@@ -1,0 +1,107 @@
+title: Zircolite generic
+order: 21
+backends:
+    - splunk
+    - splunkxml
+    - fieldlist
+    - sqlite
+logsources:
+    cisco:
+        product: cisco
+        conditions:
+            sourcetype: 'cisco*'
+    dns:
+        category: dns
+        conditions:
+            tag: "dns"
+    firewall:
+        category: firewall
+        conditions:
+            tag: 'network' 
+    proxy:
+        category: proxy
+        conditions:
+            tag: 'proxy'
+    webserver:
+        category: webserver
+        conditions:
+            tag: 'web'      
+    windows:
+        product: windows
+    windows-application:
+        product: windows
+        service: application
+        conditions:
+            Channel: 'Application'
+    windows-security:
+        product: windows
+        service: security
+        conditions:
+            Channel: 'Security'
+    windows-system:
+        product: windows
+        service: system
+        conditions:
+            Channel: 'System'
+    windows-sysmon:
+        product: windows
+        service: sysmon
+        conditions:
+            Channel: 'Microsoft-Windows-Sysmon/Operational'
+    windows-powershell:
+        product: windows
+        service: powershell
+        conditions:
+            Channel: 'Microsoft-Windows-PowerShell/Operational'
+    windows-classicpowershell:
+        product: windows
+        service: powershell-classic
+        conditions:
+            Channel: 'Windows PowerShell'
+    windows-taskscheduler:
+        product: windows
+        service: taskscheduler
+        conditions:
+            Channel: 'Microsoft-Windows-TaskScheduler/Operational'
+    windows-wmi:
+        product: windows
+        service: wmi
+        conditions:
+            Channel: 'Microsoft-Windows-WMI-Activity/Operational'
+    windows-dns-server:
+        product: windows
+        service: dns-server
+        category: dns
+        conditions:
+            Channel: 'DNS Server'
+    windows-dns-server-audit:
+        product: windows
+        service: dns-server-audit
+        conditions:
+            Channel: 'Microsoft-Windows-DNS-Server/Audit'
+    windows-driver-framework:
+        product: windows
+        service: driver-framework
+        conditions:
+            Channel: 'Microsoft-Windows-DriverFrameworks-UserMode/Operational'
+    windows-ntlm:
+        product: windows
+        service: ntlm
+        conditions:
+            Channel: 'Microsoft-Windows-NTLM/Operational'
+    windows-dhcp:
+        product: windows
+        service: dhcp
+        conditions:
+            Channel: 'Microsoft-Windows-DHCP-Server/Operational'
+    process_creation:
+        category: process_creation
+        product: windows
+        conditions:
+            EventID: 4688
+        rewrite:
+            product: windows
+            service: security
+fieldmappings:
+    Image: NewProcessName
+    ParentImage: ParentProcessName

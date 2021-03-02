@@ -1,0 +1,2 @@
+{% for match in data["matches"] %}{"title":"{{ data["title"] }}","description":"{{ data["description"] }}",{% for key, value in match.items() %}"{{ key }}":{{ value|tojson }}{{ "," if not loop.last }}{% endfor %}}
+{% endfor %}
