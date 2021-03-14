@@ -196,7 +196,11 @@ def executeRule(rule):
 					for row in rows:
 						match = {k: v for k, v in row.items() if v is not None}
 						filteredRows.append(match)
-		results = ({ "title" : rule["title"], "description" : rule["description"], "sigma" : rule["rule"], "count": counter, "matches" : filteredRows})
+		if "level" not in rule:
+			rule["level"] = "unknown"
+		if "tags" not in rule:
+			rule["tags"] = []
+		results = ({ "title" : rule["title"], "description" : rule["description"], "sigma" : rule["rule"], "rule_level" : rule["level"], "tags": rule["tags"], "count": counter, "matches" : filteredRows})
 		if counter > 0: 
 			logging.debug(f'DETECTED : {rule["title"]} - Matchs : {counter} events')
 	else:
@@ -214,7 +218,7 @@ def getOSExternalTools():
 	elif _platform == "win32":
 		return "bin\\evtx_dump_win.exe"
 
-def genarateFromTemplate(templateFile, outpoutFilename, data):
+def generateFromTemplate(templateFile, outpoutFilename, data):
 	""" Use Jinja2 to output data in a specific format """
 	try:
 		with open(templateFile, 'r', encoding='utf-8') as tmpl:
@@ -224,6 +228,28 @@ def genarateFromTemplate(templateFile, outpoutFilename, data):
 	except Exception as e:
 		logging.error(f"{Fore.RED}   [-] Template error, activate debug mode to check for errors")
 		logging.debug(f"   [-] {e}")
+
+def quitOnError(message):
+	logging.error(message)
+	sys.exit(1)
+
+def checkIfExists(path, errorMessage):
+	""" Test if path provided is a file  """
+	if not (Path(path).is_file()):
+		quitOnError(errorMessage)
+
+def initLogger(debugMode, logFile):
+	logLevel = logging.INFO
+	logFormat = "%(asctime)s %(levelname)-8s %(message)s"
+	if debugMode:
+		logLevel = logging.DEBUG
+		logFormat = "%(asctime)s %(levelname)-8s %(module)s:%(lineno)s %(funcName)s %(message)s"
+
+	logging.basicConfig(format=logFormat, filename=logFile, level=logLevel, datefmt='%Y-%m-%d %H:%M:%S')
+	logger = logging.StreamHandler()
+	logger.setLevel(logging.INFO)
+	logging.getLogger('').addHandler(logger)
+	return logger
 
 ################################################################
 # MAIN()
@@ -251,46 +277,35 @@ if __name__ == '__main__':
 	parser.add_argument("-d", "--dbfile", help="Save data as a SQLite Db to the specified file on disk", type=str)
 	parser.add_argument("-l", "--logfile", help="Log file name", default="zircolite.log", type=str)
 	parser.add_argument("-j", "--jsononly", help="If logs files are already in JSON lines format", action='store_true')
-	parser.add_argument("--template", help="If a Jinja2 template is specified it will be used to generated output", type=str)
-	parser.add_argument("--templateOutput", help="If a Jinja2 template is specified it will be used to generate a crafted output", default="detected_events_tmpl.json", type=str)
+	parser.add_argument("--template", help="If a Jinja2 template is specified it will be used to generated output", type=str, action='append', nargs='+')
+	parser.add_argument("--templateOutput", help="If a Jinja2 template is specified it will be used to generate a crafted output", type=str, action='append', nargs='+')
 	parser.add_argument("--fields", help="Show all fields in full format", action='store_true')
 	parser.add_argument("--debug", help="Activate debug logging", action='store_true')
 
 	args = parser.parse_args()
 
 	# Init logging
-	logLevel = logging.INFO
-	logFormat = "%(asctime)s %(levelname)-8s %(message)s"
-	if args.debug:
-		logLevel = logging.DEBUG
-		logFormat = "%(asctime)s %(levelname)-8s %(module)s:%(lineno)s %(funcName)s %(message)s"
-	logging.basicConfig(format=logFormat, filename=args.logfile, level=logLevel, datefmt='%Y-%m-%d %H:%M:%S')
-	consoleLogger = logging.StreamHandler()
-	consoleLogger.setLevel(logging.INFO)
-	logging.getLogger('').addHandler(consoleLogger)
+	consoleLogger = initLogger(args.debug, args.logfile)
 
 	logging.info("[+] Checking prerequisites")
 	# Cheking for evtx_dump binaries
 	evtx_dumpBinary = getOSExternalTools()
-	if not (Path(evtx_dumpBinary).is_file()):
-		logging.error(f"{Fore.RED}   [-] Cannot find Evtx_dump")
-		sys.exit(1)
-	# Checking ruleset
-	if not (Path(args.ruleset).is_file()):
-		logging.error(f"{Fore.RED}   [-] Cannot find ruleset : {args.ruleset}")
-		sys.exit(1)
+	checkIfExists(evtx_dumpBinary, f"{Fore.RED}   [-] Cannot find Evtx_dump")
+	# Checking ruleset arg
+	checkIfExists(args.ruleset, f"{Fore.RED}   [-] Cannot find ruleset : {args.ruleset}")
 	# Checking if tmpdir is empty 
 	if (Path(args.tmpdir).is_dir()):
-		logging.error(f"{Fore.RED}   [-] The Temp working directory is not empty : {args.tmpdir}. Please remove it or rename it")
-		sys.exit(1)
-	# Checking template
+		quitOnError(f"{Fore.RED}   [-] The Temp working directory exists: {args.tmpdir}. Please remove it or rename it")
+	# Checking templates args
+	readyForTemplating = False
 	if (args.template is not None):
-		if not (Path(args.template).is_file()):
-			logging.error(f"{Fore.RED}   [-] Cannot find template : {args.template}")
-			sys.exit(1)
 		if not hasJinja2:
-			logging.error(f"{Fore.RED}   [-] You provided a template but Jinja2 module is not installed : {args.template}")
-			sys.exit(1)
+			quitOnError(f"{Fore.RED}   [-] You provided a template but Jinja2 module is not installed : {args.template}")
+		if (args.templateOutput is None) or (len(args.template) != len(args.templateOutput)):
+			quitOnError(f"{Fore.RED}   [-] Number of template ouput must match number of template ")
+		for template in args.template:
+			checkIfExists(template[0], f"{Fore.RED}   [-] Cannot find template : {template[0]}")
+		readyForTemplating = True
 
 	# Start time counting
 	start_time = time.time()
@@ -315,16 +330,14 @@ if __name__ == '__main__':
 		elif EVTXPath.is_file():
 			EVTXList = [EVTXPath]
 		else:
-			logging.error(f"{Fore.RED}   [-] Unable to extract EVTX from submitted path")
-			sys.exit(1)
+			quitOnError(f"{Fore.RED}   [-] Unable to extract EVTX from submitted path")
 		if len(EVTXList) > 0:
 			for evtx in tqdm(EVTXList, colour="yellow"):
 				extractEvtx(evtx, args.tmpdir, evtx_dumpBinary)
 			# Set the path for the next step 
 			EVTXJSONList = list(Path(args.tmpdir).rglob("*.json"))
 		else:
-			logging.error(f"{Fore.RED}   [-] No EVTX files found. Please verify the directory or the extension with '--fileext'")
-			sys.exit(1)
+			quitOnError(f"{Fore.RED}   [-] No EVTX files found. Please verify the directory or the extension with '--fileext'")
 	else:
 		EVTXJSONList = list(Path(args.evtx).rglob("*.json"))
 
@@ -337,8 +350,7 @@ if __name__ == '__main__':
 	keyDict = {}
 
 	if EVTXJSONList == []:
-			logging.error(f"{Fore.RED}   [-] No JSON files found.")
-			sys.exit(1)
+		quitOnError(f"{Fore.RED}   [-] No JSON files found.")
 	for evtxJSON in tqdm(EVTXJSONList, colour="yellow"):
 		if os.stat(evtxJSON).st_size != 0:
 			results = flattenJSON(evtxJSON)
@@ -347,7 +359,7 @@ if __name__ == '__main__':
 
 	if args.fields :
 		logging.info("[+] Saving fields to fields.json")
-		with open("fields.json", 'w') as f:
+		with open("fields.json", 'w', encoding='utf-8') as f:
 			json.dump(fullFieldNames, f, indent=4)
 		sys.exit(0)
 
@@ -356,8 +368,7 @@ if __name__ == '__main__':
 	createTableStmt = "CREATE TABLE logs ( row_id INTEGER, " + fieldStmt + " PRIMARY KEY(row_id AUTOINCREMENT) );" # TODO : Indexes ?
 	logging.debug(" CREATE : " + createTableStmt.replace('\n', ' ').replace('\r', ''))
 	if not executeQuery(dbConnection, createTableStmt):
-		logging.error(f"{Fore.RED}   [-] Quit on error")
-		sys.exit(1)
+		quitOnError(f"{Fore.RED}   [-] Wasn't able to execute query")
 	del createTableStmt
 
 	logging.info("[+] Inserting data")
@@ -377,12 +388,11 @@ if __name__ == '__main__':
 	logging.info(f"[+] Loading ruleset from : {args.ruleset}")
 	with open(args.ruleset) as f:
 		ruleset = json.load(f)
-
 	rulesetSize = len(ruleset) 
 	logging.info(f"[+] Executing ruleset - {str(rulesetSize)} rules")
 	# Results are writen upon detection to allow analysis during execution and to avoid loosing results in case of error.
-	counter = 0
-	with open(args.outfile, 'w') as f:
+	fullResults = []
+	with open(args.outfile, 'w', encoding='utf-8') as f:
 		if hasTqdm: # If tqdm is installed 
 			with tqdm(ruleset, colour="yellow") as ruleBar:
 				f.write('[')
@@ -390,30 +400,44 @@ if __name__ == '__main__':
 					ruleResults = executeRule(rule)
 					if ruleResults != {}:
 						ruleBar.write(f'{Fore.CYAN}    └─> {ruleResults["title"]} - Matchs : {ruleResults["count"]} events')
-						# Output to template formatted file
-						if hasJinja2 and args.template is not None:
-							genarateFromTemplate(args.template, args.templateOutput, ruleResults)
+						# To avoid printing this one on stdout but in the logs...
+						consoleLogger.setLevel(logging.ERROR)
+						logging.info(f'{Fore.CYAN}    └─> {ruleResults["title"]} - Matchs : {ruleResults["count"]} events')
+						consoleLogger.setLevel(logging.INFO)
+						# Store results for templating
+						if readyForTemplating:
+							fullResults.append(ruleResults)
 						# Output to default json file
-						json.dump(ruleResults, f, indent = 4, ensure_ascii=False)
-						if counter != len(ruleset)-1: 
+						try:
+							json.dump(ruleResults, f, indent = 4, ensure_ascii=False)
 							f.write(',\n')
-					counter += 1
-				f.write(']')
+						except Exception as e:
+							logging.error(f"{Fore.RED}   [-] Error saving some results : {e}")
+							logging.debug(f"   [-] {e}")
+				f.write('{}]')
 		else: 
 			f.write('[')
 			for rule in ruleset:
 				ruleResults = executeRule(rule)
 				if ruleResults != {}:
 					logging.info(f'{Fore.CYAN}    └─> {ruleResults["title"]} - Matchs : {ruleResults["count"]} events')
-					# Output to template formatted file
-					if hasJinja2 and args.template is not None:
-						genarateFromTemplate(args.template, args.templateOutput, ruleResults)
+					# Store results for templating
+					if readyForTemplating:
+						fullResults.append(ruleResults)
 					# Output to default json file
-					json.dump(ruleResults, f, indent = 4, ensure_ascii=False)
-					if counter != len(ruleset)-1: 
+					try:
+						json.dump(ruleResults, f, indent = 4, ensure_ascii=False)
 						f.write(',\n')
-				counter += 1
-			f.write(']')
+					except Exception as e:
+						logging.error(f"{Fore.RED}   [-] Error saving some results : {e}")
+						logging.debug(f"   [-] {e}")
+			f.write('{}]')
+
+	# Templating
+	if readyForTemplating and fullResults != []:
+		for template, templateOutput in zip(args.template, args.templateOutput):
+			logging.info(f'[+] Applying template "{template[0]}", outputting to : {templateOutput[0]}')
+			generateFromTemplate(template[0], templateOutput[0], fullResults)
 
 	# Removing Working directory containing logs as json
 	if not args.keeptmp :

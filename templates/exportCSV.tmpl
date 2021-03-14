@@ -1,0 +1,3 @@
+title;description{% for match in data[0]["matches"] %}{% for key, value in match.items() %}{{ key }}{{ ";" if not loop.last }}{% endfor %}{% endfor %}
+{% for elem in data %}{% for match in elem["matches"] %}{{ elem["title"] }};{{ elem["description"] }};{% for key, value in match.items() %}{{ value|replace("\n","")|replace("\r","") }}{{ ";" if not loop.last }}{% endfor %}}
+{% endfor %}{% endfor %}

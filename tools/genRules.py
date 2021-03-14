@@ -45,6 +45,8 @@ def retrieveRule(ruleFile):
                         d['description']=v
                     if k=='tags':
                         d['tags']=v
+                    if k=='level':
+                        d['level']=v
         if output[:-1] == "":
             print(output)
         d['rule']=output[:-1]

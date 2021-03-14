@@ -1,0 +1,201 @@
+var ReconnaissanceData = [{% for elem in data %}{% if "attack.reconnaissance" in elem["tags"] %}{% for match in elem["matches"] %}
+	{
+		"Rule level":{{ elem["rule_level"]|tojson }},
+		"title":{{ elem["title"]|tojson }},
+		"description":{{ elem["description"]|tojson }},{% for key, value in match.items() %}
+		"{{ key }}":{{ value|tojson }}{{ "," if not loop.last }}{% endfor %}
+	}{{ "," if not loop.last }}{% endfor %}{{ "," if not loop.last }}{% endif %}{% endfor %}
+];
+
+var RessourceDevelopmentData = [{% for elem in data %}{% if "attack.ressource_development" in elem["tags"] %}{% for match in elem["matches"] %}
+	{
+		"Rule level":{{ elem["rule_level"]|tojson }},
+		"title":{{ elem["title"]|tojson }},
+		"description":{{ elem["description"]|tojson }},{% for key, value in match.items() %}
+		"{{ key }}":{{ value|tojson }}{{ "," if not loop.last }}{% endfor %}
+	}{{ "," if not loop.last }}{% endfor %}{{ "," if not loop.last }}{% endif %}{% endfor %}
+];
+
+var InitialAccessData = [{% for elem in data %}{% if "attack.initial_access" in elem["tags"] %}{% for match in elem["matches"] %}
+	{
+		"Rule level":{{ elem["rule_level"]|tojson }},
+		"title":{{ elem["title"]|tojson }},
+		"description":{{ elem["description"]|tojson }},{% for key, value in match.items() %}
+		"{{ key }}":{{ value|tojson }}{{ "," if not loop.last }}{% endfor %}
+	}{{ "," if not loop.last }}{% endfor %}{{ "," if not loop.last }}{% endif %}{% endfor %}
+];
+
+var ExecutionData = [{% for elem in data %}{% if "attack.execution" in elem["tags"] %}{% for match in elem["matches"] %}
+	{
+		"Rule level":{{ elem["rule_level"]|tojson }},
+		"title":{{ elem["title"]|tojson }},
+		"description":{{ elem["description"]|tojson }},{% for key, value in match.items() %}
+		"{{ key }}":{{ value|tojson }}{{ "," if not loop.last }}{% endfor %}
+	}{{ "," if not loop.last }}{% endfor %}{{ "," if not loop.last }}{% endif %}{% endfor %}
+];
+
+var PersistenceData = [{% for elem in data %}{% if "attack.persistence" in elem["tags"] %}{% for match in elem["matches"] %}
+	{
+		"Rule level":{{ elem["rule_level"]|tojson }},
+		"title":{{ elem["title"]|tojson }},
+		"description":{{ elem["description"]|tojson }},{% for key, value in match.items() %}
+		"{{ key }}":{{ value|tojson }}{{ "," if not loop.last }}{% endfor %}
+	}{{ "," if not loop.last }}{% endfor %}{{ "," if not loop.last }}{% endif %}{% endfor %}
+];
+
+var PrivilegeEscalationData = [{% for elem in data %}{% if "attack.privilege_escalation" in elem["tags"] %}{% for match in elem["matches"] %}
+	{
+		"Rule level":{{ elem["rule_level"]|tojson }},
+		"title":{{ elem["title"]|tojson }},
+		"description":{{ elem["description"]|tojson }},{% for key, value in match.items() %}
+		"{{ key }}":{{ value|tojson }}{{ "," if not loop.last }}{% endfor %}
+	}{{ "," if not loop.last }}{% endfor %}{{ "," if not loop.last }}{% endif %}{%- endfor %}
+];
+
+var DefenseEvasionData = [{% for elem in data %}{% if "attack.defense_evasion" in elem["tags"] %}{% for match in elem["matches"] %}
+	{
+		"Rule level":{{ elem["rule_level"]|tojson }},
+		"title":{{ elem["title"]|tojson }},
+		"description":{{ elem["description"]|tojson }},{% for key, value in match.items() %}
+		"{{ key }}":{{ value|tojson }}{{ "," if not loop.last }}{% endfor %}
+	}{{ "," if not loop.last }}{% endfor %}{{ "," if not loop.last }}{% endif %}{% endfor %}
+];
+
+var CredentialAccessData = [{% for elem in data %}{% if "attack.credential_access" in elem["tags"] %}{% for match in elem["matches"] %}
+	{
+		"Rule level":{{ elem["rule_level"]|tojson }},
+		"title":{{ elem["title"]|tojson }},
+		"description":{{ elem["description"]|tojson }},{% for key, value in match.items() %}
+		"{{ key }}":{{ value|tojson }}{{ "," if not loop.last }}{% endfor %}
+	}{{ "," if not loop.last }}{% endfor %}{{ "," if not loop.last }}{% endif %}{% endfor %}
+];
+
+var DiscoveryData = [{% for elem in data %}{% if "attack.discovery" in elem["tags"] %}{% for match in elem["matches"] %}
+	{
+		"Rule level":{{ elem["rule_level"]|tojson }},
+		"title":{{ elem["title"]|tojson }},
+		"description":{{ elem["description"]|tojson }},{% for key, value in match.items() %}
+		"{{ key }}":{{ value|tojson }}{{ "," if not loop.last }}{% endfor %}
+	}{{ "," if not loop.last }}{% endfor %}{{ "," if not loop.last }}{% endif %}{% endfor %}
+];
+
+var LateralMovementData = [{% for elem in data %}{% if "attack.lateral_movement" in elem["tags"] %}{% for match in elem["matches"] %}
+	{
+		"Rule level":{{ elem["rule_level"]|tojson }},
+		"title":{{ elem["title"]|tojson }},
+		"description":{{ elem["description"]|tojson }},{% for key, value in match.items() %}
+		"{{ key }}":{{ value|tojson }}{{ "," if not loop.last }}{% endfor %}
+	}{{ "," if not loop.last }}{% endfor %}{{ "," if not loop.last }}{% endif %}{% endfor %}
+];
+
+var CollectionData = [{% for elem in data %}{% if "attack.collection" in elem["tags"] %}{% for match in elem["matches"] %}
+	{
+		"Rule level":{{ elem["rule_level"]|tojson }},
+		"title":{{ elem["title"]|tojson }},
+		"description":{{ elem["description"]|tojson }},{% for key, value in match.items() %}
+		"{{ key }}":{{ value|tojson }}{{ "," if not loop.last }}{% endfor %}
+	}{{ "," if not loop.last }}{% endfor %}{{ "," if not loop.last }}{% endif %}{% endfor %}
+];
+
+var CommandAndControlData = [{% for elem in data %}{% if "attack.command_and_control" in elem["tags"] %}{% for match in elem["matches"] %}
+	{
+		"Rule level":{{ elem["rule_level"]|tojson }},
+		"title":{{ elem["title"]|tojson }},
+		"description":{{ elem["description"]|tojson }},{% for key, value in match.items() %}
+		"{{ key }}":{{ value|tojson }}{{ "," if not loop.last }}{% endfor %}
+	}{{ "," if not loop.last }}{% endfor %}{{ "," if not loop.last }}{% endif %}{% endfor %}
+];
+
+var ExfiltrationData = [{% for elem in data %}{% if "attack.exfiltration" in elem["tags"] %}{% for match in elem["matches"] %}
+	{
+		"Rule level":{{ elem["rule_level"]|tojson }},
+		"title":{{ elem["title"]|tojson }},
+		"description":{{ elem["description"]|tojson }},{% for key, value in match.items() %}
+		"{{ key }}":{{ value|tojson }}{{ "," if not loop.last }}{% endfor %}
+	}{{ "," if not loop.last }}{% endfor %}{{ "," if not loop.last }}{% endif %}{% endfor %}
+];
+
+var ImpactData = [{% for elem in data %}{% if "attack.impact" in elem["tags"] %}{% for match in elem["matches"] %}
+	{
+		"Rule level":{{ elem["rule_level"]|tojson }},
+		"title":{{ elem["title"]|tojson }},
+		"description":{{ elem["description"]|tojson }},{% for key, value in match.items() %}
+		"{{ key }}":{{ value|tojson }}{{ "," if not loop.last }}{% endfor %}
+	}{{ "," if not loop.last }}{% endfor %}{{ "," if not loop.last }}{% endif %}{% endfor %}
+];
+
+var OtherData = [{% for elem in data %}{% if elem["tags"]==[] %}{% for match in elem["matches"] %}
+	{
+		"Rule level":{{ elem["rule_level"]|tojson }},
+		"title":{{ elem["title"]|tojson }},
+		"description":{{ elem["description"]|tojson }},{% for key, value in match.items() %}
+		"{{ key }}":{{ value|tojson }}{{ "," if not loop.last }}{% endfor %}
+	}{{ "," if not loop.last }}{% endfor %}{{ "," if not loop.last }}{% endif %}{% endfor %}
+];
+
+var UnknownData = [{% for elem in data %}{% if elem["rule_level"] == "unknown" %}{% for match in elem["matches"] %}
+	{
+		"Rule level":{{ elem["rule_level"]|tojson }},
+		"title":{{ elem["title"]|tojson }},
+		"description":{{ elem["description"]|tojson }},{% for key, value in match.items() %}
+		"{{ key }}":{{ value|tojson }}{{ "," if not loop.last }}{% endfor %}
+	}{{ "," if not loop.last }}{% endfor %}{{ "," if not loop.last }}{% endif %}{% endfor %}
+];
+
+var LowData = [{% for elem in data %}{% if elem["rule_level"] == "low" %}{% for match in elem["matches"] %}
+	{
+		"Rule level":{{ elem["rule_level"]|tojson }},
+		"title":{{ elem["title"]|tojson }},
+		"description":{{ elem["description"]|tojson }},{% for key, value in match.items() %}
+		"{{ key }}":{{ value|tojson }}{{ "," if not loop.last }}{% endfor %}
+	}{{ "," if not loop.last }}{% endfor %}{{ "," if not loop.last }}{% endif %}{% endfor %}
+];
+
+var MediumData = [{% for elem in data %}{% if elem["rule_level"] == "medium"  %}{% for match in elem["matches"] %}
+	{
+		"Rule level":{{ elem["rule_level"]|tojson }},
+		"title":{{ elem["title"]|tojson }},
+		"description":{{ elem["description"]|tojson }},{% for key, value in match.items() %}
+		"{{ key }}":{{ value|tojson }}{{ "," if not loop.last }}{% endfor %}
+	}{{ "," if not loop.last }}{% endfor %}{{ "," if not loop.last }}{% endif %}{% endfor %}
+];
+
+var HighData = [{% for elem in data %}{% if elem["rule_level"] == "high"  %}{% for match in elem["matches"] %}
+	{
+		"Rule level":{{ elem["rule_level"]|tojson }},
+		"title":{{ elem["title"]|tojson }},
+		"description":{{ elem["description"]|tojson }},{% for key, value in match.items() %}
+		"{{ key }}":{{ value|tojson }}{{ "," if not loop.last }}{% endfor %}
+	}{{ "," if not loop.last }}{% endfor %}{{ "," if not loop.last }}{% endif %}{% endfor %}
+];
+
+var CriticalData = [{% for elem in data %}{% if elem["rule_level"] == "critical"  %}{% for match in elem["matches"] %}
+	{
+		"Rule level":{{ elem["rule_level"]|tojson }},
+		"title":{{ elem["title"]|tojson }},
+		"description":{{ elem["description"]|tojson }},{% for key, value in match.items() %}
+		"{{ key }}":{{ value|tojson }}{{ "," if not loop.last }}{% endfor %}
+	}{{ "," if not loop.last }}{% endfor %}{{ "," if not loop.last }}{% endif %}{% endfor %}
+];
+
+var dictData = {};
+dictData["reconnaissance"] = ReconnaissanceData;
+dictData["ressource_development"] = RessourceDevelopmentData;  
+dictData["initial_access"] = InitialAccessData; 
+dictData["execution"] = ExfiltrationData; 
+dictData["persistence"] = PersistenceData; 
+dictData["privilege_escalation"] = PrivilegeEscalationData; 
+dictData["defense_evasion"] = DefenseEvasionData; 
+dictData["credential_access"] = CredentialAccessData; 
+dictData["discovery"] = DiscoveryData; 
+dictData["lateral_movement"] = LateralMovementData; 
+dictData["collection"] = CollectionData; 
+dictData["command_and_control"] = CommandAndControlData; 
+dictData["exfiltration"] = ExfiltrationData; 
+dictData["impact"] = ImpactData; 
+dictData["other"] = OtherData; 
+dictData["unknown"] = UnknownData; 
+dictData["low"] = LowData; 
+dictData["medium"] = MediumData; 
+dictData["high"] = HighData; 
+dictData["critical"] = CriticalData; 

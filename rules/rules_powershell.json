@@ -8,12 +8,9 @@
             "attack.t1059.001",
             "attack.t1086"
         ],
+        "level": "medium",
         "rule": [
-            "SELECT * FROM logs WHERE ((EventID = \"400\" AND EngineVersion LIKE \"2.%\" ESCAPE '\\') AND NOT (HostVersion LIKE \"2.%\" ESCAPE '\\'))",
-            "/Users/wagga/Desktop/SIGMA/sigma/tools/sigma/backends/fireeye-helix.py:128: SyntaxWarning: \"is\" with a literal. Did you mean \"==\"?",
-            "  if node.item is \"rawmsg\":",
-            "/Users/wagga/Desktop/SIGMA/sigma/tools/sigma/backends/fireeye-helix.py:135: SyntaxWarning: \"is\" with a literal. Did you mean \"==\"?",
-            "  if node.item is \"rawmsg\":"
+            "SELECT * FROM logs WHERE (Channel = \"Windows PowerShell\" AND (EventID = \"400\" AND EngineVersion LIKE \"2.%\" ESCAPE '\\') AND NOT (HostVersion LIKE \"2.%\" ESCAPE '\\'))"
         ]
     },
     {
@@ -24,12 +21,9 @@
             "attack.t1059.001",
             "attack.t1086"
         ],
+        "level": "medium",
         "rule": [
-            "SELECT * FROM logs WHERE (Message LIKE \"%System.Net.WebClient%\" ESCAPE '\\' AND (Message LIKE \"%.DownloadFile(%\" ESCAPE '\\' OR Message LIKE \"%.DownloadString(%\" ESCAPE '\\'))",
-            "/Users/wagga/Desktop/SIGMA/sigma/tools/sigma/backends/fireeye-helix.py:128: SyntaxWarning: \"is\" with a literal. Did you mean \"==\"?",
-            "  if node.item is \"rawmsg\":",
-            "/Users/wagga/Desktop/SIGMA/sigma/tools/sigma/backends/fireeye-helix.py:135: SyntaxWarning: \"is\" with a literal. Did you mean \"==\"?",
-            "  if node.item is \"rawmsg\":"
+            "SELECT * FROM logs WHERE (Channel = \"Microsoft-Windows-PowerShell/Operational\" AND Message LIKE \"%System.Net.WebClient%\" ESCAPE '\\' AND (Message LIKE \"%.DownloadFile(%\" ESCAPE '\\' OR Message LIKE \"%.DownloadString(%\" ESCAPE '\\'))"
         ]
     },
     {},
@@ -41,12 +35,9 @@
             "attack.t1059.001",
             "attack.t1086"
         ],
+        "level": "high",
         "rule": [
-            "SELECT * FROM logs WHERE Message IN (\"System.Reflection.Assembly.Load\", \"[System.Reflection.Assembly]::Load\", \"[Reflection.Assembly]::Load\", \"System.Reflection.AssemblyName\", \"Reflection.Emit.AssemblyBuilderAccess\", \"Runtime.InteropServices.DllImportAttribute\", \"SuspendThread\")",
-            "/Users/wagga/Desktop/SIGMA/sigma/tools/sigma/backends/fireeye-helix.py:128: SyntaxWarning: \"is\" with a literal. Did you mean \"==\"?",
-            "  if node.item is \"rawmsg\":",
-            "/Users/wagga/Desktop/SIGMA/sigma/tools/sigma/backends/fireeye-helix.py:135: SyntaxWarning: \"is\" with a literal. Did you mean \"==\"?",
-            "  if node.item is \"rawmsg\":"
+            "SELECT * FROM logs WHERE (Channel = \"Microsoft-Windows-PowerShell/Operational\" AND (Message LIKE \"%System.Reflection.Assembly.Load%\" ESCAPE '\\' OR Message LIKE \"%[System.Reflection.Assembly]::Load%\" ESCAPE '\\' OR Message LIKE \"%[Reflection.Assembly]::Load%\" ESCAPE '\\' OR Message LIKE \"%System.Reflection.AssemblyName%\" ESCAPE '\\' OR Message LIKE \"%Reflection.Emit.AssemblyBuilderAccess%\" ESCAPE '\\' OR Message LIKE \"%Runtime.InteropServices.DllImportAttribute%\" ESCAPE '\\' OR Message LIKE \"%SuspendThread%\" ESCAPE '\\'))"
         ]
     },
     {
@@ -57,12 +48,9 @@
             "attack.t1059.001",
             "attack.t1086"
         ],
+        "level": "high",
         "rule": [
-            "SELECT * FROM logs WHERE ((Message LIKE \"%Invoke-DllInjection%\" ESCAPE '\\' OR Message LIKE \"%Invoke-Shellcode%\" ESCAPE '\\' OR Message LIKE \"%Invoke-WmiCommand%\" ESCAPE '\\' OR Message LIKE \"%Get-GPPPassword%\" ESCAPE '\\' OR Message LIKE \"%Get-Keystrokes%\" ESCAPE '\\' OR Message LIKE \"%Get-TimedScreenshot%\" ESCAPE '\\' OR Message LIKE \"%Get-VaultCredential%\" ESCAPE '\\' OR Message LIKE \"%Invoke-CredentialInjection%\" ESCAPE '\\' OR Message LIKE \"%Invoke-Mimikatz%\" ESCAPE '\\' OR Message LIKE \"%Invoke-NinjaCopy%\" ESCAPE '\\' OR Message LIKE \"%Invoke-TokenManipulation%\" ESCAPE '\\' OR Message LIKE \"%Out-Minidump%\" ESCAPE '\\' OR Message LIKE \"%VolumeShadowCopyTools%\" ESCAPE '\\' OR Message LIKE \"%Invoke-ReflectivePEInjection%\" ESCAPE '\\' OR Message LIKE \"%Invoke-UserHunter%\" ESCAPE '\\' OR Message LIKE \"%Find-GPOLocation%\" ESCAPE '\\' OR Message LIKE \"%Invoke-ACLScanner%\" ESCAPE '\\' OR Message LIKE \"%Invoke-DowngradeAccount%\" ESCAPE '\\' OR Message LIKE \"%Get-ServiceUnquoted%\" ESCAPE '\\' OR Message LIKE \"%Get-ServiceFilePermission%\" ESCAPE '\\' OR Message LIKE \"%Get-ServicePermission%\" ESCAPE '\\' OR Message LIKE \"%Invoke-ServiceAbuse%\" ESCAPE '\\' OR Message LIKE \"%Install-ServiceBinary%\" ESCAPE '\\' OR Message LIKE \"%Get-RegAutoLogon%\" ESCAPE '\\' OR Message LIKE \"%Get-VulnAutoRun%\" ESCAPE '\\' OR Message LIKE \"%Get-VulnSchTask%\" ESCAPE '\\' OR Message LIKE \"%Get-UnattendedInstallFile%\" ESCAPE '\\' OR Message LIKE \"%Get-ApplicationHost%\" ESCAPE '\\' OR Message LIKE \"%Get-RegAlwaysInstallElevated%\" ESCAPE '\\' OR Message LIKE \"%Get-Unconstrained%\" ESCAPE '\\' OR Message LIKE \"%Add-RegBackdoor%\" ESCAPE '\\' OR Message LIKE \"%Add-ScrnSaveBackdoor%\" ESCAPE '\\' OR Message LIKE \"%Gupt-Backdoor%\" ESCAPE '\\' OR Message LIKE \"%Invoke-ADSBackdoor%\" ESCAPE '\\' OR Message LIKE \"%Enabled-DuplicateToken%\" ESCAPE '\\' OR Message LIKE \"%Invoke-PsUaCme%\" ESCAPE '\\' OR Message LIKE \"%Remove-Update%\" ESCAPE '\\' OR Message LIKE \"%Check-VM%\" ESCAPE '\\' OR Message LIKE \"%Get-LSASecret%\" ESCAPE '\\' OR Message LIKE \"%Get-PassHashes%\" ESCAPE '\\' OR Message LIKE \"%Show-TargetScreen%\" ESCAPE '\\' OR Message LIKE \"%Port-Scan%\" ESCAPE '\\' OR Message LIKE \"%Invoke-PoshRatHttp%\" ESCAPE '\\' OR Message LIKE \"%Invoke-PowerShellTCP%\" ESCAPE '\\' OR Message LIKE \"%Invoke-PowerShellWMI%\" ESCAPE '\\' OR Message LIKE \"%Add-Exfiltration%\" ESCAPE '\\' OR Message LIKE \"%Add-Persistence%\" ESCAPE '\\' OR Message LIKE \"%Do-Exfiltration%\" ESCAPE '\\' OR Message LIKE \"%Start-CaptureServer%\" ESCAPE '\\' OR Message LIKE \"%Get-ChromeDump%\" ESCAPE '\\' OR Message LIKE \"%Get-ClipboardContents%\" ESCAPE '\\' OR Message LIKE \"%Get-FoxDump%\" ESCAPE '\\' OR Message LIKE \"%Get-IndexedItem%\" ESCAPE '\\' OR Message LIKE \"%Get-Screenshot%\" ESCAPE '\\' OR Message LIKE \"%Invoke-Inveigh%\" ESCAPE '\\' OR Message LIKE \"%Invoke-NetRipper%\" ESCAPE '\\' OR Message LIKE \"%Invoke-EgressCheck%\" ESCAPE '\\' OR Message LIKE \"%Invoke-PostExfil%\" ESCAPE '\\' OR Message LIKE \"%Invoke-PSInject%\" ESCAPE '\\' OR Message LIKE \"%Invoke-RunAs%\" ESCAPE '\\' OR Message LIKE \"%MailRaider%\" ESCAPE '\\' OR Message LIKE \"%New-HoneyHash%\" ESCAPE '\\' OR Message LIKE \"%Set-MacAttribute%\" ESCAPE '\\' OR Message LIKE \"%Invoke-DCSync%\" ESCAPE '\\' OR Message LIKE \"%Invoke-PowerDump%\" ESCAPE '\\' OR Message LIKE \"%Exploit-Jboss%\" ESCAPE '\\' OR Message LIKE \"%Invoke-ThunderStruck%\" ESCAPE '\\' OR Message LIKE \"%Invoke-VoiceTroll%\" ESCAPE '\\' OR Message LIKE \"%Set-Wallpaper%\" ESCAPE '\\' OR Message LIKE \"%Invoke-InveighRelay%\" ESCAPE '\\' OR Message LIKE \"%Invoke-PsExec%\" ESCAPE '\\' OR Message LIKE \"%Invoke-SSHCommand%\" ESCAPE '\\' OR Message LIKE \"%Get-SecurityPackages%\" ESCAPE '\\' OR Message LIKE \"%Install-SSP%\" ESCAPE '\\' OR Message LIKE \"%Invoke-BackdoorLNK%\" ESCAPE '\\' OR Message LIKE \"%PowerBreach%\" ESCAPE '\\' OR Message LIKE \"%Get-SiteListPassword%\" ESCAPE '\\' OR Message LIKE \"%Get-System%\" ESCAPE '\\' OR Message LIKE \"%Invoke-BypassUAC%\" ESCAPE '\\' OR Message LIKE \"%Invoke-Tater%\" ESCAPE '\\' OR Message LIKE \"%Invoke-WScriptBypassUAC%\" ESCAPE '\\' OR Message LIKE \"%PowerUp%\" ESCAPE '\\' OR Message LIKE \"%PowerView%\" ESCAPE '\\' OR Message LIKE \"%Get-RickAstley%\" ESCAPE '\\' OR Message LIKE \"%Find-Fruit%\" ESCAPE '\\' OR Message LIKE \"%HTTP-Login%\" ESCAPE '\\' OR Message LIKE \"%Find-TrustedDocuments%\" ESCAPE '\\' OR Message LIKE \"%Invoke-Paranoia%\" ESCAPE '\\' OR Message LIKE \"%Invoke-WinEnum%\" ESCAPE '\\' OR Message LIKE \"%Invoke-ARPScan%\" ESCAPE '\\' OR Message LIKE \"%Invoke-PortScan%\" ESCAPE '\\' OR Message LIKE \"%Invoke-ReverseDNSLookup%\" ESCAPE '\\' OR Message LIKE \"%Invoke-SMBScanner%\" ESCAPE '\\' OR Message LIKE \"%Invoke-Mimikittenz%\" ESCAPE '\\' OR Message LIKE \"%Invoke-AllChecks%\" ESCAPE '\\') AND NOT (logs MATCH ('\"Get-SystemDriveInfo\"')))",
-            "/Users/wagga/Desktop/SIGMA/sigma/tools/sigma/backends/fireeye-helix.py:128: SyntaxWarning: \"is\" with a literal. Did you mean \"==\"?",
-            "  if node.item is \"rawmsg\":",
-            "/Users/wagga/Desktop/SIGMA/sigma/tools/sigma/backends/fireeye-helix.py:135: SyntaxWarning: \"is\" with a literal. Did you mean \"==\"?",
-            "  if node.item is \"rawmsg\":"
+            "SELECT * FROM logs WHERE (Channel = \"Microsoft-Windows-PowerShell/Operational\" AND (Message LIKE \"%Invoke-DllInjection%\" ESCAPE '\\' OR Message LIKE \"%Invoke-Shellcode%\" ESCAPE '\\' OR Message LIKE \"%Invoke-WmiCommand%\" ESCAPE '\\' OR Message LIKE \"%Get-GPPPassword%\" ESCAPE '\\' OR Message LIKE \"%Get-Keystrokes%\" ESCAPE '\\' OR Message LIKE \"%Get-TimedScreenshot%\" ESCAPE '\\' OR Message LIKE \"%Get-VaultCredential%\" ESCAPE '\\' OR Message LIKE \"%Invoke-CredentialInjection%\" ESCAPE '\\' OR Message LIKE \"%Invoke-Mimikatz%\" ESCAPE '\\' OR Message LIKE \"%Invoke-NinjaCopy%\" ESCAPE '\\' OR Message LIKE \"%Invoke-TokenManipulation%\" ESCAPE '\\' OR Message LIKE \"%Out-Minidump%\" ESCAPE '\\' OR Message LIKE \"%VolumeShadowCopyTools%\" ESCAPE '\\' OR Message LIKE \"%Invoke-ReflectivePEInjection%\" ESCAPE '\\' OR Message LIKE \"%Invoke-UserHunter%\" ESCAPE '\\' OR Message LIKE \"%Find-GPOLocation%\" ESCAPE '\\' OR Message LIKE \"%Invoke-ACLScanner%\" ESCAPE '\\' OR Message LIKE \"%Invoke-DowngradeAccount%\" ESCAPE '\\' OR Message LIKE \"%Get-ServiceUnquoted%\" ESCAPE '\\' OR Message LIKE \"%Get-ServiceFilePermission%\" ESCAPE '\\' OR Message LIKE \"%Get-ServicePermission%\" ESCAPE '\\' OR Message LIKE \"%Invoke-ServiceAbuse%\" ESCAPE '\\' OR Message LIKE \"%Install-ServiceBinary%\" ESCAPE '\\' OR Message LIKE \"%Get-RegAutoLogon%\" ESCAPE '\\' OR Message LIKE \"%Get-VulnAutoRun%\" ESCAPE '\\' OR Message LIKE \"%Get-VulnSchTask%\" ESCAPE '\\' OR Message LIKE \"%Get-UnattendedInstallFile%\" ESCAPE '\\' OR Message LIKE \"%Get-ApplicationHost%\" ESCAPE '\\' OR Message LIKE \"%Get-RegAlwaysInstallElevated%\" ESCAPE '\\' OR Message LIKE \"%Get-Unconstrained%\" ESCAPE '\\' OR Message LIKE \"%Add-RegBackdoor%\" ESCAPE '\\' OR Message LIKE \"%Add-ScrnSaveBackdoor%\" ESCAPE '\\' OR Message LIKE \"%Gupt-Backdoor%\" ESCAPE '\\' OR Message LIKE \"%Invoke-ADSBackdoor%\" ESCAPE '\\' OR Message LIKE \"%Enabled-DuplicateToken%\" ESCAPE '\\' OR Message LIKE \"%Invoke-PsUaCme%\" ESCAPE '\\' OR Message LIKE \"%Remove-Update%\" ESCAPE '\\' OR Message LIKE \"%Check-VM%\" ESCAPE '\\' OR Message LIKE \"%Get-LSASecret%\" ESCAPE '\\' OR Message LIKE \"%Get-PassHashes%\" ESCAPE '\\' OR Message LIKE \"%Show-TargetScreen%\" ESCAPE '\\' OR Message LIKE \"%Port-Scan%\" ESCAPE '\\' OR Message LIKE \"%Invoke-PoshRatHttp%\" ESCAPE '\\' OR Message LIKE \"%Invoke-PowerShellTCP%\" ESCAPE '\\' OR Message LIKE \"%Invoke-PowerShellWMI%\" ESCAPE '\\' OR Message LIKE \"%Add-Exfiltration%\" ESCAPE '\\' OR Message LIKE \"%Add-Persistence%\" ESCAPE '\\' OR Message LIKE \"%Do-Exfiltration%\" ESCAPE '\\' OR Message LIKE \"%Start-CaptureServer%\" ESCAPE '\\' OR Message LIKE \"%Get-ChromeDump%\" ESCAPE '\\' OR Message LIKE \"%Get-ClipboardContents%\" ESCAPE '\\' OR Message LIKE \"%Get-FoxDump%\" ESCAPE '\\' OR Message LIKE \"%Get-IndexedItem%\" ESCAPE '\\' OR Message LIKE \"%Get-Screenshot%\" ESCAPE '\\' OR Message LIKE \"%Invoke-Inveigh%\" ESCAPE '\\' OR Message LIKE \"%Invoke-NetRipper%\" ESCAPE '\\' OR Message LIKE \"%Invoke-EgressCheck%\" ESCAPE '\\' OR Message LIKE \"%Invoke-PostExfil%\" ESCAPE '\\' OR Message LIKE \"%Invoke-PSInject%\" ESCAPE '\\' OR Message LIKE \"%Invoke-RunAs%\" ESCAPE '\\' OR Message LIKE \"%MailRaider%\" ESCAPE '\\' OR Message LIKE \"%New-HoneyHash%\" ESCAPE '\\' OR Message LIKE \"%Set-MacAttribute%\" ESCAPE '\\' OR Message LIKE \"%Invoke-DCSync%\" ESCAPE '\\' OR Message LIKE \"%Invoke-PowerDump%\" ESCAPE '\\' OR Message LIKE \"%Exploit-Jboss%\" ESCAPE '\\' OR Message LIKE \"%Invoke-ThunderStruck%\" ESCAPE '\\' OR Message LIKE \"%Invoke-VoiceTroll%\" ESCAPE '\\' OR Message LIKE \"%Set-Wallpaper%\" ESCAPE '\\' OR Message LIKE \"%Invoke-InveighRelay%\" ESCAPE '\\' OR Message LIKE \"%Invoke-PsExec%\" ESCAPE '\\' OR Message LIKE \"%Invoke-SSHCommand%\" ESCAPE '\\' OR Message LIKE \"%Get-SecurityPackages%\" ESCAPE '\\' OR Message LIKE \"%Install-SSP%\" ESCAPE '\\' OR Message LIKE \"%Invoke-BackdoorLNK%\" ESCAPE '\\' OR Message LIKE \"%PowerBreach%\" ESCAPE '\\' OR Message LIKE \"%Get-SiteListPassword%\" ESCAPE '\\' OR Message LIKE \"%Get-System%\" ESCAPE '\\' OR Message LIKE \"%Invoke-BypassUAC%\" ESCAPE '\\' OR Message LIKE \"%Invoke-Tater%\" ESCAPE '\\' OR Message LIKE \"%Invoke-WScriptBypassUAC%\" ESCAPE '\\' OR Message LIKE \"%PowerUp%\" ESCAPE '\\' OR Message LIKE \"%PowerView%\" ESCAPE '\\' OR Message LIKE \"%Get-RickAstley%\" ESCAPE '\\' OR Message LIKE \"%Find-Fruit%\" ESCAPE '\\' OR Message LIKE \"%HTTP-Login%\" ESCAPE '\\' OR Message LIKE \"%Find-TrustedDocuments%\" ESCAPE '\\' OR Message LIKE \"%Invoke-Paranoia%\" ESCAPE '\\' OR Message LIKE \"%Invoke-WinEnum%\" ESCAPE '\\' OR Message LIKE \"%Invoke-ARPScan%\" ESCAPE '\\' OR Message LIKE \"%Invoke-PortScan%\" ESCAPE '\\' OR Message LIKE \"%Invoke-ReverseDNSLookup%\" ESCAPE '\\' OR Message LIKE \"%Invoke-SMBScanner%\" ESCAPE '\\' OR Message LIKE \"%Invoke-Mimikittenz%\" ESCAPE '\\' OR Message LIKE \"%Invoke-AllChecks%\" ESCAPE '\\') AND NOT (logs MATCH ('\"Get-SystemDriveInfo\"')))"
         ]
     },
     {},
@@ -74,13 +62,10 @@
             "attack.t1059.001",
             "attack.t1086"
         ],
+        "level": "medium",
         "rule": [
-            "SELECT * FROM logs WHERE (EventID = \"1\" AND (CommandLine LIKE \"%Invoke-WebRequest%\" ESCAPE '\\' OR CommandLine LIKE \"%iwr %\" ESCAPE '\\' OR CommandLine LIKE \"%wget %\" ESCAPE '\\' OR CommandLine LIKE \"%curl %\" ESCAPE '\\' OR CommandLine LIKE \"%Net.WebClient%\" ESCAPE '\\' OR CommandLine LIKE \"%Start-BitsTransfer%\" ESCAPE '\\'))",
-            "SELECT * FROM logs WHERE (EventID = \"4104\" AND (ScriptBlockText LIKE \"%Invoke-WebRequest%\" ESCAPE '\\' OR ScriptBlockText LIKE \"%iwr %\" ESCAPE '\\' OR ScriptBlockText LIKE \"%wget %\" ESCAPE '\\' OR ScriptBlockText LIKE \"%curl %\" ESCAPE '\\' OR ScriptBlockText LIKE \"%Net.WebClient%\" ESCAPE '\\' OR ScriptBlockText LIKE \"%Start-BitsTransfer%\" ESCAPE '\\'))",
-            "/Users/wagga/Desktop/SIGMA/sigma/tools/sigma/backends/fireeye-helix.py:128: SyntaxWarning: \"is\" with a literal. Did you mean \"==\"?",
-            "  if node.item is \"rawmsg\":",
-            "/Users/wagga/Desktop/SIGMA/sigma/tools/sigma/backends/fireeye-helix.py:135: SyntaxWarning: \"is\" with a literal. Did you mean \"==\"?",
-            "  if node.item is \"rawmsg\":"
+            "SELECT * FROM logs WHERE (EventID = \"4688\" AND (CommandLine LIKE \"%Invoke-WebRequest%\" ESCAPE '\\' OR CommandLine LIKE \"%iwr %\" ESCAPE '\\' OR CommandLine LIKE \"%wget %\" ESCAPE '\\' OR CommandLine LIKE \"%curl %\" ESCAPE '\\' OR CommandLine LIKE \"%Net.WebClient%\" ESCAPE '\\' OR CommandLine LIKE \"%Start-BitsTransfer%\" ESCAPE '\\'))",
+            "SELECT * FROM logs WHERE (Channel = \"Microsoft-Windows-PowerShell/Operational\" AND EventID = \"4104\" AND (ScriptBlockText LIKE \"%Invoke-WebRequest%\" ESCAPE '\\' OR ScriptBlockText LIKE \"%iwr %\" ESCAPE '\\' OR ScriptBlockText LIKE \"%wget %\" ESCAPE '\\' OR ScriptBlockText LIKE \"%curl %\" ESCAPE '\\' OR ScriptBlockText LIKE \"%Net.WebClient%\" ESCAPE '\\' OR ScriptBlockText LIKE \"%Start-BitsTransfer%\" ESCAPE '\\'))"
         ]
     },
     {
@@ -92,12 +77,9 @@
             "attack.t1059.001",
             "attack.t1086"
         ],
+        "level": "high",
         "rule": [
-            "SELECT * FROM logs WHERE (ScriptBlockText LIKE \"%WMImplant%\" ESCAPE '\\' OR ScriptBlockText LIKE \"% change\\_user %\" ESCAPE '\\' OR ScriptBlockText LIKE \"% gen\\_cli %\" ESCAPE '\\' OR ScriptBlockText LIKE \"% command\\_exec %\" ESCAPE '\\' OR ScriptBlockText LIKE \"% disable\\_wdigest %\" ESCAPE '\\' OR ScriptBlockText LIKE \"% disable\\_winrm %\" ESCAPE '\\' OR ScriptBlockText LIKE \"% enable\\_wdigest %\" ESCAPE '\\' OR ScriptBlockText LIKE \"% enable\\_winrm %\" ESCAPE '\\' OR ScriptBlockText LIKE \"% registry\\_mod %\" ESCAPE '\\' OR ScriptBlockText LIKE \"% remote\\_posh %\" ESCAPE '\\' OR ScriptBlockText LIKE \"% sched\\_job %\" ESCAPE '\\' OR ScriptBlockText LIKE \"% service\\_mod %\" ESCAPE '\\' OR ScriptBlockText LIKE \"% process\\_kill %\" ESCAPE '\\' OR ScriptBlockText LIKE \"% active\\_users %\" ESCAPE '\\' OR ScriptBlockText LIKE \"% basic\\_info %\" ESCAPE '\\' OR ScriptBlockText LIKE \"% power\\_off %\" ESCAPE '\\' OR ScriptBlockText LIKE \"% vacant\\_system %\" ESCAPE '\\' OR ScriptBlockText LIKE \"% logon\\_events %\" ESCAPE '\\')",
-            "/Users/wagga/Desktop/SIGMA/sigma/tools/sigma/backends/fireeye-helix.py:128: SyntaxWarning: \"is\" with a literal. Did you mean \"==\"?",
-            "  if node.item is \"rawmsg\":",
-            "/Users/wagga/Desktop/SIGMA/sigma/tools/sigma/backends/fireeye-helix.py:135: SyntaxWarning: \"is\" with a literal. Did you mean \"==\"?",
-            "  if node.item is \"rawmsg\":"
+            "SELECT * FROM logs WHERE (Channel = \"Microsoft-Windows-PowerShell/Operational\" AND (ScriptBlockText LIKE \"%WMImplant%\" ESCAPE '\\' OR ScriptBlockText LIKE \"% change\\_user %\" ESCAPE '\\' OR ScriptBlockText LIKE \"% gen\\_cli %\" ESCAPE '\\' OR ScriptBlockText LIKE \"% command\\_exec %\" ESCAPE '\\' OR ScriptBlockText LIKE \"% disable\\_wdigest %\" ESCAPE '\\' OR ScriptBlockText LIKE \"% disable\\_winrm %\" ESCAPE '\\' OR ScriptBlockText LIKE \"% enable\\_wdigest %\" ESCAPE '\\' OR ScriptBlockText LIKE \"% enable\\_winrm %\" ESCAPE '\\' OR ScriptBlockText LIKE \"% registry\\_mod %\" ESCAPE '\\' OR ScriptBlockText LIKE \"% remote\\_posh %\" ESCAPE '\\' OR ScriptBlockText LIKE \"% sched\\_job %\" ESCAPE '\\' OR ScriptBlockText LIKE \"% service\\_mod %\" ESCAPE '\\' OR ScriptBlockText LIKE \"% process\\_kill %\" ESCAPE '\\' OR ScriptBlockText LIKE \"% active\\_users %\" ESCAPE '\\' OR ScriptBlockText LIKE \"% basic\\_info %\" ESCAPE '\\' OR ScriptBlockText LIKE \"% power\\_off %\" ESCAPE '\\' OR ScriptBlockText LIKE \"% vacant\\_system %\" ESCAPE '\\' OR ScriptBlockText LIKE \"% logon\\_events %\" ESCAPE '\\'))"
         ]
     },
     {
@@ -111,12 +93,9 @@
             "attack.t1021.006",
             "attack.t1028"
         ],
+        "level": "high",
         "rule": [
-            "SELECT * FROM logs WHERE (EventID IN (\"4103\", \"400\") AND HostName = \"ServerRemoteHost\" AND HostApplication LIKE \"%wsmprovhost.exe%\" ESCAPE '\\')",
-            "/Users/wagga/Desktop/SIGMA/sigma/tools/sigma/backends/fireeye-helix.py:128: SyntaxWarning: \"is\" with a literal. Did you mean \"==\"?",
-            "  if node.item is \"rawmsg\":",
-            "/Users/wagga/Desktop/SIGMA/sigma/tools/sigma/backends/fireeye-helix.py:135: SyntaxWarning: \"is\" with a literal. Did you mean \"==\"?",
-            "  if node.item is \"rawmsg\":"
+            "SELECT * FROM logs WHERE (Channel = \"Microsoft-Windows-PowerShell/Operational\" AND EventID IN (\"4103\", \"400\") AND HostName = \"ServerRemoteHost\" AND HostApplication LIKE \"%wsmprovhost.exe%\" ESCAPE '\\')"
         ]
     },
     {
@@ -128,12 +107,9 @@
             "attack.t1059.001",
             "attack.t1086"
         ],
+        "level": "high",
         "rule": [
-            "SELECT * FROM logs WHERE (EventID = \"4104\" AND (Message LIKE \"%PromptForCredential%\" ESCAPE '\\'))",
-            "/Users/wagga/Desktop/SIGMA/sigma/tools/sigma/backends/fireeye-helix.py:128: SyntaxWarning: \"is\" with a literal. Did you mean \"==\"?",
-            "  if node.item is \"rawmsg\":",
-            "/Users/wagga/Desktop/SIGMA/sigma/tools/sigma/backends/fireeye-helix.py:135: SyntaxWarning: \"is\" with a literal. Did you mean \"==\"?",
-            "  if node.item is \"rawmsg\":"
+            "SELECT * FROM logs WHERE (Channel = \"Microsoft-Windows-PowerShell/Operational\" AND EventID = \"4104\" AND (Message LIKE \"%PromptForCredential%\" ESCAPE '\\'))"
         ]
     },
     {},
@@ -146,12 +122,9 @@
             "attack.t1059.001",
             "attack.t1086"
         ],
+        "level": "high",
         "rule": [
-            "SELECT * FROM logs WHERE (EventID = \"400\" AND (EngineVersion LIKE \"2.%\" ESCAPE '\\' OR EngineVersion LIKE \"4.%\" ESCAPE '\\' OR EngineVersion LIKE \"5.%\" ESCAPE '\\') AND HostVersion LIKE \"3.%\" ESCAPE '\\')",
-            "/Users/wagga/Desktop/SIGMA/sigma/tools/sigma/backends/fireeye-helix.py:128: SyntaxWarning: \"is\" with a literal. Did you mean \"==\"?",
-            "  if node.item is \"rawmsg\":",
-            "/Users/wagga/Desktop/SIGMA/sigma/tools/sigma/backends/fireeye-helix.py:135: SyntaxWarning: \"is\" with a literal. Did you mean \"==\"?",
-            "  if node.item is \"rawmsg\":"
+            "SELECT * FROM logs WHERE (Channel = \"Windows PowerShell\" AND EventID = \"400\" AND (EngineVersion LIKE \"2.%\" ESCAPE '\\' OR EngineVersion LIKE \"4.%\" ESCAPE '\\' OR EngineVersion LIKE \"5.%\" ESCAPE '\\') AND HostVersion LIKE \"3.%\" ESCAPE '\\')"
         ]
     },
     {},
@@ -164,28 +137,22 @@
             "attack.t1059.001",
             "attack.t1086"
         ],
+        "level": "high",
         "rule": [
-            "SELECT * FROM logs WHERE (Message LIKE \"%AdjustTokenPrivileges%\" ESCAPE '\\' OR Message LIKE \"%IMAGE\\_NT\\_OPTIONAL\\_HDR64\\_MAGIC%\" ESCAPE '\\' OR Message LIKE \"%Microsoft.Win32.UnsafeNativeMethods%\" ESCAPE '\\' OR Message LIKE \"%ReadProcessMemory.Invoke%\" ESCAPE '\\' OR Message LIKE \"%SE\\_PRIVILEGE\\_ENABLED%\" ESCAPE '\\' OR Message LIKE \"%LSA\\_UNICODE\\_STRING%\" ESCAPE '\\' OR Message LIKE \"%MiniDumpWriteDump%\" ESCAPE '\\' OR Message LIKE \"%PAGE\\_EXECUTE\\_READ%\" ESCAPE '\\' OR Message LIKE \"%SECURITY\\_DELEGATION%\" ESCAPE '\\' OR Message LIKE \"%TOKEN\\_ADJUST\\_PRIVILEGES%\" ESCAPE '\\' OR Message LIKE \"%TOKEN\\_ALL\\_ACCESS%\" ESCAPE '\\' OR Message LIKE \"%TOKEN\\_ASSIGN\\_PRIMARY%\" ESCAPE '\\' OR Message LIKE \"%TOKEN\\_DUPLICATE%\" ESCAPE '\\' OR Message LIKE \"%TOKEN\\_ELEVATION%\" ESCAPE '\\' OR Message LIKE \"%TOKEN\\_IMPERSONATE%\" ESCAPE '\\' OR Message LIKE \"%TOKEN\\_INFORMATION\\_CLASS%\" ESCAPE '\\' OR Message LIKE \"%TOKEN\\_PRIVILEGES%\" ESCAPE '\\' OR Message LIKE \"%TOKEN\\_QUERY%\" ESCAPE '\\' OR Message LIKE \"%Metasploit%\" ESCAPE '\\' OR Message LIKE \"%Mimikatz%\" ESCAPE '\\')",
-            "/Users/wagga/Desktop/SIGMA/sigma/tools/sigma/backends/fireeye-helix.py:128: SyntaxWarning: \"is\" with a literal. Did you mean \"==\"?",
-            "  if node.item is \"rawmsg\":",
-            "/Users/wagga/Desktop/SIGMA/sigma/tools/sigma/backends/fireeye-helix.py:135: SyntaxWarning: \"is\" with a literal. Did you mean \"==\"?",
-            "  if node.item is \"rawmsg\":"
+            "SELECT * FROM logs WHERE (Channel = \"Microsoft-Windows-PowerShell/Operational\" AND (Message LIKE \"%AdjustTokenPrivileges%\" ESCAPE '\\' OR Message LIKE \"%IMAGE\\_NT\\_OPTIONAL\\_HDR64\\_MAGIC%\" ESCAPE '\\' OR Message LIKE \"%Microsoft.Win32.UnsafeNativeMethods%\" ESCAPE '\\' OR Message LIKE \"%ReadProcessMemory.Invoke%\" ESCAPE '\\' OR Message LIKE \"%SE\\_PRIVILEGE\\_ENABLED%\" ESCAPE '\\' OR Message LIKE \"%LSA\\_UNICODE\\_STRING%\" ESCAPE '\\' OR Message LIKE \"%MiniDumpWriteDump%\" ESCAPE '\\' OR Message LIKE \"%PAGE\\_EXECUTE\\_READ%\" ESCAPE '\\' OR Message LIKE \"%SECURITY\\_DELEGATION%\" ESCAPE '\\' OR Message LIKE \"%TOKEN\\_ADJUST\\_PRIVILEGES%\" ESCAPE '\\' OR Message LIKE \"%TOKEN\\_ALL\\_ACCESS%\" ESCAPE '\\' OR Message LIKE \"%TOKEN\\_ASSIGN\\_PRIMARY%\" ESCAPE '\\' OR Message LIKE \"%TOKEN\\_DUPLICATE%\" ESCAPE '\\' OR Message LIKE \"%TOKEN\\_ELEVATION%\" ESCAPE '\\' OR Message LIKE \"%TOKEN\\_IMPERSONATE%\" ESCAPE '\\' OR Message LIKE \"%TOKEN\\_INFORMATION\\_CLASS%\" ESCAPE '\\' OR Message LIKE \"%TOKEN\\_PRIVILEGES%\" ESCAPE '\\' OR Message LIKE \"%TOKEN\\_QUERY%\" ESCAPE '\\' OR Message LIKE \"%Metasploit%\" ESCAPE '\\' OR Message LIKE \"%Mimikatz%\" ESCAPE '\\'))"
         ]
     },
     {
         "title": "Powershell Profile.ps1 Modification - 81CD7853",
         "description": "Detects a change in profile.ps1 of the Powershell profile",
+        "level": "high",
         "tags": [
             "attack.persistence",
             "attack.privilege_escalation",
             "attack.t1546.013"
         ],
         "rule": [
-            "SELECT * FROM logs WHERE (EventID = \"11\" AND TargetFilename LIKE \"%\\\\profile.ps1%\" ESCAPE '\\' AND (TargetFilename LIKE \"%\\\\My Documents\\\\PowerShell\\\\%\" ESCAPE '\\' OR TargetFilename LIKE \"%C:\\\\Windows\\\\System32\\\\WindowsPowerShell\\\\v1.0\\\\%\" ESCAPE '\\'))",
-            "/Users/wagga/Desktop/SIGMA/sigma/tools/sigma/backends/fireeye-helix.py:128: SyntaxWarning: \"is\" with a literal. Did you mean \"==\"?",
-            "  if node.item is \"rawmsg\":",
-            "/Users/wagga/Desktop/SIGMA/sigma/tools/sigma/backends/fireeye-helix.py:135: SyntaxWarning: \"is\" with a literal. Did you mean \"==\"?",
-            "  if node.item is \"rawmsg\":"
+            "SELECT * FROM logs WHERE (Channel = \"Microsoft-Windows-Sysmon/Operational\" AND EventID = \"11\" AND TargetFilename LIKE \"%\\\\profile.ps1%\" ESCAPE '\\' AND (TargetFilename LIKE \"%\\\\My Documents\\\\PowerShell\\\\%\" ESCAPE '\\' OR TargetFilename LIKE \"%C:\\\\Windows\\\\System32\\\\WindowsPowerShell\\\\v1.0\\\\%\" ESCAPE '\\'))"
         ]
     },
     {
@@ -196,8 +163,9 @@
             "attack.t1059.001",
             "attack.t1086"
         ],
+        "level": "medium",
         "rule": [
-            "SELECT * FROM logs WHERE (EventID = \"400\" AND HostName = \"ConsoleHost\" AND (CommandLine LIKE \"%bxor%\" ESCAPE '\\' OR CommandLine LIKE \"%join%\" ESCAPE '\\' OR CommandLine LIKE \"%char%\" ESCAPE '\\'))"
+            "SELECT * FROM logs WHERE (Channel = \"Windows PowerShell\" AND EventID = \"400\" AND HostName = \"ConsoleHost\" AND (CommandLine LIKE \"%bxor%\" ESCAPE '\\' OR CommandLine LIKE \"%join%\" ESCAPE '\\' OR CommandLine LIKE \"%char%\" ESCAPE '\\'))"
         ]
     },
     {
@@ -210,8 +178,9 @@
             "attack.t1059.001",
             "attack.t1086"
         ],
+        "level": "critical",
         "rule": [
-            "SELECT * FROM logs WHERE (EventID = \"4104\" AND ScriptBlockText LIKE \"%Start-Dnscat2%\" ESCAPE '\\')"
+            "SELECT * FROM logs WHERE (Channel = \"Microsoft-Windows-PowerShell/Operational\" AND EventID = \"4104\" AND ScriptBlockText LIKE \"%Start-Dnscat2%\" ESCAPE '\\')"
         ]
     },
     {
@@ -222,8 +191,9 @@
             "attack.t1059.001",
             "attack.t1086"
         ],
+        "level": "high",
         "rule": [
-            "SELECT * FROM logs WHERE (EventID = \"4103\" AND logs MATCH ('\"PS ATTACK!!!\"'))"
+            "SELECT * FROM logs WHERE (Channel = \"Microsoft-Windows-PowerShell/Operational\" AND EventID = \"4103\" AND logs MATCH ('\"PS ATTACK!!!\"'))"
         ]
     },
     {
@@ -234,20 +204,22 @@
             "attack.t1059.001",
             "attack.t1086"
         ],
+        "level": "high",
         "rule": [
-            "SELECT * FROM logs WHERE (Message LIKE \"% -nop -w hidden -c % [Convert]::FromBase64String%\" ESCAPE '\\' OR Message LIKE \"% -w hidden -noni -nop -c \"iex(New-Object%\" ESCAPE '\\' OR Message LIKE \"% -w hidden -ep bypass -Enc%\" ESCAPE '\\' OR Message LIKE \"%powershell.exe reg add HKCU\\\\software\\\\microsoft\\\\windows\\\\currentversion\\\\run%\" ESCAPE '\\' OR Message LIKE \"%bypass -noprofile -windowstyle hidden (new-object system.net.webclient).download%\" ESCAPE '\\' OR Message LIKE \"%iex(New-Object Net.WebClient).Download%\" ESCAPE '\\')"
+            "SELECT * FROM logs WHERE (Channel = \"Microsoft-Windows-PowerShell/Operational\" AND (Message LIKE \"% -nop -w hidden -c % [Convert]::FromBase64String%\" ESCAPE '\\' OR Message LIKE \"% -w hidden -noni -nop -c \"iex(New-Object%\" ESCAPE '\\' OR Message LIKE \"% -w hidden -ep bypass -Enc%\" ESCAPE '\\' OR Message LIKE \"%powershell.exe reg add HKCU\\\\software\\\\microsoft\\\\windows\\\\currentversion\\\\run%\" ESCAPE '\\' OR Message LIKE \"%bypass -noprofile -windowstyle hidden (new-object system.net.webclient).download%\" ESCAPE '\\' OR Message LIKE \"%iex(New-Object Net.WebClient).Download%\" ESCAPE '\\'))"
         ]
     },
     {
         "title": "Data Compressed - Powershell - 3F9D62AF",
         "description": "An adversary may compress data (e.g., sensitive documents) that is collected prior to exfiltration in order to make it portable and minimize the amount of data sent over the network",
+        "level": "low",
         "tags": [
             "attack.exfiltration",
             "attack.t1560",
             "attack.t1002"
         ],
         "rule": [
-            "SELECT * FROM logs WHERE (EventID = \"4104\" AND keywords LIKE \"%-Recurse%\" ESCAPE '\\' AND keywords LIKE \"%|%\" ESCAPE '\\' AND keywords LIKE \"%Compress-Archive%\" ESCAPE '\\')"
+            "SELECT * FROM logs WHERE (Channel = \"Microsoft-Windows-PowerShell/Operational\" AND EventID = \"4104\" AND keywords LIKE \"%-Recurse%\" ESCAPE '\\' AND keywords LIKE \"%|%\" ESCAPE '\\' AND keywords LIKE \"%Compress-Archive%\" ESCAPE '\\')"
         ]
     },
     {
@@ -258,8 +230,9 @@
             "attack.t1059.001",
             "attack.t1086"
         ],
+        "level": "medium",
         "rule": [
-            "SELECT * FROM logs WHERE ((EventID IN (\"4103\", \"400\") AND ContextInfo LIKE \"%\" ESCAPE '\\') AND NOT (ContextInfo = \"powershell.exe\" OR Message = \"powershell.exe\"))"
+            "SELECT * FROM logs WHERE (Channel = \"Microsoft-Windows-PowerShell/Operational\" AND (EventID IN (\"4103\", \"400\") AND ContextInfo LIKE \"%\" ESCAPE '\\') AND NOT (ContextInfo = \"powershell.exe\" OR Message = \"powershell.exe\"))"
         ]
     },
     {},
@@ -274,8 +247,9 @@
             "attack.t1136.001",
             "attack.t1136"
         ],
+        "level": "medium",
         "rule": [
-            "SELECT * FROM logs WHERE (EventID = \"4104\" AND (Message LIKE \"%New-LocalUser%\" ESCAPE '\\'))"
+            "SELECT * FROM logs WHERE (Channel = \"Microsoft-Windows-PowerShell/Operational\" AND EventID = \"4104\" AND (Message LIKE \"%New-LocalUser%\" ESCAPE '\\'))"
         ]
     },
     {
@@ -286,8 +260,9 @@
             "attack.t1070.003",
             "attack.t1146"
         ],
+        "level": "medium",
         "rule": [
-            "SELECT * FROM logs WHERE (logs MATCH ('\"del (Get-PSReadlineOption).HistorySavePath\" OR \"Set-PSReadlineOption \u2013HistorySaveStyle SaveNothing\" OR \"Remove-Item (Get-PSReadlineOption).HistorySavePath\" OR \"rm (Get-PSReadlineOption).HistorySavePath\"'))"
+            "SELECT * FROM logs WHERE (Channel = \"Microsoft-Windows-PowerShell/Operational\" AND (logs MATCH ('\"del (Get-PSReadlineOption).HistorySavePath\" OR \"Set-PSReadlineOption \u2013HistorySaveStyle SaveNothing\" OR \"Remove-Item (Get-PSReadlineOption).HistorySavePath\" OR \"rm (Get-PSReadlineOption).HistorySavePath\"')))"
         ]
     }
 ]

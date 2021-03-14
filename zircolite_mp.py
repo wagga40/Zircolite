@@ -25,7 +25,7 @@ def executeZircolite(directory, ruleset):
 	if directory.is_dir():
 		print(bcolors.OKBLUE + "    [+] Executing Zircolite on : " + str(directory) + "                   ")
 		name = str(directory).split("/")[-1]
-		cmd = ["python3", "zircolite.py", "-e", str(directory), "-r", ruleset, "-o", "detected_events_" + name + ".json", "-l", "Zircolite_" + name + ".log"]
+		cmd = ["python3", "zircolite.py", "-e", str(directory), "-r", ruleset, "-o", "detected_events_" + name + ".json", "-l", "zircolite_" + name + ".log"]
 		subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT).stdout.read()
 
 ################################################################
