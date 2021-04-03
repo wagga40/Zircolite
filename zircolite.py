@@ -276,7 +276,7 @@ if __name__ == '__main__':
 	parser.add_argument("-k", "--keeptmp", help="Do not remove the Temp directory", action='store_true')
 	parser.add_argument("-d", "--dbfile", help="Save data as a SQLite Db to the specified file on disk", type=str)
 	parser.add_argument("-l", "--logfile", help="Log file name", default="zircolite.log", type=str)
-	parser.add_argument("-j", "--jsononly", help="If logs files are already in JSON lines format", action='store_true')
+	parser.add_argument("-j", "--jsononly", help="If logs files are already in JSON lines format ('jsonl' in evtx_dump) ", action='store_true')
 	parser.add_argument("--template", help="If a Jinja2 template is specified it will be used to generated output", type=str, action='append', nargs='+')
 	parser.add_argument("--templateOutput", help="If a Jinja2 template is specified it will be used to generate a crafted output", type=str, action='append', nargs='+')
 	parser.add_argument("--fields", help="Show all fields in full format", action='store_true')
@@ -314,6 +314,8 @@ if __name__ == '__main__':
 	fieldExclusions = {} # Will contain fields to discard
 	fieldMappings = {} # Will contain fields to rename during flattening
 	uselessValues = {} # Will contain values to discard during flattening
+
+	checkIfExists(args.config, f"{Fore.RED}   [-] Cannot find mapping file")
 	with open(args.config,'r') as fieldMappingsFile:
 		fieldMappingsDict = json.load(fieldMappingsFile)
 		fieldExclusions = fieldMappingsDict["exclusions"]
@@ -368,7 +370,7 @@ if __name__ == '__main__':
 	createTableStmt = "CREATE TABLE logs ( row_id INTEGER, " + fieldStmt + " PRIMARY KEY(row_id AUTOINCREMENT) );" # TODO : Indexes ?
 	logging.debug(" CREATE : " + createTableStmt.replace('\n', ' ').replace('\r', ''))
 	if not executeQuery(dbConnection, createTableStmt):
-		quitOnError(f"{Fore.RED}   [-] Wasn't able to execute query")
+		quitOnError(f"{Fore.RED}   [-] Not able to execute query")
 	del createTableStmt
 
 	logging.info("[+] Inserting data")

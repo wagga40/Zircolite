@@ -8,9 +8,15 @@
 
 **Zircolite is a standalone tool written in Python 3 allowing to use SIGMA rules on Windows EVTX logs.**
 
+[![asciicast](https://asciinema.org/a/EJC8RRKQXvzzjB959U4Bk5rnR.svg)](https://asciinema.org/a/EJC8RRKQXvzzjB959U4Bk5rnR)
+
+## Author
+
+* [github/wagga40](https://github.com/wagga40)
+
 ## Requirements 
 
-`Zircolite.py` do not need external Python libraries but it needs some external tools :
+`Zircolite.py` do not need mandatory Python libraries but it needs some external tools :
 
 * [Evtx_dump](https://github.com/omerbenamram/evtx)
 
@@ -19,6 +25,8 @@ These tools must be placed in the `bin` directory and be named according to the 
 | Tool             | Windows             | MacOS          | Linux           |
 |------------------|---------------------|----------------|-----------------|
 | evtx_dump        | evtx\_dump\_win.exe | evtx\_dump\_mac| evtx\_dump\_lin | 
+
+For now, `evtx_dump` is 64 bits only so if you use `zircolite.py` with evtx files as input you can only execute it on a 64 bits OS.
 
 ## Quick start
 
