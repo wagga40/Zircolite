@@ -6,12 +6,6 @@
 
 ![](../pics/gui.jpg)
 
-## Auteur
-
-**Wagga / Baptiste**
-
-* [github/wagga40](https://github.com/wagga40)
-
 ## Prérequis 
 
 ### Données

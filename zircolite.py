@@ -13,6 +13,7 @@ import sys
 import time
 import random
 import string
+import signal 
 from pathlib import Path
 import shutil
 from sys import platform as _platform
@@ -45,6 +46,10 @@ try:
 	hasJinja2 = True
 except ImportError: # If the module is not available
 	hasJinja2 = False
+
+def signal_handler(sig, frame):
+    logging.info("[-] Execution interrupted !")
+    sys.exit(0)
 
 # SQlite related functions
 def createConnection(db):
@@ -264,13 +269,13 @@ if __name__ == '__main__':
 	╚══════╝╚═╝╚═╝  ╚═╝ ╚═════╝ ╚═════╝ ╚══════╝╚═╝   ╚═╝   ╚══════╝
 	""")
 
+	# Init Args handling
 	tmpDir = "tmp-" + ''.join(random.SystemRandom().choice(string.ascii_uppercase + string.digits) for _ in range(8))
-
 	parser = argparse.ArgumentParser()
 	parser.add_argument("-e", "--evtx", help="EVTX log file or directory where EVTX log files are stored in JSON or EVTX format", type=str, required = True)
 	parser.add_argument("-r", "--ruleset", help="JSON File containing SIGMA rules", type=str, required = True)
 	parser.add_argument("-c", "--config", help="JSON File containing field mappings and exclusions", type=str, default="config/fieldMappings.json")
-	parser.add_argument("-o", "--outfile", help="JSON file that will contains all events triggering SIGMA rules", type=str, default="detected_events.json")
+	parser.add_argument("-o", "--outfile", help="JSON file that will contains all detected events", type=str, default="detected_events.json")
 	parser.add_argument("-f", "--fileext", help="EVTX file extension", type=str, default="evtx")
 	parser.add_argument("-t", "--tmpdir", help="Temp directory that will contains EVTX converted as JSON", type=str, default=tmpDir)
 	parser.add_argument("-k", "--keeptmp", help="Do not remove the Temp directory", action='store_true')
@@ -281,8 +286,9 @@ if __name__ == '__main__':
 	parser.add_argument("--templateOutput", help="If a Jinja2 template is specified it will be used to generate a crafted output", type=str, action='append', nargs='+')
 	parser.add_argument("--fields", help="Show all fields in full format", action='store_true')
 	parser.add_argument("--debug", help="Activate debug logging", action='store_true')
-
 	args = parser.parse_args()
+
+	signal.signal(signal.SIGINT, signal_handler)
 
 	# Init logging
 	consoleLogger = initLogger(args.debug, args.logfile)
@@ -401,10 +407,10 @@ if __name__ == '__main__':
 				for rule in ruleBar: # for each rule in ruleset
 					ruleResults = executeRule(rule)
 					if ruleResults != {}:
-						ruleBar.write(f'{Fore.CYAN}    └─> {ruleResults["title"]} - Matchs : {ruleResults["count"]} events')
+						ruleBar.write(f'{Fore.CYAN}    ─ {ruleResults["title"]} - Matchs : {ruleResults["count"]} events')
 						# To avoid printing this one on stdout but in the logs...
 						consoleLogger.setLevel(logging.ERROR)
-						logging.info(f'{Fore.CYAN}    └─> {ruleResults["title"]} - Matchs : {ruleResults["count"]} events')
+						logging.info(f'{Fore.CYAN}    ─ {ruleResults["title"]} - Matchs : {ruleResults["count"]} events')
 						consoleLogger.setLevel(logging.INFO)
 						# Store results for templating
 						if readyForTemplating:
@@ -422,7 +428,7 @@ if __name__ == '__main__':
 			for rule in ruleset:
 				ruleResults = executeRule(rule)
 				if ruleResults != {}:
-					logging.info(f'{Fore.CYAN}    └─> {ruleResults["title"]} - Matchs : {ruleResults["count"]} events')
+					logging.info(f'{Fore.CYAN}    ─ {ruleResults["title"]} - Matchs : {ruleResults["count"]} events')
 					# Store results for templating
 					if readyForTemplating:
 						fullResults.append(ruleResults)
@@ -434,7 +440,8 @@ if __name__ == '__main__':
 						logging.error(f"{Fore.RED}   [-] Error saving some results : {e}")
 						logging.debug(f"   [-] {e}")
 			f.write('{}]')
-
+	logging.info(f"[+] Results written in : {args.outfile}")
+	
 	# Templating
 	if readyForTemplating and fullResults != []:
 		for template, templateOutput in zip(args.template, args.templateOutput):
