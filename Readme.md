@@ -17,6 +17,8 @@ For now, `evtx_dump` is 64 bits only so if you use `zircolite.py` with evtx file
 
 Zircolite can be used directly in Python or you can use the binaries provided in released (Microsoft Windows only).
 
+:information_source: If you want to try the tool you can test with these EVTX files : [EVTX-ATTACK-SAMPLES](https://github.com/sbousseaden/EVTX-ATTACK-SAMPLES).
+
 ### Mini-GUI
 
 ![](pics/gui.jpg)
