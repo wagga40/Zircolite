@@ -127,14 +127,14 @@ python3 zircolite.py --evtx ../Logs --ruleset rules/rules_medium_generic.json --
 
 ### Benchmarks
 
-On an Intel Core-i9 8c/16t - 64 Go RAM : 
+On an Intel Core-i9 8c/16t - 64 GB RAM : 
 
 |                            | Monocore | Multicore  |
 |----------------------------|----------|------------|
-| EVTX : 34 Go - 16 folders  | -        | 12 Min     |
-| EVTX : 3,4 Go - 9 folders  | -        | 3 Min      |
-| EVTX : 1,2 Go - 6 folders  | 11 Min   | 1 Min 30 s |
-| EVTX : 40 Mo  - 2 folders  | 3 s      | 1 s        |
+| EVTX : 34 GB - 16 folders  | -        | 12 Min     |
+| EVTX : 3,4 GB - 9 folders  | -        | 3 Min      |
+| EVTX : 1,2 GB - 6 folders  | 11 Min   | 1 Min 30 s |
+| EVTX : 40 MB  - 2 folders  | 3 s      | 1 s        |
 
 ### Rules
 
