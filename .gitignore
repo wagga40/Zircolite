@@ -4,7 +4,8 @@
 .LSOverride
 
 # Icon must end with two \r
-Icon
+Icon
+
 
 # Thumbnails
 ._*
@@ -31,3 +32,5 @@ tmp
 *.log
 *.evtx
 *.evtx_data
+*.tar
+*.tar.sha256

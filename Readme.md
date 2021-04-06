@@ -23,30 +23,30 @@ Zircolite can be used directly in Python or you can use the binaries provided in
 
 ![](pics/gui.jpg)
 
-## Requirements 
+## Requirements
 
 ### Mandatory
 
-* [Evtx_dump](https://github.com/omerbenamram/evtx) : The tool is provided if you clone the repo. If you want to be sure of what you execute, you can download the tool directly on the official repository : [here](https://github.com/omerbenamram/evtx). In order to use it with Zircolite you must put it in the `bin` directory. The file must be named accordingly to the following array : 
+* [Evtx_dump](https://github.com/omerbenamram/evtx) : The tool is provided if you clone the repo. If you want to be sure of what you execute, you can download the tool directly on the official repository : [here](https://github.com/omerbenamram/evtx). In order to use it with Zircolite you must put it in the `bin` directory. The file must be named accordingly to the following array :
 
 	| Tool             | Windows             | MacOS          | Linux           |
 	|------------------|---------------------|----------------|-----------------|
-	| evtx_dump        | evtx\_dump\_win.exe | evtx\_dump\_mac| evtx\_dump\_lin | 
-	
+	| evtx_dump        | evtx\_dump\_win.exe | evtx\_dump\_mac| evtx\_dump\_lin |
+
 ### Optional
 
-To enhance Zircolite experience, you can use the following third party Python libraries : **tqdm**, **colorama**, **jinja2**. You can install them with : `pip3 install -r requirements.txt`  
+To enhance Zircolite experience, you can use the following third party Python libraries : **tqdm**, **colorama**, **jinja2**. You can install them with : `pip3 install -r requirements.txt`
 
 ## Quick start
 
-If your evtx files have the extension ".evtx" : 
+If your evtx files have the extension ".evtx" :
 
 ```shell
 python3 zircolite.py --evtx <EVTX folder> --ruleset <Converted Sigma rules>
 python3 zircolite.py --evtx ../Logs --ruleset rules/rules_medium_sysmon.json
 ```
 
-Other arguments are described when using : `zircolite.py -h`. Relevant **optional** arguments are : 
+Other arguments are described when using : `zircolite.py -h`. Relevant **optional** arguments are :
 
 - `--config [configuration file]` : JSON File containing field mappings and exclusions
 - `--fileext` : Allows to customize the evtx file extension (some tools like to change the extension)
@@ -59,7 +59,7 @@ Other arguments are described when using : `zircolite.py -h`. Relevant **optiona
 
 Zircolite provides a templating system based on Jinja 2. It allows you to change the output format to suits your needs (Splunk or ELK integration, Grep-able output...).
 
-To use the template system, use these arguments : 
+To use the template system, use these arguments :
 
 - `--template <template_filename>`
 - `--templateOutput <output_filename>`
@@ -78,13 +78,13 @@ It is possible to use multiple templates if you provide as long as for each `--t
 
 A mini-GUI screenshot is available at the beggining of this Read Me. The Mini-GUI can be used totaly offline, it allows the user to display results in a visual friendly and searchable. It uses [datatables](https://datatables.net/) and the [SB Admin 2 theme](https://github.com/StartBootstrap/startbootstrap-sb-admin-2).
 
-To use it you just need to generate a `data.js` file with the `exportForZircoGui.tmpl`template and move it to the `gui` directory : 
+To use it you just need to generate a `data.js` file with the `exportForZircoGui.tmpl`template and move it to the `gui` directory :
 
 ```shell
 python3 zircolite.py \
 			--evtx ../EVTX-ATTACK-SAMPLES/ \
-			--ruleset rules/rules_medium_sysmon_performance_v3.json \ 
-			--template templates/exportForZircoGui.tmpl \ 
+			--ruleset rules/rules_medium_sysmon_performance_v3.json \
+			--template templates/exportForZircoGui.tmpl \
 			--templateOutput data.js
 mv data.js gui/
 
@@ -98,7 +98,7 @@ Then you just have to open `index.html` in your favorite browser and click on a 
 
 Even if it is written in Python, Zircolite tries to be as fast as possible so a lot of data is stored in memory. As of v1.0, there is no "slower" mode that use less memory. Zircolite memory use oscillate between 2 or 4 times the size of the logs, so it is not a good idea to use it on very big EVTX files or a large number of EVTX. Moreover, Except when `evtx_dump` is used, Zircolite only use one core. If you have a lot of EVTX files and the total size is big, it is recommanded that you use a script to launch multiple Zircolite instances. By the way, a very basic one is provided in this repository : `Zircolite_mp.py`.
 
-`zircolite_mp.py` is a tool that leverages multiple cores to launch multiple Zircolite instances to speed up the analysis. It is pretty much like `GNU Parallel`. All cores can be used, but it is better to leave one or two cores unused. `zircolite_mp.py` needs data to be organised accordingly to the following directory tree : 
+`zircolite_mp.py` is a tool that leverages multiple cores to launch multiple Zircolite instances to speed up the analysis. It is pretty much like `GNU Parallel`. All cores can be used, but it is better to leave one or two cores unused. `zircolite_mp.py` needs data to be organised accordingly to the following directory tree :
 
 ```console
 CASE
@@ -127,7 +127,7 @@ python3 zircolite.py --evtx ../Logs --ruleset rules/rules_medium_generic.json --
 
 ### Benchmarks
 
-On an Intel Core-i9 8c/16t - 64 GB RAM : 
+On an Intel Core-i9 8c/16t - 64 GB RAM :
 
 |                            | Monocore | Multicore  |
 |----------------------------|----------|------------|
@@ -150,7 +150,7 @@ The SIGMA rules must be converted into JSON. This can be done with the `genRules
 
 ```text
 ├── Makefile                # Only make clean works
-├── Readme.md               # The file you are reading  
+├── Readme.md               # The file you are reading
 ├── bin                     # Directory containing all external binaries used in Zircolite
 ├── config                  # Directory containing the config files
 │   └── fieldMappings.json  # File containing the field mappings and exclusions
@@ -167,6 +167,28 @@ The SIGMA rules must be converted into JSON. This can be done with the `genRules
 
 No installation needed. If you need to package it for standalone use on a computer use [PyInstaller](https://www.pyinstaller.org/) or [Nuitka](https://nuitka.net/).
 
+### Zircolite with Docker
+
+Zircolite is also packaged as a Docker image (cf. `wagga40/zircolite` on Docker Hub), which embeds all dependencies (e.g. `evtx_dump`) and provides a platform-independant way of using the tool.
+
+Using Zircolite with Docker is as simple as:
+
+```sh
+docker container run --tty --volume /path/to/evtx:/case docker.io/wagga40/zircolite:1.1.2 --ruleset rules/rules_windows_sysmon.json --evtx /case --outfile /case/detected_events.json
+```
+
+This will recursively find EVTX files in the `/case` directory of the container (which is bound to the `/path/to/evtx` of the host filesystem) and write the detection events to the `/case/detected_events.json` (which finally corresponds to `/path/to/evtx/detected_events.json`). Please refer to the [official documentation](https://docs.docker.com/engine/reference/run/) for more detailed examples on how to use the Docker image.
+
+Event if Zircolite does not alter the original EVTX files, sometimes you want to make sure that nothing will write to the original files. For these cases, you can use a read-only bind mount with the following command:
+
+```sh
+docker run --rm --tty -v /path/to/evtx:/case/input:ro -v /path/to/results:/case/output docker.io/wagga40/zircolite:1.1.2 -r rules/rules_windows_sysmon.json -e /case/input -o /case/output/detected_events.json
+```
+
+This way, Zircolite cannot alter the original files since the bind mount is set to read-only. The output will still be available as `/case/output/detected_events.json` (which eventually becomes `/path/to/results/detected_events.json` on the host).
+
+Since the Docker image mirrors Zircolite's repository, all options are also available in the image.
+
 ### How to package Zircolite
 
 #### PyInstaller
@@ -174,7 +196,7 @@ No installation needed. If you need to package it for standalone use on a comput
 * Install Python 3.8 on the same OS as the one you want to use Zircolite on
 * After Python 3.8 install, you will need PyInstaller : `pip3 install pyinstaller`
 * In the root folder of Zircolite type : `pyinstaller -c --onefile zircolite.py`
-* The `dist` folder will contain the packaged app 
+* The `dist` folder will contain the packaged app
 
 :warning: When packaging with PyInstaller some AV may not like your package... Check [here](https://twitter.com/cyb3rops/status/1366011127801516035).
 
