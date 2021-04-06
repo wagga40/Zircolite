@@ -111,7 +111,7 @@ def extractEvtx(file, tmpDir, evtx_dumpBinary):
         filepath = Path(file)
         filename = filepath.name
         randString = ''.join(random.SystemRandom().choice(string.ascii_uppercase + string.digits) for _ in range(8))
-        cmd = [evtx_dumpBinary, "--no-confirm-overwrite", "-o", "jsonl", file, "-f", tmpDir + "/" + str(filename) + randString + ".json"]
+        cmd = [evtx_dumpBinary, "--no-confirm-overwrite", "-o", "jsonl", str(file), "-f", tmpDir + "/" + str(filename) + randString + ".json"]
         subprocess.call(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
     except Exception as e:
         logging.error(f"{Fore.RED}   [-] {e}")
