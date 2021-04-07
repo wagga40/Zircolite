@@ -29,9 +29,9 @@ Zircolite can be used directly in Python or you can use the binaries provided in
 
 * [Evtx_dump](https://github.com/omerbenamram/evtx) : The tool is provided if you clone the repo. If you want to be sure of what you execute, you can download the tool directly on the official repository : [here](https://github.com/omerbenamram/evtx). In order to use it with Zircolite you must put it in the `bin` directory. The file must be named accordingly to the following array :
 
-	| Tool             | Windows             | MacOS          | Linux           |
-	|------------------|---------------------|----------------|-----------------|
-	| evtx_dump        | evtx\_dump\_win.exe | evtx\_dump\_mac| evtx\_dump\_lin |
+    | Tool             | Windows             | MacOS          | Linux           |
+    |------------------|---------------------|----------------|-----------------|
+    | evtx_dump        | evtx\_dump\_win.exe | evtx\_dump\_mac| evtx\_dump\_lin |
 
 ### Optional
 
@@ -82,10 +82,10 @@ To use it you just need to generate a `data.js` file with the `exportForZircoGui
 
 ```shell
 python3 zircolite.py \
-			--evtx ../EVTX-ATTACK-SAMPLES/ \
-			--ruleset rules/rules_windows_sysmon.json.json \ 
-			--template templates/exportForZircoGui.tmpl \ 
-			--templateOutput data.js
+            --evtx ../EVTX-ATTACK-SAMPLES/ \
+            --ruleset rules/rules_windows_sysmon.json.json \ 
+            --template templates/exportForZircoGui.tmpl \ 
+            --templateOutput data.js
 mv data.js gui/
 
 ```
