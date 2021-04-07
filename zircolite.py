@@ -409,10 +409,10 @@ if __name__ == '__main__':
                 for rule in ruleBar:  # for each rule in ruleset
                     ruleResults = executeRule(rule)
                     if ruleResults != {}:
-                        ruleBar.write(f'{Fore.CYAN}    ─ {ruleResults["title"]} - Matchs : {ruleResults["count"]} events')
+                        ruleBar.write(f'{Fore.CYAN}    - {ruleResults["title"]} - Matchs : {ruleResults["count"]} events')
                         # To avoid printing this one on stdout but in the logs...
                         consoleLogger.setLevel(logging.ERROR)
-                        logging.info(f'{Fore.CYAN}    ─ {ruleResults["title"]} - Matchs : {ruleResults["count"]} events')
+                        logging.info(f'{Fore.CYAN}    - {ruleResults["title"]} - Matchs : {ruleResults["count"]} events')
                         consoleLogger.setLevel(logging.INFO)
                         # Store results for templating
                         if readyForTemplating:
@@ -430,7 +430,7 @@ if __name__ == '__main__':
             for rule in ruleset:
                 ruleResults = executeRule(rule)
                 if ruleResults != {}:
-                    logging.info(f'{Fore.CYAN}    ─ {ruleResults["title"]} - Matchs : {ruleResults["count"]} events')
+                    logging.info(f'{Fore.CYAN}    - {ruleResults["title"]} - Matchs : {ruleResults["count"]} events')
                     # Store results for templating
                     if readyForTemplating:
                         fullResults.append(ruleResults)

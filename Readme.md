@@ -43,7 +43,7 @@ If your evtx files have the extension ".evtx" :
 
 ```shell
 python3 zircolite.py --evtx <EVTX folder> --ruleset <Converted Sigma rules>
-python3 zircolite.py --evtx ../Logs --ruleset rules/rules_medium_sysmon.json
+python3 zircolite.py --evtx ../Logs --ruleset rules/rules_windows_sysmon.json
 ```
 
 Other arguments are described when using : `zircolite.py -h`. Relevant **optional** arguments are :
@@ -67,7 +67,7 @@ To use the template system, use these arguments :
 ```shell
 python3 zircolite.py --evtx example.evtx  --ruleset rules/rules_windows_sysmon.json \
 --template templates/exportCSV.tmpl \
---templateOutput test.csv --template templates/exportForSplunk.tmpl
+--templateOutput test.csv
 ```
 
 It is possible to use multiple templates if you provide as long as for each `--template` argument there is a `--templateOutput` argument associated.
@@ -83,8 +83,8 @@ To use it you just need to generate a `data.js` file with the `exportForZircoGui
 ```shell
 python3 zircolite.py \
 			--evtx ../EVTX-ATTACK-SAMPLES/ \
-			--ruleset rules/rules_medium_sysmon_performance_v3.json \
-			--template templates/exportForZircoGui.tmpl \
+			--ruleset rules/rules_windows_sysmon.json.json \ 
+			--template templates/exportForZircoGui.tmpl \ 
 			--templateOutput data.js
 mv data.js gui/
 
@@ -116,11 +116,11 @@ To launch `zircolite_mp.py` :
 
 ```
 # 1 core "--monore" or "--core 1"
-python3 zircolite.py --evtx ../Logs --ruleset rules/rules_medium_generic.json --monocore
+python3 zircolite.py --evtx ../Logs --ruleset rules/rules_windows_sysmon.json --monocore
 # All cores "--core all" (default)
-python3 zircolite.py --evtx ../Logs --ruleset rules/rules_medium_generic.json --core all
+python3 zircolite.py --evtx ../Logs --ruleset rules/rules_windows_sysmon.json --core all
 # 4 cores
-python3 zircolite.py --evtx ../Logs --ruleset rules/rules_medium_generic.json --core 4
+python3 zircolite.py --evtx ../Logs --ruleset rules/rules_windows_sysmon.json --core 4
 
 ```
 :warning: For now, `evtx_dump` will use all CPU cores, this will be changed in future versions.
