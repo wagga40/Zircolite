@@ -542,6 +542,19 @@
         ]
     },
     {
+        "title": "PCRE.NET Package Temp Files - 11DAFF69",
+        "description": "Detects processes creating temp files related to PCRE.NET package",
+        "author": "Roberto Rodriguez (Cyb3rWard0g), OTR (Open Threat Research)",
+        "tags": [
+            "attack.execution",
+            "attack.t1059"
+        ],
+        "level": "high",
+        "rule": [
+            "SELECT * FROM logs WHERE (EventID = \"11\" AND TargetFilename LIKE \"%\\\\AppData\\\\Local\\\\Temp\\\\ba9ea7344a4a5f591d6e5dc32a13494b\\\\%\" ESCAPE '\\')"
+        ]
+    },
+    {
         "title": "Suspicious ADSI-Cache Usage By Unknown Tool - 8D3C5CD2",
         "description": "Detects the usage of ADSI (LDAP) operations by tools. This may also detect tools like LDAPFragger.",
         "author": "xknow @xknow_infosec",
@@ -871,6 +884,19 @@
     },
     {},
     {
+        "title": "PowerShell Get Clipboard - 7E2C33D4",
+        "description": "A General detection for the Get-Clipboard commands in PowerShell logs. This could be an adversary capturing clipboard contents.",
+        "author": "Roberto Rodriguez (Cyb3rWard0g), OTR (Open Threat Research)",
+        "tags": [
+            "attack.collection",
+            "attack.t1115"
+        ],
+        "level": "medium",
+        "rule": [
+            "SELECT * FROM logs WHERE ((EventID = \"4104\" AND ScriptBlockText LIKE \"%Get-Clipboard%\" ESCAPE '\\') OR (EventID = \"4103\" AND Payload LIKE \"%Get-Clipboard%\" ESCAPE '\\'))"
+        ]
+    },
+    {
         "title": "Dnscat Execution - 19E7263A",
         "description": "Dnscat exfiltration tool execution",
         "author": "Daniil Yugoslavskiy, oscd.community",
@@ -997,6 +1023,34 @@
         "level": "high",
         "rule": [
             "SELECT * FROM logs WHERE (EventID = \"4104\" AND ScriptBlockText LIKE \"%CL\\_Mutexverifiers.ps1%\" ESCAPE '\\' AND ScriptBlockText LIKE \"%runAfterCancelProcess%\" ESCAPE '\\')"
+        ]
+    },
+    {
+        "title": "Suspicious Non PowerShell WSMAN COM Provider - 13D1FEAA",
+        "description": "Detects suspicious use of the WSMAN provider without PowerShell.exe as the host application.",
+        "author": "Roberto Rodriguez (Cyb3rWard0g), OTR (Open Threat Research)",
+        "tags": [
+            "attack.execution",
+            "attack.t1059.001",
+            "attack.lateral_movement",
+            "attack.t1021.003"
+        ],
+        "level": "medium",
+        "rule": [
+            "SELECT * FROM logs WHERE (Message LIKE \"%ProviderName=WSMan%\" ESCAPE '\\' AND NOT (Message LIKE \"%HostApplication=%powershell%\" ESCAPE '\\'))"
+        ]
+    },
+    {
+        "title": "PowerShell Decompress Commands - 22B90248",
+        "description": "A General detection for specific decompress commands in PowerShell logs. This could be an adversary decompressing files.",
+        "author": "Roberto Rodriguez (Cyb3rWard0g), OTR (Open Threat Research)",
+        "tags": [
+            "attack.defense_evasion",
+            "attack.t1140"
+        ],
+        "level": "informational",
+        "rule": [
+            "SELECT * FROM logs WHERE ((EventID = \"4104\" AND ScriptBlockText LIKE \"%Expand-Archive%\" ESCAPE '\\') OR (EventID = \"4103\" AND Payload LIKE \"%Expand-Archive%\" ESCAPE '\\'))"
         ]
     },
     {
@@ -1137,6 +1191,19 @@
         ]
     },
     {
+        "title": "Lsass Memory Dump via Comsvcs DLL - 1D22ED2C",
+        "description": "Detects adversaries leveraging the MiniDump export function from comsvcs.dll via rundll32 to perform a memory dump from lsass.",
+        "author": "Roberto Rodriguez (Cyb3rWard0g), OTR (Open Threat Research)",
+        "tags": [
+            "attack.credential_access",
+            "attack.t1003.001"
+        ],
+        "level": "critical",
+        "rule": [
+            "SELECT * FROM logs WHERE (EventID = \"10\" AND TargetImage LIKE \"C:\\\\windows\\\\system32\\\\lsass.exe\" ESCAPE '\\' AND SourceImage LIKE \"C:\\\\Windows\\\\System32\\\\rundll32.exe\" ESCAPE '\\' AND CallTrace LIKE \"%comsvcs.dll%\" ESCAPE '\\')"
+        ]
+    },
+    {
         "title": "Load Undocumented Autoelevated COM Interface - 58F12D77",
         "description": "COM interface (EditionUpgradeManager) that is not used by standard executables.",
         "tags": [
@@ -1231,6 +1298,19 @@
         ]
     },
     {
+        "title": "PCRE.NET Package Image Load - 7C73BAC3",
+        "description": "Detects processes loading modules related to PCRE.NET package",
+        "author": "Roberto Rodriguez (Cyb3rWard0g), OTR (Open Threat Research)",
+        "tags": [
+            "attack.execution",
+            "attack.t1059"
+        ],
+        "level": "high",
+        "rule": [
+            "SELECT * FROM logs WHERE (EventID = \"7\" AND ImageLoaded LIKE \"%\\\\AppData\\\\Local\\\\Temp\\\\ba9ea7344a4a5f591d6e5dc32a13494b\\\\%\" ESCAPE '\\')"
+        ]
+    },
+    {
         "title": "Abusing Azure Browser SSO - D410FF3D",
         "description": "Detects abusing Azure Browser SSO by requesting OAuth 2.0 refresh tokens for an Azure-AD-authenticated Windows user (i.e. the machine is joined to Azure AD and a user logs in with their Azure AD account) wanting to perform SSO authentication in the browser. An attacker can use this to authenticate to Azure AD in a browser as that user.",
         "author": "Den Iuzvyk",
@@ -1257,6 +1337,21 @@
         "level": "high",
         "rule": [
             "SELECT * FROM logs WHERE (EventID = \"7\" AND Image LIKE \"C:\\\\Windows\\\\System32\\\\wbem\\\\WmiPrvSE.exe\" ESCAPE '\\' AND ImageLoaded LIKE \"%\\\\wbemcons.dll\" ESCAPE '\\')"
+        ]
+    },
+    {
+        "title": "WMI Script Host Process Image Loaded - AF4F7D2F",
+        "description": "Detects signs of the WMI script host process %SystemRoot%\\system32\\wbem\\scrcons.exe functionality being used via images being loaded by a process.",
+        "author": "Roberto Rodriguez (Cyb3rWard0g), OTR (Open Threat Research)",
+        "tags": [
+            "attack.lateral_movement",
+            "attack.privilege_escalation",
+            "attack.persistence",
+            "attack.t1546.003"
+        ],
+        "level": "high",
+        "rule": [
+            "SELECT * FROM logs WHERE (EventID = \"7\" AND Image LIKE \"%\\\\scrcons.exe\" ESCAPE '\\' AND (ImageLoaded LIKE \"%\\\\vbscript.dll\" ESCAPE '\\' OR ImageLoaded LIKE \"%\\\\wbemdisp.dll\" ESCAPE '\\' OR ImageLoaded LIKE \"%\\\\wshom.ocx\" ESCAPE '\\' OR ImageLoaded LIKE \"%\\\\scrrun.dll\" ESCAPE '\\'))"
         ]
     },
     {
@@ -1332,6 +1427,19 @@
         ]
     },
     {
+        "title": "Python Py2Exe Image Load - BF1E6BE1",
+        "description": "Detects the image load of Python Core indicative of a Python script bundled with Py2Exe.",
+        "author": "Patrick St. John, OTR (Open Threat Research)",
+        "tags": [
+            "attack.defense_evasion",
+            "attack.t1027.002"
+        ],
+        "level": "medium",
+        "rule": [
+            "SELECT * FROM logs WHERE Description = \"Python Core\""
+        ]
+    },
+    {
         "title": "Time Travel Debugging Utility Usage - 943570C9",
         "description": "Detects usage of Time Travel Debugging Utility. Adversaries can execute malicious processes and dump processes, such as lsass.exe, via tttracer.exe.",
         "author": "Ensar \u015eamil, @sblmsrsn, @oscd_initiative",
@@ -1345,6 +1453,33 @@
         "rule": [
             "SELECT * FROM logs WHERE (EventID = \"7\" AND (ImageLoaded LIKE \"%\\\\ttdrecord.dll\" ESCAPE '\\' OR ImageLoaded LIKE \"%\\\\ttdwriter.dll\" ESCAPE '\\' OR ImageLoaded LIKE \"%\\\\ttdloader.dll\" ESCAPE '\\'))",
             "SELECT * FROM logs WHERE (EventID = \"1\" AND (ParentImage LIKE \"%\\\\tttracer.exe\" ESCAPE '\\'))"
+        ]
+    },
+    {
+        "title": "UIPromptForCredentials DLLs - BFAE2DA1",
+        "description": "Detects potential use of UIPromptForCredentials functions by looking for some of the DLLs needed for it.",
+        "author": "Roberto Rodriguez (Cyb3rWard0g), OTR (Open Threat Research)",
+        "tags": [
+            "attack.credential_access",
+            "attack.collection",
+            "attack.t1056.002"
+        ],
+        "level": "medium",
+        "rule": [
+            "SELECT * FROM logs WHERE (EventID = \"7\" AND ((ImageLoaded LIKE \"%\\\\credui.dll\" ESCAPE '\\' OR ImageLoaded LIKE \"%\\\\wincredui.dll\" ESCAPE '\\') OR OriginalFileName IN (\"credui.dll\", \"wincredui.dll\")))"
+        ]
+    },
+    {
+        "title": "WMIC Loading Scripting Libraries - C42B3A4E",
+        "description": "Detects threat actors proxy executing code and bypassing application controls by leveraging wmic and the `/FORMAT` argument switch to download and execute an XSL file (i.e js, vbs, etc).",
+        "author": "Roberto Rodriguez (Cyb3rWard0g), OTR (Open Threat Research)",
+        "tags": [
+            "attack.defense_evasion",
+            "attack.t1220"
+        ],
+        "level": "high",
+        "rule": [
+            "SELECT * FROM logs WHERE (EventID = \"7\" AND Image LIKE \"%\\\\wmic.exe\" ESCAPE '\\' AND (ImageLoaded LIKE \"%\\\\jscript.dll\" ESCAPE '\\' OR ImageLoaded LIKE \"%\\\\vbscript.dll\" ESCAPE '\\'))"
         ]
     },
     {
@@ -1390,6 +1525,19 @@
         "level": "medium",
         "rule": [
             "SELECT * FROM logs WHERE (EventID = \"7\" AND Description = \"system.management.automation\" AND ImageLoaded LIKE \"%system.management.automation%\" ESCAPE '\\')"
+        ]
+    },
+    {
+        "title": "Alternate PowerShell Hosts - BECD1B13",
+        "description": "Detects alternate PowerShell hosts potentially bypassing detections looking for powershell.exe",
+        "author": "Roberto Rodriguez (Cyb3rWard0g), OTR (Open Threat Research)",
+        "tags": [
+            "attack.execution",
+            "attack.t1059.001"
+        ],
+        "level": "medium",
+        "rule": [
+            "SELECT * FROM logs WHERE ((Description = \"system.management.automation\" AND ImageLoaded LIKE \"%system.management.automation%\" ESCAPE '\\') AND NOT (Image LIKE \"%\\\\powershell.exe\" ESCAPE '\\'))"
         ]
     },
     {
@@ -1445,6 +1593,21 @@
         "level": "medium",
         "rule": [
             "SELECT * FROM logs WHERE (EventID = \"7\" AND Image LIKE \"%\\\\lsass.exe\" ESCAPE '\\' AND Signed = \"false\")"
+        ]
+    },
+    {
+        "title": "Suspicious WSMAN Provider Image Loads - EDA47BDD",
+        "description": "Detects signs of potential use of the WSMAN provider from uncommon processes locally and remote execution.",
+        "author": "Roberto Rodriguez (Cyb3rWard0g), OTR (Open Threat Research)",
+        "tags": [
+            "attack.execution",
+            "attack.t1059.001",
+            "attack.lateral_movement",
+            "attack.t1021.003"
+        ],
+        "level": "medium",
+        "rule": [
+            "SELECT * FROM logs WHERE (EventID = \"7\" AND ((EventID = \"7\" AND ((ImageLoaded LIKE \"%\\\\WsmSvc.dll\" ESCAPE '\\' OR ImageLoaded LIKE \"%\\\\WsmAuto.dll\" ESCAPE '\\' OR ImageLoaded LIKE \"%\\\\Microsoft.WSMan.Management.ni.dll\" ESCAPE '\\') OR OriginalFileName IN (\"WsmSvc.dll\", \"WSMANAUTOMATION.DLL\", \"Microsoft.WSMan.Management.dll\")) AND NOT (Image LIKE \"%\\\\powershell.exe\" ESCAPE '\\')) OR (Image LIKE \"%\\\\svchost.exe\" ESCAPE '\\' AND OriginalFileName = \"WsmWmiPl.dll\")))"
         ]
     },
     {
@@ -1830,6 +1993,19 @@
         ]
     },
     {
+        "title": "Wdigest CredGuard Registry Modification - 8466FE69",
+        "description": "Detects potential malicious modification of the property value of IsCredGuardEnabled from HKLM:\\SYSTEM\\CurrentControlSet\\Control\\SecurityProviders\\WDigest to disable Cred Guard on a system. This is usually used with UseLogonCredential to manipulate the caching credentials.",
+        "author": "Roberto Rodriguez (Cyb3rWard0g), OTR (Open Threat Research)",
+        "tags": [
+            "attack.defense_evasion",
+            "attack.t1112"
+        ],
+        "level": "critical",
+        "rule": [
+            "SELECT * FROM logs WHERE (EventID IN (\"12\", \"13\", \"14\") AND TargetObject LIKE \"%\\\\IsCredGuardEnabled\" ESCAPE '\\')"
+        ]
+    },
+    {
         "title": "Registry Persistence Mechanism via Windows Telemetry - 7DAB58BE",
         "description": "Detects persistence method using windows telemetry",
         "author": "Lednyov Alexey, oscd.community",
@@ -1901,6 +2077,32 @@
         "level": "medium",
         "rule": [
             "SELECT * FROM logs WHERE (EventID IN (\"12\", \"13\", \"14\") AND (((((((((((((TargetObject LIKE \"%\\\\SOFTWARE\\\\Wow6432Node\\\\Microsoft\\\\Windows CE Services\\\\AutoStart%\" ESCAPE '\\' OR TargetObject LIKE \"%\\\\Software\\\\Wow6432Node\\\\Microsoft\\\\Command Processor\\\\Autorun%\" ESCAPE '\\' OR TargetObject LIKE \"%\\\\SOFTWARE\\\\Wow6432Node\\\\Microsoft\\\\Active Setup\\\\Installed Components%\" ESCAPE '\\' OR TargetObject LIKE \"%\\\\SOFTWARE\\\\Microsoft\\\\Windows CE Services\\\\AutoStartOnDisconnect%\" ESCAPE '\\' OR TargetObject LIKE \"%\\\\SOFTWARE\\\\Microsoft\\\\Windows CE Services\\\\AutoStartOnConnect%\" ESCAPE '\\' OR TargetObject LIKE \"%\\\\SYSTEM\\\\Setup\\\\CmdLine%\" ESCAPE '\\' OR TargetObject LIKE \"%\\\\Software\\\\Microsoft\\\\Ctf\\\\LangBarAddin%\" ESCAPE '\\' OR TargetObject LIKE \"%\\\\Software\\\\Microsoft\\\\Command Processor\\\\Autorun%\" ESCAPE '\\' OR TargetObject LIKE \"%\\\\SOFTWARE\\\\Microsoft\\\\Active Setup\\\\Installed Components%\" ESCAPE '\\' OR TargetObject LIKE \"%\\\\SOFTWARE\\\\Classes\\\\Protocols\\\\Handler%\" ESCAPE '\\' OR TargetObject LIKE \"%\\\\SOFTWARE\\\\Classes\\\\Protocols\\\\Filter%\" ESCAPE '\\' OR TargetObject LIKE \"%\\\\SOFTWARE\\\\Classes\\\\Htmlfile\\\\Shell\\\\Open\\\\Command\\\\(Default)%\" ESCAPE '\\' OR TargetObject LIKE \"%\\\\Environment\\\\UserInitMprLogonScript%\" ESCAPE '\\' OR TargetObject LIKE \"%\\\\SOFTWARE\\\\Policies\\\\Microsoft\\\\Windows\\\\Control Panel\\\\Desktop\\\\Scrnsave.exe%\" ESCAPE '\\' OR TargetObject LIKE \"%\\\\Software\\\\Microsoft\\\\Internet Explorer\\\\UrlSearchHooks%\" ESCAPE '\\' OR TargetObject LIKE \"%\\\\SOFTWARE\\\\Microsoft\\\\Internet Explorer\\\\Desktop\\\\Components%\" ESCAPE '\\' OR TargetObject LIKE \"%\\\\Software\\\\Classes\\\\Clsid\\\\{AB8902B4-09CA-4bb6-B78D-A8F59079A8D5}\\\\Inprocserver32%\" ESCAPE '\\' OR TargetObject LIKE \"%\\\\Control Panel\\\\Desktop\\\\Scrnsave.exe%\" ESCAPE '\\') OR (TargetObject LIKE \"%\\\\System\\\\CurrentControlSet\\\\Control\\\\Session Manager%\" ESCAPE '\\' AND (TargetObject LIKE \"%\\\\SetupExecute%\" ESCAPE '\\' OR TargetObject LIKE \"%\\\\S0InitialCommand%\" ESCAPE '\\' OR TargetObject LIKE \"%\\\\KnownDlls%\" ESCAPE '\\' OR TargetObject LIKE \"%\\\\Execute%\" ESCAPE '\\' OR TargetObject LIKE \"%\\\\BootExecute%\" ESCAPE '\\' OR TargetObject LIKE \"%\\\\AppCertDlls%\" ESCAPE '\\'))) OR (TargetObject LIKE \"%\\\\SOFTWARE\\\\Microsoft\\\\Windows\\\\CurrentVersion%\" ESCAPE '\\' AND (TargetObject LIKE \"%\\\\ShellServiceObjectDelayLoad%\" ESCAPE '\\' OR TargetObject LIKE \"%\\\\Run%\" ESCAPE '\\' OR TargetObject LIKE \"%\\\\Policies\\\\System\\\\Shell%\" ESCAPE '\\' OR TargetObject LIKE \"%\\\\Policies\\\\Explorer\\\\Run%\" ESCAPE '\\' OR TargetObject LIKE \"%\\\\Group Policy\\\\Scripts\\\\Startup%\" ESCAPE '\\' OR TargetObject LIKE \"%\\\\Group Policy\\\\Scripts\\\\Shutdown%\" ESCAPE '\\' OR TargetObject LIKE \"%\\\\Group Policy\\\\Scripts\\\\Logon%\" ESCAPE '\\' OR TargetObject LIKE \"%\\\\Group Policy\\\\Scripts\\\\Logoff%\" ESCAPE '\\' OR TargetObject LIKE \"%\\\\Explorer\\\\ShellServiceObjects%\" ESCAPE '\\' OR TargetObject LIKE \"%\\\\Explorer\\\\ShellIconOverlayIdentifiers%\" ESCAPE '\\' OR TargetObject LIKE \"%\\\\Explorer\\\\ShellExecuteHooks%\" ESCAPE '\\' OR TargetObject LIKE \"%\\\\Explorer\\\\SharedTaskScheduler%\" ESCAPE '\\' OR TargetObject LIKE \"%\\\\Explorer\\\\Browser Helper Objects%\" ESCAPE '\\' OR TargetObject LIKE \"%\\\\Authentication\\\\PLAP Providers%\" ESCAPE '\\' OR TargetObject LIKE \"%\\\\Authentication\\\\Credential Providers%\" ESCAPE '\\' OR TargetObject LIKE \"%\\\\Authentication\\\\Credential Provider Filters%\" ESCAPE '\\'))) OR (TargetObject LIKE \"%\\\\SOFTWARE\\\\Microsoft\\\\Windows NT\\\\CurrentVersion%\" ESCAPE '\\' AND (TargetObject LIKE \"%\\\\Winlogon\\\\VmApplet%\" ESCAPE '\\' OR TargetObject LIKE \"%\\\\Winlogon\\\\Userinit%\" ESCAPE '\\' OR TargetObject LIKE \"%\\\\Winlogon\\\\Taskman%\" ESCAPE '\\' OR TargetObject LIKE \"%\\\\Winlogon\\\\Shell%\" ESCAPE '\\' OR TargetObject LIKE \"%\\\\Winlogon\\\\GpExtensions%\" ESCAPE '\\' OR TargetObject LIKE \"%\\\\Winlogon\\\\AppSetup%\" ESCAPE '\\' OR TargetObject LIKE \"%\\\\Winlogon\\\\AlternateShells\\\\AvailableShells%\" ESCAPE '\\' OR TargetObject LIKE \"%\\\\Windows\\\\IconServiceLib%\" ESCAPE '\\' OR TargetObject LIKE \"%\\\\Windows\\\\Appinit\\_Dlls%\" ESCAPE '\\' OR TargetObject LIKE \"%\\\\Image File Execution Options%\" ESCAPE '\\' OR TargetObject LIKE \"%\\\\Font Drivers%\" ESCAPE '\\' OR TargetObject LIKE \"%\\\\Drivers32%\" ESCAPE '\\' OR TargetObject LIKE \"%\\\\Windows\\\\Run%\" ESCAPE '\\' OR TargetObject LIKE \"%\\\\Windows\\\\Load%\" ESCAPE '\\'))) OR (TargetObject LIKE \"%\\\\SOFTWARE\\\\Wow6432Node\\\\Microsoft\\\\Windows\\\\CurrentVersion%\" ESCAPE '\\' AND (TargetObject LIKE \"%\\\\ShellServiceObjectDelayLoad%\" ESCAPE '\\' OR TargetObject LIKE \"%\\\\Run%\" ESCAPE '\\' OR TargetObject LIKE \"%\\\\Explorer\\\\ShellServiceObjects%\" ESCAPE '\\' OR TargetObject LIKE \"%\\\\Explorer\\\\ShellIconOverlayIdentifiers%\" ESCAPE '\\' OR TargetObject LIKE \"%\\\\Explorer\\\\ShellExecuteHooks%\" ESCAPE '\\' OR TargetObject LIKE \"%\\\\Explorer\\\\SharedTaskScheduler%\" ESCAPE '\\' OR TargetObject LIKE \"%\\\\Explorer\\\\Browser Helper Objects%\" ESCAPE '\\'))) OR (TargetObject LIKE \"%\\\\SOFTWARE\\\\Wow6432Node\\\\Microsoft\\\\Windows NT\\\\CurrentVersion%\" ESCAPE '\\' AND (TargetObject LIKE \"%\\\\Windows\\\\Appinit\\_Dlls%\" ESCAPE '\\' OR TargetObject LIKE \"%\\\\Image File Execution Options%\" ESCAPE '\\' OR TargetObject LIKE \"%\\\\Drivers32%\" ESCAPE '\\'))) OR (EventID IN (\"12\", \"13\", \"14\") AND (TargetObject LIKE \"%\\\\Software\\\\Wow6432Node\\\\Microsoft\\\\Office%\" ESCAPE '\\' OR TargetObject LIKE \"%\\\\Software\\\\Microsoft\\\\Office%\" ESCAPE '\\') AND (TargetObject LIKE \"%\\\\Word\\\\Addins%\" ESCAPE '\\' OR TargetObject LIKE \"%\\\\PowerPoint\\\\Addins%\" ESCAPE '\\' OR TargetObject LIKE \"%\\\\Outlook\\\\Addins%\" ESCAPE '\\' OR TargetObject LIKE \"%\\\\Onenote\\\\Addins%\" ESCAPE '\\' OR TargetObject LIKE \"%\\\\Excel\\\\Addins%\" ESCAPE '\\' OR TargetObject LIKE \"%\\\\Access\\\\Addins%\" ESCAPE '\\' OR TargetObject LIKE \"%test\\\\Special\\\\Perf%\" ESCAPE '\\'))) OR (EventID IN (\"12\", \"13\", \"14\") AND (TargetObject LIKE \"%\\\\Software\\\\Wow6432Node\\\\Microsoft\\\\Internet Explorer%\" ESCAPE '\\' OR TargetObject LIKE \"%\\\\Software\\\\Microsoft\\\\Internet Explorer%\" ESCAPE '\\') AND (TargetObject LIKE \"%\\\\Toolbar%\" ESCAPE '\\' OR TargetObject LIKE \"%\\\\Extensions%\" ESCAPE '\\' OR TargetObject LIKE \"%\\\\Explorer Bars%\" ESCAPE '\\'))) OR (TargetObject LIKE \"%\\\\Software\\\\Wow6432Node\\\\Classes%\" ESCAPE '\\' AND (TargetObject LIKE \"%\\\\Folder\\\\ShellEx\\\\ExtShellFolderViews%\" ESCAPE '\\' OR TargetObject LIKE \"%\\\\Folder\\\\ShellEx\\\\DragDropHandlers%\" ESCAPE '\\' OR TargetObject LIKE \"%\\\\Folder\\\\ShellEx\\\\ColumnHandlers%\" ESCAPE '\\' OR TargetObject LIKE \"%\\\\Directory\\\\Shellex\\\\DragDropHandlers%\" ESCAPE '\\' OR TargetObject LIKE \"%\\\\Directory\\\\Shellex\\\\CopyHookHandlers%\" ESCAPE '\\' OR TargetObject LIKE \"%\\\\CLSID\\\\{AC757296-3522-4E11-9862-C17BE5A1767E}\\\\Instance%\" ESCAPE '\\' OR TargetObject LIKE \"%\\\\CLSID\\\\{ABE3B9A4-257D-4B97-BD1A-294AF496222E}\\\\Instance%\" ESCAPE '\\' OR TargetObject LIKE \"%\\\\CLSID\\\\{7ED96837-96F0-4812-B211-F13C24117ED3}\\\\Instance%\" ESCAPE '\\' OR TargetObject LIKE \"%\\\\CLSID\\\\{083863F1-70DE-11d0-BD40-00A0C911CE86}\\\\Instance%\" ESCAPE '\\' OR TargetObject LIKE \"%\\\\AllFileSystemObjects\\\\ShellEx\\\\DragDropHandlers%\" ESCAPE '\\' OR TargetObject LIKE \"%\\\\ShellEx\\\\PropertySheetHandlers%\" ESCAPE '\\' OR TargetObject LIKE \"%\\\\ShellEx\\\\ContextMenuHandlers%\" ESCAPE '\\'))) OR (TargetObject LIKE \"%\\\\Software\\\\Classes%\" ESCAPE '\\' AND (TargetObject LIKE \"%\\\\Folder\\\\ShellEx\\\\ExtShellFolderViews%\" ESCAPE '\\' OR TargetObject LIKE \"%\\\\Folder\\\\ShellEx\\\\DragDropHandlers%\" ESCAPE '\\' OR TargetObject LIKE \"%\\\\Folder\\\\Shellex\\\\ColumnHandlers%\" ESCAPE '\\' OR TargetObject LIKE \"%\\\\Filter%\" ESCAPE '\\' OR TargetObject LIKE \"%\\\\Exefile\\\\Shell\\\\Open\\\\Command\\\\(Default)%\" ESCAPE '\\' OR TargetObject LIKE \"%\\\\Directory\\\\Shellex\\\\DragDropHandlers%\" ESCAPE '\\' OR TargetObject LIKE \"%\\\\Directory\\\\Shellex\\\\CopyHookHandlers%\" ESCAPE '\\' OR TargetObject LIKE \"%\\\\CLSID\\\\{AC757296-3522-4E11-9862-C17BE5A1767E}\\\\Instance%\" ESCAPE '\\' OR TargetObject LIKE \"%\\\\CLSID\\\\{ABE3B9A4-257D-4B97-BD1A-294AF496222E}\\\\Instance%\" ESCAPE '\\' OR TargetObject LIKE \"%\\\\CLSID\\\\{7ED96837-96F0-4812-B211-F13C24117ED3}\\\\Instance%\" ESCAPE '\\' OR TargetObject LIKE \"%\\\\CLSID\\\\{083863F1-70DE-11d0-BD40-00A0C911CE86}\\\\Instance%\" ESCAPE '\\' OR TargetObject LIKE \"%\\\\Classes\\\\AllFileSystemObjects\\\\ShellEx\\\\DragDropHandlers%\" ESCAPE '\\' OR TargetObject LIKE \"%\\\\.exe%\" ESCAPE '\\' OR TargetObject LIKE \"%\\\\.cmd%\" ESCAPE '\\' OR TargetObject LIKE \"%\\\\ShellEx\\\\PropertySheetHandlers%\" ESCAPE '\\' OR TargetObject LIKE \"%\\\\ShellEx\\\\ContextMenuHandlers%\" ESCAPE '\\'))) OR (TargetObject LIKE \"%\\\\Software\\\\Policies\\\\Microsoft\\\\Windows\\\\System\\\\Scripts%\" ESCAPE '\\' AND (TargetObject LIKE \"%\\\\Startup%\" ESCAPE '\\' OR TargetObject LIKE \"%\\\\Shutdown%\" ESCAPE '\\' OR TargetObject LIKE \"%\\\\Logon%\" ESCAPE '\\' OR TargetObject LIKE \"%\\\\Logoff%\" ESCAPE '\\'))) OR (TargetObject LIKE \"%\\\\System\\\\CurrentControlSet\\\\Services\\\\WinSock2\\\\Parameters%\" ESCAPE '\\' AND (TargetObject LIKE \"%\\\\Protocol\\_Catalog9\\\\Catalog\\_Entries%\" ESCAPE '\\' OR TargetObject LIKE \"%\\\\NameSpace\\_Catalog5\\\\Catalog\\_Entries%\" ESCAPE '\\'))) OR (TargetObject LIKE \"%\\\\SYSTEM\\\\CurrentControlSet\\\\Control%\" ESCAPE '\\' AND (TargetObject LIKE \"%\\\\Terminal Server\\\\WinStations\\\\RDP-Tcp\\\\InitialProgram%\" ESCAPE '\\' OR TargetObject LIKE \"%\\\\Terminal Server\\\\Wds\\\\rdpwd\\\\StartupPrograms%\" ESCAPE '\\' OR TargetObject LIKE \"%\\\\SecurityProviders\\\\SecurityProviders%\" ESCAPE '\\' OR TargetObject LIKE \"%\\\\SafeBoot\\\\AlternateShell%\" ESCAPE '\\' OR TargetObject LIKE \"%\\\\Print\\\\Providers%\" ESCAPE '\\' OR TargetObject LIKE \"%\\\\Print\\\\Monitors%\" ESCAPE '\\' OR TargetObject LIKE \"%\\\\NetworkProvider\\\\Order%\" ESCAPE '\\' OR TargetObject LIKE \"%\\\\Lsa\\\\Notification Packages%\" ESCAPE '\\' OR TargetObject LIKE \"%\\\\Lsa\\\\Authentication Packages%\" ESCAPE '\\' OR TargetObject LIKE \"%\\\\BootVerificationProgram\\\\ImagePath%\" ESCAPE '\\'))))"
+        ]
+    },
+    {
+        "title": "Wdigest Enable UseLogonCredential - 8466FE69",
+        "description": "Detects potential malicious modification of the property value of UseLogonCredential from HKLM:\\SYSTEM\\CurrentControlSet\\Control\\SecurityProviders\\WDigest to enable clear-text credentials",
+        "author": "Roberto Rodriguez (Cyb3rWard0g), OTR (Open Threat Research)",
+        "tags": [
+            "attack.defense_evasion",
+            "attack.t1112"
+        ],
+        "level": "high",
+        "rule": [
+            "SELECT * FROM logs WHERE (EventID IN (\"12\", \"13\", \"14\") AND TargetObject LIKE \"%WDigest\\\\UseLogonCredential\" ESCAPE '\\')"
+        ]
+    },
+    {
+        "title": "Volume Shadow Copy Service Keys - 9DC14603",
+        "description": "Detects the volume shadow copy service initialization and processing. Registry keys such as HKLM\\\\System\\\\CurrentControlSet\\\\Services\\\\VSS\\\\Diag\\\\VolSnap\\\\Volume are captured.",
+        "author": "Roberto Rodriguez (Cyb3rWard0g), OTR (Open Threat Research)",
+        "tags": [
+            "attack.credential_access",
+            "attack.t1003.002"
+        ],
+        "level": "high",
+        "rule": [
+            "SELECT * FROM logs WHERE (EventID IN (\"12\", \"13\", \"14\") AND TargetObject LIKE \"%System\\\\CurrentControlSet\\\\Services\\\\VSS%\" ESCAPE '\\')"
         ]
     },
     {
@@ -2007,6 +2209,21 @@
         "level": "high",
         "rule": [
             "SELECT * FROM logs WHERE (EventID IN (\"12\", \"13\", \"14\") AND TargetObject LIKE \"%\\\\Software\\\\Microsoft\\\\Windows\\\\CurrentVersion\\\\CapabilityAccessManager\\\\ConsentStore\\\\%\" ESCAPE '\\' AND TargetObject LIKE \"%\\\\NonPackaged%\" ESCAPE '\\' AND (TargetObject LIKE \"%microphone%\" ESCAPE '\\' OR TargetObject LIKE \"%webcam%\" ESCAPE '\\') AND (TargetObject LIKE \"%#C:#Windows#Temp#%\" ESCAPE '\\' OR TargetObject LIKE \"%#C:#$Recycle.bin#%\" ESCAPE '\\' OR TargetObject LIKE \"%#C:#Temp#%\" ESCAPE '\\' OR TargetObject LIKE \"%#C:#Users#Public#%\" ESCAPE '\\' OR TargetObject LIKE \"%#C:#Users#Default#%\" ESCAPE '\\' OR TargetObject LIKE \"%#C:#Users#Desktop#%\" ESCAPE '\\'))"
+        ]
+    },
+    {
+        "title": "Enabling COR Profiler Environment Variables - 3443FB6A",
+        "description": "This rule detects cor_enable_profiling and cor_profiler environment variables being set and configured.",
+        "author": "Jose Rodriguez (@Cyb3rPandaH), OTR (Open Threat Research)",
+        "tags": [
+            "attack.persistence",
+            "attack.privilege_escalation",
+            "attack.defense_evasion",
+            "attack.t1574.012"
+        ],
+        "level": "high",
+        "rule": [
+            "SELECT * FROM logs WHERE (EventID IN (\"12\", \"13\", \"14\") AND (TargetObject LIKE \"%\\\\COR\\_ENABLE\\_PROFILING\" ESCAPE '\\' OR TargetObject LIKE \"%\\\\COR\\_PROFILER\" ESCAPE '\\'))"
         ]
     },
     {
@@ -2160,6 +2377,19 @@
         ]
     },
     {
+        "title": "Sysinternals SDelete Registry Keys - EA4153EC",
+        "description": "A General detection to trigger for the creation or modification of .*\\Software\\Sysinternals\\SDelete registry keys. Indicators of the use of Sysinternals SDelete tool.",
+        "author": "Roberto Rodriguez (Cyb3rWard0g), OTR (Open Threat Research)",
+        "tags": [
+            "attack.defense_evasion",
+            "attack.t1070.004"
+        ],
+        "level": "medium",
+        "rule": [
+            "SELECT * FROM logs WHERE TargetObject LIKE \"%\\\\Software\\\\Sysinternals\\\\SDelete%\" ESCAPE '\\'"
+        ]
+    },
+    {
         "title": "RDP Sensitive Settings Changed - 910E9290",
         "description": "Detects changes to RDP terminal service sensitive settings",
         "author": "Samir Bousseaden",
@@ -2230,6 +2460,20 @@
         "level": "critical",
         "rule": [
             "SELECT * FROM logs WHERE (EventID = \"1\" AND (((ParentImage LIKE \"%C:\\\\Windows\\\\Temp%\" ESCAPE '\\' OR ParentImage LIKE \"%\\\\hpqhvind.exe%\" ESCAPE '\\') AND Image LIKE \"C:\\\\ProgramData\\\\DRM%\" ESCAPE '\\') OR (ParentImage LIKE \"C:\\\\ProgramData\\\\DRM%\" ESCAPE '\\' AND Image LIKE \"%\\\\wmplayer.exe\" ESCAPE '\\') OR (ParentImage LIKE \"%\\\\Test.exe\" ESCAPE '\\' AND Image LIKE \"%\\\\wmplayer.exe\" ESCAPE '\\') OR Image LIKE \"C:\\\\ProgramData\\\\DRM\\\\CLR\\\\CLR.exe\" ESCAPE '\\' OR (ParentImage LIKE \"C:\\\\ProgramData\\\\DRM\\\\Windows%\" ESCAPE '\\' AND Image LIKE \"%\\\\SearchFilterHost.exe\" ESCAPE '\\')))"
+        ]
+    },
+    {
+        "title": "High Integrity Sdclt Process - 34D14BB1",
+        "description": "A General detection for sdclt being spawned as an elevated process. This could be an indicator of sdclt being used for bypass UAC techniques.",
+        "author": "Roberto Rodriguez (Cyb3rWard0g), OTR (Open Threat Research)",
+        "tags": [
+            "attack.privilege_escalation",
+            "attack.defense_evasion",
+            "attack.t1548.002"
+        ],
+        "level": "medium",
+        "rule": [
+            "SELECT * FROM logs WHERE (EventID = \"1\" AND Image LIKE \"%sdclt.exe\" ESCAPE '\\' AND IntegrityLevel = \"High\")"
         ]
     },
     {
@@ -3006,7 +3250,7 @@
         ],
         "level": "high",
         "rule": [
-            "Sigma parse error in ../../sigma/rules/windows/process_creation/win_susp_powershell_enc_cmd.yml: Missing matching closing parentheses"
+            "SELECT * FROM logs WHERE (EventID = \"1\" AND (EventID = \"1\" AND ((EventID = \"1\" AND CommandLine LIKE \"% -e%\" ESCAPE '\\' AND CommandLine LIKE \"% JAB%\" ESCAPE '\\' AND CommandLine LIKE \"% -w%\" ESCAPE '\\' AND CommandLine LIKE \"% hidden %\" ESCAPE '\\') OR (EventID = \"1\" AND CommandLine LIKE \"% -e%\" ESCAPE '\\' AND (CommandLine LIKE \"% BA^J%\" ESCAPE '\\' OR CommandLine LIKE \"% SUVYI%\" ESCAPE '\\' OR CommandLine LIKE \"% SQBFAFgA%\" ESCAPE '\\' OR CommandLine LIKE \"% aQBlAHgA%\" ESCAPE '\\' OR CommandLine LIKE \"% aWV4I%\" ESCAPE '\\' OR CommandLine LIKE \"% IAA%\" ESCAPE '\\' OR CommandLine LIKE \"% IAB%\" ESCAPE '\\' OR CommandLine LIKE \"% UwB%\" ESCAPE '\\' OR CommandLine LIKE \"% cwB%\" ESCAPE '\\')) OR (CommandLine LIKE \"%.exe -ENCOD %\" ESCAPE '\\'))) AND NOT (CommandLine LIKE \"% -ExecutionPolicy%\" ESCAPE '\\' AND CommandLine LIKE \"%remotesigned %\" ESCAPE '\\'))"
         ]
     },
     {
@@ -4056,6 +4300,19 @@
         "level": "critical",
         "rule": [
             "SELECT * FROM logs WHERE (EventID = \"1\" AND ((Image LIKE \"%\\\\xcopy.exe\" ESCAPE '\\' AND CommandLine LIKE \"%/S%\" ESCAPE '\\' AND CommandLine LIKE \"%/E%\" ESCAPE '\\' AND CommandLine LIKE \"%/C%\" ESCAPE '\\' AND CommandLine LIKE \"%/Q%\" ESCAPE '\\' AND CommandLine LIKE \"%/H%\" ESCAPE '\\' AND CommandLine LIKE \"%\\\\\\*\" ESCAPE '\\') OR (Image LIKE \"%\\\\adexplorer.exe\" ESCAPE '\\' AND CommandLine LIKE \"%-snapshot%\" ESCAPE '\\' AND CommandLine LIKE \"%\"\"%\" ESCAPE '\\' AND CommandLine LIKE \"%c:\\\\users\\\\%\" ESCAPE '\\')))"
+        ]
+    },
+    {
+        "title": "Sdclt Child Processes - 7EC13727",
+        "description": "A General detection for sdclt spawning new processes. This could be an indicator of sdclt being used for bypass UAC techniques.",
+        "author": "Roberto Rodriguez (Cyb3rWard0g), OTR (Open Threat Research)",
+        "tags": [
+            "attack.privilege_escalation",
+            "attack.t1548.002"
+        ],
+        "level": "medium",
+        "rule": [
+            "SELECT * FROM logs WHERE (EventID = \"1\" AND ParentImage LIKE \"%\\\\sdclt.exe\" ESCAPE '\\')"
         ]
     },
     {
@@ -5292,6 +5549,19 @@
         ]
     },
     {
+        "title": "Proxy Execution via Wuauclt - E64EB58F",
+        "description": "Detects the use of the Windows Update Client binary (wuauclt.exe) to proxy execute code.",
+        "author": "Roberto Rodriguez (Cyb3rWard0g), OTR (Open Threat Research)",
+        "tags": [
+            "attack.defense_evasion",
+            "attack.t1218"
+        ],
+        "level": "critical",
+        "rule": [
+            "SELECT * FROM logs WHERE (EventID = \"1\" AND (Image LIKE \"%wuauclt%\" ESCAPE '\\' OR OriginalFileName = \"wuauclt.exe\") AND CommandLine LIKE \"%wuauclt%UpdateDeploymentProvider%.dll%RunHandlerComServer%\" ESCAPE '\\')"
+        ]
+    },
+    {
         "title": "LSASS Memory Dumping - 1403CEB2",
         "description": "Detect creation of dump files containing the memory space of lsass.exe, which contains sensitive credentials. Identifies usage of Sysinternals procdump.exe to export the memory space of lsass.exe which contains sensitive credentials.",
         "author": "E.M. Anhaus (originally from Atomic Blue Detections, Tony Lambert), oscd.community",
@@ -5430,7 +5700,7 @@
             "attack.privilege_escalation",
             "attack.t1548.002"
         ],
-        "level": "high",
+        "level": "medium",
         "rule": [
             "SELECT * FROM logs WHERE (EventID = \"1\" AND User LIKE \"NT AUTHORITY\\\\SYSTEM\" ESCAPE '\\' AND ((Image LIKE \"%\\\\Windows\\\\Installer\\\\%\" ESCAPE '\\' AND Image LIKE \"%msi%\" ESCAPE '\\' AND (Image LIKE \"%tmp\" ESCAPE '\\')) OR ((Image LIKE \"%\\\\msiexec.exe\" ESCAPE '\\') AND IntegrityLevel = \"System\")))"
         ]
@@ -5641,7 +5911,7 @@
         ],
         "level": "critical",
         "rule": [
-            "SELECT * FROM logs WHERE (EventID = \"1\" AND (CommandLine LIKE \"% asreproast %\" ESCAPE '\\' OR CommandLine LIKE \"% dump /service:krbtgt %\" ESCAPE '\\' OR CommandLine LIKE \"% kerberoast %\" ESCAPE '\\' OR CommandLine LIKE \"% createnetonly /program:%\" ESCAPE '\\' OR CommandLine LIKE \"% ptt /ticket:%\" ESCAPE '\\' OR CommandLine LIKE \"% /impersonateuser:%\" ESCAPE '\\' OR CommandLine LIKE \"% renew /ticket:%\" ESCAPE '\\' OR CommandLine LIKE \"% asktgt /user:%\" ESCAPE '\\' OR CommandLine LIKE \"% harvest /interval:%\" ESCAPE '\\'))"
+            "SELECT * FROM logs WHERE (EventID = \"1\" AND (CommandLine LIKE \"% asreproast %\" ESCAPE '\\' OR CommandLine LIKE \"% dump /service:krbtgt %\" ESCAPE '\\' OR CommandLine LIKE \"% kerberoast %\" ESCAPE '\\' OR CommandLine LIKE \"% createnetonly /program:%\" ESCAPE '\\' OR CommandLine LIKE \"% ptt /ticket:%\" ESCAPE '\\' OR CommandLine LIKE \"% /impersonateuser:%\" ESCAPE '\\' OR CommandLine LIKE \"% renew /ticket:%\" ESCAPE '\\' OR CommandLine LIKE \"% asktgt /user:%\" ESCAPE '\\' OR CommandLine LIKE \"% harvest /interval:%\" ESCAPE '\\' OR CommandLine LIKE \"% s4u /user:%\" ESCAPE '\\' OR CommandLine LIKE \"% s4u /ticket:%\" ESCAPE '\\' OR CommandLine LIKE \"% hash /password:%\" ESCAPE '\\'))"
         ]
     },
     {
@@ -6934,6 +7204,19 @@
         ]
     },
     {
+        "title": "Suspicious WebDav Client Execution - 34D14BB1",
+        "description": "A General detection for svchost.exe spawning rundll32.exe with command arguments like C:\\windows\\system32\\davclnt.dll,DavSetCookie. This could be an indicator of exfiltration or use of WebDav to launch code (hosted on WebDav Server).",
+        "author": "Roberto Rodriguez (Cyb3rWard0g), OTR (Open Threat Research)",
+        "tags": [
+            "attack.exfiltration",
+            "attack.t1048.003"
+        ],
+        "level": "medium",
+        "rule": [
+            "SELECT * FROM logs WHERE (EventID = \"1\" AND Image LIKE \"%\\\\rundll32.exe\" ESCAPE '\\' AND CommandLine LIKE \"%C:\\\\windows\\\\system32\\\\davclnt.dll,DavSetCookie%\" ESCAPE '\\')"
+        ]
+    },
+    {
         "title": "Firewall Disabled via Netsh - 2A315872",
         "description": "Detects netsh commands that turns off the Windows firewall",
         "author": "Fatih Sirin",
@@ -7289,6 +7572,19 @@
         ]
     },
     {
+        "title": "Startup Folder File Write - 1181B6C3",
+        "description": "A General detection for files being created in the Windows startup directory. This could be an indicator of persistence.",
+        "author": "Roberto Rodriguez (Cyb3rWard0g), OTR (Open Threat Research)",
+        "tags": [
+            "attack.persistence",
+            "attack.t1547.001"
+        ],
+        "level": "low",
+        "rule": [
+            "SELECT * FROM logs WHERE (EventID = \"11\" AND TargetFilename LIKE \"%ProgramData\\\\Microsoft\\\\Windows\\\\Start Menu\\\\Programs\\\\StartUp%\" ESCAPE '\\')"
+        ]
+    },
+    {
         "title": "PowerShell Rundll32 Remote Thread Creation - 2F849328",
         "description": "Detects PowerShell remote thread creation in Rundll32.exe",
         "author": "Florian Roth",
@@ -7347,6 +7643,19 @@
         ]
     },
     {
+        "title": "Suspicious PFX File Creation - 7E601192",
+        "description": "A General detection for processes creating PFX files. This could be an inidicator of an adversary exporting a local certificate to a pfx file.",
+        "author": "Roberto Rodriguez (Cyb3rWard0g), OTR (Open Threat Research)",
+        "tags": [
+            "attack.credential_access",
+            "attack.t1552.004"
+        ],
+        "level": "medium",
+        "rule": [
+            "SELECT * FROM logs WHERE (EventID = \"11\" AND TargetFilename LIKE \"%.pfx\" ESCAPE '\\')"
+        ]
+    },
+    {
         "title": "PsExec Pipes Artifacts - F9EB4DAA",
         "description": "Detecting use PsExec via Pipe Creation/Access to pipes",
         "author": "Nikita Nazarov, oscd.community",
@@ -7371,6 +7680,19 @@
         "level": "high",
         "rule": [
             "SELECT * FROM logs WHERE (EventID = \"8\" AND (TargetProcessAddress LIKE \"%0B80\" ESCAPE '\\' OR TargetProcessAddress LIKE \"%0C7C\" ESCAPE '\\' OR TargetProcessAddress LIKE \"%0C88\" ESCAPE '\\'))"
+        ]
+    },
+    {
+        "title": "Removal of Potential COM Hijacking Registry Keys - 2BF0507B",
+        "description": "A General detection to trigger for processes removing .*\\shell\\open\\command registry keys. Registry keys that might have been used for COM hijacking activities.",
+        "author": "Roberto Rodriguez (Cyb3rWard0g), OTR (Open Threat Research)",
+        "tags": [
+            "attack.defense_evasion",
+            "attack.t1112"
+        ],
+        "level": "medium",
+        "rule": [
+            "SELECT * FROM logs WHERE (EventID = \"12\" AND EventType = \"DeleteKey\" AND TargetObject LIKE \"%\\\\shell\\\\open\\\\command\" ESCAPE '\\')"
         ]
     },
     {
@@ -7418,7 +7740,61 @@
             "SELECT * FROM logs WHERE (EventID = \"15\" AND Image LIKE \"%\\\\regedit.exe\" ESCAPE '\\')"
         ]
     },
+    {
+        "title": "Suspicious System.Drawing Load - 1F61E3EE",
+        "description": "A General detection for processes loading System.Drawing.ni.dll. This could be an indicator of potential Screen Capture.",
+        "author": "Roberto Rodriguez (Cyb3rWard0g), OTR (Open Threat Research)",
+        "tags": [
+            "attack.collection",
+            "attack.t1113"
+        ],
+        "level": "medium",
+        "rule": [
+            "SELECT * FROM logs WHERE (ImageLoaded LIKE \"%\\\\System.Drawing.ni.dll\" ESCAPE '\\' AND NOT (Image LIKE \"%\\\\WmiPrvSE.exe\" ESCAPE '\\'))"
+        ]
+    },
+    {
+        "title": "New Application in AppCompat - 11AC8902",
+        "description": "A General detection for a new application in AppCompat. This indicates an application executing for the first time on an endpoint.",
+        "author": "Roberto Rodriguez (Cyb3rWard0g), OTR (Open Threat Research)",
+        "tags": [
+            "attack.execution",
+            "attack.t1204.002"
+        ],
+        "level": "informational",
+        "rule": [
+            "SELECT * FROM logs WHERE (EventID = \"13\" AND TargetObject LIKE \"%\\\\AppCompatFlags\\\\Compatibility Assistant\\\\Store\\\\%\" ESCAPE '\\')"
+        ]
+    },
+    {
+        "title": "Wmiprvse Wbemcomn DLL Hijack - E3C21DC0",
+        "description": "Detects a threat actor creating a file named `wbemcomn.dll` in the `C:\\Windows\\System32\\wbem\\` directory over the network and loading it for a WMI DLL Hijack scenario.",
+        "author": "Roberto Rodriguez (Cyb3rWard0g), OTR (Open Threat Research)",
+        "tags": [
+            "attack.execution",
+            "attack.t1047",
+            "attack.lateral_movement",
+            "attack.t1021.002"
+        ],
+        "level": "critical",
+        "rule": [
+            "SELECT * FROM logs WHERE ((EventID = \"11\" AND Image = \"System\" AND TargetFilename LIKE \"%\\\\wbem\\\\wbemcomn.dll\" ESCAPE '\\') OR (EventID = \"7\" AND Image LIKE \"%\\\\wmiprvse.exe\" ESCAPE '\\' AND ImageLoaded LIKE \"%\\\\wbem\\\\wbemcomn.dll\" ESCAPE '\\'))"
+        ]
+    },
     {},
+    {
+        "title": "Sysinternals SDelete File Deletion - 55E8872C",
+        "description": "A General detection to trigger for the deletion of files by Sysinternals SDelete. It looks for the common name pattern used to rename files.",
+        "author": "Roberto Rodriguez (Cyb3rWard0g), OTR (Open Threat Research)",
+        "tags": [
+            "attack.defense_evasion",
+            "attack.t1070.004"
+        ],
+        "level": "medium",
+        "rule": [
+            "SELECT * FROM logs WHERE (EventID = \"23\" AND (TargetFilename LIKE \"%.AAA\" ESCAPE '\\' OR TargetFilename LIKE \"%.ZZZ\" ESCAPE '\\'))"
+        ]
+    },
     {
         "title": "Raw Disk Access Using Illegitimate Tools - 1F33C710",
         "description": "Raw disk access using illegitimate tools, possible defence evasion",
@@ -7485,6 +7861,19 @@
         ]
     },
     {
+        "title": "T1086 PowerShell Execution - 07AB7472",
+        "description": "Detects execution of PowerShell",
+        "author": "Roberto Rodriguez (Cyb3rWard0g), OTR (Open Threat Research)",
+        "tags": [
+            "attack.execution",
+            "attack.t1059.001"
+        ],
+        "level": "informational",
+        "rule": [
+            "SELECT * FROM logs WHERE (EventID = \"17\" AND PipeName LIKE \"\\\\PSHost%\" ESCAPE '\\')"
+        ]
+    },
+    {
         "title": "Suspicious Remote Thread Created - 5C4FD135",
         "description": "Offensive tradecraft is switching away from using APIs like \"CreateRemoteThread\", however, this is still largely observed in the wild. This rule aims to detect suspicious processes (those we would not expect to behave in this way like word.exe or outlook.exe) creating remote threads on other processes. It is a generalistic rule, but it should have a low FP ratio due to the selected range of processes.",
         "author": "Perez Diego (@darkquassar), oscd.community",
@@ -7496,6 +7885,20 @@
         "level": "high",
         "rule": [
             "SELECT * FROM logs WHERE ((EventID = \"8\" AND (SourceImage LIKE \"%\\\\bash.exe\" ESCAPE '\\' OR SourceImage LIKE \"%\\\\cvtres.exe\" ESCAPE '\\' OR SourceImage LIKE \"%\\\\defrag.exe\" ESCAPE '\\' OR SourceImage LIKE \"%\\\\dnx.exe\" ESCAPE '\\' OR SourceImage LIKE \"%\\\\esentutl.exe\" ESCAPE '\\' OR SourceImage LIKE \"%\\\\excel.exe\" ESCAPE '\\' OR SourceImage LIKE \"%\\\\expand.exe\" ESCAPE '\\' OR SourceImage LIKE \"%\\\\explorer.exe\" ESCAPE '\\' OR SourceImage LIKE \"%\\\\find.exe\" ESCAPE '\\' OR SourceImage LIKE \"%\\\\findstr.exe\" ESCAPE '\\' OR SourceImage LIKE \"%\\\\forfiles.exe\" ESCAPE '\\' OR SourceImage LIKE \"%\\\\git.exe\" ESCAPE '\\' OR SourceImage LIKE \"%\\\\gpupdate.exe\" ESCAPE '\\' OR SourceImage LIKE \"%\\\\hh.exe\" ESCAPE '\\' OR SourceImage LIKE \"%\\\\iexplore.exe\" ESCAPE '\\' OR SourceImage LIKE \"%\\\\installutil.exe\" ESCAPE '\\' OR SourceImage LIKE \"%\\\\lync.exe\" ESCAPE '\\' OR SourceImage LIKE \"%\\\\makecab.exe\" ESCAPE '\\' OR SourceImage LIKE \"%\\\\mDNSResponder.exe\" ESCAPE '\\' OR SourceImage LIKE \"%\\\\monitoringhost.exe\" ESCAPE '\\' OR SourceImage LIKE \"%\\\\msbuild.exe\" ESCAPE '\\' OR SourceImage LIKE \"%\\\\mshta.exe\" ESCAPE '\\' OR SourceImage LIKE \"%\\\\msiexec.exe\" ESCAPE '\\' OR SourceImage LIKE \"%\\\\mspaint.exe\" ESCAPE '\\' OR SourceImage LIKE \"%\\\\outlook.exe\" ESCAPE '\\' OR SourceImage LIKE \"%\\\\ping.exe\" ESCAPE '\\' OR SourceImage LIKE \"%\\\\powerpnt.exe\" ESCAPE '\\' OR SourceImage LIKE \"%\\\\powershell.exe\" ESCAPE '\\' OR SourceImage LIKE \"%\\\\provtool.exe\" ESCAPE '\\' OR SourceImage LIKE \"%\\\\python.exe\" ESCAPE '\\' OR SourceImage LIKE \"%\\\\regsvr32.exe\" ESCAPE '\\' OR SourceImage LIKE \"%\\\\robocopy.exe\" ESCAPE '\\' OR SourceImage LIKE \"%\\\\runonce.exe\" ESCAPE '\\' OR SourceImage LIKE \"%\\\\sapcimc.exe\" ESCAPE '\\' OR SourceImage LIKE \"%\\\\schtasks.exe\" ESCAPE '\\' OR SourceImage LIKE \"%\\\\smartscreen.exe\" ESCAPE '\\' OR SourceImage LIKE \"%\\\\spoolsv.exe\" ESCAPE '\\' OR SourceImage LIKE \"%\\\\tstheme.exe\" ESCAPE '\\' OR SourceImage LIKE \"%\\\\userinit.exe\" ESCAPE '\\' OR SourceImage LIKE \"%\\\\vssadmin.exe\" ESCAPE '\\' OR SourceImage LIKE \"%\\\\vssvc.exe\" ESCAPE '\\' OR SourceImage LIKE \"%\\\\w3wp.exe%\" ESCAPE '\\' OR SourceImage LIKE \"%\\\\winlogon.exe\" ESCAPE '\\' OR SourceImage LIKE \"%\\\\winscp.exe\" ESCAPE '\\' OR SourceImage LIKE \"%\\\\wmic.exe\" ESCAPE '\\' OR SourceImage LIKE \"%\\\\word.exe\" ESCAPE '\\' OR SourceImage LIKE \"%\\\\wscript.exe\" ESCAPE '\\')) AND NOT (SourceImage LIKE \"%Visual Studio%\" ESCAPE '\\'))"
+        ]
+    },
+    {
+        "title": "T1021 DCOM InternetExplorer.Application Iertutil DLL Hijack - 4B4D0712",
+        "description": "Detects a threat actor creating a file named `iertutil.dll` in the `C:\\Program Files\\Internet Explorer\\` directory over the network and loading it for a DCOM InternetExplorer DLL Hijack scenario.",
+        "author": "Roberto Rodriguez @Cyb3rWard0g, Open Threat Research (OTR)",
+        "tags": [
+            "attack.lateral_movement",
+            "attack.t1021.002",
+            "attack.t1021.003"
+        ],
+        "level": "critical",
+        "rule": [
+            "SELECT * FROM logs WHERE ((EventID = \"11\" AND Image = \"System\" AND TargetFilename LIKE \"%\\\\Internet Explorer\\\\iertutil.dll\" ESCAPE '\\') OR (EventID = \"7\" AND Image LIKE \"%\\\\Internet Explorer\\\\iexplore.exe\" ESCAPE '\\' AND ImageLoaded LIKE \"%\\\\Internet Explorer\\\\iertutil.dll\" ESCAPE '\\'))"
         ]
     },
     {
@@ -7662,6 +8065,21 @@
     {},
     {},
     {
+        "title": "Remote WMI ActiveScriptEventConsumers - 20832D8C",
+        "description": "Detect potential adversaries leveraging WMI ActiveScriptEventConsumers remotely to move laterally in a network",
+        "author": "Roberto Rodriguez (Cyb3rWard0g), OTR (Open Threat Research)",
+        "tags": [
+            "attack.lateral_movement",
+            "attack.privilege_escalation",
+            "attack.persistence",
+            "attack.t1546.003"
+        ],
+        "level": "high",
+        "rule": [
+            "SELECT * FROM logs WHERE ((EventID = \"4624\" AND LogonType = \"3\" AND ProcessName LIKE \"%scrcons.exe\" ESCAPE '\\') AND NOT (TargetLogonId = \"0x3e7\"))"
+        ]
+    },
+    {
         "title": "SCM Database Handle Failure - 0B6A529B",
         "description": "Detects non-system users failing to get a handle of the SCM database.",
         "author": "Roberto Rodriguez @Cyb3rWard0g",
@@ -7806,7 +8224,35 @@
             "SELECT * FROM logs WHERE (EventID = \"5145\" AND ShareName LIKE \"\\\\%\\\\IPC$\" ESCAPE '\\' AND RelativeTargetName = \"svcctl\" AND Accesses LIKE \"%WriteData%\" ESCAPE '\\')"
         ]
     },
+    {
+        "title": "VSSAudit Security Event Source Registration - 4B0E296C",
+        "description": "Detects the registration of the security event source VSSAudit. It would usually trigger when volume shadow copy operations happen.",
+        "author": "Roberto Rodriguez @Cyb3rWard0g, Open Threat Research (OTR)",
+        "tags": [
+            "attack.credential_access",
+            "attack.t1003.002"
+        ],
+        "level": "medium",
+        "rule": [
+            "SELECT * FROM logs WHERE (AuditSourceName = \"VSSAudit\" AND (EventID = \"4904\" OR EventID = \"4905\"))"
+        ]
+    },
     {},
+    {
+        "title": "T1047 Wmiprvse Wbemcomn DLL Hijack - E9057B0E",
+        "description": "Detects a threat actor creating a file named `wbemcomn.dll` in the `C:\\Windows\\System32\\wbem\\` directory over the network for a WMI DLL Hijack scenario.",
+        "author": "Roberto Rodriguez @Cyb3rWard0g, Open Threat Research (OTR)",
+        "tags": [
+            "attack.execution",
+            "attack.t1047",
+            "attack.lateral_movement",
+            "attack.t1021.002"
+        ],
+        "level": "critical",
+        "rule": [
+            "SELECT * FROM logs WHERE ((EventID = \"5145\" AND RelativeTargetName LIKE \"%\\\\wbem\\\\wbemcomn.dll\" ESCAPE '\\') AND NOT (SubjectUserName LIKE \"%$\" ESCAPE '\\'))"
+        ]
+    },
     {
         "title": "AD Privileged Users or Groups Reconnaissance - DD452ED9",
         "description": "Detect priv users or groups recon based on 4661 eventid and known privileged users or groups SIDs",
@@ -8333,6 +8779,19 @@
         ]
     },
     {
+        "title": "Sysmon Channel Reference Deletion - 8A2E1477",
+        "description": "Potential threat actor tampering with Sysmon manifest and eventually disabling it",
+        "author": "Roberto Rodriguez (Cyb3rWard0g), OTR (Open Threat Research)",
+        "tags": [
+            "attack.defense_evasion",
+            "attack.t1112"
+        ],
+        "level": "critical",
+        "rule": [
+            "SELECT * FROM logs WHERE ((ObjectName LIKE \"%WINEVT\\\\Publishers\\\\{5770385f-c22a-43e0-bf4c-06f5698ffbd9}%\" ESCAPE '\\' OR ObjectName LIKE \"%WINEVT\\\\Channels\\\\Microsoft-Windows-Sysmon/Operational%\" ESCAPE '\\') AND ((EventID = \"4657\" AND ObjectValueName = \"Enabled\" AND NewValue = \"0\") OR (EventID = \"4663\" AND AccessMask = \"65536\")))"
+        ]
+    },
+    {
         "title": "Hacktool Ruler - 2AABC1F9",
         "description": "This events that are generated when using the hacktool Ruler by Sensepost",
         "author": "Florian Roth",
@@ -8679,6 +9138,19 @@
         ]
     },
     {
+        "title": "DCERPC SMB Spoolss Named Pipe - 6BA72CB6",
+        "description": "Detects the use of the spoolss named pipe over SMB. This can be used to trigger the authentication via NTLM of any machine that has the spoolservice enabled.",
+        "tags": [
+            "attack.lateral_movement",
+            "attack.t1021.002"
+        ],
+        "author": "OTR (Open Threat Research)",
+        "level": "medium",
+        "rule": [
+            "SELECT * FROM logs WHERE (EventID = \"5145\" AND ShareName LIKE \"\\\\%\\\\IPC$\" ESCAPE '\\' AND RelativeTargetName = \"spoolss\")"
+        ]
+    },
+    {
         "title": "Tap Driver Installation - 83C8B118",
         "description": "Well-known TAP software installation. Possible preparation for data exfiltration using tunnelling techniques",
         "author": "Daniil Yugoslavskiy, Ian Davis, oscd.community",
@@ -8857,6 +9329,19 @@
         ]
     },
     {
+        "title": "Processes Accessing the Microphone and Webcam - B62AC343",
+        "description": "Potential adversaries accessing the microphone and webcam in an endpoint.",
+        "author": "Roberto Rodriguez (Cyb3rWard0g), OTR (Open Threat Research)",
+        "tags": [
+            "attack.collection",
+            "attack.t1123"
+        ],
+        "level": "medium",
+        "rule": [
+            "SELECT * FROM logs WHERE (EventID IN (\"4657\", \"4656\", \"4663\") AND (ObjectName LIKE \"%\\\\SOFTWARE\\\\Microsoft\\\\Windows\\\\CurrentVersion\\\\CapabilityAccessManager\\\\ConsentStore\\\\microphone\\\\NonPackaged%\" ESCAPE '\\' OR ObjectName LIKE \"%\\\\SOFTWARE\\\\Microsoft\\\\Windows\\\\CurrentVersion\\\\CapabilityAccessManager\\\\ConsentStore\\\\webcam\\\\NonPackaged%\" ESCAPE '\\'))"
+        ]
+    },
+    {
         "title": "Possible Impacket SecretDump Remote Activity - B6C00840",
         "description": "Detect AD credential dumping using impacket secretdump HKTL",
         "author": "Samir Bousseaden",
@@ -8960,6 +9445,19 @@
             "SELECT * FROM logs WHERE ((EventID = \"4742\" AND ServicePrincipalNames LIKE \"%GC/%\" ESCAPE '\\') OR (EventID = \"5136\" AND LDAPDisplayName = \"servicePrincipalName\" AND Value LIKE \"GC/%\" ESCAPE '\\'))"
         ]
     },
+    {
+        "title": "SMB Create Remote File Admin Share - A766EACA",
+        "description": "Look for non-system accounts SMB accessing a file with write (0x2) access mask via administrative share (i.e C$).",
+        "author": "Jose Rodriguez (@Cyb3rPandaH), OTR (Open Threat Research)",
+        "tags": [
+            "attack.lateral_movement",
+            "attack.t1021.002"
+        ],
+        "level": "high",
+        "rule": [
+            "SELECT * FROM logs WHERE ((EventID = \"5145\" AND ShareName LIKE \"%C$\" ESCAPE '\\' AND AccessMask = \"0x2\") AND NOT (SubjectUserName LIKE \"%$\" ESCAPE '\\'))"
+        ]
+    },
     {},
     {
         "title": "Generic Password Dumper Activity on LSASS - FA2DCF85",
@@ -9040,6 +9538,20 @@
         ]
     },
     {
+        "title": "T1021 DCOM InternetExplorer.Application Iertutil DLL Hijack - CECCA42D",
+        "description": "Detects a threat actor creating a file named `iertutil.dll` in the `C:\\Program Files\\Internet Explorer\\` directory over the network for a DCOM InternetExplorer DLL Hijack scenario.",
+        "author": "Roberto Rodriguez @Cyb3rWard0g, Open Threat Research (OTR)",
+        "tags": [
+            "attack.lateral_movement",
+            "attack.t1021.002",
+            "attack.t1021.003"
+        ],
+        "level": "critical",
+        "rule": [
+            "SELECT * FROM logs WHERE ((EventID = \"5145\" AND RelativeTargetName LIKE \"%\\\\Internet Explorer\\\\iertutil.dll\" ESCAPE '\\') AND NOT (SubjectUserName LIKE \"%$\" ESCAPE '\\'))"
+        ]
+    },
+    {
         "title": "Remote Task Creation via ATSVC Named Pipe - D86C330A",
         "description": "Detects remote task creation via at.exe or API interacting with ATSVC namedpipe",
         "author": "Samir Bousseaden",
@@ -9112,6 +9624,19 @@
             "SELECT * FROM logs WHERE (EventID = \"1\" AND (Image LIKE \"%\\\\net.exe\" ESCAPE '\\' OR Image LIKE \"%\\\\net1.exe\" ESCAPE '\\') AND CommandLine LIKE \"% use %\" ESCAPE '\\' AND CommandLine LIKE \"%\\\\%\\*$%\" ESCAPE '\\')"
         ]
     },
+    {
+        "title": "Volume Shadow Copy Mount - 26C36861",
+        "description": "Detects volume shadow copy mount",
+        "author": "Roberto Rodriguez @Cyb3rWard0g, Open Threat Research (OTR)",
+        "tags": [
+            "attack.credential_access",
+            "attack.t1003.002"
+        ],
+        "level": "medium",
+        "rule": [
+            "SELECT * FROM logs WHERE (Source = \"Microsoft-Windows-Ntfs\" AND EventID = \"98\" AND DeviceName LIKE \"%HarddiskVolumeShadowCopy%\" ESCAPE '\\')"
+        ]
+    },
     {},
     {
         "title": "Failed Logins with Different Accounts from Single Source System - 962E8DAC",
@@ -9154,6 +9679,19 @@
         "level": "low",
         "rule": [
             "SELECT * FROM logs WHERE (EventID = \"3\" AND (Image LIKE \"%\\\\powershell.exe\" ESCAPE '\\' AND Initiated = \"true\") AND NOT ((DestinationIp LIKE \"10.%\" ESCAPE '\\' OR DestinationIp LIKE \"192.168.%\" ESCAPE '\\' OR DestinationIp LIKE \"172.16.%\" ESCAPE '\\' OR DestinationIp LIKE \"172.17.%\" ESCAPE '\\' OR DestinationIp LIKE \"172.18.%\" ESCAPE '\\' OR DestinationIp LIKE \"172.19.%\" ESCAPE '\\' OR DestinationIp LIKE \"172.20.%\" ESCAPE '\\' OR DestinationIp LIKE \"172.21.%\" ESCAPE '\\' OR DestinationIp LIKE \"172.22.%\" ESCAPE '\\' OR DestinationIp LIKE \"172.23.%\" ESCAPE '\\' OR DestinationIp LIKE \"172.24.%\" ESCAPE '\\' OR DestinationIp LIKE \"172.25.%\" ESCAPE '\\' OR DestinationIp LIKE \"172.26.%\" ESCAPE '\\' OR DestinationIp LIKE \"172.27.%\" ESCAPE '\\' OR DestinationIp LIKE \"172.28.%\" ESCAPE '\\' OR DestinationIp LIKE \"172.29.%\" ESCAPE '\\' OR DestinationIp LIKE \"172.30.%\" ESCAPE '\\' OR DestinationIp LIKE \"172.31.%\" ESCAPE '\\' OR DestinationIp LIKE \"127.0.0.1%\" ESCAPE '\\') AND DestinationIsIpv6 = \"false\" AND User LIKE \"NT AUTHORITY\\\\SYSTEM\" ESCAPE '\\'))"
+        ]
+    },
+    {
+        "title": "Wuauclt Network Connection - E64EB58F",
+        "description": "Detects the use of the Windows Update Client binary (wuauclt.exe) to proxy execute code and making a network connections. One could easily make the DLL spawn a new process and inject to it to proxy the network connection and bypass this rule.",
+        "author": "Roberto Rodriguez (Cyb3rWard0g), OTR (Open Threat Research)",
+        "tags": [
+            "attack.defense_evasion",
+            "attack.t1218"
+        ],
+        "level": "medium",
+        "rule": [
+            "SELECT * FROM logs WHERE (EventID = \"3\" AND Image LIKE \"%wuauclt%\" ESCAPE '\\')"
         ]
     },
     {

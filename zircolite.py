@@ -378,19 +378,22 @@ if __name__ == '__main__':
     createTableStmt = "CREATE TABLE logs ( row_id INTEGER, " + fieldStmt + " PRIMARY KEY(row_id AUTOINCREMENT) );"
     logging.debug(" CREATE : " + createTableStmt.replace('\n', ' ').replace('\r', ''))
     if not executeQuery(dbConnection, createTableStmt):
-        quitOnError(f"{Fore.RED}   [-] Not able to execute query")
+        quitOnError(f"{Fore.RED}   [-] Unable to create table")
     del createTableStmt
 
     logging.info("[+] Inserting data")
     for JSONLine in tqdm(valuesStmt, colour="yellow"):
         insertData2Db(JSONLine)
 
+    if not executeQuery(dbConnection, 'CREATE INDEX "idx_eventid" ON "logs" ("eventid");'):
+        quitOnError(f"{Fore.RED}   [-] Not able to add index")
+
     logging.info("[+] Cleaning unused objects")
     del valuesStmt
 
     # Unload In memory DB to disk. Done here to permit debug in case of ruleset execution error
     if args.dbfile is not None:
-        logging.info("[+] Saving working data to disk as a SQLite Db")
+        logging.info("[+] Saving working data to disk as a SQLite DB")
         onDiskDb = sqlite3.connect(args.dbfile)
         dbConnection.backup(onDiskDb)
         onDiskDb.close()
