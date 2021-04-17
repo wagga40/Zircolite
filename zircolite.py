@@ -384,9 +384,8 @@ if __name__ == '__main__':
     logging.info("[+] Inserting data")
     for JSONLine in tqdm(valuesStmt, colour="yellow"):
         insertData2Db(JSONLine)
-
-    if not executeQuery(dbConnection, 'CREATE INDEX "idx_eventid" ON "logs" ("eventid");'):
-        quitOnError(f"{Fore.RED}   [-] Not able to add index")
+    # Creating index to speed up queries
+    executeQuery(dbConnection, 'CREATE INDEX "idx_eventid" ON "logs" ("eventid");')
 
     logging.info("[+] Cleaning unused objects")
     del valuesStmt

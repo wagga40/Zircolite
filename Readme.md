@@ -83,7 +83,7 @@ To use it you just need to generate a `data.js` file with the `exportForZircoGui
 ```shell
 python3 zircolite.py \
             --evtx ../EVTX-ATTACK-SAMPLES/ \
-            --ruleset rules/rules_windows_sysmon.json.json \ 
+            --ruleset rules/rules_windows_sysmon.json \ 
             --template templates/exportForZircoGui.tmpl \ 
             --templateOutput data.js
 mv data.js gui/

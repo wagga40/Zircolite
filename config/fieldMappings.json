@@ -257,8 +257,6 @@
 		"Event.EventData.updateGuid":"updateGuid",
 		"Event.EventData.updateRevisionNumber":"updateRevisionNumber",
 		"Event.EventData.updateTitle":"updateTitle",
-		"Event.EventData.LogonType":"Logon_Type",
-		"Event.EventData.TargetServerName":"Target_Server_Name",
 		"Event.EventData.ParentIntegrityLevel":"ParentIntegrityLevel",
 		"Event.EventData.ParentUser":"ParentUser"
 	}
