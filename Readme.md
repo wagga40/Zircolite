@@ -78,9 +78,9 @@ Then you just have to open `index.html` in your favorite browser and click on a 
   
 :warning: **The mini-GUI was not build to handle big datasets**.
 
-### Forward SIGMA detections
+### Forward SIGMA detected events
 
-If you have multiple endpoints to scan, it is usefull to send the detections to a central point. As of v1.2, Zircolite can forward detections to an HTTP server :
+If you have multiple endpoints to scan, it is usefull to send the detected events to a central point. As of v1.2, Zircolite can forward detected events to an HTTP server :
 
 ```shell
 python3 zircolite.py --evtx sample.evtx  --ruleset rules/rules_windows_sysmon.json \
