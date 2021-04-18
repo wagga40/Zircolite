@@ -7,6 +7,7 @@ import sqlite3
 import logging
 from sqlite3 import Error
 import os
+import socket
 import subprocess
 import argparse
 import sys
@@ -14,6 +15,7 @@ import time
 import random
 import string
 import signal
+import base64
 from pathlib import Path
 import shutil
 from sys import platform as _platform
@@ -27,6 +29,13 @@ except ImportError:  # If the module is not available creating a fake function t
     def tqdm(arg, colour):
         return arg
     hasTqdm = False
+
+# Requests 
+try: 
+    import requests
+    hasRequests = True
+except ImportError:
+    hasRequests = False
 
 # Coloroma - Living in colors
 try:
@@ -99,7 +108,7 @@ def executeSelectQuery(dbConnection, query):
 def extractEvtx(file, tmpDir, evtx_dumpBinary):
     """
     Convert EVTX to JSON using evtx_dump : https://github.com/omerbenamram/evtx.
-    Drop resuling JSON files in a tmp folder.
+    Drop resulting JSON files in a tmp folder.
     @params:
         file            - Required  : EVTX file to convert
         tmpDir          - Required  : directory where the JSON files will be saved
@@ -186,7 +195,7 @@ def insertData2Db(JSONLine):
     insertStrmt = "INSERT INTO logs (" + columnsStr[:-1] + ") VALUES (" + valuesStr[:-2] + ");"
     return executeQuery(dbConnection, insertStrmt)
 
-def executeRule(rule):
+def executeRule(rule, forwardTo = None):
     results = {}
     filteredRows = []
     counter = 0
@@ -214,6 +223,9 @@ def executeRule(rule):
         logging.debug("RULE FORMAT ERROR : rule key Missing")
     if filteredRows == []:
         return {}
+    # Forward results to HTTP server
+    if forwardTo is not None:
+        sendLogsHTTP(forwardTo, base64.b64encode(json.dumps({"host": socket.gethostname(), "title": rule["title"], "description": rule["description"], "sigma": rule["rule"], "rule_level": rule["level"], "tags": rule["tags"], "count": counter, "matches": filteredRows}).encode('utf-8')).decode('ascii'))
     return results
 
 def getOSExternalTools():
@@ -255,8 +267,18 @@ def initLogger(debugMode, logFile):
     logging.basicConfig(format=logFormat, filename=logFile, level=logLevel, datefmt='%Y-%m-%d %H:%M:%S')
     logger = logging.StreamHandler()
     logger.setLevel(logging.INFO)
-    logging.getLogger('').addHandler(logger)
+    logging.getLogger().addHandler(logger)
     return logger
+
+def sendLogsHTTP(host, payload = ""):
+    """ Just send provided payload to provided web server. Not very clean. Non-async code for now """
+    try:
+        r = requests.post(host, headers={'user-agent': 'zircolite/1.1.x'}, data={"data": payload})
+        logging.debug(f"{Fore.RED}   [-] {r}")
+        return True
+    except Exception as e:
+        logging.debug(f"{Fore.RED}   [-] {e}")
+        return False
 
 ################################################################
 # MAIN()
@@ -284,6 +306,7 @@ if __name__ == '__main__':
     parser.add_argument("-d", "--dbfile", help="Save data as a SQLite Db to the specified file on disk", type=str)
     parser.add_argument("-l", "--logfile", help="Log file name", default="zircolite.log", type=str)
     parser.add_argument("-j", "--jsononly", help="If logs files are already in JSON lines format ('jsonl' in evtx_dump) ", action='store_true')
+    parser.add_argument("--remote", help="Forward results to a HTTP server, arg must be the full address e.g http://address:port/uri", type=str)
     parser.add_argument("--template", help="If a Jinja2 template is specified it will be used to generated output", type=str, action='append', nargs='+')
     parser.add_argument("--templateOutput", help="If a Jinja2 template is specified it will be used to generate a crafted output", type=str, action='append', nargs='+')
     parser.add_argument("--fields", help="Show all fields in full format", action='store_true')
@@ -296,6 +319,13 @@ if __name__ == '__main__':
     consoleLogger = initLogger(args.debug, args.logfile)
 
     logging.info("[+] Checking prerequisites")
+    # Init network
+    if (args.remote is not None):
+        if hasRequests:
+            if not sendLogsHTTP(args.remote):
+                quitOnError(f"{Fore.RED}   [-] Remote host cannot be reached : {args.remote}")
+        else:
+            quitOnError(f"{Fore.RED}   [-] Requests lib missing, you cannot use '--remote'")
     # Cheking for evtx_dump binaries
     evtx_dumpBinary = getOSExternalTools()
     checkIfExists(evtx_dumpBinary, f"{Fore.RED}   [-] Cannot find Evtx_dump")
@@ -409,7 +439,7 @@ if __name__ == '__main__':
             with tqdm(ruleset, colour="yellow") as ruleBar:
                 f.write('[')
                 for rule in ruleBar:  # for each rule in ruleset
-                    ruleResults = executeRule(rule)
+                    ruleResults = executeRule(rule, args.remote)
                     if ruleResults != {}:
                         ruleBar.write(f'{Fore.CYAN}    - {ruleResults["title"]} - Matchs : {ruleResults["count"]} events')
                         # To avoid printing this one on stdout but in the logs...

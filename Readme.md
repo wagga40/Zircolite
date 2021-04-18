@@ -11,23 +11,22 @@
 
 ![](pics/Zircolite.gif)
 
-**Zircolite is a standalone tool written in Python 3 allowing to use SIGMA rules on Windows EVTX logs. It can be used directly on an endpoint (pseudo live-forensics) or in your forensic/detection workstation.** Zircolite is light (less than 500 lines of code) and simple.
+**Zircolite is a standalone tool written in Python 3 allowing to use SIGMA rules on Windows EVTX logs :**
 
-For now, `evtx_dump` is 64 bits only so if you use `zircolite.py` with evtx files as input **you can only execute it on a 64 bits OS.**
+- It can be used directly on an endpoint (pseudo live-forensics) or in your forensic/detection workstation
+- Zircolite was designed to be light (less than 500 lines of code), simple and portable
+- Zircolite is more a workflow than a real detection engine ([check here](#architecture))
 
-Zircolite can be used directly in Python or you can use the binaries provided in released (Microsoft Windows only).
+If you use `zircolite.py` with evtx files as input **you can only execute it on a 64 bits OS** (`evtx_dump` is 64 bits only).
+Zircolite can be used directly in Python or you can use the binaries provided in release (Microsoft Windows only).
 
 :information_source: If you want to try the tool you can test with these EVTX files : [EVTX-ATTACK-SAMPLES](https://github.com/sbousseaden/EVTX-ATTACK-SAMPLES).
-
-### Mini-GUI
-
-![](pics/gui.jpg)
 
 ## Requirements
 
 ### Mandatory
 
-* [Evtx_dump](https://github.com/omerbenamram/evtx) : The tool is provided if you clone the repo. If you want to be sure of what you execute, you can download the tool directly on the official repository : [here](https://github.com/omerbenamram/evtx). In order to use it with Zircolite you must put it in the `bin` directory. The file must be named accordingly to the following array :
+* [Evtx_dump](https://github.com/omerbenamram/evtx) : The tool is provided if you clone the repo. You can download also the tool directly on the official repository : [here](https://github.com/omerbenamram/evtx). In order to use it with Zircolite you must put it in the [bin](bin/) directory and name it accordingly to the following array :
 
     | Tool             | Windows             | MacOS          | Linux           |
     |------------------|---------------------|----------------|-----------------|
@@ -39,95 +38,78 @@ To enhance Zircolite experience, you can use the following third party Python li
 
 ## Quick start
 
-If your evtx files have the extension ".evtx" :
+Help is available with `zircolite.py -h`. If your evtx files have the extension ".evtx" :
 
 ```shell
 python3 zircolite.py --evtx <EVTX folder> --ruleset <Converted Sigma rules>
 python3 zircolite.py --evtx ../Logs --ruleset rules/rules_windows_sysmon.json
 ```
 
-Other arguments are described when using : `zircolite.py -h`. Relevant **optional** arguments are :
-
-- `--config [configuration file]` : JSON File containing field mappings and exclusions
-- `--fileext` : Allows to customize the evtx file extension (some tools like to change the extension)
-
-:warning: Zircolite puts a lot of data in memory, if you want to use it with a lot of logs please check the "Advanced" section.
-
 ## Advanced use
 
 ### Templating
 
-Zircolite provides a templating system based on Jinja 2. It allows you to change the output format to suits your needs (Splunk or ELK integration, Grep-able output...).
-
-To use the template system, use these arguments :
+Zircolite provides a templating system based on Jinja 2. It allows you to change the output format to suits your needs (Splunk or ELK integration, Grep-able output...). To use the template system, use these arguments :
 
 - `--template <template_filename>`
 - `--templateOutput <output_filename>`
 
 ```shell
-python3 zircolite.py --evtx example.evtx  --ruleset rules/rules_windows_sysmon.json \
---template templates/exportCSV.tmpl \
---templateOutput test.csv
+python3 zircolite.py --evtx sample.evtx  --ruleset rules/rules_windows_sysmon.json \
+--template templates/exportCSV.tmpl --templateOutput test.csv
 ```
 
 It is possible to use multiple templates if you provide as long as for each `--template` argument there is a `--templateOutput` argument associated.
 
-:warning: Use of templating can slow Zircolite. Templating is not supported with `zircolite_mp.py`.
-
 ### Mini-Gui
 
-A mini-GUI screenshot is available at the beggining of this Read Me. The Mini-GUI can be used totaly offline, it allows the user to display results in a visual friendly and searchable. It uses [datatables](https://datatables.net/) and the [SB Admin 2 theme](https://github.com/StartBootstrap/startbootstrap-sb-admin-2).
+![](pics/gui.jpg)
 
-To use it you just need to generate a `data.js` file with the `exportForZircoGui.tmpl`template and move it to the `gui` directory :
+The Mini-GUI can be used totaly offline, it allows the user to display and search results. It uses [datatables](https://datatables.net/) and the [SB Admin 2 theme](https://github.com/StartBootstrap/startbootstrap-sb-admin-2). To use it you just need to generate a `data.js` file with the `exportForZircoGui.tmpl` template and move it to the [gui](gui/) directory :
 
 ```shell
-python3 zircolite.py \
-            --evtx ../EVTX-ATTACK-SAMPLES/ \
-            --ruleset rules/rules_windows_sysmon.json \ 
-            --template templates/exportForZircoGui.tmpl \ 
-            --templateOutput data.js
+python3 zircolite.py --evtx sample.evtx 
+	--ruleset rules/rules_windows_sysmon.json \ 
+	--template templates/exportForZircoGui.tmpl --templateOutput data.js
 mv data.js gui/
-
 ```
 
 Then you just have to open `index.html` in your favorite browser and click on a Mitre Att&ck category or an alert level.
+  
+:warning: **The mini-GUI was not build to handle big datasets**.
 
-:warning: The mini-GUI was not build to handle very big datasets.
+### Forward SIGMA detections
+
+If you have multiple endpoints to scan, it is usefull to send the detections to a central point. As of v1.2, Zircolite can forward detections to an HTTP server :
+
+```shell
+python3 zircolite.py --evtx sample.evtx  --ruleset rules/rules_windows_sysmon.json \
+	--remote http://address:port/uri
+```
+
+An **example** server called is available in the [tools](tools/) directory.
 
 ### Big EVTX files
 
-Even if it is written in Python, Zircolite tries to be as fast as possible so a lot of data is stored in memory. As of v1.0, there is no "slower" mode that use less memory. Zircolite memory use oscillate between 2 or 4 times the size of the logs, so it is not a good idea to use it on very big EVTX files or a large number of EVTX. Moreover, Except when `evtx_dump` is used, Zircolite only use one core. If you have a lot of EVTX files and the total size is big, it is recommanded that you use a script to launch multiple Zircolite instances. By the way, a very basic one is provided in this repository : `Zircolite_mp.py`.
+Zircolite tries to be as fast as possible so a lot of data is stored in memory. So : 
 
-`zircolite_mp.py` is a tool that leverages multiple cores to launch multiple Zircolite instances to speed up the analysis. It is pretty much like `GNU Parallel`. All cores can be used, but it is better to leave one or two cores unused. `zircolite_mp.py` needs data to be organised accordingly to the following directory tree :
+- As of v1.0, there is no "slower" mode that use less memory. **Zircolite memory use oscillate between 2 or 3 times the size of the logs**
+- It is not a good idea to use it on very big EVTX files or a large number of EVTX
+- Except when `evtx_dump` is used, Zircolite only use one core. 
 
-```console
-CASE
-├── COMPUTER-DC-01
-│   ├── *.evtx
-├── COMPUTER-DC-02
-│   ├── *.evtx
-├── WORKSTATION_WIN10_01
-│   ├── *.evtx
-├── WORKSTATION_WIN10_02
-│   ├── *.evtx
-├── ...
+If you have a lot of EVTX files and their total size is big, it is recommanded that you use a script to launch multiple Zircolite instances. On Linux or macOS The easiest way is to use GNU Parallel : 
+
+```shell
+find ../Samples/EVTX-ATTACK-SAMPLES/  -type f -name "*.evtx" \
+| parallel -j -1 --progress python3 zircolite.py --evtx {} \
+--ruleset rules/rules_windows_sysmon.json --outfile {/.}.json
 ```
-To launch `zircolite_mp.py` :
 
-```
-# 1 core "--monore" or "--core 1"
-python3 zircolite.py --evtx ../Logs --ruleset rules/rules_windows_sysmon.json --monocore
-# All cores "--core all" (default)
-python3 zircolite.py --evtx ../Logs --ruleset rules/rules_windows_sysmon.json --core all
-# 4 cores
-python3 zircolite.py --evtx ../Logs --ruleset rules/rules_windows_sysmon.json --core 4
-
-```
-:warning: For now, `evtx_dump` will use all CPU cores, this will be changed in future versions.
+If you don't have find and/or GNU Parallel, you can use the **very basic** `Zircolite_mp.py` available in the [tools](tools/) directory of this repository.
 
 ### Benchmarks
 
-On an Intel Core-i9 8c/16t - 64 GB RAM :
+On an Intel Core-i9 8c/16t - 64 GB RAM (**Need to be updated, Zircolite is even faster now**):
 
 |                            | Monocore | Multicore  |
 |----------------------------|----------|------------|
@@ -138,7 +120,7 @@ On an Intel Core-i9 8c/16t - 64 GB RAM :
 
 ### Rules
 
-The SIGMA rules must be converted into JSON. This can be done with the `genRules.py` script located in the repository `tools` directory (check the Read Me in the directory). Some rules are already provided.
+The SIGMA rules must be converted into JSON. This can be done with the `genRules.py` script located in the repository `tools` directory. Some rules are already provided in the rules directory.
 
 ## Architecture
 
@@ -151,15 +133,12 @@ The SIGMA rules must be converted into JSON. This can be done with the `genRules
 ```text
 ├── Makefile                # Only make clean works
 ├── Readme.md               # The file you are reading
-├── bin                     # Directory containing all external binaries used in Zircolite
+├── bin                     # Directory containing all external binaries used by Zircolite
 ├── config                  # Directory containing the config files
-│   └── fieldMappings.json  # File containing the field mappings and exclusions
 ├── pics                    # Pictures directory - not really relevant
 ├── rules                   # Sample rules you can use
 ├── templates               # Jinja2 templates
 ├── tools                   # Directory containing all external tools
-│   ├── config              # Sysmon config file for Sigmac
-│   └── genRules.py         # genRules allows to generate rules in JSON for Zircolite
 └── zircolite.py            # Zircolite !
 ```
 
@@ -174,39 +153,36 @@ Zircolite is also packaged as a Docker image (cf. `wagga40/zircolite` on Docker 
 Using Zircolite with Docker is as simple as:
 
 ```sh
-docker container run --tty --volume /path/to/evtx:/case docker.io/wagga40/zircolite:1.1.2 --ruleset rules/rules_windows_sysmon.json --evtx /case --outfile /case/detected_events.json
+docker container run --tty --volume /path/to/evtx:/case docker.io/wagga40/zircolite:1.1.4 \ 
+	--ruleset rules/rules_windows_sysmon.json \
+	--evtx /case --outfile /case/detected_events.json
 ```
 
-This will recursively find EVTX files in the `/case` directory of the container (which is bound to the `/path/to/evtx` of the host filesystem) and write the detection events to the `/case/detected_events.json` (which finally corresponds to `/path/to/evtx/detected_events.json`). Please refer to the [official documentation](https://docs.docker.com/engine/reference/run/) for more detailed examples on how to use the Docker image.
+This will recursively find EVTX files in the `/case` directory of the container (which is bound to the `/path/to/evtx` of the host filesystem) and write the detection events to the `/case/detected_events.json` (which finally corresponds to `/path/to/evtx/detected_events.json`).
 
 Event if Zircolite does not alter the original EVTX files, sometimes you want to make sure that nothing will write to the original files. For these cases, you can use a read-only bind mount with the following command:
 
 ```sh
-docker run --rm --tty -v /path/to/evtx:/case/input:ro -v /path/to/results:/case/output docker.io/wagga40/zircolite:1.1.2 -r rules/rules_windows_sysmon.json -e /case/input -o /case/output/detected_events.json
+docker run --rm --tty -v /path/to/evtx:/case/input:ro -v /path/to/results:/case/output \
+	docker.io/wagga40/zircolite:1.1.4 -r rules/rules_windows_sysmon.json \
+	-e /case/input -o /case/output/detected_events.json
 ```
-
-This way, Zircolite cannot alter the original files since the bind mount is set to read-only. The output will still be available as `/case/output/detected_events.json` (which eventually becomes `/path/to/results/detected_events.json` on the host).
 
 Since the Docker image mirrors Zircolite's repository, all options are also available in the image.
 
-### How to package Zircolite
-
-#### PyInstaller
+### Package Zircolite with PyInstaller
 
 * Install Python 3.8 on the same OS as the one you want to use Zircolite on
 * After Python 3.8 install, you will need PyInstaller : `pip3 install pyinstaller`
 * In the root folder of Zircolite type : `pyinstaller -c --onefile zircolite.py`
 * The `dist` folder will contain the packaged app
 
-:warning: When packaging with PyInstaller some AV may not like your package... Check [here](https://twitter.com/cyb3rops/status/1366011127801516035).
-
-#### Nuitka
-
-* Even if I'm am not using it for now, it is possible and pretty straightforward to package Zircolite with Nuitka. Refer to Nuitka docs to know how to proceed.
+:warning: When packaging with PyInstaller some AV may not like your package.
 
 ## "Battle-tested" ?
 
-Zircolite has been used to perform cold-analysis on EVTX in multiple "real-life" situations. It also has been used directly on endpoints to perform live forensics but these were not real-life scenarios.
+Zircolite has been used to perform cold-analysis (in Lab) on EVTX in multiple "real-life" situations. 
+However, even if Zircolite has been used many times to perform analysis directly on an Microsoft Windows endpoint there is not yet a pipeline to thoroughly test every release.
 
 ## License
 
