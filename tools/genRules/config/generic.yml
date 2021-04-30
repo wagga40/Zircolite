@@ -1,9 +1,6 @@
 title: Zircolite generic
 order: 21
 backends:
-    - splunk
-    - splunkxml
-    - fieldlist
     - sqlite
 logsources:
     cisco:
@@ -94,6 +91,20 @@ logsources:
         service: dhcp
         conditions:
             Channel: 'Microsoft-Windows-DHCP-Server/Operational'
+    windows-defender:
+        product: windows
+        service: windefend
+        conditions:
+            Channel: 'Microsoft-Windows-Windows Defender/Operational'
+    windows-applocker:
+        product: windows
+        service: applocker
+        conditions:
+            Channel:
+                - 'Microsoft-Windows-AppLocker/MSI and Script'
+                - 'Microsoft-Windows-AppLocker/EXE and DLL'
+                - 'Microsoft-Windows-AppLocker/Packaged app-Deployment'
+                - 'Microsoft-Windows-AppLocker/Packaged app-Execution'
     process_creation:
         category: process_creation
         product: windows

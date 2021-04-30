@@ -1,6 +1,88 @@
 title: Conversion of Generic Rules into Sysmon Specific Rules
 order: 10
 logsources:
+    windows:
+        product: windows
+    windows-application:
+        product: windows
+        service: application
+        conditions:
+            Channel: 'Application'
+    windows-security:
+        product: windows
+        service: security
+        conditions:
+            Channel: 'Security'
+    windows-system:
+        product: windows
+        service: system
+        conditions:
+            Channel: 'System'
+    windows-sysmon:
+        product: windows
+        service: sysmon
+        conditions:
+            Channel: 'Microsoft-Windows-Sysmon/Operational'
+    windows-powershell:
+        product: windows
+        service: powershell
+        conditions:
+            Channel: 'Microsoft-Windows-PowerShell/Operational'
+    windows-classicpowershell:
+        product: windows
+        service: powershell-classic
+        conditions:
+            Channel: 'Windows PowerShell'
+    windows-taskscheduler:
+        product: windows
+        service: taskscheduler
+        conditions:
+            Channel: 'Microsoft-Windows-TaskScheduler/Operational'
+    windows-wmi:
+        product: windows
+        service: wmi
+        conditions:
+            Channel: 'Microsoft-Windows-WMI-Activity/Operational'
+    windows-dns-server:
+        product: windows
+        service: dns-server
+        category: dns
+        conditions:
+            Channel: 'DNS Server'
+    windows-dns-server-audit:
+        product: windows
+        service: dns-server-audit
+        conditions:
+            Channel: 'Microsoft-Windows-DNS-Server/Audit'
+    windows-driver-framework:
+        product: windows
+        service: driver-framework
+        conditions:
+            Channel: 'Microsoft-Windows-DriverFrameworks-UserMode/Operational'
+    windows-ntlm:
+        product: windows
+        service: ntlm
+        conditions:
+            Channel: 'Microsoft-Windows-NTLM/Operational'
+    windows-dhcp:
+        product: windows
+        service: dhcp
+        conditions:
+            Channel: 'Microsoft-Windows-DHCP-Server/Operational'
+    windows-defender:
+        product: windows
+        service: windefend
+        conditions:
+            Channel: 'Microsoft-Windows-Windows Defender/Operational'
+    windows-applocker:
+        product: windows
+        service: applocker
+        conditions:
+            Channel:
+                - 'Microsoft-Windows-AppLocker/MSI and Script'
+                - 'Microsoft-Windows-AppLocker/EXE and DLL'
+                - 'Microsoft-Windows-AppLocker/Packaged app-Deployment'
+                - 'Microsoft-Windows-AppLocker/Packaged app-Execution'
     process_creation:
         category: process_creation
         product: windows
