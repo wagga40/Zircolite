@@ -130,7 +130,7 @@
         ],
         "level": "low",
         "rule": [
-            "SELECT * FROM logs WHERE (Channel = \"System\" AND ServiceName = \"PSEXESVC\" AND ((EventID = \"7045\" AND ServiceFileName LIKE \"%\\\\PSEXESVC.exe\" ESCAPE '\\') OR EventID = \"7036\"))",
+            "SELECT * FROM logs WHERE (Channel = \"System\" AND ServiceName = \"PSEXESVC\" AND ((EventID = \"7045\" AND ImagePath LIKE \"%\\\\PSEXESVC.exe\" ESCAPE '\\') OR EventID = \"7036\"))",
             "SELECT * FROM logs WHERE (EventID = \"4688\" AND NewProcessName LIKE \"%\\\\PSEXESVC.exe\" ESCAPE '\\' AND User LIKE \"NT AUTHORITY\\\\SYSTEM\" ESCAPE '\\')"
         ]
     },
@@ -183,7 +183,7 @@
         ],
         "level": "medium",
         "rule": [
-            "SELECT * FROM logs WHERE (Channel = \"Security\" AND EventID = \"4697\" AND (ServiceFileName LIKE \"%pcap%\" ESCAPE '\\' OR ServiceFileName LIKE \"%npcap%\" ESCAPE '\\' OR ServiceFileName LIKE \"%npf%\" ESCAPE '\\' OR ServiceFileName LIKE \"%nm3%\" ESCAPE '\\' OR ServiceFileName LIKE \"%ndiscap%\" ESCAPE '\\' OR ServiceFileName LIKE \"%nmnt%\" ESCAPE '\\' OR ServiceFileName LIKE \"%windivert%\" ESCAPE '\\' OR ServiceFileName LIKE \"%USBPcap%\" ESCAPE '\\' OR ServiceFileName LIKE \"%pktmon%\" ESCAPE '\\'))"
+            "SELECT * FROM logs WHERE (Channel = \"Security\" AND EventID = \"4697\" AND (ImagePath LIKE \"%pcap%\" ESCAPE '\\' OR ImagePath LIKE \"%npcap%\" ESCAPE '\\' OR ImagePath LIKE \"%npf%\" ESCAPE '\\' OR ImagePath LIKE \"%nm3%\" ESCAPE '\\' OR ImagePath LIKE \"%ndiscap%\" ESCAPE '\\' OR ImagePath LIKE \"%nmnt%\" ESCAPE '\\' OR ImagePath LIKE \"%windivert%\" ESCAPE '\\' OR ImagePath LIKE \"%USBPcap%\" ESCAPE '\\' OR ImagePath LIKE \"%pktmon%\" ESCAPE '\\'))"
         ]
     },
     {
@@ -3202,7 +3202,7 @@
         ],
         "level": "low",
         "rule": [
-            "SELECT * FROM (SELECT count(*) AS agg FROM logs WHERE (EventID = \"4688\" AND CommandLine IN (\"arp.exe\", \"at.exe\", \"attrib.exe\", \"cscript.exe\", \"dsquery.exe\", \"hostname.exe\", \"ipconfig.exe\", \"mimikatz.exe\", \"nbtstat.exe\", \"net.exe\", \"netsh.exe\", \"nslookup.exe\", \"ping.exe\", \"quser.exe\", \"qwinsta.exe\", \"reg.exe\", \"runas.exe\", \"sc.exe\", \"schtasks.exe\", \"ssh.exe\", \"systeminfo.exe\", \"taskkill.exe\", \"telnet.exe\", \"tracert.exe\", \"wscript.exe\", \"xcopy.exe\", \"pscp.exe\", \"copy.exe\", \"robocopy.exe\", \"certutil.exe\", \"vssadmin.exe\", \"powershell.exe\", \"wevtutil.exe\", \"psexec.exe\", \"bcedit.exe\", \"wbadmin.exe\", \"icacls.exe\", \"diskpart.exe\")) GROUP BY MachineName) WHERE agg > 5"
+            "SELECT * FROM (SELECT count(*) AS agg FROM logs WHERE (EventID = \"4688\" AND CommandLine IN (\"arp.exe\", \"at.exe\", \"attrib.exe\", \"cscript.exe\", \"dsquery.exe\", \"hostname.exe\", \"ipconfig.exe\", \"mimikatz.exe\", \"nbtstat.exe\", \"net.exe\", \"netsh.exe\", \"nslookup.exe\", \"ping.exe\", \"quser.exe\", \"qwinsta.exe\", \"reg.exe\", \"runas.exe\", \"sc.exe\", \"schtasks.exe\", \"ssh.exe\", \"systeminfo.exe\", \"taskkill.exe\", \"telnet.exe\", \"tracert.exe\", \"wscript.exe\", \"xcopy.exe\", \"pscp.exe\", \"copy.exe\", \"robocopy.exe\", \"certutil.exe\", \"vssadmin.exe\", \"powershell.exe\", \"wevtutil.exe\", \"psexec.exe\", \"bcedit.exe\", \"wbadmin.exe\", \"icacls.exe\", \"diskpart.exe\")) GROUP BY Computer) WHERE agg > 5"
         ]
     },
     {
@@ -5484,7 +5484,7 @@
         ],
         "level": "critical",
         "rule": [
-            "SELECT * FROM logs WHERE (EventID = \"4688\" AND OriginalFileName = \"procdump\" AND NOT ((NewProcessName LIKE \"%\\\\procdump.exe\" ESCAPE '\\' OR NewProcessName LIKE \"%\\\\procdump64.exe\" ESCAPE '\\')))"
+            "SELECT * FROM logs WHERE (EventID = \"4688\" AND ((OriginalFileName = \"procdump\" AND NOT ((NewProcessName LIKE \"%\\\\procdump.exe\" ESCAPE '\\' OR NewProcessName LIKE \"%\\\\procdump64.exe\" ESCAPE '\\'))) OR ((CommandLine LIKE \"% -ma %\" ESCAPE '\\' AND CommandLine LIKE \"% -accepteula %\" ESCAPE '\\') AND NOT ((CommandLine LIKE \"%\\\\procdump.exe%\" ESCAPE '\\' OR CommandLine LIKE \"%\\\\procdump64.exe%\" ESCAPE '\\')))))"
         ]
     },
     {
@@ -6034,7 +6034,7 @@
         "author": "Florian Roth",
         "level": "high",
         "rule": [
-            "SELECT * FROM logs WHERE (EventID = \"4688\" AND CommandLine LIKE \"%\\\\rundll32.exe%\" ESCAPE '\\' AND CommandLine LIKE \"%,#%\" ESCAPE '\\')"
+            "SELECT * FROM logs WHERE (EventID = \"4688\" AND (CommandLine LIKE \"%\\\\rundll32.exe%\" ESCAPE '\\' AND CommandLine LIKE \"%,#%\" ESCAPE '\\') AND NOT (CommandLine LIKE \"%EDGEHTML.dll%\" ESCAPE '\\' AND CommandLine LIKE \"%#141%\" ESCAPE '\\'))"
         ]
     },
     {
@@ -8378,7 +8378,7 @@
         ],
         "level": "high",
         "rule": [
-            "SELECT * FROM logs WHERE (Channel = \"Security\" AND (EventID LIKE \"4697\" ESCAPE '\\') AND ServiceName = \"HybridConnectionManager\" AND ServiceFileName LIKE \"%HybridConnectionManager%\" ESCAPE '\\')"
+            "SELECT * FROM logs WHERE (Channel = \"Security\" AND (EventID LIKE \"4697\" ESCAPE '\\') AND ServiceName = \"HybridConnectionManager\" AND ImagePath LIKE \"%HybridConnectionManager%\" ESCAPE '\\')"
         ]
     },
     {
@@ -8452,9 +8452,9 @@
         ],
         "level": "critical",
         "rule": [
-            "SELECT * FROM logs WHERE (Channel = \"System\" AND ((ServiceFileName LIKE \"%cmd%\" ESCAPE '\\' AND ServiceFileName LIKE \"%/c%\" ESCAPE '\\' AND ServiceFileName LIKE \"%echo%\" ESCAPE '\\' AND ServiceFileName LIKE \"%\\\\pipe\\\\%\" ESCAPE '\\') OR (ServiceFileName LIKE \"%\\%COMSPEC\\%%\" ESCAPE '\\' AND ServiceFileName LIKE \"%/c%\" ESCAPE '\\' AND ServiceFileName LIKE \"%echo%\" ESCAPE '\\' AND ServiceFileName LIKE \"%\\\\pipe\\\\%\" ESCAPE '\\') OR (ServiceFileName LIKE \"%rundll32%\" ESCAPE '\\' AND ServiceFileName LIKE \"%.dll,a%\" ESCAPE '\\' AND ServiceFileName LIKE \"%/p:%\" ESCAPE '\\')))",
-            "SELECT * FROM logs WHERE ((ServiceFileName LIKE \"%cmd%\" ESCAPE '\\' AND ServiceFileName LIKE \"%/c%\" ESCAPE '\\' AND ServiceFileName LIKE \"%echo%\" ESCAPE '\\' AND ServiceFileName LIKE \"%\\\\pipe\\\\%\" ESCAPE '\\') OR (ServiceFileName LIKE \"%\\%COMSPEC\\%%\" ESCAPE '\\' AND ServiceFileName LIKE \"%/c%\" ESCAPE '\\' AND ServiceFileName LIKE \"%echo%\" ESCAPE '\\' AND ServiceFileName LIKE \"%\\\\pipe\\\\%\" ESCAPE '\\') OR (ServiceFileName LIKE \"%rundll32%\" ESCAPE '\\' AND ServiceFileName LIKE \"%.dll,a%\" ESCAPE '\\' AND ServiceFileName LIKE \"%/p:%\" ESCAPE '\\'))",
-            "SELECT * FROM logs WHERE (Channel = \"Security\" AND ((ServiceFileName LIKE \"%cmd%\" ESCAPE '\\' AND ServiceFileName LIKE \"%/c%\" ESCAPE '\\' AND ServiceFileName LIKE \"%echo%\" ESCAPE '\\' AND ServiceFileName LIKE \"%\\\\pipe\\\\%\" ESCAPE '\\') OR (ServiceFileName LIKE \"%\\%COMSPEC\\%%\" ESCAPE '\\' AND ServiceFileName LIKE \"%/c%\" ESCAPE '\\' AND ServiceFileName LIKE \"%echo%\" ESCAPE '\\' AND ServiceFileName LIKE \"%\\\\pipe\\\\%\" ESCAPE '\\') OR (ServiceFileName LIKE \"%rundll32%\" ESCAPE '\\' AND ServiceFileName LIKE \"%.dll,a%\" ESCAPE '\\' AND ServiceFileName LIKE \"%/p:%\" ESCAPE '\\')))"
+            "SELECT * FROM logs WHERE (Channel = \"System\" AND ((ImagePath LIKE \"%cmd%\" ESCAPE '\\' AND ImagePath LIKE \"%/c%\" ESCAPE '\\' AND ImagePath LIKE \"%echo%\" ESCAPE '\\' AND ImagePath LIKE \"%\\\\pipe\\\\%\" ESCAPE '\\') OR (ImagePath LIKE \"%\\%COMSPEC\\%%\" ESCAPE '\\' AND ImagePath LIKE \"%/c%\" ESCAPE '\\' AND ImagePath LIKE \"%echo%\" ESCAPE '\\' AND ImagePath LIKE \"%\\\\pipe\\\\%\" ESCAPE '\\') OR (ImagePath LIKE \"%rundll32%\" ESCAPE '\\' AND ImagePath LIKE \"%.dll,a%\" ESCAPE '\\' AND ImagePath LIKE \"%/p:%\" ESCAPE '\\')))",
+            "SELECT * FROM logs WHERE ((ImagePath LIKE \"%cmd%\" ESCAPE '\\' AND ImagePath LIKE \"%/c%\" ESCAPE '\\' AND ImagePath LIKE \"%echo%\" ESCAPE '\\' AND ImagePath LIKE \"%\\\\pipe\\\\%\" ESCAPE '\\') OR (ImagePath LIKE \"%\\%COMSPEC\\%%\" ESCAPE '\\' AND ImagePath LIKE \"%/c%\" ESCAPE '\\' AND ImagePath LIKE \"%echo%\" ESCAPE '\\' AND ImagePath LIKE \"%\\\\pipe\\\\%\" ESCAPE '\\') OR (ImagePath LIKE \"%rundll32%\" ESCAPE '\\' AND ImagePath LIKE \"%.dll,a%\" ESCAPE '\\' AND ImagePath LIKE \"%/p:%\" ESCAPE '\\'))",
+            "SELECT * FROM logs WHERE (Channel = \"Security\" AND ((ImagePath LIKE \"%cmd%\" ESCAPE '\\' AND ImagePath LIKE \"%/c%\" ESCAPE '\\' AND ImagePath LIKE \"%echo%\" ESCAPE '\\' AND ImagePath LIKE \"%\\\\pipe\\\\%\" ESCAPE '\\') OR (ImagePath LIKE \"%\\%COMSPEC\\%%\" ESCAPE '\\' AND ImagePath LIKE \"%/c%\" ESCAPE '\\' AND ImagePath LIKE \"%echo%\" ESCAPE '\\' AND ImagePath LIKE \"%\\\\pipe\\\\%\" ESCAPE '\\') OR (ImagePath LIKE \"%rundll32%\" ESCAPE '\\' AND ImagePath LIKE \"%.dll,a%\" ESCAPE '\\' AND ImagePath LIKE \"%/p:%\" ESCAPE '\\')))"
         ]
     },
     {
@@ -8642,7 +8642,7 @@
         ],
         "level": "high",
         "rule": [
-            "SELECT * FROM logs WHERE (Channel = \"System\" AND EventID = \"7045\" AND ServiceName = \"NtsSrv\" AND ServiceFileName LIKE \"% LocalService\" ESCAPE '\\')"
+            "SELECT * FROM logs WHERE (Channel = \"System\" AND EventID = \"7045\" AND ServiceName = \"NtsSrv\" AND ImagePath LIKE \"% LocalService\" ESCAPE '\\')"
         ]
     },
     {
@@ -8830,7 +8830,7 @@
         ],
         "level": "critical",
         "rule": [
-            "SELECT * FROM logs WHERE (Channel = \"System\" AND EventID = \"7045\" AND ServiceName = \"BTOBTO\" AND ServiceFileName LIKE \"%\\\\execute.bat\" ESCAPE '\\')"
+            "SELECT * FROM logs WHERE (Channel = \"System\" AND EventID = \"7045\" AND ServiceName = \"BTOBTO\" AND ImagePath LIKE \"%\\\\execute.bat\" ESCAPE '\\')"
         ]
     },
     {
@@ -8890,7 +8890,7 @@
         ],
         "level": "critical",
         "rule": [
-            "SELECT * FROM logs WHERE (Channel = \"System\" AND EventID = \"7045\" AND (ServiceFileName LIKE \"%\\\\PAExec%\" ESCAPE '\\' OR ServiceName = \"mssecsvc2.0\" OR ServiceFileName LIKE \"%net user%\" ESCAPE '\\'))"
+            "SELECT * FROM logs WHERE (Channel = \"System\" AND EventID = \"7045\" AND (ImagePath LIKE \"%\\\\PAExec%\" ESCAPE '\\' OR ServiceName = \"mssecsvc2.0\" OR ImagePath LIKE \"%net user%\" ESCAPE '\\'))"
         ]
     },
     {
@@ -9055,9 +9055,9 @@
         ],
         "level": "high",
         "rule": [
-            "SELECT * FROM logs WHERE (Channel = \"System\" AND EventID = \"7045\" AND (ServiceFileName LIKE \"%powershell%\" ESCAPE '\\' OR ServiceFileName LIKE \"%pwsh%\" ESCAPE '\\'))",
-            "SELECT * FROM logs WHERE (Channel = \"Microsoft-Windows-Sysmon/Operational\" AND EventID = \"6\" AND (ServiceFileName LIKE \"%powershell%\" ESCAPE '\\' OR ServiceFileName LIKE \"%pwsh%\" ESCAPE '\\'))",
-            "SELECT * FROM logs WHERE (Channel = \"Security\" AND EventID = \"4697\" AND (ServiceFileName LIKE \"%powershell%\" ESCAPE '\\' OR ServiceFileName LIKE \"%pwsh%\" ESCAPE '\\'))"
+            "SELECT * FROM logs WHERE (Channel = \"System\" AND EventID = \"7045\" AND (ImagePath LIKE \"%powershell%\" ESCAPE '\\' OR ImagePath LIKE \"%pwsh%\" ESCAPE '\\'))",
+            "SELECT * FROM logs WHERE (Channel = \"Microsoft-Windows-Sysmon/Operational\" AND EventID = \"6\" AND (ImagePath LIKE \"%powershell%\" ESCAPE '\\' OR ImagePath LIKE \"%pwsh%\" ESCAPE '\\'))",
+            "SELECT * FROM logs WHERE (Channel = \"Security\" AND EventID = \"4697\" AND (ImagePath LIKE \"%powershell%\" ESCAPE '\\' OR ImagePath LIKE \"%pwsh%\" ESCAPE '\\'))"
         ]
     },
     {
@@ -9073,7 +9073,7 @@
         ],
         "level": "low",
         "rule": [
-            "SELECT * FROM (SELECT count(*) AS agg FROM logs WHERE (Channel = \"System\" AND EventID = \"7045\") GROUP BY ServiceFileName) WHERE agg < 5"
+            "SELECT * FROM (SELECT count(*) AS agg FROM logs WHERE (Channel = \"System\" AND EventID = \"7045\") GROUP BY ImagePath) WHERE agg < 5"
         ]
     },
     {
@@ -9086,7 +9086,7 @@
         ],
         "level": "medium",
         "rule": [
-            "SELECT * FROM logs WHERE (Channel = \"Security\" AND (EventID IN (\"528\", \"529\", \"4624\", \"4625\") AND LogonType = \"2\" AND (ComputerName LIKE \"\\%ServerSystems\\%\" ESCAPE '\\' OR ComputerName LIKE \"\\%DomainControllers\\%\" ESCAPE '\\')) AND NOT (LogonProcessName = \"Advapi\" AND ComputerName LIKE \"\\%Workstations\\%\" ESCAPE '\\'))"
+            "SELECT * FROM logs WHERE (Channel = \"Security\" AND (EventID IN (\"528\", \"529\", \"4624\", \"4625\") AND LogonType = \"2\" AND (Computer LIKE \"\\%ServerSystems\\%\" ESCAPE '\\' OR Computer LIKE \"\\%DomainControllers\\%\" ESCAPE '\\')) AND NOT (LogonProcessName = \"Advapi\" AND Computer LIKE \"\\%Workstations\\%\" ESCAPE '\\'))"
         ]
     },
     {
@@ -9499,7 +9499,7 @@
         ],
         "level": "medium",
         "rule": [
-            "SELECT * FROM logs WHERE (Channel = \"Security\" AND (LogonType = \"3\" AND LogonProcessName = \"NtLmSsp\" AND WorkstationName LIKE \"\\%Workstations\\%\" ESCAPE '\\' AND ComputerName LIKE \"\\%Workstations\\%\" ESCAPE '\\' AND (EventID = \"4624\" OR EventID = \"4625\")) AND NOT (AccountName = \"ANONYMOUS LOGON\"))"
+            "SELECT * FROM logs WHERE (Channel = \"Security\" AND (LogonType = \"3\" AND LogonProcessName = \"NtLmSsp\" AND WorkstationName LIKE \"\\%Workstations\\%\" ESCAPE '\\' AND Computer LIKE \"\\%Workstations\\%\" ESCAPE '\\' AND (EventID = \"4624\" OR EventID = \"4625\")) AND NOT (AccountName = \"ANONYMOUS LOGON\"))"
         ]
     },
     {
@@ -9776,7 +9776,7 @@
         ],
         "level": "medium",
         "rule": [
-            "SELECT * FROM (SELECT count(QueryName) AS agg FROM logs WHERE (QueryName LIKE \"%\" ESCAPE '\\' AND QueryStatus = \"0\" AND (QueryResults LIKE \"(::ffff:)_10.%\" ESCAPE '\\' OR QueryResults LIKE \"(::ffff:)_192.168.%\" ESCAPE '\\' OR QueryResults LIKE \"(::ffff:)_172.16.%\" ESCAPE '\\' OR QueryResults LIKE \"(::ffff:)_172.17.%\" ESCAPE '\\' OR QueryResults LIKE \"(::ffff:)_172.18.%\" ESCAPE '\\' OR QueryResults LIKE \"(::ffff:)_172.19.%\" ESCAPE '\\' OR QueryResults LIKE \"(::ffff:)_172.20.%\" ESCAPE '\\' OR QueryResults LIKE \"(::ffff:)_172.21.%\" ESCAPE '\\' OR QueryResults LIKE \"(::ffff:)_172.22.%\" ESCAPE '\\' OR QueryResults LIKE \"(::ffff:)_172.23.%\" ESCAPE '\\' OR QueryResults LIKE \"(::ffff:)_172.24.%\" ESCAPE '\\' OR QueryResults LIKE \"(::ffff:)_172.25.%\" ESCAPE '\\' OR QueryResults LIKE \"(::ffff:)_172.26.%\" ESCAPE '\\' OR QueryResults LIKE \"(::ffff:)_172.27.%\" ESCAPE '\\' OR QueryResults LIKE \"(::ffff:)_172.28.%\" ESCAPE '\\' OR QueryResults LIKE \"(::ffff:)_172.29.%\" ESCAPE '\\' OR QueryResults LIKE \"(::ffff:)_172.30.%\" ESCAPE '\\' OR QueryResults LIKE \"(::ffff:)_172.31.%\" ESCAPE '\\' OR QueryResults LIKE \"(::ffff:)_127.%\" ESCAPE '\\') AND (QueryName LIKE \"%\" ESCAPE '\\' AND QueryStatus = \"0\") AND NOT ((QueryResults LIKE \"(::ffff:)_10.%\" ESCAPE '\\' OR QueryResults LIKE \"(::ffff:)_192.168.%\" ESCAPE '\\' OR QueryResults LIKE \"(::ffff:)_172.16.%\" ESCAPE '\\' OR QueryResults LIKE \"(::ffff:)_172.17.%\" ESCAPE '\\' OR QueryResults LIKE \"(::ffff:)_172.18.%\" ESCAPE '\\' OR QueryResults LIKE \"(::ffff:)_172.19.%\" ESCAPE '\\' OR QueryResults LIKE \"(::ffff:)_172.20.%\" ESCAPE '\\' OR QueryResults LIKE \"(::ffff:)_172.21.%\" ESCAPE '\\' OR QueryResults LIKE \"(::ffff:)_172.22.%\" ESCAPE '\\' OR QueryResults LIKE \"(::ffff:)_172.23.%\" ESCAPE '\\' OR QueryResults LIKE \"(::ffff:)_172.24.%\" ESCAPE '\\' OR QueryResults LIKE \"(::ffff:)_172.25.%\" ESCAPE '\\' OR QueryResults LIKE \"(::ffff:)_172.26.%\" ESCAPE '\\' OR QueryResults LIKE \"(::ffff:)_172.27.%\" ESCAPE '\\' OR QueryResults LIKE \"(::ffff:)_172.28.%\" ESCAPE '\\' OR QueryResults LIKE \"(::ffff:)_172.29.%\" ESCAPE '\\' OR QueryResults LIKE \"(::ffff:)_172.30.%\" ESCAPE '\\' OR QueryResults LIKE \"(::ffff:)_172.31.%\" ESCAPE '\\' OR QueryResults LIKE \"(::ffff:)_127.%\" ESCAPE '\\'))) GROUP BY ComputerName) WHERE agg > 3"
+            "SELECT * FROM (SELECT count(QueryName) AS agg FROM logs WHERE (QueryName LIKE \"%\" ESCAPE '\\' AND QueryStatus = \"0\" AND (QueryResults LIKE \"(::ffff:)_10.%\" ESCAPE '\\' OR QueryResults LIKE \"(::ffff:)_192.168.%\" ESCAPE '\\' OR QueryResults LIKE \"(::ffff:)_172.16.%\" ESCAPE '\\' OR QueryResults LIKE \"(::ffff:)_172.17.%\" ESCAPE '\\' OR QueryResults LIKE \"(::ffff:)_172.18.%\" ESCAPE '\\' OR QueryResults LIKE \"(::ffff:)_172.19.%\" ESCAPE '\\' OR QueryResults LIKE \"(::ffff:)_172.20.%\" ESCAPE '\\' OR QueryResults LIKE \"(::ffff:)_172.21.%\" ESCAPE '\\' OR QueryResults LIKE \"(::ffff:)_172.22.%\" ESCAPE '\\' OR QueryResults LIKE \"(::ffff:)_172.23.%\" ESCAPE '\\' OR QueryResults LIKE \"(::ffff:)_172.24.%\" ESCAPE '\\' OR QueryResults LIKE \"(::ffff:)_172.25.%\" ESCAPE '\\' OR QueryResults LIKE \"(::ffff:)_172.26.%\" ESCAPE '\\' OR QueryResults LIKE \"(::ffff:)_172.27.%\" ESCAPE '\\' OR QueryResults LIKE \"(::ffff:)_172.28.%\" ESCAPE '\\' OR QueryResults LIKE \"(::ffff:)_172.29.%\" ESCAPE '\\' OR QueryResults LIKE \"(::ffff:)_172.30.%\" ESCAPE '\\' OR QueryResults LIKE \"(::ffff:)_172.31.%\" ESCAPE '\\' OR QueryResults LIKE \"(::ffff:)_127.%\" ESCAPE '\\') AND (QueryName LIKE \"%\" ESCAPE '\\' AND QueryStatus = \"0\") AND NOT ((QueryResults LIKE \"(::ffff:)_10.%\" ESCAPE '\\' OR QueryResults LIKE \"(::ffff:)_192.168.%\" ESCAPE '\\' OR QueryResults LIKE \"(::ffff:)_172.16.%\" ESCAPE '\\' OR QueryResults LIKE \"(::ffff:)_172.17.%\" ESCAPE '\\' OR QueryResults LIKE \"(::ffff:)_172.18.%\" ESCAPE '\\' OR QueryResults LIKE \"(::ffff:)_172.19.%\" ESCAPE '\\' OR QueryResults LIKE \"(::ffff:)_172.20.%\" ESCAPE '\\' OR QueryResults LIKE \"(::ffff:)_172.21.%\" ESCAPE '\\' OR QueryResults LIKE \"(::ffff:)_172.22.%\" ESCAPE '\\' OR QueryResults LIKE \"(::ffff:)_172.23.%\" ESCAPE '\\' OR QueryResults LIKE \"(::ffff:)_172.24.%\" ESCAPE '\\' OR QueryResults LIKE \"(::ffff:)_172.25.%\" ESCAPE '\\' OR QueryResults LIKE \"(::ffff:)_172.26.%\" ESCAPE '\\' OR QueryResults LIKE \"(::ffff:)_172.27.%\" ESCAPE '\\' OR QueryResults LIKE \"(::ffff:)_172.28.%\" ESCAPE '\\' OR QueryResults LIKE \"(::ffff:)_172.29.%\" ESCAPE '\\' OR QueryResults LIKE \"(::ffff:)_172.30.%\" ESCAPE '\\' OR QueryResults LIKE \"(::ffff:)_172.31.%\" ESCAPE '\\' OR QueryResults LIKE \"(::ffff:)_127.%\" ESCAPE '\\'))) GROUP BY Computer) WHERE agg > 3"
         ]
     },
     {
