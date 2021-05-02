@@ -158,4 +158,5 @@ logsources:
         rewrite:
             product: windows
             service: sysmon
-
+fieldmappings:
+    ServiceFileName: ImagePath

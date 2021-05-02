@@ -116,3 +116,8 @@ logsources:
 fieldmappings:
     Image: NewProcessName
     ParentImage: ParentProcessName
+    ServiceFileName: ImagePath
+    ProcessCommandline: CommandLine
+    ComputerName: Computer
+    MachineName: Computer
+    userIdentity.arn: user_arn

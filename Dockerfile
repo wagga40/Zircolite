@@ -25,8 +25,7 @@ RUN git clone \
 WORKDIR "${ZIRCOLITE_INSTALL_PREFIX}/zircolite"
 
 RUN chmod 0755 \
-        zircolite.py \
-        zircolite_mp.py
+        zircolite.py
 
 FROM "python:${PYTHON_VERSION}"
 
