@@ -171,7 +171,7 @@ def flattenJSON(file):
                             fieldStmt += "'" + key + "' INTEGER,\n"
                         else:
                             keyDict[key] = ""
-                            fieldStmt += "'" + key + "' TEXT COLLATE NOCASE,\n"
+                            fieldStmt += "'" + key + "' TEXT,\n"
 
     with open(str(file), 'r', encoding='utf-8') as JSONFile:
         for line in JSONFile:
