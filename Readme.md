@@ -109,14 +109,14 @@ If you don't have find and/or GNU Parallel, you can use the **very basic** `Zirc
 
 ### Benchmarks
 
-On an Intel Core-i9 8c/16t - 64 GB RAM (**Need to be updated, Zircolite is even faster now**):
+On an Intel Core-i9 8c/16t - 64 GB RAM (**Updated 4th May 2021**):
 
 |                            | Monocore | Multicore  |
 |----------------------------|----------|------------|
-| EVTX : 34 GB - 16 folders  | -        | 12 Min     |
-| EVTX : 3,4 GB - 9 folders  | -        | 3 Min      |
-| EVTX : 1,2 GB - 6 folders  | 11 Min   | 1 Min 30 s |
-| EVTX : 40 MB  - 2 folders  | 3 s      | 1 s        |
+| EVTX : 34 GB - 16 files    | -        | 9 Min      |
+| EVTX : 7.8 GB - 4 files    | -        | 162 sec    |
+| EVTX : 1.7 GB - One file   | 99 sec   |            |
+| EVTX : 40 MB  - 263 files  | 3 sec    | 1 sec      |
 
 ### Rules
 

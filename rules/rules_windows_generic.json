@@ -46,7 +46,7 @@
     {
         "title": "Malicious Named Pipe - 833DE223",
         "description": "Detects the creation of a named pipe used by known APT malware",
-        "author": "Florian Roth",
+        "author": "Florian Roth, blueteam0ps",
         "tags": [
             "attack.defense_evasion",
             "attack.privilege_escalation",
@@ -54,7 +54,7 @@
         ],
         "level": "critical",
         "rule": [
-            "SELECT * FROM logs WHERE (PipeName LIKE \"\\\\isapi\\_http\" ESCAPE '\\' OR PipeName LIKE \"\\\\isapi\\_dg\" ESCAPE '\\' OR PipeName LIKE \"\\\\isapi\\_dg2\" ESCAPE '\\' OR PipeName LIKE \"\\\\sdlrpc\" ESCAPE '\\' OR PipeName LIKE \"\\\\ahexec\" ESCAPE '\\' OR PipeName LIKE \"\\\\winsession\" ESCAPE '\\' OR PipeName LIKE \"\\\\lsassw\" ESCAPE '\\' OR PipeName LIKE \"\\\\46a676ab7f179e511e30dd2dc41bd388\" ESCAPE '\\' OR PipeName LIKE \"\\\\9f81f59bc58452127884ce513865ed20\" ESCAPE '\\' OR PipeName LIKE \"\\\\e710f28d59aa529d6792ca6ff0ca1b34\" ESCAPE '\\' OR PipeName LIKE \"\\\\rpchlp\\_3\" ESCAPE '\\' OR PipeName LIKE \"\\\\NamePipe\\_MoreWindows\" ESCAPE '\\' OR PipeName LIKE \"\\\\pcheap\\_reuse\" ESCAPE '\\' OR PipeName LIKE \"\\\\gruntsvc\" ESCAPE '\\' OR PipeName LIKE \"\\\\583da945-62af-10e8-4902-a8f205c72b2e\" ESCAPE '\\' OR PipeName LIKE \"\\\\bizkaz\" ESCAPE '\\')"
+            "SELECT * FROM logs WHERE (PipeName LIKE \"\\\\isapi\\_http\" ESCAPE '\\' OR PipeName LIKE \"\\\\isapi\\_dg\" ESCAPE '\\' OR PipeName LIKE \"\\\\isapi\\_dg2\" ESCAPE '\\' OR PipeName LIKE \"\\\\sdlrpc\" ESCAPE '\\' OR PipeName LIKE \"\\\\ahexec\" ESCAPE '\\' OR PipeName LIKE \"\\\\winsession\" ESCAPE '\\' OR PipeName LIKE \"\\\\lsassw\" ESCAPE '\\' OR PipeName LIKE \"\\\\46a676ab7f179e511e30dd2dc41bd388\" ESCAPE '\\' OR PipeName LIKE \"\\\\9f81f59bc58452127884ce513865ed20\" ESCAPE '\\' OR PipeName LIKE \"\\\\e710f28d59aa529d6792ca6ff0ca1b34\" ESCAPE '\\' OR PipeName LIKE \"\\\\rpchlp\\_3\" ESCAPE '\\' OR PipeName LIKE \"\\\\NamePipe\\_MoreWindows\" ESCAPE '\\' OR PipeName LIKE \"\\\\pcheap\\_reuse\" ESCAPE '\\' OR PipeName LIKE \"\\\\gruntsvc\" ESCAPE '\\' OR PipeName LIKE \"\\\\583da945-62af-10e8-4902-a8f205c72b2e\" ESCAPE '\\' OR PipeName LIKE \"\\\\bizkaz\" ESCAPE '\\' OR PipeName LIKE \"\\\\svcctl\" ESCAPE '\\' OR PipeName LIKE \"\\\\Posh%\" ESCAPE '\\' OR PipeName LIKE \"\\\\jaccdpqnvbrrxlaf\" ESCAPE '\\' OR PipeName LIKE \"\\\\csexecsvc\" ESCAPE '\\')"
         ]
     },
     {
@@ -518,6 +518,22 @@
         "level": "medium",
         "rule": [
             "SELECT * FROM logs WHERE ((TargetFilename LIKE \"%\\\\AppData\\\\Local\\\\Temp\\\\%\" ESCAPE '\\' AND TargetFilename LIKE \"%PROCEXP152.sys\" ESCAPE '\\') AND NOT ((NewProcessName LIKE \"%\\\\procexp64.exe%\" ESCAPE '\\' OR NewProcessName LIKE \"%\\\\procexp.exe%\" ESCAPE '\\' OR NewProcessName LIKE \"%\\\\procmon64.exe%\" ESCAPE '\\' OR NewProcessName LIKE \"%\\\\procmon.exe%\" ESCAPE '\\')))"
+        ]
+    },
+    {
+        "title": "Outlook C2 Macro Creation - BAD15A2A",
+        "description": "Detects the creation of a macro file for Outlook. Goes with win_outlook_c2_registry_key. VbaProject.OTM is explicitly mentioned in T1137. Particularly interesting if both events Registry & File Creation happens at the same time.",
+        "author": "@ScoubiMtl",
+        "tags": [
+            "attack.persistence",
+            "command_and_control",
+            "attack.t1137",
+            "attack.t1008",
+            "attack.t1546"
+        ],
+        "level": "medium",
+        "rule": [
+            "SELECT * FROM logs WHERE TargetFilename LIKE \"%\\\\Microsoft\\\\Outlook\\\\VbaProject.OTM\" ESCAPE '\\'"
         ]
     },
     {
@@ -1994,7 +2010,7 @@
     {
         "title": "Windows Registry Persistence COM Search Order Hijacking - 6D9CBBD4",
         "description": "Detects potential COM object hijacking leveraging the COM Search Order",
-        "author": "Maxime Thiebaut (@0xThiebaut), oscd.community",
+        "author": "Maxime Thiebaut (@0xThiebaut), oscd.community, C\u00e9dric Hien",
         "tags": [
             "attack.persistence",
             "attack.t1038",
@@ -2002,7 +2018,7 @@
         ],
         "level": "medium",
         "rule": [
-            "SELECT * FROM logs WHERE ((TargetObject LIKE \"%HKU\\\\%\" ESCAPE '\\' AND TargetObject LIKE \"%\\_Classes\\\\CLSID\\\\%\" ESCAPE '\\' AND TargetObject LIKE \"%\\\\InProcServer32\\\\(Default)%\" ESCAPE '\\') AND NOT ((Details LIKE \"%\\%\\%systemroot\\%\\%\\\\system32\\\\%\" ESCAPE '\\' OR Details LIKE \"%\\%\\%systemroot\\%\\%\\\\SysWow64\\\\%\" ESCAPE '\\') OR Details LIKE \"%\\\\AppData\\\\Local\\\\Microsoft\\\\OneDrive\\\\%\" ESCAPE '\\' AND Details LIKE \"%\\\\FileCoAuthLib64.dll%\" ESCAPE '\\' OR Details LIKE \"%\\\\AppData\\\\Local\\\\Microsoft\\\\OneDrive\\\\%\" ESCAPE '\\' AND Details LIKE \"%\\\\FileSyncShell64.dll%\" ESCAPE '\\' OR Details LIKE \"%\\\\AppData\\\\Local\\\\Microsoft\\\\TeamsMeetingAddin\\\\%\" ESCAPE '\\' AND Details LIKE \"%\\\\Microsoft.Teams.AddinLoader.dll%\" ESCAPE '\\'))"
+            "SELECT * FROM logs WHERE ((TargetObject LIKE \"%HKU\\\\%\" ESCAPE '\\' AND TargetObject LIKE \"%\\_Classes\\\\CLSID\\\\%\" ESCAPE '\\' AND TargetObject LIKE \"%\\\\InProcServer32\\\\(Default)%\" ESCAPE '\\') AND NOT ((((Details LIKE \"%\\%\\%systemroot\\%\\%\\\\system32\\\\%\" ESCAPE '\\' OR Details LIKE \"%\\%\\%systemroot\\%\\%\\\\SysWow64\\\\%\" ESCAPE '\\') OR (Details LIKE \"%\\\\AppData\\\\Local\\\\Microsoft\\\\OneDrive\\\\%\" ESCAPE '\\' AND (Details LIKE \"%\\\\FileCoAuthLib64.dll%\" ESCAPE '\\' OR Details LIKE \"%\\\\FileSyncShell64.dll%\" ESCAPE '\\' OR Details LIKE \"%\\\\FileSyncApi64.dll%\" ESCAPE '\\'))) OR (Details LIKE \"%\\\\AppData\\\\Local\\\\Microsoft\\\\TeamsMeetingAddin\\\\%\" ESCAPE '\\' AND Details LIKE \"%\\\\Microsoft.Teams.AddinLoader.dll%\" ESCAPE '\\') OR (Details LIKE \"%\\\\AppData\\\\Roaming\\\\Dropbox\\\\%\" ESCAPE '\\' AND Details LIKE \"%\\\\DropboxExt64.%.dll%\" ESCAPE '\\'))))"
         ]
     },
     {
@@ -9777,6 +9793,22 @@
         "level": "medium",
         "rule": [
             "SELECT * FROM (SELECT count(QueryName) AS agg FROM logs WHERE (QueryName LIKE \"%\" ESCAPE '\\' AND QueryStatus = \"0\" AND (QueryResults LIKE \"(::ffff:)_10.%\" ESCAPE '\\' OR QueryResults LIKE \"(::ffff:)_192.168.%\" ESCAPE '\\' OR QueryResults LIKE \"(::ffff:)_172.16.%\" ESCAPE '\\' OR QueryResults LIKE \"(::ffff:)_172.17.%\" ESCAPE '\\' OR QueryResults LIKE \"(::ffff:)_172.18.%\" ESCAPE '\\' OR QueryResults LIKE \"(::ffff:)_172.19.%\" ESCAPE '\\' OR QueryResults LIKE \"(::ffff:)_172.20.%\" ESCAPE '\\' OR QueryResults LIKE \"(::ffff:)_172.21.%\" ESCAPE '\\' OR QueryResults LIKE \"(::ffff:)_172.22.%\" ESCAPE '\\' OR QueryResults LIKE \"(::ffff:)_172.23.%\" ESCAPE '\\' OR QueryResults LIKE \"(::ffff:)_172.24.%\" ESCAPE '\\' OR QueryResults LIKE \"(::ffff:)_172.25.%\" ESCAPE '\\' OR QueryResults LIKE \"(::ffff:)_172.26.%\" ESCAPE '\\' OR QueryResults LIKE \"(::ffff:)_172.27.%\" ESCAPE '\\' OR QueryResults LIKE \"(::ffff:)_172.28.%\" ESCAPE '\\' OR QueryResults LIKE \"(::ffff:)_172.29.%\" ESCAPE '\\' OR QueryResults LIKE \"(::ffff:)_172.30.%\" ESCAPE '\\' OR QueryResults LIKE \"(::ffff:)_172.31.%\" ESCAPE '\\' OR QueryResults LIKE \"(::ffff:)_127.%\" ESCAPE '\\') AND (QueryName LIKE \"%\" ESCAPE '\\' AND QueryStatus = \"0\") AND NOT ((QueryResults LIKE \"(::ffff:)_10.%\" ESCAPE '\\' OR QueryResults LIKE \"(::ffff:)_192.168.%\" ESCAPE '\\' OR QueryResults LIKE \"(::ffff:)_172.16.%\" ESCAPE '\\' OR QueryResults LIKE \"(::ffff:)_172.17.%\" ESCAPE '\\' OR QueryResults LIKE \"(::ffff:)_172.18.%\" ESCAPE '\\' OR QueryResults LIKE \"(::ffff:)_172.19.%\" ESCAPE '\\' OR QueryResults LIKE \"(::ffff:)_172.20.%\" ESCAPE '\\' OR QueryResults LIKE \"(::ffff:)_172.21.%\" ESCAPE '\\' OR QueryResults LIKE \"(::ffff:)_172.22.%\" ESCAPE '\\' OR QueryResults LIKE \"(::ffff:)_172.23.%\" ESCAPE '\\' OR QueryResults LIKE \"(::ffff:)_172.24.%\" ESCAPE '\\' OR QueryResults LIKE \"(::ffff:)_172.25.%\" ESCAPE '\\' OR QueryResults LIKE \"(::ffff:)_172.26.%\" ESCAPE '\\' OR QueryResults LIKE \"(::ffff:)_172.27.%\" ESCAPE '\\' OR QueryResults LIKE \"(::ffff:)_172.28.%\" ESCAPE '\\' OR QueryResults LIKE \"(::ffff:)_172.29.%\" ESCAPE '\\' OR QueryResults LIKE \"(::ffff:)_172.30.%\" ESCAPE '\\' OR QueryResults LIKE \"(::ffff:)_172.31.%\" ESCAPE '\\' OR QueryResults LIKE \"(::ffff:)_127.%\" ESCAPE '\\'))) GROUP BY Computer) WHERE agg > 3"
+        ]
+    },
+    {
+        "title": "Outlook C2 Registry Key - 9056D79F",
+        "description": "Detects the modification of Outlook Security Setting to allow unprompted execution. Goes with win_outlook_c2_macro_creation.yml and is particularly interesting if both events occur near to each other.",
+        "author": "@ScoubiMtl",
+        "tags": [
+            "attack.persistence",
+            "attack.command_and_control",
+            "attack.t1137",
+            "attack.t1008",
+            "attack.t1546"
+        ],
+        "level": "medium",
+        "rule": [
+            "SELECT * FROM logs WHERE (TargetObject LIKE \"HKEY\\_CURRENT\\_USER\\\\Software\\\\Microsoft\\\\Office\\\\16.0\\\\Outlook\\\\Security\\\\Level\" ESCAPE '\\' AND Details LIKE \"%0x00000001%\" ESCAPE '\\')"
         ]
     },
     {
