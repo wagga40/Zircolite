@@ -2282,6 +2282,19 @@
         ]
     },
     {
+        "title": "Creation of a Local Hidden User Account by Registry - 18D3335D",
+        "description": "Sysmon registry detection of a local hidden user account.",
+        "author": "Christian Burkard",
+        "tags": [
+            "attack.persistence",
+            "attack.t1136.001"
+        ],
+        "level": "high",
+        "rule": [
+            "SELECT * FROM logs WHERE (TargetObject LIKE \"HKLM\\\\SAM\\\\SAM\\\\Domains\\\\Account\\\\Users\\\\Names\\\\%\" ESCAPE '\\' AND TargetObject LIKE \"%$\" ESCAPE '\\' AND Image LIKE \"%lsass.exe\" ESCAPE '\\')"
+        ]
+    },
+    {
         "title": "UAC Bypass via Sdclt - 83725ECA",
         "description": "Detects changes to HKCU:\\Software\\Classes\\exefile\\shell\\runas\\command\\isolatedCommand",
         "author": "Omer Yampel",
@@ -2401,6 +2414,22 @@
         "level": "high",
         "rule": [
             "SELECT * FROM logs WHERE (EventID IN (\"12\", \"13\", \"14\") AND (Image LIKE \"%\\\\Downloads\\\\%\" ESCAPE '\\' OR Image LIKE \"%\\\\Temporary Internet Files\\\\Content.Outlook\\\\%\" ESCAPE '\\' OR Image LIKE \"%\\\\Local Settings\\\\Temporary Internet Files\\\\%\" ESCAPE '\\') AND TargetObject LIKE \"%\\\\SOFTWARE\\\\Microsoft\\\\Windows\\\\CurrentVersion\\\\Run\\\\%\" ESCAPE '\\')"
+        ]
+    },
+    {
+        "title": "Outlook C2 Registry Key - 9056D79F",
+        "description": "Detects the modification of Outlook Security Setting to allow unprompted execution. Goes with win_outlook_c2_macro_creation.yml and is particularly interesting if both events occur near to each other.",
+        "author": "@ScoubiMtl",
+        "tags": [
+            "attack.persistence",
+            "attack.command_and_control",
+            "attack.t1137",
+            "attack.t1008",
+            "attack.t1546"
+        ],
+        "level": "medium",
+        "rule": [
+            "SELECT * FROM logs WHERE (EventID IN (\"12\", \"13\", \"14\") AND TargetObject LIKE \"HKEY\\_CURRENT\\_USER\\\\Software\\\\Microsoft\\\\Office\\\\16.0\\\\Outlook\\\\Security\\\\Level\" ESCAPE '\\' AND Details LIKE \"%0x00000001%\" ESCAPE '\\')"
         ]
     },
     {
@@ -7957,6 +7986,18 @@
         ]
     },
     {
+        "title": "Vulnerable Dell BIOS Update Driver Load - F0F9B1AF",
+        "description": "Detects the load of the vulnerable Dell BIOS update driver as reported in CVE-2021-21551",
+        "author": "Florian Roth",
+        "tags": [
+            "cve.2021-21551"
+        ],
+        "level": "high",
+        "rule": [
+            "SELECT * FROM logs WHERE (EventID = \"6\" AND (ImageLoaded LIKE \"%\\\\DBUtil\\_2\\_3.Sys%\" ESCAPE '\\' OR (Hashes LIKE \"%0296e2ce999e67c76352613a718e11516fe1b0efc3ffdb8918fc999dd76a73a5%\" ESCAPE '\\' OR Hashes LIKE \"%c948ae14761095e4d76b55d9de86412258be7afd%\" ESCAPE '\\' OR Hashes LIKE \"%c996d7971c49252c582171d9380360f2%\" ESCAPE '\\' OR Hashes LIKE \"%ddbf5ecca5c8086afde1fb4f551e9e6400e94f4428fe7fb5559da5cffa654cc1%\" ESCAPE '\\' OR Hashes LIKE \"%10b30bdee43b3a2ec4aa63375577ade650269d25%\" ESCAPE '\\' OR Hashes LIKE \"%d2fd132ab7bbc6bbb87a84f026fa0244%\" ESCAPE '\\')))"
+        ]
+    },
+    {
         "title": "Sysinternals SDelete File Deletion - 55E8872C",
         "description": "A General detection to trigger for the deletion of files by Sysinternals SDelete. It looks for the common name pattern used to rename files.",
         "author": "Roberto Rodriguez (Cyb3rWard0g), OTR (Open Threat Research)",
@@ -7979,6 +8020,21 @@
         "level": "high",
         "rule": [
             "SELECT * FROM logs WHERE (Channel = \"Microsoft-Windows-Sysmon/Operational\" AND EventID = \"22\" AND QueryName LIKE \"%servicebus.windows.net%\" ESCAPE '\\' AND Image LIKE \"%HybridConnectionManager%\" ESCAPE '\\')"
+        ]
+    },
+    {
+        "title": "Pingback Backdoor - 45C29175",
+        "description": "Detects the use of Pingback backdoor that creates ICMP tunnel for C2 as described in the trustwave report",
+        "author": "Bhabesh Raj",
+        "level": "high",
+        "tags": [
+            "attack.persistence",
+            "attack.t1574.001"
+        ],
+        "rule": [
+            "SELECT * FROM logs WHERE (EventID = \"11\" AND Image LIKE \"%updata.exe\" ESCAPE '\\' AND TargetFilename LIKE \"C:\\\\Windows\\\\oci.dll\" ESCAPE '\\')",
+            "SELECT * FROM logs WHERE (EventID = \"7\" AND Image LIKE \"%msdtc.exe\" ESCAPE '\\' AND ImageLoaded LIKE \"C:\\\\Windows\\\\oci.dll\" ESCAPE '\\')",
+            "SELECT * FROM logs WHERE (EventID = \"1\" AND ParentImage LIKE \"%updata.exe\" ESCAPE '\\' AND CommandLine LIKE \"%config%\" ESCAPE '\\' AND CommandLine LIKE \"%msdtc%\" ESCAPE '\\' AND CommandLine LIKE \"%start%\" ESCAPE '\\' AND CommandLine LIKE \"%auto%\" ESCAPE '\\')"
         ]
     },
     {
@@ -9621,6 +9677,19 @@
         ]
     },
     {
+        "title": "Hidden Local User Creation - 32FBA288",
+        "description": "Detects the creation of a local hidden user account which should not happen for event ID 4720.",
+        "tags": [
+            "attack.persistence",
+            "attack.t1136.001"
+        ],
+        "author": "Christian Burkard",
+        "level": "high",
+        "rule": [
+            "SELECT * FROM logs WHERE (Channel = \"Security\" AND EventID = \"4720\" AND TargetUserName LIKE \"%$\" ESCAPE '\\')"
+        ]
+    },
+    {
         "title": "Password Dumper Activity on LSASS - 467469B3",
         "description": "Detects process handle on LSASS process with certain access mask and object type SAM_DOMAIN",
         "tags": [
@@ -9793,22 +9862,6 @@
         "level": "medium",
         "rule": [
             "SELECT * FROM (SELECT count(QueryName) AS agg FROM logs WHERE (EventID = \"22\" AND QueryName LIKE \"%\" ESCAPE '\\' AND QueryStatus = \"0\" AND (QueryResults LIKE \"(::ffff:)_10.%\" ESCAPE '\\' OR QueryResults LIKE \"(::ffff:)_192.168.%\" ESCAPE '\\' OR QueryResults LIKE \"(::ffff:)_172.16.%\" ESCAPE '\\' OR QueryResults LIKE \"(::ffff:)_172.17.%\" ESCAPE '\\' OR QueryResults LIKE \"(::ffff:)_172.18.%\" ESCAPE '\\' OR QueryResults LIKE \"(::ffff:)_172.19.%\" ESCAPE '\\' OR QueryResults LIKE \"(::ffff:)_172.20.%\" ESCAPE '\\' OR QueryResults LIKE \"(::ffff:)_172.21.%\" ESCAPE '\\' OR QueryResults LIKE \"(::ffff:)_172.22.%\" ESCAPE '\\' OR QueryResults LIKE \"(::ffff:)_172.23.%\" ESCAPE '\\' OR QueryResults LIKE \"(::ffff:)_172.24.%\" ESCAPE '\\' OR QueryResults LIKE \"(::ffff:)_172.25.%\" ESCAPE '\\' OR QueryResults LIKE \"(::ffff:)_172.26.%\" ESCAPE '\\' OR QueryResults LIKE \"(::ffff:)_172.27.%\" ESCAPE '\\' OR QueryResults LIKE \"(::ffff:)_172.28.%\" ESCAPE '\\' OR QueryResults LIKE \"(::ffff:)_172.29.%\" ESCAPE '\\' OR QueryResults LIKE \"(::ffff:)_172.30.%\" ESCAPE '\\' OR QueryResults LIKE \"(::ffff:)_172.31.%\" ESCAPE '\\' OR QueryResults LIKE \"(::ffff:)_127.%\" ESCAPE '\\') AND (QueryName LIKE \"%\" ESCAPE '\\' AND QueryStatus = \"0\") AND NOT ((QueryResults LIKE \"(::ffff:)_10.%\" ESCAPE '\\' OR QueryResults LIKE \"(::ffff:)_192.168.%\" ESCAPE '\\' OR QueryResults LIKE \"(::ffff:)_172.16.%\" ESCAPE '\\' OR QueryResults LIKE \"(::ffff:)_172.17.%\" ESCAPE '\\' OR QueryResults LIKE \"(::ffff:)_172.18.%\" ESCAPE '\\' OR QueryResults LIKE \"(::ffff:)_172.19.%\" ESCAPE '\\' OR QueryResults LIKE \"(::ffff:)_172.20.%\" ESCAPE '\\' OR QueryResults LIKE \"(::ffff:)_172.21.%\" ESCAPE '\\' OR QueryResults LIKE \"(::ffff:)_172.22.%\" ESCAPE '\\' OR QueryResults LIKE \"(::ffff:)_172.23.%\" ESCAPE '\\' OR QueryResults LIKE \"(::ffff:)_172.24.%\" ESCAPE '\\' OR QueryResults LIKE \"(::ffff:)_172.25.%\" ESCAPE '\\' OR QueryResults LIKE \"(::ffff:)_172.26.%\" ESCAPE '\\' OR QueryResults LIKE \"(::ffff:)_172.27.%\" ESCAPE '\\' OR QueryResults LIKE \"(::ffff:)_172.28.%\" ESCAPE '\\' OR QueryResults LIKE \"(::ffff:)_172.29.%\" ESCAPE '\\' OR QueryResults LIKE \"(::ffff:)_172.30.%\" ESCAPE '\\' OR QueryResults LIKE \"(::ffff:)_172.31.%\" ESCAPE '\\' OR QueryResults LIKE \"(::ffff:)_127.%\" ESCAPE '\\'))) GROUP BY ComputerName) WHERE agg > 3"
-        ]
-    },
-    {
-        "title": "Outlook C2 Registry Key - 9056D79F",
-        "description": "Detects the modification of Outlook Security Setting to allow unprompted execution. Goes with win_outlook_c2_macro_creation.yml and is particularly interesting if both events occur near to each other.",
-        "author": "@ScoubiMtl",
-        "tags": [
-            "attack.persistence",
-            "attack.command_and_control",
-            "attack.t1137",
-            "attack.t1008",
-            "attack.t1546"
-        ],
-        "level": "medium",
-        "rule": [
-            "SELECT * FROM logs WHERE (TargetObject LIKE \"HKEY\\_CURRENT\\_USER\\\\Software\\\\Microsoft\\\\Office\\\\16.0\\\\Outlook\\\\Security\\\\Level\" ESCAPE '\\' AND Details LIKE \"%0x00000001%\" ESCAPE '\\')"
         ]
     },
     {
