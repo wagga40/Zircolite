@@ -9703,6 +9703,21 @@
         ]
     },
     {
+        "title": "Moriya Rootkit - C799C832",
+        "description": "Detects the use of Moriya rootkit as described in the securelist's Operation TunnelSnake report",
+        "author": "Bhabesh Raj",
+        "level": "critical",
+        "tags": [
+            "attack.persistence",
+            "attack.privilege_escalation",
+            "attack.t1543.003"
+        ],
+        "rule": [
+            "SELECT * FROM logs WHERE (Channel = \"System\" AND EventID = \"7045\" AND ServiceName = \"ZzNetSvc\")",
+            "SELECT * FROM logs WHERE TargetFilename LIKE \"C:\\\\Windows\\\\System32\\\\drivers\\\\MoriyaStreamWatchmen.sys\" ESCAPE '\\'"
+        ]
+    },
+    {
         "title": "RDP over Reverse SSH Tunnel WFP - 878A8197",
         "description": "Detects svchost hosting RDP termsvcs communicating with the loopback address",
         "author": "Samir Bousseaden",
