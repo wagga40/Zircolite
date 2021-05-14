@@ -18,6 +18,7 @@ parser.add_argument("--output", help="Converted rules output filename", default=
 parser.add_argument("--config", help="Sigmac config location", type=str, required=True)
 parser.add_argument("--rule", help="Rule file", type=str)
 parser.add_argument("--table", help="Table name", default="logs", type=str)
+parser.add_argument("--fileext", help="Rule file extension", default="yml", type=str)
 args = parser.parse_args()
 
 def CRC32_from_string(string):
@@ -26,7 +27,7 @@ def CRC32_from_string(string):
 
 def retrieveRule(ruleFile):
     d={}
-    cmd = [args.sigmac, "-d", "--target", "sqlite", "-c", args.config, ruleFile]
+    cmd = [args.sigmac, "-d", "--target", "sqlite", "-c", args.config, ruleFile,"--backend-option","table=logs"]
     output = subprocess.Popen(cmd,stdout=subprocess.PIPE, stderr=subprocess.STDOUT).stdout.read()
     if "unsupported" in str(output):
         return d.copy()
@@ -61,7 +62,7 @@ if __name__ == '__main__':
     if args.rule:
         outputList = retrieveRule(args.rule)
     else:
-        files = glob.glob(args.rulesdirectory + "/**/*.yml", recursive=True)
+        files = glob.glob(args.rulesdirectory + "/**/*." + args.fileext, recursive=True)
         pool = Pool()
         outputList = pool.map(retrieveRule, files)
         pool.close() 
