@@ -1,6 +1,134 @@
 title: Conversion of Generic Rules into Sysmon Specific Rules
 order: 10
-logsources:
+logsources:    
+    process_creation:
+        category: process_creation
+        product: windows
+        conditions:
+            EventID: 1
+        rewrite:
+            product: windows
+            service: sysmon
+    network_connection:
+        category: network_connection
+        product: windows
+        conditions:
+            EventID: 3
+        rewrite:
+            product: windows
+            service: sysmon
+    process_terminated:
+        category: process_termination
+        product: windows
+        conditions:
+            EventID: 5
+        rewrite:
+            product: windows
+            service: sysmon
+    driver_loaded:
+        category: driver_load
+        product: windows
+        conditions:
+            EventID: 6
+        rewrite:
+            product: windows
+            service: sysmon
+    image_loaded:
+        category: image_load
+        product: windows
+        conditions:
+            EventID: 7
+        rewrite:
+            product: windows
+            service: sysmon
+    create_remote_thread:
+        category: create_remote_thread
+        product: windows
+        conditions:
+            EventID: 8
+        rewrite:
+            product: windows
+            service: sysmon
+    raw_access_thread:
+        category: raw_access_thread
+        product: windows
+        conditions:
+            EventID: 9
+        rewrite:
+            product: windows
+            service: sysmon
+    process_access:
+        category: process_access
+        product: windows
+        conditions:
+            EventID: 10
+        rewrite:
+            product: windows
+            service: sysmon       
+    file_creation:
+        category: file_event
+        product: windows
+        conditions:
+            EventID: 11
+        rewrite:
+            product: windows
+            service: sysmon
+    registry_event:
+        category: registry_event
+        product: windows
+        conditions:
+            EventID: 
+                - 12 
+                - 13 
+                - 14
+        rewrite:
+            product: windows
+            service: sysmon
+    create_stream_hash:
+        category: create_stream_hash
+        product: windows
+        conditions:
+            EventID: 15
+        rewrite:
+            product: windows
+            service: sysmon
+    pipe_created:
+        category: pipe_created
+        product: windows
+        conditions:
+            EventID: 
+                - 17
+                - 18
+        rewrite:
+            product: windows
+            service: sysmon
+    wmi_event:
+        category: wmi_event
+        product: windows
+        conditions:
+            EventID: 
+                - 19
+                - 20
+                - 21
+        rewrite:
+            product: windows
+            service: sysmon
+    dns_query:
+        category: dns_query
+        product: windows
+        conditions:
+            EventID: 22
+        rewrite:
+            product: windows
+            service: sysmon
+    file_delete:
+        category: file_delete
+        product: windows
+        conditions:
+            EventID: 23
+        rewrite:
+            product: windows
+            service: sysmon
     windows:
         product: windows
     windows-application:
@@ -74,6 +202,10 @@ logsources:
         service: windefend
         conditions:
             Channel: 'Microsoft-Windows-Windows Defender/Operational'
+    windows-defender-product:
+        product: windows_defender
+        conditions:
+            Channel: 'Microsoft-Windows-Windows Defender/Operational'
     windows-applocker:
         product: windows
         service: applocker
@@ -83,80 +215,5 @@ logsources:
                 - 'Microsoft-Windows-AppLocker/EXE and DLL'
                 - 'Microsoft-Windows-AppLocker/Packaged app-Deployment'
                 - 'Microsoft-Windows-AppLocker/Packaged app-Execution'
-    process_creation:
-        category: process_creation
-        product: windows
-        conditions:
-            EventID: 1
-        rewrite:
-            product: windows
-            service: sysmon
-    network_connection:
-        category: network_connection
-        product: windows
-        conditions:
-            EventID: 3
-        rewrite:
-            product: windows
-            service: sysmon
-    dns_query:
-        category: dns_query
-        product: windows
-        conditions:
-            EventID: 22
-        rewrite:
-            product: windows
-            service: sysmon
-    registry_event:
-        category: registry_event
-        product: windows
-        conditions:
-            EventID: 
-                - 12 
-                - 13 
-                - 14
-        rewrite:
-            product: windows
-            service: sysmon
-    file_creation:
-        category: file_event
-        product: windows
-        conditions:
-            EventID: 11
-        rewrite:
-            product: windows
-            service: sysmon
-    process_access:
-        category: process_access
-        product: windows
-        conditions:
-            EventID: 10
-        rewrite:
-            product: windows
-            service: sysmon
-    image_loaded:
-        category: image_load
-        product: windows
-        conditions:
-            EventID: 7
-        rewrite:
-            product: windows
-            service: sysmon
-    driver_loaded:
-        category: driver_load
-        product: windows
-        conditions:
-            EventID: 6
-        rewrite:
-            product: windows
-            service: sysmon
-    process_terminated:
-        category: process_termination
-        product: windows
-        conditions:
-            EventID: 5
-        rewrite:
-            product: windows
-            service: sysmon
 fieldmappings:
     ServiceFileName: ImagePath

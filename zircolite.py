@@ -273,7 +273,7 @@ def initLogger(debugMode, logFile):
 def sendLogsHTTP(host, payload = ""):
     """ Just send provided payload to provided web server. Not very clean. Non-async code for now """
     try:
-        r = requests.post(host, headers={'user-agent': 'zircolite/1.1.x'}, data={"data": payload})
+        r = requests.post(host, headers={'user-agent': 'zircolite/1.2.x'}, data={"data": payload})
         logging.debug(f"{Fore.RED}   [-] {r}")
         return True
     except Exception as e:

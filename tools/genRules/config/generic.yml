@@ -22,7 +22,15 @@ logsources:
     webserver:
         category: webserver
         conditions:
-            tag: 'web'      
+            tag: 'web'
+    process_creation:
+        category: process_creation
+        product: windows
+        conditions:
+            EventID: 4688
+        rewrite:
+            product: windows
+            service: security
     windows:
         product: windows
     windows-application:
@@ -96,6 +104,10 @@ logsources:
         service: windefend
         conditions:
             Channel: 'Microsoft-Windows-Windows Defender/Operational'
+    windows-defender-product:
+        product: windows_defender
+        conditions:
+            Channel: 'Microsoft-Windows-Windows Defender/Operational'
     windows-applocker:
         product: windows
         service: applocker
@@ -105,14 +117,6 @@ logsources:
                 - 'Microsoft-Windows-AppLocker/EXE and DLL'
                 - 'Microsoft-Windows-AppLocker/Packaged app-Deployment'
                 - 'Microsoft-Windows-AppLocker/Packaged app-Execution'
-    process_creation:
-        category: process_creation
-        product: windows
-        conditions:
-            EventID: 4688
-        rewrite:
-            product: windows
-            service: security
 fieldmappings:
     Image: NewProcessName
     ParentImage: ParentProcessName
