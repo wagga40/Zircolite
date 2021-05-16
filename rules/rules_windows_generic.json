@@ -102,7 +102,7 @@
         "author": "Bhabesh Raj",
         "level": "high",
         "rule": [
-            "SELECT * FROM logs WHERE (Channel = \"Microsoft-Windows-Windows Defender/Operational\" AND EventID = \"1116\" AND DetectionSource = \"AMSI\")"
+            "SELECT * FROM logs WHERE (Channel IN (\"Microsoft-Windows-Windows Defender/Operational\", \"Microsoft-Windows-Windows Defender/WHC\") AND EventID = \"1116\" AND DetectionSource = \"AMSI\")"
         ]
     },
     {
@@ -154,7 +154,7 @@
         "author": "J\u00e1n Tren\u010dansk\u00fd",
         "level": "high",
         "rule": [
-            "SELECT * FROM logs WHERE (Channel = \"Microsoft-Windows-Windows Defender/Operational\" AND EventID IN (\"1006\", \"1116\", \"1015\", \"1117\"))"
+            "SELECT * FROM logs WHERE (Channel IN (\"Microsoft-Windows-Windows Defender/Operational\", \"Microsoft-Windows-Windows Defender/WHC\") AND EventID IN (\"1006\", \"1116\", \"1015\", \"1117\"))"
         ]
     },
     {
@@ -210,7 +210,7 @@
         ],
         "level": "high",
         "rule": [
-            "SELECT * FROM logs WHERE (Channel = \"Microsoft-Windows-Windows Defender/Operational\" AND (EventID IN (\"5001\", \"5010\", \"5012\", \"5101\") OR ((TargetObject LIKE \"HKEY\\_LOCAL\\_MACHINE\\\\SYSTEM\\\\CurrentControlSet\\\\Services\\\\WinDefend\" ESCAPE '\\' OR TargetObject LIKE \"HKEY\\_LOCAL\\_MACHINE\\\\SOFTWARE\\\\Microsoft\\\\Windows Defender\" ESCAPE '\\' OR TargetObject LIKE \"HKEY\\_LOCAL\\_MACHINE\\\\SOFTWARE\\\\Policies\\\\Microsoft\\\\Windows Defender\" ESCAPE '\\') AND Details = \"DWORD (0x00000001)\")))"
+            "SELECT * FROM logs WHERE (Channel IN (\"Microsoft-Windows-Windows Defender/Operational\", \"Microsoft-Windows-Windows Defender/WHC\") AND (EventID IN (\"5001\", \"5010\", \"5012\", \"5101\") OR ((TargetObject LIKE \"HKEY\\_LOCAL\\_MACHINE\\\\SYSTEM\\\\CurrentControlSet\\\\Services\\\\WinDefend\" ESCAPE '\\' OR TargetObject LIKE \"HKEY\\_LOCAL\\_MACHINE\\\\SOFTWARE\\\\Microsoft\\\\Windows Defender\" ESCAPE '\\' OR TargetObject LIKE \"HKEY\\_LOCAL\\_MACHINE\\\\SOFTWARE\\\\Policies\\\\Microsoft\\\\Windows Defender\" ESCAPE '\\') AND Details = \"DWORD (0x00000001)\")))"
         ]
     },
     {
@@ -257,7 +257,7 @@
         ],
         "level": "high",
         "rule": [
-            "SELECT * FROM logs WHERE (Channel = \"Microsoft-Windows-Windows Defender/Operational\" AND EventID = \"1121\" AND (ProcessName LIKE \"%\\\\wmiprvse.exe\" ESCAPE '\\' OR ProcessName LIKE \"%\\\\psexesvc.exe\" ESCAPE '\\'))"
+            "SELECT * FROM logs WHERE (Channel IN (\"Microsoft-Windows-Windows Defender/Operational\", \"Microsoft-Windows-Windows Defender/WHC\") AND EventID = \"1121\" AND (ProcessName LIKE \"%\\\\wmiprvse.exe\" ESCAPE '\\' OR ProcessName LIKE \"%\\\\psexesvc.exe\" ESCAPE '\\'))"
         ]
     },
     {
@@ -292,7 +292,7 @@
         ],
         "level": "critical",
         "rule": [
-            "SELECT * FROM logs WHERE (EventID IN (\"12\", \"13\") AND TargetObject LIKE \"%SYSTEM\\\\%\" ESCAPE '\\' AND TargetObject LIKE \"%\\\\services\\\\localNETService\" ESCAPE '\\')"
+            "SELECT * FROM logs WHERE (EventID = \"4657\" AND OperationType IN (\"New registry value created\", \"Existing registry value modified\") AND Channel = \"Security\" AND EventID IN (\"12\", \"13\") AND TargetObject LIKE \"%SYSTEM\\\\%\" ESCAPE '\\' AND TargetObject LIKE \"%\\\\services\\\\localNETService\" ESCAPE '\\')"
         ]
     },
     {
@@ -352,7 +352,7 @@
         ],
         "level": "critical",
         "rule": [
-            "SELECT * FROM logs WHERE (EventID IN (\"12\", \"13\") AND ((TargetObject LIKE \"HKLM\\\\HARDWARE\\\\{804423C2-F490-4ac3-BFA5-13DEDE63A71A}\" ESCAPE '\\' OR TargetObject LIKE \"HKLM\\\\HARDWARE\\\\{A5124AF5-DF23-49bf-B0ED-A18ED3DEA027}\" ESCAPE '\\' OR TargetObject LIKE \"HKLM\\\\HARDWARE\\\\{2DB80286-1784-48b5-A751-B6ED1F490303}\" ESCAPE '\\') OR (TargetObject LIKE \"HKLM\\\\SYSTEM\\\\Setup\\\\PrintResponsor\\\\%\" ESCAPE '\\')))"
+            "SELECT * FROM logs WHERE ((EventID = \"4657\" AND OperationType IN (\"New registry value created\", \"Existing registry value modified\") AND Channel = \"Security\") AND EventID IN (\"12\", \"13\") AND ((TargetObject LIKE \"HKLM\\\\HARDWARE\\\\{804423C2-F490-4ac3-BFA5-13DEDE63A71A}\" ESCAPE '\\' OR TargetObject LIKE \"HKLM\\\\HARDWARE\\\\{A5124AF5-DF23-49bf-B0ED-A18ED3DEA027}\" ESCAPE '\\' OR TargetObject LIKE \"HKLM\\\\HARDWARE\\\\{2DB80286-1784-48b5-A751-B6ED1F490303}\" ESCAPE '\\') OR (TargetObject LIKE \"HKLM\\\\SYSTEM\\\\Setup\\\\PrintResponsor\\\\%\" ESCAPE '\\')))"
         ]
     },
     {
@@ -381,7 +381,7 @@
         "author": "megan201296",
         "level": "critical",
         "rule": [
-            "SELECT * FROM logs WHERE TargetObject LIKE \"%\\\\Software\\\\AppDataLow\\\\Software\\\\Microsoft\\\\%\" ESCAPE '\\'"
+            "SELECT * FROM logs WHERE (EventID = \"4657\" AND OperationType IN (\"New registry value created\", \"Existing registry value modified\") AND Channel = \"Security\" AND TargetObject LIKE \"%\\\\Software\\\\AppDataLow\\\\Software\\\\Microsoft\\\\%\" ESCAPE '\\')"
         ]
     },
     {
@@ -410,7 +410,7 @@
         "rule": [
             "SELECT * FROM logs WHERE (EventID = \"4688\" AND Channel = \"Security\" AND NewProcessName LIKE \"%\\\\cmd.exe\" ESCAPE '\\' AND CommandLine LIKE \"%sc config%\" ESCAPE '\\' AND CommandLine LIKE \"%wercplsupporte.dll%\" ESCAPE '\\')",
             "SELECT * FROM logs WHERE (EventID = \"4688\" AND Channel = \"Security\" AND NewProcessName LIKE \"%\\\\wmic.exe\" ESCAPE '\\' AND CommandLine LIKE \"%COR\\_PROFILER\" ESCAPE '\\')",
-            "SELECT * FROM logs WHERE (TargetObject LIKE \"%\\\\CurrentControlSet\\\\Services\\\\wercplsupport\\\\Parameters\\\\ServiceDll\" ESCAPE '\\')"
+            "SELECT * FROM logs WHERE (EventID = \"4657\" AND OperationType IN (\"New registry value created\", \"Existing registry value modified\") AND Channel = \"Security\" AND (TargetObject LIKE \"%\\\\CurrentControlSet\\\\Services\\\\wercplsupport\\\\Parameters\\\\ServiceDll\" ESCAPE '\\'))"
         ]
     },
     {
@@ -1884,7 +1884,7 @@
         "author": "Florian Roth, @twjackomo, Jonhnathan Ribeiro, oscd.community",
         "level": "critical",
         "rule": [
-            "SELECT * FROM logs WHERE (TargetObject LIKE \"%\\\\SOFTWARE\\\\Microsoft\\\\Windows NT\\\\CurrentVersion\\\\Image File Execution Options\\\\sethc.exe\\\\Debugger\" ESCAPE '\\' OR TargetObject LIKE \"%\\\\SOFTWARE\\\\Microsoft\\\\Windows NT\\\\CurrentVersion\\\\Image File Execution Options\\\\utilman.exe\\\\Debugger\" ESCAPE '\\' OR TargetObject LIKE \"%\\\\SOFTWARE\\\\Microsoft\\\\Windows NT\\\\CurrentVersion\\\\Image File Execution Options\\\\osk.exe\\\\Debugger\" ESCAPE '\\' OR TargetObject LIKE \"%\\\\SOFTWARE\\\\Microsoft\\\\Windows NT\\\\CurrentVersion\\\\Image File Execution Options\\\\Magnify.exe\\\\Debugger\" ESCAPE '\\' OR TargetObject LIKE \"%\\\\SOFTWARE\\\\Microsoft\\\\Windows NT\\\\CurrentVersion\\\\Image File Execution Options\\\\Narrator.exe\\\\Debugger\" ESCAPE '\\' OR TargetObject LIKE \"%\\\\SOFTWARE\\\\Microsoft\\\\Windows NT\\\\CurrentVersion\\\\Image File Execution Options\\\\DisplaySwitch.exe\\\\Debugger\" ESCAPE '\\')",
+            "SELECT * FROM logs WHERE (EventID = \"4657\" AND OperationType IN (\"New registry value created\", \"Existing registry value modified\") AND Channel = \"Security\" AND (TargetObject LIKE \"%\\\\SOFTWARE\\\\Microsoft\\\\Windows NT\\\\CurrentVersion\\\\Image File Execution Options\\\\sethc.exe\\\\Debugger\" ESCAPE '\\' OR TargetObject LIKE \"%\\\\SOFTWARE\\\\Microsoft\\\\Windows NT\\\\CurrentVersion\\\\Image File Execution Options\\\\utilman.exe\\\\Debugger\" ESCAPE '\\' OR TargetObject LIKE \"%\\\\SOFTWARE\\\\Microsoft\\\\Windows NT\\\\CurrentVersion\\\\Image File Execution Options\\\\osk.exe\\\\Debugger\" ESCAPE '\\' OR TargetObject LIKE \"%\\\\SOFTWARE\\\\Microsoft\\\\Windows NT\\\\CurrentVersion\\\\Image File Execution Options\\\\Magnify.exe\\\\Debugger\" ESCAPE '\\' OR TargetObject LIKE \"%\\\\SOFTWARE\\\\Microsoft\\\\Windows NT\\\\CurrentVersion\\\\Image File Execution Options\\\\Narrator.exe\\\\Debugger\" ESCAPE '\\' OR TargetObject LIKE \"%\\\\SOFTWARE\\\\Microsoft\\\\Windows NT\\\\CurrentVersion\\\\Image File Execution Options\\\\DisplaySwitch.exe\\\\Debugger\" ESCAPE '\\'))",
             "SELECT * FROM logs WHERE (EventID = \"4688\" AND Channel = \"Security\" AND ParentProcessName LIKE \"%\\\\winlogon.exe\" ESCAPE '\\' AND NewProcessName LIKE \"%\\\\cmd.exe\" ESCAPE '\\' AND (CommandLine LIKE \"%sethc.exe%\" ESCAPE '\\' OR CommandLine LIKE \"%utilman.exe%\" ESCAPE '\\' OR CommandLine LIKE \"%osk.exe%\" ESCAPE '\\' OR CommandLine LIKE \"%Magnify.exe%\" ESCAPE '\\' OR CommandLine LIKE \"%Narrator.exe%\" ESCAPE '\\' OR CommandLine LIKE \"%DisplaySwitch.exe%\" ESCAPE '\\'))"
         ]
     },
@@ -1902,7 +1902,7 @@
         "author": "Nik Seetharaman",
         "level": "high",
         "rule": [
-            "SELECT * FROM logs WHERE TargetObject LIKE \"%\\\\cmmgr32.exe%\" ESCAPE '\\'"
+            "SELECT * FROM logs WHERE (EventID = \"4657\" AND OperationType IN (\"New registry value created\", \"Existing registry value modified\") AND Channel = \"Security\" AND TargetObject LIKE \"%\\\\cmmgr32.exe%\" ESCAPE '\\')"
         ]
     },
     {
@@ -1917,7 +1917,7 @@
         "author": "Ilyas Ochkov, oscd.community",
         "level": "high",
         "rule": [
-            "SELECT * FROM logs WHERE ((TargetObject LIKE \"HKLM\\\\SYSTEM\\\\CurrentControlSet\\\\Control\\\\MiniNt\" ESCAPE '\\' AND EventType = \"CreateKey\") OR NewName LIKE \"HKLM\\\\SYSTEM\\\\CurrentControlSet\\\\Control\\\\MiniNt\" ESCAPE '\\')"
+            "SELECT * FROM logs WHERE ((EventID = \"4657\" AND OperationType IN (\"New registry value created\", \"Existing registry value modified\") AND Channel = \"Security\") AND ((TargetObject LIKE \"HKLM\\\\SYSTEM\\\\CurrentControlSet\\\\Control\\\\MiniNt\" ESCAPE '\\' AND EventType = \"CreateKey\") OR NewName LIKE \"HKLM\\\\SYSTEM\\\\CurrentControlSet\\\\Control\\\\MiniNt\" ESCAPE '\\'))"
         ]
     },
     {
@@ -1931,7 +1931,7 @@
         "author": "Aidan Bracher",
         "level": "critical",
         "rule": [
-            "SELECT * FROM logs WHERE TargetObject LIKE \"HKEY\\_CURRENT\\_USER\\\\Software\\\\Microsoft\\\\Windows\\\\CurrentVersion\\\\Run\\\\ntkd\" ESCAPE '\\'"
+            "SELECT * FROM logs WHERE (EventID = \"4657\" AND OperationType IN (\"New registry value created\", \"Existing registry value modified\") AND Channel = \"Security\" AND TargetObject LIKE \"HKEY\\_CURRENT\\_USER\\\\Software\\\\Microsoft\\\\Windows\\\\CurrentVersion\\\\Run\\\\ntkd\" ESCAPE '\\')"
         ]
     },
     {
@@ -1945,7 +1945,7 @@
         "author": "oscd.community, Dmitry Uchakin",
         "level": "high",
         "rule": [
-            "SELECT * FROM logs WHERE (TargetObject LIKE \"%\\\\AppX82a6gwre4fdg3bt635tn5ctqjf8msdd2\\\\Shell\\\\open\\\\command\" ESCAPE '\\')"
+            "SELECT * FROM logs WHERE (EventID = \"4657\" AND OperationType IN (\"New registry value created\", \"Existing registry value modified\") AND Channel = \"Security\" AND (TargetObject LIKE \"%\\\\AppX82a6gwre4fdg3bt635tn5ctqjf8msdd2\\\\Shell\\\\open\\\\command\" ESCAPE '\\'))"
         ]
     },
     {
@@ -1959,7 +1959,7 @@
         "author": "Ilyas Ochkov, oscd.community",
         "level": "medium",
         "rule": [
-            "SELECT * FROM logs WHERE ((TargetObject LIKE \"%\\\\SOFTWARE\\\\Microsoft\\\\Windows NT\\\\CurrentVersion\\\\Windows\\\\AppInit\\_Dlls\" ESCAPE '\\' OR TargetObject LIKE \"%\\\\SOFTWARE\\\\Wow6432Node\\\\Microsoft\\\\Windows NT\\\\CurrentVersion\\\\Windows\\\\AppInit\\_Dlls\" ESCAPE '\\') OR (NewName LIKE \"%\\\\SOFTWARE\\\\Microsoft\\\\Windows NT\\\\CurrentVersion\\\\Windows\\\\AppInit\\_Dlls\" ESCAPE '\\' OR NewName LIKE \"%\\\\SOFTWARE\\\\Wow6432Node\\\\Microsoft\\\\Windows NT\\\\CurrentVersion\\\\Windows\\\\AppInit\\_Dlls\" ESCAPE '\\'))"
+            "SELECT * FROM logs WHERE ((EventID = \"4657\" AND OperationType IN (\"New registry value created\", \"Existing registry value modified\") AND Channel = \"Security\") AND ((TargetObject LIKE \"%\\\\SOFTWARE\\\\Microsoft\\\\Windows NT\\\\CurrentVersion\\\\Windows\\\\AppInit\\_Dlls\" ESCAPE '\\' OR TargetObject LIKE \"%\\\\SOFTWARE\\\\Wow6432Node\\\\Microsoft\\\\Windows NT\\\\CurrentVersion\\\\Windows\\\\AppInit\\_Dlls\" ESCAPE '\\') OR (NewName LIKE \"%\\\\SOFTWARE\\\\Microsoft\\\\Windows NT\\\\CurrentVersion\\\\Windows\\\\AppInit\\_Dlls\" ESCAPE '\\' OR NewName LIKE \"%\\\\SOFTWARE\\\\Wow6432Node\\\\Microsoft\\\\Windows NT\\\\CurrentVersion\\\\Windows\\\\AppInit\\_Dlls\" ESCAPE '\\')))"
         ]
     },
     {
@@ -1972,7 +1972,7 @@
         ],
         "level": "medium",
         "rule": [
-            "SELECT * FROM logs WHERE (TargetObject LIKE \"HKEY\\_CURRENT\\_USER\\\\Software\\\\Microsoft\\\\Office test\\\\Special\\\\Perf\" ESCAPE '\\' OR TargetObject LIKE \"HKEY\\_LOCAL\\_MACHINE\\\\Software\\\\Microsoft\\\\Office test\\\\Special\\\\Perf\" ESCAPE '\\')"
+            "SELECT * FROM logs WHERE (EventID = \"4657\" AND OperationType IN (\"New registry value created\", \"Existing registry value modified\") AND Channel = \"Security\" AND (TargetObject LIKE \"HKEY\\_CURRENT\\_USER\\\\Software\\\\Microsoft\\\\Office test\\\\Special\\\\Perf\" ESCAPE '\\' OR TargetObject LIKE \"HKEY\\_LOCAL\\_MACHINE\\\\Software\\\\Microsoft\\\\Office test\\\\Special\\\\Perf\" ESCAPE '\\'))"
         ]
     },
     {
@@ -1981,7 +1981,7 @@
         "author": "Markus Neis",
         "level": "low",
         "rule": [
-            "SELECT * FROM logs WHERE TargetObject LIKE \"%\\\\EulaAccepted\" ESCAPE '\\'",
+            "SELECT * FROM logs WHERE (EventID = \"4657\" AND OperationType IN (\"New registry value created\", \"Existing registry value modified\") AND Channel = \"Security\" AND TargetObject LIKE \"%\\\\EulaAccepted\" ESCAPE '\\')",
             "SELECT * FROM logs WHERE (EventID = \"4688\" AND Channel = \"Security\" AND CommandLine LIKE \"% -accepteula%\" ESCAPE '\\')"
         ]
     },
@@ -1999,7 +1999,7 @@
         ],
         "level": "critical",
         "rule": [
-            "SELECT * FROM logs WHERE ((TargetObject LIKE \"%\\\\SOFTWARE\\\\Microsoft\\\\Windows NT\\\\CurrentVersion%\" ESCAPE '\\') AND ((TargetObject LIKE \"%\\\\Image File Execution Options\\\\%\" ESCAPE '\\' AND TargetObject LIKE \"%\\\\GlobalFlag%\" ESCAPE '\\') OR (TargetObject LIKE \"%SilentProcessExit\\\\%\" ESCAPE '\\' AND TargetObject LIKE \"%\\\\ReportingMode%\" ESCAPE '\\') OR (TargetObject LIKE \"%SilentProcessExit\\\\%\" ESCAPE '\\' AND TargetObject LIKE \"%\\\\MonitorProcess%\" ESCAPE '\\')))"
+            "SELECT * FROM logs WHERE ((EventID = \"4657\" AND OperationType IN (\"New registry value created\", \"Existing registry value modified\") AND Channel = \"Security\") AND (TargetObject LIKE \"%\\\\SOFTWARE\\\\Microsoft\\\\Windows NT\\\\CurrentVersion%\" ESCAPE '\\') AND ((TargetObject LIKE \"%\\\\Image File Execution Options\\\\%\" ESCAPE '\\' AND TargetObject LIKE \"%\\\\GlobalFlag%\" ESCAPE '\\') OR (TargetObject LIKE \"%SilentProcessExit\\\\%\" ESCAPE '\\' AND TargetObject LIKE \"%\\\\ReportingMode%\" ESCAPE '\\') OR (TargetObject LIKE \"%SilentProcessExit\\\\%\" ESCAPE '\\' AND TargetObject LIKE \"%\\\\MonitorProcess%\" ESCAPE '\\')))"
         ]
     },
     {
@@ -2013,7 +2013,7 @@
         "author": "Bartlomiej Czyz @bczyz1, oscd.community",
         "level": "medium",
         "rule": [
-            "SELECT * FROM logs WHERE (TargetObject LIKE \"%\\\\Control Panel\\\\Desktop\\\\SCRNSAVE.EXE\" ESCAPE '\\' AND NOT ((NewProcessName LIKE \"%\\\\rundll32.exe\" ESCAPE '\\' OR NewProcessName LIKE \"%\\\\explorer.exe\" ESCAPE '\\')))"
+            "SELECT * FROM logs WHERE ((EventID = \"4657\" AND OperationType IN (\"New registry value created\", \"Existing registry value modified\") AND Channel = \"Security\") AND TargetObject LIKE \"%\\\\Control Panel\\\\Desktop\\\\SCRNSAVE.EXE\" ESCAPE '\\' AND NOT ((NewProcessName LIKE \"%\\\\rundll32.exe\" ESCAPE '\\' OR NewProcessName LIKE \"%\\\\explorer.exe\" ESCAPE '\\')))"
         ]
     },
     {
@@ -2027,7 +2027,7 @@
         ],
         "level": "medium",
         "rule": [
-            "SELECT * FROM logs WHERE ((TargetObject LIKE \"%HKU\\\\%\" ESCAPE '\\' AND TargetObject LIKE \"%\\_Classes\\\\CLSID\\\\%\" ESCAPE '\\' AND TargetObject LIKE \"%\\\\InProcServer32\\\\(Default)%\" ESCAPE '\\') AND NOT ((((Details LIKE \"%\\%\\%systemroot\\%\\%\\\\system32\\\\%\" ESCAPE '\\' OR Details LIKE \"%\\%\\%systemroot\\%\\%\\\\SysWow64\\\\%\" ESCAPE '\\') OR (Details LIKE \"%\\\\AppData\\\\Local\\\\Microsoft\\\\OneDrive\\\\%\" ESCAPE '\\' AND (Details LIKE \"%\\\\FileCoAuthLib64.dll%\" ESCAPE '\\' OR Details LIKE \"%\\\\FileSyncShell64.dll%\" ESCAPE '\\' OR Details LIKE \"%\\\\FileSyncApi64.dll%\" ESCAPE '\\'))) OR (Details LIKE \"%\\\\AppData\\\\Local\\\\Microsoft\\\\TeamsMeetingAddin\\\\%\" ESCAPE '\\' AND Details LIKE \"%\\\\Microsoft.Teams.AddinLoader.dll%\" ESCAPE '\\') OR (Details LIKE \"%\\\\AppData\\\\Roaming\\\\Dropbox\\\\%\" ESCAPE '\\' AND Details LIKE \"%\\\\DropboxExt64.%.dll%\" ESCAPE '\\'))))"
+            "SELECT * FROM logs WHERE ((EventID = \"4657\" AND OperationType IN (\"New registry value created\", \"Existing registry value modified\") AND Channel = \"Security\") AND (TargetObject LIKE \"%HKU\\\\%\" ESCAPE '\\' AND TargetObject LIKE \"%\\_Classes\\\\CLSID\\\\%\" ESCAPE '\\' AND TargetObject LIKE \"%\\\\InProcServer32\\\\(Default)%\" ESCAPE '\\') AND NOT (((EventID = \"4657\" AND OperationType IN (\"New registry value created\", \"Existing registry value modified\") AND Channel = \"Security\") AND (((Details LIKE \"%\\%\\%systemroot\\%\\%\\\\system32\\\\%\" ESCAPE '\\' OR Details LIKE \"%\\%\\%systemroot\\%\\%\\\\SysWow64\\\\%\" ESCAPE '\\') OR (EventID = \"4657\" AND OperationType IN (\"New registry value created\", \"Existing registry value modified\") AND Channel = \"Security\" AND Details LIKE \"%\\\\AppData\\\\Local\\\\Microsoft\\\\OneDrive\\\\%\" ESCAPE '\\' AND (Details LIKE \"%\\\\FileCoAuthLib64.dll%\" ESCAPE '\\' OR Details LIKE \"%\\\\FileSyncShell64.dll%\" ESCAPE '\\' OR Details LIKE \"%\\\\FileSyncApi64.dll%\" ESCAPE '\\'))) OR (Details LIKE \"%\\\\AppData\\\\Local\\\\Microsoft\\\\TeamsMeetingAddin\\\\%\" ESCAPE '\\' AND Details LIKE \"%\\\\Microsoft.Teams.AddinLoader.dll%\" ESCAPE '\\') OR (Details LIKE \"%\\\\AppData\\\\Roaming\\\\Dropbox\\\\%\" ESCAPE '\\' AND Details LIKE \"%\\\\DropboxExt64.%.dll%\" ESCAPE '\\')))))"
         ]
     },
     {
@@ -2041,7 +2041,7 @@
         ],
         "level": "high",
         "rule": [
-            "SELECT * FROM logs WHERE (TargetObject LIKE \"HKCU\\\\Software\\\\Classes\\\\Folder\\\\shell\\\\open\\\\command\\\\DelegateExecute\" ESCAPE '\\')"
+            "SELECT * FROM logs WHERE (EventID = \"4657\" AND OperationType IN (\"New registry value created\", \"Existing registry value modified\") AND Channel = \"Security\" AND (TargetObject LIKE \"HKCU\\\\Software\\\\Classes\\\\Folder\\\\shell\\\\open\\\\command\\\\DelegateExecute\" ESCAPE '\\'))"
         ]
     },
     {
@@ -2054,7 +2054,7 @@
         "author": "megan201296, Jonhnathan Ribeiro",
         "level": "critical",
         "rule": [
-            "SELECT * FROM logs WHERE (((TargetObject LIKE \"HKCR\\\\CLSID\\\\{E08A0F4B-1F65-4D4D-9A09-BD4625B9C5A1}\\\\Model\" ESCAPE '\\') AND (TargetObject LIKE \"%\\\\SOFTWARE\\\\App\\\\AppXbf13d4ea2945444d8b13e2121cb6b663\\\\Application\" ESCAPE '\\' OR TargetObject LIKE \"%\\\\SOFTWARE\\\\App\\\\AppXbf13d4ea2945444d8b13e2121cb6b663\\\\DefaultIcon\" ESCAPE '\\' OR TargetObject LIKE \"%\\\\SOFTWARE\\\\App\\\\AppX70162486c7554f7f80f481985d67586d\\\\Application\" ESCAPE '\\' OR TargetObject LIKE \"%\\\\SOFTWARE\\\\App\\\\AppX70162486c7554f7f80f481985d67586d\\\\DefaultIcon\" ESCAPE '\\' OR TargetObject LIKE \"%\\\\SOFTWARE\\\\App\\\\AppX37cc7fdccd644b4f85f4b22d5a3f105a\\\\Application\" ESCAPE '\\' OR TargetObject LIKE \"%\\\\SOFTWARE\\\\App\\\\AppX37cc7fdccd644b4f85f4b22d5a3f105a\\\\DefaultIcon\" ESCAPE '\\')) OR ((TargetObject LIKE \"HKU\\\\%\" ESCAPE '\\') AND (TargetObject LIKE \"%\\_Classes\\\\AppXc52346ec40fb4061ad96be0e6cb7d16a\\\\%\" ESCAPE '\\' OR TargetObject LIKE \"%\\_Classes\\\\AppX3bbba44c6cae4d9695755183472171e2\\\\%\" ESCAPE '\\' OR TargetObject LIKE \"%\\_Classes\\\\CLSID\\\\{E3517E26-8E93-458D-A6DF-8030BC80528B}\\\\%\" ESCAPE '\\' OR TargetObject LIKE \"%\\_Classes\\\\CLSID\\\\{E08A0F4B-1F65-4D4D-9A09-BD4625B9C5A1}\\\\Model%\" ESCAPE '\\')))"
+            "SELECT * FROM logs WHERE ((EventID = \"4657\" AND OperationType IN (\"New registry value created\", \"Existing registry value modified\") AND Channel = \"Security\") AND (((TargetObject LIKE \"HKCR\\\\CLSID\\\\{E08A0F4B-1F65-4D4D-9A09-BD4625B9C5A1}\\\\Model\" ESCAPE '\\') AND (TargetObject LIKE \"%\\\\SOFTWARE\\\\App\\\\AppXbf13d4ea2945444d8b13e2121cb6b663\\\\Application\" ESCAPE '\\' OR TargetObject LIKE \"%\\\\SOFTWARE\\\\App\\\\AppXbf13d4ea2945444d8b13e2121cb6b663\\\\DefaultIcon\" ESCAPE '\\' OR TargetObject LIKE \"%\\\\SOFTWARE\\\\App\\\\AppX70162486c7554f7f80f481985d67586d\\\\Application\" ESCAPE '\\' OR TargetObject LIKE \"%\\\\SOFTWARE\\\\App\\\\AppX70162486c7554f7f80f481985d67586d\\\\DefaultIcon\" ESCAPE '\\' OR TargetObject LIKE \"%\\\\SOFTWARE\\\\App\\\\AppX37cc7fdccd644b4f85f4b22d5a3f105a\\\\Application\" ESCAPE '\\' OR TargetObject LIKE \"%\\\\SOFTWARE\\\\App\\\\AppX37cc7fdccd644b4f85f4b22d5a3f105a\\\\DefaultIcon\" ESCAPE '\\')) OR ((TargetObject LIKE \"HKU\\\\%\" ESCAPE '\\') AND (TargetObject LIKE \"%\\_Classes\\\\AppXc52346ec40fb4061ad96be0e6cb7d16a\\\\%\" ESCAPE '\\' OR TargetObject LIKE \"%\\_Classes\\\\AppX3bbba44c6cae4d9695755183472171e2\\\\%\" ESCAPE '\\' OR TargetObject LIKE \"%\\_Classes\\\\CLSID\\\\{E3517E26-8E93-458D-A6DF-8030BC80528B}\\\\%\" ESCAPE '\\' OR TargetObject LIKE \"%\\_Classes\\\\CLSID\\\\{E08A0F4B-1F65-4D4D-9A09-BD4625B9C5A1}\\\\Model%\" ESCAPE '\\'))))"
         ]
     },
     {
@@ -2067,7 +2067,7 @@
         ],
         "level": "medium",
         "rule": [
-            "SELECT * FROM logs WHERE (EventType = \"DeleteKey\" AND TargetObject LIKE \"%\\\\shell\\\\open\\\\command\" ESCAPE '\\')"
+            "SELECT * FROM logs WHERE (EventID = \"4657\" AND OperationType IN (\"New registry value created\", \"Existing registry value modified\") AND Channel = \"Security\" AND EventType = \"DeleteKey\" AND TargetObject LIKE \"%\\\\shell\\\\open\\\\command\" ESCAPE '\\')"
         ]
     },
     {
@@ -2082,7 +2082,7 @@
         ],
         "level": "high",
         "rule": [
-            "SELECT * FROM logs WHERE (TargetObject LIKE \"HKLM\\\\SOFTWARE\\\\Microsoft\\\\Windows NT\\\\CurrentVersion\\\\Ports%\" ESCAPE '\\' AND (Details LIKE \"%.dll%\" ESCAPE '\\' OR Details LIKE \"%.exe%\" ESCAPE '\\' OR Details LIKE \"%.bat%\" ESCAPE '\\' OR Details LIKE \"%.com%\" ESCAPE '\\' OR Details LIKE \"%C:%\" ESCAPE '\\'))"
+            "SELECT * FROM logs WHERE (EventID = \"4657\" AND OperationType IN (\"New registry value created\", \"Existing registry value modified\") AND Channel = \"Security\" AND TargetObject LIKE \"HKLM\\\\SOFTWARE\\\\Microsoft\\\\Windows NT\\\\CurrentVersion\\\\Ports%\" ESCAPE '\\' AND (Details LIKE \"%.dll%\" ESCAPE '\\' OR Details LIKE \"%.exe%\" ESCAPE '\\' OR Details LIKE \"%.bat%\" ESCAPE '\\' OR Details LIKE \"%.com%\" ESCAPE '\\' OR Details LIKE \"%C:%\" ESCAPE '\\'))"
         ]
     },
     {
@@ -2097,7 +2097,7 @@
         ],
         "level": "critical",
         "rule": [
-            "SELECT * FROM logs WHERE TargetObject LIKE \"%Services\\\\WCESERVICE\\\\Start%\" ESCAPE '\\'"
+            "SELECT * FROM logs WHERE (EventID = \"4657\" AND OperationType IN (\"New registry value created\", \"Existing registry value modified\") AND Channel = \"Security\" AND TargetObject LIKE \"%Services\\\\WCESERVICE\\\\Start%\" ESCAPE '\\')"
         ]
     },
     {
@@ -2112,7 +2112,7 @@
         ],
         "level": "High",
         "rule": [
-            "SELECT * FROM logs WHERE (TargetObject LIKE \"%Software\\\\Microsoft\\\\Windows NT\\\\CurrentVersion\\\\Accessibility\\\\ATs%\" ESCAPE '\\' OR TargetObject LIKE \"%Software\\\\Microsoft\\\\Windows NT\\\\CurrentVersion\\\\Accessibility\\\\Configuration%\" ESCAPE '\\')"
+            "SELECT * FROM logs WHERE ((EventID = \"4657\" AND OperationType IN (\"New registry value created\", \"Existing registry value modified\") AND Channel = \"Security\") AND (TargetObject LIKE \"%Software\\\\Microsoft\\\\Windows NT\\\\CurrentVersion\\\\Accessibility\\\\ATs%\" ESCAPE '\\' OR TargetObject LIKE \"%Software\\\\Microsoft\\\\Windows NT\\\\CurrentVersion\\\\Accessibility\\\\Configuration%\" ESCAPE '\\'))"
         ]
     },
     {
@@ -2125,7 +2125,7 @@
         "author": "Florian Roth",
         "level": "critical",
         "rule": [
-            "SELECT * FROM logs WHERE TargetObject LIKE \"%\\\\SYSTEM\\\\CurrentControlSet\\\\services\\\\null\\\\Instance%\" ESCAPE '\\'",
+            "SELECT * FROM logs WHERE (EventID = \"4657\" AND OperationType IN (\"New registry value created\", \"Existing registry value modified\") AND Channel = \"Security\" AND TargetObject LIKE \"%\\\\SYSTEM\\\\CurrentControlSet\\\\services\\\\null\\\\Instance%\" ESCAPE '\\')",
             "SELECT * FROM logs WHERE (EventID = \"4688\" AND Channel = \"Security\" AND CommandLine LIKE \"%loaddll -a %\" ESCAPE '\\')"
         ]
     },
@@ -2139,7 +2139,7 @@
         ],
         "level": "high",
         "rule": [
-            "SELECT * FROM logs WHERE (TargetObject LIKE \"%Microsoft\\\\Windows NT\\\\CurrentVersion\\\\SilentProcessExit%\" ESCAPE '\\' AND Details LIKE \"%MonitorProcess%\" ESCAPE '\\')"
+            "SELECT * FROM logs WHERE (EventID = \"4657\" AND OperationType IN (\"New registry value created\", \"Existing registry value modified\") AND Channel = \"Security\" AND TargetObject LIKE \"%Microsoft\\\\Windows NT\\\\CurrentVersion\\\\SilentProcessExit%\" ESCAPE '\\' AND Details LIKE \"%MonitorProcess%\" ESCAPE '\\')"
         ]
     },
     {
@@ -2153,7 +2153,7 @@
         ],
         "level": "medium",
         "rule": [
-            "SELECT * FROM logs WHERE (((TargetObject LIKE \"HKLM\\\\System\\\\CurrentControlSet\\\\Services\\\\NalDrv\\\\ImagePath\" ESCAPE '\\' OR TargetObject LIKE \"HKLM\\\\System\\\\CurrentControlSet\\\\Services\\\\PROCEXP152\\\\ImagePath\" ESCAPE '\\') AND NOT ((NewProcessName LIKE \"%\\\\procexp64.exe\" ESCAPE '\\' OR NewProcessName LIKE \"%\\\\procexp.exe\" ESCAPE '\\' OR NewProcessName LIKE \"%\\\\procmon64.exe\" ESCAPE '\\' OR NewProcessName LIKE \"%\\\\procmon.exe\" ESCAPE '\\'))) AND NOT ((Details LIKE \"%\\\\WINDOWS\\\\system32\\\\Drivers\\\\PROCEXP152.SYS%\" ESCAPE '\\')))"
+            "SELECT * FROM logs WHERE ((EventID = \"4657\" AND OperationType IN (\"New registry value created\", \"Existing registry value modified\") AND Channel = \"Security\") AND ((TargetObject LIKE \"HKLM\\\\System\\\\CurrentControlSet\\\\Services\\\\NalDrv\\\\ImagePath\" ESCAPE '\\' OR TargetObject LIKE \"HKLM\\\\System\\\\CurrentControlSet\\\\Services\\\\PROCEXP152\\\\ImagePath\" ESCAPE '\\') AND NOT ((NewProcessName LIKE \"%\\\\procexp64.exe\" ESCAPE '\\' OR NewProcessName LIKE \"%\\\\procexp.exe\" ESCAPE '\\' OR NewProcessName LIKE \"%\\\\procmon64.exe\" ESCAPE '\\' OR NewProcessName LIKE \"%\\\\procmon.exe\" ESCAPE '\\'))) AND NOT ((Details LIKE \"%\\\\WINDOWS\\\\system32\\\\Drivers\\\\PROCEXP152.SYS%\" ESCAPE '\\')))"
         ]
     },
     {
@@ -2166,7 +2166,7 @@
         ],
         "level": "critical",
         "rule": [
-            "SELECT * FROM logs WHERE TargetObject LIKE \"%Microsoft\\\\Windows NT\\\\CurrentVersion\\\\SilentProcessExit\\\\lsass.exe%\" ESCAPE '\\'"
+            "SELECT * FROM logs WHERE (EventID = \"4657\" AND OperationType IN (\"New registry value created\", \"Existing registry value modified\") AND Channel = \"Security\" AND TargetObject LIKE \"%Microsoft\\\\Windows NT\\\\CurrentVersion\\\\SilentProcessExit\\\\lsass.exe%\" ESCAPE '\\')"
         ]
     },
     {
@@ -2179,7 +2179,7 @@
         "author": "oscd.community, Natalia Shornikova",
         "level": "high",
         "rule": [
-            "SELECT * FROM logs WHERE (TargetObject LIKE \"%\\\\Software\\\\Microsoft\\\\WAB\\\\DLLPath\" ESCAPE '\\' AND NOT (Details LIKE \"\\%CommonProgramFiles\\%\\\\System\\\\wab32.dll\" ESCAPE '\\'))"
+            "SELECT * FROM logs WHERE ((EventID = \"4657\" AND OperationType IN (\"New registry value created\", \"Existing registry value modified\") AND Channel = \"Security\") AND TargetObject LIKE \"%\\\\Software\\\\Microsoft\\\\WAB\\\\DLLPath\" ESCAPE '\\' AND NOT (Details LIKE \"\\%CommonProgramFiles\\%\\\\System\\\\wab32.dll\" ESCAPE '\\'))"
         ]
     },
     {
@@ -2192,7 +2192,7 @@
         ],
         "level": "high",
         "rule": [
-            "SELECT * FROM logs WHERE TargetObject LIKE \"%HKLM\\\\SOFTWARE\\\\Microsoft\\\\HTMLHelp\\\\data%\" ESCAPE '\\'"
+            "SELECT * FROM logs WHERE (EventID = \"4657\" AND OperationType IN (\"New registry value created\", \"Existing registry value modified\") AND Channel = \"Security\" AND TargetObject LIKE \"%HKLM\\\\SOFTWARE\\\\Microsoft\\\\HTMLHelp\\\\data%\" ESCAPE '\\')"
         ]
     },
     {
@@ -2205,7 +2205,7 @@
         ],
         "level": "medium",
         "rule": [
-            "SELECT * FROM logs WHERE (TargetObject LIKE \"HKLM\\\\SOFTWARE\\\\Microsoft\\\\Active Setup\\\\Installed Components%\" ESCAPE '\\' AND TargetObject LIKE \"%\\\\StubPath\" ESCAPE '\\')"
+            "SELECT * FROM logs WHERE (EventID = \"4657\" AND OperationType IN (\"New registry value created\", \"Existing registry value modified\") AND Channel = \"Security\" AND TargetObject LIKE \"HKLM\\\\SOFTWARE\\\\Microsoft\\\\Active Setup\\\\Installed Components%\" ESCAPE '\\' AND TargetObject LIKE \"%\\\\StubPath\" ESCAPE '\\')"
         ]
     },
     {
@@ -2218,7 +2218,7 @@
         ],
         "level": "high",
         "rule": [
-            "SELECT * FROM logs WHERE (TargetObject LIKE \"%Software\\\\Microsoft\\\\Windows\\\\CurrentVersion\\\\Run\\\\Backup Mgr\" ESCAPE '\\')"
+            "SELECT * FROM logs WHERE (EventID = \"4657\" AND OperationType IN (\"New registry value created\", \"Existing registry value modified\") AND Channel = \"Security\" AND (TargetObject LIKE \"%Software\\\\Microsoft\\\\Windows\\\\CurrentVersion\\\\Run\\\\Backup Mgr\" ESCAPE '\\'))"
         ]
     },
     {
@@ -2232,7 +2232,7 @@
         "author": "Dmitriy Lifanov, oscd.community",
         "level": "high",
         "rule": [
-            "SELECT * FROM logs WHERE ((EventType = \"DeleteValue\" AND TargetObject LIKE \"%\\\\AppXypsaf9f1qserqevf0sws76dx4k9a5206\\\\Shell\\\\open\\\\command\\\\DelegateExecute\" ESCAPE '\\') OR TargetObject LIKE \"%\\\\AppXypsaf9f1qserqevf0sws76dx4k9a5206\\\\Shell\\\\open\\\\command\\\\(Default)\" ESCAPE '\\')"
+            "SELECT * FROM logs WHERE ((EventID = \"4657\" AND OperationType IN (\"New registry value created\", \"Existing registry value modified\") AND Channel = \"Security\") AND ((EventType = \"DeleteValue\" AND TargetObject LIKE \"%\\\\AppXypsaf9f1qserqevf0sws76dx4k9a5206\\\\Shell\\\\open\\\\command\\\\DelegateExecute\" ESCAPE '\\') OR TargetObject LIKE \"%\\\\AppXypsaf9f1qserqevf0sws76dx4k9a5206\\\\Shell\\\\open\\\\command\\\\(Default)\" ESCAPE '\\'))"
         ]
     },
     {
@@ -2245,7 +2245,7 @@
         ],
         "level": "critical",
         "rule": [
-            "SELECT * FROM logs WHERE TargetObject LIKE \"%\\\\IsCredGuardEnabled\" ESCAPE '\\'"
+            "SELECT * FROM logs WHERE (EventID = \"4657\" AND OperationType IN (\"New registry value created\", \"Existing registry value modified\") AND Channel = \"Security\" AND TargetObject LIKE \"%\\\\IsCredGuardEnabled\" ESCAPE '\\')"
         ]
     },
     {
@@ -2258,7 +2258,7 @@
         ],
         "level": "informational",
         "rule": [
-            "SELECT * FROM logs WHERE TargetObject LIKE \"%\\\\AppCompatFlags\\\\Compatibility Assistant\\\\Store\\\\%\" ESCAPE '\\'"
+            "SELECT * FROM logs WHERE (EventID = \"4657\" AND OperationType IN (\"New registry value created\", \"Existing registry value modified\") AND Channel = \"Security\" AND TargetObject LIKE \"%\\\\AppCompatFlags\\\\Compatibility Assistant\\\\Store\\\\%\" ESCAPE '\\')"
         ]
     },
     {
@@ -2271,7 +2271,7 @@
         ],
         "level": "critical",
         "rule": [
-            "SELECT * FROM logs WHERE ((TargetObject LIKE \"%\\\\SOFTWARE\\\\Microsoft\\\\Windows NT\\\\CurrentVersion\\\\AppCompatFlags\\\\TelemetryController\\\\%\" ESCAPE '\\' AND TargetObject LIKE \"%\\\\Command%\" ESCAPE '\\' AND Details LIKE \"%.exe%\" ESCAPE '\\') AND NOT ((Details LIKE \"%\\\\system32\\\\CompatTelRunner.exe%\" ESCAPE '\\' OR Details LIKE \"%\\\\system32\\\\DeviceCensus.exe%\" ESCAPE '\\')))"
+            "SELECT * FROM logs WHERE ((EventID = \"4657\" AND OperationType IN (\"New registry value created\", \"Existing registry value modified\") AND Channel = \"Security\") AND (TargetObject LIKE \"%\\\\SOFTWARE\\\\Microsoft\\\\Windows NT\\\\CurrentVersion\\\\AppCompatFlags\\\\TelemetryController\\\\%\" ESCAPE '\\' AND TargetObject LIKE \"%\\\\Command%\" ESCAPE '\\' AND Details LIKE \"%.exe%\" ESCAPE '\\') AND NOT ((Details LIKE \"%\\\\system32\\\\CompatTelRunner.exe%\" ESCAPE '\\' OR Details LIKE \"%\\\\system32\\\\DeviceCensus.exe%\" ESCAPE '\\')))"
         ]
     },
     {
@@ -2286,7 +2286,7 @@
         ],
         "level": "high",
         "rule": [
-            "SELECT * FROM logs WHERE TargetObject LIKE \"%\\\\services\\\\DNS\\\\Parameters\\\\ServerLevelPluginDll\" ESCAPE '\\'",
+            "SELECT * FROM logs WHERE (EventID = \"4657\" AND OperationType IN (\"New registry value created\", \"Existing registry value modified\") AND Channel = \"Security\" AND TargetObject LIKE \"%\\\\services\\\\DNS\\\\Parameters\\\\ServerLevelPluginDll\" ESCAPE '\\')",
             "SELECT * FROM logs WHERE (EventID = \"4688\" AND Channel = \"Security\" AND NewProcessName LIKE \"%\\\\dnscmd.exe\" ESCAPE '\\' AND CommandLine LIKE \"%/config%\" ESCAPE '\\' AND CommandLine LIKE \"%/serverlevelplugindll%\" ESCAPE '\\')"
         ]
     },
@@ -2300,7 +2300,7 @@
         ],
         "level": "high",
         "rule": [
-            "SELECT * FROM logs WHERE (TargetObject LIKE \"HKLM\\\\SAM\\\\SAM\\\\Domains\\\\Account\\\\Users\\\\Names\\\\%\" ESCAPE '\\' AND TargetObject LIKE \"%$\" ESCAPE '\\' AND NewProcessName LIKE \"%lsass.exe\" ESCAPE '\\')"
+            "SELECT * FROM logs WHERE (EventID = \"4657\" AND OperationType IN (\"New registry value created\", \"Existing registry value modified\") AND Channel = \"Security\" AND TargetObject LIKE \"HKLM\\\\SAM\\\\SAM\\\\Domains\\\\Account\\\\Users\\\\Names\\\\%\" ESCAPE '\\' AND TargetObject LIKE \"%$\" ESCAPE '\\' AND NewProcessName LIKE \"%lsass.exe\" ESCAPE '\\')"
         ]
     },
     {
@@ -2316,7 +2316,7 @@
         ],
         "level": "high",
         "rule": [
-            "SELECT * FROM logs WHERE (TargetObject LIKE \"HKU\\\\%\" ESCAPE '\\' AND TargetObject LIKE \"%\\_Classes\\\\exefile\\\\shell\\\\runas\\\\command\\\\isolatedCommand\" ESCAPE '\\')"
+            "SELECT * FROM logs WHERE (EventID = \"4657\" AND OperationType IN (\"New registry value created\", \"Existing registry value modified\") AND Channel = \"Security\" AND TargetObject LIKE \"HKU\\\\%\" ESCAPE '\\' AND TargetObject LIKE \"%\\_Classes\\\\exefile\\\\shell\\\\runas\\\\command\\\\isolatedCommand\" ESCAPE '\\')"
         ]
     },
     {
@@ -2331,7 +2331,7 @@
         "author": "Tom Ueltschi (@c_APT_ure)",
         "level": "high",
         "rule": [
-            "SELECT * FROM logs WHERE TargetObject LIKE \"%UserInitMprLogonScript%\" ESCAPE '\\'"
+            "SELECT * FROM logs WHERE (EventID = \"4657\" AND OperationType IN (\"New registry value created\", \"Existing registry value modified\") AND Channel = \"Security\" AND TargetObject LIKE \"%UserInitMprLogonScript%\" ESCAPE '\\')"
         ]
     },
     {
@@ -2345,7 +2345,7 @@
         "author": "Victor Sergeev, Daniil Yugoslavskiy, Gleb Sukhodolskiy, Timur Zinniatullin, oscd.community",
         "level": "medium",
         "rule": [
-            "SELECT * FROM logs WHERE (((((((((((((TargetObject LIKE \"%\\\\SOFTWARE\\\\Wow6432Node\\\\Microsoft\\\\Windows CE Services\\\\AutoStart%\" ESCAPE '\\' OR TargetObject LIKE \"%\\\\Software\\\\Wow6432Node\\\\Microsoft\\\\Command Processor\\\\Autorun%\" ESCAPE '\\' OR TargetObject LIKE \"%\\\\SOFTWARE\\\\Wow6432Node\\\\Microsoft\\\\Active Setup\\\\Installed Components%\" ESCAPE '\\' OR TargetObject LIKE \"%\\\\SOFTWARE\\\\Microsoft\\\\Windows CE Services\\\\AutoStartOnDisconnect%\" ESCAPE '\\' OR TargetObject LIKE \"%\\\\SOFTWARE\\\\Microsoft\\\\Windows CE Services\\\\AutoStartOnConnect%\" ESCAPE '\\' OR TargetObject LIKE \"%\\\\SYSTEM\\\\Setup\\\\CmdLine%\" ESCAPE '\\' OR TargetObject LIKE \"%\\\\Software\\\\Microsoft\\\\Ctf\\\\LangBarAddin%\" ESCAPE '\\' OR TargetObject LIKE \"%\\\\Software\\\\Microsoft\\\\Command Processor\\\\Autorun%\" ESCAPE '\\' OR TargetObject LIKE \"%\\\\SOFTWARE\\\\Microsoft\\\\Active Setup\\\\Installed Components%\" ESCAPE '\\' OR TargetObject LIKE \"%\\\\SOFTWARE\\\\Classes\\\\Protocols\\\\Handler%\" ESCAPE '\\' OR TargetObject LIKE \"%\\\\SOFTWARE\\\\Classes\\\\Protocols\\\\Filter%\" ESCAPE '\\' OR TargetObject LIKE \"%\\\\SOFTWARE\\\\Classes\\\\Htmlfile\\\\Shell\\\\Open\\\\Command\\\\(Default)%\" ESCAPE '\\' OR TargetObject LIKE \"%\\\\Environment\\\\UserInitMprLogonScript%\" ESCAPE '\\' OR TargetObject LIKE \"%\\\\SOFTWARE\\\\Policies\\\\Microsoft\\\\Windows\\\\Control Panel\\\\Desktop\\\\Scrnsave.exe%\" ESCAPE '\\' OR TargetObject LIKE \"%\\\\Software\\\\Microsoft\\\\Internet Explorer\\\\UrlSearchHooks%\" ESCAPE '\\' OR TargetObject LIKE \"%\\\\SOFTWARE\\\\Microsoft\\\\Internet Explorer\\\\Desktop\\\\Components%\" ESCAPE '\\' OR TargetObject LIKE \"%\\\\Software\\\\Classes\\\\Clsid\\\\{AB8902B4-09CA-4bb6-B78D-A8F59079A8D5}\\\\Inprocserver32%\" ESCAPE '\\' OR TargetObject LIKE \"%\\\\Control Panel\\\\Desktop\\\\Scrnsave.exe%\" ESCAPE '\\') OR (TargetObject LIKE \"%\\\\System\\\\CurrentControlSet\\\\Control\\\\Session Manager%\" ESCAPE '\\' AND (TargetObject LIKE \"%\\\\SetupExecute%\" ESCAPE '\\' OR TargetObject LIKE \"%\\\\S0InitialCommand%\" ESCAPE '\\' OR TargetObject LIKE \"%\\\\KnownDlls%\" ESCAPE '\\' OR TargetObject LIKE \"%\\\\Execute%\" ESCAPE '\\' OR TargetObject LIKE \"%\\\\BootExecute%\" ESCAPE '\\' OR TargetObject LIKE \"%\\\\AppCertDlls%\" ESCAPE '\\'))) OR (TargetObject LIKE \"%\\\\SOFTWARE\\\\Microsoft\\\\Windows\\\\CurrentVersion%\" ESCAPE '\\' AND (TargetObject LIKE \"%\\\\ShellServiceObjectDelayLoad%\" ESCAPE '\\' OR TargetObject LIKE \"%\\\\Run%\" ESCAPE '\\' OR TargetObject LIKE \"%\\\\Policies\\\\System\\\\Shell%\" ESCAPE '\\' OR TargetObject LIKE \"%\\\\Policies\\\\Explorer\\\\Run%\" ESCAPE '\\' OR TargetObject LIKE \"%\\\\Group Policy\\\\Scripts\\\\Startup%\" ESCAPE '\\' OR TargetObject LIKE \"%\\\\Group Policy\\\\Scripts\\\\Shutdown%\" ESCAPE '\\' OR TargetObject LIKE \"%\\\\Group Policy\\\\Scripts\\\\Logon%\" ESCAPE '\\' OR TargetObject LIKE \"%\\\\Group Policy\\\\Scripts\\\\Logoff%\" ESCAPE '\\' OR TargetObject LIKE \"%\\\\Explorer\\\\ShellServiceObjects%\" ESCAPE '\\' OR TargetObject LIKE \"%\\\\Explorer\\\\ShellIconOverlayIdentifiers%\" ESCAPE '\\' OR TargetObject LIKE \"%\\\\Explorer\\\\ShellExecuteHooks%\" ESCAPE '\\' OR TargetObject LIKE \"%\\\\Explorer\\\\SharedTaskScheduler%\" ESCAPE '\\' OR TargetObject LIKE \"%\\\\Explorer\\\\Browser Helper Objects%\" ESCAPE '\\' OR TargetObject LIKE \"%\\\\Authentication\\\\PLAP Providers%\" ESCAPE '\\' OR TargetObject LIKE \"%\\\\Authentication\\\\Credential Providers%\" ESCAPE '\\' OR TargetObject LIKE \"%\\\\Authentication\\\\Credential Provider Filters%\" ESCAPE '\\'))) OR (TargetObject LIKE \"%\\\\SOFTWARE\\\\Microsoft\\\\Windows NT\\\\CurrentVersion%\" ESCAPE '\\' AND (TargetObject LIKE \"%\\\\Winlogon\\\\VmApplet%\" ESCAPE '\\' OR TargetObject LIKE \"%\\\\Winlogon\\\\Userinit%\" ESCAPE '\\' OR TargetObject LIKE \"%\\\\Winlogon\\\\Taskman%\" ESCAPE '\\' OR TargetObject LIKE \"%\\\\Winlogon\\\\Shell%\" ESCAPE '\\' OR TargetObject LIKE \"%\\\\Winlogon\\\\GpExtensions%\" ESCAPE '\\' OR TargetObject LIKE \"%\\\\Winlogon\\\\AppSetup%\" ESCAPE '\\' OR TargetObject LIKE \"%\\\\Winlogon\\\\AlternateShells\\\\AvailableShells%\" ESCAPE '\\' OR TargetObject LIKE \"%\\\\Windows\\\\IconServiceLib%\" ESCAPE '\\' OR TargetObject LIKE \"%\\\\Windows\\\\Appinit\\_Dlls%\" ESCAPE '\\' OR TargetObject LIKE \"%\\\\Image File Execution Options%\" ESCAPE '\\' OR TargetObject LIKE \"%\\\\Font Drivers%\" ESCAPE '\\' OR TargetObject LIKE \"%\\\\Drivers32%\" ESCAPE '\\' OR TargetObject LIKE \"%\\\\Windows\\\\Run%\" ESCAPE '\\' OR TargetObject LIKE \"%\\\\Windows\\\\Load%\" ESCAPE '\\'))) OR (TargetObject LIKE \"%\\\\SOFTWARE\\\\Wow6432Node\\\\Microsoft\\\\Windows\\\\CurrentVersion%\" ESCAPE '\\' AND (TargetObject LIKE \"%\\\\ShellServiceObjectDelayLoad%\" ESCAPE '\\' OR TargetObject LIKE \"%\\\\Run%\" ESCAPE '\\' OR TargetObject LIKE \"%\\\\Explorer\\\\ShellServiceObjects%\" ESCAPE '\\' OR TargetObject LIKE \"%\\\\Explorer\\\\ShellIconOverlayIdentifiers%\" ESCAPE '\\' OR TargetObject LIKE \"%\\\\Explorer\\\\ShellExecuteHooks%\" ESCAPE '\\' OR TargetObject LIKE \"%\\\\Explorer\\\\SharedTaskScheduler%\" ESCAPE '\\' OR TargetObject LIKE \"%\\\\Explorer\\\\Browser Helper Objects%\" ESCAPE '\\'))) OR (TargetObject LIKE \"%\\\\SOFTWARE\\\\Wow6432Node\\\\Microsoft\\\\Windows NT\\\\CurrentVersion%\" ESCAPE '\\' AND (TargetObject LIKE \"%\\\\Windows\\\\Appinit\\_Dlls%\" ESCAPE '\\' OR TargetObject LIKE \"%\\\\Image File Execution Options%\" ESCAPE '\\' OR TargetObject LIKE \"%\\\\Drivers32%\" ESCAPE '\\'))) OR ((TargetObject LIKE \"%\\\\Software\\\\Wow6432Node\\\\Microsoft\\\\Office%\" ESCAPE '\\' OR TargetObject LIKE \"%\\\\Software\\\\Microsoft\\\\Office%\" ESCAPE '\\') AND (TargetObject LIKE \"%\\\\Word\\\\Addins%\" ESCAPE '\\' OR TargetObject LIKE \"%\\\\PowerPoint\\\\Addins%\" ESCAPE '\\' OR TargetObject LIKE \"%\\\\Outlook\\\\Addins%\" ESCAPE '\\' OR TargetObject LIKE \"%\\\\Onenote\\\\Addins%\" ESCAPE '\\' OR TargetObject LIKE \"%\\\\Excel\\\\Addins%\" ESCAPE '\\' OR TargetObject LIKE \"%\\\\Access\\\\Addins%\" ESCAPE '\\' OR TargetObject LIKE \"%test\\\\Special\\\\Perf%\" ESCAPE '\\'))) OR ((TargetObject LIKE \"%\\\\Software\\\\Wow6432Node\\\\Microsoft\\\\Internet Explorer%\" ESCAPE '\\' OR TargetObject LIKE \"%\\\\Software\\\\Microsoft\\\\Internet Explorer%\" ESCAPE '\\') AND (TargetObject LIKE \"%\\\\Toolbar%\" ESCAPE '\\' OR TargetObject LIKE \"%\\\\Extensions%\" ESCAPE '\\' OR TargetObject LIKE \"%\\\\Explorer Bars%\" ESCAPE '\\'))) OR (TargetObject LIKE \"%\\\\Software\\\\Wow6432Node\\\\Classes%\" ESCAPE '\\' AND (TargetObject LIKE \"%\\\\Folder\\\\ShellEx\\\\ExtShellFolderViews%\" ESCAPE '\\' OR TargetObject LIKE \"%\\\\Folder\\\\ShellEx\\\\DragDropHandlers%\" ESCAPE '\\' OR TargetObject LIKE \"%\\\\Folder\\\\ShellEx\\\\ColumnHandlers%\" ESCAPE '\\' OR TargetObject LIKE \"%\\\\Directory\\\\Shellex\\\\DragDropHandlers%\" ESCAPE '\\' OR TargetObject LIKE \"%\\\\Directory\\\\Shellex\\\\CopyHookHandlers%\" ESCAPE '\\' OR TargetObject LIKE \"%\\\\CLSID\\\\{AC757296-3522-4E11-9862-C17BE5A1767E}\\\\Instance%\" ESCAPE '\\' OR TargetObject LIKE \"%\\\\CLSID\\\\{ABE3B9A4-257D-4B97-BD1A-294AF496222E}\\\\Instance%\" ESCAPE '\\' OR TargetObject LIKE \"%\\\\CLSID\\\\{7ED96837-96F0-4812-B211-F13C24117ED3}\\\\Instance%\" ESCAPE '\\' OR TargetObject LIKE \"%\\\\CLSID\\\\{083863F1-70DE-11d0-BD40-00A0C911CE86}\\\\Instance%\" ESCAPE '\\' OR TargetObject LIKE \"%\\\\AllFileSystemObjects\\\\ShellEx\\\\DragDropHandlers%\" ESCAPE '\\' OR TargetObject LIKE \"%\\\\ShellEx\\\\PropertySheetHandlers%\" ESCAPE '\\' OR TargetObject LIKE \"%\\\\ShellEx\\\\ContextMenuHandlers%\" ESCAPE '\\'))) OR (TargetObject LIKE \"%\\\\Software\\\\Classes%\" ESCAPE '\\' AND (TargetObject LIKE \"%\\\\Folder\\\\ShellEx\\\\ExtShellFolderViews%\" ESCAPE '\\' OR TargetObject LIKE \"%\\\\Folder\\\\ShellEx\\\\DragDropHandlers%\" ESCAPE '\\' OR TargetObject LIKE \"%\\\\Folder\\\\Shellex\\\\ColumnHandlers%\" ESCAPE '\\' OR TargetObject LIKE \"%\\\\Filter%\" ESCAPE '\\' OR TargetObject LIKE \"%\\\\Exefile\\\\Shell\\\\Open\\\\Command\\\\(Default)%\" ESCAPE '\\' OR TargetObject LIKE \"%\\\\Directory\\\\Shellex\\\\DragDropHandlers%\" ESCAPE '\\' OR TargetObject LIKE \"%\\\\Directory\\\\Shellex\\\\CopyHookHandlers%\" ESCAPE '\\' OR TargetObject LIKE \"%\\\\CLSID\\\\{AC757296-3522-4E11-9862-C17BE5A1767E}\\\\Instance%\" ESCAPE '\\' OR TargetObject LIKE \"%\\\\CLSID\\\\{ABE3B9A4-257D-4B97-BD1A-294AF496222E}\\\\Instance%\" ESCAPE '\\' OR TargetObject LIKE \"%\\\\CLSID\\\\{7ED96837-96F0-4812-B211-F13C24117ED3}\\\\Instance%\" ESCAPE '\\' OR TargetObject LIKE \"%\\\\CLSID\\\\{083863F1-70DE-11d0-BD40-00A0C911CE86}\\\\Instance%\" ESCAPE '\\' OR TargetObject LIKE \"%\\\\Classes\\\\AllFileSystemObjects\\\\ShellEx\\\\DragDropHandlers%\" ESCAPE '\\' OR TargetObject LIKE \"%\\\\.exe%\" ESCAPE '\\' OR TargetObject LIKE \"%\\\\.cmd%\" ESCAPE '\\' OR TargetObject LIKE \"%\\\\ShellEx\\\\PropertySheetHandlers%\" ESCAPE '\\' OR TargetObject LIKE \"%\\\\ShellEx\\\\ContextMenuHandlers%\" ESCAPE '\\'))) OR (TargetObject LIKE \"%\\\\Software\\\\Policies\\\\Microsoft\\\\Windows\\\\System\\\\Scripts%\" ESCAPE '\\' AND (TargetObject LIKE \"%\\\\Startup%\" ESCAPE '\\' OR TargetObject LIKE \"%\\\\Shutdown%\" ESCAPE '\\' OR TargetObject LIKE \"%\\\\Logon%\" ESCAPE '\\' OR TargetObject LIKE \"%\\\\Logoff%\" ESCAPE '\\'))) OR (TargetObject LIKE \"%\\\\System\\\\CurrentControlSet\\\\Services\\\\WinSock2\\\\Parameters%\" ESCAPE '\\' AND (TargetObject LIKE \"%\\\\Protocol\\_Catalog9\\\\Catalog\\_Entries%\" ESCAPE '\\' OR TargetObject LIKE \"%\\\\NameSpace\\_Catalog5\\\\Catalog\\_Entries%\" ESCAPE '\\'))) OR (TargetObject LIKE \"%\\\\SYSTEM\\\\CurrentControlSet\\\\Control%\" ESCAPE '\\' AND (TargetObject LIKE \"%\\\\Terminal Server\\\\WinStations\\\\RDP-Tcp\\\\InitialProgram%\" ESCAPE '\\' OR TargetObject LIKE \"%\\\\Terminal Server\\\\Wds\\\\rdpwd\\\\StartupPrograms%\" ESCAPE '\\' OR TargetObject LIKE \"%\\\\SecurityProviders\\\\SecurityProviders%\" ESCAPE '\\' OR TargetObject LIKE \"%\\\\SafeBoot\\\\AlternateShell%\" ESCAPE '\\' OR TargetObject LIKE \"%\\\\Print\\\\Providers%\" ESCAPE '\\' OR TargetObject LIKE \"%\\\\Print\\\\Monitors%\" ESCAPE '\\' OR TargetObject LIKE \"%\\\\NetworkProvider\\\\Order%\" ESCAPE '\\' OR TargetObject LIKE \"%\\\\Lsa\\\\Notification Packages%\" ESCAPE '\\' OR TargetObject LIKE \"%\\\\Lsa\\\\Authentication Packages%\" ESCAPE '\\' OR TargetObject LIKE \"%\\\\BootVerificationProgram\\\\ImagePath%\" ESCAPE '\\')))"
+            "SELECT * FROM logs WHERE ((EventID = \"4657\" AND OperationType IN (\"New registry value created\", \"Existing registry value modified\") AND Channel = \"Security\") AND (((((((((((((TargetObject LIKE \"%\\\\SOFTWARE\\\\Wow6432Node\\\\Microsoft\\\\Windows CE Services\\\\AutoStart%\" ESCAPE '\\' OR TargetObject LIKE \"%\\\\Software\\\\Wow6432Node\\\\Microsoft\\\\Command Processor\\\\Autorun%\" ESCAPE '\\' OR TargetObject LIKE \"%\\\\SOFTWARE\\\\Wow6432Node\\\\Microsoft\\\\Active Setup\\\\Installed Components%\" ESCAPE '\\' OR TargetObject LIKE \"%\\\\SOFTWARE\\\\Microsoft\\\\Windows CE Services\\\\AutoStartOnDisconnect%\" ESCAPE '\\' OR TargetObject LIKE \"%\\\\SOFTWARE\\\\Microsoft\\\\Windows CE Services\\\\AutoStartOnConnect%\" ESCAPE '\\' OR TargetObject LIKE \"%\\\\SYSTEM\\\\Setup\\\\CmdLine%\" ESCAPE '\\' OR TargetObject LIKE \"%\\\\Software\\\\Microsoft\\\\Ctf\\\\LangBarAddin%\" ESCAPE '\\' OR TargetObject LIKE \"%\\\\Software\\\\Microsoft\\\\Command Processor\\\\Autorun%\" ESCAPE '\\' OR TargetObject LIKE \"%\\\\SOFTWARE\\\\Microsoft\\\\Active Setup\\\\Installed Components%\" ESCAPE '\\' OR TargetObject LIKE \"%\\\\SOFTWARE\\\\Classes\\\\Protocols\\\\Handler%\" ESCAPE '\\' OR TargetObject LIKE \"%\\\\SOFTWARE\\\\Classes\\\\Protocols\\\\Filter%\" ESCAPE '\\' OR TargetObject LIKE \"%\\\\SOFTWARE\\\\Classes\\\\Htmlfile\\\\Shell\\\\Open\\\\Command\\\\(Default)%\" ESCAPE '\\' OR TargetObject LIKE \"%\\\\Environment\\\\UserInitMprLogonScript%\" ESCAPE '\\' OR TargetObject LIKE \"%\\\\SOFTWARE\\\\Policies\\\\Microsoft\\\\Windows\\\\Control Panel\\\\Desktop\\\\Scrnsave.exe%\" ESCAPE '\\' OR TargetObject LIKE \"%\\\\Software\\\\Microsoft\\\\Internet Explorer\\\\UrlSearchHooks%\" ESCAPE '\\' OR TargetObject LIKE \"%\\\\SOFTWARE\\\\Microsoft\\\\Internet Explorer\\\\Desktop\\\\Components%\" ESCAPE '\\' OR TargetObject LIKE \"%\\\\Software\\\\Classes\\\\Clsid\\\\{AB8902B4-09CA-4bb6-B78D-A8F59079A8D5}\\\\Inprocserver32%\" ESCAPE '\\' OR TargetObject LIKE \"%\\\\Control Panel\\\\Desktop\\\\Scrnsave.exe%\" ESCAPE '\\') OR (TargetObject LIKE \"%\\\\System\\\\CurrentControlSet\\\\Control\\\\Session Manager%\" ESCAPE '\\' AND (TargetObject LIKE \"%\\\\SetupExecute%\" ESCAPE '\\' OR TargetObject LIKE \"%\\\\S0InitialCommand%\" ESCAPE '\\' OR TargetObject LIKE \"%\\\\KnownDlls%\" ESCAPE '\\' OR TargetObject LIKE \"%\\\\Execute%\" ESCAPE '\\' OR TargetObject LIKE \"%\\\\BootExecute%\" ESCAPE '\\' OR TargetObject LIKE \"%\\\\AppCertDlls%\" ESCAPE '\\'))) OR (TargetObject LIKE \"%\\\\SOFTWARE\\\\Microsoft\\\\Windows\\\\CurrentVersion%\" ESCAPE '\\' AND (TargetObject LIKE \"%\\\\ShellServiceObjectDelayLoad%\" ESCAPE '\\' OR TargetObject LIKE \"%\\\\Run%\" ESCAPE '\\' OR TargetObject LIKE \"%\\\\Policies\\\\System\\\\Shell%\" ESCAPE '\\' OR TargetObject LIKE \"%\\\\Policies\\\\Explorer\\\\Run%\" ESCAPE '\\' OR TargetObject LIKE \"%\\\\Group Policy\\\\Scripts\\\\Startup%\" ESCAPE '\\' OR TargetObject LIKE \"%\\\\Group Policy\\\\Scripts\\\\Shutdown%\" ESCAPE '\\' OR TargetObject LIKE \"%\\\\Group Policy\\\\Scripts\\\\Logon%\" ESCAPE '\\' OR TargetObject LIKE \"%\\\\Group Policy\\\\Scripts\\\\Logoff%\" ESCAPE '\\' OR TargetObject LIKE \"%\\\\Explorer\\\\ShellServiceObjects%\" ESCAPE '\\' OR TargetObject LIKE \"%\\\\Explorer\\\\ShellIconOverlayIdentifiers%\" ESCAPE '\\' OR TargetObject LIKE \"%\\\\Explorer\\\\ShellExecuteHooks%\" ESCAPE '\\' OR TargetObject LIKE \"%\\\\Explorer\\\\SharedTaskScheduler%\" ESCAPE '\\' OR TargetObject LIKE \"%\\\\Explorer\\\\Browser Helper Objects%\" ESCAPE '\\' OR TargetObject LIKE \"%\\\\Authentication\\\\PLAP Providers%\" ESCAPE '\\' OR TargetObject LIKE \"%\\\\Authentication\\\\Credential Providers%\" ESCAPE '\\' OR TargetObject LIKE \"%\\\\Authentication\\\\Credential Provider Filters%\" ESCAPE '\\'))) OR (TargetObject LIKE \"%\\\\SOFTWARE\\\\Microsoft\\\\Windows NT\\\\CurrentVersion%\" ESCAPE '\\' AND (TargetObject LIKE \"%\\\\Winlogon\\\\VmApplet%\" ESCAPE '\\' OR TargetObject LIKE \"%\\\\Winlogon\\\\Userinit%\" ESCAPE '\\' OR TargetObject LIKE \"%\\\\Winlogon\\\\Taskman%\" ESCAPE '\\' OR TargetObject LIKE \"%\\\\Winlogon\\\\Shell%\" ESCAPE '\\' OR TargetObject LIKE \"%\\\\Winlogon\\\\GpExtensions%\" ESCAPE '\\' OR TargetObject LIKE \"%\\\\Winlogon\\\\AppSetup%\" ESCAPE '\\' OR TargetObject LIKE \"%\\\\Winlogon\\\\AlternateShells\\\\AvailableShells%\" ESCAPE '\\' OR TargetObject LIKE \"%\\\\Windows\\\\IconServiceLib%\" ESCAPE '\\' OR TargetObject LIKE \"%\\\\Windows\\\\Appinit\\_Dlls%\" ESCAPE '\\' OR TargetObject LIKE \"%\\\\Image File Execution Options%\" ESCAPE '\\' OR TargetObject LIKE \"%\\\\Font Drivers%\" ESCAPE '\\' OR TargetObject LIKE \"%\\\\Drivers32%\" ESCAPE '\\' OR TargetObject LIKE \"%\\\\Windows\\\\Run%\" ESCAPE '\\' OR TargetObject LIKE \"%\\\\Windows\\\\Load%\" ESCAPE '\\'))) OR (TargetObject LIKE \"%\\\\SOFTWARE\\\\Wow6432Node\\\\Microsoft\\\\Windows\\\\CurrentVersion%\" ESCAPE '\\' AND (TargetObject LIKE \"%\\\\ShellServiceObjectDelayLoad%\" ESCAPE '\\' OR TargetObject LIKE \"%\\\\Run%\" ESCAPE '\\' OR TargetObject LIKE \"%\\\\Explorer\\\\ShellServiceObjects%\" ESCAPE '\\' OR TargetObject LIKE \"%\\\\Explorer\\\\ShellIconOverlayIdentifiers%\" ESCAPE '\\' OR TargetObject LIKE \"%\\\\Explorer\\\\ShellExecuteHooks%\" ESCAPE '\\' OR TargetObject LIKE \"%\\\\Explorer\\\\SharedTaskScheduler%\" ESCAPE '\\' OR TargetObject LIKE \"%\\\\Explorer\\\\Browser Helper Objects%\" ESCAPE '\\'))) OR (TargetObject LIKE \"%\\\\SOFTWARE\\\\Wow6432Node\\\\Microsoft\\\\Windows NT\\\\CurrentVersion%\" ESCAPE '\\' AND (TargetObject LIKE \"%\\\\Windows\\\\Appinit\\_Dlls%\" ESCAPE '\\' OR TargetObject LIKE \"%\\\\Image File Execution Options%\" ESCAPE '\\' OR TargetObject LIKE \"%\\\\Drivers32%\" ESCAPE '\\'))) OR ((EventID = \"4657\" AND OperationType IN (\"New registry value created\", \"Existing registry value modified\") AND Channel = \"Security\") AND (TargetObject LIKE \"%\\\\Software\\\\Wow6432Node\\\\Microsoft\\\\Office%\" ESCAPE '\\' OR TargetObject LIKE \"%\\\\Software\\\\Microsoft\\\\Office%\" ESCAPE '\\') AND (TargetObject LIKE \"%\\\\Word\\\\Addins%\" ESCAPE '\\' OR TargetObject LIKE \"%\\\\PowerPoint\\\\Addins%\" ESCAPE '\\' OR TargetObject LIKE \"%\\\\Outlook\\\\Addins%\" ESCAPE '\\' OR TargetObject LIKE \"%\\\\Onenote\\\\Addins%\" ESCAPE '\\' OR TargetObject LIKE \"%\\\\Excel\\\\Addins%\" ESCAPE '\\' OR TargetObject LIKE \"%\\\\Access\\\\Addins%\" ESCAPE '\\' OR TargetObject LIKE \"%test\\\\Special\\\\Perf%\" ESCAPE '\\'))) OR ((EventID = \"4657\" AND OperationType IN (\"New registry value created\", \"Existing registry value modified\") AND Channel = \"Security\") AND (TargetObject LIKE \"%\\\\Software\\\\Wow6432Node\\\\Microsoft\\\\Internet Explorer%\" ESCAPE '\\' OR TargetObject LIKE \"%\\\\Software\\\\Microsoft\\\\Internet Explorer%\" ESCAPE '\\') AND (TargetObject LIKE \"%\\\\Toolbar%\" ESCAPE '\\' OR TargetObject LIKE \"%\\\\Extensions%\" ESCAPE '\\' OR TargetObject LIKE \"%\\\\Explorer Bars%\" ESCAPE '\\'))) OR (TargetObject LIKE \"%\\\\Software\\\\Wow6432Node\\\\Classes%\" ESCAPE '\\' AND (TargetObject LIKE \"%\\\\Folder\\\\ShellEx\\\\ExtShellFolderViews%\" ESCAPE '\\' OR TargetObject LIKE \"%\\\\Folder\\\\ShellEx\\\\DragDropHandlers%\" ESCAPE '\\' OR TargetObject LIKE \"%\\\\Folder\\\\ShellEx\\\\ColumnHandlers%\" ESCAPE '\\' OR TargetObject LIKE \"%\\\\Directory\\\\Shellex\\\\DragDropHandlers%\" ESCAPE '\\' OR TargetObject LIKE \"%\\\\Directory\\\\Shellex\\\\CopyHookHandlers%\" ESCAPE '\\' OR TargetObject LIKE \"%\\\\CLSID\\\\{AC757296-3522-4E11-9862-C17BE5A1767E}\\\\Instance%\" ESCAPE '\\' OR TargetObject LIKE \"%\\\\CLSID\\\\{ABE3B9A4-257D-4B97-BD1A-294AF496222E}\\\\Instance%\" ESCAPE '\\' OR TargetObject LIKE \"%\\\\CLSID\\\\{7ED96837-96F0-4812-B211-F13C24117ED3}\\\\Instance%\" ESCAPE '\\' OR TargetObject LIKE \"%\\\\CLSID\\\\{083863F1-70DE-11d0-BD40-00A0C911CE86}\\\\Instance%\" ESCAPE '\\' OR TargetObject LIKE \"%\\\\AllFileSystemObjects\\\\ShellEx\\\\DragDropHandlers%\" ESCAPE '\\' OR TargetObject LIKE \"%\\\\ShellEx\\\\PropertySheetHandlers%\" ESCAPE '\\' OR TargetObject LIKE \"%\\\\ShellEx\\\\ContextMenuHandlers%\" ESCAPE '\\'))) OR (TargetObject LIKE \"%\\\\Software\\\\Classes%\" ESCAPE '\\' AND (TargetObject LIKE \"%\\\\Folder\\\\ShellEx\\\\ExtShellFolderViews%\" ESCAPE '\\' OR TargetObject LIKE \"%\\\\Folder\\\\ShellEx\\\\DragDropHandlers%\" ESCAPE '\\' OR TargetObject LIKE \"%\\\\Folder\\\\Shellex\\\\ColumnHandlers%\" ESCAPE '\\' OR TargetObject LIKE \"%\\\\Filter%\" ESCAPE '\\' OR TargetObject LIKE \"%\\\\Exefile\\\\Shell\\\\Open\\\\Command\\\\(Default)%\" ESCAPE '\\' OR TargetObject LIKE \"%\\\\Directory\\\\Shellex\\\\DragDropHandlers%\" ESCAPE '\\' OR TargetObject LIKE \"%\\\\Directory\\\\Shellex\\\\CopyHookHandlers%\" ESCAPE '\\' OR TargetObject LIKE \"%\\\\CLSID\\\\{AC757296-3522-4E11-9862-C17BE5A1767E}\\\\Instance%\" ESCAPE '\\' OR TargetObject LIKE \"%\\\\CLSID\\\\{ABE3B9A4-257D-4B97-BD1A-294AF496222E}\\\\Instance%\" ESCAPE '\\' OR TargetObject LIKE \"%\\\\CLSID\\\\{7ED96837-96F0-4812-B211-F13C24117ED3}\\\\Instance%\" ESCAPE '\\' OR TargetObject LIKE \"%\\\\CLSID\\\\{083863F1-70DE-11d0-BD40-00A0C911CE86}\\\\Instance%\" ESCAPE '\\' OR TargetObject LIKE \"%\\\\Classes\\\\AllFileSystemObjects\\\\ShellEx\\\\DragDropHandlers%\" ESCAPE '\\' OR TargetObject LIKE \"%\\\\.exe%\" ESCAPE '\\' OR TargetObject LIKE \"%\\\\.cmd%\" ESCAPE '\\' OR TargetObject LIKE \"%\\\\ShellEx\\\\PropertySheetHandlers%\" ESCAPE '\\' OR TargetObject LIKE \"%\\\\ShellEx\\\\ContextMenuHandlers%\" ESCAPE '\\'))) OR (TargetObject LIKE \"%\\\\Software\\\\Policies\\\\Microsoft\\\\Windows\\\\System\\\\Scripts%\" ESCAPE '\\' AND (TargetObject LIKE \"%\\\\Startup%\" ESCAPE '\\' OR TargetObject LIKE \"%\\\\Shutdown%\" ESCAPE '\\' OR TargetObject LIKE \"%\\\\Logon%\" ESCAPE '\\' OR TargetObject LIKE \"%\\\\Logoff%\" ESCAPE '\\'))) OR (TargetObject LIKE \"%\\\\System\\\\CurrentControlSet\\\\Services\\\\WinSock2\\\\Parameters%\" ESCAPE '\\' AND (TargetObject LIKE \"%\\\\Protocol\\_Catalog9\\\\Catalog\\_Entries%\" ESCAPE '\\' OR TargetObject LIKE \"%\\\\NameSpace\\_Catalog5\\\\Catalog\\_Entries%\" ESCAPE '\\'))) OR (TargetObject LIKE \"%\\\\SYSTEM\\\\CurrentControlSet\\\\Control%\" ESCAPE '\\' AND (TargetObject LIKE \"%\\\\Terminal Server\\\\WinStations\\\\RDP-Tcp\\\\InitialProgram%\" ESCAPE '\\' OR TargetObject LIKE \"%\\\\Terminal Server\\\\Wds\\\\rdpwd\\\\StartupPrograms%\" ESCAPE '\\' OR TargetObject LIKE \"%\\\\SecurityProviders\\\\SecurityProviders%\" ESCAPE '\\' OR TargetObject LIKE \"%\\\\SafeBoot\\\\AlternateShell%\" ESCAPE '\\' OR TargetObject LIKE \"%\\\\Print\\\\Providers%\" ESCAPE '\\' OR TargetObject LIKE \"%\\\\Print\\\\Monitors%\" ESCAPE '\\' OR TargetObject LIKE \"%\\\\NetworkProvider\\\\Order%\" ESCAPE '\\' OR TargetObject LIKE \"%\\\\Lsa\\\\Notification Packages%\" ESCAPE '\\' OR TargetObject LIKE \"%\\\\Lsa\\\\Authentication Packages%\" ESCAPE '\\' OR TargetObject LIKE \"%\\\\BootVerificationProgram\\\\ImagePath%\" ESCAPE '\\'))))"
         ]
     },
     {
@@ -2358,7 +2358,7 @@
         ],
         "level": "high",
         "rule": [
-            "SELECT * FROM logs WHERE TargetObject LIKE \"%WDigest\\\\UseLogonCredential\" ESCAPE '\\'"
+            "SELECT * FROM logs WHERE (EventID = \"4657\" AND OperationType IN (\"New registry value created\", \"Existing registry value modified\") AND Channel = \"Security\" AND TargetObject LIKE \"%WDigest\\\\UseLogonCredential\" ESCAPE '\\')"
         ]
     },
     {
@@ -2371,7 +2371,7 @@
         ],
         "level": "high",
         "rule": [
-            "SELECT * FROM logs WHERE TargetObject LIKE \"%System\\\\CurrentControlSet\\\\Services\\\\VSS%\" ESCAPE '\\'"
+            "SELECT * FROM logs WHERE (EventID = \"4657\" AND OperationType IN (\"New registry value created\", \"Existing registry value modified\") AND Channel = \"Security\" AND TargetObject LIKE \"%System\\\\CurrentControlSet\\\\Services\\\\VSS%\" ESCAPE '\\')"
         ]
     },
     {
@@ -2384,7 +2384,7 @@
         ],
         "level": "medium",
         "rule": [
-            "SELECT * FROM logs WHERE (EventType = \"CreateKey\" AND TargetObject LIKE \"%HKU\\\\%\" ESCAPE '\\' AND TargetObject LIKE \"%\\_Classes\\\\CLSID\\\\%\" ESCAPE '\\' AND TargetObject LIKE \"%\\\\TreatAs%\" ESCAPE '\\')"
+            "SELECT * FROM logs WHERE (EventID = \"4657\" AND OperationType IN (\"New registry value created\", \"Existing registry value modified\") AND Channel = \"Security\" AND EventType = \"CreateKey\" AND TargetObject LIKE \"%HKU\\\\%\" ESCAPE '\\' AND TargetObject LIKE \"%\\_Classes\\\\CLSID\\\\%\" ESCAPE '\\' AND TargetObject LIKE \"%\\\\TreatAs%\" ESCAPE '\\')"
         ]
     },
     {
@@ -2399,7 +2399,7 @@
         ],
         "level": "high",
         "rule": [
-            "SELECT * FROM logs WHERE (TargetObject LIKE \"%\\\\Microsoft\\\\Windows\\\\CurrentVersion\\\\Policies\\\\Explorer\\\\Run\" ESCAPE '\\' AND ((Details LIKE \"C:\\\\Windows\\\\Temp\\\\%\" ESCAPE '\\' OR Details LIKE \"C:\\\\ProgramData\\\\%\" ESCAPE '\\' OR Details LIKE \"C:\\\\$Recycle.bin\\\\%\" ESCAPE '\\' OR Details LIKE \"C:\\\\Temp\\\\%\" ESCAPE '\\' OR Details LIKE \"C:\\\\Users\\\\Public\\\\%\" ESCAPE '\\' OR Details LIKE \"C:\\\\Users\\\\Default\\\\%\" ESCAPE '\\') OR (Details LIKE \"%\\\\AppData\\\\%\" ESCAPE '\\')))"
+            "SELECT * FROM logs WHERE ((EventID = \"4657\" AND OperationType IN (\"New registry value created\", \"Existing registry value modified\") AND Channel = \"Security\") AND TargetObject LIKE \"%\\\\Microsoft\\\\Windows\\\\CurrentVersion\\\\Policies\\\\Explorer\\\\Run\" ESCAPE '\\' AND ((Details LIKE \"C:\\\\Windows\\\\Temp\\\\%\" ESCAPE '\\' OR Details LIKE \"C:\\\\ProgramData\\\\%\" ESCAPE '\\' OR Details LIKE \"C:\\\\$Recycle.bin\\\\%\" ESCAPE '\\' OR Details LIKE \"C:\\\\Temp\\\\%\" ESCAPE '\\' OR Details LIKE \"C:\\\\Users\\\\Public\\\\%\" ESCAPE '\\' OR Details LIKE \"C:\\\\Users\\\\Default\\\\%\" ESCAPE '\\') OR (Details LIKE \"%\\\\AppData\\\\%\" ESCAPE '\\')))"
         ]
     },
     {
@@ -2408,7 +2408,7 @@
         "author": "Florian Roth",
         "level": "medium",
         "rule": [
-            "SELECT * FROM logs WHERE ((TargetObject LIKE \"%\\\\Keyboard Layout\\\\Preload\\\\%\" ESCAPE '\\' OR TargetObject LIKE \"%\\\\Keyboard Layout\\\\Substitutes\\\\%\" ESCAPE '\\') AND (Details LIKE \"%00000429%\" ESCAPE '\\' OR Details LIKE \"%00050429%\" ESCAPE '\\' OR Details LIKE \"%0000042a%\" ESCAPE '\\'))"
+            "SELECT * FROM logs WHERE (EventID = \"4657\" AND OperationType IN (\"New registry value created\", \"Existing registry value modified\") AND Channel = \"Security\" AND (TargetObject LIKE \"%\\\\Keyboard Layout\\\\Preload\\\\%\" ESCAPE '\\' OR TargetObject LIKE \"%\\\\Keyboard Layout\\\\Substitutes\\\\%\" ESCAPE '\\') AND (Details LIKE \"%00000429%\" ESCAPE '\\' OR Details LIKE \"%00050429%\" ESCAPE '\\' OR Details LIKE \"%0000042a%\" ESCAPE '\\'))"
         ]
     },
     {
@@ -2422,7 +2422,7 @@
         ],
         "level": "high",
         "rule": [
-            "SELECT * FROM logs WHERE ((NewProcessName LIKE \"%\\\\Downloads\\\\%\" ESCAPE '\\' OR NewProcessName LIKE \"%\\\\Temporary Internet Files\\\\Content.Outlook\\\\%\" ESCAPE '\\' OR NewProcessName LIKE \"%\\\\Local Settings\\\\Temporary Internet Files\\\\%\" ESCAPE '\\') AND TargetObject LIKE \"%\\\\SOFTWARE\\\\Microsoft\\\\Windows\\\\CurrentVersion\\\\Run\\\\%\" ESCAPE '\\')"
+            "SELECT * FROM logs WHERE (EventID = \"4657\" AND OperationType IN (\"New registry value created\", \"Existing registry value modified\") AND Channel = \"Security\" AND (NewProcessName LIKE \"%\\\\Downloads\\\\%\" ESCAPE '\\' OR NewProcessName LIKE \"%\\\\Temporary Internet Files\\\\Content.Outlook\\\\%\" ESCAPE '\\' OR NewProcessName LIKE \"%\\\\Local Settings\\\\Temporary Internet Files\\\\%\" ESCAPE '\\') AND TargetObject LIKE \"%\\\\SOFTWARE\\\\Microsoft\\\\Windows\\\\CurrentVersion\\\\Run\\\\%\" ESCAPE '\\')"
         ]
     },
     {
@@ -2438,7 +2438,7 @@
         ],
         "level": "medium",
         "rule": [
-            "SELECT * FROM logs WHERE (TargetObject LIKE \"HKEY\\_CURRENT\\_USER\\\\Software\\\\Microsoft\\\\Office\\\\16.0\\\\Outlook\\\\Security\\\\Level\" ESCAPE '\\' AND Details LIKE \"%0x00000001%\" ESCAPE '\\')"
+            "SELECT * FROM logs WHERE (EventID = \"4657\" AND OperationType IN (\"New registry value created\", \"Existing registry value modified\") AND Channel = \"Security\" AND TargetObject LIKE \"HKEY\\_CURRENT\\_USER\\\\Software\\\\Microsoft\\\\Office\\\\16.0\\\\Outlook\\\\Security\\\\Level\" ESCAPE '\\' AND Details LIKE \"%0x00000001%\" ESCAPE '\\')"
         ]
     },
     {
@@ -2451,7 +2451,7 @@
         "author": "Bhabesh Raj",
         "level": "high",
         "rule": [
-            "SELECT * FROM logs WHERE (TargetObject LIKE \"%\\\\Software\\\\Microsoft\\\\Office\\\\Outlook\\\\Addins\\\\%\" ESCAPE '\\' OR TargetObject LIKE \"%\\\\Software\\\\Microsoft\\\\Office\\\\Word\\\\Addins\\\\%\" ESCAPE '\\' OR TargetObject LIKE \"%\\\\Software\\\\Microsoft\\\\Office\\\\Excel\\\\Addins\\\\%\" ESCAPE '\\' OR TargetObject LIKE \"%\\\\Software\\\\Microsoft\\\\Office\\\\Powerpoint\\\\Addins\\\\%\" ESCAPE '\\' OR TargetObject LIKE \"%\\\\Software\\\\Microsoft\\\\VSTO\\\\Security\\\\Inclusion\\\\%\" ESCAPE '\\')"
+            "SELECT * FROM logs WHERE (EventID = \"4657\" AND OperationType IN (\"New registry value created\", \"Existing registry value modified\") AND Channel = \"Security\" AND (TargetObject LIKE \"%\\\\Software\\\\Microsoft\\\\Office\\\\Outlook\\\\Addins\\\\%\" ESCAPE '\\' OR TargetObject LIKE \"%\\\\Software\\\\Microsoft\\\\Office\\\\Word\\\\Addins\\\\%\" ESCAPE '\\' OR TargetObject LIKE \"%\\\\Software\\\\Microsoft\\\\Office\\\\Excel\\\\Addins\\\\%\" ESCAPE '\\' OR TargetObject LIKE \"%\\\\Software\\\\Microsoft\\\\Office\\\\Powerpoint\\\\Addins\\\\%\" ESCAPE '\\' OR TargetObject LIKE \"%\\\\Software\\\\Microsoft\\\\VSTO\\\\Security\\\\Inclusion\\\\%\" ESCAPE '\\'))"
         ]
     },
     {
@@ -2466,7 +2466,7 @@
         ],
         "level": "high",
         "rule": [
-            "SELECT * FROM logs WHERE (TargetObject LIKE \"%\\\\CurrentControlSet\\\\Services\\\\NTDS\\\\DirectoryServiceExtPt%\" ESCAPE '\\' OR TargetObject LIKE \"%\\\\CurrentControlSet\\\\Services\\\\NTDS\\\\LsaDbExtPt%\" ESCAPE '\\')"
+            "SELECT * FROM logs WHERE (EventID = \"4657\" AND OperationType IN (\"New registry value created\", \"Existing registry value modified\") AND Channel = \"Security\" AND (TargetObject LIKE \"%\\\\CurrentControlSet\\\\Services\\\\NTDS\\\\DirectoryServiceExtPt%\" ESCAPE '\\' OR TargetObject LIKE \"%\\\\CurrentControlSet\\\\Services\\\\NTDS\\\\LsaDbExtPt%\" ESCAPE '\\'))"
         ]
     },
     {
@@ -2479,7 +2479,7 @@
         ],
         "level": "high",
         "rule": [
-            "SELECT * FROM logs WHERE ((TargetObject LIKE \"%\\\\CurrentControlSet\\\\Control\\\\Terminal Server\\\\WinStations\\\\RDP-Tcp\\\\UserAuthentication\" ESCAPE '\\' OR TargetObject LIKE \"%\\\\CurrentControlSet\\\\Control\\\\Terminal Server\\\\fDenyTSConnections\" ESCAPE '\\') AND Details = \"DWORD (0x00000000)\")"
+            "SELECT * FROM logs WHERE (EventID = \"4657\" AND OperationType IN (\"New registry value created\", \"Existing registry value modified\") AND Channel = \"Security\" AND (TargetObject LIKE \"%\\\\CurrentControlSet\\\\Control\\\\Terminal Server\\\\WinStations\\\\RDP-Tcp\\\\UserAuthentication\" ESCAPE '\\' OR TargetObject LIKE \"%\\\\CurrentControlSet\\\\Control\\\\Terminal Server\\\\fDenyTSConnections\" ESCAPE '\\') AND Details = \"DWORD (0x00000000)\")"
         ]
     },
     {
@@ -2493,7 +2493,7 @@
         ],
         "level": "high",
         "rule": [
-            "SELECT * FROM logs WHERE (TargetObject LIKE \"%\\\\Software\\\\Microsoft\\\\Windows\\\\CurrentVersion\\\\CapabilityAccessManager\\\\ConsentStore\\\\%\" ESCAPE '\\' AND TargetObject LIKE \"%\\\\NonPackaged%\" ESCAPE '\\' AND (TargetObject LIKE \"%microphone%\" ESCAPE '\\' OR TargetObject LIKE \"%webcam%\" ESCAPE '\\') AND (TargetObject LIKE \"%#C:#Windows#Temp#%\" ESCAPE '\\' OR TargetObject LIKE \"%#C:#$Recycle.bin#%\" ESCAPE '\\' OR TargetObject LIKE \"%#C:#Temp#%\" ESCAPE '\\' OR TargetObject LIKE \"%#C:#Users#Public#%\" ESCAPE '\\' OR TargetObject LIKE \"%#C:#Users#Default#%\" ESCAPE '\\' OR TargetObject LIKE \"%#C:#Users#Desktop#%\" ESCAPE '\\'))"
+            "SELECT * FROM logs WHERE (EventID = \"4657\" AND OperationType IN (\"New registry value created\", \"Existing registry value modified\") AND Channel = \"Security\" AND TargetObject LIKE \"%\\\\Software\\\\Microsoft\\\\Windows\\\\CurrentVersion\\\\CapabilityAccessManager\\\\ConsentStore\\\\%\" ESCAPE '\\' AND TargetObject LIKE \"%\\\\NonPackaged%\" ESCAPE '\\' AND (TargetObject LIKE \"%microphone%\" ESCAPE '\\' OR TargetObject LIKE \"%webcam%\" ESCAPE '\\') AND (TargetObject LIKE \"%#C:#Windows#Temp#%\" ESCAPE '\\' OR TargetObject LIKE \"%#C:#$Recycle.bin#%\" ESCAPE '\\' OR TargetObject LIKE \"%#C:#Temp#%\" ESCAPE '\\' OR TargetObject LIKE \"%#C:#Users#Public#%\" ESCAPE '\\' OR TargetObject LIKE \"%#C:#Users#Default#%\" ESCAPE '\\' OR TargetObject LIKE \"%#C:#Users#Desktop#%\" ESCAPE '\\'))"
         ]
     },
     {
@@ -2508,7 +2508,7 @@
         ],
         "level": "high",
         "rule": [
-            "SELECT * FROM logs WHERE (TargetObject LIKE \"%\\\\COR\\_ENABLE\\_PROFILING\" ESCAPE '\\' OR TargetObject LIKE \"%\\\\COR\\_PROFILER\" ESCAPE '\\')"
+            "SELECT * FROM logs WHERE (EventID = \"4657\" AND OperationType IN (\"New registry value created\", \"Existing registry value modified\") AND Channel = \"Security\" AND (TargetObject LIKE \"%\\\\COR\\_ENABLE\\_PROFILING\" ESCAPE '\\' OR TargetObject LIKE \"%\\\\COR\\_PROFILER\" ESCAPE '\\'))"
         ]
     },
     {
@@ -2522,7 +2522,7 @@
         ],
         "level": "medium",
         "rule": [
-            "SELECT * FROM logs WHERE TargetObject LIKE \"%TrustRecords%\" ESCAPE '\\'"
+            "SELECT * FROM logs WHERE (EventID = \"4657\" AND OperationType IN (\"New registry value created\", \"Existing registry value modified\") AND Channel = \"Security\" AND TargetObject LIKE \"%TrustRecords%\" ESCAPE '\\')"
         ]
     },
     {
@@ -2538,7 +2538,7 @@
         ],
         "level": "critical",
         "rule": [
-            "SELECT * FROM logs WHERE (TargetObject LIKE \"HKU\\\\%\" ESCAPE '\\' AND TargetObject LIKE \"%\\\\mscfile\\\\shell\\\\open\\\\command\" ESCAPE '\\')",
+            "SELECT * FROM logs WHERE (EventID = \"4657\" AND OperationType IN (\"New registry value created\", \"Existing registry value modified\") AND Channel = \"Security\" AND TargetObject LIKE \"HKU\\\\%\" ESCAPE '\\' AND TargetObject LIKE \"%\\\\mscfile\\\\shell\\\\open\\\\command\" ESCAPE '\\')",
             "SELECT * FROM logs WHERE ((EventID = \"4688\" AND Channel = \"Security\") AND ParentProcessName LIKE \"%\\\\eventvwr.exe\" ESCAPE '\\' AND NOT (NewProcessName LIKE \"%\\\\mmc.exe\" ESCAPE '\\'))"
         ]
     },
@@ -2548,7 +2548,7 @@
         "author": "Florian Roth",
         "level": "high",
         "rule": [
-            "SELECT * FROM logs WHERE ((TargetObject LIKE \"%Software\\\\Microsoft\\\\Windows\\\\CurrentVersion%\" ESCAPE '\\' AND (Details LIKE \"%vbscript%\" ESCAPE '\\' OR Details LIKE \"%jscript%\" ESCAPE '\\' OR Details LIKE \"%mshtml%\" ESCAPE '\\' OR Details LIKE \"%mshtml,%\" ESCAPE '\\' OR Details LIKE \"%mshtml %\" ESCAPE '\\' OR Details LIKE \"%RunHTMLApplication%\" ESCAPE '\\' OR Details LIKE \"%Execute(%\" ESCAPE '\\' OR Details LIKE \"%CreateObject%\" ESCAPE '\\' OR Details LIKE \"%RegRead%\" ESCAPE '\\' OR Details LIKE \"%window.close%\" ESCAPE '\\')) AND NOT (TargetObject LIKE \"%Software\\\\Microsoft\\\\Windows\\\\CurrentVersion\\\\Run%\" ESCAPE '\\'))"
+            "SELECT * FROM logs WHERE ((EventID = \"4657\" AND OperationType IN (\"New registry value created\", \"Existing registry value modified\") AND Channel = \"Security\") AND (TargetObject LIKE \"%Software\\\\Microsoft\\\\Windows\\\\CurrentVersion%\" ESCAPE '\\' AND (Details LIKE \"%vbscript%\" ESCAPE '\\' OR Details LIKE \"%jscript%\" ESCAPE '\\' OR Details LIKE \"%mshtml%\" ESCAPE '\\' OR Details LIKE \"%mshtml,%\" ESCAPE '\\' OR Details LIKE \"%mshtml %\" ESCAPE '\\' OR Details LIKE \"%RunHTMLApplication%\" ESCAPE '\\' OR Details LIKE \"%Execute(%\" ESCAPE '\\' OR Details LIKE \"%CreateObject%\" ESCAPE '\\' OR Details LIKE \"%RegRead%\" ESCAPE '\\' OR Details LIKE \"%window.close%\" ESCAPE '\\')) AND NOT (TargetObject LIKE \"%Software\\\\Microsoft\\\\Windows\\\\CurrentVersion\\\\Run%\" ESCAPE '\\'))"
         ]
     },
     {
@@ -2561,7 +2561,7 @@
         ],
         "level": "high",
         "rule": [
-            "SELECT * FROM logs WHERE (TargetObject LIKE \"%\\\\Services\\\\%\" ESCAPE '\\' AND TargetObject LIKE \"%\\\\ImagePath\" ESCAPE '\\' AND (Details LIKE \"%powershell%\" ESCAPE '\\' OR Details LIKE \"%pwsh%\" ESCAPE '\\'))"
+            "SELECT * FROM logs WHERE (EventID = \"4657\" AND OperationType IN (\"New registry value created\", \"Existing registry value modified\") AND Channel = \"Security\" AND TargetObject LIKE \"%\\\\Services\\\\%\" ESCAPE '\\' AND TargetObject LIKE \"%\\\\ImagePath\" ESCAPE '\\' AND (Details LIKE \"%powershell%\" ESCAPE '\\' OR Details LIKE \"%pwsh%\" ESCAPE '\\'))"
         ]
     },
     {
@@ -2575,7 +2575,7 @@
         "author": "Ilyas Ochkov, oscd.community",
         "level": "medium",
         "rule": [
-            "SELECT * FROM logs WHERE (TargetObject LIKE \"HKLM\\\\SYSTEM\\\\CurrentControlSet\\\\Control\\\\Session Manager\\\\AppCertDlls\" ESCAPE '\\' OR NewName LIKE \"HKLM\\\\SYSTEM\\\\CurentControlSet\\\\Control\\\\Session Manager\\\\AppCertDlls\" ESCAPE '\\')"
+            "SELECT * FROM logs WHERE ((EventID = \"4657\" AND OperationType IN (\"New registry value created\", \"Existing registry value modified\") AND Channel = \"Security\") AND (TargetObject LIKE \"HKLM\\\\SYSTEM\\\\CurrentControlSet\\\\Control\\\\Session Manager\\\\AppCertDlls\" ESCAPE '\\' OR NewName LIKE \"HKLM\\\\SYSTEM\\\\CurentControlSet\\\\Control\\\\Session Manager\\\\AppCertDlls\" ESCAPE '\\'))"
         ]
     },
     {
@@ -2589,7 +2589,7 @@
         "author": "iwillkeepwatch",
         "level": "critical",
         "rule": [
-            "SELECT * FROM logs WHERE ((TargetObject LIKE \"HKLM\\\\System\\\\CurrentControlSet\\\\Control\\\\Lsa\\\\Security Packages\" ESCAPE '\\' OR TargetObject LIKE \"HKLM\\\\System\\\\CurrentControlSet\\\\Control\\\\Lsa\\\\OSConfig\\\\Security Packages\" ESCAPE '\\') AND NOT (NewProcessName LIKE \"C:\\\\Windows\\\\system32\\\\msiexec.exe\" ESCAPE '\\' OR NewProcessName LIKE \"C:\\\\Windows\\\\syswow64\\\\MsiExec.exe\" ESCAPE '\\'))"
+            "SELECT * FROM logs WHERE ((EventID = \"4657\" AND OperationType IN (\"New registry value created\", \"Existing registry value modified\") AND Channel = \"Security\") AND (TargetObject LIKE \"HKLM\\\\System\\\\CurrentControlSet\\\\Control\\\\Lsa\\\\Security Packages\" ESCAPE '\\' OR TargetObject LIKE \"HKLM\\\\System\\\\CurrentControlSet\\\\Control\\\\Lsa\\\\OSConfig\\\\Security Packages\" ESCAPE '\\') AND NOT (NewProcessName LIKE \"C:\\\\Windows\\\\system32\\\\msiexec.exe\" ESCAPE '\\' OR NewProcessName LIKE \"C:\\\\Windows\\\\syswow64\\\\MsiExec.exe\" ESCAPE '\\'))"
         ]
     },
     {
@@ -2603,7 +2603,7 @@
         ],
         "level": "high",
         "rule": [
-            "SELECT * FROM logs WHERE ((TargetObject LIKE \"%\\\\SOFTWARE\\\\Microsoft\\\\Windows\\\\CurrentVersion\\\\Run\\\\%\" ESCAPE '\\' OR TargetObject LIKE \"%\\\\SOFTWARE\\\\Microsoft\\\\Windows\\\\CurrentVersion\\\\RunOnce\\\\%\" ESCAPE '\\') AND ((Details LIKE \"%C:\\\\Windows\\\\Temp\\\\%\" ESCAPE '\\' OR Details LIKE \"%C:\\\\$Recycle.bin\\\\%\" ESCAPE '\\' OR Details LIKE \"%C:\\\\Temp\\\\%\" ESCAPE '\\' OR Details LIKE \"%C:\\\\Users\\\\Public\\\\%\" ESCAPE '\\' OR Details LIKE \"%C:\\\\Users\\\\Default\\\\%\" ESCAPE '\\' OR Details LIKE \"%C:\\\\Users\\\\Desktop\\\\%\" ESCAPE '\\') OR (Details LIKE \"\\%Public\\%\\\\%\" ESCAPE '\\' OR Details LIKE \"wscript%\" ESCAPE '\\' OR Details LIKE \"cscript%\" ESCAPE '\\')))"
+            "SELECT * FROM logs WHERE ((EventID = \"4657\" AND OperationType IN (\"New registry value created\", \"Existing registry value modified\") AND Channel = \"Security\") AND (TargetObject LIKE \"%\\\\SOFTWARE\\\\Microsoft\\\\Windows\\\\CurrentVersion\\\\Run\\\\%\" ESCAPE '\\' OR TargetObject LIKE \"%\\\\SOFTWARE\\\\Microsoft\\\\Windows\\\\CurrentVersion\\\\RunOnce\\\\%\" ESCAPE '\\') AND ((Details LIKE \"%C:\\\\Windows\\\\Temp\\\\%\" ESCAPE '\\' OR Details LIKE \"%C:\\\\$Recycle.bin\\\\%\" ESCAPE '\\' OR Details LIKE \"%C:\\\\Temp\\\\%\" ESCAPE '\\' OR Details LIKE \"%C:\\\\Users\\\\Public\\\\%\" ESCAPE '\\' OR Details LIKE \"%C:\\\\Users\\\\Default\\\\%\" ESCAPE '\\' OR Details LIKE \"%C:\\\\Users\\\\Desktop\\\\%\" ESCAPE '\\') OR (Details LIKE \"\\%Public\\%\\\\%\" ESCAPE '\\' OR Details LIKE \"wscript%\" ESCAPE '\\' OR Details LIKE \"cscript%\" ESCAPE '\\')))"
         ]
     },
     {
@@ -2617,7 +2617,7 @@
         "author": "Teymur Kheirkhabarov",
         "level": "high",
         "rule": [
-            "SELECT * FROM logs WHERE (IntegrityLevel = \"Medium\" AND TargetObject LIKE \"%\\\\services\\\\%\" ESCAPE '\\' AND (TargetObject LIKE \"%\\\\ImagePath\" ESCAPE '\\' OR TargetObject LIKE \"%\\\\FailureCommand\" ESCAPE '\\' OR TargetObject LIKE \"%\\\\Parameters\\\\ServiceDll\" ESCAPE '\\'))"
+            "SELECT * FROM logs WHERE (EventID = \"4657\" AND OperationType IN (\"New registry value created\", \"Existing registry value modified\") AND Channel = \"Security\" AND IntegrityLevel = \"Medium\" AND TargetObject LIKE \"%\\\\services\\\\%\" ESCAPE '\\' AND (TargetObject LIKE \"%\\\\ImagePath\" ESCAPE '\\' OR TargetObject LIKE \"%\\\\FailureCommand\" ESCAPE '\\' OR TargetObject LIKE \"%\\\\Parameters\\\\ServiceDll\" ESCAPE '\\'))"
         ]
     },
     {
@@ -2630,7 +2630,7 @@
         ],
         "level": "critical",
         "rule": [
-            "SELECT * FROM logs WHERE (TargetObject LIKE \"%SOFTWARE\\\\Microsoft\\\\.NETFramework\\\\ETWEnabled\" ESCAPE '\\' AND Details = \"DWORD (0x00000000)\")"
+            "SELECT * FROM logs WHERE (EventID = \"4657\" AND OperationType IN (\"New registry value created\", \"Existing registry value modified\") AND Channel = \"Security\" AND TargetObject LIKE \"%SOFTWARE\\\\Microsoft\\\\.NETFramework\\\\ETWEnabled\" ESCAPE '\\' AND Details = \"DWORD (0x00000000)\")"
         ]
     },
     {
@@ -2643,7 +2643,7 @@
         ],
         "level": "high",
         "rule": [
-            "SELECT * FROM logs WHERE (TargetObject LIKE \"%\\\\Security\\\\Trusted Documents\\\\TrustRecords\" ESCAPE '\\' OR TargetObject LIKE \"%\\\\Security\\\\AccessVBOM\" ESCAPE '\\' OR TargetObject LIKE \"%\\\\Security\\\\VBAWarnings\" ESCAPE '\\')"
+            "SELECT * FROM logs WHERE (EventID = \"4657\" AND OperationType IN (\"New registry value created\", \"Existing registry value modified\") AND Channel = \"Security\" AND (TargetObject LIKE \"%\\\\Security\\\\Trusted Documents\\\\TrustRecords\" ESCAPE '\\' OR TargetObject LIKE \"%\\\\Security\\\\AccessVBOM\" ESCAPE '\\' OR TargetObject LIKE \"%\\\\Security\\\\VBAWarnings\" ESCAPE '\\'))"
         ]
     },
     {
@@ -2658,7 +2658,7 @@
         ],
         "level": "high",
         "rule": [
-            "SELECT * FROM logs WHERE (TargetObject LIKE \"%\\\\Services\\\\DHCPServer\\\\Parameters\\\\CalloutDlls\" ESCAPE '\\' OR TargetObject LIKE \"%\\\\Services\\\\DHCPServer\\\\Parameters\\\\CalloutEnabled\" ESCAPE '\\')"
+            "SELECT * FROM logs WHERE (EventID = \"4657\" AND OperationType IN (\"New registry value created\", \"Existing registry value modified\") AND Channel = \"Security\" AND (TargetObject LIKE \"%\\\\Services\\\\DHCPServer\\\\Parameters\\\\CalloutDlls\" ESCAPE '\\' OR TargetObject LIKE \"%\\\\Services\\\\DHCPServer\\\\Parameters\\\\CalloutEnabled\" ESCAPE '\\'))"
         ]
     },
     {
@@ -2670,7 +2670,7 @@
         ],
         "level": "high",
         "rule": [
-            "SELECT * FROM logs WHERE (TargetObject LIKE \"%\\\\Services\\\\HybridConnectionManager%\" ESCAPE '\\' OR Details LIKE \"%Microsoft.HybridConnectionManager.Listener.exe%\" ESCAPE '\\')"
+            "SELECT * FROM logs WHERE ((EventID = \"4657\" AND OperationType IN (\"New registry value created\", \"Existing registry value modified\") AND Channel = \"Security\") AND (TargetObject LIKE \"%\\\\Services\\\\HybridConnectionManager%\" ESCAPE '\\' OR Details LIKE \"%Microsoft.HybridConnectionManager.Listener.exe%\" ESCAPE '\\'))"
         ]
     },
     {
@@ -2683,7 +2683,7 @@
         ],
         "level": "medium",
         "rule": [
-            "SELECT * FROM logs WHERE TargetObject LIKE \"%\\\\Software\\\\Sysinternals\\\\SDelete%\" ESCAPE '\\'"
+            "SELECT * FROM logs WHERE (EventID = \"4657\" AND OperationType IN (\"New registry value created\", \"Existing registry value modified\") AND Channel = \"Security\" AND TargetObject LIKE \"%\\\\Software\\\\Sysinternals\\\\SDelete%\" ESCAPE '\\')"
         ]
     },
     {
@@ -2696,7 +2696,7 @@
         ],
         "level": "high",
         "rule": [
-            "SELECT * FROM logs WHERE (TargetObject LIKE \"%\\\\services\\\\TermService\\\\Parameters\\\\ServiceDll%\" ESCAPE '\\' OR TargetObject LIKE \"%\\\\Control\\\\Terminal Server\\\\fSingleSessionPerUser%\" ESCAPE '\\' OR TargetObject LIKE \"%\\\\Control\\\\Terminal Server\\\\fDenyTSConnections%\" ESCAPE '\\')"
+            "SELECT * FROM logs WHERE (EventID = \"4657\" AND OperationType IN (\"New registry value created\", \"Existing registry value modified\") AND Channel = \"Security\" AND (TargetObject LIKE \"%\\\\services\\\\TermService\\\\Parameters\\\\ServiceDll%\" ESCAPE '\\' OR TargetObject LIKE \"%\\\\Control\\\\Terminal Server\\\\fSingleSessionPerUser%\" ESCAPE '\\' OR TargetObject LIKE \"%\\\\Control\\\\Terminal Server\\\\fDenyTSConnections%\" ESCAPE '\\'))"
         ]
     },
     {
@@ -5877,7 +5877,7 @@
         "rule": [
             "SELECT * FROM logs WHERE (Channel = \"System\" AND EventID = \"7045\" AND ServiceName IN (\"SC Scheduled Scan\", \"UpdatMachine\"))",
             "SELECT * FROM logs WHERE (Channel = \"Security\" AND EventID = \"4698\" AND TaskName IN (\"SC Scheduled Scan\", \"UpdatMachine\"))",
-            "SELECT * FROM logs WHERE (TargetObject LIKE \"%SOFTWARE\\\\Microsoft\\\\Windows\\\\CurrentVersion\\\\UMe\" ESCAPE '\\' OR TargetObject LIKE \"%SOFTWARE\\\\Microsoft\\\\Windows\\\\CurrentVersion\\\\UT\" ESCAPE '\\')",
+            "SELECT * FROM logs WHERE (EventID = \"4657\" AND OperationType IN (\"New registry value created\", \"Existing registry value modified\") AND Channel = \"Security\" AND (TargetObject LIKE \"%SOFTWARE\\\\Microsoft\\\\Windows\\\\CurrentVersion\\\\UMe\" ESCAPE '\\' OR TargetObject LIKE \"%SOFTWARE\\\\Microsoft\\\\Windows\\\\CurrentVersion\\\\UT\" ESCAPE '\\'))",
             "SELECT * FROM logs WHERE ((EventID = \"4688\" AND Channel = \"Security\") AND ((CommandLine LIKE \"%\\\\Service.exe%\" ESCAPE '\\' AND (CommandLine LIKE \"%i\" ESCAPE '\\' OR CommandLine LIKE \"%u\" ESCAPE '\\')) OR (CommandLine LIKE \"%\\\\microsoft\\\\Taskbar\\\\autoit3.exe\" ESCAPE '\\' OR CommandLine LIKE \"C:\\\\wsc.exe%\" ESCAPE '\\') OR (NewProcessName LIKE \"%\\\\Windows\\\\Temp\\\\DB\\\\%\" ESCAPE '\\' AND NewProcessName LIKE \"%.exe\" ESCAPE '\\') OR (CommandLine LIKE \"%\\\\nslookup.exe%\" ESCAPE '\\' AND CommandLine LIKE \"%-q=TXT%\" ESCAPE '\\' AND ParentProcessName LIKE \"%\\\\Autoit%\" ESCAPE '\\')))"
         ]
     },
@@ -6902,7 +6902,7 @@
         "level": "high",
         "rule": [
             "SELECT * FROM logs WHERE (EventID = \"4688\" AND Channel = \"Security\" AND sha1 IN (\"53a44c2396d15c3a03723fa5e5db54cafd527635\", \"9c5e496921e3bc882dc40694f1dcc3746a75db19\", \"aeb573accfd95758550cf30bf04f389a92922844\", \"79ef78a797403a4ed1a616c68e07fff868a8650a\", \"4f6f38b4cec35e895d91c052b1f5a83d665c2196\", \"1e8c2cac2e4ce7cbd33c3858eb2e24531cb8a84d\", \"e841a63e47361a572db9a7334af459ddca11347a\", \"c28f606df28a9bc8df75a4d5e5837fc5522dd34d\", \"2e94b305d6812a9f96e6781c888e48c7fb157b6b\", \"dd44133716b8a241957b912fa6a02efde3ce3025\", \"8793bf166cb89eb55f0593404e4e933ab605e803\", \"a39b57032dbb2335499a51e13470a7cd5d86b138\", \"41cc2b15c662bc001c0eb92f6cc222934f0beeea\", \"d209430d6af54792371174e70e27dd11d3def7a7\", \"1c6452026c56efd2c94cea7e0f671eb55515edb0\", \"c6b41d3afdcdcaf9f442bbe772f5da871801fd5a\", \"4923d460e22fbbf165bbbaba168e5a46b8157d9f\", \"f201504bd96e81d0d350c3a8332593ee1c9e09de\", \"ddd2db1127632a2a52943a2fe516a2e7d05d70d2\"))",
-            "SELECT * FROM logs WHERE (EventID = \"257\" AND QNAME IN (\"asyspy256.ddns.net\", \"hotkillmail9sddcc.ddns.net\", \"rosaf112.ddns.net\", \"cvdfhjh1231.myftp.biz\", \"sz2016rose.ddns.net\", \"dffwescwer4325.myftp.biz\", \"cvdfhjh1231.ddns.net\"))",
+            "SELECT * FROM logs WHERE (Channel = \"DNS Server\" AND EventID = \"257\" AND QNAME IN (\"asyspy256.ddns.net\", \"hotkillmail9sddcc.ddns.net\", \"rosaf112.ddns.net\", \"cvdfhjh1231.myftp.biz\", \"sz2016rose.ddns.net\", \"dffwescwer4325.myftp.biz\", \"cvdfhjh1231.ddns.net\"))",
             "SELECT * FROM logs WHERE ((EventID = \"4688\" AND Channel = \"Security\") AND (sha1 LIKE \"e570585edc69f9074cb5e8a790708336bd45ca0f\" ESCAPE '\\') AND NOT ((NewProcessName LIKE \"%:\\\\Program Files(x86)\\\\%\" ESCAPE '\\' OR NewProcessName LIKE \"%:\\\\Program Files\\\\%\" ESCAPE '\\')))"
         ]
     },
@@ -7442,7 +7442,7 @@
         "rule": [
             "SELECT * FROM logs WHERE ((EventID = \"4688\" AND Channel = \"Security\") AND ((CommandLine LIKE \"%\\\\AppData\\\\Roaming\\\\Oracle%\" ESCAPE '\\' AND CommandLine LIKE \"%\\\\java%\" ESCAPE '\\' AND CommandLine LIKE \"%.exe %\" ESCAPE '\\') OR (CommandLine LIKE \"%cscript.exe%\" ESCAPE '\\' AND CommandLine LIKE \"%Retrive%\" ESCAPE '\\' AND CommandLine LIKE \"%.vbs %\" ESCAPE '\\')))",
             "SELECT * FROM logs WHERE ((TargetFilename LIKE \"%\\\\AppData\\\\Roaming\\\\Oracle\\\\bin\\\\java%\" ESCAPE '\\' AND TargetFilename LIKE \"%.exe%\" ESCAPE '\\') OR (TargetFilename LIKE \"%\\\\Retrive%\" ESCAPE '\\' AND TargetFilename LIKE \"%.vbs%\" ESCAPE '\\'))",
-            "SELECT * FROM logs WHERE (TargetObject LIKE \"HKLM\\\\SOFTWARE\\\\Microsoft\\\\Windows\\\\CurrentVersion\\\\Run%\" ESCAPE '\\' AND Details LIKE \"\\%AppData\\%\\\\Roaming\\\\Oracle\\\\bin\\\\\\*\" ESCAPE '\\')"
+            "SELECT * FROM logs WHERE (EventID = \"4657\" AND OperationType IN (\"New registry value created\", \"Existing registry value modified\") AND Channel = \"Security\" AND TargetObject LIKE \"HKLM\\\\SOFTWARE\\\\Microsoft\\\\Windows\\\\CurrentVersion\\\\Run%\" ESCAPE '\\' AND Details LIKE \"\\%AppData\\%\\\\Roaming\\\\Oracle\\\\bin\\\\\\*\" ESCAPE '\\')"
         ]
     },
     {
@@ -8143,7 +8143,7 @@
         ],
         "level": "high",
         "rule": [
-            "SELECT * FROM logs WHERE (Message LIKE \"%Set-OabVirtualDirectory%\" ESCAPE '\\' AND Message LIKE \"%ExternalUrl%\" ESCAPE '\\' AND Message LIKE \"%Page\\_Load%\" ESCAPE '\\' AND Message LIKE \"%script%\" ESCAPE '\\')"
+            "SELECT * FROM logs WHERE (Channel = \"MSExchange Management\" AND Message LIKE \"%Set-OabVirtualDirectory%\" ESCAPE '\\' AND Message LIKE \"%ExternalUrl%\" ESCAPE '\\' AND Message LIKE \"%Page\\_Load%\" ESCAPE '\\' AND Message LIKE \"%script%\" ESCAPE '\\')"
         ]
     },
     {
@@ -8992,7 +8992,7 @@
         "author": "Florian Roth",
         "level": "critical",
         "rule": [
-            "SELECT * FROM logs WHERE EventID IN (\"150\", \"770\")"
+            "SELECT * FROM logs WHERE (Channel = \"DNS Server\" AND EventID IN (\"150\", \"770\"))"
         ]
     },
     {
@@ -9235,7 +9235,7 @@
         ],
         "level": "critical",
         "rule": [
-            "SELECT * FROM logs WHERE (TargetObject LIKE \"%SYSTEM\\\\%\" ESCAPE '\\' AND TargetObject LIKE \"%ControlSet%\" ESCAPE '\\' AND TargetObject LIKE \"%\\\\Control\\\\Lsa%\" ESCAPE '\\' AND (TargetObject LIKE \"%\\\\lmcompatibilitylevel\" ESCAPE '\\' OR TargetObject LIKE \"%\\\\NtlmMinClientSec\" ESCAPE '\\' OR TargetObject LIKE \"%\\\\RestrictSendingNTLMTraffic\" ESCAPE '\\'))",
+            "SELECT * FROM logs WHERE (EventID = \"4657\" AND OperationType IN (\"New registry value created\", \"Existing registry value modified\") AND Channel = \"Security\" AND TargetObject LIKE \"%SYSTEM\\\\%\" ESCAPE '\\' AND TargetObject LIKE \"%ControlSet%\" ESCAPE '\\' AND TargetObject LIKE \"%\\\\Control\\\\Lsa%\" ESCAPE '\\' AND (TargetObject LIKE \"%\\\\lmcompatibilitylevel\" ESCAPE '\\' OR TargetObject LIKE \"%\\\\NtlmMinClientSec\" ESCAPE '\\' OR TargetObject LIKE \"%\\\\RestrictSendingNTLMTraffic\" ESCAPE '\\'))",
             "SELECT * FROM logs WHERE (Channel = \"Security\" AND EventID = \"4657\" AND ObjectName LIKE \"\\\\REGISTRY\\\\MACHINE\\\\SYSTEM\\\\%ControlSet%\\\\Control\\\\Lsa%\" ESCAPE '\\' AND ObjectValueName IN (\"LmCompatibilityLevel\", \"NtlmMinClientSec\", \"RestrictSendingNTLMTraffic\"))"
         ]
     },
@@ -9871,7 +9871,7 @@
         ],
         "level": "high",
         "rule": [
-            "SELECT * FROM logs WHERE (Channel = \"Microsoft-Windows-Windows Defender/Operational\" AND EventID = \"1121\" AND Path LIKE \"%\\\\lsass.exe\" ESCAPE '\\')"
+            "SELECT * FROM logs WHERE (Channel IN (\"Microsoft-Windows-Windows Defender/Operational\", \"Microsoft-Windows-Windows Defender/WHC\") AND EventID = \"1121\" AND Path LIKE \"%\\\\lsass.exe\" ESCAPE '\\')"
         ]
     },
     {

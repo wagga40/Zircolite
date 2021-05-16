@@ -31,6 +31,15 @@ logsources:
         rewrite:
             product: windows
             service: security
+    registry_event_win:
+        category: registry_event
+        product: windows
+        conditions:
+            EventID: 4657
+            OperationType:
+                - 'New registry value created'
+                - 'Existing registry value modified'
+            Channel: 'Security'
     windows:
         product: windows
     windows-application:
@@ -76,7 +85,6 @@ logsources:
     windows-dns-server:
         product: windows
         service: dns-server
-        category: dns
         conditions:
             Channel: 'DNS Server'
     windows-dns-server-audit:
@@ -103,11 +111,15 @@ logsources:
         product: windows
         service: windefend
         conditions:
-            Channel: 'Microsoft-Windows-Windows Defender/Operational'
+            Channel: 
+                - 'Microsoft-Windows-Windows Defender/Operational'
+                - 'Microsoft-Windows-Windows Defender/WHC'
     windows-defender-product:
         product: windows_defender
         conditions:
-            Channel: 'Microsoft-Windows-Windows Defender/Operational'
+            Channel: 
+                - 'Microsoft-Windows-Windows Defender/Operational'
+                - 'Microsoft-Windows-Windows Defender/WHC'
     windows-applocker:
         product: windows
         service: applocker
@@ -117,6 +129,11 @@ logsources:
                 - 'Microsoft-Windows-AppLocker/EXE and DLL'
                 - 'Microsoft-Windows-AppLocker/Packaged app-Deployment'
                 - 'Microsoft-Windows-AppLocker/Packaged app-Execution'
+    windows-msexchange-management:
+        product: windows
+        service: msexchange-management
+        conditions:
+            Channel: 'MSExchange Management'
 fieldmappings:
     Image: NewProcessName
     ParentImage: ParentProcessName

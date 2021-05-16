@@ -102,7 +102,7 @@
         "author": "Bhabesh Raj",
         "level": "high",
         "rule": [
-            "SELECT * FROM logs WHERE (Channel = \"Microsoft-Windows-Windows Defender/Operational\" AND EventID = \"1116\" AND DetectionSource = \"AMSI\")"
+            "SELECT * FROM logs WHERE (Channel IN (\"Microsoft-Windows-Windows Defender/Operational\", \"Microsoft-Windows-Windows Defender/WHC\") AND EventID = \"1116\" AND DetectionSource = \"AMSI\")"
         ]
     },
     {
@@ -154,7 +154,7 @@
         "author": "J\u00e1n Tren\u010dansk\u00fd",
         "level": "high",
         "rule": [
-            "SELECT * FROM logs WHERE (Channel = \"Microsoft-Windows-Windows Defender/Operational\" AND EventID IN (\"1006\", \"1116\", \"1015\", \"1117\"))"
+            "SELECT * FROM logs WHERE (Channel IN (\"Microsoft-Windows-Windows Defender/Operational\", \"Microsoft-Windows-Windows Defender/WHC\") AND EventID IN (\"1006\", \"1116\", \"1015\", \"1117\"))"
         ]
     },
     {
@@ -210,7 +210,7 @@
         ],
         "level": "high",
         "rule": [
-            "SELECT * FROM logs WHERE (Channel = \"Microsoft-Windows-Windows Defender/Operational\" AND (EventID IN (\"5001\", \"5010\", \"5012\", \"5101\") OR ((TargetObject LIKE \"HKEY\\_LOCAL\\_MACHINE\\\\SYSTEM\\\\CurrentControlSet\\\\Services\\\\WinDefend\" ESCAPE '\\' OR TargetObject LIKE \"HKEY\\_LOCAL\\_MACHINE\\\\SOFTWARE\\\\Microsoft\\\\Windows Defender\" ESCAPE '\\' OR TargetObject LIKE \"HKEY\\_LOCAL\\_MACHINE\\\\SOFTWARE\\\\Policies\\\\Microsoft\\\\Windows Defender\" ESCAPE '\\') AND Details = \"DWORD (0x00000001)\")))"
+            "SELECT * FROM logs WHERE (Channel IN (\"Microsoft-Windows-Windows Defender/Operational\", \"Microsoft-Windows-Windows Defender/WHC\") AND (EventID IN (\"5001\", \"5010\", \"5012\", \"5101\") OR ((TargetObject LIKE \"HKEY\\_LOCAL\\_MACHINE\\\\SYSTEM\\\\CurrentControlSet\\\\Services\\\\WinDefend\" ESCAPE '\\' OR TargetObject LIKE \"HKEY\\_LOCAL\\_MACHINE\\\\SOFTWARE\\\\Microsoft\\\\Windows Defender\" ESCAPE '\\' OR TargetObject LIKE \"HKEY\\_LOCAL\\_MACHINE\\\\SOFTWARE\\\\Policies\\\\Microsoft\\\\Windows Defender\" ESCAPE '\\') AND Details = \"DWORD (0x00000001)\")))"
         ]
     },
     {
@@ -257,7 +257,7 @@
         ],
         "level": "high",
         "rule": [
-            "SELECT * FROM logs WHERE (Channel = \"Microsoft-Windows-Windows Defender/Operational\" AND EventID = \"1121\" AND (ProcessName LIKE \"%\\\\wmiprvse.exe\" ESCAPE '\\' OR ProcessName LIKE \"%\\\\psexesvc.exe\" ESCAPE '\\'))"
+            "SELECT * FROM logs WHERE (Channel IN (\"Microsoft-Windows-Windows Defender/Operational\", \"Microsoft-Windows-Windows Defender/WHC\") AND EventID = \"1121\" AND (ProcessName LIKE \"%\\\\wmiprvse.exe\" ESCAPE '\\' OR ProcessName LIKE \"%\\\\psexesvc.exe\" ESCAPE '\\'))"
         ]
     },
     {
@@ -659,7 +659,7 @@
         ],
         "level": "medium",
         "rule": [
-            "SELECT * FROM logs WHERE (EventID = \"11\" AND Channel = \"Microsoft-Windows-Sysmon/Operational\" AND IntegrityLevel = \"Medium\" AND (EventID = \"11\" AND Channel = \"Microsoft-Windows-Sysmon/Operational\") AND ((TargetFilename LIKE \"%\\\\Program Files\\\\%\" ESCAPE '\\' OR TargetFilename LIKE \"%\\\\Program Files (x86)\\\\%\" ESCAPE '\\') OR (TargetFilename LIKE \"\\\\Windows\\\\%\" ESCAPE '\\' AND NOT (TargetFilename LIKE \"%temp%\" ESCAPE '\\'))))"
+            "SELECT * FROM logs WHERE ((EventID = \"11\" AND Channel = \"Microsoft-Windows-Sysmon/Operational\") AND IntegrityLevel = \"Medium\" AND (EventID = \"11\" AND Channel = \"Microsoft-Windows-Sysmon/Operational\") AND ((TargetFilename LIKE \"%\\\\Program Files\\\\%\" ESCAPE '\\' OR TargetFilename LIKE \"%\\\\Program Files (x86)\\\\%\" ESCAPE '\\') OR (TargetFilename LIKE \"\\\\Windows\\\\%\" ESCAPE '\\' AND NOT (TargetFilename LIKE \"%temp%\" ESCAPE '\\'))))"
         ]
     },
     {
@@ -3530,7 +3530,7 @@
         ],
         "level": "medium",
         "rule": [
-            "SELECT * FROM logs WHERE (EventID = \"1\" AND Channel = \"Microsoft-Windows-Sysmon/Operational\" AND CommandLine LIKE \"%winrm%\" ESCAPE '\\' AND (EventID = \"1\" AND Channel = \"Microsoft-Windows-Sysmon/Operational\") AND (CommandLine LIKE \"%format:pretty%\" ESCAPE '\\' OR CommandLine LIKE \"%format:\"pretty\"%\" ESCAPE '\\' OR CommandLine LIKE \"%format:\"text\"%\" ESCAPE '\\' OR CommandLine LIKE \"%format:text%\" ESCAPE '\\') AND NOT ((Image LIKE \"C:\\\\Windows\\\\System32\\\\%\" ESCAPE '\\' OR Image LIKE \"C:\\\\Windows\\\\SysWOW64\\\\%\" ESCAPE '\\')))",
+            "SELECT * FROM logs WHERE ((EventID = \"1\" AND Channel = \"Microsoft-Windows-Sysmon/Operational\") AND CommandLine LIKE \"%winrm%\" ESCAPE '\\' AND (EventID = \"1\" AND Channel = \"Microsoft-Windows-Sysmon/Operational\") AND (CommandLine LIKE \"%format:pretty%\" ESCAPE '\\' OR CommandLine LIKE \"%format:\"pretty\"%\" ESCAPE '\\' OR CommandLine LIKE \"%format:\"text\"%\" ESCAPE '\\' OR CommandLine LIKE \"%format:text%\" ESCAPE '\\') AND NOT ((Image LIKE \"C:\\\\Windows\\\\System32\\\\%\" ESCAPE '\\' OR Image LIKE \"C:\\\\Windows\\\\SysWOW64\\\\%\" ESCAPE '\\')))",
             "SELECT * FROM logs WHERE ((EventID = \"11\" AND Channel = \"Microsoft-Windows-Sysmon/Operational\") AND (TargetFilename LIKE \"%WsmPty.xsl\" ESCAPE '\\' OR TargetFilename LIKE \"%WsmTxt.xsl\" ESCAPE '\\') AND NOT ((TargetFilename LIKE \"C:\\\\Windows\\\\System32\\\\%\" ESCAPE '\\' OR TargetFilename LIKE \"C:\\\\Windows\\\\SysWOW64\\\\%\" ESCAPE '\\')))"
         ]
     },
@@ -3871,7 +3871,7 @@
         ],
         "level": "medium",
         "rule": [
-            "SELECT * FROM logs WHERE (EventID = \"1\" AND Channel = \"Microsoft-Windows-Sysmon/Operational\" AND (EventID = \"1\" AND Channel = \"Microsoft-Windows-Sysmon/Operational\") AND (Image LIKE \"%\\\\setspn.exe\" ESCAPE '\\' OR (Description LIKE \"%Query or reset the computer%\" ESCAPE '\\' AND Description LIKE \"%SPN attribute%\" ESCAPE '\\')) AND CommandLine LIKE \"%-q%\" ESCAPE '\\')"
+            "SELECT * FROM logs WHERE ((EventID = \"1\" AND Channel = \"Microsoft-Windows-Sysmon/Operational\") AND (EventID = \"1\" AND Channel = \"Microsoft-Windows-Sysmon/Operational\") AND (Image LIKE \"%\\\\setspn.exe\" ESCAPE '\\' OR (Description LIKE \"%Query or reset the computer%\" ESCAPE '\\' AND Description LIKE \"%SPN attribute%\" ESCAPE '\\')) AND CommandLine LIKE \"%-q%\" ESCAPE '\\')"
         ]
     },
     {},
@@ -4838,7 +4838,7 @@
         ],
         "level": "medium",
         "rule": [
-            "SELECT * FROM logs WHERE (EventID = \"1\" AND Channel = \"Microsoft-Windows-Sysmon/Operational\" AND (EventID = \"1\" AND Channel = \"Microsoft-Windows-Sysmon/Operational\") AND (Image LIKE \"%\\\\curl.exe\" ESCAPE '\\' OR Product = \"The curl executable\") AND CommandLine LIKE \"% -O %\" ESCAPE '\\')"
+            "SELECT * FROM logs WHERE ((EventID = \"1\" AND Channel = \"Microsoft-Windows-Sysmon/Operational\") AND (EventID = \"1\" AND Channel = \"Microsoft-Windows-Sysmon/Operational\") AND (Image LIKE \"%\\\\curl.exe\" ESCAPE '\\' OR Product = \"The curl executable\") AND CommandLine LIKE \"% -O %\" ESCAPE '\\')"
         ]
     },
     {
@@ -4941,7 +4941,7 @@
         ],
         "level": "medium",
         "rule": [
-            "SELECT * FROM logs WHERE (EventID = \"1\" AND Channel = \"Microsoft-Windows-Sysmon/Operational\" AND (EventID = \"1\" AND Channel = \"Microsoft-Windows-Sysmon/Operational\") AND (Image LIKE \"%\\\\rundll32.exe\" ESCAPE '\\' OR OriginalFileName = \"RUNDLL32.EXE\") AND (CommandLine LIKE \"%comsvcs%\" ESCAPE '\\' AND CommandLine LIKE \"%MiniDump%\" ESCAPE '\\' AND CommandLine LIKE \"%full%\" ESCAPE '\\'))"
+            "SELECT * FROM logs WHERE ((EventID = \"1\" AND Channel = \"Microsoft-Windows-Sysmon/Operational\") AND (EventID = \"1\" AND Channel = \"Microsoft-Windows-Sysmon/Operational\") AND (Image LIKE \"%\\\\rundll32.exe\" ESCAPE '\\' OR OriginalFileName = \"RUNDLL32.EXE\") AND (CommandLine LIKE \"%comsvcs%\" ESCAPE '\\' AND CommandLine LIKE \"%MiniDump%\" ESCAPE '\\' AND CommandLine LIKE \"%full%\" ESCAPE '\\'))"
         ]
     },
     {
@@ -5238,7 +5238,7 @@
             "attack.t1070"
         ],
         "rule": [
-            "SELECT * FROM logs WHERE (EventID = \"1\" AND Channel = \"Microsoft-Windows-Sysmon/Operational\" AND (EventID = \"1\" AND Channel = \"Microsoft-Windows-Sysmon/Operational\") AND (Image LIKE \"%\\\\fsutil.exe\" ESCAPE '\\' OR OriginalFileName = \"fsutil.exe\") AND (CommandLine LIKE \"%deletejournal%\" ESCAPE '\\' OR CommandLine LIKE \"%createjournal%\" ESCAPE '\\'))"
+            "SELECT * FROM logs WHERE ((EventID = \"1\" AND Channel = \"Microsoft-Windows-Sysmon/Operational\") AND (EventID = \"1\" AND Channel = \"Microsoft-Windows-Sysmon/Operational\") AND (Image LIKE \"%\\\\fsutil.exe\" ESCAPE '\\' OR OriginalFileName = \"fsutil.exe\") AND (CommandLine LIKE \"%deletejournal%\" ESCAPE '\\' OR CommandLine LIKE \"%createjournal%\" ESCAPE '\\'))"
         ]
     },
     {
@@ -5927,7 +5927,7 @@
         ],
         "level": "high",
         "rule": [
-            "SELECT * FROM logs WHERE (EventID = \"1\" AND Channel = \"Microsoft-Windows-Sysmon/Operational\" AND (EventID = \"1\" AND Channel = \"Microsoft-Windows-Sysmon/Operational\") AND (((Image LIKE \"%\\\\robocopy.exe\" ESCAPE '\\' OR Image LIKE \"%\\\\xcopy.exe\" ESCAPE '\\') OR (Image LIKE \"%\\\\cmd.exe\" ESCAPE '\\' AND CommandLine LIKE \"%copy%\" ESCAPE '\\')) OR (Image LIKE \"%\\\\powershell%\" ESCAPE '\\' AND (CommandLine LIKE \"%copy-item%\" ESCAPE '\\' OR CommandLine LIKE \"%copy%\" ESCAPE '\\' OR CommandLine LIKE \"%cpi %\" ESCAPE '\\' OR CommandLine LIKE \"% cp %\" ESCAPE '\\'))) AND (CommandLine LIKE \"%\\\\\\\\\\*\" ESCAPE '\\' AND CommandLine LIKE \"%$%\" ESCAPE '\\'))"
+            "SELECT * FROM logs WHERE ((EventID = \"1\" AND Channel = \"Microsoft-Windows-Sysmon/Operational\") AND (EventID = \"1\" AND Channel = \"Microsoft-Windows-Sysmon/Operational\") AND (((Image LIKE \"%\\\\robocopy.exe\" ESCAPE '\\' OR Image LIKE \"%\\\\xcopy.exe\" ESCAPE '\\') OR (Image LIKE \"%\\\\cmd.exe\" ESCAPE '\\' AND CommandLine LIKE \"%copy%\" ESCAPE '\\')) OR (Image LIKE \"%\\\\powershell%\" ESCAPE '\\' AND (CommandLine LIKE \"%copy-item%\" ESCAPE '\\' OR CommandLine LIKE \"%copy%\" ESCAPE '\\' OR CommandLine LIKE \"%cpi %\" ESCAPE '\\' OR CommandLine LIKE \"% cp %\" ESCAPE '\\'))) AND (CommandLine LIKE \"%\\\\\\\\\\*\" ESCAPE '\\' AND CommandLine LIKE \"%$%\" ESCAPE '\\'))"
         ]
     },
     {
@@ -6212,7 +6212,7 @@
         ],
         "level": "medium",
         "rule": [
-            "SELECT * FROM logs WHERE (EventID = \"1\" AND Channel = \"Microsoft-Windows-Sysmon/Operational\" AND (EventID = \"1\" AND Channel = \"Microsoft-Windows-Sysmon/Operational\") AND (Image LIKE \"%\\\\csi.exe\" ESCAPE '\\' OR Image LIKE \"%\\\\rcsi.exe\" ESCAPE '\\' OR OriginalFileName = \"csi.exe\" OR OriginalFileName = \"rcsi.exe\") AND Company = \"Microsoft Corporation\")"
+            "SELECT * FROM logs WHERE ((EventID = \"1\" AND Channel = \"Microsoft-Windows-Sysmon/Operational\") AND (EventID = \"1\" AND Channel = \"Microsoft-Windows-Sysmon/Operational\") AND (Image LIKE \"%\\\\csi.exe\" ESCAPE '\\' OR Image LIKE \"%\\\\rcsi.exe\" ESCAPE '\\' OR OriginalFileName = \"csi.exe\" OR OriginalFileName = \"rcsi.exe\") AND Company = \"Microsoft Corporation\")"
         ]
     },
     {
@@ -6419,7 +6419,7 @@
         ],
         "level": "critical",
         "rule": [
-            "SELECT * FROM logs WHERE (EventID = \"1\" AND Channel = \"Microsoft-Windows-Sysmon/Operational\" AND ParentImage LIKE \"%\\\\consent.exe\" ESCAPE '\\' AND Image LIKE \"%\\\\iexplore.exe\" ESCAPE '\\' AND CommandLine LIKE \"% http%\" ESCAPE '\\' AND (EventID = \"1\" AND Channel = \"Microsoft-Windows-Sysmon/Operational\") AND (IntegrityLevel = \"System\" OR User LIKE \"NT AUTHORITY\\\\SYSTEM\" ESCAPE '\\'))"
+            "SELECT * FROM logs WHERE ((EventID = \"1\" AND Channel = \"Microsoft-Windows-Sysmon/Operational\") AND ParentImage LIKE \"%\\\\consent.exe\" ESCAPE '\\' AND Image LIKE \"%\\\\iexplore.exe\" ESCAPE '\\' AND CommandLine LIKE \"% http%\" ESCAPE '\\' AND (EventID = \"1\" AND Channel = \"Microsoft-Windows-Sysmon/Operational\") AND (IntegrityLevel = \"System\" OR User LIKE \"NT AUTHORITY\\\\SYSTEM\" ESCAPE '\\'))"
         ]
     },
     {
@@ -6463,7 +6463,7 @@
         ],
         "level": "medium",
         "rule": [
-            "SELECT * FROM logs WHERE (EventID = \"1\" AND Channel = \"Microsoft-Windows-Sysmon/Operational\" AND (EventID = \"1\" AND Channel = \"Microsoft-Windows-Sysmon/Operational\") AND (Image LIKE \"%\\\\rasautou.exe\" ESCAPE '\\' OR OriginalFileName = \"rasdlui.exe\") AND (CommandLine LIKE \"%-d%\" ESCAPE '\\' AND CommandLine LIKE \"%-p%\" ESCAPE '\\'))"
+            "SELECT * FROM logs WHERE ((EventID = \"1\" AND Channel = \"Microsoft-Windows-Sysmon/Operational\") AND (EventID = \"1\" AND Channel = \"Microsoft-Windows-Sysmon/Operational\") AND (Image LIKE \"%\\\\rasautou.exe\" ESCAPE '\\' OR OriginalFileName = \"rasdlui.exe\") AND (CommandLine LIKE \"%-d%\" ESCAPE '\\' AND CommandLine LIKE \"%-p%\" ESCAPE '\\'))"
         ]
     },
     {
@@ -6823,7 +6823,7 @@
         "author": "Teymur Kheirkhabarov",
         "level": "high",
         "rule": [
-            "SELECT * FROM logs WHERE (EventID = \"1\" AND Channel = \"Microsoft-Windows-Sysmon/Operational\" AND Image LIKE \"%\\\\sc.exe\" ESCAPE '\\' AND IntegrityLevel = \"Medium\" AND (EventID = \"1\" AND Channel = \"Microsoft-Windows-Sysmon/Operational\") AND ((CommandLine LIKE \"%config%\" ESCAPE '\\' AND CommandLine LIKE \"%binPath%\" ESCAPE '\\') OR (CommandLine LIKE \"%failure%\" ESCAPE '\\' AND CommandLine LIKE \"%command%\" ESCAPE '\\')))"
+            "SELECT * FROM logs WHERE ((EventID = \"1\" AND Channel = \"Microsoft-Windows-Sysmon/Operational\") AND Image LIKE \"%\\\\sc.exe\" ESCAPE '\\' AND IntegrityLevel = \"Medium\" AND (EventID = \"1\" AND Channel = \"Microsoft-Windows-Sysmon/Operational\") AND ((CommandLine LIKE \"%config%\" ESCAPE '\\' AND CommandLine LIKE \"%binPath%\" ESCAPE '\\') OR (CommandLine LIKE \"%failure%\" ESCAPE '\\' AND CommandLine LIKE \"%command%\" ESCAPE '\\')))"
         ]
     },
     {
@@ -6902,7 +6902,7 @@
         "level": "high",
         "rule": [
             "SELECT * FROM logs WHERE (EventID = \"1\" AND Channel = \"Microsoft-Windows-Sysmon/Operational\" AND sha1 IN (\"53a44c2396d15c3a03723fa5e5db54cafd527635\", \"9c5e496921e3bc882dc40694f1dcc3746a75db19\", \"aeb573accfd95758550cf30bf04f389a92922844\", \"79ef78a797403a4ed1a616c68e07fff868a8650a\", \"4f6f38b4cec35e895d91c052b1f5a83d665c2196\", \"1e8c2cac2e4ce7cbd33c3858eb2e24531cb8a84d\", \"e841a63e47361a572db9a7334af459ddca11347a\", \"c28f606df28a9bc8df75a4d5e5837fc5522dd34d\", \"2e94b305d6812a9f96e6781c888e48c7fb157b6b\", \"dd44133716b8a241957b912fa6a02efde3ce3025\", \"8793bf166cb89eb55f0593404e4e933ab605e803\", \"a39b57032dbb2335499a51e13470a7cd5d86b138\", \"41cc2b15c662bc001c0eb92f6cc222934f0beeea\", \"d209430d6af54792371174e70e27dd11d3def7a7\", \"1c6452026c56efd2c94cea7e0f671eb55515edb0\", \"c6b41d3afdcdcaf9f442bbe772f5da871801fd5a\", \"4923d460e22fbbf165bbbaba168e5a46b8157d9f\", \"f201504bd96e81d0d350c3a8332593ee1c9e09de\", \"ddd2db1127632a2a52943a2fe516a2e7d05d70d2\"))",
-            "SELECT * FROM logs WHERE (EventID = \"257\" AND QNAME IN (\"asyspy256.ddns.net\", \"hotkillmail9sddcc.ddns.net\", \"rosaf112.ddns.net\", \"cvdfhjh1231.myftp.biz\", \"sz2016rose.ddns.net\", \"dffwescwer4325.myftp.biz\", \"cvdfhjh1231.ddns.net\"))",
+            "SELECT * FROM logs WHERE (Channel = \"DNS Server\" AND EventID = \"257\" AND QNAME IN (\"asyspy256.ddns.net\", \"hotkillmail9sddcc.ddns.net\", \"rosaf112.ddns.net\", \"cvdfhjh1231.myftp.biz\", \"sz2016rose.ddns.net\", \"dffwescwer4325.myftp.biz\", \"cvdfhjh1231.ddns.net\"))",
             "SELECT * FROM logs WHERE ((EventID = \"1\" AND Channel = \"Microsoft-Windows-Sysmon/Operational\") AND (sha1 LIKE \"e570585edc69f9074cb5e8a790708336bd45ca0f\" ESCAPE '\\') AND NOT ((Image LIKE \"%:\\\\Program Files(x86)\\\\%\" ESCAPE '\\' OR Image LIKE \"%:\\\\Program Files\\\\%\" ESCAPE '\\')))"
         ]
     },
@@ -7326,7 +7326,7 @@
         ],
         "level": "low",
         "rule": [
-            "SELECT * FROM logs WHERE (EventID = \"1\" AND Channel = \"Microsoft-Windows-Sysmon/Operational\" AND (EventID = \"1\" AND Channel = \"Microsoft-Windows-Sysmon/Operational\") AND ((Image LIKE \"%\\\\runonce.exe\" ESCAPE '\\') OR (Description LIKE \"Run Once Wrapper\" ESCAPE '\\')) AND (CommandLine LIKE \"% /AlternateShellStartup%\" ESCAPE '\\'))"
+            "SELECT * FROM logs WHERE ((EventID = \"1\" AND Channel = \"Microsoft-Windows-Sysmon/Operational\") AND (EventID = \"1\" AND Channel = \"Microsoft-Windows-Sysmon/Operational\") AND ((Image LIKE \"%\\\\runonce.exe\" ESCAPE '\\') OR (Description LIKE \"Run Once Wrapper\" ESCAPE '\\')) AND (CommandLine LIKE \"% /AlternateShellStartup%\" ESCAPE '\\'))"
         ]
     },
     {
@@ -7485,7 +7485,7 @@
         ],
         "level": "high",
         "rule": [
-            "SELECT * FROM logs WHERE (EventID = \"1\" AND Channel = \"Microsoft-Windows-Sysmon/Operational\" AND IntegrityLevel = \"Medium\" AND (EventID = \"1\" AND Channel = \"Microsoft-Windows-Sysmon/Operational\") AND (Product LIKE \"%AccessChk\" ESCAPE '\\' OR Description LIKE \"%Reports effective permissions%\" ESCAPE '\\'))"
+            "SELECT * FROM logs WHERE ((EventID = \"1\" AND Channel = \"Microsoft-Windows-Sysmon/Operational\") AND IntegrityLevel = \"Medium\" AND (EventID = \"1\" AND Channel = \"Microsoft-Windows-Sysmon/Operational\") AND (Product LIKE \"%AccessChk\" ESCAPE '\\' OR Description LIKE \"%Reports effective permissions%\" ESCAPE '\\'))"
         ]
     },
     {
@@ -7624,7 +7624,7 @@
         ],
         "level": "medium",
         "rule": [
-            "SELECT * FROM logs WHERE (EventID = \"1\" AND Channel = \"Microsoft-Windows-Sysmon/Operational\" AND Description LIKE \"\\?\" ESCAPE '\\' AND (FileVersion LIKE \"\\?\" ESCAPE '\\' OR Product LIKE \"\\?\" ESCAPE '\\' OR Company LIKE \"\\?\" ESCAPE '\\') AND Image LIKE \"%\\\\Downloads\\\\\\*\" ESCAPE '\\')"
+            "SELECT * FROM logs WHERE ((EventID = \"1\" AND Channel = \"Microsoft-Windows-Sysmon/Operational\") AND EventID = \"1\" AND Channel = \"Microsoft-Windows-Sysmon/Operational\" AND Description LIKE \"\\?\" ESCAPE '\\' AND (FileVersion LIKE \"\\?\" ESCAPE '\\' OR Product LIKE \"\\?\" ESCAPE '\\' OR Company LIKE \"\\?\" ESCAPE '\\') AND Image LIKE \"%\\\\Downloads\\\\\\*\" ESCAPE '\\')"
         ]
     },
     {
@@ -7910,7 +7910,7 @@
         "author": "Markus Neis",
         "level": "high",
         "rule": [
-            "SELECT * FROM logs WHERE (EventID = \"1\" AND Channel = \"Microsoft-Windows-Sysmon/Operational\" AND (EventID = \"1\" AND Channel = \"Microsoft-Windows-Sysmon/Operational\") AND ((Image LIKE \"%\\\\rundll32.exe\" ESCAPE '\\') OR (Description LIKE \"%Windows-Hostprozess (Rundll32)%\" ESCAPE '\\')) AND (CommandLine LIKE \"%Default.GetString%\" ESCAPE '\\' OR CommandLine LIKE \"%FromBase64String%\" ESCAPE '\\'))"
+            "SELECT * FROM logs WHERE ((EventID = \"1\" AND Channel = \"Microsoft-Windows-Sysmon/Operational\") AND (EventID = \"1\" AND Channel = \"Microsoft-Windows-Sysmon/Operational\") AND ((Image LIKE \"%\\\\rundll32.exe\" ESCAPE '\\') OR (Description LIKE \"%Windows-Hostprozess (Rundll32)%\" ESCAPE '\\')) AND (CommandLine LIKE \"%Default.GetString%\" ESCAPE '\\' OR CommandLine LIKE \"%FromBase64String%\" ESCAPE '\\'))"
         ]
     },
     {},
@@ -7924,7 +7924,7 @@
         ],
         "level": "medium",
         "rule": [
-            "SELECT * FROM logs WHERE (EventID = \"1\" AND Channel = \"Microsoft-Windows-Sysmon/Operational\" AND (CommandLine LIKE \"%findstr%\" ESCAPE '\\') AND (EventID = \"1\" AND Channel = \"Microsoft-Windows-Sysmon/Operational\") AND ((CommandLine LIKE \"%/V%\" ESCAPE '\\' AND CommandLine LIKE \"%/L%\" ESCAPE '\\') OR (CommandLine LIKE \"%/S%\" ESCAPE '\\' AND CommandLine LIKE \"%/I%\" ESCAPE '\\')))"
+            "SELECT * FROM logs WHERE ((EventID = \"1\" AND Channel = \"Microsoft-Windows-Sysmon/Operational\") AND (CommandLine LIKE \"%findstr%\" ESCAPE '\\') AND (EventID = \"1\" AND Channel = \"Microsoft-Windows-Sysmon/Operational\") AND ((CommandLine LIKE \"%/V%\" ESCAPE '\\' AND CommandLine LIKE \"%/L%\" ESCAPE '\\') OR (CommandLine LIKE \"%/S%\" ESCAPE '\\' AND CommandLine LIKE \"%/I%\" ESCAPE '\\')))"
         ]
     },
     {
@@ -8143,7 +8143,7 @@
         ],
         "level": "high",
         "rule": [
-            "SELECT * FROM logs WHERE (Message LIKE \"%Set-OabVirtualDirectory%\" ESCAPE '\\' AND Message LIKE \"%ExternalUrl%\" ESCAPE '\\' AND Message LIKE \"%Page\\_Load%\" ESCAPE '\\' AND Message LIKE \"%script%\" ESCAPE '\\')"
+            "SELECT * FROM logs WHERE (Channel = \"MSExchange Management\" AND Message LIKE \"%Set-OabVirtualDirectory%\" ESCAPE '\\' AND Message LIKE \"%ExternalUrl%\" ESCAPE '\\' AND Message LIKE \"%Page\\_Load%\" ESCAPE '\\' AND Message LIKE \"%script%\" ESCAPE '\\')"
         ]
     },
     {
@@ -8992,7 +8992,7 @@
         "author": "Florian Roth",
         "level": "critical",
         "rule": [
-            "SELECT * FROM logs WHERE EventID IN (\"150\", \"770\")"
+            "SELECT * FROM logs WHERE (Channel = \"DNS Server\" AND EventID IN (\"150\", \"770\"))"
         ]
     },
     {
@@ -9871,7 +9871,7 @@
         ],
         "level": "high",
         "rule": [
-            "SELECT * FROM logs WHERE (Channel = \"Microsoft-Windows-Windows Defender/Operational\" AND EventID = \"1121\" AND Path LIKE \"%\\\\lsass.exe\" ESCAPE '\\')"
+            "SELECT * FROM logs WHERE (Channel IN (\"Microsoft-Windows-Windows Defender/Operational\", \"Microsoft-Windows-Windows Defender/WHC\") AND EventID = \"1121\" AND Path LIKE \"%\\\\lsass.exe\" ESCAPE '\\')"
         ]
     },
     {
@@ -9912,7 +9912,7 @@
         ],
         "level": "medium",
         "rule": [
-            "SELECT * FROM (SELECT *,count(QueryName) AS agg FROM logs WHERE (EventID = \"22\" AND Channel = \"Microsoft-Windows-Sysmon/Operational\" AND QueryName LIKE \"%\" ESCAPE '\\' AND QueryStatus = \"0\" AND (QueryResults LIKE \"(::ffff:)_10.%\" ESCAPE '\\' OR QueryResults LIKE \"(::ffff:)_192.168.%\" ESCAPE '\\' OR QueryResults LIKE \"(::ffff:)_172.16.%\" ESCAPE '\\' OR QueryResults LIKE \"(::ffff:)_172.17.%\" ESCAPE '\\' OR QueryResults LIKE \"(::ffff:)_172.18.%\" ESCAPE '\\' OR QueryResults LIKE \"(::ffff:)_172.19.%\" ESCAPE '\\' OR QueryResults LIKE \"(::ffff:)_172.20.%\" ESCAPE '\\' OR QueryResults LIKE \"(::ffff:)_172.21.%\" ESCAPE '\\' OR QueryResults LIKE \"(::ffff:)_172.22.%\" ESCAPE '\\' OR QueryResults LIKE \"(::ffff:)_172.23.%\" ESCAPE '\\' OR QueryResults LIKE \"(::ffff:)_172.24.%\" ESCAPE '\\' OR QueryResults LIKE \"(::ffff:)_172.25.%\" ESCAPE '\\' OR QueryResults LIKE \"(::ffff:)_172.26.%\" ESCAPE '\\' OR QueryResults LIKE \"(::ffff:)_172.27.%\" ESCAPE '\\' OR QueryResults LIKE \"(::ffff:)_172.28.%\" ESCAPE '\\' OR QueryResults LIKE \"(::ffff:)_172.29.%\" ESCAPE '\\' OR QueryResults LIKE \"(::ffff:)_172.30.%\" ESCAPE '\\' OR QueryResults LIKE \"(::ffff:)_172.31.%\" ESCAPE '\\' OR QueryResults LIKE \"(::ffff:)_127.%\" ESCAPE '\\') AND (EventID = \"22\" AND Channel = \"Microsoft-Windows-Sysmon/Operational\") AND (QueryName LIKE \"%\" ESCAPE '\\' AND QueryStatus = \"0\") AND NOT ((QueryResults LIKE \"(::ffff:)_10.%\" ESCAPE '\\' OR QueryResults LIKE \"(::ffff:)_192.168.%\" ESCAPE '\\' OR QueryResults LIKE \"(::ffff:)_172.16.%\" ESCAPE '\\' OR QueryResults LIKE \"(::ffff:)_172.17.%\" ESCAPE '\\' OR QueryResults LIKE \"(::ffff:)_172.18.%\" ESCAPE '\\' OR QueryResults LIKE \"(::ffff:)_172.19.%\" ESCAPE '\\' OR QueryResults LIKE \"(::ffff:)_172.20.%\" ESCAPE '\\' OR QueryResults LIKE \"(::ffff:)_172.21.%\" ESCAPE '\\' OR QueryResults LIKE \"(::ffff:)_172.22.%\" ESCAPE '\\' OR QueryResults LIKE \"(::ffff:)_172.23.%\" ESCAPE '\\' OR QueryResults LIKE \"(::ffff:)_172.24.%\" ESCAPE '\\' OR QueryResults LIKE \"(::ffff:)_172.25.%\" ESCAPE '\\' OR QueryResults LIKE \"(::ffff:)_172.26.%\" ESCAPE '\\' OR QueryResults LIKE \"(::ffff:)_172.27.%\" ESCAPE '\\' OR QueryResults LIKE \"(::ffff:)_172.28.%\" ESCAPE '\\' OR QueryResults LIKE \"(::ffff:)_172.29.%\" ESCAPE '\\' OR QueryResults LIKE \"(::ffff:)_172.30.%\" ESCAPE '\\' OR QueryResults LIKE \"(::ffff:)_172.31.%\" ESCAPE '\\' OR QueryResults LIKE \"(::ffff:)_127.%\" ESCAPE '\\'))) GROUP BY ComputerName) WHERE agg > 3"
+            "SELECT * FROM (SELECT *,count(QueryName) AS agg FROM logs WHERE ((EventID = \"22\" AND Channel = \"Microsoft-Windows-Sysmon/Operational\") AND EventID = \"22\" AND Channel = \"Microsoft-Windows-Sysmon/Operational\" AND QueryName LIKE \"%\" ESCAPE '\\' AND QueryStatus = \"0\" AND (QueryResults LIKE \"(::ffff:)_10.%\" ESCAPE '\\' OR QueryResults LIKE \"(::ffff:)_192.168.%\" ESCAPE '\\' OR QueryResults LIKE \"(::ffff:)_172.16.%\" ESCAPE '\\' OR QueryResults LIKE \"(::ffff:)_172.17.%\" ESCAPE '\\' OR QueryResults LIKE \"(::ffff:)_172.18.%\" ESCAPE '\\' OR QueryResults LIKE \"(::ffff:)_172.19.%\" ESCAPE '\\' OR QueryResults LIKE \"(::ffff:)_172.20.%\" ESCAPE '\\' OR QueryResults LIKE \"(::ffff:)_172.21.%\" ESCAPE '\\' OR QueryResults LIKE \"(::ffff:)_172.22.%\" ESCAPE '\\' OR QueryResults LIKE \"(::ffff:)_172.23.%\" ESCAPE '\\' OR QueryResults LIKE \"(::ffff:)_172.24.%\" ESCAPE '\\' OR QueryResults LIKE \"(::ffff:)_172.25.%\" ESCAPE '\\' OR QueryResults LIKE \"(::ffff:)_172.26.%\" ESCAPE '\\' OR QueryResults LIKE \"(::ffff:)_172.27.%\" ESCAPE '\\' OR QueryResults LIKE \"(::ffff:)_172.28.%\" ESCAPE '\\' OR QueryResults LIKE \"(::ffff:)_172.29.%\" ESCAPE '\\' OR QueryResults LIKE \"(::ffff:)_172.30.%\" ESCAPE '\\' OR QueryResults LIKE \"(::ffff:)_172.31.%\" ESCAPE '\\' OR QueryResults LIKE \"(::ffff:)_127.%\" ESCAPE '\\') AND (EventID = \"22\" AND Channel = \"Microsoft-Windows-Sysmon/Operational\") AND (QueryName LIKE \"%\" ESCAPE '\\' AND QueryStatus = \"0\") AND NOT ((QueryResults LIKE \"(::ffff:)_10.%\" ESCAPE '\\' OR QueryResults LIKE \"(::ffff:)_192.168.%\" ESCAPE '\\' OR QueryResults LIKE \"(::ffff:)_172.16.%\" ESCAPE '\\' OR QueryResults LIKE \"(::ffff:)_172.17.%\" ESCAPE '\\' OR QueryResults LIKE \"(::ffff:)_172.18.%\" ESCAPE '\\' OR QueryResults LIKE \"(::ffff:)_172.19.%\" ESCAPE '\\' OR QueryResults LIKE \"(::ffff:)_172.20.%\" ESCAPE '\\' OR QueryResults LIKE \"(::ffff:)_172.21.%\" ESCAPE '\\' OR QueryResults LIKE \"(::ffff:)_172.22.%\" ESCAPE '\\' OR QueryResults LIKE \"(::ffff:)_172.23.%\" ESCAPE '\\' OR QueryResults LIKE \"(::ffff:)_172.24.%\" ESCAPE '\\' OR QueryResults LIKE \"(::ffff:)_172.25.%\" ESCAPE '\\' OR QueryResults LIKE \"(::ffff:)_172.26.%\" ESCAPE '\\' OR QueryResults LIKE \"(::ffff:)_172.27.%\" ESCAPE '\\' OR QueryResults LIKE \"(::ffff:)_172.28.%\" ESCAPE '\\' OR QueryResults LIKE \"(::ffff:)_172.29.%\" ESCAPE '\\' OR QueryResults LIKE \"(::ffff:)_172.30.%\" ESCAPE '\\' OR QueryResults LIKE \"(::ffff:)_172.31.%\" ESCAPE '\\' OR QueryResults LIKE \"(::ffff:)_127.%\" ESCAPE '\\'))) GROUP BY ComputerName) WHERE agg > 3"
         ]
     },
     {

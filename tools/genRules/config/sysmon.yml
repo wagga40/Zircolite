@@ -1,78 +1,60 @@
 title: Conversion of Generic Rules into Sysmon Specific Rules
 order: 10
-logsources:    
+logsources:
     process_creation:
         category: process_creation
         product: windows
         conditions:
             EventID: 1
-        rewrite:
-            product: windows
-            service: sysmon
+            Channel: 'Microsoft-Windows-Sysmon/Operational'
     network_connection:
         category: network_connection
         product: windows
         conditions:
             EventID: 3
-        rewrite:
-            product: windows
-            service: sysmon
+            Channel: 'Microsoft-Windows-Sysmon/Operational'
     process_terminated:
         category: process_termination
         product: windows
         conditions:
             EventID: 5
-        rewrite:
-            product: windows
-            service: sysmon
+            Channel: 'Microsoft-Windows-Sysmon/Operational'
     driver_loaded:
         category: driver_load
         product: windows
         conditions:
             EventID: 6
-        rewrite:
-            product: windows
-            service: sysmon
+            Channel: 'Microsoft-Windows-Sysmon/Operational'
     image_loaded:
         category: image_load
         product: windows
         conditions:
             EventID: 7
-        rewrite:
-            product: windows
-            service: sysmon
+            Channel: 'Microsoft-Windows-Sysmon/Operational'
     create_remote_thread:
         category: create_remote_thread
         product: windows
         conditions:
             EventID: 8
-        rewrite:
-            product: windows
-            service: sysmon
+            Channel: 'Microsoft-Windows-Sysmon/Operational'
     raw_access_thread:
         category: raw_access_thread
         product: windows
         conditions:
             EventID: 9
-        rewrite:
-            product: windows
-            service: sysmon
+            Channel: 'Microsoft-Windows-Sysmon/Operational'
     process_access:
         category: process_access
         product: windows
         conditions:
             EventID: 10
-        rewrite:
-            product: windows
-            service: sysmon       
+            Channel: 'Microsoft-Windows-Sysmon/Operational'
     file_creation:
         category: file_event
         product: windows
         conditions:
             EventID: 11
-        rewrite:
-            product: windows
-            service: sysmon
+            Channel: 'Microsoft-Windows-Sysmon/Operational'
     registry_event:
         category: registry_event
         product: windows
@@ -81,17 +63,13 @@ logsources:
                 - 12 
                 - 13 
                 - 14
-        rewrite:
-            product: windows
-            service: sysmon
+            Channel: 'Microsoft-Windows-Sysmon/Operational'
     create_stream_hash:
         category: create_stream_hash
         product: windows
         conditions:
             EventID: 15
-        rewrite:
-            product: windows
-            service: sysmon
+            Channel: 'Microsoft-Windows-Sysmon/Operational'
     pipe_created:
         category: pipe_created
         product: windows
@@ -99,9 +77,7 @@ logsources:
             EventID: 
                 - 17
                 - 18
-        rewrite:
-            product: windows
-            service: sysmon
+            Channel: 'Microsoft-Windows-Sysmon/Operational'
     wmi_event:
         category: wmi_event
         product: windows
@@ -110,25 +86,19 @@ logsources:
                 - 19
                 - 20
                 - 21
-        rewrite:
-            product: windows
-            service: sysmon
+            Channel: 'Microsoft-Windows-Sysmon/Operational'
     dns_query:
         category: dns_query
         product: windows
         conditions:
             EventID: 22
-        rewrite:
-            product: windows
-            service: sysmon
+            Channel: 'Microsoft-Windows-Sysmon/Operational'
     file_delete:
         category: file_delete
         product: windows
         conditions:
             EventID: 23
-        rewrite:
-            product: windows
-            service: sysmon
+            Channel: 'Microsoft-Windows-Sysmon/Operational'
     windows:
         product: windows
     windows-application:
@@ -174,7 +144,6 @@ logsources:
     windows-dns-server:
         product: windows
         service: dns-server
-        category: dns
         conditions:
             Channel: 'DNS Server'
     windows-dns-server-audit:
@@ -201,11 +170,20 @@ logsources:
         product: windows
         service: windefend
         conditions:
-            Channel: 'Microsoft-Windows-Windows Defender/Operational'
+            Channel: 
+                - 'Microsoft-Windows-Windows Defender/Operational'
+                - 'Microsoft-Windows-Windows Defender/WHC'
     windows-defender-product:
         product: windows_defender
         conditions:
-            Channel: 'Microsoft-Windows-Windows Defender/Operational'
+            Channel: 
+                - 'Microsoft-Windows-Windows Defender/Operational'
+                - 'Microsoft-Windows-Windows Defender/WHC'
+    windows-msexchange-management:
+        product: windows
+        service: msexchange-management
+        conditions:
+            Channel: 'MSExchange Management'
     windows-applocker:
         product: windows
         service: applocker
