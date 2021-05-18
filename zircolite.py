@@ -109,10 +109,6 @@ def extractEvtx(file, tmpDir, evtx_dumpBinary):
     """
     Convert EVTX to JSON using evtx_dump : https://github.com/omerbenamram/evtx.
     Drop resulting JSON files in a tmp folder.
-    @params:
-        file            - Required  : EVTX file to convert
-        tmpDir          - Required  : directory where the JSON files will be saved
-        evtx_dumpBinary - Required  : evtx_dump binary location
     """
 
     logging.debug(f"EXTRACTING : {file}")
@@ -129,8 +125,6 @@ def flattenJSON(file):
     """
         Flatten json object with nested keys into a single level.
         Returns the flattened json object
-        @params:
-            file    - Required  : A JSON converted EVTX file
     """
 
     logging.debug(f"FLATTENING : {file}")
@@ -297,6 +291,7 @@ if __name__ == '__main__':
     tmpDir = "tmp-" + ''.join(random.SystemRandom().choice(string.ascii_uppercase + string.digits) for _ in range(8))
     parser = argparse.ArgumentParser()
     parser.add_argument("-e", "--evtx", help="EVTX log file or directory where EVTX log files are stored in JSON or EVTX format", type=str, required=True)
+    parser.add_argument("--filter", help="Filter on these filenames. Only EVTX files containing the provided string will be used", action='append', nargs='+')
     parser.add_argument("-r", "--ruleset", help="JSON File containing SIGMA rules", type=str, required=True)
     parser.add_argument("-c", "--config", help="JSON File containing field mappings and exclusions", type=str, default="config/fieldMappings.json")
     parser.add_argument("-o", "--outfile", help="JSON file that will contains all detected events", type=str, default="detected_events.json")
@@ -373,7 +368,12 @@ if __name__ == '__main__':
             quitOnError(f"{Fore.RED}   [-] Unable to extract EVTX from submitted path")
         if len(EVTXList) > 0:
             for evtx in tqdm(EVTXList, colour="yellow"):
-                extractEvtx(evtx, args.tmpdir, evtx_dumpBinary)
+                # If there are file filter(s) : check if current file is in file filters
+                if (args.filter is not None): 
+                    if any(fileFilters[0].lower() in str(evtx).lower() for fileFilters in args.filter): 
+                        extractEvtx(evtx, args.tmpdir, evtx_dumpBinary)
+                else:
+                    extractEvtx(evtx, args.tmpdir, evtx_dumpBinary)
             # Set the path for the next step
             EVTXJSONList = list(Path(args.tmpdir).rglob("*.json"))
         else:
