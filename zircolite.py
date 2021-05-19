@@ -274,6 +274,16 @@ def sendLogsHTTP(host, payload = ""):
         logging.debug(f"{Fore.RED}   [-] {e}")
         return False
 
+def selectFiles(pathList, selectFilesList):
+    if selectFilesList is not None:
+        return [evtx for evtx in [str(element) for element in list(pathList)] if any(fileFilters[0].lower() in evtx.lower() for fileFilters in selectFilesList)]
+    return pathList
+
+def avoidFiles(pathList, avoidFilesList):
+    if avoidFilesList is not None:
+        return [evtx for evtx in [str(element) for element in list(pathList)] if all(fileFilters[0].lower() not in evtx.lower() for fileFilters in avoidFilesList)]
+    return pathList
+
 ################################################################
 # MAIN()
 ################################################################
@@ -291,7 +301,8 @@ if __name__ == '__main__':
     tmpDir = "tmp-" + ''.join(random.SystemRandom().choice(string.ascii_uppercase + string.digits) for _ in range(8))
     parser = argparse.ArgumentParser()
     parser.add_argument("-e", "--evtx", help="EVTX log file or directory where EVTX log files are stored in JSON or EVTX format", type=str, required=True)
-    parser.add_argument("--filter", help="Filter on these filenames. Only EVTX files containing the provided string will be used", action='append', nargs='+')
+    parser.add_argument("-s", "--select", help="Only EVTX files containing the provided string will be used. If there is/are exclusion(s) (--avoid) they will be handled after selection", action='append', nargs='+')
+    parser.add_argument("-a", "--avoid", help="EVTX files containing the provided string will NOT be used", action='append', nargs='+')
     parser.add_argument("-r", "--ruleset", help="JSON File containing SIGMA rules", type=str, required=True)
     parser.add_argument("-c", "--config", help="JSON File containing field mappings and exclusions", type=str, default="config/fieldMappings.json")
     parser.add_argument("-o", "--outfile", help="JSON file that will contains all detected events", type=str, default="detected_events.json")
@@ -366,18 +377,14 @@ if __name__ == '__main__':
             EVTXList = [EVTXPath]
         else:
             quitOnError(f"{Fore.RED}   [-] Unable to extract EVTX from submitted path")
-        if len(EVTXList) > 0:
-            for evtx in tqdm(EVTXList, colour="yellow"):
-                # If there are file filter(s) : check if current file is in file filters
-                if (args.filter is not None): 
-                    if any(fileFilters[0].lower() in str(evtx).lower() for fileFilters in args.filter): 
-                        extractEvtx(evtx, args.tmpdir, evtx_dumpBinary)
-                else:
-                    extractEvtx(evtx, args.tmpdir, evtx_dumpBinary)
+        FileList = avoidFiles(selectFiles(EVTXList, args.select), args.avoid) # Apply file filters in ths order "select" than "avoid"
+        if len(FileList) > 0:
+            for evtx in tqdm(FileList, colour="yellow"):
+                extractEvtx(evtx, args.tmpdir, evtx_dumpBinary)
             # Set the path for the next step
             EVTXJSONList = list(Path(args.tmpdir).rglob("*.json"))
         else:
-            quitOnError(f"{Fore.RED}   [-] No EVTX files found. Please verify the directory or the extension with '--fileext'")
+            quitOnError(f"{Fore.RED}   [-] No EVTX files found. Please verify filters, the directory or the extension with '--fileext'")
     else:
         EVTXJSONList = list(Path(args.evtx).rglob("*.json"))
 

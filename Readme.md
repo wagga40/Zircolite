@@ -47,6 +47,40 @@ python3 zircolite.py --evtx ../Logs --ruleset rules/rules_windows_sysmon.json
 
 ## Advanced use
 
+### File filters
+
+Some EVTX files are not used by SIGMA rules but can become quite large (Microsoft-Windows-SystemDataArchiver%4Diagnostic.evtx etc.), if you use `Zircolite` with directory as input argument, all EVTX files will be converted, saved and matched against the SIGMA Rules. 
+
+To speed up the detection process, you may want to use Zircolite on files matching or not matching a specific pattern. For that you can use **filters** provided by the two command line arguments :
+- `-s` or `--select` : select files partly matching the provided a string (case insensitive)
+- `-a` or `--avoid` : exclude files partly matching the provided a string (case insensitive)
+
+```shell
+# Only use EVTX files that contains "sysmon" in their names
+python3 zircolite.py --evtx logs/ --ruleset rules/rules_windows_sysmon.json --select sysmon
+
+# Exclude "Microsoft-Windows-SystemDataArchiver%4Diagnostic.evtx" 
+python3 zircolite.py --evtx logs/ --ruleset rules/rules_windows_sysmon.json --avoid systemdataarchiver
+
+# Only use EVTX files with "operational" in their names but exclude "defender" related logs
+python3 zircolite.py --evtx logs/ --ruleset rules/rules_windows_sysmon.json \
+--select operational --avoid defender
+
+```
+
+For example, the **Sysmon** ruleset available in the `rules` directory only use the following channels (names have been shortened) : Sysmon, Security, System, Powershell, Defender, AppLocker, DriverFrameworks, Application, NTLM, DNS, MSexchange, WMI-activity, TaskScheduler. So if you use the sysmon ruleset with the following rules, you should speed up `Zircolite`execution : 
+
+```shell
+python3 zircolite.py --evtx logs/ --ruleset rules/rules_windows_sysmon.json \
+--select sysmon --select security.evtx --select system.evtx \
+--select application.evtx --select Windows-NTLM --select DNS \
+--select powershell --select defender --select applocker \
+--select driverframeworks --select "msexchange management" \
+--select TaskScheduler --select WMI-activity
+```
+
+:information_source: the "select" argument is always applied first and then the "avoid" argument is applied. So, it is possible to exclude files from included files but not the opposite.
+
 ### Templating
 
 Zircolite provides a templating system based on Jinja 2. It allows you to change the output format to suits your needs (Splunk or ELK integration, Grep-able output...). To use the template system, use these arguments :
@@ -182,7 +216,7 @@ Since the Docker image mirrors Zircolite's repository, all options are also avai
 ## "Battle-tested" ?
 
 Zircolite has been used to perform cold-analysis (in Lab) on EVTX in multiple "real-life" situations. 
-However, even if Zircolite has been used many times to perform analysis directly on an Microsoft Windows endpoint there is not yet a pipeline to thoroughly test every release.
+However, even if Zircolite has been used many times to perform analysis directly on an Microsoft Windows endpoint, there is not yet a pipeline to thoroughly test every release.
 
 ## License
 
