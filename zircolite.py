@@ -377,7 +377,7 @@ if __name__ == '__main__':
             EVTXList = [EVTXPath]
         else:
             quitOnError(f"{Fore.RED}   [-] Unable to extract EVTX from submitted path")
-        FileList = avoidFiles(selectFiles(EVTXList, args.select), args.avoid) # Apply file filters in ths order "select" than "avoid"
+        FileList = avoidFiles(selectFiles(EVTXList, args.select), args.avoid)  # Apply file filters in this order : "select" than "avoid"
         if len(FileList) > 0:
             for evtx in tqdm(FileList, colour="yellow"):
                 extractEvtx(evtx, args.tmpdir, evtx_dumpBinary)

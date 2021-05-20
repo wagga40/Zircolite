@@ -110,7 +110,7 @@ mv data.js gui/
 
 Then you just have to open `index.html` in your favorite browser and click on a Mitre Att&ck category or an alert level.
   
-:warning: **The mini-GUI was not build to handle big datasets**.
+:warning: **The mini-GUI was not built to handle big datasets**.
 
 ### Forward SIGMA detected events
 

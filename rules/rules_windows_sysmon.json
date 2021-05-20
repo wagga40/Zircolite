@@ -1393,6 +1393,21 @@
         ]
     },
     {
+        "title": "Suspicious Shells Spawn by WinRM - DA853C87",
+        "description": "Detects suspicious shell spawn from WinRM host process",
+        "author": "Andreas Hunkeler (@Karneades), Markus Neis",
+        "tags": [
+            "attack.t1190",
+            "attack.initial_access",
+            "attack.persistence",
+            "attack.privilege_escalation"
+        ],
+        "level": "critical",
+        "rule": [
+            "SELECT * FROM logs WHERE (EventID = \"1\" AND Channel = \"Microsoft-Windows-Sysmon/Operational\" AND ParentImage LIKE \"%\\\\wsmprovhost.exe\" ESCAPE '\\' AND (Image LIKE \"%\\\\cmd.exe\" ESCAPE '\\' OR Image LIKE \"%\\\\sh.exe\" ESCAPE '\\' OR Image LIKE \"%\\\\bash.exe\" ESCAPE '\\' OR Image LIKE \"%\\\\powershell.exe\" ESCAPE '\\' OR Image LIKE \"%\\\\schtasks.exe\" ESCAPE '\\' OR Image LIKE \"%\\\\certutil.exe\" ESCAPE '\\' OR Image LIKE \"%\\\\whoami.exe\" ESCAPE '\\' OR Image LIKE \"%\\\\bitsadmin.exe\" ESCAPE '\\'))"
+        ]
+    },
+    {
         "title": "LSASS Memory Dump - 3E605F84",
         "description": "Detects process LSASS memory dump using procdump or taskmgr based on the CallTrace pointing to dbghelp.dll or dbgcore.dll for win10",
         "author": "Samir Bousseaden",
@@ -7156,7 +7171,7 @@
     {
         "title": "Meterpreter or Cobalt Strike Getsystem Service Start - 2892E691",
         "description": "Detects the use of getsystem Meterpreter/Cobalt Strike command by detecting a specific service starting",
-        "author": "Teymur Kheirkhabarov, Ecco",
+        "author": "Teymur Kheirkhabarov, Ecco, Florian Roth",
         "tags": [
             "attack.privilege_escalation",
             "attack.t1134",
@@ -7165,7 +7180,7 @@
         ],
         "level": "high",
         "rule": [
-            "SELECT * FROM logs WHERE ((EventID = \"1\" AND Channel = \"Microsoft-Windows-Sysmon/Operational\") AND (ParentImage LIKE \"%\\\\services.exe\" ESCAPE '\\' AND ((CommandLine LIKE \"%cmd%\" ESCAPE '\\' AND CommandLine LIKE \"%/c%\" ESCAPE '\\' AND CommandLine LIKE \"%echo%\" ESCAPE '\\' AND CommandLine LIKE \"%\\\\pipe\\\\%\" ESCAPE '\\') OR (CommandLine LIKE \"%\\%COMSPEC\\%%\" ESCAPE '\\' AND CommandLine LIKE \"%/c%\" ESCAPE '\\' AND CommandLine LIKE \"%echo%\" ESCAPE '\\' AND CommandLine LIKE \"%\\\\pipe\\\\%\" ESCAPE '\\') OR (CommandLine LIKE \"%rundll32%\" ESCAPE '\\' AND CommandLine LIKE \"%.dll,a%\" ESCAPE '\\' AND CommandLine LIKE \"%/p:%\" ESCAPE '\\'))) AND NOT (CommandLine LIKE \"%MpCmdRun%\" ESCAPE '\\'))"
+            "SELECT * FROM logs WHERE ((EventID = \"1\" AND Channel = \"Microsoft-Windows-Sysmon/Operational\") AND (ParentImage LIKE \"%\\\\services.exe\" ESCAPE '\\' AND ((CommandLine LIKE \"%cmd%\" ESCAPE '\\' AND CommandLine LIKE \"%/c%\" ESCAPE '\\' AND CommandLine LIKE \"%echo%\" ESCAPE '\\' AND CommandLine LIKE \"%\\\\pipe\\\\%\" ESCAPE '\\') OR (CommandLine LIKE \"%\\%COMSPEC\\%%\" ESCAPE '\\' AND CommandLine LIKE \"%/c%\" ESCAPE '\\' AND CommandLine LIKE \"%echo%\" ESCAPE '\\' AND CommandLine LIKE \"%\\\\pipe\\\\%\" ESCAPE '\\') OR (CommandLine LIKE \"%cmd.exe%\" ESCAPE '\\' AND CommandLine LIKE \"%/c%\" ESCAPE '\\' AND CommandLine LIKE \"%echo%\" ESCAPE '\\' AND CommandLine LIKE \"%\\\\pipe\\\\%\" ESCAPE '\\') OR (CommandLine LIKE \"%rundll32%\" ESCAPE '\\' AND CommandLine LIKE \"%.dll,a%\" ESCAPE '\\' AND CommandLine LIKE \"%/p:%\" ESCAPE '\\'))) AND NOT (CommandLine LIKE \"%MpCmdRun%\" ESCAPE '\\'))"
         ]
     },
     {
@@ -8564,7 +8579,7 @@
     {
         "title": "Meterpreter or Cobalt Strike Getsystem Service Installation - 17FDA933",
         "description": "Detects the use of getsystem Meterpreter/Cobalt Strike command by detecting a specific service installation",
-        "author": "Teymur Kheirkhabarov, Ecco",
+        "author": "Teymur Kheirkhabarov, Ecco, Florian Roth",
         "tags": [
             "attack.privilege_escalation",
             "attack.t1134",
@@ -8573,9 +8588,9 @@
         ],
         "level": "critical",
         "rule": [
-            "SELECT * FROM logs WHERE (Channel = \"System\" AND ((ImagePath LIKE \"%cmd%\" ESCAPE '\\' AND ImagePath LIKE \"%/c%\" ESCAPE '\\' AND ImagePath LIKE \"%echo%\" ESCAPE '\\' AND ImagePath LIKE \"%\\\\pipe\\\\%\" ESCAPE '\\') OR (ImagePath LIKE \"%\\%COMSPEC\\%%\" ESCAPE '\\' AND ImagePath LIKE \"%/c%\" ESCAPE '\\' AND ImagePath LIKE \"%echo%\" ESCAPE '\\' AND ImagePath LIKE \"%\\\\pipe\\\\%\" ESCAPE '\\') OR (ImagePath LIKE \"%rundll32%\" ESCAPE '\\' AND ImagePath LIKE \"%.dll,a%\" ESCAPE '\\' AND ImagePath LIKE \"%/p:%\" ESCAPE '\\')))",
-            "SELECT * FROM logs WHERE ((EventID = \"6\" AND Channel = \"Microsoft-Windows-Sysmon/Operational\") AND ((ImagePath LIKE \"%cmd%\" ESCAPE '\\' AND ImagePath LIKE \"%/c%\" ESCAPE '\\' AND ImagePath LIKE \"%echo%\" ESCAPE '\\' AND ImagePath LIKE \"%\\\\pipe\\\\%\" ESCAPE '\\') OR (ImagePath LIKE \"%\\%COMSPEC\\%%\" ESCAPE '\\' AND ImagePath LIKE \"%/c%\" ESCAPE '\\' AND ImagePath LIKE \"%echo%\" ESCAPE '\\' AND ImagePath LIKE \"%\\\\pipe\\\\%\" ESCAPE '\\') OR (ImagePath LIKE \"%rundll32%\" ESCAPE '\\' AND ImagePath LIKE \"%.dll,a%\" ESCAPE '\\' AND ImagePath LIKE \"%/p:%\" ESCAPE '\\')))",
-            "SELECT * FROM logs WHERE (Channel = \"Security\" AND ((ImagePath LIKE \"%cmd%\" ESCAPE '\\' AND ImagePath LIKE \"%/c%\" ESCAPE '\\' AND ImagePath LIKE \"%echo%\" ESCAPE '\\' AND ImagePath LIKE \"%\\\\pipe\\\\%\" ESCAPE '\\') OR (ImagePath LIKE \"%\\%COMSPEC\\%%\" ESCAPE '\\' AND ImagePath LIKE \"%/c%\" ESCAPE '\\' AND ImagePath LIKE \"%echo%\" ESCAPE '\\' AND ImagePath LIKE \"%\\\\pipe\\\\%\" ESCAPE '\\') OR (ImagePath LIKE \"%rundll32%\" ESCAPE '\\' AND ImagePath LIKE \"%.dll,a%\" ESCAPE '\\' AND ImagePath LIKE \"%/p:%\" ESCAPE '\\')))"
+            "SELECT * FROM logs WHERE (Channel = \"System\" AND ((ImagePath LIKE \"%cmd%\" ESCAPE '\\' AND ImagePath LIKE \"%/c%\" ESCAPE '\\' AND ImagePath LIKE \"%echo%\" ESCAPE '\\' AND ImagePath LIKE \"%\\\\pipe\\\\%\" ESCAPE '\\') OR (ImagePath LIKE \"%\\%COMSPEC\\%%\" ESCAPE '\\' AND ImagePath LIKE \"%/c%\" ESCAPE '\\' AND ImagePath LIKE \"%echo%\" ESCAPE '\\' AND ImagePath LIKE \"%\\\\pipe\\\\%\" ESCAPE '\\') OR (ImagePath LIKE \"%cmd.exe%\" ESCAPE '\\' AND ImagePath LIKE \"%/c%\" ESCAPE '\\' AND ImagePath LIKE \"%echo%\" ESCAPE '\\' AND ImagePath LIKE \"%\\\\pipe\\\\%\" ESCAPE '\\') OR (ImagePath LIKE \"%rundll32%\" ESCAPE '\\' AND ImagePath LIKE \"%.dll,a%\" ESCAPE '\\' AND ImagePath LIKE \"%/p:%\" ESCAPE '\\')))",
+            "SELECT * FROM logs WHERE ((EventID = \"6\" AND Channel = \"Microsoft-Windows-Sysmon/Operational\") AND ((ImagePath LIKE \"%cmd%\" ESCAPE '\\' AND ImagePath LIKE \"%/c%\" ESCAPE '\\' AND ImagePath LIKE \"%echo%\" ESCAPE '\\' AND ImagePath LIKE \"%\\\\pipe\\\\%\" ESCAPE '\\') OR (ImagePath LIKE \"%\\%COMSPEC\\%%\" ESCAPE '\\' AND ImagePath LIKE \"%/c%\" ESCAPE '\\' AND ImagePath LIKE \"%echo%\" ESCAPE '\\' AND ImagePath LIKE \"%\\\\pipe\\\\%\" ESCAPE '\\') OR (ImagePath LIKE \"%cmd.exe%\" ESCAPE '\\' AND ImagePath LIKE \"%/c%\" ESCAPE '\\' AND ImagePath LIKE \"%echo%\" ESCAPE '\\' AND ImagePath LIKE \"%\\\\pipe\\\\%\" ESCAPE '\\') OR (ImagePath LIKE \"%rundll32%\" ESCAPE '\\' AND ImagePath LIKE \"%.dll,a%\" ESCAPE '\\' AND ImagePath LIKE \"%/p:%\" ESCAPE '\\')))",
+            "SELECT * FROM logs WHERE (Channel = \"Security\" AND ((ImagePath LIKE \"%cmd%\" ESCAPE '\\' AND ImagePath LIKE \"%/c%\" ESCAPE '\\' AND ImagePath LIKE \"%echo%\" ESCAPE '\\' AND ImagePath LIKE \"%\\\\pipe\\\\%\" ESCAPE '\\') OR (ImagePath LIKE \"%\\%COMSPEC\\%%\" ESCAPE '\\' AND ImagePath LIKE \"%/c%\" ESCAPE '\\' AND ImagePath LIKE \"%echo%\" ESCAPE '\\' AND ImagePath LIKE \"%\\\\pipe\\\\%\" ESCAPE '\\') OR (ImagePath LIKE \"%cmd.exe%\" ESCAPE '\\' AND ImagePath LIKE \"%/c%\" ESCAPE '\\' AND ImagePath LIKE \"%echo%\" ESCAPE '\\' AND ImagePath LIKE \"%\\\\pipe\\\\%\" ESCAPE '\\') OR (ImagePath LIKE \"%rundll32%\" ESCAPE '\\' AND ImagePath LIKE \"%.dll,a%\" ESCAPE '\\' AND ImagePath LIKE \"%/p:%\" ESCAPE '\\')))"
         ]
     },
     {
