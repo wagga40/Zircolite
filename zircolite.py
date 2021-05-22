@@ -169,7 +169,10 @@ def flattenJSON(file):
 
     with open(str(file), 'r', encoding='utf-8') as JSONFile:
         for line in JSONFile:
-            flatten(json.loads(line))
+            try:
+                flatten(json.loads(line))
+            except Exception as e:
+                logging.debug(f'JSON ERROR : {line}')
             JSONOutput.append(JSONLine)
             JSONLine = {}
 
@@ -354,7 +357,7 @@ if __name__ == '__main__':
     # Start time counting
     start_time = time.time()
 
-    # Initialize all configuration dict
+    # Initialize configuration dictionaries 
     fieldExclusions = {}  # Will contain fields to discard
     fieldMappings = {}  # Will contain fields to rename during flattening
     uselessValues = {}  # Will contain values to discard during flattening
@@ -366,27 +369,28 @@ if __name__ == '__main__':
         fieldMappings = fieldMappingsDict["mappings"]
         uselessValues = fieldMappingsDict["useless"]
 
-    # Skipping extracting if jsononly parameter is set
-    if not args.jsononly:
-        logging.info(f"[+] Extracting EVTX Using '{args.tmpdir}' directory ")
-        EVTXPath = Path(args.evtx)
-        if EVTXPath.is_dir():
-            # EVTX recursive search in given directory with given file extension
-            EVTXList = list(EVTXPath.rglob(f"*.{args.fileext}"))
-        elif EVTXPath.is_file():
-            EVTXList = [EVTXPath]
-        else:
-            quitOnError(f"{Fore.RED}   [-] Unable to extract EVTX from submitted path")
-        FileList = avoidFiles(selectFiles(EVTXList, args.select), args.avoid)  # Apply file filters in this order : "select" than "avoid"
-        if len(FileList) > 0:
+    # If we are working with json we force the file extension if it is not user-provided
+    if args.jsononly and args.fileext != "evtx": args.fileext = "json"
+    if not args.jsononly: logging.info(f"[+] Extracting EVTX Using '{args.tmpdir}' directory ")
+    EVTXPath = Path(args.evtx)
+    if EVTXPath.is_dir():
+        # EVTX recursive search in given directory with given file extension
+        EVTXList = list(EVTXPath.rglob(f"*.{args.fileext}"))
+    elif EVTXPath.is_file():
+        EVTXList = [EVTXPath]
+    else:
+        quitOnError(f"{Fore.RED}   [-] Unable to extract EVTX from submitted path")
+    FileList = avoidFiles(selectFiles(EVTXList, args.select), args.avoid)  # Apply file filters in this order : "select" than "avoid"
+    if len(FileList) > 0:
+        if not args.jsononly:
             for evtx in tqdm(FileList, colour="yellow"):
                 extractEvtx(evtx, args.tmpdir, evtx_dumpBinary)
             # Set the path for the next step
             EVTXJSONList = list(Path(args.tmpdir).rglob("*.json"))
         else:
-            quitOnError(f"{Fore.RED}   [-] No EVTX files found. Please verify filters, the directory or the extension with '--fileext'")
+            EVTXJSONList = FileList
     else:
-        EVTXJSONList = list(Path(args.evtx).rglob("*.json"))
+        quitOnError(f"{Fore.RED}   [-] No file found. Please verify filters, the directory or the extension with '--fileext'")
 
     logging.info("[+] Processing EVTX")
 
@@ -493,7 +497,7 @@ if __name__ == '__main__':
     if not args.keeptmp:
         logging.info("[+] Cleaning")
         try:
-            shutil.rmtree(args.tmpdir)
+            if not args.jsononly: shutil.rmtree(args.tmpdir)
         except OSError as e:
             logging.error(f"{Fore.RED}   [-] Error during cleanup {e}")
 

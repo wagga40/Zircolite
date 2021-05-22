@@ -1,4 +1,5 @@
-# Zircolite
+# <p align="center">![](pics/zircolite_200.png)</p>
+
 ## Battle-tested, standalone and fast SIGMA-based detection tool for EVTX or JSON
 
 [![python](https://img.shields.io/badge/python-3.8-blue)](https://www.python.org/)
@@ -6,21 +7,25 @@
 ![version](https://img.shields.io/badge/Platform-Lin-green)
 ![version](https://img.shields.io/badge/Platform-Mac-green)
 ![version](https://img.shields.io/badge/Architecture-64bit-red)
-
-### CLI
-
 ![](pics/Zircolite.gif)
 
-**Zircolite is a standalone tool written in Python 3 allowing to use SIGMA rules on Windows EVTX logs :**
+**Zircolite is a standalone tool written in Python 3 allowing to use SIGMA rules on Windows event logs (in EVTX and JSON format) :**
 
-- It can be used directly on an endpoint (pseudo live-forensics) or in your forensic/detection workstation
-- Zircolite was designed to be light (less than 500 lines of code), simple and portable
+- Zircolite can be used directly on an endpoint (pseudo live-forensics) or in your forensic/detection workstation
+- Zircolite was designed to be light (about 500 lines of code), simple and portable
 - Zircolite is more a workflow than a real detection engine ([check here](#architecture))
+- Zircolite can handle EVTX files and JSON files as long as they are in JSONL/NDJSON format (one JSON event per line). It has been successfully tested with MORDOR Datasets and NXlog files.
 
 If you use `zircolite.py` with evtx files as input **you can only execute it on a 64 bits OS** (`evtx_dump` is 64 bits only).
 Zircolite can be used directly in Python or you can use the binaries provided in release (Microsoft Windows only).
 
-:information_source: If you want to try the tool you can test with these EVTX files : [EVTX-ATTACK-SAMPLES](https://github.com/sbousseaden/EVTX-ATTACK-SAMPLES).
+:information_source: If you want to try the tool you can test with these samples : 
+
+- [EVTX-ATTACK-SAMPLES](https://github.com/sbousseaden/EVTX-ATTACK-SAMPLES) (EVTX Files)
+- [MORDOR Datasets - APT29 Day 1](https://github.com/OTRF/mordor/blob/master/datasets/large/apt29/day1/apt29_evals_day1_manual.zip) (JSONL Files)
+- [MORDOR Datasets - APT29 Day 2](https://github.com/OTRF/mordor/blob/master/datasets/large/apt29/day2/apt29_evals_day2_manual.zip) (JSONL Files)
+- [MORDOR Datasets - APT3 Scenario 1](https://github.com/OTRF/mordor/blob/master/datasets/large/windows/apt3/caldera_attack_evals_round1_day1_2019-10-20201108.tar.gz) (JSONL Files)
+- [MORDOR Datasets - APT3 Scenario 2](https://github.com/OTRF/mordor/blob/master/datasets/large/windows/apt3/empire_apt3.tar.gz) (JSONL Files)
 
 ## Requirements
 
@@ -49,7 +54,7 @@ python3 zircolite.py --evtx ../Logs --ruleset rules/rules_windows_sysmon.json
 
 ### File filters
 
-Some EVTX files are not used by SIGMA rules but can become quite large (Microsoft-Windows-SystemDataArchiver%4Diagnostic.evtx etc.), if you use `Zircolite` with directory as input argument, all EVTX files will be converted, saved and matched against the SIGMA Rules. 
+Some EVTX files are not used by SIGMA rules but can become quite large (`Microsoft-Windows-SystemDataArchiver%4Diagnostic.evtx` etc.), if you use Zircolite with directory as input argument, all EVTX files will be converted, saved and matched against the SIGMA Rules. 
 
 To speed up the detection process, you may want to use Zircolite on files matching or not matching a specific pattern. For that you can use **filters** provided by the two command line arguments :
 - `-s` or `--select` : select files partly matching the provided a string (case insensitive)
@@ -93,7 +98,7 @@ python3 zircolite.py --evtx sample.evtx  --ruleset rules/rules_windows_sysmon.js
 --template templates/exportCSV.tmpl --templateOutput test.csv
 ```
 
-It is possible to use multiple templates if you provide as long as for each `--template` argument there is a `--templateOutput` argument associated.
+It is possible to use multiple templates if you provide for each `--template` argument there is a `--templateOutput` argument associated.
 
 ### Mini-Gui
 
@@ -141,16 +146,22 @@ find ../Samples/EVTX-ATTACK-SAMPLES/  -type f -name "*.evtx" \
 
 If you don't have find and/or GNU Parallel, you can use the **very basic** `Zircolite_mp.py` available in the [tools](tools/) directory of this repository.
 
-### Benchmarks
+### Benchmarks (**Updated 22nd May 2021**)
 
-On an Intel Core-i9 8c/16t - 64 GB RAM (**Updated 4th May 2021**):
+On an Intel Core-i9 8c/16t - 64 GB RAM - with **765 sigma rules** :
 
-|                            | Monocore | Multicore  |
-|----------------------------|----------|------------|
-| EVTX : 34 GB - 16 files    | -        | 9 Min      |
-| EVTX : 7.8 GB - 4 files    | -        | 162 sec    |
-| EVTX : 1.7 GB - One file   | 99 sec   |            |
-| EVTX : 40 MB  - 263 files  | 3 sec    | 1 sec      |
+|                                                    | Monocore | Multicore  |
+|----------------------------------------------------|----------|------------|
+| EVTX : 34 GB - 16 files                            | -        | 9 Min      |
+| EVTX : 7.8 GB - 4 files                            | -        | 162 sec    |
+| EVTX : 1.7 GB - 1 file                             | 99 sec   | -          |
+| EVTX : 40 MB  - 263 files                          | 3 sec    | 1 sec      |
+| MORDOR Datasets - APT29 Day 1 (196 081 events)     | 62 sec   | -          |
+| MORDOR Datasets - APT29 Day 2 (587 286 events)     | 4 min    | -          |
+| MORDOR Datasets - APT3 Scenario 1 (101 904 events) | 70 sec   | -          |
+| MORDOR Datasets - APT3 Scenario 2 (121 659 events) | 27 sec   | -          |
+
+:information_source: These results can be largely improved with fine-tuned rulesets.
 
 ### Rules
 
@@ -178,7 +189,9 @@ The SIGMA rules must be converted into JSON. This can be done with the `genRules
 
 ## Installation
 
-No installation needed. If you need to package it for standalone use on a computer use [PyInstaller](https://www.pyinstaller.org/) or [Nuitka](https://nuitka.net/).
+No installation needed, if you want to run the tool on Windows without the Python interpreter check the [releases](https://github.com/wagga40/Zircolite/releases).
+
+If you need/want to package Zircolite for standalone use, you can use [PyInstaller](https://www.pyinstaller.org/) or [Nuitka](https://nuitka.net/). An very short help is provided [here](#package-zircolite-with-pyinstaller).
 
 ### Zircolite with Docker
 
