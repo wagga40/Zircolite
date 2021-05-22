@@ -7886,8 +7886,8 @@
         ]
     },
     {
-        "title": "Remote PowerShell Session - 2B86E4D6",
-        "description": "Detects remote PowerShell sections by monitoring for wsmprovhost as a parent or child process (sign of an active ps remote session)",
+        "title": "Remote PowerShell Session Host Process (WinRM) - 2B86E4D6",
+        "description": "Detects remote PowerShell sections by monitoring for wsmprovhost (WinRM host process) as a parent or child process (sign of an active ps remote session)",
         "author": "Roberto Rodriguez @Cyb3rWard0g",
         "tags": [
             "attack.execution",
@@ -8347,8 +8347,8 @@
         ]
     },
     {
-        "title": "Remote PowerShell Sessions - 5F3F6748",
-        "description": "Detects basic PowerShell Remoting by monitoring for network inbound connections to ports 5985 OR 5986",
+        "title": "Remote PowerShell Sessions Network Connections (WinRM) - 5F3F6748",
+        "description": "Detects basic PowerShell Remoting (WinRM) by monitoring for network inbound connections to ports 5985 OR 5986",
         "author": "Roberto Rodriguez @Cyb3rWard0g",
         "tags": [
             "attack.execution",
