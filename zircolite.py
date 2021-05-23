@@ -162,10 +162,10 @@ def flattenJSON(file):
                     if key not in keyDict:
                         if type(value) is int:
                             keyDict[key] = ""
-                            fieldStmt += "'" + key + "' INTEGER,\n"
+                            fieldStmt += f"'{key}' INTEGER,\n"
                         else:
                             keyDict[key] = ""
-                            fieldStmt += "'" + key + "' TEXT COLLATE NOCASE,\n"
+                            fieldStmt += f"'{key}' TEXT COLLATE NOCASE,\n"
 
     with open(str(file), 'r', encoding='utf-8') as JSONFile:
         for line in JSONFile:
@@ -189,7 +189,7 @@ def insertData2Db(JSONLine):
         else:
             valuesStr += "'" + str(JSONLine[key]).replace("'", "''") + "', "
 
-    insertStrmt = "INSERT INTO logs (" + columnsStr[:-1] + ") VALUES (" + valuesStr[:-2] + ");"
+    insertStrmt = f"INSERT INTO logs ({columnsStr[:-1]}) VALUES ({valuesStr[:-2]});"
     return executeQuery(dbConnection, insertStrmt)
 
 def executeRule(rule, forwardTo = None):
@@ -270,7 +270,7 @@ def initLogger(debugMode, logFile):
 def sendLogsHTTP(host, payload = ""):
     """ Just send provided payload to provided web server. Not very clean. Non-async code for now """
     try:
-        r = requests.post(host, headers={'user-agent': 'zircolite/1.2.x'}, data={"data": payload})
+        r = requests.post(host, headers={"user-agent": "zircolite/1.2.x"}, data={"data": payload})
         logging.debug(f"{Fore.RED}   [-] {r}")
         return True
     except Exception as e:

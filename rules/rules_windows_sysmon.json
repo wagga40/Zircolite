@@ -1402,7 +1402,7 @@
             "attack.persistence",
             "attack.privilege_escalation"
         ],
-        "level": "critical",
+        "level": "high",
         "rule": [
             "SELECT * FROM logs WHERE (EventID = \"1\" AND Channel = \"Microsoft-Windows-Sysmon/Operational\" AND ParentImage LIKE \"%\\\\wsmprovhost.exe\" ESCAPE '\\' AND (Image LIKE \"%\\\\cmd.exe\" ESCAPE '\\' OR Image LIKE \"%\\\\sh.exe\" ESCAPE '\\' OR Image LIKE \"%\\\\bash.exe\" ESCAPE '\\' OR Image LIKE \"%\\\\powershell.exe\" ESCAPE '\\' OR Image LIKE \"%\\\\schtasks.exe\" ESCAPE '\\' OR Image LIKE \"%\\\\certutil.exe\" ESCAPE '\\' OR Image LIKE \"%\\\\whoami.exe\" ESCAPE '\\' OR Image LIKE \"%\\\\bitsadmin.exe\" ESCAPE '\\'))"
         ]
@@ -4515,6 +4515,15 @@
         ]
     },
     {},
+    {
+        "title": "Renamed PAExec - A5AA95EB",
+        "description": "Detects suspicious renamed PAExec execution as often used by attackers",
+        "author": "Florian Roth",
+        "level": "high",
+        "rule": [
+            "SELECT * FROM logs WHERE ((EventID = \"1\" AND Channel = \"Microsoft-Windows-Sysmon/Operational\") AND ((EventID = \"1\" AND Channel = \"Microsoft-Windows-Sysmon/Operational\") AND (Description = \"PAExec Application\" OR OriginalFilename = \"PAExec.exe\")) AND NOT ((Image LIKE \"%\\\\PAexec.exe\" ESCAPE '\\' OR Image LIKE \"%\\\\paexec.exe\" ESCAPE '\\')))"
+        ]
+    },
     {
         "title": "CVE-2021-26857 Exchange Exploitation - 1F5B9E7C",
         "description": "Detects possible successful exploitation for vulnerability described in CVE-2021-26857 by looking for | abnormal subprocesses spawning by Exchange Server\u2019s Unified Messaging service",
@@ -7668,6 +7677,15 @@
         "level": "high",
         "rule": [
             "SELECT * FROM logs WHERE (EventID = \"1\" AND Channel = \"Microsoft-Windows-Sysmon/Operational\" AND Image LIKE \"%\\\\powershell.exe\" ESCAPE '\\' AND (CommandLine LIKE \"%-DisableBehaviorMonitoring $true%\" ESCAPE '\\' OR CommandLine LIKE \"%-DisableRuntimeMonitoring $true%\" ESCAPE '\\'))"
+        ]
+    },
+    {
+        "title": "PsExec/PAExec Flags - A48D6DC1",
+        "description": "Detects suspicious flags used by PsExec and PAExec but no usual program name in command line",
+        "author": "Florian Roth",
+        "level": "high",
+        "rule": [
+            "SELECT * FROM logs WHERE ((EventID = \"1\" AND Channel = \"Microsoft-Windows-Sysmon/Operational\") AND ((EventID = \"1\" AND Channel = \"Microsoft-Windows-Sysmon/Operational\") AND ((CommandLine LIKE \"%\\\\127.0.0.1%\" ESCAPE '\\' AND CommandLine LIKE \"% -s %\" ESCAPE '\\' AND CommandLine LIKE \"%cmd.exe%\" ESCAPE '\\') OR (CommandLine LIKE \"% /accepteula %\" ESCAPE '\\' AND CommandLine LIKE \"%cmd /c %\" ESCAPE '\\' AND CommandLine LIKE \"% -u %\" ESCAPE '\\' AND CommandLine LIKE \"% -p %\" ESCAPE '\\'))) AND NOT ((CommandLine LIKE \"%paexec%\" ESCAPE '\\' OR CommandLine LIKE \"%PsExec%\" ESCAPE '\\')))"
         ]
     },
     {
