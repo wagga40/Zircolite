@@ -1,4 +1,4 @@
-# <p align="center">![](pics/zircolite_600.png)</p>
+# <p align="center">![](pics/zircolite_800.png)</p>
 
 ## Battle-tested, standalone and fast SIGMA-based detection tool for EVTX or JSON
 

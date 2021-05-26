@@ -270,7 +270,7 @@ def initLogger(debugMode, logFile):
 def sendLogsHTTP(host, payload = ""):
     """ Just send provided payload to provided web server. Not very clean. Non-async code for now """
     try:
-        r = requests.post(host, headers={"user-agent": "zircolite/1.2.x"}, data={"data": payload})
+        r = requests.post(host, headers={"user-agent": "zircolite/1.3.x"}, data={"data": payload})
         logging.debug(f"{Fore.RED}   [-] {r}")
         return True
     except Exception as e:
@@ -286,6 +286,12 @@ def avoidFiles(pathList, avoidFilesList):
     if avoidFilesList is not None:
         return [evtx for evtx in [str(element) for element in list(pathList)] if all(fileFilters[0].lower() not in evtx.lower() for fileFilters in avoidFilesList)]
     return pathList
+
+def saveDbToDisk(dbConnection, dbFilename):
+    logging.info("[+] Saving working data to disk as a SQLite DB")
+    onDiskDb = sqlite3.connect(dbFilename)
+    dbConnection.backup(onDiskDb)
+    onDiskDb.close()
 
 ################################################################
 # MAIN()
@@ -430,19 +436,15 @@ if __name__ == '__main__':
 
     logging.info("[+] Cleaning unused objects")
     del valuesStmt
+    del results
 
-    # Unload In memory DB to disk. Done here to permit debug in case of ruleset execution error
-    if args.dbfile is not None:
-        logging.info("[+] Saving working data to disk as a SQLite DB")
-        onDiskDb = sqlite3.connect(args.dbfile)
-        dbConnection.backup(onDiskDb)
-        onDiskDb.close()
+    # Unload In memory DB to disk. Done here to allow debug in case of ruleset execution error
+    if args.dbfile is not None: saveDbToDisk(dbConnection, args.dbfile)
 
     logging.info(f"[+] Loading ruleset from : {args.ruleset}")
     with open(args.ruleset) as f:
         ruleset = json.load(f)
-    rulesetSize = len(ruleset)
-    logging.info(f"[+] Executing ruleset - {str(rulesetSize)} rules")
+    logging.info(f"[+] Executing ruleset - {len(ruleset)} rules")
     # Results are writen upon detection to allow analysis during execution and to avoid loosing results in case of error.
     fullResults = []
     with open(args.outfile, 'w', encoding='utf-8') as f:
@@ -452,14 +454,13 @@ if __name__ == '__main__':
                 for rule in ruleBar:  # for each rule in ruleset
                     ruleResults = executeRule(rule, args.remote)
                     if ruleResults != {}:
-                        ruleBar.write(f'{Fore.CYAN}    - {ruleResults["title"]} - Matchs : {ruleResults["count"]} events')
+                        ruleBar.write(f'{Fore.CYAN}    - {ruleResults["title"]} : {ruleResults["count"]} events')
                         # To avoid printing this one on stdout but in the logs...
                         consoleLogger.setLevel(logging.ERROR)
-                        logging.info(f'{Fore.CYAN}    - {ruleResults["title"]} - Matchs : {ruleResults["count"]} events')
+                        logging.info(f'{Fore.CYAN}    - {ruleResults["title"]} : {ruleResults["count"]} events')
                         consoleLogger.setLevel(logging.INFO)
                         # Store results for templating
-                        if readyForTemplating:
-                            fullResults.append(ruleResults)
+                        if readyForTemplating: fullResults.append(ruleResults)
                         # Output to default json file
                         try:
                             json.dump(ruleResults, f, indent=4, ensure_ascii=False)
@@ -471,12 +472,11 @@ if __name__ == '__main__':
         else:
             f.write('[')
             for rule in ruleset:
-                ruleResults = executeRule(rule)
+                ruleResults = executeRule(rule, args.remote)
                 if ruleResults != {}:
-                    logging.info(f'{Fore.CYAN}    - {ruleResults["title"]} - Matchs : {ruleResults["count"]} events')
+                    logging.info(f'{Fore.CYAN}    - {ruleResults["title"]} : {ruleResults["count"]} events')
                     # Store results for templating
-                    if readyForTemplating:
-                        fullResults.append(ruleResults)
+                    if readyForTemplating: fullResults.append(ruleResults)
                     # Output to default json file
                     try:
                         json.dump(ruleResults, f, indent=4, ensure_ascii=False)
