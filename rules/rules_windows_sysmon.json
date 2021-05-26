@@ -73,7 +73,7 @@
     {
         "title": "CobaltStrike Named Pipe - EB4C5614",
         "description": "Detects the creation of a named pipe as used by CobaltStrike",
-        "author": "Florian Roth",
+        "author": "Florian Roth, Wojciech Lesicki",
         "tags": [
             "attack.defense_evasion",
             "attack.privilege_escalation",
@@ -81,7 +81,7 @@
         ],
         "level": "critical",
         "rule": [
-            "SELECT * FROM logs WHERE (EventID IN (\"17\", \"18\") AND Channel = \"Microsoft-Windows-Sysmon/Operational\" AND PipeName LIKE \"\\\\MSSE-%\" ESCAPE '\\' AND PipeName LIKE \"%-server\" ESCAPE '\\')"
+            "SELECT * FROM logs WHERE ((EventID IN (\"17\", \"18\") AND Channel = \"Microsoft-Windows-Sysmon/Operational\") AND ((PipeName LIKE \"%\\\\MSSE-%\" ESCAPE '\\' AND PipeName LIKE \"%-server%\" ESCAPE '\\') OR PipeName LIKE \"\\\\postex\\_%\" ESCAPE '\\' OR PipeName LIKE \"\\\\postex\\_ssh\\_%\" ESCAPE '\\' OR PipeName LIKE \"\\\\status\\_%\" ESCAPE '\\' OR PipeName LIKE \"\\\\msagent\\_%\" ESCAPE '\\'))"
         ]
     },
     {
@@ -2125,7 +2125,7 @@
             "attack.persistence",
             "attack.t1547"
         ],
-        "level": "High",
+        "level": "high",
         "rule": [
             "SELECT * FROM logs WHERE ((EventID IN (\"12\", \"13\", \"14\") AND Channel = \"Microsoft-Windows-Sysmon/Operational\") AND (TargetObject LIKE \"%Software\\\\Microsoft\\\\Windows NT\\\\CurrentVersion\\\\Accessibility\\\\ATs%\" ESCAPE '\\' OR TargetObject LIKE \"%Software\\\\Microsoft\\\\Windows NT\\\\CurrentVersion\\\\Accessibility\\\\Configuration%\" ESCAPE '\\'))"
         ]
@@ -8138,6 +8138,10 @@
         "title": "Accessing WinAPI in PowerShell for Credentials Dumping - 5C58CE1A",
         "description": "Detects Accessing to lsass.exe by Powershell",
         "author": "oscd.community, Natalia Shornikova",
+        "tags": [
+            "attack.credential_access",
+            "attack.t1003.001"
+        ],
         "level": "high",
         "rule": [
             "SELECT * FROM logs WHERE (Channel = \"Microsoft-Windows-Sysmon/Operational\" AND EventID IN (\"8\", \"10\") AND SourceImage LIKE \"%\\\\powershell.exe\" ESCAPE '\\' AND TargetImage LIKE \"%\\\\lsass.exe\" ESCAPE '\\')"
@@ -9817,6 +9821,21 @@
         "level": "high",
         "rule": [
             "SELECT * FROM logs WHERE (Channel = \"Security\" AND EventID = \"5156\" AND ((SourcePort = \"3389\" AND (DestinationAddress LIKE \"127.%\" ESCAPE '\\' OR DestinationAddress LIKE \"::1\" ESCAPE '\\')) OR (DestinationPort = \"3389\" AND (SourceAddress LIKE \"127.%\" ESCAPE '\\' OR SourceAddress LIKE \"::1\" ESCAPE '\\'))))"
+        ]
+    },
+    {
+        "title": "CobaltStrike Service Installations - 7D32A904",
+        "description": "Detects known malicious service installs that appear in cases in which a Cobalt Strike beacon elevates privileges",
+        "author": "Florian Roth",
+        "tags": [
+            "attack.execution",
+            "attack.privilege_escalation",
+            "attack.t1543.003",
+            "attack.t1569.002"
+        ],
+        "level": "critical",
+        "rule": [
+            "SELECT * FROM logs WHERE (Channel = \"System\" AND EventID = \"7045\" AND ImagePath LIKE \"%\\\\127.0.0.1\\\\ADMIN$%\" ESCAPE '\\' AND ImagePath LIKE \"%.exe%\" ESCAPE '\\')"
         ]
     },
     {
