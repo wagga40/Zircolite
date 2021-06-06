@@ -33,7 +33,9 @@ except ImportError:  # If the module is not available creating a fake function t
 # Requests 
 try: 
     import requests
+    import urllib3
     hasRequests = True
+    urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 except ImportError:
     hasRequests = False
 
@@ -56,12 +58,10 @@ try:
 except ImportError:  # If the module is not available
     hasJinja2 = False
 
-# Trap signal for less ugly exit
 def signal_handler(sig, frame):
     logging.info("[-] Execution interrupted !")
     sys.exit(0)
 
-# SQlite related functions
 def createConnection(db):
     """ create a database connection to a SQLite database """
     conn = None
@@ -104,7 +104,6 @@ def executeSelectQuery(dbConnection, query):
         logging.error(f"{Fore.RED}   [-] No connection to Db")
         return {}
 
-# Zircolite core functions
 def extractEvtx(file, tmpDir, evtx_dumpBinary):
     """
     Convert EVTX to JSON using evtx_dump : https://github.com/omerbenamram/evtx.
@@ -139,7 +138,7 @@ def flattenJSON(file):
             for a in x:
                 flatten(x[a], name + a + '.')
         else:
-            # Applying exclusions. Be carefull, the key/value pair is discarded if there is a partial match
+            # Applying exclusions. Key/value pair is discarded if there is a partial match
             if not any(exclusion in name[:-1] for exclusion in fieldExclusions):
                 # Arrays are not expanded
                 if type(x) is list:
@@ -154,17 +153,15 @@ def flattenJSON(file):
                     else:
                         # Removing all annoying character from field name
                         key = ''.join(e for e in name[:-1].split(".")[-1] if e.isalnum())
-                    key = key.lower()
+                    #key = key.lower()
                     JSONLine[key] = value
-                    if name[:-1] not in fullFieldNames:
-                        fullFieldNames[name[:-1]] = key
-                    # Creating the CREATE TABLE SQL statement
-                    if key not in keyDict:
+                    # Generate the CREATE TABLE SQL statement
+                    if key.lower() not in keyDict:
                         if type(value) is int:
-                            keyDict[key] = ""
+                            keyDict[key.lower()] = ""
                             fieldStmt += f"'{key}' INTEGER,\n"
                         else:
-                            keyDict[key] = ""
+                            keyDict[key.lower()] = ""
                             fieldStmt += f"'{key}' TEXT COLLATE NOCASE,\n"
 
     with open(str(file), 'r', encoding='utf-8') as JSONFile:
@@ -172,7 +169,7 @@ def flattenJSON(file):
             try:
                 flatten(json.loads(line))
             except Exception as e:
-                logging.debug(f'JSON ERROR : {line}')
+                logging.debug(f'JSON ERROR : {e}')
             JSONOutput.append(JSONLine)
             JSONLine = {}
 
@@ -192,7 +189,7 @@ def insertData2Db(JSONLine):
     insertStrmt = f"INSERT INTO logs ({columnsStr[:-1]}) VALUES ({valuesStr[:-2]});"
     return executeQuery(dbConnection, insertStrmt)
 
-def executeRule(rule, forwardTo = None):
+def executeRule(rule):
     results = {}
     filteredRows = []
     counter = 0
@@ -220,9 +217,6 @@ def executeRule(rule, forwardTo = None):
         logging.debug("RULE FORMAT ERROR : rule key Missing")
     if filteredRows == []:
         return {}
-    # Forward results to HTTP server
-    if forwardTo is not None:
-        sendLogsHTTP(forwardTo, base64.b64encode(json.dumps({"host": socket.gethostname(), "title": rule["title"], "description": rule["description"], "sigma": rule["rule"], "rule_level": rule["level"], "tags": rule["tags"], "count": counter, "matches": filteredRows}).encode('utf-8')).decode('ascii'))
     return results
 
 def getOSExternalTools():
@@ -267,15 +261,66 @@ def initLogger(debugMode, logFile):
     logging.getLogger().addHandler(logger)
     return logger
 
-def sendLogsHTTP(host, payload = ""):
-    """ Just send provided payload to provided web server. Not very clean. Non-async code for now """
-    try:
-        r = requests.post(host, headers={"user-agent": "zircolite/1.3.x"}, data={"data": payload})
-        logging.debug(f"{Fore.RED}   [-] {r}")
-        return True
-    except Exception as e:
-        logging.debug(f"{Fore.RED}   [-] {e}")
+class eventForwarder:
+    """ Class for handling event forwarding """
+    def __init__(self, remote, token):
+        self.remoteHost = remote
+        self.token = token
+        self.localHostname = socket.gethostname()
+        self.userAgent = "zircolite/1.3.x"
+
+    def sendAll(self, payloads):
+        """ Send an array of events """
+        for payload in payloads:
+            self.send(payload, False)
+
+    def sendMP(self, payload):
+        self.send(payload, False)
+
+    def send(self, payload, bypassToken = True):
+        """ Send events to standard HTTP or Splunk HEC if there is a token provided and bypassToken is False """
+        if payload: 
+            if self.remoteHost is not None:
+                try:
+                    if self.token is not None and not bypassToken:
+                        self.sendHEC(payload, "SystemTime")
+                    else:
+                        self.sendHTTP(payload)
+                    return True
+                except Exception as e:
+                    logging.debug(f"{Fore.RED}   [-] {e}")
+                    return False
+        
+    def networkCheck(self):
+        """ Check remote connectivity """
+        if (self.remoteHost is not None):
+            if not self.send({"Zircolite": "Forwarder"}):
+                return False
+            else:
+                return True
         return False
+
+    def formatToEpoch(self, timestamp):
+        return str(time.mktime(time.strptime(timestamp.split(".")[0], '%Y-%m-%dT%H:%M:%S')))[:-1] + timestamp.split(".")[1][:-1]
+        
+    def sendHTTP(self, payload = {}):
+        """ Just send provided payload to provided web server. Non-async code. """
+        payload.update({"host": self.localHostname})
+        r = requests.post(self.remoteHost, headers={"user-agent": self.userAgent}, data={"data": base64.b64encode(json.dumps(payload).encode('utf-8')).decode('ascii')}, verify=False)
+
+    def sendHEC(self, payload = {}, timeField = ""):
+        """ Just send provided payload to provided Splunk HEC. Non-async code. """
+        # Flatten detected events
+        for match in payload["matches"]:
+            jsonEventData = {}
+            for key, value in match.items():
+                jsonEventData.update({key: value})
+            jsonEventData.update({"title": payload["title"], "description": payload["description"], "sigma": payload["sigma"], "rule_level": payload["rule_level"], "tags": payload["tags"]})
+            # Send events with timestamps and default Splunk JSON sourcetype
+            splunkURL = f"{self.remoteHost}/services/collector/event"
+            data = {"sourcetype": "_json", "event": jsonEventData, "event": jsonEventData, "host": self.localHostname }
+            if timeField != "": data.update({"time": self.formatToEpoch(jsonEventData[timeField])})
+            r = requests.post(splunkURL, headers={'Authorization': f"Splunk {self.token}"}, json=data, verify=False)
 
 def selectFiles(pathList, selectFilesList):
     if selectFilesList is not None:
@@ -317,30 +362,32 @@ if __name__ == '__main__':
     parser.add_argument("-o", "--outfile", help="JSON file that will contains all detected events", type=str, default="detected_events.json")
     parser.add_argument("-f", "--fileext", help="EVTX file extension", type=str, default="evtx")
     parser.add_argument("-t", "--tmpdir", help="Temp directory that will contains EVTX converted as JSON", type=str, default=tmpDir)
-    parser.add_argument("-k", "--keeptmp", help="Do not remove the Temp directory", action='store_true')
+    parser.add_argument("-k", "--keeptmp", help="Do not remove the Temp directory", action="store_true")
     parser.add_argument("-d", "--dbfile", help="Save data as a SQLite Db to the specified file on disk", type=str)
     parser.add_argument("-l", "--logfile", help="Log file name", default="zircolite.log", type=str)
-    parser.add_argument("-j", "--jsononly", help="If logs files are already in JSON lines format ('jsonl' in evtx_dump) ", action='store_true')
-    parser.add_argument("--remote", help="Forward results to a HTTP server, arg must be the full address e.g http://address:port/uri", type=str)
+    parser.add_argument("-j", "--jsononly", help="If logs files are already in JSON lines format ('jsonl' in evtx_dump)", action="store_true")
+    parser.add_argument("--remote", help="Forward results to a HTTP server, please provide the full address e.g http://address:port/uri (except for Splunk)", type=str)
+    parser.add_argument("--token", help="Use this to provide Splunk HEC Token", type=str)
+    parser.add_argument("--stream", help="By default event forwarding is done at the end, this option activate forwarding events when detected", action="store_true")
     parser.add_argument("--template", help="If a Jinja2 template is specified it will be used to generated output", type=str, action='append', nargs='+')
     parser.add_argument("--templateOutput", help="If a Jinja2 template is specified it will be used to generate a crafted output", type=str, action='append', nargs='+')
-    parser.add_argument("--fields", help="Show all fields in full format", action='store_true')
-    parser.add_argument("--debug", help="Activate debug logging", action='store_true')
+    parser.add_argument("--debug", help="Activate debug logging", action="store_true")
+    parser.add_argument("--showall", help="Show all events, usefull to check what rule takes takes time to execute", action='store_true')
     args = parser.parse_args()
 
     signal.signal(signal.SIGINT, signal_handler)
 
     # Init logging
     consoleLogger = initLogger(args.debug, args.logfile)
-
-    logging.info("[+] Checking prerequisites")
-    # Init network
-    if (args.remote is not None):
+    # Init Forwarding
+    forwarder = eventForwarder(args.remote, args.token)
+    if args.remote is not None: 
         if hasRequests:
-            if not sendLogsHTTP(args.remote):
-                quitOnError(f"{Fore.RED}   [-] Remote host cannot be reached : {args.remote}")
-        else:
-            quitOnError(f"{Fore.RED}   [-] Requests lib missing, you cannot use '--remote'")
+            if not forwarder.networkCheck(): quitOnError(f"{Fore.RED}   [-] Remote host cannot be reached : {args.remote}")
+        else: quitOnError(f"{Fore.RED}   [-] Requests is not installed.")
+    
+    logging.info("[+] Checking prerequisites")
+
     # Cheking for evtx_dump binaries
     evtx_dumpBinary = getOSExternalTools()
     checkIfExists(evtx_dumpBinary, f"{Fore.RED}   [-] Cannot find Evtx_dump")
@@ -402,7 +449,6 @@ if __name__ == '__main__':
 
     fieldStmt = ""
     valuesStmt = []
-    fullFieldNames = {}
     results = {}
     keyDict = {}
 
@@ -413,12 +459,6 @@ if __name__ == '__main__':
             results = flattenJSON(evtxJSON)
             fieldStmt += results["dbFields"]
             valuesStmt += results["dbValues"]
-
-    if args.fields:
-        logging.info("[+] Saving fields to fields.json")
-        with open("fields.json", 'w', encoding='utf-8') as f:
-            json.dump(fullFieldNames, f, indent=4)
-        sys.exit(0)
 
     logging.info("[+] Creating model")
     dbConnection = createConnection(":memory:")
@@ -452,42 +492,49 @@ if __name__ == '__main__':
             with tqdm(ruleset, colour="yellow") as ruleBar:
                 f.write('[')
                 for rule in ruleBar:  # for each rule in ruleset
-                    ruleResults = executeRule(rule, args.remote)
+                    if args.showall and "title" in rule: ruleBar.write(f'{Fore.BLUE}    - {rule["title"]}')  # Print all rules
+                    ruleResults = executeRule(rule)
                     if ruleResults != {}:
                         ruleBar.write(f'{Fore.CYAN}    - {ruleResults["title"]} : {ruleResults["count"]} events')
                         # To avoid printing this one on stdout but in the logs...
                         consoleLogger.setLevel(logging.ERROR)
                         logging.info(f'{Fore.CYAN}    - {ruleResults["title"]} : {ruleResults["count"]} events')
                         consoleLogger.setLevel(logging.INFO)
-                        # Store results for templating
-                        if readyForTemplating: fullResults.append(ruleResults)
-                        # Output to default json file
+                        # Store results for templating and event forwarding (only if stream mode is disabled)
+                        if readyForTemplating or (args.remote is not None and not args.stream): fullResults.append(ruleResults)
+                        if args.stream: forwarder.send(ruleResults, False)
+                        # Output to json file
                         try:
                             json.dump(ruleResults, f, indent=4, ensure_ascii=False)
                             f.write(',\n')
                         except Exception as e:
                             logging.error(f"{Fore.RED}   [-] Error saving some results : {e}")
-                            logging.debug(f"   [-] {e}")
                 f.write('{}]')
         else:
             f.write('[')
             for rule in ruleset:
-                ruleResults = executeRule(rule, args.remote)
+                if args.showall and "title" in rule: ruleBar.write(f'{Fore.BLUE}    - {rule["title"]}')  # Print all rules
+                ruleResults = executeRule(rule)
                 if ruleResults != {}:
                     logging.info(f'{Fore.CYAN}    - {ruleResults["title"]} : {ruleResults["count"]} events')
-                    # Store results for templating
-                    if readyForTemplating: fullResults.append(ruleResults)
-                    # Output to default json file
+                    # Store results for templating and event forwarding (only if stream mode is disabled)
+                    if readyForTemplating or (args.remote is not None and not args.stream): fullResults.append(ruleResults)
+                    if args.stream: forwarder.send(ruleResults, False)
+                    # Output to json file
                     try:
                         json.dump(ruleResults, f, indent=4, ensure_ascii=False)
                         f.write(',\n')
                     except Exception as e:
                         logging.error(f"{Fore.RED}   [-] Error saving some results : {e}")
-                        logging.debug(f"   [-] {e}")
             f.write('{}]')
     logging.info(f"[+] Results written in : {args.outfile}")
 
-    # Templating
+    # Forward events
+    if args.remote is not None and not args.stream: 
+        logging.info(f"[+] Forwarding to : {args.remote}")
+        forwarder.sendAll(fullResults)
+
+    # Apply templates
     if readyForTemplating and fullResults != []:
         for template, templateOutput in zip(args.template, args.templateOutput):
             logging.info(f'[+] Applying template "{template[0]}", outputting to : {templateOutput[0]}')
