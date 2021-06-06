@@ -119,14 +119,26 @@ Then you just have to open `index.html` in your favorite browser and click on a 
 
 ### Forward SIGMA detected events
 
+#### Forward to a HTTP server
+
 If you have multiple endpoints to scan, it is usefull to send the detected events to a central point. As of v1.2, Zircolite can forward detected events to an HTTP server :
 
 ```shell
 python3 zircolite.py --evtx sample.evtx  --ruleset rules/rules_windows_sysmon.json \
 	--remote http://address:port/uri
 ```
-
 An **example** server called is available in the [tools](tools/) directory.
+
+#### Forward to a Splunk instance via HEC
+
+As of v1.3.5, Zircolite can forward detections to a Splunk instance with Splunk **HTTP Event Collector**.
+
+1. Configure HEC on you Splunk instance : [check here](https://docs.splunk.com/Documentation/Splunk/8.2.0/Data/UsetheHTTPEventCollector)
+2. Get you token and you are ready to go : 
+
+```shell
+python3 zircolite.py --evtx /sample.evtx  --ruleset rules/rules_windows_sysmon.json --remote https://x.x.x.x:8088 --token xxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
+```
 
 ### Big EVTX files
 
