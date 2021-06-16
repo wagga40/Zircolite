@@ -259,7 +259,7 @@ def initLogger(debugMode, logFile):
     logger = logging.StreamHandler()
     logger.setLevel(logging.INFO)
     logging.getLogger().addHandler(logger)
-    return logger
+    return logging.getLogger()
 
 class eventForwarder:
     """ Class for handling event forwarding """

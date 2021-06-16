@@ -151,6 +151,19 @@
         ]
     },
     {
+        "title": "Failed MSExchange Transport Agent Installation - 5282C359",
+        "description": "Detects a failed installation of a Exchange Transport Agent",
+        "tags": [
+            "attack.persistence",
+            "attack.t1505.002"
+        ],
+        "author": "Tobias Michalski",
+        "level": "high",
+        "rule": [
+            "SELECT * FROM logs WHERE (Channel = \"MSExchange Management\" AND Message LIKE \"%Install-TransportAgent%\" ESCAPE '\\' AND EventID = \"6\")"
+        ]
+    },
+    {
         "title": "Windows Defender Threat Detected - 8FA4805F",
         "description": "Detects all actions taken by Windows Defender malware detection engines",
         "author": "J\u00e1n Tren\u010dansk\u00fd",
@@ -204,7 +217,7 @@
     {
         "title": "Windows Defender Threat Detection Disabled - A65A30FB",
         "description": "Detects disabling Windows Defender threat protection",
-        "author": "J\u00e1n Tren\u010dansk\u00fd",
+        "author": "J\u00e1n Tren\u010dansk\u00fd, frack113",
         "tags": [
             "attack.defense_evasion",
             "attack.t1089",
@@ -212,7 +225,8 @@
         ],
         "level": "high",
         "rule": [
-            "SELECT * FROM logs WHERE (Channel IN (\"Microsoft-Windows-Windows Defender/Operational\", \"Microsoft-Windows-Windows Defender/WHC\") AND (EventID IN (\"5001\", \"5010\", \"5012\", \"5101\") OR ((TargetObject LIKE \"HKEY\\_LOCAL\\_MACHINE\\\\SYSTEM\\\\CurrentControlSet\\\\Services\\\\WinDefend\" ESCAPE '\\' OR TargetObject LIKE \"HKEY\\_LOCAL\\_MACHINE\\\\SOFTWARE\\\\Microsoft\\\\Windows Defender\" ESCAPE '\\' OR TargetObject LIKE \"HKEY\\_LOCAL\\_MACHINE\\\\SOFTWARE\\\\Policies\\\\Microsoft\\\\Windows Defender\" ESCAPE '\\') AND Details = \"DWORD (0x00000001)\")))"
+            "SELECT * FROM logs WHERE (Channel IN (\"Microsoft-Windows-Windows Defender/Operational\", \"Microsoft-Windows-Windows Defender/WHC\") AND (EventID IN (\"5001\", \"5010\", \"5012\", \"5101\") OR ((TargetObject LIKE \"HKEY\\_LOCAL\\_MACHINE\\\\SYSTEM\\\\CurrentControlSet\\\\Services\\\\WinDefend\" ESCAPE '\\' OR TargetObject LIKE \"HKEY\\_LOCAL\\_MACHINE\\\\SOFTWARE\\\\Microsoft\\\\Windows Defender\" ESCAPE '\\' OR TargetObject LIKE \"HKEY\\_LOCAL\\_MACHINE\\\\SOFTWARE\\\\Policies\\\\Microsoft\\\\Windows Defender\" ESCAPE '\\') AND Details = \"DWORD (0x00000001)\")))",
+            "SELECT * FROM logs WHERE (EventID = \"4657\" AND OperationType IN (\"New registry value created\", \"Existing registry value modified\") AND Channel = \"Security\" AND EventType = \"SetValue\" AND TargetObject LIKE \"HKLM\\\\SOFTWARE\\\\Policies\\\\Microsoft\\\\Windows Defender\\\\DisableAntiSpyware\" ESCAPE '\\' AND Details = \"DWORD (0x00000001)\")"
         ]
     },
     {
@@ -679,6 +693,19 @@
         ]
     },
     {
+        "title": "Outlook Form Installation - C69AD13A",
+        "description": "Detects the creation of new Outlook form which can contain malicious code",
+        "tags": [
+            "attack.persistence",
+            "attack.t1137.003"
+        ],
+        "author": "Tobias Michalski",
+        "level": "high",
+        "rule": [
+            "SELECT * FROM logs WHERE (NewProcessName LIKE \"\\\\outlook.exe\" ESCAPE '\\' AND TargetFilename LIKE \"%\\\\appdata\\\\local\\\\microsoft\\\\FORMS\\\\%\" ESCAPE '\\')"
+        ]
+    },
+    {
         "title": "Malicious PowerShell Commandlet Names - 7364E855",
         "description": "Detects the creation of known powershell scripts for exploitation",
         "tags": [
@@ -842,7 +869,7 @@
         ],
         "level": "high",
         "rule": [
-            "SELECT * FROM logs WHERE (Channel = \"Microsoft-Windows-PowerShell/Operational\" AND (Message LIKE \"%System.Reflection.Assembly.Load%\" ESCAPE '\\' OR Message LIKE \"%[System.Reflection.Assembly]::Load%\" ESCAPE '\\' OR Message LIKE \"%[Reflection.Assembly]::Load%\" ESCAPE '\\' OR Message LIKE \"%System.Reflection.AssemblyName%\" ESCAPE '\\' OR Message LIKE \"%Reflection.Emit.AssemblyBuilderAccess%\" ESCAPE '\\' OR Message LIKE \"%Runtime.InteropServices.DllImportAttribute%\" ESCAPE '\\' OR Message LIKE \"%SuspendThread%\" ESCAPE '\\'))"
+            "SELECT * FROM logs WHERE (Channel = \"Microsoft-Windows-PowerShell/Operational\" AND (Message LIKE \"%System.Reflection.Assembly.Load%\" ESCAPE '\\' OR Message LIKE \"%[System.Reflection.Assembly]::Load%\" ESCAPE '\\' OR Message LIKE \"%[Reflection.Assembly]::Load%\" ESCAPE '\\' OR Message LIKE \"%System.Reflection.AssemblyName%\" ESCAPE '\\' OR Message LIKE \"%Reflection.Emit.AssemblyBuilderAccess%\" ESCAPE '\\' OR Message LIKE \"%Runtime.InteropServices.DllImportAttribute%\" ESCAPE '\\' OR Message LIKE \"%SuspendThread%\" ESCAPE '\\' OR Message LIKE \"%rundll32%\" ESCAPE '\\' OR Message LIKE \"%FromBase64%\" ESCAPE '\\' OR Message LIKE \"%Invoke-WMIMethod%\" ESCAPE '\\' OR Message LIKE \"%http://127.0.0.1%\" ESCAPE '\\'))"
         ]
     },
     {
@@ -859,6 +886,19 @@
         ]
     },
     {},
+    {
+        "title": "Tamper Windows Defender - D4995280",
+        "description": "Attempting to disable scheduled scanning and other parts of windows defender atp.",
+        "tags": [
+            "attack.defense_evasion",
+            "attack.t1562.001"
+        ],
+        "author": "frack113",
+        "level": "high",
+        "rule": [
+            "SELECT * FROM logs WHERE (EventID = \"600\" AND HostApplication LIKE \"%Set-MpPreference%\" ESCAPE '\\' AND (HostApplication LIKE \"%-DisableRealtimeMonitoring 1%\" ESCAPE '\\' OR HostApplication LIKE \"%-DisableBehaviorMonitoring 1%\" ESCAPE '\\' OR HostApplication LIKE \"%-DisableScriptScanning 1%\" ESCAPE '\\' OR HostApplication LIKE \"%-DisableBlockAtFirstSeen 1%\" ESCAPE '\\'))"
+        ]
+    },
     {},
     {
         "title": "Execution via CL_Invocation.ps1 (2 Lines) - F4EB7F20",
@@ -1101,6 +1141,19 @@
             "SELECT * FROM logs WHERE (Channel = \"Windows PowerShell\" AND EventID = \"400\" AND HostName = \"ConsoleHost\" AND (CommandLine LIKE \"%bxor%\" ESCAPE '\\' OR CommandLine LIKE \"%join%\" ESCAPE '\\' OR CommandLine LIKE \"%char%\" ESCAPE '\\'))"
         ]
     },
+    {
+        "title": "Delete Volume Shadow Copies Via WMI With PowerShell - B9D27DE9",
+        "description": "Shadow Copies deletion using operating systems utilities via PowerShell",
+        "tags": [
+            "attack.impact",
+            "attack.t1490"
+        ],
+        "author": "frack113",
+        "level": "critical",
+        "rule": [
+            "SELECT * FROM logs WHERE (Channel = \"Windows PowerShell\" AND CommandLine LIKE \"%Get-WmiObject%\" ESCAPE '\\' AND CommandLine LIKE \"% Win32\\_Shadowcopy%\" ESCAPE '\\' AND (CommandLine LIKE \"%Delete()%\" ESCAPE '\\' OR CommandLine LIKE \"%Remove-WmiObject%\" ESCAPE '\\') AND EventID IN (\"400\", \"403\", \"600\"))"
+        ]
+    },
     {},
     {
         "title": "PowerShell Get Clipboard - 7E2C33D4",
@@ -1212,7 +1265,7 @@
             "attack.t1059.001",
             "attack.t1086"
         ],
-        "level": "high",
+        "level": "critical",
         "rule": [
             "SELECT * FROM logs WHERE (Channel = \"Microsoft-Windows-PowerShell/Operational\" AND ((EventID = \"4104\" AND (ScriptBlockText LIKE \"%$DoIt%\" ESCAPE '\\' OR ScriptBlockText LIKE \"%harmj0y%\" ESCAPE '\\' OR ScriptBlockText LIKE \"%mattifestation%\" ESCAPE '\\' OR ScriptBlockText LIKE \"%\\_RastaMouse%\" ESCAPE '\\' OR ScriptBlockText LIKE \"%tifkin\\_%\" ESCAPE '\\' OR ScriptBlockText LIKE \"%0xdeadbeef%\" ESCAPE '\\')) OR (EventID = \"4103\" AND (Payload LIKE \"%$DoIt%\" ESCAPE '\\' OR Payload LIKE \"%harmj0y%\" ESCAPE '\\' OR Payload LIKE \"%mattifestation%\" ESCAPE '\\' OR Payload LIKE \"%\\_RastaMouse%\" ESCAPE '\\' OR Payload LIKE \"%tifkin\\_%\" ESCAPE '\\' OR Payload LIKE \"%0xdeadbeef%\" ESCAPE '\\'))))"
         ]
@@ -1419,6 +1472,18 @@
         "level": "high",
         "rule": [
             "SELECT * FROM logs WHERE (TargetImage LIKE \"%\\\\windows\\\\system32\\\\svchost.exe\" ESCAPE '\\' AND GrantedAccess = \"0x1f3fff\" AND (CallTrace LIKE \"%unknown%\" ESCAPE '\\'))"
+        ]
+    },
+    {
+        "title": "SVCHOST Credential Dump - 09661B3C",
+        "description": "Detects when a process, such as mimikatz, accesses the memory of svchost to dump credentials",
+        "author": "Florent Labouyrie",
+        "tags": [
+            "attack.t1548"
+        ],
+        "level": "critical",
+        "rule": [
+            "SELECT * FROM logs WHERE ((TargetImage LIKE \"%\\\\svchost.exe\" ESCAPE '\\' AND GrantedAccess = \"0x143a\") AND NOT ((SourceImage LIKE \"%\\\\services.exe\" ESCAPE '\\' OR SourceImage LIKE \"%\\\\msiexec.exe\" ESCAPE '\\')))"
         ]
     },
     {
@@ -2007,6 +2072,19 @@
         ]
     },
     {
+        "title": "Removal Amsi Provider Reg Key - F12FDABD",
+        "description": "Remove the AMSI Provider registry key in HKLM\\Software\\Microsoft\\AMSI to disable AMSI inspection",
+        "author": "frack113",
+        "tags": [
+            "attack.defense_evasion",
+            "attack.t1562.001"
+        ],
+        "level": "high",
+        "rule": [
+            "SELECT * FROM logs WHERE (EventID = \"4657\" AND OperationType IN (\"New registry value created\", \"Existing registry value modified\") AND Channel = \"Security\" AND EventType = \"DeleteKey\" AND (TargetObject LIKE \"%{2781761E-28E0-4109-99FE-B9D127C57AFE}\" ESCAPE '\\' OR TargetObject LIKE \"%{A7C452EF-8E9F-42EB-9F2B-245613CA0DC9}\" ESCAPE '\\'))"
+        ]
+    },
+    {
         "title": "Office Application Startup - Office Test - C2D4DD54",
         "description": "Detects the addition of office test registry that allows a user to specify an arbitrary DLL that will be executed everytime an Office application is started",
         "author": "omkar72",
@@ -2306,6 +2384,19 @@
         ]
     },
     {
+        "title": "Persistent Outlook Landing Pages - 4A3D8B32",
+        "description": "Detects the manipulation of persistant URLs which could execute malicious code",
+        "author": "Tobias Michalski",
+        "tags": [
+            "attack.persistence",
+            "attack.t1112"
+        ],
+        "level": "high",
+        "rule": [
+            "SELECT * FROM logs WHERE ((EventID = \"4657\" AND OperationType IN (\"New registry value created\", \"Existing registry value modified\") AND Channel = \"Security\") AND (TargetObject LIKE \"%Software\\\\Microsoft\\\\Office\\\\%\" ESCAPE '\\' OR TargetObject LIKE \"%\\\\Outlook\\\\Today\\\\%\" ESCAPE '\\') AND (EventID = \"4657\" AND OperationType IN (\"New registry value created\", \"Existing registry value modified\") AND Channel = \"Security\") AND (((TargetObject LIKE \"%Stamp\" ESCAPE '\\') AND Details = \"DWORD (0x00000001)\") OR (TargetObject LIKE \"%UserDefinedUrl\" ESCAPE '\\')))"
+        ]
+    },
+    {
         "title": "Registry Persistence Mechanism via Windows Telemetry - 7DAB58BE",
         "description": "Detects persistence method using windows telemetry",
         "author": "Lednyov Alexey, oscd.community",
@@ -2447,6 +2538,19 @@
         ]
     },
     {
+        "title": "Persistent Outlook Landing Pages - 423E3069",
+        "description": "Detects the manipulation of persistant URLs which can be malicious",
+        "author": "Tobias Michalski",
+        "tags": [
+            "attack.persistence",
+            "attack.t1112"
+        ],
+        "level": "high",
+        "rule": [
+            "SELECT * FROM logs WHERE (EventID = \"4657\" AND OperationType IN (\"New registry value created\", \"Existing registry value modified\") AND Channel = \"Security\" AND (TargetObject LIKE \"%Software\\\\Microsoft\\\\Office\\\\%\" ESCAPE '\\' OR TargetObject LIKE \"%Outlook\\\\WebView\\\\%\" ESCAPE '\\') AND TargetObject LIKE \"%URL\" ESCAPE '\\' AND (TargetObject LIKE \"%Calendar%\" ESCAPE '\\' OR TargetObject LIKE \"%Inbox%\" ESCAPE '\\'))"
+        ]
+    },
+    {
         "title": "Suspicious Keyboard Layout Load - D01A0425",
         "description": "Detects the keyboard preload installation with a suspicious keyboard layout, e.g. Chinese, Iranian or Vietnamese layout load in user session on systems maintained by US staff only",
         "author": "Florian Roth",
@@ -2524,6 +2628,19 @@
         "level": "high",
         "rule": [
             "SELECT * FROM logs WHERE (EventID = \"4657\" AND OperationType IN (\"New registry value created\", \"Existing registry value modified\") AND Channel = \"Security\" AND (TargetObject LIKE \"%\\\\CurrentControlSet\\\\Control\\\\Terminal Server\\\\WinStations\\\\RDP-Tcp\\\\UserAuthentication\" ESCAPE '\\' OR TargetObject LIKE \"%\\\\CurrentControlSet\\\\Control\\\\Terminal Server\\\\fDenyTSConnections\" ESCAPE '\\') AND Details = \"DWORD (0x00000000)\")"
+        ]
+    },
+    {
+        "title": "Disable Microsoft Office Security Features - D5115ADD",
+        "description": "Disable Microsoft Office Security Features by registry",
+        "author": "frack113",
+        "tags": [
+            "attack.defense_evasion",
+            "attack.t1562.001"
+        ],
+        "level": "high",
+        "rule": [
+            "SELECT * FROM logs WHERE (EventID = \"4657\" AND OperationType IN (\"New registry value created\", \"Existing registry value modified\") AND Channel = \"Security\" AND EventType = \"SetValue\" AND TargetObject LIKE \"%\\\\SOFTWARE\\\\Microsoft\\\\Office\\\\%\" ESCAPE '\\' AND (TargetObject LIKE \"%VBAWarnings\" ESCAPE '\\' OR TargetObject LIKE \"%DisableInternetFilesInPV\" ESCAPE '\\' OR TargetObject LIKE \"%DisableUnsafeLocationsInPV\" ESCAPE '\\' OR TargetObject LIKE \"%DisableAttachementsInPV\" ESCAPE '\\') AND Details = \"DWORD (0x00000001)\")"
         ]
     },
     {
@@ -4675,6 +4792,20 @@
         ]
     },
     {
+        "title": "MSExchange Transport Agent Installation - E17D7AA5",
+        "description": "Detects the Installation of a Exchange Transport Agent",
+        "tags": [
+            "attack.persistence",
+            "attack.t1505.002"
+        ],
+        "author": "Tobias Michalski",
+        "level": "medium",
+        "rule": [
+            "SELECT * FROM logs WHERE (EventID = \"4688\" AND Channel = \"Security\" AND CommandLine LIKE \"%Install-TransportAgent%\" ESCAPE '\\')",
+            "SELECT * FROM logs WHERE (Channel = \"MSExchange Management\" AND Message LIKE \"%Install-TransportAgent%\" ESCAPE '\\')"
+        ]
+    },
+    {
         "title": "Hurricane Panda Activity - 956F32AE",
         "author": "Florian Roth",
         "description": "Detects Hurricane Panda Activity",
@@ -6488,7 +6619,7 @@
     },
     {
         "title": "Ngrok Usage - C5200BF2",
-        "description": "Detects the use of Ngrok, a utility used for port forwarding and tunneling, often used by threat actors to make local protected services publicly available",
+        "description": "Detects the use of Ngrok, a utility used for port forwarding and tunneling, often used by threat actors to make local protected services publicly available. Involved domains are bin.equinox.io for download and *.ngrok.io for connections.",
         "author": "Florian Roth",
         "tags": [
             "attack.command_and_control",
@@ -6496,7 +6627,7 @@
         ],
         "level": "high",
         "rule": [
-            "SELECT * FROM logs WHERE ((EventID = \"4688\" AND Channel = \"Security\") AND ((CommandLine LIKE \"% tcp 3389%\" ESCAPE '\\') OR (CommandLine LIKE \"% start %\" ESCAPE '\\' AND CommandLine LIKE \"%--all%\" ESCAPE '\\' AND CommandLine LIKE \"%--config%\" ESCAPE '\\' AND CommandLine LIKE \"%.yml%\" ESCAPE '\\')))"
+            "SELECT * FROM logs WHERE ((EventID = \"4688\" AND Channel = \"Security\") AND ((CommandLine LIKE \"% tcp 139%\" ESCAPE '\\' OR CommandLine LIKE \"% tcp 445%\" ESCAPE '\\' OR CommandLine LIKE \"% tcp 3389%\" ESCAPE '\\' OR CommandLine LIKE \"% tcp 5985%\" ESCAPE '\\' OR CommandLine LIKE \"% tcp 5986%\" ESCAPE '\\') OR (CommandLine LIKE \"% start %\" ESCAPE '\\' AND CommandLine LIKE \"%--all%\" ESCAPE '\\' AND CommandLine LIKE \"%--config%\" ESCAPE '\\' AND CommandLine LIKE \"%.yml%\" ESCAPE '\\') OR ((NewProcessName LIKE \"%ngrok.exe\" ESCAPE '\\') AND (CommandLine LIKE \"% tcp %\" ESCAPE '\\' OR CommandLine LIKE \"% http %\" ESCAPE '\\' OR CommandLine LIKE \"% authtoken %\" ESCAPE '\\'))))"
         ]
     },
     {
@@ -7777,7 +7908,7 @@
     {
         "title": "Powershell Used To Disable Windows Defender AV Security Monitoring - 58C7BF72",
         "description": "Detects attackers attempting to disable Windows Defender using Powershell",
-        "author": "ok @securonix invrep-de, oscd.community",
+        "author": "ok @securonix invrep-de, oscd.community, frack113",
         "tags": [
             "attack.defense_evasion",
             "attack.t1089",
@@ -7785,7 +7916,7 @@
         ],
         "level": "high",
         "rule": [
-            "SELECT * FROM logs WHERE (EventID = \"4688\" AND Channel = \"Security\" AND NewProcessName LIKE \"%\\\\powershell.exe\" ESCAPE '\\' AND (CommandLine LIKE \"%-DisableBehaviorMonitoring $true%\" ESCAPE '\\' OR CommandLine LIKE \"%-DisableRuntimeMonitoring $true%\" ESCAPE '\\'))"
+            "SELECT * FROM logs WHERE ((EventID = \"4688\" AND Channel = \"Security\") AND ((NewProcessName LIKE \"%\\\\powershell.exe\" ESCAPE '\\' AND (CommandLine LIKE \"%-DisableBehaviorMonitoring $true%\" ESCAPE '\\' OR CommandLine LIKE \"%-DisableRuntimeMonitoring $true%\" ESCAPE '\\')) OR (CommandLine LIKE \"%sc%\" ESCAPE '\\' AND CommandLine LIKE \"%stop%\" ESCAPE '\\' AND CommandLine LIKE \"%WinDefend%\" ESCAPE '\\') OR (CommandLine LIKE \"%sc%\" ESCAPE '\\' AND CommandLine LIKE \"%config%\" ESCAPE '\\' AND CommandLine LIKE \"%WinDefend%\" ESCAPE '\\' AND CommandLine LIKE \"%start=disabled%\" ESCAPE '\\')))"
         ]
     },
     {
@@ -8210,7 +8341,7 @@
         ],
         "level": "high",
         "rule": [
-            "SELECT * FROM logs WHERE (Channel = \"Microsoft-Windows-Sysmon/Operational\" AND EventID = \"22\" AND QueryName LIKE \"%servicebus.windows.net%\" ESCAPE '\\' AND NewProcessName LIKE \"%HybridConnectionManager%\" ESCAPE '\\')"
+            "SELECT * FROM logs WHERE (QueryName LIKE \"%servicebus.windows.net%\" ESCAPE '\\' AND NewProcessName LIKE \"%HybridConnectionManager%\" ESCAPE '\\')"
         ]
     },
     {
@@ -8240,7 +8371,22 @@
         ],
         "level": "critical",
         "rule": [
-            "SELECT * FROM logs WHERE (Channel = \"Microsoft-Windows-Sysmon/Operational\" AND ((EventID = \"11\" AND NewProcessName = \"System\" AND TargetFilename LIKE \"%\\\\wbem\\\\wbemcomn.dll\" ESCAPE '\\') OR (EventID = \"7\" AND NewProcessName LIKE \"%\\\\wmiprvse.exe\" ESCAPE '\\' AND ImageLoaded LIKE \"%\\\\wbem\\\\wbemcomn.dll\" ESCAPE '\\')))"
+            "SELECT * FROM logs WHERE (NewProcessName = \"System\" AND TargetFilename LIKE \"%\\\\wbem\\\\wbemcomn.dll\" ESCAPE '\\')",
+            "SELECT * FROM logs WHERE (NewProcessName LIKE \"%\\\\wmiprvse.exe\" ESCAPE '\\' AND ImageLoaded LIKE \"%\\\\wbem\\\\wbemcomn.dll\" ESCAPE '\\')"
+        ]
+    },
+    {
+        "title": "Sysmon Configuration Modification - 7C120A26",
+        "description": "Someone try to hide from Sysmon",
+        "author": "frack113",
+        "tags": [
+            "attack.defense_evasion",
+            "attack.t1564"
+        ],
+        "level": "high",
+        "rule": [
+            "SELECT * FROM logs WHERE (State = \"Stopped\" OR (message LIKE \"Sysmon config state changed%\" ESCAPE '\\'))",
+            "SELECT * FROM logs WHERE (Description LIKE \"%Failed to open service configuration with error%\" ESCAPE '\\' OR Description LIKE \"%Failed to connect to the driver to update configuration%\" ESCAPE '\\')"
         ]
     },
     {
@@ -8449,6 +8595,20 @@
         "level": "high",
         "rule": [
             "SELECT * FROM logs WHERE (Channel = \"Security\" AND (EventID = \"4624\" AND LogonType = \"3\" AND ProcessName LIKE \"%scrcons.exe\" ESCAPE '\\') AND NOT (TargetLogonId = \"0x3e7\"))"
+        ]
+    },
+    {
+        "title": "Multiple Users Remotely Failing To Authenticate From Single Source - CDBE22BC",
+        "description": "Detects a source system failing to authenticate against a remote host with multiple users.",
+        "author": "Mauricio Velazco",
+        "tags": [
+            "attack.t1110.003",
+            "attack.initial_access",
+            "attack.privilege_escalation"
+        ],
+        "level": "medium",
+        "rule": [
+            "SELECT * FROM (SELECT *,count(Account_Name) AS agg FROM logs WHERE (Channel = \"Security\" AND (EventID = \"4625\" AND Logon_Type = \"3\") AND NOT (Source_Network_Address = \"-\")) GROUP BY Source_Network_Address) WHERE agg > 10"
         ]
     },
     {
@@ -8708,6 +8868,20 @@
     },
     {},
     {
+        "title": "Valid Users Failing to Authenticate From Single Source Using Kerberos - 6F3E544C",
+        "description": "Detects multiple failed logins with multiple valid domain accounts from a single source system using the Kerberos protocol.",
+        "author": "Mauricio Velazco",
+        "tags": [
+            "attack.t1110.003",
+            "attack.initial_access",
+            "attack.privilege_escalation"
+        ],
+        "level": "medium",
+        "rule": [
+            "SELECT * FROM (SELECT *,count(Account_Name) AS agg FROM logs WHERE (Channel = \"Security\" AND (EventID = \"4771\" AND Failure_Code = \"0x18\") AND NOT (Account_Name LIKE \"%$\" ESCAPE '\\')) GROUP BY Client_Address) WHERE agg > 10"
+        ]
+    },
+    {
         "title": "QuarksPwDump Clearing Access History - F0B23AA1",
         "description": "Detects QuarksPwDump clearing access history in hive",
         "author": "Florian Roth",
@@ -8853,6 +9027,19 @@
         "rule": [
             "SELECT * FROM logs WHERE (Channel = \"Microsoft-Windows-PowerShell/Operational\" AND EventID = \"4104\" AND ScriptBlockText LIKE \"%Cert:\\\\LocalMachine\\\\Root%\" ESCAPE '\\' AND (ScriptBlockText LIKE \"%Move-Item%\" ESCAPE '\\' OR ScriptBlockText LIKE \"%Import-Certificate%\" ESCAPE '\\'))",
             "SELECT * FROM logs WHERE (EventID = \"4688\" AND Channel = \"Security\" AND CommandLine LIKE \"%root%\" ESCAPE '\\' AND ((NewProcessName LIKE \"%\\\\certutil.exe\" ESCAPE '\\' AND CommandLine LIKE \"%-addstore%\" ESCAPE '\\') OR (NewProcessName LIKE \"%\\\\CertMgr.exe\" ESCAPE '\\' AND CommandLine LIKE \"%/add%\" ESCAPE '\\')))"
+        ]
+    },
+    {
+        "title": "ISO Image Mount - 9861D36B",
+        "description": "Detects the mount of ISO images on an endpoint",
+        "author": "Syed Hasan (@syedhasan009)",
+        "tags": [
+            "attack.initial_access",
+            "attack.t1566.001"
+        ],
+        "level": "medium",
+        "rule": [
+            "SELECT * FROM logs WHERE (Channel = \"Security\" AND EventID = \"4663\" AND ObjectServer = \"Security\" AND ObjectType = \"File\" AND ObjectName LIKE \"\\\\Device\\\\CdRom%\" ESCAPE '\\')"
         ]
     },
     {
@@ -9328,6 +9515,20 @@
         ]
     },
     {
+        "title": "Multiple Users Attempting To Authenticate Using Explicit Credentials - 353269DA",
+        "description": "Detects a source user failing to authenticate with multiple users using explicit credentials on a host.",
+        "author": "Mauricio Velazco",
+        "tags": [
+            "attack.t1110.003",
+            "attack.initial_access",
+            "attack.privilege_escalation"
+        ],
+        "level": "medium",
+        "rule": [
+            "SELECT * FROM (SELECT *,count(Account_Name) AS agg FROM logs WHERE (Channel = \"Security\" AND EventID = \"4648\") GROUP BY Computer) WHERE agg > 10"
+        ]
+    },
+    {
         "title": "PowerShell Scripts Installed as Services - 13D7552B",
         "description": "Detects powershell script installed as a Service",
         "author": "oscd.community, Natalia Shornikova",
@@ -9369,6 +9570,20 @@
         "level": "medium",
         "rule": [
             "SELECT * FROM logs WHERE (Channel = \"Security\" AND (EventID IN (\"528\", \"529\", \"4624\", \"4625\") AND LogonType = \"2\" AND (Computer LIKE \"\\%ServerSystems\\%\" ESCAPE '\\' OR Computer LIKE \"\\%DomainControllers\\%\" ESCAPE '\\')) AND NOT (LogonProcessName = \"Advapi\" AND Computer LIKE \"\\%Workstations\\%\" ESCAPE '\\'))"
+        ]
+    },
+    {
+        "title": "Valid Users Failing to Authenticate from Single Source Using NTLM - 3E4A1DE0",
+        "description": "Detects failed logins with multiple valid domain accounts from a single source system using the NTLM protocol.",
+        "author": "Mauricio Velazco",
+        "tags": [
+            "attack.t1110.003",
+            "attack.initial_access",
+            "attack.privilege_escalation"
+        ],
+        "level": "medium",
+        "rule": [
+            "SELECT * FROM (SELECT *,count(Logon_Account) AS agg FROM logs WHERE (Channel = \"Security\" AND (EventID = \"4776\" AND action = \"failure\" AND Message LIKE \"%0xC000006A\" ESCAPE '\\') AND NOT (Logon_Account LIKE \"%$\" ESCAPE '\\')) GROUP BY Source_Workstation) WHERE agg > 10"
         ]
     },
     {
@@ -9606,6 +9821,20 @@
         "level": "high",
         "rule": [
             "SELECT * FROM logs WHERE (Channel = \"Security\" AND EventID = \"4624\" AND LogonType = \"3\" AND TargetUserName LIKE \"ANONYMOUS\\_LOGON\" ESCAPE '\\' AND WorkstationName = \"-\" AND SourceNetworkAddress = \"127.0.0.1\")"
+        ]
+    },
+    {
+        "title": "Multiple Users Failing to Authenticate from Single Process - 1044ADF2",
+        "description": "Detects failed logins with multiple accounts from a single process on the system.",
+        "author": "Mauricio Velazco",
+        "tags": [
+            "attack.t1110.003",
+            "attack.initial_access",
+            "attack.privilege_escalation"
+        ],
+        "level": "medium",
+        "rule": [
+            "SELECT * FROM (SELECT *,count(Account_Name) AS agg FROM logs WHERE (Channel = \"Security\" AND (EventID = \"4625\" AND Logon_Type = \"2\") AND NOT (Caller_Process_Name = \"-\")) GROUP BY Caller_Process_Name) WHERE agg > 10"
         ]
     },
     {
@@ -9979,6 +10208,20 @@
         ]
     },
     {
+        "title": "Invalid Users Failing To Authenticate From Single Source Using NTLM - 1CE01828",
+        "description": "Detects failed logins with multiple invalid domain accounts from a single source system using the NTLM protocol.",
+        "author": "Mauricio Velazco",
+        "tags": [
+            "attack.t1110.003",
+            "attack.initial_access",
+            "attack.privilege_escalation"
+        ],
+        "level": "medium",
+        "rule": [
+            "SELECT * FROM (SELECT *,count(Logon_Account) AS agg FROM logs WHERE (Channel = \"Security\" AND (EventID = \"4776\" AND action = \"failure\" AND Message LIKE \"%0xC0000064\" ESCAPE '\\') AND NOT (Logon_Account LIKE \"%$\" ESCAPE '\\')) GROUP BY Source_Workstation) WHERE agg > 10"
+        ]
+    },
+    {
         "title": "T1021 DCOM InternetExplorer.Application Iertutil DLL Hijack - CECCA42D",
         "description": "Detects a threat actor creating a file named `iertutil.dll` in the `C:\\Program Files\\Internet Explorer\\` directory over the network for a DCOM InternetExplorer DLL Hijack scenario.",
         "author": "Roberto Rodriguez @Cyb3rWard0g, Open Threat Research (OTR)",
@@ -10063,6 +10306,34 @@
         "level": "medium",
         "rule": [
             "SELECT * FROM logs WHERE (EventID = \"4688\" AND Channel = \"Security\" AND (NewProcessName LIKE \"%\\\\net.exe\" ESCAPE '\\' OR NewProcessName LIKE \"%\\\\net1.exe\" ESCAPE '\\') AND CommandLine LIKE \"% use %\" ESCAPE '\\' AND CommandLine LIKE \"%\\\\%\\*$%\" ESCAPE '\\')"
+        ]
+    },
+    {
+        "title": "Disabled Users Failing To Authenticate From Source Using Kerberos - F1CF3521",
+        "description": "Detects failed logins with multiple disabled domain accounts from a single source system using the Kerberos protocol.",
+        "author": "Mauricio Velazco",
+        "tags": [
+            "attack.t1110.003",
+            "attack.initial_access",
+            "attack.privilege_escalation"
+        ],
+        "level": "medium",
+        "rule": [
+            "SELECT * FROM (SELECT *,count(Account_Name) AS agg FROM logs WHERE (Channel = \"Security\" AND (EventID = \"4768\" AND Result_Code = \"0x12\") AND NOT (Account_Name LIKE \"%$\" ESCAPE '\\')) GROUP BY Client_Address) WHERE agg > 10"
+        ]
+    },
+    {
+        "title": "Invalid Users Failing To Authenticate From Source Using Kerberos - A70613AE",
+        "description": "Detects failed logins with multiple invalid domain accounts from a single source system using the Kerberos protocol.",
+        "author": "Mauricio Velazco",
+        "tags": [
+            "attack.t1110.003",
+            "attack.initial_access",
+            "attack.privilege_escalation"
+        ],
+        "level": "medium",
+        "rule": [
+            "SELECT * FROM (SELECT *,count(Account_Name) AS agg FROM logs WHERE (Channel = \"Security\" AND (EventID = \"4768\" AND Result_Code = \"0x6\") AND NOT (Account_Name LIKE \"%$\" ESCAPE '\\')) GROUP BY Client_Address) WHERE agg > 10"
         ]
     },
     {
