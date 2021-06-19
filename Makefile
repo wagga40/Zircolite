@@ -3,7 +3,7 @@
 DOCKER?=docker
 DOCKER_BUILD_FLAGS?=
 DOCKER_REGISTRY?=docker.io
-DOCKER_TAG?=1.2.5
+DOCKER_TAG?=1.4.0
 
 define HELP_MENU
 	Usage: make [<env>] <target> [<target> ...]

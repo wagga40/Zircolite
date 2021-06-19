@@ -57,6 +57,7 @@ python3 zircolite.py --evtx ../Logs --ruleset rules/rules_windows_sysmon.json
 Some EVTX files are not used by SIGMA rules but can become quite large (`Microsoft-Windows-SystemDataArchiver%4Diagnostic.evtx` etc.), if you use Zircolite with directory as input argument, all EVTX files will be converted, saved and matched against the SIGMA Rules. 
 
 To speed up the detection process, you may want to use Zircolite on files matching or not matching a specific pattern. For that you can use **filters** provided by the two command line arguments :
+
 - `-s` or `--select` : select files partly matching the provided a string (case insensitive)
 - `-a` or `--avoid` : exclude files partly matching the provided a string (case insensitive)
 
@@ -73,7 +74,7 @@ python3 zircolite.py --evtx logs/ --ruleset rules/rules_windows_sysmon.json \
 
 ```
 
-For example, the **Sysmon** ruleset available in the `rules` directory only use the following channels (names have been shortened) : Sysmon, Security, System, Powershell, Defender, AppLocker, DriverFrameworks, Application, NTLM, DNS, MSexchange, WMI-activity, TaskScheduler. So if you use the sysmon ruleset with the following rules, you should speed up `Zircolite`execution : 
+For example, the **Sysmon** ruleset available in the `rules` directory only use the following channels (names have been shortened) : *Sysmon, Security, System, Powershell, Defender, AppLocker, DriverFrameworks, Application, NTLM, DNS, MSexchange, WMI-activity, TaskScheduler*. So if you use the sysmon ruleset with the following rules, you should speed up `Zircolite`execution : 
 
 ```shell
 python3 zircolite.py --evtx logs/ --ruleset rules/rules_windows_sysmon.json \
@@ -85,6 +86,25 @@ python3 zircolite.py --evtx logs/ --ruleset rules/rules_windows_sysmon.json \
 ```
 
 :information_source: the "select" argument is always applied first and then the "avoid" argument is applied. So, it is possible to exclude files from included files but not the opposite.
+
+### Date filtering
+
+Sometimes you want to work on a selected time range to speed up analysis. With Zircolite, it is possible to filter on specific time range just by using the `--after` and `--before` and their respective shorter versions `-A` and `-B`. The filter will apply on the `SystemTime` field of each event : 
+
+```shell
+python3 zircolite.py --evtx logs/ --ruleset rules/rules_windows_sysmon.json \ 
+-A 2021-06-02T22:40:00 -B 2021-06-02T23:00:00
+```
+
+The `--after` and `--before` arguments can be used independantly.
+
+### Rule filtering
+
+Some rules can be noisy or slow on specific datasets (check [here](rules/Readme.md)) so it is possible to skip stop by using the `-R` or `--rulefilter` argument. The filter will apply on the rule title. Since there is a CRC32 in the rule title it is easiers to use it : 
+
+```shell
+python3 zircolite.py --evtx logs/ --ruleset rules/rules_windows_sysmon.json -R BFFA7F72
+``` 
 
 ### Templating
 

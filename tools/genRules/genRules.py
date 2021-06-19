@@ -68,6 +68,7 @@ if __name__ == '__main__':
         pool.close() 
         pool.join()
 
+    outputList = list(filter(None, outputList)) # Remove empty rules
     with open(args.output, 'w') as f:
         if args.rule is not None:
             json.dump([outputList], f, indent=4)

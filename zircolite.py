@@ -120,7 +120,7 @@ def extractEvtx(file, tmpDir, evtx_dumpBinary):
     except Exception as e:
         logging.error(f"{Fore.RED}   [-] {e}")
 
-def flattenJSON(file):
+def flattenJSON(file, timeAfter, timeBefore):
     """
         Flatten json object with nested keys into a single level.
         Returns the flattened json object
@@ -153,7 +153,6 @@ def flattenJSON(file):
                     else:
                         # Removing all annoying character from field name
                         key = ''.join(e for e in name[:-1].split(".")[-1] if e.isalnum())
-                    #key = key.lower()
                     JSONLine[key] = value
                     # Generate the CREATE TABLE SQL statement
                     if key.lower() not in keyDict:
@@ -170,7 +169,13 @@ def flattenJSON(file):
                 flatten(json.loads(line))
             except Exception as e:
                 logging.debug(f'JSON ERROR : {e}')
-            JSONOutput.append(JSONLine)
+            # Handle timestamp filters
+            if timeAfter != "1970-01-01T00:00:00" and timeBefore != "9999-12-12T23:59:59":
+                timestamp = time.strptime(JSONLine["SystemTime"].split(".")[0].replace("Z",""), '%Y-%m-%dT%H:%M:%S')
+                if timestamp > timeAfter and timestamp < timeBefore:
+                    JSONOutput.append(JSONLine)
+            else:
+                JSONOutput.append(JSONLine)
             JSONLine = {}
 
     return {"dbFields": fieldStmt, "dbValues": JSONOutput}
@@ -342,22 +347,15 @@ def saveDbToDisk(dbConnection, dbFilename):
 # MAIN()
 ################################################################
 if __name__ == '__main__':
-    print("""
-    ███████╗██╗██████╗  ██████╗ ██████╗ ██╗     ██╗████████╗███████╗
-    ╚══███╔╝██║██╔══██╗██╔════╝██╔═══██╗██║     ██║╚══██╔══╝██╔════╝
-      ███╔╝ ██║██████╔╝██║     ██║   ██║██║     ██║   ██║   █████╗
-     ███╔╝  ██║██╔══██╗██║     ██║   ██║██║     ██║   ██║   ██╔══╝
-    ███████╗██║██║  ██║╚██████╗╚██████╔╝███████╗██║   ██║   ███████╗
-    ╚══════╝╚═╝╚═╝  ╚═╝ ╚═════╝ ╚═════╝ ╚══════╝╚═╝   ╚═╝   ╚══════╝
-    """)
 
     # Init Args handling
     tmpDir = "tmp-" + ''.join(random.SystemRandom().choice(string.ascii_uppercase + string.digits) for _ in range(8))
     parser = argparse.ArgumentParser()
     parser.add_argument("-e", "--evtx", help="EVTX log file or directory where EVTX log files are stored in JSON or EVTX format", type=str, required=True)
-    parser.add_argument("-s", "--select", help="Only EVTX files containing the provided string will be used. If there is/are exclusion(s) (--avoid) they will be handled after selection", action='append', nargs='+')
-    parser.add_argument("-a", "--avoid", help="EVTX files containing the provided string will NOT be used", action='append', nargs='+')
+    parser.add_argument("-s", "--select", help="Only EVTX files containing the provided string will be used. If there is/are exclusion(s) ('--avoid') they will be handled after selection", action='append', nargs='+')
+    parser.add_argument("-a", "--avoid", help="EVTX files containing the provided string will NOT be used", nargs='+')
     parser.add_argument("-r", "--ruleset", help="JSON File containing SIGMA rules", type=str, required=True)
+    parser.add_argument("-R", "--rulefilter", help="Remove rule from ruleset, match is done on rule title. The easier is to provide a CRC32 (check your ruleset to find it)", action='append', nargs='*')
     parser.add_argument("-c", "--config", help="JSON File containing field mappings and exclusions", type=str, default="config/fieldMappings.json")
     parser.add_argument("-o", "--outfile", help="JSON file that will contains all detected events", type=str, default="detected_events.json")
     parser.add_argument("-f", "--fileext", help="EVTX file extension", type=str, default="evtx")
@@ -366,6 +364,8 @@ if __name__ == '__main__':
     parser.add_argument("-d", "--dbfile", help="Save data as a SQLite Db to the specified file on disk", type=str)
     parser.add_argument("-l", "--logfile", help="Log file name", default="zircolite.log", type=str)
     parser.add_argument("-j", "--jsononly", help="If logs files are already in JSON lines format ('jsonl' in evtx_dump)", action="store_true")
+    parser.add_argument("-A", "--after", help="Zircolite will only work on events that happened after the provided timestamp (UTC). Format : 1970-01-01T00:00:00", type=str, default="1970-01-01T00:00:00")
+    parser.add_argument("-B", "--before", help="Zircolite will only work on events that happened before the provided timestamp (UTC). Format : 1970-01-01T00:00:00", type=str, default="9999-12-12T23:59:59")
     parser.add_argument("--remote", help="Forward results to a HTTP server, please provide the full address e.g http://address:port/uri (except for Splunk)", type=str)
     parser.add_argument("--token", help="Use this to provide Splunk HEC Token", type=str)
     parser.add_argument("--stream", help="By default event forwarding is done at the end, this option activate forwarding events when detected", action="store_true")
@@ -379,6 +379,19 @@ if __name__ == '__main__':
 
     # Init logging
     consoleLogger = initLogger(args.debug, args.logfile)
+
+    logging.info("""
+    ███████╗██╗██████╗  ██████╗ ██████╗ ██╗     ██╗████████╗███████╗
+    ╚══███╔╝██║██╔══██╗██╔════╝██╔═══██╗██║     ██║╚══██╔══╝██╔════╝
+      ███╔╝ ██║██████╔╝██║     ██║   ██║██║     ██║   ██║   █████╗
+     ███╔╝  ██║██╔══██╗██║     ██║   ██║██║     ██║   ██║   ██╔══╝
+    ███████╗██║██║  ██║╚██████╗╚██████╔╝███████╗██║   ██║   ███████╗
+    ╚══════╝╚═╝╚═╝  ╚═╝ ╚═════╝ ╚═════╝ ╚══════╝╚═╝   ╚═╝   ╚══════╝
+    """)
+
+    # flatten array of "rulefilter" arguments
+    if args.rulefilter: args.rulefilter = [item for sublist in args.rulefilter for item in sublist]
+
     # Init Forwarding
     forwarder = eventForwarder(args.remote, args.token)
     if args.remote is not None: 
@@ -388,6 +401,12 @@ if __name__ == '__main__':
     
     logging.info("[+] Checking prerequisites")
 
+    # Checking provided timestamps
+    try:
+        eventsAfter = time.strptime(args.after, '%Y-%m-%dT%H:%M:%S')
+        eventsBefore = time.strptime(args.before, '%Y-%m-%dT%H:%M:%S')
+    except:
+        quitOnError(f"{Fore.RED}   [-] Wrong timestamp format. Please use 'AAAA-MM-DDTHH:MM:SS'")
     # Cheking for evtx_dump binaries
     evtx_dumpBinary = getOSExternalTools()
     checkIfExists(evtx_dumpBinary, f"{Fore.RED}   [-] Cannot find Evtx_dump")
@@ -456,7 +475,7 @@ if __name__ == '__main__':
         quitOnError(f"{Fore.RED}   [-] No JSON files found.")
     for evtxJSON in tqdm(EVTXJSONList, colour="yellow"):
         if os.stat(evtxJSON).st_size != 0:
-            results = flattenJSON(evtxJSON)
+            results = flattenJSON(evtxJSON, eventsAfter, eventsBefore)
             fieldStmt += results["dbFields"]
             valuesStmt += results["dbValues"]
 
@@ -484,6 +503,11 @@ if __name__ == '__main__':
     logging.info(f"[+] Loading ruleset from : {args.ruleset}")
     with open(args.ruleset) as f:
         ruleset = json.load(f)
+    # Remove empty rule and remove filtered rules
+    ruleset = list(filter(None, ruleset))
+    if args.rulefilter is not None:
+        ruleset = [rule for rule in ruleset if not any(ruleFilter in rule["title"] for ruleFilter in args.rulefilter)]
+
     logging.info(f"[+] Executing ruleset - {len(ruleset)} rules")
     # Results are writen upon detection to allow analysis during execution and to avoid loosing results in case of error.
     fullResults = []
@@ -492,7 +516,7 @@ if __name__ == '__main__':
             with tqdm(ruleset, colour="yellow") as ruleBar:
                 f.write('[')
                 for rule in ruleBar:  # for each rule in ruleset
-                    if args.showall and "title" in rule: ruleBar.write(f'{Fore.BLUE}    - {rule["title"]}')  # Print all rules
+                    if args.showall: ruleBar.write(f'{Fore.BLUE}    - {rule["title"]}')  # Print all rules
                     ruleResults = executeRule(rule)
                     if ruleResults != {}:
                         ruleBar.write(f'{Fore.CYAN}    - {ruleResults["title"]} : {ruleResults["count"]} events')
@@ -513,7 +537,7 @@ if __name__ == '__main__':
         else:
             f.write('[')
             for rule in ruleset:
-                if args.showall and "title" in rule: ruleBar.write(f'{Fore.BLUE}    - {rule["title"]}')  # Print all rules
+                if args.showall: logging.info(f'{Fore.BLUE}    - {rule["title"]}')  # Print all rules
                 ruleResults = executeRule(rule)
                 if ruleResults != {}:
                     logging.info(f'{Fore.CYAN}    - {ruleResults["title"]} : {ruleResults["count"]} events')
