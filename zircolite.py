@@ -59,49 +59,49 @@ except ImportError:  # If the module is not available
     hasJinja2 = False
 
 def signal_handler(sig, frame):
-    logging.info("[-] Execution interrupted !")
+    consoleLogger.info("[-] Execution interrupted !")
     sys.exit(0)
 
 def createConnection(db):
     """ create a database connection to a SQLite database """
     conn = None
-    logging.debug(f"CONNECTING TO : {db}")
+    consoleLogger.debug(f"CONNECTING TO : {db}")
     try:
         conn = sqlite3.connect(db)
         conn.row_factory = sqlite3.Row  # Allow to get a dict
     except Error as e:
-        logging.error(f"{Fore.RED}   [-] {e}")
+        consoleLogger.error(f"{Fore.RED}   [-] {e}")
     return conn
 
 def executeQuery(dbConnection, query):
     """ Perform a SQL Query with the provided connection """
     if dbConnection is not None:
         dbHandle = dbConnection.cursor()
-        logging.debug(f"EXECUTING : {query}")
+        consoleLogger.debug(f"EXECUTING : {query}")
         try:
             dbHandle.execute(query)
             dbConnection.commit()
             return True
         except Error as e:
-            logging.debug(f"   [-] {e}")
+            consoleLogger.debug(f"   [-] {e}")
             return False
     else:
-        logging.error(f"{Fore.RED}   [-] No connection to Db")
+        consoleLogger.error(f"{Fore.RED}   [-] No connection to Db")
         return False
 
 def executeSelectQuery(dbConnection, query):
     """ Perform a SQL Query with the provided connection """
     if dbConnection is not None:
         dbHandle = dbConnection.cursor()
-        logging.debug(f"EXECUTING : {query}")
+        consoleLogger.debug(f"EXECUTING : {query}")
         try:
             data = dbHandle.execute(query)
             return data
         except Error as e:
-            logging.debug(f"   [-] {e}")
+            consoleLogger.debug(f"   [-] {e}")
             return {}
     else:
-        logging.error(f"{Fore.RED}   [-] No connection to Db")
+        consoleLogger.error(f"{Fore.RED}   [-] No connection to Db")
         return {}
 
 def extractEvtx(file, tmpDir, evtx_dumpBinary):
@@ -110,7 +110,7 @@ def extractEvtx(file, tmpDir, evtx_dumpBinary):
     Drop resulting JSON files in a tmp folder.
     """
 
-    logging.debug(f"EXTRACTING : {file}")
+    consoleLogger.debug(f"EXTRACTING : {file}")
     try:
         filepath = Path(file)
         filename = filepath.name
@@ -118,7 +118,7 @@ def extractEvtx(file, tmpDir, evtx_dumpBinary):
         cmd = [evtx_dumpBinary, "--no-confirm-overwrite", "-o", "jsonl", str(file), "-f", tmpDir + "/" + str(filename) + randString + ".json"]
         subprocess.call(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
     except Exception as e:
-        logging.error(f"{Fore.RED}   [-] {e}")
+        consoleLogger.error(f"{Fore.RED}   [-] {e}")
 
 def flattenJSON(file, timeAfter, timeBefore):
     """
@@ -126,7 +126,7 @@ def flattenJSON(file, timeAfter, timeBefore):
         Returns the flattened json object
     """
 
-    logging.debug(f"FLATTENING : {file}")
+    consoleLogger.debug(f"FLATTENING : {file}")
     JSONLine = {}
     JSONOutput = []
     fieldStmt = ""
@@ -168,7 +168,7 @@ def flattenJSON(file, timeAfter, timeBefore):
             try:
                 flatten(json.loads(line))
             except Exception as e:
-                logging.debug(f'JSON ERROR : {e}')
+                consoleLogger.debug(f'JSON ERROR : {e}')
             # Handle timestamp filters
             if timeAfter != "1970-01-01T00:00:00" and timeBefore != "9999-12-12T23:59:59":
                 timestamp = time.strptime(JSONLine["SystemTime"].split(".")[0].replace("Z",""), '%Y-%m-%dT%H:%M:%S')
@@ -217,9 +217,9 @@ def executeRule(rule):
             rule["tags"] = []
         results = ({"title": rule["title"], "description": rule["description"], "sigma": rule["rule"], "rule_level": rule["level"], "tags": rule["tags"], "count": counter, "matches": filteredRows})
         if counter > 0:
-            logging.debug(f'DETECTED : {rule["title"]} - Matchs : {counter} events')
+            consoleLogger.debug(f'DETECTED : {rule["title"]} - Matchs : {counter} events')
     else:
-        logging.debug("RULE FORMAT ERROR : rule key Missing")
+        consoleLogger.debug("RULE FORMAT ERROR : rule key Missing")
     if filteredRows == []:
         return {}
     return results
@@ -241,11 +241,11 @@ def generateFromTemplate(templateFile, outpoutFilename, data):
             with open(outpoutFilename, 'a', encoding='utf-8') as tpl:
                 tpl.write(template.render(data=data))
     except Exception as e:
-        logging.error(f"{Fore.RED}   [-] Template error, activate debug mode to check for errors")
-        logging.debug(f"   [-] {e}")
+        consoleLogger.error(f"{Fore.RED}   [-] Template error, activate debug mode to check for errors")
+        consoleLogger.debug(f"   [-] {e}")
 
 def quitOnError(message):
-    logging.error(message)
+    consoleLogger.error(message)
     sys.exit(1)
 
 def checkIfExists(path, errorMessage):
@@ -253,17 +253,22 @@ def checkIfExists(path, errorMessage):
     if not (Path(path).is_file()):
         quitOnError(errorMessage)
 
-def initLogger(debugMode, logFile):
+def initLogger(debugMode, logFile=None):
     logLevel = logging.INFO
-    logFormat = "%(asctime)s %(levelname)-8s %(message)s"
+    if logFile is not None:
+        logFormat = "%(asctime)s %(levelname)-8s %(message)s"
+    else: 
+        logFormat = "%(message)s"
     if debugMode:
         logLevel = logging.DEBUG
         logFormat = "%(asctime)s %(levelname)-8s %(module)s:%(lineno)s %(funcName)s %(message)s"
 
     logging.basicConfig(format=logFormat, filename=logFile, level=logLevel, datefmt='%Y-%m-%d %H:%M:%S')
-    logger = logging.StreamHandler()
-    logger.setLevel(logging.INFO)
-    logging.getLogger().addHandler(logger)
+
+    if logFile is not None:
+        logger = logging.StreamHandler()
+        logger.setLevel(logging.INFO)
+        logging.getLogger().addHandler(logger)
     return logging.getLogger()
 
 class eventForwarder:
@@ -293,7 +298,7 @@ class eventForwarder:
                         self.sendHTTP(payload)
                     return True
                 except Exception as e:
-                    logging.debug(f"{Fore.RED}   [-] {e}")
+                    consoleLogger.debug(f"{Fore.RED}   [-] {e}")
                     return False
         
     def networkCheck(self):
@@ -338,7 +343,7 @@ def avoidFiles(pathList, avoidFilesList):
     return pathList
 
 def saveDbToDisk(dbConnection, dbFilename):
-    logging.info("[+] Saving working data to disk as a SQLite DB")
+    consoleLogger.info("[+] Saving working data to disk as a SQLite DB")
     onDiskDb = sqlite3.connect(dbFilename)
     dbConnection.backup(onDiskDb)
     onDiskDb.close()
@@ -355,7 +360,7 @@ if __name__ == '__main__':
     parser.add_argument("-s", "--select", help="Only EVTX files containing the provided string will be used. If there is/are exclusion(s) ('--avoid') they will be handled after selection", action='append', nargs='+')
     parser.add_argument("-a", "--avoid", help="EVTX files containing the provided string will NOT be used", nargs='+')
     parser.add_argument("-r", "--ruleset", help="JSON File containing SIGMA rules", type=str, required=True)
-    parser.add_argument("-R", "--rulefilter", help="Remove rule from ruleset, match is done on rule title. The easier is to provide a CRC32 (check your ruleset to find it)", action='append', nargs='*')
+    parser.add_argument("-R", "--rulefilter", help="Remove rule from ruleset, comparison is done on rule title (case sensitive)", action='append', nargs='*')
     parser.add_argument("-c", "--config", help="JSON File containing field mappings and exclusions", type=str, default="config/fieldMappings.json")
     parser.add_argument("-o", "--outfile", help="JSON file that will contains all detected events", type=str, default="detected_events.json")
     parser.add_argument("-f", "--fileext", help="EVTX file extension", type=str, default="evtx")
@@ -363,6 +368,7 @@ if __name__ == '__main__':
     parser.add_argument("-k", "--keeptmp", help="Do not remove the Temp directory", action="store_true")
     parser.add_argument("-d", "--dbfile", help="Save data as a SQLite Db to the specified file on disk", type=str)
     parser.add_argument("-l", "--logfile", help="Log file name", default="zircolite.log", type=str)
+    parser.add_argument("-n", "--nolog", help="Don't create a log file", action='store_true')
     parser.add_argument("-j", "--jsononly", help="If logs files are already in JSON lines format ('jsonl' in evtx_dump)", action="store_true")
     parser.add_argument("-A", "--after", help="Zircolite will only work on events that happened after the provided timestamp (UTC). Format : 1970-01-01T00:00:00", type=str, default="1970-01-01T00:00:00")
     parser.add_argument("-B", "--before", help="Zircolite will only work on events that happened before the provided timestamp (UTC). Format : 1970-01-01T00:00:00", type=str, default="9999-12-12T23:59:59")
@@ -378,9 +384,10 @@ if __name__ == '__main__':
     signal.signal(signal.SIGINT, signal_handler)
 
     # Init logging
+    if args.nolog: args.logfile = None
     consoleLogger = initLogger(args.debug, args.logfile)
 
-    logging.info("""
+    consoleLogger.info("""
     ███████╗██╗██████╗  ██████╗ ██████╗ ██╗     ██╗████████╗███████╗
     ╚══███╔╝██║██╔══██╗██╔════╝██╔═══██╗██║     ██║╚══██╔══╝██╔════╝
       ███╔╝ ██║██████╔╝██║     ██║   ██║██║     ██║   ██║   █████╗
@@ -399,7 +406,7 @@ if __name__ == '__main__':
             if not forwarder.networkCheck(): quitOnError(f"{Fore.RED}   [-] Remote host cannot be reached : {args.remote}")
         else: quitOnError(f"{Fore.RED}   [-] Requests is not installed.")
     
-    logging.info("[+] Checking prerequisites")
+    consoleLogger.info("[+] Checking prerequisites")
 
     # Checking provided timestamps
     try:
@@ -443,7 +450,7 @@ if __name__ == '__main__':
 
     # If we are working with json we force the file extension if it is not user-provided
     if args.jsononly and args.fileext != "evtx": args.fileext = "json"
-    if not args.jsononly: logging.info(f"[+] Extracting EVTX Using '{args.tmpdir}' directory ")
+    if not args.jsononly: consoleLogger.info(f"[+] Extracting EVTX Using '{args.tmpdir}' directory ")
     EVTXPath = Path(args.evtx)
     if EVTXPath.is_dir():
         # EVTX recursive search in given directory with given file extension
@@ -464,7 +471,7 @@ if __name__ == '__main__':
     else:
         quitOnError(f"{Fore.RED}   [-] No file found. Please verify filters, the directory or the extension with '--fileext'")
 
-    logging.info("[+] Processing EVTX")
+    consoleLogger.info("[+] Processing EVTX")
 
     fieldStmt = ""
     valuesStmt = []
@@ -479,28 +486,28 @@ if __name__ == '__main__':
             fieldStmt += results["dbFields"]
             valuesStmt += results["dbValues"]
 
-    logging.info("[+] Creating model")
+    consoleLogger.info("[+] Creating model")
     dbConnection = createConnection(":memory:")
     createTableStmt = "CREATE TABLE logs ( row_id INTEGER, " + fieldStmt + " PRIMARY KEY(row_id AUTOINCREMENT) );"
-    logging.debug(" CREATE : " + createTableStmt.replace('\n', ' ').replace('\r', ''))
+    consoleLogger.debug(" CREATE : " + createTableStmt.replace('\n', ' ').replace('\r', ''))
     if not executeQuery(dbConnection, createTableStmt):
         quitOnError(f"{Fore.RED}   [-] Unable to create table")
     del createTableStmt
 
-    logging.info("[+] Inserting data")
+    consoleLogger.info("[+] Inserting data")
     for JSONLine in tqdm(valuesStmt, colour="yellow"):
         insertData2Db(JSONLine)
     # Creating index to speed up queries
     executeQuery(dbConnection, 'CREATE INDEX "idx_eventid" ON "logs" ("eventid");')
 
-    logging.info("[+] Cleaning unused objects")
+    consoleLogger.info("[+] Cleaning unused objects")
     del valuesStmt
     del results
 
     # Unload In memory DB to disk. Done here to allow debug in case of ruleset execution error
     if args.dbfile is not None: saveDbToDisk(dbConnection, args.dbfile)
 
-    logging.info(f"[+] Loading ruleset from : {args.ruleset}")
+    consoleLogger.info(f"[+] Loading ruleset from : {args.ruleset}")
     with open(args.ruleset) as f:
         ruleset = json.load(f)
     # Remove empty rule and remove filtered rules
@@ -508,13 +515,13 @@ if __name__ == '__main__':
     if args.rulefilter is not None:
         ruleset = [rule for rule in ruleset if not any(ruleFilter in rule["title"] for ruleFilter in args.rulefilter)]
 
-    logging.info(f"[+] Executing ruleset - {len(ruleset)} rules")
+    consoleLogger.info(f"[+] Executing ruleset - {len(ruleset)} rules")
     # Results are writen upon detection to allow analysis during execution and to avoid loosing results in case of error.
     fullResults = []
     with open(args.outfile, 'w', encoding='utf-8') as f:
         if hasTqdm:  # If tqdm is installed
             with tqdm(ruleset, colour="yellow") as ruleBar:
-                f.write('[')
+                if not args.nolog: f.write('[')
                 for rule in ruleBar:  # for each rule in ruleset
                     if args.showall: ruleBar.write(f'{Fore.BLUE}    - {rule["title"]}')  # Print all rules
                     ruleResults = executeRule(rule)
@@ -522,55 +529,57 @@ if __name__ == '__main__':
                         ruleBar.write(f'{Fore.CYAN}    - {ruleResults["title"]} : {ruleResults["count"]} events')
                         # To avoid printing this one on stdout but in the logs...
                         consoleLogger.setLevel(logging.ERROR)
-                        logging.info(f'{Fore.CYAN}    - {ruleResults["title"]} : {ruleResults["count"]} events')
+                        consoleLogger.info(f'{Fore.CYAN}    - {ruleResults["title"]} : {ruleResults["count"]} events')
                         consoleLogger.setLevel(logging.INFO)
                         # Store results for templating and event forwarding (only if stream mode is disabled)
                         if readyForTemplating or (args.remote is not None and not args.stream): fullResults.append(ruleResults)
                         if args.stream: forwarder.send(ruleResults, False)
                         # Output to json file
-                        try:
-                            json.dump(ruleResults, f, indent=4, ensure_ascii=False)
-                            f.write(',\n')
-                        except Exception as e:
-                            logging.error(f"{Fore.RED}   [-] Error saving some results : {e}")
-                f.write('{}]')
+                        if not args.nolog: 
+                            try:
+                                json.dump(ruleResults, f, indent=4, ensure_ascii=False)
+                                f.write(',\n')
+                            except Exception as e:
+                                consoleLogger.error(f"{Fore.RED}   [-] Error saving some results : {e}")
+                if not args.nolog: f.write('{}]')
         else:
-            f.write('[')
+            if not args.nolog: f.write('[')
             for rule in ruleset:
-                if args.showall: logging.info(f'{Fore.BLUE}    - {rule["title"]}')  # Print all rules
+                if args.showall: consoleLogger.info(f'{Fore.BLUE}    - {rule["title"]}')  # Print all rules
                 ruleResults = executeRule(rule)
                 if ruleResults != {}:
-                    logging.info(f'{Fore.CYAN}    - {ruleResults["title"]} : {ruleResults["count"]} events')
+                    consoleLogger.info(f'{Fore.CYAN}    - {ruleResults["title"]} : {ruleResults["count"]} events')
                     # Store results for templating and event forwarding (only if stream mode is disabled)
                     if readyForTemplating or (args.remote is not None and not args.stream): fullResults.append(ruleResults)
                     if args.stream: forwarder.send(ruleResults, False)
                     # Output to json file
-                    try:
-                        json.dump(ruleResults, f, indent=4, ensure_ascii=False)
-                        f.write(',\n')
-                    except Exception as e:
-                        logging.error(f"{Fore.RED}   [-] Error saving some results : {e}")
-            f.write('{}]')
-    logging.info(f"[+] Results written in : {args.outfile}")
+                    if not args.nolog: 
+                        try:
+                            json.dump(ruleResults, f, indent=4, ensure_ascii=False)
+                            f.write(',\n')
+                        except Exception as e:
+                            consoleLogger.error(f"{Fore.RED}   [-] Error saving some results : {e}")
+            if not args.nolog: f.write('{}]')
+    consoleLogger.info(f"[+] Results written in : {args.outfile}")
 
     # Forward events
     if args.remote is not None and not args.stream: 
-        logging.info(f"[+] Forwarding to : {args.remote}")
+        consoleLogger.info(f"[+] Forwarding to : {args.remote}")
         forwarder.sendAll(fullResults)
 
     # Apply templates
     if readyForTemplating and fullResults != []:
         for template, templateOutput in zip(args.template, args.templateOutput):
-            logging.info(f'[+] Applying template "{template[0]}", outputting to : {templateOutput[0]}')
+            consoleLogger.info(f'[+] Applying template "{template[0]}", outputting to : {templateOutput[0]}')
             generateFromTemplate(template[0], templateOutput[0], fullResults)
 
     # Removing Working directory containing logs as json
     if not args.keeptmp:
-        logging.info("[+] Cleaning")
+        consoleLogger.info("[+] Cleaning")
         try:
             if not args.jsononly: shutil.rmtree(args.tmpdir)
         except OSError as e:
-            logging.error(f"{Fore.RED}   [-] Error during cleanup {e}")
+            consoleLogger.error(f"{Fore.RED}   [-] Error during cleanup {e}")
 
     dbConnection.close()
-    logging.info(f"\nFinished in {int((time.time() - start_time))} seconds")
+    consoleLogger.info(f"\nFinished in {int((time.time() - start_time))} seconds")

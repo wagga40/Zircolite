@@ -14,6 +14,9 @@
 
 ## Advanced use
 
+* [Working with large datasets](Advanced.md#working-with-large-datasets)
+	* [Using GNU Parallel](Advanced.md#file-filters)
+	* [Time filters](Advanced.md#time-filters)
 * [Filtering](#filtering)
 	* [File filters](Advanced.md#file-filters)
 	* [Time filters](Advanced.md#time-filters)
@@ -21,9 +24,8 @@
 * [Forwarding detected events](Advanced.md#forwarding-detected-events) 
 * [Templating and Formatting](Advanced.md#templating-and-formatting)
 * [Mini GUI](Advanced.md#mini-gui)
-* [Working with large datasets](Advanced.md#working-with-large-datasets)
 
-## 3 - Internals
+## Internals
 
 * [Zircolite architecture](Internals.md#zircolite-architecture)
 * [Project structure](Internals.md#project-structure)
