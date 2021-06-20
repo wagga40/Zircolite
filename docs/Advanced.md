@@ -15,7 +15,7 @@
 
 Zircolite has a lot of command line arguments, you can list them with the `-h` argument.
 
---
+---
 
 ### Working with large datasets
 
@@ -63,7 +63,7 @@ Except when `evtx_dump` is used, Zircolite only use one core. So if you have a l
 
 If you don't have find and/or GNU Parallel, you can use the **very basic** `Zircolite_mp.py` available in the [tools](tools/) directory of this repository.
 
---
+---
 
 ### Filtering
 
@@ -151,7 +151,7 @@ You can also specify a string, to avoid unexpected side-effect **comparison is c
 ```shell
 python3 zircolite.py --evtx logs/ --ruleset rules/rules_windows_sysmon.json -R BFFA7F72 -R MSHTA
 ```
---
+---
 
 ### Forwarding detected events 
 
@@ -188,7 +188,7 @@ As of v1.3.5, Zircolite can forward detections to a Splunk instance with Splunk 
 python3 zircolite.py --evtx /sample.evtx  --ruleset rules/rules_windows_sysmon.json \
 	--remote https://x.x.x.x:8088 --token xxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
 ```
---
+---
 
 ### Templating and Formatting
 
@@ -204,7 +204,7 @@ python3 zircolite.py --evtx sample.evtx  --ruleset rules/rules_windows_sysmon.js
 
 It is possible to use multiple templates if you provide for each `--template` argument there is a `--templateOutput` argument associated.
 
---
+---
 
 ### Mini-GUI
 

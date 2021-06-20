@@ -14,7 +14,7 @@
 
 :information_source: if you use the packaged version of Zircolite don't forget to replace `python3 zircolite.py` in the examples by the packaged binary name.
 
---
+---
 
 ### Requirements
 
@@ -34,7 +34,7 @@
 
 - Build tools : **Git** and **Make** can be useful.
 
---
+---
 
 ### Basic usage 
 
@@ -56,7 +56,7 @@ By default :
 - Results are written in the `detected_events.json` in the same directory as Zircolite
 - There is a `zircolite.log`file that will be created in the current working directory
 
---
+---
 
 ### Generate your own rulesets
 
@@ -74,7 +74,7 @@ For example :
 -  "Suspicious Eventlog Clear or Configuration Using Wevtutil" : **very noisy** on fresh environnement (labs etc.), commonly generate a lot of useless detection
 -  Notepad Making Network Connection : **can slow very significantly** the execution of Zircolite
 
---
+---
 
 ### Docker
 

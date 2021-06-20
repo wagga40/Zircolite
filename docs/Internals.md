@@ -6,7 +6,7 @@
 * [Project structure](#project-structure)
 * [Benchmarks](#benchmarks)
 
---
+---
 
 ### Zircolite architecture
 
@@ -14,7 +14,7 @@
 
 ![](../pics/Zircolite.png)
 
---
+---
 
 ### Project structure
 
@@ -31,7 +31,7 @@
 └── zircolite.py            # Zircolite !
 ```
 
---
+---
 
 ### Benchmarks (**Updated 22nd May 2021**)
 
