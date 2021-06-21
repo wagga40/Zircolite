@@ -15,15 +15,16 @@
 ## Advanced use
 
 * [Working with large datasets](Advanced.md#working-with-large-datasets)
-	* [Using GNU Parallel](Advanced.md#file-filters)
-	* [Time filters](Advanced.md#time-filters)
-* [Filtering](#filtering)
+	* [Using GNU Parallel](Advanced.md#using-gnu-parallel)
+	* [Using Zircolite MP](Advanced.md#using-zircolite-mp)
+* [Filtering](Advanced.md#filtering)
 	* [File filters](Advanced.md#file-filters)
 	* [Time filters](Advanced.md#time-filters)
 	* [Rule filters](Advanced.md#rule-filters)
 * [Forwarding detected events](Advanced.md#forwarding-detected-events) 
 * [Templating and Formatting](Advanced.md#templating-and-formatting)
 * [Mini GUI](Advanced.md#mini-gui)
+* [Packaging Zircolite](Advanced.md#packaging-zircolite)
 
 ## Internals
 

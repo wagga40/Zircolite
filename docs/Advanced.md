@@ -3,8 +3,8 @@
 ## Advanced use
 
 * [Working with large datasets](#working-with-large-datasets)
-	* [Using GNU Parallel](#file-filters)
-	* [Time filters](#time-filters)
+	* [Using GNU Parallel](#using-gnu-parallel)
+	* [Using Zircolite MP](#using-zircolite-mp)
 * [Filtering](#filtering)
 	* [File filters](#file-filters)
 	* [Time filters](#time-filters)
@@ -12,6 +12,7 @@
 * [Forwarding detected events](#forwarding-detected-events) 
 * [Templating and Formatting](#templating-and-formatting)
 * [Mini GUI](#mini-gui)
+* [Packaging Zircolite](#packaging-zircolite)
 
 Zircolite has a lot of command line arguments, you can list them with the `-h` argument.
 
@@ -59,7 +60,9 @@ Except when `evtx_dump` is used, Zircolite only use one core. So if you have a l
 	
 	In this example the `-j -1` is for using all cores but one. You can adjust the number of used cores with this arguments.
 
-#### Using Zircolite MP (*deprecated*)
+#### Using Zircolite MP 
+
+***deprecated***
 
 If you don't have find and/or GNU Parallel, you can use the **very basic** `Zircolite_mp.py` available in the [tools](tools/) directory of this repository.
 
@@ -239,6 +242,7 @@ Then you just have to open `index.html` in your favorite browser and click on a 
 
 * Install Python 3.8 on the same OS as the one you want to use Zircolite on
 * Install all dependencies : `pip3 install -r requirements.txt`
-* 
+* After Python 3.8 install, you will need Nuitka : `pip3 install nuitka`
+* In the root folder of Zircolite type : `python3 -m nuitka --onefile zircolite.py`
 
 :warning: When packaging with PyInstaller some AV may not like your package.
