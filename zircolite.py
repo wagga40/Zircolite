@@ -356,7 +356,7 @@ if __name__ == '__main__':
     # Init Args handling
     tmpDir = "tmp-" + ''.join(random.SystemRandom().choice(string.ascii_uppercase + string.digits) for _ in range(8))
     parser = argparse.ArgumentParser()
-    parser.add_argument("-e", "--evtx", help="EVTX log file or directory where EVTX log files are stored in JSON or EVTX format", type=str, required=True)
+    parser.add_argument("-e", "--evtx", help="EVTX log file or directory where EVTX log files are stored in JSON, DB or EVTX format", type=str, required=True)
     parser.add_argument("-s", "--select", help="Only EVTX files containing the provided string will be used. If there is/are exclusion(s) ('--avoid') they will be handled after selection", action='append', nargs='+')
     parser.add_argument("-a", "--avoid", help="EVTX files containing the provided string will NOT be used", nargs='+')
     parser.add_argument("-r", "--ruleset", help="JSON File containing SIGMA rules", type=str, required=True)
@@ -370,8 +370,9 @@ if __name__ == '__main__':
     parser.add_argument("-l", "--logfile", help="Log file name", default="zircolite.log", type=str)
     parser.add_argument("-n", "--nolog", help="Don't create a log file", action='store_true')
     parser.add_argument("-j", "--jsononly", help="If logs files are already in JSON lines format ('jsonl' in evtx_dump)", action="store_true")
-    parser.add_argument("-A", "--after", help="Zircolite will only work on events that happened after the provided timestamp (UTC). Format : 1970-01-01T00:00:00", type=str, default="1970-01-01T00:00:00")
-    parser.add_argument("-B", "--before", help="Zircolite will only work on events that happened before the provided timestamp (UTC). Format : 1970-01-01T00:00:00", type=str, default="9999-12-12T23:59:59")
+    parser.add_argument("-D", "--dbonly", help="Directly use a previously saved database file, timerange filters will not work", action='store_true')
+    parser.add_argument("-A", "--after", help="Work on events that happened after the provided timestamp (UTC). Format : 1970-01-01T00:00:00", type=str, default="1970-01-01T00:00:00")
+    parser.add_argument("-B", "--before", help="Work on events that happened before the provided timestamp (UTC). Format : 1970-01-01T00:00:00", type=str, default="9999-12-12T23:59:59")
     parser.add_argument("--remote", help="Forward results to a HTTP server, please provide the full address e.g http://address:port/uri (except for Splunk)", type=str)
     parser.add_argument("--token", help="Use this to provide Splunk HEC Token", type=str)
     parser.add_argument("--stream", help="By default event forwarding is done at the end, this option activate forwarding events when detected", action="store_true")
@@ -414,14 +415,18 @@ if __name__ == '__main__':
         eventsBefore = time.strptime(args.before, '%Y-%m-%dT%H:%M:%S')
     except:
         quitOnError(f"{Fore.RED}   [-] Wrong timestamp format. Please use 'AAAA-MM-DDTHH:MM:SS'")
-    # Cheking for evtx_dump binaries
-    evtx_dumpBinary = getOSExternalTools()
-    checkIfExists(evtx_dumpBinary, f"{Fore.RED}   [-] Cannot find Evtx_dump")
-    # Checking ruleset arg
-    checkIfExists(args.ruleset, f"{Fore.RED}   [-] Cannot find ruleset : {args.ruleset}")
-    # Checking if tmpdir is empty
-    if (Path(args.tmpdir).is_dir()):
-        quitOnError(f"{Fore.RED}   [-] The Temp working directory exists: {args.tmpdir}. Please remove it or rename it")
+
+    # If we are not working directly with the db
+    if not args.dbonly:
+        # Cheking for evtx_dump binaries
+        evtx_dumpBinary = getOSExternalTools()
+        checkIfExists(evtx_dumpBinary, f"{Fore.RED}   [-] Cannot find Evtx_dump")
+        # Checking ruleset arg
+        checkIfExists(args.ruleset, f"{Fore.RED}   [-] Cannot find ruleset : {args.ruleset}")
+        # Checking if tmpdir is empty
+        if (Path(args.tmpdir).is_dir()):
+            quitOnError(f"{Fore.RED}   [-] The Temp working directory exists: {args.tmpdir}. Please remove it or rename it")
+
     # Checking templates args
     readyForTemplating = False
     if (args.template is not None):
@@ -436,76 +441,84 @@ if __name__ == '__main__':
     # Start time counting
     start_time = time.time()
 
-    # Initialize configuration dictionaries 
-    fieldExclusions = {}  # Will contain fields to discard
-    fieldMappings = {}  # Will contain fields to rename during flattening
-    uselessValues = {}  # Will contain values to discard during flattening
+   # Only if we are not working directly with the db
+    if not args.dbonly:
+        # Initialize configuration dictionaries 
+        fieldExclusions = {}  # Will contain fields to discard
+        fieldMappings = {}  # Will contain fields to rename during flattening
+        uselessValues = {}  # Will contain values to discard during flattening
 
-    checkIfExists(args.config, f"{Fore.RED}   [-] Cannot find mapping file")
-    with open(args.config, 'r') as fieldMappingsFile:
-        fieldMappingsDict = json.load(fieldMappingsFile)
-        fieldExclusions = fieldMappingsDict["exclusions"]
-        fieldMappings = fieldMappingsDict["mappings"]
-        uselessValues = fieldMappingsDict["useless"]
+        checkIfExists(args.config, f"{Fore.RED}   [-] Cannot find mapping file")
+        with open(args.config, 'r') as fieldMappingsFile:
+            fieldMappingsDict = json.load(fieldMappingsFile)
+            fieldExclusions = fieldMappingsDict["exclusions"]
+            fieldMappings = fieldMappingsDict["mappings"]
+            uselessValues = fieldMappingsDict["useless"]
 
-    # If we are working with json we force the file extension if it is not user-provided
-    if args.jsononly and args.fileext != "evtx": args.fileext = "json"
-    if not args.jsononly: consoleLogger.info(f"[+] Extracting EVTX Using '{args.tmpdir}' directory ")
-    EVTXPath = Path(args.evtx)
-    if EVTXPath.is_dir():
-        # EVTX recursive search in given directory with given file extension
-        EVTXList = list(EVTXPath.rglob(f"*.{args.fileext}"))
-    elif EVTXPath.is_file():
-        EVTXList = [EVTXPath]
-    else:
-        quitOnError(f"{Fore.RED}   [-] Unable to extract EVTX from submitted path")
-    FileList = avoidFiles(selectFiles(EVTXList, args.select), args.avoid)  # Apply file filters in this order : "select" than "avoid"
-    if len(FileList) > 0:
-        if not args.jsononly:
-            for evtx in tqdm(FileList, colour="yellow"):
-                extractEvtx(evtx, args.tmpdir, evtx_dumpBinary)
-            # Set the path for the next step
-            EVTXJSONList = list(Path(args.tmpdir).rglob("*.json"))
+        # If we are working with json we force the file extension if it is not user-provided
+        if args.jsononly and args.fileext != "evtx": args.fileext = "json"
+        if not args.jsononly: consoleLogger.info(f"[+] Extracting EVTX Using '{args.tmpdir}' directory ")
+        EVTXPath = Path(args.evtx)
+        if EVTXPath.is_dir():
+            # EVTX recursive search in given directory with given file extension
+            EVTXList = list(EVTXPath.rglob(f"*.{args.fileext}"))
+        elif EVTXPath.is_file():
+            EVTXList = [EVTXPath]
         else:
-            EVTXJSONList = FileList
+            quitOnError(f"{Fore.RED}   [-] Unable to extract EVTX from submitted path")
+        FileList = avoidFiles(selectFiles(EVTXList, args.select), args.avoid)  # Apply file filters in this order : "select" than "avoid"
+        if len(FileList) > 0:
+            if not args.jsononly:
+                for evtx in tqdm(FileList, colour="yellow"):
+                    extractEvtx(evtx, args.tmpdir, evtx_dumpBinary)
+                # Set the path for the next step
+                EVTXJSONList = list(Path(args.tmpdir).rglob("*.json"))
+            else:
+                EVTXJSONList = FileList
+        else:
+            quitOnError(f"{Fore.RED}   [-] No file found. Please verify filters, the directory or the extension with '--fileext'")
+
+        consoleLogger.info("[+] Processing EVTX")
+
+        fieldStmt = ""
+        valuesStmt = []
+        results = {}
+        keyDict = {}
+
+        if EVTXJSONList == []:
+            quitOnError(f"{Fore.RED}   [-] No JSON files found.")
+        for evtxJSON in tqdm(EVTXJSONList, colour="yellow"):
+            if os.stat(evtxJSON).st_size != 0:
+                results = flattenJSON(evtxJSON, eventsAfter, eventsBefore)
+                fieldStmt += results["dbFields"]
+                valuesStmt += results["dbValues"]
+
+        consoleLogger.info("[+] Creating model")
+        dbConnection = createConnection(":memory:")
+        createTableStmt = "CREATE TABLE logs ( row_id INTEGER, " + fieldStmt + " PRIMARY KEY(row_id AUTOINCREMENT) );"
+        consoleLogger.debug(" CREATE : " + createTableStmt.replace('\n', ' ').replace('\r', ''))
+        if not executeQuery(dbConnection, createTableStmt):
+            quitOnError(f"{Fore.RED}   [-] Unable to create table")
+        del createTableStmt
+
+        consoleLogger.info("[+] Inserting data")
+        for JSONLine in tqdm(valuesStmt, colour="yellow"):
+            insertData2Db(JSONLine)
+        # Creating index to speed up queries
+        executeQuery(dbConnection, 'CREATE INDEX "idx_eventid" ON "logs" ("eventid");')
+
+        consoleLogger.info("[+] Cleaning unused objects")
+        del valuesStmt
+        del results
+
+        # Unload In memory DB to disk. Done here to allow debug in case of ruleset execution error
+        if args.dbfile is not None: saveDbToDisk(dbConnection, args.dbfile)
     else:
-        quitOnError(f"{Fore.RED}   [-] No file found. Please verify filters, the directory or the extension with '--fileext'")
-
-    consoleLogger.info("[+] Processing EVTX")
-
-    fieldStmt = ""
-    valuesStmt = []
-    results = {}
-    keyDict = {}
-
-    if EVTXJSONList == []:
-        quitOnError(f"{Fore.RED}   [-] No JSON files found.")
-    for evtxJSON in tqdm(EVTXJSONList, colour="yellow"):
-        if os.stat(evtxJSON).st_size != 0:
-            results = flattenJSON(evtxJSON, eventsAfter, eventsBefore)
-            fieldStmt += results["dbFields"]
-            valuesStmt += results["dbValues"]
-
-    consoleLogger.info("[+] Creating model")
-    dbConnection = createConnection(":memory:")
-    createTableStmt = "CREATE TABLE logs ( row_id INTEGER, " + fieldStmt + " PRIMARY KEY(row_id AUTOINCREMENT) );"
-    consoleLogger.debug(" CREATE : " + createTableStmt.replace('\n', ' ').replace('\r', ''))
-    if not executeQuery(dbConnection, createTableStmt):
-        quitOnError(f"{Fore.RED}   [-] Unable to create table")
-    del createTableStmt
-
-    consoleLogger.info("[+] Inserting data")
-    for JSONLine in tqdm(valuesStmt, colour="yellow"):
-        insertData2Db(JSONLine)
-    # Creating index to speed up queries
-    executeQuery(dbConnection, 'CREATE INDEX "idx_eventid" ON "logs" ("eventid");')
-
-    consoleLogger.info("[+] Cleaning unused objects")
-    del valuesStmt
-    del results
-
-    # Unload In memory DB to disk. Done here to allow debug in case of ruleset execution error
-    if args.dbfile is not None: saveDbToDisk(dbConnection, args.dbfile)
+        consoleLogger.info(f"[+] Creating model from disk : {args.evtx}")
+        dbfileConnection = createConnection(args.evtx)
+        dbConnection = createConnection(":memory:")
+        dbfileConnection.backup(dbConnection)
+        dbfileConnection.close()
 
     consoleLogger.info(f"[+] Loading ruleset from : {args.ruleset}")
     with open(args.ruleset) as f:
@@ -577,7 +590,7 @@ if __name__ == '__main__':
     if not args.keeptmp:
         consoleLogger.info("[+] Cleaning")
         try:
-            if not args.jsononly: shutil.rmtree(args.tmpdir)
+            if not args.jsononly and not args.dbonly: shutil.rmtree(args.tmpdir)
         except OSError as e:
             consoleLogger.error(f"{Fore.RED}   [-] Error during cleanup {e}")
 

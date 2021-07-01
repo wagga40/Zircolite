@@ -193,5 +193,10 @@ logsources:
                 - 'Microsoft-Windows-AppLocker/EXE and DLL'
                 - 'Microsoft-Windows-AppLocker/Packaged app-Deployment'
                 - 'Microsoft-Windows-AppLocker/Packaged app-Execution'
+    windows-printservice-operational:
+        product: windows
+        service: printservice-operational
+        conditions:
+            Channel: 'Microsoft-Windows-PrintService/Operational'
 fieldmappings:
     ServiceFileName: ImagePath

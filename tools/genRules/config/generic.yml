@@ -134,6 +134,11 @@ logsources:
         service: msexchange-management
         conditions:
             Channel: 'MSExchange Management'
+    windows-printservice-operational:
+        product: windows
+        service: printservice-operational
+        conditions:
+            Channel: 'Microsoft-Windows-PrintService/Operational'
 fieldmappings:
     Image: NewProcessName
     ParentImage: ParentProcessName
