@@ -1828,7 +1828,7 @@
         ],
         "level": "high",
         "rule": [
-            "SELECT * FROM logs WHERE ((NewProcessName LIKE \"%spoolsv.exe\" ESCAPE '\\') AND (ImageLoaded LIKE \"C:\\\\Windows\\\\System32\\\\spool\\\\drivers\\\\x64\\\\3\\\\old\\*.dll\" ESCAPE '\\' OR ImageLoaded LIKE \"C:\\\\Windows\\\\System32\\\\spool\\\\drivers\\\\x64\\\\3\\*.dll\" ESCAPE '\\'))"
+            "SELECT * FROM logs WHERE ((NewProcessName LIKE \"%spoolsv.exe\" ESCAPE '\\') AND (ImageLoaded LIKE \"C:\\\\Windows\\\\System32\\\\spool\\\\drivers\\\\x64\\\\3\\\\old\\\\%\" ESCAPE '\\' OR ImageLoaded LIKE \"C:\\\\Windows\\\\System32\\\\spool\\\\drivers\\\\x64\\\\3\\\\%\" ESCAPE '\\') AND (ImageLoaded LIKE \"%.dll\" ESCAPE '\\'))"
         ]
     },
     {
