@@ -2,3 +2,5 @@ jinja2>=2.11.3
 colorama>=0.4.4
 tqdm>=4.58.0
 requests>=2.24.0
+evtx>=0.7
+aiohttp[speedups]~=3.7
