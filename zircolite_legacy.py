@@ -170,7 +170,7 @@ def flattenJSON(file, timeAfter, timeBefore):
             except Exception as e:
                 consoleLogger.debug(f'JSON ERROR : {e}')
             # Handle timestamp filters
-            if timeAfter != "1970-01-01T00:00:00" and timeBefore != "9999-12-12T23:59:59":
+            if (timeAfter != "1970-01-01T00:00:00" and timeBefore != "9999-12-12T23:59:59") and "SystemTime" in JSONLine:
                 timestamp = time.strptime(JSONLine["SystemTime"].split(".")[0].replace("Z",""), '%Y-%m-%dT%H:%M:%S')
                 if timestamp > timeAfter and timestamp < timeBefore:
                     JSONOutput.append(JSONLine)

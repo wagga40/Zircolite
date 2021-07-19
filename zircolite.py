@@ -226,7 +226,7 @@ class JSONFlattener:
                     except Exception as e:
                         self.logger.debug(f'JSON ERROR : {e}')
                     # Handle timestamp filters
-                    if self.timeAfter != "1970-01-01T00:00:00" and self.timeBefore != "9999-12-12T23:59:59":
+                    if (self.timeAfter != "1970-01-01T00:00:00" and self.timeBefore != "9999-12-12T23:59:59") and "SystemTime" in JSONLine:
                         timestamp = time.strptime(JSONLine["SystemTime"].split(".")[0].replace("Z",""), '%Y-%m-%dT%H:%M:%S')
                         if timestamp > self.timeAfter and timestamp < self.timeBefore:
                             JSONOutput.append(JSONLine)

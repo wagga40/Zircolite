@@ -176,7 +176,7 @@ If you have multiple endpoints to scan, it is usefull to send the detected event
 
 ```shell
 python3 zircolite.py --evtx sample.evtx  --ruleset rules/rules_windows_sysmon.json \
-	--remote http://address:port/uri
+	--remote "http://address:port/uri"
 ```
 An **example** server called is available in the [tools](tools/) directory.
 
@@ -189,8 +189,11 @@ As of v1.3.5, Zircolite can forward detections to a Splunk instance with Splunk 
 
 ```shell
 python3 zircolite.py --evtx /sample.evtx  --ruleset rules/rules_windows_sysmon.json \
-	--remote https://x.x.x.x:8088 --token xxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
+	--remote "https://x.x.x.x:8088" --token "xxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
 ```
+
+:warning: On Windows do not forget to put quotes
+
 ---
 
 ### Templating and Formatting
