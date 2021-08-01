@@ -9,18 +9,20 @@
 ![version](https://img.shields.io/badge/Architecture-64bit-red)
 ![](pics/Zircolite.gif)
 
-**Zircolite is a standalone tool written in Python 3 allowing to use SIGMA rules on Windows event logs (in EVTX and JSON format) :**
+**Zircolite is a standalone tool written in Python 3 allowing to use SIGMA rules on Windows event logs (in EVTX and JSON format)**
 
-- Zircolite can be used directly on the investigated endpoint (use [releases](https://github.com/wagga40/Zircolite/releases)) or in your favorite forensic/detection lab
-- Zircolite was designed to be light (about 500 lines of code), simple and portable. 
-- Zircolite is more a workflow than a real detection engine ([check here](#architecture))
-- Zircolite is fast and can parse large datasets in just seconds (check [benchmarks](docs/Internals.md#benchmarks))
-- Zircolite can handle EVTX files and JSON files as long as they are in JSONL/NDJSON format (one JSON event per line). It has been successfully tested with MORDOR Datasets and NXlog files
+- **Zircolite** can be used directly on the investigated endpoint (use [releases](https://github.com/wagga40/Zircolite/releases)) or in your favorite forensic/detection lab
+- **Zircolite** is fast and can parse large datasets in just seconds (check [benchmarks](docs/Internals.md#benchmarks))
+- **Zircolite** can handle EVTX files and JSON files as long as they are in JSONL/NDJSON format (one JSON event per line)
 
 **Zircolite can be used directly in Python or you can use the binaries provided in [releases](https://github.com/wagga40/Zircolite/releases) (Microsoft Windows and Linux  only).** 
 **Documentation is [here](docs).**
 
-:information_source: If you want to try the tool you can test with these samples : [EVTX-ATTACK-SAMPLES](https://github.com/sbousseaden/EVTX-ATTACK-SAMPLES) (EVTX Files), [MORDOR Datasets - APT29 Day 1](https://github.com/OTRF/mordor/blob/master/datasets/large/apt29/day1/apt29_evals_day1_manual.zip) (JSONL Files), [MORDOR Datasets - APT29 Day 2](https://github.com/OTRF/mordor/blob/master/datasets/large/apt29/day2/apt29_evals_day2_manual.zip) (JSONL Files), [MORDOR Datasets - APT3 Scenario 1](https://github.com/OTRF/mordor/blob/master/datasets/large/windows/apt3/caldera_attack_evals_round1_day1_2019-10-20201108.tar.gz) (JSONL Files), [MORDOR Datasets - APT3 Scenario 2](https://github.com/OTRF/mordor/blob/master/datasets/large/windows/apt3/empire_apt3.tar.gz) (JSONL Files)
+:information_source: If you want to try the tool you can test with these samples : 
+
+- [EVTX-ATTACK-SAMPLES](https://github.com/sbousseaden/EVTX-ATTACK-SAMPLES) (EVTX Files)
+- [MORDOR - APT29 Day 1](https://github.com/OTRF/mordor/blob/master/datasets/large/apt29/day1/apt29_evals_day1_manual.zip) (JSONL Files), [MORDOR - APT29 Day 2](https://github.com/OTRF/mordor/blob/master/datasets/large/apt29/day2/apt29_evals_day2_manual.zip) (JSONL Files)
+- [MORDOR - APT3 Scenario 1](https://github.com/OTRF/mordor/blob/master/datasets/large/windows/apt3/caldera_attack_evals_round1_day1_2019-10-20201108.tar.gz) (JSONL Files), [MORDOR - APT3 Scenario 2](https://github.com/OTRF/mordor/blob/master/datasets/large/windows/apt3/empire_apt3.tar.gz) (JSONL Files)
 
 ## Requirements
 

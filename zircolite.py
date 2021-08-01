@@ -19,12 +19,10 @@ import base64
 from pathlib import Path
 import shutil
 from sys import platform as _platform
-from multiprocessing import Pool
 import zlib
 
 # External libs
 from tqdm import tqdm
-import requests
 import urllib3
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 from colorama import Fore
@@ -36,21 +34,6 @@ import asyncio
 def signal_handler(sig, frame):
     consoleLogger.info("[-] Execution interrupted !")
     sys.exit(0)
-
-def generateFromTemplate(templateFile, outpoutFilename, data):
-    """ Use Jinja2 to output data in a specific format """
-    try:
-        #{% if not embeddedMode %}
-        tmpl = open(templateFile, 'r', encoding='utf-8')
-        template = Template(tmpl.read())
-        #{% else %}
-        #{{ templateOpenCode }}
-        #{% endif %}
-        with open(outpoutFilename, 'a', encoding='utf-8') as tpl:
-            tpl.write(template.render(data=data))
-    except Exception as e:
-        consoleLogger.error(f"{Fore.RED}   [-] Template error, activate debug mode to check for errors")
-        consoleLogger.debug(f"   [-] {e}")
 
 def quitOnError(message):
     consoleLogger.error(message)
@@ -79,6 +62,32 @@ def initLogger(debugMode, logFile=None):
         logging.getLogger().addHandler(logger)
     return logging.getLogger()
 
+class templateEngine:
+    def __init__(self, logger=None, template=[], templateOutput=[]):
+        self.logger = logger or logging.getLogger(__name__)
+        self.template = template
+        self.templateOutput = templateOutput
+    
+    def generateFromTemplate(self, templateFile, outpoutFilename, data):
+        """ Use Jinja2 to output data in a specific format """
+        try:
+            #{% if not embeddedMode %}
+            tmpl = open(templateFile, 'r', encoding='utf-8')
+            template = Template(tmpl.read())
+            #{% else %}
+            #{{ templateOpenCode }}
+            #{% endif %}
+            with open(outpoutFilename, 'a', encoding='utf-8') as tpl:
+                tpl.write(template.render(data=data))
+        except Exception as e:
+            self.logger.error(f"{Fore.RED}   [-] Template error, activate debug mode to check for errors")
+            self.logger.debug(f"   [-] {e}")
+
+    def run(self, data):
+        for template, templateOutput in zip(self.template, self.templateOutput):
+            self.logger.info(f'[+] Applying template "{template[0]}", outputting to : {templateOutput[0]}')
+            self.generateFromTemplate(template[0], templateOutput[0], data)
+
 class eventForwarder:
     """ Class for handling event forwarding """
     def __init__(self, remote, token, logger=None):
@@ -93,8 +102,12 @@ class eventForwarder:
             if self.remoteHost is not None:
                 try:
                     if self.token is not None and not bypassToken:
+                        # Change EventLoopPolicy on Windows https://stackoverflow.com/questions/45600579/asyncio-event-loop-is-closed-when-getting-loop
+                        if _platform == "win32": asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
                         asyncio.run(self.sendHECAsync(payloads, "SystemTime"))
                     else:
+                        # Change EventLoopPolicy on Windows https://stackoverflow.com/questions/45600579/asyncio-event-loop-is-closed-when-getting-loop
+                        if _platform == "win32": asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
                         asyncio.run(self.sendHTTPAsync(payloads, noError))
                     return True
                 except Exception as e:
@@ -388,7 +401,7 @@ class zirCore:
         if ruleFilters is not None:
             self.ruleset = [rule for rule in self.ruleset if not any(ruleFilter in rule["title"] for ruleFilter in ruleFilters)]
 
-    def executeRuleset(self, outFile, writeMode='w', forwarder=None, showAll=False, readyForTemplating=False, remote=None, stream=False):
+    def executeRuleset(self, outFile, writeMode='w', forwarder=None, showAll=False, KeepResults=False, remote=None, stream=False):
         # Results are writen upon detection to allow analysis during execution and to avoid loosing results in case of error.
         with open(outFile, writeMode, encoding='utf-8') as fileHandle:
             with tqdm(self.ruleset, colour="yellow") as ruleBar:
@@ -399,7 +412,7 @@ class zirCore:
                     if ruleResults != {}:
                         ruleBar.write(f'{Fore.CYAN}    - {ruleResults["title"]} : {ruleResults["count"]} events{Fore.RESET}')
                         # Store results for templating and event forwarding (only if stream mode is disabled)
-                        if readyForTemplating or (remote is not None and not stream): self.fullResults.append(ruleResults)
+                        if KeepResults or (remote is not None and not stream): self.fullResults.append(ruleResults)
                         if stream and forwarder is not None: forwarder.send([ruleResults], False)
                         # Output to json file
                         try:
@@ -455,7 +468,7 @@ class evtxExtractor:
         return "{{ externalTool }}"
     #{% else %}
     def getOSExternalTools(self):
-        """ Determine wich binaries to run depending on host OS : 32Bits is NOT supported for now since evtx_dump is 64bits only"""
+        """ Determine which binaries to run depending on host OS : 32Bits is NOT supported for now since evtx_dump is 64bits only"""
         if _platform == "linux" or _platform == "linux2":
             return "bin/evtx_dump_lin"
         elif _platform == "darwin":
@@ -503,6 +516,47 @@ class evtxExtractor:
         #{% if embeddedMode %}
         #{{ removeTool }}
         #{% endif %}
+
+#{% if not embeddedMode -%}
+class zircoGuiGenerator:
+    """
+    Generate the mini GUI (BETA)
+    """
+    def __init__(self, packageDir, templateFile, logger=None, outputFile = None):
+        self.logger = logger or logging.getLogger(__name__)
+        self.templateFile = templateFile
+        self.tmpDir = f'tmp-zircogui-{self.randString()}'
+        self.tmpFile = f'data-{self.randString()}.js'
+        self.outputFile = outputFile or f'zircogui-output-{self.randString()}'
+        self.packageDir = packageDir
+
+    def randString(self):
+        return ''.join(random.SystemRandom().choice(string.ascii_uppercase + string.digits) for _ in range(4))
+
+    def unzip(self):
+        try:
+            shutil.unpack_archive(self.packageDir, self.tmpDir, "zip")
+        except Exception as e:
+            self.logger.error(f"   [-] {e}")
+        
+    def zip(self):
+        try:
+            shutil.make_archive(self.outputFile, 'zip', f"{self.tmpDir}/zircogui")
+        except Exception as e:
+            self.logger.error(f"   [-] {e}")
+
+    def generate(self, data):
+        self.unzip()
+        try:
+            self.logger.info(f"[+] Generating ZircoGui package to : {self.outputFile}.zip")
+            exportforzircoguiTmpl = templateEngine(self.logger, self.templateFile, self.tmpFile)
+            exportforzircoguiTmpl.generateFromTemplate(exportforzircoguiTmpl.template, exportforzircoguiTmpl.templateOutput, data)
+        except Exception as e:
+            self.logger.error(f"   [-] {e}")
+        shutil.move(self.tmpFile, f'{self.tmpDir}/zircogui/data.js')
+        self.zip()
+        shutil.rmtree(self.tmpDir)
+#{% endif %}
 
 def selectFiles(pathList, selectFilesList):
     if selectFilesList is not None:
@@ -559,6 +613,9 @@ if __name__ == '__main__':
     parser.add_argument("--debug", help="Activate debug logging", action='store_true')
     parser.add_argument("--showall", help="Show all events, usefull to check what rule takes takes time to execute", action='store_true')
     parser.add_argument("--noexternal", help="Don't use evtx_dump external binaries (slower)", action='store_true')
+    #{% if not embeddedMode %}
+    parser.add_argument("--package", help="Create a ZircoGui package", action='store_true')
+    #{% endif %}
 
     args = parser.parse_args()
 
@@ -682,7 +739,7 @@ if __name__ == '__main__':
     #{% endif %}
     
     consoleLogger.info(f"[+] Executing ruleset - {len(zircoliteCore.ruleset)} rules")
-    zircoliteCore.executeRuleset(args.outfile, forwarder=forwarder, showAll=args.showall, readyForTemplating=readyForTemplating, remote=args.remote, stream=args.stream)
+    zircoliteCore.executeRuleset(args.outfile, forwarder=forwarder, showAll=args.showall, KeepResults=(readyForTemplating or args.package), remote=args.remote, stream=args.stream)
     consoleLogger.info(f"[+] Results written in : {args.outfile}")      
 
     # Forward events
@@ -694,9 +751,8 @@ if __name__ == '__main__':
     # Templating
     if readyForTemplating and zircoliteCore.fullResults != []:
         #{% if not embeddedMode -%}
-        for template, templateOutput in zip(args.template, args.templateOutput):
-            consoleLogger.info(f'[+] Applying template "{template[0]}", outputting to : {templateOutput[0]}')
-            generateFromTemplate(template[0], templateOutput[0], zircoliteCore.fullResults)
+        templateGenerator = templateEngine(consoleLogger, args.template, args.templateOutput)
+        templateGenerator.run(zircoliteCore.fullResults)
         #{% else -%}
         #{% for templateB64Fn in templatesB64Fn -%}
         #{% for line in templateB64Fn %}
@@ -704,6 +760,14 @@ if __name__ == '__main__':
         #{% endfor %}
         #{% endfor %}
         #{% endif %}
+
+    #{% if not embeddedMode -%}
+    # Generate ZircoGui package
+    if args.package and zircoliteCore.fullResults != []:
+        if Path("templates/exportForZircoGui.tmpl").is_file() and Path("gui/zircogui.zip").is_file():
+            packager = zircoGuiGenerator("gui/zircogui.zip", "templates/exportForZircoGui.tmpl", consoleLogger)
+            packager.generate(zircoliteCore.fullResults)
+    #{% endif %}
 
     # Removing Working directory containing logs as json
     if not args.keeptmp:

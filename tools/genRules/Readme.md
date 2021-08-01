@@ -22,9 +22,10 @@ GenRules needs `sigmac` from the SIGMA repository (not from PIP). The easiest wa
 ## Quickstart
 
 ```shell
-[python3] genRules.py --rulesdirectory=<rules directory> --config=<sigmac config> --sigmac=<sigmac location>
-[python3] genRules.py --rulesdirectory=../../sigma/rules/windows/ --config=config/sysmon.yml --sigmac=../../sigma/tools/sigmac
-
+python3 genRules.py --rulesdirectory=<rules directory> \ 
+						  --config=<sigmac config> --sigmac=<sigmac location>
+python3 genRules.py --rulesdirectory=../../sigma/rules/windows/ \ 
+						  --config=config/sysmon.yml --sigmac=../../sigma/tools/sigmac
 ```
 
 The configuration file provided (`--config`) is the sigmac config file, the are some **very basic** samples in the `config` directory (Mostly copied from the SIGMA repository). Currently, only one configuration file is supported.

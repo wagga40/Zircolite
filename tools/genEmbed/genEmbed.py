@@ -80,9 +80,10 @@ class zircoGen:
             templateNameFiltered = ''.join(filter(str.isalpha, template.name.replace(".tmpl", "").lower()))
             self.templatesArgs.append(f'parser.add_argument("--{templateNameFiltered}", help="Use {templateNameFiltered} template", action="store_true")')
             templatesB64FnLines.append(f'if args.{templateNameFiltered}:')
-            templatesB64FnLines.append(f'   randomName = "export-{templateNameFiltered}-" + "".join(random.SystemRandom().choice(string.ascii_uppercase + string.digits) for _ in range(4)) + ".out"')
-            templatesB64FnLines.append(f'   consoleLogger.info("[+] Applying template, output to :" + randomName)')
-            templatesB64FnLines.append(f'   generateFromTemplate({templateNameFiltered}, randomName, zircoliteCore.fullResults)')
+            templatesB64FnLines.append(f'    randomName = "export-{templateNameFiltered}-" + "".join(random.SystemRandom().choice(string.ascii_uppercase + string.digits) for _ in range(4)) + ".out"')
+            templatesB64FnLines.append(f'    {templateNameFiltered}Tmpl = templateEngine(consoleLogger, {templateNameFiltered}, randomName)')
+            templatesB64FnLines.append(f'    consoleLogger.info("[+] Applying template, output to : " + randomName)')
+            templatesB64FnLines.append(f'    {templateNameFiltered}Tmpl.generateFromTemplate({templateNameFiltered}Tmpl.template, {templateNameFiltered}Tmpl.templateOutput, zircoliteCore.fullResults)')
             self.templatesB64Fn.append(templatesB64FnLines)
             self.templatesB64.append(f'{templateNameFiltered} = zlib.decompress(base64.b64decode(b\'{self.fileToB64String(template)}\'))')
             templatesB64FnLines = []

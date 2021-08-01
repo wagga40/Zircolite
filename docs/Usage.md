@@ -62,6 +62,19 @@ By default :
 
 The SIGMA rules must be converted into JSON. This can be done with the `genRules.py` script located in the repository [tools](../tools/genRules) directory. Default rulesets are already provided in the `rules` directory. These rulesets only are the conversion of the rules located in [rules/windows](https://github.com/SigmaHQ/sigma/tree/master/rules/windows) directory of the Sigma repository.
 
+#### Using genRules
+ 
+Please check help in the **genRules** repository : [tools/genRules](../tools/genRules).
+
+#### Update the default rulesets 
+
+If you have `Make` you can easily update default rulesets : 
+
+```shell
+make rulesets
+```
+It will generate new *generic* and *sysmon* rulesets at the root of the reposity.
+
 #### Why you should make your own rulesets
 
 The default rulesets provided are the conversion of the rules located in `rules/windows` directory of the Sigma repository. You should take into account that : 
@@ -73,6 +86,16 @@ For example :
 
 -  "Suspicious Eventlog Clear or Configuration Using Wevtutil" : **very noisy** on fresh environnement (labs etc.), commonly generate a lot of useless detection
 -  Notepad Making Network Connection : **can slow very significantly** the execution of Zircolite
+
+---
+
+### Generate your own embedded/zero-dependency versions
+
+If you deploy (manually or via GPO/SCCM) Zircolite directly on an endpoint you may want to have a binary that contains everything (rules, templates, tools, config etc.). As of 2.0, it is possible to generate your own embedded version of Zircolite with the **genEmbed** tool available in the repository [tools](../tools/genEmbed) directory
+
+#### Using genEmbed
+
+Please check help in the ** genEmbed** repository : [tools/genEmbed](../tools/genEmbed).
 
 ---
 
