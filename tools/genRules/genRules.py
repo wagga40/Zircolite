@@ -22,7 +22,7 @@ parser.add_argument("--fileext", help="Rule file extension", default="yml", type
 args = parser.parse_args()
 
 def CRC32_from_string(string):
-    buf = (binascii.crc32(string.encode('utf8')) & 0xFFFFFFFF)
+    buf = (binascii.crc32(bytes(str(string), "utf-8")) & 0xFFFFFFFF)
     return "%08X" % buf   
 
 def retrieveRule(ruleFile):
