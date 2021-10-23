@@ -2,12 +2,11 @@
 
 ## Usage
 
-* [Requirements](Usage.md#requirements)
-	* [Mandatory](Usage.md#mandatory)
-	* [Optional](Usage.md#optional)
+* [Requirements and Installation](#requirements-and-installation)
 * [Basic usage](Usage.md#basic-usage)
 * [Generate your own rulesets](Usage.md#generate-your-own-rulesets)
 	* [Why you should make your own rulesets](Usage.md#why-you-should-make-your-own-rulesets)
+* [Generate embedded versions](#generate-embedded-versions)
 * [Docker](Usage.md#docker)
 	* [Build and run your own image](Usage.md#build-and-run-your-own-image)
 	* [Docker Hub](Usage.md#docker-Hub)

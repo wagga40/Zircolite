@@ -19,5 +19,7 @@ The default rulesets provided are the conversion of the rules located in `rules/
 For example : 
 
 -  "Suspicious Eventlog Clear or Configuration Using Wevtutil" : **very noisy** on fresh environnement (labs etc.), commonly generate a lot of useless detection
--  Notepad Making Network Connection : **can slow very significantly** the execution of Zircolite
--  Rundll32 Internet Connection : can be **very noisy** in some situations
+-  "Notepad Making Network Connection" : **can slow very significantly** the execution of Zircolite
+-  "Rundll32 Internet Connection" : can be **very noisy** in some situations
+-  "Wuauclt Network Connection" : **can slow very significantly** the execution of Zircolite
+- "PowerShell Network Connections : **can slow very significantly** the execution of Zircolite

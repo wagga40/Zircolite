@@ -64,8 +64,6 @@ Except when `evtx_dump` is used, Zircolite only use one core. So if you have a l
 
 ***deprecated***
 
-If you don't have find and/or GNU Parallel, you can use the **very basic** `Zircolite_mp.py` available in the [tools](tools/) directory of this repository.
-
 ---
 
 ### Filtering
@@ -128,14 +126,14 @@ Examples :
 - Select all events between the 2021-06-02 22:40:00 and 2021-06-02 23:00:00 : 
 
 	```shell
-	python3 zircolite.py --evtx logs/ --ruleset rules/rules_windows_sysmon.json \ 
+	python3 zircolite.py --evtx logs/ --ruleset rules/rules_windows_sysmon.json \
 		-A 2021-06-02T22:40:00 -B 2021-06-02T23:00:00
 	```
 
 - Select all events after the 2021-06-01 12:00:00 : 
 
 	```shell
-	python3 zircolite.py --evtx logs/ --ruleset rules/rules_windows_sysmon.json \ 
+	python3 zircolite.py --evtx logs/ --ruleset rules/rules_windows_sysmon.json \
 		-A 2021-06-01T12:00:00
 	```
 
@@ -154,6 +152,12 @@ You can also specify a string, to avoid unexpected side-effect **comparison is c
 ```shell
 python3 zircolite.py --evtx logs/ --ruleset rules/rules_windows_sysmon.json -R BFFA7F72 -R MSHTA
 ```
+:information_source: As of version 2.2.0 of Zircolite, since the rulesets are directly generated from the official `sigmac` tool there is no more CRC32 in the rule title. Rule filtering is still available but you have to rely on other criteria.
+
+#### Limit the number of detected events
+
+Sometimes, SIGMA rules can be very noisy (and generate a lot of false positives) but you still want to keep them in your rulesets. It is possible to filter rules that returns too mich detected events with the option `--limit <MAX_NUMBER>`. Please note that when using this option, the rules are not skipped the results are just ignored. But this is useful when forwarding events to Splunk.
+
 ---
 
 ### Forwarding detected events 
@@ -194,6 +198,10 @@ python3 zircolite.py --evtx /sample.evtx  --ruleset rules/rules_windows_sysmon.j
 
 :warning: On Windows do not forget to put quotes
 
+#### No local logs
+
+When you forward detected events to an server, sometimes you don't want any log file left on the system you have run Zircolite on. It is possible with the `--nolog` option.
+
 ---
 
 ### Templating and Formatting
@@ -216,13 +224,23 @@ It is possible to use multiple templates if you provide for each `--template` ar
 
 ![](../pics/gui.jpg)
 
-The Mini-GUI can be used totaly offline, it allows the user to display and search results. It uses [datatables](https://datatables.net/) and the [SB Admin 2 theme](https://github.com/StartBootstrap/startbootstrap-sb-admin-2). To use it you just need to generate a `data.js` file with the `exportForZircoGui.tmpl` template and move it to the [gui](gui/) directory :
+
+The Mini-GUI can be used totaly offline, it allows the user to display and search results. It uses [datatables](https://datatables.net/) and the [SB Admin 2 theme](https://github.com/StartBootstrap/startbootstrap-sb-admin-2). 
+
+#### Automatic generation
+
+As of Zircolite 2.1.0, with the non-embedded versions, the easier way to use the Mini-GUI is to generate a package with the `--package` option. A zip file containing all the necessary data will be generated at the root of the repository.  
+
+#### Manual generation
+
+You need to generate a `data.js` file with the `exportForZircoGui.tmpl` template, decompress the zircogui.zip file in the [gui](gui/) directory and replace the `data.js` file in it with yours :
 
 ```shell
 python3 zircolite.py --evtx sample.evtx 
-	--ruleset rules/rules_windows_sysmon.json \ 
+	--ruleset rules/rules_windows_sysmon.json \
 	--template templates/exportForZircoGui.tmpl --templateOutput data.js
-mv data.js gui/
+7z x gui/zircogui.zip
+mv data.js zircogui/
 ```
 
 Then you just have to open `index.html` in your favorite browser and click on a Mitre Att&ck category or an alert level.

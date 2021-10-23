@@ -20,6 +20,7 @@ from pathlib import Path
 import shutil
 from sys import platform as _platform
 import zlib
+import csv
 
 # External libs
 from tqdm import tqdm
@@ -30,6 +31,7 @@ from jinja2 import Template
 from evtx import PyEvtxParser
 import aiohttp
 import asyncio
+import socket
 
 def signal_handler(sig, frame):
     consoleLogger.info("[-] Execution interrupted !")
@@ -45,21 +47,22 @@ def checkIfExists(path, errorMessage):
         quitOnError(errorMessage)
 
 def initLogger(debugMode, logFile=None):
-    logLevel = logging.INFO
-    if logFile is not None:
-        logFormat = "%(asctime)s %(levelname)-8s %(message)s"
-    else: 
-        logFormat = "%(message)s"
+    fileLogLevel = logging.INFO
+    fileLogFormat = "%(asctime)s %(levelname)-8s %(message)s"
     if debugMode:
-        logLevel = logging.DEBUG
-        logFormat = "%(asctime)s %(levelname)-8s %(module)s:%(lineno)s %(funcName)s %(message)s"
-
-    logging.basicConfig(format=logFormat, filename=logFile, level=logLevel, datefmt='%Y-%m-%d %H:%M:%S')
+        fileLogLevel = logging.DEBUG
+        fileLogFormat = "%(asctime)s %(levelname)-8s %(module)s:%(lineno)s %(funcName)s %(message)s"
 
     if logFile is not None:
+        logging.basicConfig(format=fileLogFormat, filename=logFile, level=fileLogLevel, datefmt='%Y-%m-%d %H:%M:%S')
         logger = logging.StreamHandler()
+        formatter = logging.Formatter('%(message)s')
+        logger.setFormatter(formatter)
         logger.setLevel(logging.INFO)
         logging.getLogger().addHandler(logger)
+    else:
+        logging.basicConfig(format='%(message)s', level=logging.INFO, datefmt='%Y-%m-%d %H:%M:%S')        
+    
     return logging.getLogger()
 
 class templateEngine:
@@ -90,7 +93,7 @@ class templateEngine:
 
 class eventForwarder:
     """ Class for handling event forwarding """
-    def __init__(self, remote, token, logger=None):
+    def __init__(self, remote, token,logger=None):
         self.logger = logger or logging.getLogger(__name__)
         self.remoteHost = remote
         self.token = token
@@ -101,7 +104,7 @@ class eventForwarder:
         if payloads: 
             if self.remoteHost is not None:
                 try:
-                    if self.token is not None and not bypassToken:
+                    if self.token is not None and not bypassToken: #Bypass token is only used to test connectivity
                         # Change EventLoopPolicy on Windows https://stackoverflow.com/questions/45600579/asyncio-event-loop-is-closed-when-getting-loop
                         if _platform == "win32": asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
                         asyncio.run(self.sendHECAsync(payloads, "SystemTime"))
@@ -167,6 +170,7 @@ class eventForwarder:
             statusCodes = await asyncio.gather(*tasks)
             if "4" in statusCodes or "5" in statusCodes:
                 self.logger.error(f"{Fore.RED}   [-] Forwarding failed for some events (got 4xx or 5xx HTTP Status Code){Fore.RESET}")
+
 
 class JSONFlattener:
     """ Perform JSON Flattening """
@@ -258,7 +262,7 @@ class JSONFlattener:
 class zirCore:
     """ Load data into database and apply detection rules  """
 
-    def __init__(self, config, logger=None, noOutput=False, timeAfter="1970-01-01T00:00:00", timeBefore="9999-12-12T23:59:59"):
+    def __init__(self, config, logger=None, noOutput=False, timeAfter="1970-01-01T00:00:00", timeBefore="9999-12-12T23:59:59", limit=-1, csvMode=False):
         self.logger = logger or logging.getLogger(__name__)
         self.dbConnection = self.createConnection(":memory:")
         self.fullResults = []
@@ -267,6 +271,8 @@ class zirCore:
         self.timeAfter = timeAfter
         self.timeBefore = timeBefore
         self.config = config
+        self.limit = limit
+        self.csvMode = csvMode
     
     def close(self):
         self.dbConnection.close()
@@ -359,7 +365,6 @@ class zirCore:
         results = {}
         filteredRows = []
         counter = 0
-
         if "rule" in rule:
             # for each SQL Query in the SIGMA rule
             for SQLQuery in rule["rule"]:
@@ -369,9 +374,11 @@ class zirCore:
                     rows = [dict(row) for row in data.fetchall()]
                     if len(rows) > 0:
                         counter += len(rows)
-                        # Cleaning null/None fields
                         for row in rows:
-                            match = {k: v for k, v in row.items() if v is not None}
+                            if self.csvMode: # Cleaning "annoying" values for CSV
+                                match = {k: str(v).replace("\n","").replace("\r","").replace("None","") for k, v in row.items()}
+                            else: # Cleaning null/None fields
+                                match = {k: v for k, v in row.items() if v is not None}
                             filteredRows.append(match)
             if "level" not in rule:
                 rule["level"] = "unknown"
@@ -387,9 +394,12 @@ class zirCore:
         return results
 
     def loadRulesetFromFile(self, filename, ruleFilters):
-        with open(filename) as f:
-            self.ruleset = json.load(f)
-        self.applyRulesetFilters(ruleFilters)
+        try:
+            with open(filename) as f:
+                self.ruleset = json.load(f)
+            self.applyRulesetFilters(ruleFilters)
+        except Exception as e:
+            self.logger.error(f"{Fore.RED}   [-] Load JSON ruleset failed, are you sure it is a valid JSON file ? : {e}")
 
     def loadRulesetFromVar(self, ruleset, ruleFilters):
         self.ruleset = ruleset
@@ -402,26 +412,41 @@ class zirCore:
             self.ruleset = [rule for rule in self.ruleset if not any(ruleFilter in rule["title"] for ruleFilter in ruleFilters)]
 
     def executeRuleset(self, outFile, writeMode='w', forwarder=None, showAll=False, KeepResults=False, remote=None, stream=False):
+        csvWriter = None
         # Results are writen upon detection to allow analysis during execution and to avoid loosing results in case of error.
-        with open(outFile, writeMode, encoding='utf-8') as fileHandle:
+        with open(outFile, writeMode, encoding='utf-8', newline='') as fileHandle:
             with tqdm(self.ruleset, colour="yellow") as ruleBar:
-                if not self.noOutput: fileHandle.write('[')
+                if not self.noOutput and not self.csvMode: fileHandle.write('[')
                 for rule in ruleBar:  # for each rule in ruleset
                     if showAll and "title" in rule: ruleBar.write(f'{Fore.BLUE}    - {rule["title"]}')  # Print all rules
                     ruleResults = self.executeRule(rule)
-                    if ruleResults != {}:
-                        ruleBar.write(f'{Fore.CYAN}    - {ruleResults["title"]} : {ruleResults["count"]} events{Fore.RESET}')
-                        # Store results for templating and event forwarding (only if stream mode is disabled)
-                        if KeepResults or (remote is not None and not stream): self.fullResults.append(ruleResults)
-                        if stream and forwarder is not None: forwarder.send([ruleResults], False)
-                        # Output to json file
-                        try:
-                            if not self.noOutput: 
-                                json.dump(ruleResults, fileHandle, indent=4, ensure_ascii=False)
-                                fileHandle.write(',\n')
-                        except Exception as e:
-                            self.logger.error(f"{Fore.RED}   [-] Error saving some results : {e}")
-                if not self.noOutput: fileHandle.write('{}]')  
+                    if ruleResults != {} :
+                        if self.limit == -1 or ruleResults["count"] < self.limit:
+                            ruleBar.write(f'{Fore.CYAN}    - {ruleResults["title"]} : {ruleResults["count"]} events{Fore.RESET}')
+                            # Store results for templating and event forwarding (only if stream mode is disabled)
+                            if KeepResults or (remote is not None and not stream): self.fullResults.append(ruleResults)
+                            if stream and forwarder is not None: forwarder.send([ruleResults], False)
+                            if not self.noOutput:
+                                # To avoid printing this twice on stdout but in the logs...
+                                logLevel = self.logger.getEffectiveLevel()
+                                self.logger.setLevel(logging.DEBUG)
+                                self.logger.debug(f'    - {ruleResults["title"]} : {ruleResults["count"]} events')
+                                self.logger.setLevel(logLevel)
+                                # Output to json or csv file
+                                if self.csvMode: 
+                                    if not csvWriter: # Creating the CSV header and the fields (agg is for queries with aggregation)
+                                        csvWriter = csv.DictWriter(fileHandle, delimiter=';', fieldnames=["rule_title", "rule_description", "rule_level", "rule_count", "agg"] + list(ruleResults["matches"][0].keys()))
+                                        csvWriter.writeheader()
+                                    for data in ruleResults["matches"]:
+                                        dictCSV = { "rule_title": ruleResults["title"], "rule_description": ruleResults["description"], "rule_level": ruleResults["rule_level"], "rule_count": ruleResults["count"], **data}                                        
+                                        csvWriter.writerow(dictCSV)
+                                else:
+                                    try:
+                                        json.dump(ruleResults, fileHandle, indent=4, ensure_ascii=False)
+                                        fileHandle.write(',\n')
+                                    except Exception as e:
+                                        self.logger.error(f"{Fore.RED}   [-] Error saving some results : {e}")
+                if not self.noOutput and not self.csvMode: fileHandle.write('{}]')  
 
     def run(self, EVTXJSONList):
         self.logger.info("[+] Processing EVTX")
@@ -558,6 +583,28 @@ class zircoGuiGenerator:
         shutil.rmtree(self.tmpDir)
 #{% endif %}
 
+class rulesetGenerator:
+    def __init__(self, sigmac, config, table, rulesToConvert, fileext="yml"):
+        self.table = table
+        self.config = config
+        self.sigmac = sigmac
+        self.rules = rulesToConvert
+        self.fileext = fileext
+    
+    def run(self):
+        recurse = ""
+        if Path(self.rules).is_dir(): # it is a dir, adding the recurse args.
+            recurse = "-r"
+        cmd = [self.sigmac, "-d", "--target", "sqlite", "-c", self.config, recurse, self.rules, "--output-fields", "title,id,description,author,tags,level,falsepositives", "-oF", "json", "--backend-option", f'table={self.table}']
+        outputRaw = subprocess.run(args=cmd, capture_output=True, text=True, encoding='utf-8')
+        try:
+            rules =  json.loads(outputRaw.stdout)
+        except json.decoder.JSONDecodeError:
+            return {"ruleset": [], "errors": ""}
+        # Get Sigmac conversion errors and only keep the rule filepath
+        errors = [error[error.find("(")+1:error.find(")")] for error in outputRaw.stderr.split("\n") if "unsupported" in error]
+        return {"ruleset": rules, "errors": errors}
+
 def selectFiles(pathList, selectFilesList):
     if selectFilesList is not None:
         return [evtx for evtx in [str(element) for element in list(pathList)] if any(fileFilters[0].lower() in evtx.lower() for fileFilters in selectFilesList)]
@@ -580,25 +627,30 @@ if __name__ == '__main__':
     parser.add_argument("-a", "--avoid", help="EVTX files containing the provided string will NOT be used", action='append', nargs='+')
     #{% if not embeddedMode %}
     parser.add_argument("-r", "--ruleset", help="JSON File containing SIGMA rules", type=str, required=True)
+    parser.add_argument("-sg", "--sigma", help="Tell Zircolite to directly use SIGMA rules (slower) instead of the converted ones, you must provide SIGMA config file path", type=str)
+    parser.add_argument("-sc", "--sigmac", help="Sigmac path (version >= 0.20), this arguments is mandatary only if you use '--sigma'", type=str)
+    parser.add_argument("-se", "--sigmaerrors", help="Show rules conversion error (i.e not supported by the SIGMA SQLite backend)", action='store_true')
     #{% else %}
     #{% for rule in rules %}
     #{{ rule -}}
     #{% endfor %}
     #{% endif %}
     parser.add_argument("-R", "--rulefilter", help="Remove rule from ruleset, comparison is done on rule title (case sensitive)", action='append', nargs='*')
+    parser.add_argument("-L", "--limit", help="Discard results (in output file or forwarded events) that are above the provide limit", type=int, default=-1)
     parser.add_argument("-c", "--config", help="JSON File containing field mappings and exclusions", type=str, default="config/fieldMappings.json")
-    parser.add_argument("-o", "--outfile", help="JSON file that will contains all detected events", type=str, default="detected_events.json")
+    parser.add_argument("-o", "--outfile", help="File that will contains all detected events", type=str, default="detected_events.json")
+    parser.add_argument("--csv", help="The output will be in CSV. You should note that in this mode empty fields will not be discarded from results", action='store_true')
     parser.add_argument("-f", "--fileext", help="EVTX file extension", type=str, default="evtx")
     parser.add_argument("-t", "--tmpdir", help="Temp directory that will contains EVTX converted as JSON", type=str)
-    parser.add_argument("-k", "--keeptmp", help="Do not remove the Temp directory", action='store_true')
+    parser.add_argument("-k", "--keeptmp", help="Do not remove the temp directory containing EVTX converted in JSON format", action='store_true')
     parser.add_argument("-d", "--dbfile", help="Save all logs in a SQLite Db to the specified file", type=str)
     parser.add_argument("-l", "--logfile", help="Log file name", default="zircolite.log", type=str)
-    parser.add_argument("-n", "--nolog", help="Don't create a log file", action='store_true')
+    parser.add_argument("-n", "--nolog", help="Don't create a log file or a result file (useful when forwarding)", action='store_true')
     parser.add_argument("-j", "--jsononly", help="If logs files are already in JSON lines format ('jsonl' in evtx_dump) ", action='store_true')
     parser.add_argument("-D", "--dbonly", help="Directly use a previously saved database file, timerange filters will not work", action='store_true')
     parser.add_argument("-A", "--after", help="Limit to events that happened after the provided timestamp (UTC). Format : 1970-01-01T00:00:00", type=str, default="1970-01-01T00:00:00")
     parser.add_argument("-B", "--before", help="Limit to events that happened before the provided timestamp (UTC). Format : 1970-01-01T00:00:00", type=str, default="9999-12-12T23:59:59")
-    parser.add_argument("--remote", help="Forward results to a HTTP server, please provide the full address e.g http://address:port/uri (except for Splunk)", type=str)
+    parser.add_argument("--remote", help="Forward results to a HTTP/Splunk, please provide the full address e.g [http://]address:port[/uri]", type=str)
     parser.add_argument("--cores", help="Specify how many cores you want to use, default is all cores", type=str)
     parser.add_argument("--token", help="Use this to provide Splunk HEC Token", type=str)
     parser.add_argument("--stream", help="By default event forwarding is done at the end, this option activate forwarding events when detected", action="store_true")
@@ -613,9 +665,7 @@ if __name__ == '__main__':
     parser.add_argument("--debug", help="Activate debug logging", action='store_true')
     parser.add_argument("--showall", help="Show all events, usefull to check what rule takes takes time to execute", action='store_true')
     parser.add_argument("--noexternal", help="Don't use evtx_dump external binaries (slower)", action='store_true')
-    #{% if not embeddedMode %}
-    parser.add_argument("--package", help="Create a ZircoGui package", action='store_true')
-    #{% endif %}
+    parser.add_argument("--package", help="Create a ZircoGui package (not available in embedded mode)", action='store_true')
 
     args = parser.parse_args()
 
@@ -628,7 +678,7 @@ if __name__ == '__main__':
     #{% endfor %}
     #{% endif %}
 
-    signal.signal(signal.SIGINT, signal_handler) 
+    #signal.signal(signal.SIGINT, signal_handler) 
 
     # Init logging
     if args.nolog: args.logfile = None
@@ -641,10 +691,12 @@ if __name__ == '__main__':
      ███╔╝  ██║██╔══██╗██║     ██║   ██║██║     ██║   ██║   ██╔══╝
     ███████╗██║██║  ██║╚██████╗╚██████╔╝███████╗██║   ██║   ███████╗
     ╚══════╝╚═╝╚═╝  ╚═╝ ╚═════╝ ╚═════╝ ╚══════╝╚═╝   ╚═╝   ╚══════╝
+             -= Standalone SIGMA Detection tool for EVTX =-
     """)
     #{% if embeddedMode %}#{{ embeddedText }}#{% endif %}
     #{% if embeddedMode %}
-    #{{ rulesCheck -}}
+    #{{ rulesCheck }}
+    #{{ noPackage }}
     #{% endif %}
 
     consoleLogger.info("[+] Checking prerequisites")
@@ -664,23 +716,36 @@ if __name__ == '__main__':
     #{% if embeddedMode %}
     readyForTemplating = True
     #{% else %}
-    # Checking ruleset arg
-    checkIfExists(args.ruleset, f"{Fore.RED}   [-] Cannot find ruleset : {args.ruleset}")
-    # Checking templates args
+    # Check Sigma config file & Sigmac path
+    if args.sigma and args.sigmac :
+        checkIfExists(args.sigma, f"{Fore.RED}   [-] Cannot find SIGMA config file : {args.sigma}")
+        checkIfExists(args.sigmac, f"{Fore.RED}   [-] Cannot find Sigmac converter : {args.sigmac}")
+    elif (args.sigma and not args.sigmac) or (args.sigmac and not args.sigma):
+        consoleLogger.info(f"{Fore.RED}   [-] the '--sigma' and '--sigmac' options must be used together") 
+
+    # Check ruleset arg
+    if args.sigma is None and args.sigma is None:
+        checkIfExists(args.ruleset, f"{Fore.RED}   [-] Cannot find ruleset : {args.ruleset}")
+    # Check templates args
     readyForTemplating = False
     if (args.template is not None):
+        if args.csv: quitOnError(f"{Fore.RED}   [-] You cannot use templates in CSV mode ")
         if (args.templateOutput is None) or (len(args.template) != len(args.templateOutput)):
             quitOnError(f"{Fore.RED}   [-] Number of template ouput must match number of template ")
         for template in args.template:
             checkIfExists(template[0], f"{Fore.RED}   [-] Cannot find template : {template[0]}")
         readyForTemplating = True
     #{% endif %}
+    if args.csv: 
+        readyForTemplating = False
+        if args.outfile == "detected_events.json": 
+            args.outfile = "detected_events.csv"
 
     # Start time counting
     start_time = time.time()
     
     # Initialize zirCore
-    zircoliteCore = zirCore(args.config, logger=consoleLogger, noOutput=args.nolog, timeAfter=eventsAfter, timeBefore=eventsBefore)
+    zircoliteCore = zirCore(args.config, logger=consoleLogger, noOutput=args.nolog, timeAfter=eventsAfter, timeBefore=eventsBefore, limit=args.limit, csvMode=args.csv)
 
     # If we are not working directly with the db
     if not args.dbonly:
@@ -735,12 +800,27 @@ if __name__ == '__main__':
     #{{ executeRuleSetFromVar }}
     #{% else -%}
     consoleLogger.info(f"[+] Loading ruleset from : {args.ruleset}")
-    zircoliteCore.loadRulesetFromFile(filename=args.ruleset, ruleFilters=args.rulefilter)
+    # If Raw SIGMA rules are used, they must be converted 
+    if args.sigma and args.sigmac:
+        consoleLogger.info(f"[+] Raw SIGMA rules conversion (use '--sigmaerrors' option to show not supported rules)")
+        rulesGeneratorInstance = rulesetGenerator(args.sigmac, args.sigma, "logs", args.ruleset)
+        convertedRules = rulesGeneratorInstance.run()
+        if not convertedRules["ruleset"]: quitOnError(f"{Fore.RED}   [-] No rule to execute, check your sigma rules and sigmac paths, or use '--sigmaerrors' to show not supported rules")
+        # If provided rules are not supported
+        if args.sigmaerrors and len(convertedRules["errors"]) > 0:
+            consoleLogger.info(f"[+] These rules were not converted (not supported by backend) : ")
+            for error in convertedRules["errors"]:
+                consoleLogger.info(f'{Fore.LIGHTYELLOW_EX}   [-] "{error}"{Fore.RESET}')
+        #exportList = [rule["rule"] for rule in generatedRules if not rule["notsupported"]]
+        zircoliteCore.loadRulesetFromVar(ruleset=convertedRules["ruleset"], ruleFilters=args.rulefilter)
+    else:
+        zircoliteCore.loadRulesetFromFile(filename=args.ruleset, ruleFilters=args.rulefilter)
     #{% endif %}
-    
+
+    if args.limit > 0: consoleLogger.info(f"[+] Limited mode : detections with more than {args.limit} events will be discarded")
     consoleLogger.info(f"[+] Executing ruleset - {len(zircoliteCore.ruleset)} rules")
     zircoliteCore.executeRuleset(args.outfile, forwarder=forwarder, showAll=args.showall, KeepResults=(readyForTemplating or args.package), remote=args.remote, stream=args.stream)
-    consoleLogger.info(f"[+] Results written in : {args.outfile}")      
+    consoleLogger.info(f"[+] Results written in : {args.outfile}")
 
     # Forward events
     if args.remote is not None and not args.stream: # If not in stream mode
