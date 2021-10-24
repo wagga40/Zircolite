@@ -25,7 +25,7 @@ If you like it you can buy me a coffee :
 
 You can install dependencies with : `pip3 install -r requirements.txt`
 
-The use of [evtx_dump](https://github.com/omerbenamram/evtx) is **optionnal but required by default (because it is for now much faster)**, I you do not want to use it you have to use the `--noexternal` option. The tool is provided if you clone the Zircolite repository (the official repository is [here](https://github.com/omerbenamram/evtx)).
+The use of [evtx_dump](https://github.com/omerbenamram/evtx) is **optional but required by default (because it is for now much faster)**, If you do not want to use it you have to use the `--noexternal` option. The tool is provided if you clone the Zircolite repository (the official repository is [here](https://github.com/omerbenamram/evtx)).
 
 ## Quick start
 
@@ -59,12 +59,12 @@ Everything is [here](docs).
 
 ![](pics/gui.jpg)
 
-The Mini-GUI can be used totaly offline, it allows the user to display and search results. To know how to use the Mini-GUI Check docs [here](docs).
+The Mini-GUI can be used totally offline, it allows the user to display and search results. To know how to use the Mini-GUI, check docs [here](docs).
 
 ## Battle-tested
 
 Zircolite has been used to perform cold-analysis (in Lab) on EVTX in multiple "real-life" situations. 
-However, even if Zircolite has been used many times to perform analysis directly on an Microsoft Windows endpoint, there is not yet a pipeline to thoroughly test every release.
+However, even if Zircolite has been used many times to perform analysis directly on a Microsoft Windows endpoint, there is not yet a pipeline to thoroughly test every release.
 
 ## License
 
