@@ -384,7 +384,7 @@ class zirCore:
                 rule["level"] = "unknown"
             if "tags" not in rule:
                 rule["tags"] = []
-            results = ({"title": rule["title"], "description": rule["description"], "sigma": rule["rule"], "rule_level": rule["level"], "tags": rule["tags"], "count": counter, "matches": filteredRows})
+            results = ({"title": rule["title"], "description": rule["description"],"sigmafile":rule["filename"], "sigma": rule["rule"], "rule_level": rule["level"], "tags": rule["tags"], "count": counter, "matches": filteredRows})
             if counter > 0:
                 self.logger.debug(f'DETECTED : {rule["title"]} - Matchs : {counter} events')
         else:
