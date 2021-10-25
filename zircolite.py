@@ -187,7 +187,7 @@ class JSONFlattener:
         #{{ line }}
         #{% endfor %}
         #{% else %}
-        with open(configFile, 'r') as fieldMappingsFile:
+        with open(configFile, 'r', encoding='UTF-8') as fieldMappingsFile:
             self.fieldMappingsDict = json.load(fieldMappingsFile)
             self.fieldExclusions = self.fieldMappingsDict["exclusions"]
             self.fieldMappings = self.fieldMappingsDict["mappings"]
@@ -395,7 +395,7 @@ class zirCore:
 
     def loadRulesetFromFile(self, filename, ruleFilters):
         try:
-            with open(filename) as f:
+            with open(filename, encoding='utf-8') as f:
                 self.ruleset = json.load(f)
             self.applyRulesetFilters(ruleFilters)
         except Exception as e:
