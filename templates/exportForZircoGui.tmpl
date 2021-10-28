@@ -8,7 +8,7 @@ var ReconnaissanceData = [{% for elem in data %}{% if "attack.reconnaissance" in
 	}{{ "," if not loop.last }}{% endfor %}{{ "," if not loop.last }}{% endif %}{% endfor %}
 ];
 
-var RessourceDevelopmentData = [{% for elem in data %}{% if "attack.ressource_development" in elem["tags"] %}{% for match in elem["matches"] %}
+var ResourceDevelopmentData = [{% for elem in data %}{% if "attack.resource_development" in elem["tags"] %}{% for match in elem["matches"] %}
 	{
 		"Rule level":{{ elem["rule_level"]|tojson }},
 		"title":{{ elem["title"]|tojson }},
@@ -200,7 +200,7 @@ var CriticalData = [{% for elem in data %}{% if elem["rule_level"] == "critical"
 
 var dictData = {};
 dictData["reconnaissance"] = ReconnaissanceData;
-dictData["ressource_development"] = RessourceDevelopmentData;  
+dictData["resource_development"] = ResourceDevelopmentData;  
 dictData["initial_access"] = InitialAccessData; 
 dictData["execution"] = ExfiltrationData; 
 dictData["persistence"] = PersistenceData; 
