@@ -171,7 +171,6 @@ class eventForwarder:
             if "4" in statusCodes or "5" in statusCodes:
                 self.logger.error(f"{Fore.RED}   [-] Forwarding failed for some events (got 4xx or 5xx HTTP Status Code){Fore.RESET}")
 
-
 class JSONFlattener:
     """ Perform JSON Flattening """
 
@@ -680,7 +679,7 @@ if __name__ == '__main__':
     #{% endfor %}
     #{% endif %}
 
-    #signal.signal(signal.SIGINT, signal_handler) 
+    signal.signal(signal.SIGINT, signal_handler) 
 
     # Init logging
     if args.nolog: args.logfile = None
@@ -745,7 +744,7 @@ if __name__ == '__main__':
 
     # Start time counting
     start_time = time.time()
-    
+
     # Initialize zirCore
     zircoliteCore = zirCore(args.config, logger=consoleLogger, noOutput=args.nolog, timeAfter=eventsAfter, timeBefore=eventsBefore, limit=args.limit, csvMode=args.csv)
 
@@ -783,7 +782,7 @@ if __name__ == '__main__':
         #{% endif %}
         if EVTXJSONList == []:
             quitOnError(f"{Fore.RED}   [-] No JSON files found.")
-
+        
         # Flatten and insert to Db
         zircoliteCore.run(EVTXJSONList)
         # Unload In memory DB to disk. Done here to allow debug in case of ruleset execution error

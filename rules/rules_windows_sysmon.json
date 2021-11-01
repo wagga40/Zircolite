@@ -13415,21 +13415,6 @@
         ]
     },
     {
-        "title": "Notepad Making Network Connection - D6ADF703",
-        "description": "Detects suspicious network connection by Notepad",
-        "tags": [
-            "attack.command_and_control",
-            "attack.execution",
-            "attack.defense_evasion",
-            "attack.t1055"
-        ],
-        "author": "EagleEye Team",
-        "level": "high",
-        "rule": [
-            "SELECT * FROM logs WHERE ((EventID = \"3\" AND Channel = \"Microsoft-Windows-Sysmon/Operational\") AND Image LIKE \"%\\\\notepad.exe\" ESCAPE '\\' AND NOT (DestinationPort = \"9100\"))"
-        ]
-    },
-    {
         "title": "Regsvr32 Network Activity - E09B640E",
         "description": "Detects network connections and DNS queries initiated by Regsvr32.exe",
         "tags": [
@@ -13504,21 +13489,6 @@
         "level": "medium",
         "rule": [
             "SELECT * FROM logs WHERE ((EventID = \"3\" AND Channel = \"Microsoft-Windows-Sysmon/Operational\") AND (Initiated = \"true\" AND DestinationPort IN (\"4443\", \"2448\", \"8143\", \"1777\", \"1443\", \"243\", \"65535\", \"13506\", \"3360\", \"200\", \"198\", \"49180\", \"13507\", \"6625\", \"4444\", \"4438\", \"1904\", \"13505\", \"13504\", \"12102\", \"9631\", \"5445\", \"2443\", \"777\", \"13394\", \"13145\", \"12103\", \"5552\", \"3939\", \"3675\", \"666\", \"473\", \"5649\", \"4455\", \"4433\", \"1817\", \"100\", \"65520\", \"1960\", \"1515\", \"743\", \"700\", \"14154\", \"14103\", \"14102\", \"12322\", \"10101\", \"7210\", \"4040\", \"9943\")) AND NOT (((EventID = \"3\" AND Channel = \"Microsoft-Windows-Sysmon/Operational\") AND (Image LIKE \"%\\\\Program Files%\" ESCAPE '\\' OR ((DestinationIp LIKE \"10.%\" ESCAPE '\\' OR DestinationIp LIKE \"192.168.%\" ESCAPE '\\' OR DestinationIp LIKE \"172.16.%\" ESCAPE '\\' OR DestinationIp LIKE \"172.17.%\" ESCAPE '\\' OR DestinationIp LIKE \"172.18.%\" ESCAPE '\\' OR DestinationIp LIKE \"172.19.%\" ESCAPE '\\' OR DestinationIp LIKE \"172.20.%\" ESCAPE '\\' OR DestinationIp LIKE \"172.21.%\" ESCAPE '\\' OR DestinationIp LIKE \"172.22.%\" ESCAPE '\\' OR DestinationIp LIKE \"172.23.%\" ESCAPE '\\' OR DestinationIp LIKE \"172.24.%\" ESCAPE '\\' OR DestinationIp LIKE \"172.25.%\" ESCAPE '\\' OR DestinationIp LIKE \"172.26.%\" ESCAPE '\\' OR DestinationIp LIKE \"172.27.%\" ESCAPE '\\' OR DestinationIp LIKE \"172.28.%\" ESCAPE '\\' OR DestinationIp LIKE \"172.29.%\" ESCAPE '\\' OR DestinationIp LIKE \"172.30.%\" ESCAPE '\\' OR DestinationIp LIKE \"172.31.%\" ESCAPE '\\' OR DestinationIp LIKE \"127.%\" ESCAPE '\\') AND DestinationIsIpv6 = \"false\")))))"
-        ]
-    },
-    {
-        "title": "Rundll32 Internet Connection - A0426506",
-        "description": "Detects a rundll32 that communicates with public IP addresses",
-        "author": "Florian Roth",
-        "tags": [
-            "attack.defense_evasion",
-            "attack.t1218.011",
-            "attack.t1085",
-            "attack.execution"
-        ],
-        "level": "medium",
-        "rule": [
-            "SELECT * FROM logs WHERE ((EventID = \"3\" AND Channel = \"Microsoft-Windows-Sysmon/Operational\") AND (Image LIKE \"%\\\\rundll32.exe\" ESCAPE '\\' AND Initiated = \"true\") AND NOT ((DestinationIp LIKE \"10.%\" ESCAPE '\\' OR DestinationIp LIKE \"192.168.%\" ESCAPE '\\' OR DestinationIp LIKE \"172.16.%\" ESCAPE '\\' OR DestinationIp LIKE \"172.17.%\" ESCAPE '\\' OR DestinationIp LIKE \"172.18.%\" ESCAPE '\\' OR DestinationIp LIKE \"172.19.%\" ESCAPE '\\' OR DestinationIp LIKE \"172.20.%\" ESCAPE '\\' OR DestinationIp LIKE \"172.21.%\" ESCAPE '\\' OR DestinationIp LIKE \"172.22.%\" ESCAPE '\\' OR DestinationIp LIKE \"172.23.%\" ESCAPE '\\' OR DestinationIp LIKE \"172.24.%\" ESCAPE '\\' OR DestinationIp LIKE \"172.25.%\" ESCAPE '\\' OR DestinationIp LIKE \"172.26.%\" ESCAPE '\\' OR DestinationIp LIKE \"172.27.%\" ESCAPE '\\' OR DestinationIp LIKE \"172.28.%\" ESCAPE '\\' OR DestinationIp LIKE \"172.29.%\" ESCAPE '\\' OR DestinationIp LIKE \"172.30.%\" ESCAPE '\\' OR DestinationIp LIKE \"172.31.%\" ESCAPE '\\' OR DestinationIp LIKE \"127.%\" ESCAPE '\\')))"
         ]
     },
     {
