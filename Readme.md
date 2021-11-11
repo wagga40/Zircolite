@@ -55,6 +55,20 @@ python3 zircolite.py --evtx <JSON_FOLDER/JSON_FILE> --ruleset rules/rules_window
 
 Everything is [here](docs).
 
+## Tutorials, references and related projects
+
+### Tutorial
+
+[Russ McRee](https://holisticinfosec.io) has published a pretty good [tutorial](https://holisticinfosec.io/post/2021-09-28-zircolite/) on SIGMA and **Zircolite** in his [blog](https://holisticinfosec.io/post/2021-09-28-zircolite/).
+
+### EU ATT&CK Workshop October 2021
+
+[Florian Roth](https://github.com/Neo23x0/) cited **Zircolite** in his [**SIGMA Hall of fame**](https://github.com/Neo23x0/Talks/blob/master/Sigma_Hall_of_Fame_20211022.pdf) in its talk dugin the October 2021 EU ATT&CK Workshop.
+
+### Related projects
+
+[Michel de CREVOISIER](https://github.com/mdecrevoisier) is doing an amazing work with SIGMA, MITRE Att&ck (c) and other projects. Check [his work on mapping EVTX on the MITRE Att&ck (c) framework](https://github.com/mdecrevoisier/EVTX-to-MITRE-Attack).
+
 ## Mini-Gui
 
 ![](pics/gui.jpg)
