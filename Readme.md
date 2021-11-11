@@ -48,8 +48,8 @@ python3 zircolite.py --evtx <JSON_FOLDER/JSON_FILE> --ruleset rules/rules_window
 :information_source: If you want to try the tool you can test with these samples : 
 
 - [EVTX-ATTACK-SAMPLES](https://github.com/sbousseaden/EVTX-ATTACK-SAMPLES) (EVTX Files)
-- [MORDOR - APT29 Day 1](https://github.com/OTRF/mordor/blob/master/datasets/large/apt29/day1/apt29_evals_day1_manual.zip) (JSONL Files), [MORDOR - APT29 Day 2](https://github.com/OTRF/mordor/blob/master/datasets/large/apt29/day2/apt29_evals_day2_manual.zip) (JSONL Files)
-- [MORDOR - APT3 Scenario 1](https://github.com/OTRF/mordor/blob/master/datasets/large/windows/apt3/caldera_attack_evals_round1_day1_2019-10-20201108.tar.gz) (JSONL Files), [MORDOR - APT3 Scenario 2](https://github.com/OTRF/mordor/blob/master/datasets/large/windows/apt3/empire_apt3.tar.gz) (JSONL Files)
+- [MORDOR - APT29](https://github.com/OTRF/Security-Datasets/tree/master/datasets/compound/apt29) (JSONL Files)
+- [MORDOR - APT3](https://github.com/OTRF/Security-Datasets/tree/master/datasets/compound/windows/apt3) (JSONL Files)
 
 ## Docs
 

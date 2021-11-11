@@ -20,7 +20,7 @@
 		"Event.System.Level":"Level",
 		"Event.System.Opcode":"Opcode",
 		"Event.System.Provider.#attributes.EventSourceName":"EventSourceName",
-		"Event.System.Provider.#attributes.Name" : "Name",
+		"Event.System.Provider.#attributes.Name" : "Provider_Name",
 		"Event.System.Security":"Security",
 		"Event.System.Security.#attributes.UserID":"UserID",
 		"Event.System.Task":"Task",

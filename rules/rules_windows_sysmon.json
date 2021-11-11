@@ -534,19 +534,6 @@
         ]
     },
     {
-        "title": "Antivirus Relevant File Paths Alerts - 1EE95B6E",
-        "description": "Detects an Antivirus alert in a highly relevant file path or with a relevant file name",
-        "author": "Florian Roth, Arnim Rupp",
-        "level": "high",
-        "tags": [
-            "attack.resource_development",
-            "attack.t1588"
-        ],
-        "rule": [
-            "SELECT * FROM logs WHERE ((FileName LIKE \"C:\\\\Windows\\\\%\" ESCAPE '\\' OR FileName LIKE \"C:\\\\Temp\\\\%\" ESCAPE '\\' OR FileName LIKE \"C:\\\\PerfLogs\\\\%\" ESCAPE '\\' OR FileName LIKE \"C:\\\\Users\\\\Public\\\\%\" ESCAPE '\\' OR FileName LIKE \"C:\\\\Users\\\\Default\\\\%\" ESCAPE '\\') OR (FileName LIKE \"%\\\\Client\\\\%\" ESCAPE '\\' OR FileName LIKE \"%\\\\tsclient\\\\%\" ESCAPE '\\' OR FileName LIKE \"%\\\\inetpub\\\\%\" ESCAPE '\\' OR FileName LIKE \"%/www/%\" ESCAPE '\\' OR FileName LIKE \"%apache%\" ESCAPE '\\' OR FileName LIKE \"%tomcat%\" ESCAPE '\\' OR FileName LIKE \"%nginx%\" ESCAPE '\\' OR FileName LIKE \"%weblogic%\" ESCAPE '\\') OR (Filename LIKE \"%.ps1\" ESCAPE '\\' OR Filename LIKE \"%.psm1\" ESCAPE '\\' OR Filename LIKE \"%.vbs\" ESCAPE '\\' OR Filename LIKE \"%.bat\" ESCAPE '\\' OR Filename LIKE \"%.cmd\" ESCAPE '\\' OR Filename LIKE \"%.sh\" ESCAPE '\\' OR Filename LIKE \"%.chm\" ESCAPE '\\' OR Filename LIKE \"%.xml\" ESCAPE '\\' OR Filename LIKE \"%.txt\" ESCAPE '\\' OR Filename LIKE \"%.jsp\" ESCAPE '\\' OR Filename LIKE \"%.jspx\" ESCAPE '\\' OR Filename LIKE \"%.asp\" ESCAPE '\\' OR Filename LIKE \"%.aspx\" ESCAPE '\\' OR Filename LIKE \"%.ashx\" ESCAPE '\\' OR Filename LIKE \"%.asax\" ESCAPE '\\' OR Filename LIKE \"%.asmx\" ESCAPE '\\' OR Filename LIKE \"%.php\" ESCAPE '\\' OR Filename LIKE \"%.cfm\" ESCAPE '\\' OR Filename LIKE \"%.py\" ESCAPE '\\' OR Filename LIKE \"%.pyc\" ESCAPE '\\' OR Filename LIKE \"%.pl\" ESCAPE '\\' OR Filename LIKE \"%.rb\" ESCAPE '\\' OR Filename LIKE \"%.cgi\" ESCAPE '\\' OR Filename LIKE \"%.war\" ESCAPE '\\' OR Filename LIKE \"%.ear\" ESCAPE '\\' OR Filename LIKE \"%.hta\" ESCAPE '\\' OR Filename LIKE \"%.lnk\" ESCAPE '\\' OR Filename LIKE \"%.scf\" ESCAPE '\\' OR Filename LIKE \"%.sct\" ESCAPE '\\' OR Filename LIKE \"%.vbe\" ESCAPE '\\' OR Filename LIKE \"%.wsf\" ESCAPE '\\' OR Filename LIKE \"%.wsh\" ESCAPE '\\' OR Filename LIKE \"%.gif\" ESCAPE '\\' OR Filename LIKE \"%.png\" ESCAPE '\\' OR Filename LIKE \"%.jpg\" ESCAPE '\\' OR Filename LIKE \"%.jpeg\" ESCAPE '\\' OR Filename LIKE \"%.svg\" ESCAPE '\\' OR Filename LIKE \"%.dat\" ESCAPE '\\'))"
-        ]
-    },
-    {
         "title": "Antivirus Exploitation Framework Detection - FDF61EDF",
         "description": "Detects a highly relevant Antivirus alert that reports an exploitation framework",
         "author": "Florian Roth",
