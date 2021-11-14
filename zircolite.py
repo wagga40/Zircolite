@@ -467,7 +467,7 @@ class zirCore:
 
 class evtxExtractor:
 
-    def __init__(self, logger=None, providedTmpDir=None, coreCount=None, useExternalBinaries=True, binPath = None,xmlLogs=False):
+    def __init__(self, logger=None, providedTmpDir=None, coreCount=None, useExternalBinaries=True, binPath = None, xmlLogs=False):
         self.logger = logger or logging.getLogger(__name__)
         if Path(str(providedTmpDir)).is_dir():
             self.tmpDir = f"tmp-{self.randString()}"
@@ -531,7 +531,7 @@ class evtxExtractor:
         """
         Remove syslog header and convert xml data to json : code from ZikyHD (https://github.com/ZikyHD)
         """
-        def cleanTag(tag,ns):
+        def cleanTag(tag, ns):
             if ns in tag: 
                 return tag[len(ns):]
             return tag
@@ -789,7 +789,9 @@ if __name__ == '__main__':
 
     #{% if embeddedMode %}
     readyForTemplating = True
+    #{{ binPathVar }}
     #{% else %}
+    binPath = args.evtx_dump
     # Check Sigma config file & Sigmac path
     if args.sigma and args.sigmac :
         checkIfExists(args.sigma, f"{Fore.RED}   [-] Cannot find SIGMA config file : {args.sigma}")
@@ -843,7 +845,7 @@ if __name__ == '__main__':
 
         if not args.jsononly:
             # Init EVTX extractor object
-            extractor = evtxExtractor(logger=consoleLogger, providedTmpDir=args.tmpdir, coreCount=args.cores, useExternalBinaries=(not args.noexternal), binPath=args.evtx_dump, xmlLogs=args.sysmon4linux)
+            extractor = evtxExtractor(logger=consoleLogger, providedTmpDir=args.tmpdir, coreCount=args.cores, useExternalBinaries=(not args.noexternal), binPath=binPath, xmlLogs=args.sysmon4linux)
             consoleLogger.info(f"[+] Extracting EVTX Using '{extractor.tmpDir}' directory ")
             for evtx in tqdm(FileList, colour="yellow"):
                 extractor.run(evtx)
