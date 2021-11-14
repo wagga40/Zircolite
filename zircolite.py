@@ -521,7 +521,7 @@ class evtxExtractor:
             filepath = Path(file)
             filename = filepath.name
             parser = PyEvtxParser(str(filepath))
-            with open(f"{self.tmpDir}/{str(filename)}-{self.randString()}.json", "w") as f:
+            with open(f"{self.tmpDir}/{str(filename)}-{self.randString()}.json", "w", encoding="utf-8") as f:
                 for record in parser.records_json():
                     f.write(f'{json.dumps(json.loads(record["data"]))}\n')
         except Exception as e:
@@ -531,13 +531,10 @@ class evtxExtractor:
         """
         Remove syslog header and convert xml data to json : code from ZikyHD (https://github.com/ZikyHD)
         """
-
         def cleanTag(tag,ns):
-            nsl = len(ns)
-            if ns in tag:
-                return tag[nsl:]
-            else:
-                return tag
+            if ns in tag: 
+                return tag[len(ns):]
+            return tag
 
         if not 'Event' in xmlLine:
             return None
@@ -826,13 +823,10 @@ if __name__ == '__main__':
 
     # If we are not working directly with the db
     if not args.dbonly:
-        # Init EVTX extractor object
-        extractor = evtxExtractor(logger=consoleLogger, providedTmpDir=args.tmpdir, coreCount=args.cores, useExternalBinaries=(not args.noexternal), binPath=args.evtx_dump, xmlLogs=args.sysmon4linux)
         # If we are working with json we change the file extension if it is not user-provided
         if args.jsononly and args.fileext == "evtx": args.fileext = "json"
         if args.sysmon4linux and args.fileext == "evtx": args.fileext = "log"
-        if not args.jsononly: consoleLogger.info(f"[+] Extracting EVTX Using '{extractor.tmpDir}' directory ")
-        
+
         EVTXPath = Path(args.evtx)
         if EVTXPath.is_dir():
             # EVTX recursive search in given directory with given file extension
@@ -840,7 +834,7 @@ if __name__ == '__main__':
         elif EVTXPath.is_file():
             EVTXList = [EVTXPath]
         else:
-            quitOnError(f"{Fore.RED}   [-] Unable to extract EVTX from submitted path")
+            quitOnError(f"{Fore.RED}   [-] Unable to find EVTX from submitted path")
 
         # Applying file filters in this order : "select" than "avoid"
         FileList = avoidFiles(selectFiles(EVTXList, args.select), args.avoid)
@@ -848,6 +842,9 @@ if __name__ == '__main__':
             quitOnError(f"{Fore.RED}   [-] No file found. Please verify filters, the directory or the extension with '--fileext'")
 
         if not args.jsononly:
+            # Init EVTX extractor object
+            extractor = evtxExtractor(logger=consoleLogger, providedTmpDir=args.tmpdir, coreCount=args.cores, useExternalBinaries=(not args.noexternal), binPath=args.evtx_dump, xmlLogs=args.sysmon4linux)
+            consoleLogger.info(f"[+] Extracting EVTX Using '{extractor.tmpDir}' directory ")
             for evtx in tqdm(FileList, colour="yellow"):
                 extractor.run(evtx)
             # Set the path for the next step
@@ -866,7 +863,7 @@ if __name__ == '__main__':
         if args.fieldlist:
             fields = zircoliteCore.run(EVTXJSONList, False)
             zircoliteCore.close()
-            if not args.jsononly: extractor.cleanup()
+            if not args.jsononly and not args.keeptmp: extractor.cleanup()
             [print(sortedField) for sortedField in sorted([field for field in fields.values()])]
             sys.exit(0)
         #{% endif %}
@@ -900,7 +897,6 @@ if __name__ == '__main__':
             consoleLogger.info(f"[+] These rules were not converted (not supported by backend) : ")
             for error in convertedRules["errors"]:
                 consoleLogger.info(f'{Fore.LIGHTYELLOW_EX}   [-] "{error}"{Fore.RESET}')
-        #exportList = [rule["rule"] for rule in generatedRules if not rule["notsupported"]]
         zircoliteCore.loadRulesetFromVar(ruleset=convertedRules["ruleset"], ruleFilters=args.rulefilter)
     else:
         zircoliteCore.loadRulesetFromFile(filename=args.ruleset, ruleFilters=args.rulefilter)
