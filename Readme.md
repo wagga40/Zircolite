@@ -57,9 +57,11 @@ Everything is [here](docs).
 
 ## Tutorials, references and related projects
 
-### Tutorial
+### Tutorials
 
-[Russ McRee](https://holisticinfosec.io) has published a pretty good [tutorial](https://holisticinfosec.io/post/2021-09-28-zircolite/) on SIGMA and **Zircolite** in his [blog](https://holisticinfosec.io/post/2021-09-28-zircolite/).
+- [Russ McRee](https://holisticinfosec.io) has published a pretty good [tutorial](https://holisticinfosec.io/post/2021-09-28-zircolite/) on SIGMA and **Zircolite** in his [blog](https://holisticinfosec.io/post/2021-09-28-zircolite/)
+
+- **César Marín** has published a tutorial in **spanish** [here](https://derechodelared.com/zircolite-ejecucion-de-reglas-sigma-en-ficheros-evtx/)
 
 ### EU ATT&CK Workshop October 2021
 
