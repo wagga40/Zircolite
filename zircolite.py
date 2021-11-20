@@ -2,36 +2,38 @@
 # -*- coding: utf-8 -*-
 
 # Standard libs
-import json
-import sqlite3
-import logging
-from sqlite3 import Error
-import os
-import socket
-import subprocess
 import argparse
-import sys
-import time
-import random
-import string
-import signal
 import base64
+import csv
+import json
+import logging
+import multiprocessing as mp
+import os
 from pathlib import Path
+import random
 import shutil
+import signal
+import socket
+import sqlite3
+from sqlite3 import Error
+import string
+import subprocess
+import time
+import sys
 from sys import platform as _platform
 import zlib
-import csv
 
 # External libs
+import aiohttp
+import asyncio
+from colorama import Fore
+from evtx import PyEvtxParser
+from lxml import etree
+import socket
 from tqdm import tqdm
 import urllib3
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
-from colorama import Fore
 from jinja2 import Template
-from evtx import PyEvtxParser
-import aiohttp
-import asyncio
-import socket
 
 def signal_handler(sig, frame):
     consoleLogger.info("[-] Execution interrupted !")
@@ -228,7 +230,7 @@ class JSONFlattener:
                         JSONLine[key] = value
                         # Creating the CREATE TABLE SQL statement
                         if key.lower() not in self.keyDict:
-                            self.keyDict[key.lower()] = ""
+                            self.keyDict[key.lower()] = key
                             if type(value) is int:
                                 fieldStmt += f"'{key}' INTEGER,\n"
                             else:
@@ -449,20 +451,23 @@ class zirCore:
                                         self.logger.error(f"{Fore.RED}   [-] Error saving some results : {e}")
                 if not self.noOutput and not self.csvMode: fileHandle.write('{}]')  
 
-    def run(self, EVTXJSONList):
+    def run(self, EVTXJSONList, Insert2Db=True):
         self.logger.info("[+] Processing EVTX")
         flattener = JSONFlattener(configFile=self.config, timeAfter=self.timeAfter, timeBefore=self.timeBefore)
         flattener.runAll(EVTXJSONList)
-        self.logger.info("[+] Creating model")
-        self.createDb(flattener.fieldStmt)
-        self.logger.info("[+] Inserting data")
-        self.insertFlattenedJSON2Db(flattener.valuesStmt)
-        self.logger.info("[+] Cleaning unused objects")
+        if Insert2Db:
+            self.logger.info("[+] Creating model")
+            self.createDb(flattener.fieldStmt)
+            self.logger.info("[+] Inserting data")
+            self.insertFlattenedJSON2Db(flattener.valuesStmt)
+            self.logger.info("[+] Cleaning unused objects")
+        else:
+            return flattener.keyDict
         del flattener
 
 class evtxExtractor:
 
-    def __init__(self, logger=None, providedTmpDir=None, coreCount=None, useExternalBinaries=True):
+    def __init__(self, logger=None, providedTmpDir=None, coreCount=None, useExternalBinaries=True, binPath = None, xmlLogs=False):
         self.logger = logger or logging.getLogger(__name__)
         if Path(str(providedTmpDir)).is_dir():
             self.tmpDir = f"tmp-{self.randString()}"
@@ -472,8 +477,9 @@ class evtxExtractor:
             os.mkdir(self.tmpDir)
         self.cores = coreCount or os.cpu_count()
         self.useExternalBinaries = useExternalBinaries
+        self.xmlLogs = xmlLogs
         #{% if not embeddedMode %}
-        self.evtxDumpCmd = self.getOSExternalTools()
+        self.evtxDumpCmd = self.getOSExternalTools(binPath)
         #{% else %}
         #{{ evtxDumpCmdEmbed }}
         #{% endif %}
@@ -493,14 +499,17 @@ class evtxExtractor:
         self.makeExecutable("{{ externalTool }}")
         return "{{ externalTool }}"
     #{% else %}
-    def getOSExternalTools(self):
+    def getOSExternalTools(self, binPath):
         """ Determine which binaries to run depending on host OS : 32Bits is NOT supported for now since evtx_dump is 64bits only"""
-        if _platform == "linux" or _platform == "linux2":
-            return "bin/evtx_dump_lin"
-        elif _platform == "darwin":
-            return "bin/evtx_dump_mac"
-        elif _platform == "win32":
-            return "bin\\evtx_dump_win.exe"
+        if binPath is None:
+            if _platform == "linux" or _platform == "linux2":
+                return "bin/evtx_dump_lin"
+            elif _platform == "darwin":
+                return "bin/evtx_dump_mac"
+            elif _platform == "win32":
+                return "bin\\evtx_dump_win.exe"
+        else:
+            return binPath
     #{% endif %}
 
     def runUsingBindings(self, file):
@@ -512,11 +521,65 @@ class evtxExtractor:
             filepath = Path(file)
             filename = filepath.name
             parser = PyEvtxParser(str(filepath))
-            with open(f"{self.tmpDir}/{str(filename)}-{self.randString()}.json", "w") as f:
+            with open(f"{self.tmpDir}/{str(filename)}-{self.randString()}.json", "w", encoding="utf-8") as f:
                 for record in parser.records_json():
                     f.write(f'{json.dumps(json.loads(record["data"]))}\n')
         except Exception as e:
             self.logger.error(f"{Fore.RED}   [-] {e}")
+
+    def SysmonXMLLine2JSON(self, xmlLine):
+        """
+        Remove syslog header and convert xml data to json : code from ZikyHD (https://github.com/ZikyHD)
+        """
+        def cleanTag(tag, ns):
+            if ns in tag: 
+                return tag[len(ns):]
+            return tag
+
+        if not 'Event' in xmlLine:
+            return None
+        xmlLine = "<Event>" + xmlLine.split("<Event>")[1]
+        root = etree.fromstring(xmlLine)
+        ns = u'http://schemas.microsoft.com/win/2004/08/events/event'
+        child = {"#attributes": {"xmlns": ns}}
+        for appt in root.getchildren():
+            nodename = cleanTag(appt.tag,ns)
+            nodevalue = {}
+            for elem in appt.getchildren():
+                if not elem.text:
+                    text = ""
+                else:
+                    try:
+                        text = int(elem.text)
+                    except:
+                        text = elem.text
+                if elem.tag == 'Data':
+                    childnode = elem.get("Name")
+                else:
+                    childnode = cleanTag(elem.tag,ns)
+                    if elem.attrib:
+                        text = {"#attributes": dict(elem.attrib)}
+                obj={childnode:text}
+                nodevalue = {**nodevalue, **obj}
+            node = {nodename: nodevalue}
+            child = {**child, **node}
+        event = { "Event": child }
+        return event
+
+    def SysmonXMLLogs2JSON(self, file, outfile):
+        """
+        Use multiprocessing to convert Sysmon for Linux XML logs to JSON
+        """
+        with open(file, "r", encoding="ISO-8859-1") as fp:
+            data = fp.readlines()
+        pool = mp.Pool(self.cores)
+        result = pool.map(self.SysmonXMLLine2JSON, data)
+        pool.close()
+        pool.join()
+        with open(outfile, "w", encoding="UTF-8") as fp:
+                for element in result:
+                    if element is not None:
+                        fp.write(json.dumps(element) + '\n')
 
     def run(self, file):
         """
@@ -525,18 +588,25 @@ class evtxExtractor:
         """
         self.logger.debug(f"EXTRACTING : {file}")
 
-        if not self.useExternalBinaries or not Path(self.evtxDumpCmd).is_file(): 
-            self.logger.debug(f"No external binaries args or evtx_dump is missing")
-            self.runUsingBindings(file)
-        else:
+        if self.xmlLogs: 
             try:
-                filepath = Path(file)
-                filename = filepath.name
-                cmd = [self.evtxDumpCmd, "--no-confirm-overwrite", "-o", "jsonl", str(file), "-f", f"{self.tmpDir}/{str(filename)}-{self.randString()}.json", "-t", str(self.cores)]
-                subprocess.call(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+                filename = Path(file).name
+                self.SysmonXMLLogs2JSON(str(file), f"{self.tmpDir}/{str(filename)}-{self.randString()}.json")
             except Exception as e:
                 self.logger.error(f"{Fore.RED}   [-] {e}")
-        
+        else:
+            if not self.useExternalBinaries or not Path(self.evtxDumpCmd).is_file(): 
+                self.logger.debug(f"   [-] No external binaries args or evtx_dump is missing")
+                self.runUsingBindings(file)
+            else:
+                try:
+                    filepath = Path(file)
+                    filename = filepath.name
+                    cmd = [self.evtxDumpCmd, "--no-confirm-overwrite", "-o", "jsonl", str(file), "-f", f"{self.tmpDir}/{str(filename)}-{self.randString()}.json", "-t", str(self.cores)]
+                    subprocess.call(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+                except Exception as e:
+                    self.logger.error(f"{Fore.RED}   [-] {e}")
+  
     def cleanup(self):
         shutil.rmtree(self.tmpDir)
         #{% if embeddedMode %}
@@ -628,9 +698,11 @@ if __name__ == '__main__':
     parser.add_argument("-a", "--avoid", help="EVTX files containing the provided string will NOT be used", action='append', nargs='+')
     #{% if not embeddedMode %}
     parser.add_argument("-r", "--ruleset", help="JSON File containing SIGMA rules", type=str, required=True)
+    parser.add_argument("--fieldlist", help="Get all EVTX fields", action='store_true')
     parser.add_argument("-sg", "--sigma", help="Tell Zircolite to directly use SIGMA rules (slower) instead of the converted ones, you must provide SIGMA config file path", type=str)
     parser.add_argument("-sc", "--sigmac", help="Sigmac path (version >= 0.20), this arguments is mandatary only if you use '--sigma'", type=str)
     parser.add_argument("-se", "--sigmaerrors", help="Show rules conversion error (i.e not supported by the SIGMA SQLite backend)", action='store_true')
+    parser.add_argument("--evtx_dump", help="Tell Zircolite to use this binary for EVTX conversion, on Linux and MacOS the path must launch the binary (eg. './evtx_dump' and not 'evtx_dump')", type=str, default=None)
     #{% else %}
     #{% for rule in rules %}
     #{{ rule -}}
@@ -649,6 +721,7 @@ if __name__ == '__main__':
     parser.add_argument("-n", "--nolog", help="Don't create a log file or a result file (useful when forwarding)", action='store_true')
     parser.add_argument("-j", "--jsononly", help="If logs files are already in JSON lines format ('jsonl' in evtx_dump) ", action='store_true')
     parser.add_argument("-D", "--dbonly", help="Directly use a previously saved database file, timerange filters will not work", action='store_true')
+    parser.add_argument("-S", "--sysmon4linux", help="Use this option if your log file is a Sysmon for linux log file, default file extension is '.log'", action='store_true')
     parser.add_argument("-A", "--after", help="Limit to events that happened after the provided timestamp (UTC). Format : 1970-01-01T00:00:00", type=str, default="1970-01-01T00:00:00")
     parser.add_argument("-B", "--before", help="Limit to events that happened before the provided timestamp (UTC). Format : 1970-01-01T00:00:00", type=str, default="9999-12-12T23:59:59")
     parser.add_argument("--remote", help="Forward results to a HTTP/Splunk, please provide the full address e.g [http://]address:port[/uri]", type=str)
@@ -716,7 +789,9 @@ if __name__ == '__main__':
 
     #{% if embeddedMode %}
     readyForTemplating = True
+    #{{ binPathVar }}
     #{% else %}
+    binPath = args.evtx_dump
     # Check Sigma config file & Sigmac path
     if args.sigma and args.sigmac :
         checkIfExists(args.sigma, f"{Fore.RED}   [-] Cannot find SIGMA config file : {args.sigma}")
@@ -750,11 +825,10 @@ if __name__ == '__main__':
 
     # If we are not working directly with the db
     if not args.dbonly:
-        # Init EVTX extractor object
-        extractor = evtxExtractor(logger=consoleLogger, providedTmpDir=args.tmpdir, coreCount=args.cores, useExternalBinaries=(not args.noexternal))
         # If we are working with json we change the file extension if it is not user-provided
         if args.jsononly and args.fileext == "evtx": args.fileext = "json"
-        if not args.jsononly: consoleLogger.info(f"[+] Extracting EVTX Using '{extractor.tmpDir}' directory ")
+        if args.sysmon4linux and args.fileext == "evtx": args.fileext = "log"
+
         EVTXPath = Path(args.evtx)
         if EVTXPath.is_dir():
             # EVTX recursive search in given directory with given file extension
@@ -762,7 +836,7 @@ if __name__ == '__main__':
         elif EVTXPath.is_file():
             EVTXList = [EVTXPath]
         else:
-            quitOnError(f"{Fore.RED}   [-] Unable to extract EVTX from submitted path")
+            quitOnError(f"{Fore.RED}   [-] Unable to find EVTX from submitted path")
 
         # Applying file filters in this order : "select" than "avoid"
         FileList = avoidFiles(selectFiles(EVTXList, args.select), args.avoid)
@@ -770,6 +844,9 @@ if __name__ == '__main__':
             quitOnError(f"{Fore.RED}   [-] No file found. Please verify filters, the directory or the extension with '--fileext'")
 
         if not args.jsononly:
+            # Init EVTX extractor object
+            extractor = evtxExtractor(logger=consoleLogger, providedTmpDir=args.tmpdir, coreCount=args.cores, useExternalBinaries=(not args.noexternal), binPath=binPath, xmlLogs=args.sysmon4linux)
+            consoleLogger.info(f"[+] Extracting EVTX Using '{extractor.tmpDir}' directory ")
             for evtx in tqdm(FileList, colour="yellow"):
                 extractor.run(evtx)
             # Set the path for the next step
@@ -782,7 +859,17 @@ if __name__ == '__main__':
         #{% endif %}
         if EVTXJSONList == []:
             quitOnError(f"{Fore.RED}   [-] No JSON files found.")
-        
+
+        #{% if not embeddedMode -%}
+        # Print field list and exit
+        if args.fieldlist:
+            fields = zircoliteCore.run(EVTXJSONList, False)
+            zircoliteCore.close()
+            if not args.jsononly and not args.keeptmp: extractor.cleanup()
+            [print(sortedField) for sortedField in sorted([field for field in fields.values()])]
+            sys.exit(0)
+        #{% endif %}
+
         # Flatten and insert to Db
         zircoliteCore.run(EVTXJSONList)
         # Unload In memory DB to disk. Done here to allow debug in case of ruleset execution error
@@ -812,7 +899,6 @@ if __name__ == '__main__':
             consoleLogger.info(f"[+] These rules were not converted (not supported by backend) : ")
             for error in convertedRules["errors"]:
                 consoleLogger.info(f'{Fore.LIGHTYELLOW_EX}   [-] "{error}"{Fore.RESET}')
-        #exportList = [rule["rule"] for rule in generatedRules if not rule["notsupported"]]
         zircoliteCore.loadRulesetFromVar(ruleset=convertedRules["ruleset"], ruleFilters=args.rulefilter)
     else:
         zircoliteCore.loadRulesetFromFile(filename=args.ruleset, ruleFilters=args.rulefilter)

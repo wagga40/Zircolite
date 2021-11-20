@@ -126,6 +126,7 @@ class zircoGen:
                                         rulesIf=self.rulesIf,
                                         rulesCheck=self.rulesCheck,
                                         noPackage = "args.package = False",
+                                        binPathVar = "binPath = None",
                                         executeRuleSetFromVar='zircoliteCore.loadRulesetFromVar(ruleset=ruleset, ruleFilters=args.rulefilter)',
                                         fieldMappingsLines=self.fieldMappingsLines
                                     ))

@@ -267,3 +267,79 @@ Then you just have to open `index.html` in your favorite browser and click on a 
 * In the root folder of Zircolite type : `python3 -m nuitka --onefile zircolite.py`
 
 :warning: When packaging with PyInstaller some AV may not like your package.
+
+---
+
+### Using With DFIR Orc
+
+**DFIR Orc** is a Forensics artefact collection tool for systems running Microsoft Windows (pretty much like [Kape](https://www.kroll.com/en/services/cyber-risk/incident-response-litigation-support/kroll-artifact-parser-extractor-kape) or [artifactcollector](https://forensicanalysis.github.io/documentation/manual/usage/acquisition/)). For more detailed explaination, please check here : [https://dfir-orc.github.io](https://dfir-orc.github.io).
+
+[ZikyHD](https://github.com/ZikyHD) has done a pretty good job at integrating **Zircolite** with **DFIR Orc** in this repository : [https://github.com/Zircocorp/dfir-orc-config](https://github.com/Zircocorp/dfir-orc-config).
+
+Basically, if you want to integrate Zircolite with **DFIR Orc** : 
+
+- Clone the [DFIR Orc Config repository](https://github.com/DFIR-ORC/dfir-orc-config) : `git clone https://github.com/Zircocorp/dfir-orc-config.git`
+- Create a `DFIR-ORC_config.xml` (or add to an existing one) in the `config` directory containing : 
+
+```xml
+<?xml version="1.0" encoding="utf-8"?>
+<wolf childdebug="no" command_timeout="1200">
+    <log disposition="truncate">DFIR-ORC_{SystemType}_{FullComputerName}_{TimeStamp}.log</log>
+    <outline disposition="truncate">DFIR-ORC_{SystemType}_{FullComputerName}_{TimeStamp}.json</outline>
+    
+    <!-- BEGIN ZIRCOLITE SPECIFIC CONFIGURATION-->
+    <!-- This part creates a specific archive for Zircolite -->
+    <archive name="DFIR-ORC_{SystemType}_{FullComputerName}_Zircolite.7z" keyword="Zircolite" concurrency="1" repeat="Once" compression="fast" archive_timeout="120" >
+        <restrictions ElapsedTimeLimit="480" />
+        <command keyword="GetZircoliteSysmon" winver="6.2+">
+            <execute name="zircolite_win10_nuitka.exe" run="7z:#Tools|zircolite_win10_nuitka.exe"/>
+            <input  name='rules_windows_generic.json' source='res:#rules_windows_generic.json' argument='-r {FileName}' />
+            <input  name='fieldMappings.json' source='res:#fieldMappings.json' argument='-c {FileName}' />
+            <argument> --cores 1 --noexternal -e C:\windows\System32\winevt\Logs</argument>
+            <output  name="detected_events.json" source="File" argument="-o {FileName}" />
+            <output  name="zircolite.log" source="File" argument="-l {FileName}" />
+        </command>
+    </archive>
+    <!-- /END ZIRCOLITE SPECIFIC CONFIGURATION-->
+    
+</wolf>
+```
+
+:information_source: Please note that if you add this configuration to an existing one, you only need to keep the part between `<!-- BEGIN ... -->` and `<!-- /END ... -->` blocks.
+
+-  Put your custom or default mapping file `zircolite_win10_nuitka.exe ` (the default one is in the Zircolite repository `config` directory)   `rules_windows_generic.json` (the default one is in the Zircolite repository `rules` directory) in the the `config` directory.
+
+- Put **Zircolite** [binary](https://github.com/wagga40/Zircolite/releases) (in this example `zircolite_win10_nuitka.exe`) and **DFIR Orc** [binaries](https://github.com/DFIR-ORC/dfir-orc/releases) (x86 and x64) in the the `tools` directory.
+
+- Create a `DFIR-ORC_Embed.xml` (or add to an existing one) in the `config` directory containing : 
+
+```xml
+<?xml version="1.0" encoding="utf-8"?>
+<toolembed>
+	<input>.\tools\DFIR-Orc_x86.exe</input>
+	<output>.\output\%ORC_OUTPUT%</output>
+
+	<run64 args="WolfLauncher" >7z:#Tools|DFIR-Orc_x64.exe</run64>
+	<run32 args="WolfLauncher" >self:#</run32>
+
+	<file name="WOLFLAUNCHER_CONFIG" path=".\%ORC_CONFIG_FOLDER%\DFIR-ORC_config.xml"/>
+	
+    <!-- BEGIN ZIRCOLITE SPECIFIC CONFIGURATION-->
+	<file name="rules_windows_generic.json" path=".\%ORC_CONFIG_FOLDER%\rules_windows_generic.json" />
+	<file name="fieldMappings.json" path=".\%ORC_CONFIG_FOLDER%\fieldMappings.json" />
+	<!-- /END ZIRCOLITE SPECIFIC CONFIGURATION-->
+
+    <archive name="Tools" format="7z" compression="Ultra">
+		<file name="DFIR-Orc_x64.exe" path=".\tools\DFIR-Orc_x64.exe"/>
+		
+		<!-- BEGIN ZIRCOLITE SPECIFIC CONFIGURATION-->
+		<file name="zircolite_win10_nuitka.exe" path=".\tools\zircolite_win10_nuitka.exe"/>
+		<!-- /END ZIRCOLITE SPECIFIC CONFIGURATION-->
+		
+	</archive>
+</toolembed>
+```
+:information_source: Please note that if you add this configuration to an existing one, you only need to keep the part between `<!-- BEGIN ... -->` and `<!-- /END ... -->` blocks.
+
+- Now you need to generate the **DFIR Orc** binary by executing `.\configure.ps1` at the root of the repository
+- The final output will be in the `output` directory
