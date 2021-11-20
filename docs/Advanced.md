@@ -293,11 +293,11 @@ Basically, if you want to integrate Zircolite with **DFIR Orc** :
         <restrictions ElapsedTimeLimit="480" />
         <command keyword="GetZircoliteSysmon" winver="6.2+">
             <execute name="zircolite_win10_nuitka.exe" run="7z:#Tools|zircolite_win10_nuitka.exe"/>
-            <input  name='rules_windows_sysmon.json' source='res:#rules_windows_sysmon.json' argument='-r {FileName}' />
+            <input  name='rules_windows_generic.json' source='res:#rules_windows_generic.json' argument='-r {FileName}' />
             <input  name='fieldMappings.json' source='res:#fieldMappings.json' argument='-c {FileName}' />
-            <argument>--select "sysmon" --cores 1 --noexternal -e C:\windows\System32\winevt\Logs</argument>
-            <output  name="detected_events_sysmon.json" source="File" argument="-o {FileName}" />
-            <output  name="zircolite_sysmon.log" source="File" argument="-l {FileName}" />
+            <argument> --cores 1 --noexternal -e C:\windows\System32\winevt\Logs</argument>
+            <output  name="detected_events.json" source="File" argument="-o {FileName}" />
+            <output  name="zircolite.log" source="File" argument="-l {FileName}" />
         </command>
     </archive>
     <!-- /END ZIRCOLITE SPECIFIC CONFIGURATION-->
@@ -307,7 +307,7 @@ Basically, if you want to integrate Zircolite with **DFIR Orc** :
 
 :information_source: Please note that if you add this configuration to an existing one, you only need to keep the part between `<!-- BEGIN ... -->` and `<!-- /END ... -->` blocks.
 
--  Put your custom or default mapping file `zircolite_win10_nuitka.exe ` (the default one is in the Zircolite repository `config` directory)   `rules_windows_sysmon.json` (the default one is in the Zircolite repository `rules` directory) in the the `config` directory.
+-  Put your custom or default mapping file `zircolite_win10_nuitka.exe ` (the default one is in the Zircolite repository `config` directory)   `rules_windows_generic.json` (the default one is in the Zircolite repository `rules` directory) in the the `config` directory.
 
 - Put **Zircolite** [binary](https://github.com/wagga40/Zircolite/releases) (in this example `zircolite_win10_nuitka.exe`) and **DFIR Orc** [binaries](https://github.com/DFIR-ORC/dfir-orc/releases) (x86 and x64) in the the `tools` directory.
 
@@ -326,7 +326,6 @@ Basically, if you want to integrate Zircolite with **DFIR Orc** :
 	
     <!-- BEGIN ZIRCOLITE SPECIFIC CONFIGURATION-->
 	<file name="rules_windows_generic.json" path=".\%ORC_CONFIG_FOLDER%\rules_windows_generic.json" />
-	<file name="rules_windows_sysmon.json" path=".\%ORC_CONFIG_FOLDER%\rules_windows_sysmon.json" />
 	<file name="fieldMappings.json" path=".\%ORC_CONFIG_FOLDER%\fieldMappings.json" />
 	<!-- /END ZIRCOLITE SPECIFIC CONFIGURATION-->
 
