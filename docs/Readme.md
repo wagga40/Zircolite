@@ -24,6 +24,7 @@
 * [Templating and Formatting](Advanced.md#templating-and-formatting)
 * [Mini GUI](Advanced.md#mini-gui)
 * [Packaging Zircolite](Advanced.md#packaging-zircolite)
+* [Using With DFIR Orc](Advanced.md#using-with-dfir-orc)
 
 ## Internals
 
