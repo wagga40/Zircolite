@@ -758,7 +758,7 @@ if __name__ == '__main__':
     if args.nolog: args.logfile = None
     consoleLogger = initLogger(args.debug, args.logfile)
 
-    print("""
+    consoleLogger.info("""
     ███████╗██╗██████╗  ██████╗ ██████╗ ██╗     ██╗████████╗███████╗
     ╚══███╔╝██║██╔══██╗██╔════╝██╔═══██╗██║     ██║╚══██╔══╝██╔════╝
       ███╔╝ ██║██████╔╝██║     ██║   ██║██║     ██║   ██║   █████╗
