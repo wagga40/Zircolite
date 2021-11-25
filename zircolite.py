@@ -494,10 +494,11 @@ class evtxExtractor:
 
     #{% if embeddedMode %}
     def getOSExternalToolsEmbed(self):
-        with open("{{ externalTool }}", 'wb') as f:
-            f.write(zlib.decompress(base64.b64decode(b'{{ externalToolB64 }}')))
-        self.makeExecutable("{{ externalTool }}")
-        return "{{ externalTool }}"
+        if self.useExternalBinaries:
+            with open("{{ externalTool }}", 'wb') as f:
+                f.write(zlib.decompress(base64.b64decode(b'{{ externalToolB64 }}')))
+            self.makeExecutable("{{ externalTool }}")
+            return "{{ externalTool }}"
     #{% else %}
     def getOSExternalTools(self, binPath):
         """ Determine which binaries to run depending on host OS : 32Bits is NOT supported for now since evtx_dump is 64bits only"""
@@ -610,7 +611,7 @@ class evtxExtractor:
     def cleanup(self):
         shutil.rmtree(self.tmpDir)
         #{% if embeddedMode %}
-        #{{ removeTool }}
+        #{{ removeTool }}
         #{% endif %}
 
 #{% if not embeddedMode -%}
@@ -771,6 +772,7 @@ if __name__ == '__main__':
     #{% if embeddedMode %}
     #{{ rulesCheck }}
     #{{ noPackage }}
+    #{{ noExternal }}
     #{% endif %}
 
     consoleLogger.info("[+] Checking prerequisites")

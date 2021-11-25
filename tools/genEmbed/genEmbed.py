@@ -115,7 +115,7 @@ class zircoGen:
                                         evtxDumpCmdEmbed='self.evtxDumpCmd = self.getOSExternalToolsEmbed()',
                                         externalTool=self.externalTool,
                                         externalToolB64=self.fileToB64String(self.evtxdumpPath),
-                                        removeTool=f'os.remove("{self.externalTool}")',
+                                        removeTool=f'if self.useExternalBinaries: os.remove("{self.externalTool}")',
                                         configFileB64=self.configFileB64,
                                         templates=self.templatesArgs,
                                         templatesB64=self.templatesB64,
@@ -126,6 +126,7 @@ class zircoGen:
                                         rulesIf=self.rulesIf,
                                         rulesCheck=self.rulesCheck,
                                         noPackage = "args.package = False",
+                                        noExternal = "args.noexternal = True",
                                         binPathVar = "binPath = None",
                                         executeRuleSetFromVar='zircoliteCore.loadRulesetFromVar(ruleset=ruleset, ruleFilters=args.rulefilter)',
                                         fieldMappingsLines=self.fieldMappingsLines
