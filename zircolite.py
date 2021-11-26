@@ -425,7 +425,7 @@ class zirCore:
                     ruleResults = self.executeRule(rule)
                     if ruleResults != {} :
                         if self.limit == -1 or ruleResults["count"] < self.limit:
-                            ruleBar.write(f'{Fore.CYAN}    - {ruleResults["title"]} : {ruleResults["count"]} events{Fore.RESET}')
+                            ruleBar.write(f'{Fore.CYAN}    - {ruleResults["title"]} [{ruleResults["rule_level"]}] : {ruleResults["count"]} events{Fore.RESET}')
                             # Store results for templating and event forwarding (only if stream mode is disabled)
                             if KeepResults or (remote is not None and not stream): self.fullResults.append(ruleResults)
                             if stream and forwarder is not None: forwarder.send([ruleResults], False)
@@ -433,7 +433,7 @@ class zirCore:
                                 # To avoid printing this twice on stdout but in the logs...
                                 logLevel = self.logger.getEffectiveLevel()
                                 self.logger.setLevel(logging.DEBUG)
-                                self.logger.debug(f'    - {ruleResults["title"]} : {ruleResults["count"]} events')
+                                self.logger.debug(f'    - {ruleResults["title"]} [{ruleResults["rule_level"]}] : {ruleResults["count"]} events')
                                 self.logger.setLevel(logLevel)
                                 # Output to json or csv file
                                 if self.csvMode: 
