@@ -425,7 +425,7 @@ class zirCore:
                     ruleResults = self.executeRule(rule)
                     if ruleResults != {} :
                         if self.limit == -1 or ruleResults["count"] < self.limit:
-                            ruleBar.write(f'{Fore.CYAN}    - {ruleResults["title"]} : {ruleResults["count"]} events{Fore.RESET}')
+                            ruleBar.write(f'{Fore.CYAN}    - {ruleResults["title"]} [{ruleResults["rule_level"]}] : {ruleResults["count"]} events{Fore.RESET}')
                             # Store results for templating and event forwarding (only if stream mode is disabled)
                             if KeepResults or (remote is not None and not stream): self.fullResults.append(ruleResults)
                             if stream and forwarder is not None: forwarder.send([ruleResults], False)
@@ -433,7 +433,7 @@ class zirCore:
                                 # To avoid printing this twice on stdout but in the logs...
                                 logLevel = self.logger.getEffectiveLevel()
                                 self.logger.setLevel(logging.DEBUG)
-                                self.logger.debug(f'    - {ruleResults["title"]} : {ruleResults["count"]} events')
+                                self.logger.debug(f' - {ruleResults["title"]} [{ruleResults["rule_level"]}] : {ruleResults["count"]} events')
                                 self.logger.setLevel(logLevel)
                                 # Output to json or csv file
                                 if self.csvMode: 
@@ -691,19 +691,20 @@ def avoidFiles(pathList, avoidFilesList):
 # MAIN()
 ################################################################
 if __name__ == '__main__':
+    version = "2.6.1"
 
     # Init Args handling
     parser = argparse.ArgumentParser()
-    parser.add_argument("-e", "--evtx", help="EVTX log file or directory where EVTX log files are stored in JSON or EVTX format", type=str, required=True)
+    parser.add_argument("-e", "--evtx", help="EVTX log file or directory where EVTX log files are stored in JSON or EVTX format", type=str)
     parser.add_argument("-s", "--select", help="Only EVTX files containing the provided string will be used. If there is/are exclusion(s) (--avoid) they will be handled after selection", action='append', nargs='+')
     parser.add_argument("-a", "--avoid", help="EVTX files containing the provided string will NOT be used", action='append', nargs='+')
     #{% if not embeddedMode %}
-    parser.add_argument("-r", "--ruleset", help="JSON File containing SIGMA rules", type=str, required=True)
+    parser.add_argument("-r", "--ruleset", help="JSON File containing SIGMA rules", type=str)
     parser.add_argument("--fieldlist", help="Get all EVTX fields", action='store_true')
     parser.add_argument("-sg", "--sigma", help="Tell Zircolite to directly use SIGMA rules (slower) instead of the converted ones, you must provide SIGMA config file path", type=str)
     parser.add_argument("-sc", "--sigmac", help="Sigmac path (version >= 0.20), this arguments is mandatary only if you use '--sigma'", type=str)
     parser.add_argument("-se", "--sigmaerrors", help="Show rules conversion error (i.e not supported by the SIGMA SQLite backend)", action='store_true')
-    parser.add_argument("--evtx_dump", help="Tell Zircolite to use this binary for EVTX conversion, on Linux and MacOS the path must launch the binary (eg. './evtx_dump' and not 'evtx_dump')", type=str, default=None)
+    parser.add_argument("--evtx_dump", help="Tell Zircolite to use this binary for EVTX conversion, on Linux and MacOS the path must be valid to launch the binary (eg. './evtx_dump' and not 'evtx_dump')", type=str, default=None)
     #{% else %}
     #{% for rule in rules %}
     #{{ rule -}}
@@ -741,6 +742,7 @@ if __name__ == '__main__':
     parser.add_argument("--showall", help="Show all events, usefull to check what rule takes takes time to execute", action='store_true')
     parser.add_argument("--noexternal", help="Don't use evtx_dump external binaries (slower)", action='store_true')
     parser.add_argument("--package", help="Create a ZircoGui package (not available in embedded mode)", action='store_true')
+    parser.add_argument("-v", "--version", help="Show Zircolite version", action='store_true')
 
     args = parser.parse_args()
 
@@ -768,11 +770,22 @@ if __name__ == '__main__':
     ╚══════╝╚═╝╚═╝  ╚═╝ ╚═════╝ ╚═════╝ ╚══════╝╚═╝   ╚═╝   ╚══════╝
              -= Standalone SIGMA Detection tool for EVTX =-
     """)
+
     #{% if embeddedMode %}#{{ embeddedText }}#{% endif %}
     #{% if embeddedMode %}
     #{{ rulesCheck }}
     #{{ noPackage }}
     #{{ noExternal }}
+    #{% endif %}
+
+    # Print version an quit
+    if args.version: consoleLogger.info(f"Zircolite - v{version}"), sys.exit(0)
+
+    # Check mandatory CLI options
+    if not args.evtx: consoleLogger.error(f"{Fore.RED}   [-] No EVTX source path provided{Fore.RESET}"), sys.exit(2)
+    #{% if not embeddedMode %}
+    if args.evtx and not (args.fieldlist or args.ruleset): 
+        consoleLogger.error(f"{Fore.RED}   [-] Cannot use Zircolite with EVTX source and without the fiedlist or ruleset option{Fore.RESET}"), sys.exit(2)
     #{% endif %}
 
     consoleLogger.info("[+] Checking prerequisites")
@@ -802,7 +815,7 @@ if __name__ == '__main__':
         consoleLogger.info(f"{Fore.RED}   [-] the '--sigma' and '--sigmac' options must be used together") 
 
     # Check ruleset arg
-    if args.sigma is None and args.sigma is None:
+    if args.sigma is None and args.sigma is None and not args.fieldlist:
         checkIfExists(args.ruleset, f"{Fore.RED}   [-] Cannot find ruleset : {args.ruleset}")
     # Check templates args
     readyForTemplating = False

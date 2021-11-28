@@ -56,13 +56,4 @@ endif
 		$(DOCKER_REGISTRY)/wagga40/zircolite:$(DOCKER_TAG)
 
 rulesets:
-ifndef GIT
-	$(error Git is required. Please install it first)
-endif
-ifndef PY3
-	$(error Python3 is required. Please install it first)
-endif
-	$(GIT) clone https://github.com/SigmaHQ/sigma.git $(TMP_GIT)
-	$(PY3) tools/genRules/genRules.py --rulesdirectory=$(TMP_GIT)/rules/windows/ --config=tools/genRules/config/generic.yml --sigmac=$(TMP_GIT)/tools/sigmac --output=rules_windows_generic_$(DATE).json
-	$(PY3) tools/genRules/genRules.py --rulesdirectory=$(TMP_GIT)/rules/windows/ --config=tools/genRules/config/sysmon.yml --sigmac=$(TMP_GIT)/tools/sigmac --output=rules_windows_sysmon_$(DATE).json
-	rm -rf $(TMP_GIT)
+	$(info Please check docs to generate rulesets directly with sigmatools and sigmac : https://github.com/wagga40/Zircolite/blob/master/docs/Usage.md#with-sigmatools)

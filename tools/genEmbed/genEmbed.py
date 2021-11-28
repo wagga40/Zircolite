@@ -25,41 +25,44 @@ def checkIfExists(path, errorMessage):
 class zircoGen:
 
     def fileToB64String(self, file):
-        fileData = open(file, "rb").read()
-        encoded = base64.b64encode(zlib.compress(fileData)).decode("utf-8")
-        return encoded
+        if file is not None:
+            fileData = open(file, "rb").read()
+            encoded = base64.b64encode(zlib.compress(fileData)).decode("utf-8")
+            return encoded
+        return ""
 
-    def __init__(self, configFilePath, originalFilePath, evtxdumpPath, outputFilename, rulesDir, templatesDir, isEmbedded=True):
+    def __init__(self, configFilePath=None, originalFilePath=None, evtxdumpPath=None, outputFilename=None, rulesDir=None, templatesDir=None, isEmbedded=True):
         
         self.filePath = originalFilePath
         self.embeddedMode = isEmbedded
-        self.rules = rulesDir
-        self.templates = templatesDir
         self.output = outputFilename
 
         # Filename of the evtx_dump that will be dropped during Zircolite execution
-        self.evtxdumpPath = evtxdumpPath
-        self.externalTool = f'./{"".join(random.SystemRandom().choice(string.ascii_uppercase + string.digits) for _ in range(5))}_{Path(self.evtxdumpPath).name}'
+        if self.embeddedMode:
+            self.rules = rulesDir
+            self.templates = templatesDir
+            self.evtxdumpPath = evtxdumpPath
+            self.externalTool = f'./{"".join(random.SystemRandom().choice(string.ascii_uppercase + string.digits) for _ in range(5))}_{Path(self.evtxdumpPath).name}'
 
-        # Templates related var
-        self.templatesArgs = []
-        self.templatesB64 = []
-        self.templatesB64Fn = []
+            # Templates related var
+            self.templatesArgs = []
+            self.templatesB64 = []
+            self.templatesB64Fn = []
 
-        # Rules related var
-        self.rulesArgs = []
-        self.rulesArgsB64 = []
-        self.rulesIf = []
-        self.rulesArgNameFiltered = []
-        self.rulesCheck = ""
+            # Rules related var
+            self.rulesArgs = []
+            self.rulesArgsB64 = []
+            self.rulesIf = []
+            self.rulesArgNameFiltered = []
+            self.rulesCheck = ""
 
-        # Config & Field mappings related var 
-        self.configFileB64=self.fileToB64String(configFilePath)
-        self.fieldMappingsLines = []
-        self.fieldMappingsLines.append(f'self.fieldMappingsDict = json.loads(zlib.decompress(base64.b64decode(b\'{self.configFileB64}\')))')
-        self.fieldMappingsLines.append(f'self.fieldExclusions = self.fieldMappingsDict["exclusions"]')
-        self.fieldMappingsLines.append(f'self.fieldMappings = self.fieldMappingsDict["mappings"]')
-        self.fieldMappingsLines.append(f'self.uselessValues = self.fieldMappingsDict["useless"]')
+            # Config & Field mappings related var 
+            self.configFileB64=self.fileToB64String(configFilePath)
+            self.fieldMappingsLines = []
+            self.fieldMappingsLines.append(f'self.fieldMappingsDict = json.loads(zlib.decompress(base64.b64decode(b\'{self.configFileB64}\')))')
+            self.fieldMappingsLines.append(f'self.fieldExclusions = self.fieldMappingsDict["exclusions"]')
+            self.fieldMappingsLines.append(f'self.fieldMappings = self.fieldMappingsDict["mappings"]')
+            self.fieldMappingsLines.append(f'self.uselessValues = self.fieldMappingsDict["useless"]')
 
     def fileDirCheck(self, providedPath, fileExtension):
         fileList = None
@@ -109,32 +112,36 @@ class zircoGen:
         with open(self.filePath, 'r') as tmpl :
             jinjaTemplate = Template(tmpl.read())
         with open(self.output, 'w', encoding='utf-8') as tpl:
-            tpl.write(jinjaTemplate.render(  
-                                        embeddedMode=self.embeddedMode, 
-                                        embeddedText=f'print("-= Embedded version - Generated on {datetime.now().strftime("%Y%m%dT%H:%M:%S")} =-")',
-                                        evtxDumpCmdEmbed='self.evtxDumpCmd = self.getOSExternalToolsEmbed()',
-                                        externalTool=self.externalTool,
-                                        externalToolB64=self.fileToB64String(self.evtxdumpPath),
-                                        removeTool=f'if self.useExternalBinaries: os.remove("{self.externalTool}")',
-                                        configFileB64=self.configFileB64,
-                                        templates=self.templatesArgs,
-                                        templatesB64=self.templatesB64,
-                                        templatesB64Fn=self.templatesB64Fn,
-                                        templateOpenCode = 'template = Template(str(templateFile.decode("utf-8")))',
-                                        rules=self.rulesArgs,
-                                        rulesB64=self.rulesArgsB64,
-                                        rulesIf=self.rulesIf,
-                                        rulesCheck=self.rulesCheck,
-                                        noPackage = "args.package = False",
-                                        noExternal = "args.noexternal = True",
-                                        binPathVar = "binPath = None",
-                                        executeRuleSetFromVar='zircoliteCore.loadRulesetFromVar(ruleset=ruleset, ruleFilters=args.rulefilter)',
-                                        fieldMappingsLines=self.fieldMappingsLines
-                                    ))
+            if self.embeddedMode:
+                tpl.write(jinjaTemplate.render(  
+                                            embeddedMode=self.embeddedMode, 
+                                            embeddedText=f'print("-= Embedded version - Generated on {datetime.now().strftime("%Y%m%dT%H:%M:%S")} =-")',
+                                            evtxDumpCmdEmbed='self.evtxDumpCmd = self.getOSExternalToolsEmbed()',
+                                            externalTool=self.externalTool,
+                                            externalToolB64=self.fileToB64String(self.evtxdumpPath),
+                                            removeTool=f'if self.useExternalBinaries: os.remove("{self.externalTool}")',
+                                            configFileB64=self.configFileB64,
+                                            templates=self.templatesArgs,
+                                            templatesB64=self.templatesB64,
+                                            templatesB64Fn=self.templatesB64Fn,
+                                            templateOpenCode = 'template = Template(str(templateFile.decode("utf-8")))',
+                                            rules=self.rulesArgs,
+                                            rulesB64=self.rulesArgsB64,
+                                            rulesIf=self.rulesIf,
+                                            rulesCheck=self.rulesCheck,
+                                            noPackage = "args.package = False",
+                                            noExternal = "args.noexternal = True",
+                                            binPathVar = "binPath = None",
+                                            executeRuleSetFromVar='zircoliteCore.loadRulesetFromVar(ruleset=ruleset, ruleFilters=args.rulefilter)',
+                                            fieldMappingsLines=self.fieldMappingsLines
+                                        ))
+            else:
+                tpl.write(jinjaTemplate.render(embeddedMode=self.embeddedMode))
 
     def run(self):
-        self.genTemplatesCode()
-        self.genRulesCode()
+        if self.embeddedMode:
+            self.genTemplatesCode()
+            self.genRulesCode()
         self.render()
 
 if __name__ == "__main__":
@@ -144,7 +151,7 @@ if __name__ == "__main__":
     parser.add_argument("-m", "--mode", help="Mode to use for generation", choices=['embedded', 'standard'], default="embedded")
     parser.add_argument("-z", "--zircolite", help="Zircolite python file", type=str, required=True)
     parser.add_argument("-e", "--evtxdump", help="Evtx_dump directory, if not provided zircolite will be slower", type=str)
-    parser.add_argument("-c", "--config", help="Config file path", type=str, required=True)
+    parser.add_argument("-c", "--config", help="Config file path", type=str)
     parser.add_argument("-o", "--output", help="Generated python file name", type=str, default="generated.py")
     parser.add_argument("-r", "--rulesets", help="Rulesets to embed", type=str)
     parser.add_argument("-t", "--templates", help="Templates to embed")
@@ -153,12 +160,13 @@ if __name__ == "__main__":
     isEmbedded = False
     if args.mode == 'embedded':
         isEmbedded = True
-        if args.rulesets is None:
-            print("    [-] Error : no rulesets directory provided")
+        if not args.rulesets or not args.templates or not args.config or not args.evtxdump: 
+            print("    [-] Error : Missing args (--templates or --rulesets or --config)")
+            sys.exit(2)
 
     print("    [+] Check prerequisites")
     checkIfExists(args.zircolite, "    [-] Error : Zircolite path check failed")
-    checkIfExists(args.config, "    [-] Error : Config file path check failed")
+    if isEmbedded: checkIfExists(args.config, "    [-] Error : Config file path check failed")
     filename = f'tmp-{"".join(random.SystemRandom().choice(string.ascii_uppercase + string.digits) for _ in range(5))}.tmpl'
     copyfile(args.zircolite, filename)
 
@@ -174,7 +182,10 @@ if __name__ == "__main__":
     
     print(f"    [+] Render file : {args.output}")
     # init Renderer
-    zircoliteRenderer = zircoGen(args.config, filename, args.evtxdump, args.output, args.rulesets, args.templates, isEmbedded)
+    if isEmbedded:
+        zircoliteRenderer = zircoGen(args.config, filename, args.evtxdump, args.output, args.rulesets, args.templates, isEmbedded)
+    else:
+        zircoliteRenderer = zircoGen(originalFilePath=filename, outputFilename=args.output, isEmbedded=isEmbedded)
     # Render 
     zircoliteRenderer.run()
 
