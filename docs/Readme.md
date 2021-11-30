@@ -2,7 +2,7 @@
 
 ## Usage
 
-* [Requirements and Installation](#Usage.md#requirements-and-installation)
+* [Requirements and Installation](Usage.md#requirements-and-installation)
 * [Basic usage](Usage.md#basic-usage)
 * [Generate your own rulesets](Usage.md#generate-your-own-rulesets)
 	* [Why you should make your own rulesets](Usage.md#why-you-should-make-your-own-rulesets)
