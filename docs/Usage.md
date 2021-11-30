@@ -97,7 +97,9 @@ pip install sigmatools
 And then you can convert directories containing SIGMA rules : 
 
 ```shell 
-sigmac -t sqlite -c config/sysmon.yml \
+sigmac -t sqlite -c config/generic/sysmon.yml \
+       -c config/generic/powershell.yml \
+       -c config/zircolite.yml \
        -r sigma/rules/windows/ \
        -d --backend-option table=logs \
        --output-fields title,id,description,author,tags,level,falsepositives,filename \
@@ -110,6 +112,8 @@ For an unique SIGMA rule convertion you just need to remove `-r` :
 
 ```shell 
 sigmac -t sqlite -c config/sysmon.yml \
+       -c config/generic/powershell.yml \
+       -c config/zircolite.yml \
        sigma/rules/windows/builtin/win_net_use_admin_share.yml \
        -d --backend-option table=logs \
        --output-fields title,id,description,author,tags,level,falsepositives,filename \
@@ -117,6 +121,9 @@ sigmac -t sqlite -c config/sysmon.yml \
        -o rules.json
 					  
 ```
+
+Notice : `sysmon.yml`, `powershell.yml` and `zircolite.yml` are use to get correct EventID, Channel or Provider Name.
+
 #### On the fly rules conversion
 
 Since Zircolite 2.2.0, if you have sigmatools >= 0.20, Zircolite is able to convert the rules on-the-fly if you provide a SIGMA config file and the `sigmac` path. It is very convenient for testing but you should avoid it since this is slower : 
