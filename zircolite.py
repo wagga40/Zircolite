@@ -433,7 +433,7 @@ class zirCore:
                                 # To avoid printing this twice on stdout but in the logs...
                                 logLevel = self.logger.getEffectiveLevel()
                                 self.logger.setLevel(logging.DEBUG)
-                                self.logger.debug(f' - {ruleResults["title"]} [{ruleResults["rule_level"]}] : {ruleResults["count"]} events')
+                                self.logger.debug(f'    - {ruleResults["title"]} [{ruleResults["rule_level"]}] : {ruleResults["count"]} events')
                                 self.logger.setLevel(logLevel)
                                 # Output to json or csv file
                                 if self.csvMode: 
