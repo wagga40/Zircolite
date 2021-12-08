@@ -9569,21 +9569,6 @@
         ]
     },
     {
-        "title": "Suspicious Eventlog Clear or Configuration Using Wevtutil - BFFA7F72",
-        "description": "Detects clearing or configuration of eventlogs using wevtutil, powershell and wmic. Might be used by ransomwares during the attack (seen by NotPetya and others).",
-        "author": "Ecco, Daniil Yugoslavskiy, oscd.community",
-        "level": "high",
-        "tags": [
-            "attack.defense_evasion",
-            "attack.t1070.001",
-            "attack.t1070",
-            "car.2016-04-002"
-        ],
-        "rule": [
-            "SELECT * FROM logs WHERE ((EventID = \"1\" AND Channel = \"Microsoft-Windows-Sysmon/Operational\") AND (((Image LIKE \"%\\\\powershell.exe\" ESCAPE '\\' AND (CommandLine LIKE \"%Clear-EventLog%\" ESCAPE '\\' OR CommandLine LIKE \"%Remove-EventLog%\" ESCAPE '\\' OR CommandLine LIKE \"%Limit-EventLog%\" ESCAPE '\\')) OR (Image LIKE \"%\\\\wmic.exe\" ESCAPE '\\' AND CommandLine LIKE \"% ClearEventLog %\" ESCAPE '\\')) OR (EventID = \"1\" AND Channel = \"Microsoft-Windows-Sysmon/Operational\" AND Image LIKE \"%\\\\wevtutil.exe\" ESCAPE '\\' AND (CommandLine LIKE \"%clear-log%\" ESCAPE '\\' OR CommandLine LIKE \"% cl %\" ESCAPE '\\' OR CommandLine LIKE \"%set-log%\" ESCAPE '\\' OR CommandLine LIKE \"% sl %\" ESCAPE '\\'))))"
-        ]
-    },
-    {
         "title": "DLL Execution via Rasautou.exe - 8B7FF8F2",
         "description": "Detects using Rasautou.exe for loading arbitrary .DLL specified in -d option and executes the export specified in -p.",
         "author": "Julia Fomina, oscd.community",
@@ -14234,48 +14219,6 @@
         ]
     },
     {
-        "title": "PowerShell Network Connections - 396D2245",
-        "description": "Detects a Powershell process that opens network connections - check for suspicious target ports and target systems - adjust to your environment (e.g. extend filters with company's ip range')",
-        "author": "Florian Roth",
-        "tags": [
-            "attack.execution",
-            "attack.t1059.001",
-            "attack.t1086"
-        ],
-        "level": "low",
-        "rule": [
-            "SELECT * FROM logs WHERE ((EventID = \"3\" AND Channel = \"Microsoft-Windows-Sysmon/Operational\") AND (Image LIKE \"%\\\\powershell.exe\" ESCAPE '\\' AND Initiated = \"true\" AND DestinationIsIpv6 = \"false\") AND NOT ((DestinationIp LIKE \"10.%\" ESCAPE '\\' OR DestinationIp LIKE \"192.168.%\" ESCAPE '\\' OR DestinationIp LIKE \"172.16.%\" ESCAPE '\\' OR DestinationIp LIKE \"172.17.%\" ESCAPE '\\' OR DestinationIp LIKE \"172.18.%\" ESCAPE '\\' OR DestinationIp LIKE \"172.19.%\" ESCAPE '\\' OR DestinationIp LIKE \"172.20.%\" ESCAPE '\\' OR DestinationIp LIKE \"172.21.%\" ESCAPE '\\' OR DestinationIp LIKE \"172.22.%\" ESCAPE '\\' OR DestinationIp LIKE \"172.23.%\" ESCAPE '\\' OR DestinationIp LIKE \"172.24.%\" ESCAPE '\\' OR DestinationIp LIKE \"172.25.%\" ESCAPE '\\' OR DestinationIp LIKE \"172.26.%\" ESCAPE '\\' OR DestinationIp LIKE \"172.27.%\" ESCAPE '\\' OR DestinationIp LIKE \"172.28.%\" ESCAPE '\\' OR DestinationIp LIKE \"172.29.%\" ESCAPE '\\' OR DestinationIp LIKE \"172.30.%\" ESCAPE '\\' OR DestinationIp LIKE \"172.31.%\" ESCAPE '\\' OR DestinationIp LIKE \"127.0.0.1%\" ESCAPE '\\') AND User LIKE \"NT AUTHORITY\\\\SYSTEM\" ESCAPE '\\' AND User LIKE \"%AUT%\" ESCAPE '\\' AND User LIKE \"% NT%\" ESCAPE '\\'))"
-        ]
-    },
-    {
-        "title": "Wuauclt Network Connection - E64EB58F",
-        "description": "Detects the use of the Windows Update Client binary (wuauclt.exe) to proxy execute code and making a network connections. One could easily make the DLL spawn a new process and inject to it to proxy the network connection and bypass this rule.",
-        "author": "Roberto Rodriguez (Cyb3rWard0g), OTR (Open Threat Research)",
-        "level": "medium",
-        "tags": [
-            "attack.defense_evasion",
-            "attack.t1218"
-        ],
-        "rule": [
-            "SELECT * FROM logs WHERE (EventID = \"3\" AND Channel = \"Microsoft-Windows-Sysmon/Operational\" AND Image LIKE \"%wuauclt%\" ESCAPE '\\')"
-        ]
-    },
-    {
-        "title": "Notepad Making Network Connection - D6ADF703",
-        "description": "Detects suspicious network connection by Notepad",
-        "author": "EagleEye Team",
-        "level": "high",
-        "tags": [
-            "attack.command_and_control",
-            "attack.execution",
-            "attack.defense_evasion",
-            "attack.t1055"
-        ],
-        "rule": [
-            "SELECT * FROM logs WHERE ((EventID = \"3\" AND Channel = \"Microsoft-Windows-Sysmon/Operational\") AND Image LIKE \"%\\\\notepad.exe\" ESCAPE '\\' AND NOT (DestinationPort = \"9100\"))"
-        ]
-    },
-    {
         "title": "Regsvr32 Network Activity - E09B640E",
         "description": "Detects network connections and DNS queries initiated by Regsvr32.exe",
         "tags": [
@@ -14350,21 +14293,6 @@
         ],
         "rule": [
             "SELECT * FROM logs WHERE ((EventID = \"3\" AND Channel = \"Microsoft-Windows-Sysmon/Operational\") AND (Initiated = \"true\" AND DestinationPort IN (\"4443\", \"2448\", \"8143\", \"1777\", \"1443\", \"243\", \"65535\", \"13506\", \"3360\", \"200\", \"198\", \"49180\", \"13507\", \"6625\", \"4444\", \"4438\", \"1904\", \"13505\", \"13504\", \"12102\", \"9631\", \"5445\", \"2443\", \"777\", \"13394\", \"13145\", \"12103\", \"5552\", \"3939\", \"3675\", \"666\", \"473\", \"5649\", \"4455\", \"4433\", \"1817\", \"100\", \"65520\", \"1960\", \"1515\", \"743\", \"700\", \"14154\", \"14103\", \"14102\", \"12322\", \"10101\", \"7210\", \"4040\", \"9943\")) AND NOT (((EventID = \"3\" AND Channel = \"Microsoft-Windows-Sysmon/Operational\") AND (Image LIKE \"%\\\\Program Files%\" ESCAPE '\\' OR ((DestinationIp LIKE \"10.%\" ESCAPE '\\' OR DestinationIp LIKE \"192.168.%\" ESCAPE '\\' OR DestinationIp LIKE \"172.16.%\" ESCAPE '\\' OR DestinationIp LIKE \"172.17.%\" ESCAPE '\\' OR DestinationIp LIKE \"172.18.%\" ESCAPE '\\' OR DestinationIp LIKE \"172.19.%\" ESCAPE '\\' OR DestinationIp LIKE \"172.20.%\" ESCAPE '\\' OR DestinationIp LIKE \"172.21.%\" ESCAPE '\\' OR DestinationIp LIKE \"172.22.%\" ESCAPE '\\' OR DestinationIp LIKE \"172.23.%\" ESCAPE '\\' OR DestinationIp LIKE \"172.24.%\" ESCAPE '\\' OR DestinationIp LIKE \"172.25.%\" ESCAPE '\\' OR DestinationIp LIKE \"172.26.%\" ESCAPE '\\' OR DestinationIp LIKE \"172.27.%\" ESCAPE '\\' OR DestinationIp LIKE \"172.28.%\" ESCAPE '\\' OR DestinationIp LIKE \"172.29.%\" ESCAPE '\\' OR DestinationIp LIKE \"172.30.%\" ESCAPE '\\' OR DestinationIp LIKE \"172.31.%\" ESCAPE '\\' OR DestinationIp LIKE \"127.%\" ESCAPE '\\') AND DestinationIsIpv6 = \"false\")))))"
-        ]
-    },
-    {
-        "title": "Rundll32 Internet Connection - A0426506",
-        "description": "Detects a rundll32 that communicates with public IP addresses",
-        "author": "Florian Roth",
-        "level": "medium",
-        "tags": [
-            "attack.defense_evasion",
-            "attack.t1218.011",
-            "attack.t1085",
-            "attack.execution"
-        ],
-        "rule": [
-            "SELECT * FROM logs WHERE ((EventID = \"3\" AND Channel = \"Microsoft-Windows-Sysmon/Operational\") AND (Image LIKE \"%\\\\rundll32.exe\" ESCAPE '\\' AND Initiated = \"true\") AND NOT ((DestinationIp LIKE \"10.%\" ESCAPE '\\' OR DestinationIp LIKE \"192.168.%\" ESCAPE '\\' OR DestinationIp LIKE \"172.16.%\" ESCAPE '\\' OR DestinationIp LIKE \"172.17.%\" ESCAPE '\\' OR DestinationIp LIKE \"172.18.%\" ESCAPE '\\' OR DestinationIp LIKE \"172.19.%\" ESCAPE '\\' OR DestinationIp LIKE \"172.20.%\" ESCAPE '\\' OR DestinationIp LIKE \"172.21.%\" ESCAPE '\\' OR DestinationIp LIKE \"172.22.%\" ESCAPE '\\' OR DestinationIp LIKE \"172.23.%\" ESCAPE '\\' OR DestinationIp LIKE \"172.24.%\" ESCAPE '\\' OR DestinationIp LIKE \"172.25.%\" ESCAPE '\\' OR DestinationIp LIKE \"172.26.%\" ESCAPE '\\' OR DestinationIp LIKE \"172.27.%\" ESCAPE '\\' OR DestinationIp LIKE \"172.28.%\" ESCAPE '\\' OR DestinationIp LIKE \"172.29.%\" ESCAPE '\\' OR DestinationIp LIKE \"172.30.%\" ESCAPE '\\' OR DestinationIp LIKE \"172.31.%\" ESCAPE '\\' OR DestinationIp LIKE \"127.%\" ESCAPE '\\')))"
         ]
     },
     {
