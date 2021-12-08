@@ -122,7 +122,7 @@ sigmac -t sqlite -c config/sysmon.yml \
 					  
 ```
 
-Notice : `sysmon.yml`, `powershell.yml` and `zircolite.yml` are use to get correct EventID, Channel or Provider Name.
+Notice : `sysmon.yml`, `powershell.yml` and `zircolite.yml` are used to get correct EventID, Channel or Provider Name.
 
 #### On the fly rules conversion
 
