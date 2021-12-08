@@ -14,8 +14,6 @@
 * [Mini GUI](#mini-gui)
 * [Packaging Zircolite](#packaging-zircolite)
 
-Zircolite has a lot of command line arguments, you can list them with the `-h` argument.
-
 ---
 
 ### Working with large datasets
@@ -285,16 +283,26 @@ Basically, if you want to integrate Zircolite with **DFIR Orc** :
 <?xml version="1.0" encoding="utf-8"?>
 <wolf childdebug="no" command_timeout="1200">
     <log disposition="truncate">DFIR-ORC_{SystemType}_{FullComputerName}_{TimeStamp}.log</log>
-    <outline disposition="truncate">DFIR-ORC_{SystemType}_{FullComputerName}_{TimeStamp}.json</outline>
+    <outline disposition="truncate">DFIR-ORC_{SystemType}_{FullComputerName}_{TimeStamp}.json
+    </outline>
     
     <!-- BEGIN ZIRCOLITE SPECIFIC CONFIGURATION-->
     <!-- This part creates a specific archive for Zircolite -->
-    <archive name="DFIR-ORC_{SystemType}_{FullComputerName}_Zircolite.7z" keyword="Zircolite" concurrency="1" repeat="Once" compression="fast" archive_timeout="120" >
+    <archive name="DFIR-ORC_{SystemType}_{FullComputerName}_Zircolite.7z" 
+             keyword="Zircolite" concurrency="1" 
+             repeat="Once" 
+             compression="fast" 
+             archive_timeout="120" >
         <restrictions ElapsedTimeLimit="480" />
         <command keyword="GetZircoliteSysmon" winver="6.2+">
-            <execute name="zircolite_win10_nuitka.exe" run="7z:#Tools|zircolite_win10_nuitka.exe"/>
-            <input  name='rules_windows_generic.json' source='res:#rules_windows_generic.json' argument='-r {FileName}' />
-            <input  name='fieldMappings.json' source='res:#fieldMappings.json' argument='-c {FileName}' />
+            <execute name="zircolite_win10_nuitka.exe" 
+                     run="7z:#Tools|zircolite_win10_nuitka.exe"/>
+            <input  name='rules_windows_generic.json' 
+                    source='res:#rules_windows_generic.json' 
+                    argument='-r {FileName}' />
+            <input  name='fieldMappings.json' 
+                    source='res:#fieldMappings.json' 
+                    argument='-c {FileName}' />
             <argument> --cores 1 --noexternal -e C:\windows\System32\winevt\Logs</argument>
             <output  name="detected_events.json" source="File" argument="-o {FileName}" />
             <output  name="zircolite.log" source="File" argument="-l {FileName}" />
@@ -322,18 +330,23 @@ Basically, if you want to integrate Zircolite with **DFIR Orc** :
 	<run64 args="WolfLauncher" >7z:#Tools|DFIR-Orc_x64.exe</run64>
 	<run32 args="WolfLauncher" >self:#</run32>
 
-	<file name="WOLFLAUNCHER_CONFIG" path=".\%ORC_CONFIG_FOLDER%\DFIR-ORC_config.xml"/>
+	<file name="WOLFLAUNCHER_CONFIG" 
+	      path=".\%ORC_CONFIG_FOLDER%\DFIR-ORC_config.xml"/>
 	
     <!-- BEGIN ZIRCOLITE SPECIFIC CONFIGURATION-->
-	<file name="rules_windows_generic.json" path=".\%ORC_CONFIG_FOLDER%\rules_windows_generic.json" />
-	<file name="fieldMappings.json" path=".\%ORC_CONFIG_FOLDER%\fieldMappings.json" />
+	<file name="rules_windows_generic.json" 
+	      path=".\%ORC_CONFIG_FOLDER%\rules_windows_generic.json" />
+	<file name="fieldMappings.json" 
+	      path=".\%ORC_CONFIG_FOLDER%\fieldMappings.json" />
 	<!-- /END ZIRCOLITE SPECIFIC CONFIGURATION-->
 
     <archive name="Tools" format="7z" compression="Ultra">
-		<file name="DFIR-Orc_x64.exe" path=".\tools\DFIR-Orc_x64.exe"/>
+		<file name="DFIR-Orc_x64.exe" 
+		      path=".\tools\DFIR-Orc_x64.exe"/>
 		
 		<!-- BEGIN ZIRCOLITE SPECIFIC CONFIGURATION-->
-		<file name="zircolite_win10_nuitka.exe" path=".\tools\zircolite_win10_nuitka.exe"/>
+		<file name="zircolite_win10_nuitka.exe" 
+		      path=".\tools\zircolite_win10_nuitka.exe"/>
 		<!-- /END ZIRCOLITE SPECIFIC CONFIGURATION-->
 		
 	</archive>
