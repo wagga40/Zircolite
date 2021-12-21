@@ -25,7 +25,7 @@ class rulesetGenerator:
     def retrieveRule(self, ruleFile):
         try:
             d={}
-            cmd = ["python", self.sigmac, "-d", "--target", "sqlite", "-c", self.config, ruleFile, "--backend-option", f'table={self.table}']
+            cmd = ["python3", self.sigmac, "-d", "--target", "sqlite", "-c", self.config, ruleFile, "--backend-option", f'table={self.table}']
       
             outputRaw = subprocess.run(args=cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, encoding='cp437')
 
