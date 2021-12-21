@@ -24,7 +24,7 @@ class rulesetGenerator:
 
     def retrieveRule(self, ruleFile):
         d={}
-        cmd = [self.sigmac, "-d", "--target", "sqlite", "-c", self.config, ruleFile, "--backend-option", f'table={self.table}']
+        cmd = ["python3", self.sigmac, "-d", "--target", "sqlite", "-c", self.config, ruleFile, "--backend-option", f'table={self.table}']
         outputRaw = subprocess.run(args=cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, encoding='utf-8')
         output = [rule for rule in outputRaw.stdout.split("\n") if not "Feel free" in rule]
         if "unsupported" in str(output):
