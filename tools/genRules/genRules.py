@@ -23,32 +23,45 @@ class rulesetGenerator:
         return "%08X" % buf   
 
     def retrieveRule(self, ruleFile):
-        d={}
-        cmd = ["python3", self.sigmac, "-d", "--target", "sqlite", "-c", self.config, ruleFile, "--backend-option", f'table={self.table}']
-        outputRaw = subprocess.run(args=cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, encoding='utf-8')
-        output = [rule for rule in outputRaw.stdout.split("\n") if not "Feel free" in rule]
-        if "unsupported" in str(output):
-            return {"rule": "", "file": ruleFile, "notsupported": True}
+        try:
+            d={}
+            cmd = ["python", self.sigmac, "-d", "--target", "sqlite", "-c", self.config, ruleFile, "--backend-option", f'table={self.table}']
+      
+            outputRaw = subprocess.run(args=cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, encoding='cp437')
+
+            output = [rule for rule in outputRaw.stdout.split("\n") if not "Feel free" in rule]
+            if "unsupported" in str(output):
+                return {"rule": "", "file": ruleFile, "notsupported": True}
+            else:
+                with open(ruleFile, 'r') as stream:
+                    docs = yaml.load_all(stream, Loader=yaml.FullLoader)
+                    for doc in docs:
+                        for k,v in doc.items():
+                            if k == 'title':
+                                title = v
+                            if k == 'id':
+                                d['title'] = title + " - " + self.CRC32_from_string(v)
+                            if k in ['description','tags','level','author']:
+                                d[k] = v
+                d['rule']=output[:-1]
+                return {"rule": d.copy(), "file": ruleFile, "notsupported": False}
+        except Exception as e:
+            return {"bad_file" : ruleFile, "exception" : e}
+        
+    def _good_rule(self, rule):
+        if ("bad_file" in rule):
+            print("[!]" + str(rule["bad_file"]) + " Exception:" + str(rule["exception"]))
+            return False
         else:
-            with open(ruleFile, 'r') as stream:
-                docs = yaml.load_all(stream, Loader=yaml.FullLoader)
-                for doc in docs:
-                    for k,v in doc.items():
-                        if k == 'title':
-                            title = v
-                        if k == 'id':
-                            d['title'] = title + " - " + self.CRC32_from_string(v)
-                        if k in ['description','tags','level','author']:
-                            d[k] = v
-            d['rule']=output[:-1]
-            return {"rule": d.copy(), "file": ruleFile, "notsupported": False}
-    
+            return True
+        
     def run(self):
         if Path(self.rules).is_file():
             outputList = [self.retrieveRule(self.rules)] # OutputList is an array
         elif Path(self.rules).is_dir():
             files = list(Path(self.rules).rglob(f'*.{self.fileext}'))
             outputList = process_map(self.retrieveRule, files, chunksize = 1)
+            outputList = list(filter(self._good_rule, outputList))
         return outputList
 
 if __name__ == '__main__':
