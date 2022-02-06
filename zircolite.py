@@ -11,7 +11,6 @@ import multiprocessing as mp
 import os
 from pathlib import Path
 import random
-import re
 import shutil
 import signal
 import socket
@@ -547,7 +546,6 @@ class evtxExtractor:
         attributes = auditdLine.split(' ')
         for attribute in attributes:
             if 'msg=audit' in attribute:
-
                 event['timestamp'] = self.getTime(attribute)
             else:
                 try:
@@ -627,12 +625,6 @@ class evtxExtractor:
             try:
                 filename = Path(file).name
                 self.Logs2JSON(func, str(file), f"{self.tmpDir}/{str(filename)}-{self.randString()}.json")
-            except Exception as e:
-                self.logger.error(f"{Fore.RED}   [-] {e}")
-        elif self.auditdLogs:
-            try:
-                filename = Path(file).name
-                self.AuditdLogs2JSON(str(file), f"{self.tmpDir}/{str(filename)}-{self.randString()}.json")
             except Exception as e:
                 self.logger.error(f"{Fore.RED}   [-] {e}")
         else:
