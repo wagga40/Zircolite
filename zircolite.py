@@ -414,6 +414,18 @@ class zirCore:
         if ruleFilters is not None:
             self.ruleset = [rule for rule in self.ruleset if not any(ruleFilter in rule["title"] for ruleFilter in ruleFilters)]
 
+    def ruleLevelPrintFormatter(self, level, orgFormat=Fore.RESET):
+        if level == "informational":
+            return f'{Fore.WHITE}{level}{orgFormat}'
+        if level == "low":
+            return f'{Fore.GREEN}{level}{orgFormat}'
+        if level == "medium":
+            return f'{Fore.YELLOW}{level}{orgFormat}'
+        if level == "high":
+            return f'{Fore.MAGENTA}{level}{orgFormat}'
+        if level == "critical":
+            return f'{Fore.RED}{level}{orgFormat}'
+
     def executeRuleset(self, outFile, writeMode='w', forwarder=None, showAll=False, KeepResults=False, remote=None, stream=False):
         csvWriter = None
         # Results are writen upon detection to allow analysis during execution and to avoid loosing results in case of error.
@@ -421,11 +433,11 @@ class zirCore:
             with tqdm(self.ruleset, colour="yellow") as ruleBar:
                 if not self.noOutput and not self.csvMode: fileHandle.write('[')
                 for rule in ruleBar:  # for each rule in ruleset
-                    if showAll and "title" in rule: ruleBar.write(f'{Fore.BLUE}    - {rule["title"]}')  # Print all rules
+                    if showAll and "title" in rule: ruleBar.write(f'{Fore.BLUE}    - {rule["title"]} [{self.ruleLevelPrintFormatter(rule["level"], Fore.BLUE)}]{Fore.RESET}')  # Print all rules
                     ruleResults = self.executeRule(rule)
                     if ruleResults != {} :
                         if self.limit == -1 or ruleResults["count"] < self.limit:
-                            ruleBar.write(f'{Fore.CYAN}    - {ruleResults["title"]} [{ruleResults["rule_level"]}] : {ruleResults["count"]} events{Fore.RESET}')
+                            ruleBar.write(f'{Fore.CYAN}    - {ruleResults["title"]} [{self.ruleLevelPrintFormatter(rule["level"], Fore.CYAN)}] : {ruleResults["count"]} events{Fore.RESET}')
                             # Store results for templating and event forwarding (only if stream mode is disabled)
                             if KeepResults or (remote is not None and not stream): self.fullResults.append(ruleResults)
                             if stream and forwarder is not None: forwarder.send([ruleResults], False)
@@ -555,6 +567,8 @@ class evtxExtractor:
                     event[attribute[0]] = attribute[1]
                 except:
                     pass
+        if "host" not in event:
+            event['host'] = 'offline'
         return event
 
     def SysmonXMLLine2JSON(self, xmlLine):
