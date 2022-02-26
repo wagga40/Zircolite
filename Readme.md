@@ -1,7 +1,7 @@
 # <p align="center">![](pics/zircolite_400.png)</p>
 
-## Standalone and fast SIGMA-based detection tool for EVTX or JSON Logs 
-![](pics/Zircolite.gif)
+## Standalone SIGMA-based detection tool for EVTX, Auditd, Sysmon for linux or JSONL/NDJSON Logs 
+![](pics/Zircolite.svg)
 
 [![python](https://img.shields.io/badge/python-3.8-blue)](https://www.python.org/)
 ![version](https://img.shields.io/badge/Platform-Win-green)
@@ -9,17 +9,13 @@
 ![version](https://img.shields.io/badge/Platform-Mac-green)
 ![version](https://img.shields.io/badge/Architecture-64bit-red)
 
-**Zircolite is a standalone tool written in Python 3. It allows to use SIGMA rules on MS Windows EVTX (EVTX and JSON format)**
+**Zircolite is a standalone tool written in Python 3. It allows to use SIGMA rules on MS Windows EVTX (EVTX and JSONL format), Auditd logs and Sysmon for Linux logs**
 
 - **Zircolite** can be used directly on the investigated endpoint (use [releases](https://github.com/wagga40/Zircolite/releases)) or in your forensic/detection lab
 - **Zircolite** is fast and can parse large datasets in just seconds (check [benchmarks](docs/Internals.md#benchmarks))
-- **Zircolite** can handle EVTX files and JSON files as long as they are in JSONL/NDJSON format
 
 **Zircolite can be used directly in Python or you can use the binaries provided in [releases](https://github.com/wagga40/Zircolite/releases) (Microsoft Windows and Linux  only).** 
 **Documentation is [here](docs).**
-
-If you like it you can buy me a coffee : 
-[!["Buy Me A Coffee"](https://www.buymeacoffee.com/assets/img/custom_images/orange_img.png)](https://www.buymeacoffee.com/wagga40)
 
 ## Requirements / Installation
 
@@ -29,7 +25,7 @@ The use of [evtx_dump](https://github.com/omerbenamram/evtx) is **optional but r
 
 ## Quick start
 
-#### For EVTX files : 
+#### EVTX files : 
 
 Help is available with `zircolite.py -h`. If your EVTX files have the extension ".evtx" :
 
@@ -39,7 +35,21 @@ python3 zircolite.py --evtx sysmon.evtx --ruleset rules/rules_windows_sysmon.jso
 ```
 The SYSMON ruleset used here is a default one and it is for logs coming from endpoints where SYSMON installed. A generic ruleset is available too.
 
-#### For JSONL/NDJSON files : 
+#### Auditd logs : 
+
+```shell
+python3 zircolite.py --evtx <EVTX_FOLDER/EVTX_FILE> --ruleset <Converted Sigma rules> --auditd
+python3 zircolite.py --evtx auditd.log --ruleset rules/rules_linux.json --auditd
+```
+
+#### Sysmon for Linux logs : 
+
+```shell
+python3 zircolite.py --evtx <EVTX_FOLDER/EVTX_FILE> --ruleset <Converted Sigma rules> --sysmon4linux
+python3 zircolite.py --evtx auditd.log --ruleset rules/rules_linux.json --sysmon4linux
+```
+
+#### JSONL/NDJSON files : 
 
 ```shell
 python3 zircolite.py --evtx <JSON_FOLDER/JSON_FILE> --ruleset rules/rules_windows_sysmon.json --jsononly

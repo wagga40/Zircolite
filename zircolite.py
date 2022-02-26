@@ -414,6 +414,18 @@ class zirCore:
         if ruleFilters is not None:
             self.ruleset = [rule for rule in self.ruleset if not any(ruleFilter in rule["title"] for ruleFilter in ruleFilters)]
 
+    def ruleLevelPrintFormatter(self, level, orgFormat=Fore.RESET):
+        if level == "informational":
+            return f'{Fore.WHITE}{level}{orgFormat}'
+        if level == "low":
+            return f'{Fore.GREEN}{level}{orgFormat}'
+        if level == "medium":
+            return f'{Fore.YELLOW}{level}{orgFormat}'
+        if level == "high":
+            return f'{Fore.MAGENTA}{level}{orgFormat}'
+        if level == "critical":
+            return f'{Fore.RED}{level}{orgFormat}'
+
     def executeRuleset(self, outFile, writeMode='w', forwarder=None, showAll=False, KeepResults=False, remote=None, stream=False):
         csvWriter = None
         # Results are writen upon detection to allow analysis during execution and to avoid loosing results in case of error.
@@ -421,11 +433,11 @@ class zirCore:
             with tqdm(self.ruleset, colour="yellow") as ruleBar:
                 if not self.noOutput and not self.csvMode: fileHandle.write('[')
                 for rule in ruleBar:  # for each rule in ruleset
-                    if showAll and "title" in rule: ruleBar.write(f'{Fore.BLUE}    - {rule["title"]}')  # Print all rules
+                    if showAll and "title" in rule: ruleBar.write(f'{Fore.BLUE}    - {rule["title"]} [{self.ruleLevelPrintFormatter(rule["level"], Fore.BLUE)}]{Fore.RESET}')  # Print all rules
                     ruleResults = self.executeRule(rule)
                     if ruleResults != {} :
                         if self.limit == -1 or ruleResults["count"] < self.limit:
-                            ruleBar.write(f'{Fore.CYAN}    - {ruleResults["title"]} [{ruleResults["rule_level"]}] : {ruleResults["count"]} events{Fore.RESET}')
+                            ruleBar.write(f'{Fore.CYAN}    - {ruleResults["title"]} [{self.ruleLevelPrintFormatter(rule["level"], Fore.CYAN)}] : {ruleResults["count"]} events{Fore.RESET}')
                             # Store results for templating and event forwarding (only if stream mode is disabled)
                             if KeepResults or (remote is not None and not stream): self.fullResults.append(ruleResults)
                             if stream and forwarder is not None: forwarder.send([ruleResults], False)
@@ -467,7 +479,7 @@ class zirCore:
 
 class evtxExtractor:
 
-    def __init__(self, logger=None, providedTmpDir=None, coreCount=None, useExternalBinaries=True, binPath = None, xmlLogs=False):
+    def __init__(self, logger=None, providedTmpDir=None, coreCount=None, useExternalBinaries=True, binPath = None, xmlLogs=False, auditdLogs=False, encoding=None):
         self.logger = logger or logging.getLogger(__name__)
         if Path(str(providedTmpDir)).is_dir():
             self.tmpDir = f"tmp-{self.randString()}"
@@ -478,6 +490,11 @@ class evtxExtractor:
         self.cores = coreCount or os.cpu_count()
         self.useExternalBinaries = useExternalBinaries
         self.xmlLogs = xmlLogs
+        self.auditdLogs = auditdLogs
+        # Sysmon 4 Linux default encoding is ISO-8859-1, Auditd is UTF-8
+        if not encoding and xmlLogs: self.encoding = "ISO-8859-1"
+        elif not encoding and auditdLogs: self.encoding = "utf-8"
+        else: self.encoding = encoding
         #{% if not embeddedMode %}
         self.evtxDumpCmd = self.getOSExternalTools(binPath)
         #{% else %}
@@ -528,6 +545,32 @@ class evtxExtractor:
         except Exception as e:
             self.logger.error(f"{Fore.RED}   [-] {e}")
 
+    def getTime(self, line):
+        timestamp = line.replace('msg=audit(','').replace('):','').split(':')
+        timestamp = time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(float(timestamp[0])))
+        return timestamp
+
+    def auditdLine2JSON(self, auditdLine):
+        """
+        Convert auditd logs to JSON : code from https://github.com/csark/audit2json
+        """
+        event = {}
+        attributes = auditdLine.split(' ')
+        for attribute in attributes:
+            if 'msg=audit' in attribute:
+                event['timestamp'] = self.getTime(attribute)
+            else:
+                try:
+                    attribute = attribute.replace('msg=','').replace('\'','').replace('"','').split('=')
+                    if 'cmd' in attribute[0] or 'proctitle' in attribute[0]:
+                        attribute[1] = str(bytearray.fromhex(attribute[1]).decode()).replace('\x00',' ')
+                    event[attribute[0]] = attribute[1]
+                except:
+                    pass
+        if "host" not in event:
+            event['host'] = 'offline'
+        return event
+
     def SysmonXMLLine2JSON(self, xmlLine):
         """
         Remove syslog header and convert xml data to json : code from ZikyHD (https://github.com/ZikyHD)
@@ -567,14 +610,14 @@ class evtxExtractor:
         event = { "Event": child }
         return event
 
-    def SysmonXMLLogs2JSON(self, file, outfile):
+    def Logs2JSON(self, func, file, outfile):
         """
-        Use multiprocessing to convert Sysmon for Linux XML logs to JSON
+        Use multiprocessing to convert Sysmon for Linux XML our Auditd logs to JSON
         """
-        with open(file, "r", encoding="ISO-8859-1") as fp:
+        with open(file, "r", encoding=self.encoding) as fp:
             data = fp.readlines()
         pool = mp.Pool(self.cores)
-        result = pool.map(self.SysmonXMLLine2JSON, data)
+        result = pool.map(func, data)
         pool.close()
         pool.join()
         with open(outfile, "w", encoding="UTF-8") as fp:
@@ -589,10 +632,13 @@ class evtxExtractor:
         """
         self.logger.debug(f"EXTRACTING : {file}")
 
-        if self.xmlLogs: 
+        if self.xmlLogs or self.auditdLogs: 
+            # Choose which log backend to use
+            if self.xmlLogs: func = self.SysmonXMLLine2JSON
+            else: func = self.auditdLine2JSON 
             try:
                 filename = Path(file).name
-                self.SysmonXMLLogs2JSON(str(file), f"{self.tmpDir}/{str(filename)}-{self.randString()}.json")
+                self.Logs2JSON(func, str(file), f"{self.tmpDir}/{str(filename)}-{self.randString()}.json")
             except Exception as e:
                 self.logger.error(f"{Fore.RED}   [-] {e}")
         else:
@@ -711,7 +757,7 @@ if __name__ == '__main__':
     #{% endfor %}
     #{% endif %}
     parser.add_argument("-R", "--rulefilter", help="Remove rule from ruleset, comparison is done on rule title (case sensitive)", action='append', nargs='*')
-    parser.add_argument("-L", "--limit", help="Discard results (in output file or forwarded events) that are above the provide limit", type=int, default=-1)
+    parser.add_argument("-L", "--limit", help="Discard results (in output file or forwarded events) that are above the provided limit", type=int, default=-1)
     parser.add_argument("-c", "--config", help="JSON File containing field mappings and exclusions", type=str, default="config/fieldMappings.json")
     parser.add_argument("-o", "--outfile", help="File that will contains all detected events", type=str, default="detected_events.json")
     parser.add_argument("--csv", help="The output will be in CSV. You should note that in this mode empty fields will not be discarded from results", action='store_true')
@@ -724,6 +770,8 @@ if __name__ == '__main__':
     parser.add_argument("-j", "--jsononly", help="If logs files are already in JSON lines format ('jsonl' in evtx_dump) ", action='store_true')
     parser.add_argument("-D", "--dbonly", help="Directly use a previously saved database file, timerange filters will not work", action='store_true')
     parser.add_argument("-S", "--sysmon4linux", help="Use this option if your log file is a Sysmon for linux log file, default file extension is '.log'", action='store_true')
+    parser.add_argument("-AU", "--auditd", help="Use this option if your log file is a Auditd log file, default file extension is '.log'", action='store_true')
+    parser.add_argument("-LE", "--logs-encoding",  help="Specify log encoding when dealing with Sysmon for Linux or Auditd files", type=str)
     parser.add_argument("-A", "--after", help="Limit to events that happened after the provided timestamp (UTC). Format : 1970-01-01T00:00:00", type=str, default="1970-01-01T00:00:00")
     parser.add_argument("-B", "--before", help="Limit to events that happened before the provided timestamp (UTC). Format : 1970-01-01T00:00:00", type=str, default="9999-12-12T23:59:59")
     parser.add_argument("--remote", help="Forward results to a HTTP/Splunk, please provide the full address e.g [http://]address:port[/uri]", type=str)
@@ -783,6 +831,7 @@ if __name__ == '__main__':
 
     # Check mandatory CLI options
     if not args.evtx: consoleLogger.error(f"{Fore.RED}   [-] No EVTX source path provided{Fore.RESET}"), sys.exit(2)
+    if args.sysmon4linux and args.auditd: consoleLogger.error(f"{Fore.RED}   [-] Sysmon for Linux and Auditd arguments cannot be used together{Fore.RESET}"), sys.exit(2)
     #{% if not embeddedMode %}
     if args.evtx and not (args.fieldlist or args.ruleset): 
         consoleLogger.error(f"{Fore.RED}   [-] Cannot use Zircolite with EVTX source and without the fiedlist or ruleset option{Fore.RESET}"), sys.exit(2)
@@ -842,7 +891,7 @@ if __name__ == '__main__':
     if not args.dbonly:
         # If we are working with json we change the file extension if it is not user-provided
         if args.jsononly and args.fileext == "evtx": args.fileext = "json"
-        if args.sysmon4linux and args.fileext == "evtx": args.fileext = "log"
+        if args.sysmon4linux or args.auditd and args.fileext == "evtx": args.fileext = "log"
 
         EVTXPath = Path(args.evtx)
         if EVTXPath.is_dir():
@@ -860,7 +909,7 @@ if __name__ == '__main__':
 
         if not args.jsononly:
             # Init EVTX extractor object
-            extractor = evtxExtractor(logger=consoleLogger, providedTmpDir=args.tmpdir, coreCount=args.cores, useExternalBinaries=(not args.noexternal), binPath=binPath, xmlLogs=args.sysmon4linux)
+            extractor = evtxExtractor(logger=consoleLogger, providedTmpDir=args.tmpdir, coreCount=args.cores, useExternalBinaries=(not args.noexternal), binPath=binPath, xmlLogs=args.sysmon4linux, auditdLogs=args.auditd, encoding=args.logs_encoding)
             consoleLogger.info(f"[+] Extracting EVTX Using '{extractor.tmpDir}' directory ")
             for evtx in tqdm(FileList, colour="yellow"):
                 extractor.run(evtx)
