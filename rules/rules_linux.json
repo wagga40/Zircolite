@@ -52,7 +52,7 @@
         "rule": [
             "SELECT * FROM logs WHERE (TargetFilename LIKE '%/Library/StartupItems/%' ESCAPE '\\' AND TargetFilename LIKE '%.plist' ESCAPE '\\')"
         ],
-        "filename": "macos_startup_items.yml"
+        "filename": "file_event_macos_startup_items.yml"
     },
     {
         "title": "MacOS Emond Launch Daemon",
@@ -71,7 +71,7 @@
         "rule": [
             "SELECT * FROM logs WHERE ((TargetFilename LIKE '%/etc/emond.d/rules/%' ESCAPE '\\' AND TargetFilename LIKE '%.plist' ESCAPE '\\') OR TargetFilename LIKE '%/private/var/db/emondClients/%' ESCAPE '\\')"
         ],
-        "filename": "macos_emond_launch_daemon.yml"
+        "filename": "file_event_macos_emond_launch_daemon.yml"
     },
     {
         "title": "MacOS Scripting Interpreter AppleScript",
@@ -215,6 +215,24 @@
             "SELECT * FROM logs WHERE (Image = '/usr/sbin/firmwarepasswd' AND (CommandLine LIKE '%setpasswd%' ESCAPE '\\' OR CommandLine LIKE '%full%' ESCAPE '\\' OR CommandLine LIKE '%delete%' ESCAPE '\\' OR CommandLine LIKE '%check%' ESCAPE '\\'))"
         ],
         "filename": "proc_creation_macos_suspicious_macos_firmware_activity.yml"
+    },
+    {
+        "title": "Hidden User Creation",
+        "id": "b22a5b36-2431-493a-8be1-0bae56c28ef3",
+        "description": "Detects creation of a hidden user account on macOS (UserID < 500) or with IsHidden option",
+        "author": "Daniil Yugoslavskiy, oscd.community",
+        "falsepositives": [
+            "Legitimate administration activities"
+        ],
+        "level": "medium",
+        "tags": [
+            "attack.defense_evasion",
+            "attack.t1564.002"
+        ],
+        "rule": [
+            "SELECT * FROM logs WHERE (Image LIKE '%/dscl' ESCAPE '\\' AND CommandLine LIKE '%create%' ESCAPE '\\' AND ((CommandLine LIKE '%UniqueID%' ESCAPE '\\' AND CommandLine REGEXP '([0-9]|[1-9][0-9]|[1-4][0-9]{2})') OR (CommandLine LIKE '%IsHidden%' ESCAPE '\\' AND (CommandLine LIKE '%true%' ESCAPE '\\' OR CommandLine LIKE '%yes%' ESCAPE '\\' OR CommandLine LIKE '%1%' ESCAPE '\\'))))"
+        ],
+        "filename": "proc_creation_macos_create_hidden_account.yml"
     },
     {
         "title": "Gatekeeper Bypass via Xattr",
@@ -523,6 +541,24 @@
             "SELECT * FROM logs WHERE Image = '/usr/sbin/screencapture'"
         ],
         "filename": "proc_creation_macos_screencapture.yml"
+    },
+    {
+        "title": "File and Directory Discovery",
+        "id": "089dbdf6-b960-4bcc-90e3-ffc3480c20f6",
+        "description": "Detects usage of system utilities to discover files and directories",
+        "author": "Daniil Yugoslavskiy, oscd.community",
+        "falsepositives": [
+            "Legitimate activities"
+        ],
+        "level": "informational",
+        "tags": [
+            "attack.discovery",
+            "attack.t1083"
+        ],
+        "rule": [
+            "SELECT * FROM logs WHERE ((Image = '/usr/bin/file' AND CommandLine REGEXP '(.){200,}') OR (Image = '/bin/ls' AND CommandLine LIKE '%-R%' ESCAPE '\\') OR Image = '/usr/bin/find' OR Image = '/usr/bin/mdfind' OR Image = '/tree')"
+        ],
+        "filename": "proc_creation_macos_file_and_directory_discovery.yml"
     },
     {
         "title": "Scheduled Cron Task/Job",
@@ -1477,6 +1513,24 @@
         "filename": "proc_creation_lnx_install_root_certificate.yml"
     },
     {
+        "title": "File and Directory Discovery",
+        "id": "d3feb4ee-ff1d-4d3d-bd10-5b28a238cc72",
+        "description": "Detects usage of system utilities to discover files and directories",
+        "author": "Daniil Yugoslavskiy, oscd.community",
+        "falsepositives": [
+            "Legitimate activities"
+        ],
+        "level": "informational",
+        "tags": [
+            "attack.discovery",
+            "attack.t1083"
+        ],
+        "rule": [
+            "SELECT * FROM logs WHERE ((Image LIKE '%/file' ESCAPE '\\' AND CommandLine REGEXP '(.){200,}') OR (Image LIKE '%/ls' ESCAPE '\\' AND CommandLine LIKE '%-R%' ESCAPE '\\') OR Image LIKE '%/find' ESCAPE '\\' OR Image LIKE '%/tree' ESCAPE '\\')"
+        ],
+        "filename": "proc_creation_lnx_file_and_directory_discovery.yml"
+    },
+    {
         "title": "Commands to Clear or Remove the Syslog",
         "id": "3fcc9b35-39e4-44c0-a2ad-9e82b6902b31",
         "description": "Detects specific commands commonly used to remove or empty the syslog.",
@@ -1946,7 +2000,7 @@
         "rule": [
             "SELECT * FROM logs WHERE DestinationHostname IN ('pool.minexmr.com', 'fr.minexmr.com', 'de.minexmr.com', 'sg.minexmr.com', 'ca.minexmr.com', 'us-west.minexmr.com', 'pool.supportxmr.com', 'mine.c3pool.com', 'xmr-eu1.nanopool.org', 'xmr-eu2.nanopool.org', 'xmr-us-east1.nanopool.org', 'xmr-us-west1.nanopool.org', 'xmr-asia1.nanopool.org', 'xmr-jp1.nanopool.org', 'xmr-au1.nanopool.org', 'xmr.2miners.com', 'xmr.hashcity.org', 'xmr.f2pool.com', 'xmrpool.eu', 'pool.hashvault.pro', 'moneroocean.stream', 'monerocean.stream')"
         ],
-        "filename": "lnx_crypto_mining_indicators.yml"
+        "filename": "net_connection_lnx_crypto_mining_indicators.yml"
     },
     {
         "title": "Linux Reverse Shell Indicator",
@@ -1960,6 +2014,6 @@
         "rule": [
             "SELECT * FROM logs WHERE (Image LIKE '%/bin/bash' ESCAPE '\\' AND NOT (DestinationIp IN ('127.0.0.1', '0.0.0.0')))"
         ],
-        "filename": "lnx_back_connect_shell_dev.yml"
+        "filename": "net_connection_lnx_back_connect_shell_dev.yml"
     }
 ]
