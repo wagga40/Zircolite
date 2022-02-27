@@ -11,6 +11,7 @@ import multiprocessing as mp
 import os
 from pathlib import Path
 import random
+import re
 import shutil
 import signal
 import socket
@@ -100,7 +101,7 @@ class eventForwarder:
         self.remoteHost = remote
         self.token = token
         self.localHostname = socket.gethostname()
-        self.userAgent = "zircolite/2.0.x"
+        self.userAgent = "zircolite/2.7.x"
 
     def send(self, payloads, bypassToken=True, noError=False):
         if payloads: 
@@ -285,6 +286,7 @@ class zirCore:
         try:
             conn = sqlite3.connect(db)
             conn.row_factory = sqlite3.Row  # Allows to get a dict
+            conn.create_function('regexp', 2, lambda x, y: 1 if re.search(x,y) else 0) # Allows to use regex in SQlite
         except Error as e:
             self.logger.error(f"{Fore.RED}   [-] {e}")
         return conn
@@ -737,7 +739,7 @@ def avoidFiles(pathList, avoidFilesList):
 # MAIN()
 ################################################################
 if __name__ == '__main__':
-    version = "2.6.2"
+    version = "2.7.0"
 
     # Init Args handling
     parser = argparse.ArgumentParser()
