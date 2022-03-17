@@ -92,37 +92,51 @@ Default rulesets are already provided in the `rules` directory. These rulesets o
 Zircolite use the SIGMA rules in JSON format. To generate your ruleset you need the official sigmatools (version 0.20 minimum) : 
 
 ```shell 
-pip install sigmatools
+git clone https://github.com/SigmaHQ/sigma.git
+cd sigma
 ```
-And then you can convert directories containing SIGMA rules : 
+**You must have the sigma dependencies installed, check [here](https://github.com/SigmaHQ/sigma#installation) :**
+
+[DEPRECATED] The pip version of sigmatools works but the backend has been updated since
+
+##### Sysmon rulesets (when investigated endpoints have Sysmon logs)
 
 ```shell 
-sigmac -t sqlite -c config/generic/sysmon.yml \
-       -c config/generic/powershell.yml \
-       -c config/zircolite.yml \
-       -r sigma/rules/windows/ \
-       -d --backend-option table=logs \
-       --output-fields title,id,description,author,tags,level,falsepositives,filename \
-       --output-format json \
-       -o rules.json
-					  
+tools/sigmac \
+	-t sqlite \
+	-c tools/config/generic/sysmon.yml \
+	-c tools/config/generic/powershell.yml \
+	-c tools/config/zircolite.yml \
+	-d rules/windows/ \
+   --output-fields title,id,description,author,tags,level,falsepositives,filename,status \
+   --output-format json \
+   -r \
+   -o rules_sysmon.json \
+   --backend-option table=logs
 ```
+Where : 
 
-For an unique SIGMA rule convertion you just need to remove `-r` : 
+- `-t` is the backend type (SQlite) 
+- `-c` options are the backend configurations from the official repository
+- `-r` option is used to convert an entire directory (don't forget to remove if it is a single rule conversion
+- `-o` option is used to provide the output filename 
+-  `--backend-option` is used to specify the SQLite table name (leave as is)
+
+##### Generic rulesets (when investigated endpoints _don't_ have Sysmon logs)
 
 ```shell 
-sigmac -t sqlite -c config/sysmon.yml \
-       -c config/generic/powershell.yml \
-       -c config/zircolite.yml \
-       sigma/rules/windows/builtin/win_net_use_admin_share.yml \
-       -d --backend-option table=logs \
-       --output-fields title,id,description,author,tags,level,falsepositives,filename \
-       --output-format json \
-       -o rules.json
-					  
+tools/sigmac \
+	-t sqlite \
+	-c tools/config/generic/windows-audit.yml \
+	-c tools/config/generic/powershell.yml \
+	-c tools/config/zircolite.yml \
+	-d rules/windows/ \
+   --output-fields title,id,description,author,tags,level,falsepositives,filename,status \
+   --output-format json \
+   -r \
+   -o rules_generic.json \
+   --backend-option table=logs
 ```
-
-Notice : `sysmon.yml`, `powershell.yml` and `zircolite.yml` are used to get correct EventID, Channel or Provider Name.
 
 #### On the fly rules conversion
 
@@ -135,19 +149,6 @@ python3 zircolite.py --evtx ../Samples/EVTX-ATTACK-SAMPLES/ \
                      --sigmac <DIRECTORY>/sigmac
 ```
 In this case, as some rules are not supported by the SIGMA SQL/SQLite backends, it is possible to show which rule was not converted with the `--sigmaerrors` option.
-
-#### genRules (*DEPRECATED*)
-
-If you don't have a sigmatools version above or equal to 0.20, you can use the `genRules.py` script located in the repository [tools](../tools/genRules) directory.
-
-#### Update the default rulesets 
-
-If you have `Make` you can easily update default rulesets : 
-
-```shell
-make rulesets
-```
-It will generate new *generic* and *sysmon* rulesets at the root of the reposity.
 
 #### Why you should build your own rulesets
 
