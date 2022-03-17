@@ -118,7 +118,7 @@ Where :
 
 - `-t` is the backend type (SQlite) 
 - `-c` options are the backend configurations from the official repository
-- `-r` option is used to convert an entire directory (don't forget to remove if it is a single rule conversion
+- `-r` option is used to convert an entire directory (don't forget to remove if it is a single rule conversion)
 - `-o` option is used to provide the output filename 
 -  `--backend-option` is used to specify the SQLite table name (leave as is)
 
