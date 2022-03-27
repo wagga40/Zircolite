@@ -36,551 +36,6 @@
         "filename": "cron_files.yml"
     },
     {
-        "title": "Startup Items",
-        "id": "dfe8b941-4e54-4242-b674-6b613d521962",
-        "description": "Detects creation of startup item plist files that automatically get executed at boot initialization to establish persistence.",
-        "author": "Alejandro Ortuno, oscd.community",
-        "falsepositives": [
-            "Legitimate administration activities"
-        ],
-        "level": "low",
-        "tags": [
-            "attack.persistence",
-            "attack.privilege_escalation",
-            "attack.t1037.005"
-        ],
-        "rule": [
-            "SELECT * FROM logs WHERE (TargetFilename LIKE '%/Library/StartupItems/%' ESCAPE '\\' AND TargetFilename LIKE '%.plist' ESCAPE '\\')"
-        ],
-        "filename": "file_event_macos_startup_items.yml"
-    },
-    {
-        "title": "MacOS Emond Launch Daemon",
-        "id": "23c43900-e732-45a4-8354-63e4a6c187ce",
-        "description": "Detects additions to the Emond Launch Daemon that adversaries may use to gain persistence and elevate privileges.",
-        "author": "Alejandro Ortuno, oscd.community",
-        "falsepositives": [
-            "Legitimate administration activities"
-        ],
-        "level": "medium",
-        "tags": [
-            "attack.persistence",
-            "attack.privilege_escalation",
-            "attack.t1546.014"
-        ],
-        "rule": [
-            "SELECT * FROM logs WHERE ((TargetFilename LIKE '%/etc/emond.d/rules/%' ESCAPE '\\' AND TargetFilename LIKE '%.plist' ESCAPE '\\') OR TargetFilename LIKE '%/private/var/db/emondClients/%' ESCAPE '\\')"
-        ],
-        "filename": "file_event_macos_emond_launch_daemon.yml"
-    },
-    {
-        "title": "MacOS Scripting Interpreter AppleScript",
-        "id": "1bc2e6c5-0885-472b-bed6-be5ea8eace55",
-        "description": "Detects execution of AppleScript of the macOS scripting language AppleScript.",
-        "author": "Alejandro Ortuno, oscd.community",
-        "falsepositives": [
-            "Application installers might contain scripts as part of the installation process."
-        ],
-        "level": "medium",
-        "tags": [
-            "attack.execution",
-            "attack.t1059.002"
-        ],
-        "rule": [
-            "SELECT * FROM logs WHERE ((Image LIKE '%/osascript' ESCAPE '\\') AND CommandLine LIKE '%-e%' ESCAPE '\\')"
-        ],
-        "filename": "proc_creation_macos_applescript.yml"
-    },
-    {
-        "title": "Credentials In Files",
-        "id": "53b1b378-9b06-4992-b972-dde6e423d2b4",
-        "description": "Detecting attempts to extract passwords with grep and laZagne",
-        "author": "Igor Fits, Mikhail Larin, oscd.community",
-        "falsepositives": [
-            "Unknown"
-        ],
-        "level": "high",
-        "tags": [
-            "attack.credential_access",
-            "attack.t1552.001"
-        ],
-        "rule": [
-            "SELECT * FROM logs WHERE (((Image LIKE '%/grep' ESCAPE '\\') AND (CommandLine LIKE '%password%' ESCAPE '\\')) OR CommandLine LIKE '%laZagne%' ESCAPE '\\')"
-        ],
-        "filename": "proc_creation_macos_find_cred_in_files.yml"
-    },
-    {
-        "title": "Local System Accounts Discovery",
-        "id": "ddf36b67-e872-4507-ab2e-46bda21b842c",
-        "description": "Detects enumeration of local systeam accounts on MacOS",
-        "author": "Alejandro Ortuno, oscd.community",
-        "falsepositives": [
-            "Legitimate administration activities"
-        ],
-        "level": "low",
-        "tags": [
-            "attack.discovery",
-            "attack.t1087.001"
-        ],
-        "rule": [
-            "SELECT * FROM logs WHERE (((Image LIKE '%/dscl' ESCAPE '\\') AND CommandLine LIKE '%list%' ESCAPE '\\' AND CommandLine LIKE '%/users%' ESCAPE '\\') OR ((Image LIKE '%/dscacheutil' ESCAPE '\\') AND CommandLine LIKE '%-q%' ESCAPE '\\' AND CommandLine LIKE '%user%' ESCAPE '\\') OR (CommandLine LIKE '%''x:0:''%' ESCAPE '\\') OR ((Image LIKE '%/cat' ESCAPE '\\') AND (CommandLine LIKE '%/etc/passwd%' ESCAPE '\\' OR CommandLine LIKE '%/etc/sudoers%' ESCAPE '\\')) OR (Image LIKE '%/id' ESCAPE '\\') OR ((Image LIKE '%/lsof' ESCAPE '\\') AND (CommandLine LIKE '%-u%' ESCAPE '\\')))"
-        ],
-        "filename": "proc_creation_macos_local_account.yml"
-    },
-    {
-        "title": "Indicator Removal on Host - Clear Mac System Logs",
-        "id": "acf61bd8-d814-4272-81f0-a7a269aa69aa",
-        "description": "Detects deletion of local audit logs",
-        "author": "remotephone, oscd.community",
-        "falsepositives": [
-            "Legitimate administration activities"
-        ],
-        "level": "medium",
-        "tags": [
-            "attack.defense_evasion",
-            "attack.t1070.002"
-        ],
-        "rule": [
-            "SELECT * FROM logs WHERE (Image LIKE '%/rm' ESCAPE '\\' AND (CommandLine LIKE '%/var/log%' ESCAPE '\\' OR (CommandLine LIKE '%/Users/%' ESCAPE '\\' AND CommandLine LIKE '%/Library/Logs/%' ESCAPE '\\')))"
-        ],
-        "filename": "proc_creation_macos_clear_system_logs.yml"
-    },
-    {
-        "title": "System Network Connections Discovery",
-        "id": "9a7a0393-2144-4626-9bf1-7c2f5a7321db",
-        "description": "Detects usage of system utilities to discover system network connections",
-        "author": "Daniil Yugoslavskiy, oscd.community",
-        "falsepositives": [
-            "Legitimate activities"
-        ],
-        "level": "informational",
-        "tags": [
-            "attack.discovery",
-            "attack.t1049"
-        ],
-        "rule": [
-            "SELECT * FROM logs WHERE Image IN ('/usr/bin/who', '/usr/bin/w', '/usr/bin/last', '/usr/sbin/lsof', '/usr/sbin/netstat')"
-        ],
-        "filename": "proc_creation_macos_system_network_connections_discovery.yml"
-    },
-    {
-        "title": "File Time Attribute Change",
-        "id": "88c0f9d8-30a8-4120-bb6b-ebb54abcf2a0",
-        "description": "Detect file time attribute change to hide new or changes to existing files.",
-        "author": "Igor Fits, Mikhail Larin, oscd.community",
-        "falsepositives": [
-            "Unknown"
-        ],
-        "level": "medium",
-        "tags": [
-            "attack.defense_evasion",
-            "attack.t1070.006"
-        ],
-        "rule": [
-            "SELECT * FROM logs WHERE (Image LIKE '%/touch' ESCAPE '\\' AND (CommandLine LIKE '%-t%' ESCAPE '\\' OR CommandLine LIKE '%-acmr%' ESCAPE '\\' OR CommandLine LIKE '%-d%' ESCAPE '\\' OR CommandLine LIKE '%-r%' ESCAPE '\\'))"
-        ],
-        "filename": "proc_creation_macos_change_file_time_attr.yml"
-    },
-    {
-        "title": "System Network Discovery - macOS",
-        "id": "58800443-f9fc-4d55-ae0c-98a3966dfb97",
-        "description": "Detects enumeration of local network configuration",
-        "author": "remotephone, oscd.community",
-        "falsepositives": [
-            "Legitimate administration activities"
-        ],
-        "level": "informational",
-        "tags": [
-            "attack.discovery",
-            "attack.t1016"
-        ],
-        "rule": [
-            "SELECT * FROM logs WHERE (Image IN ('/usr/sbin/netstat', '/sbin/ifconfig', '/usr/sbin/ipconfig', '/usr/libexec/ApplicationFirewall/socketfilterfw', '/usr/sbin/networksetup', '/usr/sbin/arp') OR (Image = '/usr/bin/defaults' AND CommandLine LIKE '%read%' ESCAPE '\\' AND CommandLine LIKE '%/Library/Preferences/com.apple.alf%' ESCAPE '\\'))"
-        ],
-        "filename": "proc_creation_macos_system_network_discovery.yml"
-    },
-    {
-        "title": "Suspicious MacOS Firmware Activity",
-        "id": "7ed2c9f7-c59d-4c82-a7e2-f859aa676099",
-        "description": "Detects when a user manipulates with Firmward Password on MacOS. NOTE - this command has been disabled on silicon-based apple computers.",
-        "author": "Austin Songer @austinsonger",
-        "falsepositives": [
-            "Legitimate administration activities"
-        ],
-        "level": "medium",
-        "tags": [
-            "attack.impact"
-        ],
-        "rule": [
-            "SELECT * FROM logs WHERE (Image = '/usr/sbin/firmwarepasswd' AND (CommandLine LIKE '%setpasswd%' ESCAPE '\\' OR CommandLine LIKE '%full%' ESCAPE '\\' OR CommandLine LIKE '%delete%' ESCAPE '\\' OR CommandLine LIKE '%check%' ESCAPE '\\'))"
-        ],
-        "filename": "proc_creation_macos_suspicious_macos_firmware_activity.yml"
-    },
-    {
-        "title": "Hidden User Creation",
-        "id": "b22a5b36-2431-493a-8be1-0bae56c28ef3",
-        "description": "Detects creation of a hidden user account on macOS (UserID < 500) or with IsHidden option",
-        "author": "Daniil Yugoslavskiy, oscd.community",
-        "falsepositives": [
-            "Legitimate administration activities"
-        ],
-        "level": "medium",
-        "tags": [
-            "attack.defense_evasion",
-            "attack.t1564.002"
-        ],
-        "rule": [
-            "SELECT * FROM logs WHERE (Image LIKE '%/dscl' ESCAPE '\\' AND CommandLine LIKE '%create%' ESCAPE '\\' AND ((CommandLine LIKE '%UniqueID%' ESCAPE '\\' AND CommandLine REGEXP '([0-9]|[1-9][0-9]|[1-4][0-9]{2})') OR (CommandLine LIKE '%IsHidden%' ESCAPE '\\' AND (CommandLine LIKE '%true%' ESCAPE '\\' OR CommandLine LIKE '%yes%' ESCAPE '\\' OR CommandLine LIKE '%1%' ESCAPE '\\'))))"
-        ],
-        "filename": "proc_creation_macos_create_hidden_account.yml"
-    },
-    {
-        "title": "Gatekeeper Bypass via Xattr",
-        "id": "f5141b6d-9f42-41c6-a7bf-2a780678b29b",
-        "description": "Detects macOS Gatekeeper bypass via xattr utility",
-        "author": "Daniil Yugoslavskiy, oscd.community",
-        "falsepositives": [
-            "Legitimate activities"
-        ],
-        "level": "low",
-        "tags": [
-            "attack.defense_evasion",
-            "attack.t1553.001"
-        ],
-        "rule": [
-            "SELECT * FROM logs WHERE (Image LIKE '%/xattr' ESCAPE '\\' AND CommandLine LIKE '%-r%' ESCAPE '\\' AND CommandLine LIKE '%com.apple.quarantine%' ESCAPE '\\')"
-        ],
-        "filename": "proc_creation_macos_xattr_gatekeeper_bypass.yml"
-    },
-    {
-        "title": "Decode Base64 Encoded Text",
-        "id": "719c22d7-c11a-4f2c-93a6-2cfdd5412f68",
-        "description": "Detects usage of base64 utility to decode arbitrary base64-encoded text",
-        "author": "Daniil Yugoslavskiy, oscd.community",
-        "falsepositives": [
-            "Legitimate activities"
-        ],
-        "level": "low",
-        "tags": [
-            "attack.defense_evasion",
-            "attack.t1027"
-        ],
-        "rule": [
-            "SELECT * FROM logs WHERE (Image = '/usr/bin/base64' AND CommandLine LIKE '%-d%' ESCAPE '\\')"
-        ],
-        "filename": "proc_creation_macos_base64_decode.yml"
-    },
-    {
-        "title": "Local Groups Discovery",
-        "id": "89bb1f97-c7b9-40e8-b52b-7d6afbd67276",
-        "description": "Detects enumeration of local system groups",
-        "author": "Ömer Günal, Alejandro Ortuno, oscd.community",
-        "falsepositives": [
-            "Legitimate administration activities"
-        ],
-        "level": "informational",
-        "tags": [
-            "attack.discovery",
-            "attack.t1069.001"
-        ],
-        "rule": [
-            "SELECT * FROM logs WHERE (((Image LIKE '%/dscacheutil' ESCAPE '\\') AND CommandLine LIKE '%-q%' ESCAPE '\\' AND CommandLine LIKE '%group%' ESCAPE '\\') OR ((Image LIKE '%/cat' ESCAPE '\\') AND (CommandLine LIKE '%/etc/group%' ESCAPE '\\')) OR ((Image LIKE '%/dscl' ESCAPE '\\') AND CommandLine LIKE '%-list%' ESCAPE '\\' AND CommandLine LIKE '%/groups%' ESCAPE '\\'))"
-        ],
-        "filename": "proc_creation_macos_local_groups.yml"
-    },
-    {
-        "title": "Split A File Into Pieces",
-        "id": "7f2bb9d5-6395-4de5-969c-70c11fbe6b12",
-        "description": "Detection use of the command \"split\" to split files into parts and possible transfer.",
-        "author": "Igor Fits, Mikhail Larin, oscd.community",
-        "falsepositives": [
-            "Legitimate administrative activity"
-        ],
-        "level": "low",
-        "tags": [
-            "attack.exfiltration",
-            "attack.t1030"
-        ],
-        "rule": [
-            "SELECT * FROM logs WHERE Image LIKE '%/split' ESCAPE '\\'"
-        ],
-        "filename": "proc_creation_macos_split_file_into_pieces.yml"
-    },
-    {
-        "title": "System Shutdown/Reboot",
-        "id": "40b1fbe2-18ea-4ee7-be47-0294285811de",
-        "description": "Adversaries may shutdown/reboot systems to interrupt access to, or aid in the destruction of, those systems.",
-        "author": "Igor Fits, Mikhail Larin, oscd.community",
-        "falsepositives": [
-            "Legitimate administrative activity"
-        ],
-        "level": "informational",
-        "tags": [
-            "attack.impact",
-            "attack.t1529"
-        ],
-        "rule": [
-            "SELECT * FROM logs WHERE (Image LIKE '%/shutdown' ESCAPE '\\' OR Image LIKE '%/reboot' ESCAPE '\\' OR Image LIKE '%/halt' ESCAPE '\\')"
-        ],
-        "filename": "proc_creation_macos_system_shutdown_reboot.yml"
-    },
-    {
-        "title": "Binary Padding",
-        "id": "95361ce5-c891-4b0a-87ca-e24607884a96",
-        "description": "Adversaries may use binary padding to add junk data and change the on-disk representation of malware. This rule detect using dd and truncate to add a junk data to file.",
-        "author": "Igor Fits, Mikhail Larin, oscd.community",
-        "falsepositives": [
-            "Legitimate script work"
-        ],
-        "level": "high",
-        "tags": [
-            "attack.defense_evasion",
-            "attack.t1027.001"
-        ],
-        "rule": [
-            "SELECT * FROM logs WHERE (((Image LIKE '%/truncate' ESCAPE '\\') AND (CommandLine LIKE '%-s%' ESCAPE '\\')) OR (((Image LIKE '%/dd' ESCAPE '\\') AND (CommandLine LIKE '%if=%' ESCAPE '\\')) AND NOT (CommandLine LIKE '%of=%' ESCAPE '\\')))"
-        ],
-        "filename": "proc_creation_macos_binary_padding.yml"
-    },
-    {
-        "title": "Security Software Discovery",
-        "id": "0ed75b9c-c73b-424d-9e7d-496cd565fbe0",
-        "description": "Detects usage of system utilities (only grep for now) to discover security software discovery",
-        "author": "Daniil Yugoslavskiy, oscd.community",
-        "falsepositives": [
-            "Legitimate activities"
-        ],
-        "level": "medium",
-        "tags": [
-            "attack.discovery",
-            "attack.t1518.001"
-        ],
-        "rule": [
-            "SELECT * FROM logs WHERE (Image = '/usr/bin/grep' AND ((CommandLine LIKE '%nessusd%' ESCAPE '\\' OR CommandLine LIKE '%santad%' ESCAPE '\\' OR CommandLine LIKE '%CbDefense%' ESCAPE '\\' OR CommandLine LIKE '%falcond%' ESCAPE '\\' OR CommandLine LIKE '%td-agent%' ESCAPE '\\' OR CommandLine LIKE '%packetbeat%' ESCAPE '\\' OR CommandLine LIKE '%filebeat%' ESCAPE '\\' OR CommandLine LIKE '%auditbeat%' ESCAPE '\\' OR CommandLine LIKE '%osqueryd%' ESCAPE '\\' OR CommandLine LIKE '%BlockBlock%' ESCAPE '\\' OR CommandLine LIKE '%LuLu%' ESCAPE '\\') OR (CommandLine LIKE '%Little%' ESCAPE '\\' AND CommandLine LIKE '%Snitch%' ESCAPE '\\')))"
-        ],
-        "filename": "proc_creation_macos_security_software_discovery.yml"
-    },
-    {
-        "title": "Network Sniffing",
-        "id": "adc9bcc4-c39c-4f6b-a711-1884017bf043",
-        "description": "Detects the usage of tooling to sniff network traffic. An adversary may place a network interface into promiscuous mode to passively access data in transit over the network, or use span ports to capture a larger amount of data.",
-        "author": "Alejandro Ortuno, oscd.community",
-        "falsepositives": [
-            "Legitimate administration activities"
-        ],
-        "level": "informational",
-        "tags": [
-            "attack.discovery",
-            "attack.credential_access",
-            "attack.t1040"
-        ],
-        "rule": [
-            "SELECT * FROM logs WHERE (Image LIKE '%/tcpdump' ESCAPE '\\' OR Image LIKE '%/tshark' ESCAPE '\\')"
-        ],
-        "filename": "proc_creation_macos_network_sniffing.yml"
-    },
-    {
-        "title": "Space After Filename - macOS",
-        "id": "b6e2a2e3-2d30-43b1-a4ea-071e36595690",
-        "description": "Detects attempts to masquerade as legitimate files by adding a space to the end of the filename.",
-        "author": "remotephone",
-        "falsepositives": [
-            "Mistyped commands or legitimate binaries named to match the pattern"
-        ],
-        "level": "low",
-        "tags": [
-            "attack.defense_evasion",
-            "attack.t1036.006"
-        ],
-        "rule": [
-            "SELECT * FROM logs WHERE (CommandLine LIKE '% ' ESCAPE '\\' OR ImageName LIKE '% ' ESCAPE '\\')"
-        ],
-        "filename": "proc_creation_macos_space_after_filename.yml"
-    },
-    {
-        "title": "Macos Remote System Discovery",
-        "id": "10227522-8429-47e6-a301-f2b2d014e7ad",
-        "description": "Detects the enumeration of other remote systems.",
-        "author": "Alejandro Ortuno, oscd.community",
-        "falsepositives": [
-            "Legitimate administration activities"
-        ],
-        "level": "informational",
-        "tags": [
-            "attack.discovery",
-            "attack.t1018"
-        ],
-        "rule": [
-            "SELECT * FROM logs WHERE (((Image LIKE '%/arp' ESCAPE '\\') AND (CommandLine LIKE '%-a%' ESCAPE '\\')) OR ((Image LIKE '%/ping' ESCAPE '\\') AND (CommandLine LIKE '% 10.%' ESCAPE '\\' OR CommandLine LIKE '% 192.168.%' ESCAPE '\\' OR CommandLine LIKE '% 172.16.%' ESCAPE '\\' OR CommandLine LIKE '% 172.17.%' ESCAPE '\\' OR CommandLine LIKE '% 172.18.%' ESCAPE '\\' OR CommandLine LIKE '% 172.19.%' ESCAPE '\\' OR CommandLine LIKE '% 172.20.%' ESCAPE '\\' OR CommandLine LIKE '% 172.21.%' ESCAPE '\\' OR CommandLine LIKE '% 172.22.%' ESCAPE '\\' OR CommandLine LIKE '% 172.23.%' ESCAPE '\\' OR CommandLine LIKE '% 172.24.%' ESCAPE '\\' OR CommandLine LIKE '% 172.25.%' ESCAPE '\\' OR CommandLine LIKE '% 172.26.%' ESCAPE '\\' OR CommandLine LIKE '% 172.27.%' ESCAPE '\\' OR CommandLine LIKE '% 172.28.%' ESCAPE '\\' OR CommandLine LIKE '% 172.29.%' ESCAPE '\\' OR CommandLine LIKE '% 172.30.%' ESCAPE '\\' OR CommandLine LIKE '% 172.31.%' ESCAPE '\\' OR CommandLine LIKE '% 127.%' ESCAPE '\\' OR CommandLine LIKE '% 169.254.%' ESCAPE '\\')))"
-        ],
-        "filename": "proc_creation_macos_remote_system_discovery.yml"
-    },
-    {
-        "title": "Creation Of A Local User Account",
-        "id": "51719bf5-e4fd-4e44-8ba8-b830e7ac0731",
-        "description": "Detects the creation of a new user account. Such accounts may be used for persistence that do not require persistent remote access tools to be deployed on the system.",
-        "author": "Alejandro Ortuno, oscd.community",
-        "falsepositives": [
-            "Legitimate administration activities"
-        ],
-        "level": "low",
-        "tags": [
-            "attack.t1136.001",
-            "attack.persistence"
-        ],
-        "rule": [
-            "SELECT * FROM logs WHERE ((Image LIKE '%/dscl' ESCAPE '\\') AND (CommandLine LIKE '%create%' ESCAPE '\\'))"
-        ],
-        "filename": "proc_creation_macos_create_account.yml"
-    },
-    {
-        "title": "Suspicious History File Operations",
-        "id": "508a9374-ad52-4789-b568-fc358def2c65",
-        "description": "Detects commandline operations on shell history files",
-        "author": "Mikhail Larin, oscd.community",
-        "falsepositives": [
-            "Legitimate administrative activity",
-            "Ligitimate software, cleaning hist file"
-        ],
-        "level": "medium",
-        "tags": [
-            "attack.credential_access",
-            "attack.t1552.003"
-        ],
-        "rule": [
-            "SELECT * FROM logs WHERE (CommandLine LIKE '%.bash\\_history%' ESCAPE '\\' OR CommandLine LIKE '%.zsh\\_history%' ESCAPE '\\' OR CommandLine LIKE '%.zhistory%' ESCAPE '\\' OR CommandLine LIKE '%.history%' ESCAPE '\\' OR CommandLine LIKE '%.sh\\_history%' ESCAPE '\\' OR CommandLine LIKE '%fish\\_history%' ESCAPE '\\')"
-        ],
-        "filename": "proc_creation_macos_susp_histfile_operations.yml"
-    },
-    {
-        "title": "MacOS Network Service Scanning",
-        "id": "84bae5d4-b518-4ae0-b331-6d4afd34d00f",
-        "description": "Detects enumeration of local or remote network services.",
-        "author": "Alejandro Ortuno, oscd.community",
-        "falsepositives": [
-            "Legitimate administration activities"
-        ],
-        "level": "low",
-        "tags": [
-            "attack.discovery",
-            "attack.t1046"
-        ],
-        "rule": [
-            "SELECT * FROM logs WHERE (((Image LIKE '%/nc' ESCAPE '\\' OR Image LIKE '%/netcat' ESCAPE '\\') AND NOT (CommandLine LIKE '%l%' ESCAPE '\\')) OR (Image LIKE '%/nmap' ESCAPE '\\' OR Image LIKE '%/telnet' ESCAPE '\\'))"
-        ],
-        "filename": "proc_creation_macos_network_service_scanning.yml"
-    },
-    {
-        "title": "GUI Input Capture - macOS",
-        "id": "60f1ce20-484e-41bd-85f4-ac4afec2c541",
-        "description": "Detects attempts to use system dialog prompts to capture user credentials",
-        "author": "remotephone, oscd.community",
-        "falsepositives": [
-            "Legitimate administration tools and activities"
-        ],
-        "level": "low",
-        "tags": [
-            "attack.credential_access",
-            "attack.t1056.002"
-        ],
-        "rule": [
-            "SELECT * FROM logs WHERE ((Image LIKE '/usr/sbin/osascript' ESCAPE '\\') AND CommandLine LIKE '%-e%' ESCAPE '\\' AND CommandLine LIKE '%display%' ESCAPE '\\' AND CommandLine LIKE '%dialog%' ESCAPE '\\' AND CommandLine LIKE '%answer%' ESCAPE '\\' AND (CommandLine LIKE '%admin%' ESCAPE '\\' OR CommandLine LIKE '%administrator%' ESCAPE '\\' OR CommandLine LIKE '%authenticate%' ESCAPE '\\' OR CommandLine LIKE '%authentication%' ESCAPE '\\' OR CommandLine LIKE '%credentials%' ESCAPE '\\' OR CommandLine LIKE '%pass%' ESCAPE '\\' OR CommandLine LIKE '%password%' ESCAPE '\\' OR CommandLine LIKE '%unlock%' ESCAPE '\\'))"
-        ],
-        "filename": "proc_creation_macos_gui_input_capture.yml"
-    },
-    {
-        "title": "Disable Security Tools",
-        "id": "ff39f1a6-84ac-476f-a1af-37fcdf53d7c0",
-        "description": "Detects disabling security tools",
-        "author": "Daniil Yugoslavskiy, oscd.community",
-        "falsepositives": [
-            "Legitimate activities"
-        ],
-        "level": "medium",
-        "tags": [
-            "attack.defense_evasion",
-            "attack.t1562.001"
-        ],
-        "rule": [
-            "SELECT * FROM logs WHERE ((Image = '/bin/launchctl' AND CommandLine LIKE '%unload%' ESCAPE '\\' AND (CommandLine LIKE '%com.objective-see.lulu.plist%' ESCAPE '\\' OR CommandLine LIKE '%com.objective-see.blockblock.plist%' ESCAPE '\\' OR CommandLine LIKE '%com.google.santad.plist%' ESCAPE '\\' OR CommandLine LIKE '%com.carbonblack.defense.daemon.plist%' ESCAPE '\\' OR CommandLine LIKE '%com.carbonblack.daemon.plist%' ESCAPE '\\' OR CommandLine LIKE '%at.obdev.littlesnitchd.plist%' ESCAPE '\\' OR CommandLine LIKE '%com.tenablesecurity.nessusagent.plist%' ESCAPE '\\' OR CommandLine LIKE '%com.opendns.osx.RoamingClientConfigUpdater.plist%' ESCAPE '\\' OR CommandLine LIKE '%com.crowdstrike.falcond.plist%' ESCAPE '\\' OR CommandLine LIKE '%com.crowdstrike.userdaemon.plist%' ESCAPE '\\' OR CommandLine LIKE '%osquery%' ESCAPE '\\' OR CommandLine LIKE '%filebeat%' ESCAPE '\\' OR CommandLine LIKE '%auditbeat%' ESCAPE '\\' OR CommandLine LIKE '%packetbeat%' ESCAPE '\\' OR CommandLine LIKE '%td-agent%' ESCAPE '\\')) OR (Image = '/usr/sbin/spctl' AND CommandLine LIKE '%disable%' ESCAPE '\\'))"
-        ],
-        "filename": "proc_creation_macos_disable_security_tools.yml"
-    },
-    {
-        "title": "Credentials from Password Stores - Keychain",
-        "id": "b120b587-a4c2-4b94-875d-99c9807d6955",
-        "description": "Detects passwords dumps from Keychain",
-        "author": "Tim Ismilyaev, oscd.community, Florian Roth",
-        "falsepositives": [
-            "Legitimate administration activities"
-        ],
-        "level": "medium",
-        "tags": [
-            "attack.credential_access",
-            "attack.t1555.001"
-        ],
-        "rule": [
-            "SELECT * FROM logs WHERE ((Image = '/usr/bin/security' AND (CommandLine LIKE '%find-certificate%' ESCAPE '\\' OR CommandLine LIKE '% export %' ESCAPE '\\')) OR (CommandLine LIKE '% dump-keychain %' ESCAPE '\\' OR CommandLine LIKE '% login-keychain %' ESCAPE '\\'))"
-        ],
-        "filename": "proc_creation_macos_creds_from_keychain.yml"
-    },
-    {
-        "title": "Screen Capture - macOS",
-        "id": "0877ed01-da46-4c49-8476-d49cdd80dfa7",
-        "description": "Detects attempts to use screencapture to collect macOS screenshots",
-        "author": "remotephone, oscd.community",
-        "falsepositives": [
-            "Legitimate user activity taking screenshots"
-        ],
-        "level": "low",
-        "tags": [
-            "attack.collection",
-            "attack.t1113"
-        ],
-        "rule": [
-            "SELECT * FROM logs WHERE Image = '/usr/sbin/screencapture'"
-        ],
-        "filename": "proc_creation_macos_screencapture.yml"
-    },
-    {
-        "title": "File and Directory Discovery",
-        "id": "089dbdf6-b960-4bcc-90e3-ffc3480c20f6",
-        "description": "Detects usage of system utilities to discover files and directories",
-        "author": "Daniil Yugoslavskiy, oscd.community",
-        "falsepositives": [
-            "Legitimate activities"
-        ],
-        "level": "informational",
-        "tags": [
-            "attack.discovery",
-            "attack.t1083"
-        ],
-        "rule": [
-            "SELECT * FROM logs WHERE ((Image = '/usr/bin/file' AND CommandLine REGEXP '(.){200,}') OR (Image = '/bin/ls' AND CommandLine LIKE '%-R%' ESCAPE '\\') OR Image = '/usr/bin/find' OR Image = '/usr/bin/mdfind' OR Image = '/tree')"
-        ],
-        "filename": "proc_creation_macos_file_and_directory_discovery.yml"
-    },
-    {
-        "title": "Scheduled Cron Task/Job",
-        "id": "7c3b43d8-d794-47d2-800a-d277715aa460",
-        "description": "Detects abuse of the cron utility to perform task scheduling for initial or recurring execution of malicious code. Detection will focus on crontab jobs uploaded from the tmp folder.",
-        "author": "Alejandro Ortuno, oscd.community",
-        "falsepositives": [
-            "Legitimate administration activities"
-        ],
-        "level": "medium",
-        "tags": [
-            "attack.execution",
-            "attack.persistence",
-            "attack.privilege_escalation",
-            "attack.t1053.003"
-        ],
-        "rule": [
-            "SELECT * FROM logs WHERE ((Image LIKE '%/crontab' ESCAPE '\\') AND (CommandLine LIKE '%/tmp/%' ESCAPE '\\'))"
-        ],
-        "filename": "proc_creation_macos_schedule_task_job_cron.yml"
-    },
-    {
         "title": "Failed Logins with Different Accounts from Single Source System",
         "id": "fc947f8e-ea81-4b14-9a7b-13f888f94e18",
         "description": "Detects suspicious failed logins with different user accounts from a single source system",
@@ -753,7 +208,7 @@
             "attack.t1027.003"
         ],
         "falsepositives": [
-            "None"
+            "Unknown"
         ],
         "level": "low",
         "rule": [
@@ -771,7 +226,7 @@
             "attack.t1123"
         ],
         "falsepositives": [
-            "None"
+            "Unknown"
         ],
         "level": "low",
         "rule": [
@@ -807,7 +262,7 @@
             "attack.t1068"
         ],
         "falsepositives": [
-            "unknown"
+            "Unknown"
         ],
         "level": "high",
         "rule": [
@@ -978,7 +433,7 @@
             "attack.t1059.004"
         ],
         "rule": [
-            "SELECT * FROM logs WHERE (type = 'EXECVE' AND ((a0 = 'chmod' AND a1 = '777') OR (a0 = 'chmod' AND a1 = 'u+s') OR (a0 = 'cp' AND a1 = '/bin/ksh') OR (a0 = 'cp' AND a1 = '/bin/sh')))"
+            "SELECT * FROM logs WHERE ((type = 'EXECVE' AND a0 = 'chmod' AND a1 = '777') OR (type = 'EXECVE' AND a0 = 'chmod' AND a1 = 'u+s') OR (type = 'EXECVE' AND a0 = 'cp' AND a1 = '/bin/ksh') OR (type = 'EXECVE' AND a0 = 'cp' AND a1 = '/bin/sh'))"
         ],
         "filename": "lnx_auditd_susp_cmds.yml"
     },
@@ -1066,7 +521,7 @@
             "attack.t1027.003"
         ],
         "falsepositives": [
-            "None"
+            "Unknown"
         ],
         "level": "low",
         "rule": [
@@ -1086,7 +541,7 @@
             "attack.t1548"
         ],
         "falsepositives": [
-            "None"
+            "Unknown"
         ],
         "level": "low",
         "rule": [
@@ -1254,7 +709,7 @@
             "attack.t1560.001"
         ],
         "rule": [
-            "SELECT * FROM logs WHERE (type = 'execve' AND (a0 = 'zip' OR (a0 = 'gzip' AND a1 = '-f') OR (a0 = 'tar' AND a1 LIKE '%-c%' ESCAPE '\\')))"
+            "SELECT * FROM logs WHERE ((type = 'execve' AND a0 = 'zip') OR (type = 'execve' AND a0 = 'gzip' AND a1 = '-f') OR (type = 'execve' AND a0 = 'tar' AND a1 LIKE '%-c%' ESCAPE '\\'))"
         ],
         "filename": "lnx_data_compressed.yml"
     },
@@ -1268,7 +723,7 @@
             "attack.t1048.003"
         ],
         "falsepositives": [
-            "legitimate usage of wget utility to post a file"
+            "Legitimate usage of wget utility to post a file"
         ],
         "level": "medium",
         "rule": [
@@ -1286,7 +741,7 @@
             "attack.t1027.003"
         ],
         "falsepositives": [
-            "None"
+            "Unknown"
         ],
         "level": "low",
         "rule": [
@@ -1304,7 +759,7 @@
             "attack.t1027.003"
         ],
         "falsepositives": [
-            "None"
+            "Unknown"
         ],
         "level": "low",
         "rule": [
@@ -1327,7 +782,7 @@
             "attack.t1040"
         ],
         "rule": [
-            "SELECT * FROM logs WHERE (type = 'execve' AND a1 = '-c' AND ((a0 = 'tcpdump' AND a3 LIKE '%-i%' ESCAPE '\\') OR (a0 = 'tshark' AND a3 = '-i')))"
+            "SELECT * FROM logs WHERE ((type = 'execve' AND a0 = 'tcpdump' AND a1 = '-c' AND a3 LIKE '%-i%' ESCAPE '\\') OR (type = 'execve' AND a0 = 'tshark' AND a1 = '-c' AND a3 = '-i'))"
         ],
         "filename": "lnx_network_sniffing.yml"
     },
@@ -1359,7 +814,7 @@
             "attack.t1564.001"
         ],
         "falsepositives": [
-            "None"
+            "Unknown"
         ],
         "level": "low",
         "rule": [
@@ -1616,7 +1071,7 @@
         ],
         "level": "critical",
         "rule": [
-            "SELECT * FROM logs WHERE ((Image LIKE '%/whoami' ESCAPE '\\' OR Image LIKE '%/ifconfig' ESCAPE '\\' OR Image LIKE '%/usr/bin/ip' ESCAPE '\\' OR Image LIKE '%/bin/uname' ESCAPE '\\') AND ((ParentImage LIKE '%/httpd' ESCAPE '\\' OR ParentImage LIKE '%/lighttpd' ESCAPE '\\' OR ParentImage LIKE '%/nginx' ESCAPE '\\' OR ParentImage LIKE '%/apache2' ESCAPE '\\' OR ParentImage LIKE '%/node' ESCAPE '\\') OR (ParentCommandLine LIKE '%/bin/java%' ESCAPE '\\' AND ParentCommandLine LIKE '%tomcat%' ESCAPE '\\')))"
+            "SELECT * FROM logs WHERE ((Image LIKE '%/whoami' ESCAPE '\\' OR Image LIKE '%/ifconfig' ESCAPE '\\' OR Image LIKE '%/usr/bin/ip' ESCAPE '\\' OR Image LIKE '%/bin/uname' ESCAPE '\\') AND ((ParentImage LIKE '%/httpd' ESCAPE '\\' OR ParentImage LIKE '%/lighttpd' ESCAPE '\\' OR ParentImage LIKE '%/nginx' ESCAPE '\\' OR ParentImage LIKE '%/apache2' ESCAPE '\\' OR ParentImage LIKE '%/node' ESCAPE '\\' OR ParentImage LIKE '%/caddy' ESCAPE '\\') OR (ParentCommandLine LIKE '%/bin/java%' ESCAPE '\\' AND ParentCommandLine LIKE '%tomcat%' ESCAPE '\\')))"
         ],
         "filename": "proc_creation_lnx_webshell_detection.yml"
     },
@@ -1733,6 +1188,24 @@
             "SELECT * FROM logs WHERE ((Image LIKE '%/lastlog' ESCAPE '\\') OR (CommandLine LIKE '%''x:0:''%' ESCAPE '\\') OR ((Image LIKE '%/cat' ESCAPE '\\') AND (CommandLine LIKE '%/etc/passwd%' ESCAPE '\\' OR CommandLine LIKE '%/etc/sudoers%' ESCAPE '\\')) OR (Image LIKE '%/id' ESCAPE '\\') OR ((Image LIKE '%/lsof' ESCAPE '\\') AND (CommandLine LIKE '%-u%' ESCAPE '\\')))"
         ],
         "filename": "proc_creation_lnx_local_account.yml"
+    },
+    {
+        "title": "Linux Shell Pipe to Shell",
+        "id": "880973f3-9708-491c-a77b-2a35a1921158",
+        "description": "Detects suspicious process command line that starts with a shell that executes something and finally gets piped into another shell",
+        "author": "Florian Roth",
+        "tags": [
+            "attack.defense_evasion",
+            "attack.t1140"
+        ],
+        "falsepositives": [
+            "Legitimate software that uses these patterns"
+        ],
+        "level": "medium",
+        "rule": [
+            "SELECT * FROM logs WHERE ((CommandLine LIKE 'sh -c %' ESCAPE '\\' OR CommandLine LIKE 'bash -c %' ESCAPE '\\') AND (CommandLine LIKE '%| bash' ESCAPE '\\' OR CommandLine LIKE '%|bash' ESCAPE '\\' OR CommandLine LIKE '%| sh' ESCAPE '\\' OR CommandLine LIKE '%|sh' ESCAPE '\\'))"
+        ],
+        "filename": "proc_creation_lnx_susp_pipe_shell.yml"
     },
     {
         "title": "Linux Crypto Mining Indicators",
@@ -1861,6 +1334,20 @@
         "filename": "proc_creation_lnx_network_service_scanning.yml"
     },
     {
+        "title": "Interactive Bash Suspicious Children",
+        "id": "ea3ecad2-db86-4a89-ad0b-132a10d2db55",
+        "description": "Detects suspicious interactive bash as a parent to rather uncommon child processes",
+        "author": "Florian Roth",
+        "falsepositives": [
+            "Legitimate software that uses these patterns"
+        ],
+        "level": "medium",
+        "rule": [
+            "SELECT * FROM logs WHERE (ParentCommandLine = 'bash -i' AND ((CommandLine LIKE '%-c import %' ESCAPE '\\' OR CommandLine LIKE '%base64%' ESCAPE '\\' OR CommandLine LIKE '%pty.spawn%' ESCAPE '\\') OR (Image LIKE '%whoami' ESCAPE '\\' OR Image LIKE '%iptables' ESCAPE '\\' OR Image LIKE '%/ncat' ESCAPE '\\' OR Image LIKE '%/nc' ESCAPE '\\' OR Image LIKE '%/netcat' ESCAPE '\\')))"
+        ],
+        "filename": "proc_creation_lnx_susp_interactive_bash.yml"
+    },
+    {
         "title": "Shellshock Expression",
         "id": "c67e0c98-4d39-46ee-8f6b-437ebf6b950e",
         "description": "Detects shellshock expressions in log files",
@@ -1922,7 +1409,7 @@
         "description": "Detects the ld.so preload persistence file. See `man ld.so` for more information.",
         "author": "Christian Burkard",
         "falsepositives": [
-            "rare temporary workaround for library misconfiguration"
+            "Rare temporary workaround for library misconfiguration"
         ],
         "level": "high",
         "tags": [
