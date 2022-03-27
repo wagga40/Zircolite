@@ -2,12 +2,20 @@
 
 ## Default rulesets
 
-These rulesets have been generated with `genRules.py` wich is available in the folder `tools` of the Zircolite repository.
+These rulesets have been generated with `sigmac` wich is available in the [official sigma repository](https://github.com/SigmaHQ/sigma).
 
 :warning: **These rulesets are given "as is" to help new analysts to discover SIGMA and Zircolite. They are not filtered for slow rules, rules with a lot of false positives etc. If you know what you do, you SHOULD generate your own rulesets.**
 
-- `rules_windows_generic.json` : Full SIGMA "**Windows**" ruleset (no SYSMON rewriting)
-- `rules_windows_sysmon.json` : Full SIGMA "**Windows**" ruleset (SYSMON)
+- `rules_windows_generic_full.json` : Full SIGMA ruleset from the "**Windows**" directory of the official repository (no SYSMON rewriting)
+- `rules_windows_generic_high.json` : Only level high and above SIGMA rules from the "**Windows**" directory of the official repository (no SYSMON rewriting)
+- `rules_windows_generic_medium.json` : Only level medium and above SIGMA rules from the "**Windows**" directory of the official repository (no SYSMON rewriting)
+- `rules_windows_generic.json` : Same file as `rules_windows_generic_high.json`
+- `rules_windows_sysmon.json` : Full SIGMA ruleset from the "**Windows**" directory of the official repository  (SYSMON)
+- `rules_windows_sysmon_high.json` : Only level high and above SIGMA rules from the "**Windows**" directory of the official repository (SYSMON)
+- `rules_windows_sysmon_medium.json` : Only level medium and above SIGMA rules from the "**Windows**" directory of the official repository (SYSMON)
+- `rules_windows_sysmon.json` : Same file as `rules_windows_sysmon_high.json`
+- `rules_linux.json`: Full SIGMA ruleset from the "**linux**" directory of the official repository. This ruleset can be used with Auditd and Sysmon for Linux logs.
+
 
 ## Why you should make your own rulesets
 
@@ -15,6 +23,8 @@ The default rulesets provided are the conversion of the rules located in `rules/
 
 - **Some rules are very noisy or produce a lot of false positives** depending on your environnement or the config file you used with genRules
 - **Some rules can be very slow** depending on your logs
+
+To generate you own ruleset please check the docs [here](https://github.com/wagga40/Zircolite/tree/master/docs).
 
 For example : 
 
