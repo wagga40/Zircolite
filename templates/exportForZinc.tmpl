@@ -1,0 +1,3 @@
+{% for elem in data %}{% for match in elem["matches"] %}{ "index" : { "_index" : "zircolite" } } 
+{"title":{{ elem["title"]|tojson }},"id":{{ elem["id"]|tojson }},"description":{{ elem["description"]|tojson }},{% for key, value in match.items() %}"{{ key }}":{{ value|tojson }}{{ "," if not loop.last }}{% endfor %}}
+{% endfor %}{% endfor %}
