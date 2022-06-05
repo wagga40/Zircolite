@@ -4,15 +4,13 @@
 ![](pics/Zircolite.svg)
 
 [![python](https://img.shields.io/badge/python-3.8-blue)](https://www.python.org/)
-![version](https://img.shields.io/badge/Platform-Win-green)
-![version](https://img.shields.io/badge/Platform-Lin-green)
-![version](https://img.shields.io/badge/Platform-Mac-green)
 ![version](https://img.shields.io/badge/Architecture-64bit-red)
 
 **Zircolite is a standalone tool written in Python 3. It allows to use SIGMA rules on MS Windows EVTX (EVTX and JSONL format), Auditd logs and Sysmon for Linux logs**
 
 - **Zircolite** can be used directly on the investigated endpoint (use [releases](https://github.com/wagga40/Zircolite/releases)) or in your forensic/detection lab
-- **Zircolite** is fast and can parse large datasets in just seconds (check [benchmarks](docs/Internals.md#benchmarks))
+- **Zircolite** is relatively fast and can parse large datasets in just seconds (check [benchmarks](docs/Internals.md#benchmarks))
+- **Zircolite** is based on a Sigma backend (SQLite) and do not use internal sigma to something conversion 
 
 **Zircolite can be used directly in Python or you can use the binaries provided in [releases](https://github.com/wagga40/Zircolite/releases) (Microsoft Windows and Linux  only).** 
 **Documentation is [here](docs).**
@@ -30,7 +28,7 @@ The use of [evtx_dump](https://github.com/omerbenamram/evtx) is **optional but r
 Help is available with `zircolite.py -h`. If your EVTX files have the extension ".evtx" :
 
 ```shell
-python3 zircolite.py --evtx <EVTX_FOLDER/EVTX_FILE> --ruleset <Converted Sigma rules>
+# python3 zircolite.py --evtx <EVTX FOLDER or EVTX FILE> --ruleset <SIGMA RULES JSON FILE>
 python3 zircolite.py --evtx sysmon.evtx --ruleset rules/rules_windows_sysmon.json
 ```
 The SYSMON ruleset used here is a default one and it is for logs coming from endpoints where SYSMON installed. A generic ruleset is available too.
@@ -38,21 +36,19 @@ The SYSMON ruleset used here is a default one and it is for logs coming from end
 #### Auditd logs : 
 
 ```shell
-python3 zircolite.py --evtx <EVTX_FOLDER/EVTX_FILE> --ruleset <Converted Sigma rules> --auditd
-python3 zircolite.py --evtx auditd.log --ruleset rules/rules_linux.json --auditd
+python3 zircolite.py --events auditd.log --ruleset rules/rules_linux.json --auditd
 ```
 
 #### Sysmon for Linux logs : 
 
 ```shell
-python3 zircolite.py --evtx <EVTX_FOLDER/EVTX_FILE> --ruleset <Converted Sigma rules> --sysmon4linux
-python3 zircolite.py --evtx auditd.log --ruleset rules/rules_linux.json --sysmon4linux
+python3 zircolite.py --events sysmon.log --ruleset rules/rules_linux.json --sysmon4linux
 ```
 
 #### JSONL/NDJSON files : 
 
 ```shell
-python3 zircolite.py --evtx <JSON_FOLDER/JSON_FILE> --ruleset rules/rules_windows_sysmon.json --jsononly
+python3 zircolite.py --evtx <JSON_FOLDER or JSON_FILE> --ruleset rules/rules_windows_sysmon.json --jsononly
 ```
 
 :information_source: If you want to try the tool you can test with these samples : 

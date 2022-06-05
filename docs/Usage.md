@@ -46,20 +46,39 @@ It also works directly on an unique EVTX file.
 
 By default : 
 
+- `--ruleset` is not mandatory but the default ruleset will be `rules/rules_windows_generic.json`
 - Results are written in the `detected_events.json` in the same directory as Zircolite
 - There is a `zircolite.log`file that will be created in the current working directory
+
+#### Auditd logs : 
+
+```shell
+python3 zircolite.py --events auditd.log --ruleset rules/rules_linux.json --auditd
+```
+
+:information_source: `--events` and `--evtx` are stricly equivalent but `--events` is more logical to use for non EVTX logs.
+
+#### Sysmon for Linux logs : 
+
+Sysmon for linux has been released in October 2021. It outputs XML in text format with one event per-line. As of version 2.6.0, **Zircolite** has an *initial* support of Sysmon for Linux log files. To test it, just add `-S` to you command line : 
+
+```shell
+python3 zircolite.py --events sysmon.log --ruleset rules/rules_linux.json --sysmon4linux
+```
+
+:information_source: Since the logs come from Linux, the default file extension when using `-S` case is `.log`
 
 #### JSONL/NDJSON
 
 It is possible to use Zircolite directly on JSONL/NDJSON files (NXLog files) with the `--jsononly` or `-j` arguments : 
 
 ```shell
-python3 zircolite.py --evtx <EVTX_FOLDER> --ruleset <CONVERTED_SIGMA_RULES> --jsononly
+python3 zircolite.py --events <EVTX_FOLDER> --ruleset <CONVERTED_SIGMA_RULES> --jsononly
 ```
 
 A simple use case is when you have already run Zircolite and use the `--keeptmp` option. Since it keeps all the converted EVTX in a temp directory, if you need to re-execute Zircolite, you can do it directly using this directory as the EVTX source (with `--evtx <EVTX_IN_JSON_DIRECTORY>` and `--jsononly`) and avoid to convert the EVTX again.
 
-:information_source: If you you can change the file extension with `--fileext`.
+:information_source: You can change the file extension with `--fileext`.
 
 #### SQLite database files
 
@@ -69,17 +88,7 @@ Since everything in Zircolite is stored in a in-memory SQlite database, you can 
 python3 zircolite.py --evtx <EVTX_FOLDER> --ruleset <CONVERTED_SIGMA_RULES> --dbfile output.db
 ```
 
-If you need to re-execute Zircolite,  you can do it directly using the SQLite database as the EVTX source (with `--evtx <SAVED_SQLITE_DB_PATH>` and `--dbonly`) and avoid to convert the EVTX, post-process the EVTX and insert data to database. **Using this technique can save a lot of time...** 
-
-#### Sysmon for Linux XML log files
-
-Sysmon for linux has been released in October 2021. It outputs XML in text format with one event per-line. As of version 2.6.0, **Zircolite** has an *initial* support of Sysmon for Linux log files. To test it, just add `-S` to you command line : 
-
-```shell
-python3 zircolite.py --evtx <EVTX_FOLDER> --ruleset <CONVERTED_SIGMA_RULES> -S
-```
-
-:information_source: Since the logs come from Linux, the default file extension when using `-S` case is `.log`
+If you need to re-execute Zircolite,  you can do it directly using the SQLite database as the EVTX source (with `--evtx <SAVED_SQLITE_DB_PATH>` and `--dbonly`) and avoid to convert the EVTX, post-process the EVTX and insert data to database. **Using this technique can save a lot of time... But you will be unable to use the `--forwardall`option** 
 
 ---
 
@@ -89,15 +98,13 @@ Default rulesets are already provided in the `rules` directory. These rulesets o
 
 #### With sigmatools
 
-Zircolite use the SIGMA rules in JSON format. To generate your ruleset you need the official sigmatools (version 0.20 minimum) : 
+Zircolite use the SIGMA rules in JSON format. To generate your ruleset you need the official sigmatools (**version 0.21 minimum**) : 
 
 ```shell 
 git clone https://github.com/SigmaHQ/sigma.git
 cd sigma
 ```
 **You must have the sigma dependencies installed, check [here](https://github.com/SigmaHQ/sigma#installation) :**
-
-[DEPRECATED] The pip version of sigmatools works but the backend has been updated since
 
 ##### Sysmon rulesets (when investigated endpoints have Sysmon logs)
 
@@ -140,7 +147,7 @@ tools/sigmac \
 
 #### On the fly rules conversion
 
-Since Zircolite 2.2.0, if you have sigmatools >= 0.20, Zircolite is able to convert the rules on-the-fly if you provide a SIGMA config file and the `sigmac` path. It is very convenient for testing but you should avoid it since this is slower : 
+Since Zircolite 2.2.0, if you have sigmatools >= 0.21, Zircolite is able to convert the rules on-the-fly if you provide a SIGMA config file and the `sigmac` path. It is very convenient for testing but you should avoid it since this is slower : 
 
 ```shell
 python3 zircolite.py --evtx ../Samples/EVTX-ATTACK-SAMPLES/ \

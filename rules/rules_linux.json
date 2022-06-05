@@ -230,7 +230,7 @@
         ],
         "level": "low",
         "rule": [
-            "SELECT * FROM logs WHERE (type = 'EXECVE' AND (a0 LIKE 'arecord' ESCAPE '\\') AND (a1 LIKE '-vv' ESCAPE '\\') AND (a2 LIKE '-fdat' ESCAPE '\\'))"
+            "SELECT * FROM logs WHERE (type = 'EXECVE' AND a0 = 'arecord' AND a1 = '-vv' AND a2 = '-fdat')"
         ],
         "filename": "lnx_auditd_audio_capture.yml"
     },
@@ -397,7 +397,7 @@
             "attack.t1543.002"
         ],
         "rule": [
-            "SELECT * FROM logs WHERE ((type = 'PATH' AND nametype = 'CREATE') AND ((name LIKE '/usr/lib/systemd/system/%' ESCAPE '\\' OR name LIKE '/etc/systemd/system/%' ESCAPE '\\') OR (name LIKE '%/.config/systemd/user/%' ESCAPE '\\')))"
+            "SELECT * FROM logs WHERE ((type = 'PATH' AND nametype = 'CREATE') AND ((name LIKE '/usr/lib/systemd/system/%' ESCAPE '\\' OR name LIKE '/etc/systemd/system/%' ESCAPE '\\') OR name LIKE '%/.config/systemd/user/%' ESCAPE '\\'))"
         ],
         "filename": "lnx_auditd_systemd_service_creation.yml"
     },
@@ -580,7 +580,7 @@
             "attack.command_and_control"
         ],
         "rule": [
-            "SELECT * FROM logs WHERE (key LIKE 'susp\\_activity' ESCAPE '\\')"
+            "SELECT * FROM logs WHERE key LIKE 'susp\\_activity' ESCAPE '\\'"
         ],
         "filename": "lnx_auditd_susp_c2_commands.yml"
     },
@@ -763,7 +763,7 @@
         ],
         "level": "low",
         "rule": [
-            "SELECT * FROM logs WHERE (type = 'EXECVE' AND (a0 LIKE 'unzip' ESCAPE '\\') AND (a1 LIKE '%.jpg' ESCAPE '\\' OR a1 LIKE '%.png' ESCAPE '\\'))"
+            "SELECT * FROM logs WHERE (type = 'EXECVE' AND a0 = 'unzip' AND (a1 LIKE '%.jpg' ESCAPE '\\' OR a1 LIKE '%.png' ESCAPE '\\'))"
         ],
         "filename": "lnx_auditd_unzip_hidden_zip_files_steganography.yml"
     },
@@ -842,6 +842,25 @@
         "filename": "lnx_auditd_cve_2021_3156_sudo_buffer_overflow.yml"
     },
     {
+        "title": "Linux Keylogging with Pam.d",
+        "id": "49aae26c-450e-448b-911d-b3c13d178dfc",
+        "description": "Detect attempt to enable auditing of TTY input",
+        "author": "Pawel Mazur",
+        "tags": [
+            "attack.credential_access",
+            "attack.t1003",
+            "attack.t1056.001"
+        ],
+        "falsepositives": [
+            "Administrative work"
+        ],
+        "level": "high",
+        "rule": [
+            "SELECT * FROM logs WHERE ((type = 'PATH' AND name IN ('/etc/pam.d/system-auth', '/etc/pam.d/password-auth')) OR (type LIKE 'TTY' ESCAPE '\\' OR type LIKE 'USER\\_TTY' ESCAPE '\\'))"
+        ],
+        "filename": "lnx_auditd_keylogging_with_pam_d.yml"
+    },
+    {
         "title": "BPFtrace Unsafe Option Usage",
         "id": "f8341cb2-ee25-43fa-a975-d8a5a9714b39",
         "description": "Detects the usage of the unsafe bpftrace option",
@@ -855,7 +874,7 @@
         ],
         "level": "medium",
         "rule": [
-            "SELECT * FROM logs WHERE ((Image LIKE '%bpftrace' ESCAPE '\\') AND (CommandLine LIKE '%--unsafe%' ESCAPE '\\'))"
+            "SELECT * FROM logs WHERE (Image LIKE '%bpftrace' ESCAPE '\\' AND CommandLine LIKE '%--unsafe%' ESCAPE '\\')"
         ],
         "filename": "proc_creation_lnx_bpftrace_unsafe_option_usage.yml"
     },
@@ -870,12 +889,30 @@
         "level": "low",
         "tags": [
             "attack.persistence",
-            "attack.t1053.001"
+            "attack.t1053.002"
         ],
         "rule": [
             "SELECT * FROM logs WHERE (Image LIKE '%/at' ESCAPE '\\' OR Image LIKE '%/atd' ESCAPE '\\')"
         ],
         "filename": "proc_creation_lnx_at_command.yml"
+    },
+    {
+        "title": "Suspicious Java Children Processes",
+        "id": "d292e0af-9a18-420c-9525-ec0ac3936892",
+        "description": "Detects java process spawning suspicious children",
+        "author": "Nasreddine Bencherchali",
+        "tags": [
+            "attack.execution",
+            "attack.t1059"
+        ],
+        "falsepositives": [
+            "Unknown"
+        ],
+        "level": "high",
+        "rule": [
+            "SELECT * FROM logs WHERE (ParentImage LIKE '%/java' ESCAPE '\\' AND (CommandLine LIKE '%/bin/sh%' ESCAPE '\\' OR CommandLine LIKE '%bash%' ESCAPE '\\' OR CommandLine LIKE '%dash%' ESCAPE '\\' OR CommandLine LIKE '%ksh%' ESCAPE '\\' OR CommandLine LIKE '%zsh%' ESCAPE '\\' OR CommandLine LIKE '%csh%' ESCAPE '\\' OR CommandLine LIKE '%fish%' ESCAPE '\\' OR CommandLine LIKE '%curl%' ESCAPE '\\' OR CommandLine LIKE '%wget%' ESCAPE '\\' OR CommandLine LIKE '%python%' ESCAPE '\\'))"
+        ],
+        "filename": "proc_creation_lnx_susp_java_children.yml"
     },
     {
         "title": "Disabling Security Tools",
@@ -909,7 +946,7 @@
             "attack.t1069.001"
         ],
         "rule": [
-            "SELECT * FROM logs WHERE ((Image LIKE '%/groups' ESCAPE '\\') OR ((Image LIKE '%/cat' ESCAPE '\\') AND (CommandLine LIKE '%/etc/group%' ESCAPE '\\')))"
+            "SELECT * FROM logs WHERE (Image LIKE '%/groups' ESCAPE '\\' OR (Image LIKE '%/cat' ESCAPE '\\' AND CommandLine LIKE '%/etc/group%' ESCAPE '\\'))"
         ],
         "filename": "proc_creation_lnx_local_groups.yml"
     },
@@ -930,6 +967,27 @@
             "SELECT * FROM logs WHERE (Image LIKE '%/who' ESCAPE '\\' OR Image LIKE '%/w' ESCAPE '\\' OR Image LIKE '%/last' ESCAPE '\\' OR Image LIKE '%/lsof' ESCAPE '\\' OR Image LIKE '%/netstat' ESCAPE '\\')"
         ],
         "filename": "proc_creation_lnx_system_network_connections_discovery.yml"
+    },
+    {
+        "title": "Atlassian Confluence CVE-2022-26134",
+        "id": "7fb14105-530e-4e2e-8cfb-99f7d8700b66",
+        "description": "Detects spawning of suspicious child processes by Atlassian Confluence server which may indicate successful exploitation of CVE-2022-26134",
+        "author": "Nasreddine Bencherchali",
+        "tags": [
+            "attack.initial_access",
+            "attack.execution",
+            "attack.t1190",
+            "attack.t1059",
+            "cve.2022.26134"
+        ],
+        "falsepositives": [
+            "Unknown"
+        ],
+        "level": "critical",
+        "rule": [
+            "SELECT * FROM logs WHERE (ParentImage LIKE '/opt/atlassian/confluence/%' ESCAPE '\\' AND ParentImage LIKE '%/java' ESCAPE '\\' AND (CommandLine LIKE '%/bin/sh%' ESCAPE '\\' OR CommandLine LIKE '%bash%' ESCAPE '\\' OR CommandLine LIKE '%dash%' ESCAPE '\\' OR CommandLine LIKE '%ksh%' ESCAPE '\\' OR CommandLine LIKE '%zsh%' ESCAPE '\\' OR CommandLine LIKE '%csh%' ESCAPE '\\' OR CommandLine LIKE '%fish%' ESCAPE '\\' OR CommandLine LIKE '%curl%' ESCAPE '\\' OR CommandLine LIKE '%wget%' ESCAPE '\\' OR CommandLine LIKE '%python%' ESCAPE '\\'))"
+        ],
+        "filename": "proc_creation_lnx_atlassian_confluence_cve_2022_26134.yml"
     },
     {
         "title": "Linux Doas Tool Execution",
@@ -984,6 +1042,24 @@
             "SELECT * FROM logs WHERE ((Image LIKE '%/file' ESCAPE '\\' AND CommandLine REGEXP '(.){200,}') OR (Image LIKE '%/ls' ESCAPE '\\' AND CommandLine LIKE '%-R%' ESCAPE '\\') OR Image LIKE '%/find' ESCAPE '\\' OR Image LIKE '%/tree' ESCAPE '\\')"
         ],
         "filename": "proc_creation_lnx_file_and_directory_discovery.yml"
+    },
+    {
+        "title": "Python Spawning Pretty TTY",
+        "id": "c4042d54-110d-45dd-a0e1-05c47822c937",
+        "description": "Detects python spawning a pretty tty",
+        "author": "Nextron Systems",
+        "tags": [
+            "attack.execution",
+            "attack.t1059"
+        ],
+        "falsepositives": [
+            "Unknown"
+        ],
+        "level": "high",
+        "rule": [
+            "SELECT * FROM logs WHERE ((Image LIKE '%/python2.%' ESCAPE '\\' OR Image LIKE '%/python3.%' ESCAPE '\\') AND ((CommandLine LIKE '%import pty%' ESCAPE '\\' AND CommandLine LIKE '%.spawn(%' ESCAPE '\\') OR CommandLine LIKE '%from pty import spawn%' ESCAPE '\\'))"
+        ],
+        "filename": "proc_creation_lnx_python_pty_spawn.yml"
     },
     {
         "title": "Commands to Clear or Remove the Syslog",
@@ -1069,9 +1145,9 @@
         "falsepositives": [
             "Web applications that invoke Linux command line tools"
         ],
-        "level": "critical",
+        "level": "high",
         "rule": [
-            "SELECT * FROM logs WHERE ((Image LIKE '%/whoami' ESCAPE '\\' OR Image LIKE '%/ifconfig' ESCAPE '\\' OR Image LIKE '%/usr/bin/ip' ESCAPE '\\' OR Image LIKE '%/bin/uname' ESCAPE '\\') AND ((ParentImage LIKE '%/httpd' ESCAPE '\\' OR ParentImage LIKE '%/lighttpd' ESCAPE '\\' OR ParentImage LIKE '%/nginx' ESCAPE '\\' OR ParentImage LIKE '%/apache2' ESCAPE '\\' OR ParentImage LIKE '%/node' ESCAPE '\\' OR ParentImage LIKE '%/caddy' ESCAPE '\\') OR (ParentCommandLine LIKE '%/bin/java%' ESCAPE '\\' AND ParentCommandLine LIKE '%tomcat%' ESCAPE '\\')))"
+            "SELECT * FROM logs WHERE ((Image LIKE '%/whoami' ESCAPE '\\' OR Image LIKE '%/ifconfig' ESCAPE '\\' OR Image LIKE '%/usr/bin/ip' ESCAPE '\\' OR Image LIKE '%/bin/uname' ESCAPE '\\') AND (((ParentImage LIKE '%/httpd' ESCAPE '\\' OR ParentImage LIKE '%/lighttpd' ESCAPE '\\' OR ParentImage LIKE '%/nginx' ESCAPE '\\' OR ParentImage LIKE '%/apache2' ESCAPE '\\' OR ParentImage LIKE '%/node' ESCAPE '\\' OR ParentImage LIKE '%/caddy' ESCAPE '\\') OR (ParentCommandLine LIKE '%/bin/java%' ESCAPE '\\' AND ParentCommandLine LIKE '%tomcat%' ESCAPE '\\')) OR (ParentCommandLine LIKE '%/bin/java%' ESCAPE '\\' AND ParentCommandLine LIKE '%websphere%' ESCAPE '\\')))"
         ],
         "filename": "proc_creation_lnx_webshell_detection.yml"
     },
@@ -1113,7 +1189,7 @@
             "attack.t1053.003"
         ],
         "rule": [
-            "SELECT * FROM logs WHERE ((Image LIKE '%crontab' ESCAPE '\\') AND (CommandLine LIKE '%/tmp/%' ESCAPE '\\'))"
+            "SELECT * FROM logs WHERE (Image LIKE '%crontab' ESCAPE '\\' AND CommandLine LIKE '%/tmp/%' ESCAPE '\\')"
         ],
         "filename": "proc_creation_lnx_schedule_task_job_cron.yml"
     },
@@ -1185,7 +1261,7 @@
             "attack.t1087.001"
         ],
         "rule": [
-            "SELECT * FROM logs WHERE ((Image LIKE '%/lastlog' ESCAPE '\\') OR (CommandLine LIKE '%''x:0:''%' ESCAPE '\\') OR ((Image LIKE '%/cat' ESCAPE '\\') AND (CommandLine LIKE '%/etc/passwd%' ESCAPE '\\' OR CommandLine LIKE '%/etc/sudoers%' ESCAPE '\\')) OR (Image LIKE '%/id' ESCAPE '\\') OR ((Image LIKE '%/lsof' ESCAPE '\\') AND (CommandLine LIKE '%-u%' ESCAPE '\\')))"
+            "SELECT * FROM logs WHERE (Image LIKE '%/lastlog' ESCAPE '\\' OR CommandLine LIKE '%''x:0:''%' ESCAPE '\\' OR (Image LIKE '%/cat' ESCAPE '\\' AND (CommandLine LIKE '%/etc/passwd%' ESCAPE '\\' OR CommandLine LIKE '%/etc/sudoers%' ESCAPE '\\')) OR Image LIKE '%/id' ESCAPE '\\' OR (Image LIKE '%/lsof' ESCAPE '\\' AND CommandLine LIKE '%-u%' ESCAPE '\\'))"
         ],
         "filename": "proc_creation_lnx_local_account.yml"
     },
@@ -1298,6 +1374,24 @@
         "filename": "proc_creation_lnx_process_discovery.yml"
     },
     {
+        "title": "Chmod Suspicious Directory",
+        "id": "6419afd1-3742-47a5-a7e6-b50386cd15f8",
+        "description": "Detects chmod targeting files in abnormal directory paths.",
+        "author": "Christopher Peacock @SecurePeacock, SCYTHE @scythe_io",
+        "falsepositives": [
+            "Admin changing file permissions."
+        ],
+        "level": "medium",
+        "tags": [
+            "attack.defense_evasion",
+            "attack.t1222.002"
+        ],
+        "rule": [
+            "SELECT * FROM logs WHERE (Image LIKE '%/chmod' ESCAPE '\\' AND (CommandLine LIKE '%/tmp/%' ESCAPE '\\' OR CommandLine LIKE '%/.Library/%' ESCAPE '\\' OR CommandLine LIKE '%/etc/%' ESCAPE '\\' OR CommandLine LIKE '%/opt/%' ESCAPE '\\'))"
+        ],
+        "filename": "proc_creation_lnx_susp_chmod_directories.yml"
+    },
+    {
         "title": "System Information Discovery",
         "id": "42df45e7-e6e9-43b5-8f26-bec5b39cc239",
         "description": "Detects system information discovery commands",
@@ -1366,6 +1460,24 @@
         "filename": "lnx_shellshock.yml"
     },
     {
+        "title": "Nimbuspwn Exploitation",
+        "id": "7ba05b43-adad-4c02-b5e9-c8c35cdf9fa8",
+        "description": "Detects exploitation of Nimbuspwn privilege escalation vulnerability (CVE-2022-29799 and CVE-2022-29800)",
+        "author": "Bhabesh Raj",
+        "falsepositives": [
+            "Unknown"
+        ],
+        "level": "high",
+        "tags": [
+            "attack.privilege_escalation",
+            "attack.t1068"
+        ],
+        "rule": [
+            "SELECT * FROM logs WHERE (logs MATCH ('\"networkd-dispatcher\" AND \"Error handling notification for interface\" AND \"../../\"'))"
+        ],
+        "filename": "lnx_nimbuspwn_privilege_escalation_exploit.yml"
+    },
+    {
         "title": "Sudo Privilege Escalation CVE-2019-14287",
         "id": "7fcc54cb-f27d-4684-84b7-436af096f858",
         "description": "Detects users trying to exploit sudo vulnerability reported in CVE-2019-14287",
@@ -1402,6 +1514,24 @@
             "SELECT * FROM logs WHERE (logs MATCH ('\"ln -s -f /etc/passwd\" OR \"ln -s /etc/passwd\"'))"
         ],
         "filename": "lnx_symlink_etc_passwd.yml"
+    },
+    {
+        "title": "Modifying Crontab",
+        "id": "af202fd3-7bff-4212-a25a-fb34606cfcbe",
+        "description": "Detects suspicious modification of crontab file.",
+        "author": "Pawel Mazur",
+        "falsepositives": [
+            "Legitimate modification of crontab"
+        ],
+        "level": "medium",
+        "tags": [
+            "attack.persistence",
+            "attack.t1053.003"
+        ],
+        "rule": [
+            "SELECT * FROM logs WHERE logs MATCH ('\"REPLACE\"')"
+        ],
+        "filename": "lnx_crontab_file_modification.yml"
     },
     {
         "title": "Code Injection by ld.so Preload",
