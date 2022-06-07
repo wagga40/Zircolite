@@ -32,7 +32,7 @@ The tool has been created to be used on very big datasets and there are a lot of
 
 Except when `evtx_dump` is used, Zircolite only use one core. So if you have a lot of EVTX files and their total size is big, it is recommanded that you use a script to launch multiple Zircolite instances. On Linux or MacOS The easiest way is to use **GNU Parallel**. 
 
-ℹ️ on MacOS, please use GNU find (`brew install find` will install `gfind`)
+:information_source: on MacOS, please use GNU find (`brew install find` will install `gfind`)
 
 - **"DFIR Case mode" : One directory per computer/endpoint**
 
@@ -73,7 +73,7 @@ To speed up the detection process, you may want to use Zircolite on files matchi
 - `-s` or `--select` : select files partly matching the provided a string (case insensitive)
 - `-a` or `--avoid` : exclude files partly matching the provided a string (case insensitive)
 
-ℹ️ When using the two arguments, the "select" argument is always applied first and then the "avoid" argument is applied. So, it is possible to exclude files from included files but not the opposite.
+:information_source: When using the two arguments, the "select" argument is always applied first and then the "avoid" argument is applied. So, it is possible to exclude files from included files but not the opposite.
 
 - Only use EVTX files that contains "sysmon" in their names
 
@@ -146,7 +146,7 @@ You can also specify a string, to avoid unexpected side-effect **comparison is c
 ```shell
 python3 zircolite.py --evtx logs/ --ruleset rules/rules_windows_sysmon.json -R BFFA7F72 -R MSHTA
 ```
-ℹ️ As of version 2.2.0 of Zircolite, since the rulesets are directly generated from the official `sigmac` tool there is no more CRC32 in the rule title. Rule filtering is still available but you have to rely on other criteria.
+:information_source: As of version 2.2.0 of Zircolite, since the rulesets are directly generated from the official `sigmac` tool there is no more CRC32 in the rule title. Rule filtering is still available but you have to rely on other criteria.
 
 #### Limit the number of detected events
 
@@ -202,9 +202,9 @@ python3 zircolite.py --evtx /sample.evtx  --ruleset rules/rules_windows_sysmon.j
 	--eslogin "yourlogin" --espass "yourpass"
 ```
 
-ℹ️ the `--eslogin` and `--espass` arguments are optional.
+:information_source: the `--eslogin` and `--espass` arguments are optional.
 
-⚠️ **Elastic is not handling logs the way Splunk does. Since Zircolite is flattening the field names in the JSON output some fields, especially when working with EVTX files, can have different types between Channels, logsources etc. So when Elastic uses automatic field mapping, mapping errors may prevent events insertion into Elastic.**
+:warning: **Elastic is not handling logs the way Splunk does. Since Zircolite is flattening the field names in the JSON output some fields, especially when working with EVTX files, can have different types between Channels, logsources etc. So when Elastic uses automatic field mapping, mapping errors may prevent events insertion into Elastic.**
 
 #### No local logs
 
@@ -214,8 +214,7 @@ When you forward detected events to an server, sometimes you don't want any log 
 
 Zircolite is able to forward all events and not just the detected events to Splunk, ELK or a custom HTTP Server. you just to use the `--forwardall` argument. Please note that this ability forward events as JSON and not specific  `Windows` sourcetype.
 
-⚠️ **Elastic is not handling logs the way Splunk does. Since Zircolite is flattening the field names in the JSON output some fields, especially when working with EVTX files, can have different types between Channels, logsources etc. So when Elastic uses automatic field mapping, mapping errors may prevent events insertion into Elastic.**
-
+:warning: **Elastic is not handling logs the way Splunk does. Since Zircolite is flattening the field names in the JSON output some fields, especially when working with EVTX files, can have different types between Channels, logsources etc. So when Elastic uses automatic field mapping, mapping errors may prevent events insertion into Elastic.**
 
 ---
 
@@ -330,7 +329,7 @@ Basically, if you want to integrate Zircolite with **DFIR Orc** :
 </wolf>
 ```
 
-ℹ️ Please note that if you add this configuration to an existing one, you only need to keep the part between `<!-- BEGIN ... -->` and `<!-- /END ... -->` blocks.
+:information_source: Please note that if you add this configuration to an existing one, you only need to keep the part between `<!-- BEGIN ... -->` and `<!-- /END ... -->` blocks.
 
 -  Put your custom or default mapping file `zircolite_win10_nuitka.exe ` (the default one is in the Zircolite repository `config` directory)   `rules_windows_generic.json` (the default one is in the Zircolite repository `rules` directory) in the the `config` directory.
 
@@ -369,7 +368,7 @@ Basically, if you want to integrate Zircolite with **DFIR Orc** :
 	</archive>
 </toolembed>
 ```
-ℹ️ Please note that if you add this configuration to an existing one, you only need to keep the part between `<!-- BEGIN ... -->` and `<!-- /END ... -->` blocks.
+:information_source: Please note that if you add this configuration to an existing one, you only need to keep the part between `<!-- BEGIN ... -->` and `<!-- /END ... -->` blocks.
 
 - Now you need to generate the **DFIR Orc** binary by executing `.\configure.ps1` at the root of the repository
 - The final output will be in the `output` directory

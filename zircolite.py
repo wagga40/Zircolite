@@ -1001,7 +1001,9 @@ class evtxExtractor:
                 encoding="utf-8",
             ) as f:
                 for record in parser.records_json():
-                    f.write(f'{json.dumps(json.loads(record["data"]))}\n')
+                    f.write(
+                        f'{json.dumps(json.loads(record["data"])).decode("utf-8")}\n'
+                    )
         except Exception as e:
             self.logger.error(f"{Fore.RED}   [-] {e}")
 
@@ -1093,7 +1095,7 @@ class evtxExtractor:
         with open(outfile, "w", encoding="UTF-8") as fp:
             for element in result:
                 if element is not None:
-                    fp.write(json.dumps(element) + "\n")
+                    fp.write(json.dumps(element).decode("utf-8") + "\n")
 
     def run(self, file):
         """
