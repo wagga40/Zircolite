@@ -416,7 +416,7 @@ class JSONFlattener:
                     except Exception as e:
                         self.logger.debug(f'JSON ERROR : {e}')
                     # Handle timestamp filters
-                    if (self.timeAfter != "1970-01-01T00:00:00" and self.timeBefore != "9999-12-12T23:59:59") and self.timeField in JSONLine:
+                    if (self.timeAfter != "1970-01-01T00:00:00" or self.timeBefore != "9999-12-12T23:59:59") and (self.timeField in JSONLine):
                         timestamp = time.strptime(JSONLine[self.timeField].split(".")[0].replace("Z",""), '%Y-%m-%dT%H:%M:%S')
                         if timestamp > self.timeAfter and timestamp < self.timeBefore:
                             JSONOutput.append(JSONLine)
@@ -1067,8 +1067,8 @@ if __name__ == '__main__':
     start_time = time.time()
 
     # Initialize zirCore
-    zircoliteCore = zirCore(args.config, logger=consoleLogger, noOutput=args.nolog, timeAfter=eventsAfter, timeBefore=eventsBefore, limit=args.limit, csvMode=args.csv)
-
+    zircoliteCore = zirCore(args.config, logger=consoleLogger, noOutput=args.nolog, timeAfter=eventsAfter, timeBefore=eventsBefore, limit=args.limit, csvMode=args.csv, timeField=args.timefield)
+    
     # If we are not working directly with the db
     if not args.dbonly:
         # If we are working with json we change the file extension if it is not user-provided
