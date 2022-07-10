@@ -612,7 +612,7 @@ class zirCore:
                     if showAll and "title" in rule: ruleBar.write(f'{Fore.BLUE}    - {rule["title"]} [{self.ruleLevelPrintFormatter(rule["level"], Fore.BLUE)}]{Fore.RESET}')  # Print all rules
                     ruleResults = self.executeRule(rule)
                     if ruleResults != {} :
-                        if self.limit == -1 or ruleResults["count"] < self.limit:
+                        if self.limit == -1 or ruleResults["count"] <= self.limit:
                             ruleBar.write(f'{Fore.CYAN}    - {ruleResults["title"]} [{self.ruleLevelPrintFormatter(rule["level"], Fore.CYAN)}] : {ruleResults["count"]} events{Fore.RESET}')
                             # Store results for templating and event forwarding (only if stream mode is disabled)
                             if KeepResults or (remote is not None and not stream): self.fullResults.append(ruleResults)
@@ -913,7 +913,7 @@ def avoidFiles(pathList, avoidFilesList):
 # MAIN()
 ################################################################
 if __name__ == '__main__':
-    version = "2.8.0"
+    version = "2.9.0"
 
     # Init Args handling
     parser = argparse.ArgumentParser()

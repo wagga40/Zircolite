@@ -1,5 +1,58 @@
 [
     {
+        "title": "Triple Cross eBPF Rootkit Default LockFile",
+        "id": "c0239255-822c-4630-b7f1-35362bcb8f44",
+        "description": "Detects the creation of the file \"rootlog\" which is used by the TripleCross rootkit as a way to check if the backdoor is already running.",
+        "author": "Nasreddine Bencherchali",
+        "falsepositives": [
+            "Unlikely"
+        ],
+        "level": "high",
+        "tags": [
+            "attack.defense_evasion"
+        ],
+        "rule": [
+            "SELECT * FROM logs WHERE TargetFilename = '/tmp/rootlog'"
+        ],
+        "filename": "file_create_lnx_triple_cross_rootkit_lock_file.yml"
+    },
+    {
+        "title": "Persistence Via Sudoers Files",
+        "id": "ddb26b76-4447-4807-871f-1b035b2bfa5d",
+        "description": "Detects creation of sudoers file or files in \"sudoers.d\" directory which can be used a potential method to persiste privileges for a specific user.",
+        "author": "Nasreddine Bencherchali",
+        "falsepositives": [
+            "Creation of legitimate files in sudoers.d folder part of administrator work"
+        ],
+        "level": "medium",
+        "tags": [
+            "attack.persistence",
+            "attack.t1053.003"
+        ],
+        "rule": [
+            "SELECT * FROM logs WHERE TargetFilename LIKE '/etc/sudoers.d/%' ESCAPE '\\'"
+        ],
+        "filename": "file_create_lnx_persistence_sudoers_files.yml"
+    },
+    {
+        "title": "Persistence Via Cron Files",
+        "id": "6c4e2f43-d94d-4ead-b64d-97e53fa2bd05",
+        "description": "Detects creation of cron file or files in Cron directories which could indicates potential persistence.",
+        "author": "Roberto Rodriguez (Cyb3rWard0g), OTR (Open Threat Research), MSTIC",
+        "tags": [
+            "attack.persistence",
+            "attack.t1053.003"
+        ],
+        "falsepositives": [
+            "Any legitimate cron file."
+        ],
+        "level": "medium",
+        "rule": [
+            "SELECT * FROM logs WHERE ((TargetFilename LIKE '/etc/cron.d/%' ESCAPE '\\' OR TargetFilename LIKE '/etc/cron.daily/%' ESCAPE '\\' OR TargetFilename LIKE '/etc/cron.hourly/%' ESCAPE '\\' OR TargetFilename LIKE '/etc/cron.monthly/%' ESCAPE '\\' OR TargetFilename LIKE '/etc/cron.weekly/%' ESCAPE '\\' OR TargetFilename LIKE '/var/spool/cron/crontabs/%' ESCAPE '\\') OR (TargetFilename LIKE '%/etc/cron.allow%' ESCAPE '\\' OR TargetFilename LIKE '%/etc/cron.deny%' ESCAPE '\\' OR TargetFilename LIKE '%/etc/crontab%' ESCAPE '\\'))"
+        ],
+        "filename": "file_create_lnx_persistence_cron_files.yml"
+    },
+    {
         "title": "Linux Doas Conf File Creation",
         "id": "00eee2a5-fdb0-4746-a21d-e43fbdea5681",
         "description": "Detects the creation of doas.conf file in linux host platform.",
@@ -15,25 +68,26 @@
         "rule": [
             "SELECT * FROM logs WHERE TargetFilename LIKE '%/etc/doas.conf' ESCAPE '\\'"
         ],
-        "filename": "lnx_doas_conf_creation.yml"
+        "filename": "file_create_lnx_doas_conf_creation.yml"
     },
     {
-        "title": "Cron Files",
-        "id": "6c4e2f43-d94d-4ead-b64d-97e53fa2bd05",
-        "description": "Detects creation of cron files or files in Cron directories. Potential persistence.",
-        "author": "Roberto Rodriguez (Cyb3rWard0g), OTR (Open Threat Research), MSTIC",
+        "title": "Triple Cross eBPF Rootkit Default Persistence",
+        "id": "1a2ea919-d11d-4d1e-8535-06cda13be20f",
+        "description": "Detects the creation of \"ebpfbackdoor\" files in both \"cron.d\" and \"sudoers.d\" directories. Which both are related to the TripleCross persistence method",
+        "author": "Nasreddine Bencherchali",
+        "falsepositives": [
+            "Unlikely"
+        ],
+        "level": "high",
         "tags": [
             "attack.persistence",
+            "attack.defense_evasion",
             "attack.t1053.003"
         ],
-        "falsepositives": [
-            "Any legitimate cron file."
-        ],
-        "level": "medium",
         "rule": [
-            "SELECT * FROM logs WHERE ((TargetFilename LIKE '/etc/cron.d/%' ESCAPE '\\' OR TargetFilename LIKE '/etc/cron.daily/%' ESCAPE '\\' OR TargetFilename LIKE '/etc/cron.hourly/%' ESCAPE '\\' OR TargetFilename LIKE '/etc/cron.monthly/%' ESCAPE '\\' OR TargetFilename LIKE '/etc/cron.weekly/%' ESCAPE '\\' OR TargetFilename LIKE '/var/spool/cron/crontabs/%' ESCAPE '\\') OR (TargetFilename LIKE '%/etc/cron.allow%' ESCAPE '\\' OR TargetFilename LIKE '%/etc/cron.deny%' ESCAPE '\\' OR TargetFilename LIKE '%/etc/crontab%' ESCAPE '\\'))"
+            "SELECT * FROM logs WHERE TargetFilename LIKE '%ebpfbackdoor' ESCAPE '\\'"
         ],
-        "filename": "cron_files.yml"
+        "filename": "file_create_lnx_triple_cross_rootkit_persistence.yml"
     },
     {
         "title": "Failed Logins with Different Accounts from Single Source System",
@@ -215,6 +269,24 @@
             "SELECT * FROM logs WHERE (type = 'EXECVE' AND a0 = 'steghide' AND a1 = 'embed' AND a2 IN ('-cf', '-ef') AND a4 IN ('-cf', '-ef'))"
         ],
         "filename": "lnx_auditd_steghide_embed_steganography.yml"
+    },
+    {
+        "title": "Data Compressed",
+        "id": "a3b5e3e9-1b49-4119-8b8e-0344a01f21ee",
+        "description": "An adversary may compress data (e.g., sensitive documents) that is collected prior to exfiltration in order to make it portable and minimize the amount of data sent over the network.",
+        "author": "Timur Zinniatullin, oscd.community",
+        "falsepositives": [
+            "Legitimate use of archiving tools by legitimate user."
+        ],
+        "level": "low",
+        "tags": [
+            "attack.exfiltration",
+            "attack.t1560.001"
+        ],
+        "rule": [
+            "SELECT * FROM logs WHERE ((type = 'execve' AND a0 = 'zip') OR (type = 'execve' AND a0 = 'gzip' AND a1 = '-f') OR (type = 'execve' AND a0 = 'tar' AND a1 LIKE '%-c%' ESCAPE '\\'))"
+        ],
+        "filename": "lnx_auditd_data_compressed.yml"
     },
     {
         "title": "Audio Capture",
@@ -487,7 +559,7 @@
         "falsepositives": [
             "Unknown"
         ],
-        "level": "critical",
+        "level": "high",
         "rule": [
             "SELECT * FROM (SELECT *,count(*) AS agg FROM logs WHERE (type = 'SYSCALL' AND exe = '/usr/bin/sudoedit') GROUP BY host) WHERE agg > 50"
         ],
@@ -510,6 +582,25 @@
             "SELECT * FROM logs WHERE (type = 'PATH' AND name IN ('/etc/syslog.conf', '/etc/rsyslog.conf', '/etc/syslog-ng/syslog-ng.conf'))"
         ],
         "filename": "lnx_auditd_logging_config_change.yml"
+    },
+    {
+        "title": "Network Sniffing",
+        "id": "f4d3748a-65d1-4806-bd23-e25728081d01",
+        "description": "Network sniffing refers to using the network interface on a system to monitor or capture information sent over a wired or wireless connection. An adversary may place a network interface into promiscuous mode to passively access data in transit over the network, or use span ports to capture a larger amount of data.",
+        "author": "Timur Zinniatullin, oscd.community",
+        "falsepositives": [
+            "Legitimate administrator or user uses network sniffing tool for legitimate reasons."
+        ],
+        "level": "low",
+        "tags": [
+            "attack.credential_access",
+            "attack.discovery",
+            "attack.t1040"
+        ],
+        "rule": [
+            "SELECT * FROM logs WHERE ((type = 'execve' AND a0 = 'tcpdump' AND a1 = '-c' AND a3 LIKE '%-i%' ESCAPE '\\') OR (type = 'execve' AND a0 = 'tshark' AND a1 = '-c' AND a3 = '-i'))"
+        ],
+        "filename": "lnx_auditd_network_sniffing.yml"
     },
     {
         "title": "Steganography Extract Files with Steghide",
@@ -696,24 +787,6 @@
         "filename": "lnx_auditd_web_rce.yml"
     },
     {
-        "title": "Data Compressed",
-        "id": "a3b5e3e9-1b49-4119-8b8e-0344a01f21ee",
-        "description": "An adversary may compress data (e.g., sensitive documents) that is collected prior to exfiltration in order to make it portable and minimize the amount of data sent over the network.",
-        "author": "Timur Zinniatullin, oscd.community",
-        "falsepositives": [
-            "Legitimate use of archiving tools by legitimate user."
-        ],
-        "level": "low",
-        "tags": [
-            "attack.exfiltration",
-            "attack.t1560.001"
-        ],
-        "rule": [
-            "SELECT * FROM logs WHERE ((type = 'execve' AND a0 = 'zip') OR (type = 'execve' AND a0 = 'gzip' AND a1 = '-f') OR (type = 'execve' AND a0 = 'tar' AND a1 LIKE '%-c%' ESCAPE '\\'))"
-        ],
-        "filename": "lnx_data_compressed.yml"
-    },
-    {
         "title": "Data Exfiltration with Wget",
         "id": "cb39d16b-b3b6-4a7a-8222-1cf24b686ffc",
         "description": "Detects attempts to post the file with the usage of wget utility. The adversary can bypass the permission restriction with the misconfigured sudo permission for wget utility which could allow them to read files like /etc/shadow.",
@@ -768,25 +841,6 @@
         "filename": "lnx_auditd_unzip_hidden_zip_files_steganography.yml"
     },
     {
-        "title": "Network Sniffing",
-        "id": "f4d3748a-65d1-4806-bd23-e25728081d01",
-        "description": "Network sniffing refers to using the network interface on a system to monitor or capture information sent over a wired or wireless connection. An adversary may place a network interface into promiscuous mode to passively access data in transit over the network, or use span ports to capture a larger amount of data.",
-        "author": "Timur Zinniatullin, oscd.community",
-        "falsepositives": [
-            "Legitimate administrator or user uses network sniffing tool for legitimate reasons."
-        ],
-        "level": "low",
-        "tags": [
-            "attack.credential_access",
-            "attack.discovery",
-            "attack.t1040"
-        ],
-        "rule": [
-            "SELECT * FROM logs WHERE ((type = 'execve' AND a0 = 'tcpdump' AND a1 = '-c' AND a3 LIKE '%-i%' ESCAPE '\\') OR (type = 'execve' AND a0 = 'tshark' AND a1 = '-c' AND a3 = '-i'))"
-        ],
-        "filename": "lnx_network_sniffing.yml"
-    },
-    {
         "title": "Password Policy Discovery",
         "id": "ca94a6db-8106-4737-9ed2-3e3bb826af0a",
         "description": "Detects password policy discovery commands",
@@ -805,7 +859,7 @@
         "filename": "lnx_auditd_password_policy_discovery.yml"
     },
     {
-        "title": "Hidden Files and Directoriese",
+        "title": "Hidden Files and Directories",
         "id": "d08722cd-3d09-449a-80b4-83ea2d9d4616",
         "description": "Detects adversary creating hidden file or directory, by detecting directories or files with . as the first character",
         "author": "Pawel Mazur",
@@ -835,7 +889,7 @@
         "falsepositives": [
             "Unknown"
         ],
-        "level": "critical",
+        "level": "high",
         "rule": [
             "SELECT * FROM (SELECT *,count(*) AS agg FROM logs WHERE (((type = 'EXECVE' AND a0 = '/usr/bin/sudoedit') AND (a1 = '-s' OR a2 = '-s' OR a3 = '-s' OR a4 = '-s')) AND (a1 LIKE '\\\\' ESCAPE '\\' OR a2 LIKE '\\\\' ESCAPE '\\' OR a3 LIKE '\\\\' ESCAPE '\\' OR a4 LIKE '\\\\' ESCAPE '\\')) GROUP BY host) WHERE agg > 50"
         ],
@@ -861,6 +915,24 @@
         "filename": "lnx_auditd_keylogging_with_pam_d.yml"
     },
     {
+        "title": "Triple Cross eBPF Rootkit Execve Hijack",
+        "id": "0326c3c8-7803-4a0f-8c5c-368f747f7c3e",
+        "description": "Detects execution of a the file \"execve_hijack\" which is used by the Triple Cross rootkit as a way to elevate privileges",
+        "author": "Nasreddine Bencherchali",
+        "falsepositives": [
+            "Unlikely"
+        ],
+        "level": "high",
+        "tags": [
+            "attack.defense_evasion",
+            "attack.privilege_escalation"
+        ],
+        "rule": [
+            "SELECT * FROM logs WHERE (Image LIKE '%/sudo' ESCAPE '\\' AND CommandLine LIKE '%execve\\_hijack%' ESCAPE '\\')"
+        ],
+        "filename": "proc_creation_lnx_triple_cross_rootkit_execve_hijack.yml"
+    },
+    {
         "title": "BPFtrace Unsafe Option Usage",
         "id": "f8341cb2-ee25-43fa-a975-d8a5a9714b39",
         "description": "Detects the usage of the unsafe bpftrace option",
@@ -881,7 +953,7 @@
     {
         "title": "Scheduled Task/Job At",
         "id": "d2d642d7-b393-43fe-bae4-e81ed5915c4b",
-        "description": "Detects the use of at/atd",
+        "description": "Detects the use of at/atd which are utilities that are used to schedule tasks. They are often abused by adversaries to maintain persistence or to perform task scheduling for initial or recurring execution of malicious code",
         "author": "Ömer Günal, oscd.community",
         "falsepositives": [
             "Legitimate administration activities"
@@ -935,7 +1007,7 @@
     {
         "title": "Local Groups Discovery",
         "id": "676381a6-15ca-4d73-a9c8-6a22e970b90d",
-        "description": "Detects enumeration of local system groups",
+        "description": "Detects enumeration of local system groups. Adversaries may attempt to find local system groups and permission settings",
         "author": "Ömer Günal, Alejandro Ortuno, oscd.community",
         "falsepositives": [
             "Legitimate administration activities"
@@ -969,27 +1041,6 @@
         "filename": "proc_creation_lnx_system_network_connections_discovery.yml"
     },
     {
-        "title": "Atlassian Confluence CVE-2022-26134",
-        "id": "7fb14105-530e-4e2e-8cfb-99f7d8700b66",
-        "description": "Detects spawning of suspicious child processes by Atlassian Confluence server which may indicate successful exploitation of CVE-2022-26134",
-        "author": "Nasreddine Bencherchali",
-        "tags": [
-            "attack.initial_access",
-            "attack.execution",
-            "attack.t1190",
-            "attack.t1059",
-            "cve.2022.26134"
-        ],
-        "falsepositives": [
-            "Unknown"
-        ],
-        "level": "critical",
-        "rule": [
-            "SELECT * FROM logs WHERE (ParentImage LIKE '/opt/atlassian/confluence/%' ESCAPE '\\' AND ParentImage LIKE '%/java' ESCAPE '\\' AND (CommandLine LIKE '%/bin/sh%' ESCAPE '\\' OR CommandLine LIKE '%bash%' ESCAPE '\\' OR CommandLine LIKE '%dash%' ESCAPE '\\' OR CommandLine LIKE '%ksh%' ESCAPE '\\' OR CommandLine LIKE '%zsh%' ESCAPE '\\' OR CommandLine LIKE '%csh%' ESCAPE '\\' OR CommandLine LIKE '%fish%' ESCAPE '\\' OR CommandLine LIKE '%curl%' ESCAPE '\\' OR CommandLine LIKE '%wget%' ESCAPE '\\' OR CommandLine LIKE '%python%' ESCAPE '\\'))"
-        ],
-        "filename": "proc_creation_lnx_atlassian_confluence_cve_2022_26134.yml"
-    },
-    {
         "title": "Linux Doas Tool Execution",
         "id": "067d8238-7127-451c-a9ec-fa78045b618b",
         "description": "Detects the doas tool execution in linux host platform.",
@@ -1010,7 +1061,7 @@
     {
         "title": "Install Root Certificate",
         "id": "78a80655-a51e-4669-bc6b-e9d206a462ee",
-        "description": "Detects installed new certificate",
+        "description": "Detects installation of new certificate on the system which attackers may use to avoid warnings when connecting to controlled web servers or C2s",
         "author": "Ömer Günal, oscd.community",
         "falsepositives": [
             "Legitimate administration activities"
@@ -1064,11 +1115,11 @@
     {
         "title": "Commands to Clear or Remove the Syslog",
         "id": "3fcc9b35-39e4-44c0-a2ad-9e82b6902b31",
-        "description": "Detects specific commands commonly used to remove or empty the syslog.",
+        "description": "Detects specific commands commonly used to remove or empty the syslog. Which is often used by attacker as a method to hide their tracks",
         "author": "Max Altgelt, Roberto Rodriguez (Cyb3rWard0g), OTR (Open Threat Research), MSTIC",
         "tags": [
-            "attack.impact",
-            "attack.t1565.001"
+            "attack.defense_evasion",
+            "attack.t1070.002"
         ],
         "falsepositives": [
             "Log rotation."
@@ -1100,7 +1151,7 @@
     {
         "title": "Clear Linux Logs",
         "id": "80915f59-9b56-4616-9de0-fd0dea6c12fe",
-        "description": "Detects clear logs",
+        "description": "Detects attempts to clear logs on the system. Adversaries may clear system logs to hide evidence of an intrusion",
         "author": "Ömer Günal, oscd.community",
         "falsepositives": [
             "Legitimate administration activities"
@@ -1118,7 +1169,7 @@
     {
         "title": "File Deletion",
         "id": "30aed7b6-d2c1-4eaf-9382-b6bc43e50c57",
-        "description": "Detects file deletion commands",
+        "description": "Detects file deletion using \"rm\" or \"shred\" commands which are used often by adversaries to delete files left behind by the actions of their intrusion activity",
         "author": "Ömer Günal, oscd.community",
         "falsepositives": [
             "Legitimate administration activities"
@@ -1132,6 +1183,27 @@
             "SELECT * FROM logs WHERE (Image LIKE '%/rm' ESCAPE '\\' OR Image LIKE '%/shred' ESCAPE '\\')"
         ],
         "filename": "proc_creation_lnx_file_deletion.yml"
+    },
+    {
+        "title": "Atlassian Confluence CVE-2022-26134",
+        "id": "7fb14105-530e-4e2e-8cfb-99f7d8700b66",
+        "description": "Detects spawning of suspicious child processes by Atlassian Confluence server which may indicate successful exploitation of CVE-2022-26134",
+        "author": "Nasreddine Bencherchali",
+        "tags": [
+            "attack.initial_access",
+            "attack.execution",
+            "attack.t1190",
+            "attack.t1059",
+            "cve.2022.26134"
+        ],
+        "falsepositives": [
+            "Unknown"
+        ],
+        "level": "high",
+        "rule": [
+            "SELECT * FROM logs WHERE (ParentImage LIKE '/opt/atlassian/confluence/%' ESCAPE '\\' AND ParentImage LIKE '%/java' ESCAPE '\\' AND (CommandLine LIKE '%/bin/sh%' ESCAPE '\\' OR CommandLine LIKE '%bash%' ESCAPE '\\' OR CommandLine LIKE '%dash%' ESCAPE '\\' OR CommandLine LIKE '%ksh%' ESCAPE '\\' OR CommandLine LIKE '%zsh%' ESCAPE '\\' OR CommandLine LIKE '%csh%' ESCAPE '\\' OR CommandLine LIKE '%fish%' ESCAPE '\\' OR CommandLine LIKE '%curl%' ESCAPE '\\' OR CommandLine LIKE '%wget%' ESCAPE '\\' OR CommandLine LIKE '%python%' ESCAPE '\\'))"
+        ],
+        "filename": "proc_creation_lnx_cve_2022_26134_atlassian_confluence.yml"
     },
     {
         "title": "Linux Webshell Indicators",
@@ -1174,6 +1246,20 @@
         "filename": "proc_creation_lnx_omigod_scx_runasprovider_executeshellcommand.yml"
     },
     {
+        "title": "Nohup Execution",
+        "id": "e4ffe466-6ff8-48d4-94bd-e32d1a6061e2",
+        "description": "Detects usage of nohup which could be leveraged by an attacker to keep a process running or break out from restricted environments",
+        "author": "Christopher Peacock @SecurePeacock, SCYTHE @scythe_io",
+        "falsepositives": [
+            "Administrators or installed processes that leverage nohup"
+        ],
+        "level": "medium",
+        "rule": [
+            "SELECT * FROM logs WHERE Image LIKE '%/nohup' ESCAPE '\\'"
+        ],
+        "filename": "proc_creation_lnx_nohup.yml"
+    },
+    {
         "title": "Scheduled Cron Task/Job",
         "id": "6b14bac8-3e3a-4324-8109-42f0546a347f",
         "description": "Detects abuse of the cron utility to perform task scheduling for initial or recurring execution of malicious code. Detection will focus on crontab jobs uploaded from the tmp folder.",
@@ -1192,6 +1278,24 @@
             "SELECT * FROM logs WHERE (Image LIKE '%crontab' ESCAPE '\\' AND CommandLine LIKE '%/tmp/%' ESCAPE '\\')"
         ],
         "filename": "proc_creation_lnx_schedule_task_job_cron.yml"
+    },
+    {
+        "title": "Cat Sudoers",
+        "id": "0f79c4d2-4e1f-4683-9c36-b5469a665e06",
+        "description": "Detects the execution of a cat /etc/sudoers to list all users that have sudo rights",
+        "author": "Florian Roth",
+        "falsepositives": [
+            "Legitimate administration activities"
+        ],
+        "level": "medium",
+        "tags": [
+            "attack.reconnaissance",
+            "attack.t1592.004"
+        ],
+        "rule": [
+            "SELECT * FROM logs WHERE ((Image LIKE '%/cat' ESCAPE '\\' OR Image LIKE '%grep' ESCAPE '\\') AND CommandLine LIKE '% /etc/sudoers%' ESCAPE '\\')"
+        ],
+        "filename": "proc_creation_lnx_cat_sudoers.yml"
     },
     {
         "title": "System Network Discovery - Linux",
@@ -1225,9 +1329,47 @@
         ],
         "level": "low",
         "rule": [
-            "SELECT * FROM logs WHERE (Image = '/bin/dd' AND CommandLine LIKE '%of=%' ESCAPE '\\' AND (CommandLine LIKE '%if=/dev/zero%' ESCAPE '\\' OR CommandLine LIKE '%if=/dev/null%' ESCAPE '\\'))"
+            "SELECT * FROM logs WHERE (Image IN ('/bin/dd', '/usr/bin/dd') AND CommandLine LIKE '%of=%' ESCAPE '\\' AND (CommandLine LIKE '%if=/dev/zero%' ESCAPE '\\' OR CommandLine LIKE '%if=/dev/null%' ESCAPE '\\'))"
         ],
         "filename": "proc_creation_lnx_dd_file_overwrite.yml"
+    },
+    {
+        "title": "History File Deletion",
+        "id": "1182f3b3-e716-4efa-99ab-d2685d04360f",
+        "description": "Detects events in which a history file gets deleted, e.g. the ~/bash_history to remove traces of malicious activity",
+        "author": "Florian Roth",
+        "falsepositives": [
+            "Legitimate administration activities"
+        ],
+        "level": "high",
+        "tags": [
+            "attack.impact",
+            "attack.t1565.001"
+        ],
+        "rule": [
+            "SELECT * FROM logs WHERE (Image LIKE '%/rm' ESCAPE '\\' AND ((CommandLine LIKE '%/.bash\\_history%' ESCAPE '\\' OR CommandLine LIKE '%/.zsh\\_history%' ESCAPE '\\') OR CommandLine LIKE '%\\_history' ESCAPE '\\'))"
+        ],
+        "filename": "proc_creation_lnx_susp_history_delete.yml"
+    },
+    {
+        "title": "Linux Recon Indicators",
+        "id": "0cf7a157-8879-41a2-8f55-388dd23746b7",
+        "description": "Detects events with patterns found in commands used for reconnaissance on linux systems",
+        "author": "Florian Roth",
+        "falsepositives": [
+            "Legitimate administration activities"
+        ],
+        "level": "high",
+        "tags": [
+            "attack.reconnaissance",
+            "attack.t1592.004",
+            "attack.credential_access",
+            "attack.t1552.001"
+        ],
+        "rule": [
+            "SELECT * FROM logs WHERE (CommandLine LIKE '% -name .htpasswd%' ESCAPE '\\' OR CommandLine LIKE '% -perm -4000 %' ESCAPE '\\')"
+        ],
+        "filename": "proc_creation_lnx_susp_recon_indicators.yml"
     },
     {
         "title": "Linux Remote System Discovery",
@@ -1250,7 +1392,7 @@
     {
         "title": "Local System Accounts Discovery",
         "id": "b45e3d6f-42c6-47d8-a478-df6bd6cf534c",
-        "description": "Detects enumeration of local systeam accounts",
+        "description": "Detects enumeration of local systeam accounts. This information can help adversaries determine which local accounts exist on a system to aid in follow-on behavior.",
         "author": "Alejandro Ortuno, oscd.community",
         "falsepositives": [
             "Legitimate administration activities"
@@ -1343,8 +1485,8 @@
         "description": "Detects attempts to collect data stored in the clipboard from users with the usage of xclip tool. Xclip has to be installed. Highly recommended using rule on servers, due to high usage of clipboard utilities on user workstations.",
         "author": "Pawel Mazur, Roberto Rodriguez (Cyb3rWard0g), OTR (Open Threat Research), MSTIC",
         "tags": [
-            "attack.impact",
-            "attack.t1485"
+            "attack.collection",
+            "attack.t1115"
         ],
         "falsepositives": [
             "Legitimate usage of xclip tools."
@@ -1358,7 +1500,7 @@
     {
         "title": "Process Discovery",
         "id": "4e2f5868-08d4-413d-899f-dc2f1508627b",
-        "description": "Detects process discovery commands",
+        "description": "Detects process discovery commands. Adversaries may attempt to get information about running processes on a system. Information obtained could be used to gain an understanding of common software/applications running on systems within the network",
         "author": "Ömer Günal, oscd.community",
         "falsepositives": [
             "Legitimate administration activities"
@@ -1410,6 +1552,24 @@
         "filename": "proc_creation_lnx_system_info_discovery.yml"
     },
     {
+        "title": "Print History File Contents",
+        "id": "d7821ff1-4527-4e33-9f84-d0d57fa2fb66",
+        "description": "Detects events in which someone prints the contents of history files to the commandline or redirects it to a file for reconnaissance",
+        "author": "Florian Roth",
+        "falsepositives": [
+            "Legitimate administration activities"
+        ],
+        "level": "medium",
+        "tags": [
+            "attack.reconnaissance",
+            "attack.t1592.004"
+        ],
+        "rule": [
+            "SELECT * FROM logs WHERE (Image LIKE '%/cat' ESCAPE '\\' AND ((CommandLine LIKE '%/.bash\\_history%' ESCAPE '\\' OR CommandLine LIKE '%/.zsh\\_history%' ESCAPE '\\') OR CommandLine LIKE '%\\_history' ESCAPE '\\'))"
+        ],
+        "filename": "proc_creation_lnx_susp_history_recon.yml"
+    },
+    {
         "title": "Linux Network Service Scanning",
         "id": "3e102cd9-a70d-4a7a-9508-403963092f31",
         "description": "Detects enumeration of local or remote network services.",
@@ -1440,6 +1600,24 @@
             "SELECT * FROM logs WHERE (ParentCommandLine = 'bash -i' AND ((CommandLine LIKE '%-c import %' ESCAPE '\\' OR CommandLine LIKE '%base64%' ESCAPE '\\' OR CommandLine LIKE '%pty.spawn%' ESCAPE '\\') OR (Image LIKE '%whoami' ESCAPE '\\' OR Image LIKE '%iptables' ESCAPE '\\' OR Image LIKE '%/ncat' ESCAPE '\\' OR Image LIKE '%/nc' ESCAPE '\\' OR Image LIKE '%/netcat' ESCAPE '\\')))"
         ],
         "filename": "proc_creation_lnx_susp_interactive_bash.yml"
+    },
+    {
+        "title": "Triple Cross eBPF Rootkit Install Commands",
+        "id": "22236d75-d5a0-4287-bf06-c93b1770860f",
+        "description": "Detects default install commands of the Triple Cross eBPF rootkit based on the \"deployer.sh\" script",
+        "author": "Nasreddine Bencherchali",
+        "falsepositives": [
+            "Unlikely"
+        ],
+        "level": "high",
+        "tags": [
+            "attack.defense_evasion",
+            "attack.t1014"
+        ],
+        "rule": [
+            "SELECT * FROM logs WHERE (Image LIKE '%/sudo' ESCAPE '\\' AND CommandLine LIKE '% tc %' ESCAPE '\\' AND CommandLine LIKE '% enp0s3 %' ESCAPE '\\' AND (CommandLine LIKE '% qdisc %' ESCAPE '\\' OR CommandLine LIKE '% filter %' ESCAPE '\\'))"
+        ],
+        "filename": "proc_creation_lnx_triple_cross_rootkit_install.yml"
     },
     {
         "title": "Shellshock Expression",

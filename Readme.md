@@ -19,7 +19,7 @@
 
 You can install dependencies with : `pip3 install -r requirements.txt`
 
-The use of [evtx_dump](https://github.com/omerbenamram/evtx) is **optional but required by default (because it is for now much faster)**, If you do not want to use it you have to use the `--noexternal` option. The tool is provided if you clone the Zircolite repository (the official repository is [here](https://github.com/omerbenamram/evtx)).
+The use of [evtx_dump](https://github.com/omerbenamram/evtx) is **optional but required by default (because it is for now much faster)**, If you do not want to use it you have to use the `--noexternal` option. The tool is provided if you clone the Zircolite repository (the official repository is [here](https://github.com/omerbenamram/evtx)). For Apple M1 computers, the `--noexternal` option is preferred.
 
 ## Quick start
 
@@ -33,33 +33,28 @@ python3 zircolite.py --evtx sysmon.evtx --ruleset rules/rules_windows_sysmon.jso
 ```
 The SYSMON ruleset used here is a default one and it is for logs coming from endpoints where SYSMON installed. A generic ruleset is available too.
 
-#### Auditd logs : 
+#### Auditd / Sysmon for Linux / JSONL or NDJSON logs : 
 
 ```shell
 python3 zircolite.py --events auditd.log --ruleset rules/rules_linux.json --auditd
-```
-
-#### Sysmon for Linux logs : 
-
-```shell
 python3 zircolite.py --events sysmon.log --ruleset rules/rules_linux.json --sysmon4linux
-```
-
-#### JSONL/NDJSON files : 
-
-```shell
-python3 zircolite.py --evtx <JSON_FOLDER or JSON_FILE> --ruleset rules/rules_windows_sysmon.json --jsononly
+python3 zircolite.py --events <JSON_FOLDER or JSON_FILE> --ruleset rules/rules_windows_sysmon.json --jsononly
 ```
 
 :information_source: If you want to try the tool you can test with these samples : 
 
 - [EVTX-ATTACK-SAMPLES](https://github.com/sbousseaden/EVTX-ATTACK-SAMPLES) (EVTX Files)
-- [MORDOR - APT29](https://github.com/OTRF/Security-Datasets/tree/master/datasets/compound/apt29) (JSONL Files)
-- [MORDOR - APT3](https://github.com/OTRF/Security-Datasets/tree/master/datasets/compound/windows/apt3) (JSONL Files)
 
 ## Docs
 
 Everything is [here](docs).
+
+## Mini-Gui
+
+![](pics/gui.webp)
+![](pics/gui-timeline.webp)
+
+The Mini-GUI can be used totally offline, it allows the user to display and search results. To know how to use the Mini-GUI, check docs [here](docs).
 
 ## Tutorials, references and related projects
 
@@ -76,12 +71,6 @@ Everything is [here](docs).
 ### Related projects
 
 [Michel de CREVOISIER](https://github.com/mdecrevoisier) is doing an amazing work with SIGMA, MITRE Att&ck (c) and other projects. Check [his work on mapping EVTX on the MITRE Att&ck (c) framework](https://github.com/mdecrevoisier/EVTX-to-MITRE-Attack).
-
-## Mini-Gui
-
-![](pics/gui.jpg)
-
-The Mini-GUI can be used totally offline, it allows the user to display and search results. To know how to use the Mini-GUI, check docs [here](docs).
 
 ## Battle-tested
 
