@@ -767,17 +767,32 @@ class zirCore:
                 rule["tags"] = []
             if "filename" not in rule:
                 rule["filename"] = ""
-            results = {
-                "title": rule["title"],
-                "id": rule["id"],
-                "description": rule["description"],
-                "sigmafile": rule["filename"],
-                "sigma": rule["rule"],
-                "rule_level": rule["level"],
-                "tags": rule["tags"],
-                "count": counter,
-                "matches": filteredRows,
-            }
+            if self.csvMode:
+                results = {
+                    "title": rule["title"],
+                    "id": rule["id"],
+                    "description": rule["description"]
+                    .replace("\n", "")
+                    .replace("\r", ""),
+                    "sigmafile": rule["filename"],
+                    "sigma": rule["rule"],
+                    "rule_level": rule["level"],
+                    "tags": rule["tags"],
+                    "count": counter,
+                    "matches": filteredRows,
+                }
+            else:
+                results = {
+                    "title": rule["title"],
+                    "id": rule["id"],
+                    "description": rule["description"],
+                    "sigmafile": rule["filename"],
+                    "sigma": rule["rule"],
+                    "rule_level": rule["level"],
+                    "tags": rule["tags"],
+                    "count": counter,
+                    "matches": filteredRows,
+                }
             if counter > 0:
                 self.logger.debug(
                     f'DETECTED : {rule["title"]} - Matchs : {counter} events'
