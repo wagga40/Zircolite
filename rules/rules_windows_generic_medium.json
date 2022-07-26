@@ -220,6 +220,25 @@
         "filename": "pipe_created_susp_wmi_consumer_namedpipe.yml"
     },
     {
+        "title": "Suspicious Appended Extension",
+        "id": "e3f673b3-65d1-4d80-9146-466f8b63fa99",
+        "status": "experimental",
+        "description": "Detects possible ransomware adding a custom extension to the encrypted files, such as \".jpg.crypted\", \".docx.locky\" etc.",
+        "author": "frack113",
+        "tags": [
+            "attack.impact",
+            "attack.t1486"
+        ],
+        "falsepositives": [
+            "Backup software"
+        ],
+        "level": "medium",
+        "rule": [
+            "SELECT * FROM logs WHERE (((OriginalFilename LIKE '%.lnk' ESCAPE '\\' OR OriginalFilename LIKE '%.rtf' ESCAPE '\\' OR OriginalFilename LIKE '%.pst' ESCAPE '\\' OR OriginalFilename LIKE '%.docx' ESCAPE '\\' OR OriginalFilename LIKE '%.jpg' ESCAPE '\\' OR OriginalFilename LIKE '%.pdf' ESCAPE '\\') AND (TargetFilename LIKE '%.lnk.%' ESCAPE '\\' OR TargetFilename LIKE '%.rtf.%' ESCAPE '\\' OR TargetFilename LIKE '%.pst.%' ESCAPE '\\' OR TargetFilename LIKE '%.docx.%' ESCAPE '\\' OR TargetFilename LIKE '%.jpg.%' ESCAPE '\\' OR TargetFilename LIKE '%.pdf.%' ESCAPE '\\')) AND NOT ((TargetFilename LIKE '%.tmp' ESCAPE '\\' OR TargetFilename LIKE '%.bak' ESCAPE '\\' OR TargetFilename LIKE '%.old' ESCAPE '\\')))"
+        ],
+        "filename": "file_rename_win_ransomware.yml"
+    },
+    {
         "title": "Rename Common File to DLL File",
         "id": "bbfd974c-248e-4435-8de6-1e938c79c5c1",
         "status": "experimental",
@@ -1186,6 +1205,26 @@
         "filename": "file_event_win_mal_octopus_scanner.yml"
     },
     {
+        "title": "UEFI Persistence Via Wpbbin - FileCreation",
+        "id": "e94b9ddc-eec5-4bb8-8a58-b9dc5f4e185f",
+        "status": "experimental",
+        "description": "Detects creation of a file named \"wpbbin\" in the \"%systemroot%\\system32\\\" directory. Which could be indicative of UEFI based persistence method",
+        "author": "Nasreddine Bencherchali",
+        "tags": [
+            "attack.persistence",
+            "attack.defense_evasion",
+            "attack.t1542.001"
+        ],
+        "falsepositives": [
+            "Legitimate usage of the file by hardware manufacturer such as lenovo (Thanks @0gtweet for the tip)"
+        ],
+        "level": "high",
+        "rule": [
+            "SELECT * FROM logs WHERE TargetFilename LIKE 'C:\\\\Windows\\\\System32\\\\wpbbin.exe' ESCAPE '\\'"
+        ],
+        "filename": "file_event_win_wpbbin_persistence.yml"
+    },
+    {
         "title": "Suspicious Creation with Colorcpl",
         "id": "e15b518d-b4ce-4410-a9cd-501f23ce4a18",
         "status": "experimental",
@@ -1892,6 +1931,22 @@
             "SELECT * FROM logs WHERE ((TargetFilename LIKE '%\\\\AppData\\\\Roaming\\\\Oracle\\\\bin\\\\java%' ESCAPE '\\' AND TargetFilename LIKE '%.exe%' ESCAPE '\\') OR (TargetFilename LIKE '%\\\\Retrive%' ESCAPE '\\' AND TargetFilename LIKE '%.vbs%' ESCAPE '\\'))"
         ],
         "filename": "file_event_win_mal_adwind.yml"
+    },
+    {
+        "title": "RipZip Attack on Startup Folder",
+        "id": "a6976974-ea6f-4e97-818e-ea08625c52cb",
+        "status": "experimental",
+        "description": "Detects a phishing attack which expands a ZIP file containing a malicious shortcut. If the victim expands the ZIP file via the explorer process, then the explorer process expands the malicious ZIP file and drops a malicious shortcut redirected to a backdoor into the Startup folder. Additionally, the file name of the malicious shortcut in Startup folder contains {0AFACED1-E828-11D1-9187-B532F1E9575D} meaning the folder shortcut operation.",
+        "author": "Greg (rule)",
+        "tags": [
+            "attack.t1547",
+            "attack.persistence"
+        ],
+        "level": "high",
+        "rule": [
+            "SELECT * FROM logs WHERE (TargetFileName LIKE '%\\\\Microsoft\\\\Windows\\\\Start Menu\\\\Programs\\\\Startup%' ESCAPE '\\' AND TargetFileName LIKE '%.lnk.{0AFACED1-E828-11D1-9187-B532F1E9575D}%' ESCAPE '\\' AND NewProcessName LIKE '%\\\\explorer.exe' ESCAPE '\\')"
+        ],
+        "filename": "file_event_ripzip_attack.yml"
     },
     {
         "title": "Dump Office Macro Files from Commandline",
@@ -5350,6 +5405,25 @@
         "filename": "image_load_scrcons_imageload_wmi_scripteventconsumer.yml"
     },
     {
+        "title": "Vulnerable GIGABYTE Driver Load",
+        "id": "7bcfeece-e5ed-4ff3-a5fb-2640d8cc8647",
+        "status": "experimental",
+        "description": "Detects the load of a signed and vulnerable GIGABYTE driver often used by threat actors or malware for privilege escalation",
+        "author": "Florian Roth",
+        "falsepositives": [
+            "Unknown"
+        ],
+        "level": "high",
+        "tags": [
+            "attack.privilege_escalation",
+            "attack.t1543.003"
+        ],
+        "rule": [
+            "SELECT * FROM logs WHERE ((Hashes LIKE '%MD5=9AB9F3B75A2EB87FAFB1B7361BE9DFB3%' ESCAPE '\\' OR Hashes LIKE '%SHA1=FE10018AF723986DB50701C8532DF5ED98B17C39%' ESCAPE '\\' OR Hashes LIKE '%SHA256=31F4CFB4C71DA44120752721103A16512444C13C2AC2D857A7E6F13CB679B427%' ESCAPE '\\') OR MD5 = '9ab9f3b75a2eb87fafb1b7361be9dfb3' OR SHA1 = 'fe10018af723986db50701c8532df5ed98b17c39' OR SHA256 = '31f4cfb4c71da44120752721103a16512444c13c2ac2d857a7e6f13cb679b427')"
+        ],
+        "filename": "image_load_vuln_gigabyte_driver.yml"
+    },
+    {
         "title": "GAC DLL Loaded Via Office Applications",
         "id": "90217a70-13fc-48e4-b3db-0d836c5824ac",
         "status": "test",
@@ -5388,27 +5462,6 @@
             "SELECT * FROM logs WHERE ((NewProcessName LIKE '%\\\\fxssvc.exe' ESCAPE '\\' AND ImageLoaded LIKE '%ualapi.dll' ESCAPE '\\') AND NOT (ImageLoaded LIKE 'C:\\\\Windows\\\\WinSxS\\\\%' ESCAPE '\\'))"
         ],
         "filename": "image_load_susp_fax_dll.yml"
-    },
-    {
-        "title": "Suspicious WSMAN Provider Image Loads",
-        "id": "ad1f4bb9-8dfb-4765-adb6-2a7cfb6c0f94",
-        "description": "Detects signs of potential use of the WSMAN provider from uncommon processes locally and remote execution.",
-        "status": "experimental",
-        "author": "Roberto Rodriguez (Cyb3rWard0g), OTR (Open Threat Research)",
-        "tags": [
-            "attack.execution",
-            "attack.t1059.001",
-            "attack.lateral_movement",
-            "attack.t1021.003"
-        ],
-        "falsepositives": [
-            "Unknown"
-        ],
-        "level": "medium",
-        "rule": [
-            "SELECT * FROM logs WHERE ((((ImageLoaded LIKE '%\\\\WsmSvc.dll' ESCAPE '\\' OR ImageLoaded LIKE '%\\\\WsmAuto.dll' ESCAPE '\\' OR ImageLoaded LIKE '%\\\\Microsoft.WSMan.Management.ni.dll' ESCAPE '\\') OR OriginalFileName IN ('WsmSvc.dll', 'WSMANAUTOMATION.DLL', 'Microsoft.WSMan.Management.dll')) OR (NewProcessName LIKE '%\\\\svchost.exe' ESCAPE '\\' AND OriginalFileName = 'WsmWmiPl.dll')) AND NOT (((NewProcessName LIKE '%\\\\powershell.exe' ESCAPE '\\' OR NewProcessName LIKE '%C:\\\\Windows\\\\System32\\\\sdiagnhost.exe' ESCAPE '\\' OR NewProcessName LIKE '%C:\\\\Windows\\\\System32\\\\services.exe' ESCAPE '\\')) OR ((CommandLine LIKE '%svchost.exe -k netsvcs -p -s BITS%' ESCAPE '\\' OR CommandLine LIKE '%svchost.exe -k GraphicsPerfSvcGroup -s GraphicsPerfSvc%' ESCAPE '\\' OR CommandLine LIKE '%svchost.exe -k NetworkService -p -s Wecsvc%' ESCAPE '\\' OR CommandLine LIKE '%svchost.exe -k netsvcs%' ESCAPE '\\')) OR ((NewProcessName LIKE 'C:\\\\Windows\\\\Microsoft.NET\\\\Framework64\\\\v%' ESCAPE '\\' OR NewProcessName LIKE 'C:\\\\Windows\\\\Microsoft.NET\\\\Framework\\\\v%' ESCAPE '\\') AND NewProcessName LIKE '%\\\\mscorsvw.exe' ESCAPE '\\') OR ((NewProcessName LIKE 'C:\\\\Windows\\\\System32\\\\Configure-SMRemoting.exe' ESCAPE '\\' OR NewProcessName LIKE 'C:\\\\Windows\\\\System32\\\\ServerManager.exe' ESCAPE '\\')) OR (NewProcessName LIKE 'C:\\\\Windows\\\\Temp\\\\asgard2-agent\\\\%' ESCAPE '\\') OR (NewProcessName LIKE 'C:\\\\Program Files\\\\Citrix\\\\%' ESCAPE '\\')))"
-        ],
-        "filename": "image_load_wsman_provider_image_load.yml"
     },
     {
         "title": "VBA DLL Loaded Via Microsoft Word",
@@ -5607,6 +5660,25 @@
         "filename": "image_load_tttracer_mod_load.yml"
     },
     {
+        "title": "DLL Load By System Process From Suspicious Locations",
+        "id": "9e9a9002-56c4-40fd-9eff-e4b09bfa5f6c",
+        "status": "experimental",
+        "description": "Detects when a system process (ie located in system32, syswow64...etc) loads a DLL from a suspicious location such as %temp%",
+        "author": "Nasreddine Bencherchali",
+        "falsepositives": [
+            "Unknown"
+        ],
+        "level": "high",
+        "tags": [
+            "attack.defense_evasion",
+            "attack.t1070"
+        ],
+        "rule": [
+            "SELECT * FROM logs WHERE (NewProcessName LIKE 'C:\\\\Windows\\\\%' ESCAPE '\\' AND (ImageLoaded LIKE '%\\\\Users\\\\Public\\\\%' ESCAPE '\\' OR ImageLoaded LIKE '%\\\\Desktop\\\\%' ESCAPE '\\' OR ImageLoaded LIKE '%\\\\Downloads\\\\%' ESCAPE '\\' OR ImageLoaded LIKE '%\\\\AppData\\\\Local\\\\Temp\\\\%' ESCAPE '\\'))"
+        ],
+        "filename": "image_load_susp_dll_load_system_process.yml"
+    },
+    {
         "title": "CLR DLL Loaded Via Office Applications",
         "id": "d13c43f0-f66b-4279-8b2c-5912077c1780",
         "status": "test",
@@ -5666,6 +5738,26 @@
             "SELECT * FROM logs WHERE (NewProcessName LIKE '%\\\\msdt.exe' ESCAPE '\\' AND ImageLoaded LIKE '%\\\\sdiageng.dll' ESCAPE '\\')"
         ],
         "filename": "image_load_msdt_sdiageng.yml"
+    },
+    {
+        "title": "UAC Bypass Using Iscsicpl - ImageLoad",
+        "id": "9ed5959a-c43c-4c59-84e3-d28628429456",
+        "status": "experimental",
+        "description": "Detects the \"iscsicpl.exe\" UAC bypass technique that leverages a DLL Search Order hijacking technique to load a custom DLL's from temp or a any user controlled location in the users %PATH%",
+        "author": "Nasreddine Bencherchali",
+        "falsepositives": [
+            "Unknown"
+        ],
+        "level": "high",
+        "tags": [
+            "attack.defense_evasion",
+            "attack.privilege_escalation",
+            "attack.t1548.002"
+        ],
+        "rule": [
+            "SELECT * FROM logs WHERE ((NewProcessName LIKE 'C:\\\\Windows\\\\SysWOW64\\\\iscsicpl.exe' ESCAPE '\\' AND ImageLoaded LIKE '%\\\\iscsiexe.dll' ESCAPE '\\') AND NOT (ImageLoaded LIKE '%C:\\\\Windows\\\\%' ESCAPE '\\' AND ImageLoaded LIKE '%iscsiexe.dll%' ESCAPE '\\'))"
+        ],
+        "filename": "image_load_uac_bypass_iscsicpl.yml"
     },
     {
         "title": "CLR DLL Loaded Via Scripting Applications",
@@ -5901,6 +5993,24 @@
         "filename": "registry_set_comhijack_sdclt.yml"
     },
     {
+        "title": "Register New IFiltre For Persistence",
+        "id": "b23818c7-e575-4d13-8012-332075ec0a2b",
+        "description": "Detects when an attacker register a new IFilter for an exntesion. Microsoft Windows Search uses filters to extract the content of items for inclusion in a full-text index. You can extend Windows Search to index new or proprietary file types by writing filters to extract the content, and property handlers to extract the properties of files",
+        "author": "Nasreddine Bencherchali",
+        "status": "experimental",
+        "falsepositives": [
+            "Legitimate registration of IFilters by the OS or software"
+        ],
+        "level": "medium",
+        "tags": [
+            "attack.persistence"
+        ],
+        "rule": [
+            "SELECT * FROM logs WHERE ((EventID = '4657' AND (OperationType LIKE 'Existing registry value modified' ESCAPE '\\') AND Channel = 'Security') AND ((EventType = 'SetValue' AND (TargetObject LIKE 'HKLM\\\\SOFTWARE\\\\Classes\\\\.%' ESCAPE '\\' OR TargetObject LIKE 'HKEY\\_LOCAL\\_MACHINE\\\\SOFTWARE\\\\Classes\\\\.%' ESCAPE '\\') AND TargetObject LIKE '%\\\\PersistentHandler%' ESCAPE '\\') OR (EventType = 'SetValue' AND (TargetObject LIKE 'HKLM\\\\SOFTWARE\\\\Classes\\\\CLSID%' ESCAPE '\\' OR TargetObject LIKE 'HKEY\\_LOCAL\\_MACHINE\\\\SOFTWARE\\\\Classes\\\\CLSID%' ESCAPE '\\') AND TargetObject LIKE '%\\\\PersistentAddinsRegistered\\\\{89BCB740-6119-101A-BCB7-00DD010655AF}%' ESCAPE '\\')))"
+        ],
+        "filename": "registry_set_ifilter_persistence.yml"
+    },
+    {
         "title": "Suspicious New Printer Ports in Registry (CVE-2020-1048)",
         "id": "7ec912f2-5175-4868-b811-ec13ad0f8567",
         "status": "test",
@@ -5980,6 +6090,24 @@
         "filename": "registry_set_susp_keyboard_layout_load.yml"
     },
     {
+        "title": "Persistence Via Mpnotify",
+        "id": "92772523-d9c1-4c93-9547-b0ca500baba3",
+        "description": "Detects when an attacker register a new SIP provider for persistence and defense evasion",
+        "author": "Nasreddine Bencherchali",
+        "status": "experimental",
+        "falsepositives": [
+            "Unknown"
+        ],
+        "level": "high",
+        "tags": [
+            "attack.persistence"
+        ],
+        "rule": [
+            "SELECT * FROM logs WHERE (EventID = '4657' AND (OperationType LIKE 'Existing registry value modified' ESCAPE '\\') AND Channel = 'Security' AND EventType = 'SetValue' AND TargetObject LIKE '%\\\\SOFTWARE\\\\Microsoft\\\\Windows NT\\\\CurrentVersion\\\\Winlogon\\\\mpnotify%' ESCAPE '\\')"
+        ],
+        "filename": "registry_set_mpnotify_persistence.yml"
+    },
+    {
         "title": "RDP Registry Modification",
         "id": "41904ebe-d56c-4904-b9ad-7a77bdf154b3",
         "status": "test",
@@ -5997,6 +6125,25 @@
             "SELECT * FROM logs WHERE (EventID = '4657' AND (OperationType LIKE 'Existing registry value modified' ESCAPE '\\') AND Channel = 'Security' AND EventType = 'SetValue' AND (TargetObject LIKE '%\\\\CurrentControlSet\\\\Control\\\\Terminal Server\\\\WinStations\\\\RDP-Tcp\\\\UserAuthentication' ESCAPE '\\' OR TargetObject LIKE '%\\\\CurrentControlSet\\\\Control\\\\Terminal Server\\\\fDenyTSConnections' ESCAPE '\\') AND NewValue = 'DWORD (0x00000000)')"
         ],
         "filename": "registry_set_rdp_registry_modification.yml"
+    },
+    {
+        "title": "Change User Account Associated with the FAX Service",
+        "id": "e3fdf743-f05b-4051-990a-b66919be1743",
+        "description": "Detect change of the user account associated with the FAX service to avoid the escalation problem.",
+        "status": "experimental",
+        "author": "frack113",
+        "tags": [
+            "attack.defense_evasion",
+            "attack.t1112"
+        ],
+        "falsepositives": [
+            "Unknown"
+        ],
+        "level": "high",
+        "rule": [
+            "SELECT * FROM logs WHERE ((EventID = '4657' AND (OperationType LIKE 'Existing registry value modified' ESCAPE '\\') AND Channel = 'Security') AND TargetObject LIKE 'HKLM\\\\System\\\\CurrentControlSet\\\\Services\\\\Fax\\\\ObjectName' ESCAPE '\\' AND NOT (details LIKE '%NetworkService%' ESCAPE '\\'))"
+        ],
+        "filename": "registry_set_fax_change_service_user.yml"
     },
     {
         "title": "COMPlus_ETWEnabled Registry Modification",
@@ -6074,6 +6221,24 @@
             "SELECT * FROM logs WHERE ((EventID = '4657' AND (OperationType LIKE 'Existing registry value modified' ESCAPE '\\') AND Channel = 'Security') AND (EventType = 'SetValue' AND TargetObject LIKE '%\\_Classes\\\\mscfile\\\\shell\\\\open\\\\command\\\\(Default)' ESCAPE '\\') AND NOT (NewValue LIKE '\\%SystemRoot\\%\\\\system32\\\\mmc.exe \"\\%1\" \\%%' ESCAPE '\\'))"
         ],
         "filename": "registry_set_bypass_uac_using_eventviewer.yml"
+    },
+    {
+        "title": "CHM Helper DLL Persistence",
+        "id": "976dd1f2-a484-45ec-aa1d-0e87e882262b",
+        "description": "Detects when an attacker modifies the registry key \"HtmlHelp Author\" to achieve persistence",
+        "author": "Nasreddine Bencherchali",
+        "status": "experimental",
+        "falsepositives": [
+            "Unknown"
+        ],
+        "level": "high",
+        "tags": [
+            "attack.persistence"
+        ],
+        "rule": [
+            "SELECT * FROM logs WHERE (EventID = '4657' AND (OperationType LIKE 'Existing registry value modified' ESCAPE '\\') AND Channel = 'Security' AND EventType = 'SetValue' AND (TargetObject LIKE '%\\\\Software\\\\Microsoft\\\\HtmlHelp Author\\\\Location%' ESCAPE '\\' OR TargetObject LIKE '%\\\\Software\\\\WOW6432Node\\\\Microsoft\\\\HtmlHelp Author\\\\Location%' ESCAPE '\\'))"
+        ],
+        "filename": "registry_set_chm_persistence.yml"
     },
     {
         "title": "ServiceDll Modification",
@@ -6604,6 +6769,24 @@
         "filename": "registry_set_susp_reg_persist_explorer_run.yml"
     },
     {
+        "title": "Persistence Via Disk Cleanup Handler - Autorun",
+        "id": "d4e2745c-f0c6-4bde-a3ab-b553b3f693cc",
+        "description": "Detects when an attacker modifies values of the Disk Cleanup Handler in the registry to achieve persistence via autorun.\nThe disk cleanup manager is part of the operating system. It displays the dialog box […] The user has the option of enabling or disabling individual handlers by selecting or clearing their check box in the disk cleanup manager's UI. Although Windows comes with a number of disk cleanup handlers, they aren't designed to handle files produced by other applications. Instead, the disk cleanup manager is designed to be flexible and extensible by enabling any developer to implement and register their own disk cleanup handler. Any developer can extend the available disk cleanup services by implementing and registering a disk cleanup handler.\n",
+        "author": "Nasreddine Bencherchali",
+        "status": "experimental",
+        "falsepositives": [
+            "Unknown"
+        ],
+        "level": "medium",
+        "tags": [
+            "attack.persistence"
+        ],
+        "rule": [
+            "SELECT * FROM logs WHERE ((EventID = '4657' AND (OperationType LIKE 'Existing registry value modified' ESCAPE '\\') AND Channel = 'Security') AND (EventType = 'SetValue' AND TargetObject LIKE '%\\\\SOFTWARE\\\\Microsoft\\\\Windows\\\\CurrentVersion\\\\Explorer\\\\VolumeCaches\\\\%' ESCAPE '\\') AND ((TargetObject LIKE '%\\\\Autorun%' ESCAPE '\\' AND NewValue = 'DWORD (0x00000001)') OR ((Targetobject LIKE '%\\\\CleanupString%' ESCAPE '\\' OR Targetobject LIKE '%\\\\PreCleanupString%' ESCAPE '\\') AND (NewValue LIKE '%cmd%' ESCAPE '\\' OR NewValue LIKE '%powershell%' ESCAPE '\\' OR NewValue LIKE '%rundll32%' ESCAPE '\\' OR NewValue LIKE '%mshta%' ESCAPE '\\' OR NewValue LIKE '%cscript%' ESCAPE '\\' OR NewValue LIKE '%wscript%' ESCAPE '\\' OR NewValue LIKE '%wsl%' ESCAPE '\\' OR NewValue LIKE '%\\\\Users\\\\Public\\\\%' ESCAPE '\\' OR NewValue LIKE '%\\\\Windows\\\\TEMP\\\\%' ESCAPE '\\' OR NewValue LIKE '%\\\\Microsoft\\\\Windows\\\\Start Menu\\\\Programs\\\\Startup\\\\%' ESCAPE '\\'))))"
+        ],
+        "filename": "registry_set_disk_cleanup_handler_autorun_persistence.yml"
+    },
+    {
         "title": "Persistent Outlook Landing Pages",
         "id": "487bb375-12ef-41f6-baae-c6a1572b4dd1",
         "description": "Detects the manipulation of persistent URLs which could execute malicious code",
@@ -6776,6 +6959,24 @@
         "filename": "registry_set_persistence_search_order.yml"
     },
     {
+        "title": "Add Debugger Entry To Hangs Key For Persistence",
+        "id": "833ef470-fa01-4631-a79b-6f291c9ac498",
+        "description": "Detects when an attacker adds a new \"Debugger\" value to the \"Hangs\" key in order to achieve persistence which will get invoked when an application crashes",
+        "author": "Nasreddine Bencherchali",
+        "status": "experimental",
+        "falsepositives": [
+            "This value is not set by default but could be rarly used by administrators"
+        ],
+        "level": "high",
+        "tags": [
+            "attack.persistence"
+        ],
+        "rule": [
+            "SELECT * FROM logs WHERE (EventID = '4657' AND (OperationType LIKE 'Existing registry value modified' ESCAPE '\\') AND Channel = 'Security' AND EventType = 'SetValue' AND TargetObject LIKE '%\\\\SOFTWARE\\\\Microsoft\\\\Windows\\\\Windows Error Reporting\\\\Hangs\\\\Debugger%' ESCAPE '\\')"
+        ],
+        "filename": "registry_set_hangs_debugger_persistence.yml"
+    },
+    {
         "title": "Registry Key Creation or Modification for Shim DataBase",
         "id": "dfb5b4e8-91d0-4291-b40a-e3b0d3942c45",
         "description": "Adversaries may establish persistence and/or elevate privileges by executing malicious content triggered by application shims.\nThe Microsoft Windows Application Compatibility Infrastructure/Framework (Application Shim) was created to allow for backward compatibility of software as the operating system codebase changes over time\n",
@@ -6852,6 +7053,24 @@
         "filename": "registry_set_defender_realtime_protection_disabled.yml"
     },
     {
+        "title": "Add DLLPathOverride Entry For Persistence",
+        "id": "a1b1fd53-9c4a-444c-bae0-34a330fc7aa8",
+        "description": "Detects when an attacker adds a new \"DLLPathOverride\" value to the \"Natural Language\" key in order to achieve persistence which will get invoked by \"SearchIndexer.exe\" process",
+        "author": "Nasreddine Bencherchali",
+        "status": "experimental",
+        "falsepositives": [
+            "Unknown"
+        ],
+        "level": "high",
+        "tags": [
+            "attack.persistence"
+        ],
+        "rule": [
+            "SELECT * FROM logs WHERE (EventID = '4657' AND (OperationType LIKE 'Existing registry value modified' ESCAPE '\\') AND Channel = 'Security' AND EventType = 'SetValue' AND TargetObject LIKE '%\\\\SYSTEM\\\\CurrentControlSet\\\\Control\\\\ContentIndex\\\\Language\\\\%' ESCAPE '\\' AND (TargetObject LIKE '%\\\\StemmerDLLPathOverride%' ESCAPE '\\' OR TargetObject LIKE '%\\\\WBDLLPathOverride%' ESCAPE '\\' OR TargetObject LIKE '%\\\\StemmerClass%' ESCAPE '\\' OR TargetObject LIKE '%\\\\WBreakerClass%' ESCAPE '\\'))"
+        ],
+        "filename": "regsitry_set_natural_language_persistence.yml"
+    },
+    {
         "title": "Blue Mockingbird",
         "id": "92b0b372-a939-44ed-a11b-5136cf680e27",
         "status": "experimental",
@@ -6893,6 +7112,24 @@
             "SELECT * FROM logs WHERE ((EventID = '4657' AND (OperationType LIKE 'Existing registry value modified' ESCAPE '\\') AND Channel = 'Security') AND (EventType = 'SetValue' AND TargetObject LIKE '%HKLM\\\\System\\\\CurrentControlSet\\\\Services%' ESCAPE '\\') AND ((NewValue LIKE '%ADMIN$%' ESCAPE '\\' AND NewValue LIKE '%.exe%' ESCAPE '\\') OR (NewValue LIKE '%\\%COMSPEC\\%%' ESCAPE '\\' AND NewValue LIKE '%start%' ESCAPE '\\' AND NewValue LIKE '%powershell%' ESCAPE '\\')))"
         ],
         "filename": "registry_set_cobaltstrike_service_installs.yml"
+    },
+    {
+        "title": "Persistence Via LSA Extensions",
+        "id": "41f6531d-af6e-4c6e-918f-b946f2b85a36",
+        "description": "Detects when an attacker modifies the \"REG_MULTI_SZ\" value named \"Extensions\" to include a custom DLL to achieve persistence via lsass.\nThe \"Extensions\" list contains filenames of DLLs being automatically loaded by lsass.exe. Each DLL has its InitializeLsaExtension() method called after loading.\n",
+        "author": "Nasreddine Bencherchali",
+        "status": "experimental",
+        "falsepositives": [
+            "Unlikely"
+        ],
+        "level": "high",
+        "tags": [
+            "attack.persistence"
+        ],
+        "rule": [
+            "SELECT * FROM logs WHERE (EventID = '4657' AND (OperationType LIKE 'Existing registry value modified' ESCAPE '\\') AND Channel = 'Security' AND EventType = 'SetValue' AND TargetObject LIKE '%\\\\SYSTEM\\\\CurrentControlSet\\\\Control\\\\LsaExtensionConfig\\\\LsaSrv\\\\Extensions%' ESCAPE '\\')"
+        ],
+        "filename": "registry_set_lsa_extension_persistence.yml"
     },
     {
         "title": "PowerShell as a Service in Registry",
@@ -7108,6 +7345,25 @@
         "filename": "registry_set_add_port_monitor.yml"
     },
     {
+        "title": "Change the Fax Dll",
+        "id": "9e3357ba-09d4-4fbd-a7c5-ad6386314513",
+        "description": "Detect possible persistance using Fax DLL load when service restart",
+        "status": "experimental",
+        "author": "frack113",
+        "tags": [
+            "attack.defense_evasion",
+            "attack.t1112"
+        ],
+        "falsepositives": [
+            "Unknown"
+        ],
+        "level": "high",
+        "rule": [
+            "SELECT * FROM logs WHERE ((EventID = '4657' AND (OperationType LIKE 'Existing registry value modified' ESCAPE '\\') AND Channel = 'Security') AND (TargetObject LIKE '%\\\\Software\\\\Microsoft\\\\Fax\\\\Device Providers\\\\%' ESCAPE '\\' AND TargetObject LIKE '%\\\\ImageName%' ESCAPE '\\') AND NOT (details LIKE '\\%systemroot\\%\\\\system32\\\\fxst30.dll' ESCAPE '\\'))"
+        ],
+        "filename": "registry_set_fax_dll_persistance.yml"
+    },
+    {
         "title": "CurrentVersion Autorun Keys Modification",
         "id": "20f0ee37-5942-4e45-b7d5-c5b5db9df5cd",
         "status": "experimental",
@@ -7225,6 +7481,24 @@
         "filename": "registry_set_disabled_tamper_protection_on_microsoft_defender.yml"
     },
     {
+        "title": "Persistence Via Hhctrl.ocx",
+        "id": "f10ed525-97fe-4fed-be7c-2feecca941b1",
+        "description": "Detects when an attacker modifies the registry value of the \"hhctrl\" to point to a custom binary",
+        "author": "Nasreddine Bencherchali",
+        "status": "experimental",
+        "falsepositives": [
+            "Unlikely"
+        ],
+        "level": "high",
+        "tags": [
+            "attack.persistence"
+        ],
+        "rule": [
+            "SELECT * FROM logs WHERE ((EventID = '4657' AND (OperationType LIKE 'Existing registry value modified' ESCAPE '\\') AND Channel = 'Security') AND (EventType = 'SetValue' AND TargetObject LIKE '%\\\\CLSID\\\\{52A2AAAE-085D-4187-97EA-8C30DB990436}\\\\InprocServer32\\\\(Default)%' ESCAPE '\\') AND NOT (NewValue LIKE 'C:\\\\Windows\\\\System32\\\\hhctrl.ocx' ESCAPE '\\'))"
+        ],
+        "filename": "registry_set_hhctrl_persistence.yml"
+    },
+    {
         "title": "Scheduled TaskCache Change by Uncommon Program",
         "id": "4720b7df-40c3-48fd-bbdf-fd4b3c464f0d",
         "description": "Monitor the creation of a new key under 'TaskCache' when a new scheduled task is registered by a process that is not svchost.exe, which is suspicious",
@@ -7339,6 +7613,24 @@
             "SELECT * FROM logs WHERE (EventID = '4657' AND (OperationType LIKE 'Existing registry value modified' ESCAPE '\\') AND Channel = 'Security' AND EventType = 'SetValue' AND TargetObject LIKE 'HKLM\\\\System\\\\CurrentControlSet\\\\Services\\\\SharedAccess\\\\Parameters\\\\FirewallPolicy\\\\%' ESCAPE '\\' AND TargetObject LIKE '%\\\\EnableFirewall' ESCAPE '\\' AND NewValue = 'DWORD (0x00000000)')"
         ],
         "filename": "registry_set_disable_defender_firewall.yml"
+    },
+    {
+        "title": "Add Debugger Entry To AeDebug For Persistence",
+        "id": "092af964-4233-4373-b4ba-d86ea2890288",
+        "description": "Detects when an attacker adds a new \"Debugger\" value to the \"AeDebug\" key in order to achieve persistence which will get invoked when an application crashes",
+        "author": "Nasreddine Bencherchali",
+        "status": "experimental",
+        "falsepositives": [
+            "Legitimate use of the key to setup a debugger. Which is often the case on developers machines"
+        ],
+        "level": "medium",
+        "tags": [
+            "attack.persistence"
+        ],
+        "rule": [
+            "SELECT * FROM logs WHERE ((EventID = '4657' AND (OperationType LIKE 'Existing registry value modified' ESCAPE '\\') AND Channel = 'Security') AND (EventType = 'SetValue' AND TargetObject LIKE '%\\\\SOFTWARE\\\\Microsoft\\\\Windows NT\\\\CurrentVersion\\\\AeDebug\\\\Debugger%' ESCAPE '\\' AND NewValue LIKE '%.dll' ESCAPE '\\') AND NOT (NewValue LIKE '\"C:\\\\WINDOWS\\\\system32\\\\vsjitdebugger.exe\" -p \\%ld -e \\%ld -j 0x\\%p' ESCAPE '\\'))"
+        ],
+        "filename": "registry_set_aedebug_persistence.yml"
     },
     {
         "title": "Custom File Open Handler Executes PowerShell",
@@ -7534,6 +7826,26 @@
             "SELECT * FROM logs WHERE (EventID = '4657' AND (OperationType LIKE 'Existing registry value modified' ESCAPE '\\') AND Channel = 'Security' AND EventType = 'Setvalue' AND (TargetObject LIKE 'HKLM\\\\SOFTWARE\\\\Microsoft\\\\Windows\\\\CurrentVersion\\\\Explorer\\\\Advanced\\\\ShowSuperHidden' ESCAPE '\\' OR TargetObject LIKE 'HKLM\\\\SOFTWARE\\\\Microsoft\\\\Windows\\\\CurrentVersion\\\\Explorer\\\\Advanced\\\\Hidden' ESCAPE '\\') AND NewValue = 'DWORD (0x00000000)')"
         ],
         "filename": "registry_set_hide_file.yml"
+    },
+    {
+        "title": "Persistence Via New SIP Provider",
+        "id": "5a2b21ee-6aaa-4234-ac9d-59a59edf90a1",
+        "description": "Detects when an attacker register a new SIP provider for persistence and defense evasion",
+        "author": "Nasreddine Bencherchali",
+        "status": "experimental",
+        "falsepositives": [
+            "Legitimate SIP being registered by the OS or different software."
+        ],
+        "level": "medium",
+        "tags": [
+            "attack.persistence",
+            "attack.defense_evasion",
+            "attack.t1553.003"
+        ],
+        "rule": [
+            "SELECT * FROM logs WHERE ((EventID = '4657' AND (OperationType LIKE 'Existing registry value modified' ESCAPE '\\') AND Channel = 'Security') AND (EventType = 'SetValue' AND (TargetObject LIKE '%\\\\SOFTWARE\\\\Microsoft\\\\Cryptography\\\\Providers\\\\%' ESCAPE '\\' OR TargetObject LIKE '%\\\\SOFTWARE\\\\Microsoft\\\\Cryptography\\\\OID\\\\EncodingType%' ESCAPE '\\' OR TargetObject LIKE '%\\\\SOFTWARE\\\\WOW6432Node\\\\Microsoft\\\\Cryptography\\\\Providers\\\\%' ESCAPE '\\' OR TargetObject LIKE '%\\\\SOFTWARE\\\\WOW6432Node\\\\Microsoft\\\\Cryptography\\\\OID\\\\EncodingType%' ESCAPE '\\') AND (TargetObject LIKE '%\\\\Dll%' ESCAPE '\\' OR TargetObject LIKE '%\\\\$DLL%' ESCAPE '\\')) AND NOT (NewValue IN ('WINTRUST.DLL', 'mso.dll')))"
+        ],
+        "filename": "registry_set_sip_persistence.yml"
     },
     {
         "title": "Registry Persitence via Service in Safe Mode",
@@ -7802,6 +8114,42 @@
             "SELECT * FROM logs WHERE (EventID = '4657' AND (OperationType LIKE 'New registry value created' ESCAPE '\\') AND Channel = 'Security' AND EventType = 'CreateKey' AND TargetObject LIKE '%UserInitMprLogonScript%' ESCAPE '\\')"
         ],
         "filename": "registry_add_logon_scripts_userinitmprlogonscript_reg.yml"
+    },
+    {
+        "title": "Persistence Via New AMSI Providers",
+        "id": "33efc23c-6ea2-4503-8cfe-bdf82ce8f705",
+        "status": "experimental",
+        "description": "Detects when an attacker registers a new AMSI provider in order to achieve persistence",
+        "author": "Nasreddine Bencherchali",
+        "falsepositives": [
+            "Legitimate security products adding their own AMSI providers"
+        ],
+        "level": "high",
+        "tags": [
+            "attack.persistence"
+        ],
+        "rule": [
+            "SELECT * FROM logs WHERE ((EventID = '4657' AND (OperationType LIKE 'New registry value created' ESCAPE '\\') AND Channel = 'Security') AND (EventType = 'CreateKey' AND (TargetObject LIKE '%\\\\SOFTWARE\\\\Microsoft\\\\AMSI\\\\Providers\\\\%' ESCAPE '\\' OR TargetObject LIKE '%\\\\SOFTWARE\\\\WOW6432Node\\\\Microsoft\\\\AMSI\\\\Providers\\\\%' ESCAPE '\\')) AND NOT (NewProcessName LIKE 'C:\\\\Program Files%' ESCAPE '\\'))"
+        ],
+        "filename": "registry_add_amsi_providers_persistence.yml"
+    },
+    {
+        "title": "Persistence Via Disk Cleanup Handler - NewEntry",
+        "id": "d4f4e0be-cf12-439f-9e25-4e2cdcf7df5a",
+        "description": "Detects when an attacker modifies values of the Disk Cleanup Handler in the registry to achieve persistence.\nThe disk cleanup manager is part of the operating system. It displays the dialog box […] The user has the option of enabling or disabling individual handlers by selecting or clearing their check box in the disk cleanup manager's UI. Although Windows comes with a number of disk cleanup handlers, they aren't designed to handle files produced by other applications. Instead, the disk cleanup manager is designed to be flexible and extensible by enabling any developer to implement and register their own disk cleanup handler. Any developer can extend the available disk cleanup services by implementing and registering a disk cleanup handler.\n",
+        "author": "Nasreddine Bencherchali",
+        "status": "experimental",
+        "falsepositives": [
+            "Legitimate new entry added by windows"
+        ],
+        "level": "medium",
+        "tags": [
+            "attack.persistence"
+        ],
+        "rule": [
+            "SELECT * FROM logs WHERE ((EventID = '4657' AND (OperationType LIKE 'New registry value created' ESCAPE '\\') AND Channel = 'Security') AND (EventType = 'CreateKey' AND TargetObject LIKE '%\\\\SOFTWARE\\\\Microsoft\\\\Windows\\\\CurrentVersion\\\\Explorer\\\\VolumeCaches\\\\%' ESCAPE '\\') AND NOT ((TargetObject LIKE '%\\\\Active Setup Temp Folders' ESCAPE '\\' OR TargetObject LIKE '%\\\\BranchCache' ESCAPE '\\' OR TargetObject LIKE '%\\\\Content Indexer Cleaner' ESCAPE '\\' OR TargetObject LIKE '%\\\\D3D Shader Cache' ESCAPE '\\' OR TargetObject LIKE '%\\\\Delivery Optimization Files' ESCAPE '\\' OR TargetObject LIKE '%\\\\Device Driver Packages' ESCAPE '\\' OR TargetObject LIKE '%\\\\Diagnostic Data Viewer database files' ESCAPE '\\' OR TargetObject LIKE '%\\\\Downloaded Program Files' ESCAPE '\\' OR TargetObject LIKE '%\\\\DownloadsFolder' ESCAPE '\\' OR TargetObject LIKE '%\\\\Feedback Hub Archive log files' ESCAPE '\\' OR TargetObject LIKE '%\\\\Internet Cache Files' ESCAPE '\\' OR TargetObject LIKE '%\\\\Language Pack' ESCAPE '\\' OR TargetObject LIKE '%\\\\Microsoft Office Temp Files' ESCAPE '\\' OR TargetObject LIKE '%\\\\Offline Pages Files' ESCAPE '\\' OR TargetObject LIKE '%\\\\Old ChkDsk Files' ESCAPE '\\' OR TargetObject LIKE '%\\\\Previous Installations' ESCAPE '\\' OR TargetObject LIKE '%\\\\Recycle Bin' ESCAPE '\\' OR TargetObject LIKE '%\\\\RetailDemo Offline Content' ESCAPE '\\' OR TargetObject LIKE '%\\\\Setup Log Files' ESCAPE '\\' OR TargetObject LIKE '%\\\\System error memory dump files' ESCAPE '\\' OR TargetObject LIKE '%\\\\System error minidump files' ESCAPE '\\' OR TargetObject LIKE '%\\\\Temporary Files' ESCAPE '\\' OR TargetObject LIKE '%\\\\Temporary Setup Files' ESCAPE '\\' OR TargetObject LIKE '%\\\\Temporary Sync Files' ESCAPE '\\' OR TargetObject LIKE '%\\\\Thumbnail Cache' ESCAPE '\\' OR TargetObject LIKE '%\\\\Update Cleanup' ESCAPE '\\' OR TargetObject LIKE '%\\\\Upgrade Discarded Files' ESCAPE '\\' OR TargetObject LIKE '%\\\\User file versions' ESCAPE '\\' OR TargetObject LIKE '%\\\\Windows Defender' ESCAPE '\\' OR TargetObject LIKE '%\\\\Windows Error Reporting Files' ESCAPE '\\' OR TargetObject LIKE '%\\\\Windows ESD installation files' ESCAPE '\\' OR TargetObject LIKE '%\\\\Windows Upgrade Log Files' ESCAPE '\\')))"
+        ],
+        "filename": "registry_set_disk_cleanup_handler_new_entry_persistence.yml"
     },
     {
         "title": "Removal SD Value to Hide Schedule Task",
@@ -8746,7 +9094,7 @@
             "Unknown"
         ],
         "rule": [
-            "SELECT * FROM logs WHERE ((SourceImage LIKE '%\\\\bash.exe' ESCAPE '\\' OR SourceImage LIKE '%\\\\cvtres.exe' ESCAPE '\\' OR SourceImage LIKE '%\\\\defrag.exe' ESCAPE '\\' OR SourceImage LIKE '%\\\\dnx.exe' ESCAPE '\\' OR SourceImage LIKE '%\\\\esentutl.exe' ESCAPE '\\' OR SourceImage LIKE '%\\\\excel.exe' ESCAPE '\\' OR SourceImage LIKE '%\\\\expand.exe' ESCAPE '\\' OR SourceImage LIKE '%\\\\explorer.exe' ESCAPE '\\' OR SourceImage LIKE '%\\\\find.exe' ESCAPE '\\' OR SourceImage LIKE '%\\\\findstr.exe' ESCAPE '\\' OR SourceImage LIKE '%\\\\forfiles.exe' ESCAPE '\\' OR SourceImage LIKE '%\\\\git.exe' ESCAPE '\\' OR SourceImage LIKE '%\\\\gpupdate.exe' ESCAPE '\\' OR SourceImage LIKE '%\\\\hh.exe' ESCAPE '\\' OR SourceImage LIKE '%\\\\iexplore.exe' ESCAPE '\\' OR SourceImage LIKE '%\\\\installutil.exe' ESCAPE '\\' OR SourceImage LIKE '%\\\\lync.exe' ESCAPE '\\' OR SourceImage LIKE '%\\\\makecab.exe' ESCAPE '\\' OR SourceImage LIKE '%\\\\mDNSResponder.exe' ESCAPE '\\' OR SourceImage LIKE '%\\\\monitoringhost.exe' ESCAPE '\\' OR SourceImage LIKE '%\\\\msbuild.exe' ESCAPE '\\' OR SourceImage LIKE '%\\\\mshta.exe' ESCAPE '\\' OR SourceImage LIKE '%\\\\msiexec.exe' ESCAPE '\\' OR SourceImage LIKE '%\\\\mspaint.exe' ESCAPE '\\' OR SourceImage LIKE '%\\\\outlook.exe' ESCAPE '\\' OR SourceImage LIKE '%\\\\ping.exe' ESCAPE '\\' OR SourceImage LIKE '%\\\\powerpnt.exe' ESCAPE '\\' OR SourceImage LIKE '%\\\\powershell.exe' ESCAPE '\\' OR SourceImage LIKE '%\\\\pwsh.exe' ESCAPE '\\' OR SourceImage LIKE '%\\\\provtool.exe' ESCAPE '\\' OR SourceImage LIKE '%\\\\python.exe' ESCAPE '\\' OR SourceImage LIKE '%\\\\regsvr32.exe' ESCAPE '\\' OR SourceImage LIKE '%\\\\robocopy.exe' ESCAPE '\\' OR SourceImage LIKE '%\\\\runonce.exe' ESCAPE '\\' OR SourceImage LIKE '%\\\\sapcimc.exe' ESCAPE '\\' OR SourceImage LIKE '%\\\\schtasks.exe' ESCAPE '\\' OR SourceImage LIKE '%\\\\smartscreen.exe' ESCAPE '\\' OR SourceImage LIKE '%\\\\spoolsv.exe' ESCAPE '\\' OR SourceImage LIKE '%\\\\tstheme.exe' ESCAPE '\\' OR SourceImage LIKE '%\\\\userinit.exe' ESCAPE '\\' OR SourceImage LIKE '%\\\\vssadmin.exe' ESCAPE '\\' OR SourceImage LIKE '%\\\\vssvc.exe' ESCAPE '\\' OR SourceImage LIKE '%\\\\w3wp.exe' ESCAPE '\\' OR SourceImage LIKE '%\\\\winlogon.exe' ESCAPE '\\' OR SourceImage LIKE '%\\\\winscp.exe' ESCAPE '\\' OR SourceImage LIKE '%\\\\wmic.exe' ESCAPE '\\' OR SourceImage LIKE '%\\\\word.exe' ESCAPE '\\' OR SourceImage LIKE '%\\\\wscript.exe' ESCAPE '\\') AND NOT ((SourceImage LIKE '%Visual Studio%' ESCAPE '\\') OR (SourceImage LIKE 'C:\\\\Windows\\\\System32\\\\winlogon.exe' ESCAPE '\\' AND (TargetImage LIKE 'C:\\\\Windows\\\\System32\\\\services.exe' ESCAPE '\\' OR TargetImage LIKE 'C:\\\\Windows\\\\System32\\\\wininit.exe' ESCAPE '\\' OR TargetImage LIKE 'C:\\\\Windows\\\\System32\\\\csrss.exe' ESCAPE '\\')) OR (SourceImage LIKE 'C:\\\\Windows\\\\System32\\\\provtool.exe' ESCAPE '\\' AND TargetParentProcessId = '0') OR (SourceImage LIKE '%\\\\git.exe' ESCAPE '\\' AND (TargetImage LIKE '%\\\\bin\\\\git.exe' ESCAPE '\\' OR TargetImage LIKE '%C:\\\\Windows\\\\System32\\\\conhost.exe' ESCAPE '\\'))))"
+            "SELECT * FROM logs WHERE ((SourceImage LIKE '%\\\\bash.exe' ESCAPE '\\' OR SourceImage LIKE '%\\\\cvtres.exe' ESCAPE '\\' OR SourceImage LIKE '%\\\\defrag.exe' ESCAPE '\\' OR SourceImage LIKE '%\\\\dnx.exe' ESCAPE '\\' OR SourceImage LIKE '%\\\\esentutl.exe' ESCAPE '\\' OR SourceImage LIKE '%\\\\excel.exe' ESCAPE '\\' OR SourceImage LIKE '%\\\\expand.exe' ESCAPE '\\' OR SourceImage LIKE '%\\\\explorer.exe' ESCAPE '\\' OR SourceImage LIKE '%\\\\find.exe' ESCAPE '\\' OR SourceImage LIKE '%\\\\findstr.exe' ESCAPE '\\' OR SourceImage LIKE '%\\\\forfiles.exe' ESCAPE '\\' OR SourceImage LIKE '%\\\\git.exe' ESCAPE '\\' OR SourceImage LIKE '%\\\\gpupdate.exe' ESCAPE '\\' OR SourceImage LIKE '%\\\\hh.exe' ESCAPE '\\' OR SourceImage LIKE '%\\\\iexplore.exe' ESCAPE '\\' OR SourceImage LIKE '%\\\\installutil.exe' ESCAPE '\\' OR SourceImage LIKE '%\\\\lync.exe' ESCAPE '\\' OR SourceImage LIKE '%\\\\makecab.exe' ESCAPE '\\' OR SourceImage LIKE '%\\\\mDNSResponder.exe' ESCAPE '\\' OR SourceImage LIKE '%\\\\monitoringhost.exe' ESCAPE '\\' OR SourceImage LIKE '%\\\\msbuild.exe' ESCAPE '\\' OR SourceImage LIKE '%\\\\mshta.exe' ESCAPE '\\' OR SourceImage LIKE '%\\\\msiexec.exe' ESCAPE '\\' OR SourceImage LIKE '%\\\\mspaint.exe' ESCAPE '\\' OR SourceImage LIKE '%\\\\outlook.exe' ESCAPE '\\' OR SourceImage LIKE '%\\\\ping.exe' ESCAPE '\\' OR SourceImage LIKE '%\\\\powerpnt.exe' ESCAPE '\\' OR SourceImage LIKE '%\\\\powershell.exe' ESCAPE '\\' OR SourceImage LIKE '%\\\\pwsh.exe' ESCAPE '\\' OR SourceImage LIKE '%\\\\provtool.exe' ESCAPE '\\' OR SourceImage LIKE '%\\\\python.exe' ESCAPE '\\' OR SourceImage LIKE '%\\\\regsvr32.exe' ESCAPE '\\' OR SourceImage LIKE '%\\\\robocopy.exe' ESCAPE '\\' OR SourceImage LIKE '%\\\\runonce.exe' ESCAPE '\\' OR SourceImage LIKE '%\\\\sapcimc.exe' ESCAPE '\\' OR SourceImage LIKE '%\\\\schtasks.exe' ESCAPE '\\' OR SourceImage LIKE '%\\\\smartscreen.exe' ESCAPE '\\' OR SourceImage LIKE '%\\\\spoolsv.exe' ESCAPE '\\' OR SourceImage LIKE '%\\\\tstheme.exe' ESCAPE '\\' OR SourceImage LIKE '%\\\\userinit.exe' ESCAPE '\\' OR SourceImage LIKE '%\\\\vssadmin.exe' ESCAPE '\\' OR SourceImage LIKE '%\\\\vssvc.exe' ESCAPE '\\' OR SourceImage LIKE '%\\\\w3wp.exe' ESCAPE '\\' OR SourceImage LIKE '%\\\\winlogon.exe' ESCAPE '\\' OR SourceImage LIKE '%\\\\winscp.exe' ESCAPE '\\' OR SourceImage LIKE '%\\\\wmic.exe' ESCAPE '\\' OR SourceImage LIKE '%\\\\word.exe' ESCAPE '\\' OR SourceImage LIKE '%\\\\wscript.exe' ESCAPE '\\') AND NOT ((SourceImage LIKE '%Visual Studio%' ESCAPE '\\' OR SourceParentImage LIKE '%\\\\Programs\\\\Microsoft VS Code\\\\%' ESCAPE '\\') OR (SourceImage LIKE 'C:\\\\Windows\\\\System32\\\\winlogon.exe' ESCAPE '\\' AND (TargetImage LIKE 'C:\\\\Windows\\\\System32\\\\services.exe' ESCAPE '\\' OR TargetImage LIKE 'C:\\\\Windows\\\\System32\\\\wininit.exe' ESCAPE '\\' OR TargetImage LIKE 'C:\\\\Windows\\\\System32\\\\csrss.exe' ESCAPE '\\')) OR (SourceImage LIKE 'C:\\\\Windows\\\\System32\\\\provtool.exe' ESCAPE '\\' AND TargetParentProcessId = '0') OR (SourceImage LIKE '%\\\\git.exe' ESCAPE '\\' AND (TargetImage LIKE '%\\\\bin\\\\git.exe' ESCAPE '\\' OR TargetImage LIKE '%C:\\\\Windows\\\\System32\\\\conhost.exe' ESCAPE '\\'))))"
         ],
         "filename": "sysmon_susp_remote_thread.yml"
     },
@@ -9077,6 +9425,26 @@
             "SELECT * FROM logs WHERE ((EventID = '4688' AND Channel = 'Security') AND ((NewProcessName LIKE '%\\\\GUP.exe' ESCAPE '\\' OR OriginalFileName = 'gup.exe') AND (CommandLine LIKE '% -unzipTo %' ESCAPE '\\' AND CommandLine LIKE '%http%' ESCAPE '\\')) AND NOT (ParentProcessName LIKE '%\\\\notepad++.exe' ESCAPE '\\'))"
         ],
         "filename": "proc_creation_win_susp_gup_download.yml"
+    },
+    {
+        "title": "UEFI Persistence Via Wpbbin - ProcessCreation",
+        "id": "4abc0ec4-db5a-412f-9632-26659cddf145",
+        "status": "experimental",
+        "description": "Detects execution of the binary \"wpbbin\" which is used as part of the UEFI based persistence method described in the refernece section",
+        "author": "Nasreddine Bencherchali",
+        "tags": [
+            "attack.persistence",
+            "attack.defense_evasion",
+            "attack.t1542.001"
+        ],
+        "falsepositives": [
+            "Legitimate usage of the file by hardware manufacturer such as lenovo (Thanks @0gtweet for the tip)"
+        ],
+        "level": "high",
+        "rule": [
+            "SELECT * FROM logs WHERE (EventID = '4688' AND Channel = 'Security' AND NewProcessName LIKE 'C:\\\\Windows\\\\System32\\\\wpbbin.exe' ESCAPE '\\')"
+        ],
+        "filename": "proc_creation_win_wpbbin_persistence.yml"
     },
     {
         "title": "Bitsadmin Download File with Suspicious Extension",
@@ -9418,7 +9786,7 @@
         "title": "New Lolbin Process by Office Applications",
         "id": "23daeb52-e6eb-493c-8607-c4f0246cb7d8",
         "description": "This rule will monitor any office apps that spins up a new LOLBin process. This activity is pretty suspicious and should be investigated.",
-        "author": "Vadim Khrykov (ThreatIntel), Cyb3rEng (Rule)",
+        "author": "Vadim Khrykov (ThreatIntel), Cyb3rEng (Rule), Michael Haag",
         "tags": [
             "attack.t1204.002",
             "attack.t1047",
@@ -9432,7 +9800,7 @@
         ],
         "level": "high",
         "rule": [
-            "SELECT * FROM logs WHERE (EventID = '4688' AND Channel = 'Security' AND (NewProcessName LIKE '%\\\\regsvr32.exe' ESCAPE '\\' OR NewProcessName LIKE '%\\\\rundll32.exe' ESCAPE '\\' OR NewProcessName LIKE '%\\\\msiexec.exe' ESCAPE '\\' OR NewProcessName LIKE '%\\\\mshta.exe' ESCAPE '\\' OR NewProcessName LIKE '%\\\\verclsid.exe' ESCAPE '\\' OR NewProcessName LIKE '%\\\\msdt.exe' ESCAPE '\\') AND (ParentProcessName LIKE '%\\\\winword.exe' ESCAPE '\\' OR ParentProcessName LIKE '%\\\\excel.exe' ESCAPE '\\' OR ParentProcessName LIKE '%\\\\powerpnt.exe' ESCAPE '\\' OR ParentProcessName LIKE '%\\\\msaccess.exe' ESCAPE '\\' OR ParentProcessName LIKE '%\\\\mspub.exe' ESCAPE '\\' OR ParentProcessName LIKE '%\\\\eqnedt32.exe' ESCAPE '\\'))"
+            "SELECT * FROM logs WHERE (EventID = '4688' AND Channel = 'Security' AND (NewProcessName LIKE '%\\\\regsvr32.exe' ESCAPE '\\' OR NewProcessName LIKE '%\\\\rundll32.exe' ESCAPE '\\' OR NewProcessName LIKE '%\\\\msiexec.exe' ESCAPE '\\' OR NewProcessName LIKE '%\\\\mshta.exe' ESCAPE '\\' OR NewProcessName LIKE '%\\\\verclsid.exe' ESCAPE '\\' OR NewProcessName LIKE '%\\\\msdt.exe' ESCAPE '\\' OR NewProcessName LIKE '%\\\\control.exe' ESCAPE '\\') AND (ParentProcessName LIKE '%\\\\winword.exe' ESCAPE '\\' OR ParentProcessName LIKE '%\\\\excel.exe' ESCAPE '\\' OR ParentProcessName LIKE '%\\\\powerpnt.exe' ESCAPE '\\' OR ParentProcessName LIKE '%\\\\msaccess.exe' ESCAPE '\\' OR ParentProcessName LIKE '%\\\\mspub.exe' ESCAPE '\\' OR ParentProcessName LIKE '%\\\\eqnedt32.exe' ESCAPE '\\' OR ParentProcessName LIKE '%\\\\visio.exe' ESCAPE '\\' OR ParentProcessName LIKE '%\\\\wordpad.exe' ESCAPE '\\' OR ParentProcessName LIKE '%\\\\wordview.exe' ESCAPE '\\'))"
         ],
         "filename": "proc_creation_win_lolbins_by_office_applications.yml"
     },
@@ -11144,7 +11512,7 @@
             "attack.defense_evasion"
         ],
         "rule": [
-            "SELECT * FROM logs WHERE (EventID = '4688' AND Channel = 'Security' AND NewProcessName LIKE '%\\\\ntvdm.exe' ESCAPE '\\')"
+            "SELECT * FROM logs WHERE (EventID = '4688' AND Channel = 'Security' AND (NewProcessName LIKE '%\\\\ntvdm.exe' ESCAPE '\\' OR NewProcessName LIKE '%\\\\csrstub.exe' ESCAPE '\\'))"
         ],
         "filename": "proc_creation_win_susp_16bit_application.yml"
     },
@@ -12522,6 +12890,24 @@
         "filename": "proc_creation_win_susp_advancedrun_priv_user.yml"
     },
     {
+        "title": "Suspicious PowerShell Obfuscated PowerShell Code",
+        "id": "8d01b53f-456f-48ee-90f6-bc28e67d4e35",
+        "status": "experimental",
+        "description": "Detects suspicious UTF16 and base64 encoded and often obfuscated PowerShell code often used in command lines",
+        "author": "Florian Roth",
+        "tags": [
+            "attack.defense_evasion"
+        ],
+        "falsepositives": [
+            "Unknown"
+        ],
+        "level": "high",
+        "rule": [
+            "SELECT * FROM logs WHERE (EventID = '4688' AND Channel = 'Security' AND (CommandLine LIKE '%IAAtAGIAeABvAHIAIAAwAHgA%' ESCAPE '\\' OR CommandLine LIKE '%AALQBiAHgAbwByACAAMAB4A%' ESCAPE '\\' OR CommandLine LIKE '%gAC0AYgB4AG8AcgAgADAAeA%' ESCAPE '\\' OR CommandLine LIKE '%AC4ASQBuAHYAbwBrAGUAKAApACAAfAAg%' ESCAPE '\\' OR CommandLine LIKE '%AuAEkAbgB2AG8AawBlACgAKQAgAHwAI%' ESCAPE '\\' OR CommandLine LIKE '%ALgBJAG4AdgBvAGsAZQAoACkAIAB8AC%' ESCAPE '\\' OR CommandLine LIKE '%AHsAMQB9AHsAMAB9ACIAIAAtAGYAI%' ESCAPE '\\' OR CommandLine LIKE '%B7ADEAfQB7ADAAfQAiACAALQBmAC%' ESCAPE '\\' OR CommandLine LIKE '%AewAxAH0AewAwAH0AIgAgAC0AZgAg%' ESCAPE '\\' OR CommandLine LIKE '%AHsAMAB9AHsAMwB9ACIAIAAtAGYAI%' ESCAPE '\\' OR CommandLine LIKE '%B7ADAAfQB7ADMAfQAiACAALQBmAC%' ESCAPE '\\' OR CommandLine LIKE '%AewAwAH0AewAzAH0AIgAgAC0AZgAg%' ESCAPE '\\' OR CommandLine LIKE '%AHsAMgB9AHsAMAB9ACIAIAAtAGYAI%' ESCAPE '\\' OR CommandLine LIKE '%B7ADIAfQB7ADAAfQAiACAALQBmAC%' ESCAPE '\\' OR CommandLine LIKE '%AewAyAH0AewAwAH0AIgAgAC0AZgAg%' ESCAPE '\\' OR CommandLine LIKE '%AHsAMQB9AHsAMAB9ACcAIAAtAGYAI%' ESCAPE '\\' OR CommandLine LIKE '%B7ADEAfQB7ADAAfQAnACAALQBmAC%' ESCAPE '\\' OR CommandLine LIKE '%AewAxAH0AewAwAH0AJwAgAC0AZgAg%' ESCAPE '\\' OR CommandLine LIKE '%AHsAMAB9AHsAMwB9ACcAIAAtAGYAI%' ESCAPE '\\' OR CommandLine LIKE '%B7ADAAfQB7ADMAfQAnACAALQBmAC%' ESCAPE '\\' OR CommandLine LIKE '%AewAwAH0AewAzAH0AJwAgAC0AZgAg%' ESCAPE '\\' OR CommandLine LIKE '%AHsAMgB9AHsAMAB9ACcAIAAtAGYAI%' ESCAPE '\\' OR CommandLine LIKE '%B7ADIAfQB7ADAAfQAnACAALQBmAC%' ESCAPE '\\' OR CommandLine LIKE '%AewAyAH0AewAwAH0AJwAgAC0AZgAg%' ESCAPE '\\'))"
+        ],
+        "filename": "proc_creation_win_susp_ps_encoded_obfusc.yml"
+    },
+    {
         "title": "XORDump Use",
         "id": "66e563f9-1cbd-4a22-a957-d8b7c0f44372",
         "description": "Detects suspicious use of XORDump process memory dumping utility",
@@ -12594,7 +12980,7 @@
             "attack.t1218.011"
         ],
         "rule": [
-            "SELECT * FROM logs WHERE ((EventID = '4688' AND Channel = 'Security') AND ((CommandLine LIKE '%javascript:%' ESCAPE '\\' AND CommandLine LIKE '%.RegisterXLL%' ESCAPE '\\') OR (CommandLine LIKE '%url.dll%' ESCAPE '\\' AND CommandLine LIKE '%OpenURL%' ESCAPE '\\') OR (CommandLine LIKE '%url.dll%' ESCAPE '\\' AND CommandLine LIKE '%OpenURLA%' ESCAPE '\\') OR (CommandLine LIKE '%url.dll%' ESCAPE '\\' AND CommandLine LIKE '%FileProtocolHandler%' ESCAPE '\\') OR (CommandLine LIKE '%zipfldr.dll%' ESCAPE '\\' AND CommandLine LIKE '%RouteTheCall%' ESCAPE '\\') OR (CommandLine LIKE '%shell32.dll%' ESCAPE '\\' AND CommandLine LIKE '%Control\\_RunDLL%' ESCAPE '\\') OR (CommandLine LIKE '%shell32.dll%' ESCAPE '\\' AND CommandLine LIKE '%ShellExec\\_RunDLL%' ESCAPE '\\') OR (CommandLine LIKE '%mshtml.dll%' ESCAPE '\\' AND CommandLine LIKE '%PrintHTML%' ESCAPE '\\') OR (CommandLine LIKE '%advpack.dll%' ESCAPE '\\' AND CommandLine LIKE '%LaunchINFSection%' ESCAPE '\\') OR (CommandLine LIKE '%advpack.dll%' ESCAPE '\\' AND CommandLine LIKE '%RegisterOCX%' ESCAPE '\\') OR (CommandLine LIKE '%ieadvpack.dll%' ESCAPE '\\' AND CommandLine LIKE '%LaunchINFSection%' ESCAPE '\\') OR (CommandLine LIKE '%ieadvpack.dll%' ESCAPE '\\' AND CommandLine LIKE '%RegisterOCX%' ESCAPE '\\') OR (CommandLine LIKE '%ieframe.dll%' ESCAPE '\\' AND CommandLine LIKE '%OpenURL%' ESCAPE '\\') OR (CommandLine LIKE '%shdocvw.dll%' ESCAPE '\\' AND CommandLine LIKE '%OpenURL%' ESCAPE '\\') OR (CommandLine LIKE '%syssetup.dll%' ESCAPE '\\' AND CommandLine LIKE '%SetupInfObjectInstallAction%' ESCAPE '\\') OR (CommandLine LIKE '%setupapi.dll%' ESCAPE '\\' AND CommandLine LIKE '%InstallHinfSection%' ESCAPE '\\') OR (CommandLine LIKE '%pcwutl.dll%' ESCAPE '\\' AND CommandLine LIKE '%LaunchApplication%' ESCAPE '\\') OR (CommandLine LIKE '%dfshim.dll%' ESCAPE '\\' AND CommandLine LIKE '%ShOpenVerbApplication%' ESCAPE '\\') OR (CommandLine LIKE '%dfshim.dll%' ESCAPE '\\' AND CommandLine LIKE '%ShOpenVerbShortcut%' ESCAPE '\\')))"
+            "SELECT * FROM logs WHERE ((EventID = '4688' AND Channel = 'Security') AND ((CommandLine LIKE '%javascript:%' ESCAPE '\\' AND CommandLine LIKE '%.RegisterXLL%' ESCAPE '\\') OR (CommandLine LIKE '%url.dll%' ESCAPE '\\' AND CommandLine LIKE '%OpenURL%' ESCAPE '\\') OR (CommandLine LIKE '%url.dll%' ESCAPE '\\' AND CommandLine LIKE '%OpenURLA%' ESCAPE '\\') OR (CommandLine LIKE '%url.dll%' ESCAPE '\\' AND CommandLine LIKE '%FileProtocolHandler%' ESCAPE '\\') OR (CommandLine LIKE '%zipfldr.dll%' ESCAPE '\\' AND CommandLine LIKE '%RouteTheCall%' ESCAPE '\\') OR (CommandLine LIKE '%shell32.dll%' ESCAPE '\\' AND CommandLine LIKE '%Control\\_RunDLL%' ESCAPE '\\') OR (CommandLine LIKE '%shell32.dll%' ESCAPE '\\' AND CommandLine LIKE '%ShellExec\\_RunDLL%' ESCAPE '\\') OR (CommandLine LIKE '%mshtml.dll%' ESCAPE '\\' AND CommandLine LIKE '%PrintHTML%' ESCAPE '\\') OR (CommandLine LIKE '%advpack.dll%' ESCAPE '\\' AND CommandLine LIKE '%LaunchINFSection%' ESCAPE '\\') OR (CommandLine LIKE '%advpack.dll%' ESCAPE '\\' AND CommandLine LIKE '%RegisterOCX%' ESCAPE '\\') OR (CommandLine LIKE '%ieadvpack.dll%' ESCAPE '\\' AND CommandLine LIKE '%LaunchINFSection%' ESCAPE '\\') OR (CommandLine LIKE '%ieadvpack.dll%' ESCAPE '\\' AND CommandLine LIKE '%RegisterOCX%' ESCAPE '\\') OR (CommandLine LIKE '%ieframe.dll%' ESCAPE '\\' AND CommandLine LIKE '%OpenURL%' ESCAPE '\\') OR (CommandLine LIKE '%shdocvw.dll%' ESCAPE '\\' AND CommandLine LIKE '%OpenURL%' ESCAPE '\\') OR (CommandLine LIKE '%syssetup.dll%' ESCAPE '\\' AND CommandLine LIKE '%SetupInfObjectInstallAction%' ESCAPE '\\') OR (CommandLine LIKE '%setupapi.dll%' ESCAPE '\\' AND CommandLine LIKE '%InstallHinfSection%' ESCAPE '\\') OR (CommandLine LIKE '%pcwutl.dll%' ESCAPE '\\' AND CommandLine LIKE '%LaunchApplication%' ESCAPE '\\') OR (CommandLine LIKE '%dfshim.dll%' ESCAPE '\\' AND CommandLine LIKE '%ShOpenVerbApplication%' ESCAPE '\\') OR (CommandLine LIKE '%dfshim.dll%' ESCAPE '\\' AND CommandLine LIKE '%ShOpenVerbShortcut%' ESCAPE '\\')) AND NOT (CommandLine LIKE '%shell32.dll,Control\\_RunDLL desk.cpl,screensaver,@screensaver%' ESCAPE '\\'))"
         ],
         "filename": "proc_creation_win_susp_rundll32_activity.yml"
     },
@@ -12855,7 +13241,7 @@
             "attack.t1587.001"
         ],
         "rule": [
-            "SELECT * FROM logs WHERE (EventID = '4688' AND Channel = 'Security' AND (CommandLine LIKE '%PsExec%' ESCAPE '\\' OR CommandLine LIKE '%PAExec%' ESCAPE '\\' OR CommandLine LIKE '%accepteula%' ESCAPE '\\' OR CommandLine LIKE '%cmd /c %' ESCAPE '\\') AND CommandLine LIKE '% -s cmd.exe' ESCAPE '\\')"
+            "SELECT * FROM logs WHERE (EventID = '4688' AND Channel = 'Security' AND CommandLine LIKE '% -s cmd.exe' ESCAPE '\\' AND (CommandLine LIKE '%PsExec%' ESCAPE '\\' OR CommandLine LIKE '%PAExec%' ESCAPE '\\' OR CommandLine LIKE '%accepteula%' ESCAPE '\\' OR CommandLine LIKE '%cmd /c %' ESCAPE '\\'))"
         ],
         "filename": "proc_creation_win_susp_psexex_paexec_escalate_system.yml"
     },
@@ -14106,6 +14492,24 @@
         "filename": "proc_creation_win_susp_pressynkey_lolbin.yml"
     },
     {
+        "title": "PsExec Service Execution with Different Name",
+        "id": "51ae86a2-e2e1-4097-ad85-c46cb6851de4",
+        "status": "experimental",
+        "description": "Detects suspicious launch of the PSEXESVC service with a different service name, which is not often used by legitimate administrators",
+        "author": "FLorian Roth",
+        "tags": [
+            "attack.execution"
+        ],
+        "falsepositives": [
+            "Legitimate administrative tasks"
+        ],
+        "level": "high",
+        "rule": [
+            "SELECT * FROM logs WHERE ((EventID = '4688' AND Channel = 'Security') AND OriginalFileName = 'psexesvc.exe' AND NOT (NewProcessName LIKE 'C:\\\\Windows\\\\PSEXESVC.exe' ESCAPE '\\'))"
+        ],
+        "filename": "proc_creation_win_suspicious_psexesvc_renamed.yml"
+    },
+    {
         "title": "Accesschk Usage To Check Privileges",
         "id": "c625d754-6a3d-4f65-9c9a-536aea960d37",
         "status": "test",
@@ -14454,6 +14858,24 @@
             "SELECT * FROM logs WHERE ((EventID = '4688' AND Channel = 'Security') AND (((NewProcessName LIKE '%ftp.exe' ESCAPE '\\' AND CommandLine LIKE '%-s:%' ESCAPE '\\') OR (OriginalFileName = 'ftp.exe' AND CommandLine LIKE '%-s:%' ESCAPE '\\')) OR (OriginalFileName = 'ftp.exe' AND NOT (NewProcessName LIKE '%ftp.exe' ESCAPE '\\')) OR ParentProcessName LIKE '%ftp.exe' ESCAPE '\\'))"
         ],
         "filename": "proc_creation_win_susp_ftp.yml"
+    },
+    {
+        "title": "PsExec Service Execution",
+        "id": "fdfcbd78-48f1-4a4b-90ac-d82241e368c5",
+        "status": "experimental",
+        "description": "Detects launch of the PSEXESVC service, which means that this system was the target of a psexec remote execution",
+        "author": "Romaissa Adjailia, FLorian Roth",
+        "tags": [
+            "attack.execution"
+        ],
+        "falsepositives": [
+            "Legitimate administrative tasks"
+        ],
+        "level": "medium",
+        "rule": [
+            "SELECT * FROM logs WHERE ((EventID = '4688' AND Channel = 'Security') AND (NewProcessName LIKE 'C:\\\\Windows\\\\PSEXESVC.exe' ESCAPE '\\' OR OriginalFileName = 'psexesvc.exe'))"
+        ],
+        "filename": "proc_creation_win_suspicious_psexesvc.yml"
     },
     {
         "title": "UAC Bypass Using Disk Cleanup",
@@ -15568,6 +15990,24 @@
             "SELECT * FROM logs WHERE ((EventID = '4688' AND Channel = 'Security') AND ((NewProcessName LIKE '%\\\\netsh.exe' ESCAPE '\\' AND CommandLine LIKE '%interface%' ESCAPE '\\' AND CommandLine LIKE '%portproxy%' ESCAPE '\\' AND CommandLine LIKE '%add%' ESCAPE '\\' AND CommandLine LIKE '%v4tov4%' ESCAPE '\\') OR (NewProcessName LIKE '%\\\\netsh.exe' ESCAPE '\\' AND CommandLine LIKE '%connectp%' ESCAPE '\\' AND CommandLine LIKE '%listena%' ESCAPE '\\' AND CommandLine LIKE '%c=%' ESCAPE '\\')))"
         ],
         "filename": "proc_creation_win_netsh_port_fwd.yml"
+    },
+    {
+        "title": "PsExec Service Execution as LOCAL SYSTEM",
+        "id": "7c0dcd3d-acf8-4f71-9570-f448b0034f94",
+        "status": "experimental",
+        "description": "Detects suspicious launch of the PSEXESVC service on this system and a sub process run as LOCAL_SYSTEM (-s), which means that someone remotely started a command on this system running it with highest privileges and not only the privileges of the login user account (e.g. the administrator account)",
+        "author": "FLorian Roth",
+        "tags": [
+            "attack.execution"
+        ],
+        "falsepositives": [
+            "Legitimate administrative tasks"
+        ],
+        "level": "high",
+        "rule": [
+            "SELECT * FROM logs WHERE (EventID = '4688' AND Channel = 'Security' AND ParentProcessName LIKE 'C:\\\\Windows\\\\PSEXESVC.exe' ESCAPE '\\' AND (User LIKE '%AUTHORI%' ESCAPE '\\' OR User LIKE '%AUTORI%' ESCAPE '\\'))"
+        ],
+        "filename": "proc_creation_win_suspicious_psexesvc_as_system.yml"
     },
     {
         "title": "Firewall Disabled via Netsh",
@@ -16780,6 +17220,25 @@
             "SELECT * FROM logs WHERE ((EventID = '4688' AND Channel = 'Security') AND (NewProcessName LIKE '%\\\\reg.exe' ESCAPE '\\' AND CommandLine LIKE '% query %' ESCAPE '\\' AND CommandLine LIKE '%/t %' ESCAPE '\\' AND CommandLine LIKE '%REG\\_SZ%' ESCAPE '\\' AND CommandLine LIKE '%/s%' ESCAPE '\\') AND ((CommandLine LIKE '%/f %' ESCAPE '\\' AND CommandLine LIKE '%HKLM%' ESCAPE '\\') OR (CommandLine LIKE '%/f %' ESCAPE '\\' AND CommandLine LIKE '%HKCU%' ESCAPE '\\') OR CommandLine LIKE '%HKCU\\\\Software\\\\SimonTatham\\\\PuTTY\\\\Sessions%' ESCAPE '\\'))"
         ],
         "filename": "proc_creation_win_enumeration_for_credentials_in_registry.yml"
+    },
+    {
+        "title": "PPID Spoofing Tool Usage",
+        "id": "52ff7941-8211-46f9-84f8-9903efb7077d",
+        "status": "test",
+        "description": "Detects the use of parent process ID spoofing tools like Didier Stevens tool SelectMyParent",
+        "author": "Florian Roth",
+        "tags": [
+            "attack.defense_evasion",
+            "attack.t1134.004"
+        ],
+        "falsepositives": [
+            "Unlikely"
+        ],
+        "level": "high",
+        "rule": [
+            "SELECT * FROM logs WHERE ((EventID = '4688' AND Channel = 'Security') AND (NewProcessName LIKE '%\\\\SelectMyParent.exe' ESCAPE '\\' OR (CommandLine LIKE '%PPID-spoof%' ESCAPE '\\' OR CommandLine LIKE '%ppid\\_spoof%' ESCAPE '\\' OR CommandLine LIKE '%spoof-ppid%' ESCAPE '\\' OR CommandLine LIKE '%spoof\\_ppid%' ESCAPE '\\' OR CommandLine LIKE '%ppidspoof%' ESCAPE '\\' OR CommandLine LIKE '%spoofppid%' ESCAPE '\\' OR CommandLine LIKE '%spoofedppid%' ESCAPE '\\' OR CommandLine LIKE '% -spawnto %' ESCAPE '\\') OR (OriginalFileName LIKE '%PPID-spoof%' ESCAPE '\\' OR OriginalFileName LIKE '%ppid\\_spoof%' ESCAPE '\\' OR OriginalFileName LIKE '%spoof-ppid%' ESCAPE '\\' OR OriginalFileName LIKE '%spoof\\_ppid%' ESCAPE '\\' OR OriginalFileName LIKE '%ppidspoof%' ESCAPE '\\' OR OriginalFileName LIKE '%spoofppid%' ESCAPE '\\' OR OriginalFileName LIKE '%spoofedppid%' ESCAPE '\\') OR Description = 'SelectMyParent' OR Imphash IN ('04d974875bd225f00902b4cad9af3fbc', 'a782af154c9e743ddf3f3eb2b8f3d16e', '89059503d7fbf470e68f7e63313da3ad', 'ca28337632625c8281ab8a130b3d6bad') OR (Hashes LIKE '%IMPHASH=04D974875BD225F00902B4CAD9AF3FBC%' ESCAPE '\\' OR Hashes LIKE '%IMPHASH=A782AF154C9E743DDF3F3EB2B8F3D16E%' ESCAPE '\\' OR Hashes LIKE '%IMPHASH=89059503D7FBF470E68F7E63313DA3AD%' ESCAPE '\\' OR Hashes LIKE '%IMPHASH=CA28337632625C8281AB8A130B3D6BAD%' ESCAPE '\\')))"
+        ],
+        "filename": "proc_creation_selectmyparent.yml"
     },
     {
         "title": "CVE-2021-40444 Process Pattern",
@@ -20821,6 +21280,25 @@
         "filename": "proc_creation_win_susp_wuauclt.yml"
     },
     {
+        "title": "Use Icacls to Hide File to Everyone",
+        "id": "4ae81040-fc1c-4249-bfa3-938d260214d9",
+        "status": "experimental",
+        "description": "Detect use of icacls to deny acces for everyone in Users folder sometimes used to hide malicious files",
+        "author": "frack113",
+        "falsepositives": [
+            "Legitimate use"
+        ],
+        "level": "medium",
+        "tags": [
+            "attack.defense_evasion",
+            "attack.t1564.001"
+        ],
+        "rule": [
+            "SELECT * FROM logs WHERE ((EventID = '4688' AND Channel = 'Security') AND (OriginalFileName = 'iCACLS.EXE' OR NewProcessName LIKE '%\\\\icacls.exe' ESCAPE '\\') AND (CommandLine LIKE '%C:\\\\Users\\\\%' ESCAPE '\\' AND CommandLine LIKE '%/deny%' ESCAPE '\\' AND CommandLine LIKE '%S-1-1-0:%' ESCAPE '\\'))"
+        ],
+        "filename": "proc_creation_win_icacls_deny.yml"
+    },
+    {
         "title": "Suspicious Registration via cscript.exe",
         "id": "28c8f68b-098d-45af-8d43-8089f3e35403",
         "description": "Detects when the registration of a VSS/VDS Provider as a COM+ application.",
@@ -22319,7 +22797,7 @@
         "id": "8e2b24c9-4add-46a0-b4bb-0057b4e6187d",
         "status": "experimental",
         "description": "Detects various anomalies in relation to regsvr32.exe",
-        "author": "Florian Roth, oscd.community",
+        "author": "Florian Roth, oscd.community, Tim Shelton",
         "tags": [
             "attack.defense_evasion",
             "attack.t1218.010",
@@ -22331,7 +22809,7 @@
         ],
         "level": "high",
         "rule": [
-            "SELECT * FROM logs WHERE ((EventID = '4688' AND Channel = 'Security') AND ((NewProcessName LIKE '%\\\\regsvr32.exe' ESCAPE '\\' AND CommandLine LIKE '%\\\\Temp\\\\%' ESCAPE '\\') OR (NewProcessName LIKE '%\\\\regsvr32.exe' ESCAPE '\\' AND (ParentProcessName LIKE '%\\\\powershell.exe' ESCAPE '\\' OR ParentProcessName LIKE '%\\\\pwsh.exe' ESCAPE '\\' OR ParentProcessName LIKE '%\\\\powershell\\_ise.exe' ESCAPE '\\')) OR (NewProcessName LIKE '%\\\\regsvr32.exe' ESCAPE '\\' AND ParentProcessName LIKE '%\\\\cmd.exe' ESCAPE '\\') OR (NewProcessName LIKE '%\\\\regsvr32.exe' ESCAPE '\\' AND CommandLine LIKE '%/i:%' ESCAPE '\\' AND CommandLine LIKE '%http%' ESCAPE '\\' AND CommandLine LIKE '%scrobj.dll' ESCAPE '\\') OR (NewProcessName LIKE '%\\\\regsvr32.exe' ESCAPE '\\' AND CommandLine LIKE '%/i:%' ESCAPE '\\' AND CommandLine LIKE '%ftp%' ESCAPE '\\' AND CommandLine LIKE '%scrobj.dll' ESCAPE '\\') OR (NewProcessName LIKE '%\\\\wscript.exe' ESCAPE '\\' AND ParentProcessName LIKE '%\\\\regsvr32.exe' ESCAPE '\\') OR (NewProcessName LIKE '%\\\\EXCEL.EXE' ESCAPE '\\' AND CommandLine LIKE '%..\\\\..\\\\..\\\\Windows\\\\System32\\\\regsvr32.exe %' ESCAPE '\\') OR (ParentProcessName LIKE '%\\\\mshta.exe' ESCAPE '\\' AND NewProcessName LIKE '%\\\\regsvr32.exe' ESCAPE '\\') OR (NewProcessName LIKE '%\\\\regsvr32.exe' ESCAPE '\\' AND (CommandLine LIKE '%\\\\AppData\\\\Local%' ESCAPE '\\' OR CommandLine LIKE '%C:\\\\Users\\\\Public%' ESCAPE '\\')) OR (NewProcessName LIKE '%\\\\regsvr32.exe' ESCAPE '\\' AND (CommandLine LIKE '%.jpg' ESCAPE '\\' OR CommandLine LIKE '%.jpeg' ESCAPE '\\' OR CommandLine LIKE '%.png' ESCAPE '\\' OR CommandLine LIKE '%.gif' ESCAPE '\\' OR CommandLine LIKE '%.bin' ESCAPE '\\' OR CommandLine LIKE '%.tmp' ESCAPE '\\' OR CommandLine LIKE '%.temp' ESCAPE '\\' OR CommandLine LIKE '%.txt' ESCAPE '\\'))) AND NOT ((CommandLine LIKE '%\\\\AppData\\\\Local\\\\Microsoft\\\\Teams%' ESCAPE '\\' OR CommandLine LIKE '%\\\\AppData\\\\Local\\\\WebEx\\\\WebEx64\\\\Meetings\\\\atucfobj.dll%' ESCAPE '\\')))"
+            "SELECT * FROM logs WHERE ((EventID = '4688' AND Channel = 'Security') AND ((NewProcessName LIKE '%\\\\regsvr32.exe' ESCAPE '\\' AND CommandLine LIKE '%\\\\Temp\\\\%' ESCAPE '\\') OR (NewProcessName LIKE '%\\\\regsvr32.exe' ESCAPE '\\' AND (ParentProcessName LIKE '%\\\\powershell.exe' ESCAPE '\\' OR ParentProcessName LIKE '%\\\\pwsh.exe' ESCAPE '\\' OR ParentProcessName LIKE '%\\\\powershell\\_ise.exe' ESCAPE '\\')) OR (NewProcessName LIKE '%\\\\regsvr32.exe' ESCAPE '\\' AND ParentProcessName LIKE '%\\\\cmd.exe' ESCAPE '\\') OR (NewProcessName LIKE '%\\\\regsvr32.exe' ESCAPE '\\' AND CommandLine LIKE '%/i:%' ESCAPE '\\' AND CommandLine LIKE '%http%' ESCAPE '\\' AND CommandLine LIKE '%scrobj.dll' ESCAPE '\\') OR (NewProcessName LIKE '%\\\\regsvr32.exe' ESCAPE '\\' AND CommandLine LIKE '%/i:%' ESCAPE '\\' AND CommandLine LIKE '%ftp%' ESCAPE '\\' AND CommandLine LIKE '%scrobj.dll' ESCAPE '\\') OR (NewProcessName LIKE '%\\\\wscript.exe' ESCAPE '\\' AND ParentProcessName LIKE '%\\\\regsvr32.exe' ESCAPE '\\') OR (NewProcessName LIKE '%\\\\EXCEL.EXE' ESCAPE '\\' AND CommandLine LIKE '%..\\\\..\\\\..\\\\Windows\\\\System32\\\\regsvr32.exe %' ESCAPE '\\') OR (ParentProcessName LIKE '%\\\\mshta.exe' ESCAPE '\\' AND NewProcessName LIKE '%\\\\regsvr32.exe' ESCAPE '\\') OR (NewProcessName LIKE '%\\\\regsvr32.exe' ESCAPE '\\' AND (CommandLine LIKE '%\\\\AppData\\\\Local%' ESCAPE '\\' OR CommandLine LIKE '%C:\\\\Users\\\\Public%' ESCAPE '\\')) OR (NewProcessName LIKE '%\\\\regsvr32.exe' ESCAPE '\\' AND (CommandLine LIKE '%.jpg' ESCAPE '\\' OR CommandLine LIKE '%.jpeg' ESCAPE '\\' OR CommandLine LIKE '%.png' ESCAPE '\\' OR CommandLine LIKE '%.gif' ESCAPE '\\' OR CommandLine LIKE '%.bin' ESCAPE '\\' OR CommandLine LIKE '%.tmp' ESCAPE '\\' OR CommandLine LIKE '%.temp' ESCAPE '\\' OR CommandLine LIKE '%.txt' ESCAPE '\\'))) AND NOT (((CommandLine LIKE '%\\\\AppData\\\\Local\\\\Microsoft\\\\Teams%' ESCAPE '\\' OR CommandLine LIKE '%\\\\AppData\\\\Local\\\\WebEx\\\\WebEx64\\\\Meetings\\\\atucfobj.dll%' ESCAPE '\\')) OR (ParentProcessName LIKE 'C:\\\\Program Files\\\\Box\\\\Box\\\\FS\\\\streem.exe' ESCAPE '\\' AND CommandLine LIKE '%\\\\Program Files\\\\Box\\\\Box\\\\Temp\\\\%' ESCAPE '\\')))"
         ],
         "filename": "proc_creation_win_susp_regsvr32_anomalies.yml"
     },
@@ -22470,6 +22948,24 @@
             "SELECT * FROM logs WHERE ((EventID = '4688' AND Channel = 'Security') AND (CommandLine LIKE '%setup0.exe -p%' ESCAPE '\\' OR (CommandLine LIKE '%setup.exe%' ESCAPE '\\' AND (CommandLine LIKE '%-x:0' ESCAPE '\\' OR CommandLine LIKE '%-x:1' ESCAPE '\\' OR CommandLine LIKE '%-x:2' ESCAPE '\\'))))"
         ],
         "filename": "proc_creation_win_apt_winnti_pipemon.yml"
+    },
+    {
+        "title": "Suspicious Execution Of PDQDeployRunner",
+        "id": "12b8e9f5-96b2-41e1-9a42-8c6779a5c184",
+        "status": "experimental",
+        "description": "Detects suspicious execution of \"PDQDeployRunner\" which is part of the PDQDeploy service stack that is responsible for executing commands and packages on a remote machines",
+        "tags": [
+            "attack.execution"
+        ],
+        "author": "Nasreddine Bencherchali",
+        "falsepositives": [
+            "Legitimate use of the PDQDeploy tool to execute these commands"
+        ],
+        "level": "medium",
+        "rule": [
+            "SELECT * FROM logs WHERE ((EventID = '4688' AND Channel = 'Security') AND ParentProcessName LIKE '%PDQDeployRunner-%' ESCAPE '\\' AND ((NewProcessName LIKE '%\\\\wscript.exe' ESCAPE '\\' OR NewProcessName LIKE '%\\\\cscript.exe' ESCAPE '\\' OR NewProcessName LIKE '%\\\\rundll32.exe' ESCAPE '\\' OR NewProcessName LIKE '%\\\\regsvr32.exe' ESCAPE '\\' OR NewProcessName LIKE '%\\\\wmic.exe' ESCAPE '\\' OR NewProcessName LIKE '%\\\\msiexec.exe' ESCAPE '\\' OR NewProcessName LIKE '%\\\\mshta.exe' ESCAPE '\\' OR NewProcessName LIKE '%\\\\csc.exe' ESCAPE '\\' OR NewProcessName LIKE '%\\\\dllhost.exe' ESCAPE '\\' OR NewProcessName LIKE '%\\\\certutil.exe' ESCAPE '\\' OR NewProcessName LIKE '%\\\\scriptrunner.exe' ESCAPE '\\' OR NewProcessName LIKE '%\\\\bash.exe' ESCAPE '\\' OR NewProcessName LIKE '%\\\\wsl.exe' ESCAPE '\\') OR (NewProcessName LIKE '%C:\\\\Users\\\\Public\\\\%' ESCAPE '\\' OR NewProcessName LIKE '%C:\\\\ProgramData\\\\%' ESCAPE '\\' OR NewProcessName LIKE '%C:\\\\Windows\\\\TEMP\\\\%' ESCAPE '\\' OR NewProcessName LIKE '%\\\\AppData\\\\Local\\\\Temp%' ESCAPE '\\') OR (CommandLine LIKE '%iex %' ESCAPE '\\' OR CommandLine LIKE '%Invoke-%' ESCAPE '\\' OR CommandLine LIKE '%DownloadString%' ESCAPE '\\' OR CommandLine LIKE '%http%' ESCAPE '\\' OR CommandLine LIKE '% -enc %' ESCAPE '\\' OR CommandLine LIKE '% -encodedcommand %' ESCAPE '\\' OR CommandLine LIKE '%FromBase64String%' ESCAPE '\\' OR CommandLine LIKE '% -decode %' ESCAPE '\\' OR CommandLine LIKE '% -w hidden%' ESCAPE '\\')))"
+        ],
+        "filename": "proc_creation_win_pdqdeploy_runner_susp_children.yml"
     },
     {
         "title": "Process Dump via Comsvcs DLL",
@@ -22970,7 +23466,7 @@
         ],
         "level": "medium",
         "rule": [
-            "SELECT * FROM logs WHERE ((EventID = '4688' AND Channel = 'Security') AND (NewProcessName LIKE '%\\\\update.exe' ESCAPE '\\' AND CommandLine LIKE '%.exe%' ESCAPE '\\' AND (CommandLine LIKE '%--processStart%' ESCAPE '\\' OR CommandLine LIKE '%--processStartAndWait%' ESCAPE '\\' OR CommandLine LIKE '%--createShortcut%' ESCAPE '\\')) AND NOT ((CommandLine LIKE '%C:\\\\Users\\\\%' ESCAPE '\\' AND CommandLine LIKE '%\\\\AppData\\\\Local\\\\Discord\\\\Update.exe%' ESCAPE '\\' AND CommandLine LIKE '% --processStart Discord.exe%' ESCAPE '\\')))"
+            "SELECT * FROM logs WHERE ((EventID = '4688' AND Channel = 'Security') AND (NewProcessName LIKE '%\\\\update.exe' ESCAPE '\\' AND CommandLine LIKE '%.exe%' ESCAPE '\\' AND (CommandLine LIKE '%--processStart%' ESCAPE '\\' OR CommandLine LIKE '%--processStartAndWait%' ESCAPE '\\' OR CommandLine LIKE '%--createShortcut%' ESCAPE '\\')) AND NOT ((CommandLine LIKE '%C:\\\\Users\\\\%' ESCAPE '\\' AND CommandLine LIKE '%\\\\AppData\\\\Local\\\\Discord\\\\Update.exe%' ESCAPE '\\' AND CommandLine LIKE '% --processStart Discord.exe%' ESCAPE '\\' OR CommandLine LIKE '%C:\\\\Users\\\\%' ESCAPE '\\' AND CommandLine LIKE '%\\\\AppData\\\\Local\\\\GitHubDesktop\\\\Update.exe --createShortcut GitHubDesktop.exe%' ESCAPE '\\')))"
         ],
         "filename": "proc_creation_win_susp_squirrel_lolbin.yml"
     },
@@ -24530,7 +25026,7 @@
     {
         "title": "Powerview Add-DomainObjectAcl DCSync AD Extend Right",
         "id": "2c99737c-585d-4431-b61a-c911d86ff32f",
-        "description": "backdooring domain object to grant the rights associated with DCSync to a regular user or machine account using Powerview\\Add-DomainObjectAcl DCSync Extended Right cmdlet, will allow to re-obtain the pwd hashes of any user/computer",
+        "description": "Backdooring domain object to grant the rights associated with DCSync to a regular user or machine account using Powerview\\Add-DomainObjectAcl DCSync Extended Right cmdlet, will allow to re-obtain the pwd hashes of any user/computer",
         "status": "experimental",
         "author": "Samir Bousseaden; Roberto Rodriguez @Cyb3rWard0g; oscd.community; Tim Shelton",
         "tags": [
@@ -24540,7 +25036,7 @@
         "falsepositives": [
             "New Domain Controller computer account, check user SIDs within the value attribute of event 5136 and verify if it's a regular user or DC computer account."
         ],
-        "level": "critical",
+        "level": "high",
         "rule": [
             "SELECT * FROM logs WHERE (Channel = 'Security' AND (EventID = '5136' AND AttributeLDAPDisplayName = 'ntSecurityDescriptor' AND (AttributeValue LIKE '%1131f6ad-9c07-11d1-f79f-00c04fc2dcd2%' ESCAPE '\\' OR AttributeValue LIKE '%1131f6aa-9c07-11d1-f79f-00c04fc2dcd2%' ESCAPE '\\' OR AttributeValue LIKE '%89e95b76-444d-4c62-991a-0facbeda640c%' ESCAPE '\\')) AND NOT ((ObjectType IN ('dnsNode', 'dnsZoneScope'))))"
         ],
@@ -26485,6 +26981,25 @@
         "filename": "win_invoke_obfuscation_via_use_mshta_services.yml"
     },
     {
+        "title": "New PDQDeploy Service - Client Side",
+        "id": "b98a10af-1e1e-44a7-bab2-4cc026917648",
+        "description": "Detects PDQDeploy service installation on the target system. When a pakcage is deployed via PDQDeploy it installs a remote service on the target machine with the name \"PDQDeployRunner-X\" where \"X\" is an integer starting from 1",
+        "status": "experimental",
+        "author": "Nasreddine Bencherchali",
+        "tags": [
+            "attack.privilege_escalation",
+            "attack.t1543.003"
+        ],
+        "falsepositives": [
+            "Legitimate use of the tool"
+        ],
+        "level": "medium",
+        "rule": [
+            "SELECT * FROM logs WHERE (Channel = 'System' AND (Provider_Name = 'Service Control Manager' AND EventID = '7045') AND (ImagePath LIKE '%PDQDeployRunner-%' ESCAPE '\\' OR ServiceName LIKE 'PDQDeployRunner-%' ESCAPE '\\'))"
+        ],
+        "filename": "win_service_install_pdqdeploy_runner.yml"
+    },
+    {
         "title": "Zerologon Exploitation Using Well-known Tools",
         "id": "18f37338-b9bd-4117-a039-280c81f7a596",
         "status": "stable",
@@ -26519,6 +27034,25 @@
             "SELECT * FROM logs WHERE (Channel = 'System' AND Provider_Name = 'Service Control Manager' AND EventID = '7045' AND ServiceName = 'NtsSrv' AND ImagePath LIKE '% LocalService' ESCAPE '\\')"
         ],
         "filename": "win_apt_stonedrill.yml"
+    },
+    {
+        "title": "New PDQDeploy Service - Server Side",
+        "id": "ee9ca27c-9bd7-4cee-9b01-6e906be7cae3",
+        "description": "Detects a PDQDeploy service installation which indicates that PDQDeploy was installed on the machines.\nPDQDeploy can be abused by attackers to remotely install packages or execute commands on target machines\n",
+        "status": "experimental",
+        "author": "Nasreddine Bencherchali",
+        "tags": [
+            "attack.privilege_escalation",
+            "attack.t1543.003"
+        ],
+        "falsepositives": [
+            "Legitimate use of the tool"
+        ],
+        "level": "medium",
+        "rule": [
+            "SELECT * FROM logs WHERE (Channel = 'System' AND (Provider_Name = 'Service Control Manager' AND EventID = '7045') AND (ImagePath LIKE '%PDQDeployService.exe%' ESCAPE '\\' OR ServiceName IN ('PDQDeploy', 'PDQ Deploy')))"
+        ],
+        "filename": "win_service_install_pdqdeploy.yml"
     },
     {
         "title": "DHCP Server Loaded the CallOut DLL",
@@ -28006,7 +28540,7 @@
         "id": "628d7a0b-7b84-4466-8552-e6138bc03b43",
         "status": "experimental",
         "description": "Detects suspicious \"epmap\" connection to a remote computer via remote procedure call (RPC)",
-        "author": "frack113",
+        "author": "frack113, Tim Shelton (fps)",
         "falsepositives": [
             "Unknown"
         ],
@@ -28015,7 +28549,7 @@
             "attack.lateral_movement"
         ],
         "rule": [
-            "SELECT * FROM logs WHERE ((Protocol = 'tcp' AND Initiated = 'true' AND DestinationPort = '135') AND NOT (NewProcessName LIKE 'C:\\\\Windows\\\\%' ESCAPE '\\'))"
+            "SELECT * FROM logs WHERE ((Protocol = 'tcp' AND Initiated = 'true' AND DestinationPort = '135') AND NOT ((NewProcessName LIKE 'C:\\\\Windows\\\\%' ESCAPE '\\' OR NewProcessName LIKE 'C:\\\\ProgramData\\\\Amazon\\\\SSM\\\\Update\\\\amazon-ssm-agent-updater%' ESCAPE '\\')))"
         ],
         "filename": "net_connection_win_susps_epmap.yml"
     },
@@ -28074,7 +28608,7 @@
             "attack.t1105"
         ],
         "rule": [
-            "SELECT * FROM logs WHERE (Initiated = 'true' AND (DestinationHostname LIKE '%dl.dropboxusercontent.com' ESCAPE '\\' OR DestinationHostname LIKE '%.pastebin.com' ESCAPE '\\' OR DestinationHostname LIKE '%.githubusercontent.com' ESCAPE '\\' OR DestinationHostname LIKE '%cdn.discordapp.com/attachments/' ESCAPE '\\' OR DestinationHostname LIKE '%mediafire.com' ESCAPE '\\' OR DestinationHostname LIKE '%mega.nz' ESCAPE '\\' OR DestinationHostname LIKE '%ddns.net' ESCAPE '\\' OR DestinationHostname LIKE '%.paste.ee' ESCAPE '\\' OR DestinationHostname LIKE '%.hastebin.com/raw/' ESCAPE '\\' OR DestinationHostname LIKE '%.ghostbin.co/' ESCAPE '\\' OR DestinationHostname LIKE '%ufile.io' ESCAPE '\\') AND NewProcessName LIKE 'C:\\\\Windows\\\\%' ESCAPE '\\')"
+            "SELECT * FROM logs WHERE (Initiated = 'true' AND (DestinationHostname LIKE '%dl.dropboxusercontent.com' ESCAPE '\\' OR DestinationHostname LIKE '%.pastebin.com' ESCAPE '\\' OR DestinationHostname LIKE '%.githubusercontent.com' ESCAPE '\\' OR DestinationHostname LIKE '%cdn.discordapp.com/attachments/' ESCAPE '\\' OR DestinationHostname LIKE '%mediafire.com' ESCAPE '\\' OR DestinationHostname LIKE '%mega.nz' ESCAPE '\\' OR DestinationHostname LIKE '%ddns.net' ESCAPE '\\' OR DestinationHostname LIKE '%.paste.ee' ESCAPE '\\' OR DestinationHostname LIKE '%.hastebin.com/raw/' ESCAPE '\\' OR DestinationHostname LIKE '%.ghostbin.co/' ESCAPE '\\' OR DestinationHostname LIKE '%ufile.io' ESCAPE '\\') AND (NewProcessName LIKE 'C:\\\\Windows\\\\%' ESCAPE '\\' OR NewProcessName LIKE 'C:\\\\Users\\\\Public\\\\%' ESCAPE '\\'))"
         ],
         "filename": "net_connection_win_binary_susp_com.yml"
     },
@@ -28158,6 +28692,25 @@
             "SELECT * FROM logs WHERE (((NewProcessName LIKE '%\\\\Users\\\\All Users\\\\%' ESCAPE '\\' OR NewProcessName LIKE '%\\\\Users\\\\Default\\\\%' ESCAPE '\\' OR NewProcessName LIKE '%\\\\Users\\\\Public\\\\%' ESCAPE '\\' OR NewProcessName LIKE '%\\\\Users\\\\Contacts\\\\%' ESCAPE '\\' OR NewProcessName LIKE '%\\\\Users\\\\Searches\\\\%' ESCAPE '\\' OR NewProcessName LIKE '%\\\\config\\\\systemprofile\\\\%' ESCAPE '\\' OR NewProcessName LIKE '%\\\\Windows\\\\Fonts\\\\%' ESCAPE '\\' OR NewProcessName LIKE '%\\\\Windows\\\\IME\\\\%' ESCAPE '\\' OR NewProcessName LIKE '%\\\\Windows\\\\addins\\\\%' ESCAPE '\\') OR (NewProcessName LIKE '%\\\\$Recycle.bin' ESCAPE '\\') OR (NewProcessName LIKE 'C:\\\\Perflogs\\\\%' ESCAPE '\\')) AND NOT ((NewProcessName LIKE 'C:\\\\Users\\\\Public\\\\IBM\\\\ClientSolutions\\\\Start\\_Programs\\\\%' ESCAPE '\\')))"
         ],
         "filename": "net_connection_win_susp_prog_location_network_connection.yml"
+    },
+    {
+        "title": "Communication To Ngrok.Io",
+        "id": "18249279-932f-45e2-b37a-8925f2597670",
+        "status": "experimental",
+        "description": "Detects an executable accessing ngrok.io, which could be a sign of forbidden exfiltration of data exfiltration by malicious actors",
+        "author": "Florian Roth",
+        "tags": [
+            "attack.exfiltration",
+            "attack.t1567.001"
+        ],
+        "falsepositives": [
+            "Legitimate use of ngrok.io"
+        ],
+        "level": "high",
+        "rule": [
+            "SELECT * FROM logs WHERE (Initiated = 'true' AND DestinationHostname LIKE '%.ngrok.io' ESCAPE '\\')"
+        ],
+        "filename": "net_connection_win_ngrok_io.yml"
     },
     {
         "title": "Regsvr32 Network Activity",

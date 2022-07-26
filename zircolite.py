@@ -2,7 +2,6 @@
 
 # Standard libs
 import argparse
-import base64
 import csv
 import logging
 import multiprocessing as mp
@@ -20,7 +19,6 @@ import subprocess
 import time
 import sys
 from sys import platform as _platform
-import zlib
 
 # External libs
 import aiohttp
@@ -1316,40 +1314,20 @@ if __name__ == "__main__":
         action="append",
         nargs="+",
     )
-
     parser.add_argument(
         "-r",
         "--ruleset",
         help="JSON File containing SIGMA rules",
-        default="rules/rules_windows_generic.json",
-        type=str,
+        action="append",
+        nargs="+",
     )
     parser.add_argument("--fieldlist", help="Get all EVTX fields", action="store_true")
-    parser.add_argument(
-        "-sg",
-        "--sigma",
-        help="Tell Zircolite to directly use SIGMA rules (slower) instead of the converted ones, you must provide SIGMA config file path",
-        type=str,
-    )
-    parser.add_argument(
-        "-sc",
-        "--sigmac",
-        help="Sigmac path (version >= 0.20), this arguments is mandatary only if you use '--sigma'",
-        type=str,
-    )
-    parser.add_argument(
-        "-se",
-        "--sigmaerrors",
-        help="Show rules conversion error (i.e not supported by the SIGMA SQLite backend)",
-        action="store_true",
-    )
     parser.add_argument(
         "--evtx_dump",
         help="Tell Zircolite to use this binary for EVTX conversion, on Linux and MacOS the path must be valid to launch the binary (eg. './evtx_dump' and not 'evtx_dump')",
         type=str,
         default=None,
     )
-
     parser.add_argument(
         "-R",
         "--rulefilter",
@@ -1485,7 +1463,6 @@ if __name__ == "__main__":
         help="Specify how many cores you want to use, default is all cores",
         type=str,
     )
-
     parser.add_argument(
         "--template",
         help="If a Jinja2 template is specified it will be used to generated output",
@@ -1500,7 +1477,6 @@ if __name__ == "__main__":
         action="append",
         nargs="+",
     )
-
     parser.add_argument("--debug", help="Activate debug logging", action="store_true")
     parser.add_argument(
         "--showall",
@@ -1546,6 +1522,12 @@ if __name__ == "__main__":
     if args.version:
         consoleLogger.info(f"Zircolite - v{version}"), sys.exit(0)
 
+    # Handle rulesets args
+    if args.ruleset:
+        args.ruleset = [item for args in args.ruleset for item in args]
+    else:
+        args.ruleset = ["rules/rules_windows_generic.json"]
+
     # Check mandatory CLI options
     if not args.evtx:
         consoleLogger.error(
@@ -1558,11 +1540,6 @@ if __name__ == "__main__":
     if args.forwardall and args.dbonly:
         consoleLogger.error(
             f"{Fore.RED}   [-] Can't forward all events in db only mode {Fore.RESET}"
-        ), sys.exit(2)
-
-    if args.evtx and not (args.fieldlist or args.ruleset):
-        consoleLogger.error(
-            f"{Fore.RED}   [-] Cannot use Zircolite with EVTX source and without the fiedlist or ruleset option{Fore.RESET}"
         ), sys.exit(2)
 
     consoleLogger.info("[+] Checking prerequisites")
@@ -1593,25 +1570,10 @@ if __name__ == "__main__":
         )
 
     binPath = args.evtx_dump
-    # Check Sigma config file & Sigmac path
-    if args.sigma and args.sigmac:
-        checkIfExists(
-            args.sigma, f"{Fore.RED}   [-] Cannot find SIGMA config file : {args.sigma}"
-        )
-        checkIfExists(
-            args.sigmac,
-            f"{Fore.RED}   [-] Cannot find Sigmac converter : {args.sigmac}",
-        )
-    elif (args.sigma and not args.sigmac) or (args.sigmac and not args.sigma):
-        consoleLogger.info(
-            f"{Fore.RED}   [-] the '--sigma' and '--sigmac' options must be used together"
-        )
 
     # Check ruleset arg
-    if args.sigma is None and args.sigma is None and not args.fieldlist:
-        checkIfExists(
-            args.ruleset, f"{Fore.RED}   [-] Cannot find ruleset : {args.ruleset}"
-        )
+    for ruleset in args.ruleset:
+        checkIfExists(ruleset, f"{Fore.RED}   [-] Cannot find ruleset : {ruleset}")
     # Check templates args
     readyForTemplating = False
     if args.template is not None:
@@ -1696,7 +1658,6 @@ if __name__ == "__main__":
             EVTXJSONList = FileList
 
         checkIfExists(args.config, f"{Fore.RED}   [-] Cannot find mapping file")
-
         if EVTXJSONList == []:
             quitOnError(f"{Fore.RED}   [-] No JSON files found.")
 
@@ -1728,48 +1689,28 @@ if __name__ == "__main__":
     if args.rulefilter:
         args.rulefilter = [item for sublist in args.rulefilter for item in sublist]
 
-    consoleLogger.info(f"[+] Loading ruleset from : {args.ruleset}")
-    # If Raw SIGMA rules are used, they must be converted
-    if args.sigma and args.sigmac:
-        consoleLogger.info(
-            f"[+] Raw SIGMA rules conversion (use '--sigmaerrors' option to show not supported rules)"
-        )
-        rulesGeneratorInstance = rulesetGenerator(
-            args.sigmac, args.sigma, "logs", args.ruleset
-        )
-        convertedRules = rulesGeneratorInstance.run()
-        if not convertedRules["ruleset"]:
-            quitOnError(
-                f"{Fore.RED}   [-] No rule to execute, check your sigma rules and sigmac paths, or use '--sigmaerrors' to show not supported rules"
-            )
-        # If provided rules are not supported
-        if args.sigmaerrors and len(convertedRules["errors"]) > 0:
+    writeMode = "w"
+    for ruleset in args.ruleset:
+        consoleLogger.info(f"[+] Loading ruleset from : {ruleset}")
+        zircoliteCore.loadRulesetFromFile(filename=ruleset, ruleFilters=args.rulefilter)
+        if args.limit > 0:
             consoleLogger.info(
-                f"[+] These rules were not converted (not supported by backend) : "
+                f"[+] Limited mode : detections with more than {args.limit} events will be discarded"
             )
-            for error in convertedRules["errors"]:
-                consoleLogger.info(f'{Fore.LIGHTYELLOW_EX}   [-] "{error}"{Fore.RESET}')
-        zircoliteCore.loadRulesetFromVar(
-            ruleset=convertedRules["ruleset"], ruleFilters=args.rulefilter
-        )
-    else:
-        zircoliteCore.loadRulesetFromFile(
-            filename=args.ruleset, ruleFilters=args.rulefilter
-        )
-
-    if args.limit > 0:
         consoleLogger.info(
-            f"[+] Limited mode : detections with more than {args.limit} events will be discarded"
+            f"[+] Executing ruleset - {len(zircoliteCore.ruleset)} rules"
         )
-    consoleLogger.info(f"[+] Executing ruleset - {len(zircoliteCore.ruleset)} rules")
-    zircoliteCore.executeRuleset(
-        args.outfile,
-        forwarder=forwarder,
-        showAll=args.showall,
-        KeepResults=(readyForTemplating or args.package),
-        remote=args.remote,
-        stream=args.stream,
-    )
+        zircoliteCore.executeRuleset(
+            args.outfile,
+            writeMode=writeMode,
+            forwarder=forwarder,
+            showAll=args.showall,
+            KeepResults=(readyForTemplating or args.package),
+            remote=args.remote,
+            stream=args.stream,
+        )
+        writeMode = "a"  # Next iterations will append to results file
+
     consoleLogger.info(f"[+] Results written in : {args.outfile}")
 
     # Forward events

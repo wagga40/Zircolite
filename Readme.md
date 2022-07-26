@@ -28,10 +28,11 @@ The use of [evtx_dump](https://github.com/omerbenamram/evtx) is **optional but r
 Help is available with `zircolite.py -h`. If your EVTX files have the extension ".evtx" :
 
 ```shell
-# python3 zircolite.py --evtx <EVTX FOLDER or EVTX FILE> --ruleset <SIGMA RULES JSON FILE>
+# python3 zircolite.py --evtx <EVTX FOLDER or EVTX FILE> --ruleset <SIGMA RULESET> [--ruleset <OTHER RULESET>]
 python3 zircolite.py --evtx sysmon.evtx --ruleset rules/rules_windows_sysmon.json
 ```
-The SYSMON ruleset used here is a default one and it is for logs coming from endpoints where SYSMON installed. A generic ruleset is available too.
+
+The SYSMON ruleset used here is a default one and is for logs coming from endpoints where SYSMON is installed. 
 
 #### Auditd / Sysmon for Linux / JSONL or NDJSON logs : 
 

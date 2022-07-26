@@ -1516,6 +1516,25 @@
         "filename": "proc_creation_lnx_process_discovery.yml"
     },
     {
+        "title": "Apache Spark Shell Command Injection - ProcessCreation",
+        "id": "c8a5f584-cdc8-42cc-8cce-0398e4265de3",
+        "description": "Detects attempts to exploit an apache spark server via CVE-2014-6287 from a commandline perspective",
+        "author": "Nasreddine Bencherchali",
+        "falsepositives": [
+            "Unlikely"
+        ],
+        "level": "high",
+        "tags": [
+            "attack.initial_access",
+            "attack.t1190",
+            "cve.2022.33891"
+        ],
+        "rule": [
+            "SELECT * FROM logs WHERE (ParentImage LIKE '%\\\\bash' ESCAPE '\\' AND (CommandLine LIKE '%id -Gn `%' ESCAPE '\\' OR CommandLine LIKE '%id -Gn ''%' ESCAPE '\\'))"
+        ],
+        "filename": "proc_creation_lnx_cve_2022_33891_spark_shell_command_injection.yml"
+    },
+    {
         "title": "Chmod Suspicious Directory",
         "id": "6419afd1-3742-47a5-a7e6-b50386cd15f8",
         "description": "Detects chmod targeting files in abnormal directory paths.",

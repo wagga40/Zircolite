@@ -2,7 +2,6 @@
 
 # Standard libs
 import argparse
-import base64
 import csv
 import logging
 import multiprocessing as mp
@@ -20,7 +19,6 @@ import subprocess
 import time
 import sys
 from sys import platform as _platform
-import zlib
 
 # External libs
 import aiohttp
@@ -81,12 +79,10 @@ class templateEngine:
     def generateFromTemplate(self, templateFile, outpoutFilename, data):
         """ Use Jinja2 to output data in a specific format """
         try:
-            #{% if not embeddedMode %}
+            
             tmpl = open(templateFile, 'r', encoding='utf-8')
             template = Template(tmpl.read())
-            #{% else %}
-            #{{ templateOpenCode }}
-            #{% endif %}
+            
             with open(outpoutFilename, 'a', encoding='utf-8') as tpl:
                 tpl.write(template.render(data=data))
         except Exception as e:
@@ -352,17 +348,13 @@ class JSONFlattener:
         self.timeAfter = timeAfter
         self.timeBefore = timeBefore
         self.timeField = timeField
-        #{% if embeddedMode %}
-        #{% for line in fieldMappingsLines -%}
-        #{{ line }}
-        #{% endfor %}
-        #{% else %}
+        
         with open(configFile, 'r', encoding='UTF-8') as fieldMappingsFile:
             self.fieldMappingsDict = json.loads(fieldMappingsFile.read())
             self.fieldExclusions = self.fieldMappingsDict["exclusions"]
             self.fieldMappings = self.fieldMappingsDict["mappings"]
             self.uselessValues = self.fieldMappingsDict["useless"]
-        #{% endif %}
+        
 
     def run(self, file):
         """
@@ -674,11 +666,9 @@ class evtxExtractor:
         if not encoding and xmlLogs: self.encoding = "ISO-8859-1"
         elif not encoding and auditdLogs: self.encoding = "utf-8"
         else: self.encoding = encoding
-        #{% if not embeddedMode %}
+        
         self.evtxDumpCmd = self.getOSExternalTools(binPath)
-        #{% else %}
-        #{{ evtxDumpCmdEmbed }}
-        #{% endif %}
+        
 
     def randString(self):
         return ''.join(random.SystemRandom().choice(string.ascii_uppercase + string.digits) for _ in range(8))
@@ -687,15 +677,7 @@ class evtxExtractor:
         mode = os.stat(path).st_mode
         mode |= (mode & 0o444) >> 2
         os.chmod(path, mode)
-
-    #{% if embeddedMode %}
-    def getOSExternalToolsEmbed(self):
-        if self.useExternalBinaries:
-            with open("{{ externalTool }}", 'wb') as f:
-                f.write(zlib.decompress(base64.b64decode(b'{{ externalToolB64 }}')))
-            self.makeExecutable("{{ externalTool }}")
-            return "{{ externalTool }}"
-    #{% else %}
+    
     def getOSExternalTools(self, binPath):
         """ Determine which binaries to run depending on host OS : 32Bits is NOT supported for now since evtx_dump is 64bits only"""
         if binPath is None:
@@ -707,7 +689,6 @@ class evtxExtractor:
                 return "bin\\evtx_dump_win.exe"
         else:
             return binPath
-    #{% endif %}
 
     def runUsingBindings(self, file):
         """
@@ -835,11 +816,7 @@ class evtxExtractor:
   
     def cleanup(self):
         shutil.rmtree(self.tmpDir)
-        #{% if embeddedMode %}
-        #{{ removeTool }}
-        #{% endif %}
-
-#{% if not embeddedMode -%}
+        
 class zircoGuiGenerator:
     """
     Generate the mini GUI (BETA)
@@ -878,7 +855,6 @@ class zircoGuiGenerator:
         shutil.move(self.tmpFile, f'{self.tmpDir}/zircogui/data.js')
         self.zip()
         shutil.rmtree(self.tmpDir)
-#{% endif %}
 
 class rulesetGenerator:
     def __init__(self, sigmac, config, table, rulesToConvert, fileext="yml"):
@@ -923,18 +899,9 @@ if __name__ == '__main__':
     parser.add_argument("-e", "--evtx", "--events", help="EVTX log file or directory where EVTX log files are stored in JSON or EVTX format", type=str)
     parser.add_argument("-s", "--select", help="Only EVTX files containing the provided string will be used. If there is/are exclusion(s) (--avoid) they will be handled after selection", action='append', nargs='+')
     parser.add_argument("-a", "--avoid", help="EVTX files containing the provided string will NOT be used", action='append', nargs='+')
-    #{% if not embeddedMode %}
-    parser.add_argument("-r", "--ruleset", help="JSON File containing SIGMA rules", default="rules/rules_windows_generic.json", type=str)
+    parser.add_argument("-r", "--ruleset", help="JSON File containing SIGMA rules", action='append', nargs='+')
     parser.add_argument("--fieldlist", help="Get all EVTX fields", action='store_true')
-    parser.add_argument("-sg", "--sigma", help="Tell Zircolite to directly use SIGMA rules (slower) instead of the converted ones, you must provide SIGMA config file path", type=str)
-    parser.add_argument("-sc", "--sigmac", help="Sigmac path (version >= 0.20), this arguments is mandatary only if you use '--sigma'", type=str)
-    parser.add_argument("-se", "--sigmaerrors", help="Show rules conversion error (i.e not supported by the SIGMA SQLite backend)", action='store_true')
     parser.add_argument("--evtx_dump", help="Tell Zircolite to use this binary for EVTX conversion, on Linux and MacOS the path must be valid to launch the binary (eg. './evtx_dump' and not 'evtx_dump')", type=str, default=None)
-    #{% else %}
-    #{% for rule in rules %}
-    #{{ rule -}}
-    #{% endfor %}
-    #{% endif %}
     parser.add_argument("-R", "--rulefilter", help="Remove rule from ruleset, comparison is done on rule title (case sensitive)", action='append', nargs='*')
     parser.add_argument("-L", "--limit", help="Discard results (in output file or forwarded events) that are above the provided limit", type=int, default=-1)
     parser.add_argument("-c", "--config", help="JSON File containing field mappings and exclusions", type=str, default="config/fieldMappings.json")
@@ -962,14 +929,8 @@ if __name__ == '__main__':
     parser.add_argument("--forwardall", help="Forward all events", action="store_true")
     parser.add_argument("--timefield", help="Provide time field name for event forwarding", default="SystemTime", action="store_true")
     parser.add_argument("--cores", help="Specify how many cores you want to use, default is all cores", type=str)
-    #{% if not embeddedMode %}
     parser.add_argument("--template", help="If a Jinja2 template is specified it will be used to generated output", type=str, action='append', nargs='+')
     parser.add_argument("--templateOutput", help="If a Jinja2 template is specified it will be used to generate a crafted output", type=str, action='append', nargs='+')
-    #{% else %}
-    #{% for template in templates %}
-    #{{ template -}}
-    #{% endfor %}
-    #{% endif %}
     parser.add_argument("--debug", help="Activate debug logging", action='store_true')
     parser.add_argument("--showall", help="Show all events, usefull to check what rule takes takes time to execute", action='store_true')
     parser.add_argument("--noexternal", help="Don't use evtx_dump external binaries (slower)", action='store_true')
@@ -977,15 +938,6 @@ if __name__ == '__main__':
     parser.add_argument("-v", "--version", help="Show Zircolite version", action='store_true')
 
     args = parser.parse_args()
-
-    #{% if embeddedMode %}
-    #{% for ruleB64 in rulesB64 %}
-    #{{ ruleB64 -}}
-    #{% endfor %}
-    #{% for template in templatesB64 %}
-    #{{ template -}}
-    #{% endfor %}
-    #{% endif %}
 
     signal.signal(signal.SIGINT, signal_handler) 
 
@@ -1003,25 +955,20 @@ if __name__ == '__main__':
    -= Standalone SIGMA Detection tool for EVTX/Auditd/Sysmon Linux =-
     """)
 
-    #{% if embeddedMode %}#{{ embeddedText }}#{% endif %}
-    #{% if embeddedMode %}
-    #{{ rulesCheck }}
-    #{{ noPackage }}
-    #{{ noExternal }}
-    #{% endif %}
-
     # Print version an quit
     if args.version: consoleLogger.info(f"Zircolite - v{version}"), sys.exit(0)
+
+    # Handle rulesets args 
+    if args.ruleset:
+        args.ruleset = [item for args in args.ruleset for item in args]
+    else: 
+        args.ruleset = ["rules/rules_windows_generic.json"]
 
     # Check mandatory CLI options
     if not args.evtx: consoleLogger.error(f"{Fore.RED}   [-] No EVTX source path provided{Fore.RESET}"), sys.exit(2)
     if args.sysmon4linux and args.auditd: consoleLogger.error(f"{Fore.RED}   [-] Sysmon for Linux and Auditd arguments cannot be used together{Fore.RESET}"), sys.exit(2)
     if args.forwardall and args.dbonly: consoleLogger.error(f"{Fore.RED}   [-] Can't forward all events in db only mode {Fore.RESET}"), sys.exit(2)
-    #{% if not embeddedMode %}
-    if args.evtx and not (args.fieldlist or args.ruleset): 
-        consoleLogger.error(f"{Fore.RED}   [-] Cannot use Zircolite with EVTX source and without the fiedlist or ruleset option{Fore.RESET}"), sys.exit(2)
-    #{% endif %}
-
+    
     consoleLogger.info("[+] Checking prerequisites")
 
     # Init Forwarding
@@ -1036,21 +983,11 @@ if __name__ == '__main__':
     except:
         quitOnError(f"{Fore.RED}   [-] Wrong timestamp format. Please use 'AAAA-MM-DDTHH:MM:SS'")
 
-    #{% if embeddedMode %}
-    readyForTemplating = True
-    #{{ binPathVar }}
-    #{% else %}
     binPath = args.evtx_dump
-    # Check Sigma config file & Sigmac path
-    if args.sigma and args.sigmac :
-        checkIfExists(args.sigma, f"{Fore.RED}   [-] Cannot find SIGMA config file : {args.sigma}")
-        checkIfExists(args.sigmac, f"{Fore.RED}   [-] Cannot find Sigmac converter : {args.sigmac}")
-    elif (args.sigma and not args.sigmac) or (args.sigmac and not args.sigma):
-        consoleLogger.info(f"{Fore.RED}   [-] the '--sigma' and '--sigmac' options must be used together") 
 
     # Check ruleset arg
-    if args.sigma is None and args.sigma is None and not args.fieldlist:
-        checkIfExists(args.ruleset, f"{Fore.RED}   [-] Cannot find ruleset : {args.ruleset}")
+    for ruleset in args.ruleset:
+        checkIfExists(ruleset, f"{Fore.RED}   [-] Cannot find ruleset : {ruleset}")
     # Check templates args
     readyForTemplating = False
     if (args.template is not None):
@@ -1060,7 +997,7 @@ if __name__ == '__main__':
         for template in args.template:
             checkIfExists(template[0], f"{Fore.RED}   [-] Cannot find template : {template[0]}")
         readyForTemplating = True
-    #{% endif %}
+    
     if args.csv: 
         readyForTemplating = False
         if args.outfile == "detected_events.json": 
@@ -1103,13 +1040,10 @@ if __name__ == '__main__':
         else:
             EVTXJSONList = FileList
 
-        #{% if not embeddedMode -%}
         checkIfExists(args.config, f"{Fore.RED}   [-] Cannot find mapping file")
-        #{% endif %}
         if EVTXJSONList == []:
             quitOnError(f"{Fore.RED}   [-] No JSON files found.")
 
-        #{% if not embeddedMode -%}
         # Print field list and exit
         if args.fieldlist:
             fields = zircoliteCore.run(EVTXJSONList, False)
@@ -1117,8 +1051,7 @@ if __name__ == '__main__':
             if not args.jsononly and not args.keeptmp: extractor.cleanup()
             [print(sortedField) for sortedField in sorted([field for field in fields.values()])]
             sys.exit(0)
-        #{% endif %}
-
+        
         # Flatten and insert to Db
         if args.forwardall:
             zircoliteCore.run(EVTXJSONList, forwarder=forwarder)
@@ -1132,33 +1065,16 @@ if __name__ == '__main__':
 
     # flatten array of "rulefilter" arguments
     if args.rulefilter: args.rulefilter = [item for sublist in args.rulefilter for item in sublist]
-    
-    #{% if embeddedMode -%}
-    #{% for ruleIf in rulesIf -%}
-    #{{ ruleIf }}
-    #{% endfor %}
-    #{{ executeRuleSetFromVar }}
-    #{% else -%}
-    consoleLogger.info(f"[+] Loading ruleset from : {args.ruleset}")
-    # If Raw SIGMA rules are used, they must be converted 
-    if args.sigma and args.sigmac:
-        consoleLogger.info(f"[+] Raw SIGMA rules conversion (use '--sigmaerrors' option to show not supported rules)")
-        rulesGeneratorInstance = rulesetGenerator(args.sigmac, args.sigma, "logs", args.ruleset)
-        convertedRules = rulesGeneratorInstance.run()
-        if not convertedRules["ruleset"]: quitOnError(f"{Fore.RED}   [-] No rule to execute, check your sigma rules and sigmac paths, or use '--sigmaerrors' to show not supported rules")
-        # If provided rules are not supported
-        if args.sigmaerrors and len(convertedRules["errors"]) > 0:
-            consoleLogger.info(f"[+] These rules were not converted (not supported by backend) : ")
-            for error in convertedRules["errors"]:
-                consoleLogger.info(f'{Fore.LIGHTYELLOW_EX}   [-] "{error}"{Fore.RESET}')
-        zircoliteCore.loadRulesetFromVar(ruleset=convertedRules["ruleset"], ruleFilters=args.rulefilter)
-    else:
-        zircoliteCore.loadRulesetFromFile(filename=args.ruleset, ruleFilters=args.rulefilter)
-    #{% endif %}
 
-    if args.limit > 0: consoleLogger.info(f"[+] Limited mode : detections with more than {args.limit} events will be discarded")
-    consoleLogger.info(f"[+] Executing ruleset - {len(zircoliteCore.ruleset)} rules")
-    zircoliteCore.executeRuleset(args.outfile, forwarder=forwarder, showAll=args.showall, KeepResults=(readyForTemplating or args.package), remote=args.remote, stream=args.stream)
+    writeMode = "w"
+    for ruleset in args.ruleset:
+        consoleLogger.info(f"[+] Loading ruleset from : {ruleset}")
+        zircoliteCore.loadRulesetFromFile(filename=ruleset, ruleFilters=args.rulefilter)
+        if args.limit > 0: consoleLogger.info(f"[+] Limited mode : detections with more than {args.limit} events will be discarded")
+        consoleLogger.info(f"[+] Executing ruleset - {len(zircoliteCore.ruleset)} rules")
+        zircoliteCore.executeRuleset(args.outfile, writeMode=writeMode, forwarder=forwarder, showAll=args.showall, KeepResults=(readyForTemplating or args.package), remote=args.remote, stream=args.stream)
+        writeMode = "a" # Next iterations will append to results file
+
     consoleLogger.info(f"[+] Results written in : {args.outfile}")
 
     # Forward events
@@ -1169,25 +1085,15 @@ if __name__ == '__main__':
 
     # Templating
     if readyForTemplating and zircoliteCore.fullResults != []:
-        #{% if not embeddedMode -%}
         templateGenerator = templateEngine(consoleLogger, args.template, args.templateOutput)
         templateGenerator.run(zircoliteCore.fullResults)
-        #{% else -%}
-        #{% for templateB64Fn in templatesB64Fn -%}
-        #{% for line in templateB64Fn %}
-        #{{ line -}}
-        #{% endfor %}
-        #{% endfor %}
-        #{% endif %}
 
-    #{% if not embeddedMode -%}
     # Generate ZircoGui package
     if args.package and zircoliteCore.fullResults != []:
         if Path("templates/exportForZircoGui.tmpl").is_file() and Path("gui/zircogui.zip").is_file():
             packager = zircoGuiGenerator("gui/zircogui.zip", "templates/exportForZircoGui.tmpl", consoleLogger)
             packager.generate(zircoliteCore.fullResults)
-    #{% endif %}
-
+    
     # Removing Working directory containing logs as json
     if not args.keeptmp:
         consoleLogger.info("[+] Cleaning")
