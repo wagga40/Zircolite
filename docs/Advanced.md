@@ -158,7 +158,7 @@ Sometimes, SIGMA rules can be very noisy (and generate a lot of false positives)
 
 Zircolite provide 2 ways to forward events to a collector : 
 
-- the HTTP forwarder : this is a very simple forwarder and pretty much a "toy" example and should be used when you have nothing else. An **example** server called is available in the [tools](tools/) directory
+- the HTTP forwarder : this is a very simple forwarder and pretty much a "toy" example and should be used when you have nothing else. An **example** server called is available in the [tools](../tools/zircolite_server/) directory
 - the Splunk HEC Forwarder : it allows to forward all detected events to a Splunk instance using **HTTP Event Collector**.
 
 For now, the forwarders are not asynchronous so it can slow Zircolite execution. There are two modes to forward the events : 
@@ -176,7 +176,7 @@ If you have multiple endpoints to scan, it is usefull to send the detected event
 python3 zircolite.py --evtx sample.evtx  --ruleset rules/rules_windows_sysmon.json \
 	--remote "http://address:port/uri"
 ```
-An **example** server called is available in the [tools](tools/) directory.
+An **example** server called is available in the [tools](../tools/zircolite_server/) directory.
 
 #### Forward events to a Splunk instance via HEC
 
