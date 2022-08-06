@@ -1206,10 +1206,28 @@
         "filename": "proc_creation_lnx_cve_2022_26134_atlassian_confluence.yml"
     },
     {
+        "title": "Linux Base64 Encoded Pipe to Shell",
+        "id": "ba592c6d-6888-43c3-b8c6-689b8fe47337",
+        "description": "Detects suspicious process command line that uses base64 encoded input for execution with a shell",
+        "author": "pH-T",
+        "falsepositives": [
+            "Legitimate administration activities"
+        ],
+        "level": "medium",
+        "tags": [
+            "attack.defense_evasion",
+            "attack.t1140"
+        ],
+        "rule": [
+            "SELECT * FROM logs WHERE (CommandLine LIKE '%base64 -w0 %' ESCAPE '\\' AND ((CommandLine LIKE '%| bash %' ESCAPE '\\' OR CommandLine LIKE '%| sh %' ESCAPE '\\' OR CommandLine LIKE '%|bash %' ESCAPE '\\' OR CommandLine LIKE '%|sh %' ESCAPE '\\') OR (CommandLine LIKE '%| bash' ESCAPE '\\' OR CommandLine LIKE '%| sh' ESCAPE '\\' OR CommandLine LIKE '%|bash' ESCAPE '\\' OR CommandLine LIKE '% |sh' ESCAPE '\\')))"
+        ],
+        "filename": "proc_creation_lnx_base64_execution.yml"
+    },
+    {
         "title": "Linux Webshell Indicators",
         "id": "818f7b24-0fba-4c49-a073-8b755573b9c7",
         "description": "Detects suspicious sub processes of web server processes",
-        "author": "Florian Roth",
+        "author": "Florian Roth, Nasreddine Bencherchali (update)",
         "tags": [
             "attack.persistence",
             "attack.t1505.003"
@@ -1219,7 +1237,7 @@
         ],
         "level": "high",
         "rule": [
-            "SELECT * FROM logs WHERE ((Image LIKE '%/whoami' ESCAPE '\\' OR Image LIKE '%/ifconfig' ESCAPE '\\' OR Image LIKE '%/usr/bin/ip' ESCAPE '\\' OR Image LIKE '%/bin/uname' ESCAPE '\\') AND (((ParentImage LIKE '%/httpd' ESCAPE '\\' OR ParentImage LIKE '%/lighttpd' ESCAPE '\\' OR ParentImage LIKE '%/nginx' ESCAPE '\\' OR ParentImage LIKE '%/apache2' ESCAPE '\\' OR ParentImage LIKE '%/node' ESCAPE '\\' OR ParentImage LIKE '%/caddy' ESCAPE '\\') OR (ParentCommandLine LIKE '%/bin/java%' ESCAPE '\\' AND ParentCommandLine LIKE '%tomcat%' ESCAPE '\\')) OR (ParentCommandLine LIKE '%/bin/java%' ESCAPE '\\' AND ParentCommandLine LIKE '%websphere%' ESCAPE '\\')))"
+            "SELECT * FROM logs WHERE (((ParentImage LIKE '%/httpd' ESCAPE '\\' OR ParentImage LIKE '%/lighttpd' ESCAPE '\\' OR ParentImage LIKE '%/nginx' ESCAPE '\\' OR ParentImage LIKE '%/apache2' ESCAPE '\\' OR ParentImage LIKE '%/node' ESCAPE '\\' OR ParentImage LIKE '%/caddy' ESCAPE '\\') OR (ParentCommandLine LIKE '%/bin/java%' ESCAPE '\\' AND ParentCommandLine LIKE '%tomcat%' ESCAPE '\\') OR (ParentCommandLine LIKE '%/bin/java%' ESCAPE '\\' AND ParentCommandLine LIKE '%websphere%' ESCAPE '\\')) AND (Image LIKE '%/whoami' ESCAPE '\\' OR Image LIKE '%/ifconfig' ESCAPE '\\' OR Image LIKE '%/usr/bin/ip' ESCAPE '\\' OR Image LIKE '%/usr/sbin/ip' ESCAPE '\\' OR Image LIKE '%/bin/uname' ESCAPE '\\' OR Image LIKE '%/bin/cat' ESCAPE '\\' OR Image LIKE '%/bin/crontab' ESCAPE '\\' OR Image LIKE '%/hostname' ESCAPE '\\' OR Image LIKE '%/iptables' ESCAPE '\\' OR Image LIKE '%/netstat' ESCAPE '\\' OR Image LIKE '%/pwd' ESCAPE '\\' OR Image LIKE '%/route' ESCAPE '\\'))"
         ],
         "filename": "proc_creation_lnx_webshell_detection.yml"
     },
@@ -1421,7 +1439,7 @@
         ],
         "level": "medium",
         "rule": [
-            "SELECT * FROM logs WHERE ((CommandLine LIKE 'sh -c %' ESCAPE '\\' OR CommandLine LIKE 'bash -c %' ESCAPE '\\') AND (CommandLine LIKE '%| bash' ESCAPE '\\' OR CommandLine LIKE '%|bash' ESCAPE '\\' OR CommandLine LIKE '%| sh' ESCAPE '\\' OR CommandLine LIKE '%|sh' ESCAPE '\\'))"
+            "SELECT * FROM logs WHERE ((CommandLine LIKE 'sh -c %' ESCAPE '\\' OR CommandLine LIKE 'bash -c %' ESCAPE '\\') AND ((CommandLine LIKE '%| bash %' ESCAPE '\\' OR CommandLine LIKE '%| sh %' ESCAPE '\\' OR CommandLine LIKE '%|bash %' ESCAPE '\\' OR CommandLine LIKE '%|sh %' ESCAPE '\\') OR (CommandLine LIKE '%| bash' ESCAPE '\\' OR CommandLine LIKE '%| sh' ESCAPE '\\' OR CommandLine LIKE '%|bash' ESCAPE '\\' OR CommandLine LIKE '% |sh' ESCAPE '\\')))"
         ],
         "filename": "proc_creation_lnx_susp_pipe_shell.yml"
     },

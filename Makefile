@@ -3,7 +3,7 @@
 DOCKER?=docker
 DOCKER_BUILD_FLAGS?=
 DOCKER_REGISTRY?=docker.io
-DOCKER_TAG?=2.0.0
+DOCKER_TAG?=2.9.1
 GIT?=git
 PY3?=python3
 DATE=$(shell date +%s)

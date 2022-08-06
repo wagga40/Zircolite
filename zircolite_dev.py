@@ -573,7 +573,7 @@ class zirCore:
                 self.ruleset = json.loads(f.read())
             self.applyRulesetFilters(ruleFilters)
         except Exception as e:
-            self.logger.error(f"{Fore.RED}   [-] Load JSON ruleset failed, are you sure it is a valid JSON file ? : {e}")
+            self.logger.error(f"{Fore.RED}   [-] Load JSON ruleset failed, are you sure it is a valid JSON file ? : {e}{Fore.RESET}")
 
     def loadRulesetFromVar(self, ruleset, ruleFilters):
         self.ruleset = ruleset
@@ -597,12 +597,12 @@ class zirCore:
         if level == "critical":
             return f'{Fore.RED}{level}{orgFormat}'
 
-    def executeRuleset(self, outFile, writeMode='w', forwarder=None, showAll=False, KeepResults=False, remote=None, stream=False):
+    def executeRuleset(self, outFile, writeMode='w', forwarder=None, showAll=False, KeepResults=False, remote=None, stream=False, lastRuleset=False):
         csvWriter = None
         # Results are writen upon detection to allow analysis during execution and to avoid loosing results in case of error.
         with open(outFile, writeMode, encoding='utf-8', newline='') as fileHandle:
             with tqdm(self.ruleset, colour="yellow") as ruleBar:
-                if not self.noOutput and not self.csvMode: fileHandle.write('[')
+                if not self.noOutput and not self.csvMode and writeMode != "a": fileHandle.write('[')
                 for rule in ruleBar:  # for each rule in ruleset
                     if showAll and "title" in rule: ruleBar.write(f'{Fore.BLUE}    - {rule["title"]} [{self.ruleLevelPrintFormatter(rule["level"], Fore.BLUE)}]{Fore.RESET}')  # Print all rules
                     ruleResults = self.executeRule(rule)
@@ -620,7 +620,7 @@ class zirCore:
                                 self.logger.setLevel(logLevel)
                                 # Output to json or csv file
                                 if self.csvMode: 
-                                    if not csvWriter: # Creating the CSV header and the fields (agg is for queries with aggregation)
+                                    if not csvWriter: # Creating the CSV header and the fields ("agg" is for queries with aggregation)
                                         csvWriter = csv.DictWriter(fileHandle, delimiter=';', fieldnames=["rule_title", "rule_description", "rule_level", "rule_count", "agg"] + list(ruleResults["matches"][0].keys()))
                                         csvWriter.writeheader()
                                     for data in ruleResults["matches"]:
@@ -632,7 +632,7 @@ class zirCore:
                                         fileHandle.write(',\n')
                                     except Exception as e:
                                         self.logger.error(f"{Fore.RED}   [-] Error saving some results : {e}")
-                if not self.noOutput and not self.csvMode: fileHandle.write('{}]')  
+                if not self.noOutput and not self.csvMode and lastRuleset: fileHandle.write('{}]') # Added to produce a valid JSON Array
 
     def run(self, EVTXJSONList, Insert2Db=True, forwarder=None):
         self.logger.info("[+] Processing EVTX")
@@ -892,7 +892,7 @@ def avoidFiles(pathList, avoidFilesList):
 # MAIN()
 ################################################################
 if __name__ == '__main__':
-    version = "2.9.0"
+    version = "2.9.1"
 
     # Init Args handling
     parser = argparse.ArgumentParser()
@@ -968,6 +968,7 @@ if __name__ == '__main__':
     if not args.evtx: consoleLogger.error(f"{Fore.RED}   [-] No EVTX source path provided{Fore.RESET}"), sys.exit(2)
     if args.sysmon4linux and args.auditd: consoleLogger.error(f"{Fore.RED}   [-] Sysmon for Linux and Auditd arguments cannot be used together{Fore.RESET}"), sys.exit(2)
     if args.forwardall and args.dbonly: consoleLogger.error(f"{Fore.RED}   [-] Can't forward all events in db only mode {Fore.RESET}"), sys.exit(2)
+    if args.csv and len(args.ruleset) > 1 : consoleLogger.error(f"{Fore.RED}   [-] Since fields in results can change between rulesets, it is not possible to have CSV output when using multiple rulesets{Fore.RESET}"), sys.exit(2)
     
     consoleLogger.info("[+] Checking prerequisites")
 
@@ -1072,7 +1073,7 @@ if __name__ == '__main__':
         zircoliteCore.loadRulesetFromFile(filename=ruleset, ruleFilters=args.rulefilter)
         if args.limit > 0: consoleLogger.info(f"[+] Limited mode : detections with more than {args.limit} events will be discarded")
         consoleLogger.info(f"[+] Executing ruleset - {len(zircoliteCore.ruleset)} rules")
-        zircoliteCore.executeRuleset(args.outfile, writeMode=writeMode, forwarder=forwarder, showAll=args.showall, KeepResults=(readyForTemplating or args.package), remote=args.remote, stream=args.stream)
+        zircoliteCore.executeRuleset(args.outfile, writeMode=writeMode, forwarder=forwarder, showAll=args.showall, KeepResults=(readyForTemplating or args.package), remote=args.remote, stream=args.stream, lastRuleset=(ruleset == args.ruleset[-1]))
         writeMode = "a" # Next iterations will append to results file
 
     consoleLogger.info(f"[+] Results written in : {args.outfile}")
