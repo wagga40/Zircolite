@@ -10,9 +10,9 @@
 
 - **Zircolite** can be used directly on the investigated endpoint (use [releases](https://github.com/wagga40/Zircolite/releases)) or in your forensic/detection lab
 - **Zircolite** is relatively fast and can parse large datasets in just seconds (check [benchmarks](docs/Internals.md#benchmarks))
-- **Zircolite** is based on a Sigma backend (SQLite) and do not use internal sigma to something conversion 
+- **Zircolite** is based on a Sigma backend (SQLite) and do not use internal sigma to "something" conversion 
 
-**Zircolite can be used directly in Python or you can use the binaries provided in [releases](https://github.com/wagga40/Zircolite/releases) (Microsoft Windows and Linux  only).** 
+**Zircolite can be used directly in Python or you can use the binaries provided in [releases](https://github.com/wagga40/Zircolite/releases) (Microsoft Windows and Linux only).** 
 **Documentation is [here](docs).**
 
 ## Requirements / Installation
@@ -52,10 +52,19 @@ Everything is [here](docs).
 
 ## Mini-Gui
 
+The Mini-GUI can be used totally offline, it allows the user to display and search results. You can automatically generate a Mini-Gui "package" with the `--package` option. To know how to use the Mini-GUI, check docs [here](docs/Advanced.md#mini-gui).
+
+### Detected events by Mitre Att&ck (c) techniques and criticity levels
+
 ![](pics/gui.webp)
+
+### Detected events Timeline
+
 ![](pics/gui-timeline.webp)
 
-The Mini-GUI can be used totally offline, it allows the user to display and search results. To know how to use the Mini-GUI, check docs [here](docs).
+### Detected events by Mitre Att&ck (c) techniques displayed on the Matrix 
+
+![](pics/gui-matrix.webp)
 
 ## Tutorials, references and related projects
 

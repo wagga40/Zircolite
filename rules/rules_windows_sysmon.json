@@ -3025,7 +3025,7 @@
             "attack.t1106"
         ],
         "rule": [
-            "SELECT * FROM logs WHERE ((EventID = '10' AND Channel = 'Microsoft-Windows-Sysmon/Operational') AND CallTrace LIKE 'UNKNOWN%' ESCAPE '\\' AND NOT ((TargetImage LIKE 'C:\\\\Program Files\\\\Cylance\\\\Desktop\\\\CylanceUI.exe' ESCAPE '\\' AND SourceImage LIKE 'C:\\\\Windows\\\\Explorer.EXE' ESCAPE '\\') OR (TargetImage LIKE 'C:\\\\Program Files (x86)\\\\Microsoft\\\\EdgeUpdate\\\\MicrosoftEdgeUpdate.exe' ESCAPE '\\' AND SourceImage LIKE 'C:\\\\Program Files (x86)\\\\Microsoft\\\\Temp\\*\\\\MicrosoftEdgeUpdate.exe' ESCAPE '\\') OR (TargetImage LIKE '%vcredist\\_x64.exe' ESCAPE '\\' AND SourceImage LIKE '%vcredist\\_x64.exe' ESCAPE '\\') OR (TargetImage LIKE 'C:\\\\Windows\\\\system32\\\\systeminfo.exe' ESCAPE '\\' AND SourceImage LIKE '%setup64.exe' ESCAPE '\\') OR (TargetImage LIKE '%AmazonSSMAgentSetup.exe' ESCAPE '\\' AND SourceImage LIKE '%AmazonSSMAgentSetup.exe' ESCAPE '\\') OR (TargetImage LIKE '%C:\\\\Program Files\\\\Mozilla Firefox\\\\firefox.exe' ESCAPE '\\' AND SourceImage LIKE '%C:\\\\Program Files\\\\Mozilla Firefox\\\\firefox.exe' ESCAPE '\\')))"
+            "SELECT * FROM logs WHERE ((EventID = '10' AND Channel = 'Microsoft-Windows-Sysmon/Operational') AND CallTrace LIKE 'UNKNOWN%' ESCAPE '\\' AND NOT ((TargetImage LIKE 'C:\\\\Program Files\\\\Cylance\\\\Desktop\\\\CylanceUI.exe' ESCAPE '\\' AND SourceImage LIKE 'C:\\\\Windows\\\\Explorer.EXE' ESCAPE '\\') OR (TargetImage LIKE 'C:\\\\Program Files (x86)\\\\Microsoft\\\\EdgeUpdate\\\\MicrosoftEdgeUpdate.exe' ESCAPE '\\' AND SourceImage LIKE 'C:\\\\Program Files (x86)\\\\Microsoft\\\\Temp\\\\%' ESCAPE '\\' AND SourceImage LIKE '%\\\\MicrosoftEdgeUpdate.exe' ESCAPE '\\') OR (TargetImage LIKE '%vcredist\\_x64.exe' ESCAPE '\\' AND SourceImage LIKE '%vcredist\\_x64.exe' ESCAPE '\\') OR (TargetImage LIKE 'C:\\\\Windows\\\\system32\\\\systeminfo.exe' ESCAPE '\\' AND SourceImage LIKE '%setup64.exe' ESCAPE '\\') OR (TargetImage LIKE '%AmazonSSMAgentSetup.exe' ESCAPE '\\' AND SourceImage LIKE '%AmazonSSMAgentSetup.exe' ESCAPE '\\') OR (TargetImage LIKE '%C:\\\\Program Files\\\\Mozilla Firefox\\\\firefox.exe' ESCAPE '\\' AND SourceImage LIKE '%C:\\\\Program Files\\\\Mozilla Firefox\\\\firefox.exe' ESCAPE '\\')))"
         ],
         "filename": "proc_access_win_direct_syscall_ntopenprocess.yml"
     },
@@ -3623,7 +3623,7 @@
             "attack.t1003.001"
         ],
         "rule": [
-            "SELECT * FROM logs WHERE ((EventID = '7' AND Channel = 'Microsoft-Windows-Sysmon/Operational') AND ((((ImageLoaded LIKE '%\\\\dbghelp.dll' ESCAPE '\\' OR ImageLoaded LIKE '%\\\\dbgcore.dll' ESCAPE '\\') AND (Image LIKE '%\\\\msbuild.exe' ESCAPE '\\' OR Image LIKE '%\\\\cmd.exe' ESCAPE '\\' OR Image LIKE '%\\\\rundll32.exe' ESCAPE '\\' OR Image LIKE '%\\\\word.exe' ESCAPE '\\' OR Image LIKE '%\\\\excel.exe' ESCAPE '\\' OR Image LIKE '%\\\\powerpnt.exe' ESCAPE '\\' OR Image LIKE '%\\\\outlook.exe' ESCAPE '\\' OR Image LIKE '%\\\\monitoringhost.exe' ESCAPE '\\' OR Image LIKE '%\\\\wmic.exe' ESCAPE '\\' OR Image LIKE '%\\\\bash.exe' ESCAPE '\\' OR Image LIKE '%\\\\wscript.exe' ESCAPE '\\' OR Image LIKE '%\\\\cscript.exe' ESCAPE '\\' OR Image LIKE '%\\\\mshta.exe' ESCAPE '\\' OR Image LIKE '%\\\\schtasks.exe' ESCAPE '\\' OR Image LIKE '%\\\\dnx.exe' ESCAPE '\\' OR Image LIKE '%\\\\regsvcs.exe' ESCAPE '\\' OR Image LIKE '%\\\\sc.exe' ESCAPE '\\' OR Image LIKE '%\\\\scriptrunner.exe' ESCAPE '\\')) OR ((ImageLoaded LIKE '%\\\\dbghelp.dll' ESCAPE '\\' OR ImageLoaded LIKE '%\\\\dbgcore.dll' ESCAPE '\\') AND Signed = 'FALSE')) AND NOT (Image LIKE '%Visual Studio%' ESCAPE '\\' OR (CommandLine LIKE '%-k LocalSystemNetworkRestricted%' ESCAPE '\\' OR CommandLine LIKE '%-k UnistackSvcGroup -s WpnUserService%' ESCAPE '\\'))) AND NOT ((CommandLine LIKE 'C:\\\\WINDOWS\\\\winsxs\\*\\\\TiWorker.exe -Embedding' ESCAPE '\\' OR CommandLine LIKE 'C:\\\\Windows\\\\system32\\\\svchost.exe -k netsvcs -p -s wuauserv' ESCAPE '\\' OR CommandLine LIKE 'C:\\\\Windows\\\\System32\\\\svchost.exe -k WerSvcGroup' ESCAPE '\\')))"
+            "SELECT * FROM logs WHERE ((EventID = '7' AND Channel = 'Microsoft-Windows-Sysmon/Operational') AND (((ImageLoaded LIKE '%\\\\dbghelp.dll' ESCAPE '\\' OR ImageLoaded LIKE '%\\\\dbgcore.dll' ESCAPE '\\') AND (Image LIKE '%\\\\msbuild.exe' ESCAPE '\\' OR Image LIKE '%\\\\cmd.exe' ESCAPE '\\' OR Image LIKE '%\\\\rundll32.exe' ESCAPE '\\' OR Image LIKE '%\\\\word.exe' ESCAPE '\\' OR Image LIKE '%\\\\excel.exe' ESCAPE '\\' OR Image LIKE '%\\\\powerpnt.exe' ESCAPE '\\' OR Image LIKE '%\\\\outlook.exe' ESCAPE '\\' OR Image LIKE '%\\\\monitoringhost.exe' ESCAPE '\\' OR Image LIKE '%\\\\wmic.exe' ESCAPE '\\' OR Image LIKE '%\\\\bash.exe' ESCAPE '\\' OR Image LIKE '%\\\\wscript.exe' ESCAPE '\\' OR Image LIKE '%\\\\cscript.exe' ESCAPE '\\' OR Image LIKE '%\\\\mshta.exe' ESCAPE '\\' OR Image LIKE '%\\\\schtasks.exe' ESCAPE '\\' OR Image LIKE '%\\\\dnx.exe' ESCAPE '\\' OR Image LIKE '%\\\\regsvcs.exe' ESCAPE '\\' OR Image LIKE '%\\\\sc.exe' ESCAPE '\\' OR Image LIKE '%\\\\scriptrunner.exe' ESCAPE '\\')) OR ((ImageLoaded LIKE '%\\\\dbghelp.dll' ESCAPE '\\' OR ImageLoaded LIKE '%\\\\dbgcore.dll' ESCAPE '\\') AND Signed = 'FALSE')) AND NOT ((Image LIKE '%Visual Studio%' ESCAPE '\\' OR (CommandLine LIKE '%-k LocalSystemNetworkRestricted%' ESCAPE '\\' OR CommandLine LIKE '%-k UnistackSvcGroup -s WpnUserService%' ESCAPE '\\')) OR ((CommandLine LIKE 'C:\\\\Windows\\\\system32\\\\svchost.exe -k netsvcs -p -s wuauserv' ESCAPE '\\' OR CommandLine LIKE 'C:\\\\Windows\\\\System32\\\\svchost.exe -k WerSvcGroup' ESCAPE '\\')) OR (CommandLine LIKE 'C:\\\\WINDOWS\\\\winsxs\\\\%' ESCAPE '\\' AND CommandLine LIKE '%\\\\TiWorker.exe -Embedding' ESCAPE '\\')))"
         ],
         "filename": "image_load_susp_dbghelp_dbgcore_load.yml"
     },
@@ -3722,7 +3722,7 @@
             "attack.t1070"
         ],
         "rule": [
-            "SELECT * FROM logs WHERE (EventID = '7' AND Channel = 'Microsoft-Windows-Sysmon/Operational' AND Image LIKE 'C:\\\\Windows\\\\%' ESCAPE '\\' AND (ImageLoaded LIKE '%\\\\Users\\\\Public\\\\%' ESCAPE '\\' OR ImageLoaded LIKE '%\\\\Desktop\\\\%' ESCAPE '\\' OR ImageLoaded LIKE '%\\\\Downloads\\\\%' ESCAPE '\\' OR ImageLoaded LIKE '%\\\\AppData\\\\Local\\\\Temp\\\\%' ESCAPE '\\' OR ImageLoaded LIKE '%C:\\\\PerfLogs\\\\%' ESCAPE '\\'))"
+            "SELECT * FROM logs WHERE ((EventID = '7' AND Channel = 'Microsoft-Windows-Sysmon/Operational') AND (Image LIKE 'C:\\\\Windows\\\\%' ESCAPE '\\' AND (ImageLoaded LIKE '%\\\\Users\\\\Public\\\\%' ESCAPE '\\' OR ImageLoaded LIKE '%\\\\Desktop\\\\%' ESCAPE '\\' OR ImageLoaded LIKE '%\\\\Downloads\\\\%' ESCAPE '\\' OR ImageLoaded LIKE '%\\\\AppData\\\\Local\\\\Temp\\\\%' ESCAPE '\\' OR ImageLoaded LIKE '%C:\\\\PerfLogs\\\\%' ESCAPE '\\')) AND NOT (ImageLoaded LIKE '%\\\\Program Files%' ESCAPE '\\'))"
         ],
         "filename": "image_load_susp_dll_load_system_process.yml"
     },
@@ -4475,7 +4475,7 @@
             "attack.t1562.002"
         ],
         "rule": [
-            "SELECT * FROM logs WHERE ((EventID = '13' AND Channel = 'Microsoft-Windows-Sysmon/Operational') AND (EventType = 'SetValue' AND TargetObject LIKE 'HKLM\\\\SOFTWARE\\\\Microsoft\\\\Windows\\\\CurrentVersion\\\\WINEVT\\\\Channels\\\\%' ESCAPE '\\' AND TargetObject LIKE '%\\\\Enabled' ESCAPE '\\' AND Details = 'DWORD (0x00000000)') AND NOT ((Image LIKE '%\\\\Windows\\\\system32\\\\wevtutil.exe' ESCAPE '\\') OR (Image LIKE 'C:\\\\Windows\\\\winsxs\\\\%' ESCAPE '\\' AND Image LIKE '%\\\\TiWorker.exe' ESCAPE '\\' AND TargetObject LIKE '%\\\\Microsoft\\\\Windows\\\\CurrentVersion\\\\WINEVT\\\\Channels\\\\Microsoft-IIS-%' ESCAPE '\\')))"
+            "SELECT * FROM logs WHERE ((EventID = '13' AND Channel = 'Microsoft-Windows-Sysmon/Operational') AND (EventType = 'SetValue' AND TargetObject LIKE 'HKLM\\\\SOFTWARE\\\\Microsoft\\\\Windows\\\\CurrentVersion\\\\WINEVT\\\\Channels\\\\%' ESCAPE '\\' AND TargetObject LIKE '%\\\\Enabled' ESCAPE '\\' AND Details = 'DWORD (0x00000000)') AND NOT ((Image LIKE '%\\\\Windows\\\\system32\\\\wevtutil.exe' ESCAPE '\\') OR (Image LIKE 'C:\\\\Windows\\\\winsxs\\\\%' ESCAPE '\\' AND Image LIKE '%\\\\TiWorker.exe' ESCAPE '\\') OR (Image LIKE 'C:\\\\Windows\\\\System32\\\\svchost.exe' ESCAPE '\\' AND TargetObject LIKE '%\\\\Microsoft\\\\Windows\\\\CurrentVersion\\\\WINEVT\\\\Channels\\\\Microsoft-Windows-FileInfoMinifilter%' ESCAPE '\\')))"
         ],
         "filename": "registry_set_disable_winevt_logging.yml"
     },
@@ -4955,7 +4955,7 @@
             "attack.t1053.005"
         ],
         "rule": [
-            "SELECT * FROM logs WHERE ((EventID = '13' AND Channel = 'Microsoft-Windows-Sysmon/Operational') AND (EventType = 'SetValue' AND TargetObject LIKE '%SOFTWARE\\\\Microsoft\\\\Windows NT\\\\CurrentVersion\\\\Schedule\\\\TaskCache\\\\%' ESCAPE '\\') AND NOT (((TargetObject LIKE '%Microsoft\\\\Windows\\\\UpdateOrchestrator%' ESCAPE '\\' OR TargetObject LIKE '%Microsoft\\\\Windows\\\\SoftwareProtectionPlatform\\\\SvcRestartTask\\\\Index%' ESCAPE '\\' OR TargetObject LIKE '%Microsoft\\\\Windows\\\\Flighting\\\\OneSettings\\\\RefreshCache\\\\Index%' ESCAPE '\\')) OR (Image LIKE 'C:\\\\Windows\\\\%' ESCAPE '\\' AND Image LIKE '%\\\\TiWorker.exe' ESCAPE '\\' AND (TargetObject LIKE '%\\\\MICROSOFT\\\\WINDOWS NT\\\\CURRENTVERSION\\\\SCHEDULE\\\\TASKCACHE\\\\PLAIN\\\\{1A552422-F571-4376-A7F1-5941E63D7B40}%' ESCAPE '\\' OR TargetObject LIKE '%\\\\Microsoft\\\\Windows NT\\\\CurrentVersion\\\\Schedule\\\\TaskCache\\\\Tree\\\\Microsoft\\\\Windows\\\\DeviceDirectoryClient\\\\%' ESCAPE '\\' OR TargetObject LIKE '%\\\\Microsoft\\\\Windows NT\\\\CurrentVersion\\\\Schedule\\\\TaskCache\\\\Tasks\\\\{04622042-F26B-4CCA-815F-E7A8375D87E6}%' ESCAPE '\\' OR TargetObject LIKE '%\\\\Microsoft\\\\Windows NT\\\\CurrentVersion\\\\Schedule\\\\TaskCache\\\\Tasks\\\\{C130EB11-1FDE-4953-B222-F44EEC6E1E8B}%' ESCAPE '\\')) OR (Image LIKE 'C:\\\\WINDOWS\\\\system32\\\\svchost.exe' ESCAPE '\\') OR (Image LIKE 'C:\\\\Windows\\\\Microsoft.NET\\\\Framework\\\\%' ESCAPE '\\' AND Image LIKE '%\\\\ngen.exe' ESCAPE '\\' AND TargetObject LIKE '%\\\\Microsoft\\\\Windows NT\\\\CurrentVersion\\\\Schedule\\\\TaskCache\\\\Tasks\\\\{B66B135D-DA06-4FC4-95F8-7458E1D10129}%' ESCAPE '\\')))"
+            "SELECT * FROM logs WHERE ((EventID = '13' AND Channel = 'Microsoft-Windows-Sysmon/Operational') AND (EventType = 'SetValue' AND TargetObject LIKE '%SOFTWARE\\\\Microsoft\\\\Windows NT\\\\CurrentVersion\\\\Schedule\\\\TaskCache\\\\%' ESCAPE '\\') AND NOT (((TargetObject LIKE '%Microsoft\\\\Windows\\\\UpdateOrchestrator%' ESCAPE '\\' OR TargetObject LIKE '%Microsoft\\\\Windows\\\\SoftwareProtectionPlatform\\\\SvcRestartTask\\\\Index%' ESCAPE '\\' OR TargetObject LIKE '%Microsoft\\\\Windows\\\\Flighting\\\\OneSettings\\\\RefreshCache\\\\Index%' ESCAPE '\\')) OR (Image LIKE 'C:\\\\Windows\\\\%' ESCAPE '\\' AND Image LIKE '%\\\\TiWorker.exe' ESCAPE '\\') OR (Image LIKE 'C:\\\\WINDOWS\\\\system32\\\\svchost.exe' ESCAPE '\\') OR (Image LIKE 'C:\\\\Windows\\\\Microsoft.NET\\\\Framework\\\\%' ESCAPE '\\' AND Image LIKE '%\\\\ngen.exe' ESCAPE '\\' AND TargetObject LIKE '%\\\\Microsoft\\\\Windows NT\\\\CurrentVersion\\\\Schedule\\\\TaskCache\\\\Tasks\\\\{B66B135D-DA06-4FC4-95F8-7458E1D10129}%' ESCAPE '\\')))"
         ],
         "filename": "registry_set_taskcache_entry.yml"
     },
@@ -9453,6 +9453,25 @@
         "filename": "proc_creation_win_msdt_diagcab.yml"
     },
     {
+        "title": "Use Short Name Path in Image",
+        "id": "a96970af-f126-420d-90e1-d37bf25e50e1",
+        "status": "experimental",
+        "description": "Detect use of the Windows 8.3 short name. Which could be used as a method to avoid Iamge detection",
+        "author": "frack113, Nasreddine Bencherchali",
+        "falsepositives": [
+            "Applications could use this notation occasionally which might generate some false positives. In that case Investigate the parent and child process."
+        ],
+        "level": "high",
+        "tags": [
+            "attack.defense_evasion",
+            "attack.t1564.004"
+        ],
+        "rule": [
+            "SELECT * FROM logs WHERE ((EventID = '1' AND Channel = 'Microsoft-Windows-Sysmon/Operational') AND (Image LIKE '%~1\\\\%' ESCAPE '\\' OR Image LIKE '%~2\\\\%' ESCAPE '\\') AND NOT ((ParentImage LIKE 'C:\\\\Windows\\\\System32\\\\Dism.exe' ESCAPE '\\')))"
+        ],
+        "filename": "proc_creation_win_ntfs_short_name_path_use_image.yml"
+    },
+    {
         "title": "EvilNum Golden Chickens Deployment via OCX Files",
         "id": "8acf3cfa-1e8c-4099-83de-a0c4038e18f0",
         "status": "test",
@@ -12057,6 +12076,25 @@
         "filename": "proc_creation_win_webshell_detection.yml"
     },
     {
+        "title": "Use NTFS Short Name in Image",
+        "id": "3ef5605c-9eb9-47b0-9a71-b727e6aa5c3b",
+        "status": "experimental",
+        "description": "Detect use of the Windows 8.3 short name. Which could be used as a method to avoid Image based detection",
+        "author": "frack113, Nasreddine Bencherchali",
+        "falsepositives": [
+            "Unknown"
+        ],
+        "level": "high",
+        "tags": [
+            "attack.defense_evasion",
+            "attack.t1564.004"
+        ],
+        "rule": [
+            "SELECT * FROM logs WHERE (EventID = '1' AND Channel = 'Microsoft-Windows-Sysmon/Operational' AND (Image LIKE '%~1.exe%' ESCAPE '\\' OR Image LIKE '%~1.bat%' ESCAPE '\\' OR Image LIKE '%~1.msi%' ESCAPE '\\' OR Image LIKE '%~1.vbe%' ESCAPE '\\' OR Image LIKE '%~1.vbs%' ESCAPE '\\' OR Image LIKE '%~1.dll%' ESCAPE '\\' OR Image LIKE '%~1.ps1%' ESCAPE '\\' OR Image LIKE '%~1.js%' ESCAPE '\\' OR Image LIKE '%~1.hta%' ESCAPE '\\' OR Image LIKE '%~2.exe%' ESCAPE '\\' OR Image LIKE '%~2.bat%' ESCAPE '\\' OR Image LIKE '%~2.msi%' ESCAPE '\\' OR Image LIKE '%~2.vbe%' ESCAPE '\\' OR Image LIKE '%~2.vbs%' ESCAPE '\\' OR Image LIKE '%~2.dll%' ESCAPE '\\' OR Image LIKE '%~2.ps1%' ESCAPE '\\' OR Image LIKE '%~2.js%' ESCAPE '\\' OR Image LIKE '%~2.hta%' ESCAPE '\\'))"
+        ],
+        "filename": "proc_creation_win_ntfs_short_name_use_image.yml"
+    },
+    {
         "title": "Use Radmin Viewer Utility",
         "id": "5817e76f-4804-41e6-8f1d-5fa0b3ecae2d",
         "status": "experimental",
@@ -13593,7 +13631,7 @@
         ],
         "level": "high",
         "rule": [
-            "SELECT * FROM logs WHERE ((EventID = '1' AND Channel = 'Microsoft-Windows-Sysmon/Operational') AND Image LIKE '%\\\\MpCmdRun.exe' ESCAPE '\\' AND NOT ((Image LIKE 'C:\\\\Program Files\\\\Windows Defender\\\\%' ESCAPE '\\' OR Image LIKE 'C:\\\\ProgramData\\\\Microsoft\\\\Windows Defender\\\\Platform\\\\%' ESCAPE '\\')))"
+            "SELECT * FROM logs WHERE ((EventID = '1' AND Channel = 'Microsoft-Windows-Sysmon/Operational') AND Image LIKE '%\\\\MpCmdRun.exe' ESCAPE '\\' AND NOT ((Image LIKE 'C:\\\\Program Files\\\\Windows Defender\\\\%' ESCAPE '\\' OR Image LIKE 'C:\\\\ProgramData\\\\Microsoft\\\\Windows Defender\\\\Platform\\\\%' ESCAPE '\\' OR Image LIKE 'C:\\\\Windows\\\\winsxs\\\\x86\\_security-malware-windows-defender\\_%' ESCAPE '\\' OR Image LIKE 'C:\\\\Program Files\\\\Microsoft Security Client\\\\MpCmdRun.exe%' ESCAPE '\\')))"
         ],
         "filename": "proc_creation_win_dll_sideload_defender.yml"
     },
@@ -16580,7 +16618,7 @@
         ],
         "level": "high",
         "rule": [
-            "SELECT * FROM logs WHERE (Channel = 'Security' AND (EventID = '5136' AND AttributeLDAPDisplayName = 'ntSecurityDescriptor' AND (AttributeValue LIKE '%1131f6ad-9c07-11d1-f79f-00c04fc2dcd2%' ESCAPE '\\' OR AttributeValue LIKE '%1131f6aa-9c07-11d1-f79f-00c04fc2dcd2%' ESCAPE '\\' OR AttributeValue LIKE '%89e95b76-444d-4c62-991a-0facbeda640c%' ESCAPE '\\')) AND NOT ((ObjectType IN ('dnsNode', 'dnsZoneScope'))))"
+            "SELECT * FROM logs WHERE (Channel = 'Security' AND (EventID = '5136' AND AttributeLDAPDisplayName = 'ntSecurityDescriptor' AND (AttributeValue LIKE '%1131f6ad-9c07-11d1-f79f-00c04fc2dcd2%' ESCAPE '\\' OR AttributeValue LIKE '%1131f6aa-9c07-11d1-f79f-00c04fc2dcd2%' ESCAPE '\\' OR AttributeValue LIKE '%89e95b76-444d-4c62-991a-0facbeda640c%' ESCAPE '\\')) AND NOT ((ObjectClass IN ('dnsNode', 'dnsZoneScope'))))"
         ],
         "filename": "win_account_backdoor_dcsync_rights.yml"
     },

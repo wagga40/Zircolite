@@ -198,6 +198,22 @@ var CriticalData = [{% for elem in data %}{% if elem["rule_level"] == "critical"
 	}{{ "," if not loop.last }}{% endfor %}{{ "," if not loop.last }}{% endif %}{% endfor %}
 ];
 
+var attack = [
+	{% for elem in data -%}
+		{% for tag in elem["tags"] -%}
+			{% if ".t" in tag -%}
+	[{{ tag|replace("attack.", "")|upper|tojson }}, {{ elem["title"]|tojson }}],
+			{% endif -%}
+		{% endfor -%}
+	{% endfor -%}
+];
+
+var tags = [{% for elem in data %}{% for tag in elem["tags"] %}{% if ".t" in tag %}
+	{{ tag|replace("attack.", "")|upper|tojson }},{% endif %}{% endfor %}{% endfor %}
+];
+
+var timeField = {{timeField|tojson}};
+
 var dictData = {};
 dictData["reconnaissance"] = ReconnaissanceData;
 dictData["resource_development"] = ResourceDevelopmentData;  

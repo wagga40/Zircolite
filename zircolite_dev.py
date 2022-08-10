@@ -71,10 +71,11 @@ def initLogger(debugMode, logFile=None):
     return logging.getLogger()
 
 class templateEngine:
-    def __init__(self, logger=None, template=[], templateOutput=[]):
+    def __init__(self, logger=None, template=[], templateOutput=[], timeField=""):
         self.logger = logger or logging.getLogger(__name__)
         self.template = template
         self.templateOutput = templateOutput
+        self.timeField = timeField
     
     def generateFromTemplate(self, templateFile, outpoutFilename, data):
         """ Use Jinja2 to output data in a specific format """
@@ -84,7 +85,7 @@ class templateEngine:
             template = Template(tmpl.read())
             
             with open(outpoutFilename, 'a', encoding='utf-8') as tpl:
-                tpl.write(template.render(data=data))
+                tpl.write(template.render(data=data, timeField=self.timeField))
         except Exception as e:
             self.logger.error(f"{Fore.RED}   [-] Template error, activate debug mode to check for errors")
             self.logger.debug(f"   [-] {e}")
@@ -821,13 +822,14 @@ class zircoGuiGenerator:
     """
     Generate the mini GUI (BETA)
     """
-    def __init__(self, packageDir, templateFile, logger=None, outputFile = None):
+    def __init__(self, packageDir, templateFile, logger=None, outputFile = None, timeField = ""):
         self.logger = logger or logging.getLogger(__name__)
         self.templateFile = templateFile
         self.tmpDir = f'tmp-zircogui-{self.randString()}'
         self.tmpFile = f'data-{self.randString()}.js'
         self.outputFile = outputFile or f'zircogui-output-{self.randString()}'
         self.packageDir = packageDir
+        self.timeField = timeField
 
     def randString(self):
         return ''.join(random.SystemRandom().choice(string.ascii_uppercase + string.digits) for _ in range(4))
@@ -848,7 +850,7 @@ class zircoGuiGenerator:
         self.unzip()
         try:
             self.logger.info(f"[+] Generating ZircoGui package to : {self.outputFile}.zip")
-            exportforzircoguiTmpl = templateEngine(self.logger, self.templateFile, self.tmpFile)
+            exportforzircoguiTmpl = templateEngine(self.logger, self.templateFile, self.tmpFile, self.timeField)
             exportforzircoguiTmpl.generateFromTemplate(exportforzircoguiTmpl.template, exportforzircoguiTmpl.templateOutput, data)
         except Exception as e:
             self.logger.error(f"   [-] {e}")
@@ -892,7 +894,7 @@ def avoidFiles(pathList, avoidFilesList):
 # MAIN()
 ################################################################
 if __name__ == '__main__':
-    version = "2.9.1"
+    version = "2.9.5"
 
     # Init Args handling
     parser = argparse.ArgumentParser()
@@ -927,7 +929,7 @@ if __name__ == '__main__':
     parser.add_argument("--espass", help="ES password", type=str, default="")
     parser.add_argument("--stream", help="By default event forwarding is done at the end, this option activate forwarding events when detected", action="store_true")
     parser.add_argument("--forwardall", help="Forward all events", action="store_true")
-    parser.add_argument("--timefield", help="Provide time field name for event forwarding", default="SystemTime", action="store_true")
+    parser.add_argument("--timefield", help="Provide time field name for event forwarding, default is 'SystemTime'", default="SystemTime", action="store_true")
     parser.add_argument("--cores", help="Specify how many cores you want to use, default is all cores", type=str)
     parser.add_argument("--template", help="If a Jinja2 template is specified it will be used to generated output", type=str, action='append', nargs='+')
     parser.add_argument("--templateOutput", help="If a Jinja2 template is specified it will be used to generate a crafted output", type=str, action='append', nargs='+')
@@ -1086,13 +1088,13 @@ if __name__ == '__main__':
 
     # Templating
     if readyForTemplating and zircoliteCore.fullResults != []:
-        templateGenerator = templateEngine(consoleLogger, args.template, args.templateOutput)
+        templateGenerator = templateEngine(consoleLogger, args.template, args.templateOutput, args.timefield)
         templateGenerator.run(zircoliteCore.fullResults)
 
     # Generate ZircoGui package
     if args.package and zircoliteCore.fullResults != []:
         if Path("templates/exportForZircoGui.tmpl").is_file() and Path("gui/zircogui.zip").is_file():
-            packager = zircoGuiGenerator("gui/zircogui.zip", "templates/exportForZircoGui.tmpl", consoleLogger)
+            packager = zircoGuiGenerator("gui/zircogui.zip", "templates/exportForZircoGui.tmpl", consoleLogger, None, args.timefield)
             packager.generate(zircoliteCore.fullResults)
     
     # Removing Working directory containing logs as json
