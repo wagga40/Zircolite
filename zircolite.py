@@ -1264,11 +1264,16 @@ class rulesUpdater:
         rulesets = Path(self.tmpDir).rglob("*.json")
         for ruleset in rulesets:
             hash_new = hashlib.md5(open(ruleset, "rb").read()).hexdigest()
-            hash_old = hashlib.md5(
-                open(f"rules/{ruleset.name}", "rb").read()
-            ).hexdigest()
+            if Path(f"rules/{ruleset.name}").is_file():
+                hash_old = hashlib.md5(
+                    open(f"rules/{ruleset.name}", "rb").read()
+                ).hexdigest()
+            else:
+                hash_old = ""
             if hash_new != hash_old:
                 count += 1
+                if not Path(f"rules/").exists():
+                    Path(f"rules/").mkdir()
                 shutil.move(ruleset, f"rules/{ruleset.name}")
                 self.updatedRulesets.append(f"rules/{ruleset.name}")
                 self.logger.info(
