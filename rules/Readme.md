@@ -10,12 +10,13 @@ These rulesets have been generated with `sigmac` wich is available in the [offic
 - `rules_windows_generic_high.json` : Only level high and above SIGMA rules from the "**Windows**" directory of the official repository (no SYSMON rewriting)
 - `rules_windows_generic_medium.json` : Only level medium and above SIGMA rules from the "**Windows**" directory of the official repository (no SYSMON rewriting)
 - `rules_windows_generic.json` : Same file as `rules_windows_generic_high.json`
-- `rules_windows_sysmon.json` : Full SIGMA ruleset from the "**Windows**" directory of the official repository  (SYSMON)
+- `rules_windows_sysmon_full.json` : Full SIGMA ruleset from the "**Windows**" directory of the official repository  (SYSMON)
 - `rules_windows_sysmon_high.json` : Only level high and above SIGMA rules from the "**Windows**" directory of the official repository (SYSMON)
 - `rules_windows_sysmon_medium.json` : Only level medium and above SIGMA rules from the "**Windows**" directory of the official repository (SYSMON)
 - `rules_windows_sysmon.json` : Same file as `rules_windows_sysmon_high.json`
 - `rules_linux.json`: Full SIGMA ruleset from the "**linux**" directory of the official repository. This ruleset can be used with Auditd and Sysmon for Linux logs.
 
+**As of v2.9.5, Zircolite can auto-update its default rulesets using the `-U` or `--update-rules`. There is an auto-updated rulesets repository available [here](https://github.com/wagga40/Zircolite-Rules).**
 
 ## Why you should make your own rulesets
 

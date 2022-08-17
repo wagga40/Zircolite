@@ -3,6 +3,7 @@
 # Standard libs
 import argparse
 import csv
+import hashlib
 import logging
 import multiprocessing as mp
 import os
@@ -1167,7 +1168,7 @@ class evtxExtractor:
 
 class zircoGuiGenerator:
     """
-    Generate the mini GUI (BETA)
+    Generate the mini GUI
     """
 
     def __init__(
@@ -1220,48 +1221,74 @@ class zircoGuiGenerator:
         shutil.rmtree(self.tmpDir)
 
 
-class rulesetGenerator:
-    def __init__(self, sigmac, config, table, rulesToConvert, fileext="yml"):
-        self.table = table
-        self.config = config
-        self.sigmac = sigmac
-        self.rules = rulesToConvert
-        self.fileext = fileext
+class rulesUpdater:
+    """
+    Download rulesets from the https://github.com/wagga40/Zircolite-Rules repository and update if necessary.
+    """
+
+    def __init__(self, logger=None):
+        self.url = (
+            "https://github.com/wagga40/Zircolite-Rules/archive/refs/heads/main.zip"
+        )
+        self.logger = logger or logging.getLogger(__name__)
+        self.tempFile = f"tmp-rules-{self.randString()}.zip"
+        self.tmpDir = f"tmp-rules-{self.randString()}"
+        self.updatedRulesets = []
+
+    def randString(self):
+        return "".join(
+            random.SystemRandom().choice(string.ascii_uppercase + string.digits)
+            for _ in range(4)
+        )
+
+    def download(self):
+        resp = requests.get(self.url, stream=True)
+        total = int(resp.headers.get("content-length", 0))
+        with open(self.tempFile, "wb") as file, tqdm(
+            desc=self.tempFile,
+            total=total,
+            unit="iB",
+            unit_scale=True,
+            unit_divisor=1024,
+            colour="yellow",
+        ) as bar:
+            for data in resp.iter_content(chunk_size=1024):
+                size = file.write(data)
+                bar.update(size)
+
+    def unzip(self):
+        shutil.unpack_archive(self.tempFile, self.tmpDir, "zip")
+
+    def checkIfNewerAndMove(self):
+        count = 0
+        rulesets = Path(self.tmpDir).rglob("*.json")
+        for ruleset in rulesets:
+            hash_new = hashlib.md5(open(ruleset, "rb").read()).hexdigest()
+            hash_old = hashlib.md5(
+                open(f"rules/{ruleset.name}", "rb").read()
+            ).hexdigest()
+            if hash_new != hash_old:
+                count += 1
+                shutil.move(ruleset, f"rules/{ruleset.name}")
+                self.updatedRulesets.append(f"rules/{ruleset.name}")
+                self.logger.info(
+                    f"{Fore.CYAN}   [+] Updated : rules/{ruleset.name}{Fore.RESET}"
+                )
+        if count == 0:
+            self.logger.info(f"{Fore.CYAN}   [+] No newer rulesets found")
+
+    def clean(self):
+        os.remove(self.tempFile)
+        shutil.rmtree(self.tmpDir)
 
     def run(self):
-        recurse = ""
-        if Path(self.rules).is_dir():  # it is a dir, adding the recurse args.
-            recurse = "-r"
-        cmd = [
-            self.sigmac,
-            "-d",
-            "--target",
-            "sqlite",
-            "-c",
-            self.config,
-            recurse,
-            self.rules,
-            "--output-fields",
-            "title,id,description,author,tags,level,falsepositives",
-            "-oF",
-            "json",
-            "--backend-option",
-            f"table={self.table}",
-        ]
-        outputRaw = subprocess.run(
-            args=cmd, capture_output=True, text=True, encoding="utf-8"
-        )
         try:
-            rules = json.loads(outputRaw.stdout)
-        except json.decoder.JSONDecodeError:
-            return {"ruleset": [], "errors": ""}
-        # Get Sigmac conversion errors and only keep the rule filepath
-        errors = [
-            error[error.find("(") + 1 : error.find(")")]
-            for error in outputRaw.stderr.split("\n")
-            if "unsupported" in error
-        ]
-        return {"ruleset": rules, "errors": errors}
+            self.download()
+            self.unzip()
+            self.checkIfNewerAndMove()
+            self.clean()
+        except Exception as e:
+            self.logger.error(f"   [-] {e}")
 
 
 def selectFiles(pathList, selectFilesList):
@@ -1499,6 +1526,12 @@ if __name__ == "__main__":
         action="store_true",
     )
     parser.add_argument(
+        "-U",
+        "--update-rules",
+        help="Update rulesets located in the 'rules' directory",
+        action="store_true",
+    )
+    parser.add_argument(
         "-v", "--version", help="Show Zircolite version", action="store_true"
     )
 
@@ -1526,6 +1559,12 @@ if __name__ == "__main__":
     # Print version an quit
     if args.version:
         consoleLogger.info(f"Zircolite - v{version}"), sys.exit(0)
+
+    if args.update_rules:
+        consoleLogger.info(f"[+] Updating rules")
+        updater = rulesUpdater(logger=consoleLogger)
+        updater.run()
+        sys.exit(0)
 
     # Handle rulesets args
     if args.ruleset:

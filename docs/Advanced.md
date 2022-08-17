@@ -13,6 +13,7 @@
 * [Templating and Formatting](#templating-and-formatting)
 * [Mini GUI](#mini-gui)
 * [Packaging Zircolite](#packaging-zircolite)
+* [Using with DFIR Orc](#using-with-dfir-orc)
 
 ---
 

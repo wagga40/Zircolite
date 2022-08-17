@@ -96,6 +96,8 @@ If you need to re-execute Zircolite,  you can do it directly using the SQLite da
 
 Default rulesets are already provided in the `rules` directory. These rulesets only are the conversion of the rules located in [rules/windows](https://github.com/SigmaHQ/sigma/tree/master/rules/windows) directory of the Sigma repository. These rulesets are provided to use Zircolite out-of-the-box but [you should generate your own rulesets](#why-you-should-build-your-own-rulesets).
 
+**As of v2.9.5, Zircolite can auto-update its default rulesets using the `-U` or `--update-rules`. There is an auto-updated rulesets repository available [here](https://github.com/wagga40/Zircolite-Rules).**
+
 #### With sigmatools
 
 Zircolite use the SIGMA rules in JSON format. To generate your ruleset you need the official sigmatools (**version 0.21 minimum**) : 
@@ -173,11 +175,8 @@ For example :
 
 ### Generate embedded versions
 
-If you deploy (manually or via GPO/SCCM) Zircolite directly on an endpoint you may want to have a binary that contains everything (rules, templates, tools, config etc.). As of 2.0, it is possible to generate your own embedded version of Zircolite with the **genEmbed** tool available in the repository [tools](../tools/genEmbed) directory
-
-#### Using genEmbed
-
-Please check help in the **genEmbed** repository : [tools/genEmbed](../tools/genEmbed).
+*Removed*.
+You can use DFIR Orc to package Zircolite, check [here](Advanced.md#using-with-dfir-orc).
 
 ---
 

@@ -34,6 +34,8 @@ python3 zircolite.py --evtx sysmon.evtx --ruleset rules/rules_windows_sysmon.jso
 
 The SYSMON ruleset used here is a default one and is for logs coming from endpoints where SYSMON is installed. 
 
+Rules can be updated using the `-U` or `--update-rules` options.
+
 #### Auditd / Sysmon for Linux / JSONL or NDJSON logs : 
 
 ```shell
@@ -42,9 +44,7 @@ python3 zircolite.py --events sysmon.log --ruleset rules/rules_linux.json --sysm
 python3 zircolite.py --events <JSON_FOLDER or JSON_FILE> --ruleset rules/rules_windows_sysmon.json --jsononly
 ```
 
-:information_source: If you want to try the tool you can test with these samples : 
-
-- [EVTX-ATTACK-SAMPLES](https://github.com/sbousseaden/EVTX-ATTACK-SAMPLES) (EVTX Files)
+:information_source: If you want to try the tool you can test with [EVTX-ATTACK-SAMPLES](https://github.com/sbousseaden/EVTX-ATTACK-SAMPLES) (EVTX Files).
 
 ## Docs
 
