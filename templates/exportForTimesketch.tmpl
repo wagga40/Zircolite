@@ -1,0 +1,2 @@
+{% for elem in data %}{% for match in elem["matches"] %}{"title":{{ elem["title"]|tojson }},"id":{{ elem["id"]|tojson }},"description":{{ elem["description"]|tojson }},"message":{{ elem["title"]|tojson }},"timestamp_desc":{{ elem["rule_level"]|tojson }},{% for key, value in match.items() %}"{{ key }}":{{ value|tojson }}{%if key == "SystemTime"%},"datetime":{{ value|tojson }}{% endif %}{{ "," if not loop.last }}{% endfor %}}
+{% endfor %}{% endfor %}
