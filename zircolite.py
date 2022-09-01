@@ -1071,7 +1071,14 @@ class evtxExtractor:
         if not "Event" in xmlLine:
             return None
         xmlLine = "<Event>" + xmlLine.split("<Event>")[1]
-        root = etree.fromstring(xmlLine)
+
+        try:
+            # isolate invidvidual line parsing errors
+            root = etree.fromstring(xmlLine)
+        except Exception as ex:
+            self.logger.debug(f"unable to parse line \"{xmlLine}\": {ex}")
+            return None
+
         ns = "http://schemas.microsoft.com/win/2004/08/events/event"
         child = {"#attributes": {"xmlns": ns}}
         for appt in root.getchildren():
