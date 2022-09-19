@@ -652,8 +652,17 @@ class zirCore:
         try:
             conn = sqlite3.connect(db)
             conn.row_factory = sqlite3.Row  # Allows to get a dict
+
+            def udf_regex(x, y):
+                if y is None:
+                    return 0
+                if re.search(x, y):
+                    return 1
+                else:
+                    return 0
+
             conn.create_function(
-                "regexp", 2, lambda x, y: 1 if re.search(x, y) else 0
+                "regexp", 2, udf_regex
             )  # Allows to use regex in SQlite
         except Error as e:
             self.logger.error(f"{Fore.RED}   [-] {e}")
