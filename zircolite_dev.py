@@ -969,7 +969,7 @@ if __name__ == '__main__':
     parser.add_argument("--template", help="If a Jinja2 template is specified it will be used to generated output", type=str, action='append', nargs='+')
     parser.add_argument("--templateOutput", help="If a Jinja2 template is specified it will be used to generate a crafted output", type=str, action='append', nargs='+')
     parser.add_argument("--debug", help="Activate debug logging", action='store_true')
-    parser.add_argument("--showall", help="Show all events, usefull to check what rule takes takes time to execute", action='store_true')
+    parser.add_argument("--showall", help="Show all events, useful to check what rule takes takes time to execute", action='store_true')
     parser.add_argument("--noexternal", help="Don't use evtx_dump external binaries (slower)", action='store_true')
     parser.add_argument("--package", help="Create a ZircoGui package (not available in embedded mode)", action='store_true')
     parser.add_argument("-U", "--update-rules", help="Update rulesets located in the 'rules' directory", action='store_true')
