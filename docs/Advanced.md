@@ -171,7 +171,7 @@ If you forward your events to a central collector you can disable local logging 
 
 #### Forward events to a HTTP server
 
-If you have multiple endpoints to scan, it is usefull to send the detected events to a central collector. As of v1.2, Zircolite can forward detected events to an HTTP server :
+If you have multiple endpoints to scan, it is useful to send the detected events to a central collector. As of v1.2, Zircolite can forward detected events to an HTTP server :
 
 ```shell
 python3 zircolite.py --evtx sample.evtx  --ruleset rules/rules_windows_sysmon.json \
