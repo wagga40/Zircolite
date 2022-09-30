@@ -1533,7 +1533,7 @@ if __name__ == "__main__":
     parser.add_argument("--debug", help="Activate debug logging", action="store_true")
     parser.add_argument(
         "--showall",
-        help="Show all events, usefull to check what rule takes takes time to execute",
+        help="Show all events, useful to check what rule takes takes time to execute",
         action="store_true",
     )
     parser.add_argument(
