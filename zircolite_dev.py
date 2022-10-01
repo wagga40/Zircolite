@@ -374,7 +374,7 @@ class JSONFlattener:
                 for a in x:
                     flatten(x[a], name + a + '.')
             else:
-                # Applying exclusions. Be carefull, the key/value pair is discarded if there is a partial match
+                # Applying exclusions. Be careful, the key/value pair is discarded if there is a partial match
                 if not any(exclusion in name[:-1] for exclusion in self.fieldExclusions):
                     # Arrays are not expanded
                     if type(x) is list:
@@ -451,7 +451,16 @@ class zirCore:
         try:
             conn = sqlite3.connect(db)
             conn.row_factory = sqlite3.Row  # Allows to get a dict
-            conn.create_function('regexp', 2, lambda x, y: 1 if re.search(x,y) else 0) # Allows to use regex in SQlite
+
+            def udf_regex(x, y):
+                if y is None: 
+                    return 0
+                if re.search(x, y):
+                    return 1
+                else:
+                    return 0
+
+            conn.create_function('regexp', 2, udf_regex) # Allows to use regex in SQlite
         except Error as e:
             self.logger.error(f"{Fore.RED}   [-] {e}")
         return conn
@@ -561,7 +570,7 @@ class zirCore:
             else:
                 results = ({"title": rule["title"], "id": rule["id"], "description": rule["description"], "sigmafile": rule["filename"], "sigma": rule["rule"], "rule_level": rule["level"], "tags": rule["tags"], "count": counter, "matches": filteredRows})
             if counter > 0:
-                self.logger.debug(f'DETECTED : {rule["title"]} - Matchs : {counter} events')
+                self.logger.debug(f'DETECTED : {rule["title"]} - Matches : {counter} events')
         else:
             self.logger.debug("RULE FORMAT ERROR : rule key Missing")
         if filteredRows == []:
@@ -600,7 +609,7 @@ class zirCore:
 
     def executeRuleset(self, outFile, writeMode='w', forwarder=None, showAll=False, KeepResults=False, remote=None, stream=False, lastRuleset=False):
         csvWriter = None
-        # Results are writen upon detection to allow analysis during execution and to avoid loosing results in case of error.
+        # Results are writen upon detection to allow analysis during execution and to avoid losing results in case of error.
         with open(outFile, writeMode, encoding='utf-8', newline='') as fileHandle:
             with tqdm(self.ruleset, colour="yellow") as ruleBar:
                 if not self.noOutput and not self.csvMode and writeMode != "a": fileHandle.write('[')
@@ -744,7 +753,12 @@ class evtxExtractor:
         if not 'Event' in xmlLine:
             return None
         xmlLine = "<Event>" + xmlLine.split("<Event>")[1]
-        root = etree.fromstring(xmlLine)
+        try:
+            # isolate invidvidual line parsing errors
+            root = etree.fromstring(xmlLine)
+        except Exception as ex:
+            self.logger.debug(f"unable to parse line \"{xmlLine}\": {ex}")
+            return None
         ns = u'http://schemas.microsoft.com/win/2004/08/events/event'
         child = {"#attributes": {"xmlns": ns}}
         for appt in root.getchildren():
@@ -969,7 +983,7 @@ if __name__ == '__main__':
     parser.add_argument("--template", help="If a Jinja2 template is specified it will be used to generated output", type=str, action='append', nargs='+')
     parser.add_argument("--templateOutput", help="If a Jinja2 template is specified it will be used to generate a crafted output", type=str, action='append', nargs='+')
     parser.add_argument("--debug", help="Activate debug logging", action='store_true')
-    parser.add_argument("--showall", help="Show all events, usefull to check what rule takes takes time to execute", action='store_true')
+    parser.add_argument("--showall", help="Show all events, useful to check what rule takes takes time to execute", action='store_true')
     parser.add_argument("--noexternal", help="Don't use evtx_dump external binaries (slower)", action='store_true')
     parser.add_argument("--package", help="Create a ZircoGui package (not available in embedded mode)", action='store_true')
     parser.add_argument("-U", "--update-rules", help="Update rulesets located in the 'rules' directory", action='store_true')
@@ -1036,9 +1050,9 @@ if __name__ == '__main__':
     # Check templates args
     readyForTemplating = False
     if (args.template is not None):
-        if args.csv: quitOnError(f"{Fore.RED}   [-] You cannot use templates in CSV mode ")
+        if args.csv: quitOnError(f"{Fore.RED}   [-] You cannot use templates in CSV mode")
         if (args.templateOutput is None) or (len(args.template) != len(args.templateOutput)):
-            quitOnError(f"{Fore.RED}   [-] Number of template ouput must match number of template ")
+            quitOnError(f"{Fore.RED}   [-] Number of templates output must match number of templates")
         for template in args.template:
             checkIfExists(template[0], f"{Fore.RED}   [-] Cannot find template : {template[0]}")
         readyForTemplating = True
