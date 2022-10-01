@@ -943,7 +943,7 @@ def avoidFiles(pathList, avoidFilesList):
 # MAIN()
 ################################################################
 if __name__ == '__main__':
-    version = "2.9.5"
+    version = "2.9.6"
 
     # Init Args handling
     parser = argparse.ArgumentParser()
