@@ -158,6 +158,16 @@ var UnknownData = [{% for elem in data %}{% if elem["rule_level"] == "unknown" %
 	}{{ "," if not loop.last }}{% endfor %}{{ "," if not loop.last }}{% endif %}{% endfor %}
 ];
 
+var InformationalData = [{% for elem in data %}{% if elem["rule_level"] == "informational" %}{% for match in elem["matches"] %}
+	{
+		"Rule level":{{ elem["rule_level"]|tojson }},
+		"title":{{ elem["title"]|tojson }},
+		"sigma_yml":{{ elem["sigmafile"]|tojson }},
+		"description":{{ elem["description"]|tojson }},{% for key, value in match.items() %}
+		"{{ key }}":{{ value|tojson }}{{ "," if not loop.last }}{% endfor %}
+	}{{ "," if not loop.last }}{% endfor %}{{ "," if not loop.last }}{% endif %}{% endfor %}
+];
+
 var LowData = [{% for elem in data %}{% if elem["rule_level"] == "low" %}{% for match in elem["matches"] %}
 	{
 		"Rule level":{{ elem["rule_level"]|tojson }},
@@ -231,6 +241,7 @@ dictData["exfiltration"] = ExfiltrationData;
 dictData["impact"] = ImpactData; 
 dictData["other"] = OtherData; 
 dictData["unknown"] = UnknownData; 
+dictData["informational"] = InformationalData; 
 dictData["low"] = LowData; 
 dictData["medium"] = MediumData; 
 dictData["high"] = HighData; 

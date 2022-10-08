@@ -46,6 +46,24 @@
         "filename": "lnx_susp_guacamole.yml"
     },
     {
+        "title": "Disabling Security Tools",
+        "id": "49f5dfc1-f92e-4d34-96fa-feba3f6acf36",
+        "description": "Detects disabling security tools",
+        "author": "Ömer Günal, Alejandro Ortuno, oscd.community",
+        "tags": [
+            "attack.defense_evasion",
+            "attack.t1562.004"
+        ],
+        "falsepositives": [
+            "Legitimate administration activities"
+        ],
+        "level": "medium",
+        "rule": [
+            "SELECT * FROM logs WHERE (logs MATCH ('\"stopping iptables\" OR \"stopping ip6tables\" OR \"stopping firewalld\" OR \"stopping cbdaemon\" OR \"stopping falcon-sensor\"'))"
+        ],
+        "filename": "lnx_security_tools_disabling_syslog.yml"
+    },
+    {
         "title": "Failed Logins with Different Accounts from Single Source System",
         "id": "fc947f8e-ea81-4b14-9a7b-13f888f94e18",
         "description": "Detects suspicious failed logins with different user accounts from a single source system",
@@ -64,6 +82,24 @@
             "SELECT * FROM (SELECT *,count(pam_user) AS agg FROM logs WHERE (pam_message = 'authentication failure' AND pam_user LIKE '%' ESCAPE '\\' AND pam_rhost LIKE '%' ESCAPE '\\') GROUP BY pam_rhost) WHERE agg > 3"
         ],
         "filename": "lnx_susp_failed_logons_single_source.yml"
+    },
+    {
+        "title": "Suspicious Named Error",
+        "id": "c8e35e96-19ce-4f16-aeb6-fd5588dc5365",
+        "description": "Detects suspicious DNS error messages that indicate a fatal or suspicious error that could be caused by exploiting attempts",
+        "author": "Florian Roth",
+        "falsepositives": [
+            "Unknown"
+        ],
+        "level": "high",
+        "tags": [
+            "attack.initial_access",
+            "attack.t1190"
+        ],
+        "rule": [
+            "SELECT * FROM logs WHERE (logs MATCH ('\" dropping source port zero packet from \" OR \" denied AXFR from \" OR \" exiting (due to fatal error)\"'))"
+        ],
+        "filename": "lnx_susp_named.yml"
     },
     {
         "title": "Modifying Crontab",
@@ -1238,6 +1274,24 @@
         "filename": "proc_creation_lnx_omigod_scx_runasprovider_executescript.yml"
     },
     {
+        "title": "Connection Proxy",
+        "id": "72f4ab3f-787d-495d-a55d-68c2ff46cf4c",
+        "description": "Detects setting proxy configuration",
+        "author": "Ömer Günal",
+        "falsepositives": [
+            "Legitimate administration activities"
+        ],
+        "level": "low",
+        "tags": [
+            "attack.defense_evasion",
+            "attack.t1090"
+        ],
+        "rule": [
+            "SELECT * FROM logs WHERE (CommandLine LIKE '%http\\_proxy=%' ESCAPE '\\' OR CommandLine LIKE '%https\\_proxy=%' ESCAPE '\\')"
+        ],
+        "filename": "proc_creation_lnx_proxy_connection.yml"
+    },
+    {
         "title": "Linux Webshell Indicators",
         "id": "818f7b24-0fba-4c49-a073-8b755573b9c7",
         "description": "Detects suspicious sub processes of web server processes",
@@ -1797,6 +1851,26 @@
         "filename": "proc_creation_lnx_install_root_certificate.yml"
     },
     {
+        "title": "Sudo Privilege Escalation CVE-2019-14287",
+        "id": "f74107df-b6c6-4e80-bf00-4170b658162b",
+        "description": "Detects users trying to exploit sudo vulnerability reported in CVE-2019-14287",
+        "author": "Florian Roth",
+        "tags": [
+            "attack.privilege_escalation",
+            "attack.t1068",
+            "attack.t1548.003",
+            "cve.2019.14287"
+        ],
+        "falsepositives": [
+            "Unlikely"
+        ],
+        "level": "high",
+        "rule": [
+            "SELECT * FROM logs WHERE CommandLine LIKE '% -u#%' ESCAPE '\\'"
+        ],
+        "filename": "proc_creation_lnx_sudo_cve_2019_14287.yml"
+    },
+    {
         "title": "Remove Immutable File Attribute",
         "id": "34979410-e4b5-4e5d-8cfb-389fdff05c12",
         "description": "Detects usage of the 'chattr' utility to remove immutable file attribute.",
@@ -1997,6 +2071,23 @@
             "SELECT * FROM logs WHERE (Image LIKE '%crontab' ESCAPE '\\' AND CommandLine LIKE '%/tmp/%' ESCAPE '\\')"
         ],
         "filename": "proc_creation_lnx_schedule_task_job_cron.yml"
+    },
+    {
+        "title": "Setuid and Setgid",
+        "id": "c21c4eaa-ba2e-419a-92b2-8371703cbe21",
+        "description": "Detects suspicious change of file privileges with chown and chmod commands",
+        "author": "Ömer Günal",
+        "falsepositives": [
+            "Legitimate administration activities"
+        ],
+        "level": "low",
+        "tags": [
+            "attack.persistence"
+        ],
+        "rule": [
+            "SELECT * FROM logs WHERE (CommandLine LIKE '%chown root%' ESCAPE '\\' AND (CommandLine LIKE '% chmod u+s%' ESCAPE '\\' OR CommandLine LIKE '% chmod g+s%' ESCAPE '\\'))"
+        ],
+        "filename": "proc_creation_lnx_setgid_setuid.yml"
     },
     {
         "title": "Linux Crypto Mining Indicators",
