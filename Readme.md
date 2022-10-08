@@ -75,13 +75,10 @@ The Mini-GUI can be used totally offline, it allows the user to display and sear
 
 - **César Marín** has published a tutorial in **spanish** [here](https://derechodelared.com/zircolite-ejecucion-de-reglas-sigma-en-ficheros-evtx/)
 
-### EU ATT&CK Workshop October 2021
+### References 
 
-[Florian Roth](https://github.com/Neo23x0/) cited **Zircolite** in his [**SIGMA Hall of fame**](https://github.com/Neo23x0/Talks/blob/master/Sigma_Hall_of_Fame_20211022.pdf) in its talk dugin the October 2021 EU ATT&CK Workshop.
-
-### Related projects
-
-[Michel de CREVOISIER](https://github.com/mdecrevoisier) is doing an amazing work with SIGMA, MITRE Att&ck (c) and other projects. Check [his work on mapping EVTX on the MITRE Att&ck (c) framework](https://github.com/mdecrevoisier/EVTX-to-MITRE-Attack).
+- [Florian Roth](https://github.com/Neo23x0/) cited **Zircolite** in his [**SIGMA Hall of fame**](https://github.com/Neo23x0/Talks/blob/master/Sigma_Hall_of_Fame_20211022.pdf) in its talk dugin the October 2021 EU ATT&CK Workshop in October 2021
+- Zircolite has been cited and used in the research work of the CIDRE team : [PWNJUSTSU - Website](https://pwnjutsu.irisa.fr) and [PWNJUSTSU - Academic paper](https://hal.inria.fr/hal-03694719/document)
 
 ## Battle-tested
 

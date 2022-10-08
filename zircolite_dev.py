@@ -943,7 +943,7 @@ def avoidFiles(pathList, avoidFilesList):
 # MAIN()
 ################################################################
 if __name__ == '__main__':
-    version = "2.9.6"
+    version = "2.9.7"
 
     # Init Args handling
     parser = argparse.ArgumentParser()
@@ -959,7 +959,7 @@ if __name__ == '__main__':
     parser.add_argument("-o", "--outfile", help="File that will contains all detected events", type=str, default="detected_events.json")
     parser.add_argument("--csv", help="The output will be in CSV. You should note that in this mode empty fields will not be discarded from results", action='store_true')
     parser.add_argument("-f", "--fileext", help="EVTX file extension", type=str, default="evtx")
-    parser.add_argument("-t", "--tmpdir", help="Temp directory that will contains EVTX converted as JSON", type=str)
+    parser.add_argument("-t", "--tmpdir", help="Temp directory that will contains EVTX converted as JSON (parent directories must exist)", type=str)
     parser.add_argument("-k", "--keeptmp", help="Do not remove the temp directory containing EVTX converted in JSON format", action='store_true')
     parser.add_argument("-d", "--dbfile", help="Save all logs in a SQLite Db to the specified file", type=str)
     parser.add_argument("-l", "--logfile", help="Log file name", default="zircolite.log", type=str)

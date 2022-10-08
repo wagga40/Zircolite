@@ -1340,7 +1340,7 @@ def avoidFiles(pathList, avoidFilesList):
 # MAIN()
 ################################################################
 if __name__ == "__main__":
-    version = "2.9.6"
+    version = "2.9.7"
 
     # Init Args handling
     parser = argparse.ArgumentParser()
@@ -1418,7 +1418,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "-t",
         "--tmpdir",
-        help="Temp directory that will contains EVTX converted as JSON",
+        help="Temp directory that will contains EVTX converted as JSON (parent directories must exist)",
         type=str,
     )
     parser.add_argument(
