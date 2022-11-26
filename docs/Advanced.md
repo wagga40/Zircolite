@@ -52,7 +52,7 @@ Except when `evtx_dump` is used, Zircolite only use one core. So if you have a l
 	You can use this mode when you have a lot of aggregated EVTX coming from multiple computers. It is generaly the case when you use WEF/WEC and you recover the EVTX files from the collector. This mode will create one result file per EVTX.
 
 	```shell
-	find <CASE_DIRECTORY> -type f -name "*.| \
+	find <CASE_DIRECTORY> -type f -name "*.evtx" | \
 		parallel -j -1 --progress python3 zircolite.py --evtx {} \
 		--ruleset rules/rules_windows_sysmon.json --outfile {/.}.json
 	```
