@@ -597,12 +597,16 @@ class JSONFlattener:
                         self.timeAfter != "1970-01-01T00:00:00"
                         or self.timeBefore != "9999-12-12T23:59:59"
                     ) and (self.timeField in JSONLine):
-                        timestamp = time.strptime(
-                            JSONLine[self.timeField].split(".")[0].replace("Z", ""),
-                            "%Y-%m-%dT%H:%M:%S",
-                        )
-                        if timestamp > self.timeAfter and timestamp < self.timeBefore:
+                        try:
+                            timestamp = time.strptime(
+                                JSONLine[self.timeField].split(".")[0].replace("Z", ""),
+                                "%Y-%m-%dT%H:%M:%S",
+                            )
+                        except:
                             JSONOutput.append(JSONLine)
+                        else:
+                            if timestamp > self.timeAfter and timestamp < self.timeBefore:
+                                JSONOutput.append(JSONLine)
                     else:
                         JSONOutput.append(JSONLine)
                     JSONLine = {}
