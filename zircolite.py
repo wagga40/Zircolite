@@ -589,6 +589,7 @@ class JSONFlattener:
                     try:
                         dictToFlatten = json.loads(line)
                         dictToFlatten.update({"OriginalLogfile": filename})
+                        dictToFlatten.update({"OriginalLogLinexxHash": xxhash.xxh64_hexdigest(line[:-1])})
                         flatten(dictToFlatten)
                     except Exception as e:
                         self.logger.debug(f"JSON ERROR : {e}")
