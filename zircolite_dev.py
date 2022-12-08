@@ -342,7 +342,7 @@ class eventForwarder:
 class JSONFlattener:
     """ Perform JSON Flattening """
 
-    def __init__(self, configFile, logger=None, timeAfter="1970-01-01T00:00:00", timeBefore="9999-12-12T23:59:59", timeField=None):
+    def __init__(self, configFile, logger=None, timeAfter="1970-01-01T00:00:00", timeBefore="9999-12-12T23:59:59", timeField=None, hashes=False):
         self.logger = logger or logging.getLogger(__name__)
         self.keyDict = {}
         self.fieldStmt = ""
@@ -350,6 +350,7 @@ class JSONFlattener:
         self.timeAfter = timeAfter
         self.timeBefore = timeBefore
         self.timeField = timeField
+        self.hashes = hashes
         
         with open(configFile, 'r', encoding='UTF-8') as fieldMappingsFile:
             self.fieldMappingsDict = json.loads(fieldMappingsFile.read())
@@ -405,12 +406,17 @@ class JSONFlattener:
                     try:
                         dictToFlatten = json.loads(line)
                         dictToFlatten.update({"OriginalLogfile": filename})
+                        if self.hashes: 
+                            dictToFlatten.update({"OriginalLogLinexxHash": xxhash.xxh64_hexdigest(line[:-1])})
                         flatten(dictToFlatten)
                     except Exception as e:
                         self.logger.debug(f'JSON ERROR : {e}')
                     # Handle timestamp filters
                     if (self.timeAfter != "1970-01-01T00:00:00" or self.timeBefore != "9999-12-12T23:59:59") and (self.timeField in JSONLine):
-                        timestamp = time.strptime(JSONLine[self.timeField].split(".")[0].replace("Z",""), '%Y-%m-%dT%H:%M:%S')
+                        try:
+                            timestamp = time.strptime(JSONLine[self.timeField].split(".")[0].replace("Z",""), '%Y-%m-%dT%H:%M:%S')
+                        except:
+                            JSONOutput.append(JSONLine)
                         if timestamp > self.timeAfter and timestamp < self.timeBefore:
                             JSONOutput.append(JSONLine)
                     else:
@@ -428,7 +434,7 @@ class JSONFlattener:
 class zirCore:
     """ Load data into database and apply detection rules  """
 
-    def __init__(self, config, logger=None, noOutput=False, timeAfter="1970-01-01T00:00:00", timeBefore="9999-12-12T23:59:59", limit=-1, csvMode=False, timeField=None):
+    def __init__(self, config, logger=None, noOutput=False, timeAfter="1970-01-01T00:00:00", timeBefore="9999-12-12T23:59:59", limit=-1, csvMode=False, timeField=None, hashes=False):
         self.logger = logger or logging.getLogger(__name__)
         self.dbConnection = self.createConnection(":memory:")
         self.fullResults = []
@@ -440,6 +446,7 @@ class zirCore:
         self.limit = limit
         self.csvMode = csvMode
         self.timeField = timeField
+        self.hashes = hashes
     
     def close(self):
         self.dbConnection.close()
@@ -646,7 +653,7 @@ class zirCore:
 
     def run(self, EVTXJSONList, Insert2Db=True, forwarder=None):
         self.logger.info("[+] Processing EVTX")
-        flattener = JSONFlattener(configFile=self.config, timeAfter=self.timeAfter, timeBefore=self.timeBefore, timeField=self.timeField)
+        flattener = JSONFlattener(configFile=self.config, timeAfter=self.timeAfter, timeBefore=self.timeBefore, timeField=self.timeField, hashes=self.hashes)
         flattener.runAll(EVTXJSONList)
         if Insert2Db:
             self.logger.info("[+] Creating model")
@@ -978,6 +985,7 @@ if __name__ == '__main__':
     parser.add_argument("--espass", help="ES password", type=str, default="")
     parser.add_argument("--stream", help="By default event forwarding is done at the end, this option activate forwarding events when detected", action="store_true")
     parser.add_argument("--forwardall", help="Forward all events", action="store_true")
+    parser.add_argument("--hashes", help="Add an xxhash64 of the orginal log event to each event", action='store_true')
     parser.add_argument("--timefield", help="Provide time field name for event forwarding, default is 'SystemTime'", default="SystemTime", action="store_true")
     parser.add_argument("--cores", help="Specify how many cores you want to use, default is all cores", type=str)
     parser.add_argument("--template", help="If a Jinja2 template is specified it will be used to generated output", type=str, action='append', nargs='+')
@@ -1066,7 +1074,7 @@ if __name__ == '__main__':
     start_time = time.time()
 
     # Initialize zirCore
-    zircoliteCore = zirCore(args.config, logger=consoleLogger, noOutput=args.nolog, timeAfter=eventsAfter, timeBefore=eventsBefore, limit=args.limit, csvMode=args.csv, timeField=args.timefield)
+    zircoliteCore = zirCore(args.config, logger=consoleLogger, noOutput=args.nolog, timeAfter=eventsAfter, timeBefore=eventsBefore, limit=args.limit, csvMode=args.csv, timeField=args.timefield, hashes=args.hashes)
     
     # If we are not working directly with the db
     if not args.dbonly:

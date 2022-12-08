@@ -521,6 +521,7 @@ class JSONFlattener:
         timeAfter="1970-01-01T00:00:00",
         timeBefore="9999-12-12T23:59:59",
         timeField=None,
+        hashes=False,
     ):
         self.logger = logger or logging.getLogger(__name__)
         self.keyDict = {}
@@ -529,6 +530,7 @@ class JSONFlattener:
         self.timeAfter = timeAfter
         self.timeBefore = timeBefore
         self.timeField = timeField
+        self.hashes = hashes
 
         with open(configFile, "r", encoding="UTF-8") as fieldMappingsFile:
             self.fieldMappingsDict = json.loads(fieldMappingsFile.read())
@@ -589,7 +591,14 @@ class JSONFlattener:
                     try:
                         dictToFlatten = json.loads(line)
                         dictToFlatten.update({"OriginalLogfile": filename})
-                        dictToFlatten.update({"OriginalLogLinexxHash": xxhash.xxh64_hexdigest(line[:-1])})
+                        if self.hashes:
+                            dictToFlatten.update(
+                                {
+                                    "OriginalLogLinexxHash": xxhash.xxh64_hexdigest(
+                                        line[:-1]
+                                    )
+                                }
+                            )
                         flatten(dictToFlatten)
                     except Exception as e:
                         self.logger.debug(f"JSON ERROR : {e}")
@@ -605,9 +614,8 @@ class JSONFlattener:
                             )
                         except:
                             JSONOutput.append(JSONLine)
-                        else:
-                            if timestamp > self.timeAfter and timestamp < self.timeBefore:
-                                JSONOutput.append(JSONLine)
+                        if timestamp > self.timeAfter and timestamp < self.timeBefore:
+                            JSONOutput.append(JSONLine)
                     else:
                         JSONOutput.append(JSONLine)
                     JSONLine = {}
@@ -634,6 +642,7 @@ class zirCore:
         limit=-1,
         csvMode=False,
         timeField=None,
+        hashes=False,
     ):
         self.logger = logger or logging.getLogger(__name__)
         self.dbConnection = self.createConnection(":memory:")
@@ -646,6 +655,7 @@ class zirCore:
         self.limit = limit
         self.csvMode = csvMode
         self.timeField = timeField
+        self.hashes = hashes
 
     def close(self):
         self.dbConnection.close()
@@ -945,6 +955,7 @@ class zirCore:
             timeAfter=self.timeAfter,
             timeBefore=self.timeBefore,
             timeField=self.timeField,
+            hashes=self.hashes,
         )
         flattener.runAll(EVTXJSONList)
         if Insert2Db:
@@ -1509,6 +1520,11 @@ if __name__ == "__main__":
     )
     parser.add_argument("--forwardall", help="Forward all events", action="store_true")
     parser.add_argument(
+        "--hashes",
+        help="Add an xxhash64 of the orginal log event to each event",
+        action="store_true",
+    )
+    parser.add_argument(
         "--timefield",
         help="Provide time field name for event forwarding, default is 'SystemTime'",
         default="SystemTime",
@@ -1681,6 +1697,7 @@ if __name__ == "__main__":
         limit=args.limit,
         csvMode=args.csv,
         timeField=args.timefield,
+        hashes=args.hashes,
     )
 
     # If we are not working directly with the db
