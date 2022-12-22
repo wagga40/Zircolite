@@ -434,9 +434,9 @@ class JSONFlattener:
 class zirCore:
     """ Load data into database and apply detection rules  """
 
-    def __init__(self, config, logger=None, noOutput=False, timeAfter="1970-01-01T00:00:00", timeBefore="9999-12-12T23:59:59", limit=-1, csvMode=False, timeField=None, hashes=False):
+    def __init__(self, config, logger=None, noOutput=False, timeAfter="1970-01-01T00:00:00", timeBefore="9999-12-12T23:59:59", limit=-1, csvMode=False, timeField=None, hashes=False, dbLocation=":memory:"):
         self.logger = logger or logging.getLogger(__name__)
-        self.dbConnection = self.createConnection(":memory:")
+        self.dbConnection = self.createConnection(dbLocation)
         self.fullResults = []
         self.ruleset = {}
         self.noOutput = noOutput
@@ -987,12 +987,13 @@ if __name__ == '__main__':
     parser.add_argument("--forwardall", help="Forward all events", action="store_true")
     parser.add_argument("--hashes", help="Add an xxhash64 of the orginal log event to each event", action='store_true')
     parser.add_argument("--timefield", help="Provide time field name for event forwarding, default is 'SystemTime'", default="SystemTime", action="store_true")
-    parser.add_argument("--cores", help="Specify how many cores you want to use, default is all cores", type=str)
+    parser.add_argument("--cores", help="Specify how many cores you want to use, default is all cores, works only for EVTX extraction", type=str)
     parser.add_argument("--template", help="If a Jinja2 template is specified it will be used to generated output", type=str, action='append', nargs='+')
     parser.add_argument("--templateOutput", help="If a Jinja2 template is specified it will be used to generate a crafted output", type=str, action='append', nargs='+')
     parser.add_argument("--debug", help="Activate debug logging", action='store_true')
     parser.add_argument("--showall", help="Show all events, useful to check what rule takes takes time to execute", action='store_true')
     parser.add_argument("--noexternal", help="Don't use evtx_dump external binaries (slower)", action='store_true')
+    parser.add_argument("--ondiskdb", help="Use an on-disk database instead of the in-memory one (much slower !). Use if your system has limited RAM or if your dataset is very large and you cannot split it.", type=str, default=":memory:")
     parser.add_argument("--package", help="Create a ZircoGui package (not available in embedded mode)", action='store_true')
     parser.add_argument("-U", "--update-rules", help="Update rulesets located in the 'rules' directory", action='store_true')
     parser.add_argument("-v", "--version", help="Show Zircolite version", action='store_true')
@@ -1065,16 +1066,20 @@ if __name__ == '__main__':
             checkIfExists(template[0], f"{Fore.RED}   [-] Cannot find template : {template[0]}")
         readyForTemplating = True
     
+    # Change output filename in CSV mode
     if args.csv: 
         readyForTemplating = False
         if args.outfile == "detected_events.json": 
             args.outfile = "detected_events.csv"
 
+    # If on-disk DB already exists, quit.
+    if args.ondiskdb != ":memory:" and (Path(args.ondiskdb).is_file()): quitOnError(f"{Fore.RED}   [-] On-disk database already exists") 
+
     # Start time counting
     start_time = time.time()
 
     # Initialize zirCore
-    zircoliteCore = zirCore(args.config, logger=consoleLogger, noOutput=args.nolog, timeAfter=eventsAfter, timeBefore=eventsBefore, limit=args.limit, csvMode=args.csv, timeField=args.timefield, hashes=args.hashes)
+    zircoliteCore = zirCore(args.config, logger=consoleLogger, noOutput=args.nolog, timeAfter=eventsAfter, timeBefore=eventsBefore, limit=args.limit, csvMode=args.csv, timeField=args.timefield, hashes=args.hashes, dbLocation=args.ondiskdb)
     
     # If we are not working directly with the db
     if not args.dbonly:

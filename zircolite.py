@@ -643,9 +643,10 @@ class zirCore:
         csvMode=False,
         timeField=None,
         hashes=False,
+        dbLocation=":memory:",
     ):
         self.logger = logger or logging.getLogger(__name__)
-        self.dbConnection = self.createConnection(":memory:")
+        self.dbConnection = self.createConnection(dbLocation)
         self.fullResults = []
         self.ruleset = {}
         self.noOutput = noOutput
@@ -1532,7 +1533,7 @@ if __name__ == "__main__":
     )
     parser.add_argument(
         "--cores",
-        help="Specify how many cores you want to use, default is all cores",
+        help="Specify how many cores you want to use, default is all cores, works only for EVTX extraction",
         type=str,
     )
     parser.add_argument(
@@ -1559,6 +1560,12 @@ if __name__ == "__main__":
         "--noexternal",
         help="Don't use evtx_dump external binaries (slower)",
         action="store_true",
+    )
+    parser.add_argument(
+        "--ondiskdb",
+        help="Use an on-disk database instead of the in-memory one (much slower !). Use if your system has limited RAM or if your dataset is very large and you cannot split it.",
+        type=str,
+        default=":memory:",
     )
     parser.add_argument(
         "--package",
@@ -1679,10 +1686,15 @@ if __name__ == "__main__":
             )
         readyForTemplating = True
 
+    # Change output filename in CSV mode
     if args.csv:
         readyForTemplating = False
         if args.outfile == "detected_events.json":
             args.outfile = "detected_events.csv"
+
+    # If on-disk DB already exists, quit.
+    if args.ondiskdb != ":memory:" and (Path(args.ondiskdb).is_file()):
+        quitOnError(f"{Fore.RED}   [-] On-disk database already exists")
 
     # Start time counting
     start_time = time.time()
@@ -1698,6 +1710,7 @@ if __name__ == "__main__":
         csvMode=args.csv,
         timeField=args.timefield,
         hashes=args.hashes,
+        dbLocation=args.ondiskdb,
     )
 
     # If we are not working directly with the db
