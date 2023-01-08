@@ -958,7 +958,7 @@ class zirCore:
                     fileHandle.write("{}]")  # Added to produce a valid JSON Array
 
     def run(self, EVTXJSONList, Insert2Db=True, forwarder=None):
-        self.logger.info("[+] Processing EVTX")
+        self.logger.info("[+] Processing events")
         flattener = JSONFlattener(
             configFile=self.config,
             timeAfter=self.timeAfter,
@@ -1069,7 +1069,10 @@ class evtxExtractor:
         Convert auditd logs to JSON : code from https://github.com/csark/audit2json
         """
         event = {}
-        attributes = auditdLine.split(" ")
+        # According to auditd specs https://github.com/linux-audit/audit-documentation/wiki/SPEC-Audit-Event-Enrichment
+        # a GS ASCII character, 0x1D, will be inserted to separate original and translated fields
+        # Best way to deal with it is to remove it.
+        attributes = auditdLine.replace("\x1d", " ").split(" ")
         for attribute in attributes:
             if "msg=audit" in attribute:
                 event["timestamp"] = self.getTime(attribute)
@@ -1373,13 +1376,13 @@ if __name__ == "__main__":
         "-e",
         "--evtx",
         "--events",
-        help="EVTX log file or directory where EVTX log files are stored in JSON or EVTX format",
+        help="Log file or directory where log files are stored in JSON, Auditd, Sysmon for Linux, or EVTX format",
         type=str,
     )
     parser.add_argument(
         "-s",
         "--select",
-        help="Only EVTX files containing the provided string will be used. If there is/are exclusion(s) (--avoid) they will be handled after selection",
+        help="Only files containing the provided string will be used. If there is/are exclusion(s) (--avoid) they will be handled after selection",
         action="append",
         nargs="+",
     )
@@ -1397,7 +1400,9 @@ if __name__ == "__main__":
         action="append",
         nargs="+",
     )
-    parser.add_argument("--fieldlist", help="Get all EVTX fields", action="store_true")
+    parser.add_argument(
+        "--fieldlist", help="Get all events fields", action="store_true"
+    )
     parser.add_argument(
         "--evtx_dump",
         help="Tell Zircolite to use this binary for EVTX conversion, on Linux and MacOS the path must be valid to launch the binary (eg. './evtx_dump' and not 'evtx_dump')",
@@ -1443,13 +1448,13 @@ if __name__ == "__main__":
     parser.add_argument(
         "-t",
         "--tmpdir",
-        help="Temp directory that will contains EVTX converted as JSON (parent directories must exist)",
+        help="Temp directory that will contains events converted as JSON (parent directories must exist)",
         type=str,
     )
     parser.add_argument(
         "-k",
         "--keeptmp",
-        help="Do not remove the temp directory containing EVTX converted in JSON format",
+        help="Do not remove the temp directory containing events converted in JSON format",
         action="store_true",
     )
     parser.add_argument(
@@ -1630,7 +1635,7 @@ if __name__ == "__main__":
     # Check mandatory CLI options
     if not args.evtx:
         consoleLogger.error(
-            f"{Fore.RED}   [-] No EVTX source path provided{Fore.RESET}"
+            f"{Fore.RED}   [-] No events source path provided{Fore.RESET}"
         ), sys.exit(2)
     if args.sysmon4linux and args.auditd:
         consoleLogger.error(
@@ -1742,7 +1747,7 @@ if __name__ == "__main__":
             EVTXList = [EVTXPath]
         else:
             quitOnError(
-                f"{Fore.RED}   [-] Unable to find EVTX from submitted path{Fore.RESET}"
+                f"{Fore.RED}   [-] Unable to find events from submitted path{Fore.RESET}"
             )
 
         # Applying file filters in this order : "select" than "avoid"
@@ -1765,7 +1770,7 @@ if __name__ == "__main__":
                 encoding=args.logs_encoding,
             )
             consoleLogger.info(
-                f"[+] Extracting EVTX Using '{extractor.tmpDir}' directory "
+                f"[+] Extracting events Using '{extractor.tmpDir}' directory "
             )
             for evtx in tqdm(FileList, colour="yellow"):
                 extractor.run(evtx)

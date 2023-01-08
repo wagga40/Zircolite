@@ -652,7 +652,7 @@ class zirCore:
                 if not self.noOutput and not self.csvMode and lastRuleset: fileHandle.write('{}]') # Added to produce a valid JSON Array
 
     def run(self, EVTXJSONList, Insert2Db=True, forwarder=None):
-        self.logger.info("[+] Processing EVTX")
+        self.logger.info("[+] Processing events")
         flattener = JSONFlattener(configFile=self.config, timeAfter=self.timeAfter, timeBefore=self.timeBefore, timeField=self.timeField, hashes=self.hashes)
         flattener.runAll(EVTXJSONList)
         if Insert2Db:
@@ -732,7 +732,10 @@ class evtxExtractor:
         Convert auditd logs to JSON : code from https://github.com/csark/audit2json
         """
         event = {}
-        attributes = auditdLine.split(' ')
+        # According to auditd specs https://github.com/linux-audit/audit-documentation/wiki/SPEC-Audit-Event-Enrichment
+        # a GS ASCII character, 0x1D, will be inserted to separate original and translated fields
+        # Best way to deal with it is to remove it.
+        attributes = auditdLine.replace('\x1d',' ').split(' ')
         for attribute in attributes:
             if 'msg=audit' in attribute:
                 event['timestamp'] = self.getTime(attribute)
@@ -954,11 +957,11 @@ if __name__ == '__main__':
 
     # Init Args handling
     parser = argparse.ArgumentParser()
-    parser.add_argument("-e", "--evtx", "--events", help="EVTX log file or directory where EVTX log files are stored in JSON or EVTX format", type=str)
-    parser.add_argument("-s", "--select", help="Only EVTX files containing the provided string will be used. If there is/are exclusion(s) (--avoid) they will be handled after selection", action='append', nargs='+')
+    parser.add_argument("-e", "--evtx", "--events", help="Log file or directory where log files are stored in JSON, Auditd, Sysmon for Linux, or EVTX format", type=str)
+    parser.add_argument("-s", "--select", help="Only files containing the provided string will be used. If there is/are exclusion(s) (--avoid) they will be handled after selection", action='append', nargs='+')
     parser.add_argument("-a", "--avoid", help="EVTX files containing the provided string will NOT be used", action='append', nargs='+')
     parser.add_argument("-r", "--ruleset", help="JSON File containing SIGMA rules", action='append', nargs='+')
-    parser.add_argument("--fieldlist", help="Get all EVTX fields", action='store_true')
+    parser.add_argument("--fieldlist", help="Get all events fields", action='store_true')
     parser.add_argument("--evtx_dump", help="Tell Zircolite to use this binary for EVTX conversion, on Linux and MacOS the path must be valid to launch the binary (eg. './evtx_dump' and not 'evtx_dump')", type=str, default=None)
     parser.add_argument("-R", "--rulefilter", help="Remove rule from ruleset, comparison is done on rule title (case sensitive)", action='append', nargs='*')
     parser.add_argument("-L", "--limit", help="Discard results (in output file or forwarded events) that are above the provided limit", type=int, default=-1)
@@ -966,8 +969,8 @@ if __name__ == '__main__':
     parser.add_argument("-o", "--outfile", help="File that will contains all detected events", type=str, default="detected_events.json")
     parser.add_argument("--csv", help="The output will be in CSV. You should note that in this mode empty fields will not be discarded from results", action='store_true')
     parser.add_argument("-f", "--fileext", help="EVTX file extension", type=str, default="evtx")
-    parser.add_argument("-t", "--tmpdir", help="Temp directory that will contains EVTX converted as JSON (parent directories must exist)", type=str)
-    parser.add_argument("-k", "--keeptmp", help="Do not remove the temp directory containing EVTX converted in JSON format", action='store_true')
+    parser.add_argument("-t", "--tmpdir", help="Temp directory that will contains events converted as JSON (parent directories must exist)", type=str)
+    parser.add_argument("-k", "--keeptmp", help="Do not remove the temp directory containing events converted in JSON format", action='store_true')
     parser.add_argument("-d", "--dbfile", help="Save all logs in a SQLite Db to the specified file", type=str)
     parser.add_argument("-l", "--logfile", help="Log file name", default="zircolite.log", type=str)
     parser.add_argument("-n", "--nolog", help="Don't create a log file or a result file (useful when forwarding)", action='store_true')
@@ -1032,7 +1035,7 @@ if __name__ == '__main__':
         args.ruleset = ["rules/rules_windows_generic.json"]
 
     # Check mandatory CLI options
-    if not args.evtx: consoleLogger.error(f"{Fore.RED}   [-] No EVTX source path provided{Fore.RESET}"), sys.exit(2)
+    if not args.evtx: consoleLogger.error(f"{Fore.RED}   [-] No events source path provided{Fore.RESET}"), sys.exit(2)
     if args.sysmon4linux and args.auditd: consoleLogger.error(f"{Fore.RED}   [-] Sysmon for Linux and Auditd arguments cannot be used together{Fore.RESET}"), sys.exit(2)
     if args.forwardall and args.dbonly: consoleLogger.error(f"{Fore.RED}   [-] Can't forward all events in db only mode {Fore.RESET}"), sys.exit(2)
     if args.csv and len(args.ruleset) > 1 : consoleLogger.error(f"{Fore.RED}   [-] Since fields in results can change between rulesets, it is not possible to have CSV output when using multiple rulesets{Fore.RESET}"), sys.exit(2)
@@ -1094,7 +1097,7 @@ if __name__ == '__main__':
         elif EVTXPath.is_file():
             EVTXList = [EVTXPath]
         else:
-            quitOnError(f"{Fore.RED}   [-] Unable to find EVTX from submitted path{Fore.RESET}")
+            quitOnError(f"{Fore.RED}   [-] Unable to find events from submitted path{Fore.RESET}")
 
         # Applying file filters in this order : "select" than "avoid"
         FileList = avoidFiles(selectFiles(EVTXList, args.select), args.avoid)
@@ -1104,7 +1107,7 @@ if __name__ == '__main__':
         if not args.jsononly:
             # Init EVTX extractor object
             extractor = evtxExtractor(logger=consoleLogger, providedTmpDir=args.tmpdir, coreCount=args.cores, useExternalBinaries=(not args.noexternal), binPath=binPath, xmlLogs=args.sysmon4linux, auditdLogs=args.auditd, encoding=args.logs_encoding)
-            consoleLogger.info(f"[+] Extracting EVTX Using '{extractor.tmpDir}' directory ")
+            consoleLogger.info(f"[+] Extracting events Using '{extractor.tmpDir}' directory ")
             for evtx in tqdm(FileList, colour="yellow"):
                 extractor.run(evtx)
             # Set the path for the next step
