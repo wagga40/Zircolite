@@ -103,7 +103,7 @@ class templateEngine:
                 tpl.write(template.render(data=data, timeField=self.timeField))
         except Exception as e:
             self.logger.error(
-                f"{Fore.RED}   [-] Template error, activate debug mode to check for errors"
+                f"{Fore.RED}   [-] Template error, activate debug mode to check for errors{Fore.RESET}"
             )
             self.logger.debug(f"   [-] {e}")
 
@@ -212,7 +212,9 @@ class eventForwarder:
                     + timestamp.split(".")[1][:-1]
                 )
             except Exception as e:
-                self.logger.debug(f"{Fore.RED}   [-] Timestamp error: {timestamp}")
+                self.logger.debug(
+                    f"{Fore.RED}   [-] Timestamp error: {timestamp}{Fore.RESET}"
+                )
 
     def disableESDefaultLogging(self):
         """By Default Elastic client has a logger set to INFO level"""
@@ -301,7 +303,7 @@ class eventForwarder:
                             canInsert = True
                         else:
                             self.logger.debug(
-                                f"{Fore.RED}   [-] ES Mapping parser error : {e}"
+                                f"{Fore.RED}   [-] ES Mapping parser error : {e}{Fore.RESET}"
                             )
                         if canInsert:
                             try:
@@ -311,7 +313,9 @@ class eventForwarder:
                                     id=data["hash"],
                                 )
                             except Exception as e:
-                                self.logger.debug(f"{Fore.RED}   [-] ES error : {e}")
+                                self.logger.debug(
+                                    f"{Fore.RED}   [-] ES error : {e}{Fore.RESET}"
+                                )
                     elif e.body["error"]["type"] == "illegal_argument_exception":
                         errField = e.body["error"]["reason"].split("[")[1].split("]")[0]
                         data["payload"].pop(errField, None)  # remove value from payload
@@ -320,9 +324,13 @@ class eventForwarder:
                                 index=index, document=data["payload"], id=data["hash"]
                             )
                         except Exception as e:
-                            self.logger.debug(f"{Fore.RED}   [-] ES error : {e}")
+                            self.logger.debug(
+                                f"{Fore.RED}   [-] ES error : {e}{Fore.RESET}"
+                            )
                     else:
-                        self.logger.debug(f"{Fore.RED}   [-] ES error : {e}")
+                        self.logger.debug(
+                            f"{Fore.RED}   [-] ES error : {e}{Fore.RESET}"
+                        )
 
             queue.task_done()  # Notify Queue action ended
 
@@ -690,7 +698,7 @@ class zirCore:
             " CREATE : " + createTableStmt.replace("\n", " ").replace("\r", "")
         )
         if not self.executeQuery(createTableStmt):
-            self.logger.error(f"{Fore.RED}   [-] Unable to create table")
+            self.logger.error(f"{Fore.RED}   [-] Unable to create table{Fore.RESET}")
             sys.exit(1)
 
     def createIndex(self):
@@ -709,7 +717,7 @@ class zirCore:
                 self.logger.debug(f"   [-] {e}")
                 return False
         else:
-            self.logger.error(f"{Fore.RED}   [-] No connection to Db")
+            self.logger.error(f"{Fore.RED}   [-] No connection to Db{Fore.RESET}")
             return False
 
     def executeSelectQuery(self, query):
@@ -724,7 +732,7 @@ class zirCore:
                 self.logger.debug(f"   [-] {e}")
                 return {}
         else:
-            self.logger.error(f"{Fore.RED}   [-] No connection to Db")
+            self.logger.error(f"{Fore.RED}   [-] No connection to Db{Fore.RESET}")
             return {}
 
     def loadDbInMemory(self, db):
@@ -944,7 +952,7 @@ class zirCore:
                                         fileHandle.write(",\n")
                                     except Exception as e:
                                         self.logger.error(
-                                            f"{Fore.RED}   [-] Error saving some results : {e}"
+                                            f"{Fore.RED}   [-] Error saving some results : {e}{Fore.RESET}"
                                         )
                 if not self.noOutput and not self.csvMode and lastRuleset:
                     fileHandle.write("{}]")  # Added to produce a valid JSON Array
@@ -986,7 +994,7 @@ class evtxExtractor:
         if Path(str(providedTmpDir)).is_dir():
             self.tmpDir = f"tmp-{self.randString()}"
             self.logger.error(
-                f"{Fore.RED}   [-] Provided directory already exists using '{self.tmpDir}' instead"
+                f"{Fore.RED}   [-] Provided directory already exists using '{self.tmpDir}' instead{Fore.RESET}"
             )
         else:
             self.tmpDir = providedTmpDir or f"tmp-{self.randString()}"
@@ -1047,7 +1055,7 @@ class evtxExtractor:
                         f'{json.dumps(json.loads(record["data"])).decode("utf-8")}\n'
                     )
         except Exception as e:
-            self.logger.error(f"{Fore.RED}   [-] {e}")
+            self.logger.error(f"{Fore.RED}   [-] {e}{Fore.RESET}")
 
     def getTime(self, line):
         timestamp = line.replace("msg=audit(", "").replace("):", "").split(":")
@@ -1165,7 +1173,7 @@ class evtxExtractor:
                     f"{self.tmpDir}/{str(filename)}-{self.randString()}.json",
                 )
             except Exception as e:
-                self.logger.error(f"{Fore.RED}   [-] {e}")
+                self.logger.error(f"{Fore.RED}   [-] {e}{Fore.RESET}")
         else:
             if not self.useExternalBinaries or not Path(self.evtxDumpCmd).is_file():
                 self.logger.debug(
@@ -1191,7 +1199,7 @@ class evtxExtractor:
                         cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT
                     )
                 except Exception as e:
-                    self.logger.error(f"{Fore.RED}   [-] {e}")
+                    self.logger.error(f"{Fore.RED}   [-] {e}{Fore.RESET}")
 
     def cleanup(self):
         shutil.rmtree(self.tmpDir)
@@ -1652,7 +1660,7 @@ if __name__ == "__main__":
     if args.remote is not None:
         if not forwarder.networkCheck():
             quitOnError(
-                f"{Fore.RED}   [-] Remote host cannot be reached : {args.remote}"
+                f"{Fore.RED}   [-] Remote host cannot be reached : {args.remote}{Fore.RESET}"
             )
 
     # Checking provided timestamps
@@ -1668,21 +1676,26 @@ if __name__ == "__main__":
 
     # Check ruleset arg
     for ruleset in args.ruleset:
-        checkIfExists(ruleset, f"{Fore.RED}   [-] Cannot find ruleset : {ruleset}")
+        checkIfExists(
+            ruleset, f"{Fore.RED}   [-] Cannot find ruleset : {ruleset}{Fore.RESET}"
+        )
     # Check templates args
     readyForTemplating = False
     if args.template is not None:
         if args.csv:
-            quitOnError(f"{Fore.RED}   [-] You cannot use templates in CSV mode")
+            quitOnError(
+                f"{Fore.RED}   [-] You cannot use templates in CSV mode{Fore.RESET}"
+            )
         if (args.templateOutput is None) or (
             len(args.template) != len(args.templateOutput)
         ):
             quitOnError(
-                f"{Fore.RED}   [-] Number of templates output must match number of templates"
+                f"{Fore.RED}   [-] Number of templates output must match number of templates{Fore.RESET}"
             )
         for template in args.template:
             checkIfExists(
-                template[0], f"{Fore.RED}   [-] Cannot find template : {template[0]}"
+                template[0],
+                f"{Fore.RED}   [-] Cannot find template : {template[0]}{Fore.RESET}",
             )
         readyForTemplating = True
 
@@ -1694,7 +1707,7 @@ if __name__ == "__main__":
 
     # If on-disk DB already exists, quit.
     if args.ondiskdb != ":memory:" and (Path(args.ondiskdb).is_file()):
-        quitOnError(f"{Fore.RED}   [-] On-disk database already exists")
+        quitOnError(f"{Fore.RED}   [-] On-disk database already exists{Fore.RESET}")
 
     # Start time counting
     start_time = time.time()
@@ -1728,13 +1741,15 @@ if __name__ == "__main__":
         elif EVTXPath.is_file():
             EVTXList = [EVTXPath]
         else:
-            quitOnError(f"{Fore.RED}   [-] Unable to find EVTX from submitted path")
+            quitOnError(
+                f"{Fore.RED}   [-] Unable to find EVTX from submitted path{Fore.RESET}"
+            )
 
         # Applying file filters in this order : "select" than "avoid"
         FileList = avoidFiles(selectFiles(EVTXList, args.select), args.avoid)
         if len(FileList) <= 0:
             quitOnError(
-                f"{Fore.RED}   [-] No file found. Please verify filters, the directory or the extension with '--fileext'"
+                f"{Fore.RED}   [-] No file found. Please verify filters, the directory or the extension with '--fileext'{Fore.RESET}"
             )
 
         if not args.jsononly:
@@ -1759,9 +1774,11 @@ if __name__ == "__main__":
         else:
             EVTXJSONList = FileList
 
-        checkIfExists(args.config, f"{Fore.RED}   [-] Cannot find mapping file")
+        checkIfExists(
+            args.config, f"{Fore.RED}   [-] Cannot find mapping file{Fore.RESET}"
+        )
         if EVTXJSONList == []:
-            quitOnError(f"{Fore.RED}   [-] No JSON files found.")
+            quitOnError(f"{Fore.RED}   [-] No JSON files found.{Fore.RESET}")
 
         # Print field list and exit
         if args.fieldlist:
@@ -1852,7 +1869,9 @@ if __name__ == "__main__":
             if not args.jsononly and not args.dbonly:
                 extractor.cleanup()
         except OSError as e:
-            consoleLogger.error(f"{Fore.RED}   [-] Error during cleanup {e}")
+            consoleLogger.error(
+                f"{Fore.RED}   [-] Error during cleanup {e}{Fore.RESET}"
+            )
 
     zircoliteCore.close()
     consoleLogger.info(f"\nFinished in {int((time.time() - start_time))} seconds")

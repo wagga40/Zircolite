@@ -147,18 +147,6 @@ tools/sigmac \
    --backend-option table=logs
 ```
 
-#### On the fly rules conversion
-
-Since Zircolite 2.2.0, if you have sigmatools >= 0.21, Zircolite is able to convert the rules on-the-fly if you provide a SIGMA config file and the `sigmac` path. It is very convenient for testing but you should avoid it since this is slower : 
-
-```shell
-python3 zircolite.py --evtx ../Samples/EVTX-ATTACK-SAMPLES/ \
-                     --ruleset <DIRECTORY>/sigma/rules/windows/ \
-                     --sigma <DIRECTORY>/sysmon.yml \
-                     --sigmac <DIRECTORY>/sigmac
-```
-In this case, as some rules are not supported by the SIGMA SQL/SQLite backends, it is possible to show which rule was not converted with the `--sigmaerrors` option.
-
 #### Why you should build your own rulesets
 
 The default rulesets provided are the conversion of the rules located in `rules/windows` directory of the Sigma repository. You should take into account that : 
