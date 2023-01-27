@@ -764,7 +764,7 @@ class evtxExtractor:
             return None
         xmlLine = "<Event>" + xmlLine.split("<Event>")[1]
         try:
-            # isolate invidvidual line parsing errors
+            # isolate individual line parsing errors
             root = etree.fromstring(xmlLine)
         except Exception as ex:
             self.logger.debug(f"unable to parse line \"{xmlLine}\": {ex}")
@@ -998,6 +998,7 @@ if __name__ == '__main__':
     parser.add_argument("--noexternal", help="Don't use evtx_dump external binaries (slower)", action='store_true')
     parser.add_argument("--ondiskdb", help="Use an on-disk database instead of the in-memory one (much slower !). Use if your system has limited RAM or if your dataset is very large and you cannot split it.", type=str, default=":memory:")
     parser.add_argument("--package", help="Create a ZircoGui package (not available in embedded mode)", action='store_true')
+    parser.add_argument("-RE", "--remove-events", help="Zircolite will try to remove events/logs submitted if analysis is successful (use at your own risk)", action='store_true')
     parser.add_argument("-U", "--update-rules", help="Update rulesets located in the 'rules' directory", action='store_true')
     parser.add_argument("-v", "--version", help="Show Zircolite version", action='store_true')
 
@@ -1169,13 +1170,21 @@ if __name__ == '__main__':
             packager = zircoGuiGenerator("gui/zircogui.zip", "templates/exportForZircoGui.tmpl", consoleLogger, None, args.timefield)
             packager.generate(zircoliteCore.fullResults)
     
-    # Removing Working directory containing logs as json
+    # Remove working directory containing logs as json
     if not args.keeptmp:
         consoleLogger.info("[+] Cleaning")
         try:
             if not args.jsononly and not args.dbonly: extractor.cleanup()
         except OSError as e:
             consoleLogger.error(f"{Fore.RED}   [-] Error during cleanup {e}{Fore.RESET}")
+
+    # Remove files submitted for analysis
+    if args.remove_events:
+        for EVTX in EVTXList:
+            try:
+                os.remove(EVTX)
+            except OSError as e:
+                consoleLogger.error(f"{Fore.RED}   [-] Cannot remove files {e}{Fore.RESET}")
 
     zircoliteCore.close()
     consoleLogger.info(f"\nFinished in {int((time.time() - start_time))} seconds")

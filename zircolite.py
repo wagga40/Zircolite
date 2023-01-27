@@ -1109,7 +1109,7 @@ class evtxExtractor:
             return None
         xmlLine = "<Event>" + xmlLine.split("<Event>")[1]
         try:
-            # isolate invidvidual line parsing errors
+            # isolate individual line parsing errors
             root = etree.fromstring(xmlLine)
         except Exception as ex:
             self.logger.debug(f'unable to parse line "{xmlLine}": {ex}')
@@ -1586,6 +1586,12 @@ if __name__ == "__main__":
         action="store_true",
     )
     parser.add_argument(
+        "-RE",
+        "--remove-events",
+        help="Zircolite will try to remove events/logs submitted if analysis is successful (use at your own risk)",
+        action="store_true",
+    )
+    parser.add_argument(
         "-U",
         "--update-rules",
         help="Update rulesets located in the 'rules' directory",
@@ -1867,7 +1873,7 @@ if __name__ == "__main__":
             )
             packager.generate(zircoliteCore.fullResults)
 
-    # Removing Working directory containing logs as json
+    # Remove working directory containing logs as json
     if not args.keeptmp:
         consoleLogger.info("[+] Cleaning")
         try:
@@ -1877,6 +1883,16 @@ if __name__ == "__main__":
             consoleLogger.error(
                 f"{Fore.RED}   [-] Error during cleanup {e}{Fore.RESET}"
             )
+
+    # Remove files submitted for analysis
+    if args.remove_events:
+        for EVTX in EVTXList:
+            try:
+                os.remove(EVTX)
+            except OSError as e:
+                consoleLogger.error(
+                    f"{Fore.RED}   [-] Cannot remove files {e}{Fore.RESET}"
+                )
 
     zircoliteCore.close()
     consoleLogger.info(f"\nFinished in {int((time.time() - start_time))} seconds")
