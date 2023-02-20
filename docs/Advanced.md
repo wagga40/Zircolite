@@ -31,7 +31,7 @@ The tool has been created to be used on very big datasets and there are a lot of
 
 #### Using GNU Parallel 
 
-Except when `evtx_dump` is used, Zircolite only use one core. So if you have a lot of EVTX files and their total size is big, it is recommanded that you use a script to launch multiple Zircolite instances. On Linux or MacOS The easiest way is to use **GNU Parallel**. 
+Except when `evtx_dump` is used, Zircolite only use one core. So if you have a lot of EVTX files and their total size is big, it is recommended that you use a script to launch multiple Zircolite instances. On Linux or MacOS The easiest way is to use **GNU Parallel**. 
 
 :information_source: on MacOS, please use GNU find (`brew install find` will install `gfind`)
 
@@ -49,7 +49,7 @@ Except when `evtx_dump` is used, Zircolite only use one core. So if you have a l
 
 - **"WEF/WEC mode" : One zircolite instance per EVTX**
 
-	You can use this mode when you have a lot of aggregated EVTX coming from multiple computers. It is generaly the case when you use WEF/WEC and you recover the EVTX files from the collector. This mode will create one result file per EVTX.
+	You can use this mode when you have a lot of aggregated EVTX coming from multiple computers. It is generally the case when you use WEF/WEC and you recover the EVTX files from the collector. This mode will create one result file per EVTX.
 
 	```shell
 	find <CASE_DIRECTORY> -type f -name "*.| \
@@ -240,7 +240,7 @@ It is possible to use multiple templates if you provide for each `--template` ar
 ![](../pics/gui.jpg)
 
 
-The Mini-GUI can be used totaly offline, it allows the user to display and search results. It uses [datatables](https://datatables.net/) and the [SB Admin 2 theme](https://github.com/StartBootstrap/startbootstrap-sb-admin-2). 
+The Mini-GUI can be used totally offline, it allows the user to display and search results. It uses [datatables](https://datatables.net/) and the [SB Admin 2 theme](https://github.com/StartBootstrap/startbootstrap-sb-admin-2). 
 
 #### Automatic generation
 
@@ -287,7 +287,7 @@ Then you just have to open `index.html` in your favorite browser and click on a 
 
 ### Using With DFIR Orc
 
-**DFIR Orc** is a Forensics artefact collection tool for systems running Microsoft Windows (pretty much like [Kape](https://www.kroll.com/en/services/cyber-risk/incident-response-litigation-support/kroll-artifact-parser-extractor-kape) or [artifactcollector](https://forensicanalysis.github.io/documentation/manual/usage/acquisition/)). For more detailed explaination, please check here : [https://dfir-orc.github.io](https://dfir-orc.github.io).
+**DFIR Orc** is a Forensics artefact collection tool for systems running Microsoft Windows (pretty much like [Kape](https://www.kroll.com/en/services/cyber-risk/incident-response-litigation-support/kroll-artifact-parser-extractor-kape) or [artifactcollector](https://forensicanalysis.github.io/documentation/manual/usage/acquisition/)). For more detailed explanation, please check here : [https://dfir-orc.github.io](https://dfir-orc.github.io).
 
 [ZikyHD](https://github.com/ZikyHD) has done a pretty good job at integrating **Zircolite** with **DFIR Orc** in this repository : [https://github.com/Zircocorp/dfir-orc-config](https://github.com/Zircocorp/dfir-orc-config).
 

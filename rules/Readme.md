@@ -22,14 +22,14 @@ These rulesets have been generated with `sigmac` wich is available in the [offic
 
 The default rulesets provided are the conversion of the rules located in `rules/windows` directory of the Sigma repository. You should take into account that : 
 
-- **Some rules are very noisy or produce a lot of false positives** depending on your environnement or the config file you used with genRules
+- **Some rules are very noisy or produce a lot of false positives** depending on your environment or the config file you used with genRules
 - **Some rules can be very slow** depending on your logs
 
 To generate you own ruleset please check the docs [here](https://github.com/wagga40/Zircolite/tree/master/docs).
 
 For example : 
 
--  "Suspicious Eventlog Clear or Configuration Using Wevtutil" : **very noisy** on fresh environnement (labs etc.), commonly generate a lot of useless detection
+-  "Suspicious Eventlog Clear or Configuration Using Wevtutil" : **very noisy** on fresh environment (labs etc.), commonly generate a lot of useless detection
 -  "Notepad Making Network Connection" : **can slow very significantly** the execution of Zircolite
 -  "Rundll32 Internet Connection" : can be **very noisy** in some situations
 -  "Wuauclt Network Connection" : **can slow very significantly** the execution of Zircolite
