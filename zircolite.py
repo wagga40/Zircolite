@@ -620,9 +620,12 @@ class JSONFlattener:
                                 JSONLine[self.timeField].split(".")[0].replace("Z", ""),
                                 "%Y-%m-%dT%H:%M:%S",
                             )
+                            if (
+                                timestamp > self.timeAfter
+                                and timestamp < self.timeBefore
+                            ):
+                                JSONOutput.append(JSONLine)
                         except:
-                            JSONOutput.append(JSONLine)
-                        if timestamp > self.timeAfter and timestamp < self.timeBefore:
                             JSONOutput.append(JSONLine)
                     else:
                         JSONOutput.append(JSONLine)
@@ -762,6 +765,11 @@ class zirCore:
         for JSONLine in tqdm(flattenedJSON, colour="yellow"):
             self.insertData2Db(JSONLine)
         self.createIndex()
+
+    def saveFlattenedJSON2File(self, flattenedJSON, outputFile):
+        with open(outputFile, "w", encoding="utf-8") as file:
+            for JSONLine in tqdm(flattenedJSON, colour="yellow"):
+                file.write(json.dumps(JSONLine).decode("utf-8") + "\n")
 
     def saveDbToDisk(self, dbFilename):
         consoleLogger.info("[+] Saving working data to disk as a SQLite DB")
@@ -957,7 +965,7 @@ class zirCore:
                 if not self.noOutput and not self.csvMode and lastRuleset:
                     fileHandle.write("{}]")  # Added to produce a valid JSON Array
 
-    def run(self, EVTXJSONList, Insert2Db=True, forwarder=None):
+    def run(self, EVTXJSONList, Insert2Db=True, saveToFile=False, forwarder=None):
         self.logger.info("[+] Processing events")
         flattener = JSONFlattener(
             configFile=self.config,
@@ -967,6 +975,10 @@ class zirCore:
             hashes=self.hashes,
         )
         flattener.runAll(EVTXJSONList)
+        if saveToFile:
+            filename = f"flattened_events_{''.join(random.SystemRandom().choice(string.ascii_uppercase + string.digits) for _ in range(4))}.json"
+            self.logger.info(f"[+] Saving flattened JSON to : {filename}")
+            self.saveFlattenedJSON2File(flattener.valuesStmt, filename)
         if Insert2Db:
             self.logger.info("[+] Creating model")
             self.createDb(flattener.fieldStmt)
@@ -989,6 +1001,7 @@ class evtxExtractor:
         xmlLogs=False,
         auditdLogs=False,
         encoding=None,
+        evtxtract=False,
     ):
         self.logger = logger or logging.getLogger(__name__)
         if Path(str(providedTmpDir)).is_dir():
@@ -1003,10 +1016,11 @@ class evtxExtractor:
         self.useExternalBinaries = useExternalBinaries
         self.xmlLogs = xmlLogs
         self.auditdLogs = auditdLogs
+        self.evtxtract = evtxtract
         # Sysmon 4 Linux default encoding is ISO-8859-1, Auditd is UTF-8
         if not encoding and xmlLogs:
             self.encoding = "ISO-8859-1"
-        elif not encoding and auditdLogs:
+        elif not encoding and (auditdLogs or evtxtract):
             self.encoding = "utf-8"
         else:
             self.encoding = encoding
@@ -1099,27 +1113,30 @@ class evtxExtractor:
         """
         Remove syslog header and convert xml data to json : code from ZikyHD (https://github.com/ZikyHD)
         """
+        if not "Event" in xmlLine:
+            return None
+        xmlLine = "<Event>" + xmlLine.split("<Event>")[1]
+        try:  # isolate individual line parsing errors
+            root = etree.fromstring(xmlLine)
+            return self.xml2dict_evtxtract(root)
+        except Exception as ex:
+            self.logger.debug(f'Unable to parse line "{xmlLine}": {ex}')
+            return None
 
+    def xml2dict(
+        self, eventRoot, ns="http://schemas.microsoft.com/win/2004/08/events/event"
+    ):
         def cleanTag(tag, ns):
             if ns in tag:
                 return tag[len(ns) :]
             return tag
 
-        if not "Event" in xmlLine:
-            return None
-        xmlLine = "<Event>" + xmlLine.split("<Event>")[1]
-        try:
-            # isolate individual line parsing errors
-            root = etree.fromstring(xmlLine)
-        except Exception as ex:
-            self.logger.debug(f'unable to parse line "{xmlLine}": {ex}')
-            return None
-        ns = "http://schemas.microsoft.com/win/2004/08/events/event"
         child = {"#attributes": {"xmlns": ns}}
-        for appt in root.getchildren():
+        for appt in eventRoot.getchildren():
             nodename = cleanTag(appt.tag, ns)
             nodevalue = {}
             for elem in appt.getchildren():
+                cleanedTag = cleanTag(elem.tag, ns)
                 if not elem.text:
                     text = ""
                 else:
@@ -1127,15 +1144,17 @@ class evtxExtractor:
                         text = int(elem.text)
                     except:
                         text = elem.text
-                if elem.tag == "Data":
+                if cleanedTag == "Data":
                     childnode = elem.get("Name")
+                elif cleanedTag == "Qualifiers":
+                    text = elem.text
                 else:
-                    childnode = cleanTag(elem.tag, ns)
+                    childnode = cleanedTag
                     if elem.attrib:
                         text = {"#attributes": dict(elem.attrib)}
-                obj = {childnode: text}
+                obj = {str(childnode): text}
                 nodevalue = {**nodevalue, **obj}
-            node = {nodename: nodevalue}
+            node = {str(nodename): nodevalue}
             child = {**child, **node}
         event = {"Event": child}
         return event
@@ -1155,13 +1174,39 @@ class evtxExtractor:
                 if element is not None:
                     fp.write(json.dumps(element).decode("utf-8") + "\n")
 
+    def evtxtract2JSON(self, file, outfile):
+        """
+        Convert EXVTXtract Logs to JSON using xml2dict and "dumps" it to a file
+        """
+        # Load file as a string to add enclosing document since XML doesn't support multiple documents
+        with open(file, "r", encoding=self.encoding) as fp:
+            data = fp.read()
+        # Remove all non UTF-8 characters
+        data = bytes(data.replace("\x00", "").replace("\x0B", ""), "utf-8").decode(
+            "utf-8", "ignore"
+        )
+        data = f"<evtxtract>\n{data}\n</evtxtract>"
+        # Load the XML file
+        parser = etree.XMLParser(
+            recover=True
+        )  # Recover=True allows the parser to ignore bad characters
+        root = etree.fromstring(data, parser=parser)
+        with open(outfile, "w", encoding="UTF-8") as fp:
+            for event in root.getchildren():
+                if "Event" in event.tag:
+                    extractedEvent = self.xml2dict(
+                        event, "{http://schemas.microsoft.com/win/2004/08/events/event}"
+                    )
+                    fp.write(json.dumps(extractedEvent).decode("utf-8") + "\n")
+
     def run(self, file):
         """
-        Convert EVTX to JSON using evtx_dump : https://github.com/omerbenamram/evtx.
+        Convert Logs to JSON
         Drop resulting JSON files in a tmp folder.
         """
         self.logger.debug(f"EXTRACTING : {file}")
 
+        # Auditd or Sysmon4Linux logs
         if self.xmlLogs or self.auditdLogs:
             # Choose which log backend to use
             if self.xmlLogs:
@@ -1177,6 +1222,16 @@ class evtxExtractor:
                 )
             except Exception as e:
                 self.logger.error(f"{Fore.RED}   [-] {e}{Fore.RESET}")
+        # EVTXtract
+        elif self.evtxtract:
+            try:
+                filename = Path(file).name
+                self.evtxtract2JSON(
+                    str(file), f"{self.tmpDir}/{str(filename)}-{self.randString()}.json"
+                )
+            except Exception as e:
+                self.logger.error(f"{Fore.RED}   [-] {e}{Fore.RESET}")
+        # EVTX
         else:
             if not self.useExternalBinaries or not Path(self.evtxDumpCmd).is_file():
                 self.logger.debug(
@@ -1458,6 +1513,9 @@ if __name__ == "__main__":
         action="store_true",
     )
     parser.add_argument(
+        "-K", "--keepflat", help="Save flattened events as JSON", action="store_true"
+    )
+    parser.add_argument(
         "-d",
         "--dbfile",
         help="Save all logs in a SQLite Db to the specified file",
@@ -1494,6 +1552,11 @@ if __name__ == "__main__":
         "-AU",
         "--auditd",
         help="Use this option if your log file is a Auditd log file, default file extension is '.log'",
+        action="store_true",
+    )
+    parser.add_argument(
+        "--evtxtract",
+        help="Use this option if your log file was extracted with EVTXtract, default file extension is '.log'",
         action="store_true",
     )
     parser.add_argument(
@@ -1643,9 +1706,9 @@ if __name__ == "__main__":
         consoleLogger.error(
             f"{Fore.RED}   [-] No events source path provided{Fore.RESET}"
         ), sys.exit(2)
-    if args.sysmon4linux and args.auditd:
+    if int(args.sysmon4linux) + int(args.auditd) + int(args.evtxtract) > 1:
         consoleLogger.error(
-            f"{Fore.RED}   [-] Sysmon for Linux and Auditd arguments cannot be used together{Fore.RESET}"
+            f"{Fore.RED}   [-] --sysmon4linux, --auditd and --evtxtract arguments cannot be used together{Fore.RESET}"
         ), sys.exit(2)
     if args.forwardall and args.dbonly:
         consoleLogger.error(
@@ -1773,6 +1836,7 @@ if __name__ == "__main__":
                 binPath=binPath,
                 xmlLogs=args.sysmon4linux,
                 auditdLogs=args.auditd,
+                evtxtract=args.evtxtract,
                 encoding=args.logs_encoding,
             )
             consoleLogger.info(
@@ -1793,7 +1857,7 @@ if __name__ == "__main__":
 
         # Print field list and exit
         if args.fieldlist:
-            fields = zircoliteCore.run(EVTXJSONList, False)
+            fields = zircoliteCore.run(EVTXJSONList, Insert2Db=False)
             zircoliteCore.close()
             if not args.jsononly and not args.keeptmp:
                 extractor.cleanup()
@@ -1805,9 +1869,11 @@ if __name__ == "__main__":
 
         # Flatten and insert to Db
         if args.forwardall:
-            zircoliteCore.run(EVTXJSONList, forwarder=forwarder)
+            zircoliteCore.run(
+                EVTXJSONList, saveToFile=args.keepflat, forwarder=forwarder
+            )
         else:
-            zircoliteCore.run(EVTXJSONList)
+            zircoliteCore.run(EVTXJSONList, saveToFile=args.keepflat)
         # Unload In memory DB to disk. Done here to allow debug in case of ruleset execution error
         if args.dbfile is not None:
             zircoliteCore.saveDbToDisk(args.dbfile)
