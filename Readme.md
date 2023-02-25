@@ -20,7 +20,9 @@
 
 Python 3.8 minimum is required. You can install dependencies with : `pip3 install -r requirements.txt`
 
-The use of [evtx_dump](https://github.com/omerbenamram/evtx) is **optional but required by default (because it is for now much faster)**, If you do not want to use it you have to use the `--noexternal` option. The tool is provided if you clone the Zircolite repository (the official repository is [here](https://github.com/omerbenamram/evtx)). For Apple M1 computers, the `--noexternal` option is preferred.
+The use of [evtx_dump](https://github.com/omerbenamram/evtx) is **optional but required by default (because it is -for now- much faster)**, If you do not want to use it you have to use the `--noexternal` option. The tool is provided if you clone the Zircolite repository (the official repository is [here](https://github.com/omerbenamram/evtx)).
+
+:warning: the `evtx` library may need Rust and Cargo to be installed.
 
 ## Quick start
 
