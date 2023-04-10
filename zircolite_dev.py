@@ -676,7 +676,7 @@ class zirCore:
 
 class evtxExtractor:
 
-    def __init__(self, logger=None, providedTmpDir=None, coreCount=None, useExternalBinaries=True, binPath = None, xmlLogs=False, auditdLogs=False, encoding=None, evtxtract=False):
+    def __init__(self, logger=None, providedTmpDir=None, coreCount=None, useExternalBinaries=True, binPath = None, xmlLogs=False, sysmon4linux=False, auditdLogs=False, encoding=None, evtxtract=False):
         self.logger = logger or logging.getLogger(__name__)
         if Path(str(providedTmpDir)).is_dir():
             self.tmpDir = f"tmp-{self.randString()}"
@@ -686,12 +686,13 @@ class evtxExtractor:
             os.mkdir(self.tmpDir)
         self.cores = coreCount or os.cpu_count()
         self.useExternalBinaries = useExternalBinaries
+        self.sysmon4linux = sysmon4linux
         self.xmlLogs = xmlLogs
         self.auditdLogs = auditdLogs
         self.evtxtract = evtxtract
         # Sysmon 4 Linux default encoding is ISO-8859-1, Auditd is UTF-8
-        if not encoding and xmlLogs: self.encoding = "ISO-8859-1"
-        elif not encoding and (auditdLogs or evtxtract): self.encoding = "utf-8"
+        if not encoding and sysmon4linux: self.encoding = "ISO-8859-1"
+        elif not encoding and (auditdLogs or evtxtract or xmlLogs): self.encoding = "utf-8"
         else: self.encoding = encoding
         
         self.evtxDumpCmd = self.getOSExternalTools(binPath)
@@ -769,7 +770,20 @@ class evtxExtractor:
         xmlLine = "<Event>" + xmlLine.split("<Event>")[1]
         try: # isolate individual line parsing errors
             root = etree.fromstring(xmlLine)
-            return self.xml2dict_evtxtract(root)
+            return self.xml2dict(root)
+        except Exception as ex:
+            self.logger.debug(f"Unable to parse line \"{xmlLine}\": {ex}")
+            return None
+
+    def XMLLine2JSON(self, xmlLine):
+        """
+        Remove "Events" header and convert xml data to json : code from ZikyHD (https://github.com/ZikyHD)
+        """
+        if not '<Event ' in xmlLine:
+            return None
+        try: # isolate individual line parsing errors
+            root = etree.fromstring(xmlLine)
+            return self.xml2dict(root, u'{http://schemas.microsoft.com/win/2004/08/events/event}')
         except Exception as ex:
             self.logger.debug(f"Unable to parse line \"{xmlLine}\": {ex}")
             return None
@@ -809,12 +823,17 @@ class evtxExtractor:
         event = { "Event": child }
         return event
 
-    def Logs2JSON(self, func, file, outfile):
+    def Logs2JSON(self, func, datasource, outfile, isFile=True):
         """
         Use multiprocessing to convert Sysmon for Linux XML our Auditd logs to JSON
         """
-        with open(file, "r", encoding=self.encoding) as fp:
-            data = fp.readlines()
+        
+        if isFile:
+            with open(datasource, "r", encoding=self.encoding) as fp: 
+                data = fp.readlines()
+        else : 
+            data = datasource.split("\n")
+        
         pool = mp.Pool(self.cores)
         result = pool.map(func, data)
         pool.close()
@@ -849,21 +868,29 @@ class evtxExtractor:
         Drop resulting JSON files in a tmp folder.
         """
         self.logger.debug(f"EXTRACTING : {file}")
-
+        filename = Path(file).name
         # Auditd or Sysmon4Linux logs
-        if self.xmlLogs or self.auditdLogs: 
+        if self.sysmon4linux or self.auditdLogs:
             # Choose which log backend to use
-            if self.xmlLogs: func = self.SysmonXMLLine2JSON
+            if self.sysmon4linux: func = self.SysmonXMLLine2JSON
             else: func = self.auditdLine2JSON 
             try:
-                filename = Path(file).name
                 self.Logs2JSON(func, str(file), f"{self.tmpDir}/{str(filename)}-{self.randString()}.json")
+            except Exception as e:
+                self.logger.error(f"{Fore.RED}   [-] {e}{Fore.RESET}")
+        # XML logs
+        elif self.xmlLogs:
+            try:
+                data = ""
+                # We need to read the entire file to remove anoying newlines and fields with newlines (System.evtx Logs for example...)
+                with open(str(file), 'r') as XMLFile:
+                    data = XMLFile.read().replace("\n","").replace("</Event>","</Event>\n").replace("<Event ","\n<Event ")
+                self.Logs2JSON(self.XMLLine2JSON, data, f"{self.tmpDir}/{str(filename)}-{self.randString()}.json", isFile=False)
             except Exception as e:
                 self.logger.error(f"{Fore.RED}   [-] {e}{Fore.RESET}")
         # EVTXtract
         elif self.evtxtract:
             try:
-                filename = Path(file).name
                 self.evtxtract2JSON(str(file), f"{self.tmpDir}/{str(filename)}-{self.randString()}.json")
             except Exception as e:
                 self.logger.error(f"{Fore.RED}   [-] {e}{Fore.RESET}")
@@ -874,8 +901,6 @@ class evtxExtractor:
                 self.runUsingBindings(file)
             else:
                 try:
-                    filepath = Path(file)
-                    filename = filepath.name
                     cmd = [self.evtxDumpCmd, "--no-confirm-overwrite", "-o", "jsonl", str(file), "-f", f"{self.tmpDir}/{str(filename)}-{self.randString()}.json", "-t", str(self.cores)]
                     subprocess.call(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
                 except Exception as e:
@@ -995,7 +1020,7 @@ def avoidFiles(pathList, avoidFilesList):
 # MAIN()
 ################################################################
 if __name__ == '__main__':
-    version = "2.9.7"
+    version = "2.9.9"
 
     # Init Args handling
     parser = argparse.ArgumentParser()
@@ -1010,7 +1035,7 @@ if __name__ == '__main__':
     parser.add_argument("-c", "--config", help="JSON File containing field mappings and exclusions", type=str, default="config/fieldMappings.json")
     parser.add_argument("-o", "--outfile", help="File that will contains all detected events", type=str, default="detected_events.json")
     parser.add_argument("--csv", help="The output will be in CSV. You should note that in this mode empty fields will not be discarded from results", action='store_true')
-    parser.add_argument("-f", "--fileext", help="EVTX file extension", type=str, default="evtx")
+    parser.add_argument("-f", "--fileext", help="Extension of the log files", type=str)
     parser.add_argument("-t", "--tmpdir", help="Temp directory that will contains events converted as JSON (parent directories must exist)", type=str)
     parser.add_argument("-k", "--keeptmp", help="Do not remove the temp directory containing events converted in JSON format", action='store_true')
     parser.add_argument("-K", "--keepflat", help="Save flattened events as JSON", action='store_true')
@@ -1021,6 +1046,7 @@ if __name__ == '__main__':
     parser.add_argument("-D", "--dbonly", help="Directly use a previously saved database file, timerange filters will not work", action='store_true')
     parser.add_argument("-S", "--sysmon4linux", help="Use this option if your log file is a Sysmon for linux log file, default file extension is '.log'", action='store_true')
     parser.add_argument("-AU", "--auditd", help="Use this option if your log file is a Auditd log file, default file extension is '.log'", action='store_true')
+    parser.add_argument("-x", "--xml", help="Use this option if your log file is a EVTX converted to XML log file, default file extension is '.xml'", action='store_true')
     parser.add_argument("--evtxtract", help="Use this option if your log file was extracted with EVTXtract, default file extension is '.log'", action='store_true')
     parser.add_argument("-LE", "--logs-encoding",  help="Specify log encoding when dealing with Sysmon for Linux or Auditd files", type=str)
     parser.add_argument("-A", "--after", help="Limit to events that happened after the provided timestamp (UTC). Format : 1970-01-01T00:00:00", type=str, default="1970-01-01T00:00:00")
@@ -1132,9 +1158,12 @@ if __name__ == '__main__':
     # If we are not working directly with the db
     if not args.dbonly:
         # If we are working with json we change the file extension if it is not user-provided
-        if args.jsononly and args.fileext == "evtx": args.fileext = "json"
-        if args.sysmon4linux or args.auditd and args.fileext == "evtx": args.fileext = "log"
-
+        if not args.fileext:
+            if args.jsononly: args.fileext = "json"
+            elif (args.sysmon4linux or args.auditd): args.fileext = "log"
+            elif args.xml: args.fileext = "xml"
+            else: args.fileext = "evtx"
+        
         EVTXPath = Path(args.evtx)
         if EVTXPath.is_dir():
             # EVTX recursive search in given directory with given file extension
@@ -1151,7 +1180,7 @@ if __name__ == '__main__':
 
         if not args.jsononly:
             # Init EVTX extractor object
-            extractor = evtxExtractor(logger=consoleLogger, providedTmpDir=args.tmpdir, coreCount=args.cores, useExternalBinaries=(not args.noexternal), binPath=binPath, xmlLogs=args.sysmon4linux, auditdLogs=args.auditd, evtxtract=args.evtxtract, encoding=args.logs_encoding)
+            extractor = evtxExtractor(logger=consoleLogger, providedTmpDir=args.tmpdir, coreCount=args.cores, useExternalBinaries=(not args.noexternal), binPath=binPath, xmlLogs=args.xml, sysmon4linux=args.sysmon4linux, auditdLogs=args.auditd, evtxtract=args.evtxtract, encoding=args.logs_encoding)
             consoleLogger.info(f"[+] Extracting events Using '{extractor.tmpDir}' directory ")
             for evtx in tqdm(FileList, colour="yellow"):
                 extractor.run(evtx)

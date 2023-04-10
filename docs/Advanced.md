@@ -5,6 +5,7 @@
 * [Working with large datasets](#working-with-large-datasets)
 	* [Using GNU Parallel](#using-gnu-parallel)
 	* [Using Zircolite MP](#using-zircolite-mp)
+* [Keep data used by Zircolite](#keep-data-used-by-zircolite)
 * [Filtering](#filtering)
 	* [File filters](#file-filters)
 	* [Time filters](#time-filters)
@@ -28,6 +29,8 @@ The tool has been created to be used on very big datasets and there are a lot of
 
 - Using as much CPU core as possible : see below "[Using GNU Parallel](using-gnu-parallel)"
 - Using [Filtering](#filtering)
+
+:information_source: There is an option to heavily limit the memory usage of Zircolite by using the `--ondiskdb <DB_NAME>` argument. This is only usefull to avoid errors when dealing with very large datasets and have a lot of time. **This should be used with caution and the below alternatives are far better choices**.
 
 #### Using GNU Parallel 
 
@@ -61,6 +64,15 @@ Except when `evtx_dump` is used, Zircolite only use one core. So if you have a l
 
 ---
 
+### Keep data used by Zircolite : 
+
+**Zircolite** has a lot of arguments that can be used to keep data used to perform Sigma detections : 
+
+- `--dbfile <FILE>` allows you to export all the logs in a SQLite 3 database file. You can query the logs with SQL statements to find more things than what the Sigma rules could have found
+- `--keeptmp` allows you to keep the source logs (EVTX/Auditd/Evtxtract/XML...) converted in JSON format
+- `--keepflat` allow you to keep the source logs (EVTX/Auditd/Evtxtract/XML...) converted in a flattened JSON format
+---
+
 ### Filtering
 
 Zircolite has a lot of filtering options to speed up the detection process. Don't overlook these options because they can save you a lot of time.
@@ -79,7 +91,8 @@ To speed up the detection process, you may want to use Zircolite on files matchi
 - Only use EVTX files that contains "sysmon" in their names
 
 	```shell
-	python3 zircolite.py --evtx logs/ --ruleset rules/rules_windows_sysmon.json --select sysmon
+	python3 zircolite.py --evtx logs/ --ruleset rules/rules_windows_sysmon.json \
+		--select sysmon
 	```
 - Exclude "Microsoft-Windows-SystemDataArchiver%4Diagnostic.evtx" 
 
@@ -145,7 +158,8 @@ python3 zircolite.py --evtx logs/ --ruleset rules/rules_windows_sysmon.json -R B
 You can also specify a string, to avoid unexpected side-effect **comparison is case-sensitive**. For example, if you do not want to use all MSHTA related rules and skip the execution of the rule "Suspicious Eventlog Clear or Configuration Using Wevtutil - BFFA7F72": 
 
 ```shell
-python3 zircolite.py --evtx logs/ --ruleset rules/rules_windows_sysmon.json -R BFFA7F72 -R MSHTA
+python3 zircolite.py --evtx logs/ --ruleset rules/rules_windows_sysmon.json \
+	-R BFFA7F72 -R MSHTA
 ```
 :information_source: As of version 2.2.0 of Zircolite, since the rulesets are directly generated from the official `sigmac` tool there is no more CRC32 in the rule title. Rule filtering is still available but you have to rely on other criteria.
 

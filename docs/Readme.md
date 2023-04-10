@@ -16,6 +16,7 @@
 * [Working with large datasets](Advanced.md#working-with-large-datasets)
 	* [Using GNU Parallel](Advanced.md#using-gnu-parallel)
 	* [Using Zircolite MP](Advanced.md#using-zircolite-mp)
+* [Keep data used by Zircolite](#keep-data-used-by-zircolite)
 * [Filtering](Advanced.md#filtering)
 	* [File filters](Advanced.md#file-filters)
 	* [Time filters](Advanced.md#time-filters)

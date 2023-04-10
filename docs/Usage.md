@@ -50,6 +50,48 @@ By default :
 - Results are written in the `detected_events.json` in the same directory as Zircolite
 - There is a `zircolite.log`file that will be created in the current working directory
 
+#### XML logs : 
+
+`evtx_dump` or services like **VirusTotal** sometimes output logs in text format with XML logs inside. 
+
+To do that with `evtx_dump` you have to use the following command line : 
+```shell
+./evtx_dump -o xml <EVTX_FILE> -f <OUTPUT_XML_FILE> --no-indent --dont-show-record-number
+```
+
+And it produces something like this (1 event per line): 
+
+```xml
+<?xml version="1.0" encoding="utf-8"?><Event xmlns="http://schemas.microsoft.com/win/2004/08/events/event"><System><Provider Name="Microsoft-Windows-Sysmon" Guid="XXXXXX"></Provider><EventID>1</EventID><Version>5</Version><Level>4</Level><Task>1</Task><Opcode>0</Opcode><Keywords>XXXX</Keywords><TimeCreated SystemTime="XXXX-XX-XXTXX:XX:XX.XXXXXXZ"></TimeCreated><EventRecordID>XXXX</EventRecordID><Correlation></Correlation><Execution ProcessID="XXXXX" ThreadID="XXXXX"></Execution><Channel>Microsoft-Windows-Sysmon/Operational</Channel><Computer>XXXXXXX</Computer><Security UserID="XXXXX"></Security></System><EventData><Data Name="RuleName">XXXX</Data><Data Name="UtcTime">XXXX-XX-XX XX:XX:XX.XXX</Data><Data Name="ProcessGuid">XXXX</Data><Data Name="ProcessId">XXX</Data><Data Name="Image">XXXXXX</Data><Data Name="FileVersion">XXXX</Data><Data Name="Description">XXXXXXXX</Data><Data Name="Product">Microsoft® Windows® Operating System</Data><Data Name="Company">Microsoft Corporation</Data><Data Name="OriginalFileName">XXXX</Data><Data Name="CommandLine">XXXX</Data><Data Name="CurrentDirectory">XXXXXX</Data><Data Name="User">XXXXX</Data><Data Name="LogonGuid">XXXX</Data><Data Name="LogonId">XXXXX</Data><Data Name="TerminalSessionId">0</Data><Data Name="IntegrityLevel">High</Data><Data Name="Hashes">XXXX</Data><Data Name="ParentProcessGuid">XXXXXX</Data><Data Name="ParentProcessId">XXXXXXX</Data><Data Name="ParentImage">XXXXXX</Data><Data Name="ParentCommandLine">XXXXXX</Data><Data Name="ParentUser">XXXXXX</Data></EventData></Event>
+
+```
+
+**VirusTotal** if you have an enterprise account will allow you to get logs in a pretty similar format : 
+
+```xml
+<?xml version="1.0" encoding="utf-8"?>
+<Events>
+<Event xmlns="http://schemas.microsoft.com/win/2004/08/events/event"><System><Provider Guid="XXXXXXX" Name="Microsoft-Windows-Sysmon"/><EventID>13</EventID><Version>2</Version><Level>4</Level><Task>13</Task><Opcode>0</Opcode><Keywords>0x8000000000000000</Keywords><TimeCreated SystemTime="XXXX-XX-XXTXX:XX:XX.XXXXXXZ"/><EventRecordID>749827</EventRecordID><Correlation/><Execution ProcessID="2248" ThreadID="2748"/><Channel>Microsoft-Windows-Sysmon/Operational</Channel><Computer>XXXXXX</Computer><Security UserID="S-1-5-18"/></System><EventData><Data Name="RuleName">-</Data><Data Name="EventType">SetValue</Data><Data Name="UtcTime">XXXX-XX-XX XX:XX:XX.XXX</Data><Data Name="ProcessGuid">XXXXXXX</Data><Data Name="ProcessId">XXXXX</Data><Data Name="Image">C:\Windows\Explorer.EXE</Data><Data Name="TargetObject">XXXXXXXX</Data><Data Name="Details">Binary Data</Data></EventData></Event>
+</Events>
+```
+
+**Zircolite** will handle both format with the following command line :
+
+```shell
+python3 zircolite.py --events <LOGS_FOLDER_OR_LOG_FILE>  --ruleset <RULESET> --xml
+python3 zircolite.py --events  Microsoft-Windows-SysmonOperational.xml \ 
+	--ruleset rules/rules_windows_sysmon_full.json --xml
+```
+
+#### EVTXtract logs : 
+
+Willi Ballenthin has built called [EVTXtract](https://github.com/williballenthin/EVTXtract) a tool to recovers and reconstructs fragments of EVTX log files from raw binary data, including unallocated space and memory images.
+
+**Zircolite** can work with the output of EVTXtract with the following command line :
+
+```shell
+python3 zircolite.py --events <EVTXTRACT_EXTRACTED_LOGS>  --ruleset <RULESET> --evtxtract
+```
 #### Auditd logs : 
 
 ```shell
@@ -73,7 +115,7 @@ python3 zircolite.py --events sysmon.log --ruleset rules/rules_linux.json --sysm
 It is possible to use Zircolite directly on JSONL/NDJSON files (NXLog files) with the `--jsononly` or `-j` arguments : 
 
 ```shell
-python3 zircolite.py --events <EVTX_FOLDER> --ruleset <CONVERTED_SIGMA_RULES> --jsononly
+python3 zircolite.py --events <EVTX_FOLDER> --ruleset <RULESET> --jsononly
 ```
 
 A simple use case is when you have already run Zircolite and use the `--keeptmp` option. Since it keeps all the converted EVTX in a temp directory, if you need to re-execute Zircolite, you can do it directly using this directory as the EVTX source (with `--evtx <EVTX_IN_JSON_DIRECTORY>` and `--jsononly`) and avoid to convert the EVTX again.
@@ -85,7 +127,8 @@ A simple use case is when you have already run Zircolite and use the `--keeptmp`
 Since everything in Zircolite is stored in a in-memory SQlite database, you can choose to save the database on disk for later use. It is possible with the option `--dbfile <db_filename>`.
 
 ```shell
-python3 zircolite.py --evtx <EVTX_FOLDER> --ruleset <CONVERTED_SIGMA_RULES> --dbfile output.db
+python3 zircolite.py --evtx <EVTX_FOLDER> --ruleset <CONVERTED_SIGMA_RULES> \
+	--dbfile output.db
 ```
 
 If you need to re-execute Zircolite,  you can do it directly using the SQLite database as the EVTX source (with `--evtx <SAVED_SQLITE_DB_PATH>` and `--dbonly`) and avoid to convert the EVTX, post-process the EVTX and insert data to database. **Using this technique can save a lot of time... But you will be unable to use the `--forwardall`option** 
@@ -198,7 +241,8 @@ docker run --rm --tty -v <EVTX folder>:/case/input:ro -v <Results folder>:/case/
 You can use the Docker image available on [Docker Hub](https://hub.docker.com/r/wagga40/zircolite). Please note that in this case, the configuration files and rules are the default ones.
 
 ```shell
-docker container run --tty --volume <EVTX folder>:/case docker.io/wagga40/zircolite:1.4.0 \
+docker container run --tty \
+	--volume <EVTX folder>:/case docker.io/wagga40/zircolite:lastest \
 	--ruleset rules/rules_windows_sysmon.json \
 	--evtx /case --outfile /case/detected_events.json
 ```

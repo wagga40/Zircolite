@@ -1,12 +1,12 @@
 # <p align="center">![](pics/zircolite_400.png)</p>
 
-## Standalone SIGMA-based detection tool for EVTX, Auditd, Sysmon for linux or JSONL/NDJSON Logs 
+## Standalone SIGMA-based detection tool for EVTX, Auditd, Sysmon for linux, XML or JSONL/NDJSON Logs 
 ![](pics/Zircolite_v2.9.gif)
 
 [![python](https://img.shields.io/badge/python-3.8-blue)](https://www.python.org/)
 ![version](https://img.shields.io/badge/Architecture-64bit-red)
 
-**Zircolite is a standalone tool written in Python 3. It allows to use SIGMA rules on MS Windows EVTX (EVTX and JSONL format), Auditd logs and Sysmon for Linux logs**
+**Zircolite is a standalone tool written in Python 3. It allows to use SIGMA rules on : MS Windows EVTX (EVTX, XML and JSONL format), Auditd logs, Sysmon for Linux and EVTXtract logs**
 
 - **Zircolite** can be used directly on the investigated endpoint or in your forensic/detection lab
 - **Zircolite** is relatively fast and can parse large datasets in just seconds (check [benchmarks](docs/Internals.md#benchmarks))
