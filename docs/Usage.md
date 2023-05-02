@@ -198,14 +198,14 @@ Please keep in mind that as opposed to field alias, the original field name is n
 Let's say you have this event log in JSON format (the event has been deliberately truncated): 
 
 ```json 
-  {
-      "EventID": 1,
-      "Provider_Name": "Microsoft-Windows-Sysmon",
-      "Channel": "Microsoft-Windows-Sysmon/Operational",
-      "CommandLine": "\"C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe\"",
-      "Image": "C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe",
-      "IntegrityLevel": "Medium",
-    }
+{
+    "EventID": 1,
+    "Provider_Name": "Microsoft-Windows-Sysmon",
+    "Channel": "Microsoft-Windows-Sysmon/Operational",
+    "CommandLine": "\"C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe\"",
+    "Image": "C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe",
+    "IntegrityLevel": "Medium",
+}
 ```
 
 Let's say you are not sure all your rules use the "CommandLine" field but you remember that some of them use the "cmdline" field. To avoid any problems you could use an alias for the "CommandLine" field like this : 
@@ -225,15 +225,15 @@ Let's say you are not sure all your rules use the "CommandLine" field but you re
 With this configuration, the event log used to apply Sigma rules will look like this : 
 
 ```json 
-  {
-      "EventID": 1,
-      "Provider_Name": "Microsoft-Windows-Sysmon",
-      "Channel": "Microsoft-Windows-Sysmon/Operational",
-      "CommandLine": "\"C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe\"",
-      "cmdline": "\"C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe\"",
-      "Image": "C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe",
-      "IntegrityLevel": "Medium",
-    }
+{
+	"EventID": 1,
+	"Provider_Name": "Microsoft-Windows-Sysmon",
+	"Channel": "Microsoft-Windows-Sysmon/Operational",
+	"CommandLine": "\"C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe\"",
+	"cmdline": "\"C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe\"",
+	"Image": "C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe",
+	"IntegrityLevel": "Medium",
+}
 ```
 
 Be careful when using aliases because the data is stored multiple times.
