@@ -259,5 +259,14 @@
 		"Event.EventData.updateTitle":"updateTitle",
 		"Event.EventData.ParentIntegrityLevel":"ParentIntegrityLevel",
 		"Event.EventData.ParentUser":"ParentUser"
+	},
+	"alias":
+	{
+	},
+	"split":
+	{
+		"Hash": {"separator":",", "equal":"="},
+		"Hashes": {"separator":",", "equal":"="},
+		"ConfigurationFileHash": {"separator":",", "equal":"="}
 	}
 }

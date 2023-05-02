@@ -4,6 +4,7 @@
 
 * [Requirements and Installation](Usage.md#requirements-and-installation)
 * [Basic usage](Usage.md#basic-usage)
+* [Field mappings, field exclusions, value exclusions, field aliases and field splitting](Usage.md#field-mappings-field-exclusions-value-exclusions-field-aliases-and-field-splitting)
 * [Generate your own rulesets](Usage.md#generate-your-own-rulesets)
 	* [Why you should make your own rulesets](Usage.md#why-you-should-make-your-own-rulesets)
 * [Generate embedded versions](#generate-embedded-versions)

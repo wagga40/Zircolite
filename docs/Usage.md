@@ -4,6 +4,7 @@
 
 * [Requirements and Installation](#requirements-and-installation)
 * [Basic usage](#basic-usage)
+* [Field mappings, field exclusions, value exclusions, field aliases and field splitting](#field-mappings-field-exclusions-value-exclusions-field-aliases-and-field-splitting)
 * [Generate your own rulesets](#generate-your-own-rulesets)
 	* [Why you should make your own rulesets](#why-you-should-make-your-own-rulesets)
 * [Generate embedded versions](#generate-embedded-versions)
@@ -135,6 +136,150 @@ If you need to re-execute Zircolite,  you can do it directly using the SQLite da
 
 ---
 
+### Field mappings, field exclusions, value exclusions, field aliases and field splitting
+
+Sometimes your logs need some transformations to allow your rules to match against them. Zircolite has multiple mechanisms for this. The configuration of these mechanisms is provided by a file that can be found in the [config](../config/) directory of the repository. It is also possible to provide your own configuration woth the `--config` or `-c` options.
+
+The configuration file has the following structure : 
+
+```json 
+{
+	"exclusions" : [],
+	"useless" : [],
+	"mappings" : 
+	{
+		"field_name_1": "new_field_name_1", 
+		"field_name_2": "new_field_name_2"
+	},
+	"alias":
+	{
+		"field_alias_1": "alias_1"
+	},
+	"split":
+	{
+		"field_name_split": {"separator":",", "equal":"="}
+	}
+}
+```
+
+#### Field mappings
+
+**field mappings** allow you to rename a field from your raw logs (the ones that you want to analyze with Zircolite). Zircolite already uses this mechanism to rename nested JSON fields. You can check all the builtin field mappings [here](https://github.com/wagga40/Zircolite/blob/master/config/fieldMappings.json).
+
+For example, if you want to rename the field "CommandLine" in **your raw logs** to "cmdline", you can add the following in the [here](https://github.com/wagga40/Zircolite/blob/master/config/fieldMappings.json) file : 
+
+```json 
+{
+	"exclusions" : [],
+	"useless" : [],
+	"mappings" : 
+	{
+		"CommandLine": "cmdline"
+	},
+	"alias":{},
+	"split": {}
+}
+```
+
+Please keep in mind that as opposed to field alias, the original field name is not kept.
+
+#### Field exclusions
+
+**field exclusions** allow you to exclude a field. Zircolite already uses this mechanism to exclude the `xlmns` field. You can check all the builtin field exclusions [here](https://github.com/wagga40/Zircolite/blob/master/config/fieldMappings.json).
+
+#### Value exclusions
+
+**value exclusions** allow you to remove field which value is to be excluded. Zircolite already uses this mechanism to remove *null* and empty values. You can check all the builtin value exclusions [here](https://github.com/wagga40/Zircolite/blob/master/config/fieldMappings.json).
+
+#### Field aliases
+
+**field aliases** allow you to have multiple fields with different name but the same value. It is pretty similar to field mapping but you keep the original value. Field aliases can be used on original field names but also on mapped field names and splitted fields.
+
+Let's say you have this event log in JSON format (the event has been deliberately truncated): 
+
+```json 
+  {
+      "EventID": 1,
+      "Provider_Name": "Microsoft-Windows-Sysmon",
+      "Channel": "Microsoft-Windows-Sysmon/Operational",
+      "CommandLine": "\"C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe\"",
+      "Image": "C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe",
+      "IntegrityLevel": "Medium",
+    }
+```
+
+Let's say you are not sure all your rules use the "CommandLine" field but you remember that some of them use the "cmdline" field. To avoid any problems you could use an alias for the "CommandLine" field like this : 
+
+```json 
+{
+	"exclusions" : [],
+	"useless" : [],
+	"mappings" : {},
+	"alias":{
+		"CommandLine": "cmdline"
+	},
+	"split": {}
+}
+```
+
+With this configuration, the event log used to apply Sigma rules will look like this : 
+
+```json 
+  {
+      "EventID": 1,
+      "Provider_Name": "Microsoft-Windows-Sysmon",
+      "Channel": "Microsoft-Windows-Sysmon/Operational",
+      "CommandLine": "\"C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe\"",
+      "cmdline": "\"C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe\"",
+      "Image": "C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe",
+      "IntegrityLevel": "Medium",
+    }
+```
+
+Be careful when using aliases because the data is stored multiple times.
+
+#### Field splitting
+
+**field aliases** allow you to split fields that contain key,value pairs.  Zircolite already uses this mechanism to handle hash/hashes fields in Sysmon logs. You can check all the builtin field splittings [here](https://github.com/wagga40/Zircolite/blob/master/config/fieldMappings.json). Moreover, Field aliases can be applied to splitted fields.
+
+For example, let's say we have this Sysmon event log : 
+
+```json
+	{
+      "Hashes": "SHA1=XX,MD5=X,SHA256=XXX,IMPHASH=XXXX",
+      "EventID": 1
+	}
+```
+
+With the following configuration, Zircolite will split the `hashes` field like this : 
+
+```json 
+{
+	"exclusions" : [],
+	"useless" : [],
+	"mappings" : {},
+	"alias":{},
+	"split": {
+		"Hashes": {"separator":",", "equal":"="}
+	}
+}
+```
+
+The final event log used to apply Sigma rules will look like this : 
+
+```json
+	{
+      "SHA1": "F43D9BB316E30AE1A3494AC5B0624F6BEA1BF054",
+      "MD5": "04029E121A0CFA5991749937DD22A1D9",
+      "SHA256": "9F914D42706FE215501044ACD85A32D58AAEF1419D404FDDFA5D3B48F66CCD9F",
+      "IMPHASH": "7C955A0ABC747F57CCC4324480737EF7",
+      "Hashes": "SHA1=F43D9BB316E30AE1A3494AC5B0624F6BEA1BF054,MD5=04029E121A0CFA5991749937DD22A1D9,SHA256=9F914D42706FE215501044ACD85A32D58AAEF1419D404FDDFA5D3B48F66CCD9F,IMPHASH=7C955A0ABC747F57CCC4324480737EF7",
+      "EventID": 1
+	}
+```
+
+---
+
 ### Generate your own rulesets
 
 Default rulesets are already provided in the `rules` directory. These rulesets only are the conversion of the rules located in [rules/windows](https://github.com/SigmaHQ/sigma/tree/master/rules/windows) directory of the Sigma repository. These rulesets are provided to use Zircolite out-of-the-box but [you should generate your own rulesets](#why-you-should-build-your-own-rulesets).
@@ -143,18 +288,22 @@ Default rulesets are already provided in the `rules` directory. These rulesets o
 
 #### With sigmatools
 
-Zircolite use the SIGMA rules in JSON format. To generate your ruleset you need the official sigmatools (**version 0.21 minimum**) : 
+Zircolite use the SIGMA rules in JSON format. Since the SQLite backend is not yet available in pySigma, you need to generate your ruleset with  the official [legacy-sigmatools](https://github.com/SigmaHQ/legacy-sigmatools) (**version 0.21 minimum**) : 
 
 ```shell 
-git clone https://github.com/SigmaHQ/sigma.git
-cd sigma
+pip3 install sigmatools
 ```
-**You must have the sigma dependencies installed, check [here](https://github.com/SigmaHQ/sigma#installation) :**
+
+since you need to access the configuration files directly it is easier to also clone the repository :  
+```shell 
+git clone https://github.com/SigmaHQ/legacy-sigmatools.git
+cd legacy-sigmools
+```
 
 ##### Sysmon rulesets (when investigated endpoints have Sysmon logs)
 
 ```shell 
-tools/sigmac \
+sigmac \
 	-t sqlite \
 	-c tools/config/generic/sysmon.yml \
 	-c tools/config/generic/powershell.yml \
@@ -177,7 +326,7 @@ Where :
 ##### Generic rulesets (when investigated endpoints _don't_ have Sysmon logs)
 
 ```shell 
-tools/sigmac \
+sigmac \
 	-t sqlite \
 	-c tools/config/generic/windows-audit.yml \
 	-c tools/config/generic/powershell.yml \
