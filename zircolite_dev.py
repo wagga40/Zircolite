@@ -653,7 +653,7 @@ class zirCore:
 
     def executeRuleset(self, outFile, writeMode='w', forwarder=None, showAll=False, KeepResults=False, remote=None, stream=False, lastRuleset=False):
         csvWriter = None
-        # Results are writen upon detection to allow analysis during execution and to avoid losing results in case of error.
+        # Results are written upon detection to allow analysis during execution and to avoid losing results in case of error.
         with open(outFile, writeMode, encoding='utf-8', newline='') as fileHandle:
             with tqdm(self.ruleset, colour="yellow") as ruleBar:
                 if not self.noOutput and not self.csvMode and writeMode != "a": fileHandle.write('[')
@@ -914,7 +914,7 @@ class evtxExtractor:
         elif self.xmlLogs:
             try:
                 data = ""
-                # We need to read the entire file to remove anoying newlines and fields with newlines (System.evtx Logs for example...)
+                # We need to read the entire file to remove annoying newlines and fields with newlines (System.evtx Logs for example...)
                 with open(str(file), 'r') as XMLFile:
                     data = XMLFile.read().replace("\n","").replace("</Event>","</Event>\n").replace("<Event ","\n<Event ")
                 self.Logs2JSON(self.XMLLine2JSON, data, f"{self.tmpDir}/{str(filename)}-{self.randString()}.json", isFile=False)
@@ -1052,7 +1052,7 @@ def avoidFiles(pathList, avoidFilesList):
 # MAIN()
 ################################################################
 if __name__ == '__main__':
-    version = "2.9.9"
+    version = "2.9.10"
 
     # Init Args handling
     parser = argparse.ArgumentParser()
@@ -1090,7 +1090,7 @@ if __name__ == '__main__':
     parser.add_argument("--espass", help="ES password", type=str, default="")
     parser.add_argument("--stream", help="By default event forwarding is done at the end, this option activate forwarding events when detected", action="store_true")
     parser.add_argument("--forwardall", help="Forward all events", action="store_true")
-    parser.add_argument("--hashes", help="Add an xxhash64 of the orginal log event to each event", action='store_true')
+    parser.add_argument("--hashes", help="Add an xxhash64 of the original log event to each event", action='store_true')
     parser.add_argument("--timefield", help="Provide time field name for event forwarding, default is 'SystemTime'", default="SystemTime", action="store_true")
     parser.add_argument("--cores", help="Specify how many cores you want to use, default is all cores, works only for EVTX extraction", type=str)
     parser.add_argument("--template", help="If a Jinja2 template is specified it will be used to generated output", type=str, action='append', nargs='+')

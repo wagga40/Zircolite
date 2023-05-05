@@ -933,7 +933,7 @@ class zirCore:
         lastRuleset=False,
     ):
         csvWriter = None
-        # Results are writen upon detection to allow analysis during execution and to avoid losing results in case of error.
+        # Results are written upon detection to allow analysis during execution and to avoid losing results in case of error.
         with open(outFile, writeMode, encoding="utf-8", newline="") as fileHandle:
             with tqdm(self.ruleset, colour="yellow") as ruleBar:
                 if not self.noOutput and not self.csvMode and writeMode != "a":
@@ -1288,7 +1288,7 @@ class evtxExtractor:
         elif self.xmlLogs:
             try:
                 data = ""
-                # We need to read the entire file to remove anoying newlines and fields with newlines (System.evtx Logs for example...)
+                # We need to read the entire file to remove annoying newlines and fields with newlines (System.evtx Logs for example...)
                 with open(str(file), "r") as XMLFile:
                     data = (
                         XMLFile.read()
@@ -1502,7 +1502,7 @@ def avoidFiles(pathList, avoidFilesList):
 # MAIN()
 ################################################################
 if __name__ == "__main__":
-    version = "2.9.9"
+    version = "2.9.10"
 
     # Init Args handling
     parser = argparse.ArgumentParser()
@@ -1681,7 +1681,7 @@ if __name__ == "__main__":
     parser.add_argument("--forwardall", help="Forward all events", action="store_true")
     parser.add_argument(
         "--hashes",
-        help="Add an xxhash64 of the orginal log event to each event",
+        help="Add an xxhash64 of the original log event to each event",
         action="store_true",
     )
     parser.add_argument(
