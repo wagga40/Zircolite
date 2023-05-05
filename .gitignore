@@ -34,3 +34,4 @@ tmp
 *.evtx_data
 *.tar
 *.tar.sha256
+.pdm-python

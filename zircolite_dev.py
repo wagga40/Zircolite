@@ -357,6 +357,8 @@ class JSONFlattener:
             self.fieldExclusions = self.fieldMappingsDict["exclusions"]
             self.fieldMappings = self.fieldMappingsDict["mappings"]
             self.uselessValues = self.fieldMappingsDict["useless"]
+            self.aliases = self.fieldMappingsDict["alias"]
+            self.fieldSplitList = self.fieldMappingsDict["split"]
 
     def run(self, file):
         """
@@ -385,23 +387,53 @@ class JSONFlattener:
                     # Excluding useless values (e.g. "null"). The value must be an exact match.
                     if not value in self.uselessValues:
                         # Applying field mappings
-                        if name[:-1] in self.fieldMappings:
-                            key = self.fieldMappings[name[:-1]]
+                        rawFieldName = name[:-1]
+                        if rawFieldName in self.fieldMappings:
+                            key = self.fieldMappings[rawFieldName]
                         else:
                             # Removing all annoying character from field name
-                            key = ''.join(e for e in name[:-1].split(".")[-1] if e.isalnum())
-                        JSONLine[key] = value
-                        # Creating the CREATE TABLE SQL statement
-                        if key.lower() not in self.keyDict:
-                            self.keyDict[key.lower()] = key
-                            if type(value) is int:
-                                fieldStmt += f"'{key}' INTEGER,\n"
-                            else:
-                                fieldStmt += f"'{key}' TEXT COLLATE NOCASE,\n"
+                            key = ''.join(e for e in rawFieldName.split(".")[-1] if e.isalnum())
+
+                        # Preparing aliases
+                        keys = [key]
+                        if key in self.aliases: keys.append(self.aliases[key])
+                        if rawFieldName in self.aliases: keys.append(self.aliases[rawFieldName])
+
+                        # Applying field splitting
+                        fieldsToSplit = []
+                        if rawFieldName in self.fieldSplitList: fieldsToSplit.append(rawFieldName)
+                        if key in self.fieldSplitList: fieldsToSplit.append(key)
+                        
+                        if len(fieldsToSplit) > 0:
+                            for field in fieldsToSplit:
+                                try:
+                                    splittedFields = value.split(self.fieldSplitList[field]["separator"])
+                                    for splittedField in splittedFields:
+                                        k,v = splittedField.split(self.fieldSplitList[field]["equal"])
+                                        keyLower = k.lower()
+                                        JSONLine[k] = v
+                                        if keyLower not in self.keyDict:
+                                            self.keyDict[keyLower] = k
+                                            fieldStmt += f"'{k}' TEXT COLLATE NOCASE,\n"
+                                except Exception as e:
+                                    self.logger.error(f"ERROR : Couldn't apply field splitting {e}")
+
+                        # Applying aliases
+                        for key in keys:
+                            JSONLine[key] = value
+                            # Creating the CREATE TABLE SQL statement
+                            keyLower =key.lower()
+                            if keyLower not in self.keyDict:
+                                self.keyDict[keyLower] = key
+                                if type(value) is int:
+                                    fieldStmt += f"'{key}' INTEGER,\n"
+                                else:
+                                    fieldStmt += f"'{key}' TEXT COLLATE NOCASE,\n"
+
         # If filesize is not zero
         if os.stat(file).st_size != 0:
             with open(str(file), 'r', encoding='utf-8') as JSONFile:
-                filename = str(file).split(os.path.sep)[1]
+                filename = os.path.basename(file)
                 for line in JSONFile:
                     try:
                         dictToFlatten = json.loads(line)
