@@ -416,7 +416,7 @@ class JSONFlattener:
                                             self.keyDict[keyLower] = k
                                             fieldStmt += f"'{k}' TEXT COLLATE NOCASE,\n"
                                 except Exception as e:
-                                    self.logger.error(f"ERROR : Couldn't apply field splitting {e}")
+                                    self.logger.debug(f"ERROR : Couldn't apply field splitting, value(s) {str(splittedFields)} : {e}")
 
                         # Applying aliases
                         for key in keys:
