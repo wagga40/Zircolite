@@ -103,7 +103,7 @@ class eventForwarder:
         self.remoteHost = remote
         self.token = token
         self.localHostname = socket.gethostname()
-        self.userAgent = "zircolite/2.8.x"
+        self.userAgent = "zircolite/2.x"
         self.index = index
         self.login = login
         self.password = password
@@ -158,8 +158,12 @@ class eventForwarder:
 
     async def HECWorker(self, session, queue, sigmaEvents):
         while True:
+            if self.index:
+                providedIndex = f"?index={self.index}"
+            else:
+                providedIndex = ""
             data = await queue.get() # Pop data from Queue
-            resp = await session.post(f"{self.remoteHost}/services/collector/event", headers={'Authorization': f"Splunk {self.token}"}, json=data) # Exec action from Queue
+            resp = await session.post(f"{self.remoteHost}/services/collector/event{providedIndex}", headers={'Authorization': f"Splunk {self.token}"}, json=data) # Exec action from Queue
             queue.task_done() # Notify Queue action ended
             if str(resp.status)[0] in ["4", "5"]:
                 self.logger.error(f"{Fore.RED}   [-] Forwarding failed for event {Fore.RESET}")
@@ -263,7 +267,7 @@ class eventForwarder:
             session = AsyncElasticsearch(hosts=[self.remoteHost], verify_certs=False, basic_auth=(self.login, self.password))
         return session
 
-    async def testESession(self, session):
+    async def testESSession(self, session):
         try:
             await session.info()
         except Exception as e:
@@ -291,7 +295,7 @@ class eventForwarder:
 
         if mode == "ES":
             session = self.initESSession()
-            await self.testESession(session)
+            await self.testESSession(session)
             if self.connectionFailed: return
             fnformatEvent = self.formatEventForES
             fnWorker = self.ESWorker
