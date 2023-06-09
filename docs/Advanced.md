@@ -202,8 +202,11 @@ As of v1.3.5, Zircolite can forward detections to a Splunk instance with Splunk 
 
 ```shell
 python3 zircolite.py --evtx /sample.evtx  --ruleset rules/rules_windows_sysmon.json \
-	--remote "https://x.x.x.x:8088" --token "xxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
+	--remote "https://x.x.x.x:8088" --token "xxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx" \ 
+	[--index myindex]
 ```
+
+Since Splunk HEC default to the first associated index, `--index` is optional but can be used to specify the choosen index among the available ones.
 
 :warning: On Windows do not forget to put quotes
 
