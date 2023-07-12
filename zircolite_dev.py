@@ -470,7 +470,7 @@ class JSONFlattener:
 class zirCore:
     """ Load data into database and apply detection rules  """
 
-    def __init__(self, config, logger=None, noOutput=False, timeAfter="1970-01-01T00:00:00", timeBefore="9999-12-12T23:59:59", limit=-1, csvMode=False, timeField=None, hashes=False, dbLocation=":memory:"):
+    def __init__(self, config, logger=None, noOutput=False, timeAfter="1970-01-01T00:00:00", timeBefore="9999-12-12T23:59:59", limit=-1, csvMode=False, timeField=None, hashes=False, dbLocation=":memory:", delimiter=";"):
         self.logger = logger or logging.getLogger(__name__)
         self.dbConnection = self.createConnection(dbLocation)
         self.fullResults = []
@@ -483,6 +483,7 @@ class zirCore:
         self.csvMode = csvMode
         self.timeField = timeField
         self.hashes = hashes
+        self.delimiter = delimiter
     
     def close(self):
         self.dbConnection.close()
@@ -679,7 +680,7 @@ class zirCore:
                                 # Output to json or csv file
                                 if self.csvMode: 
                                     if not csvWriter: # Creating the CSV header and the fields ("agg" is for queries with aggregation)
-                                        csvWriter = csv.DictWriter(fileHandle, delimiter=';', fieldnames=["rule_title", "rule_description", "rule_level", "rule_count", "agg"] + list(ruleResults["matches"][0].keys()))
+                                        csvWriter = csv.DictWriter(fileHandle, delimiter=self.delimiter, fieldnames=["rule_title", "rule_description", "rule_level", "rule_count", "agg"] + list(ruleResults["matches"][0].keys()))
                                         csvWriter.writeheader()
                                     for data in ruleResults["matches"]:
                                         dictCSV = { "rule_title": ruleResults["title"], "rule_description": ruleResults["description"], "rule_level": ruleResults["rule_level"], "rule_count": ruleResults["count"], **data}                                        
@@ -1071,6 +1072,7 @@ if __name__ == '__main__':
     parser.add_argument("-c", "--config", help="JSON File containing field mappings and exclusions", type=str, default="config/fieldMappings.json")
     parser.add_argument("-o", "--outfile", help="File that will contains all detected events", type=str, default="detected_events.json")
     parser.add_argument("--csv", help="The output will be in CSV. You should note that in this mode empty fields will not be discarded from results", action='store_true')
+    parser.add_argument("--csv-delimiter", help="Choose the delimiter for CSV ouput", type=str, default=";")
     parser.add_argument("-f", "--fileext", help="Extension of the log files", type=str)
     parser.add_argument("-t", "--tmpdir", help="Temp directory that will contains events converted as JSON (parent directories must exist)", type=str)
     parser.add_argument("-k", "--keeptmp", help="Do not remove the temp directory containing events converted in JSON format", action='store_true')
@@ -1189,7 +1191,7 @@ if __name__ == '__main__':
     start_time = time.time()
 
     # Initialize zirCore
-    zircoliteCore = zirCore(args.config, logger=consoleLogger, noOutput=args.nolog, timeAfter=eventsAfter, timeBefore=eventsBefore, limit=args.limit, csvMode=args.csv, timeField=args.timefield, hashes=args.hashes, dbLocation=args.ondiskdb)
+    zircoliteCore = zirCore(args.config, logger=consoleLogger, noOutput=args.nolog, timeAfter=eventsAfter, timeBefore=eventsBefore, limit=args.limit, csvMode=args.csv, timeField=args.timefield, hashes=args.hashes, dbLocation=args.ondiskdb, delimiter=args.csv_delimiter)
     
     # If we are not working directly with the db
     if not args.dbonly:

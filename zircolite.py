@@ -700,6 +700,7 @@ class zirCore:
         timeField=None,
         hashes=False,
         dbLocation=":memory:",
+        delimiter=";",
     ):
         self.logger = logger or logging.getLogger(__name__)
         self.dbConnection = self.createConnection(dbLocation)
@@ -713,6 +714,7 @@ class zirCore:
         self.csvMode = csvMode
         self.timeField = timeField
         self.hashes = hashes
+        self.delimiter = delimiter
 
     def close(self):
         self.dbConnection.close()
@@ -973,7 +975,7 @@ class zirCore:
                                     ):  # Creating the CSV header and the fields ("agg" is for queries with aggregation)
                                         csvWriter = csv.DictWriter(
                                             fileHandle,
-                                            delimiter=";",
+                                            delimiter=self.delimiter,
                                             fieldnames=[
                                                 "rule_title",
                                                 "rule_description",
@@ -1580,6 +1582,12 @@ if __name__ == "__main__":
         help="The output will be in CSV. You should note that in this mode empty fields will not be discarded from results",
         action="store_true",
     )
+    parser.add_argument(
+        "--csv-delimiter",
+        help="Choose the delimiter for CSV ouput",
+        type=str,
+        default=";",
+    )
     parser.add_argument("-f", "--fileext", help="Extension of the log files", type=str)
     parser.add_argument(
         "-t",
@@ -1885,6 +1893,7 @@ if __name__ == "__main__":
         timeField=args.timefield,
         hashes=args.hashes,
         dbLocation=args.ondiskdb,
+        delimiter=args.csv_delimiter,
     )
 
     # If we are not working directly with the db
