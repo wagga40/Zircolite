@@ -71,6 +71,7 @@ Except when `evtx_dump` is used, Zircolite only use one core. So if you have a l
 - `--dbfile <FILE>` allows you to export all the logs in a SQLite 3 database file. You can query the logs with SQL statements to find more things than what the Sigma rules could have found
 - `--keeptmp` allows you to keep the source logs (EVTX/Auditd/Evtxtract/XML...) converted in JSON format
 - `--keepflat` allow you to keep the source logs (EVTX/Auditd/Evtxtract/XML...) converted in a flattened JSON format
+
 ---
 
 ### Filtering
@@ -238,14 +239,14 @@ Zircolite is able to forward all events and not just the detected events to Splu
 
 ### Templating and Formatting
 
-Zircolite provides a templating system based on Jinja 2. It allows you to change the output format to suits your needs (Splunk or ELK integration, Grep-able output...). There are some templates available in the [Templates directory](../templates) of the repository : CSV, Splunk, Mini-GUI. To use the template system, use these arguments :
+Zircolite provides a templating system based on Jinja 2. It allows you to change the output format to suits your needs (Splunk or ELK integration, Grep-able output...). There are some templates available in the [Templates directory](../templates) of the repository : Splunk, Timesketch, ... To use the template system, use these arguments :
 
 - `--template <template_filename>`
 - `--templateOutput <output_filename>`
 
 ```shell
 python3 zircolite.py --evtx sample.evtx  --ruleset rules/rules_windows_sysmon.json \
---template templates/exportCSV.tmpl --templateOutput test.csv
+--template templates/exportForSplunk.tmpl --templateOutput exportForSplunk.json
 ```
 
 It is possible to use multiple templates if you provide for each `--template` argument there is a `--templateOutput` argument associated.
@@ -261,7 +262,7 @@ The Mini-GUI can be used totally offline, it allows the user to display and sear
 
 #### Automatic generation
 
-As of Zircolite 2.1.0, with the non-embedded versions, the easier way to use the Mini-GUI is to generate a package with the `--package` option. A zip file containing all the necessary data will be generated at the root of the repository.  
+As of Zircolite 2.1.0, the easier way to use the Mini-GUI is to generate a package with the `--package` option. A zip file containing all the necessary data will be generated at the root of the repository.  
 
 #### Manual generation
 

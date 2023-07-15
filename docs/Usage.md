@@ -45,11 +45,14 @@ python3 zircolite.py --evtx ../Logs --ruleset rules/rules_windows_sysmon.json
 
 It also works directly on an unique EVTX file.
 
+:information_source: `--evtx`, `--events` and `-e` are equivalent
+
 By default : 
 
 - `--ruleset` is not mandatory but the default ruleset will be `rules/rules_windows_generic.json`
 - Results are written in the `detected_events.json` in the same directory as Zircolite
 - There is a `zircolite.log`file that will be created in the current working directory
+- `Zircolite` will automatically choose a file extension, you can change it with `--fileext`. This option can be used with wildcards or [Python Glob syntax](https://docs.python.org/3/library/glob.html) but with `*.` added before the given parameter value : `*.<FILEEXT PARAMETER VALUE>`. For example `--fileext log` will search for `*.log` files in the given path and `--fileext log.*` will search for `*.log.*` which can be useful when handling linux log files (auditd.log.1...).
 
 #### XML logs : 
 
@@ -116,12 +119,10 @@ python3 zircolite.py --events sysmon.log --ruleset rules/rules_linux.json --sysm
 It is possible to use Zircolite directly on JSONL/NDJSON files (NXLog files) with the `--jsononly` or `-j` arguments : 
 
 ```shell
-python3 zircolite.py --events <EVTX_FOLDER> --ruleset <RULESET> --jsononly
+python3 zircolite.py --events <LOGS_FOLDER> --ruleset <RULESET> --jsononly
 ```
 
 A simple use case is when you have already run Zircolite and use the `--keeptmp` option. Since it keeps all the converted EVTX in a temp directory, if you need to re-execute Zircolite, you can do it directly using this directory as the EVTX source (with `--evtx <EVTX_IN_JSON_DIRECTORY>` and `--jsononly`) and avoid to convert the EVTX again.
-
-:information_source: You can change the file extension with `--fileext`.
 
 #### SQLite database files
 

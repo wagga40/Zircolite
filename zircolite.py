@@ -700,6 +700,7 @@ class zirCore:
         timeField=None,
         hashes=False,
         dbLocation=":memory:",
+        delimiter=";",
     ):
         self.logger = logger or logging.getLogger(__name__)
         self.dbConnection = self.createConnection(dbLocation)
@@ -713,6 +714,7 @@ class zirCore:
         self.csvMode = csvMode
         self.timeField = timeField
         self.hashes = hashes
+        self.delimiter = delimiter
 
     def close(self):
         self.dbConnection.close()
@@ -973,7 +975,7 @@ class zirCore:
                                     ):  # Creating the CSV header and the fields ("agg" is for queries with aggregation)
                                         csvWriter = csv.DictWriter(
                                             fileHandle,
-                                            delimiter=";",
+                                            delimiter=self.delimiter,
                                             fieldnames=[
                                                 "rule_title",
                                                 "rule_description",
@@ -1580,7 +1582,24 @@ if __name__ == "__main__":
         help="The output will be in CSV. You should note that in this mode empty fields will not be discarded from results",
         action="store_true",
     )
+    parser.add_argument(
+        "--csv-delimiter",
+        help="Choose the delimiter for CSV ouput",
+        type=str,
+        default=";",
+    )
     parser.add_argument("-f", "--fileext", help="Extension of the log files", type=str)
+    parser.add_argument(
+        "-fp",
+        "--file-pattern",
+        help="Use a Python Glob pattern to select files. This option only works with directories",
+        type=str,
+    )
+    parser.add_argument(
+        "--no-recursion",
+        help="By default Zircolite search recursively, by using this option only the provided directory will be used",
+        action="store_true",
+    )
     parser.add_argument(
         "-t",
         "--tmpdir",
@@ -1885,6 +1904,7 @@ if __name__ == "__main__":
         timeField=args.timefield,
         hashes=args.hashes,
         dbLocation=args.ondiskdb,
+        delimiter=args.csv_delimiter,
     )
 
     # If we are not working directly with the db
@@ -1900,22 +1920,30 @@ if __name__ == "__main__":
             else:
                 args.fileext = "evtx"
 
-        EVTXPath = Path(args.evtx)
-        if EVTXPath.is_dir():
-            # EVTX recursive search in given directory with given file extension
-            EVTXList = list(EVTXPath.rglob(f"*.{args.fileext}"))
-        elif EVTXPath.is_file():
-            EVTXList = [EVTXPath]
+        LogPath = Path(args.evtx)
+        if LogPath.is_dir():
+            # Log recursive search in given directory with given file extension or pattern
+            pattern = f"*.{args.fileext}"
+            # If a Glob pattern is provided
+            if args.file_pattern not in [None, ""]:
+                pattern = args.file_pattern
+            fnGlob = LogPath.rglob
+
+            if args.no_recursion:
+                fnGlob = LogPath.glob
+            LogList = list(fnGlob(pattern))
+        elif LogPath.is_file():
+            LogList = [LogPath]
         else:
             quitOnError(
                 f"{Fore.RED}   [-] Unable to find events from submitted path{Fore.RESET}"
             )
 
         # Applying file filters in this order : "select" than "avoid"
-        FileList = avoidFiles(selectFiles(EVTXList, args.select), args.avoid)
+        FileList = avoidFiles(selectFiles(LogList, args.select), args.avoid)
         if len(FileList) <= 0:
             quitOnError(
-                f"{Fore.RED}   [-] No file found. Please verify filters, the directory or the extension with '--fileext'{Fore.RESET}"
+                f"{Fore.RED}   [-] No file found. Please verify filters, directory or the extension with '--fileext' or '--file-pattern'{Fore.RESET}"
             )
 
         if not args.jsononly:
@@ -1938,19 +1966,19 @@ if __name__ == "__main__":
             for evtx in tqdm(FileList, colour="yellow"):
                 extractor.run(evtx)
             # Set the path for the next step
-            EVTXJSONList = list(Path(extractor.tmpDir).rglob("*.json"))
+            LogJSONList = list(Path(extractor.tmpDir).rglob("*.json"))
         else:
-            EVTXJSONList = FileList
+            LogJSONList = FileList
 
         checkIfExists(
             args.config, f"{Fore.RED}   [-] Cannot find mapping file{Fore.RESET}"
         )
-        if EVTXJSONList == []:
+        if LogJSONList == []:
             quitOnError(f"{Fore.RED}   [-] No JSON files found.{Fore.RESET}")
 
         # Print field list and exit
         if args.fieldlist:
-            fields = zircoliteCore.run(EVTXJSONList, Insert2Db=False)
+            fields = zircoliteCore.run(LogJSONList, Insert2Db=False)
             zircoliteCore.close()
             if not args.jsononly and not args.keeptmp:
                 extractor.cleanup()
@@ -1963,10 +1991,10 @@ if __name__ == "__main__":
         # Flatten and insert to Db
         if args.forwardall:
             zircoliteCore.run(
-                EVTXJSONList, saveToFile=args.keepflat, forwarder=forwarder
+                LogJSONList, saveToFile=args.keepflat, forwarder=forwarder
             )
         else:
-            zircoliteCore.run(EVTXJSONList, saveToFile=args.keepflat)
+            zircoliteCore.run(LogJSONList, saveToFile=args.keepflat)
         # Unload In memory DB to disk. Done here to allow debug in case of ruleset execution error
         if args.dbfile is not None:
             zircoliteCore.saveDbToDisk(args.dbfile)
@@ -2045,7 +2073,7 @@ if __name__ == "__main__":
 
     # Remove files submitted for analysis
     if args.remove_events:
-        for EVTX in EVTXList:
+        for EVTX in LogList:
             try:
                 os.remove(EVTX)
             except OSError as e:
