@@ -71,6 +71,7 @@ Except when `evtx_dump` is used, Zircolite only use one core. So if you have a l
 - `--dbfile <FILE>` allows you to export all the logs in a SQLite 3 database file. You can query the logs with SQL statements to find more things than what the Sigma rules could have found
 - `--keeptmp` allows you to keep the source logs (EVTX/Auditd/Evtxtract/XML...) converted in JSON format
 - `--keepflat` allow you to keep the source logs (EVTX/Auditd/Evtxtract/XML...) converted in a flattened JSON format
+
 ---
 
 ### Filtering
