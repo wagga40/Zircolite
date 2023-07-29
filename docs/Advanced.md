@@ -4,7 +4,6 @@
 
 * [Working with large datasets](#working-with-large-datasets)
 	* [Using GNU Parallel](#using-gnu-parallel)
-	* [Using Zircolite MP](#using-zircolite-mp)
 * [Keep data used by Zircolite](#keep-data-used-by-zircolite)
 * [Filtering](#filtering)
 	* [File filters](#file-filters)
@@ -64,7 +63,7 @@ Except when `evtx_dump` is used, Zircolite only use one core. So if you have a l
 
 ---
 
-### Keep data used by Zircolite : 
+### Keep data used by Zircolite
 
 **Zircolite** has a lot of arguments that can be used to keep data used to perform Sigma detections : 
 

@@ -34,7 +34,7 @@ If you can share the EVTX files on whose the blocking happened, feel free to pos
 
 Help is available with `zircolite.py -h`. 
 
-#### For EVTX files : 
+#### For EVTX files
 
 If your evtx files have the extension ".evtx" :
 
@@ -47,14 +47,14 @@ It also works directly on an unique EVTX file.
 
 :information_source: `--evtx`, `--events` and `-e` are equivalent
 
-By default : 
+By default
 
 - `--ruleset` is not mandatory but the default ruleset will be `rules/rules_windows_generic.json`
 - Results are written in the `detected_events.json` in the same directory as Zircolite
 - There is a `zircolite.log`file that will be created in the current working directory
 - `Zircolite` will automatically choose a file extension, you can change it with `--fileext`. This option can be used with wildcards or [Python Glob syntax](https://docs.python.org/3/library/glob.html) but with `*.` added before the given parameter value : `*.<FILEEXT PARAMETER VALUE>`. For example `--fileext log` will search for `*.log` files in the given path and `--fileext log.*` will search for `*.log.*` which can be useful when handling linux log files (auditd.log.1...).
 
-#### XML logs : 
+#### XML logs
 
 `evtx_dump` or services like **VirusTotal** sometimes output logs in text format with XML logs inside. 
 
@@ -87,7 +87,7 @@ python3 zircolite.py --events  Microsoft-Windows-SysmonOperational.xml \
 	--ruleset rules/rules_windows_sysmon_full.json --xml
 ```
 
-#### EVTXtract logs : 
+#### EVTXtract logs
 
 Willi Ballenthin has built called [EVTXtract](https://github.com/williballenthin/EVTXtract) a tool to recovers and reconstructs fragments of EVTX log files from raw binary data, including unallocated space and memory images.
 
@@ -96,7 +96,7 @@ Willi Ballenthin has built called [EVTXtract](https://github.com/williballenthin
 ```shell
 python3 zircolite.py --events <EVTXTRACT_EXTRACTED_LOGS>  --ruleset <RULESET> --evtxtract
 ```
-#### Auditd logs : 
+#### Auditd logs
 
 ```shell
 python3 zircolite.py --events auditd.log --ruleset rules/rules_linux.json --auditd
@@ -104,7 +104,7 @@ python3 zircolite.py --events auditd.log --ruleset rules/rules_linux.json --audi
 
 :information_source: `--events` and `--evtx` are strictly equivalent but `--events` is more logical to use for non EVTX logs.
 
-#### Sysmon for Linux logs : 
+#### Sysmon for Linux logs
 
 Sysmon for linux has been released in October 2021. It outputs XML in text format with one event per-line. As of version 2.6.0, **Zircolite** has an *initial* support of Sysmon for Linux log files. To test it, just add `-S` to you command line : 
 
