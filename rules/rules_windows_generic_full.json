@@ -17453,7 +17453,7 @@
         ],
         "level": "high",
         "rule": [
-            "SELECT * FROM logs WHERE EventID = '27'"
+            "SELECT * FROM logs WHERE Channel = 'Microsoft-Windows-Sysmon/Operational' AND EventID = '27'"
         ],
         "filename": "sysmon_file_block_exe.yml"
     },
