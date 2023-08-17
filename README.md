@@ -50,6 +50,14 @@ python3 zircolite.py --events <JSON_FOLDER or JSON_FILE> --ruleset rules/rules_w
 
 :information_source: If you want to try the tool you can test with [EVTX-ATTACK-SAMPLES](https://github.com/sbousseaden/EVTX-ATTACK-SAMPLES) (EVTX Files).
 
+#### Updating default rulesets
+
+```shell
+python3 zircolite.py -U
+```
+
+:information_source: Please note these rulesets are provided to use Zircolite out-of-the-box but [you should generate your own rulesets](#why-you-should-build-your-own-rulesets) but they can be very noisy or slow. These auto-updated rulesets are available on the dedicated repository : [Zircolite-Rules](https://github.com/wagga40/Zircolite-Rules).
+
 ## Docs
 
 Everything is [here](docs).

@@ -43,7 +43,7 @@ Except when `evtx_dump` is used, Zircolite only use one core. So if you have a l
 
 	```shell
 	find <CASE_DIRECTORY> -maxdepth 1 -mindepth 1 -type d | \
-		parallel --bar python3 zircolite.py --evtx {} 
+		parallel --bar python3 zircolite.py --evtx {} \ 
 		--ruleset rules/rules_windows_sysmon.json --outfile {/.}.json
 	```
 	
