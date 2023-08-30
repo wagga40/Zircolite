@@ -41,19 +41,19 @@ urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 
 def signal_handler(sig, frame):
-    consoleLogger.info("[-] Execution interrupted !")
+    print("[-] Execution interrupted !")
     sys.exit(0)
 
 
-def quitOnError(message):
-    consoleLogger.error(message)
+def quitOnError(message, logger=None):
+    logger.error(message)
     sys.exit(1)
 
 
-def checkIfExists(path, errorMessage):
+def checkIfExists(path, errorMessage, logger=None):
     """Test if path provided is a file"""
     if not (Path(path).is_file()):
-        quitOnError(errorMessage)
+        quitOnError(errorMessage, logger)
 
 
 def initLogger(debugMode, logFile=None):
@@ -1507,8 +1507,8 @@ def avoidFiles(pathList, avoidFilesList):
 ################################################################
 # MAIN()
 ################################################################
-if __name__ == "__main__":
-    version = "2.9.10"
+def main():
+    version = "2.9.14"
 
     # Init Args handling
     parser = argparse.ArgumentParser()
@@ -1840,7 +1840,8 @@ if __name__ == "__main__":
     if args.remote is not None:
         if not forwarder.networkCheck():
             quitOnError(
-                f"{Fore.RED}   [-] Remote host cannot be reached : {args.remote}{Fore.RESET}"
+                f"{Fore.RED}   [-] Remote host cannot be reached : {args.remote}{Fore.RESET}",
+                consoleLogger,
             )
 
     # Checking provided timestamps
@@ -1849,7 +1850,8 @@ if __name__ == "__main__":
         eventsBefore = time.strptime(args.before, "%Y-%m-%dT%H:%M:%S")
     except:
         quitOnError(
-            f"{Fore.RED}   [-] Wrong timestamp format. Please use 'AAAA-MM-DDTHH:MM:SS'"
+            f"{Fore.RED}   [-] Wrong timestamp format. Please use 'AAAA-MM-DDTHH:MM:SS'",
+            consoleLogger,
         )
 
     binPath = args.evtx_dump
@@ -1857,25 +1859,30 @@ if __name__ == "__main__":
     # Check ruleset arg
     for ruleset in args.ruleset:
         checkIfExists(
-            ruleset, f"{Fore.RED}   [-] Cannot find ruleset : {ruleset}{Fore.RESET}"
+            ruleset,
+            f"{Fore.RED}   [-] Cannot find ruleset : {ruleset}. Default rulesets are available here : https://github.com/wagga40/Zircolite-Rules{Fore.RESET}",
+            consoleLogger,
         )
     # Check templates args
     readyForTemplating = False
     if args.template is not None:
         if args.csv:
             quitOnError(
-                f"{Fore.RED}   [-] You cannot use templates in CSV mode{Fore.RESET}"
+                f"{Fore.RED}   [-] You cannot use templates in CSV mode{Fore.RESET}",
+                consoleLogger,
             )
         if (args.templateOutput is None) or (
             len(args.template) != len(args.templateOutput)
         ):
             quitOnError(
-                f"{Fore.RED}   [-] Number of templates output must match number of templates{Fore.RESET}"
+                f"{Fore.RED}   [-] Number of templates output must match number of templates{Fore.RESET}",
+                consoleLogger,
             )
         for template in args.template:
             checkIfExists(
                 template[0],
-                f"{Fore.RED}   [-] Cannot find template : {template[0]}{Fore.RESET}",
+                f"{Fore.RED}   [-] Cannot find template : {template[0]}. DEfault templates are available here : https://github.com/wagga40/Zircolite/tree/master/templates{Fore.RESET}",
+                consoleLogger,
             )
         readyForTemplating = True
 
@@ -1887,7 +1894,10 @@ if __name__ == "__main__":
 
     # If on-disk DB already exists, quit.
     if args.ondiskdb != ":memory:" and (Path(args.ondiskdb).is_file()):
-        quitOnError(f"{Fore.RED}   [-] On-disk database already exists{Fore.RESET}")
+        quitOnError(
+            f"{Fore.RED}   [-] On-disk database already exists{Fore.RESET}",
+            consoleLogger,
+        )
 
     # Start time counting
     start_time = time.time()
@@ -1936,14 +1946,16 @@ if __name__ == "__main__":
             LogList = [LogPath]
         else:
             quitOnError(
-                f"{Fore.RED}   [-] Unable to find events from submitted path{Fore.RESET}"
+                f"{Fore.RED}   [-] Unable to find events from submitted path{Fore.RESET}",
+                consoleLogger,
             )
 
         # Applying file filters in this order : "select" than "avoid"
         FileList = avoidFiles(selectFiles(LogList, args.select), args.avoid)
         if len(FileList) <= 0:
             quitOnError(
-                f"{Fore.RED}   [-] No file found. Please verify filters, directory or the extension with '--fileext' or '--file-pattern'{Fore.RESET}"
+                f"{Fore.RED}   [-] No file found. Please verify filters, directory or the extension with '--fileext' or '--file-pattern'{Fore.RESET}",
+                consoleLogger,
             )
 
         if not args.jsononly:
@@ -1971,10 +1983,14 @@ if __name__ == "__main__":
             LogJSONList = FileList
 
         checkIfExists(
-            args.config, f"{Fore.RED}   [-] Cannot find mapping file{Fore.RESET}"
+            args.config,
+            f"{Fore.RED}   [-] Cannot find mapping file, you can get the default one here : https://github.com/wagga40/Zircolite/blob/master/config/fieldMappings.json {Fore.RESET}",
+            consoleLogger,
         )
         if LogJSONList == []:
-            quitOnError(f"{Fore.RED}   [-] No JSON files found.{Fore.RESET}")
+            quitOnError(
+                f"{Fore.RED}   [-] No JSON files found.{Fore.RESET}", consoleLogger
+            )
 
         # Print field list and exit
         if args.fieldlist:
@@ -2083,3 +2099,7 @@ if __name__ == "__main__":
 
     zircoliteCore.close()
     consoleLogger.info(f"\nFinished in {int((time.time() - start_time))} seconds")
+
+
+if __name__ == "__main__":
+    main()
