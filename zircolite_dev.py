@@ -584,7 +584,7 @@ class zirCore:
                 file.write(json.dumps(JSONLine).decode('utf-8') + '\n')
 
     def saveDbToDisk(self, dbFilename):
-        consoleLogger.info("[+] Saving working data to disk as a SQLite DB")
+        self.logger.info("[+] Saving working data to disk as a SQLite DB")
         onDiskDb = sqlite3.connect(dbFilename)
         self.dbConnection.backup(onDiskDb)
         onDiskDb.close()
@@ -1057,7 +1057,7 @@ def avoidFiles(pathList, avoidFilesList):
 # MAIN()
 ################################################################
 def main():
-    version = "2.9.14"
+    version = "2.9.15"
 
     # Init Args handling
     parser = argparse.ArgumentParser()

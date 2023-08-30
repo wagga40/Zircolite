@@ -92,10 +92,9 @@ The Mini-GUI can be used totally offline, it allows the user to display and sear
 - Zircolite has been cited and used in the research work of the CIDRE team : [PWNJUSTSU - Website](https://pwnjutsu.irisa.fr) and [PWNJUSTSU - Academic paper](https://hal.inria.fr/hal-03694719/document)
 - Zircolite has been cited and presented during [JSAC 2023](https://jsac.jpcert.or.jp/archive/2023/pdf/JSAC2023_workshop_sigma_jp.pdf)
 
-## Battle-tested
+## Get it from Pypi
 
-Zircolite has been used to perform cold-analysis (in Lab) on EVTX in multiple "real-life" situations. 
-However, even if Zircolite has been used many times to perform analysis directly on a Microsoft Windows endpoint, there is not yet a pipeline to thoroughly test every release.
+**BETA** : Zircolite is now available on Pypi. You can install it with `pip install zircolite`. This version don't have the config files and rulesets so you will have to get them and provide them as command line arguments.
 
 ## License
 
