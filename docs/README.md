@@ -1,36 +1,12 @@
 # Zircolite documentation
 
-**Dedicated documentation website is available [here](https://wagga40.github.io/Zircolite)**
+**Zircolite is a standalone tool written in Python 3. It allows to use SIGMA rules on : MS Windows EVTX (EVTX, XML and JSONL format), Auditd logs, Sysmon for Linux and EVTXtract logs**
 
-## Usage
+- **Zircolite** can be used directly on the investigated endpoint or in your forensic/detection lab
+- **Zircolite** is relatively fast and can parse large datasets in just seconds 
+- **Zircolite** is based on a Sigma backend (SQLite) and do not use internal sigma to "something" conversion
+- **Zircolite** can export results to multiple format with using Jinja [templates](templates) : JSON, CSV, JSONL, Splunk, Elastic, Zinc, Timesketch...
 
-* [Requirements and Installation](Usage.md#requirements-and-installation)
-* [Basic usage](Usage.md#basic-usage)
-* [Field mappings, field exclusions, value exclusions, field aliases and field splitting](Usage.md#field-mappings-field-exclusions-value-exclusions-field-aliases-and-field-splitting)
-* [Generate your own rulesets](Usage.md#generate-your-own-rulesets)
-	* [Why you should make your own rulesets](Usage.md#why-you-should-make-your-own-rulesets)
-* [Generate embedded versions](#generate-embedded-versions)
-* [Docker](Usage.md#docker)
-	* [Build and run your own image](Usage.md#build-and-run-your-own-image)
-	* [Docker Hub](Usage.md#docker-Hub)
+**Zircolite can be used directly in Python or you can use the binaries provided in [releases](https://github.com/wagga40/Zircolite/releases).** 
 
-## Advanced use
-
-* [Working with large datasets](Advanced.md#working-with-large-datasets)
-	* [Using GNU Parallel](Advanced.md#using-gnu-parallel)
-* [Keep data used by Zircolite](#keep-data-used-by-zircolite)
-* [Filtering](Advanced.md#filtering)
-	* [File filters](Advanced.md#file-filters)
-	* [Time filters](Advanced.md#time-filters)
-	* [Rule filters](Advanced.md#rule-filters)
-* [Forwarding detected events](Advanced.md#forwarding-detected-events) 
-* [Templating and Formatting](Advanced.md#templating-and-formatting)
-* [Mini GUI](Advanced.md#mini-gui)
-* [Packaging Zircolite](Advanced.md#packaging-zircolite)
-* [Using With DFIR Orc](Advanced.md#using-with-dfir-orc)
-
-## Internals
-
-* [Zircolite architecture](Internals.md#zircolite-architecture)
-* [Project structure](Internals.md#project-structure)
-* [Benchmarks](Internals.md#benchmarks)
+**Documentation is [here](https://wagga40.github.io/Zircolite/) (dedicated site) or [here](docs) (repo directory).**

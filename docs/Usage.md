@@ -1,22 +1,8 @@
-# Zircolite documentation
-
-## Usage
-
-* [Requirements and Installation](#requirements-and-installation)
-* [Basic usage](#basic-usage)
-* [Field mappings, field exclusions, value exclusions, field aliases and field splitting](#field-mappings-field-exclusions-value-exclusions-field-aliases-and-field-splitting)
-* [Generate your own rulesets](#generate-your-own-rulesets)
-	* [Why you should make your own rulesets](#why-you-should-make-your-own-rulesets)
-* [Generate embedded versions](#generate-embedded-versions)
-* [Docker](#docker)
-	* [Build and run your own image](#build-and-run-your-own-image)
-	* [Docker Hub](#docker-Hub)
+# Usage
 
 :information_source: if you use the packaged version of Zircolite don't forget to replace `python3 zircolite.py` in the examples by the packaged binary name.
 
----
-
-### Requirements and Installation
+## Requirements and Installation
 
 You can install dependencies with : `pip3 install -r requirements.txt`
 
@@ -28,13 +14,11 @@ Sometimes `evtx_dump` hangs under MS Windows, this is not related to Zircolite. 
 
 If you can share the EVTX files on whose the blocking happened, feel free to post an issue in the [evtx_dump](https://github.com/omerbenamram/evtx/issues) repository.
 
----
-
-### Basic usage 
+## Basic usage 
 
 Help is available with `zircolite.py -h`. 
 
-#### For EVTX files
+### For EVTX files
 
 If your evtx files have the extension ".evtx" :
 
@@ -54,7 +38,7 @@ By default
 - There is a `zircolite.log`file that will be created in the current working directory
 - `Zircolite` will automatically choose a file extension, you can change it with `--fileext`. This option can be used with wildcards or [Python Glob syntax](https://docs.python.org/3/library/glob.html) but with `*.` added before the given parameter value : `*.<FILEEXT PARAMETER VALUE>`. For example `--fileext log` will search for `*.log` files in the given path and `--fileext log.*` will search for `*.log.*` which can be useful when handling linux log files (auditd.log.1...).
 
-#### XML logs
+### XML logs
 
 `evtx_dump` or services like **VirusTotal** sometimes output logs in text format with XML logs inside. 
 
@@ -70,7 +54,7 @@ And it produces something like this (1 event per line):
 
 ```
 
-**VirusTotal** if you have an enterprise account will allow you to get logs in a pretty similar format : 
+**VirusTotal** : if you have an enterprise account will allow you to get logs in a pretty similar format : 
 
 ```xml
 <?xml version="1.0" encoding="utf-8"?>
@@ -87,7 +71,7 @@ python3 zircolite.py --events  Microsoft-Windows-SysmonOperational.xml \
 	--ruleset rules/rules_windows_sysmon_full.json --xml
 ```
 
-#### EVTXtract logs
+### EVTXtract logs
 
 Willi Ballenthin has built called [EVTXtract](https://github.com/williballenthin/EVTXtract) a tool to recovers and reconstructs fragments of EVTX log files from raw binary data, including unallocated space and memory images.
 
@@ -96,35 +80,77 @@ Willi Ballenthin has built called [EVTXtract](https://github.com/williballenthin
 ```shell
 python3 zircolite.py --events <EVTXTRACT_EXTRACTED_LOGS>  --ruleset <RULESET> --evtxtract
 ```
-#### Auditd logs
+
+### Auditd logs
 
 ```shell
 python3 zircolite.py --events auditd.log --ruleset rules/rules_linux.json --auditd
 ```
 
-:information_source: `--events` and `--evtx` are strictly equivalent but `--events` is more logical to use for non EVTX logs.
+:information_source: `--events` and `--evtx` are strictly equivalent but `--events` make more sense with non EVTX logs.
 
-#### Sysmon for Linux logs
+### Sysmon for Linux logs
 
-Sysmon for linux has been released in October 2021. It outputs XML in text format with one event per-line. As of version 2.6.0, **Zircolite** has an *initial* support of Sysmon for Linux log files. To test it, just add `-S` to you command line : 
+Sysmon for linux has been released in October 2021. It outputs XML in text format with one event per-line. As of version 2.6.0, **Zircolite** support of Sysmon for Linux log files. You just have to add `-S`, `--sysmon4linux`, `--sysmon-linux`, `--sysmon-linux-input` to your command line : 
 
 ```shell
-python3 zircolite.py --events sysmon.log --ruleset rules/rules_linux.json --sysmon4linux
+python3 zircolite.py --events sysmon.log --ruleset rules/rules_linux.json --sysmon-linux
 ```
 
 :information_source: Since the logs come from Linux, the default file extension when using `-S` case is `.log`
 
-#### JSONL/NDJSON
+### JSONL/NDJSON logs
 
-It is possible to use Zircolite directly on JSONL/NDJSON files (NXLog files) with the `--jsononly` or `-j` arguments : 
+JSONL/NDJSON logs have one event log per line, they look like this : 
+
+```json
+{"EventID": "4688", "EventRecordID": "1", ...}
+{"EventID": "4688", "EventRecordID": "2", ...}
+...
+```
+
+It is possible to use Zircolite directly on JSONL/NDJSON files (NXLog files) with the `-j`, `--jsonl`, `--jsononly` or `--json-input` options : 
 
 ```shell
-python3 zircolite.py --events <LOGS_FOLDER> --ruleset <RULESET> --jsononly
+python3 zircolite.py --events <LOGS_FOLDER> --ruleset <RULESET> --jsonl
 ```
 
 A simple use case is when you have already run Zircolite and use the `--keeptmp` option. Since it keeps all the converted EVTX in a temp directory, if you need to re-execute Zircolite, you can do it directly using this directory as the EVTX source (with `--evtx <EVTX_IN_JSON_DIRECTORY>` and `--jsononly`) and avoid to convert the EVTX again.
 
-#### SQLite database files
+### JSON Array / Full JSON object
+
+Some logs will be provided in JSON format as an array : 
+
+```json
+[ 
+	{"EventID": "4688", "EventRecordID": "1", ...}, 
+	{"EventID": "4688", "EventRecordID": "2", ...}, 
+... ]
+```
+
+To handle these logs you will need to use the `--jsonarray`, `--json-array` or `--json-array-input` options :
+
+```shell
+python3 zircolite.py --events <LOGS_FOLDER> --ruleset <RULESET> --json-array-input
+```
+
+### CSV
+
+It is possible to use Zircolite directly on CSV logs **if the CSV are correctly formatted**. The field names must appear on the first line : 
+
+```csv
+EventID,EventRecordID,Computer,SubjectUserSid,...
+4624,32421,xxxx.DOMAIN.local,S-1-5-18,xxxx,DOMAIN,...
+...
+```
+
+To handle these logs you will need to use the `--csv-input` options (**Do not use `--csv`** !):
+
+```shell
+python3 zircolite.py --events <LOGS_FOLDER> --ruleset <RULESET> --csv-input
+```
+
+### SQLite database files
 
 Since everything in Zircolite is stored in a in-memory SQlite database, you can choose to save the database on disk for later use. It is possible with the option `--dbfile <db_filename>`.
 
@@ -135,9 +161,7 @@ python3 zircolite.py --evtx <EVTX_FOLDER> --ruleset <CONVERTED_SIGMA_RULES> \
 
 If you need to re-execute Zircolite,  you can do it directly using the SQLite database as the EVTX source (with `--evtx <SAVED_SQLITE_DB_PATH>` and `--dbonly`) and avoid to convert the EVTX, post-process the EVTX and insert data to database. **Using this technique can save a lot of time... But you will be unable to use the `--forwardall`option** 
 
----
-
-### Field mappings, field exclusions, value exclusions, field aliases and field splitting
+## Field mappings, field exclusions, value exclusions, field aliases and field splitting
 
 Sometimes your logs need some transformations to allow your rules to match against them. Zircolite has multiple mechanisms for this. The configuration of these mechanisms is provided by a file that can be found in the [config](../config/) directory of the repository. It is also possible to provide your own configuration woth the `--config` or `-c` options.
 
@@ -163,7 +187,7 @@ The configuration file has the following structure :
 }
 ```
 
-#### Field mappings
+### Field mappings
 
 **field mappings** allow you to rename a field from your raw logs (the ones that you want to analyze with Zircolite). Zircolite already uses this mechanism to rename nested JSON fields. You can check all the builtin field mappings [here](https://github.com/wagga40/Zircolite/blob/master/config/fieldMappings.json).
 
@@ -184,15 +208,15 @@ For example, if you want to rename the field "CommandLine" in **your raw logs** 
 
 Please keep in mind that as opposed to field alias, the original field name is not kept.
 
-#### Field exclusions
+### Field exclusions
 
 **field exclusions** allow you to exclude a field. Zircolite already uses this mechanism to exclude the `xlmns` field. You can check all the builtin field exclusions [here](https://github.com/wagga40/Zircolite/blob/master/config/fieldMappings.json).
 
-#### Value exclusions
+### Value exclusions
 
 **value exclusions** allow you to remove field which value is to be excluded. Zircolite already uses this mechanism to remove *null* and empty values. You can check all the builtin value exclusions [here](https://github.com/wagga40/Zircolite/blob/master/config/fieldMappings.json).
 
-#### Field aliases
+### Field aliases
 
 **field aliases** allow you to have multiple fields with different name but the same value. It is pretty similar to field mapping but you keep the original value. Field aliases can be used on original field names but also on mapped field names and splitted fields.
 
@@ -239,7 +263,7 @@ With this configuration, the event log used to apply Sigma rules will look like 
 
 Be careful when using aliases because the data is stored multiple times.
 
-#### Field splitting
+### Field splitting
 
 **field aliases** allow you to split fields that contain key,value pairs.  Zircolite already uses this mechanism to handle hash/hashes fields in Sysmon logs. You can check all the builtin field splittings [here](https://github.com/wagga40/Zircolite/blob/master/config/fieldMappings.json). Moreover, Field aliases can be applied to splitted fields.
 
@@ -279,15 +303,13 @@ The final event log used to apply Sigma rules will look like this :
 }
 ```
 
----
-
-### Generate your own rulesets
+## Generate your own rulesets
 
 Default rulesets are already provided in the `rules` directory. These rulesets only are the conversion of the rules located in [rules/windows](https://github.com/SigmaHQ/sigma/tree/master/rules/windows) directory of the Sigma repository. These rulesets are provided to use Zircolite out-of-the-box but [you should generate your own rulesets](#why-you-should-build-your-own-rulesets).
 
 **As of v2.9.5, Zircolite can auto-update its default rulesets using the `-U` or `--update-rules`. There is an auto-updated rulesets repository available [here](https://github.com/wagga40/Zircolite-Rules).**
 
-#### With sigmatools
+### With sigmatools
 
 Zircolite use the SIGMA rules in JSON format. Since the SQLite backend is not yet available in pySigma, you need to generate your ruleset with  the official [legacy-sigmatools](https://github.com/SigmaHQ/legacy-sigmatools) (**version 0.21 minimum**) : 
 
@@ -301,7 +323,7 @@ git clone https://github.com/SigmaHQ/legacy-sigmatools.git
 cd legacy-sigmools
 ```
 
-##### Sysmon rulesets (when investigated endpoints have Sysmon logs)
+#### Sysmon rulesets (when investigated endpoints have Sysmon logs)
 
 ```shell 
 sigmac \
@@ -324,7 +346,7 @@ Where :
 - `-o` option is used to provide the output filename 
 -  `--backend-option` is used to specify the SQLite table name (leave as is)
 
-##### Generic rulesets (when investigated endpoints _don't_ have Sysmon logs)
+#### Generic rulesets (when investigated endpoints _don't_ have Sysmon logs)
 
 ```shell 
 sigmac \
@@ -340,7 +362,7 @@ sigmac \
    --backend-option table=logs
 ```
 
-#### Why you should build your own rulesets
+### Why you should build your own rulesets
 
 The default rulesets provided are the conversion of the rules located in `rules/windows` directory of the Sigma repository. You should take into account that : 
 
@@ -352,20 +374,16 @@ For example :
 -  "Suspicious Eventlog Clear or Configuration Using Wevtutil" : **very noisy** on fresh environment (labs etc.), commonly generate a lot of useless detections
 -  Notepad Making Network Connection : **can slow very significantly** the execution of Zircolite
 
----
-
-### Generate embedded versions
+## Generate embedded versions
 
 *Removed*.
 You can use DFIR Orc to package Zircolite, check [here](Advanced.md#using-with-dfir-orc).
 
----
-
-### Docker
+## Docker
 
 Zircolite is also packaged as a Docker image (cf. [wagga40/zircolite](https://hub.docker.com/r/wagga40/zircolite) on Docker Hub), which embeds all dependencies (e.g. `evtx_dump`) and provides a platform-independant way of using the tool.
 
-#### Build and run your own image
+### Build and run your own image
 
 ```shell
 docker build . -t <Image name>
@@ -386,7 +404,7 @@ docker run --rm --tty -v <EVTX folder>:/case/input:ro -v <Results folder>:/case/
 	--evtx /case/input -o /case/output/detected_events.json
 ```
 
-#### Docker Hub
+### Docker Hub
 
 You can use the Docker image available on [Docker Hub](https://hub.docker.com/r/wagga40/zircolite). Please note that in this case, the configuration files and rules are the default ones.
 
