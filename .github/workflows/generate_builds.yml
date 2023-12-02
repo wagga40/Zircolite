@@ -2,11 +2,6 @@ name: Generate build
 
 on:
   workflow_dispatch:
-  push:
-    branches:
-      - "master"
-  schedule:
-    - cron: '0 1 * * *'
 
 jobs:
   build-and-upload:
@@ -17,11 +12,10 @@ jobs:
         include:
           - build: linux
             os: ubuntu-latest
-            target: x86_64-unknown-linux-musl
 
           - build: windows-gnu
             os: windows-latest
-            target: x86_64-pc-windows-gnu
+
     steps:
       - name: Clone repository
         uses: actions/checkout@v4
