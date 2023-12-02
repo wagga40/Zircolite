@@ -1,23 +1,6 @@
-# Zircolite documentation
+# Advanced use
 
-## Advanced use
-
-* [Working with large datasets](#working-with-large-datasets)
-	* [Using GNU Parallel](#using-gnu-parallel)
-* [Keep data used by Zircolite](#keep-data-used-by-zircolite)
-* [Filtering](#filtering)
-	* [File filters](#file-filters)
-	* [Time filters](#time-filters)
-	* [Rule filters](#rule-filters)
-* [Forwarding detected events](#forwarding-detected-events) 
-* [Templating and Formatting](#templating-and-formatting)
-* [Mini GUI](#mini-gui)
-* [Packaging Zircolite](#packaging-zircolite)
-* [Using with DFIR Orc](#using-with-dfir-orc)
-
----
-
-### Working with large datasets
+## Working with large datasets
 
 Zircolite tries to be as fast as possible so a lot of data is stored in memory. So : 
 
@@ -31,7 +14,7 @@ The tool has been created to be used on very big datasets and there are a lot of
 
 :information_source: There is an option to heavily limit the memory usage of Zircolite by using the `--ondiskdb <DB_NAME>` argument. This is only usefull to avoid errors when dealing with very large datasets and have a lot of time. **This should be used with caution and the below alternatives are far better choices**.
 
-#### Using GNU Parallel 
+### Using GNU Parallel 
 
 Except when `evtx_dump` is used, Zircolite only use one core. So if you have a lot of EVTX files and their total size is big, it is recommended that you use a script to launch multiple Zircolite instances. On Linux or MacOS The easiest way is to use **GNU Parallel**. 
 
@@ -61,9 +44,7 @@ Except when `evtx_dump` is used, Zircolite only use one core. So if you have a l
 	
 	In this example the `-j -1` is for using all cores but one. You can adjust the number of used cores with this arguments.
 
----
-
-### Keep data used by Zircolite
+## Keep data used by Zircolite
 
 **Zircolite** has a lot of arguments that can be used to keep data used to perform Sigma detections : 
 
@@ -71,13 +52,11 @@ Except when `evtx_dump` is used, Zircolite only use one core. So if you have a l
 - `--keeptmp` allows you to keep the source logs (EVTX/Auditd/Evtxtract/XML...) converted in JSON format
 - `--keepflat` allow you to keep the source logs (EVTX/Auditd/Evtxtract/XML...) converted in a flattened JSON format
 
----
-
-### Filtering
+## Filtering
 
 Zircolite has a lot of filtering options to speed up the detection process. Don't overlook these options because they can save you a lot of time.
 
-#### File filters
+### File filters
 
 Some EVTX files are not used by SIGMA rules but can become quite large (a good example is `Microsoft-Windows-SystemDataArchiver%4Diagnostic.evtx`), if you use Zircolite with a directory as input argument, all EVTX files will be converted, saved and matched against the SIGMA Rules. 
 
@@ -121,7 +100,7 @@ python3 zircolite.py --evtx logs/ --ruleset rules/rules_windows_sysmon.json \
 	--select TaskScheduler --select WMI-activity
 ```
 
-#### Time filters
+### Time filters
 
 Sometimes you only want to work on a specific timerange to speed up analysis. With Zircolite, it is possible to filter on a specific timerange just by using the `--after` and `--before` and their respective shorter versions `-A` and `-B`. Please note that : 
 
@@ -145,7 +124,7 @@ Examples :
 		-A 2021-06-01T12:00:00
 	```
 
-#### Rule filters
+### Rule filters
 
 Some rules can be noisy or slow on specific datasets (check [here](rules/Readme.md)) so it is possible to skip them by using the `-R` or `--rulefilter` argument. This argument can be used multiple times.
 
@@ -163,13 +142,11 @@ python3 zircolite.py --evtx logs/ --ruleset rules/rules_windows_sysmon.json \
 ```
 :information_source: As of version 2.2.0 of Zircolite, since the rulesets are directly generated from the official `sigmac` tool there is no more CRC32 in the rule title. Rule filtering is still available but you have to rely on other criteria.
 
-#### Limit the number of detected events
+### Limit the number of detected events
 
 Sometimes, SIGMA rules can be very noisy (and generate a lot of false positives) but you still want to keep them in your rulesets. It is possible to filter rules that returns too mich detected events with the option `--limit <MAX_NUMBER>`. Please note that when using this option, the rules are not skipped the results are just ignored. But this is useful when forwarding events to Splunk.
 
----
-
-### Forwarding detected events 
+## Forwarding detected events 
 
 Zircolite provide 2 ways to forward events to a collector : 
 
@@ -183,7 +160,7 @@ For now, the forwarders are not asynchronous so it can slow Zircolite execution.
 
 If you forward your events to a central collector you can disable local logging with the Zircolite `--nolog` argument.
 
-#### Forward events to a HTTP server
+### Forward events to a HTTP server
 
 If you have multiple endpoints to scan, it is useful to send the detected events to a central collector. As of v1.2, Zircolite can forward detected events to an HTTP server :
 
@@ -193,7 +170,7 @@ python3 zircolite.py --evtx sample.evtx  --ruleset rules/rules_windows_sysmon.js
 ```
 An **example** server called is available in the [tools](../tools/zircolite_server/) directory.
 
-#### Forward events to a Splunk instance via HEC
+### Forward events to a Splunk instance via HEC
 
 As of v1.3.5, Zircolite can forward detections to a Splunk instance with Splunk **HTTP Event Collector**.
 
@@ -210,7 +187,7 @@ Since Splunk HEC default to the first associated index, `--index` is optional bu
 
 :warning: On Windows do not forget to put quotes
 
-#### Forward to ELK
+### Forward to ELK
 
 As of version 2.8.0, Zircolite can forward events to an ELK stack using the ES client.
 
@@ -234,9 +211,7 @@ Zircolite is able to forward all events and not just the detected events to Splu
 
 :warning: **Elastic is not handling logs the way Splunk does. Since Zircolite is flattening the field names in the JSON output some fields, especially when working with EVTX files, can have different types between Channels, logsources etc. So when Elastic uses automatic field mapping, mapping errors may prevent events insertion into Elastic.**
 
----
-
-### Templating and Formatting
+## Templating and Formatting
 
 Zircolite provides a templating system based on Jinja 2. It allows you to change the output format to suits your needs (Splunk or ELK integration, Grep-able output...). There are some templates available in the [Templates directory](../templates) of the repository : Splunk, Timesketch, ... To use the template system, use these arguments :
 
@@ -250,20 +225,18 @@ python3 zircolite.py --evtx sample.evtx  --ruleset rules/rules_windows_sysmon.js
 
 It is possible to use multiple templates if you provide for each `--template` argument there is a `--templateOutput` argument associated.
 
----
+## Mini-GUI
 
-### Mini-GUI
-
-![](../pics/gui.jpg)
+![](pics/gui.jpg)
 
 
 The Mini-GUI can be used totally offline, it allows the user to display and search results. It uses [datatables](https://datatables.net/) and the [SB Admin 2 theme](https://github.com/StartBootstrap/startbootstrap-sb-admin-2). 
 
-#### Automatic generation
+### Automatic generation
 
 As of Zircolite 2.1.0, the easier way to use the Mini-GUI is to generate a package with the `--package` option. A zip file containing all the necessary data will be generated at the root of the repository.  
 
-#### Manual generation
+### Manual generation
 
 You need to generate a `data.js` file with the `exportForZircoGui.tmpl` template, decompress the zircogui.zip file in the [gui](gui/) directory and replace the `data.js` file in it with yours :
 
@@ -279,11 +252,9 @@ Then you just have to open `index.html` in your favorite browser and click on a 
   
 :warning: **The mini-GUI was not built to handle big datasets**.
 
----
+## Packaging Zircolite 
 
-### Packaging Zircolite 
-
-#### PyInstaller
+### PyInstaller
 
 * Install Python 3.8 on the same OS as the one you want to use Zircolite on
 * Install all dependencies : `pip3 install -r requirements.txt`
@@ -291,7 +262,7 @@ Then you just have to open `index.html` in your favorite browser and click on a 
 * In the root folder of Zircolite type : `pyinstaller -c --onefile zircolite.py`
 * The `dist` folder will contain the packaged app
 
-#### Nuitka
+### Nuitka
 
 * Install Python 3.8 on the same OS as the one you want to use Zircolite on
 * Install all dependencies : `pip3 install -r requirements.txt`
@@ -300,9 +271,7 @@ Then you just have to open `index.html` in your favorite browser and click on a 
 
 :warning: When packaging with PyInstaller some AV may not like your package.
 
----
-
-### Using With DFIR Orc
+## Using With DFIR Orc
 
 **DFIR Orc** is a Forensics artefact collection tool for systems running Microsoft Windows (pretty much like [Kape](https://www.kroll.com/en/services/cyber-risk/incident-response-litigation-support/kroll-artifact-parser-extractor-kape) or [artifactcollector](https://forensicanalysis.github.io/documentation/manual/usage/acquisition/)). For more detailed explanation, please check here : [https://dfir-orc.github.io](https://dfir-orc.github.io).
 
