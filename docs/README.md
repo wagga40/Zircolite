@@ -8,5 +8,3 @@
 - **Zircolite** can export results to multiple format with using Jinja [templates](templates) : JSON, CSV, JSONL, Splunk, Elastic, Zinc, Timesketch...
 
 **Zircolite can be used directly in Python or you can use the binaries provided in [releases](https://github.com/wagga40/Zircolite/releases).** 
-
-**Documentation is [here](https://wagga40.github.io/Zircolite/) (dedicated site) or [here](docs) (repo directory).**
