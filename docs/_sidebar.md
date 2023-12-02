@@ -8,7 +8,7 @@
 
 * Advanced use
     * [Working with large datasets](Advanced.md#working-with-large-datasets)
-    * [Keep data used by Zircolite](#keep-data-used-by-zircolite)
+    * [Keep data used by Zircolite](Advanced.md#keep-data-used-by-zircolite)
     * [Filtering](Advanced.md#filtering)
     * [Forwarding detected events](Advanced.md#forwarding-detected-events) 
     * [Templating and Formatting](Advanced.md#templating-and-formatting)

@@ -2374,6 +2374,24 @@
         "filename": "proc_creation_lnx_susp_java_children.yml"
     },
     {
+        "title": "Potential Linux Process Code Injection Via DD Utility",
+        "id": "4cad6c64-d6df-42d6-8dae-eb78defdc415",
+        "description": "Detects the injection of code by overwriting the memory map of a Linux process using the \"dd\" Linux command.",
+        "author": "Joseph Kamau",
+        "tags": [
+            "attack.defense_evasion",
+            "attack.t1055.009"
+        ],
+        "falsepositives": [
+            "Unknown"
+        ],
+        "level": "medium",
+        "rule": [
+            "SELECT * FROM logs WHERE (Image LIKE '%/dd' ESCAPE '\\' AND CommandLine LIKE '%of=%' ESCAPE '\\' AND CommandLine LIKE '%/proc/%' ESCAPE '\\' AND CommandLine LIKE '%/mem%' ESCAPE '\\')"
+        ],
+        "filename": "proc_creation_lnx_dd_process_injection.yml"
+    },
+    {
         "title": "Decode Base64 Encoded Text",
         "id": "e2072cab-8c9a-459b-b63c-40ae79e27031",
         "description": "Detects usage of base64 utility to decode arbitrary base64-encoded text",

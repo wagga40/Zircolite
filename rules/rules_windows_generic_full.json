@@ -3488,7 +3488,7 @@
     {
         "title": "Potential PendingFileRenameOperations Tamper",
         "id": "4eec988f-7bf0-49f1-8675-1e6a510b3a2a",
-        "status": "experimental",
+        "status": "test",
         "description": "Detect changes to the \"PendingFileRenameOperations\" registry key from uncommon or suspicious images lcoations to stage currently used files for rename after reboot.",
         "author": "frack113",
         "tags": [
@@ -3841,7 +3841,7 @@
     {
         "title": "Atbroker Registry Change",
         "id": "9577edbb-851f-4243-8c91-1d5b50c1a39b",
-        "status": "experimental",
+        "status": "test",
         "description": "Detects creation/modification of Assistive Technology applications and persistence with usage of 'at'",
         "author": "Mateusz Wydra, oscd.community",
         "tags": [
@@ -4764,7 +4764,7 @@
     {
         "title": "Potential Svchost Memory Access",
         "id": "166e9c50-8cd9-44af-815d-d1f0c0e90dde",
-        "status": "experimental",
+        "status": "test",
         "description": "Detects potential access to svchost process memory such as that used by Invoke-Phantom to kill the winRM Windows event logging service.",
         "author": "Tim Burrell",
         "tags": [
@@ -5511,7 +5511,7 @@
     {
         "title": "Suspicious PowerShell Download - PoshModule",
         "id": "de41232e-12e8-49fa-86bc-c05c7e722df9",
-        "status": "experimental",
+        "status": "test",
         "description": "Detects suspicious PowerShell download command",
         "author": "Florian Roth (Nextron Systems)",
         "tags": [
@@ -5589,7 +5589,7 @@
     {
         "title": "Malicious PowerShell Scripts - PoshModule",
         "id": "41025fd7-0466-4650-a813-574aaacbe7f4",
-        "status": "experimental",
+        "status": "test",
         "description": "Detects the execution of known offensive powershell scripts used for exploitation or reconnaissance",
         "author": "frack113, Nasreddine Bencherchali",
         "tags": [
@@ -5650,7 +5650,7 @@
     {
         "title": "Potential Active Directory Enumeration Using AD Module - PsModule",
         "id": "74176142-4684-4d8a-8b0a-713257e7df8e",
-        "status": "experimental",
+        "status": "test",
         "description": "Detects usage of the \"Import-Module\" cmdlet to load the \"Microsoft.ActiveDirectory.Management.dl\" DLL. Which is often used by attackers to perform AD enumeration.",
         "author": "Nasreddine Bencherchali (Nextron Systems), frack113",
         "tags": [
@@ -6781,7 +6781,7 @@
     {
         "title": "Usage Of Web Request Commands And Cmdlets - ScriptBlock",
         "id": "1139d2e2-84b1-4226-b445-354492eba8ba",
-        "status": "experimental",
+        "status": "test",
         "description": "Detects the use of various web request commands with commandline tools and Windows PowerShell cmdlets (including aliases) via PowerShell scriptblock logs",
         "author": "James Pemberton / @4A616D6573",
         "tags": [
@@ -7277,7 +7277,7 @@
     {
         "title": "Unsigned AppX Installation Attempt Using Add-AppxPackage - PsScript",
         "id": "975b2262-9a49-439d-92a6-0709cccdf0b2",
-        "status": "experimental",
+        "status": "test",
         "description": "Detects usage of the \"Add-AppxPackage\" or it's alias \"Add-AppPackage\" to install unsigned AppX packages",
         "author": "Nasreddine Bencherchali (Nextron Systems)",
         "tags": [
@@ -7659,7 +7659,7 @@
     {
         "title": "Import PowerShell Modules From Suspicious Directories",
         "id": "21f9162c-5f5d-4b01-89a8-b705bd7d10ab",
-        "status": "experimental",
+        "status": "test",
         "description": "Detects powershell scripts that import modules from suspicious directories",
         "author": "Nasreddine Bencherchali (Nextron Systems)",
         "tags": [
@@ -7984,7 +7984,7 @@
     {
         "title": "Potential Data Exfiltration Via Audio File",
         "id": "e4f93c99-396f-47c8-bb0f-201b1fa69034",
-        "status": "experimental",
+        "status": "test",
         "description": "Detects potential exfiltration attempt via audio file using PowerShell",
         "author": "Nasreddine Bencherchali (Nextron Systems)",
         "tags": [
@@ -8117,7 +8117,7 @@
     {
         "title": "Powershell XML Execute Command",
         "id": "6c6c6282-7671-4fe9-a0ce-a2dcebdc342b",
-        "status": "experimental",
+        "status": "test",
         "description": "Adversaries may abuse PowerShell commands and scripts for execution.\nPowerShell is a powerful interactive command-line interface and scripting environment included in the Windows operating system. (Citation: TechNet PowerShell)\nAdversaries can use PowerShell to perform a number of actions, including discovery of information and execution of code\n",
         "author": "frack113",
         "tags": [
@@ -8815,7 +8815,7 @@
     {
         "title": "Potential PowerShell Obfuscation Using Alias Cmdlets",
         "id": "96cd126d-f970-49c4-848a-da3a09f55c55",
-        "status": "experimental",
+        "status": "test",
         "description": "Detects Set-Alias or New-Alias cmdlet usage. Which can be use as a mean to obfuscate PowerShell scripts",
         "author": "frack113",
         "tags": [
@@ -8893,7 +8893,7 @@
     {
         "title": "Potential Active Directory Enumeration Using AD Module - PsScript",
         "id": "9e620995-f2d8-4630-8430-4afd89f77604",
-        "status": "experimental",
+        "status": "test",
         "description": "Detects usage of the \"Import-Module\" cmdlet to load the \"Microsoft.ActiveDirectory.Management.dl\" DLL. Which is often used by attackers to perform AD enumeration.",
         "author": "frack113, Nasreddine Bencherchali",
         "tags": [
@@ -9008,7 +9008,7 @@
     {
         "title": "Potential PowerShell Obfuscation Using Character Join",
         "id": "e8314f79-564d-4f79-bc13-fbc0bf2660d8",
-        "status": "experimental",
+        "status": "test",
         "description": "Detects specific techniques often seen used inside of PowerShell scripts to obfscuate Alias creation",
         "author": "Nasreddine Bencherchali (Nextron Systems)",
         "tags": [
@@ -9187,7 +9187,7 @@
     {
         "title": "Malicious Nishang PowerShell Commandlets",
         "id": "f772cee9-b7c2-4cb2-8f07-49870adc02e0",
-        "status": "experimental",
+        "status": "test",
         "description": "Detects Commandlet names and arguments from the Nishang exploitation framework",
         "author": "Alec Costello",
         "tags": [
@@ -9202,25 +9202,6 @@
             "SELECT * FROM logs WHERE (EventID = '4104' AND Channel IN ('Microsoft-Windows-PowerShell/Operational', 'PowerShellCore/Operational') AND (ScriptBlockText LIKE '%Add-ConstrainedDelegationBackdoor%' ESCAPE '\\' OR ScriptBlockText LIKE '%Copy-VSS%' ESCAPE '\\' OR ScriptBlockText LIKE '%Create-MultipleSessions%' ESCAPE '\\' OR ScriptBlockText LIKE '%DataToEncode%' ESCAPE '\\' OR ScriptBlockText LIKE '%DNS\\_TXT\\_Pwnage%' ESCAPE '\\' OR ScriptBlockText LIKE '%Do-Exfiltration-Dns%' ESCAPE '\\' OR ScriptBlockText LIKE '%Download\\_Execute%' ESCAPE '\\' OR ScriptBlockText LIKE '%Download-Execute-PS%' ESCAPE '\\' OR ScriptBlockText LIKE '%DownloadAndExtractFromRemoteRegistry%' ESCAPE '\\' OR ScriptBlockText LIKE '%DumpCerts%' ESCAPE '\\' OR ScriptBlockText LIKE '%DumpCreds%' ESCAPE '\\' OR ScriptBlockText LIKE '%DumpHashes%' ESCAPE '\\' OR ScriptBlockText LIKE '%Enable-DuplicateToken%' ESCAPE '\\' OR ScriptBlockText LIKE '%Enable-Duplication%' ESCAPE '\\' OR ScriptBlockText LIKE '%Execute-Command-MSSQL%' ESCAPE '\\' OR ScriptBlockText LIKE '%Execute-DNSTXT-Code%' ESCAPE '\\' OR ScriptBlockText LIKE '%Execute-OnTime%' ESCAPE '\\' OR ScriptBlockText LIKE '%ExetoText%' ESCAPE '\\' OR ScriptBlockText LIKE '%exfill%' ESCAPE '\\' OR ScriptBlockText LIKE '%ExfilOption%' ESCAPE '\\' OR ScriptBlockText LIKE '%FakeDC%' ESCAPE '\\' OR ScriptBlockText LIKE '%FireBuster%' ESCAPE '\\' OR ScriptBlockText LIKE '%FireListener%' ESCAPE '\\' OR ScriptBlockText LIKE '%Get-Information %' ESCAPE '\\' OR ScriptBlockText LIKE '%Get-PassHints%' ESCAPE '\\' OR ScriptBlockText LIKE '%Get-Web-Credentials%' ESCAPE '\\' OR ScriptBlockText LIKE '%Get-WebCredentials%' ESCAPE '\\' OR ScriptBlockText LIKE '%Get-WLAN-Keys%' ESCAPE '\\' OR ScriptBlockText LIKE '%HTTP-Backdoor%' ESCAPE '\\' OR ScriptBlockText LIKE '%Invoke-AmsiBypass%' ESCAPE '\\' OR ScriptBlockText LIKE '%Invoke-BruteForce%' ESCAPE '\\' OR ScriptBlockText LIKE '%Invoke-CredentialsPhish%' ESCAPE '\\' OR ScriptBlockText LIKE '%Invoke-Decode%' ESCAPE '\\' OR ScriptBlockText LIKE '%Invoke-Encode%' ESCAPE '\\' OR ScriptBlockText LIKE '%Invoke-Interceptor%' ESCAPE '\\' OR ScriptBlockText LIKE '%Invoke-JSRatRegsvr%' ESCAPE '\\' OR ScriptBlockText LIKE '%Invoke-JSRatRundll%' ESCAPE '\\' OR ScriptBlockText LIKE '%Invoke-MimikatzWDigestDowngrade%' ESCAPE '\\' OR ScriptBlockText LIKE '%Invoke-NetworkRelay%' ESCAPE '\\' OR ScriptBlockText LIKE '%Invoke-PowerShellIcmp%' ESCAPE '\\' OR ScriptBlockText LIKE '%Invoke-PowerShellUdp%' ESCAPE '\\' OR ScriptBlockText LIKE '%Invoke-Prasadhak%' ESCAPE '\\' OR ScriptBlockText LIKE '%Invoke-PSGcat%' ESCAPE '\\' OR ScriptBlockText LIKE '%Invoke-PsGcatAgent%' ESCAPE '\\' OR ScriptBlockText LIKE '%Invoke-SessionGopher%' ESCAPE '\\' OR ScriptBlockText LIKE '%Invoke-SSIDExfil%' ESCAPE '\\' OR ScriptBlockText LIKE '%LoggedKeys%' ESCAPE '\\' OR ScriptBlockText LIKE '%Nishang%' ESCAPE '\\' OR ScriptBlockText LIKE '%NotAllNameSpaces%' ESCAPE '\\' OR ScriptBlockText LIKE '%Out-CHM%' ESCAPE '\\' OR ScriptBlockText LIKE '%OUT-DNSTXT%' ESCAPE '\\' OR ScriptBlockText LIKE '%Out-HTA%' ESCAPE '\\' OR ScriptBlockText LIKE '%Out-RundllCommand%' ESCAPE '\\' OR ScriptBlockText LIKE '%Out-SCF%' ESCAPE '\\' OR ScriptBlockText LIKE '%Out-SCT%' ESCAPE '\\' OR ScriptBlockText LIKE '%Out-Shortcut%' ESCAPE '\\' OR ScriptBlockText LIKE '%Out-WebQuery%' ESCAPE '\\' OR ScriptBlockText LIKE '%Out-Word%' ESCAPE '\\' OR ScriptBlockText LIKE '%Parse\\_Keys%' ESCAPE '\\' OR ScriptBlockText LIKE '%Password-List%' ESCAPE '\\' OR ScriptBlockText LIKE '%Powerpreter%' ESCAPE '\\' OR ScriptBlockText LIKE '%Remove-Persistence%' ESCAPE '\\' OR ScriptBlockText LIKE '%Remove-PoshRat%' ESCAPE '\\' OR ScriptBlockText LIKE '%Remove-Update%' ESCAPE '\\' OR ScriptBlockText LIKE '%Run-EXEonRemote%' ESCAPE '\\' OR ScriptBlockText LIKE '%Set-DCShadowPermissions%' ESCAPE '\\' OR ScriptBlockText LIKE '%Set-RemotePSRemoting%' ESCAPE '\\' OR ScriptBlockText LIKE '%Set-RemoteWMI%' ESCAPE '\\' OR ScriptBlockText LIKE '%Shellcode32%' ESCAPE '\\' OR ScriptBlockText LIKE '%Shellcode64%' ESCAPE '\\' OR ScriptBlockText LIKE '%StringtoBase64%' ESCAPE '\\' OR ScriptBlockText LIKE '%TexttoExe%' ESCAPE '\\'))"
         ],
         "filename": "posh_ps_nishang_malicious_commandlets.yml"
-    },
-    {
-        "title": "Suspicious DNS Query for IP Lookup Service APIs",
-        "id": "ec82e2a5-81ea-4211-a1f8-37a0286df2c2",
-        "status": "test",
-        "description": "Detects DNS queries for IP lookup services such as \"api.ipify.org\" originating from a non browser process.",
-        "author": "Brandon George (blog post), Thomas Patzke",
-        "tags": [
-            "attack.reconnaissance",
-            "attack.t1590"
-        ],
-        "falsepositives": [
-            "Legitimate usage of IP lookup services such as ipify API"
-        ],
-        "level": "medium",
-        "rule": [
-            "SELECT * FROM logs WHERE ((QueryName LIKE '%api.2ip.ua%' ESCAPE '\\' OR QueryName LIKE '%api.ipify.org%' ESCAPE '\\' OR QueryName LIKE '%bot.whatismyipaddress.com%' ESCAPE '\\' OR QueryName LIKE '%canireachthe.net%' ESCAPE '\\' OR QueryName LIKE '%checkip.amazonaws.com%' ESCAPE '\\' OR QueryName LIKE '%checkip.dyndns.org%' ESCAPE '\\' OR QueryName LIKE '%curlmyip.com%' ESCAPE '\\' OR QueryName LIKE '%edns.ip-api.com%' ESCAPE '\\' OR QueryName LIKE '%eth0.me%' ESCAPE '\\' OR QueryName LIKE '%freegeoip.app%' ESCAPE '\\' OR QueryName LIKE '%geoipy.com%' ESCAPE '\\' OR QueryName LIKE '%getip.pro%' ESCAPE '\\' OR QueryName LIKE '%icanhazip.com%' ESCAPE '\\' OR QueryName LIKE '%ident.me%' ESCAPE '\\' OR QueryName LIKE '%ifconfig.io%' ESCAPE '\\' OR QueryName LIKE '%ifconfig.me%' ESCAPE '\\' OR QueryName LIKE '%ip-api.com%' ESCAPE '\\' OR QueryName LIKE '%ip.anysrc.net%' ESCAPE '\\' OR QueryName LIKE '%ip.tyk.nu%' ESCAPE '\\' OR QueryName LIKE '%ipaddressworld.com%' ESCAPE '\\' OR QueryName LIKE '%ipecho.net%' ESCAPE '\\' OR QueryName LIKE '%ipinfo.io%' ESCAPE '\\' OR QueryName LIKE '%ipof.in%' ESCAPE '\\' OR QueryName LIKE '%ipv4.icanhazip.com%' ESCAPE '\\' OR QueryName LIKE '%ipv4bot.whatismyipaddress.com%' ESCAPE '\\' OR QueryName LIKE '%ipwho.is%' ESCAPE '\\' OR QueryName LIKE '%l2.io%' ESCAPE '\\' OR QueryName LIKE '%myexternalip.com%' ESCAPE '\\' OR QueryName LIKE '%wgetip.com%' ESCAPE '\\' OR QueryName LIKE '%whatismyip.akamai.com%' ESCAPE '\\' OR QueryName LIKE '%wtfismyip.com%' ESCAPE '\\') AND NOT ((NewProcessName LIKE '%\\\\brave.exe' ESCAPE '\\') OR ((NewProcessName LIKE 'C:\\\\Program Files\\\\Google\\\\Chrome\\\\Application\\\\chrome.exe' ESCAPE '\\' OR NewProcessName LIKE 'C:\\\\Program Files (x86)\\\\Google\\\\Chrome\\\\Application\\\\chrome.exe' ESCAPE '\\')) OR ((NewProcessName LIKE 'C:\\\\Program Files\\\\Mozilla Firefox\\\\firefox.exe' ESCAPE '\\' OR NewProcessName LIKE 'C:\\\\Program Files (x86)\\\\Mozilla Firefox\\\\firefox.exe' ESCAPE '\\')) OR ((NewProcessName LIKE 'C:\\\\Program Files (x86)\\\\Internet Explorer\\\\iexplore.exe' ESCAPE '\\' OR NewProcessName LIKE 'C:\\\\Program Files\\\\Internet Explorer\\\\iexplore.exe' ESCAPE '\\')) OR (NewProcessName LIKE '%\\\\maxthon.exe' ESCAPE '\\') OR (NewProcessName LIKE 'C:\\\\Program Files (x86)\\\\Microsoft\\\\EdgeWebView\\\\Application\\\\%' ESCAPE '\\' OR NewProcessName LIKE '%\\\\WindowsApps\\\\MicrosoftEdge.exe' ESCAPE '\\' OR (NewProcessName LIKE 'C:\\\\Program Files (x86)\\\\Microsoft\\\\Edge\\\\Application\\\\msedge.exe' ESCAPE '\\' OR NewProcessName LIKE 'C:\\\\Program Files\\\\Microsoft\\\\Edge\\\\Application\\\\msedge.exe' ESCAPE '\\')) OR ((NewProcessName LIKE 'C:\\\\Program Files (x86)\\\\Microsoft\\\\EdgeCore\\\\%' ESCAPE '\\' OR NewProcessName LIKE 'C:\\\\Program Files\\\\Microsoft\\\\EdgeCore\\\\%' ESCAPE '\\') AND (NewProcessName LIKE '%\\\\msedge.exe' ESCAPE '\\' OR NewProcessName LIKE '%\\\\msedgewebview2.exe' ESCAPE '\\')) OR (NewProcessName LIKE '%\\\\opera.exe' ESCAPE '\\') OR (NewProcessName LIKE '%\\\\safari.exe' ESCAPE '\\') OR (NewProcessName LIKE '%\\\\seamonkey.exe' ESCAPE '\\') OR (NewProcessName LIKE '%\\\\vivaldi.exe' ESCAPE '\\') OR (NewProcessName LIKE '%\\\\whale.exe' ESCAPE '\\')))"
-        ],
-        "filename": "dns_query_win_susp_ipify.yml"
     },
     {
         "title": "DNS Query Request By Regsvr32.EXE",
@@ -9323,7 +9304,7 @@
     {
         "title": "DNS Query for Anonfiles.com Domain - Sysmon",
         "id": "065cceea-77ec-4030-9052-fc0affea7110",
-        "status": "experimental",
+        "status": "test",
         "description": "Detects DNS queries for \"anonfiles.com\", which is an anonymous file upload platform often used for malicious purposes",
         "author": "pH-T (Nextron Systems)",
         "tags": [
@@ -9452,6 +9433,25 @@
             "SELECT * FROM logs WHERE QueryName LIKE '%.tunnels.api.visualstudio.com' ESCAPE '\\'"
         ],
         "filename": "dns_query_win_vscode_tunnel_communication.yml"
+    },
+    {
+        "title": "Suspicious DNS Query for IP Lookup Service APIs",
+        "id": "ec82e2a5-81ea-4211-a1f8-37a0286df2c2",
+        "status": "test",
+        "description": "Detects DNS queries for IP lookup services such as \"api.ipify.org\" originating from a non browser process.",
+        "author": "Brandon George (blog post), Thomas Patzke",
+        "tags": [
+            "attack.reconnaissance",
+            "attack.t1590"
+        ],
+        "falsepositives": [
+            "Legitimate usage of IP lookup services such as ipify API"
+        ],
+        "level": "medium",
+        "rule": [
+            "SELECT * FROM logs WHERE ((QueryName LIKE '%api.2ip.ua%' ESCAPE '\\' OR QueryName LIKE '%api.bigdatacloud.net%' ESCAPE '\\' OR QueryName LIKE '%api.ipify.org%' ESCAPE '\\' OR QueryName LIKE '%bot.whatismyipaddress.com%' ESCAPE '\\' OR QueryName LIKE '%canireachthe.net%' ESCAPE '\\' OR QueryName LIKE '%checkip.amazonaws.com%' ESCAPE '\\' OR QueryName LIKE '%checkip.dyndns.org%' ESCAPE '\\' OR QueryName LIKE '%curlmyip.com%' ESCAPE '\\' OR QueryName LIKE '%db-ip.com%' ESCAPE '\\' OR QueryName LIKE '%edns.ip-api.com%' ESCAPE '\\' OR QueryName LIKE '%eth0.me%' ESCAPE '\\' OR QueryName LIKE '%freegeoip.app%' ESCAPE '\\' OR QueryName LIKE '%geoipy.com%' ESCAPE '\\' OR QueryName LIKE '%getip.pro%' ESCAPE '\\' OR QueryName LIKE '%icanhazip.com%' ESCAPE '\\' OR QueryName LIKE '%ident.me%' ESCAPE '\\' OR QueryName LIKE '%ifconfig.io%' ESCAPE '\\' OR QueryName LIKE '%ifconfig.me%' ESCAPE '\\' OR QueryName LIKE '%ipapi.co%' ESCAPE '\\' OR QueryName LIKE '%ip-api.com%' ESCAPE '\\' OR QueryName LIKE '%ip.anysrc.net%' ESCAPE '\\' OR QueryName LIKE '%ip.tyk.nu%' ESCAPE '\\' OR QueryName LIKE '%ipaddressworld.com%' ESCAPE '\\' OR QueryName LIKE '%ipecho.net%' ESCAPE '\\' OR QueryName LIKE '%ipinfo.io%' ESCAPE '\\' OR QueryName LIKE '%ipof.in%' ESCAPE '\\' OR QueryName LIKE '%ipv4.icanhazip.com%' ESCAPE '\\' OR QueryName LIKE '%ipv4bot.whatismyipaddress.com%' ESCAPE '\\' OR QueryName LIKE '%ipwho.is%' ESCAPE '\\' OR QueryName LIKE '%l2.io%' ESCAPE '\\' OR QueryName LIKE '%myexternalip.com%' ESCAPE '\\' OR QueryName LIKE '%wgetip.com%' ESCAPE '\\' OR QueryName LIKE '%whatismyip.akamai.com%' ESCAPE '\\' OR QueryName LIKE '%wtfismyip.com%' ESCAPE '\\') AND NOT ((NewProcessName LIKE '%\\\\brave.exe' ESCAPE '\\') OR ((NewProcessName LIKE 'C:\\\\Program Files\\\\Google\\\\Chrome\\\\Application\\\\chrome.exe' ESCAPE '\\' OR NewProcessName LIKE 'C:\\\\Program Files (x86)\\\\Google\\\\Chrome\\\\Application\\\\chrome.exe' ESCAPE '\\')) OR ((NewProcessName LIKE 'C:\\\\Program Files\\\\Mozilla Firefox\\\\firefox.exe' ESCAPE '\\' OR NewProcessName LIKE 'C:\\\\Program Files (x86)\\\\Mozilla Firefox\\\\firefox.exe' ESCAPE '\\')) OR ((NewProcessName LIKE 'C:\\\\Program Files (x86)\\\\Internet Explorer\\\\iexplore.exe' ESCAPE '\\' OR NewProcessName LIKE 'C:\\\\Program Files\\\\Internet Explorer\\\\iexplore.exe' ESCAPE '\\')) OR (NewProcessName LIKE '%\\\\maxthon.exe' ESCAPE '\\') OR (NewProcessName LIKE 'C:\\\\Program Files (x86)\\\\Microsoft\\\\EdgeWebView\\\\Application\\\\%' ESCAPE '\\' OR NewProcessName LIKE '%\\\\WindowsApps\\\\MicrosoftEdge.exe' ESCAPE '\\' OR (NewProcessName LIKE 'C:\\\\Program Files (x86)\\\\Microsoft\\\\Edge\\\\Application\\\\msedge.exe' ESCAPE '\\' OR NewProcessName LIKE 'C:\\\\Program Files\\\\Microsoft\\\\Edge\\\\Application\\\\msedge.exe' ESCAPE '\\')) OR ((NewProcessName LIKE 'C:\\\\Program Files (x86)\\\\Microsoft\\\\EdgeCore\\\\%' ESCAPE '\\' OR NewProcessName LIKE 'C:\\\\Program Files\\\\Microsoft\\\\EdgeCore\\\\%' ESCAPE '\\') AND (NewProcessName LIKE '%\\\\msedge.exe' ESCAPE '\\' OR NewProcessName LIKE '%\\\\msedgewebview2.exe' ESCAPE '\\')) OR (NewProcessName LIKE '%\\\\opera.exe' ESCAPE '\\') OR (NewProcessName LIKE '%\\\\safari.exe' ESCAPE '\\') OR (NewProcessName LIKE '%\\\\seamonkey.exe' ESCAPE '\\') OR (NewProcessName LIKE '%\\\\vivaldi.exe' ESCAPE '\\') OR (NewProcessName LIKE '%\\\\whale.exe' ESCAPE '\\')))"
+        ],
+        "filename": "dns_query_win_susp_external_ip_lookup.yml"
     },
     {
         "title": "DNS Query Tor .Onion Address - Sysmon",
@@ -11303,7 +11303,7 @@
     {
         "title": "Potential DLL Sideloading Of Non-Existent DLLs From System Folders",
         "id": "6b98b92b-4f00-4f62-b4fe-4d1920215771",
-        "status": "experimental",
+        "status": "test",
         "description": "Detects DLL sideloading of system dlls that are not present on the system by default. Usually to achieve techniques such as UAC bypass and privilege escalation",
         "author": "Nasreddine Bencherchali (Nextron Systems)",
         "tags": [
@@ -11423,6 +11423,28 @@
             "SELECT * FROM logs WHERE ((EventID = '4657' AND (OperationType LIKE 'Existing registry value modified' ESCAPE '\\') AND Channel = 'Security') AND (TargetObject LIKE '%Security\\\\Trusted Locations\\\\Location%' ESCAPE '\\' AND TargetObject LIKE '%\\\\Path' ESCAPE '\\') AND NOT ((NewProcessName LIKE '%:\\\\Program Files\\\\Common Files\\\\Microsoft Shared\\\\ClickToRun\\\\%' ESCAPE '\\' AND NewProcessName LIKE '%\\\\OfficeClickToRun.exe' ESCAPE '\\') OR ((NewProcessName LIKE '%:\\\\Program Files\\\\Microsoft Office\\\\%' ESCAPE '\\' OR NewProcessName LIKE '%:\\\\Program Files (x86)\\\\Microsoft Office\\\\%' ESCAPE '\\'))))"
         ],
         "filename": "registry_set_office_trusted_location.yml"
+    },
+    {
+        "title": "Registry Set With Crypto-Classes From The \"Cryptography\" PowerShell Namespace",
+        "id": "1c2a3268-3881-414a-80af-a5b313b14c0e",
+        "status": "experimental",
+        "description": "Detects the setting of a registry inside the \"\\Shell\\Open\\Command\" value with PowerShell classes from the \"System.Security.Cryptography\" namespace.\nThe PowerShell namespace \"System.Security.Cryptography\" provides classes for on-the-fly encryption and decryption.\nThese can be used for example in decrypting malicious payload for defense evasion.\n",
+        "author": "Andreas Braathen (mnemonic.io)",
+        "tags": [
+            "attack.defense_evasion",
+            "attack.t1059.001",
+            "attack.t1027.010",
+            "attack.t1547.001",
+            "detection.threat_hunting"
+        ],
+        "falsepositives": [
+            "Classes are legitimately used, but less so when e.g. parents with low prevalence or decryption of content in temporary folders."
+        ],
+        "level": "medium",
+        "rule": [
+            "SELECT * FROM logs WHERE (EventID = '4657' AND (OperationType LIKE 'Existing registry value modified' ESCAPE '\\') AND Channel = 'Security' AND EventType = 'SetValue' AND TargetObject LIKE '%\\\\Shell\\\\Open\\\\Command%' ESCAPE '\\' AND (NewValue LIKE '%powershell%' ESCAPE '\\' OR NewValue LIKE '%pwsh%' ESCAPE '\\') AND NewValue LIKE '%System.Security.Cryptography.%' ESCAPE '\\' AND (NewValue LIKE '%.AesCryptoServiceProvider%' ESCAPE '\\' OR NewValue LIKE '%.DESCryptoServiceProvider%' ESCAPE '\\' OR NewValue LIKE '%.DSACryptoServiceProvider%' ESCAPE '\\' OR NewValue LIKE '%.RC2CryptoServiceProvider%' ESCAPE '\\' OR NewValue LIKE '%.Rijndael%' ESCAPE '\\' OR NewValue LIKE '%.RSACryptoServiceProvider%' ESCAPE '\\' OR NewValue LIKE '%.TripleDESCryptoServiceProvider%' ESCAPE '\\'))"
+        ],
+        "filename": "registry_set_powershell_crypto_namespace.yml"
     },
     {
         "title": "Scheduled Task Created - Registry",
@@ -11783,7 +11805,7 @@
     {
         "title": "Scheduled Task Deletion",
         "id": "4f86b304-3e02-40e3-aa5d-e88a167c9617",
-        "status": "experimental",
+        "status": "test",
         "description": "Detects scheduled task deletion events. Scheduled tasks are likely to be deleted if not used for persistence. Malicious Software often creates tasks directly under the root node e.g. \\TASKNAME",
         "author": "David Strassegger, Tim Shelton",
         "tags": [
@@ -12167,6 +12189,27 @@
             "SELECT * FROM logs WHERE ((EventID = '4688' AND Channel = 'Security') AND (((NewProcessName LIKE '%\\\\cacls.exe' ESCAPE '\\' OR NewProcessName LIKE '%\\\\icacls.exe' ESCAPE '\\' OR NewProcessName LIKE '%\\\\net.exe' ESCAPE '\\' OR NewProcessName LIKE '%\\\\net1.exe' ESCAPE '\\') AND (CommandLine LIKE '%/grant%' ESCAPE '\\' OR CommandLine LIKE '%/setowner%' ESCAPE '\\' OR CommandLine LIKE '%/inheritance:r%' ESCAPE '\\')) OR (NewProcessName LIKE '%\\\\attrib.exe' ESCAPE '\\' AND CommandLine LIKE '%-r%' ESCAPE '\\') OR NewProcessName LIKE '%\\\\takeown.exe' ESCAPE '\\') AND NOT ((CommandLine LIKE '%ICACLS C:\\\\ProgramData\\\\dynatrace\\\\gateway\\\\config\\\\connectivity.history /reset' ESCAPE '\\') OR (CommandLine LIKE '%ICACLS C:\\\\ProgramData\\\\dynatrace\\\\gateway\\\\config\\\\config.properties /grant :r %' ESCAPE '\\' AND CommandLine LIKE '%S-1-5-19:F%' ESCAPE '\\') OR ((CommandLine LIKE '%\\\\AppData\\\\Local\\\\Programs\\\\Microsoft VS Code%' ESCAPE '\\' OR CommandLine LIKE '%:\\\\Program Files\\\\Microsoft VS Code%' ESCAPE '\\')) OR ((CommandLine LIKE '%:\\\\Program Files (x86)\\\\Avira%' ESCAPE '\\' OR CommandLine LIKE '%:\\\\Program Files\\\\Avira%' ESCAPE '\\'))))"
         ],
         "filename": "proc_creation_win_susp_file_permission_modifications.yml"
+    },
+    {
+        "title": "Invocation Of Crypto-Classes From The \"Cryptography\" PowerShell Namespace",
+        "id": "ad856965-f44d-42a8-945e-bbf7bd03d05a",
+        "status": "experimental",
+        "description": "Detects the invocation of PowerShell commands with references to classes from the \"System.Security.Cryptography\" namespace.\nThe PowerShell namespace \"System.Security.Cryptography\" provides classes for on-the-fly encryption and decryption.\nThese can be used for example in decrypting malicious payload for defense evasion.\n",
+        "author": "Andreas Braathen (mnemonic.io)",
+        "tags": [
+            "attack.defense_evasion",
+            "attack.t1059.001",
+            "attack.t1027.010",
+            "detection.threat_hunting"
+        ],
+        "falsepositives": [
+            "Classes are legitimately used, but less so when e.g. parents with low prevalence or decryption of content in temporary folders."
+        ],
+        "level": "medium",
+        "rule": [
+            "SELECT * FROM logs WHERE ((EventID = '4688' AND Channel = 'Security') AND ((NewProcessName LIKE '%\\\\powershell.exe' ESCAPE '\\' OR NewProcessName LIKE '%\\\\pwsh.exe' ESCAPE '\\') OR OriginalFileName IN ('PowerShell.EXE', 'pwsh.dll')) AND CommandLine LIKE '%System.Security.Cryptography.%' ESCAPE '\\' AND (CommandLine LIKE '%.AesCryptoServiceProvider%' ESCAPE '\\' OR CommandLine LIKE '%.DESCryptoServiceProvider%' ESCAPE '\\' OR CommandLine LIKE '%.DSACryptoServiceProvider%' ESCAPE '\\' OR CommandLine LIKE '%.RC2CryptoServiceProvider%' ESCAPE '\\' OR CommandLine LIKE '%.Rijndael%' ESCAPE '\\' OR CommandLine LIKE '%.RSACryptoServiceProvider%' ESCAPE '\\' OR CommandLine LIKE '%.TripleDESCryptoServiceProvider%' ESCAPE '\\'))"
+        ],
+        "filename": "proc_creation_win_powershell_crypto_namespace.yml"
     },
     {
         "title": "ClickOnce Deployment Execution - Dfsvc.EXE Child Process",
@@ -13563,7 +13606,7 @@
     {
         "title": "Suspicious Startup Folder Persistence",
         "id": "28208707-fe31-437f-9a7f-4b1108b94d2e",
-        "status": "experimental",
+        "status": "test",
         "description": "Detects when a file with a suspicious extension is created in the startup folder",
         "author": "Nasreddine Bencherchali (Nextron Systems)",
         "tags": [
@@ -15186,7 +15229,7 @@
     {
         "title": "VsCode Powershell Profile Modification",
         "id": "3a9fa2ec-30bc-4ebd-b49e-7c9cff225502",
-        "status": "experimental",
+        "status": "test",
         "description": "Detects the creation or modification of a vscode related powershell profile which could indicate suspicious activity as the profile can be used as a mean of persistence",
         "author": "Nasreddine Bencherchali (Nextron Systems)",
         "tags": [
@@ -18214,7 +18257,7 @@
     {
         "title": "Potential Exploitation Attempt From Office Application",
         "id": "868955d9-697e-45d4-a3da-360cefd7c216",
-        "status": "experimental",
+        "status": "test",
         "description": "Detects Office applications executing a child process that includes directory traversal patterns. This could be an attempt to exploit CVE-2022-30190 (MSDT RCE) or CVE-2021-40444 (MSHTML RCE)",
         "author": "Christian Burkard (Nextron Systems), @SBousseaden (idea)",
         "tags": [
@@ -19155,7 +19198,7 @@
     {
         "title": "Potential CVE-2022-26809 Exploitation Attempt",
         "id": "a7cd7306-df8b-4398-b711-6f3e4935cf16",
-        "status": "experimental",
+        "status": "test",
         "description": "Detects suspicious remote procedure call (RPC) service anomalies based on the spawned sub processes (long shot to detect the exploitation of vulnerabilities like CVE-2022-26809)",
         "author": "Florian Roth (Nextron Systems)",
         "tags": [
@@ -19261,7 +19304,7 @@
     {
         "title": "Potential Centos Web Panel Exploitation Attempt - CVE-2022-44877",
         "id": "1b2eeb27-949b-4704-8bfa-d8e5cfa045a1",
-        "status": "experimental",
+        "status": "test",
         "description": "Detects potential exploitation attempts that target the Centos Web Panel 7 Unauthenticated Remote Code Execution CVE-2022-44877",
         "author": "Nasreddine Bencherchali (Nextron Systems)",
         "tags": [
@@ -19750,7 +19793,7 @@
         ],
         "level": "high",
         "rule": [
-            "SELECT * FROM logs WHERE (EventID = '4688' AND Channel = 'Security' AND ParentProcessName LIKE '%\\\\ws\\_tomcatservice.exe' ESCAPE '\\' AND NewProcessName LIKE '%\\\\repadmin.exe' ESCAPE '\\')"
+            "SELECT * FROM logs WHERE ((EventID = '4688' AND Channel = 'Security') AND ParentProcessName LIKE '%\\\\ws\\_tomcatservice.exe' ESCAPE '\\' AND NOT ((NewProcessName LIKE '%\\\\repadmin.exe' ESCAPE '\\')))"
         ],
         "filename": "proc_creation_win_apt_mint_sandstorm_log4j_wstomcat_execution.yml"
     },
@@ -20777,7 +20820,7 @@
     {
         "title": "Potential Exploitation Attempt Of Undocumented WindowsServer RCE",
         "id": "6d5b8176-d87d-4402-8af4-53aee9db7b5d",
-        "status": "experimental",
+        "status": "test",
         "description": "Detects potential exploitation attempt of undocumented Windows Server Pre Auth Remote Code Execution (RCE)",
         "author": "Florian Roth (Nextron Systems), Nasreddine Bencherchali",
         "tags": [
@@ -22311,7 +22354,7 @@
     {
         "title": "Deployment Of The AppX Package Was Blocked By The Policy",
         "id": "e021bbb5-407f-41f5-9dc9-1864c45a7a51",
-        "status": "experimental",
+        "status": "test",
         "description": "Detects an appx package deployment that was blocked by the local computer policy",
         "author": "frack113",
         "tags": [
@@ -22329,7 +22372,7 @@
     {
         "title": "Suspicious AppX Package Locations",
         "id": "5cdeaf3d-1489-477c-95ab-c318559fc051",
-        "status": "experimental",
+        "status": "test",
         "description": "Detects an appx package added the pipeline of the \"to be processed\" packages which is located in suspicious locations",
         "author": "Nasreddine Bencherchali (Nextron Systems)",
         "tags": [
@@ -22365,7 +22408,7 @@
     {
         "title": "Deployment AppX Package Was Blocked By AppLocker",
         "id": "6ae53108-c3a0-4bee-8f45-c7591a2c337f",
-        "status": "experimental",
+        "status": "test",
         "description": "Detects an appx package deployment that was blocked by AppLocker policy",
         "author": "frack113",
         "tags": [
@@ -22383,7 +22426,7 @@
     {
         "title": "Suspicious AppX Package Installation Attempt",
         "id": "898d5fc9-fbc3-43de-93ad-38e97237c344",
-        "status": "experimental",
+        "status": "test",
         "description": "Detects an appx package installation with the error code \"0x80073cff\" which indicates that the package didn't meet the signing requirements and could be suspicious",
         "author": "Nasreddine Bencherchali (Nextron Systems)",
         "tags": [
@@ -22401,7 +22444,7 @@
     {
         "title": "Uncommon AppX Package Locations",
         "id": "c977cb50-3dff-4a9f-b873-9290f56132f1",
-        "status": "experimental",
+        "status": "test",
         "description": "Detects an appx package added the pipeline of the \"to be processed\" packages which is located in uncommon locations",
         "author": "Nasreddine Bencherchali (Nextron Systems)",
         "tags": [
@@ -22419,7 +22462,7 @@
     {
         "title": "Potential Malicious AppX Package Installation Attempts",
         "id": "09d3b48b-be17-47f5-bf4e-94e7e75d09ce",
-        "status": "experimental",
+        "status": "test",
         "description": "Detects potential installation or installation attempts of known malicious appx packages",
         "author": "Nasreddine Bencherchali (Nextron Systems)",
         "tags": [
@@ -22849,7 +22892,7 @@
     {
         "title": "Suspicious Digital Signature Of AppX Package",
         "id": "b5aa7d60-c17e-4538-97de-09029d6cd76b",
-        "status": "experimental",
+        "status": "test",
         "description": "Detects execution of AppX packages with known suspicious or malicious signature",
         "author": "Nasreddine Bencherchali (Nextron Systems)",
         "tags": [
@@ -25940,7 +25983,7 @@
     {
         "title": "DNS Query for Anonfiles.com Domain - DNS Client",
         "id": "29f171d7-aa47-42c7-9c7b-3c87938164d9",
-        "status": "experimental",
+        "status": "test",
         "description": "Detects DNS queries for anonfiles.com, which is an anonymous file upload platform often used for malicious purposes",
         "author": "Nasreddine Bencherchali (Nextron Systems)",
         "tags": [
@@ -27956,7 +27999,7 @@
     {
         "title": "Restricted Software Access By SRP",
         "id": "b4c8da4a-1c12-46b0-8a2b-0a8521d03442",
-        "status": "experimental",
+        "status": "test",
         "description": "Detects restricted access to applications by the Software Restriction Policies (SRP) policy",
         "author": "frack113",
         "tags": [
@@ -28132,7 +28175,7 @@
     {
         "title": "The Windows Defender Firewall Service Failed To Load Group Policy",
         "id": "7ec15688-fd24-4177-ba43-1a950537ee39",
-        "status": "experimental",
+        "status": "test",
         "description": "Detects activity when The Windows Defender Firewall service failed to load Group Policy",
         "author": "frack113",
         "tags": [
@@ -28808,7 +28851,7 @@
         ],
         "level": "medium",
         "rule": [
-            "SELECT * FROM logs WHERE ((DestinationHostname LIKE '%api.2ip.ua%' ESCAPE '\\' OR DestinationHostname LIKE '%api.ipify.org%' ESCAPE '\\' OR DestinationHostname LIKE '%bot.whatismyipaddress.com%' ESCAPE '\\' OR DestinationHostname LIKE '%canireachthe.net%' ESCAPE '\\' OR DestinationHostname LIKE '%checkip.amazonaws.com%' ESCAPE '\\' OR DestinationHostname LIKE '%checkip.dyndns.org%' ESCAPE '\\' OR DestinationHostname LIKE '%curlmyip.com%' ESCAPE '\\' OR DestinationHostname LIKE '%edns.ip-api.com%' ESCAPE '\\' OR DestinationHostname LIKE '%eth0.me%' ESCAPE '\\' OR DestinationHostname LIKE '%freegeoip.app%' ESCAPE '\\' OR DestinationHostname LIKE '%geoipy.com%' ESCAPE '\\' OR DestinationHostname LIKE '%getip.pro%' ESCAPE '\\' OR DestinationHostname LIKE '%icanhazip.com%' ESCAPE '\\' OR DestinationHostname LIKE '%ident.me%' ESCAPE '\\' OR DestinationHostname LIKE '%ifconfig.io%' ESCAPE '\\' OR DestinationHostname LIKE '%ifconfig.me%' ESCAPE '\\' OR DestinationHostname LIKE '%ip-api.com%' ESCAPE '\\' OR DestinationHostname LIKE '%ip.anysrc.net%' ESCAPE '\\' OR DestinationHostname LIKE '%ip.tyk.nu%' ESCAPE '\\' OR DestinationHostname LIKE '%ipaddressworld.com%' ESCAPE '\\' OR DestinationHostname LIKE '%ipecho.net%' ESCAPE '\\' OR DestinationHostname LIKE '%ipinfo.io%' ESCAPE '\\' OR DestinationHostname LIKE '%ipof.in%' ESCAPE '\\' OR DestinationHostname LIKE '%ipv4.icanhazip.com%' ESCAPE '\\' OR DestinationHostname LIKE '%ipv4bot.whatismyipaddress.com%' ESCAPE '\\' OR DestinationHostname LIKE '%ipwho.is%' ESCAPE '\\' OR DestinationHostname LIKE '%l2.io%' ESCAPE '\\' OR DestinationHostname LIKE '%myexternalip.com%' ESCAPE '\\' OR DestinationHostname LIKE '%wgetip.com%' ESCAPE '\\' OR DestinationHostname LIKE '%whatismyip.akamai.com%' ESCAPE '\\' OR DestinationHostname LIKE '%wtfismyip.com%' ESCAPE '\\') AND NOT ((NewProcessName LIKE '%\\\\brave.exe' ESCAPE '\\') OR ((NewProcessName LIKE 'C:\\\\Program Files\\\\Google\\\\Chrome\\\\Application\\\\chrome.exe' ESCAPE '\\' OR NewProcessName LIKE 'C:\\\\Program Files (x86)\\\\Google\\\\Chrome\\\\Application\\\\chrome.exe' ESCAPE '\\')) OR ((NewProcessName LIKE 'C:\\\\Program Files\\\\Mozilla Firefox\\\\firefox.exe' ESCAPE '\\' OR NewProcessName LIKE 'C:\\\\Program Files (x86)\\\\Mozilla Firefox\\\\firefox.exe' ESCAPE '\\')) OR ((NewProcessName LIKE 'C:\\\\Program Files (x86)\\\\Internet Explorer\\\\iexplore.exe' ESCAPE '\\' OR NewProcessName LIKE 'C:\\\\Program Files\\\\Internet Explorer\\\\iexplore.exe' ESCAPE '\\')) OR (NewProcessName LIKE '%\\\\maxthon.exe' ESCAPE '\\') OR (NewProcessName LIKE 'C:\\\\Program Files (x86)\\\\Microsoft\\\\EdgeWebView\\\\Application\\\\%' ESCAPE '\\' OR NewProcessName LIKE '%\\\\WindowsApps\\\\MicrosoftEdge.exe' ESCAPE '\\' OR (NewProcessName LIKE 'C:\\\\Program Files (x86)\\\\Microsoft\\\\Edge\\\\Application\\\\msedge.exe' ESCAPE '\\' OR NewProcessName LIKE 'C:\\\\Program Files\\\\Microsoft\\\\Edge\\\\Application\\\\msedge.exe' ESCAPE '\\')) OR ((NewProcessName LIKE 'C:\\\\Program Files (x86)\\\\Microsoft\\\\EdgeCore\\\\%' ESCAPE '\\' OR NewProcessName LIKE 'C:\\\\Program Files\\\\Microsoft\\\\EdgeCore\\\\%' ESCAPE '\\') AND (NewProcessName LIKE '%\\\\msedge.exe' ESCAPE '\\' OR NewProcessName LIKE '%\\\\msedgewebview2.exe' ESCAPE '\\')) OR (NewProcessName LIKE '%\\\\opera.exe' ESCAPE '\\') OR (NewProcessName LIKE '%\\\\safari.exe' ESCAPE '\\') OR (NewProcessName LIKE '%\\\\seamonkey.exe' ESCAPE '\\') OR (NewProcessName LIKE '%\\\\vivaldi.exe' ESCAPE '\\') OR (NewProcessName LIKE '%\\\\whale.exe' ESCAPE '\\')))"
+            "SELECT * FROM logs WHERE ((DestinationHostname LIKE '%api.2ip.ua%' ESCAPE '\\' OR DestinationHostname LIKE '%api.bigdatacloud.net%' ESCAPE '\\' OR DestinationHostname LIKE '%api.ipify.org%' ESCAPE '\\' OR DestinationHostname LIKE '%bot.whatismyipaddress.com%' ESCAPE '\\' OR DestinationHostname LIKE '%canireachthe.net%' ESCAPE '\\' OR DestinationHostname LIKE '%checkip.amazonaws.com%' ESCAPE '\\' OR DestinationHostname LIKE '%checkip.dyndns.org%' ESCAPE '\\' OR DestinationHostname LIKE '%curlmyip.com%' ESCAPE '\\' OR DestinationHostname LIKE '%db-ip.com%' ESCAPE '\\' OR DestinationHostname LIKE '%edns.ip-api.com%' ESCAPE '\\' OR DestinationHostname LIKE '%eth0.me%' ESCAPE '\\' OR DestinationHostname LIKE '%freegeoip.app%' ESCAPE '\\' OR DestinationHostname LIKE '%geoipy.com%' ESCAPE '\\' OR DestinationHostname LIKE '%getip.pro%' ESCAPE '\\' OR DestinationHostname LIKE '%icanhazip.com%' ESCAPE '\\' OR DestinationHostname LIKE '%ident.me%' ESCAPE '\\' OR DestinationHostname LIKE '%ifconfig.io%' ESCAPE '\\' OR DestinationHostname LIKE '%ifconfig.me%' ESCAPE '\\' OR DestinationHostname LIKE '%ipapi.co%' ESCAPE '\\' OR DestinationHostname LIKE '%ip-api.com%' ESCAPE '\\' OR DestinationHostname LIKE '%ip.anysrc.net%' ESCAPE '\\' OR DestinationHostname LIKE '%ip.tyk.nu%' ESCAPE '\\' OR DestinationHostname LIKE '%ipaddressworld.com%' ESCAPE '\\' OR DestinationHostname LIKE '%ipecho.net%' ESCAPE '\\' OR DestinationHostname LIKE '%ipinfo.io%' ESCAPE '\\' OR DestinationHostname LIKE '%ipof.in%' ESCAPE '\\' OR DestinationHostname LIKE '%ipv4.icanhazip.com%' ESCAPE '\\' OR DestinationHostname LIKE '%ipv4bot.whatismyipaddress.com%' ESCAPE '\\' OR DestinationHostname LIKE '%ipwho.is%' ESCAPE '\\' OR DestinationHostname LIKE '%l2.io%' ESCAPE '\\' OR DestinationHostname LIKE '%myexternalip.com%' ESCAPE '\\' OR DestinationHostname LIKE '%wgetip.com%' ESCAPE '\\' OR DestinationHostname LIKE '%whatismyip.akamai.com%' ESCAPE '\\' OR DestinationHostname LIKE '%wtfismyip.com%' ESCAPE '\\') AND NOT ((NewProcessName LIKE '%\\\\brave.exe' ESCAPE '\\') OR ((NewProcessName LIKE 'C:\\\\Program Files\\\\Google\\\\Chrome\\\\Application\\\\chrome.exe' ESCAPE '\\' OR NewProcessName LIKE 'C:\\\\Program Files (x86)\\\\Google\\\\Chrome\\\\Application\\\\chrome.exe' ESCAPE '\\')) OR ((NewProcessName LIKE 'C:\\\\Program Files\\\\Mozilla Firefox\\\\firefox.exe' ESCAPE '\\' OR NewProcessName LIKE 'C:\\\\Program Files (x86)\\\\Mozilla Firefox\\\\firefox.exe' ESCAPE '\\')) OR ((NewProcessName LIKE 'C:\\\\Program Files (x86)\\\\Internet Explorer\\\\iexplore.exe' ESCAPE '\\' OR NewProcessName LIKE 'C:\\\\Program Files\\\\Internet Explorer\\\\iexplore.exe' ESCAPE '\\')) OR (NewProcessName LIKE '%\\\\maxthon.exe' ESCAPE '\\') OR (NewProcessName LIKE 'C:\\\\Program Files (x86)\\\\Microsoft\\\\EdgeWebView\\\\Application\\\\%' ESCAPE '\\' OR NewProcessName LIKE '%\\\\WindowsApps\\\\MicrosoftEdge.exe' ESCAPE '\\' OR (NewProcessName LIKE 'C:\\\\Program Files (x86)\\\\Microsoft\\\\Edge\\\\Application\\\\msedge.exe' ESCAPE '\\' OR NewProcessName LIKE 'C:\\\\Program Files\\\\Microsoft\\\\Edge\\\\Application\\\\msedge.exe' ESCAPE '\\')) OR ((NewProcessName LIKE 'C:\\\\Program Files (x86)\\\\Microsoft\\\\EdgeCore\\\\%' ESCAPE '\\' OR NewProcessName LIKE 'C:\\\\Program Files\\\\Microsoft\\\\EdgeCore\\\\%' ESCAPE '\\') AND (NewProcessName LIKE '%\\\\msedge.exe' ESCAPE '\\' OR NewProcessName LIKE '%\\\\msedgewebview2.exe' ESCAPE '\\')) OR (NewProcessName LIKE '%\\\\opera.exe' ESCAPE '\\') OR (NewProcessName LIKE '%\\\\safari.exe' ESCAPE '\\') OR (NewProcessName LIKE '%\\\\seamonkey.exe' ESCAPE '\\') OR (NewProcessName LIKE '%\\\\vivaldi.exe' ESCAPE '\\') OR (NewProcessName LIKE '%\\\\whale.exe' ESCAPE '\\')))"
         ],
         "filename": "net_connection_win_susp_external_ip_lookup.yml"
     },
@@ -29468,7 +29511,7 @@
     {
         "title": "Renamed Plink Execution",
         "id": "1c12727d-02bf-45ff-a9f3-d49806a3cf43",
-        "status": "experimental",
+        "status": "test",
         "description": "Detects the execution of a renamed version of the Plink binary",
         "author": "Nasreddine Bencherchali (Nextron Systems)",
         "tags": [
@@ -29508,7 +29551,7 @@
     {
         "title": "Potential Password Spraying Attempt Using Dsacls.EXE",
         "id": "bac9fb54-2da7-44e9-988f-11e9a5edbc0c",
-        "status": "experimental",
+        "status": "test",
         "description": "Detects possible password spraying attempts using Dsacls",
         "author": "Nasreddine Bencherchali (Nextron Systems)",
         "tags": [
@@ -30347,7 +30390,7 @@
     {
         "title": "DirLister Execution",
         "id": "b4dc61f5-6cce-468e-a608-b48b469feaa2",
-        "status": "experimental",
+        "status": "test",
         "description": "Detect the usage of \"DirLister.exe\" a utility for quickly listing folder or drive contents. It was seen used by BlackCat ransomware to create a list of accessible directories and files.",
         "author": "frack113",
         "tags": [
@@ -30660,7 +30703,7 @@
     {
         "title": "Potential Persistence Via Powershell Search Order Hijacking - Task",
         "id": "b66474aa-bd92-4333-a16c-298155b120df",
-        "status": "experimental",
+        "status": "test",
         "description": "Detects suspicious powershell execution via a schedule task where the command ends with an suspicious flags to hide the powershell instance instead of executeing scripts or commands. This could be a sign of persistence via PowerShell \"Get-Variable\" technique as seen being used in Colibri Loader",
         "author": "pH-T (Nextron Systems), Florian Roth (Nextron Systems)",
         "tags": [
@@ -31237,7 +31280,7 @@
     {
         "title": "SQLite Chromium Profile Data DB Access",
         "id": "24c77512-782b-448a-8950-eddb0785fc71",
-        "status": "experimental",
+        "status": "test",
         "description": "Detect usage of the \"sqlite\" binary to query databases in Chromium-based browsers for potential data stealing.",
         "author": "TropChaud",
         "tags": [
@@ -31640,7 +31683,7 @@
     {
         "title": "Potential Active Directory Enumeration Using AD Module - ProcCreation",
         "id": "70bc5215-526f-4477-963c-a47a5c9ebd12",
-        "status": "experimental",
+        "status": "test",
         "description": "Detects usage of the \"Import-Module\" cmdlet to load the \"Microsoft.ActiveDirectory.Management.dl\" DLL. Which is often used by attackers to perform AD enumeration.",
         "author": "frack113",
         "tags": [
@@ -31891,7 +31934,7 @@
     {
         "title": "Renamed NetSupport RAT Execution",
         "id": "0afbd410-de03-4078-8491-f132303cb67d",
-        "status": "experimental",
+        "status": "test",
         "description": "Detects the execution of a renamed \"client32.exe\" (NetSupport RAT) via Imphash, Product and OriginalFileName strings",
         "author": "Nasreddine Bencherchali (Nextron Systems)",
         "tags": [
@@ -32150,7 +32193,7 @@
     {
         "title": "PDQ Deploy Remote Adminstartion Tool Execution",
         "id": "d679950c-abb7-43a6-80fb-2a480c4fc450",
-        "status": "experimental",
+        "status": "test",
         "description": "Detect use of PDQ Deploy remote admin tool",
         "author": "frack113",
         "tags": [
@@ -32311,7 +32354,7 @@
     {
         "title": "Nltest.EXE Execution",
         "id": "903076ff-f442-475a-b667-4f246bcc203b",
-        "status": "experimental",
+        "status": "test",
         "description": "Detects nltest commands that can be used for information discovery",
         "author": "Arun Chauhan",
         "tags": [
@@ -32600,7 +32643,7 @@
     {
         "title": "HackTool - Inveigh Execution",
         "id": "b99a1518-1ad5-4f65-bc95-1ffff97a8fd0",
-        "status": "experimental",
+        "status": "test",
         "description": "Detects the use of Inveigh a cross-platform .NET IPv4/IPv6 machine-in-the-middle tool",
         "author": "Nasreddine Bencherchali (Nextron Systems)",
         "tags": [
@@ -32954,7 +32997,7 @@
     {
         "title": "Disabled RestrictedAdminMode For RDS - ProcCreation",
         "id": "28ac00d6-22d9-4a3c-927f-bbd770104573",
-        "status": "experimental",
+        "status": "test",
         "description": "Detect activation of DisableRestrictedAdmin to disable RestrictedAdmin mode.\nRestrictedAdmin mode prevents the transmission of reusable credentials to the remote system to which you connect using Remote Desktop.\nThis prevents your credentials from being harvested during the initial connection process if the remote server has been compromise\n",
         "author": "frack113",
         "tags": [
@@ -33014,7 +33057,7 @@
     {
         "title": "Unsigned AppX Installation Attempt Using Add-AppxPackage",
         "id": "37651c2a-42cd-4a69-ae0d-22a4349aa04a",
-        "status": "experimental",
+        "status": "test",
         "description": "Detects usage of the \"Add-AppxPackage\" or it's alias \"Add-AppPackage\" to install unsigned AppX packages",
         "author": "Nasreddine Bencherchali (Nextron Systems)",
         "tags": [
@@ -33307,7 +33350,7 @@
     {
         "title": "HackTool - SafetyKatz Execution",
         "id": "b1876533-4ed5-4a83-90f3-b8645840a413",
-        "status": "experimental",
+        "status": "test",
         "description": "Detects the execution of the hacktool SafetyKatz via PE information and default Image name",
         "author": "Nasreddine Bencherchali (Nextron Systems)",
         "tags": [
@@ -33716,7 +33759,7 @@
     {
         "title": "Potential Renamed Rundll32 Execution",
         "id": "2569ed8c-1147-498a-9b8c-2ad3656b10ed",
-        "status": "experimental",
+        "status": "test",
         "description": "Detects when 'DllRegisterServer' is called in the commandline and the image is not rundll32. This could mean that the 'rundll32' utility has been renamed in order to avoid detection",
         "author": "Nasreddine Bencherchali (Nextron Systems)",
         "tags": [
@@ -33848,7 +33891,7 @@
     {
         "title": "PUA - DefenderCheck Execution",
         "id": "f0ca6c24-3225-47d5-b1f5-352bf07ecfa7",
-        "status": "experimental",
+        "status": "test",
         "description": "Detects the use of DefenderCheck, a tool to evaluate the signatures used in Microsoft Defender. It can be used to figure out the strings / byte chains used in Microsoft Defender to detect a tool and thus used for AV evasion.",
         "author": "Florian Roth (Nextron Systems)",
         "tags": [
@@ -34366,7 +34409,7 @@
     {
         "title": "Suspicious Hacktool Execution - Imphash",
         "id": "24e3e58a-646b-4b50-adef-02ef935b9fc8",
-        "status": "experimental",
+        "status": "test",
         "description": "Detects the execution of different Windows based hacktools via their import hash (imphash) even if the files have been renamed",
         "author": "Florian Roth (Nextron Systems)",
         "tags": [
@@ -35044,7 +35087,7 @@
     {
         "title": "Microsoft IIS Service Account Password Dumped",
         "id": "2d3cdeec-c0db-45b4-aa86-082f7eb75701",
-        "status": "experimental",
+        "status": "test",
         "description": "Detects the Internet Information Services (IIS) command-line tool, AppCmd, being used to list passwords",
         "author": "Tim Rauch, Janantha Marasinghe",
         "tags": [
@@ -35959,7 +36002,7 @@
     {
         "title": "Potential WinAPI Calls Via CommandLine",
         "id": "ba3f5c1b-6272-4119-9dbd-0bc8d21c2702",
-        "status": "experimental",
+        "status": "test",
         "description": "Detects the use of WinAPI Functions via the commandline. As seen used by threat actors via the tool winapiexec",
         "author": "Nasreddine Bencherchali (Nextron Systems)",
         "tags": [
@@ -36079,7 +36122,7 @@
     {
         "title": "PUA - Seatbelt Execution",
         "id": "38646daa-e78f-4ace-9de0-55547b2d30da",
-        "status": "experimental",
+        "status": "test",
         "description": "Detects the execution of the PUA/Recon tool Seatbelt via PE information of command line parameters",
         "author": "Nasreddine Bencherchali (Nextron Systems)",
         "tags": [
@@ -36142,7 +36185,7 @@
     {
         "title": "Potential Arbitrary Code Execution Via Node.EXE",
         "id": "6640f31c-01ad-49b5-beb5-83498a5cd8bd",
-        "status": "experimental",
+        "status": "test",
         "description": "Detects the execution node.exe which is shipped with multiple software such as VMware, Adobe...etc. In order to execute arbitrary code. For example to establish reverse shell as seen in Log4j attacks...etc",
         "author": "Nasreddine Bencherchali (Nextron Systems)",
         "tags": [
@@ -36444,7 +36487,7 @@
     {
         "title": "HackTool - SharPersist Execution",
         "id": "26488ad0-f9fd-4536-876f-52fea846a2e4",
-        "status": "experimental",
+        "status": "test",
         "description": "Detects the execution of the hacktool SharPersist - used to deploy various different kinds of persistence mechanisms",
         "author": "Florian Roth (Nextron Systems)",
         "tags": [
@@ -36547,7 +36590,7 @@
     {
         "title": "Uncommon One Time Only Scheduled Task At 00:00",
         "id": "970823b7-273b-460a-8afc-3a6811998529",
-        "status": "experimental",
+        "status": "test",
         "description": "Detects scheduled task creation events that include suspicious actions, and is run once at 00:00",
         "author": "pH-T (Nextron Systems)",
         "tags": [
@@ -36721,7 +36764,7 @@
     {
         "title": "Suspicious New Instance Of An Office COM Object",
         "id": "9bdaf1e9-fdef-443b-8081-4341b74a7e28",
-        "status": "experimental",
+        "status": "test",
         "description": "Detects an svchost process spawning an instance of an office application. This happens when the initial word application creates an instance of one of the Office COM objects such as 'Word.Application', 'Excel.Application', etc.\nThis can be used by malicious actors to create malicious Office documents with macros on the fly. (See vba2clr project in the references)\n",
         "author": "Nasreddine Bencherchali (Nextron Systems)",
         "tags": [
@@ -37497,7 +37540,7 @@
     {
         "title": "Potential DLL Sideloading Via DeviceEnroller.EXE",
         "id": "e173ad47-4388-4012-ae62-bd13f71c18a8",
-        "status": "experimental",
+        "status": "test",
         "description": "Detects the use of the PhoneDeepLink parameter to potentially sideload a DLL file that does not exist. This non-existent DLL file is named \"ShellChromeAPI.dll\".\nAdversaries can drop their own renamed DLL and execute it via DeviceEnroller.exe using this parameter\n",
         "author": "@gott_cyber",
         "tags": [
@@ -37691,7 +37734,7 @@
     {
         "title": "Potential Reconnaissance For Cached Credentials Via Cmdkey.EXE",
         "id": "07f8bdc2-c9b3-472a-9817-5a670b872f53",
-        "status": "experimental",
+        "status": "test",
         "description": "Detects usage of cmdkey to look for cached credentials on the system",
         "author": "jmallette, Florian Roth (Nextron Systems), Nasreddine Bencherchali (Nextron Systems)",
         "tags": [
@@ -37867,7 +37910,7 @@
     {
         "title": "Operator Bloopers Cobalt Strike Modules",
         "id": "4f154fb6-27d1-4813-a759-78b93e0b9c48",
-        "status": "experimental",
+        "status": "test",
         "description": "Detects Cobalt Strike module/commands accidentally entered in CMD shell",
         "author": "_pete_0, TheDFIRReport",
         "tags": [
@@ -39084,7 +39127,7 @@
     {
         "title": "HackTool - KrbRelayUp Execution",
         "id": "12827a56-61a4-476a-a9cb-f3068f191073",
-        "status": "experimental",
+        "status": "test",
         "description": "Detects KrbRelayUp used to perform a universal no-fix local privilege escalation in Windows domain environments where LDAP signing is not enforced",
         "author": "Florian Roth (Nextron Systems)",
         "tags": [
@@ -39689,7 +39732,7 @@
     {
         "title": "Disable Windows IIS HTTP Logging",
         "id": "e4ed6030-ffe5-4e6a-8a8a-ab3c1ab9d94e",
-        "status": "experimental",
+        "status": "test",
         "description": "Disables HTTP logging on a Windows IIS web server as seen by Threat Group 3390 (Bronze Union)",
         "author": "frack113",
         "tags": [
@@ -39816,7 +39859,7 @@
     {
         "title": "Suspicious IIS URL GlobalRules Rewrite Via AppCmd",
         "id": "7c8af9b2-dcae-41a2-a9db-b28c288b5f08",
-        "status": "experimental",
+        "status": "test",
         "description": "Detects usage of \"appcmd\" to create new global URL rewrite rules. This behaviour has been observed being used by threat actors to add new rules so they can access their webshells.",
         "author": "Nasreddine Bencherchali (Nextron Systems)",
         "tags": [
@@ -40965,7 +41008,7 @@
     {
         "title": "Suspicious Git Clone",
         "id": "aef9d1f1-7396-4e92-a927-4567c7a495c1",
-        "status": "experimental",
+        "status": "test",
         "description": "Detects execution of \"git\" in order to clone a remote repository that contain suspicious keywords which might be suspicious",
         "author": "Nasreddine Bencherchali (Nextron Systems)",
         "tags": [
@@ -41022,7 +41065,7 @@
     {
         "title": "HackTool - KrbRelay Execution",
         "id": "e96253b8-6b3b-4f90-9e59-3b24b99cf9b4",
-        "status": "experimental",
+        "status": "test",
         "description": "Detects the use of KrbRelay, a Kerberos relaying tool",
         "author": "Florian Roth (Nextron Systems)",
         "tags": [
@@ -41060,7 +41103,7 @@
     {
         "title": "New Remote Desktop Connection Initiated Via Mstsc.EXE",
         "id": "954f0af7-62dd-418f-b3df-a84bc2c7a774",
-        "status": "experimental",
+        "status": "test",
         "description": "Detects the usage of \"mstsc.exe\" with the \"/v\" flag to initiate a connection to a remote server.\nAdversaries may use valid accounts to log into a computer using the Remote Desktop Protocol (RDP). The adversary may then perform actions as the logged-on user.\n",
         "author": "frack113",
         "tags": [
@@ -41255,7 +41298,7 @@
     {
         "title": "HackTool - PowerTool Execution",
         "id": "a34f79a3-8e5f-4cc3-b765-de00695452c2",
-        "status": "experimental",
+        "status": "test",
         "description": "Detects the execution of the tool PowerTool which has the ability to kill a process, delete its process file, unload drivers, and delete the driver files",
         "author": "Nasreddine Bencherchali (Nextron Systems)",
         "tags": [
@@ -41293,7 +41336,7 @@
     {
         "title": "Potentially Over Permissive Permissions Granted Using Dsacls.EXE",
         "id": "01c42d3c-242d-4655-85b2-34f1739632f7",
-        "status": "experimental",
+        "status": "test",
         "description": "Detects usage of Dsacls to grant over permissive permissions",
         "author": "Nasreddine Bencherchali (Nextron Systems)",
         "tags": [
@@ -41447,7 +41490,7 @@
     {
         "title": "Potential Credential Dumping Attempt Using New NetworkProvider - CLI",
         "id": "baef1ec6-2ca9-47a3-97cc-4cf2bda10b77",
-        "status": "experimental",
+        "status": "test",
         "description": "Detects when an attacker tries to add a new network provider in order to dump clear text credentials, similar to how the NPPSpy tool does it",
         "author": "Nasreddine Bencherchali (Nextron Systems)",
         "tags": [
@@ -41507,7 +41550,7 @@
     {
         "title": "Potential Recon Activity Via Nltest.EXE",
         "id": "5cc90652-4cbd-4241-aa3b-4b462fa5a248",
-        "status": "experimental",
+        "status": "test",
         "description": "Detects nltest commands that can be used for information discovery",
         "author": "Craig Young, oscd.community, Georg Lauenstein",
         "tags": [
@@ -41873,7 +41916,7 @@
     {
         "title": "HackTool - SharpLdapWhoami Execution",
         "id": "d9367cbb-c2e0-47ce-bdc0-128cb6da898d",
-        "status": "experimental",
+        "status": "test",
         "description": "Detects SharpLdapWhoami, a whoami alternative that queries the LDAP service on a domain controller",
         "author": "Florian Roth (Nextron Systems)",
         "tags": [
@@ -41914,7 +41957,7 @@
     {
         "title": "SafeBoot Registry Key Deleted Via Reg.EXE",
         "id": "fc0e89b5-adb0-43c1-b749-c12a10ec37de",
-        "status": "experimental",
+        "status": "test",
         "description": "Detects execution of \"reg.exe\" commands with the \"delete\" flag on safe boot registry keys. Often used by attacker to prevent safeboot execution of security products",
         "author": "Nasreddine Bencherchali (Nextron Systems), Tim Shelton",
         "tags": [
@@ -42085,7 +42128,7 @@
     {
         "title": "Suspicious Binary In User Directory Spawned From Office Application",
         "id": "aa3a6f94-890e-4e22-b634-ffdfd54792cc",
-        "status": "experimental",
+        "status": "test",
         "description": "Detects an executable in the users directory started from one of the Microsoft Office suite applications (Word, Excel, PowerPoint, Publisher, Visio)",
         "author": "Jason Lynch",
         "tags": [
@@ -42166,7 +42209,7 @@
     {
         "title": "Fsutil Behavior Set SymlinkEvaluation",
         "id": "c0b2768a-dd06-4671-8339-b16ca8d1f27f",
-        "status": "experimental",
+        "status": "test",
         "description": "A symbolic link is a type of file that contains a reference to another file.\nThis is probably done to make sure that the ransomware is able to follow shortcuts on the machine in order to find the original file to encrypt\n",
         "author": "frack113",
         "tags": [
@@ -42438,7 +42481,7 @@
     {
         "title": "Suspicious Hacktool Execution - PE Metadata",
         "id": "37c1333a-a0db-48be-b64b-7393b2386e3b",
-        "status": "experimental",
+        "status": "test",
         "description": "Detects the execution of different Windows based hacktools via PE metadata (company, product, etc.) even if the files have been renamed",
         "author": "Florian Roth (Nextron Systems)",
         "tags": [
@@ -42499,7 +42542,7 @@
     {
         "title": "Suspicious Rundll32 Script in CommandLine",
         "id": "73fcad2e-ff14-4c38-b11d-4172c8ac86c7",
-        "status": "experimental",
+        "status": "test",
         "description": "Detects suspicious process related to rundll32 based on arguments",
         "author": "frack113, Zaw Min Htun (ZETA)",
         "tags": [
@@ -43134,7 +43177,7 @@
     {
         "title": "PowerShell Base64 Encoded WMI Classes",
         "id": "1816994b-42e1-4fb1-afd2-134d88184f71",
-        "status": "experimental",
+        "status": "test",
         "description": "Detects calls to base64 encoded WMI class such as \"Win32_Shadowcopy\", \"Win32_ScheduledJob\", etc.",
         "author": "Christian Burkard (Nextron Systems), Nasreddine Bencherchali (Nextron Systems)",
         "tags": [
@@ -43253,7 +43296,7 @@
     {
         "title": "HackTool - SysmonEOP Execution",
         "id": "8a7e90c5-fe6e-45dc-889e-057fe4378bd9",
-        "status": "experimental",
+        "status": "test",
         "description": "Detects the execution of the PoC that can be used to exploit Sysmon CVE-2022-41120",
         "author": "Florian Roth (Nextron Systems)",
         "tags": [
@@ -43331,7 +43374,7 @@
     {
         "title": "PUA - Fast Reverse Proxy (FRP) Execution",
         "id": "32410e29-5f94-4568-b6a3-d91a8adad863",
-        "status": "experimental",
+        "status": "test",
         "description": "Detects the use of Fast Reverse Proxy. frp is a fast reverse proxy to help you expose a local server behind a NAT or firewall to the Internet.",
         "author": "frack113, Florian Roth",
         "tags": [
@@ -43394,7 +43437,7 @@
     {
         "title": "Suspicious Windows Defender Folder Exclusion Added Via Reg.EXE",
         "id": "48917adc-a28e-4f5d-b729-11e75da8941f",
-        "status": "experimental",
+        "status": "test",
         "description": "Detects the usage of \"reg.exe\" to add Defender folder exclusions. Qbot has been seen using this technique to add exclusions for folders within AppData and ProgramData.",
         "author": "frack113",
         "tags": [
@@ -43834,7 +43877,7 @@
     {
         "title": "Operator Bloopers Cobalt Strike Commands",
         "id": "647c7b9e-d784-4fda-b9a0-45c565a7b729",
-        "status": "experimental",
+        "status": "test",
         "description": "Detects use of Cobalt Strike commands accidentally entered in the CMD shell",
         "author": "_pete_0, TheDFIRReport",
         "tags": [
@@ -44278,7 +44321,7 @@
     {
         "title": "HackTool - HandleKatz LSASS Dumper Execution",
         "id": "ca621ba5-54ab-4035-9942-d378e6fcde3c",
-        "status": "experimental",
+        "status": "test",
         "description": "Detects the use of HandleKatz, a tool that demonstrates the usage of cloned handles to Lsass in order to create an obfuscated memory dump of the same",
         "author": "Florian Roth (Nextron Systems)",
         "tags": [
@@ -44727,7 +44770,7 @@
     {
         "title": "New Generic Credentials Added Via Cmdkey.EXE",
         "id": "b1ec66c6-f4d1-4b5c-96dd-af28ccae7727",
-        "status": "experimental",
+        "status": "test",
         "description": "Detects usage of cmdkey to add generic credentials. As an example, this has to be used before connecting to an RDP session via command line interface.",
         "author": "frack113, Nasreddine Bencherchali (Nextron Systems)",
         "tags": [
@@ -45099,7 +45142,7 @@
     {
         "title": "Suspicious Shells Spawn by Java Utility Keytool",
         "id": "90fb5e62-ca1f-4e22-b42e-cc521874c938",
-        "status": "experimental",
+        "status": "test",
         "description": "Detects suspicious shell spawn from Java utility keytool process (e.g. adselfservice plus exploitation)",
         "author": "Andreas Hunkeler (@Karneades)",
         "tags": [
@@ -45119,7 +45162,7 @@
     {
         "title": "PUA - NPS Tunneling Tool Execution",
         "id": "68d37776-61db-42f5-bf54-27e87072d17e",
-        "status": "experimental",
+        "status": "test",
         "description": "Detects the use of NPS, a port forwarding and intranet penetration proxy server",
         "author": "Florian Roth (Nextron Systems)",
         "tags": [
@@ -45275,7 +45318,7 @@
     {
         "title": "Renamed Msdt.EXE Execution",
         "id": "bd1c6866-65fc-44b2-be51-5588fcff82b9",
-        "status": "experimental",
+        "status": "test",
         "description": "Detects the execution of a renamed \"Msdt.exe\" binary",
         "author": "pH-T (Nextron Systems)",
         "tags": [
@@ -45313,7 +45356,7 @@
     {
         "title": "Execution from Suspicious Folder",
         "id": "3dfd06d2-eaf4-4532-9555-68aca59f57c4",
-        "status": "experimental",
+        "status": "test",
         "description": "Detects a suspicious execution from an uncommon folder",
         "author": "Florian Roth (Nextron Systems), Tim Shelton",
         "tags": [
@@ -45468,7 +45511,7 @@
     {
         "title": "Lolbin Ssh.exe Use As Proxy",
         "id": "7d6d30b8-5b91-4b90-a891-46cccaf29598",
-        "status": "experimental",
+        "status": "test",
         "description": "Detect usage of the \"ssh.exe\" binary as a proxy to launch other programs",
         "author": "frack113, Nasreddine Bencherchali",
         "tags": [
@@ -45565,7 +45608,7 @@
     {
         "title": "Renamed Mavinject.EXE Execution",
         "id": "e6474a1b-5390-49cd-ab41-8d88655f7394",
-        "status": "experimental",
+        "status": "test",
         "description": "Detects the execution of a renamed version of the \"Mavinject\" process. Which can be abused to perform process injection using the \"/INJECTRUNNING\" flag",
         "author": "frack113, Florian Roth",
         "tags": [
@@ -46741,7 +46784,7 @@
     {
         "title": "Query Usage To Exfil Data",
         "id": "53ef0cef-fa24-4f25-a34a-6c72dfa2e6e2",
-        "status": "experimental",
+        "status": "test",
         "description": "Detects usage of \"query.exe\" a system binary to exfil information such as \"sessions\" and \"processes\" for later use",
         "author": "Nasreddine Bencherchali (Nextron Systems)",
         "tags": [
@@ -46856,7 +46899,7 @@
     {
         "title": "Potential PowerShell Execution Policy Tampering - ProcCreation",
         "id": "cf2e938e-9a3e-4fe8-a347-411642b28a9f",
-        "status": "experimental",
+        "status": "test",
         "description": "Detects changes to the PowerShell execution policy registry key in order to bypass signing requirements for script execution from the CommandLine",
         "author": "Nasreddine Bencherchali (Nextron Systems)",
         "tags": [
@@ -46874,7 +46917,7 @@
     {
         "title": "Renamed BrowserCore.EXE Execution",
         "id": "8a4519e8-e64a-40b6-ae85-ba8ad2177559",
-        "status": "experimental",
+        "status": "test",
         "description": "Detects process creation with a renamed BrowserCore.exe (used to extract Azure tokens)",
         "author": "Max Altgelt (Nextron Systems)",
         "tags": [
@@ -47145,7 +47188,7 @@
     {
         "title": "Suspicious Use of PsLogList",
         "id": "aae1243f-d8af-40d8-ab20-33fc6d0c55bc",
-        "status": "experimental",
+        "status": "test",
         "description": "Detects usage of the PsLogList utility to dump event log in order to extract admin accounts and perform account discovery or delete events logs",
         "author": "Nasreddine Bencherchali (Nextron Systems)",
         "tags": [
@@ -47352,7 +47395,7 @@
     {
         "title": "Renamed Vmnat.exe Execution",
         "id": "7b4f794b-590a-4ad4-ba18-7964a2832205",
-        "status": "experimental",
+        "status": "test",
         "description": "Detects renamed vmnat.exe or portable version that can be used for DLL side-loading",
         "author": "elhoim",
         "tags": [
@@ -47371,7 +47414,7 @@
     {
         "title": "Renamed Sysinternals Sdelete Execution",
         "id": "c1d867fe-8d95-4487-aab4-e53f2d339f90",
-        "status": "experimental",
+        "status": "test",
         "description": "Detects the use of a renamed SysInternals Sdelete, which is something an administrator shouldn't do (the renaming)",
         "author": "Florian Roth (Nextron Systems)",
         "tags": [
@@ -47844,7 +47887,7 @@
     {
         "title": "Potential Signing Bypass Via Windows Developer Features",
         "id": "a383dec4-deec-4e6e-913b-ed9249670848",
-        "status": "experimental",
+        "status": "test",
         "description": "Detects when a user enable developer features such as \"Developer Mode\" or \"Application Sideloading\". Which allows the user to install untrusted packages.",
         "author": "Nasreddine Bencherchali (Nextron Systems)",
         "tags": [
@@ -47900,7 +47943,7 @@
     {
         "title": "Renamed Remote Utilities RAT (RURAT) Execution",
         "id": "9ef27c24-4903-4192-881a-3adde7ff92a5",
-        "status": "experimental",
+        "status": "test",
         "description": "Detects execution of renamed Remote Utilities (RURAT) via Product PE header field",
         "author": "Nasreddine Bencherchali (Nextron Systems)",
         "tags": [
@@ -48275,7 +48318,7 @@
     {
         "title": "Root Certificate Installed From Susp Locations",
         "id": "5f6a601c-2ecb-498b-9c33-660362323afa",
-        "status": "experimental",
+        "status": "test",
         "description": "Adversaries may install a root certificate on a compromised system to avoid warnings when connecting to adversary controlled web servers.",
         "author": "Nasreddine Bencherchali (Nextron Systems)",
         "tags": [
@@ -48294,7 +48337,7 @@
     {
         "title": "Potential Process Injection Via Msra.EXE",
         "id": "744a188b-0415-4792-896f-11ddb0588dbc",
-        "status": "experimental",
+        "status": "test",
         "description": "Detects potential process injection via Microsoft Remote Asssistance (Msra.exe) by looking at suspicious child processes spawned from the aforementioned process. It has been a target used by many threat actors and used for discovery and persistence tactics",
         "author": "Alexander McDonald",
         "tags": [
@@ -48807,7 +48850,7 @@
     {
         "title": "Import PowerShell Modules From Suspicious Directories - ProcCreation",
         "id": "c31364f7-8be6-4b77-8483-dd2b5a7b69a3",
-        "status": "experimental",
+        "status": "test",
         "description": "Detects powershell scripts that import modules from suspicious directories",
         "author": "Nasreddine Bencherchali (Nextron Systems)",
         "tags": [
@@ -48907,7 +48950,7 @@
     {
         "title": "Potential RDP Tunneling Via SSH",
         "id": "f7d7ebd5-a016-46e2-9c54-f9932f2d386d",
-        "status": "experimental",
+        "status": "test",
         "description": "Execution of ssh.exe to perform data exfiltration and tunneling through RDP",
         "author": "Nasreddine Bencherchali (Nextron Systems)",
         "tags": [
@@ -49218,7 +49261,7 @@
     {
         "title": "Potential Discovery Activity Via Dnscmd.EXE",
         "id": "b6457d63-d2a2-4e29-859d-4e7affc153d1",
-        "status": "experimental",
+        "status": "test",
         "description": "Detects an attempt to leverage dnscmd.exe to enumerate the DNS zones of a domain. DNS zones used to host the DNS records for a particular domain.",
         "author": "@gott_cyber",
         "tags": [
@@ -49278,7 +49321,7 @@
     {
         "title": "Service Registry Key Deleted Via Reg.EXE",
         "id": "05b2aa93-1210-42c8-8d9a-2fcc13b284f5",
-        "status": "experimental",
+        "status": "test",
         "description": "Detects execution of \"reg.exe\" commands with the \"delete\" flag on services registry key. Often used by attacker to remove AV software services",
         "author": "Nasreddine Bencherchali (Nextron Systems)",
         "tags": [
@@ -49587,7 +49630,7 @@
     {
         "title": "HackTool - Htran/NATBypass Execution",
         "id": "f5e3b62f-e577-4e59-931e-0a15b2b94e1e",
-        "status": "experimental",
+        "status": "test",
         "description": "Detects executable names or flags used by Htran or Htran-like tools (e.g. NATBypass)",
         "author": "Florian Roth (Nextron Systems)",
         "tags": [
@@ -49626,7 +49669,7 @@
     {
         "title": "SQLite Firefox Profile Data DB Access",
         "id": "4833155a-4053-4c9c-a997-777fcea0baa7",
-        "status": "experimental",
+        "status": "test",
         "description": "Detect usage of the \"sqlite\" binary to query databases in Firefox and other Gecko-based browsers for potential data stealing.",
         "author": "frack113",
         "tags": [
