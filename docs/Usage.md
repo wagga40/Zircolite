@@ -163,7 +163,7 @@ If you need to re-execute Zircolite,  you can do it directly using the SQLite da
 
 ## Field mappings, field exclusions, value exclusions, field aliases and field splitting
 
-Sometimes your logs need some transformations to allow your rules to match against them. Zircolite has multiple mechanisms for this. The configuration of these mechanisms is provided by a file that can be found in the [config](../config/) directory of the repository. It is also possible to provide your own configuration woth the `--config` or `-c` options.
+Sometimes your logs need some transformations to allow your rules to match against them. Zircolite has multiple mechanisms for this. The configuration of these mechanisms is provided by a file that can be found in the [config](https://github.com/wagga40/Zircolite/tree/master/config/) directory of the repository. It is also possible to provide your own configuration woth the `--config` or `-c` options.
 
 The configuration file has the following structure : 
 

@@ -126,7 +126,7 @@ Examples :
 
 ### Rule filters
 
-Some rules can be noisy or slow on specific datasets (check [here](rules/Readme.md)) so it is possible to skip them by using the `-R` or `--rulefilter` argument. This argument can be used multiple times.
+Some rules can be noisy or slow on specific datasets (check [here](https://github.com/wagga40/Zircolite/tree/master/rules/README.md)) so it is possible to skip them by using the `-R` or `--rulefilter` argument. This argument can be used multiple times.
 
 The filter will apply on the rule title. Since there is a CRC32 in the rule title it is easier to use it. For example, to skip execution of the rule "Suspicious Eventlog Clear or Configuration Using Wevtutil - BFFA7F72" : 
 
@@ -168,7 +168,7 @@ If you have multiple endpoints to scan, it is useful to send the detected events
 python3 zircolite.py --evtx sample.evtx  --ruleset rules/rules_windows_sysmon.json \
 	--remote "http://address:port/uri"
 ```
-An **example** server called is available in the [tools](../tools/zircolite_server/) directory.
+An **example** server called is available in the [tools](https://github.com/wagga40/Zircolite/tree/master/tools/zircolite_server/) directory.
 
 ### Forward events to a Splunk instance via HEC
 
@@ -213,7 +213,7 @@ Zircolite is able to forward all events and not just the detected events to Splu
 
 ## Templating and Formatting
 
-Zircolite provides a templating system based on Jinja 2. It allows you to change the output format to suits your needs (Splunk or ELK integration, Grep-able output...). There are some templates available in the [Templates directory](../templates) of the repository : Splunk, Timesketch, ... To use the template system, use these arguments :
+Zircolite provides a templating system based on Jinja 2. It allows you to change the output format to suits your needs (Splunk or ELK integration, Grep-able output...). There are some templates available in the [Templates directory](https://github.com/wagga40/Zircolite/tree/master/templates) of the repository : Splunk, Timesketch, ... To use the template system, use these arguments :
 
 - `--template <template_filename>`
 - `--templateOutput <output_filename>`
@@ -238,7 +238,7 @@ As of Zircolite 2.1.0, the easier way to use the Mini-GUI is to generate a packa
 
 ### Manual generation
 
-You need to generate a `data.js` file with the `exportForZircoGui.tmpl` template, decompress the zircogui.zip file in the [gui](gui/) directory and replace the `data.js` file in it with yours :
+You need to generate a `data.js` file with the `exportForZircoGui.tmpl` template, decompress the zircogui.zip file in the [gui](https://github.com/wagga40/Zircolite/tree/master/gui/) directory and replace the `data.js` file in it with yours :
 
 ```shell
 python3 zircolite.py --evtx sample.evtx 
