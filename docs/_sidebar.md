@@ -3,7 +3,7 @@
     * [Basic usage](Usage.md#basic-usage)
     * [Field mappings, field exclusions, value exclusions, field aliases and field splitting](Usage.md#field-mappings-field-exclusions-value-exclusions-field-aliases-and-field-splitting)
     * [Generate your own rulesets](Usage.md#generate-your-own-rulesets)
-    * [Generate embedded versions](#generate-embedded-versions)
+    * [Generate embedded versions](Usage.md#generate-embedded-versions)
     * [Docker](Usage.md#docker)
 
 * Advanced use
