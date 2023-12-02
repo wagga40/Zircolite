@@ -28,9 +28,16 @@ jobs:
       - name: Install python 3.9
         uses: actions/setup-python@v4
         with:
-          python-version: '3.9' 
-      - name: Install requirements
+          python-version: '3.9'
+      - name: Install dependencies
         run: | 
           pip install -r requirements.txt
           pip install nuitka zstandard orderedset
-          python3 -m nuitka --onefile zircolite.py
+      
+      - name: Build with Nuitka
+        uses: Nuitka/Nuitka-Action@main
+        with:
+          nuitka-version: main
+          script-name: zircolite.py
+          onefile: true
+          
