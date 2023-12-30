@@ -3,7 +3,7 @@
 DOCKER?=docker
 DOCKER_BUILD_FLAGS?=
 DOCKER_REGISTRY?=docker.io
-DOCKER_TAG?=2.9.9
+DOCKER_TAG?=2.10
 GIT?=git
 PY3?=python3
 DATE=$(shell date +%s)
@@ -56,4 +56,4 @@ endif
 		$(DOCKER_REGISTRY)/wagga40/zircolite:$(DOCKER_TAG)
 
 rulesets:
-	$(info Please check docs to generate rulesets directly with sigmatools and sigmac : https://github.com/wagga40/Zircolite/blob/master/docs/Usage.md#with-sigmatools)
+	$(info Please check docs to generate rulesets)
