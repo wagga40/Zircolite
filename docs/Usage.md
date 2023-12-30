@@ -4,11 +4,64 @@
 
 ## Requirements and Installation
 
-You can install dependencies with : `pip3 install -r requirements.txt`
+- [Release versions](https://github.com/wagga40/Zircolite/releases) are standalone, they are easier to use and deploy
+- If you have an **ARM CPU, it is stringly recommended to use the release versions**
+- The repository version of Zircolite works with **Python 3.8** and above
+- The repository version can run on Linux, Mac OS and Windows
+- The use of [evtx_dump](https://github.com/omerbenamram/evtx) is **optional but required by default (because it is for now much faster)**, I you do not want to use it you have to use the '--noexternal' option. The tool is provided if you clone the Zircolite repository (the official repository is [here](https://github.com/omerbenamram/evtx)).
 
-The use of [evtx_dump](https://github.com/omerbenamram/evtx) is **optional but required by default (because it is for now much faster)**, I you do not want to use it you have to use the '--noexternal' option. The tool is provided if you clone the Zircolite repository (the official repository is [here](https://github.com/omerbenamram/evtx)).
+### Installation from releases
 
-#### Known issues
+- Get the appropriate version [here](https://github.com/wagga40/Zircolite/releases)
+
+```bash
+# DECOMPRESS
+7z x zircolite_lin_amd64_glibc_2.10.0.zip
+cd zircolite_lin_amd64_glibc/
+
+# EXAMPLE RUN
+git clone https://github.com/sbousseaden/EVTX-ATTACK-SAMPLES.git
+./zircolite_lin_amd64_glibc.bin -e EVTX-ATTACK-SAMPLES/Execution/ -r rules/rules_windows_sysmon_pysigma.json
+
+```
+
+### Installation from repository
+
+#### Using [*venv*](https://packaging.python.org/en/latest/guides/installing-using-pip-and-virtual-environments/) on Linux/MacOS
+
+**Requirements** : Python 3 venv
+
+```shell
+# INSTALL
+git clone https://github.com/wagga40/Zircolite.git
+cd Zircolite 
+python3 -m venv .venv
+source .venv/bin/activate
+pip3 install -r requirements.txt
+
+# EXAMPLE RUN
+git clone https://github.com/sbousseaden/EVTX-ATTA^C-SAMPLES.git
+python3 zircolite.py -e EVTX-ATTACK-SAMPLES/ -r rules/rules_windows_sysmon_pysigma.json
+deactivate # Quit Python3 venv
+```
+
+#### Using [*Pdm*](https://pdm-project.org/latest/) or [Poetry](https://python-poetry.org)
+
+```shell
+# INSTALL
+git clone https://github.com/wagga40/Zircolite.git
+cd Zircolite 
+pdm init -n
+cat requirements.txt | xargs pdm add
+
+# EXAMPLE RUN
+git clone https://github.com/sbousseaden/EVTX-ATTACK-SAMPLES.git
+pdm run python3 zircolite.py -e EVTX-ATTACK-SAMPLES/ -r rules/rules_windows_sysmon_pysigma.json
+```
+
+If you want to use *poetry*, just replace the "pdm" command in the above example by "poetry".
+
+### Known issues
 
 Sometimes `evtx_dump` hangs under MS Windows, this is not related to Zircolite. If it happens to you, usually the use of `--noexternal` solves the problem.
 
@@ -309,21 +362,50 @@ Default rulesets are already provided in the `rules` directory. These rulesets o
 
 **As of v2.9.5, Zircolite can auto-update its default rulesets using the `-U` or `--update-rules`. There is an auto-updated rulesets repository available [here](https://github.com/wagga40/Zircolite-Rules).**
 
-### With sigmatools
+### Generate rulesets using PySigma
 
-Zircolite use the SIGMA rules in JSON format. Since the SQLite backend is not yet available in pySigma, you need to generate your ruleset with  the official [legacy-sigmatools](https://github.com/SigmaHQ/legacy-sigmatools) (**version 0.21 minimum**) : 
+#### Using [*Pdm*](https://pdm-project.org/latest/) or [Poetry](https://python-poetry.org)
+
+```shell
+# INSTALL
+git clone https://github.com/SigmaHQ/sigma.git
+cd sigma
+pdm init -n
+pdm add pysigma sigma-cli pysigma-pipeline-sysmon pysigma-pipeline-windows pysigma-backend-sqlite
+
+# GENERATE RULESET (SYSMON)
+pdm run sigma convert -t sqlite -f zircolite -p sysmon -p windows-logsources sigma/rules/windows/ -s -o rules.json
+# GENERATE RULESET (GENERIC / NO SYSMON)
+pdm run sigma convert -t sqlite -f zircolite -p windows-audit -p windows-logsources sigma/rules/windows/ -s -o rules.json
+
+```
+
+In the last line : 
+
+- `-t` is the backend type (SQlite) 
+- `-f` is the format, here "zircolite" means the ruleset will be generated in the format used by Zircolite
+- `-p` option is the pipeline used, in the given example we use two pipelines
+- `-s` to continue on error (e.g when there are not supported rules)
+- `-o` allow to specify the output file
+
+If you want to use *poetry*, just replace the "pdm" command in the above example by "poetry".
+
+### Generate rulesets using sigmatools [**DEPRECATED**]
+
+[**DEPRECATED**] Zircolite use the SIGMA rules in JSON format. Since the SQLite backend is not yet available in pySigma, you need to generate your ruleset with the official [legacy-sigmatools](https://github.com/SigmaHQ/legacy-sigmatools) (**version 0.21 minimum**) : 
 
 ```shell 
 pip3 install sigmatools
 ```
 
-since you need to access the configuration files directly it is easier to also clone the repository :  
+[**DEPRECATED**] since you need to access the configuration files directly it is easier to also clone the repository :  
+
 ```shell 
 git clone https://github.com/SigmaHQ/legacy-sigmatools.git
-cd legacy-sigmools
+cd legacy-sigmatools
 ```
 
-#### Sysmon rulesets (when investigated endpoints have Sysmon logs)
+#### [**DEPRECATED**] Sysmon rulesets (when investigated endpoints have Sysmon logs) 
 
 ```shell 
 sigmac \
@@ -338,6 +420,7 @@ sigmac \
    -o rules_sysmon.json \
    --backend-option table=logs
 ```
+
 Where : 
 
 - `-t` is the backend type (SQlite) 
@@ -346,7 +429,7 @@ Where :
 - `-o` option is used to provide the output filename 
 -  `--backend-option` is used to specify the SQLite table name (leave as is)
 
-#### Generic rulesets (when investigated endpoints _don't_ have Sysmon logs)
+#### [**DEPRECATED**] Generic rulesets (when investigated endpoints _don't_ have Sysmon logs) [**DEPRECATED**]
 
 ```shell 
 sigmac \
