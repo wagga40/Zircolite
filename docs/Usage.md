@@ -27,7 +27,7 @@ git clone https://github.com/sbousseaden/EVTX-ATTACK-SAMPLES.git
 
 ### Installation from repository
 
-#### Using [*venv*](https://packaging.python.org/en/latest/guides/installing-using-pip-and-virtual-environments/) on Linux/MacOS
+#### Using [venv](https://packaging.python.org/en/latest/guides/installing-using-pip-and-virtual-environments/) on Linux/MacOS
 
 **Requirements** : Python 3 venv
 
@@ -45,7 +45,7 @@ python3 zircolite.py -e EVTX-ATTACK-SAMPLES/ -r rules/rules_windows_sysmon_pysig
 deactivate # Quit Python3 venv
 ```
 
-#### Using [*Pdm*](https://pdm-project.org/latest/) or [Poetry](https://python-poetry.org)
+#### Using [Pdm](https://pdm-project.org/latest/) or [Poetry](https://python-poetry.org)
 
 ```shell
 # INSTALL
@@ -364,14 +364,14 @@ Default rulesets are already provided in the `rules` directory. These rulesets o
 
 ### Generate rulesets using PySigma
 
-#### Using [*Pdm*](https://pdm-project.org/latest/) or [Poetry](https://python-poetry.org)
+#### Using [Pdm](https://pdm-project.org/latest/) or [Poetry](https://python-poetry.org)
 
 ```shell
 # INSTALL
 git clone https://github.com/SigmaHQ/sigma.git
 cd sigma
 pdm init -n
-pdm add pysigma sigma-cli pysigma-pipeline-sysmon pysigma-pipeline-windows pysigma-backend-sqlite
+pdm add pysigma pip sigma-cli pysigma-pipeline-sysmon pysigma-pipeline-windows pysigma-backend-sqlite
 
 # GENERATE RULESET (SYSMON)
 pdm run sigma convert -t sqlite -f zircolite -p sysmon -p windows-logsources sigma/rules/windows/ -s -o rules.json
