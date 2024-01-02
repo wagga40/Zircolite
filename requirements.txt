@@ -9,3 +9,8 @@ lxml~=4.6
 elasticsearch[async]>=7.8.0
 orjson>=3.6.0
 xxhash
+pysigma>=0.10.10
+pysigma-pipeline-sysmon>=1.0.3
+pysigma-pipeline-windows>=1.1.1
+pysigma-backend-sqlite>=0.1.1
+pyyaml
