@@ -359,3 +359,10 @@ Basically, if you want to integrate Zircolite with **DFIR Orc** :
 
 - Now you need to generate the **DFIR Orc** binary by executing `.\configure.ps1` at the root of the repository
 - The final output will be in the `output` directory
+
+## Other tools 
+
+Some other tools (mostly untested) have included a way to run Zircolite : 
+
+- [Kape](https://www.kroll.com/en/services/cyber-risk/incident-response-litigation-support/kroll-artifact-parser-extractor-kape) has a module for Zircolite : [here](https://github.com/EricZimmerman/KapeFiles/tree/master/Modules/Apps/GitHub)
+- [Velociraptor](https://github.com/Velocidex/velociraptor) has an artifact for Zircolite : [here](https://docs.velociraptor.app/exchange/artifacts/pages/windows.eventlogs.zircolite/)

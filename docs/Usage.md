@@ -21,15 +21,14 @@ cd zircolite_lin_amd64_glibc/
 
 # EXAMPLE RUN
 git clone https://github.com/sbousseaden/EVTX-ATTACK-SAMPLES.git
-./zircolite_lin_amd64_glibc.bin -e EVTX-ATTACK-SAMPLES/Execution/ -r rules/rules_windows_sysmon_pysigma.json
+./zircolite_lin_amd64_glibc.bin -e EVTX-ATTACK-SAMPLES/Execution/ \
+                                -r rules/rules_windows_sysmon_pysigma.json
 
 ```
 
 ### Installation from repository
 
 #### Using [venv](https://packaging.python.org/en/latest/guides/installing-using-pip-and-virtual-environments/) on Linux/MacOS
-
-**Requirements** : Python 3 venv
 
 ```shell
 # INSTALL
@@ -56,7 +55,8 @@ cat requirements.txt | xargs pdm add
 
 # EXAMPLE RUN
 git clone https://github.com/sbousseaden/EVTX-ATTACK-SAMPLES.git
-pdm run python3 zircolite.py -e EVTX-ATTACK-SAMPLES/ -r rules/rules_windows_sysmon_pysigma.json
+pdm run python3 zircolite.py -e EVTX-ATTACK-SAMPLES/ \
+    -r rules/rules_windows_sysmon_pysigma.json
 ```
 
 If you want to use *poetry*, just replace the "pdm" command in the above example by "poetry".
@@ -71,25 +71,43 @@ If you can share the EVTX files on whose the blocking happened, feel free to pos
 
 Help is available with `zircolite.py -h`. 
 
-### For EVTX files
+Basically, the simplest way to use Zircolite is something like this:
+
+```shell
+python3 zircolite.py --events <LOGS> --ruleset <RULESET>
+```
+
+Where : 
+- `--events` is a filename or a directory containing the logs you want to analyse (`--evtx` and `-e` can be used instade of `--events`) . Zircolite support the following format : EVTX, XML, JSON (one event per line), JSON Array (one big array), EVTXTRACT, CSV, Auditd, Sysmon for Linux
+- `--ruleset` is a file or directory containing the Sigma rules to use for detection. Zircolite as its own format called "Zircolite ruleset" where all the rules are in one JSON file. However, as of version *2.20.0*, Zircolite can directly use Sigma rules in YAML format (YAML file or Directory containing the YAML files)
+
+Multiple rulesets can be specified, results can be per-ruleset or combined (with `--combine-ruleset` or `-cr`) : 
+
+```shell
+# Example with a Zircolite ruleset and a Sigma rule. Results will be displayed per-ruleset
+python3 zircolite.py --events sample.evtx --ruleset rules/rules_windows_sysmon.json \
+    --ruleset schtasks.yml 
+# Example with a Zircolite ruleset and a Sigma rule. Results will be displayed combined 
+python3 zircolite.py --events sample.evtx --ruleset rules/rules_windows_sysmon.json \
+    --ruleset schtasks.yml --combine-rulesets 
+```
+
+By default : 
+
+- `--ruleset` is not mandatory but the default ruleset is `rules/rules_windows_generic_pysigma.json`
+- Results are written in the `detected_events.json` in the same directory as Zircolite, you can choose a CSV formatted output with `--csv`
+- There is a `zircolite.log` file that will be created in the current working directory, it can be disabled with `--nolog`
+-  When providing a directory for then event logs, `Zircolite` will automatically use a file extension, you can change it with `--fileext`. This option can be used with wildcards or [Python Glob syntax](https://docs.python.org/3/library/glob.html) but `*.` will automatically be added before the given parameter value : `*.<FILEEXT PARAMETER VALUE>`. For example `--fileext log` will search for `*.log` files in the given path and `--fileext log.*` will search for `*.log.*` which can be useful when handling linux log files (auditd.log.1...)
+
+### EVTX files
 
 If your evtx files have the extension ".evtx" :
 
 ```shell
-python3 zircolite.py --evtx <EVTX_FOLDER> --ruleset <Converted Sigma rules>
+python3 zircolite.py --evtx <EVTX_FOLDER/EVTX_FILE> \
+    --ruleset <Converted Sigma ruleset (JSON)/Directory with Sigma rules (YAML)/>
 python3 zircolite.py --evtx ../Logs --ruleset rules/rules_windows_sysmon.json
 ```
-
-It also works directly on an unique EVTX file.
-
-:information_source: `--evtx`, `--events` and `-e` are equivalent
-
-By default
-
-- `--ruleset` is not mandatory but the default ruleset will be `rules/rules_windows_generic.json`
-- Results are written in the `detected_events.json` in the same directory as Zircolite
-- There is a `zircolite.log`file that will be created in the current working directory
-- `Zircolite` will automatically choose a file extension, you can change it with `--fileext`. This option can be used with wildcards or [Python Glob syntax](https://docs.python.org/3/library/glob.html) but with `*.` added before the given parameter value : `*.<FILEEXT PARAMETER VALUE>`. For example `--fileext log` will search for `*.log` files in the given path and `--fileext log.*` will search for `*.log.*` which can be useful when handling linux log files (auditd.log.1...).
 
 ### XML logs
 
@@ -120,8 +138,8 @@ And it produces something like this (1 event per line):
 
 ```shell
 python3 zircolite.py --events <LOGS_FOLDER_OR_LOG_FILE>  --ruleset <RULESET> --xml
-python3 zircolite.py --events  Microsoft-Windows-SysmonOperational.xml \ 
-	--ruleset rules/rules_windows_sysmon_full.json --xml
+python3 zircolite.py --events  Microsoft-Windows-SysmonOperational.xml \
+    --ruleset rules/rules_windows_sysmon_full.json --xml
 ```
 
 ### EVTXtract logs
@@ -176,8 +194,8 @@ Some logs will be provided in JSON format as an array :
 
 ```json
 [ 
-	{"EventID": "4688", "EventRecordID": "1", ...}, 
-	{"EventID": "4688", "EventRecordID": "2", ...}, 
+    {"EventID": "4688", "EventRecordID": "1", ...}, 
+    {"EventID": "4688", "EventRecordID": "2", ...}, 
 ... ]
 ```
 
@@ -209,7 +227,7 @@ Since everything in Zircolite is stored in a in-memory SQlite database, you can 
 
 ```shell
 python3 zircolite.py --evtx <EVTX_FOLDER> --ruleset <CONVERTED_SIGMA_RULES> \
-	--dbfile output.db
+    --dbfile output.db
 ```
 
 If you need to re-execute Zircolite,  you can do it directly using the SQLite database as the EVTX source (with `--evtx <SAVED_SQLITE_DB_PATH>` and `--dbonly`) and avoid to convert the EVTX, post-process the EVTX and insert data to database. **Using this technique can save a lot of time... But you will be unable to use the `--forwardall`option** 
@@ -222,21 +240,21 @@ The configuration file has the following structure :
 
 ```json 
 {
-	"exclusions" : [],
-	"useless" : [],
-	"mappings" : 
-	{
-		"field_name_1": "new_field_name_1", 
-		"field_name_2": "new_field_name_2"
-	},
-	"alias":
-	{
-		"field_alias_1": "alias_1"
-	},
-	"split":
-	{
-		"field_name_split": {"separator":",", "equal":"="}
-	}
+    "exclusions" : [],
+    "useless" : [],
+    "mappings" : 
+    {
+        "field_name_1": "new_field_name_1", 
+        "field_name_2": "new_field_name_2"
+    },
+    "alias":
+    {
+        "field_alias_1": "alias_1"
+    },
+    "split":
+    {
+        "field_name_split": {"separator":",", "equal":"="}
+    }
 }
 ```
 
@@ -248,14 +266,14 @@ For example, if you want to rename the field "CommandLine" in **your raw logs** 
 
 ```json 
 {
-	"exclusions" : [],
-	"useless" : [],
-	"mappings" : 
-	{
-		"CommandLine": "cmdline"
-	},
-	"alias":{},
-	"split": {}
+    "exclusions" : [],
+    "useless" : [],
+    "mappings" : 
+    {
+        "CommandLine": "cmdline"
+    },
+    "alias":{},
+    "split": {}
 }
 ```
 
@@ -290,13 +308,13 @@ Let's say you are not sure all your rules use the "CommandLine" field but you re
 
 ```json 
 {
-	"exclusions" : [],
-	"useless" : [],
-	"mappings" : {},
-	"alias":{
-		"CommandLine": "cmdline"
-	},
-	"split": {}
+    "exclusions" : [],
+    "useless" : [],
+    "mappings" : {},
+    "alias":{
+        "CommandLine": "cmdline"
+    },
+    "split": {}
 }
 ```
 
@@ -304,13 +322,13 @@ With this configuration, the event log used to apply Sigma rules will look like 
 
 ```json 
 {
-	"EventID": 1,
-	"Provider_Name": "Microsoft-Windows-Sysmon",
-	"Channel": "Microsoft-Windows-Sysmon/Operational",
-	"CommandLine": "\"C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe\"",
-	"cmdline": "\"C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe\"",
-	"Image": "C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe",
-	"IntegrityLevel": "Medium",
+    "EventID": 1,
+    "Provider_Name": "Microsoft-Windows-Sysmon",
+    "Channel": "Microsoft-Windows-Sysmon/Operational",
+    "CommandLine": "\"C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe\"",
+    "cmdline": "\"C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe\"",
+    "Image": "C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe",
+    "IntegrityLevel": "Medium",
 }
 ```
 
@@ -333,13 +351,13 @@ With the following configuration, Zircolite will split the `hashes` field like t
 
 ```json 
 {
-	"exclusions" : [],
-	"useless" : [],
-	"mappings" : {},
-	"alias":{},
-	"split": {
-		"Hashes": {"separator":",", "equal":"="}
-	}
+    "exclusions" : [],
+    "useless" : [],
+    "mappings" : {},
+    "alias":{},
+    "split": {
+        "Hashes": {"separator":",", "equal":"="}
+    }
 }
 ```
 
@@ -347,12 +365,12 @@ The final event log used to apply Sigma rules will look like this :
 
 ```json
 {
-	"SHA1": "F43D9BB316E30AE1A3494AC5B0624F6BEA1BF054",
-	"MD5": "04029E121A0CFA5991749937DD22A1D9",
-	"SHA256": "9F914D42706FE215501044ACD85A32D58AAEF1419D404FDDFA5D3B48F66CCD9F",
-	"IMPHASH": "7C955A0ABC747F57CCC4324480737EF7",
-	"Hashes": "SHA1=F43D9BB316E30AE1A3494AC5B0624F6BEA1BF054,MD5=04029E121A0CFA5991749937DD22A1D9,SHA256=9F914D42706FE215501044ACD85A32D58AAEF1419D404FDDFA5D3B48F66CCD9F,IMPHASH=7C955A0ABC747F57CCC4324480737EF7",
-	"EventID": 1
+    "SHA1": "F43D9BB316E30AE1A3494AC5B0624F6BEA1BF054",
+    "MD5": "04029E121A0CFA5991749937DD22A1D9",
+    "SHA256": "9F914D42706FE215501044ACD85A32D58AAEF1419D404FDDFA5D3B48F66CCD9F",
+    "IMPHASH": "7C955A0ABC747F57CCC4324480737EF7",
+    "Hashes": "SHA1=F43D9BB316E30AE1A3494AC5B0624F6BEA1BF054,MD5=04029E121A0CFA5991749937DD22A1D9,SHA256=9F914D42706FE215501044ACD85A32D58AAEF1419D404FDDFA5D3B48F66CCD9F,IMPHASH=7C955A0ABC747F57CCC4324480737EF7",
+    "EventID": 1
 }
 ```
 
@@ -409,11 +427,11 @@ cd legacy-sigmatools
 
 ```shell 
 sigmac \
-	-t sqlite \
-	-c tools/config/generic/sysmon.yml \
-	-c tools/config/generic/powershell.yml \
-	-c tools/config/zircolite.yml \
-	-d rules/windows/ \
+    -t sqlite \
+    -c tools/config/generic/sysmon.yml \
+    -c tools/config/generic/powershell.yml \
+    -c tools/config/zircolite.yml \
+    -d rules/windows/ \
    --output-fields title,id,description,author,tags,level,falsepositives,filename,status \
    --output-format json \
    -r \
@@ -433,11 +451,11 @@ Where :
 
 ```shell 
 sigmac \
-	-t sqlite \
-	-c tools/config/generic/windows-audit.yml \
-	-c tools/config/generic/powershell.yml \
-	-c tools/config/zircolite.yml \
-	-d rules/windows/ \
+    -t sqlite \
+    -c tools/config/generic/windows-audit.yml \
+    -c tools/config/generic/powershell.yml \
+    -c tools/config/zircolite.yml \
+    -d rules/windows/ \
    --output-fields title,id,description,author,tags,level,falsepositives,filename,status \
    --output-format json \
    -r \
@@ -459,8 +477,10 @@ For example :
 
 ## Generate embedded versions
 
-*Removed*.
-You can use DFIR Orc to package Zircolite, check [here](Advanced.md#using-with-dfir-orc).
+***Removed***
+
+- You can use DFIR Orc to package Zircolite, check [here](Advanced.md#using-with-dfir-orc)
+- [Kape](https://www.kroll.com/en/services/cyber-risk/incident-response-litigation-support/kroll-artifact-parser-extractor-kape) also has a module for Zircolite : [here](https://github.com/EricZimmerman/KapeFiles/tree/master/Modules/Apps/GitHub)
 
 ## Docker
 
@@ -471,9 +491,9 @@ Zircolite is also packaged as a Docker image (cf. [wagga40/zircolite](https://hu
 ```shell
 docker build . -t <Image name>
 docker container run --tty --volume <EVTX folder>:/case <Image name> \
-	--ruleset rules/rules_windows_sysmon.json \
-	--evtx /case \
-	--outfile /case/detected_events.json
+    --ruleset rules/rules_windows_sysmon.json \
+    --evtx /case \
+    --outfile /case/detected_events.json
 ```
 
 This will recursively find EVTX files in the `/case` directory of the container (which is bound to the `/path/to/evtx` of the host filesystem) and write the detection events to the `/case/detected_events.json` (which finally corresponds to `/path/to/evtx/detected_events.json`).
@@ -482,9 +502,9 @@ Event if Zircolite does not alter the original EVTX files, sometimes you want to
 
 ```shell
 docker run --rm --tty -v <EVTX folder>:/case/input:ro -v <Results folder>:/case/output \
-	<Zircolite Image name> 
-	--ruleset rules/rules_windows_sysmon.json \
-	--evtx /case/input -o /case/output/detected_events.json
+    <Zircolite Image name> 
+    --ruleset rules/rules_windows_sysmon.json \
+    --evtx /case/input -o /case/output/detected_events.json
 ```
 
 ### Docker Hub
@@ -493,7 +513,7 @@ You can use the Docker image available on [Docker Hub](https://hub.docker.com/r/
 
 ```shell
 docker container run --tty \
-	--volume <EVTX folder>:/case docker.io/wagga40/zircolite:lastest \
-	--ruleset rules/rules_windows_sysmon.json \
-	--evtx /case --outfile /case/detected_events.json
+    --volume <EVTX folder>:/case docker.io/wagga40/zircolite:lastest \
+    --ruleset rules/rules_windows_sysmon.json \
+    --evtx /case --outfile /case/detected_events.json
 ```
