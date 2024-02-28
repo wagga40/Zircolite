@@ -7,5 +7,5 @@ evtx>=0.6.2
 aiohttp[speedups]~=3.9.2
 lxml~=4.6
 elasticsearch[async]>=7.8.0
-orjson>=3.6.0
+orjson>=3.9.15
 xxhash
