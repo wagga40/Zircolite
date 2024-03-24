@@ -6,6 +6,7 @@ import asyncio
 import csv
 import functools
 import hashlib
+import importlib
 import logging
 import multiprocessing as mp
 import os
@@ -57,12 +58,8 @@ sigmaConversionDisabled = False
 try:
     from sigma.collection import SigmaCollection
     from sigma.backends.sqlite import sqlite
-    from sigma.pipelines.sysmon import sysmon_pipeline
-    from sigma.pipelines.windows import (
-        windows_logsource_pipeline,
-        windows_audit_pipeline,
-    )
     from sigma.processing.resolver import ProcessingPipelineResolver
+    from sigma.plugins import InstalledSigmaPlugins
     import yaml
 except ImportError:
     sigmaConversionDisabled = True
@@ -887,7 +884,7 @@ class zirCore:
         filteredRows = []
         counter = 0
         if "rule" in rule:
-            # for each SQL Query in the SIGMA rule
+            # for each SQL Query in the Sigma rule
             for SQLQuery in rule["rule"]:
                 data = self.executeSelectQuery(SQLQuery)
                 if data != {}:
@@ -1067,7 +1064,7 @@ class zirCore:
                                         self.logger.error(
                                             f"{Fore.RED}   [-] Error saving some results : {e}{Fore.RESET}"
                                         )
-                if not self.noOutput and not self.csvMode and lastRuleset:
+                if (not self.noOutput and not self.csvMode) and lastRuleset:
                     fileHandle.write("{}]")  # Added to produce a valid JSON Array
 
     def run(
@@ -1134,6 +1131,12 @@ class evtxExtractor:
         self.auditdLogs = auditdLogs
         self.evtxtract = evtxtract
         self.csvInput = csvInput
+        # Hardcoded hash list of evtx_dump binaries
+        self.validHashList = [
+            "bbcce464533e0364",
+            "e642f5c23e156deb",
+            "5a7a1005885a1a11",
+        ]
         # Sysmon 4 Linux default encoding is ISO-8859-1, Auditd is UTF-8
         if not encoding and sysmon4linux:
             self.encoding = "ISO-8859-1"
@@ -1348,6 +1351,23 @@ class evtxExtractor:
                     )
                     fp.write(json.dumps(extractedEvent).decode("utf-8") + "\n")
 
+    def verifyBinHash(self, binPath):
+        """
+        Verify the hash of a binary (Hashes are hardcoded)
+        """
+        hasher = xxhash.xxh64()
+        try:
+            # Open the file in binary mode and read chunks to hash
+            with open(binPath, "rb") as f:
+                while chunk := f.read(4096):  # Read chunks of 4096 bytes
+                    hasher.update(chunk)  # Update the hash with the chunk
+            if hasher.hexdigest() in self.validHashList:
+                return True
+        except Exception as e:
+            self.logger.error(f"{Fore.RED}   [-] {e}{Fore.RESET}")
+
+        return False
+
     def run(self, file):
         """
         Convert Logs to JSON
@@ -1355,19 +1375,16 @@ class evtxExtractor:
         """
         self.logger.debug(f"EXTRACTING : {file}")
         filename = Path(file).name
+        outputJSONFilename = f"{self.tmpDir}/{str(filename)}-{self.randString()}.json"
         # Auditd or Sysmon4Linux logs
         if self.sysmon4linux or self.auditdLogs:
             # Choose which log backend to use
             if self.sysmon4linux:
                 func = self.SysmonXMLLine2JSON
-            else:
+            elif self.auditdLogs:
                 func = self.auditdLine2JSON
             try:
-                self.Logs2JSON(
-                    func,
-                    str(file),
-                    f"{self.tmpDir}/{str(filename)}-{self.randString()}.json",
-                )
+                self.Logs2JSON(func, str(file), outputJSONFilename)
             except Exception as e:
                 self.logger.error(f"{Fore.RED}   [-] {e}{Fore.RESET}")
         # XML logs
@@ -1383,27 +1400,20 @@ class evtxExtractor:
                         .replace("<Event ", "\n<Event ")
                     )
                 self.Logs2JSON(
-                    self.XMLLine2JSON,
-                    data,
-                    f"{self.tmpDir}/{str(filename)}-{self.randString()}.json",
-                    isFile=False,
+                    self.XMLLine2JSON, data, outputJSONFilename, isFile=False
                 )
             except Exception as e:
                 self.logger.error(f"{Fore.RED}   [-] {e}{Fore.RESET}")
         # EVTXtract
         elif self.evtxtract:
             try:
-                self.evtxtract2JSON(
-                    str(file), f"{self.tmpDir}/{str(filename)}-{self.randString()}.json"
-                )
+                self.evtxtract2JSON(str(file), outputJSONFilename)
             except Exception as e:
                 self.logger.error(f"{Fore.RED}   [-] {e}{Fore.RESET}")
         # CSV
         elif self.csvInput:
             try:
-                self.csv2JSON(
-                    str(file), f"{self.tmpDir}/{str(filename)}-{self.randString()}.json"
-                )
+                self.csv2JSON(str(file), outputJSONFilename)
             except Exception as e:
                 self.logger.error(f"{Fore.RED}   [-] {e}{Fore.RESET}")
         # EVTX
@@ -1414,23 +1424,25 @@ class evtxExtractor:
                 )
                 self.runUsingBindings(file)
             else:
-                try:
-                    cmd = [
-                        self.evtxDumpCmd,
-                        "--no-confirm-overwrite",
-                        "-o",
-                        "jsonl",
-                        str(file),
-                        "-f",
-                        f"{self.tmpDir}/{str(filename)}-{self.randString()}.json",
-                        "-t",
-                        str(self.cores),
-                    ]
-                    subprocess.call(
-                        cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT
-                    )
-                except Exception as e:
-                    self.logger.error(f"{Fore.RED}   [-] {e}{Fore.RESET}")
+                # Check if the binary is valid does not avoid TOCTOU
+                if self.verifyBinHash(self.evtxDumpCmd):
+                    try:
+                        cmd = [
+                            self.evtxDumpCmd,
+                            "--no-confirm-overwrite",
+                            "-o",
+                            "jsonl",
+                            str(file),
+                            "-f",
+                            outputJSONFilename,
+                            "-t",
+                            str(self.cores),
+                        ]
+                        subprocess.call(
+                            cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT
+                        )
+                    except Exception as e:
+                        self.logger.error(f"{Fore.RED}   [-] {e}{Fore.RESET}")
 
     def cleanup(self):
         shutil.rmtree(self.tmpDir)
@@ -1567,31 +1579,49 @@ class rulesUpdater:
 
 
 class rulesetHandler:
-    def __init__(self, logger=None, config=None):
+    def __init__(self, logger=None, config=None, listPipelineOnly=False):
         self.logger = logger or logging.getLogger(__name__)
         self.saveRuleset = config.save_ruleset
         self.rulesetPathList = config.ruleset
         self.cores = config.cores or os.cpu_count()
         self.sigmaConversionDisabled = config.no_sigma_conversion
+        self.pipelines = []
 
         if self.sigmaConversionDisabled:
             self.logger.info(
-                f"{Fore.LIGHTYELLOW_EX}   [i] SIGMA conversion is disabled ! {Fore.RESET}"
+                f"{Fore.LIGHTYELLOW_EX}   [i] Sigma conversion is disabled (missing imports) ! {Fore.RESET}"
             )
-
-        # Rsolving pipelines
-        if config.pipeline_sysmon:
-            self.pipelines = [sysmon_pipeline(), windows_logsource_pipeline()]
-        elif config.pipeline_windows:
-            self.pipelines = [windows_audit_pipeline(), windows_logsource_pipeline()]
         else:
-            self.pipelines = []
+            # Init pipelines
+            plugins = InstalledSigmaPlugins.autodiscover()
+            pipeline_resolver = plugins.get_pipeline_resolver()
+            pipeline_list = list(pipeline_resolver.pipelines.keys())
+
+            if listPipelineOnly:
+                self.logger.info(
+                    "[+] Installed pipelines : "
+                    + ", ".join(pipeline_list)
+                    + "\n    You can install pipelines with your Python package manager"
+                    + "\n    e.g : pip install pysigma-pipeline-sysmon"
+                )
+            else:
+                # Resolving pipelines
+                if config.pipeline:
+                    for pipelineName in [
+                        item for pipeline in config.pipeline for item in pipeline
+                    ]:  # Flatten the list of pipeline names list
+                        if pipelineName in pipeline_list:
+                            self.pipelines.append(plugins.pipelines[pipelineName]())
+                        else:
+                            self.logger.error(
+                                f"{Fore.RED}   [-] {pipelineName} not found. You can list installed pipelines with '--pipeline-list'{Fore.RESET}"
+                            )
 
         # Parse & (if necessary) convert ruleset, final list is stored in self.Rulesets
         self.Rulesets = self.rulesetParsing()
 
         # Combining Rulesets
-        if config.combine_ruleset:
+        if config.combine_rulesets:
             self.Rulesets = [
                 item
                 for subRuleset in self.Rulesets
@@ -1654,8 +1684,8 @@ class rulesetHandler:
             piperesolver = ProcessingPipelineResolver()
             # Add pipelines
             for pipeline in pipelines:
-                piperesolver.add_pipeline_class(pipeline)  # Sysmon handling
-            # Create a single sorted and prioritzed pipeline
+                piperesolver.add_pipeline_class(pipeline)
+            # Create a single sorted and prioritized pipeline
             combined_pipeline = piperesolver.resolve(piperesolver.pipelines)
             # Instantiate backend, using our resolved pipeline
             sqlite_backend = sqlite.sqliteBackend(combined_pipeline)
@@ -1682,9 +1712,13 @@ class rulesetHandler:
             ruleset = sorted(ruleset, key=lambda d: d["level"])  # Sorting by level
 
             if self.saveRuleset:
-                with open(self.randRulesetName(str(sigmaRules)), "w") as outfile:
+                tempRulesetName = self.randRulesetName(str(sigmaRules))
+                with open(tempRulesetName, "w") as outfile:
                     outfile.write(
                         json.dumps(ruleset, option=json.OPT_INDENT_2).decode("utf-8")
+                    )
+                    self.logger.info(
+                        f"{Fore.CYAN}   [+] Saved ruleset as : {tempRulesetName}{Fore.RESET}"
                     )
 
         return ruleset
@@ -1707,13 +1741,12 @@ class rulesetHandler:
                                 f"{Fore.RED}   [-] Cannot load {str(rulesetPath)} {e}{Fore.RESET}"
                             )
                     else:  # YAML Ruleset
-                        if (
-                            self.isYAML(rulesetPath)
-                            and not self.sigmaConversionDisabled
+                        if not self.sigmaConversionDisabled and self.isYAML(
+                            rulesetPath
                         ):
                             try:
                                 self.logger.info(
-                                    f"{Fore.CYAN}   [+] Converting Native SIGMA to Zircolite ruleset : {str(rulesetPath)}{Fore.RESET}"
+                                    f"{Fore.CYAN}   [+] Converting Native Sigma to Zircolite ruleset : {str(rulesetPath)}{Fore.RESET}"
                                 )
                                 rulesetList.append(
                                     self.sigmaRulesToRuleset(
@@ -1725,11 +1758,11 @@ class rulesetHandler:
                                     f"{Fore.RED}   [-] Cannot convert {str(rulesetPath)} {e}{Fore.RESET}"
                                 )
                 elif (
-                    rulesetPath.is_dir() and not self.sigmaConversionDisabled
+                    not self.sigmaConversionDisabled and rulesetPath.is_dir()
                 ):  # Directory
                     try:
                         self.logger.info(
-                            f"{Fore.CYAN}   [+] Converting Native SIGMA to Zircolite ruleset : {str(rulesetPath)}{Fore.RESET}"
+                            f"{Fore.CYAN}   [+] Converting Native Sigma to Zircolite ruleset : {str(rulesetPath)}{Fore.RESET}"
                         )
                         rulesetList.append(
                             self.sigmaRulesToRuleset([rulesetPath], self.pipelines)
@@ -1818,8 +1851,9 @@ def ImportErrorHandler(config):
         return "", config, False
 
     return (
-        f"{Fore.LIGHTYELLOW_EX}   [i] Import errors, functions can be disabled ('--imports' for details){Fore.RESET}",
+        f"{Fore.LIGHTYELLOW_EX}   [i] Import errors, certain functionalities may be disabled ('--imports' for details)\n       Supplemental imports can be installed with 'requirements.full.txt'{Fore.RESET}",
         config,
+        False,
     )
 
 
@@ -1833,26 +1867,26 @@ def main():
     parser = argparse.ArgumentParser()
     # Input files and filtering/selection options
     logsInputArgs = parser.add_argument_group(
-        "Input files and filtering/selection options"
+        f"{Fore.BLUE}INPUT FILES AND FILTERING/SELECTION OPTIONS{Fore.RESET}"
     )
     logsInputArgs.add_argument(
         "-e",
         "--evtx",
         "--events",
-        help="Log file or directory where log files are stored in JSON, Auditd, Sysmon for Linux, or EVTX format",
+        help="Log file or directory where log files are stored in supported format",
         type=str,
     )
     logsInputArgs.add_argument(
         "-s",
         "--select",
-        help="Only files containing the provided string will be used. If there is/are exclusion(s) (--avoid) they will be handled after selection",
+        help="Only files with filenames containing the provided string will be used. If there is/are exclusion(s) (--avoid) they will be handled after selection",
         action="append",
         nargs="+",
     )
     logsInputArgs.add_argument(
         "-a",
         "--avoid",
-        help="EVTX files containing the provided string will NOT be used",
+        help="Files files with filenames containing the provided string will NOT be used",
         action="append",
         nargs="+",
     )
@@ -1871,7 +1905,9 @@ def main():
         action="store_true",
     )
     # Events filtering options
-    eventArgs = parser.add_argument_group("Events filtering options")
+    eventArgs = parser.add_argument_group(
+        f"{Fore.BLUE}EVENTS FILTERING OPTIONS{Fore.RESET}"
+    )
     eventArgs.add_argument(
         "-A",
         "--after",
@@ -1887,7 +1923,7 @@ def main():
         default="9999-12-12T23:59:59",
     )
     # Event and log formats options
-    eventFormatsArgs = parser.add_argument_group("Event and log formats options")
+    eventFormatsArgs = parser.add_mutually_exclusive_group()
     eventFormatsArgs.add_argument(
         "-j",
         "--jsononly",
@@ -1941,21 +1977,17 @@ def main():
     eventFormatsArgs.add_argument(
         "--csvonly",
         "--csv-input",
-        help="Use this option if your log file was extracted with EVTXtract, default file extension is '.log'",
+        help="You log file is in CSV format '.csv'",
         action="store_true",
     )
-    eventFormatsArgs.add_argument(
-        "-LE",
-        "--logs-encoding",
-        help="Specify log encoding when dealing with Sysmon for Linux or Auditd files",
-        type=str,
-    )
     # Ruleset options
-    rulesetsFormatsArgs = parser.add_argument_group("Event and log formats options")
+    rulesetsFormatsArgs = parser.add_argument_group(
+        f"{Fore.BLUE}RULES AND RULESETS OPTIONS{Fore.RESET}"
+    )
     rulesetsFormatsArgs.add_argument(
         "-r",
         "--ruleset",
-        help="JSON File containing SIGMA rules (Zircolite ruleset)",
+        help="Sigma ruleset : JSON (Zircolite format) or YAML/Directory containing YAML files (Native Sigma format)",
         action="append",
         nargs="+",
     )
@@ -1964,32 +1996,33 @@ def main():
     )
     rulesetsFormatsArgs.add_argument(
         "-cr",
-        "--combine-ruleset",
-        help="JSON File containing SIGMA rules (Zircolite ruleset)",
+        "--combine-rulesets",
+        help="Merge all rulesets provided into one",
         action="store_true",
     )
     rulesetsFormatsArgs.add_argument(
         "-sr",
         "--save-ruleset",
-        help="Save converted ruleset (SIGMA to Zircolite format) to disk",
+        help="Save converted ruleset (Sigma to Zircolite format) to disk",
         action="store_true",
     )
     rulesetsFormatsArgs.add_argument(
-        "-ps",
-        "--pipeline-sysmon",
-        help="For all the raw SIGMA rulesets (YAML) provided use the sysmon pipeline",
-        action="store_true",
+        "-p",
+        "--pipeline",
+        help="For all the native Sigma rulesets (YAML) use this pipeline. Multiple can be used. Examples : 'sysmon', 'windows-logsources', 'windows-audit'. You can list installed pipelines with '--pipeline-list'.",
+        action="append",
+        nargs="+",
     )
     rulesetsFormatsArgs.add_argument(
-        "-pw",
-        "--pipeline-windows",
-        help="For all the raw SIGMA rulesets (YAML) provided use the generic windows pipeline",
+        "-pl",
+        "--pipeline-list",
+        help="List installed pysigma pipelines",
         action="store_true",
     )
     rulesetsFormatsArgs.add_argument(
         "-pn",
         "--pipeline-null",
-        help="For all the raw SIGMA rulesets (YAML) don't use pipeline (Default)",
+        help="For all the native Sigma rulesets (YAML) don't use any pipeline (Default)",
         action="store_true",
     )
     rulesetsFormatsArgs.add_argument(
@@ -1999,17 +2032,9 @@ def main():
         action="append",
         nargs="*",
     )
-    rulesetsFormatsArgs.add_argument(
-        "-L",
-        "--limit",
-        "--limit-results",
-        help="Discard results (in output file or forwarded events) that are above the provided limit",
-        type=int,
-        default=-1,
-    )
     # Ouput formats and output files options
     outputFormatsArgs = parser.add_argument_group(
-        "Ouput formats and output files options"
+        f"{Fore.BLUE}OUPUT FORMATS AND OUTPUT FILES OPTIONS{Fore.RESET}"
     )
     outputFormatsArgs.add_argument(
         "-o",
@@ -2059,14 +2084,30 @@ def main():
         help="Add an xxhash64 of the original log event to each event",
         action="store_true",
     )
+    outputFormatsArgs.add_argument(
+        "-L",
+        "--limit",
+        "--limit-results",
+        help="Discard results (in output file or forwarded events) that are above the provided limit",
+        type=int,
+        default=-1,
+    )
     # Advanced configuration options
-    configFormatsArgs = parser.add_argument_group("Advanced configuration options")
+    configFormatsArgs = parser.add_argument_group(
+        f"{Fore.BLUE}ADVANCED CONFIGURATION OPTIONS{Fore.RESET}"
+    )
     configFormatsArgs.add_argument(
         "-c",
         "--config",
         help="JSON File containing field mappings and exclusions",
         type=str,
         default="config/fieldMappings.json",
+    )
+    eventFormatsArgs.add_argument(
+        "-LE",
+        "--logs-encoding",
+        help="Specify log encoding when dealing with Sysmon for Linux or Auditd files",
+        type=str,
     )
     configFormatsArgs.add_argument(
         "--fieldlist", help="Get all events fields", action="store_true"
@@ -2079,6 +2120,7 @@ def main():
     )
     configFormatsArgs.add_argument(
         "--noexternal",
+        "--bindings",
         help="Don't use evtx_dump external binaries (slower)",
         action="store_true",
     )
@@ -2106,7 +2148,7 @@ def main():
     )
     configFormatsArgs.add_argument(
         "--ondiskdb",
-        help="Use an on-disk database instead of the in-memory one (much slower !). Use if your system has limited RAM or if your dataset is very large and you cannot split it.",
+        help="Use an on-disk database instead of the in-memory one (much slower !). Use if your system has limited RAM or if your dataset is very large and you cannot split it",
         type=str,
         default=":memory:",
     )
@@ -2126,7 +2168,9 @@ def main():
         "-v", "--version", help="Show Zircolite version", action="store_true"
     )
     # Forwarding options
-    forwardingFormatsArgs = parser.add_argument_group("Forwarding options")
+    forwardingFormatsArgs = parser.add_argument_group(
+        f"{Fore.BLUE}FORWARDING OPTIONS{Fore.RESET}"
+    )
     forwardingFormatsArgs.add_argument(
         "--remote",
         help="Forward results to a HTTP/Splunk/Elasticsearch, please provide the full address e.g http[s]://address:port[/uri]",
@@ -2159,7 +2203,9 @@ def main():
         action="store_true",
     )
     # Templating and Mini GUI options
-    templatingFormatsArgs = parser.add_argument_group("Templating and Mini GUI options")
+    templatingFormatsArgs = parser.add_argument_group(
+        f"{Fore.BLUE}TEMPLATING AND MINI GUI OPTIONS{Fore.RESET}"
+    )
     templatingFormatsArgs.add_argument(
         "--template",
         help="If a Jinja2 template is specified it will be used to generated output",
@@ -2175,7 +2221,7 @@ def main():
         nargs="+",
     )
     templatingFormatsArgs.add_argument(
-        "--package", help="Create a ZircoGui package", action="store_true"
+        "--package", help="Create a ZircoGui/Mini Gui package", action="store_true"
     )
     args = parser.parse_args()
 
@@ -2194,7 +2240,7 @@ def main():
      ███╔╝  ██║██╔══██╗██║     ██║   ██║██║     ██║   ██║   ██╔══╝
     ███████╗██║██║  ██║╚██████╗╚██████╔╝███████╗██║   ██║   ███████╗
     ╚══════╝╚═╝╚═╝  ╚═╝ ╚═════╝ ╚═════╝ ╚══════╝╚═╝   ╚═╝   ╚══════╝
-   -= Standalone SIGMA Detection tool for EVTX/Auditd/Sysmon Linux =-
+   -= Standalone Sigma Detection tool for EVTX/Auditd/Sysmon Linux =-
     """
     )
 
@@ -2209,8 +2255,10 @@ def main():
 
     # Print version an quit
     if args.version:
-        consoleLogger.info(f"Zircolite - v{version}"), sys.exit(0)
+        consoleLogger.info(f"Zircolite - v{version}")
+        sys.exit(0)
 
+    # Update rulesets
     if args.update_rules:
         consoleLogger.info("[+] Updating rules")
         updater = rulesUpdater(logger=consoleLogger)
@@ -2223,14 +2271,16 @@ def main():
     else:
         args.ruleset = ["rules/rules_windows_generic_pysigma.json"]
 
+    # Loading rulesets
+    consoleLogger.info("[+] Loading ruleset(s)")
+    rulesetsManager = rulesetHandler(consoleLogger, args, args.pipeline_list)
+    if args.pipeline_list:
+        sys.exit(0)
+
     # Check mandatory CLI options
     if not args.evtx:
         consoleLogger.error(
-            f"{Fore.RED}   [-] No events source path provided{Fore.RESET}"
-        ), sys.exit(2)
-    if int(args.sysmon4linux) + int(args.auditd) + int(args.evtxtract) > 1:
-        consoleLogger.error(
-            f"{Fore.RED}   [-] --sysmon4linux, --auditd and --evtxtract arguments cannot be used together{Fore.RESET}"
+            f"{Fore.RED}   [-] No events source path provided. Use '-e <PATH TO LOGS>', '--events <PATH TO LOGS>'{Fore.RESET}"
         ), sys.exit(2)
     if args.forwardall and args.dbonly:
         consoleLogger.error(
@@ -2442,10 +2492,7 @@ def main():
         args.rulefilter = [item for sublist in args.rulefilter for item in sublist]
 
     writeMode = "w"
-    consoleLogger.info("[+] Loading ruleset(s)")
-    rulesetsManager = rulesetHandler(consoleLogger, args)
     for ruleset in rulesetsManager.Rulesets:
-
         zircoliteCore.loadRulesetFromVar(ruleset=ruleset, ruleFilters=args.rulefilter)
         if args.limit > 0:
             consoleLogger.info(
@@ -2462,7 +2509,7 @@ def main():
             KeepResults=(readyForTemplating or args.package),
             remote=args.remote,
             stream=args.stream,
-            lastRuleset=(ruleset == args.ruleset[-1]),
+            lastRuleset=(ruleset == rulesetsManager.Rulesets[-1]),
         )
         writeMode = "a"  # Next iterations will append to results file
 

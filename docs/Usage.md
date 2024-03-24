@@ -4,8 +4,8 @@
 
 ## Requirements and Installation
 
-- [Release versions](https://github.com/wagga40/Zircolite/releases) are standalone, they are easier to use and deploy
-- If you have an **ARM CPU, it is stringly recommended to use the release versions**
+- [Release versions](https://github.com/wagga40/Zircolite/releases) are standalone, they are easier to use and deploy. Be careful, **the packager (nuitka) does not like Zircolite being run in from another directory**.
+- If you have an **ARM CPU, it is strongly recommended to use the release versions**
 - The repository version of Zircolite works with **Python 3.8** and above
 - The repository version can run on Linux, Mac OS and Windows
 - The use of [evtx_dump](https://github.com/omerbenamram/evtx) is **optional but required by default (because it is for now much faster)**, I you do not want to use it you have to use the '--noexternal' option. The tool is provided if you clone the Zircolite repository (the official repository is [here](https://github.com/omerbenamram/evtx)).
@@ -16,7 +16,7 @@
 
 ```bash
 # DECOMPRESS
-7z x zircolite_lin_amd64_glibc_2.10.0.zip
+7z x zircolite_lin_amd64_glibc_2.20.0.zip
 cd zircolite_lin_amd64_glibc/
 
 # EXAMPLE RUN
@@ -63,9 +63,9 @@ If you want to use *poetry*, just replace the "pdm" command in the above example
 
 ### Known issues
 
-Sometimes `evtx_dump` hangs under MS Windows, this is not related to Zircolite. If it happens to you, usually the use of `--noexternal` solves the problem.
+- Sometimes `evtx_dump` hangs under MS Windows, this is not related to Zircolite. If it happens to you, usually the use of `--noexternal` solves the problem. If you can share the EVTX files on whose the blocking happened, feel free to post an issue in the [evtx_dump](https://github.com/omerbenamram/evtx/issues) repository.
+- If you use the packaged/release version, please note that the packager (nuitka) does not like Zircolite being run in from another directory (i.e : `c:\SOMEDIR\Zircolite\Zircolite.exe -e sample.evtx -r rules.json`).
 
-If you can share the EVTX files on whose the blocking happened, feel free to post an issue in the [evtx_dump](https://github.com/omerbenamram/evtx/issues) repository.
 
 ## Basic usage 
 
@@ -78,10 +78,11 @@ python3 zircolite.py --events <LOGS> --ruleset <RULESET>
 ```
 
 Where : 
+
 - `--events` is a filename or a directory containing the logs you want to analyse (`--evtx` and `-e` can be used instade of `--events`) . Zircolite support the following format : EVTX, XML, JSON (one event per line), JSON Array (one big array), EVTXTRACT, CSV, Auditd, Sysmon for Linux
 - `--ruleset` is a file or directory containing the Sigma rules to use for detection. Zircolite as its own format called "Zircolite ruleset" where all the rules are in one JSON file. However, as of version *2.20.0*, Zircolite can directly use Sigma rules in YAML format (YAML file or Directory containing the YAML files)
 
-Multiple rulesets can be specified, results can be per-ruleset or combined (with `--combine-ruleset` or `-cr`) : 
+Multiple rulesets can be specified, results can be per-ruleset or combined (with `--combine-rulesets` or `-cr`) : 
 
 ```shell
 # Example with a Zircolite ruleset and a Sigma rule. Results will be displayed per-ruleset
@@ -232,9 +233,65 @@ python3 zircolite.py --evtx <EVTX_FOLDER> --ruleset <CONVERTED_SIGMA_RULES> \
 
 If you need to re-execute Zircolite,  you can do it directly using the SQLite database as the EVTX source (with `--evtx <SAVED_SQLITE_DB_PATH>` and `--dbonly`) and avoid to convert the EVTX, post-process the EVTX and insert data to database. **Using this technique can save a lot of time... But you will be unable to use the `--forwardall`option** 
 
+## Rulesets / Rules
+
+Zircolite has his own rulesets format (JSON). Default rulesets are available in the [rules](https://github.com/wagga40/Zircolite/tree/master/rules/) directory or in the [Zircolite-Rules](https://github.com/wagga40/Zircolite-Rules) repository.
+
+Since version 2.20.0, Zircolite can directly use native Sigma rules by converting them with [pySigma](https://github.com/SigmaHQ/pySigma). Zircolite will detect whether the provided rules are in JSON or YAML format and will automatically convert the rules in the latter case : 
+
+```bash
+# Simple rule
+python3 zircolite.py -e sample.evtx -r schtasks.yml
+
+# Directory
+python3 zircolite.py -e sample.evtx -r ./sigma/rules/windows/process_creation
+
+```
+### Using multiple rules/rulesets
+
+It is possible to use multiple rulesets by chaining or repeating with the `-r`or `--ruleset` arguments : 
+
+```bash
+# Simple rule
+python3 zircolite.py -e sample.evtx -r schtasks.yml -r ./sigma/rules/windows/process_creation
+
+```
+
+By default, the detection results are displayed by ruleset, it is possible to group the results with `-cr` or `--combine-rulesets`. In this case only one list will be displayed.
+
+## Pipelines 
+
+By default, Zircolite does not use any pySigma pipelines, which can be somewhat limiting. However, it is possible to use the default pySigma pipelines. 
+
+### Install and list pipelines
+
+However, they must be installed before check [pySigma docs](https://github.com/SigmaHQ) for that, but it is generaly as simple as : 
+
+- `pip3 install pysigma-pipeline-nameofpipeline`
+- `poetry add pysigma-pipeline-nameofpipeline`
+
+Installed pipelines can be listed with : 
+
+- `python3 zircolite_dev.py -pl`
+- `python3 zircolite_dev.py --pipeline-list`
+
+### Use pipelines
+
+To use pipelines, employ the -p or --pipelines arguments; multiple pipelines are supported. The usage closely mirrors that of **Sigma-cli**.
+
+Example : 
+
+```bash
+python3 zircolite.py -e sample.evtx -r schtasks.yml -p sysmon -p windows-logsources
+```
+
+The converted rules/rulesets can be saved by using the `-sr` or the `--save-ruleset` arguments.
+
+:information_source: When using multiple native Sigma rule/rulesets, you cannot differenciate pipelines. All the pipelines will be used in the conversion process.
+
 ## Field mappings, field exclusions, value exclusions, field aliases and field splitting
 
-Sometimes your logs need some transformations to allow your rules to match against them. Zircolite has multiple mechanisms for this. The configuration of these mechanisms is provided by a file that can be found in the [config](https://github.com/wagga40/Zircolite/tree/master/config/) directory of the repository. It is also possible to provide your own configuration woth the `--config` or `-c` options.
+If your logs require transformations to align with your rules, Zircolite offers several mechanisms for this purpose. You can configure these mechanisms using a file located in the [config](https://github.com/wagga40/Zircolite/tree/master/config/) directory of the repository. Additionally, you have the option to use your own configuration by utilizing the `--config` or `-c` options.
 
 The configuration file has the following structure : 
 
@@ -260,9 +317,9 @@ The configuration file has the following structure :
 
 ### Field mappings
 
-**field mappings** allow you to rename a field from your raw logs (the ones that you want to analyze with Zircolite). Zircolite already uses this mechanism to rename nested JSON fields. You can check all the builtin field mappings [here](https://github.com/wagga40/Zircolite/blob/master/config/fieldMappings.json).
+**Field mappings** enable you to rename a field from your logs. Zircolite leverages this mechanism extensively to rename nested JSON fields. You can view all the built-in field mappings [here](https://github.com/wagga40/Zircolite/blob/master/config/fieldMappings.json).
 
-For example, if you want to rename the field "CommandLine" in **your raw logs** to "cmdline", you can add the following in the [here](https://github.com/wagga40/Zircolite/blob/master/config/fieldMappings.json) file : 
+For instance, to rename the "CommandLine" field in **your raw logs** to "cmdline", you can add the following entry to the [fieldMappings.json](https://github.com/wagga40/Zircolite/blob/master/config/fieldMappings.json) file:
 
 ```json 
 {
