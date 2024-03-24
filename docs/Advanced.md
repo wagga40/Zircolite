@@ -7,7 +7,7 @@ Zircolite tries to be as fast as possible so a lot of data is stored in memory. 
 - **Zircolite memory use oscillate between 2 or 3 times the size of the logs**
 - It is not a good idea to use it on very big EVTX files or a large number of EVTX **as is**
 
-The tool has been created to be used on very big datasets and there are a lot of ways to speed up Zircolite :
+There are a lot of ways to speed up Zircolite :
 
 - Using as much CPU core as possible : see below "[Using GNU Parallel](using-gnu-parallel)"
 - Using [Filtering](#filtering)
@@ -26,7 +26,7 @@ Except when `evtx_dump` is used, Zircolite only use one core. So if you have a l
 
 	```shell
 	find <CASE_DIRECTORY> -maxdepth 1 -mindepth 1 -type d | \
-		parallel --bar python3 zircolite.py --evtx {} \ 
+		parallel --bar python3 zircolite.py --evtx {} \
 		--ruleset rules/rules_windows_sysmon.json --outfile {/.}.json
 	```
 	
@@ -179,7 +179,7 @@ As of v1.3.5, Zircolite can forward detections to a Splunk instance with Splunk 
 
 ```shell
 python3 zircolite.py --evtx /sample.evtx  --ruleset rules/rules_windows_sysmon.json \
-	--remote "https://x.x.x.x:8088" --token "xxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx" \ 
+	--remote "https://x.x.x.x:8088" --token "xxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx" \
 	[--index myindex]
 ```
 
@@ -359,3 +359,10 @@ Basically, if you want to integrate Zircolite with **DFIR Orc** :
 
 - Now you need to generate the **DFIR Orc** binary by executing `.\configure.ps1` at the root of the repository
 - The final output will be in the `output` directory
+
+## Other tools 
+
+Some other tools (mostly untested) have included a way to run Zircolite : 
+
+- [Kape](https://www.kroll.com/en/services/cyber-risk/incident-response-litigation-support/kroll-artifact-parser-extractor-kape) has a module for Zircolite : [here](https://github.com/EricZimmerman/KapeFiles/tree/master/Modules/Apps/GitHub)
+- [Velociraptor](https://github.com/Velocidex/velociraptor) has an artifact for Zircolite : [here](https://docs.velociraptor.app/exchange/artifacts/pages/windows.eventlogs.zircolite/)

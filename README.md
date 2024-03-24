@@ -6,7 +6,7 @@
 [![python](https://img.shields.io/badge/python-3.8-blue)](https://www.python.org/)
 ![version](https://img.shields.io/badge/Architecture-64bit-red)
 
-> **Zircolite is a standalone tool written in Python 3. It allows to use SIGMA rules on : MS Windows EVTX (EVTX, XML and JSONL format), Auditd logs, Sysmon for Linux and EVTXtract logs**
+> **Zircolite is a standalone tool written in Python 3. It allows to use SIGMA rules on : MS Windows EVTX (EVTX, XML and JSONL format), Auditd logs, Sysmon for Linux, EVTXtract, CSV and XML logs**
 
 - **Zircolite** can be used directly on the investigated endpoint or in your forensic/detection lab
 - **Zircolite** is relatively fast and can parse large datasets in just seconds
@@ -19,7 +19,7 @@
 
 ## Requirements / Installation
 
-Python 3.8 minimum is required. You can install dependencies with : `pip3 install -r requirements.txt`
+Python 3.8 minimum is required. If you only want to use base functionnalities of Zircolite, you can install dependencies with : `pip3 install -r requirements.txt`. But `pip3 install -r requirements.full.txt` is strongly recommanded.
 
 The use of [evtx_dump](https://github.com/omerbenamram/evtx) is **optional but required by default (because it is -for now- much faster)**, If you do not want to use it you have to use the `--noexternal` option. The tool is provided if you clone the Zircolite repository (the official repository is [here](https://github.com/omerbenamram/evtx)).
 

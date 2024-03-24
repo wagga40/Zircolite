@@ -1,11 +1,4 @@
-jinja2>=2.11.3
-colorama>=0.4.4
-tqdm>=4.58.0
-urllib3>=1.26.2
-requests>=2.24.0
-evtx>=0.6.2
-aiohttp[speedups]~=3.9.2
-lxml~=4.6
-elasticsearch[async]>=7.8.0
 orjson>=3.9.15
 xxhash
+colorama>=0.4.4
+tqdm>=4.58.0
