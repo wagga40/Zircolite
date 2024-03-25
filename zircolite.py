@@ -6,7 +6,6 @@ import asyncio
 import csv
 import functools
 import hashlib
-import importlib
 import logging
 import multiprocessing as mp
 import os
@@ -2244,6 +2243,11 @@ def main():
     """
     )
 
+    # Print version an quit
+    if args.version:
+        consoleLogger.info(f"Zircolite - v{version}")
+        sys.exit(0)
+
     # Show imports status
     importsMessage, args, mustQuit = ImportErrorHandler(args)
     if importsMessage != "":
@@ -2252,11 +2256,6 @@ def main():
         consoleLogger.info("[+] Modules imports status: OK")
     if mustQuit:
         sys.exit(1)
-
-    # Print version an quit
-    if args.version:
-        consoleLogger.info(f"Zircolite - v{version}")
-        sys.exit(0)
 
     # Update rulesets
     if args.update_rules:
