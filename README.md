@@ -8,7 +8,6 @@
 
 > **Zircolite is a standalone tool written in Python 3. It allows to use SIGMA rules on : MS Windows EVTX (EVTX, XML and JSONL format), Auditd logs, Sysmon for Linux, EVTXtract, CSV and XML logs**
 
-- **Zircolite** can be used directly on the investigated endpoint or in your forensic/detection lab
 - **Zircolite** is relatively fast and can parse large datasets in just seconds
 - **Zircolite** is based on a Sigma backend (SQLite) and do not use internal sigma to "something" conversion
 - **Zircolite** can export results to multiple format with using Jinja [templates](templates) : JSON, CSV, JSONL, Splunk, Elastic, Zinc, Timesketch...
@@ -23,11 +22,11 @@ Python 3.8 minimum is required. If you only want to use base functionnalities of
 
 The use of [evtx_dump](https://github.com/omerbenamram/evtx) is **optional but required by default (because it is -for now- much faster)**, If you do not want to use it you have to use the `--noexternal` option. The tool is provided if you clone the Zircolite repository (the official repository is [here](https://github.com/omerbenamram/evtx)).
 
-:warning: the `evtx` library may need Rust and Cargo to be installed.
+:warning: On some systems (Mac, Arm, ...) the `evtx` library may need Rust and Cargo to be installed.
 
 ## Quick start
 
-#### EVTX files : 
+### EVTX files : 
 
 Help is available with `zircolite.py -h`. If your EVTX files have the extension ".evtx" :
 
@@ -36,11 +35,9 @@ Help is available with `zircolite.py -h`. If your EVTX files have the extension 
 python3 zircolite.py --evtx sysmon.evtx --ruleset rules/rules_windows_sysmon.json
 ```
 
-The SYSMON ruleset used here is a default one and is for logs coming from endpoints where SYSMON is installed. 
+The SYSMON ruleset employed is a default one, intended for analyzing logs from endpoints with SYSMON installed.
 
-Rules can be updated using the `-U` or `--update-rules` options.
-
-#### Auditd / Sysmon for Linux / JSONL or NDJSON logs : 
+### Auditd / Sysmon for Linux / JSONL or NDJSON logs : 
 
 ```shell
 python3 zircolite.py --events auditd.log --ruleset rules/rules_linux.json --auditd
@@ -50,7 +47,24 @@ python3 zircolite.py --events <JSON_FOLDER or JSON_FILE> --ruleset rules/rules_w
 
 :information_source: If you want to try the tool you can test with [EVTX-ATTACK-SAMPLES](https://github.com/sbousseaden/EVTX-ATTACK-SAMPLES) (EVTX Files).
 
-#### Updating default rulesets
+### Run with Docker
+
+```bash
+# Pull docker image
+docker pull wagga40/zircolite:latest
+# If your logs and rules are in a specific directory
+docker run --rm --tty \
+    -v $PWD:/case/input:ro \
+    -v $PWD:/case/output \
+    wagga40/zircolite:latest \
+    -e /case/input \
+    -o /case/output/detected_events.json \
+    -r /case/input/a_sigma_rule.yml
+```
+
+You can replace `$PWD` with the directory (absolute path only) where your logs and rules/rulesets are stored.
+
+### Updating default rulesets
 
 ```shell
 python3 zircolite.py -U

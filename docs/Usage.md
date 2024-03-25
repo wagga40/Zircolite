@@ -543,25 +543,41 @@ For example :
 
 Zircolite is also packaged as a Docker image (cf. [wagga40/zircolite](https://hub.docker.com/r/wagga40/zircolite) on Docker Hub), which embeds all dependencies (e.g. `evtx_dump`) and provides a platform-independant way of using the tool.
 
+You can pull the last image with : `docker pull wagga40/zircolite:latest`
+
 ### Build and run your own image
 
 ```shell
 docker build . -t <Image name>
-docker container run --tty --volume <EVTX folder>:/case <Image name> \
+docker container run --tty \
+    --volume <Logs folder>:/case
+    wagga40/zircolite:latest \
     --ruleset rules/rules_windows_sysmon.json \
-    --evtx /case \
+    --events /case \
     --outfile /case/detected_events.json
 ```
 
-This will recursively find EVTX files in the `/case` directory of the container (which is bound to the `/path/to/evtx` of the host filesystem) and write the detection events to the `/case/detected_events.json` (which finally corresponds to `/path/to/evtx/detected_events.json`).
-
-Event if Zircolite does not alter the original EVTX files, sometimes you want to make sure that nothing will write to the original files. For these cases, you can use a read-only bind mount with the following command:
+This will recursively find log files in the `/case` directory of the container (which is bound to the `/path/to/evtx` of the host filesystem) and write the detection events to the `/case/detected_events.json` (which finally corresponds to `/path/to/evtx/detected_events.json`). The given example uses the internal rulesets, if you want to use your own, place them in the same directory as the logs : 
 
 ```shell
-docker run --rm --tty -v <EVTX folder>:/case/input:ro -v <Results folder>:/case/output \
-    <Zircolite Image name> 
+docker container run --tty \
+    --volume <Logs folder>:/case
+    wagga40/zircolite:latest \
+    --ruleset /case/my_ruleset.json \
+    --events /case/my_logs.evtx \
+    --outfile /case/detected_events.json
+```
+
+Event if Zircolite does not alter the original log files, sometimes you want to make sure that nothing will write to the original files. For these cases, you can use a read-only bind mount with the following command:
+
+```shell
+docker run --rm --tty \
+    -v <EVTX folder>:/case/input:ro \
+    -v <Results folder>:/case/output \
+    wagga40/zircolite:latest \
     --ruleset rules/rules_windows_sysmon.json \
-    --evtx /case/input -o /case/output/detected_events.json
+    --events /case/input \
+    -o /case/output/detected_events.json
 ```
 
 ### Docker Hub
