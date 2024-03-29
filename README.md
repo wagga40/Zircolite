@@ -32,7 +32,7 @@ Help is available with `zircolite.py -h`. If your EVTX files have the extension 
 
 ```shell
 # python3 zircolite.py --evtx <EVTX FOLDER or EVTX FILE> --ruleset <SIGMA RULESET> [--ruleset <OTHER RULESET>]
-python3 zircolite.py --evtx sysmon.evtx --ruleset rules/rules_windows_sysmon.json
+python3 zircolite.py --evtx sysmon.evtx --ruleset rules/rules_windows_sysmon_pysigma.json
 ```
 
 The SYSMON ruleset employed is a default one, intended for analyzing logs from endpoints with SYSMON installed.
@@ -42,7 +42,7 @@ The SYSMON ruleset employed is a default one, intended for analyzing logs from e
 ```shell
 python3 zircolite.py --events auditd.log --ruleset rules/rules_linux.json --auditd
 python3 zircolite.py --events sysmon.log --ruleset rules/rules_linux.json --sysmon4linux
-python3 zircolite.py --events <JSON_FOLDER or JSON_FILE> --ruleset rules/rules_windows_sysmon.json --jsononly
+python3 zircolite.py --events <JSON_FOLDER or JSON_FILE> --ruleset rules/rules_windows_sysmon_pysigma.json --jsononly
 ```
 
 :information_source: If you want to try the tool you can test with [EVTX-ATTACK-SAMPLES](https://github.com/sbousseaden/EVTX-ATTACK-SAMPLES) (EVTX Files).

@@ -801,29 +801,6 @@
         "filename": ""
     },
     {
-        "title": "CobaltStrike Service Installations in Registry",
-        "id": "61a7697c-cb79-42a8-a2ff-5f0cdfae0130",
-        "status": "test",
-        "description": "Detects known malicious service installs that appear in cases in which a Cobalt Strike beacon elevates privileges or lateral movement.\nWe can also catch this by system log 7045 (https://github.com/SigmaHQ/sigma/blob/master/rules/windows/builtin/win_cobaltstrike_service_installs.yml)\nIn some SIEM you can catch those events also in HKLM\\System\\ControlSet001\\Services or HKLM\\System\\ControlSet002\\Services, however, this rule is based on a regular sysmon's events.\n",
-        "author": "Wojciech Lesicki",
-        "tags": [
-            "attack.execution",
-            "attack.privilege_escalation",
-            "attack.lateral_movement",
-            "attack.t1021.002",
-            "attack.t1543.003",
-            "attack.t1569.002"
-        ],
-        "falsepositives": [
-            "Unknown"
-        ],
-        "level": "critical",
-        "rule": [
-            "SELECT * FROM logs WHERE Channel='Security' AND ((EventID=4657 AND OperationType='Existing registry value modified') AND (TargetObject LIKE '%HKLM\\\\System\\\\CurrentControlSet\\\\Services%' ESCAPE '\\' AND ((NewValue LIKE '%ADMIN$%' ESCAPE '\\' AND NewValue LIKE '%.exe%' ESCAPE '\\') OR (NewValue LIKE '%\\%COMSPEC\\%%' ESCAPE '\\' AND NewValue LIKE '%start%' ESCAPE '\\' AND NewValue LIKE '%powershell%' ESCAPE '\\'))))"
-        ],
-        "filename": ""
-    },
-    {
         "title": "Potential Credential Dumping Via LSASS SilentProcessExit Technique",
         "id": "55e29995-75e7-451a-bef0-6225e2f13597",
         "status": "test",
@@ -839,25 +816,6 @@
         "level": "critical",
         "rule": [
             "SELECT * FROM logs WHERE Channel='Security' AND ((EventID=4657 AND (OperationType='New registry value created' OR OperationType='Existing registry value modified')) AND TargetObject LIKE '%Microsoft\\\\Windows NT\\\\CurrentVersion\\\\SilentProcessExit\\\\lsass.exe%' ESCAPE '\\')"
-        ],
-        "filename": ""
-    },
-    {
-        "title": "FlowCloud Malware",
-        "id": "5118765f-6657-4ddb-a487-d7bd673abbf1",
-        "status": "test",
-        "description": "Detects FlowCloud malware from threat group TA410.",
-        "author": "NVISO",
-        "tags": [
-            "attack.persistence",
-            "attack.t1112"
-        ],
-        "falsepositives": [
-            "Unknown"
-        ],
-        "level": "critical",
-        "rule": [
-            "SELECT * FROM logs WHERE Channel='Security' AND ((EventID=4657 AND (OperationType='New registry value created' OR OperationType='Existing registry value modified')) AND ((TargetObject LIKE 'HKLM\\\\HARDWARE\\\\{804423C2-F490-4ac3-BFA5-13DEDE63A71A}' ESCAPE '\\' OR TargetObject LIKE 'HKLM\\\\HARDWARE\\\\{A5124AF5-DF23-49bf-B0ED-A18ED3DEA027}' ESCAPE '\\' OR TargetObject LIKE 'HKLM\\\\HARDWARE\\\\{2DB80286-1784-48b5-A751-B6ED1F490303}' ESCAPE '\\') OR TargetObject LIKE 'HKLM\\\\SYSTEM\\\\Setup\\\\PrintResponsor\\\\%' ESCAPE '\\'))"
         ],
         "filename": ""
     },
@@ -1002,25 +960,6 @@
         "level": "critical",
         "rule": [
             "SELECT * FROM logs WHERE Channel='Security' AND ((EventID=4657 AND (OperationType='New registry value created' OR OperationType='Existing registry value modified')) AND ((TargetObject LIKE '%\\\\Control\\\\Print\\\\Environments\\\\Windows x64\\\\Drivers\\\\Version-3\\\\QMS 810\\\\%' ESCAPE '\\' OR TargetObject LIKE '%\\\\Control\\\\Print\\\\Environments\\\\Windows x64\\\\Drivers\\\\Version-3\\\\mimikatz%' ESCAPE '\\') OR (TargetObject LIKE '%legitprinter%' ESCAPE '\\' AND TargetObject LIKE '%\\\\Control\\\\Print\\\\Environments\\\\Windows%' ESCAPE '\\') OR ((TargetObject LIKE '%\\\\Control\\\\Print\\\\Environments%' ESCAPE '\\' OR TargetObject LIKE '%\\\\CurrentVersion\\\\Print\\\\Printers%' ESCAPE '\\') AND (TargetObject LIKE '%Gentil Kiwi%' ESCAPE '\\' OR TargetObject LIKE '%mimikatz printer%' ESCAPE '\\' OR TargetObject LIKE '%Kiwi Legit Printer%' ESCAPE '\\'))))"
-        ],
-        "filename": ""
-    },
-    {
-        "title": "Security Support Provider (SSP) Added to LSA Configuration",
-        "id": "eeb30123-9fbd-4ee8-aaa0-2e545bbed6dc",
-        "status": "test",
-        "description": "Detects the addition of a SSP to the registry. Upon a reboot or API call, SSP DLLs gain access to encrypted and plaintext passwords stored in Windows.",
-        "author": "iwillkeepwatch",
-        "tags": [
-            "attack.persistence",
-            "attack.t1547.005"
-        ],
-        "falsepositives": [
-            "Unlikely"
-        ],
-        "level": "critical",
-        "rule": [
-            "SELECT * FROM logs WHERE Channel='Security' AND ((EventID=4657 AND (OperationType='New registry value created' OR OperationType='Existing registry value modified')) AND ((TargetObject LIKE 'HKLM\\\\System\\\\CurrentControlSet\\\\Control\\\\Lsa\\\\Security Packages' ESCAPE '\\' OR TargetObject LIKE 'HKLM\\\\System\\\\CurrentControlSet\\\\Control\\\\Lsa\\\\OSConfig\\\\Security Packages' ESCAPE '\\') AND (NOT (NewProcessName LIKE 'C:\\\\Windows\\\\system32\\\\msiexec.exe' ESCAPE '\\' OR NewProcessName LIKE 'C:\\\\Windows\\\\syswow64\\\\MsiExec.exe' ESCAPE '\\'))))"
         ],
         "filename": ""
     },
@@ -3180,6 +3119,25 @@
         "level": "critical",
         "rule": [
             "SELECT * FROM logs WHERE Channel='Security' AND (EventID=4688 AND (((NewProcessName LIKE '%\\\\rundll32.exe' ESCAPE '\\' OR OriginalFileName='RUNDLL32.EXE') AND (CommandLine LIKE '%,RunDLL' ESCAPE '\\' OR CommandLine LIKE '%,Control\\_RunDLL' ESCAPE '\\')) AND (NOT ((CommandLine LIKE '%.dll,Control\\_RunDLL' ESCAPE '\\' OR CommandLine LIKE '%.dll\",Control\\_RunDLL' ESCAPE '\\' OR CommandLine LIKE '%.dll'',Control\\_RunDLL' ESCAPE '\\') OR ParentProcessName LIKE '%\\\\tracker.exe' ESCAPE '\\'))))"
+        ],
+        "filename": ""
+    },
+    {
+        "title": "FlowCloud Registry Markers",
+        "id": "5118765f-6657-4ddb-a487-d7bd673abbf1",
+        "status": "test",
+        "description": "Detects FlowCloud malware registry markers from threat group TA410.\nThe malware stores its configuration in the registry alongside drivers utilized by the malware's keylogger components.\n",
+        "author": "NVISO",
+        "tags": [
+            "attack.persistence",
+            "attack.t1112"
+        ],
+        "falsepositives": [
+            "Unlikely"
+        ],
+        "level": "critical",
+        "rule": [
+            "SELECT * FROM logs WHERE Channel='Security' AND ((EventID=4657 AND (OperationType='New registry value created' OR OperationType='Existing registry value modified')) AND (TargetObject LIKE '%\\\\HARDWARE\\\\{2DB80286-1784-48b5-A751-B6ED1F490303}%' ESCAPE '\\' OR TargetObject LIKE '%\\\\HARDWARE\\\\{804423C2-F490-4ac3-BFA5-13DEDE63A71A}%' ESCAPE '\\' OR TargetObject LIKE '%\\\\HARDWARE\\\\{A5124AF5-DF23-49bf-B0ED-A18ED3DEA027}%' ESCAPE '\\' OR TargetObject LIKE '%\\\\SYSTEM\\\\Setup\\\\PrintResponsor\\\\%' ESCAPE '\\'))"
         ],
         "filename": ""
     },
@@ -9614,7 +9572,7 @@
         ],
         "level": "high",
         "rule": [
-            "SELECT * FROM logs WHERE Channel='Security' AND (EventID=4688 AND ((NewProcessName LIKE '%reg.exe' ESCAPE '\\' OR OriginalFileName='reg.exe') AND CommandLine LIKE '%\\\\SYSTEM\\\\CurrentControlSet\\\\Control\\\\SafeBoot%' ESCAPE '\\' AND (CommandLine LIKE '% copy %' ESCAPE '\\' OR CommandLine LIKE '% add %' ESCAPE '\\')))"
+            "SELECT * FROM logs WHERE Channel='Security' AND (EventID=4688 AND ((NewProcessName LIKE '%\\\\reg.exe' ESCAPE '\\' OR OriginalFileName='reg.exe') AND CommandLine LIKE '%\\\\SYSTEM\\\\CurrentControlSet\\\\Control\\\\SafeBoot%' ESCAPE '\\' AND (CommandLine LIKE '% copy %' ESCAPE '\\' OR CommandLine LIKE '% add %' ESCAPE '\\')))"
         ],
         "filename": ""
     },
@@ -12164,7 +12122,7 @@
         ],
         "level": "high",
         "rule": [
-            "SELECT * FROM logs WHERE Channel='Security' AND (EventID=4688 AND ((NewProcessName LIKE '%\\\\schtasks.exe' ESCAPE '\\' AND CommandLine LIKE '%/Create %' ESCAPE '\\') AND (((CommandLine LIKE '%/sc minute %' ESCAPE '\\' OR CommandLine LIKE '%/ru system %' ESCAPE '\\') AND (CommandLine LIKE '%cmd /c%' ESCAPE '\\' OR CommandLine LIKE '%cmd /k%' ESCAPE '\\' OR CommandLine LIKE '%cmd /r%' ESCAPE '\\' OR CommandLine LIKE '%cmd.exe /c %' ESCAPE '\\' OR CommandLine LIKE '%cmd.exe /k %' ESCAPE '\\' OR CommandLine LIKE '%cmd.exe /r %' ESCAPE '\\')) OR (CommandLine LIKE '% -decode %' ESCAPE '\\' OR CommandLine LIKE '% -enc %' ESCAPE '\\' OR CommandLine LIKE '% -w hidden %' ESCAPE '\\' OR CommandLine LIKE '% bypass %' ESCAPE '\\' OR CommandLine LIKE '% IEX%' ESCAPE '\\' OR CommandLine LIKE '%.DownloadData%' ESCAPE '\\' OR CommandLine LIKE '%.DownloadFile%' ESCAPE '\\' OR CommandLine LIKE '%.DownloadString%' ESCAPE '\\' OR CommandLine LIKE '%/c start /min %' ESCAPE '\\' OR CommandLine LIKE '%FromBase64String%' ESCAPE '\\' OR CommandLine LIKE '%mshta http%' ESCAPE '\\' OR CommandLine LIKE '%mshta.exe http%' ESCAPE '\\') OR ((CommandLine LIKE '%:\\\\Windows\\\\Temp\\\\%' ESCAPE '\\' OR CommandLine LIKE '%\\\\AppData\\\\%' ESCAPE '\\' OR CommandLine LIKE '%\\%AppData\\%%' ESCAPE '\\' OR CommandLine LIKE '%\\%Temp\\%%' ESCAPE '\\' OR CommandLine LIKE '%\\%tmp\\%%' ESCAPE '\\') AND (CommandLine LIKE '%cscript%' ESCAPE '\\' OR CommandLine LIKE '%curl%' ESCAPE '\\' OR CommandLine LIKE '%wscript%' ESCAPE '\\')))))"
+            "SELECT * FROM logs WHERE Channel='Security' AND (EventID=4688 AND ((NewProcessName LIKE '%\\\\schtasks.exe' ESCAPE '\\' AND CommandLine LIKE '%/Create %' ESCAPE '\\') AND (((CommandLine LIKE '%/sc minute %' ESCAPE '\\' OR CommandLine LIKE '%/ru system %' ESCAPE '\\') AND (CommandLine LIKE '%cmd /c%' ESCAPE '\\' OR CommandLine LIKE '%cmd /k%' ESCAPE '\\' OR CommandLine LIKE '%cmd /r%' ESCAPE '\\' OR CommandLine LIKE '%cmd.exe /c %' ESCAPE '\\' OR CommandLine LIKE '%cmd.exe /k %' ESCAPE '\\' OR CommandLine LIKE '%cmd.exe /r %' ESCAPE '\\')) OR (CommandLine LIKE '% -decode %' ESCAPE '\\' OR CommandLine LIKE '% -enc %' ESCAPE '\\' OR CommandLine LIKE '% -w hidden %' ESCAPE '\\' OR CommandLine LIKE '% bypass %' ESCAPE '\\' OR CommandLine LIKE '% IEX%' ESCAPE '\\' OR CommandLine LIKE '%.DownloadData%' ESCAPE '\\' OR CommandLine LIKE '%.DownloadFile%' ESCAPE '\\' OR CommandLine LIKE '%.DownloadString%' ESCAPE '\\' OR CommandLine LIKE '%/c start /min %' ESCAPE '\\' OR CommandLine LIKE '%FromBase64String%' ESCAPE '\\' OR CommandLine LIKE '%mshta http%' ESCAPE '\\' OR CommandLine LIKE '%mshta.exe http%' ESCAPE '\\') OR ((CommandLine LIKE '%:\\\\ProgramData\\\\%' ESCAPE '\\' OR CommandLine LIKE '%:\\\\Temp\\\\%' ESCAPE '\\' OR CommandLine LIKE '%:\\\\Tmp\\\\%' ESCAPE '\\' OR CommandLine LIKE '%:\\\\Users\\\\Public\\\\%' ESCAPE '\\' OR CommandLine LIKE '%:\\\\Windows\\\\Temp\\\\%' ESCAPE '\\' OR CommandLine LIKE '%\\\\AppData\\\\%' ESCAPE '\\' OR CommandLine LIKE '%\\%AppData\\%%' ESCAPE '\\' OR CommandLine LIKE '%\\%Temp\\%%' ESCAPE '\\' OR CommandLine LIKE '%\\%tmp\\%%' ESCAPE '\\') AND (CommandLine LIKE '%cscript%' ESCAPE '\\' OR CommandLine LIKE '%curl%' ESCAPE '\\' OR CommandLine LIKE '%wscript%' ESCAPE '\\')))))"
         ],
         "filename": ""
     },
@@ -19276,27 +19234,6 @@
         "filename": ""
     },
     {
-        "title": "Suspicious New Printer Ports in Registry (CVE-2020-1048)",
-        "id": "7ec912f2-5175-4868-b811-ec13ad0f8567",
-        "status": "test",
-        "description": "Detects a new and suspicious printer port creation in Registry that could be an attempt to exploit CVE-2020-1048",
-        "author": "EagleEye Team, Florian Roth (Nextron Systems), NVISO",
-        "tags": [
-            "attack.persistence",
-            "attack.execution",
-            "attack.defense_evasion",
-            "attack.t1112"
-        ],
-        "falsepositives": [
-            "New printer port install on host"
-        ],
-        "level": "high",
-        "rule": [
-            "SELECT * FROM logs WHERE Channel='Security' AND ((EventID=4657 AND OperationType='Existing registry value modified') AND (TargetObject LIKE 'HKLM\\\\SOFTWARE\\\\Microsoft\\\\Windows NT\\\\CurrentVersion\\\\Ports%' ESCAPE '\\' AND (NewValue LIKE '%.dll%' ESCAPE '\\' OR NewValue LIKE '%.exe%' ESCAPE '\\' OR NewValue LIKE '%.bat%' ESCAPE '\\' OR NewValue LIKE '%.com%' ESCAPE '\\' OR NewValue LIKE '%C:%' ESCAPE '\\')))"
-        ],
-        "filename": ""
-    },
-    {
         "title": "Potential Persistence Via Excel Add-in - Registry",
         "id": "961e33d1-4f86-4fcf-80ab-930a708b2f82",
         "status": "experimental",
@@ -19353,10 +19290,10 @@
         "filename": ""
     },
     {
-        "title": "Disable Sysmon Event Logging Via Registry",
+        "title": "Sysmon Driver Altitude Change",
         "id": "4916a35e-bfc4-47d0-8e25-a003d7067061",
         "status": "experimental",
-        "description": "Detects changes in Sysmon driver altitude. If the Sysmon driver is configured to load at an altitude of another registered service, it will fail to load at boot.",
+        "description": "Detects changes in Sysmon driver altitude value.\nIf the Sysmon driver is configured to load at an altitude of another registered service, it will fail to load at boot.\n",
         "author": "B.Talebi",
         "tags": [
             "attack.defense_evasion",
@@ -19367,12 +19304,12 @@
         ],
         "level": "high",
         "rule": [
-            "SELECT * FROM logs WHERE Channel='Security' AND ((EventID=4657 AND OperationType='Existing registry value modified') AND (TargetObject LIKE 'HKLM\\\\SYSTEM\\\\CurrentControlSet\\\\%' ESCAPE '\\' AND TargetObject LIKE '%\\\\Instances\\\\Sysmon Instance\\\\Altitude' ESCAPE '\\'))"
+            "SELECT * FROM logs WHERE Channel='Security' AND ((EventID=4657 AND OperationType='Existing registry value modified') AND (TargetObject LIKE '%\\\\Services\\\\%' ESCAPE '\\' AND TargetObject LIKE '%\\\\Instances\\\\Sysmon Instance\\\\Altitude' ESCAPE '\\'))"
         ],
         "filename": ""
     },
     {
-        "title": "Office Macros Auto-Enabled",
+        "title": "Office Macros Warning Disabled",
         "id": "91239011-fe3c-4b54-9f24-15c86bb65913",
         "status": "test",
         "description": "Detects registry changes to Microsoft Office \"VBAWarning\" to a value of \"1\" which enables the execution of all macros, whether signed or unsigned.",
@@ -19410,10 +19347,10 @@
         "filename": ""
     },
     {
-        "title": "Changing RDP Port to Non Standard Number",
+        "title": "Default RDP Port Changed to Non Standard Port",
         "id": "509e84b9-a71a-40e0-834f-05470369bd1e",
         "status": "test",
-        "description": "Remote desktop is a common feature in operating systems.\nIt allows a user to log into an interactive session with a system desktop graphical user interface on a remote system.\nMicrosoft refers to its implementation of the Remote Desktop Protocol (RDP) as Remote Desktop Services (RDS).\n",
+        "description": "Detects changes to the default RDP port.\nRemote desktop is a common feature in operating systems. It allows a user to log into a remote system using an interactive session with a graphical user interface.\nMicrosoft refers to its implementation of the Remote Desktop Protocol (RDP) as Remote Desktop Services (RDS).\n",
         "author": "frack113",
         "tags": [
             "attack.persistence",
@@ -19424,7 +19361,7 @@
         ],
         "level": "high",
         "rule": [
-            "SELECT * FROM logs WHERE Channel='Security' AND ((EventID=4657 AND OperationType='Existing registry value modified') AND (TargetObject LIKE 'HKLM\\\\System\\\\CurrentControlSet\\\\Control\\\\Terminal Server\\\\WinStations\\\\RDP-Tcp\\\\PortNumber' ESCAPE '\\' AND (NOT NewValue='DWORD (0x00000d3d)')))"
+            "SELECT * FROM logs WHERE Channel='Security' AND ((EventID=4657 AND OperationType='Existing registry value modified') AND (TargetObject LIKE '%\\\\Control\\\\Terminal Server\\\\WinStations\\\\RDP-Tcp\\\\PortNumber' ESCAPE '\\' AND (NOT NewValue='DWORD (0x00000d3d)')))"
         ],
         "filename": ""
     },
@@ -19463,24 +19400,6 @@
         "level": "high",
         "rule": [
             "SELECT * FROM logs WHERE Channel='Security' AND ((EventID=4657 AND OperationType='Existing registry value modified') AND ((TargetObject LIKE '%\\\\SOFTWARE\\\\Microsoft\\\\Office\\\\%' ESCAPE '\\' AND TargetObject LIKE '%\\\\Security\\\\ProtectedView\\\\%' ESCAPE '\\') AND ((NewValue='DWORD (0x00000001)' AND (TargetObject LIKE '%\\\\DisableAttachementsInPV' ESCAPE '\\' OR TargetObject LIKE '%\\\\DisableInternetFilesInPV' ESCAPE '\\' OR TargetObject LIKE '%\\\\DisableIntranetCheck' ESCAPE '\\' OR TargetObject LIKE '%\\\\DisableUnsafeLocationsInPV' ESCAPE '\\')) OR (NewValue='DWORD (0x00000000)' AND (TargetObject LIKE '%\\\\enabledatabasefileprotectedview' ESCAPE '\\' OR TargetObject LIKE '%\\\\enableforeigntextfileprotectedview' ESCAPE '\\')))))"
-        ],
-        "filename": ""
-    },
-    {
-        "title": "Adwind RAT / JRAT - Registry",
-        "id": "42f0e038-767e-4b85-9d96-2c6335bad0b5",
-        "status": "experimental",
-        "description": "Detects javaw.exe in AppData folder as used by Adwind / JRAT",
-        "author": "Florian Roth (Nextron Systems), Tom Ueltschi, Jonhnathan Ribeiro, oscd.community",
-        "tags": [
-            "attack.execution",
-            "attack.t1059.005",
-            "attack.t1059.007"
-        ],
-        "falsepositives": [],
-        "level": "high",
-        "rule": [
-            "SELECT * FROM logs WHERE Channel='Security' AND ((EventID=4657 AND OperationType='Existing registry value modified') AND (TargetObject LIKE 'HKLM\\\\SOFTWARE\\\\Microsoft\\\\Windows\\\\CurrentVersion\\\\Run%' ESCAPE '\\' AND NewValue LIKE '\\%AppData\\%\\\\Roaming\\\\Oracle\\\\bin\\\\%' ESCAPE '\\'))"
         ],
         "filename": ""
     },
@@ -20022,7 +19941,7 @@
         ],
         "level": "high",
         "rule": [
-            "SELECT * FROM logs WHERE Channel='Security' AND ((EventID=4657 AND OperationType='Existing registry value modified') AND ((TargetObject LIKE '%\\\\SOFTWARE\\\\Microsoft\\\\Windows\\\\CurrentVersion\\\\Run\\\\%' ESCAPE '\\' OR TargetObject LIKE '%\\\\SOFTWARE\\\\Microsoft\\\\Windows\\\\CurrentVersion\\\\RunOnce\\\\%' ESCAPE '\\') AND ((NewValue LIKE '%:\\\\$Recycle.bin\\\\%' ESCAPE '\\' OR NewValue LIKE '%:\\\\Temp\\\\%' ESCAPE '\\' OR NewValue LIKE '%:\\\\Users\\\\Default\\\\%' ESCAPE '\\' OR NewValue LIKE '%:\\\\Users\\\\Desktop\\\\%' ESCAPE '\\' OR NewValue LIKE '%:\\\\Users\\\\Public\\\\%' ESCAPE '\\' OR NewValue LIKE '%:\\\\Windows\\\\Temp\\\\%' ESCAPE '\\' OR NewValue LIKE '%\\\\AppData\\\\Local\\\\Temp\\\\%' ESCAPE '\\' OR NewValue LIKE '%\\%temp\\%\\\\%' ESCAPE '\\' OR NewValue LIKE '%\\%tmp\\%\\\\%' ESCAPE '\\') OR (NewValue LIKE '\\%Public\\%\\\\%' ESCAPE '\\' OR NewValue LIKE 'wscript%' ESCAPE '\\' OR NewValue LIKE 'cscript%' ESCAPE '\\'))))"
+            "SELECT * FROM logs WHERE Channel='Security' AND ((EventID=4657 AND OperationType='Existing registry value modified') AND (((TargetObject LIKE '%\\\\SOFTWARE\\\\Microsoft\\\\Windows\\\\CurrentVersion\\\\Run\\\\%' ESCAPE '\\' OR TargetObject LIKE '%\\\\SOFTWARE\\\\Microsoft\\\\Windows\\\\CurrentVersion\\\\RunOnce\\\\%' ESCAPE '\\') AND ((NewValue LIKE '%:\\\\$Recycle.bin\\\\%' ESCAPE '\\' OR NewValue LIKE '%:\\\\Temp\\\\%' ESCAPE '\\' OR NewValue LIKE '%:\\\\Users\\\\Default\\\\%' ESCAPE '\\' OR NewValue LIKE '%:\\\\Users\\\\Desktop\\\\%' ESCAPE '\\' OR NewValue LIKE '%:\\\\Users\\\\Public\\\\%' ESCAPE '\\' OR NewValue LIKE '%:\\\\Windows\\\\Temp\\\\%' ESCAPE '\\' OR NewValue LIKE '%\\\\AppData\\\\Local\\\\Temp\\\\%' ESCAPE '\\' OR NewValue LIKE '%\\%temp\\%\\\\%' ESCAPE '\\' OR NewValue LIKE '%\\%tmp\\%\\\\%' ESCAPE '\\') OR (NewValue LIKE '\\%Public\\%\\\\%' ESCAPE '\\' OR NewValue LIKE 'wscript%' ESCAPE '\\' OR NewValue LIKE 'cscript%' ESCAPE '\\'))) AND (NOT (NewProcessName LIKE 'C:\\\\Windows\\\\SoftwareDistribution\\\\Download\\\\%' ESCAPE '\\' AND (NewValue LIKE '%rundll32.exe C:\\\\WINDOWS\\\\system32\\\\advpack.dll,DelNodeRunDLL32%' ESCAPE '\\' AND NewValue LIKE '%C:\\\\Windows\\\\Temp\\\\%' ESCAPE '\\')))))"
         ],
         "filename": ""
     },
@@ -20136,7 +20055,7 @@
         ],
         "level": "high",
         "rule": [
-            "SELECT * FROM logs WHERE Channel='Security' AND ((EventID=4657 AND OperationType='Existing registry value modified') AND ((TargetObject LIKE 'HKLM\\\\SOFTWARE\\\\Microsoft\\\\Windows\\\\CurrentVersion\\\\WINEVT\\\\Channels\\\\%' ESCAPE '\\' AND TargetObject LIKE '%\\\\Enabled' ESCAPE '\\' AND NewValue='DWORD (0x00000000)') AND (NOT (NewProcessName LIKE '%\\\\Windows\\\\system32\\\\wevtutil.exe' ESCAPE '\\' OR (NewProcessName LIKE 'C:\\\\Windows\\\\winsxs\\\\%' ESCAPE '\\' AND NewProcessName LIKE '%\\\\TiWorker.exe' ESCAPE '\\') OR (NewProcessName LIKE 'C:\\\\Windows\\\\System32\\\\svchost.exe' ESCAPE '\\' AND (TargetObject LIKE '%\\\\Microsoft\\\\Windows\\\\CurrentVersion\\\\WINEVT\\\\Channels\\\\Microsoft-Windows-FileInfoMinifilter%' ESCAPE '\\' OR TargetObject LIKE '%\\\\Microsoft\\\\Windows\\\\CurrentVersion\\\\WINEVT\\\\Channels\\\\Microsoft-Windows-ASN1\\\\%' ESCAPE '\\' OR TargetObject LIKE '%\\\\Microsoft\\\\Windows\\\\CurrentVersion\\\\WINEVT\\\\Channels\\\\Microsoft-Windows-Kernel-AppCompat\\\\%' ESCAPE '\\' OR TargetObject LIKE '%\\\\Microsoft\\\\Windows\\\\CurrentVersion\\\\WINEVT\\\\Channels\\\\Microsoft-Windows-Runtime\\\\Error\\\\%' ESCAPE '\\' OR TargetObject LIKE '%\\\\Microsoft\\\\Windows\\\\CurrentVersion\\\\WINEVT\\\\Channels\\\\Microsoft-Windows-CAPI2/Operational\\\\%' ESCAPE '\\')) OR (NewProcessName LIKE 'C:\\\\Windows\\\\servicing\\\\TrustedInstaller.exe' ESCAPE '\\' AND TargetObject LIKE '%\\\\Microsoft\\\\Windows\\\\CurrentVersion\\\\WINEVT\\\\Channels\\\\Microsoft-Windows-Compat-Appraiser%' ESCAPE '\\'))) AND (NOT (NewProcessName='' OR NewProcessName IS NULL))))"
+            "SELECT * FROM logs WHERE Channel='Security' AND ((EventID=4657 AND OperationType='Existing registry value modified') AND ((TargetObject LIKE '%\\\\Microsoft\\\\Windows\\\\CurrentVersion\\\\WINEVT\\\\Channels\\\\%' ESCAPE '\\' AND TargetObject LIKE '%\\\\Enabled' ESCAPE '\\' AND NewValue='DWORD (0x00000000)') AND (NOT (NewProcessName LIKE 'C:\\\\Windows\\\\system32\\\\wevtutil.exe' ESCAPE '\\' OR (NewProcessName LIKE 'C:\\\\Windows\\\\winsxs\\\\%' ESCAPE '\\' AND NewProcessName LIKE '%\\\\TiWorker.exe' ESCAPE '\\') OR (NewProcessName LIKE 'C:\\\\Windows\\\\System32\\\\svchost.exe' ESCAPE '\\' AND (TargetObject LIKE '%\\\\Microsoft\\\\Windows\\\\CurrentVersion\\\\WINEVT\\\\Channels\\\\Microsoft-Windows-FileInfoMinifilter%' ESCAPE '\\' OR TargetObject LIKE '%\\\\Microsoft\\\\Windows\\\\CurrentVersion\\\\WINEVT\\\\Channels\\\\Microsoft-Windows-ASN1\\\\%' ESCAPE '\\' OR TargetObject LIKE '%\\\\Microsoft\\\\Windows\\\\CurrentVersion\\\\WINEVT\\\\Channels\\\\Microsoft-Windows-Kernel-AppCompat\\\\%' ESCAPE '\\' OR TargetObject LIKE '%\\\\Microsoft\\\\Windows\\\\CurrentVersion\\\\WINEVT\\\\Channels\\\\Microsoft-Windows-Runtime\\\\Error\\\\%' ESCAPE '\\' OR TargetObject LIKE '%\\\\Microsoft\\\\Windows\\\\CurrentVersion\\\\WINEVT\\\\Channels\\\\Microsoft-Windows-CAPI2/Operational\\\\%' ESCAPE '\\')) OR (NewProcessName LIKE 'C:\\\\Windows\\\\servicing\\\\TrustedInstaller.exe' ESCAPE '\\' AND TargetObject LIKE '%\\\\Microsoft\\\\Windows\\\\CurrentVersion\\\\WINEVT\\\\Channels\\\\Microsoft-Windows-Compat-Appraiser%' ESCAPE '\\'))) AND (NOT (NewProcessName='' OR NewProcessName IS NULL))))"
         ],
         "filename": ""
     },
@@ -20198,7 +20117,7 @@
         "filename": ""
     },
     {
-        "title": "Set TimeProviders DllName",
+        "title": "New TimeProviders Registered With Uncommon DLL Name",
         "id": "e88a6ddc-74f7-463b-9b26-f69fc0d2ce85",
         "status": "experimental",
         "description": "Detects processes setting a new DLL in DllName in under HKEY_LOCAL_MACHINE\\SYSTEM\\CurrentControlSet\\Services\\W32Time\\TimeProvider.\nAdversaries may abuse time providers to execute DLLs when the system boots.\nThe Windows Time service (W32Time) enables time synchronization across and within domains.\n",
@@ -20213,7 +20132,7 @@
         ],
         "level": "high",
         "rule": [
-            "SELECT * FROM logs WHERE Channel='Security' AND ((EventID=4657 AND OperationType='Existing registry value modified') AND ((TargetObject LIKE 'HKLM\\\\System\\\\CurrentControlSet\\\\Services\\\\W32Time\\\\TimeProviders%' ESCAPE '\\' AND TargetObject LIKE '%DllName' ESCAPE '\\') AND (NOT NewValue LIKE 'C:\\\\Windows\\\\SYSTEM32\\\\w32time.DLL' ESCAPE '\\')))"
+            "SELECT * FROM logs WHERE Channel='Security' AND ((EventID=4657 AND OperationType='Existing registry value modified') AND ((TargetObject LIKE '%\\\\Services\\\\W32Time\\\\TimeProviders%' ESCAPE '\\' AND TargetObject LIKE '%\\\\DllName' ESCAPE '\\') AND (NOT (NewValue LIKE '\\%SystemRoot\\%\\\\System32\\\\vmictimeprovider.dll' ESCAPE '\\' OR NewValue LIKE '\\%systemroot\\%\\\\system32\\\\w32time.dll' ESCAPE '\\' OR NewValue LIKE 'C:\\\\Windows\\\\SYSTEM32\\\\w32time.DLL' ESCAPE '\\'))))"
         ],
         "filename": ""
     },
@@ -20326,6 +20245,29 @@
         "level": "high",
         "rule": [
             "SELECT * FROM logs WHERE Channel='Security' AND ((EventID=4657 AND OperationType='Existing registry value modified') AND (TargetObject LIKE '%\\\\Software\\\\Microsoft\\\\Windows\\\\CurrentVersion\\\\Explorer\\\\TypedPaths\\\\%' ESCAPE '\\' AND (NOT (NewProcessName LIKE 'C:\\\\Windows\\\\explorer.exe' ESCAPE '\\' OR NewProcessName LIKE 'C:\\\\Windows\\\\SysWOW64\\\\explorer.exe' ESCAPE '\\'))))"
+        ],
+        "filename": ""
+    },
+    {
+        "title": "Potential CobaltStrike Service Installations - Registry",
+        "id": "61a7697c-cb79-42a8-a2ff-5f0cdfae0130",
+        "status": "test",
+        "description": "Detects known malicious service installs that appear in cases in which a Cobalt Strike beacon elevates privileges or lateral movement.\n",
+        "author": "Wojciech Lesicki",
+        "tags": [
+            "attack.execution",
+            "attack.privilege_escalation",
+            "attack.lateral_movement",
+            "attack.t1021.002",
+            "attack.t1543.003",
+            "attack.t1569.002"
+        ],
+        "falsepositives": [
+            "Unlikely"
+        ],
+        "level": "high",
+        "rule": [
+            "SELECT * FROM logs WHERE Channel='Security' AND ((EventID=4657 AND OperationType='Existing registry value modified') AND ((TargetObject LIKE '%\\\\System\\\\CurrentControlSet\\\\Services%' ESCAPE '\\' OR (TargetObject LIKE '%\\\\System\\\\ControlSet%' ESCAPE '\\' AND TargetObject LIKE '%\\\\Services%' ESCAPE '\\')) AND ((NewValue LIKE '%ADMIN$%' ESCAPE '\\' AND NewValue LIKE '%.exe%' ESCAPE '\\') OR (NewValue LIKE '%\\%COMSPEC\\%%' ESCAPE '\\' AND NewValue LIKE '%start%' ESCAPE '\\' AND NewValue LIKE '%powershell%' ESCAPE '\\'))))"
         ],
         "filename": ""
     },
@@ -20499,7 +20441,7 @@
         ],
         "level": "high",
         "rule": [
-            "SELECT * FROM logs WHERE Channel='Security' AND ((EventID=4657 AND OperationType='Existing registry value modified') AND (((TargetObject LIKE 'HKLM\\\\SYSTEM\\\\CurrentControlSet\\\\Control\\\\SafeBoot\\\\Minimal\\\\%' ESCAPE '\\' OR TargetObject LIKE 'HKLM\\\\SYSTEM\\\\CurrentControlSet\\\\Control\\\\SafeBoot\\\\Network\\\\%' ESCAPE '\\') AND TargetObject LIKE '%\\\\(Default)' ESCAPE '\\' AND NewValue='Service') AND (NOT (NewProcessName LIKE 'C:\\\\WINDOWS\\\\system32\\\\msiexec.exe' ESCAPE '\\' AND (TargetObject LIKE 'HKLM\\\\System\\\\CurrentControlSet\\\\Control\\\\SafeBoot\\\\Minimal\\\\SAVService\\\\(Default)' ESCAPE '\\' OR TargetObject LIKE 'HKLM\\\\System\\\\CurrentControlSet\\\\Control\\\\SafeBoot\\\\Network\\\\SAVService\\\\(Default)' ESCAPE '\\')))))"
+            "SELECT * FROM logs WHERE Channel='Security' AND ((EventID=4657 AND OperationType='Existing registry value modified') AND (((TargetObject LIKE '%\\\\Control\\\\SafeBoot\\\\Minimal\\\\%' ESCAPE '\\' OR TargetObject LIKE '%\\\\Control\\\\SafeBoot\\\\Network\\\\%' ESCAPE '\\') AND TargetObject LIKE '%\\\\(Default)' ESCAPE '\\' AND NewValue='Service') AND (NOT (NewProcessName LIKE 'C:\\\\WINDOWS\\\\system32\\\\msiexec.exe' ESCAPE '\\' AND (TargetObject LIKE '%\\\\Control\\\\SafeBoot\\\\Minimal\\\\SAVService\\\\(Default)' ESCAPE '\\' OR TargetObject LIKE '%\\\\Control\\\\SafeBoot\\\\Network\\\\SAVService\\\\(Default)' ESCAPE '\\')))))"
         ],
         "filename": ""
     },
@@ -20615,10 +20557,10 @@
         "filename": ""
     },
     {
-        "title": "Change Winevt Event Access Permission Via Registry",
+        "title": "Change Winevt Channel Access Permission Via Registry",
         "id": "7d9263bd-dc47-4a58-bc92-5474abab390c",
         "status": "experimental",
-        "description": "Detects tampering with the \"ChannelAccess\" registry key in order to change access to Windows event channel",
+        "description": "Detects tampering with the \"ChannelAccess\" registry key in order to change access to Windows event channel.",
         "author": "frack113",
         "tags": [
             "attack.defense_evasion",
@@ -20629,7 +20571,7 @@
         ],
         "level": "high",
         "rule": [
-            "SELECT * FROM logs WHERE Channel='Security' AND ((EventID=4657 AND OperationType='Existing registry value modified') AND ((TargetObject LIKE 'HKLM\\\\SOFTWARE\\\\Microsoft\\\\Windows\\\\CurrentVersion\\\\WINEVT\\\\Channels\\\\%' ESCAPE '\\' AND TargetObject LIKE '%\\\\ChannelAccess' ESCAPE '\\' AND (NewValue LIKE '%(A;;0x1;;;SY)%' ESCAPE '\\' OR NewValue LIKE '%(A;;0x5;;;BA)%' ESCAPE '\\' OR NewValue LIKE '%(A;;0x1;;;LA)%' ESCAPE '\\')) AND (NOT (NewProcessName LIKE 'C:\\\\Windows\\\\servicing\\\\TrustedInstaller.exe' ESCAPE '\\' OR NewProcessName LIKE '%\\\\TiWorker.exe' ESCAPE '\\'))))"
+            "SELECT * FROM logs WHERE Channel='Security' AND ((EventID=4657 AND OperationType='Existing registry value modified') AND ((TargetObject LIKE '%\\\\Microsoft\\\\Windows\\\\CurrentVersion\\\\WINEVT\\\\Channels\\\\%' ESCAPE '\\' AND TargetObject LIKE '%\\\\ChannelAccess' ESCAPE '\\' AND (NewValue LIKE '%(A;;0x1;;;LA)%' ESCAPE '\\' OR NewValue LIKE '%(A;;0x1;;;SY)%' ESCAPE '\\' OR NewValue LIKE '%(A;;0x5;;;BA)%' ESCAPE '\\')) AND (NOT (NewProcessName LIKE 'C:\\\\Windows\\\\servicing\\\\TrustedInstaller.exe' ESCAPE '\\' OR (NewProcessName LIKE 'C:\\\\Windows\\\\WinSxS\\\\%' ESCAPE '\\' AND NewProcessName LIKE '%\\\\TiWorker.exe' ESCAPE '\\')))))"
         ],
         "filename": ""
     },
@@ -20905,25 +20847,6 @@
         "filename": ""
     },
     {
-        "title": "Add Port Monitor Persistence in Registry",
-        "id": "944e8941-f6f6-4ee8-ac05-1c224e923c0e",
-        "status": "experimental",
-        "description": "Adversaries may use port monitors to run an attacker supplied DLL during system boot for persistence or privilege escalation.\nA port monitor can be set through the AddMonitor API call to set a DLL to be loaded at startup.\n",
-        "author": "frack113",
-        "tags": [
-            "attack.persistence",
-            "attack.t1547.010"
-        ],
-        "falsepositives": [
-            "Unknown"
-        ],
-        "level": "high",
-        "rule": [
-            "SELECT * FROM logs WHERE Channel='Security' AND ((EventID=4657 AND OperationType='Existing registry value modified') AND ((TargetObject LIKE 'HKLM\\\\System\\\\CurrentControlSet\\\\Control\\\\Print\\\\Monitors\\\\%' ESCAPE '\\' AND NewValue LIKE '%.dll' ESCAPE '\\') AND (NOT ((NewProcessName LIKE 'C:\\\\Windows\\\\System32\\\\spoolsv.exe' ESCAPE '\\' AND TargetObject LIKE '%\\\\System\\\\CurrentControlSet\\\\Control\\\\Print\\\\Monitors\\\\CutePDF Writer Monitor v4.0\\\\Driver%' ESCAPE '\\' AND NewValue LIKE 'cpwmon64\\_v40.dll' ESCAPE '\\' AND (User LIKE '%AUTHORI%' ESCAPE '\\' OR User LIKE '%AUTORI%' ESCAPE '\\')) OR TargetObject LIKE '%Control\\\\Print\\\\Monitors\\\\MONVNC\\\\Driver%' ESCAPE '\\' OR (TargetObject LIKE '%Control\\\\Print\\\\Environments\\\\%' ESCAPE '\\' AND TargetObject LIKE '%\\\\Drivers\\\\%' ESCAPE '\\' AND TargetObject LIKE '%\\\\VNC Printer%' ESCAPE '\\')))))"
-        ],
-        "filename": ""
-    },
-    {
         "title": "Suspicious Shim Database Patching Activity",
         "id": "bf344fea-d947-4ef4-9192-34d008315d3a",
         "status": "experimental",
@@ -21056,7 +20979,7 @@
         "filename": ""
     },
     {
-        "title": "Windows Defender Service Disabled",
+        "title": "Windows Defender Service Disabled - Registry",
         "id": "e1aa95de-610a-427d-b9e7-9b46cfafbe6a",
         "status": "experimental",
         "description": "Detects when an attacker or tool disables the  Windows Defender service (WinDefend) via the registry",
@@ -21070,7 +20993,7 @@
         ],
         "level": "high",
         "rule": [
-            "SELECT * FROM logs WHERE Channel='Security' AND ((EventID=4657 AND OperationType='Existing registry value modified') AND (TargetObject LIKE 'HKLM\\\\SYSTEM\\\\CurrentControlSet\\\\Services\\\\WinDefend\\\\Start' ESCAPE '\\' AND NewValue='DWORD (0x00000004)'))"
+            "SELECT * FROM logs WHERE Channel='Security' AND ((EventID=4657 AND OperationType='Existing registry value modified') AND (TargetObject LIKE '%\\\\Services\\\\WinDefend\\\\Start' ESCAPE '\\' AND NewValue='DWORD (0x00000004)'))"
         ],
         "filename": ""
     },
@@ -21461,6 +21384,25 @@
         "filename": ""
     },
     {
+        "title": "Security Support Provider (SSP) Added to LSA Configuration",
+        "id": "eeb30123-9fbd-4ee8-aaa0-2e545bbed6dc",
+        "status": "test",
+        "description": "Detects the addition of a SSP to the registry. Upon a reboot or API call, SSP DLLs gain access to encrypted and plaintext passwords stored in Windows.\n",
+        "author": "iwillkeepwatch",
+        "tags": [
+            "attack.persistence",
+            "attack.t1547.005"
+        ],
+        "falsepositives": [
+            "Unknown"
+        ],
+        "level": "high",
+        "rule": [
+            "SELECT * FROM logs WHERE Channel='Security' AND ((EventID=4657 AND (OperationType='New registry value created' OR OperationType='Existing registry value modified')) AND ((TargetObject LIKE '%\\\\Control\\\\Lsa\\\\Security Packages' ESCAPE '\\' OR TargetObject LIKE '%\\\\Control\\\\Lsa\\\\OSConfig\\\\Security Packages' ESCAPE '\\') AND (NOT (NewProcessName LIKE 'C:\\\\Windows\\\\system32\\\\msiexec.exe' ESCAPE '\\' OR NewProcessName LIKE 'C:\\\\Windows\\\\syswow64\\\\MsiExec.exe' ESCAPE '\\'))))"
+        ],
+        "filename": ""
+    },
+    {
         "title": "WINEKEY Registry Modification",
         "id": "b98968aa-dbc0-4a9c-ac35-108363cbf8d5",
         "status": "test",
@@ -21699,26 +21641,6 @@
         "filename": ""
     },
     {
-        "title": "Files With System Process Name In Unsuspected Locations",
-        "id": "d5866ddf-ce8f-4aea-b28e-d96485a20d3d",
-        "status": "test",
-        "description": "Detects the creation of an executable with a system process name in folders other than the system ones (System32, SysWOW64, etc.).\n",
-        "author": "Sander Wiebing, Tim Shelton, Nasreddine Bencherchali (Nextron Systems)",
-        "tags": [
-            "attack.defense_evasion",
-            "attack.t1036.005"
-        ],
-        "falsepositives": [
-            "System processes copied outside their default folders for testing purposes",
-            "Third party software naming their software with the same names as the processes mentioned here"
-        ],
-        "level": "high",
-        "rule": [
-            "SELECT * FROM logs WHERE (TargetFilename LIKE '%\\\\AtBroker.exe' ESCAPE '\\' OR TargetFilename LIKE '%\\\\audiodg.exe' ESCAPE '\\' OR TargetFilename LIKE '%\\\\backgroundTaskHost.exe' ESCAPE '\\' OR TargetFilename LIKE '%\\\\bcdedit.exe' ESCAPE '\\' OR TargetFilename LIKE '%\\\\bitsadmin.exe' ESCAPE '\\' OR TargetFilename LIKE '%\\\\cmdl32.exe' ESCAPE '\\' OR TargetFilename LIKE '%\\\\cmstp.exe' ESCAPE '\\' OR TargetFilename LIKE '%\\\\conhost.exe' ESCAPE '\\' OR TargetFilename LIKE '%\\\\csrss.exe' ESCAPE '\\' OR TargetFilename LIKE '%\\\\dasHost.exe' ESCAPE '\\' OR TargetFilename LIKE '%\\\\dfrgui.exe' ESCAPE '\\' OR TargetFilename LIKE '%\\\\dllhost.exe' ESCAPE '\\' OR TargetFilename LIKE '%\\\\dwm.exe' ESCAPE '\\' OR TargetFilename LIKE '%\\\\eventcreate.exe' ESCAPE '\\' OR TargetFilename LIKE '%\\\\eventvwr.exe' ESCAPE '\\' OR TargetFilename LIKE '%\\\\explorer.exe' ESCAPE '\\' OR TargetFilename LIKE '%\\\\extrac32.exe' ESCAPE '\\' OR TargetFilename LIKE '%\\\\fontdrvhost.exe' ESCAPE '\\' OR TargetFilename LIKE '%\\\\ipconfig.exe' ESCAPE '\\' OR TargetFilename LIKE '%\\\\iscsicli.exe' ESCAPE '\\' OR TargetFilename LIKE '%\\\\iscsicpl.exe' ESCAPE '\\' OR TargetFilename LIKE '%\\\\logman.exe' ESCAPE '\\' OR TargetFilename LIKE '%\\\\LogonUI.exe' ESCAPE '\\' OR TargetFilename LIKE '%\\\\LsaIso.exe' ESCAPE '\\' OR TargetFilename LIKE '%\\\\lsass.exe' ESCAPE '\\' OR TargetFilename LIKE '%\\\\lsm.exe' ESCAPE '\\' OR TargetFilename LIKE '%\\\\msiexec.exe' ESCAPE '\\' OR TargetFilename LIKE '%\\\\msinfo32.exe' ESCAPE '\\' OR TargetFilename LIKE '%\\\\mstsc.exe' ESCAPE '\\' OR TargetFilename LIKE '%\\\\nbtstat.exe' ESCAPE '\\' OR TargetFilename LIKE '%\\\\odbcconf.exe' ESCAPE '\\' OR TargetFilename LIKE '%\\\\powershell.exe' ESCAPE '\\' OR TargetFilename LIKE '%\\\\pwsh.exe' ESCAPE '\\' OR TargetFilename LIKE '%\\\\regini.exe' ESCAPE '\\' OR TargetFilename LIKE '%\\\\regsvr32.exe' ESCAPE '\\' OR TargetFilename LIKE '%\\\\rundll32.exe' ESCAPE '\\' OR TargetFilename LIKE '%\\\\RuntimeBroker.exe' ESCAPE '\\' OR TargetFilename LIKE '%\\\\schtasks.exe' ESCAPE '\\' OR TargetFilename LIKE '%\\\\SearchFilterHost.exe' ESCAPE '\\' OR TargetFilename LIKE '%\\\\SearchIndexer.exe' ESCAPE '\\' OR TargetFilename LIKE '%\\\\SearchProtocolHost.exe' ESCAPE '\\' OR TargetFilename LIKE '%\\\\SecurityHealthService.exe' ESCAPE '\\' OR TargetFilename LIKE '%\\\\SecurityHealthSystray.exe' ESCAPE '\\' OR TargetFilename LIKE '%\\\\services.exe' ESCAPE '\\' OR TargetFilename LIKE '%\\\\ShellAppRuntime.exe' ESCAPE '\\' OR TargetFilename LIKE '%\\\\sihost.exe' ESCAPE '\\' OR TargetFilename LIKE '%\\\\smartscreen.exe' ESCAPE '\\' OR TargetFilename LIKE '%\\\\smss.exe' ESCAPE '\\' OR TargetFilename LIKE '%\\\\spoolsv.exe' ESCAPE '\\' OR TargetFilename LIKE '%\\\\svchost.exe' ESCAPE '\\' OR TargetFilename LIKE '%\\\\SystemSettingsBroker.exe' ESCAPE '\\' OR TargetFilename LIKE '%\\\\taskhost.exe' ESCAPE '\\' OR TargetFilename LIKE '%\\\\taskhostw.exe' ESCAPE '\\' OR TargetFilename LIKE '%\\\\Taskmgr.exe' ESCAPE '\\' OR TargetFilename LIKE '%\\\\TiWorker.exe' ESCAPE '\\' OR TargetFilename LIKE '%\\\\vssadmin.exe' ESCAPE '\\' OR TargetFilename LIKE '%\\\\w32tm.exe' ESCAPE '\\' OR TargetFilename LIKE '%\\\\WerFault.exe' ESCAPE '\\' OR TargetFilename LIKE '%\\\\WerFaultSecure.exe' ESCAPE '\\' OR TargetFilename LIKE '%\\\\wermgr.exe' ESCAPE '\\' OR TargetFilename LIKE '%\\\\wevtutil.exe' ESCAPE '\\' OR TargetFilename LIKE '%\\\\wininit.exe' ESCAPE '\\' OR TargetFilename LIKE '%\\\\winlogon.exe' ESCAPE '\\' OR TargetFilename LIKE '%\\\\winrshost.exe' ESCAPE '\\' OR TargetFilename LIKE '%\\\\WinRTNetMUAHostServer.exe' ESCAPE '\\' OR TargetFilename LIKE '%\\\\wlanext.exe' ESCAPE '\\' OR TargetFilename LIKE '%\\\\wlrmdr.exe' ESCAPE '\\' OR TargetFilename LIKE '%\\\\WmiPrvSE.exe' ESCAPE '\\' OR TargetFilename LIKE '%\\\\wslhost.exe' ESCAPE '\\' OR TargetFilename LIKE '%\\\\WSReset.exe' ESCAPE '\\' OR TargetFilename LIKE '%\\\\WUDFHost.exe' ESCAPE '\\' OR TargetFilename LIKE '%\\\\WWAHost.exe' ESCAPE '\\') AND (NOT (((TargetFilename LIKE '%:\\\\Windows\\\\SoftwareDistribution\\\\%' ESCAPE '\\' OR TargetFilename LIKE '%:\\\\Windows\\\\System32\\\\%' ESCAPE '\\' OR TargetFilename LIKE '%:\\\\Windows\\\\SysWOW64\\\\%' ESCAPE '\\' OR TargetFilename LIKE '%:\\\\Windows\\\\WinSxS\\\\%' ESCAPE '\\' OR TargetFilename LIKE '%\\\\SystemRoot\\\\System32\\\\%' ESCAPE '\\') AND (Image LIKE '%\\\\Windows\\\\System32\\\\dism.exe' ESCAPE '\\' OR Image LIKE '%\\\\TiWorker.exe' ESCAPE '\\')) OR (TargetFilename LIKE '%:\\\\$WINDOWS.~BT\\\\%' ESCAPE '\\' AND Image LIKE '%:\\\\$WINDOWS.~BT\\\\Sources\\\\SetupHost.exe' ESCAPE '\\') OR (TargetFilename LIKE '%\\\\RuntimeBroker.exe' ESCAPE '\\' AND Image LIKE '%:\\\\Windows\\\\system32\\\\wbengine.exe' ESCAPE '\\') OR (Image LIKE '%:\\\\Windows\\\\system32\\\\svchost.exe' ESCAPE '\\' AND (TargetFilename LIKE '%:\\\\Windows\\\\SoftwareDistribution\\\\Download\\\\%' ESCAPE '\\' OR TargetFilename LIKE '%:\\\\Program Files\\\\WindowsApps\\\\%' ESCAPE '\\')) OR Image LIKE '%:\\\\Windows\\\\System32\\\\wuauclt.exe' ESCAPE '\\' OR TargetFilename LIKE '%:\\\\Windows\\\\explorer.exe' ESCAPE '\\' OR (Image LIKE '%:\\\\WINDOWS\\\\system32\\\\msiexec.exe' ESCAPE '\\' AND (TargetFilename LIKE '%:\\\\Program Files\\\\PowerShell\\\\7\\\\pwsh.exe' ESCAPE '\\' OR TargetFilename LIKE '%:\\\\Program Files\\\\PowerShell\\\\7-preview\\\\pwsh.exe' ESCAPE '\\')) OR (TargetFilename LIKE '%:\\\\Windows\\\\System32\\\\SecurityHealth\\\\%' ESCAPE '\\' AND TargetFilename LIKE '%\\\\SecurityHealthSystray.exe' ESCAPE '\\' AND Image LIKE '%\\\\SecurityHealthSetup.exe' ESCAPE '\\') OR (Image LIKE '%:\\\\Windows\\\\uus\\\\%' ESCAPE '\\' AND Image LIKE '%\\\\wuaucltcore.exe' ESCAPE '\\' AND TargetFilename LIKE '%:\\\\$WinREAgent\\\\%' ESCAPE '\\')))"
-        ],
-        "filename": ""
-    },
-    {
         "title": "Potential Privilege Escalation Attempt Via .Exe.Local Technique",
         "id": "07a99744-56ac-40d2-97b7-2095967b0e03",
         "status": "test",
@@ -21876,25 +21798,6 @@
         "level": "high",
         "rule": [
             "SELECT * FROM logs WHERE (TargetFilename LIKE '%\\\\PROCEXP%' ESCAPE '\\' AND TargetFilename LIKE '%.sys' ESCAPE '\\') AND (NOT (Image LIKE '%\\\\procexp.exe' ESCAPE '\\' OR Image LIKE '%\\\\procexp64.exe' ESCAPE '\\'))"
-        ],
-        "filename": ""
-    },
-    {
-        "title": "EVTX Created In Uncommon Location",
-        "id": "65236ec7-ace0-4f0c-82fd-737b04fd4dcb",
-        "status": "experimental",
-        "description": "Detects the creation of new files with the \".evtx\" extension in non-common locations. Which could indicate tampering with default evtx locations in order to evade security controls",
-        "author": "D3F7A5105",
-        "tags": [
-            "attack.defense_evasion",
-            "attack.t1562.002"
-        ],
-        "falsepositives": [
-            "Administrator or backup activity"
-        ],
-        "level": "high",
-        "rule": [
-            "SELECT * FROM logs WHERE TargetFilename LIKE '%.evtx' ESCAPE '\\' AND (NOT (TargetFilename LIKE '%:\\\\Windows\\\\System32\\\\winevt\\\\Logs\\\\%' ESCAPE '\\' OR (TargetFilename LIKE '%:\\\\ProgramData\\\\Microsoft\\\\Windows\\\\Containers\\\\BaseImages\\\\%' ESCAPE '\\' AND TargetFilename LIKE '%\\\\Windows\\\\System32\\\\winevt\\\\Logs\\\\' ESCAPE '\\') OR (Image LIKE '%:\\\\Windows\\\\explorer.exe' ESCAPE '\\' OR Image LIKE '%:\\\\Windows\\\\system32\\\\dllhost.exe' ESCAPE '\\')))"
         ],
         "filename": ""
     },
@@ -26587,6 +26490,26 @@
         "filename": ""
     },
     {
+        "title": "Potential KamiKakaBot Activity - Winlogon Shell Persistence",
+        "id": "c9b86500-1ec2-4de6-9120-d744c8fb5caf",
+        "status": "experimental",
+        "description": "Detects changes to the \"Winlogon\" registry key where a process will set the value of the \"Shell\" to a value that was observed being used by KamiKakaBot samples in order to achieve persistence.\n",
+        "author": "Nasreddine Bencherchali (Nextron Systems), X__Junior",
+        "tags": [
+            "attack.persistence",
+            "attack.t1547.001",
+            "detection.emerging_threats"
+        ],
+        "falsepositives": [
+            "Unlikely"
+        ],
+        "level": "high",
+        "rule": [
+            "SELECT * FROM logs WHERE Channel='Security' AND ((EventID=4657 AND OperationType='Existing registry value modified') AND (TargetObject LIKE '%\\\\Microsoft\\\\Windows NT\\\\CurrentVersion\\\\Winlogon\\\\Shell' ESCAPE '\\' AND (NewValue LIKE '%-nop -w h%' ESCAPE '\\' AND NewValue LIKE '%$env%' ESCAPE '\\' AND NewValue LIKE '%explorer.exe%' ESCAPE '\\' AND NewValue LIKE '%Start-Process%' ESCAPE '\\')))"
+        ],
+        "filename": ""
+    },
+    {
         "title": "Potential Raspberry Robin CPL Execution Activity",
         "id": "92020b88-9caf-464f-bad8-cd0fb0aa2a81",
         "status": "experimental",
@@ -26834,6 +26757,28 @@
         "level": "high",
         "rule": [
             "SELECT * FROM logs WHERE Channel='Security' AND (EventID=4688 AND ((CommandLine LIKE '%Add-PrinterPort -Name%' ESCAPE '\\' AND (CommandLine LIKE '%.exe%' ESCAPE '\\' OR CommandLine LIKE '%.dll%' ESCAPE '\\' OR CommandLine LIKE '%.bat%' ESCAPE '\\')) OR CommandLine LIKE '%Generic / Text Only%' ESCAPE '\\'))"
+        ],
+        "filename": ""
+    },
+    {
+        "title": "CVE-2020-1048 Exploitation Attempt - Suspicious New Printer Ports - Registry",
+        "id": "7ec912f2-5175-4868-b811-ec13ad0f8567",
+        "status": "test",
+        "description": "Detects changes to the \"Ports\" registry key with data that includes a Windows path or a file with a suspicious extension.\nThis could be an attempt to exploit CVE-2020-1048 - a Windows Print Spooler elevation of privilege vulnerability.\n",
+        "author": "EagleEye Team, Florian Roth (Nextron Systems), NVISO",
+        "tags": [
+            "attack.persistence",
+            "attack.execution",
+            "attack.defense_evasion",
+            "attack.t1112",
+            "cve.2020.1048"
+        ],
+        "falsepositives": [
+            "New printer port install on host"
+        ],
+        "level": "high",
+        "rule": [
+            "SELECT * FROM logs WHERE Channel='Security' AND ((EventID=4657 AND OperationType='Existing registry value modified') AND (TargetObject LIKE '%\\\\Microsoft\\\\Windows NT\\\\CurrentVersion\\\\Ports%' ESCAPE '\\' AND (NewValue LIKE '%.bat%' ESCAPE '\\' OR NewValue LIKE '%.com%' ESCAPE '\\' OR NewValue LIKE '%.dll%' ESCAPE '\\' OR NewValue LIKE '%.exe%' ESCAPE '\\' OR NewValue LIKE '%.ps1%' ESCAPE '\\' OR NewValue LIKE '%.vbe%' ESCAPE '\\' OR NewValue LIKE '%.vbs%' ESCAPE '\\' OR NewValue LIKE '%C:%' ESCAPE '\\')))"
         ],
         "filename": ""
     },
@@ -29612,25 +29557,6 @@
         "filename": ""
     },
     {
-        "title": "CMD Shell Output Redirect",
-        "id": "4f4eaa9f-5ad4-410c-a4be-bc6132b0175a",
-        "status": "test",
-        "description": "Detects the use of the redirection character \">\" to redicrect information in commandline",
-        "author": "frack113",
-        "tags": [
-            "attack.discovery",
-            "attack.t1082"
-        ],
-        "falsepositives": [
-            "Internet Download Manager extensions use named pipes and redirection via CLI. Filter it out if you use it in your environment"
-        ],
-        "level": "low",
-        "rule": [
-            "SELECT * FROM logs WHERE Channel='Security' AND (EventID=4688 AND (((OriginalFileName='Cmd.Exe' OR NewProcessName LIKE '%\\\\cmd.exe' ESCAPE '\\') AND CommandLine LIKE '%>%' ESCAPE '\\') AND (NOT (CommandLine LIKE '%C:\\\\Program Files (x86)\\\\Internet Download Manager\\\\IDMMsgHost.exe%' ESCAPE '\\' OR CommandLine LIKE '%chrome-extension://%' ESCAPE '\\' OR CommandLine LIKE '%\\\\.\\\\pipe\\\\chrome.nativeMessaging%' ESCAPE '\\'))))"
-        ],
-        "filename": ""
-    },
-    {
         "title": "Detect Virtualbox Driver Installation OR Starting Of VMs",
         "id": "bab049ca-7471-4828-9024-38279a4c04da",
         "status": "test",
@@ -30631,6 +30557,25 @@
         "filename": ""
     },
     {
+        "title": "MaxMpxCt Registry Value Changed",
+        "id": "0e6a9e62-627e-496c-aef5-bfa39da29b5e",
+        "status": "experimental",
+        "description": "Detects changes to the \"MaxMpxCt\" registry value.\nMaxMpxCt specifies the maximum outstanding network requests for the server per client, which is used when negotiating a Server Message Block (SMB) connection with a client. Note if the value is set beyond 125 older Windows 9x clients will fail to negotiate.\nRansomware threat actors and operators (specifically BlackCat) were seen increasing this value in order to handle a higher volume of traffic.\n",
+        "author": "Nasreddine Bencherchali (Nextron Systems)",
+        "tags": [
+            "attack.defense_evasion",
+            "attack.t1070.005"
+        ],
+        "falsepositives": [
+            "Unknown"
+        ],
+        "level": "low",
+        "rule": [
+            "SELECT * FROM logs WHERE Channel='Security' AND ((EventID=4657 AND OperationType='Existing registry value modified') AND TargetObject LIKE '%\\\\Services\\\\LanmanServer\\\\Parameters\\\\MaxMpxCt' ESCAPE '\\')"
+        ],
+        "filename": ""
+    },
+    {
         "title": "New ODBC Driver Registered",
         "id": "3390fbef-c98d-4bdd-a863-d65ed7c610dd",
         "status": "experimental",
@@ -31207,6 +31152,26 @@
         "level": "low",
         "rule": [
             "SELECT * FROM logs WHERE Channel='Security' AND (EventID=4688 AND (((NewProcessName LIKE '%\\\\sc.exe' ESCAPE '\\' AND OriginalFileName='sc.exe') AND CommandLine LIKE '% query%' ESCAPE '\\') AND (NOT CommandLine='sc query dokan1')))"
+        ],
+        "filename": ""
+    },
+    {
+        "title": "CMD Shell Output Redirect",
+        "id": "4f4eaa9f-5ad4-410c-a4be-bc6132b0175a",
+        "status": "test",
+        "description": "Detects the use of the redirection character \">\" to redirect information on the command line.\nThis technique is sometimes used by malicious actors in order to redirect the output of reconnaissance commands such as \"hostname\" and \"dir\" to files for future exfiltration.\n",
+        "author": "frack113",
+        "tags": [
+            "attack.discovery",
+            "attack.t1082",
+            "detection.threat_hunting"
+        ],
+        "falsepositives": [
+            "Internet Download Manager extensions use named pipes and redirection via CLI. Filter it out if you use it in your environment"
+        ],
+        "level": "low",
+        "rule": [
+            "SELECT * FROM logs WHERE Channel='Security' AND (EventID=4688 AND (((OriginalFileName='Cmd.Exe' OR NewProcessName LIKE '%\\\\cmd.exe' ESCAPE '\\') AND CommandLine LIKE '%>%' ESCAPE '\\') AND (NOT (CommandLine LIKE '%C:\\\\Program Files (x86)\\\\Internet Download Manager\\\\IDMMsgHost.exe%' ESCAPE '\\' OR CommandLine LIKE '%chrome-extension://%' ESCAPE '\\' OR CommandLine LIKE '%\\\\.\\\\pipe\\\\chrome.nativeMessaging%' ESCAPE '\\'))))"
         ],
         "filename": ""
     },
@@ -35089,6 +35054,24 @@
         "filename": ""
     },
     {
+        "title": "Potentially Suspicious Electron Application CommandLine",
+        "id": "378a05d8-963c-46c9-bcce-13c7657eac99",
+        "status": "experimental",
+        "description": "Detects potentially suspicious CommandLine of electron apps (teams, discord, slack, etc.). This could be a sign of abuse to proxy execution through a signed binary.",
+        "author": "frack113, Nasreddine Bencherchali (Nextron Systems)",
+        "tags": [
+            "attack.execution"
+        ],
+        "falsepositives": [
+            "Legitimate usage for debugging purposes"
+        ],
+        "level": "medium",
+        "rule": [
+            "SELECT * FROM logs WHERE Channel='Security' AND (EventID=4688 AND (((NewProcessName LIKE '%\\\\chrome.exe' ESCAPE '\\' OR NewProcessName LIKE '%\\\\code.exe' ESCAPE '\\' OR NewProcessName LIKE '%\\\\discord.exe' ESCAPE '\\' OR NewProcessName LIKE '%\\\\GitHubDesktop.exe' ESCAPE '\\' OR NewProcessName LIKE '%\\\\keybase.exe' ESCAPE '\\' OR NewProcessName LIKE '%\\\\msedge\\_proxy.exe' ESCAPE '\\' OR NewProcessName LIKE '%\\\\msedge.exe' ESCAPE '\\' OR NewProcessName LIKE '%\\\\msedgewebview2.exe' ESCAPE '\\' OR NewProcessName LIKE '%\\\\msteams.exe' ESCAPE '\\' OR NewProcessName LIKE '%\\\\slack.exe' ESCAPE '\\' OR NewProcessName LIKE '%\\\\Teams.exe' ESCAPE '\\') OR (OriginalFileName='chrome.exe' OR OriginalFileName='code.exe' OR OriginalFileName='discord.exe' OR OriginalFileName='GitHubDesktop.exe' OR OriginalFileName='keybase.exe' OR OriginalFileName LIKE 'msedge\\_proxy.exe' ESCAPE '\\' OR OriginalFileName='msedge.exe' OR OriginalFileName='msedgewebview2.exe' OR OriginalFileName='msteams.exe' OR OriginalFileName='slack.exe' OR OriginalFileName='Teams.exe')) AND (CommandLine LIKE '%--browser-subprocess-path%' ESCAPE '\\' OR CommandLine LIKE '%--gpu-launcher%' ESCAPE '\\' OR CommandLine LIKE '%--renderer-cmd-prefix%' ESCAPE '\\' OR CommandLine LIKE '%--utility-cmd-prefix%' ESCAPE '\\')))"
+        ],
+        "filename": ""
+    },
+    {
         "title": "Potential Product Reconnaissance Via Wmic.EXE",
         "id": "15434e33-5027-4914-88d5-3d4145ec25a9",
         "status": "test",
@@ -35609,24 +35592,6 @@
         "level": "medium",
         "rule": [
             "SELECT * FROM logs WHERE Channel='Security' AND (EventID=4688 AND ((NewProcessName LIKE '%\\\\DXCap.exe' ESCAPE '\\' OR OriginalFileName='DXCap.exe') AND CommandLine LIKE '% -c %' ESCAPE '\\'))"
-        ],
-        "filename": ""
-    },
-    {
-        "title": "Potentially Suspicious Electron Application CommandLine",
-        "id": "378a05d8-963c-46c9-bcce-13c7657eac99",
-        "status": "experimental",
-        "description": "Detects potentially suspicious CommandLine of electron apps (teams, discord, slack, etc.). This could be a sign of abuse to proxy execution through a signed binary.",
-        "author": "frack113, Nasreddine Bencherchali (Nextron Systems)",
-        "tags": [
-            "attack.execution"
-        ],
-        "falsepositives": [
-            "Legitimate usage for debugging purposes"
-        ],
-        "level": "medium",
-        "rule": [
-            "SELECT * FROM logs WHERE Channel='Security' AND (EventID=4688 AND (((NewProcessName LIKE '%\\\\chrome.exe' ESCAPE '\\' OR NewProcessName LIKE '%\\\\code.exe' ESCAPE '\\' OR NewProcessName LIKE '%\\\\discord.exe' ESCAPE '\\' OR NewProcessName LIKE '%\\\\GitHubDesktop.exe' ESCAPE '\\' OR NewProcessName LIKE '%\\\\keybase.exe' ESCAPE '\\' OR NewProcessName LIKE '%\\\\msedge\\_proxy.exe' ESCAPE '\\' OR NewProcessName LIKE '%\\\\msedge.exe' ESCAPE '\\' OR NewProcessName LIKE '%\\\\msedgewebview2.exe' ESCAPE '\\' OR NewProcessName LIKE '%\\\\msteams.exe' ESCAPE '\\' OR NewProcessName LIKE '%\\\\slack.exe' ESCAPE '\\' OR NewProcessName LIKE '%\\\\Teams.exe' ESCAPE '\\') OR (OriginalFileName='chrome.exe' OR OriginalFileName='code.exe' OR OriginalFileName='discord.exe' OR OriginalFileName='GitHubDesktop.exe' OR OriginalFileName='keybase.exe' OR OriginalFileName LIKE 'msedge\\_proxy.exe' ESCAPE '\\' OR OriginalFileName='msedge.exe' OR OriginalFileName='msedgewebview2.exe' OR OriginalFileName='msteams.exe' OR OriginalFileName='slack.exe' OR OriginalFileName='Teams.exe')) AND (CommandLine LIKE '%--browser-subprocess-path%' ESCAPE '\\' OR CommandLine LIKE '%--gpu-launcher%' ESCAPE '\\' OR CommandLine LIKE '%--renderer-cmd-prefix%' ESCAPE '\\' OR CommandLine LIKE '%--utility-cmd-prefix%' ESCAPE '\\')))"
         ],
         "filename": ""
     },
@@ -42695,10 +42660,10 @@
         "filename": ""
     },
     {
-        "title": "Suspicious CMD Shell Output Redirect",
+        "title": "Potentially Suspicious CMD Shell Output Redirect",
         "id": "8e0bb260-d4b2-4fff-bb8d-3f82118e6892",
         "status": "experimental",
-        "description": "Detects inline Windows shell commands redirecting output via the \">\" symbol to a suspicious location",
+        "description": "Detects inline Windows shell commands redirecting output via the \">\" symbol to a suspicious location.\nThis technique is sometimes used by malicious actors in order to redirect the output of reconnaissance commands such as \"hostname\" and \"dir\" to files for future exfiltration.\n",
         "author": "Nasreddine Bencherchali (Nextron Systems)",
         "tags": [
             "attack.defense_evasion",
@@ -42709,7 +42674,7 @@
         ],
         "level": "medium",
         "rule": [
-            "SELECT * FROM logs WHERE Channel='Security' AND (EventID=4688 AND ((NewProcessName LIKE '%\\\\cmd.exe' ESCAPE '\\' OR OriginalFileName='Cmd.Exe') AND ((CommandLine LIKE '%> \\\\Users\\\\Public\\\\%' ESCAPE '\\' OR CommandLine LIKE '%> \\%APPDATA\\%\\\\%' ESCAPE '\\' OR CommandLine LIKE '%> \\%TEMP\\%\\\\%' ESCAPE '\\' OR CommandLine LIKE '%> \\%TMP\\%\\\\%' ESCAPE '\\' OR CommandLine LIKE '%> \\%USERPROFILE\\%\\\\%' ESCAPE '\\' OR CommandLine LIKE '%> C:\\\\Temp\\\\%' ESCAPE '\\' OR CommandLine LIKE '%> C:\\\\Users\\\\Public\\\\%' ESCAPE '\\' OR CommandLine LIKE '%> C:\\\\Windows\\\\Temp\\\\%' ESCAPE '\\' OR CommandLine LIKE '%>\\\\Users\\\\Public\\\\%' ESCAPE '\\' OR CommandLine LIKE '%>\\%APPDATA\\%\\\\%' ESCAPE '\\' OR CommandLine LIKE '%>\\%TEMP\\%\\\\%' ESCAPE '\\' OR CommandLine LIKE '%>\\%TMP\\%\\\\%' ESCAPE '\\' OR CommandLine LIKE '%>\\%USERPROFILE\\%\\\\%' ESCAPE '\\' OR CommandLine LIKE '%>C:\\\\Temp\\\\%' ESCAPE '\\' OR CommandLine LIKE '%>C:\\\\Users\\\\Public\\\\%' ESCAPE '\\' OR CommandLine LIKE '%>C:\\\\Windows\\\\Temp\\\\%' ESCAPE '\\') OR ((CommandLine LIKE '% >%' ESCAPE '\\' OR CommandLine LIKE '%\">%' ESCAPE '\\' OR CommandLine LIKE '%''>%' ESCAPE '\\') AND (CommandLine LIKE '%C:\\\\Users\\\\%' ESCAPE '\\' AND CommandLine LIKE '%\\\\AppData\\\\Local\\\\%' ESCAPE '\\')))))"
+            "SELECT * FROM logs WHERE Channel='Security' AND (EventID=4688 AND ((NewProcessName LIKE '%\\\\cmd.exe' ESCAPE '\\' OR OriginalFileName='Cmd.Exe') AND ((CommandLine LIKE '%>_\\%APPDATA\\%\\\\%' ESCAPE '\\' OR CommandLine LIKE '%>_\\%TEMP\\%\\\\%' ESCAPE '\\' OR CommandLine LIKE '%>_\\%TMP\\%\\\\%' ESCAPE '\\' OR CommandLine LIKE '%>_\\%USERPROFILE\\%\\\\%' ESCAPE '\\' OR CommandLine LIKE '%>_C:\\\\ProgramData\\\\%' ESCAPE '\\' OR CommandLine LIKE '%>_C:\\\\Temp\\\\%' ESCAPE '\\' OR CommandLine LIKE '%>_C:\\\\Users\\\\Public\\\\%' ESCAPE '\\' OR CommandLine LIKE '%>_C:\\\\Windows\\\\Temp\\\\%' ESCAPE '\\') OR ((CommandLine LIKE '% >%' ESCAPE '\\' OR CommandLine LIKE '%\">%' ESCAPE '\\' OR CommandLine LIKE '%''>%' ESCAPE '\\') AND (CommandLine LIKE '%C:\\\\Users\\\\%' ESCAPE '\\' AND CommandLine LIKE '%\\\\AppData\\\\Local\\\\%' ESCAPE '\\')))))"
         ],
         "filename": ""
     },
@@ -46211,7 +46176,7 @@
         "title": "ServiceDll Hijack",
         "id": "612e47e9-8a59-43a6-b404-f48683f45bd6",
         "status": "experimental",
-        "description": "Detects changes to the \"ServiceDLL\" value related to a service in the registry. This is often used as a method of persistence.",
+        "description": "Detects changes to the \"ServiceDLL\" value related to a service in the registry.\nThis is often used as a method of persistence.\n",
         "author": "frack113",
         "tags": [
             "attack.persistence",
@@ -46224,7 +46189,7 @@
         ],
         "level": "medium",
         "rule": [
-            "SELECT * FROM logs WHERE Channel='Security' AND ((EventID=4657 AND OperationType='Existing registry value modified') AND ((TargetObject LIKE 'HKLM\\\\System\\\\CurrentControlSet\\\\Services\\\\%' ESCAPE '\\' AND TargetObject LIKE '%\\\\Parameters\\\\ServiceDll' ESCAPE '\\') AND (NOT (NewValue LIKE 'C:\\\\Windows\\\\system32\\\\spool\\\\drivers\\\\x64\\\\3\\\\PrintConfig.dll' ESCAPE '\\' OR (NewProcessName LIKE 'C:\\\\Windows\\\\system32\\\\lsass.exe' ESCAPE '\\' AND TargetObject LIKE '%\\\\CurrentControlSet\\\\Services\\\\NTDS\\\\Parameters\\\\ServiceDll' ESCAPE '\\' AND NewValue LIKE '\\%\\%systemroot\\%\\%\\\\system32\\\\ntdsa.dll' ESCAPE '\\') OR NewProcessName LIKE 'C:\\\\Windows\\\\System32\\\\poqexec.exe' ESCAPE '\\'))))"
+            "SELECT * FROM logs WHERE Channel='Security' AND ((EventID=4657 AND OperationType='Existing registry value modified') AND (((TargetObject LIKE '%\\\\System\\\\%' ESCAPE '\\' AND TargetObject LIKE '%ControlSet%' ESCAPE '\\' AND TargetObject LIKE '%\\\\Services\\\\%' ESCAPE '\\') AND TargetObject LIKE '%\\\\Parameters\\\\ServiceDll' ESCAPE '\\') AND (NOT (NewValue LIKE 'C:\\\\Windows\\\\system32\\\\spool\\\\drivers\\\\x64\\\\3\\\\PrintConfig.dll' ESCAPE '\\' OR (NewProcessName LIKE 'C:\\\\Windows\\\\system32\\\\lsass.exe' ESCAPE '\\' AND TargetObject LIKE '%\\\\Services\\\\NTDS\\\\Parameters\\\\ServiceDll' ESCAPE '\\' AND NewValue LIKE '\\%\\%systemroot\\%\\%\\\\system32\\\\ntdsa.dll' ESCAPE '\\') OR NewProcessName LIKE 'C:\\\\Windows\\\\System32\\\\poqexec.exe' ESCAPE '\\')) AND (NOT (NewProcessName LIKE '%\\\\regsvr32.exe' ESCAPE '\\' AND NewValue LIKE 'C:\\\\Windows\\\\System32\\\\STAgent.dll' ESCAPE '\\'))))"
         ],
         "filename": ""
     },
@@ -46691,7 +46656,7 @@
         ],
         "level": "medium",
         "rule": [
-            "SELECT * FROM logs WHERE Channel='Security' AND ((EventID=4657 AND OperationType='Existing registry value modified') AND (TargetObject LIKE 'HKLM\\\\System\\\\CurrentControlSet\\\\Services\\\\LanmanServer\\\\Parameters\\\\%' ESCAPE '\\' AND (TargetObject LIKE '%AutoShareWks' ESCAPE '\\' OR TargetObject LIKE '%AutoShareServer' ESCAPE '\\') AND NewValue='DWORD (0x00000000)'))"
+            "SELECT * FROM logs WHERE Channel='Security' AND ((EventID=4657 AND OperationType='Existing registry value modified') AND (TargetObject LIKE '%\\\\Services\\\\LanmanServer\\\\Parameters\\\\%' ESCAPE '\\' AND (TargetObject LIKE '%\\\\AutoShareWks' ESCAPE '\\' OR TargetObject LIKE '%\\\\AutoShareServer' ESCAPE '\\') AND NewValue='DWORD (0x00000000)'))"
         ],
         "filename": ""
     },
@@ -46767,7 +46732,7 @@
         ],
         "level": "medium",
         "rule": [
-            "SELECT * FROM logs WHERE Channel='Security' AND ((EventID=4657 AND OperationType='Existing registry value modified') AND (TargetObject LIKE 'HKLM\\\\System\\\\CurrentControlSet\\\\Services\\\\SharedAccess\\\\Parameters\\\\FirewallPolicy\\\\%' ESCAPE '\\' AND TargetObject LIKE '%\\\\EnableFirewall' ESCAPE '\\' AND NewValue='DWORD (0x00000000)'))"
+            "SELECT * FROM logs WHERE Channel='Security' AND ((EventID=4657 AND OperationType='Existing registry value modified') AND (TargetObject LIKE '%\\\\Services\\\\SharedAccess\\\\Parameters\\\\FirewallPolicy\\\\%' ESCAPE '\\' AND TargetObject LIKE '%\\\\EnableFirewall' ESCAPE '\\' AND NewValue='DWORD (0x00000000)'))"
         ],
         "filename": ""
     },
@@ -46867,7 +46832,7 @@
         "title": "Register New IFiltre For Persistence",
         "id": "b23818c7-e575-4d13-8012-332075ec0a2b",
         "status": "experimental",
-        "description": "Detects when an attacker register a new IFilter for an extension. Microsoft Windows Search uses filters to extract the content of items for inclusion in a full-text index. You can extend Windows Search to index new or proprietary file types by writing filters to extract the content, and property handlers to extract the properties of files",
+        "description": "Detects when an attacker registers a new IFilter for an extension. Microsoft Windows Search uses filters to extract the content of items for inclusion in a full-text index.\nYou can extend Windows Search to index new or proprietary file types by writing filters to extract the content, and property handlers to extract the properties of files.\n",
         "author": "Nasreddine Bencherchali (Nextron Systems)",
         "tags": [
             "attack.persistence"
@@ -46877,7 +46842,7 @@
         ],
         "level": "medium",
         "rule": [
-            "SELECT * FROM logs WHERE Channel='Security' AND ((EventID=4657 AND OperationType='Existing registry value modified') AND ((((TargetObject LIKE 'HKLM\\\\SOFTWARE\\\\Classes\\\\.%' ESCAPE '\\' OR TargetObject LIKE 'HKEY\\_LOCAL\\_MACHINE\\\\SOFTWARE\\\\Classes\\\\.%' ESCAPE '\\') AND TargetObject LIKE '%\\\\PersistentHandler%' ESCAPE '\\') OR ((TargetObject LIKE 'HKLM\\\\SOFTWARE\\\\Classes\\\\CLSID%' ESCAPE '\\' OR TargetObject LIKE 'HKEY\\_LOCAL\\_MACHINE\\\\SOFTWARE\\\\Classes\\\\CLSID%' ESCAPE '\\') AND TargetObject LIKE '%\\\\PersistentAddinsRegistered\\\\{89BCB740-6119-101A-BCB7-00DD010655AF}%' ESCAPE '\\')) AND (NOT ((TargetObject LIKE '%\\\\CLSID\\\\{4F46F75F-199F-4C63-8B7D-86D48FE7970C}\\\\%' ESCAPE '\\' OR TargetObject LIKE '%\\\\CLSID\\\\{4887767F-7ADC-4983-B576-88FB643D6F79}\\\\%' ESCAPE '\\' OR TargetObject LIKE '%\\\\CLSID\\\\{D3B41FA1-01E3-49AF-AA25-1D0D824275AE}\\\\%' ESCAPE '\\' OR TargetObject LIKE '%\\\\CLSID\\\\{72773E1A-B711-4d8d-81FA-B9A43B0650DD}\\\\%' ESCAPE '\\' OR TargetObject LIKE '%\\\\CLSID\\\\{098f2470-bae0-11cd-b579-08002b30bfeb}\\\\%' ESCAPE '\\' OR TargetObject LIKE '%\\\\CLSID\\\\{1AA9BF05-9A97-48c1-BA28-D9DCE795E93C}\\\\%' ESCAPE '\\' OR TargetObject LIKE '%\\\\CLSID\\\\{2e2294a9-50d7-4fe7-a09f-e6492e185884}\\\\%' ESCAPE '\\' OR TargetObject LIKE '%\\\\CLSID\\\\{34CEAC8D-CBC0-4f77-B7B1-8A60CB6DA0F7}\\\\%' ESCAPE '\\' OR TargetObject LIKE '%\\\\CLSID\\\\{3B224B11-9363-407e-850F-C9E1FFACD8FB}\\\\%' ESCAPE '\\' OR TargetObject LIKE '%\\\\CLSID\\\\{3DDEB7A4-8ABF-4D82-B9EE-E1F4552E95BE}\\\\%' ESCAPE '\\' OR TargetObject LIKE '%\\\\CLSID\\\\{5645C8C1-E277-11CF-8FDA-00AA00A14F93}\\\\%' ESCAPE '\\' OR TargetObject LIKE '%\\\\CLSID\\\\{5645C8C4-E277-11CF-8FDA-00AA00A14F93}\\\\%' ESCAPE '\\' OR TargetObject LIKE '%\\\\CLSID\\\\{58A9EBF6-5755-4554-A67E-A2467AD1447B}\\\\%' ESCAPE '\\' OR TargetObject LIKE '%\\\\CLSID\\\\{5e941d80-bf96-11cd-b579-08002b30bfeb}\\\\%' ESCAPE '\\' OR TargetObject LIKE '%\\\\CLSID\\\\{698A4FFC-63A3-4E70-8F00-376AD29363FB}\\\\%' ESCAPE '\\' OR TargetObject LIKE '%\\\\CLSID\\\\{7E9D8D44-6926-426F-AA2B-217A819A5CCE}\\\\%' ESCAPE '\\' OR TargetObject LIKE '%\\\\CLSID\\\\{8CD34779-9F10-4f9b-ADFB-B3FAEABDAB5A}\\\\%' ESCAPE '\\' OR TargetObject LIKE '%\\\\CLSID\\\\{9694E38A-E081-46ac-99A0-8743C909ACB6}\\\\%' ESCAPE '\\' OR TargetObject LIKE '%\\\\CLSID\\\\{98de59a0-d175-11cd-a7bd-00006b827d94}\\\\%' ESCAPE '\\' OR TargetObject LIKE '%\\\\CLSID\\\\{AA10385A-F5AA-4EFF-B3DF-71B701E25E18}\\\\%' ESCAPE '\\' OR TargetObject LIKE '%\\\\CLSID\\\\{B4132098-7A03-423D-9463-163CB07C151F}\\\\%' ESCAPE '\\' OR TargetObject LIKE '%\\\\CLSID\\\\{d044309b-5da6-4633-b085-4ed02522e5a5}\\\\%' ESCAPE '\\' OR TargetObject LIKE '%\\\\CLSID\\\\{D169C14A-5148-4322-92C8-754FC9D018D8}\\\\%' ESCAPE '\\' OR TargetObject LIKE '%\\\\CLSID\\\\{DD75716E-B42E-4978-BB60-1497B92E30C4}\\\\%' ESCAPE '\\' OR TargetObject LIKE '%\\\\CLSID\\\\{E2F83EED-62DE-4A9F-9CD0-A1D40DCD13B6}\\\\%' ESCAPE '\\' OR TargetObject LIKE '%\\\\CLSID\\\\{E772CEB3-E203-4828-ADF1-765713D981B8}\\\\%' ESCAPE '\\' OR TargetObject LIKE '%\\\\CLSID\\\\{eec97550-47a9-11cf-b952-00aa0051fe20}%' ESCAPE '\\' OR TargetObject LIKE '%\\\\CLSID\\\\{FB10BD80-A331-4e9e-9EB7-00279903AD99}\\\\%' ESCAPE '\\') OR (NewProcessName LIKE 'C:\\\\Windows\\\\System32\\\\%' ESCAPE '\\' OR NewProcessName LIKE 'C:\\\\Program Files (x86)\\\\%' ESCAPE '\\' OR NewProcessName LIKE 'C:\\\\Program Files\\\\%' ESCAPE '\\')))))"
+            "SELECT * FROM logs WHERE Channel='Security' AND ((EventID=4657 AND OperationType='Existing registry value modified') AND (((TargetObject LIKE '%\\\\SOFTWARE\\\\Classes\\\\.%' ESCAPE '\\' AND TargetObject LIKE '%\\\\PersistentHandler%' ESCAPE '\\') OR (TargetObject LIKE '%\\\\SOFTWARE\\\\Classes\\\\CLSID%' ESCAPE '\\' AND TargetObject LIKE '%\\\\PersistentAddinsRegistered\\\\{89BCB740-6119-101A-BCB7-00DD010655AF}%' ESCAPE '\\')) AND (NOT ((TargetObject LIKE '%\\\\CLSID\\\\{4F46F75F-199F-4C63-8B7D-86D48FE7970C}\\\\%' ESCAPE '\\' OR TargetObject LIKE '%\\\\CLSID\\\\{4887767F-7ADC-4983-B576-88FB643D6F79}\\\\%' ESCAPE '\\' OR TargetObject LIKE '%\\\\CLSID\\\\{D3B41FA1-01E3-49AF-AA25-1D0D824275AE}\\\\%' ESCAPE '\\' OR TargetObject LIKE '%\\\\CLSID\\\\{72773E1A-B711-4d8d-81FA-B9A43B0650DD}\\\\%' ESCAPE '\\' OR TargetObject LIKE '%\\\\CLSID\\\\{098f2470-bae0-11cd-b579-08002b30bfeb}\\\\%' ESCAPE '\\' OR TargetObject LIKE '%\\\\CLSID\\\\{1AA9BF05-9A97-48c1-BA28-D9DCE795E93C}\\\\%' ESCAPE '\\' OR TargetObject LIKE '%\\\\CLSID\\\\{2e2294a9-50d7-4fe7-a09f-e6492e185884}\\\\%' ESCAPE '\\' OR TargetObject LIKE '%\\\\CLSID\\\\{34CEAC8D-CBC0-4f77-B7B1-8A60CB6DA0F7}\\\\%' ESCAPE '\\' OR TargetObject LIKE '%\\\\CLSID\\\\{3B224B11-9363-407e-850F-C9E1FFACD8FB}\\\\%' ESCAPE '\\' OR TargetObject LIKE '%\\\\CLSID\\\\{3DDEB7A4-8ABF-4D82-B9EE-E1F4552E95BE}\\\\%' ESCAPE '\\' OR TargetObject LIKE '%\\\\CLSID\\\\{5645C8C1-E277-11CF-8FDA-00AA00A14F93}\\\\%' ESCAPE '\\' OR TargetObject LIKE '%\\\\CLSID\\\\{5645C8C4-E277-11CF-8FDA-00AA00A14F93}\\\\%' ESCAPE '\\' OR TargetObject LIKE '%\\\\CLSID\\\\{58A9EBF6-5755-4554-A67E-A2467AD1447B}\\\\%' ESCAPE '\\' OR TargetObject LIKE '%\\\\CLSID\\\\{5e941d80-bf96-11cd-b579-08002b30bfeb}\\\\%' ESCAPE '\\' OR TargetObject LIKE '%\\\\CLSID\\\\{698A4FFC-63A3-4E70-8F00-376AD29363FB}\\\\%' ESCAPE '\\' OR TargetObject LIKE '%\\\\CLSID\\\\{7E9D8D44-6926-426F-AA2B-217A819A5CCE}\\\\%' ESCAPE '\\' OR TargetObject LIKE '%\\\\CLSID\\\\{8CD34779-9F10-4f9b-ADFB-B3FAEABDAB5A}\\\\%' ESCAPE '\\' OR TargetObject LIKE '%\\\\CLSID\\\\{9694E38A-E081-46ac-99A0-8743C909ACB6}\\\\%' ESCAPE '\\' OR TargetObject LIKE '%\\\\CLSID\\\\{98de59a0-d175-11cd-a7bd-00006b827d94}\\\\%' ESCAPE '\\' OR TargetObject LIKE '%\\\\CLSID\\\\{AA10385A-F5AA-4EFF-B3DF-71B701E25E18}\\\\%' ESCAPE '\\' OR TargetObject LIKE '%\\\\CLSID\\\\{B4132098-7A03-423D-9463-163CB07C151F}\\\\%' ESCAPE '\\' OR TargetObject LIKE '%\\\\CLSID\\\\{d044309b-5da6-4633-b085-4ed02522e5a5}\\\\%' ESCAPE '\\' OR TargetObject LIKE '%\\\\CLSID\\\\{D169C14A-5148-4322-92C8-754FC9D018D8}\\\\%' ESCAPE '\\' OR TargetObject LIKE '%\\\\CLSID\\\\{DD75716E-B42E-4978-BB60-1497B92E30C4}\\\\%' ESCAPE '\\' OR TargetObject LIKE '%\\\\CLSID\\\\{E2F83EED-62DE-4A9F-9CD0-A1D40DCD13B6}\\\\%' ESCAPE '\\' OR TargetObject LIKE '%\\\\CLSID\\\\{E772CEB3-E203-4828-ADF1-765713D981B8}\\\\%' ESCAPE '\\' OR TargetObject LIKE '%\\\\CLSID\\\\{eec97550-47a9-11cf-b952-00aa0051fe20}%' ESCAPE '\\' OR TargetObject LIKE '%\\\\CLSID\\\\{FB10BD80-A331-4e9e-9EB7-00279903AD99}\\\\%' ESCAPE '\\') OR (NewProcessName LIKE 'C:\\\\Windows\\\\System32\\\\%' ESCAPE '\\' OR NewProcessName LIKE 'C:\\\\Program Files (x86)\\\\%' ESCAPE '\\' OR NewProcessName LIKE 'C:\\\\Program Files\\\\%' ESCAPE '\\')))))"
         ],
         "filename": ""
     },
@@ -47284,25 +47249,6 @@
         "filename": ""
     },
     {
-        "title": "Service Binary in Uncommon Folder",
-        "id": "277dc340-0540-42e7-8efb-5ff460045e07",
-        "status": "experimental",
-        "description": "Detect the creation of a service with a service binary located in a uncommon directory",
-        "author": "Florian Roth (Nextron Systems)",
-        "tags": [
-            "attack.defense_evasion",
-            "attack.t1112"
-        ],
-        "falsepositives": [
-            "Unknown"
-        ],
-        "level": "medium",
-        "rule": [
-            "SELECT * FROM logs WHERE Channel='Security' AND ((EventID=4657 AND OperationType='Existing registry value modified') AND (((TargetObject LIKE 'HKLM\\\\System\\\\CurrentControlSet\\\\Services\\\\%' ESCAPE '\\' AND TargetObject LIKE '%\\\\Start' ESCAPE '\\' AND (NewProcessName LIKE '%\\\\AppData\\\\Local\\\\%' ESCAPE '\\' OR NewProcessName LIKE '%\\\\AppData\\\\Roaming\\\\%' ESCAPE '\\') AND (NewValue='DWORD (0x00000000)' OR NewValue='DWORD (0x00000001)' OR NewValue='DWORD (0x00000002)')) OR (TargetObject LIKE 'HKLM\\\\System\\\\CurrentControlSet\\\\Services\\\\%' ESCAPE '\\' AND TargetObject LIKE '%\\\\ImagePath' ESCAPE '\\' AND (NewValue LIKE '%\\\\AppData\\\\Local\\\\%' ESCAPE '\\' OR NewValue LIKE '%\\\\AppData\\\\Roaming\\\\%' ESCAPE '\\'))) AND (NOT ((NewProcessName LIKE '%\\\\AppData\\\\Roaming\\\\Zoom%' ESCAPE '\\' OR NewProcessName LIKE '%\\\\AppData\\\\Local\\\\Zoom%' ESCAPE '\\') OR (NewValue LIKE '%\\\\AppData\\\\Roaming\\\\Zoom%' ESCAPE '\\' OR NewValue LIKE '%\\\\AppData\\\\Local\\\\Zoom%' ESCAPE '\\')))))"
-        ],
-        "filename": ""
-    },
-    {
         "title": "Windows Defender Exclusions Added - Registry",
         "id": "a982fc9c-6333-4ffb-a51d-addb04e8b529",
         "status": "test",
@@ -47318,6 +47264,25 @@
         "level": "medium",
         "rule": [
             "SELECT * FROM logs WHERE Channel='Security' AND ((EventID=4657 AND OperationType='Existing registry value modified') AND TargetObject LIKE '%\\\\Microsoft\\\\Windows Defender\\\\Exclusions%' ESCAPE '\\')"
+        ],
+        "filename": ""
+    },
+    {
+        "title": "Add Port Monitor Persistence in Registry",
+        "id": "944e8941-f6f6-4ee8-ac05-1c224e923c0e",
+        "status": "experimental",
+        "description": "Adversaries may use port monitors to run an attacker supplied DLL during system boot for persistence or privilege escalation.\nA port monitor can be set through the AddMonitor API call to set a DLL to be loaded at startup.\n",
+        "author": "frack113",
+        "tags": [
+            "attack.persistence",
+            "attack.t1547.010"
+        ],
+        "falsepositives": [
+            "Unknown"
+        ],
+        "level": "medium",
+        "rule": [
+            "SELECT * FROM logs WHERE Channel='Security' AND ((EventID=4657 AND OperationType='Existing registry value modified') AND ((TargetObject LIKE '%\\\\Control\\\\Print\\\\Monitors\\\\%' ESCAPE '\\' AND NewValue LIKE '%.dll' ESCAPE '\\') AND (NOT ((NewProcessName LIKE 'C:\\\\Windows\\\\System32\\\\spoolsv.exe' ESCAPE '\\' AND TargetObject LIKE '%\\\\Control\\\\Print\\\\Monitors\\\\CutePDF Writer Monitor v4.0\\\\Driver%' ESCAPE '\\' AND NewValue LIKE 'cpwmon64\\_v40.dll' ESCAPE '\\' AND (User LIKE '%AUTHORI%' ESCAPE '\\' OR User LIKE '%AUTORI%' ESCAPE '\\')) OR TargetObject LIKE '%\\\\Control\\\\Print\\\\Monitors\\\\MONVNC\\\\Driver%' ESCAPE '\\' OR (TargetObject LIKE '%Control\\\\Print\\\\Environments\\\\%' ESCAPE '\\' AND TargetObject LIKE '%\\\\Drivers\\\\%' ESCAPE '\\' AND TargetObject LIKE '%\\\\VNC Printer%' ESCAPE '\\')))))"
         ],
         "filename": ""
     },
@@ -47379,10 +47344,10 @@
         "filename": ""
     },
     {
-        "title": "Modification of Explorer Hidden Keys",
+        "title": "Displaying Hidden Files Feature Disabled",
         "id": "5a5152f1-463f-436b-b2f5-8eceb3964b42",
         "status": "experimental",
-        "description": "Detects modifications to the hidden files keys in registry. This technique is abused by several malware families to hide their files from normal users.",
+        "description": "Detects modifications to the \"Hidden\" and \"ShowSuperHidden\" explorer registry values in order to disable showing of hidden files and system files.\nThis technique is abused by several malware families to hide their files from normal users.\n",
         "author": "frack113",
         "tags": [
             "attack.defense_evasion",
@@ -47393,26 +47358,7 @@
         ],
         "level": "medium",
         "rule": [
-            "SELECT * FROM logs WHERE Channel='Security' AND ((EventID=4657 AND OperationType='Existing registry value modified') AND ((TargetObject LIKE 'HKLM\\\\SOFTWARE\\\\Microsoft\\\\Windows\\\\CurrentVersion\\\\Explorer\\\\Advanced\\\\ShowSuperHidden' ESCAPE '\\' OR TargetObject LIKE 'HKLM\\\\SOFTWARE\\\\Microsoft\\\\Windows\\\\CurrentVersion\\\\Explorer\\\\Advanced\\\\Hidden' ESCAPE '\\') AND NewValue='DWORD (0x00000000)'))"
-        ],
-        "filename": ""
-    },
-    {
-        "title": "Suspicious Set Value of MSDT in Registry (CVE-2022-30190)",
-        "id": "2d9403d5-7927-46b7-8216-37ab7c9ec5e3",
-        "status": "test",
-        "description": "Detects set value ms-msdt MSProtocol URI scheme in Registry that could be an attempt to exploit CVE-2022-30190.",
-        "author": "Sittikorn S",
-        "tags": [
-            "attack.defense_evasion",
-            "attack.t1221"
-        ],
-        "falsepositives": [
-            "Unknown"
-        ],
-        "level": "medium",
-        "rule": [
-            "SELECT * FROM logs WHERE Channel='Security' AND ((EventID=4657 AND OperationType='Existing registry value modified') AND TargetObject LIKE 'HKCR\\\\ms-msdt\\\\%' ESCAPE '\\')"
+            "SELECT * FROM logs WHERE Channel='Security' AND ((EventID=4657 AND OperationType='Existing registry value modified') AND ((TargetObject LIKE '%\\\\Microsoft\\\\Windows\\\\CurrentVersion\\\\Explorer\\\\Advanced\\\\ShowSuperHidden' ESCAPE '\\' OR TargetObject LIKE '%\\\\Microsoft\\\\Windows\\\\CurrentVersion\\\\Explorer\\\\Advanced\\\\Hidden' ESCAPE '\\') AND NewValue='DWORD (0x00000000)'))"
         ],
         "filename": ""
     },
@@ -47570,10 +47516,10 @@
         "filename": ""
     },
     {
-        "title": "PortProxy Registry Key",
+        "title": "New PortProxy Registry Entry Added",
         "id": "a54f842a-3713-4b45-8c84-5f136fdebd3c",
         "status": "test",
-        "description": "Detects the modification of PortProxy registry key which is used for port forwarding. For command execution see rule win_netsh_port_fwd.yml.",
+        "description": "Detects the modification of the PortProxy registry key which is used for port forwarding.",
         "author": "Andreas Hunkeler (@Karneades)",
         "tags": [
             "attack.lateral_movement",
@@ -47587,7 +47533,7 @@
         ],
         "level": "medium",
         "rule": [
-            "SELECT * FROM logs WHERE Channel='Security' AND ((EventID=4657 AND (OperationType='New registry value created' OR OperationType='Existing registry value modified')) AND TargetObject LIKE 'HKLM\\\\SYSTEM\\\\CurrentControlSet\\\\Services\\\\PortProxy\\\\v4tov4\\\\tcp' ESCAPE '\\')"
+            "SELECT * FROM logs WHERE Channel='Security' AND ((EventID=4657 AND (OperationType='New registry value created' OR OperationType='Existing registry value modified')) AND TargetObject LIKE '%\\\\Services\\\\PortProxy\\\\v4tov4\\\\tcp\\\\%' ESCAPE '\\')"
         ],
         "filename": ""
     },
@@ -47606,7 +47552,7 @@
         ],
         "level": "medium",
         "rule": [
-            "SELECT * FROM logs WHERE Channel='Security' AND ((EventID=4657 AND (OperationType='New registry value created' OR OperationType='Existing registry value modified')) AND ((TargetObject LIKE 'HKLM\\\\SOFTWARE\\\\Microsoft\\\\Active Setup\\\\Installed Components%' ESCAPE '\\' AND TargetObject LIKE '%\\\\StubPath' ESCAPE '\\') AND (NOT ((NewValue LIKE '\"C:\\\\Program Files\\\\Google\\\\Chrome\\\\Application\\\\%' ESCAPE '\\' AND NewValue LIKE '%\\\\Installer\\\\chrmstp.exe\" --configure-user-settings --verbose-logging --system-level%' ESCAPE '\\') OR ((NewValue LIKE '\"C:\\\\Program Files (x86)\\\\Microsoft\\\\Edge\\\\Application\\\\%' ESCAPE '\\' OR NewValue LIKE '\"C:\\\\Program Files\\\\Microsoft\\\\Edge\\\\Application\\\\%' ESCAPE '\\') AND NewValue LIKE '%\\\\Installer\\\\setup.exe\" --configure-user-settings --verbose-logging --system-level --msedge --channel=stable' ESCAPE '\\')))))"
+            "SELECT * FROM logs WHERE Channel='Security' AND ((EventID=4657 AND (OperationType='New registry value created' OR OperationType='Existing registry value modified')) AND ((TargetObject LIKE '%\\\\Microsoft\\\\Active Setup\\\\Installed Components%' ESCAPE '\\' AND TargetObject LIKE '%\\\\StubPath' ESCAPE '\\') AND (NOT ((NewValue LIKE '%C:\\\\Program Files\\\\Google\\\\Chrome\\\\Application\\\\%' ESCAPE '\\' AND NewValue LIKE '%\\\\Installer\\\\chrmstp.exe\" --configure-user-settings --verbose-logging --system-level%' ESCAPE '\\') OR ((NewValue LIKE '%C:\\\\Program Files (x86)\\\\Microsoft\\\\Edge\\\\Application\\\\%' ESCAPE '\\' OR NewValue LIKE '%C:\\\\Program Files\\\\Microsoft\\\\Edge\\\\Application\\\\%' ESCAPE '\\') AND NewValue LIKE '%\\\\Installer\\\\setup.exe\" --configure-user-settings --verbose-logging --system-level --msedge --channel=stable' ESCAPE '\\')))))"
         ],
         "filename": ""
     },
@@ -48137,6 +48083,26 @@
         "filename": ""
     },
     {
+        "title": "Files With System Process Name In Unsuspected Locations",
+        "id": "d5866ddf-ce8f-4aea-b28e-d96485a20d3d",
+        "status": "test",
+        "description": "Detects the creation of an executable with a system process name in folders other than the system ones (System32, SysWOW64, etc.).\nIt is highly recommended to perform an initial baseline before using this rule in production.\n",
+        "author": "Sander Wiebing, Tim Shelton, Nasreddine Bencherchali (Nextron Systems)",
+        "tags": [
+            "attack.defense_evasion",
+            "attack.t1036.005"
+        ],
+        "falsepositives": [
+            "System processes copied outside their default folders for testing purposes",
+            "Third party software naming their software with the same names as the processes mentioned here"
+        ],
+        "level": "medium",
+        "rule": [
+            "SELECT * FROM logs WHERE (TargetFilename LIKE '%\\\\AtBroker.exe' ESCAPE '\\' OR TargetFilename LIKE '%\\\\audiodg.exe' ESCAPE '\\' OR TargetFilename LIKE '%\\\\backgroundTaskHost.exe' ESCAPE '\\' OR TargetFilename LIKE '%\\\\bcdedit.exe' ESCAPE '\\' OR TargetFilename LIKE '%\\\\bitsadmin.exe' ESCAPE '\\' OR TargetFilename LIKE '%\\\\cmdl32.exe' ESCAPE '\\' OR TargetFilename LIKE '%\\\\cmstp.exe' ESCAPE '\\' OR TargetFilename LIKE '%\\\\conhost.exe' ESCAPE '\\' OR TargetFilename LIKE '%\\\\csrss.exe' ESCAPE '\\' OR TargetFilename LIKE '%\\\\dasHost.exe' ESCAPE '\\' OR TargetFilename LIKE '%\\\\dfrgui.exe' ESCAPE '\\' OR TargetFilename LIKE '%\\\\dllhost.exe' ESCAPE '\\' OR TargetFilename LIKE '%\\\\dwm.exe' ESCAPE '\\' OR TargetFilename LIKE '%\\\\eventcreate.exe' ESCAPE '\\' OR TargetFilename LIKE '%\\\\eventvwr.exe' ESCAPE '\\' OR TargetFilename LIKE '%\\\\explorer.exe' ESCAPE '\\' OR TargetFilename LIKE '%\\\\extrac32.exe' ESCAPE '\\' OR TargetFilename LIKE '%\\\\fontdrvhost.exe' ESCAPE '\\' OR TargetFilename LIKE '%\\\\ipconfig.exe' ESCAPE '\\' OR TargetFilename LIKE '%\\\\iscsicli.exe' ESCAPE '\\' OR TargetFilename LIKE '%\\\\iscsicpl.exe' ESCAPE '\\' OR TargetFilename LIKE '%\\\\logman.exe' ESCAPE '\\' OR TargetFilename LIKE '%\\\\LogonUI.exe' ESCAPE '\\' OR TargetFilename LIKE '%\\\\LsaIso.exe' ESCAPE '\\' OR TargetFilename LIKE '%\\\\lsass.exe' ESCAPE '\\' OR TargetFilename LIKE '%\\\\lsm.exe' ESCAPE '\\' OR TargetFilename LIKE '%\\\\msiexec.exe' ESCAPE '\\' OR TargetFilename LIKE '%\\\\msinfo32.exe' ESCAPE '\\' OR TargetFilename LIKE '%\\\\mstsc.exe' ESCAPE '\\' OR TargetFilename LIKE '%\\\\nbtstat.exe' ESCAPE '\\' OR TargetFilename LIKE '%\\\\odbcconf.exe' ESCAPE '\\' OR TargetFilename LIKE '%\\\\powershell.exe' ESCAPE '\\' OR TargetFilename LIKE '%\\\\pwsh.exe' ESCAPE '\\' OR TargetFilename LIKE '%\\\\regini.exe' ESCAPE '\\' OR TargetFilename LIKE '%\\\\regsvr32.exe' ESCAPE '\\' OR TargetFilename LIKE '%\\\\rundll32.exe' ESCAPE '\\' OR TargetFilename LIKE '%\\\\RuntimeBroker.exe' ESCAPE '\\' OR TargetFilename LIKE '%\\\\schtasks.exe' ESCAPE '\\' OR TargetFilename LIKE '%\\\\SearchFilterHost.exe' ESCAPE '\\' OR TargetFilename LIKE '%\\\\SearchIndexer.exe' ESCAPE '\\' OR TargetFilename LIKE '%\\\\SearchProtocolHost.exe' ESCAPE '\\' OR TargetFilename LIKE '%\\\\SecurityHealthService.exe' ESCAPE '\\' OR TargetFilename LIKE '%\\\\SecurityHealthSystray.exe' ESCAPE '\\' OR TargetFilename LIKE '%\\\\services.exe' ESCAPE '\\' OR TargetFilename LIKE '%\\\\ShellAppRuntime.exe' ESCAPE '\\' OR TargetFilename LIKE '%\\\\sihost.exe' ESCAPE '\\' OR TargetFilename LIKE '%\\\\smartscreen.exe' ESCAPE '\\' OR TargetFilename LIKE '%\\\\smss.exe' ESCAPE '\\' OR TargetFilename LIKE '%\\\\spoolsv.exe' ESCAPE '\\' OR TargetFilename LIKE '%\\\\svchost.exe' ESCAPE '\\' OR TargetFilename LIKE '%\\\\SystemSettingsBroker.exe' ESCAPE '\\' OR TargetFilename LIKE '%\\\\taskhost.exe' ESCAPE '\\' OR TargetFilename LIKE '%\\\\taskhostw.exe' ESCAPE '\\' OR TargetFilename LIKE '%\\\\Taskmgr.exe' ESCAPE '\\' OR TargetFilename LIKE '%\\\\TiWorker.exe' ESCAPE '\\' OR TargetFilename LIKE '%\\\\vssadmin.exe' ESCAPE '\\' OR TargetFilename LIKE '%\\\\w32tm.exe' ESCAPE '\\' OR TargetFilename LIKE '%\\\\WerFault.exe' ESCAPE '\\' OR TargetFilename LIKE '%\\\\WerFaultSecure.exe' ESCAPE '\\' OR TargetFilename LIKE '%\\\\wermgr.exe' ESCAPE '\\' OR TargetFilename LIKE '%\\\\wevtutil.exe' ESCAPE '\\' OR TargetFilename LIKE '%\\\\wininit.exe' ESCAPE '\\' OR TargetFilename LIKE '%\\\\winlogon.exe' ESCAPE '\\' OR TargetFilename LIKE '%\\\\winrshost.exe' ESCAPE '\\' OR TargetFilename LIKE '%\\\\WinRTNetMUAHostServer.exe' ESCAPE '\\' OR TargetFilename LIKE '%\\\\wlanext.exe' ESCAPE '\\' OR TargetFilename LIKE '%\\\\wlrmdr.exe' ESCAPE '\\' OR TargetFilename LIKE '%\\\\WmiPrvSE.exe' ESCAPE '\\' OR TargetFilename LIKE '%\\\\wslhost.exe' ESCAPE '\\' OR TargetFilename LIKE '%\\\\WSReset.exe' ESCAPE '\\' OR TargetFilename LIKE '%\\\\WUDFHost.exe' ESCAPE '\\' OR TargetFilename LIKE '%\\\\WWAHost.exe' ESCAPE '\\') AND (NOT ((TargetFilename LIKE '%\\\\SystemRoot\\\\System32\\\\%' ESCAPE '\\' OR TargetFilename LIKE '%C:\\\\$WINDOWS.~BT\\\\%' ESCAPE '\\' OR TargetFilename LIKE '%C:\\\\$WinREAgent\\\\%' ESCAPE '\\' OR TargetFilename LIKE '%C:\\\\Windows\\\\SoftwareDistribution\\\\%' ESCAPE '\\' OR TargetFilename LIKE '%C:\\\\Windows\\\\System32\\\\%' ESCAPE '\\' OR TargetFilename LIKE '%C:\\\\Windows\\\\SysWOW64\\\\%' ESCAPE '\\' OR TargetFilename LIKE '%C:\\\\Windows\\\\WinSxS\\\\%' ESCAPE '\\' OR TargetFilename LIKE '%C:\\\\Windows\\\\uus\\\\%' ESCAPE '\\') OR (Image LIKE '%C:\\\\Windows\\\\system32\\\\svchost.exe' ESCAPE '\\' AND TargetFilename LIKE '%C:\\\\Program Files\\\\WindowsApps\\\\%' ESCAPE '\\') OR Image LIKE '%C:\\\\Windows\\\\System32\\\\wuauclt.exe' ESCAPE '\\' OR TargetFilename LIKE '%C:\\\\Windows\\\\explorer.exe' ESCAPE '\\' OR (Image LIKE '%C:\\\\WINDOWS\\\\system32\\\\msiexec.exe' ESCAPE '\\' AND (TargetFilename LIKE '%C:\\\\Program Files\\\\PowerShell\\\\7\\\\pwsh.exe' ESCAPE '\\' OR TargetFilename LIKE '%C:\\\\Program Files\\\\PowerShell\\\\7-preview\\\\pwsh.exe' ESCAPE '\\')) OR (TargetFilename LIKE '%C:\\\\Windows\\\\System32\\\\SecurityHealth\\\\%' ESCAPE '\\' AND TargetFilename LIKE '%\\\\SecurityHealthSystray.exe' ESCAPE '\\' AND Image LIKE '%\\\\SecurityHealthSetup.exe' ESCAPE '\\')))"
+        ],
+        "filename": ""
+    },
+    {
         "title": "TeamViewer Remote Session",
         "id": "162ab1e4-6874-4564-853c-53ec3ab8be01",
         "status": "test",
@@ -48227,6 +48193,26 @@
         "level": "medium",
         "rule": [
             "SELECT * FROM logs WHERE TargetFilename LIKE '%.scr' ESCAPE '\\' AND (NOT ((Image LIKE '%\\\\Kindle.exe' ESCAPE '\\' OR Image LIKE '%\\\\Bin\\\\ccSvcHst.exe' ESCAPE '\\') OR (Image LIKE '%\\\\TiWorker.exe' ESCAPE '\\' AND TargetFilename LIKE '%\\\\uwfservicingscr.scr' ESCAPE '\\')))"
+        ],
+        "filename": ""
+    },
+    {
+        "title": "EVTX Created In Uncommon Location",
+        "id": "65236ec7-ace0-4f0c-82fd-737b04fd4dcb",
+        "status": "experimental",
+        "description": "Detects the creation of new files with the \".evtx\" extension in non-common or non-standard location.\nThis could indicate tampering with default EVTX locations in order to evade security controls or simply exfiltration of event log to search for sensitive information within.\nNote that backup software and legitimate administrator might perform similar actions during troubleshooting.\n",
+        "author": "D3F7A5105",
+        "tags": [
+            "attack.defense_evasion",
+            "attack.t1562.002"
+        ],
+        "falsepositives": [
+            "Administrator or backup activity",
+            "An unknown bug seems to trigger the Windows \"svchost\" process to drop EVTX files in the \"C:\\Windows\\Temp\" directory in the form \"<log_name\">_<uuid>.evtx\". See https://superuser.com/questions/1371229/low-disk-space-after-filling-up-c-windows-temp-with-evtx-and-txt-files"
+        ],
+        "level": "medium",
+        "rule": [
+            "SELECT * FROM logs WHERE TargetFilename LIKE '%.evtx' ESCAPE '\\' AND (NOT (TargetFilename LIKE 'C:\\\\Windows\\\\System32\\\\winevt\\\\Logs\\\\%' ESCAPE '\\' OR (TargetFilename LIKE 'C:\\\\ProgramData\\\\Microsoft\\\\Windows\\\\Containers\\\\BaseImages\\\\%' ESCAPE '\\' AND TargetFilename LIKE '%\\\\Windows\\\\System32\\\\winevt\\\\Logs\\\\' ESCAPE '\\')))"
         ],
         "filename": ""
     },
@@ -49644,6 +49630,25 @@
         "filename": ""
     },
     {
+        "title": "Suspicious Set Value of MSDT in Registry (CVE-2022-30190)",
+        "id": "2d9403d5-7927-46b7-8216-37ab7c9ec5e3",
+        "status": "test",
+        "description": "Detects set value ms-msdt MSProtocol URI scheme in Registry that could be an attempt to exploit CVE-2022-30190.",
+        "author": "Sittikorn S",
+        "tags": [
+            "attack.defense_evasion",
+            "attack.t1221"
+        ],
+        "falsepositives": [
+            "Unknown"
+        ],
+        "level": "medium",
+        "rule": [
+            "SELECT * FROM logs WHERE Channel='Security' AND ((EventID=4657 AND OperationType='Existing registry value modified') AND TargetObject LIKE 'HKCR\\\\ms-msdt\\\\%' ESCAPE '\\')"
+        ],
+        "filename": ""
+    },
+    {
         "title": "Zimbra Collaboration Suite Email Server Unauthenticated RCE",
         "id": "dd218fb6-4d02-42dc-85f0-a0a376072efd",
         "status": "test",
@@ -49740,6 +49745,45 @@
         "level": "medium",
         "rule": [
             "SELECT * FROM logs WHERE Channel='Security' AND (EventID=4663 AND ObjectType='File' AND AccessMask='0x6' AND ObjectName LIKE '%.xml' ESCAPE '\\' AND (ObjectName LIKE '%Temp%' ESCAPE '\\' AND ObjectName LIKE '%ScreenConnect%' ESCAPE '\\') AND ProcessName LIKE '%ScreenConnect.Service.exe%' ESCAPE '\\')"
+        ],
+        "filename": ""
+    },
+    {
+        "title": "Potential KamiKakaBot Activity - Lure Document Execution",
+        "id": "24474469-bd80-46cc-9e08-9fbe81bfaaca",
+        "status": "experimental",
+        "description": "Detects the execution of a Word document via the WinWord Start Menu shortcut.\nThis behavior was observed being used by KamiKakaBot samples in order to initiate the 2nd stage of the infection.\n",
+        "author": "Nasreddine Bencherchali (Nextron Systems), X__Junior (Nextron Systems)",
+        "tags": [
+            "attack.execution",
+            "attack.t1059",
+            "detection.emerging_threats"
+        ],
+        "falsepositives": [
+            "Unknown"
+        ],
+        "level": "medium",
+        "rule": [
+            "SELECT * FROM logs WHERE Channel='Security' AND (EventID=4688 AND (NewProcessName LIKE '%\\\\cmd.exe' ESCAPE '\\' AND (CommandLine LIKE '%/c %' ESCAPE '\\' AND CommandLine LIKE '%.lnk ~%' ESCAPE '\\' AND CommandLine LIKE '%Start Menu\\\\Programs\\\\Word%' ESCAPE '\\') AND CommandLine LIKE '%.doc' ESCAPE '\\'))"
+        ],
+        "filename": ""
+    },
+    {
+        "title": "Potential KamiKakaBot Activity - Shutdown Schedule Task Creation",
+        "id": "fe9e8ba9-4419-41e6-a574-bd9f7b3af961",
+        "status": "experimental",
+        "description": "Detects the creation of a schedule task that runs weekly and execute the \"shutdown /l /f\" command.\nThis behavior was observed being used by KamiKakaBot samples in order to achieve persistence on a system.\n",
+        "author": "Nasreddine Bencherchali (Nextron Systems), X__Junior (Nextron Systems)",
+        "tags": [
+            "attack.persistence",
+            "detection.emerging_threats"
+        ],
+        "falsepositives": [
+            "Unknown"
+        ],
+        "level": "medium",
+        "rule": [
+            "SELECT * FROM logs WHERE Channel='Security' AND (EventID=4688 AND ((NewProcessName LIKE '%\\\\schtasks.exe' ESCAPE '\\' AND (CommandLine LIKE '% /create %' ESCAPE '\\' AND CommandLine LIKE '%shutdown /l /f%' ESCAPE '\\' AND CommandLine LIKE '%WEEKLY%' ESCAPE '\\')) AND (NOT (User LIKE '%AUTHORI%' ESCAPE '\\' OR User LIKE '%AUTORI%' ESCAPE '\\'))))"
         ],
         "filename": ""
     },
@@ -50447,6 +50491,26 @@
         "level": "medium",
         "rule": [
             "SELECT * FROM logs WHERE Channel='Security' AND ((EventID=4657 AND OperationType='Existing registry value modified') AND ((TargetObject LIKE '%Security\\\\Trusted Locations\\\\Location%' ESCAPE '\\' AND TargetObject LIKE '%\\\\Path' ESCAPE '\\') AND (NOT ((NewProcessName LIKE '%:\\\\Program Files\\\\Common Files\\\\Microsoft Shared\\\\ClickToRun\\\\%' ESCAPE '\\' AND NewProcessName LIKE '%\\\\OfficeClickToRun.exe' ESCAPE '\\') OR (NewProcessName LIKE '%:\\\\Program Files\\\\Microsoft Office\\\\%' ESCAPE '\\' OR NewProcessName LIKE '%:\\\\Program Files (x86)\\\\Microsoft Office\\\\%' ESCAPE '\\')))))"
+        ],
+        "filename": ""
+    },
+    {
+        "title": "Service Binary in User Controlled Folder",
+        "id": "277dc340-0540-42e7-8efb-5ff460045e07",
+        "status": "experimental",
+        "description": "Detects the setting of the \"ImagePath\" value of a service registry key to a path controlled by a non-administrator user such as \"\\AppData\\\" or \"\\ProgramData\\\".\nAttackers often use such directories for staging purposes.\nThis rule might also trigger on badly written software, where if an attacker controls an auto starting service, they might achieve persistence or privilege escalation.\nNote that while ProgramData is a user controlled folder, software might apply strict ACLs which makes them only accessible to admin users. Remove such folders via filters if you experience a lot of noise.\n",
+        "author": "Nasreddine Bencherchali (Nextron Systems), Florian Roth (Nextron Systems)",
+        "tags": [
+            "attack.defense_evasion",
+            "attack.t1112",
+            "detection.threat_hunting"
+        ],
+        "falsepositives": [
+            "Unknown"
+        ],
+        "level": "medium",
+        "rule": [
+            "SELECT * FROM logs WHERE Channel='Security' AND ((EventID=4657 AND OperationType='Existing registry value modified') AND (((TargetObject LIKE '%ControlSet%' ESCAPE '\\' AND TargetObject LIKE '%\\\\Services\\\\%' ESCAPE '\\') AND TargetObject LIKE '%\\\\ImagePath' ESCAPE '\\' AND (NewValue LIKE '%:\\\\ProgramData\\\\%' ESCAPE '\\' OR NewValue LIKE '%\\\\AppData\\\\Local\\\\%' ESCAPE '\\' OR NewValue LIKE '%\\\\AppData\\\\Roaming\\\\%' ESCAPE '\\')) AND (NOT ((TargetObject LIKE '%\\\\Services\\\\WinDefend\\\\%' ESCAPE '\\' OR TargetObject LIKE '%\\\\Services\\\\MpKs%' ESCAPE '\\') AND NewValue LIKE '%C:\\\\ProgramData\\\\Microsoft\\\\Windows Defender\\\\%' ESCAPE '\\')) AND (NOT ((TargetObject LIKE '%\\\\Services\\\\ZoomCptService%' ESCAPE '\\' AND NewValue LIKE '%C:\\\\Program Files\\\\Common Files\\\\Zoom\\\\Support\\\\CptService.exe%' ESCAPE '\\') OR (TargetObject LIKE '%\\\\Services\\\\MBAMInstallerService%' ESCAPE '\\' AND (NewValue LIKE '%C:\\\\Users\\\\%' ESCAPE '\\' AND NewValue LIKE '%AppData\\\\Local\\\\Temp\\\\MBAMInstallerService.exe%' ESCAPE '\\'))))))"
         ],
         "filename": ""
     },

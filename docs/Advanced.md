@@ -27,7 +27,7 @@ Except when `evtx_dump` is used, Zircolite only use one core. So if you have a l
 	```shell
 	find <CASE_DIRECTORY> -maxdepth 1 -mindepth 1 -type d | \
 		parallel --bar python3 zircolite.py --evtx {} \
-		--ruleset rules/rules_windows_sysmon.json --outfile {/.}.json
+		--ruleset rules/rules_windows_sysmon_pysigma.json --outfile {/.}.json
 	```
 	
 	One downside of this mode is that if you have less computer evidences than CPU Cores, they all will not be used.
@@ -39,7 +39,7 @@ Except when `evtx_dump` is used, Zircolite only use one core. So if you have a l
 	```shell
 	find <CASE_DIRECTORY> -type f -name "*.| \
 		parallel -j -1 --progress python3 zircolite.py --evtx {} \
-		--ruleset rules/rules_windows_sysmon.json --outfile {/.}.json
+		--ruleset rules/rules_windows_sysmon_pysigma.json --outfile {/.}.json
 	```
 	
 	In this example the `-j -1` is for using all cores but one. You can adjust the number of used cores with this arguments.
@@ -70,20 +70,20 @@ To speed up the detection process, you may want to use Zircolite on files matchi
 - Only use EVTX files that contains "sysmon" in their names
 
 	```shell
-	python3 zircolite.py --evtx logs/ --ruleset rules/rules_windows_sysmon.json \
+	python3 zircolite.py --evtx logs/ --ruleset rules/rules_windows_sysmon_pysigma.json \
 		--select sysmon
 	```
 - Exclude "Microsoft-Windows-SystemDataArchiver%4Diagnostic.evtx" 
 
 	```shell
-	python3 zircolite.py --evtx logs/ --ruleset rules/rules_windows_sysmon.json \
+	python3 zircolite.py --evtx logs/ --ruleset rules/rules_windows_sysmon_pysigma.json \
 		--avoid systemdataarchiver
 	```
 
 - Only use EVTX files with "operational" in their names but exclude "defender" related logs
 	
 	```shell
-	python3 zircolite.py --evtx logs/ --ruleset rules/rules_windows_sysmon.json \
+	python3 zircolite.py --evtx logs/ --ruleset rules/rules_windows_sysmon_pysigma.json \
 	--select operational --avoid defender
 	```
 
@@ -92,7 +92,7 @@ For example, the **Sysmon** ruleset available in the `rules` directory only use 
 So if you use the sysmon ruleset with the following rules, it should speed up `Zircolite`execution : 
 
 ```shell
-python3 zircolite.py --evtx logs/ --ruleset rules/rules_windows_sysmon.json \
+python3 zircolite.py --evtx logs/ --ruleset rules/rules_windows_sysmon_pysigma.json \
 	--select sysmon --select security.evtx --select system.evtx \
 	--select application.evtx --select Windows-NTLM --select DNS \
 	--select powershell --select defender --select applocker \
@@ -113,14 +113,14 @@ Examples :
 - Select all events between the 2021-06-02 22:40:00 and 2021-06-02 23:00:00 : 
 
 	```shell
-	python3 zircolite.py --evtx logs/ --ruleset rules/rules_windows_sysmon.json \
+	python3 zircolite.py --evtx logs/ --ruleset rules/rules_windows_sysmon_pysigma.json \
 		-A 2021-06-02T22:40:00 -B 2021-06-02T23:00:00
 	```
 
 - Select all events after the 2021-06-01 12:00:00 : 
 
 	```shell
-	python3 zircolite.py --evtx logs/ --ruleset rules/rules_windows_sysmon.json \
+	python3 zircolite.py --evtx logs/ --ruleset rules/rules_windows_sysmon_pysigma.json \
 		-A 2021-06-01T12:00:00
 	```
 
@@ -132,7 +132,7 @@ The filter will apply on the rule title. To avoid unexpected side-effect **compa
 
 ```shell
 python3 zircolite.py --evtx logs/ \
-	--ruleset rules/rules_windows_sysmon.json \
+	--ruleset rules/rules_windows_sysmon_pysigma.json \
 	-R MSHTA
 ```
 
@@ -160,7 +160,7 @@ If you forward your events to a central collector you can disable local logging 
 If you have multiple endpoints to scan, it is useful to send the detected events to a central collector. As of v1.2, Zircolite can forward detected events to an HTTP server :
 
 ```shell
-python3 zircolite.py --evtx sample.evtx  --ruleset rules/rules_windows_sysmon.json \
+python3 zircolite.py --evtx sample.evtx  --ruleset rules/rules_windows_sysmon_pysigma.json \
 	--remote "http://address:port/uri"
 ```
 An **example** server called is available in the [tools](https://github.com/wagga40/Zircolite/tree/master/tools/zircolite_server/) directory.
@@ -173,7 +173,7 @@ As of v1.3.5, Zircolite can forward detections to a Splunk instance with Splunk 
 2. Get your token and you are ready to go : 
 
 ```shell
-python3 zircolite.py --evtx /sample.evtx  --ruleset rules/rules_windows_sysmon.json \
+python3 zircolite.py --evtx /sample.evtx  --ruleset rules/rules_windows_sysmon_pysigma.json \
 	--remote "https://x.x.x.x:8088" --token "xxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx" \
 	[--index myindex]
 ```
@@ -187,7 +187,7 @@ Since Splunk HEC default to the first associated index, `--index` is optional bu
 As of version 2.8.0, Zircolite can forward events to an ELK stack using the ES client.
 
 ```shell
-python3 zircolite.py --evtx /sample.evtx  --ruleset rules/rules_windows_sysmon.json \
+python3 zircolite.py --evtx /sample.evtx  --ruleset rules/rules_windows_sysmon_pysigma.json \
 	--remote "https://x.x.x.x:8088" --index "zircolite-whatever" \
 	--eslogin "yourlogin" --espass "yourpass"
 ```
@@ -214,7 +214,7 @@ Zircolite provides a templating system based on Jinja 2. It allows you to change
 - `--templateOutput <output_filename>`
 
 ```shell
-python3 zircolite.py --evtx sample.evtx  --ruleset rules/rules_windows_sysmon.json \
+python3 zircolite.py --evtx sample.evtx  --ruleset rules/rules_windows_sysmon_pysigma.json \
 --template templates/exportForSplunk.tmpl --templateOutput exportForSplunk.json
 ```
 
@@ -237,7 +237,7 @@ You need to generate a `data.js` file with the `exportForZircoGui.tmpl` template
 
 ```shell
 python3 zircolite.py --evtx sample.evtx 
-	--ruleset rules/rules_windows_sysmon.json \
+	--ruleset rules/rules_windows_sysmon_pysigma.json \
 	--template templates/exportForZircoGui.tmpl --templateOutput data.js
 7z x gui/zircogui.zip
 mv data.js zircogui/
