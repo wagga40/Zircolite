@@ -128,32 +128,27 @@ Examples :
 
 Some rules can be noisy or slow on specific datasets (check [here](https://github.com/wagga40/Zircolite/tree/master/rules/README.md)) so it is possible to skip them by using the `-R` or `--rulefilter` argument. This argument can be used multiple times.
 
-The filter will apply on the rule title. Since there is a CRC32 in the rule title it is easier to use it. For example, to skip execution of the rule "Suspicious Eventlog Clear or Configuration Using Wevtutil - BFFA7F72" : 
+The filter will apply on the rule title. To avoid unexpected side-effect **comparison is case-sensitive**. For example, if you do not want to use all MSHTA related rules : 
 
 ```shell
-python3 zircolite.py --evtx logs/ --ruleset rules/rules_windows_sysmon.json -R BFFA7F72
+python3 zircolite.py --evtx logs/ \
+	--ruleset rules/rules_windows_sysmon.json \
+	-R MSHTA
 ```
-
-You can also specify a string, to avoid unexpected side-effect **comparison is case-sensitive**. For example, if you do not want to use all MSHTA related rules and skip the execution of the rule "Suspicious Eventlog Clear or Configuration Using Wevtutil - BFFA7F72": 
-
-```shell
-python3 zircolite.py --evtx logs/ --ruleset rules/rules_windows_sysmon.json \
-	-R BFFA7F72 -R MSHTA
-```
-:information_source: As of version 2.2.0 of Zircolite, since the rulesets are directly generated from the official `sigmac` tool there is no more CRC32 in the rule title. Rule filtering is still available but you have to rely on other criteria.
 
 ### Limit the number of detected events
 
-Sometimes, SIGMA rules can be very noisy (and generate a lot of false positives) but you still want to keep them in your rulesets. It is possible to filter rules that returns too mich detected events with the option `--limit <MAX_NUMBER>`. Please note that when using this option, the rules are not skipped the results are just ignored. But this is useful when forwarding events to Splunk.
+Sometimes, SIGMA rules can be very noisy (and generate a lot of false positives) but you still want to keep them in your rulesets. It is possible to filter rules that returns too mich detected events with the option `--limit <MAX_NUMBER>`. **Please note that when using this option, the rules are not skipped the results are just ignored** but this is useful when forwarding events to Splunk.
 
 ## Forwarding detected events 
 
-Zircolite provide 2 ways to forward events to a collector : 
+Zircolite provide multiple ways to forward events to a collector : 
 
-- the HTTP forwarder : this is a very simple forwarder and pretty much a "toy" example and should be used when you have nothing else. An **example** server called is available in the [tools](../tools/zircolite_server/) directory
-- the Splunk HEC Forwarder : it allows to forward all detected events to a Splunk instance using **HTTP Event Collector**.
+- the HTTP forwarder : this is a very simple forwarder and pretty much a **"toy"** example and should be used when you have nothing else. An **example** server called is available in the [tools](../tools/zircolite_server/) directory
+- the Splunk HEC Forwarder : it allows to forward all detected events to a Splunk instance using **HTTP Event Collector**
+- the ELK ES client : it allows to forward all detected events to an ELK instance
 
-For now, the forwarders are not asynchronous so it can slow Zircolite execution. There are two modes to forward the events : 
+There are two modes to forward the events : 
 
 - By default all events are forwarded after the detection process
 - The argument `--stream` allow to forward events during the detection process
@@ -269,7 +264,7 @@ Then you just have to open `index.html` in your favorite browser and click on a 
 * After Python 3.8 install, you will need Nuitka : `pip3 install nuitka`
 * In the root folder of Zircolite type : `python3 -m nuitka --onefile zircolite.py`
 
-:warning: When packaging with PyInstaller some AV may not like your package.
+:warning: When packaging with PyInstaller or Nuitka some AV may not like your package.
 
 ## Using With DFIR Orc
 

@@ -119,14 +119,14 @@ class templateEngine:
         self.templateOutput = templateOutput
         self.timeField = timeField
     
-    def generateFromTemplate(self, templateFile, outpoutFilename, data):
+    def generateFromTemplate(self, templateFile, outputFilename, data):
         """ Use Jinja2 to output data in a specific format """
         try:
             
             tmpl = open(templateFile, 'r', encoding='utf-8')
             template = Template(tmpl.read())
             
-            with open(outpoutFilename, 'a', encoding='utf-8') as tpl:
+            with open(outputFilename, 'a', encoding='utf-8') as tpl:
                 tpl.write(template.render(data=data, timeField=self.timeField))
         except Exception as e:
             self.logger.error(f"{Fore.RED}   [-] Template error, activate debug mode to check for errors{Fore.RESET}")
@@ -1022,7 +1022,7 @@ class evtxExtractor:
             try:
                 data = ""
                 # We need to read the entire file to remove annoying newlines and fields with newlines (System.evtx Logs for example...)
-                with open(str(file), 'r') as XMLFile:
+                with open(str(file), 'r', encoding="utf-8") as XMLFile:
                     data = XMLFile.read().replace("\n","").replace("</Event>","</Event>\n").replace("<Event ","\n<Event ")
                 self.Logs2JSON(self.XMLLine2JSON, data, outputJSONFilename, isFile=False)
             except Exception as e:
@@ -1201,7 +1201,7 @@ class rulesetHandler:
     def isYAML(self, filepath): 
         """ Test if the file is a YAML file """
         if (filepath.suffix == ".yml" or filepath.suffix == ".yaml"):
-            with open(filepath, 'r') as file:
+            with open(filepath, 'r', encoding="utf-8") as file:
                 content = file.read()
                 try:
                     yaml.safe_load(content)
@@ -1212,7 +1212,7 @@ class rulesetHandler:
     def isJSON(self, filepath): 
         """ Test if the file is a JSON file """
         if (filepath.suffix == ".json"):
-            with open(filepath, 'r') as file:
+            with open(filepath, 'r', encoding="utf-8") as file:
                 content = file.read()
                 try:
                     json.loads(content)
