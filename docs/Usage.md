@@ -86,10 +86,10 @@ Multiple rulesets can be specified, results can be per-ruleset or combined (with
 
 ```shell
 # Example with a Zircolite ruleset and a Sigma rule. Results will be displayed per-ruleset
-python3 zircolite.py --events sample.evtx --ruleset rules/rules_windows_sysmon.json \
+python3 zircolite.py --events sample.evtx --ruleset rules/rules_windows_sysmon_pysigma.json \
     --ruleset schtasks.yml 
 # Example with a Zircolite ruleset and a Sigma rule. Results will be displayed combined 
-python3 zircolite.py --events sample.evtx --ruleset rules/rules_windows_sysmon.json \
+python3 zircolite.py --events sample.evtx --ruleset rules/rules_windows_sysmon_pysigma.json \
     --ruleset schtasks.yml --combine-rulesets 
 ```
 
@@ -107,7 +107,7 @@ If your evtx files have the extension ".evtx" :
 ```shell
 python3 zircolite.py --evtx <EVTX_FOLDER/EVTX_FILE> \
     --ruleset <Converted Sigma ruleset (JSON)/Directory with Sigma rules (YAML)/>
-python3 zircolite.py --evtx ../Logs --ruleset rules/rules_windows_sysmon.json
+python3 zircolite.py --evtx ../Logs --ruleset rules/rules_windows_sysmon_pysigma.json
 ```
 
 ### XML logs
@@ -140,7 +140,7 @@ And it produces something like this (1 event per line):
 ```shell
 python3 zircolite.py --events <LOGS_FOLDER_OR_LOG_FILE>  --ruleset <RULESET> --xml
 python3 zircolite.py --events  Microsoft-Windows-SysmonOperational.xml \
-    --ruleset rules/rules_windows_sysmon_full.json --xml
+    --ruleset rules/rules_windows_sysmon_pysigma.json --xml
 ```
 
 ### EVTXtract logs
@@ -552,7 +552,7 @@ docker build . -t <Image name>
 docker container run --tty \
     --volume <Logs folder>:/case
     wagga40/zircolite:latest \
-    --ruleset rules/rules_windows_sysmon.json \
+    --ruleset rules/rules_windows_sysmon_pysigma.json \
     --events /case \
     --outfile /case/detected_events.json
 ```
@@ -575,7 +575,7 @@ docker run --rm --tty \
     -v <EVTX folder>:/case/input:ro \
     -v <Results folder>:/case/output \
     wagga40/zircolite:latest \
-    --ruleset rules/rules_windows_sysmon.json \
+    --ruleset rules/rules_windows_sysmon_pysigma.json \
     --events /case/input \
     -o /case/output/detected_events.json
 ```
@@ -587,6 +587,6 @@ You can use the Docker image available on [Docker Hub](https://hub.docker.com/r/
 ```shell
 docker container run --tty \
     --volume <EVTX folder>:/case docker.io/wagga40/zircolite:lastest \
-    --ruleset rules/rules_windows_sysmon.json \
+    --ruleset rules/rules_windows_sysmon_pysigma.json \
     --evtx /case --outfile /case/detected_events.json
 ```
