@@ -106,10 +106,6 @@ The Mini-GUI can be used totally offline, it allows the user to display and sear
 - Zircolite has been cited and used in the research work of the CIDRE team : [PWNJUSTSU - Website](https://pwnjutsu.irisa.fr) and [PWNJUSTSU - Academic paper](https://hal.inria.fr/hal-03694719/document)
 - Zircolite has been cited and presented during [JSAC 2023](https://jsac.jpcert.or.jp/archive/2023/pdf/JSAC2023_workshop_sigma_jp.pdf)
 
-## Get it from Pypi
-
-**BETA** : Zircolite is now available on Pypi. You can install it with `pip install zircolite`. This version don't have the config files and rulesets so you will have to get them and provide them as command line arguments.
-
 ## License
 
 - All the **code** of the project is licensed under the [GNU Lesser General Public License](https://www.gnu.org/licenses/lgpl-3.0.en.html)
