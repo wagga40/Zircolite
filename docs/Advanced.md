@@ -26,8 +26,8 @@ Except when `evtx_dump` is used, Zircolite only use one core. So if you have a l
 
 	```shell
 	find <CASE_DIRECTORY> -maxdepth 1 -mindepth 1 -type d | \
-		parallel --bar python3 zircolite.py --evtx {} \
-		--ruleset rules/rules_windows_sysmon_pysigma.json --outfile {/.}.json
+		parallel --bar python3 zircolite.py -e {} \
+		-r rules/rules_windows_sysmon_pysigma.json --outfile {/.}.json
 	```
 	
 	One downside of this mode is that if you have less computer evidences than CPU Cores, they all will not be used.
@@ -37,9 +37,9 @@ Except when `evtx_dump` is used, Zircolite only use one core. So if you have a l
 	You can use this mode when you have a lot of aggregated EVTX coming from multiple computers. It is generally the case when you use WEF/WEC and you recover the EVTX files from the collector. This mode will create one result file per EVTX.
 
 	```shell
-	find <CASE_DIRECTORY> -type f -name "*.| \
-		parallel -j -1 --progress python3 zircolite.py --evtx {} \
-		--ruleset rules/rules_windows_sysmon_pysigma.json --outfile {/.}.json
+	find <CASE_DIRECTORY> -type f -name "*.evtx" \
+		parallel -j -1 --progress python3 zircolite.py -e {} \
+		-r rules/rules_windows_sysmon_pysigma.json --outfile {/.}.json
 	```
 	
 	In this example the `-j -1` is for using all cores but one. You can adjust the number of used cores with this arguments.
