@@ -26,6 +26,8 @@ The use of [evtx_dump](https://github.com/omerbenamram/evtx) is **optional but r
 
 ## Quick start
 
+Check tutorials made by other (EN, SP and FR) [here](#tutorials).
+
 ### EVTX files : 
 
 Help is available with `zircolite.py -h`. If your EVTX files have the extension ".evtx" :
@@ -96,9 +98,11 @@ The Mini-GUI can be used totally offline, it allows the user to display and sear
 
 ### Tutorials
 
-- [Russ McRee](https://holisticinfosec.io) has published a pretty good [tutorial](https://holisticinfosec.io/post/2021-09-28-zircolite/) on SIGMA and **Zircolite** in his [blog](https://holisticinfosec.io/post/2021-09-28-zircolite/)
+- (EN) [Russ McRee](https://holisticinfosec.io) has published a pretty good [tutorial](https://holisticinfosec.io/post/2021-09-28-zircolite/) on SIGMA and **Zircolite** in his [blog](https://holisticinfosec.io/post/2021-09-28-zircolite/)
 
-- **César Marín** has published a tutorial in **spanish** [here](https://derechodelared.com/zircolite-ejecucion-de-reglas-sigma-en-ficheros-evtx/)
+- (SP) **César Marín** has published a tutorial in **spanish** [here](https://derechodelared.com/zircolite-ejecucion-de-reglas-sigma-en-ficheros-evtx/)
+
+- (FR) [IT-connect.fr](https://www.it-connect.fr/) has published [a very extensive tutorial](https://www.it-connect.fr/) in **French** on Zircolite
 
 ### References 
 

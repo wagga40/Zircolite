@@ -405,9 +405,11 @@ class eventForwarder:
                 "host": self.localHostname,
             }
             [
-                payload.update({key: eval(value)})
-                if value in ["False", "True"]
-                else payload.update({key: value})
+                (
+                    payload.update({key: eval(value)})
+                    if value in ["False", "True"]
+                    else payload.update({key: value})
+                )
                 for key, value in match.items()
             ]  # In detected events boolean are stored as strings
 
@@ -1100,6 +1102,7 @@ class zirCore:
 
 
 class evtxExtractor:
+
     def __init__(
         self,
         logger=None,
@@ -1262,6 +1265,7 @@ class evtxExtractor:
     def xml2dict(
         self, eventRoot, ns="http://schemas.microsoft.com/win/2004/08/events/event"
     ):
+
         def cleanTag(tag, ns):
             if ns in tag:
                 return tag[len(ns) :]
@@ -1578,6 +1582,7 @@ class rulesUpdater:
 
 
 class rulesetHandler:
+
     def __init__(self, logger=None, config=None, listPipelineOnly=False):
         self.logger = logger or logging.getLogger(__name__)
         self.saveRuleset = config.save_ruleset
