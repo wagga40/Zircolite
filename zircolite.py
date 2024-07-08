@@ -1226,7 +1226,7 @@ class evtxExtractor:
                         attribute[1] = str(
                             bytearray.fromhex(attribute[1]).decode()
                         ).replace("\x00", " ")
-                    event[attribute[0]] = attribute[1]
+                    event[attribute[0]] = attribute[1].rstrip()
                 except Exception:
                     pass
         if "host" not in event:
