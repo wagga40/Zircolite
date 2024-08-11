@@ -1,6 +1,6 @@
 # <p align="center">![](pics/zircolite_400.png)</p>
 
-## Standalone SIGMA-based detection tool for EVTX, Auditd, Sysmon for linux, XML or JSONL/NDJSON Logs 
+## Standalone SIGMA-based detection tool for EVTX, Auditd, Sysmon for linux, XML or JSONL/NDJSON Logs
 ![](pics/Zircolite_v2.9.gif)
 
 [![python](https://img.shields.io/badge/python-3.8-blue)](https://www.python.org/)
@@ -12,13 +12,13 @@
 - **Zircolite** is based on a Sigma backend (SQLite) and do not use internal sigma to "something" conversion
 - **Zircolite** can export results to multiple format with using Jinja [templates](templates) : JSON, CSV, JSONL, Splunk, Elastic, Zinc, Timesketch...
 
-**Zircolite can be used directly in Python or you can use the binaries provided in [releases](https://github.com/wagga40/Zircolite/releases).** 
+**Zircolite can be used directly in Python or you can use the binaries provided in [releases](https://github.com/wagga40/Zircolite/releases).**
 
 **Documentation is [here](https://wagga40.github.io/Zircolite/) (dedicated site) or [here](docs) (repo directory).**
 
 ## Requirements / Installation
 
-Python 3.8 minimum is required. If you only want to use base functionnalities of Zircolite, you can install dependencies with : `pip3 install -r requirements.txt`. But `pip3 install -r requirements.full.txt` is strongly recommanded.
+Python 3.8 minimum is required. If you only want to use base functionalities of Zircolite, you can install dependencies with : `pip3 install -r requirements.txt`. But `pip3 install -r requirements.full.txt` is strongly recommended.
 
 The use of [evtx_dump](https://github.com/omerbenamram/evtx) is **optional but required by default (because it is -for now- much faster)**, If you do not want to use it you have to use the `--noexternal` option. The tool is provided if you clone the Zircolite repository (the official repository is [here](https://github.com/omerbenamram/evtx)).
 
@@ -28,7 +28,7 @@ The use of [evtx_dump](https://github.com/omerbenamram/evtx) is **optional but r
 
 Check tutorials made by other (EN, SP and FR) [here](#tutorials).
 
-### EVTX files : 
+### EVTX files
 
 Help is available with `zircolite.py -h`. If your EVTX files have the extension ".evtx" :
 
@@ -39,7 +39,7 @@ python3 zircolite.py --evtx sysmon.evtx --ruleset rules/rules_windows_sysmon_pys
 
 The SYSMON ruleset employed is a default one, intended for analyzing logs from endpoints with SYSMON installed.
 
-### Auditd / Sysmon for Linux / JSONL or NDJSON logs : 
+### Auditd / Sysmon for Linux / JSONL or NDJSON logs
 
 ```shell
 python3 zircolite.py --events auditd.log --ruleset rules/rules_linux.json --auditd
@@ -82,7 +82,7 @@ Everything is [here](docs).
 
 The Mini-GUI can be used totally offline, it allows the user to display and search results. You can automatically generate a Mini-Gui "package" with the `--package` option. To know how to use the Mini-GUI, check docs [here](docs/Advanced.md#mini-gui).
 
-### Detected events by Mitre Att&ck (c) techniques and criticity levels
+### Detected events by Mitre Att&ck (c) techniques and criticality levels
 
 ![](pics/gui.webp)
 
@@ -90,7 +90,7 @@ The Mini-GUI can be used totally offline, it allows the user to display and sear
 
 ![](pics/gui-timeline.webp)
 
-### Detected events by Mitre Att&ck (c) techniques displayed on the Matrix 
+### Detected events by Mitre Att&ck (c) techniques displayed on the Matrix
 
 ![](pics/gui-matrix.webp)
 
@@ -104,9 +104,9 @@ The Mini-GUI can be used totally offline, it allows the user to display and sear
 
 - (FR) [IT-connect.fr](https://www.it-connect.fr/) has published [a very extensive tutorial](https://www.it-connect.fr/) in **French** on Zircolite
 
-### References 
+### References
 
-- [Florian Roth](https://github.com/Neo23x0/) cited **Zircolite** in his [**SIGMA Hall of fame**](https://github.com/Neo23x0/Talks/blob/master/Sigma_Hall_of_Fame_20211022.pdf) in its talk dugin the October 2021 EU ATT&CK Workshop in October 2021
+- [Florian Roth](https://github.com/Neo23x0/) cited **Zircolite** in his [**SIGMA Hall of fame**](https://github.com/Neo23x0/Talks/blob/master/Sigma_Hall_of_Fame_20211022.pdf) in its talk during the October 2021 EU ATT&CK Workshop in October 2021
 - Zircolite has been cited and used in the research work of the CIDRE team : [PWNJUSTSU - Website](https://pwnjutsu.irisa.fr) and [PWNJUSTSU - Academic paper](https://hal.inria.fr/hal-03694719/document)
 - Zircolite has been cited and presented during [JSAC 2023](https://jsac.jpcert.or.jp/archive/2023/pdf/JSAC2023_workshop_sigma_jp.pdf)
 
@@ -114,4 +114,4 @@ The Mini-GUI can be used totally offline, it allows the user to display and sear
 
 - All the **code** of the project is licensed under the [GNU Lesser General Public License](https://www.gnu.org/licenses/lgpl-3.0.en.html)
 - `evtx_dump` is under the MIT license
-- The rules are released under the [Detection Rule License (DRL) 1.0](https://github.com/Neo23x0/sigma/blob/master/LICENSE.Detection.Rules.md)
+- The rules are released under the [Detection Rule License (DRL)](https://github.com/SigmaHQ/Detection-Rule-License)
