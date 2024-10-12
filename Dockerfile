@@ -4,7 +4,7 @@
 #
 ARG PYTHON_VERSION="3.11-slim"
 
-FROM "python:${PYTHON_VERSION}" as stage
+FROM "python:${PYTHON_VERSION}" AS stage
 
 ARG ZIRCOLITE_INSTALL_PREFIX="/opt"
 ARG ZIRCOLITE_REPOSITORY_URI="https://github.com/wagga40/Zircolite.git"
@@ -30,7 +30,7 @@ RUN chmod 0755 \
 FROM "python:${PYTHON_VERSION}"
 
 LABEL author="wagga40"
-LABEL description="A standalone SIGMA-based detection tool for EVTX."
+LABEL description="A standalone SIGMA-based detection tool for EVTX, Auditd and Sysmon for Linux logs."
 LABEL maintainer="wagga40"
 
 ARG ZIRCOLITE_INSTALL_PREFIX="/opt"
@@ -45,6 +45,8 @@ WORKDIR "${ZIRCOLITE_INSTALL_PREFIX}/zircolite"
 
 RUN python3 -m pip install \
         --requirement requirements.full.txt
+
+RUN python3 zircolite.py -U
 
 ENTRYPOINT [ "python3", "zircolite.py" ]
 

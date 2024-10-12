@@ -268,5 +268,68 @@
 		"Hash": {"separator":",", "equal":"="},
 		"Hashes": {"separator":",", "equal":"="},
 		"ConfigurationFileHash": {"separator":",", "equal":"="}
+	},
+	"transforms_enabled": true,
+	"transforms":{
+		"proctitle": [{
+			"info": "Proctitle HEX to ASCII",
+			"type": "python",
+            "code": "def transform(param):\n\treturn bytes.fromhex(param).decode('ascii').replace('\\x00',' ')",
+			"alias": false,
+			"alias_name": "",
+            "source_condition": ["auditd_input"],
+			"enabled": true
+		}],
+		"cmd": [{
+			"info": "Cmd HEX to ASCII",
+			"type": "python",
+            "code": "def transform(param):\n\treturn bytes.fromhex(param).decode('ascii').replace('\\x00',' ')",
+			"alias": false,
+			"alias_name": "",
+            "source_condition": ["auditd_input"],
+			"enabled": true
+		}],
+		"CommandLine": [
+			{
+				"info": "Base64 decoded CommandLine",
+				"type": "python",
+				"code": "\ndef transform(param):\n    decoded_values = []\n    concatenated_result = ''\n    data = param\n\n    base64_pattern = r'(?:[A-Za-z0-9+/]{4}){2,}(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?'\n    matches = re.findall(base64_pattern, data)\n    for match in matches:\n        decoded = base64.b64decode(match)\n        encoding = chardet.detect(decoded)['encoding']\n        if encoding and encoding in ['utf-8', 'ascii', 'utf-16le', 'ISO-8859-1']:\n            decoded = decoded.decode(encoding)\n            decoded = decoded.strip()\n            if decoded.isprintable() and len(decoded) > 10 :\n                decoded_values.append(decoded)\n    \n    concatenated_result = '|'.join(decoded_values)\n    return concatenated_result\n",
+				"alias": true,
+				"alias_name": "CommandLine_b64decoded",
+				"source_condition": ["evtx_input", "json_array_input", "json_input", "evtxtract_input", "db_input"],
+				"enabled": false
+			},
+			{
+				"info": "CommandLine credentials extraction - Regex by Practical Security Analytics - https://practicalsecurityanalytics.com/extracting-credentials-from-windows-logs/",
+                "type": "python",
+                "code": "\ndef transform(param):\n    import re\n    regex_patterns = [\n        r'net.+user\\s+(?P<username>(?:\"((?:\\\\.|[^\"\\\\])*)\")|(?:[^\\s\"]+))\\s+(?P<password>(?:\"((?:\\\\.|[^\"\\\\])*)\")|(?:[^\\s\"]+))',\n        r'net.+use\\s+(?P<share>\\\\\\\\\\S+)\\s+/USER:(?P<username>(?:\"((?:\\\\.|[^\"\\\\])*)\")|(?:[^\\s\"]+))\\s+(?P<password>(?:\"((?:\\\\.|[^\"\\\\])*)\")|(?:[^\\s\"]+))',\n        r'schtasks.+/U\\s+(?P<username>(?:\"((?:\\\\.|[^\"\\\\])*)\")|(?:[^\\s\"]+)).+/P\\s+(?P<password>(?:\"((?:\\\\.|[^\"\\\\])*)\")|(?:[^\\s\"]+))',\n        r'wmic.+/user:\\s*(?P<username>(?:\"((?:\\\\.|[^\"\\\\])*)\")|(?:[^\\s\"]+)).+/password:\\s*(?P<password>(?:\"((?:\\\\.|[^\"\\\\])*)\")|(?:[^\\s\"]+))',\n        r'psexec.+-u\\s+(?P<username>(?:\"((?:\\\\.|[^\"\\\\])*)\")|(?:[^\\s\"]+)).+-p\\s+(?P<password>(?:\"((?:\\\\.|[^\"\\\\])*)\")|(?:[^\\s\"]+))'\n    ]\n\n    matches = []\n    \n    for pattern in regex_patterns:\n        found = re.findall(pattern, param)\n        if len(found) > 0:\n            for match in list(found[0]):\n                if len(match) > 0:  \n                    matches.append(match) \n\n    concatenated_result = '|'.join(matches)\n    if concatenated_result == None:\n        return ''\n    return concatenated_result\n",
+                "alias": true,
+                "alias_name": "CommandLine_Extracted_Creds",
+				"source_condition": ["evtx_input", "json_array_input", "json_input", "evtxtract_input", "db_input"],
+                "enabled": false
+			}
+		],
+		"Payload": [
+			{
+				"info": "Base64 decoded Payload",
+				"type": "python",
+				"code": "\ndef transform(param):\n    decoded_values = []\n    concatenated_result = ''\n    data = param\n\n    base64_pattern = r'(?:[A-Za-z0-9+/]{4}){2,}(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?'\n    matches = re.findall(base64_pattern, data)\n    for match in matches:\n        decoded = base64.b64decode(match)\n        encoding = chardet.detect(decoded)['encoding']\n        if encoding and encoding in ['utf-8', 'ascii', 'utf-16le', 'ISO-8859-1']:\n            decoded = decoded.decode(encoding)\n            decoded = decoded.strip()\n            if decoded.isprintable() and len(decoded) > 10 :\n                decoded_values.append(decoded)\n    \n    concatenated_result = '|'.join(decoded_values)\n    return concatenated_result\n",
+				"alias": true,
+				"alias_name": "Payload_b64decoded",
+				"source_condition": ["evtx_input", "json_array_input", "json_input", "evtxtract_input", "db_input"],
+				"enabled": false
+			}
+		],
+		"ServiceFileName":[
+			{
+				"info": "Base64 decoded ServiceFileName",
+				"type": "python",
+				"code": "\ndef transform(param):\n    decoded_values = []\n    concatenated_result = ''\n    data = param\n\n    base64_pattern = r'(?:[A-Za-z0-9+/]{4}){2,}(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?'\n    matches = re.findall(base64_pattern, data)\n    for match in matches:\n        decoded = base64.b64decode(match)\n        encoding = chardet.detect(decoded)['encoding']\n        if encoding and encoding in ['utf-8', 'ascii', 'utf-16le', 'ISO-8859-1']:\n            decoded = decoded.decode(encoding)\n            decoded = decoded.strip()\n            if decoded.isprintable() and len(decoded) > 10 :\n                decoded_values.append(decoded)\n    \n    concatenated_result = '|'.join(decoded_values)\n    return concatenated_result\n",
+				"alias": true,
+				"alias_name": "ServiceFileName_b64decoded",
+				"source_condition": ["evtx_input", "json_array_input", "json_input", "evtxtract_input", "db_input"],
+				"enabled": false
+			}
+		]
 	}
 }
