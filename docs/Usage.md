@@ -1,6 +1,7 @@
 # Usage
 
-:information_source: if you use the packaged version of Zircolite don't forget to replace `python3 zircolite.py` in the examples by the packaged binary name.
+> [!NOTE]  
+> If you use the packaged version of Zircolite don't forget to replace `python3 zircolite.py` in the examples by the packaged binary name.
 
 ## Requirements and Installation
 
@@ -159,7 +160,8 @@ python3 zircolite.py --events <EVTXTRACT_EXTRACTED_LOGS>  --ruleset <RULESET> --
 python3 zircolite.py --events auditd.log --ruleset rules/rules_linux.json --auditd
 ```
 
-:information_source: `--events` and `--evtx` are strictly equivalent but `--events` make more sense with non EVTX logs.
+> [!NOTE]  
+> `--events` and `--evtx` are strictly equivalent but `--events` make more sense with non-EVTX logs.
 
 ### Sysmon for Linux logs
 
@@ -169,7 +171,8 @@ Sysmon for linux has been released in October 2021. It outputs XML in text forma
 python3 zircolite.py --events sysmon.log --ruleset rules/rules_linux.json --sysmon-linux
 ```
 
-:information_source: Since the logs come from Linux, the default file extension when using `-S` case is `.log`
+> [!NOTE]  
+> Since the logs come from Linux, the default file extension when using `-S` case is `.log`
 
 ### JSONL/NDJSON logs
 
@@ -287,7 +290,8 @@ python3 zircolite.py -e sample.evtx -r schtasks.yml -p sysmon -p windows-logsour
 
 The converted rules/rulesets can be saved by using the `-sr` or the `--save-ruleset` arguments.
 
-:information_source: When using multiple native Sigma rule/rulesets, you cannot differenciate pipelines. All the pipelines will be used in the conversion process.
+> [!NOTE]  
+> When using multiple native Sigma rule/rulesets, you cannot differenciate pipelines. All the pipelines will be used in the conversion process.
 
 ## Field mappings, field exclusions, value exclusions, field aliases and field splitting
 
@@ -422,14 +426,186 @@ The final event log used to apply Sigma rules will look like this :
 
 ```json
 {
-    "SHA1": "F43D9BB316E30AE1A3494AC5B0624F6BEA1BF054",
-    "MD5": "04029E121A0CFA5991749937DD22A1D9",
-    "SHA256": "9F914D42706FE215501044ACD85A32D58AAEF1419D404FDDFA5D3B48F66CCD9F",
-    "IMPHASH": "7C955A0ABC747F57CCC4324480737EF7",
-    "Hashes": "SHA1=F43D9BB316E30AE1A3494AC5B0624F6BEA1BF054,MD5=04029E121A0CFA5991749937DD22A1D9,SHA256=9F914D42706FE215501044ACD85A32D58AAEF1419D404FDDFA5D3B48F66CCD9F,IMPHASH=7C955A0ABC747F57CCC4324480737EF7",
+    "SHA1": "x",
+    "MD5": "x",
+    "SHA256": "x",
+    "IMPHASH": "x",
+    "Hashes": "SHA1=x,MD5=x,SHA256=x,IMPHASH=x",
     "EventID": 1
 }
 ```
+
+## Field Transforms 
+
+### What Are Transforms?
+
+Transforms in Zircolite are custom functions that manipulate the value of a specific field during the event flattening process. They allow you to:
+
+- Format or normalize data
+- Enrich events with additional computed fields
+- Decode encoded data (e.g., Base64, hexadecimal)
+- Extract information using regular expressions
+
+By using transforms, you can preprocess event data to make it more suitable for detection rules and analysis.
+
+### Enabling Transforms
+
+Transforms are configured in the config file (the default one is in `config/fieldMappings.json`) under the `"transforms"` section. To enable transforms, set the `"transforms_enabled"` flag to `true` in your configuration file:
+
+```json
+{
+  "transforms_enabled": true,
+  "transforms": {
+    // Transform definitions
+  }
+}
+```
+
+### Configuring Transforms
+
+Transforms are defined in the `"transforms"` section of the configuration file. Each transform is associated with a specific field and consists of several properties.
+
+### Transform Structure
+
+A transform definition has the following structure:
+
+- **Field Name**: The name of the field to which the transform applies.
+- **Transform List**: A list of transform objects for the field.
+
+Each transform object contains:
+
+- **info**: A description of what the transform does.
+- **type**: The type of the transform (currently only `"python"` is supported).
+- **code**: The Python code that performs the transformation.
+- **alias**: A boolean indicating whether the result should be stored in a new field.
+- **alias_name**: The name of the new field if `alias` is `true`.
+- **source_condition**: A list specifying when the transform should be applied based on the input type (e.g., `["evtx_input", "json_input"]`).
+- **enabled**: A boolean indicating whether the transform is active.
+
+#### Source conditions possible values
+    
+| Sets `source_condition` Value |
+|-------------------------------|
+| `"json_input"`                |
+| `"json_array_input"`          |
+| `"db_input"`                  |
+| `"sysmon_linux_input"`        |
+| `"auditd_input"`              |
+| `"xml_input"`                 |
+| `"evtxtract_input"`           |
+| `"csv_input"`                 |
+| `"evtx_input"`                |
+
+#### Example Transform Object
+
+```json
+{
+  "info": "Base64 decoded CommandLine",
+  "type": "python",
+  "code": "def transform(param):\n    # Transformation logic\n    return transformed_value",
+  "alias": true,
+  "alias_name": "CommandLine_b64decoded",
+  "source_condition": ["evtx_input", "json_input"],
+  "enabled": true
+}
+```
+
+### Available Fields
+
+You can define transforms for any field present in your event data. In the configuration, transforms are keyed by the field name:
+
+```json
+"transforms": {
+  "CommandLine": [
+    {
+      // Transform object
+    }
+  ],
+  "Payload": [
+    {
+      // Transform object
+    }
+  ]
+}
+```
+
+---
+
+### Writing Transform Functions
+
+Zircolite uses `RestrictedPython` to safely execute transform functions. This means that certain built-in functions and modules are available, while others are restricted.
+The function must be named `transform` and accept a single parameter `param`, which is the original value of the field.
+
+**Available Modules and Functions:**
+
+- **Built-in Functions**: A limited set of Python built-in functions, such as `len`, `int`, `str`, etc.
+- **Modules**: You can import `re` for regular expressions, `base64` for encoding/decoding, and `chardet` for character encoding detection.
+
+**Unavailable Features:**
+
+- Access to file I/O, network, or system calls is prohibited.
+- Use of certain built-in functions that can affect the system is restricted.
+
+#### Example Transform Functions
+
+##### Base64 Decoding
+
+```python
+def transform(param):
+    import base64
+    decoded = base64.b64decode(param)
+    return decoded.decode('utf-8')
+```
+
+##### Hexadecimal to ASCII Conversion
+
+```python
+def transform(param):
+    decoded = bytes.fromhex(param).decode('ascii')
+    return decoded.replace('\x00', ' ')
+```
+
+### Applying Transforms
+
+Transforms are automatically applied during the event flattening process if:
+
+- They are **enabled** (`"enabled": true`).
+- The current input type matches the **source condition** (`"source_condition": [...]`).
+
+For each event, Zircolite checks if any transforms are defined for the fields present in the event. If so, it executes the transform function and replaces the field's value with the transformed value or stores it in a new field if `alias` is `true`.
+
+### Example
+
+**Use Case**: Convert hexadecimal-encoded command lines in Auditd logs to readable ASCII strings.
+
+**Configuration:**
+
+```json
+"proctitle": [
+  {
+    "info": "Proctitle HEX to ASCII",
+    "type": "python",
+    "code": "def transform(param):\n    return bytes.fromhex(param).decode('ascii').replace('\\x00', ' ')",
+    "alias": false,
+    "alias_name": "",
+    "source_condition": ["auditd_input"],
+    "enabled": true
+  }
+]
+```
+
+**Explanation:**
+
+- **Field**: `proctitle`
+- **Function**: Converts hexadecimal strings to ASCII and replaces null bytes with spaces.
+- **Alias**: `false` (the original `proctitle` field is replaced).
+
+### Best Practices
+
+- **Test Your Transforms**: Before enabling a transform, ensure that the code works correctly with sample data.
+- **Use Aliases Wisely**: If you don't want to overwrite the original field, set `"alias": true` and provide an `"alias_name"`.
+- **Manage Performance**: Complex transforms can impact performance. Optimize your code and only enable necessary transforms.
+- **Keep Transforms Specific**: Tailor transforms to specific fields and input types using `"source_condition"` to avoid unexpected behavior.
 
 ## Generate your own rulesets
 
@@ -541,7 +717,7 @@ For example :
 
 ## Docker
 
-Zircolite is also packaged as a Docker image (cf. [wagga40/zircolite](https://hub.docker.com/r/wagga40/zircolite) on Docker Hub), which embeds all dependencies (e.g. `evtx_dump`) and provides a platform-independant way of using the tool.
+Zircolite is also packaged as a Docker image (cf. [wagga40/zircolite](https://hub.docker.com/r/wagga40/zircolite) on Docker Hub), which embeds all dependencies (e.g. `evtx_dump`) and provides a platform-independant way of using the tool. Please note this image is not updated with the last rulesets !
 
 You can pull the last image with : `docker pull wagga40/zircolite:latest`
 

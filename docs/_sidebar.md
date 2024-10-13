@@ -2,6 +2,7 @@
     * [Requirements and Installation](Usage.md#requirements-and-installation)
     * [Basic usage](Usage.md#basic-usage)
     * [Field mappings, field exclusions, value exclusions, field aliases and field splitting](Usage.md#field-mappings-field-exclusions-value-exclusions-field-aliases-and-field-splitting)
+    * [Field Transforms](Usage.md#field-transforms)
     * [Generate your own rulesets](Usage.md#generate-your-own-rulesets)
     * [Generate embedded versions](Usage.md#generate-embedded-versions)
     * [Docker](Usage.md#docker)

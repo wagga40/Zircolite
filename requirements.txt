@@ -2,3 +2,5 @@ orjson>=3.9.15
 xxhash
 colorama>=0.4.4
 tqdm>=4.58.0
+chardet
+RestrictedPython

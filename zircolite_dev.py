@@ -3,6 +3,8 @@
 # Standard libs
 import argparse
 import asyncio
+import base64
+import chardet
 import csv
 import functools
 import hashlib
@@ -29,6 +31,12 @@ import xxhash
 from colorama import Fore
 from tqdm import tqdm
 from tqdm.asyncio import tqdm as tqdmAsync
+from RestrictedPython import compile_restricted
+from RestrictedPython import safe_builtins
+from RestrictedPython import limited_builtins
+from RestrictedPython import utility_builtins
+from RestrictedPython.Eval import default_guarded_getiter
+from RestrictedPython.Guards import guarded_iter_unpack_sequence
 
 # External libs (Optional)
 forwardingDisabled = False
@@ -389,11 +397,11 @@ class eventForwarder:
         # Wait until all worker tasks are cancelled.
         await asyncio.gather(*tasks, return_exceptions=True)
         await session.close()
-        
+
 class JSONFlattener:
     """ Perform JSON Flattening """
 
-    def __init__(self, configFile, logger=None, timeAfter="1970-01-01T00:00:00", timeBefore="9999-12-12T23:59:59", timeField=None, hashes=False, JSONArray=False):
+    def __init__(self, configFile, logger=None, timeAfter="1970-01-01T00:00:00", timeBefore="9999-12-12T23:59:59", timeField=None, hashes=False, args_config=None):
         self.logger = logger or logging.getLogger(__name__)
         self.keyDict = {}
         self.fieldStmt = ""
@@ -402,7 +410,17 @@ class JSONFlattener:
         self.timeBefore = timeBefore
         self.timeField = timeField
         self.hashes = hashes
-        self.JSONArray = JSONArray
+        self.args_config = args_config
+        self.JSONArray = args_config.json_array_input
+        # Initialize the cache for compiled code
+        self.compiled_code_cache = {}
+
+        # Convert the argparse.Namespace to a dictionary
+        args_dict = vars(args_config)
+        # Find the chosen input format
+        self.chosen_input = next((key for key, value in args_dict.items() if "_input" in key and value), None)
+        if self.chosen_input is None:
+            self.chosen_input = "evtx_input" # Since evtx is the default input, we force it no chosen input has been found
         
         with open(configFile, 'r', encoding='UTF-8') as fieldMappingsFile:
             self.fieldMappingsDict = json.loads(fieldMappingsFile.read())
@@ -411,6 +429,28 @@ class JSONFlattener:
             self.uselessValues = self.fieldMappingsDict["useless"]
             self.aliases = self.fieldMappingsDict["alias"]
             self.fieldSplitList = self.fieldMappingsDict["split"]
+            self.transforms = self.fieldMappingsDict["transforms"]
+            self.transforms_enabled = self.fieldMappingsDict["transforms_enabled"]
+
+        # Define the authorized BUILTINS for Resticted Python
+        def default_guarded_getitem(ob, index):
+            return ob[index]
+        
+        default_guarded_getattr = getattr
+
+        self.RestrictedPython_BUILTINS = {
+            '__name__': 'script',
+            "_getiter_": default_guarded_getiter,
+            '_getattr_': default_guarded_getattr,
+            '_getitem_': default_guarded_getitem,
+            'base64': base64,
+            're': re,
+            'chardet': chardet,
+            '_iter_unpack_sequence_': guarded_iter_unpack_sequence
+        }
+        self.RestrictedPython_BUILTINS.update(safe_builtins)
+        self.RestrictedPython_BUILTINS.update(limited_builtins)
+        self.RestrictedPython_BUILTINS.update(utility_builtins)
 
     def run(self, file):
         """
@@ -421,6 +461,23 @@ class JSONFlattener:
         JSONLine = {}
         JSONOutput = []
         fieldStmt = ""
+
+        def transformValue(code, param):
+            try:
+                # Check if the code has already been compiled
+                if code in self.compiled_code_cache:
+                    byte_code = self.compiled_code_cache[code]
+                else:
+                    # Compile the code and store it in the cache
+                    byte_code = compile_restricted(code, filename='<inline code>', mode='exec')
+                    self.compiled_code_cache[code] = byte_code
+                # Prepare the execution environment
+                TransformFunction = {}
+                exec(byte_code, self.RestrictedPython_BUILTINS, TransformFunction)
+                return TransformFunction["transform"](param)
+            except Exception as e:
+                self.logger.debug(f"ERROR: Couldn't apply transform: {e}")
+                return param  # Return the original parameter if transform fails
 
         def flatten(x, name=''):
             nonlocal fieldStmt
@@ -438,6 +495,7 @@ class JSONFlattener:
                         value = x
                     # Excluding useless values (e.g. "null"). The value must be an exact match.
                     if value not in self.uselessValues:
+
                         # Applying field mappings
                         rawFieldName = name[:-1]
                         if rawFieldName in self.fieldMappings:
@@ -446,12 +504,28 @@ class JSONFlattener:
                             # Removing all annoying character from field name
                             key = ''.join(e for e in rawFieldName.split(".")[-1] if e.isalnum())
 
-                        # Preparing aliases
+                        # Preparing aliases (work on original field name and Mapped field name)
                         keys = [key]
-                        if key in self.aliases: 
-                            keys.append(self.aliases[key])
-                        if rawFieldName in self.aliases: 
-                            keys.append(self.aliases[rawFieldName])
+                        for fieldName in [key, rawFieldName]:
+                            if fieldName in self.aliases: 
+                                keys.append(self.aliases[key])
+
+                        # Applying field transforms (work on original field name and Mapped field name)
+                        keysThatNeedTransformedValues = []
+                        transformedValuesByKeys = {}
+                        if self.transforms_enabled:
+                            for fieldName in [key, rawFieldName]:
+                                if fieldName in self.transforms:
+                                    for transform in self.transforms[fieldName]:
+                                        if transform["enabled"] and self.chosen_input in transform["source_condition"] :
+                                            transformCode = transform["code"]
+                                            # If the transform rule ask for a dedicated alias
+                                            if transform["alias"]:
+                                                keys.append(transform["alias_name"])
+                                                keysThatNeedTransformedValues.append(transform["alias_name"])
+                                                transformedValuesByKeys[transform["alias_name"]] = transformValue(transformCode, value)
+                                            else:
+                                                value = transformValue(transformCode, value)
 
                         # Applying field splitting
                         fieldsToSplit = []
@@ -476,16 +550,19 @@ class JSONFlattener:
 
                         # Applying aliases
                         for key in keys:
-                            JSONLine[key] = value
+                            if key in keysThatNeedTransformedValues:
+                                JSONLine[key] = transformedValuesByKeys[key]
+                            else:
+                                JSONLine[key] = value
                             # Creating the CREATE TABLE SQL statement
-                            keyLower =key.lower()
+                            keyLower = key.lower()
                             if keyLower not in self.keyDict:
                                 self.keyDict[keyLower] = key
                                 if isinstance(value, int):
                                     fieldStmt += f"'{key}' INTEGER,\n"
                                 else:
                                     fieldStmt += f"'{key}' TEXT COLLATE NOCASE,\n"
-
+        
         # If filesize is not zero
         if os.stat(file).st_size != 0:
             with open(str(file), 'r', encoding='utf-8') as JSONFile:
@@ -556,7 +633,13 @@ class zirCore:
         conn = None
         self.logger.debug(f"CONNECTING TO : {db}")
         try:
-            conn = sqlite3.connect(db)
+            if db == ':memory:':
+                conn = sqlite3.connect(db, isolation_level=None)
+                conn.execute('PRAGMA journal_mode = MEMORY;')
+                conn.execute('PRAGMA synchronous = OFF;')
+                conn.execute('PRAGMA temp_store = MEMORY;')
+            else:
+                conn = sqlite3.connect(db)
             conn.row_factory = sqlite3.Row  # Allows to get a dict
 
             def udf_regex(x, y):
@@ -574,7 +657,7 @@ class zirCore:
 
     def createDb(self, fieldStmt):
         createTableStmt = f"CREATE TABLE logs ( row_id INTEGER, {fieldStmt} PRIMARY KEY(row_id AUTOINCREMENT) );"
-        self.logger.debug(" CREATE : " + createTableStmt.replace('\n', ' ').replace('\r', ''))
+        self.logger.debug(f" CREATE : {createTableStmt}")
         if not self.executeQuery(createTableStmt):
             self.logger.error(f"{Fore.RED}   [-] Unable to create table{Fore.RESET}")
             sys.exit(1)
@@ -599,19 +682,23 @@ class zirCore:
             return False
 
     def executeSelectQuery(self, query):
-        """ Perform a SQL Query -SELECT only- with the provided connection """
-        if self.dbConnection is not None:
-            dbHandle = self.dbConnection.cursor()
-            self.logger.debug(f"EXECUTING : {query}")
-            try:
-                data = dbHandle.execute(query)
-                return data
-            except Error as e:
-                self.logger.debug(f"   [-] {e}")
-                return {}
-        else:
+        """
+        Execute a SELECT SQL query and return the results as a list of dictionaries.
+        """
+        if self.dbConnection is None:
             self.logger.error(f"{Fore.RED}   [-] No connection to Db{Fore.RESET}")
-            return {}
+            return []
+        try:
+            cursor = self.dbConnection.cursor()
+            self.logger.debug(f"Executing SELECT query: {query}")
+            cursor.execute(query)
+            rows = cursor.fetchall()
+            # Convert rows to list of dictionaries
+            result = [dict(row) for row in rows]
+            return result
+        except sqlite3.Error as e:
+            self.logger.debug(f"   [-] SQL query error: {e}")
+            return []
 
     def loadDbInMemory(self, db):
         """ In db only mode it is possible to restore an on disk Db to avoid EVTX extraction and flattening """
@@ -619,20 +706,30 @@ class zirCore:
         dbfileConnection.backup(self.dbConnection)
         dbfileConnection.close()
 
+    def escape_identifier(self, identifier):
+        """Escape SQL identifiers like table or column names."""
+        return identifier.replace("\"", "\"\"")
+
     def insertData2Db(self, JSONLine):
-        """ Build INSERT INTO Query and insert data into Db """
-        columnsStr = ""
-        valuesStr = ""
-
-        for key in sorted(JSONLine.keys()):
-            columnsStr += "'" + key + "',"
-            if isinstance(JSONLine[key], int):
-                valuesStr += str(JSONLine[key]) + ", "
-            else:
-                valuesStr += "'" + str(JSONLine[key]).replace("'", "''") + "', "
-
-        insertStrmt = f"INSERT INTO logs ({columnsStr[:-1]}) VALUES ({valuesStr[:-2]});"
-        return self.executeQuery(insertStrmt)
+        """Build a parameterized INSERT INTO query and insert data into the database."""
+        columns = JSONLine.keys()
+        columnsEscaped = ', '.join([self.escape_identifier(col) for col in columns])
+        placeholders = ', '.join(['?'] * len(columns))
+        values = []
+        for col in columns:
+            value = JSONLine[col]
+            if isinstance(value, int):
+                # Check if value exceeds SQLite INTEGER limits
+                if abs(value) > 9223372036854775807:
+                    value = str(value)  # Convert to string
+            values.append(value)
+        insertStmt = f'INSERT INTO logs ({columnsEscaped}) VALUES ({placeholders})'
+        try:
+            self.dbConnection.execute(insertStmt, values)
+            return True
+        except Exception as e:
+            self.logger.debug(f"   [-] {e}")
+            return False
 
     def insertFlattenedJSON2Db(self, flattenedJSON, forwarder=None):
         if forwarder:
@@ -644,7 +741,7 @@ class zirCore:
     def saveFlattenedJSON2File(self, flattenedJSON, outputFile):
         with open(outputFile, 'w', encoding='utf-8') as file:
             for JSONLine in tqdm(flattenedJSON, colour="yellow"):
-                file.write(json.dumps(JSONLine).decode('utf-8') + '\n')
+                file.write(f'{json.dumps(JSONLine).decode("utf-8")}\n')
 
     def saveDbToDisk(self, dbFilename):
         self.logger.info("[+] Saving working data to disk as a SQLite DB")
@@ -653,41 +750,58 @@ class zirCore:
         onDiskDb.close()
 
     def executeRule(self, rule):
-        results = {}
-        filteredRows = []
-        counter = 0
-        if "rule" in rule:
-            # for each SQL Query in the Sigma rule
-            for SQLQuery in rule["rule"]:
-                data = self.executeSelectQuery(SQLQuery)
-                if data != {}:
-                    # Convert to array of dict
-                    rows = [dict(row) for row in data.fetchall()]
-                    if len(rows) > 0:
-                        counter += len(rows)
-                        for row in rows:
-                            if self.csvMode: # Cleaning "annoying" values for CSV
-                                match = {k: str(v).replace("\n","").replace("\r","").replace("None","") for k, v in row.items()}
-                            else: # Cleaning null/None fields
-                                match = {k: v for k, v in row.items() if v is not None}
-                            filteredRows.append(match)
-            if "level" not in rule:
-                rule["level"] = "unknown"
-            if "tags" not in rule:
-                rule["tags"] = []
-            if "filename" not in rule:
-                rule["filename"] = ""
-            if self.csvMode: 
-                results = ({"title": rule["title"], "id": rule["id"], "description": rule["description"].replace("\n","").replace("\r",""), "sigmafile": rule["filename"], "sigma": rule["rule"], "rule_level": rule["level"], "tags": rule["tags"], "count": counter, "matches": filteredRows})
-            else:
-                results = ({"title": rule["title"], "id": rule["id"], "description": rule["description"], "sigmafile": rule["filename"], "sigma": rule["rule"], "rule_level": rule["level"], "tags": rule["tags"], "count": counter, "matches": filteredRows})
-            if counter > 0:
-                self.logger.debug(f'DETECTED : {rule["title"]} - Matches : {counter} events')
-        else:
-            self.logger.debug("RULE FORMAT ERROR : rule key Missing")
-        if filteredRows == []:
+        """
+        Execute a single Sigma rule against the database and return the results.
+        """
+        if "rule" not in rule:
+            self.logger.debug("RULE FORMAT ERROR: 'rule' key missing")
             return {}
-        return results
+
+        # Set default values for missing rule keys
+        rule_level = rule.get("level", "unknown")
+        tags = rule.get("tags", [])
+        filename = rule.get("filename", "")
+        description = rule.get("description", "")
+        title = rule.get("title", "Unnamed Rule")
+        rule_id = rule.get("id", "")
+        sigma_queries = rule["rule"]
+
+        filteredRows = []
+
+        # Process each SQL query in the rule
+        for SQLQuery in sigma_queries:
+            data = self.executeSelectQuery(SQLQuery)
+            if data:
+                if self.csvMode:
+                    # Clean values for CSV output
+                    cleaned_rows = [
+                        {k: str(v).replace("\n", "").replace("\r", "").replace("None", "") for k, v in dict(row).items()}
+                        for row in data
+                    ]
+                else:
+                    # Remove None values
+                    cleaned_rows = [
+                        {k: v for k, v in dict(row).items() if v is not None}
+                        for row in data
+                    ]
+                filteredRows.extend(cleaned_rows)
+
+        if filteredRows:
+            results = {
+                "title": title,
+                "id": rule_id,
+                "description": description.replace("\n", "").replace("\r", "") if self.csvMode else description,
+                "sigmafile": filename,
+                "sigma": sigma_queries,
+                "rule_level": rule_level,
+                "tags": tags,
+                "count": len(filteredRows),
+                "matches": filteredRows
+            }
+            self.logger.debug(f'DETECTED: {title} - Matches: {len(filteredRows)} events')
+            return results
+        else:
+            return {}
 
     def loadRulesetFromFile(self, filename, ruleFilters):
         try:
@@ -719,51 +833,99 @@ class zirCore:
         if level == "critical":
             return f'{Fore.RED}{level}{orgFormat}'
 
-    def executeRuleset(self, outFile, writeMode='w', forwarder=None, showAll=False, KeepResults=False, remote=None, stream=False, lastRuleset=False):
+    def executeRuleset(self, outFile, writeMode='w', forwarder=None, showAll=False,
+                    KeepResults=False, remote=None, stream=False, lastRuleset=False):
+        """
+        Execute all rules in the ruleset and handle output.
+        """
         csvWriter = None
-        # Results are written upon detection to allow analysis during execution and to avoid losing results in case of error.
-        with open(outFile, writeMode, encoding='utf-8', newline='') as fileHandle:
-            with tqdm(self.ruleset, colour="yellow") as ruleBar:
-                if not self.noOutput and not self.csvMode and writeMode != "a": 
-                    fileHandle.write('[')
-                for rule in ruleBar:  # for each rule in ruleset
-                    if showAll and "title" in rule: 
-                        ruleBar.write(f'{Fore.BLUE}    - {rule["title"]} [{self.ruleLevelPrintFormatter(rule["level"], Fore.BLUE)}]{Fore.RESET}')  # Print all rules
-                    ruleResults = self.executeRule(rule)
-                    if ruleResults != {}:
-                        if self.limit == -1 or ruleResults["count"] <= self.limit:
-                            ruleBar.write(f'{Fore.CYAN}    - {ruleResults["title"]} [{self.ruleLevelPrintFormatter(rule["level"], Fore.CYAN)}] : {ruleResults["count"]} events{Fore.RESET}')
-                            # Store results for templating and event forwarding (only if stream mode is disabled)
-                            if KeepResults or (remote is not None and not stream): 
-                                self.fullResults.append(ruleResults)
-                            if stream and forwarder is not None: 
-                                forwarder.send([ruleResults], False)
-                            if not self.noOutput:
-                                # To avoid printing this twice on stdout but in the logs...
-                                logLevel = self.logger.getEffectiveLevel()
-                                self.logger.setLevel(logging.DEBUG)
-                                self.logger.debug(f'    - {ruleResults["title"]} [{ruleResults["rule_level"]}] : {ruleResults["count"]} events')
-                                self.logger.setLevel(logLevel)
-                                # Output to json or csv file
-                                if self.csvMode: 
-                                    if not csvWriter: # Creating the CSV header and the fields ("agg" is for queries with aggregation)
-                                        csvWriter = csv.DictWriter(fileHandle, delimiter=self.delimiter, fieldnames=["rule_title", "rule_description", "rule_level", "rule_count", "agg"] + list(ruleResults["matches"][0].keys()))
-                                        csvWriter.writeheader()
-                                    for data in ruleResults["matches"]:
-                                        dictCSV = { "rule_title": ruleResults["title"], "rule_description": ruleResults["description"], "rule_level": ruleResults["rule_level"], "rule_count": ruleResults["count"], **data}                                        
-                                        csvWriter.writerow(dictCSV)
-                                else:
-                                    try:
-                                        fileHandle.write(json.dumps(ruleResults, option=json.OPT_INDENT_2).decode('utf-8'))
-                                        fileHandle.write(',\n')
-                                    except Exception as e:
-                                        self.logger.error(f"{Fore.RED}   [-] Error saving some results : {e}{Fore.RESET}")
-                if (not self.noOutput and not self.csvMode) and lastRuleset: 
-                    fileHandle.write('{}]') # Added to produce a valid JSON Array
+        first_json_output = True  # To manage commas in JSON output
+        is_json_mode = not self.csvMode
 
-    def run(self, EVTXJSONList, Insert2Db=True, saveToFile=False, forwarder=None, JSONArray=False):
+        # Prepare output file handle if needed
+        fileHandle = None
+        if not self.noOutput:
+            # Open file in text mode since we will write decoded strings
+            fileHandle = open(outFile, writeMode, encoding='utf-8', newline='')
+            if is_json_mode and writeMode != 'a':
+                fileHandle.write('[')  # Start JSON array
+
+        # Iterate over rules in the ruleset
+        with tqdm(self.ruleset, colour="yellow") as ruleBar:
+            for rule in ruleBar:
+                # Show all rules if showAll is True
+                if showAll and "title" in rule:
+                    rule_title = rule["title"]
+                    rule_level = rule.get("level", "unknown")
+                    formatted_level = self.ruleLevelPrintFormatter(rule_level, Fore.BLUE)
+                    ruleBar.write(f'{Fore.BLUE}    - {rule_title} [{formatted_level}]{Fore.RESET}')
+
+                # Execute the rule
+                ruleResults = self.executeRule(rule)
+                if not ruleResults:
+                    continue  # No matches, skip to next rule
+
+                # Apply limit if set
+                if self.limit != -1 and ruleResults["count"] > self.limit:
+                    continue  # Exceeds limit, skip this result
+
+                # Write progress message
+                rule_title = ruleResults["title"]
+                rule_level = ruleResults.get("rule_level", "unknown")
+                formatted_level = self.ruleLevelPrintFormatter(rule_level, Fore.CYAN)
+                rule_count = ruleResults["count"]
+                ruleBar.write(f'{Fore.CYAN}    - {rule_title} [{formatted_level}] : {rule_count} events{Fore.RESET}')
+
+                # Store results if needed
+                if KeepResults or (remote and not stream):
+                    self.fullResults.append(ruleResults)
+
+                # Forward results if streaming
+                if stream and forwarder:
+                    forwarder.send([ruleResults], False)
+
+                # Handle output to file
+                if not self.noOutput:
+                    if self.csvMode:
+                        # Initialize CSV writer if not already done
+                        if csvWriter is None:
+                            fieldnames = ["rule_title", "rule_description", "rule_level", "rule_count"] + list(ruleResults["matches"][0].keys())
+                            csvWriter = csv.DictWriter(fileHandle, delimiter=self.delimiter, fieldnames=fieldnames)
+                            csvWriter.writeheader()
+                        # Write matches to CSV
+                        for data in ruleResults["matches"]:
+                            dictCSV = {
+                                "rule_title": ruleResults["title"],
+                                "rule_description": ruleResults["description"],
+                                "rule_level": ruleResults["rule_level"],
+                                "rule_count": ruleResults["count"],
+                                **data
+                            }
+                            csvWriter.writerow(dictCSV)
+                    else:
+                        # Write results as JSON using orjson
+                        try:
+                            # Handle commas between JSON objects
+                            if not first_json_output:
+                                fileHandle.write(',\n')
+                            else:
+                                first_json_output = False
+                            # Serialize ruleResults to JSON bytes with indentation
+                            json_bytes = json.dumps(ruleResults, option=json.OPT_INDENT_2)
+                            # Write the decoded JSON string to the file
+                            fileHandle.write(json_bytes.decode('utf-8'))
+                        except Exception as e:
+                            self.logger.error(f"Error saving some results: {e}")
+
+        # Close output file handle if needed
+        if not self.noOutput:
+            if is_json_mode and lastRuleset:
+                fileHandle.write(']')  # Close JSON array
+            fileHandle.close()
+
+    def run(self, EVTXJSONList, Insert2Db=True, saveToFile=False, forwarder=None, args_config=None):
         self.logger.info("[+] Processing events")
-        flattener = JSONFlattener(configFile=self.config, timeAfter=self.timeAfter, timeBefore=self.timeBefore, timeField=self.timeField, hashes=self.hashes, JSONArray=JSONArray)
+        flattener = JSONFlattener(configFile=self.config, timeAfter=self.timeAfter, timeBefore=self.timeBefore, timeField=self.timeField, hashes=self.hashes, args_config=args_config)
         flattener.runAll(EVTXJSONList)
         if saveToFile:
             filename = f"flattened_events_{''.join(random.SystemRandom().choice(string.ascii_uppercase + string.digits) for _ in range(4))}.json"
@@ -837,7 +999,7 @@ class evtxExtractor:
                     for record in parser.records_json():
                         f.write(f'{json.dumps(json.loads(record["data"])).decode("utf-8")}\n')
             except Exception as e:
-                self.logger.error(f"{Fore.RED}   [-] Cannot use PyEvtxParser{Fore.RESET}")
+                self.logger.error(f"{Fore.RED}   [-] Cannot use PyEvtxParser : {e}{Fore.RESET}")
         else:
             self.logger.error(f"{Fore.RED}   [-] Cannot use PyEvtxParser and evtx_dump is disabled or missing{Fore.RESET}")
 
@@ -861,8 +1023,6 @@ class evtxExtractor:
             else:
                 try:
                     attribute = attribute.replace('msg=','').replace('\'','').replace('"','').split('=')
-                    if 'cmd' in attribute[0] or 'proctitle' in attribute[0]:
-                        attribute[1] = str(bytearray.fromhex(attribute[1]).decode()).replace('\x00',' ')
                     event[attribute[0]] = attribute[1].rstrip()
                 except Exception:
                     pass
@@ -1363,15 +1523,16 @@ def main():
     eventArgs.add_argument("-A", "--after", help="Limit to events that happened after the provided timestamp (UTC). Format : 1970-01-01T00:00:00", type=str, default="1970-01-01T00:00:00")
     eventArgs.add_argument("-B", "--before", help="Limit to events that happened before the provided timestamp (UTC). Format : 1970-01-01T00:00:00", type=str, default="9999-12-12T23:59:59")
     # Event and log formats options
-    eventFormatsArgs = parser.add_mutually_exclusive_group()    
-    eventFormatsArgs.add_argument("-j", "--jsononly", "--jsonline", "--jsonl", "--json-input", help="If logs files are already in JSON lines format ('jsonl' in evtx_dump) ", action='store_true')
-    eventFormatsArgs.add_argument("--jsonarray", "--json-array", "--json-array-input", help="Source logs are in JSON but as an array", action='store_true')
-    eventFormatsArgs.add_argument("-D", "--dbonly", "--db-input", help="Directly use a previously saved database file, timerange filters will not work", action='store_true')
-    eventFormatsArgs.add_argument("-S", "--sysmon4linux", "--sysmon-linux", "--sysmon-linux-input", help="Use this option if your log file is a Sysmon for linux log file, default file extension is '.log'", action='store_true')
-    eventFormatsArgs.add_argument("-AU", "--auditd", "--auditd-input", help="Use this option if your log file is a Auditd log file, default file extension is '.log'", action='store_true')
-    eventFormatsArgs.add_argument("-x", "--xml", "--xml-input", help="Use this option if your log file is a EVTX converted to XML log file, default file extension is '.xml'", action='store_true')
-    eventFormatsArgs.add_argument("--evtxtract", help="Use this option if your log file was extracted with EVTXtract, default file extension is '.log'", action='store_true')
-    eventFormatsArgs.add_argument("--csvonly" ,"--csv-input", help="You log file is in CSV format '.csv'", action='store_true')
+    # /!\ an option name containing '-input' must exists (It is used in JSON flattening mechanism)
+    eventFormatsArgs = parser.add_mutually_exclusive_group()
+    eventFormatsArgs.add_argument("-j", "--json-input", "--jsononly", "--jsonline", "--jsonl", help="If logs files are already in JSON lines format ('jsonl' in evtx_dump) ", action='store_true')
+    eventFormatsArgs.add_argument("--json-array-input", "--jsonarray", "--json-array", help="Source logs are in JSON but as an array", action='store_true')
+    eventFormatsArgs.add_argument("--db-input", "-D", "--dbonly", help="Directly use a previously saved database file, timerange filters will not work", action='store_true')
+    eventFormatsArgs.add_argument("-S", "--sysmon-linux-input", "--sysmon4linux", "--sysmon-linux", help="Use this option if your log file is a Sysmon for linux log file, default file extension is '.log'", action='store_true')
+    eventFormatsArgs.add_argument("-AU", "--auditd-input", "--auditd", help="Use this option if your log file is a Auditd log file, default file extension is '.log'", action='store_true')
+    eventFormatsArgs.add_argument("-x", "--xml-input", "--xml", help="Use this option if your log file is a EVTX converted to XML log file, default file extension is '.xml'", action='store_true')
+    eventFormatsArgs.add_argument("--evtxtract-input", "--evtxtract", help="Use this option if your log file was extracted with EVTXtract, default file extension is '.log'", action='store_true')
+    eventFormatsArgs.add_argument("--csv-input", "--csvonly", help="You log file is in CSV format '.csv'", action='store_true')
     # Ruleset options
     rulesetsFormatsArgs = parser.add_argument_group(f'{Fore.BLUE}RULES AND RULESETS OPTIONS{Fore.RESET}')  
     rulesetsFormatsArgs.add_argument("-r", "--ruleset", help="Sigma ruleset : JSON (Zircolite format) or YAML/Directory containing YAML files (Native Sigma format)", action='append', nargs='+')
@@ -1480,7 +1641,7 @@ def main():
     # Check mandatory CLI options
     if not args.evtx: 
         consoleLogger.error(f"{Fore.RED}   [-] No events source path provided. Use '-e <PATH TO LOGS>', '--events <PATH TO LOGS>'{Fore.RESET}"), sys.exit(2)
-    if args.forwardall and args.dbonly: 
+    if args.forwardall and args.db_input: 
         consoleLogger.error(f"{Fore.RED}   [-] Can't forward all events in db only mode {Fore.RESET}"), sys.exit(2)
     if args.csv and len(args.ruleset) > 1: 
         consoleLogger.error(f"{Fore.RED}   [-] Since fields in results can change between rulesets, it is not possible to have CSV output when using multiple rulesets{Fore.RESET}"), sys.exit(2)
@@ -1490,6 +1651,7 @@ def main():
     # Init Forwarding
     forwarder = None
     if args.remote is not None: 
+        consoleLogger.info(f"{Fore.LIGHTRED_EX}[!] Forwarding is not tested anymore and will be removed in the future{Fore.RESET}")
         forwarder = eventForwarder(remote=args.remote, timeField=args.timefield, token=args.token, logger=consoleLogger, index=args.index, login=args.eslogin, password=args.espass)
         if not forwarder.networkCheck(): 
             quitOnError(f"{Fore.RED}   [-] Remote host cannot be reached : {args.remote}{Fore.RESET}", consoleLogger)
@@ -1529,16 +1691,16 @@ def main():
     zircoliteCore = zirCore(args.config, logger=consoleLogger, noOutput=args.nolog, timeAfter=eventsAfter, timeBefore=eventsBefore, limit=args.limit, csvMode=args.csv, timeField=args.timefield, hashes=args.hashes, dbLocation=args.ondiskdb, delimiter=args.csv_delimiter)
     
     # If we are not working directly with the db
-    if not args.dbonly:
+    if not args.db_input:
         # If we are working with json we change the file extension if it is not user-provided
         if not args.fileext:
-            if args.jsononly or args.jsonarray:
+            if args.json_input or args.json_array_input:
                 args.fileext = "json"
-            elif (args.sysmon4linux or args.auditd):
+            elif (args.sysmon_linux_input or args.auditd_input):
                 args.fileext = "log"
-            elif args.xml:
+            elif args.xml_input:
                 args.fileext = "xml"
-            elif args.csvonly:
+            elif args.csv_input:
                 args.fileext = "csv"
             else:
                 args.fileext = "evtx"
@@ -1565,9 +1727,9 @@ def main():
         if len(FileList) <= 0:
             quitOnError(f"{Fore.RED}   [-] No file found. Please verify filters, directory or the extension with '--fileext' or '--file-pattern'{Fore.RESET}", consoleLogger)
 
-        if not args.jsononly and not args.jsonarray:
+        if not args.json_input and not args.json_array_input:
             # Init EVTX extractor object
-            extractor = evtxExtractor(logger=consoleLogger, providedTmpDir=args.tmpdir, coreCount=args.cores, useExternalBinaries=(not args.noexternal), binPath=args.evtx_dump, xmlLogs=args.xml, sysmon4linux=args.sysmon4linux, auditdLogs=args.auditd, evtxtract=args.evtxtract, encoding=args.logs_encoding, csvInput=args.csvonly)
+            extractor = evtxExtractor(logger=consoleLogger, providedTmpDir=args.tmpdir, coreCount=args.cores, useExternalBinaries=(not args.noexternal), binPath=args.evtx_dump, xmlLogs=args.xml_input, sysmon4linux=args.sysmon_linux_input, auditdLogs=args.auditd_input, evtxtract=args.evtxtract_input, encoding=args.logs_encoding, csvInput=args.csv_input)
             consoleLogger.info(f"[+] Extracting events Using '{extractor.tmpDir}' directory ")
             for evtx in tqdm(FileList, colour="yellow"):
                 extractor.run(evtx)
@@ -1582,18 +1744,18 @@ def main():
 
         # Print field list and exit
         if args.fieldlist:
-            fields = zircoliteCore.run(LogJSONList, Insert2Db=False, JSONArray=args.jsonarray)
+            fields = zircoliteCore.run(LogJSONList, Insert2Db=False, args_config=args)
             zircoliteCore.close()
-            if not args.jsononly and not args.jsonarray and not args.keeptmp:
+            if not args.json_input and not args.json_array_input and not args.keeptmp:
                 extractor.cleanup()
             [print(sortedField) for sortedField in sorted([field for field in fields.values()])]
             sys.exit(0)
         
         # Flatten and insert to Db
         if args.forwardall:
-            zircoliteCore.run(LogJSONList, saveToFile=args.keepflat, forwarder=forwarder, JSONArray=args.jsonarray)
+            zircoliteCore.run(LogJSONList, saveToFile=args.keepflat, forwarder=forwarder, args_config=args)
         else:
-            zircoliteCore.run(LogJSONList, saveToFile=args.keepflat, JSONArray=args.jsonarray)
+            zircoliteCore.run(LogJSONList, saveToFile=args.keepflat, args_config=args)
         # Unload In memory DB to disk. Done here to allow debug in case of ruleset execution error
         if args.dbfile is not None: 
             zircoliteCore.saveDbToDisk(args.dbfile)
@@ -1638,7 +1800,7 @@ def main():
     if not args.keeptmp:
         consoleLogger.info("[+] Cleaning")
         try:
-            if not args.jsononly and not args.jsonarray and not args.dbonly:
+            if not args.json_input and not args.json_array_input and not args.db_input:
                 extractor.cleanup()
         except OSError as e:
             consoleLogger.error(f"{Fore.RED}   [-] Error during cleanup {e}{Fore.RESET}")

@@ -12,13 +12,15 @@ There are a lot of ways to speed up Zircolite :
 - Using as much CPU core as possible : see below "[Using GNU Parallel](using-gnu-parallel)"
 - Using [Filtering](#filtering)
 
-:information_source: There is an option to heavily limit the memory usage of Zircolite by using the `--ondiskdb <DB_NAME>` argument. This is only usefull to avoid errors when dealing with very large datasets and have a lot of time. **This should be used with caution and the below alternatives are far better choices**.
+> [!NOTE]  
+> There is an option to heavily limit the memory usage of Zircolite by using the `--ondiskdb <DB_NAME>` argument. This is only usefull to avoid errors when dealing with very large datasets and if you have have a lot of time... **This should be used with caution and the below alternatives are far better choices**.
 
 ### Using GNU Parallel 
 
 Except when `evtx_dump` is used, Zircolite only use one core. So if you have a lot of EVTX files and their total size is big, it is recommended that you use a script to launch multiple Zircolite instances. On Linux or MacOS The easiest way is to use **GNU Parallel**. 
 
-:information_source: on MacOS, please use GNU find (`brew install find` will install `gfind`)
+> [!NOTE]  
+> On MacOS, please use GNU find (`brew install find` will install `gfind`)
 
 - **"DFIR Case mode" : One directory per computer/endpoint**
 
@@ -65,7 +67,8 @@ To speed up the detection process, you may want to use Zircolite on files matchi
 - `-s` or `--select` : select files partly matching the provided a string (case insensitive)
 - `-a` or `--avoid` : exclude files partly matching the provided a string (case insensitive)
 
-:information_source: When using the two arguments, the "select" argument is always applied first and then the "avoid" argument is applied. So, it is possible to exclude files from included files but not the opposite.
+> [!NOTE]  
+> When using the two arguments, the "select" argument is always applied first and then the "avoid" argument is applied. So, it is possible to exclude files from included files but not the opposite.
 
 - Only use EVTX files that contains "sysmon" in their names
 
@@ -142,6 +145,9 @@ Sometimes, SIGMA rules can be very noisy (and generate a lot of false positives)
 
 ## Forwarding detected events 
 
+> [!WARNING]  
+> Forwarding is DEPRECATED and will likely be disabled in a future release
+
 Zircolite provide multiple ways to forward events to a collector : 
 
 - the HTTP forwarder : this is a very simple forwarder and pretty much a **"toy"** example and should be used when you have nothing else. An **example** server called is available in the [tools](../tools/zircolite_server/) directory
@@ -180,7 +186,8 @@ python3 zircolite.py --evtx /sample.evtx  --ruleset rules/rules_windows_sysmon_p
 
 Since Splunk HEC default to the first associated index, `--index` is optional but can be used to specify the choosen index among the available ones.
 
-:warning: On Windows do not forget to put quotes
+> [!WARNING]  
+> On Windows do not forget to put quotes
 
 ### Forward to ELK
 
@@ -192,9 +199,11 @@ python3 zircolite.py --evtx /sample.evtx  --ruleset rules/rules_windows_sysmon_p
 	--eslogin "yourlogin" --espass "yourpass"
 ```
 
-:information_source: the `--eslogin` and `--espass` arguments are optional.
+> [!NOTE]  
+> the `--eslogin` and `--espass` arguments are optional.
 
-:warning: **Elastic is not handling logs the way Splunk does. Since Zircolite is flattening the field names in the JSON output some fields, especially when working with EVTX files, can have different types between Channels, logsources etc. So when Elastic uses automatic field mapping, mapping errors may prevent events insertion into Elastic.**
+> [!WARNING]  
+> **Elastic is not handling logs the way Splunk does. Since Zircolite is flattening the field names in the JSON output some fields, especially when working with EVTX files, can have different types between Channels, logsources etc. So when Elastic uses automatic field mapping, mapping errors may prevent events insertion into Elastic.**
 
 #### No local logs
 
@@ -204,7 +213,8 @@ When you forward detected events to an server, sometimes you don't want any log 
 
 Zircolite is able to forward all events and not just the detected events to Splunk, ELK or a custom HTTP Server. you just to use the `--forwardall` argument. Please note that this ability forward events as JSON and not specific  `Windows` sourcetype.
 
-:warning: **Elastic is not handling logs the way Splunk does. Since Zircolite is flattening the field names in the JSON output some fields, especially when working with EVTX files, can have different types between Channels, logsources etc. So when Elastic uses automatic field mapping, mapping errors may prevent events insertion into Elastic.**
+> [!WARNING]  
+> **Elastic is not handling logs the way Splunk does. Since Zircolite is flattening the field names in the JSON output some fields, especially when working with EVTX files, can have different types between Channels, logsources etc. So when Elastic uses automatic field mapping, mapping errors may prevent events insertion into Elastic.**
 
 ## Templating and Formatting
 
@@ -245,7 +255,8 @@ mv data.js zircogui/
 
 Then you just have to open `index.html` in your favorite browser and click on a Mitre Att&ck category or an alert level.
   
-:warning: **The mini-GUI was not built to handle big datasets**.
+> [!WARNING]  
+> **The mini-GUI was not built to handle big datasets**.
 
 ## Packaging Zircolite 
 
@@ -264,7 +275,8 @@ Then you just have to open `index.html` in your favorite browser and click on a 
 * After Python 3.8 install, you will need Nuitka : `pip3 install nuitka`
 * In the root folder of Zircolite type : `python3 -m nuitka --onefile zircolite.py`
 
-:warning: When packaging with PyInstaller or Nuitka some AV may not like your package.
+> [!WARNING]  
+> When packaging with PyInstaller or Nuitka some AV may not like your package.
 
 ## Using With DFIR Orc
 
@@ -311,7 +323,8 @@ Basically, if you want to integrate Zircolite with **DFIR Orc** :
 </wolf>
 ```
 
-:information_source: Please note that if you add this configuration to an existing one, you only need to keep the part between `<!-- BEGIN ... -->` and `<!-- /END ... -->` blocks.
+> [!NOTE]  
+> Please note that if you add this configuration to an existing one, you only need to keep the part between `<!-- BEGIN ... -->` and `<!-- /END ... -->` blocks.
 
 -  Put your custom or default mapping file `zircolite_win10_nuitka.exe ` (the default one is in the Zircolite repository `config` directory)   `rules_windows_generic.json` (the default one is in the Zircolite repository `rules` directory) in the the `config` directory.
 
@@ -350,7 +363,8 @@ Basically, if you want to integrate Zircolite with **DFIR Orc** :
 	</archive>
 </toolembed>
 ```
-:information_source: Please note that if you add this configuration to an existing one, you only need to keep the part between `<!-- BEGIN ... -->` and `<!-- /END ... -->` blocks.
+> [!NOTE]  
+> Please note that if you add this configuration to an existing one, you only need to keep the part between `<!-- BEGIN ... -->` and `<!-- /END ... -->` blocks.
 
 - Now you need to generate the **DFIR Orc** binary by executing `.\configure.ps1` at the root of the repository
 - The final output will be in the `output` directory
