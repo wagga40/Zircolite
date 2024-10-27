@@ -1,2 +1,0 @@
-{% for match in data["matches"] %}{"host":{{ data["host"]|tojson }},"title":{{ data["title"]|tojson }},"description":{{ data["description"]|tojson }},"sigma":{{ data["sigma"]|tojson }},"rule_level":{{ data["rule_level"]|tojson }},"tags":{{ data["tags"]|tojson }},{% for key, value in match.items() %}"{{ key }}":{{ value|tojson }}{{ "," if not loop.last }}{% endfor %}}
-{% endfor %}

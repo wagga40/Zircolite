@@ -2,20 +2,19 @@
 
 # Standard libs
 import argparse
-import asyncio
 import base64
 import chardet
 import csv
 import functools
 import hashlib
 import logging
+import logging.config
 import multiprocessing as mp
 import os
 import random
 import re
 import shutil
 import signal
-import socket
 import sqlite3
 import string
 import subprocess
@@ -30,7 +29,6 @@ import orjson as json
 import xxhash
 from colorama import Fore
 from tqdm import tqdm
-from tqdm.asyncio import tqdm as tqdmAsync
 from RestrictedPython import compile_restricted
 from RestrictedPython import safe_builtins
 from RestrictedPython import limited_builtins
@@ -39,26 +37,10 @@ from RestrictedPython.Eval import default_guarded_getiter
 from RestrictedPython.Guards import guarded_iter_unpack_sequence
 
 # External libs (Optional)
-forwardingDisabled = False
-try:
-    import aiohttp
-    import urllib3
-
-    urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
-except ImportError:
-    forwardingDisabled = True
-
-elasticForwardingDisabled = False
-try:
-    from elasticsearch import AsyncElasticsearch
-except ImportError:
-    elasticForwardingDisabled = True
-
 updateDisabled = False
 try:
     import requests
 except ImportError:
-    forwardingDisabled = True
     updateDisabled = True
 
 sigmaConversionDisabled = False
@@ -95,499 +77,117 @@ def signal_handler(sig, frame):
     sys.exit(0)
 
 
-def quitOnError(message, logger=None):
+def quitOnError(message):
+    """Log an error message and exit the program."""
+    logger = logging.getLogger(__name__)
     logger.error(message)
     sys.exit(1)
 
 
-def checkIfExists(path, errorMessage, logger=None):
+def checkIfExists(path, errorMessage):
     """Test if path provided is a file"""
     if not (Path(path).is_file()):
-        quitOnError(errorMessage, logger)
+        quitOnError(errorMessage)
 
 
-def initLogger(debugMode, logFile=None):
-    fileLogLevel = logging.INFO
-    fileLogFormat = "%(asctime)s %(levelname)-8s %(message)s"
-    if debugMode:
-        fileLogLevel = logging.DEBUG
-        fileLogFormat = (
-            "%(asctime)s %(levelname)-8s %(module)s:%(lineno)s %(funcName)s %(message)s"
-        )
+def setup_logging(debug_mode, log_file=None):
+    """Set up logging configuration."""
+    log_level = logging.DEBUG if debug_mode else logging.INFO
 
-    if logFile is not None:
-        logging.basicConfig(
-            format=fileLogFormat,
-            filename=logFile,
-            level=fileLogLevel,
-            datefmt="%Y-%m-%d %H:%M:%S",
-        )
-        logger = logging.StreamHandler()
-        formatter = logging.Formatter("%(message)s")
-        logger.setFormatter(formatter)
-        logger.setLevel(logging.INFO)
-        logging.getLogger().addHandler(logger)
-    else:
-        logging.basicConfig(
-            format="%(message)s", level=logging.INFO, datefmt="%Y-%m-%d %H:%M:%S"
-        )
+    # Define a configuration dictionary
+    logging_config = {
+        "version": 1,
+        "disable_existing_loggers": False,
+        "formatters": {
+            "console_formatter": {"format": "%(message)s"},
+            "file_formatter": {
+                "format": "%(asctime)s [%(levelname)s] %(name)s: %(message)s"
+            },
+        },
+        "handlers": {
+            "console": {
+                "class": "logging.StreamHandler",
+                "formatter": "console_formatter",
+                "level": logging.INFO,
+                "stream": "ext://sys.stdout",
+            },
+            "file": {
+                "class": "logging.FileHandler",
+                "formatter": "file_formatter",
+                "level": log_level,
+                "filename": log_file or "zircolite.log",
+                "encoding": "utf-8",
+            },
+        },
+        "root": {
+            "handlers": ["console", "file"] if log_file else ["console"],
+            "level": log_level,
+        },
+    }
 
-    return logging.getLogger()
+    logging.config.dictConfig(logging_config)
 
 
-class templateEngine:
-    def __init__(self, logger=None, template=[], templateOutput=[], timeField=""):
-        self.logger = logger or logging.getLogger(__name__)
-        self.template = template
-        self.templateOutput = templateOutput
+# Define the authorized BUILTINS for Resticted Python
+def default_guarded_getitem(ob, index):
+    return ob[index]
+
+
+class template_engine:
+    def __init__(self, templates=[], template_outputs=[], timeField=""):
+        self.logger = logging.getLogger(__name__)
         self.timeField = timeField
+        self.compiled_templates = {}
+        # Flatten templates and outputs if they are nested lists
+        self.template_paths = [
+            tpl[0] if isinstance(tpl, list) else tpl for tpl in templates
+        ]
+        self.template_outputs = [
+            out[0] if isinstance(out, list) else out for out in template_outputs
+        ]
 
-    def generateFromTemplate(self, templateFile, outputFilename, data):
+    def generate_from_template(self, template_file, outputFilename, data):
         """Use Jinja2 to output data in a specific format"""
         try:
-
-            tmpl = open(templateFile, "r", encoding="utf-8")
-            template = Template(tmpl.read())
-
+            with open(template_file, "r", encoding="utf-8") as tmpl:
+                # Use the compiled template if available, otherwise compile it
+                if template_file in self.compiled_templates:
+                    template = self.compiled_templates["templateFile"]
+                else:
+                    template = Template(tmpl.read())
+                    self.compiled_templates["templateFile"] = template
+            # Render the template and write to the output file
             with open(outputFilename, "a", encoding="utf-8") as tpl:
                 tpl.write(template.render(data=data, timeField=self.timeField))
         except Exception as e:
             self.logger.error(
-                f"{Fore.RED}   [-] Template error, activate debug mode to check for errors{Fore.RESET}"
+                f"{Fore.RED}   [-] Template error, activate debug mode with '--debug' to check for errors{Fore.RESET}"
             )
             self.logger.debug(f"   [-] {e}")
 
     def run(self, data):
-        for template, templateOutput in zip(self.template, self.templateOutput):
+        for template, template_output in zip(
+            self.template_paths, self.template_outputs
+        ):
             self.logger.info(
-                f'[+] Applying template "{template[0]}", outputting to : {templateOutput[0]}'
+                f'[+] Applying template "{template}", outputting to : {template_output}'
             )
-            self.generateFromTemplate(template[0], templateOutput[0], data)
+            self.generate_from_template(template, template_output, data)
 
 
-class eventForwarder:
-    """Class for handling event forwarding"""
-
-    def __init__(
-        self,
-        remote,
-        timeField,
-        token,
-        logger=None,
-        index=None,
-        login="",
-        password="",
-        pipeline="",
-    ):
-        self.logger = logger or logging.getLogger(__name__)
-        self.remoteHost = remote
-        self.token = token
-        self.localHostname = socket.gethostname()
-        self.userAgent = "zircolite/2.x"
-        self.index = index
-        self.login = login
-        self.password = password
-        self.pipeline = pipeline
-        self.queueSize = 20
-        self.connectionFailed = False
-        self.timeField = timeField
-
-    def send(self, payloads, forwardAll=False):
-        if payloads:
-            if self.remoteHost:
-                try:
-                    # Change EventLoopPolicy on Windows https://stackoverflow.com/questions/45600579/asyncio-event-loop-is-closed-when-getting-loop
-                    if _platform == "win32":
-                        asyncio.set_event_loop_policy(
-                            asyncio.WindowsSelectorEventLoopPolicy()
-                        )
-                    # Splunk HEC
-                    if self.token:
-                        asyncio.run(
-                            self.sendAllAsyncQueue(
-                                payloads,
-                                timeField=self.timeField,
-                                sigmaEvents=(not forwardAll),
-                                mode="HEC",
-                            )
-                        )
-                    # ElasticSearch
-                    elif self.index:
-                        self.disableESDefaultLogging()
-                        asyncio.run(
-                            self.sendAllAsyncQueue(
-                                payloads,
-                                timeField=self.timeField,
-                                sigmaEvents=(not forwardAll),
-                                mode="ES",
-                            )
-                        )
-                    # HTTP
-                    else:
-                        asyncio.run(
-                            self.sendAllAsyncQueue(
-                                payloads,
-                                timeField=self.timeField,
-                                sigmaEvents=(not forwardAll),
-                                mode="HTTP",
-                            )
-                        )
-                except Exception as e:
-                    self.logger.debug(f"{Fore.RED}   [-] {e}")
-
-    def networkCheck(self):
-        """Check remote connectivity"""
-        self.logger.info(f"[+] Check connectivity to {self.remoteHost}")
-        try:
-            requests.get(
-                self.remoteHost,
-                headers={"user-agent": self.userAgent},
-                timeout=10,
-                verify=False,
-            )
-        except (requests.ConnectionError, requests.Timeout):
-            return False
-        return True
-
-    def formatToEpoch(self, timestamp):
-        try:
-            return (
-                str(time.mktime(time.strptime(timestamp, "%Y-%m-%dT%H:%M:%S.%f%z")))
-                + timestamp.split(".")[1][:-1]
-            )
-        except ValueError:
-            try:
-                return (
-                    str(time.mktime(time.strptime(timestamp, "%Y-%m-%dT%H:%M:%S%z")))
-                    + timestamp.split(".")[1][:-1]
-                )
-            except Exception:
-                self.logger.debug(
-                    f"{Fore.RED}   [-] Timestamp error: {timestamp}{Fore.RESET}"
-                )
-
-    def disableESDefaultLogging(self):
-        """By Default Elastic client has a logger set to INFO level"""
-        es_log = logging.getLogger("elasticsearch")
-        es_log.setLevel(logging.ERROR)
-        es_log = logging.getLogger("elastic_transport")
-        es_log.setLevel(logging.ERROR)
-
-    async def HECWorker(self, session, queue, sigmaEvents):
-        while True:
-            if self.index:
-                providedIndex = f"?index={self.index}"
-            else:
-                providedIndex = ""
-            data = await queue.get()  # Pop data from Queue
-            resp = await session.post(
-                f"{self.remoteHost}/services/collector/event{providedIndex}",
-                headers={"Authorization": f"Splunk {self.token}"},
-                json=data,
-            )  # Exec action from Queue
-            queue.task_done()  # Notify Queue action ended
-            if str(resp.status)[0] in ["4", "5"]:
-                self.logger.error(
-                    f"{Fore.RED}   [-] Forwarding failed for event {Fore.RESET}"
-                )
-
-    async def ESWorker(self, session, queue, sigmaEvents):
-        while True:
-            data = await queue.get()  # Pop data from Queue
-            index = self.index
-            if sigmaEvents:
-                index = f"{self.index}-sigma"
-            else:
-                if "OriginalLogfile" in data["payload"]:
-                    index = f'{index}-{("".join([char for char in data["payload"]["OriginalLogfile"].split(".")[0] if (char.isalpha() or char == "-")])).lower()}'
-            try:
-                await session.index(
-                    index=index, document=data["payload"], id=data["hash"]
-                )  # Exec action from Queue
-            except Exception as e:
-                if "error" in e.body:
-                    if e.body["error"]["type"] == "mapper_parsing_exception":
-                        errField = e.body["error"]["reason"].split("[")[1].split("]")[0]
-                        errType = e.body["error"]["reason"].split("[")[2].split("]")[0]
-                        errValue = (
-                            e.body["error"]["reason"].split("value: '")[1].split("'")[0]
-                        )
-                        canInsert = False
-
-                        if errType == "long" and errValue.startswith(
-                            "0x"
-                        ):  # Hex value in long field
-                            data["payload"][errField] = int(
-                                data["payload"][errField], 16
-                            )
-                            canInsert = True
-                        elif errType == "boolean" and errValue.startswith(
-                            "0"
-                        ):  # 0 value in bool field
-                            data["payload"][errField] = "false"
-                            canInsert = True
-                        elif errType == "boolean" and errValue.startswith(
-                            "1"
-                        ):  # 1 value in bool field
-                            data["payload"][errField] = "true"
-                            canInsert = True
-                        elif (
-                            errType == "long"
-                            and isinstance((data["payload"][errField]), int)
-                            and data["payload"][errField] > (2**63 - 1)
-                        ):  # ES limit
-                            data["payload"][errField] = 2**63 - 1
-                            canInsert = True
-                        elif (
-                            errType == "long"
-                            and isinstance((data["payload"][errField]), int)
-                            and data["payload"][errField] < -(2**63)
-                        ):  # ES limit
-                            data["payload"][errField] = -(2**63)
-                            canInsert = True
-                        elif errType == "long" and isinstance(
-                            data["payload"][errField], argparse.BooleanOptionalAction
-                        ):
-                            if type(data["payload"][errField]):
-                                data["payload"][errField] = 1
-                            else:
-                                data["payload"][errField] = 0
-                            canInsert = True
-                        else:
-                            self.logger.debug(
-                                f"{Fore.RED}   [-] ES Mapping parser error : {e}{Fore.RESET}"
-                            )
-                        if canInsert:
-                            try:
-                                await session.index(
-                                    index=index,
-                                    document=data["payload"],
-                                    id=data["hash"],
-                                )
-                            except Exception as e:
-                                self.logger.debug(
-                                    f"{Fore.RED}   [-] ES error : {e}{Fore.RESET}"
-                                )
-                    elif e.body["error"]["type"] == "illegal_argument_exception":
-                        errField = e.body["error"]["reason"].split("[")[1].split("]")[0]
-                        data["payload"].pop(errField, None)  # remove value from payload
-                        try:
-                            await session.index(
-                                index=index, document=data["payload"], id=data["hash"]
-                            )
-                        except Exception as e:
-                            self.logger.debug(
-                                f"{Fore.RED}   [-] ES error : {e}{Fore.RESET}"
-                            )
-                    else:
-                        self.logger.debug(
-                            f"{Fore.RED}   [-] ES error : {e}{Fore.RESET}"
-                        )
-
-            queue.task_done()  # Notify Queue action ended
-
-    async def HTTPWorker(self, session, queue, sigmaEvents):
-        while True:
-            data = await queue.get()  # Pop data from Queue
-            resp = await session.post(
-                self.remoteHost, headers={"user-agent": self.userAgent}, json=data
-            )  # Exec action from Queue
-            queue.task_done()  # Notify Queue action ended
-            if str(resp.status)[0] in ["4", "5"]:
-                self.logger.error(
-                    f"{Fore.RED}   [-] Forwarding failed for event {Fore.RESET}"
-                )
-
-    def formatEventForES(self, payload, match={}, timeField="", sigmaEvents=False):
-        if self.pipeline != "":
-            payload["pipeline"] = self.pipeline
-        if sigmaEvents:
-            payload = {
-                "title": payload["title"],
-                "id": payload["id"],
-                "sigmafile": payload["sigmafile"],
-                "description": payload["description"],
-                "sigma": payload["sigma"],
-                "rule_level": payload["rule_level"],
-                "tags": payload["tags"],
-                "host": self.localHostname,
-            }
-            [
-                (
-                    payload.update({key: eval(value)})
-                    if value in ["False", "True"]
-                    else payload.update({key: value})
-                )
-                for key, value in match.items()
-            ]  # In detected events boolean are stored as strings
-
-        return {"payload": payload, "hash": xxhash.xxh64_hexdigest(str(payload))}
-
-    def formatEventForSplunk(self, payload, match={}, timeField="", sigmaEvents=False):
-        if sigmaEvents:
-            payload = {
-                "title": payload["title"],
-                "id": payload["id"],
-                "sigmafile": payload["sigmafile"],
-                "description": payload["description"],
-                "sigma": payload["sigma"],
-                "rule_level": payload["rule_level"],
-                "tags": payload["tags"],
-            }
-            [payload.update({key: value}) for key, value in match.items()]
-        if timeField == "":
-            return {"sourcetype": "_json", "event": payload, "host": self.localHostname}
-        elif timeField not in payload:
-            self.logger.error(
-                f"{Fore.RED}   [-] Provided time field was not found {Fore.RESET}"
-            )
-            return {"sourcetype": "_json", "event": payload, "host": self.localHostname}
-        else:
-            return {
-                "sourcetype": "_json",
-                "event": payload,
-                "host": self.localHostname,
-                "time": self.formatToEpoch(payload[timeField]),
-            }
-
-    def formatEventForHTTTP(self, payload, match={}, timeField="", sigmaEvents=False):
-        payload.update({"host": self.localHostname})
-        return payload
-
-    def initESSession(self):
-        if self.login == "":
-            session = AsyncElasticsearch(hosts=[self.remoteHost], verify_certs=False)
-        else:
-            session = AsyncElasticsearch(
-                hosts=[self.remoteHost],
-                verify_certs=False,
-                basic_auth=(self.login, self.password),
-            )
-        return session
-
-    async def testESSession(self, session):
-        try:
-            await session.info()
-        except Exception:
-            self.logger.error(f"{Fore.RED}   [-] Connection to ES failed {Fore.RESET}")
-            await session.close()
-            self.connectionFailed = True
-
-    async def testSplunkSession(self, session):
-        data = {"sourcetype": "_json", "event": {}, "host": self.localHostname}
-        resp = await session.post(
-            f"{self.remoteHost}/services/collector/event",
-            headers={"Authorization": f"Splunk {self.token}"},
-            json=data,
-        )
-        if str(resp.status)[0] in ["4", "5"]:
-            await session.close()
-            self.logger.error(
-                f"{Fore.RED}   [-] Connection to Splunk HEC failed - Forwarding disabled {Fore.RESET}"
-            )
-            self.connectionFailed = True
-
-    async def testHTTPSession(self, session):
-        resp = await session.post(
-            self.remoteHost, headers={"user-agent": self.userAgent}, json={}
-        )
-        if str(resp.status)[0] in ["4", "5"]:
-            await session.close()
-            self.logger.error(
-                f"{Fore.RED}   [-] Connection to HTTP Server failed - Forwarding disabled {Fore.RESET}"
-            )
-            self.connectionFailed = True
-
-    async def sendAllAsyncQueue(
-        self, payloads, timeField="", sigmaEvents=False, mode=""
-    ):
-
-        if self.connectionFailed:
-            return
-
-        if mode == "ES":
-            session = self.initESSession()
-            await self.testESSession(session)
-            if self.connectionFailed:
-                return
-            fnformatEvent = self.formatEventForES
-            fnWorker = self.ESWorker
-        elif mode == "HEC":
-            session = aiohttp.ClientSession(connector=aiohttp.TCPConnector(ssl=False))
-            await self.testSplunkSession(session)
-            if self.connectionFailed:
-                return
-            fnformatEvent = self.formatEventForSplunk
-            fnWorker = self.HECWorker
-        elif mode == "HTTP":
-            session = aiohttp.ClientSession(connector=aiohttp.TCPConnector(ssl=False))
-            await self.testHTTPSession(session)
-            if self.connectionFailed:
-                return
-            fnformatEvent = self.formatEventForHTTTP
-            fnWorker = self.HTTPWorker
-        else:
-            return
-
-        # Init queue
-        queue = asyncio.Queue()
-        tasks = []
-
-        if not sigmaEvents:
-            self.logger.info("[+] Gathering events to forward")
-            payloads = tqdmAsync(payloads, colour="yellow")
-
-        for payload in payloads:
-            if sigmaEvents:
-                for match in payload["matches"]:
-                    queue.put_nowait(
-                        fnformatEvent(
-                            payload=payload,
-                            match=match,
-                            timeField=timeField,
-                            sigmaEvents=sigmaEvents,
-                        )
-                    )
-            else:
-                queue.put_nowait(
-                    fnformatEvent(
-                        payload=payload, timeField=timeField, sigmaEvents=sigmaEvents
-                    )
-                )
-
-        # Create workers to process Queue
-        for i in range(20):
-            task = asyncio.create_task(
-                fnWorker(session, queue, sigmaEvents=sigmaEvents)
-            )
-            tasks.append(task)
-        if not sigmaEvents:
-            self.logger.info(
-                f"[+] Forwarding {queue.qsize()} events to {self.remoteHost} {Fore.CYAN}(Don't panic if nothing change for a long time){Fore.RESET}"
-            )
-        await queue.join()
-        # Cancel our worker tasks.
-        for task in tasks:
-            task.cancel()
-        # Wait until all worker tasks are cancelled.
-        await asyncio.gather(*tasks, return_exceptions=True)
-        await session.close()
-
-
-class JSONFlattener:
+class json_flattener:
     """Perform JSON Flattening"""
 
     def __init__(
         self,
         configFile,
-        logger=None,
         timeAfter="1970-01-01T00:00:00",
         timeBefore="9999-12-12T23:59:59",
         timeField=None,
         hashes=False,
-        args_config=None,
+        input_format=None,
     ):
-        self.logger = logger or logging.getLogger(__name__)
+        self.logger = logging.getLogger(__name__)
         self.keyDict = {}
         self.fieldStmt = ""
         self.valuesStmt = []
@@ -595,19 +195,17 @@ class JSONFlattener:
         self.timeBefore = timeBefore
         self.timeField = timeField
         self.hashes = hashes
-        self.args_config = args_config
-        self.JSONArray = args_config.json_array_input
+        self.JSONArray = False
+
         # Initialize the cache for compiled code
         self.compiled_code_cache = {}
 
-        # Convert the argparse.Namespace to a dictionary
-        args_dict = vars(args_config)
-        # Find the chosen input format
-        self.chosen_input = next(
-            (key for key, value in args_dict.items() if "_input" in key and value), None
-        )
+        self.chosen_input = input_format
         if self.chosen_input is None:
             self.chosen_input = "evtx_input"  # Since evtx is the default input, we force it no chosen input has been found
+
+        if self.chosen_input == "json_array_input":
+            self.JSONArray = True
 
         with open(configFile, "r", encoding="UTF-8") as fieldMappingsFile:
             self.fieldMappingsDict = json.loads(fieldMappingsFile.read())
@@ -619,16 +217,10 @@ class JSONFlattener:
             self.transforms = self.fieldMappingsDict["transforms"]
             self.transforms_enabled = self.fieldMappingsDict["transforms_enabled"]
 
-        # Define the authorized BUILTINS for Resticted Python
-        def default_guarded_getitem(ob, index):
-            return ob[index]
-
-        default_guarded_getattr = getattr
-
         self.RestrictedPython_BUILTINS = {
             "__name__": "script",
             "_getiter_": default_guarded_getiter,
-            "_getattr_": default_guarded_getattr,
+            "_getattr_": getattr,
             "_getitem_": default_guarded_getitem,
             "base64": base64,
             "re": re,
@@ -639,7 +231,26 @@ class JSONFlattener:
         self.RestrictedPython_BUILTINS.update(limited_builtins)
         self.RestrictedPython_BUILTINS.update(utility_builtins)
 
-    def run(self, file):
+    def transform_value(self, code, param):
+        try:
+            # Check if the code has already been compiled
+            if code in self.compiled_code_cache:
+                byte_code = self.compiled_code_cache[code]
+            else:
+                # Compile the code and store it in the cache
+                byte_code = compile_restricted(
+                    code, filename="<inline code>", mode="exec"
+                )
+                self.compiled_code_cache[code] = byte_code
+            # Prepare the execution environment
+            TransformFunction = {}
+            exec(byte_code, self.RestrictedPython_BUILTINS, TransformFunction)
+            return TransformFunction["transform"](param)
+        except Exception as e:
+            self.logger.debug(f"ERROR: Couldn't apply transform: {e}")
+            return param  # Return the original parameter if transform fails
+
+    def process_file(self, file):
         """
         Flatten json object with nested keys into a single level.
         Returns the flattened json object
@@ -648,25 +259,6 @@ class JSONFlattener:
         JSONLine = {}
         JSONOutput = []
         fieldStmt = ""
-
-        def transformValue(code, param):
-            try:
-                # Check if the code has already been compiled
-                if code in self.compiled_code_cache:
-                    byte_code = self.compiled_code_cache[code]
-                else:
-                    # Compile the code and store it in the cache
-                    byte_code = compile_restricted(
-                        code, filename="<inline code>", mode="exec"
-                    )
-                    self.compiled_code_cache[code] = byte_code
-                # Prepare the execution environment
-                TransformFunction = {}
-                exec(byte_code, self.RestrictedPython_BUILTINS, TransformFunction)
-                return TransformFunction["transform"](param)
-            except Exception as e:
-                self.logger.debug(f"ERROR: Couldn't apply transform: {e}")
-                return param  # Return the original parameter if transform fails
 
         def flatten(x, name=""):
             nonlocal fieldStmt
@@ -724,9 +316,11 @@ class JSONFlattener:
                                                 )
                                                 transformedValuesByKeys[
                                                     transform["alias_name"]
-                                                ] = transformValue(transformCode, value)
+                                                ] = self.transform_value(
+                                                    transformCode, value
+                                                )
                                             else:
-                                                value = transformValue(
+                                                value = self.transform_value(
                                                     transformCode, value
                                                 )
 
@@ -824,60 +418,72 @@ class JSONFlattener:
                     JSONLine = {}
         return {"dbFields": fieldStmt, "dbValues": JSONOutput}
 
-    def runAll(self, EVTXJSONList):
-        for evtxJSON in tqdm(EVTXJSONList, colour="yellow"):
+    def save_to_file(self, outputFile):
+        with open(outputFile, "w", encoding="utf-8") as file:
+            for JSONLine in tqdm(self.valuesStmt, colour="yellow"):
+                file.write(f'{json.dumps(JSONLine).decode("utf-8")}\n')
+
+    def run(self, EVTXJSONList):
+        for evtxJSON in EVTXJSONList:
             if os.stat(evtxJSON).st_size != 0:
-                results = self.run(evtxJSON)
+                results = self.process_file(evtxJSON)
                 self.fieldStmt += results["dbFields"]
                 self.valuesStmt += results["dbValues"]
 
 
-class zirCore:
+class zircore:
     """Load data into database and apply detection rules"""
 
     def __init__(
         self,
-        config,
-        logger=None,
         noOutput=False,
-        timeAfter="1970-01-01T00:00:00",
-        timeBefore="9999-12-12T23:59:59",
         limit=-1,
-        csvMode=False,
-        timeField=None,
-        hashes=False,
-        dbLocation=":memory:",
+        csv_output=False,
+        db_location=":memory:",
         delimiter=";",
+        tmp_directory=".",
+        tmp_directory_db=".",
     ):
-        self.logger = logger or logging.getLogger(__name__)
-        self.dbConnection = self.createConnection(dbLocation)
+        self.logger = logging.getLogger(__name__)
+
+        self.tmp_directory = tmp_directory
+        self.tmp_directory_db = tmp_directory_db
+        self.db_connection = self.create_connection(db_location)
         self.fullResults = []
+        self.rule_results = []
         self.ruleset = {}
         self.noOutput = noOutput
-        self.timeAfter = timeAfter
-        self.timeBefore = timeBefore
-        self.config = config
         self.limit = limit
-        self.csvMode = csvMode
-        self.timeField = timeField
-        self.hashes = hashes
+        self.csv_output = csv_output
         self.delimiter = delimiter
 
-    def close(self):
-        self.dbConnection.close()
+        # if not csv_output:
 
-    def createConnection(self, db):
+        if not Path(str(tmp_directory)).is_dir():
+            os.mkdir(tmp_directory)
+        if "?mode=memory&cache=shared" in db_location:
+            tmp_filename = f'{db_location.replace("file:", "").replace("?mode=memory&cache=shared", "")}.json'
+        else:
+            tmp_filename = f"{db_location}.json"
+        self.tmp_file = open(f"{tmp_directory}/{tmp_filename}", "w", encoding="utf-8")
+
+    def close(self):
+        self.db_connection.close()
+
+    def create_connection(self, db):
         """create a database connection to a SQLite database"""
         conn = None
         self.logger.debug(f"CONNECTING TO : {db}")
         try:
-            if db == ":memory:":
+            if "?mode=memory&cache=shared" in db:
                 conn = sqlite3.connect(db, isolation_level=None)
                 conn.execute("PRAGMA journal_mode = MEMORY;")
                 conn.execute("PRAGMA synchronous = OFF;")
                 conn.execute("PRAGMA temp_store = MEMORY;")
             else:
-                conn = sqlite3.connect(db)
+                if not Path(str(self.tmp_directory_db)).is_dir():
+                    os.mkdir(self.tmp_directory_db)
+                conn = sqlite3.connect(f"{self.tmp_directory_db}/{db}")
             conn.row_factory = sqlite3.Row  # Allows to get a dict
 
             def udf_regex(x, y):
@@ -895,42 +501,43 @@ class zirCore:
             self.logger.error(f"{Fore.RED}   [-] {e}")
         return conn
 
-    def createDb(self, fieldStmt):
+    def create_db(self, fieldStmt):
         createTableStmt = f"CREATE TABLE logs ( row_id INTEGER, {fieldStmt} PRIMARY KEY(row_id AUTOINCREMENT) );"
         self.logger.debug(f" CREATE : {createTableStmt}")
-        if not self.executeQuery(createTableStmt):
+        if not self.execute_simple_query(createTableStmt):
             self.logger.error(f"{Fore.RED}   [-] Unable to create table{Fore.RESET}")
             sys.exit(1)
 
-    def createIndex(self):
-        self.executeQuery('CREATE INDEX "idx_eventid" ON "logs" ("eventid");')
+    def create_index(self):
+        self.execute_simple_query('CREATE INDEX "idx_eventid" ON "logs" ("EventID");')
+        self.execute_simple_query('CREATE INDEX "idx_channel" ON "logs" ("Channel");')
 
-    def executeQuery(self, query):
+    def execute_simple_query(self, query):
         """Perform a SQL Query with the provided connection"""
-        if self.dbConnection is not None:
-            dbHandle = self.dbConnection.cursor()
+        if self.db_connection is None:
+            self.logger.error(f"{Fore.RED}   [-] No connection to Db{Fore.RESET}")
+            return False
+        else:
+            dbHandle = self.db_connection.cursor()
             self.logger.debug(f"EXECUTING : {query}")
             try:
                 dbHandle.execute(query)
-                self.dbConnection.commit()
-                return True
+                self.db_connection.commit()
             except Error as e:
                 self.logger.debug(f"   [-] {e}")
                 return False
-        else:
-            self.logger.error(f"{Fore.RED}   [-] No connection to Db{Fore.RESET}")
-            return False
+            return True
 
-    def executeSelectQuery(self, query):
+    def execute_select_query(self, query):
         """
         Execute a SELECT SQL query and return the results as a list of dictionaries.
         """
-        if self.dbConnection is None:
+        if self.db_connection is None:
             self.logger.error(f"{Fore.RED}   [-] No connection to Db{Fore.RESET}")
             return []
         try:
-            cursor = self.dbConnection.cursor()
-            self.logger.debug(f"Executing SELECT query: {query}")
+            cursor = self.db_connection.cursor()
+            self.logger.debug(f"EXECUTING SELECT QUERY: {query}")
             cursor.execute(query)
             rows = cursor.fetchall()
             # Convert rows to list of dictionaries
@@ -940,17 +547,17 @@ class zirCore:
             self.logger.debug(f"   [-] SQL query error: {e}")
             return []
 
-    def loadDbInMemory(self, db):
+    def load_db_in_memory(self, db):
         """In db only mode it is possible to restore an on disk Db to avoid EVTX extraction and flattening"""
-        dbfileConnection = self.createConnection(db)
-        dbfileConnection.backup(self.dbConnection)
+        dbfileConnection = self.create_connection(db)
+        dbfileConnection.backup(self.db_connection)
         dbfileConnection.close()
 
     def escape_identifier(self, identifier):
         """Escape SQL identifiers like table or column names."""
         return identifier.replace('"', '""')
 
-    def insertData2Db(self, JSONLine):
+    def insert_data_to_db(self, JSONLine):
         """Build a parameterized INSERT INTO query and insert data into the database."""
         columns = JSONLine.keys()
         columnsEscaped = ", ".join([self.escape_identifier(col) for col in columns])
@@ -965,31 +572,23 @@ class zirCore:
             values.append(value)
         insertStmt = f"INSERT INTO logs ({columnsEscaped}) VALUES ({placeholders})"
         try:
-            self.dbConnection.execute(insertStmt, values)
+            self.db_connection.execute(insertStmt, values)
             return True
         except Exception as e:
             self.logger.debug(f"   [-] {e}")
             return False
 
-    def insertFlattenedJSON2Db(self, flattenedJSON, forwarder=None):
-        if forwarder:
-            forwarder.send(flattenedJSON, forwardAll=True)
-        for JSONLine in tqdm(flattenedJSON, colour="yellow"):
-            self.insertData2Db(JSONLine)
-        self.createIndex()
+    def insert_flat_json_to_db(self, flattenedJSON):
+        for JSONLine in flattenedJSON:
+            self.insert_data_to_db(JSONLine)
 
-    def saveFlattenedJSON2File(self, flattenedJSON, outputFile):
-        with open(outputFile, "w", encoding="utf-8") as file:
-            for JSONLine in tqdm(flattenedJSON, colour="yellow"):
-                file.write(f'{json.dumps(JSONLine).decode("utf-8")}\n')
-
-    def saveDbToDisk(self, dbFilename):
+    def save_db_to_disk(self, dbFilename):
         self.logger.info("[+] Saving working data to disk as a SQLite DB")
         onDiskDb = sqlite3.connect(dbFilename)
-        self.dbConnection.backup(onDiskDb)
+        self.db_connection.backup(onDiskDb)
         onDiskDb.close()
 
-    def executeRule(self, rule):
+    def execute_rule(self, rule):
         """
         Execute a single Sigma rule against the database and return the results.
         """
@@ -1010,9 +609,9 @@ class zirCore:
 
         # Process each SQL query in the rule
         for SQLQuery in sigma_queries:
-            data = self.executeSelectQuery(SQLQuery)
+            data = self.execute_select_query(SQLQuery)
             if data:
-                if self.csvMode:
+                if self.csv_output:
                     # Clean values for CSV output
                     cleaned_rows = [
                         {
@@ -1038,7 +637,7 @@ class zirCore:
                 "id": rule_id,
                 "description": (
                     description.replace("\n", "").replace("\r", "")
-                    if self.csvMode
+                    if self.csv_output
                     else description
                 ),
                 "sigmafile": filename,
@@ -1048,6 +647,11 @@ class zirCore:
                 "count": len(filteredRows),
                 "matches": filteredRows,
             }
+
+            if not self.csv_output:
+                json_bytes = json.dumps(results)
+                self.tmp_file.write(f"{json_bytes.decode('utf-8')}\n")
+
             self.logger.debug(
                 f"DETECTED: {title} - Matches: {len(filteredRows)} events"
             )
@@ -1055,21 +659,11 @@ class zirCore:
         else:
             return {}
 
-    def loadRulesetFromFile(self, filename, ruleFilters):
-        try:
-            with open(filename, encoding="utf-8") as f:
-                self.ruleset = json.loads(f.read())
-            self.applyRulesetFilters(ruleFilters)
-        except Exception as e:
-            self.logger.error(
-                f"{Fore.RED}   [-] Loading JSON ruleset failed, are you sure it is a valid JSON file ? : {e}{Fore.RESET}"
-            )
-
-    def loadRulesetFromVar(self, ruleset, ruleFilters):
+    def load_ruleset_from_var(self, ruleset, ruleFilters):
         self.ruleset = ruleset
-        self.applyRulesetFilters(ruleFilters)
+        self.apply_ruleset_filters(ruleFilters)
 
-    def applyRulesetFilters(self, ruleFilters=None):
+    def apply_ruleset_filters(self, ruleFilters=None):
         # Remove empty rule and remove filtered rules
         self.ruleset = list(filter(None, self.ruleset))
         if ruleFilters is not None:
@@ -1079,219 +673,98 @@ class zirCore:
                 if not any(ruleFilter in rule["title"] for ruleFilter in ruleFilters)
             ]
 
-    def ruleLevelPrintFormatter(self, level, orgFormat=Fore.RESET):
-        if level == "informational":
-            return f"{Fore.WHITE}{level}{orgFormat}"
-        if level == "low":
-            return f"{Fore.GREEN}{level}{orgFormat}"
-        if level == "medium":
-            return f"{Fore.YELLOW}{level}{orgFormat}"
-        if level == "high":
-            return f"{Fore.MAGENTA}{level}{orgFormat}"
-        if level == "critical":
-            return f"{Fore.RED}{level}{orgFormat}"
-
-    def executeRuleset(
-        self,
-        outFile,
-        writeMode="w",
-        forwarder=None,
-        showAll=False,
-        KeepResults=False,
-        remote=None,
-        stream=False,
-        lastRuleset=False,
-    ):
+    def execute_ruleset(self):
         """
         Execute all rules in the ruleset and handle output.
         """
-        csvWriter = None
-        first_json_output = True  # To manage commas in JSON output
-        is_json_mode = not self.csvMode
 
-        # Prepare output file handle if needed
-        fileHandle = None
-        if not self.noOutput:
-            # Open file in text mode since we will write decoded strings
-            fileHandle = open(outFile, writeMode, encoding="utf-8", newline="")
-            if is_json_mode and writeMode != "a":
-                fileHandle.write("[")  # Start JSON array
+        for rule in self.ruleset:
 
-        # Iterate over rules in the ruleset
-        with tqdm(self.ruleset, colour="yellow") as ruleBar:
-            for rule in ruleBar:
-                # Show all rules if showAll is True
-                if showAll and "title" in rule:
-                    rule_title = rule["title"]
-                    rule_level = rule.get("level", "unknown")
-                    formatted_level = self.ruleLevelPrintFormatter(
-                        rule_level, Fore.BLUE
-                    )
-                    ruleBar.write(
-                        f"{Fore.BLUE}    - {rule_title} [{formatted_level}]{Fore.RESET}"
-                    )
+            # Execute the rule
+            ruleResults = self.execute_rule(rule)
+            if not ruleResults:
+                continue  # No matches, skip to next rule
 
-                # Execute the rule
-                ruleResults = self.executeRule(rule)
-                if not ruleResults:
-                    continue  # No matches, skip to next rule
+            # Apply limit if set
+            if self.limit != -1 and ruleResults["count"] > self.limit:
+                continue  # Exceeds limit, skip this result
 
-                # Apply limit if set
-                if self.limit != -1 and ruleResults["count"] > self.limit:
-                    continue  # Exceeds limit, skip this result
+            # Store if the rule has matched : title, level, count only
+            self.rule_results.append(
+                {
+                    "rule_title": ruleResults["title"],
+                    "rule_level": ruleResults["rule_level"],
+                    "rule_count": ruleResults["count"],
+                }
+            )
 
-                # Write progress message
-                rule_title = ruleResults["title"]
-                rule_level = ruleResults.get("rule_level", "unknown")
-                formatted_level = self.ruleLevelPrintFormatter(rule_level, Fore.CYAN)
-                rule_count = ruleResults["count"]
-                ruleBar.write(
-                    f"{Fore.CYAN}    - {rule_title} [{formatted_level}] : {rule_count} events{Fore.RESET}"
-                )
+            # self.fullResults.append(ruleResults)
 
-                # Store results if needed
-                if KeepResults or (remote and not stream):
-                    self.fullResults.append(ruleResults)
-
-                # Forward results if streaming
-                if stream and forwarder:
-                    forwarder.send([ruleResults], False)
-
-                # Handle output to file
-                if not self.noOutput:
-                    if self.csvMode:
-                        # Initialize CSV writer if not already done
-                        if csvWriter is None:
-                            fieldnames = [
-                                "rule_title",
-                                "rule_description",
-                                "rule_level",
-                                "rule_count",
-                            ] + list(ruleResults["matches"][0].keys())
-                            csvWriter = csv.DictWriter(
-                                fileHandle,
-                                delimiter=self.delimiter,
-                                fieldnames=fieldnames,
-                            )
-                            csvWriter.writeheader()
-                        # Write matches to CSV
-                        for data in ruleResults["matches"]:
-                            dictCSV = {
-                                "rule_title": ruleResults["title"],
-                                "rule_description": ruleResults["description"],
-                                "rule_level": ruleResults["rule_level"],
-                                "rule_count": ruleResults["count"],
-                                **data,
-                            }
-                            csvWriter.writerow(dictCSV)
-                    else:
-                        # Write results as JSON using orjson
-                        try:
-                            # Handle commas between JSON objects
-                            if not first_json_output:
-                                fileHandle.write(",\n")
-                            else:
-                                first_json_output = False
-                            # Serialize ruleResults to JSON bytes with indentation
-                            json_bytes = json.dumps(
-                                ruleResults, option=json.OPT_INDENT_2
-                            )
-                            # Write the decoded JSON string to the file
-                            fileHandle.write(json_bytes.decode("utf-8"))
-                        except Exception as e:
-                            self.logger.error(f"Error saving some results: {e}")
-
-        # Close output file handle if needed
-        if not self.noOutput:
-            if is_json_mode and lastRuleset:
-                fileHandle.write("]")  # Close JSON array
-            fileHandle.close()
-
-    def run(
-        self,
-        EVTXJSONList,
-        Insert2Db=True,
-        saveToFile=False,
-        forwarder=None,
-        args_config=None,
-    ):
-        self.logger.info("[+] Processing events")
-        flattener = JSONFlattener(
-            configFile=self.config,
-            timeAfter=self.timeAfter,
-            timeBefore=self.timeBefore,
-            timeField=self.timeField,
-            hashes=self.hashes,
-            args_config=args_config,
-        )
-        flattener.runAll(EVTXJSONList)
-        if saveToFile:
-            filename = f"flattened_events_{''.join(random.SystemRandom().choice(string.ascii_uppercase + string.digits) for _ in range(4))}.json"
-            self.logger.info(f"[+] Saving flattened JSON to : {filename}")
-            self.saveFlattenedJSON2File(flattener.valuesStmt, filename)
-        if Insert2Db:
-            self.logger.info("[+] Creating model")
-            self.createDb(flattener.fieldStmt)
-            self.logger.info("[+] Inserting data")
-            self.insertFlattenedJSON2Db(flattener.valuesStmt, forwarder)
-            self.logger.info("[+] Cleaning unused objects")
-        else:
-            return flattener.keyDict
-        del flattener
+        self.tmp_file.close()
 
 
-class evtxExtractor:
+class evtx_extractor:
 
     def __init__(
         self,
-        logger=None,
         providedTmpDir=None,
-        coreCount=None,
-        useExternalBinaries=True,
-        binPath=None,
-        xmlLogs=False,
-        sysmon4linux=False,
-        auditdLogs=False,
+        cores=None,
+        use_external_binaries=True,
+        binaries_path=None,
         encoding=None,
-        evtxtract=False,
-        csvInput=False,
+        input_format=None,
     ):
-        self.logger = logger or logging.getLogger(__name__)
+        self.logger = logging.getLogger(__name__)
+
         if Path(str(providedTmpDir)).is_dir():
-            self.tmpDir = f"tmp-{self.randString()}"
+            self.tmpDir = f"tmp-{self.rand_string()}"
             self.logger.error(
                 f"{Fore.RED}   [-] Provided directory already exists using '{self.tmpDir}' instead{Fore.RESET}"
             )
         else:
-            self.tmpDir = providedTmpDir or f"tmp-{self.randString()}"
+            self.tmpDir = providedTmpDir or f"tmp-{self.rand_string()}"
             os.mkdir(self.tmpDir)
-        self.cores = coreCount or os.cpu_count()
-        self.useExternalBinaries = useExternalBinaries
-        self.sysmon4linux = sysmon4linux
-        self.xmlLogs = xmlLogs
-        self.auditdLogs = auditdLogs
-        self.evtxtract = evtxtract
-        self.csvInput = csvInput
+
+        self.cores = cores or os.cpu_count()
+        self.use_external_binaries = use_external_binaries
+        self.sysmon4linux = False
+        self.xmlLogs = False
+        self.csvInput = False
+        self.auditdLogs = False
+        self.evtxtract = False
+
+        if input_format == "sysmon_linux_input":
+            self.sysmon4linux = True
+        elif input_format == "xml_input":
+            self.xmlLogs = True
+        elif input_format == "csv_input":
+            self.csvInput = True
+        elif input_format == "auditd_input":
+            self.auditdLogs = True
+        elif input_format == "evtxtract_input":
+            self.evtxtract = True
+
         # Hardcoded hash list of evtx_dump binaries
         self.validHashList = [
             "bbcce464533e0364",
             "e642f5c23e156deb",
             "5a7a1005885a1a11",
         ]
+
         # Sysmon 4 Linux default encoding is ISO-8859-1, Auditd is UTF-8
-        if not encoding and sysmon4linux:
+        if not encoding and self.sysmon4linux:
             self.encoding = "ISO-8859-1"
-        elif not encoding and (auditdLogs or evtxtract or xmlLogs):
+        elif not encoding and (self.auditdLogs or self.evtxtract or self.xmlLogs):
             self.encoding = "utf-8"
         else:
             self.encoding = encoding
 
-        self.evtxDumpCmd = self.getOSExternalTools(binPath)
+        self.evtx_dump_cmd = self.getOSExternalTools(binaries_path)
 
-    def randString(self):
+    def rand_string(self, length=8):
         return "".join(
             random.SystemRandom().choice(string.ascii_uppercase + string.digits)
-            for _ in range(8)
+            for _ in range(length)
         )
 
     def getOSExternalTools(self, binPath):
@@ -1311,13 +784,13 @@ class evtxExtractor:
         Convert EVTX to JSON using evtx_dump bindings (slower)
         Drop resulting JSON files in a tmp folder.
         """
-        if not self.useExternalBinaries:
+        if not self.use_external_binaries:
             try:
                 filepath = Path(file)
                 filename = filepath.name
                 parser = PyEvtxParser(str(filepath))
                 with open(
-                    f"{self.tmpDir}/{str(filename)}-{self.randString()}.json",
+                    f"{self.tmpDir}/{str(filename)}-{self.rand_string()}.json",
                     "w",
                     encoding="utf-8",
                 ) as f:
@@ -1513,7 +986,7 @@ class evtxExtractor:
         """
         self.logger.debug(f"EXTRACTING : {file}")
         filename = Path(file).name
-        outputJSONFilename = f"{self.tmpDir}/{str(filename)}-{self.randString()}.json"
+        outputJSONFilename = f"{self.tmpDir}/{str(filename)}-{self.rand_string()}.json"
         # Auditd or Sysmon4Linux logs
         if self.sysmon4linux or self.auditdLogs:
             # Choose which log backend to use
@@ -1556,17 +1029,17 @@ class evtxExtractor:
                 self.logger.error(f"{Fore.RED}   [-] {e}{Fore.RESET}")
         # EVTX
         else:
-            if not self.useExternalBinaries or not Path(self.evtxDumpCmd).is_file():
+            if not self.use_external_binaries or not Path(self.evtx_dump_cmd).is_file():
                 self.logger.debug(
                     "   [-] No external binaries args or evtx_dump is missing"
                 )
                 self.runUsingBindings(file)
             else:
                 # Check if the binary is valid does not avoid TOCTOU
-                if self.verifyBinHash(self.evtxDumpCmd):
+                if self.verifyBinHash(self.evtx_dump_cmd):
                     try:
                         cmd = [
-                            self.evtxDumpCmd,
+                            self.evtx_dump_cmd,
                             "--no-confirm-overwrite",
                             "-o",
                             "jsonl",
@@ -1586,79 +1059,73 @@ class evtxExtractor:
         shutil.rmtree(self.tmpDir)
 
 
-class zircoGuiGenerator:
+class gui_generator:
     """
     Generate the mini GUI
     """
 
-    def __init__(
-        self, packageDir, templateFile, logger=None, outputFile=None, timeField=""
-    ):
-        self.logger = logger or logging.getLogger(__name__)
-        self.templateFile = templateFile
-        self.tmpDir = f"tmp-zircogui-{self.randString()}"
-        self.tmpFile = f"data-{self.randString()}.js"
-        self.outputFile = outputFile or f"zircogui-output-{self.randString()}"
-        self.packageDir = packageDir
-        self.timeField = timeField
+    def __init__(self, package_dir, template_file, output_file=None, time_field=""):
+        self.logger = logging.getLogger(__name__)
+        self.template_file = template_file
+        self.tmp_dir = f"tmp-zircogui-{self.rand_string()}"
+        self.tmp_file = f"data-{self.rand_string()}.js"
+        self.output_file = output_file or f"zircogui-output-{self.rand_string()}"
+        self.package_dir = package_dir
+        self.time_field = time_field
 
-    def randString(self):
+    def rand_string(self, length=4):
         return "".join(
             random.SystemRandom().choice(string.ascii_uppercase + string.digits)
-            for _ in range(4)
+            for _ in range(length)
         )
 
     def unzip(self):
         try:
-            shutil.unpack_archive(self.packageDir, self.tmpDir, "zip")
+            shutil.unpack_archive(self.package_dir, self.tmp_dir, "zip")
         except Exception as e:
             self.logger.error(f"   [-] {e}")
 
     def zip(self):
         try:
-            shutil.make_archive(self.outputFile, "zip", f"{self.tmpDir}/zircogui")
+            shutil.make_archive(self.output_file, "zip", f"{self.tmp_dir}/zircogui")
         except Exception as e:
             self.logger.error(f"   [-] {e}")
 
-    def generate(self, data):
+    def run(self, data):
         self.unzip()
         try:
             self.logger.info(
-                f"[+] Generating ZircoGui package to : {self.outputFile}.zip"
+                f"[+] Generating ZircoGui package to : {self.output_file}.zip"
             )
-            exportforzircoguiTmpl = templateEngine(
-                self.logger, self.templateFile, self.tmpFile, self.timeField
+            exportforzircoguiTmpl = template_engine(
+                [self.template_file], [self.tmp_file], self.time_field
             )
-            exportforzircoguiTmpl.generateFromTemplate(
-                exportforzircoguiTmpl.template,
-                exportforzircoguiTmpl.templateOutput,
-                data,
-            )
+            exportforzircoguiTmpl.run(data)
         except Exception as e:
             self.logger.error(f"   [-] {e}")
-        shutil.move(self.tmpFile, f"{self.tmpDir}/zircogui/data.js")
+        shutil.move(self.tmp_file, f"{self.tmp_dir}/zircogui/data.js")
         self.zip()
-        shutil.rmtree(self.tmpDir)
+        shutil.rmtree(self.tmp_dir)
 
 
-class rulesUpdater:
+class rules_updater:
     """
     Download rulesets from the https://github.com/wagga40/Zircolite-Rules repository and update if necessary.
     """
 
-    def __init__(self, logger=None):
+    def __init__(self):
         self.url = (
             "https://github.com/wagga40/Zircolite-Rules/archive/refs/heads/main.zip"
         )
-        self.logger = logger or logging.getLogger(__name__)
-        self.tempFile = f"tmp-rules-{self.randString()}.zip"
-        self.tmpDir = f"tmp-rules-{self.randString()}"
+        self.logger = logging.getLogger(__name__)
+        self.tempFile = f"tmp-rules-{self.rand_string()}.zip"
+        self.tmpDir = f"tmp-rules-{self.rand_string()}"
         self.updatedRulesets = []
 
-    def randString(self):
+    def rand_string(self, length=4):
         return "".join(
             random.SystemRandom().choice(string.ascii_uppercase + string.digits)
-            for _ in range(4)
+            for _ in range(length)
         )
 
     def download(self):
@@ -1716,10 +1183,10 @@ class rulesUpdater:
             self.logger.error(f"   [-] {e}")
 
 
-class rulesetHandler:
+class ruleset_handler:
 
-    def __init__(self, logger=None, config=None, listPipelineOnly=False):
-        self.logger = logger or logging.getLogger(__name__)
+    def __init__(self, config=None, listPipelineOnly=False):
+        self.logger = logging.getLogger(__name__)
         self.saveRuleset = config.save_ruleset
         self.rulesetPathList = config.ruleset
         self.cores = config.cores or os.cpu_count()
@@ -1760,18 +1227,35 @@ class rulesetHandler:
         self.Rulesets = self.rulesetParsing()
 
         # Combining Rulesets
-        if config.combine_rulesets:
-            self.Rulesets = [
-                item
-                for subRuleset in self.Rulesets
-                if subRuleset
-                for item in subRuleset
-            ]
-            self.Rulesets = [
-                sorted(self.Rulesets, key=lambda d: d["level"])
-            ]  # Sorting by level
+        # if config.combine_rulesets:
+        self.Rulesets = [
+            item for subRuleset in self.Rulesets if subRuleset for item in subRuleset
+        ]
+        # Remove duplicates based on 'id' or 'title'
+        unique_rules = []
+        seen_keys = set()
+        for rule in self.Rulesets:
+            # Use 'id' or 'title' as the unique key
+            rule_key = rule.get("id") or rule.get("title")
+            if rule_key and rule_key not in seen_keys:
+                seen_keys.add(rule_key)
+                unique_rules.append(rule)
 
-        if all(not subRuleset for subRuleset in self.Rulesets):
+        level_order = {
+            "critical": 1,
+            "high": 2,
+            "medium": 3,
+            "low": 4,
+            "informational": 5,
+        }
+        self.Rulesets = sorted(
+            unique_rules,
+            key=lambda d: level_order.get(
+                d.get("level", "informational"), float("inf")
+            ),
+        )  # Sorting by level
+
+        if len(self.Rulesets) == 0:
             self.logger.error(f"{Fore.RED}   [-] No rules to execute !{Fore.RESET}")
 
     def isYAML(self, filepath):
@@ -1916,10 +1400,10 @@ class rulesetHandler:
 def selectFiles(pathList, selectFilesList):
     if selectFilesList is not None:
         return [
-            evtx
-            for evtx in [str(element) for element in list(pathList)]
+            logs
+            for logs in [str(element) for element in list(pathList)]
             if any(
-                fileFilters[0].lower() in evtx.lower()
+                fileFilters[0].lower() in logs.lower()
                 for fileFilters in selectFilesList
             )
         ]
@@ -1929,10 +1413,10 @@ def selectFiles(pathList, selectFilesList):
 def avoidFiles(pathList, avoidFilesList):
     if avoidFilesList is not None:
         return [
-            evtx
-            for evtx in [str(element) for element in list(pathList)]
+            logs
+            for logs in [str(element) for element in list(pathList)]
             if all(
-                fileFilters[0].lower() not in evtx.lower()
+                fileFilters[0].lower() not in logs.lower()
                 for fileFilters in avoidFilesList
             )
         ]
@@ -1942,16 +1426,6 @@ def avoidFiles(pathList, avoidFilesList):
 def ImportErrorHandler(config):
     importErrorList = []
 
-    if forwardingDisabled:
-        importErrorList.append(
-            f"{Fore.LIGHTYELLOW_EX}   [i] Cannot import 'aiohttp' or 'urllib3' or 'requests', events forwarding is disabled{Fore.RESET}"
-        )
-        config.remote = None
-    if elasticForwardingDisabled:
-        importErrorList.append(
-            f"{Fore.LIGHTYELLOW_EX}   [i] Cannot import 'elasticsearch[async]', events forwarding to Elastic is disabled{Fore.RESET}"
-        )
-        config.index = None
     if updateDisabled:
         importErrorList.append(
             f"{Fore.LIGHTYELLOW_EX}   [i] Cannot import 'requests', events update is disabled{Fore.RESET}"
@@ -1996,11 +1470,101 @@ def ImportErrorHandler(config):
     )
 
 
+def runner(file, params):
+    """Runner function to flatten events and apply rules with multiprocessing"""
+
+    flattener = json_flattener(
+        configFile=params["config"],
+        timeAfter=params["events_after"],
+        timeBefore=params["events_before"],
+        timeField=params["timefield"],
+        hashes=params["hashes"],
+        input_format=params["input_format"],
+    )
+
+    flattener.run([file])
+
+    # Save the flattened JSON to a file
+    if params["keepflat"]:
+        flattener.save_to_file(f"flattened_events_{rand_string(4)}.json")
+
+    # Initialize zircore
+    filename = os.path.basename(file)
+    if params["on_disk_db"]:
+        db_location = f"{filename}-{rand_string(4)}.db"
+    else:
+        db_location = f"file:{filename}?mode=memory&cache=shared"
+
+    zircolite_core = zircore(
+        limit=params["limit"],
+        csv_output=params["csv_output"],
+        db_location=db_location,
+        delimiter=params["delimiter"],
+        tmp_directory=params["tmp_directory"],
+        tmp_directory_db=params["tmp_directory_db"],
+    )
+
+    zircolite_core.create_db(flattener.fieldStmt)
+    zircolite_core.insert_flat_json_to_db(flattener.valuesStmt)
+    del flattener
+    zircolite_core.create_index()
+
+    ruleset = params["rulesets"]
+    zircolite_core.load_ruleset_from_var(
+        ruleset=ruleset, ruleFilters=params["rulefilter"]
+    )
+    zircolite_core.execute_ruleset()
+    zircolite_core.close()
+
+    return zircolite_core.fullResults, zircolite_core.rule_results
+
+
+def runner_wrapper(args):
+    """Helper function to allow TQDM to display a progress bar"""
+    return runner(*args)
+
+
+def format_rule_level(level, reset=Fore.RESET):
+    if level == "informational":
+        return f"{Fore.WHITE}{level}{reset}"
+    if level == "low":
+        return f"{Fore.GREEN}{level}{reset}"
+    if level == "medium":
+        return f"{Fore.YELLOW}{level}{reset}"
+    if level == "high":
+        return f"{Fore.MAGENTA}{level}{reset}"
+    if level == "critical":
+        return f"{Fore.RED}{level}{reset}"
+    return level  # Default case
+
+
+def rand_string(length=10):
+    return "".join(
+        random.SystemRandom().choice(string.ascii_uppercase + string.digits)
+        for _ in range(length)
+    )
+
+
+def concatenate_files(input_dir, output_file, buffer_size=1024 * 1024):
+    input_files = list(Path(input_dir).rglob("*.json"))
+    with open(output_file, "wb") as outfile:
+        for fname in input_files:
+            if not os.path.isfile(fname):
+                print(f"File not found: {fname}")
+                continue
+            with open(fname, "rb") as infile:
+                while True:
+                    buffer = infile.read(buffer_size)
+                    if not buffer:
+                        break
+                    outfile.write(buffer)
+
+
 ################################################################
 # MAIN()
 ################################################################
 def main():
-    version = "2.30.0"
+    version = "2.50.0"
 
     # Init Args handling
     parser = argparse.ArgumentParser()
@@ -2010,8 +1574,8 @@ def main():
     )
     logsInputArgs.add_argument(
         "-e",
-        "--evtx",
         "--events",
+        "--evtx",
         help="Log file or directory where log files are stored in supported format",
         type=str,
     )
@@ -2081,13 +1645,6 @@ def main():
         action="store_true",
     )
     eventFormatsArgs.add_argument(
-        "--db-input",
-        "-D",
-        "--dbonly",
-        help="Directly use a previously saved database file, timerange filters will not work",
-        action="store_true",
-    )
-    eventFormatsArgs.add_argument(
         "-S",
         "--sysmon-linux-input",
         "--sysmon4linux",
@@ -2134,12 +1691,6 @@ def main():
     )
     rulesetsFormatsArgs.add_argument(
         "-nsc", "--no-sigma-conversion", help=argparse.SUPPRESS, action="store_true"
-    )
-    rulesetsFormatsArgs.add_argument(
-        "-cr",
-        "--combine-rulesets",
-        help="Merge all rulesets provided into one",
-        action="store_true",
     )
     rulesetsFormatsArgs.add_argument(
         "-sr",
@@ -2229,7 +1780,7 @@ def main():
         "-L",
         "--limit",
         "--limit-results",
-        help="Discard results (in output file or forwarded events) that are above the provided limit",
+        help="Discard results that are above the provided limit",
         type=int,
         default=-1,
     )
@@ -2268,7 +1819,8 @@ def main():
     configFormatsArgs.add_argument(
         "--cores",
         help="Specify how many cores you want to use, default is all cores, works only for EVTX extraction",
-        type=str,
+        default=os.cpu_count(),
+        type=int,
     )
     configFormatsArgs.add_argument(
         "--debug", help="Activate debug logging", action="store_true"
@@ -2277,21 +1829,10 @@ def main():
         "--imports", help="Show detailed module import errors", action="store_true"
     )
     configFormatsArgs.add_argument(
-        "--showall",
-        help="Show all events, useful to check what rule takes takes time to execute",
-        action="store_true",
-    )
-    configFormatsArgs.add_argument(
-        "-n",
-        "--nolog",
-        help="Don't create a log file or a result file (useful when forwarding)",
-        action="store_true",
-    )
-    configFormatsArgs.add_argument(
         "--ondiskdb",
+        "--on-disk-db",
         help="Use an on-disk database instead of the in-memory one (much slower !). Use if your system has limited RAM or if your dataset is very large and you cannot split it",
-        type=str,
-        default=":memory:",
+        action="store_true",
     )
     configFormatsArgs.add_argument(
         "-RE",
@@ -2308,41 +1849,13 @@ def main():
     configFormatsArgs.add_argument(
         "-v", "--version", help="Show Zircolite version", action="store_true"
     )
-    # Forwarding options
-    forwardingFormatsArgs = parser.add_argument_group(
-        f"{Fore.BLUE}FORWARDING OPTIONS{Fore.RESET}"
-    )
-    forwardingFormatsArgs.add_argument(
-        "--remote",
-        help="Forward results to a HTTP/Splunk/Elasticsearch, please provide the full address e.g http[s]://address:port[/uri]",
-        type=str,
-    )
-    forwardingFormatsArgs.add_argument(
-        "--token", help="Use this to provide Splunk HEC Token", type=str
-    )
-    forwardingFormatsArgs.add_argument(
-        "--index", help="Use this to provide ES index", type=str
-    )
-    forwardingFormatsArgs.add_argument(
-        "--eslogin", help="ES login", type=str, default=""
-    )
-    forwardingFormatsArgs.add_argument(
-        "--espass", help="ES password", type=str, default=""
-    )
-    forwardingFormatsArgs.add_argument(
-        "--stream",
-        help="By default event forwarding is done at the end, this option activate forwarding events when detected",
-        action="store_true",
-    )
-    forwardingFormatsArgs.add_argument(
-        "--forwardall", help="Forward all events", action="store_true"
-    )
-    forwardingFormatsArgs.add_argument(
+    configFormatsArgs.add_argument(
         "--timefield",
-        help="Provide time field name for event forwarding, default is 'SystemTime'",
+        help="Use this option to provide timestamp field name, default is 'SystemTime'",
         default="SystemTime",
         action="store_true",
     )
+
     # Templating and Mini GUI options
     templatingFormatsArgs = parser.add_argument_group(
         f"{Fore.BLUE}TEMPLATING AND MINI GUI OPTIONS{Fore.RESET}"
@@ -2369,11 +1882,10 @@ def main():
     signal.signal(signal.SIGINT, signal_handler)
 
     # Init logging
-    if args.nolog:
-        args.logfile = None
-    consoleLogger = initLogger(args.debug, args.logfile)
+    setup_logging(args.debug, args.logfile)
+    logger = logging.getLogger()
 
-    consoleLogger.info(
+    logger.info(
         """
     ███████╗██╗██████╗  ██████╗ ██████╗ ██╗     ██╗████████╗███████╗
     ╚══███╔╝██║██╔══██╗██╔════╝██╔═══██╗██║     ██║╚══██╔══╝██╔════╝
@@ -2387,22 +1899,22 @@ def main():
 
     # Print version an quit
     if args.version:
-        consoleLogger.info(f"Zircolite - v{version}")
+        logger.info(f"Zircolite - v{version}")
         sys.exit(0)
 
     # Show imports status
     importsMessage, args, mustQuit = ImportErrorHandler(args)
     if importsMessage != "":
-        consoleLogger.info(f"[+] Modules imports status: \n{importsMessage}")
+        logger.info(f"[+] Modules imports status: \n{importsMessage}")
     else:
-        consoleLogger.info("[+] Modules imports status: OK")
+        logger.info("[+] Modules imports status: OK")
     if mustQuit:
         sys.exit(1)
 
     # Update rulesets
     if args.update_rules:
-        consoleLogger.info("[+] Updating rules")
-        updater = rulesUpdater(logger=consoleLogger)
+        logger.info("[+] Updating rules")
+        updater = rules_updater()
         updater.run()
         sys.exit(0)
 
@@ -2413,56 +1925,30 @@ def main():
         args.ruleset = ["rules/rules_windows_generic_pysigma.json"]
 
     # Loading rulesets
-    consoleLogger.info("[+] Loading ruleset(s)")
-    rulesetsManager = rulesetHandler(consoleLogger, args, args.pipeline_list)
+    logger.info("[+] Loading ruleset(s)")
+    rulesetsManager = ruleset_handler(args, args.pipeline_list)
     if args.pipeline_list:
         sys.exit(0)
 
     # Check mandatory CLI options
-    if not args.evtx:
-        consoleLogger.error(
+    if not args.events:
+        logger.error(
             f"{Fore.RED}   [-] No events source path provided. Use '-e <PATH TO LOGS>', '--events <PATH TO LOGS>'{Fore.RESET}"
         ), sys.exit(2)
-    if args.forwardall and args.db_input:
-        consoleLogger.error(
-            f"{Fore.RED}   [-] Can't forward all events in db only mode {Fore.RESET}"
-        ), sys.exit(2)
     if args.csv and len(args.ruleset) > 1:
-        consoleLogger.error(
+        logger.error(
             f"{Fore.RED}   [-] Since fields in results can change between rulesets, it is not possible to have CSV output when using multiple rulesets{Fore.RESET}"
         ), sys.exit(2)
 
-    consoleLogger.info("[+] Checking prerequisites")
-
-    # Init Forwarding
-    forwarder = None
-    if args.remote is not None:
-        consoleLogger.info(
-            f"{Fore.LIGHTRED_EX}[!] Forwarding is not tested anymore and will be removed in the future{Fore.RESET}"
-        )
-        forwarder = eventForwarder(
-            remote=args.remote,
-            timeField=args.timefield,
-            token=args.token,
-            logger=consoleLogger,
-            index=args.index,
-            login=args.eslogin,
-            password=args.espass,
-        )
-        if not forwarder.networkCheck():
-            quitOnError(
-                f"{Fore.RED}   [-] Remote host cannot be reached : {args.remote}{Fore.RESET}",
-                consoleLogger,
-            )
+    logger.info("[+] Checking prerequisites")
 
     # Checking provided timestamps
     try:
-        eventsAfter = time.strptime(args.after, "%Y-%m-%dT%H:%M:%S")
-        eventsBefore = time.strptime(args.before, "%Y-%m-%dT%H:%M:%S")
+        events_after = time.strptime(args.after, "%Y-%m-%dT%H:%M:%S")
+        events_before = time.strptime(args.before, "%Y-%m-%dT%H:%M:%S")
     except Exception:
         quitOnError(
-            f"{Fore.RED}   [-] Wrong timestamp format. Please use 'AAAA-MM-DDTHH:MM:SS'",
-            consoleLogger,
+            f"{Fore.RED}   [-] Wrong timestamp format. Please use 'AAAA-MM-DDTHH:MM:SS'"
         )
 
     # Check templates args
@@ -2470,243 +1956,257 @@ def main():
     if args.template is not None:
         if args.csv:
             quitOnError(
-                f"{Fore.RED}   [-] You cannot use templates in CSV mode{Fore.RESET}",
-                consoleLogger,
+                f"{Fore.RED}   [-] You cannot use templates in CSV mode{Fore.RESET}"
             )
         if (args.templateOutput is None) or (
             len(args.template) != len(args.templateOutput)
         ):
             quitOnError(
-                f"{Fore.RED}   [-] Number of templates output must match number of templates{Fore.RESET}",
-                consoleLogger,
+                f"{Fore.RED}   [-] Number of templates output must match number of templates{Fore.RESET}"
             )
         for template in args.template:
             checkIfExists(
                 template[0],
                 f"{Fore.RED}   [-] Cannot find template : {template[0]}. DEfault templates are available here : https://github.com/wagga40/Zircolite/tree/master/templates{Fore.RESET}",
-                consoleLogger,
             )
         readyForTemplating = True
 
     # Change output filename in CSV mode
     if args.csv:
         readyForTemplating = False
+        # If outfile is not provided, default to 'detected_events.csv' instead of 'detected_events.json'
         if args.outfile == "detected_events.json":
             args.outfile = "detected_events.csv"
-
-    # If on-disk DB already exists, quit.
-    if args.ondiskdb != ":memory:" and (Path(args.ondiskdb).is_file()):
-        quitOnError(
-            f"{Fore.RED}   [-] On-disk database already exists{Fore.RESET}",
-            consoleLogger,
-        )
 
     # Start time counting
     start_time = time.time()
 
-    # Initialize zirCore
-    zircoliteCore = zirCore(
-        args.config,
-        logger=consoleLogger,
-        noOutput=args.nolog,
-        timeAfter=eventsAfter,
-        timeBefore=eventsBefore,
-        limit=args.limit,
-        csvMode=args.csv,
-        timeField=args.timefield,
-        hashes=args.hashes,
-        dbLocation=args.ondiskdb,
-        delimiter=args.csv_delimiter,
+    # If we are working with json file extension is changed if it is not user-provided
+    if not args.fileext:
+        if args.json_input or args.json_array_input:
+            args.fileext = "json"
+        elif args.sysmon_linux_input or args.auditd_input:
+            args.fileext = "log"
+        elif args.xml_input:
+            args.fileext = "xml"
+        elif args.csv_input:
+            args.fileext = "csv"
+        else:
+            args.fileext = "evtx"
+
+    LogPath = Path(args.events)
+    if LogPath.is_dir():
+        # Log recursive search in given directory with given file extension or pattern
+        pattern = f"*.{args.fileext}"
+        # If a Glob pattern is provided
+        if args.file_pattern not in [None, ""]:
+            pattern = args.file_pattern
+        fnGlob = LogPath.rglob
+        # If directory recursion is not wanted
+        if args.no_recursion:
+            fnGlob = LogPath.glob
+        LogList = list(fnGlob(pattern))
+    elif LogPath.is_file():
+        LogList = [LogPath]
+    else:
+        quitOnError(
+            f"{Fore.RED}   [-] Unable to find events from submitted path{Fore.RESET}"
+        )
+
+    # Applying file filters in this order : "select" than "avoid"
+    FileList = avoidFiles(selectFiles(LogList, args.select), args.avoid)
+    if len(FileList) <= 0:
+        quitOnError(
+            f"{Fore.RED}   [-] No file found. Please verify filters, directory or the extension with '--fileext' or '--file-pattern'{Fore.RESET}"
+        )
+
+    args_dict = vars(args)
+    # Find the chosen input format
+    chosen_input = next(
+        (key for key, value in args_dict.items() if "_input" in key and value), None
     )
 
-    # If we are not working directly with the db
-    if not args.db_input:
-        # If we are working with json we change the file extension if it is not user-provided
-        if not args.fileext:
-            if args.json_input or args.json_array_input:
-                args.fileext = "json"
-            elif args.sysmon_linux_input or args.auditd_input:
-                args.fileext = "log"
-            elif args.xml_input:
-                args.fileext = "xml"
-            elif args.csv_input:
-                args.fileext = "csv"
-            else:
-                args.fileext = "evtx"
-
-        LogPath = Path(args.evtx)
-        if LogPath.is_dir():
-            # Log recursive search in given directory with given file extension or pattern
-            pattern = f"*.{args.fileext}"
-            # If a Glob pattern is provided
-            if args.file_pattern not in [None, ""]:
-                pattern = args.file_pattern
-            fnGlob = LogPath.rglob
-
-            if args.no_recursion:
-                fnGlob = LogPath.glob
-            LogList = list(fnGlob(pattern))
-        elif LogPath.is_file():
-            LogList = [LogPath]
-        else:
-            quitOnError(
-                f"{Fore.RED}   [-] Unable to find events from submitted path{Fore.RESET}",
-                consoleLogger,
-            )
-
-        # Applying file filters in this order : "select" than "avoid"
-        FileList = avoidFiles(selectFiles(LogList, args.select), args.avoid)
-        if len(FileList) <= 0:
-            quitOnError(
-                f"{Fore.RED}   [-] No file found. Please verify filters, directory or the extension with '--fileext' or '--file-pattern'{Fore.RESET}",
-                consoleLogger,
-            )
-
-        if not args.json_input and not args.json_array_input:
-            # Init EVTX extractor object
-            extractor = evtxExtractor(
-                logger=consoleLogger,
-                providedTmpDir=args.tmpdir,
-                coreCount=args.cores,
-                useExternalBinaries=(not args.noexternal),
-                binPath=args.evtx_dump,
-                xmlLogs=args.xml_input,
-                sysmon4linux=args.sysmon_linux_input,
-                auditdLogs=args.auditd_input,
-                evtxtract=args.evtxtract_input,
-                encoding=args.logs_encoding,
-                csvInput=args.csv_input,
-            )
-            consoleLogger.info(
-                f"[+] Extracting events Using '{extractor.tmpDir}' directory "
-            )
-            for evtx in tqdm(FileList, colour="yellow"):
-                extractor.run(evtx)
-            # Set the path for the next step
-            LogJSONList = list(Path(extractor.tmpDir).rglob("*.json"))
-        else:
-            LogJSONList = FileList
-
-        checkIfExists(
-            args.config,
-            f"{Fore.RED}   [-] Cannot find mapping file, you can get the default one here : https://github.com/wagga40/Zircolite/blob/master/config/fieldMappings.json {Fore.RESET}",
-            consoleLogger,
+    if not args.json_input and not args.json_array_input:
+        # Init EVTX extractor object
+        extractor = evtx_extractor(
+            providedTmpDir=args.tmpdir,
+            cores=args.cores,
+            use_external_binaries=(not args.noexternal),
+            binaries_path=args.evtx_dump,
+            encoding=args.logs_encoding,
+            input_format=chosen_input,
         )
-        if LogJSONList == []:
-            quitOnError(
-                f"{Fore.RED}   [-] No files containing logs found.{Fore.RESET}",
-                consoleLogger,
-            )
-
-        # Print field list and exit
-        if args.fieldlist:
-            fields = zircoliteCore.run(LogJSONList, Insert2Db=False, args_config=args)
-            zircoliteCore.close()
-            if not args.json_input and not args.json_array_input and not args.keeptmp:
-                extractor.cleanup()
-            [
-                print(sortedField)
-                for sortedField in sorted([field for field in fields.values()])
-            ]
-            sys.exit(0)
-
-        # Flatten and insert to Db
-        if args.forwardall:
-            zircoliteCore.run(
-                LogJSONList,
-                saveToFile=args.keepflat,
-                forwarder=forwarder,
-                args_config=args,
-            )
-        else:
-            zircoliteCore.run(LogJSONList, saveToFile=args.keepflat, args_config=args)
-        # Unload In memory DB to disk. Done here to allow debug in case of ruleset execution error
-        if args.dbfile is not None:
-            zircoliteCore.saveDbToDisk(args.dbfile)
+        logger.info(f"[+] Extracting events using '{extractor.tmpDir}' directory ")
+        for evtx in tqdm(FileList, colour="yellow"):
+            extractor.run(evtx)
+        # Set the path for the next step
+        LogJSONList = list(Path(extractor.tmpDir).rglob("*.json"))
     else:
-        consoleLogger.info(f"[+] Creating model from disk : {args.evtx}")
-        zircoliteCore.loadDbInMemory(args.evtx)
+        LogJSONList = FileList
+
+    checkIfExists(
+        args.config,
+        f"{Fore.RED}   [-] Cannot find mapping file, you can get the default one here : https://github.com/wagga40/Zircolite/blob/master/config/fieldMappings.json {Fore.RESET}",
+    )
+    if LogJSONList == []:
+        quitOnError(f"{Fore.RED}   [-] No files containing logs found.{Fore.RESET}")
+
+    # TODO : Add option for already flattened event
+    logger.info(
+        f"[+] Processing events and applying {Fore.CYAN}{len(rulesetsManager.Rulesets)}{Fore.RESET} rules"
+    )
 
     # flatten array of "rulefilter" arguments
     if args.rulefilter:
         args.rulefilter = [item for sublist in args.rulefilter for item in sublist]
 
-    writeMode = "w"
-    for ruleset in rulesetsManager.Rulesets:
-        zircoliteCore.loadRulesetFromVar(ruleset=ruleset, ruleFilters=args.rulefilter)
-        if args.limit > 0:
-            consoleLogger.info(
-                f"[+] Limited mode : detections with more than {args.limit} events will be discarded"
-            )
-        consoleLogger.info(
-            f"[+] Executing ruleset - {len(zircoliteCore.ruleset)} rules"
-        )
-        zircoliteCore.executeRuleset(
-            args.outfile,
-            writeMode=writeMode,
-            forwarder=forwarder,
-            showAll=args.showall,
-            KeepResults=(readyForTemplating or args.package),
-            remote=args.remote,
-            stream=args.stream,
-            lastRuleset=(ruleset == rulesetsManager.Rulesets[-1]),
-        )
-        writeMode = "a"  # Next iterations will append to results file
+    tmp_directory = f"tmp-output-{rand_string()}"
+    tmp_directory_db = f"tmp-db-{rand_string()}" if args.ondiskdb else ""
 
-    consoleLogger.info(f"[+] Results written in : {args.outfile}")
+    # Pack the parameters for multiprocessing
+    param_list = {
+        "config": args.config,
+        "events_after": events_after,
+        "events_before": events_before,
+        "timefield": args.timefield,
+        "hashes": args.hashes,
+        "input_format": chosen_input,
+        "csv_output": args.csv,
+        "limit": args.limit,
+        "on_disk_db": args.ondiskdb,
+        "delimiter": args.csv_delimiter,
+        "keepflat": args.keepflat,
+        "rulefilter": args.rulefilter,
+        "rulesets": rulesetsManager.Rulesets,
+        "tmp_directory": tmp_directory,
+        "tmp_directory_db": tmp_directory_db,
+    }
 
-    # Forward events
-    if args.remote is not None and not args.stream:  # If not in stream mode
-        consoleLogger.info(f"[+] Forwarding to : {args.remote}")
-        forwarder.send(zircoliteCore.fullResults, False)
-    if args.remote is not None and args.stream:
-        consoleLogger.info(f"[+] Forwarded to : {args.remote}")
+    params_map = []
+    for file in LogJSONList:
+        params_map.append((file, param_list))
+
+    all_full_results = []
+    all_rule_results = []
+    # Perform the JSON flattening and the detection process with multiprocessing
+    pool = mp.Pool(args.cores)
+    with tqdm(total=len(params_map), colour="yellow") as pbar:
+        for full_results, rule_results in pool.imap_unordered(
+            runner_wrapper, params_map
+        ):
+            all_full_results.extend(full_results)
+            all_rule_results.extend(rule_results)
+            pbar.update()
+    pool.close()
+    pool.join()
+
+    # Merge the rule results from all processes
+    aggregated_rules = {}
+    for rule in all_rule_results:
+        key = rule["rule_title"]
+        if key in aggregated_rules:
+            aggregated_rules[key]["rule_count"] += rule["rule_count"]
+        else:
+            aggregated_rules[key] = rule.copy()
+
+    level_order = {"critical": 1, "high": 2, "medium": 3, "low": 4, "informational": 5}
+
+    aggregated_rules = sorted(
+        aggregated_rules.values(),
+        key=lambda d: level_order.get(
+            d.get("rule_level", "informational"), float("inf")
+        ),
+    )  # Sort by level
+    for rule in aggregated_rules:
+        rule_title = rule["rule_title"]
+        rule_level = rule["rule_level"]
+        rule_count = rule["rule_count"]
+        formatted_level = format_rule_level(rule_level, Fore.CYAN)
+        logger.info(
+            f"{Fore.CYAN}    - {rule_title} [{formatted_level}] : {rule_count} events{Fore.RESET}"
+        )
+
+    logger.info(f"[+] Writing results to the output file : {args.outfile}")
+
+    concatenate_files(tmp_directory, args.outfile)
+    # if not keep_tmp_output:
+    shutil.rmtree(tmp_directory)
+    # if not keep_tmp_db:
+    if args.ondiskdb:
+        shutil.rmtree(tmp_directory_db)
+
+    # if not args.csv:
+    #     with open(args.outfile, 'w', encoding='utf-8') as outfile:
+    #         # Serialize the list of rule results to JSON with indentation
+    #         json_bytes = json.dumps(all_full_results, option=json.OPT_INDENT_2)
+    #         # Write the decoded JSON string to the file
+    #         outfile.write(json_bytes.decode('utf-8'))
+    # else:
+    #     # For CSV mode, collect all field names
+    #     fieldnames_set = set(["rule_title", "rule_description", "rule_level", "rule_count"])
+
+    #     for rule_result in all_full_results:
+    #         matches = rule_result['matches']
+    #         if matches:
+    #             for data in matches:
+    #                 fieldnames_set.update(data.keys())
+
+    #     # For CSV mode, write matches to CSV
+    #     with open(args.outfile, 'w', encoding='utf-8', newline='') as outfile:
+    #         writer = csv.DictWriter(outfile, delimiter=args.csv_delimiter, fieldnames=fieldnames_set)
+    #         writer.writeheader()
+    #         for rule_result in all_full_results:
+    #             matches = rule_result['matches']
+    #             if matches:
+    #                 for data in matches:
+    #                     dictCSV = {
+    #                         "rule_title": rule_result["title"],
+    #                         "rule_description": rule_result["description"],
+    #                         "rule_level": rule_result["rule_level"],
+    #                         "rule_count": rule_result["count"],
+    #                         **data
+    #                     }
+    #                     writer.writerow(dictCSV)
 
     # Templating
-    if readyForTemplating and zircoliteCore.fullResults != []:
-        templateGenerator = templateEngine(
-            consoleLogger, args.template, args.templateOutput, args.timefield
+    if readyForTemplating and all_full_results != []:
+        template_generator = template_engine(
+            args.template, args.templateOutput, args.timefield
         )
-        templateGenerator.run(zircoliteCore.fullResults)
+        template_generator.run(all_full_results)
 
     # Generate ZircoGui package
-    if args.package and zircoliteCore.fullResults != []:
+    if args.package and all_full_results != []:
         if (
             Path("templates/exportForZircoGui.tmpl").is_file()
             and Path("gui/zircogui.zip").is_file()
         ):
-            packager = zircoGuiGenerator(
+            packager = gui_generator(
                 "gui/zircogui.zip",
                 "templates/exportForZircoGui.tmpl",
-                consoleLogger,
                 None,
                 args.timefield,
             )
-            packager.generate(zircoliteCore.fullResults)
+            packager.run(all_full_results)
 
     # Remove working directory containing logs as json
     if not args.keeptmp:
-        consoleLogger.info("[+] Cleaning")
+        logger.info("[+] Cleaning")
         try:
-            if not args.json_input and not args.json_array_input and not args.db_input:
+            if not args.json_input and not args.json_array_input:
                 extractor.cleanup()
         except OSError as e:
-            consoleLogger.error(
-                f"{Fore.RED}   [-] Error during cleanup {e}{Fore.RESET}"
-            )
+            logger.error(f"{Fore.RED}   [-] Error during cleanup {e}{Fore.RESET}")
 
     # Remove files submitted for analysis
     if args.remove_events:
-        for EVTX in LogList:
+        for logs in LogList:
             try:
-                os.remove(EVTX)
+                os.remove(logs)
             except OSError as e:
-                consoleLogger.error(
-                    f"{Fore.RED}   [-] Cannot remove files {e}{Fore.RESET}"
-                )
+                logger.error(f"{Fore.RED}   [-] Cannot remove files {e}{Fore.RESET}")
 
-    zircoliteCore.close()
-    consoleLogger.info(f"\nFinished in {int((time.time() - start_time))} seconds")
+    logger.info(f"\nFinished in {int((time.time() - start_time))} seconds")
 
 
 if __name__ == "__main__":
