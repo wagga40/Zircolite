@@ -1506,7 +1506,7 @@ def ImportErrorHandler(config):
 # MAIN()
 ################################################################
 def main():
-    version = "2.30.0"
+    version = "2.30.1"
 
     # Init Args handling
     parser = argparse.ArgumentParser()
