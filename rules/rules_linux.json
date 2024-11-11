@@ -1863,9 +1863,9 @@
         "filename": "proc_creation_lnx_cve_2022_26134_atlassian_confluence.yml"
     },
     {
-        "title": "Python Spawning Pretty TTY",
+        "title": "Python Spawning Pretty TTY Via PTY Module",
         "id": "c4042d54-110d-45dd-a0e1-05c47822c937",
-        "description": "Detects python spawning a pretty tty which could be indicative of potential reverse shell activity",
+        "description": "Detects a python process calling to the PTY module in order to spawn a pretty tty which could be indicative of potential reverse shell activity.\n",
         "author": "Nextron Systems",
         "tags": [
             "attack.execution",
@@ -1874,9 +1874,9 @@
         "falsepositives": [
             "Unknown"
         ],
-        "level": "high",
+        "level": "medium",
         "rule": [
-            "SELECT * FROM logs WHERE (((Image LIKE '%/python' ESCAPE '\\' OR Image LIKE '%/python2' ESCAPE '\\' OR Image LIKE '%/python3' ESCAPE '\\') OR (Image LIKE '%/python2.%' ESCAPE '\\' OR Image LIKE '%/python3.%' ESCAPE '\\')) AND ((CommandLine LIKE '%import pty%' ESCAPE '\\' AND CommandLine LIKE '%.spawn(%' ESCAPE '\\') OR CommandLine LIKE '%from pty import spawn%' ESCAPE '\\'))"
+            "SELECT * FROM logs WHERE (((Image LIKE '%/python' ESCAPE '\\' OR Image LIKE '%/python2' ESCAPE '\\' OR Image LIKE '%/python3' ESCAPE '\\') OR (Image LIKE '%/python2.%' ESCAPE '\\' OR Image LIKE '%/python3.%' ESCAPE '\\')) AND (CommandLine LIKE '%import pty%' ESCAPE '\\' OR CommandLine LIKE '%from pty %' ESCAPE '\\') AND CommandLine LIKE '%spawn%' ESCAPE '\\')"
         ],
         "filename": "proc_creation_lnx_python_pty_spawn.yml"
     },
@@ -2174,9 +2174,9 @@
         "filename": "proc_creation_lnx_crontab_enumeration.yml"
     },
     {
-        "title": "Potential Python Reverse Shell",
+        "title": "Python Reverse Shell Execution Via PTY And Socket Modules",
         "id": "32e62bc7-3de0-4bb1-90af-532978fe42c0",
-        "description": "Detects executing python with keywords related to network activity that could indicate a potential reverse shell",
+        "description": "Detects the execution of python with calls to the socket and pty module in order to connect and spawn a potential reverse shell.\n",
         "author": "@d4ns4n_, Nasreddine Bencherchali (Nextron Systems)",
         "tags": [
             "attack.execution"
@@ -2186,7 +2186,7 @@
         ],
         "level": "high",
         "rule": [
-            "SELECT * FROM logs WHERE (Image LIKE '%python%' ESCAPE '\\' AND CommandLine LIKE '% -c %' ESCAPE '\\' AND CommandLine LIKE '%import%' ESCAPE '\\' AND CommandLine LIKE '%pty%' ESCAPE '\\' AND CommandLine LIKE '%spawn(%' ESCAPE '\\' AND CommandLine LIKE '%.connect%' ESCAPE '\\')"
+            "SELECT * FROM logs WHERE (Image LIKE '%python%' ESCAPE '\\' AND CommandLine LIKE '% -c %' ESCAPE '\\' AND CommandLine LIKE '%import%' ESCAPE '\\' AND CommandLine LIKE '%pty%' ESCAPE '\\' AND CommandLine LIKE '%socket%' ESCAPE '\\' AND CommandLine LIKE '%spawn%' ESCAPE '\\' AND CommandLine LIKE '%.connect%' ESCAPE '\\')"
         ],
         "filename": "proc_creation_lnx_python_reverse_shell.yml"
     },
