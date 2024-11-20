@@ -371,7 +371,7 @@ class zircore:
         #if not csv_output:
 
         if not Path(str(tmp_directory)).is_dir():
-            os.mkdir(tmp_directory)
+            os.makedirs(tmp_directory, exist_ok=True)
         if "?mode=memory&cache=shared" in db_location:
             tmp_filename = f'{db_location.replace("file:", "").replace("?mode=memory&cache=shared", "")}.json'
         else:
