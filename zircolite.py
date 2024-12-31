@@ -460,7 +460,7 @@ class zircore:
         self.logger.debug(f"CONNECTING TO : {db}")
         try:
             if "?mode=memory&cache=shared" in db:
-                conn = sqlite3.connect(db, isolation_level=None)
+                conn = sqlite3.connect(db, isolation_level=None, uri=True)
                 conn.execute("PRAGMA journal_mode = MEMORY;")
                 conn.execute("PRAGMA synchronous = OFF;")
                 conn.execute("PRAGMA temp_store = MEMORY;")
