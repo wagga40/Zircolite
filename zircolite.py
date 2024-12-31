@@ -1310,7 +1310,7 @@ class ruleset_handler:
 
             if self.save_ruleset:
                 temp_ruleset_name = self.rand_ruleset_name(str(sigma_rules))
-                with open(temp_ruleset_name, "w") as outfile:
+                with open(temp_ruleset_name, "w", encoding="utf-8") as outfile:
                     outfile.write(
                         orjson.dumps(ruleset, option=orjson.OPT_INDENT_2).decode(
                             "utf-8"
