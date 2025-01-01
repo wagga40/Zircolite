@@ -387,7 +387,7 @@ class zircore:
         self.logger.debug(f"CONNECTING TO : {db}")
         try:
             if "?mode=memory&cache=shared" in db:
-                conn = sqlite3.connect(db, isolation_level=None)
+                conn = sqlite3.connect(db, isolation_level=None, uri=True)
                 conn.execute('PRAGMA journal_mode = MEMORY;')
                 conn.execute('PRAGMA synchronous = OFF;')
                 conn.execute('PRAGMA temp_store = MEMORY;')
@@ -1106,7 +1106,7 @@ class ruleset_handler:
 
             if self.save_ruleset:
                 temp_ruleset_name = self.rand_ruleset_name(str(sigma_rules))
-                with open(temp_ruleset_name, 'w') as outfile:
+                with open(temp_ruleset_name, 'w', encoding="utf-8") as outfile:
                     outfile.write(orjson.dumps(ruleset, option=orjson.OPT_INDENT_2).decode('utf-8'))
                     self.logger.info(f"{Fore.CYAN}   [+] Saved ruleset as : {temp_ruleset_name}{Fore.RESET}")
 
