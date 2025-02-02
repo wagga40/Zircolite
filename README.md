@@ -27,7 +27,7 @@
 
 ## Requirements / Installation
 
-The project has only beek tested with Python 3.10. If you only want to use base functionnalities of Zircolite, you can install dependencies with : `pip3 install -r requirements.txt`. But `pip3 install -r requirements.full.txt` is strongly recommended.
+The project has only been tested with Python 3.10. If you only want to use base functionnalities of Zircolite, you can install dependencies with : `pip3 install -r requirements.txt`. But `pip3 install -r requirements.full.txt` is strongly recommended.
 
 The use of [evtx_dump](https://github.com/omerbenamram/evtx) is **optional but required by default (because it is -for now- much faster)**, If you do not want to use it you have to use the `--noexternal` option. The tool is provided if you clone the Zircolite repository (the official repository is [here](https://github.com/omerbenamram/evtx)).
 
