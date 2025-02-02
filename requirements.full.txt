@@ -7,7 +7,7 @@ requests>=2.24.0
 jinja2>=2.11.3
 evtx>=0.6.2
 aiohttp[speedups]~=3.9.2
-lxml~=4.6
+lxml
 elasticsearch[async]>=7.8.0
 pysigma>=0.10.10
 pysigma-pipeline-sysmon>=1.0.3
