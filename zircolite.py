@@ -1472,7 +1472,7 @@ class evtxExtractor:
         with open(file, "r", encoding=self.encoding) as fp:
             data = fp.read()
         # Remove all non UTF-8 characters
-        data = bytes(data.replace("\x00", "").replace("\x0B", ""), "utf-8").decode(
+        data = bytes(data.replace("\x00", "").replace("\x0b", ""), "utf-8").decode(
             "utf-8", "ignore"
         )
         data = f"<evtxtract>\n{data}\n</evtxtract>"
@@ -1976,7 +1976,7 @@ def ImportErrorHandler(config):
         importErrorList.append(
             f"{Fore.LIGHTYELLOW_EX}   [i] Cannot import 'lxml', cannot use XML logs as input{Fore.RESET}"
         )
-        if config.xml:
+        if config.xml_input:
             return (
                 f"{Fore.RED}   [-] Cannot import 'lxml', but according to command line provided it is needed{Fore.RESET}",
                 config,
