@@ -1491,7 +1491,7 @@ def ImportErrorHandler(config):
         config.template = None
     if xmlImportDisabled:
         importErrorList.append(f"{Fore.LIGHTYELLOW_EX}   [i] Cannot import 'lxml', cannot use XML logs as input{Fore.RESET}")
-        if config.xml:
+        if config.xml_input:
             return f"{Fore.RED}   [-] Cannot import 'lxml', but according to command line provided it is needed{Fore.RESET}", config, True
 
     if config.debug or config.imports: 
