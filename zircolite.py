@@ -862,7 +862,7 @@ class zirCore:
         self.timeField = timeField
         self.hashes = hashes
         self.delimiter = delimiter
-
+        self.first_json_output = True  # To manage commas in JSON output
     def close(self):
         self.dbConnection.close()
 
@@ -1106,7 +1106,6 @@ class zirCore:
         Execute all rules in the ruleset and handle output.
         """
         csvWriter = None
-        first_json_output = True  # To manage commas in JSON output
         is_json_mode = not self.csvMode
 
         # Prepare output file handle if needed
@@ -1188,10 +1187,10 @@ class zirCore:
                         # Write results as JSON using orjson
                         try:
                             # Handle commas between JSON objects
-                            if not first_json_output:
+                            if not self.first_json_output:
                                 fileHandle.write(",\n")
                             else:
-                                first_json_output = False
+                                self.first_json_output = False
                             # Serialize ruleResults to JSON bytes with indentation
                             json_bytes = json.dumps(
                                 ruleResults, option=json.OPT_INDENT_2
