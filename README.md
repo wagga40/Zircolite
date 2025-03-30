@@ -1,6 +1,6 @@
 # <p align="center">![](pics/zircolite_400.png)</p>
 
-## Standalone SIGMA-based detection tool for EVTX, Auditd, Sysmon for linux, XML or JSONL/NDJSON Logs 
+## Standalone SIGMA-based detection tool for EVTX, Auditd, Sysmon for linux, XML, CSV or JSONL/NDJSON Logs 
 ![](pics/Zircolite_v2.9.gif)
 
 [![python](https://img.shields.io/badge/python-3.10-blue)](https://www.python.org/)
@@ -13,6 +13,7 @@
 - Sysmon for Linux
 - EVTXtract
 - CSV and XML logs
+- JSON Array logs
 
 ### Key Features
 
@@ -20,6 +21,7 @@
 - **SIGMA Backend**: It is based on a SIGMA backend (SQLite) and does not use internal SIGMA-to-something conversion.
 - **Advanced Log Manipulation**: It can manipulate input logs by splitting fields and applying transformations, allowing for more flexible and powerful log analysis.
 - **Flexible Export**: Zircolite can export results to multiple formats using Jinja [templates](templates), including JSON, CSV, JSONL, Splunk, Elastic, Zinc, Timesketch, and more.
+- **Multiple Input Formats**: Support for various log formats including EVTX, JSON Lines, JSON Arrays, CSV, XML, and more.
 
 **You can use Zircolite directly in Python or use the binaries provided in the [releases](https://github.com/wagga40/Zircolite/releases).** 
 
@@ -31,7 +33,7 @@ The project has only been tested with Python 3.10. If you only want to use base 
 
 The use of [evtx_dump](https://github.com/omerbenamram/evtx) is **optional but required by default (because it is -for now- much faster)**, If you do not want to use it you have to use the `--noexternal` option. The tool is provided if you clone the Zircolite repository (the official repository is [here](https://github.com/omerbenamram/evtx)).
 
-:warning: On some systems (Mac, Arm, ...) the `evtx` library may need Rust and Cargo to be installed.
+:warning: On some systems (Mac, Arm, ...) the `evtx` Python library may need Rust and Cargo to be installed.
 
 ## Quick start
 
@@ -52,21 +54,30 @@ If your EVTX files have the extension ".evtx" :
 python3 zircolite.py --evtx sysmon.evtx --ruleset rules/rules_windows_sysmon_pysigma.json
 ```
 
-- The `--evtx` argument can be a file or a folder. If it is a folder, all EVTX files in the current folder and subfolders will be selected.
-- The SYSMON ruleset used is a default one, intended for analyzing logs from endpoints with SYSMON installed.
-
-### Auditd / Sysmon for Linux / JSONL or NDJSON logs : 
+### Other Log Formats:
 
 ```shell
 # For Auditd logs
 python3 zircolite.py --events auditd.log --ruleset rules/rules_linux.json --auditd
+
 # For Sysmon for Linux logs
 python3 zircolite.py --events sysmon.log --ruleset rules/rules_linux.json --sysmon4linux
+
 # For JSONL or NDJSON logs
 python3 zircolite.py --events <JSON_FOLDER_OR_FILE> --ruleset rules/rules_windows_sysmon_pysigma.json --jsononly
+
+# For JSON Array logs
+python3 zircolite.py --events <JSON_FOLDER_OR_FILE> --ruleset rules/rules_windows_sysmon_pysigma.json --json-array
+
+# For CSV logs
+python3 zircolite.py --events <CSV_FOLDER_OR_FILE> --ruleset rules/rules_windows_sysmon_pysigma.json --csv-input
+
+# For XML logs
+python3 zircolite.py --events <XML_FOLDER_OR_FILE> --ruleset rules/rules_windows_sysmon_pysigma.json --xml-input
 ```
 
-- The `--events` argument can be a file or a folder. If it is a folder, all event files in the current folder and subfolders will be selected.
+- The `--events` argument can be a file or a folder. If it is a folder, all EVTX files in the current folder and subfolders will be selected.
+- The SYSMON ruleset used is a default one, intended for analyzing logs from endpoints with SYSMON installed.
 
 > [!TIP]
 > If you want to try the tool you can test with [EVTX-ATTACK-SAMPLES](https://github.com/sbousseaden/EVTX-ATTACK-SAMPLES) (EVTX Files).

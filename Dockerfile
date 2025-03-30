@@ -1,53 +1,39 @@
-# Since `evtx_dump` precompiled binaries are not shipped with musl support, we need to use the
-# Debian-based Python image instead of the Alpine-based image, which increases the size of the
-# final image (~70 MB overhead).
-#
-ARG PYTHON_VERSION="3.11-slim"
+ARG PYTHON_VERSION="3.13-slim"
 
-FROM "python:${PYTHON_VERSION}" AS stage
+FROM python:${PYTHON_VERSION}
 
 ARG ZIRCOLITE_INSTALL_PREFIX="/opt"
-ARG ZIRCOLITE_REPOSITORY_URI="https://github.com/wagga40/Zircolite.git"
+ARG ZIRCOLITE_REQUIREMENTS_FILE="requirements.full.txt"
 
+WORKDIR ${ZIRCOLITE_INSTALL_PREFIX}/zircolite
+
+# Copy requirements first to leverage Docker cache
+COPY ${ZIRCOLITE_REQUIREMENTS_FILE} .
+RUN pip install --no-cache-dir -r ${ZIRCOLITE_REQUIREMENTS_FILE}
+
+# Install git only when needed for rule updates
 RUN apt-get update && \
-    DEBIAN_FRONTEND=noninteractive \
-    apt-get install --yes --no-install-recommends \
-        git && \
-    apt-get autoremove --purge --yes && \
+    DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends git && \
+    apt-get clean && \
     rm -rf /var/lib/apt/lists/*
 
-WORKDIR "${ZIRCOLITE_INSTALL_PREFIX}"
+# Copy files in order of change frequency (least to most)
+COPY README.md .
+COPY docs/ docs/
+COPY pics/ pics/
+COPY templates/ templates/
+COPY config/ config/
+COPY bin/ bin/
+COPY gui/ gui/
+COPY rules/ rules/
+COPY zircolite.py .
 
-RUN git clone \
-        "${ZIRCOLITE_REPOSITORY_URI}" \
-        zircolite
+LABEL author="wagga40" \
+    description="A standalone SIGMA-based detection tool for EVTX, Auditd and Sysmon for Linux logs." \
+    maintainer="wagga40"
 
-WORKDIR "${ZIRCOLITE_INSTALL_PREFIX}/zircolite"
+RUN chmod 0755 zircolite.py && \
+    python3 zircolite.py -U
 
-RUN chmod 0755 \
-        zircolite.py
-
-FROM "python:${PYTHON_VERSION}"
-
-LABEL author="wagga40"
-LABEL description="A standalone SIGMA-based detection tool for EVTX, Auditd and Sysmon for Linux logs."
-LABEL maintainer="wagga40"
-
-ARG ZIRCOLITE_INSTALL_PREFIX="/opt"
-
-WORKDIR "${ZIRCOLITE_INSTALL_PREFIX}"
-
-COPY --chown=root:root --from=stage \
-         "${ZIRCOLITE_INSTALL_PREFIX}/zircolite" \
-         zircolite
-
-WORKDIR "${ZIRCOLITE_INSTALL_PREFIX}/zircolite"
-
-RUN python3 -m pip install \
-        --requirement requirements.full.txt
-
-RUN python3 zircolite.py -U
-
-ENTRYPOINT [ "python3", "zircolite.py" ]
-
-CMD [ "--help" ]
+ENTRYPOINT ["python3", "zircolite.py"]
+CMD ["--help"]

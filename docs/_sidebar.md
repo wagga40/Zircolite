@@ -1,10 +1,11 @@
 * Usage
     * [Requirements and Installation](Usage.md#requirements-and-installation)
     * [Basic usage](Usage.md#basic-usage)
+    * [Rulesets / Rules](Usage.md#rulesets--rules)
+    * [Pipelines](Usage.md#pipelines)
     * [Field mappings, field exclusions, value exclusions, field aliases and field splitting](Usage.md#field-mappings-field-exclusions-value-exclusions-field-aliases-and-field-splitting)
     * [Field Transforms](Usage.md#field-transforms)
     * [Generate your own rulesets](Usage.md#generate-your-own-rulesets)
-    * [Generate embedded versions](Usage.md#generate-embedded-versions)
     * [Docker](Usage.md#docker)
 
 * Advanced use
@@ -15,7 +16,6 @@
     * [Templating and Formatting](Advanced.md#templating-and-formatting)
     * [Mini GUI](Advanced.md#mini-gui)
     * [Packaging Zircolite](Advanced.md#packaging-zircolite)
-    * [Using With DFIR Orc](Advanced.md#using-with-dfir-orc)
 
 * Internals
     * [Zircolite architecture](Internals.md#zircolite-architecture)

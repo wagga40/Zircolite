@@ -1,7 +1,7 @@
 # Usage
 
 > [!NOTE]  
-> If you use the packaged version of Zircolite don't forget to replace `python3 zircolite.py` in the examples by the packaged binary name.
+> If you use the packaged version of Zircolite, remember to replace `python3 zircolite.py` in the examples with the packaged binary name.
 
 ## Requirements and Installation
 
@@ -234,7 +234,7 @@ python3 zircolite.py --evtx <EVTX_FOLDER> --ruleset <CONVERTED_SIGMA_RULES> \
     --dbfile output.db
 ```
 
-If you need to re-execute Zircolite,  you can do it directly using the SQLite database as the EVTX source (with `--evtx <SAVED_SQLITE_DB_PATH>` and `--dbonly`) and avoid to convert the EVTX, post-process the EVTX and insert data to database. **Using this technique can save a lot of time... But you will be unable to use the `--forwardall`option** 
+If you need to re-execute Zircolite,  you can do it directly using the SQLite database as the EVTX source (with `--evtx <SAVED_SQLITE_DB_PATH>` and `--dbonly`) and avoid to convert the EVTX, post-process the EVTX and insert data to database. **Using this technique can save a lot of time** 
 
 ## Rulesets / Rules
 
@@ -707,13 +707,6 @@ For example :
 
 -  "Suspicious Eventlog Clear or Configuration Using Wevtutil" : **very noisy** on fresh environment (labs etc.), commonly generate a lot of useless detections
 -  Notepad Making Network Connection : **can slow very significantly** the execution of Zircolite
-
-## Generate embedded versions
-
-***Removed***
-
-- You can use DFIR Orc to package Zircolite, check [here](Advanced.md#using-with-dfir-orc)
-- [Kape](https://www.kroll.com/en/services/cyber-risk/incident-response-litigation-support/kroll-artifact-parser-extractor-kape) also has a module for Zircolite : [here](https://github.com/EricZimmerman/KapeFiles/tree/master/Modules/Apps/GitHub)
 
 ## Docker
 
