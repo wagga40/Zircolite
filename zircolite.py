@@ -705,7 +705,7 @@ class evtxExtractor:
                     return "bin/evtx_dump_lin"
             elif platform.system() == "Darwin":
                 return "bin/evtx_dump_mac"
-            elif platform.system() == "win32":
+            elif platform.system() == "Windows":
                 return "bin\\evtx_dump_win.exe"
         else:
             return binPath
