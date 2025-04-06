@@ -1,0 +1,82 @@
+version: '3'
+
+vars:
+  DOCKER: docker
+  DOCKER_BUILD_FLAGS: ''
+  DOCKER_REGISTRY: docker.io
+  DOCKER_REPO: wagga40/zircolite
+  RULES_URL: https://github.com/wagga40/Zircolite-Rules/archive/refs/heads/main.tar.gz
+  PLATFORMS: linux/amd64,linux/arm64
+
+tasks:
+  default:
+    deps: [clean]
+
+  get-version:
+    desc: Get the version from zircolite.py
+    cmds:
+      - 'echo "Version: {{.VERSION}}"'
+    vars:
+      VERSION:
+        sh: |
+          cat zircolite.py | grep "version = \"" | cut -d'"' -f2
+
+  docker-build:
+    desc: Build the Docker image
+    preconditions:
+      - sh: command -v {{.DOCKER}}
+        msg: "Docker (https://docs.docker.com/install/) is required. Please install it first"
+    cmds:
+      - '{{.DOCKER}} image build --rm --tag {{.DOCKER_REPO}}:dev {{.DOCKER_BUILD_FLAGS}} .'
+
+  docker-build-multi-arch:
+    desc: Build the Docker image for multiple architectures
+    cmds:
+      - '{{.DOCKER}} image build --rm --tag {{.DOCKER_REPO}}:{{.VERSION}} --platform {{.PLATFORMS}} {{.DOCKER_BUILD_FLAGS}} .'
+      - '{{.DOCKER}} image build --rm --tag {{.DOCKER_REPO}}:latest --platform {{.PLATFORMS}} {{.DOCKER_BUILD_FLAGS}} .'
+    vars:
+      VERSION:
+        sh: |
+          cat zircolite.py | grep "version = \"" | cut -d'"' -f2
+
+  docker-push:
+    desc: Push the Docker image to docker hub
+    deps: [docker-build-multi-arch]
+    cmds:
+      - '{{.DOCKER}} image push {{.DOCKER_REGISTRY}}/{{.DOCKER_REPO}}:{{.VERSION}}'
+      - '{{.DOCKER}} image push {{.DOCKER_REGISTRY}}/{{.DOCKER_REPO}}:latest'
+    vars:
+      VERSION:
+        sh: |
+          cat zircolite.py | grep "version = \"" | cut -d'"' -f2
+
+  clean:
+    desc: Remove all default artifacts
+    cmds:
+      - rm -rf detected_events.json
+      - rm -rf ./tmp-*
+      - rm -f zircolite.log
+      - rm -f fields.json
+      - rm -f zircolite.tar
+
+  save:
+    desc: Save the Docker image to an archive
+    cmds:
+      - |
+        if ! command -v docker &> /dev/null; then
+          echo "Docker (https://docs.docker.com/install/) is required. Please install it first"
+          exit 1
+        fi
+      - '{{.DOCKER}} image save --output zircolite.tar {{.DOCKER_REGISTRY}}/{{.DOCKER_REPO}}:{{.DOCKER_TAG}}'
+
+  update-rules:
+    desc: Update default rulesets using Zircolite-Rules repository
+    preconditions:
+      - sh: command -v curl
+        msg: "curl is required. Please install it first"
+    prompt: "This task will overwrite the existing rulesets. Are you sure you want to continue?"
+    cmds: 
+      - curl -sSL {{.RULES_URL}} | tar -xzf -
+      - defer: rm -rf Zircolite-Rules-main
+      - mv Zircolite-Rules-main/rules_*.json ./rules/
+
