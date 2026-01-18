@@ -6,7 +6,6 @@
 # Icon must end with two \r
 Icon
 
-
 # Thumbnails
 ._*
 
@@ -35,6 +34,13 @@ tmp
 *.tar
 *.tar.sha256
 .pdm-python
+*.7z
+*.dmg
+*.gz
+*.iso
+*.jar
+*.rar
+*.tar
 
 # pycache
 __pycache__/
@@ -53,3 +59,19 @@ venv/
 pdm.lock
 pyproject.toml
 Makefile*
+build/
+gui_dev/
+Taskfile.integration.yml
+
+# Default files for Editors and IDEs (vscode, cursor, idea, zed, sublime, etc.)
+.vscode/*
+.cursor/*
+.zed/*
+*.sublime-workspace
+*.sublime-project
+
+coverage/
+*.lcov
+
+.tmp/
+.temp/
