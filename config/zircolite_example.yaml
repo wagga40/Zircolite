@@ -1,0 +1,179 @@
+# Zircolite Configuration File Example
+# =====================================
+# This file demonstrates all available configuration options.
+# Use with: python3 zircolite.py --yaml-config config/zircolite_example.yaml
+#
+# CLI arguments will override settings in this file.
+# Generate a fresh config file with: python3 zircolite.py --generate-config my_config.yaml
+
+# Input configuration
+input:
+  # Path to log file or directory containing log files
+  # This is required unless provided via -e/--evtx CLI argument
+  path: ./logs/
+  
+  # Input format options:
+  # - evtx: Windows Event Log files (default)
+  # - json: JSON Lines (JSONL/NDJSON) format
+  # - json_array: JSON array format
+  # - xml: XML format
+  # - csv: CSV format
+  # - sysmon_linux: Sysmon for Linux logs
+  # - auditd: Linux Auditd logs
+  # - evtxtract: EVTXtract output files
+  format: evtx
+  
+  # Search recursively in directories (default: true)
+  recursive: true
+  
+  # File glob pattern (e.g., "*.evtx", "Security*.evtx")
+  # file_pattern: "*.evtx"
+  
+  # File extension filter (alternative to file_pattern)
+  # file_extension: evtx
+  
+  # Include only files containing these strings in filename
+  # select:
+  #   - Security
+  #   - Sysmon
+  
+  # Exclude files containing these strings in filename
+  # avoid:
+  #   - backup
+  #   - old
+  
+  # Field mappings configuration file (JSON or YAML format)
+  # Defines field exclusions, mappings, aliases, and transformations
+  # field_mappings: config/fieldMappings.json
+  # field_mappings: config/fieldMappings.yaml
+
+# Rules and rulesets configuration
+rules:
+  # List of ruleset files or directories
+  # Supports both Zircolite JSON format and native Sigma YAML rules
+  rulesets:
+    - rules/rules_windows_generic_pysigma.json
+    # - rules/rules_windows_sysmon.json
+    # - /path/to/sigma/rules/windows/process_creation/
+  
+  # pySigma pipelines for native Sigma rules
+  # Use --pipeline-list to see available pipelines
+  # pipelines:
+  #   - sysmon
+  #   - windows-logsources
+  
+  # Rule title filters (exclude rules matching these strings)
+  # filters:
+  #   - "Noisy Rule"
+  #   - "Test Rule"
+
+# Output configuration
+output:
+  # Output file path
+  file: detected_events.json
+  
+  # Output format: json or csv
+  format: json
+  
+  # CSV delimiter (only used when format is csv)
+  csv_delimiter: ";"
+  
+  # Jinja2 templates for custom output formats
+  # templates:
+  #   - template: templates/exportForSplunk.tmpl
+  #     output: splunk_events.json
+  #   - template: templates/exportForELK.tmpl
+  #     output: elk_events.json
+  
+  # Create Mini-GUI package
+  package: false
+  # package_dir: ./output/gui/
+  
+  # Save SQLite database to file (useful for debugging or re-analysis)
+  # db_file: events.db
+  
+  # Log file path
+  log_file: zircolite.log
+
+# Processing configuration
+processing:
+  # Use streaming mode (single-pass, memory efficient) - recommended
+  streaming: true
+  
+  # Use unified database for all files
+  # Enables cross-file correlation but uses more memory
+  unified_db: false
+  
+  # Automatic mode selection based on file analysis
+  # Analyzes file count, sizes, and available RAM to recommend optimal mode
+  auto_mode: true
+  
+  # Use on-disk database instead of in-memory (slower but uses less RAM)
+  # on_disk_db: /tmp/zircolite_temp.db
+  
+  # Add xxhash of original log lines to each event
+  hashes: false
+  
+  # Limit results per rule (-1 = no limit)
+  # Useful for noisy rules
+  limit: -1
+  
+  # Time field for event timestamps
+  time_field: SystemTime
+  
+  # Show all rules being executed (verbose)
+  show_all: false
+  
+  # Enable debug logging
+  debug: false
+
+# Time-based event filtering
+time_filter:
+  # Process events after this timestamp (UTC)
+  # Format: YYYY-MM-DDTHH:MM:SS
+  after: "1970-01-01T00:00:00"
+  
+  # Process events before this timestamp (UTC)
+  before: "9999-12-12T23:59:59"
+
+# Parallel processing configuration
+# Enables processing multiple files simultaneously for faster analysis.
+# The heuristics automatically determine optimal worker count based on:
+# - Available system memory (uses up to 85% of available RAM)
+# - CPU core count (allows up to 2x cores for I/O-bound workloads)
+# - Number and size of files (scales workers with file count)
+# - File sizes (smaller files = more workers, larger files = fewer workers)
+parallel:
+  # Enable parallel file processing (default: auto-enabled when beneficial)
+  # When auto_mode is true, parallel is automatically enabled if:
+  # - More than 1 file to process
+  # - At least 1GB RAM available
+  # - Files are not too large (single file < 60% of usable RAM)
+  enabled: true
+  
+  # Maximum number of workers
+  # null = auto-detect (recommended)
+  # Auto-detection considers:
+  # - Memory-based limit: usable_RAM / estimated_memory_per_file
+  # - CPU-based limit: up to 2x CPU cores (I/O-bound workloads benefit from more threads)
+  # - File-based limit: up to 3x CPU cores, but never more than file count
+  # - Minimum: at least half of CPU cores when resources allow
+  # - Maximum cap: 32 workers (prevents context switching overhead)
+  max_workers: null
+  
+  # Minimum number of workers (default: 1)
+  min_workers: 1
+  
+  # Memory usage threshold to trigger throttling (percent)
+  # When system memory usage exceeds this, a warning is logged
+  # Default: 85.0 (conservative to prevent system instability)
+  memory_limit_percent: 85.0
+  
+  # Dynamically adjust workers based on memory usage
+  # When enabled, the processor monitors memory and can throttle if needed
+  adaptive: true
+  
+  # Memory estimation multipliers (informational, not configurable):
+  # - Small files (<10MB): 5x multiplier (higher overhead ratio)
+  # - Medium files (<50MB): 4x multiplier
+  # - Large files (>=50MB): 3.5x multiplier (more memory efficient)
