@@ -61,11 +61,13 @@ pyproject.toml
 Makefile*
 build/
 gui_dev/
-Taskfile.integration.yml
+tools/
+Taskfile.dev.yml
 
 # Default files for Editors and IDEs (vscode, cursor, idea, zed, sublime, etc.)
 .vscode/*
 .cursor/*
+.cursorrules
 .zed/*
 *.sublime-workspace
 *.sublime-project

@@ -26,8 +26,6 @@ from RestrictedPython import utility_builtins
 from RestrictedPython.Eval import default_guarded_getiter
 from RestrictedPython.Guards import guarded_iter_unpack_sequence
 # Rich progress
-from rich.progress import Progress, SpinnerColumn, TextColumn, BarColumn, MofNCompleteColumn, TimeElapsedColumn
-from .console import console
 
 from .config import ProcessingConfig
 from .utils import load_field_mappings

@@ -15,7 +15,6 @@ import string
 from typing import Optional
 
 # Rich console for styled output  
-from .console import console
 from jinja2 import Template
 
 from .config import TemplateConfig, GuiConfig
@@ -53,7 +52,7 @@ class TemplateEngine:
             with open(output_filename, 'a', encoding='utf-8') as tpl:
                 tpl.write(template.render(data=data, timeField=self.time_field))
         except Exception as e:
-            self.logger.error(f"[red]   [-] Template error, activate debug mode to check for errors[/]")
+            self.logger.error("[red]   [-] Template error, activate debug mode to check for errors[/]")
             self.logger.debug(f"   [-] {e}")
 
     def run(self, data):

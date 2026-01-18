@@ -2,10 +2,8 @@
 Tests for the YAML configuration loader module.
 """
 
-import os
 import pytest
 import sys
-import tempfile
 from argparse import Namespace
 from pathlib import Path
 

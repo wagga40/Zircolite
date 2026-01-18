@@ -22,7 +22,7 @@ import yaml
 
 # Rich-based console - import with fallback for compatibility
 try:
-    from .console import console, ZircoliteConsole, get_rich_logger
+    from .console import console, get_rich_logger
     HAS_RICH = True
 except ImportError:
     HAS_RICH = False

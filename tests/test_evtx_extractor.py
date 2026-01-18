@@ -2,13 +2,11 @@
 Tests for the EvtxExtractor class.
 """
 
+import importlib.util
 import json
-import os
 import pytest
-import shutil
 import sys
 from pathlib import Path
-from unittest.mock import MagicMock, patch
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
@@ -267,9 +265,7 @@ class TestEvtxExtractorXmlConversion:
     )
     def test_xml_line_to_json(self, test_logger, sample_xml_event):
         """Test XML line to JSON conversion."""
-        try:
-            from lxml import etree
-        except ImportError:
+        if importlib.util.find_spec("lxml") is None:
             pytest.skip("lxml not available")
         
         config = ExtractorConfig(xml_logs=True)
@@ -288,9 +284,7 @@ class TestEvtxExtractorXmlConversion:
     )
     def test_xml_line_to_json_invalid(self, test_logger):
         """Test handling of invalid XML."""
-        try:
-            from lxml import etree
-        except ImportError:
+        if importlib.util.find_spec("lxml") is None:
             pytest.skip("lxml not available")
         
         config = ExtractorConfig(xml_logs=True)
@@ -311,9 +305,7 @@ class TestEvtxExtractorSysmonLinux:
     )
     def test_sysmon_xml_line_to_json(self, test_logger):
         """Test Sysmon XML line to JSON conversion."""
-        try:
-            from lxml import etree
-        except ImportError:
+        if importlib.util.find_spec("lxml") is None:
             pytest.skip("lxml not available")
         
         config = ExtractorConfig(sysmon4linux=True)
@@ -334,9 +326,7 @@ class TestEvtxExtractorSysmonLinux:
     )
     def test_sysmon_xml_line_no_event(self, test_logger):
         """Test handling of lines without Event tag."""
-        try:
-            from lxml import etree
-        except ImportError:
+        if importlib.util.find_spec("lxml") is None:
             pytest.skip("lxml not available")
         
         config = ExtractorConfig(sysmon4linux=True)
@@ -431,9 +421,7 @@ class TestEvtxExtractorRun:
     )
     def test_run_xml_input(self, tmp_xml_file, test_logger):
         """Test run method with XML input."""
-        try:
-            from lxml import etree
-        except ImportError:
+        if importlib.util.find_spec("lxml") is None:
             pytest.skip("lxml not available")
         
         config = ExtractorConfig(xml_logs=True)
@@ -489,9 +477,7 @@ class TestEvtxExtractorEvtxBinding:
         if not sample_evtx.exists():
             pytest.skip("No sample EVTX file available")
         
-        try:
-            from evtx import PyEvtxParser
-        except ImportError:
+        if importlib.util.find_spec("evtx") is None:
             pytest.skip("evtx not available")
         
         extractor = EvtxExtractor(logger=test_logger)
@@ -526,9 +512,7 @@ class TestEvtxExtractorEvtxtract:
     )
     def test_evtxtract_to_json(self, tmp_path, test_logger):
         """Test EVTXtract log conversion."""
-        try:
-            from lxml import etree
-        except ImportError:
+        if importlib.util.find_spec("lxml") is None:
             pytest.skip("lxml not available")
         
         # Create sample EVTXtract output

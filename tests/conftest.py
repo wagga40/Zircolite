@@ -8,7 +8,6 @@ import pytest
 import shutil
 import sqlite3
 import sys
-import tempfile
 import yaml
 from pathlib import Path
 from unittest.mock import MagicMock, patch
@@ -18,29 +17,10 @@ from argparse import Namespace
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from zircolite import (
-    JSONFlattener,
-    ZircoliteCore,
-    EvtxExtractor,
-    TemplateEngine,
-    MemoryTracker,
-    StreamingEventProcessor,
     init_logger,
-    load_field_mappings,
-    # Config dataclasses
-    ProcessingConfig,
-    ExtractorConfig,
-    RulesetConfig,
-    TemplateConfig,
-    GuiConfig,
 )
 
 # For backwards compatibility, also import these
-from zircolite import (
-    quit_on_error,
-    check_if_exists,
-    select_files,
-    avoid_files,
-)
 
 
 # =============================================================================

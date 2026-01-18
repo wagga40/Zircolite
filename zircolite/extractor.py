@@ -23,7 +23,6 @@ from typing import Optional
 
 import orjson as json
 # Rich console for styled output
-from .console import console
 from evtx import PyEvtxParser
 from lxml import etree
 
