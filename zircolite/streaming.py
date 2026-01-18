@@ -20,7 +20,6 @@ import chardet
 import orjson as json
 import xxhash
 # Rich console for styled output
-from .console import console
 from evtx import PyEvtxParser
 from RestrictedPython import compile_restricted
 from RestrictedPython import limited_builtins

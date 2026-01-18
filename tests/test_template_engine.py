@@ -2,9 +2,6 @@
 Tests for the TemplateEngine class.
 """
 
-import json
-import os
-import pytest
 import sys
 from pathlib import Path
 

@@ -3,12 +3,9 @@ Tests for utility functions in zircolite.py.
 """
 
 import logging
-import os
 import pytest
 import sys
-from io import StringIO
 from pathlib import Path
-from unittest.mock import MagicMock, patch
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 

@@ -3,11 +3,9 @@ Tests for the RulesetHandler class in zircolite/rules.py.
 """
 
 import json
-import os
-import pytest
 import sys
 from pathlib import Path
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 

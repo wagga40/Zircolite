@@ -3,8 +3,6 @@ Tests for the ZircoliteCore class.
 """
 
 import json
-import os
-import pytest
 import sqlite3
 import sys
 from pathlib import Path

@@ -3,8 +3,6 @@ Tests for the JSONFlattener class.
 """
 
 import json
-import os
-import pytest
 import sys
 from pathlib import Path
 
@@ -434,9 +432,6 @@ class TestJSONFlattenerTimeFiltering:
         with open(json_file, 'w') as f:
             for event in events:
                 f.write(json.dumps(event) + "\n")
-        
-        import time
-        time_after = time.strptime("2024-03-01T00:00:00", '%Y-%m-%dT%H:%M:%S')
         
         proc_config = ProcessingConfig(
             time_after="2024-03-01T00:00:00",
