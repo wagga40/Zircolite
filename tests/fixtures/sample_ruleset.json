@@ -1,0 +1,58 @@
+[
+    {
+        "title": "Suspicious PowerShell Command",
+        "id": "test-rule-001",
+        "status": "test",
+        "description": "Detects suspicious PowerShell commands",
+        "author": "Test Author",
+        "tags": ["attack.execution", "attack.t1059.001"],
+        "falsepositives": ["Unknown"],
+        "level": "high",
+        "rule": [
+            "SELECT * FROM logs WHERE CommandLine LIKE '%powershell%' ESCAPE '\\'"
+        ],
+        "filename": "test_rule_powershell.yml"
+    },
+    {
+        "title": "CMD Whoami Execution",
+        "id": "test-rule-002",
+        "status": "test",
+        "description": "Detects whoami command execution",
+        "author": "Test Author",
+        "tags": ["attack.discovery", "attack.t1033"],
+        "falsepositives": ["Legitimate admin"],
+        "level": "medium",
+        "rule": [
+            "SELECT * FROM logs WHERE CommandLine LIKE '%whoami%' ESCAPE '\\'"
+        ],
+        "filename": "test_rule_whoami.yml"
+    },
+    {
+        "title": "Suspicious File Creation",
+        "id": "test-rule-003",
+        "status": "test",
+        "description": "Detects suspicious file creation",
+        "author": "Test Author",
+        "tags": ["attack.persistence"],
+        "falsepositives": ["Unknown"],
+        "level": "low",
+        "rule": [
+            "SELECT * FROM logs WHERE TargetFileName LIKE '%.exe' ESCAPE '\\'"
+        ],
+        "filename": "test_rule_file.yml"
+    },
+    {
+        "title": "Network Connection Detection",
+        "id": "test-rule-004",
+        "status": "test",
+        "description": "Detects network connections",
+        "author": "Test Author",
+        "tags": ["attack.command_and_control"],
+        "falsepositives": ["Normal network activity"],
+        "level": "informational",
+        "rule": [
+            "SELECT * FROM logs WHERE EventID = 3"
+        ],
+        "filename": "test_rule_network.yml"
+    }
+]

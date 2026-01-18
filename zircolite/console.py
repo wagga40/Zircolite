@@ -1,0 +1,677 @@
+#!python3
+"""
+Rich-based console output for Zircolite.
+
+This module provides styled terminal output using the Rich library:
+- Console output with colors and formatting
+- Progress bars with live status updates
+- Summary dashboards and tables
+- Real-time detection tracking
+"""
+
+import logging
+import time
+from contextlib import contextmanager
+from dataclasses import dataclass, field
+from typing import Any, Dict, List, Optional
+
+from rich.console import Console, Group
+from rich.live import Live
+from rich.logging import RichHandler
+from rich.panel import Panel
+from rich.progress import (
+    BarColumn,
+    MofNCompleteColumn,
+    Progress,
+    SpinnerColumn,
+    TaskID,
+    TextColumn,
+    TimeElapsedColumn,
+    TimeRemainingColumn,
+)
+from rich.table import Table
+from rich.text import Text
+from rich.theme import Theme
+
+# Custom Zircolite theme
+ZIRCOLITE_THEME = Theme({
+    "info": "cyan",
+    "warning": "yellow",
+    "error": "bold red",
+    "success": "bold green",
+    "critical": "bold red reverse",
+    "high": "bold magenta",
+    "medium": "bold yellow",
+    "low": "green",
+    "informational": "dim white",
+    "file": "cyan",
+    "count": "bold magenta",
+    "time": "yellow",
+    "header": "bold cyan",
+    "progress.description": "cyan",
+    "progress.percentage": "green",
+    "progress.remaining": "yellow",
+    "rule.title": "cyan",
+    "rule.level.critical": "bold white on red",
+    "rule.level.high": "bold magenta",
+    "rule.level.medium": "bold yellow",
+    "rule.level.low": "green",
+    "rule.level.informational": "dim",
+    "stat.label": "dim",
+    "stat.value": "bold cyan",
+})
+
+# Global console instance for consistent output
+console = Console(theme=ZIRCOLITE_THEME, highlight=False)
+
+
+# ============================================================================
+# CLI-STYLE HELPER FUNCTIONS
+# ============================================================================
+
+def print_step(message: str):
+    """Print a step message with [+] prefix."""
+    console.print(f"[bold white]\\[+][/] {message}")
+
+
+def print_substep(message: str, style: str = "dim"):
+    """Print a sub-step message with indentation."""
+    console.print(f"    [{style}]\\[>][/] {message}")
+
+
+def print_info(message: str):
+    """Print an info message with [i] prefix."""
+    console.print(f"    [dim]\\[i][/] {message}")
+
+
+def print_success(message: str):
+    """Print a success message with checkmark."""
+    console.print(f"[green]\\[✓][/] {message}")
+
+
+def print_warning(message: str):
+    """Print a warning message with [!] prefix."""
+    console.print(f"[yellow]\\[!][/] {message}")
+
+
+def print_error(message: str):
+    """Print an error message with [-] prefix."""
+    console.print(f"[red]\\[-][/] {message}")
+
+
+def print_file(label: str, path: str):
+    """Print a file path with label."""
+    console.print(f"[cyan]\\[+][/] {label}: [cyan]{path}[/]")
+
+
+def print_count(label: str, count: int, style: str = "magenta"):
+    """Print a count with label."""
+    console.print(f"[cyan]\\[+][/] {label}: [{style}]{count:,}[/]")
+
+
+def print_detection(title: str, level: str, count: int):
+    """Print a detection result with styled severity level."""
+    level_styles = {
+        "critical": "bold white on red",
+        "high": "bold magenta",
+        "medium": "bold yellow",
+        "low": "green",
+        "informational": "dim",
+    }
+    level_style = level_styles.get(level.lower(), "cyan")
+    console.print(f"    [cyan]•[/] {title} [[{level_style}]{level}[/]] : [magenta]{count:,}[/] events")
+
+
+@dataclass
+class DetectionStats:
+    """Statistics for detection tracking."""
+    critical: int = 0
+    high: int = 0
+    medium: int = 0
+    low: int = 0
+    informational: int = 0
+    total_events: int = 0
+    total_rules_matched: int = 0
+    
+    def add_detection(self, level: str, count: int):
+        """Add a detection to the stats."""
+        level_lower = level.lower()
+        if level_lower == "critical":
+            self.critical += count
+        elif level_lower == "high":
+            self.high += count
+        elif level_lower == "medium":
+            self.medium += count
+        elif level_lower == "low":
+            self.low += count
+        elif level_lower == "informational":
+            self.informational += count
+        self.total_events += count
+        self.total_rules_matched += 1
+    
+    @property
+    def total_by_severity(self) -> Dict[str, int]:
+        """Get totals by severity level."""
+        return {
+            "critical": self.critical,
+            "high": self.high,
+            "medium": self.medium,
+            "low": self.low,
+            "informational": self.informational,
+        }
+
+
+@dataclass
+class ProcessingStats:
+    """Overall processing statistics."""
+    files_total: int = 0
+    files_processed: int = 0
+    files_failed: int = 0
+    events_total: int = 0
+    rules_executed: int = 0
+    start_time: float = field(default_factory=time.time)
+    end_time: Optional[float] = None
+    peak_memory_mb: float = 0.0
+    avg_memory_mb: float = 0.0
+    workers_used: int = 1
+    detection_stats: DetectionStats = field(default_factory=DetectionStats)
+    
+    @property
+    def elapsed_seconds(self) -> float:
+        """Get elapsed time in seconds."""
+        end = self.end_time or time.time()
+        return end - self.start_time
+    
+    @property
+    def events_per_second(self) -> float:
+        """Calculate events processed per second."""
+        elapsed = self.elapsed_seconds
+        return self.events_total / elapsed if elapsed > 0 else 0
+
+
+class ZircoliteConsole:
+    """
+    Rich-based console for Zircolite output.
+    
+    Provides styled output, progress tracking, and summary dashboards.
+    """
+    
+    def __init__(self, quiet: bool = False, no_color: bool = False):
+        """
+        Initialize the console.
+        
+        Args:
+            quiet: Suppress non-essential output
+            no_color: Disable colors (for CI/piping)
+        """
+        self.quiet = quiet
+        self.console = Console(
+            theme=ZIRCOLITE_THEME,
+            highlight=False,
+            force_terminal=not no_color,
+            no_color=no_color
+        )
+        self.stats = ProcessingStats()
+        self._live: Optional[Live] = None
+        self._progress: Optional[Progress] = None
+        self._current_task: Optional[TaskID] = None
+        self._detections: List[Dict[str, Any]] = []
+    
+    def print_banner(self, version: str):
+        """Print the Zircolite ASCII banner."""
+        banner = """
+[bold cyan]███████╗██╗██████╗  ██████╗ ██████╗ ██╗     ██╗████████╗███████╗[/]
+[cyan]╚══███╔╝██║██╔══██╗██╔════╝██╔═══██╗██║     ██║╚══██╔══╝██╔════╝[/]
+[bold blue]  ███╔╝ ██║██████╔╝██║     ██║   ██║██║     ██║   ██║   █████╗[/]
+[blue] ███╔╝  ██║██╔══██╗██║     ██║   ██║██║     ██║   ██║   ██╔══╝[/]
+[bold magenta]███████╗██║██║  ██║╚██████╗╚██████╔╝███████╗██║   ██║   ███████╗[/]
+[magenta]╚══════╝╚═╝╚═╝  ╚═╝ ╚═════╝ ╚═════╝ ╚══════╝╚═╝   ╚═╝   ╚══════╝[/]
+[dim]-= Standalone Sigma Detection tool for EVTX/Auditd/Sysmon Linux =-[/]
+"""
+        self.console.print(banner)
+        self.console.print(f"                           [dim]v{version}[/]\n")
+    
+    def info(self, message: str, prefix: str = "[+]"):
+        """Print an info message."""
+        if not self.quiet:
+            self.console.print(f"[bold white]{prefix}[/] {message}")
+    
+    def success(self, message: str, prefix: str = "[✓]"):
+        """Print a success message."""
+        if not self.quiet:
+            self.console.print(f"[success]{prefix}[/] {message}")
+    
+    def warning(self, message: str, prefix: str = "[!]"):
+        """Print a warning message."""
+        self.console.print(f"[warning]{prefix}[/] {message}")
+    
+    def error(self, message: str, prefix: str = "[-]"):
+        """Print an error message."""
+        self.console.print(f"[error]{prefix}[/] {message}")
+    
+    def print_workload_analysis(
+        self, 
+        file_count: int,
+        total_size: str,
+        avg_size: str,
+        available_ram: str,
+        cpu_count: int,
+        db_mode: str,
+        db_reason: str,
+        parallel_enabled: bool = False,
+        parallel_workers: int = 1,
+        parallel_reason: str = ""
+    ):
+        """Print workload analysis with styled output."""
+        self.info("Analyzing workload...")
+        
+        # Create a nice table for workload info
+        table = Table(show_header=False, box=None, padding=(0, 2))
+        table.add_column("Label", style="dim")
+        table.add_column("Value")
+        
+        table.add_row("Files", f"[count]{file_count}[/] ([file]{total_size}[/] total, avg [file]{avg_size}[/])")
+        table.add_row("System", f"[success]{available_ram}[/] RAM available, [count]{cpu_count}[/] CPUs")
+        
+        # Database mode
+        mode_icon = "🔗" if db_mode == "unified" else "📁"
+        mode_style = "success" if db_mode == "unified" else "info"
+        table.add_row(
+            "DB Mode", 
+            f"{mode_icon} [{mode_style}]{db_mode.upper()}[/] [dim]({db_reason})[/]"
+        )
+        
+        # Parallel processing
+        if parallel_enabled:
+            table.add_row(
+                "Parallel",
+                f"⚡ [success]ENABLED[/] ([count]{parallel_workers}[/] workers)"
+            )
+        elif db_mode != "unified":
+            table.add_row(
+                "Parallel",
+                f"⚡ [dim]disabled - {parallel_reason}[/]"
+            )
+        
+        self.console.print(table)
+        self.console.print()
+    
+    def create_file_progress(self, total_files: int, description: str = "Processing") -> Progress:
+        """Create a progress bar for file processing."""
+        self._progress = Progress(
+            SpinnerColumn(),
+            TextColumn("[progress.description]{task.description}"),
+            BarColumn(bar_width=40),
+            MofNCompleteColumn(),
+            TextColumn("•"),
+            TimeElapsedColumn(),
+            TextColumn("•"),
+            TimeRemainingColumn(),
+            console=self.console,
+            transient=True,
+        )
+        return self._progress
+    
+    def create_rule_progress(self, total_rules: int, description: str = "Executing rules") -> Progress:
+        """Create a progress bar for rule execution."""
+        return Progress(
+            SpinnerColumn(),
+            TextColumn("[progress.description]{task.description}"),
+            BarColumn(bar_width=40),
+            MofNCompleteColumn(),
+            TextColumn("•"),
+            TimeElapsedColumn(),
+            console=self.console,
+            transient=True,
+        )
+    
+    @contextmanager
+    def live_status(self, status: str = "Processing..."):
+        """Context manager for live status updates."""
+        with self.console.status(status, spinner="dots") as status_obj:
+            yield status_obj
+    
+    def print_detection(
+        self, 
+        title: str, 
+        level: str, 
+        count: int,
+        show_immediately: bool = True
+    ):
+        """Print a detection result with styled output."""
+        # Store for summary
+        self._detections.append({
+            "title": title,
+            "level": level,
+            "count": count
+        })
+        
+        # Update stats
+        self.stats.detection_stats.add_detection(level, count)
+        
+        if show_immediately and not self.quiet:
+            level_style = f"rule.level.{level.lower()}"
+            self.console.print(
+                f"    [rule.title]•[/] {title} "
+                f"[[{level_style}]{level}[/]] : "
+                f"[count]{count:,}[/] events"
+            )
+    
+    def print_detection_summary_table(self):
+        """Print a summary table of all detections sorted by severity."""
+        if not self._detections:
+            self.info("No detections found")
+            return
+        
+        # Sort detections by severity and count
+        level_priority = {
+            "critical": 0, "high": 1, "medium": 2, 
+            "low": 3, "informational": 4
+        }
+        sorted_detections = sorted(
+            self._detections,
+            key=lambda d: (level_priority.get(d["level"].lower(), 5), -d["count"])
+        )
+        
+        # Create detection table
+        table = Table(
+            title="[bold]Detection Results[/]",
+            show_header=True,
+            header_style="bold",
+            border_style="dim",
+        )
+        table.add_column("Rule", style="cyan", no_wrap=False, max_width=60)
+        table.add_column("Level", justify="center", width=14)
+        table.add_column("Events", justify="right", style="magenta")
+        
+        for det in sorted_detections:
+            level = det["level"]
+            level_style = f"rule.level.{level.lower()}"
+            table.add_row(
+                det["title"],
+                Text(level.upper(), style=level_style),
+                f"{det['count']:,}"
+            )
+        
+        self.console.print()
+        self.console.print(table)
+    
+    def print_summary_dashboard(
+        self,
+        processing_time: float,
+        files_processed: int,
+        total_events: int,
+        peak_memory_mb: float,
+        avg_memory_mb: float,
+        workers_used: int = 1
+    ):
+        """Print a summary dashboard at the end of processing."""
+        # Update stats
+        self.stats.end_time = time.time()
+        self.stats.files_processed = files_processed
+        self.stats.events_total = total_events
+        self.stats.peak_memory_mb = peak_memory_mb
+        self.stats.avg_memory_mb = avg_memory_mb
+        self.stats.workers_used = workers_used
+        
+        # Create summary table
+        summary_table = Table(show_header=False, box=None, padding=(0, 2))
+        summary_table.add_column("Metric", style="dim")
+        summary_table.add_column("Value", style="bold")
+        
+        # Time
+        if processing_time >= 60:
+            time_str = f"{int(processing_time // 60)}m {int(processing_time % 60)}s"
+        else:
+            time_str = f"{processing_time:.1f}s"
+        summary_table.add_row("⏱  Duration", f"[time]{time_str}[/]")
+        
+        # Files
+        summary_table.add_row("📁 Files", f"[file]{files_processed:,}[/]")
+        
+        # Events
+        summary_table.add_row("📊 Events", f"[count]{total_events:,}[/]")
+        
+        # Throughput
+        if processing_time > 0:
+            throughput = total_events / processing_time
+            summary_table.add_row("⚡ Throughput", f"[success]{throughput:,.0f}[/] events/s")
+        
+        # Workers (if parallel)
+        if workers_used > 1:
+            summary_table.add_row("👥 Workers", f"[count]{workers_used}[/]")
+        
+        # Memory
+        if peak_memory_mb > 0:
+            if peak_memory_mb >= 1024:
+                mem_str = f"{peak_memory_mb / 1024:.2f} GB"
+            else:
+                mem_str = f"{peak_memory_mb:.0f} MB"
+            summary_table.add_row("💾 Peak Memory", f"[info]{mem_str}[/]")
+        
+        # Detection summary by severity
+        det_stats = self.stats.detection_stats
+        detection_parts = []
+        if det_stats.critical > 0:
+            detection_parts.append(f"[rule.level.critical]{det_stats.critical} CRIT[/]")
+        if det_stats.high > 0:
+            detection_parts.append(f"[rule.level.high]{det_stats.high} HIGH[/]")
+        if det_stats.medium > 0:
+            detection_parts.append(f"[rule.level.medium]{det_stats.medium} MED[/]")
+        if det_stats.low > 0:
+            detection_parts.append(f"[rule.level.low]{det_stats.low} LOW[/]")
+        if det_stats.informational > 0:
+            detection_parts.append(f"[rule.level.informational]{det_stats.informational} INFO[/]")
+        
+        if detection_parts:
+            summary_table.add_row("🎯 Detections", " | ".join(detection_parts))
+        else:
+            summary_table.add_row("🎯 Detections", "[dim]None[/]")
+        
+        # Total matched events
+        if det_stats.total_events > 0:
+            summary_table.add_row(
+                "🔍 Matched Events", 
+                f"[count]{det_stats.total_events:,}[/] across [count]{det_stats.total_rules_matched}[/] rules"
+            )
+        
+        # Print panel
+        self.console.print()
+        panel = Panel(
+            summary_table,
+            title="[bold]Summary[/]",
+            border_style="cyan",
+            padding=(1, 2)
+        )
+        self.console.print(panel)
+    
+    def clear_detections(self):
+        """Clear stored detections for new run."""
+        self._detections = []
+        self.stats = ProcessingStats()
+
+
+class RichProgressTracker:
+    """
+    Progress tracker for real-time updates during processing.
+    
+    Supports multiple concurrent progress bars and live status updates.
+    """
+    
+    def __init__(self, console: Optional[Console] = None, quiet: bool = False):
+        """Initialize the progress tracker."""
+        self.console = console or Console(theme=ZIRCOLITE_THEME)
+        self.quiet = quiet
+        self._progress: Optional[Progress] = None
+        self._live: Optional[Live] = None
+        self._tasks: Dict[str, TaskID] = {}
+        self._detection_count: Dict[str, int] = {
+            "critical": 0, "high": 0, "medium": 0, 
+            "low": 0, "informational": 0
+        }
+    
+    def create_multi_progress(self) -> Progress:
+        """Create a multi-task progress bar."""
+        self._progress = Progress(
+            SpinnerColumn(),
+            TextColumn("[progress.description]{task.description}"),
+            BarColumn(bar_width=30),
+            MofNCompleteColumn(),
+            TimeElapsedColumn(),
+            console=self.console,
+            transient=False,
+        )
+        return self._progress
+    
+    @contextmanager
+    def live_progress(self, total: int, description: str = "Processing"):
+        """Context manager for live progress updates."""
+        if self.quiet:
+            yield None
+            return
+        
+        progress = Progress(
+            SpinnerColumn(),
+            TextColumn("[progress.description]{task.description}"),
+            BarColumn(bar_width=40),
+            MofNCompleteColumn(),
+            TextColumn("•"),
+            TextColumn("[count]{task.fields[events]:,}[/] events"),
+            TextColumn("•"),
+            TimeElapsedColumn(),
+            console=self.console,
+            transient=True,
+        )
+        
+        with progress:
+            task_id = progress.add_task(description, total=total, events=0)
+            
+            def update(advance: int = 1, events: int = 0):
+                progress.update(task_id, advance=advance, events=events)
+            
+            yield update
+    
+    @contextmanager
+    def live_rule_execution(self, total_rules: int):
+        """Context manager for rule execution with live detection updates."""
+        if self.quiet:
+            yield None, lambda *args, **kwargs: None
+            return
+        
+        # Create progress bar
+        progress = Progress(
+            SpinnerColumn(),
+            TextColumn("[progress.description]{task.description}"),
+            BarColumn(bar_width=30),
+            MofNCompleteColumn(),
+            TimeElapsedColumn(),
+            console=self.console,
+            transient=False,
+        )
+        
+        # Create detection summary table
+        def make_detection_table():
+            table = Table(show_header=False, box=None, padding=(0, 1))
+            table.add_column("Level", width=12)
+            table.add_column("Count", justify="right", width=8)
+            
+            if self._detection_count["critical"] > 0:
+                table.add_row("[rule.level.critical]CRITICAL[/]", str(self._detection_count["critical"]))
+            if self._detection_count["high"] > 0:
+                table.add_row("[rule.level.high]HIGH[/]", str(self._detection_count["high"]))
+            if self._detection_count["medium"] > 0:
+                table.add_row("[rule.level.medium]MEDIUM[/]", str(self._detection_count["medium"]))
+            if self._detection_count["low"] > 0:
+                table.add_row("[rule.level.low]LOW[/]", str(self._detection_count["low"]))
+            if self._detection_count["informational"] > 0:
+                table.add_row("[rule.level.informational]INFO[/]", str(self._detection_count["informational"]))
+            
+            return table
+        
+        # Group progress and detections
+        task_id = None
+        
+        with Live(console=self.console, refresh_per_second=10, transient=True) as live:
+            progress.start()
+            task_id = progress.add_task("Executing rules", total=total_rules)
+            
+            def update(advance: int = 1, detection: Optional[Dict] = None):
+                progress.update(task_id, advance=advance)
+                
+                if detection:
+                    level = detection.get("level", "unknown").lower()
+                    count = detection.get("count", 0)
+                    if level in self._detection_count:
+                        self._detection_count[level] += count
+                
+                # Update live display
+                group = Group(progress, make_detection_table())
+                live.update(group)
+            
+            yield progress, update
+            
+            progress.stop()
+        
+        # Reset for next run
+        self._detection_count = {k: 0 for k in self._detection_count}
+
+
+def get_rich_logger(name: str = "zircolite", debug: bool = False, log_file: Optional[str] = None) -> logging.Logger:
+    """
+    Create a logger with Rich handler for styled console output.
+    
+    Args:
+        name: Logger name
+        debug: Enable debug level logging
+        log_file: Optional file path for persistent logging
+        
+    Returns:
+        Configured logger with Rich handler
+    """
+    logger = logging.getLogger(name)
+    logger.setLevel(logging.DEBUG if debug else logging.INFO)
+    logger.handlers.clear()
+    logger.propagate = False
+    
+    # Rich console handler - hide level prefix for clean output
+    rich_handler = RichHandler(
+        console=console,
+        show_path=False,
+        show_time=False,
+        show_level=False,  # Don't show INFO/DEBUG/etc prefix
+        markup=True,
+        rich_tracebacks=True,
+    )
+    rich_handler.setLevel(logging.INFO)
+    rich_handler.setFormatter(logging.Formatter("%(message)s"))
+    logger.addHandler(rich_handler)
+    
+    # File handler (if requested)
+    if log_file:
+        file_format = "%(asctime)s %(levelname)-8s %(message)s"
+        if debug:
+            file_format = "%(asctime)s %(levelname)-8s %(module)s:%(lineno)s %(funcName)s %(message)s"
+        file_handler = logging.FileHandler(log_file)
+        file_handler.setLevel(logging.DEBUG if debug else logging.INFO)
+        file_handler.setFormatter(logging.Formatter(file_format, datefmt='%Y-%m-%d %H:%M:%S'))
+        logger.addHandler(file_handler)
+    
+    return logger
+
+
+# Color/style mapping for severity levels
+LEVEL_STYLES = {
+    "critical": "rule.level.critical",
+    "high": "rule.level.high", 
+    "medium": "rule.level.medium",
+    "low": "rule.level.low",
+    "informational": "rule.level.informational",
+}
+
+
+def format_level(level: str) -> str:
+    """Format a severity level with appropriate style markup."""
+    style = LEVEL_STYLES.get(level.lower(), "")
+    if style:
+        return f"[{style}]{level}[/]"
+    return level
