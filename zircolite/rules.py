@@ -101,7 +101,7 @@ class RulesUpdater:
                 self.logger.info(f"[cyan]   [+] Updated : {dest_file}[/]")
                 
         if count == 0: 
-            self.logger.info(f"[cyan]   [+] No newer rulesets found")
+            self.logger.info("[cyan]   [+] No newer rulesets found")
     
     def clean(self):
         if Path(self.tempFile).exists():
@@ -170,12 +170,13 @@ class RulesetHandler:
 
         # Combining rulesets 
         self.rulesets = [item for sub_ruleset in self.rulesets if sub_ruleset for item in sub_ruleset]
-        # Remove duplicates based on 'id' or 'title'
+        # Remove duplicates based on SQL query
         unique_rules = []
         seen_keys = set()
         for rule in self.rulesets:
-            # Use 'id' or 'title' as the unique key
-            rule_key = rule.get('id') or rule.get('title')
+            # Use the SQL query as the unique key
+            rule_queries = rule.get('rule')
+            rule_key = tuple(rule_queries) if rule_queries else None
             if rule_key and rule_key not in seen_keys:
                 seen_keys.add(rule_key)
                 unique_rules.append(rule)
@@ -190,7 +191,7 @@ class RulesetHandler:
         self.rulesets = sorted(unique_rules, key=lambda d: level_order.get(d.get('level', 'informational'), float('inf'))) # Sorting by level
             
         if all(not sub_ruleset for sub_ruleset in self.rulesets):
-            self.logger.error(f"[red]   [-] No rules to execute ![/]")
+            self.logger.error("[red]   [-] No rules to execute ![/]")
         else:
             self.logger.info(f"[+] {len(self.rulesets)} rules loaded")
 
@@ -215,6 +216,19 @@ class RulesetHandler:
                     return True
                 except json.JSONDecodeError:
                     return False
+
+    def is_valid_sigma_rule(self, filepath):
+        """Check if a YAML file is a valid Sigma rule (has required fields)."""
+        try:
+            with open(filepath, 'r', encoding="utf-8") as file:
+                content = yaml.safe_load(file)
+                if not isinstance(content, dict):
+                    return False
+                # A valid Sigma rule must have title, logsource and detection
+                required_fields = ['title', 'logsource', 'detection']
+                return all(field in content for field in required_fields)
+        except Exception:
+            return False
 
     def rand_ruleset_name(self, sigma_rules):
         """Generate a random ruleset filename."""
@@ -251,7 +265,13 @@ class RulesetHandler:
             else:
                 rule_list = [rules]
             
-            rule_collection = SigmaCollection.load_ruleset(rule_list)
+            # Filter out invalid Sigma rules
+            valid_rule_list = [r for r in rule_list if self.is_valid_sigma_rule(r)]
+            skipped_count = len(rule_list) - len(valid_rule_list)
+            if skipped_count > 0:
+                self.logger.debug(f"[yellow]   [!] Skipped {skipped_count} invalid Sigma rule(s)[/]")
+            
+            rule_collection = SigmaCollection.load_ruleset(valid_rule_list)
             ruleset = []
 
             # Process rules with Rich progress bar
