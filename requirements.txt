@@ -3,7 +3,7 @@ xxhash
 rich>=14.2.0
 chardet
 RestrictedPython
-requests>=2.24.0
+requests>=2.32.4
 jinja2>=2.11.3
 evtx>=0.6.2
 lxml
@@ -13,3 +13,4 @@ pysigma-pipeline-windows>=1.1.1
 pysigma-backend-sqlite>=0.1.1
 pyyaml
 psutil>=5.9.0
+urllib3>=2.6.3 # not directly required, pinned by Snyk to avoid a vulnerability
