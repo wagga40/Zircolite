@@ -128,16 +128,7 @@ Zircolite automatically optimizes processing based on your workload. When you ru
 3. **Enables parallel processing** - when beneficial, automatically processes files in parallel
 
 ```shell
-# Auto-optimization happens by default
 python3 zircolite.py --evtx ./logs/ --ruleset rules/rules_windows_sysmon.json
-
-# Example output:
-# [+] Analyzing workload...
-#     [>] Files: 15 (250.3 MB total, avg 16.7 MB)
-#     [>] System: 12.5 GB RAM available, 8 CPUs
-#     [>] 📁 Database mode: PER-FILE
-#         [i] Default mode - 15 files, 250.3 MB total
-#     [>] ⚡ Parallel: ENABLED (4 workers)
 ```
 
 You can control this behavior:
