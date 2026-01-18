@@ -35,3 +35,21 @@ tmp
 *.tar
 *.tar.sha256
 .pdm-python
+
+# pycache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.pyw
+*.pyz
+*.pyzw
+
+# Python virtual environments & cache 
+.venv/
+venv/
+.env
+*.log
+pdm.lock
+pyproject.toml
+Makefile*
