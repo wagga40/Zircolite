@@ -13,4 +13,4 @@ pysigma-pipeline-windows>=1.1.1
 pysigma-backend-sqlite>=0.1.1
 pyyaml
 psutil>=5.9.0
-urllib3>=2.6.3 # not directly required, pinned by Snyk to avoid a vulnerability
+urllib3>=2.6.3
