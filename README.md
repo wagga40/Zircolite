@@ -54,7 +54,7 @@ If your EVTX files have the extension ".evtx":
 
 ```shell
 # python3 zircolite.py --evtx <EVTX FOLDER or EVTX FILE> --ruleset <SIGMA RULESET> [--ruleset <OTHER RULESET>]
-python3 zircolite.py --evtx sysmon.evtx --ruleset rules/rules_windows_sysmon_pysigma.json
+python3 zircolite.py --evtx sysmon.evtx --ruleset rules/rules_windows_sysmon.json
 ```
 
 ### Using Native Sigma Rules (YAML)
@@ -82,16 +82,16 @@ python3 zircolite.py --events auditd.log --ruleset rules/rules_linux.json --audi
 python3 zircolite.py --events sysmon.log --ruleset rules/rules_linux.json --sysmon4linux
 
 # For JSONL or NDJSON logs
-python3 zircolite.py --events <JSON_FOLDER_OR_FILE> --ruleset rules/rules_windows_sysmon_pysigma.json --jsononly
+python3 zircolite.py --events <JSON_FOLDER_OR_FILE> --ruleset rules/rules_windows_sysmon.json --jsononly
 
 # For JSON Array logs
-python3 zircolite.py --events <JSON_FOLDER_OR_FILE> --ruleset rules/rules_windows_sysmon_pysigma.json --json-array
+python3 zircolite.py --events <JSON_FOLDER_OR_FILE> --ruleset rules/rules_windows_sysmon.json --json-array
 
 # For CSV logs
-python3 zircolite.py --events <CSV_FOLDER_OR_FILE> --ruleset rules/rules_windows_sysmon_pysigma.json --csv-input
+python3 zircolite.py --events <CSV_FOLDER_OR_FILE> --ruleset rules/rules_windows_sysmon.json --csv-input
 
 # For XML logs
-python3 zircolite.py --events <XML_FOLDER_OR_FILE> --ruleset rules/rules_windows_sysmon_pysigma.json --xml-input
+python3 zircolite.py --events <XML_FOLDER_OR_FILE> --ruleset rules/rules_windows_sysmon.json --xml-input
 ```
 
 - The `--events` argument can be a file or a folder. If it is a folder, all log files in the current folder and subfolders will be selected (use `--no-recursion` to disable).
