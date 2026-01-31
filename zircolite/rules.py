@@ -3,6 +3,7 @@
 Ruleset handling and updating for Zircolite.
 
 This module contains:
+- EventFilter: Filter events based on channel and eventID from rules
 - RulesetHandler: Parse and convert Sigma rules to Zircolite format
 - RulesUpdater: Download and update rulesets from repository
 """
@@ -15,7 +16,7 @@ import re
 import shutil
 import string
 from pathlib import Path
-from typing import Optional
+from typing import Optional, Set, FrozenSet, Tuple, List, Dict, Any
 
 import orjson as json
 import requests
@@ -32,8 +33,169 @@ from rich.progress import Progress, SpinnerColumn, TextColumn, BarColumn, Downlo
 from .config import RulesetConfig
 
 
+class EventFilter:
+    """
+    Filter events based on channel and eventID from loaded rules.
+    
+    This class extracts all unique channel and eventID values from a ruleset
+    and provides fast lookup to determine if an event should be processed.
+    
+    Filtering logic:
+    - If event's Channel is NOT in the set of all channels from rules → discard
+    - If event's EventID is NOT in the set of all eventIDs from rules → discard
+    
+    Both checks are independent - an event must have BOTH a known channel AND
+    a known eventID to be processed.
+    """
+
+    __slots__ = (
+        'channels', 'eventids', '_has_filter_data', 'logger',
+        '_channels_lower', '_rules_with_filter', '_rules_without_filter'
+    )
+
+    def __init__(
+        self, 
+        rulesets: List[Dict[str, Any]], 
+        *, 
+        logger: Optional[logging.Logger] = None
+    ):
+        """
+        Initialize EventFilter from a list of rules.
+        
+        Args:
+            rulesets: List of rule dictionaries, each potentially containing
+                      'channel' (list of strings) and 'eventid' (list of ints)
+            logger: Logger instance (creates default if None)
+        """
+        self.logger = logger or logging.getLogger(__name__)
+        
+        # Storage for unique values across ALL rules (built as sets, converted to frozenset)
+        self.channels: FrozenSet[str] = frozenset()
+        self.eventids: FrozenSet[int] = frozenset()
+        
+        # Stats
+        self._rules_with_filter = 0
+        self._rules_without_filter = 0
+        
+        # Flags
+        self._has_filter_data = False
+        
+        # Pre-computed lowercase channels for case-insensitive matching
+        self._channels_lower: FrozenSet[str] = frozenset()
+        
+        # Extract filter data from rulesets
+        self._extract_filter_data(rulesets)
+
+    def _extract_filter_data(self, rulesets: List[Dict[str, Any]]) -> None:
+        """Extract all unique channels and eventIDs from all rules."""
+        rules_with_filter = 0
+        rules_without_filter = 0
+        
+        # Build as mutable sets first
+        channels_set: Set[str] = set()
+        eventids_set: Set[int] = set()
+        
+        for rule in rulesets:
+            channels = rule.get('channel', [])
+            eventids = rule.get('eventid', [])
+            
+            # Check if this rule has filter metadata
+            if channels or eventids:
+                rules_with_filter += 1
+                
+                # Add all channels from this rule
+                for channel in channels:
+                    if channel:
+                        channels_set.add(channel)
+                
+                # Add all eventids from this rule
+                for eventid in eventids:
+                    if eventid is not None:
+                        eventids_set.add(int(eventid))
+            else:
+                rules_without_filter += 1
+        
+        # Convert to immutable frozensets for faster lookups
+        self.channels = frozenset(channels_set)
+        self.eventids = frozenset(eventids_set)
+        
+        # Pre-compute lowercase channels for case-insensitive matching
+        self._channels_lower = frozenset(c.lower() for c in self.channels)
+        
+        # Store stats
+        self._rules_with_filter = rules_with_filter
+        self._rules_without_filter = rules_without_filter
+        
+        # Enable filtering if we have BOTH channels AND eventIDs
+        self._has_filter_data = bool(self.channels and self.eventids)
+        
+        if not self._has_filter_data:
+            self.logger.debug("EventFilter: Missing channels or eventIDs - filtering disabled")
+
+    @property
+    def is_enabled(self) -> bool:
+        """Check if filtering is enabled (has both channels and eventIDs)."""
+        return self._has_filter_data
+
+    @property
+    def has_filter_data(self) -> bool:
+        """Check if filter data was extracted from rules."""
+        return self._has_filter_data
+
+    def should_process_event(self, channel: Optional[str], eventid: Optional[int]) -> bool:
+        """
+        Check if an event should be processed based on its channel and eventID.
+        
+        Filtering logic:
+        - If event's Channel is NOT in the set of all channels → discard
+        - If event's EventID is NOT in the set of all eventIDs → discard
+        
+        Both checks are independent. An event must have a known channel AND 
+        a known eventID to be processed.
+        
+        Args:
+            channel: The event's channel name (e.g., 'Microsoft-Windows-Sysmon/Operational')
+            eventid: The event's EventID (int, str convertible to int, or None)
+            
+        Returns:
+            True if the event should be processed, False if it can be skipped
+        """
+        # Fast path: if no filter data or incomplete event info, process everything
+        if not self._has_filter_data or channel is None or eventid is None:
+            return True
+        
+        # Convert eventid to int if needed (internal callers pass int, but API accepts str)
+        # isinstance check is cheap; only convert when necessary for external callers
+        if not isinstance(eventid, int):
+            try:
+                eventid = int(eventid)
+            except (ValueError, TypeError):
+                return True
+        
+        # Local bindings for faster attribute access in tight loop
+        channels = self.channels
+        channels_lower = self._channels_lower
+        
+        # Check 1: Is the channel in our known channels? (case-insensitive fallback)
+        if channel not in channels and channel.lower() not in channels_lower:
+            return False
+        
+        # Check 2: Is the eventID in our known eventIDs?
+        return eventid in self.eventids
+
+    def get_stats(self) -> Dict[str, Any]:
+        """Get statistics about the filter data."""
+        return {
+            'channels_count': len(self.channels),
+            'eventids_count': len(self.eventids),
+            'is_enabled': self.is_enabled,
+            'rules_with_filter': self._rules_with_filter,
+            'rules_without_filter': self._rules_without_filter
+        }
+
+
 class RulesUpdater:
-    """Download rulesets from the https://github.com/wagga40/Zircolite-Rules repository and update if necessary."""
+    """Download rulesets from the https://github.com/wagga40/Zircolite-Rules-v2 repository and update if necessary."""
 
     def __init__(self, *, logger: Optional[logging.Logger] = None):
         """
@@ -42,7 +204,7 @@ class RulesUpdater:
         Args:
             logger: Logger instance (creates default if None)
         """
-        self.url = "https://github.com/wagga40/Zircolite-Rules/archive/refs/heads/main.zip"
+        self.url = "https://github.com/wagga40/Zircolite-Rules-v2/archive/refs/heads/main.zip"
         self.logger = logger or logging.getLogger(__name__)
         self.tempFile = f'tmp-rules-{self._randString()}.zip'
         self.tmpDir = f'tmp-rules-{self._randString()}'
@@ -144,6 +306,7 @@ class RulesetHandler:
         self.saveRuleset = cfg.save_ruleset
         self.rulesetPathList = cfg.ruleset
         self.pipelines = []
+        self.event_filter: Optional[EventFilter] = None  # Will be populated after loading
 
         # Init pipelines
         plugins = InstalledSigmaPlugins.autodiscover()
@@ -194,6 +357,15 @@ class RulesetHandler:
             self.logger.error("[red]   [-] No rules to execute ![/]")
         else:
             self.logger.info(f"[+] {len(self.rulesets)} rules loaded")
+            
+            # Create EventFilter from loaded rulesets for early event filtering
+            self.event_filter = EventFilter(self.rulesets, logger=self.logger)
+            if self.event_filter.is_enabled:
+                stats = self.event_filter.get_stats()
+                self.logger.info(
+                    f"[+] Event filter enabled: [cyan]{stats['channels_count']}[/] channels, "
+                    f"[cyan]{stats['eventids_count']}[/] eventIDs"
+                )
 
     def is_yaml(self, filepath): 
         """Test if the file is a YAML file."""

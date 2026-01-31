@@ -7,6 +7,7 @@ This module contains the JSONFlattener class for:
 - Field mapping and transformation
 - Time-based filtering
 - SQL schema generation
+- Early event filtering based on channel/eventID
 """
 
 import base64
@@ -14,7 +15,7 @@ import logging
 import os
 import re
 import time
-from typing import Any, Optional
+from typing import Any, Optional, TYPE_CHECKING
 
 import chardet
 import orjson as json
@@ -30,9 +31,12 @@ from RestrictedPython.Guards import guarded_iter_unpack_sequence
 from .config import ProcessingConfig
 from .utils import load_field_mappings
 
+if TYPE_CHECKING:
+    from .rules import EventFilter
+
 
 class JSONFlattener:
-    """Perform JSON flattening operations"""
+    """Perform JSON flattening operations with optional event filtering."""
 
     __slots__ = (
         'logger', 'key_dict', 'field_stmt_parts', 'values_stmt', 'time_after', 'time_before',
@@ -40,7 +44,9 @@ class JSONFlattener:
         'compiled_code_cache', 'chosen_input', 'field_exclusions', 'field_mappings',
         'useless_values', 'aliases', 'field_split_list', 'transforms', 'transforms_enabled',
         'RestrictedPython_BUILTINS', '_time_after_parsed', '_time_before_parsed',
-        '_has_time_filter', '_transform_func_cache', '_sql_type_cache'
+        '_has_time_filter', '_transform_func_cache', '_sql_type_cache',
+        # Event filtering (early skip based on channel/eventID)
+        'event_filter', '_events_filtered_count'
     )
 
     @staticmethod
@@ -59,7 +65,8 @@ class JSONFlattener:
         args_config: Any,
         processing_config: Optional[ProcessingConfig] = None,
         *,
-        logger: Optional[logging.Logger] = None
+        logger: Optional[logging.Logger] = None,
+        event_filter: 'Optional[EventFilter]' = None
     ):
         """
         Initialize JSONFlattener.
@@ -69,6 +76,7 @@ class JSONFlattener:
             args_config: Argparse namespace with input format options
             processing_config: Processing configuration (uses defaults if None)
             logger: Logger instance (creates default if None)
+            event_filter: Optional EventFilter for early event filtering based on channel/eventID
         """
         proc = processing_config or ProcessingConfig()
         
@@ -88,6 +96,10 @@ class JSONFlattener:
         self._transform_func_cache = {}
         # Pre-computed SQL type strings to avoid f-string overhead
         self._sql_type_cache = {}
+        
+        # Event filter for early filtering based on channel/eventID
+        self.event_filter = event_filter
+        self._events_filtered_count = 0
 
         # Pre-parse time bounds once instead of per-event
         self._has_time_filter = (proc.time_after != "1970-01-01T00:00:00" or proc.time_before != "9999-12-12T23:59:59")
@@ -151,6 +163,93 @@ class JSONFlattener:
             return func
         except Exception:
             return None
+
+    def _extract_event_filter_fields(self, event_dict: dict) -> tuple:
+        """
+        Extract Channel and EventID from raw event data for early filtering.
+        
+        This method tries to extract these fields from common locations in
+        Windows event log structures before the expensive flattening operation.
+        
+        Args:
+            event_dict: Raw event dictionary (not yet flattened)
+            
+        Returns:
+            Tuple of (channel, eventid) where either can be None if not found
+        """
+        channel = None
+        eventid = None
+        
+        # Try common paths for Windows EVTX events
+        # Path 1: Event.System.Channel and Event.System.EventID
+        event = event_dict.get('Event')
+        if event and isinstance(event, dict):
+            system = event.get('System')
+            if system and isinstance(system, dict):
+                channel = system.get('Channel')
+                
+                # EventID can be a dict with '#text' or a direct value
+                eid = system.get('EventID')
+                if isinstance(eid, dict):
+                    eventid = eid.get('#text')
+                else:
+                    eventid = eid
+        
+        # Path 2: Direct fields (for pre-flattened or different structures)
+        if channel is None:
+            channel = event_dict.get('Channel')
+        if eventid is None:
+            eventid = event_dict.get('EventID')
+        
+        # Path 3: System at top level (some JSON formats)
+        if channel is None or eventid is None:
+            system = event_dict.get('System')
+            if system and isinstance(system, dict):
+                if channel is None:
+                    channel = system.get('Channel')
+                if eventid is None:
+                    eid = system.get('EventID')
+                    if isinstance(eid, dict):
+                        eventid = eid.get('#text')
+                    else:
+                        eventid = eid
+        
+        # Convert eventid to int if possible
+        if eventid is not None:
+            try:
+                eventid = int(eventid)
+            except (ValueError, TypeError):
+                eventid = None
+        
+        return channel, eventid
+
+    def _should_process_event(self, event_dict: dict) -> bool:
+        """
+        Check if an event should be processed based on the event filter.
+        
+        This is a fast check performed before expensive flattening operations.
+        
+        Args:
+            event_dict: Raw event dictionary
+            
+        Returns:
+            True if the event should be processed, False if it can be skipped
+        """
+        if self.event_filter is None or not self.event_filter.is_enabled:
+            return True
+        
+        channel, eventid = self._extract_event_filter_fields(event_dict)
+        should_process = self.event_filter.should_process_event(channel, eventid)
+        
+        if not should_process:
+            self._events_filtered_count += 1
+        
+        return should_process
+
+    @property
+    def events_filtered_count(self) -> int:
+        """Return the number of events skipped by the event filter."""
+        return self._events_filtered_count
 
     def _transform_value(self, code, param):
         """Transform a value using cached transform function."""
@@ -236,6 +335,9 @@ class JSONFlattener:
                 # Split by newlines for line-delimited JSON
                 logs = file_content.split(b'\n')
 
+            # Cache event filter method for hot loop
+            should_process_event = self._should_process_event
+            
             for line in logs:
                 if not line:  # Skip empty lines
                     continue
@@ -244,6 +346,10 @@ class JSONFlattener:
                         dict_to_flatten = line
                     else:
                         dict_to_flatten = json.loads(line)
+                    
+                    # Early event filter check before expensive flattening
+                    if not should_process_event(dict_to_flatten):
+                        continue
                     
                     dict_to_flatten["OriginalLogfile"] = filename
                     if hashes:

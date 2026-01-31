@@ -5,7 +5,7 @@ vars:
   DOCKER_BUILD_FLAGS: ''
   DOCKER_REGISTRY: docker.io
   DOCKER_REPO: wagga40/zircolite
-  RULES_URL: https://github.com/wagga40/Zircolite-Rules/archive/refs/heads/main.tar.gz
+  RULES_URL: https://github.com/wagga40/Zircolite-Rules-v2/archive/refs/heads/main.tar.gz
   PLATFORMS: linux/amd64,linux/arm64
 
 tasks:
@@ -58,6 +58,7 @@ tasks:
       - rm -f zircolite.log
       - rm -f fields.json
       - rm -f zircolite.tar
+      - rm -rf zircogui-output-*
 
   save:
     desc: Save the Docker image to an archive
@@ -70,13 +71,13 @@ tasks:
       - '{{.DOCKER}} image save --output zircolite.tar {{.DOCKER_REGISTRY}}/{{.DOCKER_REPO}}:{{.DOCKER_TAG}}'
 
   update-rules:
-    desc: Update default rulesets using Zircolite-Rules repository
+    desc: Update default rulesets using Zircolite-Rules-v2 repository
     preconditions:
       - sh: command -v curl
         msg: "curl is required. Please install it first"
     prompt: "This task will overwrite the existing rulesets. Are you sure you want to continue?"
     cmds: 
       - curl -sSL {{.RULES_URL}} | tar -xzf -
-      - defer: rm -rf Zircolite-Rules-main
-      - mv Zircolite-Rules-main/rules_*.json ./rules/
+      - defer: rm -rf Zircolite-Rules-v2-main
+      - mv Zircolite-Rules-v2-main/rules_*.json ./rules/
 

@@ -122,6 +122,24 @@ def load_field_mappings(config_file: str, *, logger: Optional[logging.Logger] = 
             logger.debug(f"Field mappings config missing '{key}', using default")
             config[key] = defaults[key]
     
+    # Add event_filter section with minimal fallback defaults
+    # (Full defaults are in config/fieldMappings.yaml)
+    if 'event_filter' not in config:
+        config['event_filter'] = {
+            'enabled': True,
+            'channel_fields': ["Event.System.Channel", "Channel"],
+            'eventid_fields': ["Event.System.EventID", "EventID"],
+        }
+    
+    # Add timestamp_detection section with minimal fallback defaults
+    # (Full defaults are in config/fieldMappings.yaml)
+    if 'timestamp_detection' not in config:
+        config['timestamp_detection'] = {
+            'default_field': 'SystemTime',
+            'auto_detect': True,
+            'detection_fields': ["SystemTime", "UtcTime", "@timestamp", "timestamp"],
+        }
+    
     return config
 
 
@@ -309,7 +327,7 @@ def analyze_files_and_recommend_mode(file_list, logger=None):
     - Many small files (>10 files, avg <5MB) → unified mode (less overhead, cross-file correlation)
     - Few large files (<5 files, avg >50MB) → per-file mode (memory efficient)
     - Low available RAM (<2GB) → per-file mode (safer for memory)
-    - High RAM + many files → unified mode (faster overall)
+    - High RAM + many files → per-file mode (enables parallel processing)
     - Very large total size (>available RAM) → per-file mode (avoid OOM)
     - Single file → per-file mode (no benefit from unified)
     
@@ -443,9 +461,9 @@ def analyze_files_and_recommend_mode(file_list, logger=None):
     if file_count < 5 and avg_size >= LARGE_FILE_THRESHOLD:
         return ('per-file', f"Few large files detected ({file_count} files, avg {format_size(avg_size)})", stats)
     
-    # Rule 6: High RAM + moderate number of files - unified mode
+    # Rule 6: High RAM + moderate number of files - per-file mode (enables parallel processing)
     if available_ram >= HIGH_RAM_THRESHOLD and file_count >= 3:
-        return ('unified', f"Sufficient RAM available ({format_size(available_ram)}) with {file_count} files", stats)
+        return ('per-file', f"Sufficient RAM available ({format_size(available_ram)}) with {file_count} files - parallel processing enabled", stats)
     
     # Rule 7: Many files (even if not tiny) - unified mode for correlation benefits
     if file_count >= MANY_FILES_THRESHOLD:

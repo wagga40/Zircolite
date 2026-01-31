@@ -35,6 +35,7 @@ from zircolite import (
     EvtxExtractor,
     RulesetHandler,
     RulesUpdater,
+    EventFilter,
     TemplateEngine,
     ZircoliteGuiGenerator,
     MemoryTracker,
@@ -90,6 +91,7 @@ class ProcessingContext:
     dbfile: Optional[str]
     keepflat: bool
     memory_tracker: MemoryTracker
+    event_filter: Optional[EventFilter] = None
 
 
 ################################################################
@@ -112,6 +114,7 @@ def parse_arguments():
     event_args = parser.add_argument_group('🔍 EVENTS FILTERING')
     event_args.add_argument("-A", "--after", help="Process only events after this timestamp (UTC format: 1970-01-01T00:00:00)", type=str, default="1970-01-01T00:00:00")
     event_args.add_argument("-B", "--before", help="Process only events before this timestamp (UTC format: 1970-01-01T00:00:00)", type=str, default="9999-12-12T23:59:59")
+    event_args.add_argument("--no-event-filter", help="Disable early event filtering based on channel/eventID (process all events)", action='store_true')
     
     # Event and log formats options
     event_formats_args = parser.add_mutually_exclusive_group()
@@ -157,7 +160,7 @@ def parse_arguments():
     config_formats_args.add_argument("-RE", "--remove-events", help="Remove processed log files after successful analysis (use with caution)", action='store_true')
     config_formats_args.add_argument("-U", "--update-rules", help="Update rulesets in the 'rules' directory", action='store_true')
     config_formats_args.add_argument("-v", "--version", help="Display Zircolite version", action='store_true')
-    config_formats_args.add_argument("--timefield", "--time-field", help="Specify time field name for event forwarding (default: 'SystemTime')", type=str, default="SystemTime")
+    config_formats_args.add_argument("--timefield", "--time-field", help="Specify time field name for time filtering (default: 'SystemTime', auto-detects if not found)", type=str, default="SystemTime")
     config_formats_args.add_argument("--no-streaming", help="Disable streaming mode and use traditional multi-pass processing (for debugging)", action='store_true')
     config_formats_args.add_argument("--unified-db", "--all-in-one", help="Force unified database mode (all files in one DB, enables cross-file correlation)", action='store_true')
     config_formats_args.add_argument("--no-auto-mode", help="Disable automatic processing mode selection based on file analysis", action='store_true')
@@ -296,7 +299,8 @@ def process_unified_streaming(ctx: ProcessingContext, file_list: List[Path], inp
         input_type=input_type,
         args_config=args,
         extractor=extractor,
-        disable_progress=disable_nested
+        disable_progress=disable_nested,
+        event_filter=ctx.event_filter
     )
     ctx.memory_tracker.sample()
     
@@ -348,7 +352,8 @@ def process_perfile_streaming(ctx: ProcessingContext, file_list: List[Path], inp
             input_type=input_type,
             args_config=args,
             extractor=extractor,
-            disable_progress=disable_nested
+            disable_progress=disable_nested,
+            event_filter=ctx.event_filter
         )
         ctx.memory_tracker.sample()
         
@@ -393,7 +398,7 @@ def process_unified_traditional(ctx: ProcessingContext, file_list: List[Path], a
     disable_nested = len(file_list) > 1
     zircolite_core = create_zircolite_core(ctx, disable_progress=disable_nested)
     
-    zircolite_core.run(file_list, insert_to_db=True, save_to_file=ctx.keepflat, args_config=args, disable_progress=disable_nested)
+    zircolite_core.run(file_list, insert_to_db=True, save_to_file=ctx.keepflat, args_config=args, disable_progress=disable_nested, event_filter=ctx.event_filter)
     ctx.memory_tracker.sample()
     
     if ctx.dbfile:
@@ -439,7 +444,7 @@ def process_perfile_traditional(ctx: ProcessingContext, file_list: List[Path], a
         
         zircolite_core = create_zircolite_core(ctx, db_location=":memory:", disable_progress=disable_nested)
         
-        zircolite_core.run([json_file], insert_to_db=True, save_to_file=ctx.keepflat, args_config=args, disable_progress=disable_nested)
+        zircolite_core.run([json_file], insert_to_db=True, save_to_file=ctx.keepflat, args_config=args, disable_progress=disable_nested, event_filter=ctx.event_filter)
         ctx.memory_tracker.sample()
         
         if ctx.dbfile:
@@ -554,6 +559,7 @@ def process_parallel_streaming(ctx: ProcessingContext, file_list: List[Path], in
     counter_lock = threading.Lock()
     all_results = []
     errors = []  # Collect errors for later reporting
+    total_filtered_count = [0]  # Track filtered events across all workers
     
     def get_thread_core():
         """Get or create a ZircoliteCore instance for this thread."""
@@ -575,13 +581,19 @@ def process_parallel_streaming(ctx: ProcessingContext, file_list: List[Path], in
             core._cursor = None
             
             # Process file (silently)
-            event_count = core.run_streaming(
+            event_count, filtered_count = core.run_streaming(
                 [log_file],
                 input_type=input_type,
                 args_config=args,
                 extractor=extractor,
-                disable_progress=True
+                disable_progress=True,
+                event_filter=ctx.event_filter,
+                return_filtered_count=True
             )
+            
+            # Aggregate filtered count
+            with counter_lock:
+                total_filtered_count[0] += filtered_count
             
             if event_count == 0:
                 return (0, [])
@@ -628,7 +640,7 @@ def process_parallel_streaming(ctx: ProcessingContext, file_list: List[Path], in
         if len(errors) > 3:
             ctx.logger.error(f"    → ... and {len(errors) - 3} more")
     
-    # Collect all results
+    # Collect all results (event counts are tracked in stats.total_events)
     for file_results in results_list:
         if file_results:
             all_results.extend(file_results)
@@ -681,6 +693,15 @@ def process_parallel_streaming(ctx: ProcessingContext, file_list: List[Path], in
             }
             level_style = level_styles.get(level.lower(), "cyan")
             ctx.logger.info(f'[cyan]    • {title} [[{level_style}]{level}[/][cyan]] : [magenta]{count:,}[/cyan] events[/]')
+    
+    # Display filtered events statistics after detection results
+    total_events = stats.total_events
+    filtered_count = total_filtered_count[0]
+    if filtered_count > 0:
+        ctx.logger.info(
+            f"[+] Total events processed: [magenta]{total_events:,}[/] "
+            f"([dim]{filtered_count:,} events filtered out[/])"
+        )
     
     # Write combined results to output file
     if all_results and not ctx.no_output:
@@ -1070,6 +1091,13 @@ def main():
     memory_tracker = MemoryTracker(logger=logger)
     memory_tracker.sample()
 
+    # Handle event filter configuration
+    active_event_filter = None
+    if not getattr(args, 'no_event_filter', False):
+        active_event_filter = rulesets_manager.event_filter
+    else:
+        logger.info("[+] Event filtering disabled (--no-event-filter)")
+    
     # Create processing context
     ctx = ProcessingContext(
         config=args.config,
@@ -1091,7 +1119,8 @@ def main():
         package=args.package,
         dbfile=args.dbfile,
         keepflat=args.keepflat,
-        memory_tracker=memory_tracker
+        memory_tracker=memory_tracker,
+        event_filter=active_event_filter
     )
 
     # Initialize tracking variables

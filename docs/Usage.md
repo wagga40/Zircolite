@@ -135,6 +135,7 @@ By default:
 |--------|-------------|
 | `-A`, `--after` | Process only events after this timestamp |
 | `-B`, `--before` | Process only events before this timestamp |
+| `--no-event-filter` | Disable early event filtering based on channel/eventID |
 
 #### Input Formats
 
@@ -180,15 +181,19 @@ By default:
 
 | Option | Description |
 |--------|-------------|
-| `-c`, `--config` | JSON config file for field mappings |
+| `-c`, `--config` | YAML/JSON config file for field mappings and transforms |
 | `--fieldlist` | List all event fields |
 | `--debug` | Enable debug logging |
 | `--showall` | Show all rules being executed |
 | `-n`, `--nolog` | Don't create log files |
 | `--ondiskdb` | Use on-disk database (slower, less RAM) |
+
+> [!TIP]
+> The field mappings configuration file (`-c` option) also contains **field transforms** that can automatically decode Base64, extract IOCs, detect obfuscation patterns, and more. See the [Field Transforms](Advanced.md#field-transforms) section in Advanced.md for details.
 | `-RE`, `--remove-events` | Remove log files after analysis |
 | `-U`, `--update-rules` | Update rulesets |
 | `-v`, `--version` | Display version |
+| `--timefield` | Specify timestamp field name (default: 'SystemTime', auto-detects if not found) |
 | `--no-streaming` | Disable streaming mode (use traditional processing) |
 | `--unified-db` | Force unified database mode (all files in one DB, enables cross-file correlation) |
 | `--no-auto-mode` | Disable automatic processing mode selection |
@@ -362,7 +367,7 @@ python3 zircolite.py --evtx sample.evtx --fieldlist
 
 ## Rulesets / Rules
 
-Zircolite has its own ruleset format (JSON). Default rulesets are available in the [rules](https://github.com/wagga40/Zircolite/tree/master/rules/) directory or in the [Zircolite-Rules](https://github.com/wagga40/Zircolite-Rules) repository.
+Zircolite has its own ruleset format (JSON). Default rulesets are available in the [rules](https://github.com/wagga40/Zircolite/tree/master/rules/) directory or in the [Zircolite-Rules-v2](https://github.com/wagga40/Zircolite-Rules-v2) repository.
 
 Since version 2.20.0, Zircolite can directly use native Sigma rules by converting them with [pySigma](https://github.com/SigmaHQ/pySigma). Zircolite will detect whether the provided rules are in JSON or YAML format and will automatically convert them in the latter case: 
 
@@ -423,10 +428,10 @@ If your logs require transformations to align with your rules, Zircolite offers 
 
 ### Configuration File Formats
 
-Zircolite supports both **JSON** and **YAML** formats for the field mappings configuration file:
+Zircolite supports both **YAML** and **JSON** formats for the field mappings configuration file:
 
-- **JSON format**: `config/fieldMappings.json` (default)
-- **YAML format**: `config/fieldMappings.yaml` (with comments for better documentation)
+- **YAML format**: `config/fieldMappings.yaml` (default, with comments for documentation)
+- **JSON format**: Also supported for backward compatibility
 
 The file format is automatically detected based on the file extension (`.json`, `.yaml`, or `.yml`). If no extension is provided, Zircolite will attempt to parse as JSON first, then YAML.
 
@@ -487,9 +492,9 @@ transforms: {}
 
 ### Field Mappings
 
-**Field mappings** enable you to rename a field from your logs. Zircolite leverages this mechanism extensively to rename nested JSON fields. You can view all the built-in field mappings [here](https://github.com/wagga40/Zircolite/blob/master/config/fieldMappings.json).
+**Field mappings** enable you to rename a field from your logs. Zircolite uses this mechanism to rename nested JSON fields. You can view all the built-in field mappings in [`config/fieldMappings.yaml`](https://github.com/wagga40/Zircolite/blob/master/config/fieldMappings.yaml).
 
-For instance, to rename the "CommandLine" field in **your raw logs** to "cmdline", you can add the following entry to the [fieldMappings.json](https://github.com/wagga40/Zircolite/blob/master/config/fieldMappings.json) file:
+For instance, to rename the "CommandLine" field in **your raw logs** to "cmdline", you can add the following entry to the configuration file:
 
 ```json 
 {
@@ -508,11 +513,11 @@ Please keep in mind that, unlike field aliases, the original field name is not p
 
 ### Field Exclusions
 
-**Field exclusions** allow you to exclude a field. Zircolite already uses this mechanism to exclude the `xmlns` field. You can check all the built-in field exclusions [here](https://github.com/wagga40/Zircolite/blob/master/config/fieldMappings.json).
+**Field exclusions** allow you to exclude a field. Zircolite uses this mechanism to exclude the `xmlns` field. See the built-in field exclusions in [`config/fieldMappings.yaml`](https://github.com/wagga40/Zircolite/blob/master/config/fieldMappings.yaml).
 
 ### Value Exclusions
 
-**Value exclusions** allow you to remove fields whose values should be excluded. Zircolite already uses this mechanism to remove *null* and empty values. You can check all the built-in value exclusions [here](https://github.com/wagga40/Zircolite/blob/master/config/fieldMappings.json).
+**Value exclusions** allow you to remove fields whose values should be excluded. Zircolite uses this mechanism to remove *null* and empty values. See the built-in value exclusions in [`config/fieldMappings.yaml`](https://github.com/wagga40/Zircolite/blob/master/config/fieldMappings.yaml).
 
 ### Field Aliases
 
@@ -563,7 +568,7 @@ Be careful when using aliases because the data is stored multiple times.
 
 ### Field Splitting
 
-**Field splitting** allows you to split fields that contain key-value pairs. Zircolite already uses this mechanism to handle hash/hashes fields in Sysmon logs. You can check all the built-in field splittings [here](https://github.com/wagga40/Zircolite/blob/master/config/fieldMappings.json). Additionally, field aliases can be applied to split fields.
+**Field splitting** allows you to split fields that contain key-value pairs. Zircolite uses this mechanism to handle hash/hashes fields in Sysmon logs. See the built-in field splittings in [`config/fieldMappings.yaml`](https://github.com/wagga40/Zircolite/blob/master/config/fieldMappings.yaml). Field aliases can be applied to split fields.
 
 For example, let's say we have this Sysmon event log: 
 
@@ -616,9 +621,28 @@ By using transforms, you can preprocess event data to make it more suitable for 
 
 ### Enabling Transforms
 
-Transforms are configured in the config file (default: `config/fieldMappings.json` or `config/fieldMappings.yaml`) under the `transforms` section. To enable transforms, set the `transforms_enabled` flag to `true` in your configuration file.
+Transforms are configured in `config/fieldMappings.yaml`. To enable transforms:
 
-**JSON format:**
+1. Set `transforms_enabled: true`
+2. Add transform names to the `enabled_transforms` list
+
+```yaml
+transforms_enabled: true
+
+enabled_transforms:
+  # Auditd (Linux)
+  - proctitle
+  - cmd
+  
+  # Uncomment to enable:
+  # - CommandLine_b64decoded
+  # - Image_LOLBinMatch
+  # - ScriptBlockText_ObfuscationIndicators
+```
+
+Only transforms listed in `enabled_transforms` will run. This provides a single location to control all transforms.
+
+**JSON format (alternative):**
 
 ```json
 {
@@ -782,13 +806,57 @@ For each event, Zircolite checks if any transforms are defined for the fields pr
 
 ### Built-in Transforms
 
-The default configuration files (`config/fieldMappings.json` or `config/fieldMappings.yaml`) include several pre-configured transforms:
+The default configuration file (`config/fieldMappings.yaml`) includes many pre-configured transforms for security analysis:
 
+#### Auditd Transforms
 - **proctitle**: Converts hexadecimal proctitle from Auditd to ASCII
 - **cmd**: Converts hexadecimal cmd from Auditd to ASCII
-- **CommandLine**: Base64 decoding and credential extraction (disabled by default)
-- **Payload**: Base64 decoding (disabled by default)
-- **ServiceFileName**: Base64 decoding (disabled by default)
+
+#### CommandLine Transforms
+- **CommandLine_b64decoded**: Base64 decoding
+- **CommandLine_Extracted_Creds**: Credential extraction from net/wmic/psexec commands
+- **CommandLine_URLs**: Extract HTTP/HTTPS/FTP URLs
+- **CommandLine_XORIndicators**: Detect XOR operations and extract keys
+- **CommandLine_AMSIBypass**: Detect AMSI bypass techniques
+- **CommandLine_HexStrings**: Find and decode hex-encoded strings
+- **CommandLine_EnvVarObfuscation**: Detect environment variable abuse
+- **CommandLine_DownloadCradle**: Identify download cradle patterns (DownloadString, WebClient, certutil, bitsadmin)
+- **CommandLine_EvasionTechniques**: Detect process hollowing, injection, syscalls, ETW bypass
+- **CommandLine_RegistryPaths**: Extract registry key paths
+
+#### PowerShell (ScriptBlockText) Transforms
+- **ScriptBlockText_b64decoded**: Base64 decoding
+- **ScriptBlockText_ObfuscationIndicators**: Detect char substitution, string concat, GzipStream, MemoryStream, etc.
+- **ScriptBlockText_XORPatterns**: Detect XOR keys and patterns
+- **ScriptBlockText_ReflectionAbuse**: Detect .NET reflection-based attacks
+- **ScriptBlockText_ShellcodeIndicators**: Detect shellcode execution patterns
+- **ScriptBlockText_NetworkIOCs**: Extract IPs, URLs, and domains
+
+#### Process Transforms
+- **Image_ExeName**: Extract executable name from path
+- **Image_LOLBinMatch**: Detect Living Off The Land Binaries (certutil, mshta, regsvr32, etc.)
+- **Image_TyposquatDetect**: Detect typosquatted process names (svchost→svch0st, lsass→1sass, etc.)
+- **ParentImage_ExeName**: Extract parent executable name
+
+#### Network Transforms
+- **QueryName_TLD**: Extract TLD from DNS queries
+- **QueryName_EntropyScore**: Entropy score for DGA detection
+- **QueryName_TyposquatDetect**: Detect typosquatted official domains (gov sites, banks, tech companies)
+- **DestinationIp_ObfuscationCheck**: Detect hex/octal/decimal IP obfuscation
+- **DestinationPort_Category**: Categorize ports (HTTP, SMB, RDP, METASPLOIT_DEFAULT, etc.)
+
+#### User Transforms
+- **User_Name**: Extract username without domain
+- **User_Domain**: Extract domain from user field
+
+#### File and Registry Transforms
+- **TargetFileName_URLDecoded**: URL decode file paths
+- **TargetObject_SuspiciousRegistry**: Identify persistence registry keys (Run, Services, IFEO, COM)
+- **Hash_MD5**: Extract MD5 from Sysmon Hashes field
+- **Hash_SHA256**: Extract SHA256 from Sysmon Hashes field
+
+> [!TIP]
+> For a complete reference of transform output values and detailed examples, see the [Field Transforms](Advanced.md#field-transforms) section in Advanced.md.
 
 ### Example
 
@@ -839,11 +907,57 @@ proctitle:
 - **Manage Performance**: Complex transforms can impact performance. Optimize your code and only enable necessary transforms.
 - **Keep Transforms Specific**: Tailor transforms to specific fields and input types using `"source_condition"` to avoid unexpected behavior.
 
+## Event Filter and Timestamp Configuration
+
+Zircolite includes an early event filtering mechanism and automatic timestamp detection. Both are configured in the `event_filter` and `timestamp_detection` sections of the field mappings file (`config/fieldMappings.yaml`).
+
+### Early Event Filtering
+
+When rules are loaded, Zircolite extracts all unique `Channel` and `EventID` values. During processing, events that don't match are skipped before processing operations.
+
+The filter supports multiple log formats through configurable field paths:
+
+```yaml
+event_filter:
+  enabled: true
+  channel_fields:
+    - Event.System.Channel      # Standard EVTX
+    - Channel                   # Pre-flattened
+    - winlog.channel            # Elastic Winlogbeat
+  eventid_fields:
+    - Event.System.EventID      # Standard EVTX
+    - EventID                   # Pre-flattened
+    - winlog.event_id           # Elastic Winlogbeat
+```
+
+Disable with `--no-event-filter` CLI option or set `enabled: false` in config.
+
+### Timestamp Auto-Detection
+
+Zircolite automatically detects the timestamp field when the default (`SystemTime`) is not found:
+
+```yaml
+timestamp_detection:
+  auto_detect: true
+  detection_fields:
+    - SystemTime                # Windows EVTX default
+    - UtcTime                   # Sysmon logs
+    - "@timestamp"              # Elasticsearch/ECS format
+    - timestamp                 # Common generic name
+    - _time                     # Splunk format
+```
+
+Explicitly specify a timestamp field:
+
+```shell
+python3 zircolite.py --events logs/ --ruleset rules.json --timefield "@timestamp"
+```
+
 ## Generating Your Own Rulesets
 
 Default rulesets are already provided in the `rules` directory. These rulesets are only the conversion of the rules located in the [rules/windows](https://github.com/SigmaHQ/sigma/tree/master/rules/windows) directory of the Sigma repository. These rulesets are provided to use Zircolite out of the box, but [you should generate your own rulesets](#why-you-should-build-your-own-rulesets).
 
-**As of v2.9.5, Zircolite can auto-update its default rulesets using the `-U` or `--update-rules` option. There is an auto-updated rulesets repository available [here](https://github.com/wagga40/Zircolite-Rules).**
+**As of v2.9.5, Zircolite can auto-update its default rulesets using the `-U` or `--update-rules` option. There is an auto-updated rulesets repository available [here](https://github.com/wagga40/Zircolite-Rules-v2).**
 
 ### Generate Rulesets Using pySigma
 

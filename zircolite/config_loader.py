@@ -68,6 +68,7 @@ class ProcessingConfig:
     hashes: bool = False
     limit: int = -1
     time_field: str = "SystemTime"
+    event_filter_enabled: bool = True  # Enable event filtering based on channel/eventID
     show_all: bool = False
     debug: bool = False
     remove_events: bool = False
@@ -223,6 +224,7 @@ class ConfigLoader:
                 hashes=proc.get('hashes', False),
                 limit=proc.get('limit', -1),
                 time_field=proc.get('time_field', 'SystemTime'),
+                event_filter_enabled=proc.get('event_filter_enabled', True),
                 show_all=proc.get('show_all', False),
                 debug=proc.get('debug', False),
                 remove_events=proc.get('remove_events', False),
@@ -424,6 +426,8 @@ class ConfigLoader:
             config.processing.limit = args.limit
         if hasattr(args, 'timefield') and args.timefield != 'SystemTime':
             config.processing.time_field = args.timefield
+        if hasattr(args, 'no_event_filter') and args.no_event_filter:
+            config.processing.event_filter_enabled = False
         if hasattr(args, 'showall') and args.showall:
             config.processing.show_all = True
         if hasattr(args, 'debug') and args.debug:
@@ -560,8 +564,12 @@ processing:
   # Limit results per rule (-1 = no limit)
   limit: -1
   
-  # Time field for event timestamps
+  # Time field for event timestamps (auto-detects if not found)
   time_field: SystemTime
+  
+  # Enable early event filtering based on channel/eventID from rules
+  # This improves performance by skipping events that won't match any rules
+  event_filter_enabled: true
   
   # Show all rules being executed
   show_all: false
