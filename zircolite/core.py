@@ -35,6 +35,7 @@ from rich.progress import (
 
 if TYPE_CHECKING:
     from .extractor import EvtxExtractor
+    from .rules import EventFilter
 
 
 class ZircoliteCore:
@@ -618,7 +619,8 @@ class ZircoliteCore:
                 file_handle.write(']')  # Close JSON array
             file_handle.close()
 
-    def run(self, evtx_json_list, insert_to_db=True, save_to_file=False, args_config=None, disable_progress=False):
+    def run(self, evtx_json_list, insert_to_db=True, save_to_file=False, args_config=None, 
+            disable_progress=False, event_filter: 'Optional[EventFilter]' = None):
         """Process events from JSON files and optionally insert into database."""
         self.logger.info("[+] Processing events")
         # Build ProcessingConfig from instance attributes
@@ -632,9 +634,20 @@ class ZircoliteCore:
         flattener = JSONFlattener(
             config_file=self.config,
             args_config=args_config,
-            processing_config=proc_config
+            processing_config=proc_config,
+            event_filter=event_filter
         )
         flattener.run_all(evtx_json_list)
+        
+        # Log filtered events statistics
+        filtered_count = flattener.events_filtered_count
+        events_count = len(flattener.values_stmt)
+        if filtered_count > 0:
+            self.logger.info(
+                f"[+] Events loaded: [magenta]{events_count:,}[/] "
+                f"([dim]{filtered_count:,} events filtered out[/])"
+            )
+        
         if save_to_file:
             filename = f"flattened_events_{''.join(random.SystemRandom().choice(string.ascii_uppercase + string.digits) for _ in range(4))}.json"
             self.logger.info(f"[+] Saving flattened JSON to : {filename}")
@@ -651,7 +664,9 @@ class ZircoliteCore:
 
     def run_streaming(self, log_files: list, input_type: str = 'evtx', 
                       args_config=None, extractor: 'EvtxExtractor' = None,
-                      disable_progress: bool = False) -> int:
+                      disable_progress: bool = False,
+                      event_filter: 'Optional[EventFilter]' = None,
+                      return_filtered_count: bool = False) -> 'int | tuple[int, int]':
         """
         Process log files using streaming mode - single-pass extraction, flattening, and DB insertion.
         
@@ -660,6 +675,7 @@ class ZircoliteCore:
         - Avoids double JSON parsing
         - Processes events in a streaming fashion
         - Uses dynamic schema discovery
+        - Supports early event filtering based on channel/eventID
         
         Args:
             log_files: List of log files to process
@@ -667,9 +683,11 @@ class ZircoliteCore:
             args_config: Argument configuration namespace
             extractor: EvtxExtractor instance (required for xml, sysmon_linux, auditd)
             disable_progress: Whether to disable progress bars
+            event_filter: Optional EventFilter for early event filtering based on channel/eventID
+            return_filtered_count: If True, return (total_events, filtered_count) tuple
             
         Returns:
-            Total number of events processed
+            Total number of events processed, or (total_events, filtered_count) if return_filtered_count=True
         """
         self.logger.info("[+] Processing events (streaming mode)")
         
@@ -690,7 +708,8 @@ class ZircoliteCore:
             config_file=self.config,
             args_config=args_config,
             processing_config=proc_config,
-            logger=self.logger
+            logger=self.logger,
+            event_filter=event_filter
         )
         
         # Create initial table structure
@@ -759,5 +778,16 @@ class ZircoliteCore:
         self.logger.info("[+] Creating indexes")
         self.create_index()
         
-        self.logger.info(f"[+] Total events processed: [magenta]{total_events:,}[/]")
+        # Log filtered events statistics
+        filtered_count = processor.events_filtered_count
+        if filtered_count > 0:
+            self.logger.info(
+                f"[+] Total events processed: [magenta]{total_events:,}[/] "
+                f"([dim]{filtered_count:,} events filtered out[/])"
+            )
+        else:
+            self.logger.info(f"[+] Total events processed: [magenta]{total_events:,}[/]")
+        
+        if return_filtered_count:
+            return total_events, filtered_count
         return total_events

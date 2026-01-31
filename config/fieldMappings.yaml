@@ -5,6 +5,9 @@
 # Supports both JSON (.json) and YAML (.yaml, .yml) formats.
 #
 # Sections:
+#   - enabled_transforms: Quick enable/disable transforms by name (see below)
+#   - event_filter: Configure channel/eventID field extraction for filtering
+#   - timestamp_detection: Configure timestamp field auto-detection
 #   - exclusions: Fields to exclude from processing
 #   - useless: Values to filter out (null, empty strings)
 #   - mappings: Rename nested/complex field names to simpler ones
@@ -12,6 +15,94 @@
 #   - split: Split field values into multiple fields
 #   - transforms: Apply Python code to transform field values
 # =============================================================================
+
+# -----------------------------------------------------------------------------
+# EVENT FILTER CONFIGURATION
+# -----------------------------------------------------------------------------
+# Configures how Channel and EventID fields are extracted from events for
+# early filtering. This allows events that won't match any rules to be
+# skipped before expensive processing.
+#
+# This applies to ALL input types (EVTX, JSON, XML, CSV, etc.) when they
+# contain Windows-style log data.
+#
+# Field paths support:
+#   - Dot notation for nested fields (e.g., "Event.System.Channel")
+#   - Direct field names (e.g., "Channel")
+#   - Paths are tried in order until a value is found
+# -----------------------------------------------------------------------------
+event_filter:
+  # Enable/disable event filtering globally
+  enabled: true
+  
+  # Field paths for Channel extraction (tried in order)
+  channel_fields:
+    - Event.System.Channel      # Standard EVTX structure
+    - Channel                   # Pre-flattened or direct field
+    - System.Channel            # JSON with System at top level
+    - channel                   # Lowercase variant
+    - log_name                  # Common in SIEM exports
+    - LogName                   # Windows Event Forwarding
+    - source.name               # ECS format
+    - winlog.channel            # Elastic Winlogbeat
+  
+  # Field paths for EventID extraction (tried in order)
+  eventid_fields:
+    - Event.System.EventID      # Standard EVTX (can be int or dict)
+    - Event.System.EventID.#text  # EVTX with dict structure
+    - EventID                   # Pre-flattened or direct field
+    - System.EventID            # JSON with System at top level
+    - System.EventID.#text      # JSON with dict structure
+    - eventid                   # Lowercase variant
+    - event_id                  # Snake_case variant
+    - EventCode                 # Some SIEM exports
+    - event.code                # ECS format
+    - winlog.event_id           # Elastic Winlogbeat
+  
+  # Apply filtering to all sources, not just Windows-like logs
+  # Set to true if your non-Windows logs also use channel/eventID filtering
+  filter_all_sources: false
+
+# -----------------------------------------------------------------------------
+# TIMESTAMP DETECTION CONFIGURATION
+# -----------------------------------------------------------------------------
+# Configures timestamp field detection for time filtering.
+# If the default timestamp field is not found, Zircolite can auto-detect
+# common timestamp fields from the event data.
+# -----------------------------------------------------------------------------
+timestamp_detection:
+  # Default timestamp field name (used if present)
+  default_field: SystemTime
+  
+  # Enable auto-detection if default field not found
+  auto_detect: true
+  
+  # Timestamp field names to try during auto-detection (in order of priority)
+  detection_fields:
+    - SystemTime                # Windows EVTX default
+    - UtcTime                   # Sysmon logs
+    - TimeCreated               # Some Windows exports
+    - "@timestamp"              # Elasticsearch/ECS format
+    - timestamp                 # Common generic name
+    - Timestamp                 # Common generic name (capitalized)
+    - time                      # Simple name
+    - Time                      # Simple name (capitalized)
+    - EventTime                 # Some SIEM exports
+    - event_time                # Snake_case variant
+    - datetime                  # Common name
+    - DateTime                  # Common name (capitalized)
+    - date                      # Simple date field
+    - Date                      # Simple date field (capitalized)
+    - CreatedTime               # Creation timestamp
+    - created_time              # Snake_case variant
+    - log_time                  # Log timestamp
+    - LogTime                   # Log timestamp (capitalized)
+    - _time                     # Splunk format
+    - event.created             # ECS format
+    - "@time"                   # Alternative ECS format
+    - ts                        # Short timestamp name
+    - recorded_time             # Recording timestamp
+    - RecordedTime              # Recording timestamp (capitalized)
 
 # -----------------------------------------------------------------------------
 # FIELD EXCLUSIONS
@@ -344,7 +435,97 @@ split:
 # Enable/disable the transform engine globally.
 # When disabled, all transform definitions are ignored.
 # -----------------------------------------------------------------------------
+
+# =============================================================================
+# TRANSFORM ENABLE/DISABLE CONTROL
+# =============================================================================
+# Quick way to enable/disable transforms without editing each transform.
+# Uncomment transforms you want to enable. Transforms not listed here or
+# commented out are DISABLED.
+#
+# Note: transforms_enabled must be true for any transforms to run.
+# =============================================================================
 transforms_enabled: true
+
+enabled_transforms:
+  # -------------------------
+  # AUDITD TRANSFORMS (Linux)
+  # -------------------------
+  - proctitle                        # Decode hex proctitle to ASCII
+  - cmd                              # Decode hex cmd to ASCII
+
+  # -------------------------
+  # BASE64 DECODING
+  # -------------------------
+  # - CommandLine_b64decoded         # Decode Base64 in command lines
+  # - ScriptBlockText_b64decoded     # Decode Base64 in PowerShell scripts
+  # - Payload_b64decoded             # Decode Base64 in payload fields
+  # - ServiceFileName_b64decoded     # Decode Base64 in service file names
+
+  # -------------------------
+  # CREDENTIAL EXTRACTION
+  # -------------------------
+  # - CommandLine_Extracted_Creds    # Extract creds from net/wmic/psexec
+
+  # -------------------------
+  # URL & PATH ANALYSIS
+  # -------------------------
+  # - CommandLine_URLs               # Extract URLs from command lines
+  # - TargetFileName_URLDecoded      # URL decode file paths
+  # - CommandLine_RegistryPaths      # Extract registry key paths
+
+  # -------------------------
+  # PROCESS ANALYSIS
+  # -------------------------
+  # - Image_ExeName                  # Extract exe name from path
+  # - Image_LOLBinMatch              # Detect LOLBins (certutil, mshta, etc.)
+  # - Image_TyposquatDetect          # Detect typosquatted process names
+  # - ParentImage_ExeName            # Extract parent exe name
+
+  # -------------------------
+  # POWERSHELL ANALYSIS
+  # -------------------------
+  # - ScriptBlockText_ObfuscationIndicators  # Detect obfuscation patterns
+  # - ScriptBlockText_XORPatterns    # Detect XOR operations
+  # - ScriptBlockText_ReflectionAbuse # Detect .NET reflection abuse
+  # - ScriptBlockText_ShellcodeIndicators   # Detect shellcode patterns
+  # - ScriptBlockText_NetworkIOCs    # Extract IPs/URLs from scripts
+
+  # -------------------------
+  # SECURITY HUNTING
+  # -------------------------
+  # - CommandLine_XORIndicators      # Detect XOR in command lines
+  # - CommandLine_AMSIBypass         # Detect AMSI bypass attempts
+  # - CommandLine_HexStrings         # Find hex-encoded strings
+  # - CommandLine_EnvVarObfuscation  # Detect env variable abuse
+  # - CommandLine_DownloadCradle     # Detect download cradles
+  # - CommandLine_EvasionTechniques  # Detect evasion techniques
+
+  # -------------------------
+  # NETWORK ANALYSIS
+  # -------------------------
+  # - QueryName_TLD                  # Extract TLD from DNS queries
+  # - QueryName_EntropyScore         # Entropy for DGA detection
+  # - QueryName_TyposquatDetect      # Detect typosquatted domains
+  # - DestinationIp_ObfuscationCheck # Detect obfuscated IPs
+  # - DestinationPort_Category       # Categorize ports
+
+  # -------------------------
+  # USER ANALYSIS
+  # -------------------------
+  # - User_Name                      # Extract username without domain
+  # - User_Domain                    # Extract domain from user field
+
+  # -------------------------
+  # HASH EXTRACTION
+  # -------------------------
+  # - Hash_MD5                       # Extract MD5 from Hashes field
+  # - Hash_SHA256                    # Extract SHA256 from Hashes field
+
+  # -------------------------
+  # REGISTRY ANALYSIS
+  # -------------------------
+  # - TargetObject_SuspiciousRegistry # Detect persistence registry keys
 
 # -----------------------------------------------------------------------------
 # TRANSFORM DEFINITIONS
@@ -372,7 +553,8 @@ transforms_enabled: true
 #         - csv_input
 #         - evtxtract_input
 #         - db_input
-#       enabled: true/false      # Enable/disable this specific transform
+#
+# NOTE: Enable/disable transforms using the 'enabled_transforms' list above.
 # -----------------------------------------------------------------------------
 transforms:
   # -------------------------
@@ -389,7 +571,6 @@ transforms:
       alias_name: ""
       source_condition:
         - auditd_input
-      enabled: true
 
   # Convert hex-encoded cmd to ASCII (Auditd logs)
   cmd:
@@ -402,7 +583,6 @@ transforms:
       alias_name: ""
       source_condition:
         - auditd_input
-      enabled: true
 
   # -------------------------
   # CommandLine Transforms
@@ -438,7 +618,6 @@ transforms:
         - json_input
         - evtxtract_input
         - db_input
-      enabled: false  # Disabled by default - enable for base64 analysis
 
     # Credential extraction from command lines
     # Regex patterns by Practical Security Analytics
@@ -477,7 +656,6 @@ transforms:
         - json_input
         - evtxtract_input
         - db_input
-      enabled: false  # Disabled by default - enable for credential hunting
 
   # -------------------------
   # Payload Transforms
@@ -512,7 +690,6 @@ transforms:
         - json_input
         - evtxtract_input
         - db_input
-      enabled: false  # Disabled by default - enable for payload analysis
 
   # -------------------------
   # ServiceFileName Transforms
@@ -547,4 +724,1497 @@ transforms:
         - json_input
         - evtxtract_input
         - db_input
-      enabled: false  # Disabled by default - enable for service analysis
+
+  # -------------------------
+  # URL/Path Transforms
+  # -------------------------
+  # URL decode percent-encoded strings (useful for detecting encoded malicious URLs)
+  TargetFileName:
+    - info: "URL decode TargetFileName"
+      type: python
+      code: |
+        def transform(param):
+            import re
+            def decode_match(m):
+                return chr(int(m.group(1), 16))
+            return re.sub(r'%([0-9A-Fa-f]{2})', decode_match, param)
+      alias: true
+      alias_name: "TargetFileName_URLDecoded"
+      source_condition:
+        - evtx_input
+        - json_array_input
+        - json_input
+        - evtxtract_input
+        - db_input
+
+  # -------------------------
+  # IP Address Transforms
+  # -------------------------
+  # Detect obfuscated IP addresses (hex, octal, decimal formats)
+  DestinationIp:
+    - info: "Detect obfuscated IP address formats"
+      type: python
+      code: |
+        def transform(param):
+            import re
+            # Detect various IP obfuscation techniques
+            obfuscation_patterns = [
+                # Hex IP (0x7f000001)
+                r'0x[0-9a-fA-F]{8}',
+                # Decimal IP (2130706433)
+                r'^\d{9,10}$',
+                # Octal IP (0177.0.0.01)
+                r'0[0-7]{1,3}\.0[0-7]{1,3}\.0[0-7]{1,3}\.0[0-7]{1,3}',
+                # Mixed format
+                r'0x[0-9a-fA-F]+\.[0-9]+\.[0-9]+\.[0-9]+'
+            ]
+            for pattern in obfuscation_patterns:
+                if re.match(pattern, param.strip()):
+                    return 'OBFUSCATED_IP:' + param
+            return param
+      alias: true
+      alias_name: "DestinationIp_ObfuscationCheck"
+      source_condition:
+        - evtx_input
+        - json_array_input
+        - json_input
+        - evtxtract_input
+        - db_input
+
+  # -------------------------
+  # Image Path Transforms
+  # -------------------------
+  # Extract just the executable name from full path
+  Image:
+    - info: "Extract executable name from Image path"
+      type: python
+      code: |
+        def transform(param):
+            # Extract filename from path (works for both / and \)
+            parts = param.replace('\\', '/').split('/')
+            return parts[-1] if parts else param
+      alias: true
+      alias_name: "Image_ExeName"
+      source_condition:
+        - evtx_input
+        - json_array_input
+        - json_input
+        - sysmon_linux_input
+        - evtxtract_input
+        - db_input
+
+    # Detect LOLBins (Living Off The Land Binaries)
+    - info: "Detect LOLBins in Image path"
+      type: python
+      code: |
+        def transform(param):
+            lolbins = [
+                'certutil', 'mshta', 'regsvr32', 'rundll32', 'wmic',
+                'cscript', 'wscript', 'powershell', 'cmd', 'msiexec',
+                'installutil', 'regasm', 'regsvcs', 'msconfig', 'msbuild',
+                'cmstp', 'certreq', 'dnscmd', 'eudcedit', 'expand',
+                'extrac32', 'findstr', 'forfiles', 'ftp', 'gpscript',
+                'hh', 'ieexec', 'infdefaultinstall', 'makecab', 'mavinject',
+                'pcalua', 'pcwrun', 'presentationhost', 'replace', 'rpcping',
+                'runscripthelper', 'syncappvpublishingserver', 'control',
+                'bash', 'bitsadmin'
+            ]
+            exe_name = param.replace('\\', '/').split('/')[-1].lower()
+            exe_name = exe_name.replace('.exe', '')
+            if exe_name in lolbins:
+                return 'LOLBIN:' + exe_name
+            return ''
+      alias: true
+      alias_name: "Image_LOLBinMatch"
+      source_condition:
+        - evtx_input
+        - json_array_input
+        - json_input
+        - evtxtract_input
+        - db_input
+
+    # Detect typosquatted process names (similar to legit binaries)
+    - info: "Detect typosquatted process names"
+      type: python
+      code: |
+        def transform(param):
+            # High-value targets for typosquatting detection
+            # These are processes attackers commonly impersonate
+            typosquat_targets = [
+                # Critical Windows processes (most commonly impersonated)
+                'svchost', 'services', 'lsass', 'csrss', 'smss', 'wininit',
+                'winlogon', 'explorer', 'taskhost', 'taskhostw', 'dwm',
+                'conhost', 'dllhost', 'spoolsv', 'searchindexer', 'wmiprvse',
+                # LOLBins (commonly abused)
+                'powershell', 'cmd', 'rundll32', 'regsvr32', 'mshta', 'wmic',
+                'cscript', 'wscript', 'msiexec', 'certutil', 'bitsadmin',
+                # Browsers
+                'chrome', 'firefox', 'msedge', 'iexplore',
+                # Apps
+                'outlook', 'teams', 'onedrive', 'dropbox',
+            ]
+            
+            # Comprehensive whitelist of legitimate Windows executables
+            # These will NEVER be flagged as typosquats
+            legit_whitelist = set([
+                # System utilities with similar names (false positive prevention)
+                'wevtutil', 'vssadmin', 'netstat', 'nbtstat', 'pathping',
+                'tracert', 'ipconfig', 'netsh', 'schtasks', 'tasklist',
+                'taskkill', 'systeminfo', 'hostname', 'whoami', 'quser',
+                'qwinsta', 'query', 'logoff', 'shutdown', 'gpupdate',
+                'gpresult', 'auditpol', 'secedit', 'icacls', 'takeown',
+                'cacls', 'attrib', 'cipher', 'compact', 'expand',
+                'makecab', 'extrac32', 'fsutil', 'diskpart', 'diskperf',
+                'chkdsk', 'chkntfs', 'defrag', 'sfc', 'dism', 'bcdedit',
+                'bootcfg', 'msinfo32', 'perfmon', 'resmon', 'eventvwr',
+                'compmgmt', 'devmgmt', 'diskmgmt', 'services', 'taskschd',
+                'lusrmgr', 'secpol', 'gpedit', 'regedit', 'regedt32',
+                # PowerShell variants
+                'powershell', 'pwsh', 'powershell_ise',
+                # CMD variants
+                'cmd', 'command',
+                # Windows services and hosts
+                'svchost', 'taskhost', 'taskhostw', 'dllhost', 'conhost',
+                'RuntimeBroker', 'smartscreen', 'fontdrvhost', 'sihost',
+                'ctfmon', 'dwm', 'winlogon', 'wininit', 'csrss', 'smss',
+                'lsass', 'lsm', 'services', 'spoolsv', 'wuauclt', 'trustedinstaller',
+                # Microsoft Office
+                'winword', 'excel', 'powerpnt', 'outlook', 'onenote', 'msaccess',
+                'mspub', 'visio', 'lync', 'teams',
+                # Browsers and updaters
+                'chrome', 'firefox', 'msedge', 'iexplore', 'opera', 'brave',
+                'chromium', 'vivaldi', 'update', 'updater', 'googleupdate',
+                # Security tools
+                'defender', 'msmpeng', 'nissrv', 'mpcmdrun', 'malwarebytes',
+                'mbam', 'avast', 'avgui', 'norton', 'nortonsecurity',
+                # Common apps
+                'onedrive', 'dropbox', 'slack', 'zoom', 'skype', 'discord',
+                'spotify', 'steam', 'vlc', 'notepad', 'notepad++', 'calc',
+                'mspaint', 'wordpad', 'write', 'charmap', 'magnify', 'narrator',
+                # Development tools
+                'code', 'devenv', 'msbuild', 'vscode', 'git', 'node', 'python',
+                'java', 'javaw', 'dotnet', 'nuget',
+                # Network tools
+                'ping', 'nslookup', 'dig', 'curl', 'wget', 'ssh', 'scp', 'sftp',
+                'ftp', 'telnet', 'putty', 'plink', 'pscp', 'psftp',
+                # All typosquat targets are also legitimate
+            ] + typosquat_targets)
+            
+            # Simple edit distance calculation (Levenshtein-like)
+            def edit_distance(s1, s2):
+                if len(s1) < len(s2):
+                    return edit_distance(s2, s1)
+                if len(s2) == 0:
+                    return len(s1)
+                prev_row = list(range(len(s2) + 1))
+                for i, c1 in enumerate(s1):
+                    curr_row = [i + 1]
+                    for j, c2 in enumerate(s2):
+                        insertions = prev_row[j + 1] + 1
+                        deletions = curr_row[j] + 1
+                        substitutions = prev_row[j] + (c1 != c2)
+                        curr_row.append(min(insertions, deletions, substitutions))
+                    prev_row = curr_row
+                return prev_row[-1]
+            
+            # Extract exe name
+            exe_name = param.replace('\\', '/').split('/')[-1].lower()
+            exe_name = exe_name.replace('.exe', '').replace('.com', '').replace('.scr', '')
+            
+            if not exe_name or len(exe_name) < 4:
+                return ''
+            
+            # IMPORTANT: Skip if exe_name is a known legitimate executable
+            # This prevents false positives like wevtutil being flagged as certutil
+            if exe_name in legit_whitelist:
+                return ''
+            
+            findings = []
+            for target in typosquat_targets:
+                # Skip very short names to avoid false positives
+                if len(target) < 5:
+                    continue
+                
+                dist = edit_distance(exe_name, target)
+                
+                # Require higher similarity for detection
+                # Only flag if edit distance is 1-2 AND represents significant % of name
+                max_dist = 1 if len(target) <= 7 else 2
+                
+                if 0 < dist <= max_dist:
+                    # Additional validation: require suspicious character patterns
+                    # to reduce false positives
+                    is_suspicious = False
+                    patterns = []
+                    
+                    # Homoglyph substitution (l->1, o->0, etc.)
+                    if any(c in exe_name for c in '01'):
+                        for i, c in enumerate(exe_name):
+                            if c == '0' and i < len(target) and target[i] == 'o':
+                                is_suspicious = True
+                                patterns.append('HOMOGLYPH')
+                                break
+                            if c == '1' and i < len(target) and target[i] in 'li':
+                                is_suspicious = True
+                                patterns.append('HOMOGLYPH')
+                                break
+                    
+                    # rn -> m substitution
+                    if 'rn' in exe_name and 'm' in target:
+                        is_suspicious = True
+                        patterns.append('HOMOGLYPH')
+                    
+                    # vv -> w substitution  
+                    if 'vv' in exe_name and 'w' in target:
+                        is_suspicious = True
+                        patterns.append('HOMOGLYPH')
+                    
+                    # Character omission/addition at beginning or end
+                    if abs(len(exe_name) - len(target)) == 1:
+                        if exe_name.startswith(target) or exe_name.endswith(target):
+                            is_suspicious = True
+                            patterns.append('CHAR_ADD')
+                        elif target.startswith(exe_name) or target.endswith(exe_name):
+                            is_suspicious = True
+                            patterns.append('CHAR_OMIT')
+                    
+                    # Single char substitution in middle of name
+                    if len(exe_name) == len(target) and dist == 1:
+                        is_suspicious = True
+                        if not patterns:
+                            patterns.append('CHAR_SWAP')
+                    
+                    # Only report if we found suspicious patterns
+                    if is_suspicious:
+                        pattern_str = ','.join(patterns) if patterns else 'SIMILAR'
+                        findings.append(f'TYPOSQUAT:{target}({pattern_str})')
+            
+            return '|'.join(findings[:2]) if findings else ''  # Limit output
+      alias: true
+      alias_name: "Image_TyposquatDetect"
+      source_condition:
+        - evtx_input
+        - json_array_input
+        - json_input
+        - evtxtract_input
+        - db_input
+
+  # -------------------------
+  # ParentImage Transforms
+  # -------------------------
+  ParentImage:
+    - info: "Extract parent executable name"
+      type: python
+      code: |
+        def transform(param):
+            parts = param.replace('\\', '/').split('/')
+            return parts[-1] if parts else param
+      alias: true
+      alias_name: "ParentImage_ExeName"
+      source_condition:
+        - evtx_input
+        - json_array_input
+        - json_input
+        - sysmon_linux_input
+        - evtxtract_input
+        - db_input
+
+  # -------------------------
+  # ScriptBlockText Transforms
+  # -------------------------
+  ScriptBlockText:
+    - info: "Base64 decoded ScriptBlockText"
+      type: python
+      code: |
+        def transform(param):
+            
+            # Pattern matches valid base64 strings (minimum 8 chars for 2 groups of 4)
+            base64_pattern = r'(?:[A-Za-z0-9+/]{4}){2,}(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?'
+            matches = re.findall(base64_pattern, param)
+            
+            if not matches:
+                return ''
+            
+            decoded_values = []
+            valid_encodings = {'utf-8', 'ascii', 'utf-16le', 'ISO-8859-1'}
+            
+            for match in matches:
+                try:
+                    decoded_bytes = base64.b64decode(match)
+                    
+                    # Try common encodings directly (faster than chardet)
+                    for encoding in ['utf-8', 'ascii', 'utf-16le', 'ISO-8859-1']:
+                        try:
+                            decoded_str = decoded_bytes.decode(encoding)
+                            decoded_str = decoded_str.strip()
+                            
+                            # Filter: must be printable and meaningful length
+                            if decoded_str.isprintable() and len(decoded_str) > 10:
+                                decoded_values.append(decoded_str)
+                                break  # Stop after first successful decode
+                        except (UnicodeDecodeError, AttributeError):
+                            continue
+                except Exception:
+                    # Silently skip invalid base64 or decode errors
+                    continue
+            
+            return '|'.join(decoded_values) if decoded_values else ''
+      alias: true
+      alias_name: "ScriptBlockText_b64decoded"
+      source_condition:
+        - evtx_input
+        - json_array_input
+        - json_input
+        - evtxtract_input
+        - db_input
+
+    - info: "Detect obfuscated PowerShell indicators"
+      type: python
+      code: |
+        def transform(param):
+            import re
+            indicators = []
+            
+            # Character substitution (e.g., `I`E`X)
+            if re.search(r'`[A-Za-z]', param):
+                indicators.append('CHAR_SUBST')
+            
+            # String concatenation (e.g., 'Inv'+'oke')
+            if re.search(r"'[^']+'\s*\+\s*'[^']+'", param):
+                indicators.append('STR_CONCAT')
+            
+            # -Join operator obfuscation
+            if re.search(r'-[jJ][oO][iI][nN]', param):
+                indicators.append('JOIN_OP')
+            
+            # Format string obfuscation
+            if re.search(r'-[fF]\s*[\'"]', param):
+                indicators.append('FORMAT_STR')
+            
+            # Variable substitution in strings
+            if re.search(r'\$\{[^}]+\}', param):
+                indicators.append('VAR_SUBST')
+            
+            # Encoded command indicator
+            if re.search(r'-[eE][nN][cC][oO]?[dD]?[eE]?[dD]?[cC]?[oO]?[mM]?[mM]?[aA]?[nN]?[dD]?', param):
+                indicators.append('ENC_CMD')
+            
+            # GzipStream / IO.Compression obfuscation
+            if re.search(r'[Gg][Zz][Ii][Pp][Ss][Tt][Rr][Ee][Aa][Mm]', param, re.IGNORECASE):
+                indicators.append('GZIPSTREAM')
+            
+            # FromBase64String obfuscation
+            if re.search(r'[Ff][Rr][Oo][Mm][Bb][Aa][Ss][Ee]64[Ss][Tt][Rr][Ii][Nn][Gg]', param, re.IGNORECASE):
+                indicators.append('FROMBASE64')
+            
+            # IO.Compression namespace
+            if re.search(r'[Ii][Oo]\.[Cc][Oo][Mm][Pp][Rr][Ee][Ss][Ss][Ii][Oo][Nn]', param, re.IGNORECASE):
+                indicators.append('IO_COMPRESSION')
+            
+            # DeflateStream obfuscation
+            if re.search(r'[Dd][Ee][Ff][Ll][Aa][Tt][Ee][Ss][Tt][Rr][Ee][Aa][Mm]', param, re.IGNORECASE):
+                indicators.append('DEFLATESTREAM')
+            
+            # MemoryStream obfuscation
+            if re.search(r'[Mm][Ee][Mm][Oo][Rr][Yy][Ss][Tt][Rr][Ee][Aa][Mm]', param, re.IGNORECASE):
+                indicators.append('MEMORYSTREAM')
+            
+            return '|'.join(indicators) if indicators else ''
+      alias: true
+      alias_name: "ScriptBlockText_ObfuscationIndicators"
+      source_condition:
+        - evtx_input
+        - json_array_input
+        - json_input
+        - evtxtract_input
+        - db_input
+
+  # -------------------------
+  # User Transforms
+  # -------------------------
+  User:
+    - info: "Extract username without domain"
+      type: python
+      code: |
+        def transform(param):
+            # Handle DOMAIN\user or user@domain formats
+            if '\\' in param:
+                return param.split('\\')[-1]
+            elif '@' in param:
+                return param.split('@')[0]
+            return param
+      alias: true
+      alias_name: "User_Name"
+      source_condition:
+        - evtx_input
+        - json_array_input
+        - json_input
+        - evtxtract_input
+        - db_input
+
+    - info: "Extract domain from User field"
+      type: python
+      code: |
+        def transform(param):
+            # Handle DOMAIN\user or user@domain formats
+            if '\\' in param:
+                parts = param.split('\\')
+                return parts[0] if len(parts) > 1 else ''
+            elif '@' in param:
+                parts = param.split('@')
+                return parts[1] if len(parts) > 1 else ''
+            return ''
+      alias: true
+      alias_name: "User_Domain"
+      source_condition:
+        - evtx_input
+        - json_array_input
+        - json_input
+        - evtxtract_input
+        - db_input
+
+  # -------------------------
+  # QueryName (DNS) Transforms
+  # -------------------------
+  QueryName:
+    - info: "Extract TLD from DNS query"
+      type: python
+      code: |
+        def transform(param):
+            # Get top-level domain
+            parts = param.rstrip('.').split('.')
+            if len(parts) >= 2:
+                return parts[-1]
+            return param
+      alias: true
+      alias_name: "QueryName_TLD"
+      source_condition:
+        - evtx_input
+        - json_array_input
+        - json_input
+        - evtxtract_input
+        - db_input
+
+    - info: "Calculate DNS query entropy (detect DGA)"
+      type: python
+      code: |
+        def transform(param):
+            import re
+            # Remove TLD and calculate entropy-like metric
+            domain = param.rstrip('.').split('.')[0] if '.' in param else param
+            
+            # Simple character frequency analysis
+            if len(domain) == 0:
+                return '0'
+            
+            char_count = {}
+            for c in domain.lower():
+                char_count[c] = char_count.get(c, 0) + 1
+            
+            # Calculate simple entropy approximation
+            entropy = 0
+            for count in char_count.values():
+                freq = count / len(domain)
+                if freq > 0:
+                    # Simplified entropy calculation without math.log
+                    entropy += freq * (1 - freq)
+            
+            # High entropy suggests DGA
+            entropy_score = round(entropy * 100, 2)
+            return str(entropy_score)
+      alias: true
+      alias_name: "QueryName_EntropyScore"
+      source_condition:
+        - evtx_input
+        - json_array_input
+        - json_input
+        - evtxtract_input
+        - db_input
+
+    # Detect typosquatted domains (gov, banking, tech companies)
+    - info: "Detect typosquatted official domains"
+      type: python
+      code: |
+        def transform(param):
+            # Known legitimate domains to protect against typosquatting
+            # Format: (domain_pattern, category)
+            official_domains = [
+                # US Government
+                ('irs', 'GOV_US'), ('ssa', 'GOV_US'), ('medicare', 'GOV_US'),
+                ('usps', 'GOV_US'), ('uscis', 'GOV_US'), ('state', 'GOV_US'),
+                ('treasury', 'GOV_US'), ('whitehouse', 'GOV_US'), ('usa', 'GOV_US'),
+                ('dmv', 'GOV_US'), ('fbi', 'GOV_US'), ('cia', 'GOV_US'),
+                ('dhs', 'GOV_US'), ('doj', 'GOV_US'), ('epa', 'GOV_US'),
+                # UK Government
+                ('hmrc', 'GOV_UK'), ('nhs', 'GOV_UK'), ('dvla', 'GOV_UK'),
+                ('gov', 'GOV_UK'),
+                # EU/Other Government
+                ('europa', 'GOV_EU'), ('gouv', 'GOV_FR'), ('bund', 'GOV_DE'),
+                # Banking & Finance
+                ('chase', 'BANK'), ('wellsfargo', 'BANK'), ('bankofamerica', 'BANK'),
+                ('citibank', 'BANK'), ('usbank', 'BANK'), ('capitalone', 'BANK'),
+                ('americanexpress', 'BANK'), ('amex', 'BANK'), ('discover', 'BANK'),
+                ('paypal', 'BANK'), ('venmo', 'BANK'), ('zelle', 'BANK'),
+                ('schwab', 'BANK'), ('fidelity', 'BANK'), ('vanguard', 'BANK'),
+                ('coinbase', 'CRYPTO'), ('binance', 'CRYPTO'), ('kraken', 'CRYPTO'),
+                # Tech Giants
+                ('microsoft', 'TECH'), ('google', 'TECH'), ('apple', 'TECH'),
+                ('amazon', 'TECH'), ('facebook', 'TECH'), ('meta', 'TECH'),
+                ('netflix', 'TECH'), ('linkedin', 'TECH'), ('twitter', 'TECH'),
+                ('instagram', 'TECH'), ('whatsapp', 'TECH'), ('telegram', 'TECH'),
+                ('dropbox', 'TECH'), ('zoom', 'TECH'), ('slack', 'TECH'),
+                ('github', 'TECH'), ('gitlab', 'TECH'), ('adobe', 'TECH'),
+                ('salesforce', 'TECH'), ('oracle', 'TECH'), ('vmware', 'TECH'),
+                # Email/Cloud
+                ('outlook', 'EMAIL'), ('hotmail', 'EMAIL'), ('gmail', 'EMAIL'),
+                ('yahoo', 'EMAIL'), ('icloud', 'EMAIL'), ('protonmail', 'EMAIL'),
+                ('office365', 'CLOUD'), ('office', 'CLOUD'), ('onedrive', 'CLOUD'),
+                ('sharepoint', 'CLOUD'), ('azure', 'CLOUD'), ('aws', 'CLOUD'),
+                # Security vendors
+                ('norton', 'SECURITY'), ('mcafee', 'SECURITY'), ('kaspersky', 'SECURITY'),
+                ('avast', 'SECURITY'), ('malwarebytes', 'SECURITY'), ('crowdstrike', 'SECURITY'),
+                # Shipping/Logistics
+                ('fedex', 'SHIPPING'), ('ups', 'SHIPPING'), ('dhl', 'SHIPPING'),
+                ('usps', 'SHIPPING'),
+            ]
+            
+            # Simple edit distance
+            def edit_distance(s1, s2):
+                if len(s1) < len(s2):
+                    return edit_distance(s2, s1)
+                if len(s2) == 0:
+                    return len(s1)
+                prev_row = list(range(len(s2) + 1))
+                for i, c1 in enumerate(s1):
+                    curr_row = [i + 1]
+                    for j, c2 in enumerate(s2):
+                        insertions = prev_row[j + 1] + 1
+                        deletions = curr_row[j] + 1
+                        substitutions = prev_row[j] + (c1 != c2)
+                        curr_row.append(min(insertions, deletions, substitutions))
+                    prev_row = curr_row
+                return prev_row[-1]
+            
+            # Extract domain parts
+            domain = param.rstrip('.').lower()
+            parts = domain.split('.')
+            
+            if len(parts) < 2:
+                return ''
+            
+            # Get the main domain (second-level domain)
+            # Handle cases like co.uk, com.br, etc.
+            common_cctld_sld = ['co', 'com', 'org', 'net', 'gov', 'ac', 'edu']
+            if len(parts) >= 3 and parts[-2] in common_cctld_sld:
+                main_domain = parts[-3]
+            else:
+                main_domain = parts[-2]
+            
+            # Skip very short domains
+            if len(main_domain) < 3:
+                return ''
+            
+            findings = []
+            for legit, category in official_domains:
+                # Skip if exact match (legitimate)
+                if main_domain == legit:
+                    return ''
+                
+                # Skip very short patterns
+                if len(legit) < 3:
+                    continue
+                
+                dist = edit_distance(main_domain, legit)
+                
+                # Detect close matches
+                threshold = 1 if len(legit) <= 5 else 2
+                
+                if 0 < dist <= threshold:
+                    # Identify typosquatting technique
+                    techniques = []
+                    
+                    # Homoglyph detection (0/o, 1/l/i, rn/m, vv/w)
+                    if any(c in main_domain for c in ['0', '1', 'vv', 'rn']):
+                        techniques.append('HOMOGLYPH')
+                    
+                    # Added/missing characters
+                    if abs(len(main_domain) - len(legit)) == 1:
+                        techniques.append('CHAR_MANIP')
+                    
+                    # Character swap
+                    if len(main_domain) == len(legit):
+                        diffs = sum(1 for a, b in zip(main_domain, legit) if a != b)
+                        if diffs <= 2:
+                            techniques.append('CHAR_SWAP')
+                    
+                    # Prefix/suffix additions (common phishing)
+                    if main_domain.startswith(legit) or main_domain.endswith(legit):
+                        techniques.append('AFFIX')
+                    if legit in main_domain:
+                        techniques.append('EMBEDDED')
+                    
+                    tech_str = ','.join(techniques) if techniques else 'SIMILAR'
+                    findings.append(f'TYPOSQUAT_{category}:{legit}({tech_str})')
+            
+            # Also check for suspicious TLD combinations
+            tld = parts[-1]
+            suspicious_tlds = ['tk', 'ml', 'ga', 'cf', 'gq', 'xyz', 'top', 'work', 'click', 'link', 'info']
+            if tld in suspicious_tlds and findings:
+                findings.append(f'SUSPICIOUS_TLD:{tld}')
+            
+            return '|'.join(findings[:3]) if findings else ''  # Limit output
+      alias: true
+      alias_name: "QueryName_TyposquatDetect"
+      source_condition:
+        - evtx_input
+        - json_array_input
+        - json_input
+        - evtxtract_input
+        - db_input
+
+  # -------------------------
+  # Hashes Transforms
+  # -------------------------
+  Hashes:
+    - info: "Extract MD5 hash from Hashes field"
+      type: python
+      code: |
+        def transform(param):
+            import re
+            match = re.search(r'MD5=([A-Fa-f0-9]{32})', param)
+            return match.group(1) if match else ''
+      alias: true
+      alias_name: "Hash_MD5"
+      source_condition:
+        - evtx_input
+        - json_array_input
+        - json_input
+        - evtxtract_input
+        - db_input
+
+    - info: "Extract SHA256 hash from Hashes field"
+      type: python
+      code: |
+        def transform(param):
+            import re
+            match = re.search(r'SHA256=([A-Fa-f0-9]{64})', param)
+            return match.group(1) if match else ''
+      alias: true
+      alias_name: "Hash_SHA256"
+      source_condition:
+        - evtx_input
+        - json_array_input
+        - json_input
+        - evtxtract_input
+        - db_input
+
+  # =============================================================================
+  # SECURITY-ORIENTED TRANSFORMS
+  # =============================================================================
+  # These transforms are designed for threat hunting and malware analysis.
+  # They help identify obfuscation techniques, extract IOCs, and detect
+  # common attack patterns.
+  # =============================================================================
+
+  # -------------------------
+  # CommandLine Security Transforms
+  # -------------------------
+  CommandLine:
+    # Base64 decoding for encoded commands (existing, kept for reference)
+    - info: "Base64 decoded CommandLine"
+      type: python
+      code: |
+        def transform(param):
+            decoded_values = []
+            data = param
+
+            base64_pattern = r'(?:[A-Za-z0-9+/]{4}){2,}(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?'
+            matches = re.findall(base64_pattern, data)
+            for match in matches:
+                try:
+                    decoded = base64.b64decode(match)
+                    encoding = chardet.detect(decoded)['encoding']
+                    if encoding and encoding in ['utf-8', 'ascii', 'utf-16le', 'ISO-8859-1']:
+                        decoded = decoded.decode(encoding)
+                        decoded = decoded.strip()
+                        if decoded.isprintable() and len(decoded) > 10:
+                            decoded_values.append(decoded)
+                except:
+                    pass
+            
+            return '|'.join(decoded_values) if decoded_values else ''
+      alias: true
+      alias_name: "CommandLine_b64decoded"
+      source_condition:
+        - evtx_input
+        - json_array_input
+        - json_input
+        - evtxtract_input
+        - db_input
+
+    # Extract URLs from command lines
+    - info: "Extract URLs from CommandLine"
+      type: python
+      code: |
+        def transform(param):
+            import re
+            # Match http/https/ftp URLs
+            url_pattern = r'(https?://[^\s\'"<>]+|ftp://[^\s\'"<>]+)'
+            matches = re.findall(url_pattern, param, re.IGNORECASE)
+            # Clean up trailing punctuation
+            cleaned = []
+            for url in matches:
+                url = url.rstrip('.,;:)]\'"')
+                if len(url) > 10:
+                    cleaned.append(url)
+            return '|'.join(cleaned) if cleaned else ''
+      alias: true
+      alias_name: "CommandLine_URLs"
+      source_condition:
+        - evtx_input
+        - json_array_input
+        - json_input
+        - evtxtract_input
+        - db_input
+
+    # Detect XOR key patterns in PowerShell
+    - info: "Detect XOR operations in CommandLine"
+      type: python
+      code: |
+        def transform(param):
+            import re
+            indicators = []
+            
+            # XOR operator in PowerShell (-bxor)
+            if re.search(r'-bxor', param, re.IGNORECASE):
+                indicators.append('BXOR_OP')
+            
+            # XOR in byte arrays [byte[]]
+            if re.search(r'\[byte\[\]\].*\^', param, re.IGNORECASE):
+                indicators.append('BYTE_XOR')
+            
+            # Common XOR key patterns (single byte keys) - match hex first
+            xor_key_match = re.search(r'-bxor\s*(0x[0-9a-fA-F]+|\d+)', param, re.IGNORECASE)
+            if xor_key_match:
+                indicators.append('XOR_KEY:' + xor_key_match.group(1))
+            
+            # XOR in loops (common obfuscation pattern)
+            if re.search(r'for.*-bxor|foreach.*-bxor', param, re.IGNORECASE):
+                indicators.append('XOR_LOOP')
+            
+            return '|'.join(indicators) if indicators else ''
+      alias: true
+      alias_name: "CommandLine_XORIndicators"
+      source_condition:
+        - evtx_input
+        - json_array_input
+        - json_input
+        - evtxtract_input
+        - db_input
+
+    # Detect AMSI bypass attempts
+    - info: "Detect AMSI bypass indicators"
+      type: python
+      code: |
+        def transform(param):
+            import re
+            indicators = []
+            param_lower = param.lower()
+            
+            # Direct AMSI references
+            if 'amsi' in param_lower:
+                indicators.append('AMSI_REF')
+            
+            # AmsiInitFailed bypass
+            if re.search(r'amsiInitFailed', param, re.IGNORECASE):
+                indicators.append('AMSI_INIT_FAILED')
+            
+            # amsiContext manipulation
+            if re.search(r'amsiContext', param, re.IGNORECASE):
+                indicators.append('AMSI_CONTEXT')
+            
+            # AmsiScanBuffer bypass
+            if re.search(r'AmsiScanBuffer', param, re.IGNORECASE):
+                indicators.append('AMSI_SCAN_BUFFER')
+            
+            # Common bypass patterns
+            if re.search(r'\[Ref\]\.Assembly\.GetType.*AMSI', param, re.IGNORECASE):
+                indicators.append('AMSI_REFLECTION')
+            
+            # Patching AMSI.DLL
+            if re.search(r'amsi\.dll', param, re.IGNORECASE):
+                indicators.append('AMSI_DLL')
+            
+            return '|'.join(indicators) if indicators else ''
+      alias: true
+      alias_name: "CommandLine_AMSIBypass"
+      source_condition:
+        - evtx_input
+        - json_array_input
+        - json_input
+        - evtxtract_input
+        - db_input
+
+    # Detect hex-encoded strings
+    - info: "Detect and extract hex strings"
+      type: python
+      code: |
+        def transform(param):
+            import re
+            # Find hex strings (0x prefixed or continuous hex)
+            hex_patterns = []
+            
+            # 0x prefixed hex bytes (e.g., 0x48,0x65,0x6c,0x6c,0x6f)
+            ox_matches = re.findall(r'(?:0x[0-9a-fA-F]{2}[,\s]*){4,}', param)
+            for match in ox_matches:
+                hex_patterns.append('0x_HEX')
+                # Try to decode
+                try:
+                    hex_bytes = re.findall(r'0x([0-9a-fA-F]{2})', match)
+                    decoded = bytes.fromhex(''.join(hex_bytes)).decode('ascii', errors='ignore')
+                    if decoded.isprintable() and len(decoded) > 3:
+                        hex_patterns.append('DECODED:' + decoded[:50])
+                except:
+                    pass
+            
+            # Continuous hex string (e.g., 48656c6c6f)
+            cont_matches = re.findall(r'(?<![0-9a-fA-F])[0-9a-fA-F]{16,}(?![0-9a-fA-F])', param)
+            for match in cont_matches:
+                if len(match) % 2 == 0:  # Valid hex string
+                    hex_patterns.append('CONT_HEX')
+                    try:
+                        decoded = bytes.fromhex(match).decode('ascii', errors='ignore')
+                        if decoded.isprintable() and len(decoded) > 3:
+                            hex_patterns.append('DECODED:' + decoded[:50])
+                    except:
+                        pass
+            
+            return '|'.join(hex_patterns) if hex_patterns else ''
+      alias: true
+      alias_name: "CommandLine_HexStrings"
+      source_condition:
+        - evtx_input
+        - json_array_input
+        - json_input
+        - evtxtract_input
+        - db_input
+
+    # Detect suspicious environment variable usage
+    - info: "Detect environment variable obfuscation"
+      type: python
+      code: |
+        def transform(param):
+            import re
+            indicators = []
+            
+            # Environment variable character-by-character extraction
+            # e.g., %comspec:~0,1% extracts first char of COMSPEC
+            if re.search(r'%[^%]+:~\d+,\d+%', param):
+                indicators.append('ENV_CHAR_EXTRACT')
+            
+            # Multiple env var substitutions (obfuscation indicator)
+            env_count = len(re.findall(r'%[a-zA-Z_]+%', param))
+            if env_count > 3:
+                indicators.append('MULTI_ENV_VAR:' + str(env_count))
+            
+            # Suspicious env vars
+            suspicious_vars = ['comspec', 'pathext', 'temp', 'tmp', 'appdata', 'programdata']
+            for var in suspicious_vars:
+                if re.search(r'%' + var + r'%', param, re.IGNORECASE):
+                    indicators.append('ENV:' + var.upper())
+            
+            return '|'.join(indicators) if indicators else ''
+      alias: true
+      alias_name: "CommandLine_EnvVarObfuscation"
+      source_condition:
+        - evtx_input
+        - json_array_input
+        - json_input
+        - evtxtract_input
+        - db_input
+
+    # Detect download cradles and remote execution
+    - info: "Detect download cradles and remote execution"
+      type: python
+      code: |
+        def transform(param):
+            import re
+            indicators = []
+            param_lower = param.lower()
+            
+            # PowerShell download cradles
+            if 'downloadstring' in param_lower:
+                indicators.append('DOWNLOADSTRING')
+            if 'downloadfile' in param_lower:
+                indicators.append('DOWNLOADFILE')
+            if 'downloaddata' in param_lower:
+                indicators.append('DOWNLOADDATA')
+            if 'invoke-webrequest' in param_lower or 'iwr' in param_lower:
+                indicators.append('INVOKE_WEBREQUEST')
+            if 'invoke-restmethod' in param_lower or 'irm' in param_lower:
+                indicators.append('INVOKE_RESTMETHOD')
+            if 'webclient' in param_lower:
+                indicators.append('WEBCLIENT')
+            if 'bitstransfer' in param_lower:
+                indicators.append('BITSTRANSFER')
+            
+            # Certutil download
+            if re.search(r'certutil.*-urlcache', param, re.IGNORECASE):
+                indicators.append('CERTUTIL_DOWNLOAD')
+            
+            # Bitsadmin download
+            if re.search(r'bitsadmin.*/transfer', param, re.IGNORECASE):
+                indicators.append('BITSADMIN_DOWNLOAD')
+            
+            # Curl/wget
+            if re.search(r'\b(curl|wget)\b', param, re.IGNORECASE):
+                indicators.append('CURL_WGET')
+            
+            return '|'.join(indicators) if indicators else ''
+      alias: true
+      alias_name: "CommandLine_DownloadCradle"
+      source_condition:
+        - evtx_input
+        - json_array_input
+        - json_input
+        - evtxtract_input
+        - db_input
+
+    # Detect common evasion techniques
+    - info: "Detect common evasion techniques"
+      type: python
+      code: |
+        def transform(param):
+            import re
+            indicators = []
+            param_lower = param.lower()
+            
+            # Process hollowing indicators
+            if 'ntunmapviewofsection' in param_lower or 'zwunmapviewofsection' in param_lower:
+                indicators.append('PROCESS_HOLLOWING')
+            
+            # Reflective DLL injection
+            if 'reflectiveloader' in param_lower:
+                indicators.append('REFLECTIVE_DLL')
+            
+            # Token manipulation
+            if 'adjusttokenprivileges' in param_lower or 'setthreadtoken' in param_lower:
+                indicators.append('TOKEN_MANIPULATION')
+            
+            # Memory allocation (VirtualAlloc, etc.)
+            if re.search(r'virtualalloc|ntalloc|zwalloc', param, re.IGNORECASE):
+                indicators.append('MEMORY_ALLOC')
+            
+            # CreateRemoteThread
+            if 'createremotethread' in param_lower:
+                indicators.append('REMOTE_THREAD')
+            
+            # Syscall direct invocation
+            if re.search(r'\bsyscall\b|ntdll', param, re.IGNORECASE):
+                indicators.append('SYSCALL')
+            
+            # ETW bypass
+            if re.search(r'etw|nttracevent', param, re.IGNORECASE):
+                indicators.append('ETW_BYPASS')
+            
+            return '|'.join(indicators) if indicators else ''
+      alias: true
+      alias_name: "CommandLine_EvasionTechniques"
+      source_condition:
+        - evtx_input
+        - json_array_input
+        - json_input
+        - evtxtract_input
+        - db_input
+
+    # Extract registry keys from command lines
+    - info: "Extract registry paths from CommandLine"
+      type: python
+      code: |
+        def transform(param):
+            import re
+            # Match registry paths
+            reg_pattern = r'(HK[A-Z_]+\\[^\s\'"]+|HKEY_[A-Z_]+\\[^\s\'"]+)'
+            matches = re.findall(reg_pattern, param, re.IGNORECASE)
+            # Deduplicate and clean
+            seen = set()
+            cleaned = []
+            for match in matches:
+                match_lower = match.lower()
+                if match_lower not in seen:
+                    seen.add(match_lower)
+                    cleaned.append(match)
+            return '|'.join(cleaned) if cleaned else ''
+      alias: true
+      alias_name: "CommandLine_RegistryPaths"
+      source_condition:
+        - evtx_input
+        - json_array_input
+        - json_input
+        - evtxtract_input
+        - db_input
+
+  # -------------------------
+  # ScriptBlockText Security Transforms (Extended)
+  # -------------------------
+  ScriptBlockText:
+    # Base64 decoded ScriptBlockText (existing transform reference)
+    - info: "Base64 decoded ScriptBlockText"
+      type: python
+      code: |
+        def transform(param):
+            
+            # Pattern matches valid base64 strings (minimum 8 chars for 2 groups of 4)
+            base64_pattern = r'(?:[A-Za-z0-9+/]{4}){2,}(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?'
+            matches = re.findall(base64_pattern, param)
+            
+            if not matches:
+                return ''
+            
+            decoded_values = []
+            valid_encodings = {'utf-8', 'ascii', 'utf-16le', 'ISO-8859-1'}
+            
+            for match in matches:
+                try:
+                    decoded_bytes = base64.b64decode(match)
+                    
+                    # Try common encodings directly (faster than chardet)
+                    for encoding in ['utf-8', 'ascii', 'utf-16le', 'ISO-8859-1']:
+                        try:
+                            decoded_str = decoded_bytes.decode(encoding)
+                            decoded_str = decoded_str.strip()
+                            
+                            # Filter: must be printable and meaningful length
+                            if decoded_str.isprintable() and len(decoded_str) > 10:
+                                decoded_values.append(decoded_str)
+                                break  # Stop after first successful decode
+                        except (UnicodeDecodeError, AttributeError):
+                            continue
+                except Exception:
+                    # Silently skip invalid base64 or decode errors
+                    continue
+            
+            return '|'.join(decoded_values) if decoded_values else ''
+      alias: true
+      alias_name: "ScriptBlockText_b64decoded"
+      source_condition:
+        - evtx_input
+        - json_array_input
+        - json_input
+        - evtxtract_input
+        - db_input
+
+    - info: "Detect obfuscated PowerShell indicators"
+      type: python
+      code: |
+        def transform(param):
+            import re
+            indicators = []
+            
+            # Character substitution (e.g., `I`E`X)
+            if re.search(r'`[A-Za-z]', param):
+                indicators.append('CHAR_SUBST')
+            
+            # String concatenation (e.g., 'Inv'+'oke')
+            if re.search(r"'[^']+'\s*\+\s*'[^']+'", param):
+                indicators.append('STR_CONCAT')
+            
+            # -Join operator obfuscation
+            if re.search(r'-[jJ][oO][iI][nN]', param):
+                indicators.append('JOIN_OP')
+            
+            # Format string obfuscation
+            if re.search(r'-[fF]\s*[\'"]', param):
+                indicators.append('FORMAT_STR')
+            
+            # Variable substitution in strings
+            if re.search(r'\$\{[^}]+\}', param):
+                indicators.append('VAR_SUBST')
+            
+            # Encoded command indicator
+            if re.search(r'-[eE][nN][cC][oO]?[dD]?[eE]?[dD]?[cC]?[oO]?[mM]?[mM]?[aA]?[nN]?[dD]?', param):
+                indicators.append('ENC_CMD')
+            
+            # GzipStream / IO.Compression obfuscation
+            if re.search(r'[Gg][Zz][Ii][Pp][Ss][Tt][Rr][Ee][Aa][Mm]', param, re.IGNORECASE):
+                indicators.append('GZIPSTREAM')
+            
+            # FromBase64String obfuscation
+            if re.search(r'[Ff][Rr][Oo][Mm][Bb][Aa][Ss][Ee]64[Ss][Tt][Rr][Ii][Nn][Gg]', param, re.IGNORECASE):
+                indicators.append('FROMBASE64')
+            
+            # IO.Compression namespace
+            if re.search(r'[Ii][Oo]\.[Cc][Oo][Mm][Pp][Rr][Ee][Ss][Ss][Ii][Oo][Nn]', param, re.IGNORECASE):
+                indicators.append('IO_COMPRESSION')
+            
+            # DeflateStream obfuscation
+            if re.search(r'[Dd][Ee][Ff][Ll][Aa][Tt][Ee][Ss][Tt][Rr][Ee][Aa][Mm]', param, re.IGNORECASE):
+                indicators.append('DEFLATESTREAM')
+            
+            # MemoryStream obfuscation
+            if re.search(r'[Mm][Ee][Mm][Oo][Rr][Yy][Ss][Tt][Rr][Ee][Aa][Mm]', param, re.IGNORECASE):
+                indicators.append('MEMORYSTREAM')
+            
+            return '|'.join(indicators) if indicators else ''
+      alias: true
+      alias_name: "ScriptBlockText_ObfuscationIndicators"
+      source_condition:
+        - evtx_input
+        - json_array_input
+        - json_input
+        - evtxtract_input
+        - db_input
+
+    # Detect XOR operations in PowerShell scripts
+    - info: "Detect XOR key patterns in ScriptBlockText"
+      type: python
+      code: |
+        def transform(param):
+            import re
+            results = []
+            
+            # -bxor operator with key
+            bxor_matches = re.findall(r'-bxor\s*(\d+|0x[0-9a-fA-F]+)', param, re.IGNORECASE)
+            for key in bxor_matches:
+                results.append('XOR_KEY:' + key)
+            
+            # XOR in foreach/for loops
+            if re.search(r'foreach.*-bxor|for\s*\(.*-bxor', param, re.IGNORECASE):
+                results.append('XOR_LOOP')
+            
+            # Byte array XOR patterns
+            if re.search(r'\[byte\[\]\].*-bxor|\[System\.Byte\[\]\].*-bxor', param, re.IGNORECASE):
+                results.append('BYTE_ARRAY_XOR')
+            
+            # Common single-byte XOR keys (often used in malware)
+            for key in ['0x35', '0x55', '0xAA', '0xFF', '35', '55', '170', '255']:
+                if re.search(r'-bxor\s*' + key + r'\b', param, re.IGNORECASE):
+                    results.append('COMMON_XOR_KEY:' + key)
+            
+            return '|'.join(results) if results else ''
+      alias: true
+      alias_name: "ScriptBlockText_XORPatterns"
+      source_condition:
+        - evtx_input
+        - json_array_input
+        - json_input
+        - evtxtract_input
+        - db_input
+
+    # Detect .NET reflection abuse
+    - info: "Detect .NET reflection abuse"
+      type: python
+      code: |
+        def transform(param):
+            import re
+            indicators = []
+            param_lower = param.lower()
+            
+            # Assembly loading
+            if 'system.reflection.assembly' in param_lower:
+                indicators.append('ASSEMBLY_LOAD')
+            if 'load(' in param_lower and 'assembly' in param_lower:
+                indicators.append('DYNAMIC_LOAD')
+            
+            # Type reflection
+            if re.search(r'\[type\]|gettype\(', param, re.IGNORECASE):
+                indicators.append('TYPE_REFLECTION')
+            
+            # Method invocation via reflection
+            if re.search(r'\.invoke\(|invokemember\(', param, re.IGNORECASE):
+                indicators.append('INVOKE_METHOD')
+            
+            # GetMethod/GetField
+            if re.search(r'getmethod\(|getfield\(|getproperty\(', param, re.IGNORECASE):
+                indicators.append('GET_MEMBER')
+            
+            # Delegate creation (used in shellcode runners)
+            if re.search(r'getdelegateforcunctionpointer|marshal\.getdelegateforfunctionpointer', param, re.IGNORECASE):
+                indicators.append('DELEGATE_CREATION')
+            
+            return '|'.join(indicators) if indicators else ''
+      alias: true
+      alias_name: "ScriptBlockText_ReflectionAbuse"
+      source_condition:
+        - evtx_input
+        - json_array_input
+        - json_input
+        - evtxtract_input
+        - db_input
+
+    # Detect shellcode patterns
+    - info: "Detect shellcode indicators"
+      type: python
+      code: |
+        def transform(param):
+            import re
+            indicators = []
+            param_lower = param.lower()
+            
+            # VirtualAlloc with executable permissions
+            if re.search(r'virtualalloc.*0x40|virtualalloc.*page_execute', param, re.IGNORECASE):
+                indicators.append('EXEC_MEMORY_ALLOC')
+            
+            # Kernel32/ntdll function calls
+            if 'kernel32' in param_lower:
+                indicators.append('KERNEL32_REF')
+            if 'ntdll' in param_lower:
+                indicators.append('NTDLL_REF')
+            
+            # CreateThread/CreateRemoteThread
+            if 'createthread' in param_lower:
+                indicators.append('CREATE_THREAD')
+            
+            # Shellcode byte patterns (common NOP sled, syscall patterns)
+            if re.search(r'0x90,\s*0x90|\\x90\\x90', param):
+                indicators.append('NOP_SLED')
+            
+            # Copy memory operations
+            if re.search(r'marshal\.copy|rtlmovememory|copymemory', param, re.IGNORECASE):
+                indicators.append('MEMORY_COPY')
+            
+            # Pointer operations
+            if re.search(r'intptr|marshal\.allochglobal', param, re.IGNORECASE):
+                indicators.append('POINTER_OP')
+            
+            return '|'.join(indicators) if indicators else ''
+      alias: true
+      alias_name: "ScriptBlockText_ShellcodeIndicators"
+      source_condition:
+        - evtx_input
+        - json_array_input
+        - json_input
+        - evtxtract_input
+        - db_input
+
+    # Extract IPs and domains from scripts
+    - info: "Extract network IOCs from ScriptBlockText"
+      type: python
+      code: |
+        def transform(param):
+            import re
+            iocs = []
+            
+            # IPv4 addresses
+            ipv4_pattern = r'\b(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})\b'
+            ips = re.findall(ipv4_pattern, param)
+            for ip in ips:
+                # Filter out common non-IOC IPs
+                if not ip.startswith(('0.', '127.', '255.')):
+                    iocs.append('IP:' + ip)
+            
+            # URLs
+            url_pattern = r'(https?://[^\s\'"<>]+)'
+            urls = re.findall(url_pattern, param, re.IGNORECASE)
+            for url in urls[:5]:  # Limit to first 5
+                url = url.rstrip('.,;:)]\'"')
+                iocs.append('URL:' + url[:100])
+            
+            # Domains (simplified)
+            domain_pattern = r'\b([a-zA-Z0-9][-a-zA-Z0-9]*\.(?:com|net|org|io|ru|cn|tk|xyz|top|info|biz))\b'
+            domains = re.findall(domain_pattern, param, re.IGNORECASE)
+            for domain in set(domains):
+                iocs.append('DOMAIN:' + domain)
+            
+            return '|'.join(iocs[:20]) if iocs else ''  # Limit total IOCs
+      alias: true
+      alias_name: "ScriptBlockText_NetworkIOCs"
+      source_condition:
+        - evtx_input
+        - json_array_input
+        - json_input
+        - evtxtract_input
+        - db_input
+
+  # -------------------------
+  # TargetObject Registry Transforms
+  # -------------------------
+  TargetObject:
+    - info: "Identify suspicious registry paths"
+      type: python
+      code: |
+        def transform(param):
+            import re
+            suspicious = []
+            param_lower = param.lower()
+            
+            # Run keys (persistence)
+            if re.search(r'\\run\\|\\runonce\\', param, re.IGNORECASE):
+                suspicious.append('RUN_KEY')
+            
+            # Services (persistence)
+            if re.search(r'\\services\\', param, re.IGNORECASE):
+                suspicious.append('SERVICE_KEY')
+            
+            # Image File Execution Options (hijacking)
+            if 'image file execution options' in param_lower:
+                suspicious.append('IFEO')
+            
+            # AppInit DLLs
+            if 'appinit_dlls' in param_lower:
+                suspicious.append('APPINIT_DLLS')
+            
+            # Winlogon (persistence)
+            if 'winlogon' in param_lower:
+                suspicious.append('WINLOGON')
+            
+            # COM hijacking
+            if re.search(r'\\clsid\\|\\inprocserver', param, re.IGNORECASE):
+                suspicious.append('COM_HIJACK')
+            
+            # Scheduled tasks
+            if 'schedule\\taskcache' in param_lower:
+                suspicious.append('SCHED_TASK')
+            
+            # Security settings
+            if re.search(r'\\policies\\|\\security\\', param, re.IGNORECASE):
+                suspicious.append('SECURITY_POLICY')
+            
+            return '|'.join(suspicious) if suspicious else ''
+      alias: true
+      alias_name: "TargetObject_SuspiciousRegistry"
+      source_condition:
+        - evtx_input
+        - json_array_input
+        - json_input
+        - evtxtract_input
+        - db_input
+
+  # -------------------------
+  # DestinationPort Transforms
+  # -------------------------
+  DestinationPort:
+    - info: "Categorize destination ports"
+      type: python
+      code: |
+        def transform(param):
+            try:
+                port = int(param)
+            except (ValueError, TypeError):
+                return ''
+            
+            # Well-known categories
+            if port == 80:
+                return 'HTTP'
+            elif port == 443:
+                return 'HTTPS'
+            elif port == 445:
+                return 'SMB'
+            elif port == 3389:
+                return 'RDP'
+            elif port == 22:
+                return 'SSH'
+            elif port == 21:
+                return 'FTP'
+            elif port == 20:
+                return 'FTP_DATA'
+            elif port == 23:
+                return 'TELNET'
+            elif port == 53:
+                return 'DNS'
+            elif port == 25 or port == 587 or port == 465:
+                return 'SMTP'
+            elif port in [135, 139]:
+                return 'RPC_NETBIOS'
+            elif port == 137:
+                return 'NETBIOS_NS'
+            elif port == 138:
+                return 'NETBIOS_DGM'
+            elif port == 1433:
+                return 'MSSQL'
+            elif port == 3306:
+                return 'MYSQL'
+            elif port == 5432:
+                return 'POSTGRESQL'
+            elif port == 1521:
+                return 'ORACLE'
+            elif port == 27017:
+                return 'MONGODB'
+            elif port == 6379:
+                return 'REDIS'
+            elif port == 5985 or port == 5986:
+                return 'WINRM'
+            elif port == 88:
+                return 'KERBEROS'
+            elif port == 389:
+                return 'LDAP'
+            elif port == 636:
+                return 'LDAPS'
+            elif port == 3268:
+                return 'LDAP_GC'
+            elif port == 3269:
+                return 'LDAPS_GC'
+            elif port == 464:
+                return 'KERBEROS_PASSWD'
+            elif port == 4444:
+                return 'METASPLOIT_DEFAULT'
+            elif port == 4445:
+                return 'METASPLOIT_ALT'
+            elif port == 8080 or port == 8443:
+                return 'ALT_HTTP'
+            elif port == 8000 or port == 8888:
+                return 'DEV_HTTP'
+            elif port == 9090:
+                return 'OPENFIRE'
+            elif port == 110:
+                return 'POP3'
+            elif port == 995:
+                return 'POP3S'
+            elif port == 143:
+                return 'IMAP'
+            elif port == 993:
+                return 'IMAPS'
+            elif port == 161:
+                return 'SNMP'
+            elif port == 162:
+                return 'SNMP_TRAP'
+            elif port == 69:
+                return 'TFTP'
+            elif port == 514:
+                return 'SYSLOG'
+            elif port == 515:
+                return 'LPD'
+            elif port == 548:
+                return 'AFP'
+            elif port == 873:
+                return 'RSYNC'
+            elif port == 1080:
+                return 'SOCKS'
+            elif port == 1194:
+                return 'OPENVPN'
+            elif port == 1723:
+                return 'PPTP'
+            elif port == 2049:
+                return 'NFS'
+            elif port == 2375 or port == 2376:
+                return 'DOCKER'
+            elif port == 5000:
+                return 'DOCKER_REGISTRY'
+            elif port == 5900:
+                return 'VNC'
+            elif port == 6000:
+                return 'X11'
+            elif port == 8081:
+                return 'PROXY'
+            elif port == 9200:
+                return 'ELASTICSEARCH'
+            elif port == 9300:
+                return 'ELASTICSEARCH_CLUSTER'
+            elif port == 11211:
+                return 'MEMCACHED'
+            elif port == 50000:
+                return 'SAP'
+            elif port >= 49152:
+                return 'EPHEMERAL'
+            elif port >= 1024:
+                return 'HIGH_PORT'
+            else:
+                return 'WELL_KNOWN'
+      alias: true
+      alias_name: "DestinationPort_Category"
+      source_condition:
+        - evtx_input
+        - json_array_input
+        - json_input
+        - evtxtract_input
+        - db_input

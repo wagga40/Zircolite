@@ -4,7 +4,105 @@
 
 **Zircolite is more a workflow than a real detection engine.** To put it simply, it leverages the ability of the Sigma converter to output rules in SQLite format. Zircolite simply applies SQLite-converted rules to EVTX logs stored in an in-memory SQLite database.
 
-![](pics/Zircolite.png)
+### High-Level Flow
+
+```mermaid
+flowchart LR
+    subgraph IN[Inputs]
+        I[EVTX / XML / JSON<br/>CSV / Auditd]
+    end
+    
+    subgraph PROC[Processing]
+        F[Flatten &<br/>Transform]
+    end
+    
+    subgraph DB[SQLite]
+        S[(In-Memory DB)]
+    end
+    
+    subgraph RULES[Rules]
+        R[SIGMA → SQL]
+    end
+    
+    subgraph OUT[Output]
+        O[JSON / CSV<br/>Templates]
+    end
+    
+    I --> F --> S
+    R --> S
+    S --> O
+```
+
+### Event Processing Pipeline
+
+```mermaid
+flowchart TB
+    A[Raw Event] --> B{Event Filter}
+    B -->|Skip| A
+    B -->|Process| C[Flatten Nested JSON]
+    C --> D[Apply Field Mappings]
+    D --> E[Create Aliases]
+    E --> F[Split Fields]
+    F --> G[Run Transforms]
+    G --> H[Insert to SQLite]
+    H --> I[Execute SIGMA Rules]
+    I --> J[Output Detections]
+```
+
+### Field Processing Details
+
+| Stage | Description | Example |
+|-------|-------------|---------|
+| **1. Filter** | Skip events not matching any rule | Channel/EventID check |
+| **2. Flatten** | Nested → flat structure | `Event.System.Channel` → `Channel` |
+| **3. Mappings** | Rename fields | `Event.EventData.CommandLine` → `CommandLine` |
+| **4. Aliases** | Duplicate fields with new names | `CommandLine` → `cmdline` |
+| **5. Splits** | Parse key=value strings | `"a=1 b=2"` → `{a:1, b:2}` |
+| **6. Transforms** | Custom Python code (sandboxed) | Extract filename from path |
+
+### Processing Modes
+
+```mermaid
+flowchart LR
+    subgraph Streaming[Streaming - Default]
+        S1[Read] --> S2[Flatten] --> S3[Insert]
+    end
+    
+    subgraph PerFile[Per-File Mode]
+        P1[File 1] --> P2[File 2] --> P3[Combine]
+    end
+    
+    subgraph Unified[Unified Mode]
+        U1[All Files] --> U2[Single DB]
+    end
+```
+
+**Mode Selection:**
+- **Streaming** (default): Single-pass, no intermediate files
+- **Per-File**: Separate DB per file, enables parallel processing
+- **Unified**: All files in one DB, enables cross-file correlation
+
+### Transform System
+
+```mermaid
+flowchart LR
+    A[Field Value] --> B[RestrictedPython<br/>Sandbox]
+    B --> C{Alias?}
+    C -->|Yes| D[New Field]
+    C -->|No| E[Replace Value]
+    
+    subgraph Allowed
+        R[re / base64 / chardet]
+    end
+    
+    Allowed -.-> B
+```
+
+**Transform capabilities:**
+- Regex extraction (`re` module)
+- Base64 encoding/decoding
+- Character encoding detection
+- Custom logic in sandboxed Python
 
 ### Core Components
 
@@ -16,7 +114,7 @@ Zircolite is built around several key classes, organized in the `zircolite/` pac
 - **JSONFlattener** (`flattener.py`): Processes and flattens JSON log events, applies field mappings, aliases, splits, and transforms.
 - **EvtxExtractor** (`extractor.py`): Converts various log formats (EVTX, XML, Auditd, Sysmon for Linux, CSV) to JSON.
 - **RulesetHandler** (`rules.py`): Manages ruleset loading and conversion, including native Sigma (YAML) to Zircolite format (JSON) conversion using pySigma.
-- **RulesUpdater** (`rules.py`): Downloads and updates rulesets from the Zircolite-Rules repository.
+- **RulesUpdater** (`rules.py`): Downloads and updates rulesets from the Zircolite-Rules-v2 repository.
 - **TemplateEngine** (`templates.py`): Generates output using Jinja2 templates.
 - **ZircoliteGuiGenerator** (`templates.py`): Creates the Mini-GUI package for result visualization.
 - **MemoryTracker** (`utils.py`): Monitors and reports memory usage during execution.
@@ -52,7 +150,7 @@ Use `--no-auto-mode` to disable automatic selection and use per-file mode by def
 5. **Result Output**: Matches are written to the output file (JSON or CSV) and optionally processed through templates.
 
 Benefits of streaming mode:
-- 40-60% faster processing
+- Faster processing
 - No intermediate JSON files (eliminates disk I/O)
 - Single JSON parse per event
 - Lower memory footprint
@@ -112,7 +210,7 @@ Transforms use **RestrictedPython** for safe, sandboxed execution of custom Pyth
 ├── README.md               # Project documentation
 ├── bin/                    # Directory containing external binaries (evtx_dump)
 ├── config/                 # Configuration files
-│   ├── fieldMappings.json  # Field mappings, aliases, splits, and transforms
+│   ├── fieldMappings.yaml  # Field mappings, aliases, splits, and transforms
 │   └── zircolite_example.yaml  # Example YAML configuration file
 ├── docs/                   # Documentation directory
 │   ├── README.md           # Documentation index

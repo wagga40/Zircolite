@@ -20,8 +20,6 @@
 - **Multiple Input Formats**: Supports various log formats including EVTX, JSON Lines, JSON Arrays, CSV, XML, and more.
 - **Native Sigma Support**: Zircolite can directly use native Sigma rules (YAML) by converting them with pySigma.
 - **SIGMA Backend**: It is based on a SIGMA backend (SQLite) and does not use internal SIGMA-to-something conversion.
-- **Automatic Parallel Processing**: Intelligent parallel file processing enabled by default. Automatically calculates optimal worker count based on available RAM, CPU cores, and file sizes.
-- **YAML Configuration**: Support for YAML configuration files for easier management of complex analysis workflows.
 - **Advanced Log Manipulation**: It can manipulate input logs by splitting fields and applying transformations, allowing for more flexible and powerful log analysis.
 - **Field Transforms**: Apply custom Python transformations to fields during processing (e.g., Base64 decoding, hex-to-ASCII conversion).
 - **Flexible Export**: Zircolite can export results to multiple formats using Jinja [templates](templates), including JSON, CSV, JSONL, Splunk, Elastic, Zinc, Timesketch, and more.
@@ -203,7 +201,91 @@ python3 zircolite.py -U
 ```
 
 > [!IMPORTANT]  
-> Please note that these rulesets are provided to use Zircolite out of the box, but [you should generate your own rulesets](#why-you-should-build-your-own-rulesets) as they can be very noisy or slow. These auto-updated rulesets are available in the dedicated repository: [Zircolite-Rules](https://github.com/wagga40/Zircolite-Rules).
+> Please note that these rulesets are provided to use Zircolite out of the box, but [you should generate your own rulesets](#why-you-should-build-your-own-rulesets) as they can be noisy or slow. These auto-updated rulesets are available in the dedicated repository: [Zircolite-Rules-v2](https://github.com/wagga40/Zircolite-Rules-v2).
+
+### Field Splitting
+
+Field splitting extracts key-value pairs from fields. For example, Sysmon logs contain a `Hashes` field like:
+
+```
+SHA1=abc123,MD5=def456,SHA256=789xyz
+```
+
+With field splitting configured in `config/fieldMappings.yaml`:
+
+```yaml
+split:
+  Hashes:
+    separator: ","
+    equal: "="
+```
+
+The event becomes:
+
+```json
+{
+  "SHA1": "abc123",
+  "MD5": "def456",
+  "SHA256": "789xyz",
+  "Hashes": "SHA1=abc123,MD5=def456,SHA256=789xyz"
+}
+```
+
+Now you can write rules that match on `SHA256` or `MD5` directly.
+
+### Field Transforms
+
+Transforms apply Python code to field values during processing. They can decode data, extract IOCs, or detect attack patterns.
+
+**Example: Base64 Decoding**
+
+When a command line contains `powershell -enc SGVsbG8gV29ybGQ=`, the transform:
+
+```yaml
+transforms:
+  CommandLine:
+    - info: "Base64 decode"
+      type: python
+      code: |
+        def transform(param):
+            import base64
+            import re
+            match = re.search(r'-[eE]nc(?:odedcommand)?\s+([A-Za-z0-9+/=]+)', param)
+            if match:
+                try:
+                    return base64.b64decode(match.group(1)).decode('utf-16-le')
+                except:
+                    return ""
+            return ""
+      alias: true
+      alias_name: "CommandLine_b64decoded"
+```
+
+Creates a new field `CommandLine_b64decoded` containing `Hello World`.
+
+**Example: LOLBin Detection**
+
+```yaml
+transforms:
+  Image:
+    - info: "Detect Living Off The Land Binaries"
+      type: python
+      code: |
+        def transform(param):
+            import re
+            lolbins = ['certutil', 'mshta', 'regsvr32', 'rundll32', 'bitsadmin']
+            exe_name = param.lower().split('\\')[-1].replace('.exe', '')
+            for lolbin in lolbins:
+                if exe_name == lolbin:
+                    return f"LOLBIN:{lolbin}"
+            return ""
+      alias: true
+      alias_name: "Image_LOLBinMatch"
+```
+
+When `Image` is `C:\Windows\System32\certutil.exe`, creates `Image_LOLBinMatch` = `LOLBIN:certutil`.
+
+See [Advanced documentation](docs/Advanced.md#field-transforms) for all available transforms and detailed configuration.
 
 ## Documentation
 

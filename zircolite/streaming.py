@@ -6,6 +6,7 @@ This module contains the StreamingEventProcessor class for:
 - Single-pass streaming of events from various log formats
 - Dynamic schema discovery during streaming
 - Batch database insertion
+- Early event filtering based on channel/eventID
 """
 
 import base64
@@ -33,6 +34,7 @@ from .utils import load_field_mappings
 
 if TYPE_CHECKING:
     from .extractor import EvtxExtractor
+    from .rules import EventFilter
 
 
 class StreamingEventProcessor:
@@ -43,6 +45,8 @@ class StreamingEventProcessor:
     as they are extracted from EVTX/XML/Auditd sources and directly inserting them
     into the SQLite database in batches.
     
+    Supports early event filtering based on channel/eventID to skip events that won't
+    match any detection rules.
     """
 
     __slots__ = (
@@ -50,7 +54,12 @@ class StreamingEventProcessor:
         'hashes', 'args_config', 'disable_progress', 'batch_size',
         # Config data (loaded once)
         'field_exclusions', 'field_mappings', 'useless_values', 'aliases',
-        'field_split_list', 'transforms', 'transforms_enabled', 'chosen_input',
+        'field_split_list', 'transforms', 'transforms_enabled', 'enabled_transforms_set',
+        'chosen_input',
+        # Event filter config (from fieldMappings config)
+        '_channel_field_paths', '_eventid_field_paths',
+        # Timestamp config (from fieldMappings config)
+        '_timestamp_detection_fields', '_timestamp_auto_detect', '_detected_time_field',
         # Schema tracking
         'discovered_fields', 'field_types', 'field_stmt_cache',
         # Caches
@@ -58,7 +67,9 @@ class StreamingEventProcessor:
         # Time filter cache
         '_has_time_filter', '_time_after_parsed', '_time_before_parsed',
         # DB column caching (optimization)
-        '_db_columns', '_last_insert_stmt', '_last_insert_columns'
+        '_db_columns', '_last_insert_stmt', '_last_insert_columns',
+        # Event filtering (early skip based on channel/eventID)
+        'event_filter', '_events_filtered_count', '_filtering_enabled'
     )
 
     def __init__(
@@ -67,7 +78,8 @@ class StreamingEventProcessor:
         args_config: Any,
         processing_config: Optional[ProcessingConfig] = None,
         *,
-        logger: Optional[logging.Logger] = None
+        logger: Optional[logging.Logger] = None,
+        event_filter: 'Optional[EventFilter]' = None
     ):
         """
         Initialize StreamingEventProcessor.
@@ -77,6 +89,7 @@ class StreamingEventProcessor:
             args_config: Argparse namespace with input format options
             processing_config: Processing configuration (uses defaults if None)
             logger: Logger instance (creates default if None)
+            event_filter: Optional EventFilter for early event filtering based on channel/eventID
         """
         proc = processing_config or ProcessingConfig()
         
@@ -89,6 +102,12 @@ class StreamingEventProcessor:
         self.args_config = args_config
         self.disable_progress = proc.disable_progress
         self.batch_size = proc.batch_size
+        
+        # Event filter for early filtering based on channel/eventID
+        self.event_filter = event_filter
+        self._events_filtered_count = 0
+        # Pre-compute filtering enabled flag (avoids repeated checks in hot loop)
+        self._filtering_enabled = event_filter is not None and event_filter.is_enabled
         
         # Schema tracking - fields discovered during streaming
         self.discovered_fields = {}  # field_name_lower -> original_field_name
@@ -120,11 +139,14 @@ class StreamingEventProcessor:
         if not hasattr(self, 'chosen_input') or self.chosen_input is None:
             self.chosen_input = "evtx_input"
         
-        # Load field mappings config
+        # Load field mappings config (includes event_filter and timestamp_detection)
         self._load_config()
         
         # Initialize RestrictedPython builtins
         self._init_restricted_builtins()
+        
+        # Timestamp auto-detection state
+        self._detected_time_field = None
 
     @staticmethod
     def _parse_time_bound(value, fallback):
@@ -146,6 +168,25 @@ class StreamingEventProcessor:
         self.field_split_list = config["split"]
         self.transforms = config["transforms"]
         self.transforms_enabled = config["transforms_enabled"]
+        
+        # Load enabled_transforms list for quick enable/disable control
+        # If present, only transforms in this list are enabled (overrides per-transform 'enabled' flag)
+        enabled_list = config.get("enabled_transforms", None)
+        if enabled_list is not None:
+            self.enabled_transforms_set = frozenset(enabled_list)
+        else:
+            # If no list provided, fall back to per-transform 'enabled' flag (set to None)
+            self.enabled_transforms_set = None
+        
+        # Load event filter field paths from config (defaults provided by load_field_mappings)
+        event_filter = config.get("event_filter", {})
+        self._channel_field_paths = tuple(event_filter.get("channel_fields", []))
+        self._eventid_field_paths = tuple(event_filter.get("eventid_fields", []))
+        
+        # Load timestamp detection config (defaults provided by load_field_mappings)
+        timestamp = config.get("timestamp_detection", {})
+        self._timestamp_detection_fields = tuple(timestamp.get("detection_fields", []))
+        self._timestamp_auto_detect = timestamp.get("auto_detect", True)
 
     def _init_restricted_builtins(self):
         """Initialize RestrictedPython builtins for transforms."""
@@ -165,6 +206,146 @@ class StreamingEventProcessor:
         self.RestrictedPython_BUILTINS.update(safe_builtins)
         self.RestrictedPython_BUILTINS.update(limited_builtins)
         self.RestrictedPython_BUILTINS.update(utility_builtins)
+
+    def _extract_event_filter_fields(self, event_dict: dict) -> tuple:
+        """
+        Extract Channel and EventID from raw event data for early filtering.
+        
+        This method tries to extract these fields using configured field paths.
+        Paths are tried in order until a value is found.
+        
+        The field paths support:
+        - Dot notation for nested fields (e.g., "Event.System.Channel")
+        - Direct field names (e.g., "Channel")
+        - Special handling for EventID which may be a dict with '#text'
+        
+        Args:
+            event_dict: Raw event dictionary (not yet flattened)
+            
+        Returns:
+            Tuple of (channel, eventid) where eventid is int or None
+        """
+        channel = None
+        eventid = None
+        
+        # Extract channel using configured field paths
+        channel = self._extract_field_value(event_dict, self._channel_field_paths)
+        
+        # Extract eventID using configured field paths
+        eventid = self._extract_field_value(event_dict, self._eventid_field_paths)
+        
+        # Convert eventid to int if possible (guarantees int or None for caller)
+        if eventid is not None:
+            # Handle EventID as dict with '#text' (XML style)
+            if isinstance(eventid, dict):
+                eventid = eventid.get('#text')
+            try:
+                eventid = int(eventid)
+            except (ValueError, TypeError):
+                eventid = None
+        
+        return channel, eventid
+
+    def _extract_field_value(self, event_dict: dict, field_paths: tuple) -> Any:
+        """
+        Extract a field value from an event dict using a list of possible paths.
+        
+        Paths support dot notation for nested access (e.g., "Event.System.Channel").
+        Tries each path in order until a non-None value is found.
+        
+        Args:
+            event_dict: The event dictionary to extract from
+            field_paths: Tuple of field paths to try
+            
+        Returns:
+            The first non-None value found, or None if no path succeeds
+        """
+        for path in field_paths:
+            value = self._get_nested_value(event_dict, path)
+            if value is not None:
+                return value
+        return None
+
+    def _get_nested_value(self, obj: dict, path: str) -> Any:
+        """
+        Get a value from a nested dictionary using dot notation.
+        
+        Args:
+            obj: The dictionary to search
+            path: Dot-separated path (e.g., "Event.System.Channel")
+            
+        Returns:
+            The value at the path, or None if not found
+        """
+        if not path or not isinstance(obj, dict):
+            return None
+        
+        # Split path by dots
+        parts = path.split('.')
+        current = obj
+        
+        for part in parts:
+            if not isinstance(current, dict):
+                return None
+            current = current.get(part)
+            if current is None:
+                return None
+        
+        return current
+
+    def _detect_timestamp_field(self, flattened_event: dict) -> Optional[str]:
+        """
+        Auto-detect the timestamp field from a flattened event.
+        
+        Tries the default time_field first, then falls back to configured
+        detection fields in order of priority.
+        
+        Args:
+            flattened_event: A flattened event dictionary
+            
+        Returns:
+            The name of the detected timestamp field, or None if not found
+        """
+        # First, try the explicitly configured time_field (if set)
+        if self.time_field and self.time_field in flattened_event:
+            return self.time_field
+        
+        # If auto-detect is enabled, try detection fields from config
+        if self._timestamp_auto_detect:
+            for field in self._timestamp_detection_fields:
+                if field in flattened_event:
+                    return field
+        
+        return None
+
+    def _should_process_event(self, event_dict: dict) -> bool:
+        """
+        Check if an event should be processed based on the event filter.
+        
+        This is a fast check performed before expensive flattening operations.
+        
+        Args:
+            event_dict: Raw event dictionary
+            
+        Returns:
+            True if the event should be processed, False if it can be skipped
+        """
+        # Fast path: use pre-computed flag instead of repeated attribute checks
+        if not self._filtering_enabled:
+            return True
+        
+        channel, eventid = self._extract_event_filter_fields(event_dict)
+        should_process = self.event_filter.should_process_event(channel, eventid)
+        
+        if not should_process:
+            self._events_filtered_count += 1
+        
+        return should_process
+
+    @property
+    def events_filtered_count(self) -> int:
+        """Return the number of events skipped by the event filter."""
+        return self._events_filtered_count
 
     def _get_transform_func(self, code):
         """Get or create cached transform function."""
@@ -217,6 +398,7 @@ class StreamingEventProcessor:
         transforms = self.transforms
         transforms_get = transforms.get
         transforms_enabled = self.transforms_enabled
+        enabled_transforms_set = self.enabled_transforms_set
         chosen_input = self.chosen_input
         discovered_fields = self.discovered_fields
         field_types = self.field_types
@@ -284,15 +466,16 @@ class StreamingEventProcessor:
                 # Handle transforms
                 transformed_keys = None
                 transformed_values = None
-                if transforms_enabled:
+                if transforms_enabled and enabled_transforms_set:
                     for field_name in (key, raw_field_name):
                         field_transforms = transforms_get(field_name)
                         if field_transforms:
                             for transform in field_transforms:
-                                if transform["enabled"] and chosen_input in transform["source_condition"]:
+                                # Check if transform is enabled via enabled_transforms list
+                                alias_name = transform.get("alias_name", "")
+                                if alias_name in enabled_transforms_set and chosen_input in transform["source_condition"]:
                                     transform_code = transform["code"]
                                     if transform["alias"]:
-                                        alias_name = transform["alias_name"]
                                         keys.append(alias_name)
                                         if transformed_keys is None:
                                             transformed_keys = set()
@@ -334,21 +517,39 @@ class StreamingEventProcessor:
                         field_types[k] = 'INTEGER' if is_int else 'TEXT COLLATE NOCASE'
         
         # Time filtering (with pre-parsed bounds)
-        if self._has_time_filter and self.time_field:
-            ts_str = json_line.get(self.time_field)
-            if ts_str:
-                try:
-                    # Strip fractional seconds and timezone
-                    dot_pos = ts_str.find('.')
-                    if dot_pos != -1:
-                        ts_str = ts_str[:dot_pos]
-                    elif ts_str.endswith('Z'):
-                        ts_str = ts_str[:-1]
-                    timestamp = time.strptime(ts_str, '%Y-%m-%dT%H:%M:%S')
-                    if not (self._time_after_parsed < timestamp < self._time_before_parsed):
-                        return None
-                except Exception:
-                    pass
+        if self._has_time_filter:
+            # Use configured time_field or auto-detect
+            effective_time_field = self.time_field
+            
+            # Auto-detect timestamp field if not found or not set
+            if not effective_time_field or effective_time_field not in json_line:
+                if self._detected_time_field and self._detected_time_field in json_line:
+                    effective_time_field = self._detected_time_field
+                elif self._timestamp_auto_detect:
+                    detected = self._detect_timestamp_field(json_line)
+                    if detected:
+                        self._detected_time_field = detected
+                        effective_time_field = detected
+                        self.logger.debug(f"Auto-detected timestamp field: {detected}")
+            
+            if effective_time_field:
+                ts_str = json_line.get(effective_time_field)
+                if ts_str:
+                    try:
+                        # Strip fractional seconds and timezone
+                        dot_pos = ts_str.find('.')
+                        if dot_pos != -1:
+                            ts_str = ts_str[:dot_pos]
+                        elif ts_str.endswith('Z'):
+                            ts_str = ts_str[:-1]
+                        # Handle timezone offset (e.g., +00:00)
+                        if '+' in ts_str:
+                            ts_str = ts_str.split('+')[0]
+                        timestamp = time.strptime(ts_str[:19], '%Y-%m-%dT%H:%M:%S')
+                        if not (self._time_after_parsed < timestamp < self._time_before_parsed):
+                            return None
+                    except Exception:
+                        pass
         
         return json_line
 
@@ -360,6 +561,7 @@ class StreamingEventProcessor:
             parser = PyEvtxParser(str(filepath))
             flatten = self._flatten_event  # Local reference for speed
             json_loads = json.loads
+            should_process = self._should_process_event  # Local reference for speed
             
             for record in parser.records_json():
                 try:
@@ -370,6 +572,10 @@ class StreamingEventProcessor:
                     else:
                         raw_bytes = raw_data
                         event_dict = json_loads(raw_data)
+                    
+                    # Early filter check before expensive flattening
+                    if not should_process(event_dict):
+                        continue
                     
                     flattened = flatten(event_dict, filename, raw_bytes)
                     if flattened:
@@ -387,16 +593,21 @@ class StreamingEventProcessor:
         Optimizations:
         - JSONL mode: True line-by-line streaming (no full file load)
         - JSON array mode: Single parse, iterate elements
+        - Early event filtering based on channel/eventID
         """
         try:
             filename = os.path.basename(json_file)
             flatten = self._flatten_event  # Local reference
+            should_process = self._should_process_event  # Local reference
             
             if json_array:
                 # JSON array: must load entire file to parse array
                 with open(json_file, 'rb') as f:
                     logs = json.loads(f.read())
                 for event_dict in logs:
+                    # Early filter check before expensive flattening
+                    if not should_process(event_dict):
+                        continue
                     flattened = flatten(event_dict, filename, None)
                     if flattened:
                         yield flattened
@@ -409,6 +620,9 @@ class StreamingEventProcessor:
                             continue
                         try:
                             event_dict = json.loads(line)
+                            # Early filter check before expensive flattening
+                            if not should_process(event_dict):
+                                continue
                             flattened = flatten(event_dict, filename, line)
                             if flattened:
                                 yield flattened
@@ -422,6 +636,7 @@ class StreamingEventProcessor:
         try:
             filename = Path(xml_file).name
             flatten = self._flatten_event  # Local reference
+            should_process = self._should_process_event  # Local reference
             xml_convert = extractor.xml_line_to_json
             
             with open(xml_file, 'r', encoding=extractor.encoding) as f:
@@ -433,6 +648,9 @@ class StreamingEventProcessor:
                 try:
                     event_dict = xml_convert(line)
                     if event_dict:
+                        # Early filter check before expensive flattening
+                        if not should_process(event_dict):
+                            continue
                         flattened = flatten(event_dict, filename, line.encode('utf-8'))
                         if flattened:
                             yield flattened
@@ -446,6 +664,7 @@ class StreamingEventProcessor:
         try:
             filename = Path(log_file).name
             flatten = self._flatten_event  # Local reference
+            should_process = self._should_process_event  # Local reference
             sysmon_convert = extractor.sysmon_xml_line_to_json
             
             with open(log_file, 'r', encoding=extractor.encoding) as f:
@@ -455,6 +674,9 @@ class StreamingEventProcessor:
                     try:
                         event_dict = sysmon_convert(line)
                         if event_dict:
+                            # Early filter check before expensive flattening
+                            if not should_process(event_dict):
+                                continue
                             flattened = flatten(event_dict, filename, line.encode('utf-8'))
                             if flattened:
                                 yield flattened
@@ -468,6 +690,7 @@ class StreamingEventProcessor:
         try:
             filename = Path(log_file).name
             flatten = self._flatten_event  # Local reference
+            should_process = self._should_process_event  # Local reference
             auditd_convert = extractor.auditd_line_to_json
             
             with open(log_file, 'r', encoding=extractor.encoding) as f:
@@ -477,6 +700,9 @@ class StreamingEventProcessor:
                     try:
                         event_dict = auditd_convert(line)
                         if event_dict:
+                            # Early filter check (may not apply to Auditd, but keeps consistent)
+                            if not should_process(event_dict):
+                                continue
                             flattened = flatten(event_dict, filename, line.encode('utf-8'))
                             if flattened:
                                 yield flattened
@@ -495,12 +721,15 @@ class StreamingEventProcessor:
         try:
             filename = os.path.basename(csv_file)
             flatten = self._flatten_event  # Local reference
+            should_process = self._should_process_event  # Local reference
             
             with open(csv_file, 'r', encoding='utf-8', newline='') as f:
                 reader = csv_module.DictReader(f)
                 for row in reader:
                     try:
-                        # CSV rows are already flat dicts
+                        # CSV rows are already flat dicts, check filter on them directly
+                        if not should_process(row):
+                            continue
                         flattened = flatten(row, filename, None)
                         if flattened:
                             yield flattened
@@ -521,6 +750,7 @@ class StreamingEventProcessor:
         try:
             filename = Path(log_file).name
             flatten = self._flatten_event  # Local reference
+            should_process = self._should_process_event  # Local reference
             xml_to_dict = extractor.xml_to_dict
             
             # Read and clean the file content
@@ -542,6 +772,9 @@ class StreamingEventProcessor:
                     try:
                         event_dict = xml_to_dict(event, ns)
                         if event_dict:
+                            # Early filter check before expensive flattening
+                            if not should_process(event_dict):
+                                continue
                             flattened = flatten(event_dict, filename, None)
                             if flattened:
                                 yield flattened
@@ -563,10 +796,12 @@ class StreamingEventProcessor:
         Falls back to standard parsing if file is small enough.
         
         Memory optimization: yields events in chunks rather than all at once.
+        Includes early event filtering based on channel/eventID.
         """
         try:
             filename = os.path.basename(json_file)
             flatten = self._flatten_event  # Local reference
+            should_process = self._should_process_event  # Local reference
             
             file_size = os.path.getsize(json_file)
             
@@ -575,6 +810,9 @@ class StreamingEventProcessor:
                 with open(json_file, 'rb') as f:
                     logs = json.loads(f.read())
                 for event_dict in logs:
+                    # Early filter check before expensive flattening
+                    if not should_process(event_dict):
+                        continue
                     flattened = flatten(event_dict, filename, None)
                     if flattened:
                         yield flattened
@@ -592,6 +830,9 @@ class StreamingEventProcessor:
             for i in range(0, total_events, chunk_size):
                 chunk = logs[i:i + chunk_size]
                 for event_dict in chunk:
+                    # Early filter check before expensive flattening
+                    if not should_process(event_dict):
+                        continue
                     flattened = flatten(event_dict, filename, None)
                     if flattened:
                         yield flattened

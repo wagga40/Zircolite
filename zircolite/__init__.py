@@ -30,7 +30,7 @@ from .core import ZircoliteCore
 from .streaming import StreamingEventProcessor
 from .flattener import JSONFlattener
 from .extractor import EvtxExtractor
-from .rules import RulesetHandler, RulesUpdater
+from .rules import RulesetHandler, RulesUpdater, EventFilter
 from .templates import TemplateEngine, ZircoliteGuiGenerator
 from .utils import (
     init_logger,
@@ -102,6 +102,7 @@ __all__ = [
     'EvtxExtractor',
     'RulesetHandler',
     'RulesUpdater',
+    'EventFilter',
     'TemplateEngine',
     'ZircoliteGuiGenerator',
     'MemoryTracker',
