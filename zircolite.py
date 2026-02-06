@@ -987,7 +987,7 @@ def print_stats(memory_tracker: MemoryTracker, start_time: float, logger,
 # MAIN
 ################################################################
 def main():
-    version = "3.0.0"
+    version = "3.0.2"
     args = parse_arguments()
 
     # Handle generate-config before logging setup
