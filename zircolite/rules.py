@@ -423,11 +423,21 @@ class RulesetHandler:
         for sigma_rules in sigma_rules_list:
             # Create the pipeline resolver
             pipeline_resolver = ProcessingPipelineResolver()
-            # Add pipelines
-            for pipeline in pipelines:
-                pipeline_resolver.add_pipeline_class(pipeline)
-            # Create a single sorted and prioritized pipeline
-            combined_pipeline = pipeline_resolver.resolve(pipeline_resolver.pipelines)
+            # Preserve user order: pySigma's resolve() sorts by (priority, path).
+            # When priorities are equal it uses pipeline name, so e.g. "Add Channel..."
+            # runs before "Generic Log Sources..." and Channel is never set for Sysmon.
+            # Temporarily set priority to index so user order is respected.
+            original_priorities = [p.priority for p in pipelines]
+            try:
+                for i, pipeline in enumerate(pipelines):
+                    pipeline.priority = i
+                for pipeline in pipelines:
+                    pipeline_resolver.add_pipeline_class(pipeline)
+                # Resolve using pipeline names in user order (lower priority = earlier)
+                combined_pipeline = pipeline_resolver.resolve([p.name for p in pipelines])
+            finally:
+                for pipeline, orig in zip(pipelines, original_priorities):
+                    pipeline.priority = orig
             # Instantiate backend, using our resolved pipeline
             sqlite_backend = sqlite.sqliteBackend(combined_pipeline)
 

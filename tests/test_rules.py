@@ -390,3 +390,87 @@ class TestRulesetJsonParsing:
         )
         
         assert len(handler.rulesets) == 0
+
+
+class TestPipelineOrderPreserved:
+    """Tests that user-specified pipeline order is preserved when converting Sigma rules."""
+
+    def test_resolve_called_with_pipeline_names_in_user_order(self, tmp_path, test_logger):
+        """Resolve must be called with pipeline names in the same order as -p sysmon -p windows-logsources."""
+        wmi_rule = tmp_path / "wmi_event_subscription.yml"
+        wmi_rule.write_text("""
+title: WMI Event Subscription
+id: test-wmi-001
+status: test
+logsource:
+    product: windows
+    category: wmi_event
+detection:
+    selection:
+        EventID: [19, 20, 21]
+    condition: selection
+level: medium
+""")
+        resolve_calls = []
+
+        def capture_resolve(self_resolver, pipeline_specs, target=None):
+            resolve_calls.append(list(pipeline_specs))
+            from sigma.processing.pipeline import ProcessingPipeline
+            return ProcessingPipeline(name="combined", priority=0, items=[])
+
+        with patch(
+            "zircolite.rules.ProcessingPipelineResolver.resolve",
+            capture_resolve,
+        ):
+            handler = RulesetHandler(
+                ruleset_config=RulesetConfig(
+                    ruleset=[str(wmi_rule)],
+                    pipeline=[["sysmon"], ["windows-logsources"]],
+                ),
+                logger=test_logger,
+            )
+
+        assert len(resolve_calls) == 1, "resolve() should be called exactly once"
+        names_passed = resolve_calls[0]
+        assert isinstance(names_passed, list), "resolve() should be called with a list, not a dict"
+        assert len(names_passed) == 2, "two pipelines should be passed"
+        # User order is sysmon first, windows-logsources second
+        assert names_passed[0] == handler.pipelines[0].name
+        assert names_passed[1] == handler.pipelines[1].name
+
+    def test_pipeline_priorities_restored_after_conversion(self, tmp_path, test_logger):
+        """Pipeline priority values must be restored after sigma_rules_to_ruleset (no permanent mutation)."""
+        wmi_rule = tmp_path / "wmi_event_subscription.yml"
+        wmi_rule.write_text("""
+title: WMI Event Subscription
+id: test-wmi-002
+status: test
+logsource:
+    product: windows
+    category: wmi_event
+detection:
+    selection:
+        EventID: 19
+    condition: selection
+level: medium
+""")
+        original_priority = 10
+
+        with patch(
+            "zircolite.rules.ProcessingPipelineResolver.resolve",
+            lambda self_resolver, pipeline_specs, target=None: __import__(
+                "sigma.processing.pipeline", fromlist=["ProcessingPipeline"]
+            ).ProcessingPipeline(name="combined", priority=0, items=[]),
+        ):
+            handler = RulesetHandler(
+                ruleset_config=RulesetConfig(
+                    ruleset=[str(wmi_rule)],
+                    pipeline=[["sysmon"], ["windows-logsources"]],
+                ),
+                logger=test_logger,
+            )
+
+        for p in handler.pipelines:
+            assert p.priority == original_priority, (
+                "Pipeline priority should be restored to original after conversion"
+            )
