@@ -22,7 +22,7 @@ import orjson as json
 import requests
 import yaml
 # Rich console for styled output
-from .console import console
+from .console import console, is_quiet
 from sigma.collection import SigmaCollection
 from sigma.backends.sqlite import sqlite
 from sigma.processing.resolver import ProcessingPipelineResolver
@@ -225,7 +225,8 @@ class RulesUpdater:
             TransferSpeedColumn(),
             TimeRemainingColumn(),
             console=console,
-            transient=True
+            transient=True,
+            disable=is_quiet(),
         )
         
         with progress:
@@ -463,7 +464,8 @@ class RulesetHandler:
                 BarColumn(bar_width=40),
                 TextColumn("[cyan]{task.completed}/{task.total}[/]"),
                 console=console,
-                transient=True
+                transient=True,
+                disable=is_quiet(),
             )
             
             with progress:
@@ -473,6 +475,18 @@ class RulesetHandler:
                     if converted_rule is not None:
                         ruleset.append(converted_rule)
                     progress.update(task_id, advance=1)
+            
+            # Print conversion summary
+            conversion_errors = len(rule_collection) - len(ruleset)
+            summary_parts = [f"[green]\\[✓][/] Converted [cyan]{len(ruleset)}[/] rules"]
+            if skipped_count > 0 or conversion_errors > 0:
+                detail_parts = []
+                if skipped_count > 0:
+                    detail_parts.append(f"{skipped_count} invalid skipped")
+                if conversion_errors > 0:
+                    detail_parts.append(f"{conversion_errors} failed")
+                summary_parts.append(f" [dim]({', '.join(detail_parts)})[/]")
+            self.logger.info("".join(summary_parts))
             
             ruleset = sorted(ruleset, key=lambda d: d.get('level', 'informational'))  # Sorting by level
 
@@ -489,25 +503,27 @@ class RulesetHandler:
         ruleset_list = []
         for ruleset in self.rulesetPathList:
             ruleset_path = Path(ruleset)
-            if ruleset_path.exists():
-                if ruleset_path.is_file():
-                    if self.is_json(ruleset_path):  # JSON Ruleset
-                        try:
-                            with open(ruleset_path, encoding='utf-8') as f:
-                                ruleset_list.append(json.loads(f.read()))
-                            self.logger.info(f"    [>] Loaded JSON/Zircolite ruleset : [cyan]{str(ruleset_path)}[/]")
-                        except Exception as e:
-                            self.logger.error(f"[red]    [-] Cannot load {str(ruleset_path)} {e}[/]")
-                    elif self.is_yaml(ruleset_path):  # YAML Ruleset
-                        try:
-                            self.logger.info(f"[cyan]    [>] Converting Native Sigma to Zircolite ruleset : {str(ruleset_path)}[/]")
-                            ruleset_list.append(self.sigma_rules_to_ruleset([ruleset_path], self.pipelines))
-                        except Exception as e:
-                            self.logger.error(f"[red]    [-] Cannot convert {str(ruleset_path)} {e}[/]")
-                elif ruleset_path.is_dir():  # Directory
+            if not ruleset_path.exists():
+                self.logger.warning(f"[yellow]   [!] Ruleset path does not exist: {str(ruleset_path)}[/]")
+                continue
+            if ruleset_path.is_file():
+                if self.is_json(ruleset_path):  # JSON Ruleset
+                    try:
+                        with open(ruleset_path, encoding='utf-8') as f:
+                            ruleset_list.append(json.loads(f.read()))
+                        self.logger.info(f"    [>] Loaded JSON/Zircolite ruleset : [cyan]{str(ruleset_path)}[/]")
+                    except Exception as e:
+                        self.logger.error(f"[red]    [-] Cannot load {str(ruleset_path)} {e}[/]")
+                elif self.is_yaml(ruleset_path):  # YAML Ruleset
                     try:
                         self.logger.info(f"[cyan]    [>] Converting Native Sigma to Zircolite ruleset : {str(ruleset_path)}[/]")
                         ruleset_list.append(self.sigma_rules_to_ruleset([ruleset_path], self.pipelines))
                     except Exception as e:
                         self.logger.error(f"[red]    [-] Cannot convert {str(ruleset_path)} {e}[/]")
+            elif ruleset_path.is_dir():  # Directory
+                try:
+                    self.logger.info(f"[cyan]    [>] Converting Native Sigma to Zircolite ruleset : {str(ruleset_path)}[/]")
+                    ruleset_list.append(self.sigma_rules_to_ruleset([ruleset_path], self.pipelines))
+                except Exception as e:
+                    self.logger.error(f"[red]    [-] Cannot convert {str(ruleset_path)} {e}[/]")
         return ruleset_list

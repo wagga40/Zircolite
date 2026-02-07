@@ -54,6 +54,19 @@ from .console import (
     get_rich_logger,
     format_level,
     LEVEL_STYLES,
+    # Quiet mode
+    set_quiet_mode,
+    is_quiet,
+    # Banner
+    print_banner,
+    # Live display helpers
+    make_detection_counter,
+    build_file_tree,
+    build_attack_summary,
+    build_detection_table,
+    make_file_link,
+    get_suggestions,
+    print_suggestions,
     # CLI helper functions
     print_step,
     print_substep,
@@ -71,6 +84,10 @@ from .parallel import (
     MemoryAwareParallelProcessor,
     process_files_with_memory_awareness,
     estimate_parallel_viability,
+)
+from .detector import (
+    LogTypeDetector,
+    DetectionResult,
 )
 from .config_loader import (
     ConfigLoader,
@@ -123,6 +140,9 @@ __all__ = [
     'MemoryAwareParallelProcessor',
     'process_files_with_memory_awareness',
     'estimate_parallel_viability',
+    # Log type detection
+    'LogTypeDetector',
+    'DetectionResult',
     # YAML configuration
     'ConfigLoader',
     'ZircoliteConfig',
@@ -141,6 +161,19 @@ __all__ = [
     'get_rich_logger',
     'format_level',
     'LEVEL_STYLES',
+    # Quiet mode
+    'set_quiet_mode',
+    'is_quiet',
+    # Banner
+    'print_banner',
+    # Live display helpers
+    'make_detection_counter',
+    'build_file_tree',
+    'build_attack_summary',
+    'build_detection_table',
+    'make_file_link',
+    'get_suggestions',
+    'print_suggestions',
     # CLI helper functions
     'print_step',
     'print_substep',
@@ -153,4 +186,4 @@ __all__ = [
     'print_detection',
 ]
 
-__version__ = "3.0.2"
+__version__ = "3.1.0"

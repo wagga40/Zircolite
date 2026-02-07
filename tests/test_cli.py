@@ -9,6 +9,7 @@ These tests verify the command-line interface behavior including:
 - Error handling and validation
 """
 
+import argparse
 import json
 import os
 import pytest
@@ -18,6 +19,8 @@ import sys
 from pathlib import Path
 from unittest.mock import patch
 import importlib.util
+
+from zircolite import DetectionResult
 
 # Path to the workspace root
 WORKSPACE_ROOT = Path(__file__).parent.parent
@@ -2138,6 +2141,59 @@ class TestAnalyzeFilesAndRecommendMode:
         ]
         for field in expected_fields:
             assert field in stats, f"Missing field: {field}"
+
+
+def _minimal_detection_args():
+    """Build minimal args namespace with no format flags set (default evtx)."""
+    return argparse.Namespace(
+        json_input=False,
+        json_array_input=False,
+        xml_input=False,
+        sysmon_linux_input=False,
+        auditd_input=False,
+        csv_input=False,
+        evtxtract_input=False,
+        db_input=False,
+        timefield="SystemTime",
+    )
+
+
+class TestApplyDetectionResultUnknown:
+    """Tests for _apply_detection_result when detection returns unknown."""
+
+    def test_unknown_detection_returns_evtx_and_sets_no_format_flag(self):
+        """When log_source is unknown, applied input type is evtx and no format flag is set."""
+        args = _minimal_detection_args()
+        logger = zircolite_script.init_logger(debug_mode=False)
+        detection = DetectionResult(
+            input_type="json",
+            log_source="unknown",
+            confidence="low",
+            details="Could not determine log type: No files to analyze",
+        )
+
+        input_type = zircolite_script._apply_detection_result(args, detection, logger)
+
+        assert input_type == "evtx"
+        assert getattr(args, "json_input", None) is False
+        assert getattr(args, "json_array_input", None) is False
+        assert getattr(args, "xml_input", None) is False
+
+    def test_auto_detect_with_all_unknown_files_returns_evtx(self, tmp_path):
+        """When all sampled files yield unknown detection, auto_detect returns evtx and sets no format flag."""
+        args = _minimal_detection_args()
+        logger = zircolite_script.init_logger(debug_mode=False)
+        # Paths that do not exist: detect() returns unknown for each
+        file_list = [
+            tmp_path / "nope1.json",
+            tmp_path / "nope2.json",
+            tmp_path / "nope3.json",
+        ]
+
+        input_type = zircolite_script.auto_detect_log_type(file_list, args, logger)
+
+        assert input_type == "evtx"
+        assert getattr(args, "json_input", None) is False
 
 
 class TestCLIOnDiskDatabase:

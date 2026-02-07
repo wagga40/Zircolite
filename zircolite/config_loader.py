@@ -616,4 +616,5 @@ parallel:
     with open(output_path, 'w', encoding='utf-8') as f:
         f.write(default_config)
     
-    print(f"Created default configuration file: {output_path}")
+    from .console import console
+    console.print(f"[green]\\[✓][/] Created default configuration file: [cyan]{output_path}[/]")

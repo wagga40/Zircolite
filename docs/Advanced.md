@@ -421,13 +421,6 @@ transforms:
       enabled: true
 ```
 
-#### Available Modules in Transforms
-
-The following modules are available in the sandboxed environment:
-- `base64` - Base64 encoding/decoding
-- `re` - Regular expressions
-- `chardet` - Character encoding detection
-
 #### Transform Best Practices
 
 1. **Keep transforms fast** - They run on every matching event
@@ -444,7 +437,7 @@ Zircolite processes each log file separately in its own database by default, whi
 
 ### Automatic Processing Optimization
 
-As of version 2.41.0, Zircolite automatically analyzes your workload and optimizes processing. When you run Zircolite with multiple files, it:
+Zircolite automatically analyzes your workload and optimizes processing. When you run Zircolite with multiple files, it:
 
 1. **Analyzes your files** - counts files, measures sizes, checks available RAM and CPU cores
 2. **Selects optimal database mode** - unified (all files in one DB) vs. per-file (separate DB per file)
@@ -455,12 +448,12 @@ As of version 2.41.0, Zircolite automatically analyzes your workload and optimiz
 python3 zircolite.py --evtx ./logs/ --ruleset rules/rules_windows_sysmon.json
 
 # Example output:
-# [+] Analyzing workload...
-#     [>] Files: 15 (250.3 MB total, avg 16.7 MB)
-#     [>] System: 12.5 GB RAM available, 8 CPUs
-#     [>] 📁 Database mode: PER-FILE
-#         [i] Default mode - 15 files, 250.3 MB total
-#     [>] ⚡ Parallel: ENABLED (4 workers)
+[+] Analyzing workload...
+  [>] Files       4 (478.2 MB total, avg 119.6 MB)
+  [>] System      33.7 GB RAM available, 10 CPUs
+  [>] DB Mode     PER-FILE
+  				  Few large files detected (4 files, avg 119.6 MB)
+  [>] Parallel    ENABLED (4 workers)
 ```
 
 #### Database Mode Selection Heuristics
@@ -608,40 +601,6 @@ The event filter statistics are displayed in the summary panel after processing.
 > [!NOTE]  
 > There is an option to use an on-disk database instead of in-memory by using the `--ondiskdb <DB_NAME>` argument. This is useful for very large datasets but is slower. **Consider the alternatives below first.**
 
-### Using GNU Parallel
-
-> [!NOTE]  
-> Zircolite now has built-in parallel processing that is enabled by default. The section below is only useful for advanced scenarios where you need external parallelization (e.g., processing across multiple machines or when you need separate output files per directory).
-
-On Linux or macOS, you can use **GNU Parallel** to launch multiple Zircolite instances for advanced scenarios.
-
-> [!NOTE]  
-> On macOS, please use GNU find (`brew install findutils` will install `gfind`).
-
-- **"DFIR Case Mode": One directory per computer/endpoint**
-
-	This mode is useful when your evidence is stored per computer (one directory per computer containing all EVTX files for that computer). It will create one result file per computer in the current directory.
-
-	```shell
-	find <CASE_DIRECTORY> -maxdepth 1 -mindepth 1 -type d | \
-		parallel --bar python3 zircolite.py -e {} \
-		-r rules/rules_windows_sysmon_pysigma.json --outfile {/.}.json
-	```
-	
-	One downside of this mode is that if you have fewer computer evidence directories than CPU cores, they will not all be used.
-
-- **"WEF/WEC Mode": One Zircolite instance per EVTX**
-
-	You can use this mode when you have a lot of aggregated EVTX files coming from multiple computers. This is generally the case when you use WEF/WEC and you recover the EVTX files from the collector. This mode will create one result file per EVTX.
-
-	```shell
-	find <CASE_DIRECTORY> -type f -name "*.evtx" \
-		parallel -j -1 --progress python3 zircolite.py -e {} \
-		-r rules/rules_windows_sysmon_pysigma.json --outfile {/.}.json
-	```
-	
-	In this example, `-j -1` uses all cores but one. You can adjust the number of cores used with this argument.
-
 ## Keeping Data Used by Zircolite
 
 **Zircolite** has several arguments that can be used to keep data used to perform Sigma detections: 
@@ -772,7 +731,7 @@ The Mini-GUI can be used completely offline. It allows the user to display and s
 
 ### Automatic Generation
 
-As of Zircolite 2.1.0, the easiest way to use the Mini-GUI is to generate a package with the `--package` option. A ZIP file containing all the necessary data will be generated. Use `--package-dir` to specify the output directory:
+The easiest way to use the Mini-GUI is to generate a package with the `--package` option. A ZIP file containing all the necessary data will be generated. Use `--package-dir` to specify the output directory:
 
 ```shell
 python3 zircolite.py --evtx sample.evtx \
@@ -796,26 +755,6 @@ Then simply open `index.html` in your favorite browser and click on a MITRE ATT&
   
 > [!WARNING]  
 > **The Mini-GUI was not built to handle large datasets.**
-
-## Packaging Zircolite 
-
-### PyInstaller
-
-* Install Python 3.10+ on the same OS as the one you want to use Zircolite on.
-* Install all dependencies: `pip3 install -r requirements.txt`
-* Install PyInstaller: `pip3 install pyinstaller`
-* In the root folder of Zircolite, type: `pyinstaller -c --onefile zircolite.py`
-* The `dist` folder will contain the packaged app.
-
-### Nuitka
-
-* Install Python 3.10+ on the same OS as the one you want to use Zircolite on.
-* Install all dependencies: `pip3 install -r requirements.txt`
-* Install Nuitka: `pip3 install nuitka`
-* In the root folder of Zircolite, type: `python3 -m nuitka --onefile zircolite.py`
-
-> [!WARNING]  
-> When packaging with PyInstaller or Nuitka, some antivirus programs may flag your package.
 
 ## Troubleshooting
 

@@ -17,20 +17,22 @@
 
 ### Key Features
 
+- **Automatic Log Type Detection**: Automatically identifies log formats and timestamp fields using magic bytes, content analysis, and regex-based fallback -- no need to specify format flags in most cases.
 - **Multiple Input Formats**: Supports various log formats including EVTX, JSON Lines, JSON Arrays, CSV, XML, and more.
 - **Native Sigma Support**: Zircolite can directly use native Sigma rules (YAML) by converting them with pySigma.
 - **SIGMA Backend**: It is based on a SIGMA backend (SQLite) and does not use internal SIGMA-to-something conversion.
 - **Advanced Log Manipulation**: It can manipulate input logs by splitting fields and applying transformations, allowing for more flexible and powerful log analysis.
 - **Field Transforms**: Apply custom Python transformations to fields during processing (e.g., Base64 decoding, hex-to-ASCII conversion).
 - **Flexible Export**: Zircolite can export results to multiple formats using Jinja [templates](templates), including JSON, CSV, JSONL, Splunk, Elastic, Zinc, Timesketch, and more.
+- **Rich Terminal Output**: Detection results displayed in severity-sorted tables with MITRE ATT&CK technique IDs, ATT&CK tactics heatmap, rule coverage metrics, clickable output file links, and contextual post-run suggestions.
 
-**You can use Zircolite directly in Python or use the binaries provided in the [releases](https://github.com/wagga40/Zircolite/releases).** 
+**You can use Zircolite directly with Python.** 
 
 **Documentation is available [here](https://wagga40.github.io/Zircolite/) (dedicated site) or [here](docs) (repository directory).**
 
 ## Requirements / Installation
 
-The project has only been tested with Python 3.10. Install dependencies with: `pip3 install -r requirements.txt`.
+The project has been tested with Python 3.10 and above. Install dependencies with: `pip3 install -r requirements.txt`.
 
 ### Dependencies
 
@@ -59,7 +61,7 @@ python3 zircolite.py --evtx sysmon.evtx --ruleset rules/rules_windows_sysmon.jso
 
 ### Using Native Sigma Rules (YAML)
 
-Since version 2.20.0, you can use native Sigma rules directly:
+You can use native Sigma rules (YAML) directly:
 
 ```shell
 # Single YAML rule
@@ -74,28 +76,26 @@ python3 zircolite.py --evtx sample.evtx --ruleset rule.yml --pipeline sysmon --p
 
 ### Other Log Formats
 
+Zircolite **auto-detects** the log format in most cases, so explicit format flags are optional:
+
 ```shell
-# For Auditd logs
+# Auto-detection (recommended) - Zircolite identifies the format automatically
+python3 zircolite.py --events auditd.log --ruleset rules/rules_linux.json
+python3 zircolite.py --events sysmon.log --ruleset rules/rules_linux.json
+python3 zircolite.py --events <JSON_FOLDER_OR_FILE> --ruleset rules/rules_windows_sysmon.json
+
+# Explicit format flags (still supported, override auto-detection)
 python3 zircolite.py --events auditd.log --ruleset rules/rules_linux.json --auditd
-
-# For Sysmon for Linux logs
 python3 zircolite.py --events sysmon.log --ruleset rules/rules_linux.json --sysmon4linux
-
-# For JSONL or NDJSON logs
 python3 zircolite.py --events <JSON_FOLDER_OR_FILE> --ruleset rules/rules_windows_sysmon.json --jsononly
-
-# For JSON Array logs
 python3 zircolite.py --events <JSON_FOLDER_OR_FILE> --ruleset rules/rules_windows_sysmon.json --json-array
-
-# For CSV logs
 python3 zircolite.py --events <CSV_FOLDER_OR_FILE> --ruleset rules/rules_windows_sysmon.json --csv-input
-
-# For XML logs
 python3 zircolite.py --events <XML_FOLDER_OR_FILE> --ruleset rules/rules_windows_sysmon.json --xml-input
 ```
 
 - The `--events` argument can be a file or a folder. If it is a folder, all log files in the current folder and subfolders will be selected (use `--no-recursion` to disable).
 - Use `--file-pattern` to specify a custom glob pattern for file selection.
+- Use `--no-auto-detect` to disable automatic format detection.
 
 > [!TIP]
 > If you want to try the tool, you can test with [EVTX-ATTACK-SAMPLES](https://github.com/sbousseaden/EVTX-ATTACK-SAMPLES) (EVTX files).
@@ -199,6 +199,8 @@ parallel:
 ```shell
 python3 zircolite.py -U
 ```
+
+Alternatively, if you use [Task](https://taskfile.dev/) (go-task), run `task update-rules` from the project root to update rules from [Zircolite-Rules-v2](https://github.com/wagga40/Zircolite-Rules-v2). See [docs](docs/README.md) for other tasks (Docker build, clean, etc.).
 
 > [!IMPORTANT]  
 > Please note that these rulesets are provided to use Zircolite out of the box, but [you should generate your own rulesets](#why-you-should-build-your-own-rulesets) as they can be noisy or slow. These auto-updated rulesets are available in the dedicated repository: [Zircolite-Rules-v2](https://github.com/wagga40/Zircolite-Rules-v2).

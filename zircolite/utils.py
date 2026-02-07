@@ -485,14 +485,18 @@ def print_mode_recommendation(recommended_mode, reason, stats, logger, show_para
 def _print_mode_recommendation_rich(recommended_mode, reason, stats, show_parallel=True):
     """Print mode recommendation using Rich console."""
     from rich.table import Table
-    
+    from .console import is_quiet
+
+    if is_quiet():
+        return
+
     console.print("[bold white]\\[+][/] Analyzing workload...")
-    
+
     # Create a nice table for workload info
     table = Table(show_header=False, box=None, padding=(0, 2))
     table.add_column("Label", style="dim")
     table.add_column("Value")
-    
+
     # File stats
     file_count = stats['file_count']
     total_size = stats['total_size_fmt']
@@ -501,35 +505,34 @@ def _print_mode_recommendation_rich(recommended_mode, reason, stats, show_parall
         "[>] Files", 
         f"[yellow]{file_count}[/] ([cyan]{total_size}[/] total, avg [cyan]{avg_size}[/])"
     )
-    
+
     if stats['has_psutil']:
         table.add_row(
             "[>] System",
             f"[green]{stats['available_ram_fmt']}[/] RAM available, [yellow]{stats['cpu_count']}[/] CPUs"
         )
-    
+
     # Database mode
-    mode_icon = "🔗" if recommended_mode == 'unified' else "📁"
     mode_style = "green" if recommended_mode == 'unified' else "cyan"
     mode_label = "UNIFIED" if recommended_mode == 'unified' else "PER-FILE"
     table.add_row(
-        f"[>] {mode_icon} DB Mode",
+        "[>] DB Mode",
         f"[{mode_style}]{mode_label}[/]"
     )
     table.add_row("", f"[dim]{reason}[/]")
-    
+
     # Parallel processing (only for per-file mode)
     if show_parallel and recommended_mode != 'unified':
         if stats.get('parallel_recommended', False):
             workers = stats.get('parallel_workers', '?')
             table.add_row(
-                "[>] ⚡ Parallel",
+                "[>] Parallel",
                 f"[green]ENABLED[/] ([yellow]{workers}[/] workers)"
             )
         else:
             p_reason = stats.get('parallel_reason', 'Not recommended')
-            table.add_row("[>] ⚡ Parallel", f"[dim]disabled - {p_reason}[/]")
-    
+            table.add_row("[>] Parallel", f"[dim]disabled - {p_reason}[/]")
+
     console.print(table)
     console.print()
 

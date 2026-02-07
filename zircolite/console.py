@@ -13,6 +13,7 @@ import logging
 import time
 from contextlib import contextmanager
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from rich.console import Console, Group
@@ -32,6 +33,7 @@ from rich.progress import (
 from rich.table import Table
 from rich.text import Text
 from rich.theme import Theme
+from rich.tree import Tree
 
 # Custom Zircolite theme
 ZIRCOLITE_THEME = Theme({
@@ -52,7 +54,7 @@ ZIRCOLITE_THEME = Theme({
     "progress.percentage": "green",
     "progress.remaining": "yellow",
     "rule.title": "cyan",
-    "rule.level.critical": "bold white on red",
+    "rule.level.critical": "bold red",
     "rule.level.high": "bold magenta",
     "rule.level.medium": "bold yellow",
     "rule.level.low": "green",
@@ -66,53 +68,107 @@ console = Console(theme=ZIRCOLITE_THEME, highlight=False)
 
 
 # ============================================================================
+# QUIET MODE SUPPORT
+# ============================================================================
+
+_quiet_mode: bool = False
+
+
+def set_quiet_mode(quiet: bool = True):
+    """Enable/disable quiet mode globally.
+    
+    When quiet mode is active, non-essential output (banners, progress info,
+    detection listings) is suppressed. Errors, warnings, and the final
+    summary panel still display.
+    """
+    global _quiet_mode
+    _quiet_mode = quiet
+
+
+def is_quiet() -> bool:
+    """Check if quiet mode is active."""
+    return _quiet_mode
+
+
+# ============================================================================
+# BANNER
+# ============================================================================
+
+_BANNER = """\
+[bold cyan]███████╗██╗██████╗  ██████╗ ██████╗ ██╗     ██╗████████╗███████╗[/]
+[cyan]╚══███╔╝██║██╔══██╗██╔════╝██╔═══██╗██║     ██║╚══██╔══╝██╔════╝[/]
+[bold blue]  ███╔╝ ██║██████╔╝██║     ██║   ██║██║     ██║   ██║   █████╗[/]
+[blue] ███╔╝  ██║██╔══██╗██║     ██║   ██║██║     ██║   ██║   ██╔══╝[/]
+[bold magenta]███████╗██║██║  ██║╚██████╗╚██████╔╝███████╗██║   ██║   ███████╗[/]
+[magenta]╚══════╝╚═╝╚═╝  ╚═╝ ╚═════╝ ╚═════╝ ╚══════╝╚═╝   ╚═╝   ╚══════╝[/]
+[dim]-= Standalone Sigma Detection tool for EVTX/Auditd/Sysmon Linux =-[/]"""
+
+
+def print_banner(version: str):
+    """Print the Zircolite ASCII banner with version number."""
+    if _quiet_mode:
+        return
+    console.print()
+    console.print(_BANNER)
+    console.print(f"                              [dim]v{version}[/]\n")
+
+
+# ============================================================================
 # CLI-STYLE HELPER FUNCTIONS
 # ============================================================================
 
 def print_step(message: str):
-    """Print a step message with [+] prefix."""
-    console.print(f"[bold white]\\[+][/] {message}")
+    """Print a step message with [+] prefix. Suppressed in quiet mode."""
+    if not _quiet_mode:
+        console.print(f"[bold white]\\[+][/] {message}")
 
 
 def print_substep(message: str, style: str = "dim"):
-    """Print a sub-step message with indentation."""
-    console.print(f"    [{style}]\\[>][/] {message}")
+    """Print a sub-step message with indentation. Suppressed in quiet mode."""
+    if not _quiet_mode:
+        console.print(f"    [{style}]\\[>][/] {message}")
 
 
 def print_info(message: str):
-    """Print an info message with [i] prefix."""
-    console.print(f"    [dim]\\[i][/] {message}")
+    """Print an info message with [i] prefix. Suppressed in quiet mode."""
+    if not _quiet_mode:
+        console.print(f"    [dim]\\[i][/] {message}")
 
 
 def print_success(message: str):
-    """Print a success message with checkmark."""
-    console.print(f"[green]\\[✓][/] {message}")
+    """Print a success message with checkmark. Suppressed in quiet mode."""
+    if not _quiet_mode:
+        console.print(f"[green]\\[✓][/] {message}")
 
 
 def print_warning(message: str):
-    """Print a warning message with [!] prefix."""
+    """Print a warning message with [!] prefix. Always shown."""
     console.print(f"[yellow]\\[!][/] {message}")
 
 
 def print_error(message: str):
-    """Print an error message with [-] prefix."""
+    """Print an error message with [-] prefix. Always shown."""
     console.print(f"[red]\\[-][/] {message}")
 
 
 def print_file(label: str, path: str):
-    """Print a file path with label."""
-    console.print(f"[cyan]\\[+][/] {label}: [cyan]{path}[/]")
+    """Print a file path with label. Suppressed in quiet mode."""
+    if not _quiet_mode:
+        console.print(f"[cyan]\\[+][/] {label}: [cyan]{path}[/]")
 
 
 def print_count(label: str, count: int, style: str = "magenta"):
-    """Print a count with label."""
-    console.print(f"[cyan]\\[+][/] {label}: [{style}]{count:,}[/]")
+    """Print a count with label. Suppressed in quiet mode."""
+    if not _quiet_mode:
+        console.print(f"[cyan]\\[+][/] {label}: [{style}]{count:,}[/]")
 
 
 def print_detection(title: str, level: str, count: int):
-    """Print a detection result with styled severity level."""
+    """Print a detection result with styled severity level. Suppressed in quiet mode."""
+    if _quiet_mode:
+        return
     level_styles = {
-        "critical": "bold white on red",
+        "critical": "bold red",
         "high": "bold magenta",
         "medium": "bold yellow",
         "low": "green",
@@ -219,17 +275,11 @@ class ZircoliteConsole:
     
     def print_banner(self, version: str):
         """Print the Zircolite ASCII banner."""
-        banner = """
-[bold cyan]███████╗██╗██████╗  ██████╗ ██████╗ ██╗     ██╗████████╗███████╗[/]
-[cyan]╚══███╔╝██║██╔══██╗██╔════╝██╔═══██╗██║     ██║╚══██╔══╝██╔════╝[/]
-[bold blue]  ███╔╝ ██║██████╔╝██║     ██║   ██║██║     ██║   ██║   █████╗[/]
-[blue] ███╔╝  ██║██╔══██╗██║     ██║   ██║██║     ██║   ██║   ██╔══╝[/]
-[bold magenta]███████╗██║██║  ██║╚██████╗╚██████╔╝███████╗██║   ██║   ███████╗[/]
-[magenta]╚══════╝╚═╝╚═╝  ╚═╝ ╚═════╝ ╚═════╝ ╚══════╝╚═╝   ╚═╝   ╚══════╝[/]
-[dim]-= Standalone Sigma Detection tool for EVTX/Auditd/Sysmon Linux =-[/]
-"""
-        self.console.print(banner)
-        self.console.print(f"                           [dim]v{version}[/]\n")
+        if self.quiet:
+            return
+        self.console.print()
+        self.console.print(_BANNER)
+        self.console.print(f"                              [dim]v{version}[/]\n")
     
     def info(self, message: str, prefix: str = "[+]"):
         """Print an info message."""
@@ -659,6 +709,84 @@ def get_rich_logger(name: str = "zircolite", debug: bool = False, log_file: Opti
     return logger
 
 
+# ============================================================================
+# LIVE DETECTION COUNTER (for rule execution progress)
+# ============================================================================
+
+def make_detection_counter(counts: Dict[str, int]) -> Text:
+    """
+    Build a live detection severity counter for display under a progress bar.
+    
+    Args:
+        counts: Dict mapping severity levels to rule-match counts
+        
+    Returns:
+        Rich Text renderable showing detection summary
+    """
+    parts = []
+    if counts.get("critical", 0):
+        parts.append(f"[bold red]{counts['critical']} CRIT[/]")
+    if counts.get("high", 0):
+        parts.append(f"[bold magenta]{counts['high']} HIGH[/]")
+    if counts.get("medium", 0):
+        parts.append(f"[bold yellow]{counts['medium']} MED[/]")
+    if counts.get("low", 0):
+        parts.append(f"[green]{counts['low']} LOW[/]")
+    if counts.get("informational", 0):
+        parts.append(f"[dim]{counts['informational']} INFO[/]")
+    
+    if parts:
+        return Text.from_markup("    " + "  ".join(parts))
+    return Text("    No detections yet", style="dim")
+
+
+# ============================================================================
+# FILE TREE VIEW (for multi-file per-file processing)
+# ============================================================================
+
+def build_file_tree(label: str, file_stats: List[Dict[str, Any]]) -> Tree:
+    """
+    Build a Rich Tree showing per-file processing results.
+    
+    Args:
+        label: Root label for the tree
+        file_stats: List of dicts with keys: name, events, detections, filtered (optional)
+        
+    Returns:
+        Rich Tree renderable
+    """
+    tree = Tree(f"[bold]{label}[/]")
+    
+    for fs in file_stats:
+        name = fs["name"]
+        events = fs.get("events", 0)
+        detections = fs.get("detections", 0)
+        filtered = fs.get("filtered", 0)
+        
+        # Color-code detection count
+        if detections == 0:
+            det_style = "green"
+        elif detections < 5:
+            det_style = "yellow"
+        else:
+            det_style = "red"
+        
+        det_label = "detection" if detections == 1 else "detections"
+        det_text = f"[{det_style}]{detections} {det_label}[/]"
+        
+        parts = [f"[cyan]{name}[/]", f"[magenta]{events:,}[/] events", det_text]
+        if filtered > 0:
+            parts.append(f"[dim]{filtered:,} filtered[/]")
+        
+        tree.add(" — ".join(parts))
+    
+    return tree
+
+
+# ============================================================================
+# SEVERITY STYLES AND FORMATTERS
+# ============================================================================
+
 # Color/style mapping for severity levels
 LEVEL_STYLES = {
     "critical": "rule.level.critical",
@@ -675,3 +803,232 @@ def format_level(level: str) -> str:
     if style:
         return f"[{style}]{level}[/]"
     return level
+
+
+# ============================================================================
+# MITRE ATT&CK TACTICS SUMMARY
+# ============================================================================
+
+# ATT&CK tactic tag suffix -> display name
+_ATTACK_TACTICS = {
+    "reconnaissance": "Reconnaissance",
+    "resource_development": "Resource Development",
+    "initial_access": "Initial Access",
+    "execution": "Execution",
+    "persistence": "Persistence",
+    "privilege_escalation": "Privilege Escalation",
+    "defense_evasion": "Defense Evasion",
+    "credential_access": "Credential Access",
+    "discovery": "Discovery",
+    "lateral_movement": "Lateral Movement",
+    "collection": "Collection",
+    "command_and_control": "Command and Control",
+    "exfiltration": "Exfiltration",
+    "impact": "Impact",
+}
+
+
+def build_attack_summary(results: List[Dict[str, Any]]) -> Optional[Panel]:
+    """
+    Build a MITRE ATT&CK tactics summary panel from detection results.
+
+    Extracts ATT&CK tags from detection results and groups techniques
+    by tactic, showing a visual heatmap of coverage.
+
+    Args:
+        results: List of detection result dicts (with "tags" and "count" keys)
+
+    Returns:
+        Rich Panel with ATT&CK summary, or None if no ATT&CK tags found
+    """
+    tactic_techniques: Dict[str, set] = {}
+    tactic_hits: Dict[str, int] = {}
+
+    for result in results:
+        tags = result.get("tags", [])
+        count = result.get("count", 0)
+        if not tags:
+            continue
+
+        tactics = []
+        techniques = []
+        for tag in tags:
+            tag_lower = tag.lower()
+            if not tag_lower.startswith("attack."):
+                continue
+            suffix = tag_lower[7:]  # Remove "attack." prefix
+
+            if suffix.startswith("t") and len(suffix) > 1 and suffix[1].isdigit():
+                techniques.append(suffix.upper())
+            elif suffix in _ATTACK_TACTICS:
+                tactics.append(suffix)
+
+        for tactic in tactics:
+            display_name = _ATTACK_TACTICS[tactic]
+            if display_name not in tactic_techniques:
+                tactic_techniques[display_name] = set()
+                tactic_hits[display_name] = 0
+            tactic_techniques[display_name].update(techniques)
+            tactic_hits[display_name] += count
+
+    if not tactic_hits:
+        return None
+
+    sorted_tactics = sorted(tactic_hits.items(), key=lambda x: -x[1])
+    max_hits = max(tactic_hits.values()) if tactic_hits else 1
+
+    table = Table(show_header=False, box=None, padding=(0, 1))
+    table.add_column("Tactic", style="cyan", width=22, no_wrap=True)
+    table.add_column("Bar", width=20)
+    table.add_column("Details", style="dim")
+
+    for tactic, hits in sorted_tactics:
+        techs = tactic_techniques.get(tactic, set())
+        bar_width = max(1, int(16 * hits / max_hits)) if max_hits > 0 else 1
+        bar = "█" * bar_width + "░" * (16 - bar_width)
+
+        tech_count = len(techs)
+        tech_label = "technique" if tech_count == 1 else "techniques"
+        hit_label = "hit" if hits == 1 else "hits"
+        detail = f"{tech_count} {tech_label} ({hits:,} {hit_label})"
+
+        table.add_row(tactic, f"[yellow]{bar}[/]", detail)
+
+    return Panel(table, title="[bold]🗺  ATT&CK Coverage[/]", border_style="yellow", padding=(0, 1))
+
+
+# ============================================================================
+# DETECTION RESULTS TABLE
+# ============================================================================
+
+def build_detection_table(results: List[Dict[str, Any]], title: Optional[str] = None) -> Table:
+    """
+    Build a Rich Table showing detection results with severity, rule name,
+    event count, and ATT&CK technique IDs.
+
+    Args:
+        results: List of detection result dicts, pre-sorted by severity
+        title: Optional table title (e.g. filename for per-file mode)
+
+    Returns:
+        Rich Table renderable
+    """
+    table = Table(
+        show_header=True,
+        header_style="bold",
+        border_style="dim",
+        padding=(0, 1),
+        title=f"[bold cyan]{title}[/]" if title else None,
+    )
+    table.add_column("Severity", justify="center", width=14, no_wrap=True)
+    table.add_column("Rule", no_wrap=False, max_width=50)
+    table.add_column("Events", justify="right", style="magenta", width=8)
+    table.add_column("ATT&CK", style="dim", max_width=22, no_wrap=True)
+
+    for result in results:
+        level = result.get("rule_level", "unknown")
+        rule_title = result.get("title", "Unknown")
+        count = result.get("count", 0)
+        tags = result.get("tags", [])
+
+        # Styled severity badge
+        level_style = LEVEL_STYLES.get(level.lower(), "")
+        level_text = Text(level.upper(), style=level_style) if level_style else Text(level.upper())
+
+        # Extract ATT&CK technique IDs from tags
+        attack_ids = []
+        for tag in tags:
+            tag_lower = tag.lower()
+            if tag_lower.startswith("attack.t") and len(tag_lower) > 8 and tag_lower[8].isdigit():
+                attack_ids.append(tag[7:].upper())
+
+        if len(attack_ids) > 3:
+            attack_str = ", ".join(attack_ids[:3]) + f" +{len(attack_ids) - 3}"
+        else:
+            attack_str = ", ".join(attack_ids)
+
+        table.add_row(level_text, rule_title, f"{count:,}", attack_str)
+
+    return table
+
+
+# ============================================================================
+# TERMINAL HYPERLINKS
+# ============================================================================
+
+def make_file_link(path: str) -> str:
+    """
+    Create a Rich markup string with a clickable file:// hyperlink.
+
+    Works in terminals supporting OSC 8 hyperlinks (iTerm2, Windows Terminal,
+    modern GNOME/KDE terminals). Falls back to plain text in others.
+
+    Args:
+        path: File path (relative or absolute)
+
+    Returns:
+        Rich markup string with clickable link
+    """
+    try:
+        abs_path = Path(path).resolve()
+        uri = abs_path.as_uri()
+        return f"[link={uri}][cyan]{path}[/][/link]"
+    except (ValueError, OSError):
+        return f"[cyan]{path}[/]"
+
+
+# ============================================================================
+# POST-RUN CONTEXTUAL SUGGESTIONS
+# ============================================================================
+
+def get_suggestions(
+    results: List[Dict[str, Any]],
+    processing_time: float,
+    has_template: bool = False,
+    has_package: bool = False,
+) -> List[str]:
+    """
+    Generate contextual suggestions based on run results.
+
+    Args:
+        results: Detection results list
+        processing_time: Total processing time in seconds
+        has_template: Whether templates were used
+        has_package: Whether package was created
+
+    Returns:
+        List of suggestion strings with Rich markup
+    """
+    tips: List[str] = []
+
+    if results:
+        has_critical = any(
+            r.get("rule_level", "").lower() in ("critical", "high")
+            for r in results
+        )
+        if has_critical and not has_template and not has_package:
+            tips.append(
+                "Critical/High detections found — generate an interactive report with "
+                "[cyan]--package[/]"
+            )
+    else:
+        tips.append(
+            "No detections found. Use [cyan]--showall[/] to verify rules are executing correctly"
+        )
+
+    if processing_time > 120:
+        tips.append(
+            "Consider [cyan]--unified-db[/] for cross-file correlation, "
+            "or reduce the ruleset scope for faster processing"
+        )
+
+    return tips
+
+
+def print_suggestions(tips: List[str]):
+    """Print contextual suggestions. Suppressed in quiet mode."""
+    if _quiet_mode or not tips:
+        return
+    console.print()
+    for tip in tips:
+        console.print(f"  [dim]💡[/] {tip}")
