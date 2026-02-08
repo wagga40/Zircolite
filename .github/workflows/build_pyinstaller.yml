@@ -11,7 +11,6 @@ on:
   workflow_dispatch:
 
 env:
-  PYTHON_VERSION: "3.14"
   EVTX_SAMPLE_URL: "https://raw.githubusercontent.com/sbousseaden/EVTX-ATTACK-SAMPLES/master/Execution/Exec_sysmon_meterpreter_reversetcp_msipackage.evtx"
   EVTX_OUTPUT: "detected_events.json"
 
@@ -27,24 +26,28 @@ jobs:
             artifact_name: Zircolite-linux-x64
             binary_path: dist/Zircolite
             binary_name: Zircolite
+            python_version: "3.14"
           - os: ubuntu-24.04-arm
             runner: ubuntu-24.04-arm
             arch: arm64
             artifact_name: Zircolite-linux-arm64
             binary_path: dist/Zircolite
             binary_name: Zircolite
+            python_version: "3.14"
           - os: windows-2022
             runner: windows-2022
             arch: x64
             artifact_name: Zircolite-windows-x64
             binary_path: dist/Zircolite.exe
             binary_name: Zircolite.exe
+            python_version: "3.14"
           - os: windows-11-arm
             runner: windows-11-arm
             arch: arm64
             artifact_name: Zircolite-windows-arm64
             binary_path: dist/Zircolite.exe
             binary_name: Zircolite.exe
+            python_version: "3.12"
 
     runs-on: ${{ matrix.runner }}
 
@@ -55,7 +58,7 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: ${{ env.PYTHON_VERSION }}
+          python-version: ${{ matrix.python_version }}
 
       - name: Install dependencies
         run: |
