@@ -80,4 +80,3 @@ coverage/
 
 # PyInstaller
 dist/
-*.spec
