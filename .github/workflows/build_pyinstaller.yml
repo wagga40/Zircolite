@@ -89,16 +89,17 @@ jobs:
           & "dist/Zircolite.exe" --version
         shell: pwsh
 
+      # Do not use -n (--nolog): it sets no_output=True and prevents writing detected_events.json
       - name: Run binary on EVTX (Linux)
         if: matrix.os != 'windows-2022' && matrix.os != 'windows-11-arm'
         run: |
-          "${{ matrix.binary_path }}" -e evtx_sample.evtx -r rules/rules_windows_sysmon.json -o "${{ env.EVTX_OUTPUT }}" -n
+          "${{ matrix.binary_path }}" -e evtx_sample.evtx -r rules/rules_windows_sysmon.json -o "${{ env.EVTX_OUTPUT }}"
         shell: bash
 
       - name: Run binary on EVTX (Windows)
         if: matrix.os == 'windows-2022' || matrix.os == 'windows-11-arm'
         run: |
-          & "${{ matrix.binary_path }}" -e evtx_sample.evtx -r rules/rules_windows_sysmon.json -o "${{ env.EVTX_OUTPUT }}" -n
+          & "${{ matrix.binary_path }}" -e evtx_sample.evtx -r rules/rules_windows_sysmon.json -o "${{ env.EVTX_OUTPUT }}"
         shell: pwsh
 
       - name: Verify EVTX output
@@ -132,11 +133,12 @@ jobs:
           fi
         shell: bash
 
+      # Do not use -n (--nolog): it sets no_output=True and prevents writing the output file
       - name: Verify package runs (from package dir)
         run: |
           pkg="${{ matrix.artifact_name }}"
           cd "$pkg"
-          ./${{ matrix.binary_name }} -e ../evtx_sample.evtx -r rules/rules_windows_sysmon.json -o ../detected_from_pkg.json -n
+          ./${{ matrix.binary_name }} -e ../evtx_sample.evtx -r rules/rules_windows_sysmon.json -o ../detected_from_pkg.json
           cd ..
           if [ ! -f detected_from_pkg.json ]; then
             echo "Error: detected_from_pkg.json was not created (package binary may have failed)"
