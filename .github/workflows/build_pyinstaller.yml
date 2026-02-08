@@ -103,6 +103,11 @@ jobs:
 
       - name: Verify EVTX output
         run: |
+          p='${{ env.EVTX_OUTPUT }}'
+          if [ ! -f "$p" ]; then
+            echo "Error: $p was not created by the binary (binary may have failed)"
+            exit 1
+          fi
           python -c "
           import json, sys
           p = '${{ env.EVTX_OUTPUT }}'
@@ -133,6 +138,10 @@ jobs:
           cd "$pkg"
           ./${{ matrix.binary_name }} -e ../evtx_sample.evtx -r rules/rules_windows_sysmon.json -o ../detected_from_pkg.json -n
           cd ..
+          if [ ! -f detected_from_pkg.json ]; then
+            echo "Error: detected_from_pkg.json was not created (package binary may have failed)"
+            exit 1
+          fi
           python -c "
           import json, sys
           with open('detected_from_pkg.json') as f:
