@@ -52,7 +52,7 @@ rules:
   # List of ruleset files or directories
   # Supports both Zircolite JSON format and native Sigma YAML rules
   rulesets:
-    - rules/rules_windows_generic_pysigma.json
+    - rules/rules_windows_generic.json
     # - rules/rules_windows_sysmon.json
     # - /path/to/sigma/rules/windows/process_creation/
   

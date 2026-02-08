@@ -62,7 +62,7 @@ class TestRulesConfig:
         """Test RulesConfig default values."""
         config = RulesConfig()
         
-        assert config.rulesets == ["rules/rules_windows_generic_pysigma.json"]
+        assert config.rulesets == ["rules/rules_windows_generic.json"]
         assert config.pipelines is None
         assert config.filters is None
         assert config.combine_rulesets is False
@@ -257,7 +257,7 @@ class TestConfigLoaderParseConfig:
         # Should have defaults for missing sections
         assert config.input.path == "./logs/"
         assert config.input.format == "evtx"  # Default
-        assert config.rules.rulesets == ["rules/rules_windows_generic_pysigma.json"]  # Default
+        assert config.rules.rulesets == ["rules/rules_windows_generic.json"]  # Default
     
     def test_parse_empty_config(self, test_logger):
         """Test parsing an empty configuration."""

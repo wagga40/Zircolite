@@ -90,7 +90,7 @@ A minimal first run from clone to results:
    ```shell
    python3 zircolite.py -U
    ```
-   After `-U`, rules may be named e.g. `rules_windows_sysmon_pysigma.json`. See [Rulesets / Rules](Usage.md#rulesets--rules) for naming details.
+   After `-U`, rules may be named e.g. `rules_windows_sysmon.json`. See [Rulesets / Rules](Usage.md#rulesets--rules) for naming details.
 
 3. **Run on one EVTX**
    ```shell
@@ -121,16 +121,16 @@ Multiple rulesets can be specified, and results can be per-ruleset or combined (
 
 ```shell
 # Example with a Zircolite ruleset and a Sigma rule. Results will be displayed per-ruleset
-python3 zircolite.py --events sample.evtx --ruleset rules/rules_windows_sysmon_pysigma.json \
+python3 zircolite.py --events sample.evtx --ruleset rules/rules_windows_sysmon.json \
     --ruleset schtasks.yml 
 # Example with a Zircolite ruleset and a Sigma rule. Results will be displayed combined 
-python3 zircolite.py --events sample.evtx --ruleset rules/rules_windows_sysmon_pysigma.json \
+python3 zircolite.py --events sample.evtx --ruleset rules/rules_windows_sysmon.json \
     --ruleset schtasks.yml --combine-rulesets 
 ```
 
 By default: 
 
-- `--ruleset` is not mandatory; the default ruleset is `rules/rules_windows_generic_pysigma.json`.
+- `--ruleset` is not mandatory; the default ruleset is `rules/rules_windows_generic.json`.
 - Results are written to `detected_events.json` in the same directory as Zircolite. You can choose a CSV-formatted output with `--csv`.
 - A `zircolite.log` file will be created in the current working directory; it can be disabled with `--nolog`.
 - When providing a directory for event logs, Zircolite will automatically filter by file extension. You can change this with `--fileext`. You can also use `--file-pattern` for custom glob patterns.
@@ -364,7 +364,7 @@ Auto-detection is enabled by default. Simply run Zircolite without a format flag
 
 ```shell
 # Auto-detection identifies the format and timestamp field automatically
-python3 zircolite.py --events logs/ --ruleset rules/rules_windows_sysmon_pysigma.json
+python3 zircolite.py --events logs/ --ruleset rules/rules_windows_sysmon.json
 
 # Example output:
 # [+] Auto-detected log type: sysmon_windows (json), confidence=high, timestamp=UtcTime
@@ -403,7 +403,7 @@ If your EVTX files have the extension ".evtx":
 ```shell
 python3 zircolite.py --evtx <EVTX_FOLDER/EVTX_FILE> \
     --ruleset <Converted Sigma ruleset (JSON)/Directory with Sigma rules (YAML)/>
-python3 zircolite.py --evtx ../Logs --ruleset rules/rules_windows_sysmon_pysigma.json
+python3 zircolite.py --evtx ../Logs --ruleset rules/rules_windows_sysmon.json
 ```
 
 ### XML Logs
@@ -436,7 +436,7 @@ This produces something like the following (one event per line):
 ```shell
 python3 zircolite.py --events <LOGS_FOLDER_OR_LOG_FILE>  --ruleset <RULESET> --xml
 python3 zircolite.py --events  Microsoft-Windows-SysmonOperational.xml \
-    --ruleset rules/rules_windows_sysmon_pysigma.json --xml
+    --ruleset rules/rules_windows_sysmon.json --xml
 ```
 
 ### EVTXtract Logs
@@ -551,7 +551,7 @@ python3 zircolite.py --evtx sample.evtx --fieldlist
 
 Zircolite has its own ruleset format (JSON). Default rulesets are available in the [rules](https://github.com/wagga40/Zircolite/tree/master/rules/) directory or in the [Zircolite-Rules-v2](https://github.com/wagga40/Zircolite-Rules-v2) repository.
 
-**Ruleset naming:** The repository ships with rules such as `rules_windows_sysmon.json` and `rules_windows_generic.json`. If you run `python3 zircolite.py -U` (or `task update-rules`), rules are updated from Zircolite-Rules-v2 and may be named e.g. `rules_windows_sysmon_pysigma.json` and `rules_windows_generic_pysigma.json`. When you omit `--ruleset`, Zircolite defaults to `rules/rules_windows_generic_pysigma.json` if that file exists; otherwise use a ruleset from `rules/` or run `-U` first.
+**Ruleset naming:** The repository ships with rules such as `rules_windows_sysmon.json` and `rules_windows_generic.json`. If you run `python3 zircolite.py -U` (or `task update-rules`), rules are updated from Zircolite-Rules-v2 and may be named e.g. `rules_windows_sysmon.json` and `rules_windows_generic.json`. When you omit `--ruleset`, Zircolite defaults to `rules/rules_windows_generic.json` if that file exists; otherwise use a ruleset from `rules/` or run `-U` first.
 
 Zircolite can use native Sigma rules (YAML) by converting them with [pySigma](https://github.com/SigmaHQ/pySigma). Zircolite detects whether the provided rules are in JSON or YAML format and converts YAML rules automatically: 
 
@@ -1229,7 +1229,7 @@ docker build . -t <Image name>
 docker container run --tty \
     --volume <Logs folder>:/case
     wagga40/zircolite:latest \
-    --ruleset rules/rules_windows_sysmon_pysigma.json \
+    --ruleset rules/rules_windows_sysmon.json \
     --events /case \
     --outfile /case/detected_events.json
 ```
@@ -1252,7 +1252,7 @@ docker run --rm --tty \
     -v <EVTX folder>:/case/input:ro \
     -v <Results folder>:/case/output \
     wagga40/zircolite:latest \
-    --ruleset rules/rules_windows_sysmon_pysigma.json \
+    --ruleset rules/rules_windows_sysmon.json \
     --events /case/input \
     -o /case/output/detected_events.json
 ```
@@ -1264,7 +1264,7 @@ You can use the Docker image available on [Docker Hub](https://hub.docker.com/r/
 ```shell
 docker container run --tty \
     --volume <EVTX folder>:/case docker.io/wagga40/zircolite:latest \
-    --ruleset rules/rules_windows_sysmon_pysigma.json \
+    --ruleset rules/rules_windows_sysmon.json \
     --evtx /case --outfile /case/detected_events.json
 ```
 
@@ -1279,7 +1279,7 @@ docker container run --tty \
 | **Out of memory on large datasets** | Use `--no-parallel`, `--no-auto-mode`, or `--ondiskdb`; reduce `--parallel-workers`. |
 | **EVTX library (pyevtx-rs) fails to install** | On some systems (Mac, ARM), install Rust and Cargo first; see [Requirements and Installation](Usage.md#requirements-and-installation). |
 | **No detections / rules not matching** | Run with `--showall` to see which rules ran; use `--fieldlist` to check field names; ensure ruleset matches your log source (e.g. Sysmon vs generic Windows). |
-| **Ruleset file not found** | Default rulesets may be named `rules_windows_sysmon.json` (in repo) or `rules_windows_sysmon_pysigma.json` (after `-U`). Use `python3 zircolite.py -U` to update rules from Zircolite-Rules-v2. |
+| **Ruleset file not found** | Default rulesets may be named `rules_windows_sysmon.json` (in repo) or `rules_windows_sysmon.json` (after `-U`). Use `python3 zircolite.py -U` to update rules from Zircolite-Rules-v2. |
 
 ### Getting help
 
@@ -1299,8 +1299,8 @@ Rulesets like `rules_windows_sysmon.json` target Sysmon EVTX (process creation, 
 **When should I use unified mode vs per-file mode?**  
 Use **unified mode** (`--unified-db`) when you need cross-file correlation (e.g. one rule matching events from multiple logs). Use **per-file mode** (default, or `--no-auto-mode`) when you have many or large files and want lower memory use and parallel processing. Zircolite auto-selects based on file count and size unless you override with `--no-auto-mode` or `--unified-db`.
 
-**Which ruleset file should I use: `rules_windows_sysmon.json` or `rules_windows_sysmon_pysigma.json`?**  
-The repository ships with `rules_windows_sysmon.json` (and similar). Running `python3 zircolite.py -U` (or `task update-rules`) fetches rules from Zircolite-Rules-v2, which may provide `*_pysigma.json` variants. Use whichever file exists in your `rules/` directory; both are valid Zircolite rulesets.
+**Which ruleset file should I use: `rules_windows_sysmon.json` or `rules_windows_sysmon.json`?**  
+The repository ships with `rules_windows_sysmon.json` (and similar). Running `python3 zircolite.py -U` (or `task update-rules`) fetches rules from Zircolite-Rules-v2. Use whichever file exists in your `rules/` directory; both are valid Zircolite rulesets.
 
 **Where is the full CLI reference?**  
 Run `python3 zircolite.py -h` for the complete, up-to-date list of options. The [Command-Line Options Summary](Usage.md#command-line-options-summary) in this doc is a condensed reference.

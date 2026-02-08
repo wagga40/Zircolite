@@ -631,27 +631,27 @@ To speed up the detection process, you may want to use Zircolite on files matchi
 - Only use EVTX files that contain "sysmon" in their names:
 
 	```shell
-	python3 zircolite.py --evtx logs/ --ruleset rules/rules_windows_sysmon_pysigma.json \
+	python3 zircolite.py --evtx logs/ --ruleset rules/rules_windows_sysmon.json \
 		--select sysmon
 	```
 - Exclude "Microsoft-Windows-SystemDataArchiver%4Diagnostic.evtx": 
 
 	```shell
-	python3 zircolite.py --evtx logs/ --ruleset rules/rules_windows_sysmon_pysigma.json \
+	python3 zircolite.py --evtx logs/ --ruleset rules/rules_windows_sysmon.json \
 		--avoid systemdataarchiver
 	```
 
 - Only use EVTX files with "operational" in their names but exclude "defender"-related logs:
 	
 	```shell
-	python3 zircolite.py --evtx logs/ --ruleset rules/rules_windows_sysmon_pysigma.json \
+	python3 zircolite.py --evtx logs/ --ruleset rules/rules_windows_sysmon.json \
 	--select operational --avoid defender
 	```
 
 - Use a custom glob pattern to select specific files:
 
 	```shell
-	python3 zircolite.py --evtx logs/ --ruleset rules/rules_windows_sysmon_pysigma.json \
+	python3 zircolite.py --evtx logs/ --ruleset rules/rules_windows_sysmon.json \
 		--file-pattern "Security*.evtx"
 	```
 
@@ -660,7 +660,7 @@ For example, the **Sysmon** ruleset available in the `rules` directory only uses
 So if you use the Sysmon ruleset with the following rules, it should speed up Zircolite's execution: 
 
 ```shell
-python3 zircolite.py --evtx logs/ --ruleset rules/rules_windows_sysmon_pysigma.json \
+python3 zircolite.py --evtx logs/ --ruleset rules/rules_windows_sysmon.json \
 	--select sysmon --select security.evtx --select system.evtx \
 	--select application.evtx --select Windows-NTLM --select DNS \
 	--select powershell --select defender --select applocker \
@@ -681,14 +681,14 @@ Examples:
 - Select all events between 2021-06-02 22:40:00 and 2021-06-02 23:00:00: 
 
 	```shell
-	python3 zircolite.py --evtx logs/ --ruleset rules/rules_windows_sysmon_pysigma.json \
+	python3 zircolite.py --evtx logs/ --ruleset rules/rules_windows_sysmon.json \
 		-A 2021-06-02T22:40:00 -B 2021-06-02T23:00:00
 	```
 
 - Select all events after 2021-06-01 12:00:00: 
 
 	```shell
-	python3 zircolite.py --evtx logs/ --ruleset rules/rules_windows_sysmon_pysigma.json \
+	python3 zircolite.py --evtx logs/ --ruleset rules/rules_windows_sysmon.json \
 		-A 2021-06-01T12:00:00
 	```
 
@@ -700,7 +700,7 @@ The filter will apply to the rule title. To avoid unexpected side effects, **com
 
 ```shell
 python3 zircolite.py --evtx logs/ \
-	--ruleset rules/rules_windows_sysmon_pysigma.json \
+	--ruleset rules/rules_windows_sysmon.json \
 	-R MSHTA
 ```
 
@@ -716,7 +716,7 @@ Zircolite provides a templating system based on Jinja2. It allows you to change 
 - `--templateOutput <output_filename>`
 
 ```shell
-python3 zircolite.py --evtx sample.evtx  --ruleset rules/rules_windows_sysmon_pysigma.json \
+python3 zircolite.py --evtx sample.evtx  --ruleset rules/rules_windows_sysmon.json \
 --template templates/exportForSplunk.tmpl --templateOutput exportForSplunk.json
 ```
 
@@ -735,7 +735,7 @@ The easiest way to use the Mini-GUI is to generate a package with the `--package
 
 ```shell
 python3 zircolite.py --evtx sample.evtx \
-    --ruleset rules/rules_windows_sysmon_pysigma.json \
+    --ruleset rules/rules_windows_sysmon.json \
     --package --package-dir /path/to/output
 ```
 
@@ -745,7 +745,7 @@ You need to generate a `data.js` file with the `exportForZircoGui.tmpl` template
 
 ```shell
 python3 zircolite.py --evtx sample.evtx 
-	--ruleset rules/rules_windows_sysmon_pysigma.json \
+	--ruleset rules/rules_windows_sysmon.json \
 	--template templates/exportForZircoGui.tmpl --templateOutput data.js
 7z x gui/zircogui.zip
 mv data.js zircogui/
