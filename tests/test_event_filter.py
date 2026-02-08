@@ -243,7 +243,7 @@ class TestEventFilterStats:
         
         assert stats['channels_count'] == 2
         assert stats['eventids_count'] == 3
-        assert stats['is_enabled'] == True
+        assert stats['is_enabled']
         assert stats['rules_with_filter'] == 1
         assert stats['rules_without_filter'] == 0
 

@@ -17,6 +17,7 @@ Package structure:
 
 # Standard libs
 import argparse
+import logging
 import os
 import sys
 import time
@@ -24,10 +25,32 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import List, Optional
 
+# Force UTF-8 on Windows so argparse help and banner (Unicode/emojis) don't raise
+# UnicodeEncodeError when the console uses cp1252 (see PYI-1448 / PYI-4560).
+if sys.platform == "win32":
+    try:
+        if hasattr(sys.stdout, "reconfigure"):
+            sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+            sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+        elif hasattr(sys.stdout, "buffer"):
+            import io
+            sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8", errors="replace")
+            sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding="utf-8", errors="replace")
+    except (AttributeError, OSError):
+        pass
+
 # External libs - Rich for styled terminal output
+from rich.logging import RichHandler
 from rich.panel import Panel
 from rich.table import Table
 from rich.progress import Progress, SpinnerColumn, TextColumn, BarColumn, MofNCompleteColumn, TimeElapsedColumn
+
+# Rich argparse for colored --help output
+try:
+    from rich_argparse import RichHelpFormatter
+    _HAS_RICH_ARGPARSE = True
+except ImportError:
+    _HAS_RICH_ARGPARSE = False
 
 # Import from package
 from zircolite import (
@@ -56,12 +79,25 @@ from zircolite import (
     # Parallel processing
     ParallelConfig,
     MemoryAwareParallelProcessor,
+    # Log type detection
+    LogTypeDetector,
+    DetectionResult,
     # YAML configuration
     ConfigLoader,
     create_default_config_file,
     # Rich console
     console,
     DetectionStats,
+    # UI/UX helpers
+    set_quiet_mode,
+    is_quiet,
+    print_banner,
+    build_file_tree,
+    build_attack_summary,
+    build_detection_table,
+    make_file_link,
+    get_suggestions,
+    print_suggestions,
 )
 
 
@@ -92,6 +128,10 @@ class ProcessingContext:
     keepflat: bool
     memory_tracker: MemoryTracker
     event_filter: Optional[EventFilter] = None
+    file_stats: Optional[list] = None
+    total_filtered_events: int = 0
+    total_events: int = 0
+    workers_used: int = 1
 
 
 ################################################################
@@ -99,7 +139,10 @@ class ProcessingContext:
 ################################################################
 def parse_arguments():
     """Parse command line arguments."""
-    parser = argparse.ArgumentParser()
+    kwargs = {}
+    if _HAS_RICH_ARGPARSE:
+        kwargs["formatter_class"] = RichHelpFormatter
+    parser = argparse.ArgumentParser(**kwargs)
     
     # Input files and filtering/selection options
     logs_input_args = parser.add_argument_group('📁 INPUT FILES AND FILTERING')
@@ -153,6 +196,7 @@ def parse_arguments():
     config_formats_args = parser.add_argument_group('⚙️  ADVANCED CONFIGURATION')  
     config_formats_args.add_argument("-c", "--config", help="JSON or YAML file containing field mappings and exclusions", type=str, default="config/fieldMappings.yaml")
     config_formats_args.add_argument("-LE", "--logs-encoding", help="Specify encoding for Sysmon for Linux or Auditd files", type=str)
+    config_formats_args.add_argument("-q", "--quiet", help="Quiet mode: suppress banner, progress, and info messages. Only the summary panel and errors are shown.", action='store_true')
     config_formats_args.add_argument("--debug", help="Enable debug logging", action='store_true')
     config_formats_args.add_argument("--showall", "--show-all", help="Show all rules being executed", action='store_true')
     config_formats_args.add_argument("-n", "--nolog", "--no-log", help="Don't create log or result files", action='store_true')
@@ -164,6 +208,7 @@ def parse_arguments():
     config_formats_args.add_argument("--no-streaming", help="Disable streaming mode and use traditional multi-pass processing (for debugging)", action='store_true')
     config_formats_args.add_argument("--unified-db", "--all-in-one", help="Force unified database mode (all files in one DB, enables cross-file correlation)", action='store_true')
     config_formats_args.add_argument("--no-auto-mode", help="Disable automatic processing mode selection based on file analysis", action='store_true')
+    config_formats_args.add_argument("--no-auto-detect", help="Disable automatic log type and timestamp detection (use explicit format flags instead)", action='store_true')
     
     # YAML configuration file options
     yaml_config_args = parser.add_argument_group('📄 YAML CONFIGURATION FILE')
@@ -204,6 +249,15 @@ def get_file_extension(args) -> str:
     return "evtx"
 
 
+def _has_explicit_format_flag(args) -> bool:
+    """Check if the user has set an explicit format flag on the CLI."""
+    return any([
+        args.json_input, args.json_array_input, args.xml_input,
+        args.sysmon_linux_input, args.auditd_input,
+        args.csv_input, args.evtxtract_input, args.db_input,
+    ])
+
+
 def discover_files(args, logger) -> List[Path]:
     """Discover log files based on path and filters."""
     args.fileext = get_file_extension(args)
@@ -226,7 +280,7 @@ def discover_files(args, logger) -> List[Path]:
 
 
 def get_input_type(args) -> str:
-    """Determine input type for streaming processor."""
+    """Determine input type for streaming processor from explicit CLI flags."""
     if args.json_input:
         return 'json'
     if args.json_array_input:
@@ -244,15 +298,120 @@ def get_input_type(args) -> str:
     return 'evtx'
 
 
+def _apply_detection_result(args, detection: 'DetectionResult', logger) -> str:
+    """
+    Apply a DetectionResult to the args namespace and return the input_type.
+    
+    Sets the appropriate CLI flag on args so that downstream code
+    (extractor creation, file extension logic, etc.) works correctly.
+    When detection failed (log_source "unknown"), keeps default evtx and does
+    not set any format flag.
+    """
+    if detection.log_source == "unknown":
+        return "evtx"
+
+    input_type = detection.input_type
+
+    # Map input_type back to the args flag
+    flag_map = {
+        'json': 'json_input',
+        'json_array': 'json_array_input',
+        'xml': 'xml_input',
+        'sysmon_linux': 'sysmon_linux_input',
+        'auditd': 'auditd_input',
+        'csv': 'csv_input',
+        'evtxtract': 'evtxtract_input',
+    }
+    
+    if input_type in flag_map:
+        setattr(args, flag_map[input_type], True)
+    
+    # Update timefield if detection found a timestamp and user didn't override
+    if detection.timestamp_field and args.timefield == "SystemTime":
+        args.timefield = detection.timestamp_field
+    
+    return input_type
+
+
+def auto_detect_log_type(
+    file_list: List[Path], args, logger,
+    field_mappings_config: Optional[dict] = None,
+) -> str:
+    """
+    Automatically detect log type from the provided files.
+    
+    Analyzes file content and structure to determine the log format.
+    If an explicit format flag was set by the user, this is skipped.
+    
+    Args:
+        file_list: List of discovered log files
+        args: Parsed CLI arguments
+        logger: Logger instance
+        field_mappings_config: Optional field mappings config (for timestamp detection fields)
+        
+    Returns:
+        The detected input_type string
+    """
+    # If user set an explicit format flag, respect it
+    if _has_explicit_format_flag(args):
+        input_type = get_input_type(args)
+        logger.debug(f"Using explicit format flag: {input_type}")
+        return input_type
+    
+    # If auto-detect is disabled, fall back to flag-based detection
+    if getattr(args, 'no_auto_detect', False):
+        input_type = get_input_type(args)
+        logger.debug(f"Auto-detect disabled, using default: {input_type}")
+        return input_type
+    
+    # Load timestamp detection fields from config if available
+    ts_fields = None
+    if field_mappings_config:
+        ts_config = field_mappings_config.get("timestamp_detection", {})
+        ts_fields = ts_config.get("detection_fields")
+    
+    detector = LogTypeDetector(logger=logger, timestamp_detection_fields=ts_fields)
+    
+    # Use batch detection for better accuracy
+    detection = detector.detect_batch(file_list)
+    
+    logger.info(
+        f"[+] Auto-detected log type: "
+        f"[cyan]{detection.log_source}[/] "
+        f"([yellow]{detection.input_type}[/]) "
+        f"- confidence: [{'green' if detection.confidence == 'high' else 'yellow' if detection.confidence == 'medium' else 'red'}]"
+        f"{detection.confidence}[/]"
+    )
+    if detection.details:
+        logger.debug(f"    Detection details: {detection.details}")
+    if detection.timestamp_field:
+        logger.info(f"[+] Auto-detected timestamp field: [cyan]{detection.timestamp_field}[/]")
+    if detection.suggested_pipeline:
+        logger.debug(f"    Suggested pipeline: {detection.suggested_pipeline}")
+    
+    if detection.confidence == "low":
+        logger.warning(
+            "[yellow]   [!] Low confidence detection. "
+            "Consider using explicit format flags (-j, -x, -S, -AU, etc.)[/]"
+        )
+    
+    # Apply detection result to args
+    input_type = _apply_detection_result(args, detection, logger)
+    
+    # If detection changed the format from default, update the file extension
+    # for directory scanning (re-discover files if needed)
+    return input_type
+
+
 def create_extractor(args, logger, input_type: str) -> Optional[EvtxExtractor]:
     """Create extractor for formats that need conversion."""
     if input_type in ('xml', 'sysmon_linux', 'auditd', 'evtxtract'):
         extractor_config = ExtractorConfig(
-            xml_logs=args.xml_input,
-            sysmon4linux=args.sysmon_linux_input,
-            auditd_logs=args.auditd_input,
-            evtxtract=args.evtxtract_input,
-            csv_input=args.csv_input,
+            xml_logs=(input_type == 'xml'),
+            sysmon4linux=(input_type == 'sysmon_linux'),
+            auditd_logs=(input_type == 'auditd'),
+            evtxtract=(input_type == 'evtxtract'),
+            csv_input=(input_type == 'csv'),
             tmp_dir=args.tmpdir,
             encoding=args.logs_encoding
         )
@@ -291,17 +450,21 @@ def process_unified_streaming(ctx: ProcessingContext, file_list: List[Path], inp
     """Process all files into a single database using streaming mode."""
     ctx.logger.info(f"[+] Loading all [yellow]{len(file_list)}[/] file(s) into a single unified database")
     
-    disable_nested = len(file_list) > 1
+    disable_nested = len(file_list) > 1 or is_quiet()
     zircolite_core = create_zircolite_core(ctx, disable_progress=disable_nested)
     
-    total_events = zircolite_core.run_streaming(
+    result = zircolite_core.run_streaming(
         file_list,
         input_type=input_type,
         args_config=args,
         extractor=extractor,
         disable_progress=disable_nested,
-        event_filter=ctx.event_filter
+        event_filter=ctx.event_filter,
+        return_filtered_count=True
     )
+    total_events, filtered_count = result if isinstance(result, tuple) else (result, 0)
+    ctx.total_filtered_events += filtered_count
+    ctx.total_events += total_events
     ctx.memory_tracker.sample()
     
     if ctx.dbfile:
@@ -325,7 +488,6 @@ def process_unified_streaming(ctx: ProcessingContext, file_list: List[Path], inp
     ctx.memory_tracker.sample()
     
     results = list(zircolite_core.full_results) if zircolite_core.full_results else []
-    ctx.logger.info(f"[+] Results written in: [cyan]{ctx.outfile}[/]")
     
     return zircolite_core, results
 
@@ -334,9 +496,10 @@ def process_perfile_streaming(ctx: ProcessingContext, file_list: List[Path], inp
     """Process each file separately using streaming mode."""
     ctx.logger.info(f"[+] Processing [yellow]{len(file_list)}[/] file(s) separately in streaming mode")
     
-    disable_nested = len(file_list) > 1
+    disable_nested = len(file_list) > 1 or is_quiet()
     all_results = []
     first_file = True
+    file_stats = []
     
     for file_idx, log_file in enumerate(file_list):
         file_name = Path(log_file).name
@@ -347,14 +510,18 @@ def process_perfile_streaming(ctx: ProcessingContext, file_list: List[Path], inp
         
         zircolite_core = create_zircolite_core(ctx, db_location=":memory:", disable_progress=disable_nested)
         
-        zircolite_core.run_streaming(
+        result = zircolite_core.run_streaming(
             [log_file],
             input_type=input_type,
             args_config=args,
             extractor=extractor,
             disable_progress=disable_nested,
-            event_filter=ctx.event_filter
+            event_filter=ctx.event_filter,
+            return_filtered_count=True
         )
+        event_count, filtered_count = result if isinstance(result, tuple) else (result, 0)
+        ctx.total_filtered_events += filtered_count
+        ctx.total_events += event_count
         ctx.memory_tracker.sample()
         
         if ctx.dbfile:
@@ -376,10 +543,20 @@ def process_perfile_streaming(ctx: ProcessingContext, file_list: List[Path], inp
             ctx.outfile,
             write_mode=write_mode,
             show_all=ctx.showall,
-            keep_results=(ctx.ready_for_templating or ctx.package),
-            last_ruleset=is_last_file
+            keep_results=True,
+            last_ruleset=is_last_file,
+            source_label=file_name
         )
         ctx.memory_tracker.sample()
+        
+        # Track per-file stats for tree view
+        file_detection_count = len(zircolite_core.full_results) if zircolite_core.full_results else 0
+        file_stats.append({
+            "name": file_name,
+            "events": event_count,
+            "detections": file_detection_count,
+            "filtered": filtered_count,
+        })
         
         if zircolite_core.full_results:
             all_results.extend(zircolite_core.full_results)
@@ -387,7 +564,14 @@ def process_perfile_streaming(ctx: ProcessingContext, file_list: List[Path], inp
         zircolite_core.close()
         first_file = False
     
-    ctx.logger.info(f"[+] Results written in: [cyan]{ctx.outfile}[/]")
+    # Render file tree for multi-file processing
+    if len(file_list) > 1 and file_stats and not is_quiet():
+        console.print()
+        tree = build_file_tree(f"Processed {len(file_list)} files", file_stats)
+        console.print(tree)
+        console.print()
+    
+    ctx.file_stats = file_stats
     return None, all_results
 
 
@@ -395,7 +579,7 @@ def process_unified_traditional(ctx: ProcessingContext, file_list: List[Path], a
     """Process all files into a single database using traditional mode."""
     ctx.logger.info(f"[+] Loading all [yellow]{len(file_list)}[/] file(s) into a single unified database")
     
-    disable_nested = len(file_list) > 1
+    disable_nested = len(file_list) > 1 or is_quiet()
     zircolite_core = create_zircolite_core(ctx, disable_progress=disable_nested)
     
     zircolite_core.run(file_list, insert_to_db=True, save_to_file=ctx.keepflat, args_config=args, disable_progress=disable_nested, event_filter=ctx.event_filter)
@@ -422,7 +606,6 @@ def process_unified_traditional(ctx: ProcessingContext, file_list: List[Path], a
     ctx.memory_tracker.sample()
     
     results = list(zircolite_core.full_results) if zircolite_core.full_results else []
-    ctx.logger.info(f"[+] Results written in: [cyan]{ctx.outfile}[/]")
     
     return zircolite_core, results
 
@@ -431,9 +614,10 @@ def process_perfile_traditional(ctx: ProcessingContext, file_list: List[Path], a
     """Process each file separately using traditional mode."""
     ctx.logger.info(f"[+] Processing [yellow]{len(file_list)}[/] file(s) separately")
     
-    disable_nested = len(file_list) > 1
+    disable_nested = len(file_list) > 1 or is_quiet()
     all_results = []
     first_file = True
+    file_stats = []
     
     for file_idx, json_file in enumerate(file_list):
         file_name = Path(json_file).name
@@ -466,10 +650,19 @@ def process_perfile_traditional(ctx: ProcessingContext, file_list: List[Path], a
             ctx.outfile,
             write_mode=write_mode,
             show_all=ctx.showall,
-            keep_results=(ctx.ready_for_templating or ctx.package),
-            last_ruleset=is_last_file
+            keep_results=True,
+            last_ruleset=is_last_file,
+            source_label=file_name
         )
         ctx.memory_tracker.sample()
+        
+        # Track per-file stats for tree view
+        file_detection_count = len(zircolite_core.full_results) if zircolite_core.full_results else 0
+        file_stats.append({
+            "name": file_name,
+            "events": 0,  # Traditional mode doesn't expose event count easily
+            "detections": file_detection_count,
+        })
         
         if zircolite_core.full_results:
             all_results.extend(zircolite_core.full_results)
@@ -477,7 +670,14 @@ def process_perfile_traditional(ctx: ProcessingContext, file_list: List[Path], a
         zircolite_core.close()
         first_file = False
     
-    ctx.logger.info(f"[+] Results written in: [cyan]{ctx.outfile}[/]")
+    # Render file tree for multi-file processing
+    if len(file_list) > 1 and file_stats and not is_quiet():
+        console.print()
+        tree = build_file_tree(f"Processed {len(file_list)} files", file_stats)
+        console.print(tree)
+        console.print()
+    
+    ctx.file_stats = file_stats
     return None, all_results
 
 
@@ -485,7 +685,7 @@ def process_db_input(ctx: ProcessingContext, args) -> tuple:
     """Process from an existing database file."""
     ctx.logger.info(f"[+] Creating model from disk: [cyan]{args.evtx}[/]")
     
-    zircolite_core = create_zircolite_core(ctx)
+    zircolite_core = create_zircolite_core(ctx, disable_progress=is_quiet())
     zircolite_core.load_db_in_memory(args.evtx)
     ctx.memory_tracker.sample()
     
@@ -505,7 +705,6 @@ def process_db_input(ctx: ProcessingContext, args) -> tuple:
     ctx.memory_tracker.sample()
     
     results = list(zircolite_core.full_results) if zircolite_core.full_results else []
-    ctx.logger.info(f"[+] Results written in: [cyan]{ctx.outfile}[/]")
     
     return zircolite_core, results
 
@@ -571,7 +770,8 @@ def process_parallel_streaming(ctx: ProcessingContext, file_list: List[Path], in
         return thread_local.core
     
     def process_single_file(log_file: Path) -> tuple:
-        """Process a single file and return (event_count, results)."""
+        """Process a single file and return (event_count, file_data_dict)."""
+        file_name = Path(log_file).name
         try:
             # Get thread-local core (with silent logger)
             core = get_thread_core()
@@ -596,7 +796,7 @@ def process_parallel_streaming(ctx: ProcessingContext, file_list: List[Path], in
                 total_filtered_count[0] += filtered_count
             
             if event_count == 0:
-                return (0, [])
+                return (0, {"name": file_name, "results": [], "events": 0, "filtered": filtered_count})
             
             # Load and execute ruleset
             core.load_ruleset_from_var(ruleset=ctx.rulesets, rule_filters=ctx.rule_filters)
@@ -609,17 +809,19 @@ def process_parallel_streaming(ctx: ProcessingContext, file_list: List[Path], in
                 write_mode='w',
                 show_all=False,
                 keep_results=True,
-                last_ruleset=True
+                last_ruleset=True,
+                show_table=False
             )
             
             file_results = list(core.full_results) if core.full_results else []
             
-            return (event_count, file_results)
+            return (event_count, {"name": file_name, "results": file_results,
+                                  "events": event_count, "filtered": filtered_count})
             
         except Exception as e:
             # Store error for later - don't log during parallel processing
-            errors.append((Path(log_file).name, str(e)))
-            return (0, [])
+            errors.append((file_name, str(e)))
+            return (0, {"name": file_name, "results": [], "events": 0, "filtered": 0})
     
     # Create parallel processor
     processor = MemoryAwareParallelProcessor(config=parallel_config, logger=ctx.logger)
@@ -629,27 +831,37 @@ def process_parallel_streaming(ctx: ProcessingContext, file_list: List[Path], in
         file_list,
         process_single_file,
         desc="Processing",
-        disable_progress=False
+        disable_progress=is_quiet()
     )
     
     # Report any errors that occurred
     if errors:
         ctx.logger.error(f"[!] {len(errors)} file(s) failed to process:")
-        for fname, err in errors[:3]:
+        for fname, err in errors[:5]:
             ctx.logger.error(f"    → {fname}: {err}")
-        if len(errors) > 3:
-            ctx.logger.error(f"    → ... and {len(errors) - 3} more")
+        if len(errors) > 5:
+            ctx.logger.error(f"    → ... and {len(errors) - 5} more")
     
-    # Collect all results (event counts are tracked in stats.total_events)
-    for file_results in results_list:
-        if file_results:
-            all_results.extend(file_results)
+    # Collect results and build per-file stats
+    file_stats = []
+    for file_data in results_list:
+        if file_data and isinstance(file_data, dict):
+            file_results = file_data.get("results", [])
+            if file_results:
+                all_results.extend(file_results)
+            file_stats.append({
+                "name": file_data.get("name", "unknown"),
+                "events": file_data.get("events", 0),
+                "detections": len(file_results),
+                "filtered": file_data.get("filtered", 0),
+            })
     
     ctx.memory_tracker.sample()
+    ctx.file_stats = file_stats
+    ctx.workers_used = stats.workers_used
     
     # Display detection results summary (aggregate by rule title)
     if all_results:
-        ctx.logger.info(f"[+] Executing ruleset - [yellow]{len(ctx.rulesets)}[/] rules")
         
         # Aggregate results by rule title
         rule_summary = {}
@@ -658,10 +870,11 @@ def process_parallel_streaming(ctx: ProcessingContext, file_list: List[Path], in
             level = result.get("rule_level", "unknown")
             count = result.get("count", 0)
             
+            tags = result.get("tags", [])
             if title in rule_summary:
                 rule_summary[title]["count"] += count
             else:
-                rule_summary[title] = {"level": level, "count": count}
+                rule_summary[title] = {"level": level, "count": count, "tags": tags}
         
         # Level priority for sorting (critical first, informational last)
         level_priority = {
@@ -679,24 +892,32 @@ def process_parallel_streaming(ctx: ProcessingContext, file_list: List[Path], in
             priority = level_priority.get(level, 5)  # Unknown levels at the end
             return (priority, -info["count"])  # Negative count for descending order
         
-        # Display each rule's detections (same format as non-parallel mode)
-        for title, info in sorted(rule_summary.items(), key=sort_key):
-            level = info["level"]
-            count = info["count"]
-            # Format level with color using Rich markup
-            level_styles = {
-                "critical": "bold white on red",
-                "high": "bold magenta",
-                "medium": "bold yellow",
-                "low": "green",
-                "informational": "dim",
-            }
-            level_style = level_styles.get(level.lower(), "cyan")
-            ctx.logger.info(f'[cyan]    • {title} [[{level_style}]{level}[/][cyan]] : [magenta]{count:,}[/cyan] events[/]')
+        # Build aggregated results list for detection table display
+        aggregated_results = [
+            {"title": title, "rule_level": info["level"], "count": info["count"],
+             "tags": info.get("tags", [])}
+            for title, info in sorted(rule_summary.items(), key=sort_key)
+        ]
+        
+        # Display as a table (suppressed in quiet mode)
+        if not is_quiet() and aggregated_results:
+            console.print()
+            console.print(build_detection_table(aggregated_results))
+            console.print()
+    
+    # Render file tree for multi-file processing (same as per-file mode)
+    if len(file_list) > 1 and file_stats and not is_quiet():
+        tree = build_file_tree(f"Processed {len(file_list)} files", file_stats)
+        console.print(tree)
+        console.print()
+    
+    # Propagate filtered count to processing context
+    filtered_count = total_filtered_count[0]
+    ctx.total_filtered_events += filtered_count
     
     # Display filtered events statistics after detection results
     total_events = stats.total_events
-    filtered_count = total_filtered_count[0]
+    ctx.total_events += total_events
     if filtered_count > 0:
         ctx.logger.info(
             f"[+] Total events processed: [magenta]{total_events:,}[/] "
@@ -704,7 +925,7 @@ def process_parallel_streaming(ctx: ProcessingContext, file_list: List[Path], in
         )
     
     # Write combined results to output file
-    if all_results and not ctx.no_output:
+    if not ctx.no_output:
         import orjson as json
         with open(ctx.outfile, 'w', encoding='utf-8') as f:
             f.write('[')
@@ -714,8 +935,6 @@ def process_parallel_streaming(ctx: ProcessingContext, file_list: List[Path], in
                 json_bytes = json.dumps(result, option=json.OPT_INDENT_2)
                 f.write(json_bytes.decode('utf-8'))
             f.write(']')
-    
-    ctx.logger.info(f"[+] Results written in: [cyan]{ctx.outfile}[/]")
     
     return None, all_results
 
@@ -848,6 +1067,8 @@ def load_yaml_config_and_merge(args, logger) -> argparse.Namespace:
         sys.exit(1)
     except Exception as e:
         logger.error(f"[red]   [-] Error loading YAML config: {e}[/]")
+        if logger.isEnabledFor(logging.DEBUG):
+            console.print_exception(show_locals=False)
         sys.exit(1)
     
     return args
@@ -900,7 +1121,10 @@ def cleanup(args, extractor, use_streaming: bool, logger, log_list=None):
 
 def print_stats(memory_tracker: MemoryTracker, start_time: float, logger, 
                 all_results: list = None, files_processed: int = 0, 
-                total_events: int = 0, workers_used: int = 1):
+                total_events: int = 0, workers_used: int = 1,
+                filtered_events: int = 0, total_rules: int = 0,
+                phase_times: dict = None, has_template: bool = False,
+                has_package: bool = False, outfile: str = None):
     """Print final execution statistics with a Rich summary dashboard."""
     memory_tracker.sample()
     peak_memory, avg_memory = memory_tracker.get_stats()
@@ -911,22 +1135,42 @@ def print_stats(memory_tracker: MemoryTracker, start_time: float, logger,
     summary_table.add_column("Metric", style="dim")
     summary_table.add_column("Value", style="bold")
     
-    # Time
+    # ── Duration with phase breakdown ──
     if processing_time >= 60:
         time_str = f"{int(processing_time // 60)}m {int(processing_time % 60)}s"
     else:
         time_str = f"{processing_time:.1f}s"
     summary_table.add_row("⏱  Duration", f"[yellow]{time_str}[/]")
     
-    # Files
+    # Phase timing breakdown (#3)
+    if phase_times and processing_time > 0:
+        bar_width = 16
+        for phase_name, phase_secs in phase_times.items():
+            if phase_secs <= 0:
+                continue
+            pct = phase_secs / processing_time
+            filled = max(1, int(bar_width * pct))
+            bar = "█" * filled + "░" * (bar_width - filled)
+            if phase_secs >= 60:
+                t_str = f"{int(phase_secs // 60)}m {int(phase_secs % 60)}s"
+            else:
+                t_str = f"{phase_secs:.1f}s"
+            summary_table.add_row("", f"  [dim]├─ {phase_name}  {bar}  {t_str} ({pct:.0%})[/]")
+    
+    # ── Files ──
     if files_processed > 0:
         summary_table.add_row("📁 Files", f"[cyan]{files_processed:,}[/]")
     
-    # Events
+    # ── Events with filter efficiency (#5) ──
     if total_events > 0:
-        summary_table.add_row("📊 Events", f"[magenta]{total_events:,}[/]")
+        events_text = f"[magenta]{total_events:,}[/]"
+        if filtered_events > 0:
+            total_scanned = total_events + filtered_events
+            match_rate = (total_events / total_scanned * 100) if total_scanned > 0 else 0
+            events_text += f" [dim]({filtered_events:,} filtered out — {match_rate:.1f}% match rate)[/]"
+        summary_table.add_row("📊 Events", events_text)
     
-    # Throughput
+    # ── Throughput ──
     if processing_time > 0 and total_events > 0:
         throughput = total_events / processing_time
         summary_table.add_row("⚡ Throughput", f"[green]{throughput:,.0f}[/] events/s")
@@ -940,7 +1184,7 @@ def print_stats(memory_tracker: MemoryTracker, start_time: float, logger,
         mem_str = memory_tracker.format_memory(peak_memory)
         summary_table.add_row("💾 Peak Memory", f"[cyan]{mem_str}[/]")
     
-    # Detection summary by severity
+    # ── Detection summary ──
     if all_results:
         det_stats = DetectionStats()
         for result in all_results:
@@ -950,7 +1194,7 @@ def print_stats(memory_tracker: MemoryTracker, start_time: float, logger,
         
         detection_parts = []
         if det_stats.critical > 0:
-            detection_parts.append(f"[bold white on red]{det_stats.critical} CRIT[/]")
+            detection_parts.append(f"[bold red]{det_stats.critical} CRIT[/]")
         if det_stats.high > 0:
             detection_parts.append(f"[bold magenta]{det_stats.high} HIGH[/]")
         if det_stats.medium > 0:
@@ -965,14 +1209,60 @@ def print_stats(memory_tracker: MemoryTracker, start_time: float, logger,
         else:
             summary_table.add_row("🎯 Detections", "[dim]None[/]")
         
+        # Rule coverage bar (#6)
+        if total_rules > 0:
+            matched_rules = det_stats.total_rules_matched
+            coverage_pct = matched_rules / total_rules * 100
+            bar_w = 16
+            filled = max(0, int(bar_w * matched_rules / total_rules))
+            cov_bar = "█" * filled + "░" * (bar_w - filled)
+            summary_table.add_row(
+                "📏 Coverage",
+                f"[cyan]{matched_rules}[/]/[cyan]{total_rules}[/] rules matched ({coverage_pct:.1f}%)  [dim]{cov_bar}[/]"
+            )
+        
         # Total matched events
         if det_stats.total_events > 0:
             summary_table.add_row(
                 "🔍 Matched", 
                 f"[magenta]{det_stats.total_events:,}[/] events across [cyan]{det_stats.total_rules_matched}[/] rules"
             )
+        
+        # Top-N detections by severity (most critical first)
+        level_priority = {
+            "critical": 0, "high": 1, "medium": 2,
+            "low": 3, "informational": 4,
+        }
+        sorted_results = sorted(
+            all_results,
+            key=lambda r: (level_priority.get(r.get("rule_level", "unknown").lower(), 5), -r.get("count", 0))
+        )
+        top_n = sorted_results[:5]
+        if top_n:
+            level_abbrev = {
+                "critical": "CRIT", "high": "HIGH", "medium": " MED",
+                "low": " LOW", "informational": "INFO",
+            }
+            top_lines = []
+            for r in top_n:
+                level = r.get("rule_level", "unknown")
+                level_style = {
+                    "critical": "bold red", "high": "bold magenta",
+                    "medium": "bold yellow", "low": "green", "informational": "dim",
+                }.get(level.lower(), "cyan")
+                title = r.get("title", "Unknown")
+                count = r.get("count", 0)
+                abbrev = level_abbrev.get(level.lower(), level.upper()[:4])
+                if len(title) > 50:
+                    title = title[:47] + "..."
+                top_lines.append(f"[{level_style}]{abbrev}[/] {title} [dim]({count:,})[/]")
+            summary_table.add_row("📋 Top Hits", top_lines[0])
+            for line in top_lines[1:]:
+                summary_table.add_row("", line)
+    else:
+        summary_table.add_row("🎯 Detections", "[dim]None[/]")
     
-    # Print panel
+    # Print summary panel
     console.print()
     panel = Panel(
         summary_table,
@@ -981,13 +1271,33 @@ def print_stats(memory_tracker: MemoryTracker, start_time: float, logger,
         padding=(1, 2)
     )
     console.print(panel)
+    
+    # ATT&CK Coverage panel (#1) - shown separately after summary
+    if all_results:
+        attack_panel = build_attack_summary(all_results)
+        if attack_panel:
+            console.print(attack_panel)
+    
+    # Output file location - prominent and always visible
+    if outfile:
+        console.print()
+        console.print(f"  [bold green]→[/] Output: {make_file_link(outfile)}")
+    
+    # Post-run contextual suggestions (#8)
+    tips = get_suggestions(
+        all_results or [],
+        processing_time,
+        has_template=has_template,
+        has_package=has_package,
+    )
+    print_suggestions(tips)
 
 
 ################################################################
 # MAIN
 ################################################################
 def main():
-    version = "3.0.2"
+    version = "3.1.0"
     args = parse_arguments()
 
     # Handle generate-config before logging setup
@@ -995,23 +1305,23 @@ def main():
         create_default_config_file(args.generate_config)
         sys.exit(0)
 
+    # Set up quiet mode before any output
+    if args.quiet:
+        set_quiet_mode(True)
+
     # Init logging
     if args.nolog: 
         args.logfile = None
     logger = init_logger(args.debug, args.logfile)
 
-    # Print Rich banner
-    banner = """
-[bold cyan]███████╗██╗██████╗  ██████╗ ██████╗ ██╗     ██╗████████╗███████╗[/]
-[cyan]╚══███╔╝██║██╔══██╗██╔════╝██╔═══██╗██║     ██║╚══██╔══╝██╔════╝[/]
-[bold blue]  ███╔╝ ██║██████╔╝██║     ██║   ██║██║     ██║   ██║   █████╗[/]
-[blue] ███╔╝  ██║██╔══██╗██║     ██║   ██║██║     ██║   ██║   ██╔══╝[/]
-[bold magenta]███████╗██║██║  ██║╚██████╗╚██████╔╝███████╗██║   ██║   ███████╗[/]
-[magenta]╚══════╝╚═╝╚═╝  ╚═╝ ╚═════╝ ╚═════╝ ╚══════╝╚═╝   ╚═╝   ╚══════╝[/]
-[dim]-= Standalone Sigma Detection tool for EVTX/Auditd/Sysmon Linux =-[/]
-"""
-    console.print(banner)
-    console.print(f"                              [dim]v{version}[/]\n")
+    # In quiet mode, suppress INFO-level console output (file handler keeps everything)
+    if args.quiet:
+        for handler in logger.handlers:
+            if isinstance(handler, RichHandler):
+                handler.setLevel(logging.WARNING)
+
+    # Print Rich banner (single source of truth from console module)
+    print_banner(version)
 
     # Handle special commands
     if args.version: 
@@ -1033,14 +1343,18 @@ def main():
     else: 
         args.ruleset = ["rules/rules_windows_generic_pysigma.json"]
 
-    # Load rulesets
+    # Load rulesets (with spinner for visual feedback during pySigma conversion)
     logger.info("[+] Loading ruleset(s)")
     ruleset_config = RulesetConfig(
         ruleset=args.ruleset,
         pipeline=args.pipeline,
         save_ruleset=args.save_ruleset
     )
-    rulesets_manager = RulesetHandler(ruleset_config, logger=logger, list_pipelines_only=args.pipeline_list)
+    if not is_quiet():
+        with console.status("[bold cyan]Loading and converting rulesets...", spinner="dots"):
+            rulesets_manager = RulesetHandler(ruleset_config, logger=logger, list_pipelines_only=args.pipeline_list)
+    else:
+        rulesets_manager = RulesetHandler(ruleset_config, logger=logger, list_pipelines_only=args.pipeline_list)
     if args.pipeline_list:
         sys.exit(0)
 
@@ -1129,6 +1443,19 @@ def main():
     use_streaming = False
     log_list = None
     all_results = []
+    phase_setup_end = None  # Will be set when processing starts
+
+    # Load field mappings config early (needed for auto-detection and processing)
+    field_mappings_config = None
+    if not args.db_input:
+        from zircolite.utils import load_field_mappings
+        try:
+            field_mappings_config = load_field_mappings(args.config, logger=logger)
+        except Exception:
+            field_mappings_config = None
+
+    # Mark end of setup phase for timing breakdown
+    phase_setup_end = time.time()
 
     # Process based on input mode
     if args.db_input:
@@ -1140,6 +1467,31 @@ def main():
         
         file_list = discover_files(args, logger)
         log_list = file_list  # Keep reference for cleanup
+        
+        # Auto-detect log type (analyzes file content if no explicit flag set)
+        if not is_quiet() and not _has_explicit_format_flag(args) and not getattr(args, 'no_auto_detect', False):
+            with console.status("[bold cyan]Auto-detecting log type...", spinner="dots"):
+                input_type = auto_detect_log_type(file_list, args, logger, field_mappings_config)
+        else:
+            input_type = auto_detect_log_type(file_list, args, logger, field_mappings_config)
+        
+        # If auto-detection changed the file extension and we're scanning a directory,
+        # re-discover files with the correct extension
+        if Path(args.evtx).is_dir() and not args.fileext and not args.file_pattern:
+            new_ext = get_file_extension(args)
+            if new_ext != "evtx" and args.fileext != new_ext:
+                args.fileext = new_ext
+                old_count = len(file_list)
+                file_list = discover_files(args, logger)
+                log_list = file_list
+                if len(file_list) != old_count:
+                    logger.info(
+                        f"[+] Re-discovered [yellow]{len(file_list)}[/] file(s) "
+                        f"with extension '.{new_ext}'"
+                    )
+        
+        # Update the processing context time_field if auto-detection changed it
+        ctx.time_field = args.timefield
         
         # Auto-select processing mode (database mode + parallel processing)
         use_parallel = False
@@ -1172,7 +1524,6 @@ def main():
         use_streaming = not args.no_streaming and not args.keepflat
         
         if use_streaming:
-            input_type = get_input_type(args)
             extractor = create_extractor(args, logger, input_type)
             
             if use_parallel and not args.unified_db and len(file_list) > 1:
@@ -1202,23 +1553,29 @@ def main():
                 
                 logger.info(f"[+] Extracting events using '[cyan]{extractor.tmpDir}[/]' directory")
                 
-                # Use Rich progress bar for extraction
-                extract_progress = Progress(
-                    SpinnerColumn(),
-                    TextColumn("[progress.description]{task.description}"),
-                    BarColumn(bar_width=40),
-                    MofNCompleteColumn(),
-                    TextColumn("•"),
-                    TimeElapsedColumn(),
-                    console=console,
-                    transient=True,
-                )
-                with extract_progress:
-                    task_id = extract_progress.add_task("Extracting", total=len(file_list))
+                if is_quiet():
+                    # Extract without progress bar in quiet mode
                     for evtx in file_list:
                         extractor.run(evtx)
                         memory_tracker.sample()
-                        extract_progress.update(task_id, advance=1)
+                else:
+                    # Use Rich progress bar for extraction
+                    extract_progress = Progress(
+                        SpinnerColumn(),
+                        TextColumn("[progress.description]{task.description}"),
+                        BarColumn(bar_width=40),
+                        MofNCompleteColumn(),
+                        TextColumn("•"),
+                        TimeElapsedColumn(),
+                        console=console,
+                        transient=True,
+                    )
+                    with extract_progress:
+                        task_id = extract_progress.add_task("Extracting", total=len(file_list))
+                        for evtx in file_list:
+                            extractor.run(evtx)
+                            memory_tracker.sample()
+                            extract_progress.update(task_id, advance=1)
                     
                 log_json_list = list(Path(extractor.tmpDir).rglob("*.json"))
                 memory_tracker.sample()
@@ -1241,14 +1598,36 @@ def main():
     if zircolite_core is not None:
         zircolite_core.close()
     
-    # Print final stats with summary dashboard
+    # Build phase timing breakdown
+    now = time.time()
+    phase_times = None
+    if phase_setup_end is not None:
+        processing_end = now  # processing + output happened between setup_end and now
+        setup_time = phase_setup_end - start_time
+        processing_time = processing_end - phase_setup_end
+        if setup_time > 0.5 or processing_time > 0.5:
+            phase_times = {}
+            if setup_time > 0.5:
+                phase_times["Setup"] = setup_time
+            if processing_time > 0.5:
+                phase_times["Processing"] = processing_time
+    
+    # Print final stats with summary dashboard (always shown, even in quiet mode)
     files_processed = len(log_list) if log_list else 1
     print_stats(
         memory_tracker, 
         start_time, 
         logger,
         all_results=all_results,
-        files_processed=files_processed
+        files_processed=files_processed,
+        total_events=ctx.total_events,
+        workers_used=ctx.workers_used,
+        filtered_events=ctx.total_filtered_events,
+        total_rules=len(ctx.rulesets) if ctx.rulesets else 0,
+        phase_times=phase_times,
+        has_template=ctx.ready_for_templating,
+        has_package=ctx.package,
+        outfile=ctx.outfile if not ctx.no_output else None,
     )
 
 

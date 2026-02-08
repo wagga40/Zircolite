@@ -1,0 +1,165 @@
+# Build PyInstaller binaries for Linux (x64, arm64) and Windows (x64, arm64),
+# verify they run (--help, --version), and test with an EVTX from
+# https://github.com/sbousseaden/EVTX-ATTACK-SAMPLES (Execution folder).
+name: build_pyinstaller
+
+on:
+  push:
+    branches: [master, main]
+  pull_request:
+    branches: [master, main]
+  workflow_dispatch:
+
+env:
+  EVTX_SAMPLE_URL: "https://raw.githubusercontent.com/sbousseaden/EVTX-ATTACK-SAMPLES/master/Execution/Exec_sysmon_meterpreter_reversetcp_msipackage.evtx"
+  EVTX_OUTPUT: "detected_events.json"
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-24.04
+            runner: ubuntu-24.04
+            arch: x64
+            artifact_name: Zircolite-linux-x64
+            binary_path: dist/Zircolite
+            binary_name: Zircolite
+            python_version: "3.14"
+          - os: ubuntu-24.04-arm
+            runner: ubuntu-24.04-arm
+            arch: arm64
+            artifact_name: Zircolite-linux-arm64
+            binary_path: dist/Zircolite
+            binary_name: Zircolite
+            python_version: "3.14"
+          - os: windows-2022
+            runner: windows-2022
+            arch: x64
+            artifact_name: Zircolite-windows-x64
+            binary_path: dist/Zircolite.exe
+            binary_name: Zircolite.exe
+            python_version: "3.14"
+          - os: windows-11-arm
+            runner: windows-11-arm
+            arch: arm64
+            artifact_name: Zircolite-windows-arm64
+            binary_path: dist/Zircolite.exe
+            binary_name: Zircolite.exe
+            python_version: "3.12"
+
+    runs-on: ${{ matrix.runner }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python_version }}
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt "pyinstaller>=6.18.0"
+
+      - name: Build with PyInstaller
+        run: pyinstaller --noconfirm Zircolite.spec
+
+      - name: Download EVTX sample
+        run: |
+          curl -sSL -o evtx_sample.evtx "${{ env.EVTX_SAMPLE_URL }}"
+          if [ ! -f evtx_sample.evtx ] || [ ! -s evtx_sample.evtx ]; then
+            echo "Download failed or file empty"
+            exit 1
+          fi
+        shell: bash
+
+      - name: Verify binary (Linux)
+        if: matrix.os != 'windows-2022' && matrix.os != 'windows-11-arm'
+        run: |
+          chmod +x "${{ matrix.binary_path }}"
+          "${{ matrix.binary_path }}" --help
+          "${{ matrix.binary_path }}" --version
+        shell: bash
+
+      - name: Verify binary (Windows)
+        if: matrix.os == 'windows-2022' || matrix.os == 'windows-11-arm'
+        run: |
+          & "dist/Zircolite.exe" --help
+          & "dist/Zircolite.exe" --version
+        shell: pwsh
+
+      # Do not use -n (--nolog): it sets no_output=True and prevents writing detected_events.json
+      - name: Run binary on EVTX (Linux)
+        if: matrix.os != 'windows-2022' && matrix.os != 'windows-11-arm'
+        run: |
+          "${{ matrix.binary_path }}" -e evtx_sample.evtx -r rules/rules_windows_sysmon.json -o "${{ env.EVTX_OUTPUT }}"
+        shell: bash
+
+      - name: Run binary on EVTX (Windows)
+        if: matrix.os == 'windows-2022' || matrix.os == 'windows-11-arm'
+        run: |
+          & "${{ matrix.binary_path }}" -e evtx_sample.evtx -r rules/rules_windows_sysmon.json -o "${{ env.EVTX_OUTPUT }}"
+        shell: pwsh
+
+      - name: Verify EVTX output
+        run: |
+          p='${{ env.EVTX_OUTPUT }}'
+          if [ ! -f "$p" ]; then
+            echo "Error: $p was not created by the binary (binary may have failed)"
+            exit 1
+          fi
+          python -c "
+          import json, sys
+          p = '${{ env.EVTX_OUTPUT }}'
+          with open(p) as f:
+              d = json.load(f)
+          if not isinstance(d, list):
+              print('Expected JSON array')
+              sys.exit(1)
+          print(f'Detections: {len(d)}')
+          "
+        shell: bash
+
+      - name: Prepare release package
+        run: |
+          pkg="${{ matrix.artifact_name }}"
+          mkdir -p "$pkg"
+          cp "${{ matrix.binary_path }}" "$pkg/"
+          cp -r config rules templates gui docs pics "$pkg/"
+          cp README.md "$pkg/"
+          if [ "${{ matrix.os }}" != "windows-2022" ] && [ "${{ matrix.os }}" != "windows-11-arm" ]; then
+            chmod +x "$pkg/${{ matrix.binary_name }}"
+          fi
+        shell: bash
+
+      # Do not use -n (--nolog): it sets no_output=True and prevents writing the output file
+      - name: Verify package runs (from package dir)
+        run: |
+          pkg="${{ matrix.artifact_name }}"
+          cd "$pkg"
+          ./${{ matrix.binary_name }} -e ../evtx_sample.evtx -r rules/rules_windows_sysmon.json -o ../detected_from_pkg.json
+          cd ..
+          if [ ! -f detected_from_pkg.json ]; then
+            echo "Error: detected_from_pkg.json was not created (package binary may have failed)"
+            exit 1
+          fi
+          python -c "
+          import json, sys
+          with open('detected_from_pkg.json') as f:
+              d = json.load(f)
+          if not isinstance(d, list):
+              print('Expected JSON array')
+              sys.exit(1)
+          print(f'Package run OK, detections: {len(d)}')
+          "
+        shell: bash
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact_name }}
+          path: ${{ matrix.artifact_name }}

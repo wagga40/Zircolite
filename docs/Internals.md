@@ -12,6 +12,10 @@ flowchart LR
         I[EVTX / XML / JSON<br/>CSV / Auditd]
     end
     
+    subgraph DETECT[Detection]
+        D[Auto-Detect<br/>Format & Timestamp]
+    end
+    
     subgraph PROC[Processing]
         F[Flatten &<br/>Transform]
     end
@@ -28,7 +32,7 @@ flowchart LR
         O[JSON / CSV<br/>Templates]
     end
     
-    I --> F --> S
+    I --> D --> F --> S
     R --> S
     S --> O
 ```
@@ -104,12 +108,65 @@ flowchart LR
 - Character encoding detection
 - Custom logic in sandboxed Python
 
+### Log Type Detection
+
+Zircolite includes an automatic log type detection system (`LogTypeDetector` in `detector.py`) that analyzes input files to determine their format, log source, and timestamp field before processing begins.
+
+#### Detection Pipeline
+
+```mermaid
+flowchart TB
+    A[Input File] --> B{Magic Bytes?}
+    B -->|ElfFile header| C[EVTX Binary - High]
+    B -->|No match| D[Read 64 KB Sample]
+    D --> E{First char?}
+    E -->|"{ or ["| F[Parse JSON → Classify]
+    E -->|"<"| G{Sysmon Linux?}
+    G -->|Yes| H[Sysmon Linux - High]
+    G -->|No| I{EVTXtract?}
+    I -->|Yes| J[EVTXtract - High]
+    I -->|No| K[XML Detection]
+    E -->|Other| L{Auditd pattern?}
+    L -->|Yes| M[Auditd - High]
+    L -->|No| N{Sysmon Linux?}
+    N -->|Yes| O[Sysmon Linux]
+    N -->|No| P{CSV?}
+    P -->|Yes| Q[CSV Detection]
+    P -->|No| R[Extension Fallback]
+    R --> S{Timestamp found?}
+    S -->|No| T[Regex Timestamp Scan]
+    T --> U[Enriched Result]
+    S -->|Yes| U
+```
+
+#### JSON Event Classification
+
+When JSON content is detected, the classifier inspects the parsed event structure:
+
+| Check | Log Source | Confidence |
+|-------|-----------|------------|
+| `Event.System.Channel` in Sysmon channels | `sysmon_windows` | High |
+| `Event.System.Channel`/`EventID` present | `windows_evtx_json` | High |
+| Top-level `Channel` + `EventID` | `windows_evtx_json` (pre-flattened) | High |
+| `@timestamp` or `winlog` structure | `ecs_elastic` | High/Medium |
+| `type` field with auditd value | `auditd` | High |
+| 3+ Sysmon fields (RuleName, ProcessGuid, etc.) | `sysmon_windows` | Medium |
+| Generic with detected timestamp | `generic_json` | Medium |
+| Generic without timestamp | `generic_json` | Low |
+
+#### Timestamp Detection Strategy
+
+1. **Known field names** (priority order): `SystemTime`, `UtcTime`, `TimeCreated`, `@timestamp`, `timestamp`, etc.
+2. **Heuristic scoring**: All event fields are scored by name relevance and value format.
+3. **Regex fallback**: Raw file content is scanned for timestamp patterns (ISO 8601, syslog, epoch, US date-time, Windows FileTime) and matched back to JSON keys when possible.
+
 ### Core Components
 
 Zircolite is built around several key classes, organized in the `zircolite/` package:
 
+- **LogTypeDetector** (`detector.py`): Automatic log format and timestamp detection. Analyzes magic bytes, content structure, and file extension to determine the input type and log source.
 - **ZircoliteCore** (`core.py`): The main detection engine that manages the SQLite database, loads rulesets, and executes detection rules.
-- **ZircoliteConsole** (`console.py`): Rich-based terminal output with styled messages, progress bars, tables, and detection summaries.
+- **ZircoliteConsole** (`console.py`): Rich-based terminal output with styled messages, progress bars, live detection counters, detection results tables, summary panels, MITRE ATT&CK coverage panels, terminal hyperlinks, post-run suggestions, file tree views, and quiet mode support.
 - **StreamingEventProcessor** (`streaming.py`): Single-pass processor for efficient event extraction, flattening, and database insertion.
 - **JSONFlattener** (`flattener.py`): Processes and flattens JSON log events, applies field mappings, aliases, splits, and transforms.
 - **EvtxExtractor** (`extractor.py`): Converts various log formats (EVTX, XML, Auditd, Sysmon for Linux, CSV) to JSON.
@@ -146,7 +203,7 @@ Use `--no-auto-mode` to disable automatic selection and use per-file mode by def
 1. **Single-Pass Processing**: `StreamingEventProcessor` reads events, flattens them, and inserts into the database in one pass.
 2. **Dynamic Schema Discovery**: Database columns are added dynamically as new fields are discovered.
 3. **Batch Insertion**: Events are inserted in batches for optimal performance.
-4. **Rule Execution**: `ZircoliteCore` executes each rule's SQL query against the database.
+4. **Rule Execution**: `ZircoliteCore` executes each rule's SQL query against the database. Matching results are displayed in a severity-sorted Rich Table with Rule, Events, and ATT&CK columns. In parallel mode, table display is suppressed per-worker (`show_table=False`) and an aggregated table is shown after all workers complete.
 5. **Result Output**: Matches are written to the output file (JSON or CSV) and optionally processed through templates.
 
 Benefits of streaming mode:
@@ -206,8 +263,8 @@ Transforms use **RestrictedPython** for safe, sandboxed execution of custom Pyth
 ## Project Structure
 
 ```text
-├── Makefile                # Basic Makefile for common tasks
 ├── README.md               # Project documentation
+├── Taskfile.yml            # Production tasks (Docker, rules update, clean)
 ├── bin/                    # Directory containing external binaries (evtx_dump)
 ├── config/                 # Configuration files
 │   ├── fieldMappings.yaml  # Field mappings, aliases, splits, and transforms
@@ -239,6 +296,7 @@ Transforms use **RestrictedPython** for safe, sandboxed execution of custom Pyth
     ├── config_loader.py    # YAML configuration file loader
     ├── console.py          # ZircoliteConsole (Rich-based terminal output)
     ├── core.py             # ZircoliteCore class (database and rule execution)
+    ├── detector.py         # LogTypeDetector (automatic log format detection)
     ├── streaming.py        # StreamingEventProcessor (single-pass processing)
     ├── flattener.py        # JSONFlattener (log flattening)
     ├── extractor.py        # EvtxExtractor (log format conversion)
@@ -254,8 +312,9 @@ The `zircolite/` package contains modular implementations of all core components
 
 - **`config.py`**: Contains dataclasses for configuration (`ProcessingConfig`, `ExtractorConfig`, `RulesetConfig`, etc.).
 - **`config_loader.py`**: Contains `ConfigLoader` for loading and validating YAML configuration files.
-- **`console.py`**: Contains `ZircoliteConsole` for Rich-based terminal output with styled messages, progress bars, and detection summaries.
-- **`core.py`**: Contains `ZircoliteCore`, the main detection engine managing SQLite operations and rule execution.
+- **`console.py`**: Contains `ZircoliteConsole` and helper functions for Rich-based terminal output including styled messages, progress bars, live detection counters during rule execution, detection results tables (`build_detection_table`), MITRE ATT&CK coverage panels (`build_attack_summary`), terminal hyperlinks (`make_file_link`), post-run contextual suggestions (`get_suggestions`, `print_suggestions`), summary dashboards, file tree views, severity style constants (`LEVEL_STYLES`), `DetectionStats`, and a global quiet mode (`set_quiet_mode`, `is_quiet`).
+- **`core.py`**: Contains `ZircoliteCore`, the main detection engine managing SQLite operations and rule execution. The `execute_ruleset` method accepts a `show_table` parameter to control detection table display (used to suppress per-worker output in parallel mode).
+- **`detector.py`**: Contains `LogTypeDetector` and `DetectionResult` for automatic log format, log source, and timestamp detection via magic bytes, content analysis, and regex fallback.
 - **`streaming.py`**: Contains `StreamingEventProcessor` for efficient single-pass event processing.
 - **`flattener.py`**: Contains `JSONFlattener` for flattening nested JSON log events.
 - **`extractor.py`**: Contains `EvtxExtractor` for converting various log formats to JSON.

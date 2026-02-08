@@ -25,9 +25,11 @@ import orjson as json
 from .config import ProcessingConfig
 from .flattener import JSONFlattener
 from .streaming import StreamingEventProcessor
-from .console import console
+from .console import console, is_quiet, make_detection_counter, build_detection_table
 
-# Rich progress bar
+# Rich progress bar and live display
+from rich.console import Group
+from rich.live import Live
 from rich.progress import (
     Progress, SpinnerColumn, TextColumn, BarColumn,
     MofNCompleteColumn, TimeElapsedColumn
@@ -471,7 +473,8 @@ class ZircoliteCore:
         return csv_writer, needs_comma_prefix
 
     def execute_ruleset(self, out_file, write_mode='w', show_all=False,
-                    keep_results=False, last_ruleset=False):
+                    keep_results=False, last_ruleset=False, source_label=None,
+                    show_table=True):
         """Execute all rules in the ruleset and handle output."""
         csv_writer = None
         is_json_mode = not self.csv_mode
@@ -550,7 +553,9 @@ class ZircoliteCore:
                         rule_results, file_handle, csv_writer, needs_comma_prefix
                     )
         else:
-            # Process with Rich progress bar
+            # Process with Rich Live display: progress bar + live detection counter
+            detection_counts = {"critical": 0, "high": 0, "medium": 0, "low": 0, "informational": 0}
+            
             progress = Progress(
                 SpinnerColumn(),
                 TextColumn("[progress.description]{task.description}"),
@@ -558,13 +563,11 @@ class ZircoliteCore:
                 MofNCompleteColumn(),
                 TextColumn("•"),
                 TimeElapsedColumn(),
-                console=console,
-                transient=True,
             )
             
-            with progress:
-                task_id = progress.add_task("Executing rules", total=len(self.ruleset))
-                
+            task_id = progress.add_task("Executing rules", total=len(self.ruleset))
+            
+            with Live(console=console, refresh_per_second=10, transient=True) as live:
                 for rule in self.ruleset:
                     # Show all rules if show_all is True
                     if show_all and "title" in rule:
@@ -577,25 +580,31 @@ class ZircoliteCore:
                     rule_results = execute_rule(rule)
                     progress.advance(task_id)
                     
-                    if not rule_results:
-                        continue  # No matches, skip to next rule
+                    if rule_results:
+                        # Apply limit if set
+                        if limit != -1 and rule_results["count"] > limit:
+                            pass  # Exceeds limit, skip this result
+                        else:
+                            # Collect results for later display (sorted by level)
+                            all_rule_results.append(rule_results)
 
-                    # Apply limit if set
-                    if limit != -1 and rule_results["count"] > limit:
-                        continue  # Exceeds limit, skip this result
+                            # Update live detection counts
+                            det_level = rule_results.get("rule_level", "unknown").lower()
+                            if det_level in detection_counts:
+                                detection_counts[det_level] += 1
 
-                    # Collect results for later display (sorted by level)
-                    all_rule_results.append(rule_results)
+                            # Store results if needed
+                            if keep_results:
+                                full_results_append(rule_results)
 
-                    # Store results if needed
-                    if keep_results:
-                        full_results_append(rule_results)
-
-                    # Handle output to file
-                    if not no_output:
-                        csv_writer, needs_comma_prefix = self._write_result_to_output(
-                            rule_results, file_handle, csv_writer, needs_comma_prefix
-                        )
+                            # Handle output to file
+                            if not no_output:
+                                csv_writer, needs_comma_prefix = self._write_result_to_output(
+                                    rule_results, file_handle, csv_writer, needs_comma_prefix
+                                )
+                    
+                    # Update live display with progress + detection counter
+                    live.update(Group(progress, make_detection_counter(detection_counts)))
 
         # Sort results by level priority, then by count (descending)
         def sort_key(result):
@@ -605,13 +614,11 @@ class ZircoliteCore:
         
         all_rule_results.sort(key=sort_key)
         
-        # Display sorted results using Rich
-        for rule_results in all_rule_results:
-            rule_title = rule_results["title"]
-            rule_level = rule_results.get("rule_level", "unknown")
-            formatted_level = level_formatter(rule_level, "cyan")
-            rule_count = rule_results["count"]
-            console.print(f'[cyan]    • {rule_title} [[/]{formatted_level}[cyan]] : [magenta]{rule_count:,}[/cyan] events[/]')
+        # Display sorted results as a table (suppressed in quiet mode or when show_table=False)
+        if show_table and not is_quiet() and all_rule_results:
+            console.print()
+            console.print(build_detection_table(all_rule_results, title=source_label))
+            console.print()
 
         # Close output file handle if needed
         if not self.no_output:

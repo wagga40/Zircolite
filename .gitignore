@@ -77,3 +77,6 @@ coverage/
 
 .tmp/
 .temp/
+
+# PyInstaller
+dist/

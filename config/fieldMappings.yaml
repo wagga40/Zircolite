@@ -105,6 +105,80 @@ timestamp_detection:
     - RecordedTime              # Recording timestamp (capitalized)
 
 # -----------------------------------------------------------------------------
+# LOG SOURCE DETECTION CONFIGURATION
+# -----------------------------------------------------------------------------
+# Configures automatic detection of log sources by examining file content.
+# When no explicit format flag is given (-j, -x, -S, -AU, etc.), Zircolite
+# will analyze input files to determine the log format and source.
+#
+# Each source has:
+#   - input_type: Processing format for Zircolite
+#   - signature_fields: Fields whose presence indicates this source
+#   - signature_values: Specific field values that identify this source
+#   - timestamp_field: Default timestamp field for this source
+#   - suggested_pipeline: Recommended Sigma pipeline
+# -----------------------------------------------------------------------------
+log_source_detection:
+  # Enable/disable automatic detection
+  enabled: true
+
+  # Known log source signatures (checked in order)
+  sources:
+    - name: sysmon_windows
+      input_type: json
+      signature_fields:
+        - Event.System.Channel
+        - Event.System.EventID
+      signature_values:
+        Event.System.Channel:
+          - "Microsoft-Windows-Sysmon/Operational"
+          - "Microsoft-Windows-Sysmon"
+      timestamp_field: UtcTime
+      suggested_pipelines: [sysmon, windows-logsources]
+
+    - name: windows_evtx_json
+      input_type: json
+      signature_fields:
+        - Event.System.Channel
+        - Event.System.EventID
+        - Event.System.Provider
+      timestamp_field: SystemTime
+      suggested_pipelines: [windows-audit, windows-logsources]
+
+    - name: windows_evtx_json_flat
+      input_type: json
+      signature_fields:
+        - Channel
+        - EventID
+      timestamp_field: SystemTime
+      suggested_pipelines: [windows-audit, windows-logsources]
+
+    - name: ecs_elastic
+      input_type: json
+      signature_fields:
+        - "@timestamp"
+      timestamp_field: "@timestamp"
+
+    - name: auditd
+      input_type: auditd
+      timestamp_field: timestamp
+
+    - name: sysmon_linux
+      input_type: sysmon_linux
+      timestamp_field: UtcTime
+      suggested_pipelines: []
+
+    - name: windows_evtx_xml
+      input_type: xml
+      timestamp_field: SystemTime
+      suggested_pipelines: [windows-audit, windows-logsources]
+
+    - name: evtxtract
+      input_type: evtxtract
+      timestamp_field: SystemTime
+      suggested_pipelines: [windows-audit, windows-logsources]
+
+# -----------------------------------------------------------------------------
 # FIELD EXCLUSIONS
 # -----------------------------------------------------------------------------
 # List of substrings - any field containing these strings will be excluded.
@@ -457,75 +531,75 @@ enabled_transforms:
   # -------------------------
   # BASE64 DECODING
   # -------------------------
-  # - CommandLine_b64decoded         # Decode Base64 in command lines
-  # - ScriptBlockText_b64decoded     # Decode Base64 in PowerShell scripts
-  # - Payload_b64decoded             # Decode Base64 in payload fields
-  # - ServiceFileName_b64decoded     # Decode Base64 in service file names
+  #- CommandLine_b64decoded         # Decode Base64 in command lines
+  #- ScriptBlockText_b64decoded     # Decode Base64 in PowerShell scripts
+  #- Payload_b64decoded             # Decode Base64 in payload fields
+  #- ServiceFileName_b64decoded     # Decode Base64 in service file names
 
   # -------------------------
   # CREDENTIAL EXTRACTION
   # -------------------------
-  # - CommandLine_Extracted_Creds    # Extract creds from net/wmic/psexec
+  #- CommandLine_Extracted_Creds    # Extract creds from net/wmic/psexec
 
   # -------------------------
   # URL & PATH ANALYSIS
   # -------------------------
-  # - CommandLine_URLs               # Extract URLs from command lines
-  # - TargetFileName_URLDecoded      # URL decode file paths
-  # - CommandLine_RegistryPaths      # Extract registry key paths
+  #- CommandLine_URLs               # Extract URLs from command lines
+  #- TargetFileName_URLDecoded      # URL decode file paths
+  #- CommandLine_RegistryPaths      # Extract registry key paths
 
   # -------------------------
   # PROCESS ANALYSIS
   # -------------------------
-  # - Image_ExeName                  # Extract exe name from path
-  # - Image_LOLBinMatch              # Detect LOLBins (certutil, mshta, etc.)
-  # - Image_TyposquatDetect          # Detect typosquatted process names
-  # - ParentImage_ExeName            # Extract parent exe name
+  #- Image_ExeName                  # Extract exe name from path
+  #- Image_LOLBinMatch              # Detect LOLBins (certutil, mshta, etc.)
+  #- Image_TyposquatDetect          # Detect typosquatted process names
+  #- ParentImage_ExeName            # Extract parent exe name
 
   # -------------------------
   # POWERSHELL ANALYSIS
   # -------------------------
-  # - ScriptBlockText_ObfuscationIndicators  # Detect obfuscation patterns
-  # - ScriptBlockText_XORPatterns    # Detect XOR operations
-  # - ScriptBlockText_ReflectionAbuse # Detect .NET reflection abuse
-  # - ScriptBlockText_ShellcodeIndicators   # Detect shellcode patterns
-  # - ScriptBlockText_NetworkIOCs    # Extract IPs/URLs from scripts
+  #- ScriptBlockText_ObfuscationIndicators  # Detect obfuscation patterns
+  #- ScriptBlockText_XORPatterns    # Detect XOR operations
+  #- ScriptBlockText_ReflectionAbuse # Detect .NET reflection abuse
+  #- ScriptBlockText_ShellcodeIndicators   # Detect shellcode patterns
+  #- ScriptBlockText_NetworkIOCs    # Extract IPs/URLs from scripts
 
   # -------------------------
   # SECURITY HUNTING
   # -------------------------
-  # - CommandLine_XORIndicators      # Detect XOR in command lines
-  # - CommandLine_AMSIBypass         # Detect AMSI bypass attempts
-  # - CommandLine_HexStrings         # Find hex-encoded strings
-  # - CommandLine_EnvVarObfuscation  # Detect env variable abuse
-  # - CommandLine_DownloadCradle     # Detect download cradles
-  # - CommandLine_EvasionTechniques  # Detect evasion techniques
+  #- CommandLine_XORIndicators      # Detect XOR in command lines
+  #- CommandLine_AMSIBypass         # Detect AMSI bypass attempts
+  #- CommandLine_HexStrings         # Find hex-encoded strings
+  #- CommandLine_EnvVarObfuscation  # Detect env variable abuse
+  #- CommandLine_DownloadCradle     # Detect download cradles
+  #- CommandLine_EvasionTechniques  # Detect evasion techniques
 
   # -------------------------
   # NETWORK ANALYSIS
   # -------------------------
-  # - QueryName_TLD                  # Extract TLD from DNS queries
-  # - QueryName_EntropyScore         # Entropy for DGA detection
-  # - QueryName_TyposquatDetect      # Detect typosquatted domains
-  # - DestinationIp_ObfuscationCheck # Detect obfuscated IPs
-  # - DestinationPort_Category       # Categorize ports
+  #- QueryName_TLD                  # Extract TLD from DNS queries
+  #- QueryName_EntropyScore         # Entropy for DGA detection
+  #- QueryName_TyposquatDetect      # Detect typosquatted domains
+  #- DestinationIp_ObfuscationCheck # Detect obfuscated IPs
+  #- DestinationPort_Category       # Categorize ports
 
   # -------------------------
   # USER ANALYSIS
   # -------------------------
-  # - User_Name                      # Extract username without domain
-  # - User_Domain                    # Extract domain from user field
+  #- User_Name                      # Extract username without domain
+  #- User_Domain                    # Extract domain from user field
 
   # -------------------------
   # HASH EXTRACTION
   # -------------------------
-  # - Hash_MD5                       # Extract MD5 from Hashes field
-  # - Hash_SHA256                    # Extract SHA256 from Hashes field
+  #- Hash_MD5                       # Extract MD5 from Hashes field
+  #- Hash_SHA256                    # Extract SHA256 from Hashes field
 
   # -------------------------
   # REGISTRY ANALYSIS
   # -------------------------
-  # - TargetObject_SuspiciousRegistry # Detect persistence registry keys
+  #- TargetObject_SuspiciousRegistry # Detect persistence registry keys
 
 # -----------------------------------------------------------------------------
 # TRANSFORM DEFINITIONS

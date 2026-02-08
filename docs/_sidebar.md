@@ -1,12 +1,16 @@
 * Usage
     * [Requirements and Installation](Usage.md#requirements-and-installation)
+    * [First run](Usage.md#first-run)
     * [Basic usage](Usage.md#basic-usage)
+    * [Automatic Log Type Detection](Usage.md#automatic-log-type-detection)
     * [Rulesets / Rules](Usage.md#rulesets--rules)
     * [Pipelines](Usage.md#pipelines)
     * [Field mappings, field exclusions, value exclusions, field aliases and field splitting](Usage.md#field-mappings-field-exclusions-value-exclusions-field-aliases-and-field-splitting)
     * [Field Transforms](Usage.md#field-transforms)
     * [Generate your own rulesets](Usage.md#generate-your-own-rulesets)
     * [Docker](Usage.md#docker)
+    * [Troubleshooting](Usage.md#troubleshooting)
+    * [FAQ](Usage.md#faq)
 
 * Advanced use
     * [Working with large datasets](Advanced.md#working-with-large-datasets)
@@ -17,10 +21,10 @@
     * [Filtering](Advanced.md#filtering)
     * [Templating and Formatting](Advanced.md#templating-and-formatting)
     * [Mini GUI](Advanced.md#mini-gui)
-    * [Packaging Zircolite](Advanced.md#packaging-zircolite)
 
 * Internals
     * [Zircolite architecture](Internals.md#zircolite-architecture)
+    * [Log Type Detection](Internals.md#log-type-detection)
     * [Processing Flow](Internals.md#processing-flow)
     * [Per-File vs. Unified Processing](Internals.md#per-file-vs-unified-processing)
     * [Project structure](Internals.md#project-structure)
