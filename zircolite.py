@@ -987,7 +987,7 @@ def load_yaml_config_and_merge(args, logger) -> argparse.Namespace:
             args.logs_encoding = args.logs_encoding or yaml_config.input.encoding
         
         # Rules settings
-        if not args.ruleset or args.ruleset == ["rules/rules_windows_generic_pysigma.json"]:
+        if not args.ruleset or args.ruleset == ["rules/rules_windows_generic.json"]:
             args.ruleset = yaml_config.rules.rulesets
         if yaml_config.rules.pipelines and not args.pipeline:
             args.pipeline = [[p] for p in yaml_config.rules.pipelines]
@@ -1341,7 +1341,7 @@ def main():
     if args.ruleset:
         args.ruleset = [item for sublist in args.ruleset for item in sublist]
     else: 
-        args.ruleset = ["rules/rules_windows_generic_pysigma.json"]
+        args.ruleset = ["rules/rules_windows_generic.json"]
 
     # Load rulesets (with spinner for visual feedback during pySigma conversion)
     logger.info("[+] Loading ruleset(s)")

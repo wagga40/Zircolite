@@ -34,7 +34,7 @@ class InputConfig:
 @dataclass
 class RulesConfig:
     """Configuration for rules and rulesets."""
-    rulesets: List[str] = field(default_factory=lambda: ["rules/rules_windows_generic_pysigma.json"])
+    rulesets: List[str] = field(default_factory=lambda: ["rules/rules_windows_generic.json"])
     pipelines: Optional[List[str]] = None
     filters: Optional[List[str]] = None  # Rule title filters to exclude
     combine_rulesets: bool = False
@@ -181,7 +181,7 @@ class ConfigLoader:
         # Parse rules section
         if 'rules' in config_dict:
             rules = config_dict['rules']
-            rulesets = rules.get('rulesets', ["rules/rules_windows_generic_pysigma.json"])
+            rulesets = rules.get('rulesets', ["rules/rules_windows_generic.json"])
             if isinstance(rulesets, str):
                 rulesets = [rulesets]
             config.rules = RulesConfig(
@@ -494,7 +494,7 @@ input:
 rules:
   # List of ruleset files or directories
   rulesets:
-    - rules/rules_windows_generic_pysigma.json
+    - rules/rules_windows_generic.json
   
   # pySigma pipelines for native Sigma rules
   pipelines: null  # Example: ["sysmon", "windows-logsources"]
