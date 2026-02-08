@@ -1,6 +1,7 @@
 # Build PyInstaller binaries for Linux (x64, arm64) and Windows (x64, arm64),
 # verify they run (--help, --version), and test with an EVTX from
 # https://github.com/sbousseaden/EVTX-ATTACK-SAMPLES (Execution folder).
+# Only runs on push/PR when the commit or PR message contains "Release v", or when triggered manually.
 name: build_pyinstaller
 
 on:
@@ -49,6 +50,7 @@ jobs:
             binary_name: Zircolite.exe
             python_version: "3.12"
 
+    if: github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && contains(github.event.head_commit.message, 'Release v')) || (github.event_name == 'pull_request' && (contains(github.event.pull_request.title, 'Release v') || contains(github.event.pull_request.body || '', 'Release v')))
     runs-on: ${{ matrix.runner }}
 
     steps:
