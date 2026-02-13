@@ -17,6 +17,7 @@ Package structure:
 
 # Standard libs
 import argparse
+import csv
 import logging
 import os
 import sys
@@ -926,15 +927,45 @@ def process_parallel_streaming(ctx: ProcessingContext, file_list: List[Path], in
     
     # Write combined results to output file
     if not ctx.no_output:
-        import orjson as json
-        with open(ctx.outfile, 'w', encoding='utf-8') as f:
-            f.write('[')
-            for i, result in enumerate(all_results):
-                if i > 0:
-                    f.write(',\n')
-                json_bytes = json.dumps(result, option=json.OPT_INDENT_2)
-                f.write(json_bytes.decode('utf-8'))
-            f.write(']')
+        if ctx.csv_mode:
+            # CSV output (same format as ZircoliteCore._write_result_to_output)
+            all_keys = set()
+            for result in all_results:
+                for row in result.get("matches", []):
+                    all_keys.update(row.keys())
+            fieldnames = ["rule_title", "rule_description", "rule_level", "rule_count"] + sorted(all_keys)
+            with open(ctx.outfile, 'w', encoding='utf-8', newline='') as f:
+                writer = csv.DictWriter(
+                    f, delimiter=ctx.delimiter, fieldnames=fieldnames, extrasaction='ignore'
+                )
+                writer.writeheader()
+                for result in all_results:
+                    title = result.get("title", "")
+                    description = (result.get("description") or "").replace("\n", "").replace("\r", "")
+                    level = result.get("rule_level", "")
+                    count = result.get("count", 0)
+                    for row in result.get("matches", []):
+                        clean_row = {
+                            k: ("" if v is None else str(v)).replace("\n", "").replace("\r", "")
+                            for k, v in row.items()
+                        }
+                        writer.writerow({
+                            "rule_title": title,
+                            "rule_description": description,
+                            "rule_level": level,
+                            "rule_count": count,
+                            **clean_row,
+                        })
+        else:
+            import orjson as json
+            with open(ctx.outfile, 'w', encoding='utf-8') as f:
+                f.write('[')
+                for i, result in enumerate(all_results):
+                    if i > 0:
+                        f.write(',\n')
+                    json_bytes = json.dumps(result, option=json.OPT_INDENT_2)
+                    f.write(json_bytes.decode('utf-8'))
+                f.write(']')
     
     return None, all_results
 

@@ -500,6 +500,70 @@ class TestCLIOutputFormats:
         # Should contain CSV headers
         assert "rule_title" in content or "title" in content or len(content) > 0
 
+    def test_csv_output_with_parallel_workers(self, tmp_path):
+        """Test that --csv produces CSV output when parallel workers are used (multiple files)."""
+        # Two JSONL event files so parallel path can be used
+        event_line = '{"Event": {"System": {"EventID": 1}, "EventData": {"CommandLine": "powershell.exe"}}}'
+        events_file1 = tmp_path / "events1.json"
+        events_file2 = tmp_path / "events2.json"
+        events_file1.write_text(event_line + "\n")
+        events_file2.write_text(event_line + "\n")
+
+        ruleset_file = tmp_path / "ruleset.json"
+        ruleset_file.write_text(json.dumps([{
+            "title": "Test Rule",
+            "id": "test-001",
+            "level": "high",
+            "tags": [],
+            "rule": ["SELECT * FROM logs WHERE CommandLine LIKE '%powershell%'"]
+        }]))
+
+        config_file = tmp_path / "config.json"
+        config_file.write_text(json.dumps({
+            "exclusions": [],
+            "useless": [],
+            "mappings": {
+                "Event.System.EventID": "EventID",
+                "Event.EventData.CommandLine": "CommandLine"
+            },
+            "alias": {},
+            "split": {},
+            "transforms_enabled": False,
+            "transforms": {}
+        }))
+
+        output_file = tmp_path / "result.csv"
+
+        def mock_analyze(files, logger=None):
+            stats = {
+                "parallel_recommended": True,
+                "parallel_workers": 2,
+                "parallel_reason": "test",
+            }
+            return ("per-file", "test", stats)
+
+        with patch.object(zircolite_script, 'analyze_files_and_recommend_mode', side_effect=mock_analyze):
+            with patch('sys.argv', [
+                'zircolite.py',
+                '-e', str(events_file1),
+                '-e', str(events_file2),
+                '-r', str(ruleset_file),
+                '-c', str(config_file),
+                '-j',
+                '--csv',
+                '--csv-delimiter', ',',
+                '-o', str(output_file),
+                '--no-auto-mode'
+            ] + get_log_arg(tmp_path)):
+                zircolite_script.main()
+
+        assert output_file.exists()
+        with open(output_file) as f:
+            content = f.read()
+        # Must be CSV: header contains rule_title, not a JSON array
+        assert content.strip().startswith("rule_title") or "rule_title" in content.split("\n")[0]
+        assert not content.strip().startswith("["), "Output should be CSV, not JSON"
+
 
 class TestCLIDetection:
     """Tests for detection functionality through CLI."""
