@@ -203,7 +203,6 @@ For the full list of options and up-to-date help, run: `python3 zircolite.py -h`
 | Option | Description |
 |--------|-------------|
 | `-c`, `--config` | YAML/JSON config file for field mappings and transforms |
-| `--fieldlist` | List all event fields |
 | `-q`, `--quiet` | Quiet mode: suppress banner, progress bars, and info messages — only the summary panel and errors are shown |
 | `--debug` | Enable debug logging (includes full tracebacks on errors) |
 | `-n`, `--nolog` | Don't create log files |
@@ -283,7 +282,7 @@ After the summary panel, Zircolite also displays:
 
 - **MITRE ATT&CK tactics summary** — a heatmap panel grouping detected techniques by tactic (Execution, Persistence, Defense Evasion, etc.), sorted by hit count
 - **Output file path** — shown prominently with a terminal hyperlink (`file://` link) that is clickable in supported terminals (iTerm2, Windows Terminal, modern GNOME/KDE terminals)
-- **Contextual suggestions** — tips based on the results, such as suggesting `--package` when critical detections are found, or `--fieldlist` when no detections were found
+- **Contextual suggestions** — tips based on the results, such as suggesting `--package` when critical detections are found
 
 When processing multiple files in per-file mode, a **file tree** is also displayed showing per-file event counts, detection counts, and filtered event counts.
 
@@ -536,14 +535,6 @@ python3 zircolite.py --evtx <EVTX_FOLDER> --ruleset <CONVERTED_SIGMA_RULES> \
 ```
 
 If you need to re-execute Zircolite, you can do so directly using the SQLite database as the EVTX source (with `--evtx <SAVED_SQLITE_DB_PATH>` and `--dbonly`) to avoid converting the EVTX files, post-processing them, and inserting data into the database. **Using this technique can save a lot of time.** 
-
-### Listing Available Fields
-
-Use `--fieldlist` to list all fields present in your log files. This is useful for understanding your data and creating custom rules:
-
-```shell
-python3 zircolite.py --evtx sample.evtx --fieldlist
-```
 
 ## Rulesets / Rules
 
@@ -1330,7 +1321,7 @@ docker container run --tty \
 | **Missing or wrong timestamp field** | Set the timestamp field explicitly with `--timefield "FieldName"`. |
 | **Out of memory on large datasets** | Use `--no-parallel`, `--no-auto-mode`; reduce `--parallel-workers`. |
 | **EVTX library (pyevtx-rs) fails to install** | On some systems (Mac, ARM), install Rust and Cargo first; see [Requirements and Installation](Usage.md#requirements-and-installation). |
-| **No detections / rules not matching** | Use `--fieldlist` to check field names; ensure ruleset matches your log source (e.g. Sysmon vs generic Windows). |
+| **No detections / rules not matching** | Ensure ruleset matches your log source (e.g. Sysmon vs generic Windows); check that field names in your logs align with what the rules expect. |
 | **Ruleset file not found** | Default rulesets may be named `rules_windows_sysmon.json` (in repo) or `rules_windows_sysmon.json` (after `-U`). Use `python3 zircolite.py -U` to update rules from Zircolite-Rules-v2. |
 
 ### Getting help
@@ -1343,7 +1334,7 @@ docker container run --tty \
 ## FAQ
 
 **Why do I get no detections?**  
-Rules only match if your log fields align with what the rule expects. Use `--fieldlist` on your log file to see field names. Ensure the ruleset matches your log source (e.g. Sysmon rules for Sysmon EVTX; generic Windows rules for Security/System EVTX). Check that the timestamp field is correct (`--timefield` if auto-detection is wrong).
+Rules only match if your log fields align with what the rule expects. Ensure the ruleset matches your log source (e.g. Sysmon rules for Sysmon EVTX; generic Windows rules for Security/System EVTX). Check that the timestamp field is correct (`--timefield` if auto-detection is wrong).
 
 **What is the difference between EVTX rules and JSON/generic rules?**  
 Rulesets like `rules_windows_sysmon.json` target Sysmon EVTX (process creation, network, etc.). Rules like `rules_windows_generic.json` target Windows event logs without Sysmon rewriting (Security, System, etc.). Use the ruleset that matches your log source.

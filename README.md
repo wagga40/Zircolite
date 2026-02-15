@@ -1,7 +1,7 @@
 # <p align="center">![](pics/zircolite_400.png)</p>
 
 ## Standalone SIGMA-Based Detection Tool for EVTX, Auditd, Sysmon for Linux, XML, CSV, or JSONL/NDJSON Logs 
-![](pics/Zircolite_v2.9.gif)
+![](pics/Zircolite-v3-cli.webp)
 
 [![python](https://img.shields.io/badge/python-3.10-blue)](https://www.python.org/)
 ![version](https://img.shields.io/badge/Architecture-64bit-red)

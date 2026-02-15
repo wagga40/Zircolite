@@ -531,7 +531,6 @@ def default_args_config():
         hashes=False,
         limit=-1,
         config="config/config.yaml",
-        fieldlist=False,
         debug=False,
         nolog=True,
         remove_events=False,
