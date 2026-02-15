@@ -43,9 +43,9 @@ input:
   #   - old
   
   # Field mappings configuration file (JSON or YAML format)
-  # Defines field exclusions, mappings, aliases, and transformations
-  # field_mappings: config/fieldMappings.json
-  # field_mappings: config/fieldMappings.yaml
+  # Defines field exclusions, mappings, aliases, and transformations.
+  # Use config/config.yaml (default); legacy fieldMappings.yaml is deprecated.
+  # field_mappings: config/config.yaml
 
 # Rules and rulesets configuration
 rules:
@@ -108,9 +108,6 @@ processing:
   # Analyzes file count, sizes, and available RAM to recommend optimal mode
   auto_mode: true
   
-  # Use on-disk database instead of in-memory (slower but uses less RAM)
-  # on_disk_db: /tmp/zircolite_temp.db
-  
   # Add xxhash of original log lines to each event
   hashes: false
   
@@ -121,11 +118,22 @@ processing:
   # Time field for event timestamps
   time_field: SystemTime
   
-  # Show all rules being executed (verbose)
-  show_all: false
-  
   # Enable debug logging
   debug: false
+
+  # Enable all transforms regardless of the enabled_transforms list in config.yaml
+  # Equivalent to --all-transforms CLI flag
+  # all_transforms: false
+
+  # Enable transforms by category name
+  # Categories are defined in the transform_categories section of config/config.yaml
+  # Equivalent to --transform-category CLI flag (can specify multiple)
+  # Available categories: auditd, base64, credentials, commandline, process,
+  #                       powershell, network, file, user, hash, registry
+  # transform_categories:
+  #   - commandline
+  #   - process
+  #   - network
 
 # Time-based event filtering
 time_filter:

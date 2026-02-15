@@ -1,4 +1,7 @@
 # =============================================================================
+# DEPRECATED: Use config/config.yaml instead. This file is kept for backward
+# compatibility and may be removed in a future version.
+# =============================================================================
 # Zircolite Field Mappings Configuration
 # =============================================================================
 # This file defines how log fields are processed, mapped, and transformed.

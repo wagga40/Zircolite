@@ -53,12 +53,14 @@ tasks:
   clean:
     desc: Remove all default artifacts
     cmds:
-      - rm -rf detected_events.json
+      - rm detected_events.json
+      - rm detected_events.csv
+      - rm flattened_events_*.json
       - rm -rf ./tmp-*
-      - rm -f zircolite.log
-      - rm -f fields.json
-      - rm -f zircolite.tar
-      - rm -rf zircogui-output-*
+      - rm zircolite.log
+      - rm fields.json
+      - rm zircolite.tar
+      - rm zircogui-output-*
 
   save:
     desc: Save the Docker image to an archive

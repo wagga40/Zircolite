@@ -219,6 +219,15 @@ class TestEventFilterShouldProcess:
             "Microsoft-Windows-Sysmon/Operational", "1"
         )
 
+    def test_invalid_eventid_returns_true(self, sysmon_filter):
+        """Invalid eventid (ValueError/TypeError) cannot be filtered; process event."""
+        assert sysmon_filter.should_process_event(
+            "Microsoft-Windows-Sysmon/Operational", "not_a_number"
+        )
+        assert sysmon_filter.should_process_event(
+            "Microsoft-Windows-Sysmon/Operational", None
+        )
+
     def test_disabled_filter_processes_all(self):
         """Test that disabled filter processes all events."""
         event_filter = EventFilter([])  # Empty = disabled
@@ -367,7 +376,7 @@ class TestStreamingProcessorWithFilter:
         # Create processor with filter
         args = Namespace(json_input=True, json_array_input=False)
         processor = StreamingEventProcessor(
-            config_file="config/fieldMappings.yaml",
+            config_file="config/config.yaml",
             args_config=args,
             processing_config=ProcessingConfig(),
             event_filter=sysmon_filter
@@ -400,7 +409,7 @@ class TestStreamingProcessorWithFilter:
         # Create processor without filter
         args = Namespace(json_input=True, json_array_input=False)
         processor = StreamingEventProcessor(
-            config_file="config/fieldMappings.yaml",
+            config_file="config/config.yaml",
             args_config=args,
             processing_config=ProcessingConfig(),
             event_filter=None
@@ -445,7 +454,7 @@ class TestConfigurableFieldPaths:
         
         args = Namespace(json_input=True, json_array_input=False)
         processor = StreamingEventProcessor(
-            config_file="config/fieldMappings.yaml",
+            config_file="config/config.yaml",
             args_config=args,
             processing_config=ProcessingConfig(),
             event_filter=sysmon_filter
@@ -468,7 +477,7 @@ class TestConfigurableFieldPaths:
         
         args = Namespace(json_input=True, json_array_input=False)
         processor = StreamingEventProcessor(
-            config_file="config/fieldMappings.yaml",
+            config_file="config/config.yaml",
             args_config=args,
             processing_config=ProcessingConfig(),
             event_filter=sysmon_filter
@@ -491,7 +500,7 @@ class TestConfigurableFieldPaths:
         
         args = Namespace(json_input=True, json_array_input=False)
         processor = StreamingEventProcessor(
-            config_file="config/fieldMappings.yaml",
+            config_file="config/config.yaml",
             args_config=args,
             processing_config=ProcessingConfig(),
             event_filter=sysmon_filter
@@ -514,7 +523,7 @@ class TestConfigurableFieldPaths:
         
         args = Namespace(json_input=True, json_array_input=False)
         processor = StreamingEventProcessor(
-            config_file="config/fieldMappings.yaml",
+            config_file="config/config.yaml",
             args_config=args,
             processing_config=ProcessingConfig(),
             event_filter=sysmon_filter
@@ -537,7 +546,7 @@ class TestConfigurableFieldPaths:
         
         args = Namespace(json_input=True, json_array_input=False)
         processor = StreamingEventProcessor(
-            config_file="config/fieldMappings.yaml",
+            config_file="config/config.yaml",
             args_config=args,
             processing_config=ProcessingConfig(),
             event_filter=sysmon_filter
@@ -570,7 +579,7 @@ class TestTimestampAutoDetection:
         )
         args = Namespace(json_input=True, json_array_input=False)
         processor = StreamingEventProcessor(
-            config_file="config/fieldMappings.yaml",
+            config_file="config/config.yaml",
             args_config=args,
             processing_config=config,
             event_filter=None
@@ -599,7 +608,7 @@ class TestTimestampAutoDetection:
         )
         args = Namespace(json_input=True, json_array_input=False)
         processor = StreamingEventProcessor(
-            config_file="config/fieldMappings.yaml",
+            config_file="config/config.yaml",
             args_config=args,
             processing_config=config,
             event_filter=None
@@ -630,7 +639,7 @@ class TestTimestampAutoDetection:
         )
         args = Namespace(json_input=True, json_array_input=False)
         processor = StreamingEventProcessor(
-            config_file="config/fieldMappings.yaml",
+            config_file="config/config.yaml",
             args_config=args,
             processing_config=config,
             event_filter=None
@@ -661,7 +670,7 @@ class TestTimestampAutoDetection:
         )
         args = Namespace(json_input=True, json_array_input=False)
         processor = StreamingEventProcessor(
-            config_file="config/fieldMappings.yaml",
+            config_file="config/config.yaml",
             args_config=args,
             processing_config=config,
             event_filter=None
@@ -673,13 +682,13 @@ class TestTimestampAutoDetection:
 
 
 class TestEventFilterFieldMappingsConfig:
-    """Tests for event filter and timestamp detection in fieldMappings config."""
+    """Tests for event filter and timestamp detection in field mappings config (config/config.yaml)."""
 
     def test_load_field_mappings_includes_event_filter(self):
         """Test that load_field_mappings includes event_filter section."""
         from zircolite.utils import load_field_mappings
         
-        config = load_field_mappings("config/fieldMappings.yaml")
+        config = load_field_mappings("config/config.yaml")
         
         assert "event_filter" in config
         assert "channel_fields" in config["event_filter"]
@@ -691,7 +700,7 @@ class TestEventFilterFieldMappingsConfig:
         """Test that load_field_mappings includes timestamp_detection section."""
         from zircolite.utils import load_field_mappings
         
-        config = load_field_mappings("config/fieldMappings.yaml")
+        config = load_field_mappings("config/config.yaml")
         
         assert "timestamp_detection" in config
         assert "auto_detect" in config["timestamp_detection"]

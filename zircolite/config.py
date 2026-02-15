@@ -15,7 +15,7 @@ class ProcessingConfig:
     """
     Configuration for event processing operations.
     
-    Used by ZircoliteCore, JSONFlattener, and StreamingEventProcessor
+    Used by ZircoliteCore and StreamingEventProcessor
     for shared processing parameters.
     """
     # Time filtering

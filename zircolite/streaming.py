@@ -11,6 +11,7 @@ This module contains the StreamingEventProcessor class for:
 
 import base64
 import logging
+import math
 import os
 import re
 import time
@@ -37,6 +38,72 @@ if TYPE_CHECKING:
     from .rules import EventFilter
 
 
+# ---------------------------------------------------------------------------
+# Module-level constants – built once, shared across all instances
+# ---------------------------------------------------------------------------
+
+# Pre-compiled regex for stripping non-alphanumeric characters (opt #7)
+_NON_ALNUM_RE = re.compile(r'[^a-zA-Z0-9]')
+
+# Translation table for fast newline removal in XML processing (opt #8)
+_NEWLINE_TRANSLATE = str.maketrans('', '', '\n\r')
+
+
+def _build_restricted_builtins() -> dict:
+    """Build RestrictedPython builtins dict once at module level (opt #11)."""
+    def _default_guarded_getitem(ob, index):
+        return ob[index]
+
+    def _safe_write_(obj):
+        """Allow writes to safe container types (dict, list, set) only."""
+        if isinstance(obj, (dict, list, set)):
+            return obj
+        raise TypeError(f"Write access to {type(obj).__name__} is not allowed")
+
+    _INPLACE_OPS = {
+        '+=': lambda x, y: x + y,
+        '-=': lambda x, y: x - y,
+        '*=': lambda x, y: x * y,
+        '/=': lambda x, y: x / y,
+        '//=': lambda x, y: x // y,
+        '%=': lambda x, y: x % y,
+        '**=': lambda x, y: x ** y,
+        '|=': lambda x, y: x | y,
+        '&=': lambda x, y: x & y,
+        '^=': lambda x, y: x ^ y,
+    }
+
+    def _inplacevar_(op, x, y):
+        """Handle augmented assignment operators (+=, -=, *=, etc.)."""
+        fn = _INPLACE_OPS.get(op)
+        if fn is None:
+            raise TypeError(f"Unsupported in-place operator: {op}")
+        return fn(x, y)
+
+    builtins = {
+        '__name__': 'script',
+        '_getiter_': default_guarded_getiter,
+        '_getattr_': getattr,
+        '_getitem_': _default_guarded_getitem,
+        '_write_': _safe_write_,
+        '_inplacevar_': _inplacevar_,
+        'base64': base64,
+        'math': math,
+        're': re,
+        'chardet': chardet,
+        '_iter_unpack_sequence_': guarded_iter_unpack_sequence,
+    }
+    builtins.update(safe_builtins)
+    builtins.update(limited_builtins)
+    builtins.update(utility_builtins)
+    return builtins
+
+
+# Shared builtins constant (identical for all StreamingEventProcessor
+# instances – avoids rebuilding per-instance).
+_RESTRICTED_BUILTINS = _build_restricted_builtins()
+
+
 class StreamingEventProcessor:
     """
     Single-pass streaming processor that combines extraction, flattening, and DB insertion.
@@ -55,8 +122,8 @@ class StreamingEventProcessor:
         # Config data (loaded once)
         'field_exclusions', 'field_mappings', 'useless_values', 'aliases',
         'field_split_list', 'transforms', 'transforms_enabled', 'enabled_transforms_set',
-        'chosen_input',
-        # Event filter config (from fieldMappings config)
+        'transform_categories', 'transforms_dir', 'chosen_input',
+        # Event filter config (from fieldMappings config) – pre-split tuples (opt #6)
         '_channel_field_paths', '_eventid_field_paths',
         # Timestamp config (from fieldMappings config)
         '_timestamp_detection_fields', '_timestamp_auto_detect', '_detected_time_field',
@@ -64,10 +131,13 @@ class StreamingEventProcessor:
         'discovered_fields', 'field_types', 'field_stmt_cache',
         # Caches
         'compiled_code_cache', '_transform_func_cache', 'RestrictedPython_BUILTINS',
-        # Time filter cache
+        # Time filter cache – includes string bounds for fast comparison (opt #2)
         '_has_time_filter', '_time_after_parsed', '_time_before_parsed',
+        '_time_after_str', '_time_before_str',
         # DB column caching (optimization)
         '_db_columns', '_last_insert_stmt', '_last_insert_columns',
+        # Sorted-column caching for _insert_batch (opt #5)
+        '_last_column_frozenset', '_last_sorted_columns',
         # Event filtering (early skip based on channel/eventID)
         'event_filter', '_events_filtered_count', '_filtering_enabled'
     )
@@ -128,9 +198,14 @@ class StreamingEventProcessor:
         if self._has_time_filter:
             self._time_after_parsed = self._parse_time_bound(proc.time_after, "1970-01-01T00:00:00")
             self._time_before_parsed = self._parse_time_bound(proc.time_before, "9999-12-12T23:59:59")
+            # String bounds for fast lexicographic comparison (opt #2)
+            self._time_after_str = proc.time_after[:19]
+            self._time_before_str = proc.time_before[:19]
         else:
             self._time_after_parsed = None
             self._time_before_parsed = None
+            self._time_after_str = None
+            self._time_before_str = None
         
         # Determine chosen input format
         if args_config:
@@ -139,11 +214,15 @@ class StreamingEventProcessor:
         if not hasattr(self, 'chosen_input') or self.chosen_input is None:
             self.chosen_input = "evtx_input"
         
+        # Sorted-column caching for _insert_batch (opt #5)
+        self._last_column_frozenset = frozenset()
+        self._last_sorted_columns = ()
+        
         # Load field mappings config (includes event_filter and timestamp_detection)
         self._load_config()
         
-        # Initialize RestrictedPython builtins
-        self._init_restricted_builtins()
+        # Use module-level RestrictedPython builtins (opt #11)
+        self.RestrictedPython_BUILTINS = _RESTRICTED_BUILTINS
         
         # Timestamp auto-detection state
         self._detected_time_field = None
@@ -168,7 +247,15 @@ class StreamingEventProcessor:
         self.field_split_list = config["split"]
         self.transforms = config["transforms"]
         self.transforms_enabled = config["transforms_enabled"]
-        
+
+        # Resolve transforms_dir (default: transforms/ relative to config file)
+        transforms_dir_raw = config.get("transforms_dir", "transforms/")
+        config_dir = Path(self.config_file).parent
+        self.transforms_dir = (config_dir / transforms_dir_raw).resolve()
+
+        # Resolve external file-based transforms (type: python_file)
+        self._resolve_file_transforms()
+
         # Load enabled_transforms list for quick enable/disable control
         # If present, only transforms in this list are enabled (overrides per-transform 'enabled' flag)
         enabled_list = config.get("enabled_transforms", None)
@@ -177,35 +264,91 @@ class StreamingEventProcessor:
         else:
             # If no list provided, fall back to per-transform 'enabled' flag (set to None)
             self.enabled_transforms_set = None
+
+        # Load transform categories for --transform-category support
+        self.transform_categories = config.get("transform_categories", {})
+
+        # Handle CLI overrides: --all-transforms and --transform-category
+        if self.args_config:
+            if getattr(self.args_config, 'all_transforms', False):
+                # Enable ALL defined transforms by collecting every alias_name
+                all_aliases = []
+                for field_transforms in self.transforms.values():
+                    for t in field_transforms:
+                        alias = t.get("alias_name", "")
+                        if alias:
+                            all_aliases.append(alias)
+                        elif not t.get("alias", True):
+                            # Non-alias transforms identified by field name
+                            all_aliases.append("")
+                self.enabled_transforms_set = frozenset(all_aliases)
+                # Also ensure transforms engine is on
+                self.transforms_enabled = True
+            elif getattr(self.args_config, 'transform_categories', None):
+                # Enable transforms belonging to the requested categories
+                requested = getattr(self.args_config, 'transform_categories')
+                combined = set(self.enabled_transforms_set) if self.enabled_transforms_set else set()
+                for cat_name in requested:
+                    cat_transforms = self.transform_categories.get(cat_name, [])
+                    if not cat_transforms:
+                        self.logger.warning(f"   [!] Unknown transform category: '{cat_name}'")
+                    combined.update(cat_transforms)
+                self.enabled_transforms_set = frozenset(combined)
+                self.transforms_enabled = True
         
         # Load event filter field paths from config (defaults provided by load_field_mappings)
-        event_filter = config.get("event_filter", {})
-        self._channel_field_paths = tuple(event_filter.get("channel_fields", []))
-        self._eventid_field_paths = tuple(event_filter.get("eventid_fields", []))
+        # Pre-split dot-notation paths into tuples for faster nested access (opt #6)
+        event_filter_cfg = config.get("event_filter", {})
+        self._channel_field_paths = tuple(
+            tuple(p.split('.')) for p in event_filter_cfg.get("channel_fields", [])
+        )
+        self._eventid_field_paths = tuple(
+            tuple(p.split('.')) for p in event_filter_cfg.get("eventid_fields", [])
+        )
         
         # Load timestamp detection config (defaults provided by load_field_mappings)
         timestamp = config.get("timestamp_detection", {})
         self._timestamp_detection_fields = tuple(timestamp.get("detection_fields", []))
         self._timestamp_auto_detect = timestamp.get("auto_detect", True)
 
-    def _init_restricted_builtins(self):
-        """Initialize RestrictedPython builtins for transforms."""
-        def default_guarded_getitem(ob, index):
-            return ob[index]
+    def _resolve_file_transforms(self):
+        """Resolve python_file transforms by loading code from external files.
 
-        self.RestrictedPython_BUILTINS = {
-            '__name__': 'script',
-            "_getiter_": default_guarded_getiter,
-            '_getattr_': getattr,
-            '_getitem_': default_guarded_getitem,
-            'base64': base64,
-            're': re,
-            'chardet': chardet,
-            '_iter_unpack_sequence_': guarded_iter_unpack_sequence
-        }
-        self.RestrictedPython_BUILTINS.update(safe_builtins)
-        self.RestrictedPython_BUILTINS.update(limited_builtins)
-        self.RestrictedPython_BUILTINS.update(utility_builtins)
+        Transforms with ``type: python_file`` have their ``file`` key resolved
+        relative to ``self.transforms_dir``.  The file contents are stored in the
+        ``code`` key so that the rest of the processing pipeline (compilation,
+        caching, execution) remains unchanged.
+
+        Transforms with ``type: python`` (or missing type) are left untouched
+        (backward compatible).
+        """
+        for field_name, field_transforms in self.transforms.items():
+            for transform in field_transforms:
+                ttype = transform.get("type", "python")
+                if ttype != "python_file":
+                    continue
+                rel_path = transform.get("file", "")
+                if not rel_path:
+                    self.logger.warning(
+                        f"   [!] Transform for '{field_name}' has type python_file but no 'file' key – skipped"
+                    )
+                    transform["code"] = "def transform(param):\n    return param"
+                    continue
+                file_path = Path(rel_path)
+                if not file_path.is_absolute():
+                    file_path = self.transforms_dir / file_path
+                try:
+                    transform["code"] = file_path.read_text(encoding="utf-8")
+                except FileNotFoundError:
+                    self.logger.error(
+                        f"   [!] Transform file not found: {file_path} (field '{field_name}')"
+                    )
+                    transform["code"] = "def transform(param):\n    return param"
+                except Exception as exc:
+                    self.logger.error(
+                        f"   [!] Error reading transform file {file_path}: {exc}"
+                    )
+                    transform["code"] = "def transform(param):\n    return param"
 
     def _extract_event_filter_fields(self, event_dict: dict) -> tuple:
         """
@@ -266,22 +409,20 @@ class StreamingEventProcessor:
                 return value
         return None
 
-    def _get_nested_value(self, obj: dict, path: str) -> Any:
+    def _get_nested_value(self, obj: dict, parts: tuple) -> Any:
         """
-        Get a value from a nested dictionary using dot notation.
+        Get a value from a nested dictionary using pre-split path parts.
         
         Args:
             obj: The dictionary to search
-            path: Dot-separated path (e.g., "Event.System.Channel")
+            parts: Pre-split path tuple (e.g., ("Event", "System", "Channel"))
             
         Returns:
             The value at the path, or None if not found
         """
-        if not path or not isinstance(obj, dict):
+        if not parts or not isinstance(obj, dict):
             return None
         
-        # Split path by dots
-        parts = path.split('.')
         current = obj
         
         for part in parts:
@@ -407,24 +548,21 @@ class StreamingEventProcessor:
         # Result dict
         json_line = {}
         
-        # Iterative flattening using stack with mutable path list
-        # Stack entries: (object, path_list, depth)
-        # We track depth to know how many path elements to pop when backtracking
-        stack = [(event_dict, [], 0)]
+        # Iterative flattening using stack with immutable tuple paths (opt #3)
+        # Stack entries: (object, path_tuple)
+        # Tuples avoid list slice copies per node; tuple + (k,) is fast for
+        # the small depths typical of log events.
+        stack = [(event_dict, ())]
         
         while stack:
-            obj, path, depth = stack.pop()
+            obj, path_parts = stack.pop()
             
             if isinstance(obj, dict):
-                items = list(obj.items())
-                for k, v in reversed(items):  # Reverse to maintain order when popping
-                    # Build new path by copying (list slicing is fast for small lists)
-                    new_path = path[:depth]
-                    new_path.append(k)
-                    stack.append((v, new_path, depth + 1))
+                for k, v in obj.items():
+                    stack.append((v, path_parts + (k,)))
             else:
                 # Build field name from path
-                raw_field_name = '.'.join(path)
+                raw_field_name = '.'.join(path_parts)
                 
                 # Check exclusions (early exit)
                 excluded = False
@@ -448,9 +586,9 @@ class StreamingEventProcessor:
                 # Get mapped field name (cache lookup)
                 mapped_key = field_mappings_get(raw_field_name)
                 if mapped_key is None:
-                    # Use last path component, filtered to alphanumeric
-                    last_part = path[-1] if path else ''
-                    mapped_key = ''.join(c for c in last_part if c.isalnum())
+                    # Use last path component, filtered to alphanumeric (opt #7)
+                    last_part = path_parts[-1] if path_parts else ''
+                    mapped_key = _NON_ALNUM_RE.sub('', last_part)
                 
                 key = mapped_key
                 keys = [key]
@@ -466,24 +604,33 @@ class StreamingEventProcessor:
                 # Handle transforms
                 transformed_keys = None
                 transformed_values = None
-                if transforms_enabled and enabled_transforms_set:
+                if transforms_enabled:
                     for field_name in (key, raw_field_name):
                         field_transforms = transforms_get(field_name)
                         if field_transforms:
                             for transform in field_transforms:
-                                # Check if transform is enabled via enabled_transforms list
                                 alias_name = transform.get("alias_name", "")
-                                if alias_name in enabled_transforms_set and chosen_input in transform["source_condition"]:
-                                    transform_code = transform["code"]
-                                    if transform["alias"]:
-                                        keys.append(alias_name)
-                                        if transformed_keys is None:
-                                            transformed_keys = set()
-                                            transformed_values = {}
-                                        transformed_keys.add(alias_name)
-                                        transformed_values[alias_name] = transform_value(transform_code, value)
-                                    else:
-                                        value = transform_value(transform_code, value)
+                                # Check if transform is enabled:
+                                # - If enabled_transforms_set is set, only run transforms in that list
+                                # - Otherwise, fall back to per-transform 'enabled' flag
+                                if enabled_transforms_set is not None:
+                                    if alias_name not in enabled_transforms_set:
+                                        continue
+                                else:
+                                    if not transform.get("enabled", True):
+                                        continue
+                                if chosen_input not in transform["source_condition"]:
+                                    continue
+                                transform_code = transform["code"]
+                                if transform["alias"]:
+                                    keys.append(alias_name)
+                                    if transformed_keys is None:
+                                        transformed_keys = set()
+                                        transformed_values = {}
+                                    transformed_keys.add(alias_name)
+                                    transformed_values[alias_name] = transform_value(transform_code, value)
+                                else:
+                                    value = transform_value(transform_code, value)
                 
                 # Handle field splitting
                 split_config = field_split_list_get(raw_field_name) or field_split_list_get(key)
@@ -536,17 +683,22 @@ class StreamingEventProcessor:
                 ts_str = json_line.get(effective_time_field)
                 if ts_str:
                     try:
-                        # Strip fractional seconds and timezone
+                        # Strip fractional seconds and timezone for comparison
                         dot_pos = ts_str.find('.')
                         if dot_pos != -1:
-                            ts_str = ts_str[:dot_pos]
+                            ts_cmp = ts_str[:dot_pos]
                         elif ts_str.endswith('Z'):
-                            ts_str = ts_str[:-1]
+                            ts_cmp = ts_str[:-1]
+                        else:
+                            ts_cmp = ts_str
                         # Handle timezone offset (e.g., +00:00)
-                        if '+' in ts_str:
-                            ts_str = ts_str.split('+')[0]
-                        timestamp = time.strptime(ts_str[:19], '%Y-%m-%dT%H:%M:%S')
-                        if not (self._time_after_parsed < timestamp < self._time_before_parsed):
+                        if '+' in ts_cmp:
+                            ts_cmp = ts_cmp.split('+')[0]
+                        # Lexicographic string comparison (opt #2) – ISO 8601
+                        # strings are naturally orderable, avoiding expensive
+                        # time.strptime() per event.
+                        ts_cmp = ts_cmp[:19]
+                        if not (self._time_after_str < ts_cmp < self._time_before_str):
                             return None
                     except Exception:
                         pass
@@ -640,7 +792,10 @@ class StreamingEventProcessor:
             xml_convert = extractor.xml_line_to_json
             
             with open(xml_file, 'r', encoding=extractor.encoding) as f:
-                data = f.read().replace("\n", "").replace("</Event>", "</Event>\n").replace("<Event ", "\n<Event ")
+                # Use str.translate for fast C-level newline removal (opt #8),
+                # then split into individual events.
+                data = f.read().translate(_NEWLINE_TRANSLATE)
+                data = data.replace("</Event>", "</Event>\n").replace("<Event ", "\n<Event ")
             
             for line in data.split("\n"):
                 if not line:
@@ -825,7 +980,7 @@ class StreamingEventProcessor:
             with open(json_file, 'rb') as f:
                 logs = json.loads(f.read())
             
-            # Process in chunks to allow garbage collection
+            # Process in chunks to allow garbage collection (opt #10)
             total_events = len(logs)
             for i in range(0, total_events, chunk_size):
                 chunk = logs[i:i + chunk_size]
@@ -836,8 +991,11 @@ class StreamingEventProcessor:
                     flattened = flatten(event_dict, filename, None)
                     if flattened:
                         yield flattened
-                # Allow GC to reclaim chunk memory
+                # Null out processed elements to allow earlier GC of event dicts
+                for j in range(i, min(i + chunk_size, total_events)):
+                    logs[j] = None
                 del chunk
+            del logs
                 
         except Exception as e:
             self.logger.error(f"[red]   [-] Error streaming JSON array file {json_file}: {e}[/]")
@@ -853,7 +1011,9 @@ class StreamingEventProcessor:
                                input_type: str = 'evtx', 
                                extractor: 'EvtxExtractor' = None,
                                json_array: bool = False,
-                               use_chunked_json: bool = True) -> int:
+                               use_chunked_json: bool = True,
+                               keepflat_file=None,
+                               progress_callback=None) -> int:
         """
         Process a single log file with streaming, directly inserting into database.
         
@@ -864,6 +1024,8 @@ class StreamingEventProcessor:
             extractor: EvtxExtractor instance (required for xml, sysmon_linux, auditd, evtxtract)
             json_array: If True, treat JSON file as array instead of JSONL
             use_chunked_json: If True, use memory-efficient chunked reading for large JSON arrays
+            keepflat_file: If provided, an open file handle to write flattened events to (JSONL)
+            progress_callback: Optional callable(event_count) invoked every batch for live progress
         
         Returns the number of events processed.
         """
@@ -886,7 +1048,7 @@ class StreamingEventProcessor:
         elif input_type == 'evtxtract' and extractor:
             event_stream = self.stream_evtxtract_events(log_file, extractor)
         else:
-            self.logger.error(f"Unsupported input type: {input_type}")
+            self.logger.error(f"[error]   [-] Unsupported input type: {input_type}[/]")
             return 0
         
         # Batch processing with local variable caching
@@ -897,6 +1059,9 @@ class StreamingEventProcessor:
         cursor = db_connection.cursor()
         insert_batch = self._insert_batch
         
+        # Optional keepflat writing
+        json_dumps = json.dumps if keepflat_file else None
+        
         # SQLite integer limit (constant)
         SQLITE_INT_MAX = 9223372036854775807
         
@@ -904,14 +1069,23 @@ class StreamingEventProcessor:
             batch_append(event)
             event_count += 1
             
+            # Write flattened event to keepflat file if requested
+            if keepflat_file is not None:
+                keepflat_file.write(json_dumps(event).decode('utf-8'))
+                keepflat_file.write('\n')
+            
             if len(batch) >= batch_size:
                 insert_batch(db_connection, cursor, batch, SQLITE_INT_MAX)
                 batch = []
                 batch_append = batch.append  # Rebind after list replacement
+                if progress_callback is not None:
+                    progress_callback(event_count)
         
         # Insert remaining batch
         if batch:
             insert_batch(db_connection, cursor, batch, SQLITE_INT_MAX)
+            if progress_callback is not None:
+                progress_callback(event_count)
         
         return event_count
 
@@ -924,7 +1098,14 @@ class StreamingEventProcessor:
         all_columns_set = set()
         for event in batch:
             all_columns_set.update(event.keys())
-        all_columns = tuple(sorted(all_columns_set))  # tuple for hashable comparison
+        # Cache sorted columns – only re-sort when the column set changes (opt #5)
+        all_columns_frozen = frozenset(all_columns_set)
+        if all_columns_frozen != self._last_column_frozenset:
+            all_columns = tuple(sorted(all_columns_frozen))
+            self._last_column_frozenset = all_columns_frozen
+            self._last_sorted_columns = all_columns
+        else:
+            all_columns = self._last_sorted_columns
         
         # Check if we need to update schema or INSERT statement
         schema_changed = self._ensure_columns_exist_cached(db_connection, cursor, all_columns)
@@ -1014,6 +1195,10 @@ class StreamingEventProcessor:
             self._db_columns = {'row_id'}
             self._last_insert_stmt = None
             self._last_insert_columns = None
+            self._last_column_frozenset = frozenset()
+            self._last_sorted_columns = ()
         except Exception as e:
-            self.logger.error(f"Error creating initial table: {e}")
+            self.logger.error(f"[error]   [-] Error creating initial table: {e}[/]")
             raise
+        finally:
+            cursor.close()

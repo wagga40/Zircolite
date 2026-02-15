@@ -114,6 +114,39 @@ class TestMemoryTrackerSample:
         assert len(tracker.memory_samples) == 10
         assert tracker.peak_memory == 100.0  # 100 MB
 
+    def test_no_rate_limit_by_default(self, test_logger):
+        """With default interval=0, every sample() call should record."""
+        mock_proc = MagicMock()
+        mock_proc.memory_info.return_value.rss = 50 * 1024 * 1024
+        tracker = MemoryTracker(logger=test_logger)
+        tracker.process = mock_proc
+        for _ in range(5):
+            tracker.sample()
+        assert len(tracker.memory_samples) == 5
+
+    def test_rate_limit_skips_rapid_calls(self, test_logger):
+        """With min_sample_interval set, rapid calls should be skipped."""
+        mock_proc = MagicMock()
+        mock_proc.memory_info.return_value.rss = 50 * 1024 * 1024
+        tracker = MemoryTracker(logger=test_logger, min_sample_interval=10.0)
+        tracker.process = mock_proc
+        tracker.sample()
+        assert len(tracker.memory_samples) == 1
+        tracker.sample()
+        tracker.sample()
+        assert len(tracker.memory_samples) == 1
+
+    def test_sample_force_bypasses_rate_limit(self, test_logger):
+        """force=True should always record regardless of interval."""
+        mock_proc = MagicMock()
+        mock_proc.memory_info.return_value.rss = 50 * 1024 * 1024
+        tracker = MemoryTracker(logger=test_logger, min_sample_interval=10.0)
+        tracker.process = mock_proc
+        tracker.sample()
+        tracker.sample(force=True)
+        tracker.sample(force=True)
+        assert len(tracker.memory_samples) == 3
+
 
 class TestMemoryTrackerGetStats:
     """Tests for get_stats method."""

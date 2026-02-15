@@ -55,7 +55,7 @@ var PrivilegeEscalationData = [{% for elem in data %}{% if "attack.privilege_esc
 		"sigma_yml":{{ elem["sigmafile"]|tojson }},
 		"description":{{ elem["description"]|tojson }},{% for key, value in match.items() %}
 		"{{ key }}":{{ value|tojson }}{{ "," if not loop.last }}{% endfor %}
-	}{{ "," if not loop.last }}{% endfor %}{{ "," if not loop.last }}{% endif %}{%- endfor %}
+	}{{ "," if not loop.last }}{% endfor %}{{ "," if not loop.last }}{% endif %}{% endfor %}
 ];
 
 var DefenseEvasionData = [{% for elem in data %}{% if "attack.defense_evasion" in elem["tags"] %}{% for match in elem["matches"] %}

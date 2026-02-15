@@ -3,6 +3,7 @@ Tests for the ZircoliteCore class.
 """
 
 import json
+import re
 import sqlite3
 import sys
 from pathlib import Path
@@ -10,6 +11,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from zircolite import ZircoliteCore, ProcessingConfig
+from zircolite.core import _compile_regex
 
 
 class TestZircoliteCoreInit:
@@ -207,8 +209,8 @@ class TestZircoliteCoreDatabase:
         
         zircore.close()
     
-    def test_insert_flattened_json_to_db(self, field_mappings_file, test_logger):
-        """Test batch inserting flattened JSON data."""
+    def test_insert_data_to_db_multiple_rows(self, field_mappings_file, test_logger):
+        """Test inserting multiple data rows individually."""
         proc_config = ProcessingConfig(disable_progress=True)
         zircore = ZircoliteCore(
             config=field_mappings_file,
@@ -220,14 +222,15 @@ class TestZircoliteCoreDatabase:
         field_stmt = "'EventID' TEXT COLLATE NOCASE,\n'CommandLine' TEXT COLLATE NOCASE,\n'Computer' TEXT COLLATE NOCASE,\n"
         zircore.create_db(field_stmt)
         
-        # Insert batch data
+        # Insert individual rows
         data = [
             {"EventID": "1", "CommandLine": "test1.exe", "Computer": "PC1"},
             {"EventID": "2", "CommandLine": "test2.exe", "Computer": "PC2"},
             {"EventID": "3", "CommandLine": "test3.exe", "Computer": "PC3"},
         ]
         
-        zircore.insert_flattened_json_to_db(data)
+        for row in data:
+            zircore.insert_data_to_db(row)
         
         # Verify data
         results = zircore.execute_select_query("SELECT * FROM logs")
@@ -249,9 +252,7 @@ class TestZircoliteCoreDatabase:
         
         # Insert data with large integer (exceeds SQLite INTEGER limit)
         large_int = 99999999999999999999999
-        data = [{"EventID": "1", "LargeValue": large_int}]
-        
-        zircore.insert_flattened_json_to_db(data)
+        zircore.insert_data_to_db({"EventID": "1", "LargeValue": large_int})
         
         results = zircore.execute_select_query("SELECT * FROM logs")
         assert len(results) == 1
@@ -731,7 +732,18 @@ class TestZircoliteCoreRuleLevelFormatting:
 
 class TestZircoliteCoreRegexSupport:
     """Tests for regex support in SQL queries."""
-    
+
+    def test_compile_regex_returns_pattern(self):
+        """_compile_regex should return a compiled re.Pattern."""
+        pat = _compile_regex(r'hello.*world')
+        assert isinstance(pat, re.Pattern)
+
+    def test_compile_regex_caches(self):
+        """Repeated calls with the same pattern return the same object."""
+        pat1 = _compile_regex(r'^test\d+$')
+        pat2 = _compile_regex(r'^test\d+$')
+        assert pat1 is pat2
+
     def test_regex_function_registered(self, field_mappings_file, test_logger):
         """Test that regexp function is available in SQLite."""
         zircore = ZircoliteCore(
@@ -783,35 +795,16 @@ class TestZircoliteCoreRegexSupport:
         assert len(results) == 1
         zircore.close()
 
-
-class TestZircoliteCoreSaveFlattenedJSON:
-    """Tests for saving flattened JSON to file."""
-    
-    def test_save_flattened_json_to_file(self, field_mappings_file, tmp_path, test_logger):
-        """Test saving flattened JSON data to file."""
-        proc_config = ProcessingConfig(disable_progress=True)
+    def test_regex_invalid_pattern_returns_no_match(self, field_mappings_file, test_logger):
+        """Invalid regex pattern should not crash; query returns 0 matches."""
         zircore = ZircoliteCore(
             config=field_mappings_file,
-            processing_config=proc_config,
             logger=test_logger
         )
-        
-        data = [
-            {"EventID": "1", "CommandLine": "test1.exe"},
-            {"EventID": "2", "CommandLine": "test2.exe"},
-        ]
-        
-        output_file = str(tmp_path / "flattened.json")
-        zircore.save_flattened_json_to_file(data, output_file)
-        
-        assert Path(output_file).exists()
-        
-        with open(output_file) as f:
-            lines = f.readlines()
-        
-        assert len(lines) == 2
-        assert "test1.exe" in lines[0]
-        
+        zircore.execute_query("CREATE TABLE test (v TEXT)")
+        zircore.execute_query("INSERT INTO test VALUES ('test')")
+        results = zircore.execute_select_query("SELECT * FROM test WHERE v REGEXP '[invalid'")
+        assert len(results) == 0
         zircore.close()
 
 
@@ -975,3 +968,54 @@ class TestZircoliteCoreStreamingMode:
         
         assert total_events == 0
         zircore.close()
+
+
+class TestZircoliteCoreEscapeIdentifier:
+    """Tests for the escape_identifier method and its caching."""
+
+    def test_escape_plain_identifier(self, field_mappings_file, test_logger):
+        """Plain identifiers are returned unchanged."""
+        zircore = ZircoliteCore(config=field_mappings_file, logger=test_logger)
+        assert zircore.escape_identifier("EventID") == "EventID"
+        zircore.close()
+
+    def test_escape_identifier_with_quotes(self, field_mappings_file, test_logger):
+        """Double quotes inside identifiers are doubled."""
+        zircore = ZircoliteCore(config=field_mappings_file, logger=test_logger)
+        assert zircore.escape_identifier('col"name') == 'col""name'
+        zircore.close()
+
+    def test_escape_identifier_caching(self, field_mappings_file, test_logger):
+        """Repeated calls return the same cached result."""
+        zircore = ZircoliteCore(config=field_mappings_file, logger=test_logger)
+        first = zircore.escape_identifier("CachedCol")
+        second = zircore.escape_identifier("CachedCol")
+        assert first == second
+        assert "CachedCol" in zircore._escape_cache
+        zircore.close()
+
+
+class TestZircoliteCoreGetCursorAndClose:
+    """Tests for _get_cursor reuse and close() safety."""
+
+    def test_get_cursor_returns_same_object(self, field_mappings_file, test_logger):
+        """_get_cursor should return the same cursor on repeated calls."""
+        zircore = ZircoliteCore(config=field_mappings_file, logger=test_logger)
+        c1 = zircore._get_cursor()
+        c2 = zircore._get_cursor()
+        assert c1 is c2
+        zircore.close()
+
+    def test_close_clears_cursor(self, field_mappings_file, test_logger):
+        """After close(), the internal cursor should be None."""
+        zircore = ZircoliteCore(config=field_mappings_file, logger=test_logger)
+        zircore._get_cursor()  # Ensure cursor is populated
+        zircore.close()
+        assert zircore._cursor is None
+
+    def test_close_can_be_called_once(self, field_mappings_file, test_logger):
+        """close() should work without error on a live connection."""
+        zircore = ZircoliteCore(config=field_mappings_file, logger=test_logger)
+        zircore.close()
+        # Connection is closed; verify cursor was cleared
+        assert zircore._cursor is None

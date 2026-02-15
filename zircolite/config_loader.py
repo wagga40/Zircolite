@@ -61,19 +61,16 @@ class OutputConfig:
 @dataclass
 class ProcessingConfig:
     """Configuration for processing options."""
-    streaming: bool = True
     unified_db: bool = False
     auto_mode: bool = True
-    on_disk_db: Optional[str] = None
     hashes: bool = False
     limit: int = -1
     time_field: str = "SystemTime"
     event_filter_enabled: bool = True  # Enable event filtering based on channel/eventID
-    show_all: bool = False
     debug: bool = False
     remove_events: bool = False
-    keep_tmp: bool = False
-    tmp_dir: Optional[str] = None
+    all_transforms: bool = False
+    transform_categories: Optional[list] = None
 
 
 @dataclass
@@ -217,19 +214,16 @@ class ConfigLoader:
         if 'processing' in config_dict:
             proc = config_dict['processing']
             config.processing = ProcessingConfig(
-                streaming=proc.get('streaming', True),
                 unified_db=proc.get('unified_db', False),
                 auto_mode=proc.get('auto_mode', True),
-                on_disk_db=proc.get('on_disk_db'),
                 hashes=proc.get('hashes', False),
                 limit=proc.get('limit', -1),
                 time_field=proc.get('time_field', 'SystemTime'),
                 event_filter_enabled=proc.get('event_filter_enabled', True),
-                show_all=proc.get('show_all', False),
                 debug=proc.get('debug', False),
                 remove_events=proc.get('remove_events', False),
-                keep_tmp=proc.get('keep_tmp', False),
-                tmp_dir=proc.get('tmp_dir')
+                all_transforms=proc.get('all_transforms', False),
+                transform_categories=proc.get('transform_categories'),
             )
         
         # Parse time_filter section
@@ -412,14 +406,10 @@ class ConfigLoader:
             config.output.no_output = True
         
         # Processing overrides
-        if hasattr(args, 'no_streaming') and args.no_streaming:
-            config.processing.streaming = False
         if hasattr(args, 'unified_db') and args.unified_db:
             config.processing.unified_db = True
         if hasattr(args, 'no_auto_mode') and args.no_auto_mode:
             config.processing.auto_mode = False
-        if hasattr(args, 'ondiskdb') and args.ondiskdb != ':memory:':
-            config.processing.on_disk_db = args.ondiskdb
         if hasattr(args, 'hashes') and args.hashes:
             config.processing.hashes = True
         if hasattr(args, 'limit') and args.limit != -1:
@@ -428,16 +418,14 @@ class ConfigLoader:
             config.processing.time_field = args.timefield
         if hasattr(args, 'no_event_filter') and args.no_event_filter:
             config.processing.event_filter_enabled = False
-        if hasattr(args, 'showall') and args.showall:
-            config.processing.show_all = True
         if hasattr(args, 'debug') and args.debug:
             config.processing.debug = True
         if hasattr(args, 'remove_events') and args.remove_events:
             config.processing.remove_events = True
-        if hasattr(args, 'keeptmp') and args.keeptmp:
-            config.processing.keep_tmp = True
-        if hasattr(args, 'tmpdir') and args.tmpdir:
-            config.processing.tmp_dir = args.tmpdir
+        if hasattr(args, 'all_transforms') and args.all_transforms:
+            config.processing.all_transforms = True
+        if hasattr(args, 'transform_categories') and args.transform_categories:
+            config.processing.transform_categories = args.transform_categories
         
         # Time filter overrides
         if hasattr(args, 'after') and args.after != '1970-01-01T00:00:00':
@@ -546,17 +534,11 @@ output:
 
 # Processing configuration
 processing:
-  # Use streaming mode (single-pass, memory efficient)
-  streaming: true
-  
   # Use unified database for all files (enables cross-file correlation)
   unified_db: false
   
   # Automatic mode selection based on file analysis
   auto_mode: true
-  
-  # Use on-disk database instead of in-memory
-  on_disk_db: null  # Set to file path to enable
   
   # Add xxhash of original log lines
   hashes: false
@@ -571,20 +553,19 @@ processing:
   # This improves performance by skipping events that won't match any rules
   event_filter_enabled: true
   
-  # Show all rules being executed
-  show_all: false
-  
   # Enable debug logging
   debug: false
   
   # Remove log files after processing (use with caution!)
   remove_events: false
-  
-  # Keep temporary files
-  keep_tmp: false
-  
-  # Custom temporary directory
-  tmp_dir: null
+
+  # Enable all transforms (overrides enabled_transforms list)
+  # all_transforms: false
+
+  # Enable transforms by category (see config/config.yaml for category definitions)
+  # transform_categories:
+  #   - commandline
+  #   - process
 
 # Time-based event filtering
 time_filter:

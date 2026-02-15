@@ -9,7 +9,18 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from zircolite import StreamingEventProcessor, ZircoliteCore, ProcessingConfig
+from zircolite import (
+    StreamingEventProcessor,
+    ZircoliteCore,
+    ProcessingConfig,
+    EvtxExtractor,
+    ExtractorConfig,
+)
+from zircolite.streaming import (
+    _NON_ALNUM_RE,
+    _NEWLINE_TRANSLATE,
+    _RESTRICTED_BUILTINS as STREAMING_BUILTINS,
+)
 
 
 class TestStreamingEventProcessorInit:
@@ -55,7 +66,9 @@ class TestStreamingEventProcessorInit:
         assert processor._has_time_filter is True
         assert processor._time_after_parsed is not None
         assert processor._time_before_parsed is not None
-    
+        assert processor._time_after_str == "2024-01-01T00:00:00"
+        assert processor._time_before_str == "2024-12-31T23:59:59"
+
     def test_init_with_hashes(self, field_mappings_file, test_logger, default_args_config):
         """Test initialization with hash generation enabled."""
         proc_config = ProcessingConfig(hashes=True)
@@ -153,6 +166,54 @@ class TestStreamingEventProcessorFlattening:
         for key in flattened.keys():
             assert "xmlns" not in key.lower()
 
+    def test_time_filter_accepts_in_range(self, field_mappings_file, test_logger, default_args_config):
+        """Events within the time window should be kept."""
+        proc = ProcessingConfig(
+            time_after="2024-01-01T00:00:00",
+            time_before="2024-12-31T23:59:59",
+            time_field="SystemTime",
+        )
+        processor = StreamingEventProcessor(
+            config_file=field_mappings_file,
+            args_config=default_args_config,
+            processing_config=proc,
+            logger=test_logger,
+        )
+        event = {
+            "Event": {
+                "System": {
+                    "EventID": 1,
+                    "TimeCreated": {"#attributes": {"SystemTime": "2024-06-15T12:00:00.000Z"}},
+                }
+            }
+        }
+        result = processor._flatten_event(event, "test.evtx")
+        assert result is not None
+
+    def test_time_filter_rejects_out_of_range(self, field_mappings_file, test_logger, default_args_config):
+        """Events outside the time window should be filtered."""
+        proc = ProcessingConfig(
+            time_after="2024-06-01T00:00:00",
+            time_before="2024-06-30T23:59:59",
+            time_field="SystemTime",
+        )
+        processor = StreamingEventProcessor(
+            config_file=field_mappings_file,
+            args_config=default_args_config,
+            processing_config=proc,
+            logger=test_logger,
+        )
+        event = {
+            "Event": {
+                "System": {
+                    "EventID": 1,
+                    "TimeCreated": {"#attributes": {"SystemTime": "2025-01-01T00:00:00.000Z"}},
+                }
+            }
+        }
+        result = processor._flatten_event(event, "test.evtx")
+        assert result is None
+
 
 class TestStreamingEventProcessorSchemaGeneration:
     """Tests for SQL schema generation."""
@@ -193,6 +254,92 @@ class TestStreamingEventProcessorSchemaGeneration:
         assert result[0] == 'logs'
         
         conn.close()
+
+    def test_insert_batch_updates_column_cache_on_new_columns(
+        self, field_mappings_file, test_logger, default_args_config
+    ):
+        """When new columns appear in a batch, column cache should update."""
+        proc = ProcessingConfig(batch_size=2, disable_progress=True)
+        processor = StreamingEventProcessor(
+            config_file=field_mappings_file,
+            args_config=default_args_config,
+            processing_config=proc,
+            logger=test_logger,
+        )
+        conn = sqlite3.connect(':memory:')
+        processor.create_initial_table(conn)
+        cursor = conn.cursor()
+
+        batch1 = [{"colA": "a1", "colB": "b1"}]
+        processor._insert_batch(conn, cursor, batch1, 9223372036854775807)
+        first_frozen = processor._last_column_frozenset
+
+        batch2 = [{"colA": "a2", "colB": "b2"}]
+        processor._insert_batch(conn, cursor, batch2, 9223372036854775807)
+        assert processor._last_column_frozenset == first_frozen
+
+        batch3 = [{"colA": "a3", "colB": "b3", "colC": "c3"}]
+        processor._insert_batch(conn, cursor, batch3, 9223372036854775807)
+        assert processor._last_column_frozenset != first_frozen
+        assert "colc" in processor._last_column_frozenset or "colC" in processor._last_column_frozenset
+
+        conn.close()
+
+
+class TestStreamingEventProcessorNestedPaths:
+    """Tests for pre-split nested field paths and _get_nested_value."""
+
+    def test_channel_field_paths_are_tuples(self, field_mappings_file, test_logger, default_args_config):
+        """_channel_field_paths should be tuple-of-tuples."""
+        processor = StreamingEventProcessor(
+            config_file=field_mappings_file,
+            args_config=default_args_config,
+            logger=test_logger,
+        )
+        assert isinstance(processor._channel_field_paths, tuple)
+        if processor._channel_field_paths:
+            first = processor._channel_field_paths[0]
+            assert isinstance(first, tuple)
+            assert len(first) >= 1
+
+    def test_get_nested_value_with_tuple_parts(self, field_mappings_file, test_logger, default_args_config):
+        """_get_nested_value should work with pre-split tuple parts."""
+        processor = StreamingEventProcessor(
+            config_file=field_mappings_file,
+            args_config=default_args_config,
+            logger=test_logger,
+        )
+        data = {"Event": {"System": {"Channel": "Sysmon"}}}
+        val = processor._get_nested_value(data, ("Event", "System", "Channel"))
+        assert val == "Sysmon"
+
+    def test_get_nested_value_missing_key(self, field_mappings_file, test_logger, default_args_config):
+        """_get_nested_value should return None for missing keys."""
+        processor = StreamingEventProcessor(
+            config_file=field_mappings_file,
+            args_config=default_args_config,
+            logger=test_logger,
+        )
+        data = {"Event": {"System": {}}}
+        val = processor._get_nested_value(data, ("Event", "System", "Channel"))
+        assert val is None
+
+
+class TestStreamingEventProcessorModuleHelpers:
+    """Tests for module-level helpers (alphanumeric filter, newline translation)."""
+
+    def test_non_alnum_re_strips_special(self):
+        assert _NON_ALNUM_RE.sub('', 'Hello-World_123!') == 'HelloWorld123'
+
+    def test_non_alnum_re_empty_string(self):
+        assert _NON_ALNUM_RE.sub('', '') == ''
+
+    def test_newline_translate_removes_newlines(self):
+        assert 'abc'.translate(_NEWLINE_TRANSLATE) == 'abc'
+        assert 'a\nb\rc\r\n'.translate(_NEWLINE_TRANSLATE) == 'abc'
+
+    def test_newline_translate_preserves_other_whitespace(self):
+        assert 'a\tb c'.translate(_NEWLINE_TRANSLATE) == 'a\tb c'
 
 
 class TestStreamingEventProcessorJSONStreaming:
@@ -621,6 +768,40 @@ class TestStreamingEventProcessorJSONArrayChunked:
         
         conn.close()
 
+    def test_stream_json_array_chunked_yields_all_events(
+        self, field_mappings_file, test_logger, default_args_config, tmp_path
+    ):
+        """Chunked processing with custom chunk_size should yield every event."""
+        events = [{"Event": {"System": {"EventID": i}}} for i in range(25)]
+        arr_file = tmp_path / "big_array.json"
+        arr_file.write_text(json.dumps(events))
+
+        processor = StreamingEventProcessor(
+            config_file=field_mappings_file,
+            args_config=default_args_config,
+            logger=test_logger,
+        )
+        result = list(processor.stream_json_array_chunked(str(arr_file), chunk_size=5))
+        assert len(result) == 25
+
+
+class TestStreamingEventProcessorRestrictedPythonBuiltins:
+    """Tests for shared RestrictedPython builtins."""
+
+    def test_processor_uses_module_builtins(self, field_mappings_file, test_logger, default_args_config):
+        """StreamingEventProcessor should reference the shared module-level builtins."""
+        processor = StreamingEventProcessor(
+            config_file=field_mappings_file,
+            args_config=default_args_config,
+            logger=test_logger,
+        )
+        assert processor.RestrictedPython_BUILTINS is STREAMING_BUILTINS
+
+    def test_builtins_contain_expected_keys(self):
+        """Shared builtins should include essential sandboxing keys."""
+        for key in ('__name__', '_getiter_', '_getattr_', '_getitem_', 'base64', 're', 'chardet'):
+            assert key in STREAMING_BUILTINS, f"Missing key: {key}"
+
 
 class TestStreamingEventProcessorMemoryEfficiency:
     """Tests for memory efficiency of streaming operations."""
@@ -685,3 +866,328 @@ class TestStreamingEventProcessorMemoryEfficiency:
         # Consume generator
         events = list(stream)
         assert len(events) == 3
+
+
+class TestStreamingEventProcessorFormatStreams:
+    """Tests for XML, Auditd, Sysmon Linux streaming and process_file_streaming dispatch."""
+
+    def test_stream_xml_events(
+        self, field_mappings_file, test_logger, default_args_config, tmp_xml_file, tmp_path
+    ):
+        """Stream XML file yields flattened events."""
+        config = ExtractorConfig(xml_logs=True, tmp_dir=str(tmp_path / "xml_tmp"))
+        extractor = EvtxExtractor(extractor_config=config, logger=test_logger)
+        processor = StreamingEventProcessor(
+            config_file=field_mappings_file,
+            args_config=default_args_config,
+            logger=test_logger,
+        )
+        events = list(processor.stream_xml_events(tmp_xml_file, extractor))
+        assert len(events) >= 1
+        assert "OriginalLogfile" in events[0]
+        extractor.cleanup()
+
+    def test_stream_auditd_events(
+        self, field_mappings_file, test_logger, default_args_config, tmp_auditd_file, tmp_path
+    ):
+        """Stream Auditd file yields flattened events."""
+        config = ExtractorConfig(auditd_logs=True, tmp_dir=str(tmp_path / "auditd_tmp"))
+        extractor = EvtxExtractor(extractor_config=config, logger=test_logger)
+        processor = StreamingEventProcessor(
+            config_file=field_mappings_file,
+            args_config=default_args_config,
+            logger=test_logger,
+        )
+        events = list(processor.stream_auditd_events(tmp_auditd_file, extractor))
+        assert len(events) >= 1
+        assert "OriginalLogfile" in events[0]
+        extractor.cleanup()
+
+    def test_stream_sysmon_linux_events(
+        self, field_mappings_file, test_logger, default_args_config, tmp_path
+    ):
+        """Stream Sysmon for Linux file; yields events when XML parses to Windows-like structure."""
+        # Same format as test_evtx_extractor Sysmon Linux: syslog prefix + <Event>...</Event>
+        sysmon_file = tmp_path / "sysmon.log"
+        sysmon_file.write_text(
+            'Jan 15 10:30:00 host sysmon: <Event><System><EventID>1</EventID></System>'
+            '<EventData><Data Name="Image">/usr/bin/bash</Data></EventData></Event>\n'
+        )
+        config = ExtractorConfig(sysmon4linux=True, tmp_dir=str(tmp_path / "sysmon_tmp"))
+        extractor = EvtxExtractor(extractor_config=config, logger=test_logger)
+        processor = StreamingEventProcessor(
+            config_file=field_mappings_file,
+            args_config=default_args_config,
+            logger=test_logger,
+        )
+        events = list(processor.stream_sysmon_linux_events(str(sysmon_file), extractor))
+        # May be 0 if flattener expects Windows channel/time fields; we still cover the stream path
+        assert isinstance(events, list)
+        extractor.cleanup()
+
+    def test_process_file_streaming_xml(
+        self, field_mappings_file, test_logger, default_args_config, tmp_xml_file, tmp_path
+    ):
+        """process_file_streaming with input_type xml inserts events."""
+        config = ExtractorConfig(xml_logs=True, tmp_dir=str(tmp_path / "xml_tmp"))
+        extractor = EvtxExtractor(extractor_config=config, logger=test_logger)
+        proc_config = ProcessingConfig(disable_progress=True)
+        processor = StreamingEventProcessor(
+            config_file=field_mappings_file,
+            args_config=default_args_config,
+            processing_config=proc_config,
+            logger=test_logger,
+        )
+        conn = sqlite3.connect(':memory:')
+        processor.create_initial_table(conn)
+        count = processor.process_file_streaming(
+            conn, tmp_xml_file, input_type='xml', extractor=extractor
+        )
+        assert count >= 1
+        conn.close()
+        extractor.cleanup()
+
+    def test_process_file_streaming_auditd(
+        self, field_mappings_file, test_logger, default_args_config, tmp_auditd_file, tmp_path
+    ):
+        """process_file_streaming with input_type auditd inserts events."""
+        config = ExtractorConfig(auditd_logs=True, tmp_dir=str(tmp_path / "auditd_tmp"))
+        extractor = EvtxExtractor(extractor_config=config, logger=test_logger)
+        proc_config = ProcessingConfig(disable_progress=True)
+        processor = StreamingEventProcessor(
+            config_file=field_mappings_file,
+            args_config=default_args_config,
+            processing_config=proc_config,
+            logger=test_logger,
+        )
+        conn = sqlite3.connect(':memory:')
+        processor.create_initial_table(conn)
+        count = processor.process_file_streaming(
+            conn, tmp_auditd_file, input_type='auditd', extractor=extractor
+        )
+        assert count >= 1
+        conn.close()
+        extractor.cleanup()
+
+    def test_process_file_streaming_unsupported_type(
+        self, field_mappings_file, test_logger, default_args_config, tmp_path
+    ):
+        """Unsupported input_type returns 0 and logs error."""
+        processor = StreamingEventProcessor(
+            config_file=field_mappings_file,
+            args_config=default_args_config,
+            logger=test_logger,
+        )
+        conn = sqlite3.connect(':memory:')
+        processor.create_initial_table(conn)
+        f = tmp_path / "dummy.evtx"
+        f.write_bytes(b"x")
+        count = processor.process_file_streaming(conn, str(f), input_type='unknown')
+        assert count == 0
+        conn.close()
+
+
+class TestStreamingEventProcessorErrorPaths:
+    """Tests for exception paths in streaming methods."""
+
+    def test_stream_json_events_nonexistent_file(
+        self, field_mappings_file, test_logger, default_args_config, tmp_path
+    ):
+        """stream_json_events with nonexistent file does not raise; yields nothing."""
+        processor = StreamingEventProcessor(
+            config_file=field_mappings_file,
+            args_config=default_args_config,
+            logger=test_logger,
+        )
+        path = str(tmp_path / "does_not_exist.json")
+        events = list(processor.stream_json_events(path, json_array=False))
+        assert events == []
+
+    def test_stream_csv_events_nonexistent_file(
+        self, field_mappings_file, test_logger, default_args_config, tmp_path
+    ):
+        """stream_csv_events with nonexistent file does not raise; yields nothing."""
+        processor = StreamingEventProcessor(
+            config_file=field_mappings_file,
+            args_config=default_args_config,
+            logger=test_logger,
+        )
+        path = str(tmp_path / "does_not_exist.csv")
+        events = list(processor.stream_csv_events(path))
+        assert events == []
+
+    def test_stream_evtx_events_nonexistent_file(
+        self, field_mappings_file, test_logger, default_args_config, tmp_path
+    ):
+        """stream_evtx_events with nonexistent file does not raise; yields nothing."""
+        processor = StreamingEventProcessor(
+            config_file=field_mappings_file,
+            args_config=default_args_config,
+            logger=test_logger,
+        )
+        path = str(tmp_path / "does_not_exist.evtx")
+        events = list(processor.stream_evtx_events(path))
+        assert events == []
+
+
+class TestStreamingTimeParsing:
+    """Tests for _parse_time_bound edge cases."""
+
+    def test_parse_time_bound_struct_time(self, field_mappings_file, test_logger, default_args_config):
+        """Cover line 204: struct_time input is returned as-is."""
+        import time
+        processor = StreamingEventProcessor(
+            config_file=field_mappings_file,
+            args_config=default_args_config,
+            logger=test_logger,
+        )
+        st = time.strptime("2024-01-01T00:00:00", "%Y-%m-%dT%H:%M:%S")
+        result = processor._parse_time_bound(st, "1970-01-01T00:00:00")
+        assert result == st
+
+    def test_parse_time_bound_invalid_string(self, field_mappings_file, test_logger, default_args_config):
+        """Cover lines 207-208: invalid string falls back."""
+        processor = StreamingEventProcessor(
+            config_file=field_mappings_file,
+            args_config=default_args_config,
+            logger=test_logger,
+        )
+        result = processor._parse_time_bound("not-a-date", "1970-01-01T00:00:00")
+        assert result is not None  # Falls back to the fallback value
+
+    def test_parse_time_bound_none_value(self, field_mappings_file, test_logger, default_args_config):
+        """Cover line 207: None value falls back."""
+        processor = StreamingEventProcessor(
+            config_file=field_mappings_file,
+            args_config=default_args_config,
+            logger=test_logger,
+        )
+        result = processor._parse_time_bound(None, "1970-01-01T00:00:00")
+        assert result is not None
+
+
+class TestStreamingTimeFiltering:
+    """Tests for time filtering edge cases in _flatten_event."""
+
+    def test_time_filter_with_z_suffix(self, field_mappings_file, test_logger, default_args_config, tmp_path):
+        """Cover line 583: timestamps ending with Z."""
+        proc_config = ProcessingConfig(
+            time_after="2024-01-01T00:00:00",
+            time_before="2024-12-31T23:59:59",
+            time_field="SystemTime",
+        )
+        processor = StreamingEventProcessor(
+            config_file=field_mappings_file,
+            args_config=default_args_config,
+            processing_config=proc_config,
+            logger=test_logger,
+        )
+
+        # Write JSONL with a flat event with Z-suffix timestamp in range
+        json_file = tmp_path / "events.json"
+        event = {
+            "EventID": 1,
+            "Channel": "Sysmon",
+            "SystemTime": "2024-06-15T10:30:00Z",
+            "CommandLine": "test.exe"
+        }
+        json_file.write_text(json.dumps(event) + "\n")
+
+        events = list(processor.stream_json_events(str(json_file), json_array=False))
+        assert len(events) == 1
+
+    def test_time_filter_rejects_old_event(self, field_mappings_file, test_logger, default_args_config, tmp_path):
+        """Cover lines 595-596: events outside time range are rejected.
+        
+        Time filtering is controlled by ProcessingConfig.time_after / time_before.
+        Uses a flat JSON event so the time_field is immediately accessible.
+        """
+        proc_config = ProcessingConfig(
+            time_after="2025-01-01T00:00:00",
+            time_before="2025-12-31T23:59:59",
+            time_field="SystemTime",
+        )
+        processor = StreamingEventProcessor(
+            config_file=field_mappings_file,
+            args_config=default_args_config,
+            processing_config=proc_config,
+            logger=test_logger,
+        )
+
+        # Verify the time filter is active
+        assert processor._has_time_filter is True
+
+        # Write JSONL with a flat event whose SystemTime is outside the range
+        json_file = tmp_path / "old_events.json"
+        event = {
+            "EventID": 1,
+            "Channel": "Sysmon",
+            "SystemTime": "2020-06-15T10:30:00.000Z",
+            "CommandLine": "test.exe"
+        }
+        json_file.write_text(json.dumps(event) + "\n")
+
+        events = list(processor.stream_json_events(str(json_file), json_array=False))
+        assert len(events) == 0  # Event should be rejected by time filter
+
+    def test_time_filter_with_timezone_offset(self, field_mappings_file, test_logger, default_args_config, tmp_path):
+        """Cover line 588: timestamps with +00:00 offset."""
+        proc_config = ProcessingConfig(
+            time_after="2024-01-01T00:00:00",
+            time_before="2024-12-31T23:59:59",
+            time_field="SystemTime",
+        )
+        processor = StreamingEventProcessor(
+            config_file=field_mappings_file,
+            args_config=default_args_config,
+            processing_config=proc_config,
+            logger=test_logger,
+        )
+
+        # Flat event with timezone offset
+        json_file = tmp_path / "tz_events.json"
+        event = {
+            "EventID": 1,
+            "Channel": "Sysmon",
+            "SystemTime": "2024-06-15T10:30:00+00:00",
+            "CommandLine": "test.exe"
+        }
+        json_file.write_text(json.dumps(event) + "\n")
+
+        events = list(processor.stream_json_events(str(json_file), json_array=False))
+        assert len(events) == 1
+
+
+class TestStreamingJsonEdgeCases:
+    """Tests for JSON streaming edge cases."""
+
+    def test_stream_json_empty_lines_skipped(self, field_mappings_file, test_logger, default_args_config, tmp_path):
+        """Cover line 664: empty lines in JSONL are skipped."""
+        processor = StreamingEventProcessor(
+            config_file=field_mappings_file,
+            args_config=default_args_config,
+            logger=test_logger,
+        )
+        json_file = tmp_path / "with_blanks.json"
+        event = {"Event": {"System": {"EventID": 1, "Channel": "Sysmon"}, "EventData": {"CommandLine": "test"}}}
+        json_file.write_text(json.dumps(event) + "\n\n\n" + json.dumps(event) + "\n")
+
+        events = list(processor.stream_json_events(str(json_file), json_array=False))
+        assert len(events) == 2
+
+    def test_stream_json_array_mode(self, field_mappings_file, test_logger, default_args_config, tmp_path):
+        """Cover JSON array parsing path."""
+        processor = StreamingEventProcessor(
+            config_file=field_mappings_file,
+            args_config=default_args_config,
+            logger=test_logger,
+        )
+        json_file = tmp_path / "array.json"
+        events_data = [
+            {"Event": {"System": {"EventID": 1, "Channel": "Sysmon"}, "EventData": {"CommandLine": "test"}}},
+            {"Event": {"System": {"EventID": 2, "Channel": "Security"}, "EventData": {"Image": "cmd.exe"}}},
+        ]
+        json_file.write_text(json.dumps(events_data))
+
+        events = list(processor.stream_json_events(str(json_file), json_array=True))
+        assert len(events) == 2

@@ -192,8 +192,6 @@ For the full list of options and up-to-date help, run: `python3 zircolite.py -h`
 | `-o`, `--outfile` | Output file for results |
 | `--csv` | Output results in CSV format |
 | `--csv-delimiter` | Delimiter for CSV output (default: `;`) |
-| `-t`, `--tmpdir` | Temporary directory for conversion |
-| `-k`, `--keeptmp` | Keep temporary directory |
 | `--keepflat` | Save flattened events as JSON |
 | `-d`, `--dbfile` | Save logs to SQLite database |
 | `-l`, `--logfile` | Log file name |
@@ -208,17 +206,17 @@ For the full list of options and up-to-date help, run: `python3 zircolite.py -h`
 | `--fieldlist` | List all event fields |
 | `-q`, `--quiet` | Quiet mode: suppress banner, progress bars, and info messages — only the summary panel and errors are shown |
 | `--debug` | Enable debug logging (includes full tracebacks on errors) |
-| `--showall` | Show all rules being executed |
 | `-n`, `--nolog` | Don't create log files |
-| `--ondiskdb` | Use on-disk database (slower, less RAM) |
 | `-RE`, `--remove-events` | Remove log files after analysis |
 | `-U`, `--update-rules` | Update rulesets |
 | `-v`, `--version` | Display version |
 | `--timefield` | Specify timestamp field name (default: 'SystemTime', auto-detects if not found) |
-| `--no-streaming` | Disable streaming mode (use traditional processing) |
 | `--unified-db` | Force unified database mode (all files in one DB, enables cross-file correlation) |
 | `--no-auto-mode` | Disable automatic processing mode selection |
 | `--no-auto-detect` | Disable automatic log type and timestamp detection |
+| `--all-transforms` | Enable all defined transforms (overrides enabled_transforms list) |
+| `--transform-category` | Enable transforms by category name (repeatable) |
+| `--transform-list` | List available transform categories and exit |
 
 > [!TIP]
 > The field mappings configuration file (`-c` option) also contains **field transforms** that can automatically decode Base64, extract IOCs, detect obfuscation patterns, and more. See the [Field Transforms](Advanced.md#field-transforms) section in Advanced.md for details.
@@ -285,7 +283,7 @@ After the summary panel, Zircolite also displays:
 
 - **MITRE ATT&CK tactics summary** — a heatmap panel grouping detected techniques by tactic (Execution, Persistence, Defense Evasion, etc.), sorted by hit count
 - **Output file path** — shown prominently with a terminal hyperlink (`file://` link) that is clickable in supported terminals (iTerm2, Windows Terminal, modern GNOME/KDE terminals)
-- **Contextual suggestions** — tips based on the results, such as suggesting `--package` when critical detections are found, or `--showall` when no detections were found
+- **Contextual suggestions** — tips based on the results, such as suggesting `--package` when critical detections are found, or `--fieldlist` when no detections were found
 
 When processing multiple files in per-file mode, a **file tree** is also displayed showing per-file event counts, detection counts, and filtered event counts.
 
@@ -386,7 +384,7 @@ Explicit format flags (`--json-input`, `--auditd-input`, etc.) always take prece
 
 The detector tries to find the correct timestamp field in three ways:
 
-1. **Known field names** - Checks a priority-ordered list (configurable in `fieldMappings.yaml`): `SystemTime`, `UtcTime`, `TimeCreated`, `@timestamp`, `timestamp`, `EventTime`, `_time`, `ts`, etc.
+1. **Known field names** - Checks a priority-ordered list (configurable in `config/config.yaml`): `SystemTime`, `UtcTime`, `TimeCreated`, `@timestamp`, `timestamp`, `EventTime`, `_time`, `ts`, etc.
 2. **Heuristic scoring** - Scans all event fields, scoring them by name relevance (fields containing "time", "date", "created") and value format.
 3. **Regex fallback** - Scans raw file content for timestamp patterns (ISO 8601, syslog, epoch seconds/millis, US date-time, Windows FileTime) and ties the match back to a JSON key when possible.
 
@@ -493,7 +491,7 @@ You can use Zircolite directly on JSONL/NDJSON files (e.g., NXLog files) with th
 python3 zircolite.py --events <LOGS_FOLDER> --ruleset <RULESET> --jsonl
 ```
 
-A simple use case is when you have already run Zircolite and used the `--keeptmp` option. Since it keeps all the converted EVTX files in a temp directory, if you need to re-execute Zircolite, you can do so directly using this directory as the EVTX source (with `--evtx <EVTX_IN_JSON_DIRECTORY>` and `--jsononly`) to avoid converting the EVTX files again.
+If you have already converted EVTX to JSON (e.g. in another run) and kept the files, you can re-run Zircolite using that directory as the event source with `--evtx <JSON_DIRECTORY>` and `--json-input` to avoid converting again.
 
 ### JSON Array / Full JSON Object
 
@@ -614,7 +612,7 @@ If your logs require transformations to align with your rules, Zircolite offers 
 
 Zircolite supports both **YAML** and **JSON** formats for the field mappings configuration file:
 
-- **YAML format**: `config/fieldMappings.yaml` (default, with comments for documentation)
+- **YAML format**: `config/config.yaml` (default, with comments for documentation)
 - **JSON format**: Also supported for backward compatibility
 
 The file format is automatically detected based on the file extension (`.json`, `.yaml`, or `.yml`). If no extension is provided, Zircolite will attempt to parse as JSON first, then YAML.
@@ -676,7 +674,7 @@ transforms: {}
 
 ### Field Mappings
 
-**Field mappings** enable you to rename a field from your logs. Zircolite uses this mechanism to rename nested JSON fields. You can view all the built-in field mappings in [`config/fieldMappings.yaml`](https://github.com/wagga40/Zircolite/blob/master/config/fieldMappings.yaml).
+**Field mappings** enable you to rename a field from your logs. Zircolite uses this mechanism to rename nested JSON fields. You can view all the built-in field mappings in [`config/config.yaml`](https://github.com/wagga40/Zircolite/blob/master/config/config.yaml).
 
 For instance, to rename the "CommandLine" field in **your raw logs** to "cmdline", you can add the following entry to the configuration file:
 
@@ -697,11 +695,11 @@ Please keep in mind that, unlike field aliases, the original field name is not p
 
 ### Field Exclusions
 
-**Field exclusions** allow you to exclude a field. Zircolite uses this mechanism to exclude the `xmlns` field. See the built-in field exclusions in [`config/fieldMappings.yaml`](https://github.com/wagga40/Zircolite/blob/master/config/fieldMappings.yaml).
+**Field exclusions** allow you to exclude a field. Zircolite uses this mechanism to exclude the `xmlns` field. See the built-in field exclusions in [`config/config.yaml`](https://github.com/wagga40/Zircolite/blob/master/config/config.yaml).
 
 ### Value Exclusions
 
-**Value exclusions** allow you to remove fields whose values should be excluded. Zircolite uses this mechanism to remove *null* and empty values. See the built-in value exclusions in [`config/fieldMappings.yaml`](https://github.com/wagga40/Zircolite/blob/master/config/fieldMappings.yaml).
+**Value exclusions** allow you to remove fields whose values should be excluded. Zircolite uses this mechanism to remove *null* and empty values. See the built-in value exclusions in [`config/config.yaml`](https://github.com/wagga40/Zircolite/blob/master/config/config.yaml).
 
 ### Field Aliases
 
@@ -752,7 +750,7 @@ Be careful when using aliases because the data is stored multiple times.
 
 ### Field Splitting
 
-**Field splitting** allows you to split fields that contain key-value pairs. Zircolite uses this mechanism to handle hash/hashes fields in Sysmon logs. See the built-in field splittings in [`config/fieldMappings.yaml`](https://github.com/wagga40/Zircolite/blob/master/config/fieldMappings.yaml). Field aliases can be applied to split fields.
+**Field splitting** allows you to split fields that contain key-value pairs. Zircolite uses this mechanism to handle hash/hashes fields in Sysmon logs. See the built-in field splittings in [`config/config.yaml`](https://github.com/wagga40/Zircolite/blob/master/config/config.yaml). Field aliases can be applied to split fields.
 
 For example, let's say we have this Sysmon event log: 
 
@@ -805,7 +803,7 @@ By using transforms, you can preprocess event data to make it more suitable for 
 
 ### Enabling Transforms
 
-Transforms are configured in `config/fieldMappings.yaml`. To enable transforms:
+Transforms are configured in `config/config.yaml`. To enable transforms:
 
 1. Set `transforms_enabled: true`
 2. Add transform names to the `enabled_transforms` list
@@ -825,6 +823,21 @@ enabled_transforms:
 ```
 
 Only transforms listed in `enabled_transforms` will run. This provides a single location to control all transforms.
+
+**Enabling transforms by category (CLI):**
+
+```bash
+# Enable all transforms in specific categories
+python3 zircolite.py -e logs/ --transform-category commandline --transform-category process
+
+# Enable ALL transforms
+python3 zircolite.py -e logs/ --all-transforms
+
+# List available categories
+python3 zircolite.py --transform-list
+```
+
+Categories are defined in the `transform_categories` section of `config/config.yaml`. See [Advanced.md](Advanced.md#transform-categories) for the full list.
 
 **JSON format (alternative):**
 
@@ -857,8 +870,9 @@ A transform definition has the following structure:
 Each transform object contains:
 
 - **info**: A description of what the transform does.
-- **type**: The type of the transform (currently only `"python"` is supported).
-- **code**: The Python code that performs the transformation.
+- **type**: `"python"` for inline code or `"python_file"` for external file.
+- **code**: The Python code that performs the transformation (for `type: python`).
+- **file**: Path to a `.py` file containing the transform function (for `type: python_file`). Resolved relative to `transforms_dir`.
 - **alias**: A boolean indicating whether the result should be stored in a new field.
 - **alias_name**: The name of the new field if `alias` is `true`.
 - **source_condition**: A list specifying when the transform should be applied based on the input type (e.g., `["evtx_input", "json_input"]`).
@@ -878,7 +892,7 @@ Each transform object contains:
 | `"csv_input"`                 |
 | `"evtx_input"`                |
 
-#### Example Transform Object
+#### Example: Inline Transform (type: python)
 
 **JSON format:**
 
@@ -908,11 +922,46 @@ Each transform object contains:
   source_condition:
     - evtx_input
     - json_input
-  enabled: true
 ```
 
 > [!TIP]
 > YAML's multi-line string syntax (`|`) makes writing transform code much cleaner than escaping newlines in JSON.
+
+#### Example: External File Transform (type: python_file)
+
+```yaml
+- info: "Base64 decoded CommandLine"
+  type: python_file
+  file: commandline_b64decoded.py
+  alias: true
+  alias_name: "CommandLine_b64decoded"
+  source_condition:
+    - evtx_input
+    - json_input
+```
+
+The `.py` file contains only the transform function:
+
+```python
+def transform(param):
+    # param is the field value (always a string)
+    # return the transformed value (string)
+    return param.upper()
+```
+
+External files are resolved relative to `transforms_dir` (default: `transforms/`, relative to the config file directory). This is configured in `config.yaml`:
+
+```yaml
+transforms_dir: transforms/
+```
+
+> [!TIP]
+> Use `config/transform_tester.py` to develop and test transforms locally with the same RestrictedPython sandbox.
+> ```bash
+> python config/transform_tester.py config/transforms/image_exename.py "C:\Windows\cmd.exe"
+> python config/transform_tester.py my_transform.py --interactive
+> python config/transform_tester.py --list-builtins
+> ```
 
 ### Available Fields
 
@@ -953,11 +1002,14 @@ The function must be named `transform` and accept a single parameter `param`, wh
 **Available Modules and Functions:**
 
 - **Built-in Functions**: A limited set of Python built-in functions, such as `len`, `int`, `str`, etc.
-- **Modules**: You can import `re` for regular expressions, `base64` for encoding/decoding, and `chardet` for character encoding detection.
+- **Modules**: You can use `re` for regular expressions, `base64` for encoding/decoding, `chardet` for character encoding detection, and `math` for mathematical functions.
+- **Container writes**: `dict[key] = value` and `list[idx] = value` are supported.
+- **Augmented assignments**: `+=`, `-=`, `*=`, etc. are supported.
 
 **Unavailable Features:**
 
 - Access to file I/O, network, or system calls is prohibited.
+- Writing to arbitrary object attributes is blocked (only `dict`, `list`, and `set` writes are allowed).
 - Use of certain built-in functions that can affect the system is restricted.
 
 #### Example Transform Functions
@@ -990,7 +1042,7 @@ For each event, Zircolite checks if any transforms are defined for the fields pr
 
 ### Built-in Transforms
 
-The default configuration file (`config/fieldMappings.yaml`) includes many pre-configured transforms for security analysis:
+The default configuration file (`config/config.yaml`) includes many pre-configured transforms for security analysis:
 
 #### Auditd Transforms
 - **proctitle**: Converts hexadecimal proctitle from Auditd to ASCII
@@ -1093,7 +1145,7 @@ proctitle:
 
 ## Event Filter and Timestamp Configuration
 
-Zircolite includes an early event filtering mechanism and automatic timestamp detection. Both are configured in the `event_filter` and `timestamp_detection` sections of the field mappings file (`config/fieldMappings.yaml`).
+Zircolite includes an early event filtering mechanism and automatic timestamp detection. Both are configured in the `event_filter` and `timestamp_detection` sections of the field mappings file (`config/config.yaml`).
 
 ### Early Event Filtering
 
@@ -1276,9 +1328,9 @@ docker container run --tty \
 |-------|-------------|
 | **Wrong log format detected** | Use `--no-auto-detect` and an explicit format flag (e.g. `--json-input`, `--auditd-input`). |
 | **Missing or wrong timestamp field** | Set the timestamp field explicitly with `--timefield "FieldName"`. |
-| **Out of memory on large datasets** | Use `--no-parallel`, `--no-auto-mode`, or `--ondiskdb`; reduce `--parallel-workers`. |
+| **Out of memory on large datasets** | Use `--no-parallel`, `--no-auto-mode`; reduce `--parallel-workers`. |
 | **EVTX library (pyevtx-rs) fails to install** | On some systems (Mac, ARM), install Rust and Cargo first; see [Requirements and Installation](Usage.md#requirements-and-installation). |
-| **No detections / rules not matching** | Run with `--showall` to see which rules ran; use `--fieldlist` to check field names; ensure ruleset matches your log source (e.g. Sysmon vs generic Windows). |
+| **No detections / rules not matching** | Use `--fieldlist` to check field names; ensure ruleset matches your log source (e.g. Sysmon vs generic Windows). |
 | **Ruleset file not found** | Default rulesets may be named `rules_windows_sysmon.json` (in repo) or `rules_windows_sysmon.json` (after `-U`). Use `python3 zircolite.py -U` to update rules from Zircolite-Rules-v2. |
 
 ### Getting help
@@ -1291,7 +1343,7 @@ docker container run --tty \
 ## FAQ
 
 **Why do I get no detections?**  
-Rules only match if your log fields align with what the rule expects. Use `--showall` to see which rules ran. Use `--fieldlist` on your log file to see field names. Ensure the ruleset matches your log source (e.g. Sysmon rules for Sysmon EVTX; generic Windows rules for Security/System EVTX). Check that the timestamp field is correct (`--timefield` if auto-detection is wrong).
+Rules only match if your log fields align with what the rule expects. Use `--fieldlist` on your log file to see field names. Ensure the ruleset matches your log source (e.g. Sysmon rules for Sysmon EVTX; generic Windows rules for Security/System EVTX). Check that the timestamp field is correct (`--timefield` if auto-detection is wrong).
 
 **What is the difference between EVTX rules and JSON/generic rules?**  
 Rulesets like `rules_windows_sysmon.json` target Sysmon EVTX (process creation, network, etc.). Rules like `rules_windows_generic.json` target Windows event logs without Sysmon rewriting (Security, System, etc.). Use the ruleset that matches your log source.

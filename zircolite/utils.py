@@ -57,6 +57,14 @@ def load_field_mappings(config_file: str, *, logger: Optional[logging.Logger] = 
     logger = logger or logging.getLogger(__name__)
     config_path = Path(config_file)
     
+    # Deprecation: prefer config/config.yaml over fieldMappings.yaml
+    path_lower = config_path.name.lower()
+    if path_lower in ("fieldmappings.yaml", "fieldmappings.yml"):
+        logger.warning(
+            "fieldMappings.yaml is deprecated; use config/config.yaml instead. "
+            "Support for fieldMappings.yaml may be removed in a future version."
+        )
+    
     if not config_path.exists():
         raise FileNotFoundError(f"Field mappings configuration file not found: {config_file}")
     
@@ -123,7 +131,7 @@ def load_field_mappings(config_file: str, *, logger: Optional[logging.Logger] = 
             config[key] = defaults[key]
     
     # Add event_filter section with minimal fallback defaults
-    # (Full defaults are in config/fieldMappings.yaml)
+    # (Full defaults are in config/config.yaml)
     if 'event_filter' not in config:
         config['event_filter'] = {
             'enabled': True,
@@ -132,7 +140,7 @@ def load_field_mappings(config_file: str, *, logger: Optional[logging.Logger] = 
         }
     
     # Add timestamp_detection section with minimal fallback defaults
-    # (Full defaults are in config/fieldMappings.yaml)
+    # (Full defaults are in config/config.yaml)
     if 'timestamp_detection' not in config:
         config['timestamp_detection'] = {
             'default_field': 'SystemTime',
@@ -252,19 +260,25 @@ def avoid_files(path_list, avoid_files_list):
 
 
 class MemoryTracker:
-    """Track memory usage during execution."""
+    """Track memory usage during execution with optional rate limiting."""
     
-    def __init__(self, *, logger: Optional[logging.Logger] = None):
+    def __init__(self, *, logger: Optional[logging.Logger] = None,
+                 min_sample_interval: float = 0.0):
         """
         Initialize MemoryTracker.
         
         Args:
             logger: Logger instance (creates default if None)
+            min_sample_interval: Minimum seconds between samples (0 = no limit).
+                When positive, rapid ``sample()`` calls are silently skipped
+                to reduce syscall overhead (opt #13).
         """
         self.logger = logger or logging.getLogger(__name__)
         self.memory_samples = []
         self.peak_memory = 0
         self.process = psutil.Process(os.getpid())
+        self._min_sample_interval = min_sample_interval
+        self._last_sample_time = 0.0
     
     def get_memory_usage(self):
         """Get current memory usage in MB."""
@@ -274,8 +288,20 @@ class MemoryTracker:
         except Exception:
             return 0
     
-    def sample(self):
-        """Take a memory usage sample."""
+    def sample(self, *, force: bool = False):
+        """Take a memory usage sample.
+        
+        Args:
+            force: If True, bypass the rate limit and always sample.
+        """
+        # Rate limiting (opt #13) – skip if called too soon after last sample
+        if self._min_sample_interval > 0 and not force:
+            import time as _time
+            now = _time.monotonic()
+            if now - self._last_sample_time < self._min_sample_interval:
+                return
+            self._last_sample_time = now
+        
         memory_mb = self.get_memory_usage()
         if memory_mb > 0:
             self.memory_samples.append(memory_mb)

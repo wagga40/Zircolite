@@ -11,7 +11,7 @@ This module provides memory-aware parallel file processing capabilities:
 import logging
 import os
 import time
-from concurrent.futures import ThreadPoolExecutor, as_completed
+from concurrent.futures import ThreadPoolExecutor, wait, FIRST_COMPLETED
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable, Dict, List, Optional, Tuple, Any
@@ -249,45 +249,64 @@ class MemoryAwareParallelProcessor:
             )
             
             with ExecutorClass(max_workers=num_workers) as executor:
-                # Submit all tasks
-                future_to_file = {
-                    executor.submit(process_func, f): f 
-                    for f in file_list
-                }
+                # Lazy submission with backpressure (opt #14) – only
+                # ``num_workers`` tasks are in-flight at any time, allowing
+                # memory to be reclaimed between file completions.
+                file_iter = iter(file_list)
+                active_futures: dict = {}
                 
-                for future in as_completed(future_to_file):
-                    file_path = future_to_file[future]
-                    
+                # Seed initial batch of work
+                for _ in range(num_workers):
                     try:
-                        event_count, result = future.result()
-                        self.stats.total_events += event_count
-                        self.stats.processed_files += 1
-                        if result is not None:
-                            results.append(result)
-                        
-                        # Update progress bar
-                        progress.update(
-                            task_id, 
-                            advance=1, 
-                            events=self.stats.total_events
-                        )
-                            
-                    except Exception as e:
-                        self.stats.failed_files += 1
-                        failed_files.append((file_path, str(e)))
-                        progress.update(task_id, advance=1)
+                        f = next(file_iter)
+                        active_futures[executor.submit(process_func, f)] = f
+                    except StopIteration:
+                        break
+                
+                while active_futures:
+                    # Wait for at least one task to finish
+                    done, _ = wait(active_futures, return_when=FIRST_COMPLETED)
                     
-                    # Memory check at intervals
-                    if self.stats.processed_files % self.config.memory_check_interval == 0:
-                        current_mem = self.get_current_memory_mb()
-                        self._memory_samples.append(current_mem)
-                        self.stats.peak_memory_mb = max(
-                            self.stats.peak_memory_mb, current_mem
-                        )
+                    for future in done:
+                        file_path = active_futures.pop(future)
                         
-                        # Check for throttling (log warning but can't reduce workers mid-execution)
-                        if self.should_throttle():
-                            self.stats.throttle_events += 1
+                        try:
+                            event_count, result = future.result()
+                            self.stats.total_events += event_count
+                            self.stats.processed_files += 1
+                            if result is not None:
+                                results.append(result)
+                            
+                            progress.update(
+                                task_id, advance=1,
+                                events=self.stats.total_events
+                            )
+                        except Exception as e:
+                            self.stats.failed_files += 1
+                            failed_files.append((file_path, str(e)))
+                            progress.update(task_id, advance=1)
+                        
+                        # Memory check at intervals
+                        total_done = self.stats.processed_files + self.stats.failed_files
+                        if total_done % self.config.memory_check_interval == 0:
+                            current_mem = self.get_current_memory_mb()
+                            self._memory_samples.append(current_mem)
+                            self.stats.peak_memory_mb = max(
+                                self.stats.peak_memory_mb, current_mem
+                            )
+                            
+                            # Backpressure: pause briefly when memory is high
+                            # to let GC reclaim before submitting more work
+                            if self.should_throttle():
+                                self.stats.throttle_events += 1
+                                time.sleep(0.2)
+                        
+                        # Submit next file (keeps exactly num_workers in-flight)
+                        try:
+                            next_file = next(file_iter)
+                            active_futures[executor.submit(process_func, next_file)] = next_file
+                        except StopIteration:
+                            pass
         
         # Calculate final statistics
         self.stats.processing_time_seconds = time.time() - start_time

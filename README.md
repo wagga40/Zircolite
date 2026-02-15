@@ -213,7 +213,7 @@ Field splitting extracts key-value pairs from fields. For example, Sysmon logs c
 SHA1=abc123,MD5=def456,SHA256=789xyz
 ```
 
-With field splitting configured in `config/fieldMappings.yaml`:
+With field splitting configured in `config/config.yaml`:
 
 ```yaml
 split:

@@ -20,8 +20,6 @@ from zircolite import (
     init_logger,
 )
 
-# For backwards compatibility, also import these
-
 
 # =============================================================================
 # Field Mappings Configuration Fixtures
@@ -527,19 +525,15 @@ def default_args_config():
         outfile="detected_events.json",
         csv=False,
         csv_delimiter=";",
-        tmpdir=None,
-        keeptmp=False,
         keepflat=False,
         dbfile=None,
         logfile="zircolite.log",
         hashes=False,
         limit=-1,
-        config="config/fieldMappings.json",
+        config="config/config.yaml",
         fieldlist=False,
         debug=False,
-        showall=False,
         nolog=True,
-        ondiskdb=":memory:",
         remove_events=False,
         update_rules=False,
         version=False,
@@ -736,15 +730,3 @@ def cleanup_test_artifacts():
     # Also clean from test start directory if different
     if test_start_cwd != _ORIGINAL_CWD:
         _cleanup_artifacts(Path(test_start_cwd))
-
-
-@pytest.fixture
-def clean_test_outputs():
-    """
-    Clean up test output files (explicit fixture for tests that need it).
-    
-    This is kept for backwards compatibility but cleanup_test_artifacts
-    now handles this automatically.
-    """
-    yield
-    _cleanup_artifacts(Path('.'))
