@@ -1,0 +1,50 @@
+<Event xmlns="http://schemas.microsoft.com/win/2004/08/events/event"><System><Provider Name="Microsoft-Windows-Security-Auditing" Guid="{54849625-5478-4994-a5ba-3e3b0328c30d}"></Provider>
+<EventID Qualifiers="">4672</EventID>
+<Version>0</Version>
+<Level>0</Level>
+<Task>12548</Task>
+<Opcode>0</Opcode>
+<Keywords>0x80200000000000</Keywords>
+<TimeCreated SystemTime="2023-02-06 22:07:30.404066"></TimeCreated>
+<EventRecordID>4398962269</EventRecordID>
+<Correlation ActivityID="{3013de7a-3a71-0000-93de-1330713ad901}" RelatedActivityID=""></Correlation>
+<Execution ProcessID="712" ThreadID="828"></Execution>
+<Channel>Security</Channel>
+<Computer>HOST.local</Computer>
+<Security UserID=""></Security>
+</System>
+<EventData><Data Name="SubjectUserSid">S-1-5-18</Data>
+<Data Name="SubjectUserName">-</Data>
+<Data Name="SubjectDomainName">LOCAL</Data>
+<Data Name="SubjectLogonId">0x0000000000f33c</Data>
+<Data Name="PrivilegeList">SeSecurityPrivilege</Data>
+</EventData>
+</Event>
+<Event xmlns="http://schemas.microsoft.com/win/2004/08/events/event"><System><Provider Name="Microsoft-Windows-Security-Auditing" Guid="{54849625-5478-4994-a5ba-3e3b0328c30d}"></Provider>
+<EventID Qualifiers="">4624</EventID>
+<Version>2</Version>
+<Level>0</Level>
+<Task>12544</Task>
+<Opcode>0</Opcode>
+<Keywords>0x80200000000000</Keywords>
+<TimeCreated SystemTime="2023-02-06 22:07:30.404188"></TimeCreated>
+<EventRecordID>4398962270</EventRecordID>
+<Correlation ActivityID="{3013de7a-3a71-0000-93de-1330713ad901}" RelatedActivityID=""></Correlation>
+<Execution ProcessID="712" ThreadID="828"></Execution>
+<Channel>Security</Channel>
+<Computer>HOST.local</Computer>
+<Security UserID=""></Security>
+</System>
+<EventData><Data Name="SubjectUserSid">S-1-0-0</Data>
+<Data Name="SubjectUserName">-</Data>
+<Data Name="SubjectDomainName">-</Data>
+<Data Name="TargetUserSid">S-1-5-18</Data>
+<Data Name="TargetUserName">-</Data>
+<Data Name="TargetDomainName">LOCAL</Data>
+<Data Name="LogonType">3</Data>
+<Data Name="LogonProcessName">Kerberos</Data>
+<Data Name="AuthenticationPackageName">Kerberos</Data>
+<Data Name="IpAddress">::1</Data>
+<Data Name="IpPort">39899</Data>
+</EventData>
+</Event>

@@ -5,6 +5,7 @@ Tests JSON and YAML format support for field mappings configuration files.
 """
 
 import json
+import logging
 import pytest
 import sys
 from pathlib import Path
@@ -247,7 +248,7 @@ class TestLoadFieldMappingsIntegration:
     
     def test_load_project_yaml_config(self):
         """Test loading the actual project YAML config file."""
-        config_path = Path(__file__).parent.parent / "config" / "fieldMappings.yaml"
+        config_path = Path(__file__).parent.parent / "config" / "config.yaml"
         if config_path.exists():
             config = load_field_mappings(str(config_path))
             
@@ -256,9 +257,9 @@ class TestLoadFieldMappingsIntegration:
             assert "xmlns" in config["exclusions"]
     
     def test_project_json_yaml_equivalence(self):
-        """Test that project JSON and YAML configs are equivalent."""
+        """Test that project JSON and YAML configs are equivalent (when both exist)."""
         json_path = Path(__file__).parent.parent / "config" / "fieldMappings.json"
-        yaml_path = Path(__file__).parent.parent / "config" / "fieldMappings.yaml"
+        yaml_path = Path(__file__).parent.parent / "config" / "config.yaml"
         
         if json_path.exists() and yaml_path.exists():
             json_config = load_field_mappings(str(json_path))
@@ -267,3 +268,22 @@ class TestLoadFieldMappingsIntegration:
             # Check key counts match
             assert len(json_config["mappings"]) == len(yaml_config["mappings"])
             assert json_config["transforms_enabled"] == yaml_config["transforms_enabled"]
+
+    def test_deprecated_field_mappings_yaml_warns(self):
+        """Loading config/fieldMappings.yaml (deprecated) emits a deprecation warning."""
+        deprecated_path = Path(__file__).parent.parent / "config" / "fieldMappings.yaml"
+        if not deprecated_path.exists():
+            pytest.skip("Deprecated file config/fieldMappings.yaml not present")
+        # Use a dedicated logger so we can capture the warning regardless of Rich/caplog
+        log_capture = []
+        handler = logging.Handler()
+        handler.emit = lambda rec: log_capture.append(rec.getMessage())
+        test_logger = logging.getLogger("zircolite.utils.deprecation_test")
+        test_logger.setLevel(logging.WARNING)
+        test_logger.addHandler(handler)
+        load_field_mappings(str(deprecated_path), logger=test_logger)
+        test_logger.removeHandler(handler)
+        assert len(log_capture) >= 1
+        msg = log_capture[0].lower()
+        assert "deprecated" in msg
+        assert "config.yaml" in msg

@@ -762,8 +762,8 @@ class TestEdgeCases:
     def test_binary_junk(self, detector, binary_junk_file):
         """Random binary content should not crash detection."""
         result = detector.detect(binary_junk_file)
-        # Should not crash, result type doesn't matter much
         assert result is not None
+        assert isinstance(result.log_source, str)
 
     def test_malformed_json(self, detector, tmp_path):
         """Malformed JSON should be handled gracefully."""
@@ -771,14 +771,15 @@ class TestEdgeCases:
         f.write_text('{"broken": true, no_quotes: bad}\n')
         result = detector.detect(f)
         assert result is not None
+        assert isinstance(result.log_source, str)
 
     def test_extension_fallback_json(self, detector, tmp_path):
         """Files with .json extension but unreadable content should fall back."""
         f = tmp_path / "weird.json"
         f.write_bytes(b"\x00\x01\x02\x03" * 100)
         result = detector.detect(f)
-        # Should not crash
         assert result is not None
+        assert isinstance(result.log_source, str)
 
     def test_extension_fallback_xml(self, detector, tmp_path):
         """Files with .xml extension but non-XML content should fall back."""
@@ -786,6 +787,7 @@ class TestEdgeCases:
         f.write_text("This is not XML at all\nJust plain text\n")
         result = detector.detect(f)
         assert result is not None
+        assert isinstance(result.log_source, str)
 
 
 # =============================================================================

@@ -8,7 +8,6 @@ Modules:
 - config: Configuration dataclasses for all components
 - core: ZircoliteCore class for database and rule execution
 - streaming: StreamingEventProcessor for single-pass processing
-- flattener: JSONFlattener for log flattening
 - extractor: EvtxExtractor for log format conversion
 - rules: RulesetHandler and RulesUpdater for rule management
 - templates: TemplateEngine and ZircoliteGuiGenerator for output generation
@@ -28,7 +27,6 @@ from .config import (
 )
 from .core import ZircoliteCore
 from .streaming import StreamingEventProcessor
-from .flattener import JSONFlattener
 from .extractor import EvtxExtractor
 from .rules import RulesetHandler, RulesUpdater, EventFilter
 from .templates import TemplateEngine, ZircoliteGuiGenerator
@@ -45,6 +43,17 @@ from .utils import (
     print_mode_recommendation,
     load_field_mappings,
 )
+from .processing import (
+    ProcessingContext,
+    create_zircolite_core,
+    create_worker_core,
+    create_extractor,
+    process_unified_streaming,
+    process_perfile_streaming,
+    process_db_input,
+    process_parallel_streaming,
+    process_single_file_worker,
+)
 from .console import (
     console,
     ZircoliteConsole,
@@ -53,20 +62,25 @@ from .console import (
     ProcessingStats,
     get_rich_logger,
     format_level,
+    LEVEL_PRIORITY,
     LEVEL_STYLES,
     # Quiet mode
     set_quiet_mode,
     is_quiet,
     # Banner
     print_banner,
+    # Section separators & panels
+    print_section,
+    print_error_panel,
+    print_no_detections,
+    # Severity badges
+    make_severity_badge,
     # Live display helpers
     make_detection_counter,
     build_file_tree,
     build_attack_summary,
     build_detection_table,
     make_file_link,
-    get_suggestions,
-    print_suggestions,
     # CLI helper functions
     print_step,
     print_substep,
@@ -112,10 +126,19 @@ __all__ = [
     'RulesetConfig',
     'TemplateConfig',
     'GuiConfig',
+    # Processing context & modes
+    'ProcessingContext',
+    'create_zircolite_core',
+    'create_worker_core',
+    'create_extractor',
+    'process_unified_streaming',
+    'process_perfile_streaming',
+    'process_db_input',
+    'process_parallel_streaming',
+    'process_single_file_worker',
     # Core classes
     'ZircoliteCore',
     'StreamingEventProcessor',
-    'JSONFlattener',
     'EvtxExtractor',
     'RulesetHandler',
     'RulesUpdater',
@@ -161,19 +184,25 @@ __all__ = [
     'get_rich_logger',
     'format_level',
     'LEVEL_STYLES',
+    # Severity ordering
+    'LEVEL_PRIORITY',
     # Quiet mode
     'set_quiet_mode',
     'is_quiet',
     # Banner
     'print_banner',
+    # Section separators & panels
+    'print_section',
+    'print_error_panel',
+    'print_no_detections',
+    # Severity badges
+    'make_severity_badge',
     # Live display helpers
     'make_detection_counter',
     'build_file_tree',
     'build_attack_summary',
     'build_detection_table',
     'make_file_link',
-    'get_suggestions',
-    'print_suggestions',
     # CLI helper functions
     'print_step',
     'print_substep',
@@ -186,4 +215,4 @@ __all__ = [
     'print_detection',
 ]
 
-__version__ = "3.1.0"
+__version__ = "3.2.0"

@@ -1,13 +1,15 @@
 """
-Tests for the TemplateEngine class.
+Tests for the TemplateEngine and ZircoliteGuiGenerator classes.
 """
 
 import sys
 from pathlib import Path
+from unittest.mock import MagicMock, patch
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from zircolite import TemplateEngine, TemplateConfig
+from zircolite.templates import ZircoliteGuiGenerator
 
 
 class TestTemplateEngineInit:
@@ -399,3 +401,54 @@ class TestTemplateEngineExportFormats:
         
         assert '{"index":{}}' in content
         assert '"rule_title":' in content
+
+
+# =============================================================================
+# ZircoliteGuiGenerator
+# =============================================================================
+
+class TestZircoliteGuiGenerator:
+    """Tests for ZircoliteGuiGenerator.generate() with mocks."""
+
+    def test_generate_directory_nonexistent_logs_error(self, sample_detection_results):
+        """When directory is given but does not exist, error is logged and fallback used."""
+        mock_logger = MagicMock()
+        gen = ZircoliteGuiGenerator(logger=mock_logger)
+        gen.packageDir = __file__  # exists but not a zip
+        with patch("zircolite.templates.os.path.exists", return_value=False):
+            with patch("zircolite.templates.shutil.unpack_archive", side_effect=ValueError("not a zip")):
+                gen.generate(sample_detection_results, directory="/nonexistent/path")
+        mock_logger.error.assert_called()
+
+    def test_generate_exception_calls_finally_cleanup(self, test_logger, sample_detection_results, tmp_path):
+        """When unpack_archive raises, finally block still runs and cleans tmpDir."""
+        gen = ZircoliteGuiGenerator(logger=test_logger)
+        gen.packageDir = str(tmp_path / "package.zip")
+        gen.tmpDir = str(tmp_path / "tmp-zircogui-abc1")
+        Path(gen.tmpDir).mkdir(parents=True)
+
+        with patch("zircolite.templates.shutil.unpack_archive", side_effect=RuntimeError("bad archive")):
+            gen.generate(sample_detection_results, directory="")
+        assert not Path(gen.tmpDir).exists()
+
+    def test_generate_success_mocks(self, test_logger, sample_detection_results, tmp_path):
+        """Generate with mocked unpack, TemplateEngine, move and make_archive."""
+        (tmp_path / "pkg.zip").write_bytes(b"x")
+        gen = ZircoliteGuiGenerator(logger=test_logger)
+        gen.packageDir = str(tmp_path / "pkg.zip")
+        gen.templateFile = str(tmp_path / "tmpl.js")
+        gen.tmpFile = str(tmp_path / "data.js")
+        gen.outputFile = "zircogui-output"
+        gen.tmpDir = str(tmp_path / "tmp-zircogui-xyz")
+        Path(gen.templateFile).write_text("{{ data }}")
+
+        with patch("zircolite.templates.shutil.unpack_archive") as mock_unpack:
+            def mkdirs(archive, path, fmt):
+                Path(path).mkdir(parents=True)
+                (Path(path) / "zircogui").mkdir()
+            mock_unpack.side_effect = mkdirs
+            with patch("zircolite.templates.shutil.move"):
+                with patch("zircolite.templates.shutil.make_archive") as mock_make:
+                    gen.generate(sample_detection_results, directory="")
+                    mock_make.assert_called_once()
+        assert not Path(gen.tmpDir).exists()

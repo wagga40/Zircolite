@@ -16,6 +16,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
+from rich.bar import Bar
+from rich.columns import Columns
 from rich.console import Console, Group
 from rich.live import Live
 from rich.logging import RichHandler
@@ -30,6 +32,8 @@ from rich.progress import (
     TimeElapsedColumn,
     TimeRemainingColumn,
 )
+from rich.rule import Rule
+from rich.syntax import Syntax
 from rich.table import Table
 from rich.text import Text
 from rich.theme import Theme
@@ -111,6 +115,76 @@ def print_banner(version: str):
     console.print()
     console.print(_BANNER)
     console.print(f"                              [dim]v{version}[/]\n")
+
+
+# ============================================================================
+# SECTION SEPARATORS
+# ============================================================================
+
+def print_section(title: str = ""):
+    """Print a section separator with an optional centered title.
+
+    Uses ``rich.rule.Rule`` to draw a horizontal line across the terminal,
+    providing clear visual boundaries between processing phases.
+    Suppressed in quiet mode.
+    """
+    if _quiet_mode:
+        return
+    if title:
+        console.print(Rule(f"[bold cyan]{title}[/]", style="dim"))
+    else:
+        console.print(Rule(style="dim"))
+
+
+# ============================================================================
+# ERROR PANEL
+# ============================================================================
+
+def print_error_panel(title: str, message: str, suggestion: str = ""):
+    """Display a fatal error inside a prominent red-bordered panel.
+
+    Always shown regardless of quiet mode – errors must never be hidden.
+
+    Args:
+        title: Short error category (e.g. "Missing File")
+        message: Detailed error description
+        suggestion: Optional remediation hint shown below the message
+    """
+    content = f"[bold red]{message}[/]"
+    if suggestion:
+        content += f"\n\n[dim]Suggestion: {suggestion}[/]"
+    console.print()
+    console.print(
+        Panel(
+            content,
+            title=f"[bold red]Error: {title}[/]",
+            border_style="red",
+            padding=(1, 2),
+        )
+    )
+
+
+# ============================================================================
+# "NO DETECTIONS" ZERO-STATE
+# ============================================================================
+
+def print_no_detections():
+    """Display a styled zero-state panel when no rules matched.
+
+    Gives the user clear visual confirmation that analysis completed
+    cleanly rather than a single dim log line.  Suppressed in quiet mode.
+    """
+    if _quiet_mode:
+        return
+    console.print()
+    console.print(
+        Panel(
+            "[bold green]No detections found[/]\n"
+            "[dim]All rules executed \u2014 no matches in the provided logs.[/]",
+            border_style="green",
+            padding=(1, 2),
+        )
+    )
 
 
 # ============================================================================
@@ -410,17 +484,13 @@ class ZircoliteConsole:
     def print_detection_summary_table(self):
         """Print a summary table of all detections sorted by severity."""
         if not self._detections:
-            self.info("No detections found")
+            print_no_detections()
             return
         
         # Sort detections by severity and count
-        level_priority = {
-            "critical": 0, "high": 1, "medium": 2, 
-            "low": 3, "informational": 4
-        }
         sorted_detections = sorted(
             self._detections,
-            key=lambda d: (level_priority.get(d["level"].lower(), 5), -d["count"])
+            key=lambda d: (LEVEL_PRIORITY.get(d["level"].lower(), 5), -d["count"])
         )
         
         # Create detection table
@@ -429,17 +499,16 @@ class ZircoliteConsole:
             show_header=True,
             header_style="bold",
             border_style="dim",
+            expand=True,
         )
-        table.add_column("Rule", style="cyan", no_wrap=False, max_width=60)
+        table.add_column("Rule", style="cyan", no_wrap=False, ratio=1)
         table.add_column("Level", justify="center", width=14)
         table.add_column("Events", justify="right", style="magenta")
         
         for det in sorted_detections:
-            level = det["level"]
-            level_style = f"rule.level.{level.lower()}"
             table.add_row(
                 det["title"],
-                Text(level.upper(), style=level_style),
+                make_severity_badge(det["level"]),
                 f"{det['count']:,}"
             )
         
@@ -465,9 +534,9 @@ class ZircoliteConsole:
         self.stats.workers_used = workers_used
         
         # Create summary table
-        summary_table = Table(show_header=False, box=None, padding=(0, 2))
-        summary_table.add_column("Metric", style="dim")
-        summary_table.add_column("Value", style="bold")
+        summary_table = Table(show_header=False, box=None, padding=(0, 2), expand=True)
+        summary_table.add_column("Metric", style="dim", width=16)
+        summary_table.add_column("Value", style="bold", ratio=1)
         
         # Time
         if processing_time >= 60:
@@ -531,7 +600,8 @@ class ZircoliteConsole:
             summary_table,
             title="[bold]Summary[/]",
             border_style="cyan",
-            padding=(1, 2)
+            padding=(1, 2),
+            expand=True,
         )
         self.console.print(panel)
     
@@ -744,9 +814,37 @@ def make_detection_counter(counts: Dict[str, int]) -> Text:
 # FILE TREE VIEW (for multi-file per-file processing)
 # ============================================================================
 
+def _format_file_node(fs: Dict[str, Any]) -> str:
+    """Format a single file stat dict as a Rich-markup tree label."""
+    name = Path(fs["name"]).name
+    events = fs.get("events", 0)
+    detections = fs.get("detections", 0)
+    filtered = fs.get("filtered", 0)
+
+    # Color-code detection count
+    if detections == 0:
+        det_style = "green"
+    elif detections < 5:
+        det_style = "yellow"
+    else:
+        det_style = "red"
+
+    det_label = "detection" if detections == 1 else "detections"
+    det_text = f"[{det_style}]{detections} {det_label}[/]"
+
+    parts = [f"[cyan]{name}[/]", f"[magenta]{events:,}[/] events", det_text]
+    if filtered > 0:
+        parts.append(f"[dim]{filtered:,} filtered[/]")
+
+    return " \u2014 ".join(parts)
+
+
 def build_file_tree(label: str, file_stats: List[Dict[str, Any]]) -> Tree:
     """
     Build a Rich Tree showing per-file processing results.
+
+    When files come from multiple directories, they are automatically
+    grouped by parent directory for a nested, navigable tree.
     
     Args:
         label: Root label for the tree
@@ -756,36 +854,39 @@ def build_file_tree(label: str, file_stats: List[Dict[str, Any]]) -> Tree:
         Rich Tree renderable
     """
     tree = Tree(f"[bold]{label}[/]")
-    
+
+    # Group by parent directory
+    by_dir: Dict[str, list] = {}
     for fs in file_stats:
-        name = fs["name"]
-        events = fs.get("events", 0)
-        detections = fs.get("detections", 0)
-        filtered = fs.get("filtered", 0)
-        
-        # Color-code detection count
-        if detections == 0:
-            det_style = "green"
-        elif detections < 5:
-            det_style = "yellow"
+        parent = str(Path(fs["name"]).parent)
+        by_dir.setdefault(parent, []).append(fs)
+
+    for dir_path, files in sorted(by_dir.items()):
+        if dir_path == "." and len(by_dir) == 1:
+            # Flat – add directly to root
+            for fs in files:
+                tree.add(_format_file_node(fs))
         else:
-            det_style = "red"
-        
-        det_label = "detection" if detections == 1 else "detections"
-        det_text = f"[{det_style}]{detections} {det_label}[/]"
-        
-        parts = [f"[cyan]{name}[/]", f"[magenta]{events:,}[/] events", det_text]
-        if filtered > 0:
-            parts.append(f"[dim]{filtered:,} filtered[/]")
-        
-        tree.add(" — ".join(parts))
-    
+            branch = tree.add(f"[dim]{dir_path}/[/]")
+            for fs in files:
+                branch.add(_format_file_node(fs))
+
     return tree
 
 
 # ============================================================================
 # SEVERITY STYLES AND FORMATTERS
 # ============================================================================
+
+# Sort-order priority for severity levels (critical first, informational last).
+# Canonical source – import this wherever results need severity-ordering.
+LEVEL_PRIORITY = {
+    "critical": 0,
+    "high": 1,
+    "medium": 2,
+    "low": 3,
+    "informational": 4,
+}
 
 # Color/style mapping for severity levels
 LEVEL_STYLES = {
@@ -803,6 +904,34 @@ def format_level(level: str) -> str:
     if style:
         return f"[{style}]{level}[/]"
     return level
+
+
+def make_severity_badge(level: str) -> Text:
+    """Return a fixed-width, styled severity badge.
+
+    Every severity level gets a contrasting background colour so that
+    the badge is visually consistent across all rows and instantly
+    scannable.  The label is centered inside the ``Text`` renderable
+    using ``justify="center"`` so it aligns correctly regardless of
+    the column width.
+
+    Args:
+        level: Severity level string (e.g. "critical", "high", ...)
+
+    Returns:
+        ``rich.text.Text`` renderable with consistent width and styling.
+    """
+    _BADGES = {
+        "critical":      ("CRITICAL", "bold white on red"),
+        "high":          ("HIGH",     "bold white on magenta"),
+        "medium":        ("MEDIUM",   "bold black on yellow"),
+        "low":           ("LOW",      "bold white on green"),
+        "informational": ("INFO",     "white on bright_black"),
+    }
+    label, style = _BADGES.get(level.lower(), (level.upper(), ""))
+    # Pad to fixed width so badges are visually uniform, then center
+    badge = Text(f" {label} ", style=style, justify="center")
+    return badge
 
 
 # ============================================================================
@@ -877,24 +1006,23 @@ def build_attack_summary(results: List[Dict[str, Any]]) -> Optional[Panel]:
     sorted_tactics = sorted(tactic_hits.items(), key=lambda x: -x[1])
     max_hits = max(tactic_hits.values()) if tactic_hits else 1
 
-    table = Table(show_header=False, box=None, padding=(0, 1))
+    table = Table(show_header=False, box=None, padding=(0, 1), expand=True)
     table.add_column("Tactic", style="cyan", width=22, no_wrap=True)
     table.add_column("Bar", width=20)
-    table.add_column("Details", style="dim")
+    table.add_column("Details", style="dim", ratio=1)
 
     for tactic, hits in sorted_tactics:
         techs = tactic_techniques.get(tactic, set())
-        bar_width = max(1, int(16 * hits / max_hits)) if max_hits > 0 else 1
-        bar = "█" * bar_width + "░" * (16 - bar_width)
+        bar = Bar(size=max_hits, begin=0, end=hits, width=16, color="yellow", bgcolor="bright_black")
 
         tech_count = len(techs)
         tech_label = "technique" if tech_count == 1 else "techniques"
         hit_label = "hit" if hits == 1 else "hits"
         detail = f"{tech_count} {tech_label} ({hits:,} {hit_label})"
 
-        table.add_row(tactic, f"[yellow]{bar}[/]", detail)
+        table.add_row(tactic, bar, detail)
 
-    return Panel(table, title="[bold]🗺  ATT&CK Coverage[/]", border_style="yellow", padding=(0, 1))
+    return Panel(table, title="[bold]🗺  ATT&CK Coverage[/]", border_style="yellow", padding=(0, 1), expand=True)
 
 
 # ============================================================================
@@ -919,11 +1047,12 @@ def build_detection_table(results: List[Dict[str, Any]], title: Optional[str] = 
         border_style="dim",
         padding=(0, 1),
         title=f"[bold cyan]{title}[/]" if title else None,
+        expand=True,
     )
     table.add_column("Severity", justify="center", width=14, no_wrap=True)
-    table.add_column("Rule", no_wrap=False, max_width=50)
+    table.add_column("Rule", no_wrap=False, ratio=1)
     table.add_column("Events", justify="right", style="magenta", width=8)
-    table.add_column("ATT&CK", style="dim", max_width=22, no_wrap=True)
+    table.add_column("ATT&CK", style="dim", width=22, no_wrap=True)
 
     for result in results:
         level = result.get("rule_level", "unknown")
@@ -931,9 +1060,8 @@ def build_detection_table(results: List[Dict[str, Any]], title: Optional[str] = 
         count = result.get("count", 0)
         tags = result.get("tags", [])
 
-        # Styled severity badge
-        level_style = LEVEL_STYLES.get(level.lower(), "")
-        level_text = Text(level.upper(), style=level_style) if level_style else Text(level.upper())
+        # Fixed-width severity badge with background highlighting
+        level_text = make_severity_badge(level)
 
         # Extract ATT&CK technique IDs from tags
         attack_ids = []
@@ -977,58 +1105,3 @@ def make_file_link(path: str) -> str:
         return f"[cyan]{path}[/]"
 
 
-# ============================================================================
-# POST-RUN CONTEXTUAL SUGGESTIONS
-# ============================================================================
-
-def get_suggestions(
-    results: List[Dict[str, Any]],
-    processing_time: float,
-    has_template: bool = False,
-    has_package: bool = False,
-) -> List[str]:
-    """
-    Generate contextual suggestions based on run results.
-
-    Args:
-        results: Detection results list
-        processing_time: Total processing time in seconds
-        has_template: Whether templates were used
-        has_package: Whether package was created
-
-    Returns:
-        List of suggestion strings with Rich markup
-    """
-    tips: List[str] = []
-
-    if results:
-        has_critical = any(
-            r.get("rule_level", "").lower() in ("critical", "high")
-            for r in results
-        )
-        if has_critical and not has_template and not has_package:
-            tips.append(
-                "Critical/High detections found — generate an interactive report with "
-                "[cyan]--package[/]"
-            )
-    else:
-        tips.append(
-            "No detections found. Use [cyan]--showall[/] to verify rules are executing correctly"
-        )
-
-    if processing_time > 120:
-        tips.append(
-            "Consider [cyan]--unified-db[/] for cross-file correlation, "
-            "or reduce the ruleset scope for faster processing"
-        )
-
-    return tips
-
-
-def print_suggestions(tips: List[str]):
-    """Print contextual suggestions. Suppressed in quiet mode."""
-    if _quiet_mode or not tips:
-        return
-    console.print()
-    for tip in tips:
-        console.print(f"  [dim]💡[/] {tip}")

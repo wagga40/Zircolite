@@ -1,7 +1,8 @@
 """
 Integration tests for Zircolite.
 
-These tests verify end-to-end workflows and component interactions.
+These tests verify end-to-end workflows and component interactions
+using the streaming pipeline (single-pass processing).
 """
 
 import json
@@ -11,8 +12,8 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from zircolite import (
-    JSONFlattener,
     ZircoliteCore,
+    StreamingEventProcessor,
     EvtxExtractor,
     TemplateEngine,
     ProcessingConfig,
@@ -21,11 +22,30 @@ from zircolite import (
 )
 
 
+def _run_streaming_pipeline(json_file, config_file, args_config, test_logger,
+                            proc_config=None, input_type='json'):
+    """Helper: run streaming pipeline on a JSON file, return ZircoliteCore."""
+    if proc_config is None:
+        proc_config = ProcessingConfig(disable_progress=True)
+    zircore = ZircoliteCore(
+        config=config_file,
+        processing_config=proc_config,
+        logger=test_logger
+    )
+    zircore.run_streaming(
+        [str(json_file)],
+        input_type=input_type,
+        args_config=args_config,
+        disable_progress=True,
+    )
+    return zircore
+
+
 class TestFullPipelineJSON:
     """Integration tests for complete JSON processing pipeline."""
     
     def test_json_to_detection(self, field_mappings_file, sample_ruleset, tmp_path, args_config_evtx, test_logger):
-        """Test complete pipeline: JSON file -> flattening -> detection."""
+        """Test complete pipeline: JSON file -> streaming -> detection."""
         # Create sample JSON events file
         events = [
             {"Event": {"System": {"EventID": 1}, "EventData": {"CommandLine": "powershell.exe -c whoami", "Image": "C:\\powershell.exe"}}},
@@ -38,28 +58,11 @@ class TestFullPipelineJSON:
             for event in events:
                 f.write(json.dumps(event) + "\n")
         
-        # Step 1: Flatten JSON
-        proc_config = ProcessingConfig(disable_progress=True)
-        flattener = JSONFlattener(
-            config_file=field_mappings_file,
-            args_config=args_config_evtx,
-            processing_config=proc_config,
-            logger=test_logger
-        )
-        result = flattener.run(str(json_file))
+        # Stream, flatten and insert in one pass
+        args_config_evtx.json_input = True
+        zircore = _run_streaming_pipeline(json_file, field_mappings_file, args_config_evtx, test_logger)
         
-        assert len(result["dbValues"]) == 3
-        
-        # Step 2: Create ZircoliteCore and insert data
-        zircore = ZircoliteCore(
-            config=field_mappings_file,
-            processing_config=proc_config,
-            logger=test_logger
-        )
-        zircore.create_db(result["dbFields"])
-        zircore.insert_flattened_json_to_db(result["dbValues"])
-        
-        # Step 3: Load and execute ruleset
+        # Execute ruleset
         zircore.load_ruleset_from_var(sample_ruleset, rule_filters=None)
         
         output_file = str(tmp_path / "detections.json")
@@ -93,25 +96,11 @@ class TestFullPipelineJSON:
         # Configure for JSON array input
         default_args_config.json_array_input = True
         
-        proc_config = ProcessingConfig(disable_progress=True)
-        flattener = JSONFlattener(
-            config_file=field_mappings_file,
-            args_config=default_args_config,
-            processing_config=proc_config,
-            logger=test_logger
+        zircore = _run_streaming_pipeline(
+            json_file, field_mappings_file, default_args_config, test_logger,
+            input_type='json_array'
         )
-        result = flattener.run(str(json_file))
         
-        assert len(result["dbValues"]) == 2
-        
-        # Process through ZircoliteCore
-        zircore = ZircoliteCore(
-            config=field_mappings_file,
-            processing_config=proc_config,
-            logger=test_logger
-        )
-        zircore.create_db(result["dbFields"])
-        zircore.insert_flattened_json_to_db(result["dbValues"])
         zircore.load_ruleset_from_var(sample_ruleset, rule_filters=None)
         
         output_file = str(tmp_path / "detections.json")
@@ -127,7 +116,7 @@ class TestFullPipelineCSV:
     """Integration tests for CSV input processing."""
     
     def test_csv_to_detection(self, tmp_path, test_logger, minimal_field_mappings, sample_ruleset, default_args_config):
-        """Test complete pipeline with CSV input."""
+        """Test complete pipeline with CSV input via streaming."""
         # Create config file
         config_file = tmp_path / "config.json"
         config_file.write_text(json.dumps(minimal_field_mappings))
@@ -141,33 +130,23 @@ class TestFullPipelineCSV:
 """
         csv_file.write_text(csv_content)
         
-        # Extract CSV to JSON
-        ext_config = ExtractorConfig(csv_input=True)
-        extractor = EvtxExtractor(
-            extractor_config=ext_config,
-            logger=test_logger
-        )
-        extractor.run(str(csv_file))
-        
-        # Get the converted JSON file
-        json_files = list(Path(extractor.tmpDir).glob("*.json"))
-        assert len(json_files) == 1
-        
-        # Flatten and process
+        # Use streaming CSV processor directly
         default_args_config.csv_input = True
-        
         proc_config = ProcessingConfig(disable_progress=True)
-        flattener = JSONFlattener(
-            config_file=str(config_file),
-            args_config=default_args_config,
+        zircore = ZircoliteCore(
+            config=str(config_file),
             processing_config=proc_config,
             logger=test_logger
         )
-        result = flattener.run(str(json_files[0]))
+        total_events = zircore.run_streaming(
+            [str(csv_file)],
+            input_type='csv',
+            args_config=default_args_config,
+            disable_progress=True,
+        )
         
-        assert len(result["dbValues"]) == 3
-        
-        extractor.cleanup()
+        assert total_events == 3
+        zircore.close()
 
 
 class TestFullPipelineAuditd:
@@ -183,7 +162,7 @@ type=SYSCALL msg=audit(1705318202.789:458): arch=c000003e syscall=59 success=yes
 """
         auditd_file.write_text(auditd_content)
         
-        # Extract to JSON
+        # Extract to JSON (extractor still needed for auditd conversion)
         ext_config = ExtractorConfig(auditd_logs=True)
         extractor = EvtxExtractor(
             extractor_config=ext_config,
@@ -214,7 +193,7 @@ class TestMultipleFileProcessing:
     """Integration tests for processing multiple files."""
     
     def test_process_multiple_json_files(self, sample_ruleset, tmp_path, args_config_evtx, test_logger, minimal_field_mappings):
-        """Test processing multiple JSON files."""
+        """Test processing multiple JSON files via streaming."""
         # Create config file in separate location
         config_dir = tmp_path / "config"
         config_dir.mkdir()
@@ -224,6 +203,7 @@ class TestMultipleFileProcessing:
         # Create multiple JSON files in events directory
         events_dir = tmp_path / "events"
         events_dir.mkdir()
+        json_files = []
         for i in range(3):
             events = [
                 {"Event": {"System": {"EventID": 1}, "EventData": {"CommandLine": f"powershell.exe test{i}"}}}
@@ -232,30 +212,25 @@ class TestMultipleFileProcessing:
             with open(json_file, 'w') as f:
                 for event in events:
                     f.write(json.dumps(event) + "\n")
+            json_files.append(str(json_file))
         
-        # Process all files (only from events dir to avoid picking up config)
-        json_files = list(events_dir.glob("*.json"))
-        
+        # Process all files via streaming
+        args_config_evtx.json_input = True
         proc_config = ProcessingConfig(disable_progress=True)
-        flattener = JSONFlattener(
-            config_file=str(config_file),
-            args_config=args_config_evtx,
-            processing_config=proc_config,
-            logger=test_logger
-        )
-        flattener.run_all(json_files)
-        
-        # Should have events from all files
-        assert len(flattener.values_stmt) == 3
-        
-        # Process through ZircoliteCore
         zircore = ZircoliteCore(
             config=str(config_file),
             processing_config=proc_config,
             logger=test_logger
         )
-        zircore.create_db(flattener.field_stmt)
-        zircore.insert_flattened_json_to_db(flattener.values_stmt)
+        total_events = zircore.run_streaming(
+            json_files,
+            input_type='json',
+            args_config=args_config_evtx,
+            disable_progress=True,
+        )
+        
+        # Should have events from all files
+        assert total_events == 3
         
         # Verify all events are in database
         results = zircore.execute_select_query("SELECT COUNT(*) as cnt FROM logs")
@@ -279,23 +254,9 @@ class TestDetectionToTemplate:
             for event in events:
                 f.write(json.dumps(event) + "\n")
         
-        # Process events
-        proc_config = ProcessingConfig(disable_progress=True)
-        flattener = JSONFlattener(
-            config_file=field_mappings_file,
-            args_config=args_config_evtx,
-            processing_config=proc_config,
-            logger=test_logger
-        )
-        result = flattener.run(str(json_file))
-        
-        zircore = ZircoliteCore(
-            config=field_mappings_file,
-            processing_config=proc_config,
-            logger=test_logger
-        )
-        zircore.create_db(result["dbFields"])
-        zircore.insert_flattened_json_to_db(result["dbValues"])
+        # Process events via streaming
+        args_config_evtx.json_input = True
+        zircore = _run_streaming_pipeline(json_file, field_mappings_file, args_config_evtx, test_logger)
         zircore.load_ruleset_from_var(sample_ruleset, rule_filters=None)
         
         output_file = str(tmp_path / "detections.json")
@@ -338,7 +299,7 @@ class TestDatabasePersistence:
     
     def test_save_and_load_database(self, field_mappings_file, sample_ruleset, tmp_path, args_config_evtx, test_logger):
         """Test saving database to disk and reloading."""
-        # Create and populate database
+        # Create events
         events = [
             {"Event": {"System": {"EventID": 1}, "EventData": {"CommandLine": "powershell.exe test"}}},
             {"Event": {"System": {"EventID": 1}, "EventData": {"CommandLine": "whoami"}}},
@@ -349,22 +310,9 @@ class TestDatabasePersistence:
             for event in events:
                 f.write(json.dumps(event) + "\n")
         
-        proc_config = ProcessingConfig(disable_progress=True)
-        flattener = JSONFlattener(
-            config_file=field_mappings_file,
-            args_config=args_config_evtx,
-            processing_config=proc_config,
-            logger=test_logger
-        )
-        result = flattener.run(str(json_file))
-        
-        zircore = ZircoliteCore(
-            config=field_mappings_file,
-            processing_config=proc_config,
-            logger=test_logger
-        )
-        zircore.create_db(result["dbFields"])
-        zircore.insert_flattened_json_to_db(result["dbValues"])
+        # Process via streaming
+        args_config_evtx.json_input = True
+        zircore = _run_streaming_pipeline(json_file, field_mappings_file, args_config_evtx, test_logger)
         
         # Save to disk
         db_file = str(tmp_path / "events.db")
@@ -372,6 +320,7 @@ class TestDatabasePersistence:
         zircore.close()
         
         # Load from disk in new instance
+        proc_config = ProcessingConfig(disable_progress=True)
         zircore2 = ZircoliteCore(
             config=field_mappings_file,
             processing_config=proc_config,
@@ -411,32 +360,30 @@ class TestCSVOutput:
             for event in events:
                 f.write(json.dumps(event) + "\n")
         
+        # Process via streaming
+        args_config_evtx.json_input = True
         proc_config = ProcessingConfig(disable_progress=True)
-        flattener = JSONFlattener(
-            config_file=field_mappings_file,
-            args_config=args_config_evtx,
-            processing_config=proc_config,
-            logger=test_logger
-        )
-        result = flattener.run(str(json_file))
+        zircore = _run_streaming_pipeline(json_file, field_mappings_file, args_config_evtx, test_logger, proc_config=proc_config)
         
-        # Use CSV mode
+        # Create new core with CSV mode for output
         csv_proc_config = ProcessingConfig(
             disable_progress=True,
             csv_mode=True,
             delimiter=","
         )
-        zircore = ZircoliteCore(
+        csv_core = ZircoliteCore(
             config=field_mappings_file,
             processing_config=csv_proc_config,
             logger=test_logger
         )
-        zircore.create_db(result["dbFields"])
-        zircore.insert_flattened_json_to_db(result["dbValues"])
-        zircore.load_ruleset_from_var(sample_ruleset, rule_filters=None)
+        # Copy data from streaming core to CSV core
+        zircore.db_connection.backup(csv_core.db_connection)
+        zircore.close()
+        
+        csv_core.load_ruleset_from_var(sample_ruleset, rule_filters=None)
         
         output_file = str(tmp_path / "detections.csv")
-        zircore.execute_ruleset(output_file, write_mode='w', last_ruleset=True)
+        csv_core.execute_ruleset(output_file, write_mode='w', last_ruleset=True)
         
         # Verify CSV output
         assert Path(output_file).exists()
@@ -449,7 +396,7 @@ class TestCSVOutput:
         assert "rule_description" in content
         assert "rule_level" in content
         
-        zircore.close()
+        csv_core.close()
 
 
 class TestRuleFiltering:
@@ -466,22 +413,8 @@ class TestRuleFiltering:
             for event in events:
                 f.write(json.dumps(event) + "\n")
         
-        proc_config = ProcessingConfig(disable_progress=True)
-        flattener = JSONFlattener(
-            config_file=field_mappings_file,
-            args_config=args_config_evtx,
-            processing_config=proc_config,
-            logger=test_logger
-        )
-        result = flattener.run(str(json_file))
-        
-        zircore = ZircoliteCore(
-            config=field_mappings_file,
-            processing_config=proc_config,
-            logger=test_logger
-        )
-        zircore.create_db(result["dbFields"])
-        zircore.insert_flattened_json_to_db(result["dbValues"])
+        args_config_evtx.json_input = True
+        zircore = _run_streaming_pipeline(json_file, field_mappings_file, args_config_evtx, test_logger)
         
         # Filter out PowerShell rule
         zircore.load_ruleset_from_var(sample_ruleset, rule_filters=["PowerShell"])
@@ -496,7 +429,7 @@ class TestTimeFiltering:
     """Integration tests for time-based filtering."""
     
     def test_filter_events_by_time(self, tmp_path, args_config_evtx, test_logger, minimal_field_mappings):
-        """Test filtering events by timestamp."""
+        """Test filtering events by timestamp via streaming."""
         config_file = tmp_path / "config.json"
         config_file.write_text(json.dumps(minimal_field_mappings))
         
@@ -513,30 +446,33 @@ class TestTimeFiltering:
                 f.write(json.dumps(event) + "\n")
         
         # Filter to only include events after March 2024
+        args_config_evtx.json_input = True
         proc_config = ProcessingConfig(
             time_after="2024-03-01T00:00:00",
             time_before="2024-09-01T00:00:00",
             time_field="SystemTime",
             disable_progress=True
         )
-        flattener = JSONFlattener(
-            config_file=str(config_file),
-            args_config=args_config_evtx,
-            processing_config=proc_config,
-            logger=test_logger
+        zircore = _run_streaming_pipeline(
+            json_file, str(config_file), args_config_evtx, test_logger,
+            proc_config=proc_config
         )
-        result = flattener.run(str(json_file))
         
         # Should only have the middle event
-        assert len(result["dbValues"]) == 1
-        assert "middle" in str(result["dbValues"][0])
+        results = zircore.execute_select_query("SELECT * FROM logs")
+        assert len(results) == 1
+        # Check it's the middle event
+        row_values = str(dict(results[0]))
+        assert "middle" in row_values
+        
+        zircore.close()
 
 
 class TestHashGeneration:
     """Integration tests for hash generation."""
     
     def test_events_with_hashes(self, field_mappings_file, tmp_path, args_config_evtx, test_logger):
-        """Test that xxhash is computed for events."""
+        """Test that xxhash is computed for events via streaming."""
         events = [
             {"Event": {"System": {"EventID": 1}, "EventData": {"CommandLine": "test1"}}},
             {"Event": {"System": {"EventID": 1}, "EventData": {"CommandLine": "test2"}}},
@@ -547,20 +483,21 @@ class TestHashGeneration:
             for event in events:
                 f.write(json.dumps(event) + "\n")
         
+        args_config_evtx.json_input = True
         proc_config = ProcessingConfig(hashes=True, disable_progress=True)
-        flattener = JSONFlattener(
-            config_file=field_mappings_file,
-            args_config=args_config_evtx,
-            processing_config=proc_config,
-            logger=test_logger
+        zircore = _run_streaming_pipeline(
+            json_file, field_mappings_file, args_config_evtx, test_logger,
+            proc_config=proc_config
         )
-        result = flattener.run(str(json_file))
         
-        # Each event should have a hash
-        for event in result["dbValues"]:
-            assert "OriginalLogLinexxHash" in event
-            # Hash should be a non-empty string
-            assert len(event["OriginalLogLinexxHash"]) > 0
+        # Each event should have a hash in the database
+        results = zircore.execute_select_query("SELECT OriginalLogLinexxHash FROM logs")
+        assert len(results) == 2
+        for row in results:
+            assert row['OriginalLogLinexxHash'] is not None
+            assert len(str(row['OriginalLogLinexxHash'])) > 0
+        
+        zircore.close()
 
 
 class TestResultLimiting:
@@ -583,24 +520,16 @@ class TestResultLimiting:
             for event in events:
                 f.write(json.dumps(event) + "\n")
         
+        # Process via streaming, then create ZircoliteCore with limit
+        args_config_evtx.json_input = True
         proc_config = ProcessingConfig(disable_progress=True)
-        flattener = JSONFlattener(
-            config_file=field_mappings_file,
-            args_config=args_config_evtx,
-            processing_config=proc_config,
-            logger=test_logger
+        zircore = _run_streaming_pipeline(
+            json_file, field_mappings_file, args_config_evtx, test_logger,
+            proc_config=proc_config
         )
-        result = flattener.run(str(json_file))
         
-        # Create ZircoliteCore with limit
-        limit_proc_config = ProcessingConfig(limit=10, disable_progress=True)
-        zircore = ZircoliteCore(
-            config=field_mappings_file,
-            processing_config=limit_proc_config,
-            logger=test_logger
-        )
-        zircore.create_db(result["dbFields"])
-        zircore.insert_flattened_json_to_db(result["dbValues"])
+        # Set limit after processing
+        zircore.limit = 10
         
         ruleset = [{
             "title": "High Volume Rule",
@@ -628,7 +557,7 @@ class TestErrorHandling:
     """Integration tests for error handling."""
     
     def test_handles_malformed_events(self, field_mappings_file, tmp_path, args_config_evtx, test_logger):
-        """Test handling of malformed events in input."""
+        """Test handling of malformed events via streaming."""
         # Mix valid and invalid JSON
         content = '''{"Event": {"System": {"EventID": 1}, "EventData": {"CommandLine": "valid1"}}}
 {malformed json line
@@ -638,17 +567,14 @@ class TestErrorHandling:
         json_file = tmp_path / "events.json"
         json_file.write_text(content)
         
-        proc_config = ProcessingConfig(disable_progress=True)
-        flattener = JSONFlattener(
-            config_file=field_mappings_file,
-            args_config=args_config_evtx,
-            processing_config=proc_config,
-            logger=test_logger
-        )
-        result = flattener.run(str(json_file))
+        args_config_evtx.json_input = True
+        zircore = _run_streaming_pipeline(json_file, field_mappings_file, args_config_evtx, test_logger)
         
-        # Should have processed valid events
-        assert len(result["dbValues"]) >= 1
+        # Should have processed valid events (streaming skips malformed lines)
+        results = zircore.execute_select_query("SELECT COUNT(*) as cnt FROM logs")
+        assert results[0]['cnt'] >= 1
+        
+        zircore.close()
     
     def test_handles_empty_ruleset(self, field_mappings_file, tmp_path, args_config_evtx, test_logger):
         """Test handling of empty ruleset."""
@@ -661,22 +587,8 @@ class TestErrorHandling:
             for event in events:
                 f.write(json.dumps(event) + "\n")
         
-        proc_config = ProcessingConfig(disable_progress=True)
-        flattener = JSONFlattener(
-            config_file=field_mappings_file,
-            args_config=args_config_evtx,
-            processing_config=proc_config,
-            logger=test_logger
-        )
-        result = flattener.run(str(json_file))
-        
-        zircore = ZircoliteCore(
-            config=field_mappings_file,
-            processing_config=proc_config,
-            logger=test_logger
-        )
-        zircore.create_db(result["dbFields"])
-        zircore.insert_flattened_json_to_db(result["dbValues"])
+        args_config_evtx.json_input = True
+        zircore = _run_streaming_pipeline(json_file, field_mappings_file, args_config_evtx, test_logger)
         zircore.load_ruleset_from_var([], rule_filters=None)
         
         output_file = str(tmp_path / "detections.json")

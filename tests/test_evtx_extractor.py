@@ -38,21 +38,15 @@ class TestEvtxExtractorInit:
         extractor.cleanup()
     
     def test_init_handles_existing_directory(self, tmp_path, test_logger):
-        """Test handling when provided directory already exists."""
+        """Test that when provided directory already exists, it is used."""
         existing_dir = tmp_path / "existing"
         existing_dir.mkdir()
         
         config = ExtractorConfig(tmp_dir=str(existing_dir))
         extractor = EvtxExtractor(extractor_config=config, logger=test_logger)
         
-        # When directory exists, should use a different random directory name
-        assert extractor.tmpDir != str(existing_dir)
-        # The new tmpDir starts with 'tmp-'
-        assert extractor.tmpDir.startswith("tmp-")
-        
-        # Create the directory for cleanup to work (the constructor errors but doesn't create it)
-        if not Path(extractor.tmpDir).exists():
-            Path(extractor.tmpDir).mkdir(exist_ok=True)
+        assert extractor.tmpDir == str(existing_dir)
+        assert Path(existing_dir).exists()
         
         extractor.cleanup()
     
@@ -471,17 +465,14 @@ class TestEvtxExtractorEvtxBinding:
         reason="evtx (PyEvtxParser) not installed"
     )
     def test_run_using_bindings_with_real_evtx(self, test_logger):
-        """Test EVTX processing with real EVTX file if available."""
-        # Check if sample EVTX exists
-        sample_evtx = Path("build/LINUX-ARM64-GLIBC/sample.evtx")
+        """Test EVTX processing with real EVTX file (Sigma regression sample)."""
+        # Sample from SigmaHQ/sigma regression_data: proc_creation_win_bitsadmin_download
+        sample_evtx = Path(__file__).parent / "fixtures" / "sample_bitsadmin.evtx"
         if not sample_evtx.exists():
-            pytest.skip("No sample EVTX file available")
-        
+            pytest.skip("No sample EVTX file available (tests/fixtures/sample_bitsadmin.evtx)")
         if importlib.util.find_spec("evtx") is None:
             pytest.skip("evtx not available")
-        
         extractor = EvtxExtractor(logger=test_logger)
-        
         extractor.run_using_bindings(str(sample_evtx))
         
         json_files = list(Path(extractor.tmpDir).glob("*.json"))
@@ -499,6 +490,10 @@ class TestEvtxExtractorEvtxBinding:
         
         # Should not raise exception
         extractor.run_using_bindings(str(invalid_evtx))
+        
+        # Invalid input should not produce JSON output
+        json_files = list(Path(extractor.tmpDir).glob("*.json"))
+        assert len(json_files) == 0
         
         extractor.cleanup()
 

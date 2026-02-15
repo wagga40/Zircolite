@@ -298,6 +298,33 @@ class TestMemoryAwareParallelProcessorProcessFiles:
         assert stats.processed_files == 2
         assert stats.failed_files == 1
 
+    def test_throttle_events_counted_under_memory_pressure(self, test_logger, tmp_path):
+        """When memory pressure is high, throttle events should be recorded."""
+        files = []
+        for i in range(6):
+            f = tmp_path / f"test_{i}.json"
+            f.write_text('{}')
+            files.append(f)
+
+        config = ParallelConfig(
+            max_workers=2,
+            memory_limit_percent=10.0,
+            memory_check_interval=1,
+        )
+        processor = MemoryAwareParallelProcessor(config=config, logger=test_logger)
+
+        def simple_process(f):
+            return (1, {"file": str(f)})
+
+        with patch('psutil.virtual_memory') as mock_vm:
+            mock_vm.return_value.percent = 95.0
+            results, stats = processor.process_files_parallel(
+                files, simple_process, disable_progress=True,
+            )
+
+        assert stats.processed_files == 6
+        assert stats.throttle_events > 0
+
 
 class TestEstimateParallelViability:
     """Tests for estimate_parallel_viability function."""

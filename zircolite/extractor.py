@@ -49,12 +49,21 @@ class EvtxExtractor:
         
         self.logger = logger or logging.getLogger(__name__)
         
-        # Handle temporary directory
-        if cfg.tmp_dir and Path(cfg.tmp_dir).is_dir():
-            self.tmpDir = f"tmp-{self.rand_string()}"
-            self.logger.error(f"[red]   [-] Provided directory already exists using '{self.tmpDir}' instead[/]")
+        # Handle temporary directory: use provided path (create if needed) or a unique dir in cwd
+        if cfg.tmp_dir:
+            path = Path(cfg.tmp_dir)
+            if path.exists() and not path.is_dir():
+                self.logger.error(
+                    f"[red]   [-] Path exists and is not a directory: {path}, using random tmp dir[/]"
+                )
+                self.tmpDir = f"tmp-{self.rand_string()}"
+                os.mkdir(self.tmpDir)
+            else:
+                self.tmpDir = str(path)
+                if not path.exists():
+                    os.mkdir(self.tmpDir)
         else:
-            self.tmpDir = cfg.tmp_dir or f"tmp-{self.rand_string()}"
+            self.tmpDir = f"tmp-{self.rand_string()}"
             os.mkdir(self.tmpDir)
         
         self.sysmon4linux = cfg.sysmon4linux
@@ -240,6 +249,7 @@ class EvtxExtractor:
                     
         except Exception as e:
             self.logger.error(f"[red]   [-] {e}[/]")
+            raise
 
     def cleanup(self):
         shutil.rmtree(self.tmpDir)

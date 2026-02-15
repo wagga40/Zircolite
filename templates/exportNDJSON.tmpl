@@ -1,0 +1,4 @@
+{# Generic NDJSON: one JSON object per line. Rule metadata (title, id, description, rule_level) + event fields. #}
+{# Use with: --template templates/exportNDJSON.tmpl --templateOutput detections.ndjson #}
+{% for elem in data %}{% for match in elem["matches"] %}{"title":{{ elem["title"]|tojson }},"id":{{ elem["id"]|tojson }},"description":{{ elem["description"]|tojson }},"rule_level":{{ elem["rule_level"]|tojson }},{% for key, value in match.items() %}"{{ key }}":{{ value|tojson }}{{ "," if not loop.last }}{% endfor %}}
+{% endfor %}{% endfor %}

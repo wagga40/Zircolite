@@ -1,0 +1,5 @@
+{# CSV summary: one row per rule (not per event). Use for triage and reporting. #}
+{# Use with: --template templates/exportSummaryCSV.tmpl --templateOutput summary.csv #}
+rule_title,rule_id,rule_level,count,description
+{% for elem in data %}{{ elem["title"]|tojson }},{{ elem["id"]|tojson }},{{ elem["rule_level"]|tojson }},{{ elem["count"] }},{{ elem["description"]|tojson }}
+{% endfor %}

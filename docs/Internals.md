@@ -96,17 +96,29 @@ flowchart LR
     C -->|No| E[Replace Value]
     
     subgraph Allowed
-        R[re / base64 / chardet]
+        R[re / base64 / chardet / math]
     end
     
     Allowed -.-> B
+    
+    subgraph Sources
+        S1[Inline code<br/>type: python] --> B
+        S2[External file<br/>type: python_file] --> B
+    end
 ```
 
 **Transform capabilities:**
 - Regex extraction (`re` module)
 - Base64 encoding/decoding
-- Character encoding detection
+- Character encoding detection (`chardet`)
+- Mathematical functions (`math`)
 - Custom logic in sandboxed Python
+
+**Transform sources:**
+- **Inline** (`type: python`): code defined directly in `config.yaml`
+- **External** (`type: python_file`): code loaded from `.py` files in `transforms_dir` (default: `config/transforms/`)
+- Both types use the exact same RestrictedPython sandbox
+- A standalone tester (`config/transform_tester.py`) is provided for local development
 
 ### Log Type Detection
 
@@ -168,7 +180,7 @@ Zircolite is built around several key classes, organized in the `zircolite/` pac
 - **ZircoliteCore** (`core.py`): The main detection engine that manages the SQLite database, loads rulesets, and executes detection rules.
 - **ZircoliteConsole** (`console.py`): Rich-based terminal output with styled messages, progress bars, live detection counters, detection results tables, summary panels, MITRE ATT&CK coverage panels, terminal hyperlinks, post-run suggestions, file tree views, and quiet mode support.
 - **StreamingEventProcessor** (`streaming.py`): Single-pass processor for efficient event extraction, flattening, and database insertion.
-- **JSONFlattener** (`flattener.py`): Processes and flattens JSON log events, applies field mappings, aliases, splits, and transforms.
+- **Processing pipeline helpers** (`processing.py`): Coordinates processing modes (per-file, unified-db, parallel workers), result aggregation, and output writing.
 - **EvtxExtractor** (`extractor.py`): Converts various log formats (EVTX, XML, Auditd, Sysmon for Linux, CSV) to JSON.
 - **RulesetHandler** (`rules.py`): Manages ruleset loading and conversion, including native Sigma (YAML) to Zircolite format (JSON) conversion using pySigma.
 - **RulesUpdater** (`rules.py`): Downloads and updates rulesets from the Zircolite-Rules-v2 repository.
@@ -198,7 +210,7 @@ The heuristics consider:
 
 Use `--no-auto-mode` to disable automatic selection and use per-file mode by default, or `--unified-db` to force unified mode.
 
-#### Streaming Mode (Default)
+#### Processing Pipeline
 
 1. **Single-Pass Processing**: `StreamingEventProcessor` reads events, flattens them, and inserts into the database in one pass.
 2. **Dynamic Schema Discovery**: Database columns are added dynamically as new fields are discovered.
@@ -206,21 +218,12 @@ Use `--no-auto-mode` to disable automatic selection and use per-file mode by def
 4. **Rule Execution**: `ZircoliteCore` executes each rule's SQL query against the database. Matching results are displayed in a severity-sorted Rich Table with Rule, Events, and ATT&CK columns. In parallel mode, table display is suppressed per-worker (`show_table=False`) and an aggregated table is shown after all workers complete.
 5. **Result Output**: Matches are written to the output file (JSON or CSV) and optionally processed through templates.
 
-Benefits of streaming mode:
-- Faster processing
+Benefits:
+- Fast single-pass processing
 - No intermediate JSON files (eliminates disk I/O)
 - Single JSON parse per event
 - Lower memory footprint
-
-#### Traditional Mode
-
-1. **Input Processing**: Log files are read and converted to JSON format using `EvtxExtractor`.
-2. **Flattening**: JSON events are flattened by `JSONFlattener`, applying field mappings, aliases, splits, and transforms.
-3. **Database Insertion**: Flattened events are inserted into an in-memory SQLite database.
-4. **Rule Execution**: `ZircoliteCore` executes each rule's SQL query against the database.
-5. **Result Output**: Matches are written to the output file (JSON or CSV) and optionally processed through templates.
-
-Use `--no-streaming` to force traditional mode.
+- Optional `--keepflat` to save flattened events alongside processing
 
 ### Per-File vs. Unified Processing
 
@@ -256,9 +259,16 @@ The parallel processor is automatically enabled when:
 
 Transforms use **RestrictedPython** for safe, sandboxed execution of custom Python code:
 
-- Available modules: `re`, `base64`, `chardet`
+- Available modules: `re`, `base64`, `chardet`, `math`
+- Augmented assignments (`+=`, `-=`, etc.) and container writes (`dict[key] = value`, `list[idx] = value`) are supported
+- Writes to arbitrary object attributes are blocked for security
 - Transform functions are compiled once and cached for reuse
 - Transforms can create new fields (aliases) or replace existing values
+- Transforms can be enabled by category using `--transform-category` or all at once with `--all-transforms`
+- **Inline transforms** (`type: python`) define code directly in the config YAML
+- **External transforms** (`type: python_file`) load code from `.py` files in `transforms_dir` (default: `config/transforms/`)
+- External file code is resolved during config loading and then compiled/cached identically to inline transforms
+- A standalone tester (`config/transform_tester.py`) replicates the exact sandbox for local development
 
 ## Project Structure
 
@@ -267,7 +277,8 @@ Transforms use **RestrictedPython** for safe, sandboxed execution of custom Pyth
 ├── Taskfile.yml            # Production tasks (Docker, rules update, clean)
 ├── bin/                    # Directory containing external binaries (evtx_dump)
 ├── config/                 # Configuration files
-│   ├── fieldMappings.yaml  # Field mappings, aliases, splits, and transforms
+│   ├── config.yaml         # Field mappings, aliases, splits, and transforms (canonical)
+│   ├── fieldMappings.yaml  # Deprecated duplicate; use config.yaml
 │   └── zircolite_example.yaml  # Example YAML configuration file
 ├── docs/                   # Documentation directory
 │   ├── README.md           # Documentation index
@@ -298,7 +309,6 @@ Transforms use **RestrictedPython** for safe, sandboxed execution of custom Pyth
     ├── core.py             # ZircoliteCore class (database and rule execution)
     ├── detector.py         # LogTypeDetector (automatic log format detection)
     ├── streaming.py        # StreamingEventProcessor (single-pass processing)
-    ├── flattener.py        # JSONFlattener (log flattening)
     ├── extractor.py        # EvtxExtractor (log format conversion)
     ├── parallel.py         # MemoryAwareParallelProcessor (parallel processing)
     ├── rules.py            # RulesetHandler, RulesUpdater (rule management)
@@ -312,11 +322,10 @@ The `zircolite/` package contains modular implementations of all core components
 
 - **`config.py`**: Contains dataclasses for configuration (`ProcessingConfig`, `ExtractorConfig`, `RulesetConfig`, etc.).
 - **`config_loader.py`**: Contains `ConfigLoader` for loading and validating YAML configuration files.
-- **`console.py`**: Contains `ZircoliteConsole` and helper functions for Rich-based terminal output including styled messages, progress bars, live detection counters during rule execution, detection results tables (`build_detection_table`), MITRE ATT&CK coverage panels (`build_attack_summary`), terminal hyperlinks (`make_file_link`), post-run contextual suggestions (`get_suggestions`, `print_suggestions`), summary dashboards, file tree views, severity style constants (`LEVEL_STYLES`), `DetectionStats`, and a global quiet mode (`set_quiet_mode`, `is_quiet`).
+- **`console.py`**: Contains `ZircoliteConsole` and helper functions for Rich-based terminal output including styled messages, progress bars, live detection counters during rule execution, detection results tables (`build_detection_table`), MITRE ATT&CK coverage panels (`build_attack_summary`), terminal hyperlinks (`make_file_link`), summary dashboards, file tree views, severity style constants (`LEVEL_STYLES`), `DetectionStats`, and a global quiet mode (`set_quiet_mode`, `is_quiet`).
 - **`core.py`**: Contains `ZircoliteCore`, the main detection engine managing SQLite operations and rule execution. The `execute_ruleset` method accepts a `show_table` parameter to control detection table display (used to suppress per-worker output in parallel mode).
 - **`detector.py`**: Contains `LogTypeDetector` and `DetectionResult` for automatic log format, log source, and timestamp detection via magic bytes, content analysis, and regex fallback.
-- **`streaming.py`**: Contains `StreamingEventProcessor` for efficient single-pass event processing.
-- **`flattener.py`**: Contains `JSONFlattener` for flattening nested JSON log events.
+- **`streaming.py`**: Contains `StreamingEventProcessor` for efficient single-pass event processing (extraction, flattening, and DB insertion in one pass).
 - **`extractor.py`**: Contains `EvtxExtractor` for converting various log formats to JSON.
 - **`parallel.py`**: Contains `MemoryAwareParallelProcessor` and `ParallelConfig` for memory-aware parallel file processing.
 - **`rules.py`**: Contains `RulesetHandler` and `RulesUpdater` for rule management.

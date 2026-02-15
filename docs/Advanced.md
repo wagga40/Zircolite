@@ -2,7 +2,7 @@
 
 ## Field Transforms
 
-Zircolite includes a **field transform system** that allows automatic enrichment and transformation of log field values during processing. Transforms are defined in `config/fieldMappings.yaml` and execute Python code in a sandboxed environment using RestrictedPython.
+Zircolite includes a **field transform system** that allows automatic enrichment and transformation of log field values during processing. Transforms are defined in `config/config.yaml` and execute Python code in a sandboxed environment using RestrictedPython.
 
 ### Overview
 
@@ -15,7 +15,7 @@ Transforms can:
 
 ### Enabling Transforms
 
-Transforms require two settings in `fieldMappings.yaml`:
+Transforms require two settings in `config/config.yaml`:
 
 ```yaml
 transforms_enabled: true
@@ -40,82 +40,301 @@ enabled_transforms:
 
 Only transforms listed in `enabled_transforms` will run. Uncomment transforms you want to enable.
 
+### Transform Categories
+
+Transforms can be enabled individually or by **category** using the `--transform-category` CLI option. Use `--all-transforms` to enable every defined transform. Use `--transform-list` to see all available categories.
+
+```bash
+# Enable all transforms in the commandline and process categories
+python3 zircolite.py -e logs/ --transform-category commandline --transform-category process
+
+# Enable ALL transforms at once
+python3 zircolite.py -e logs/ --all-transforms
+
+# List available categories and their transforms
+python3 zircolite.py --transform-list
+```
+
+Categories are defined in the `transform_categories` section of `config/config.yaml` and can be customized.
+
+### Inline vs External Transforms
+
+Transforms can be defined in two ways:
+
+**Inline** (`type: python`) -- code is written directly in `config.yaml`:
+
+```yaml
+- info: "Extract executable name"
+  type: python
+  code: |
+    def transform(param):
+        parts = param.replace('\\', '/').split('/')
+        return parts[-1] if parts else param
+  alias: true
+  alias_name: "Image_ExeName"
+  source_condition: [evtx_input, json_input]
+```
+
+**External file** (`type: python_file`) -- code is loaded from a `.py` file:
+
+```yaml
+- info: "Extract executable name"
+  type: python_file
+  file: image_exename.py
+  alias: true
+  alias_name: "Image_ExeName"
+  source_condition: [evtx_input, json_input]
+```
+
+External files are resolved relative to the `transforms_dir` setting (default: `transforms/`, relative to the config file directory). Most built-in transforms ship as external files in `config/transforms/`.
+
+The `transforms_dir` setting can be customized:
+
+```yaml
+transforms_dir: transforms/           # default
+transforms_dir: /opt/zircolite/tfs/   # absolute path
+transforms_dir: ../shared_transforms/ # relative to config dir
+```
+
+### Developing Custom Transforms
+
+Use the included **transform tester** to develop and debug transforms locally:
+
+```bash
+# Test a transform file with a sample value
+python config/transform_tester.py config/transforms/image_exename.py "C:\Windows\System32\cmd.exe"
+
+# Interactive mode (enter values one at a time)
+python config/transform_tester.py config/transforms/commandline_entropyscore.py --interactive
+
+# List available builtins and modules in the sandbox
+python config/transform_tester.py --list-builtins
+```
+
+The tester uses the exact same RestrictedPython sandbox as Zircolite, so if a transform works in the tester, it will work in Zircolite.
+
 ### Available Transforms
 
-#### Auditd Transforms
+#### Auditd Transforms (`auditd`)
 
 | Field | Alias Field | Description |
 |-------|-------------|-------------|
 | `proctitle` | *(modifies original)* | Converts hex-encoded proctitle to ASCII |
 | `cmd` | *(modifies original)* | Converts hex-encoded cmd to ASCII |
 
-#### CommandLine Transforms
+#### Command Line Transforms (`commandline`)
 
-| Transform | Alias Field | Description |
-|-----------|-------------|-------------|
-| Base64 Decode | `CommandLine_b64decoded` | Decodes Base64 strings in command lines |
-| Credential Extraction | `CommandLine_Extracted_Creds` | Extracts credentials from net/wmic/psexec commands |
-| URL Extraction | `CommandLine_URLs` | Extracts HTTP/HTTPS/FTP URLs |
-| XOR Detection | `CommandLine_XORIndicators` | Detects XOR operations and extracts keys |
-| AMSI Bypass | `CommandLine_AMSIBypass` | Detects AMSI bypass techniques |
-| Hex Strings | `CommandLine_HexStrings` | Finds and decodes hex-encoded strings |
-| Env Var Obfuscation | `CommandLine_EnvVarObfuscation` | Detects environment variable abuse |
-| Download Cradles | `CommandLine_DownloadCradle` | Identifies download cradle patterns |
-| Evasion Techniques | `CommandLine_EvasionTechniques` | Detects process hollowing, injection, etc. |
-| Registry Paths | `CommandLine_RegistryPaths` | Extracts registry key paths |
+| Alias Field | Description |
+|-------------|-------------|
+| `CommandLine_b64decoded` | Decodes Base64 strings in command lines |
+| `CommandLine_Extracted_Creds` | Extracts credentials from net/wmic/psexec commands |
+| `CommandLine_URLs` | Extracts HTTP/HTTPS/FTP URLs |
+| `CommandLine_RegistryPaths` | Extracts registry key paths |
+| `CommandLine_Length` | Categorizes command line length: SHORT, NORMAL, LONG, VERY_LONG, EXTREME |
+| `CommandLine_EntropyScore` | Shannon entropy score: LOW, MEDIUM, NORMAL, HIGH, VERY_HIGH |
+| `CommandLine_XORIndicators` | Detects XOR operations and extracts keys |
+| `CommandLine_AMSIBypass` | Detects AMSI bypass techniques |
+| `CommandLine_HexStrings` | Finds and decodes hex-encoded strings |
+| `CommandLine_EnvVarObfuscation` | Detects environment variable abuse |
+| `CommandLine_DownloadCradle` | Identifies download cradle patterns |
+| `CommandLine_EvasionTechniques` | Detects process hollowing, injection, etc. |
+| `CommandLine_LateralMovement` | Detects PsExec, WMI, WinRM, RDP, SMB, SSH, DCOM usage |
+| `CommandLine_DataStaging` | Detects exfiltration staging: archiving, bulk copy, DB dumps |
+| `CommandLine_C2Indicators` | C2 framework fingerprints: Cobalt Strike, Metasploit, Sliver, etc. |
+| `CommandLine_PersistenceCategory` | Categorizes persistence mechanisms (tasks, services, registry, cron) |
+| `CommandLine_ReconIndicators` | Detects reconnaissance commands (systeminfo, ipconfig, etc.) |
+| `CommandLine_ConcatDeobfuscate` | Deobfuscates caret escaping, string concat, format operators, backticks |
+| `CommandLine_CryptoMining` | Detects stratum protocol, mining pools, wallet patterns, miner tools |
+| `CommandLine_InjectionTechnique` | Classifies injection: classic, hollowing, APC, thread hijack, etc. |
 
-#### ScriptBlockText (PowerShell) Transforms
+#### Process Transforms (`process`)
 
-| Transform | Alias Field | Description |
-|-----------|-------------|-------------|
-| Base64 Decode | `ScriptBlockText_b64decoded` | Decodes Base64 in PowerShell scripts |
-| Obfuscation Indicators | `ScriptBlockText_ObfuscationIndicators` | Detects char substitution, string concat, GzipStream, etc. |
-| XOR Patterns | `ScriptBlockText_XORPatterns` | Detects XOR keys and patterns |
-| .NET Reflection | `ScriptBlockText_ReflectionAbuse` | Detects reflection-based attacks |
-| Shellcode Indicators | `ScriptBlockText_ShellcodeIndicators` | Detects shellcode execution patterns |
-| Network IOCs | `ScriptBlockText_NetworkIOCs` | Extracts IPs, URLs, and domains |
+| Alias Field | Description |
+|-------------|-------------|
+| `Image_ExeName` | Extracts executable name from path |
+| `Image_LOLBinMatch` | Detects Living Off The Land Binaries |
+| `Image_TyposquatDetect` | Detects typosquatted process names |
+| `Image_PathAnomaly` | Flags processes running from Temp, AppData, Recycle Bin, etc. |
+| `Image_StagingDirectory` | Tags execution from attacker staging directories |
+| `Image_MasqueradeDetect` | Detects process name masquerading (svchost, lsass from wrong paths) |
+| `ParentImage_ExeName` | Extracts parent executable name |
+| `ParentImage_SpawnAnomaly` | Flags anomalous parent processes (Office, browsers, WMI) |
 
-#### Process and Image Transforms
+#### PowerShell Transforms (`powershell`)
 
-| Field | Alias Field | Description |
-|-------|-------------|-------------|
-| `Image` | `Image_ExeName` | Extracts executable name from path |
-| `Image` | `Image_LOLBinMatch` | Detects Living Off The Land Binaries |
-| `Image` | `Image_TyposquatDetect` | Detects typosquatted process names (similar to legit Windows binaries) |
-| `ParentImage` | `ParentImage_ExeName` | Extracts parent executable name |
+| Alias Field | Description |
+|-------------|-------------|
+| `ScriptBlockText_b64decoded` | Decodes Base64 in PowerShell scripts |
+| `ScriptBlockText_ObfuscationIndicators` | Detects char substitution, string concat, GzipStream, etc. |
+| `ScriptBlockText_XORPatterns` | Detects XOR keys and patterns |
+| `ScriptBlockText_ReflectionAbuse` | Detects reflection-based attacks |
+| `ScriptBlockText_ShellcodeIndicators` | Detects shellcode execution patterns |
+| `ScriptBlockText_NetworkIOCs` | Extracts IPs, URLs, and domains |
+| `ScriptBlockText_StagerDetect` | Detects stagers: reflection loading, staged IEX, AppDomain abuse |
+| `ScriptBlockText_PackerIndicators` | Detects packers/crypters: GZip, multi-layer encoding, Invoke-Obfuscation |
 
-#### User and Identity Transforms
+#### Network Transforms (`network`)
 
-| Field | Alias Field | Description |
-|-------|-------------|-------------|
-| `User` | `User_Name` | Extracts username without domain (from `DOMAIN\user` or `user@domain`) |
-| `User` | `User_Domain` | Extracts domain from user field |
+| Alias Field | Description |
+|-------------|-------------|
+| `QueryName_TLD` | Extracts TLD from DNS queries |
+| `QueryName_EntropyScore` | Entropy score for DGA detection |
+| `QueryName_TyposquatDetect` | Detects typosquatted official domains (gov, banks, tech) |
+| `QueryName_SubdomainAnalysis` | DNS subdomain structure analysis: depth, hex/base64, entropy |
+| `DestinationIp_ObfuscationCheck` | Detects hex/octal/decimal IP obfuscation |
+| `DestinationPort_Category` | Categorizes ports (HTTP, SMB, RDP, METASPLOIT, etc.) |
 
-#### Network Transforms
+#### File Transforms (`file`)
 
-| Field | Alias Field | Description |
-|-------|-------------|-------------|
-| `QueryName` | `QueryName_TLD` | Extracts TLD from DNS queries |
-| `QueryName` | `QueryName_EntropyScore` | Entropy score for DGA detection |
-| `QueryName` | `QueryName_TyposquatDetect` | Detects typosquatted official domains (gov, banks, tech) |
-| `DestinationIp` | `DestinationIp_ObfuscationCheck` | Detects hex/octal/decimal IP obfuscation |
-| `DestinationPort` | `DestinationPort_Category` | Categorizes ports (HTTP, SMB, RDP, METASPLOIT, etc.) |
+| Alias Field | Description |
+|-------------|-------------|
+| `TargetFileName_URLDecoded` | URL decodes file paths |
+| `TargetFileName_DoubleExtension` | Detects double extension tricks (e.g., `invoice.pdf.exe`) |
+| `TargetFileName_SensitiveFile` | Flags access to SAM, NTDS.dit, SSH keys, browser data, lsass dumps |
 
-#### File and Registry Transforms
+#### User and Authentication Transforms (`user`)
 
-| Field | Alias Field | Description |
-|-------|-------------|-------------|
-| `TargetFileName` | `TargetFileName_URLDecoded` | URL decodes file paths |
-| `TargetObject` | `TargetObject_SuspiciousRegistry` | Identifies persistence registry keys (Run, Services, IFEO, COM) |
-| `Payload` | `Payload_b64decoded` | Decodes Base64 in payload fields |
-| `ServiceFileName` | `ServiceFileName_b64decoded` | Decodes Base64 in service file names |
+| Alias Field | Description |
+|-------------|-------------|
+| `User_Name` | Extracts username without domain |
+| `User_Domain` | Extracts domain from user field |
+| `LogonType_Description` | Maps logon type IDs to labels (INTERACTIVE, NETWORK, etc.) |
 
-#### Hash Transforms
+#### Hash Transforms (`hash`)
 
-| Field | Alias Field | Description |
-|-------|-------------|-------------|
-| `Hashes` | `Hash_MD5` | Extracts MD5 hash from Sysmon Hashes field |
-| `Hashes` | `Hash_SHA256` | Extracts SHA256 hash from Sysmon Hashes field |
+| Alias Field | Description |
+|-------------|-------------|
+| `Hash_MD5` | Extracts MD5 hash from Sysmon Hashes field |
+| `Hash_SHA256` | Extracts SHA256 hash from Sysmon Hashes field |
+
+#### Base64 Decoding Transforms (`base64`)
+
+| Alias Field | Description |
+|-------------|-------------|
+| `CommandLine_b64decoded` | Decodes Base64 in command lines |
+| `ScriptBlockText_b64decoded` | Decodes Base64 in PowerShell scripts |
+| `Payload_b64decoded` | Decodes Base64 in payload fields |
+| `ServiceFileName_b64decoded` | Decodes Base64 in service file names |
+
+#### Registry Transforms (`registry`)
+
+| Alias Field | Description |
+|-------------|-------------|
+| `TargetObject_SuspiciousRegistry` | Identifies persistence registry keys (Run, Services, IFEO, COM) |
+
+#### Credentials Transforms (`credentials`)
+
+| Alias Field | Description |
+|-------------|-------------|
+| `CommandLine_Extracted_Creds` | Extracts credentials from net/wmic/psexec commands |
+
+### Using Transform Data After Zircolite Runs
+
+Transforms produce enriched fields in both the SQLite database (during processing) and the JSON output file (`detected_events.json`). You can query these fields after a run using SQL (via `--dbfile` to keep the database) or `jq` on the JSON output.
+
+#### SQL Queries (with `--dbfile`)
+
+Keep the SQLite database after processing with `--dbfile events.db`, then query transforms directly:
+
+```sql
+-- Find obfuscated commands: long AND high entropy
+SELECT * FROM logs
+WHERE CommandLine_Length LIKE 'EXTREME%'
+  AND CommandLine_EntropyScore LIKE 'VERY_HIGH%'
+```
+
+```sql
+-- Timeline of lateral movement
+SELECT SystemTime, CommandLine, CommandLine_LateralMovement
+FROM logs
+WHERE CommandLine_LateralMovement != ''
+ORDER BY SystemTime
+```
+
+```sql
+-- Find potential C2 framework usage
+SELECT SystemTime, Image, CommandLine, CommandLine_C2Indicators
+FROM logs
+WHERE CommandLine_C2Indicators LIKE '%COBALT_STRIKE%'
+   OR CommandLine_C2Indicators LIKE '%METASPLOIT%'
+```
+
+```sql
+-- Classify injection techniques
+SELECT DISTINCT CommandLine_InjectionTechnique, COUNT(*) as count
+FROM logs
+WHERE CommandLine_InjectionTechnique != ''
+GROUP BY CommandLine_InjectionTechnique
+```
+
+#### jq Queries (on detected_events.json)
+
+The JSON output is an array of detection objects. Each has `title`, `rule_level`, `tags`, `count`, and `matches` (an array of event dicts with all fields including transform aliases).
+
+**Extract all unique LOLBins seen across all detections:**
+
+```bash
+jq -r '[.[].matches[].Image_LOLBinMatch // empty] | unique | .[]' detected_events.json
+```
+
+**Find events where base64 was detected but could not be decoded (potential shellcode/encrypted payloads):**
+
+```bash
+jq '[.[].matches[] | select(.CommandLine_b64decoded == "b64_detected_cannot_decode")]
+    | map({SystemTime, Image, CommandLine})' detected_events.json
+```
+
+**List all events with high entropy command lines (obfuscation indicator):**
+
+```bash
+jq '[.[].matches[] | select(.CommandLine_EntropyScore | startswith("HIGH") or startswith("VERY_HIGH"))]
+    | map({SystemTime, CommandLine, CommandLine_EntropyScore})' detected_events.json
+```
+
+**Extract network IOCs from PowerShell detections:**
+
+```bash
+jq -r '[.[].matches[] | select(.ScriptBlockText_NetworkIOCs != null and .ScriptBlockText_NetworkIOCs != "")]
+    | map(.ScriptBlockText_NetworkIOCs) | unique | .[]' detected_events.json
+```
+
+**Lateral movement timeline:**
+
+```bash
+jq '[.[].matches[] | select(.CommandLine_LateralMovement != null and .CommandLine_LateralMovement != "")]
+    | sort_by(.SystemTime)
+    | .[] | {SystemTime, User, CommandLine_LateralMovement}' detected_events.json
+```
+
+**Export all C2 indicators with context to CSV-friendly format:**
+
+```bash
+jq -r '.[].matches[] | select(.CommandLine_C2Indicators != null and .CommandLine_C2Indicators != "")
+    | [.SystemTime, .Computer, .User, .Image, .CommandLine_C2Indicators] | @csv' detected_events.json
+```
+
+**Find suspicious registry persistence across all rules:**
+
+```bash
+jq '[.[].matches[] | select(.TargetObject_SuspiciousRegistry != null and .TargetObject_SuspiciousRegistry != "")]
+    | group_by(.TargetObject_SuspiciousRegistry)
+    | map({category: .[0].TargetObject_SuspiciousRegistry, count: length, first_seen: (map(.SystemTime) | sort | first)})
+    | sort_by(-.count)' detected_events.json
+```
+
+**Combine multiple transform fields for triage (process + command line analysis):**
+
+```bash
+jq '[.[].matches[] | select(.Image_LOLBinMatch != null and .Image_LOLBinMatch != "")]
+    | map({
+        time: .SystemTime,
+        lolbin: .Image_LOLBinMatch,
+        entropy: .CommandLine_EntropyScore,
+        length: .CommandLine_Length,
+        download: .CommandLine_DownloadCradle,
+        urls: .CommandLine_URLs
+      })' detected_events.json
+```
 
 ### Transform Output Values Reference
 
@@ -249,6 +468,68 @@ Transforms produce specific indicator values that can be used for filtering and 
 - `CHAR_SWAP` - Character substitution
 - `AFFIX` - Prefix/suffix added to legitimate domain
 - `EMBEDDED` - Legitimate domain embedded in longer string
+
+#### Extended Transform Output Values
+
+##### `CommandLine_Length` Values
+`SHORT:<n>`, `NORMAL:<n>`, `LONG:<n>`, `VERY_LONG:<n>`, `EXTREME:<n>` (where `<n>` is the character count)
+
+##### `CommandLine_EntropyScore` Values
+`LOW:<score>`, `MEDIUM:<score>`, `NORMAL:<score>`, `HIGH:<score>`, `VERY_HIGH:<score>` (Shannon entropy)
+
+##### `Image_PathAnomaly` Values
+`TEMP_DIR`, `WINDOWS_TEMP`, `USER_TEMP`, `APPDATA`, `DOWNLOADS`, `USER_DESKTOP`, `USER_MEDIA_DIR`, `RECYCLE_BIN`, `PUBLIC_PROFILE`, `PERFLOGS`
+
+##### `Image_StagingDirectory` Values
+`STAGING:ProgramData`, `STAGING:WindowsTemp`, `STAGING:RootTemp`, `STAGING:PerfLogs`, `STAGING:VendorFolder`, `STAGING:PublicProfile`, `STAGING:RecycleBin`, `STAGING:UNC_Path`, `STAGING:LinuxTmp`, `STAGING:DevShm`
+
+##### `CommandLine_LateralMovement` Values
+`LATERAL:PSEXEC`, `LATERAL:REMOTE_SERVICE`, `LATERAL:WMI`, `LATERAL:WINRM`, `LATERAL:RDP`, `LATERAL:SMB`, `LATERAL:SSH`, `LATERAL:DCOM`, `LATERAL:AT_REMOTE`
+
+##### `CommandLine_DataStaging` Values
+`STAGING:ARCHIVE`, `STAGING:BULK_COPY`, `STAGING:DB_DUMP`, `STAGING:EMAIL_COLLECT`, `STAGING:FILE_HUNT`, `STAGING:AD_DUMP`
+
+##### `CommandLine_C2Indicators` Values
+`C2:COBALT_STRIKE`, `C2:METASPLOIT`, `C2:SLIVER`, `C2:EMPIRE`, `C2:HAVOC`, `C2:GENERIC_PIPE`, `C2:COVENANT`
+
+##### `CommandLine_PersistenceCategory` Values
+`PERSIST:SCHED_TASK`, `PERSIST:SERVICE`, `PERSIST:REG_RUN`, `PERSIST:WMI_SUB`, `PERSIST:STARTUP_FOLDER`, `PERSIST:DLL_SEARCH`, `PERSIST:CRON`, `PERSIST:SYSTEMD`, `PERSIST:LAUNCH_AGENT`, `PERSIST:BOOT`
+
+##### `CommandLine_ReconIndicators` Values
+`RECON:SYSINFO`, `RECON:NETWORK`, `RECON:USER_ENUM`, `RECON:DOMAIN`, `RECON:SHARE`, `RECON:PROCESS`, `RECON:SECURITY`
+
+##### `QueryName_SubdomainAnalysis` Values
+`DNS:DEEP_SUB:<depth>`, `DNS:LONG_SUB:<length>`, `DNS:HEX_SUBDOMAIN`, `DNS:B64_SUBDOMAIN`, `DNS:HIGH_ENTROPY_SUB`, `DNS:NUMERIC_SUB`
+
+##### `ScriptBlockText_StagerDetect` Values
+`STAGER:REFLECTION_LOAD`, `STAGER:STAGED_IEX`, `STAGER:INMEMORY_NET`, `STAGER:AMSI_THEN_EXEC`, `STAGER:APPDOMAIN`, `STAGER:RUNSPACE`, `STAGER:CLM_BYPASS`, `STAGER:WIN32_API`
+
+##### `CommandLine_ConcatDeobfuscate` Values
+`DEOBF:CARET`, `DEOBF:CONCAT:<reconstructed>`, `DEOBF:FORMAT_OP`, `DEOBF:BACKTICK`, `DEOBF:ENV_SUBSTR`
+
+##### `CommandLine_CryptoMining` Values
+`MINING:PROTOCOL`, `MINING:POOL:<name>`, `MINING:WALLET:MONERO`, `MINING:WALLET:BITCOIN`, `MINING:WALLET:ETHEREUM`, `MINING:TOOL:<name>`, `MINING:MINER_ARGS`
+
+##### `ScriptBlockText_PackerIndicators` Values
+`PACKER:GZIP`, `PACKER:DEFLATE`, `PACKER:MULTI_ENCODE`, `PACKER:NESTED_IEX`, `PACKER:CUSTOM_ENCODING`, `PACKER:REVERSAL`, `PACKER:VAR_SUBSTITUTION`, `PACKER:INVOKE_OBFUSCATION`, `PACKER:SECURESTRING`
+
+##### `CommandLine_InjectionTechnique` Values
+`INJECT:CLASSIC`, `INJECT:ALLOC_WRITE`, `INJECT:HOLLOWING`, `INJECT:APC`, `INJECT:THREAD_HIJACK`, `INJECT:CALLBACK`, `INJECT:MAPPING`, `INJECT:ETW_BYPASS`, `INJECT:SHELLCODE_ALLOC`
+
+##### `Image_MasqueradeDetect` Values
+`MASQUERADE:<exe_name>` (e.g., `MASQUERADE:svchost.exe`, `MASQUERADE:lsass.exe`) — flags the process name when running from a non-standard directory.
+
+##### `TargetFileName_DoubleExtension` Values
+`DOUBLE_EXT:<ext1>.<ext2>` (e.g., `DOUBLE_EXT:pdf.exe`, `DOUBLE_EXT:docx.scr`)
+
+##### `TargetFileName_SensitiveFile` Values
+`SENSITIVE:CREDENTIAL_STORE`, `SENSITIVE:NTDS`, `SENSITIVE:SSH_KEY`, `SENSITIVE:CERT_PRIVATE`, `SENSITIVE:BROWSER_DATA`, `SENSITIVE:CONFIG`, `SENSITIVE:MEMORY_DUMP`
+
+##### `ParentImage_SpawnAnomaly` Values
+`ANOMALY:OFFICE_SPAWN`, `ANOMALY:BROWSER_SPAWN`, `ANOMALY:PDF_SPAWN`, `ANOMALY:SCRIPT_CHAIN`, `ANOMALY:WMI_SPAWN`, `ANOMALY:TASK_SPAWN`, `ANOMALY:JAVA_SPAWN`
+
+##### `LogonType_Description` Values
+`SYSTEM`, `INTERACTIVE`, `NETWORK`, `BATCH`, `SERVICE`, `UNLOCK`, `NETWORK_CLEARTEXT`, `NEW_CREDENTIALS`, `REMOTE_INTERACTIVE`, `CACHED_INTERACTIVE`
 
 ### Transform Examples
 
@@ -400,7 +681,7 @@ SELECT * FROM logs WHERE QueryName_TyposquatDetect LIKE '%SUSPICIOUS_TLD%'
 
 ### Creating Custom Transforms
 
-You can add custom transforms in `fieldMappings.yaml`:
+You can add custom transforms in `config/config.yaml`:
 
 ```yaml
 transforms:
@@ -541,18 +822,9 @@ Streaming mode is **enabled by default** for most input types:
 - Sysmon for Linux logs
 - Auditd logs
 
-Streaming mode is **automatically disabled** for:
-- CSV input (`--csv-input`)
-- EVTXtract input (`--evtxtract-input`)
-- When using `--keepflat` (to save intermediate JSON)
-- When using `--fieldlist`
+All input formats are processed via the streaming pipeline, including CSV and EVTXtract.
 
-#### Controlling Streaming Mode
-
-```shell
-# Force traditional mode (disable streaming)
-python3 zircolite.py --evtx logs/ --ruleset rules.json --no-streaming
-```
+Use `--keepflat` to save flattened events to a JSONL file alongside processing.
 
 ### Memory Usage
 
@@ -582,7 +854,7 @@ The event filter uses configurable field paths to extract Channel and EventID fr
 - Standard EVTX: `Event.System.Channel`, `Event.System.EventID`
 - Pre-flattened JSON: `Channel`, `EventID`
 - ECS/Elasticsearch: `winlog.channel`, `event.code`
-- And many more (configurable in `config/fieldMappings.yaml`)
+- And many more (configurable in `config/config.yaml`)
 
 ```shell
 # Event filtering is enabled by default
@@ -598,16 +870,12 @@ python3 zircolite.py --evtx logs/ --ruleset rules.json --filter-all-sources
 
 The event filter statistics are displayed in the summary panel after processing.
 
-> [!NOTE]  
-> There is an option to use an on-disk database instead of in-memory by using the `--ondiskdb <DB_NAME>` argument. This is useful for very large datasets but is slower. **Consider the alternatives below first.**
-
 ## Keeping Data Used by Zircolite
 
 **Zircolite** has several arguments that can be used to keep data used to perform Sigma detections: 
 
 - `--dbfile <FILE>` allows you to export all the logs to a SQLite 3 database file. You can query the logs with SQL statements to find more things than what the Sigma rules could have found. When processing multiple files, each file gets its own database file with a unique name.
-- `--keeptmp` allows you to keep the source logs (EVTX/Auditd/EVTXtract/XML...) converted in JSON format.
-- `--keepflat` allows you to keep the source logs (EVTX/Auditd/EVTXtract/XML...) converted in a flattened JSON format.
+- `--keepflat` saves all flattened events to a JSONL file during streaming processing.
 - `--hashes` adds an xxhash64 hash of the original log line to each event, useful for deduplication and tracking.
 
 ## Filtering
@@ -721,6 +989,19 @@ python3 zircolite.py --evtx sample.evtx  --ruleset rules/rules_windows_sysmon.js
 ```
 
 It is possible to use multiple templates if you provide a `--templateOutput` argument for each `--template` argument.
+
+### Available templates
+
+| Template | Output format | Use case |
+|----------|----------------|----------|
+| `exportForSplunk.tmpl` | NDJSON | Splunk HEC or bulk import (no rule ID) |
+| `exportForSplunkWithRuleID.tmpl` | NDJSON | Splunk with rule ID for correlation |
+| `exportForELK.tmpl` | NDJSON | Elasticsearch / ELK Stack |
+| `exportForZinc.tmpl` | Bulk JSON | OpenSearch/Elasticsearch bulk API (index + document per event) |
+| `exportForTimesketch.tmpl` | NDJSON | Timesketch (uses `--timefield` for datetime) |
+| `exportForZircoGui.tmpl` | JavaScript | Mini-GUI `data.js` (used by `--package`) |
+| `exportNDJSON.tmpl` | NDJSON | Generic: rule metadata + event fields, one JSON per line |
+| `exportSummaryCSV.tmpl` | CSV | One row per rule (triage/summary), not per event |
 
 ## Mini-GUI
 
