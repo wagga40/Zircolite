@@ -844,24 +844,42 @@ There are several ways to speed up Zircolite:
 
 ### Early Event Filtering
 
-Zircolite includes an **early event filtering** mechanism that skips events before processing operations. This feature:
+Zircolite includes an **early event filtering** mechanism that skips events before flattening and database insertion. This reduces memory and CPU when your rules only reference a subset of log sources. **Event filtering applies only to Windows logs** (EVTX, Windows JSON/XML, Winlogbeat, etc.); other log types (Linux, Auditd, generic JSON, etc.) are not filtered by channel/eventID.
 
-1. **Extracts Channel and EventID** values from all loaded rules
-2. **Filters events early** - before flattening and database insertion
-3. **Supports multiple log formats** - EVTX, JSON, XML, CSV, and more
+#### How the filter is built
 
-The event filter uses configurable field paths to extract Channel and EventID from different log structures:
+When rules are loaded, Zircolite collects all unique **Channel** and **EventID** values from the ruleset (from each rule’s `channel` and `eventid` metadata in the converted rules). Only events whose **(Channel, EventID)** pair is in that set are kept; others are skipped before processing.
+
+#### When filtering is enabled or disabled
+
+Filtering is **enabled** only when:
+
+- The ruleset has at least one channel and one eventID across all rules, **and**
+- **Every** rule has at least one channel and one eventID (no rule has “any” log source).
+
+If **any** rule has empty or missing channel/eventid (i.e. the rule applies to any log source), filtering is **disabled** for the whole run. That way, rules that match on any Channel/EventID still see all events, and **alert counts stay consistent** whether you run a single rule or the full ruleset. Otherwise, the same rule could report different counts (e.g. 74 alone vs 40 with the full ruleset) because events would be dropped when other rules’ log sources are used to build the filter.
+
+#### Filtering logic
+
+- An event is **kept** only if **both** its Channel is in the ruleset’s channel set **and** its EventID is in the ruleset’s eventID set.
+- Channel matching is case-insensitive.
+- If the filter is disabled (see above), all events are processed.
+
+#### Configuration and formats
+
+The event filter uses configurable field paths to read Channel and EventID from different log structures:
+
 - Standard EVTX: `Event.System.Channel`, `Event.System.EventID`
 - Pre-flattened JSON: `Channel`, `EventID`
 - ECS/Elasticsearch: `winlog.channel`, `event.code`
-- And many more (configurable in `config/config.yaml`)
+- And more (configurable in `config/config.yaml`).
 
 ```shell
-# Event filtering is enabled by default
+# Event filtering is enabled when all rules have channel/eventid
 # You'll see a log message like:
 # [+] Event filter enabled: 15 channels, 45 eventIDs
 
-# Disable event filtering if needed
+# Disable event filtering if needed (process all events)
 python3 zircolite.py --evtx logs/ --ruleset rules.json --no-event-filter
 
 # Apply filtering to non-Windows log sources too
