@@ -23,6 +23,8 @@ from zircolite.console import LEVEL_PRIORITY
 from zircolite.processing import (
     ProcessingContext,
     _IncrementalResultWriter,
+    _ThreadSafeWriter,
+    _keepflat_context,
     create_zircolite_core,
     create_worker_core,
     create_extractor,
@@ -462,3 +464,111 @@ class TestIncrementalResultWriter:
 
         assert len(rows) == 1
         assert rows[0]["rule_title"] == "Rule A"
+
+
+# =============================================================================
+# Keepflat context manager & multi-file support
+# =============================================================================
+
+class TestKeepflatContext:
+    """Tests for _keepflat_context and _ThreadSafeWriter."""
+
+    def _make_ctx(self, tmp_path, keepflat=True):
+        logger = MagicMock()
+
+        class FakeCtx:
+            pass
+
+        ctx = FakeCtx()
+        ctx.keepflat = keepflat
+        ctx.logger = logger
+        return ctx
+
+    def test_yields_none_when_disabled(self, tmp_path):
+        ctx = self._make_ctx(tmp_path, keepflat=False)
+        with _keepflat_context(ctx) as kf:
+            assert kf is None
+
+    def test_yields_file_handle_when_enabled(self, tmp_path, monkeypatch):
+        monkeypatch.chdir(tmp_path)
+        ctx = self._make_ctx(tmp_path, keepflat=True)
+        with _keepflat_context(ctx) as kf:
+            assert kf is not None
+            kf.write(b'hello\n')
+        flat_files = list(tmp_path.glob("flattened_events_*.json"))
+        assert len(flat_files) == 1
+        assert flat_files[0].read_bytes() == b'hello\n'
+
+    def test_thread_safe_wrapper(self, tmp_path, monkeypatch):
+        monkeypatch.chdir(tmp_path)
+        ctx = self._make_ctx(tmp_path, keepflat=True)
+        with _keepflat_context(ctx, thread_safe=True) as kf:
+            assert isinstance(kf, _ThreadSafeWriter)
+            kf.write(b'line1\n')
+            kf.write(b'line2\n')
+        flat_files = list(tmp_path.glob("flattened_events_*.json"))
+        assert len(flat_files) == 1
+        assert flat_files[0].read_bytes() == b'line1\nline2\n'
+
+    def test_file_closed_after_context(self, tmp_path, monkeypatch):
+        monkeypatch.chdir(tmp_path)
+        ctx = self._make_ctx(tmp_path, keepflat=True)
+        handle = None
+        with _keepflat_context(ctx) as kf:
+            handle = kf
+        assert handle.closed
+
+
+class TestKeepflatPerfile:
+    """Test that per-file streaming produces a single consolidated keepflat file."""
+
+    def test_perfile_single_keepflat_file(
+        self, field_mappings_file, test_logger, default_args_config,
+        sample_ruleset, tmp_path,
+    ):
+        ctx = ProcessingContext(
+            config=field_mappings_file,
+            logger=test_logger,
+            no_output=True,
+            events_after=time.strptime("1970-01-01T00:00:00", "%Y-%m-%dT%H:%M:%S"),
+            events_before=time.strptime("9999-12-12T23:59:59", "%Y-%m-%dT%H:%M:%S"),
+            limit=-1,
+            csv_mode=False,
+            time_field="SystemTime",
+            hashes=False,
+            db_location=":memory:",
+            delimiter=";",
+            rulesets=sample_ruleset,
+            rule_filters=None,
+            outfile=str(tmp_path / "out.json"),
+            ready_for_templating=False,
+            package=False,
+            dbfile=None,
+            keepflat=True,
+            memory_tracker=MemoryTracker(logger=test_logger),
+        )
+
+        ev1 = tmp_path / "ev1.json"
+        ev1.write_text('{"Event": {"System": {"EventID": 1}, "EventData": {"CommandLine": "a"}}}\n')
+        ev2 = tmp_path / "ev2.json"
+        ev2.write_text('{"Event": {"System": {"EventID": 2}, "EventData": {"CommandLine": "b"}}}\n')
+
+        # chdir so keepflat file is created in tmp_path
+        original_cwd = os.getcwd()
+        try:
+            os.chdir(tmp_path)
+            process_perfile_streaming(
+                ctx, [ev1, ev2], "json", None, default_args_config,
+            )
+        finally:
+            os.chdir(original_cwd)
+
+        flat_files = list(tmp_path.glob("flattened_events_*.json"))
+        assert len(flat_files) == 1, (
+            f"Expected 1 consolidated keepflat file, got {len(flat_files)}"
+        )
+
+        lines = flat_files[0].read_text().strip().splitlines()
+        assert len(lines) == 2, (
+            f"Expected 2 events in keepflat file, got {len(lines)}"
+        )

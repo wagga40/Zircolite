@@ -12,10 +12,8 @@ This module contains the ZircoliteCore class for:
 import csv
 import logging
 import os
-import random
 import re
 import sqlite3
-import string
 from functools import lru_cache
 from pathlib import Path
 from sqlite3 import Error
@@ -620,7 +618,7 @@ class ZircoliteCore:
                       disable_progress: bool = False,
                       event_filter: 'Optional[EventFilter]' = None,
                       return_filtered_count: bool = False,
-                      keepflat: bool = False,
+                      keepflat_file=None,
                       _raw_config: Optional[dict] = None) -> 'int | tuple[int, int]':
         """
         Process log files using streaming mode - single-pass extraction, flattening, and DB insertion.
@@ -631,7 +629,7 @@ class ZircoliteCore:
         - Processes events in a streaming fashion
         - Uses dynamic schema discovery
         - Supports early event filtering based on channel/eventID
-        - Optional --keepflat: saves flattened events to a JSONL file alongside processing
+        - Optional keepflat: writes flattened events to a caller-managed file handle
         
         Args:
             log_files: List of log files to process
@@ -641,7 +639,8 @@ class ZircoliteCore:
             disable_progress: Whether to disable progress bars
             event_filter: Optional EventFilter for early event filtering based on channel/eventID
             return_filtered_count: If True, return (total_events, filtered_count) tuple
-            keepflat: If True, save flattened events to a JSONL file
+            keepflat_file: Open binary file handle to write flattened JSONL events to (caller
+                          is responsible for opening and closing the file)
             _raw_config: Pre-parsed field-mappings dict passed through to
                         StreamingEventProcessor to skip redundant config reads.
             
@@ -676,14 +675,6 @@ class ZircoliteCore:
         self.logger.info("[+] Creating dynamic model")
         processor.create_initial_table(self.db_connection)
         
-        # Open keepflat output file if requested
-        keepflat_file = None
-        keepflat_filename = None
-        if keepflat:
-            keepflat_filename = f"flattened_events_{''.join(random.SystemRandom().choice(string.ascii_uppercase + string.digits) for _ in range(4))}.json"
-            self.logger.info(f"[+] Saving flattened events to: [cyan]{keepflat_filename}[/]")
-            keepflat_file = open(keepflat_filename, 'wb', buffering=1048576)
-        
         # Process each file
         total_events = 0
 
@@ -717,65 +708,55 @@ class ZircoliteCore:
                 self.logger.error(f"[error]   [-] Error processing {log_file}: {e}[/]")
                 return 0
         
-        try:
-            show_progress = not is_quiet()
-            if show_progress:
-                if disable_progress:
-                    # Lightweight spinner + event counter only (no file bar)
-                    # Cost: one update per batch (~1000 events) – negligible.
-                    progress = Progress(
-                        SpinnerColumn(),
-                        TextColumn("[progress.description]{task.description}"),
-                        TextColumn("\u2022"),
-                        TextColumn("[magenta]{task.fields[events]:,}[/] events"),
-                        TextColumn("\u2022"),
-                        TimeElapsedColumn(),
-                        console=console,
-                        transient=True,
-                    )
-                    with progress:
-                        task_id = progress.add_task("Streaming", total=None, events=0)
+        show_progress = not is_quiet()
+        if show_progress:
+            if disable_progress:
+                progress = Progress(
+                    SpinnerColumn(),
+                    TextColumn("[progress.description]{task.description}"),
+                    TextColumn("\u2022"),
+                    TextColumn("[magenta]{task.fields[events]:,}[/] events"),
+                    TextColumn("\u2022"),
+                    TimeElapsedColumn(),
+                    console=console,
+                    transient=True,
+                )
+                with progress:
+                    task_id = progress.add_task("Streaming", total=None, events=0)
 
-                        def _streaming_cb_lite(event_count):
-                            progress.update(task_id, events=total_events + event_count)
+                    def _streaming_cb_lite(event_count):
+                        progress.update(task_id, events=total_events + event_count)
 
-                        for log_file in log_files:
-                            event_count = process_single_file(log_file, progress_cb=_streaming_cb_lite)
-                            total_events += event_count
-                            progress.update(task_id, events=total_events)
-                else:
-                    # Full progress bar with file bar + event counter
-                    progress = Progress(
-                        SpinnerColumn(),
-                        TextColumn("[progress.description]{task.description}"),
-                        BarColumn(bar_width=40),
-                        MofNCompleteColumn(),
-                        TextColumn("\u2022"),
-                        TextColumn("[magenta]{task.fields[events]:,}[/] events"),
-                        TextColumn("\u2022"),
-                        TimeElapsedColumn(),
-                        console=console,
-                        transient=True,
-                    )
-                    with progress:
-                        task_id = progress.add_task("Processing files", total=len(log_files), events=0)
-
-                        def _streaming_progress_cb(event_count):
-                            progress.update(task_id, events=total_events + event_count)
-
-                        for log_file in log_files:
-                            event_count = process_single_file(log_file, progress_cb=_streaming_progress_cb)
-                            total_events += event_count
-                            progress.update(task_id, advance=1, events=total_events)
+                    for log_file in log_files:
+                        event_count = process_single_file(log_file, progress_cb=_streaming_cb_lite)
+                        total_events += event_count
+                        progress.update(task_id, events=total_events)
             else:
-                # Quiet mode – no progress at all
-                for log_file in log_files:
-                    total_events += process_single_file(log_file)
-        finally:
-            # Always close keepflat file
-            if keepflat_file is not None:
-                keepflat_file.close()
-        
+                progress = Progress(
+                    SpinnerColumn(),
+                    TextColumn("[progress.description]{task.description}"),
+                    BarColumn(bar_width=40),
+                    MofNCompleteColumn(),
+                    TextColumn("\u2022"),
+                    TextColumn("[magenta]{task.fields[events]:,}[/] events"),
+                    TextColumn("\u2022"),
+                    TimeElapsedColumn(),
+                    console=console,
+                    transient=True,
+                )
+                with progress:
+                    task_id = progress.add_task("Processing files", total=len(log_files), events=0)
+
+                    def _streaming_progress_cb(event_count):
+                        progress.update(task_id, events=total_events + event_count)
+
+                    for log_file in log_files:
+                        event_count = process_single_file(log_file, progress_cb=_streaming_progress_cb)
+                        total_events += event_count
+                        progress.update(task_id, advance=1, events=total_events)
+        else:
+            for log_file in log_files:
+                total_events += process_single_file(log_file)
         # Create index after all data is inserted
         self.logger.info("[+] Creating indexes")
         self.create_index()

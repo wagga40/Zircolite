@@ -192,7 +192,7 @@ For the full list of options and up-to-date help, run: `python3 zircolite.py -h`
 | `-o`, `--outfile` | Output file for results |
 | `--csv` | Output results in CSV format |
 | `--csv-delimiter` | Delimiter for CSV output (default: `;`) |
-| `--keepflat` | Save flattened events as JSON |
+| `--keepflat` | Save flattened events as JSON (only processed events; filtered events are excluded) |
 | `-d`, `--dbfile` | Save logs to SQLite database |
 | `-l`, `--logfile` | Log file name |
 | `--hashes` | Add xxhash64 to each event |

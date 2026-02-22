@@ -824,7 +824,7 @@ Streaming mode is **enabled by default** for most input types:
 
 All input formats are processed via the streaming pipeline, including CSV and EVTXtract.
 
-Use `--keepflat` to save flattened events to a JSONL file alongside processing.
+Use `--keepflat` to save flattened events to a JSONL file alongside processing. Note that `--keepflat` only includes events that Zircolite actually processed — events dropped by early event filtering or time filtering (`--after`/`--before`) are not included. To get all events regardless of filtering, combine with `--no-event-filter`.
 
 ### Memory Usage
 
@@ -893,7 +893,7 @@ The event filter statistics are displayed in the summary panel after processing.
 **Zircolite** has several arguments that can be used to keep data used to perform Sigma detections: 
 
 - `--dbfile <FILE>` allows you to export all the logs to a SQLite 3 database file. You can query the logs with SQL statements to find more things than what the Sigma rules could have found. When processing multiple files, each file gets its own database file with a unique name.
-- `--keepflat` saves all flattened events to a JSONL file during streaming processing.
+- `--keepflat` saves flattened events to a JSONL file during streaming processing. This file contains only the events that were actually processed (i.e. events that passed early event filtering and time filtering). If event filtering is active, events whose Channel/EventID don't match any rule will **not** appear in the keepflat output. Use `--no-event-filter` to include all events.
 - `--hashes` adds an xxhash64 hash of the original log line to each event, useful for deduplication and tracking.
 
 ## Filtering
