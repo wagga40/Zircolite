@@ -856,7 +856,7 @@ def _run_processing(ctx, args, logger, memory_tracker):
 # MAIN
 ################################################################
 def main():
-    version = "3.2.0"
+    version = "3.3.0"
     args = parse_arguments()
 
     # Handle generate-config before logging setup
