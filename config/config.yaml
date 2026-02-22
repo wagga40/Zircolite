@@ -464,6 +464,127 @@ mappings:
   Event.EventData.updateRevisionNumber: updateRevisionNumber
   Event.EventData.updateTitle: updateTitle
 
+# --- ECS / WINLOGBEAT / ELASTIC AGENT MAPPINGS ---
+# ECS Mapping from https://github.com/Maspital
+# DNS & Network
+  dns.question.name: QueryName
+  dns.question.registered_domain: QueryName
+  dns.answers.data: QueryResults
+  dns.resolved_ip: DestinationIp
+  network.protocol: Protocol
+
+  # File & Code Signing
+  file.code_signature.subject_name: Signature
+  file.code_signature.status: SignatureStatus
+  file.code_signature.valid: Signed
+  file.pe.imphash: Imphash
+  file.pe.original_file_name: OriginalFileName
+  file.path: TargetFilename
+  file.name: TargetFileName
+  file.directory: TargetFilename  # Fallback
+  
+  # Process (ECS)
+  process.command_line: CommandLine
+  process.executable: Image
+  process.name: ProcessName
+  process.pid: ProcessId
+  process.entity_id: ProcessGuid
+  process.working_directory: CurrentDirectory
+  process.args: ProcessArgs
+  
+  # Parent Process (ECS)
+  process.parent.command_line: ParentCommandLine
+  process.parent.executable: ParentImage
+  process.parent.name: ParentProcessName
+  process.parent.pid: ParentProcessId
+  process.parent.entity_id: ParentProcessGuid
+
+  # Hashes (ECS & Winlogbeat)
+  process.hash.md5: MD5
+  process.hash.sha1: SHA1
+  process.hash.sha256: SHA256
+  process.hash.imphash: Imphash
+  hash.md5: MD5
+  hash.sha1: SHA1
+  hash.sha256: SHA256
+  hash.imphash: Imphash
+
+  # User & Host (ECS)
+  user.name: User
+  user.domain: UserDomain
+  user.id: UserSid
+  host.name: Computer
+  host.hostname: ComputerName
+
+  # Event Meta
+  event.code: EventID
+  event.action: EventType
+  event.provider: Provider_Name
+  event.created: EventTime
+
+  # Winlog Meta
+  winlog.channel: Channel
+  winlog.event_id: EventID
+  winlog.computer_name: Computer
+  winlog.provider_name: Provider_Name
+  winlog.provider_guid: Guid
+  winlog.record_id: EventRecordID
+  winlog.task: Task
+  winlog.opcode: Opcode
+
+  # Winlog Event Data
+  winlog.event_data.CommandLine: CommandLine
+  winlog.event_data.Image: Image
+  winlog.event_data.ParentCommandLine: ParentCommandLine
+  winlog.event_data.ParentImage: ParentImage
+  winlog.event_data.OriginalFileName: OriginalFileName
+  winlog.event_data.IntegrityLevel: IntegrityLevel
+  winlog.event_data.LogonId: LogonId
+  winlog.event_data.LogonGuid: LogonGuid
+  winlog.event_data.TerminalSessionId: TerminalSessionId
+  winlog.event_data.User: User
+  winlog.event_data.CurrentDirectory: CurrentDirectory
+  winlog.event_data.Hashes: Hashes
+  winlog.event_data.ProcessGuid: ProcessGuid
+  winlog.event_data.ProcessId: ProcessId
+  winlog.event_data.ParentProcessGuid: ParentProcessGuid
+  winlog.event_data.ParentProcessId: ParentProcessId
+  winlog.event_data.ParentUser: ParentUser
+  winlog.event_data.Company: Company
+  winlog.event_data.Description: Description
+  winlog.event_data.FileVersion: FileVersion
+  winlog.event_data.Product: Product
+  winlog.event_data.RuleName: RuleName
+  winlog.event_data.UtcTime: UtcTime
+  winlog.event_data.TargetFilename: TargetFileName
+  winlog.event_data.TargetObject: TargetObject
+  winlog.event_data.Details: Details
+  winlog.event_data.SourceImage: SourceImage
+  winlog.event_data.TargetImage: TargetImage
+  winlog.event_data.DestinationIp: DestinationIp
+  winlog.event_data.DestinationPort: DestinationPort
+  winlog.event_data.DestinationHostname: DestinationHostname
+  winlog.event_data.SourceIp: SourceIp
+  winlog.event_data.SourcePort: SourcePort
+  winlog.event_data.QueryName: QueryName
+  winlog.event_data.QueryResults: QueryResults
+
+  winlog.event_data.CallTrace: CallTrace
+  winlog.event_data.GrantedAccess: GrantedAccess
+  winlog.event_data.TargetName: TargetName
+  winlog.event_data.TargetUserName: TargetUserName
+  winlog.event_data.TargetDomainName: TargetDomainName
+  winlog.event_data.SubjectUserName: SubjectUserName
+  winlog.event_data.SubjectDomainName: SubjectDomainName
+  winlog.event_data.SubjectUserSid: SubjectUserSid
+  winlog.event_data.TargetUserSid: TargetUserSid
+  winlog.event_data.NewName: NewName
+  winlog.event_data.CallerProcessId: CallerProcessId
+  winlog.event_data.CallerProcessName: CallerProcessName
+  winlog.event_data.WorkstationName: WorkstationName
+  winlog.event_data.IpAddress: IpAddress
+  winlog.event_data.IpPort: IpPort
+
 # -----------------------------------------------------------------------------
 # FIELD ALIASES
 # -----------------------------------------------------------------------------
