@@ -235,6 +235,15 @@ For the full list of options and up-to-date help, run: `python3 zircolite.py -h`
 | `--parallel-workers` | Maximum number of parallel workers (default: auto-detect) |
 | `--parallel-memory-limit` | Memory usage threshold percentage before throttling (default: 75) |
 
+Parallel processing includes several automatic optimizations:
+
+- **LPT scheduling** — files are sorted largest-first so that big files start early and small files fill gaps at the end, minimizing total wall-clock time.
+- **Real throttling** — when memory pressure exceeds the configured limit, new task submissions are deferred (not just delayed) until in-flight tasks finish and memory drops back down.
+- **Adaptive memory estimation** — after the first file completes, the actual memory-per-file ratio is measured and blended with the heuristic estimate, producing more accurate worker counts for the remaining files.
+- **Config pre-loading** — the field-mappings configuration file is read once and shared across all workers, eliminating redundant disk I/O.
+- **Schema-preserving table reuse** — workers reuse the SQLite table schema between files (`DELETE FROM` instead of `DROP TABLE`), avoiding repeated `ALTER TABLE` for files with the same structure.
+- **Incremental result writing** — detection results are written to the output file as each file completes rather than buffered in memory until the end.
+
 #### Templating and Mini-GUI
 
 | Option | Description |

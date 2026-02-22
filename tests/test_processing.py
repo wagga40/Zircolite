@@ -22,6 +22,7 @@ from unittest.mock import MagicMock, patch
 from zircolite.console import LEVEL_PRIORITY
 from zircolite.processing import (
     ProcessingContext,
+    _IncrementalResultWriter,
     create_zircolite_core,
     create_worker_core,
     create_extractor,
@@ -367,3 +368,97 @@ class TestPublicAPI:
             process_parallel_streaming,
         ]:
             assert callable(fn)
+
+
+# =============================================================================
+# Incremental Result Writing
+# =============================================================================
+
+
+class TestIncrementalResultWriter:
+    """Tests for _IncrementalResultWriter in processing.py."""
+
+    def _make_ctx(self, tmp_path, csv_mode=False):
+        outfile = str(
+            tmp_path / "output.csv" if csv_mode else tmp_path / "output.json"
+        )
+
+        class FakeCtx:
+            pass
+
+        ctx = FakeCtx()
+        ctx.no_output = False
+        ctx.csv_mode = csv_mode
+        ctx.outfile = outfile
+        ctx.delimiter = ";"
+        return ctx
+
+    def test_json_incremental_write(self, tmp_path):
+        ctx = self._make_ctx(tmp_path)
+
+        with _IncrementalResultWriter(ctx) as writer:
+            writer.write_file_results({
+                "results": [
+                    {"title": "Rule A", "rule_level": "high", "count": 1,
+                     "matches": [{"CommandLine": "test"}]},
+                ]
+            })
+            writer.write_file_results({
+                "results": [
+                    {"title": "Rule B", "rule_level": "low", "count": 2,
+                     "matches": [{"Image": "cmd.exe"}]},
+                ]
+            })
+
+        with open(ctx.outfile, "r") as f:
+            data = json.loads(f.read())
+
+        assert len(data) == 2
+        assert data[0]["title"] == "Rule A"
+        assert data[1]["title"] == "Rule B"
+
+    def test_no_output_mode(self, tmp_path):
+        ctx = self._make_ctx(tmp_path)
+        ctx.no_output = True
+
+        with _IncrementalResultWriter(ctx) as writer:
+            writer.write_file_results({
+                "results": [{"title": "X", "matches": []}]
+            })
+
+        assert not os.path.exists(ctx.outfile)
+
+    def test_empty_results(self, tmp_path):
+        ctx = self._make_ctx(tmp_path)
+
+        with _IncrementalResultWriter(ctx) as writer:
+            writer.write_file_results({"results": []})
+
+        with open(ctx.outfile, "r") as f:
+            data = json.loads(f.read())
+        assert data == []
+
+    def test_csv_incremental_write(self, tmp_path):
+        import csv as csv_mod
+
+        ctx = self._make_ctx(tmp_path, csv_mode=True)
+
+        with _IncrementalResultWriter(ctx) as writer:
+            writer.write_file_results({
+                "results": [
+                    {
+                        "title": "Rule A",
+                        "description": "desc",
+                        "rule_level": "high",
+                        "count": 1,
+                        "matches": [{"CommandLine": "test", "Image": "ps.exe"}],
+                    }
+                ]
+            })
+
+        with open(ctx.outfile, "r") as f:
+            reader = csv_mod.DictReader(f, delimiter=";")
+            rows = list(reader)
+
+        assert len(rows) == 1
+        assert rows[0]["rule_title"] == "Rule A"

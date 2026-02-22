@@ -73,6 +73,7 @@ Taskfile.dev.yml
 *.sublime-project
 
 coverage/
+htmlcov/
 *.lcov
 
 .tmp/

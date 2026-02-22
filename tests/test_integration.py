@@ -7,6 +7,7 @@ using the streaming pipeline (single-pass processing).
 
 import json
 import sys
+import pytest
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
@@ -41,6 +42,7 @@ def _run_streaming_pipeline(json_file, config_file, args_config, test_logger,
     return zircore
 
 
+@pytest.mark.integration
 class TestFullPipelineJSON:
     """Integration tests for complete JSON processing pipeline."""
     

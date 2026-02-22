@@ -10,6 +10,7 @@ This module contains the StreamingEventProcessor class for:
 """
 
 import base64
+import csv as csv_module
 import logging
 import math
 import os
@@ -42,15 +43,18 @@ if TYPE_CHECKING:
 # Module-level constants – built once, shared across all instances
 # ---------------------------------------------------------------------------
 
-# Pre-compiled regex for stripping non-alphanumeric characters (opt #7)
+# Pre-compiled regex for stripping non-alphanumeric characters
 _NON_ALNUM_RE = re.compile(r'[^a-zA-Z0-9]')
 
-# Translation table for fast newline removal in XML processing (opt #8)
+# Translation table for newline removal in XML processing
 _NEWLINE_TRANSLATE = str.maketrans('', '', '\n\r')
+
+# Sentinel for excluded paths in the path resolution cache
+_EXCLUDED_SENTINEL = object()
 
 
 def _build_restricted_builtins() -> dict:
-    """Build RestrictedPython builtins dict once at module level (opt #11)."""
+    """Build RestrictedPython builtins dict once at module level."""
     def _default_guarded_getitem(ob, index):
         return ob[index]
 
@@ -123,7 +127,7 @@ class StreamingEventProcessor:
         'field_exclusions', 'field_mappings', 'useless_values', 'aliases',
         'field_split_list', 'transforms', 'transforms_enabled', 'enabled_transforms_set',
         'transform_categories', 'transforms_dir', 'chosen_input',
-        # Event filter config (from fieldMappings config) – pre-split tuples (opt #6)
+        # Event filter config (from fieldMappings config)
         '_channel_field_paths', '_eventid_field_paths',
         # Timestamp config (from fieldMappings config)
         '_timestamp_detection_fields', '_timestamp_auto_detect', '_detected_time_field',
@@ -131,12 +135,15 @@ class StreamingEventProcessor:
         'discovered_fields', 'field_types', 'field_stmt_cache',
         # Caches
         'compiled_code_cache', '_transform_func_cache', 'RestrictedPython_BUILTINS',
-        # Time filter cache – includes string bounds for fast comparison (opt #2)
+        # Path resolution cache – maps path_parts tuple to resolved (raw_name, mapped_key)
+        # or _EXCLUDED_SENTINEL; avoids repeated join/exclusion/mapping per leaf
+        '_resolve_path',
+        # Time filter cache – includes string bounds for comparison
         '_has_time_filter', '_time_after_parsed', '_time_before_parsed',
         '_time_after_str', '_time_before_str',
-        # DB column caching (optimization)
+        # DB column caching
         '_db_columns', '_last_insert_stmt', '_last_insert_columns',
-        # Sorted-column caching for _insert_batch (opt #5)
+        # Sorted-column caching for _insert_batch
         '_last_column_frozenset', '_last_sorted_columns',
         # Event filtering (early skip based on channel/eventID)
         'event_filter', '_events_filtered_count', '_filtering_enabled'
@@ -149,7 +156,8 @@ class StreamingEventProcessor:
         processing_config: Optional[ProcessingConfig] = None,
         *,
         logger: Optional[logging.Logger] = None,
-        event_filter: 'Optional[EventFilter]' = None
+        event_filter: 'Optional[EventFilter]' = None,
+        _raw_config: Optional[dict] = None
     ):
         """
         Initialize StreamingEventProcessor.
@@ -160,6 +168,9 @@ class StreamingEventProcessor:
             processing_config: Processing configuration (uses defaults if None)
             logger: Logger instance (creates default if None)
             event_filter: Optional EventFilter for early event filtering based on channel/eventID
+            _raw_config: Pre-parsed field mappings dict – when provided, skips
+                         re-reading ``config_file`` from disk (used by parallel
+                         workers to avoid redundant I/O).
         """
         proc = processing_config or ProcessingConfig()
         
@@ -180,27 +191,27 @@ class StreamingEventProcessor:
         self._filtering_enabled = event_filter is not None and event_filter.is_enabled
         
         # Schema tracking - fields discovered during streaming
-        self.discovered_fields = {}  # field_name_lower -> original_field_name
-        self.field_types = {}  # field_name -> 'INTEGER' or 'TEXT'
-        self.field_stmt_cache = {}
+        self.discovered_fields: dict = {}  # field_name_lower -> original_field_name
+        self.field_types: dict = {}  # field_name -> 'INTEGER' or 'TEXT'
+        self.field_stmt_cache: dict = {}
         
         # Caches for transforms
-        self.compiled_code_cache = {}
-        self._transform_func_cache = {}
+        self.compiled_code_cache: dict = {}
+        self._transform_func_cache: dict = {}
         
         # DB column caching for batch inserts (avoid repeated PRAGMA queries)
-        self._db_columns = None  # Set of known columns in DB, None = needs refresh
-        self._last_insert_stmt = None  # Cached INSERT statement
-        self._last_insert_columns = None  # Columns used in cached statement (as tuple for comparison)
+        self._db_columns: Optional[set] = None  # Set of known columns in DB, None = needs refresh
+        self._last_insert_stmt: Optional[str] = None  # Cached INSERT statement
+        self._last_insert_columns: Optional[tuple] = None  # Columns used in cached statement (as tuple for comparison)
         
         # Pre-parse time bounds once
         self._has_time_filter = (proc.time_after != "1970-01-01T00:00:00" or proc.time_before != "9999-12-12T23:59:59")
         if self._has_time_filter:
             self._time_after_parsed = self._parse_time_bound(proc.time_after, "1970-01-01T00:00:00")
             self._time_before_parsed = self._parse_time_bound(proc.time_before, "9999-12-12T23:59:59")
-            # String bounds for fast lexicographic comparison (opt #2)
-            self._time_after_str = proc.time_after[:19]
-            self._time_before_str = proc.time_before[:19]
+            # String bounds for lexicographic comparison
+            self._time_after_str: Optional[str] = proc.time_after[:19]
+            self._time_before_str: Optional[str] = proc.time_before[:19]
         else:
             self._time_after_parsed = None
             self._time_before_parsed = None
@@ -214,18 +225,34 @@ class StreamingEventProcessor:
         if not hasattr(self, 'chosen_input') or self.chosen_input is None:
             self.chosen_input = "evtx_input"
         
-        # Sorted-column caching for _insert_batch (opt #5)
-        self._last_column_frozenset = frozenset()
+        # Sorted-column caching for _insert_batch
+        self._last_column_frozenset: frozenset = frozenset()
         self._last_sorted_columns = ()
         
         # Load field mappings config (includes event_filter and timestamp_detection)
-        self._load_config()
+        self._load_config(_raw_config=_raw_config)
         
-        # Use module-level RestrictedPython builtins (opt #11)
+        # Use module-level RestrictedPython builtins
         self.RestrictedPython_BUILTINS = _RESTRICTED_BUILTINS
         
         # Timestamp auto-detection state
         self._detected_time_field = None
+
+        from functools import lru_cache
+        
+        @lru_cache(maxsize=10000)
+        def _resolve_path(path_parts):
+            raw_field_name = '.'.join(path_parts)
+            for exclusion in self.field_exclusions:
+                if exclusion in raw_field_name:
+                    return _EXCLUDED_SENTINEL
+            mapped_key = self.field_mappings.get(raw_field_name)
+            if mapped_key is None:
+                last_part = path_parts[-1] if path_parts else ''
+                mapped_key = _NON_ALNUM_RE.sub('', last_part)
+            return (raw_field_name, mapped_key)
+
+        self._resolve_path = _resolve_path
 
     @staticmethod
     def _parse_time_bound(value, fallback):
@@ -237,9 +264,14 @@ class StreamingEventProcessor:
         except (ValueError, TypeError):
             return time.strptime(fallback, '%Y-%m-%dT%H:%M:%S')
 
-    def _load_config(self):
-        """Load field mappings configuration (supports JSON and YAML formats)."""
-        config = load_field_mappings(self.config_file, logger=self.logger)
+    def _load_config(self, *, _raw_config: Optional[dict] = None):
+        """Load field mappings configuration (supports JSON and YAML formats).
+
+        When *_raw_config* is provided the disk read is skipped, which
+        eliminates redundant I/O when many parallel workers share the
+        same configuration file.
+        """
+        config = _raw_config or load_field_mappings(self.config_file, logger=self.logger)
         self.field_exclusions = tuple(config["exclusions"])
         self.field_mappings = config["mappings"]
         self.useless_values = frozenset(config["useless"]) if config["useless"] else frozenset()
@@ -297,7 +329,7 @@ class StreamingEventProcessor:
                 self.transforms_enabled = True
         
         # Load event filter field paths from config (defaults provided by load_field_mappings)
-        # Pre-split dot-notation paths into tuples for faster nested access (opt #6)
+        # Pre-split dot-notation paths into tuples for nested access
         event_filter_cfg = config.get("event_filter", {})
         self._channel_field_paths = tuple(
             tuple(p.split('.')) for p in event_filter_cfg.get("channel_fields", [])
@@ -517,7 +549,7 @@ class StreamingEventProcessor:
         except Exception:
             return param
 
-    def _flatten_event(self, event_dict: dict, filename: str, raw_bytes: bytes = None) -> Optional[dict]:
+    def _flatten_event(self, event_dict: dict, filename: str, raw_bytes: Optional[bytes] = None) -> Optional[dict]:
         """
         Flatten a single event dictionary and track discovered fields.
         Returns flattened dict or None if filtered out.
@@ -528,30 +560,24 @@ class StreamingEventProcessor:
             event_dict["OriginalLogLinexxHash"] = xxhash.xxh64_hexdigest(raw_bytes)
         
         # Cache references for hot loop (local vars are faster than attribute access)
-        field_exclusions = self.field_exclusions
-        field_mappings = self.field_mappings
-        field_mappings_get = field_mappings.get
         useless_values = self.useless_values
-        aliases = self.aliases
-        aliases_get = aliases.get
+        aliases_get = self.aliases.get
         field_split_list = self.field_split_list
         field_split_list_get = field_split_list.get
-        transforms = self.transforms
-        transforms_get = transforms.get
+        transforms_get = self.transforms.get
         transforms_enabled = self.transforms_enabled
         enabled_transforms_set = self.enabled_transforms_set
         chosen_input = self.chosen_input
         discovered_fields = self.discovered_fields
         field_types = self.field_types
         transform_value = self._transform_value
+        resolve_path = self._resolve_path
+        _sentinel = _EXCLUDED_SENTINEL
         
         # Result dict
         json_line = {}
         
-        # Iterative flattening using stack with immutable tuple paths (opt #3)
-        # Stack entries: (object, path_tuple)
-        # Tuples avoid list slice copies per node; tuple + (k,) is fast for
-        # the small depths typical of log events.
+        # Iterative flattening using stack with immutable tuple paths
         stack = [(event_dict, ())]
         
         while stack:
@@ -561,17 +587,13 @@ class StreamingEventProcessor:
                 for k, v in obj.items():
                     stack.append((v, path_parts + (k,)))
             else:
-                # Build field name from path
-                raw_field_name = '.'.join(path_parts)
-                
-                # Check exclusions (early exit)
-                excluded = False
-                for exclusion in field_exclusions:
-                    if exclusion in raw_field_name:
-                        excluded = True
-                        break
-                if excluded:
+                # Path resolution cache: the same field paths recur across
+                # events with identical schemas, so we cache the join,
+                # exclusion check, and mapping lookup.
+                cached = resolve_path(path_parts)
+                if cached is _sentinel:
                     continue
+                raw_field_name, mapped_key = cached
                 
                 # Handle arrays - convert to string
                 if isinstance(obj, list):
@@ -582,13 +604,6 @@ class StreamingEventProcessor:
                 # Skip useless values
                 if value in useless_values:
                     continue
-                
-                # Get mapped field name (cache lookup)
-                mapped_key = field_mappings_get(raw_field_name)
-                if mapped_key is None:
-                    # Use last path component, filtered to alphanumeric (opt #7)
-                    last_part = path_parts[-1] if path_parts else ''
-                    mapped_key = _NON_ALNUM_RE.sub('', last_part)
                 
                 key = mapped_key
                 keys = [key]
@@ -610,9 +625,6 @@ class StreamingEventProcessor:
                         if field_transforms:
                             for transform in field_transforms:
                                 alias_name = transform.get("alias_name", "")
-                                # Check if transform is enabled:
-                                # - If enabled_transforms_set is set, only run transforms in that list
-                                # - Otherwise, fall back to per-transform 'enabled' flag
                                 if enabled_transforms_set is not None:
                                     if alias_name not in enabled_transforms_set:
                                         continue
@@ -648,8 +660,13 @@ class StreamingEventProcessor:
                     except Exception:
                         pass
                 
-                # Apply values to all keys and track schema
+                # Apply values to all keys and track schema.
+                # Normalize large integers to strings here so _insert_batch
+                # doesn't need a per-value isinstance check.
                 is_int = isinstance(value, int)
+                if is_int and abs(value) > 9223372036854775807:
+                    value = str(value)
+                    is_int = False
                 has_transforms = transformed_keys is not None
                 
                 for k in keys:
@@ -694,9 +711,8 @@ class StreamingEventProcessor:
                         # Handle timezone offset (e.g., +00:00)
                         if '+' in ts_cmp:
                             ts_cmp = ts_cmp.split('+')[0]
-                        # Lexicographic string comparison (opt #2) – ISO 8601
-                        # strings are naturally orderable, avoiding expensive
-                        # time.strptime() per event.
+                        # Lexicographic string comparison – ISO 8601
+                        # strings are naturally orderable.
                         ts_cmp = ts_cmp[:19]
                         if not (self._time_after_str < ts_cmp < self._time_before_str):
                             return None
@@ -742,7 +758,6 @@ class StreamingEventProcessor:
         """
         Stream and flatten events from a JSON file.
         
-        Optimizations:
         - JSONL mode: True line-by-line streaming (no full file load)
         - JSON array mode: Single parse, iterate elements
         - Early event filtering based on channel/eventID
@@ -784,33 +799,44 @@ class StreamingEventProcessor:
             self.logger.error(f"[red]   [-] Error streaming JSON file {json_file}: {e}[/]")
 
     def stream_xml_events(self, xml_file: str, extractor: 'EvtxExtractor') -> Generator[dict, None, None]:
-        """Stream and flatten events from an XML file using the extractor's conversion methods."""
+        """Stream and flatten events from an XML file using incremental parsing."""
+        from lxml import etree
         try:
             filename = Path(xml_file).name
             flatten = self._flatten_event  # Local reference
             should_process = self._should_process_event  # Local reference
-            xml_convert = extractor.xml_line_to_json
+            xml_to_dict = extractor.xml_to_dict
             
-            with open(xml_file, 'r', encoding=extractor.encoding) as f:
-                # Use str.translate for fast C-level newline removal (opt #8),
-                # then split into individual events.
-                data = f.read().translate(_NEWLINE_TRANSLATE)
-                data = data.replace("</Event>", "</Event>\n").replace("<Event ", "\n<Event ")
-            
-            for line in data.split("\n"):
-                if not line:
-                    continue
-                try:
-                    event_dict = xml_convert(line)
-                    if event_dict:
-                        # Early filter check before expensive flattening
-                        if not should_process(event_dict):
-                            continue
-                        flattened = flatten(event_dict, filename, line.encode('utf-8'))
-                        if flattened:
-                            yield flattened
-                except Exception:
-                    continue
+            # Using iterparse for memory-efficient XML parsing
+            context = etree.iterparse(xml_file, events=('end',), recover=True)
+            for action, elem in context:
+                if elem.tag.endswith('Event'):
+                    try:
+                        ns = ''
+                        if '}' in elem.tag:
+                            ns = elem.tag.split('}')[0] + '}'
+                            
+                        event_dict = xml_to_dict(elem, ns)
+                        if event_dict:
+                            # Early filter check before expensive flattening
+                            if not should_process(event_dict):
+                                elem.clear()
+                                while elem.getprevious() is not None:
+                                    del elem.getparent()[0]
+                                continue
+                            
+                            raw_bytes = etree.tostring(elem)
+                            flattened = flatten(event_dict, filename, raw_bytes)
+                            if flattened:
+                                yield flattened
+                    except Exception:
+                        pass
+                    
+                    # Clear element to save memory
+                    elem.clear()
+                    while elem.getprevious() is not None:
+                        del elem.getparent()[0]
+                        
         except Exception as e:
             self.logger.error(f"[red]   [-] Error streaming XML file {xml_file}: {e}[/]")
 
@@ -872,7 +898,6 @@ class StreamingEventProcessor:
         
         Memory-efficient: reads one row at a time using csv.DictReader.
         """
-        import csv as csv_module
         try:
             filename = os.path.basename(csv_file)
             flatten = self._flatten_event  # Local reference
@@ -898,7 +923,7 @@ class StreamingEventProcessor:
         Stream and flatten events from an EVTXtract output file.
         
         EVTXtract produces XML-like output that needs special parsing.
-        Memory optimization: process events as they're parsed rather than loading all.
+        Events are processed as they're parsed rather than loading all at once.
         """
         from lxml import etree
         
@@ -943,14 +968,14 @@ class StreamingEventProcessor:
         except Exception as e:
             self.logger.error(f"[red]   [-] Error streaming EVTXtract file {log_file}: {e}[/]")
 
-    def stream_json_array_chunked(self, json_file: str, chunk_size: int = 10000) -> Generator[dict, None, None]:
+    def stream_json_array_chunked(self, json_file: str) -> Generator[dict, None, None]:
         """
-        Stream and flatten events from a large JSON array file with chunked processing.
+        Stream and flatten events from a large JSON array file incrementally.
         
-        For very large JSON arrays, this attempts to parse incrementally.
+        For very large JSON arrays, this parses incrementally using raw_decode.
         Falls back to standard parsing if file is small enough.
         
-        Memory optimization: yields events in chunks rather than all at once.
+        Yields events incrementally rather than all at once.
         Includes early event filtering based on channel/eventID.
         """
         try:
@@ -973,30 +998,59 @@ class StreamingEventProcessor:
                         yield flattened
                 return
             
-            # For larger files, try memory-mapped reading with chunked parsing
-            # Read and parse in chunks to reduce peak memory
-            self.logger.debug(f"Large JSON array ({file_size / 1024 / 1024:.1f}MB), using chunked processing")
+            # For larger files, use incremental parsing
+            self.logger.debug(f"Large JSON array ({file_size / 1024 / 1024:.1f}MB), using incremental processing")
             
-            with open(json_file, 'rb') as f:
-                logs = json.loads(f.read())
+            import json as std_json
+            decoder = std_json.JSONDecoder()
             
-            # Process in chunks to allow garbage collection (opt #10)
-            total_events = len(logs)
-            for i in range(0, total_events, chunk_size):
-                chunk = logs[i:i + chunk_size]
-                for event_dict in chunk:
-                    # Early filter check before expensive flattening
-                    if not should_process(event_dict):
-                        continue
-                    flattened = flatten(event_dict, filename, None)
-                    if flattened:
-                        yield flattened
-                # Null out processed elements to allow earlier GC of event dicts
-                for j in range(i, min(i + chunk_size, total_events)):
-                    logs[j] = None
-                del chunk
-            del logs
+            with open(json_file, 'r', encoding='utf-8', errors='ignore') as f:
+                # Find the start of the array
+                while True:
+                    char = f.read(1)
+                    if not char:
+                        return
+                    if char == '[':
+                        break
                 
+                buffer = ""
+                while True:
+                    chunk = f.read(65536)
+                    if not chunk:
+                        # Process remaining buffer if any
+                        buffer = buffer.lstrip(' \t\n\r,')
+                        if buffer and not buffer.startswith(']'):
+                            try:
+                                obj, _ = decoder.raw_decode(buffer)
+                                if should_process(obj):
+                                    flattened = flatten(obj, filename, None)
+                                    if flattened:
+                                        yield flattened
+                            except Exception:
+                                pass
+                        break
+                        
+                    buffer += chunk
+                    
+                    while True:
+                        buffer = buffer.lstrip(' \t\n\r,')
+                        if not buffer:
+                            break
+                        if buffer.startswith(']'):
+                            # End of array
+                            return
+                            
+                        try:
+                            obj, idx = decoder.raw_decode(buffer)
+                            if should_process(obj):
+                                flattened = flatten(obj, filename, None)
+                                if flattened:
+                                    yield flattened
+                            buffer = buffer[idx:]
+                        except std_json.JSONDecodeError:
+                            # Need more data
+                            break
+                            
         except Exception as e:
             self.logger.error(f"[red]   [-] Error streaming JSON array file {json_file}: {e}[/]")
 
@@ -1009,7 +1063,7 @@ class StreamingEventProcessor:
 
     def process_file_streaming(self, db_connection, log_file: str, 
                                input_type: str = 'evtx', 
-                               extractor: 'EvtxExtractor' = None,
+                               extractor: Optional['EvtxExtractor'] = None,
                                json_array: bool = False,
                                use_chunked_json: bool = True,
                                keepflat_file=None,
@@ -1029,27 +1083,26 @@ class StreamingEventProcessor:
         
         Returns the number of events processed.
         """
-        # Select appropriate streaming method (dispatch table approach)
-        if input_type == 'evtx':
-            event_stream = self.stream_evtx_events(log_file)
-        elif input_type == 'json':
+        # Dispatch to the appropriate stream method
+        if input_type == 'json':
             if json_array and use_chunked_json:
                 event_stream = self.stream_json_array_chunked(log_file)
             else:
                 event_stream = self.stream_json_events(log_file, json_array=json_array)
-        elif input_type == 'xml' and extractor:
-            event_stream = self.stream_xml_events(log_file, extractor)
-        elif input_type == 'sysmon_linux' and extractor:
-            event_stream = self.stream_sysmon_linux_events(log_file, extractor)
-        elif input_type == 'auditd' and extractor:
-            event_stream = self.stream_auditd_events(log_file, extractor)
-        elif input_type == 'csv':
-            event_stream = self.stream_csv_events(log_file)
-        elif input_type == 'evtxtract' and extractor:
-            event_stream = self.stream_evtxtract_events(log_file, extractor)
         else:
-            self.logger.error(f"[error]   [-] Unsupported input type: {input_type}[/]")
-            return 0
+            _dispatch = {
+                'evtx': lambda: self.stream_evtx_events(log_file),
+                'xml': lambda: self.stream_xml_events(log_file, extractor),
+                'sysmon_linux': lambda: self.stream_sysmon_linux_events(log_file, extractor),
+                'auditd': lambda: self.stream_auditd_events(log_file, extractor),
+                'csv': lambda: self.stream_csv_events(log_file),
+                'evtxtract': lambda: self.stream_evtxtract_events(log_file, extractor),
+            }
+            factory = _dispatch.get(input_type)
+            if factory is None or (input_type in ('xml', 'sysmon_linux', 'auditd', 'evtxtract') and not extractor):
+                self.logger.error(f"[error]   [-] Unsupported input type: {input_type}[/]")
+                return 0
+            event_stream = factory()
         
         # Batch processing with local variable caching
         batch = []
@@ -1059,11 +1112,8 @@ class StreamingEventProcessor:
         cursor = db_connection.cursor()
         insert_batch = self._insert_batch
         
-        # Optional keepflat writing
+        # Optional keepflat writing (write orjson bytes directly)
         json_dumps = json.dumps if keepflat_file else None
-        
-        # SQLite integer limit (constant)
-        SQLITE_INT_MAX = 9223372036854775807
         
         for event in event_stream:
             batch_append(event)
@@ -1071,11 +1121,11 @@ class StreamingEventProcessor:
             
             # Write flattened event to keepflat file if requested
             if keepflat_file is not None:
-                keepflat_file.write(json_dumps(event).decode('utf-8'))
-                keepflat_file.write('\n')
+                keepflat_file.write(json_dumps(event))
+                keepflat_file.write(b'\n')
             
             if len(batch) >= batch_size:
-                insert_batch(db_connection, cursor, batch, SQLITE_INT_MAX)
+                insert_batch(db_connection, cursor, batch)
                 batch = []
                 batch_append = batch.append  # Rebind after list replacement
                 if progress_callback is not None:
@@ -1083,23 +1133,37 @@ class StreamingEventProcessor:
         
         # Insert remaining batch
         if batch:
-            insert_batch(db_connection, cursor, batch, SQLITE_INT_MAX)
+            insert_batch(db_connection, cursor, batch)
             if progress_callback is not None:
                 progress_callback(event_count)
         
         return event_count
 
-    def _insert_batch(self, db_connection, cursor, batch: List[dict], sqlite_int_max: int):
-        """Insert a batch of events into the database with dynamic schema handling."""
+    def _insert_batch(self, db_connection, cursor, batch: List[dict]):
+        """Insert a batch of events into the database with dynamic schema handling.
+
+        Large-integer normalization is handled upstream in ``_flatten_event``,
+        so no per-value type check is needed here.
+        """
         if not batch:
             return
         
-        # Collect all columns from batch using set union
-        all_columns_set = set()
-        for event in batch:
-            all_columns_set.update(event.keys())
-        # Cache sorted columns – only re-sort when the column set changes (opt #5)
-        all_columns_frozen = frozenset(all_columns_set)
+        # Collect all columns from batch using set union.
+        # If first and last events have the same keys, the batch is likely
+        # homogeneous and we can skip the union.
+        first_keys = batch[0].keys()
+        if len(batch) == 1 or (
+            len(batch[-1]) == len(first_keys)
+            and batch[-1].keys() == first_keys
+        ):
+            all_columns_frozen = frozenset(first_keys)
+        else:
+            all_columns_set = set()
+            for event in batch:
+                all_columns_set.update(event.keys())
+            all_columns_frozen = frozenset(all_columns_set)
+
+        # Cache sorted columns – only re-sort when the column set changes
         if all_columns_frozen != self._last_column_frozenset:
             all_columns = tuple(sorted(all_columns_frozen))
             self._last_column_frozenset = all_columns_frozen
@@ -1114,27 +1178,14 @@ class StreamingEventProcessor:
         if self._last_insert_columns == all_columns and not schema_changed:
             insert_stmt = self._last_insert_stmt
         else:
-            # Build new INSERT statement
             columns_escaped = ', '.join(f'"{col}"' for col in all_columns)
             placeholders = ', '.join(['?'] * len(all_columns))
             insert_stmt = f'INSERT INTO logs ({columns_escaped}) VALUES ({placeholders})'
             self._last_insert_stmt = insert_stmt
             self._last_insert_columns = all_columns
         
-        # Prepare batch data with local variable caching
-        rows = []
-        rows_append = rows.append
-        for event in batch:
-            event_get = event.get
-            values = []
-            values_append = values.append
-            for col in all_columns:
-                value = event_get(col)
-                # Convert large integers to string for SQLite compatibility
-                if value is not None and isinstance(value, int) and abs(value) > sqlite_int_max:
-                    value = str(value)
-                values_append(value)
-            rows_append(tuple(values))
+        # Build rows – large-int normalisation already done in _flatten_event
+        rows = [tuple(event.get(col) for col in all_columns) for event in batch]
         
         # Execute batch insert with transaction
         try:
@@ -1182,7 +1233,12 @@ class StreamingEventProcessor:
         self._ensure_columns_exist_cached(db_connection, cursor, tuple(columns))
 
     def create_initial_table(self, db_connection):
-        """Create the initial logs table with basic structure."""
+        """Create the initial logs table with basic structure.
+
+        If the table already exists (e.g. after ``DELETE FROM logs`` for
+        worker-core reuse), the column cache is refreshed from the actual
+        schema so that ``_ensure_columns_exist_cached`` works correctly.
+        """
         cursor = db_connection.cursor()
         try:
             cursor.execute("""
@@ -1191,8 +1247,10 @@ class StreamingEventProcessor:
                 )
             """)
             db_connection.commit()
-            # Reset column cache since we have a fresh table
-            self._db_columns = {'row_id'}
+            # Refresh column cache from actual table state – handles both
+            # freshly created tables and reused tables (DELETE FROM path).
+            cursor.execute("PRAGMA table_info(logs)")
+            self._db_columns = {row[1].lower() for row in cursor.fetchall()}
             self._last_insert_stmt = None
             self._last_insert_columns = None
             self._last_column_frozenset = frozenset()

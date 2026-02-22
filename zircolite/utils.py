@@ -271,7 +271,7 @@ class MemoryTracker:
             logger: Logger instance (creates default if None)
             min_sample_interval: Minimum seconds between samples (0 = no limit).
                 When positive, rapid ``sample()`` calls are silently skipped
-                to reduce syscall overhead (opt #13).
+                to reduce syscall overhead.
         """
         self.logger = logger or logging.getLogger(__name__)
         self.memory_samples = []
@@ -294,7 +294,7 @@ class MemoryTracker:
         Args:
             force: If True, bypass the rate limit and always sample.
         """
-        # Rate limiting (opt #13) – skip if called too soon after last sample
+        # Rate limiting – skip if called too soon after last sample
         if self._min_sample_interval > 0 and not force:
             import time as _time
             now = _time.monotonic()
@@ -397,20 +397,14 @@ def analyze_files_and_recommend_mode(file_list, logger=None):
     
     memory_per_file = avg_size * memory_multiplier
     
-    # Calculate optimal parallel workers (aggressive scaling)
-    usable_memory = available_ram * 0.85  # Use 85% of available RAM
-    memory_based_workers = max(1, int(usable_memory / memory_per_file)) if memory_per_file > 0 else cpu_count
-    
-    # Allow up to 2x CPU count for I/O bound workloads
-    cpu_based_workers = cpu_count * 2
-    
-    # Scale with file count (more files = more parallelism potential)
-    file_based_workers = min(file_count, cpu_count * 3)
-    
-    # Take minimum of constraints, but ensure we use at least half CPU count
-    optimal_workers = min(memory_based_workers, cpu_based_workers, file_based_workers)
-    optimal_workers = max(optimal_workers, min(cpu_count // 2, file_count))
-    optimal_workers = min(optimal_workers, file_count, 32)  # Cap at 32 workers
+    # Delegate to the consolidated worker-calculation function so that
+    # the heuristics stay in sync with MemoryAwareParallelProcessor.
+    from .parallel import calculate_optimal_workers as _calc_workers
+    optimal_workers = _calc_workers(
+        file_sizes=file_sizes,
+        available_memory_mb=available_ram / (1024 * 1024),
+        cpu_count=cpu_count,
+    )
     
     # Parallel processing recommendation
     parallel_recommended = False
@@ -423,7 +417,7 @@ def analyze_files_and_recommend_mode(file_list, logger=None):
         parallel_reason = "Very low RAM - parallel disabled for safety"
     elif optimal_workers <= 1:
         parallel_reason = "Insufficient resources for parallel processing"
-    elif memory_per_file > usable_memory * 0.6:  # Single file uses >60% of usable RAM
+    elif memory_per_file > (available_ram * 0.85) * 0.6:  # Single file uses >60% of usable RAM
         parallel_reason = "Very large files - sequential processing safer"
     else:
         parallel_recommended = True

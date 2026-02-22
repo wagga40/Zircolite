@@ -40,7 +40,7 @@ from .console import (
 from .core import ZircoliteCore
 from .extractor import EvtxExtractor
 from .parallel import ParallelConfig, MemoryAwareParallelProcessor
-from .utils import MemoryTracker, create_silent_logger
+from .utils import MemoryTracker, create_silent_logger, load_field_mappings
 
 if TYPE_CHECKING:
     from .rules import EventFilter
@@ -99,7 +99,7 @@ class ProcessingContext:
 
 def create_zircolite_core(
     ctx: ProcessingContext,
-    db_location: str = None,
+    db_location: Optional[str] = None,
     disable_progress: bool = False,
 ) -> ZircoliteCore:
     """Create a ``ZircoliteCore`` instance with standard configuration."""
@@ -397,6 +397,7 @@ def process_single_file_worker(
     worker_counter: list,
     total_filtered_count: list,
     thread_local: threading.local,
+    raw_config: Optional[dict] = None,
 ) -> tuple:
     """Process a single file inside a parallel worker thread.
 
@@ -411,12 +412,17 @@ def process_single_file_worker(
                 worker_id = worker_counter[0]
                 worker_counter[0] += 1
             thread_local.core = create_worker_core(ctx, worker_id)
+        else:
+            # Reuse table schema across files: DELETE keeps columns intact so
+            # _ensure_columns_exist_cached sees them immediately, avoiding
+            # redundant ALTER TABLE statements for files with similar structure.
+            try:
+                thread_local.core.db_connection.execute("DELETE FROM logs")
+            except Exception:
+                pass  # Table may not exist if previous file failed early
+            thread_local.core._cursor = None
 
         core = thread_local.core
-
-        # Clear previous data
-        core.db_connection.execute("DROP TABLE IF EXISTS logs")
-        core._cursor = None
 
         event_count, filtered_count = core.run_streaming(
             [log_file],
@@ -426,6 +432,7 @@ def process_single_file_worker(
             disable_progress=True,
             event_filter=ctx.event_filter,
             return_filtered_count=True,
+            _raw_config=raw_config,
         )
 
         with counter_lock:
@@ -483,11 +490,100 @@ def process_single_file_worker(
 # PARALLEL STREAMING
 # ============================================================================
 
+class _IncrementalResultWriter:
+    """Thread-safe, incremental writer for parallel detection results.
+
+    Writes each detection result to disk as it arrives rather than buffering
+    everything in memory and flushing at the end.  Supports both JSON-array
+    and CSV output modes.
+    """
+
+    def __init__(self, ctx: ProcessingContext):
+        self._ctx = ctx
+        self._fh = None
+        self._csv_writer = None
+        self._first_json = True
+        self._lock = threading.Lock()
+
+    def __enter__(self):
+        if self._ctx.no_output:
+            return self
+        if self._ctx.csv_mode:
+            self._fh = open(self._ctx.outfile, "w", encoding="utf-8", newline="")
+        else:
+            self._fh = open(self._ctx.outfile, "wb")
+            self._fh.write(b"[")
+        return self
+
+    def write_file_results(self, file_data) -> None:
+        """Write all detection results from a single file's output dict."""
+        if self._fh is None or not isinstance(file_data, dict):
+            return
+        for result in file_data.get("results", []):
+            self._write_one(result)
+
+    def _write_one(self, result: dict) -> None:
+        with self._lock:
+            if self._ctx.csv_mode:
+                self._write_csv(result)
+            else:
+                self._write_json(result)
+
+    def _write_json(self, result: dict) -> None:
+        if not self._first_json:
+            self._fh.write(b",\n")
+        self._first_json = False
+        self._fh.write(orjson.dumps(result, option=orjson.OPT_INDENT_2))
+
+    def _write_csv(self, result: dict) -> None:
+        title = result.get("title", "")
+        description = (
+            (result.get("description") or "").replace("\n", "").replace("\r", "")
+        )
+        level = result.get("rule_level", "")
+        count = result.get("count", 0)
+        for row in result.get("matches", []):
+            if self._csv_writer is None:
+                fieldnames = [
+                    "rule_title", "rule_description", "rule_level", "rule_count",
+                ] + sorted(row.keys())
+                self._csv_writer = csv.DictWriter(
+                    self._fh,
+                    delimiter=self._ctx.delimiter,
+                    fieldnames=fieldnames,
+                    extrasaction="ignore",
+                )
+                self._csv_writer.writeheader()
+            clean_row = {
+                k: ("" if v is None else str(v)).replace("\n", "").replace("\r", "")
+                for k, v in row.items()
+            }
+            self._csv_writer.writerow({
+                "rule_title": title,
+                "rule_description": description,
+                "rule_level": level,
+                "rule_count": count,
+                **clean_row,
+            })
+
+    def __exit__(self, *args):
+        if self._fh is not None:
+            if not self._ctx.csv_mode:
+                self._fh.write(b"]")
+            self._fh.close()
+            self._fh = None
+
+
 def _write_parallel_results(ctx: ProcessingContext, all_results: list) -> None:
     """Write combined parallel results to the output file.
 
     Uses binary I/O for JSON (avoids an unnecessary decode/encode
     round-trip) and text I/O for CSV.
+
+    .. deprecated::
+        Kept for backward compatibility.  New code should use
+        :class:`_IncrementalResultWriter` which writes results as they
+        arrive instead of buffering in memory.
     """
     if ctx.no_output:
         return
@@ -534,7 +630,6 @@ def _write_parallel_results(ctx: ProcessingContext, all_results: list) -> None:
                         }
                     )
     else:
-        # Binary writes – avoids decode('utf-8') per result
         with open(ctx.outfile, "wb") as f:
             f.write(b"[")
             for i, result in enumerate(all_results):
@@ -550,19 +645,23 @@ def process_parallel_streaming(
     input_type: str,
     extractor,
     args,
-    recommended_workers: int = None,
+    recommended_workers: Optional[int] = None,
 ) -> tuple:
     """Process files in parallel using memory-aware parallel processor."""
 
     parallel_config = ParallelConfig(
         max_workers=getattr(args, "parallel_workers", None) or recommended_workers,
         memory_limit_percent=getattr(args, "parallel_memory_limit", 75.0),
-        use_processes=False,
         adaptive_workers=True,
+        sort_by_size=True,
+        adaptive_memory=True,
     )
 
     if len(file_list) < 2:
         return process_perfile_streaming(ctx, file_list, input_type, extractor, args)
+
+    # Pre-parse field mappings once so workers skip redundant disk reads
+    raw_config = load_field_mappings(ctx.config)
 
     # Shared mutable state for workers
     thread_local = threading.local()
@@ -583,18 +682,58 @@ def process_parallel_streaming(
             worker_counter=worker_counter,
             total_filtered_count=total_filtered_count,
             thread_local=thread_local,
+            raw_config=raw_config,
         )
 
     processor = MemoryAwareParallelProcessor(
         config=parallel_config, logger=ctx.logger
     )
 
-    results_list, stats = processor.process_files_parallel(
-        file_list,
-        _process_file,
-        desc="Processing",
-        disable_progress=is_quiet(),
-    )
+    all_results: list = []
+    file_stats: list = []
+
+    def _on_file_complete(file_data) -> None:
+        if not isinstance(file_data, dict):
+            return
+        file_results = file_data.get("results", [])
+        if file_results:
+            all_results.extend(file_results)
+        file_stats.append({
+            "name": file_data.get("name", "unknown"),
+            "events": file_data.get("events", 0),
+            "detections": len(file_results),
+            "filtered": file_data.get("filtered", 0),
+        })
+
+    # Incremental writing streams JSON results to disk as files complete.
+    # CSV mode is excluded: the CSV DictWriter header is fixed at creation
+    # time, so columns from later files would be silently dropped.  CSV
+    # falls back to _write_parallel_results which collects all columns first.
+    use_incremental = not ctx.csv_mode
+
+    if use_incremental:
+        with _IncrementalResultWriter(ctx) as writer:
+
+            def _on_result(file_data) -> None:
+                _on_file_complete(file_data)
+                writer.write_file_results(file_data)
+
+            results_list, stats = processor.process_files_parallel(
+                file_list,
+                _process_file,
+                desc="Processing",
+                disable_progress=is_quiet(),
+                on_result=_on_result,
+            )
+    else:
+        results_list, stats = processor.process_files_parallel(
+            file_list,
+            _process_file,
+            desc="Processing",
+            disable_progress=is_quiet(),
+            on_result=_on_file_complete,
+        )
+        _write_parallel_results(ctx, all_results)
 
     # Collect errors
     for file_data in results_list:
@@ -607,23 +746,6 @@ def process_parallel_streaming(
             ctx.logger.error(f"    \u2192 {fname}: {err}")
         if len(errors) > 5:
             ctx.logger.error(f"    \u2192 ... and {len(errors) - 5} more")
-
-    # Build aggregated results and per-file stats
-    all_results: list = []
-    file_stats: list = []
-    for file_data in results_list:
-        if file_data and isinstance(file_data, dict):
-            file_results = file_data.get("results", [])
-            if file_results:
-                all_results.extend(file_results)
-            file_stats.append(
-                {
-                    "name": file_data.get("name", "unknown"),
-                    "events": file_data.get("events", 0),
-                    "detections": len(file_results),
-                    "filtered": file_data.get("filtered", 0),
-                }
-            )
 
     ctx.memory_tracker.sample()
     ctx.file_stats = file_stats
@@ -680,8 +802,5 @@ def process_parallel_streaming(
             f"[+] Total events processed: [magenta]{total_events:,}[/] "
             f"([dim]{filtered_count:,} events filtered out[/])"
         )
-
-    # Write combined output
-    _write_parallel_results(ctx, all_results)
 
     return None, all_results

@@ -603,7 +603,7 @@ class LogTypeDetector:
         self, event: dict, is_json_array: bool, ext: str
     ) -> DetectionResult:
         """Classify a JSON event based on its structure and fields."""
-        flat_keys = set()
+        flat_keys: set = set()
         self._collect_keys(event, flat_keys)
 
         input_type = "json_array" if is_json_array else "json"

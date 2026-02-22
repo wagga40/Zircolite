@@ -8,23 +8,29 @@ These rulesets are generated from SIGMA rules using **pySigma** from the [offici
 
 ### Windows (generic – no Sysmon rewriting)
 
-- `rules_windows_generic_high.json` : Level high and above from the **Windows** directory (no Sysmon rewriting)
-- `rules_windows_generic_medium.json` : Level medium and above from the **Windows** directory (no Sysmon rewriting)
-- `rules_windows_generic.json` : Same as `rules_windows_generic_high.json`
+- `rules_windows_generic_high.json` — Level high and above from the **Windows** directory (no Sysmon rewriting)
+- `rules_windows_generic_medium.json` — Level medium and above from the **Windows** directory (no Sysmon rewriting)
+- `rules_windows_generic.json` — Same as `rules_windows_generic_high.json` (default when `--ruleset` is omitted)
 
 ### Windows (Sysmon)
 
-- `rules_windows_sysmon_high.json` : Level high and above from the **Windows** directory (Sysmon)
-- `rules_windows_sysmon_medium.json` : Level medium and above from the **Windows** directory (Sysmon)
-- `rules_windows_sysmon.json` : Same as `rules_windows_sysmon_high.json`
+- `rules_windows_sysmon_high.json` — Level high and above from the **Windows** directory (Sysmon)
+- `rules_windows_sysmon_medium.json` — Level medium and above from the **Windows** directory (Sysmon)
+- `rules_windows_sysmon.json` — Same as `rules_windows_sysmon_high.json`
+
+### Windows (merged)
+
+- `rules_windows_merged_high.json` — Level high and above, merged Windows log sources
+- `rules_windows_merged_medium.json` — Level medium and above, merged Windows log sources
+- `rules_windows_merged.json` — Same as `rules_windows_merged_high.json`
 
 ### Linux
 
-- `rules_linux.json` : Full SIGMA ruleset from the **linux** directory (Auditd and Sysmon for Linux)
-- `rules_linux_high.json` : Level high and above from the **linux** directory
-- `rules_linux_medium.json` : Level medium and above from the **linux** directory
+- `rules_linux.json` — Full SIGMA ruleset from the **linux** directory (Auditd and Sysmon for Linux)
+- `rules_linux_high.json` — Level high and above from the **linux** directory
+- `rules_linux_medium.json` — Level medium and above from the **linux** directory
 
-**Zircolite can auto-update these rulesets with `-U` or `--update-rules`. Pre-built rules are available in [Zircolite-Rules](https://github.com/wagga40/Zircolite-Rules-v2).**
+**Zircolite can auto-update these rulesets with `-U` or `--update-rules`. Pre-built rules are available in [Zircolite-Rules-v2](https://github.com/wagga40/Zircolite-Rules-v2).**
 
 ## Why you should make your own rulesets
 
@@ -33,7 +39,7 @@ The default rulesets are converted from the **Windows** and **linux** rule direc
 - **Some rules are very noisy or produce many false positives** depending on your environment and configuration.
 - **Some rules can be very slow** depending on your log volume and schema.
 
-To generate your own ruleset, see the [documentation](https://wagga40.github.io/Zircolite/) or the [docs](https://github.com/wagga40/Zircolite/tree/master/docs) in the repository.
+To generate your own ruleset, see the [Usage documentation](../docs/Usage.md#rulesets--rules) in the repository or the [online docs](https://wagga40.github.io/Zircolite/).
 
 Examples of rules that may be noisy or slow:
 

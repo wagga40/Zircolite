@@ -98,6 +98,7 @@ from .parallel import (
     MemoryAwareParallelProcessor,
     process_files_with_memory_awareness,
     estimate_parallel_viability,
+    calculate_optimal_workers,
 )
 from .detector import (
     LogTypeDetector,
@@ -163,6 +164,7 @@ __all__ = [
     'MemoryAwareParallelProcessor',
     'process_files_with_memory_awareness',
     'estimate_parallel_viability',
+    'calculate_optimal_workers',
     # Log type detection
     'LogTypeDetector',
     'DetectionResult',
