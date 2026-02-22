@@ -18,6 +18,8 @@ Package structure:
 import argparse
 import logging
 import os
+import random
+import string
 import sys
 import time
 from pathlib import Path
@@ -196,6 +198,7 @@ def parse_arguments():
     templating_formats_args = parser.add_argument_group('🎨 TEMPLATING AND MINI GUI')
     templating_formats_args.add_argument("-t", "--template", help="Jinja2 template to use for output generation", type=str, action='append', nargs='+')
     templating_formats_args.add_argument("-T", "--templateOutput", "--template-output", help="Output file for Jinja2 template results", type=str, action='append', nargs='+')
+    templating_formats_args.add_argument("--timesketch", help="Shortcut: use Timesketch template and write to timesketch-<RAND>.json", action='store_true')
     templating_formats_args.add_argument("-G", "--package", help="Create a ZircoGui/Mini GUI package", action='store_true')
     templating_formats_args.add_argument("--package-dir", help="Directory to save the ZircoGui/Mini GUI package", type=str, default="")
     
@@ -896,6 +899,16 @@ def main():
     # Load YAML configuration if provided
     if args.yaml_config:
         args = load_yaml_config_and_merge(args, logger)
+
+    # Apply --timesketch shortcut
+    if getattr(args, 'timesketch', False):
+        rand_4 = ''.join(random.SystemRandom().choice(string.ascii_uppercase + string.digits) for _ in range(4))
+        out_name = f"timesketch-{rand_4}.json"
+        if args.template is None:
+            args.template = []
+            args.templateOutput = []
+        args.template.append(["templates/exportForTimesketch.tmpl"])
+        args.templateOutput.append([out_name])
 
     # Handle rulesets
     if args.ruleset:

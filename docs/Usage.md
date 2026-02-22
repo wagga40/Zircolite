@@ -250,6 +250,7 @@ Parallel processing includes several automatic optimizations:
 |--------|-------------|
 | `--template` | Jinja2 template for output |
 | `--templateOutput` | Output file for template |
+| `--timesketch` | Shortcut: Timesketch template → `timesketch-<RAND>.json` |
 | `--package` | Create ZircoGui package |
 | `--package-dir` | Directory for ZircoGui package |
 

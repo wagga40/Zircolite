@@ -1001,9 +1001,17 @@ Zircolite provides a templating system based on Jinja2. It allows you to change 
 - `--template <template_filename>`
 - `--templateOutput <output_filename>`
 
+For Timesketch you can use the shortcut `--timesketch`: it uses `exportForTimesketch.tmpl` and writes to a file named `timesketch-<RAND>.json` (4-character random suffix) so you can run multiple exports without overwriting.
+
 ```shell
 python3 zircolite.py --evtx sample.evtx  --ruleset rules/rules_windows_sysmon.json \
 --template templates/exportForSplunk.tmpl --templateOutput exportForSplunk.json
+```
+
+Timesketch shortcut:
+
+```shell
+python3 zircolite.py --evtx sample.evtx --ruleset rules/rules_windows_sysmon.json --timesketch
 ```
 
 It is possible to use multiple templates if you provide a `--templateOutput` argument for each `--template` argument.
@@ -1016,7 +1024,7 @@ It is possible to use multiple templates if you provide a `--templateOutput` arg
 | `exportForSplunkWithRuleID.tmpl` | NDJSON | Splunk with rule ID for correlation |
 | `exportForELK.tmpl` | NDJSON | Elasticsearch / ELK Stack |
 | `exportForZinc.tmpl` | Bulk JSON | OpenSearch/Elasticsearch bulk API (index + document per event) |
-| `exportForTimesketch.tmpl` | NDJSON | Timesketch (uses `--timefield` for datetime) |
+| `exportForTimesketch.tmpl` | NDJSON | Timesketch (uses `--timefield` for datetime); shortcut: `--timesketch` |
 | `exportForZircoGui.tmpl` | JavaScript | Mini-GUI `data.js` (used by `--package`) |
 | `exportNDJSON.tmpl` | NDJSON | Generic: rule metadata + event fields, one JSON per line |
 | `exportSummaryCSV.tmpl` | CSV | One row per rule (triage/summary), not per event |
