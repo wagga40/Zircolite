@@ -87,7 +87,6 @@ class ParallelProcessingConfig:
     max_workers: Optional[int] = None  # None = auto-detect
     min_workers: int = 1
     memory_limit_percent: float = 75.0
-    use_processes: bool = False  # Deprecated: always uses threads (processes have issues)
     adaptive: bool = True
 
 
@@ -242,7 +241,6 @@ class ConfigLoader:
                 max_workers=par.get('max_workers'),
                 min_workers=par.get('min_workers', 1),
                 memory_limit_percent=par.get('memory_limit_percent', 75.0),
-                use_processes=par.get('use_processes', False),
                 adaptive=par.get('adaptive', True)
             )
         

@@ -134,7 +134,6 @@ class TestParallelProcessingConfig:
         assert config.max_workers is None
         assert config.min_workers == 1
         assert config.memory_limit_percent == 75.0
-        assert config.use_processes is False
         assert config.adaptive is True
 
 
@@ -438,7 +437,6 @@ class TestConfigLoaderMergeWithArgs:
             parallel=False,
             parallel_workers=None,
             parallel_memory_limit=75.0,
-            parallel_use_processes=False,
         )
         
         loader = ConfigLoader(logger=test_logger)
@@ -494,7 +492,6 @@ class TestConfigLoaderMergeWithArgs:
             parallel=False,
             parallel_workers=None,
             parallel_memory_limit=75.0,
-            parallel_use_processes=False,
         )
         
         loader = ConfigLoader(logger=test_logger)
@@ -665,7 +662,6 @@ class TestConfigLoaderMergeWithArgsExtended:
             parallel=False,
             parallel_workers=None,
             parallel_memory_limit=75.0,
-            parallel_use_processes=False,
         )
         defaults.update(overrides)
         return Namespace(**defaults)

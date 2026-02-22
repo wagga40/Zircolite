@@ -19,6 +19,7 @@ from zircolite import (
 from zircolite.streaming import (
     _NON_ALNUM_RE,
     _NEWLINE_TRANSLATE,
+    _EXCLUDED_SENTINEL,
     _RESTRICTED_BUILTINS as STREAMING_BUILTINS,
 )
 
@@ -271,15 +272,15 @@ class TestStreamingEventProcessorSchemaGeneration:
         cursor = conn.cursor()
 
         batch1 = [{"colA": "a1", "colB": "b1"}]
-        processor._insert_batch(conn, cursor, batch1, 9223372036854775807)
+        processor._insert_batch(conn, cursor, batch1)
         first_frozen = processor._last_column_frozenset
 
         batch2 = [{"colA": "a2", "colB": "b2"}]
-        processor._insert_batch(conn, cursor, batch2, 9223372036854775807)
+        processor._insert_batch(conn, cursor, batch2)
         assert processor._last_column_frozenset == first_frozen
 
         batch3 = [{"colA": "a3", "colB": "b3", "colC": "c3"}]
-        processor._insert_batch(conn, cursor, batch3, 9223372036854775807)
+        processor._insert_batch(conn, cursor, batch3)
         assert processor._last_column_frozenset != first_frozen
         assert "colc" in processor._last_column_frozenset or "colC" in processor._last_column_frozenset
 
@@ -781,7 +782,7 @@ class TestStreamingEventProcessorJSONArrayChunked:
             args_config=default_args_config,
             logger=test_logger,
         )
-        result = list(processor.stream_json_array_chunked(str(arr_file), chunk_size=5))
+        result = list(processor.stream_json_array_chunked(str(arr_file)))
         assert len(result) == 25
 
 
@@ -1191,3 +1192,129 @@ class TestStreamingJsonEdgeCases:
 
         events = list(processor.stream_json_events(str(json_file), json_array=True))
         assert len(events) == 2
+
+
+# ============================================================================
+# PRE-PARSED CONFIG PASSTHROUGH
+# ============================================================================
+
+
+class TestPreParsedConfig:
+    """Tests for pre-parsed field mappings passthrough."""
+
+    def test_streaming_processor_uses_raw_config(self, field_mappings_file):
+        """StreamingEventProcessor uses _raw_config instead of reading disk."""
+        from zircolite.config import ProcessingConfig
+        from argparse import Namespace
+
+        raw_config = {
+            "exclusions": ["xmlns"],
+            "useless": [None, ""],
+            "mappings": {"Event.System.EventID": "EventID"},
+            "alias": {},
+            "split": {},
+            "transforms_enabled": False,
+            "transforms": {},
+        }
+
+        args = Namespace(evtx_input=True)
+        proc = ProcessingConfig()
+
+        processor = StreamingEventProcessor(
+            config_file="/nonexistent/path.json",
+            args_config=args,
+            processing_config=proc,
+            _raw_config=raw_config,
+        )
+
+        assert processor.field_mappings == {"Event.System.EventID": "EventID"}
+        assert processor.transforms_enabled is False
+
+    def test_streaming_processor_falls_back_to_file(self, field_mappings_file):
+        """Without _raw_config, config is loaded from disk as before."""
+        from zircolite.config import ProcessingConfig
+        from argparse import Namespace
+
+        args = Namespace(evtx_input=True)
+        proc = ProcessingConfig()
+
+        processor = StreamingEventProcessor(
+            config_file=field_mappings_file,
+            args_config=args,
+            processing_config=proc,
+        )
+
+        assert "Event.System.EventID" in processor.field_mappings
+
+
+# ============================================================================
+# TABLE REUSE (DELETE FROM instead of DROP TABLE)
+# ============================================================================
+
+
+class TestTableReuse:
+    """Tests for DELETE FROM table reuse in worker cores."""
+
+    def test_create_initial_table_refreshes_cache(self):
+        """create_initial_table queries actual schema for its column cache."""
+        from zircolite.config import ProcessingConfig
+        from argparse import Namespace
+
+        raw_config = {
+            "exclusions": [],
+            "useless": [],
+            "mappings": {},
+            "alias": {},
+            "split": {},
+            "transforms_enabled": False,
+            "transforms": {},
+        }
+
+        conn = sqlite3.connect(":memory:")
+        conn.execute(
+            "CREATE TABLE logs (row_id INTEGER PRIMARY KEY, EventID TEXT, Channel TEXT)"
+        )
+        conn.commit()
+
+        args = Namespace(evtx_input=True)
+        processor = StreamingEventProcessor(
+            config_file="/unused",
+            args_config=args,
+            processing_config=ProcessingConfig(),
+            _raw_config=raw_config,
+        )
+
+        processor.create_initial_table(conn)
+
+        assert "row_id" in processor._db_columns
+        assert "eventid" in processor._db_columns
+        assert "channel" in processor._db_columns
+
+        conn.close()
+
+    def test_delete_from_preserves_schema(self):
+        """DELETE FROM keeps columns so ALTER TABLE is not needed for same schema."""
+        conn = sqlite3.connect(":memory:")
+        conn.execute(
+            "CREATE TABLE logs (row_id INTEGER PRIMARY KEY AUTOINCREMENT, "
+            "EventID TEXT, Channel TEXT)"
+        )
+        conn.execute(
+            "INSERT INTO logs (EventID, Channel) VALUES ('1', 'Sysmon')"
+        )
+        conn.commit()
+
+        conn.execute("DELETE FROM logs")
+        conn.commit()
+
+        cursor = conn.cursor()
+        cursor.execute("PRAGMA table_info(logs)")
+        columns = {row[1].lower() for row in cursor.fetchall()}
+
+        assert "eventid" in columns
+        assert "channel" in columns
+
+        cursor.execute("SELECT COUNT(*) FROM logs")
+        assert cursor.fetchone()[0] == 0
+
+        conn.close()

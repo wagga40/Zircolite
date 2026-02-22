@@ -79,7 +79,7 @@ class TestEventFilterInit:
         assert len(event_filter.eventids) == 3
 
     def test_init_mixed_rules(self):
-        """Test that filtering works even when some rules lack filter data."""
+        """Test that filtering is disabled when any rule has no log source (issue #117)."""
         rulesets = [
             {
                 "title": "Rule with filter",
@@ -94,10 +94,29 @@ class TestEventFilterInit:
         ]
         event_filter = EventFilter(rulesets)
         
-        # Should be enabled - has both channels and eventIDs
-        assert event_filter.is_enabled
+        # Filter must be disabled so the rule without channel/eventid sees all events;
+        # otherwise alert counts for that rule would differ between single-rule and
+        # full-ruleset runs.
+        assert not event_filter.is_enabled
+        assert event_filter._rules_without_filter == 1
         assert len(event_filter.channels) == 1
         assert len(event_filter.eventids) == 1
+
+    def test_issue_117_full_ruleset_with_any_logsource_rule_disables_filter(self):
+        """Regression for #117: full ruleset including a rule with no channel/eventid must not filter.
+
+        When one rule has empty channel/eventid (any log source), event filtering must be
+        disabled so that the same rule yields the same alert count whether run alone or
+        with the full ruleset.
+        """
+        rulesets = [
+            {"title": "Usage Of Web Request Commands And Cmdlets", "channel": [], "eventid": []},
+            {"title": "External Remote SMB Logon", "channel": ["Security"], "eventid": [5140]},
+            {"title": "Process Creation", "channel": ["Microsoft-Windows-Sysmon/Operational"], "eventid": [1]},
+        ]
+        event_filter = EventFilter(rulesets)
+        assert not event_filter.is_enabled
+        assert event_filter._rules_without_filter == 1
 
     def test_init_all_rules_without_filter(self):
         """Test initialization when all rules lack filter data."""

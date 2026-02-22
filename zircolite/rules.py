@@ -40,7 +40,15 @@ class EventFilter:
     This class extracts all unique channel and eventID values from a ruleset
     and provides fast lookup to determine if an event should be processed.
     
-    Filtering logic:
+    Filtering is enabled only when:
+    - There is at least one channel and one eventID across the ruleset, and
+    - No rule has empty channel and eventid (i.e. "any" log source).
+    
+    If any rule has no channel/eventid constraints, filtering is disabled so
+    that events needed by such rules are not dropped, keeping alert counts
+    consistent whether you run a single rule or a full ruleset.
+    
+    When enabled, filtering logic:
     - If event's Channel is NOT in the set of all channels from rules → discard
     - If event's EventID is NOT in the set of all eventIDs from rules → discard
     
@@ -126,11 +134,21 @@ class EventFilter:
         self._rules_with_filter = rules_with_filter
         self._rules_without_filter = rules_without_filter
         
-        # Enable filtering if we have BOTH channels AND eventIDs
-        self._has_filter_data = bool(self.channels and self.eventids)
+        # Enable filtering only if we have BOTH channels AND eventIDs AND no rule
+        # has "any" log source. Rules with empty channel/eventid match any event;
+        # if we filtered by other rules' log sources we would drop events needed
+        # by those rules and get inconsistent counts (see issue #117).
+        self._has_filter_data = bool(
+            self.channels and self.eventids and (rules_without_filter == 0)
+        )
         
         if not self._has_filter_data:
-            self.logger.debug("EventFilter: Missing channels or eventIDs - filtering disabled")
+            if rules_without_filter > 0:
+                self.logger.debug(
+                    "EventFilter: At least one rule has no channel/eventid (any log source) - filtering disabled"
+                )
+            else:
+                self.logger.debug("EventFilter: Missing channels or eventIDs - filtering disabled")
 
     @property
     def is_enabled(self) -> bool:

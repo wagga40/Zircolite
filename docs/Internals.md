@@ -4,6 +4,21 @@
 
 **Zircolite is more a workflow than a real detection engine.** To put it simply, it leverages the ability of the Sigma converter to output rules in SQLite format. Zircolite simply applies SQLite-converted rules to EVTX logs stored in an in-memory SQLite database.
 
+### Architecture Overview
+
+```mermaid
+graph TD
+    FS["File System (Logs)"] --> SEP["StreamingEventProcessor"]
+    SEP -->|"Extract & Flatten"| FE["_flatten_event"]
+    FE -->|"LRU _resolve_path"| IB["_insert_batch"]
+    IB -->|"Batch Insert"| DB["SQLite Database"]
+    
+    MAPP["MemoryAwareParallelProcessor"] -->|"Assigns workers"| SEP
+    
+    ZC["ZircoliteCore"] -->|"Execute Rules"| DB
+    ZC -->|"Stream Results"| OUT["Disk / Console"]
+```
+
 ### High-Level Flow
 
 ```mermaid

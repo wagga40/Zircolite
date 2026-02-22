@@ -3,6 +3,7 @@ Tests for the ZircoliteCore class.
 """
 
 import json
+import pytest
 import re
 import sqlite3
 import sys
@@ -808,6 +809,7 @@ class TestZircoliteCoreRegexSupport:
         zircore.close()
 
 
+@pytest.mark.slow
 class TestZircoliteCoreStreamingMode:
     """Tests for ZircoliteCore streaming mode functionality."""
     

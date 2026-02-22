@@ -192,7 +192,7 @@ For the full list of options and up-to-date help, run: `python3 zircolite.py -h`
 | `-o`, `--outfile` | Output file for results |
 | `--csv` | Output results in CSV format |
 | `--csv-delimiter` | Delimiter for CSV output (default: `;`) |
-| `--keepflat` | Save flattened events as JSON |
+| `--keepflat` | Save flattened events as JSON (only processed events; filtered events are excluded) |
 | `-d`, `--dbfile` | Save logs to SQLite database |
 | `-l`, `--logfile` | Log file name |
 | `--hashes` | Add xxhash64 to each event |
@@ -235,12 +235,22 @@ For the full list of options and up-to-date help, run: `python3 zircolite.py -h`
 | `--parallel-workers` | Maximum number of parallel workers (default: auto-detect) |
 | `--parallel-memory-limit` | Memory usage threshold percentage before throttling (default: 75) |
 
+Parallel processing includes several automatic optimizations:
+
+- **LPT scheduling** — files are sorted largest-first so that big files start early and small files fill gaps at the end, minimizing total wall-clock time.
+- **Real throttling** — when memory pressure exceeds the configured limit, new task submissions are deferred (not just delayed) until in-flight tasks finish and memory drops back down.
+- **Adaptive memory estimation** — after the first file completes, the actual memory-per-file ratio is measured and blended with the heuristic estimate, producing more accurate worker counts for the remaining files.
+- **Config pre-loading** — the field-mappings configuration file is read once and shared across all workers, eliminating redundant disk I/O.
+- **Schema-preserving table reuse** — workers reuse the SQLite table schema between files (`DELETE FROM` instead of `DROP TABLE`), avoiding repeated `ALTER TABLE` for files with the same structure.
+- **Incremental result writing** — detection results are written to the output file as each file completes rather than buffered in memory until the end.
+
 #### Templating and Mini-GUI
 
 | Option | Description |
 |--------|-------------|
 | `--template` | Jinja2 template for output |
 | `--templateOutput` | Output file for template |
+| `--timesketch` | Shortcut: Timesketch template → `timesketch-<RAND>.json` |
 | `--package` | Create ZircoGui package |
 | `--package-dir` | Directory for ZircoGui package |
 
@@ -1140,7 +1150,13 @@ Zircolite includes an early event filtering mechanism and automatic timestamp de
 
 ### Early Event Filtering
 
-When rules are loaded, Zircolite extracts all unique `Channel` and `EventID` values. During processing, events that don't match are skipped before processing operations.
+Zircolite can skip events before processing based on **Channel** and **EventID**, so only events that could match at least one rule’s log source are loaded. This reduces memory and CPU when rules use a subset of channels/eventIDs. **Event filtering applies only to Windows logs** (EVTX, Windows JSON/XML, etc.); other log types (Linux, Auditd, generic JSON, etc.) are not filtered by channel/eventID.
+
+**How it works:**
+
+- When rules are loaded, Zircolite collects all unique `Channel` and `EventID` values from the ruleset (from each rule’s `channel` and `eventid` metadata).
+- Filtering is **enabled** only when the ruleset has at least one channel and one eventID **and** every rule has at least one channel and one eventID. If any rule has empty or missing channel/eventid (“any” log source), filtering is **disabled** so that rule still sees all events and alert counts stay consistent whether you run one rule or the full ruleset.
+- When enabled, an event is **kept** only if both its Channel is in the ruleset’s channel set and its EventID is in the ruleset’s eventID set; otherwise it is skipped before flattening and database insertion.
 
 The filter supports multiple log formats through configurable field paths:
 
@@ -1157,7 +1173,7 @@ event_filter:
     - winlog.event_id           # Elastic Winlogbeat
 ```
 
-Disable with `--no-event-filter` CLI option or set `enabled: false` in config.
+Disable with the `--no-event-filter` CLI option or set `enabled: false` in config.
 
 ### Timestamp Auto-Detection
 

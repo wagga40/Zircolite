@@ -824,7 +824,7 @@ Streaming mode is **enabled by default** for most input types:
 
 All input formats are processed via the streaming pipeline, including CSV and EVTXtract.
 
-Use `--keepflat` to save flattened events to a JSONL file alongside processing.
+Use `--keepflat` to save flattened events to a JSONL file alongside processing. Note that `--keepflat` only includes events that Zircolite actually processed — events dropped by early event filtering or time filtering (`--after`/`--before`) are not included. To get all events regardless of filtering, combine with `--no-event-filter`.
 
 ### Memory Usage
 
@@ -844,24 +844,42 @@ There are several ways to speed up Zircolite:
 
 ### Early Event Filtering
 
-Zircolite includes an **early event filtering** mechanism that skips events before processing operations. This feature:
+Zircolite includes an **early event filtering** mechanism that skips events before flattening and database insertion. This reduces memory and CPU when your rules only reference a subset of log sources. **Event filtering applies only to Windows logs** (EVTX, Windows JSON/XML, Winlogbeat, etc.); other log types (Linux, Auditd, generic JSON, etc.) are not filtered by channel/eventID.
 
-1. **Extracts Channel and EventID** values from all loaded rules
-2. **Filters events early** - before flattening and database insertion
-3. **Supports multiple log formats** - EVTX, JSON, XML, CSV, and more
+#### How the filter is built
 
-The event filter uses configurable field paths to extract Channel and EventID from different log structures:
+When rules are loaded, Zircolite collects all unique **Channel** and **EventID** values from the ruleset (from each rule’s `channel` and `eventid` metadata in the converted rules). Only events whose **(Channel, EventID)** pair is in that set are kept; others are skipped before processing.
+
+#### When filtering is enabled or disabled
+
+Filtering is **enabled** only when:
+
+- The ruleset has at least one channel and one eventID across all rules, **and**
+- **Every** rule has at least one channel and one eventID (no rule has “any” log source).
+
+If **any** rule has empty or missing channel/eventid (i.e. the rule applies to any log source), filtering is **disabled** for the whole run. That way, rules that match on any Channel/EventID still see all events, and **alert counts stay consistent** whether you run a single rule or the full ruleset. Otherwise, the same rule could report different counts (e.g. 74 alone vs 40 with the full ruleset) because events would be dropped when other rules’ log sources are used to build the filter.
+
+#### Filtering logic
+
+- An event is **kept** only if **both** its Channel is in the ruleset’s channel set **and** its EventID is in the ruleset’s eventID set.
+- Channel matching is case-insensitive.
+- If the filter is disabled (see above), all events are processed.
+
+#### Configuration and formats
+
+The event filter uses configurable field paths to read Channel and EventID from different log structures:
+
 - Standard EVTX: `Event.System.Channel`, `Event.System.EventID`
 - Pre-flattened JSON: `Channel`, `EventID`
 - ECS/Elasticsearch: `winlog.channel`, `event.code`
-- And many more (configurable in `config/config.yaml`)
+- And more (configurable in `config/config.yaml`).
 
 ```shell
-# Event filtering is enabled by default
+# Event filtering is enabled when all rules have channel/eventid
 # You'll see a log message like:
 # [+] Event filter enabled: 15 channels, 45 eventIDs
 
-# Disable event filtering if needed
+# Disable event filtering if needed (process all events)
 python3 zircolite.py --evtx logs/ --ruleset rules.json --no-event-filter
 
 # Apply filtering to non-Windows log sources too
@@ -875,7 +893,7 @@ The event filter statistics are displayed in the summary panel after processing.
 **Zircolite** has several arguments that can be used to keep data used to perform Sigma detections: 
 
 - `--dbfile <FILE>` allows you to export all the logs to a SQLite 3 database file. You can query the logs with SQL statements to find more things than what the Sigma rules could have found. When processing multiple files, each file gets its own database file with a unique name.
-- `--keepflat` saves all flattened events to a JSONL file during streaming processing.
+- `--keepflat` saves flattened events to a JSONL file during streaming processing. This file contains only the events that were actually processed (i.e. events that passed early event filtering and time filtering). If event filtering is active, events whose Channel/EventID don't match any rule will **not** appear in the keepflat output. Use `--no-event-filter` to include all events.
 - `--hashes` adds an xxhash64 hash of the original log line to each event, useful for deduplication and tracking.
 
 ## Filtering
@@ -983,9 +1001,17 @@ Zircolite provides a templating system based on Jinja2. It allows you to change 
 - `--template <template_filename>`
 - `--templateOutput <output_filename>`
 
+For Timesketch you can use the shortcut `--timesketch`: it uses `exportForTimesketch.tmpl` and writes to a file named `timesketch-<RAND>.json` (4-character random suffix) so you can run multiple exports without overwriting.
+
 ```shell
 python3 zircolite.py --evtx sample.evtx  --ruleset rules/rules_windows_sysmon.json \
 --template templates/exportForSplunk.tmpl --templateOutput exportForSplunk.json
+```
+
+Timesketch shortcut:
+
+```shell
+python3 zircolite.py --evtx sample.evtx --ruleset rules/rules_windows_sysmon.json --timesketch
 ```
 
 It is possible to use multiple templates if you provide a `--templateOutput` argument for each `--template` argument.
@@ -998,7 +1024,7 @@ It is possible to use multiple templates if you provide a `--templateOutput` arg
 | `exportForSplunkWithRuleID.tmpl` | NDJSON | Splunk with rule ID for correlation |
 | `exportForELK.tmpl` | NDJSON | Elasticsearch / ELK Stack |
 | `exportForZinc.tmpl` | Bulk JSON | OpenSearch/Elasticsearch bulk API (index + document per event) |
-| `exportForTimesketch.tmpl` | NDJSON | Timesketch (uses `--timefield` for datetime) |
+| `exportForTimesketch.tmpl` | NDJSON | Timesketch (uses `--timefield` for datetime); shortcut: `--timesketch` |
 | `exportForZircoGui.tmpl` | JavaScript | Mini-GUI `data.js` (used by `--package`) |
 | `exportNDJSON.tmpl` | NDJSON | Generic: rule metadata + event fields, one JSON per line |
 | `exportSummaryCSV.tmpl` | CSV | One row per rule (triage/summary), not per event |

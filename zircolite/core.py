@@ -12,10 +12,8 @@ This module contains the ZircoliteCore class for:
 import csv
 import logging
 import os
-import random
 import re
 import sqlite3
-import string
 from functools import lru_cache
 from pathlib import Path
 from sqlite3 import Error
@@ -84,8 +82,8 @@ class ZircoliteCore:
         
         self.logger = logger or logging.getLogger(__name__)
         self.db_connection = self.create_connection(proc.db_location)
-        self.full_results = []
-        self.ruleset = {}
+        self.full_results: list = []
+        self.ruleset: list = []
         self.no_output = proc.no_output
         self.time_after = proc.time_after
         self.time_before = proc.time_before
@@ -98,7 +96,7 @@ class ZircoliteCore:
         self.first_json_output = True  # To manage commas in JSON output
         self.disable_progress = proc.disable_progress
         # Cache for escaped identifiers to avoid repeated string operations
-        self._escape_cache = {}
+        self._escape_cache: dict = {}
         # Pre-computed level format map for O(1) lookup (Rich styles)
         self._level_format_map = {
             "informational": "rule.level.informational",
@@ -134,7 +132,7 @@ class ZircoliteCore:
         return self._cursor
 
     def create_connection(self, db):
-        """Create a database connection to a SQLite database with optimized settings."""
+        """Create a database connection to a SQLite database."""
         conn = None
         self.logger.debug(f"CONNECTING TO : {db}")
         try:
@@ -151,15 +149,15 @@ class ZircoliteCore:
             ]
             
             if db == ':memory:':
-                # In-memory database optimizations
+                # In-memory database settings
                 pragmas = [
                     ('journal_mode', 'OFF'),           # No journal needed for in-memory
                     ('synchronous', 'OFF'),
                     ('cache_size', '-128000'),         # 128MB cache
-                    ('locking_mode', 'EXCLUSIVE'),     # Single-user optimization
+                    ('locking_mode', 'EXCLUSIVE'),     # Single-user mode
                 ] + common_pragmas
             else:
-                # On-disk database optimizations
+                # On-disk database settings
                 pragmas = [
                     ('journal_mode', 'WAL'),           # Write-Ahead Logging
                     ('synchronous', 'NORMAL'),         # Balance safety and speed
@@ -286,24 +284,60 @@ class ZircoliteCore:
             self._escape_cache[identifier] = escaped
         return escaped
 
-    def insert_data_to_db(self, json_line):
-        """Build a parameterized INSERT INTO query and insert data into the database."""
-        columns = json_line.keys()
-        columns_escaped = ', '.join([self.escape_identifier(col) for col in columns])
-        placeholders = ', '.join(['?'] * len(columns))
-        values = []
-        for col in columns:
-            value = json_line[col]
-            if isinstance(value, int):
-                # Check if value exceeds SQLite INTEGER limits
-                if abs(value) > 9223372036854775807:
-                    value = str(value)  # Convert to string
-            values.append(value)
-        insert_stmt = f'INSERT INTO logs ({columns_escaped}) VALUES ({placeholders})'
+    def insert_data_to_db(self, data):
+        """Build a parameterized INSERT INTO query and insert data into the database.
+        Supports both single dictionaries and lists of dictionaries (batch insertion).
+        """
+        if not data:
+            return True
+
+        # Convert single dictionary to list for uniform batch processing
+        if isinstance(data, dict):
+            batch = [data]
+        elif isinstance(data, list):
+            batch = data
+        else:
+            self.logger.debug("   [-] Data must be a dictionary or a list of dictionaries")
+            return False
+
+        # To optimize, we group by the exact set of columns.
+        # In most cases, a batch has homogeneous keys.
+        # If keys vary, we process them in sub-batches.
+        
         try:
-            self.db_connection.execute(insert_stmt, values)
+            self.db_connection.execute('BEGIN TRANSACTION')
+            
+            # Group rows by their column signatures
+            batches_by_columns = {}
+            for row in batch:
+                cols = tuple(row.keys())
+                if cols not in batches_by_columns:
+                    batches_by_columns[cols] = []
+                batches_by_columns[cols].append(row)
+                
+            for cols, rows in batches_by_columns.items():
+                columns_escaped = ', '.join([self.escape_identifier(col) for col in cols])
+                placeholders = ', '.join(['?'] * len(cols))
+                insert_stmt = f'INSERT INTO logs ({columns_escaped}) VALUES ({placeholders})'
+                
+                values_list = []
+                for row in rows:
+                    values = []
+                    for col in cols:
+                        value = row[col]
+                        if isinstance(value, int):
+                            # Check if value exceeds SQLite INTEGER limits
+                            if abs(value) > 9223372036854775807:
+                                value = str(value)  # Convert to string
+                        values.append(value)
+                    values_list.append(tuple(values))
+                
+                self.db_connection.executemany(insert_stmt, values_list)
+                
+            self.db_connection.execute('COMMIT')
             return True
         except Exception as e:
+            self.db_connection.execute('ROLLBACK')
             self.logger.debug(f"   [-] {e}")
             return False
 
@@ -333,7 +367,7 @@ class ZircoliteCore:
             data = execute_select(sql_query)
             if data:
                 if csv_mode:
-                    # Clean values for CSV output - optimized with local vars
+                    # Clean values for CSV output
                     cleaned_rows = [
                         {
                             k: ("" if v is None else str(v)).replace("\n", "").replace("\r", "")
@@ -491,7 +525,12 @@ class ZircoliteCore:
                         continue  # Exceeds limit, skip this result
 
                     # Collect results for later display (sorted by level)
-                    all_rule_results.append(rule_results)
+                    all_rule_results.append({
+                        "title": rule_results.get("title", "Unknown"),
+                        "rule_level": rule_results.get("rule_level", "unknown"),
+                        "count": rule_results.get("count", 0),
+                        "tags": rule_results.get("tags", [])
+                    })
 
                     # Store results if needed
                     if keep_results:
@@ -529,7 +568,12 @@ class ZircoliteCore:
                                 pass  # Exceeds limit, skip this result
                             else:
                                 # Collect results for later display (sorted by level)
-                                all_rule_results.append(rule_results)
+                                all_rule_results.append({
+                                    "title": rule_results.get("title", "Unknown"),
+                                    "rule_level": rule_results.get("rule_level", "unknown"),
+                                    "count": rule_results.get("count", 0),
+                                    "tags": rule_results.get("tags", [])
+                                })
 
                                 # Update live detection counts
                                 det_level = rule_results.get("rule_level", "unknown").lower()
@@ -570,11 +614,12 @@ class ZircoliteCore:
                 file_handle.close()
 
     def run_streaming(self, log_files: list, input_type: str = 'evtx', 
-                      args_config=None, extractor: 'EvtxExtractor' = None,
+                      args_config=None, extractor: Optional['EvtxExtractor'] = None,
                       disable_progress: bool = False,
                       event_filter: 'Optional[EventFilter]' = None,
                       return_filtered_count: bool = False,
-                      keepflat: bool = False) -> 'int | tuple[int, int]':
+                      keepflat_file=None,
+                      _raw_config: Optional[dict] = None) -> 'int | tuple[int, int]':
         """
         Process log files using streaming mode - single-pass extraction, flattening, and DB insertion.
         
@@ -584,7 +629,7 @@ class ZircoliteCore:
         - Processes events in a streaming fashion
         - Uses dynamic schema discovery
         - Supports early event filtering based on channel/eventID
-        - Optional --keepflat: saves flattened events to a JSONL file alongside processing
+        - Optional keepflat: writes flattened events to a caller-managed file handle
         
         Args:
             log_files: List of log files to process
@@ -594,7 +639,10 @@ class ZircoliteCore:
             disable_progress: Whether to disable progress bars
             event_filter: Optional EventFilter for early event filtering based on channel/eventID
             return_filtered_count: If True, return (total_events, filtered_count) tuple
-            keepflat: If True, save flattened events to a JSONL file
+            keepflat_file: Open binary file handle to write flattened JSONL events to (caller
+                          is responsible for opening and closing the file)
+            _raw_config: Pre-parsed field-mappings dict passed through to
+                        StreamingEventProcessor to skip redundant config reads.
             
         Returns:
             Total number of events processed, or (total_events, filtered_count) if return_filtered_count=True
@@ -619,26 +667,16 @@ class ZircoliteCore:
             args_config=args_config,
             processing_config=proc_config,
             logger=self.logger,
-            event_filter=event_filter
+            event_filter=event_filter,
+            _raw_config=_raw_config,
         )
         
         # Create initial table structure
         self.logger.info("[+] Creating dynamic model")
         processor.create_initial_table(self.db_connection)
         
-        # Open keepflat output file if requested
-        keepflat_file = None
-        keepflat_filename = None
-        if keepflat:
-            keepflat_filename = f"flattened_events_{''.join(random.SystemRandom().choice(string.ascii_uppercase + string.digits) for _ in range(4))}.json"
-            self.logger.info(f"[+] Saving flattened events to: [cyan]{keepflat_filename}[/]")
-            keepflat_file = open(keepflat_filename, 'w', encoding='utf-8', buffering=1048576)
-        
         # Process each file
         total_events = 0
-        
-        # Mutable container for progress callback updates
-        _progress_events = [0]
 
         def process_single_file(log_file, progress_cb=None):
             """Process a single log file and return event count."""
@@ -670,65 +708,55 @@ class ZircoliteCore:
                 self.logger.error(f"[error]   [-] Error processing {log_file}: {e}[/]")
                 return 0
         
-        try:
-            show_progress = not is_quiet()
-            if show_progress:
-                if disable_progress:
-                    # Lightweight spinner + event counter only (no file bar)
-                    # Cost: one update per batch (~1000 events) – negligible.
-                    progress = Progress(
-                        SpinnerColumn(),
-                        TextColumn("[progress.description]{task.description}"),
-                        TextColumn("\u2022"),
-                        TextColumn("[magenta]{task.fields[events]:,}[/] events"),
-                        TextColumn("\u2022"),
-                        TimeElapsedColumn(),
-                        console=console,
-                        transient=True,
-                    )
-                    with progress:
-                        task_id = progress.add_task("Streaming", total=None, events=0)
+        show_progress = not is_quiet()
+        if show_progress:
+            if disable_progress:
+                progress = Progress(
+                    SpinnerColumn(),
+                    TextColumn("[progress.description]{task.description}"),
+                    TextColumn("\u2022"),
+                    TextColumn("[magenta]{task.fields[events]:,}[/] events"),
+                    TextColumn("\u2022"),
+                    TimeElapsedColumn(),
+                    console=console,
+                    transient=True,
+                )
+                with progress:
+                    task_id = progress.add_task("Streaming", total=None, events=0)
 
-                        def _streaming_cb_lite(event_count):
-                            progress.update(task_id, events=total_events + event_count)
+                    def _streaming_cb_lite(event_count):
+                        progress.update(task_id, events=total_events + event_count)
 
-                        for log_file in log_files:
-                            event_count = process_single_file(log_file, progress_cb=_streaming_cb_lite)
-                            total_events += event_count
-                            progress.update(task_id, events=total_events)
-                else:
-                    # Full progress bar with file bar + event counter
-                    progress = Progress(
-                        SpinnerColumn(),
-                        TextColumn("[progress.description]{task.description}"),
-                        BarColumn(bar_width=40),
-                        MofNCompleteColumn(),
-                        TextColumn("\u2022"),
-                        TextColumn("[magenta]{task.fields[events]:,}[/] events"),
-                        TextColumn("\u2022"),
-                        TimeElapsedColumn(),
-                        console=console,
-                        transient=True,
-                    )
-                    with progress:
-                        task_id = progress.add_task("Processing files", total=len(log_files), events=0)
-
-                        def _streaming_progress_cb(event_count):
-                            progress.update(task_id, events=total_events + event_count)
-
-                        for log_file in log_files:
-                            event_count = process_single_file(log_file, progress_cb=_streaming_progress_cb)
-                            total_events += event_count
-                            progress.update(task_id, advance=1, events=total_events)
+                    for log_file in log_files:
+                        event_count = process_single_file(log_file, progress_cb=_streaming_cb_lite)
+                        total_events += event_count
+                        progress.update(task_id, events=total_events)
             else:
-                # Quiet mode – no progress at all
-                for log_file in log_files:
-                    total_events += process_single_file(log_file)
-        finally:
-            # Always close keepflat file
-            if keepflat_file is not None:
-                keepflat_file.close()
-        
+                progress = Progress(
+                    SpinnerColumn(),
+                    TextColumn("[progress.description]{task.description}"),
+                    BarColumn(bar_width=40),
+                    MofNCompleteColumn(),
+                    TextColumn("\u2022"),
+                    TextColumn("[magenta]{task.fields[events]:,}[/] events"),
+                    TextColumn("\u2022"),
+                    TimeElapsedColumn(),
+                    console=console,
+                    transient=True,
+                )
+                with progress:
+                    task_id = progress.add_task("Processing files", total=len(log_files), events=0)
+
+                    def _streaming_progress_cb(event_count):
+                        progress.update(task_id, events=total_events + event_count)
+
+                    for log_file in log_files:
+                        event_count = process_single_file(log_file, progress_cb=_streaming_progress_cb)
+                        total_events += event_count
+                        progress.update(task_id, advance=1, events=total_events)
+        else:
+            for log_file in log_files:
+                total_events += process_single_file(log_file)
         # Create index after all data is inserted
         self.logger.info("[+] Creating indexes")
         self.create_index()
