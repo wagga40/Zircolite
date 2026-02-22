@@ -76,16 +76,16 @@ class TestBannerAndSection:
     def test_print_banner_visible_when_not_quiet(self):
         set_quiet_mode(False)
         with console.capture() as capture:
-            print_banner("3.2.0")
+            print_banner("3.3.0")
         out = capture.get()
         assert "Standalone Sigma" in out or "Sigma" in out
-        assert "3.2.0" in out
+        assert "3.3.0" in out
 
     def test_print_banner_suppressed_when_quiet(self):
         set_quiet_mode(True)
         try:
             with console.capture() as capture:
-                print_banner("3.2.0")
+                print_banner("3.3.0")
             assert capture.get() == ""
         finally:
             set_quiet_mode(False)

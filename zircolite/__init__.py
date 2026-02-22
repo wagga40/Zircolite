@@ -217,4 +217,4 @@ __all__ = [
     'print_detection',
 ]
 
-__version__ = "3.2.0"
+__version__ = "3.3.0"
