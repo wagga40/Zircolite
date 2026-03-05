@@ -61,9 +61,8 @@ pyproject.toml
 Makefile*
 build/
 gui_dev/
-tools/
+helpers/
 Taskfile.dev.yml
-
 # Default files for Editors and IDEs (vscode, cursor, idea, zed, sublime, etc.)
 .vscode/*
 .cursor/*
@@ -71,6 +70,7 @@ Taskfile.dev.yml
 .zed/*
 *.sublime-workspace
 *.sublime-project
+CLAUDE.md
 
 coverage/
 htmlcov/
@@ -78,6 +78,7 @@ htmlcov/
 
 .tmp/
 .temp/
+tests/external
 
 # PyInstaller
 dist/

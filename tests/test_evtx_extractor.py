@@ -2,7 +2,6 @@
 Tests for the EvtxExtractor class.
 """
 
-import importlib.util
 import json
 import pytest
 import sys
@@ -48,6 +47,16 @@ class TestEvtxExtractorInit:
         assert extractor.tmpDir == str(existing_dir)
         assert Path(existing_dir).exists()
         
+        extractor.cleanup()
+
+    def test_init_when_tmp_dir_path_is_file_uses_random_dir(self, tmp_path, test_logger):
+        """When tmp_dir path exists and is not a directory, use a random tmp dir."""
+        file_path = tmp_path / "a_file"
+        file_path.write_text("not a dir")
+        config = ExtractorConfig(tmp_dir=str(file_path))
+        extractor = EvtxExtractor(extractor_config=config, logger=test_logger)
+        assert extractor.tmpDir != str(file_path)
+        assert "tmp-" in extractor.tmpDir
         extractor.cleanup()
     
     def test_init_sysmon_linux_mode(self, test_logger):
@@ -99,37 +108,26 @@ class TestEvtxExtractorInit:
         extractor.cleanup()
 
 
-class TestEvtxExtractorRandString:
-    """Tests for random string generation."""
-    
-    def test_rand_string_length(self, test_logger):
-        """Test that rand_string generates 8 character strings."""
-        extractor = EvtxExtractor(logger=test_logger)
-        
-        random_str = extractor.rand_string()
-        
+class TestRandomSuffix:
+    """Tests for random_suffix (used by extractor and others)."""
+
+    def test_random_suffix_length(self):
+        """Test that random_suffix(8) generates 8 character strings."""
+        from zircolite.utils import random_suffix
+        random_str = random_suffix(8)
         assert len(random_str) == 8
-        extractor.cleanup()
-    
-    def test_rand_string_unique(self, test_logger):
-        """Test that rand_string generates unique strings."""
-        extractor = EvtxExtractor(logger=test_logger)
-        
-        strings = [extractor.rand_string() for _ in range(100)]
-        unique_strings = set(strings)
-        
-        # All should be unique (with very high probability)
-        assert len(unique_strings) == 100
-        extractor.cleanup()
-    
-    def test_rand_string_alphanumeric(self, test_logger):
-        """Test that rand_string uses only alphanumeric characters."""
-        extractor = EvtxExtractor(logger=test_logger)
-        
-        random_str = extractor.rand_string()
-        
+
+    def test_random_suffix_unique(self):
+        """Test that random_suffix generates unique strings."""
+        from zircolite.utils import random_suffix
+        strings = [random_suffix(8) for _ in range(100)]
+        assert len(set(strings)) == 100
+
+    def test_random_suffix_alphanumeric(self):
+        """Test that random_suffix uses only alphanumeric characters."""
+        from zircolite.utils import random_suffix
+        random_str = random_suffix(8)
         assert random_str.isalnum()
-        extractor.cleanup()
 
 
 class TestEvtxExtractorAuditdConversion:
@@ -216,118 +214,132 @@ class TestEvtxExtractorCsvConversion:
         extractor.cleanup()
 
 
+@pytest.mark.requires_lxml
 class TestEvtxExtractorXmlConversion:
     """Tests for XML log conversion."""
-    
-    @pytest.mark.skipif(
-        'lxml' not in sys.modules,
-        reason="lxml not installed"
-    )
+
     def test_xml_to_dict(self, test_logger):
         """Test XML to dictionary conversion."""
+        from lxml import etree
+
         config = ExtractorConfig(xml_logs=True)
         extractor = EvtxExtractor(extractor_config=config, logger=test_logger)
-        
-        try:
-            from lxml import etree
-        except ImportError:
-            pytest.skip("lxml not available")
-        
+
         xml_str = '''<Event xmlns="http://schemas.microsoft.com/win/2004/08/events/event">
             <System>
                 <EventID>1</EventID>
                 <Channel>Test</Channel>
+                <TimeCreated SystemTime="2024-06-15T10:30:00.000Z"/>
             </System>
             <EventData>
                 <Data Name="CommandLine">test.exe</Data>
             </EventData>
         </Event>'''
-        
+
         root = etree.fromstring(xml_str)
         ns = '{http://schemas.microsoft.com/win/2004/08/events/event}'
-        
+
         result = extractor.xml_to_dict(root, ns)
-        
+
         assert 'Event' in result
         assert 'System' in result['Event']
-        
+        assert 'TimeCreated' in result['Event']['System']
+        assert result['Event']['System']['TimeCreated'] == {"#attributes": {"SystemTime": "2024-06-15T10:30:00.000Z"}}
+
         extractor.cleanup()
-    
-    @pytest.mark.skipif(
-        'lxml' not in sys.modules,
-        reason="lxml not installed"
-    )
+
+    def test_xml_to_dict_multiple_eventdata_fields(self, test_logger):
+        """xml_to_dict merges multiple EventData Data elements into one dict."""
+        from lxml import etree
+
+        config = ExtractorConfig(xml_logs=True)
+        extractor = EvtxExtractor(extractor_config=config, logger=test_logger)
+
+        xml_str = '''<Event xmlns="http://schemas.microsoft.com/win/2004/08/events/event">
+            <System><EventID>2</EventID></System>
+            <EventData>
+                <Data Name="CommandLine">cmd.exe</Data>
+                <Data Name="Image">C:\\cmd.exe</Data>
+                <Data Name="ParentCommandLine">explorer.exe</Data>
+            </EventData>
+        </Event>'''
+        root = etree.fromstring(xml_str)
+        ns = '{http://schemas.microsoft.com/win/2004/08/events/event}'
+
+        result = extractor.xml_to_dict(root, ns)
+
+        event_data = result['Event']['EventData']
+        assert event_data['CommandLine'] == 'cmd.exe'
+        assert event_data['Image'] == 'C:\\cmd.exe'
+        assert event_data['ParentCommandLine'] == 'explorer.exe'
+        assert len(event_data) == 3
+
+        extractor.cleanup()
+
     def test_xml_line_to_json(self, test_logger, sample_xml_event):
         """Test XML line to JSON conversion."""
-        if importlib.util.find_spec("lxml") is None:
-            pytest.skip("lxml not available")
-        
         config = ExtractorConfig(xml_logs=True)
         extractor = EvtxExtractor(extractor_config=config, logger=test_logger)
-        
+
         result = extractor.xml_line_to_json(sample_xml_event)
-        
+
         assert result is not None
         assert 'Event' in result
-        
+
         extractor.cleanup()
-    
-    @pytest.mark.skipif(
-        'lxml' not in sys.modules,
-        reason="lxml not installed"
-    )
+
     def test_xml_line_to_json_invalid(self, test_logger):
         """Test handling of invalid XML."""
-        if importlib.util.find_spec("lxml") is None:
-            pytest.skip("lxml not available")
-        
         config = ExtractorConfig(xml_logs=True)
         extractor = EvtxExtractor(extractor_config=config, logger=test_logger)
-        
+
         result = extractor.xml_line_to_json("not xml at all")
-        
+
+        assert result is None
+        extractor.cleanup()
+
+    def test_xml_line_to_json_malformed_triggers_exception_path(self, test_logger):
+        """When XML contains <Event but is malformed, exception is caught and returns None."""
+        config = ExtractorConfig(xml_logs=True)
+        extractor = EvtxExtractor(extractor_config=config, logger=test_logger)
+        result = extractor.xml_line_to_json('<Event ><System><EventID>1</System></Event>')
         assert result is None
         extractor.cleanup()
 
 
+@pytest.mark.requires_lxml
 class TestEvtxExtractorSysmonLinux:
     """Tests for Sysmon for Linux log conversion."""
-    
-    @pytest.mark.skipif(
-        'lxml' not in sys.modules,
-        reason="lxml not installed"
-    )
+
     def test_sysmon_xml_line_to_json(self, test_logger):
         """Test Sysmon XML line to JSON conversion."""
-        if importlib.util.find_spec("lxml") is None:
-            pytest.skip("lxml not available")
-        
         config = ExtractorConfig(sysmon4linux=True)
         extractor = EvtxExtractor(extractor_config=config, logger=test_logger)
-        
+
         sysmon_line = 'Jan 15 10:30:00 host sysmon: <Event><EventData><Data Name="Image">/usr/bin/bash</Data></EventData></Event>'
-        
+
         result = extractor.sysmon_xml_line_to_json(sysmon_line)
-        
+
         assert result is not None
         assert 'Event' in result
-        
+
         extractor.cleanup()
-    
-    @pytest.mark.skipif(
-        'lxml' not in sys.modules,
-        reason="lxml not installed"
-    )
-    def test_sysmon_xml_line_no_event(self, test_logger):
-        """Test handling of lines without Event tag."""
-        if importlib.util.find_spec("lxml") is None:
-            pytest.skip("lxml not available")
-        
+
+    def test_sysmon_xml_line_to_json_malformed_returns_none(self, test_logger):
+        """When Sysmon XML line is malformed, exception is caught and returns None."""
         config = ExtractorConfig(sysmon4linux=True)
         extractor = EvtxExtractor(extractor_config=config, logger=test_logger)
-        
+        result = extractor.sysmon_xml_line_to_json('Jan 15 10:30:00 host sysmon: <Event><System>unclosed')
+        assert result is None
+        extractor.cleanup()
+
+    def test_sysmon_xml_line_no_event(self, test_logger):
+        """Test handling of lines without Event tag."""
+        config = ExtractorConfig(sysmon4linux=True)
+        extractor = EvtxExtractor(extractor_config=config, logger=test_logger)
+
         result = extractor.sysmon_xml_line_to_json("just a regular log line")
-        
+
         assert result is None
         extractor.cleanup()
 
@@ -409,23 +421,17 @@ class TestEvtxExtractorRun:
         
         extractor.cleanup()
     
-    @pytest.mark.skipif(
-        'lxml' not in sys.modules,
-        reason="lxml not installed"
-    )
+    @pytest.mark.requires_lxml
     def test_run_xml_input(self, tmp_xml_file, test_logger):
         """Test run method with XML input."""
-        if importlib.util.find_spec("lxml") is None:
-            pytest.skip("lxml not available")
-        
         config = ExtractorConfig(xml_logs=True)
         extractor = EvtxExtractor(extractor_config=config, logger=test_logger)
-        
+
         extractor.run(tmp_xml_file)
-        
+
         json_files = list(Path(extractor.tmpDir).glob("*.json"))
         assert len(json_files) == 1
-        
+
         extractor.cleanup()
 
 
@@ -460,18 +466,13 @@ class TestEvtxExtractorCleanup:
 class TestEvtxExtractorEvtxBinding:
     """Tests for EVTX Python binding functionality."""
     
-    @pytest.mark.skipif(
-        'evtx' not in sys.modules,
-        reason="evtx (PyEvtxParser) not installed"
-    )
+    @pytest.mark.requires_evtx
     def test_run_using_bindings_with_real_evtx(self, test_logger):
         """Test EVTX processing with real EVTX file (Sigma regression sample)."""
         # Sample from SigmaHQ/sigma regression_data: proc_creation_win_bitsadmin_download
         sample_evtx = Path(__file__).parent / "fixtures" / "sample_bitsadmin.evtx"
         if not sample_evtx.exists():
             pytest.skip("No sample EVTX file available (tests/fixtures/sample_bitsadmin.evtx)")
-        if importlib.util.find_spec("evtx") is None:
-            pytest.skip("evtx not available")
         extractor = EvtxExtractor(logger=test_logger)
         extractor.run_using_bindings(str(sample_evtx))
         
@@ -498,17 +499,12 @@ class TestEvtxExtractorEvtxBinding:
         extractor.cleanup()
 
 
+@pytest.mark.requires_lxml
 class TestEvtxExtractorEvtxtract:
     """Tests for EVTXtract log conversion."""
-    
-    @pytest.mark.skipif(
-        'lxml' not in sys.modules,
-        reason="lxml not installed"
-    )
+
     def test_evtxtract_to_json(self, tmp_path, test_logger):
         """Test EVTXtract log conversion."""
-        if importlib.util.find_spec("lxml") is None:
-            pytest.skip("lxml not available")
         
         # Create sample EVTXtract output
         evtxtract_content = '''<Event xmlns="http://schemas.microsoft.com/win/2004/08/events/event">
@@ -540,4 +536,36 @@ class TestEvtxExtractorEvtxtract:
             lines = f.readlines()
         
         assert len(lines) == 2
+        extractor.cleanup()
+
+
+class TestExtractorBugFixes:
+    """Tests verifying specific bug fixes in the extractor."""
+
+    def test_auditd_attribute_with_equals_in_value(self, tmp_path):
+        """Auditd attributes with '=' in the value should not be truncated."""
+        extractor = EvtxExtractor(
+            ExtractorConfig(tmp_dir=str(tmp_path / "tmp"), auditd_logs=True)
+        )
+        line = 'type=EXECVE msg=audit(1600000000.123:456): argc=1 a0=ls key=user=admin'
+        event = extractor.auditd_line_to_json(line)
+        assert event.get("key") == "user=admin"
+        extractor.cleanup()
+
+    def test_get_time_malformed_returns_empty(self, tmp_path):
+        """get_time returns empty string on malformed auditd timestamp."""
+        extractor = EvtxExtractor(
+            ExtractorConfig(tmp_dir=str(tmp_path / "tmp"))
+        )
+        result = extractor.get_time("msg=audit():")
+        assert result == ""
+        extractor.cleanup()
+
+    def test_cleanup_missing_dir_no_error(self, tmp_path):
+        """cleanup() does not raise if tmpDir was already removed."""
+        extractor = EvtxExtractor(
+            ExtractorConfig(tmp_dir=str(tmp_path / "tmp"))
+        )
+        import shutil
+        shutil.rmtree(extractor.tmpDir)
         extractor.cleanup()

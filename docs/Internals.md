@@ -326,6 +326,7 @@ Transforms use **RestrictedPython** for safe, sandboxed execution of custom Pyth
     ├── streaming.py        # StreamingEventProcessor (single-pass processing)
     ├── extractor.py        # EvtxExtractor (log format conversion)
     ├── parallel.py         # MemoryAwareParallelProcessor (parallel processing)
+    ├── processing.py       # Processing mode coordination, result aggregation
     ├── rules.py            # RulesetHandler, RulesUpdater (rule management)
     ├── templates.py        # TemplateEngine, ZircoliteGuiGenerator (output)
     └── utils.py            # Utility functions, MemoryTracker, heuristics
@@ -343,6 +344,7 @@ The `zircolite/` package contains modular implementations of all core components
 - **`streaming.py`**: Contains `StreamingEventProcessor` for efficient single-pass event processing (extraction, flattening, and DB insertion in one pass).
 - **`extractor.py`**: Contains `EvtxExtractor` for converting various log formats to JSON.
 - **`parallel.py`**: Contains `MemoryAwareParallelProcessor` and `ParallelConfig` for memory-aware parallel file processing.
+- **`processing.py`**: Coordinates processing modes (per-file, unified-db, parallel workers), result aggregation, and output writing.
 - **`rules.py`**: Contains `RulesetHandler` and `RulesUpdater` for rule management.
 - **`templates.py`**: Contains `TemplateEngine` and `ZircoliteGuiGenerator` for output generation.
 - **`utils.py`**: Contains utility functions (`init_logger`, file filters), `MemoryTracker`, and workload analysis heuristics (`analyze_files_and_recommend_mode`).

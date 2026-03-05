@@ -18,7 +18,7 @@
 ### Key Features
 
 - **Automatic Log Type Detection**: Automatically identifies log formats and timestamp fields using magic bytes, content analysis, and regex-based fallback -- no need to specify format flags in most cases.
-- **Multiple Input Formats**: Supports various log formats including EVTX, JSON Lines, JSON Arrays, CSV, XML, and more.
+- **Multiple Input Formats**: Supports various log formats including EVTX, JSON Lines, JSON Arrays, CSV, XML, and more. Compressed or archived logs (gzip, bzip2, ZIP, 7-Zip) are supported; use `--archive-password` for encrypted ZIP/7z.
 - **Native Sigma Support**: Zircolite can directly use native Sigma rules (YAML) by converting them with pySigma.
 - **SIGMA Backend**: It is based on a SIGMA backend (SQLite) and does not use internal SIGMA-to-something conversion.
 - **Advanced Log Manipulation**: It can manipulate input logs by splitting fields and applying transformations, allowing for more flexible and powerful log analysis.
@@ -36,7 +36,7 @@ The project has been tested with Python 3.10 and above. Install dependencies wit
 
 ### Dependencies
 
-- **Required**: `orjson`, `xxhash`, `rich`, `RestrictedPython`, `requests`, `pySigma`, `evtx` (pyevtx-rs), `jinja2`, `lxml`, `psutil`, `pyyaml`
+- **Required**: `orjson`, `xxhash`, `rich`, `RestrictedPython`, `requests`, `pySigma`, `evtx` (pyevtx-rs), `jinja2`, `lxml`, `psutil`, `pyyaml`, `py7zr` (for 7-Zip archives)
 
 :warning: On some systems (Mac, ARM, etc.), the `evtx` Python library may require Rust and Cargo to be installed.
 
@@ -56,7 +56,7 @@ If your EVTX files have the extension ".evtx":
 
 ```shell
 # python3 zircolite.py --evtx <EVTX FOLDER or EVTX FILE> --ruleset <SIGMA RULESET> [--ruleset <OTHER RULESET>]
-python3 zircolite.py --evtx sysmon.evtx --ruleset rules/rules_windows_sysmon.json
+python3 zircolite.py --evtx sysmon.evtx --ruleset rules/rules_windows_merged.json
 ```
 
 ### Using Native Sigma Rules (YAML)
@@ -82,15 +82,15 @@ Zircolite **auto-detects** the log format in most cases, so explicit format flag
 # Auto-detection (recommended) - Zircolite identifies the format automatically
 python3 zircolite.py --events auditd.log --ruleset rules/rules_linux.json
 python3 zircolite.py --events sysmon.log --ruleset rules/rules_linux.json
-python3 zircolite.py --events <JSON_FOLDER_OR_FILE> --ruleset rules/rules_windows_sysmon.json
+python3 zircolite.py --events <JSON_FOLDER_OR_FILE> --ruleset rules/rules_windows_merged.json
 
-# Explicit format flags (still supported, override auto-detection)
+# Explicit format flags (override auto-detection)
 python3 zircolite.py --events auditd.log --ruleset rules/rules_linux.json --auditd
 python3 zircolite.py --events sysmon.log --ruleset rules/rules_linux.json --sysmon4linux
-python3 zircolite.py --events <JSON_FOLDER_OR_FILE> --ruleset rules/rules_windows_sysmon.json --jsononly
-python3 zircolite.py --events <JSON_FOLDER_OR_FILE> --ruleset rules/rules_windows_sysmon.json --json-array
-python3 zircolite.py --events <CSV_FOLDER_OR_FILE> --ruleset rules/rules_windows_sysmon.json --csv-input
-python3 zircolite.py --events <XML_FOLDER_OR_FILE> --ruleset rules/rules_windows_sysmon.json --xml-input
+python3 zircolite.py --events <JSON_FOLDER_OR_FILE> --ruleset rules/rules_windows_merged.json --jsononly
+python3 zircolite.py --events <JSON_FOLDER_OR_FILE> --ruleset rules/rules_windows_merged.json --json-array
+python3 zircolite.py --events <CSV_FOLDER_OR_FILE> --ruleset rules/rules_windows_merged.json --csv-input
+python3 zircolite.py --events <XML_FOLDER_OR_FILE> --ruleset rules/rules_windows_merged.json --xml-input
 ```
 
 - The `--events` argument can be a file or a folder. If it is a folder, all log files in the current folder and subfolders will be selected (use `--no-recursion` to disable).
@@ -126,23 +126,23 @@ Zircolite automatically optimizes processing based on your workload. When you ru
 3. **Enables parallel processing** - when beneficial, automatically processes files in parallel
 
 ```shell
-python3 zircolite.py --evtx ./logs/ --ruleset rules/rules_windows_sysmon.json
+python3 zircolite.py --evtx ./logs/ --ruleset rules/rules_windows_merged.json
 ```
 
 You can control this behavior:
 
 ```shell
 # Disable automatic mode selection (force per-file mode)
-python3 zircolite.py --evtx ./logs/ --ruleset rules/rules_windows_sysmon.json --no-auto-mode
+python3 zircolite.py --evtx ./logs/ --ruleset rules/rules_windows_merged.json --no-auto-mode
 
 # Force unified database mode (enables cross-file correlation)
-python3 zircolite.py --evtx ./logs/ --ruleset rules/rules_windows_sysmon.json --unified-db
+python3 zircolite.py --evtx ./logs/ --ruleset rules/rules_windows_merged.json --unified-db
 
 # Disable parallel processing
-python3 zircolite.py --evtx ./logs/ --ruleset rules/rules_windows_sysmon.json --no-parallel
+python3 zircolite.py --evtx ./logs/ --ruleset rules/rules_windows_merged.json --no-parallel
 
 # Specify maximum workers manually
-python3 zircolite.py --evtx ./logs/ --ruleset rules/rules_windows_sysmon.json --parallel-workers 4
+python3 zircolite.py --evtx ./logs/ --ruleset rules/rules_windows_merged.json --parallel-workers 4
 ```
 
 The parallel processor automatically:
@@ -175,7 +175,7 @@ input:
 
 rules:
   rulesets:
-    - rules/rules_windows_sysmon.json
+    - rules/rules_windows_merged.json
   pipelines:
     - sysmon
 
@@ -191,7 +191,7 @@ processing:
 parallel:
   enabled: true        # Parallel processing (auto-enabled when beneficial)
   max_workers: null    # Auto-detect based on CPU/memory
-  memory_limit_percent: 75.0
+  memory_limit_percent: 85.0
 ```
 
 ### Updating Default Rulesets

@@ -13,7 +13,6 @@ import argparse
 import json
 import os
 import pytest
-import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -46,57 +45,6 @@ zircolite_script = load_zircolite_script()
 def get_log_arg(tmp_path):
     """Return log file argument for tests that need output files."""
     return ['-l', str(tmp_path / "test.log")]
-
-
-@pytest.fixture(autouse=True)
-def cleanup_cli_artifacts():
-    """
-    Automatically clean up any artifacts created by CLI tests.
-    
-    This fixture runs before and after each test to ensure a clean state.
-    It removes common artifacts that Zircolite may create in the working directory.
-    """
-    # Store original working directory
-    original_cwd = os.getcwd()
-    
-    # Artifact patterns to clean up
-    artifact_patterns = [
-        "detected_events*.json",
-        "detected_events*.csv",
-        "flattened_events_*.json",
-        "zircolite*.log",
-        "*.db",
-        "tmp-*",
-        "zircogui-output*",
-        "fields.json",
-    ]
-    
-    def cleanup_artifacts(directory: Path):
-        """Remove artifacts matching patterns from directory."""
-        for pattern in artifact_patterns:
-            for item in directory.glob(pattern):
-                try:
-                    if item.is_file():
-                        item.unlink()
-                    elif item.is_dir():
-                        shutil.rmtree(item)
-                except (OSError, PermissionError):
-                    pass
-    
-    # Clean before test (in case previous test left artifacts)
-    cleanup_artifacts(WORKSPACE_ROOT)
-    
-    yield
-    
-    # Restore working directory if changed
-    if os.getcwd() != original_cwd:
-        try:
-            os.chdir(original_cwd)
-        except (OSError, FileNotFoundError):
-            pass
-    
-    # Clean after test
-    cleanup_artifacts(WORKSPACE_ROOT)
 
 
 class TestCLIArgumentParsing:
@@ -258,6 +206,18 @@ class TestCLITransformOptions:
         with patch('sys.argv', ['zircolite.py', '-e', 'test.evtx']):
             args = zircolite_script.parse_arguments()
         assert args.all_transforms is False
+
+    def test_add_index_parsed(self):
+        """Test that --add-index accepts one or more column names."""
+        with patch('sys.argv', ['zircolite.py', '--add-index', 'Channel', 'SystemTime', '-e', 'test.evtx']):
+            args = zircolite_script.parse_arguments()
+        assert args.add_index == [['Channel', 'SystemTime']]
+
+    def test_remove_index_parsed(self):
+        """Test that --remove-index accepts one or more index names."""
+        with patch('sys.argv', ['zircolite.py', '--remove-index', 'idx_channel', '-e', 'test.evtx']):
+            args = zircolite_script.parse_arguments()
+        assert args.remove_index == [['idx_channel']]
 
     def test_transform_list_flag_exits(self, tmp_path):
         """Test that --transform-list flag triggers listing and exits."""
@@ -1727,11 +1687,13 @@ class TestCLIAdvancedConfiguration:
         assert isinstance(detections, list)
 
 
-# Fixture files for Sysmon Linux, XML, and EVTXtract input tests (sanitized, minimal)
+# Fixture files for Sysmon Linux, XML, EVTXtract, Auditd, and Winlogbeat (sanitized/cropped)
 FIXTURES_DIR = WORKSPACE_ROOT / "tests" / "fixtures"
 SYSMON_LINUX_FIXTURE = FIXTURES_DIR / "sysmon_linux_sample.log"
 XML_EVENTS_FIXTURE = FIXTURES_DIR / "xml_events_sample.xml"
 EVTXTRACT_FIXTURE = FIXTURES_DIR / "evtxtract_sample.log"
+AUDITD_FIXTURE = FIXTURES_DIR / "audit_sample.log"
+WINLOGBEAT_FIXTURE = FIXTURES_DIR / "winlogbeat_sysmon_sample.json"
 
 
 def _minimal_config_for_events():
@@ -1818,6 +1780,56 @@ class TestCLISysmonXmlEvtxtractInput:
             '-r', str(ruleset_file),
             '-c', str(config_file),
             '--evtxtract-input',
+            '-o', str(output_file),
+        ] + get_log_arg(tmp_path)):
+            zircolite_script.main()
+        assert output_file.exists()
+        with open(output_file) as f:
+            data = json.load(f)
+        assert isinstance(data, list)
+
+    def test_auditd_input_processes_fixture(self, tmp_path):
+        """Test -AU / --auditd-input runs successfully with audit_sample.log."""
+        if not AUDITD_FIXTURE.exists():
+            pytest.skip(f"Fixture not found: {AUDITD_FIXTURE}")
+        ruleset_file = tmp_path / "ruleset.json"
+        ruleset_file.write_text("[]")
+        config_file = WORKSPACE_ROOT / "config" / "config.yaml"
+        if not config_file.exists():
+            config_file = tmp_path / "config.json"
+            config_file.write_text(json.dumps({"mappings": {}, "exclusions": [], "useless": [], "alias": {}, "split": {}, "transforms_enabled": False, "transforms": {}}))
+        output_file = tmp_path / "out.json"
+        with patch('sys.argv', [
+            'zircolite.py',
+            '-e', str(AUDITD_FIXTURE),
+            '-r', str(ruleset_file),
+            '-c', str(config_file),
+            '-AU',
+            '-o', str(output_file),
+        ] + get_log_arg(tmp_path)):
+            zircolite_script.main()
+        assert output_file.exists()
+        with open(output_file) as f:
+            data = json.load(f)
+        assert isinstance(data, list)
+
+    def test_json_input_processes_winlogbeat_fixture(self, tmp_path):
+        """Test -j / --json-input runs successfully with Winlogbeat Sysmon JSONL fixture."""
+        if not WINLOGBEAT_FIXTURE.exists():
+            pytest.skip(f"Fixture not found: {WINLOGBEAT_FIXTURE}")
+        ruleset_file = tmp_path / "ruleset.json"
+        ruleset_file.write_text("[]")
+        config_file = WORKSPACE_ROOT / "config" / "config.yaml"
+        if not config_file.exists():
+            config_file = tmp_path / "config.json"
+            config_file.write_text(json.dumps(_minimal_config_for_events()))
+        output_file = tmp_path / "out.json"
+        with patch('sys.argv', [
+            'zircolite.py',
+            '-e', str(WINLOGBEAT_FIXTURE),
+            '-r', str(ruleset_file),
+            '-c', str(config_file),
+            '-j',
             '-o', str(output_file),
         ] + get_log_arg(tmp_path)):
             zircolite_script.main()
@@ -2507,6 +2519,97 @@ class TestCLIUnifiedDatabase:
         db_files = list(tmp_path.glob("unified_*.db"))
         assert len(db_files) == 0  # No per-file databases
 
+    def test_perfile_dbfile_multiple_files_respects_directory(self, tmp_path):
+        """Per-file mode with -d <dir>/db.db and multiple files writes DBs under that directory."""
+        events_dir = tmp_path / "events"
+        events_dir.mkdir()
+        (events_dir / "f1.json").write_text(
+            json.dumps({"Event": {"System": {"EventID": 1}, "EventData": {"CommandLine": "a"}}})
+        )
+        (events_dir / "f2.json").write_text(
+            json.dumps({"Event": {"System": {"EventID": 1}, "EventData": {"CommandLine": "b"}}})
+        )
+        ruleset_file = tmp_path / "ruleset.json"
+        ruleset_file.write_text("[]")
+        config_file = tmp_path / "config.json"
+        config_file.write_text(json.dumps({
+            "exclusions": [],
+            "useless": [],
+            "mappings": {
+                "Event.System.EventID": "EventID",
+                "Event.EventData.CommandLine": "CommandLine"
+            },
+            "alias": {},
+            "split": {},
+            "transforms_enabled": False,
+            "transforms": {}
+        }))
+        output_file = tmp_path / "output.json"
+        db_dir = tmp_path / "out"
+        db_file = db_dir / "db.db"
+
+        with patch("sys.argv", [
+            "zircolite.py",
+            "-e", str(events_dir),
+            "-r", str(ruleset_file),
+            "-c", str(config_file),
+            "-j",
+            "-o", str(output_file),
+            "--no-auto-mode",
+            "--no-parallel",
+            "-d", str(db_file),
+        ] + get_log_arg(tmp_path)):
+            zircolite_script.main()
+
+        assert db_dir.is_dir()
+        assert (db_dir / "db_f1.json.db").exists()
+        assert (db_dir / "db_f2.json.db").exists()
+        assert not list(tmp_path.glob("db_*.db"))
+
+    def test_parallel_dbfile_fails_fast(self, tmp_path):
+        """Parallel mode with multiple files and --dbfile exits with clear error (no silent failure)."""
+        events_dir = tmp_path / "events"
+        events_dir.mkdir()
+        (events_dir / "a.json").write_text(
+            json.dumps({"Event": {"System": {"EventID": 1}, "EventData": {"CommandLine": "x"}}})
+        )
+        (events_dir / "b.json").write_text(
+            json.dumps({"Event": {"System": {"EventID": 1}, "EventData": {"CommandLine": "y"}}})
+        )
+        ruleset_file = tmp_path / "ruleset.json"
+        ruleset_file.write_text("[]")
+        config_file = tmp_path / "config.json"
+        config_file.write_text(json.dumps({
+            "exclusions": [],
+            "useless": [],
+            "mappings": {"Event.System.EventID": "EventID", "Event.EventData.CommandLine": "CommandLine"},
+            "alias": {},
+            "split": {},
+            "transforms_enabled": False,
+            "transforms": {}
+        }))
+        output_file = tmp_path / "output.json"
+        db_file = tmp_path / "out.db"
+
+        def fake_recommend(_file_list, _logger):
+            return ("per-file", "Multiple files", {"parallel_recommended": True, "parallel_workers": 2})
+
+        with patch.object(zircolite_script, "analyze_files_and_recommend_mode", side_effect=fake_recommend):
+            with pytest.raises(SystemExit) as exc_info:
+                with patch("sys.argv", [
+                    "zircolite.py",
+                    "-e", str(events_dir),
+                    "-r", str(ruleset_file),
+                    "-c", str(config_file),
+                    "-j",
+                    "-o", str(output_file),
+                    "--no-auto-mode",
+                    "-d", str(db_file),
+                ] + get_log_arg(tmp_path)):
+                    zircolite_script.main()
+        assert exc_info.value.code == 2
+        assert not db_file.exists()
+
     def test_unified_db_vs_per_file_mode(self, tmp_path):
         """Test that unified mode produces different results than per-file mode."""
         events_dir = tmp_path / "events"
@@ -2882,8 +2985,8 @@ def _minimal_detection_args():
 class TestApplyDetectionResultUnknown:
     """Tests for _apply_detection_result when detection returns unknown."""
 
-    def test_unknown_detection_returns_evtx_and_sets_no_format_flag(self):
-        """When log_source is unknown, applied input type is evtx and no format flag is set."""
+    def test_unknown_detection_with_known_input_type_uses_it(self):
+        """When log_source is unknown but input_type is a known format (e.g. json), use it."""
         args = _minimal_detection_args()
         logger = zircolite_script.init_logger(debug_mode=False)
         detection = DetectionResult(
@@ -2895,16 +2998,30 @@ class TestApplyDetectionResultUnknown:
 
         input_type = zircolite_script._apply_detection_result(args, detection, logger)
 
-        assert input_type == "evtx"
-        assert getattr(args, "json_input", None) is False
-        assert getattr(args, "json_array_input", None) is False
-        assert getattr(args, "xml_input", None) is False
+        assert input_type == "json"
+        assert getattr(args, "json_input", None) is True
 
-    def test_auto_detect_with_all_unknown_files_returns_evtx(self, tmp_path):
-        """When all sampled files yield unknown detection, auto_detect returns evtx and sets no format flag."""
+    def test_unknown_detection_with_unknown_input_type_returns_evtx(self):
+        """When log_source is unknown and input_type is not a known format, default to evtx."""
         args = _minimal_detection_args()
         logger = zircolite_script.init_logger(debug_mode=False)
-        # Paths that do not exist: detect() returns unknown for each
+        detection = DetectionResult(
+            input_type="evtx",
+            log_source="unknown",
+            confidence="low",
+            details="Could not determine log type",
+        )
+
+        input_type = zircolite_script._apply_detection_result(args, detection, logger)
+
+        assert input_type == "evtx"
+        assert getattr(args, "json_input", None) is not True
+
+    def test_auto_detect_with_all_unknown_files_uses_unknown_result_input_type(self, tmp_path):
+        """When all sampled files yield unknown detection, we still use the unknown result's input_type (json)."""
+        args = _minimal_detection_args()
+        logger = zircolite_script.init_logger(debug_mode=False)
+        # Paths that do not exist: detect() returns unknown for each (_unknown_result gives input_type=json)
         file_list = [
             tmp_path / "nope1.json",
             tmp_path / "nope2.json",
@@ -2913,7 +3030,123 @@ class TestApplyDetectionResultUnknown:
 
         input_type = zircolite_script.auto_detect_log_type(file_list, args, logger)
 
-        assert input_type == "evtx"
-        assert getattr(args, "json_input", None) is False
+        assert input_type == "json"
+        assert getattr(args, "json_input", None) is True
+
+
+class TestApplyDetectionResultTimefieldSanitization:
+    """Tests for timefield sanitization in _apply_detection_result.
+
+    The streaming processor strips non-alphanumeric characters from field
+    names when storing events in SQLite (e.g. '@timestamp' -> 'timestamp').
+    _apply_detection_result must apply the same sanitization so that the
+    timefield used for template rendering matches the actual column name.
+    """
+
+    def test_at_timestamp_sanitized(self):
+        """@timestamp from ECS/Elastic detection must be sanitized to 'timestamp'."""
+        args = _minimal_detection_args()
+        logger = zircolite_script.init_logger(debug_mode=False)
+        detection = DetectionResult(
+            input_type="json",
+            log_source="ecs_elastic",
+            confidence="high",
+            timestamp_field="@timestamp",
+        )
+
+        zircolite_script._apply_detection_result(args, detection, logger)
+
+        assert args.timefield == "timestamp"
+
+    def test_at_time_sanitized(self):
+        """'@time' field should be sanitized to 'time'."""
+        args = _minimal_detection_args()
+        logger = zircolite_script.init_logger(debug_mode=False)
+        detection = DetectionResult(
+            input_type="json",
+            log_source="generic_json",
+            confidence="medium",
+            timestamp_field="@time",
+        )
+
+        zircolite_script._apply_detection_result(args, detection, logger)
+
+        assert args.timefield == "time"
+
+    def test_plain_field_unchanged(self):
+        """Plain alphanumeric fields like 'UtcTime' remain unchanged."""
+        args = _minimal_detection_args()
+        logger = zircolite_script.init_logger(debug_mode=False)
+        detection = DetectionResult(
+            input_type="json",
+            log_source="sysmon_windows",
+            confidence="high",
+            timestamp_field="UtcTime",
+        )
+
+        zircolite_script._apply_detection_result(args, detection, logger)
+
+        assert args.timefield == "UtcTime"
+
+    def test_systemtime_unchanged(self):
+        """SystemTime stays SystemTime (no-op when detection matches default)."""
+        args = _minimal_detection_args()
+        logger = zircolite_script.init_logger(debug_mode=False)
+        detection = DetectionResult(
+            input_type="evtx",
+            log_source="windows_evtx",
+            confidence="high",
+            timestamp_field="SystemTime",
+        )
+
+        zircolite_script._apply_detection_result(args, detection, logger)
+
+        assert args.timefield == "SystemTime"
+
+    def test_underscore_field_sanitized(self):
+        """'_time' (Splunk format) should be sanitized to 'time'."""
+        args = _minimal_detection_args()
+        logger = zircolite_script.init_logger(debug_mode=False)
+        detection = DetectionResult(
+            input_type="json",
+            log_source="generic_json",
+            confidence="medium",
+            timestamp_field="_time",
+        )
+
+        zircolite_script._apply_detection_result(args, detection, logger)
+
+        assert args.timefield == "time"
+
+    def test_user_override_not_clobbered(self):
+        """When user explicitly sets --timefield, detection should not override it."""
+        args = _minimal_detection_args()
+        args.timefield = "MyCustomField"
+        logger = zircolite_script.init_logger(debug_mode=False)
+        detection = DetectionResult(
+            input_type="json",
+            log_source="ecs_elastic",
+            confidence="high",
+            timestamp_field="@timestamp",
+        )
+
+        zircolite_script._apply_detection_result(args, detection, logger)
+
+        assert args.timefield == "MyCustomField"
+
+    def test_none_timestamp_field_leaves_default(self):
+        """When detection has no timestamp_field, the default is preserved."""
+        args = _minimal_detection_args()
+        logger = zircolite_script.init_logger(debug_mode=False)
+        detection = DetectionResult(
+            input_type="json",
+            log_source="generic_json",
+            confidence="low",
+            timestamp_field=None,
+        )
+
+        zircolite_script._apply_detection_result(args, detection, logger)
+
+        assert args.timefield == "SystemTime"
 
 

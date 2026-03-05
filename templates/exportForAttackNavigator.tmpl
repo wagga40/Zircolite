@@ -1,0 +1,52 @@
+{%- set techniques = collect_navigator_techniques(data) -%}
+{
+  "name": "Zircolite Detection Coverage",
+  "versions": {
+    "attack": "14",
+    "navigator": "4.9",
+    "layer": "4.5"
+  },
+  "domain": "enterprise-attack",
+  "description": "ATT&CK techniques detected by Zircolite",
+  "filters": {
+    "platforms": ["Windows", "Linux", "macOS"]
+  },
+  "sorting": 3,
+  "layout": {
+    "layout": "side",
+    "aggregateFunction": "sum",
+    "showID": true,
+    "showName": true,
+    "showAggregateScores": true,
+    "countUnscored": false,
+    "expandedSubtechniques": "annotated"
+  },
+  "hideDisabled": false,
+  "techniques": [
+    {% for t in techniques %}
+    {
+      "techniqueID": {{ t.techniqueID | tojson }},
+      "score": {{ t.score }},
+      "color": {{ t.color | tojson }},
+      "comment": {{ t.comment | tojson }},
+      "enabled": true,
+      "metadata": [],
+      "links": [],
+      "showSubtechniques": false
+    }{{ "," if not loop.last }}
+    {% endfor %}
+  ],
+  "gradient": {
+    "colors": ["#ff6666ff", "#ffe766ff", "#8ec843ff"],
+    "minValue": 0,
+    "maxValue": 100
+  },
+  "legendItems": [],
+  "metadata": [],
+  "links": [],
+  "showTacticRowBackground": false,
+  "tacticRowBackground": "#dddddd",
+  "selectTechniquesAcrossTactics": true,
+  "selectSubtechniquesWithParent": false,
+  "selectVisibleTechniques": false
+}

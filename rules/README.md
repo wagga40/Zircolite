@@ -24,6 +24,8 @@ These rulesets are generated from SIGMA rules using **pySigma** from the [offici
 - `rules_windows_merged_medium.json` — Level medium and above, merged Windows log sources
 - `rules_windows_merged.json` — Same as `rules_windows_merged_high.json`
 
+Documentation and examples in this repository use `rules_windows_merged.json` as the default Windows ruleset for EVTX.
+
 ### Linux
 
 - `rules_linux.json` — Full SIGMA ruleset from the **linux** directory (Auditd and Sysmon for Linux)

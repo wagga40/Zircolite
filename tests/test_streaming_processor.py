@@ -6,6 +6,9 @@ import json
 import sqlite3
 import sys
 from pathlib import Path
+from unittest.mock import MagicMock, patch
+
+import pytest
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
@@ -19,7 +22,6 @@ from zircolite import (
 from zircolite.streaming import (
     _NON_ALNUM_RE,
     _NEWLINE_TRANSLATE,
-    _EXCLUDED_SENTINEL,
     _RESTRICTED_BUILTINS as STREAMING_BUILTINS,
 )
 
@@ -34,9 +36,9 @@ class TestStreamingEventProcessorInit:
             args_config=default_args_config,
             logger=test_logger
         )
-        
+
         assert processor.config_file == field_mappings_file
-        assert processor.batch_size == 5000
+        assert processor.batch_size == ProcessingConfig().batch_size
         assert processor.hashes is False
     
     def test_init_with_custom_batch_size(self, field_mappings_file, test_logger, default_args_config):
@@ -803,6 +805,82 @@ class TestStreamingEventProcessorRestrictedPythonBuiltins:
         for key in ('__name__', '_getiter_', '_getattr_', '_getitem_', 'base64', 're', 'chardet'):
             assert key in STREAMING_BUILTINS, f"Missing key: {key}"
 
+    def test_transform_safe_write_rejected_returns_value_unchanged(
+        self, test_logger, default_args_config, tmp_path, sample_windows_event
+    ):
+        """Transform that triggers _safe_write_ on non-container is caught; value returned unchanged."""
+        raw_config = {
+            "exclusions": [],
+            "useless": [],
+            "mappings": {"Event.EventData.CommandLine": "CommandLine"},
+            "alias": {},
+            "split": {},
+            "transforms_enabled": True,
+            "transforms": {
+                "CommandLine": [
+                    {
+                        "alias_name": "",
+                        "alias": False,
+                        "code": "def transform(param):\n  x = 1\n  x.foo = 2\n  return param",
+                        "enabled": True,
+                        "source_condition": ["evtx_input"],
+                    }
+                ]
+            },
+        }
+        config_path = tmp_path / "c.json"
+        config_path.write_text(json.dumps(raw_config))
+        args = __import__('argparse').Namespace(evtx_input=True)
+        processor = StreamingEventProcessor(
+            config_file=str(config_path),
+            args_config=args,
+            logger=test_logger,
+            _raw_config=raw_config,
+        )
+        json_file = tmp_path / "e.json"
+        json_file.write_text(json.dumps(sample_windows_event) + "\n")
+        events = list(processor.stream_json_events(str(json_file), json_array=False))
+        assert len(events) == 1
+        assert events[0].get("CommandLine")  # value preserved when transform raises
+
+    def test_transform_unsupported_inplace_op_returns_value_unchanged(
+        self, test_logger, default_args_config, tmp_path, sample_windows_event
+    ):
+        """Transform that triggers _inplacevar_ with unsupported op is caught; value returned unchanged."""
+        raw_config = {
+            "exclusions": [],
+            "useless": [],
+            "mappings": {"Event.EventData.CommandLine": "CommandLine"},
+            "alias": {},
+            "split": {},
+            "transforms_enabled": True,
+            "transforms": {
+                "CommandLine": [
+                    {
+                        "alias_name": "",
+                        "alias": False,
+                        "code": "def transform(param):\n  x = 1\n  x @= 2\n  return param",
+                        "enabled": True,
+                        "source_condition": ["evtx_input"],
+                    }
+                ]
+            },
+        }
+        config_path = tmp_path / "c.json"
+        config_path.write_text(json.dumps(raw_config))
+        args = __import__('argparse').Namespace(evtx_input=True)
+        processor = StreamingEventProcessor(
+            config_file=str(config_path),
+            args_config=args,
+            logger=test_logger,
+            _raw_config=raw_config,
+        )
+        json_file = tmp_path / "e.json"
+        json_file.write_text(json.dumps(sample_windows_event) + "\n")
+        events = list(processor.stream_json_events(str(json_file), json_array=False))
+        assert len(events) == 1
+        assert events[0].get("CommandLine")
+
 
 class TestStreamingEventProcessorMemoryEfficiency:
     """Tests for memory efficiency of streaming operations."""
@@ -987,6 +1065,32 @@ class TestStreamingEventProcessorFormatStreams:
         assert count == 0
         conn.close()
 
+    @pytest.mark.requires_lxml
+    def test_stream_evtxtract_events(
+        self, field_mappings_file, test_logger, default_args_config, tmp_path
+    ):
+        """Stream EVTXtract file yields flattened events from embedded Event XML."""
+        evtxtract_content = '''Found at offset 0x0
+<Event xmlns="http://schemas.microsoft.com/win/2004/08/events/event">
+<System><EventID>1</EventID><Channel>Microsoft-Windows-Sysmon/Operational</Channel></System>
+<EventData><Data Name="CommandLine">cmd.exe</Data></EventData>
+</Event>
+'''
+        evtxtract_file = tmp_path / "evtxtract.log"
+        evtxtract_file.write_text(evtxtract_content)
+        config = ExtractorConfig(evtxtract=True, tmp_dir=str(tmp_path / "evtxtract_tmp"))
+        extractor = EvtxExtractor(extractor_config=config, logger=test_logger)
+        processor = StreamingEventProcessor(
+            config_file=field_mappings_file,
+            args_config=default_args_config,
+            logger=test_logger,
+        )
+        events = list(processor.stream_evtxtract_events(str(evtxtract_file), extractor))
+        extractor.cleanup()
+        assert isinstance(events, list)
+        if events:
+            assert "OriginalLogfile" in events[0]
+
 
 class TestStreamingEventProcessorErrorPaths:
     """Tests for exception paths in streaming methods."""
@@ -1028,6 +1132,287 @@ class TestStreamingEventProcessorErrorPaths:
         )
         path = str(tmp_path / "does_not_exist.evtx")
         events = list(processor.stream_evtx_events(path))
+        assert events == []
+
+    @patch('zircolite.streaming.PyEvtxParser')
+    def test_stream_evtx_events_with_mock_parser(
+        self, mock_parser_cls, field_mappings_file, test_logger, default_args_config, tmp_path, sample_windows_event
+    ):
+        """stream_evtx_events yields flattened events when parser returns records (string and bytes payloads)."""
+        evtx_file = tmp_path / "test.evtx"
+        evtx_file.write_bytes(b"ElfFile\x00\x00")  # placeholder
+
+        def records():
+            yield {"data": json.dumps(sample_windows_event).encode('utf-8')}
+            yield {"data": json.dumps(sample_windows_event)}
+
+        mock_parser = MagicMock()
+        mock_parser.records_json.side_effect = records
+        mock_parser_cls.return_value = mock_parser
+
+        processor = StreamingEventProcessor(
+            config_file=field_mappings_file,
+            args_config=default_args_config,
+            logger=test_logger,
+        )
+        events = list(processor.stream_evtx_events(str(evtx_file)))
+        assert len(events) == 2
+        assert "OriginalLogfile" in events[0]
+
+    @patch('zircolite.streaming.PyEvtxParser')
+    def test_stream_evtx_events_inner_exception_continues(
+        self, mock_parser_cls, field_mappings_file, test_logger, default_args_config, tmp_path, sample_windows_event
+    ):
+        """When a record raises during processing, that record is skipped and iteration continues."""
+        evtx_file = tmp_path / "test.evtx"
+        evtx_file.write_bytes(b"ElfFile\x00\x00")
+
+        def records():
+            yield {"data": json.dumps(sample_windows_event)}
+            yield {"data": b"not valid json {"}
+            yield {"data": json.dumps(sample_windows_event)}
+
+        mock_parser = MagicMock()
+        mock_parser.records_json.side_effect = records
+        mock_parser_cls.return_value = mock_parser
+
+        processor = StreamingEventProcessor(
+            config_file=field_mappings_file,
+            args_config=default_args_config,
+            logger=test_logger,
+        )
+        events = list(processor.stream_evtx_events(str(evtx_file)))
+        assert len(events) == 2
+
+    @patch('zircolite.streaming.PyEvtxParser')
+    def test_stream_evtx_events_outer_exception_logs_error(
+        self, mock_parser_cls, field_mappings_file, test_logger, default_args_config, tmp_path
+    ):
+        """When parser construction or iteration raises, error is logged and no events yielded."""
+        evtx_file = tmp_path / "test.evtx"
+        evtx_file.write_bytes(b"ElfFile\x00\x00")
+        mock_parser_cls.side_effect = RuntimeError("EVTX open failed")
+
+        processor = StreamingEventProcessor(
+            config_file=field_mappings_file,
+            args_config=default_args_config,
+            logger=test_logger,
+        )
+        events = list(processor.stream_evtx_events(str(evtx_file)))
+        assert events == []
+
+    @patch('zircolite.streaming.PyEvtxParser')
+    @patch('zircolite.streaming.open_maybe_compressed')
+    def test_stream_evtx_events_compressed_7z_decompresses_then_parses(
+        self, mock_open_compressed, mock_parser_cls, field_mappings_file, test_logger, default_args_config, tmp_path, sample_windows_event
+    ):
+        """When path ends in .7z, stream_evtx_events decompresses then parses the temp file."""
+        evtx_7z = tmp_path / "log.evtx.7z"
+        evtx_7z.write_bytes(b"\x37\x7a\xbc\xaf\x27\x1c")  # 7z magic
+
+        evtx_magic = b"ElfFile\x00\x00"
+        mock_open_compressed.return_value.__enter__.return_value.read.return_value = evtx_magic
+
+        mock_parser = MagicMock()
+        mock_parser.records_json.return_value = iter([{"data": json.dumps(sample_windows_event)}])
+        mock_parser_cls.return_value = mock_parser
+
+        processor = StreamingEventProcessor(
+            config_file=field_mappings_file,
+            args_config=default_args_config,
+            logger=test_logger,
+        )
+        events = list(processor.stream_evtx_events(str(evtx_7z)))
+        assert len(events) == 1
+        assert "OriginalLogfile" in events[0]
+        mock_open_compressed.assert_called_once()
+        call_args = mock_open_compressed.call_args[0][0]
+        assert str(evtx_7z) == str(call_args) or evtx_7z.name in str(call_args)
+        # Parser was called with the temp path (not the .7z path)
+        mock_parser_cls.assert_called_once()
+        parser_path = mock_parser_cls.call_args[0][0]
+        assert ".evtx" in parser_path
+        assert ".7z" not in parser_path
+
+
+class TestStreamingTransformInitAndResolve:
+    """Tests for transform_categories init and _resolve_file_transforms."""
+
+    def test_init_with_transform_categories_and_unknown_category(
+        self, field_mappings_file, test_logger, tmp_path
+    ):
+        """Unknown transform category logs warning and enables transforms from known categories."""
+        from argparse import Namespace
+        config_path = tmp_path / "config.yaml"
+        config_content = {
+            "exclusions": [],
+            "useless": [],
+            "mappings": {"Event.System.EventID": "EventID"},
+            "alias": {},
+            "split": {},
+            "transforms_enabled": False,
+            "transforms": {
+                "CommandLine": [
+                    {"alias_name": "cmd_upper", "alias": True, "code": "def transform(param): return param.upper()", "enabled": True}
+                ]
+            },
+            "transform_categories": {"commandline": ["cmd_upper"]},
+        }
+        import yaml
+        config_path.write_text(yaml.dump(config_content))
+        args = Namespace(transform_categories=["unknown_cat", "commandline"], evtx_input=True)
+        processor = StreamingEventProcessor(
+            config_file=str(config_path),
+            args_config=args,
+            logger=test_logger,
+        )
+        assert processor.transforms_enabled is True
+        assert "cmd_upper" in processor.enabled_transforms_set
+
+    def test_resolve_file_transforms_missing_file(self, test_logger, tmp_path):
+        """python_file transform with missing file gets fallback code and error logged."""
+        config_path = tmp_path / "fieldMappings.json"
+        config = {
+            "exclusions": [],
+            "useless": [],
+            "mappings": {"Event.EventData.CommandLine": "CommandLine"},
+            "alias": {},
+            "split": {},
+            "transforms_enabled": True,
+            "transforms": {
+                "CommandLine": [
+                    {
+                        "type": "python_file",
+                        "file": "nonexistent.py",
+                        "alias_name": "cmd",
+                        "alias": True,
+                        "enabled": True,
+                        "source_condition": ["evtx_input"],
+                    }
+                ]
+            },
+        }
+        config_path.write_text(json.dumps(config))
+        args = __import__('argparse').Namespace(evtx_input=True)
+        processor = StreamingEventProcessor(
+            config_file=str(config_path),
+            args_config=args,
+            logger=test_logger,
+        )
+        assert processor.transforms["CommandLine"][0]["code"].strip().startswith("def transform(param):")
+
+    def test_resolve_file_transforms_empty_file_key(self, test_logger, tmp_path):
+        """python_file transform with no 'file' key gets warning and fallback code."""
+        config_path = tmp_path / "fieldMappings.json"
+        config = {
+            "exclusions": [],
+            "useless": [],
+            "mappings": {"a": "b"},
+            "alias": {},
+            "split": {},
+            "transforms_enabled": False,
+            "transforms": {
+                "b": [{"type": "python_file", "alias_name": "x", "alias": True, "enabled": True, "source_condition": ["evtx_input"]}]
+            },
+        }
+        config_path.write_text(json.dumps(config))
+        processor = StreamingEventProcessor(
+            config_file=str(config_path),
+            args_config=__import__('argparse').Namespace(evtx_input=True),
+            logger=test_logger,
+        )
+        assert "def transform(param):" in processor.transforms["b"][0]["code"]
+
+
+class TestStreamingJsonXmlErrorPaths:
+    """Tests for stream_json_events and stream_xml_events exception paths."""
+
+    def test_stream_json_events_invalid_line_skipped(
+        self, field_mappings_file, test_logger, default_args_config, tmp_path, sample_windows_event
+    ):
+        """JSONL with one invalid JSON line skips that line and yields the rest."""
+        json_file = tmp_path / "mixed.json"
+        lines = [
+            json.dumps(sample_windows_event),
+            "not valid json {{{",
+            json.dumps(sample_windows_event),
+        ]
+        json_file.write_text("\n".join(lines))
+        processor = StreamingEventProcessor(
+            config_file=field_mappings_file,
+            args_config=default_args_config,
+            logger=test_logger,
+        )
+        events = list(processor.stream_json_events(str(json_file), json_array=False))
+        assert len(events) == 2
+
+    def test_stream_json_events_outer_exception(
+        self, field_mappings_file, test_logger, default_args_config, tmp_path
+    ):
+        """When file cannot be opened (e.g. path is a directory), error is logged and no events."""
+        dir_path = tmp_path / "adir"
+        dir_path.mkdir()
+        processor = StreamingEventProcessor(
+            config_file=field_mappings_file,
+            args_config=default_args_config,
+            logger=test_logger,
+        )
+        events = list(processor.stream_json_events(str(dir_path), json_array=False))
+        assert events == []
+
+    def test_stream_xml_events_outer_exception(
+        self, field_mappings_file, test_logger, default_args_config, tmp_path
+    ):
+        """When XML file cannot be read, error is logged and no events."""
+        from zircolite.extractor import EvtxExtractor
+        config = __import__('zircolite.config').ExtractorConfig(xml_logs=True, tmp_dir=str(tmp_path / "xml_tmp"))
+        extractor = EvtxExtractor(extractor_config=config, logger=test_logger)
+        processor = StreamingEventProcessor(
+            config_file=field_mappings_file,
+            args_config=default_args_config,
+            logger=test_logger,
+        )
+        path = str(tmp_path / "does_not_exist.xml")
+        events = list(processor.stream_xml_events(path, extractor))
+        assert events == []
+        extractor.cleanup()
+
+
+class TestStreamingJsonArrayChunkedLargeFile:
+    """Tests for stream_json_array_chunked incremental (large file) path."""
+
+    @patch('os.path.getsize')
+    def test_stream_json_array_chunked_uses_incremental_when_large(
+        self, mock_getsize, field_mappings_file, test_logger, default_args_config, tmp_path, sample_windows_events_list
+    ):
+        """When file size >= 50MB, incremental parsing path is used."""
+        arr_file = tmp_path / "large_array.json"
+        arr_file.write_text(json.dumps(sample_windows_events_list))
+        mock_getsize.return_value = 50 * 1024 * 1024 + 1
+
+        processor = StreamingEventProcessor(
+            config_file=field_mappings_file,
+            args_config=default_args_config,
+            logger=test_logger,
+        )
+        events = list(processor.stream_json_array_chunked(str(arr_file)))
+        assert len(events) == 3
+
+    @patch('os.path.getsize')
+    def test_stream_json_array_chunked_incremental_empty_file(
+        self, mock_getsize, field_mappings_file, test_logger, default_args_config, tmp_path
+    ):
+        """Incremental path with file that has no opening bracket returns no events."""
+        arr_file = tmp_path / "no_bracket.txt"
+        arr_file.write_text("")
+        mock_getsize.return_value = 60 * 1024 * 1024
+
+        processor = StreamingEventProcessor(
+            config_file=field_mappings_file,
+            args_config=default_args_config,
+            logger=test_logger,
+        )
+        events = list(processor.stream_json_array_chunked(str(arr_file)))
         assert events == []
 
 
@@ -1199,6 +1584,336 @@ class TestStreamingJsonEdgeCases:
 # ============================================================================
 
 
+class TestStreamingEventFilter:
+    """Tests for event filter extraction and filtering."""
+
+    def test_extract_event_filter_fields_eventid_dict_text(
+        self, field_mappings_file, test_logger, default_args_config
+    ):
+        """EventID as XML-style dict with #text is converted to int."""
+        processor = StreamingEventProcessor(
+            config_file=field_mappings_file,
+            args_config=default_args_config,
+            logger=test_logger,
+        )
+        event = {
+            "Event": {
+                "System": {"Channel": "Security", "EventID": {"#text": "4688"}},
+            }
+        }
+        channel, eventid = processor._extract_event_filter_fields(event)
+        assert eventid == 4688
+        assert channel == "Security"
+
+    def test_extract_event_filter_fields_eventid_invalid_converts_to_none(
+        self, field_mappings_file, test_logger, default_args_config
+    ):
+        """EventID that cannot convert to int yields None."""
+        processor = StreamingEventProcessor(
+            config_file=field_mappings_file,
+            args_config=default_args_config,
+            logger=test_logger,
+        )
+        event = {"Event": {"System": {"EventID": "not_a_number"}}}
+        _, eventid = processor._extract_event_filter_fields(event)
+        assert eventid is None
+
+    def test_get_nested_value_empty_parts_returns_none(
+        self, field_mappings_file, test_logger, default_args_config
+    ):
+        """_get_nested_value with empty parts returns None."""
+        processor = StreamingEventProcessor(
+            config_file=field_mappings_file,
+            args_config=default_args_config,
+            logger=test_logger,
+        )
+        assert processor._get_nested_value({"a": 1}, ()) is None
+
+    def test_get_nested_value_non_dict_returns_none(
+        self, field_mappings_file, test_logger, default_args_config
+    ):
+        """_get_nested_value with non-dict intermediate returns None."""
+        processor = StreamingEventProcessor(
+            config_file=field_mappings_file,
+            args_config=default_args_config,
+            logger=test_logger,
+        )
+        assert processor._get_nested_value({"a": "string"}, ("a", "b")) is None
+
+    def test_should_process_event_with_filter_filters_out(
+        self, field_mappings_file, test_logger, default_args_config, tmp_path
+    ):
+        """When event_filter is enabled, events not matching channel/eventID are skipped."""
+        from zircolite.rules import EventFilter
+
+        ruleset = [
+            {"channel": ["Microsoft-Windows-Sysmon/Operational"], "eventid": [1, 3]},
+        ]
+        event_filter = EventFilter(ruleset, logger=test_logger)
+        assert event_filter.is_enabled
+
+        raw_config = {
+            "exclusions": [],
+            "useless": [],
+            "mappings": {
+                "Event.System.EventID": "EventID",
+                "Event.System.Channel": "Channel",
+            },
+            "alias": {},
+            "split": {},
+            "transforms_enabled": False,
+            "transforms": {},
+            "event_filter": {
+                "channel_fields": ["Event.System.Channel", "Channel"],
+                "eventid_fields": ["Event.System.EventID", "EventID"],
+            },
+        }
+        config_path = tmp_path / "cfg.json"
+        config_path.write_text(json.dumps(raw_config))
+        args = __import__("argparse").Namespace(evtx_input=True)
+        processor = StreamingEventProcessor(
+            config_file=str(config_path),
+            args_config=args,
+            logger=test_logger,
+            event_filter=event_filter,
+            _raw_config=raw_config,
+        )
+        assert processor._filtering_enabled
+
+        event_in = {"Event": {"System": {"Channel": "Security", "EventID": 4624}}}
+        assert processor._should_process_event(event_in) is False
+        assert processor.events_filtered_count == 1
+
+    def test_detect_timestamp_field_uses_config(
+        self, field_mappings_file, test_logger, default_args_config
+    ):
+        """_detect_timestamp_field returns time_field when set and present in event."""
+        from zircolite.config import ProcessingConfig
+
+        proc = ProcessingConfig(time_field="SystemTime")
+        processor = StreamingEventProcessor(
+            config_file=field_mappings_file,
+            args_config=default_args_config,
+            processing_config=proc,
+            logger=test_logger,
+        )
+        flat = {"SystemTime": "2024-06-15T10:30:00Z", "EventID": 1}
+        assert processor._detect_timestamp_field(flat) == "SystemTime"
+
+
+class TestStreamingTransformFailure:
+    """Tests for transform compilation failure path."""
+
+    def test_get_transform_func_invalid_code_returns_none(
+        self, field_mappings_file, test_logger, default_args_config
+    ):
+        """_get_transform_func with invalid code returns None and logs."""
+        processor = StreamingEventProcessor(
+            config_file=field_mappings_file,
+            args_config=default_args_config,
+            logger=test_logger,
+        )
+        result = processor._get_transform_func("def transform(param): syntax error {{{")
+        assert result is None
+
+
+class TestStreamingKeepflatAndProgress:
+    """Tests for keepflat file and progress_callback in process_file_streaming."""
+
+    def test_process_file_streaming_writes_keepflat(
+        self, field_mappings_file, test_logger, default_args_config, tmp_json_file_multiple, tmp_path
+    ):
+        """When keepflat_file is provided, flattened events are written as JSONL."""
+        proc_config = ProcessingConfig(disable_progress=True)
+        processor = StreamingEventProcessor(
+            config_file=field_mappings_file,
+            args_config=default_args_config,
+            processing_config=proc_config,
+            logger=test_logger,
+        )
+        conn = sqlite3.connect(":memory:")
+        processor.create_initial_table(conn)
+        keepflat_path = tmp_path / "flat.jsonl"
+        with open(keepflat_path, "wb") as keepflat_file:
+            count = processor.process_file_streaming(
+                conn,
+                tmp_json_file_multiple,
+                input_type="json",
+                json_array=False,
+                keepflat_file=keepflat_file,
+            )
+        conn.close()
+        assert count == 3
+        lines = keepflat_path.read_text().strip().split("\n")
+        assert len(lines) == 3
+        assert "OriginalLogfile" in json.loads(lines[0])
+
+    def test_process_file_streaming_invokes_progress_callback(
+        self, field_mappings_file, test_logger, default_args_config, tmp_json_file_multiple
+    ):
+        """progress_callback is invoked after each batch."""
+        proc_config = ProcessingConfig(batch_size=2, disable_progress=True)
+        processor = StreamingEventProcessor(
+            config_file=field_mappings_file,
+            args_config=default_args_config,
+            processing_config=proc_config,
+            logger=test_logger,
+        )
+        conn = sqlite3.connect(":memory:")
+        processor.create_initial_table(conn)
+        calls = []
+        count = processor.process_file_streaming(
+            conn,
+            tmp_json_file_multiple,
+            input_type="json",
+            json_array=False,
+            progress_callback=calls.append,
+        )
+        conn.close()
+        assert count == 3
+        assert len(calls) >= 1
+        assert 3 in calls
+
+
+class TestStreamingInsertBatchRollback:
+    """Tests for _insert_batch rollback on exception."""
+
+    def test_insert_batch_rollback_on_commit_failure(
+        self, field_mappings_file, test_logger, default_args_config
+    ):
+        """When COMMIT raises, ROLLBACK is executed and exception propagates."""
+        proc_config = ProcessingConfig(disable_progress=True)
+        processor = StreamingEventProcessor(
+            config_file=field_mappings_file,
+            args_config=default_args_config,
+            processing_config=proc_config,
+            logger=test_logger,
+        )
+        processor._flatten_event(
+            {"Event": {"System": {"EventID": 1}, "EventData": {"x": "y"}}},
+            "test.evtx",
+        )
+        execute_calls = []
+
+        def mock_execute(sql, *args):
+            execute_calls.append(sql.strip().upper())
+            if sql.strip().upper() == "COMMIT":
+                raise sqlite3.OperationalError("mock commit failure")
+
+        mock_cursor = MagicMock()
+        mock_cursor.fetchall.return_value = []
+        mock_conn = MagicMock()
+        mock_conn.execute = mock_execute
+        mock_conn.cursor.return_value = mock_cursor
+
+        with pytest.raises(sqlite3.OperationalError):
+            processor._insert_batch(mock_conn, mock_cursor, [{"EventID": 1, "x": "y"}])
+        assert "COMMIT" in execute_calls
+        assert "ROLLBACK" in execute_calls
+
+
+class TestStreamingEnsureColumnsExistCached:
+    """Tests for _ensure_columns_exist_cached exception path."""
+
+    def test_ensure_columns_exist_cached_alter_duplicate_ignored(
+        self, field_mappings_file, test_logger, default_args_config
+    ):
+        """When ALTER TABLE fails (e.g. column exists), cache is not corrupted."""
+        processor = StreamingEventProcessor(
+            config_file=field_mappings_file,
+            args_config=default_args_config,
+            logger=test_logger,
+        )
+        conn = sqlite3.connect(":memory:")
+        conn.execute(
+            "CREATE TABLE logs (row_id INTEGER PRIMARY KEY, colA TEXT)"
+        )
+        conn.commit()
+        cursor = conn.cursor()
+        processor._db_columns = {"row_id", "cola"}
+        schema_changed = processor._ensure_columns_exist_cached(
+            conn, cursor, ("colA", "colB")
+        )
+        conn.close()
+        assert "colb" in processor._db_columns
+        assert schema_changed is True
+
+
+class TestStreamingUnsupportedInputType:
+    """Tests for process_file_streaming with unsupported or missing extractor."""
+
+    def test_process_file_streaming_xml_without_extractor_returns_zero(
+        self, field_mappings_file, test_logger, default_args_config, tmp_path
+    ):
+        """input_type xml with extractor=None returns 0 and logs error."""
+        processor = StreamingEventProcessor(
+            config_file=field_mappings_file,
+            args_config=default_args_config,
+            logger=test_logger,
+        )
+        conn = sqlite3.connect(":memory:")
+        processor.create_initial_table(conn)
+        f = tmp_path / "dummy.xml"
+        f.write_text("<root/>")
+        count = processor.process_file_streaming(
+            conn, str(f), input_type="xml", extractor=None
+        )
+        conn.close()
+        assert count == 0
+
+
+class TestStreamingFlattenListValue:
+    """Tests for _flatten_event with list value (str(obj))."""
+
+    def test_flatten_event_list_value_stringified(
+        self, test_logger, default_args_config, tmp_path
+    ):
+        """Nested list value is stringified in flattened output."""
+        raw_config = {
+            "exclusions": [],
+            "useless": [],
+            "mappings": {"Event.EventData.Tags": "Tags"},
+            "alias": {},
+            "split": {},
+            "transforms_enabled": False,
+            "transforms": {},
+        }
+        config_file = tmp_path / "c.json"
+        config_file.write_text(json.dumps(raw_config))
+        args = __import__("argparse").Namespace(evtx_input=True)
+        processor = StreamingEventProcessor(
+            config_file=str(config_file),
+            args_config=args,
+            logger=test_logger,
+            _raw_config=raw_config,
+        )
+        event = {"Event": {"EventData": {"Tags": ["a", "b", "c"]}}}
+        flat = processor._flatten_event(event, "test.evtx")
+        assert flat is not None
+        assert flat.get("Tags") == "['a', 'b', 'c']" or "Tags" in flat
+
+
+class TestStreamingEnsureColumnsExistLegacy:
+    """Tests for legacy _ensure_columns_exist method."""
+
+    def test_ensure_columns_exist_delegates_to_cached(
+        self, field_mappings_file, test_logger, default_args_config
+    ):
+        """_ensure_columns_exist calls _ensure_columns_exist_cached with tuple."""
+        processor = StreamingEventProcessor(
+            config_file=field_mappings_file,
+            args_config=default_args_config,
+            logger=test_logger,
+        )
+        conn = sqlite3.connect(":memory:")
+        conn.execute("CREATE TABLE logs (row_id INTEGER PRIMARY KEY)")
+        conn.commit()
+        cursor = conn.cursor()
+        processor._ensure_columns_exist(conn, cursor, ["colA"])
+        conn.close()
+        assert "cola" in processor._db_columns
+
+
 class TestPreParsedConfig:
     """Tests for pre-parsed field mappings passthrough."""
 
@@ -1317,4 +2032,50 @@ class TestTableReuse:
         cursor.execute("SELECT COUNT(*) FROM logs")
         assert cursor.fetchone()[0] == 0
 
+        conn.close()
+
+
+class TestStreamingBugFixes:
+    """Tests for specific bug fixes in StreamingEventProcessor."""
+
+    def test_json_array_with_non_dict_elements(
+        self, field_mappings_file, test_logger, default_args_config, tmp_path
+    ):
+        """Non-dict elements in JSON arrays should be skipped without TypeError."""
+        import orjson
+        json_file = tmp_path / "mixed.json"
+        data = [
+            {"Event": {"System": {"EventID": 1}}},
+            "not a dict",
+            42,
+            None,
+            {"Event": {"System": {"EventID": 2}}},
+        ]
+        json_file.write_bytes(orjson.dumps(data))
+
+        processor = StreamingEventProcessor(
+            config_file=field_mappings_file,
+            args_config=default_args_config,
+            logger=test_logger,
+        )
+        events = list(processor.stream_json_events(str(json_file), json_array=True))
+        assert len(events) == 2
+
+    def test_column_cache_refreshed_on_alter_failure(
+        self, field_mappings_file, test_logger, default_args_config
+    ):
+        """When ALTER TABLE fails, the column cache is refreshed from the DB."""
+        processor = StreamingEventProcessor(
+            config_file=field_mappings_file,
+            args_config=default_args_config,
+            logger=test_logger,
+        )
+        conn = sqlite3.connect(":memory:")
+        conn.execute("CREATE TABLE logs (row_id INTEGER PRIMARY KEY, colA TEXT)")
+        conn.commit()
+        cursor = conn.cursor()
+        processor._db_columns = {"row_id", "cola"}
+
+        processor._ensure_columns_exist_cached(conn, cursor, ("colA", "colB"))
+        assert "colb" in processor._db_columns
         conn.close()

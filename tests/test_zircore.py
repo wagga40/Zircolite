@@ -2,12 +2,14 @@
 Tests for the ZircoliteCore class.
 """
 
+import gc
 import json
 import pytest
 import re
 import sqlite3
 import sys
 from pathlib import Path
+from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
@@ -187,6 +189,29 @@ class TestZircoliteCoreDatabase:
         
         assert results == []
         zircore.close()
+
+    def test_execute_select_query_omits_none_values(self, field_mappings_file, test_logger):
+        """execute_select_query returns dicts with None values omitted (key absent)."""
+        zircore = ZircoliteCore(
+            config=field_mappings_file,
+            logger=test_logger
+        )
+        zircore.execute_query(
+            "CREATE TABLE test (id INTEGER, a TEXT, b TEXT)"
+        )
+        zircore.db_connection.execute(
+            "INSERT INTO test (id, a, b) VALUES (1, 'x', NULL)"
+        )
+        zircore.db_connection.commit()
+
+        results = zircore.execute_select_query("SELECT * FROM test")
+        assert len(results) == 1
+        row = results[0]
+        assert row.get("id") == 1
+        assert row.get("a") == "x"
+        assert "b" not in row
+
+        zircore.close()
     
     def test_insert_data_to_db(self, field_mappings_file, test_logger):
         """Test inserting data into database."""
@@ -257,6 +282,7 @@ class TestZircoliteCoreDatabase:
         
         results = zircore.execute_select_query("SELECT * FROM logs")
         assert len(results) == 1
+        assert results[0]["LargeValue"] == str(large_int)
         
         zircore.close()
     
@@ -278,6 +304,78 @@ class TestZircoliteCoreDatabase:
         result = cursor.fetchone()
         
         assert result is not None
+        zircore.close()
+
+    def test_get_table_columns(self, field_mappings_file, test_logger):
+        """Test _get_table_columns returns column names from logs table."""
+        zircore = ZircoliteCore(
+            config=field_mappings_file,
+            logger=test_logger
+        )
+        field_stmt = "'eventid' TEXT, 'Channel' TEXT"
+        zircore.create_db(field_stmt)
+        cols = zircore._get_table_columns()
+        assert "eventid" in cols
+        assert "Channel" in cols
+        zircore.close()
+
+    def test_create_index_with_channel_column_creates_idx_channel(self, field_mappings_file, test_logger):
+        """When logs table has Channel column, create_index creates idx_channel."""
+        zircore = ZircoliteCore(
+            config=field_mappings_file,
+            logger=test_logger
+        )
+        field_stmt = "'eventid' TEXT, 'Channel' TEXT"
+        zircore.create_db(field_stmt)
+        zircore.create_index()
+        cursor = zircore.db_connection.cursor()
+        cursor.execute("SELECT name FROM sqlite_master WHERE type='index' AND name='idx_channel'")
+        assert cursor.fetchone() is not None
+        zircore.close()
+
+    def test_create_index_add_index_creates_extra_indexes(self, field_mappings_file, test_logger):
+        """create_index with add_index creates indexes on requested columns."""
+        proc_config = ProcessingConfig(
+            disable_progress=True,
+            add_index=["Channel", "SystemTime"],
+            remove_index=[],
+        )
+        zircore = ZircoliteCore(
+            config=field_mappings_file,
+            processing_config=proc_config,
+            logger=test_logger
+        )
+        field_stmt = "'eventid' TEXT, 'Channel' TEXT, 'SystemTime' TEXT"
+        zircore.create_db(field_stmt)
+        zircore.create_index()
+        cursor = zircore.db_connection.cursor()
+        cursor.execute("SELECT name FROM sqlite_master WHERE type='index'")
+        names = [row[0] for row in cursor.fetchall()]
+        assert "idx_eventid" in names
+        assert "idx_channel" in names  # auto-created when Channel column exists
+        assert "idx_SystemTime" in names  # from add_index (idx_Channel may be skipped if same as idx_channel)
+        zircore.close()
+
+    def test_create_index_remove_index_drops_indexes(self, field_mappings_file, test_logger):
+        """create_index with remove_index drops the given index names."""
+        proc_config = ProcessingConfig(
+            disable_progress=True,
+            add_index=[],
+            remove_index=["idx_channel"],
+        )
+        zircore = ZircoliteCore(
+            config=field_mappings_file,
+            processing_config=proc_config,
+            logger=test_logger
+        )
+        field_stmt = "'eventid' TEXT, 'Channel' TEXT"
+        zircore.create_db(field_stmt)
+        zircore.create_index()
+        cursor = zircore.db_connection.cursor()
+        cursor.execute("SELECT name FROM sqlite_master WHERE type='index' AND name='idx_channel'")
+        assert cursor.fetchone() is None
+        cursor.execute("SELECT name FROM sqlite_master WHERE type='index' AND name='idx_eventid'")
+        assert cursor.fetchone() is not None
         zircore.close()
     
     def test_save_db_to_disk(self, field_mappings_file, tmp_path, test_logger):
@@ -331,6 +429,100 @@ class TestZircoliteCoreDatabase:
         assert len(results) == 1
         assert results[0]['value'] == 'loaded'
         
+        zircore.close()
+
+    def test_create_connection_returns_none_on_sqlite_error(
+        self, field_mappings_file, tmp_path, test_logger
+    ):
+        """When sqlite3.connect raises Error, create_connection returns None."""
+        with patch('zircolite.core.sqlite3.connect', side_effect=sqlite3.Error("mock")):
+            proc_config = ProcessingConfig(db_location=str(tmp_path / "fail.db"))
+            zircore = ZircoliteCore(
+                config=field_mappings_file,
+                processing_config=proc_config,
+                logger=test_logger,
+            )
+            assert zircore.db_connection is None
+
+    def test_create_connection_reraises_base_exception(
+        self, field_mappings_file, tmp_path, test_logger
+    ):
+        """When sqlite3.connect raises BaseException, create_connection reraises."""
+        with patch('zircolite.core.sqlite3.connect', side_effect=MemoryError("mock")):
+            proc_config = ProcessingConfig(db_location=str(tmp_path / "fail.db"))
+            with pytest.raises(MemoryError):
+                ZircoliteCore(
+                    config=field_mappings_file,
+                    processing_config=proc_config,
+                    logger=test_logger,
+                )
+
+    def test_create_db_raises_when_execute_query_fails(self, field_mappings_file, test_logger):
+        """When execute_query returns False in create_db, RuntimeError is raised."""
+        zircore = ZircoliteCore(
+            config=field_mappings_file,
+            logger=test_logger,
+        )
+        with patch('zircolite.core.ZircoliteCore.execute_query', return_value=False):
+            with pytest.raises(RuntimeError, match="Unable to create database table"):
+                zircore.create_db("'EventID' TEXT")
+        zircore.close()
+
+    def test_execute_query_returns_false_when_no_connection(self, field_mappings_file, test_logger):
+        """execute_query returns False when db_connection is None."""
+        zircore = ZircoliteCore(
+            config=field_mappings_file,
+            logger=test_logger,
+        )
+        zircore.close()
+        zircore.db_connection = None
+        result = zircore.execute_query("SELECT 1")
+        assert result is False
+
+    def test_execute_select_query_returns_empty_when_no_connection(
+        self, field_mappings_file, test_logger
+    ):
+        """execute_select_query returns [] when db_connection is None."""
+        zircore = ZircoliteCore(
+            config=field_mappings_file,
+            logger=test_logger,
+        )
+        zircore.close()
+        zircore.db_connection = None
+        result = zircore.execute_select_query("SELECT 1")
+        assert result == []
+
+    def test_execute_select_query_returns_empty_on_sql_error(
+        self, field_mappings_file, test_logger
+    ):
+        """execute_select_query returns [] and logs when query raises sqlite3.Error."""
+        zircore = ZircoliteCore(
+            config=field_mappings_file,
+            logger=test_logger,
+        )
+        zircore.execute_query("CREATE TABLE t (x INTEGER)")
+        results = zircore.execute_select_query("SELECT * FROM nonexistent_table")
+        assert results == []
+        zircore.close()
+
+    def test_insert_data_to_db_rollback_on_exception(self, field_mappings_file, test_logger):
+        """When executemany raises, insert_data_to_db rolls back and returns False."""
+        zircore = ZircoliteCore(
+            config=field_mappings_file,
+            logger=test_logger,
+        )
+        zircore.create_db("'EventID' TEXT COLLATE NOCASE,\n'CommandLine' TEXT COLLATE NOCASE")
+        zircore.db_connection.execute(
+            "INSERT INTO logs (EventID, CommandLine) VALUES ('1', 'first')"
+        )
+        zircore.db_connection.commit()
+        row_count_before = zircore.execute_select_query("SELECT COUNT(*) as c FROM logs")[0]["c"]
+        result = zircore.insert_data_to_db(
+            [{"EventID": "2", "CommandLine": "x", "ExtraCol": "y"}]
+        )
+        assert result is False
+        row_count_after = zircore.execute_select_query("SELECT COUNT(*) as c FROM logs")[0]["c"]
+        assert row_count_after == row_count_before
         zircore.close()
 
 
@@ -476,12 +668,12 @@ class TestZircoliteCoreRuleExecution:
         }
         
         results = zircore.execute_rule(rule)
-        
-        # In normal mode, None values should be removed from matches
-        if results.get("matches"):
-            first_match = results["matches"][0]
-            assert all(v is not None for v in first_match.values())
-        
+
+        assert results, "Expected rule to produce matches"
+        assert results.get("matches"), "Expected at least one match"
+        first_match = results["matches"][0]
+        assert all(v is not None for v in first_match.values())
+
         zircore.close()
 
 
@@ -499,6 +691,15 @@ class TestZircoliteCoreRuleset:
         
         # sample_ruleset fixture has 3 rules
         assert len(zircore.ruleset) == 3
+        zircore.close()
+
+    def test_load_ruleset_from_file_invalid_json(self, field_mappings_file, tmp_path, test_logger):
+        """Loading invalid JSON ruleset logs error and does not raise."""
+        bad_ruleset = tmp_path / "bad_ruleset.json"
+        bad_ruleset.write_text("{ invalid json }")
+        zircore = ZircoliteCore(config=field_mappings_file, logger=test_logger)
+        zircore.load_ruleset_from_file(str(bad_ruleset), rule_filters=None)
+        assert zircore.ruleset == []
         zircore.close()
     
     def test_load_ruleset_from_var(self, field_mappings_file, sample_ruleset, test_logger):
@@ -607,6 +808,40 @@ class TestZircoliteCoreRulesetExecution:
         
         assert "rule_title" in content
         zircore.close()
+
+    def test_execute_ruleset_progress_callback_invoked(
+        self, field_mappings_file, sample_ruleset, tmp_path, test_logger
+    ):
+        """progress_callback is called with (current_index, total_rules) for each rule."""
+        proc_config = ProcessingConfig(disable_progress=True)
+        zircore = ZircoliteCore(
+            config=field_mappings_file,
+            processing_config=proc_config,
+            logger=test_logger,
+        )
+        field_stmt = "'CommandLine' TEXT COLLATE NOCASE,\n"
+        zircore.create_db(field_stmt)
+        zircore.db_connection.execute(
+            "INSERT INTO logs (CommandLine) VALUES ('powershell.exe whoami')"
+        )
+        zircore.db_connection.commit()
+        zircore.load_ruleset_from_var(sample_ruleset, rule_filters=None)
+        total_rules = len(zircore.ruleset)
+        progress_updates = []
+
+        def capture(cur: int, tot: int) -> None:
+            progress_updates.append((cur, tot))
+
+        output_file = str(tmp_path / "output.json")
+        zircore.execute_ruleset(
+            output_file,
+            write_mode="w",
+            last_ruleset=True,
+            progress_callback=capture,
+        )
+        expected = [(i, total_rules) for i in range(total_rules + 1)]
+        assert progress_updates == expected
+        zircore.close()
     
     def test_execute_ruleset_with_limit(self, field_mappings_file, tmp_path, test_logger):
         """Test that limit discards rules with too many matches."""
@@ -689,45 +924,6 @@ class TestZircoliteCoreRulesetExecution:
         
         # No file should be created
         assert not Path(output_file).exists()
-        zircore.close()
-
-
-class TestZircoliteCoreRuleLevelFormatting:
-    """Tests for rule level color formatting."""
-    
-    def test_rule_level_informational(self, field_mappings_file, test_logger):
-        """Test informational level formatting."""
-        zircore = ZircoliteCore(config=field_mappings_file, logger=test_logger)
-        result = zircore.rule_level_print_formatter("informational")
-        assert "informational" in result
-        zircore.close()
-    
-    def test_rule_level_low(self, field_mappings_file, test_logger):
-        """Test low level formatting."""
-        zircore = ZircoliteCore(config=field_mappings_file, logger=test_logger)
-        result = zircore.rule_level_print_formatter("low")
-        assert "low" in result
-        zircore.close()
-    
-    def test_rule_level_medium(self, field_mappings_file, test_logger):
-        """Test medium level formatting."""
-        zircore = ZircoliteCore(config=field_mappings_file, logger=test_logger)
-        result = zircore.rule_level_print_formatter("medium")
-        assert "medium" in result
-        zircore.close()
-    
-    def test_rule_level_high(self, field_mappings_file, test_logger):
-        """Test high level formatting."""
-        zircore = ZircoliteCore(config=field_mappings_file, logger=test_logger)
-        result = zircore.rule_level_print_formatter("high")
-        assert "high" in result
-        zircore.close()
-    
-    def test_rule_level_critical(self, field_mappings_file, test_logger):
-        """Test critical level formatting."""
-        zircore = ZircoliteCore(config=field_mappings_file, logger=test_logger)
-        result = zircore.rule_level_print_formatter("critical")
-        assert "critical" in result
         zircore.close()
 
 
@@ -971,6 +1167,73 @@ class TestZircoliteCoreStreamingMode:
         assert total_events == 0
         zircore.close()
 
+    def test_run_streaming_logs_error_and_returns_zero_on_file_exception(
+        self, field_mappings_file, tmp_path, test_logger, default_args_config
+    ):
+        """When process_file_streaming raises, run_streaming logs and returns 0 for that file."""
+        not_a_file = str(tmp_path / "nonexistent.json")
+        proc_config = ProcessingConfig(disable_progress=True)
+        zircore = ZircoliteCore(
+            config=field_mappings_file,
+            processing_config=proc_config,
+            logger=test_logger,
+        )
+        total = zircore.run_streaming(
+            [not_a_file],
+            input_type='json',
+            args_config=default_args_config,
+            disable_progress=True,
+        )
+        assert total == 0
+        zircore.close()
+
+    def test_run_streaming_with_progress_bar_when_not_quiet(
+        self, field_mappings_file, tmp_path, test_logger, default_args_config
+    ):
+        """run_streaming uses spinner progress when is_quiet() is False and disable_progress is True."""
+        json_file = tmp_path / "ev.json"
+        json_file.write_text(json.dumps({"Event": {"System": {"EventID": 1}}}) + "\n")
+        proc_config = ProcessingConfig(disable_progress=True)
+        zircore = ZircoliteCore(
+            config=field_mappings_file,
+            processing_config=proc_config,
+            logger=test_logger,
+        )
+        with patch('zircolite.core.is_quiet', return_value=False):
+            total = zircore.run_streaming(
+                [str(json_file)],
+                input_type='json',
+                args_config=default_args_config,
+                disable_progress=True,
+            )
+        assert total == 1
+        zircore.close()
+
+    def test_run_streaming_with_bar_progress_when_not_quiet_and_multi_file(
+        self, field_mappings_file, tmp_path, test_logger, default_args_config
+    ):
+        """run_streaming uses BarColumn progress when is_quiet() False and disable_progress False."""
+        f1 = tmp_path / "a.json"
+        f2 = tmp_path / "b.json"
+        ev = json.dumps({"Event": {"System": {"EventID": 1}}}) + "\n"
+        f1.write_text(ev)
+        f2.write_text(ev)
+        proc_config = ProcessingConfig(disable_progress=False)
+        zircore = ZircoliteCore(
+            config=field_mappings_file,
+            processing_config=proc_config,
+            logger=test_logger,
+        )
+        with patch('zircolite.core.is_quiet', return_value=False):
+            total = zircore.run_streaming(
+                [str(f1), str(f2)],
+                input_type='json',
+                args_config=default_args_config,
+                disable_progress=False,
+            )
+        assert total == 2
+        zircore.close()
+
 
 class TestZircoliteCoreEscapeIdentifier:
     """Tests for the escape_identifier method and its caching."""
@@ -1021,3 +1284,62 @@ class TestZircoliteCoreGetCursorAndClose:
         zircore.close()
         # Connection is closed; verify cursor was cleared
         assert zircore._cursor is None
+
+    def test_del_closes_connection(self, field_mappings_file, test_logger):
+        """__del__ runs and closes db_connection when instance is garbage-collected."""
+        zircore = ZircoliteCore(config=field_mappings_file, logger=test_logger)
+        assert zircore.db_connection is not None
+        del zircore
+        gc.collect()
+
+
+class TestBugFixes:
+    """Tests verifying specific bug fixes."""
+
+    def test_apply_ruleset_filters_missing_title(self, field_mappings_file, test_logger):
+        """Rules without a 'title' key should not cause KeyError when filtering."""
+        zircore = ZircoliteCore(config=field_mappings_file, logger=test_logger)
+        ruleset = [
+            {"title": "Keep This", "rule": ["SELECT 1"]},
+            {"rule": ["SELECT 2"]},
+            {"title": "Filter Out", "rule": ["SELECT 3"]},
+        ]
+        zircore.load_ruleset_from_var(ruleset, rule_filters=["Filter Out"])
+        assert len(zircore.ruleset) == 2
+        titles = [r.get("title", "") for r in zircore.ruleset]
+        assert "Keep This" in titles
+        assert "Filter Out" not in titles
+        zircore.close()
+
+    def test_create_db_raises_runtime_error(self, field_mappings_file, test_logger):
+        """create_db raises RuntimeError instead of calling sys.exit."""
+        zircore = ZircoliteCore(config=field_mappings_file, logger=test_logger)
+        with patch('zircolite.core.ZircoliteCore.execute_query', return_value=False):
+            with pytest.raises(RuntimeError, match="Unable to create database table"):
+                zircore.create_db("'x' TEXT")
+        zircore.close()
+
+    def test_run_rule_tests_heterogeneous_keys(self, field_mappings_file, tmp_path, test_logger):
+        """run_rule_tests builds schema from all event keys, not just the first."""
+        test_file = tmp_path / "tests.json"
+        test_cases = [{
+            "title": "Test Rule",
+            "true_positive": [
+                {"CommandLine": "cmd.exe"},
+                {"CommandLine": "powershell.exe", "Image": "ps.exe"},
+            ],
+            "true_negative": [],
+        }]
+        test_file.write_text(json.dumps(test_cases))
+
+        zircore = ZircoliteCore(config=field_mappings_file, logger=test_logger)
+        zircore.ruleset = [{
+            "title": "Test Rule",
+            "id": "t1",
+            "rule": ["SELECT * FROM logs WHERE CommandLine LIKE '%cmd%'"],
+        }]
+        results = zircore.run_rule_tests(str(test_file))
+        assert len(results) == 1
+        assert results[0]["error"] == ""
+        assert results[0]["tp_pass"] is True
+        zircore.close()

@@ -1,6 +1,6 @@
 # Zircolite Documentation
 
-Documentation for **Zircolite 3.x**. Zircolite is a standalone SIGMA-based detection tool for EVTX, Auditd, Sysmon for Linux, XML, CSV, and JSONL/NDJSON logs. It uses SQLite as a backend for SIGMA rule execution.
+Documentation for **Zircolite 3.5**. Zircolite is a standalone SIGMA-based detection tool for EVTX, Auditd, Sysmon for Linux, XML, CSV, and JSONL/NDJSON logs. It uses SQLite as a backend for SIGMA rule execution.
 
 **Zircolite** supports the following log sources:
 
@@ -31,7 +31,7 @@ Documentation for **Zircolite 3.x**. Zircolite is a standalone SIGMA-based detec
 
 1. Install dependencies: `pip3 install -r requirements.txt`
 2. Run: `python3 zircolite.py --events <logs> --ruleset <ruleset>`
-3. For EVTX with default Sysmon rules: `python3 zircolite.py --evtx sample.evtx --ruleset rules/rules_windows_sysmon.json`
+3. For EVTX with Windows rules (merged): `python3 zircolite.py --evtx sample.evtx --ruleset rules/rules_windows_merged.json`
 
 See [Usage → First run](Usage.md#first-run), [Usage → Basic usage](Usage.md#basic-usage), and [Usage → Automatic Log Type Detection](Usage.md#automatic-log-type-detection) for details.
 

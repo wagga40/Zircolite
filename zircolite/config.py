@@ -37,6 +37,16 @@ class ProcessingConfig:
     delimiter: str = ";"
     limit: int = -1
 
+    # Performance options
+    profile_rules: bool = False
+
+    # Database indexes: columns to index (add), index names to drop (remove)
+    add_index: List[str] = field(default_factory=list)
+    remove_index: List[str] = field(default_factory=list)
+
+    # Archive decryption
+    archive_password: Optional[str] = None
+
 
 @dataclass
 class ExtractorConfig:
@@ -56,7 +66,7 @@ class ExtractorConfig:
     tmp_dir: Optional[str] = None
     encoding: Optional[str] = None
     
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         """Set default encoding based on input type if not specified."""
         if self.encoding is None:
             if self.sysmon4linux:

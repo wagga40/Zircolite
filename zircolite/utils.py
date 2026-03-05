@@ -12,34 +12,43 @@ This module contains:
 
 import logging
 import os
+import random
+import string
 import sys
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import TYPE_CHECKING, Any, Dict, List, Optional, Tuple, Union, cast
+
+if TYPE_CHECKING:
+    from rich.console import Console
 
 import orjson
 import psutil
 import yaml
 
 # Rich-based console - import with fallback for compatibility
+console: Optional["Console"] = None
 try:
-    from .console import console, get_rich_logger
+    from .console import console as _console, get_rich_logger
+
+    console = _console
     HAS_RICH = True
 except ImportError:
     HAS_RICH = False
-    console = None
 
 
-def load_field_mappings(config_file: str, *, logger: Optional[logging.Logger] = None) -> Dict[str, Any]:
+def load_field_mappings(
+    config_file: str, *, logger: Optional[logging.Logger] = None
+) -> Dict[str, Any]:
     """
     Load field mappings configuration from JSON or YAML file.
-    
+
     Supports both JSON (.json) and YAML (.yaml, .yml) formats.
     The file format is auto-detected based on file extension.
-    
+
     Args:
         config_file: Path to the field mappings configuration file
         logger: Optional logger instance for error messages
-        
+
     Returns:
         Dictionary containing field mappings configuration with keys:
         - exclusions: List of field name patterns to exclude
@@ -49,14 +58,14 @@ def load_field_mappings(config_file: str, *, logger: Optional[logging.Logger] = 
         - split: Dict defining field splitting rules
         - transforms: Dict defining field value transformations
         - transforms_enabled: Boolean flag for enabling transforms
-        
+
     Raises:
         FileNotFoundError: If configuration file doesn't exist
         ValueError: If file format is unsupported or parsing fails
     """
     logger = logger or logging.getLogger(__name__)
     config_path = Path(config_file)
-    
+
     # Deprecation: prefer config/config.yaml over fieldMappings.yaml
     path_lower = config_path.name.lower()
     if path_lower in ("fieldmappings.yaml", "fieldmappings.yml"):
@@ -64,138 +73,324 @@ def load_field_mappings(config_file: str, *, logger: Optional[logging.Logger] = 
             "fieldMappings.yaml is deprecated; use config/config.yaml instead. "
             "Support for fieldMappings.yaml may be removed in a future version."
         )
-    
+
     if not config_path.exists():
-        raise FileNotFoundError(f"Field mappings configuration file not found: {config_file}")
-    
+        raise FileNotFoundError(
+            f"Field mappings configuration file not found: {config_file}"
+        )
+
     # Determine format from file extension
     suffix = config_path.suffix.lower()
-    
-    if suffix == '.json':
+
+    if suffix == ".json":
         # JSON format - use orjson for speed
-        with open(config_path, 'rb') as f:
+        with open(config_path, "rb") as f:
             try:
                 config = orjson.loads(f.read())
             except orjson.JSONDecodeError as e:
                 raise ValueError(f"Invalid JSON in field mappings file: {e}")
-    elif suffix in ('.yaml', '.yml'):
+    elif suffix in (".yaml", ".yml"):
         # YAML format
-        with open(config_path, 'r', encoding='utf-8') as f:
+        with open(config_path, "r", encoding="utf-8") as f:
             try:
                 config = yaml.safe_load(f)
             except yaml.YAMLError as e:
                 raise ValueError(f"Invalid YAML in field mappings file: {e}")
     else:
         # Try to auto-detect based on content
-        with open(config_path, 'rb') as f:
+        with open(config_path, "rb") as f:
             content = f.read()
-        
+
         # Try JSON first (most common)
         try:
             config = orjson.loads(content)
         except orjson.JSONDecodeError:
             # Try YAML as fallback
             try:
-                config = yaml.safe_load(content.decode('utf-8'))
+                config = yaml.safe_load(content.decode("utf-8"))
             except yaml.YAMLError:
                 raise ValueError(
                     f"Unable to parse field mappings file: {config_file}. "
                     f"Supported formats: .json, .yaml, .yml"
                 )
-    
+
     if config is None:
         config = {}
-    
+
     # Ensure config is a dictionary
     if not isinstance(config, dict):
         raise ValueError(
             f"Invalid field mappings file format: {config_file}. "
             f"Expected a dictionary/object at root level."
         )
-    
+
     # Validate required keys and provide defaults
-    required_keys = ['exclusions', 'useless', 'mappings', 'alias', 'split', 'transforms', 'transforms_enabled']
+    required_keys = [
+        "exclusions",
+        "useless",
+        "mappings",
+        "alias",
+        "split",
+        "transforms",
+        "transforms_enabled",
+    ]
     defaults = {
-        'exclusions': [],
-        'useless': [None, ""],
-        'mappings': {},
-        'alias': {},
-        'split': {},
-        'transforms': {},
-        'transforms_enabled': False
+        "exclusions": [],
+        "useless": [None, ""],
+        "mappings": {},
+        "alias": {},
+        "split": {},
+        "transforms": {},
+        "transforms_enabled": False,
     }
-    
+
     for key in required_keys:
         if key not in config:
             logger.debug(f"Field mappings config missing '{key}', using default")
             config[key] = defaults[key]
-    
+
     # Add event_filter section with minimal fallback defaults
     # (Full defaults are in config/config.yaml)
-    if 'event_filter' not in config:
-        config['event_filter'] = {
-            'enabled': True,
-            'channel_fields': ["Event.System.Channel", "Channel"],
-            'eventid_fields': ["Event.System.EventID", "EventID"],
+    if "event_filter" not in config:
+        config["event_filter"] = {
+            "enabled": True,
+            "channel_fields": ["Event.System.Channel", "Channel"],
+            "eventid_fields": ["Event.System.EventID", "EventID"],
         }
-    
+
     # Add timestamp_detection section with minimal fallback defaults
     # (Full defaults are in config/config.yaml)
-    if 'timestamp_detection' not in config:
-        config['timestamp_detection'] = {
-            'default_field': 'SystemTime',
-            'auto_detect': True,
-            'detection_fields': ["SystemTime", "UtcTime", "@timestamp", "timestamp"],
+    if "timestamp_detection" not in config:
+        config["timestamp_detection"] = {
+            "default_field": "SystemTime",
+            "auto_detect": True,
+            "detection_fields": ["SystemTime", "UtcTime", "@timestamp", "timestamp"],
         }
-    
+
     return config
 
 
-def quit_on_error(message, logger=None):
+# ---------------------------------------------------------------------------
+# Compressed and archive handling
+# ---------------------------------------------------------------------------
+
+# Suffixes that indicate a compressed/archived file (inner format detected separately).
+COMPRESSED_SUFFIXES = frozenset((".gz", ".bz2", ".zip", ".7z"))
+
+# Shown when decompression fails due to wrong or missing archive password.
+ARCHIVE_PASSWORD_ERROR_MESSAGE = "Wrong or missing archive password. Use --archive-password with the correct password."
+
+
+def open_maybe_compressed(
+    path: Union[Path, str],
+    mode: str = "rb",
+    encoding: Optional[str] = None,
+    password: Optional[Union[str, bytes]] = None,
+):
+    """Open a file, transparently decompressing gz/bz2 or extracting from a zip/7z archive.
+
+    Args:
+        path: Path-like object or string pointing to the file.
+        mode: Open mode.  ``'rb'`` for binary reads; ``'rt'`` for text reads.
+        encoding: Character encoding for text-mode opens (defaults to ``'utf-8'``).
+        password: Archive password for encrypted ZIP or 7-Zip archives.
+                  May be a ``str`` or ``bytes``.  Ignored for non-archive formats.
+
+    Returns:
+        A file-like object.  For ZIP and 7-Zip archives the member is buffered
+        in memory and returned as ``io.BytesIO`` / ``io.TextIOWrapper``.
+
+    Raises:
+        ValueError: If an archive contains zero or more than one member, or if
+            decompression fails (e.g. wrong password).
+        ImportError: If ``py7zr`` is not installed and a ``.7z`` file is opened.
+    """
+    import io
+
+    p = Path(path)
+    suffix = p.suffix.lower()
+    text_mode = "t" in mode
+
+    if suffix == ".gz":
+        import gzip
+
+        if text_mode:
+            return gzip.open(p, mode, encoding=encoding or "utf-8")
+        return gzip.open(p, "rb")
+
+    if suffix == ".bz2":
+        import bz2
+
+        if text_mode:
+            return bz2.open(p, mode, encoding=encoding or "utf-8")
+        return bz2.open(p, "rb")
+
+    if suffix == ".zip":
+        import zipfile
+
+        pwd = password.encode() if isinstance(password, str) else password
+        try:
+            with zipfile.ZipFile(p, "r") as zf:
+                members = [m for m in zf.namelist() if not m.endswith("/")]
+                if not members:
+                    raise ValueError(f"ZIP archive '{p}' contains no files")
+                if len(members) > 1:
+                    raise ValueError(
+                        f"ZIP archive '{p}' contains {len(members)} files; "
+                        "only single-file archives are supported"
+                    )
+                data = zf.read(members[0], pwd=pwd)
+        except RuntimeError as e:
+            # ZIP raises RuntimeError for wrong/missing password
+            if "password" in str(e).lower() or "decrypt" in str(e).lower():
+                raise ValueError(ARCHIVE_PASSWORD_ERROR_MESSAGE) from e
+            raise
+        if text_mode:
+            return io.TextIOWrapper(io.BytesIO(data), encoding=encoding or "utf-8")
+        return io.BytesIO(data)
+
+    if suffix == ".7z":
+        try:
+            import lzma
+            import py7zr
+            from py7zr.exceptions import (
+                Bad7zFile,
+                CrcError,
+                DecompressionError,
+                PasswordRequired,
+            )
+        except ImportError:
+            raise ImportError(
+                "The 'py7zr' package is required to read .7z files. "
+                "Install it with: pip install py7zr"
+            )
+        pwd_7z: Optional[str] = (
+            password.decode() if isinstance(password, bytes) else password
+        )
+
+        class _MemFactory:
+            """Factory for py7zr in-memory extraction (create() is called per member)."""
+
+            def __init__(self):
+                self._buf = None
+
+            def create(self, fname):
+                self._buf = io.BytesIO()
+                return self._buf
+
+        try:
+            with py7zr.SevenZipFile(p, "r", password=pwd_7z) as szf:
+                names = szf.getnames()
+                if not names:
+                    raise ValueError(f"7-Zip archive '{p}' contains no files")
+                if len(names) > 1:
+                    raise ValueError(
+                        f"7-Zip archive '{p}' contains {len(names)} files; "
+                        "only single-file archives are supported"
+                    )
+                factory = _MemFactory()
+                szf.extract(path=None, targets=names, factory=factory)
+                if factory._buf is None:
+                    raise RuntimeError("7z extract produced no data")
+                factory._buf.seek(0)
+                data = factory._buf.read()
+        except PasswordRequired:
+            raise ValueError(ARCHIVE_PASSWORD_ERROR_MESSAGE) from None
+        except Bad7zFile as e:
+            # Wrong password often yields "invalid block data" at CRC check
+            if "invalid" in str(e).lower():
+                raise ValueError(ARCHIVE_PASSWORD_ERROR_MESSAGE) from e
+            raise
+        except (CrcError, DecompressionError, lzma.LZMAError) as e:
+            # Wrong 7z password often yields LZMAError/CrcError during decompression
+            raise ValueError(ARCHIVE_PASSWORD_ERROR_MESSAGE) from e
+        if text_mode:
+            return io.TextIOWrapper(io.BytesIO(data), encoding=encoding or "utf-8")
+        return io.BytesIO(data)
+
+    # Plain file fallback
+    if text_mode:
+        return open(p, mode, encoding=encoding or "utf-8")
+    return open(p, mode)
+
+
+# ---------------------------------------------------------------------------
+# CSV and string helpers
+# ---------------------------------------------------------------------------
+
+
+def sanitize_value_for_csv(value: Any) -> str:
+    """Normalize a value for safe CSV output (no newlines, None -> empty string)."""
+    return ("" if value is None else str(value)).replace("\n", "").replace("\r", "")
+
+
+def sanitize_row_for_csv(row: Dict[str, Any]) -> Dict[str, str]:
+    """Return a new dict with all values sanitized for CSV output."""
+    return {k: sanitize_value_for_csv(v) for k, v in row.items()}
+
+
+def random_suffix(length: int = 4) -> str:
+    """Return a random alphanumeric string (uppercase + digits) of given length."""
+    return "".join(
+        random.SystemRandom().choice(string.ascii_uppercase + string.digits)
+        for _ in range(length)
+    )
+
+
+def quit_on_error(message: str, logger: Optional[logging.Logger] = None) -> None:
     """Log error message and exit with error code."""
     logger = logger or logging.getLogger(__name__)
     logger.error(message)
     sys.exit(1)
 
 
-def check_if_exists(path, error_message, logger=None):
+def check_if_exists(
+    path: Union[Path, str],
+    error_message: str,
+    logger: Optional[logging.Logger] = None,
+) -> None:
     """Check if the provided path is a file."""
     if not Path(path).is_file():
         quit_on_error(error_message, logger)
 
 
-def init_logger(debug_mode, log_file=None, name='zircolite', use_rich=True):
+def init_logger(
+    debug_mode: bool,
+    log_file: Optional[str] = None,
+    name: str = "zircolite",
+    use_rich: bool = True,
+) -> logging.Logger:
     """Initialize logger with appropriate configuration.
-    
+
     Args:
         debug_mode: Enable debug-level logging with verbose format
         log_file: Optional path to log file for persistent logging
         name: Logger name (default: 'zircolite')
         use_rich: Use Rich-based console output (default: True)
-    
+
     Returns:
         Configured logger instance
     """
     # Use Rich logger if available and requested
     if use_rich and HAS_RICH:
         return get_rich_logger(name=name, debug=debug_mode, log_file=log_file)
-    
+
     # Fallback to standard logging
     logger = logging.getLogger(name)
     logger.setLevel(logging.DEBUG if debug_mode else logging.INFO)
-    
+
     # Clear any existing handlers to avoid duplicates
     logger.handlers.clear()
-    
+
     # Prevent propagation to root logger to avoid duplicate messages
     logger.propagate = False
-    
+
     # Console handler - always present with simple format
     console_handler = logging.StreamHandler()
     console_handler.setLevel(logging.INFO)
-    console_handler.setFormatter(logging.Formatter('%(message)s'))
+    console_handler.setFormatter(logging.Formatter("%(message)s"))
     logger.addHandler(console_handler)
-    
+
     # File handler (if requested)
     if log_file is not None:
         file_log_format = "%(asctime)s %(levelname)-8s %(message)s"
@@ -203,18 +398,20 @@ def init_logger(debug_mode, log_file=None, name='zircolite', use_rich=True):
             file_log_format = "%(asctime)s %(levelname)-8s %(module)s:%(lineno)s %(funcName)s %(message)s"
         file_handler = logging.FileHandler(log_file)
         file_handler.setLevel(logging.DEBUG if debug_mode else logging.INFO)
-        file_handler.setFormatter(logging.Formatter(file_log_format, datefmt='%Y-%m-%d %H:%M:%S'))
+        file_handler.setFormatter(
+            logging.Formatter(file_log_format, datefmt="%Y-%m-%d %H:%M:%S")
+        )
         logger.addHandler(file_handler)
 
     return logger
 
 
-def create_silent_logger(name='zircolite_worker'):
+def create_silent_logger(name: str = "zircolite_worker") -> logging.Logger:
     """Create a logger that suppresses all output (for parallel workers).
-    
+
     Args:
         name: Logger name (should be unique per worker)
-    
+
     Returns:
         Logger instance that discards all messages
     """
@@ -227,46 +424,56 @@ def create_silent_logger(name='zircolite_worker'):
     return logger
 
 
-def select_files(path_list, select_files_list):
+def select_files(
+    path_list: List[Union[Path, str]],
+    select_files_list: Optional[List[List[str]]],
+) -> List[Union[Path, str]]:
     """Select files from path list based on filter criteria."""
     if select_files_list is None:
         return path_list
 
     paths = list(path_list)
-    filters = [file_filters[0].lower() for file_filters in select_files_list]
-    selected = []
+    filters = [f[0].lower() for f in select_files_list if f]
+    selected: List[str] = []
     for element in paths:
         path_str = str(element)
         path_str_lower = path_str.lower()
         if any(file_filter in path_str_lower for file_filter in filters):
             selected.append(path_str)
-    return selected
+    return cast(List[Union[Path, str]], selected)
 
 
-def avoid_files(path_list, avoid_files_list):
+def avoid_files(
+    path_list: List[Union[Path, str]],
+    avoid_files_list: Optional[List[List[str]]],
+) -> List[Union[Path, str]]:
     """Filter out files from path list based on exclusion criteria."""
     if avoid_files_list is None:
         return path_list
 
     paths = list(path_list)
-    filters = [file_filters[0].lower() for file_filters in avoid_files_list]
-    filtered = []
+    filters = [f[0].lower() for f in avoid_files_list if f]
+    filtered: List[str] = []
     for element in paths:
         path_str = str(element)
         path_str_lower = path_str.lower()
         if all(file_filter not in path_str_lower for file_filter in filters):
             filtered.append(path_str)
-    return filtered
+    return cast(List[Union[Path, str]], filtered)
 
 
 class MemoryTracker:
     """Track memory usage during execution with optional rate limiting."""
-    
-    def __init__(self, *, logger: Optional[logging.Logger] = None,
-                 min_sample_interval: float = 0.0):
+
+    def __init__(
+        self,
+        *,
+        logger: Optional[logging.Logger] = None,
+        min_sample_interval: float = 0.0,
+    ):
         """
         Initialize MemoryTracker.
-        
+
         Args:
             logger: Logger instance (creates default if None)
             min_sample_interval: Minimum seconds between samples (0 = no limit).
@@ -274,51 +481,52 @@ class MemoryTracker:
                 to reduce syscall overhead.
         """
         self.logger = logger or logging.getLogger(__name__)
-        self.memory_samples = []
-        self.peak_memory = 0
+        self.memory_samples: List[float] = []
+        self.peak_memory: float = 0.0
         self.process = psutil.Process(os.getpid())
         self._min_sample_interval = min_sample_interval
         self._last_sample_time = 0.0
-    
-    def get_memory_usage(self):
+
+    def get_memory_usage(self) -> float:
         """Get current memory usage in MB."""
         try:
             # Get RSS (Resident Set Size) in bytes, convert to MB
             return self.process.memory_info().rss / (1024 * 1024)
         except Exception:
             return 0
-    
+
     def sample(self, *, force: bool = False):
         """Take a memory usage sample.
-        
+
         Args:
             force: If True, bypass the rate limit and always sample.
         """
         # Rate limiting – skip if called too soon after last sample
         if self._min_sample_interval > 0 and not force:
             import time as _time
+
             now = _time.monotonic()
             if now - self._last_sample_time < self._min_sample_interval:
                 return
             self._last_sample_time = now
-        
+
         memory_mb = self.get_memory_usage()
         if memory_mb > 0:
             self.memory_samples.append(memory_mb)
             if memory_mb > self.peak_memory:
                 self.peak_memory = memory_mb
-    
-    def get_stats(self):
+
+    def get_stats(self) -> Tuple[float, float]:
         """Get peak and average memory usage."""
         if not self.memory_samples:
             return 0, 0
-        
+
         peak = self.peak_memory
         average = sum(self.memory_samples) / len(self.memory_samples)
-        
+
         return peak, average
-    
-    def format_memory(self, memory_mb):
+
+    def format_memory(self, memory_mb: float) -> str:
         """Format memory value for display."""
         if memory_mb >= 1024:
             return f"{memory_mb / 1024:.2f} GB"
@@ -329,7 +537,7 @@ class MemoryTracker:
 ################################################################
 # HEURISTICS FOR OPTIMAL PROCESSING MODE
 ################################################################
-def format_size(size):
+def format_size(size: Union[int, float]) -> str:
     """Format byte size for human-readable display."""
     if size >= 1024 * 1024 * 1024:
         return f"{size / (1024 * 1024 * 1024):.1f} GB"
@@ -340,15 +548,18 @@ def format_size(size):
     return f"{size} bytes"
 
 
-def analyze_files_and_recommend_mode(file_list, logger=None):
+def analyze_files_and_recommend_mode(
+    file_list: List[Union[Path, str]],
+    logger: Optional[logging.Logger] = None,
+) -> Tuple[str, str, Dict[str, Any]]:
     """
     Analyze files and available RAM to recommend optimal processing settings.
-    
+
     Returns a tuple: (recommended_mode, reason, stats)
     - recommended_mode: 'unified' or 'per-file'
     - reason: Human-readable explanation
     - stats: Dictionary with analysis statistics including parallel recommendation
-    
+
     Heuristics for database mode:
     - Many small files (>10 files, avg <5MB) → unified mode (less overhead, cross-file correlation)
     - Few large files (<5 files, avg >50MB) → per-file mode (memory efficient)
@@ -356,7 +567,7 @@ def analyze_files_and_recommend_mode(file_list, logger=None):
     - High RAM + many files → per-file mode (enables parallel processing)
     - Very large total size (>available RAM) → per-file mode (avoid OOM)
     - Single file → per-file mode (no benefit from unified)
-    
+
     Heuristics for parallel processing:
     - Multiple files (>1) + sufficient RAM → enable parallel
     - Per-file mode (not unified) + multiple files → parallel beneficial
@@ -372,7 +583,7 @@ def analyze_files_and_recommend_mode(file_list, logger=None):
         total_ram = 8 * 1024 * 1024 * 1024
         cpu_count = 4
         has_psutil = False
-    
+
     # Calculate file statistics
     file_count = len(file_list)
     file_sizes = []
@@ -381,12 +592,12 @@ def analyze_files_and_recommend_mode(file_list, logger=None):
             file_sizes.append(os.path.getsize(f))
         except OSError:
             file_sizes.append(0)
-    
+
     total_size = sum(file_sizes)
     avg_size = total_size / file_count if file_count > 0 else 0
     max_size = max(file_sizes) if file_sizes else 0
     min_size = min(file_sizes) if file_sizes else 0
-    
+
     # Estimate memory usage per file (dynamic multiplier based on file size)
     if avg_size < 10 * 1024 * 1024:  # < 10MB
         memory_multiplier = 5.0  # Small files have more overhead
@@ -394,30 +605,33 @@ def analyze_files_and_recommend_mode(file_list, logger=None):
         memory_multiplier = 4.0  # Medium files
     else:
         memory_multiplier = 3.5  # Large files are more memory efficient
-    
+
     memory_per_file = avg_size * memory_multiplier
-    
+
     # Delegate to the consolidated worker-calculation function so that
     # the heuristics stay in sync with MemoryAwareParallelProcessor.
     from .parallel import calculate_optimal_workers as _calc_workers
+
     optimal_workers = _calc_workers(
         file_sizes=file_sizes,
         available_memory_mb=available_ram / (1024 * 1024),
         cpu_count=cpu_count,
     )
-    
+
     # Parallel processing recommendation
     parallel_recommended = False
     parallel_reason = ""
     parallel_workers = 1
-    
+
     if file_count <= 1:
         parallel_reason = "Single file - parallel not applicable"
     elif available_ram < 1 * 1024 * 1024 * 1024:  # < 1GB (lowered from 2GB)
         parallel_reason = "Very low RAM - parallel disabled for safety"
     elif optimal_workers <= 1:
         parallel_reason = "Insufficient resources for parallel processing"
-    elif memory_per_file > (available_ram * 0.85) * 0.6:  # Single file uses >60% of usable RAM
+    elif (
+        memory_per_file > (available_ram * 0.85) * 0.6
+    ):  # Single file uses >60% of usable RAM
         parallel_reason = "Very large files - sequential processing safer"
     else:
         parallel_recommended = True
@@ -426,167 +640,210 @@ def analyze_files_and_recommend_mode(file_list, logger=None):
         efficiency = 0.75 if file_count >= optimal_workers else 0.65
         speedup = min(optimal_workers * efficiency, file_count)
         parallel_reason = f"{optimal_workers} workers, ~{speedup:.1f}x speedup"
-    
+
     stats = {
-        'file_count': file_count,
-        'total_size': total_size,
-        'total_size_fmt': format_size(total_size),
-        'avg_size': avg_size,
-        'avg_size_fmt': format_size(avg_size),
-        'max_size': max_size,
-        'max_size_fmt': format_size(max_size),
-        'min_size': min_size,
-        'min_size_fmt': format_size(min_size),
-        'available_ram': available_ram,
-        'available_ram_fmt': format_size(available_ram),
-        'total_ram': total_ram,
-        'total_ram_fmt': format_size(total_ram),
-        'has_psutil': has_psutil,
-        'cpu_count': cpu_count,
+        "file_count": file_count,
+        "total_size": total_size,
+        "total_size_fmt": format_size(total_size),
+        "avg_size": avg_size,
+        "avg_size_fmt": format_size(avg_size),
+        "max_size": max_size,
+        "max_size_fmt": format_size(max_size),
+        "min_size": min_size,
+        "min_size_fmt": format_size(min_size),
+        "available_ram": available_ram,
+        "available_ram_fmt": format_size(available_ram),
+        "total_ram": total_ram,
+        "total_ram_fmt": format_size(total_ram),
+        "has_psutil": has_psutil,
+        "cpu_count": cpu_count,
         # Parallel processing recommendations
-        'parallel_recommended': parallel_recommended,
-        'parallel_reason': parallel_reason,
-        'parallel_workers': parallel_workers,
-        'memory_per_file': memory_per_file,
-        'memory_per_file_fmt': format_size(int(memory_per_file)),
+        "parallel_recommended": parallel_recommended,
+        "parallel_reason": parallel_reason,
+        "parallel_workers": parallel_workers,
+        "memory_per_file": memory_per_file,
+        "memory_per_file_fmt": format_size(int(memory_per_file)),
     }
-    
+
     # Thresholds (can be tuned)
     MANY_FILES_THRESHOLD = 10
-    SMALL_FILE_THRESHOLD = 5 * 1024 * 1024       # 5 MB
-    LARGE_FILE_THRESHOLD = 50 * 1024 * 1024      # 50 MB
-    LOW_RAM_THRESHOLD = 2 * 1024 * 1024 * 1024   # 2 GB
+    SMALL_FILE_THRESHOLD = 5 * 1024 * 1024  # 5 MB
+    LARGE_FILE_THRESHOLD = 50 * 1024 * 1024  # 50 MB
+    LOW_RAM_THRESHOLD = 2 * 1024 * 1024 * 1024  # 2 GB
     HIGH_RAM_THRESHOLD = 8 * 1024 * 1024 * 1024  # 8 GB
-    RAM_SAFETY_FACTOR = 3  # Total data should be < available_ram / factor for unified mode
-    
+    RAM_SAFETY_FACTOR = (
+        3  # Total data should be < available_ram / factor for unified mode
+    )
+
     # Decision logic for database mode
-    
+
     # Rule 1: Single file - no benefit from unified mode
     if file_count == 1:
-        return ('per-file', "Single file detected", stats)
-    
+        return ("per-file", "Single file detected", stats)
+
     # Rule 2: Very low RAM - always use per-file to be safe
     if available_ram < LOW_RAM_THRESHOLD:
-        return ('per-file', f"Low available RAM ({format_size(available_ram)})", stats)
-    
+        return ("per-file", f"Low available RAM ({format_size(available_ram)})", stats)
+
     # Rule 3: Total size exceeds safe RAM threshold - use per-file
     if total_size > available_ram / RAM_SAFETY_FACTOR:
-        return ('per-file', f"Total data size ({format_size(total_size)}) is large compared to available RAM ({format_size(available_ram)})", stats)
-    
+        return (
+            "per-file",
+            f"Total data size ({format_size(total_size)}) is large compared to available RAM ({format_size(available_ram)})",
+            stats,
+        )
+
     # Rule 4: Many small files - unified mode is more efficient
     if file_count >= MANY_FILES_THRESHOLD and avg_size <= SMALL_FILE_THRESHOLD:
-        return ('unified', f"Many small files detected ({file_count} files, avg {format_size(avg_size)})", stats)
-    
+        return (
+            "unified",
+            f"Many small files detected ({file_count} files, avg {format_size(avg_size)})",
+            stats,
+        )
+
     # Rule 5: Few very large files - per-file mode is safer
     if file_count < 5 and avg_size >= LARGE_FILE_THRESHOLD:
-        return ('per-file', f"Few large files detected ({file_count} files, avg {format_size(avg_size)})", stats)
-    
+        return (
+            "per-file",
+            f"Few large files detected ({file_count} files, avg {format_size(avg_size)})",
+            stats,
+        )
+
     # Rule 6: High RAM + moderate number of files - per-file mode (enables parallel processing)
     if available_ram >= HIGH_RAM_THRESHOLD and file_count >= 3:
-        return ('per-file', f"Sufficient RAM available ({format_size(available_ram)}) with {file_count} files - parallel processing enabled", stats)
-    
+        return (
+            "per-file",
+            f"Sufficient RAM available ({format_size(available_ram)}) with {file_count} files - parallel processing enabled",
+            stats,
+        )
+
     # Rule 7: Many files (even if not tiny) - unified mode for correlation benefits
     if file_count >= MANY_FILES_THRESHOLD:
-        return ('unified', f"Multiple files detected ({file_count})", stats)
-    
+        return ("unified", f"Multiple files detected ({file_count})", stats)
+
     # Default: per-file mode (safer default)
-    return ('per-file', f"Default mode - {file_count} files, {format_size(total_size)} total", stats)
+    return (
+        "per-file",
+        f"Default mode - {file_count} files, {format_size(total_size)} total",
+        stats,
+    )
 
 
-def print_mode_recommendation(recommended_mode, reason, stats, logger, show_parallel=True):
+def print_mode_recommendation(
+    recommended_mode: str,
+    reason: str,
+    stats: Dict[str, Any],
+    logger: Optional[logging.Logger],
+    show_parallel: bool = True,
+) -> None:
     """Print the mode recommendation to the user with clean formatting."""
     # Check if we have the Rich console available
     if HAS_RICH and console is not None:
         _print_mode_recommendation_rich(recommended_mode, reason, stats, show_parallel)
     else:
-        _print_mode_recommendation_plain(recommended_mode, reason, stats, logger, show_parallel)
+        _print_mode_recommendation_plain(
+            recommended_mode,
+            reason,
+            stats,
+            logger or logging.getLogger(__name__),
+            show_parallel,
+        )
 
 
-def _print_mode_recommendation_rich(recommended_mode, reason, stats, show_parallel=True):
+def _print_mode_recommendation_rich(
+    recommended_mode: str,
+    reason: str,
+    stats: Dict[str, Any],
+    show_parallel: bool = True,
+) -> None:
     """Print mode recommendation using Rich console."""
     from rich.table import Table
     from .console import is_quiet
 
     if is_quiet():
         return
+    if console is None:
+        return
 
     console.print("[bold white]\\[+][/] Analyzing workload...")
 
     # Create a nice table for workload info
-    table = Table(show_header=False, box=None, padding=(0, 2))
+    table = Table(show_header=False, box=None, padding=(0, 4))
     table.add_column("Label", style="dim")
     table.add_column("Value")
 
     # File stats
-    file_count = stats['file_count']
-    total_size = stats['total_size_fmt']
-    avg_size = stats['avg_size_fmt']
+    file_count = stats["file_count"]
+    total_size = stats["total_size_fmt"]
+    avg_size = stats["avg_size_fmt"]
     table.add_row(
-        "[>] Files", 
-        f"[yellow]{file_count}[/] ([cyan]{total_size}[/] total, avg [cyan]{avg_size}[/])"
+        "[>] Files",
+        f"[yellow]{file_count}[/] ([cyan]{total_size}[/] total, avg [cyan]{avg_size}[/])",
     )
 
-    if stats['has_psutil']:
+    if stats["has_psutil"]:
         table.add_row(
             "[>] System",
-            f"[green]{stats['available_ram_fmt']}[/] RAM available, [yellow]{stats['cpu_count']}[/] CPUs"
+            f"[green]{stats['available_ram_fmt']}[/] RAM available, [yellow]{stats['cpu_count']}[/] CPUs",
         )
 
     # Database mode
-    mode_style = "green" if recommended_mode == 'unified' else "cyan"
-    mode_label = "UNIFIED" if recommended_mode == 'unified' else "PER-FILE"
-    table.add_row(
-        "[>] DB Mode",
-        f"[{mode_style}]{mode_label}[/]"
-    )
+    mode_style = "green" if recommended_mode == "unified" else "cyan"
+    mode_label = "UNIFIED" if recommended_mode == "unified" else "PER-FILE"
+    table.add_row("[>] DB Mode", f"[{mode_style}]{mode_label}[/]")
     table.add_row("", f"[dim]{reason}[/]")
 
     # Parallel processing (only for per-file mode)
-    if show_parallel and recommended_mode != 'unified':
-        if stats.get('parallel_recommended', False):
-            workers = stats.get('parallel_workers', '?')
+    if show_parallel and recommended_mode != "unified":
+        if stats.get("parallel_recommended", False):
+            workers = stats.get("parallel_workers", "?")
             table.add_row(
-                "[>] Parallel",
-                f"[green]ENABLED[/] ([yellow]{workers}[/] workers)"
+                "[>] Parallel", f"[green]ENABLED[/] ([yellow]{workers}[/] workers)"
             )
         else:
-            p_reason = stats.get('parallel_reason', 'Not recommended')
+            p_reason = stats.get("parallel_reason", "Not recommended")
             table.add_row("[>] Parallel", f"[dim]disabled - {p_reason}[/]")
 
     console.print(table)
     console.print()
 
 
-def _print_mode_recommendation_plain(recommended_mode, reason, stats, logger, show_parallel=True):
+def _print_mode_recommendation_plain(
+    recommended_mode: str,
+    reason: str,
+    stats: Dict[str, Any],
+    logger: logging.Logger,
+    show_parallel: bool = True,
+) -> None:
     """Print mode recommendation using plain logger (fallback)."""
     # Header
     logger.info("[+] Analyzing workload...")
-    
+
     # File statistics
-    file_count = stats['file_count']
-    total_size = stats['total_size_fmt']
-    avg_size = stats['avg_size_fmt']
+    file_count = stats["file_count"]
+    total_size = stats["total_size_fmt"]
+    avg_size = stats["avg_size_fmt"]
     logger.info(f"    [>] Files: {file_count} ({total_size} total, avg {avg_size})")
-    
-    if stats['has_psutil']:
-        ram = stats['available_ram_fmt']
-        cpus = stats['cpu_count']
+
+    if stats["has_psutil"]:
+        ram = stats["available_ram_fmt"]
+        cpus = stats["cpu_count"]
         logger.info(f"    [>] System: {ram} RAM available, {cpus} CPUs")
-    
+
     # Database mode recommendation
-    mode_icon = "🔗" if recommended_mode == 'unified' else "📁"
-    mode_label = "UNIFIED" if recommended_mode == 'unified' else "PER-FILE"
-    
+    mode_icon = "🔗" if recommended_mode == "unified" else "📁"
+    mode_label = "UNIFIED" if recommended_mode == "unified" else "PER-FILE"
+
     logger.info(f"    [>] {mode_icon} Database mode: {mode_label}")
-    logger.info(f"        [i] {reason}")
-    
+    logger.info(f"    [i] {reason}")
+
     # Parallel processing recommendation (only show for per-file mode)
-    if show_parallel and recommended_mode != 'unified':
-        if stats.get('parallel_recommended', False):
-            workers = stats.get('parallel_workers', '?')
+    if show_parallel and recommended_mode != "unified":
+        if stats.get("parallel_recommended", False):
+            workers = stats.get("parallel_workers", "?")
             logger.info(f"    [>] ⚡ Parallel: ENABLED ({workers} workers)")
         else:
-            p_reason = stats.get('parallel_reason', 'Not recommended')
+            p_reason = stats.get("parallel_reason", "Not recommended")
             logger.info(f"    [>] ⚡ Parallel: disabled - {p_reason}")
-    
+
     logger.info("")

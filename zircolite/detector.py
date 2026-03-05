@@ -9,6 +9,7 @@ processing parameters.
 
 Supported detections:
 - EVTX binary files (magic bytes)
+- SQLite database files (magic bytes)
 - Windows EVTX exported as JSON/JSONL
 - Windows EVTX exported as XML
 - Sysmon for Linux logs (syslog with embedded XML)
@@ -30,6 +31,11 @@ from typing import Dict, List, Optional, Tuple
 
 import orjson as json
 
+from zircolite.utils import (
+    ARCHIVE_PASSWORD_ERROR_MESSAGE,
+    COMPRESSED_SUFFIXES,
+)
+
 
 # =========================================================================
 # Pre-compiled module-level constants
@@ -38,49 +44,54 @@ import orjson as json
 # EVTX magic bytes: "ElfFile\x00"
 EVTX_MAGIC = b"ElfFile\x00"
 
+# SQLite database file header (first 16 bytes)
+SQLITE_MAGIC = b"SQLite format 3\x00"
+
 # ---- Regex patterns for raw-content timestamp detection ----
 # Each tuple: (compiled_regex, human-readable format name, example)
 # Order matters: more specific patterns first to avoid false positives.
 TIMESTAMP_RAW_PATTERNS = [
     # ISO 8601 full: 2024-06-15T10:30:00.123456Z or +00:00
-    (re.compile(
-        r'\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})?'
-    ), "ISO 8601", "2024-06-15T10:30:00.123Z"),
+    (
+        re.compile(
+            r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})?"
+        ),
+        "ISO 8601",
+        "2024-06-15T10:30:00.123Z",
+    ),
     # ISO 8601 with space separator: 2024-06-15 10:30:00
-    (re.compile(
-        r'\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}(?:\.\d+)?'
-    ), "ISO 8601 (space)", "2024-06-15 10:30:00"),
+    (
+        re.compile(r"\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}(?:\.\d+)?"),
+        "ISO 8601 (space)",
+        "2024-06-15 10:30:00",
+    ),
     # US/EU date format: 06/15/2024 10:30:00
-    (re.compile(
-        r'\d{2}/\d{2}/\d{4} \d{2}:\d{2}:\d{2}'
-    ), "US date-time", "06/15/2024 10:30:00"),
+    (
+        re.compile(r"\d{2}/\d{2}/\d{4} \d{2}:\d{2}:\d{2}"),
+        "US date-time",
+        "06/15/2024 10:30:00",
+    ),
     # Syslog: Jun 15 10:30:00  (month name + day + time)
-    (re.compile(
-        r'(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+\d{1,2}\s+\d{2}:\d{2}:\d{2}'
-    ), "Syslog", "Jun 15 10:30:00"),
+    (
+        re.compile(
+            r"(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+\d{1,2}\s+\d{2}:\d{2}:\d{2}"
+        ),
+        "Syslog",
+        "Jun 15 10:30:00",
+    ),
     # Windows FileTime / LDAP: 18-digit integer (e.g. 133627842000000000)
-    (re.compile(
-        r'(?<!\d)1[23]\d{16}(?!\d)'
-    ), "Windows FileTime", "133627842000000000"),
+    (re.compile(r"(?<!\d)1[23]\d{16}(?!\d)"), "Windows FileTime", "133627842000000000"),
     # Epoch seconds: 10-digit integer (standalone)
-    (re.compile(
-        r'(?<!\d)\d{10}(?!\d)'
-    ), "Epoch seconds", "1718442600"),
+    (re.compile(r"(?<!\d)\d{10}(?!\d)"), "Epoch seconds", "1718442600"),
     # Epoch milliseconds: 13-digit integer (standalone)
-    (re.compile(
-        r'(?<!\d)\d{13}(?!\d)'
-    ), "Epoch milliseconds", "1718442600000"),
+    (re.compile(r"(?<!\d)\d{13}(?!\d)"), "Epoch milliseconds", "1718442600000"),
 ]
 
 # Auditd line pattern: type=XXXX msg=audit(TIMESTAMP.NNN:SEQ):
-AUDITD_LINE_PATTERN = re.compile(
-    r'^type=\w+\s+msg=audit\(\d+\.\d+:\d+\):'
-)
+AUDITD_LINE_PATTERN = re.compile(r"^type=\w+\s+msg=audit\(\d+\.\d+:\d+\):")
 
 # Sysmon for Linux: syslog header before XML
-SYSMON_LINUX_SYSLOG_PATTERN = re.compile(
-    r'^\w+\s+\d+\s+[\d:]+\s+\S+\s+\S+.*<Event>'
-)
+SYSMON_LINUX_SYSLOG_PATTERN = re.compile(r"^\w+\s+\d+\s+[\d:]+\s+\S+\s+\S+.*<Event>")
 
 # Windows Event XML namespace
 WINDOWS_EVENT_NS = "http://schemas.microsoft.com/win/2004/08/events/event"
@@ -94,36 +105,67 @@ EVTXTRACT_MARKERS = (
 )
 
 # Auditd type values (most common)
-AUDITD_TYPES = frozenset({
-    "SYSCALL", "EXECVE", "PATH", "CWD", "PROCTITLE",
-    "USER_AUTH", "USER_ACCT", "CRED_ACQ", "CRED_DISP",
-    "USER_START", "USER_END", "USER_LOGIN", "USER_CMD",
-    "LOGIN", "SERVICE_START", "SERVICE_STOP",
-    "ANOM_PROMISCUOUS", "NETFILTER_CFG", "SYSTEM_BOOT",
-    "SYSTEM_SHUTDOWN", "DAEMON_START", "DAEMON_END",
-    "CONFIG_CHANGE", "AVC", "SELINUX_ERR",
-    "CRYPTO_KEY_USER", "CRYPTO_SESSION",
-})
+AUDITD_TYPES = frozenset(
+    {
+        "SYSCALL",
+        "EXECVE",
+        "PATH",
+        "CWD",
+        "PROCTITLE",
+        "USER_AUTH",
+        "USER_ACCT",
+        "CRED_ACQ",
+        "CRED_DISP",
+        "USER_START",
+        "USER_END",
+        "USER_LOGIN",
+        "USER_CMD",
+        "LOGIN",
+        "SERVICE_START",
+        "SERVICE_STOP",
+        "ANOM_PROMISCUOUS",
+        "NETFILTER_CFG",
+        "SYSTEM_BOOT",
+        "SYSTEM_SHUTDOWN",
+        "DAEMON_START",
+        "DAEMON_END",
+        "CONFIG_CHANGE",
+        "AVC",
+        "SELINUX_ERR",
+        "CRYPTO_KEY_USER",
+        "CRYPTO_SESSION",
+    }
+)
 
 # Sysmon channel names
-SYSMON_CHANNELS = frozenset({
-    "Microsoft-Windows-Sysmon/Operational",
-    "Microsoft-Windows-Sysmon",
-})
+SYSMON_CHANNELS = frozenset(
+    {
+        "Microsoft-Windows-Sysmon/Operational",
+        "Microsoft-Windows-Sysmon",
+    }
+)
 
 # ---- Pre-compiled regexes for _looks_like_timestamp ----
-_RE_ISO8601 = re.compile(r'^\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}:\d{2}')
-_RE_DATE_ONLY = re.compile(r'^\d{4}-\d{2}-\d{2}$')
-_RE_SLASH_DATE = re.compile(r'^\d{2}/\d{2}/\d{4}')
+_RE_ISO8601 = re.compile(r"^\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}:\d{2}")
+_RE_DATE_ONLY = re.compile(r"^\d{4}-\d{2}-\d{2}$")
+_RE_SLASH_DATE = re.compile(r"^\d{2}/\d{2}/\d{4}")
 _RE_SYSLOG_TS = re.compile(
-    r'^(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+\d{1,2}\s+\d{2}:\d{2}:\d{2}'
+    r"^(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+\d{1,2}\s+\d{2}:\d{2}:\d{2}"
 )
 
 # ---- Pre-computed sets for _timestamp_field_score ----
-_EXACT_TS_NAMES = frozenset({
-    "systemtime", "utctime", "@timestamp", "timestamp",
-    "timecreated", "eventtime", "_time", "datetime",
-})
+_EXACT_TS_NAMES = frozenset(
+    {
+        "systemtime",
+        "utctime",
+        "@timestamp",
+        "timestamp",
+        "timecreated",
+        "eventtime",
+        "_time",
+        "datetime",
+    }
+)
 _SHORT_TS_NAMES = frozenset({"ts", "dt"})
 
 
@@ -189,6 +231,7 @@ class LogTypeDetector:
         self,
         logger: Optional[logging.Logger] = None,
         timestamp_detection_fields: Optional[List[str]] = None,
+        archive_password: Optional[str] = None,
     ):
         """
         Initialize LogTypeDetector.
@@ -197,13 +240,29 @@ class LogTypeDetector:
             logger: Logger instance (creates default if None)
             timestamp_detection_fields: Ordered list of timestamp field names
                 to try during auto-detection. If None, uses built-in defaults.
+            archive_password: Password for encrypted ZIP/7-Zip archives when
+                sampling content for detection. Enables opening protected
+                archives to determine inner log format.
         """
         self.logger = logger or logging.getLogger(__name__)
-        self._timestamp_fields = tuple(timestamp_detection_fields or [
-            "SystemTime", "UtcTime", "TimeCreated", "@timestamp",
-            "timestamp", "Timestamp", "EventTime", "event_time",
-            "datetime", "DateTime", "_time", "ts",
-        ])
+        self._timestamp_fields = tuple(
+            timestamp_detection_fields
+            or [
+                "SystemTime",
+                "UtcTime",
+                "TimeCreated",
+                "@timestamp",
+                "timestamp",
+                "Timestamp",
+                "EventTime",
+                "event_time",
+                "datetime",
+                "DateTime",
+                "_time",
+                "ts",
+            ]
+        )
+        self._archive_password = archive_password
 
     # ----------------------------------------------------------------
     # Public API
@@ -230,34 +289,62 @@ class LogTypeDetector:
             self.logger.debug(f"Detection: file not found: {file_path}")
             return self._unknown_result(f"File not found: {file_path}")
 
-        ext = file_path.suffix.lower()
+        # Phase 0: Compressed/archived file? Resolve inner extension and sample first.
+        resolved = self._resolve_compressed(file_path)
+        if resolved is not None:
+            _base_ext, sample_bytes, sample_text, sample_lines = resolved
+            if not sample_bytes:
+                return self._fallback_by_extension(
+                    _base_ext,
+                    "File is empty or could not decompress (e.g. password-protected)",
+                )
+            content_result = self._detect_from_content(
+                sample_bytes, sample_text, sample_lines, _base_ext
+            )
+            if content_result:
+                if content_result.timestamp_field is None:
+                    self._enrich_timestamp_from_raw(
+                        content_result, sample_text, sample_bytes
+                    )
+                return content_result
+            fallback = self._fallback_by_extension(
+                _base_ext, "Could not determine format from content"
+            )
+            if fallback.timestamp_field is None:
+                self._enrich_timestamp_from_raw(fallback, sample_text, sample_bytes)
+            return fallback
 
-        # Phase 1: Check magic bytes for binary formats
+        # Phase 1: Plain file — magic bytes then content
         magic_result = self._check_magic_bytes(file_path)
         if magic_result:
             return magic_result
 
-        # Phase 2: Content-based detection
         try:
             sample_bytes, sample_text, sample_lines = self._read_sample(file_path)
         except Exception as e:
             self.logger.debug(f"Detection: cannot read file {file_path}: {e}")
-            return self._fallback_by_extension(ext, f"Cannot read file: {e}")
+            return self._fallback_by_extension(
+                file_path.suffix.lower(), f"Cannot read file: {e}"
+            )
 
         if not sample_bytes:
-            return self._fallback_by_extension(ext, "File is empty")
+            return self._fallback_by_extension(
+                file_path.suffix.lower(), "File is empty"
+            )
 
-        # Phase 2a: Try structured format detection
         content_result = self._detect_from_content(
-            sample_bytes, sample_text, sample_lines, ext
+            sample_bytes, sample_text, sample_lines, file_path.suffix.lower()
         )
         if content_result:
             if content_result.timestamp_field is None:
-                self._enrich_timestamp_from_raw(content_result, sample_text, sample_bytes)
+                self._enrich_timestamp_from_raw(
+                    content_result, sample_text, sample_bytes
+                )
             return content_result
 
-        # Phase 3: Fallback to extension, enriched with raw timestamp scan
-        fallback = self._fallback_by_extension(ext, "Could not determine format from content")
+        fallback = self._fallback_by_extension(
+            file_path.suffix.lower(), "Could not determine format from content"
+        )
         if fallback.timestamp_field is None:
             self._enrich_timestamp_from_raw(fallback, sample_text, sample_bytes)
         return fallback
@@ -330,14 +417,144 @@ class LogTypeDetector:
         return best_key
 
     # ----------------------------------------------------------------
-    # Internal: sampling and magic bytes
+    # Internal: compressed file resolution, then sampling and magic bytes
     # ----------------------------------------------------------------
 
+    def _archive_password_bytes(self) -> Optional[bytes]:
+        """Return archive password as bytes for ZIP/7z APIs, or None."""
+        if self._archive_password is None:
+            return None
+        if isinstance(self._archive_password, str):
+            return self._archive_password.encode()
+        return self._archive_password
+
+    def _resolve_compressed(
+        self, file_path: Path
+    ) -> Optional[Tuple[str, bytes, str, List[str]]]:
+        """
+        If the file is a compressed/archived type (.gz, .bz2, .zip, .7z), resolve
+        the inner extension and decompressed sample for format detection.
+
+        Returns:
+            None if the file is not compressed; otherwise
+            (base_ext, sample_bytes, sample_text, sample_lines) for the inner content.
+            Uses archive_password for ZIP/7-Zip when set.
+        """
+        suffix = file_path.suffix.lower()
+        if suffix not in COMPRESSED_SUFFIXES:
+            return None
+
+        # Step 1: Resolve inner extension (from archive when openable, else from filename)
+        if suffix in (".gz", ".bz2"):
+            base_ext = Path(file_path.stem).suffix.lower()
+        elif suffix == ".zip":
+            try:
+                import zipfile
+
+                with zipfile.ZipFile(file_path, "r") as zf:
+                    members = [m for m in zf.namelist() if not m.endswith("/")]
+                    if members:
+                        base_ext = Path(members[0]).suffix.lower()
+                    else:
+                        base_ext = Path(file_path.stem).suffix.lower()
+            except Exception:
+                base_ext = Path(file_path.stem).suffix.lower()
+        else:
+            assert suffix == ".7z"
+            try:
+                import py7zr
+                from py7zr.exceptions import PasswordRequired
+
+                with py7zr.SevenZipFile(
+                    file_path, "r", password=self._archive_password
+                ) as szf:
+                    names = szf.getnames()
+                    if names:
+                        base_ext = Path(names[0]).suffix.lower()
+                    else:
+                        base_ext = Path(file_path.stem).suffix.lower()
+            except PasswordRequired:
+                raise ValueError(ARCHIVE_PASSWORD_ERROR_MESSAGE) from None
+            except Exception:
+                base_ext = Path(file_path.stem).suffix.lower()
+
+        # Step 2: Decompress and sample (same password used for ZIP/7z)
+        sample_bytes = b""
+        if suffix == ".gz":
+            import gzip
+
+            try:
+                with gzip.open(file_path, "rb") as f:
+                    sample_bytes = f.read(self.SAMPLE_BYTES)
+            except Exception:
+                pass
+        elif suffix == ".bz2":
+            import bz2
+
+            try:
+                with bz2.open(file_path, "rb") as bz2_file:
+                    sample_bytes = bz2_file.read(self.SAMPLE_BYTES)
+            except Exception:
+                pass
+        elif suffix == ".zip":
+            try:
+                import zipfile
+
+                with zipfile.ZipFile(file_path, "r") as zf:
+                    members = [m for m in zf.namelist() if not m.endswith("/")]
+                    if members:
+                        sample_bytes = zf.read(
+                            members[0], pwd=self._archive_password_bytes()
+                        )[: self.SAMPLE_BYTES]
+            except Exception:
+                pass
+        elif suffix == ".7z":
+            try:
+                import io as _io
+                import py7zr
+                from py7zr.exceptions import PasswordRequired
+
+                class _MemFactory:
+                    def __init__(self):
+                        self._buf = None
+
+                    def create(self, fname):
+                        self._buf = _io.BytesIO()
+                        return self._buf
+
+                with py7zr.SevenZipFile(
+                    file_path, "r", password=self._archive_password
+                ) as szf:
+                    names = szf.getnames()
+                    if names:
+                        factory = _MemFactory()
+                        szf.extract(path=None, targets=[names[0]], factory=factory)
+                        if factory._buf is not None:
+                            factory._buf.seek(0)
+                            sample_bytes = factory._buf.read(self.SAMPLE_BYTES)
+            except PasswordRequired:
+                raise ValueError(ARCHIVE_PASSWORD_ERROR_MESSAGE) from None
+            except Exception:
+                pass  # e.g. corrupt or wrong password (LZMAError) — fall back to empty sample
+
+        try:
+            text = sample_bytes.decode("utf-8")
+        except UnicodeDecodeError:
+            text = sample_bytes.decode("iso-8859-1")
+        lines = text.splitlines()[: self.SAMPLE_LINES]
+        return (base_ext, sample_bytes, text, lines)
+
     def _check_magic_bytes(self, file_path: Path) -> Optional[DetectionResult]:
-        """Check file magic bytes for binary format detection."""
+        """Check file magic bytes for binary format detection.
+
+        Compressed files are skipped here — their inner format is detected
+        via content sampling after decompression/extraction in ``_read_sample``.
+        """
+        if file_path.suffix.lower() in COMPRESSED_SUFFIXES:
+            return None
         try:
             with open(file_path, "rb") as f:
-                header = f.read(8)
+                header = f.read(16)
 
             if header[:7] == EVTX_MAGIC[:7]:
                 return DetectionResult(
@@ -348,6 +565,15 @@ class LogTypeDetector:
                     suggested_pipeline="sysmon",
                     details="EVTX binary file detected via magic bytes (ElfFile header)",
                 )
+            if len(header) >= 16 and header[:16] == SQLITE_MAGIC:
+                return DetectionResult(
+                    input_type="sqlite",
+                    log_source="sqlite_db",
+                    confidence="high",
+                    timestamp_field=None,
+                    suggested_pipeline=None,
+                    details="SQLite database file detected via magic bytes",
+                )
         except Exception as e:
             self.logger.debug(f"Detection: magic bytes check failed: {e}")
 
@@ -355,7 +581,9 @@ class LogTypeDetector:
 
     def _read_sample(self, file_path: Path) -> Tuple[bytes, str, List[str]]:
         """
-        Read a sample of the file for content analysis.
+        Read a sample of a plain (non-compressed) file for content analysis.
+
+        Compressed files are handled earlier by _resolve_compressed().
 
         Returns:
             (raw_bytes, decoded_text, first_N_lines)
@@ -363,13 +591,12 @@ class LogTypeDetector:
         with open(file_path, "rb") as f:
             sample_bytes = f.read(self.SAMPLE_BYTES)
 
-        # Decode once — reused by all downstream methods
         try:
             text = sample_bytes.decode("utf-8")
         except UnicodeDecodeError:
             text = sample_bytes.decode("iso-8859-1")
 
-        lines = text.splitlines()[:self.SAMPLE_LINES]
+        lines = text.splitlines()[: self.SAMPLE_LINES]
         return sample_bytes, text, lines
 
     # ----------------------------------------------------------------
@@ -431,8 +658,7 @@ class LogTypeDetector:
         """Check if content matches auditd log format."""
         match = AUDITD_LINE_PATTERN.match  # local ref
         auditd_matches = sum(
-            1 for line in lines[:10]
-            if line.strip() and match(line.strip())
+            1 for line in lines[:10] if line.strip() and match(line.strip())
         )
 
         if auditd_matches >= 2:
@@ -471,7 +697,11 @@ class LogTypeDetector:
                 has_syslog_header = True
                 sysmon_matches += 1
             elif "<Event>" in stripped and "<EventID>" in stripped:
-                if "RuleName" in stripped or "ProcessGuid" in stripped or "UtcTime" in stripped:
+                if (
+                    "RuleName" in stripped
+                    or "ProcessGuid" in stripped
+                    or "UtcTime" in stripped
+                ):
                     sysmon_matches += 1
 
         if sysmon_matches >= 2:
@@ -612,7 +842,9 @@ class LogTypeDetector:
         event_obj = event.get("Event")
         if isinstance(event_obj, dict):
             system_obj = event_obj.get("System")
-            if isinstance(system_obj, dict) and ("Channel" in system_obj or "EventID" in system_obj):
+            if isinstance(system_obj, dict) and (
+                "Channel" in system_obj or "EventID" in system_obj
+            ):
                 channel = system_obj.get("Channel", "")
                 event_data_obj = event_obj.get("EventData")
 
@@ -624,7 +856,10 @@ class LogTypeDetector:
                         timestamp_field="UtcTime",
                         suggested_pipeline="sysmon",
                         details=f"Sysmon Windows JSON detected (channel: {channel})",
-                        metadata={"channel": channel, "has_event_data": bool(event_data_obj)},
+                        metadata={
+                            "channel": channel,
+                            "has_event_data": bool(event_data_obj),
+                        },
                     )
 
                 return DetectionResult(
@@ -634,8 +869,11 @@ class LogTypeDetector:
                     timestamp_field="SystemTime",
                     suggested_pipeline="sysmon",
                     details="Windows Event Log JSON detected"
-                           + (f" (channel: {channel})" if channel else ""),
-                    metadata={"channel": channel, "has_event_data": bool(event_data_obj)},
+                    + (f" (channel: {channel})" if channel else ""),
+                    metadata={
+                        "channel": channel,
+                        "has_event_data": bool(event_data_obj),
+                    },
                 )
 
         # --- Pre-flattened Windows events ---
@@ -661,7 +899,7 @@ class LogTypeDetector:
                 timestamp_field=ts_field or "SystemTime",
                 suggested_pipeline="sysmon",
                 details="Pre-flattened Windows Event Log JSON detected"
-                       + (f" (channel: {channel})" if channel else ""),
+                + (f" (channel: {channel})" if channel else ""),
                 metadata={"channel": channel, "pre_flattened": True},
             )
 
@@ -724,8 +962,11 @@ class LogTypeDetector:
             confidence="medium" if ts_field else "low",
             timestamp_field=ts_field,
             details="Generic JSON format detected"
-                   + (f" (timestamp field: {ts_field})" if ts_field else
-                      " (no timestamp field detected)"),
+            + (
+                f" (timestamp field: {ts_field})"
+                if ts_field
+                else " (no timestamp field detected)"
+            ),
             metadata={"sample_keys": list(event.keys())[:20]},
         )
 
@@ -757,9 +998,7 @@ class LogTypeDetector:
             headers = set(first_row.keys())
 
             # Detect timestamp field from headers
-            ts_field = next(
-                (c for c in self._timestamp_fields if c in headers), None
-            )
+            ts_field = next((c for c in self._timestamp_fields if c in headers), None)
 
             if "Channel" in headers and "EventID" in headers:
                 return DetectionResult(
@@ -768,7 +1007,10 @@ class LogTypeDetector:
                     confidence="high",
                     timestamp_field=ts_field or "SystemTime",
                     details="Windows Event Log CSV format detected",
-                    metadata={"headers": sorted(headers)[:20], "delimiter": dialect.delimiter},
+                    metadata={
+                        "headers": sorted(headers)[:20],
+                        "delimiter": dialect.delimiter,
+                    },
                 )
 
             return DetectionResult(
@@ -777,8 +1019,11 @@ class LogTypeDetector:
                 confidence="medium",
                 timestamp_field=ts_field,
                 details="CSV format detected"
-                       + (f" (timestamp field: {ts_field})" if ts_field else ""),
-                metadata={"headers": sorted(headers)[:20], "delimiter": dialect.delimiter},
+                + (f" (timestamp field: {ts_field})" if ts_field else ""),
+                metadata={
+                    "headers": sorted(headers)[:20],
+                    "delimiter": dialect.delimiter,
+                },
             )
 
         except Exception:
@@ -855,9 +1100,7 @@ class LogTypeDetector:
         matched_key = None
         first_char = sample_text.lstrip()[:1]
         if first_char in ("{", "["):
-            event = self._parse_first_json_event(
-                sample_bytes, first_char == "["
-            )
+            event = self._parse_first_json_event(sample_bytes, first_char == "[")
             if event:
                 matched_key = self._find_key_for_value(event, matched_value)
 

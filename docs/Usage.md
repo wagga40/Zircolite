@@ -19,6 +19,7 @@
 - `jinja2` - For templating
 - `lxml` - For XML input support
 - `psutil` - For memory usage tracking and parallel processing
+- `py7zr` - For reading 7-Zip (`.7z`) archives; optional (ZIP and gzip/bzip2 use the standard library)
 - `pyyaml` - For YAML configuration file parsing
 
 ### Installation from Repository
@@ -35,42 +36,51 @@ pip3 install -r requirements.txt
 
 # EXAMPLE RUN
 git clone https://github.com/sbousseaden/EVTX-ATTACK-SAMPLES.git
-python3 zircolite.py -e EVTX-ATTACK-SAMPLES/ -r rules/rules_windows_sysmon.json
+python3 zircolite.py -e EVTX-ATTACK-SAMPLES/ -r rules/rules_windows_merged.json
 deactivate # Exit the Python virtual environment
 ```
 
-#### Using [PDM](https://pdm-project.org/latest/) or [Poetry](https://python-poetry.org)
+#### Using [PDM](https://pdm-project.org/latest/)
+
+```shell
+# INSTALL (uses pyproject.toml)
+git clone https://github.com/wagga40/Zircolite.git
+cd Zircolite 
+pdm install
+
+# EXAMPLE RUN
+git clone https://github.com/sbousseaden/EVTX-ATTACK-SAMPLES.git
+pdm run python3 zircolite.py -e EVTX-ATTACK-SAMPLES/ -r rules/rules_windows_merged.json
+```
+
+#### Using [Poetry](https://python-poetry.org)
 
 ```shell
 # INSTALL
 git clone https://github.com/wagga40/Zircolite.git
 cd Zircolite 
-pdm init -n
-cat requirements.txt | xargs pdm add
+poetry install
+pip install -r requirements.txt  # if pyproject.toml doesn't cover all deps
 
 # EXAMPLE RUN
 git clone https://github.com/sbousseaden/EVTX-ATTACK-SAMPLES.git
-pdm run python3 zircolite.py -e EVTX-ATTACK-SAMPLES/ -r rules/rules_windows_sysmon.json
+poetry run python3 zircolite.py -e EVTX-ATTACK-SAMPLES/ -r rules/rules_windows_merged.json
 ```
-
-If you use Poetry, replace `pdm` with `poetry` in the commands above.
 
 #### Using [UV](https://docs.astral.sh/uv/)
 
 ```shell
-# INSTALL (UV creates venv and installs from requirements.txt)
+# INSTALL
 git clone https://github.com/wagga40/Zircolite.git
 cd Zircolite 
-uv venv
-source .venv/bin/activate   # Windows: .venv\Scripts\activate
-uv pip install -r requirements.txt
+uv sync
 
 # EXAMPLE RUN
 git clone https://github.com/sbousseaden/EVTX-ATTACK-SAMPLES.git
-uv run python zircolite.py -e EVTX-ATTACK-SAMPLES/ -r rules/rules_windows_sysmon.json
+uv run python zircolite.py -e EVTX-ATTACK-SAMPLES/ -r rules/rules_windows_merged.json
 ```
 
-Alternatively, run Zircolite without activating the venv: `uv run python zircolite.py ...` (UV will use the project venv automatically).
+UV reads `pyproject.toml` and handles the venv automatically. You can also use `uv pip install -r requirements.txt` if you prefer an explicit install.
 
 After installation, you can use [Task](https://taskfile.dev/) for automation (update rules, Docker build, clean): see [Task and Taskfile](README.md#task-and-taskfile) in the [documentation index](README.md).
 
@@ -86,15 +96,15 @@ A minimal first run from clone to results:
    ```
 
 2. **Optional: update rulesets**  
-   The repository includes rules in `rules/` (e.g. `rules_windows_sysmon.json`). To fetch the latest pre-built rules from [Zircolite-Rules-v2](https://github.com/wagga40/Zircolite-Rules-v2), run:
+   The repository includes rules in `rules/` (e.g. `rules_windows_merged.json`). To fetch the latest pre-built rules from [Zircolite-Rules-v2](https://github.com/wagga40/Zircolite-Rules-v2), run:
    ```shell
    python3 zircolite.py -U
    ```
-   After `-U`, rules may be named e.g. `rules_windows_sysmon.json`. See [Rulesets / Rules](Usage.md#rulesets--rules) for naming details.
+   After `-U`, rules may be named e.g. `rules_windows_merged.json`. See [Rulesets / Rules](Usage.md#rulesets--rules) for naming details.
 
 3. **Run on one EVTX**
    ```shell
-   python3 zircolite.py --evtx path/to/sample.evtx --ruleset rules/rules_windows_sysmon.json
+   python3 zircolite.py --evtx path/to/sample.evtx --ruleset rules/rules_windows_merged.json
    ```
 
 4. **Output**  
@@ -114,18 +124,15 @@ python3 zircolite.py --events <LOGS> --ruleset <RULESET>
 
 Where: 
 
-- `--events` is a filename or a directory containing the logs you want to analyze (`--evtx` and `-e` can be used instead of `--events`). Zircolite supports the following formats: EVTX, XML, JSON (one event per line), JSON Array (one large array), EVTXTRACT, CSV, Auditd, and Sysmon for Linux.
+- `--events` is a filename or a directory containing the logs you want to analyze (`--evtx` and `-e` can be used instead of `--events`). Zircolite supports the following formats: EVTX, XML, JSON (one event per line), JSON Array (one large array), EVTXTRACT, CSV, Auditd, and Sysmon for Linux. Logs can also be compressed or archived (gzip, bzip2, ZIP, 7-Zip); see [Compressed and archived logs](Usage.md#compressed-and-archived-logs).
 - `--ruleset` is a file or directory containing the Sigma rules to use for detection. Zircolite has its own format called "Zircolite ruleset" where all the rules are in one JSON file. Zircolite can also use Sigma rules in YAML format directly (YAML file or directory containing YAML files).
 
-Multiple rulesets can be specified, and results can be per-ruleset or combined (with `--combine-rulesets` or `-cr`): 
+Multiple rulesets can be specified:
 
 ```shell
-# Example with a Zircolite ruleset and a Sigma rule. Results will be displayed per-ruleset
-python3 zircolite.py --events sample.evtx --ruleset rules/rules_windows_sysmon.json \
+# Example with a Zircolite ruleset and a Sigma rule
+python3 zircolite.py --events sample.evtx --ruleset rules/rules_windows_merged.json \
     --ruleset schtasks.yml 
-# Example with a Zircolite ruleset and a Sigma rule. Results will be displayed combined 
-python3 zircolite.py --events sample.evtx --ruleset rules/rules_windows_sysmon.json \
-    --ruleset schtasks.yml --combine-rulesets 
 ```
 
 By default: 
@@ -150,6 +157,7 @@ For the full list of options and up-to-date help, run: `python3 zircolite.py -h`
 | `-f`, `--fileext` | File extension of logs to process |
 | `-fp`, `--file-pattern` | Python glob pattern for file selection |
 | `--no-recursion` | Disable recursive directory search |
+| `--archive-password` | Password for encrypted ZIP or 7-Zip archives (used for auto-detect and streaming) |
 
 #### Event Filtering
 
@@ -179,11 +187,11 @@ For the full list of options and up-to-date help, run: `python3 zircolite.py -h`
 | Option | Description |
 |--------|-------------|
 | `-r`, `--ruleset` | Sigma ruleset (JSON or YAML) |
-| `-cr`, `--combine-rulesets` | Merge all rulesets into one |
 | `-sr`, `--save-ruleset` | Save converted ruleset to disk |
 | `-p`, `--pipeline` | Use specified pySigma pipeline |
 | `-pl`, `--pipeline-list` | List installed pipelines |
 | `-R`, `--rulefilter` | Remove rules by title |
+| `--test-rules` | JSON file with rule test cases (true-positive / true-negative); validate rules and exit |
 
 #### Output Options
 
@@ -197,6 +205,7 @@ For the full list of options and up-to-date help, run: `python3 zircolite.py -h`
 | `-l`, `--logfile` | Log file name |
 | `--hashes` | Add xxhash64 to each event |
 | `-L`, `--limit` | Discard results exceeding limit |
+| `--profile-rules` | Time each rule execution and print a performance report at the end (Rule Performance table) |
 
 #### Advanced Configuration
 
@@ -213,6 +222,8 @@ For the full list of options and up-to-date help, run: `python3 zircolite.py -h`
 | `--unified-db` | Force unified database mode (all files in one DB, enables cross-file correlation) |
 | `--no-auto-mode` | Disable automatic processing mode selection |
 | `--no-auto-detect` | Disable automatic log type and timestamp detection |
+| `--add-index` | Create an index on the given column(s); repeat or list multiple (e.g. `--add-index Channel EventID`) |
+| `--remove-index` | Drop the given index name(s) after creation; repeat or list multiple (e.g. `--remove-index idx_channel`) |
 | `--all-transforms` | Enable all defined transforms (overrides enabled_transforms list) |
 | `--transform-category` | Enable transforms by category name (repeatable) |
 | `--transform-list` | List available transform categories and exit |
@@ -233,7 +244,7 @@ For the full list of options and up-to-date help, run: `python3 zircolite.py -h`
 |--------|-------------|
 | `--no-parallel` | Disable automatic parallel processing |
 | `--parallel-workers` | Maximum number of parallel workers (default: auto-detect) |
-| `--parallel-memory-limit` | Memory usage threshold percentage before throttling (default: 75) |
+| `--parallel-memory-limit` | Memory usage threshold percentage before throttling (default: 85) |
 
 Parallel processing includes several automatic optimizations:
 
@@ -251,6 +262,7 @@ Parallel processing includes several automatic optimizations:
 | `--template` | Jinja2 template for output |
 | `--templateOutput` | Output file for template |
 | `--timesketch` | Shortcut: Timesketch template → `timesketch-<RAND>.json` |
+| `--navigator-output` | Shortcut: ATT&CK Navigator layer → `navigator-<RAND>.json` (or optional custom filename) |
 | `--package` | Create ZircoGui package |
 | `--package-dir` | Directory for ZircoGui package |
 
@@ -269,7 +281,7 @@ Zircolite has three output verbosity levels:
 In quiet mode, Zircolite suppresses all non-essential output. Only the final summary panel and error/warning messages are displayed:
 
 ```shell
-python3 zircolite.py --quiet -e logs/ -r rules/rules_windows_sysmon.json
+python3 zircolite.py --quiet -e logs/ -r rules/rules_windows_merged.json
 ```
 
 The log file (if not disabled with `-n`) still captures full details regardless of quiet mode.
@@ -313,6 +325,16 @@ In **per-file mode**, each file's detection table includes the filename as its t
 
 > **Note:** Severity levels are color-coded in terminal output: **CRITICAL** (bold red), **HIGH** (bold magenta), **MEDIUM** (bold yellow), **LOW** (green), **INFORMATIONAL** (dim).
 
+### Rule performance profiling
+
+Use `--profile-rules` to measure how long each rule takes to execute. After the run, Zircolite prints a **Rule Performance** section with a table of rules sorted by elapsed time (slowest first), plus total rule execution time. This helps you identify rules that are slow on your dataset so you can tune or exclude them (e.g. with `--rulefilter`).
+
+```shell
+python3 zircolite.py --evtx logs/ --ruleset rules/rules_windows_merged.json --profile-rules
+```
+
+The report shows the top rules by execution time (milliseconds). Rules taking ≥500 ms are highlighted in red, ≥100 ms in yellow.
+
 ### Sigma Rule Conversion Summary
 
 When converting native Sigma rules (YAML) to Zircolite format, a mini-summary is displayed showing:
@@ -334,6 +356,8 @@ When you point Zircolite at a file or directory without specifying a format flag
 1. **File format** (EVTX binary, JSON/JSONL, XML, CSV, plain text)
 2. **Log source** (Windows EVTX, Sysmon Windows/Linux, Auditd, ECS/Elastic, EVTXtract, etc.)
 3. **Timestamp field** (SystemTime, UtcTime, @timestamp, etc.)
+
+For **compressed or archived files** (`.gz`, `.bz2`, `.zip`, `.7z`), detection first resolves the inner file (decompressing or opening the archive, using `--archive-password` when needed), then applies the phases below to the inner content.
 
 Detection is performed in three phases:
 
@@ -371,7 +395,7 @@ Auto-detection is enabled by default. Simply run Zircolite without a format flag
 
 ```shell
 # Auto-detection identifies the format and timestamp field automatically
-python3 zircolite.py --events logs/ --ruleset rules/rules_windows_sysmon.json
+python3 zircolite.py --events logs/ --ruleset rules/rules_windows_merged.json
 
 # Example output:
 # [+] Auto-detected log type: sysmon_windows (json), confidence=high, timestamp=UtcTime
@@ -410,7 +434,7 @@ If your EVTX files have the extension ".evtx":
 ```shell
 python3 zircolite.py --evtx <EVTX_FOLDER/EVTX_FILE> \
     --ruleset <Converted Sigma ruleset (JSON)/Directory with Sigma rules (YAML)/>
-python3 zircolite.py --evtx ../Logs --ruleset rules/rules_windows_sysmon.json
+python3 zircolite.py --evtx ../Logs --ruleset rules/rules_windows_merged.json
 ```
 
 ### XML Logs
@@ -443,7 +467,7 @@ This produces something like the following (one event per line):
 ```shell
 python3 zircolite.py --events <LOGS_FOLDER_OR_LOG_FILE>  --ruleset <RULESET> --xml
 python3 zircolite.py --events  Microsoft-Windows-SysmonOperational.xml \
-    --ruleset rules/rules_windows_sysmon.json --xml
+    --ruleset rules/rules_windows_merged.json --xml
 ```
 
 ### EVTXtract Logs
@@ -535,6 +559,31 @@ To handle these logs, use the `--csv-input` option (**do not use `--csv`**!):
 python3 zircolite.py --events <LOGS_FOLDER> --ruleset <RULESET> --csv-input
 ```
 
+### Compressed and archived logs
+
+Zircolite can read logs that are compressed or stored in a single-file archive. The **inner** format (EVTX, JSON, XML, etc.) is auto-detected when possible.
+
+| Suffix   | Format   | Notes |
+|----------|----------|--------|
+| `.gz`    | gzip     | Standard library; inner format from filename (e.g. `logs.json.gz` → JSON). |
+| `.bz2`   | bzip2    | Standard library; inner format from filename. |
+| `.zip`   | ZIP      | Single-file ZIP only; inner format from the member name. Encrypted ZIP supported with `--archive-password`. |
+| `.7z`    | 7-Zip    | Requires `py7zr`. Single-file 7z only; inner format from the member name. Encrypted 7z supported with `--archive-password`. |
+
+- **Single-file only**: Archives must contain exactly one file (e.g. one JSONL file inside the ZIP). Multi-file archives are not supported.
+- **Auto-detection**: For `.gz` and `.bz2`, the inner format is inferred from the filename (e.g. `events.json.gz`). For `.zip` and `.7z`, Zircolite opens the archive when possible to read the member name and a sample; if the archive is password-protected and no password is given, it falls back to the filename (e.g. `data.json.7z` → JSON).
+- **Encrypted archives**: Use `--archive-password` with the correct password. The same password is used for auto-detection (so the log type can be determined) and for streaming. If the password is wrong or missing, Zircolite reports: *Wrong or missing archive password. Use --archive-password with the correct password.*
+
+Examples:
+
+```shell
+# Gzip-compressed JSONL (no password)
+python3 zircolite.py --events logs.json.gz --ruleset rules/rules_windows_merged.json
+
+# Password-protected 7-Zip archive containing JSON
+python3 zircolite.py --events export.json.7z --ruleset rules/rules_windows_merged.json --archive-password "yourpassword"
+```
+
 ### SQLite Database Files
 
 Since everything in Zircolite is stored in an in-memory SQLite database, you can choose to save the database on disk for later use with the `--dbfile <db_filename>` option. When processing multiple files, each file's database is saved with a file-specific name.
@@ -544,13 +593,27 @@ python3 zircolite.py --evtx <EVTX_FOLDER> --ruleset <CONVERTED_SIGMA_RULES> \
     --dbfile output.db
 ```
 
-If you need to re-execute Zircolite, you can do so directly using the SQLite database as the EVTX source (with `--evtx <SAVED_SQLITE_DB_PATH>` and `--dbonly`) to avoid converting the EVTX files, post-processing them, and inserting data into the database. **Using this technique can save a lot of time.** 
+If you need to re-execute Zircolite, you can do so directly using the SQLite database as the EVTX source (with `--evtx <SAVED_SQLITE_DB_PATH>` and `--dbonly`) to avoid converting the EVTX files, post-processing them, and inserting data into the database. **Using this technique can save a lot of time.**
+
+#### Database indexes
+
+Zircolite creates an index on the `eventid` column by default. When the logs table has a `Channel` column (Windows EVTX/XML logs), an index on `Channel` is created automatically to speed up rule matching. You can add indexes on other columns with `--add-index` and remove indexes by name with `--remove-index`:
+
+```shell
+# Add indexes on Channel and EventID (if not already present)
+python3 zircolite.py --evtx logs/ --ruleset rules/rules_windows_merged.json --add-index Channel EventID
+
+# Remove the automatic Channel index (e.g. to reduce write time)
+python3 zircolite.py --evtx logs/ --ruleset rules/rules_windows_merged.json --remove-index idx_channel
+```
+
+Index names for `--remove-index` are the SQLite index names (e.g. `idx_eventid`, `idx_channel`, or names from `--add-index` such as `idx_SystemTime`). 
 
 ## Rulesets / Rules
 
 Zircolite has its own ruleset format (JSON). Default rulesets are available in the [rules](https://github.com/wagga40/Zircolite/tree/master/rules/) directory or in the [Zircolite-Rules-v2](https://github.com/wagga40/Zircolite-Rules-v2) repository.
 
-**Ruleset naming:** The repository ships with rules such as `rules_windows_sysmon.json` and `rules_windows_generic.json`. If you run `python3 zircolite.py -U` (or `task update-rules`), rules are updated from Zircolite-Rules-v2 and may be named e.g. `rules_windows_sysmon.json` and `rules_windows_generic.json`. When you omit `--ruleset`, Zircolite defaults to `rules/rules_windows_generic.json` if that file exists; otherwise use a ruleset from `rules/` or run `-U` first.
+**Ruleset naming:** The repository ships with rules such as `rules_windows_merged.json` (Sysmon + generic Windows), `rules_windows_sysmon.json`, and `rules_windows_generic.json`. If you run `python3 zircolite.py -U` (or `task update-rules`), rules are updated from Zircolite-Rules-v2. When you omit `--ruleset`, Zircolite defaults to `rules/rules_windows_generic.json` if that file exists; otherwise use a ruleset from `rules/` or run `-U` first. Examples in this doc use `rules_windows_merged.json` for Windows EVTX.
 
 Zircolite can use native Sigma rules (YAML) by converting them with [pySigma](https://github.com/SigmaHQ/pySigma). Zircolite detects whether the provided rules are in JSON or YAML format and converts YAML rules automatically: 
 
@@ -572,7 +635,59 @@ python3 zircolite.py -e sample.evtx -r schtasks.yml -r ./sigma/rules/windows/pro
 
 ```
 
-By default, detection results are displayed by ruleset. You can group the results with `-cr` or `--combine-rulesets`. In this case, only one list will be displayed.
+## Rule testing
+
+You can validate a ruleset against a set of test cases without processing real log files. This is useful for regression testing when you change rules or field mappings, or for CI/CD.
+
+Use `--test-rules` with a JSON file that defines, per rule, which events must trigger the rule (true positives) and which must not (true negatives). Zircolite runs the rules against these events and exits after printing a results table. No `--evtx` or `--events` input is required.
+
+```bash
+python3 zircolite.py --ruleset rules/rules_windows_merged.json --test-rules rule_tests.json
+```
+
+### Test file format
+
+The test file must be a JSON array. Each element describes tests for one rule and is matched to a rule by **title** or **id** (at least one of `title` or `id` is required).
+
+| Field | Description |
+|-------|-------------|
+| `title` | Rule title (matched against the ruleset) |
+| `id` | Rule ID (matched against the ruleset) |
+| `true_positive` | Array of event objects that **must** trigger the rule (at least one match expected) |
+| `true_negative` | Array of event objects that **must not** trigger the rule (zero matches expected) |
+
+Each event in `true_positive` and `true_negative` is a flat key-value object. Keys are column names as they appear in the SQLite `logs` table (e.g. after field mappings). Use the same field names your rules expect (e.g. `CommandLine`, `Image`, `EventID`).
+
+Example:
+
+```json
+[
+  {
+    "title": "Detect PowerShell",
+    "id": "ps-001",
+    "true_positive": [
+      { "CommandLine": "powershell.exe -c Get-Process", "EventID": "4688" }
+    ],
+    "true_negative": [
+      { "CommandLine": "notepad.exe document.txt", "EventID": "4688" }
+    ]
+  },
+  {
+    "id": "cmd-001",
+    "true_positive": [
+      { "CommandLine": "cmd.exe /c whoami", "EventID": "4688" }
+    ],
+    "true_negative": []
+  }
+]
+```
+
+### Results
+
+- **True-positive test**: Passes if the rule matches at least one of the given events; fails otherwise (false negative).
+- **True-negative test**: Passes if the rule matches none of the given events; fails if it matches any (false positive).
+
+Rules that have no corresponding entry in the test file are reported as “no test case” (skipped). The summary shows counts for passed, failed, and skipped rules. Exit code is `0`; check the table for any failed tests.
 
 ## Pipelines 
 
@@ -1288,7 +1403,7 @@ docker build . -t <Image name>
 docker container run --tty \
     --volume <Logs folder>:/case
     wagga40/zircolite:latest \
-    --ruleset rules/rules_windows_sysmon.json \
+    --ruleset rules/rules_windows_merged.json \
     --events /case \
     --outfile /case/detected_events.json
 ```
@@ -1311,7 +1426,7 @@ docker run --rm --tty \
     -v <EVTX folder>:/case/input:ro \
     -v <Results folder>:/case/output \
     wagga40/zircolite:latest \
-    --ruleset rules/rules_windows_sysmon.json \
+    --ruleset rules/rules_windows_merged.json \
     --events /case/input \
     -o /case/output/detected_events.json
 ```
@@ -1323,8 +1438,8 @@ You can use the Docker image available on [Docker Hub](https://hub.docker.com/r/
 ```shell
 docker container run --tty \
     --volume <EVTX folder>:/case docker.io/wagga40/zircolite:latest \
-    --ruleset rules/rules_windows_sysmon.json \
-    --evtx /case --outfile /case/detected_events.json
+    --ruleset rules/rules_windows_merged.json \
+    --events /case --outfile /case/detected_events.json
 ```
 
 ## Troubleshooting
@@ -1338,7 +1453,7 @@ docker container run --tty \
 | **Out of memory on large datasets** | Use `--no-parallel`, `--no-auto-mode`; reduce `--parallel-workers`. |
 | **EVTX library (pyevtx-rs) fails to install** | On some systems (Mac, ARM), install Rust and Cargo first; see [Requirements and Installation](Usage.md#requirements-and-installation). |
 | **No detections / rules not matching** | Ensure ruleset matches your log source (e.g. Sysmon vs generic Windows); check that field names in your logs align with what the rules expect. |
-| **Ruleset file not found** | Default rulesets may be named `rules_windows_sysmon.json` (in repo) or `rules_windows_sysmon.json` (after `-U`). Use `python3 zircolite.py -U` to update rules from Zircolite-Rules-v2. |
+| **Ruleset file not found** | Default rulesets are in `rules/` (e.g. `rules_windows_merged.json`). If missing, run `python3 zircolite.py -U` to download them from Zircolite-Rules-v2. |
 
 ### Getting help
 
@@ -1353,13 +1468,13 @@ docker container run --tty \
 Rules only match if your log fields align with what the rule expects. Ensure the ruleset matches your log source (e.g. Sysmon rules for Sysmon EVTX; generic Windows rules for Security/System EVTX). Check that the timestamp field is correct (`--timefield` if auto-detection is wrong).
 
 **What is the difference between EVTX rules and JSON/generic rules?**  
-Rulesets like `rules_windows_sysmon.json` target Sysmon EVTX (process creation, network, etc.). Rules like `rules_windows_generic.json` target Windows event logs without Sysmon rewriting (Security, System, etc.). Use the ruleset that matches your log source.
+`rules_windows_merged.json` covers both Sysmon and generic Windows channels. `rules_windows_sysmon.json` targets Sysmon EVTX only (process creation, network, etc.). `rules_windows_generic.json` targets Windows event logs without Sysmon (Security, System, etc.). Use the ruleset that matches your log source; for mixed or unknown Windows logs, prefer `rules_windows_merged.json`.
 
 **When should I use unified mode vs per-file mode?**  
 Use **unified mode** (`--unified-db`) when you need cross-file correlation (e.g. one rule matching events from multiple logs). Use **per-file mode** (default, or `--no-auto-mode`) when you have many or large files and want lower memory use and parallel processing. Zircolite auto-selects based on file count and size unless you override with `--no-auto-mode` or `--unified-db`.
 
-**Which ruleset file should I use: `rules_windows_sysmon.json` or `rules_windows_sysmon.json`?**  
-The repository ships with `rules_windows_sysmon.json` (and similar). Running `python3 zircolite.py -U` (or `task update-rules`) fetches rules from Zircolite-Rules-v2. Use whichever file exists in your `rules/` directory; both are valid Zircolite rulesets.
+**Which ruleset should I use: Sysmon, generic, or merged?**  
+Prefer `rules_windows_merged.json` for most Windows EVTX (Sysmon and/or other channels). Use `rules_windows_sysmon.json` for Sysmon-only logs, or `rules_windows_generic.json` for standard Windows logs (Security, System, etc.) without Sysmon. Each variant also has `_high` (high severity and above) and `_medium` (medium and above) versions. Run `python3 zircolite.py -U` (or `task update-rules`) to fetch the latest rulesets from Zircolite-Rules-v2.
 
 **Where is the full CLI reference?**  
 Run `python3 zircolite.py -h` for the complete, up-to-date list of options. The [Command-Line Options Summary](Usage.md#command-line-options-summary) in this doc is a condensed reference.

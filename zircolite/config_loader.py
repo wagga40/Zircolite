@@ -9,6 +9,7 @@ This module provides:
 - Default value handling
 """
 
+import argparse
 import logging
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -37,7 +38,6 @@ class RulesConfig:
     rulesets: List[str] = field(default_factory=lambda: ["rules/rules_windows_generic.json"])
     pipelines: Optional[List[str]] = None
     filters: Optional[List[str]] = None  # Rule title filters to exclude
-    combine_rulesets: bool = False
     save_ruleset: bool = False
 
 
@@ -71,6 +71,8 @@ class ProcessingConfig:
     remove_events: bool = False
     all_transforms: bool = False
     transform_categories: Optional[list] = None
+    add_index: Optional[List[str]] = None
+    remove_index: Optional[List[str]] = None
 
 
 @dataclass
@@ -86,7 +88,7 @@ class ParallelProcessingConfig:
     enabled: bool = False
     max_workers: Optional[int] = None  # None = auto-detect
     min_workers: int = 1
-    memory_limit_percent: float = 75.0
+    memory_limit_percent: float = 85.0
     adaptive: bool = True
 
 
@@ -184,7 +186,6 @@ class ConfigLoader:
                 rulesets=rulesets,
                 pipelines=rules.get('pipelines'),
                 filters=rules.get('filters'),
-                combine_rulesets=rules.get('combine_rulesets', False),
                 save_ruleset=rules.get('save_ruleset', False)
             )
         
@@ -223,6 +224,8 @@ class ConfigLoader:
                 remove_events=proc.get('remove_events', False),
                 all_transforms=proc.get('all_transforms', False),
                 transform_categories=proc.get('transform_categories'),
+                add_index=proc.get('add_index'),
+                remove_index=proc.get('remove_index'),
             )
         
         # Parse time_filter section
@@ -240,7 +243,7 @@ class ConfigLoader:
                 enabled=par.get('enabled', False),
                 max_workers=par.get('max_workers'),
                 min_workers=par.get('min_workers', 1),
-                memory_limit_percent=par.get('memory_limit_percent', 75.0),
+                memory_limit_percent=par.get('memory_limit_percent', 85.0),
                 adaptive=par.get('adaptive', True)
             )
         
@@ -272,8 +275,13 @@ class ConfigLoader:
         issues = []
         
         # Validate input
-        if config.input.path and not Path(config.input.path).exists():
-            issues.append(f"Input path does not exist: {config.input.path}")
+        if config.input.path:
+            if isinstance(config.input.path, str) and not Path(config.input.path).exists():
+                issues.append(f"Input path does not exist: {config.input.path}")
+            elif isinstance(config.input.path, list):
+                for p in config.input.path:
+                    if not Path(p).exists():
+                        issues.append(f"Input path does not exist: {p}")
         
         valid_formats = ['evtx', 'json', 'json_array', 'xml', 'csv', 'sysmon_linux', 'auditd', 'evtxtract']
         if config.input.format not in valid_formats:
@@ -322,7 +330,9 @@ class ConfigLoader:
         
         return issues
 
-    def merge_with_args(self, config: ZircoliteConfig, args) -> ZircoliteConfig:
+    def merge_with_args(
+        self, config: ZircoliteConfig, args: argparse.Namespace
+    ) -> ZircoliteConfig:
         """
         Merge YAML config with CLI arguments. CLI arguments take precedence.
         
@@ -372,8 +382,6 @@ class ConfigLoader:
             config.rules.pipelines = [p for pl in args.pipeline for p in pl]
         if hasattr(args, 'rulefilter') and args.rulefilter:
             config.rules.filters = [f for fl in args.rulefilter for f in fl]
-        if hasattr(args, 'combine_rulesets') and args.combine_rulesets:
-            config.rules.combine_rulesets = True
         if hasattr(args, 'save_ruleset') and args.save_ruleset:
             config.rules.save_ruleset = True
         
@@ -388,7 +396,10 @@ class ConfigLoader:
             # Convert template list format
             config.output.templates = []
             for i, tmpl in enumerate(args.template):
-                output = args.templateOutput[i][0] if args.templateOutput else f"output_{i}.txt"
+                if args.templateOutput and i < len(args.templateOutput) and args.templateOutput[i]:
+                    output = args.templateOutput[i][0]
+                else:
+                    output = f"output_{i}.txt"
                 config.output.templates.append({'template': tmpl[0], 'output': output})
         if hasattr(args, 'package') and args.package:
             config.output.package = True
@@ -424,7 +435,11 @@ class ConfigLoader:
             config.processing.all_transforms = True
         if hasattr(args, 'transform_categories') and args.transform_categories:
             config.processing.transform_categories = args.transform_categories
-        
+        if getattr(args, 'add_index', None):
+            config.processing.add_index = [x for group in args.add_index for x in group]
+        if getattr(args, 'remove_index', None):
+            config.processing.remove_index = [x for group in args.remove_index for x in group]
+
         # Time filter overrides
         if hasattr(args, 'after') and args.after != '1970-01-01T00:00:00':
             config.time_filter.after = args.after
@@ -440,7 +455,7 @@ class ConfigLoader:
         return config
 
 
-def create_default_config_file(output_path: str = "zircolite_config.yaml"):
+def create_default_config_file(output_path: str = "zircolite_config.yaml") -> None:
     """
     Create a default configuration file with all options documented.
     
@@ -487,9 +502,6 @@ rules:
   
   # Rule title filters (exclude rules matching these strings)
   filters: null  # Example: ["Noisy Rule", "Test"]
-  
-  # Combine all rulesets into one
-  combine_rulesets: false
   
   # Save converted ruleset to disk
   save_ruleset: false
@@ -586,7 +598,7 @@ parallel:
   min_workers: 1
   
   # Memory usage threshold to trigger throttling (percent)
-  memory_limit_percent: 75.0
+  memory_limit_percent: 85.0
   
   # Dynamically adjust workers based on memory usage
   adaptive: true
