@@ -79,6 +79,7 @@ htmlcov/
 .tmp/
 .temp/
 tests/external
+.coverage
 
 # PyInstaller
 dist/
