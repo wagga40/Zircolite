@@ -14,7 +14,6 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from zircolite import (
     ZircoliteCore,
-    StreamingEventProcessor,
     EvtxExtractor,
     TemplateEngine,
     ProcessingConfig,
@@ -114,6 +113,7 @@ class TestFullPipelineJSON:
         zircore.close()
 
 
+@pytest.mark.integration
 class TestFullPipelineCSV:
     """Integration tests for CSV input processing."""
     
@@ -151,6 +151,7 @@ class TestFullPipelineCSV:
         zircore.close()
 
 
+@pytest.mark.integration
 class TestFullPipelineAuditd:
     """Integration tests for Auditd log processing."""
     
@@ -191,6 +192,7 @@ type=SYSCALL msg=audit(1705318202.789:458): arch=c000003e syscall=59 success=yes
         extractor.cleanup()
 
 
+@pytest.mark.integration
 class TestMultipleFileProcessing:
     """Integration tests for processing multiple files."""
     
@@ -241,6 +243,7 @@ class TestMultipleFileProcessing:
         zircore.close()
 
 
+@pytest.mark.integration
 class TestDetectionToTemplate:
     """Integration tests for detection to template pipeline."""
     
@@ -296,6 +299,7 @@ Alert: {{ elem.title }} ({{ elem.rule_level }})
         zircore.close()
 
 
+@pytest.mark.integration
 class TestDatabasePersistence:
     """Integration tests for database persistence."""
     
@@ -348,6 +352,7 @@ class TestDatabasePersistence:
         zircore2.close()
 
 
+@pytest.mark.integration
 class TestCSVOutput:
     """Integration tests for CSV output."""
     
@@ -401,6 +406,7 @@ class TestCSVOutput:
         csv_core.close()
 
 
+@pytest.mark.integration
 class TestRuleFiltering:
     """Integration tests for rule filtering."""
     
@@ -427,6 +433,7 @@ class TestRuleFiltering:
         zircore.close()
 
 
+@pytest.mark.integration
 class TestTimeFiltering:
     """Integration tests for time-based filtering."""
     
@@ -470,6 +477,7 @@ class TestTimeFiltering:
         zircore.close()
 
 
+@pytest.mark.integration
 class TestHashGeneration:
     """Integration tests for hash generation."""
     
@@ -502,6 +510,7 @@ class TestHashGeneration:
         zircore.close()
 
 
+@pytest.mark.integration
 class TestResultLimiting:
     """Integration tests for result limiting."""
     
@@ -555,6 +564,7 @@ class TestResultLimiting:
         zircore.close()
 
 
+@pytest.mark.integration
 class TestErrorHandling:
     """Integration tests for error handling."""
     
@@ -601,5 +611,130 @@ class TestErrorHandling:
             detections = json.loads(f.read())
         
         assert detections == []
-        
+
+        zircore.close()
+
+
+@pytest.mark.integration
+@pytest.mark.requires_lxml
+class TestFullPipelineXML:
+    """Integration tests for XML event processing end-to-end."""
+
+    def test_xml_extraction_to_detection(
+        self, tmp_path, test_logger, default_args_config, minimal_field_mappings, sample_ruleset
+    ):
+        """Test complete pipeline: XML file → extraction → streaming → detection."""
+        config_file = tmp_path / "config.json"
+        config_file.write_text(json.dumps(minimal_field_mappings))
+
+        xml_content = (
+            '<?xml version="1.0" encoding="utf-8"?>\n'
+            '<Events>\n'
+            '<Event xmlns="http://schemas.microsoft.com/win/2004/08/events/event">\n'
+            '    <System>\n'
+            '        <EventID>1</EventID>\n'
+            '        <Channel>Microsoft-Windows-Sysmon/Operational</Channel>\n'
+            '        <Computer>TESTHOST</Computer>\n'
+            '        <TimeCreated SystemTime="2024-06-01T12:00:00.000Z"/>\n'
+            '    </System>\n'
+            '    <EventData>\n'
+            '        <Data Name="CommandLine">powershell.exe -encodedCommand abc</Data>\n'
+            '        <Data Name="Image">C:\\Windows\\System32\\powershell.exe</Data>\n'
+            '        <Data Name="User">TESTHOST\\admin</Data>\n'
+            '    </EventData>\n'
+            '</Event>\n'
+            '</Events>'
+        )
+
+        xml_file = tmp_path / "events.xml"
+        xml_file.write_text(xml_content)
+
+        # Extract XML to JSON
+        ext_config = ExtractorConfig(xml_logs=True)
+        extractor = EvtxExtractor(extractor_config=ext_config, logger=test_logger)
+        extractor.run(str(xml_file))
+
+        json_files = list(Path(extractor.tmpDir).glob("*.json"))
+        assert len(json_files) == 1
+
+        # Stream extracted JSON through ZircoliteCore
+        default_args_config.xml_input = True
+        proc_config = ProcessingConfig(disable_progress=True)
+        zircore = ZircoliteCore(
+            config=str(config_file),
+            processing_config=proc_config,
+            logger=test_logger,
+        )
+        total = zircore.run_streaming(
+            [str(json_files[0])],
+            input_type='json',
+            args_config=default_args_config,
+            disable_progress=True,
+        )
+        assert total == 1
+
+        # Run detection
+        zircore.load_ruleset_from_var(sample_ruleset, rule_filters=None)
+        output_file = str(tmp_path / "detections.json")
+        zircore.execute_ruleset(output_file, write_mode='w', last_ruleset=True)
+
+        assert Path(output_file).exists()
+        with open(output_file) as f:
+            detections = json.loads(f.read())
+
+        titles = [d["title"] for d in detections]
+        assert any("PowerShell" in t for t in titles)
+
+        extractor.cleanup()
+        zircore.close()
+
+
+@pytest.mark.integration
+class TestFullPipelineAuditdDetection:
+    """Integration tests for Auditd log processing with detection."""
+
+    def test_auditd_extraction_and_detection(
+        self, tmp_path, test_logger, default_args_config, minimal_field_mappings
+    ):
+        """Test complete pipeline: Auditd log → extraction → streaming → detection."""
+        config_file = tmp_path / "config.json"
+        config_file.write_text(json.dumps(minimal_field_mappings))
+
+        auditd_file = tmp_path / "audit.log"
+        auditd_file.write_text(
+            'type=SYSCALL msg=audit(1705318200.123:456): arch=c000003e syscall=59 '
+            'success=yes exit=0 pid=5678 uid=0 comm="bash" exe="/bin/bash"\n'
+            'type=SYSCALL msg=audit(1705318201.456:457): arch=c000003e syscall=59 '
+            'success=yes exit=0 pid=5679 uid=0 comm="curl" exe="/usr/bin/curl"\n'
+        )
+
+        # Extract auditd to JSON
+        ext_config = ExtractorConfig(auditd_logs=True)
+        extractor = EvtxExtractor(extractor_config=ext_config, logger=test_logger)
+        extractor.run(str(auditd_file))
+
+        json_files = list(Path(extractor.tmpDir).glob("*.json"))
+        assert len(json_files) == 1
+
+        # Stream extracted events into ZircoliteCore
+        default_args_config.auditd_input = True
+        proc_config = ProcessingConfig(disable_progress=True)
+        zircore = ZircoliteCore(
+            config=str(config_file),
+            processing_config=proc_config,
+            logger=test_logger,
+        )
+        total = zircore.run_streaming(
+            [str(json_files[0])],
+            input_type='json',
+            args_config=default_args_config,
+            disable_progress=True,
+        )
+        assert total == 2
+
+        # Verify events reached the database
+        results = zircore.execute_select_query("SELECT COUNT(*) as cnt FROM logs")
+        assert results[0]['cnt'] == 2
+
+        extractor.cleanup()
         zircore.close()

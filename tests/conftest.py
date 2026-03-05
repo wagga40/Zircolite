@@ -4,6 +4,7 @@ Shared pytest fixtures for Zircolite test suite.
 
 import json
 import os
+import time
 import pytest
 import shutil
 import sqlite3
@@ -505,8 +506,10 @@ def default_args_config():
         fileext=None,
         file_pattern=None,
         no_recursion=False,
+        archive_password=None,
         after="1970-01-01T00:00:00",
         before="9999-12-12T23:59:59",
+        no_event_filter=False,
         json_input=False,
         json_array_input=False,
         db_input=False,
@@ -517,28 +520,45 @@ def default_args_config():
         csv_input=False,
         logs_encoding=None,
         ruleset=["rules/rules_windows_generic.json"],
-        combine_rulesets=False,
         save_ruleset=False,
         pipeline=None,
         pipeline_list=False,
         rulefilter=None,
+        test_rules=None,
         outfile="detected_events.json",
         csv=False,
         csv_delimiter=";",
         keepflat=False,
+        profile_rules=False,
         dbfile=None,
         logfile="zircolite.log",
         hashes=False,
         limit=-1,
         config="config/config.yaml",
+        quiet=False,
         debug=False,
         nolog=True,
         remove_events=False,
         update_rules=False,
         version=False,
         timefield="SystemTime",
+        unified_db=False,
+        no_auto_mode=False,
+        no_auto_detect=False,
+        add_index=[],
+        remove_index=[],
+        all_transforms=False,
+        transform_categories=None,
+        transform_list=False,
+        yaml_config=None,
+        generate_config=None,
+        no_parallel=False,
+        parallel_workers=None,
+        parallel_memory_limit=85.0,
         template=None,
         templateOutput=None,
+        timesketch=False,
+        navigator_output=None,
         package=False,
         package_dir=""
     )
@@ -694,6 +714,22 @@ def _cleanup_artifacts(directory: Path):
                 pass
 
 
+def pytest_runtest_setup(item):
+    """Skip tests with optional-library markers when the library is unavailable."""
+    import importlib.util
+    for marker in item.iter_markers():
+        if marker.name == "requires_lxml" and importlib.util.find_spec("lxml") is None:
+            pytest.skip("lxml not installed")
+        if marker.name == "requires_evtx" and importlib.util.find_spec("evtx") is None:
+            pytest.skip("evtx not installed")
+        if marker.name == "requires_py7zr" and importlib.util.find_spec("py7zr") is None:
+            pytest.skip("py7zr not installed")
+        if marker.name == "requires_sigma":
+            for mod in ("sigma", "sigma.backends.sqlite"):
+                if importlib.util.find_spec(mod) is None:
+                    pytest.skip(f"{mod} not installed")
+
+
 @pytest.fixture(autouse=True)
 def cleanup_test_artifacts():
     """
@@ -729,3 +765,40 @@ def cleanup_test_artifacts():
     # Also clean from test start directory if different
     if test_start_cwd != _ORIGINAL_CWD:
         _cleanup_artifacts(Path(test_start_cwd))
+
+
+# =============================================================================
+# ProcessingContext Factory Fixture
+# =============================================================================
+
+@pytest.fixture
+def make_processing_context(field_mappings_file, test_logger, tmp_path):
+    """Factory fixture for creating ProcessingContext instances with sensible defaults."""
+    from zircolite.processing import ProcessingContext
+    from zircolite.utils import MemoryTracker
+
+    def _make(**overrides):
+        defaults = dict(
+            config=field_mappings_file,
+            logger=test_logger,
+            no_output=True,
+            events_after=time.strptime("1970-01-01T00:00:00", "%Y-%m-%dT%H:%M:%S"),
+            events_before=time.strptime("9999-12-12T23:59:59", "%Y-%m-%dT%H:%M:%S"),
+            limit=-1,
+            csv_mode=False,
+            time_field="SystemTime",
+            hashes=False,
+            db_location=":memory:",
+            delimiter=";",
+            rulesets=[],
+            rule_filters=None,
+            outfile=str(tmp_path / "detected_events.json"),
+            ready_for_templating=False,
+            package=False,
+            dbfile=None,
+            keepflat=False,
+            memory_tracker=MemoryTracker(logger=test_logger),
+        )
+        defaults.update(overrides)
+        return ProcessingContext(**defaults)
+    return _make

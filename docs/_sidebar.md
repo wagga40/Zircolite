@@ -4,8 +4,9 @@
     * [Basic usage](Usage.md#basic-usage)
     * [Automatic Log Type Detection](Usage.md#automatic-log-type-detection)
     * [Rulesets / Rules](Usage.md#rulesets--rules)
+    * [Rule testing](Usage.md#rule-testing)
     * [Pipelines](Usage.md#pipelines)
-    * [Field mappings, field exclusions, value exclusions, field aliases and field splitting](Usage.md#field-mappings-field-exclusions-value-exclusions-field-aliases-and-field-splitting)
+    * [Field mappings, exclusions, aliases and splitting](Usage.md#field-mappings-field-exclusions-value-exclusions-field-aliases-and-field-splitting)
     * [Field Transforms](Usage.md#field-transforms)
     * [Generate your own rulesets](Usage.md#generate-your-own-rulesets)
     * [Docker](Usage.md#docker)
@@ -13,14 +14,21 @@
     * [FAQ](Usage.md#faq)
 
 * Advanced use
+    * [Field Transforms](Advanced.md#field-transforms)
+    * [Transform Categories](Advanced.md#transform-categories)
+    * [Available Transforms](Advanced.md#available-transforms)
+    * [Transform Output Values Reference](Advanced.md#transform-output-values-reference)
+    * [Transform Examples](Advanced.md#transform-examples)
     * [Working with large datasets](Advanced.md#working-with-large-datasets)
     * [Automatic Processing Optimization](Advanced.md#automatic-processing-optimization)
     * [Parallel Processing](Advanced.md#parallel-processing)
     * [Streaming Mode](Advanced.md#streaming-mode)
+    * [Early Event Filtering](Advanced.md#early-event-filtering)
     * [Keep data used by Zircolite](Advanced.md#keeping-data-used-by-zircolite)
     * [Filtering](Advanced.md#filtering)
     * [Templating and Formatting](Advanced.md#templating-and-formatting)
     * [Mini GUI](Advanced.md#mini-gui)
+    * [Other Tools](Advanced.md#other-tools)
 
 * Internals
     * [Zircolite architecture](Internals.md#zircolite-architecture)

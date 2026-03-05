@@ -25,6 +25,8 @@ from zircolite.console import (
     print_file,
     print_count,
     print_detection,
+    print_rule_test_results,
+    print_profiling_report,
     DetectionStats,
     ProcessingStats,
     ZircoliteConsole,
@@ -37,9 +39,15 @@ from zircolite.console import (
     build_attack_summary,
     build_detection_table,
     make_file_link,
-    LEVEL_PRIORITY,
     console,
 )
+
+
+@pytest.fixture(autouse=True)
+def reset_quiet_mode_after_test():
+    """Reset quiet mode after each test to avoid cross-test leakage."""
+    yield
+    set_quiet_mode(False)
 
 
 # =============================================================================
@@ -76,16 +84,16 @@ class TestBannerAndSection:
     def test_print_banner_visible_when_not_quiet(self):
         set_quiet_mode(False)
         with console.capture() as capture:
-            print_banner("3.3.0")
+            print_banner("3.5.0")
         out = capture.get()
         assert "Standalone Sigma" in out or "Sigma" in out
-        assert "3.3.0" in out
+        assert "3.5.0" in out
 
     def test_print_banner_suppressed_when_quiet(self):
         set_quiet_mode(True)
         try:
             with console.capture() as capture:
-                print_banner("3.3.0")
+                print_banner("3.5.0")
             assert capture.get() == ""
         finally:
             set_quiet_mode(False)
@@ -899,3 +907,89 @@ class TestMakeFileLink:
         # An empty path should still produce markup without crashing
         result = make_file_link("")
         assert isinstance(result, str)
+
+
+# =============================================================================
+# print_rule_test_results
+# =============================================================================
+
+
+class TestPrintRuleTestResults:
+    """Tests for print_rule_test_results."""
+
+    def test_all_pass(self):
+        results = [
+            {"title": "Rule A", "id": "r1", "tp_pass": True, "tn_pass": True},
+            {"title": "Rule B", "id": "r2", "tp_pass": True, "tn_pass": True},
+        ]
+        with console.capture() as capture:
+            print_rule_test_results(results)
+        out = capture.get()
+        assert "Rule A" in out
+        assert "Rule B" in out
+        assert "Passed: 2" in out or "Passed:" in out
+
+    def test_partial_failure(self):
+        results = [
+            {"title": "Pass", "id": "r1", "tp_pass": True, "tn_pass": True},
+            {"title": "Fail", "id": "r2", "tp_pass": False, "tn_pass": True, "error": "TP=0"},
+        ]
+        with console.capture() as capture:
+            print_rule_test_results(results)
+        out = capture.get()
+        assert "Pass" in out
+        assert "Fail" in out
+        assert "Failed:" in out or "Failed" in out
+
+    def test_no_test_case(self):
+        results = [
+            {"title": "NoCase", "id": "r1", "tp_pass": None, "tn_pass": None, "error": "no test case"},
+        ]
+        with console.capture() as capture:
+            print_rule_test_results(results)
+        out = capture.get()
+        assert "NoCase" in out
+        assert "no test case" in out
+
+    def test_empty_results(self):
+        with console.capture() as capture:
+            print_rule_test_results([])
+        out = capture.get()
+        assert "No test results" in out or "no test results" in out.lower()
+
+
+# =============================================================================
+# print_profiling_report
+# =============================================================================
+
+
+class TestPrintProfilingReport:
+    """Tests for print_profiling_report."""
+
+    def test_basic_report(self):
+        report = [
+            {"title": "Rule A", "elapsed_ms": 50.0},
+            {"title": "Rule B", "elapsed_ms": 120.0},
+        ]
+        with console.capture() as capture:
+            print_profiling_report(report)
+        out = capture.get()
+        assert "Rule A" in out
+        assert "Rule B" in out
+        assert "50" in out or "120" in out
+        assert "Total" in out or "total" in out.lower()
+
+    def test_top_n_limit(self):
+        report = [{"title": f"SlowRule{i}", "elapsed_ms": 10.0 * i} for i in range(30)]
+        with console.capture() as capture:
+            print_profiling_report(report, top_n=5)
+        out = capture.get()
+        assert "SlowRule0" in out
+        assert "SlowRule4" in out
+        assert "SlowRule5" not in out
+
+    def test_empty_report(self):
+        with console.capture() as capture:
+            print_profiling_report([])
+        out = capture.get()
+        assert "No profiling" in out or "no profiling" in out.lower()

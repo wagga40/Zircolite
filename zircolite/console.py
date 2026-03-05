@@ -17,7 +17,6 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from rich.bar import Bar
-from rich.columns import Columns
 from rich.console import Console, Group
 from rich.live import Live
 from rich.logging import RichHandler
@@ -33,7 +32,6 @@ from rich.progress import (
     TimeRemainingColumn,
 )
 from rich.rule import Rule
-from rich.syntax import Syntax
 from rich.table import Table
 from rich.text import Text
 from rich.theme import Theme
@@ -228,7 +226,7 @@ def print_error(message: str):
 def print_file(label: str, path: str):
     """Print a file path with label. Suppressed in quiet mode."""
     if not _quiet_mode:
-        console.print(f"[cyan]\\[+][/] {label}: [cyan]{path}[/]")
+        console.print(f"[cyan]\\[+][/] {label}: {make_file_link(path)}")
 
 
 def print_count(label: str, count: int, style: str = "magenta"):
@@ -832,7 +830,9 @@ def _format_file_node(fs: Dict[str, Any]) -> str:
     det_label = "detection" if detections == 1 else "detections"
     det_text = f"[{det_style}]{detections} {det_label}[/]"
 
-    parts = [f"[cyan]{name}[/]", f"[magenta]{events:,}[/] events", det_text]
+    full_path = fs.get("path")
+    name_markup = make_file_link(full_path, name) if full_path else f"[cyan]{name}[/]"
+    parts = [name_markup, f"[magenta]{events:,}[/] events", det_text]
     if filtered > 0:
         parts.append(f"[dim]{filtered:,} filtered[/]")
 
@@ -1084,7 +1084,107 @@ def build_detection_table(results: List[Dict[str, Any]], title: Optional[str] = 
 # TERMINAL HYPERLINKS
 # ============================================================================
 
-def make_file_link(path: str) -> str:
+def print_rule_test_results(results: List[Dict[str, Any]]) -> None:
+    """Print rule test results as a Rich table.
+
+    Args:
+        results: List returned by ``ZircoliteCore.run_rule_tests()``.
+    """
+    if not results:
+        console.print("[dim]No test results to display.[/]")
+        return
+
+    table = Table(
+        title="[bold]Rule Test Results[/]",
+        show_header=True,
+        header_style="bold",
+        border_style="dim",
+        expand=True,
+    )
+    table.add_column("Rule", no_wrap=False, ratio=1)
+    table.add_column("TP", justify="center", width=6)
+    table.add_column("TN", justify="center", width=6)
+    table.add_column("Notes", style="dim", width=30)
+
+    passed = failed = skipped = 0
+    for r in results:
+        tp = r.get('tp_pass')
+        tn = r.get('tn_pass')
+        title = r.get('title', r.get('id', '?'))
+        error = r.get('error', '')
+
+        if tp is None and tn is None:
+            # No test case
+            tp_str = tn_str = "[dim]—[/]"
+            notes = "[dim]no test case[/]"
+            skipped += 1
+        elif tp is False or tn is False:
+            tp_str = "[green]✓[/]" if tp else "[bold red]✗[/]"
+            tn_str = "[green]✓[/]" if tn else "[bold red]✗[/]"
+            notes = error or (
+                f"[red]TP={r.get('tp_count',0)}, TN={r.get('tn_count',0)}[/]"
+            )
+            failed += 1
+        else:
+            tp_str = "[green]✓[/]" if tp else "[dim]—[/]"
+            tn_str = "[green]✓[/]" if tn else "[dim]—[/]"
+            notes = ""
+            passed += 1
+
+        table.add_row(title, tp_str, tn_str, notes)
+
+    console.print()
+    console.print(table)
+    console.print(
+        f"    [dim]Passed: [green]{passed}[/]  "
+        f"Failed: [red]{failed}[/]  "
+        f"No test case: [yellow]{skipped}[/][/]"
+    )
+
+
+def print_profiling_report(report: List[Dict[str, Any]], top_n: int = 20) -> None:
+    """Print a rule performance report as a Rich table.
+
+    Args:
+        report: List of dicts returned by ``ZircoliteCore.get_profiling_report()``.
+        top_n: Maximum number of rules to display.
+    """
+    if not report:
+        console.print("[dim]No profiling data available.[/]")
+        return
+
+    table = Table(
+        title="[bold]Rule Performance Report[/]",
+        show_header=True,
+        header_style="bold",
+        border_style="dim",
+        expand=True,
+    )
+    table.add_column("#", justify="right", style="dim", width=4)
+    table.add_column("Rule", no_wrap=False, ratio=1)
+    table.add_column("Time (ms)", justify="right", width=12)
+
+    for rank, entry in enumerate(report[:top_n], start=1):
+        elapsed = entry["elapsed_ms"]
+        title = entry["title"]
+        if elapsed >= 500:
+            time_str = f"[bold red]{elapsed:.1f}[/]"
+        elif elapsed >= 100:
+            time_str = f"[bold yellow]{elapsed:.1f}[/]"
+        else:
+            time_str = f"{elapsed:.1f}"
+        table.add_row(str(rank), title, time_str)
+
+    console.print()
+    console.print(table)
+    total_ms = sum(e["elapsed_ms"] for e in report)
+    console.print(
+        f"    [dim]Total rule execution time: [cyan]{total_ms:.1f}[/] ms "
+        f"across [cyan]{len(report)}[/] rules.[/]"
+    )
+
+
+def make_file_link(path: str, display: Optional[str] = None) -> str:
     """
     Create a Rich markup string with a clickable file:// hyperlink.
 
@@ -1092,16 +1192,18 @@ def make_file_link(path: str) -> str:
     modern GNOME/KDE terminals). Falls back to plain text in others.
 
     Args:
-        path: File path (relative or absolute)
+        path: File path (relative or absolute) used for the link target
+        display: Text shown to the user. Defaults to *path* when ``None``.
 
     Returns:
         Rich markup string with clickable link
     """
+    text = display if display is not None else path
     try:
         abs_path = Path(path).resolve()
         uri = abs_path.as_uri()
-        return f"[link={uri}][cyan]{path}[/][/link]"
+        return f"[link={uri}][cyan]{text}[/][/link]"
     except (ValueError, OSError):
-        return f"[cyan]{path}[/]"
+        return f"[cyan]{text}[/]"
 
 

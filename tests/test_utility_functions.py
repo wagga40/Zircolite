@@ -51,7 +51,7 @@ class TestInitLogger:
         
         # File creation may be delayed - check logger has file handler configured
         file_handlers = [h for h in logger.handlers if hasattr(h, 'baseFilename')]
-        assert len(file_handlers) >= 0  # Logger configured correctly
+        assert len(file_handlers) >= 1
     
     def test_init_logger_debug_with_file(self, tmp_path):
         """Test logger in debug mode with file output."""
@@ -119,20 +119,27 @@ class TestCheckIfExists:
         
         assert exc_info.value.code == 1
     
-    def test_check_directory_as_file(self, tmp_path, test_logger):
-        """Test that directory is not considered a file."""
+    def test_check_if_exists_rejects_directory(self, tmp_path, test_logger):
+        """check_if_exists uses is_file(), so a directory must be rejected."""
+        assert tmp_path.is_dir()
         with pytest.raises(SystemExit):
             check_if_exists(str(tmp_path), "Not a file", test_logger)
 
 
 class TestQuitOnError:
     """Tests for quit_on_error function."""
-    
+
     def test_quit_on_error_exits(self, test_logger):
         """Test that quit_on_error exits with code 1."""
         with pytest.raises(SystemExit) as exc_info:
             quit_on_error("Error message", test_logger)
-        
+
+        assert exc_info.value.code == 1
+
+    def test_quit_on_error_default_logger(self):
+        """quit_on_error with logger=None uses default logger and exits."""
+        with pytest.raises(SystemExit) as exc_info:
+            quit_on_error("Error message", None)
         assert exc_info.value.code == 1
 
 
@@ -532,3 +539,23 @@ class TestPrintModeRecommendation:
         }
         # Should not raise
         print_mode_recommendation("per-file", "Test reason", stats, test_logger)
+
+
+class TestSelectAvoidFilesBugFixes:
+    """Tests for edge cases in select_files and avoid_files."""
+
+    def test_select_files_empty_sublist(self):
+        """select_files with empty sublists should not raise IndexError."""
+        from zircolite.utils import select_files
+        paths = [Path("a.evtx"), Path("b.evtx")]
+        result = select_files(paths, [["a"], []])
+        assert len(result) == 1
+        assert "a.evtx" in str(result[0])
+
+    def test_avoid_files_empty_sublist(self):
+        """avoid_files with empty sublists should not raise IndexError."""
+        from zircolite.utils import avoid_files
+        paths = [Path("a.evtx"), Path("b.evtx")]
+        result = avoid_files(paths, [["a"], []])
+        assert len(result) == 1
+        assert "b.evtx" in str(result[0])

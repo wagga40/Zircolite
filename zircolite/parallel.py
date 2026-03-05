@@ -13,6 +13,7 @@ This module provides memory-aware parallel file processing capabilities:
 
 import logging
 import os
+import queue
 import time
 from collections import deque
 from concurrent.futures import ThreadPoolExecutor, wait, FIRST_COMPLETED
@@ -22,11 +23,26 @@ from typing import Callable, Dict, List, Optional, Tuple, Any
 
 import psutil
 
+from rich.console import Group
+from rich.live import Live
 from rich.progress import (
     Progress, SpinnerColumn, TextColumn, BarColumn,
     MofNCompleteColumn, TimeElapsedColumn
 )
 from .console import console
+
+# Refresh interval for draining rule-progress queue (matches Live refresh_per_second=10)
+_RULE_PROGRESS_POLL_SECONDS = 0.1
+
+# Max length for file name in per-file progress bar (truncate with ellipsis)
+_FILE_PROGRESS_NAME_MAX_LEN = 40
+
+
+def _truncate_filename(name: str, max_len: int = _FILE_PROGRESS_NAME_MAX_LEN) -> str:
+    """Truncate file name for progress bar description if needed."""
+    if len(name) <= max_len:
+        return name
+    return name[: max_len - 1] + "…"
 
 
 # ============================================================================
@@ -106,7 +122,7 @@ class ParallelConfig:
     """Configuration for parallel processing."""
     max_workers: Optional[int] = None
     min_workers: int = 1
-    memory_limit_percent: float = 75.0
+    memory_limit_percent: float = 85.0
     memory_check_interval: int = 5
     adaptive_workers: bool = True
     batch_size: int = 10
@@ -319,6 +335,7 @@ class MemoryAwareParallelProcessor:
         disable_progress: bool = False,
         on_result: Optional[Callable[[Any], None]] = None,
         event_count_callback: Optional[Callable[[int], None]] = None,
+        rule_progress_queue: Optional[queue.Queue] = None,
     ) -> Tuple[List[Any], ParallelStats]:
         """
         Process files in parallel with memory awareness.
@@ -332,6 +349,10 @@ class MemoryAwareParallelProcessor:
                        (useful for incremental writes to disk).
             event_count_callback: Called with cumulative event total after
                                   each file for granular progress reporting.
+            rule_progress_queue: If set, workers put (worker_id, file_name, rules_done, total_rules)
+                                 here; this method adds one progress task per file (description =
+                                 truncated file_name), updates it, and removes it when the file
+                                 finishes to free console space.
 
         Returns:
             ``(results_list, stats)``
@@ -363,7 +384,8 @@ class MemoryAwareParallelProcessor:
         # Use a deque so throttled files remain available for later submission
         file_queue: deque = deque(file_list)
 
-        progress = Progress(
+        # Global progress: files M/N, event count, worker count
+        progress_main = Progress(
             SpinnerColumn(),
             TextColumn("[progress.description]{task.description}"),
             BarColumn(bar_width=40),
@@ -376,27 +398,78 @@ class MemoryAwareParallelProcessor:
             TimeElapsedColumn(),
             console=console,
             transient=True,
-            disable=disable_progress
+            disable=disable_progress,
         )
 
-        with progress:
-            task_id = progress.add_task(
+        # Per-file rule progress: filename and rules X/Y only (no events/workers)
+        progress_files = Progress(
+            SpinnerColumn(),
+            TextColumn("[progress.description]{task.description}"),
+            BarColumn(bar_width=40),
+            MofNCompleteColumn(),
+            TextColumn("•"),
+            TimeElapsedColumn(),
+            console=console,
+            transient=True,
+            disable=disable_progress,
+        )
+
+        def run_parallel_loop() -> None:
+            nonlocal first_file_calibrated
+            task_id = progress_main.add_task(
                 desc,
                 total=len(file_list),
                 events=0,
-                workers=num_workers
+                workers=num_workers,
             )
+            worker_file_task_ids: Dict[int, Any] = {}
 
             with ThreadPoolExecutor(max_workers=num_workers) as executor:
                 active_futures: dict = {}
 
-                # Seed initial batch
                 for _ in range(min(num_workers, len(file_queue))):
                     f = file_queue.popleft()
                     active_futures[executor.submit(process_func, f)] = f
 
                 while active_futures:
-                    done, _ = wait(active_futures, return_when=FIRST_COMPLETED)
+                    if rule_progress_queue is not None:
+                        while True:
+                            try:
+                                w_id, file_name, rules_done, total_rules = (
+                                    rule_progress_queue.get_nowait()
+                                )
+                                if total_rules <= 0:
+                                    continue
+                                total_rules = total_rules or 1
+                                if w_id not in worker_file_task_ids:
+                                    worker_file_task_ids[w_id] = progress_files.add_task(
+                                        _truncate_filename(str(file_name)),
+                                        total=total_rules,
+                                        completed=0,
+                                    )
+                                progress_files.update(
+                                    worker_file_task_ids[w_id],
+                                    completed=rules_done,
+                                    total=total_rules,
+                                )
+                                if rules_done >= total_rules:
+                                    task_id_to_remove = worker_file_task_ids.get(
+                                        w_id
+                                    )
+                                    if task_id_to_remove is not None:
+                                        try:
+                                            progress_files.remove_task(
+                                                task_id_to_remove
+                                            )
+                                        finally:
+                                            del worker_file_task_ids[w_id]
+                            except queue.Empty:
+                                break
+                    done, _ = wait(
+                        active_futures,
+                        return_when=FIRST_COMPLETED,
+                        timeout=_RULE_PROGRESS_POLL_SECONDS,
+                    )
 
                     for future in done:
                         file_path = active_futures.pop(future)
@@ -410,9 +483,9 @@ class MemoryAwareParallelProcessor:
                                 if on_result is not None:
                                     on_result(result)
 
-                            progress.update(
+                            progress_main.update(
                                 task_id, advance=1,
-                                events=self.stats.total_events
+                                events=self.stats.total_events,
                             )
 
                             if event_count_callback is not None:
@@ -421,9 +494,8 @@ class MemoryAwareParallelProcessor:
                         except Exception as e:
                             self.stats.failed_files += 1
                             failed_files.append((file_path, str(e)))
-                            progress.update(task_id, advance=1)
+                            progress_main.update(task_id, advance=1)
 
-                        # Adaptive memory calibration after first file
                         if (
                             not first_file_calibrated
                             and self.config.adaptive_memory
@@ -434,7 +506,6 @@ class MemoryAwareParallelProcessor:
                                 file_path, self.get_current_memory_mb()
                             )
 
-                        # Periodic memory sampling
                         total_done = self.stats.processed_files + self.stats.failed_files
                         if total_done % self.config.memory_check_interval == 0:
                             current_mem = self.get_current_memory_mb()
@@ -443,7 +514,6 @@ class MemoryAwareParallelProcessor:
                                 self.stats.peak_memory_mb, current_mem
                             )
 
-                        # Submit next file with real throttling
                         if file_queue:
                             if self.should_throttle():
                                 self.stats.throttle_events += 1
@@ -452,12 +522,21 @@ class MemoryAwareParallelProcessor:
                                 f = file_queue.popleft()
                                 active_futures[executor.submit(process_func, f)] = f
 
-                    # Safety valve: if all futures drained during throttling
-                    # but the queue still has files, force-submit one to keep
-                    # making forward progress.
                     if not active_futures and file_queue:
                         f = file_queue.popleft()
                         active_futures[executor.submit(process_func, f)] = f
+
+        if rule_progress_queue is not None:
+            with Live(
+                Group(progress_main, progress_files),
+                console=console,
+                refresh_per_second=10,
+                transient=True,
+            ):
+                run_parallel_loop()
+        else:
+            with progress_main:
+                run_parallel_loop()
 
         # Final statistics
         self.stats.processing_time_seconds = time.time() - start_time

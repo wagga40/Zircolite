@@ -14,12 +14,10 @@ This module contains the EvtxExtractor class for:
 import csv
 import logging
 import os
-import random
 import shutil
-import string
 import time
 from pathlib import Path
-from typing import Optional
+from typing import Any, Callable, Dict, Optional, Union
 
 import orjson as json
 # Rich console for styled output
@@ -27,6 +25,7 @@ from evtx import PyEvtxParser
 from lxml import etree
 
 from .config import ExtractorConfig
+from .utils import random_suffix
 
 
 class EvtxExtractor:
@@ -54,16 +53,16 @@ class EvtxExtractor:
             path = Path(cfg.tmp_dir)
             if path.exists() and not path.is_dir():
                 self.logger.error(
-                    f"[red]   [-] Path exists and is not a directory: {path}, using random tmp dir[/]"
+                    f"[red]    [-] Path exists and is not a directory: {path}, using random tmp dir[/]"
                 )
-                self.tmpDir = f"tmp-{self.rand_string()}"
+                self.tmpDir = f"tmp-{random_suffix(8)}"
                 os.mkdir(self.tmpDir)
             else:
                 self.tmpDir = str(path)
                 if not path.exists():
                     os.mkdir(self.tmpDir)
         else:
-            self.tmpDir = f"tmp-{self.rand_string()}"
+            self.tmpDir = f"tmp-{random_suffix(8)}"
             os.mkdir(self.tmpDir)
         
         self.sysmon4linux = cfg.sysmon4linux
@@ -73,29 +72,34 @@ class EvtxExtractor:
         self.csvInput = cfg.csv_input
         self.encoding = cfg.encoding
         
-    def rand_string(self):
-        """Generate a random string for temporary file names."""
-        return ''.join(random.SystemRandom().choice(string.ascii_uppercase + string.digits) for _ in range(8))
-
-    def run_using_bindings(self, file):
+    def run_using_bindings(self, file: Union[Path, str]) -> None:
         """Convert EVTX to JSON using evtx_dump bindings. Drop resulting JSON files in a tmp folder."""
         try:
             filepath = Path(file)
             filename = filepath.name
             parser = PyEvtxParser(str(filepath))
-            with open(f"{self.tmpDir}/{str(filename)}-{self.rand_string()}.json", "w", encoding="utf-8") as f:
+            with open(f"{self.tmpDir}/{str(filename)}-{random_suffix(8)}.json", "w", encoding="utf-8") as f:
                 for record in parser.records_json():
-                    f.write(f'{json.dumps(json.loads(record["data"])).decode("utf-8")}\n')
+                    if record is None:
+                        continue
+                    data = record.get("data")
+                    if data is None:
+                        continue
+                    f.write(f"{json.dumps(json.loads(data)).decode('utf-8')}\n")
         except Exception as e:
-            self.logger.error(f"[red]   [-] Cannot use PyEvtxParser : {e}[/]")
+            self.logger.error(f"[red]    [-] Cannot use PyEvtxParser : {e}[/]")
 
-    def get_time(self, line):
+    def get_time(self, line: str) -> str:
         """Extract timestamp from auditd log line."""
-        timestamp = line.replace('msg=audit(','').replace('):','').split(':')
-        timestamp = time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(float(timestamp[0])))
-        return timestamp
+        try:
+            parts = line.replace("msg=audit(", "").replace("):", "").split(":")
+            return time.strftime(
+                "%Y-%m-%d %H:%M:%S", time.localtime(float(parts[0]))
+            )
+        except (ValueError, IndexError, OSError):
+            return ""
 
-    def auditd_line_to_json(self, auditd_line):
+    def auditd_line_to_json(self, auditd_line: str) -> Dict[str, Any]:
         """Convert auditd logs to JSON. Code from https://github.com/csark/audit2json."""
         event = {}
         # According to auditd specs https://github.com/linux-audit/audit-documentation/wiki/SPEC-Audit-Event-Enrichment
@@ -107,15 +111,21 @@ class EvtxExtractor:
                 event['timestamp'] = self.get_time(attribute)
             else:
                 try:
-                    attribute = attribute.replace('msg=','').replace('\'','').replace('"','').split('=')
-                    event[attribute[0]] = attribute[1].rstrip()
-                except Exception:
-                    pass
+                    cleaned = (
+                        attribute.replace("msg=", "")
+                        .replace("'", "")
+                        .replace('"', "")
+                    )
+                    key, _, value = cleaned.partition("=")
+                    if key and _ == "=":
+                        event[key] = value.rstrip()
+                except Exception as e:
+                    self.logger.debug(f"Skipping malformed auditd attribute '{attribute}': {e}")
         if "host" not in event:
             event['host'] = 'offline'
         return event
 
-    def sysmon_xml_line_to_json(self, xml_line):
+    def sysmon_xml_line_to_json(self, xml_line: str) -> Optional[Dict[str, Any]]:
         """Remove syslog header and convert XML data to JSON. Code from ZikyHD (https://github.com/ZikyHD)."""
         if 'Event' not in xml_line:
             return None
@@ -127,7 +137,7 @@ class EvtxExtractor:
             self.logger.debug(f"Unable to parse line \"{xml_line}\": {ex}")
             return None
 
-    def xml_line_to_json(self, xml_line):
+    def xml_line_to_json(self, xml_line: str) -> Optional[Dict[str, Any]]:
         """Remove "Events" header and convert XML data to JSON. Code from ZikyHD (https://github.com/ZikyHD)."""
         if '<Event ' not in xml_line:
             return None
@@ -138,43 +148,51 @@ class EvtxExtractor:
             self.logger.debug(f"Unable to parse line \"{xml_line}\": {ex}")
             return None
 
-    def xml_to_dict(self, event_root, ns=u'http://schemas.microsoft.com/win/2004/08/events/event'):
+    def xml_to_dict(
+        self,
+        event_root: Any,
+        ns: str = "http://schemas.microsoft.com/win/2004/08/events/event",
+    ) -> Dict[str, Any]:
         """Convert XML event to dictionary structure."""
-        def clean_tag(tag, ns):
+        def clean_tag(tag: str, ns: str) -> str:
             """Remove namespace from XML tag."""
             if ns in tag: 
                 return tag[len(ns):]
             return tag
 
-        child = {"#attributes": {"xmlns": ns}}
-        for appt in event_root.getchildren():
+        child: Dict[str, Any] = {"#attributes": {"xmlns": ns}}
+        for appt in event_root:
             node_name = clean_tag(appt.tag, ns)
-            node_value = {}
-            for elem in appt.getchildren():
+            node_value: Dict[str, Any] = {}
+            for elem in appt:
                 cleaned_tag = clean_tag(elem.tag, ns)
-                if not elem.text:
-                    text = ""
-                else:
+                text: Any = "" if not elem.text else elem.text
+                if elem.text:
                     try:
                         text = int(elem.text)
                     except Exception:
-                        text = elem.text
-                if cleaned_tag == 'Data':
+                        pass
+                if cleaned_tag == "Data":
                     child_node = elem.get("Name")
-                elif cleaned_tag == 'Qualifiers':
+                elif cleaned_tag == "Qualifiers":
+                    child_node = cleaned_tag
                     text = elem.text
                 else:
                     child_node = cleaned_tag
                     if elem.attrib:
                         text = {"#attributes": dict(elem.attrib)}
-                obj = {str(child_node): text}
-                node_value = {**node_value, **obj}
-            node = {str(node_name): node_value}
-            child = {**child, **node}
+                node_value[str(child_node)] = text
+            child[str(node_name)] = node_value
         event = {"Event": child}
         return event
 
-    def logs_to_json(self, func, datasource, outfile, is_file=True):
+    def logs_to_json(
+        self,
+        func: Callable[[str], Optional[Dict[str, Any]]],
+        datasource: str,
+        outfile: str,
+        is_file: bool = True,
+    ) -> None:
         """Convert supported log formats to JSON sequentially."""
         if is_file:
             with open(datasource, "r", encoding=self.encoding) as fp: 
@@ -189,7 +207,7 @@ class EvtxExtractor:
                 if element is not None:
                     fp.write(json.dumps(element).decode("utf-8") + '\n')
 
-    def csv_to_json(self, csv_path, json_path):  
+    def csv_to_json(self, csv_path: Union[Path, str], json_path: Union[Path, str]) -> None:
         """Convert CSV logs to JSON."""
         with open(csv_path, encoding='utf-8') as csv_file: 
             csv_reader = csv.DictReader(csv_file) 
@@ -197,7 +215,7 @@ class EvtxExtractor:
                 for row in csv_reader: 
                     json_file.write(json.dumps(row).decode("utf-8") + '\n')
 
-    def evtxtract_to_json(self, file, outfile):
+    def evtxtract_to_json(self, file: Union[Path, str], outfile: Union[Path, str]) -> None:
         """Convert EVTXtract logs to JSON using xml_to_dict and write to a file."""
         # Load file as a string to add enclosing document since XML doesn't support multiple documents
         with open(file, "r", encoding=self.encoding) as fp:
@@ -209,19 +227,19 @@ class EvtxExtractor:
         parser = etree.XMLParser(recover=True)  # Recover=True allows the parser to ignore bad characters
         root = etree.fromstring(data, parser=parser)
         with open(outfile, "w", encoding="UTF-8") as fp:
-            for event in root.getchildren():
+            for event in root:
                 if "Event" in event.tag:
                     extracted_event = self.xml_to_dict(event, u'{http://schemas.microsoft.com/win/2004/08/events/event}')
                     fp.write(json.dumps(extracted_event).decode("utf-8") + '\n')
 
-    def run(self, file):
+    def run(self, file: Union[Path, str]) -> None:
         """
         Convert Logs to JSON
         Drop resulting JSON files in a tmp folder.
         """
         self.logger.debug(f"EXTRACTING : {file}")
         filename = Path(file).name
-        output_json_filename = f"{self.tmpDir}/{str(filename)}-{self.rand_string()}.json"
+        output_json_filename = f"{self.tmpDir}/{str(filename)}-{random_suffix(8)}.json"
         
         try:
             # Auditd or Sysmon4Linux logs
@@ -248,8 +266,9 @@ class EvtxExtractor:
                 self.run_using_bindings(file)
                     
         except Exception as e:
-            self.logger.error(f"[red]   [-] {e}[/]")
+            self.logger.error(f"[red]    [-] {e}[/]")
             raise
 
-    def cleanup(self):
-        shutil.rmtree(self.tmpDir)
+    def cleanup(self) -> None:
+        if os.path.isdir(self.tmpDir):
+            shutil.rmtree(self.tmpDir)

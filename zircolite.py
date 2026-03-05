@@ -19,11 +19,12 @@ import argparse
 import logging
 import os
 import random
+import re
 import string
 import sys
 import time
 from pathlib import Path
-from typing import List, Optional
+from typing import Any, List, Optional
 
 # Force UTF-8 on Windows so argparse help and banner (Unicode/emojis) don't raise
 # UnicodeEncodeError when the console uses cp1252 (see PYI-1448 / PYI-4560).
@@ -109,7 +110,7 @@ from zircolite.processing import (
 ################################################################
 # ARGUMENT PARSING
 ################################################################
-def parse_arguments():
+def parse_arguments() -> argparse.Namespace:
     """Parse command line arguments."""
     kwargs = {}
     if _HAS_RICH_ARGPARSE:
@@ -124,6 +125,7 @@ def parse_arguments():
     logs_input_args.add_argument("-f", "--fileext", help="File extension of the log files to process", type=str)    
     logs_input_args.add_argument("-fp", "--file-pattern", help="Python Glob pattern to select files (only works with directories)", type=str)
     logs_input_args.add_argument("--no-recursion", help="Search for log files only in the specified directory (disable recursive search)", action="store_true")
+    logs_input_args.add_argument("--archive-password", help="Password for encrypted ZIP or 7-Zip archives", type=str, metavar="PASSWORD")
 
     # Events filtering options
     event_args = parser.add_argument_group('🔍 EVENTS FILTERING')
@@ -145,11 +147,11 @@ def parse_arguments():
     # Ruleset options
     rulesets_formats_args = parser.add_argument_group('📋 RULES AND RULESETS')  
     rulesets_formats_args.add_argument("-r", "--ruleset", help="Sigma ruleset in JSON (Zircolite format) or YAML/directory of YAML files (Native Sigma format)", action='append', nargs='+')
-    rulesets_formats_args.add_argument("-cr", "--combine-rulesets", help="Merge all provided rulesets into one", action='store_true')
     rulesets_formats_args.add_argument("-sr", "--save-ruleset", help="Save converted ruleset (from Sigma to Zircolite format) to disk", action='store_true')
     rulesets_formats_args.add_argument("-p", "--pipeline", help="Use specified pipeline for native Sigma rulesets (YAML). Examples: 'sysmon', 'windows-logsources', 'windows-audit'. Use '--pipeline-list' to see available pipelines.", action='append', nargs='+')
     rulesets_formats_args.add_argument("-pl", "--pipeline-list", help="List all installed pysigma pipelines", action='store_true')
     rulesets_formats_args.add_argument("-R", "--rulefilter", help="Remove rules from ruleset by matching rule title (case sensitive)", action='append', nargs='*')
+    rulesets_formats_args.add_argument("--test-rules", help="JSON file with rule test cases (true-positive / true-negative events per rule)", type=str, metavar="TEST_FILE")
     
     # Output formats and output files options
     output_formats_args = parser.add_argument_group('💾 OUTPUT FORMATS AND FILES')
@@ -157,6 +159,7 @@ def parse_arguments():
     output_formats_args.add_argument("--csv", "--csv-output", help="Output results in CSV format (empty fields will be included)", action='store_true')
     output_formats_args.add_argument("--csv-delimiter", help="Delimiter for CSV output", type=str, default=";")
     output_formats_args.add_argument("--keepflat", "--keep-flat", help="Save flattened events as JSON", action='store_true')
+    output_formats_args.add_argument("--profile-rules", help="Time each rule execution and print a performance report at the end", action='store_true')
     output_formats_args.add_argument("-d", "--dbfile", "--db-file", help="Save all logs to a SQLite database file", type=str)
     output_formats_args.add_argument("-l", "--logfile", "--log-file", help="Log file name", default="zircolite.log", type=str)
     output_formats_args.add_argument("--hashes", help="Add xxhash64 of the original log event to each event", action='store_true')
@@ -176,7 +179,9 @@ def parse_arguments():
     config_formats_args.add_argument("--unified-db", "--all-in-one", help="Force unified database mode (all files in one DB, enables cross-file correlation)", action='store_true')
     config_formats_args.add_argument("--no-auto-mode", help="Disable automatic processing mode selection based on file analysis", action='store_true')
     config_formats_args.add_argument("--no-auto-detect", help="Disable automatic log type and timestamp detection (use explicit format flags instead)", action='store_true')
-    
+    config_formats_args.add_argument("--add-index", help="Create an index on the given column(s). Can be repeated or list multiple columns (e.g. --add-index Channel EventID).", action='append', nargs='+', metavar="COL", default=[])
+    config_formats_args.add_argument("--remove-index", help="Drop the given index name(s) after creation. Can be repeated or list multiple (e.g. --remove-index idx_channel idx_eventid).", action='append', nargs='+', metavar="IDX", default=[])
+
     # Transform options
     transform_args = parser.add_argument_group('🔄 TRANSFORMS')
     transform_args.add_argument("--all-transforms", help="Enable all defined transforms (overrides enabled_transforms list)", action='store_true')
@@ -192,13 +197,14 @@ def parse_arguments():
     parallel_args = parser.add_argument_group('⚡ PARALLEL PROCESSING')
     parallel_args.add_argument("-P", "--no-parallel", help="Disable automatic parallel processing (parallel is enabled by default when beneficial)", action='store_true')
     parallel_args.add_argument("-w", "--parallel-workers", help="Maximum number of parallel workers (default: auto-detect based on CPU/memory)", type=int)
-    parallel_args.add_argument("--parallel-memory-limit", help="Memory usage threshold percentage before throttling (default: 75)", type=float, default=75.0)
+    parallel_args.add_argument("--parallel-memory-limit", help="Memory usage threshold percentage before throttling (default: 85)", type=float, default=85.0)
     
     # Templating and Mini GUI options
     templating_formats_args = parser.add_argument_group('🎨 TEMPLATING AND MINI GUI')
     templating_formats_args.add_argument("-t", "--template", help="Jinja2 template to use for output generation", type=str, action='append', nargs='+')
     templating_formats_args.add_argument("-T", "--templateOutput", "--template-output", help="Output file for Jinja2 template results", type=str, action='append', nargs='+')
     templating_formats_args.add_argument("--timesketch", help="Shortcut: use Timesketch template and write to timesketch-<RAND>.json", action='store_true')
+    templating_formats_args.add_argument("--navigator-output", help="Shortcut: generate ATT&CK Navigator layer JSON and write to navigator-<RAND>.json (or specify a custom filename)", type=str, metavar="OUTPUT_FILE", nargs='?', const="")
     templating_formats_args.add_argument("-G", "--package", help="Create a ZircoGui/Mini GUI package", action='store_true')
     templating_formats_args.add_argument("--package-dir", help="Directory to save the ZircoGui/Mini GUI package", type=str, default="")
     
@@ -208,7 +214,7 @@ def parse_arguments():
 ################################################################
 # FILE DISCOVERY AND INPUT TYPE DETECTION
 ################################################################
-def get_file_extension(args) -> str:
+def get_file_extension(args: argparse.Namespace) -> str:
     """Determine file extension based on input type."""
     if args.fileext:
         return args.fileext
@@ -223,7 +229,7 @@ def get_file_extension(args) -> str:
     return "evtx"
 
 
-def _has_explicit_format_flag(args) -> bool:
+def _has_explicit_format_flag(args: argparse.Namespace) -> bool:
     """Check if the user has set an explicit format flag on the CLI."""
     return any([
         args.json_input, args.json_array_input, args.xml_input,
@@ -232,7 +238,9 @@ def _has_explicit_format_flag(args) -> bool:
     ])
 
 
-def discover_files(args, logger) -> List[Path]:
+def discover_files(
+    args: argparse.Namespace, logger: logging.Logger
+) -> List[Path]:
     """Discover log files based on path and filters."""
     args.fileext = get_file_extension(args)
     
@@ -244,17 +252,19 @@ def discover_files(args, logger) -> List[Path]:
     elif log_path.is_file():
         log_list = [log_path]
     else:
-        quit_on_error("[red]   [-] Unable to find events from submitted path[/]", logger)
+        quit_on_error("[red]    [-] Unable to find events from submitted path[/]", logger)
     
     file_list = avoid_files(select_files(log_list, args.select), args.avoid)
     if not file_list:
-        quit_on_error("[red]   [-] No file found. Please verify filters, directory or the extension with '--fileext' or '--file-pattern'[/]", logger)
+        quit_on_error("[red]    [-] No file found. Please verify filters, directory or the extension with '--fileext' or '--file-pattern'[/]", logger)
     
     return file_list
 
 
-def get_input_type(args) -> str:
+def get_input_type(args: argparse.Namespace) -> str:
     """Determine input type for streaming processor from explicit CLI flags."""
+    if args.db_input:
+        return 'sqlite'
     if args.json_input:
         return 'json'
     if args.json_array_input:
@@ -272,19 +282,30 @@ def get_input_type(args) -> str:
     return 'evtx'
 
 
-def _apply_detection_result(args, detection: 'DetectionResult', logger) -> str:
+_TIMEFIELD_SANITIZE_RE = re.compile(r"[^a-zA-Z0-9]")
+
+
+def _apply_detection_result(
+    args: argparse.Namespace,
+    detection: "DetectionResult",
+    logger: logging.Logger,
+) -> str:
     """
     Apply a DetectionResult to the args namespace and return the input_type.
-    
+
     Sets the appropriate CLI flag on args so that downstream code
     (extractor creation, file extension logic, etc.) works correctly.
-    When detection failed (log_source "unknown"), keeps default evtx and does
-    not set any format flag.
+    When detection failed (log_source "unknown"), still use detection.input_type
+    if it is a known format (e.g. json from extension fallback), otherwise
+    default to evtx.
     """
-    if detection.log_source == "unknown":
-        return "evtx"
-
     input_type = detection.input_type
+    known_formats = (
+        'json', 'json_array', 'xml', 'sysmon_linux', 'auditd', 'csv', 'evtxtract', 'sqlite'
+    )
+
+    if detection.log_source == "unknown" and input_type not in known_formats:
+        return "evtx"
 
     # Map input_type back to the args flag
     flag_map = {
@@ -295,15 +316,19 @@ def _apply_detection_result(args, detection: 'DetectionResult', logger) -> str:
         'auditd': 'auditd_input',
         'csv': 'csv_input',
         'evtxtract': 'evtxtract_input',
+        'sqlite': 'db_input',
     }
-    
+
     if input_type in flag_map:
         setattr(args, flag_map[input_type], True)
-    
-    # Update timefield if detection found a timestamp and user didn't override
+
+    # Update timefield if detection found a timestamp and user didn't override.
+    # The streaming processor strips non-alphanumeric characters from field
+    # names (e.g. "@timestamp" → "timestamp") when storing events in SQLite,
+    # so the timefield must be sanitized the same way to match the column name.
     if detection.timestamp_field and args.timefield == "SystemTime":
-        args.timefield = detection.timestamp_field
-    
+        args.timefield = _TIMEFIELD_SANITIZE_RE.sub("", detection.timestamp_field)
+
     return input_type
 
 
@@ -344,8 +369,12 @@ def auto_detect_log_type(
         ts_config = field_mappings_config.get("timestamp_detection", {})
         ts_fields = ts_config.get("detection_fields")
     
-    detector = LogTypeDetector(logger=logger, timestamp_detection_fields=ts_fields)
-    
+    detector = LogTypeDetector(
+        logger=logger,
+        timestamp_detection_fields=ts_fields,
+        archive_password=getattr(args, 'archive_password', None),
+    )
+
     # Use batch detection for better accuracy
     detection = detector.detect_batch(file_list)
     
@@ -380,7 +409,9 @@ def auto_detect_log_type(
 ################################################################
 # YAML CONFIGURATION – split into per-section helpers
 ################################################################
-def _apply_yaml_input_config(yaml_config, args):
+def _apply_yaml_input_config(
+    yaml_config: Any, args: argparse.Namespace
+) -> None:
     """Apply YAML input section to CLI args."""
     if yaml_config.input.path and not args.evtx:
         args.evtx = yaml_config.input.path
@@ -406,9 +437,11 @@ def _apply_yaml_input_config(yaml_config, args):
         args.logs_encoding = args.logs_encoding or yaml_config.input.encoding
 
 
-def _apply_yaml_rules_config(yaml_config, args):
+def _apply_yaml_rules_config(
+    yaml_config: Any, args: argparse.Namespace
+) -> None:
     """Apply YAML rules section to CLI args."""
-    if not args.ruleset or args.ruleset == ["rules/rules_windows_generic.json"]:
+    if not args.ruleset or args.ruleset == [["rules/rules_windows_generic.json"]]:
         args.ruleset = yaml_config.rules.rulesets
     if yaml_config.rules.pipelines and not args.pipeline:
         args.pipeline = [[p] for p in yaml_config.rules.pipelines]
@@ -418,12 +451,15 @@ def _apply_yaml_rules_config(yaml_config, args):
         args.save_ruleset = True
 
 
-def _apply_yaml_output_config(yaml_config, args):
+def _apply_yaml_output_config(
+    yaml_config: Any, args: argparse.Namespace
+) -> None:
     """Apply YAML output section to CLI args."""
     if args.outfile == "detected_events.json":
         args.outfile = yaml_config.output.file
     if yaml_config.output.format == 'csv':
         args.csv = True
+        args._csv_from_yaml = True
     if yaml_config.output.csv_delimiter != ';':
         args.csv_delimiter = yaml_config.output.csv_delimiter
     if yaml_config.output.templates and not args.template:
@@ -443,7 +479,9 @@ def _apply_yaml_output_config(yaml_config, args):
         args.nolog = True
 
 
-def _apply_yaml_processing_config(yaml_config, args):
+def _apply_yaml_processing_config(
+    yaml_config: Any, args: argparse.Namespace
+) -> None:
     """Apply YAML processing + time-filter + parallel sections to CLI args."""
     # Processing
     if yaml_config.processing.unified_db:
@@ -466,6 +504,12 @@ def _apply_yaml_processing_config(yaml_config, args):
         # Merge with any CLI-provided categories
         existing = getattr(args, 'transform_categories', None) or []
         args.transform_categories = existing + yaml_config.processing.transform_categories
+    if yaml_config.processing.add_index:
+        existing = _flatten_add_remove_index(getattr(args, 'add_index', None))
+        args.add_index = [existing + list(yaml_config.processing.add_index)]
+    if yaml_config.processing.remove_index:
+        existing = _flatten_add_remove_index(getattr(args, 'remove_index', None))
+        args.remove_index = [existing + list(yaml_config.processing.remove_index)]
     # Time filters
     if yaml_config.time_filter.after != '1970-01-01T00:00:00':
         args.after = yaml_config.time_filter.after
@@ -477,7 +521,7 @@ def _apply_yaml_processing_config(yaml_config, args):
         args.no_parallel = True
     if yaml_config.parallel.max_workers:
         args.parallel_workers = yaml_config.parallel.max_workers
-    if yaml_config.parallel.memory_limit_percent != 75.0:
+    if yaml_config.parallel.memory_limit_percent != 85.0:
         args.parallel_memory_limit = yaml_config.parallel.memory_limit_percent
 
 
@@ -487,12 +531,12 @@ def _print_transform_categories(config_path: str, logger):
     try:
         config = load_field_mappings(config_path, logger=logger)
     except (FileNotFoundError, ValueError) as e:
-        logger.error(f"[red]   [-] {e}[/]")
+        logger.error(f"[red]    [-] {e}[/]")
         return
 
     categories = config.get("transform_categories", {})
     if not categories:
-        logger.info("[yellow]   [!] No transform categories defined in config.[/]")
+        logger.info("[yellow]    [!] No transform categories defined in config.[/]")
         return
 
     table = Table(title="Transform Categories", show_lines=True)
@@ -527,13 +571,13 @@ def load_yaml_config_and_merge(args, logger) -> argparse.Namespace:
         _apply_yaml_output_config(yaml_config, args)
         _apply_yaml_processing_config(yaml_config, args)
 
-        logger.info(f"[+] Configuration loaded and merged from: [cyan]{args.yaml_config}[/]")
+        logger.info(f"[+] Configuration loaded and merged from: {make_file_link(args.yaml_config)}")
 
     except FileNotFoundError as e:
-        logger.error(f"[red]   [-] {e}[/]")
+        logger.error(f"[red]    [-] {e}[/]")
         sys.exit(1)
     except Exception as e:
-        logger.error(f"[red]   [-] Error loading YAML config: {e}[/]")
+        logger.error(f"[red]    [-] Error loading YAML config: {e}[/]")
         if logger.isEnabledFor(logging.DEBUG):
             console.print_exception(show_locals=False)
         sys.exit(1)
@@ -544,7 +588,11 @@ def load_yaml_config_and_merge(args, logger) -> argparse.Namespace:
 ################################################################
 # POST-PROCESSING
 ################################################################
-def handle_templating(ctx: ProcessingContext, results: list, args):
+def handle_templating(
+    ctx: ProcessingContext,
+    results: List[Any],
+    args: argparse.Namespace,
+) -> None:
     """Handle template generation and package creation."""
     if ctx.ready_for_templating and results:
         tmpl_config = TemplateConfig(
@@ -566,9 +614,29 @@ def handle_templating(ctx: ProcessingContext, results: list, args):
             )
             packager = ZircoliteGuiGenerator(gui_config, logger=ctx.logger)
             packager.generate(results, args.package_dir)
+        else:
+            missing = []
+            if not template_path.is_file():
+                missing.append(str(template_path))
+            if not gui_zip_path.is_file():
+                missing.append(str(gui_zip_path))
+            ctx.logger.warning(
+                f"[yellow]   [!] Cannot create GUI package: missing file(s): {', '.join(missing)}[/]"
+            )
 
 
-def cleanup(args, logger, log_list=None):
+def _flatten_add_remove_index(value: Any) -> List[str]:
+    """Flatten argparse append nargs='+' list of lists into a single list."""
+    if not value:
+        return []
+    return [item for group in value for item in group]
+
+
+def cleanup(
+    args: argparse.Namespace,
+    logger: logging.Logger,
+    log_list: Optional[List[Path]] = None,
+) -> None:
     """Clean up temporary files and optionally remove original events."""
     if args.remove_events and log_list:
         logger.info("[+] Cleaning")
@@ -576,15 +644,24 @@ def cleanup(args, logger, log_list=None):
             try:
                 os.remove(evtx)
             except OSError as e:
-                logger.error(f"[red]   [-] Cannot remove file {e}[/]")
+                logger.error(f"[red]    [-] Cannot remove file {e}[/]")
 
 
-def print_stats(memory_tracker: MemoryTracker, start_time: float, logger, 
-                all_results: list = None, files_processed: int = 0, 
-                total_events: int = 0, workers_used: int = 1,
-                filtered_events: int = 0, total_rules: int = 0,
-                phase_times: dict = None, has_template: bool = False,
-                has_package: bool = False, outfile: str = None):
+def print_stats(
+    memory_tracker: MemoryTracker,
+    start_time: float,
+    logger: logging.Logger,
+    all_results: Optional[List[Any]] = None,
+    files_processed: int = 0,
+    total_events: int = 0,
+    workers_used: int = 1,
+    filtered_events: int = 0,
+    total_rules: int = 0,
+    phase_times: Optional[dict] = None,
+    has_template: bool = False,
+    has_package: bool = False,
+    outfile: Optional[str] = None,
+) -> None:
     """Print final execution statistics with a Rich summary dashboard."""
     memory_tracker.sample()
     peak_memory, avg_memory = memory_tracker.get_stats()
@@ -615,7 +692,7 @@ def print_stats(memory_tracker: MemoryTracker, start_time: float, logger,
                 t_str = f"{int(phase_secs // 60)}m {int(phase_secs % 60)}s"
             else:
                 t_str = f"{phase_secs:.1f}s"
-            summary_table.add_row("", f"  [dim]\u251c\u2500 {phase_name}  {bar}  {t_str} ({pct:.0%})[/]")
+            summary_table.add_row("", f"    [dim]\u251c\u2500 {phase_name}  {bar}  {t_str} ({pct:.0%})[/]")
     
     # ── Files ──
     if files_processed > 0:
@@ -744,12 +821,17 @@ def print_stats(memory_tracker: MemoryTracker, start_time: float, logger,
     # Output file location - prominent and always visible
     if outfile:
         console.print()
-        console.print(f"  [bold green]\u2192[/] Output: {make_file_link(outfile)}")
+        console.print(f"    [bold green]\u2192[/] Output: {make_file_link(outfile)}")
 
 ################################################################
 # PROCESSING DISPATCH
 ################################################################
-def _run_processing(ctx, args, logger, memory_tracker):
+def _run_processing(
+    ctx: ProcessingContext,
+    args: argparse.Namespace,
+    logger: logging.Logger,
+    memory_tracker: MemoryTracker,
+) -> None:
     """Run the main processing pipeline and return all state needed by main().
 
     Returns:
@@ -773,17 +855,36 @@ def _run_processing(ctx, args, logger, memory_tracker):
 
     # ----- DB input mode -----
     if args.db_input:
+        _ignored = []
+        if args.unified_db:
+            _ignored.append("--unified-db")
+        if getattr(args, 'no_auto_mode', False):
+            _ignored.append("--no-auto-mode")
+        if getattr(args, 'no_parallel', False):
+            _ignored.append("--no-parallel")
+        if getattr(args, 'add_index', None):
+            _ignored.append("--add-index")
+        if getattr(args, 'remove_index', None):
+            _ignored.append("--remove-index")
+        if getattr(args, 'hashes', False):
+            _ignored.append("--hashes")
+        if _ignored:
+            logger.warning(
+                f"[yellow]DB input mode: the following flags have no effect and will be "
+                f"ignored: {', '.join(_ignored)}[/]"
+            )
         zircolite_core, all_results = process_db_input(ctx, args)
         return zircolite_core, all_results, extractor, log_list, phase_setup_end
 
     # ----- File input mode -----
     check_if_exists(
         args.config,
-        "[red]   [-] Cannot find mapping file, you can get the default one here : "
+        "[red]    [-] Cannot find mapping file, you can get the default one here : "
         "https://github.com/wagga40/Zircolite/blob/master/config/config.yaml [/]",
         logger,
     )
 
+    original_ext = args.fileext or "evtx"
     file_list = discover_files(args, logger)
     log_list = file_list
 
@@ -794,10 +895,10 @@ def _run_processing(ctx, args, logger, memory_tracker):
     else:
         input_type = auto_detect_log_type(file_list, args, logger, field_mappings_config)
 
-    # Re-discover files if auto-detection changed the extension
-    if Path(args.evtx).is_dir() and not args.fileext and not args.file_pattern:
+    # Re-discover files if auto-detection changed the expected extension
+    if Path(args.evtx).is_dir() and not args.file_pattern:
         new_ext = get_file_extension(args)
-        if new_ext != "evtx":
+        if new_ext != original_ext:
             args.fileext = new_ext
             old_count = len(file_list)
             file_list = discover_files(args, logger)
@@ -810,6 +911,29 @@ def _run_processing(ctx, args, logger, memory_tracker):
 
     ctx.time_field = args.timefield
 
+    # DB input mode (explicit -D or auto-detected SQLite file)
+    if args.db_input:
+        _ignored = []
+        if args.unified_db:
+            _ignored.append("--unified-db")
+        if getattr(args, 'no_auto_mode', False):
+            _ignored.append("--no-auto-mode")
+        if getattr(args, 'no_parallel', False):
+            _ignored.append("--no-parallel")
+        if getattr(args, 'add_index', None):
+            _ignored.append("--add-index")
+        if getattr(args, 'remove_index', None):
+            _ignored.append("--remove-index")
+        if getattr(args, 'hashes', False):
+            _ignored.append("--hashes")
+        if _ignored:
+            logger.warning(
+                f"[yellow]DB input mode: the following flags have no effect and will be "
+                f"ignored: {', '.join(_ignored)}[/]"
+            )
+        zircolite_core, all_results = process_db_input(ctx, args, file_list=file_list)
+        return zircolite_core, all_results, extractor, log_list, phase_setup_end
+
     # Auto-select processing mode
     use_parallel = False
     parallel_workers = 1
@@ -819,7 +943,7 @@ def _run_processing(ctx, args, logger, memory_tracker):
         print_mode_recommendation(recommended_mode, reason, stats, logger, show_parallel=True)
         if recommended_mode == 'unified':
             args.unified_db = True
-        if not args.unified_db and not getattr(args, 'no_parallel', False):
+        if not args.unified_db and not getattr(args, 'no_parallel', False) and not getattr(args, 'profile_rules', False):
             if stats.get('parallel_recommended', False):
                 use_parallel = True
                 parallel_workers = stats.get('parallel_workers', 1)
@@ -827,14 +951,34 @@ def _run_processing(ctx, args, logger, memory_tracker):
         logger.info("[+] [cyan]Database mode:[/] [green]UNIFIED[/] (forced)")
         logger.info("")
     else:
-        if not getattr(args, 'no_parallel', False) and len(file_list) > 1:
+        if not getattr(args, 'no_parallel', False) and not getattr(args, 'profile_rules', False) and len(file_list) > 1:
             _, _, stats = analyze_files_and_recommend_mode(file_list, logger)
             if stats.get('parallel_recommended', False):
                 use_parallel = True
                 parallel_workers = stats.get('parallel_workers', 1)
 
+    if getattr(args, 'profile_rules', False):
+        logger.info(
+            "[+] [cyan]Profile mode[/] (--profile-rules): rule execution will be timed; "
+            "files will be processed sequentially (parallel disabled)."
+        )
+        if args.unified_db:
+            logger.info(
+                "[+] [cyan]Note:[/] --profile-rules with --unified-db reports per-rule "
+                "timings against the combined dataset, not per-file breakdowns."
+            )
+        logger.info("")
+
     # Streaming processing (single-pass pipeline)
     extractor = create_extractor(args, logger, input_type)
+
+    if use_parallel and len(file_list) > 1 and getattr(args, "dbfile", None):
+        logger.error(
+            "[red]    [-] Saving the database to a file (--dbfile) is not supported when "
+            "processing multiple files in parallel. Use --unified-db to get a single "
+            "database file, or disable parallel with --no-parallel to save one database per file.[/]"
+        )
+        sys.exit(2)
 
     if use_parallel and not args.unified_db and len(file_list) > 1:
         zircolite_core, all_results = process_parallel_streaming(
@@ -855,8 +999,8 @@ def _run_processing(ctx, args, logger, memory_tracker):
 ################################################################
 # MAIN
 ################################################################
-def main():
-    version = "3.3.0"
+def main() -> None:
+    version = "3.5.0"
     args = parse_arguments()
 
     # Handle generate-config before logging setup
@@ -910,6 +1054,16 @@ def main():
         args.template.append(["templates/exportForTimesketch.tmpl"])
         args.templateOutput.append([out_name])
 
+    # Apply --navigator-output shortcut
+    if getattr(args, 'navigator_output', None) is not None:
+        rand_4 = ''.join(random.SystemRandom().choice(string.ascii_uppercase + string.digits) for _ in range(4))
+        nav_out = args.navigator_output or f"navigator-{rand_4}.json"
+        if args.template is None:
+            args.template = []
+            args.templateOutput = []
+        args.template.append(["templates/exportForAttackNavigator.tmpl"])
+        args.templateOutput.append([nav_out])
+
     # Handle rulesets
     if args.ruleset:
         args.ruleset = [item for sublist in args.ruleset for item in sublist]
@@ -931,6 +1085,20 @@ def main():
     if args.pipeline_list:
         sys.exit(0)
 
+    # Handle --test-rules: validate rules against test cases and exit
+    if getattr(args, 'test_rules', None):
+        from zircolite.core import ZircoliteCore
+        from zircolite.console import print_rule_test_results
+        check_if_exists(args.test_rules, f"[red]    [-] Cannot find test file: {args.test_rules}[/]", logger)
+        logger.info(f"[+] Running rule tests from: {make_file_link(args.test_rules)}")
+        _test_core = ZircoliteCore(args.config, logger=logger)
+        _test_core.load_ruleset_from_var(rulesets_manager.rulesets, args.rulefilter)
+        test_results = _test_core.run_rule_tests(args.test_rules)
+        _test_core.close()
+        print_section("Rule Testing")
+        print_rule_test_results(test_results)
+        sys.exit(0)
+
     # Validate required arguments
     if not args.evtx:
         print_error_panel(
@@ -940,31 +1108,42 @@ def main():
         )
         sys.exit(2)
     if args.csv and len(args.ruleset) > 1:
+        csv_source = (
+            "the configuration file (output.format: csv)"
+            if getattr(args, '_csv_from_yaml', False)
+            else "--csv"
+        )
         print_error_panel(
             "Invalid Configuration",
             "CSV output is not supported with multiple rulesets.",
-            "Fields in results can change between rulesets. Use a single ruleset with --csv."
+            f"CSV output was enabled via {csv_source}. Use a single ruleset for CSV output."
         )
         sys.exit(2)
     
     logger.info("[+] Checking prerequisites")
 
     # Parse timestamps
-    try:
-        events_after = time.strptime(args.after, '%Y-%m-%dT%H:%M:%S')
-        events_before = time.strptime(args.before, '%Y-%m-%dT%H:%M:%S')
-    except Exception:
-        quit_on_error("[red]   [-] Wrong timestamp format. Please use 'YYYY-MM-DDTHH:MM:SS'", logger)
+    for flag, value in (('--after', args.after), ('--before', args.before)):
+        try:
+            time.strptime(value, '%Y-%m-%dT%H:%M:%S')
+        except Exception:
+            quit_on_error(f"[red]    [-] Wrong timestamp format for {flag}: '{value}'. Expected 'YYYY-MM-DDTHH:MM:SS'[/]", logger)
+    events_after = time.strptime(args.after, '%Y-%m-%dT%H:%M:%S')
+    events_before = time.strptime(args.before, '%Y-%m-%dT%H:%M:%S')
+    if events_after >= events_before:
+        quit_on_error(f"[red]    [-] --after '{args.after}' must be earlier than --before '{args.before}'[/]", logger)
 
     # Check templates
     ready_for_templating = False
     if args.template is not None:
         if args.csv: 
-            quit_on_error("[red]   [-] You cannot use templates in CSV mode[/]", logger)
+            quit_on_error("[red]    [-] You cannot use templates in CSV mode[/]", logger)
         if args.templateOutput is None or len(args.template) != len(args.templateOutput):
-            quit_on_error("[red]   [-] Number of templates output must match number of templates[/]", logger)
+            n_tmpl = len(args.template)
+            n_out = len(args.templateOutput) if args.templateOutput else 0
+            quit_on_error(f"[red]    [-] Number of --templateOutput values ({n_out}) must match --template count ({n_tmpl})[/]", logger)
         for template in args.template:
-            check_if_exists(template[0], f"[red]   [-] Cannot find template: {template[0]}. Default templates are available here: https://github.com/wagga40/Zircolite/tree/master/templates[/]", logger)
+            check_if_exists(template[0], f"[red]    [-] Cannot find template: {template[0]}. Default templates are available here: https://github.com/wagga40/Zircolite/tree/master/templates[/]", logger)
         ready_for_templating = True
     
     # CSV mode adjustments
@@ -976,6 +1155,14 @@ def main():
     # Flatten rule filters
     if args.rulefilter: 
         args.rulefilter = [item for sublist in args.rulefilter for item in sublist]
+
+    if args.dbfile and Path(args.dbfile).exists():
+        print_error_panel(
+            "Database File Exists",
+            f"The database file '{args.dbfile}' already exists.",
+            "Remove the existing file or choose a different path with --dbfile."
+        )
+        sys.exit(2)
 
     # Section separator before processing
     print_section("Processing")
@@ -1013,13 +1200,23 @@ def main():
         dbfile=args.dbfile,
         keepflat=args.keepflat,
         memory_tracker=memory_tracker,
-        event_filter=active_event_filter
+        event_filter=active_event_filter,
+        profile_rules=getattr(args, 'profile_rules', False),
+        archive_password=getattr(args, 'archive_password', None),
+        add_index=_flatten_add_remove_index(getattr(args, 'add_index', None)),
+        remove_index=_flatten_add_remove_index(getattr(args, 'remove_index', None)),
     )
 
     # Run processing and collect results
     zircolite_core, all_results, extractor, log_list, phase_setup_end = (
         _run_processing(ctx, args, logger, memory_tracker)
     )
+
+    # Print rule profiling report if requested
+    if getattr(args, 'profile_rules', False) and zircolite_core is not None:
+        from zircolite.console import print_profiling_report
+        print_section("Rule Performance")
+        print_profiling_report(zircolite_core.get_profiling_report())
 
     # Handle templating and package generation
     handle_templating(ctx, all_results, args)

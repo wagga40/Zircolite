@@ -16,24 +16,29 @@ Tests cover:
 - Edge cases: empty files, unknown formats, binary junk
 """
 
+import gzip
 import json
 import logging
 import os
 import pytest
 from pathlib import Path
+from unittest.mock import patch
 
 from zircolite.detector import (
     LogTypeDetector,
     DetectionResult,
     EVTX_MAGIC,
+    SQLITE_MAGIC,
     AUDITD_LINE_PATTERN,
-    TIMESTAMP_RAW_PATTERNS,
 )
 
 
 # =============================================================================
 # Fixtures
 # =============================================================================
+
+FIXTURES_DIR = Path(__file__).resolve().parent / "fixtures"
+
 
 @pytest.fixture
 def detector():
@@ -380,6 +385,27 @@ class TestEvtxBinaryDetection:
         assert result.confidence == "high"
 
 
+class TestSqliteDatabaseDetection:
+    """Tests for SQLite database file detection via magic bytes."""
+
+    def test_detect_sqlite_by_magic_bytes(self, detector, tmp_path):
+        """SQLite database files should be detected with high confidence via magic bytes."""
+        db_file = tmp_path / "events.db"
+        db_file.write_bytes(SQLITE_MAGIC + b"\x00" * 100)
+        result = detector.detect(db_file)
+        assert result.input_type == "sqlite"
+        assert result.log_source == "sqlite_db"
+        assert result.confidence == "high"
+
+    def test_detect_sqlite_ignores_extension(self, detector, tmp_path):
+        """SQLite detection should work regardless of file extension."""
+        f = tmp_path / "data.bin"
+        f.write_bytes(SQLITE_MAGIC + b"\x00" * 100)
+        result = detector.detect(f)
+        assert result.input_type == "sqlite"
+        assert result.confidence == "high"
+
+
 # =============================================================================
 # Windows EVTX JSON Detection Tests
 # =============================================================================
@@ -463,6 +489,28 @@ class TestAuditdDetection:
         for line in invalid_lines:
             assert not AUDITD_LINE_PATTERN.match(line), f"Pattern should not match: {line}"
 
+    def test_detect_auditd_single_line_medium_confidence(self, detector, tmp_path):
+        """Single auditd line yields medium confidence."""
+        f = tmp_path / "single_auditd.log"
+        f.write_text(
+            'type=SYSCALL msg=audit(1705318200.123:456): arch=c000003e syscall=59 success=yes\n'
+            'some other line that does not match\n'
+        )
+        result = detector.detect(f)
+        assert result.input_type == "auditd"
+        assert result.log_source == "auditd"
+        assert result.confidence == "medium"
+        assert "1 matching" in result.details or "1 matching line" in result.details
+
+    def test_detect_auditd_from_fixture(self, detector):
+        """Real auditd fixture (audit_sample.log) is detected as auditd."""
+        fixture = FIXTURES_DIR / "audit_sample.log"
+        if not fixture.exists():
+            pytest.skip(f"Fixture not found: {fixture}")
+        result = detector.detect(fixture)
+        assert result.input_type == "auditd"
+        assert result.log_source == "auditd"
+
 
 # =============================================================================
 # Sysmon for Linux Detection Tests
@@ -490,6 +538,15 @@ class TestSysmonLinuxDetection:
         result = detector.detect(f)
         assert result.input_type == "sysmon_linux"
         assert result.confidence in ("medium", "high")
+
+    def test_detect_sysmon_linux_from_fixture(self, detector):
+        """Real Sysmon for Linux fixture (sysmon_linux_sample.log) is detected."""
+        fixture = FIXTURES_DIR / "sysmon_linux_sample.log"
+        if not fixture.exists():
+            pytest.skip(f"Fixture not found: {fixture}")
+        result = detector.detect(fixture)
+        assert result.input_type == "sysmon_linux"
+        assert result.log_source == "sysmon_linux"
 
 
 # =============================================================================
@@ -523,6 +580,15 @@ class TestXmlDetection:
         assert result.input_type == "xml"
         assert result.confidence in ("medium", "low")
 
+    def test_detect_generic_xml_no_event_tag(self, detector, tmp_path):
+        """XML without Event tag is classified as generic_xml with low confidence."""
+        f = tmp_path / "generic.xml"
+        f.write_text('<?xml version="1.0"?><root><item>data</item></root>')
+        result = detector.detect(f)
+        assert result.input_type == "xml"
+        assert result.log_source == "generic_xml"
+        assert result.confidence == "low"
+
 
 # =============================================================================
 # CSV Detection Tests
@@ -537,6 +603,28 @@ class TestCsvDetection:
         assert result.input_type == "csv"
         assert "csv" in result.log_source
         assert result.confidence in ("high", "medium")
+
+    def test_detect_windows_evtx_csv_high_confidence(self, detector, tmp_path):
+        """CSV with Channel and EventID headers should be windows_evtx_csv with high confidence."""
+        f = tmp_path / "evtx.csv"
+        f.write_text(
+            "EventID,Channel,Computer,SystemTime,CommandLine\n"
+            "1,Microsoft-Windows-Sysmon/Operational,PC01,2024-06-15T10:30:00Z,cmd.exe\n"
+            "2,Microsoft-Windows-Sysmon/Operational,PC01,2024-06-15T10:31:00Z,powershell.exe\n"
+        )
+        result = detector.detect(f)
+        assert result.input_type == "csv"
+        assert result.log_source == "windows_evtx_csv"
+        assert result.confidence == "high"
+
+    def test_detect_csv_extension_fallback_when_sniffer_fails(self, detector, tmp_path):
+        """When CSV content cannot be parsed by sniffer, extension fallback is used."""
+        f = tmp_path / "bad.csv"
+        f.write_bytes(b"\x00\x01\x02\x03\x04\x05\n\x00\x01\x02")
+        result = detector.detect(f)
+        assert result.input_type == "csv"
+        assert result.log_source == "generic_csv"
+        assert result.confidence in ("low", "medium")
 
     def test_detect_generic_csv(self, detector, csv_generic_file):
         """Generic CSV should be detected with timestamp field."""
@@ -573,6 +661,16 @@ class TestEcsDetection:
         assert result.log_source == "ecs_elastic"
         assert result.timestamp_field == "@timestamp"
 
+    def test_detect_winlogbeat_sysmon_from_fixture(self, detector):
+        """Real Winlogbeat Sysmon JSONL fixture is detected as ECS/Elastic."""
+        fixture = FIXTURES_DIR / "winlogbeat_sysmon_sample.json"
+        if not fixture.exists():
+            pytest.skip(f"Fixture not found: {fixture}")
+        result = detector.detect(fixture)
+        assert result.input_type == "json"
+        assert result.log_source == "ecs_elastic"
+        assert result.timestamp_field == "@timestamp"
+
 
 # =============================================================================
 # EVTXtract Detection Tests
@@ -587,6 +685,16 @@ class TestEvtxtractDetection:
         assert result.input_type == "evtxtract"
         assert result.log_source == "evtxtract"
         assert result.confidence == "high"
+
+    def test_detect_evtxtract_from_fixture(self, detector):
+        """Real EVTXtract fixture (evtxtract_sample.log) is detected as xml or evtxtract."""
+        fixture = FIXTURES_DIR / "evtxtract_sample.log"
+        if not fixture.exists():
+            pytest.skip(f"Fixture not found: {fixture}")
+        result = detector.detect(fixture)
+        # EVTXtract output is concatenated Event XML; detector may report xml or evtxtract
+        assert result.input_type in ("xml", "evtxtract")
+        assert result.log_source in ("windows_evtx_xml", "evtxtract", "generic_xml")
 
 
 # =============================================================================
@@ -622,6 +730,25 @@ class TestGenericJsonDetection:
         result = detector.detect(f)
         assert result.log_source == "sysmon_windows"
         assert result.timestamp_field == "UtcTime"
+
+    def test_detect_json_unparseable_first_event_returns_generic(self, detector, tmp_path):
+        """JSON array with first element not a dict yields generic_json with parse message."""
+        f = tmp_path / "bad_first.json"
+        f.write_text('["not", "a", "dict"]')
+        result = detector.detect(f)
+        assert result.input_type == "json_array"
+        assert result.log_source == "generic_json"
+        assert result.confidence == "low"
+        assert "could not parse" in result.details.lower()
+
+    def test_detect_json_array_first_element_not_dict(self, detector, tmp_path):
+        """JSON array with first element not a dict yields generic_json."""
+        f = tmp_path / "array_primitives.json"
+        f.write_text('[1, 2, 3]')
+        result = detector.detect(f)
+        assert result.input_type == "json_array"
+        assert result.log_source == "generic_json"
+        assert result.confidence == "low"
 
 
 # =============================================================================
@@ -741,6 +868,15 @@ class TestBatchDetection:
         result = detector.detect_batch([auditd_file])
         assert result.input_type == "auditd"
 
+    def test_batch_confidence_boost_when_all_agree(self, detector, tmp_path):
+        """When multiple files agree on type and confidence is medium, boost to high."""
+        for i in range(2):
+            f = tmp_path / f"auditd_{i}.log"
+            f.write_text("type=SYSCALL msg=audit(1705318200.123:456): arch=c000003e syscall=59 success=yes\n")
+        result = detector.detect_batch([tmp_path / "auditd_0.log", tmp_path / "auditd_1.log"])
+        assert result.input_type == "auditd"
+        assert result.confidence == "high"
+
 
 # =============================================================================
 # Edge Cases
@@ -754,10 +890,66 @@ class TestEdgeCases:
         result = detector.detect(empty_file)
         assert result.confidence == "low"
 
+    def test_detect_fallback_when_read_raises(self, detector, tmp_path):
+        """When file cannot be read (e.g. path is a directory), fallback is used."""
+        result = detector.detect(tmp_path)
+        assert result is not None
+        assert "Cannot read" in result.details or result.log_source == "unknown"
+
     def test_nonexistent_file(self, detector, tmp_path):
         """Non-existent files should be handled gracefully."""
         result = detector.detect(tmp_path / "nonexistent.json")
         assert result.log_source == "unknown"
+        assert "File not found" in result.details
+
+    def test_detect_directory_returns_file_not_found(self, detector, tmp_path):
+        """When path is a directory (not a file), return unknown with File not found."""
+        result = detector.detect(tmp_path)
+        assert result.log_source == "unknown"
+        assert "File not found" in result.details
+
+    def test_compressed_empty_gz_fallback(self, detector, tmp_path):
+        """Empty .gz decompresses to empty; fallback by inner extension."""
+        empty_gz = tmp_path / "empty.json.gz"
+        with gzip.open(empty_gz, "wb") as f:
+            f.write(b"")
+        result = detector.detect(empty_gz)
+        assert "empty" in result.details.lower() or "could not decompress" in result.details.lower()
+        assert result.input_type == "json" or result.log_source == "unknown"
+
+    def test_compressed_corrupt_gz_fallback(self, detector, tmp_path):
+        """Corrupt .gz falls back to inner extension (decompress exception)."""
+        bad_gz = tmp_path / "bad.json.gz"
+        bad_gz.write_bytes(b"not valid gzip content")
+        result = detector.detect(bad_gz)
+        assert "empty" in result.details.lower() or "could not decompress" in result.details.lower()
+        assert result.input_type == "json" or result.log_source == "unknown"
+
+    def test_compressed_corrupt_zip_fallback(self, detector, tmp_path):
+        """Corrupt .zip uses stem extension and empty sample; fallback by extension."""
+        bad_zip = tmp_path / "data.json.zip"
+        bad_zip.write_text("not a zip file")
+        result = detector.detect(bad_zip)
+        assert result.input_type == "json" or "empty" in result.details.lower()
+
+    def test_detect_read_sample_raises_returns_fallback(self, detector, tmp_path):
+        """When _read_sample raises (e.g. permission), detect returns extension fallback."""
+        f = tmp_path / "readable.log"
+        f.write_text("plain text so no magic bytes")
+        with patch.object(detector, "_read_sample", side_effect=OSError("Permission denied")):
+            result = detector.detect(f)
+        assert "Cannot read" in result.details
+        assert result.input_type == "json"
+        assert result.confidence == "low"
+
+    def test_detect_read_sample_unicode_fallback_iso8859(self, detector, tmp_path):
+        """Content that is not valid UTF-8 is decoded with iso-8859-1 fallback."""
+        f = tmp_path / "latin1.json"
+        raw = b'{"msg": "caf\xe9", "timestamp": "2024-06-15T10:30:00Z"}\n'
+        f.write_bytes(raw)
+        result = detector.detect(f)
+        assert result is not None
+        assert result.log_source in ("generic_json", "ecs_elastic", "auditd")
 
     def test_binary_junk(self, detector, binary_junk_file):
         """Random binary content should not crash detection."""
@@ -788,6 +980,74 @@ class TestEdgeCases:
         result = detector.detect(f)
         assert result is not None
         assert isinstance(result.log_source, str)
+
+    def test_extension_fallback_evtx(self, detector, tmp_path):
+        """Empty file with .evtx extension should fall back to evtx by extension."""
+        f = tmp_path / "empty.evtx"
+        f.write_text("")
+        result = detector.detect(f)
+        assert result.input_type == "evtx"
+        assert result.confidence == "low"
+
+    def test_extension_fallback_tsv(self, detector, tmp_path):
+        """File with .tsv extension and no content match should fall back."""
+        f = tmp_path / "junk.tsv"
+        f.write_text("x\ty\tz\n")
+        result = detector.detect(f)
+        assert result.input_type == "csv"
+        assert result.log_source == "generic_csv"
+
+    def test_extension_fallback_log(self, detector, tmp_path):
+        """File with .log extension should fall back to json/generic_json."""
+        f = tmp_path / "out.log"
+        f.write_text("")
+        result = detector.detect(f)
+        assert result.input_type == "json"
+        assert result.log_source == "generic_json"
+        assert result.confidence == "low"
+
+    def test_extension_unknown(self, detector, tmp_path):
+        """Unknown extension should return unknown result."""
+        f = tmp_path / "file.xyz"
+        f.write_text("some content")
+        result = detector.detect(f)
+        assert result.log_source == "unknown"
+        assert "Unknown extension" in result.details
+
+
+# =============================================================================
+# Archive password and internal helpers
+# =============================================================================
+
+class TestArchivePasswordBytes:
+    """Tests for _archive_password_bytes used when opening protected archives."""
+
+    def test_archive_password_none(self, test_logger):
+        """When archive_password is None, _archive_password_bytes returns None."""
+        det = LogTypeDetector(logger=test_logger)
+        assert det._archive_password_bytes() is None
+
+    def test_archive_password_str_encoded_to_bytes(self, test_logger):
+        """When archive_password is str, _archive_password_bytes returns utf-8 bytes."""
+        det = LogTypeDetector(logger=test_logger, archive_password="secret")
+        assert det._archive_password_bytes() == b"secret"
+
+    def test_archive_password_bytes_passthrough(self, test_logger):
+        """When archive_password is bytes, _archive_password_bytes returns it as-is."""
+        det = LogTypeDetector(logger=test_logger, archive_password=b"bytes\x00")
+        assert det._archive_password_bytes() == b"bytes\x00"
+
+
+class TestMagicBytesException:
+    """Tests for _check_magic_bytes when file read fails."""
+
+    def test_magic_bytes_open_raises_returns_none(self, detector, tmp_path):
+        """When opening the file for magic bytes raises, _check_magic_bytes returns None."""
+        f = tmp_path / "evtx.evtx"
+        f.write_bytes(EVTX_MAGIC + b"\x00" * 50)
+        with patch("builtins.open", side_effect=OSError("Permission denied")):
+            result = detector._check_magic_bytes(f)
+        assert result is None
 
 
 # =============================================================================
@@ -983,6 +1243,20 @@ class TestRawTimestampFallbackIntegration:
         # Raw scan should spot the syslog timestamp format
         assert "Syslog" in result.details or "raw_timestamp_format" in result.metadata
 
+    def test_enrich_timestamp_matched_key_from_json(self, detector, tmp_path):
+        """Raw timestamp enrichment sets timestamp_field when JSON key contains the matched value."""
+        f = tmp_path / "custom_ts.json"
+        f.write_text('{"logged_at": "2024-06-15T10:30:00Z", "msg": "test"}\n')
+        result = detector.detect(f)
+        assert result.timestamp_field == "logged_at"
+
+    def test_enrich_timestamp_metadata_only_when_no_json_key(self, detector, tmp_path):
+        """Raw timestamp enrichment sets only metadata when content has timestamp but no JSON key."""
+        f = tmp_path / "text.log"
+        f.write_text("plain text 2024-06-15T10:30:00 more text\n")
+        result = detector.detect(f)
+        assert "raw_timestamp_format" in result.metadata or "2024" in result.details
+
 
 class TestLooksLikeTimestampExtended:
     """Tests for extended _looks_like_timestamp patterns."""
@@ -1006,3 +1280,524 @@ class TestLooksLikeTimestampExtended:
     def test_windows_filetime_string(self):
         """Windows FileTime as string should be recognized."""
         assert LogTypeDetector._looks_like_timestamp("133627842000000000")
+
+    def test_looks_like_timestamp_none_and_non_string(self):
+        """None and non-string types should return False."""
+        assert not LogTypeDetector._looks_like_timestamp(None)
+        assert not LogTypeDetector._looks_like_timestamp([])
+        assert not LogTypeDetector._looks_like_timestamp({})
+
+    def test_looks_like_timestamp_int_out_of_range(self):
+        """Integers outside epoch/FileTime range should return False."""
+        assert not LogTypeDetector._looks_like_timestamp(1)
+        assert not LogTypeDetector._looks_like_timestamp(946684799)
+        assert not LogTypeDetector._looks_like_timestamp(4102444801)
+
+    def test_looks_like_timestamp_float_epoch_millis(self):
+        """Float epoch milliseconds should be recognized."""
+        assert LogTypeDetector._looks_like_timestamp(1718442600000.0)
+
+    def test_looks_like_timestamp_string_length_bounds(self):
+        """Strings too short or too long should return False."""
+        assert not LogTypeDetector._looks_like_timestamp("1234567")
+        assert not LogTypeDetector._looks_like_timestamp("a" * 41)
+
+    def test_looks_like_timestamp_date_only(self):
+        """Date-only YYYY-MM-DD should be recognized."""
+        assert LogTypeDetector._looks_like_timestamp("2024-06-15")
+
+    def test_looks_like_timestamp_digit_18_starts_with_one(self):
+        """18-digit string starting with 1 (Windows FileTime) should be recognized."""
+        assert LogTypeDetector._looks_like_timestamp("133627842000000000")
+        assert not LogTypeDetector._looks_like_timestamp("233627842000000000")
+
+
+class TestTimestampFieldScore:
+    """Tests for _timestamp_field_score."""
+
+    def test_exact_timestamp_names(self):
+        """Exact timestamp names should score 100."""
+        assert LogTypeDetector._timestamp_field_score("SystemTime") == 100
+        assert LogTypeDetector._timestamp_field_score("UtcTime") == 100
+        assert LogTypeDetector._timestamp_field_score("timestamp") == 100
+
+    def test_contains_timestamp(self):
+        """Field names containing 'timestamp' should score 90."""
+        assert LogTypeDetector._timestamp_field_score("event_timestamp") == 90
+
+    def test_contains_time_not_timeout(self):
+        """Field names containing 'time' but not 'timeout' should score 80."""
+        assert LogTypeDetector._timestamp_field_score("event_time") == 80
+        assert LogTypeDetector._timestamp_field_score("timeout") == 0
+
+    def test_contains_date_not_update(self):
+        """Field names containing 'date' but not 'update' should score 70."""
+        assert LogTypeDetector._timestamp_field_score("birth_date") == 70
+        assert LogTypeDetector._timestamp_field_score("last_update") == 0
+
+    def test_short_ts_names(self):
+        """Short names ts and dt should score 60."""
+        assert LogTypeDetector._timestamp_field_score("ts") == 60
+        assert LogTypeDetector._timestamp_field_score("dt") == 60
+
+    def test_contains_created(self):
+        """Field names containing 'created' should score 50."""
+        assert LogTypeDetector._timestamp_field_score("created_at") == 50
+
+    def test_contains_when(self):
+        """Field names containing 'when' should score 40."""
+        assert LogTypeDetector._timestamp_field_score("occurred_when") == 40
+
+    def test_unknown_returns_zero(self):
+        """Unknown field names should score 0."""
+        assert LogTypeDetector._timestamp_field_score("message") == 0
+        assert LogTypeDetector._timestamp_field_score("payload") == 0
+
+
+# =============================================================================
+# _collect_keys and _find_key_for_value
+# =============================================================================
+
+
+class TestCollectKeysAndFindKeyForValue:
+    """Tests for _collect_keys and _find_key_for_value helpers."""
+
+    def test_collect_keys_recursive(self):
+        """_collect_keys should collect top-level and nested keys with dot notation."""
+        keys = set()
+        obj = {"a": 1, "b": {"c": 2, "d": {"e": 3}}}
+        LogTypeDetector._collect_keys(obj, keys)
+        assert "a" in keys
+        assert "b" in keys
+        assert "b.c" in keys
+        assert "b.d" in keys
+        assert "b.d.e" in keys
+
+    def test_find_key_for_value_nested_dict(self):
+        """_find_key_for_value returns sub_key when needle is in inner dict (one level deep)."""
+        event = {"Event": {"SystemTime": "2024-06-15T10:30:00Z"}}
+        assert LogTypeDetector._find_key_for_value(event, "2024-06-15T10:30:00Z") == "SystemTime"
+
+    def test_find_key_for_value_three_levels_returns_none(self):
+        """_find_key_for_value only looks one level deep; three-level nesting is not found."""
+        event = {"Event": {"System": {"SystemTime": "2024-06-15T10:30:00Z"}}}
+        assert LogTypeDetector._find_key_for_value(event, "2024-06-15T10:30:00Z") is None
+
+    def test_find_key_for_value_top_level(self):
+        """_find_key_for_value should return key when needle is in top-level string value."""
+        event = {"timestamp": "2024-06-15T10:30:00Z", "msg": "hello"}
+        assert LogTypeDetector._find_key_for_value(event, "2024-06-15T10:30:00Z") == "timestamp"
+
+    def test_find_key_for_value_not_found(self):
+        """_find_key_for_value should return None when needle is not in any string value."""
+        event = {"a": "x", "b": {"c": "y"}}
+        assert LogTypeDetector._find_key_for_value(event, "z") is None
+
+
+# =============================================================================
+# CSV edge cases: delimiter heuristic, parse exception, return None
+# =============================================================================
+
+
+class TestCsvEdgeCases:
+    """Tests for _check_csv edge paths."""
+
+    def test_csv_delimiter_heuristic_plain_txt(self, detector, tmp_path):
+        """Content with consistent delimiter but non-.csv extension can be detected as CSV."""
+        f = tmp_path / "data.txt"
+        f.write_text("col1,col2,col3\n1,2,3\n4,5,6\n")
+        result = detector.detect(f)
+        assert result.input_type == "csv"
+        assert result.log_source == "generic_csv"
+
+    def test_csv_extension_parse_failure_returns_low_confidence(self, detector, tmp_path):
+        """When extension is .csv but sniffer/parse fails, return low-confidence CSV."""
+        f = tmp_path / "bad.csv"
+        f.write_text("not,enough\n")
+        result = detector.detect(f)
+        assert result.input_type == "csv"
+        assert result.log_source == "generic_csv"
+        assert result.confidence in ("low", "medium")
+
+    def test_no_delimiter_match_returns_none_from_content(self, detector, tmp_path):
+        """Content with no consistent delimiter and non-csv extension returns None from _detect_from_content."""
+        f = tmp_path / "single_col.txt"
+        f.write_text("only one column\nand another line\n")
+        result = detector.detect(f)
+        assert result is not None
+        assert result.log_source in ("generic_json", "unknown") or "extension" in result.details.lower()
+
+
+# =============================================================================
+# _check_evtxtract single marker returns None
+# =============================================================================
+
+
+class TestEvtxtractSingleMarker:
+    """EVTXtract with fewer than 2 markers should not be detected as evtxtract."""
+
+    def test_evtxtract_one_marker_returns_none(self, detector, tmp_path):
+        """Content with only one EVTXtract marker should not be classified as evtxtract."""
+        f = tmp_path / "one_marker.log"
+        f.write_text('Found at offset 0x100\n<Event><EventID>1</EventID></Event>\n')
+        result = detector.detect(f)
+        assert result.input_type != "evtxtract" or result.log_source != "evtxtract"
+
+
+# =============================================================================
+# JSON classification: Event.System without Channel/EventID, type not in AUDITD, ECS no winlog
+# =============================================================================
+
+
+class TestJsonClassificationEdgeCases:
+    """Tests for _classify_json_event edge branches."""
+
+    def test_json_event_system_without_channel_or_eventid(self, detector, tmp_path):
+        """JSON with Event.System but no Channel/EventID keys falls through to other checks."""
+        f = tmp_path / "minimal_event.json"
+        event = {
+            "Event": {
+                "System": {"Provider": {"#attributes": {"Name": "Custom"}}},
+                "EventData": {},
+            }
+        }
+        f.write_text(json.dumps(event) + "\n")
+        result = detector.detect(f)
+        assert result is not None
+        assert result.input_type == "json"
+
+    def test_json_type_not_in_auditd_types(self, detector, tmp_path):
+        """JSON with type field but value not in AUDITD_TYPES is not classified as auditd."""
+        f = tmp_path / "custom_type.json"
+        event = {"type": "CUSTOM_TYPE", "timestamp": "2024-06-15T10:30:00Z"}
+        f.write_text(json.dumps(event) + "\n")
+        result = detector.detect(f)
+        assert result.log_source != "auditd"
+
+    def test_json_ecs_without_winlog_channel(self, detector, tmp_path):
+        """ECS-style JSON with @timestamp but no winlog.channel gets medium confidence ecs_elastic."""
+        f = tmp_path / "ecs_no_winlog.json"
+        event = {"@timestamp": "2024-06-15T10:30:00.000Z", "event": {"module": "sysmon"}, "message": "test"}
+        f.write_text(json.dumps(event) + "\n")
+        result = detector.detect(f)
+        assert result.log_source == "ecs_elastic"
+        assert result.confidence in ("high", "medium")
+
+    def test_json_sysmon_fields_medium_confidence(self, detector, tmp_path):
+        """JSON with 3+ Sysmon-like fields (no Event wrapper) is classified as sysmon_windows medium."""
+        f = tmp_path / "sysmon_flat.json"
+        event = {
+            "RuleName": "-",
+            "ProcessGuid": "{abc}",
+            "ProcessId": "1234",
+            "Image": "C:\\cmd.exe",
+            "UtcTime": "2024-06-15 10:30:00.000",
+            "CommandLine": "cmd.exe",
+        }
+        f.write_text(json.dumps(event) + "\n")
+        result = detector.detect(f)
+        assert result.log_source == "sysmon_windows"
+        assert result.confidence in ("high", "medium")
+
+
+# =============================================================================
+# Compressed detection: .gz with JSON, _check_magic_bytes skips compressed
+# =============================================================================
+
+
+class TestCompressedDetection:
+    """Tests for compressed file detection paths."""
+
+    def test_detect_gz_with_json_content(self, detector, tmp_path):
+        """Compressed .gz containing JSON is detected from decompressed content."""
+        import gzip
+        raw = b'{"Event":{"System":{"EventID":1,"Channel":"Security"}}}\n'
+        f = tmp_path / "events.json.gz"
+        with gzip.open(f, "wb") as gz:
+            gz.write(raw)
+        result = detector.detect(f)
+        assert result.input_type == "json"
+        assert result.log_source in ("windows_evtx_json", "sysmon_windows", "generic_json")
+
+    def test_check_magic_bytes_skips_compressed(self, detector, tmp_path):
+        """_check_magic_bytes returns None for compressed suffix so content is sampled instead."""
+        f = tmp_path / "data.evtx.gz"
+        f.write_bytes(b"\x1f\x8b")  # gzip magic
+        result = detector._check_magic_bytes(f)
+        assert result is None
+
+    def test_detect_zip_with_one_member(self, detector, tmp_path):
+        """ZIP archive with one JSON member is detected from extracted content."""
+        import zipfile
+        zip_path = tmp_path / "logs.zip"
+        with zipfile.ZipFile(zip_path, "w") as zf:
+            zf.writestr("events.json", b'{"id":1,"timestamp":"2024-06-15T10:30:00Z"}\n')
+        result = detector.detect(zip_path)
+        assert result.input_type == "json"
+        assert result.log_source in ("generic_json", "ecs_elastic")
+
+    def test_read_sample_unicode_fallback(self, detector, tmp_path):
+        """_read_sample decodes with iso-8859-1 when UTF-8 fails."""
+        f = tmp_path / "latin1.txt"
+        f.write_bytes(b"type=SYSCALL msg=audit(1705318200.123:456): caf\xe9\n")
+        sample_bytes, text, lines = detector._read_sample(f)
+        assert "caf" in text
+        assert len(lines) >= 1
+
+
+# =============================================================================
+# _parse_first_json_event truncated array recovery
+# =============================================================================
+
+
+class TestParseFirstJsonEventRecovery:
+    """Tests for line-by-line JSON recovery in _parse_first_json_event."""
+
+    def test_truncated_json_array_line_recovery(self, detector):
+        """Truncated JSON array can yield first event via line-by-line recovery."""
+        sample = b'[\n{"id":1,"timestamp":"2024-06-15T10:30:00Z"},\n'
+        event = detector._parse_first_json_event(sample, is_json_array=True)
+        assert event is not None
+        assert event.get("id") == 1
+        assert "timestamp" in event
+
+
+# =============================================================================
+# Real Fixture Single-File Detection Tests
+# =============================================================================
+
+
+class TestRealFixtureSingleFile:
+    """Systematic detection tests against every log fixture in tests/fixtures/.
+
+    Each test runs detector.detect() on a real fixture file and verifies the
+    full DetectionResult: input_type, log_source, confidence, timestamp_field,
+    and a non-empty details string.
+    """
+
+    def test_sample_events_json(self, detector):
+        """sample_events.json: Windows Sysmon JSONL should be detected."""
+        fixture = FIXTURES_DIR / "sample_events.json"
+        if not fixture.exists():
+            pytest.skip(f"Fixture not found: {fixture}")
+        result = detector.detect(fixture)
+        assert result.input_type == "json"
+        assert result.log_source in ("windows_evtx_json", "sysmon_windows")
+        assert result.confidence == "high"
+        assert result.timestamp_field in ("SystemTime", "UtcTime")
+        assert result.details
+
+    def test_winlogbeat_sysmon_json(self, detector):
+        """winlogbeat_sysmon_sample.json: ECS/Winlogbeat format detection."""
+        fixture = FIXTURES_DIR / "winlogbeat_sysmon_sample.json"
+        if not fixture.exists():
+            pytest.skip(f"Fixture not found: {fixture}")
+        result = detector.detect(fixture)
+        assert result.input_type == "json"
+        assert result.log_source == "ecs_elastic"
+        assert result.confidence == "high"
+        assert result.timestamp_field == "@timestamp"
+        assert result.details
+
+    def test_xml_events_sample(self, detector):
+        """xml_events_sample.xml: Windows Event XML with MS namespace."""
+        fixture = FIXTURES_DIR / "xml_events_sample.xml"
+        if not fixture.exists():
+            pytest.skip(f"Fixture not found: {fixture}")
+        result = detector.detect(fixture)
+        assert result.input_type == "xml"
+        assert result.log_source == "windows_evtx_xml"
+        assert result.confidence == "high"
+        assert result.timestamp_field == "SystemTime"
+        assert result.details
+
+    def test_audit_sample_log(self, detector):
+        """audit_sample.log: Linux Auditd key=value format."""
+        fixture = FIXTURES_DIR / "audit_sample.log"
+        if not fixture.exists():
+            pytest.skip(f"Fixture not found: {fixture}")
+        result = detector.detect(fixture)
+        assert result.input_type == "auditd"
+        assert result.log_source == "auditd"
+        assert result.confidence == "high"
+        assert result.details
+
+    def test_sysmon_linux_sample_log(self, detector):
+        """sysmon_linux_sample.log: Sysmon for Linux (syslog + embedded XML)."""
+        fixture = FIXTURES_DIR / "sysmon_linux_sample.log"
+        if not fixture.exists():
+            pytest.skip(f"Fixture not found: {fixture}")
+        result = detector.detect(fixture)
+        assert result.input_type == "sysmon_linux"
+        assert result.log_source == "sysmon_linux"
+        assert result.confidence == "high"
+        assert result.timestamp_field == "UtcTime"
+        assert result.details
+
+    def test_evtxtract_sample_log(self, detector):
+        """evtxtract_sample.log: EVTXtract output (concatenated Event XML)."""
+        fixture = FIXTURES_DIR / "evtxtract_sample.log"
+        if not fixture.exists():
+            pytest.skip(f"Fixture not found: {fixture}")
+        result = detector.detect(fixture)
+        assert result.input_type in ("xml", "evtxtract")
+        assert result.log_source in ("windows_evtx_xml", "evtxtract", "generic_xml")
+        assert result.confidence in ("high", "medium")
+        assert result.details
+
+    def test_sample_bitsadmin_evtx(self, detector):
+        """sample_bitsadmin.evtx: EVTX binary detected via magic bytes."""
+        fixture = FIXTURES_DIR / "sample_bitsadmin.evtx"
+        if not fixture.exists():
+            pytest.skip(f"Fixture not found: {fixture}")
+        result = detector.detect(fixture)
+        assert result.input_type == "evtx"
+        assert result.log_source == "windows_evtx"
+        assert result.confidence == "high"
+        assert result.details
+
+    def test_sample_bitsadmin_db(self, detector):
+        """sample_bitsadmin.db: SQLite database detected via magic bytes."""
+        fixture = FIXTURES_DIR / "sample_bitsadmin.db"
+        if not fixture.exists():
+            pytest.skip(f"Fixture not found: {fixture}")
+        result = detector.detect(fixture)
+        assert result.input_type == "sqlite"
+        assert result.log_source == "sqlite_db"
+        assert result.confidence == "high"
+        assert result.details
+
+
+# =============================================================================
+# Real Fixture Batch / Directory Detection Tests
+# =============================================================================
+
+
+class TestRealFixtureBatchDetection:
+    """Batch detection tests using real fixture files.
+
+    Tests simulate directory processing by copying fixture files into temp
+    directories and passing the file lists to detect_batch().
+    """
+
+    def _copy_fixtures(self, names, dest_dir):
+        """Copy named fixtures into dest_dir and return their new paths."""
+        import shutil
+        paths = []
+        for name in names:
+            src = FIXTURES_DIR / name
+            if not src.exists():
+                pytest.skip(f"Fixture not found: {src}")
+            dst = dest_dir / name
+            shutil.copy2(src, dst)
+            paths.append(dst)
+        return paths
+
+    def test_batch_same_type_windows_json(self, detector, tmp_path):
+        """Batch of identical Windows EVTX JSON files agrees on type."""
+        import shutil
+        src = FIXTURES_DIR / "sample_events.json"
+        if not src.exists():
+            pytest.skip(f"Fixture not found: {src}")
+        files = []
+        for i in range(3):
+            dst = tmp_path / f"events_{i}.json"
+            shutil.copy2(src, dst)
+            files.append(dst)
+
+        result = detector.detect_batch(files)
+        assert result.input_type == "json"
+        assert result.log_source in ("windows_evtx_json", "sysmon_windows")
+        assert result.confidence == "high"
+
+    def test_batch_same_type_auditd(self, detector, tmp_path):
+        """Batch of identical auditd files agrees on type."""
+        import shutil
+        src = FIXTURES_DIR / "audit_sample.log"
+        if not src.exists():
+            pytest.skip(f"Fixture not found: {src}")
+        files = []
+        for i in range(3):
+            dst = tmp_path / f"audit_{i}.log"
+            shutil.copy2(src, dst)
+            files.append(dst)
+
+        result = detector.detect_batch(files)
+        assert result.input_type == "auditd"
+        assert result.log_source == "auditd"
+        assert result.confidence == "high"
+
+    def test_batch_same_type_sysmon_linux(self, detector, tmp_path):
+        """Batch of identical Sysmon Linux files agrees on type."""
+        import shutil
+        src = FIXTURES_DIR / "sysmon_linux_sample.log"
+        if not src.exists():
+            pytest.skip(f"Fixture not found: {src}")
+        files = []
+        for i in range(3):
+            dst = tmp_path / f"sysmon_{i}.log"
+            shutil.copy2(src, dst)
+            files.append(dst)
+
+        result = detector.detect_batch(files)
+        assert result.input_type == "sysmon_linux"
+        assert result.log_source == "sysmon_linux"
+        assert result.confidence == "high"
+
+    def test_batch_mixed_json_formats(self, detector, tmp_path):
+        """Batch of different JSON formats returns a valid high-confidence result."""
+        files = self._copy_fixtures(
+            ["sample_events.json", "winlogbeat_sysmon_sample.json"],
+            tmp_path,
+        )
+        result = detector.detect_batch(files)
+        assert result.input_type == "json"
+        assert result.confidence == "high"
+        assert result.log_source in ("windows_evtx_json", "sysmon_windows", "ecs_elastic")
+
+    def test_batch_mixed_types(self, detector, tmp_path):
+        """Batch of different log types still returns the best-confidence result."""
+        files = self._copy_fixtures(
+            ["sample_events.json", "audit_sample.log", "xml_events_sample.xml"],
+            tmp_path,
+        )
+        result = detector.detect_batch(files)
+        assert result.confidence == "high"
+        assert result.input_type in ("json", "auditd", "xml")
+        assert result.log_source != "unknown"
+
+    def test_batch_single_evtx(self, detector):
+        """Single EVTX file in a batch list is handled correctly."""
+        fixture = FIXTURES_DIR / "sample_bitsadmin.evtx"
+        if not fixture.exists():
+            pytest.skip(f"Fixture not found: {fixture}")
+        result = detector.detect_batch([fixture])
+        assert result.input_type == "evtx"
+        assert result.log_source == "windows_evtx"
+        assert result.confidence == "high"
+
+    def test_batch_single_sqlite(self, detector):
+        """Single SQLite file in a batch list is handled correctly."""
+        fixture = FIXTURES_DIR / "sample_bitsadmin.db"
+        if not fixture.exists():
+            pytest.skip(f"Fixture not found: {fixture}")
+        result = detector.detect_batch([fixture])
+        assert result.input_type == "sqlite"
+        assert result.log_source == "sqlite_db"
+        assert result.confidence == "high"
+
+    def test_batch_all_log_fixtures(self, detector, tmp_path):
+        """Batch with all log fixture types returns a valid result."""
+        log_fixtures = [
+            "sample_events.json",
+            "winlogbeat_sysmon_sample.json",
+            "xml_events_sample.xml",
+            "audit_sample.log",
+            "sysmon_linux_sample.log",
+            "evtxtract_sample.log",
+        ]
+        files = self._copy_fixtures(log_fixtures, tmp_path)
+        result = detector.detect_batch(files)
+        assert result.confidence in ("high", "medium")
+        assert result.log_source != "unknown"
+        assert result.details

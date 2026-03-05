@@ -1,0 +1,55 @@
+{
+  "$schema": "https://raw.githubusercontent.com/oasis-tcs/sarif-spec/master/Schemata/sarif-schema-2.1.0.json",
+  "version": "2.1.0",
+  "runs": [
+    {
+      "tool": {
+        "driver": {
+          "name": "Zircolite",
+          "informationUri": "https://github.com/wagga40/Zircolite",
+          "rules": [
+            {% for elem in data %}
+            {
+              "id": {{ elem.id | tojson }},
+              "name": {{ elem.title | tojson }},
+              "shortDescription": {
+                "text": {{ elem.title | tojson }}
+              },
+              "fullDescription": {
+                "text": {{ elem.description | tojson }}
+              },
+              "properties": {
+                "tags": {{ elem.tags | tojson }},
+                "level": {{ elem.rule_level | tojson }}
+              }
+            }{{ "," if not loop.last }}
+            {% endfor %}
+          ]
+        }
+      },
+      "results": [
+        {% set ns = namespace(first=true) %}
+        {% for elem in data %}{% for match in elem.matches %}
+        {% if not ns.first %},{% endif %}{% set ns.first = false %}
+        {
+          "ruleId": {{ elem.id | tojson }},
+          "level": {% if elem.rule_level in ['critical', 'high'] %}"error"{% elif elem.rule_level == 'medium' %}"warning"{% else %}"note"{% endif %},
+          "message": {
+            "text": {{ (elem.title ~ " — " ~ elem.description) | tojson }}
+          },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": ""
+                }
+              }
+            }
+          ],
+          "properties": {{ match | tojson }}
+        }
+        {% endfor %}{% endfor %}
+      ]
+    }
+  ]
+}

@@ -14,16 +14,40 @@ import logging
 import os
 import re
 import sqlite3
+import time as _time_module
 from functools import lru_cache
 from pathlib import Path
 from sqlite3 import Error
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING, Any, Callable, Dict, List, Optional, Tuple, Union
 
 import orjson as json
 
+from rich.console import Group
+from rich.live import Live
+from rich.panel import Panel
+from rich.progress import (
+    Progress,
+    SpinnerColumn,
+    TextColumn,
+    BarColumn,
+    MofNCompleteColumn,
+    TimeElapsedColumn,
+)
+from rich.syntax import Syntax
+
+from .config import ProcessingConfig
+from .console import (
+    LEVEL_PRIORITY,
+    build_detection_table,
+    console,
+    is_quiet,
+    make_detection_counter,
+)
+from .streaming import StreamingEventProcessor
+from .utils import sanitize_row_for_csv
 
 # ---------------------------------------------------------------------------
-# Optimisation: LRU-cached regex compilation for the SQLite ``regexp`` UDF.
+# LRU-cached regex compilation for the SQLite ``regexp`` UDF.
 # SIGMA rules reuse the same patterns across thousands of rows; caching the
 # compiled objects avoids redundant ``re.compile`` calls per row.
 # ---------------------------------------------------------------------------
@@ -32,19 +56,6 @@ def _compile_regex(pattern: str) -> re.Pattern:
     """Return a compiled regex, cached for repeated use by the SQLite UDF."""
     return re.compile(pattern)
 
-from .config import ProcessingConfig
-from .streaming import StreamingEventProcessor
-from .console import console, is_quiet, make_detection_counter, build_detection_table, LEVEL_PRIORITY
-
-# Rich progress bar and live display
-from rich.console import Group
-from rich.live import Live
-from rich.panel import Panel
-from rich.progress import (
-    Progress, SpinnerColumn, TextColumn, BarColumn,
-    MofNCompleteColumn, TimeElapsedColumn
-)
-from rich.syntax import Syntax
 
 if TYPE_CHECKING:
     from .extractor import EvtxExtractor
@@ -56,12 +67,30 @@ class ZircoliteCore:
 
     # Use __slots__ for reduced memory footprint per instance
     __slots__ = (
-        'logger', 'db_connection', 'full_results', 'ruleset', 'no_output',
-        'time_after', 'time_before', 'config', 'limit', 'csv_mode', 
-        'time_field', 'hashes', 'delimiter', 'first_json_output', 
-        'disable_progress', '_escape_cache', '_level_format_map',
-        '_cursor'  # Reusable cursor for better performance
+        "logger",
+        "db_connection",
+        "full_results",
+        "ruleset",
+        "no_output",
+        "time_after",
+        "time_before",
+        "config",
+        "limit",
+        "csv_mode",
+        "time_field",
+        "hashes",
+        "delimiter",
+        "first_json_output",
+        "disable_progress",
+        "_escape_cache",
+        "_cursor",
+        "profile_rules",
+        "_profiling_data",
+        "archive_password",
+        "add_index",
+        "remove_index",
     )
+    _cursor: Optional[sqlite3.Cursor]
 
     def __init__(
         self,
@@ -95,43 +124,45 @@ class ZircoliteCore:
         self.delimiter = proc.delimiter
         self.first_json_output = True  # To manage commas in JSON output
         self.disable_progress = proc.disable_progress
+        self.profile_rules = proc.profile_rules
+        self._profiling_data: dict = {}
+        self.archive_password = proc.archive_password
+        self.add_index = list(proc.add_index) if proc.add_index else []
+        self.remove_index = list(proc.remove_index) if proc.remove_index else []
         # Cache for escaped identifiers to avoid repeated string operations
         self._escape_cache: dict = {}
-        # Pre-computed level format map for O(1) lookup (Rich styles)
-        self._level_format_map = {
-            "informational": "rule.level.informational",
-            "low": "rule.level.low",
-            "medium": "rule.level.medium",
-            "high": "rule.level.high",
-            "critical": "rule.level.critical"
-        }
         # Reusable cursor to avoid creating new cursors for each query
         self._cursor = None
     
-    def close(self):
+    def close(self) -> None:
         """Close the database connection. Safe to call multiple times."""
         self._cursor = None
-        if self.db_connection is not None:
-            self.db_connection.close()
+        conn = self.db_connection
+        if conn is not None:
+            conn.close()
             self.db_connection = None
 
-    def __del__(self):
+    def __del__(self) -> None:
         """Ensure connection is closed when the instance is garbage-collected."""
-        if getattr(self, 'db_connection', None) is not None:
+        conn = getattr(self, "db_connection", None)
+        if conn is not None:
             try:
-                self.db_connection.close()
+                conn.close()
             except Exception:
                 pass
             self.db_connection = None
         self._cursor = None
 
-    def _get_cursor(self):
+    def _get_cursor(self) -> sqlite3.Cursor:
         """Get a reusable cursor for better performance."""
-        if self._cursor is None:
-            self._cursor = self.db_connection.cursor()
+        if self._cursor is not None:
+            return self._cursor
+        if self.db_connection is None:
+            raise RuntimeError("No database connection")
+        self._cursor = self.db_connection.cursor()
         return self._cursor
 
-    def create_connection(self, db):
+    def create_connection(self, db: str) -> Optional[sqlite3.Connection]:
         """Create a database connection to a SQLite database."""
         conn = None
         self.logger.debug(f"CONNECTING TO : {db}")
@@ -169,8 +200,8 @@ class ZircoliteCore:
             for pragma, value in pragmas:
                 conn.execute(f'PRAGMA {pragma} = {value};')
             
-            # Enable dictionary-style row access
-            conn.row_factory = sqlite3.Row
+            # Raw tuples; we build dicts with None filtered in execute_select_query
+            conn.row_factory = None
 
             def udf_regex(x, y):
                 """User-defined function for regex matching in SQLite.
@@ -189,7 +220,7 @@ class ZircoliteCore:
             conn.create_function('regexp', 2, udf_regex)  # Allows to use regex in SQLite
             return conn
         except Error as e:
-            self.logger.error(f"[red]   [-] {e}[/]")
+            self.logger.error(f"[red]    [-] {e}[/]")
             if conn is not None:
                 try:
                     conn.close()
@@ -204,7 +235,7 @@ class ZircoliteCore:
                     pass
             raise
 
-    def create_db(self, field_stmt):
+    def create_db(self, field_stmt: str) -> None:
         """Create the database table with the specified field statement."""
         cleaned_field_stmt = field_stmt.strip()
         if cleaned_field_stmt.endswith(','):
@@ -215,15 +246,50 @@ class ZircoliteCore:
             create_table_stmt = "CREATE TABLE logs ( row_id INTEGER PRIMARY KEY AUTOINCREMENT );"
         self.logger.debug(f" CREATE : {create_table_stmt}")
         if not self.execute_query(create_table_stmt):
-            self.logger.error("[red]   [-] Unable to create table[/]")
-            import sys
-            sys.exit(1)
+            raise RuntimeError("Unable to create database table")
 
-    def create_index(self):
-        """Create an index on the eventid column."""
+    def _get_table_columns(self) -> List[str]:
+        """Return the list of column names for the logs table."""
+        cursor = self._get_cursor()
+        cursor.execute('PRAGMA table_info("logs")')
+        return [row[1] for row in cursor.fetchall()]
+
+    def create_index(self) -> None:
+        """Create standard and optional indexes; drop any requested by remove_index."""
+        columns = self._get_table_columns()
+        cursor = self._get_cursor()
+
         self.execute_query('CREATE INDEX "idx_eventid" ON "logs" ("eventid");')
 
-    def execute_query(self, query):
+        if "Channel" in columns:
+            try:
+                cursor.execute('CREATE INDEX "idx_channel" ON "logs" ("Channel");')
+                self.db_connection.commit()
+            except sqlite3.OperationalError:
+                pass
+
+        for col in self.add_index:
+            if col not in columns:
+                self.logger.debug("Column %s not present; skipping index", col)
+                continue
+            idx_name = "idx_" + col.replace(".", "_")
+            q_idx = self.escape_identifier(idx_name)
+            q_col = self.escape_identifier(col)
+            try:
+                cursor.execute(f'CREATE INDEX "{q_idx}" ON "logs" ("{q_col}");')
+                self.db_connection.commit()
+            except sqlite3.OperationalError as e:
+                self.logger.debug("Could not create index on %s: %s", col, e)
+
+        for idx_name in self.remove_index:
+            q_idx = self.escape_identifier(idx_name)
+            try:
+                cursor.execute(f'DROP INDEX IF EXISTS "{q_idx}";')
+                self.db_connection.commit()
+            except sqlite3.OperationalError as e:
+                self.logger.debug("Could not drop index %s: %s", idx_name, e)
+
+    def execute_query(self, query: str) -> bool:
         """Perform a SQL query with the provided connection."""
         if self.db_connection is not None:
             self.logger.debug(f"EXECUTING : {query}")
@@ -232,16 +298,16 @@ class ZircoliteCore:
                 self.db_connection.commit()
                 return True
             except Error as e:
-                self.logger.debug(f"   [-] {e}")
+                self.logger.debug(f"    [-] {e}")
                 return False
         else:
-            self.logger.error("[error]   [-] No connection to Db[/]")
+            self.logger.error("[error]    [-] No connection to Db[/]")
             return False
 
-    def execute_select_query(self, query):
+    def execute_select_query(self, query: str) -> List[Dict[str, Any]]:
         """Execute a SELECT SQL query and return the results as a list of dictionaries."""
         if self.db_connection is None:
-            self.logger.error("[error]   [-] No connection to Db[/]")
+            self.logger.error("[error]    [-] No connection to Db[/]")
             return []
         try:
             cursor = self._get_cursor()
@@ -254,28 +320,33 @@ class ZircoliteCore:
                     padding=(0, 1),
                 ))
             cursor.execute(query)
-            # Fetch all rows - sqlite3.Row objects are already dict-like
             rows = cursor.fetchall()
             if not rows:
                 return []
-            # Convert to dicts using C-level dict(Row) (faster than
-            # Python-level dict comprehension)
-            return [dict(row) for row in rows]
+            col_names = [d[0] for d in cursor.description]
+            return [
+                {k: v for k, v in zip(col_names, row) if v is not None}
+                for row in rows
+            ]
         except sqlite3.Error as e:
-            self.logger.debug(f"   [-] SQL query error: {e}")
+            self.logger.debug(f"    [-] SQL query error: {e}")
             return []
 
-    def load_db_in_memory(self, db):
+    def load_db_in_memory(self, db: str) -> None:
         """In db-only mode, restore an on-disk database to avoid EVTX extraction and flattening."""
-        db_file_connection = self.create_connection(db)
-        if db_file_connection is None:
-            raise RuntimeError(f"Could not connect to database: {db}")
+        try:
+            db_file_connection = sqlite3.connect(db, check_same_thread=False)
+            db_file_connection.execute("PRAGMA wal_checkpoint(TRUNCATE)")
+        except Error as e:
+            raise RuntimeError(f"Could not connect to database: {db} ({e})") from e
+        if self.db_connection is None:
+            raise RuntimeError("No main database connection")
         try:
             db_file_connection.backup(self.db_connection)
         finally:
             db_file_connection.close()
 
-    def escape_identifier(self, identifier):
+    def escape_identifier(self, identifier: str) -> str:
         """Escape SQL identifiers like table or column names with caching."""
         # Check cache first for frequently used identifiers
         escaped = self._escape_cache.get(identifier)
@@ -284,7 +355,7 @@ class ZircoliteCore:
             self._escape_cache[identifier] = escaped
         return escaped
 
-    def insert_data_to_db(self, data):
+    def insert_data_to_db(self, data: Union[Dict[str, Any], List[Dict[str, Any]]]) -> bool:
         """Build a parameterized INSERT INTO query and insert data into the database.
         Supports both single dictionaries and lists of dictionaries (batch insertion).
         """
@@ -297,18 +368,22 @@ class ZircoliteCore:
         elif isinstance(data, list):
             batch = data
         else:
-            self.logger.debug("   [-] Data must be a dictionary or a list of dictionaries")
+            self.logger.debug("    [-] Data must be a dictionary or a list of dictionaries")
             return False
 
         # To optimize, we group by the exact set of columns.
         # In most cases, a batch has homogeneous keys.
         # If keys vary, we process them in sub-batches.
-        
+
+        conn = self.db_connection
+        if conn is None:
+            return False
+
         try:
-            self.db_connection.execute('BEGIN TRANSACTION')
-            
+            conn.execute('BEGIN TRANSACTION')
+
             # Group rows by their column signatures
-            batches_by_columns = {}
+            batches_by_columns: Dict[Tuple[str, ...], List[Dict[str, Any]]] = {}
             for row in batch:
                 cols = tuple(row.keys())
                 if cols not in batches_by_columns:
@@ -332,23 +407,31 @@ class ZircoliteCore:
                         values.append(value)
                     values_list.append(tuple(values))
                 
-                self.db_connection.executemany(insert_stmt, values_list)
-                
-            self.db_connection.execute('COMMIT')
+                conn.executemany(insert_stmt, values_list)
+
+            conn.execute('COMMIT')
             return True
         except Exception as e:
-            self.db_connection.execute('ROLLBACK')
-            self.logger.debug(f"   [-] {e}")
+            conn.execute('ROLLBACK')
+            self.logger.debug(f"    [-] {e}")
             return False
 
-    def save_db_to_disk(self, db_filename):
+    def save_db_to_disk(self, db_filename: str) -> None:
         """Save the working database to disk as a SQLite DB file."""
         self.logger.info("[+] Saving working data to disk as a SQLite DB")
+        if self.db_connection is None:
+            raise RuntimeError("No database connection")
+        if Path(db_filename).exists():
+            raise FileExistsError(
+                f"Database file '{db_filename}' already exists. "
+                f"Remove it first or choose a different path."
+            )
         on_disk_db = sqlite3.connect(db_filename)
         self.db_connection.backup(on_disk_db)
+        on_disk_db.execute("PRAGMA journal_mode = DELETE")
         on_disk_db.close()
 
-    def execute_rule(self, rule):
+    def execute_rule(self, rule: Dict[str, Any]) -> Dict[str, Any]:
         """Execute a single Sigma rule against the database and return the results."""
         # Fast path: check for required key first
         sigma_queries = rule.get("rule")
@@ -357,7 +440,7 @@ class ZircoliteCore:
             return {}
 
         # Pre-allocate list with estimated capacity
-        filtered_rows = []
+        filtered_rows: List[Dict[str, Any]] = []
         filtered_rows_extend = filtered_rows.extend  # Cache method reference
         csv_mode = self.csv_mode  # Cache instance variable
         execute_select = self.execute_select_query  # Cache method reference
@@ -367,20 +450,9 @@ class ZircoliteCore:
             data = execute_select(sql_query)
             if data:
                 if csv_mode:
-                    # Clean values for CSV output
-                    cleaned_rows = [
-                        {
-                            k: ("" if v is None else str(v)).replace("\n", "").replace("\r", "")
-                            for k, v in row.items()
-                        }
-                        for row in data
-                    ]
+                    cleaned_rows = [sanitize_row_for_csv(row) for row in data]
                 else:
-                    # Remove None values - already dicts from execute_select_query
-                    cleaned_rows = [
-                        {k: v for k, v in row.items() if v is not None}
-                        for row in data
-                    ]
+                    cleaned_rows = data
                 filtered_rows_extend(cleaned_rows)
 
         if not filtered_rows:
@@ -405,34 +477,39 @@ class ZircoliteCore:
         self.logger.debug(f'DETECTED: {title} - Matches: {len(filtered_rows)} events')
         return results
 
-    def load_ruleset_from_file(self, filename, rule_filters):
+    def load_ruleset_from_file(
+        self, filename: str, rule_filters: Optional[List[str]]
+    ) -> None:
         """Load a ruleset from a JSON file."""
         try:
             with open(filename, encoding='utf-8') as f:
                 self.ruleset = json.loads(f.read())
             self.apply_ruleset_filters(rule_filters)
         except Exception as e:
-            self.logger.error(f"[red]   [-] Loading JSON ruleset failed, are you sure it is a valid JSON file ? : {e}[/]")
+            self.logger.error(f"[red]    [-] Loading JSON ruleset failed, are you sure it is a valid JSON file ? : {e}[/]")
 
-    def load_ruleset_from_var(self, ruleset, rule_filters):
+    def load_ruleset_from_var(
+        self, ruleset: List[Dict[str, Any]], rule_filters: Optional[List[str]]
+    ) -> None:
         """Load a ruleset from a variable."""
         self.ruleset = ruleset
         self.apply_ruleset_filters(rule_filters)
     
-    def apply_ruleset_filters(self, rule_filters=None):
+    def apply_ruleset_filters(
+        self, rule_filters: Optional[List[str]] = None
+    ) -> None:
         """Remove empty rules and filtered rules from the ruleset."""
         self.ruleset = list(filter(None, self.ruleset))
         if rule_filters is not None:
-            self.ruleset = [rule for rule in self.ruleset if not any(rule_filter in rule["title"] for rule_filter in rule_filters)]
+            self.ruleset = [rule for rule in self.ruleset if not any(rule_filter in rule.get("title", "") for rule_filter in rule_filters)]
 
-    def rule_level_print_formatter(self, level, org_style="cyan"):
-        """Format rule level for colored output using Rich markup."""
-        style = self._level_format_map.get(level.lower())
-        if style is not None:
-            return f'[{style}]{level}[/][{org_style}]'
-        return f'{level}'
-
-    def _write_result_to_output(self, rule_results, file_handle, csv_writer, needs_comma_prefix):
+    def _write_result_to_output(
+        self,
+        rule_results: Dict[str, Any],
+        file_handle: Any,
+        csv_writer: Optional[Any],
+        needs_comma_prefix: bool,
+    ) -> Tuple[Optional[Any], bool]:
         """Write rule results to output file. Returns (csv_writer, needs_comma_prefix)."""
         if self.csv_mode:
             # Initialize CSV writer if not already done
@@ -470,15 +547,24 @@ class ZircoliteCore:
                 json_bytes = json.dumps(rule_results, option=json.OPT_INDENT_2)
                 file_handle.write(json_bytes.decode('utf-8'))
             except Exception as e:
-                self.logger.error(f"[error]   [-] Error saving some results: {e}[/]")
+                self.logger.error(f"[error]    [-] Error saving some results: {e}[/]")
         return csv_writer, needs_comma_prefix
 
-    def execute_ruleset(self, out_file, write_mode='w',
-                    keep_results=False, last_ruleset=False, source_label=None,
-                    show_table=True):
+    def execute_ruleset(
+        self,
+        out_file: str,
+        write_mode: str = "w",
+        keep_results: bool = False,
+        last_ruleset: bool = False,
+        source_label: Optional[str] = None,
+        show_table: bool = True,
+        disable_progress: Optional[bool] = None,
+        progress_callback: Optional[Callable[[int, int], None]] = None,
+    ) -> None:
         """Execute all rules in the ruleset and handle output."""
         csv_writer = None
         is_json_mode = not self.csv_mode
+        _disable = disable_progress if disable_progress is not None else self.disable_progress
 
         # Prepare output file handle if needed
         file_handle = None
@@ -511,32 +597,58 @@ class ZircoliteCore:
             # Collect all results for sorting by level
             all_rule_results = []
 
-            # Create Rich progress bar for rule execution
-            if self.disable_progress:
-                # Process without progress bar
-                for rule in self.ruleset:
-                    # Execute the rule
+            # Cache profiling flag locally for the inner loop
+            _profile = self.profile_rules
+            _profiling_data = self._profiling_data
+            _perf_counter = _time_module.perf_counter
+            total_rules = len(self.ruleset)
+
+            if progress_callback is not None:
+                progress_callback(0, total_rules)
+                for i, rule in enumerate(self.ruleset):
+                    if _profile:
+                        _t0 = _perf_counter()
                     rule_results = execute_rule(rule)
+                    if _profile:
+                        _title = rule.get('title', 'unknown')
+                        _profiling_data[_title] = _profiling_data.get(_title, 0.0) + (_perf_counter() - _t0) * 1000
+                    progress_callback(i + 1, total_rules)
                     if not rule_results:
-                        continue  # No matches, skip to next rule
-
-                    # Apply limit if set
+                        continue
                     if limit != -1 and rule_results["count"] > limit:
-                        continue  # Exceeds limit, skip this result
-
-                    # Collect results for later display (sorted by level)
+                        continue
                     all_rule_results.append({
                         "title": rule_results.get("title", "Unknown"),
                         "rule_level": rule_results.get("rule_level", "unknown"),
                         "count": rule_results.get("count", 0),
                         "tags": rule_results.get("tags", [])
                     })
-
-                    # Store results if needed
                     if keep_results:
                         full_results_append(rule_results)
-
-                    # Handle output to file
+                    if not no_output:
+                        csv_writer, needs_comma_prefix = self._write_result_to_output(
+                            rule_results, file_handle, csv_writer, needs_comma_prefix
+                        )
+            elif _disable:
+                for rule in self.ruleset:
+                    if _profile:
+                        _t0 = _perf_counter()
+                    rule_results = execute_rule(rule)
+                    if _profile:
+                        _title = rule.get('title', 'unknown')
+                        _profiling_data[_title] = _profiling_data.get(_title, 0.0) + (_perf_counter() - _t0) * 1000
+                    if not rule_results:
+                        continue
+                    if limit != -1 and rule_results["count"] > limit:
+                        continue
+                    all_rule_results.append({
+                        "title": rule_results.get("title", "Unknown"),
+                        "rule_level": rule_results.get("rule_level", "unknown"),
+                        "count": rule_results.get("count", 0),
+                        "tags": rule_results.get("tags", [])
+                    })
+                    if keep_results:
+                        full_results_append(rule_results)
                     if not no_output:
                         csv_writer, needs_comma_prefix = self._write_result_to_output(
                             rule_results, file_handle, csv_writer, needs_comma_prefix
@@ -559,7 +671,12 @@ class ZircoliteCore:
                 with Live(console=console, refresh_per_second=10, transient=True) as live:
                     for rule in self.ruleset:
                         # Execute the rule
+                        if _profile:
+                            _t0 = _perf_counter()
                         rule_results = execute_rule(rule)
+                        if _profile:
+                            _title = rule.get('title', 'unknown')
+                            _profiling_data[_title] = _profiling_data.get(_title, 0.0) + (_perf_counter() - _t0) * 1000
                         progress.advance(task_id)
                         
                         if rule_results:
@@ -613,6 +730,124 @@ class ZircoliteCore:
                     file_handle.write(']')  # Close JSON array
                 file_handle.close()
 
+    def run_rule_tests(self, test_file: str) -> list:
+        """Validate rules against known-positive and known-negative events.
+
+        The test file is a JSON array where each element contains:
+        - ``title`` or ``id``: matched against the loaded ruleset
+        - ``true_positive``: list of event dicts that MUST trigger the rule
+        - ``true_negative``: list of event dicts that MUST NOT trigger the rule
+
+        Returns a list of result dicts with keys:
+        ``title``, ``id``, ``tp_pass``, ``tn_pass``, ``tp_count``, ``tn_count``, ``error``
+        """
+        try:
+            with open(test_file, encoding='utf-8') as f:
+                test_cases = json.loads(f.read())
+        except Exception as e:
+            self.logger.error(f"[red]    [-] Cannot load rule test file: {e}[/]")
+            return []
+
+        if not isinstance(test_cases, list):
+            self.logger.error("[red]    [-] Rule test file must be a JSON array[/]")
+            return []
+
+        # Index test cases by title and id for fast lookup
+        by_title = {tc.get('title', ''): tc for tc in test_cases if tc.get('title')}
+        by_id = {tc.get('id', ''): tc for tc in test_cases if tc.get('id')}
+
+        results = []
+        for rule in self.ruleset:
+            title = rule.get('title', '')
+            rule_id = rule.get('id', '')
+            tc = by_title.get(title) or by_id.get(rule_id)
+            if tc is None:
+                results.append({
+                    'title': title, 'id': rule_id,
+                    'tp_pass': None, 'tn_pass': None,
+                    'tp_count': 0, 'tn_count': 0,
+                    'error': 'no test case',
+                })
+                continue
+
+            tp_events = tc.get('true_positive', [])
+            tn_events = tc.get('true_negative', [])
+            tp_pass = True
+            tn_pass = True
+            tp_count = 0
+            tn_count = 0
+            error = ''
+
+            try:
+                # Run true-positive check
+                if tp_events:
+                    all_keys: set = set()
+                    for ev in tp_events:
+                        all_keys.update(ev.keys())
+                    tp_core = ZircoliteCore(
+                        self.config,
+                        processing_config=None,  # defaults
+                        logger=self.logger,
+                    )
+                    tp_core.create_db(
+                        ', '.join(f'"{k}" TEXT' for k in sorted(all_keys))
+                    )
+                    tp_core.insert_data_to_db(tp_events)
+                    tp_res = tp_core.execute_rule(rule)
+                    tp_count = tp_res.get('count', 0) if tp_res else 0
+                    tp_pass = tp_count > 0
+                    tp_core.close()
+
+                # Run true-negative check
+                if tn_events:
+                    all_keys = set()
+                    for ev in tn_events:
+                        all_keys.update(ev.keys())
+                    tn_core = ZircoliteCore(
+                        self.config,
+                        processing_config=None,
+                        logger=self.logger,
+                    )
+                    tn_core.create_db(
+                        ', '.join(f'"{k}" TEXT' for k in sorted(all_keys))
+                    )
+                    tn_core.insert_data_to_db(tn_events)
+                    tn_res = tn_core.execute_rule(rule)
+                    tn_count = tn_res.get('count', 0) if tn_res else 0
+                    tn_pass = tn_count == 0
+                    tn_core.close()
+
+            except Exception as exc:
+                error = str(exc)
+                tp_pass = False
+                tn_pass = False
+
+            results.append({
+                'title': title, 'id': rule_id,
+                'tp_pass': tp_pass, 'tn_pass': tn_pass,
+                'tp_count': tp_count, 'tn_count': tn_count,
+                'error': error,
+            })
+
+        return results
+
+    def get_profiling_report(self) -> list:
+        """Return rule timing data sorted by elapsed time (descending).
+
+        Each entry is a dict with keys: ``title``, ``elapsed_ms``.
+        Only populated when ``profile_rules=True`` was set at construction.
+        """
+        return sorted(
+            [{"title": t, "elapsed_ms": ms} for t, ms in self._profiling_data.items()],
+            key=lambda r: r["elapsed_ms"],
+            reverse=True,
+        )
+
+    def merge_profiling_data(self, other: "ZircoliteCore") -> None:
+        """Merge another core's rule timing data into this core (additive by rule title)."""
+        for title, ms in other._profiling_data.items():
+            self._profiling_data[title] = self._profiling_data.get(title, 0.0) + ms
+
     def run_streaming(self, log_files: list, input_type: str = 'evtx', 
                       args_config=None, extractor: Optional['EvtxExtractor'] = None,
                       disable_progress: bool = False,
@@ -660,7 +895,8 @@ class ZircoliteCore:
             time_before=self.time_before,
             time_field=self.time_field,
             hashes=self.hashes,
-            disable_progress=disable_progress or self.disable_progress
+            disable_progress=disable_progress or self.disable_progress,
+            archive_password=self.archive_password,
         )
         processor = StreamingEventProcessor(
             config_file=self.config,
@@ -705,7 +941,7 @@ class ZircoliteCore:
                 return event_count
                     
             except Exception as e:
-                self.logger.error(f"[error]   [-] Error processing {log_file}: {e}[/]")
+                self.logger.error(f"[error]    [-] Error processing {log_file}: {e}[/]")
                 return 0
         
         show_progress = not is_quiet()

@@ -65,7 +65,6 @@ class TestRulesConfig:
         assert config.rulesets == ["rules/rules_windows_generic.json"]
         assert config.pipelines is None
         assert config.filters is None
-        assert config.combine_rulesets is False
         assert config.save_ruleset is False
     
     def test_custom_values(self):
@@ -133,7 +132,7 @@ class TestParallelProcessingConfig:
         assert config.enabled is False
         assert config.max_workers is None
         assert config.min_workers == 1
-        assert config.memory_limit_percent == 75.0
+        assert config.memory_limit_percent == 85.0
         assert config.adaptive is True
 
 
@@ -436,7 +435,7 @@ class TestConfigLoaderMergeWithArgs:
             before="9999-12-12T23:59:59",
             parallel=False,
             parallel_workers=None,
-            parallel_memory_limit=75.0,
+            parallel_memory_limit=85.0,
         )
         
         loader = ConfigLoader(logger=test_logger)
@@ -491,7 +490,7 @@ class TestConfigLoaderMergeWithArgs:
             before="9999-12-12T23:59:59",
             parallel=False,
             parallel_workers=None,
-            parallel_memory_limit=75.0,
+            parallel_memory_limit=85.0,
         )
         
         loader = ConfigLoader(logger=test_logger)
@@ -629,6 +628,7 @@ class TestConfigLoaderMergeWithArgsExtended:
             auditd_input=False,
             evtxtract_input=False,
             no_recursion=False,
+            archive_password=None,
             file_pattern=None,
             fileext=None,
             select=None,
@@ -637,31 +637,43 @@ class TestConfigLoaderMergeWithArgsExtended:
             ruleset=None,
             pipeline=None,
             rulefilter=None,
-            combine_rulesets=False,
             save_ruleset=False,
+            test_rules=None,
             csv=False,
             csv_delimiter=";",
             template=None,
             templateOutput=None,
+            timesketch=False,
+            navigator_output=None,
             package=False,
             package_dir="",
             keepflat=False,
+            profile_rules=False,
             dbfile=None,
             logfile="zircolite.log",
             nolog=False,
             unified_db=False,
             no_auto_mode=False,
+            no_auto_detect=False,
             hashes=False,
             limit=-1,
             timefield="SystemTime",
             no_event_filter=False,
+            quiet=False,
             debug=False,
             remove_events=False,
             after="1970-01-01T00:00:00",
             before="9999-12-12T23:59:59",
-            parallel=False,
+            all_transforms=False,
+            transform_categories=None,
+            transform_list=False,
+            yaml_config=None,
+            generate_config=None,
+            no_parallel=False,
             parallel_workers=None,
-            parallel_memory_limit=75.0,
+            parallel_memory_limit=85.0,
+            add_index=[],
+            remove_index=[],
         )
         defaults.update(overrides)
         return Namespace(**defaults)
@@ -777,13 +789,6 @@ class TestConfigLoaderMergeWithArgsExtended:
         loader = ConfigLoader(logger=test_logger)
         merged = loader.merge_with_args(config, args)
         assert merged.rules.filters == ["Noisy Rule", "Another"]
-
-    def test_combine_rulesets_override(self, test_logger):
-        config = ZircoliteConfig()
-        args = self._make_args(combine_rulesets=True)
-        loader = ConfigLoader(logger=test_logger)
-        merged = loader.merge_with_args(config, args)
-        assert merged.rules.combine_rulesets is True
 
     def test_save_ruleset_override(self, test_logger):
         config = ZircoliteConfig()
@@ -910,6 +915,34 @@ class TestConfigLoaderMergeWithArgsExtended:
         merged = loader.merge_with_args(config, args)
         assert merged.processing.remove_events is True
 
+    def test_all_transforms_override(self, test_logger):
+        config = ZircoliteConfig()
+        args = self._make_args(all_transforms=True)
+        loader = ConfigLoader(logger=test_logger)
+        merged = loader.merge_with_args(config, args)
+        assert merged.processing.all_transforms is True
+
+    def test_transform_categories_override(self, test_logger):
+        config = ZircoliteConfig()
+        args = self._make_args(transform_categories=["commandline", "dfir"])
+        loader = ConfigLoader(logger=test_logger)
+        merged = loader.merge_with_args(config, args)
+        assert merged.processing.transform_categories == ["commandline", "dfir"]
+
+    def test_add_index_override(self, test_logger):
+        config = ZircoliteConfig()
+        args = self._make_args(add_index=[["Channel", "SystemTime"]])
+        loader = ConfigLoader(logger=test_logger)
+        merged = loader.merge_with_args(config, args)
+        assert merged.processing.add_index == ["Channel", "SystemTime"]
+
+    def test_remove_index_override(self, test_logger):
+        config = ZircoliteConfig()
+        args = self._make_args(remove_index=[["idx_channel", "idx_eventid"]])
+        loader = ConfigLoader(logger=test_logger)
+        merged = loader.merge_with_args(config, args)
+        assert merged.processing.remove_index == ["idx_channel", "idx_eventid"]
+
     def test_after_override(self, test_logger):
         config = ZircoliteConfig()
         args = self._make_args(after="2024-06-01T00:00:00")
@@ -1024,3 +1057,44 @@ parallel:
         assert config.output.file == "results.json"
         assert config.time_filter.after == "2024-01-01T00:00:00"
         assert config.parallel.enabled is False
+
+
+class TestConfigLoaderBugFixes:
+    """Tests for specific bug fixes in config_loader."""
+
+    def test_validate_config_list_path(self, test_logger, tmp_path):
+        """validate_config should handle list-type input.path without TypeError."""
+        loader = ConfigLoader(logger=test_logger)
+        config = ZircoliteConfig()
+        config.input.path = [str(tmp_path), "/nonexistent"]
+        issues = loader.validate_config(config)
+        assert any("nonexistent" in i for i in issues)
+
+    def test_merge_with_args_template_mismatch_length(self, test_logger):
+        """merge_with_args handles templateOutput shorter than template."""
+        import argparse
+        loader = ConfigLoader(logger=test_logger)
+        config = ZircoliteConfig()
+        args = argparse.Namespace(
+            evtx=None, json_input=False, json_array_input=False,
+            xml_input=False, csv_input=False, sysmon_linux_input=False,
+            auditd_input=False, evtxtract_input=False, no_recursion=False,
+            file_pattern=None, fileext=None, select=None, avoid=None,
+            logs_encoding=None, ruleset=None, pipeline=None, rulefilter=None,
+            save_ruleset=False, outfile="detected_events.json",
+            csv=False, csv_delimiter=";",
+            template=[["tmpl1.tmpl"], ["tmpl2.tmpl"]],
+            templateOutput=[["out1.txt"]],
+            package=False, package_dir="", keepflat=False, dbfile=None,
+            logfile="zircolite.log", nolog=False, unified_db=False,
+            no_auto_mode=False, hashes=False, limit=-1, timefield="SystemTime",
+            no_event_filter=False, debug=False, remove_events=False,
+            all_transforms=False, transform_categories=None,
+            add_index=None, remove_index=None,
+            after="1970-01-01T00:00:00", before="9999-12-12T23:59:59",
+            parallel=False, parallel_workers=None,
+        )
+        result = loader.merge_with_args(config, args)
+        assert len(result.output.templates) == 2
+        assert result.output.templates[0]["output"] == "out1.txt"
+        assert result.output.templates[1]["output"] == "output_1.txt"

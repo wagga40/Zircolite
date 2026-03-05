@@ -726,15 +726,15 @@ Zircolite automatically analyzes your workload and optimizes processing. When yo
 
 ```shell
 # Auto-optimization happens by default
-python3 zircolite.py --evtx ./logs/ --ruleset rules/rules_windows_sysmon.json
+python3 zircolite.py --evtx ./logs/ --ruleset rules/rules_windows_merged.json
 
 # Example output:
 [+] Analyzing workload...
-  [>] Files       4 (478.2 MB total, avg 119.6 MB)
-  [>] System      33.7 GB RAM available, 10 CPUs
-  [>] DB Mode     PER-FILE
+    [>] Files       4 (478.2 MB total, avg 119.6 MB)
+    [>] System      33.7 GB RAM available, 10 CPUs
+    [>] DB Mode     PER-FILE
   				  Few large files detected (4 files, avg 119.6 MB)
-  [>] Parallel    ENABLED (4 workers)
+    [>] Parallel    ENABLED (4 workers)
 ```
 
 #### Database Mode Selection Heuristics
@@ -881,9 +881,6 @@ The event filter uses configurable field paths to read Channel and EventID from 
 
 # Disable event filtering if needed (process all events)
 python3 zircolite.py --evtx logs/ --ruleset rules.json --no-event-filter
-
-# Apply filtering to non-Windows log sources too
-python3 zircolite.py --evtx logs/ --ruleset rules.json --filter-all-sources
 ```
 
 The event filter statistics are displayed in the summary panel after processing.
@@ -893,6 +890,7 @@ The event filter statistics are displayed in the summary panel after processing.
 **Zircolite** has several arguments that can be used to keep data used to perform Sigma detections: 
 
 - `--dbfile <FILE>` allows you to export all the logs to a SQLite 3 database file. You can query the logs with SQL statements to find more things than what the Sigma rules could have found. When processing multiple files, each file gets its own database file with a unique name.
+- **Database indexes**: An index on `eventid` is always created; when the table has a `Channel` column (Windows logs), an index on `Channel` is created automatically. Use `--add-index COL [COL ...]` to create indexes on additional columns (e.g. `--add-index SystemTime Computer`) and `--remove-index IDX [IDX ...]` to drop indexes by name after creation (e.g. `--remove-index idx_channel`).
 - `--keepflat` saves flattened events to a JSONL file during streaming processing. This file contains only the events that were actually processed (i.e. events that passed early event filtering and time filtering). If event filtering is active, events whose Channel/EventID don't match any rule will **not** appear in the keepflat output. Use `--no-event-filter` to include all events.
 - `--hashes` adds an xxhash64 hash of the original log line to each event, useful for deduplication and tracking.
 
@@ -917,27 +915,27 @@ To speed up the detection process, you may want to use Zircolite on files matchi
 - Only use EVTX files that contain "sysmon" in their names:
 
 	```shell
-	python3 zircolite.py --evtx logs/ --ruleset rules/rules_windows_sysmon.json \
+	python3 zircolite.py --evtx logs/ --ruleset rules/rules_windows_merged.json \
 		--select sysmon
 	```
 - Exclude "Microsoft-Windows-SystemDataArchiver%4Diagnostic.evtx": 
 
 	```shell
-	python3 zircolite.py --evtx logs/ --ruleset rules/rules_windows_sysmon.json \
+	python3 zircolite.py --evtx logs/ --ruleset rules/rules_windows_merged.json \
 		--avoid systemdataarchiver
 	```
 
 - Only use EVTX files with "operational" in their names but exclude "defender"-related logs:
 	
 	```shell
-	python3 zircolite.py --evtx logs/ --ruleset rules/rules_windows_sysmon.json \
+	python3 zircolite.py --evtx logs/ --ruleset rules/rules_windows_merged.json \
 	--select operational --avoid defender
 	```
 
 - Use a custom glob pattern to select specific files:
 
 	```shell
-	python3 zircolite.py --evtx logs/ --ruleset rules/rules_windows_sysmon.json \
+	python3 zircolite.py --evtx logs/ --ruleset rules/rules_windows_merged.json \
 		--file-pattern "Security*.evtx"
 	```
 
@@ -946,7 +944,7 @@ For example, the **Sysmon** ruleset available in the `rules` directory only uses
 So if you use the Sysmon ruleset with the following rules, it should speed up Zircolite's execution: 
 
 ```shell
-python3 zircolite.py --evtx logs/ --ruleset rules/rules_windows_sysmon.json \
+python3 zircolite.py --evtx logs/ --ruleset rules/rules_windows_merged.json \
 	--select sysmon --select security.evtx --select system.evtx \
 	--select application.evtx --select Windows-NTLM --select DNS \
 	--select powershell --select defender --select applocker \
@@ -967,14 +965,14 @@ Examples:
 - Select all events between 2021-06-02 22:40:00 and 2021-06-02 23:00:00: 
 
 	```shell
-	python3 zircolite.py --evtx logs/ --ruleset rules/rules_windows_sysmon.json \
+	python3 zircolite.py --evtx logs/ --ruleset rules/rules_windows_merged.json \
 		-A 2021-06-02T22:40:00 -B 2021-06-02T23:00:00
 	```
 
 - Select all events after 2021-06-01 12:00:00: 
 
 	```shell
-	python3 zircolite.py --evtx logs/ --ruleset rules/rules_windows_sysmon.json \
+	python3 zircolite.py --evtx logs/ --ruleset rules/rules_windows_merged.json \
 		-A 2021-06-01T12:00:00
 	```
 
@@ -982,11 +980,13 @@ Examples:
 
 Some rules can be noisy or slow on specific datasets (check [here](https://github.com/wagga40/Zircolite/tree/master/rules/README.md)), so it is possible to skip them by using the `-R` or `--rulefilter` argument. This argument can be used multiple times.
 
+To find which rules are slow on your data, run with `--profile-rules`. Zircolite will print a **Rule Performance** report at the end (rules sorted by execution time). Use that list to decide which rules to exclude with `--rulefilter`. See [Rule performance profiling](Usage.md#rule-performance-profiling) in Usage.md.
+
 The filter will apply to the rule title. To avoid unexpected side effects, **comparison is case-sensitive**. For example, if you do not want to use all MSHTA-related rules: 
 
 ```shell
 python3 zircolite.py --evtx logs/ \
-	--ruleset rules/rules_windows_sysmon.json \
+	--ruleset rules/rules_windows_merged.json \
 	-R MSHTA
 ```
 
@@ -1004,15 +1004,17 @@ Zircolite provides a templating system based on Jinja2. It allows you to change 
 For Timesketch you can use the shortcut `--timesketch`: it uses `exportForTimesketch.tmpl` and writes to a file named `timesketch-<RAND>.json` (4-character random suffix) so you can run multiple exports without overwriting.
 
 ```shell
-python3 zircolite.py --evtx sample.evtx  --ruleset rules/rules_windows_sysmon.json \
+python3 zircolite.py --evtx sample.evtx  --ruleset rules/rules_windows_merged.json \
 --template templates/exportForSplunk.tmpl --templateOutput exportForSplunk.json
 ```
 
 Timesketch shortcut:
 
 ```shell
-python3 zircolite.py --evtx sample.evtx --ruleset rules/rules_windows_sysmon.json --timesketch
+python3 zircolite.py --evtx sample.evtx --ruleset rules/rules_windows_merged.json --timesketch
 ```
+
+For ATT&CK Navigator use `--navigator-output` (writes to `navigator-<RAND>.json`) or `--navigator-output mylayer.json` for a custom filename.
 
 It is possible to use multiple templates if you provide a `--templateOutput` argument for each `--template` argument.
 
@@ -1028,10 +1030,12 @@ It is possible to use multiple templates if you provide a `--templateOutput` arg
 | `exportForZircoGui.tmpl` | JavaScript | Mini-GUI `data.js` (used by `--package`) |
 | `exportNDJSON.tmpl` | NDJSON | Generic: rule metadata + event fields, one JSON per line |
 | `exportSummaryCSV.tmpl` | CSV | One row per rule (triage/summary), not per event |
+| `exportForSARIF.tmpl` | JSON | [SARIF](https://sarifweb.azurewebsites.net/) format for integration with code analysis tools and CI pipelines |
+| `exportForAttackNavigator.tmpl` | JSON | [ATT&CK Navigator](https://mitre-attack.github.io/attack-navigator/) layer with technique scores and colors; shortcut: `--navigator-output` |
 
 ## Mini-GUI
 
-![](pics/gui.jpg)
+![](pics/gui.webp)
 
 
 The Mini-GUI can be used completely offline. It allows the user to display and search results. It uses [DataTables](https://datatables.net/) and the [SB Admin 2 theme](https://github.com/StartBootstrap/startbootstrap-sb-admin-2). 
@@ -1042,7 +1046,7 @@ The easiest way to use the Mini-GUI is to generate a package with the `--package
 
 ```shell
 python3 zircolite.py --evtx sample.evtx \
-    --ruleset rules/rules_windows_sysmon.json \
+    --ruleset rules/rules_windows_merged.json \
     --package --package-dir /path/to/output
 ```
 
@@ -1052,7 +1056,7 @@ You need to generate a `data.js` file with the `exportForZircoGui.tmpl` template
 
 ```shell
 python3 zircolite.py --evtx sample.evtx 
-	--ruleset rules/rules_windows_sysmon.json \
+	--ruleset rules/rules_windows_merged.json \
 	--template templates/exportForZircoGui.tmpl --templateOutput data.js
 7z x gui/zircogui.zip
 mv data.js zircogui/

@@ -11,18 +11,16 @@ This module contains:
 import hashlib
 import logging
 import os
-import random
 import re
 import shutil
-import string
 from pathlib import Path
-from typing import Optional, Set, FrozenSet, Tuple, List, Dict, Any
+from typing import Any, Dict, List, Optional, Set, FrozenSet, Union
 
 import orjson as json
-import requests
+import requests  # type: ignore[import-untyped]
 import yaml
 # Rich console for styled output
-from .console import console, is_quiet
+from .console import console, is_quiet, make_file_link
 from sigma.collection import SigmaCollection
 from sigma.backends.sqlite import sqlite
 from sigma.processing.resolver import ProcessingPipelineResolver
@@ -31,6 +29,7 @@ from sigma.plugins import InstalledSigmaPlugins
 from rich.progress import Progress, SpinnerColumn, TextColumn, BarColumn, DownloadColumn, TransferSpeedColumn, TimeRemainingColumn
 
 from .config import RulesetConfig
+from .utils import random_suffix
 
 
 class EventFilter:
@@ -224,15 +223,12 @@ class RulesUpdater:
         """
         self.url = "https://github.com/wagga40/Zircolite-Rules-v2/archive/refs/heads/main.zip"
         self.logger = logger or logging.getLogger(__name__)
-        self.tempFile = f'tmp-rules-{self._randString()}.zip'
-        self.tmpDir = f'tmp-rules-{self._randString()}'
-        self.updated_rulesets = []
+        self.tempFile = f'tmp-rules-{random_suffix(4)}.zip'
+        self.tmpDir = f'tmp-rules-{random_suffix(4)}'
+        self.updated_rulesets: List[str] = []
 
-    def _randString(self):
-        return ''.join(random.SystemRandom().choice(string.ascii_uppercase + string.digits) for _ in range(4))
-
-    def download(self):
-        resp = requests.get(self.url, stream=True)
+    def download(self) -> None:
+        resp = requests.get(self.url, stream=True, timeout=30)
         total = int(resp.headers.get('content-length', 0))
         
         progress = Progress(
@@ -254,10 +250,10 @@ class RulesUpdater:
                     size = file.write(data)
                     progress.update(task_id, advance=size)
     
-    def unzip(self):
+    def unzip(self) -> None:
         shutil.unpack_archive(self.tempFile, self.tmpDir, "zip")
     
-    def checkIfNewerAndMove(self):
+    def checkIfNewerAndMove(self) -> None:
         count = 0
         rules_dir = Path('rules/')
         
@@ -279,24 +275,30 @@ class RulesUpdater:
                 count += 1
                 shutil.move(ruleset, dest_file)
                 self.updated_rulesets.append(str(dest_file))
-                self.logger.info(f"[cyan]   [+] Updated : {dest_file}[/]")
+                self.logger.info(f"    [>] Updated : {make_file_link(str(dest_file))}")
                 
         if count == 0: 
-            self.logger.info("[cyan]   [+] No newer rulesets found")
+            self.logger.info("[cyan]    [>] No newer rulesets found")
     
-    def clean(self):
+    def clean(self) -> None:
         if Path(self.tempFile).exists():
             os.remove(self.tempFile)
         if Path(self.tmpDir).exists():
             shutil.rmtree(self.tmpDir)
     
-    def run(self):
-        try: 
+    def run(self) -> None:
+        try:
             self.download()
             self.unzip()
             self.checkIfNewerAndMove()
-        except Exception as e: 
-            self.logger.error(f"   [-] {e}")
+        except requests.exceptions.ConnectionError as e:
+            self.logger.error(f"    [-] Network connection failed: {e}")
+        except requests.exceptions.Timeout:
+            self.logger.error(f"    [-] Download timed out after 30s: {self.url}")
+        except requests.exceptions.HTTPError as e:
+            self.logger.error(f"    [-] Server returned an error: {e}")
+        except Exception as e:
+            self.logger.error(f"    [-] {e}")
         finally:
             self.clean()
 
@@ -345,13 +347,14 @@ class RulesetHandler:
                     if pipelineName in pipeline_list:
                         self.pipelines.append(plugins.pipelines[pipelineName]())
                     else:
-                        self.logger.error(f"[red]   [-] {pipelineName} not found. You can list installed pipelines with '--pipeline-list'[/]")
+                        self.logger.error(f"[red]    [-] {pipelineName} not found. You can list installed pipelines with '--pipeline-list'[/]")
 
         # Parse & (if necessary) convert ruleset, final list is stored in self.rulesets
-        self.rulesets = self.ruleset_parsing()
-
-        # Combining rulesets 
-        self.rulesets = [item for sub_ruleset in self.rulesets if sub_ruleset for item in sub_ruleset]
+        raw_rulesets = self.ruleset_parsing()
+        # Flatten list of rulesets into a single list of rules
+        self.rulesets = [
+            item for sub_ruleset in raw_rulesets if sub_ruleset for item in sub_ruleset
+        ]
         # Remove duplicates based on SQL query
         unique_rules = []
         seen_keys = set()
@@ -373,7 +376,7 @@ class RulesetHandler:
         self.rulesets = sorted(unique_rules, key=lambda d: level_order.get(d.get('level', 'informational'), float('inf'))) # Sorting by level
             
         if all(not sub_ruleset for sub_ruleset in self.rulesets):
-            self.logger.error("[red]   [-] No rules to execute ![/]")
+            self.logger.error("[red]    [-] No rules to execute ![/]")
         else:
             self.logger.info(f"[+] {len(self.rulesets)} rules loaded")
             
@@ -386,29 +389,31 @@ class RulesetHandler:
                     f"[cyan]{stats['eventids_count']}[/] eventIDs"
                 )
 
-    def is_yaml(self, filepath): 
+    def is_yaml(self, filepath: Path) -> Optional[bool]:
         """Test if the file is a YAML file."""
-        if (filepath.suffix == ".yml" or filepath.suffix == ".yaml"):
-            with open(filepath, 'r', encoding="utf-8") as file:
+        if filepath.suffix in (".yml", ".yaml"):
+            with open(filepath, "r", encoding="utf-8") as file:
                 content = file.read()
                 try:
                     yaml.safe_load(content)
                     return True
                 except yaml.YAMLError:
                     return False
+        return None
 
-    def is_json(self, filepath): 
+    def is_json(self, filepath: Path) -> Optional[bool]:
         """Test if the file is a JSON file."""
-        if (filepath.suffix == ".json"):
-            with open(filepath, 'r', encoding="utf-8") as file:
+        if filepath.suffix == ".json":
+            with open(filepath, "r", encoding="utf-8") as file:
                 content = file.read()
                 try:
                     json.loads(content)
                     return True
                 except json.JSONDecodeError:
                     return False
+        return None
 
-    def is_valid_sigma_rule(self, filepath):
+    def is_valid_sigma_rule(self, filepath: Path) -> bool:
         """Check if a YAML file is a valid Sigma rule (has required fields)."""
         try:
             with open(filepath, 'r', encoding="utf-8") as file:
@@ -419,26 +424,30 @@ class RulesetHandler:
                 required_fields = ['title', 'logsource', 'detection']
                 return all(field in content for field in required_fields)
         except Exception:
-            return False
+            pass
+        return False
 
-    def rand_ruleset_name(self, sigma_rules):
+    def rand_ruleset_name(self, sigma_rules: str) -> str:
         """Generate a random ruleset filename."""
         # Clean the ruleset name
         cleaned_name = ''.join(char if char.isalnum() else '-' for char in sigma_rules).strip('-')
         cleaned_name = re.sub(r'-+', '-', cleaned_name)
-        # Generate a random string 
-        random_string = ''.join(random.SystemRandom().choice(string.ascii_uppercase + string.digits) for _ in range(8))
-        return f"ruleset-{cleaned_name}-{random_string}.json"
+        return f"ruleset-{cleaned_name}-{random_suffix(8)}.json"
 
-    def convert_sigma_rules(self, backend, rule):
+    def convert_sigma_rules(self, backend: Any, rule: Any) -> Optional[Dict[str, Any]]:
         """Convert a single Sigma rule using the provided backend."""
-        try: 
+        try:
             return backend.convert_rule(rule, "zircolite")[0]
         except Exception as e:
-            self.logger.debug(f"[red]   [-] Cannot convert rule '{str(rule)}' : {e}[/]")
+            self.logger.debug(f"[red]    [-] Cannot convert rule '{str(rule)}' : {e}[/]")
+            return None
 
-    def sigma_rules_to_ruleset(self, sigma_rules_list, pipelines):
+    def sigma_rules_to_ruleset(
+        self, sigma_rules_list: List[Union[Path, str]], pipelines: List[Any]
+    ) -> List[Dict[str, Any]]:
         """Convert Sigma rules to Zircolite ruleset format."""
+        combined_ruleset: List[Dict[str, Any]] = []
+
         for sigma_rules in sigma_rules_list:
             # Create the pipeline resolver
             pipeline_resolver = ProcessingPipelineResolver()
@@ -470,10 +479,15 @@ class RulesetHandler:
             valid_rule_list = [r for r in rule_list if self.is_valid_sigma_rule(r)]
             skipped_count = len(rule_list) - len(valid_rule_list)
             if skipped_count > 0:
-                self.logger.debug(f"[yellow]   [!] Skipped {skipped_count} invalid Sigma rule(s)[/]")
+                self.logger.debug(f"[yellow]    [!] Skipped {skipped_count} invalid Sigma rule(s)[/]")
             
-            rule_collection = SigmaCollection.load_ruleset(valid_rule_list)
-            ruleset = []
+            if not valid_rule_list:
+                continue
+
+            rule_collection = SigmaCollection.load_ruleset(
+                [str(p) for p in valid_rule_list]
+            )
+            ruleset: List[Dict[str, Any]] = []
 
             # Process rules with Rich progress bar
             progress = Progress(
@@ -506,41 +520,45 @@ class RulesetHandler:
                 summary_parts.append(f" [dim]({', '.join(detail_parts)})[/]")
             self.logger.info("".join(summary_parts))
             
-            ruleset = sorted(ruleset, key=lambda d: d.get('level', 'informational'))  # Sorting by level
+            ruleset = sorted(ruleset, key=lambda d: d.get('level', 'informational'))
 
             if self.saveRuleset:
                 temp_ruleset_name = self.rand_ruleset_name(str(sigma_rules))
-                with open(temp_ruleset_name, 'w', encoding='utf-8') as outfile:
-                    outfile.write(json.dumps(ruleset, option=json.OPT_INDENT_2).decode('utf-8'))
-                    self.logger.info(f"[cyan]   [+] Saved ruleset as : {temp_ruleset_name}[/]")
+                with open(temp_ruleset_name, "w", encoding="utf-8") as outfile:
+                    outfile.write(
+                        json.dumps(ruleset, option=json.OPT_INDENT_2).decode("utf-8")
+                    )
+                    self.logger.info(f"[+] Saved ruleset as : {make_file_link(temp_ruleset_name)}")
 
-        return ruleset
-    
-    def ruleset_parsing(self):
+            combined_ruleset.extend(ruleset)
+
+        return combined_ruleset
+
+    def ruleset_parsing(self) -> List[List[Dict[str, Any]]]:
         """Parse and convert rulesets from files or directories."""
         ruleset_list = []
         for ruleset in self.rulesetPathList:
             ruleset_path = Path(ruleset)
             if not ruleset_path.exists():
-                self.logger.warning(f"[yellow]   [!] Ruleset path does not exist: {str(ruleset_path)}[/]")
+                self.logger.warning(f"[yellow]    [!] Ruleset path does not exist: {str(ruleset_path)}[/]")
                 continue
             if ruleset_path.is_file():
                 if self.is_json(ruleset_path):  # JSON Ruleset
                     try:
                         with open(ruleset_path, encoding='utf-8') as f:
                             ruleset_list.append(json.loads(f.read()))
-                        self.logger.info(f"    [>] Loaded JSON/Zircolite ruleset : [cyan]{str(ruleset_path)}[/]")
+                        self.logger.info(f"    [>] Loaded JSON/Zircolite ruleset : {make_file_link(str(ruleset_path))}")
                     except Exception as e:
                         self.logger.error(f"[red]    [-] Cannot load {str(ruleset_path)} {e}[/]")
                 elif self.is_yaml(ruleset_path):  # YAML Ruleset
                     try:
-                        self.logger.info(f"[cyan]    [>] Converting Native Sigma to Zircolite ruleset : {str(ruleset_path)}[/]")
+                        self.logger.info(f"    [>] Converting Native Sigma to Zircolite ruleset : {make_file_link(str(ruleset_path))}")
                         ruleset_list.append(self.sigma_rules_to_ruleset([ruleset_path], self.pipelines))
                     except Exception as e:
                         self.logger.error(f"[red]    [-] Cannot convert {str(ruleset_path)} {e}[/]")
             elif ruleset_path.is_dir():  # Directory
                 try:
-                    self.logger.info(f"[cyan]    [>] Converting Native Sigma to Zircolite ruleset : {str(ruleset_path)}[/]")
+                    self.logger.info(f"    [>] Converting Native Sigma to Zircolite ruleset : {make_file_link(str(ruleset_path))}")
                     ruleset_list.append(self.sigma_rules_to_ruleset([ruleset_path], self.pipelines))
                 except Exception as e:
                     self.logger.error(f"[red]    [-] Cannot convert {str(ruleset_path)} {e}[/]")

@@ -42,6 +42,7 @@ from .utils import (
     analyze_files_and_recommend_mode,
     print_mode_recommendation,
     load_field_mappings,
+    open_maybe_compressed,
 )
 from .processing import (
     ProcessingContext,
@@ -158,6 +159,7 @@ __all__ = [
     'analyze_files_and_recommend_mode',
     'print_mode_recommendation',
     'load_field_mappings',
+    'open_maybe_compressed',
     # Parallel processing
     'ParallelConfig',
     'ParallelStats',
@@ -217,4 +219,4 @@ __all__ = [
     'print_detection',
 ]
 
-__version__ = "3.3.0"
+__version__ = "3.5.0"

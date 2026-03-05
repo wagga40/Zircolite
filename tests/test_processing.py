@@ -17,7 +17,7 @@ import threading
 import pytest
 from argparse import Namespace
 from pathlib import Path
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 from zircolite.console import LEVEL_PRIORITY
 from zircolite.processing import (
@@ -93,7 +93,7 @@ def dummy_args():
     return Namespace(
         logs_encoding=None,
         parallel_workers=None,
-        parallel_memory_limit=75.0,
+        parallel_memory_limit=85.0,
     )
 
 
@@ -306,30 +306,13 @@ class TestProcessPerfileStreaming:
     """Tests for process_perfile_streaming behavior."""
 
     def test_perfile_no_template_returns_accumulated_results(
-        self, field_mappings_file, test_logger, default_args_config,
-        sample_ruleset, tmp_path,
+        self, default_args_config,
+        sample_ruleset, tmp_path, make_processing_context,
     ):
         """Per-file streaming always returns accumulated results for summary/ATT&CK dashboard."""
-        ctx = ProcessingContext(
-            config=field_mappings_file,
-            logger=test_logger,
-            no_output=True,
-            events_after=time.strptime("1970-01-01T00:00:00", "%Y-%m-%dT%H:%M:%S"),
-            events_before=time.strptime("9999-12-12T23:59:59", "%Y-%m-%dT%H:%M:%S"),
-            limit=-1,
-            csv_mode=False,
-            time_field="SystemTime",
-            hashes=False,
-            db_location=":memory:",
-            delimiter=";",
+        ctx = make_processing_context(
             rulesets=sample_ruleset,
-            rule_filters=None,
             outfile=str(tmp_path / "out.json"),
-            ready_for_templating=False,
-            package=False,
-            dbfile=None,
-            keepflat=False,
-            memory_tracker=MemoryTracker(logger=test_logger),
         )
         events = [{"Event": {"System": {"EventID": 1}, "EventData": {"CommandLine": "powershell.exe"}}}]
         jf = tmp_path / "ev.json"
@@ -342,6 +325,29 @@ class TestProcessPerfileStreaming:
         assert isinstance(results, list)
         assert len(results) >= 1
         assert results[0].get("title") == "Suspicious PowerShell Command"
+
+    def test_perfile_streaming_two_files_aggregates_results(
+        self, default_args_config,
+        sample_ruleset, tmp_path, make_processing_context,
+    ):
+        """Per-file streaming with two files reuses connection and aggregates results."""
+        ctx = make_processing_context(
+            rulesets=sample_ruleset,
+            outfile=str(tmp_path / "out.json"),
+        )
+        event = {"Event": {"System": {"EventID": 1}, "EventData": {"CommandLine": "powershell.exe"}}}
+        jf1 = tmp_path / "f1.json"
+        jf2 = tmp_path / "f2.json"
+        jf1.write_text(json.dumps(event) + "\n")
+        jf2.write_text(json.dumps(event) + "\n")
+
+        _, results = process_perfile_streaming(
+            ctx, [jf1, jf2], "json", None, default_args_config,
+        )
+        assert isinstance(results, list)
+        assert len(results) >= 1
+        total_matches = sum(r.get("count", 0) for r in results)
+        assert total_matches >= 2
 
 
 # =============================================================================
@@ -470,6 +476,121 @@ class TestIncrementalResultWriter:
 # Keepflat context manager & multi-file support
 # =============================================================================
 
+# =============================================================================
+# process_single_file_worker
+# =============================================================================
+
+
+class TestProcessSingleFileWorker:
+    """Functional tests for process_single_file_worker."""
+
+    def test_returns_result_tuple_with_results_key(
+        self, default_args_config, sample_ruleset, tmp_path, make_processing_context,
+    ):
+        ctx = make_processing_context(
+            rulesets=sample_ruleset,
+            outfile=str(tmp_path / "out.json"),
+        )
+        jf = tmp_path / "ev.json"
+        jf.write_text(
+            '{"Event": {"System": {"EventID": 1}, "EventData": {"CommandLine": "powershell.exe"}}}\n'
+        )
+        thread_local = threading.local()
+        counter_lock = threading.Lock()
+        worker_counter = [0]
+        total_filtered_count = [0]
+
+        event_count, file_data = process_single_file_worker(
+            jf,
+            ctx,
+            "json",
+            None,
+            default_args_config,
+            counter_lock=counter_lock,
+            worker_counter=worker_counter,
+            total_filtered_count=total_filtered_count,
+            thread_local=thread_local,
+        )
+        assert event_count == 1
+        assert "results" in file_data
+        assert file_data["name"] == "ev.json"
+        assert len(file_data["results"]) >= 1
+        assert file_data["events"] == 1
+
+    def test_returns_empty_matches_when_no_rule_matches(
+        self, default_args_config, sample_ruleset, tmp_path, make_processing_context,
+    ):
+        ctx = make_processing_context(
+            rulesets=sample_ruleset,
+            outfile=str(tmp_path / "out.json"),
+        )
+        jf = tmp_path / "ev.json"
+        jf.write_text(
+            '{"Event": {"System": {"EventID": 1}, "EventData": {"CommandLine": "notepad.exe"}}}\n'
+        )
+        thread_local = threading.local()
+        counter_lock = threading.Lock()
+        worker_counter = [0]
+        total_filtered_count = [0]
+
+        event_count, file_data = process_single_file_worker(
+            jf,
+            ctx,
+            "json",
+            None,
+            default_args_config,
+            counter_lock=counter_lock,
+            worker_counter=worker_counter,
+            total_filtered_count=total_filtered_count,
+            thread_local=thread_local,
+        )
+        assert event_count == 1
+        assert file_data["results"] == []
+        assert file_data["events"] == 1
+
+
+# =============================================================================
+# _ThreadSafeWriter concurrency
+# =============================================================================
+
+
+class TestThreadSafeWriterConcurrency:
+    """Concurrent writes must not interleave lines."""
+
+    def test_concurrent_writes_no_interleaving(self, tmp_path):
+        out = tmp_path / "out.jsonl"
+        with open(out, "wb") as fh:
+            writer = _ThreadSafeWriter(fh)
+            num_threads = 4
+            lines_per_thread = 50
+
+            def write_lines(prefix):
+                for i in range(lines_per_thread):
+                    writer.write(f"{prefix}_{i}\n".encode())
+
+            threads = [
+                threading.Thread(target=write_lines, args=(f"T{t}",))
+                for t in range(num_threads)
+            ]
+            for t in threads:
+                t.start()
+            for t in threads:
+                t.join()
+
+        lines = out.read_text().strip().splitlines()
+        assert len(lines) == num_threads * lines_per_thread
+        for line in lines:
+            parts = line.split("_")
+            assert len(parts) == 2
+            assert parts[0] in [f"T{t}" for t in range(num_threads)]
+            assert parts[1].isdigit()
+
+
+# =============================================================================
+# Keepflat context
+# =============================================================================
+
+
 class TestKeepflatContext:
     """Tests for _keepflat_context and _ThreadSafeWriter."""
 
@@ -523,29 +644,13 @@ class TestKeepflatPerfile:
     """Test that per-file streaming produces a single consolidated keepflat file."""
 
     def test_perfile_single_keepflat_file(
-        self, field_mappings_file, test_logger, default_args_config,
-        sample_ruleset, tmp_path,
+        self, default_args_config,
+        sample_ruleset, tmp_path, make_processing_context,
     ):
-        ctx = ProcessingContext(
-            config=field_mappings_file,
-            logger=test_logger,
-            no_output=True,
-            events_after=time.strptime("1970-01-01T00:00:00", "%Y-%m-%dT%H:%M:%S"),
-            events_before=time.strptime("9999-12-12T23:59:59", "%Y-%m-%dT%H:%M:%S"),
-            limit=-1,
-            csv_mode=False,
-            time_field="SystemTime",
-            hashes=False,
-            db_location=":memory:",
-            delimiter=";",
+        ctx = make_processing_context(
             rulesets=sample_ruleset,
-            rule_filters=None,
             outfile=str(tmp_path / "out.json"),
-            ready_for_templating=False,
-            package=False,
-            dbfile=None,
             keepflat=True,
-            memory_tracker=MemoryTracker(logger=test_logger),
         )
 
         ev1 = tmp_path / "ev1.json"

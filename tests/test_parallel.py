@@ -2,13 +2,10 @@
 Tests for the parallel processing module.
 """
 
-import os
+import queue
 import sys
-import time
 from pathlib import Path
 from unittest.mock import MagicMock, patch
-
-import pytest
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
@@ -35,7 +32,7 @@ class TestParallelConfig:
 
         assert config.max_workers is None
         assert config.min_workers == 1
-        assert config.memory_limit_percent == 75.0
+        assert config.memory_limit_percent == 85.0
         assert config.memory_check_interval == 5
         assert config.adaptive_workers is True
         assert config.batch_size == 10
@@ -695,6 +692,28 @@ class TestMemoryAwareParallelProcessorProcessFiles:
         assert stats.total_files == 3
         assert stats.processed_files == 2
         assert stats.failed_files == 1
+
+    def test_rule_progress_queue_drained(self, test_logger, tmp_path):
+        """When rule_progress_queue is passed, main thread drains it during processing."""
+        progress_queue = queue.Queue()
+        f = tmp_path / "one.json"
+        f.write_text('{"x": 1}')
+        total_rules = 4
+        file_name = "one.json"
+
+        def put_rule_progress(path):
+            for done in range(total_rules + 1):
+                progress_queue.put((0, file_name, done, total_rules))
+            return (1, None)
+
+        processor = MemoryAwareParallelProcessor(logger=test_logger)
+        processor.process_files_parallel(
+            [f],
+            put_rule_progress,
+            disable_progress=True,
+            rule_progress_queue=progress_queue,
+        )
+        assert progress_queue.empty()
 
 
 # ============================================================================

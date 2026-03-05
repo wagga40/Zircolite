@@ -2,9 +2,12 @@
 Tests for the TemplateEngine and ZircoliteGuiGenerator classes.
 """
 
+import json
 import sys
 from pathlib import Path
 from unittest.mock import MagicMock, patch
+
+import pytest
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
@@ -84,8 +87,8 @@ class TestTemplateEngineGenerate:
         assert '"title":' in content
         assert '"level":' in content
     
-    def test_generate_appends_to_file(self, simple_template, tmp_path, test_logger, sample_detection_results):
-        """Test that generate_from_template appends to existing file."""
+    def test_generate_overwrites_existing_file(self, simple_template, tmp_path, test_logger, sample_detection_results):
+        """Test that generate_from_template overwrites (not appends to) existing file."""
         output_file = str(tmp_path / "output.txt")
         
         # Write initial content
@@ -98,7 +101,7 @@ class TestTemplateEngineGenerate:
         with open(output_file) as f:
             content = f.read()
         
-        assert "Initial content" in content
+        assert "Initial content" not in content
         assert "Suspicious PowerShell Command" in content
     
     def test_generate_with_time_field(self, tmp_path, test_logger, sample_detection_results):
@@ -381,6 +384,87 @@ class TestTemplateEngineExportFormats:
         assert "title,level,count" in content
         assert "Suspicious PowerShell Command,high,2" in content
     
+    def test_timesketch_template_uses_sanitized_timefield(self, tmp_path, test_logger):
+        """Timesketch template must populate 'datetime' using the sanitized time field.
+
+        Reproduces the bug where ECS/Elastic JSON events have '@timestamp' in
+        the raw data, but the streaming processor stores it as 'timestamp'
+        (stripping the '@'). The template's timeField must match the column name.
+        """
+        ts_value = "2024-03-01T23:05:25.150Z"
+        data = [{
+            "title": "Test Rule",
+            "id": "abc-123",
+            "description": "Test",
+            "rule_level": "high",
+            "matches": [
+                {
+                    "Channel": "Microsoft-Windows-Sysmon/Operational",
+                    "EventID": "11",
+                    "timestamp": ts_value,
+                    "EventTime": "2024-03-01T23:05:27.220Z",
+                    "Image": "C:\\test.exe",
+                }
+            ],
+        }]
+
+        template_file = Path(__file__).parent.parent / "templates" / "exportForTimesketch.tmpl"
+        if not template_file.exists():
+            pytest.skip("Timesketch template not found")
+
+        output_file = str(tmp_path / "timesketch.json")
+
+        # 'timestamp' is the sanitized name (what the streaming processor stores)
+        tmpl_config = TemplateConfig(time_field="timestamp")
+        engine = TemplateEngine(template_config=tmpl_config, logger=test_logger)
+        engine.generate_from_template(str(template_file), output_file, data)
+
+        with open(output_file) as f:
+            for line in f:
+                line = line.strip()
+                if not line:
+                    continue
+                record = json.loads(line)
+                assert record["datetime"] == ts_value, (
+                    f"datetime should be '{ts_value}', got '{record['datetime']}'"
+                )
+
+    def test_timesketch_template_empty_with_unsanitized_field(self, tmp_path, test_logger):
+        """Demonstrate the original bug: '@timestamp' as timeField yields empty datetime."""
+        data = [{
+            "title": "Test Rule",
+            "id": "abc-123",
+            "description": "Test",
+            "rule_level": "high",
+            "matches": [
+                {
+                    "Channel": "Microsoft-Windows-Sysmon/Operational",
+                    "timestamp": "2024-03-01T23:05:25.150Z",
+                }
+            ],
+        }]
+
+        template_file = Path(__file__).parent.parent / "templates" / "exportForTimesketch.tmpl"
+        if not template_file.exists():
+            pytest.skip("Timesketch template not found")
+
+        output_file = str(tmp_path / "timesketch_bad.json")
+
+        # '@timestamp' would NOT match the 'timestamp' column — the old bug
+        tmpl_config = TemplateConfig(time_field="@timestamp")
+        engine = TemplateEngine(template_config=tmpl_config, logger=test_logger)
+        engine.generate_from_template(str(template_file), output_file, data)
+
+        with open(output_file) as f:
+            for line in f:
+                line = line.strip()
+                if not line:
+                    continue
+                record = json.loads(line)
+                assert record["datetime"] == "", (
+                    "With unsanitized '@timestamp', datetime should be empty"
+                )
+
     def test_elk_style_template(self, tmp_path, test_logger, sample_detection_results):
         """Test Elasticsearch/ELK-style bulk export template."""
         template_content = """{% for elem in data %}{% for match in elem.matches %}
@@ -452,3 +536,114 @@ class TestZircoliteGuiGenerator:
                     gen.generate(sample_detection_results, directory="")
                     mock_make.assert_called_once()
         assert not Path(gen.tmpDir).exists()
+
+
+class TestGuiGeneratorHappyPath:
+    """ZircoliteGuiGenerator.generate() end-to-end: real zip produced with expected content."""
+
+    def test_generates_zip_with_data(self, test_logger, sample_detection_results, tmp_path):
+        import zipfile
+        gui_dir = tmp_path / "zircogui"
+        gui_dir.mkdir()
+        (gui_dir / "index.html").write_text("<html></html>")
+        package_zip = tmp_path / "package.zip"
+        with zipfile.ZipFile(package_zip, "w", zipfile.ZIP_DEFLATED) as zf:
+            for f in gui_dir.rglob("*"):
+                if f.is_file():
+                    zf.write(f, f.relative_to(gui_dir.parent))
+
+        template_file = tmp_path / "export.js.tmpl"
+        template_file.write_text("var data = {{ data | tojson }};")
+        out_dir = tmp_path / "output"
+        out_dir.mkdir()
+
+        gen = ZircoliteGuiGenerator(logger=test_logger)
+        gen.packageDir = str(package_zip)
+        gen.templateFile = str(template_file)
+        gen.outputFile = "zircogui-result"
+        gen.generate(sample_detection_results, directory=str(out_dir))
+
+        zip_path = out_dir / "zircogui-result.zip"
+        if not zip_path.exists():
+            zip_path = Path(gen.outputFile + ".zip")
+        assert zip_path.exists()
+        with zipfile.ZipFile(zip_path, "r") as zf:
+            names = zf.namelist()
+            assert "data.js" in names or any("data.js" in n for n in names)
+
+
+class TestTemplateEngineAttackNavigatorHelpers:
+    """Tests for ATT&CK Navigator helpers used in templates (_extract_attack_techniques, collect_navigator_techniques)."""
+
+    def test_extract_attack_techniques_filter(self, tmp_path, test_logger, sample_detection_results):
+        """Template filter extract_attack_techniques returns technique IDs from tags."""
+        template_content = """{% for elem in data %}
+Techniques: {{ elem.tags | extract_attack_techniques | join(',') }}
+{% endfor %}"""
+        template_file = tmp_path / "attack.tmpl"
+        template_file.write_text(template_content)
+        output_file = str(tmp_path / "attack_out.txt")
+        engine = TemplateEngine(logger=test_logger)
+        engine.generate_from_template(str(template_file), output_file, sample_detection_results)
+        with open(output_file) as f:
+            content = f.read()
+        assert "T1059.001" in content
+
+    def test_collect_navigator_techniques_global(self, tmp_path, test_logger, sample_detection_results):
+        """Template global collect_navigator_techniques builds Navigator technique list."""
+        template_content = """{% set nav = collect_navigator_techniques(data) %}
+{% for t in nav %}
+{{ t.techniqueID }}: {{ t.score }} {{ t.color }}
+{% endfor %}"""
+        template_file = tmp_path / "navigator.tmpl"
+        template_file.write_text(template_content)
+        output_file = str(tmp_path / "nav_out.txt")
+        engine = TemplateEngine(logger=test_logger)
+        engine.generate_from_template(str(template_file), output_file, sample_detection_results)
+        with open(output_file) as f:
+            content = f.read()
+        assert "T1059.001" in content
+        assert "#" in content
+        assert "2" in content
+
+    def test_collect_navigator_techniques_merges_same_technique(self, tmp_path, test_logger):
+        """When two detections share the same technique, score is summed and level is max."""
+        data = [
+            {"title": "Rule A", "tags": ["attack.t1059.001"], "rule_level": "medium", "count": 1},
+            {"title": "Rule B", "tags": ["attack.t1059.001"], "rule_level": "high", "count": 2},
+        ]
+        template_content = """{% set nav = collect_navigator_techniques(data) %}
+{% for t in nav %}{{ t.techniqueID }}|{{ t.score }}|{{ t.color }}{% endfor %}"""
+        template_file = tmp_path / "nav_merge.tmpl"
+        template_file.write_text(template_content)
+        output_file = str(tmp_path / "nav_merge_out.txt")
+        engine = TemplateEngine(logger=test_logger)
+        engine.generate_from_template(str(template_file), output_file, data)
+        with open(output_file) as f:
+            content = f.read()
+        assert "T1059.001" in content
+        assert "|3|" in content
+        assert "#ff6600" in content
+
+    def test_generate_from_template_missing_file_logs_error(self, tmp_path, sample_detection_results):
+        """When template file is missing, error and debug are logged."""
+        mock_logger = MagicMock()
+        output_file = str(tmp_path / "out.txt")
+        engine = TemplateEngine(logger=mock_logger)
+        engine.generate_from_template("/nonexistent/template.tmpl", output_file, sample_detection_results)
+        mock_logger.error.assert_called_once()
+        mock_logger.debug.assert_called_once()
+
+    def test_generate_from_template_overwrites_existing(self, tmp_path, sample_detection_results):
+        """Template output should overwrite (not append to) existing files."""
+        template_file = tmp_path / "tmpl.tmpl"
+        template_file.write_text("{{ data | length }}")
+        output_file = str(tmp_path / "out.txt")
+
+        engine = TemplateEngine()
+        engine.generate_from_template(str(template_file), output_file, sample_detection_results)
+        engine.generate_from_template(str(template_file), output_file, sample_detection_results)
+
+        content = open(output_file).read()
+        expected = str(len(sample_detection_results))
+        assert content == expected

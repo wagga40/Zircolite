@@ -17,16 +17,16 @@ Contents
     - ``process_db_input``
 """
 
+import argparse
 import csv
 import logging
-import random
-import string
+import queue
 import threading
 import time
 from contextlib import contextmanager
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import List, Optional, TYPE_CHECKING
+from typing import Any, Dict, List, Optional, Tuple, Union, TYPE_CHECKING
 
 import orjson
 
@@ -34,6 +34,7 @@ from .config import ProcessingConfig, ExtractorConfig
 from .console import (
     console,
     is_quiet,
+    make_file_link,
     print_section,
     print_no_detections,
     build_file_tree,
@@ -43,7 +44,14 @@ from .console import (
 from .core import ZircoliteCore
 from .extractor import EvtxExtractor
 from .parallel import ParallelConfig, MemoryAwareParallelProcessor
-from .utils import MemoryTracker, create_silent_logger, load_field_mappings
+from .utils import (
+    MemoryTracker,
+    create_silent_logger,
+    load_field_mappings,
+    random_suffix,
+    sanitize_row_for_csv,
+    sanitize_value_for_csv,
+)
 
 if TYPE_CHECKING:
     from .rules import EventFilter
@@ -86,12 +94,16 @@ class ProcessingContext:
     total_filtered_events: int = 0
     total_events: int = 0
     workers_used: int = 1
+    profile_rules: bool = False
+    archive_password: Optional[str] = None
+    add_index: list = field(default_factory=list)
+    remove_index: list = field(default_factory=list)
 
     # Cached formatted time strings (computed in __post_init__)
     time_after_str: str = field(init=False, repr=False)
     time_before_str: str = field(init=False, repr=False)
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         self.time_after_str = time.strftime("%Y-%m-%dT%H:%M:%S", self.events_after)
         self.time_before_str = time.strftime("%Y-%m-%dT%H:%M:%S", self.events_before)
 
@@ -117,6 +129,10 @@ def create_zircolite_core(
         csv_mode=ctx.csv_mode,
         delimiter=ctx.delimiter,
         limit=ctx.limit,
+        profile_rules=ctx.profile_rules,
+        archive_password=ctx.archive_password,
+        add_index=ctx.add_index,
+        remove_index=ctx.remove_index,
     )
     return ZircoliteCore(ctx.config, proc_config, logger=ctx.logger)
 
@@ -135,11 +151,16 @@ def create_worker_core(ctx: ProcessingContext, worker_id: int) -> ZircoliteCore:
         csv_mode=ctx.csv_mode,
         delimiter=ctx.delimiter,
         limit=ctx.limit,
+        archive_password=ctx.archive_password,
+        add_index=ctx.add_index,
+        remove_index=ctx.remove_index,
     )
     return ZircoliteCore(ctx.config, proc_config, logger=silent_logger)
 
 
-def create_extractor(args, logger, input_type: str) -> Optional[EvtxExtractor]:
+def create_extractor(
+    args: argparse.Namespace, logger: logging.Logger, input_type: str
+) -> Optional[EvtxExtractor]:
     """Create extractor for formats that need conversion."""
     if input_type in ("xml", "sysmon_linux", "auditd", "evtxtract"):
         extractor_config = ExtractorConfig(
@@ -158,7 +179,9 @@ def create_extractor(args, logger, input_type: str) -> Optional[EvtxExtractor]:
 # HELPERS
 # ============================================================================
 
-def _unpack_streaming_result(result) -> tuple:
+def _unpack_streaming_result(
+    result: Union[int, Tuple[int, int]]
+) -> Tuple[int, int]:
     """Safely unpack (total_events, filtered_count) from run_streaming."""
     return result if isinstance(result, tuple) else (result, 0)
 
@@ -178,11 +201,11 @@ class _ThreadSafeWriter:
 
     __slots__ = ('_fh', '_lock')
 
-    def __init__(self, fh):
+    def __init__(self, fh: Any) -> None:
         self._fh = fh
         self._lock = threading.Lock()
 
-    def write(self, data):
+    def write(self, data: bytes) -> None:
         with self._lock:
             self._fh.write(data)
 
@@ -202,11 +225,8 @@ def _keepflat_context(ctx: 'ProcessingContext', *, thread_safe: bool = False):
     if not ctx.keepflat:
         yield None
         return
-    filename = "flattened_events_{}.json".format(
-        ''.join(random.SystemRandom().choice(
-            string.ascii_uppercase + string.digits) for _ in range(4))
-    )
-    ctx.logger.info(f"[+] Saving flattened events to: [cyan]{filename}[/]")
+    filename = "flattened_events_{}.json".format(random_suffix(4))
+    ctx.logger.info(f"[+] Saving flattened events to: {make_file_link(filename)}")
     fh = open(filename, 'wb', buffering=1048576)
     try:
         yield _ThreadSafeWriter(fh) if thread_safe else fh
@@ -222,9 +242,9 @@ def process_unified_streaming(
     ctx: ProcessingContext,
     file_list: List[Path],
     input_type: str,
-    extractor,
-    args,
-) -> tuple:
+    extractor: Optional[EvtxExtractor],
+    args: argparse.Namespace,
+) -> Tuple[Any, ...]:
     """Process all files into a single database using streaming mode."""
     ctx.logger.info(
         f"[+] Loading all [yellow]{len(file_list)}[/] file(s) into a single unified database"
@@ -251,7 +271,7 @@ def process_unified_streaming(
 
     if ctx.dbfile:
         zircolite_core.save_db_to_disk(ctx.dbfile)
-        ctx.logger.info(f"[+] Saved unified database to: [cyan]{ctx.dbfile}[/]")
+        ctx.logger.info(f"[+] Saved unified database to: {make_file_link(ctx.dbfile)}")
         ctx.memory_tracker.sample()
 
     zircolite_core.load_ruleset_from_var(
@@ -273,6 +293,7 @@ def process_unified_streaming(
         write_mode="w",
         keep_results=True,
         last_ruleset=True,
+        disable_progress=is_quiet(),
     )
     ctx.memory_tracker.sample()
 
@@ -288,9 +309,9 @@ def process_perfile_streaming(
     ctx: ProcessingContext,
     file_list: List[Path],
     input_type: str,
-    extractor,
-    args,
-) -> tuple:
+    extractor: Optional[EvtxExtractor],
+    args: argparse.Namespace,
+) -> Tuple[Any, ...]:
     """Process each file separately using streaming mode."""
     ctx.logger.info(
         f"[+] Processing [yellow]{len(file_list)}[/] file(s) separately in streaming mode"
@@ -300,91 +321,112 @@ def process_perfile_streaming(
     all_results = []
     first_file = True
     file_stats = []
+    profiling_core = create_zircolite_core(ctx, disable_progress=disable_nested) if ctx.profile_rules else None
 
     # Always accumulate results – they are needed for the ATT&CK Coverage
     # panel in the summary dashboard, not only for templates/packaging.
 
-    with _keepflat_context(ctx) as kf:
-        for file_idx, log_file in enumerate(file_list):
-            file_name = Path(log_file).name
-            if len(file_list) > 1:
-                ctx.logger.info(
-                    f"[+] Processing file [cyan]{file_idx + 1}[/]/[cyan]{len(file_list)}[/]: [cyan]{file_name}[/]"
+    zircolite_core = create_zircolite_core(
+        ctx, db_location=":memory:", disable_progress=disable_nested
+    )
+    try:
+        with _keepflat_context(ctx) as kf:
+            for file_idx, log_file in enumerate(file_list):
+                file_name = Path(log_file).name
+                file_link = make_file_link(str(log_file), file_name)
+                if len(file_list) > 1:
+                    ctx.logger.info(
+                        f"[+] Processing file [cyan]{file_idx + 1}[/]/[cyan]{len(file_list)}[/]: {file_link}"
+                    )
+                else:
+                    ctx.logger.info(f"[+] Processing file: {file_link}")
+
+                if file_idx > 0:
+                    try:
+                        zircolite_core.db_connection.execute("DELETE FROM logs")
+                    except Exception:
+                        pass
+                    zircolite_core._cursor = None
+
+                result = zircolite_core.run_streaming(
+                    [log_file],
+                    input_type=input_type,
+                    args_config=args,
+                    extractor=extractor,
+                    disable_progress=disable_nested,
+                    event_filter=ctx.event_filter,
+                    return_filtered_count=True,
+                    keepflat_file=kf,
                 )
-            else:
-                ctx.logger.info(f"[+] Processing file: [cyan]{file_name}[/]")
+                event_count, filtered_count = _unpack_streaming_result(result)
+                ctx.total_filtered_events += filtered_count
+                ctx.total_events += event_count
+                ctx.memory_tracker.sample()
 
-            zircolite_core = create_zircolite_core(
-                ctx, db_location=":memory:", disable_progress=disable_nested
-            )
+                if ctx.dbfile:
+                    dbfile_path = Path(ctx.dbfile)
+                    parent = dbfile_path.parent
+                    if parent != Path("."):
+                        parent.mkdir(parents=True, exist_ok=True)
+                    file_db_name = str(
+                        parent / f"{dbfile_path.stem}_{file_name}{dbfile_path.suffix}"
+                    )
+                    zircolite_core.save_db_to_disk(file_db_name)
+                    ctx.logger.info(
+                        f"[+] Saved database for {file_link} to: {make_file_link(file_db_name)}"
+                    )
+                    ctx.memory_tracker.sample()
 
-            result = zircolite_core.run_streaming(
-                [log_file],
-                input_type=input_type,
-                args_config=args,
-                extractor=extractor,
-                disable_progress=disable_nested,
-                event_filter=ctx.event_filter,
-                return_filtered_count=True,
-                keepflat_file=kf,
-            )
-            event_count, filtered_count = _unpack_streaming_result(result)
-            ctx.total_filtered_events += filtered_count
-            ctx.total_events += event_count
-            ctx.memory_tracker.sample()
-
-            if ctx.dbfile:
-                file_db_name = (
-                    f"{Path(ctx.dbfile).stem}_{file_name}{Path(ctx.dbfile).suffix}"
+                zircolite_core.load_ruleset_from_var(
+                    ruleset=ctx.rulesets, rule_filters=ctx.rule_filters
                 )
-                zircolite_core.save_db_to_disk(file_db_name)
+                zircolite_core.full_results = []
+
+                if ctx.limit > 0 and first_file:
+                    ctx.logger.info(
+                        f"[+] Limited mode: detections with more than [yellow]{ctx.limit}[/] events will be discarded"
+                    )
+
+                is_last_file = file_idx == len(file_list) - 1
+                write_mode = "w" if first_file else "a"
+
                 ctx.logger.info(
-                    f"[+] Saved database for [cyan]{file_name}[/] to: [cyan]{file_db_name}[/]"
+                    f"[+] Executing ruleset for {file_link} - "
+                    f"[yellow]{len(zircolite_core.ruleset)}[/] rules"
+                )
+                zircolite_core.execute_ruleset(
+                    ctx.outfile,
+                    write_mode=write_mode,
+                    keep_results=True,
+                    last_ruleset=is_last_file,
+                    source_label=file_name,
+                    disable_progress=is_quiet(),
                 )
                 ctx.memory_tracker.sample()
 
-            zircolite_core.load_ruleset_from_var(
-                ruleset=ctx.rulesets, rule_filters=ctx.rule_filters
-            )
-
-            if ctx.limit > 0 and first_file:
-                ctx.logger.info(
-                    f"[+] Limited mode: detections with more than [yellow]{ctx.limit}[/] events will be discarded"
+                file_detection_count = (
+                    len(zircolite_core.full_results)
+                    if zircolite_core.full_results
+                    else 0
+                )
+                file_stats.append(
+                    {
+                        "name": file_name,
+                        "path": str(log_file),
+                        "events": event_count,
+                        "detections": file_detection_count,
+                        "filtered": filtered_count,
+                    }
                 )
 
-            is_last_file = file_idx == len(file_list) - 1
-            write_mode = "w" if first_file else "a"
+                if zircolite_core.full_results:
+                    all_results.extend(zircolite_core.full_results)
 
-            ctx.logger.info(
-                f"[+] Executing ruleset for [cyan]{file_name}[/] - "
-                f"[yellow]{len(zircolite_core.ruleset)}[/] rules"
-            )
-            zircolite_core.execute_ruleset(
-                ctx.outfile,
-                write_mode=write_mode,
-                keep_results=True,
-                last_ruleset=is_last_file,
-                source_label=file_name,
-            )
-            ctx.memory_tracker.sample()
-
-            file_detection_count = (
-                len(zircolite_core.full_results) if zircolite_core.full_results else 0
-            )
-            file_stats.append(
-                {
-                    "name": file_name,
-                    "events": event_count,
-                    "detections": file_detection_count,
-                    "filtered": filtered_count,
-                }
-            )
-
-            if zircolite_core.full_results:
-                all_results.extend(zircolite_core.full_results)
-
-            zircolite_core.close()
-            first_file = False
+                if profiling_core is not None:
+                    profiling_core.merge_profiling_data(zircolite_core)
+                first_file = False
+    finally:
+        zircolite_core.close()
 
     if len(file_list) > 1 and file_stats and not is_quiet():
         console.print()
@@ -393,43 +435,108 @@ def process_perfile_streaming(
         console.print()
 
     ctx.file_stats = file_stats
-    return None, all_results
+    return profiling_core, all_results
 
 
 # ============================================================================
 # DATABASE INPUT
 # ============================================================================
 
-def process_db_input(ctx: ProcessingContext, args) -> tuple:
-    """Process from an existing database file."""
-    ctx.logger.info(f"[+] Creating model from disk: [cyan]{args.evtx}[/]")
+def process_db_input(
+    ctx: ProcessingContext,
+    args: argparse.Namespace,
+    file_list: Optional[List[Path]] = None,
+) -> Tuple[Any, ...]:
+    """Process from existing database file(s).
 
+    When *file_list* is provided (directory of DB files), each file is
+    loaded, rules are executed, and results are aggregated — similar to
+    per-file streaming mode.  When *file_list* is ``None`` (the legacy
+    ``-D`` path), ``args.evtx`` is used as the single DB path.
+    """
+    db_files = [Path(f) for f in file_list] if file_list else [Path(args.evtx)]
+    all_results: list = []
+    first_file = True
+    file_stats: list = []
     zircolite_core = create_zircolite_core(ctx, disable_progress=is_quiet())
-    zircolite_core.load_db_in_memory(args.evtx)
-    ctx.memory_tracker.sample()
 
-    zircolite_core.load_ruleset_from_var(
-        ruleset=ctx.rulesets, rule_filters=ctx.rule_filters
-    )
+    for file_idx, db_path in enumerate(db_files):
+        file_name = db_path.name
+        file_link = make_file_link(str(db_path), file_name)
+        if len(db_files) > 1:
+            ctx.logger.info(
+                f"[+] Loading database [cyan]{file_idx + 1}[/]/"
+                f"[cyan]{len(db_files)}[/]: {file_link}"
+            )
+        else:
+            ctx.logger.info(f"[+] Creating model from disk: {file_link}")
 
-    if ctx.limit > 0:
-        ctx.logger.info(
-            f"[+] Limited mode: detections with more than [yellow]{ctx.limit}[/] events will be discarded"
+        zircolite_core.load_db_in_memory(str(db_path))
+        ctx.memory_tracker.sample()
+
+        # Warn if loaded DB has no 'logs' table (e.g. WAL data missing)
+        try:
+            _cur = zircolite_core.db_connection.cursor()
+            _cur.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='logs'")
+            if _cur.fetchone() is None:
+                ctx.logger.warning(
+                    f"[yellow]    [!] Database '{file_name}' has no 'logs' table. "
+                    f"The file may be damaged (e.g. missing WAL journal). Skipping.[/]"
+                )
+                first_file = False
+                continue
+        except Exception:
+            pass
+
+        zircolite_core.load_ruleset_from_var(
+            ruleset=ctx.rulesets, rule_filters=ctx.rule_filters
         )
+        zircolite_core.full_results = []
 
-    ctx.logger.info(
-        f"[+] Executing ruleset - [yellow]{len(zircolite_core.ruleset)}[/] rules"
-    )
-    zircolite_core.execute_ruleset(
-        ctx.outfile,
-        write_mode="w",
-        keep_results=True,
-        last_ruleset=True,
-    )
-    ctx.memory_tracker.sample()
+        if ctx.limit > 0 and first_file:
+            ctx.logger.info(
+                f"[+] Limited mode: detections with more than "
+                f"[yellow]{ctx.limit}[/] events will be discarded"
+            )
 
-    results = list(zircolite_core.full_results) if zircolite_core.full_results else []
-    return zircolite_core, results
+        is_last = file_idx == len(db_files) - 1
+        write_mode = "w" if first_file else "a"
+
+        ctx.logger.info(
+            f"[+] Executing ruleset - [yellow]{len(zircolite_core.ruleset)}[/] rules"
+        )
+        zircolite_core.execute_ruleset(
+            ctx.outfile,
+            write_mode=write_mode,
+            keep_results=True,
+            last_ruleset=is_last,
+            source_label=file_name if len(db_files) > 1 else None,
+            disable_progress=is_quiet(),
+        )
+        ctx.memory_tracker.sample()
+
+        file_detection_count = len(zircolite_core.full_results) if zircolite_core.full_results else 0
+        file_stats.append({
+            "name": file_name,
+            "path": str(db_path),
+            "events": 0,
+            "detections": file_detection_count,
+            "filtered": 0,
+        })
+
+        if zircolite_core.full_results:
+            all_results.extend(zircolite_core.full_results)
+
+        first_file = False
+
+    if len(db_files) > 1 and file_stats and not is_quiet():
+        console.print()
+        tree = build_file_tree(f"Processed {len(db_files)} database files", file_stats)
+        console.print(tree)
+        console.print()
+
+    ctx.file_stats = file_stats
+    return zircolite_core, all_results
 
 
 # ============================================================================
@@ -440,16 +547,17 @@ def process_single_file_worker(
     log_file: Path,
     ctx: ProcessingContext,
     input_type: str,
-    extractor,
-    args,
+    extractor: Optional[EvtxExtractor],
+    args: argparse.Namespace,
     *,
     counter_lock: threading.Lock,
-    worker_counter: list,
-    total_filtered_count: list,
-    thread_local: threading.local,
+    worker_counter: List[int],
+    total_filtered_count: List[int],
+    thread_local: Any,
     raw_config: Optional[dict] = None,
-    keepflat_file=None,
-) -> tuple:
+    keepflat_file: Optional[Any] = None,
+    rule_progress_queue: Optional[queue.Queue] = None,
+) -> Tuple[int, Dict[str, Any]]:
     """Process a single file inside a parallel worker thread.
 
     Returns ``(event_count, file_data_dict)``.  This is a top-level function
@@ -462,6 +570,7 @@ def process_single_file_worker(
             with counter_lock:
                 worker_id = worker_counter[0]
                 worker_counter[0] += 1
+            thread_local.worker_id = worker_id
             thread_local.core = create_worker_core(ctx, worker_id)
         else:
             # Reuse table schema across files: DELETE keeps columns intact so
@@ -495,6 +604,7 @@ def process_single_file_worker(
                 0,
                 {
                     "name": file_name,
+                    "path": str(log_file),
                     "results": [],
                     "events": 0,
                     "filtered": filtered_count,
@@ -506,12 +616,19 @@ def process_single_file_worker(
         )
         core.full_results = []
 
+        worker_id = getattr(thread_local, "worker_id", 0)
+        progress_callback = (
+            (lambda cur, tot: rule_progress_queue.put((worker_id, file_name, cur, tot)))
+            if rule_progress_queue is not None
+            else None
+        )
         core.execute_ruleset(
             ctx.outfile,
             write_mode="w",
             keep_results=True,
             last_ruleset=True,
             show_table=False,
+            progress_callback=progress_callback,
         )
 
         file_results = list(core.full_results) if core.full_results else []
@@ -519,6 +636,7 @@ def process_single_file_worker(
             event_count,
             {
                 "name": file_name,
+                "path": str(log_file),
                 "results": file_results,
                 "events": event_count,
                 "filtered": filtered_count,
@@ -530,6 +648,7 @@ def process_single_file_worker(
             0,
             {
                 "name": file_name,
+                "path": str(log_file),
                 "results": [],
                 "events": 0,
                 "filtered": 0,
@@ -549,6 +668,9 @@ class _IncrementalResultWriter:
     everything in memory and flushing at the end.  Supports both JSON-array
     and CSV output modes.
     """
+
+    _fh: Any
+    _csv_writer: Any
 
     def __init__(self, ctx: ProcessingContext):
         self._ctx = ctx
@@ -582,16 +704,18 @@ class _IncrementalResultWriter:
                 self._write_json(result)
 
     def _write_json(self, result: dict) -> None:
+        if self._fh is None:
+            return
         if not self._first_json:
             self._fh.write(b",\n")
         self._first_json = False
         self._fh.write(orjson.dumps(result, option=orjson.OPT_INDENT_2))
 
     def _write_csv(self, result: dict) -> None:
+        if self._fh is None:
+            return
         title = result.get("title", "")
-        description = (
-            (result.get("description") or "").replace("\n", "").replace("\r", "")
-        )
+        description = sanitize_value_for_csv(result.get("description") or "")
         level = result.get("rule_level", "")
         count = result.get("count", 0)
         for row in result.get("matches", []):
@@ -606,10 +730,8 @@ class _IncrementalResultWriter:
                     extrasaction="ignore",
                 )
                 self._csv_writer.writeheader()
-            clean_row = {
-                k: ("" if v is None else str(v)).replace("\n", "").replace("\r", "")
-                for k, v in row.items()
-            }
+            assert self._csv_writer is not None
+            clean_row = sanitize_row_for_csv(row)
             self._csv_writer.writerow({
                 "rule_title": title,
                 "rule_description": description,
@@ -626,7 +748,9 @@ class _IncrementalResultWriter:
             self._fh = None
 
 
-def _write_parallel_results(ctx: ProcessingContext, all_results: list) -> None:
+def _write_parallel_results(
+    ctx: ProcessingContext, all_results: List[Dict[str, Any]]
+) -> None:
     """Write combined parallel results to the output file.
 
     Uses binary I/O for JSON (avoids an unnecessary decode/encode
@@ -658,20 +782,11 @@ def _write_parallel_results(ctx: ProcessingContext, all_results: list) -> None:
             writer.writeheader()
             for result in all_results:
                 title = result.get("title", "")
-                description = (
-                    (result.get("description") or "")
-                    .replace("\n", "")
-                    .replace("\r", "")
-                )
+                description = sanitize_value_for_csv(result.get("description") or "")
                 level = result.get("rule_level", "")
                 count = result.get("count", 0)
                 for row in result.get("matches", []):
-                    clean_row = {
-                        k: ("" if v is None else str(v))
-                        .replace("\n", "")
-                        .replace("\r", "")
-                        for k, v in row.items()
-                    }
+                    clean_row = sanitize_row_for_csv(row)
                     writer.writerow(
                         {
                             "rule_title": title,
@@ -695,15 +810,15 @@ def process_parallel_streaming(
     ctx: ProcessingContext,
     file_list: List[Path],
     input_type: str,
-    extractor,
-    args,
+    extractor: Optional[EvtxExtractor],
+    args: argparse.Namespace,
     recommended_workers: Optional[int] = None,
-) -> tuple:
+) -> Tuple[Any, ...]:
     """Process files in parallel using memory-aware parallel processor."""
 
     parallel_config = ParallelConfig(
         max_workers=getattr(args, "parallel_workers", None) or recommended_workers,
-        memory_limit_percent=getattr(args, "parallel_memory_limit", 75.0),
+        memory_limit_percent=getattr(args, "parallel_memory_limit", 85.0),
         adaptive_workers=True,
         sort_by_size=True,
         adaptive_memory=True,
@@ -737,6 +852,7 @@ def process_parallel_streaming(
             all_results.extend(file_results)
         file_stats.append({
             "name": file_data.get("name", "unknown"),
+            "path": file_data.get("path", ""),
             "events": file_data.get("events", 0),
             "detections": len(file_results),
             "filtered": file_data.get("filtered", 0),
@@ -747,6 +863,7 @@ def process_parallel_streaming(
     # time, so columns from later files would be silently dropped.  CSV
     # falls back to _write_parallel_results which collects all columns first.
     use_incremental = not ctx.csv_mode
+    rule_progress_queue = queue.Queue() if not is_quiet() else None
 
     with _keepflat_context(ctx, thread_safe=True) as kf:
 
@@ -764,6 +881,7 @@ def process_parallel_streaming(
                 thread_local=thread_local,
                 raw_config=raw_config,
                 keepflat_file=kf,
+                rule_progress_queue=rule_progress_queue,
             )
 
         if use_incremental:
@@ -779,6 +897,7 @@ def process_parallel_streaming(
                     desc="Processing",
                     disable_progress=is_quiet(),
                     on_result=_on_result,
+                    rule_progress_queue=rule_progress_queue,
                 )
         else:
             results_list, stats = processor.process_files_parallel(
@@ -787,6 +906,7 @@ def process_parallel_streaming(
                 desc="Processing",
                 disable_progress=is_quiet(),
                 on_result=_on_file_complete,
+                rule_progress_queue=rule_progress_queue,
             )
             _write_parallel_results(ctx, all_results)
 
