@@ -27,6 +27,7 @@ Temporary Items
 
 TODO
 detected_events.json
+results
 tmp
 *.log
 *.evtx
