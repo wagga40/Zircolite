@@ -346,10 +346,23 @@ The report shows the top rules by execution time (milliseconds). Rules taking �
 When converting native Sigma rules (YAML) to Zircolite format, a mini-summary is displayed showing:
 
 - Number of rules **successfully converted**
-- Number of **invalid rules skipped** (files that don't have required Sigma fields)
+- Number of **invalid rules skipped** (files that are not valid Sigma detection or correlation YAML)
 - Number of rules that **failed** conversion
 
 For example: `[✓] Converted 245 rules (3 invalid skipped, 2 failed)`
+
+### Sigma correlation rules
+
+Zircolite converts **Sigma correlation rules** (e.g. `event_count`, `value_count`, `temporal`) using the same SQLite backend as standalone SIGMA rules. Put the **base rule(s)** and the **correlation rule** in the **same YAML file** (multi-document stream, separated by `---`) or in the **same directory** passed to `--ruleset`, so rule `name` references between documents can resolve. Passing two separate `--ruleset` paths loads separate collections and cannot resolve cross-file references.
+
+Rules that exist only as **references** for a correlation (not emitted as standalone detections) are still compiled internally so the correlation SQL can embed their conditions. The emitted Zircolite ruleset therefore typically contains **one row per correlation rule**, not the referenced base rules.
+
+**Timestamp alignment:** Correlation rules that use `timespan` need a timestamp column in the SQLite database. Zircolite automatically aligns the timestamp field used by the SQLite backend with the timestamp field detected from your logs (or set via `--timefield`). For example, if auto-detection finds `@timestamp` (sanitized to `timestamp`), the correlation SQL will reference `timestamp` instead of the default `SystemTime`. If you use `--timefield UtcTime`, correlation queries will use `UtcTime`. This is handled transparently — no extra configuration is needed.
+
+**Limitations:**
+
+- **`timespan` on `event_count`:** The SQLite backend may not apply the time window in the generated query; counts can reflect all matching rows in the database, not a rolling window. For large time ranges this can differ from engines that enforce `timespan` strictly.
+- **Event filter:** Correlation-only entries do not list Windows `Channel` / `EventID` metadata; they are omitted from early event filtering so referenced base rules still drive channel/event filtering.
 
 ## Automatic Log Type Detection
 

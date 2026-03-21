@@ -197,7 +197,7 @@ Zircolite is built around several key classes, organized in the `zircolite/` pac
 - **StreamingEventProcessor** (`streaming.py`): Single-pass processor for efficient event extraction, flattening, and database insertion.
 - **Processing pipeline helpers** (`processing.py`): Coordinates processing modes (per-file, unified-db, parallel workers), result aggregation, and output writing.
 - **EvtxExtractor** (`extractor.py`): Converts various log formats (EVTX, XML, Auditd, Sysmon for Linux, CSV) to JSON.
-- **RulesetHandler** (`rules.py`): Manages ruleset loading and conversion, including native Sigma (YAML) to Zircolite format (JSON) conversion using pySigma.
+- **RulesetHandler** (`rules.py`): Manages ruleset loading and conversion, including native Sigma (YAML) to Zircolite format (JSON) conversion using pySigma. Sigma correlation rules use the same SQLite backend; base rules referenced only by a correlation are still compiled during conversion so correlation SQL can embed their conditions, but they are not added as separate rules in the emitted ruleset. The backend's `timestamp_field` is set from `RulesetConfig.time_field` so that correlation SQL references the correct column (auto-detected or user-specified via `--timefield`).
 - **RulesUpdater** (`rules.py`): Downloads and updates rulesets from the Zircolite-Rules-v2 repository.
 - **TemplateEngine** (`templates.py`): Generates output using Jinja2 templates.
 - **ZircoliteGuiGenerator** (`templates.py`): Creates the Mini-GUI package for result visualization.

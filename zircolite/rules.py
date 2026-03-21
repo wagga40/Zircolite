@@ -22,6 +22,8 @@ import yaml
 # Rich console for styled output
 from .console import console, is_quiet, make_file_link
 from sigma.collection import SigmaCollection
+from sigma.correlations import SigmaCorrelationRule
+from sigma.rule import SigmaRule
 from sigma.backends.sqlite import sqlite
 from sigma.processing.resolver import ProcessingPipelineResolver
 from sigma.plugins import InstalledSigmaPlugins
@@ -326,6 +328,7 @@ class RulesetHandler:
         self.logger = logger or logging.getLogger(__name__)
         self.saveRuleset = cfg.save_ruleset
         self.rulesetPathList = cfg.ruleset
+        self.time_field = cfg.time_field
         self.pipelines = []
         self.event_filter: Optional[EventFilter] = None  # Will be populated after loading
 
@@ -380,8 +383,10 @@ class RulesetHandler:
         else:
             self.logger.info(f"[+] {len(self.rulesets)} rules loaded")
             
-            # Create EventFilter from loaded rulesets for early event filtering
-            self.event_filter = EventFilter(self.rulesets, logger=self.logger)
+            # Correlation rules carry no Channel/EventID for filtering; excluding them
+            # avoids disabling EventFilter for the whole ruleset (see EventFilter docstring).
+            non_correlation_rules = [r for r in self.rulesets if not r.get("correlation")]
+            self.event_filter = EventFilter(non_correlation_rules, logger=self.logger)
             if self.event_filter.is_enabled:
                 stats = self.event_filter.get_stats()
                 self.logger.info(
@@ -390,12 +395,13 @@ class RulesetHandler:
                 )
 
     def is_yaml(self, filepath: Path) -> Optional[bool]:
-        """Test if the file is a YAML file."""
+        """Test if the file is a YAML file (including multi-document streams)."""
         if filepath.suffix in (".yml", ".yaml"):
             with open(filepath, "r", encoding="utf-8") as file:
                 content = file.read()
                 try:
-                    yaml.safe_load(content)
+                    for _ in yaml.safe_load_all(content):
+                        pass
                     return True
                 except yaml.YAMLError:
                     return False
@@ -414,15 +420,18 @@ class RulesetHandler:
         return None
 
     def is_valid_sigma_rule(self, filepath: Path) -> bool:
-        """Check if a YAML file is a valid Sigma rule (has required fields)."""
+        """Check if a YAML file contains at least one valid Sigma or correlation rule."""
         try:
             with open(filepath, 'r', encoding="utf-8") as file:
-                content = yaml.safe_load(file)
-                if not isinstance(content, dict):
-                    return False
-                # A valid Sigma rule must have title, logsource and detection
-                required_fields = ['title', 'logsource', 'detection']
-                return all(field in content for field in required_fields)
+                for doc in yaml.safe_load_all(file):
+                    if not isinstance(doc, dict):
+                        continue
+                    has_standard = all(
+                        f in doc for f in ("title", "logsource", "detection")
+                    )
+                    has_correlation = "title" in doc and "correlation" in doc
+                    if has_standard or has_correlation:
+                        return True
         except Exception:
             pass
         return False
@@ -437,9 +446,28 @@ class RulesetHandler:
     def convert_sigma_rules(self, backend: Any, rule: Any) -> Optional[Dict[str, Any]]:
         """Convert a single Sigma rule using the provided backend."""
         try:
-            return backend.convert_rule(rule, "zircolite")[0]
+            converted = backend.convert_rule(rule, "zircolite")
+            if not converted:
+                return None
+            return converted[0]
         except Exception as e:
             self.logger.debug(f"[red]    [-] Cannot convert rule '{str(rule)}' : {e}[/]")
+            return None
+
+    def convert_correlation_rule(
+        self, backend: Any, rule: SigmaCorrelationRule
+    ) -> Optional[Dict[str, Any]]:
+        """Convert a Sigma correlation rule using the provided backend."""
+        try:
+            converted = backend.convert_correlation_rule(rule, "zircolite")
+            if not converted:
+                return None
+            result = converted[0]
+            result["correlation"] = True
+            return result
+        except Exception as e:
+            title = getattr(rule, "title", str(rule))
+            self.logger.debug(f"[red]    [-] Cannot convert correlation rule '{title}' : {e}[/]")
             return None
 
     def sigma_rules_to_ruleset(
@@ -468,6 +496,8 @@ class RulesetHandler:
                     pipeline.priority = orig
             # Instantiate backend, using our resolved pipeline
             sqlite_backend = sqlite.sqliteBackend(combined_pipeline)
+            sqlite_backend.timestamp_field = self.time_field
+            sqlite_backend.init_processing_pipeline("zircolite")
 
             rules = Path(sigma_rules)
             if rules.is_dir():
@@ -502,14 +532,35 @@ class RulesetHandler:
             
             with progress:
                 task_id = progress.add_task("Converting rules", total=len(rule_collection))
+                skipped_referenced_only = 0
                 for rule in rule_collection:
-                    converted_rule = self.convert_sigma_rules(sqlite_backend, rule)
+                    # Rules only referenced by correlation have _output False; pySigma does not
+                    # return standalone queries for them, but convert_rule must still run so
+                    # correlation conversion can embed the referenced detection SQL.
+                    if isinstance(rule, SigmaRule) and not rule._output:
+                        try:
+                            sqlite_backend.convert_rule(rule, "zircolite")
+                        except Exception as e:
+                            self.logger.debug(
+                                f"[red]    [-] Cannot convert rule '{str(rule)}' : {e}[/]"
+                            )
+                        skipped_referenced_only += 1
+                        progress.update(task_id, advance=1)
+                        continue
+                    if isinstance(rule, SigmaCorrelationRule):
+                        converted_rule = self.convert_correlation_rule(
+                            sqlite_backend, rule
+                        )
+                    else:
+                        converted_rule = self.convert_sigma_rules(sqlite_backend, rule)
                     if converted_rule is not None:
                         ruleset.append(converted_rule)
                     progress.update(task_id, advance=1)
             
             # Print conversion summary
-            conversion_errors = len(rule_collection) - len(ruleset)
+            conversion_errors = (
+                len(rule_collection) - skipped_referenced_only - len(ruleset)
+            )
             summary_parts = [f"[green]\\[✓][/] Converted [cyan]{len(ruleset)}[/] rules"]
             if skipped_count > 0 or conversion_errors > 0:
                 detail_parts = []

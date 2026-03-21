@@ -85,6 +85,7 @@ class RulesetConfig:
     ruleset: List[str] = field(default_factory=list)
     pipeline: Optional[List[List[str]]] = None
     save_ruleset: bool = False
+    time_field: str = "SystemTime"
 
 
 @dataclass 

@@ -1079,12 +1079,46 @@ def main() -> None:
     else: 
         args.ruleset = ["rules/rules_windows_generic.json"]
 
+    # Early timestamp detection: resolve the effective time field *before* ruleset
+    # conversion so that correlation rule SQL references the correct column name.
+    # The full auto_detect_log_type still runs later inside _run_processing for
+    # format flags, file re-discovery, etc.; this only updates args.timefield.
+    if (
+        args.evtx
+        and args.timefield == "SystemTime"
+        and not _has_explicit_format_flag(args)
+        and not getattr(args, 'no_auto_detect', False)
+        and Path(args.evtx).exists()
+    ):
+        try:
+            from zircolite.utils import load_field_mappings
+            _fm = load_field_mappings(args.config, logger=logger)
+        except Exception:
+            _fm = None
+        _ts_fields = None
+        if _fm:
+            _ts_cfg = _fm.get("timestamp_detection", {})
+            _ts_fields = _ts_cfg.get("detection_fields")
+        _early_files = list(discover_files(args, logger))
+        if _early_files:
+            _detector = LogTypeDetector(
+                logger=logger,
+                timestamp_detection_fields=_ts_fields,
+                archive_password=getattr(args, 'archive_password', None),
+            )
+            _detection = _detector.detect_batch(_early_files)
+            if _detection.timestamp_field:
+                args.timefield = _TIMEFIELD_SANITIZE_RE.sub(
+                    "", _detection.timestamp_field
+                )
+
     # Load rulesets (with spinner for visual feedback during pySigma conversion)
     logger.info("[+] Loading ruleset(s)")
     ruleset_config = RulesetConfig(
         ruleset=args.ruleset,
         pipeline=args.pipeline,
-        save_ruleset=args.save_ruleset
+        save_ruleset=args.save_ruleset,
+        time_field=args.timefield,
     )
     if not is_quiet():
         with console.status("[bold cyan]Loading and converting rulesets...", spinner="dots"):

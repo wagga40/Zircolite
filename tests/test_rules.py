@@ -3,6 +3,7 @@ Tests for the RulesetHandler and RulesUpdater classes in zircolite/rules.py.
 """
 
 import json
+import sqlite3
 import sys
 from pathlib import Path
 from unittest.mock import MagicMock, patch
@@ -168,6 +169,77 @@ detection: }malformed
         with patch("builtins.open", side_effect=OSError("read error")):
             assert handler.is_valid_sigma_rule(tmp_path / "any.yml") is False
 
+    def test_valid_correlation_rule_document(self, tmp_path, test_logger):
+        """YAML containing only a Sigma correlation rule is accepted."""
+        corr = tmp_path / "corr.yml"
+        corr.write_text("""
+title: Correlation Only
+id: 11111111-1111-1111-1111-111111111111
+correlation:
+  type: event_count
+  rules:
+    - other_rule
+  condition:
+    gte: 10
+level: high
+""")
+        with patch.object(RulesetHandler, "ruleset_parsing", return_value=[]):
+            handler = RulesetHandler(
+                ruleset_config=RulesetConfig(ruleset=[]),
+                logger=test_logger,
+            )
+        assert handler.is_valid_sigma_rule(corr) is True
+
+    def test_valid_multi_document_standard_and_correlation(self, tmp_path, test_logger):
+        """Multi-document YAML with base rule and correlation is accepted."""
+        multi = tmp_path / "multi.yml"
+        multi.write_text("""
+---
+title: Base Rule
+name: base_ref
+id: aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa
+logsource:
+  product: windows
+  service: sysmon
+detection:
+  selection:
+    EventID: 1
+  condition: selection
+level: high
+---
+title: Correlation
+id: bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb
+correlation:
+  type: event_count
+  rules:
+    - base_ref
+  condition:
+    gte: 2
+level: high
+""")
+        with patch.object(RulesetHandler, "ruleset_parsing", return_value=[]):
+            handler = RulesetHandler(
+                ruleset_config=RulesetConfig(ruleset=[]),
+                logger=test_logger,
+            )
+        assert handler.is_valid_sigma_rule(multi) is True
+
+    def test_is_yaml_accepts_multi_document_stream(self, tmp_path, test_logger):
+        """is_yaml must accept multi-document YAML (safe_load fails on those)."""
+        multi = tmp_path / "multi.yml"
+        multi.write_text("""
+---
+a: 1
+---
+b: 2
+""")
+        with patch.object(RulesetHandler, "ruleset_parsing", return_value=[]):
+            handler = RulesetHandler(
+                ruleset_config=RulesetConfig(ruleset=[]),
+                logger=test_logger,
+            )
+        assert handler.is_yaml(multi) is True
+
 
 class TestDuplicateRemovalBySqlQuery:
     """Tests for duplicate rule removal based on SQL query."""
@@ -326,6 +398,31 @@ class TestDuplicateRemovalBySqlQuery:
         
         # All 3 rules should be present
         assert len(handler.rulesets) == 3
+
+    def test_event_filter_excludes_correlation_rules(self, test_logger):
+        """Correlation rules must not disable EventFilter when base rules have channel/eventid."""
+        mock_rules = [
+            {
+                "title": "Base",
+                "rule": ["SELECT 1"],
+                "level": "high",
+                "channel": ["Security"],
+                "eventid": [4625],
+            },
+            {
+                "title": "Correlation",
+                "rule": ["SELECT 2"],
+                "level": "high",
+                "correlation": True,
+            },
+        ]
+        with patch.object(RulesetHandler, "ruleset_parsing", return_value=[mock_rules]):
+            handler = RulesetHandler(
+                ruleset_config=RulesetConfig(ruleset=[]),
+                logger=test_logger,
+            )
+        assert handler.event_filter is not None
+        assert handler.event_filter.is_enabled is True
 
 
 class TestRulesetSortingByLevel:
@@ -503,6 +600,211 @@ level: high
         assert len(handler.rulesets) == 1
         info_calls = " ".join(str(c) for c in mock_info.call_args_list)
         assert "failed" in info_calls
+
+
+@pytest.mark.requires_sigma
+class TestSigmaCorrelationConversion:
+    """End-to-end conversion of multi-document Sigma rules with correlation."""
+
+    def test_multi_doc_correlation_produces_zircolite_rule(self, tmp_path, test_logger):
+        """Base + correlation in one YAML file converts to one correlation rule with SQL."""
+        rules_yml = tmp_path / "rules.yml"
+        rules_yml.write_text("""
+---
+title: Process Create
+name: proc_create
+id: aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa
+logsource:
+  product: windows
+  service: sysmon
+detection:
+  selection:
+    EventID: 1
+  condition: selection
+level: high
+---
+title: Many process creates
+id: bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb
+correlation:
+  type: event_count
+  rules:
+    - proc_create
+  group-by:
+    - Image
+  timespan: 5m
+  condition:
+    gte: 3
+level: high
+""")
+        handler = RulesetHandler(
+            ruleset_config=RulesetConfig(
+                ruleset=[str(rules_yml)],
+                pipeline=[["sysmon"]],
+            ),
+            logger=test_logger,
+        )
+        assert len(handler.rulesets) == 1
+        corr = handler.rulesets[0]
+        assert corr.get("correlation") is True
+        assert "event_count" in corr["rule"][0] or "GROUP BY" in corr["rule"][0]
+        assert "EventID" in corr["rule"][0]
+
+    def test_correlation_event_count_sql_runs_on_sqlite(self, tmp_path, test_logger):
+        """Generated event_count SQL executes against a minimal logs table."""
+        rules_yml = tmp_path / "rules.yml"
+        rules_yml.write_text("""
+---
+title: Process Create
+name: proc_create
+id: aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa
+logsource:
+  product: windows
+  service: sysmon
+detection:
+  selection:
+    EventID: 1
+  condition: selection
+level: high
+---
+title: Many process creates
+id: bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb
+correlation:
+  type: event_count
+  rules:
+    - proc_create
+  group-by:
+    - Image
+  timespan: 5m
+  condition:
+    gte: 3
+level: high
+""")
+        handler = RulesetHandler(
+            ruleset_config=RulesetConfig(
+                ruleset=[str(rules_yml)],
+                pipeline=[["sysmon"]],
+            ),
+            logger=test_logger,
+        )
+        sql = handler.rulesets[0]["rule"][0]
+        conn = sqlite3.connect(":memory:")
+        try:
+            conn.execute("CREATE TABLE logs (EventID INTEGER, Image TEXT)")
+            for _ in range(3):
+                conn.execute(
+                    "INSERT INTO logs (EventID, Image) VALUES (?, ?)",
+                    (1, "C:\\\\Windows\\\\System32\\\\cmd.exe"),
+                )
+            rows = conn.execute(sql).fetchall()
+            assert len(rows) == 1
+            assert rows[0][0] == "C:\\\\Windows\\\\System32\\\\cmd.exe"
+            assert rows[0][1] == 3  # event_count
+        finally:
+            conn.close()
+
+    def test_temporal_correlation_uses_configured_time_field(self, tmp_path, test_logger):
+        """Temporal correlation SQL references the time_field from RulesetConfig, not 'timestamp'."""
+        rules_yml = tmp_path / "temporal.yml"
+        rules_yml.write_text("""
+---
+title: Process Create
+name: proc_create
+id: aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa
+logsource:
+  product: windows
+  service: sysmon
+detection:
+  selection:
+    EventID: 1
+  condition: selection
+level: high
+---
+title: Other Rule
+name: other_rule
+id: cccccccc-cccc-cccc-cccc-cccccccccccc
+logsource:
+  product: windows
+  service: sysmon
+detection:
+  selection:
+    EventID: 5
+  condition: selection
+level: high
+---
+title: Temporal test
+id: bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb
+correlation:
+  type: temporal
+  rules:
+    - proc_create
+    - other_rule
+  group-by:
+    - Image
+  timespan: 5m
+  condition:
+    gte: 2
+level: high
+""")
+        handler = RulesetHandler(
+            ruleset_config=RulesetConfig(
+                ruleset=[str(rules_yml)],
+                pipeline=[["sysmon"]],
+                time_field="UtcTime",
+            ),
+            logger=test_logger,
+        )
+        assert len(handler.rulesets) >= 1
+        corr = [r for r in handler.rulesets if r.get("correlation")]
+        assert len(corr) == 1
+        sql = corr[0]["rule"][0]
+        assert "UtcTime" in sql
+        assert "timestamp" not in sql.lower().split("utctime")[0]
+
+    def test_event_count_correlation_uses_custom_time_field(self, tmp_path, test_logger):
+        """event_count correlation with non-default time_field propagates to backend."""
+        rules_yml = tmp_path / "rules.yml"
+        rules_yml.write_text("""
+---
+title: Process Create
+name: proc_create
+id: aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa
+logsource:
+  product: windows
+  service: sysmon
+detection:
+  selection:
+    EventID: 1
+  condition: selection
+level: high
+---
+title: Many process creates
+id: bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb
+correlation:
+  type: event_count
+  rules:
+    - proc_create
+  group-by:
+    - Image
+  timespan: 5m
+  condition:
+    gte: 3
+level: high
+""")
+        handler = RulesetHandler(
+            ruleset_config=RulesetConfig(
+                ruleset=[str(rules_yml)],
+                pipeline=[["sysmon"]],
+                time_field="SystemTime",
+            ),
+            logger=test_logger,
+        )
+        assert len(handler.rulesets) == 1
+        assert handler.rulesets[0].get("correlation") is True
+
+    def test_default_time_field_is_system_time(self, test_logger):
+        """RulesetConfig defaults time_field to SystemTime."""
+        cfg = RulesetConfig()
+        assert cfg.time_field == "SystemTime"
 
 
 @pytest.mark.requires_sigma
@@ -885,6 +1187,22 @@ class TestRulesetHandlerEdgeCases:
         mock_rule = MagicMock()
         with patch.object(test_logger, "debug") as mock_debug:
             result = handler.convert_sigma_rules(mock_backend, mock_rule)
+        assert result is None
+        mock_debug.assert_called_once()
+
+    def test_convert_correlation_rule_exception_returns_none_and_logs(self, test_logger):
+        """convert_correlation_rule returns None and logs when backend raises."""
+        with patch.object(RulesetHandler, "ruleset_parsing", return_value=[]):
+            handler = RulesetHandler(
+                ruleset_config=RulesetConfig(ruleset=[]),
+                logger=test_logger,
+            )
+        mock_backend = MagicMock()
+        mock_backend.convert_correlation_rule.side_effect = ValueError("bad correlation")
+        mock_rule = MagicMock()
+        mock_rule.title = "Bad Corr"
+        with patch.object(test_logger, "debug") as mock_debug:
+            result = handler.convert_correlation_rule(mock_backend, mock_rule)
         assert result is None
         mock_debug.assert_called_once()
         assert "Cannot convert rule" in str(mock_debug.call_args) or "convert" in str(mock_debug.call_args).lower()
