@@ -156,7 +156,16 @@ def parse_arguments() -> argparse.Namespace:
     # Output formats and output files options
     output_formats_args = parser.add_argument_group('💾 OUTPUT FORMATS AND FILES')
     output_formats_args.add_argument("-o", "--outfile", help="Output file for detected events", type=str, default="detected_events.json")
-    output_formats_args.add_argument("--csv", "--csv-output", help="Output results in CSV format (empty fields will be included)", action='store_true')
+    output_formats_args.add_argument(
+        "--csv",
+        "--csv-output",
+        help=(
+            "Output results in CSV format (empty fields included). "
+            "Column headers are fixed from the first detection row; match fields that only "
+            "appear in later rules are omitted—use default JSON output for a full field set."
+        ),
+        action="store_true",
+    )
     output_formats_args.add_argument("--csv-delimiter", help="Delimiter for CSV output", type=str, default=";")
     output_formats_args.add_argument("--keepflat", "--keep-flat", help="Save flattened events as JSON", action='store_true')
     output_formats_args.add_argument("--profile-rules", help="Time each rule execution and print a performance report at the end", action='store_true')

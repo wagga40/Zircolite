@@ -809,6 +809,60 @@ class TestZircoliteCoreRulesetExecution:
         assert "rule_title" in content
         zircore.close()
 
+    def test_execute_ruleset_csv_extra_keys_from_later_rules_ignored(
+        self, field_mappings_file, tmp_path, test_logger
+    ):
+        """CSV DictWriter must not raise when a later rule returns wider rows than the first."""
+        proc_config = ProcessingConfig(csv_mode=True, disable_progress=True)
+        zircore = ZircoliteCore(
+            config=field_mappings_file,
+            processing_config=proc_config,
+            logger=test_logger,
+        )
+        field_stmt = (
+            "'CommandLine' TEXT COLLATE NOCASE,\n"
+            "'PrivilegeList' TEXT COLLATE NOCASE,\n"
+        )
+        zircore.create_db(field_stmt)
+        zircore.db_connection.execute(
+            "INSERT INTO logs (CommandLine, PrivilegeList) VALUES ('first_row', 'SeTcbPrivilege')"
+        )
+        zircore.db_connection.execute(
+            "INSERT INTO logs (CommandLine, PrivilegeList) VALUES ('second_row', 'SeSecurityPrivilege')"
+        )
+        zircore.db_connection.commit()
+
+        ruleset = [
+            {
+                "title": "Narrow projection",
+                "id": "narrow-1",
+                "description": "CommandLine only",
+                "level": "high",
+                "tags": [],
+                "rule": [
+                    "SELECT CommandLine FROM logs WHERE CommandLine = 'first_row'"
+                ],
+            },
+            {
+                "title": "Wide projection",
+                "id": "wide-1",
+                "description": "All columns",
+                "level": "medium",
+                "tags": [],
+                "rule": ["SELECT * FROM logs WHERE CommandLine = 'second_row'"],
+            },
+        ]
+        zircore.load_ruleset_from_var(ruleset, rule_filters=None)
+
+        output_file = str(tmp_path / "extra_keys.csv")
+        zircore.execute_ruleset(output_file, write_mode="w", last_ruleset=True)
+
+        assert Path(output_file).exists()
+        with open(output_file, encoding="utf-8") as f:
+            header = f.readline()
+        assert "PrivilegeList" not in header
+        zircore.close()
+
     def test_execute_ruleset_progress_callback_invoked(
         self, field_mappings_file, sample_ruleset, tmp_path, test_logger
     ):
