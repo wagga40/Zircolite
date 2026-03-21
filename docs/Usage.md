@@ -138,7 +138,7 @@ python3 zircolite.py --events sample.evtx --ruleset rules/rules_windows_merged.j
 By default: 
 
 - `--ruleset` is not mandatory; the default ruleset is `rules/rules_windows_generic.json`.
-- Results are written to `detected_events.json` in the same directory as Zircolite. You can choose a CSV-formatted output with `--csv`.
+- Results are written to `detected_events.json` in the same directory as Zircolite. You can choose a CSV-formatted output with `--csv` (see [CSV detection output](Usage.md#csv-detection-output)).
 - A `zircolite.log` file will be created in the current working directory; it can be disabled with `--nolog`.
 - When providing a directory for event logs, Zircolite will automatically filter by file extension. You can change this with `--fileext`. You can also use `--file-pattern` for custom glob patterns.
 - Use `--no-recursion` to disable recursive directory search.
@@ -206,6 +206,12 @@ For the full list of options and up-to-date help, run: `python3 zircolite.py -h`
 | `--hashes` | Add xxhash64 to each event |
 | `-L`, `--limit` | Discard results exceeding limit |
 | `--profile-rules` | Time each rule execution and print a performance report at the end (Rule Performance table) |
+
+#### CSV detection output
+
+When you use `--csv`, detections are written as one flat table. The header row is built from the **first** match row that is written (plus `rule_title`, `rule_description`, `rule_level`, and `rule_count`). If another rule later returns rows with **additional** columns—for example one rule uses a narrow `SELECT` and another uses `SELECT *`—those extra fields are not added as new CSV columns; values for those keys are omitted from the CSV for that row.
+
+JSON output does not have this limitation: each rule’s result object includes full `matches` with whatever columns the rule’s SQL returns. Use JSON (or post-process) when you need every field from every rule in the export file.
 
 #### Advanced Configuration
 

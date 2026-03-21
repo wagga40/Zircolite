@@ -510,12 +510,23 @@ class ZircoliteCore:
         csv_writer: Optional[Any],
         needs_comma_prefix: bool,
     ) -> Tuple[Optional[Any], bool]:
-        """Write rule results to output file. Returns (csv_writer, needs_comma_prefix)."""
+        """Write rule results to output file. Returns (csv_writer, needs_comma_prefix).
+
+        In CSV mode, the writer is created once with fieldnames from the first match row
+        (plus rule metadata columns). Later rules may return wider rows; keys not in that
+        header are omitted, unlike JSON where each rule is serialized in full. See
+        docs/Usage.md (section CSV detection output).
+        """
         if self.csv_mode:
             # Initialize CSV writer if not already done
             if csv_writer is None:
                 fieldnames = ["rule_title", "rule_description", "rule_level", "rule_count"] + list(rule_results["matches"][0].keys())
-                csv_writer = csv.DictWriter(file_handle, delimiter=self.delimiter, fieldnames=fieldnames)
+                csv_writer = csv.DictWriter(
+                    file_handle,
+                    delimiter=self.delimiter,
+                    fieldnames=fieldnames,
+                    extrasaction="ignore",
+                )
                 csv_writer.writeheader()
             # Write matches to CSV - pre-compute common values
             title = rule_results["title"]
