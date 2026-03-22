@@ -6,8 +6,8 @@ Security updates are provided for the latest major release line. We encourage yo
 
 | Version | Supported          |
 | ------- | ------------------ |
-| 3.5.x   | :white_check_mark: |
-| < 3.5   | :x:                |
+| 3.6.x   | :white_check_mark: |
+| < 3.6   | :x:                |
 
 ## Reporting a vulnerability
 
