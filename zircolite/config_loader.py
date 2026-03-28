@@ -73,6 +73,7 @@ class ProcessingConfig:
     transform_categories: Optional[list] = None
     add_index: Optional[List[str]] = None
     remove_index: Optional[List[str]] = None
+    strict_evtx: bool = False
 
 
 @dataclass
@@ -226,6 +227,7 @@ class ConfigLoader:
                 transform_categories=proc.get('transform_categories'),
                 add_index=proc.get('add_index'),
                 remove_index=proc.get('remove_index'),
+                strict_evtx=proc.get('strict_evtx', False),
             )
         
         # Parse time_filter section
@@ -439,6 +441,8 @@ class ConfigLoader:
             config.processing.add_index = [x for group in args.add_index for x in group]
         if getattr(args, 'remove_index', None):
             config.processing.remove_index = [x for group in args.remove_index for x in group]
+        if hasattr(args, 'strict') and args.strict:
+            config.processing.strict_evtx = True
 
         # Time filter overrides
         if hasattr(args, 'after') and args.after != '1970-01-01T00:00:00':
@@ -576,6 +580,10 @@ processing:
   # transform_categories:
   #   - commandline
   #   - process
+
+  # Strict EVTX parsing: stop on corrupted or malformed chunks (default: false)
+  # When false (lenient), recovers as many events as possible from damaged files
+  strict_evtx: false
 
 # Time-based event filtering
 time_filter:

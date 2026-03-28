@@ -51,6 +51,14 @@ class TestExtractorConfigEncoding:
         cfg = ExtractorConfig(csv_input=True)
         assert cfg.encoding is None
 
+    def test_strict_evtx_default_false(self):
+        cfg = ExtractorConfig()
+        assert cfg.strict_evtx is False
+
+    def test_strict_evtx_set_true(self):
+        cfg = ExtractorConfig(strict_evtx=True)
+        assert cfg.strict_evtx is True
+
 
 # =============================================================================
 # RulesetConfig
@@ -133,3 +141,11 @@ class TestProcessingConfigDefaults:
         cfg = ProcessingConfig()
         assert cfg.add_index == []
         assert cfg.remove_index == []
+
+    def test_strict_evtx_default_false(self):
+        cfg = ProcessingConfig()
+        assert cfg.strict_evtx is False
+
+    def test_strict_evtx_set_true(self):
+        cfg = ProcessingConfig(strict_evtx=True)
+        assert cfg.strict_evtx is True

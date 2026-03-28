@@ -89,6 +89,7 @@ class ZircoliteCore:
         "archive_password",
         "add_index",
         "remove_index",
+        "strict_evtx",
     )
     _cursor: Optional[sqlite3.Cursor]
 
@@ -129,6 +130,7 @@ class ZircoliteCore:
         self.archive_password = proc.archive_password
         self.add_index = list(proc.add_index) if proc.add_index else []
         self.remove_index = list(proc.remove_index) if proc.remove_index else []
+        self.strict_evtx = proc.strict_evtx
         # Cache for escaped identifiers to avoid repeated string operations
         self._escape_cache: dict = {}
         # Reusable cursor to avoid creating new cursors for each query
@@ -908,6 +910,7 @@ class ZircoliteCore:
             hashes=self.hashes,
             disable_progress=disable_progress or self.disable_progress,
             archive_password=self.archive_password,
+            strict_evtx=self.strict_evtx,
         )
         processor = StreamingEventProcessor(
             config_file=self.config,

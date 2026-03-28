@@ -1235,6 +1235,119 @@ class TestStreamingEventProcessorErrorPaths:
         assert ".7z" not in parser_path
 
 
+class TestStreamingEvtxStrictMode:
+    """Tests for lenient (default) and strict EVTX parsing modes."""
+
+    @patch('zircolite.streaming.PyEvtxParser')
+    def test_lenient_mode_logs_warning_on_chunk_error(
+        self, mock_parser_cls, field_mappings_file, test_logger, default_args_config, tmp_path, sample_windows_event
+    ):
+        """In lenient mode (default), chunk errors log a warning and yield events recovered before the error."""
+        evtx_file = tmp_path / "corrupt.evtx"
+        evtx_file.write_bytes(b"ElfFile\x00\x00")
+
+        good_record = {"data": json.dumps(sample_windows_event)}
+
+        def records_with_error():
+            yield good_record
+            raise RuntimeError("Failed to parse chunk header")
+
+        mock_parser = MagicMock()
+        mock_parser.records_json.side_effect = records_with_error
+        mock_parser_cls.return_value = mock_parser
+
+        processor = StreamingEventProcessor(
+            config_file=field_mappings_file,
+            args_config=default_args_config,
+            logger=test_logger,
+        )
+        events = list(processor.stream_evtx_events(str(evtx_file)))
+        assert len(events) == 1
+        assert "OriginalLogfile" in events[0]
+
+    @patch('zircolite.streaming.PyEvtxParser')
+    def test_strict_mode_raises_on_chunk_error(
+        self, mock_parser_cls, field_mappings_file, test_logger, default_args_config, tmp_path, sample_windows_event
+    ):
+        """In strict mode, chunk errors propagate as exceptions."""
+        evtx_file = tmp_path / "corrupt.evtx"
+        evtx_file.write_bytes(b"ElfFile\x00\x00")
+
+        def records_with_error():
+            yield {"data": json.dumps(sample_windows_event)}
+            raise RuntimeError("Failed to parse chunk header")
+
+        mock_parser = MagicMock()
+        mock_parser.records_json.side_effect = records_with_error
+        mock_parser_cls.return_value = mock_parser
+
+        proc_config = ProcessingConfig(strict_evtx=True)
+        processor = StreamingEventProcessor(
+            config_file=field_mappings_file,
+            args_config=default_args_config,
+            processing_config=proc_config,
+            logger=test_logger,
+        )
+        with pytest.raises(RuntimeError, match="Failed to parse chunk header"):
+            list(processor.stream_evtx_events(str(evtx_file)))
+
+    @patch('zircolite.streaming.PyEvtxParser')
+    def test_lenient_mode_still_handles_invalid_evtx_for_7z(
+        self, mock_parser_cls, field_mappings_file, test_logger, default_args_config, tmp_path
+    ):
+        """Invalid EVTX signature inside .7z still logs error and returns early in lenient mode."""
+        evtx_file = tmp_path / "bad.evtx.7z"
+        evtx_file.write_bytes(b"not-evtx")
+
+        mock_parser_cls.side_effect = RuntimeError("Invalid EVTX signature (ElfFile0)")
+        processor = StreamingEventProcessor(
+            config_file=field_mappings_file,
+            args_config=default_args_config,
+            logger=test_logger,
+        )
+        events = list(processor.stream_evtx_events(str(evtx_file)))
+        assert events == []
+
+    @patch('zircolite.streaming.PyEvtxParser')
+    def test_strict_mode_raises_on_parser_construction_failure(
+        self, mock_parser_cls, field_mappings_file, test_logger, default_args_config, tmp_path
+    ):
+        """In strict mode, parser construction failures raise."""
+        evtx_file = tmp_path / "bad.evtx"
+        evtx_file.write_bytes(b"ElfFile\x00\x00")
+
+        mock_parser_cls.side_effect = RuntimeError("EVTX open failed")
+        proc_config = ProcessingConfig(strict_evtx=True)
+        processor = StreamingEventProcessor(
+            config_file=field_mappings_file,
+            args_config=default_args_config,
+            processing_config=proc_config,
+            logger=test_logger,
+        )
+        with pytest.raises(RuntimeError, match="EVTX open failed"):
+            list(processor.stream_evtx_events(str(evtx_file)))
+
+    def test_strict_evtx_flag_stored_from_config(
+        self, field_mappings_file, test_logger, default_args_config
+    ):
+        """strict_evtx is correctly read from ProcessingConfig."""
+        proc_strict = ProcessingConfig(strict_evtx=True)
+        processor_strict = StreamingEventProcessor(
+            config_file=field_mappings_file,
+            args_config=default_args_config,
+            processing_config=proc_strict,
+            logger=test_logger,
+        )
+        assert processor_strict.strict_evtx is True
+
+        processor_lenient = StreamingEventProcessor(
+            config_file=field_mappings_file,
+            args_config=default_args_config,
+            logger=test_logger,
+        )
+        assert processor_lenient.strict_evtx is False
+
+
 class TestStreamingTransformInitAndResolve:
     """Tests for transform_categories init and _resolve_file_transforms."""
 

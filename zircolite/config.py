@@ -47,6 +47,9 @@ class ProcessingConfig:
     # Archive decryption
     archive_password: Optional[str] = None
 
+    # EVTX parsing strictness (False = lenient/skip bad chunks, True = stop on errors)
+    strict_evtx: bool = False
+
 
 @dataclass
 class ExtractorConfig:
@@ -65,6 +68,9 @@ class ExtractorConfig:
     # Processing options
     tmp_dir: Optional[str] = None
     encoding: Optional[str] = None
+
+    # EVTX parsing strictness
+    strict_evtx: bool = False
     
     def __post_init__(self) -> None:
         """Set default encoding based on input type if not specified."""

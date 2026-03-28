@@ -98,6 +98,7 @@ class ProcessingContext:
     archive_password: Optional[str] = None
     add_index: list = field(default_factory=list)
     remove_index: list = field(default_factory=list)
+    strict_evtx: bool = False
 
     # Cached formatted time strings (computed in __post_init__)
     time_after_str: str = field(init=False, repr=False)
@@ -133,6 +134,7 @@ def create_zircolite_core(
         archive_password=ctx.archive_password,
         add_index=ctx.add_index,
         remove_index=ctx.remove_index,
+        strict_evtx=ctx.strict_evtx,
     )
     return ZircoliteCore(ctx.config, proc_config, logger=ctx.logger)
 
@@ -154,6 +156,7 @@ def create_worker_core(ctx: ProcessingContext, worker_id: int) -> ZircoliteCore:
         archive_password=ctx.archive_password,
         add_index=ctx.add_index,
         remove_index=ctx.remove_index,
+        strict_evtx=ctx.strict_evtx,
     )
     return ZircoliteCore(ctx.config, proc_config, logger=silent_logger)
 

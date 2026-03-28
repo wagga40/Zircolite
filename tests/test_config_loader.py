@@ -109,6 +109,7 @@ class TestProcessingConfig:
         assert config.hashes is False
         assert config.limit == -1
         assert config.time_field == "SystemTime"
+        assert config.strict_evtx is False
 
 
 class TestTimeFilterConfig:
@@ -971,6 +972,21 @@ class TestConfigLoaderMergeWithArgsExtended:
         merged = loader.merge_with_args(config, args)
         assert merged.parallel.max_workers == 8
 
+    def test_strict_evtx_override(self, test_logger):
+        config = ZircoliteConfig()
+        args = self._make_args(strict=True)
+        loader = ConfigLoader(logger=test_logger)
+        merged = loader.merge_with_args(config, args)
+        assert merged.processing.strict_evtx is True
+
+    def test_strict_evtx_default_not_overridden(self, test_logger):
+        config = ZircoliteConfig()
+        config.processing.strict_evtx = False
+        args = self._make_args()
+        loader = ConfigLoader(logger=test_logger)
+        merged = loader.merge_with_args(config, args)
+        assert merged.processing.strict_evtx is False
+
 
 class TestConfigLoaderParseConfigExtended:
     """Additional parse_config tests for edge cases."""
@@ -999,6 +1015,20 @@ class TestConfigLoaderParseConfigExtended:
         loader = ConfigLoader(logger=test_logger)
         config = loader.parse_config(config_dict)
         assert config.output.templates == [{"template": "tmpl.html", "output": "out.html"}]
+
+    def test_parse_config_strict_evtx(self, test_logger):
+        """strict_evtx parsed from processing section."""
+        config_dict = {"processing": {"strict_evtx": True}}
+        loader = ConfigLoader(logger=test_logger)
+        config = loader.parse_config(config_dict)
+        assert config.processing.strict_evtx is True
+
+    def test_parse_config_strict_evtx_default(self, test_logger):
+        """strict_evtx defaults to False when not in YAML."""
+        config_dict = {"processing": {}}
+        loader = ConfigLoader(logger=test_logger)
+        config = loader.parse_config(config_dict)
+        assert config.processing.strict_evtx is False
 
 
 class TestConfigLoaderIntegration:

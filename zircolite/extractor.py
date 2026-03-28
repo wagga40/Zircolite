@@ -71,6 +71,7 @@ class EvtxExtractor:
         self.evtxtract = cfg.evtxtract
         self.csvInput = cfg.csv_input
         self.encoding = cfg.encoding
+        self.strict_evtx = cfg.strict_evtx
         
     def run_using_bindings(self, file: Union[Path, str]) -> None:
         """Convert EVTX to JSON using evtx_dump bindings. Drop resulting JSON files in a tmp folder."""
@@ -87,7 +88,13 @@ class EvtxExtractor:
                         continue
                     f.write(f"{json.dumps(json.loads(data)).decode('utf-8')}\n")
         except Exception as e:
-            self.logger.error(f"[red]    [-] Cannot use PyEvtxParser : {e}[/]")
+            if self.strict_evtx:
+                self.logger.error(f"[red]    [-] Cannot use PyEvtxParser : {e}[/]")
+                raise
+            self.logger.warning(
+                f"[yellow]    [!] EVTX parsing error in {file}: {e} — "
+                "recovered events before the error were kept (use [cyan]--strict[/] to abort on parse errors)[/]"
+            )
 
     def get_time(self, line: str) -> str:
         """Extract timestamp from auditd log line."""
