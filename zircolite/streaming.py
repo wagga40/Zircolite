@@ -202,6 +202,8 @@ class StreamingEventProcessor:
         "archive_password",
         # One-shot flag: warn once when --timefield value is absent from events
         "_timefield_warned",
+        # EVTX parsing strictness
+        "strict_evtx",
     )
     enabled_transforms_set: Optional[FrozenSet[Any]]
     _detected_time_field: Optional[str]
@@ -241,6 +243,7 @@ class StreamingEventProcessor:
         self.disable_progress = proc.disable_progress
         self.batch_size = proc.batch_size
         self.archive_password = proc.archive_password
+        self.strict_evtx = proc.strict_evtx
 
         # Event filter for early filtering based on channel/eventID
         self.event_filter = event_filter
@@ -921,8 +924,14 @@ class StreamingEventProcessor:
                         "Use [cyan]-e/--events[/] without forcing EVTX so auto-detect can run, or [cyan]--json-input[/] for JSON in archives.[/]"
                     )
                     return
-            self.logger.error(
-                f"[red]    [-] Error streaming EVTX file {evtx_file}: {e}[/]"
+            if self.strict_evtx:
+                self.logger.error(
+                    f"[red]    [-] Error streaming EVTX file {evtx_file}: {e}[/]"
+                )
+                raise
+            self.logger.warning(
+                f"[yellow]    [!] EVTX parsing error in {evtx_file}: {e} — "
+                "recovered events before the error were kept (use [cyan]--strict[/] to abort on parse errors)[/]"
             )
         finally:
             if tmp_path and os.path.exists(tmp_path):

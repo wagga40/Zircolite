@@ -188,6 +188,7 @@ def parse_arguments() -> argparse.Namespace:
     config_formats_args.add_argument("--unified-db", "--all-in-one", help="Force unified database mode (all files in one DB, enables cross-file correlation)", action='store_true')
     config_formats_args.add_argument("--no-auto-mode", help="Disable automatic processing mode selection based on file analysis", action='store_true')
     config_formats_args.add_argument("--no-auto-detect", help="Disable automatic log type and timestamp detection (use explicit format flags instead)", action='store_true')
+    config_formats_args.add_argument("--strict", help="Strict EVTX parsing: stop on corrupted or malformed chunks instead of skipping them (default: lenient, recovers as many events as possible)", action='store_true')
     config_formats_args.add_argument("--add-index", help="Create an index on the given column(s). Can be repeated or list multiple columns (e.g. --add-index Channel EventID).", action='append', nargs='+', metavar="COL", default=[])
     config_formats_args.add_argument("--remove-index", help="Drop the given index name(s) after creation. Can be repeated or list multiple (e.g. --remove-index idx_channel idx_eventid).", action='append', nargs='+', metavar="IDX", default=[])
 
@@ -519,6 +520,8 @@ def _apply_yaml_processing_config(
     if yaml_config.processing.remove_index:
         existing = _flatten_add_remove_index(getattr(args, 'remove_index', None))
         args.remove_index = [existing + list(yaml_config.processing.remove_index)]
+    if yaml_config.processing.strict_evtx:
+        args.strict = True
     # Time filters
     if yaml_config.time_filter.after != '1970-01-01T00:00:00':
         args.after = yaml_config.time_filter.after
@@ -1248,6 +1251,7 @@ def main() -> None:
         archive_password=getattr(args, 'archive_password', None),
         add_index=_flatten_add_remove_index(getattr(args, 'add_index', None)),
         remove_index=_flatten_add_remove_index(getattr(args, 'remove_index', None)),
+        strict_evtx=getattr(args, 'strict', False),
     )
 
     # Run processing and collect results

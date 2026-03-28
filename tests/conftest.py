@@ -560,7 +560,8 @@ def default_args_config():
         timesketch=False,
         navigator_output=None,
         package=False,
-        package_dir=""
+        package_dir="",
+        strict=False,
     )
 
 

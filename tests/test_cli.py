@@ -1687,6 +1687,29 @@ class TestCLIAdvancedConfiguration:
         assert isinstance(detections, list)
 
 
+class TestCLIStrictEvtxParsing:
+    """Tests for --strict EVTX parsing flag."""
+
+    def test_strict_flag_accepted(self):
+        """--strict flag is accepted without error."""
+        with patch('sys.argv', ['zircolite.py', '--strict', '-v']):
+            with pytest.raises(SystemExit) as exc_info:
+                zircolite_script.main()
+            assert exc_info.value.code == 0
+
+    def test_strict_flag_default_false(self):
+        """--strict defaults to False when not provided."""
+        with patch('sys.argv', ['zircolite.py', '-v']):
+            args = zircolite_script.parse_arguments()
+            assert args.strict is False
+
+    def test_strict_flag_sets_true(self):
+        """--strict sets the strict attribute to True."""
+        with patch('sys.argv', ['zircolite.py', '--strict', '-v']):
+            args = zircolite_script.parse_arguments()
+            assert args.strict is True
+
+
 # Fixture files for Sysmon Linux, XML, EVTXtract, Auditd, and Winlogbeat (sanitized/cropped)
 FIXTURES_DIR = WORKSPACE_ROOT / "tests" / "fixtures"
 SYSMON_LINUX_FIXTURE = FIXTURES_DIR / "sysmon_linux_sample.log"
