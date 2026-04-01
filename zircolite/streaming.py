@@ -1419,19 +1419,16 @@ class StreamingEventProcessor:
         if not batch:
             return
 
-        # Collect all columns from batch using set union.
-        # If first and last events have the same keys, the batch is likely
-        # homogeneous and we can skip the union.
+        # Collect all columns from the full batch.
+        # Some log types mix event schemas within a single batch, so comparing
+        # only the first and last event can drop columns that appear in the middle.
         first_keys = batch[0].keys()
-        if len(batch) == 1 or (
-            len(batch[-1]) == len(first_keys) and batch[-1].keys() == first_keys
-        ):
-            all_columns_frozen = frozenset(first_keys)
-        else:
-            all_columns_set: Set[str] = set()
-            for event in batch:
-                all_columns_set.update(event.keys())
-            all_columns_frozen = frozenset(all_columns_set)
+        all_columns_set: Set[str] = set(first_keys)
+        for event in batch[1:]:
+            event_keys = event.keys()
+            if len(event_keys) != len(first_keys) or event_keys != first_keys:
+                all_columns_set.update(event_keys)
+        all_columns_frozen = frozenset(all_columns_set)
 
         # Cache sorted columns – only re-sort when the column set changes
         if all_columns_frozen != self._last_column_frozenset:
