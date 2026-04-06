@@ -1012,7 +1012,7 @@ def _run_processing(
 # MAIN
 ################################################################
 def main() -> None:
-    version = "3.6.1"
+    version = "3.6.3"
     args = parse_arguments()
 
     # Handle generate-config before logging setup

@@ -1,6 +1,6 @@
 # Zircolite Documentation
 
-Documentation for **Zircolite 3.6.1**. Zircolite is a standalone SIGMA-based detection tool for EVTX, Auditd, Sysmon for Linux, XML, CSV, and JSONL/NDJSON logs. It uses SQLite as a backend for SIGMA rule execution.
+Documentation for **Zircolite 3.6.3**. Zircolite is a standalone SIGMA-based detection tool for EVTX, Auditd, Sysmon for Linux, XML, CSV, and JSONL/NDJSON logs. It uses SQLite as a backend for SIGMA rule execution.
 
 **Zircolite** supports the following log sources:
 
