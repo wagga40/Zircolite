@@ -43,8 +43,31 @@ from .console import (
     is_quiet,
     make_detection_counter,
 )
+from .shutdown import is_shutdown_requested
 from .streaming import StreamingEventProcessor
 from .utils import sanitize_row_for_csv
+
+# Translation table for stripping newline characters from CSV descriptions.
+_NEWLINE_TRANSLATE = str.maketrans("", "", "\n\r")
+
+# Identifier followed by a comparison/predicate operator in SIGMA-derived SQL.
+# Matches the column name in patterns like `Channel='x'`, `EventID = 1`,
+# `CommandLine LIKE '%foo%'`, `Image IN (...)`, `Score >= 5`.
+_SQL_COLUMN_REF_RE = re.compile(
+    r"(?<![A-Za-z0-9_.])([A-Za-z_][A-Za-z0-9_]*)\s*"
+    r"(?:=|!=|<>|<=|>=|<|>|\bLIKE\b|\bIN\b|\bBETWEEN\b|\bIS\b)",
+    re.IGNORECASE,
+)
+
+# Reserved SQL words to exclude from column-reference extraction.
+_SQL_RESERVED_WORDS = frozenset({
+    "select", "from", "where", "and", "or", "not", "in", "is", "null",
+    "like", "between", "exists", "case", "when", "then", "else", "end",
+    "as", "on", "join", "inner", "outer", "left", "right", "full",
+    "order", "by", "group", "having", "limit", "offset", "asc", "desc",
+    "distinct", "all", "union", "intersect", "except", "escape",
+    "true", "false",
+})
 
 # ---------------------------------------------------------------------------
 # LRU-cached regex compilation for the SQLite ``regexp`` UDF.
@@ -89,6 +112,7 @@ class ZircoliteCore:
         "archive_password",
         "add_index",
         "remove_index",
+        "auto_index_top_n",
         "strict_evtx",
     )
     _cursor: Optional[sqlite3.Cursor]
@@ -130,6 +154,7 @@ class ZircoliteCore:
         self.archive_password = proc.archive_password
         self.add_index = list(proc.add_index) if proc.add_index else []
         self.remove_index = list(proc.remove_index) if proc.remove_index else []
+        self.auto_index_top_n = max(0, int(proc.auto_index_top_n or 0))
         self.strict_evtx = proc.strict_evtx
         # Cache for escaped identifiers to avoid repeated string operations
         self._escape_cache: dict = {}
@@ -164,8 +189,13 @@ class ZircoliteCore:
         self._cursor = self.db_connection.cursor()
         return self._cursor
 
-    def create_connection(self, db: str) -> Optional[sqlite3.Connection]:
-        """Create a database connection to a SQLite database."""
+    def create_connection(self, db: str) -> sqlite3.Connection:
+        """Create a database connection to a SQLite database.
+
+        Raises:
+            RuntimeError: If the underlying sqlite3 driver reports an error
+                while opening the connection or applying PRAGMAs.
+        """
         conn = None
         self.logger.debug(f"CONNECTING TO : {db}")
         try:
@@ -173,12 +203,15 @@ class ZircoliteCore:
             conn = sqlite3.connect(db, isolation_level=None, check_same_thread=False)
             
             # Configure PRAGMA settings based on database type
-            # Common PRAGMA settings for both in-memory and on-disk databases
+            # Common PRAGMA settings for both in-memory and on-disk databases.
+            # SQLite's auxiliary worker threads (sorting, index scans) scale with cores,
+            # but more than 8 rarely helps and adds context-switch overhead.
+            sqlite_threads = min(8, os.cpu_count() or 4)
             common_pragmas = [
                 ('temp_store', 'MEMORY'),
                 ('mmap_size', '268435456'),        # 256MB memory-mapped I/O
                 ('page_size', '4096'),
-                ('threads', '4'),
+                ('threads', str(sqlite_threads)),
             ]
             
             if db == ':memory:':
@@ -228,7 +261,7 @@ class ZircoliteCore:
                     conn.close()
                 except Exception:
                     pass
-            return None
+            raise RuntimeError(f"Unable to open SQLite database '{db}': {e}") from e
         except BaseException:
             if conn is not None:
                 try:
@@ -256,21 +289,67 @@ class ZircoliteCore:
         cursor.execute('PRAGMA table_info("logs")')
         return [row[1] for row in cursor.fetchall()]
 
+    def _auto_index_candidates(self, columns: List[str]) -> List[str]:
+        """Pick the top-N columns referenced by the loaded ruleset.
+
+        Columns already covered by built-in indices (``eventid``, ``Channel``)
+        and those queued via ``add_index`` are excluded so the work isn't
+        duplicated. Names are matched case-insensitively against the actual
+        table columns.
+        """
+        if not self.auto_index_top_n or not self.ruleset:
+            return []
+
+        already_indexed_lower = {"eventid", "channel"}
+        already_indexed_lower.update(c.lower() for c in self.add_index)
+        columns_by_lower = {c.lower(): c for c in columns}
+
+        counts: Dict[str, int] = {}
+        for rule in self.ruleset:
+            for sql_query in rule.get("rule", []):
+                if not isinstance(sql_query, str):
+                    continue
+                for match in _SQL_COLUMN_REF_RE.finditer(sql_query):
+                    candidate = match.group(1)
+                    cl = candidate.lower()
+                    if cl in _SQL_RESERVED_WORDS or cl in already_indexed_lower:
+                        continue
+                    actual = columns_by_lower.get(cl)
+                    if actual is None:
+                        continue
+                    counts[actual] = counts.get(actual, 0) + 1
+
+        if not counts:
+            return []
+
+        ranked = sorted(counts.items(), key=lambda kv: (-kv[1], kv[0]))
+        return [col for col, _ in ranked[: self.auto_index_top_n]]
+
     def create_index(self) -> None:
         """Create standard and optional indexes; drop any requested by remove_index."""
         columns = self._get_table_columns()
         cursor = self._get_cursor()
+        if self.db_connection is None:
+            raise RuntimeError("No database connection")
+        conn = self.db_connection
 
         self.execute_query('CREATE INDEX "idx_eventid" ON "logs" ("eventid");')
 
         if "Channel" in columns:
             try:
                 cursor.execute('CREATE INDEX "idx_channel" ON "logs" ("Channel");')
-                self.db_connection.commit()
+                conn.commit()
             except sqlite3.OperationalError:
                 pass
 
-        for col in self.add_index:
+        auto_index_cols = self._auto_index_candidates(columns)
+        if auto_index_cols:
+            self.logger.info(
+                f"[+] Auto-indexing top [yellow]{len(auto_index_cols)}[/] columns "
+                f"from ruleset: [cyan]{', '.join(auto_index_cols)}[/]"
+            )
+
+        for col in list(self.add_index) + auto_index_cols:
             if col not in columns:
                 self.logger.debug("Column %s not present; skipping index", col)
                 continue
@@ -279,7 +358,7 @@ class ZircoliteCore:
             q_col = self.escape_identifier(col)
             try:
                 cursor.execute(f'CREATE INDEX "{q_idx}" ON "logs" ("{q_col}");')
-                self.db_connection.commit()
+                conn.commit()
             except sqlite3.OperationalError as e:
                 self.logger.debug("Could not create index on %s: %s", col, e)
 
@@ -287,7 +366,7 @@ class ZircoliteCore:
             q_idx = self.escape_identifier(idx_name)
             try:
                 cursor.execute(f'DROP INDEX IF EXISTS "{q_idx}";')
-                self.db_connection.commit()
+                conn.commit()
             except sqlite3.OperationalError as e:
                 self.logger.debug("Could not drop index %s: %s", idx_name, e)
 
@@ -429,9 +508,11 @@ class ZircoliteCore:
                 f"Remove it first or choose a different path."
             )
         on_disk_db = sqlite3.connect(db_filename)
-        self.db_connection.backup(on_disk_db)
-        on_disk_db.execute("PRAGMA journal_mode = DELETE")
-        on_disk_db.close()
+        try:
+            self.db_connection.backup(on_disk_db)
+            on_disk_db.execute("PRAGMA journal_mode = DELETE")
+        finally:
+            on_disk_db.close()
 
     def execute_rule(self, rule: Dict[str, Any]) -> Dict[str, Any]:
         """Execute a single Sigma rule against the database and return the results."""
@@ -468,7 +549,7 @@ class ZircoliteCore:
         results = {
             "title": title,
             "id": rule_get("id", ""),
-            "description": description.replace("\n", "").replace("\r", "") if csv_mode else description,
+            "description": description.translate(_NEWLINE_TRANSLATE) if csv_mode else description,
             "sigmafile": rule_get("filename", ""),
             "sigma": sigma_queries,
             "rule_level": rule_get("level", "unknown"),
@@ -579,6 +660,14 @@ class ZircoliteCore:
         is_json_mode = not self.csv_mode
         _disable = disable_progress if disable_progress is not None else self.disable_progress
 
+        # Refresh the query planner's stats now that all events are inserted and
+        # any optional indices have been created. Cheap; helps rule queries.
+        if self.db_connection is not None:
+            try:
+                self.db_connection.execute("PRAGMA optimize")
+            except sqlite3.Error as exc:
+                self.logger.debug(f"PRAGMA optimize failed (non-fatal): {exc}")
+
         # Prepare output file handle if needed
         file_handle = None
         needs_comma_prefix = False
@@ -619,8 +708,9 @@ class ZircoliteCore:
             if progress_callback is not None:
                 progress_callback(0, total_rules)
                 for i, rule in enumerate(self.ruleset):
-                    if _profile:
-                        _t0 = _perf_counter()
+                    if is_shutdown_requested():
+                        break
+                    _t0 = _perf_counter() if _profile else 0.0
                     rule_results = execute_rule(rule)
                     if _profile:
                         _title = rule.get('title', 'unknown')
@@ -644,8 +734,9 @@ class ZircoliteCore:
                         )
             elif _disable:
                 for rule in self.ruleset:
-                    if _profile:
-                        _t0 = _perf_counter()
+                    if is_shutdown_requested():
+                        break
+                    _t0 = _perf_counter() if _profile else 0.0
                     rule_results = execute_rule(rule)
                     if _profile:
                         _title = rule.get('title', 'unknown')
@@ -683,9 +774,10 @@ class ZircoliteCore:
                 
                 with Live(console=console, refresh_per_second=10, transient=True) as live:
                     for rule in self.ruleset:
+                        if is_shutdown_requested():
+                            break
                         # Execute the rule
-                        if _profile:
-                            _t0 = _perf_counter()
+                        _t0 = _perf_counter() if _profile else 0.0
                         rule_results = execute_rule(rule)
                         if _profile:
                             _title = rule.get('title', 'unknown')

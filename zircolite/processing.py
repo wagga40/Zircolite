@@ -44,6 +44,7 @@ from .console import (
 from .core import ZircoliteCore
 from .extractor import EvtxExtractor
 from .parallel import ParallelConfig, MemoryAwareParallelProcessor
+from .shutdown import is_shutdown_requested
 from .utils import (
     MemoryTracker,
     create_silent_logger,
@@ -98,6 +99,7 @@ class ProcessingContext:
     archive_password: Optional[str] = None
     add_index: list = field(default_factory=list)
     remove_index: list = field(default_factory=list)
+    auto_index_top_n: int = 0
     strict_evtx: bool = False
 
     # Cached formatted time strings (computed in __post_init__)
@@ -134,6 +136,7 @@ def create_zircolite_core(
         archive_password=ctx.archive_password,
         add_index=ctx.add_index,
         remove_index=ctx.remove_index,
+        auto_index_top_n=ctx.auto_index_top_n,
         strict_evtx=ctx.strict_evtx,
     )
     return ZircoliteCore(ctx.config, proc_config, logger=ctx.logger)
@@ -335,6 +338,8 @@ def process_perfile_streaming(
     try:
         with _keepflat_context(ctx) as kf:
             for file_idx, log_file in enumerate(file_list):
+                if is_shutdown_requested():
+                    break
                 file_name = Path(log_file).name
                 file_link = make_file_link(str(log_file), file_name)
                 if len(file_list) > 1:
@@ -346,9 +351,12 @@ def process_perfile_streaming(
 
                 if file_idx > 0:
                     try:
-                        zircolite_core.db_connection.execute("DELETE FROM logs")
-                    except Exception:
-                        pass
+                        if zircolite_core.db_connection is not None:
+                            zircolite_core.db_connection.execute("DELETE FROM logs")
+                    except Exception as exc:
+                        ctx.logger.debug(
+                            f"Failed to clear 'logs' table between files: {exc}"
+                        )
                     zircolite_core._cursor = None
 
                 result = zircolite_core.run_streaming(
@@ -479,6 +487,8 @@ def process_db_input(
 
         # Warn if loaded DB has no 'logs' table (e.g. WAL data missing)
         try:
+            if zircolite_core.db_connection is None:
+                raise RuntimeError("No database connection after load_db_in_memory")
             _cur = zircolite_core.db_connection.cursor()
             _cur.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='logs'")
             if _cur.fetchone() is None:
@@ -587,7 +597,7 @@ def process_single_file_worker(
 
         core = thread_local.core
 
-        event_count, filtered_count = core.run_streaming(
+        _streaming_result = core.run_streaming(
             [log_file],
             input_type=input_type,
             args_config=args,
@@ -598,6 +608,7 @@ def process_single_file_worker(
             keepflat_file=keepflat_file,
             _raw_config=raw_config,
         )
+        event_count, filtered_count = _unpack_streaming_result(_streaming_result)
 
         with counter_lock:
             total_filtered_count[0] += filtered_count

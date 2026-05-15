@@ -16,7 +16,17 @@ import random
 import string
 import sys
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Dict, List, Optional, Tuple, Union, cast
+from typing import (
+    TYPE_CHECKING,
+    Any,
+    Dict,
+    List,
+    Optional,
+    Sequence,
+    Tuple,
+    Union,
+    cast,
+)
 
 if TYPE_CHECKING:
     from rich.console import Console
@@ -27,8 +37,10 @@ import yaml
 
 # Rich-based console - import with fallback for compatibility
 console: Optional["Console"] = None
+get_rich_logger = None  # type: ignore[assignment]
 try:
-    from .console import console as _console, get_rich_logger
+    from .console import console as _console  # type: ignore[no-redef]
+    from .console import get_rich_logger
 
     console = _console
     HAS_RICH = True
@@ -186,7 +198,7 @@ def open_maybe_compressed(
     mode: str = "rb",
     encoding: Optional[str] = None,
     password: Optional[Union[str, bytes]] = None,
-):
+) -> Any:
     """Open a file, transparently decompressing gz/bz2 or extracting from a zip/7z archive.
 
     Args:
@@ -252,6 +264,7 @@ def open_maybe_compressed(
     if suffix == ".7z":
         try:
             import lzma
+
             import py7zr
             from py7zr.exceptions import (
                 Bad7zFile,
@@ -289,7 +302,7 @@ def open_maybe_compressed(
                         "only single-file archives are supported"
                     )
                 factory = _MemFactory()
-                szf.extract(path=None, targets=names, factory=factory)
+                szf.extract(path=None, targets=names, factory=factory)  # type: ignore[arg-type]
                 if factory._buf is None:
                     raise RuntimeError("7z extract produced no data")
                 factory._buf.seek(0)
@@ -372,7 +385,7 @@ def init_logger(
         Configured logger instance
     """
     # Use Rich logger if available and requested
-    if use_rich and HAS_RICH:
+    if use_rich and HAS_RICH and get_rich_logger is not None:
         return get_rich_logger(name=name, debug=debug_mode, log_file=log_file)
 
     # Fallback to standard logging
@@ -425,12 +438,12 @@ def create_silent_logger(name: str = "zircolite_worker") -> logging.Logger:
 
 
 def select_files(
-    path_list: List[Union[Path, str]],
+    path_list: Sequence[Union[Path, str]],
     select_files_list: Optional[List[List[str]]],
 ) -> List[Union[Path, str]]:
     """Select files from path list based on filter criteria."""
     if select_files_list is None:
-        return path_list
+        return list(path_list)
 
     paths = list(path_list)
     filters = [f[0].lower() for f in select_files_list if f]
@@ -444,12 +457,12 @@ def select_files(
 
 
 def avoid_files(
-    path_list: List[Union[Path, str]],
+    path_list: Sequence[Union[Path, str]],
     avoid_files_list: Optional[List[List[str]]],
 ) -> List[Union[Path, str]]:
     """Filter out files from path list based on exclusion criteria."""
     if avoid_files_list is None:
-        return path_list
+        return list(path_list)
 
     paths = list(path_list)
     filters = [f[0].lower() for f in avoid_files_list if f]
@@ -549,7 +562,7 @@ def format_size(size: Union[int, float]) -> str:
 
 
 def analyze_files_and_recommend_mode(
-    file_list: List[Union[Path, str]],
+    file_list: Sequence[Union[Path, str]],
     logger: Optional[logging.Logger] = None,
 ) -> Tuple[str, str, Dict[str, Any]]:
     """
@@ -735,11 +748,14 @@ def print_mode_recommendation(
     stats: Dict[str, Any],
     logger: Optional[logging.Logger],
     show_parallel: bool = True,
+    forced_workers: Optional[int] = None,
 ) -> None:
     """Print the mode recommendation to the user with clean formatting."""
     # Check if we have the Rich console available
     if HAS_RICH and console is not None:
-        _print_mode_recommendation_rich(recommended_mode, reason, stats, show_parallel)
+        _print_mode_recommendation_rich(
+            recommended_mode, reason, stats, show_parallel, forced_workers
+        )
     else:
         _print_mode_recommendation_plain(
             recommended_mode,
@@ -747,6 +763,7 @@ def print_mode_recommendation(
             stats,
             logger or logging.getLogger(__name__),
             show_parallel,
+            forced_workers,
         )
 
 
@@ -755,9 +772,11 @@ def _print_mode_recommendation_rich(
     reason: str,
     stats: Dict[str, Any],
     show_parallel: bool = True,
+    forced_workers: Optional[int] = None,
 ) -> None:
     """Print mode recommendation using Rich console."""
     from rich.table import Table
+
     from .console import is_quiet
 
     if is_quiet():
@@ -795,7 +814,18 @@ def _print_mode_recommendation_rich(
 
     # Parallel processing (only for per-file mode)
     if show_parallel and recommended_mode != "unified":
-        if stats.get("parallel_recommended", False):
+        is_forced = forced_workers is not None and forced_workers > 0
+        parallel_will_run = stats.get("parallel_recommended", False) or is_forced
+
+        if is_forced and parallel_will_run:
+            auto_workers = stats.get("parallel_workers", "?")
+            table.add_row(
+                "[>] Parallel",
+                f"[green]ENABLED[/] ([yellow]{forced_workers}[/] workers) "
+                f"[magenta]forced via --parallel-workers[/] "
+                f"[dim](auto-detected: {auto_workers})[/]",
+            )
+        elif stats.get("parallel_recommended", False):
             workers = stats.get("parallel_workers", "?")
             table.add_row(
                 "[>] Parallel", f"[green]ENABLED[/] ([yellow]{workers}[/] workers)"
@@ -814,6 +844,7 @@ def _print_mode_recommendation_plain(
     stats: Dict[str, Any],
     logger: logging.Logger,
     show_parallel: bool = True,
+    forced_workers: Optional[int] = None,
 ) -> None:
     """Print mode recommendation using plain logger (fallback)."""
     # Header
@@ -839,7 +870,16 @@ def _print_mode_recommendation_plain(
 
     # Parallel processing recommendation (only show for per-file mode)
     if show_parallel and recommended_mode != "unified":
-        if stats.get("parallel_recommended", False):
+        is_forced = forced_workers is not None and forced_workers > 0
+        parallel_will_run = stats.get("parallel_recommended", False) or is_forced
+
+        if is_forced and parallel_will_run:
+            auto_workers = stats.get("parallel_workers", "?")
+            logger.info(
+                f"    [>] ⚡ Parallel: ENABLED ({forced_workers} workers) "
+                f"forced via CLI (auto-detected: {auto_workers})"
+            )
+        elif stats.get("parallel_recommended", False):
             workers = stats.get("parallel_workers", "?")
             logger.info(f"    [>] ⚡ Parallel: ENABLED ({workers} workers)")
         else:

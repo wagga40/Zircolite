@@ -34,6 +34,7 @@ from RestrictedPython.Eval import default_guarded_getiter
 from RestrictedPython.Guards import guarded_iter_unpack_sequence
 
 from .config import ProcessingConfig
+from .shutdown import is_shutdown_requested
 from .utils import (
     COMPRESSED_SUFFIXES,
     load_field_mappings,
@@ -178,8 +179,9 @@ class StreamingEventProcessor:
         "compiled_code_cache",
         "_transform_func_cache",
         "RestrictedPython_BUILTINS",
-        # Path resolution cache – maps path_parts tuple to resolved (raw_name, mapped_key)
-        # or _EXCLUDED_SENTINEL; avoids repeated join/exclusion/mapping per leaf
+        # Path resolution cache – maps (raw_field_name, last_part) to resolved
+        # (raw_name, mapped_key) or _EXCLUDED_SENTINEL; avoids repeated
+        # exclusion/mapping lookups per leaf
         "_resolve_path",
         # Time filter cache – includes string bounds for comparison
         "_has_time_filter",
@@ -304,11 +306,12 @@ class StreamingEventProcessor:
         self._last_column_frozenset: frozenset = frozenset()
         self._last_sorted_columns = ()
 
+        # Use module-level RestrictedPython builtins. Must be set before
+        # _load_config(), which eagerly compiles transforms via _get_transform_func.
+        self.RestrictedPython_BUILTINS = _RESTRICTED_BUILTINS
+
         # Load field mappings config (includes event_filter and timestamp_detection)
         self._load_config(_raw_config=_raw_config)
-
-        # Use module-level RestrictedPython builtins
-        self.RestrictedPython_BUILTINS = _RESTRICTED_BUILTINS
 
         # Timestamp auto-detection state
         self._detected_time_field = None
@@ -317,14 +320,12 @@ class StreamingEventProcessor:
         from functools import lru_cache
 
         @lru_cache(maxsize=10000)
-        def _resolve_path(path_parts):
-            raw_field_name = ".".join(path_parts)
+        def _resolve_path(raw_field_name: str, last_part: str):
             for exclusion in self.field_exclusions:
                 if exclusion in raw_field_name:
                     return _EXCLUDED_SENTINEL
             mapped_key = self.field_mappings.get(raw_field_name)
             if mapped_key is None:
-                last_part = path_parts[-1] if path_parts else ""
                 mapped_key = _NON_ALNUM_RE.sub("", last_part)
             return (raw_field_name, mapped_key)
 
@@ -443,6 +444,17 @@ class StreamingEventProcessor:
                 for t in field_transforms
             ]
 
+        # Warm the transform function cache so the per-event hot path never
+        # pays the compile_restricted/exec cost. Failures fall through to the
+        # lazy path which logs and skips the offending transform.
+        if self.transforms_enabled:
+            seen_codes: Set[str] = set()
+            for specs in self._transforms_baked.values():
+                for spec in specs:
+                    if spec.code and spec.code not in seen_codes:
+                        seen_codes.add(spec.code)
+                        self._get_transform_func(spec.code)
+
     def _resolve_file_transforms(self):
         """Resolve python_file transforms by loading code from external files.
 
@@ -509,7 +521,7 @@ class StreamingEventProcessor:
             if isinstance(eventid, dict):
                 eventid = eventid.get("#text")
             try:
-                eventid = int(eventid)
+                eventid = int(eventid) if eventid is not None else None
             except (ValueError, TypeError):
                 eventid = None
 
@@ -681,11 +693,11 @@ class StreamingEventProcessor:
         # Result dict
         json_line: Dict[str, Any] = {}
 
-        def process_leaf(path_parts: Tuple[Any, ...], obj: Any) -> None:
-            cached = resolve_path(path_parts)
+        def process_leaf(raw_field_name: str, last_part: str, obj: Any) -> None:
+            cached = resolve_path(raw_field_name, last_part)
             if cached is _sentinel:
                 return
-            raw_field_name, mapped_key = cached
+            raw_field_name, mapped_key = cached  # type: ignore[misc]
             if isinstance(obj, list):
                 value = str(obj)
             else:
@@ -734,8 +746,8 @@ class StreamingEventProcessor:
                 keys.append(alias_key)
             if alias_raw is not None:
                 keys.append(alias_raw)
-            transformed_keys = None
-            transformed_values = None
+            transformed_keys: Optional[set] = None
+            transformed_values: Dict[str, Any] = {}
             if transforms_enabled:
                 for field_name in (key, raw_field_name):
                     field_transforms = transforms_get(field_name)
@@ -755,7 +767,6 @@ class StreamingEventProcessor:
                                 keys.append(alias_name)
                                 if transformed_keys is None:
                                     transformed_keys = set()
-                                    transformed_values = {}
                                 transformed_keys.add(alias_name)
                                 transformed_values[alias_name] = transform_value(
                                     transform_code, value
@@ -792,14 +803,28 @@ class StreamingEventProcessor:
                     discovered_fields[key_lower] = k
                     field_types[k] = "INTEGER" if is_int else "TEXT COLLATE NOCASE"
 
-        stack: List[Tuple[Any, Tuple[Any, ...]]] = [(event_dict, ())]
+        # Descend through the event tree, carrying the dotted path as a string
+        # (cheaper than re-allocating a path tuple at every node). Leaves are
+        # processed without an extra stack push/pop.
+        stack: List[Tuple[Any, str, str]] = [(event_dict, "", "")]
         while stack:
-            obj, path_parts = stack.pop()
+            obj, raw_path, last_part = stack.pop()
             if isinstance(obj, dict):
-                for k, v in obj.items():
-                    stack.append((v, path_parts + (k,)))
+                if raw_path:
+                    for k, v in obj.items():
+                        new_path = f"{raw_path}.{k}"
+                        if isinstance(v, dict):
+                            stack.append((v, new_path, k))
+                        else:
+                            process_leaf(new_path, k, v)
+                else:
+                    for k, v in obj.items():
+                        if isinstance(v, dict):
+                            stack.append((v, k, k))
+                        else:
+                            process_leaf(k, k, v)
             else:
-                process_leaf(path_parts, obj)
+                process_leaf(raw_path, last_part, obj)
 
         # Time filtering (with pre-parsed bounds)
         if self._has_time_filter:
@@ -998,7 +1023,7 @@ class StreamingEventProcessor:
         self, xml_file: str, extractor: "EvtxExtractor"
     ) -> Generator[dict, None, None]:
         """Stream and flatten events from an XML file using incremental parsing."""
-        from lxml import etree
+        from lxml import etree  # type: ignore[attr-defined]
 
         _fh = None  # Track compressed file handle for cleanup
         try:
@@ -1166,7 +1191,7 @@ class StreamingEventProcessor:
         EVTXtract produces XML-like output that needs special parsing.
         Events are processed as they're parsed rather than loading all at once.
         """
-        from lxml import etree
+        from lxml import etree  # type: ignore[attr-defined]
 
         try:
             filename = Path(log_file).name
@@ -1401,6 +1426,8 @@ class StreamingEventProcessor:
                 batch_append = batch.append  # Rebind after list replacement
                 if progress_callback is not None:
                     progress_callback(event_count)
+                if is_shutdown_requested():
+                    return event_count
 
         # Insert remaining batch
         if batch:
@@ -1422,13 +1449,21 @@ class StreamingEventProcessor:
         # Collect all columns from the full batch.
         # Some log types mix event schemas within a single batch, so comparing
         # only the first and last event can drop columns that appear in the middle.
+        # We delay materializing the union set until we know the batch is non-uniform,
+        # which is the common case for stable event sources.
         first_keys = batch[0].keys()
-        all_columns_set: Set[str] = set(first_keys)
+        extra_columns: Optional[Set[str]] = None
         for event in batch[1:]:
             event_keys = event.keys()
             if len(event_keys) != len(first_keys) or event_keys != first_keys:
-                all_columns_set.update(event_keys)
-        all_columns_frozen = frozenset(all_columns_set)
+                if extra_columns is None:
+                    extra_columns = set(first_keys)
+                extra_columns.update(event_keys)
+
+        if extra_columns is None:
+            all_columns_frozen = frozenset(first_keys)
+        else:
+            all_columns_frozen = frozenset(extra_columns)
 
         # Cache sorted columns – only re-sort when the column set changes
         if all_columns_frozen != self._last_column_frozenset:

@@ -409,8 +409,9 @@ class TestTemplateEngineExportFormats:
         }]
 
         template_file = Path(__file__).parent.parent / "templates" / "exportForTimesketch.tmpl"
-        if not template_file.exists():
-            pytest.skip("Timesketch template not found")
+        assert template_file.exists(), (
+            f"Shipped Timesketch template missing at {template_file} — packaging bug"
+        )
 
         output_file = str(tmp_path / "timesketch.json")
 
@@ -445,8 +446,9 @@ class TestTemplateEngineExportFormats:
         }]
 
         template_file = Path(__file__).parent.parent / "templates" / "exportForTimesketch.tmpl"
-        if not template_file.exists():
-            pytest.skip("Timesketch template not found")
+        assert template_file.exists(), (
+            f"Shipped Timesketch template missing at {template_file} — packaging bug"
+        )
 
         output_file = str(tmp_path / "timesketch_bad.json")
 
@@ -624,6 +626,59 @@ Techniques: {{ elem.tags | extract_attack_techniques | join(',') }}
         assert "T1059.001" in content
         assert "|3|" in content
         assert "#ff6600" in content
+
+    def test_attack_navigator_template_outputs_structured_layer(self, tmp_path, test_logger):
+        """The shipped Navigator template emits parseable severity-based layer JSON."""
+        data = [
+            {
+                "title": "Rule A",
+                "id": "rule-a",
+                "tags": ["attack.execution", "attack.t1059.001"],
+                "rule_level": "medium",
+                "count": 1,
+            },
+            {
+                "title": "Rule B",
+                "id": "rule-b",
+                "tags": ["attack.execution", "attack.t1059.001"],
+                "rule_level": "high",
+                "count": 2,
+            },
+        ]
+        template_file = Path(__file__).parent.parent / "templates" / "exportForAttackNavigator.tmpl"
+        output_file = tmp_path / "navigator.json"
+
+        engine = TemplateEngine(logger=test_logger)
+        engine.generate_from_template(str(template_file), str(output_file), data)
+
+        layer = json.loads(output_file.read_text())
+        assert layer["name"] == "Zircolite Detected ATT&CK Techniques"
+        assert layer["description"] == "ATT&CK techniques detected by Zircolite, colored by maximum rule severity"
+        assert {item["label"] for item in layer["legendItems"]} >= {"High", "Medium", "Low"}
+
+        technique = layer["techniques"][0]
+        assert technique["techniqueID"] == "T1059.001"
+        assert technique["tactic"] == "execution"
+        assert technique["score"] == 3
+        assert technique["color"] == "#ff6600"
+        assert technique["comment"] == "3 hits across 2 rules; max severity: high"
+        assert technique["metadata"] == [
+            {"name": "Event Count", "value": "3"},
+            {"name": "Max Severity", "value": "high"},
+            {"name": "Rule Count", "value": "2"},
+            {"name": "Rules", "value": "Rule B (rule-b); Rule A (rule-a)"},
+        ]
+
+    def test_attack_navigator_template_handles_empty_data(self, tmp_path, test_logger):
+        """Navigator export still creates a valid empty layer."""
+        template_file = Path(__file__).parent.parent / "templates" / "exportForAttackNavigator.tmpl"
+        output_file = tmp_path / "navigator_empty.json"
+
+        engine = TemplateEngine(logger=test_logger)
+        engine.generate_from_template(str(template_file), str(output_file), [])
+
+        layer = json.loads(output_file.read_text())
+        assert layer["techniques"] == []
 
     def test_generate_from_template_missing_file_logs_error(self, tmp_path, sample_detection_results):
         """When template file is missing, error and debug are logged."""

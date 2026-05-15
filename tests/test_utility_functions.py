@@ -540,6 +540,57 @@ class TestPrintModeRecommendation:
         # Should not raise
         print_mode_recommendation("per-file", "Test reason", stats, test_logger)
 
+    def test_plain_fallback_forced_workers(self):
+        """Forced worker count should be displayed and labelled as forced."""
+        from unittest.mock import MagicMock
+        from zircolite.utils import _print_mode_recommendation_plain
+
+        stats = {
+            'file_count': 4,
+            'total_size_fmt': '80.0 MB',
+            'avg_size_fmt': '20.0 MB',
+            'has_psutil': True,
+            'available_ram_fmt': '8.0 GB',
+            'cpu_count': 4,
+            'parallel_recommended': True,
+            'parallel_workers': 3,
+            'parallel_reason': '3 workers',
+        }
+        mock_logger = MagicMock()
+        _print_mode_recommendation_plain(
+            "per-file", "Test reason", stats, mock_logger,
+            show_parallel=True, forced_workers=8,
+        )
+        joined = "\n".join(call.args[0] for call in mock_logger.info.call_args_list)
+        assert "8 workers" in joined
+        assert "forced" in joined.lower()
+        assert "auto-detected: 3" in joined
+
+    def test_plain_fallback_forced_workers_when_not_recommended(self):
+        """When parallel isn't recommended but user forces workers, show as forced."""
+        from unittest.mock import MagicMock
+        from zircolite.utils import _print_mode_recommendation_plain
+
+        stats = {
+            'file_count': 2,
+            'total_size_fmt': '50.0 MB',
+            'avg_size_fmt': '25.0 MB',
+            'has_psutil': True,
+            'available_ram_fmt': '2.0 GB',
+            'cpu_count': 2,
+            'parallel_recommended': False,
+            'parallel_workers': 1,
+            'parallel_reason': 'Insufficient resources',
+        }
+        mock_logger = MagicMock()
+        _print_mode_recommendation_plain(
+            "per-file", "Default", stats, mock_logger,
+            show_parallel=True, forced_workers=4,
+        )
+        joined = "\n".join(call.args[0] for call in mock_logger.info.call_args_list)
+        assert "4 workers" in joined
+        assert "forced" in joined.lower()
+
 
 class TestSelectAvoidFilesBugFixes:
     """Tests for edge cases in select_files and avoid_files."""
