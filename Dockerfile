@@ -12,12 +12,6 @@ LABEL org.opencontainers.image.title="Zircolite" \
 
 WORKDIR ${ZIRCOLITE_INSTALL_PREFIX}/zircolite
 
-# Install system dependencies
-RUN apt-get update && \
-    DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends git && \
-    apt-get clean && \
-    rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
-
 # Copy and install Python dependencies
 COPY ${ZIRCOLITE_REQUIREMENTS_FILE} .
 RUN pip install --no-cache-dir -r ${ZIRCOLITE_REQUIREMENTS_FILE} && \
@@ -36,6 +30,13 @@ COPY zircolite.py .
 # Set permissions and update rules in single layer
 RUN chmod 0755 zircolite.py && \
     python3 zircolite.py -U
+
+# Run as a non-root user. chown happens after -U so the unprivileged user
+# owns the refreshed rulesets and can read every asset under the install prefix.
+RUN groupadd --system zircolite && \
+    useradd --system --gid zircolite --home-dir ${ZIRCOLITE_INSTALL_PREFIX}/zircolite --shell /usr/sbin/nologin zircolite && \
+    chown -R zircolite:zircolite ${ZIRCOLITE_INSTALL_PREFIX}/zircolite
+USER zircolite
 
 ENTRYPOINT ["python3", "zircolite.py"]
 CMD ["--help"]
