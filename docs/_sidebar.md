@@ -6,7 +6,7 @@
     * [Rulesets / Rules](Usage.md#rulesets--rules)
     * [Rule testing](Usage.md#rule-testing)
     * [Pipelines](Usage.md#pipelines)
-    * [Field mappings, exclusions, aliases and splitting](Usage.md#field-mappings-field-exclusions-value-exclusions-field-aliases-and-field-splitting)
+    * [Field mappings, exclusions, aliases and splitting](Usage.md#field-mappings-exclusions-aliases-and-splitting)
     * [Field Transforms](Usage.md#field-transforms)
     * [Generate your own rulesets](Usage.md#generate-your-own-rulesets)
     * [Docker](Usage.md#docker)

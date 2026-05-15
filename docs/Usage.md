@@ -143,6 +143,16 @@ By default:
 - When providing a directory for event logs, Zircolite will automatically filter by file extension. You can change this with `--fileext`. You can also use `--file-pattern` for custom glob patterns.
 - Use `--no-recursion` to disable recursive directory search.
 
+### Interrupting a Run
+
+Pressing `Ctrl+C` triggers a graceful shutdown: in-flight workers finish their current event batch or rule, temporary files are cleaned up, the SQLite database is closed, and Zircolite exits with status code `130` — no Python traceback.
+
+If shutdown takes longer than you want to wait (for example, a worker is mid-way through a large file), press `Ctrl+C` a second time to force an immediate exit. The first message confirms the request:
+
+```
+[!] Interrupt received - finishing current work and shutting down. Press Ctrl+C again to force quit.
+```
+
 ### Command-Line Options Summary
 
 For the full list of options and up-to-date help, run: `python3 zircolite.py -h`. The tables below summarize the main options.
@@ -217,7 +227,7 @@ JSON output does not have this limitation: each rule’s result object includes 
 
 | Option | Description |
 |--------|-------------|
-| `-c`, `--config` | YAML/JSON config file for field mappings and transforms |
+| `-c`, `--config` | YAML config file (JSON also accepted) |
 | `-q`, `--quiet` | Quiet mode: suppress banner, progress bars, and info messages — only the summary panel and errors are shown |
 | `--debug` | Enable debug logging (includes full tracebacks on errors) |
 | `-n`, `--nolog` | Don't create log files |
@@ -230,6 +240,7 @@ JSON output does not have this limitation: each rule’s result object includes 
 | `--no-auto-detect` | Disable automatic log type and timestamp detection |
 | `--add-index` | Create an index on the given column(s); repeat or list multiple (e.g. `--add-index Channel EventID`) |
 | `--remove-index` | Drop the given index name(s) after creation; repeat or list multiple (e.g. `--remove-index idx_channel`) |
+| `--auto-index [N]` | Inspect the loaded ruleset and auto-create indices on the top-N most-referenced columns (defaults to N=5 when used without a value, 0 = off). Combines with `--add-index`. |
 | `--all-transforms` | Enable all defined transforms (overrides enabled_transforms list) |
 | `--transform-category` | Enable transforms by category name (repeatable) |
 | `--transform-list` | List available transform categories and exit |
@@ -626,7 +637,17 @@ python3 zircolite.py --evtx logs/ --ruleset rules/rules_windows_merged.json --ad
 python3 zircolite.py --evtx logs/ --ruleset rules/rules_windows_merged.json --remove-index idx_channel
 ```
 
-Index names for `--remove-index` are the SQLite index names (e.g. `idx_eventid`, `idx_channel`, or names from `--add-index` such as `idx_SystemTime`). 
+Index names for `--remove-index` are the SQLite index names (e.g. `idx_eventid`, `idx_channel`, or names from `--add-index` such as `idx_SystemTime`).
+
+If you don't want to pick columns by hand, use `--auto-index [N]` to let Zircolite inspect the loaded ruleset and create indices on the N columns that the rules' WHERE clauses reference most often (N defaults to 5 when the flag is used without a value, and 0 when it is omitted). Columns already covered by the built-in `eventid`/`Channel` indices or by `--add-index` are skipped, and only columns that exist in the loaded data are indexed. You can combine `--auto-index` with `--add-index` to force a specific column on top of the auto-picked ones:
+
+```shell
+# Auto-index the top 8 columns referenced by the ruleset
+python3 zircolite.py --evtx logs/ --ruleset rules/rules_windows_merged.json --auto-index 8
+
+# Auto-index (top 5 by default), plus always index Computer
+python3 zircolite.py --evtx logs/ --ruleset rules/rules_windows_merged.json --auto-index --add-index Computer
+```
 
 ## Rulesets / Rules
 
@@ -739,544 +760,234 @@ The converted rules/rulesets can be saved using the `-sr` or `--save-ruleset` ar
 > [!NOTE]  
 > When using multiple native Sigma rules/rulesets, you cannot differentiate pipelines. All the pipelines will be used in the conversion process.
 
-## Field Mappings, Field Exclusions, Value Exclusions, Field Aliases, and Field Splitting
+## Field Mappings, Exclusions, Aliases, and Splitting
 
-If your logs require transformations to align with your rules, Zircolite offers several mechanisms for this purpose. You can configure these mechanisms using a file located in the [config](https://github.com/wagga40/Zircolite/tree/master/config/) directory of the repository. Additionally, you have the option to use your own configuration by utilizing the `--config` or `-c` options.
+If your logs need to be reshaped before rules can match them, Zircolite offers several config-driven mechanisms. The canonical configuration lives in [`config/config.yaml`](https://github.com/wagga40/Zircolite/tree/master/config/). Use your own with `-c` / `--config`.
 
-### Configuration File Formats
+> [!NOTE]
+> Configuration is **YAML** (`.yaml` / `.yml`). JSON (`.json`) is still accepted for backward compatibility — the format is detected from the file extension.
 
-Zircolite supports both **YAML** and **JSON** formats for the field mappings configuration file:
+### Configuration overview
 
-- **YAML format**: `config/config.yaml` (default, with comments for documentation)
-- **JSON format**: Also supported for backward compatibility
-
-The file format is automatically detected based on the file extension (`.json`, `.yaml`, or `.yml`). If no extension is provided, Zircolite will attempt to parse as JSON first, then YAML.
-
-> [!TIP]
-> The YAML format is recommended for custom configurations as it supports comments, making it easier to document your mappings and transforms.
-
-**JSON format example:**
-
-```json 
-{
-    "exclusions" : [],
-    "useless" : [],
-    "mappings" : 
-    {
-        "field_name_1": "new_field_name_1", 
-        "field_name_2": "new_field_name_2"
-    },
-    "alias":
-    {
-        "field_alias_1": "alias_1"
-    },
-    "split":
-    {
-        "field_name_split": {"separator":",", "equal":"="}
-    },
-    "transforms_enabled": true,
-    "transforms": {}
-}
-```
-
-**YAML format example:**
+A configuration file can define five top-level sections. All are optional:
 
 ```yaml
-# Field mappings configuration
-exclusions:
-  - xmlns  # Exclude XML namespace attributes
+exclusions:               # fields to drop entirely
+  - xmlns
 
-useless:
+useless:                  # values that should remove their field
   - null
   - ""
 
-mappings:
-  # Rename nested fields to simpler names
+mappings:                 # rename a (possibly nested) field
   Event.System.EventID: EventID
   Event.EventData.CommandLine: CommandLine
 
-alias:
-  CommandLine: cmd  # Create alias 'cmd' for CommandLine
+alias:                    # duplicate a field under a new name
+  CommandLine: cmd
 
-split:
+split:                    # parse key=value strings into separate fields
   Hashes:
     separator: ","
     equal: "="
 
-transforms_enabled: true
-transforms: {}
+transforms_enabled: true  # see "Field Transforms" below
 ```
 
 ### Field Mappings
 
-**Field mappings** enable you to rename a field from your logs. Zircolite uses this mechanism to rename nested JSON fields. You can view all the built-in field mappings in [`config/config.yaml`](https://github.com/wagga40/Zircolite/blob/master/config/config.yaml).
+Rename a field (the original name is **not** kept). Zircolite uses this internally to flatten nested JSON paths into simple names. See defaults in [`config/config.yaml`](https://github.com/wagga40/Zircolite/blob/master/config/config.yaml).
 
-For instance, to rename the "CommandLine" field in **your raw logs** to "cmdline", you can add the following entry to the configuration file:
-
-```json 
-{
-    "exclusions" : [],
-    "useless" : [],
-    "mappings" : 
-    {
-        "CommandLine": "cmdline"
-    },
-    "alias":{},
-    "split": {}
-}
+```yaml
+mappings:
+  CommandLine: cmdline
 ```
-
-Please keep in mind that, unlike field aliases, the original field name is not preserved.
 
 ### Field Exclusions
 
-**Field exclusions** allow you to exclude a field. Zircolite uses this mechanism to exclude the `xmlns` field. See the built-in field exclusions in [`config/config.yaml`](https://github.com/wagga40/Zircolite/blob/master/config/config.yaml).
+Drop a field from every event. Used internally to remove `xmlns`. See defaults in [`config/config.yaml`](https://github.com/wagga40/Zircolite/blob/master/config/config.yaml).
 
 ### Value Exclusions
 
-**Value exclusions** allow you to remove fields whose values should be excluded. Zircolite uses this mechanism to remove *null* and empty values. See the built-in value exclusions in [`config/config.yaml`](https://github.com/wagga40/Zircolite/blob/master/config/config.yaml).
+Drop a field if its value matches one of the listed values. Used internally to remove `null` and empty strings. See defaults in [`config/config.yaml`](https://github.com/wagga40/Zircolite/blob/master/config/config.yaml).
 
 ### Field Aliases
 
-**Field aliases** allow you to have multiple fields with different names but the same value. It is similar to field mapping, but you keep the original value. Field aliases can be used on original field names as well as on mapped field names and split fields.
+Duplicate a field under a new name, keeping the original. Works on raw, mapped, and split fields.
 
-Let's say you have this event log in JSON format (the event has been deliberately truncated): 
-
-```json 
-{
-    "EventID": 1,
-    "Provider_Name": "Microsoft-Windows-Sysmon",
-    "Channel": "Microsoft-Windows-Sysmon/Operational",
-    "CommandLine": "\"C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe\"",
-    "Image": "C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe",
-    "IntegrityLevel": "Medium"
-}
+```yaml
+alias:
+  CommandLine: cmdline
 ```
 
-Let's say you are not sure all your rules use the "CommandLine" field, but you remember that some of them use the "cmdline" field. To avoid any problems, you could use an alias for the "CommandLine" field like this: 
-
-```json 
-{
-    "exclusions" : [],
-    "useless" : [],
-    "mappings" : {},
-    "alias":{
-        "CommandLine": "cmdline"
-    },
-    "split": {}
-}
-```
-
-With this configuration, the event log used to apply Sigma rules will look like this: 
-
-```json 
-{
-    "EventID": 1,
-    "Provider_Name": "Microsoft-Windows-Sysmon",
-    "Channel": "Microsoft-Windows-Sysmon/Operational",
-    "CommandLine": "\"C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe\"",
-    "cmdline": "\"C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe\"",
-    "Image": "C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe",
-    "IntegrityLevel": "Medium"
-}
-```
-
-Be careful when using aliases because the data is stored multiple times.
-
-### Field Splitting
-
-**Field splitting** allows you to split fields that contain key-value pairs. Zircolite uses this mechanism to handle hash/hashes fields in Sysmon logs. See the built-in field splittings in [`config/config.yaml`](https://github.com/wagga40/Zircolite/blob/master/config/config.yaml). Field aliases can be applied to split fields.
-
-For example, let's say we have this Sysmon event log: 
+Applied to this event:
 
 ```json
 {
+    "EventID": 1,
+    "CommandLine": "powershell.exe",
+    "Image": "C:\\Windows\\...\\powershell.exe"
+}
+```
+
+…rules will see the alias added alongside the original:
+
+```json
+{
+    "EventID": 1,
+    "CommandLine": "powershell.exe",
+    "cmdline": "powershell.exe",
+    "Image": "C:\\Windows\\...\\powershell.exe"
+}
+```
+
+Aliases duplicate data — use them sparingly.
+
+### Field Splitting
+
+Parse a key=value string into separate fields. Used internally for Sysmon's `Hashes` field. Aliases can be applied to the resulting fields.
+
+```yaml
+split:
+  Hashes:
+    separator: ","
+    equal: "="
+```
+
+Given this event:
+
+```json
+{ "Hashes": "SHA1=XX,MD5=X,SHA256=XXX,IMPHASH=XXXX", "EventID": 1 }
+```
+
+…rules will see:
+
+```json
+{
+    "SHA1": "XX",
+    "MD5": "X",
+    "SHA256": "XXX",
+    "IMPHASH": "XXXX",
     "Hashes": "SHA1=XX,MD5=X,SHA256=XXX,IMPHASH=XXXX",
     "EventID": 1
 }
 ```
 
-With the following configuration, Zircolite will split the `Hashes` field like this: 
+## Field Transforms
 
-```json 
-{
-    "exclusions" : [],
-    "useless" : [],
-    "mappings" : {},
-    "alias":{},
-    "split": {
-        "Hashes": {"separator":",", "equal":"="}
-    }
-}
-```
-
-The final event log used to apply Sigma rules will look like this: 
-
-```json
-{
-    "SHA1": "x",
-    "MD5": "x",
-    "SHA256": "x",
-    "IMPHASH": "x",
-    "Hashes": "SHA1=x,MD5=x,SHA256=x,IMPHASH=x",
-    "EventID": 1
-}
-```
-
-## Field Transforms 
-
-### What Are Transforms?
-
-Transforms in Zircolite are custom functions that manipulate the value of a specific field during the event flattening process. They allow you to:
-
-- Format or normalize data
-- Enrich events with additional computed fields
-- Decode encoded data (e.g., Base64, hexadecimal)
-- Extract information using regular expressions
-
-By using transforms, you can preprocess event data to make it more suitable for detection rules and analysis. Transforms are executed using **RestrictedPython** for safe, sandboxed execution.
+Transforms run small Python snippets against field values during event flattening, in a **RestrictedPython** sandbox. They can decode data (Base64, hex), extract IOCs (URLs, IPs), categorize values, or flag obfuscation patterns.
 
 ### Enabling Transforms
 
-Transforms are configured in `config/config.yaml`. To enable transforms:
-
-1. Set `transforms_enabled: true`
-2. Add transform names to the `enabled_transforms` list
+Transforms live in `config/config.yaml`. Only transforms listed in `enabled_transforms` will run:
 
 ```yaml
 transforms_enabled: true
 
 enabled_transforms:
-  # Auditd (Linux)
-  - proctitle
+  - proctitle                # Auditd
   - cmd
-  
-  # Uncomment to enable:
   # - CommandLine_b64decoded
   # - Image_LOLBinMatch
-  # - ScriptBlockText_ObfuscationIndicators
 ```
 
-Only transforms listed in `enabled_transforms` will run. This provides a single location to control all transforms.
-
-**Enabling transforms by category (CLI):**
+You can also enable transforms by category from the CLI:
 
 ```bash
-# Enable all transforms in specific categories
 python3 zircolite.py -e logs/ --transform-category commandline --transform-category process
-
-# Enable ALL transforms
-python3 zircolite.py -e logs/ --all-transforms
-
-# List available categories
-python3 zircolite.py --transform-list
+python3 zircolite.py -e logs/ --all-transforms      # enable everything
+python3 zircolite.py --transform-list               # show available categories
 ```
 
-Categories are defined in the `transform_categories` section of `config/config.yaml`. See [Advanced.md](Advanced.md#transform-categories) for the full list.
+Categories are defined in the `transform_categories` section of `config.yaml`.
 
-**JSON format (alternative):**
+### Defining a Transform
 
-```json
-{
-  "transforms_enabled": true,
-  "transforms": {
-  }
-}
-```
-
-**YAML format:**
+Each transform is attached to a field and has either inline code (`type: python`) or an external file (`type: python_file`):
 
 ```yaml
-transforms_enabled: true
-transforms: {}
+transforms:
+  CommandLine:
+    - info: "Base64 decoded CommandLine"
+      type: python
+      code: |
+        def transform(param):
+            import base64
+            return base64.b64decode(param).decode("utf-8")
+      alias: true
+      alias_name: CommandLine_b64decoded
+      source_condition: [evtx_input, json_input]
+      enabled: true
 ```
 
-### Configuring Transforms
+| Key | Purpose |
+|-----|---------|
+| `info` | Short description |
+| `type` | `python` (inline) or `python_file` (load from disk) |
+| `code` | Inline code (with `type: python`) |
+| `file` | Path to a `.py` file relative to `transforms_dir` (with `type: python_file`) |
+| `alias` | `true` → write to a new field; `false` → replace the original value |
+| `alias_name` | Name of the new field when `alias: true` |
+| `source_condition` | Input types this transform applies to (see below) |
+| `enabled` | Whether the transform is active |
 
-Transforms are defined in the `"transforms"` section of the configuration file. Each transform is associated with a specific field and consists of several properties.
+**Source conditions:** `evtx_input`, `json_input`, `json_array_input`, `xml_input`, `csv_input`, `db_input`, `sysmon_linux_input`, `auditd_input`, `evtxtract_input`.
 
-### Transform Structure
+### External File Transforms
 
-A transform definition has the following structure:
-
-- **Field Name**: The name of the field to which the transform applies.
-- **Transform List**: A list of transform objects for the field.
-
-Each transform object contains:
-
-- **info**: A description of what the transform does.
-- **type**: `"python"` for inline code or `"python_file"` for external file.
-- **code**: The Python code that performs the transformation (for `type: python`).
-- **file**: Path to a `.py` file containing the transform function (for `type: python_file`). Resolved relative to `transforms_dir`.
-- **alias**: A boolean indicating whether the result should be stored in a new field.
-- **alias_name**: The name of the new field if `alias` is `true`.
-- **source_condition**: A list specifying when the transform should be applied based on the input type (e.g., `["evtx_input", "json_input"]`).
-- **enabled**: A boolean indicating whether the transform is active.
-
-#### Source Condition Possible Values
-    
-| `source_condition` Value      |
-|-------------------------------|
-| `"json_input"`                |
-| `"json_array_input"`          |
-| `"db_input"`                  |
-| `"sysmon_linux_input"`        |
-| `"auditd_input"`              |
-| `"xml_input"`                 |
-| `"evtxtract_input"`           |
-| `"csv_input"`                 |
-| `"evtx_input"`                |
-
-#### Example: Inline Transform (type: python)
-
-**JSON format:**
-
-```json
-{
-  "info": "Base64 decoded CommandLine",
-  "type": "python",
-  "code": "def transform(param):\n    # Transformation logic\n    return transformed_value",
-  "alias": true,
-  "alias_name": "CommandLine_b64decoded",
-  "source_condition": ["evtx_input", "json_input"],
-  "enabled": true
-}
-```
-
-**YAML format:**
+For longer code, keep the function in its own file under `transforms_dir` (default: `config/transforms/`):
 
 ```yaml
-- info: "Base64 decoded CommandLine"
-  type: python
-  code: |
-    def transform(param):
-        # Transformation logic
-        return transformed_value
-  alias: true
-  alias_name: "CommandLine_b64decoded"
-  source_condition:
-    - evtx_input
-    - json_input
+transforms:
+  CommandLine:
+    - info: "Base64 decoded CommandLine"
+      type: python_file
+      file: commandline_b64decoded.py
+      alias: true
+      alias_name: CommandLine_b64decoded
+      source_condition: [evtx_input, json_input]
+      enabled: true
 ```
-
-> [!TIP]
-> YAML's multi-line string syntax (`|`) makes writing transform code much cleaner than escaping newlines in JSON.
-
-#### Example: External File Transform (type: python_file)
-
-```yaml
-- info: "Base64 decoded CommandLine"
-  type: python_file
-  file: commandline_b64decoded.py
-  alias: true
-  alias_name: "CommandLine_b64decoded"
-  source_condition:
-    - evtx_input
-    - json_input
-```
-
-The `.py` file contains only the transform function:
 
 ```python
+# config/transforms/commandline_b64decoded.py
 def transform(param):
-    # param is the field value (always a string)
-    # return the transformed value (string)
-    return param.upper()
+    import base64
+    return base64.b64decode(param).decode("utf-8")
 ```
 
-External files are resolved relative to `transforms_dir` (default: `transforms/`, relative to the config file directory). This is configured in `config.yaml`:
-
-```yaml
-transforms_dir: transforms/
-```
+Change the directory with `transforms_dir:` in `config.yaml` if needed.
 
 > [!TIP]
-> Use `config/transform_tester.py` to develop and test transforms locally with the same RestrictedPython sandbox.
+> Use `config/transform_tester.py` to develop and debug transforms locally — it uses the same sandbox as Zircolite.
 > ```bash
 > python config/transform_tester.py config/transforms/image_exename.py "C:\Windows\cmd.exe"
 > python config/transform_tester.py my_transform.py --interactive
 > python config/transform_tester.py --list-builtins
 > ```
 
-### Available Fields
-
-You can define transforms for any field present in your event data. In the configuration, transforms are keyed by the field name:
-
-**JSON format:**
-
-```json
-"transforms": {
-  "CommandLine": [
-    { }
-  ],
-  "Payload": [
-    { }
-  ]
-}
-```
-
-**YAML format:**
-
-```yaml
-transforms:
-  CommandLine:
-    - info: "Transform description"
-      # ... transform properties
-  Payload:
-    - info: "Another transform"
-      # ... transform properties
-```
-
----
-
 ### Writing Transform Functions
 
-Zircolite uses `RestrictedPython` to safely execute transform functions. This means that certain built-in functions and modules are available, while others are restricted.
-The function must be named `transform` and accept a single parameter `param`, which is the original value of the field.
+The function must be named `transform` and take a single `param` (the field value, always a string).
 
-**Available Modules and Functions:**
+**Available in the sandbox:**
 
-- **Built-in Functions**: A limited set of Python built-in functions, such as `len`, `int`, `str`, etc.
-- **Modules**: You can use `re` for regular expressions, `base64` for encoding/decoding, `chardet` for character encoding detection, and `math` for mathematical functions.
-- **Container writes**: `dict[key] = value` and `list[idx] = value` are supported.
-- **Augmented assignments**: `+=`, `-=`, `*=`, etc. are supported.
+- A subset of Python built-ins (`len`, `int`, `str`, etc.)
+- Modules: `re`, `base64`, `chardet`, `math`
+- `dict[k] = v` / `list[i] = v` writes; augmented assignments (`+=`, `-=`, …)
 
-**Unavailable Features:**
-
-- Access to file I/O, network, or system calls is prohibited.
-- Writing to arbitrary object attributes is blocked (only `dict`, `list`, and `set` writes are allowed).
-- Use of certain built-in functions that can affect the system is restricted.
-
-#### Example Transform Functions
-
-##### Base64 Decoding
-
-```python
-def transform(param):
-    import base64
-    decoded = base64.b64decode(param)
-    return decoded.decode('utf-8')
-```
-
-##### Hexadecimal to ASCII Conversion
-
-```python
-def transform(param):
-    decoded = bytes.fromhex(param).decode('ascii')
-    return decoded.replace('\x00', ' ')
-```
-
-### Applying Transforms
-
-Transforms are automatically applied during the event flattening process if:
-
-- They are **enabled** (`"enabled": true`).
-- The current input type matches the **source condition** (`"source_condition": [...]`).
-
-For each event, Zircolite checks if any transforms are defined for the fields present in the event. If so, it executes the transform function and replaces the field's value with the transformed value or stores it in a new field if `alias` is `true`.
+**Blocked:** file I/O, network, system calls, writes to arbitrary object attributes.
 
 ### Built-in Transforms
 
-The default configuration file (`config/config.yaml`) includes many pre-configured transforms for security analysis:
-
-#### Auditd Transforms
-- **proctitle**: Converts hexadecimal proctitle from Auditd to ASCII
-- **cmd**: Converts hexadecimal cmd from Auditd to ASCII
-
-#### CommandLine Transforms
-- **CommandLine_b64decoded**: Base64 decoding
-- **CommandLine_Extracted_Creds**: Credential extraction from net/wmic/psexec commands
-- **CommandLine_URLs**: Extract HTTP/HTTPS/FTP URLs
-- **CommandLine_XORIndicators**: Detect XOR operations and extract keys
-- **CommandLine_AMSIBypass**: Detect AMSI bypass techniques
-- **CommandLine_HexStrings**: Find and decode hex-encoded strings
-- **CommandLine_EnvVarObfuscation**: Detect environment variable abuse
-- **CommandLine_DownloadCradle**: Identify download cradle patterns (DownloadString, WebClient, certutil, bitsadmin)
-- **CommandLine_EvasionTechniques**: Detect process hollowing, injection, syscalls, ETW bypass
-- **CommandLine_RegistryPaths**: Extract registry key paths
-
-#### PowerShell (ScriptBlockText) Transforms
-- **ScriptBlockText_b64decoded**: Base64 decoding
-- **ScriptBlockText_ObfuscationIndicators**: Detect char substitution, string concat, GzipStream, MemoryStream, etc.
-- **ScriptBlockText_XORPatterns**: Detect XOR keys and patterns
-- **ScriptBlockText_ReflectionAbuse**: Detect .NET reflection-based attacks
-- **ScriptBlockText_ShellcodeIndicators**: Detect shellcode execution patterns
-- **ScriptBlockText_NetworkIOCs**: Extract IPs, URLs, and domains
-
-#### Process Transforms
-- **Image_ExeName**: Extract executable name from path
-- **Image_LOLBinMatch**: Detect Living Off The Land Binaries (certutil, mshta, regsvr32, etc.)
-- **Image_TyposquatDetect**: Detect typosquatted process names (svchost→svch0st, lsass→1sass, etc.)
-- **ParentImage_ExeName**: Extract parent executable name
-
-#### Network Transforms
-- **QueryName_TLD**: Extract TLD from DNS queries
-- **QueryName_EntropyScore**: Entropy score for DGA detection
-- **QueryName_TyposquatDetect**: Detect typosquatted official domains (gov sites, banks, tech companies)
-- **DestinationIp_ObfuscationCheck**: Detect hex/octal/decimal IP obfuscation
-- **DestinationPort_Category**: Categorize ports (HTTP, SMB, RDP, METASPLOIT_DEFAULT, etc.)
-
-#### User Transforms
-- **User_Name**: Extract username without domain
-- **User_Domain**: Extract domain from user field
-
-#### File and Registry Transforms
-- **TargetFileName_URLDecoded**: URL decode file paths
-- **TargetObject_SuspiciousRegistry**: Identify persistence registry keys (Run, Services, IFEO, COM)
-- **Hash_MD5**: Extract MD5 from Sysmon Hashes field
-- **Hash_SHA256**: Extract SHA256 from Sysmon Hashes field
-
-> [!TIP]
-> For a complete reference of transform output values and detailed examples, see the [Field Transforms](Advanced.md#field-transforms) section in Advanced.md.
-
-### Example
-
-**Use Case**: Convert hexadecimal-encoded command lines in Auditd logs to readable ASCII strings.
-
-**JSON Configuration:**
-
-```json
-"proctitle": [
-  {
-    "info": "Proctitle HEX to ASCII",
-    "type": "python",
-    "code": "def transform(param):\n    return bytes.fromhex(param).decode('ascii').replace('\\x00', ' ')",
-    "alias": false,
-    "alias_name": "",
-    "source_condition": ["auditd_input"],
-    "enabled": true
-  }
-]
-```
-
-**YAML Configuration:**
-
-```yaml
-proctitle:
-  - info: "Proctitle HEX to ASCII"
-    type: python
-    code: |
-      def transform(param):
-          return bytes.fromhex(param).decode('ascii').replace('\x00', ' ')
-    alias: false
-    alias_name: ""
-    source_condition:
-      - auditd_input
-    enabled: true
-```
-
-**Explanation:**
-
-- **Field**: `proctitle`
-- **Function**: Converts hexadecimal strings to ASCII and replaces null bytes with spaces.
-- **Alias**: `false` (the original `proctitle` field is replaced).
+The default `config.yaml` ships with a large catalogue of security-oriented transforms (Base64 decoding, LOLBin detection, AMSI bypass, typosquat detection, DGA scoring, registry persistence, etc.). For the full list and the values each transform produces, see [Advanced.md — Available Transforms](Advanced.md#available-transforms).
 
 ### Best Practices
 
-- **Test Your Transforms**: Before enabling a transform, ensure that the code works correctly with sample data.
-- **Use Aliases Wisely**: If you don't want to overwrite the original field, set `"alias": true` and provide an `"alias_name"`.
-- **Manage Performance**: Complex transforms can impact performance. Optimize your code and only enable necessary transforms.
-- **Keep Transforms Specific**: Tailor transforms to specific fields and input types using `"source_condition"` to avoid unexpected behavior.
+- **Test first**: validate your code on sample values with `config/transform_tester.py`.
+- **Prefer aliases**: set `alias: true` with an `alias_name` so the original field stays intact.
+- **Watch performance**: transforms run on every event — keep them tight and only enable what you need.
+- **Scope correctly**: use `source_condition` so a transform only runs on the input types it makes sense for.
 
 ## Event Filter and Timestamp Configuration
 

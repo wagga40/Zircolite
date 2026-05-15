@@ -356,6 +356,70 @@ class TestZircoliteCoreDatabase:
         assert "idx_SystemTime" in names  # from add_index (idx_Channel may be skipped if same as idx_channel)
         zircore.close()
 
+    def test_auto_index_picks_top_columns_from_ruleset(self, field_mappings_file, test_logger):
+        """auto_index_top_n picks the top-N referenced columns and creates indices."""
+        proc_config = ProcessingConfig(
+            disable_progress=True,
+            add_index=[],
+            remove_index=[],
+            auto_index_top_n=2,
+        )
+        zircore = ZircoliteCore(
+            config=field_mappings_file,
+            processing_config=proc_config,
+            logger=test_logger,
+        )
+        field_stmt = (
+            "'eventid' TEXT, 'Channel' TEXT, 'Image' TEXT, "
+            "'CommandLine' TEXT, 'TargetFilename' TEXT"
+        )
+        zircore.create_db(field_stmt)
+        zircore.ruleset = [
+            {
+                "title": "rule a",
+                "rule": [
+                    "SELECT * FROM logs WHERE Image='x' AND CommandLine LIKE '%a%'",
+                    "SELECT * FROM logs WHERE Image='y' AND TargetFilename='z'",
+                ],
+            },
+            {
+                "title": "rule b",
+                "rule": ["SELECT * FROM logs WHERE Image='q' AND CommandLine='r'"],
+            },
+        ]
+        zircore.create_index()
+        cursor = zircore.db_connection.cursor()
+        cursor.execute("SELECT name FROM sqlite_master WHERE type='index'")
+        names = {row[0] for row in cursor.fetchall()}
+        # Image appears 3x, CommandLine 2x, TargetFilename 1x — top 2 win.
+        assert "idx_Image" in names
+        assert "idx_CommandLine" in names
+        assert "idx_TargetFilename" not in names
+        # Built-in indices remain.
+        assert "idx_eventid" in names
+        assert "idx_channel" in names
+        zircore.close()
+
+    def test_auto_index_zero_creates_no_extra_indices(self, field_mappings_file, test_logger):
+        """auto_index_top_n=0 leaves only built-in indices."""
+        proc_config = ProcessingConfig(disable_progress=True, auto_index_top_n=0)
+        zircore = ZircoliteCore(
+            config=field_mappings_file,
+            processing_config=proc_config,
+            logger=test_logger,
+        )
+        zircore.create_db("'eventid' TEXT, 'Image' TEXT")
+        zircore.ruleset = [
+            {"title": "r", "rule": ["SELECT * FROM logs WHERE Image='x'"]}
+        ]
+        zircore.create_index()
+        cursor = zircore.db_connection.cursor()
+        cursor.execute("SELECT name FROM sqlite_master WHERE type='index'")
+        names = {row[0] for row in cursor.fetchall()}
+        assert "idx_Image" not in names
+        assert "idx_eventid" in names
+        zircore.close()
+
     def test_create_index_remove_index_drops_indexes(self, field_mappings_file, test_logger):
         """create_index with remove_index drops the given index names."""
         proc_config = ProcessingConfig(
@@ -431,18 +495,18 @@ class TestZircoliteCoreDatabase:
         
         zircore.close()
 
-    def test_create_connection_returns_none_on_sqlite_error(
+    def test_create_connection_raises_runtimeerror_on_sqlite_error(
         self, field_mappings_file, tmp_path, test_logger
     ):
-        """When sqlite3.connect raises Error, create_connection returns None."""
+        """When sqlite3.connect raises Error, create_connection raises RuntimeError."""
         with patch('zircolite.core.sqlite3.connect', side_effect=sqlite3.Error("mock")):
             proc_config = ProcessingConfig(db_location=str(tmp_path / "fail.db"))
-            zircore = ZircoliteCore(
-                config=field_mappings_file,
-                processing_config=proc_config,
-                logger=test_logger,
-            )
-            assert zircore.db_connection is None
+            with pytest.raises(RuntimeError, match="Unable to open SQLite database"):
+                ZircoliteCore(
+                    config=field_mappings_file,
+                    processing_config=proc_config,
+                    logger=test_logger,
+                )
 
     def test_create_connection_reraises_base_exception(
         self, field_mappings_file, tmp_path, test_logger

@@ -16,20 +16,25 @@ import os
 import queue
 import time
 from collections import deque
-from concurrent.futures import ThreadPoolExecutor, wait, FIRST_COMPLETED
+from concurrent.futures import FIRST_COMPLETED, ThreadPoolExecutor, wait
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Callable, Dict, List, Optional, Tuple, Any
+from typing import Any, Callable, Dict, List, Optional, Tuple
 
 import psutil
-
 from rich.console import Group
 from rich.live import Live
 from rich.progress import (
-    Progress, SpinnerColumn, TextColumn, BarColumn,
-    MofNCompleteColumn, TimeElapsedColumn
+    BarColumn,
+    MofNCompleteColumn,
+    Progress,
+    SpinnerColumn,
+    TextColumn,
+    TimeElapsedColumn,
 )
+
 from .console import console
+from .shutdown import is_shutdown_requested
 
 # Refresh interval for draining rule-progress queue (matches Live refresh_per_second=10)
 _RULE_PROGRESS_POLL_SECONDS = 0.1
@@ -48,6 +53,7 @@ def _truncate_filename(name: str, max_len: int = _FILE_PROGRESS_NAME_MAX_LEN) ->
 # ============================================================================
 # CONSOLIDATED WORKER CALCULATION
 # ============================================================================
+
 
 def calculate_optimal_workers(
     file_sizes: List[int],
@@ -95,7 +101,11 @@ def calculate_optimal_workers(
     memory_per_file_mb = avg_file_size_mb * memory_multiplier
     usable_memory_mb = available_memory_mb * 0.85
 
-    memory_based = max(1, int(usable_memory_mb / memory_per_file_mb)) if memory_per_file_mb > 0 else cpu_count
+    memory_based = (
+        max(1, int(usable_memory_mb / memory_per_file_mb))
+        if memory_per_file_mb > 0
+        else cpu_count
+    )
     cpu_based = cpu_count * 2  # I/O-bound workloads benefit from >1x CPU count
     file_based = min(file_count, cpu_count * 3)
 
@@ -117,9 +127,11 @@ def calculate_optimal_workers(
 # CONFIGURATION DATACLASSES
 # ============================================================================
 
+
 @dataclass
 class ParallelConfig:
     """Configuration for parallel processing."""
+
     max_workers: Optional[int] = None
     min_workers: int = 1
     memory_limit_percent: float = 85.0
@@ -133,6 +145,7 @@ class ParallelConfig:
 @dataclass
 class ParallelStats:
     """Statistics from parallel processing."""
+
     total_files: int = 0
     processed_files: int = 0
     failed_files: int = 0
@@ -151,6 +164,7 @@ class ParallelStats:
 # PROCESSOR
 # ============================================================================
 
+
 class MemoryAwareParallelProcessor:
     """
     Parallel processor that monitors and adapts to available memory.
@@ -163,20 +177,13 @@ class MemoryAwareParallelProcessor:
     - Adaptive memory estimation: calibrates after first file completion
     - Per-result and per-event callbacks for incremental progress/output
 
-    **Why threads, not processes:** Zircolite's heavy lifting (EVTX parsing
-    via Rust, JSON parsing via orjson/C, SQLite queries via C) all release
-    the GIL, so ``ThreadPoolExecutor`` already achieves real parallelism for
-    these I/O-bound workloads.  ``ProcessPoolExecutor`` would add process
-    creation overhead, pickle serialization costs, and higher memory usage
-    (full Python interpreter per worker) for marginal CPU-parallelism on the
-    remaining pure-Python flattening code -- a net loss in practice.
     """
 
     def __init__(
         self,
         config: Optional[ParallelConfig] = None,
         *,
-        logger: Optional[logging.Logger] = None
+        logger: Optional[logging.Logger] = None,
     ):
         self.config = config or ParallelConfig()
         self.logger = logger or logging.getLogger(__name__)
@@ -292,7 +299,9 @@ class MemoryAwareParallelProcessor:
     # Worker calculation
     # ------------------------------------------------------------------
 
-    def calculate_optimal_workers(self, file_list: List[Path], quiet: bool = False) -> int:
+    def calculate_optimal_workers(
+        self, file_list: List[Path], quiet: bool = False
+    ) -> int:
         """Calculate optimal workers, delegating to the module-level function."""
         file_sizes = []
         for f in file_list:
@@ -316,11 +325,13 @@ class MemoryAwareParallelProcessor:
     @staticmethod
     def sort_files_by_size(file_list: List[Path]) -> List[Path]:
         """Sort files largest-first (Longest Processing Time scheduling)."""
+
         def _safe_size(f):
             try:
                 return os.path.getsize(f)
             except OSError:
                 return 0
+
         return sorted(file_list, key=_safe_size, reverse=True)
 
     # ------------------------------------------------------------------
@@ -432,6 +443,8 @@ class MemoryAwareParallelProcessor:
                     active_futures[executor.submit(process_func, f)] = f
 
                 while active_futures:
+                    if is_shutdown_requested():
+                        file_queue.clear()
                     if rule_progress_queue is not None:
                         while True:
                             try:
@@ -442,10 +455,12 @@ class MemoryAwareParallelProcessor:
                                     continue
                                 total_rules = total_rules or 1
                                 if w_id not in worker_file_task_ids:
-                                    worker_file_task_ids[w_id] = progress_files.add_task(
-                                        _truncate_filename(str(file_name)),
-                                        total=total_rules,
-                                        completed=0,
+                                    worker_file_task_ids[w_id] = (
+                                        progress_files.add_task(
+                                            _truncate_filename(str(file_name)),
+                                            total=total_rules,
+                                            completed=0,
+                                        )
                                     )
                                 progress_files.update(
                                     worker_file_task_ids[w_id],
@@ -453,9 +468,7 @@ class MemoryAwareParallelProcessor:
                                     total=total_rules,
                                 )
                                 if rules_done >= total_rules:
-                                    task_id_to_remove = worker_file_task_ids.get(
-                                        w_id
-                                    )
+                                    task_id_to_remove = worker_file_task_ids.get(w_id)
                                     if task_id_to_remove is not None:
                                         try:
                                             progress_files.remove_task(
@@ -484,7 +497,8 @@ class MemoryAwareParallelProcessor:
                                     on_result(result)
 
                             progress_main.update(
-                                task_id, advance=1,
+                                task_id,
+                                advance=1,
                                 events=self.stats.total_events,
                             )
 
@@ -506,7 +520,9 @@ class MemoryAwareParallelProcessor:
                                 file_path, self.get_current_memory_mb()
                             )
 
-                        total_done = self.stats.processed_files + self.stats.failed_files
+                        total_done = (
+                            self.stats.processed_files + self.stats.failed_files
+                        )
                         if total_done % self.config.memory_check_interval == 0:
                             current_mem = self.get_current_memory_mb()
                             self._memory_samples.append(current_mem)
@@ -514,7 +530,7 @@ class MemoryAwareParallelProcessor:
                                 self.stats.peak_memory_mb, current_mem
                             )
 
-                        if file_queue:
+                        if file_queue and not is_shutdown_requested():
                             if self.should_throttle():
                                 self.stats.throttle_events += 1
                                 self.stats.submissions_paused += 1
@@ -522,7 +538,7 @@ class MemoryAwareParallelProcessor:
                                 f = file_queue.popleft()
                                 active_futures[executor.submit(process_func, f)] = f
 
-                    if not active_futures and file_queue:
+                    if not active_futures and file_queue and not is_shutdown_requested():
                         f = file_queue.popleft()
                         active_futures[executor.submit(process_func, f)] = f
 
@@ -541,7 +557,9 @@ class MemoryAwareParallelProcessor:
         # Final statistics
         self.stats.processing_time_seconds = time.time() - start_time
         if self._memory_samples:
-            self.stats.avg_memory_mb = sum(self._memory_samples) / len(self._memory_samples)
+            self.stats.avg_memory_mb = sum(self._memory_samples) / len(
+                self._memory_samples
+            )
 
         self._log_summary(failed_files)
 
@@ -555,7 +573,9 @@ class MemoryAwareParallelProcessor:
         summary_parts = [files_str, events_str, time_str]
 
         if self.stats.processing_time_seconds > 1:
-            events_per_sec = self.stats.total_events / self.stats.processing_time_seconds
+            events_per_sec = (
+                self.stats.total_events / self.stats.processing_time_seconds
+            )
             throughput_str = f"[green]{events_per_sec:,.0f}[/] events/s"
             summary_parts.append(throughput_str)
 
@@ -572,13 +592,14 @@ class MemoryAwareParallelProcessor:
 # CONVENIENCE FUNCTIONS
 # ============================================================================
 
+
 def process_files_with_memory_awareness(
     file_list: List[Path],
     process_func: Callable[[Path], Tuple[int, Any]],
     config: Optional[ParallelConfig] = None,
     logger: Optional[logging.Logger] = None,
     desc: str = "Processing files",
-    disable_progress: bool = False
+    disable_progress: bool = False,
 ) -> Tuple[List[Any], ParallelStats]:
     """
     Convenience function for parallel processing with memory awareness.
@@ -601,8 +622,7 @@ def process_files_with_memory_awareness(
 
 
 def estimate_parallel_viability(
-    file_list: List[Path],
-    logger: Optional[logging.Logger] = None
+    file_list: List[Path], logger: Optional[logging.Logger] = None
 ) -> Dict[str, Any]:
     """
     Estimate whether parallel processing would be beneficial.
@@ -616,7 +636,7 @@ def estimate_parallel_viability(
         return {
             "recommended": False,
             "reason": "Single file - parallel processing not beneficial",
-            "suggested_workers": 1
+            "suggested_workers": 1,
         }
 
     processor = MemoryAwareParallelProcessor(logger=logger)
@@ -625,9 +645,7 @@ def estimate_parallel_viability(
     optimal_workers = processor.calculate_optimal_workers(file_list)
 
     total_size_mb = sum(
-        os.path.getsize(f) / (1024 * 1024)
-        for f in file_list
-        if os.path.exists(f)
+        os.path.getsize(f) / (1024 * 1024) for f in file_list if os.path.exists(f)
     )
 
     if optimal_workers <= 1:
@@ -636,7 +654,7 @@ def estimate_parallel_viability(
             "reason": f"Insufficient memory for parallel processing ({available_mem:.0f}MB available, ~{mem_per_file:.0f}MB needed per file)",
             "suggested_workers": 1,
             "available_memory_mb": available_mem,
-            "estimated_memory_per_file_mb": mem_per_file
+            "estimated_memory_per_file_mb": mem_per_file,
         }
 
     estimated_speedup = min(optimal_workers * 0.7, file_count)
@@ -649,5 +667,5 @@ def estimate_parallel_viability(
         "available_memory_mb": available_mem,
         "estimated_memory_per_file_mb": mem_per_file,
         "total_files": file_count,
-        "total_size_mb": total_size_mb
+        "total_size_mb": total_size_mb,
     }

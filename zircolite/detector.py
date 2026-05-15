@@ -473,7 +473,7 @@ class LogTypeDetector:
                         base_ext = Path(names[0]).suffix.lower()
                     else:
                         base_ext = Path(file_path.stem).suffix.lower()
-            except PasswordRequired:
+            except PasswordRequired:  # type: ignore[misc]
                 raise ValueError(ARCHIVE_PASSWORD_ERROR_MESSAGE) from None
             except Exception:
                 base_ext = Path(file_path.stem).suffix.lower()
@@ -528,11 +528,11 @@ class LogTypeDetector:
                     names = szf.getnames()
                     if names:
                         factory = _MemFactory()
-                        szf.extract(path=None, targets=[names[0]], factory=factory)
+                        szf.extract(path=None, targets=[names[0]], factory=factory)  # type: ignore[arg-type]
                         if factory._buf is not None:
                             factory._buf.seek(0)
                             sample_bytes = factory._buf.read(self.SAMPLE_BYTES)
-            except PasswordRequired:
+            except PasswordRequired:  # type: ignore[misc]
                 raise ValueError(ARCHIVE_PASSWORD_ERROR_MESSAGE) from None
             except Exception:
                 pass  # e.g. corrupt or wrong password (LZMAError) — fall back to empty sample

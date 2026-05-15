@@ -9,14 +9,24 @@ This module contains:
 
 import logging
 import os
-import re
 import shutil
 from typing import Any, Dict, List, Optional
 
 from jinja2 import Environment
 
+from .attack import extract_attack_tactics, extract_attack_techniques
 from .config import TemplateConfig, GuiConfig
 from .utils import random_suffix
+
+
+_LEVEL_ORDER = {'unknown': -1, 'informational': 0, 'low': 1, 'medium': 2, 'high': 3, 'critical': 4}
+_LEVEL_COLOR = {
+    'critical': '#ff0000',
+    'high': '#ff6600',
+    'medium': '#ffcc00',
+    'low': '#66ff66',
+    'informational': '#aaffaa',
+}
 
 
 def _extract_attack_techniques(tags: list) -> list:
@@ -25,55 +35,88 @@ def _extract_attack_techniques(tags: list) -> list:
     Converts tags like ``'attack.t1059.001'`` to ``'T1059.001'``.
     Duplicate IDs are removed while preserving order.
     """
-    _TECH_RE = re.compile(r'^attack\.(t\d{4}(?:\.\d{3})?)', re.IGNORECASE)
-    seen: dict = {}
-    for tag in (tags or []):
-        m = _TECH_RE.match(tag)
-        if m:
-            tid = m.group(1).upper()
-            seen[tid] = None  # dict preserves insertion order (Python 3.7+)
-    return list(seen)
+    return extract_attack_techniques(tags)
+
+
+def _extract_attack_tactics(tags: list) -> list:
+    """Extract ATT&CK tactic IDs from Sigma tags."""
+    return extract_attack_tactics(tags)
+
+
+def _count_label(count: int, singular: str) -> str:
+    return singular if count == 1 else f"{singular}s"
+
+
+def _format_rule_summary(rule: dict) -> str:
+    title = rule.get('title') or 'Unknown Rule'
+    rule_id = rule.get('id')
+    return f"{title} ({rule_id})" if rule_id else title
+
+
+def _rule_sort_key(rule: dict) -> tuple:
+    return (-_LEVEL_ORDER.get(rule.get('level', 'unknown'), -1), _format_rule_summary(rule))
 
 
 def _collect_navigator_techniques(data: list) -> list:
     """Build a deduplicated ATT&CK Navigator technique list from detection results.
 
-    For each unique technique ID found across all detections, the entry carries
-    the maximum event count and the highest severity level seen.
+    For each unique technique/tactic pair found across all detections, the
+    entry carries the total event count and the highest severity level seen.
     """
-    _LEVEL_ORDER = {'informational': 0, 'low': 1, 'medium': 2, 'high': 3, 'critical': 4}
-    _LEVEL_COLOR = {
-        'critical': '#ff0000',
-        'high': '#ff6600',
-        'medium': '#ffcc00',
-        'low': '#66ff66',
-        'informational': '#aaffaa',
-    }
-
-    merged: dict = {}  # tid -> {score, level, comment}
+    merged: dict = {}
     for elem in data:
-        for tid in _extract_attack_techniques(elem.get('tags', [])):
-            lvl = elem.get('rule_level', 'informational').lower()
-            cnt = elem.get('count', 0)
-            title = elem.get('title', '')
-            if tid not in merged:
-                merged[tid] = {'score': cnt, 'level': lvl, 'comment': title}
-            else:
-                existing = merged[tid]
-                # Accumulate score; keep highest severity level
-                existing['score'] += cnt
-                if _LEVEL_ORDER.get(lvl, 0) > _LEVEL_ORDER.get(existing['level'], 0):
-                    existing['level'] = lvl
-                    existing['comment'] = title
+        tags = elem.get('tags', [])
+        tactics = _extract_attack_tactics(tags) or [None]
+        techniques = _extract_attack_techniques(tags)
+        level = str(elem.get('rule_level') or 'unknown').lower()
+        count = int(elem.get('count') or 0)
+        rule = {
+            'title': elem.get('title', ''),
+            'id': elem.get('id', ''),
+            'level': level,
+        }
+
+        for tid in techniques:
+            for tactic in tactics:
+                key = (tid, tactic)
+                if key not in merged:
+                    merged[key] = {
+                        'techniqueID': tid,
+                        'tactic': tactic,
+                        'score': 0,
+                        'level': level,
+                        'rules': {},
+                    }
+
+                entry = merged[key]
+                entry['score'] += count
+                if _LEVEL_ORDER.get(level, -1) > _LEVEL_ORDER.get(entry['level'], -1):
+                    entry['level'] = level
+                entry['rules'][(_format_rule_summary(rule), level)] = rule
 
     entries = []
-    for tid, info in merged.items():
-        entries.append({
-            'techniqueID': tid,
-            'score': info['score'],
-            'color': _LEVEL_COLOR.get(info['level'], '#aaaaaa'),
-            'comment': f"{info['comment']} ({info['level']})",
-        })
+    for info in merged.values():
+        rules = sorted(info['rules'].values(), key=_rule_sort_key)
+        rule_count = len(rules)
+        score = info['score']
+        level = info['level']
+        entry = {
+            'techniqueID': info['techniqueID'],
+            'tactic': info['tactic'],
+            'score': score,
+            'color': _LEVEL_COLOR.get(level, '#aaaaaa'),
+            'comment': (
+                f"{score} {_count_label(score, 'hit')} across "
+                f"{rule_count} {_count_label(rule_count, 'rule')}; max severity: {level}"
+            ),
+            'metadata': [
+                {'name': 'Event Count', 'value': str(score)},
+                {'name': 'Max Severity', 'value': level},
+                {'name': 'Rule Count', 'value': str(rule_count)},
+                {'name': 'Rules', 'value': '; '.join(_format_rule_summary(rule) for rule in rules[:5])},
+            ],
+        }
+        entries.append(entry)
     return entries
 
 
@@ -81,6 +124,7 @@ def _make_jinja2_env() -> Environment:
     """Create a Jinja2 Environment with Zircolite-specific filters."""
     env = Environment()
     env.filters['extract_attack_techniques'] = _extract_attack_techniques
+    env.filters['extract_attack_tactics'] = _extract_attack_tactics
     env.globals['collect_navigator_techniques'] = _collect_navigator_techniques
     return env
 

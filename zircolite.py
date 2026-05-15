@@ -24,15 +24,15 @@ import string
 import sys
 import time
 from pathlib import Path
-from typing import Any, List, Optional
+from typing import Any, List, Optional, Tuple
 
 # Force UTF-8 on Windows so argparse help and banner (Unicode/emojis) don't raise
 # UnicodeEncodeError when the console uses cp1252 (see PYI-1448 / PYI-4560).
 if sys.platform == "win32":
     try:
         if hasattr(sys.stdout, "reconfigure"):
-            sys.stdout.reconfigure(encoding="utf-8", errors="replace")
-            sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+            sys.stdout.reconfigure(encoding="utf-8", errors="replace")  # type: ignore[attr-defined]
+            sys.stderr.reconfigure(encoding="utf-8", errors="replace")  # type: ignore[attr-defined]
         elif hasattr(sys.stdout, "buffer"):
             import io
             sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8", errors="replace")
@@ -50,6 +50,7 @@ try:
     from rich_argparse import RichHelpFormatter
     _HAS_RICH_ARGPARSE = True
 except ImportError:
+    RichHelpFormatter = None  # type: ignore[assignment,misc]
     _HAS_RICH_ARGPARSE = False
 
 # Import from package
@@ -98,6 +99,12 @@ from zircolite.processing import (
     process_perfile_streaming,
     process_db_input,
     process_parallel_streaming,
+)
+
+from zircolite.shutdown import (
+    install_signal_handler,
+    is_shutdown_requested,
+    request_shutdown,
 )
 
 
@@ -191,6 +198,7 @@ def parse_arguments() -> argparse.Namespace:
     config_formats_args.add_argument("--strict", help="Strict EVTX parsing: stop on corrupted or malformed chunks instead of skipping them (default: lenient, recovers as many events as possible)", action='store_true')
     config_formats_args.add_argument("--add-index", help="Create an index on the given column(s). Can be repeated or list multiple columns (e.g. --add-index Channel EventID).", action='append', nargs='+', metavar="COL", default=[])
     config_formats_args.add_argument("--remove-index", help="Drop the given index name(s) after creation. Can be repeated or list multiple (e.g. --remove-index idx_channel idx_eventid).", action='append', nargs='+', metavar="IDX", default=[])
+    config_formats_args.add_argument("--auto-index", help="Inspect the loaded ruleset and auto-create indices on the top-N most-referenced columns (default N=5 when used without an explicit number). Combine with --add-index for additional manually chosen columns.", type=int, nargs='?', const=5, default=0, metavar="N")
 
     # Transform options
     transform_args = parser.add_argument_group('🔄 TRANSFORMS')
@@ -255,6 +263,7 @@ def discover_files(
     args.fileext = get_file_extension(args)
     
     log_path = Path(args.evtx)
+    log_list: List[Path] = []
     if log_path.is_dir():
         pattern = args.file_pattern if args.file_pattern else f"*.{args.fileext}"
         fn_glob = log_path.rglob if not args.no_recursion else log_path.glob
@@ -263,12 +272,12 @@ def discover_files(
         log_list = [log_path]
     else:
         quit_on_error("[red]    [-] Unable to find events from submitted path[/]", logger)
-    
+
     file_list = avoid_files(select_files(log_list, args.select), args.avoid)
     if not file_list:
         quit_on_error("[red]    [-] No file found. Please verify filters, directory or the extension with '--fileext' or '--file-pattern'[/]", logger)
-    
-    return file_list
+
+    return [Path(p) for p in file_list]
 
 
 def get_input_type(args: argparse.Namespace) -> str:
@@ -606,7 +615,7 @@ def handle_templating(
     args: argparse.Namespace,
 ) -> None:
     """Handle template generation and package creation."""
-    if ctx.ready_for_templating and results:
+    if ctx.ready_for_templating:
         tmpl_config = TemplateConfig(
             template=args.template,
             template_output=args.templateOutput,
@@ -838,12 +847,38 @@ def print_stats(
 ################################################################
 # PROCESSING DISPATCH
 ################################################################
+def _warn_ignored_db_flags(
+    args: argparse.Namespace, logger: logging.Logger
+) -> None:
+    """Warn when CLI flags incompatible with DB input mode were supplied."""
+    ignored: List[str] = []
+    if args.unified_db:
+        ignored.append("--unified-db")
+    if getattr(args, 'no_auto_mode', False):
+        ignored.append("--no-auto-mode")
+    if getattr(args, 'no_parallel', False):
+        ignored.append("--no-parallel")
+    if getattr(args, 'add_index', None):
+        ignored.append("--add-index")
+    if getattr(args, 'remove_index', None):
+        ignored.append("--remove-index")
+    if getattr(args, 'auto_index', 0):
+        ignored.append("--auto-index")
+    if getattr(args, 'hashes', False):
+        ignored.append("--hashes")
+    if ignored:
+        logger.warning(
+            f"[yellow]DB input mode: the following flags have no effect and will be "
+            f"ignored: {', '.join(ignored)}[/]"
+        )
+
+
 def _run_processing(
     ctx: ProcessingContext,
     args: argparse.Namespace,
     logger: logging.Logger,
     memory_tracker: MemoryTracker,
-) -> None:
+) -> Tuple[Any, Any, Any, Optional[List[Path]], float]:
     """Run the main processing pipeline and return all state needed by main().
 
     Returns:
@@ -865,26 +900,9 @@ def _run_processing(
 
     phase_setup_end = time.time()
 
-    # ----- DB input mode -----
+    # ----- DB input mode (explicit -D) -----
     if args.db_input:
-        _ignored = []
-        if args.unified_db:
-            _ignored.append("--unified-db")
-        if getattr(args, 'no_auto_mode', False):
-            _ignored.append("--no-auto-mode")
-        if getattr(args, 'no_parallel', False):
-            _ignored.append("--no-parallel")
-        if getattr(args, 'add_index', None):
-            _ignored.append("--add-index")
-        if getattr(args, 'remove_index', None):
-            _ignored.append("--remove-index")
-        if getattr(args, 'hashes', False):
-            _ignored.append("--hashes")
-        if _ignored:
-            logger.warning(
-                f"[yellow]DB input mode: the following flags have no effect and will be "
-                f"ignored: {', '.join(_ignored)}[/]"
-            )
+        _warn_ignored_db_flags(args, logger)
         zircolite_core, all_results = process_db_input(ctx, args)
         return zircolite_core, all_results, extractor, log_list, phase_setup_end
 
@@ -923,26 +941,9 @@ def _run_processing(
 
     ctx.time_field = args.timefield
 
-    # DB input mode (explicit -D or auto-detected SQLite file)
+    # DB input mode (auto-detected SQLite file)
     if args.db_input:
-        _ignored = []
-        if args.unified_db:
-            _ignored.append("--unified-db")
-        if getattr(args, 'no_auto_mode', False):
-            _ignored.append("--no-auto-mode")
-        if getattr(args, 'no_parallel', False):
-            _ignored.append("--no-parallel")
-        if getattr(args, 'add_index', None):
-            _ignored.append("--add-index")
-        if getattr(args, 'remove_index', None):
-            _ignored.append("--remove-index")
-        if getattr(args, 'hashes', False):
-            _ignored.append("--hashes")
-        if _ignored:
-            logger.warning(
-                f"[yellow]DB input mode: the following flags have no effect and will be "
-                f"ignored: {', '.join(_ignored)}[/]"
-            )
+        _warn_ignored_db_flags(args, logger)
         zircolite_core, all_results = process_db_input(ctx, args, file_list=file_list)
         return zircolite_core, all_results, extractor, log_list, phase_setup_end
 
@@ -952,13 +953,20 @@ def _run_processing(
 
     if not args.no_auto_mode and not args.unified_db:
         recommended_mode, reason, stats = analyze_files_and_recommend_mode(file_list, logger)
-        print_mode_recommendation(recommended_mode, reason, stats, logger, show_parallel=True)
+        forced_workers = getattr(args, 'parallel_workers', None)
+        print_mode_recommendation(
+            recommended_mode, reason, stats, logger,
+            show_parallel=True, forced_workers=forced_workers,
+        )
         if recommended_mode == 'unified':
             args.unified_db = True
         if not args.unified_db and not getattr(args, 'no_parallel', False) and not getattr(args, 'profile_rules', False):
             if stats.get('parallel_recommended', False):
                 use_parallel = True
                 parallel_workers = stats.get('parallel_workers', 1)
+            elif forced_workers and forced_workers > 1 and len(file_list) > 1:
+                use_parallel = True
+                parallel_workers = forced_workers
     elif args.unified_db:
         logger.info("[+] [cyan]Database mode:[/] [green]UNIFIED[/] (forced)")
         logger.info("")
@@ -1012,8 +1020,10 @@ def _run_processing(
 # MAIN
 ################################################################
 def main() -> None:
-    version = "3.6.3"
+    version = "3.7.0"
     args = parse_arguments()
+
+    install_signal_handler()
 
     # Handle generate-config before logging setup
     if args.generate_config:
@@ -1062,6 +1072,7 @@ def main() -> None:
         out_name = f"timesketch-{rand_4}.json"
         if args.template is None:
             args.template = []
+        if args.templateOutput is None:
             args.templateOutput = []
         args.template.append(["templates/exportForTimesketch.tmpl"])
         args.templateOutput.append([out_name])
@@ -1072,6 +1083,7 @@ def main() -> None:
         nav_out = args.navigator_output or f"navigator-{rand_4}.json"
         if args.template is None:
             args.template = []
+        if args.templateOutput is None:
             args.templateOutput = []
         args.template.append(["templates/exportForAttackNavigator.tmpl"])
         args.templateOutput.append([nav_out])
@@ -1251,35 +1263,52 @@ def main() -> None:
         archive_password=getattr(args, 'archive_password', None),
         add_index=_flatten_add_remove_index(getattr(args, 'add_index', None)),
         remove_index=_flatten_add_remove_index(getattr(args, 'remove_index', None)),
+        auto_index_top_n=getattr(args, 'auto_index', 0),
         strict_evtx=getattr(args, 'strict', False),
     )
 
-    # Run processing and collect results
-    zircolite_core, all_results, extractor, log_list, phase_setup_end = (
-        _run_processing(ctx, args, logger, memory_tracker)
-    )
+    zircolite_core = None
+    extractor = None
+    log_list = []
+    all_results = []
+    phase_setup_end = None
 
-    # Print rule profiling report if requested
-    if getattr(args, 'profile_rules', False) and zircolite_core is not None:
-        from zircolite.console import print_profiling_report
-        print_section("Rule Performance")
-        print_profiling_report(zircolite_core.get_profiling_report())
+    try:
+        zircolite_core, all_results, extractor, log_list, phase_setup_end = (
+            _run_processing(ctx, args, logger, memory_tracker)
+        )
 
-    # Handle templating and package generation
-    handle_templating(ctx, all_results, args)
+        if not is_shutdown_requested():
+            # Print rule profiling report if requested
+            if getattr(args, 'profile_rules', False) and zircolite_core is not None:
+                from zircolite.console import print_profiling_report
+                print_section("Rule Performance")
+                print_profiling_report(zircolite_core.get_profiling_report())
 
-    # Cleanup
-    cleanup(args, logger, log_list)
-    if extractor is not None:
+            # Handle templating and package generation
+            handle_templating(ctx, all_results, args)
+    except KeyboardInterrupt:
+        request_shutdown()
+    finally:
         try:
-            extractor.cleanup()
+            cleanup(args, logger, log_list)
         except Exception as e:
-            logger.debug(f"Extractor cleanup: {e}")
+            logger.debug(f"Cleanup: {e}")
+        if extractor is not None:
+            try:
+                extractor.cleanup()
+            except Exception as e:
+                logger.debug(f"Extractor cleanup: {e}")
+        if zircolite_core is not None:
+            try:
+                zircolite_core.close()
+            except Exception as e:
+                logger.debug(f"Core close: {e}")
 
-    # Close database connection
-    if zircolite_core is not None:
-        zircolite_core.close()
-    
+    if is_shutdown_requested():
+        logger.info("[yellow][!] Shutdown complete.[/]")
+        sys.exit(130)
+
     # Build phase timing breakdown
     now = time.time()
     phase_times = None
@@ -1292,12 +1321,12 @@ def main() -> None:
                 phase_times["Setup"] = setup_time
             if processing_time > 0.5:
                 phase_times["Processing"] = processing_time
-    
+
     # Print final stats with summary dashboard (always shown, even in quiet mode)
     files_processed = len(log_list) if log_list else 1
     print_stats(
-        memory_tracker, 
-        start_time, 
+        memory_tracker,
+        start_time,
         logger,
         all_results=all_results,
         files_processed=files_processed,

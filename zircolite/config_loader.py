@@ -73,6 +73,7 @@ class ProcessingConfig:
     transform_categories: Optional[list] = None
     add_index: Optional[List[str]] = None
     remove_index: Optional[List[str]] = None
+    auto_index: int = 0
     strict_evtx: bool = False
 
 
@@ -227,6 +228,7 @@ class ConfigLoader:
                 transform_categories=proc.get('transform_categories'),
                 add_index=proc.get('add_index'),
                 remove_index=proc.get('remove_index'),
+                auto_index=int(proc.get('auto_index', 0) or 0),
                 strict_evtx=proc.get('strict_evtx', False),
             )
         
@@ -441,6 +443,8 @@ class ConfigLoader:
             config.processing.add_index = [x for group in args.add_index for x in group]
         if getattr(args, 'remove_index', None):
             config.processing.remove_index = [x for group in args.remove_index for x in group]
+        if getattr(args, 'auto_index', 0):
+            config.processing.auto_index = int(args.auto_index)
         if hasattr(args, 'strict') and args.strict:
             config.processing.strict_evtx = True
 
@@ -584,6 +588,14 @@ processing:
   # Strict EVTX parsing: stop on corrupted or malformed chunks (default: false)
   # When false (lenient), recovers as many events as possible from damaged files
   strict_evtx: false
+
+  # Database indexes — Zircolite always indexes `eventid` and indexes `Channel`
+  # automatically when the column is present.
+  # add_index: ["SystemTime", "Computer"]   # extra columns to index
+  # remove_index: ["idx_channel"]           # SQLite index names to drop after creation
+  # auto_index: 0                            # >0 = auto-index the top-N columns
+                                              # referenced by the loaded ruleset
+                                              # (5 is a reasonable default)
 
 # Time-based event filtering
 time_filter:

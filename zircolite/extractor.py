@@ -22,7 +22,7 @@ from typing import Any, Callable, Dict, Optional, Union
 import orjson as json
 # Rich console for styled output
 from evtx import PyEvtxParser
-from lxml import etree
+from lxml import etree  # type: ignore[attr-defined]
 
 from .config import ExtractorConfig
 from .utils import random_suffix

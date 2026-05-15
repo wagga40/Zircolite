@@ -44,6 +44,10 @@ class ProcessingConfig:
     add_index: List[str] = field(default_factory=list)
     remove_index: List[str] = field(default_factory=list)
 
+    # When > 0, scan the loaded ruleset and create indices on the top-N
+    # most-referenced columns from WHERE clauses (in addition to add_index).
+    auto_index_top_n: int = 0
+
     # Archive decryption
     archive_password: Optional[str] = None
 

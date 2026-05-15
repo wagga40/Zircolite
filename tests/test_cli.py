@@ -1210,6 +1210,66 @@ Alert: {{ elem.title }} ({{ elem.rule_level }})
             content = f.read()
         assert "Alert:" in content
 
+    def test_navigator_output_creates_empty_layer_without_detections(self, tmp_path):
+        """--navigator-output should emit a valid empty layer when no rules match."""
+        events_file = tmp_path / "events.json"
+        events_file.write_text('{"Event": {"System": {"EventID": 1}}}')
+
+        ruleset_file = tmp_path / "ruleset.json"
+        ruleset_file.write_text("[]")
+
+        nav_output = tmp_path / "navigator.json"
+        original_cwd = os.getcwd()
+        try:
+            os.chdir(WORKSPACE_ROOT)
+            with patch('sys.argv', [
+                'zircolite.py',
+                '-e', str(events_file),
+                '-r', str(ruleset_file),
+                '-j',
+                '--navigator-output', str(nav_output),
+            ] + get_log_arg(tmp_path)):
+                zircolite_script.main()
+        finally:
+            os.chdir(original_cwd)
+
+        layer = json.loads(nav_output.read_text())
+        assert layer["techniques"] == []
+        assert layer["name"] == "Zircolite Detected ATT&CK Techniques"
+        assert layer["domain"] == "enterprise-attack"
+        assert layer["versions"]["layer"] == "4.5"
+        assert isinstance(layer["legendItems"], list) and layer["legendItems"]
+        assert isinstance(layer["filters"]["platforms"], list)
+
+    def test_template_with_navigator_output_reports_count_mismatch(self, tmp_path):
+        """Shortcut initialization should not crash when templateOutput is absent."""
+        events_file = tmp_path / "events.json"
+        events_file.write_text('{"Event": {"System": {"EventID": 1}}}')
+
+        ruleset_file = tmp_path / "ruleset.json"
+        ruleset_file.write_text("[]")
+
+        template_file = tmp_path / "template.tmpl"
+        template_file.write_text("{{ data | length }}")
+
+        original_cwd = os.getcwd()
+        try:
+            os.chdir(WORKSPACE_ROOT)
+            with pytest.raises(SystemExit) as exc_info:
+                with patch('sys.argv', [
+                    'zircolite.py',
+                    '-e', str(events_file),
+                    '-r', str(ruleset_file),
+                    '-j',
+                    '--template', str(template_file),
+                    '--navigator-output', str(tmp_path / "navigator.json"),
+                ] + get_log_arg(tmp_path)):
+                    zircolite_script.main()
+        finally:
+            os.chdir(original_cwd)
+
+        assert exc_info.value.code == 1
+
 
 class TestCLIPackage:
     """Tests for --package and --package-dir options."""
