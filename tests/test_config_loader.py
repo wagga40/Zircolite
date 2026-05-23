@@ -1030,6 +1030,29 @@ class TestConfigLoaderParseConfigExtended:
         config = loader.parse_config(config_dict)
         assert config.processing.strict_evtx is False
 
+    def test_parse_config_template_append_default(self, test_logger):
+        """template_append defaults to False when not in YAML."""
+        config_dict = {"output": {}}
+        loader = ConfigLoader(logger=test_logger)
+        config = loader.parse_config(config_dict)
+        assert config.output.template_append is False
+
+    def test_parse_config_template_append_true(self, test_logger):
+        """template_append is parsed from output section."""
+        config_dict = {"output": {"template_append": True}}
+        loader = ConfigLoader(logger=test_logger)
+        config = loader.parse_config(config_dict)
+        assert config.output.template_append is True
+
+    def test_template_append_cli_override(self, test_logger):
+        """CLI --template-append flag sets output.template_append on merge."""
+        from argparse import Namespace
+        config = ZircoliteConfig()
+        args = Namespace(template_append=True)
+        loader = ConfigLoader(logger=test_logger)
+        merged = loader.merge_with_args(config, args)
+        assert merged.output.template_append is True
+
 
 class TestConfigLoaderIntegration:
     """Integration tests for ConfigLoader."""

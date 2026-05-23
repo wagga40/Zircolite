@@ -151,19 +151,26 @@ class TemplateEngine:
         self.template = cfg.template
         self.template_output = cfg.template_output
         self.time_field = cfg.time_field
-    
+        self.append = cfg.append
+
     def generate_from_template(
         self,
         template_file: str,
         output_filename: str,
         data: List[Dict[str, Any]],
+        append: Optional[bool] = None,
     ) -> None:
-        """Use Jinja2 to output data in a specific format."""
+        """Use Jinja2 to output data in a specific format.
+
+        If ``append`` is ``None``, the engine-wide ``self.append`` setting is
+        used. Pass ``True``/``False`` explicitly to override per-call.
+        """
         try:
             with open(template_file, 'r', encoding='utf-8') as tmpl:
                 template = _make_jinja2_env().from_string(tmpl.read())
 
-            with open(output_filename, 'w', encoding='utf-8') as tpl:
+            mode = 'a' if (self.append if append is None else append) else 'w'
+            with open(output_filename, mode, encoding='utf-8') as tpl:
                 tpl.write(template.render(data=data, timeField=self.time_field))
         except Exception as e:
             self.logger.error("[red]    [-] Template error, activate debug mode to check for errors[/]")
@@ -172,7 +179,10 @@ class TemplateEngine:
     def run(self, data: List[Dict[str, Any]]) -> None:
         """Run template generation for all configured templates."""
         for template_spec, output_spec in zip(self.template, self.template_output):
-            self.logger.info(f'[+] Applying template "{template_spec[0]}", outputting to : {output_spec[0]}')
+            mode_label = "appending" if self.append else "writing"
+            self.logger.info(
+                f'[+] Applying template "{template_spec[0]}", {mode_label} to : {output_spec[0]}'
+            )
             self.generate_from_template(template_spec[0], output_spec[0], data)
 
 
