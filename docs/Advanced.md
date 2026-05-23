@@ -874,6 +874,7 @@ Zircolite provides a templating system based on Jinja2. It allows you to change 
 
 - `--template <template_filename>`
 - `--templateOutput <output_filename>`
+- `--template-append`
 
 For Timesketch you can use the shortcut `--timesketch`: it uses `exportForTimesketch.tmpl` and writes to a file named `timesketch-<RAND>.json` (4-character random suffix) so you can run multiple exports without overwriting.
 
@@ -891,6 +892,29 @@ python3 zircolite.py --evtx sample.evtx --ruleset rules/rules_windows_merged.jso
 For ATT&CK Navigator use `--navigator-output` (writes to `navigator-<RAND>.json`) or `--navigator-output mylayer.json` for a custom filename.
 
 It is possible to use multiple templates if you provide a `--templateOutput` argument for each `--template` argument.
+
+### Append mode
+
+By default, template output files are overwritten on every run so that re-running Zircolite over the same logs is idempotent. If you instead want to accumulate template output across multiple runs (for example, building a cumulative NDJSON feed for Splunk or ELK ingestion), pass `--template-append`:
+
+```shell
+python3 zircolite.py --evtx logs/ --ruleset rules/rules_windows_merged.json \
+    --template templates/exportForSplunk.tmpl --templateOutput exportForSplunk.ndjson \
+    --template-append
+```
+
+The same setting can be expressed in YAML:
+
+```yaml
+output:
+  templates:
+    - template: templates/exportForSplunk.tmpl
+      output: exportForSplunk.ndjson
+  template_append: true
+```
+
+> [!WARNING]
+> Append mode is intended for **line-oriented** templates such as `exportForSplunk.tmpl`, `exportForELK.tmpl`, `exportForTimesketch.tmpl`, and `exportNDJSON.tmpl`. It is not appropriate for templates that produce a **single JSON document**, such as `exportForAttackNavigator.tmpl` or `exportForSARIF.tmpl` — appending to those will produce invalid output.
 
 ### Available templates
 

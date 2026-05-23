@@ -93,6 +93,7 @@ class TestTemplateConfig:
         assert cfg.template == []
         assert cfg.template_output == []
         assert cfg.time_field == ""
+        assert cfg.append is False
 
     def test_list_independence(self):
         a = TemplateConfig()

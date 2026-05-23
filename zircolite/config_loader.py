@@ -50,6 +50,7 @@ class OutputConfig:
     template: Optional[str] = None
     template_output: Optional[str] = None
     templates: Optional[List[Dict[str, str]]] = None  # List of {template, output} pairs
+    template_append: bool = False
     package: bool = False
     package_dir: str = ""
     keep_flat: bool = False
@@ -204,6 +205,7 @@ class ConfigLoader:
                 template=out.get('template'),
                 template_output=out.get('template_output'),
                 templates=templates,
+                template_append=out.get('template_append', False),
                 package=out.get('package', False),
                 package_dir=out.get('package_dir', ''),
                 keep_flat=out.get('keep_flat', False),
@@ -405,6 +407,8 @@ class ConfigLoader:
                 else:
                     output = f"output_{i}.txt"
                 config.output.templates.append({'template': tmpl[0], 'output': output})
+        if getattr(args, 'template_append', False):
+            config.output.template_append = True
         if hasattr(args, 'package') and args.package:
             config.output.package = True
         if hasattr(args, 'package_dir') and args.package_dir:
@@ -533,6 +537,13 @@ output:
   #     output: splunk_events.json
   #   - template: templates/exportForELK.tmpl
   #     output: elk_events.json
+
+  # Append to template output files instead of overwriting them on each run.
+  # Useful for accumulating results across multiple runs (e.g. cumulative
+  # NDJSON exports). Not all templates produce append-safe output: single-
+  # document JSON exports (such as the ATT&CK Navigator layer) become
+  # invalid when concatenated.
+  template_append: false
   
   # Create Mini-GUI package
   package: false
