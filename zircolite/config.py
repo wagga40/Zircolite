@@ -108,6 +108,10 @@ class TemplateConfig:
     template: List[List[str]] = field(default_factory=list)
     template_output: List[List[str]] = field(default_factory=list)
     time_field: str = ""
+    # When True, template output files are opened in append mode rather than
+    # being overwritten. Useful for accumulating results across multiple runs
+    # (e.g. cumulative NDJSON exports). See issue #132.
+    append: bool = False
 
 
 @dataclass

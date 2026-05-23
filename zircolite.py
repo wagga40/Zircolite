@@ -221,6 +221,7 @@ def parse_arguments() -> argparse.Namespace:
     templating_formats_args = parser.add_argument_group('🎨 TEMPLATING AND MINI GUI')
     templating_formats_args.add_argument("-t", "--template", help="Jinja2 template to use for output generation", type=str, action='append', nargs='+')
     templating_formats_args.add_argument("-T", "--templateOutput", "--template-output", help="Output file for Jinja2 template results", type=str, action='append', nargs='+')
+    templating_formats_args.add_argument("--template-append", help="Append to template output files instead of overwriting them. Useful for accumulating results across multiple runs (e.g. cumulative NDJSON exports). Note: not all templates produce append-safe output (single-document JSON layers will become invalid).", action='store_true', dest='template_append')
     templating_formats_args.add_argument("--timesketch", help="Shortcut: use Timesketch template and write to timesketch-<RAND>.json", action='store_true')
     templating_formats_args.add_argument("--navigator-output", help="Shortcut: generate ATT&CK Navigator layer JSON and write to navigator-<RAND>.json (or specify a custom filename)", type=str, metavar="OUTPUT_FILE", nargs='?', const="")
     templating_formats_args.add_argument("-G", "--package", help="Create a ZircoGui/Mini GUI package", action='store_true')
@@ -484,6 +485,8 @@ def _apply_yaml_output_config(
     if yaml_config.output.templates and not args.template:
         args.template = [[t['template']] for t in yaml_config.output.templates]
         args.templateOutput = [[t['output']] for t in yaml_config.output.templates]
+    if getattr(yaml_config.output, 'template_append', False) and not getattr(args, 'template_append', False):
+        args.template_append = True
     if yaml_config.output.package:
         args.package = True
     if yaml_config.output.package_dir:
@@ -619,7 +622,8 @@ def handle_templating(
         tmpl_config = TemplateConfig(
             template=args.template,
             template_output=args.templateOutput,
-            time_field=ctx.time_field
+            time_field=ctx.time_field,
+            append=getattr(args, 'template_append', False),
         )
         template_generator = TemplateEngine(tmpl_config, logger=ctx.logger)
         template_generator.run(results)
@@ -1020,7 +1024,7 @@ def _run_processing(
 # MAIN
 ################################################################
 def main() -> None:
-    version = "3.7.0"
+    version = "3.7.1"
     args = parse_arguments()
 
     install_signal_handler()

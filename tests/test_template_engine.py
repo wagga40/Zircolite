@@ -190,6 +190,87 @@ class TestTemplateEngineRun:
         engine.run(sample_detection_results)
 
 
+class TestTemplateEngineAppendMode:
+    """Tests for the append=True option (issue #132)."""
+
+    def test_default_overwrites(self, simple_template, tmp_path, test_logger, sample_detection_results):
+        """By default the engine still overwrites; append flag is False."""
+        output_file = str(tmp_path / "out.txt")
+        Path(output_file).write_text("preexisting\n")
+
+        engine = TemplateEngine(logger=test_logger)
+        assert engine.append is False
+        engine.generate_from_template(simple_template, output_file, sample_detection_results)
+
+        content = Path(output_file).read_text()
+        assert "preexisting" not in content
+
+    def test_append_via_config_accumulates(self, tmp_path, test_logger, sample_detection_results):
+        """Engine-wide append=True keeps previous content and appends."""
+        template_file = tmp_path / "tmpl.tmpl"
+        template_file.write_text("X")
+        output_file = str(tmp_path / "out.txt")
+
+        cfg = TemplateConfig(
+            template=[[str(template_file)]],
+            template_output=[[output_file]],
+            append=True,
+        )
+        engine = TemplateEngine(template_config=cfg, logger=test_logger)
+
+        engine.generate_from_template(str(template_file), output_file, sample_detection_results)
+        engine.generate_from_template(str(template_file), output_file, sample_detection_results)
+
+        assert Path(output_file).read_text() == "XX"
+
+    def test_append_preserves_existing_content(self, tmp_path, test_logger, sample_detection_results):
+        """append=True keeps any pre-existing file content untouched."""
+        template_file = tmp_path / "tmpl.tmpl"
+        template_file.write_text("rendered")
+        output_file = tmp_path / "out.txt"
+        output_file.write_text("old data\n")
+
+        cfg = TemplateConfig(append=True)
+        engine = TemplateEngine(template_config=cfg, logger=test_logger)
+        engine.generate_from_template(str(template_file), str(output_file), sample_detection_results)
+
+        assert output_file.read_text() == "old data\nrendered"
+
+    def test_append_per_call_override(self, tmp_path, test_logger, sample_detection_results):
+        """The append parameter on generate_from_template overrides the engine setting."""
+        template_file = tmp_path / "tmpl.tmpl"
+        template_file.write_text("Y")
+        output_file = tmp_path / "out.txt"
+
+        engine = TemplateEngine(logger=test_logger)
+        # First write
+        engine.generate_from_template(str(template_file), str(output_file), sample_detection_results)
+        # Force append for the second call
+        engine.generate_from_template(
+            str(template_file), str(output_file), sample_detection_results, append=True
+        )
+
+        assert output_file.read_text() == "YY"
+
+    def test_run_uses_append_setting(self, tmp_path, test_logger, sample_detection_results):
+        """run() honours the engine-wide append flag for every configured template."""
+        template_file = tmp_path / "tmpl.tmpl"
+        template_file.write_text("Z")
+        output_file = str(tmp_path / "out.txt")
+        Path(output_file).write_text("seed\n")
+
+        cfg = TemplateConfig(
+            template=[[str(template_file)]],
+            template_output=[[output_file]],
+            append=True,
+        )
+        engine = TemplateEngine(template_config=cfg, logger=test_logger)
+        engine.run(sample_detection_results)
+        engine.run(sample_detection_results)
+
+        assert Path(output_file).read_text() == "seed\nZZ"
+
+
 class TestTemplateEngineJinjaFeatures:
     """Tests for Jinja2 template features."""
     

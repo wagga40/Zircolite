@@ -1210,6 +1210,111 @@ Alert: {{ elem.title }} ({{ elem.rule_level }})
             content = f.read()
         assert "Alert:" in content
 
+    def test_template_append_accumulates_across_runs(self, tmp_path):
+        """--template-append should append to existing template output across runs."""
+        events_file = tmp_path / "events.json"
+        events_file.write_text('{"Event": {"System": {"EventID": 1}, "EventData": {"CommandLine": "powershell.exe"}}}')
+
+        ruleset_file = tmp_path / "ruleset.json"
+        ruleset_file.write_text(json.dumps([{
+            "title": "Test Rule",
+            "id": "test-001",
+            "level": "high",
+            "tags": [],
+            "rule": ["SELECT * FROM logs WHERE CommandLine LIKE '%powershell%'"]
+        }]))
+
+        config_file = tmp_path / "config.json"
+        config_file.write_text(json.dumps({
+            "exclusions": [],
+            "useless": [],
+            "mappings": {
+                "Event.System.EventID": "EventID",
+                "Event.EventData.CommandLine": "CommandLine"
+            },
+            "alias": {},
+            "split": {},
+            "transforms_enabled": False,
+            "transforms": {}
+        }))
+
+        template_file = tmp_path / "template.tmpl"
+        template_file.write_text("RUN|")
+
+        output_file = tmp_path / "detected_events.json"
+        template_output = tmp_path / "alerts.txt"
+
+        argv_base = [
+            'zircolite.py',
+            '-e', str(events_file),
+            '-r', str(ruleset_file),
+            '-c', str(config_file),
+            '-j',
+            '-o', str(output_file),
+            '--template', str(template_file),
+            '--templateOutput', str(template_output),
+            '--template-append',
+        ] + get_log_arg(tmp_path)
+
+        with patch('sys.argv', argv_base):
+            zircolite_script.main()
+        with patch('sys.argv', argv_base):
+            zircolite_script.main()
+
+        assert template_output.read_text() == "RUN|RUN|"
+
+    def test_template_append_disabled_overwrites(self, tmp_path):
+        """Without --template-append, repeated runs overwrite the template output."""
+        events_file = tmp_path / "events.json"
+        events_file.write_text('{"Event": {"System": {"EventID": 1}, "EventData": {"CommandLine": "powershell.exe"}}}')
+
+        ruleset_file = tmp_path / "ruleset.json"
+        ruleset_file.write_text(json.dumps([{
+            "title": "Test Rule",
+            "id": "test-001",
+            "level": "high",
+            "tags": [],
+            "rule": ["SELECT * FROM logs WHERE CommandLine LIKE '%powershell%'"]
+        }]))
+
+        config_file = tmp_path / "config.json"
+        config_file.write_text(json.dumps({
+            "exclusions": [],
+            "useless": [],
+            "mappings": {
+                "Event.System.EventID": "EventID",
+                "Event.EventData.CommandLine": "CommandLine"
+            },
+            "alias": {},
+            "split": {},
+            "transforms_enabled": False,
+            "transforms": {}
+        }))
+
+        template_file = tmp_path / "template.tmpl"
+        template_file.write_text("ONCE")
+
+        output_file = tmp_path / "detected_events.json"
+        template_output = tmp_path / "alerts.txt"
+
+        argv_base = [
+            'zircolite.py',
+            '-e', str(events_file),
+            '-r', str(ruleset_file),
+            '-c', str(config_file),
+            '-j',
+            '-o', str(output_file),
+            '--template', str(template_file),
+            '--templateOutput', str(template_output),
+        ] + get_log_arg(tmp_path)
+
+        with patch('sys.argv', argv_base):
+            zircolite_script.main()
+        with patch('sys.argv', argv_base):
+            zircolite_script.main()
+
+        assert template_output.read_text() == "ONCE"
+
     def test_navigator_output_creates_empty_layer_without_detections(self, tmp_path):
         """--navigator-output should emit a valid empty layer when no rules match."""
         events_file = tmp_path / "events.json"

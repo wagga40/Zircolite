@@ -557,6 +557,7 @@ def default_args_config():
         parallel_memory_limit=85.0,
         template=None,
         templateOutput=None,
+        template_append=False,
         timesketch=False,
         navigator_output=None,
         package=False,
