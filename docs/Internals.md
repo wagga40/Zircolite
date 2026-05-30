@@ -79,35 +79,6 @@ flowchart TB
 | **5. Splits** | Parse key=value strings | `"a=1 b=2"` → `{a:1, b:2}` |
 | **6. Transforms** | Custom Python code (sandboxed) | Extract filename from path |
 
-### Flattening Hot Path
-
-Flattening is the dominant cost of ingestion: every leaf of every event passes
-through `process_leaf` inside `_flatten_event`, so small per-field savings
-compound over millions of fields. A few caches keep that path lean while leaving
-the flattened output (and therefore detections) unchanged:
-
-- **`_special_fields`** — built once in `_load_config` from the configured
-  alias, split, and (when enabled) transform field names. Most leaves appear in
-  none of these, so a single set membership check lets them take an *ultra-fast
-  path* (assign the value, record the column type once) instead of the
-  alias/split/transform lookups. Only "special" leaves enter the fuller logic.
-- **`_seen_leaf_keys`** — once a leaf key has had its column recorded, later
-  events with the same key skip the `str.lower()` and `discovered_fields`
-  bookkeeping. Large-integer normalization (values outside signed 64-bit are
-  stored as text) still runs for *every* value, because the same field can carry
-  an over-range value in a later event.
-- **Event-filter path hints** — `_extract_field_value_hinted` remembers which
-  configured path produced the `Channel`/`EventID` on the previous event and
-  tries it first. A file's schema is stable, so this usually hits; on a miss it
-  falls back to the full ordered scan, keeping results identical.
-- **Batch insert** — `_insert_batch` uses a single `operator.itemgetter` for
-  homogeneous batches (every event shares the first event's columns) and keeps
-  the per-column `dict.get` path for heterogeneous batches so missing columns
-  still map to `NULL`.
-
-The `tools/flatten-benchmark.py` harness reports steady-state flattening
-throughput (events/second) on a fixed corpus for measuring changes to this path.
-
 ### Processing Modes
 
 ```mermaid
