@@ -1024,7 +1024,7 @@ def _run_processing(
 # MAIN
 ################################################################
 def main() -> None:
-    version = "3.7.5"
+    version = "3.7.6"
     args = parse_arguments()
 
     install_signal_handler()
