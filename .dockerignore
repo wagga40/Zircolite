@@ -1,0 +1,51 @@
+# VCS
+.git
+.gitignore
+.github
+
+# Python environments & caches
+.venv
+venv
+__pycache__
+*.py[cod]
+.mypy_cache
+.pytest_cache
+.ruff_cache
+.coverage
+coverage
+htmlcov
+*.lcov
+
+# Build / packaging / dev-only sources
+build
+dist
+gui_dev
+helpers
+tools
+
+# Dev tooling, docs, project meta (not needed at runtime)
+docs
+pics
+tests
+*.md
+Taskfile*.yml
+pdm.lock
+pyproject.toml
+.cursor
+.cursorrules
+CLAUDE.md
+.claude
+.vscode
+.zed
+
+# OS junk & local outputs
+.DS_Store
+*.log
+detected_events.json
+detected_events.csv
+flattened_events_*.json
+fields.json
+tmp-*
+zircolite.tar
+zircogui-output-*
+*.evtx
