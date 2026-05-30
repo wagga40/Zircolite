@@ -13,12 +13,13 @@ import base64
 import csv as csv_module
 import logging
 import math
+import operator
 import os
 import re
 import tempfile
 import time
 from pathlib import Path
-from typing import Any, Dict, FrozenSet, Generator, List, NamedTuple, Optional, Set, Tuple, TYPE_CHECKING, cast
+from typing import Any, Dict, FrozenSet, Generator, List, NamedTuple, Optional, Set, Tuple, TYPE_CHECKING
 
 import chardet
 import orjson as json
@@ -164,9 +165,16 @@ class StreamingEventProcessor:
         "transform_categories",
         "transforms_dir",
         "chosen_input",
+        # Field names that need alias/split/transform handling. Leaves whose
+        # mapped or raw name is absent here take the ultra-fast leaf path.
+        "_special_fields",
         # Event filter config (from fieldMappings config)
         "_channel_field_paths",
         "_eventid_field_paths",
+        # Last field path that yielded a Channel/EventID value; tried first on
+        # the next event since a file's schema is stable
+        "_channel_path_hint",
+        "_eventid_path_hint",
         # Timestamp config (from fieldMappings config)
         "_timestamp_detection_fields",
         "_timestamp_auto_detect",
@@ -175,6 +183,8 @@ class StreamingEventProcessor:
         "discovered_fields",
         "field_types",
         "field_stmt_cache",
+        # Leaf keys whose schema bookkeeping is already done (skip repeat work)
+        "_seen_leaf_keys",
         # Caches
         "compiled_code_cache",
         "_transform_func_cache",
@@ -257,6 +267,13 @@ class StreamingEventProcessor:
         self.discovered_fields: dict = {}  # field_name_lower -> original_field_name
         self.field_types: dict = {}  # field_name -> 'INTEGER' or 'TEXT'
         self.field_stmt_cache: dict = {}
+        # Leaf keys already passed through schema bookkeeping. Shares the
+        # lifetime of discovered_fields (never cleared mid-instance).
+        self._seen_leaf_keys: set = set()
+
+        # Event-filter path hints (populated lazily during streaming)
+        self._channel_path_hint: Optional[tuple] = None
+        self._eventid_path_hint: Optional[tuple] = None
 
         # Caches for transforms
         self.compiled_code_cache: dict = {}
@@ -455,6 +472,16 @@ class StreamingEventProcessor:
                         seen_codes.add(spec.code)
                         self._get_transform_func(spec.code)
 
+        # Fields that require alias, split, or transform handling. A leaf whose
+        # mapped key and raw name are both absent here cannot produce extra
+        # columns, so it skips the alias/split/transform lookups entirely.
+        # Transform fields only count when the engine is enabled, mirroring the
+        # ``not transforms_enabled`` short-circuit in the per-leaf fast path.
+        special_fields = set(self.aliases) | set(self.field_split_list)
+        if self.transforms_enabled:
+            special_fields |= set(self._transforms_baked)
+        self._special_fields = special_fields
+
     def _resolve_file_transforms(self):
         """Resolve python_file transforms by loading code from external files.
 
@@ -512,8 +539,12 @@ class StreamingEventProcessor:
         Returns:
             Tuple of (channel, eventid) where eventid is int or None
         """
-        channel = self._extract_field_value(event_dict, self._channel_field_paths)
-        eventid = self._extract_field_value(event_dict, self._eventid_field_paths)
+        channel, self._channel_path_hint = self._extract_field_value_hinted(
+            event_dict, self._channel_field_paths, self._channel_path_hint
+        )
+        eventid, self._eventid_path_hint = self._extract_field_value_hinted(
+            event_dict, self._eventid_field_paths, self._eventid_path_hint
+        )
 
         # Convert eventid to int if possible (guarantees int or None for caller)
         if eventid is not None:
@@ -546,6 +577,33 @@ class StreamingEventProcessor:
             if value is not None:
                 return value
         return None
+
+    def _extract_field_value_hinted(
+        self, event_dict: dict, field_paths: tuple, hint: Optional[tuple]
+    ) -> tuple:
+        """
+        Like :meth:`_extract_field_value`, but try the last winning path first.
+
+        A log file's schema is stable, so the path that produced a value on the
+        previous event almost always produces it again. Probing that path first
+        avoids re-walking earlier candidate paths that are absent from the
+        event. On a miss the full ordered scan runs as before, keeping results
+        identical to a plain first-match scan.
+
+        Returns:
+            Tuple of (value, winning_path). ``winning_path`` is the path that
+            produced the value (the new hint), or the unchanged hint when no
+            path matched.
+        """
+        if hint is not None:
+            value = self._get_nested_value(event_dict, hint)
+            if value is not None:
+                return value, hint
+        for path in field_paths:
+            value = self._get_nested_value(event_dict, path)
+            if value is not None:
+                return value, path
+        return None, hint
 
     def _get_nested_value(self, obj: dict, parts: tuple) -> Any:
         """
@@ -688,6 +746,8 @@ class StreamingEventProcessor:
         field_types = self.field_types
         transform_value = self._transform_value
         resolve_path = self._resolve_path
+        special_fields = self._special_fields
+        seen_leaf_keys = self._seen_leaf_keys
         _sentinel = _EXCLUDED_SENTINEL
 
         # Result dict
@@ -705,6 +765,26 @@ class StreamingEventProcessor:
             if value in useless_values:
                 return
             key = mapped_key
+
+            # Ultra-fast path: the vast majority of leaves have no alias, split
+            # rule, or active transform. They only need a value assignment plus a
+            # one-time column-type record, so they skip the lookups below.
+            if key not in special_fields and raw_field_name not in special_fields:
+                is_int = isinstance(value, int)
+                if is_int and abs(value) > 9223372036854775807:
+                    value = str(value)
+                    is_int = False
+                json_line[key] = value
+                if key not in seen_leaf_keys:
+                    key_lower = key.lower()
+                    if key_lower not in discovered_fields:
+                        discovered_fields[key_lower] = key
+                        field_types[key] = (
+                            "INTEGER" if is_int else "TEXT COLLATE NOCASE"
+                        )
+                    seen_leaf_keys.add(key)
+                return
+
             alias_key = aliases_get(key)
             alias_raw = aliases_get(raw_field_name)
             split_config = field_split_list_get(
@@ -714,32 +794,23 @@ class StreamingEventProcessor:
                 no_transforms = not transforms_enabled or (
                     not transforms_get(key) and not transforms_get(raw_field_name)
                 )
-                if no_transforms:
-                    if split_config:
-                        try:
-                            separator = split_config["separator"]
-                            equal_sign = split_config["equal"]
-                            for split_field in value.split(separator):
-                                k, v = split_field.split(equal_sign)
-                                json_line[k] = v
+                if no_transforms and split_config:
+                    # Split-only field: emit the parsed sub-fields and drop the
+                    # original key (preserves the historical fast-path behaviour).
+                    try:
+                        separator = split_config["separator"]
+                        equal_sign = split_config["equal"]
+                        for split_field in value.split(separator):
+                            k, v = split_field.split(equal_sign)
+                            json_line[k] = v
+                            if k not in seen_leaf_keys:
                                 key_lower = k.lower()
                                 if key_lower not in discovered_fields:
                                     discovered_fields[key_lower] = k
                                     field_types[k] = "TEXT COLLATE NOCASE"
-                        except (ValueError, KeyError, AttributeError):
-                            pass
-                        return
-                    is_int = isinstance(value, int)
-                    if is_int:
-                        v_int = cast(int, value)
-                        if abs(v_int) > 9223372036854775807:
-                            value = str(value)
-                            is_int = False
-                    json_line[key] = value
-                    key_lower = key.lower()
-                    if key_lower not in discovered_fields:
-                        discovered_fields[key_lower] = key
-                        field_types[key] = "INTEGER" if is_int else "TEXT COLLATE NOCASE"
+                                seen_leaf_keys.add(k)
+                    except (ValueError, KeyError, AttributeError):
+                        pass
                     return
             keys = [key]
             if alias_key is not None:
@@ -780,28 +851,30 @@ class StreamingEventProcessor:
                     for split_field in value.split(separator):
                         k, v = split_field.split(equal_sign)
                         json_line[k] = v
-                        key_lower = k.lower()
-                        if key_lower not in discovered_fields:
-                            discovered_fields[key_lower] = k
-                            field_types[k] = "TEXT COLLATE NOCASE"
+                        if k not in seen_leaf_keys:
+                            key_lower = k.lower()
+                            if key_lower not in discovered_fields:
+                                discovered_fields[key_lower] = k
+                                field_types[k] = "TEXT COLLATE NOCASE"
+                            seen_leaf_keys.add(k)
                 except (ValueError, KeyError, AttributeError):
                     pass
             is_int = isinstance(value, int)
-            if is_int:
-                v_int = cast(int, value)
-                if abs(v_int) > 9223372036854775807:
-                    value = str(value)
-                    is_int = False
+            if is_int and abs(value) > 9223372036854775807:
+                value = str(value)
+                is_int = False
             has_transforms = transformed_keys is not None
             for k in keys:
                 if has_transforms and k in transformed_keys:
                     json_line[k] = transformed_values[k]
                 else:
                     json_line[k] = value
-                key_lower = k.lower()
-                if key_lower not in discovered_fields:
-                    discovered_fields[key_lower] = k
-                    field_types[k] = "INTEGER" if is_int else "TEXT COLLATE NOCASE"
+                if k not in seen_leaf_keys:
+                    key_lower = k.lower()
+                    if key_lower not in discovered_fields:
+                        discovered_fields[key_lower] = k
+                        field_types[k] = "INTEGER" if is_int else "TEXT COLLATE NOCASE"
+                    seen_leaf_keys.add(k)
 
         # Descend through the event tree, carrying the dotted path as a string
         # (cheaper than re-allocating a path tuple at every node). Leaves are
@@ -1490,8 +1563,15 @@ class StreamingEventProcessor:
             self._last_insert_stmt = insert_stmt
             self._last_insert_columns = all_columns
 
-        # Build rows – large-int normalisation already done in _flatten_event
-        rows = [tuple(event.get(col) for col in all_columns) for event in batch]
+        # Build rows – large-int normalisation already done in _flatten_event.
+        # When every event shares the first event's columns (the common case for
+        # a stable source), a single itemgetter beats a per-column .get genexpr.
+        # Heterogeneous batches keep .get so missing columns map to NULL.
+        if extra_columns is None and len(all_columns) > 1:
+            row_getter = operator.itemgetter(*all_columns)
+            rows = [row_getter(event) for event in batch]
+        else:
+            rows = [tuple(event.get(col) for col in all_columns) for event in batch]
 
         # Execute batch insert with transaction
         try:
