@@ -218,6 +218,171 @@ class TestStreamingEventProcessorFlattening:
         assert result is None
 
 
+class TestFlattenHotPathOptimizations:
+    """Tests for the flattening fast path (special fields, seen-key caching)."""
+
+    def test_special_fields_only_split_when_no_alias_or_transform(
+        self, field_mappings_file, test_logger, default_args_config
+    ):
+        """Minimal config has one split field and no aliases/transforms."""
+        processor = StreamingEventProcessor(
+            config_file=field_mappings_file,
+            args_config=default_args_config,
+            logger=test_logger,
+        )
+        assert processor._special_fields == {"Hashes"}
+
+    def test_special_fields_include_alias_and_transform_targets(
+        self, field_mappings_file_with_transforms, test_logger, default_args_config
+    ):
+        """Alias and (enabled) transform field names are flagged as special."""
+        processor = StreamingEventProcessor(
+            config_file=field_mappings_file_with_transforms,
+            args_config=default_args_config,
+            logger=test_logger,
+        )
+        assert processor._special_fields == {"CommandLine", "proctitle"}
+
+    def test_fast_path_assigns_value_and_discovers_field(
+        self, field_mappings_file, test_logger, default_args_config
+    ):
+        """A non-special leaf is assigned and its column type recorded once."""
+        processor = StreamingEventProcessor(
+            config_file=field_mappings_file,
+            args_config=default_args_config,
+            logger=test_logger,
+        )
+        event = {"Event": {"System": {"EventID": 4688, "Channel": "Security"}}}
+        flat = processor._flatten_event(event, "t.evtx")
+        assert flat["EventID"] == 4688
+        assert flat["Channel"] == "Security"
+        assert processor.field_types["EventID"] == "INTEGER"
+        assert processor.field_types["Channel"] == "TEXT COLLATE NOCASE"
+        # The key is now remembered so repeat work is skipped.
+        assert "EventID" in processor._seen_leaf_keys
+
+    def test_seen_key_repeat_large_int_still_stringified(
+        self, field_mappings_file, test_logger, default_args_config
+    ):
+        """A >int64 value on an already-seen key must still be stringified."""
+        processor = StreamingEventProcessor(
+            config_file=field_mappings_file,
+            args_config=default_args_config,
+            logger=test_logger,
+        )
+        huge = 9223372036854775807 + 10  # exceeds signed 64-bit range
+        first = processor._flatten_event(
+            {"Event": {"System": {"EventID": 1}}}, "t.evtx"
+        )
+        second = processor._flatten_event(
+            {"Event": {"System": {"EventID": huge}}}, "t.evtx"
+        )
+        assert first["EventID"] == 1
+        assert second["EventID"] == str(huge)
+        assert isinstance(second["EventID"], str)
+
+    def test_int64_min_is_stringified_like_baseline(
+        self, field_mappings_file, test_logger, default_args_config
+    ):
+        """INT64_MIN trips the abs()-based overflow guard (historical behaviour)."""
+        processor = StreamingEventProcessor(
+            config_file=field_mappings_file,
+            args_config=default_args_config,
+            logger=test_logger,
+        )
+        int64_min = -9223372036854775808
+        flat = processor._flatten_event(
+            {"Event": {"System": {"EventID": int64_min}}}, "t.evtx"
+        )
+        assert flat["EventID"] == str(int64_min)
+
+    def test_split_only_field_drops_original_and_repeats(
+        self, field_mappings_file, test_logger, default_args_config
+    ):
+        """Split-only fields emit sub-fields (dropping the original) every event."""
+        processor = StreamingEventProcessor(
+            config_file=field_mappings_file,
+            args_config=default_args_config,
+            logger=test_logger,
+        )
+        first = processor._flatten_event(
+            {"Event": {"EventData": {"Hashes": "MD5=aaa,SHA256=bbb"}}}, "t.evtx"
+        )
+        assert first["MD5"] == "aaa"
+        assert first["SHA256"] == "bbb"
+        assert "Hashes" not in first
+        # Second event with the same (now seen) sub-keys still splits correctly.
+        second = processor._flatten_event(
+            {"Event": {"EventData": {"Hashes": "MD5=ccc,SHA256=ddd"}}}, "t.evtx"
+        )
+        assert second["MD5"] == "ccc"
+        assert second["SHA256"] == "ddd"
+        assert "Hashes" not in second
+
+    def test_event_filter_path_hint_reused_and_falls_back(
+        self, field_mappings_file, test_logger, default_args_config
+    ):
+        """The winning channel/eventid path is cached and reused, with fallback."""
+        processor = StreamingEventProcessor(
+            config_file=field_mappings_file,
+            args_config=default_args_config,
+            logger=test_logger,
+        )
+        e1 = {"Event": {"System": {"Channel": "Sysmon", "EventID": 1}}}
+        channel, eventid = processor._extract_event_filter_fields(e1)
+        assert channel == "Sysmon"
+        assert eventid == 1
+        assert processor._channel_path_hint == ("Event", "System", "Channel")
+        assert processor._eventid_path_hint == ("Event", "System", "EventID")
+
+        # Same schema: hint hit yields identical results.
+        assert processor._extract_event_filter_fields(e1) == ("Sysmon", 1)
+
+        # Different schema: hint misses, full scan finds the direct fields and
+        # updates the hint.
+        e2 = {"Channel": "Security", "EventID": 4624}
+        channel2, eventid2 = processor._extract_event_filter_fields(e2)
+        assert channel2 == "Security"
+        assert eventid2 == 4624
+        assert processor._channel_path_hint == ("Channel",)
+        assert processor._eventid_path_hint == ("EventID",)
+
+    def test_insert_batch_homogeneous_and_heterogeneous(
+        self, field_mappings_file, test_logger, default_args_config
+    ):
+        """itemgetter path (homogeneous) and .get path (heterogeneous) agree."""
+        processor = StreamingEventProcessor(
+            config_file=field_mappings_file,
+            args_config=default_args_config,
+            logger=test_logger,
+        )
+        conn = sqlite3.connect(":memory:")
+        cur = conn.cursor()
+        cur.execute('CREATE TABLE logs ("Alpha" TEXT, "Beta" TEXT, "Solo" TEXT)')
+        conn.commit()
+
+        # Homogeneous, multi-column -> itemgetter fast path.
+        processor._insert_batch(
+            conn, cur, [{"Alpha": "a1", "Beta": "b1"}, {"Alpha": "a2", "Beta": "b2"}]
+        )
+        assert cur.execute(
+            'SELECT "Alpha", "Beta" FROM logs ORDER BY "Alpha"'
+        ).fetchall() == [("a1", "b1"), ("a2", "b2")]
+
+        # Single-column -> guarded .get path (itemgetter would return a scalar).
+        processor._insert_batch(conn, cur, [{"Solo": "s1"}])
+        assert cur.execute(
+            'SELECT "Solo" FROM logs WHERE "Solo" IS NOT NULL'
+        ).fetchall() == [("s1",)]
+
+        # Heterogeneous -> .get path, missing columns become NULL.
+        processor._insert_batch(conn, cur, [{"Alpha": "x"}, {"Beta": "y"}])
+        rows = set(cur.execute('SELECT "Alpha", "Beta" FROM logs').fetchall())
+        assert ("x", None) in rows
+        assert (None, "y") in rows
+        conn.close()
+
+
 class TestStreamingEventProcessorSchemaGeneration:
     """Tests for SQL schema generation."""
     

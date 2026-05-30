@@ -77,3 +77,39 @@ pdm run python tools/sigma-regression.py \
 - `1` if any test failed or the script could not load the ruleset / find regression data.
 
 Skipped tests (missing data file or no matching rule in the ruleset) are reported in the summary but do not change the exit code unless you treat "skipped" as failure in your workflow.
+
+## flatten-benchmark.py
+
+Measures Zircolite's event-**flattening** throughput, isolated from EVTX parsing, SQLite insertion, and rule execution. Flattening is the dominant cost of log ingestion, so this harness is useful when changing the `_flatten_event` / `process_leaf` hot path.
+
+The script reads raw events once, then repeatedly calls `StreamingEventProcessor._flatten_event` over them. The first pass warms schema discovery and the seen-key cache, so the reported numbers reflect steady-state flattening.
+
+### Arguments
+
+- **`--evtx`** (required): Path to an EVTX file or a directory of EVTX files (searched recursively).
+- **`--config`**: Field mappings config file (default: `config/config.yaml`).
+- **`--max-events`**: Maximum number of events to load and flatten (default: `20000`).
+- **`--passes`**: Number of timed passes over the loaded events (default: `11`); the median and best are reported.
+
+### Usage
+
+From the Zircolite project root:
+
+```bash
+# Single file
+pdm run python tools/flatten-benchmark.py --evtx sample.evtx
+
+# Directory of EVTX files, custom event count and pass count
+pdm run python tools/flatten-benchmark.py \
+  --evtx /path/to/EVTX-ATTACK-SAMPLES \
+  --max-events 20000 --passes 11
+```
+
+### Output
+
+Prints the event count and, for the timed passes, the median and best wall time plus the corresponding events/second.
+
+### Exit code
+
+- `0` on success.
+- `1` if no events could be collected (for example, a bad `--evtx` path or a capture with no standard records).

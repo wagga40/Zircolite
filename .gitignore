@@ -72,6 +72,10 @@ Taskfile.dev.yml
 *.sublime-workspace
 *.sublime-project
 CLAUDE.md
+.claude
+.mypy_cache
+.pytest_cache
+.ruff_cache
 
 coverage/
 htmlcov/
