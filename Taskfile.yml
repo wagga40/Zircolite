@@ -19,7 +19,7 @@ tasks:
     vars:
       VERSION:
         sh: |
-          cat zircolite.py | grep "version = \"" | cut -d'"' -f2
+          cat zircolite/__init__.py | grep "^__version__ = " | cut -d'"' -f2
 
   docker-build:
     desc: Build the Docker image
@@ -37,7 +37,7 @@ tasks:
     vars:
       VERSION:
         sh: |
-          cat zircolite.py | grep "version = \"" | cut -d'"' -f2
+          cat zircolite/__init__.py | grep "^__version__ = " | cut -d'"' -f2
 
   docker-push:
     desc: Push the Docker image to docker hub
@@ -48,7 +48,7 @@ tasks:
     vars:
       VERSION:
         sh: |
-          cat zircolite.py | grep "version = \"" | cut -d'"' -f2
+          cat zircolite/__init__.py | grep "^__version__ = " | cut -d'"' -f2
 
   clean:
     desc: Remove all default artifacts

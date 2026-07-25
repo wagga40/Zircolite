@@ -99,7 +99,7 @@ from zircolite.shutdown import (
     request_shutdown,
 )
 
-from zircolite import run_config
+from zircolite import __version__, run_config
 from zircolite.run_config import DEFAULTS, EARLY_DESTS, flatten_groups
 
 
@@ -982,7 +982,7 @@ def _run_processing(
 # MAIN
 ################################################################
 def main() -> None:
-    version = "3.8.0"
+    version = __version__
     args = parse_arguments()
 
     install_signal_handler()

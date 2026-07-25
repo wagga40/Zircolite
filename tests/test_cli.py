@@ -3689,3 +3689,22 @@ class TestFlagsThatMustNotChangeDetections:
         self._run(tmp_path, ['-q'])
 
         assert "Zircolite" not in capsys.readouterr().out
+
+
+def test_version_has_a_single_source():
+    """The Taskfile greps zircolite/__init__.py, so nothing may duplicate it."""
+    from zircolite import __version__
+
+    cli_source = (WORKSPACE_ROOT / "zircolite.py").read_text()
+    assert 'version = "' not in cli_source, (
+        "zircolite.py must read __version__, not carry its own literal"
+    )
+
+    taskfile = (WORKSPACE_ROOT / "Taskfile.yml").read_text()
+    assert "zircolite/__init__.py" in taskfile
+
+    result = subprocess.run(
+        [sys.executable, str(WORKSPACE_ROOT / "zircolite.py"), "-v"],
+        capture_output=True, text=True, cwd=str(WORKSPACE_ROOT),
+    )
+    assert __version__ in result.stdout
