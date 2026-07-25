@@ -77,7 +77,6 @@ from zircolite import (
     # Input format registry
     DEFAULT_INPUT_FORMAT,
     format_by_name,
-    format_by_yaml,
     format_from_args,
     has_explicit_format,
     # YAML configuration
@@ -113,6 +112,9 @@ from zircolite.shutdown import (
     request_shutdown,
 )
 
+from zircolite import run_config
+from zircolite.run_config import DEFAULTS, EARLY_DESTS, flatten_groups
+
 
 ################################################################
 # NOTE: ProcessingContext and all process_* functions live in
@@ -142,8 +144,8 @@ def parse_arguments() -> argparse.Namespace:
 
     # Events filtering options
     event_args = parser.add_argument_group('🔍 EVENTS FILTERING')
-    event_args.add_argument("-A", "--after", help="Process only events at or after this timestamp, inclusive (UTC format: 1970-01-01T00:00:00)", type=str, default="1970-01-01T00:00:00")
-    event_args.add_argument("-B", "--before", help="Process only events at or before this timestamp, inclusive (UTC format: 1970-01-01T00:00:00)", type=str, default="9999-12-12T23:59:59")
+    event_args.add_argument("-A", "--after", help=f"Process only events at or after this timestamp, inclusive (UTC format: 1970-01-01T00:00:00, default: {DEFAULTS['after']})", type=str, default=None)
+    event_args.add_argument("-B", "--before", help=f"Process only events at or before this timestamp, inclusive (UTC format: 1970-01-01T00:00:00, default: {DEFAULTS['before']})", type=str, default=None)
     event_args.add_argument("--no-event-filter", help="Disable early event filtering based on channel/eventID (process all events)", action='store_true')
     
     # Event and log formats options
@@ -168,7 +170,7 @@ def parse_arguments() -> argparse.Namespace:
     
     # Output formats and output files options
     output_formats_args = parser.add_argument_group('💾 OUTPUT FORMATS AND FILES')
-    output_formats_args.add_argument("-o", "--outfile", help="Output file for detected events", type=str, default="detected_events.json")
+    output_formats_args.add_argument("-o", "--outfile", help="Output file for detected events (default: detected_events.json, or detected_events.csv with --csv)", type=str, default=None)
     output_formats_args.add_argument(
         "--csv",
         "--csv-output",
@@ -179,13 +181,13 @@ def parse_arguments() -> argparse.Namespace:
         ),
         action="store_true",
     )
-    output_formats_args.add_argument("--csv-delimiter", help="Delimiter for CSV output", type=str, default=";")
+    output_formats_args.add_argument("--csv-delimiter", help=f"Delimiter for CSV output (default: '{DEFAULTS['csv_delimiter']}')", type=str, default=None)
     output_formats_args.add_argument("--keepflat", "--keep-flat", help="Save flattened events as JSON", action='store_true')
     output_formats_args.add_argument("--profile-rules", help="Time each rule execution and print a performance report at the end", action='store_true')
     output_formats_args.add_argument("-d", "--dbfile", "--db-file", help="Save all logs to a SQLite database file", type=str)
-    output_formats_args.add_argument("-l", "--logfile", "--log-file", help="Log file name", default="zircolite.log", type=str)
+    output_formats_args.add_argument("-l", "--logfile", "--log-file", help=f"Log file name (default: {DEFAULTS['logfile']})", default=None, type=str)
     output_formats_args.add_argument("--hashes", help="Add xxhash64 of the original log event to each event", action='store_true')
-    output_formats_args.add_argument("-L", "--limit", "--limit-results", help="Discard results exceeding this limit from output file", type=int, default=-1)
+    output_formats_args.add_argument("-L", "--limit", "--limit-results", help=f"Discard results exceeding this limit from output file (default: {DEFAULTS['limit']}, i.e. no limit)", type=int, default=None)
     
     # Advanced configuration options
     config_formats_args = parser.add_argument_group('⚙️  ADVANCED CONFIGURATION')  
@@ -197,14 +199,14 @@ def parse_arguments() -> argparse.Namespace:
     config_formats_args.add_argument("-RE", "--remove-events", help="Remove processed log files after successful analysis (use with caution)", action='store_true')
     config_formats_args.add_argument("-U", "--update-rules", help="Update rulesets in the 'rules' directory", action='store_true')
     config_formats_args.add_argument("-v", "--version", help="Display Zircolite version", action='store_true')
-    config_formats_args.add_argument("--timefield", "--time-field", help="Specify time field name for time filtering (default: 'SystemTime', auto-detects if not found)", type=str, default="SystemTime")
+    config_formats_args.add_argument("--timefield", "--time-field", help="Specify time field name for time filtering (default: 'SystemTime', auto-detects if not found)", type=str, default=None)
     config_formats_args.add_argument("--unified-db", "--all-in-one", help="Force unified database mode (all files in one DB, enables cross-file correlation)", action='store_true')
     config_formats_args.add_argument("--no-auto-mode", help="Disable automatic processing mode selection based on file analysis", action='store_true')
     config_formats_args.add_argument("--no-auto-detect", help="Disable automatic log type and timestamp detection (use explicit format flags instead)", action='store_true')
     config_formats_args.add_argument("--strict", help="Strict EVTX parsing: stop on corrupted or malformed chunks instead of skipping them (default: lenient, recovers as many events as possible)", action='store_true')
-    config_formats_args.add_argument("--add-index", help="Create an index on the given column(s). Can be repeated or list multiple columns (e.g. --add-index Channel EventID).", action='append', nargs='+', metavar="COL", default=[])
-    config_formats_args.add_argument("--remove-index", help="Drop the given index name(s) after creation. Can be repeated or list multiple (e.g. --remove-index idx_channel idx_eventid).", action='append', nargs='+', metavar="IDX", default=[])
-    config_formats_args.add_argument("--auto-index", help="Inspect the loaded ruleset and auto-create indices on the top-N most-referenced columns (default N=5 when used without an explicit number). Combine with --add-index for additional manually chosen columns.", type=int, nargs='?', const=5, default=0, metavar="N")
+    config_formats_args.add_argument("--add-index", help="Create an index on the given column(s). Can be repeated or list multiple columns (e.g. --add-index Channel EventID).", action='append', nargs='+', metavar="COL", default=None)
+    config_formats_args.add_argument("--remove-index", help="Drop the given index name(s) after creation. Can be repeated or list multiple (e.g. --remove-index idx_channel idx_eventid).", action='append', nargs='+', metavar="IDX", default=None)
+    config_formats_args.add_argument("--auto-index", help="Inspect the loaded ruleset and auto-create indices on the top-N most-referenced columns (default N=5 when used without an explicit number). Combine with --add-index for additional manually chosen columns.", type=int, nargs='?', const=5, default=None, metavar="N")
 
     # Transform options
     transform_args = parser.add_argument_group('🔄 TRANSFORMS')
@@ -221,7 +223,7 @@ def parse_arguments() -> argparse.Namespace:
     parallel_args = parser.add_argument_group('⚡ PARALLEL PROCESSING')
     parallel_args.add_argument("-P", "--no-parallel", help="Disable automatic parallel processing (parallel is enabled by default when beneficial)", action='store_true')
     parallel_args.add_argument("-w", "--parallel-workers", help="Maximum number of parallel workers (default: auto-detect based on CPU/memory)", type=int)
-    parallel_args.add_argument("--parallel-memory-limit", help="Memory usage threshold percentage before throttling (default: 85)", type=float, default=85.0)
+    parallel_args.add_argument("--parallel-memory-limit", help=f"Memory usage threshold percentage before throttling (default: {DEFAULTS['parallel_memory_limit']:g})", type=float, default=None)
     
     # Templating and Mini GUI options
     templating_formats_args = parser.add_argument_group('🎨 TEMPLATING AND MINI GUI')
@@ -231,7 +233,7 @@ def parse_arguments() -> argparse.Namespace:
     templating_formats_args.add_argument("--timesketch", help="Shortcut: use Timesketch template and write to timesketch-<RAND>.json", action='store_true')
     templating_formats_args.add_argument("--navigator-output", help="Shortcut: generate ATT&CK Navigator layer JSON and write to navigator-<RAND>.json (or specify a custom filename)", type=str, metavar="OUTPUT_FILE", nargs='?', const="")
     templating_formats_args.add_argument("-G", "--package", help="Create a ZircoGui/Mini GUI package", action='store_true')
-    templating_formats_args.add_argument("--package-dir", help="Directory to save the ZircoGui/Mini GUI package", type=str, default="")
+    templating_formats_args.add_argument("--package-dir", help="Directory to save the ZircoGui/Mini GUI package", type=str, default=None)
     
     return parser.parse_args()
 
@@ -259,14 +261,26 @@ def _has_explicit_format_flag(args: argparse.Namespace) -> bool:
     return has_explicit_format(args)
 
 
+def _is_explicit(args: argparse.Namespace, dest: str, unset: Any = None) -> bool:
+    """Whether *dest* was set by the user rather than left at its default.
+
+    ``run_config.resolve`` records this on the namespace. Namespaces built by
+    hand (library callers, tests) never went through it, so they fall back to
+    comparing against the value that means "not set".
+    """
+    explicit = getattr(args, "_explicit", None)
+    if explicit is None:
+        return getattr(args, dest, unset) != unset
+    return dest in explicit
+
+
 def _fileext_is_explicit(args: argparse.Namespace) -> bool:
     """Whether --fileext (or its YAML equivalent) was set by the user.
 
     ``discover_files`` overwrites ``args.fileext`` with the format-derived
     default, so callers cannot recover this from the namespace afterwards.
     """
-    explicit = getattr(args, "_fileext_explicit", None)
-    return bool(args.fileext) if explicit is None else bool(explicit)
+    return _is_explicit(args, "fileext")
 
 
 def discover_files(
@@ -338,7 +352,7 @@ def _apply_detection_result(
     # The streaming processor strips non-alphanumeric characters from field
     # names (e.g. "@timestamp" → "timestamp") when storing events in SQLite,
     # so the timefield must be sanitized the same way to match the column name.
-    if detection.timestamp_field and args.timefield == "SystemTime":
+    if detection.timestamp_field and not _is_explicit(args, "timefield", "SystemTime"):
         args.timefield = _TIMEFIELD_SANITIZE_RE.sub("", detection.timestamp_field)
 
     return input_type
@@ -431,134 +445,8 @@ def auto_detect_log_type(
 
 
 ################################################################
-# YAML CONFIGURATION – split into per-section helpers
+# YAML CONFIGURATION
 ################################################################
-def _apply_yaml_input_config(
-    yaml_config: Any, args: argparse.Namespace
-) -> None:
-    """Apply YAML input section to CLI args."""
-    if yaml_config.input.path and not args.evtx:
-        args.evtx = yaml_config.input.path
-
-    if not has_explicit_format(args):
-        spec = format_by_yaml(yaml_config.input.format)
-        if spec is not None and spec.has_cli_flag:
-            setattr(args, spec.args_flag, True)
-
-    if yaml_config.input.recursive is False:
-        args.no_recursion = True
-    if yaml_config.input.file_pattern:
-        args.file_pattern = args.file_pattern or yaml_config.input.file_pattern
-    if yaml_config.input.file_extension:
-        args.fileext = args.fileext or yaml_config.input.file_extension
-    if yaml_config.input.encoding:
-        args.logs_encoding = args.logs_encoding or yaml_config.input.encoding
-    if yaml_config.input.select and not args.select:
-        args.select = [[s] for s in yaml_config.input.select]
-    if yaml_config.input.avoid and not args.avoid:
-        args.avoid = [[a] for a in yaml_config.input.avoid]
-
-
-def _apply_yaml_rules_config(
-    yaml_config: Any, args: argparse.Namespace
-) -> None:
-    """Apply YAML rules section to CLI args."""
-    if not args.ruleset:
-        # Keep the same nested shape argparse produces (action='append') so the
-        # flatten in main() does not iterate the characters of each path string.
-        args.ruleset = [[r] for r in yaml_config.rules.rulesets]
-    if yaml_config.rules.pipelines and not args.pipeline:
-        args.pipeline = [[p] for p in yaml_config.rules.pipelines]
-    if yaml_config.rules.filters and not args.rulefilter:
-        args.rulefilter = [[f] for f in yaml_config.rules.filters]
-    if yaml_config.rules.save_ruleset:
-        args.save_ruleset = True
-
-
-def _apply_yaml_output_config(
-    yaml_config: Any, args: argparse.Namespace
-) -> None:
-    """Apply YAML output section to CLI args."""
-    if args.outfile == "detected_events.json":
-        args.outfile = yaml_config.output.file
-    if yaml_config.output.format == 'csv':
-        args.csv = True
-        args._csv_from_yaml = True
-    if yaml_config.output.csv_delimiter != ';':
-        args.csv_delimiter = yaml_config.output.csv_delimiter
-    if yaml_config.output.templates and not args.template:
-        args.template = [[t['template']] for t in yaml_config.output.templates]
-        args.templateOutput = [[t['output']] for t in yaml_config.output.templates]
-    if getattr(yaml_config.output, 'template_append', False) and not getattr(args, 'template_append', False):
-        args.template_append = True
-    if yaml_config.output.package:
-        args.package = True
-    if yaml_config.output.package_dir:
-        args.package_dir = yaml_config.output.package_dir
-    if yaml_config.output.keep_flat:
-        args.keepflat = True
-    if yaml_config.output.db_file:
-        args.dbfile = yaml_config.output.db_file
-    if yaml_config.output.log_file != 'zircolite.log':
-        args.logfile = yaml_config.output.log_file
-    if yaml_config.output.no_output:
-        args.nolog = True
-
-
-def _apply_yaml_processing_config(
-    yaml_config: Any, args: argparse.Namespace
-) -> None:
-    """Apply YAML processing + time-filter + parallel sections to CLI args."""
-    # Processing
-    if yaml_config.processing.unified_db:
-        args.unified_db = True
-    if not yaml_config.processing.auto_mode:
-        args.no_auto_mode = True
-    if yaml_config.processing.hashes:
-        args.hashes = True
-    if yaml_config.processing.limit != -1:
-        args.limit = yaml_config.processing.limit
-    if yaml_config.processing.time_field != 'SystemTime':
-        args.timefield = yaml_config.processing.time_field
-    if yaml_config.processing.debug:
-        args.debug = True
-    if yaml_config.processing.remove_events:
-        args.remove_events = True
-    if yaml_config.processing.all_transforms:
-        args.all_transforms = True
-    if yaml_config.processing.transform_categories:
-        # Merge with any CLI-provided categories
-        existing = getattr(args, 'transform_categories', None) or []
-        args.transform_categories = existing + yaml_config.processing.transform_categories
-    if yaml_config.processing.add_index:
-        existing = _flatten_add_remove_index(getattr(args, 'add_index', None))
-        args.add_index = [existing + list(yaml_config.processing.add_index)]
-    if yaml_config.processing.remove_index:
-        existing = _flatten_add_remove_index(getattr(args, 'remove_index', None))
-        args.remove_index = [existing + list(yaml_config.processing.remove_index)]
-    if yaml_config.processing.auto_index and not args.auto_index:
-        args.auto_index = yaml_config.processing.auto_index
-    if not yaml_config.processing.event_filter_enabled:
-        args.no_event_filter = True
-    if yaml_config.processing.strict_evtx:
-        args.strict = True
-    # Time filters
-    if yaml_config.time_filter.after != '1970-01-01T00:00:00':
-        args.after = yaml_config.time_filter.after
-    if yaml_config.time_filter.before != '9999-12-12T23:59:59':
-        args.before = yaml_config.time_filter.before
-
-    # Parallel
-    if yaml_config.parallel.enabled is False:
-        args.no_parallel = True
-    if yaml_config.parallel.max_workers:
-        args.parallel_workers = yaml_config.parallel.max_workers
-    if yaml_config.parallel.min_workers != 1:
-        args.parallel_min_workers = yaml_config.parallel.min_workers
-    if yaml_config.parallel.adaptive is not True:
-        args.parallel_adaptive = yaml_config.parallel.adaptive
-    if yaml_config.parallel.memory_limit_percent != 85.0:
-        args.parallel_memory_limit = yaml_config.parallel.memory_limit_percent
 
 
 def _print_transform_categories(config_path: str, logger) -> bool:
@@ -591,46 +479,43 @@ def _print_transform_categories(config_path: str, logger) -> bool:
     return True
 
 
-def apply_yaml_logging_overrides(args: argparse.Namespace) -> None:
-    """Resolve the YAML keys that must be known before the logger is created.
+def _read_yaml_quietly(path: Optional[str]) -> dict:
+    """Best-effort YAML read for the pre-logger phase.
 
-    The full merge needs a logger to report parsing problems, but ``debug``,
-    ``log_file`` and ``no_output`` decide how that logger is built. They are
-    read from a cheap pre-parse instead; any error here is left for the real
-    merge, which reports it properly.
+    Any problem here is left for :func:`resolve_run_config`, which has a logger
+    and reports it properly.
     """
-    if not args.yaml_config:
-        return
+    if not path:
+        return {}
     try:
         import yaml
 
-        with open(args.yaml_config, 'r', encoding='utf-8') as f:
+        with open(path, 'r', encoding='utf-8') as f:
             raw = yaml.safe_load(f) or {}
-        if not isinstance(raw, dict):
-            return
     except Exception:
-        return
-
-    processing = raw.get('processing') or {}
-    output = raw.get('output') or {}
-    if isinstance(processing, dict) and processing.get('debug'):
-        args.debug = True
-    if isinstance(output, dict):
-        if output.get('no_output'):
-            args.nolog = True
-        log_file = output.get('log_file')
-        if log_file and args.logfile == 'zircolite.log':
-            args.logfile = log_file
+        return {}
+    return raw if isinstance(raw, dict) else {}
 
 
-def load_yaml_config_and_merge(args, logger) -> argparse.Namespace:
-    """Load YAML config file and merge with CLI arguments."""
+def resolve_logging_args(args: argparse.Namespace) -> None:
+    """Resolve the settings the logger is built from, before it exists.
+
+    ``debug``, ``no_output`` and ``log_file`` decide how the logger is
+    constructed, so they cannot wait for the validated merge. Everything else
+    is resolved by :func:`resolve_run_config`.
+    """
+    run_config.resolve(args, _read_yaml_quietly(args.yaml_config), only=EARLY_DESTS)
+
+
+def resolve_run_config(args, logger) -> argparse.Namespace:
+    """Resolve CLI arguments against the YAML config file, if one was given."""
     if not args.yaml_config:
-        return args
+        return run_config.resolve(args, {}, skip=EARLY_DESTS)
 
     try:
         config_loader = ConfigLoader(logger=logger)
-        yaml_config = config_loader.load(args.yaml_config)
+        raw = config_loader.load_yaml(args.yaml_config)
+        yaml_config = config_loader.parse_config(raw)
 
         issues = config_loader.validate_config(yaml_config)
         fatal_issues = []
@@ -645,18 +530,15 @@ def load_yaml_config_and_merge(args, logger) -> argparse.Namespace:
         if fatal_issues:
             sys.exit(1)
 
-        yaml_config = config_loader.merge_with_args(yaml_config, args)
-
-        _apply_yaml_input_config(yaml_config, args)
-        _apply_yaml_rules_config(yaml_config, args)
-        _apply_yaml_output_config(yaml_config, args)
-        _apply_yaml_processing_config(yaml_config, args)
+        run_config.resolve(args, raw, skip=EARLY_DESTS)
 
         logger.info(f"[+] Configuration loaded and merged from: {make_file_link(args.yaml_config)}")
 
     except FileNotFoundError as e:
         logger.error(f"[red]    [-] {e}[/]")
         sys.exit(1)
+    except SystemExit:
+        raise
     except Exception as e:
         logger.error(f"[red]    [-] Error loading YAML config: {e}[/]")
         if logger.isEnabledFor(logging.DEBUG):
@@ -728,13 +610,6 @@ def handle_templating(
                 ctx.logger.warning(
                     f"[yellow]   [!] Cannot create GUI package: missing file(s): {', '.join(missing)}[/]"
                 )
-
-
-def _flatten_add_remove_index(value: Any) -> List[str]:
-    """Flatten argparse append nargs='+' list of lists into a single list."""
-    if not value:
-        return []
-    return [item for group in value for item in group]
 
 
 def cleanup(
@@ -1133,7 +1008,7 @@ def main() -> None:
 
     # Init logging. A YAML config can set debug/log_file/no_output, and those
     # have to be known before the logger exists
-    apply_yaml_logging_overrides(args)
+    resolve_logging_args(args)
     if args.nolog:
         args.logfile = None
     logger = init_logger(args.debug, args.logfile)
@@ -1163,13 +1038,9 @@ def main() -> None:
     if args.transform_list:
         sys.exit(0 if _print_transform_categories(args.config, logger) else 1)
     
-    # Load YAML configuration if provided
-    if args.yaml_config:
-        args = load_yaml_config_and_merge(args, logger)
-
-    # Remember whether the user pinned an extension: discover_files overwrites
-    # args.fileext with the format-derived default on its first call
-    args._fileext_explicit = bool(args.fileext)
+    # Resolve CLI arguments against the YAML configuration file, if any. This
+    # also applies the built-in defaults, so it must run even without -Y.
+    args = resolve_run_config(args, logger)
 
     # Apply --timesketch shortcut
     if getattr(args, 'timesketch', False):
@@ -1210,7 +1081,7 @@ def main() -> None:
     # format flags, file re-discovery, etc.; this only updates args.timefield.
     if (
         args.evtx
-        and args.timefield == "SystemTime"
+        and not _is_explicit(args, "timefield", "SystemTime")
         and not _has_explicit_format_flag(args)
         and not getattr(args, 'no_auto_detect', False)
         and Path(args.evtx).exists()
@@ -1365,11 +1236,9 @@ def main() -> None:
             logger,
         )
     
-    # CSV mode adjustments
+    # CSV mode adjustments (the .csv output name is applied while resolving)
     if args.csv:
         ready_for_templating = False
-        if args.outfile == "detected_events.json":
-            args.outfile = "detected_events.csv"
 
     if args.dbfile and Path(args.dbfile).exists():
         print_error_panel(
@@ -1418,8 +1287,8 @@ def main() -> None:
         event_filter=active_event_filter,
         profile_rules=getattr(args, 'profile_rules', False),
         archive_password=getattr(args, 'archive_password', None),
-        add_index=_flatten_add_remove_index(getattr(args, 'add_index', None)),
-        remove_index=_flatten_add_remove_index(getattr(args, 'remove_index', None)),
+        add_index=flatten_groups(getattr(args, 'add_index', None)),
+        remove_index=flatten_groups(getattr(args, 'remove_index', None)),
         auto_index_top_n=getattr(args, 'auto_index', 0),
         strict_evtx=getattr(args, 'strict', False),
     )

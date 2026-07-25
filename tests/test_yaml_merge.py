@@ -1,4 +1,4 @@
-"""Tests for the YAML config -> CLI args merge helpers in zircolite.py."""
+"""Tests for resolving a YAML config file onto the CLI args namespace."""
 import argparse
 import importlib.util
 import sys
@@ -6,7 +6,8 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from zircolite.config_loader import ZircoliteConfig
+from zircolite import run_config
+from zircolite.run_config import EARLY_DESTS, flatten_groups, resolve
 
 WORKSPACE_ROOT = Path(__file__).parent.parent
 
@@ -25,7 +26,7 @@ zircolite_script = load_zircolite_script()
 
 
 def _args(**overrides):
-    """Minimal argparse namespace for the merge helpers."""
+    """Namespace shaped like a freshly parsed one: unset scalars are None."""
     defaults = dict(
         ruleset=None,
         pipeline=None,
@@ -34,12 +35,12 @@ def _args(**overrides):
         no_parallel=False,
         parallel_workers=None,
         no_event_filter=False,
-        auto_index=0,
+        auto_index=None,
         add_index=None,
         remove_index=None,
         strict=False,
-        after="1970-01-01T00:00:00",
-        before="9999-12-12T23:59:59",
+        after=None,
+        before=None,
         evtx=None,
         json_input=False,
         json_array_input=False,
@@ -52,168 +53,273 @@ def _args(**overrides):
         file_pattern=None,
         fileext=None,
         logs_encoding=None,
+        select=None,
+        avoid=None,
+        csv=False,
+        template=None,
+        templateOutput=None,
     )
     defaults.update(overrides)
     return argparse.Namespace(**defaults)
 
 
-class TestApplyYamlRulesConfig:
-    """Tests for _apply_yaml_rules_config."""
+class TestRulesResolution:
+    """rules.* -> args."""
 
     def test_yaml_rulesets_keep_argparse_nested_shape(self):
         """YAML rulesets must be wrapped per-element so main()'s flatten works."""
-        yaml_config = ZircoliteConfig()
-        yaml_config.rules.rulesets = ["rules/a.json", "rules/b.json"]
         args = _args()
 
-        zircolite_script._apply_yaml_rules_config(yaml_config, args)
+        resolve(args, {"rules": {"rulesets": ["rules/a.json", "rules/b.json"]}})
 
         assert args.ruleset == [["rules/a.json"], ["rules/b.json"]]
-        # Simulate the flatten performed in main()
-        flattened = [item for sublist in args.ruleset for item in sublist]
-        assert flattened == ["rules/a.json", "rules/b.json"]
+        assert flatten_groups(args.ruleset) == ["rules/a.json", "rules/b.json"]
 
     def test_cli_ruleset_takes_precedence_over_yaml(self):
-        yaml_config = ZircoliteConfig()
-        yaml_config.rules.rulesets = ["rules/a.json"]
         args = _args(ruleset=[["cli/rules.json"]])
 
-        zircolite_script._apply_yaml_rules_config(yaml_config, args)
+        resolve(args, {"rules": {"rulesets": ["rules/a.json"]}})
 
         assert args.ruleset == [["cli/rules.json"]]
 
     def test_yaml_pipelines_and_filters_are_nested(self):
-        yaml_config = ZircoliteConfig()
-        yaml_config.rules.rulesets = ["rules/a.json"]
-        yaml_config.rules.pipelines = ["pipeline_x"]
-        yaml_config.rules.filters = ["Noisy"]
         args = _args()
 
-        zircolite_script._apply_yaml_rules_config(yaml_config, args)
+        resolve(
+            args,
+            {"rules": {"rulesets": ["rules/a.json"], "pipelines": ["pipeline_x"],
+                       "filters": ["Noisy"]}},
+        )
 
         assert args.pipeline == [["pipeline_x"]]
         assert args.rulefilter == [["Noisy"]]
 
+    def test_absent_rules_section_leaves_ruleset_unset(self):
+        """main() falls back to the bundled ruleset only when this stays unset."""
+        args = _args()
 
-class TestApplyYamlParallelConfig:
-    """Tests for the parallel section of _apply_yaml_processing_config."""
+        resolve(args, {"input": {"path": "logs/"}})
+
+        assert args.ruleset is None
+
+    def test_bare_rulefilter_does_not_discard_yaml_filters(self):
+        """`-R` with nargs='*' and no operand yields [[]]; it names nothing."""
+        args = _args(rulefilter=[[]])
+
+        resolve(args, {"rules": {"filters": ["Noisy"]}})
+
+        assert args.rulefilter == [["Noisy"]]
+
+
+class TestParallelResolution:
+    """parallel.* -> args."""
 
     def test_yaml_without_parallel_section_keeps_parallel_enabled(self):
         """A YAML file with no parallel section must not set --no-parallel."""
-        yaml_config = ZircoliteConfig()
         args = _args()
 
-        zircolite_script._apply_yaml_processing_config(yaml_config, args)
+        resolve(args, {})
 
         assert args.no_parallel is False
 
     def test_yaml_parallel_enabled_false_disables_parallel(self):
-        yaml_config = ZircoliteConfig()
-        yaml_config.parallel.enabled = False
         args = _args()
 
-        zircolite_script._apply_yaml_processing_config(yaml_config, args)
+        resolve(args, {"parallel": {"enabled": False}})
 
         assert args.no_parallel is True
 
     def test_yaml_parallel_enabled_true_keeps_parallel(self):
-        yaml_config = ZircoliteConfig()
-        yaml_config.parallel.enabled = True
         args = _args()
 
-        zircolite_script._apply_yaml_processing_config(yaml_config, args)
+        resolve(args, {"parallel": {"enabled": True}})
 
         assert args.no_parallel is False
 
+    def test_cli_no_parallel_survives_yaml_enabled_true(self):
+        """YAML must never clear a flag the user set on the CLI."""
+        args = _args(no_parallel=True)
 
-class TestApplyYamlNewlyWiredOptions:
-    """Regression tests for YAML options that were parsed but never applied."""
+        resolve(args, {"parallel": {"enabled": True}})
+
+        assert args.no_parallel is True
+
+    def test_yaml_min_workers_applied(self):
+        args = _args()
+
+        resolve(args, {"parallel": {"min_workers": 3}})
+
+        assert args.parallel_min_workers == 3
+
+    def test_yaml_adaptive_false_applied(self):
+        args = _args()
+
+        resolve(args, {"parallel": {"adaptive": False}})
+
+        assert args.parallel_adaptive is False
+
+    def test_yaml_parallel_defaults_are_filled_in(self):
+        """Every destination carries a usable value after resolution."""
+        args = _args()
+
+        resolve(args, {})
+
+        assert args.parallel_min_workers == 1
+        assert args.parallel_adaptive is True
+        assert args.parallel_memory_limit == 85.0
+
+
+class TestInputAndProcessingResolution:
+    """Options that were once parsed but never applied."""
 
     def test_yaml_select_and_avoid_applied(self):
-        yaml_config = ZircoliteConfig()
-        yaml_config.input.select = ["sysmon", "security"]
-        yaml_config.input.avoid = ["backup"]
-        args = _args(select=None, avoid=None)
+        args = _args()
 
-        zircolite_script._apply_yaml_input_config(yaml_config, args)
+        resolve(args, {"input": {"select": ["sysmon", "security"],
+                                 "avoid": ["backup"]}})
 
         assert args.select == [["sysmon"], ["security"]]
         assert args.avoid == [["backup"]]
 
     def test_cli_select_takes_precedence_over_yaml(self):
-        yaml_config = ZircoliteConfig()
-        yaml_config.input.select = ["yamlpick"]
-        args = _args(select=[["clipick"]], avoid=None)
+        args = _args(select=[["clipick"]])
 
-        zircolite_script._apply_yaml_input_config(yaml_config, args)
+        resolve(args, {"input": {"select": ["yamlpick"]}})
 
         assert args.select == [["clipick"]]
 
     def test_yaml_event_filter_disabled(self):
-        yaml_config = ZircoliteConfig()
-        yaml_config.processing.event_filter_enabled = False
         args = _args()
 
-        zircolite_script._apply_yaml_processing_config(yaml_config, args)
+        resolve(args, {"processing": {"event_filter_enabled": False}})
 
         assert args.no_event_filter is True
 
     def test_yaml_event_filter_enabled_by_default(self):
-        yaml_config = ZircoliteConfig()
         args = _args()
 
-        zircolite_script._apply_yaml_processing_config(yaml_config, args)
+        resolve(args, {})
 
         assert args.no_event_filter is False
 
     def test_yaml_auto_index_applied(self):
-        yaml_config = ZircoliteConfig()
-        yaml_config.processing.auto_index = 5
         args = _args()
 
-        zircolite_script._apply_yaml_processing_config(yaml_config, args)
+        resolve(args, {"processing": {"auto_index": 5}})
 
         assert args.auto_index == 5
 
     def test_cli_auto_index_takes_precedence_over_yaml(self):
-        yaml_config = ZircoliteConfig()
-        yaml_config.processing.auto_index = 5
         args = _args(auto_index=10)
 
-        zircolite_script._apply_yaml_processing_config(yaml_config, args)
+        resolve(args, {"processing": {"auto_index": 5}})
 
         assert args.auto_index == 10
 
 
-class TestApplyYamlParallelWorkers:
-    """YAML parallel.min_workers / adaptive must reach the CLI args."""
+class TestAdditiveKeysMerge:
+    """add_index / remove_index / transform_categories union YAML and CLI."""
 
-    def test_yaml_min_workers_applied(self):
-        yaml_config = ZircoliteConfig()
-        yaml_config.parallel.min_workers = 3
+    def test_transform_categories_union(self):
+        args = _args(transform_categories=["process"])
+
+        resolve(args, {"processing": {"transform_categories": ["commandline"]}})
+
+        assert args.transform_categories == ["commandline", "process"]
+
+    def test_add_index_union(self):
+        args = _args(add_index=[["Channel"]])
+
+        resolve(args, {"processing": {"add_index": ["Computer"]}})
+
+        assert flatten_groups(args.add_index) == ["Computer", "Channel"]
+
+    def test_remove_index_union(self):
+        args = _args(remove_index=[["idx_cli"]])
+
+        resolve(args, {"processing": {"remove_index": ["idx_yaml"]}})
+
+        assert flatten_groups(args.remove_index) == ["idx_yaml", "idx_cli"]
+
+    def test_union_is_deduplicated(self):
+        args = _args(add_index=[["Channel"]])
+
+        resolve(args, {"processing": {"add_index": ["Channel"]}})
+
+        assert flatten_groups(args.add_index) == ["Channel"]
+
+    def test_yaml_only_still_applies(self):
         args = _args()
 
-        zircolite_script._apply_yaml_processing_config(yaml_config, args)
+        resolve(args, {"processing": {"transform_categories": ["commandline"]}})
 
-        assert args.parallel_min_workers == 3
+        assert args.transform_categories == ["commandline"]
 
-    def test_yaml_adaptive_false_applied(self):
-        yaml_config = ZircoliteConfig()
-        yaml_config.parallel.adaptive = False
-        args = _args()
 
-        zircolite_script._apply_yaml_processing_config(yaml_config, args)
+class TestExplicitDefaultsWin:
+    """A value the user typed must beat the config file, even at the default."""
 
-        assert args.parallel_adaptive is False
+    def test_cli_delimiter_equal_to_default_beats_yaml(self):
+        args = _args(csv_delimiter=";")
 
-    def test_yaml_parallel_defaults_leave_args_untouched(self):
-        yaml_config = ZircoliteConfig()
-        args = _args()
+        resolve(args, {"output": {"csv_delimiter": ","}})
 
-        zircolite_script._apply_yaml_processing_config(yaml_config, args)
+        assert args.csv_delimiter == ";"
 
-        assert not hasattr(args, "parallel_min_workers")
-        assert not hasattr(args, "parallel_adaptive")
+    def test_cli_limit_equal_to_default_beats_yaml(self):
+        args = _args(limit=-1)
+
+        resolve(args, {"processing": {"limit": 10}})
+
+        assert args.limit == -1
+
+    def test_yaml_applies_when_cli_is_silent(self):
+        args = _args(csv_delimiter=None, limit=None)
+
+        resolve(args, {"output": {"csv_delimiter": ","},
+                       "processing": {"limit": 10}})
+
+        assert args.csv_delimiter == ","
+        assert args.limit == 10
+
+    def test_defaults_apply_with_no_yaml_at_all(self):
+        args = _args(csv_delimiter=None, limit=None, outfile=None, logfile=None,
+                     timefield=None)
+
+        resolve(args, {})
+
+        assert args.csv_delimiter == ";"
+        assert args.limit == -1
+        assert args.outfile == "detected_events.json"
+        assert args.logfile == "zircolite.log"
+        assert args.timefield == "SystemTime"
+
+
+class TestCsvOutputNaming:
+    """--csv picks the .csv default name without clobbering an explicit one."""
+
+    def test_csv_flag_changes_default_outfile(self):
+        args = _args(csv=True, outfile=None)
+
+        resolve(args, {})
+
+        assert args.outfile == "detected_events.csv"
+
+    def test_yaml_csv_format_changes_default_outfile(self):
+        args = _args(outfile=None)
+
+        resolve(args, {"output": {"format": "csv"}})
+
+        assert args.csv is True
+        assert args._csv_from_yaml is True
+        assert args.outfile == "detected_events.csv"
+
+    def test_explicit_outfile_survives_csv(self):
+        args = _args(csv=True, outfile="detected_events.json")
+
+        resolve(args, {})
+
+        assert args.outfile == "detected_events.json"
 
 
 class TestYamlLoggingOverrides:
@@ -222,20 +328,18 @@ class TestYamlLoggingOverrides:
     def test_debug_true_sets_args_debug(self, tmp_path):
         cfg = tmp_path / "cfg.yaml"
         cfg.write_text("processing:\n  debug: true\n")
-        args = _args(yaml_config=str(cfg), debug=False, nolog=False,
-                     logfile="zircolite.log")
+        args = _args(yaml_config=str(cfg), debug=False, nolog=False, logfile=None)
 
-        zircolite_script.apply_yaml_logging_overrides(args)
+        zircolite_script.resolve_logging_args(args)
 
         assert args.debug is True
 
     def test_log_file_overrides_default(self, tmp_path):
         cfg = tmp_path / "cfg.yaml"
         cfg.write_text("output:\n  log_file: custom.log\n")
-        args = _args(yaml_config=str(cfg), debug=False, nolog=False,
-                     logfile="zircolite.log")
+        args = _args(yaml_config=str(cfg), debug=False, nolog=False, logfile=None)
 
-        zircolite_script.apply_yaml_logging_overrides(args)
+        zircolite_script.resolve_logging_args(args)
 
         assert args.logfile == "custom.log"
 
@@ -245,68 +349,73 @@ class TestYamlLoggingOverrides:
         args = _args(yaml_config=str(cfg), debug=False, nolog=False,
                      logfile="from_cli.log")
 
-        zircolite_script.apply_yaml_logging_overrides(args)
+        zircolite_script.resolve_logging_args(args)
 
         assert args.logfile == "from_cli.log"
 
     def test_no_output_sets_nolog(self, tmp_path):
         cfg = tmp_path / "cfg.yaml"
         cfg.write_text("output:\n  no_output: true\n")
-        args = _args(yaml_config=str(cfg), debug=False, nolog=False,
-                     logfile="zircolite.log")
+        args = _args(yaml_config=str(cfg), debug=False, nolog=False, logfile=None)
 
-        zircolite_script.apply_yaml_logging_overrides(args)
+        zircolite_script.resolve_logging_args(args)
 
         assert args.nolog is True
 
     def test_missing_or_broken_file_is_left_to_the_real_merge(self, tmp_path):
-        """A parse error here must not crash: load_yaml_config_and_merge reports it."""
+        """A parse error here must not crash: resolve_run_config reports it."""
         cfg = tmp_path / "cfg.yaml"
         cfg.write_text("output: [this is not a mapping\n")
-        args = _args(yaml_config=str(cfg), debug=False, nolog=False,
-                     logfile="zircolite.log")
+        args = _args(yaml_config=str(cfg), debug=False, nolog=False, logfile=None)
 
-        zircolite_script.apply_yaml_logging_overrides(args)
-
-        assert args.debug is False
-        assert args.logfile == "zircolite.log"
-
-    def test_no_yaml_config_is_a_noop(self):
-        args = _args(yaml_config=None, debug=False, nolog=False,
-                     logfile="zircolite.log")
-
-        zircolite_script.apply_yaml_logging_overrides(args)
+        zircolite_script.resolve_logging_args(args)
 
         assert args.debug is False
         assert args.logfile == "zircolite.log"
 
+    def test_no_yaml_config_still_applies_the_default_log_file(self):
+        """Without this, argparse's None default would disable file logging."""
+        args = _args(yaml_config=None, debug=False, nolog=False, logfile=None)
 
-class TestMergeWithArgsParallel:
-    """merge_with_args must reflect the real --no-parallel flag."""
+        zircolite_script.resolve_logging_args(args)
 
-    def test_no_parallel_disables_enabled(self):
-        from zircolite.config_loader import ConfigLoader
-        config = ZircoliteConfig()
-        args = _args(no_parallel=True)
+        assert args.debug is False
+        assert args.logfile == "zircolite.log"
 
-        merged = ConfigLoader().merge_with_args(config, args)
+    def test_early_phase_touches_only_the_logging_settings(self, tmp_path):
+        """The rest must wait for validation, so it stays unresolved here."""
+        cfg = tmp_path / "cfg.yaml"
+        cfg.write_text("processing:\n  limit: 10\n")
+        args = _args(yaml_config=str(cfg), debug=False, nolog=False, logfile=None,
+                     limit=None)
 
-        assert merged.parallel.enabled is False
+        zircolite_script.resolve_logging_args(args)
 
-    def test_default_leaves_parallel_enabled(self):
-        from zircolite.config_loader import ConfigLoader
-        config = ZircoliteConfig()
+        assert args.limit is None
+        assert set(EARLY_DESTS) == {"debug", "nolog", "logfile"}
 
-        merged = ConfigLoader().merge_with_args(config, _args())
 
-        assert merged.parallel.enabled is True
+class TestSettingsTable:
+    """Structural invariants of the settings table itself."""
 
-    def test_cli_rulesets_are_flattened(self):
-        """args.ruleset is still argparse's list-of-lists at merge time."""
-        from zircolite.config_loader import ConfigLoader
-        config = ZircoliteConfig()
-        args = _args(ruleset=[["a.json"], ["b.json"]])
+    def test_every_setting_has_a_unique_dest(self):
+        dests = [s.dest for s in run_config.SETTINGS]
+        assert len(dests) == len(set(dests))
 
-        merged = ConfigLoader().merge_with_args(config, args)
+    def test_every_setting_names_a_known_section(self):
+        from zircolite.config_loader import SECTIONS
 
-        assert merged.rules.rulesets == ["a.json", "b.json"]
+        for setting in run_config.SETTINGS:
+            assert setting.section in SECTIONS, setting.dest
+
+    def test_every_setting_key_is_a_real_config_field(self):
+        from dataclasses import fields as dc_fields
+        from zircolite.config_loader import SECTIONS
+
+        for setting in run_config.SETTINGS:
+            known = {f.name for f in dc_fields(SECTIONS[setting.section])}
+            assert setting.key in known, f"{setting.section}.{setting.key}"
+
+    def test_early_dests_are_all_settings(self):
+        dests = {s.dest for s in run_config.SETTINGS}
+        assert EARLY_DESTS <= dests

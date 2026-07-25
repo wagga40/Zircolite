@@ -15,7 +15,7 @@ from zircolite.config_loader import (
     InputConfig,
     RulesConfig,
     OutputConfig,
-    ProcessingConfig,
+    YamlProcessingConfig,
     TimeFilterConfig,
     ParallelProcessingConfig,
     create_default_config_file,
@@ -62,7 +62,9 @@ class TestRulesConfig:
         """Test RulesConfig default values."""
         config = RulesConfig()
         
-        assert config.rulesets == ["rules/rules_windows_generic.json"]
+        # Empty, not the bundled ruleset: the CLI needs "no rules section" to
+        # stay distinguishable so it can resolve the installed copy instead.
+        assert config.rulesets == []
         assert config.pipelines is None
         assert config.filters is None
         assert config.save_ruleset is False
@@ -101,7 +103,7 @@ class TestProcessingConfig:
     
     def test_default_values(self):
         """Test ProcessingConfig default values."""
-        config = ProcessingConfig()
+        config = YamlProcessingConfig()
         
         assert config.unified_db is False
         assert config.auto_mode is True
@@ -147,7 +149,7 @@ class TestZircoliteConfig:
         assert isinstance(config.input, InputConfig)
         assert isinstance(config.rules, RulesConfig)
         assert isinstance(config.output, OutputConfig)
-        assert isinstance(config.processing, ProcessingConfig)
+        assert isinstance(config.processing, YamlProcessingConfig)
         assert isinstance(config.time_filter, TimeFilterConfig)
         assert isinstance(config.parallel, ParallelProcessingConfig)
 
@@ -255,7 +257,7 @@ class TestConfigLoaderParseConfig:
         # Should have defaults for missing sections
         assert config.input.path == "./logs/"
         assert config.input.format == "evtx"  # Default
-        assert config.rules.rulesets == ["rules/rules_windows_generic.json"]  # Default
+        assert config.rules.rulesets == []  # No rules section given
     
     def test_parse_empty_config(self, test_logger):
         """Test parsing an empty configuration."""
@@ -388,120 +390,6 @@ class TestConfigLoaderValidate:
         assert any("min_workers must be at least 1" in issue for issue in issues)
 
 
-class TestConfigLoaderMergeWithArgs:
-    """Tests for ConfigLoader.merge_with_args method."""
-    
-    def test_cli_overrides_yaml(self, test_logger):
-        """Test that CLI arguments override YAML config."""
-        config = ZircoliteConfig()
-        config.input.path = "./yaml_path/"
-        config.output.file = "yaml_output.json"
-        
-        args = Namespace(
-            evtx="./cli_path/",
-            outfile="cli_output.json",
-            json_input=False,
-            json_array_input=False,
-            xml_input=False,
-            csv_input=False,
-            sysmon_linux_input=False,
-            auditd_input=False,
-            evtxtract_input=False,
-            no_recursion=False,
-            file_pattern=None,
-            fileext=None,
-            logs_encoding=None,
-            ruleset=None,
-            pipeline=None,
-            rulefilter=None,
-            save_ruleset=False,
-            csv=False,
-            csv_delimiter=";",
-            template=None,
-            templateOutput=None,
-            package=False,
-            package_dir="",
-            keepflat=False,
-            dbfile=None,
-            logfile="zircolite.log",
-            nolog=False,
-            unified_db=False,
-            no_auto_mode=False,
-            hashes=False,
-            limit=-1,
-            timefield="SystemTime",
-            debug=False,
-            remove_events=False,
-            after="1970-01-01T00:00:00",
-            before="9999-12-12T23:59:59",
-            parallel=False,
-            parallel_workers=None,
-            parallel_memory_limit=85.0,
-        )
-        
-        loader = ConfigLoader(logger=test_logger)
-        merged = loader.merge_with_args(config, args)
-        
-        # CLI should override
-        assert merged.input.path == "./cli_path/"
-        assert merged.output.file == "cli_output.json"
-    
-    def test_yaml_values_preserved_when_cli_default(self, test_logger):
-        """Test that YAML values are kept when CLI has defaults."""
-        config = ZircoliteConfig()
-        config.input.path = "./yaml_path/"
-        config.rules.rulesets = ["yaml_rules.json"]
-        
-        args = Namespace(
-            evtx=None,  # Not provided
-            outfile="detected_events.json",  # Default
-            json_input=False,
-            json_array_input=False,
-            xml_input=False,
-            csv_input=False,
-            sysmon_linux_input=False,
-            auditd_input=False,
-            evtxtract_input=False,
-            no_recursion=False,
-            file_pattern=None,
-            fileext=None,
-            logs_encoding=None,
-            ruleset=None,  # Not provided
-            pipeline=None,
-            rulefilter=None,
-            save_ruleset=False,
-            csv=False,
-            csv_delimiter=";",
-            template=None,
-            templateOutput=None,
-            package=False,
-            package_dir="",
-            keepflat=False,
-            dbfile=None,
-            logfile="zircolite.log",
-            nolog=False,
-            unified_db=False,
-            no_auto_mode=False,
-            hashes=False,
-            limit=-1,
-            timefield="SystemTime",
-            debug=False,
-            remove_events=False,
-            after="1970-01-01T00:00:00",
-            before="9999-12-12T23:59:59",
-            parallel=False,
-            parallel_workers=None,
-            parallel_memory_limit=85.0,
-        )
-        
-        loader = ConfigLoader(logger=test_logger)
-        merged = loader.merge_with_args(config, args)
-        
-        # YAML values should be preserved
-        assert merged.input.path == "./yaml_path/"
-        assert merged.rules.rulesets == ["yaml_rules.json"]
-
-
 class TestCreateDefaultConfigFile:
     """Tests for create_default_config_file function."""
     
@@ -613,381 +501,6 @@ class TestConfigLoaderValidateExtended:
         assert len(template_issues) == 0
 
 
-class TestConfigLoaderMergeWithArgsExtended:
-    """Extended tests for merge_with_args covering all CLI override branches."""
-
-    def _make_args(self, **overrides):
-        """Build a Namespace with defaults and optional overrides."""
-        defaults = dict(
-            evtx=None,
-            outfile="detected_events.json",
-            json_input=False,
-            json_array_input=False,
-            xml_input=False,
-            csv_input=False,
-            sysmon_linux_input=False,
-            auditd_input=False,
-            evtxtract_input=False,
-            no_recursion=False,
-            archive_password=None,
-            file_pattern=None,
-            fileext=None,
-            select=None,
-            avoid=None,
-            logs_encoding=None,
-            ruleset=None,
-            pipeline=None,
-            rulefilter=None,
-            save_ruleset=False,
-            test_rules=None,
-            csv=False,
-            csv_delimiter=";",
-            template=None,
-            templateOutput=None,
-            timesketch=False,
-            navigator_output=None,
-            package=False,
-            package_dir="",
-            keepflat=False,
-            profile_rules=False,
-            dbfile=None,
-            logfile="zircolite.log",
-            nolog=False,
-            unified_db=False,
-            no_auto_mode=False,
-            no_auto_detect=False,
-            hashes=False,
-            limit=-1,
-            timefield="SystemTime",
-            no_event_filter=False,
-            quiet=False,
-            debug=False,
-            remove_events=False,
-            after="1970-01-01T00:00:00",
-            before="9999-12-12T23:59:59",
-            all_transforms=False,
-            transform_categories=None,
-            transform_list=False,
-            yaml_config=None,
-            generate_config=None,
-            no_parallel=False,
-            parallel_workers=None,
-            parallel_memory_limit=85.0,
-            add_index=[],
-            remove_index=[],
-        )
-        defaults.update(overrides)
-        return Namespace(**defaults)
-
-    def test_json_input_override(self, test_logger):
-        config = ZircoliteConfig()
-        args = self._make_args(json_input=True)
-        loader = ConfigLoader(logger=test_logger)
-        merged = loader.merge_with_args(config, args)
-        assert merged.input.format == "json"
-
-    def test_json_array_input_override(self, test_logger):
-        config = ZircoliteConfig()
-        args = self._make_args(json_array_input=True)
-        loader = ConfigLoader(logger=test_logger)
-        merged = loader.merge_with_args(config, args)
-        assert merged.input.format == "json_array"
-
-    def test_xml_input_override(self, test_logger):
-        config = ZircoliteConfig()
-        args = self._make_args(xml_input=True)
-        loader = ConfigLoader(logger=test_logger)
-        merged = loader.merge_with_args(config, args)
-        assert merged.input.format == "xml"
-
-    def test_csv_input_override(self, test_logger):
-        config = ZircoliteConfig()
-        args = self._make_args(csv_input=True)
-        loader = ConfigLoader(logger=test_logger)
-        merged = loader.merge_with_args(config, args)
-        assert merged.input.format == "csv"
-
-    def test_sysmon_linux_input_override(self, test_logger):
-        config = ZircoliteConfig()
-        args = self._make_args(sysmon_linux_input=True)
-        loader = ConfigLoader(logger=test_logger)
-        merged = loader.merge_with_args(config, args)
-        assert merged.input.format == "sysmon_linux"
-
-    def test_auditd_input_override(self, test_logger):
-        config = ZircoliteConfig()
-        args = self._make_args(auditd_input=True)
-        loader = ConfigLoader(logger=test_logger)
-        merged = loader.merge_with_args(config, args)
-        assert merged.input.format == "auditd"
-
-    def test_evtxtract_input_override(self, test_logger):
-        config = ZircoliteConfig()
-        args = self._make_args(evtxtract_input=True)
-        loader = ConfigLoader(logger=test_logger)
-        merged = loader.merge_with_args(config, args)
-        assert merged.input.format == "evtxtract"
-
-    def test_no_recursion_override(self, test_logger):
-        config = ZircoliteConfig()
-        args = self._make_args(no_recursion=True)
-        loader = ConfigLoader(logger=test_logger)
-        merged = loader.merge_with_args(config, args)
-        assert merged.input.recursive is False
-
-    def test_file_pattern_override(self, test_logger):
-        config = ZircoliteConfig()
-        args = self._make_args(file_pattern="*.log")
-        loader = ConfigLoader(logger=test_logger)
-        merged = loader.merge_with_args(config, args)
-        assert merged.input.file_pattern == "*.log"
-
-    def test_fileext_override(self, test_logger):
-        config = ZircoliteConfig()
-        args = self._make_args(fileext=".evtx")
-        loader = ConfigLoader(logger=test_logger)
-        merged = loader.merge_with_args(config, args)
-        assert merged.input.file_extension == ".evtx"
-
-    def test_select_override(self, test_logger):
-        config = ZircoliteConfig()
-        args = self._make_args(select=[["Security"], ["System"]])
-        loader = ConfigLoader(logger=test_logger)
-        merged = loader.merge_with_args(config, args)
-        assert merged.input.select == ["Security", "System"]
-
-    def test_avoid_override(self, test_logger):
-        config = ZircoliteConfig()
-        args = self._make_args(avoid=[["backup"], ["test"]])
-        loader = ConfigLoader(logger=test_logger)
-        merged = loader.merge_with_args(config, args)
-        assert merged.input.avoid == ["backup", "test"]
-
-    def test_logs_encoding_override(self, test_logger):
-        config = ZircoliteConfig()
-        args = self._make_args(logs_encoding="utf-16")
-        loader = ConfigLoader(logger=test_logger)
-        merged = loader.merge_with_args(config, args)
-        assert merged.input.encoding == "utf-16"
-
-    def test_ruleset_override(self, test_logger):
-        config = ZircoliteConfig()
-        args = self._make_args(ruleset=["rules/custom.json"])
-        loader = ConfigLoader(logger=test_logger)
-        merged = loader.merge_with_args(config, args)
-        assert merged.rules.rulesets == ["rules/custom.json"]
-
-    def test_pipeline_override(self, test_logger):
-        config = ZircoliteConfig()
-        args = self._make_args(pipeline=[["sysmon"], ["windows-logsources"]])
-        loader = ConfigLoader(logger=test_logger)
-        merged = loader.merge_with_args(config, args)
-        assert merged.rules.pipelines == ["sysmon", "windows-logsources"]
-
-    def test_rulefilter_override(self, test_logger):
-        config = ZircoliteConfig()
-        args = self._make_args(rulefilter=[["Noisy Rule"], ["Another"]])
-        loader = ConfigLoader(logger=test_logger)
-        merged = loader.merge_with_args(config, args)
-        assert merged.rules.filters == ["Noisy Rule", "Another"]
-
-    def test_save_ruleset_override(self, test_logger):
-        config = ZircoliteConfig()
-        args = self._make_args(save_ruleset=True)
-        loader = ConfigLoader(logger=test_logger)
-        merged = loader.merge_with_args(config, args)
-        assert merged.rules.save_ruleset is True
-
-    def test_csv_output_override(self, test_logger):
-        config = ZircoliteConfig()
-        args = self._make_args(csv=True)
-        loader = ConfigLoader(logger=test_logger)
-        merged = loader.merge_with_args(config, args)
-        assert merged.output.format == "csv"
-
-    def test_csv_delimiter_override(self, test_logger):
-        config = ZircoliteConfig()
-        args = self._make_args(csv_delimiter=",")
-        loader = ConfigLoader(logger=test_logger)
-        merged = loader.merge_with_args(config, args)
-        assert merged.output.csv_delimiter == ","
-
-    def test_template_override(self, test_logger):
-        config = ZircoliteConfig()
-        args = self._make_args(
-            template=[["tmpl.html"]],
-            templateOutput=[["out.html"]],
-        )
-        loader = ConfigLoader(logger=test_logger)
-        merged = loader.merge_with_args(config, args)
-        assert len(merged.output.templates) == 1
-        assert merged.output.templates[0]["template"] == "tmpl.html"
-        assert merged.output.templates[0]["output"] == "out.html"
-
-    def test_package_override(self, test_logger):
-        config = ZircoliteConfig()
-        args = self._make_args(package=True, package_dir="pkg")
-        loader = ConfigLoader(logger=test_logger)
-        merged = loader.merge_with_args(config, args)
-        assert merged.output.package is True
-        assert merged.output.package_dir == "pkg"
-
-    def test_keepflat_override(self, test_logger):
-        config = ZircoliteConfig()
-        args = self._make_args(keepflat=True)
-        loader = ConfigLoader(logger=test_logger)
-        merged = loader.merge_with_args(config, args)
-        assert merged.output.keep_flat is True
-
-    def test_dbfile_override(self, test_logger):
-        config = ZircoliteConfig()
-        args = self._make_args(dbfile="out.db")
-        loader = ConfigLoader(logger=test_logger)
-        merged = loader.merge_with_args(config, args)
-        assert merged.output.db_file == "out.db"
-
-    def test_logfile_override(self, test_logger):
-        config = ZircoliteConfig()
-        args = self._make_args(logfile="custom.log")
-        loader = ConfigLoader(logger=test_logger)
-        merged = loader.merge_with_args(config, args)
-        assert merged.output.log_file == "custom.log"
-
-    def test_nolog_override(self, test_logger):
-        config = ZircoliteConfig()
-        args = self._make_args(nolog=True)
-        loader = ConfigLoader(logger=test_logger)
-        merged = loader.merge_with_args(config, args)
-        assert merged.output.no_output is True
-
-    def test_unified_db_override(self, test_logger):
-        config = ZircoliteConfig()
-        args = self._make_args(unified_db=True)
-        loader = ConfigLoader(logger=test_logger)
-        merged = loader.merge_with_args(config, args)
-        assert merged.processing.unified_db is True
-
-    def test_no_auto_mode_override(self, test_logger):
-        config = ZircoliteConfig()
-        args = self._make_args(no_auto_mode=True)
-        loader = ConfigLoader(logger=test_logger)
-        merged = loader.merge_with_args(config, args)
-        assert merged.processing.auto_mode is False
-
-    def test_hashes_override(self, test_logger):
-        config = ZircoliteConfig()
-        args = self._make_args(hashes=True)
-        loader = ConfigLoader(logger=test_logger)
-        merged = loader.merge_with_args(config, args)
-        assert merged.processing.hashes is True
-
-    def test_limit_override(self, test_logger):
-        config = ZircoliteConfig()
-        args = self._make_args(limit=1000)
-        loader = ConfigLoader(logger=test_logger)
-        merged = loader.merge_with_args(config, args)
-        assert merged.processing.limit == 1000
-
-    def test_timefield_override(self, test_logger):
-        config = ZircoliteConfig()
-        args = self._make_args(timefield="@timestamp")
-        loader = ConfigLoader(logger=test_logger)
-        merged = loader.merge_with_args(config, args)
-        assert merged.processing.time_field == "@timestamp"
-
-    def test_no_event_filter_override(self, test_logger):
-        config = ZircoliteConfig()
-        args = self._make_args(no_event_filter=True)
-        loader = ConfigLoader(logger=test_logger)
-        merged = loader.merge_with_args(config, args)
-        assert merged.processing.event_filter_enabled is False
-
-    def test_debug_override(self, test_logger):
-        config = ZircoliteConfig()
-        args = self._make_args(debug=True)
-        loader = ConfigLoader(logger=test_logger)
-        merged = loader.merge_with_args(config, args)
-        assert merged.processing.debug is True
-
-    def test_remove_events_override(self, test_logger):
-        config = ZircoliteConfig()
-        args = self._make_args(remove_events=True)
-        loader = ConfigLoader(logger=test_logger)
-        merged = loader.merge_with_args(config, args)
-        assert merged.processing.remove_events is True
-
-    def test_all_transforms_override(self, test_logger):
-        config = ZircoliteConfig()
-        args = self._make_args(all_transforms=True)
-        loader = ConfigLoader(logger=test_logger)
-        merged = loader.merge_with_args(config, args)
-        assert merged.processing.all_transforms is True
-
-    def test_transform_categories_override(self, test_logger):
-        config = ZircoliteConfig()
-        args = self._make_args(transform_categories=["commandline", "dfir"])
-        loader = ConfigLoader(logger=test_logger)
-        merged = loader.merge_with_args(config, args)
-        assert merged.processing.transform_categories == ["commandline", "dfir"]
-
-    def test_add_index_override(self, test_logger):
-        config = ZircoliteConfig()
-        args = self._make_args(add_index=[["Channel", "SystemTime"]])
-        loader = ConfigLoader(logger=test_logger)
-        merged = loader.merge_with_args(config, args)
-        assert merged.processing.add_index == ["Channel", "SystemTime"]
-
-    def test_remove_index_override(self, test_logger):
-        config = ZircoliteConfig()
-        args = self._make_args(remove_index=[["idx_channel", "idx_eventid"]])
-        loader = ConfigLoader(logger=test_logger)
-        merged = loader.merge_with_args(config, args)
-        assert merged.processing.remove_index == ["idx_channel", "idx_eventid"]
-
-    def test_after_override(self, test_logger):
-        config = ZircoliteConfig()
-        args = self._make_args(after="2024-06-01T00:00:00")
-        loader = ConfigLoader(logger=test_logger)
-        merged = loader.merge_with_args(config, args)
-        assert merged.time_filter.after == "2024-06-01T00:00:00"
-
-    def test_before_override(self, test_logger):
-        config = ZircoliteConfig()
-        args = self._make_args(before="2024-12-31T23:59:59")
-        loader = ConfigLoader(logger=test_logger)
-        merged = loader.merge_with_args(config, args)
-        assert merged.time_filter.before == "2024-12-31T23:59:59"
-
-    def test_parallel_override(self, test_logger):
-        config = ZircoliteConfig()
-        args = self._make_args(parallel=True)
-        loader = ConfigLoader(logger=test_logger)
-        merged = loader.merge_with_args(config, args)
-        assert merged.parallel.enabled is True
-
-    def test_parallel_workers_override(self, test_logger):
-        config = ZircoliteConfig()
-        args = self._make_args(parallel_workers=8)
-        loader = ConfigLoader(logger=test_logger)
-        merged = loader.merge_with_args(config, args)
-        assert merged.parallel.max_workers == 8
-
-    def test_strict_evtx_override(self, test_logger):
-        config = ZircoliteConfig()
-        args = self._make_args(strict=True)
-        loader = ConfigLoader(logger=test_logger)
-        merged = loader.merge_with_args(config, args)
-        assert merged.processing.strict_evtx is True
-
-    def test_strict_evtx_default_not_overridden(self, test_logger):
-        config = ZircoliteConfig()
-        config.processing.strict_evtx = False
-        args = self._make_args()
-        loader = ConfigLoader(logger=test_logger)
-        merged = loader.merge_with_args(config, args)
-        assert merged.processing.strict_evtx is False
-
-
 class TestConfigLoaderParseConfigExtended:
     """Additional parse_config tests for edge cases."""
 
@@ -1044,16 +557,6 @@ class TestConfigLoaderParseConfigExtended:
         config = loader.parse_config(config_dict)
         assert config.output.template_append is True
 
-    def test_template_append_cli_override(self, test_logger):
-        """CLI --template-append flag sets output.template_append on merge."""
-        from argparse import Namespace
-        config = ZircoliteConfig()
-        args = Namespace(template_append=True)
-        loader = ConfigLoader(logger=test_logger)
-        merged = loader.merge_with_args(config, args)
-        assert merged.output.template_append is True
-
-
 class TestConfigLoaderIntegration:
     """Integration tests for ConfigLoader."""
     
@@ -1074,7 +577,6 @@ output:
   format: json
 
 processing:
-  streaming: true
   unified_db: false
 
 time_filter:
@@ -1123,39 +625,11 @@ class TestConfigLoaderBugFixes:
         issues = loader.validate_config(config)
         assert any("single path string" in i for i in issues)
 
-    def test_parse_config_null_rulesets_uses_default(self, test_logger):
+    def test_parse_config_null_rulesets_stays_empty(self, test_logger):
         """A 'rulesets: null' entry must not crash parsing/validation."""
         loader = ConfigLoader(logger=test_logger)
         config = loader.parse_config({'rules': {'rulesets': None}})
-        assert config.rules.rulesets == ["rules/rules_windows_generic.json"]
+        assert config.rules.rulesets == []
         # validate_config must not raise TypeError iterating None
         loader.validate_config(config)
 
-    def test_merge_with_args_template_mismatch_length(self, test_logger):
-        """merge_with_args handles templateOutput shorter than template."""
-        import argparse
-        loader = ConfigLoader(logger=test_logger)
-        config = ZircoliteConfig()
-        args = argparse.Namespace(
-            evtx=None, json_input=False, json_array_input=False,
-            xml_input=False, csv_input=False, sysmon_linux_input=False,
-            auditd_input=False, evtxtract_input=False, no_recursion=False,
-            file_pattern=None, fileext=None, select=None, avoid=None,
-            logs_encoding=None, ruleset=None, pipeline=None, rulefilter=None,
-            save_ruleset=False, outfile="detected_events.json",
-            csv=False, csv_delimiter=";",
-            template=[["tmpl1.tmpl"], ["tmpl2.tmpl"]],
-            templateOutput=[["out1.txt"]],
-            package=False, package_dir="", keepflat=False, dbfile=None,
-            logfile="zircolite.log", nolog=False, unified_db=False,
-            no_auto_mode=False, hashes=False, limit=-1, timefield="SystemTime",
-            no_event_filter=False, debug=False, remove_events=False,
-            all_transforms=False, transform_categories=None,
-            add_index=None, remove_index=None,
-            after="1970-01-01T00:00:00", before="9999-12-12T23:59:59",
-            parallel=False, parallel_workers=None,
-        )
-        result = loader.merge_with_args(config, args)
-        assert len(result.output.templates) == 2
-        assert result.output.templates[0]["output"] == "out1.txt"
-        assert result.output.templates[1]["output"] == "output_1.txt"

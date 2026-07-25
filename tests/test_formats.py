@@ -19,6 +19,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 import pytest
 
 import zircolite as zc_pkg
+from zircolite import run_config
 from zircolite.config import ExtractorConfig
 from zircolite.config_loader import ConfigLoader, ZircoliteConfig
 from zircolite.formats import (
@@ -106,24 +107,24 @@ class TestFormatParity:
     ):
         assert zircolite_cli._format_flag_extension(make_args(flag)) == extension
 
-    def test_merge_with_args_sets_yaml_format(
+    def test_cli_flag_wins_over_yaml_format(
         self, flag, input_type, explicit, extension, yaml_format
     ):
-        loader = ConfigLoader()
-        config = ZircoliteConfig()
-        merged = loader.merge_with_args(config, make_args(flag))
-        # No flag set leaves the configured default in place
-        expected = yaml_format if flag is not None else "evtx"
-        assert merged.input.format == expected
+        """An explicit CLI format flag is not overridden by `input.format`."""
+        if flag is None:
+            pytest.skip("EVTX is the implicit default; it has no flag to win with")
+        args = make_args(flag, evtx=None, no_recursion=False)
+        # Deliberately pick a different format in the YAML document
+        other = "csv" if yaml_format != "csv" else "json"
+        run_config.resolve(args, {"input": {"format": other}})
+        assert zircolite_cli.get_input_type(args) == input_type
 
     def test_yaml_format_round_trip(
         self, flag, input_type, explicit, extension, yaml_format
     ):
         """A YAML `input.format` must set the flag `get_input_type` reads back."""
-        config = ZircoliteConfig()
-        config.input.format = yaml_format
         args = make_args(None, evtx=None, no_recursion=False)
-        zircolite_cli._apply_yaml_input_config(config, args)
+        run_config.resolve(args, {"input": {"format": yaml_format}})
         assert zircolite_cli.get_input_type(args) == input_type
 
     def test_chosen_input(

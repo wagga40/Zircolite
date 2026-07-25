@@ -9,16 +9,28 @@ This module provides:
 - Default value handling
 """
 
-import argparse
 import logging
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, fields
 
-from .formats import INPUT_FORMATS, YAML_INPUT_FORMATS, is_valid_yaml_format
+from .formats import YAML_INPUT_FORMATS, is_valid_yaml_format
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 import yaml
-# Rich console for styled output
+
+# Defaults shared by the dataclasses below and by the CLI. argparse declares
+# these options with `default=None` so that "the user passed the default
+# explicitly" stays distinguishable from "the user passed nothing"; the value
+# is filled in here instead, at the end of the resolution chain.
+DEFAULT_OUTFILE = "detected_events.json"
+DEFAULT_CSV_DELIMITER = ";"
+DEFAULT_LOG_FILE = "zircolite.log"
+DEFAULT_LIMIT = -1
+DEFAULT_TIME_FIELD = "SystemTime"
+DEFAULT_AFTER = "1970-01-01T00:00:00"
+DEFAULT_BEFORE = "9999-12-12T23:59:59"
+DEFAULT_MEMORY_LIMIT_PERCENT = 85.0
+DEFAULT_PACKAGE_DIR = ""
 
 
 @dataclass
@@ -37,7 +49,10 @@ class InputConfig:
 @dataclass
 class RulesConfig:
     """Configuration for rules and rulesets."""
-    rulesets: List[str] = field(default_factory=lambda: ["rules/rules_windows_generic.json"])
+    # Empty on purpose: an absent `rules:` section must stay distinguishable
+    # from an explicit choice, so that the CLI can still fall back to the
+    # ruleset bundled with the install rather than a bare relative path.
+    rulesets: List[str] = field(default_factory=list)
     pipelines: Optional[List[str]] = None
     filters: Optional[List[str]] = None  # Rule title filters to exclude
     save_ruleset: bool = False
@@ -46,27 +61,27 @@ class RulesConfig:
 @dataclass
 class OutputConfig:
     """Configuration for output files and formats."""
-    file: str = "detected_events.json"
+    file: str = DEFAULT_OUTFILE
     format: str = "json"  # json, csv
-    csv_delimiter: str = ";"
+    csv_delimiter: str = DEFAULT_CSV_DELIMITER
     templates: Optional[List[Dict[str, str]]] = None  # List of {template, output} pairs
     template_append: bool = False
     package: bool = False
-    package_dir: str = ""
+    package_dir: str = DEFAULT_PACKAGE_DIR
     keep_flat: bool = False
     db_file: Optional[str] = None
-    log_file: str = "zircolite.log"
+    log_file: str = DEFAULT_LOG_FILE
     no_output: bool = False
 
 
 @dataclass
-class ProcessingConfig:
+class YamlProcessingConfig:
     """Configuration for processing options."""
     unified_db: bool = False
     auto_mode: bool = True
     hashes: bool = False
-    limit: int = -1
-    time_field: str = "SystemTime"
+    limit: int = DEFAULT_LIMIT
+    time_field: str = DEFAULT_TIME_FIELD
     event_filter_enabled: bool = True  # Enable event filtering based on channel/eventID
     debug: bool = False
     remove_events: bool = False
@@ -81,8 +96,8 @@ class ProcessingConfig:
 @dataclass
 class TimeFilterConfig:
     """Configuration for time-based event filtering."""
-    after: str = "1970-01-01T00:00:00"
-    before: str = "9999-12-12T23:59:59"
+    after: str = DEFAULT_AFTER
+    before: str = DEFAULT_BEFORE
 
 
 @dataclass
@@ -91,7 +106,7 @@ class ParallelProcessingConfig:
     enabled: bool = True  # parallel auto-mode is on unless explicitly disabled
     max_workers: Optional[int] = None  # None = auto-detect
     min_workers: int = 1
-    memory_limit_percent: float = 85.0
+    memory_limit_percent: float = DEFAULT_MEMORY_LIMIT_PERCENT
     adaptive: bool = True
 
 
@@ -101,9 +116,44 @@ class ZircoliteConfig:
     input: InputConfig = field(default_factory=InputConfig)
     rules: RulesConfig = field(default_factory=RulesConfig)
     output: OutputConfig = field(default_factory=OutputConfig)
-    processing: ProcessingConfig = field(default_factory=ProcessingConfig)
+    processing: YamlProcessingConfig = field(default_factory=YamlProcessingConfig)
     time_filter: TimeFilterConfig = field(default_factory=TimeFilterConfig)
     parallel: ParallelProcessingConfig = field(default_factory=ParallelProcessingConfig)
+    # Dotted keys found in the YAML file that no section recognises. Reported
+    # by validate_config so a typo does not silently do nothing.
+    unknown_keys: List[str] = field(default_factory=list)
+
+
+# Section name -> dataclass. Every accepted YAML key is a field of one of these,
+# which is what makes unknown-key detection drift-proof: adding a field to a
+# dataclass is the only way to add a key, so the two cannot disagree.
+SECTIONS: Dict[str, Any] = {
+    'input': InputConfig,
+    'rules': RulesConfig,
+    'output': OutputConfig,
+    'processing': YamlProcessingConfig,
+    'time_filter': TimeFilterConfig,
+    'parallel': ParallelProcessingConfig,
+}
+
+
+def unknown_yaml_keys(config_dict: Dict[str, Any]) -> List[str]:
+    """Dotted keys in *config_dict* that no configuration section defines.
+
+    Many YAML names deliberately differ from their CLI flag (``--keepflat`` is
+    ``keep_flat``, ``--nolog`` is ``no_output``), so a typo is easy to make and
+    would otherwise do nothing at all.
+    """
+    unknown: List[str] = []
+    for name, value in (config_dict or {}).items():
+        if name not in SECTIONS:
+            unknown.append(name)
+            continue
+        known = {f.name for f in fields(SECTIONS[name])}
+        for key in (value or {}):
+            if key not in known:
+                unknown.append(f"{name}.{key}")
+    return unknown
 
 
 class ConfigLoader:
@@ -164,10 +214,14 @@ class ConfigLoader:
             ZircoliteConfig instance
         """
         config = ZircoliteConfig()
-        
+        config.unknown_keys = unknown_yaml_keys(config_dict)
+
+        # A present-but-empty section (`processing:` with nothing under it) parses
+        # as None, so every section is read through `or {}`.
+
         # Parse input section
         if 'input' in config_dict:
-            inp = config_dict['input']
+            inp = config_dict['input'] or {}
             config.input = InputConfig(
                 path=inp.get('path'),
                 format=inp.get('format', 'evtx'),
@@ -181,9 +235,9 @@ class ConfigLoader:
         
         # Parse rules section
         if 'rules' in config_dict:
-            rules = config_dict['rules']
+            rules = config_dict['rules'] or {}
             # dict.get returns None when the key is present-but-null (rulesets:)
-            rulesets = rules.get('rulesets') or ["rules/rules_windows_generic.json"]
+            rulesets = rules.get('rulesets') or []
             if isinstance(rulesets, str):
                 rulesets = [rulesets]
             config.rules = RulesConfig(
@@ -195,33 +249,31 @@ class ConfigLoader:
         
         # Parse output section
         if 'output' in config_dict:
-            out = config_dict['output']
-            templates = None
-            if 'templates' in out:
-                templates = out['templates']
+            out = config_dict['output'] or {}
+            templates = out.get('templates')
             config.output = OutputConfig(
-                file=out.get('file', 'detected_events.json'),
+                file=out.get('file', DEFAULT_OUTFILE),
                 format=out.get('format', 'json'),
-                csv_delimiter=out.get('csv_delimiter', ';'),
+                csv_delimiter=out.get('csv_delimiter', DEFAULT_CSV_DELIMITER),
                 templates=templates,
                 template_append=out.get('template_append', False),
                 package=out.get('package', False),
                 package_dir=out.get('package_dir', ''),
                 keep_flat=out.get('keep_flat', False),
                 db_file=out.get('db_file'),
-                log_file=out.get('log_file', 'zircolite.log'),
+                log_file=out.get('log_file', DEFAULT_LOG_FILE),
                 no_output=out.get('no_output', False)
             )
-        
+
         # Parse processing section
         if 'processing' in config_dict:
-            proc = config_dict['processing']
-            config.processing = ProcessingConfig(
+            proc = config_dict['processing'] or {}
+            config.processing = YamlProcessingConfig(
                 unified_db=proc.get('unified_db', False),
                 auto_mode=proc.get('auto_mode', True),
                 hashes=proc.get('hashes', False),
-                limit=proc.get('limit', -1),
-                time_field=proc.get('time_field', 'SystemTime'),
+                limit=proc.get('limit', DEFAULT_LIMIT),
+                time_field=proc.get('time_field', DEFAULT_TIME_FIELD),
                 event_filter_enabled=proc.get('event_filter_enabled', True),
                 debug=proc.get('debug', False),
                 remove_events=proc.get('remove_events', False),
@@ -235,23 +287,25 @@ class ConfigLoader:
         
         # Parse time_filter section
         if 'time_filter' in config_dict:
-            tf = config_dict['time_filter']
+            tf = config_dict['time_filter'] or {}
             config.time_filter = TimeFilterConfig(
-                after=tf.get('after', '1970-01-01T00:00:00'),
-                before=tf.get('before', '9999-12-12T23:59:59')
+                after=tf.get('after', DEFAULT_AFTER),
+                before=tf.get('before', DEFAULT_BEFORE)
             )
-        
+
         # Parse parallel section
         if 'parallel' in config_dict:
-            par = config_dict['parallel']
+            par = config_dict['parallel'] or {}
             config.parallel = ParallelProcessingConfig(
                 enabled=par.get('enabled', True),
                 max_workers=par.get('max_workers'),
                 min_workers=par.get('min_workers', 1),
-                memory_limit_percent=par.get('memory_limit_percent', 85.0),
+                memory_limit_percent=par.get(
+                    'memory_limit_percent', DEFAULT_MEMORY_LIMIT_PERCENT
+                ),
                 adaptive=par.get('adaptive', True)
             )
-        
+
         return config
 
     def load(self, config_path: str) -> ZircoliteConfig:
@@ -278,7 +332,10 @@ class ConfigLoader:
             List of validation error messages (empty if valid)
         """
         issues = []
-        
+
+        for key in config.unknown_keys:
+            issues.append(f"Unknown configuration key (ignored): {key}")
+
         # Validate input
         if isinstance(config.input.path, list):
             issues.append("input.path must be a single path string, not a list")
@@ -333,134 +390,6 @@ class ConfigLoader:
                 issues.append("memory_limit_percent must be between 0 and 100")
         
         return issues
-
-    def merge_with_args(
-        self, config: ZircoliteConfig, args: argparse.Namespace
-    ) -> ZircoliteConfig:
-        """
-        Merge YAML config with CLI arguments. CLI arguments take precedence.
-        
-        Args:
-            config: Base configuration from YAML
-            args: argparse namespace with CLI arguments
-            
-        Returns:
-            Merged configuration
-        """
-        # Input overrides
-        if hasattr(args, 'evtx') and args.evtx:
-            config.input.path = args.evtx
-        
-        for spec in INPUT_FORMATS:
-            if getattr(args, spec.args_flag, False):
-                config.input.format = spec.yaml_format
-                break
-        
-        if hasattr(args, 'no_recursion') and args.no_recursion:
-            config.input.recursive = False
-        if hasattr(args, 'file_pattern') and args.file_pattern:
-            config.input.file_pattern = args.file_pattern
-        if hasattr(args, 'fileext') and args.fileext:
-            config.input.file_extension = args.fileext
-        if hasattr(args, 'select') and args.select:
-            config.input.select = [term for group in args.select for term in group]
-        if hasattr(args, 'avoid') and args.avoid:
-            config.input.avoid = [term for group in args.avoid for term in group]
-        if hasattr(args, 'logs_encoding') and args.logs_encoding:
-            config.input.encoding = args.logs_encoding
-        
-        # Rules overrides
-        if hasattr(args, 'ruleset') and args.ruleset:
-            # argparse stores -r as a list of lists (action='append'); the CLI
-            # only flattens it later, so normalize here
-            config.rules.rulesets = [
-                r for group in args.ruleset
-                for r in (group if isinstance(group, list) else [group])
-            ]
-        if hasattr(args, 'pipeline') and args.pipeline:
-            config.rules.pipelines = [p for pl in args.pipeline for p in pl]
-        if hasattr(args, 'rulefilter') and args.rulefilter:
-            config.rules.filters = [f for fl in args.rulefilter for f in fl]
-        if hasattr(args, 'save_ruleset') and args.save_ruleset:
-            config.rules.save_ruleset = True
-        
-        # Output overrides
-        if hasattr(args, 'outfile') and args.outfile != "detected_events.json":
-            config.output.file = args.outfile
-        if hasattr(args, 'csv') and args.csv:
-            config.output.format = 'csv'
-        if hasattr(args, 'csv_delimiter') and args.csv_delimiter != ';':
-            config.output.csv_delimiter = args.csv_delimiter
-        if hasattr(args, 'template') and args.template:
-            # Convert template list format
-            config.output.templates = []
-            for i, tmpl in enumerate(args.template):
-                if args.templateOutput and i < len(args.templateOutput) and args.templateOutput[i]:
-                    output = args.templateOutput[i][0]
-                else:
-                    output = f"output_{i}.txt"
-                config.output.templates.append({'template': tmpl[0], 'output': output})
-        if getattr(args, 'template_append', False):
-            config.output.template_append = True
-        if hasattr(args, 'package') and args.package:
-            config.output.package = True
-        if hasattr(args, 'package_dir') and args.package_dir:
-            config.output.package_dir = args.package_dir
-        if hasattr(args, 'keepflat') and args.keepflat:
-            config.output.keep_flat = True
-        if hasattr(args, 'dbfile') and args.dbfile:
-            config.output.db_file = args.dbfile
-        if hasattr(args, 'logfile') and args.logfile != 'zircolite.log':
-            config.output.log_file = args.logfile
-        if hasattr(args, 'nolog') and args.nolog:
-            config.output.no_output = True
-        
-        # Processing overrides
-        if hasattr(args, 'unified_db') and args.unified_db:
-            config.processing.unified_db = True
-        if hasattr(args, 'no_auto_mode') and args.no_auto_mode:
-            config.processing.auto_mode = False
-        if hasattr(args, 'hashes') and args.hashes:
-            config.processing.hashes = True
-        if hasattr(args, 'limit') and args.limit != -1:
-            config.processing.limit = args.limit
-        if hasattr(args, 'timefield') and args.timefield != 'SystemTime':
-            config.processing.time_field = args.timefield
-        if hasattr(args, 'no_event_filter') and args.no_event_filter:
-            config.processing.event_filter_enabled = False
-        if hasattr(args, 'debug') and args.debug:
-            config.processing.debug = True
-        if hasattr(args, 'remove_events') and args.remove_events:
-            config.processing.remove_events = True
-        if hasattr(args, 'all_transforms') and args.all_transforms:
-            config.processing.all_transforms = True
-        if hasattr(args, 'transform_categories') and args.transform_categories:
-            config.processing.transform_categories = args.transform_categories
-        if getattr(args, 'add_index', None):
-            config.processing.add_index = [x for group in args.add_index for x in group]
-        if getattr(args, 'remove_index', None):
-            config.processing.remove_index = [x for group in args.remove_index for x in group]
-        if getattr(args, 'auto_index', 0):
-            config.processing.auto_index = int(args.auto_index)
-        if hasattr(args, 'strict') and args.strict:
-            config.processing.strict_evtx = True
-
-        # Time filter overrides
-        if hasattr(args, 'after') and args.after != '1970-01-01T00:00:00':
-            config.time_filter.after = args.after
-        if hasattr(args, 'before') and args.before != '9999-12-12T23:59:59':
-            config.time_filter.before = args.before
-        
-        # Parallel processing overrides
-        if getattr(args, 'no_parallel', False):
-            config.parallel.enabled = False
-        if hasattr(args, 'parallel_workers') and args.parallel_workers:
-            config.parallel.max_workers = args.parallel_workers
-        if getattr(args, 'parallel_memory_limit', 85.0) != 85.0:
-            config.parallel.memory_limit_percent = args.parallel_memory_limit
-        
-        return config
-
 
 def create_default_config_file(output_path: str = "zircolite_config.yaml") -> None:
     """
