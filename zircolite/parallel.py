@@ -136,9 +136,6 @@ class ParallelConfig:
     max_workers: Optional[int] = None
     min_workers: int = 1
     memory_limit_percent: float = 85.0
-    memory_check_interval: int = 5  # kept for config compatibility; memory is sampled on every completion
-    adaptive_workers: bool = True
-    batch_size: int = 10
     sort_by_size: bool = True  # LPT scheduling – process largest files first
     adaptive_memory: bool = True  # Calibrate memory estimates after first file
 
@@ -147,18 +144,12 @@ class ParallelConfig:
 class ParallelStats:
     """Statistics from parallel processing."""
 
-    total_files: int = 0
     processed_files: int = 0
-    failed_files: int = 0
     total_events: int = 0
-    peak_memory_mb: float = 0.0
-    avg_memory_mb: float = 0.0
     processing_time_seconds: float = 0.0
     workers_used: int = 0
     throttle_events: int = 0
     submissions_paused: int = 0  # Times new work was deferred due to memory pressure
-    memory_calibrated: bool = False
-    calibrated_ratio: float = 0.0
 
 
 # ============================================================================
@@ -189,8 +180,6 @@ class MemoryAwareParallelProcessor:
         self.config = config or ParallelConfig()
         self.logger = logger or logging.getLogger(__name__)
         self.stats = ParallelStats()
-        self._memory_samples: List[float] = []
-        self._current_workers = 0
         self._process = psutil.Process(os.getpid())
         self._calibrated_memory_per_file_mb: Optional[float] = None
         self._first_file_memory_before: Optional[float] = None
@@ -305,8 +294,6 @@ class MemoryAwareParallelProcessor:
         blended_ratio = 0.7 * actual_ratio + 0.3 * heuristic_ratio
 
         self._calibrated_memory_per_file_mb = file_size_mb * blended_ratio
-        self.stats.memory_calibrated = True
-        self.stats.calibrated_ratio = blended_ratio
         self.logger.debug(
             f"Memory calibrated: {actual_ratio:.1f}x actual, "
             f"{blended_ratio:.1f}x blended (file: {file_size_mb:.1f}MB, "
@@ -317,9 +304,7 @@ class MemoryAwareParallelProcessor:
     # Worker calculation
     # ------------------------------------------------------------------
 
-    def calculate_optimal_workers(
-        self, file_list: List[Path], quiet: bool = False
-    ) -> int:
+    def calculate_optimal_workers(self, file_list: List[Path]) -> int:
         """Calculate optimal workers, delegating to the module-level function."""
         file_sizes = []
         for f in file_list:
@@ -363,7 +348,6 @@ class MemoryAwareParallelProcessor:
         desc: str = "Processing",
         disable_progress: bool = False,
         on_result: Optional[Callable[[Any], None]] = None,
-        event_count_callback: Optional[Callable[[int], None]] = None,
         rule_progress_queue: Optional[queue.Queue] = None,
     ) -> Tuple[List[Any], ParallelStats]:
         """
@@ -376,8 +360,6 @@ class MemoryAwareParallelProcessor:
             disable_progress: Suppress Rich progress bar.
             on_result: Called with each non-None result as it arrives
                        (useful for incremental writes to disk).
-            event_count_callback: Called with cumulative event total after
-                                  each file for granular progress reporting.
             rule_progress_queue: If set, workers put (worker_id, file_name, rules_done, total_rules)
                                  here; this method adds one progress task per file (description =
                                  truncated file_name), updates it, and removes it when the file
@@ -390,8 +372,7 @@ class MemoryAwareParallelProcessor:
             return [], self.stats
 
         start_time = time.time()
-        self.stats = ParallelStats(total_files=len(file_list))
-        self._memory_samples = []
+        self.stats = ParallelStats()
         # Reset calibration state so a reused processor instance does not
         # inherit estimates from a previous run
         self._calibrated_memory_per_file_mb = None
@@ -401,8 +382,7 @@ class MemoryAwareParallelProcessor:
         if self.config.sort_by_size:
             file_list = self.sort_files_by_size(file_list)
 
-        num_workers = self.calculate_optimal_workers(file_list, quiet=True)
-        self._current_workers = num_workers
+        num_workers = self.calculate_optimal_workers(file_list)
         self.stats.workers_used = num_workers
 
         # Snapshot memory before first file for adaptive calibration
@@ -523,11 +503,7 @@ class MemoryAwareParallelProcessor:
                                 events=self.stats.total_events,
                             )
 
-                            if event_count_callback is not None:
-                                event_count_callback(self.stats.total_events)
-
                         except Exception as e:
-                            self.stats.failed_files += 1
                             failed_files.append((file_path, str(e)))
                             progress_main.update(task_id, advance=1)
 
@@ -539,14 +515,6 @@ class MemoryAwareParallelProcessor:
                             self.calibrate_memory(
                                 file_path, self.get_current_memory_mb()
                             )
-
-                        # Sample memory on every completion — interval-based sampling
-                        # misses peaks in spiky workloads.
-                        current_mem = self.get_current_memory_mb()
-                        self._memory_samples.append(current_mem)
-                        self.stats.peak_memory_mb = max(
-                            self.stats.peak_memory_mb, current_mem
-                        )
 
                         if file_queue and not is_shutdown_requested():
                             if self.should_throttle() or self._would_exceed_memory_budget():
@@ -574,10 +542,6 @@ class MemoryAwareParallelProcessor:
 
         # Final statistics
         self.stats.processing_time_seconds = time.time() - start_time
-        if self._memory_samples:
-            self.stats.avg_memory_mb = sum(self._memory_samples) / len(
-                self._memory_samples
-            )
 
         self._log_summary(failed_files)
 
@@ -615,86 +579,3 @@ class MemoryAwareParallelProcessor:
                 f"[!] Memory pressure detected [yellow]{self.stats.throttle_events}[/] times "
                 f"([yellow]{self.stats.submissions_paused}[/] submissions deferred)"
             )
-
-
-# ============================================================================
-# CONVENIENCE FUNCTIONS
-# ============================================================================
-
-
-def process_files_with_memory_awareness(
-    file_list: List[Path],
-    process_func: Callable[[Path], Tuple[int, Any]],
-    config: Optional[ParallelConfig] = None,
-    logger: Optional[logging.Logger] = None,
-    desc: str = "Processing files",
-    disable_progress: bool = False,
-) -> Tuple[List[Any], ParallelStats]:
-    """
-    Convenience function for parallel processing with memory awareness.
-
-    Args:
-        file_list: List of files to process
-        process_func: Function that processes a single file, returns (event_count, result)
-        config: Parallel processing configuration
-        logger: Logger instance
-        desc: Description for progress bar
-        disable_progress: Whether to disable progress bar
-
-    Returns:
-        Tuple of (results list, statistics)
-    """
-    processor = MemoryAwareParallelProcessor(config=config, logger=logger)
-    return processor.process_files_parallel(
-        file_list, process_func, desc=desc, disable_progress=disable_progress
-    )
-
-
-def estimate_parallel_viability(
-    file_list: List[Path], logger: Optional[logging.Logger] = None
-) -> Dict[str, Any]:
-    """
-    Estimate whether parallel processing would be beneficial.
-
-    Returns dict with recommendation and reasoning.
-    """
-    logger = logger or logging.getLogger(__name__)
-
-    file_count = len(file_list)
-    if file_count < 2:
-        return {
-            "recommended": False,
-            "reason": "Single file - parallel processing not beneficial",
-            "suggested_workers": 1,
-        }
-
-    processor = MemoryAwareParallelProcessor(logger=logger)
-    available_mem = processor.get_available_memory_mb()
-    mem_per_file = processor.estimate_memory_per_file(file_list)
-    optimal_workers = processor.calculate_optimal_workers(file_list)
-
-    total_size_mb = sum(
-        os.path.getsize(f) / (1024 * 1024) for f in file_list if os.path.exists(f)
-    )
-
-    if optimal_workers <= 1:
-        return {
-            "recommended": False,
-            "reason": f"Insufficient memory for parallel processing ({available_mem:.0f}MB available, ~{mem_per_file:.0f}MB needed per file)",
-            "suggested_workers": 1,
-            "available_memory_mb": available_mem,
-            "estimated_memory_per_file_mb": mem_per_file,
-        }
-
-    estimated_speedup = min(optimal_workers * 0.7, file_count)
-
-    return {
-        "recommended": True,
-        "reason": f"Parallel processing recommended with {optimal_workers} workers",
-        "suggested_workers": optimal_workers,
-        "estimated_speedup": f"{estimated_speedup:.1f}x",
-        "available_memory_mb": available_mem,
-        "estimated_memory_per_file_mb": mem_per_file,
-        "total_files": file_count,
-        "total_size_mb": total_size_mb,
-    }

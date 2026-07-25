@@ -23,12 +23,6 @@ class TestShutdownEvent:
         shutdown.request_shutdown()
         assert shutdown.is_shutdown_requested() is True
 
-    def test_event_object_is_settable_and_observable(self):
-        evt = shutdown.shutdown_event()
-        assert evt.is_set() is False
-        evt.set()
-        assert shutdown.is_shutdown_requested() is True
-
     def test_reset_clears_flag(self):
         shutdown.request_shutdown()
         assert shutdown.is_shutdown_requested() is True

@@ -748,28 +748,6 @@ class TestZircoliteCoreRuleExecution:
 class TestZircoliteCoreRuleset:
     """Tests for ruleset handling."""
     
-    def test_load_ruleset_from_file(self, field_mappings_file, sample_ruleset_file, test_logger):
-        """Test loading ruleset from JSON file."""
-        zircore = ZircoliteCore(
-            config=field_mappings_file,
-            logger=test_logger
-        )
-        
-        zircore.load_ruleset_from_file(sample_ruleset_file, rule_filters=None)
-        
-        # sample_ruleset fixture has 3 rules
-        assert len(zircore.ruleset) == 3
-        zircore.close()
-
-    def test_load_ruleset_from_file_invalid_json(self, field_mappings_file, tmp_path, test_logger):
-        """Loading invalid JSON ruleset logs error and does not raise."""
-        bad_ruleset = tmp_path / "bad_ruleset.json"
-        bad_ruleset.write_text("{ invalid json }")
-        zircore = ZircoliteCore(config=field_mappings_file, logger=test_logger)
-        zircore.load_ruleset_from_file(str(bad_ruleset), rule_filters=None)
-        assert zircore.ruleset == []
-        zircore.close()
-    
     def test_load_ruleset_from_var(self, field_mappings_file, sample_ruleset, test_logger):
         """Test loading ruleset from variable."""
         zircore = ZircoliteCore(

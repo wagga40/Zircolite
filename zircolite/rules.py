@@ -161,11 +161,6 @@ class EventFilter:
         """Check if filtering is enabled (has both channels and eventIDs)."""
         return self._has_filter_data
 
-    @property
-    def has_filter_data(self) -> bool:
-        """Check if filter data was extracted from rules."""
-        return self._has_filter_data
-
     def should_process_event(self, channel: Optional[str], eventid: Optional[int]) -> bool:
         """
         Check if an event should be processed based on its channel and eventID.

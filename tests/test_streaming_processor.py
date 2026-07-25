@@ -21,7 +21,6 @@ from zircolite import (
 )
 from zircolite.streaming import (
     _NON_ALNUM_RE,
-    _NEWLINE_TRANSLATE,
     _RESTRICTED_BUILTINS as STREAMING_BUILTINS,
 )
 
@@ -384,22 +383,6 @@ class TestFlattenHotPathOptimizations:
 class TestStreamingEventProcessorSchemaGeneration:
     """Tests for SQL schema generation."""
     
-    def test_get_field_statement(self, field_mappings_file, test_logger, default_args_config, sample_windows_event):
-        """Test SQL field statement generation."""
-        processor = StreamingEventProcessor(
-            config_file=field_mappings_file,
-            args_config=default_args_config,
-            logger=test_logger
-        )
-        
-        # Flatten an event to populate field_types
-        processor._flatten_event(sample_windows_event, "test.evtx")
-        
-        field_stmt = processor.get_field_statement()
-        
-        assert len(field_stmt) > 0
-        assert "TEXT COLLATE NOCASE" in field_stmt or "INTEGER" in field_stmt
-    
     def test_create_initial_table(self, field_mappings_file, test_logger, default_args_config):
         """Test initial table creation."""
         processor = StreamingEventProcessor(
@@ -492,20 +475,13 @@ class TestStreamingEventProcessorNestedPaths:
 
 
 class TestStreamingEventProcessorModuleHelpers:
-    """Tests for module-level helpers (alphanumeric filter, newline translation)."""
+    """Tests for module-level helpers."""
 
     def test_non_alnum_re_strips_special(self):
         assert _NON_ALNUM_RE.sub('', 'Hello-World_123!') == 'HelloWorld123'
 
     def test_non_alnum_re_empty_string(self):
         assert _NON_ALNUM_RE.sub('', '') == ''
-
-    def test_newline_translate_removes_newlines(self):
-        assert 'abc'.translate(_NEWLINE_TRANSLATE) == 'abc'
-        assert 'a\nb\rc\r\n'.translate(_NEWLINE_TRANSLATE) == 'abc'
-
-    def test_newline_translate_preserves_other_whitespace(self):
-        assert 'a\tb c'.translate(_NEWLINE_TRANSLATE) == 'a\tb c'
 
 
 class TestStreamingEventProcessorJSONStreaming:
@@ -2149,13 +2125,13 @@ class TestStreamingFlattenListValue:
         assert flat.get("Tags") == "['a', 'b', 'c']" or "Tags" in flat
 
 
-class TestStreamingEnsureColumnsExistLegacy:
-    """Tests for legacy _ensure_columns_exist method."""
+class TestStreamingEnsureColumnsExist:
+    """Tests for dynamic column creation."""
 
-    def test_ensure_columns_exist_delegates_to_cached(
+    def test_ensure_columns_exist_adds_missing_column(
         self, field_mappings_file, test_logger, default_args_config
     ):
-        """_ensure_columns_exist calls _ensure_columns_exist_cached with tuple."""
+        """A column absent from the table is added and recorded in the cache."""
         processor = StreamingEventProcessor(
             config_file=field_mappings_file,
             args_config=default_args_config,
@@ -2165,7 +2141,7 @@ class TestStreamingEnsureColumnsExistLegacy:
         conn.execute("CREATE TABLE logs (row_id INTEGER PRIMARY KEY)")
         conn.commit()
         cursor = conn.cursor()
-        processor._ensure_columns_exist(conn, cursor, ["colA"])
+        processor._ensure_columns_exist_cached(conn, cursor, ("colA",))
         conn.close()
         assert "cola" in processor._db_columns
 

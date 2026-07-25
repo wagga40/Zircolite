@@ -18,10 +18,6 @@ def is_shutdown_requested() -> bool:
     return _shutdown_event.is_set()
 
 
-def shutdown_event() -> threading.Event:
-    return _shutdown_event
-
-
 def request_shutdown() -> None:
     _shutdown_event.set()
 

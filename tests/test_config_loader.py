@@ -92,7 +92,6 @@ class TestOutputConfig:
         assert config.file == "detected_events.json"
         assert config.format == "json"
         assert config.csv_delimiter == ";"
-        assert config.template is None
         assert config.package is False
         assert config.no_output is False
 

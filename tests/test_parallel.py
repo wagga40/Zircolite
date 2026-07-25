@@ -14,8 +14,6 @@ from zircolite.parallel import (
     ParallelStats,
     MemoryAwareParallelProcessor,
     calculate_optimal_workers,
-    process_files_with_memory_awareness,
-    estimate_parallel_viability,
 )
 
 
@@ -33,9 +31,6 @@ class TestParallelConfig:
         assert config.max_workers is None
         assert config.min_workers == 1
         assert config.memory_limit_percent == 85.0
-        assert config.memory_check_interval == 5
-        assert config.adaptive_workers is True
-        assert config.batch_size == 10
         assert config.sort_by_size is True
         assert config.adaptive_memory is True
 
@@ -62,37 +57,23 @@ class TestParallelStats:
     def test_default_values(self):
         stats = ParallelStats()
 
-        assert stats.total_files == 0
         assert stats.processed_files == 0
-        assert stats.failed_files == 0
         assert stats.total_events == 0
-        assert stats.peak_memory_mb == 0.0
-        assert stats.avg_memory_mb == 0.0
         assert stats.processing_time_seconds == 0.0
         assert stats.workers_used == 0
         assert stats.throttle_events == 0
         assert stats.submissions_paused == 0
-        assert stats.memory_calibrated is False
-        assert stats.calibrated_ratio == 0.0
 
     def test_custom_values(self):
         stats = ParallelStats(
-            total_files=10,
             processed_files=8,
-            failed_files=2,
             total_events=1000,
             submissions_paused=5,
-            memory_calibrated=True,
-            calibrated_ratio=4.2,
         )
 
-        assert stats.total_files == 10
         assert stats.processed_files == 8
-        assert stats.failed_files == 2
         assert stats.total_events == 1000
         assert stats.submissions_paused == 5
-        assert stats.memory_calibrated is True
-        assert stats.calibrated_ratio == 4.2
 
 
 # ============================================================================
@@ -420,8 +401,6 @@ class TestAdaptiveMemory:
         processor.calibrate_memory(f, 120.0)  # 20 MB delta
 
         assert processor._calibrated_memory_per_file_mb is not None
-        assert processor.stats.memory_calibrated is True
-        assert processor.stats.calibrated_ratio > 0
 
         calibrated = processor.estimate_memory_per_file([f])
         assert calibrated == processor._calibrated_memory_per_file_mb
@@ -434,7 +413,6 @@ class TestAdaptiveMemory:
         processor.calibrate_memory(f, 200.0)
 
         assert processor._calibrated_memory_per_file_mb is None
-        assert processor.stats.memory_calibrated is False
 
     def test_calibrate_no_op_if_negative_delta(self, test_logger, tmp_path):
         f = tmp_path / "test.evtx"
@@ -486,7 +464,6 @@ class TestRealThrottling:
         config = ParallelConfig(
             max_workers=2,
             memory_limit_percent=10.0,
-            memory_check_interval=1,
             sort_by_size=False,
         )
         processor = MemoryAwareParallelProcessor(config=config, logger=test_logger)
@@ -516,7 +493,6 @@ class TestRealThrottling:
         config = ParallelConfig(
             max_workers=1,
             memory_limit_percent=5.0,
-            memory_check_interval=1,
             sort_by_size=False,
         )
         processor = MemoryAwareParallelProcessor(config=config, logger=test_logger)
@@ -530,7 +506,7 @@ class TestRealThrottling:
                 files, simple, disable_progress=True
             )
 
-        assert stats.processed_files + stats.failed_files == 5
+        assert stats.processed_files <= 5
 
     def test_throttle_events_counted_under_memory_pressure(self, test_logger, tmp_path):
         """Legacy throttle_events counter is also incremented."""
@@ -543,7 +519,6 @@ class TestRealThrottling:
         config = ParallelConfig(
             max_workers=2,
             memory_limit_percent=10.0,
-            memory_check_interval=1,
         )
         processor = MemoryAwareParallelProcessor(config=config, logger=test_logger)
 
@@ -566,7 +541,7 @@ class TestRealThrottling:
 
 
 class TestCallbacks:
-    """Tests for on_result and event_count_callback."""
+    """Tests for the on_result callback."""
 
     def test_on_result_called_per_file(self, test_logger, tmp_path):
         files = []
@@ -612,29 +587,6 @@ class TestCallbacks:
 
         assert received == []
 
-    def test_event_count_callback(self, test_logger, tmp_path):
-        files = []
-        for i in range(3):
-            f = tmp_path / f"test_{i}.json"
-            f.write_text("{}")
-            files.append(f)
-
-        counts = []
-
-        config = ParallelConfig(max_workers=1, sort_by_size=False)
-        processor = MemoryAwareParallelProcessor(config=config, logger=test_logger)
-
-        processor.process_files_parallel(
-            files,
-            lambda f: (100, {"name": f.name}),
-            disable_progress=True,
-            event_count_callback=lambda c: counts.append(c),
-        )
-
-        assert len(counts) == 3
-        assert counts == [100, 200, 300]
-
-
 # ============================================================================
 # FILE PROCESSING
 # ============================================================================
@@ -652,7 +604,7 @@ class TestMemoryAwareParallelProcessorProcessFiles:
         results, stats = processor.process_files_parallel([], dummy_func)
 
         assert results == []
-        assert stats.total_files == 0
+        assert stats.processed_files == 0
 
     def test_process_files_simple(self, test_logger, tmp_path):
         processor = MemoryAwareParallelProcessor(logger=test_logger)
@@ -672,9 +624,7 @@ class TestMemoryAwareParallelProcessorProcessFiles:
             disable_progress=True
         )
 
-        assert stats.total_files == 3
         assert stats.processed_files == 3
-        assert stats.failed_files == 0
         assert len(results) == 3
 
     def test_process_files_with_failures(self, test_logger, tmp_path):
@@ -700,9 +650,8 @@ class TestMemoryAwareParallelProcessorProcessFiles:
             disable_progress=True
         )
 
-        assert stats.total_files == 3
         assert stats.processed_files == 2
-        assert stats.failed_files == 1
+        assert len(results) == 2
 
     def test_rule_progress_queue_drained(self, test_logger, tmp_path):
         """When rule_progress_queue is passed, main thread drains it during processing."""
@@ -725,68 +674,6 @@ class TestMemoryAwareParallelProcessorProcessFiles:
             rule_progress_queue=progress_queue,
         )
         assert progress_queue.empty()
-
-
-# ============================================================================
-# VIABILITY & CONVENIENCE
-# ============================================================================
-
-
-class TestEstimateParallelViability:
-    """Tests for estimate_parallel_viability function."""
-
-    def test_single_file_not_recommended(self, test_logger, tmp_path):
-        f = tmp_path / "test.evtx"
-        f.write_bytes(b"x" * 1000)
-
-        result = estimate_parallel_viability([f], test_logger)
-
-        assert result["recommended"] is False
-        assert "Single file" in result["reason"]
-
-    def test_multiple_files_recommended(self, test_logger, tmp_path):
-        files = []
-        for i in range(5):
-            f = tmp_path / f"test_{i}.evtx"
-            f.write_bytes(b"x" * 1024 * 1024)
-            files.append(f)
-
-        with patch('psutil.virtual_memory') as mock_vm:
-            mock_vm.return_value.available = 16 * 1024 * 1024 * 1024
-            mock_vm.return_value.total = 32 * 1024 * 1024 * 1024
-
-            result = estimate_parallel_viability(files, test_logger)
-
-            assert "suggested_workers" in result
-            assert result["suggested_workers"] >= 1
-
-    def test_empty_list(self, test_logger):
-        result = estimate_parallel_viability([], test_logger)
-        assert result["recommended"] is False
-
-
-class TestProcessFilesWithMemoryAwareness:
-    """Tests for convenience function."""
-
-    def test_convenience_function(self, test_logger, tmp_path):
-        files = []
-        for i in range(2):
-            f = tmp_path / f"test_{i}.json"
-            f.write_text('{"test": true}')
-            files.append(f)
-
-        def simple_process(f):
-            return (1, str(f))
-
-        results, stats = process_files_with_memory_awareness(
-            files,
-            simple_process,
-            logger=test_logger,
-            disable_progress=True
-        )
-
-        assert stats.processed_files == 2
-        assert len(results) == 2
 
 
 # ============================================================================

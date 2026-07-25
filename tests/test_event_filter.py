@@ -17,7 +17,7 @@ class TestEventFilterInit:
         """Test initialization with empty rulesets."""
         event_filter = EventFilter([])
         assert not event_filter.is_enabled
-        assert not event_filter.has_filter_data
+        assert not event_filter.is_enabled
         assert len(event_filter.channels) == 0
         assert len(event_filter.eventids) == 0
 
@@ -38,7 +38,7 @@ class TestEventFilterInit:
         event_filter = EventFilter(rulesets)
         
         assert event_filter.is_enabled
-        assert event_filter.has_filter_data
+        assert event_filter.is_enabled
         assert len(event_filter.channels) == 2
         assert len(event_filter.eventids) == 5
         assert "Microsoft-Windows-Sysmon/Operational" in event_filter.channels
@@ -127,7 +127,7 @@ class TestEventFilterInit:
         event_filter = EventFilter(rulesets)
         
         assert not event_filter.is_enabled
-        assert not event_filter.has_filter_data
+        assert not event_filter.is_enabled
 
 
 class TestEventFilterShouldProcess:

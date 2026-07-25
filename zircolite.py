@@ -791,7 +791,6 @@ def cleanup(
 def print_stats(
     memory_tracker: MemoryTracker,
     start_time: float,
-    logger: logging.Logger,
     all_results: Optional[List[Any]] = None,
     files_processed: int = 0,
     total_events: int = 0,
@@ -1005,15 +1004,13 @@ def _run_processing(
     ctx: ProcessingContext,
     args: argparse.Namespace,
     logger: logging.Logger,
-    memory_tracker: MemoryTracker,
-) -> Tuple[Any, Any, Any, Optional[List[Path]], float]:
+) -> Tuple[Any, Any, Optional[List[Path]], float]:
     """Run the main processing pipeline and return all state needed by main().
 
     Returns:
-        (zircolite_core, all_results, extractor, log_list, phase_setup_end)
+        (zircolite_core, all_results, log_list, phase_setup_end)
     """
     zircolite_core = None
-    extractor = None
     log_list = None
     all_results = []
 
@@ -1032,7 +1029,7 @@ def _run_processing(
     if args.db_input:
         _warn_ignored_db_flags(args, logger)
         zircolite_core, all_results = process_db_input(ctx, args)
-        return zircolite_core, all_results, extractor, log_list, phase_setup_end
+        return zircolite_core, all_results, log_list, phase_setup_end
 
     # ----- File input mode -----
     check_if_exists(
@@ -1075,7 +1072,7 @@ def _run_processing(
     if args.db_input:
         _warn_ignored_db_flags(args, logger)
         zircolite_core, all_results = process_db_input(ctx, args, file_list=file_list)
-        return zircolite_core, all_results, extractor, log_list, phase_setup_end
+        return zircolite_core, all_results, log_list, phase_setup_end
 
     # Auto-select processing mode
     use_parallel = False
@@ -1149,7 +1146,7 @@ def _run_processing(
             ctx, file_list, input_type, extractor, args
         )
 
-    return zircolite_core, all_results, extractor, log_list, phase_setup_end
+    return zircolite_core, all_results, log_list, phase_setup_end
 
 
 ################################################################
@@ -1464,14 +1461,13 @@ def main() -> None:
     )
 
     zircolite_core = None
-    extractor = None
     log_list = []
     all_results = []
-    phase_setup_end = None
+    phase_setup_end = 0.0
 
     try:
-        zircolite_core, all_results, extractor, log_list, phase_setup_end = (
-            _run_processing(ctx, args, logger, memory_tracker)
+        zircolite_core, all_results, log_list, phase_setup_end = _run_processing(
+            ctx, args, logger
         )
 
         if not is_shutdown_requested():
@@ -1503,22 +1499,20 @@ def main() -> None:
     # Build phase timing breakdown
     now = time.time()
     phase_times = None
-    if phase_setup_end is not None:
-        setup_time = phase_setup_end - start_time
-        processing_time = now - phase_setup_end
-        if setup_time > 0.5 or processing_time > 0.5:
-            phase_times = {}
-            if setup_time > 0.5:
-                phase_times["Setup"] = setup_time
-            if processing_time > 0.5:
-                phase_times["Processing"] = processing_time
+    setup_time = phase_setup_end - start_time
+    processing_time = now - phase_setup_end
+    if setup_time > 0.5 or processing_time > 0.5:
+        phase_times = {}
+        if setup_time > 0.5:
+            phase_times["Setup"] = setup_time
+        if processing_time > 0.5:
+            phase_times["Processing"] = processing_time
 
     # Print final stats with summary dashboard (always shown, even in quiet mode)
     files_processed = len(log_list) if log_list else 1
     print_stats(
         memory_tracker,
         start_time,
-        logger,
         all_results=all_results,
         files_processed=files_processed,
         total_events=ctx.total_events,

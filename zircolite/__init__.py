@@ -97,8 +97,6 @@ from .parallel import (
     ParallelConfig,
     ParallelStats,
     MemoryAwareParallelProcessor,
-    process_files_with_memory_awareness,
-    estimate_parallel_viability,
     calculate_optimal_workers,
 )
 from .detector import (
@@ -164,8 +162,6 @@ __all__ = [
     'ParallelConfig',
     'ParallelStats',
     'MemoryAwareParallelProcessor',
-    'process_files_with_memory_awareness',
-    'estimate_parallel_viability',
     'calculate_optimal_workers',
     # Log type detection
     'LogTypeDetector',

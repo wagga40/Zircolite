@@ -610,17 +610,6 @@ class ZircoliteCore:
         self.logger.debug(f'DETECTED: {title} - Matches: {len(filtered_rows)} events')
         return results
 
-    def load_ruleset_from_file(
-        self, filename: str, rule_filters: Optional[List[str]]
-    ) -> None:
-        """Load a ruleset from a JSON file."""
-        try:
-            with open(filename, encoding='utf-8') as f:
-                self.ruleset = json.loads(f.read())
-            self.apply_ruleset_filters(rule_filters)
-        except Exception as e:
-            self.logger.error(f"[red]    [-] Loading JSON ruleset failed, are you sure it is a valid JSON file ? : {e}[/]")
-
     def load_ruleset_from_var(
         self, ruleset: List[Dict[str, Any]], rule_filters: Optional[List[str]]
     ) -> None:
@@ -868,33 +857,29 @@ class ZircoliteCore:
                             _profiling_data[_title] = _profiling_data.get(_title, 0.0) + (_perf_counter() - _t0) * 1000
                         progress.advance(task_id)
                         
-                        if rule_results:
-                            # Apply limit if set
-                            if limit != -1 and rule_results["count"] > limit:
-                                pass  # Exceeds limit, skip this result
-                            else:
-                                # Collect results for later display (sorted by level)
-                                all_rule_results.append({
-                                    "title": rule_results.get("title", "Unknown"),
-                                    "rule_level": rule_results.get("rule_level", "unknown"),
-                                    "count": rule_results.get("count", 0),
-                                    "tags": rule_results.get("tags", [])
-                                })
+                        if rule_results and not (limit != -1 and rule_results["count"] > limit):
+                            # Collect results for later display (sorted by level)
+                            all_rule_results.append({
+                                "title": rule_results.get("title", "Unknown"),
+                                "rule_level": rule_results.get("rule_level", "unknown"),
+                                "count": rule_results.get("count", 0),
+                                "tags": rule_results.get("tags", [])
+                            })
 
-                                # Update live detection counts
-                                det_level = rule_results.get("rule_level", "unknown").lower()
-                                if det_level in detection_counts:
-                                    detection_counts[det_level] += 1
+                            # Update live detection counts
+                            det_level = rule_results.get("rule_level", "unknown").lower()
+                            if det_level in detection_counts:
+                                detection_counts[det_level] += 1
 
-                                # Store results if needed
-                                if keep_results:
-                                    full_results_append(rule_results)
+                            # Store results if needed
+                            if keep_results:
+                                full_results_append(rule_results)
 
-                                # Handle output to file
-                                if not no_output:
-                                    csv_writer, needs_comma_prefix = self._write_result_to_output(
-                                        rule_results, file_handle, csv_writer, needs_comma_prefix
-                                    )
+                            # Handle output to file
+                            if not no_output:
+                                csv_writer, needs_comma_prefix = self._write_result_to_output(
+                                    rule_results, file_handle, csv_writer, needs_comma_prefix
+                                )
                         
                         # Update live display with progress + detection counter
                         live.update(Group(progress, make_detection_counter(detection_counts)))

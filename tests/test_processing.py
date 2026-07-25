@@ -139,7 +139,6 @@ class TestProcessingContext:
         assert dummy_ctx.total_events == 0
         assert dummy_ctx.total_filtered_events == 0
         assert dummy_ctx.workers_used == 1
-        assert dummy_ctx.file_stats is None
 
 
 # =============================================================================

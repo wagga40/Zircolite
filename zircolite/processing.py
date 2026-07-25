@@ -93,7 +93,6 @@ class ProcessingContext:
     keepflat: bool
     memory_tracker: MemoryTracker
     event_filter: Optional["EventFilter"] = None
-    file_stats: Optional[list] = None
     total_filtered_events: int = 0
     total_events: int = 0
     workers_used: int = 1
@@ -462,7 +461,6 @@ def process_perfile_streaming(
         console.print(tree)
         console.print()
 
-    ctx.file_stats = file_stats
     return profiling_core, all_results
 
 
@@ -589,7 +587,6 @@ def process_db_input(
         console.print(tree)
         console.print()
 
-    ctx.file_stats = file_stats
     return zircolite_core, all_results
 
 
@@ -873,7 +870,6 @@ def process_parallel_streaming(
         max_workers=getattr(args, "parallel_workers", None) or recommended_workers,
         min_workers=getattr(args, "parallel_min_workers", 1),
         memory_limit_percent=getattr(args, "parallel_memory_limit", 85.0),
-        adaptive_workers=True,
         sort_by_size=True,
         adaptive_memory=getattr(args, "parallel_adaptive", True),
     )
@@ -977,7 +973,6 @@ def process_parallel_streaming(
             ctx.logger.error(f"    \u2192 ... and {len(errors) - 5} more")
 
     ctx.memory_tracker.sample()
-    ctx.file_stats = file_stats
     ctx.workers_used = stats.workers_used
 
     # Display detection table

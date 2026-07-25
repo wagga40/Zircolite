@@ -43,10 +43,6 @@ class EvtxExtractor:
 
         self.logger = logger or logging.getLogger(__name__)
 
-        self.sysmon4linux = cfg.sysmon4linux
-        self.xmlLogs = cfg.xml_logs
-        self.auditdLogs = cfg.auditd_logs
-        self.evtxtract = cfg.evtxtract
         self.encoding = cfg.encoding
 
     def get_time(self, line: str) -> str:

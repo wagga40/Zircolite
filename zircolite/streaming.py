@@ -56,9 +56,6 @@ if TYPE_CHECKING:
 # Pre-compiled regex for stripping non-alphanumeric characters
 _NON_ALNUM_RE = re.compile(r"[^a-zA-Z0-9]")
 
-# Translation table for newline removal in XML processing
-_NEWLINE_TRANSLATE = str.maketrans("", "", "\n\r")
-
 # Sentinel for excluded paths in the path resolution cache
 _EXCLUDED_SENTINEL = object()
 
@@ -197,12 +194,9 @@ class StreamingEventProcessor:
     __slots__ = (
         "logger",
         "config_file",
-        "time_after",
-        "time_before",
         "time_field",
         "hashes",
         "args_config",
-        "disable_progress",
         "batch_size",
         # Config data (loaded once)
         "field_exclusions",
@@ -236,7 +230,6 @@ class StreamingEventProcessor:
         # Schema tracking
         "discovered_fields",
         "field_types",
-        "field_stmt_cache",
         # Leaf keys whose schema bookkeeping is already done (skip repeat work)
         "_seen_leaf_keys",
         # Caches
@@ -299,12 +292,9 @@ class StreamingEventProcessor:
 
         self.logger = logger or logging.getLogger(__name__)
         self.config_file = config_file
-        self.time_after = proc.time_after
-        self.time_before = proc.time_before
         self.time_field = proc.time_field
         self.hashes = proc.hashes
         self.args_config = args_config
-        self.disable_progress = proc.disable_progress
         self.batch_size = proc.batch_size
         self.archive_password = proc.archive_password
         self.strict_evtx = proc.strict_evtx
@@ -318,7 +308,6 @@ class StreamingEventProcessor:
         # Schema tracking - fields discovered during streaming
         self.discovered_fields: dict = {}  # field_name_lower -> original_field_name
         self.field_types: dict = {}  # field_name -> 'INTEGER' or 'TEXT'
-        self.field_stmt_cache: dict = {}
         # Leaf keys already passed through schema bookkeeping. Shares the
         # lifetime of discovered_fields (never cleared mid-instance).
         self._seen_leaf_keys: set = set()
@@ -609,31 +598,14 @@ class StreamingEventProcessor:
 
         return channel, eventid
 
-    def _extract_field_value(self, event_dict: dict, field_paths: tuple) -> Any:
-        """
-        Extract a field value from an event dict using a list of possible paths.
-
-        Paths support dot notation for nested access (e.g., "Event.System.Channel").
-        Tries each path in order until a non-None value is found.
-
-        Args:
-            event_dict: The event dictionary to extract from
-            field_paths: Tuple of field paths to try
-
-        Returns:
-            The first non-None value found, or None if no path succeeds
-        """
-        for path in field_paths:
-            value = self._get_nested_value(event_dict, path)
-            if value is not None:
-                return value
-        return None
-
     def _extract_field_value_hinted(
         self, event_dict: dict, field_paths: tuple, hint: Optional[tuple]
     ) -> tuple:
         """
-        Like :meth:`_extract_field_value`, but try the last winning path first.
+        Extract a field value, trying the last winning path first.
+
+        Paths support dot notation for nested access (e.g. "Event.System.Channel")
+        and are otherwise tried in order until one yields a non-None value.
 
         A log file's schema is stable, so the path that produced a value on the
         previous event almost always produces it again. Probing that path first
@@ -1511,13 +1483,6 @@ class StreamingEventProcessor:
                 f"[red]    [-] Error streaming JSON array file {json_file}: {e}[/]"
             )
 
-    def get_field_statement(self) -> str:
-        """Generate SQL field statement from discovered fields."""
-        parts = []
-        for field_name, sql_type in self.field_types.items():
-            parts.append(f"{_quote_identifier(field_name)} {sql_type},\n")
-        return "".join(parts)
-
     def process_file_streaming(
         self,
         db_connection,
@@ -1733,10 +1698,6 @@ class StreamingEventProcessor:
                     db_columns = self._db_columns
 
         return schema_changed
-
-    def _ensure_columns_exist(self, db_connection, cursor, columns: List[str]):
-        """Dynamically add columns to the table if they don't exist (legacy method)."""
-        self._ensure_columns_exist_cached(db_connection, cursor, tuple(columns))
 
     def create_initial_table(self, db_connection):
         """Create the initial logs table with basic structure.

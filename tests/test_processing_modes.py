@@ -222,8 +222,6 @@ class TestProcessParallelStreaming:
         data = json.loads(outfile.read_text())
         assert isinstance(data, list)
         assert len(results) >= 1
-        assert ctx.file_stats is not None
-        assert len(ctx.file_stats) == 2
 
     def test_parallel_single_file_falls_back_to_perfile(
         self,

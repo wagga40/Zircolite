@@ -23,7 +23,6 @@ class TestEvtxExtractorInit:
         config = ExtractorConfig(sysmon4linux=True)
         extractor = EvtxExtractor(extractor_config=config, logger=test_logger)
         
-        assert extractor.sysmon4linux is True
         assert extractor.encoding == "ISO-8859-1"
         
     
@@ -32,7 +31,6 @@ class TestEvtxExtractorInit:
         config = ExtractorConfig(auditd_logs=True)
         extractor = EvtxExtractor(extractor_config=config, logger=test_logger)
         
-        assert extractor.auditdLogs is True
         assert extractor.encoding == "utf-8"
         
     
@@ -41,7 +39,6 @@ class TestEvtxExtractorInit:
         config = ExtractorConfig(xml_logs=True)
         extractor = EvtxExtractor(extractor_config=config, logger=test_logger)
         
-        assert extractor.xmlLogs is True
         assert extractor.encoding == "utf-8"
         
     

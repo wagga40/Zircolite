@@ -47,8 +47,6 @@ class OutputConfig:
     file: str = "detected_events.json"
     format: str = "json"  # json, csv
     csv_delimiter: str = ";"
-    template: Optional[str] = None
-    template_output: Optional[str] = None
     templates: Optional[List[Dict[str, str]]] = None  # List of {template, output} pairs
     template_append: bool = False
     package: bool = False
@@ -203,8 +201,6 @@ class ConfigLoader:
                 file=out.get('file', 'detected_events.json'),
                 format=out.get('format', 'json'),
                 csv_delimiter=out.get('csv_delimiter', ';'),
-                template=out.get('template'),
-                template_output=out.get('template_output'),
                 templates=templates,
                 template_append=out.get('template_append', False),
                 package=out.get('package', False),
