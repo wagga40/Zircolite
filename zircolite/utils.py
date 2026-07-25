@@ -18,7 +18,6 @@ import string
 import sys
 from pathlib import Path
 from typing import (
-    TYPE_CHECKING,
     Any,
     Dict,
     List,
@@ -29,24 +28,11 @@ from typing import (
     cast,
 )
 
-if TYPE_CHECKING:
-    from rich.console import Console
-
 import orjson
 import psutil
 import yaml
 
-# Rich-based console - import with fallback for compatibility
-console: Optional["Console"] = None
-get_rich_logger = None  # type: ignore[assignment]
-try:
-    from .console import console as _console  # type: ignore[no-redef]
-    from .console import get_rich_logger
-
-    console = _console
-    HAS_RICH = True
-except ImportError:
-    HAS_RICH = False
+from .console import console, get_rich_logger
 
 
 def load_field_mappings(
@@ -428,7 +414,6 @@ def init_logger(
     debug_mode: bool,
     log_file: Optional[str] = None,
     name: str = "zircolite",
-    use_rich: bool = True,
 ) -> logging.Logger:
     """Initialize logger with appropriate configuration.
 
@@ -436,50 +421,11 @@ def init_logger(
         debug_mode: Enable debug-level logging with verbose format
         log_file: Optional path to log file for persistent logging
         name: Logger name (default: 'zircolite')
-        use_rich: Use Rich-based console output (default: True)
 
     Returns:
         Configured logger instance
     """
-    # Use Rich logger if available and requested
-    if use_rich and HAS_RICH and get_rich_logger is not None:
-        return get_rich_logger(name=name, debug=debug_mode, log_file=log_file)
-
-    # Fallback to standard logging
-    logger = logging.getLogger(name)
-    logger.setLevel(logging.DEBUG if debug_mode else logging.INFO)
-
-    # Clear any existing handlers to avoid duplicates; close them first so
-    # repeated initialization does not leak open log files
-    for handler in logger.handlers:
-        try:
-            handler.close()
-        except Exception:
-            pass
-    logger.handlers.clear()
-
-    # Prevent propagation to root logger to avoid duplicate messages
-    logger.propagate = False
-
-    # Console handler - always present with simple format
-    console_handler = logging.StreamHandler()
-    console_handler.setLevel(logging.INFO)
-    console_handler.setFormatter(logging.Formatter("%(message)s"))
-    logger.addHandler(console_handler)
-
-    # File handler (if requested)
-    if log_file is not None:
-        file_log_format = "%(asctime)s %(levelname)-8s %(message)s"
-        if debug_mode:
-            file_log_format = "%(asctime)s %(levelname)-8s %(module)s:%(lineno)s %(funcName)s %(message)s"
-        file_handler = logging.FileHandler(log_file, encoding="utf-8", errors="replace")
-        file_handler.setLevel(logging.DEBUG if debug_mode else logging.INFO)
-        file_handler.setFormatter(
-            logging.Formatter(file_log_format, datefmt="%Y-%m-%d %H:%M:%S")
-        )
-        logger.addHandler(file_handler)
-
-    return logger
+    return get_rich_logger(name=name, debug=debug_mode, log_file=log_file)
 
 
 def create_silent_logger(name: str = "zircolite_worker") -> logging.Logger:
@@ -539,29 +485,19 @@ def avoid_files(
 
 
 class MemoryTracker:
-    """Track memory usage during execution with optional rate limiting."""
+    """Track memory usage during execution."""
 
-    def __init__(
-        self,
-        *,
-        logger: Optional[logging.Logger] = None,
-        min_sample_interval: float = 0.0,
-    ):
+    def __init__(self, *, logger: Optional[logging.Logger] = None):
         """
         Initialize MemoryTracker.
 
         Args:
             logger: Logger instance (creates default if None)
-            min_sample_interval: Minimum seconds between samples (0 = no limit).
-                When positive, rapid ``sample()`` calls are silently skipped
-                to reduce syscall overhead.
         """
         self.logger = logger or logging.getLogger(__name__)
         self.memory_samples: List[float] = []
         self.peak_memory: float = 0.0
         self.process = psutil.Process(os.getpid())
-        self._min_sample_interval = min_sample_interval
-        self._last_sample_time = 0.0
 
     def get_memory_usage(self) -> float:
         """Get current memory usage in MB."""
@@ -571,21 +507,8 @@ class MemoryTracker:
         except Exception:
             return 0
 
-    def sample(self, *, force: bool = False):
-        """Take a memory usage sample.
-
-        Args:
-            force: If True, bypass the rate limit and always sample.
-        """
-        # Rate limiting – skip if called too soon after last sample
-        if self._min_sample_interval > 0 and not force:
-            import time as _time
-
-            now = _time.monotonic()
-            if now - self._last_sample_time < self._min_sample_interval:
-                return
-            self._last_sample_time = now
-
+    def sample(self):
+        """Take a memory usage sample."""
         memory_mb = self.get_memory_usage()
         if memory_mb > 0:
             self.memory_samples.append(memory_mb)
@@ -674,19 +597,16 @@ def analyze_files_and_recommend_mode(
     max_size = max(file_sizes) if file_sizes else 0
     min_size = min(file_sizes) if file_sizes else 0
 
+    # Delegate to the consolidated helpers so the heuristics stay in sync
+    # with MemoryAwareParallelProcessor.
+    from .parallel import (
+        calculate_optimal_workers as _calc_workers,
+        memory_multiplier_for,
+    )
+
     # Estimate memory usage per file (dynamic multiplier based on file size)
-    if avg_size < 10 * 1024 * 1024:  # < 10MB
-        memory_multiplier = 5.0  # Small files have more overhead
-    elif avg_size < 50 * 1024 * 1024:  # < 50MB
-        memory_multiplier = 4.0  # Medium files
-    else:
-        memory_multiplier = 3.5  # Large files are more memory efficient
-
+    memory_multiplier = memory_multiplier_for(avg_size / (1024 * 1024))
     memory_per_file = avg_size * memory_multiplier
-
-    # Delegate to the consolidated worker-calculation function so that
-    # the heuristics stay in sync with MemoryAwareParallelProcessor.
-    from .parallel import calculate_optimal_workers as _calc_workers
 
     optimal_workers = _calc_workers(
         file_sizes=file_sizes,
@@ -819,20 +739,9 @@ def print_mode_recommendation(
     forced_workers: Optional[int] = None,
 ) -> None:
     """Print the mode recommendation to the user with clean formatting."""
-    # Check if we have the Rich console available
-    if HAS_RICH and console is not None:
-        _print_mode_recommendation_rich(
-            recommended_mode, reason, stats, show_parallel, forced_workers
-        )
-    else:
-        _print_mode_recommendation_plain(
-            recommended_mode,
-            reason,
-            stats,
-            logger or logging.getLogger(__name__),
-            show_parallel,
-            forced_workers,
-        )
+    _print_mode_recommendation_rich(
+        recommended_mode, reason, stats, show_parallel, forced_workers
+    )
 
 
 def _print_mode_recommendation_rich(
@@ -904,54 +813,3 @@ def _print_mode_recommendation_rich(
 
     console.print(table)
     console.print()
-
-
-def _print_mode_recommendation_plain(
-    recommended_mode: str,
-    reason: str,
-    stats: Dict[str, Any],
-    logger: logging.Logger,
-    show_parallel: bool = True,
-    forced_workers: Optional[int] = None,
-) -> None:
-    """Print mode recommendation using plain logger (fallback)."""
-    # Header
-    logger.info("[+] Analyzing workload...")
-
-    # File statistics
-    file_count = stats["file_count"]
-    total_size = stats["total_size_fmt"]
-    avg_size = stats["avg_size_fmt"]
-    logger.info(f"    [>] Files: {file_count} ({total_size} total, avg {avg_size})")
-
-    if stats["has_psutil"]:
-        ram = stats["available_ram_fmt"]
-        cpus = stats["cpu_count"]
-        logger.info(f"    [>] System: {ram} RAM available, {cpus} CPUs")
-
-    # Database mode recommendation
-    mode_icon = "🔗" if recommended_mode == "unified" else "📁"
-    mode_label = "UNIFIED" if recommended_mode == "unified" else "PER-FILE"
-
-    logger.info(f"    [>] {mode_icon} Database mode: {mode_label}")
-    logger.info(f"    [i] {reason}")
-
-    # Parallel processing recommendation (only show for per-file mode)
-    if show_parallel and recommended_mode != "unified":
-        is_forced = forced_workers is not None and forced_workers > 0
-        parallel_will_run = stats.get("parallel_recommended", False) or is_forced
-
-        if is_forced and parallel_will_run:
-            auto_workers = stats.get("parallel_workers", "?")
-            logger.info(
-                f"    [>] ⚡ Parallel: ENABLED ({forced_workers} workers) "
-                f"forced via CLI (auto-detected: {auto_workers})"
-            )
-        elif stats.get("parallel_recommended", False):
-            workers = stats.get("parallel_workers", "?")
-            logger.info(f"    [>] ⚡ Parallel: ENABLED ({workers} workers)")
-        else:
-            p_reason = stats.get("parallel_reason", "Not recommended")
-            logger.info(f"    [>] ⚡ Parallel: disabled - {p_reason}")
-
-    logger.info("")

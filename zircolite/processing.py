@@ -25,6 +25,7 @@ import sqlite3
 import threading
 import time
 from contextlib import contextmanager
+from copy import deepcopy
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple, Union, TYPE_CHECKING
@@ -40,7 +41,7 @@ from .console import (
     print_no_detections,
     build_file_tree,
     build_detection_table,
-    LEVEL_PRIORITY,
+    sort_key_severity,
 )
 from .core import ZircoliteCore
 from .extractor import EvtxExtractor
@@ -191,12 +192,6 @@ def _unpack_streaming_result(
 ) -> Tuple[int, int]:
     """Safely unpack (total_events, filtered_count) from run_streaming."""
     return result if isinstance(result, tuple) else (result, 0)
-
-
-def _sort_key_severity(result: dict) -> tuple:
-    """Sort key: critical first, then by descending event count."""
-    level = result.get("rule_level", "unknown").lower()
-    return (LEVEL_PRIORITY.get(level, 5), -result.get("count", 0))
 
 
 class _ThreadSafeWriter:
@@ -749,31 +744,28 @@ def process_single_file_worker(
 # ============================================================================
 
 class _IncrementalResultWriter:
-    """Thread-safe, incremental writer for parallel detection results.
+    """Incremental writer for parallel JSON detection results.
 
     Writes each detection result to disk as it arrives rather than buffering
-    everything in memory and flushing at the end.  Supports both JSON-array
-    and CSV output modes.
+    everything in memory and flushing at the end. JSON only: CSV needs the
+    full field set up front, so it goes through ``_write_parallel_results``.
+
+    Not thread-safe by design -- ``on_result`` is invoked from the main
+    scheduling loop as futures complete, never from a worker.
     """
 
     _fh: Any
-    _csv_writer: Any
 
     def __init__(self, ctx: ProcessingContext):
         self._ctx = ctx
         self._fh = None
-        self._csv_writer = None
         self._first_json = True
-        self._lock = threading.Lock()
 
     def __enter__(self):
         if self._ctx.no_output:
             return self
-        if self._ctx.csv_mode:
-            self._fh = open(self._ctx.outfile, "w", encoding="utf-8", newline="")
-        else:
-            self._fh = open(self._ctx.outfile, "wb")
-            self._fh.write(b"[")
+        self._fh = open(self._ctx.outfile, "wb")
+        self._fh.write(b"[")
         return self
 
     def write_file_results(self, file_data) -> None:
@@ -784,11 +776,7 @@ class _IncrementalResultWriter:
             self._write_one(result)
 
     def _write_one(self, result: dict) -> None:
-        with self._lock:
-            if self._ctx.csv_mode:
-                self._write_csv(result)
-            else:
-                self._write_json(result)
+        self._write_json(result)
 
     def _write_json(self, result: dict) -> None:
         if self._fh is None:
@@ -798,40 +786,10 @@ class _IncrementalResultWriter:
         self._first_json = False
         self._fh.write(orjson.dumps(result, option=orjson.OPT_INDENT_2))
 
-    def _write_csv(self, result: dict) -> None:
-        if self._fh is None:
-            return
-        title = result.get("title", "")
-        description = sanitize_value_for_csv(result.get("description") or "")
-        level = result.get("rule_level", "")
-        count = result.get("count", 0)
-        for row in result.get("matches", []):
-            if self._csv_writer is None:
-                fieldnames = [
-                    "rule_title", "rule_description", "rule_level", "rule_count",
-                ] + sorted(row.keys())
-                self._csv_writer = csv.DictWriter(
-                    self._fh,
-                    delimiter=self._ctx.delimiter,
-                    fieldnames=fieldnames,
-                    extrasaction="ignore",
-                )
-                self._csv_writer.writeheader()
-            assert self._csv_writer is not None
-            clean_row = sanitize_row_for_csv(row)
-            self._csv_writer.writerow({
-                "rule_title": title,
-                "rule_description": description,
-                "rule_level": level,
-                "rule_count": count,
-                **clean_row,
-            })
-
     def __exit__(self, *args):
         if self._fh is not None:
             try:
-                if not self._ctx.csv_mode:
-                    self._fh.write(b"]")
+                self._fh.write(b"]")
             finally:
                 self._fh.close()
                 self._fh = None
@@ -913,6 +871,10 @@ def process_parallel_streaming(
         return process_perfile_streaming(ctx, file_list, input_type, extractor, args)
 
     # Pre-parse field mappings once so workers skip redundant disk reads
+    # Parsed once, then deep-copied per worker: _resolve_file_transforms
+    # writes the loaded source back into the transform dicts, so sharing one
+    # object across threads lets a failed read in one worker install the no-op
+    # fallback into a dict another worker is still baking.
     raw_config = load_field_mappings(ctx.config)
 
     # Shared mutable state for workers
@@ -964,7 +926,7 @@ def process_parallel_streaming(
                 worker_counter=worker_counter,
                 total_filtered_count=total_filtered_count,
                 thread_local=thread_local,
-                raw_config=raw_config,
+                raw_config=deepcopy(raw_config),
                 keepflat_file=kf,
                 rule_progress_queue=rule_progress_queue,
             )
@@ -1032,7 +994,7 @@ def process_parallel_streaming(
                 "tags": info.get("tags", []),
             }
             for title, info in sorted(
-                rule_summary.items(), key=lambda item: _sort_key_severity(
+                rule_summary.items(), key=lambda item: sort_key_severity(
                     {"rule_level": item[1]["level"], "count": item[1]["count"]}
                 )
             )

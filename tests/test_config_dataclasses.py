@@ -104,7 +104,7 @@ class TestGuiConfig:
 
     def test_defaults(self):
         cfg = GuiConfig()
-        assert cfg.package_dir == ""
+        assert cfg.source_archive == ""
         assert cfg.template_file == ""
         assert cfg.time_field == ""
 

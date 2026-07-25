@@ -26,7 +26,6 @@ from zircolite.formats import (
     ALIAS_EXTENSIONS,
     DEFAULT_INPUT_FORMAT,
     EXTENSION_FALLBACKS,
-    INPUT_FLAG_PRECEDENCE,
     INPUT_FORMATS,
     NON_WINDOWS_INPUT_FLAGS,
     YAML_INPUT_FORMATS,
@@ -181,7 +180,8 @@ class TestRegistryInvariants:
                 ), spec.name
 
     def test_precedence_is_frozen(self):
-        assert INPUT_FLAG_PRECEDENCE == (
+        """Registry order is the tie-break when several flags are truthy."""
+        assert tuple(f.args_flag for f in INPUT_FORMATS) == (
             "db_input",
             "json_input",
             "json_array_input",

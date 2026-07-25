@@ -652,8 +652,6 @@ def pytest_runtest_setup(item):
     for marker in item.iter_markers():
         if marker.name == "requires_lxml" and importlib.util.find_spec("lxml") is None:
             pytest.skip("lxml not installed")
-        if marker.name == "requires_evtx" and importlib.util.find_spec("evtx") is None:
-            pytest.skip("evtx not installed")
         if marker.name == "requires_py7zr" and importlib.util.find_spec("py7zr") is None:
             pytest.skip("py7zr not installed")
         if marker.name == "requires_sigma":

@@ -91,7 +91,6 @@ from .detector import (
 from .formats import (
     InputFormat,
     INPUT_FORMATS,
-    INPUT_FLAG_PRECEDENCE,
     YAML_INPUT_FORMATS,
     NON_WINDOWS_INPUT_FLAGS,
     DEFAULT_INPUT_FORMAT,
@@ -167,7 +166,6 @@ __all__ = [
     # Input format registry
     'InputFormat',
     'INPUT_FORMATS',
-    'INPUT_FLAG_PRECEDENCE',
     'YAML_INPUT_FORMATS',
     'NON_WINDOWS_INPUT_FLAGS',
     'DEFAULT_INPUT_FORMAT',

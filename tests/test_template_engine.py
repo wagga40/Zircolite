@@ -7,7 +7,6 @@ import sys
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
-import pytest
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
@@ -581,7 +580,7 @@ class TestZircoliteGuiGenerator:
         """When directory is given but does not exist, error is logged and fallback used."""
         mock_logger = MagicMock()
         gen = ZircoliteGuiGenerator(logger=mock_logger)
-        gen.packageDir = __file__  # exists but not a zip
+        gen.source_archive = __file__  # exists but not a zip
         with patch("zircolite.templates.os.path.exists", return_value=False):
             with patch("zircolite.templates.shutil.unpack_archive", side_effect=ValueError("not a zip")):
                 gen.generate(sample_detection_results, directory="/nonexistent/path")
@@ -590,7 +589,7 @@ class TestZircoliteGuiGenerator:
     def test_generate_exception_calls_finally_cleanup(self, test_logger, sample_detection_results, tmp_path):
         """When unpack_archive raises, finally block still runs and cleans tmpDir."""
         gen = ZircoliteGuiGenerator(logger=test_logger)
-        gen.packageDir = str(tmp_path / "package.zip")
+        gen.source_archive = str(tmp_path / "package.zip")
         gen.tmpDir = str(tmp_path / "tmp-zircogui-abc1")
         Path(gen.tmpDir).mkdir(parents=True)
 
@@ -602,7 +601,7 @@ class TestZircoliteGuiGenerator:
         """Generate with mocked unpack, TemplateEngine, move and make_archive."""
         (tmp_path / "pkg.zip").write_bytes(b"x")
         gen = ZircoliteGuiGenerator(logger=test_logger)
-        gen.packageDir = str(tmp_path / "pkg.zip")
+        gen.source_archive = str(tmp_path / "pkg.zip")
         gen.templateFile = str(tmp_path / "tmpl.js")
         gen.tmpFile = str(tmp_path / "data.js")
         gen.outputFile = "zircogui-output"
@@ -641,7 +640,7 @@ class TestGuiGeneratorHappyPath:
         out_dir.mkdir()
 
         gen = ZircoliteGuiGenerator(logger=test_logger)
-        gen.packageDir = str(package_zip)
+        gen.source_archive = str(package_zip)
         gen.templateFile = str(template_file)
         gen.outputFile = "zircogui-result"
         gen.generate(sample_detection_results, directory=str(out_dir))

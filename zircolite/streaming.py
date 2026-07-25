@@ -1206,15 +1206,18 @@ class StreamingEventProcessor:
                 except Exception:
                     pass
 
-    def stream_sysmon_linux_events(
-        self, log_file: str, extractor: "EvtxExtractor"
+    def _stream_line_events(
+        self, log_file: str, extractor: "EvtxExtractor", convert, label: str
     ) -> Generator[dict, None, None]:
-        """Stream and flatten events from a Sysmon for Linux log file."""
+        """Stream a one-event-per-line text log through *convert*.
+
+        Shared by the Sysmon-for-Linux and Auditd readers, which differ only
+        in the converter and the wording of the error.
+        """
         try:
             filename = Path(log_file).name
             flatten = self._flatten_event  # Local reference
             should_process = self._should_process_event  # Local reference
-            sysmon_convert = extractor.sysmon_xml_line_to_json
 
             with open_maybe_compressed(
                 log_file,
@@ -1226,59 +1229,40 @@ class StreamingEventProcessor:
                     if not line.strip():
                         continue
                     try:
-                        event_dict = sysmon_convert(line)
-                        if event_dict:
-                            # Early filter check before expensive flattening
-                            if not should_process(event_dict):
-                                continue
-                            flattened = flatten(
-                                event_dict, filename, line.encode("utf-8")
-                            )
-                            if flattened:
-                                yield flattened
-                    except Exception:
+                        event_dict = convert(line)
+                        if not event_dict:
+                            continue
+                        # Early filter check before expensive flattening
+                        if not should_process(event_dict):
+                            continue
+                        flattened = flatten(
+                            event_dict, filename, line.encode("utf-8")
+                        )
+                        if flattened:
+                            yield flattened
+                    except Exception as exc:
+                        self.logger.debug(f"Skipping line in {log_file}: {exc}")
                         continue
         except Exception as e:
             self.logger.error(
-                f"[red]    [-] Error streaming Sysmon Linux file {log_file}: {e}[/]"
+                f"[red]    [-] Error streaming {label} file {log_file}: {e}[/]"
             )
+
+    def stream_sysmon_linux_events(
+        self, log_file: str, extractor: "EvtxExtractor"
+    ) -> Generator[dict, None, None]:
+        """Stream and flatten events from a Sysmon for Linux log file."""
+        yield from self._stream_line_events(
+            log_file, extractor, extractor.sysmon_xml_line_to_json, "Sysmon Linux"
+        )
 
     def stream_auditd_events(
         self, log_file: str, extractor: "EvtxExtractor"
     ) -> Generator[dict, None, None]:
         """Stream and flatten events from an Auditd log file."""
-        try:
-            filename = Path(log_file).name
-            flatten = self._flatten_event  # Local reference
-            should_process = self._should_process_event  # Local reference
-            auditd_convert = extractor.auditd_line_to_json
-
-            with open_maybe_compressed(
-                log_file,
-                "rt",
-                encoding=extractor.encoding,
-                password=self.archive_password,
-            ) as f:
-                for line in f:
-                    if not line.strip():
-                        continue
-                    try:
-                        event_dict = auditd_convert(line)
-                        if event_dict:
-                            # Early filter check (may not apply to Auditd, but keeps consistent)
-                            if not should_process(event_dict):
-                                continue
-                            flattened = flatten(
-                                event_dict, filename, line.encode("utf-8")
-                            )
-                            if flattened:
-                                yield flattened
-                    except Exception:
-                        continue
-        except Exception as e:
-            self.logger.error(
-                f"[red]    [-] Error streaming Auditd file {log_file}: {e}[/]"
-            )
+        yield from self._stream_line_events(
+            log_file, extractor, extractor.auditd_line_to_json, "Auditd"
+        )
 
     def stream_csv_events(self, csv_file: str) -> Generator[dict, None, None]:
         """

@@ -37,11 +37,11 @@ from rich.syntax import Syntax
 
 from .config import ProcessingConfig
 from .console import (
-    LEVEL_PRIORITY,
     build_detection_table,
     console,
     is_quiet,
     make_detection_counter,
+    sort_key_severity,
 )
 from .formats import json_array_requested
 from .shutdown import is_shutdown_requested
@@ -349,8 +349,6 @@ class ZircoliteCore:
         """Create standard and optional indexes; drop any requested by remove_index."""
         columns = self._get_table_columns()
         cursor = self._get_cursor()
-        if self.db_connection is None:
-            raise RuntimeError("No database connection")
         conn = self.db_connection
 
         self.execute_query('CREATE INDEX "idx_eventid" ON "logs" ("eventid");')
@@ -785,30 +783,37 @@ class ZircoliteCore:
             _perf_counter = _time_module.perf_counter
             total_rules = len(self.ruleset)
 
+            def run_rule(rule) -> Optional[dict]:
+                """Execute one rule, timing it and recording the summary row."""
+                _t0 = _perf_counter() if _profile else 0.0
+                rule_results = execute_rule(rule)
+                if _profile:
+                    _title = rule.get('title', 'unknown')
+                    _profiling_data[_title] = _profiling_data.get(_title, 0.0) + (
+                        _perf_counter() - _t0
+                    ) * 1000
+                if not rule_results:
+                    return None
+                if limit != -1 and rule_results["count"] > limit:
+                    return None
+                all_rule_results.append({
+                    "title": rule_results.get("title", "Unknown"),
+                    "rule_level": rule_results.get("rule_level", "unknown"),
+                    "count": rule_results.get("count", 0),
+                    "tags": rule_results.get("tags", [])
+                })
+                if keep_results:
+                    full_results_append(rule_results)
+                return rule_results
+
             if progress_callback is not None:
                 progress_callback(0, total_rules)
                 for i, rule in enumerate(self.ruleset):
                     if is_shutdown_requested():
                         break
-                    _t0 = _perf_counter() if _profile else 0.0
-                    rule_results = execute_rule(rule)
-                    if _profile:
-                        _title = rule.get('title', 'unknown')
-                        _profiling_data[_title] = _profiling_data.get(_title, 0.0) + (_perf_counter() - _t0) * 1000
+                    rule_results = run_rule(rule)
                     progress_callback(i + 1, total_rules)
-                    if not rule_results:
-                        continue
-                    if limit != -1 and rule_results["count"] > limit:
-                        continue
-                    all_rule_results.append({
-                        "title": rule_results.get("title", "Unknown"),
-                        "rule_level": rule_results.get("rule_level", "unknown"),
-                        "count": rule_results.get("count", 0),
-                        "tags": rule_results.get("tags", [])
-                    })
-                    if keep_results:
-                        full_results_append(rule_results)
-                    if not no_output:
+                    if rule_results is not None and not no_output:
                         csv_writer, needs_comma_prefix = self._write_result_to_output(
                             rule_results, file_handle, csv_writer, needs_comma_prefix
                         )
@@ -816,88 +821,47 @@ class ZircoliteCore:
                 for rule in self.ruleset:
                     if is_shutdown_requested():
                         break
-                    _t0 = _perf_counter() if _profile else 0.0
-                    rule_results = execute_rule(rule)
-                    if _profile:
-                        _title = rule.get('title', 'unknown')
-                        _profiling_data[_title] = _profiling_data.get(_title, 0.0) + (_perf_counter() - _t0) * 1000
-                    if not rule_results:
-                        continue
-                    if limit != -1 and rule_results["count"] > limit:
-                        continue
-                    all_rule_results.append({
-                        "title": rule_results.get("title", "Unknown"),
-                        "rule_level": rule_results.get("rule_level", "unknown"),
-                        "count": rule_results.get("count", 0),
-                        "tags": rule_results.get("tags", [])
-                    })
-                    if keep_results:
-                        full_results_append(rule_results)
-                    if not no_output:
+                    rule_results = run_rule(rule)
+                    if rule_results is not None and not no_output:
                         csv_writer, needs_comma_prefix = self._write_result_to_output(
                             rule_results, file_handle, csv_writer, needs_comma_prefix
                         )
             else:
                 # Process with Rich Live display: progress bar + live detection counter
                 detection_counts = {"critical": 0, "high": 0, "medium": 0, "low": 0, "informational": 0}
-                
+
                 progress = Progress(
                     SpinnerColumn(),
                     TextColumn("[progress.description]{task.description}"),
                     BarColumn(bar_width=40),
                     MofNCompleteColumn(),
-                    TextColumn("•"),
+                    TextColumn("\u2022"),
                     TimeElapsedColumn(),
                 )
-                
-                task_id = progress.add_task("Executing rules", total=len(self.ruleset))
-                
+
+                task_id = progress.add_task("Executing rules", total=total_rules)
+
                 with Live(console=console, refresh_per_second=10, transient=True) as live:
                     for rule in self.ruleset:
                         if is_shutdown_requested():
                             break
-                        # Execute the rule
-                        _t0 = _perf_counter() if _profile else 0.0
-                        rule_results = execute_rule(rule)
-                        if _profile:
-                            _title = rule.get('title', 'unknown')
-                            _profiling_data[_title] = _profiling_data.get(_title, 0.0) + (_perf_counter() - _t0) * 1000
+                        rule_results = run_rule(rule)
                         progress.advance(task_id)
-                        
-                        if rule_results and not (limit != -1 and rule_results["count"] > limit):
-                            # Collect results for later display (sorted by level)
-                            all_rule_results.append({
-                                "title": rule_results.get("title", "Unknown"),
-                                "rule_level": rule_results.get("rule_level", "unknown"),
-                                "count": rule_results.get("count", 0),
-                                "tags": rule_results.get("tags", [])
-                            })
 
-                            # Update live detection counts
+                        if rule_results is not None:
                             det_level = rule_results.get("rule_level", "unknown").lower()
                             if det_level in detection_counts:
                                 detection_counts[det_level] += 1
-
-                            # Store results if needed
-                            if keep_results:
-                                full_results_append(rule_results)
-
-                            # Handle output to file
                             if not no_output:
                                 csv_writer, needs_comma_prefix = self._write_result_to_output(
                                     rule_results, file_handle, csv_writer, needs_comma_prefix
                                 )
-                        
+
                         # Update live display with progress + detection counter
                         live.update(Group(progress, make_detection_counter(detection_counts)))
 
             # Sort results by level priority, then by count (descending)
-            def sort_key(result):
-                level = result.get("rule_level", "unknown").lower()
-                priority = LEVEL_PRIORITY.get(level, 5)  # Unknown levels at the end
-                return (priority, -result.get("count", 0))  # Negative count for descending
-            
-            all_rule_results.sort(key=sort_key)
+            all_rule_results.sort(key=sort_key_severity)
             
             # Display sorted results as a table (suppressed in quiet mode or when show_table=False)
             if show_table and not is_quiet() and all_rule_results:
@@ -1144,7 +1108,6 @@ class ZircoliteCore:
 
         def process_single_file(log_file, progress_cb=None):
             """Process a single log file and return event count."""
-            nonlocal total_events
             try:
                 file_size = os.path.getsize(log_file)
                 if file_size == 0:

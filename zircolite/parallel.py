@@ -43,8 +43,9 @@ _RULE_PROGRESS_POLL_SECONDS = 0.1
 _FILE_PROGRESS_NAME_MAX_LEN = 40
 
 
-def _truncate_filename(name: str, max_len: int = _FILE_PROGRESS_NAME_MAX_LEN) -> str:
+def _truncate_filename(name: str) -> str:
     """Truncate file name for progress bar description if needed."""
+    max_len = _FILE_PROGRESS_NAME_MAX_LEN
     if len(name) <= max_len:
         return name
     return name[: max_len - 1] + "…"
@@ -61,6 +62,20 @@ def _file_size(path: Path) -> int:
 # ============================================================================
 # CONSOLIDATED WORKER CALCULATION
 # ============================================================================
+
+
+def memory_multiplier_for(avg_file_size_mb: float) -> float:
+    """Peak RSS expected per MB of input, by average file size.
+
+    Smaller files carry proportionally more per-event overhead; larger ones
+    amortise it. Single source of truth for the estimate used by the worker
+    count, the per-file estimate and the mode recommendation.
+    """
+    if avg_file_size_mb < 10:
+        return 5.0
+    if avg_file_size_mb < 50:
+        return 4.0
+    return 3.5
 
 
 def calculate_optimal_workers(
@@ -99,15 +114,7 @@ def calculate_optimal_workers(
         return max(1, min(max_workers, file_count))
 
     avg_file_size_mb = (sum(file_sizes) / file_count) / (1024 * 1024)
-
-    if avg_file_size_mb < 10:
-        memory_multiplier = 5.0
-    elif avg_file_size_mb < 50:
-        memory_multiplier = 4.0
-    else:
-        memory_multiplier = 3.5
-
-    memory_per_file_mb = avg_file_size_mb * memory_multiplier
+    memory_per_file_mb = avg_file_size_mb * memory_multiplier_for(avg_file_size_mb)
     usable_memory_mb = available_memory_mb * 0.85
 
     memory_based = (
@@ -267,15 +274,7 @@ class MemoryAwareParallelProcessor:
                 total_size += 10 * 1024 * 1024
 
         avg_file_size_mb = (total_size / min(len(file_list), 10)) / (1024 * 1024)
-
-        if avg_file_size_mb < 10:
-            memory_multiplier = 5.0
-        elif avg_file_size_mb < 50:
-            memory_multiplier = 4.0
-        else:
-            memory_multiplier = 3.5
-
-        return avg_file_size_mb * memory_multiplier
+        return avg_file_size_mb * memory_multiplier_for(avg_file_size_mb)
 
     def calibrate_memory(
         self,
@@ -488,7 +487,6 @@ class MemoryAwareParallelProcessor:
                                 )
                                 if total_rules <= 0:
                                     continue
-                                total_rules = total_rules or 1
                                 if w_id not in worker_file_task_ids:
                                     worker_file_task_ids[w_id] = (
                                         progress_files.add_task(

@@ -5,7 +5,7 @@ Covers:
 - ProcessingContext dataclass (including cached time strings)
 - LEVEL_PRIORITY constant
 - Factory helpers (create_zircolite_core, create_worker_core, create_extractor)
-- _sort_key_severity helper
+- sort_key_severity helper
 - _write_parallel_results (binary JSON + CSV output)
 - Module-level imports / public API surface
 """
@@ -30,7 +30,7 @@ from zircolite.processing import (
     create_zircolite_core,
     create_worker_core,
     create_extractor,
-    _sort_key_severity,
+    sort_key_severity,
     _unpack_streaming_result,
     _write_parallel_results,
     process_single_file_worker,
@@ -216,20 +216,20 @@ class TestHelpers:
     def test_unpack_streaming_result_int(self):
         assert _unpack_streaming_result(42) == (42, 0)
 
-    def test_sort_key_severity_ordering(self):
+    def testsort_key_severity_ordering(self):
         critical = {"rule_level": "critical", "count": 1}
         high = {"rule_level": "high", "count": 100}
-        assert _sort_key_severity(critical) < _sort_key_severity(high)
+        assert sort_key_severity(critical) < sort_key_severity(high)
 
-    def test_sort_key_severity_count_descending(self):
+    def testsort_key_severity_count_descending(self):
         a = {"rule_level": "high", "count": 50}
         b = {"rule_level": "high", "count": 10}
-        assert _sort_key_severity(a) < _sort_key_severity(b)
+        assert sort_key_severity(a) < sort_key_severity(b)
 
     def test_sort_key_unknown_level_goes_last(self):
         unknown = {"rule_level": "custom", "count": 100}
         info = {"rule_level": "informational", "count": 1}
-        assert _sort_key_severity(info) < _sort_key_severity(unknown)
+        assert sort_key_severity(info) < sort_key_severity(unknown)
 
 
 # =============================================================================
@@ -446,31 +446,6 @@ class TestIncrementalResultWriter:
         with open(ctx.outfile, "r") as f:
             data = json.loads(f.read())
         assert data == []
-
-    def test_csv_incremental_write(self, tmp_path):
-        import csv as csv_mod
-
-        ctx = self._make_ctx(tmp_path, csv_mode=True)
-
-        with _IncrementalResultWriter(ctx) as writer:
-            writer.write_file_results({
-                "results": [
-                    {
-                        "title": "Rule A",
-                        "description": "desc",
-                        "rule_level": "high",
-                        "count": 1,
-                        "matches": [{"CommandLine": "test", "Image": "ps.exe"}],
-                    }
-                ]
-            })
-
-        with open(ctx.outfile, "r") as f:
-            reader = csv_mod.DictReader(f, delimiter=";")
-            rows = list(reader)
-
-        assert len(rows) == 1
-        assert rows[0]["rule_title"] == "Rule A"
 
 
 # =============================================================================

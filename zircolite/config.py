@@ -119,6 +119,8 @@ class GuiConfig:
     
     Used by ZircoliteGuiGenerator.
     """
-    package_dir: str = ""
+    # Path to the gui/zircogui.zip that gets unpacked, not the output
+    # directory -- that arrives separately as generate()'s second argument.
+    source_archive: str = ""
     template_file: str = ""
     time_field: str = ""

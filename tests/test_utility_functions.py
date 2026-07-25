@@ -71,20 +71,6 @@ class TestInitLogger:
         # Check logger is properly configured (file may be delayed)
         assert logger.level in [logging.DEBUG, logging.INFO, logging.NOTSET]
 
-    def test_init_logger_use_rich_false(self):
-        """Test init_logger with use_rich=False uses standard logging."""
-        logger = init_logger(debug_mode=False, use_rich=False)
-        assert logger is not None
-        assert isinstance(logger, logging.Logger)
-
-    def test_init_logger_use_rich_false_with_file(self, tmp_path):
-        """Test init_logger use_rich=False with log file adds file handler."""
-        log_file = str(tmp_path / "plain.log")
-        logger = init_logger(debug_mode=False, log_file=log_file, use_rich=False)
-        assert logger is not None
-        file_handlers = [h for h in logger.handlers if getattr(h, 'baseFilename', None)]
-        assert len(file_handlers) >= 1
-
 
 class TestCreateSilentLogger:
     """Tests for create_silent_logger."""
@@ -533,128 +519,6 @@ class TestAnalyzeFilesAndRecommendMode:
 # print_mode_recommendation (plain fallback)
 # =============================================================================
 
-class TestPrintModeRecommendation:
-    """Tests for print_mode_recommendation and _print_mode_recommendation_plain."""
-
-    def test_plain_fallback(self, test_logger):
-        """Cover lines 561-590: plain text mode recommendation."""
-        from zircolite.utils import _print_mode_recommendation_plain
-
-        stats = {
-            'file_count': 5,
-            'total_size_fmt': '100.0 MB',
-            'avg_size_fmt': '20.0 MB',
-            'has_psutil': True,
-            'available_ram_fmt': '8.0 GB',
-            'cpu_count': 4,
-            'parallel_recommended': True,
-            'parallel_workers': 4,
-            'parallel_reason': '4 workers, ~3.0x speedup',
-        }
-        # Should not raise
-        _print_mode_recommendation_plain("per-file", "Multiple files", stats, test_logger)
-
-    def test_plain_fallback_unified_no_parallel(self, test_logger):
-        """Cover unified mode branch in plain fallback."""
-        from zircolite.utils import _print_mode_recommendation_plain
-
-        stats = {
-            'file_count': 12,
-            'total_size_fmt': '10.0 MB',
-            'avg_size_fmt': '0.8 MB',
-            'has_psutil': False,
-            'parallel_recommended': False,
-            'parallel_reason': 'Not recommended',
-        }
-        _print_mode_recommendation_plain("unified", "Many small files", stats, test_logger)
-
-    def test_plain_fallback_perfile_no_parallel(self, test_logger):
-        """Cover per-file mode with parallel disabled."""
-        from zircolite.utils import _print_mode_recommendation_plain
-
-        stats = {
-            'file_count': 2,
-            'total_size_fmt': '50.0 MB',
-            'avg_size_fmt': '25.0 MB',
-            'has_psutil': True,
-            'available_ram_fmt': '2.0 GB',
-            'cpu_count': 2,
-            'parallel_recommended': False,
-            'parallel_reason': 'Low RAM',
-        }
-        _print_mode_recommendation_plain(
-            "per-file", "Default mode", stats, test_logger, show_parallel=True
-        )
-
-    def test_print_mode_recommendation_rich_path(self, test_logger):
-        """Cover the Rich console path of print_mode_recommendation."""
-        from zircolite.utils import print_mode_recommendation
-
-        stats = {
-            'file_count': 3,
-            'total_size_fmt': '30.0 MB',
-            'avg_size_fmt': '10.0 MB',
-            'has_psutil': True,
-            'available_ram_fmt': '16.0 GB',
-            'cpu_count': 8,
-            'parallel_recommended': True,
-            'parallel_workers': 3,
-            'parallel_reason': '3 workers',
-        }
-        # Should not raise
-        print_mode_recommendation("per-file", "Test reason", stats, test_logger)
-
-    def test_plain_fallback_forced_workers(self):
-        """Forced worker count should be displayed and labelled as forced."""
-        from unittest.mock import MagicMock
-        from zircolite.utils import _print_mode_recommendation_plain
-
-        stats = {
-            'file_count': 4,
-            'total_size_fmt': '80.0 MB',
-            'avg_size_fmt': '20.0 MB',
-            'has_psutil': True,
-            'available_ram_fmt': '8.0 GB',
-            'cpu_count': 4,
-            'parallel_recommended': True,
-            'parallel_workers': 3,
-            'parallel_reason': '3 workers',
-        }
-        mock_logger = MagicMock()
-        _print_mode_recommendation_plain(
-            "per-file", "Test reason", stats, mock_logger,
-            show_parallel=True, forced_workers=8,
-        )
-        joined = "\n".join(call.args[0] for call in mock_logger.info.call_args_list)
-        assert "8 workers" in joined
-        assert "forced" in joined.lower()
-        assert "auto-detected: 3" in joined
-
-    def test_plain_fallback_forced_workers_when_not_recommended(self):
-        """When parallel isn't recommended but user forces workers, show as forced."""
-        from unittest.mock import MagicMock
-        from zircolite.utils import _print_mode_recommendation_plain
-
-        stats = {
-            'file_count': 2,
-            'total_size_fmt': '50.0 MB',
-            'avg_size_fmt': '25.0 MB',
-            'has_psutil': True,
-            'available_ram_fmt': '2.0 GB',
-            'cpu_count': 2,
-            'parallel_recommended': False,
-            'parallel_workers': 1,
-            'parallel_reason': 'Insufficient resources',
-        }
-        mock_logger = MagicMock()
-        _print_mode_recommendation_plain(
-            "per-file", "Default", stats, mock_logger,
-            show_parallel=True, forced_workers=4,
-        )
-        joined = "\n".join(call.args[0] for call in mock_logger.info.call_args_list)
-        assert "4 workers" in joined
-        assert "forced" in joined.lower()
-
 
 class TestSelectAvoidFilesBugFixes:
     """Tests for edge cases in select_files and avoid_files."""
@@ -751,9 +615,9 @@ class TestInitLoggerHandlerManagement:
         from zircolite.utils import init_logger
         log1 = tmp_path / "one.log"
         log2 = tmp_path / "two.log"
-        logger1 = init_logger(debug_mode=False, log_file=str(log1), use_rich=False)
+        logger1 = init_logger(debug_mode=False, log_file=str(log1))
         old_handlers = list(logger1.handlers)
-        logger2 = init_logger(debug_mode=False, log_file=str(log2), use_rich=False)
+        logger2 = init_logger(debug_mode=False, log_file=str(log2))
         assert logger1 is logger2  # same named logger
         for h in old_handlers:
             if isinstance(h, logging.FileHandler):

@@ -29,20 +29,6 @@ _LEVEL_COLOR = {
 }
 
 
-def _extract_attack_techniques(tags: list) -> list:
-    """Extract ATT&CK technique IDs from Sigma tags.
-
-    Converts tags like ``'attack.t1059.001'`` to ``'T1059.001'``.
-    Duplicate IDs are removed while preserving order.
-    """
-    return extract_attack_techniques(tags)
-
-
-def _extract_attack_tactics(tags: list) -> list:
-    """Extract ATT&CK tactic IDs from Sigma tags."""
-    return extract_attack_tactics(tags)
-
-
 def _count_label(count: int, singular: str) -> str:
     return singular if count == 1 else f"{singular}s"
 
@@ -66,8 +52,8 @@ def _collect_navigator_techniques(data: list) -> list:
     merged: dict = {}
     for elem in data:
         tags = elem.get('tags', [])
-        tactics = _extract_attack_tactics(tags) or [None]
-        techniques = _extract_attack_techniques(tags)
+        tactics = extract_attack_tactics(tags) or [None]
+        techniques = extract_attack_techniques(tags)
         level = str(elem.get('rule_level') or 'unknown').lower()
         count = int(elem.get('count') or 0)
         rule = {
@@ -123,8 +109,8 @@ def _collect_navigator_techniques(data: list) -> list:
 def _make_jinja2_env() -> Environment:
     """Create a Jinja2 Environment with Zircolite-specific filters."""
     env = Environment()
-    env.filters['extract_attack_techniques'] = _extract_attack_techniques
-    env.filters['extract_attack_tactics'] = _extract_attack_tactics
+    env.filters['extract_attack_techniques'] = extract_attack_techniques
+    env.filters['extract_attack_tactics'] = extract_attack_tactics
     env.globals['collect_navigator_techniques'] = _collect_navigator_techniques
     return env
 
@@ -212,7 +198,7 @@ class ZircoliteGuiGenerator:
         self.tmpDir = f'tmp-zircogui-{random_suffix(4)}'
         self.tmpFile = f'data-{random_suffix(4)}.js'
         self.outputFile = f'zircogui-output-{random_suffix(4)}'
-        self.packageDir = cfg.package_dir
+        self.source_archive = cfg.source_archive
         self.timeField = cfg.time_field
 
     def generate(
@@ -228,7 +214,7 @@ class ZircoliteGuiGenerator:
 
         try:
             # Extract the GUI package
-            shutil.unpack_archive(self.packageDir, self.tmpDir, "zip")
+            shutil.unpack_archive(self.source_archive, self.tmpDir, "zip")
 
             # Generate data file
             target_name = f"{self.outputFile}.zip"

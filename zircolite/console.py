@@ -15,7 +15,7 @@ import logging
 import sys
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 from rich.bar import Bar
 from rich.console import Console
@@ -213,17 +213,6 @@ class DetectionStats:
             self.informational += count
         self.total_events += count
         self.total_rules_matched += 1
-    
-    @property
-    def total_by_severity(self) -> Dict[str, int]:
-        """Get totals by severity level."""
-        return {
-            "critical": self.critical,
-            "high": self.high,
-            "medium": self.medium,
-            "low": self.low,
-            "informational": self.informational,
-        }
 
 
 def get_rich_logger(name: str = "zircolite", debug: bool = False, log_file: Optional[str] = None) -> logging.Logger:
@@ -385,6 +374,13 @@ LEVEL_PRIORITY = {
     "low": 3,
     "informational": 4,
 }
+
+
+def sort_key_severity(result: Dict[str, Any]) -> Tuple[int, int]:
+    """Sort key for a detection row: critical first, then descending count."""
+    level = result.get("rule_level", "unknown").lower()
+    return (LEVEL_PRIORITY.get(level, 5), -result.get("count", 0))
+
 
 def make_severity_badge(level: str) -> Text:
     """Return a fixed-width, styled severity badge.

@@ -201,15 +201,6 @@ class DetectionResult:
     # Additional metadata from detection
     metadata: Dict = field(default_factory=dict)
 
-    def __str__(self) -> str:
-        parts = [f"{self.log_source} ({self.input_type})"]
-        parts.append(f"confidence={self.confidence}")
-        if self.timestamp_field:
-            parts.append(f"timestamp={self.timestamp_field}")
-        if self.suggested_pipeline:
-            parts.append(f"pipeline={self.suggested_pipeline}")
-        return ", ".join(parts)
-
 
 class LogTypeDetector:
     """

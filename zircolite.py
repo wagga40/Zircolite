@@ -26,20 +26,6 @@ import time
 from pathlib import Path
 from typing import Any, List, Optional, Tuple
 
-# Force UTF-8 on Windows so argparse help and banner (Unicode/emojis) don't raise
-# UnicodeEncodeError when the console uses cp1252 (see PYI-1448 / PYI-4560).
-if sys.platform == "win32":
-    try:
-        if hasattr(sys.stdout, "reconfigure"):
-            sys.stdout.reconfigure(encoding="utf-8", errors="replace")  # type: ignore[attr-defined]
-            sys.stderr.reconfigure(encoding="utf-8", errors="replace")  # type: ignore[attr-defined]
-        elif hasattr(sys.stdout, "buffer"):
-            import io
-            sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8", errors="replace")
-            sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding="utf-8", errors="replace")
-    except (AttributeError, OSError):
-        pass
-
 # External libs - Rich for styled terminal output
 from rich.logging import RichHandler
 from rich.panel import Panel
@@ -596,7 +582,7 @@ def handle_templating(
             gui_zip_path = _bundled_asset("gui", "zircogui.zip")
             if template_path.is_file() and gui_zip_path.is_file():
                 gui_config = GuiConfig(
-                    package_dir=str(gui_zip_path),
+                    source_archive=str(gui_zip_path),
                     template_file=str(template_path),
                     time_field=ctx.time_field
                 )
@@ -642,7 +628,7 @@ def print_stats(
 ) -> None:
     """Print final execution statistics with a Rich summary dashboard."""
     memory_tracker.sample()
-    peak_memory, avg_memory = memory_tracker.get_stats()
+    peak_memory, _ = memory_tracker.get_stats()
     processing_time = time.time() - start_time
     
     # Build summary table

@@ -130,7 +130,6 @@ _BY_YAML: Dict[str, InputFormat] = {f.yaml_format: f for f in INPUT_FORMATS}
 
 DEFAULT_INPUT_FORMAT: InputFormat = _BY_NAME["evtx"]
 
-INPUT_FLAG_PRECEDENCE: Tuple[str, ...] = tuple(f.args_flag for f in INPUT_FORMATS)
 YAML_INPUT_FORMATS: Tuple[str, ...] = tuple(f.yaml_format for f in INPUT_FORMATS)
 
 # Formats without Channel/EventID semantics: event filtering is skipped for

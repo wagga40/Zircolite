@@ -161,17 +161,6 @@ class TestDetectionStats:
         assert stats.low == 1
         assert stats.total_events == 9
 
-    def test_total_by_severity(self):
-        stats = DetectionStats()
-        stats.add_detection("high", 1)
-        totals = stats.total_by_severity
-        assert totals["high"] == 1
-        assert totals["critical"] == 0
-
-
-# =============================================================================
-# Section separator: no title (line 136)
-# =============================================================================
 
 class TestPrintSectionNoTitle:
     """Cover the else branch of print_section when no title is given."""
