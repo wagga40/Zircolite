@@ -505,16 +505,20 @@ def run_single_test(
         core = ZircoliteCore(config_path, proc_config, logger=test_logger)
         events_from_db: Optional[List[Dict[str, Any]]] = None
         try:
-            # Minimal args for streaming (no transforms needed for regression)
-            class Args:
-                json_array_input = json_array
-                all_transforms = False
-                transform_categories = None
+            # Minimal args for streaming (no transforms needed for regression).
+            # A Namespace, not a class: attributes declared on a class body are
+            # invisible to vars(), which used to make the format resolve to the
+            # default no matter what was asked for.
+            args_ns = argparse.Namespace(
+                json_array_input=json_array,
+                all_transforms=False,
+                transform_categories=None,
+            )
 
             core.run_streaming(
                 [str(data_file)],
                 input_type=input_type,
-                args_config=Args(),
+                args_config=args_ns,
                 extractor=None,
                 disable_progress=True,
             )

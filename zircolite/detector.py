@@ -31,6 +31,8 @@ from typing import Dict, List, Optional, Tuple
 
 import orjson as json
 
+from .formats import EXTENSION_FALLBACKS
+
 from zircolite.utils import (
     ARCHIVE_PASSWORD_ERROR_MESSAGE,
     COMPRESSED_SUFFIXES,
@@ -1122,29 +1124,18 @@ class LogTypeDetector:
 
     def _fallback_by_extension(self, ext: str, reason: str) -> DetectionResult:
         """Fall back to extension-based detection when content analysis fails."""
-        ext_map = {
-            ".evtx": ("evtx", "windows_evtx", "SystemTime", "sysmon"),
-            ".json": ("json", "generic_json", None, None),
-            ".jsonl": ("json", "generic_json", None, None),
-            ".ndjson": ("json", "generic_json", None, None),
-            ".xml": ("xml", "windows_evtx_xml", "SystemTime", "sysmon"),
-            ".csv": ("csv", "generic_csv", None, None),
-            ".tsv": ("csv", "generic_csv", None, None),
-            ".log": ("json", "generic_json", None, None),
-        }
+        fallback = EXTENSION_FALLBACKS.get(ext)
+        if fallback is None:
+            return self._unknown_result(f"Unknown extension '{ext}' ({reason})")
 
-        if ext in ext_map:
-            input_type, log_source, ts_field, pipeline = ext_map[ext]
-            return DetectionResult(
-                input_type=input_type,
-                log_source=log_source,
-                confidence="low",
-                timestamp_field=ts_field,
-                suggested_pipeline=pipeline,
-                details=f"Detected by extension '{ext}' ({reason})",
-            )
-
-        return self._unknown_result(f"Unknown extension '{ext}' ({reason})")
+        return DetectionResult(
+            input_type=fallback.format_name,
+            log_source=fallback.log_source,
+            confidence="low",
+            timestamp_field=fallback.timestamp_field,
+            suggested_pipeline=fallback.pipeline,
+            details=f"Detected by extension '{ext}' ({reason})",
+        )
 
     def _enrich_timestamp_from_raw(
         self,

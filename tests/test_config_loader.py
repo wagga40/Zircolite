@@ -4,7 +4,6 @@ Tests for the YAML configuration loader module.
 
 import pytest
 import sys
-from argparse import Namespace
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent))

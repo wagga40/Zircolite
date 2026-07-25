@@ -98,7 +98,6 @@ from .formats import (
     format_by_name,
     format_by_yaml,
     format_from_args,
-    format_from_flags,
     has_explicit_format,
     is_valid_yaml_format,
 )
@@ -175,7 +174,6 @@ __all__ = [
     'format_by_name',
     'format_by_yaml',
     'format_from_args',
-    'format_from_flags',
     'has_explicit_format',
     'is_valid_yaml_format',
     # YAML configuration

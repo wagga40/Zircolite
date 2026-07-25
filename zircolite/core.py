@@ -43,6 +43,7 @@ from .console import (
     is_quiet,
     make_detection_counter,
 )
+from .formats import json_array_requested
 from .shutdown import is_shutdown_requested
 from .streaming import StreamingEventProcessor, StrictParseError
 from .utils import sanitize_row_for_csv
@@ -1113,10 +1114,7 @@ class ZircoliteCore:
         """
         self.logger.info("[+] Processing events (streaming mode)")
         
-        # Determine if JSON array mode
-        json_array = False
-        if args_config and hasattr(args_config, 'json_array_input'):
-            json_array = args_config.json_array_input
+        json_array = json_array_requested(args_config) if args_config else False
         
         # Create streaming processor with ProcessingConfig
         proc_config = ProcessingConfig(

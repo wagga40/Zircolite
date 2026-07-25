@@ -9,6 +9,8 @@ for cleaner, more maintainable class initialization across the codebase.
 from dataclasses import dataclass, field
 from typing import Optional, List
 
+from .formats import INPUT_FORMATS
+
 
 @dataclass
 class ProcessingConfig:
@@ -72,12 +74,13 @@ class ExtractorConfig:
     encoding: Optional[str] = None
 
     def __post_init__(self) -> None:
-        """Set default encoding based on input type if not specified."""
-        if self.encoding is None:
-            if self.sysmon4linux:
-                self.encoding = "ISO-8859-1"
-            elif self.auditd_logs or self.evtxtract or self.xml_logs:
-                self.encoding = "utf-8"
+        """Take the encoding from the format registry unless one was given."""
+        if self.encoding is not None:
+            return
+        for spec in INPUT_FORMATS:
+            if spec.extractor_flag and getattr(self, spec.extractor_flag, False):
+                self.encoding = spec.default_encoding
+                return
 
 
 @dataclass

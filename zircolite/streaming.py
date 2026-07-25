@@ -40,7 +40,7 @@ from .formats import (
     DEFAULT_INPUT_FORMAT,
     NON_WINDOWS_INPUT_FLAGS,
     format_by_name,
-    format_from_flags,
+    format_from_args,
 )
 from .shutdown import is_shutdown_requested
 from .utils import (
@@ -344,7 +344,7 @@ class StreamingEventProcessor:
         # Deterministic precedence when several *_input flags are truthy (API
         # edge; the CLI always sets exactly one)
         self.chosen_input = (
-            format_from_flags(vars(args_config)).args_flag
+            format_from_args(args_config).args_flag
             if args_config
             else DEFAULT_INPUT_FORMAT.args_flag
         )
@@ -1292,9 +1292,9 @@ class StreamingEventProcessor:
             filename = os.path.basename(csv_file)
             flatten = self._flatten_event  # Local reference
             should_process = self._should_process_event  # Local reference
-            encoding = (
-                getattr(self.args_config, "logs_encoding", None) or "utf-8-sig"
-            )
+            encoding = getattr(
+                self.args_config, "logs_encoding", None
+            ) or format_from_args(self.args_config).default_encoding
 
             with open_maybe_compressed(
                 csv_file, "rt", encoding=encoding, password=self.archive_password
@@ -1448,7 +1448,10 @@ class StreamingEventProcessor:
             decoder = std_json.JSONDecoder()
 
             with open_maybe_compressed(
-                json_file, "rt", encoding="utf-8-sig", password=self.archive_password
+                json_file,
+                "rt",
+                encoding=format_by_name("json_array").default_encoding,
+                password=self.archive_password,
             ) as f:
                 # Find the start of the array
                 while True:

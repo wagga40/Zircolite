@@ -23,7 +23,9 @@ from zircolite import run_config
 from zircolite.config import ExtractorConfig
 from zircolite.config_loader import ConfigLoader, ZircoliteConfig
 from zircolite.formats import (
+    ALIAS_EXTENSIONS,
     DEFAULT_INPUT_FORMAT,
+    EXTENSION_FALLBACKS,
     INPUT_FLAG_PRECEDENCE,
     INPUT_FORMATS,
     NON_WINDOWS_INPUT_FLAGS,
@@ -31,8 +33,8 @@ from zircolite.formats import (
     format_by_name,
     format_by_yaml,
     format_from_args,
-    format_from_flags,
     has_explicit_format,
+    json_array_requested,
 )
 from zircolite.processing import create_extractor
 from zircolite.streaming import StreamingEventProcessor
@@ -236,24 +238,54 @@ class TestLookups:
         assert has_explicit_format(make_args(None)) is False
 
 
-class TestFormatFromFlagsUsesVars:
-    """``format_from_flags`` reads ``vars()`` and must stay that way.
+class TestSingleFormatResolver:
+    """One resolver, so a namespace cannot resolve two different ways.
 
-    The regression runners in ``tools/`` and ``helpers/`` pass an instance of
-    a throwaway class whose flags are declared on the class body. Those never
-    reach the instance ``__dict__``, so ``vars()`` does not see them and such
-    callers resolve to the EVTX default. Switching this helper to ``getattr``
-    would silently change which transforms fire for those runs.
+    There used to be a second ``vars()``-based resolver, which could not see
+    the class-body attributes the regression runners declared. Those runs
+    resolved to EVTX in the streaming processor while ``core`` -- reading the
+    same object through ``getattr`` -- saw the array flag.
     """
 
-    def test_class_level_attributes_are_not_seen(self):
+    def test_class_level_attributes_resolve(self):
         class Args:
             json_array_input = True
 
-        assert format_from_flags(vars(Args())).name == "evtx"
+        assert format_from_args(Args()).name == "json_array"
 
-    def test_instance_attributes_are_seen(self):
-        assert format_from_flags(vars(make_args("json_array_input"))).name == "json_array"
+    def test_instance_attributes_resolve(self):
+        assert format_from_args(make_args("json_array_input")).name == "json_array"
+
+    def test_regression_runner_namespace_resolves(self, field_mappings_file):
+        """The runners now build a Namespace; the processor must agree."""
+        args = argparse.Namespace(
+            json_array_input=True, all_transforms=False, transform_categories=None
+        )
+        processor = StreamingEventProcessor(
+            config_file=field_mappings_file, args_config=args
+        )
+
+        assert processor.chosen_input == "json_array_input"
+        assert json_array_requested(args) is True
+
+    def test_no_evtx_only_transform_is_gated_out_by_this(self):
+        """Locks the property that made the collapse behaviour-neutral.
+
+        Every shipped source_condition that lists evtx_input also lists
+        json_array_input, so the two resolve to the same set of transforms.
+        A future config edit that breaks this should say so here.
+        """
+        import yaml
+
+        config = yaml.safe_load(
+            (Path(__file__).parent.parent / "config" / "config.yaml").read_text()
+        )
+        for category, items in (config.get("transforms") or {}).items():
+            for transform in items:
+                sources = set(transform.get("source_condition", []))
+                assert ("evtx_input" in sources) == ("json_array_input" in sources), (
+                    f"{category}: {transform.get('alias_name')}"
+                )
 
 
 class TestCreateExtractor:
@@ -292,3 +324,109 @@ class TestPackageExports:
         for name in ("InputFormat", "INPUT_FORMATS", "format_by_name"):
             assert hasattr(zc_pkg, name), name
             assert name in zc_pkg.__all__, name
+
+
+class TestExtensionFallbacks:
+    """The extension table is hand-written on purpose; keep it honest."""
+
+    def test_every_fallback_names_a_real_format(self):
+        for ext, fallback in EXTENSION_FALLBACKS.items():
+            assert format_by_name(fallback.format_name) is not None, ext
+
+    def test_unambiguous_extensions_agree_with_the_registry(self):
+        """When exactly one format claims an extension, that must be the guess.
+
+        Catches drift such as changing a format's default_extension without
+        updating this table. Extensions claimed by several formats (".log" by
+        three, ".json" by two) are judgement calls documented next to the
+        table, and aliases are claimed by none.
+        """
+        for ext, fallback in EXTENSION_FALLBACKS.items():
+            if ext in ALIAS_EXTENSIONS:
+                continue
+            claimants = {
+                f.name for f in INPUT_FORMATS
+                if f.default_extension == ext.lstrip(".")
+            }
+            if len(claimants) != 1:
+                continue
+            assert fallback.format_name in claimants, (
+                f"{ext} -> {fallback.format_name}, but only {claimants} claim it"
+            )
+
+    def test_ambiguous_extensions_are_documented_judgement_calls(self):
+        """.log is claimed by three formats and guesses none of them.
+
+        Reaching the fallback means none of their content markers were found,
+        so a readable text format is the least-bad answer.
+        """
+        log_claimants = {
+            f.name for f in INPUT_FORMATS if f.default_extension == "log"
+        }
+        assert len(log_claimants) > 1
+        assert EXTENSION_FALLBACKS[".log"].format_name == "json"
+
+    def test_alias_extensions_are_not_claimed_by_any_format(self):
+        claimed = {f".{f.default_extension}" for f in INPUT_FORMATS if f.default_extension}
+        assert ALIAS_EXTENSIONS.isdisjoint(claimed)
+
+    def test_detector_uses_the_shared_table(self, test_logger):
+        from zircolite.detector import LogTypeDetector
+
+        detector = LogTypeDetector(logger=test_logger)
+        for ext, fallback in EXTENSION_FALLBACKS.items():
+            result = detector._fallback_by_extension(ext, "test")
+            assert result.input_type == fallback.format_name
+            assert result.log_source == fallback.log_source
+            assert result.confidence == "low"
+
+    def test_unknown_extension_is_unknown(self, test_logger):
+        from zircolite.detector import LogTypeDetector
+
+        detector = LogTypeDetector(logger=test_logger)
+        assert detector._fallback_by_extension(".zzz", "test").log_source == "unknown"
+
+
+class TestDefaultEncodings:
+    """Per-format encodings live in the registry, not in three other places."""
+
+    def test_text_formats_declare_an_encoding(self):
+        for spec in INPUT_FORMATS:
+            if spec.stream_method and spec.name != "evtx":
+                assert spec.default_encoding is not None, spec.name
+
+    def test_binary_formats_declare_none(self):
+        assert format_by_name("evtx").default_encoding is None
+        assert format_by_name("sqlite").default_encoding is None
+
+    @pytest.mark.parametrize("flag,expected", [
+        ("sysmon4linux", "ISO-8859-1"),
+        ("auditd_logs", "utf-8"),
+        ("evtxtract", "utf-8"),
+        ("xml_logs", "utf-8"),
+    ])
+    def test_extractor_config_reads_the_registry(self, flag, expected):
+        assert ExtractorConfig(**{flag: True}).encoding == expected
+
+    def test_explicit_encoding_is_never_overridden(self):
+        cfg = ExtractorConfig(sysmon4linux=True, encoding="cp1252")
+        assert cfg.encoding == "cp1252"
+
+
+class TestJsonArrayRequested:
+    """core.py used to read the json_array_input flag name directly."""
+
+    def test_true_only_for_array_formats(self):
+        for spec in INPUT_FORMATS:
+            args = make_args(spec.args_flag)
+            assert json_array_requested(args) is spec.json_array, spec.name
+
+    def test_false_for_a_bare_namespace(self):
+        assert json_array_requested(argparse.Namespace()) is False
+
+    def test_array_wins_even_when_lines_takes_precedence(self):
+        """json_input sorts first, but the array request must still be seen."""
+        args = make_args("json_input")
+        args.json_array_input = True
+        assert format_from_args(args).name == "json"
+        assert json_array_requested(args) is True

@@ -27,6 +27,9 @@ class InputFormat:
     default_extension: Optional[str] = None
     stream_method: Optional[str] = None  # StreamingEventProcessor generator
     extractor_flag: Optional[str] = None  # ExtractorConfig field to enable
+    # Encoding used to open the file when --logs-encoding is not given. None
+    # for the binary formats, which carry their own.
+    default_encoding: Optional[str] = None
     reads_json: bool = False
     json_array: bool = False
     windows_event_semantics: bool = True  # Channel/EventID early filtering applies
@@ -50,6 +53,7 @@ INPUT_FORMATS: Tuple[InputFormat, ...] = (
         yaml_format="json",
         default_extension="json",
         stream_method="stream_json_events",
+        default_encoding="utf-8-sig",
         reads_json=True,
     ),
     InputFormat(
@@ -58,6 +62,7 @@ INPUT_FORMATS: Tuple[InputFormat, ...] = (
         yaml_format="json_array",
         default_extension="json",
         stream_method="stream_json_events",
+        default_encoding="utf-8-sig",
         reads_json=True,
         json_array=True,
     ),
@@ -68,6 +73,7 @@ INPUT_FORMATS: Tuple[InputFormat, ...] = (
         default_extension="xml",
         stream_method="stream_xml_events",
         extractor_flag="xml_logs",
+        default_encoding="utf-8",
     ),
     InputFormat(
         name="sysmon_linux",
@@ -76,6 +82,7 @@ INPUT_FORMATS: Tuple[InputFormat, ...] = (
         default_extension="log",
         stream_method="stream_sysmon_linux_events",
         extractor_flag="sysmon4linux",
+        default_encoding="ISO-8859-1",
         windows_event_semantics=False,
     ),
     InputFormat(
@@ -85,6 +92,7 @@ INPUT_FORMATS: Tuple[InputFormat, ...] = (
         default_extension="log",
         stream_method="stream_auditd_events",
         extractor_flag="auditd_logs",
+        default_encoding="utf-8",
         windows_event_semantics=False,
     ),
     InputFormat(
@@ -93,6 +101,7 @@ INPUT_FORMATS: Tuple[InputFormat, ...] = (
         yaml_format="csv",
         default_extension="csv",
         stream_method="stream_csv_events",
+        default_encoding="utf-8-sig",
     ),
     InputFormat(
         name="evtxtract",
@@ -101,6 +110,7 @@ INPUT_FORMATS: Tuple[InputFormat, ...] = (
         default_extension="log",
         stream_method="stream_evtxtract_events",
         extractor_flag="evtxtract",
+        default_encoding="utf-8",
     ),
     InputFormat(
         name="evtx",
@@ -130,6 +140,40 @@ NON_WINDOWS_INPUT_FLAGS: FrozenSet[str] = frozenset(
 )
 
 
+@dataclass(frozen=True)
+class ExtensionFallback:
+    """Best guess for a file extension once content analysis has failed."""
+
+    format_name: str
+    log_source: str
+    timestamp_field: Optional[str] = None
+    pipeline: Optional[str] = None
+
+
+# Deliberately not derived from `default_extension`: that mapping is
+# format -> extension and its inverse is not a function. Three formats glob
+# ".log" and two glob ".json", so this table records which one a blind guess
+# picks, and is only ever consulted after content analysis has given up.
+EXTENSION_FALLBACKS: Mapping[str, ExtensionFallback] = {
+    ".evtx": ExtensionFallback("evtx", "windows_evtx", "SystemTime", "sysmon"),
+    ".xml": ExtensionFallback("xml", "windows_evtx_xml", "SystemTime", "sysmon"),
+    ".csv": ExtensionFallback("csv", "generic_csv"),
+    ".tsv": ExtensionFallback("csv", "generic_csv"),
+    # JSON lines rather than json_array: the former reads a single-line array
+    # too, so it is the safer guess of the two.
+    ".json": ExtensionFallback("json", "generic_json"),
+    ".jsonl": ExtensionFallback("json", "generic_json"),
+    ".ndjson": ExtensionFallback("json", "generic_json"),
+    # Shared by sysmon_linux, auditd and evtxtract. Reaching here means none of
+    # their content markers were found, so a readable text format is the least
+    # bad answer.
+    ".log": ExtensionFallback("json", "generic_json"),
+}
+
+# Extensions with no `default_extension` claim in the registry above.
+ALIAS_EXTENSIONS: FrozenSet[str] = frozenset({".jsonl", ".ndjson", ".tsv"})
+
+
 def format_by_name(name: str) -> Optional[InputFormat]:
     """Look up a format by its canonical input_type."""
     return _BY_NAME.get(name)
@@ -157,19 +201,18 @@ def format_from_args(args: Any) -> InputFormat:
     return DEFAULT_INPUT_FORMAT
 
 
-def format_from_flags(flags: Mapping[str, Any]) -> InputFormat:
-    """Same resolution as :func:`format_from_args`, from a flag mapping.
+def json_array_requested(args: Any) -> bool:
+    """Whether any format flag on *args* asks for JSON-array reading.
 
-    Callers pass ``vars(namespace)``. This is intentionally not merged with
-    :func:`format_from_args`: the regression runners pass an instance whose
-    flags are declared on the class body, so ``vars()`` does not see them and
-    those runs resolve to the default. Reading them through ``getattr``
-    instead would change which transforms fire.
+    Not `format_from_args(args).json_array`: a namespace with both the lines
+    and the array flag set resolves to the lines format by precedence, but the
+    array request still has to be honoured.
     """
-    for spec in INPUT_FORMATS:
-        if flags.get(spec.args_flag):
-            return spec
-    return DEFAULT_INPUT_FORMAT
+    return any(
+        getattr(args, spec.args_flag, False)
+        for spec in INPUT_FORMATS
+        if spec.json_array
+    )
 
 
 def has_explicit_format(args: Any) -> bool:
