@@ -664,39 +664,22 @@ Zircolite automatically enables parallel processing when it's beneficial. The pa
 # Set maximum workers
 python3 zircolite.py --evtx logs/ --ruleset rules.json --parallel-workers 8
 
-# Set memory threshold for throttling (default: 75%)
+# Set memory threshold for throttling (default: 85%)
 python3 zircolite.py --evtx logs/ --ruleset rules.json --parallel-memory-limit 80
 ```
 
-### Streaming Mode
+### The Streaming Pipeline
 
-Zircolite includes a **streaming mode** (enabled by default) that combines extraction, flattening, and database insertion into a single pass.
+Every input format is processed the same way: extraction, flattening and
+database insertion happen in a single pass, with no intermediate files.
 
-#### How Streaming Mode Works
+1. Read events from the source
+2. Flatten each event and insert it into SQLite in batches
+3. Execute the ruleset
 
-**Traditional Mode (multi-pass):**
-1. Extract logs from EVTX → Write intermediate JSON files
-2. Read JSON files → Flatten → Store in memory
-3. Create database → Insert all events
-4. Execute rules
-
-**Streaming Mode (single-pass):**
-1. Extract logs → Flatten immediately → Insert directly to database in batches
-2. Execute rules
-
-This eliminates intermediate file I/O and avoids double JSON parsing.
-
-#### When Streaming Mode is Used
-
-Streaming mode is **enabled by default** for most input types:
-- EVTX files
-- JSON/JSONL files
-- JSON Array files
-- XML logs
-- Sysmon for Linux logs
-- Auditd logs
-
-All input formats are processed via the streaming pipeline, including CSV and EVTXtract.
+There is no alternative pipeline and no flag to select one. What *is*
+selectable is how the database is organised across files — per-file, unified
+or parallel — described under [Processing Modes](Internals.md#processing-modes).
 
 Use `--keepflat` to save flattened events to a JSONL file alongside processing. Note that `--keepflat` only includes events that Zircolite actually processed — events dropped by early event filtering or time filtering (`--after`/`--before`) are not included. To get all events regardless of filtering, combine with `--no-event-filter`.
 

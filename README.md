@@ -24,7 +24,7 @@
 - **Advanced Log Manipulation**: It can manipulate input logs by splitting fields and applying transformations, allowing for more flexible and powerful log analysis.
 - **Field Transforms**: Apply custom Python transformations to fields during processing (e.g., Base64 decoding, hex-to-ASCII conversion).
 - **Flexible Export**: Zircolite can export results to multiple formats using Jinja [templates](templates), including JSON, CSV, JSONL, Splunk, Elastic, Zinc, Timesketch, and more.
-- **Rich Terminal Output**: Detection results displayed in severity-sorted tables with MITRE ATT&CK technique IDs, ATT&CK tactics heatmap, rule coverage metrics, clickable output file links, and contextual post-run suggestions.
+- **Rich Terminal Output**: Detection results displayed in severity-sorted tables with MITRE ATT&CK technique IDs, ATT&CK tactics heatmap, rule coverage metrics, and clickable output file links.
 
 **You can use Zircolite directly with Python.** 
 
@@ -36,7 +36,8 @@ The project has been tested with Python 3.10 and above. Install dependencies wit
 
 ### Dependencies
 
-- **Required**: `orjson`, `xxhash`, `rich`, `RestrictedPython`, `requests`, `pySigma`, `evtx` (pyevtx-rs), `jinja2`, `lxml`, `psutil`, `pyyaml`, `py7zr` (for 7-Zip archives)
+- **Required**: `orjson`, `xxhash`, `rich`, `rich-argparse`, `RestrictedPython`, `requests`, `urllib3`, `pySigma`, `evtx` (pyevtx-rs), `jinja2`, `lxml`, `chardet`, `psutil`, `pyyaml`
+- **Optional**: `py7zr` (for 7-Zip archives)
 
 :warning: On some systems (Mac, ARM, etc.), the `evtx` Python library may require Rust and Cargo to be installed.
 
@@ -184,7 +185,6 @@ output:
   format: json
 
 processing:
-  streaming: true      # Single-pass processing (default: enabled)
   unified_db: false    # Per-file databases (default)
   auto_mode: true      # Automatic mode selection (default: enabled)
 

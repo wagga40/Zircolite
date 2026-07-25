@@ -1,188 +1,164 @@
-# Zircolite Configuration File Example
-# =====================================
-# This file demonstrates all available configuration options.
-# Use with: python3 zircolite.py --yaml-config config/zircolite_example.yaml
+# Zircolite Configuration File
 #
-# CLI arguments will override settings in this file.
-# Generate a fresh config file with: python3 zircolite.py --generate-config my_config.yaml
+# Every supported key appears here at its default value. Regenerate this file
+# with `zircolite.py --generate-config <path>`; tests/test_config_loader.py
+# checks the two stay identical.
+#
+# CLI arguments override these settings, except for transform_categories,
+# add_index and remove_index, where the two sources are combined.
 
 # Input configuration
 input:
   # Path to log file or directory containing log files
-  # This is required unless provided via -e/--evtx CLI argument
-  path: ./logs/
+  path: null  # Required: set this or use -e/--evtx CLI argument
   
-  # Input format options:
-  # - evtx: Windows Event Log files (default)
-  # - json: JSON Lines (JSONL/NDJSON) format
-  # - json_array: JSON array format
-  # - xml: XML format
-  # - csv: CSV format
-  # - sysmon_linux: Sysmon for Linux logs
-  # - auditd: Linux Auditd logs
-  # - evtxtract: EVTXtract output files
-  # - sqlite: a database saved by a previous run (equivalent to --db-input)
+  # Input format: sqlite, json, json_array, xml, sysmon_linux, auditd, csv, evtxtract, evtx
   format: evtx
   
-  # Search recursively in directories (default: true)
+  # Search recursively in directories
   recursive: true
   
   # File glob pattern (e.g., "*.evtx", "Security*.evtx")
-  # file_pattern: "*.evtx"
+  file_pattern: null
   
-  # File extension filter (alternative to file_pattern)
-  # file_extension: evtx
+  # File extension filter
+  file_extension: null
   
   # Include only files containing these strings in filename
-  # select:
-  #   - Security
-  #   - Sysmon
+  select: null  # Example: ["Security", "Sysmon"]
   
   # Exclude files containing these strings in filename
-  # avoid:
-  #   - backup
-  #   - old
+  avoid: null  # Example: ["backup", "old"]
   
-  # Field mappings configuration file (JSON or YAML format)
-  # Defines field exclusions, mappings, aliases, and transformations.
-  # Use config/config.yaml (default); legacy fieldMappings.yaml is deprecated.
-  # field_mappings: config/config.yaml
+  # File encoding (for Sysmon Linux/Auditd)
+  encoding: null
 
 # Rules and rulesets configuration
 rules:
   # List of ruleset files or directories
-  # Supports both Zircolite JSON format and native Sigma YAML rules
   rulesets:
     - rules/rules_windows_generic.json
-    # - rules/rules_windows_sysmon.json
-    # - /path/to/sigma/rules/windows/process_creation/
   
   # pySigma pipelines for native Sigma rules
-  # Use --pipeline-list to see available pipelines
-  # pipelines:
-  #   - sysmon
-  #   - windows-logsources
+  pipelines: null  # Example: ["sysmon", "windows-logsources"]
   
   # Rule title filters (exclude rules matching these strings)
-  # filters:
-  #   - "Noisy Rule"
-  #   - "Test Rule"
+  filters: null  # Example: ["Noisy Rule", "Test"]
+  
+  # Save converted ruleset to disk
+  save_ruleset: false
 
 # Output configuration
 output:
   # Output file path
   file: detected_events.json
   
-  # Output format: json or csv
+  # Output format: json, csv
   format: json
   
-  # CSV delimiter (only used when format is csv)
+  # CSV delimiter
   csv_delimiter: ";"
   
-  # Jinja2 templates for custom output formats
+  # Jinja2 templates (list of template/output pairs)
+  templates: null
+  # Example:
   # templates:
   #   - template: templates/exportForSplunk.tmpl
   #     output: splunk_events.json
   #   - template: templates/exportForELK.tmpl
   #     output: elk_events.json
+
+  # Append to template output files instead of overwriting them on each run.
+  # Useful for accumulating results across multiple runs (e.g. cumulative
+  # NDJSON exports). Not all templates produce append-safe output: single-
+  # document JSON exports (such as the ATT&CK Navigator layer) become
+  # invalid when concatenated.
+  template_append: false
   
   # Create Mini-GUI package
   package: false
-  # package_dir: ./output/gui/
+  package_dir: ""
   
-  # Save SQLite database to file (useful for debugging or re-analysis)
-  # db_file: events.db
+  # Save flattened JSON events
+  keep_flat: false
+  
+  # Save SQLite database to file
+  db_file: null
   
   # Log file path
   log_file: zircolite.log
+  
+  # Disable output files
+  no_output: false
 
 # Processing configuration
 processing:
-  # Use streaming mode (single-pass, memory efficient) - recommended
-  streaming: true
-  
-  # Use unified database for all files
-  # Enables cross-file correlation but uses more memory
+  # Use unified database for all files (enables cross-file correlation)
   unified_db: false
   
   # Automatic mode selection based on file analysis
-  # Analyzes file count, sizes, and available RAM to recommend optimal mode
   auto_mode: true
   
-  # Add xxhash of original log lines to each event
+  # Add xxhash of original log lines
   hashes: false
   
   # Limit results per rule (-1 = no limit)
-  # Useful for noisy rules
   limit: -1
   
-  # Time field for event timestamps
+  # Time field for event timestamps (auto-detects if not found)
   time_field: SystemTime
+  
+  # Enable early event filtering based on channel/eventID from rules
+  # This improves performance by skipping events that won't match any rules
+  event_filter_enabled: true
   
   # Enable debug logging
   debug: false
+  
+  # Remove log files after processing (use with caution!)
+  remove_events: false
 
-  # Enable all transforms regardless of the enabled_transforms list in config.yaml
-  # Equivalent to --all-transforms CLI flag
-  # all_transforms: false
+  # Enable all transforms (overrides enabled_transforms list)
+  all_transforms: false
 
-  # Enable transforms by category name
-  # Categories are defined in the transform_categories section of config/config.yaml
-  # Equivalent to --transform-category CLI flag (can specify multiple)
-  # Available categories: auditd, base64, credentials, commandline, process,
-  #                       powershell, network, file, user, hash, registry
-  # transform_categories:
-  #   - commandline
-  #   - process
-  #   - network
+  # Enable transforms by category (see config/config.yaml for category
+  # definitions). Categories given here are added to any passed with
+  # --transform-category, they do not replace them.
+  transform_categories: []
+
+  # Strict EVTX parsing: stop on corrupted or malformed chunks (default: false)
+  # When false (lenient), recovers as many events as possible from damaged files
+  strict_evtx: false
+
+  # Database indexes — Zircolite always indexes `eventid` and indexes `Channel`
+  # automatically when the column is present. Like transform_categories, these
+  # lists are added to their CLI equivalents rather than replaced by them.
+  add_index: []       # extra columns to index, e.g. ["SystemTime", "Computer"]
+  remove_index: []    # SQLite index names to drop after creation
+  auto_index: 0       # >0 = auto-index the top-N columns the ruleset references
 
 # Time-based event filtering
 time_filter:
   # Process events after this timestamp (UTC)
-  # Format: YYYY-MM-DDTHH:MM:SS
   after: "1970-01-01T00:00:00"
   
   # Process events before this timestamp (UTC)
   before: "9999-12-12T23:59:59"
 
 # Parallel processing configuration
-# Enables processing multiple files simultaneously for faster analysis.
-# The heuristics automatically determine optimal worker count based on:
-# - Available system memory (uses up to 85% of available RAM)
-# - CPU core count (allows up to 2x cores for I/O-bound workloads)
-# - Number and size of files (scales workers with file count)
-# - File sizes (smaller files = more workers, larger files = fewer workers)
+# Parallel is enabled by default when beneficial (multiple files, sufficient memory)
 parallel:
-  # Enable parallel file processing (default: auto-enabled when beneficial)
-  # When auto_mode is true, parallel is automatically enabled if:
-  # - More than 1 file to process
-  # - At least 1GB RAM available
-  # - Files are not too large (single file < 60% of usable RAM)
+  # Set to false to disable automatic parallel processing
   enabled: true
   
-  # Maximum number of workers
-  # null = auto-detect (recommended)
-  # Auto-detection considers:
-  # - Memory-based limit: usable_RAM / estimated_memory_per_file
-  # - CPU-based limit: up to 2x CPU cores (I/O-bound workloads benefit from more threads)
-  # - File-based limit: up to 3x CPU cores, but never more than file count
-  # - Minimum: at least half of CPU cores when resources allow
-  # - Maximum cap: 32 workers (prevents context switching overhead)
+  # Maximum number of workers (null = auto-detect based on CPU/memory)
   max_workers: null
   
-  # Minimum number of workers (default: 1)
+  # Minimum number of workers
   min_workers: 1
   
   # Memory usage threshold to trigger throttling (percent)
-  # When system memory usage exceeds this, a warning is logged
-  # Default: 85.0 (conservative to prevent system instability)
   memory_limit_percent: 85.0
   
   # Dynamically adjust workers based on memory usage
-  # When enabled, the processor monitors memory and can throttle if needed
   adaptive: true
-  
-  # Memory estimation multipliers (informational, not configurable):
-  # - Small files (<10MB): 5x multiplier (higher overhead ratio)
-  # - Medium files (<50MB): 4x multiplier
-  # - Large files (>=50MB): 3.5x multiplier (more memory efficient)

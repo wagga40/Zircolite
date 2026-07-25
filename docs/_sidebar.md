@@ -8,7 +8,7 @@
     * [Pipelines](Usage.md#pipelines)
     * [Field mappings, exclusions, aliases and splitting](Usage.md#field-mappings-exclusions-aliases-and-splitting)
     * [Field Transforms](Usage.md#field-transforms)
-    * [Generate your own rulesets](Usage.md#generate-your-own-rulesets)
+    * [Generate your own rulesets](Usage.md#generating-your-own-rulesets)
     * [Docker](Usage.md#docker)
     * [Troubleshooting](Usage.md#troubleshooting)
     * [FAQ](Usage.md#faq)

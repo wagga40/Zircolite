@@ -513,24 +513,23 @@ processing:
   remove_events: false
 
   # Enable all transforms (overrides enabled_transforms list)
-  # all_transforms: false
+  all_transforms: false
 
-  # Enable transforms by category (see config/config.yaml for category definitions)
-  # transform_categories:
-  #   - commandline
-  #   - process
+  # Enable transforms by category (see config/config.yaml for category
+  # definitions). Categories given here are added to any passed with
+  # --transform-category, they do not replace them.
+  transform_categories: []
 
   # Strict EVTX parsing: stop on corrupted or malformed chunks (default: false)
   # When false (lenient), recovers as many events as possible from damaged files
   strict_evtx: false
 
   # Database indexes — Zircolite always indexes `eventid` and indexes `Channel`
-  # automatically when the column is present.
-  # add_index: ["SystemTime", "Computer"]   # extra columns to index
-  # remove_index: ["idx_channel"]           # SQLite index names to drop after creation
-  # auto_index: 0                            # >0 = auto-index the top-N columns
-                                              # referenced by the loaded ruleset
-                                              # (5 is a reasonable default)
+  # automatically when the column is present. Like transform_categories, these
+  # lists are added to their CLI equivalents rather than replaced by them.
+  add_index: []       # extra columns to index, e.g. ["SystemTime", "Computer"]
+  remove_index: []    # SQLite index names to drop after creation
+  auto_index: 0       # >0 = auto-index the top-N columns the ruleset references
 
 # Time-based event filtering
 time_filter:

@@ -81,25 +81,35 @@ flowchart TB
 
 ### Processing Modes
 
+Every mode reads events through the same single-pass streaming pipeline
+(read → flatten → insert). What the mode chooses is how the database is
+organised across input files.
+
 ```mermaid
 flowchart LR
-    subgraph Streaming[Streaming - Default]
-        S1[Read] --> S2[Flatten] --> S3[Insert]
+    subgraph PerFile[Per-File - default]
+        P1[File 1 -> DB] --> P3[Combine results]
+        P2[File 2 -> DB] --> P3
     end
-    
-    subgraph PerFile[Per-File Mode]
-        P1[File 1] --> P2[File 2] --> P3[Combine]
+
+    subgraph Unified[Unified]
+        U1[All files] --> U2[Single DB]
     end
-    
-    subgraph Unified[Unified Mode]
-        U1[All Files] --> U2[Single DB]
+
+    subgraph Parallel[Parallel]
+        R1[Worker 1] --> R3[Combine results]
+        R2[Worker 2] --> R3
     end
 ```
 
-**Mode Selection:**
-- **Streaming** (default): Single-pass, no intermediate files
-- **Per-File**: Separate DB per file, enables parallel processing
-- **Unified**: All files in one DB, enables cross-file correlation
+| Mode | Flag | Database | Enables |
+|------|------|----------|---------|
+| Per-file | default | One per file, reused | Parallel processing |
+| Unified | `--unified-db` | One for all files | Cross-file correlation rules |
+| Parallel | automatic | One per worker | Concurrent file processing |
+
+Auto-mode picks between them from file count, file sizes, available RAM and
+CPU count. `--no-auto-mode` disables that choice and keeps per-file.
 
 ### Transform System
 
@@ -193,7 +203,7 @@ Zircolite is built around several key classes, organized in the `zircolite/` pac
 
 - **LogTypeDetector** (`detector.py`): Automatic log format and timestamp detection. Analyzes magic bytes, content structure, and file extension to determine the input type and log source.
 - **ZircoliteCore** (`core.py`): The main detection engine that manages the SQLite database, loads rulesets, and executes detection rules.
-- **`console.py`**: Rich-based terminal output — the shared `console` instance and theme, styled messages, detection results tables, summary panels, MITRE ATT&CK coverage panels, terminal hyperlinks, post-run suggestions, file tree views, and quiet mode support. Progress bars and live displays are built inline by `core.py` and `processing.py`.
+- **`console.py`**: Rich-based terminal output — the shared `console` instance and theme, styled messages, detection results tables, MITRE ATT&CK coverage panels, terminal hyperlinks, file tree views, rule-test and rule-profiling reports, and quiet mode support. Progress bars, live displays and the summary panel are built inline by `core.py`, `processing.py` and `zircolite.py`.
 - **StreamingEventProcessor** (`streaming.py`): Single-pass processor for efficient event extraction, flattening, and database insertion.
 - **Processing pipeline helpers** (`processing.py`): Coordinates processing modes (per-file, unified-db, parallel workers), result aggregation, and output writing.
 - **EvtxExtractor** (`extractor.py`): Converts individual raw log lines and XML elements into event dictionaries for the formats that need it (Auditd, Sysmon for Linux, XML/EVTXtract). It is a helper for `StreamingEventProcessor`, not a separate extraction pass: nothing is written to an intermediate file.
@@ -203,6 +213,9 @@ Zircolite is built around several key classes, organized in the `zircolite/` pac
 - **ZircoliteGuiGenerator** (`templates.py`): Creates the Mini-GUI package for result visualization.
 - **MemoryTracker** (`utils.py`): Monitors and reports memory usage during execution.
 - **MemoryAwareParallelProcessor** (`parallel.py`): Handles parallel file processing with memory awareness and adaptive worker scaling.
+- **`shutdown.py`**: Installs the SIGINT handler so a Ctrl+C finishes the current batch and writes results instead of leaving a partial file behind.
+- **`attack.py`**: Extracts MITRE ATT&CK technique and tactic IDs from Sigma tags, normalising the hyphen and underscore spellings both appear in.
+- **`run_config.py`**: Resolves CLI arguments against a YAML configuration file in a single pass, and holds the merge semantics for every option.
 - **ConfigLoader** (`config_loader.py`): Loads and validates YAML configuration files, merges with CLI arguments.
 - **Input format registry** (`formats.py`): Single source of truth for every input format. Resolution precedence, the default extension used to glob a directory, and which formats need an extractor all come from this one table.
 
@@ -291,7 +304,6 @@ Transforms use **RestrictedPython** for safe, sandboxed execution of custom Pyth
 ```text
 ├── README.md               # Project documentation
 ├── Taskfile.yml            # Production tasks (Docker, rules update, clean)
-├── bin/                    # Directory containing external binaries (evtx_dump)
 ├── config/                 # Configuration files
 │   ├── config.yaml         # Field mappings, aliases, splits, and transforms (canonical)
 │   ├── fieldMappings.yaml  # Deprecated duplicate; use config.yaml
@@ -331,6 +343,9 @@ Transforms use **RestrictedPython** for safe, sandboxed execution of custom Pyth
     ├── processing.py       # Processing mode coordination, result aggregation
     ├── rules.py            # RulesetHandler, RulesUpdater (rule management)
     ├── templates.py        # TemplateEngine, ZircoliteGuiGenerator (output)
+    ├── run_config.py       # CLI/YAML resolution and merge semantics
+    ├── shutdown.py         # Graceful Ctrl+C handling
+    ├── attack.py           # MITRE ATT&CK tag parsing
     └── utils.py            # Utility functions, MemoryTracker, heuristics
 ```
 
@@ -351,6 +366,9 @@ The `zircolite/` package contains modular implementations of all core components
 - **`rules.py`**: Contains `RulesetHandler` and `RulesUpdater` for rule management.
 - **`templates.py`**: Contains `TemplateEngine` and `ZircoliteGuiGenerator` for output generation.
 - **`utils.py`**: Contains utility functions (`init_logger`, file filters), `MemoryTracker`, and workload analysis heuristics (`analyze_files_and_recommend_mode`).
+- **`run_config.py`**: One-pass resolution of CLI arguments against a YAML configuration file. The `SETTINGS` table names every option, its YAML key, its default and how the two combine.
+- **`shutdown.py`**: Graceful shutdown on SIGINT.
+- **`attack.py`**: MITRE ATT&CK technique and tactic extraction from Sigma tags.
 
 ## SQLite Optimizations
 
@@ -407,8 +425,15 @@ This allows Sigma rules that use regex matching to work correctly.
 - `lxml` - For XML input support
 - `psutil` - For memory tracking and parallel processing
 - `pyyaml` - For YAML configuration file parsing
+- `chardet` - Encoding detection, and available to sandboxed transforms
+- `rich-argparse` - Coloured `--help` output
+- `urllib3` - HTTP transport for rule updates
 
-All dependencies listed above are required for full functionality. Install them with:
+### Optional
+
+- `py7zr` - Reading `.7z` archives; the other archive formats use the standard library
+
+Install the required set with:
 
 ```shell
 pip3 install -r requirements.txt

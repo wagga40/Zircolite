@@ -632,3 +632,52 @@ class TestConfigLoaderBugFixes:
         # validate_config must not raise TypeError iterating None
         loader.validate_config(config)
 
+
+
+class TestExampleConfigStaysComplete:
+    """config/zircolite_example.yaml documents the schema, so it must match it.
+
+    It previously advertised a `processing.streaming` key the loader ignored
+    entirely, and omitted eleven keys that do exist.
+    """
+
+    EXAMPLE = Path(__file__).parent.parent / "config" / "zircolite_example.yaml"
+
+    def _parsed(self):
+        import yaml
+        return yaml.safe_load(self.EXAMPLE.read_text())
+
+    def test_it_has_no_unknown_keys(self):
+        from zircolite.config_loader import unknown_yaml_keys
+
+        assert unknown_yaml_keys(self._parsed()) == []
+
+    def test_it_covers_every_key(self):
+        from dataclasses import fields as dc_fields
+        from zircolite.config_loader import SECTIONS
+
+        parsed = self._parsed()
+        for section, cls in SECTIONS.items():
+            present = set((parsed.get(section) or {}).keys())
+            known = {f.name for f in dc_fields(cls)}
+            assert known - present == set(), f"{section} is missing keys"
+
+    def test_it_matches_what_generate_config_writes(self, tmp_path):
+        """The example is the generator's output; regenerate rather than edit."""
+        from zircolite.config_loader import create_default_config_file
+
+        generated = tmp_path / "generated.yaml"
+        create_default_config_file(str(generated))
+
+        def body(text):
+            # The example carries a longer preamble; compare from the first key
+            return text[text.index("# Input configuration"):]
+
+        assert body(generated.read_text()) == body(self.EXAMPLE.read_text())
+
+    def test_it_loads_and_validates(self, test_logger):
+        loader = ConfigLoader(logger=test_logger)
+        config = loader.load(str(self.EXAMPLE))
+        issues = loader.validate_config(config)
+
+        assert not any("Unknown configuration key" in i for i in issues)

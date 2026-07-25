@@ -264,7 +264,9 @@ JSON output does not have this limitation: each rule’s result object includes 
 
 `--generate-config` writes a fully commented template covering every supported key, which is the reference for this file's schema. Note that it is a *run* configuration (which logs to read, which rules to apply, where to write) and is unrelated to `-c`/`--config`, which points at the field-mappings and transforms configuration.
 
-A few options have no equivalent key and must be passed on the command line: `-c`/`--config`, `-q`/`--quiet`, `--profile-rules`, `--archive-password`, `--no-auto-detect` and `--test-rules`.
+Some options have no equivalent key and must be passed on the command line: `-c`/`--config`, `-q`/`--quiet`, `--profile-rules`, `--archive-password`, `--no-auto-detect`, `--test-rules`, `--timesketch`, `--navigator-output`, `--transform-list`, `--pipeline-list`, `-U`/`--update-rules`, `-v`/`--version` and `--generate-config`.
+
+CLI arguments override the file, with one deliberate exception: `--transform-category`, `--add-index` and `--remove-index` are added to whatever the file lists rather than replacing it, since they name things to include rather than which things to use.
 
 #### Parallel Processing
 
@@ -308,7 +310,7 @@ Zircolite has three output verbosity levels:
 
 | Mode | Flag | What's Shown |
 |------|------|-------------|
-| **Default** | *(none)* | Banner, workload analysis, progress bars with live detection counters, per-file tree view, detection results table, summary panel, ATT&CK coverage panel, output file path, and contextual suggestions |
+| **Default** | *(none)* | Banner, workload analysis, progress bars with live detection counters, per-file tree view, detection results table, summary panel, ATT&CK coverage panel, and output file path |
 | **Quiet** | `-q` / `--quiet` | Summary panel only (plus errors and warnings). Ideal for CI pipelines or when piping results to other tools |
 | **Debug** | `--debug` | Everything from default mode plus debug-level log messages and detailed tracebacks on errors |
 
@@ -340,7 +342,6 @@ After the summary panel, Zircolite also displays:
 
 - **MITRE ATT&CK tactics summary** — a heatmap panel grouping detected techniques by tactic (Execution, Persistence, Defense Evasion, etc.), sorted by hit count
 - **Output file path** — shown prominently with a terminal hyperlink (`file://` link) that is clickable in supported terminals (iTerm2, Windows Terminal, modern GNOME/KDE terminals)
-- **Contextual suggestions** — tips based on the results, such as suggesting `--package` when critical detections are found
 
 When processing multiple files in per-file mode, a **file tree** is also displayed showing per-file event counts, detection counts, and filtered event counts.
 
@@ -1165,7 +1166,7 @@ For example:
 
 ## Docker
 
-Zircolite is also packaged as a Docker image (see [wagga40/zircolite](https://hub.docker.com/r/wagga40/zircolite) on Docker Hub), which embeds all dependencies (e.g., `evtx_dump`) and provides a platform-independent way of using the tool. Please note that this image is not updated with the latest rulesets!
+Zircolite is also packaged as a Docker image (see [wagga40/zircolite](https://hub.docker.com/r/wagga40/zircolite) on Docker Hub), which embeds all dependencies and provides a platform-independent way of using the tool. Please note that this image is not updated with the latest rulesets!
 
 You can pull the latest image with: `docker pull wagga40/zircolite:latest`
 
