@@ -9,6 +9,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 import pytest
+from rich.console import Console
 
 from zircolite.console import (
     set_quiet_mode,
@@ -271,7 +272,7 @@ class TestFileTree:
         assert tree.label  # Has a root label
 
     def test_build_file_tree_nested_dirs(self):
-        """Cover the nested directory grouping branch (line 870-872)."""
+        """Files in sub-directories are grouped under their directory."""
         file_stats = [
             {"name": "dir1/a.evtx", "events": 100, "detections": 0},
             {"name": "dir2/b.evtx", "events": 200, "detections": 5},
@@ -281,7 +282,7 @@ class TestFileTree:
 
 
 # =============================================================================
-# format_level / make_severity_badge
+# make_severity_badge
 # =============================================================================
 
 class TestSeverityFormatters:
@@ -352,42 +353,72 @@ class TestBuildAttackSummary:
 # =============================================================================
 
 class TestBuildDetectionTable:
-    """Tests for build_detection_table function."""
+    """build_detection_table renders the row content it is handed.
 
-    def test_basic_table(self):
+    These render through a captured console rather than asserting the object
+    is not None: the function cannot return None, so that assertion passed
+    whatever the table actually contained.
+    """
+
+    @staticmethod
+    def _render(table, width=200):
+        capture_console = Console(width=width, no_color=True, force_terminal=False)
+        with capture_console.capture() as capture:
+            capture_console.print(table)
+        return capture.get()
+
+    def test_row_shows_title_count_and_severity(self):
         results = [
             {"rule_level": "high", "title": "Test Rule", "count": 5,
              "tags": ["attack.execution", "attack.t1059.001"]},
         ]
-        table = build_detection_table(results)
-        assert table is not None
+        out = self._render(build_detection_table(results))
 
-    def test_table_with_title(self):
+        assert "Test Rule" in out
+        assert "5" in out
+        assert "HIGH" in out.upper()
+        assert "T1059.001" in out
+
+    def test_title_is_rendered_when_given(self):
         results = [
             {"rule_level": "medium", "title": "Rule A", "count": 3, "tags": []},
         ]
-        table = build_detection_table(results, title="file.evtx")
-        assert table is not None
+        out = self._render(build_detection_table(results, title="file.evtx"))
 
-    def test_table_truncation_many_attack_ids(self):
-        """Cover the >3 ATT&CK IDs truncation branch (line 1074)."""
+        assert "file.evtx" in out
+        assert "Rule A" in out
+
+    def test_attack_ids_beyond_three_are_summarised(self):
         results = [
             {"rule_level": "critical", "title": "Multi-Attack Rule", "count": 20,
              "tags": ["attack.t1059.001", "attack.t1055", "attack.t1003",
                       "attack.t1078", "attack.t1021"]},
         ]
         table = build_detection_table(results)
-        assert table is not None
 
-    def test_table_empty_results(self):
-        table = build_detection_table([])
-        assert table is not None
+        # Read the cell, not the rendering: the ATT&CK column is fixed-width
+        # and Rich ellipsises the marker away at any console size.
+        attack_cell = list(table.columns[3].cells)[0]
+        assert attack_cell == "T1059.001, T1055, T1003 +2"
 
-    def test_table_missing_fields(self):
-        """Results with missing optional fields."""
-        results = [{}]
+    def test_three_or_fewer_attack_ids_are_listed_in_full(self):
+        results = [
+            {"rule_level": "low", "title": "Few", "count": 1,
+             "tags": ["attack.t1059.001", "attack.t1055"]},
+        ]
         table = build_detection_table(results)
-        assert table is not None
+
+        assert list(table.columns[3].cells)[0] == "T1059.001, T1055"
+
+    def test_empty_results_render_without_rows(self):
+        out = self._render(build_detection_table([]))
+
+        assert "Rule" in out or out.strip() != ""
+
+    def test_missing_fields_do_not_break_rendering(self):
+        out = self._render(build_detection_table([{}]))
+
+        assert out.strip() != ""
 
 
 # =============================================================================
@@ -405,7 +436,7 @@ class TestMakeFileLink:
         assert "output.json" in result
 
     def test_exception_fallback(self):
-        """Cover the exception handling branch (lines 1104-1105)."""
+        """A path that cannot be turned into a URI falls back to plain text."""
         # An empty path should still produce markup without crashing
         result = make_file_link("")
         assert isinstance(result, str)
@@ -533,3 +564,36 @@ class TestConsoleLoggerHandling:
         for h in logger.handlers:
             h.close()
         logger.handlers.clear()
+
+
+class TestAttackTacticExtraction:
+    """attack.extract_attack_tactics normalises the tag spellings SIGMA uses."""
+
+    def test_hyphen_and_underscore_spellings_agree(self):
+        from zircolite.attack import extract_attack_tactics
+
+        hyphen = extract_attack_tactics(["attack.credential-access"])
+        underscore = extract_attack_tactics(["attack.credential_access"])
+
+        assert hyphen == underscore
+        assert hyphen != []
+
+    def test_techniques_are_not_reported_as_tactics(self):
+        from zircolite.attack import extract_attack_tactics
+
+        assert extract_attack_tactics(["attack.t1059.001"]) == []
+
+    def test_duplicates_collapse_and_order_is_kept(self):
+        from zircolite.attack import extract_attack_tactics
+
+        tactics = extract_attack_tactics(
+            ["attack.execution", "attack.persistence", "attack.execution"]
+        )
+
+        assert len(tactics) == len(set(tactics))
+        assert tactics[0] != tactics[-1]
+
+    def test_non_attack_tags_are_ignored(self):
+        from zircolite.attack import extract_attack_tactics
+
+        assert extract_attack_tactics(["cve.2024.1234", "car.2013-05-002"]) == []

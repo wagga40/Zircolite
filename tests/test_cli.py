@@ -239,42 +239,6 @@ class TestCLITransformOptions:
 class TestCLIInputModes:
     """Tests for different input modes."""
 
-    def test_json_input_mode_fileext(self, tmp_path):
-        """Test that JSON input mode sets correct file extension."""
-        # Create test files
-        events_file = tmp_path / "events.json"
-        events_file.write_text('{"Event": {"System": {"EventID": 1}, "EventData": {}}}')
-        
-        ruleset_file = tmp_path / "ruleset.json"
-        ruleset_file.write_text("[]")
-        
-        config_file = tmp_path / "config.json"
-        config_file.write_text(json.dumps({
-            "exclusions": [],
-            "useless": [],
-            "mappings": {"Event.System.EventID": "EventID"},
-            "alias": {},
-            "split": {},
-            "transforms_enabled": False,
-            "transforms": {}
-        }))
-        
-        output_file = tmp_path / "output.json"
-        
-        with patch('sys.argv', [
-            'zircolite.py',
-            '-e', str(events_file),
-            '-r', str(ruleset_file),
-            '-c', str(config_file),
-            '-j',  # JSON input mode
-            '-o', str(output_file),
-            '--no-auto-mode'
-        ] + get_log_arg(tmp_path)):
-            zircolite_script.main()
-        
-        # Output file should be created
-        assert output_file.exists()
-
     def test_csv_input_mode(self, tmp_path):
         """Test CSV input mode processing."""
         # Create CSV events file
@@ -313,42 +277,14 @@ class TestCLIInputModes:
 class TestCLIStreamingMode:
     """Tests for streaming mode (default) vs traditional mode."""
 
-    def test_streaming_mode_enabled_by_default(self, tmp_path):
-        """Test that streaming mode is enabled by default."""
-        events_file = tmp_path / "events.json"
-        events_file.write_text('{"Event": {"System": {"EventID": 1}, "EventData": {}}}')
-        
-        ruleset_file = tmp_path / "ruleset.json"
-        ruleset_file.write_text("[]")
-        
-        config_file = tmp_path / "config.json"
-        config_file.write_text(json.dumps({
-            "exclusions": [],
-            "useless": [],
-            "mappings": {"Event.System.EventID": "EventID"},
-            "alias": {},
-            "split": {},
-            "transforms_enabled": False,
-            "transforms": {}
-        }))
-        
-        output_file = tmp_path / "output.json"
-        
-        with patch('sys.argv', [
-            'zircolite.py',
-            '-e', str(events_file),
-            '-r', str(ruleset_file),
-            '-c', str(config_file),
-            '-j',
-            '-o', str(output_file),
-            '--no-auto-mode'  # Disable auto-mode for predictable behavior
-        ] + get_log_arg(tmp_path)):
-            zircolite_script.main()
-        
-        assert output_file.exists()
+    def test_keepflat_saves_flattened_events(self, tmp_path, monkeypatch):
+        """--keepflat must write the flattened events, not just the detections.
 
-    def test_keepflat_saves_flattened_events(self, tmp_path):
-        """Test --keepflat saves flattened events in streaming mode."""
+        The flat file lands in the working directory under a random name, so
+        the test has to run there and go looking for it; asserting on the
+        detection output instead never touched the feature.
+        """
+        monkeypatch.chdir(tmp_path)
         events_file = tmp_path / "events.json"
         events_file.write_text('{"Event": {"System": {"EventID": 1}, "EventData": {}}}')
         
@@ -379,8 +315,15 @@ class TestCLIStreamingMode:
             '--no-auto-mode'
         ] + get_log_arg(tmp_path)):
             zircolite_script.main()
-        
+
         assert output_file.exists()
+
+        flat_files = list(tmp_path.glob("flattened_events_*.json"))
+        assert len(flat_files) == 1, "--keepflat wrote no flattened events file"
+        event = json.loads(flat_files[0].read_text().splitlines()[0])
+        # Flattened: the nested Event.System.EventID is now a top-level column
+        assert event["EventID"] == 1
+        assert "Event" not in event
 
 
 class TestCLIOutputFormats:
@@ -478,16 +421,17 @@ class TestCLIOutputFormats:
         with open(output_file) as f:
             content = f.read()
         # Should contain CSV headers
-        assert "rule_title" in content or "title" in content or len(content) > 0
+        assert content.split("\n")[0].startswith("rule_title")
+        assert not content.strip().startswith("[")
 
     def test_csv_output_with_parallel_workers(self, tmp_path):
         """Test that --csv produces CSV output when parallel workers are used (multiple files)."""
-        # Two JSONL event files so parallel path can be used
+        # -e takes one path, so a directory is how several files get in
         event_line = '{"Event": {"System": {"EventID": 1}, "EventData": {"CommandLine": "powershell.exe"}}}'
-        events_file1 = tmp_path / "events1.json"
-        events_file2 = tmp_path / "events2.json"
-        events_file1.write_text(event_line + "\n")
-        events_file2.write_text(event_line + "\n")
+        events_dir = tmp_path / "events"
+        events_dir.mkdir()
+        (events_dir / "events1.json").write_text(event_line + "\n")
+        (events_dir / "events2.json").write_text(event_line + "\n")
 
         ruleset_file = tmp_path / "ruleset.json"
         ruleset_file.write_text(json.dumps([{
@@ -522,11 +466,16 @@ class TestCLIOutputFormats:
             }
             return ("per-file", "test", stats)
 
-        with patch.object(zircolite_script, 'analyze_files_and_recommend_mode', side_effect=mock_analyze):
+        analyze_calls = []
+
+        def tracking_analyze(files, logger=None):
+            analyze_calls.append(list(files))
+            return mock_analyze(files, logger)
+
+        with patch.object(zircolite_script, 'analyze_files_and_recommend_mode', side_effect=tracking_analyze):
             with patch('sys.argv', [
                 'zircolite.py',
-                '-e', str(events_file1),
-                '-e', str(events_file2),
+                '-e', str(events_dir),
                 '-r', str(ruleset_file),
                 '-c', str(config_file),
                 '-j',
@@ -537,11 +486,15 @@ class TestCLIOutputFormats:
             ] + get_log_arg(tmp_path)):
                 zircolite_script.main()
 
+        # Without this the test silently exercised the sequential path
+        assert analyze_calls, "parallel analysis never ran"
+        assert len(analyze_calls[0]) == 2, "both files must reach the analyser"
+
         assert output_file.exists()
         with open(output_file) as f:
             content = f.read()
         # Must be CSV: header contains rule_title, not a JSON array
-        assert content.strip().startswith("rule_title") or "rule_title" in content.split("\n")[0]
+        assert content.split("\n")[0].startswith("rule_title")
         assert not content.strip().startswith("["), "Output should be CSV, not JSON"
 
 
@@ -1671,73 +1624,6 @@ class TestCLIRemoveEvents:
 class TestCLIAdvancedConfiguration:
     """Tests for Advanced Configuration options: --quiet, --debug, --timefield, --logs-encoding, --no-auto-detect."""
 
-    def test_quiet_mode_runs_successfully(self, tmp_path):
-        """Test -q / --quiet runs without error and produces output."""
-        events_file = tmp_path / "events.json"
-        events_file.write_text('{"Event": {"System": {"EventID": 1}, "EventData": {"CommandLine": "powershell.exe"}}}')
-        ruleset_file = tmp_path / "ruleset.json"
-        ruleset_file.write_text(json.dumps([{
-            "title": "Test Rule",
-            "id": "test-001",
-            "level": "high",
-            "tags": [],
-            "rule": ["SELECT * FROM logs WHERE CommandLine LIKE '%powershell%'"]
-        }]))
-        config_file = tmp_path / "config.json"
-        config_file.write_text(json.dumps({
-            "exclusions": [],
-            "useless": [],
-            "mappings": {"Event.System.EventID": "EventID", "Event.EventData.CommandLine": "CommandLine"},
-            "alias": {},
-            "split": {},
-            "transforms_enabled": False,
-            "transforms": {}
-        }))
-        output_file = tmp_path / "out.json"
-        with patch('sys.argv', [
-            'zircolite.py',
-            '-e', str(events_file),
-            '-r', str(ruleset_file),
-            '-c', str(config_file),
-            '-j',
-            '-o', str(output_file),
-            '-q'
-        ] + get_log_arg(tmp_path)):
-            zircolite_script.main()
-        assert output_file.exists()
-        with open(output_file) as f:
-            detections = json.loads(f.read())
-        assert isinstance(detections, list)
-
-    def test_debug_mode_runs_successfully(self, tmp_path):
-        """Test --debug runs without error and produces output."""
-        events_file = tmp_path / "events.json"
-        events_file.write_text('{"Event": {"System": {"EventID": 1}, "EventData": {}}}')
-        ruleset_file = tmp_path / "ruleset.json"
-        ruleset_file.write_text("[]")
-        config_file = tmp_path / "config.json"
-        config_file.write_text(json.dumps({
-            "exclusions": [],
-            "useless": [],
-            "mappings": {"Event.System.EventID": "EventID"},
-            "alias": {},
-            "split": {},
-            "transforms_enabled": False,
-            "transforms": {}
-        }))
-        output_file = tmp_path / "out.json"
-        with patch('sys.argv', [
-            'zircolite.py',
-            '-e', str(events_file),
-            '-r', str(ruleset_file),
-            '-c', str(config_file),
-            '-j',
-            '-o', str(output_file),
-            '--debug'
-        ] + get_log_arg(tmp_path)):
-            zircolite_script.main()
-        assert output_file.exists()
-
     def test_timefield_used_for_filtering(self, tmp_path):
         """Test --timefield is used for time range filtering."""
         events_file = tmp_path / "events.json"
@@ -1787,37 +1673,6 @@ class TestCLIAdvancedConfiguration:
             detections = json.loads(f.read())
         # Event is from 2020, filter is after 2024 -> no detections
         assert len(detections) == 0
-
-    def test_logs_encoding_accepted(self, tmp_path):
-        """Test -LE / --logs-encoding is accepted (auditd input)."""
-        auditd_file = tmp_path / "audit.log"
-        auditd_file.write_text(
-            'type=SYSCALL msg=audit(1705318200.123:456): arch=c000003e syscall=59 success=yes exit=0 pid=5678 uid=0 comm="bash" exe="/bin/bash"'
-        )
-        ruleset_file = tmp_path / "ruleset.json"
-        ruleset_file.write_text("[]")
-        config_file = tmp_path / "config.json"
-        config_file.write_text(json.dumps({
-            "exclusions": [],
-            "useless": [],
-            "mappings": {},
-            "alias": {},
-            "split": {},
-            "transforms_enabled": False,
-            "transforms": {}
-        }))
-        output_file = tmp_path / "out.json"
-        with patch('sys.argv', [
-            'zircolite.py',
-            '-e', str(auditd_file),
-            '-r', str(ruleset_file),
-            '-c', str(config_file),
-            '-AU',
-            '-o', str(output_file),
-            '-LE', 'utf-8'
-        ] + get_log_arg(tmp_path)):
-            zircolite_script.main()
-        assert output_file.exists()
 
     def test_no_auto_detect_with_explicit_format(self, tmp_path):
         """Test --no-auto-detect with explicit --json-input uses JSON without auto-detection."""
@@ -2108,102 +1963,8 @@ class TestCLIFileExtension:
 class TestCLINoEventFilter:
     """Tests for --no-event-filter option."""
 
-    def test_no_event_filter_runs_successfully(self, tmp_path):
-        """Test --no-event-filter runs without error and produces output."""
-        events_file = tmp_path / "events.json"
-        events_file.write_text('{"Event": {"System": {"EventID": 1}, "EventData": {}}}')
-        ruleset_file = tmp_path / "ruleset.json"
-        ruleset_file.write_text("[]")
-        config_file = tmp_path / "config.json"
-        config_file.write_text(json.dumps({
-            "exclusions": [],
-            "useless": [],
-            "mappings": {"Event.System.EventID": "EventID"},
-            "alias": {},
-            "split": {},
-            "transforms_enabled": False,
-            "transforms": {}
-        }))
-        output_file = tmp_path / "out.json"
-        with patch('sys.argv', [
-            'zircolite.py',
-            '-e', str(events_file),
-            '-r', str(ruleset_file),
-            '-c', str(config_file),
-            '-j',
-            '-o', str(output_file),
-            '--no-event-filter'
-        ] + get_log_arg(tmp_path)):
-            zircolite_script.main()
-        assert output_file.exists()
-
-
 class TestCLIParallelOptions:
     """Tests for parallel processing options: -P / --no-parallel, --parallel-memory-limit."""
-
-    def test_no_parallel_runs_successfully(self, tmp_path):
-        """Test -P / --no-parallel disables parallel processing and runs successfully."""
-        events_dir = tmp_path / "events"
-        events_dir.mkdir()
-        for i in range(3):
-            (events_dir / f"e{i}.json").write_text(
-                '{"Event": {"System": {"EventID": 1}, "EventData": {}}}'
-            )
-        ruleset_file = tmp_path / "ruleset.json"
-        ruleset_file.write_text("[]")
-        config_file = tmp_path / "config.json"
-        config_file.write_text(json.dumps({
-            "exclusions": [],
-            "useless": [],
-            "mappings": {"Event.System.EventID": "EventID"},
-            "alias": {},
-            "split": {},
-            "transforms_enabled": False,
-            "transforms": {}
-        }))
-        output_file = tmp_path / "out.json"
-        with patch('sys.argv', [
-            'zircolite.py',
-            '-e', str(events_dir),
-            '-r', str(ruleset_file),
-            '-c', str(config_file),
-            '-j',
-            '-o', str(output_file),
-            '--no-auto-mode',
-            '-P'
-        ] + get_log_arg(tmp_path)):
-            zircolite_script.main()
-        assert output_file.exists()
-
-    def test_parallel_memory_limit_accepted(self, tmp_path):
-        """Test --parallel-memory-limit is accepted and run completes."""
-        events_file = tmp_path / "events.json"
-        events_file.write_text('{"Event": {"System": {"EventID": 1}, "EventData": {}}}')
-        ruleset_file = tmp_path / "ruleset.json"
-        ruleset_file.write_text("[]")
-        config_file = tmp_path / "config.json"
-        config_file.write_text(json.dumps({
-            "exclusions": [],
-            "useless": [],
-            "mappings": {"Event.System.EventID": "EventID"},
-            "alias": {},
-            "split": {},
-            "transforms_enabled": False,
-            "transforms": {}
-        }))
-        output_file = tmp_path / "out.json"
-        with patch('sys.argv', [
-            'zircolite.py',
-            '-e', str(events_file),
-            '-r', str(ruleset_file),
-            '-c', str(config_file),
-            '-j',
-            '-o', str(output_file),
-            '--parallel-memory-limit', '80'
-        ] + get_log_arg(tmp_path)):
-            zircolite_script.main()
-        assert output_file.exists()
-
 
 class TestCLIYamlConfig:
     """Tests for --yaml-config / -Y option."""
@@ -3849,3 +3610,82 @@ class TestGenerateConfigDoesNotClobber:
 
         assert result.returncode == 2
         assert target.read_text() == "keep me\n"
+
+
+class TestFlagsThatMustNotChangeDetections:
+    """Flags that alter plumbing, not results.
+
+    These replace eight near-identical tests whose only assertion was that
+    the output file existed -- true even if nothing was detected. Each case
+    now asserts the detection actually fired, plus whatever is specific to
+    the flag.
+    """
+
+    EVENT = ('{"Event": {"System": {"EventID": 1}, '
+             '"EventData": {"CommandLine": "powershell.exe"}}}')
+
+    def _run(self, tmp_path, extra_args):
+        events_file = tmp_path / "events.json"
+        events_file.write_text(self.EVENT)
+
+        ruleset_file = tmp_path / "ruleset.json"
+        ruleset_file.write_text(json.dumps([{
+            "title": "Test Rule",
+            "id": "test-001",
+            "level": "high",
+            "tags": [],
+            "rule": ["SELECT * FROM logs WHERE CommandLine LIKE '%powershell%'"],
+        }]))
+
+        config_file = tmp_path / "config.json"
+        config_file.write_text(json.dumps({
+            "exclusions": [], "useless": [],
+            "mappings": {"Event.System.EventID": "EventID",
+                         "Event.EventData.CommandLine": "CommandLine"},
+            "alias": {}, "split": {},
+            "transforms_enabled": False, "transforms": {},
+        }))
+
+        output_file = tmp_path / "out.json"
+        argv = [
+            'zircolite.py',
+            '-e', str(events_file),
+            '-r', str(ruleset_file),
+            '-c', str(config_file),
+            '-j',
+            '-o', str(output_file),
+        ] + extra_args + get_log_arg(tmp_path)
+        with patch('sys.argv', argv):
+            zircolite_script.main()
+        return output_file
+
+    @pytest.mark.parametrize("extra_args", [
+        pytest.param([], id="baseline"),
+        pytest.param(['-f', 'json'], id="fileext"),
+        pytest.param(['-q'], id="quiet"),
+        pytest.param(['--debug'], id="debug"),
+        pytest.param(['-LE', 'utf-8'], id="logs-encoding"),
+        pytest.param(['--no-event-filter'], id="no-event-filter"),
+        pytest.param(['-P'], id="no-parallel"),
+        pytest.param(['--parallel-memory-limit', '50'], id="memory-limit"),
+        pytest.param(['--no-auto-mode'], id="no-auto-mode"),
+    ])
+    def test_detection_is_unaffected(self, tmp_path, extra_args):
+        output_file = self._run(tmp_path, extra_args)
+
+        assert output_file.exists()
+        detections = json.loads(output_file.read_text())
+        assert len(detections) == 1
+        assert detections[0]["title"] == "Test Rule"
+
+    def test_debug_writes_debug_records_to_the_log(self, tmp_path):
+        self._run(tmp_path, ['--debug'])
+
+        log_files = list(tmp_path.glob("*.log"))
+        assert log_files, "no log file was written"
+        assert "DEBUG" in log_files[0].read_text()
+
+    def test_quiet_suppresses_the_banner(self, tmp_path, capsys):
+        self._run(tmp_path, ['-q'])
+
+        assert "Zircolite" not in capsys.readouterr().out

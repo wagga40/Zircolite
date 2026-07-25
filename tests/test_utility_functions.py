@@ -729,3 +729,52 @@ class TestOpenMaybeCompressedDecodeErrors:
             f.write(b"good line\nbad \xff line\n")
         with open_maybe_compressed(str(src), "rt") as f:
             assert len(f.readlines()) == 2
+
+
+class TestCsvSanitisation:
+    """sanitize_*_for_csv keep one detection on one CSV row.
+
+    Embedded newlines in a match value would otherwise split the record, so
+    the writers in core.py and processing.py run every value through these.
+    """
+
+    def test_newlines_are_stripped(self):
+        from zircolite.utils import sanitize_value_for_csv
+
+        assert sanitize_value_for_csv("a\nb") == "ab"
+        assert sanitize_value_for_csv("a\r\nb") == "ab"
+        assert sanitize_value_for_csv("a\rb") == "ab"
+
+    def test_none_becomes_empty_string(self):
+        from zircolite.utils import sanitize_value_for_csv
+
+        assert sanitize_value_for_csv(None) == ""
+
+    def test_non_strings_are_stringified(self):
+        from zircolite.utils import sanitize_value_for_csv
+
+        assert sanitize_value_for_csv(42) == "42"
+        assert sanitize_value_for_csv(True) == "True"
+
+    def test_ordinary_values_are_untouched(self):
+        from zircolite.utils import sanitize_value_for_csv
+
+        for benign in ("powershell.exe", "C:\\Windows", "4624", ""):
+            assert sanitize_value_for_csv(benign) == benign
+
+    def test_row_sanitisation_covers_every_value(self):
+        from zircolite.utils import sanitize_row_for_csv
+
+        row = {"a": "one\ntwo", "b": None, "c": 7, "d": "fine"}
+        out = sanitize_row_for_csv(row)
+
+        assert out == {"a": "onetwo", "b": "", "c": "7", "d": "fine"}
+        assert set(out) == set(row)
+
+    def test_row_sanitisation_does_not_mutate_the_input(self):
+        from zircolite.utils import sanitize_row_for_csv
+
+        row = {"a": "one\ntwo"}
+        sanitize_row_for_csv(row)
+
+        assert row == {"a": "one\ntwo"}
