@@ -57,14 +57,9 @@ from .processing import (
 )
 from .console import (
     console,
-    ZircoliteConsole,
-    RichProgressTracker,
     DetectionStats,
-    ProcessingStats,
     get_rich_logger,
-    format_level,
     LEVEL_PRIORITY,
-    LEVEL_STYLES,
     # Quiet mode
     set_quiet_mode,
     is_quiet,
@@ -82,16 +77,6 @@ from .console import (
     build_attack_summary,
     build_detection_table,
     make_file_link,
-    # CLI helper functions
-    print_step,
-    print_substep,
-    print_info,
-    print_success,
-    print_warning,
-    print_error,
-    print_file,
-    print_count,
-    print_detection,
 )
 from .parallel import (
     ParallelConfig,
@@ -177,13 +162,8 @@ __all__ = [
     'create_default_config_file',
     # Rich console output
     'console',
-    'ZircoliteConsole',
-    'RichProgressTracker',
     'DetectionStats',
-    'ProcessingStats',
     'get_rich_logger',
-    'format_level',
-    'LEVEL_STYLES',
     # Severity ordering
     'LEVEL_PRIORITY',
     # Quiet mode
@@ -203,16 +183,6 @@ __all__ = [
     'build_attack_summary',
     'build_detection_table',
     'make_file_link',
-    # CLI helper functions
-    'print_step',
-    'print_substep',
-    'print_info',
-    'print_success',
-    'print_warning',
-    'print_error',
-    'print_file',
-    'print_count',
-    'print_detection',
 ]
 
-__version__ = "3.7.6"
+__version__ = "3.8.0"

@@ -193,7 +193,7 @@ Zircolite is built around several key classes, organized in the `zircolite/` pac
 
 - **LogTypeDetector** (`detector.py`): Automatic log format and timestamp detection. Analyzes magic bytes, content structure, and file extension to determine the input type and log source.
 - **ZircoliteCore** (`core.py`): The main detection engine that manages the SQLite database, loads rulesets, and executes detection rules.
-- **ZircoliteConsole** (`console.py`): Rich-based terminal output with styled messages, progress bars, live detection counters, detection results tables, summary panels, MITRE ATT&CK coverage panels, terminal hyperlinks, post-run suggestions, file tree views, and quiet mode support.
+- **`console.py`**: Rich-based terminal output — the shared `console` instance and theme, styled messages, detection results tables, summary panels, MITRE ATT&CK coverage panels, terminal hyperlinks, post-run suggestions, file tree views, and quiet mode support. Progress bars and live displays are built inline by `core.py` and `processing.py`.
 - **StreamingEventProcessor** (`streaming.py`): Single-pass processor for efficient event extraction, flattening, and database insertion.
 - **Processing pipeline helpers** (`processing.py`): Coordinates processing modes (per-file, unified-db, parallel workers), result aggregation, and output writing.
 - **EvtxExtractor** (`extractor.py`): Converts individual raw log lines and XML elements into event dictionaries for the formats that need it (Auditd, Sysmon for Linux, XML/EVTXtract). It is a helper for `StreamingEventProcessor`, not a separate extraction pass: nothing is written to an intermediate file.
@@ -320,7 +320,7 @@ Transforms use **RestrictedPython** for safe, sandboxed execution of custom Pyth
     ├── __init__.py         # Package exports
     ├── config.py           # Configuration dataclasses
     ├── config_loader.py    # YAML configuration file loader
-    ├── console.py          # ZircoliteConsole (Rich-based terminal output)
+    ├── console.py          # Rich-based terminal output helpers
     ├── core.py             # ZircoliteCore class (database and rule execution)
     ├── detector.py         # LogTypeDetector (automatic log format detection)
     ├── streaming.py        # StreamingEventProcessor (single-pass processing)
@@ -338,7 +338,7 @@ The `zircolite/` package contains modular implementations of all core components
 
 - **`config.py`**: Contains dataclasses for configuration (`ProcessingConfig`, `ExtractorConfig`, `RulesetConfig`, etc.).
 - **`config_loader.py`**: Contains `ConfigLoader` for loading and validating YAML configuration files.
-- **`console.py`**: Contains `ZircoliteConsole` and helper functions for Rich-based terminal output including styled messages, progress bars, live detection counters during rule execution, detection results tables (`build_detection_table`), MITRE ATT&CK coverage panels (`build_attack_summary`), terminal hyperlinks (`make_file_link`), summary dashboards, file tree views, severity style constants (`LEVEL_STYLES`), `DetectionStats`, and a global quiet mode (`set_quiet_mode`, `is_quiet`).
+- **`console.py`**: Helper functions and renderables for Rich-based terminal output: the shared `console` instance, styled messages, detection results tables (`build_detection_table`), MITRE ATT&CK coverage panels (`build_attack_summary`), terminal hyperlinks (`make_file_link`), file tree views (`build_file_tree`), severity ordering (`LEVEL_PRIORITY`), `DetectionStats`, and a global quiet mode (`set_quiet_mode`, `is_quiet`). Progress bars and live detection counters are constructed inline by their owners in `core.py` and `processing.py`.
 - **`core.py`**: Contains `ZircoliteCore`, the main detection engine managing SQLite operations and rule execution. The `execute_ruleset` method accepts a `show_table` parameter to control detection table display (used to suppress per-worker output in parallel mode).
 - **`detector.py`**: Contains `LogTypeDetector` and `DetectionResult` for automatic log format, log source, and timestamp detection via magic bytes, content analysis, and regex fallback.
 - **`streaming.py`**: Contains `StreamingEventProcessor` for efficient single-pass event processing (extraction, flattening, and DB insertion in one pass).
