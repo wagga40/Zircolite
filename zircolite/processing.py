@@ -44,6 +44,7 @@ from .console import (
 )
 from .core import ZircoliteCore
 from .extractor import EvtxExtractor
+from .formats import format_by_name
 from .parallel import ParallelConfig, MemoryAwareParallelProcessor
 from .shutdown import is_shutdown_requested
 from .utils import (
@@ -170,16 +171,15 @@ def create_extractor(
     args: argparse.Namespace, logger: logging.Logger, input_type: str
 ) -> Optional[EvtxExtractor]:
     """Create extractor for formats that need conversion."""
-    if input_type in ("xml", "sysmon_linux", "auditd", "evtxtract"):
-        extractor_config = ExtractorConfig(
-            xml_logs=(input_type == "xml"),
-            sysmon4linux=(input_type == "sysmon_linux"),
-            auditd_logs=(input_type == "auditd"),
-            evtxtract=(input_type == "evtxtract"),
-            encoding=args.logs_encoding,
-        )
-        return EvtxExtractor(extractor_config, logger=logger)
-    return None
+    spec = format_by_name(input_type)
+    if spec is None or spec.extractor_flag is None:
+        return None
+    # ExtractorConfig derives its default encoding from the format flags in
+    # __post_init__, so the flag has to go through the constructor rather than
+    # being set afterwards.
+    flags: Dict[str, Any] = {spec.extractor_flag: True}
+    extractor_config = ExtractorConfig(encoding=args.logs_encoding, **flags)
+    return EvtxExtractor(extractor_config, logger=logger)
 
 
 # ============================================================================

@@ -88,6 +88,20 @@ from .detector import (
     LogTypeDetector,
     DetectionResult,
 )
+from .formats import (
+    InputFormat,
+    INPUT_FORMATS,
+    INPUT_FLAG_PRECEDENCE,
+    YAML_INPUT_FORMATS,
+    NON_WINDOWS_INPUT_FLAGS,
+    DEFAULT_INPUT_FORMAT,
+    format_by_name,
+    format_by_yaml,
+    format_from_args,
+    format_from_flags,
+    has_explicit_format,
+    is_valid_yaml_format,
+)
 from .config_loader import (
     ConfigLoader,
     ZircoliteConfig,
@@ -151,6 +165,19 @@ __all__ = [
     # Log type detection
     'LogTypeDetector',
     'DetectionResult',
+    # Input format registry
+    'InputFormat',
+    'INPUT_FORMATS',
+    'INPUT_FLAG_PRECEDENCE',
+    'YAML_INPUT_FORMATS',
+    'NON_WINDOWS_INPUT_FLAGS',
+    'DEFAULT_INPUT_FORMAT',
+    'format_by_name',
+    'format_by_yaml',
+    'format_from_args',
+    'format_from_flags',
+    'has_explicit_format',
+    'is_valid_yaml_format',
     # YAML configuration
     'ConfigLoader',
     'ZircoliteConfig',

@@ -21,6 +21,7 @@ input:
   # - sysmon_linux: Sysmon for Linux logs
   # - auditd: Linux Auditd logs
   # - evtxtract: EVTXtract output files
+  # - sqlite: a database saved by a previous run (equivalent to --db-input)
   format: evtx
   
   # Search recursively in directories (default: true)

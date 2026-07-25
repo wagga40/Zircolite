@@ -204,6 +204,7 @@ Zircolite is built around several key classes, organized in the `zircolite/` pac
 - **MemoryTracker** (`utils.py`): Monitors and reports memory usage during execution.
 - **MemoryAwareParallelProcessor** (`parallel.py`): Handles parallel file processing with memory awareness and adaptive worker scaling.
 - **ConfigLoader** (`config_loader.py`): Loads and validates YAML configuration files, merges with CLI arguments.
+- **Input format registry** (`formats.py`): Single source of truth for every input format. Resolution precedence, the default extension used to glob a directory, and which formats need an extractor all come from this one table.
 
 ### Processing Flow
 
@@ -320,6 +321,7 @@ Transforms use **RestrictedPython** for safe, sandboxed execution of custom Pyth
     ├── __init__.py         # Package exports
     ├── config.py           # Configuration dataclasses
     ├── config_loader.py    # YAML configuration file loader
+    ├── formats.py          # Input format registry (single source of truth)
     ├── console.py          # Rich-based terminal output helpers
     ├── core.py             # ZircoliteCore class (database and rule execution)
     ├── detector.py         # LogTypeDetector (automatic log format detection)
@@ -338,6 +340,7 @@ The `zircolite/` package contains modular implementations of all core components
 
 - **`config.py`**: Contains dataclasses for configuration (`ProcessingConfig`, `ExtractorConfig`, `RulesetConfig`, etc.).
 - **`config_loader.py`**: Contains `ConfigLoader` for loading and validating YAML configuration files.
+- **`formats.py`**: The `INPUT_FORMATS` registry — one row per input format holding its CLI flag, YAML `input.format` value, default file extension, streaming generator and extractor requirement. The CLI, the YAML loader, the streaming dispatcher and `create_extractor` all resolve formats through it, so adding a format means adding a row rather than editing eight switches.
 - **`console.py`**: Helper functions and renderables for Rich-based terminal output: the shared `console` instance, styled messages, detection results tables (`build_detection_table`), MITRE ATT&CK coverage panels (`build_attack_summary`), terminal hyperlinks (`make_file_link`), file tree views (`build_file_tree`), severity ordering (`LEVEL_PRIORITY`), `DetectionStats`, and a global quiet mode (`set_quiet_mode`, `is_quiet`). Progress bars and live detection counters are constructed inline by their owners in `core.py` and `processing.py`.
 - **`core.py`**: Contains `ZircoliteCore`, the main detection engine managing SQLite operations and rule execution. The `execute_ruleset` method accepts a `show_table` parameter to control detection table display (used to suppress per-worker output in parallel mode).
 - **`detector.py`**: Contains `LogTypeDetector` and `DetectionResult` for automatic log format, log source, and timestamp detection via magic bytes, content analysis, and regex fallback.

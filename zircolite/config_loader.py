@@ -12,6 +12,8 @@ This module provides:
 import argparse
 import logging
 from dataclasses import dataclass, field
+
+from .formats import INPUT_FORMATS, YAML_INPUT_FORMATS, is_valid_yaml_format
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -23,7 +25,7 @@ import yaml
 class InputConfig:
     """Configuration for input files and formats."""
     path: Optional[str] = None
-    format: str = "evtx"  # evtx, json, json_array, xml, csv, sysmon_linux, auditd, evtxtract
+    format: str = "evtx"  # see zircolite.formats.YAML_INPUT_FORMATS
     recursive: bool = True
     file_pattern: Optional[str] = None
     file_extension: Optional[str] = None
@@ -283,9 +285,11 @@ class ConfigLoader:
         elif config.input.path and not Path(config.input.path).exists():
             issues.append(f"Input path does not exist: {config.input.path}")
         
-        valid_formats = ['evtx', 'json', 'json_array', 'xml', 'csv', 'sysmon_linux', 'auditd', 'evtxtract']
-        if config.input.format not in valid_formats:
-            issues.append(f"Invalid input format: {config.input.format}. Must be one of: {valid_formats}")
+        if not is_valid_yaml_format(config.input.format):
+            issues.append(
+                f"Invalid input format: {config.input.format}. "
+                f"Must be one of: {sorted(YAML_INPUT_FORMATS)}"
+            )
         
         # Validate rules
         for ruleset in config.rules.rulesets:
@@ -347,20 +351,10 @@ class ConfigLoader:
         if hasattr(args, 'evtx') and args.evtx:
             config.input.path = args.evtx
         
-        if hasattr(args, 'json_input') and args.json_input:
-            config.input.format = 'json'
-        elif hasattr(args, 'json_array_input') and args.json_array_input:
-            config.input.format = 'json_array'
-        elif hasattr(args, 'xml_input') and args.xml_input:
-            config.input.format = 'xml'
-        elif hasattr(args, 'csv_input') and args.csv_input:
-            config.input.format = 'csv'
-        elif hasattr(args, 'sysmon_linux_input') and args.sysmon_linux_input:
-            config.input.format = 'sysmon_linux'
-        elif hasattr(args, 'auditd_input') and args.auditd_input:
-            config.input.format = 'auditd'
-        elif hasattr(args, 'evtxtract_input') and args.evtxtract_input:
-            config.input.format = 'evtxtract'
+        for spec in INPUT_FORMATS:
+            if getattr(args, spec.args_flag, False):
+                config.input.format = spec.yaml_format
+                break
         
         if hasattr(args, 'no_recursion') and args.no_recursion:
             config.input.recursive = False
@@ -475,7 +469,7 @@ def create_default_config_file(output_path: str = "zircolite_config.yaml") -> No
     Args:
         output_path: Path to write the configuration file
     """
-    default_config = """# Zircolite Configuration File
+    default_config = f"""# Zircolite Configuration File
 # All options can be overridden by command-line arguments
 
 # Input configuration
@@ -483,7 +477,7 @@ input:
   # Path to log file or directory containing log files
   path: null  # Required: set this or use -e/--evtx CLI argument
   
-  # Input format: evtx, json, json_array, xml, csv, sysmon_linux, auditd, evtxtract
+  # Input format: {", ".join(YAML_INPUT_FORMATS)}
   format: evtx
   
   # Search recursively in directories

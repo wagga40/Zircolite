@@ -36,6 +36,12 @@ from RestrictedPython.Eval import default_guarded_getiter
 from RestrictedPython.Guards import guarded_iter_unpack_sequence
 
 from .config import ProcessingConfig
+from .formats import (
+    DEFAULT_INPUT_FORMAT,
+    NON_WINDOWS_INPUT_FLAGS,
+    format_by_name,
+    format_from_flags,
+)
 from .shutdown import is_shutdown_requested
 from .utils import (
     COMPRESSED_SUFFIXES,
@@ -64,23 +70,9 @@ _EXCLUDED_SENTINEL = object()
 # generous for legitimate large events
 _MAX_JSON_OBJECT_BUFFER_CHARS = 64 * 1024 * 1024
 
-# Deterministic precedence when several *_input flags are truthy (API edge;
-# the CLI always sets exactly one). More specific formats beat the default.
-_INPUT_FLAG_PRECEDENCE = (
-    "db_input",
-    "json_input",
-    "json_array_input",
-    "xml_input",
-    "sysmon_linux_input",
-    "auditd_input",
-    "csv_input",
-    "evtxtract_input",
-    "evtx_input",
-)
-
 # Input formats without Channel/EventID semantics: event filtering is skipped
 # for these unless event_filter.filter_all_sources is enabled in the config
-_NON_WINDOWS_INPUTS = frozenset({"auditd_input", "sysmon_linux_input"})
+_NON_WINDOWS_INPUTS = NON_WINDOWS_INPUT_FLAGS
 
 
 def _quote_identifier(name: str) -> str:
@@ -341,15 +333,13 @@ class StreamingEventProcessor:
             self._time_after_str = None
             self._time_before_str = None
 
-        # Determine chosen input format (deterministic precedence order)
-        if args_config:
-            args_dict = vars(args_config)
-            self.chosen_input = next(
-                (key for key in _INPUT_FLAG_PRECEDENCE if args_dict.get(key)),
-                None,
-            )
-        if not hasattr(self, "chosen_input") or self.chosen_input is None:
-            self.chosen_input = "evtx_input"
+        # Deterministic precedence when several *_input flags are truthy (API
+        # edge; the CLI always sets exactly one)
+        self.chosen_input = (
+            format_from_flags(vars(args_config)).args_flag
+            if args_config
+            else DEFAULT_INPUT_FORMAT.args_flag
+        )
 
         # Sorted-column caching for _insert_batch
         self._last_column_frozenset: frozenset = frozenset()
@@ -1490,7 +1480,6 @@ class StreamingEventProcessor:
         input_type: str = "evtx",
         extractor: Optional["EvtxExtractor"] = None,
         json_array: bool = False,
-        use_chunked_json: bool = True,
         keepflat_file=None,
         progress_callback=None,
     ) -> int:
@@ -1500,44 +1489,34 @@ class StreamingEventProcessor:
         Args:
             db_connection: SQLite database connection
             log_file: Path to the log file to process
-            input_type: Type of input ('evtx', 'json', 'xml', 'sysmon_linux', 'auditd', 'csv', 'evtxtract')
-            extractor: EvtxExtractor instance (required for xml, sysmon_linux, auditd, evtxtract)
-            json_array: If True, treat JSON file as array instead of JSONL
-            use_chunked_json: If True, use memory-efficient chunked reading for large JSON arrays
+            input_type: Canonical format name (see zircolite.formats)
+            extractor: EvtxExtractor instance (required for formats that need conversion)
+            json_array: If True, treat a 'json' file as an array instead of JSONL
             keepflat_file: If provided, an open file handle to write flattened events to (JSONL)
             progress_callback: Optional callable(event_count) invoked every batch for live progress
 
         Returns the number of events processed.
         """
         # Dispatch to the appropriate stream method
-        if input_type == "json":
-            if json_array and use_chunked_json:
-                event_stream = self.stream_json_array_chunked(log_file)
-            else:
-                event_stream = self.stream_json_events(log_file, json_array=json_array)
-        elif input_type in ("xml", "sysmon_linux", "auditd", "evtxtract"):
-            if extractor is None:
-                self.logger.error(
-                    f"[error]    [-] Unsupported input type: {input_type}[/]"
-                )
-                return 0
-            if input_type == "xml":
-                event_stream = self.stream_xml_events(log_file, extractor)
-            elif input_type == "sysmon_linux":
-                event_stream = self.stream_sysmon_linux_events(log_file, extractor)
-            elif input_type == "auditd":
-                event_stream = self.stream_auditd_events(log_file, extractor)
-            else:
-                event_stream = self.stream_evtxtract_events(log_file, extractor)
-        elif input_type == "evtx":
-            event_stream = self.stream_evtx_events(log_file)
-        elif input_type == "csv":
-            event_stream = self.stream_csv_events(log_file)
-        else:
+        spec = format_by_name(input_type)
+        needs_extractor = spec is not None and spec.extractor_flag is not None
+        if spec is None or spec.stream_method is None or (needs_extractor and extractor is None):
             self.logger.error(
                 f"[error]    [-] Unsupported input type: {input_type}[/]"
             )
             return 0
+
+        if spec.reads_json:
+            # json_array is both a format of its own and a modifier on 'json'
+            as_array = spec.json_array or json_array
+            if as_array:
+                event_stream = self.stream_json_array_chunked(log_file)
+            else:
+                event_stream = self.stream_json_events(log_file, json_array=False)
+        elif needs_extractor:
+            event_stream = getattr(self, spec.stream_method)(log_file, extractor)
+        else:
+            event_stream = getattr(self, spec.stream_method)(log_file)
 
         # Batch processing with local variable caching
         batch: List[Dict[str, Any]] = []

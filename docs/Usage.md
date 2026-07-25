@@ -179,16 +179,20 @@ For the full list of options and up-to-date help, run: `python3 zircolite.py -h`
 
 #### Input Formats
 
-| Option | Description |
-|--------|-------------|
-| `-j`, `--json-input` | Input logs are in JSON lines format |
-| `--json-array-input` | Input logs are in JSON array format |
-| `--db-input` | Use a previously saved database file |
-| `-S`, `--sysmon-linux-input` | Process Sysmon for Linux logs |
-| `-AU`, `--auditd-input` | Process Auditd logs |
-| `-x`, `--xml-input` | Process XML-formatted logs |
-| `--evtxtract-input` | Process EVTXtract output |
-| `--csv-input` | Process CSV logs |
+When the events path is a directory, the selected format also decides which
+extension is globbed, unless `--fileext` or `--file-pattern` says otherwise.
+
+| Option | Description | Default extension |
+|--------|-------------|-------------------|
+| *(none)* | Input logs are EVTX files | `.evtx` |
+| `-j`, `--json-input` | Input logs are in JSON lines format | `.json` |
+| `--json-array-input` | Input logs are in JSON array format | `.json` |
+| `--db-input` | Use a previously saved database file | *(path is given explicitly)* |
+| `-S`, `--sysmon-linux-input` | Process Sysmon for Linux logs | `.log` |
+| `-AU`, `--auditd-input` | Process Auditd logs | `.log` |
+| `-x`, `--xml-input` | Process XML-formatted logs | `.xml` |
+| `--evtxtract-input` | Process EVTXtract output | `.log` |
+| `--csv-input` | Process CSV logs | `.csv` |
 | `-LE`, `--logs-encoding` | Encoding of the source files, for the formats read as text: Sysmon for Linux, Auditd, EVTXtract and CSV. XML uses the encoding declared in the document, and JSON is read as UTF-8. |
 
 #### Rules and Rulesets

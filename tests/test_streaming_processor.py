@@ -915,7 +915,6 @@ class TestStreamingEventProcessorJSONArrayChunked:
             tmp_json_array_file,
             input_type='json',
             json_array=True,
-            use_chunked_json=True
         )
         
         assert event_count == 3
@@ -927,6 +926,47 @@ class TestStreamingEventProcessorJSONArrayChunked:
         
         assert db_count == 3
         
+        conn.close()
+
+    def test_process_file_streaming_json_array_input_type(
+        self, field_mappings_file, test_logger, default_args_config, tmp_json_array_file
+    ):
+        """'json_array' is dispatched directly, without the caller normalising it."""
+        proc_config = ProcessingConfig(disable_progress=True)
+        processor = StreamingEventProcessor(
+            config_file=field_mappings_file,
+            args_config=default_args_config,
+            processing_config=proc_config,
+            logger=test_logger,
+        )
+        conn = sqlite3.connect(":memory:")
+        processor.create_initial_table(conn)
+
+        event_count = processor.process_file_streaming(
+            conn, tmp_json_array_file, input_type="json_array"
+        )
+
+        assert event_count == 3
+        conn.close()
+
+    def test_process_file_streaming_sqlite_is_unsupported(
+        self, field_mappings_file, test_logger, default_args_config, tmp_json_array_file
+    ):
+        """SQLite is a real format but has no streaming reader."""
+        processor = StreamingEventProcessor(
+            config_file=field_mappings_file,
+            args_config=default_args_config,
+            logger=test_logger,
+        )
+        conn = sqlite3.connect(":memory:")
+        processor.create_initial_table(conn)
+
+        assert (
+            processor.process_file_streaming(
+                conn, tmp_json_array_file, input_type="sqlite"
+            )
+            == 0
+        )
         conn.close()
 
     def test_stream_json_array_chunked_yields_all_events(

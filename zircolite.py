@@ -74,6 +74,12 @@ from zircolite import (
     # Log type detection
     LogTypeDetector,
     DetectionResult,
+    # Input format registry
+    DEFAULT_INPUT_FORMAT,
+    format_by_name,
+    format_by_yaml,
+    format_from_args,
+    has_explicit_format,
     # YAML configuration
     ConfigLoader,
     create_default_config_file,
@@ -235,15 +241,10 @@ def parse_arguments() -> argparse.Namespace:
 ################################################################
 def _format_flag_extension(args: argparse.Namespace) -> str:
     """Extension implied by the format flags alone (ignores args.fileext)."""
-    if args.json_input or args.json_array_input:
-        return "json"
-    if args.sysmon_linux_input or args.auditd_input:
-        return "log"
-    if args.xml_input:
-        return "xml"
-    if args.csv_input:
-        return "csv"
-    return "evtx"
+    spec = format_from_args(args)
+    # A format without its own extension (SQLite) must not narrow a directory
+    # scan, so it falls back to the default format's extension.
+    return spec.default_extension or DEFAULT_INPUT_FORMAT.default_extension
 
 
 def get_file_extension(args: argparse.Namespace) -> str:
@@ -255,11 +256,7 @@ def get_file_extension(args: argparse.Namespace) -> str:
 
 def _has_explicit_format_flag(args: argparse.Namespace) -> bool:
     """Check if the user has set an explicit format flag on the CLI."""
-    return any([
-        args.json_input, args.json_array_input, args.xml_input,
-        args.sysmon_linux_input, args.auditd_input,
-        args.csv_input, args.evtxtract_input, args.db_input,
-    ])
+    return has_explicit_format(args)
 
 
 def _fileext_is_explicit(args: argparse.Namespace) -> bool:
@@ -305,23 +302,7 @@ def discover_files(
 
 def get_input_type(args: argparse.Namespace) -> str:
     """Determine input type for streaming processor from explicit CLI flags."""
-    if args.db_input:
-        return 'sqlite'
-    if args.json_input:
-        return 'json'
-    if args.json_array_input:
-        return 'json_array'
-    if args.xml_input:
-        return 'xml'
-    if args.sysmon_linux_input:
-        return 'sysmon_linux'
-    if args.auditd_input:
-        return 'auditd'
-    if args.csv_input:
-        return 'csv'
-    if args.evtxtract_input:
-        return 'evtxtract'
-    return 'evtx'
+    return format_from_args(args).name
 
 
 _TIMEFIELD_SANITIZE_RE = re.compile(r"[^a-zA-Z0-9]")
@@ -342,27 +323,16 @@ def _apply_detection_result(
     default to evtx.
     """
     input_type = detection.input_type
-    known_formats = (
-        'json', 'json_array', 'xml', 'sysmon_linux', 'auditd', 'csv', 'evtxtract', 'sqlite'
-    )
+    spec = format_by_name(input_type)
+    # EVTX has no flag of its own, so an unknown source that resolves to it
+    # (or to nothing) is indistinguishable from a failed detection.
+    selectable = spec is not None and spec.has_cli_flag
 
-    if detection.log_source == "unknown" and input_type not in known_formats:
+    if detection.log_source == "unknown" and not selectable:
         return "evtx"
 
-    # Map input_type back to the args flag
-    flag_map = {
-        'json': 'json_input',
-        'json_array': 'json_array_input',
-        'xml': 'xml_input',
-        'sysmon_linux': 'sysmon_linux_input',
-        'auditd': 'auditd_input',
-        'csv': 'csv_input',
-        'evtxtract': 'evtxtract_input',
-        'sqlite': 'db_input',
-    }
-
-    if input_type in flag_map:
-        setattr(args, flag_map[input_type], True)
+    if selectable:
+        setattr(args, spec.args_flag, True)
 
     # Update timefield if detection found a timestamp and user didn't override.
     # The streaming processor strips non-alphanumeric characters from field
@@ -470,16 +440,10 @@ def _apply_yaml_input_config(
     if yaml_config.input.path and not args.evtx:
         args.evtx = yaml_config.input.path
 
-    if not any([args.json_input, args.json_array_input, args.xml_input,
-                args.csv_input, args.sysmon_linux_input, args.auditd_input, args.evtxtract_input]):
-        format_map = {
-            'json': 'json_input', 'json_array': 'json_array_input',
-            'xml': 'xml_input', 'csv': 'csv_input',
-            'sysmon_linux': 'sysmon_linux_input', 'auditd': 'auditd_input',
-            'evtxtract': 'evtxtract_input',
-        }
-        if yaml_config.input.format in format_map:
-            setattr(args, format_map[yaml_config.input.format], True)
+    if not has_explicit_format(args):
+        spec = format_by_yaml(yaml_config.input.format)
+        if spec is not None and spec.has_cli_flag:
+            setattr(args, spec.args_flag, True)
 
     if yaml_config.input.recursive is False:
         args.no_recursion = True

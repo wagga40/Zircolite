@@ -1146,19 +1146,12 @@ class ZircoliteCore:
                 if file_size == 0:
                     return 0
                 
-                # Map input type to streaming method parameter
-                stream_input_type = input_type
-                local_json_array = json_array
-                if input_type == 'json_array':
-                    stream_input_type = 'json'
-                    local_json_array = True
-                
                 event_count = processor.process_file_streaming(
                     self.db_connection,
                     str(log_file),
-                    input_type=stream_input_type,
+                    input_type=input_type,
                     extractor=extractor,
-                    json_array=local_json_array,
+                    json_array=json_array,
                     keepflat_file=keepflat_file,
                     progress_callback=progress_cb,
                 )
