@@ -391,6 +391,31 @@ class ConfigLoader:
         
         return issues
 
+
+# One line of prose per format for the generated config file. A format with no
+# entry is still listed, so a new one cannot silently go undescribed.
+_FORMAT_NOTES: Dict[str, str] = {
+    "evtx": "Windows Event Log files (default)",
+    "json": "JSON Lines (JSONL/NDJSON), one event per line",
+    "json_array": "a single JSON array of events",
+    "xml": "EVTX exported to XML",
+    "csv": "CSV, with the delimiter sniffed from the first lines",
+    "sysmon_linux": "Sysmon for Linux (syslog header plus XML)",
+    "auditd": "Linux auditd logs",
+    "evtxtract": "EVTXtract recovery output",
+    "sqlite": "a database saved by a previous run (same as --db-input)",
+}
+
+
+def _format_comment_block() -> str:
+    """Comment lines describing every registered input format."""
+    width = max(len(name) for name in YAML_INPUT_FORMATS)
+    return "\n".join(
+        f"  #   {name.ljust(width)}  {_FORMAT_NOTES.get(name, '')}".rstrip()
+        for name in YAML_INPUT_FORMATS
+    )
+
+
 def create_default_config_file(output_path: str = "zircolite_config.yaml") -> None:
     """
     Create a default configuration file with all options documented.
@@ -399,61 +424,87 @@ def create_default_config_file(output_path: str = "zircolite_config.yaml") -> No
         output_path: Path to write the configuration file
     """
     default_config = f"""# Zircolite Configuration File
-# All options can be overridden by command-line arguments
+# =============================
+# Every supported key appears below at its default value.
+#
+#   Use with:  python3 zircolite.py --yaml-config my_config.yaml
+#   Regenerate: python3 zircolite.py --generate-config my_config.yaml
+#
+# CLI arguments override this file, with three deliberate exceptions --
+# transform_categories, add_index and remove_index are *added* to whatever the
+# CLI passes rather than replaced by it, because they name things to include
+# rather than which things to use.
+#
+# This is a *run* configuration: which logs to read, which rules to apply and
+# where to write. It is unrelated to -c/--config, which points at the field
+# mappings and transforms configuration (config/config.yaml).
 
 # Input configuration
 input:
   # Path to log file or directory containing log files
   path: null  # Required: set this or use -e/--evtx CLI argument
-  
-  # Input format: {", ".join(YAML_INPUT_FORMATS)}
+
+  # Input format:
+{_format_comment_block()}
   format: evtx
-  
+
   # Search recursively in directories
   recursive: true
-  
-  # File glob pattern (e.g., "*.evtx", "Security*.evtx")
-  file_pattern: null
-  
-  # File extension filter
-  file_extension: null
-  
-  # Include only files containing these strings in filename
+
+  # File glob pattern, applied instead of the format's default extension
+  file_pattern: null  # Example: "Security*.evtx"
+
+  # File extension filter, an alternative to file_pattern
+  file_extension: null  # Example: evtx
+
+  # Include only files whose *filename* contains one of these strings.
+  # Matching is on the filename alone, not the directory path.
   select: null  # Example: ["Security", "Sysmon"]
-  
-  # Exclude files containing these strings in filename
+
+  # Exclude files whose filename contains one of these strings, applied
+  # after `select`.
   avoid: null  # Example: ["backup", "old"]
-  
-  # File encoding (for Sysmon Linux/Auditd)
-  encoding: null
+
+  # Encoding for the formats read as text (Sysmon for Linux, Auditd,
+  # EVTXtract, CSV). null uses the per-format default. XML always uses the
+  # encoding declared in the document, and JSON is always read as UTF-8.
+  encoding: null  # Example: ISO-8859-1
 
 # Rules and rulesets configuration
 rules:
-  # List of ruleset files or directories
+  # Ruleset files or directories. Accepts both the Zircolite JSON format and
+  # directories of native Sigma YAML rules.
   rulesets:
     - rules/rules_windows_generic.json
-  
-  # pySigma pipelines for native Sigma rules
+    # - rules/rules_windows_sysmon.json
+    # - /path/to/sigma/rules/windows/process_creation/
+
+  # pySigma pipelines applied when converting native Sigma rules.
+  # Run `--pipeline-list` to see what is installed.
   pipelines: null  # Example: ["sysmon", "windows-logsources"]
-  
-  # Rule title filters (exclude rules matching these strings)
+
+  # Drop rules whose title contains one of these strings (case sensitive)
   filters: null  # Example: ["Noisy Rule", "Test"]
-  
-  # Save converted ruleset to disk
+
+  # Write the converted Sigma -> Zircolite ruleset to disk
   save_ruleset: false
 
 # Output configuration
 output:
-  # Output file path
+  # Output file path. With format: csv this defaults to detected_events.csv
+  # unless you name a file here.
   file: detected_events.json
-  
+
   # Output format: json, csv
+  # CSV fixes its column headers from the first detection row, so match
+  # fields that only appear in later rules are omitted. Use json for a
+  # complete field set. CSV also rejects more than one ruleset.
   format: json
-  
-  # CSV delimiter
+
+  # Delimiter used when format is csv
   csv_delimiter: ";"
-  
-  # Jinja2 templates (list of template/output pairs)
+
+  # Jinja2 templates, as template/output pairs
   templates: null
   # Example:
   # templates:
@@ -468,94 +519,124 @@ output:
   # document JSON exports (such as the ATT&CK Navigator layer) become
   # invalid when concatenated.
   template_append: false
-  
-  # Create Mini-GUI package
+
+  # Create the Mini-GUI package
   package: false
-  package_dir: ""
-  
-  # Save flattened JSON events
+  package_dir: ""  # Where to write it; empty means the working directory
+
+  # Also write the flattened events as JSONL. Only events Zircolite actually
+  # processed are included, so events dropped by early event filtering or by
+  # the time filter are absent; combine with event_filter_enabled: false to
+  # capture everything.
   keep_flat: false
-  
-  # Save SQLite database to file
-  db_file: null
-  
+
+  # Keep the SQLite database, for debugging or to re-analyse with input
+  # format `sqlite` later. Zircolite refuses to overwrite an existing file.
+  db_file: null  # Example: events.db
+
   # Log file path
   log_file: zircolite.log
-  
-  # Disable output files
+
+  # Write no log or result files at all
   no_output: false
 
 # Processing configuration
 processing:
-  # Use unified database for all files (enables cross-file correlation)
+  # One database for every file instead of one per file. Required for Sigma
+  # correlation rules that need to see events across files, at the cost of
+  # holding everything in memory at once.
   unified_db: false
-  
-  # Automatic mode selection based on file analysis
+
+  # Let Zircolite pick the processing mode from file count, file sizes,
+  # available RAM and CPU count. Set false to force per-file mode.
   auto_mode: true
-  
-  # Add xxhash of original log lines
+
+  # Add an xxhash64 of the original log line to every event
   hashes: false
-  
-  # Limit results per rule (-1 = no limit)
+
+  # Discard results from any rule matching more than this many events, which
+  # keeps a single noisy rule from dominating the output. -1 disables it.
   limit: -1
-  
-  # Time field for event timestamps (auto-detects if not found)
+
+  # Field holding the event timestamp. Auto-detected when this one is absent
+  # from the events.
   time_field: SystemTime
-  
-  # Enable early event filtering based on channel/eventID from rules
-  # This improves performance by skipping events that won't match any rules
+
+  # Skip events whose Channel/EventID cannot match any loaded rule, before
+  # the expensive flattening step. Applies to Windows-shaped inputs only.
   event_filter_enabled: true
-  
+
   # Enable debug logging
   debug: false
-  
-  # Remove log files after processing (use with caution!)
+
+  # Delete the source log files after a successful run (use with caution!)
   remove_events: false
 
-  # Enable all transforms (overrides enabled_transforms list)
+  # Run every transform defined in config/config.yaml, ignoring its
+  # enabled_transforms list
   all_transforms: false
 
-  # Enable transforms by category (see config/config.yaml for category
-  # definitions). Categories given here are added to any passed with
-  # --transform-category, they do not replace them.
-  transform_categories: []
+  # Enable transforms by category. Categories are defined in the
+  # transform_categories section of config/config.yaml; `--transform-list`
+  # prints them. Added to any passed with --transform-category.
+  transform_categories: []  # Example: ["commandline", "process"]
 
-  # Strict EVTX parsing: stop on corrupted or malformed chunks (default: false)
-  # When false (lenient), recovers as many events as possible from damaged files
+  # Strict EVTX parsing: abort the run on a corrupted or malformed chunk.
+  # When false (lenient), keeps as many events as can be recovered from a
+  # damaged file and warns.
   strict_evtx: false
 
-  # Database indexes — Zircolite always indexes `eventid` and indexes `Channel`
-  # automatically when the column is present. Like transform_categories, these
-  # lists are added to their CLI equivalents rather than replaced by them.
-  add_index: []       # extra columns to index, e.g. ["SystemTime", "Computer"]
+  # Database indexes. Zircolite always indexes `eventid`, and indexes
+  # `Channel` when that column is present. Like transform_categories, these
+  # are added to their CLI equivalents rather than replaced by them.
+  add_index: []       # Extra columns to index, e.g. ["SystemTime", "Computer"]
   remove_index: []    # SQLite index names to drop after creation
-  auto_index: 0       # >0 = auto-index the top-N columns the ruleset references
+  auto_index: 0       # >0 = also index the top-N columns the ruleset
+                      # references in WHERE clauses (5 is a reasonable value).
+                      # Never recreates an index listed in remove_index.
 
 # Time-based event filtering
 time_filter:
-  # Process events after this timestamp (UTC)
+  # Process only events at or after this timestamp, inclusive (UTC)
+  # Format: YYYY-MM-DDTHH:MM:SS
   after: "1970-01-01T00:00:00"
-  
-  # Process events before this timestamp (UTC)
+
+  # Process only events at or before this timestamp, inclusive (UTC)
   before: "9999-12-12T23:59:59"
 
 # Parallel processing configuration
-# Parallel is enabled by default when beneficial (multiple files, sufficient memory)
+# Files are processed concurrently when that is likely to help. Zircolite
+# enables it automatically unless:
+#   - there is only one file
+#   - less than 1 GB of RAM is available
+#   - the estimated worker count comes out at 1
+#   - the largest single file would need more than 60% of usable RAM
 parallel:
-  # Set to false to disable automatic parallel processing
+  # Set false to disable automatic parallel processing entirely
   enabled: true
-  
-  # Maximum number of workers (null = auto-detect based on CPU/memory)
+
+  # Maximum number of workers. null = auto-detect, which takes the smallest of:
+  #   - memory:    (available RAM x 0.85) / estimated memory per file
+  #   - CPU:       2x CPU cores, since the work is largely I/O bound
+  #   - file count: at most 3x CPU cores, and never more than the file count
+  # then applies a floor of half the CPU cores when memory is not the
+  # constraint, and a hard ceiling of 32 to avoid context-switching overhead.
   max_workers: null
-  
-  # Minimum number of workers
+
+  # Never drop below this many workers
   min_workers: 1
-  
-  # Memory usage threshold to trigger throttling (percent)
-  memory_limit_percent: 85.0
-  
-  # Dynamically adjust workers based on memory usage
+
+  # System memory usage above which new file submissions are deferred
+  memory_limit_percent: {DEFAULT_MEMORY_LIMIT_PERCENT}
+
+  # Recalibrate the memory-per-file estimate from what the first completed
+  # file actually used, instead of trusting the size-based heuristic alone.
   adaptive: true
+
+# Memory per file is estimated from the average input size, since smaller
+# files carry proportionally more per-event overhead:
+#   < 10 MB  -> 5.0x    < 50 MB -> 4.0x    >= 50 MB -> 3.5x
+# These multipliers are informational; they are not configurable.
 """
     
     target = Path(output_path)

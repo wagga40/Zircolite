@@ -430,3 +430,29 @@ class TestJsonArrayRequested:
         args.json_array_input = True
         assert format_from_args(args).name == "json"
         assert json_array_requested(args) is True
+
+
+class TestGeneratedConfigDescribesEveryFormat:
+    """The generated config file lists the formats from the registry.
+
+    The old hand-written example enumerated them in prose, which is how it
+    came to describe formats that no longer matched the code.
+    """
+
+    def test_every_format_is_listed_and_described(self, tmp_path):
+        from zircolite.config_loader import _FORMAT_NOTES, create_default_config_file
+
+        target = tmp_path / "generated.yaml"
+        create_default_config_file(str(target))
+        text = target.read_text()
+
+        for spec in INPUT_FORMATS:
+            assert f"#   {spec.yaml_format}" in text, spec.yaml_format
+            assert spec.yaml_format in _FORMAT_NOTES, (
+                f"{spec.yaml_format} has no description in _FORMAT_NOTES"
+            )
+
+    def test_no_note_describes_a_format_that_was_removed(self):
+        from zircolite.config_loader import _FORMAT_NOTES
+
+        assert set(_FORMAT_NOTES) <= set(YAML_INPUT_FORMATS)
