@@ -2,6 +2,7 @@
 Tests for the console module (quiet mode, output helpers, stats).
 """
 
+import logging
 import sys
 from pathlib import Path
 
@@ -993,3 +994,63 @@ class TestPrintProfilingReport:
             print_profiling_report([])
         out = capture.get()
         assert "No profiling" in out or "no profiling" in out.lower()
+
+
+class TestConsoleLoggerHandling:
+    """Regression tests for console/logger fixes."""
+
+    def test_make_file_link_fallback_on_uri_error(self):
+        """When as_uri() fails, make_file_link falls back to plain markup."""
+        from unittest.mock import patch
+        from zircolite.console import make_file_link
+        with patch("pathlib.Path.as_uri", side_effect=ValueError("relative")):
+            result = make_file_link("some/relative.json")
+        assert result == "[cyan]some/relative.json[/]"
+
+    def test_get_rich_logger_file_handler_utf8(self, tmp_path):
+        """The file handler must use UTF-8 (locale encoding breaks on ✓ glyphs)."""
+        from zircolite.console import get_rich_logger
+        log_file = tmp_path / "test.log"
+        logger = get_rich_logger(name="test_utf8_logger", log_file=str(log_file))
+        file_handlers = [h for h in logger.handlers if isinstance(h, logging.FileHandler)]
+        assert len(file_handlers) == 1
+        assert file_handlers[0].encoding == "utf-8"
+        # Writing non-ASCII must not produce logging errors
+        logger.info("[green]\\[✓][/] Done")
+        for h in logger.handlers:
+            h.close()
+        logger.handlers.clear()
+
+    def test_get_rich_logger_reinit_closes_old_handler(self, tmp_path):
+        """Re-initializing must close the previous file handler."""
+        from zircolite.console import get_rich_logger
+        logger = get_rich_logger(name="test_reinit_logger", log_file=str(tmp_path / "a.log"))
+        old_file_handlers = [h for h in logger.handlers if isinstance(h, logging.FileHandler)]
+        logger = get_rich_logger(name="test_reinit_logger", log_file=str(tmp_path / "b.log"))
+        for h in old_file_handlers:
+            assert h.stream is None or h.stream.closed
+        for h in logger.handlers:
+            h.close()
+        logger.handlers.clear()
+
+    def test_workload_analysis_suppressed_in_quiet_mode(self, capsys):
+        """print_workload_analysis must print nothing in quiet mode."""
+        from zircolite.console import ZircoliteConsole
+        zc = ZircoliteConsole(quiet=True)
+        zc.print_workload_analysis(
+            file_count=5, total_size="10 MB", avg_size="2 MB",
+            available_ram="8 GB", cpu_count=8,
+            db_mode="unified", db_reason="test",
+        )
+        assert capsys.readouterr().out == ""
+
+    def test_progress_factories_add_task(self):
+        """Progress factories must pre-add a task with the given total."""
+        from zircolite.console import ZircoliteConsole
+        zc = ZircoliteConsole(quiet=True)
+        progress = zc.create_file_progress(7, "Files")
+        assert len(progress.tasks) == 1
+        assert progress.tasks[0].total == 7
+        rule_progress = zc.create_rule_progress(42, "Rules")
+        assert len(rule_progress.tasks) == 1
+        assert rule_progress.tasks[0].total == 42

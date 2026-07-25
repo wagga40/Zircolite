@@ -173,8 +173,8 @@ For the full list of options and up-to-date help, run: `python3 zircolite.py -h`
 
 | Option | Description |
 |--------|-------------|
-| `-A`, `--after` | Process only events after this timestamp |
-| `-B`, `--before` | Process only events before this timestamp |
+| `-A`, `--after` | Process only events at or after this timestamp (inclusive) |
+| `-B`, `--before` | Process only events at or before this timestamp (inclusive) |
 | `--no-event-filter` | Disable early event filtering based on channel/eventID |
 
 #### Input Formats
@@ -189,8 +189,7 @@ For the full list of options and up-to-date help, run: `python3 zircolite.py -h`
 | `-x`, `--xml-input` | Process XML-formatted logs |
 | `--evtxtract-input` | Process EVTXtract output |
 | `--csv-input` | Process CSV logs |
-| `-LE`, `--logs-encoding` | Specify encoding for log files |
-| `--no-auto-detect` | Disable automatic log type detection (use explicit format flags instead) |
+| `-LE`, `--logs-encoding` | Encoding of the source files, for the formats read as text: Sysmon for Linux, Auditd, EVTXtract and CSV. XML uses the encoding declared in the document, and JSON is read as UTF-8. |
 
 #### Rules and Rulesets
 
@@ -214,8 +213,11 @@ For the full list of options and up-to-date help, run: `python3 zircolite.py -h`
 | `-d`, `--dbfile` | Save logs to SQLite database |
 | `-l`, `--logfile` | Log file name |
 | `--hashes` | Add xxhash64 to each event |
-| `-L`, `--limit` | Discard results exceeding limit |
+| `-L`, `--limit` | Discard results exceeding limit (must be a positive integer, or `-1` to disable) |
 | `--profile-rules` | Time each rule execution and print a performance report at the end (Rule Performance table) |
+
+> [!NOTE]
+> `--dbfile` cannot be combined with parallel processing of multiple files: each worker would need to write the same database. Use `--unified-db` to get a single database file, or `--no-parallel` to save one database per input file. Zircolite exits with an error rather than silently dropping databases.
 
 #### CSV detection output
 
@@ -237,7 +239,8 @@ JSON output does not have this limitation: each rule’s result object includes 
 | `--timefield` | Specify timestamp field name (default: 'SystemTime', auto-detects if not found) |
 | `--unified-db` | Force unified database mode (all files in one DB, enables cross-file correlation) |
 | `--no-auto-mode` | Disable automatic processing mode selection |
-| `--no-auto-detect` | Disable automatic log type and timestamp detection |
+| `--no-auto-detect` | Disable automatic log type and timestamp detection (use explicit format flags instead) |
+| `--strict` | Strict EVTX parsing: abort on a corrupted or malformed chunk instead of skipping it (default: lenient) |
 | `--add-index` | Create an index on the given column(s); repeat or list multiple (e.g. `--add-index Channel EventID`) |
 | `--remove-index` | Drop the given index name(s) after creation; repeat or list multiple (e.g. `--remove-index idx_channel`) |
 | `--auto-index [N]` | Inspect the loaded ruleset and auto-create indices on the top-N most-referenced columns (defaults to N=5 when used without a value, 0 = off). Combines with `--add-index`. |
@@ -255,13 +258,21 @@ JSON output does not have this limitation: each rule’s result object includes 
 | `-Y`, `--yaml-config` | YAML configuration file (CLI arguments override file settings) |
 | `--generate-config` | Generate a default YAML configuration file and exit |
 
+`--generate-config` writes a fully commented template covering every supported key, which is the reference for this file's schema. Note that it is a *run* configuration (which logs to read, which rules to apply, where to write) and is unrelated to `-c`/`--config`, which points at the field-mappings and transforms configuration.
+
+A few options have no equivalent key and must be passed on the command line: `-c`/`--config`, `-q`/`--quiet`, `--profile-rules`, `--archive-password`, `--no-auto-detect` and `--test-rules`.
+
 #### Parallel Processing
 
 | Option | Description |
 |--------|-------------|
-| `--no-parallel` | Disable automatic parallel processing |
-| `--parallel-workers` | Maximum number of parallel workers (default: auto-detect) |
+| `-P`, `--no-parallel` | Disable automatic parallel processing |
+| `-w`, `--parallel-workers` | Maximum number of parallel workers (default: auto-detect) |
 | `--parallel-memory-limit` | Memory usage threshold percentage before throttling (default: 85) |
+
+Two further settings exist only in the YAML configuration file (`parallel.min_workers` and `parallel.adaptive`); they have no command-line equivalent.
+
+`--parallel-workers` is also an explicit override: if you pass it together with `--no-auto-mode`, parallel processing is used even when the built-in heuristic would not have recommended it.
 
 Parallel processing includes several automatic optimizations:
 
@@ -278,11 +289,14 @@ Parallel processing includes several automatic optimizations:
 |--------|-------------|
 | `--template` | Jinja2 template for output |
 | `--templateOutput` | Output file for template |
-| `--template-append` | Append to template output files instead of overwriting them |
+| `--template-append` | Append to template output files instead of overwriting them (see the caveat below) |
 | `--timesketch` | Shortcut: Timesketch template → `timesketch-<RAND>.json` |
 | `--navigator-output` | Shortcut: ATT&CK Navigator layer → `navigator-<RAND>.json` (or optional custom filename) |
 | `--package` | Create ZircoGui package |
 | `--package-dir` | Directory for ZircoGui package |
+
+> [!WARNING]
+> `--template-append` is only safe for templates whose output is a stream of independent records (for example NDJSON exports for Splunk or Timesketch). Templates that emit a **single JSON document** — the ATT&CK Navigator layer produced by `--navigator-output` in particular — become invalid when a second document is concatenated onto the first.
 
 ## Output Verbosity
 
@@ -432,7 +446,13 @@ python3 zircolite.py --events logs/ --ruleset rules/rules_windows_merged.json
 # [+] Auto-detected log type: sysmon_windows (json), confidence=high, timestamp=UtcTime
 ```
 
-When a format is auto-detected, Zircolite will also re-discover files in the input directory using the appropriate extension if needed.
+Auto-detection also works on **directories**. Zircolite first looks for `.evtx` files; if it finds none and you have not pinned an extension with `--fileext` or a pattern with `--file-pattern`, it samples every file in the directory to detect the format, then re-scans using the matching extension. So a folder of `.json`, `.log` or `.csv` logs is processed without any extra flag:
+
+```shell
+python3 zircolite.py --events ./json_logs/ --ruleset rules/rules_windows_merged.json
+```
+
+An explicit `--fileext` always wins over the detected extension.
 
 ### Disabling Auto-Detection
 
@@ -466,6 +486,16 @@ If your EVTX files have the extension ".evtx":
 python3 zircolite.py --evtx <EVTX_FOLDER/EVTX_FILE> \
     --ruleset <Converted Sigma ruleset (JSON)/Directory with Sigma rules (YAML)/>
 python3 zircolite.py --evtx ../Logs --ruleset rules/rules_windows_merged.json
+```
+
+#### Damaged EVTX files
+
+By default EVTX parsing is **lenient**: when a chunk is corrupted or malformed, Zircolite keeps every event recovered up to that point, logs a warning, and moves on to the next file. This is usually what you want on evidence recovered from a damaged disk or an interrupted export.
+
+Use `--strict` to abort on the first parsing error instead, which is useful when you need to know that a file was processed in full:
+
+```shell
+python3 zircolite.py --evtx ../Logs --ruleset rules/rules_windows_merged.json --strict
 ```
 
 ### XML Logs
@@ -523,6 +553,8 @@ python3 zircolite.py --events auditd.log --ruleset rules/rules_linux.json --audi
 
 > [!NOTE]  
 > `--events` and `--evtx` are strictly equivalent, but `--events` makes more sense with non-EVTX logs.
+>
+> Auditd `timestamp` fields are rendered in UTC (auditd epoch timestamps are UTC), regardless of the timezone of the machine running the analysis.
 
 ### Sysmon for Linux Logs
 
@@ -583,6 +615,8 @@ EventID,EventRecordID,Computer,SubjectUserSid,...
 4624,32421,xxxx.DOMAIN.local,S-1-5-18,xxxx,DOMAIN,...
 ...
 ```
+
+The delimiter is detected from the first lines of the file: comma, semicolon, tab (`.tsv` exports) and pipe are all supported, and quoted values containing the delimiter are preserved. Use `-LE`/`--logs-encoding` if the file is not UTF-8 (for example `-LE ISO-8859-1`).
 
 To handle these logs, use the `--csv-input` option (**do not use `--csv`**!):
 
@@ -682,6 +716,8 @@ You can validate a ruleset against a set of test cases without processing real l
 
 Use `--test-rules` with a JSON file that defines, per rule, which events must trigger the rule (true positives) and which must not (true negatives). Zircolite runs the rules against these events and exits after printing a results table. No `--evtx` or `--events` input is required.
 
+The exit code is `0` when every test case passes and `1` when any true-positive or true-negative check fails, so the command can gate CI/CD pipelines. Test events are stored in typed columns (integers become INTEGER), so numeric comparisons in rules behave exactly as they do during real processing.
+
 ```bash
 python3 zircolite.py --ruleset rules/rules_windows_merged.json --test-rules rule_tests.json
 ```
@@ -728,7 +764,9 @@ Example:
 - **True-positive test**: Passes if the rule matches at least one of the given events; fails otherwise (false negative).
 - **True-negative test**: Passes if the rule matches none of the given events; fails if it matches any (false positive).
 
-Rules that have no corresponding entry in the test file are reported as “no test case” (skipped). The summary shows counts for passed, failed, and skipped rules. Exit code is `0`; check the table for any failed tests.
+Rules that have no corresponding entry in the test file are reported as “no test case” and are **skipped** — they do not fail the run. The summary shows counts for passed, failed, and skipped rules.
+
+The reverse case is treated as a failure: a test case whose `title`/`id` matches **no rule** in the loaded ruleset never runs, so counting it as a pass would hide a typo in the test file. Zircolite reports the offending entries and exits `1`.
 
 ## Pipelines 
 

@@ -21,6 +21,7 @@ import argparse
 import csv
 import logging
 import queue
+import sqlite3
 import threading
 import time
 from contextlib import contextmanager
@@ -49,6 +50,7 @@ from .utils import (
     MemoryTracker,
     create_silent_logger,
     load_field_mappings,
+    quit_on_error,
     random_suffix,
     sanitize_row_for_csv,
     sanitize_value_for_csv,
@@ -159,6 +161,7 @@ def create_worker_core(ctx: ProcessingContext, worker_id: int) -> ZircoliteCore:
         archive_password=ctx.archive_password,
         add_index=ctx.add_index,
         remove_index=ctx.remove_index,
+        auto_index_top_n=ctx.auto_index_top_n,
         strict_evtx=ctx.strict_evtx,
     )
     return ZircoliteCore(ctx.config, proc_config, logger=silent_logger)
@@ -174,7 +177,6 @@ def create_extractor(
             sysmon4linux=(input_type == "sysmon_linux"),
             auditd_logs=(input_type == "auditd"),
             evtxtract=(input_type == "evtxtract"),
-            csv_input=(input_type == "csv"),
             encoding=args.logs_encoding,
         )
         return EvtxExtractor(extractor_config, logger=logger)
@@ -382,6 +384,12 @@ def process_perfile_streaming(
                     file_db_name = str(
                         parent / f"{dbfile_path.stem}_{file_name}{dbfile_path.suffix}"
                     )
+                    if Path(file_db_name).exists():
+                        # Two input files share the same basename: add the
+                        # file index to keep the DB path unique
+                        file_db_name = str(
+                            parent / f"{dbfile_path.stem}_{file_idx + 1}_{file_name}{dbfile_path.suffix}"
+                        )
                     zircolite_core.save_db_to_disk(file_db_name)
                     ctx.logger.info(
                         f"[+] Saved database for {file_link} to: {make_file_link(file_db_name)}"
@@ -398,7 +406,6 @@ def process_perfile_streaming(
                         f"[+] Limited mode: detections with more than [yellow]{ctx.limit}[/] events will be discarded"
                     )
 
-                is_last_file = file_idx == len(file_list) - 1
                 write_mode = "w" if first_file else "a"
 
                 ctx.logger.info(
@@ -409,7 +416,7 @@ def process_perfile_streaming(
                     ctx.outfile,
                     write_mode=write_mode,
                     keep_results=True,
-                    last_ruleset=is_last_file,
+                    last_ruleset=False,
                     source_label=file_name,
                     disable_progress=is_quiet(),
                 )
@@ -437,11 +444,21 @@ def process_perfile_streaming(
                     profiling_core.merge_profiling_data(zircolite_core)
                 first_file = False
     finally:
+        # Close the JSON array even when the loop was interrupted (Ctrl+C):
+        # every execute_ruleset call above used last_ruleset=False
+        if file_stats and not ctx.csv_mode and not zircolite_core.no_output:
+            try:
+                with open(ctx.outfile, 'a', encoding='utf-8', newline='') as fh:
+                    fh.write(']')
+            except OSError as exc:
+                ctx.logger.debug(f"Could not finalize JSON output: {exc}")
         zircolite_core.close()
+        if profiling_core is not None:
+            profiling_core.close()
 
     if len(file_list) > 1 and file_stats and not is_quiet():
         console.print()
-        tree = build_file_tree(f"Processed {len(file_list)} files", file_stats)
+        tree = build_file_tree(f"Processed {len(file_stats)} files", file_stats)
         console.print(tree)
         console.print()
 
@@ -468,79 +485,103 @@ def process_db_input(
     db_files = [Path(f) for f in file_list] if file_list else [Path(args.evtx)]
     all_results: list = []
     first_file = True
+    processed_any = False
     file_stats: list = []
     zircolite_core = create_zircolite_core(ctx, disable_progress=is_quiet())
 
-    for file_idx, db_path in enumerate(db_files):
-        file_name = db_path.name
-        file_link = make_file_link(str(db_path), file_name)
-        if len(db_files) > 1:
-            ctx.logger.info(
-                f"[+] Loading database [cyan]{file_idx + 1}[/]/"
-                f"[cyan]{len(db_files)}[/]: {file_link}"
-            )
-        else:
-            ctx.logger.info(f"[+] Creating model from disk: {file_link}")
+    try:
+        for file_idx, db_path in enumerate(db_files):
+            file_name = db_path.name
+            file_link = make_file_link(str(db_path), file_name)
+            if len(db_files) > 1:
+                ctx.logger.info(
+                    f"[+] Loading database [cyan]{file_idx + 1}[/]/"
+                    f"[cyan]{len(db_files)}[/]: {file_link}"
+                )
+            else:
+                ctx.logger.info(f"[+] Creating model from disk: {file_link}")
 
-        zircolite_core.load_db_in_memory(str(db_path))
-        ctx.memory_tracker.sample()
+            try:
+                zircolite_core.load_db_in_memory(str(db_path))
+            except (RuntimeError, sqlite3.Error) as e:
+                if file_list is None:
+                    quit_on_error(f"[red]    [-] {e}[/]", ctx.logger)
+                ctx.logger.warning(
+                    f"[yellow]    [!] Could not load database '{file_name}': {e}. Skipping.[/]"
+                )
+                continue
+            ctx.memory_tracker.sample()
 
-        # Warn if loaded DB has no 'logs' table (e.g. WAL data missing)
-        try:
+            # Warn and skip if the DB cannot be used (no connection, no 'logs' table)
             if zircolite_core.db_connection is None:
-                raise RuntimeError("No database connection after load_db_in_memory")
-            _cur = zircolite_core.db_connection.cursor()
-            _cur.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='logs'")
-            if _cur.fetchone() is None:
+                ctx.logger.warning(
+                    f"[yellow]    [!] Could not open database '{file_name}'. Skipping.[/]"
+                )
+                continue
+            try:
+                _cur = zircolite_core.db_connection.cursor()
+                _cur.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='logs'")
+                _has_logs_table = _cur.fetchone() is not None
+                _cur.close()
+            except Exception as e:
+                ctx.logger.warning(
+                    f"[yellow]    [!] Cannot inspect database '{file_name}': {e}. Skipping.[/]"
+                )
+                continue
+            if not _has_logs_table:
                 ctx.logger.warning(
                     f"[yellow]    [!] Database '{file_name}' has no 'logs' table. "
                     f"The file may be damaged (e.g. missing WAL journal). Skipping.[/]"
                 )
-                first_file = False
                 continue
-        except Exception:
-            pass
 
-        zircolite_core.load_ruleset_from_var(
-            ruleset=ctx.rulesets, rule_filters=ctx.rule_filters
-        )
-        zircolite_core.full_results = []
-
-        if ctx.limit > 0 and first_file:
-            ctx.logger.info(
-                f"[+] Limited mode: detections with more than "
-                f"[yellow]{ctx.limit}[/] events will be discarded"
+            zircolite_core.load_ruleset_from_var(
+                ruleset=ctx.rulesets, rule_filters=ctx.rule_filters
             )
+            zircolite_core.full_results = []
 
-        is_last = file_idx == len(db_files) - 1
-        write_mode = "w" if first_file else "a"
+            if ctx.limit > 0 and first_file:
+                ctx.logger.info(
+                    f"[+] Limited mode: detections with more than "
+                    f"[yellow]{ctx.limit}[/] events will be discarded"
+                )
 
-        ctx.logger.info(
-            f"[+] Executing ruleset - [yellow]{len(zircolite_core.ruleset)}[/] rules"
-        )
-        zircolite_core.execute_ruleset(
-            ctx.outfile,
-            write_mode=write_mode,
-            keep_results=True,
-            last_ruleset=is_last,
-            source_label=file_name if len(db_files) > 1 else None,
-            disable_progress=is_quiet(),
-        )
-        ctx.memory_tracker.sample()
+            write_mode = "w" if first_file else "a"
 
-        file_detection_count = len(zircolite_core.full_results) if zircolite_core.full_results else 0
-        file_stats.append({
-            "name": file_name,
-            "path": str(db_path),
-            "events": 0,
-            "detections": file_detection_count,
-            "filtered": 0,
-        })
+            ctx.logger.info(
+                f"[+] Executing ruleset - [yellow]{len(zircolite_core.ruleset)}[/] rules"
+            )
+            zircolite_core.execute_ruleset(
+                ctx.outfile,
+                write_mode=write_mode,
+                keep_results=True,
+                last_ruleset=False,
+                source_label=file_name if len(db_files) > 1 else None,
+                disable_progress=is_quiet(),
+            )
+            ctx.memory_tracker.sample()
 
-        if zircolite_core.full_results:
-            all_results.extend(zircolite_core.full_results)
+            file_detection_count = len(zircolite_core.full_results) if zircolite_core.full_results else 0
+            file_stats.append({
+                "name": file_name,
+                "path": str(db_path),
+                "events": 0,
+                "detections": file_detection_count,
+                "filtered": 0,
+            })
 
-        first_file = False
+            if zircolite_core.full_results:
+                all_results.extend(zircolite_core.full_results)
+
+            first_file = False
+            processed_any = True
+    finally:
+        # The closing ']' is written here (not via last_ruleset) so skipped DB
+        # files or a failure on a later file cannot leave the JSON output
+        # unterminated.
+        if processed_any and not ctx.csv_mode and not zircolite_core.no_output:
+            with open(ctx.outfile, 'a', encoding='utf-8', newline='') as fh:
+                fh.write(']')
 
     if len(db_files) > 1 and file_stats and not is_quiet():
         console.print()
@@ -756,10 +797,12 @@ class _IncrementalResultWriter:
 
     def __exit__(self, *args):
         if self._fh is not None:
-            if not self._ctx.csv_mode:
-                self._fh.write(b"]")
-            self._fh.close()
-            self._fh = None
+            try:
+                if not self._ctx.csv_mode:
+                    self._fh.write(b"]")
+            finally:
+                self._fh.close()
+                self._fh = None
 
 
 def _write_parallel_results(
@@ -768,12 +811,8 @@ def _write_parallel_results(
     """Write combined parallel results to the output file.
 
     Uses binary I/O for JSON (avoids an unnecessary decode/encode
-    round-trip) and text I/O for CSV.
-
-    .. deprecated::
-        Kept for backward compatibility.  New code should use
-        :class:`_IncrementalResultWriter` which writes results as they
-        arrive instead of buffering in memory.
+    round-trip) and text I/O for CSV. This is the CSV-mode output path for
+    parallel processing; JSON mode uses :class:`_IncrementalResultWriter`.
     """
     if ctx.no_output:
         return
@@ -832,10 +871,11 @@ def process_parallel_streaming(
 
     parallel_config = ParallelConfig(
         max_workers=getattr(args, "parallel_workers", None) or recommended_workers,
+        min_workers=getattr(args, "parallel_min_workers", 1),
         memory_limit_percent=getattr(args, "parallel_memory_limit", 85.0),
         adaptive_workers=True,
         sort_by_size=True,
-        adaptive_memory=True,
+        adaptive_memory=getattr(args, "parallel_adaptive", True),
     )
 
     if len(file_list) < 2:
@@ -977,7 +1017,7 @@ def process_parallel_streaming(
 
     # File tree
     if len(file_list) > 1 and file_stats and not is_quiet():
-        tree = build_file_tree(f"Processed {len(file_list)} files", file_stats)
+        tree = build_file_tree(f"Processed {len(file_stats)} files", file_stats)
         console.print(tree)
         console.print()
 

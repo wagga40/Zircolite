@@ -88,7 +88,7 @@ class TimeFilterConfig:
 @dataclass
 class ParallelProcessingConfig:
     """Configuration for parallel processing."""
-    enabled: bool = False
+    enabled: bool = True  # parallel auto-mode is on unless explicitly disabled
     max_workers: Optional[int] = None  # None = auto-detect
     min_workers: int = 1
     memory_limit_percent: float = 85.0
@@ -182,7 +182,8 @@ class ConfigLoader:
         # Parse rules section
         if 'rules' in config_dict:
             rules = config_dict['rules']
-            rulesets = rules.get('rulesets', ["rules/rules_windows_generic.json"])
+            # dict.get returns None when the key is present-but-null (rulesets:)
+            rulesets = rules.get('rulesets') or ["rules/rules_windows_generic.json"]
             if isinstance(rulesets, str):
                 rulesets = [rulesets]
             config.rules = RulesConfig(
@@ -246,7 +247,7 @@ class ConfigLoader:
         if 'parallel' in config_dict:
             par = config_dict['parallel']
             config.parallel = ParallelProcessingConfig(
-                enabled=par.get('enabled', False),
+                enabled=par.get('enabled', True),
                 max_workers=par.get('max_workers'),
                 min_workers=par.get('min_workers', 1),
                 memory_limit_percent=par.get('memory_limit_percent', 85.0),
@@ -281,13 +282,10 @@ class ConfigLoader:
         issues = []
         
         # Validate input
-        if config.input.path:
-            if isinstance(config.input.path, str) and not Path(config.input.path).exists():
-                issues.append(f"Input path does not exist: {config.input.path}")
-            elif isinstance(config.input.path, list):
-                for p in config.input.path:
-                    if not Path(p).exists():
-                        issues.append(f"Input path does not exist: {p}")
+        if isinstance(config.input.path, list):
+            issues.append("input.path must be a single path string, not a list")
+        elif config.input.path and not Path(config.input.path).exists():
+            issues.append(f"Input path does not exist: {config.input.path}")
         
         valid_formats = ['evtx', 'json', 'json_array', 'xml', 'csv', 'sysmon_linux', 'auditd', 'evtxtract']
         if config.input.format not in valid_formats:
@@ -375,15 +373,20 @@ class ConfigLoader:
         if hasattr(args, 'fileext') and args.fileext:
             config.input.file_extension = args.fileext
         if hasattr(args, 'select') and args.select:
-            config.input.select = [s[0] for s in args.select]
+            config.input.select = [term for group in args.select for term in group]
         if hasattr(args, 'avoid') and args.avoid:
-            config.input.avoid = [a[0] for a in args.avoid]
+            config.input.avoid = [term for group in args.avoid for term in group]
         if hasattr(args, 'logs_encoding') and args.logs_encoding:
             config.input.encoding = args.logs_encoding
         
         # Rules overrides
         if hasattr(args, 'ruleset') and args.ruleset:
-            config.rules.rulesets = args.ruleset
+            # argparse stores -r as a list of lists (action='append'); the CLI
+            # only flattens it later, so normalize here
+            config.rules.rulesets = [
+                r for group in args.ruleset
+                for r in (group if isinstance(group, list) else [group])
+            ]
         if hasattr(args, 'pipeline') and args.pipeline:
             config.rules.pipelines = [p for pl in args.pipeline for p in pl]
         if hasattr(args, 'rulefilter') and args.rulefilter:
@@ -459,10 +462,12 @@ class ConfigLoader:
             config.time_filter.before = args.before
         
         # Parallel processing overrides
-        if hasattr(args, 'parallel') and args.parallel:
-            config.parallel.enabled = True
+        if getattr(args, 'no_parallel', False):
+            config.parallel.enabled = False
         if hasattr(args, 'parallel_workers') and args.parallel_workers:
             config.parallel.max_workers = args.parallel_workers
+        if getattr(args, 'parallel_memory_limit', 85.0) != 85.0:
+            config.parallel.memory_limit_percent = args.parallel_memory_limit
         
         return config
 

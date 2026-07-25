@@ -12,6 +12,7 @@ Covers:
 
 import json
 import os
+import sqlite3
 import time
 import threading
 import pytest
@@ -677,3 +678,269 @@ class TestKeepflatPerfile:
         assert len(lines) == 2, (
             f"Expected 2 events in keepflat file, got {len(lines)}"
         )
+
+
+class TestProcessDbInputSkippedFiles:
+    """Regression tests: skipped DB files must not corrupt JSON output."""
+
+    def _ctx(self, tmp_path, memory_tracker):
+        logger = MagicMock()
+        config_file = tmp_path / "fieldMappings.json"
+        config_file.write_text(json.dumps({
+            "exclusions": [], "useless": [None, ""], "mappings": {},
+            "alias": {}, "split": {}, "transforms_enabled": False, "transforms": {},
+        }))
+        return ProcessingContext(
+            config=str(config_file),
+            logger=logger,
+            no_output=False,
+            events_after=time.strptime("2024-01-01T00:00:00", "%Y-%m-%dT%H:%M:%S"),
+            events_before=time.strptime("2025-12-31T23:59:59", "%Y-%m-%dT%H:%M:%S"),
+            limit=-1,
+            csv_mode=False,
+            time_field="SystemTime",
+            hashes=False,
+            db_location=":memory:",
+            delimiter=";",
+            rulesets=[{
+                "title": "PS Rule", "id": "ps-1", "description": "d",
+                "level": "high", "tags": [],
+                "rule": ["SELECT * FROM logs WHERE CommandLine LIKE '%powershell%' ESCAPE '\\'"],
+            }],
+            rule_filters=None,
+            outfile=str(tmp_path / "detected_events.json"),
+            ready_for_templating=False,
+            package=False,
+            dbfile=None,
+            keepflat=False,
+            memory_tracker=memory_tracker,
+        )
+
+    def _make_valid_db(self, path: Path):
+        conn = sqlite3.connect(str(path))
+        conn.execute("CREATE TABLE logs (row_id INTEGER PRIMARY KEY, CommandLine TEXT)")
+        conn.execute("INSERT INTO logs (CommandLine) VALUES ('powershell.exe test')")
+        conn.commit()
+        conn.close()
+
+    def _make_empty_db(self, path: Path):
+        conn = sqlite3.connect(str(path))
+        conn.execute("CREATE TABLE other (x TEXT)")
+        conn.commit()
+        conn.close()
+
+    def test_skipped_first_db_still_produces_valid_json(self, tmp_path, memory_tracker):
+        from zircolite.processing import process_db_input
+        bad = tmp_path / "bad.db"
+        good = tmp_path / "good.db"
+        self._make_empty_db(bad)
+        self._make_valid_db(good)
+        ctx = self._ctx(tmp_path, memory_tracker)
+        args = Namespace(logs_encoding=None)
+
+        process_db_input(ctx, args, file_list=[bad, good])
+
+        with open(ctx.outfile) as f:
+            results = json.load(f)
+        assert len(results) == 1
+
+    def test_skipped_last_db_still_closes_json_array(self, tmp_path, memory_tracker):
+        from zircolite.processing import process_db_input
+        good = tmp_path / "good.db"
+        bad = tmp_path / "bad.db"
+        self._make_valid_db(good)
+        self._make_empty_db(bad)
+        ctx = self._ctx(tmp_path, memory_tracker)
+        args = Namespace(logs_encoding=None)
+
+        process_db_input(ctx, args, file_list=[good, bad])
+
+        with open(ctx.outfile) as f:
+            content = f.read()
+        assert content.rstrip().endswith("]")
+        assert len(json.loads(content)) == 1
+
+    def test_all_dbs_skipped_no_output_file_mess(self, tmp_path, memory_tracker):
+        from zircolite.processing import process_db_input
+        bad1 = tmp_path / "bad1.db"
+        bad2 = tmp_path / "bad2.db"
+        self._make_empty_db(bad1)
+        self._make_empty_db(bad2)
+        ctx = self._ctx(tmp_path, memory_tracker)
+        args = Namespace(logs_encoding=None)
+
+        process_db_input(ctx, args, file_list=[bad1, bad2])
+        # No file was ever processed: nothing should have been written
+        assert not Path(ctx.outfile).exists()
+
+    def test_missing_db_file_is_skipped_in_multi_file_mode(self, tmp_path, memory_tracker):
+        from zircolite.processing import process_db_input
+        missing = tmp_path / "missing.db"
+        good = tmp_path / "good.db"
+        self._make_valid_db(good)
+        ctx = self._ctx(tmp_path, memory_tracker)
+        args = Namespace(logs_encoding=None)
+
+        process_db_input(ctx, args, file_list=[missing, good])
+
+        with open(ctx.outfile) as f:
+            results = json.load(f)
+        assert len(results) == 1
+
+    def test_single_missing_db_exits_with_friendly_error(self, tmp_path, memory_tracker):
+        from zircolite.processing import process_db_input
+        ctx = self._ctx(tmp_path, memory_tracker)
+        args = Namespace(logs_encoding=None, evtx=str(tmp_path / "missing.db"))
+
+        with pytest.raises(SystemExit) as exc:
+            process_db_input(ctx, args)
+        assert exc.value.code == 1
+
+    def test_midloop_failure_still_closes_json_array(self, tmp_path, memory_tracker, monkeypatch):
+        from zircolite.core import ZircoliteCore
+        from zircolite.processing import process_db_input
+        good1 = tmp_path / "good1.db"
+        good2 = tmp_path / "good2.db"
+        self._make_valid_db(good1)
+        self._make_valid_db(good2)
+        ctx = self._ctx(tmp_path, memory_tracker)
+        args = Namespace(logs_encoding=None)
+
+        original = ZircoliteCore.execute_ruleset
+        calls = {"n": 0}
+
+        def failing(core_self, *a, **kw):
+            calls["n"] += 1
+            if calls["n"] == 2:
+                raise sqlite3.OperationalError("disk I/O error")
+            return original(core_self, *a, **kw)
+
+        monkeypatch.setattr(ZircoliteCore, "execute_ruleset", failing)
+
+        with pytest.raises(sqlite3.OperationalError):
+            process_db_input(ctx, args, file_list=[good1, good2])
+
+        with open(ctx.outfile) as f:
+            results = json.load(f)
+        assert len(results) == 1
+
+
+class TestParallelKeepflatEndToEnd:
+    """Parallel keepflat output must be valid JSONL (no interleaved writes)."""
+
+    def test_parallel_keepflat_all_lines_parse(self, tmp_path, memory_tracker, monkeypatch):
+        import orjson
+        from zircolite.processing import process_parallel_streaming
+
+        monkeypatch.chdir(tmp_path)
+        config_file = tmp_path / "fieldMappings.json"
+        config_file.write_text(json.dumps({
+            "exclusions": [], "useless": [None, ""], "mappings": {},
+            "alias": {}, "split": {}, "transforms_enabled": False, "transforms": {},
+        }))
+        files = []
+        for i in range(4):
+            f = tmp_path / f"events_{i}.json"
+            f.write_text("\n".join(
+                json.dumps({"EventID": i * 10 + j, "Message": f"m{i}-{j}"})
+                for j in range(50)
+            ) + "\n")
+            files.append(f)
+
+        logger = MagicMock()
+        ctx = ProcessingContext(
+            config=str(config_file), logger=logger, no_output=True,
+            events_after=time.strptime("2020-01-01T00:00:00", "%Y-%m-%dT%H:%M:%S"),
+            events_before=time.strptime("2030-01-01T00:00:00", "%Y-%m-%dT%H:%M:%S"),
+            limit=-1, csv_mode=False, time_field="SystemTime", hashes=False,
+            db_location=":memory:", delimiter=";", rulesets=[], rule_filters=None,
+            outfile=str(tmp_path / "out.json"), ready_for_templating=False,
+            package=False, dbfile=None, keepflat=True, memory_tracker=memory_tracker,
+        )
+        args = Namespace(logs_encoding=None, parallel_workers=4, parallel_memory_limit=95.0)
+
+        process_parallel_streaming(ctx, files, "json", None, args)
+
+        keepflat_files = list(tmp_path.glob("flattened_events_*.json"))
+        assert len(keepflat_files) == 1
+        lines = keepflat_files[0].read_bytes().splitlines()
+        assert len(lines) == 200
+        for line in lines:
+            orjson.loads(line)  # every line must be a complete JSON object
+
+
+class TestWorkerCoreReuse:
+    """Thread-local core reuse across files (DELETE FROM logs branch)."""
+
+    def test_worker_reuses_core_and_clears_table(self, tmp_path, dummy_ctx, dummy_args):
+        import threading as _threading
+        from zircolite.processing import process_single_file_worker
+
+        f1 = tmp_path / "a.json"
+        f1.write_text(json.dumps({"EventID": 1}) + "\n")
+        f2 = tmp_path / "b.json"
+        f2.write_text(json.dumps({"EventID": 2}) + "\n" + json.dumps({"EventID": 3}) + "\n")
+
+        thread_local = _threading.local()
+        kwargs = dict(
+            counter_lock=_threading.Lock(),
+            worker_counter=[0],
+            total_filtered_count=[0],
+            thread_local=thread_local,
+        )
+        count1, _ = process_single_file_worker(f1, dummy_ctx, "json", None, dummy_args, **kwargs)
+        assert count1 == 1
+        # Second file on the same worker: table cleared, only its events remain
+        count2, _ = process_single_file_worker(f2, dummy_ctx, "json", None, dummy_args, **kwargs)
+        assert count2 == 2
+        cursor = thread_local.core.db_connection.cursor()
+        cursor.execute("SELECT COUNT(*) FROM logs")
+        assert cursor.fetchone()[0] == 2
+
+
+class TestPerfileShutdownFinalization:
+    """Interrupted per-file runs must still produce valid (closed) JSON."""
+
+    def test_shutdown_break_closes_json_array(self, tmp_path, memory_tracker, monkeypatch):
+        from zircolite.processing import process_perfile_streaming
+
+        config_file = tmp_path / "fieldMappings.json"
+        config_file.write_text(json.dumps({
+            "exclusions": [], "useless": [None, ""], "mappings": {},
+            "alias": {}, "split": {}, "transforms_enabled": False, "transforms": {},
+        }))
+        outfile = tmp_path / "detected.json"
+        files = []
+        for i in range(3):
+            f = tmp_path / f"events_{i}.json"
+            f.write_text(json.dumps({"EventID": i, "CommandLine": "powershell.exe x"}) + "\n")
+            files.append(f)
+
+        logger = MagicMock()
+        ctx = ProcessingContext(
+            config=str(config_file), logger=logger, no_output=False,
+            events_after=time.strptime("2020-01-01T00:00:00", "%Y-%m-%dT%H:%M:%S"),
+            events_before=time.strptime("2030-01-01T00:00:00", "%Y-%m-%dT%H:%M:%S"),
+            limit=-1, csv_mode=False, time_field="SystemTime", hashes=False,
+            db_location=":memory:", delimiter=";",
+            rulesets=[{
+                "title": "PS", "id": "1", "description": "", "level": "high", "tags": [],
+                "rule": ["SELECT * FROM logs WHERE CommandLine LIKE '%powershell%' ESCAPE '\\'"],
+            }],
+            rule_filters=None,
+            outfile=str(outfile), ready_for_templating=False,
+            package=False, dbfile=None, keepflat=False, memory_tracker=memory_tracker,
+        )
+        args = Namespace(logs_encoding=None)
+
+        # First loop iteration runs, the second check triggers the shutdown break
+        checks = iter([False, True, True, True])
+        monkeypatch.setattr(
+            "zircolite.processing.is_shutdown_requested", lambda: next(checks, True)
+        )
+
+        process_perfile_streaming(ctx, files, "json", None, args)
+
+        with open(outfile) as f:
+            results = json.load(f)  # must be a valid, closed JSON array
+        assert len(results) == 1

@@ -120,7 +120,12 @@ class EventFilter:
                 # Add all eventids from this rule
                 for eventid in eventids:
                     if eventid is not None:
-                        eventids_set.add(int(eventid))
+                        try:
+                            eventids_set.add(int(eventid))
+                        except (ValueError, TypeError):
+                            self.logger.debug(
+                                f"EventFilter: skipping non-numeric eventid '{eventid}'"
+                            )
             else:
                 rules_without_filter += 1
         
@@ -231,6 +236,7 @@ class RulesUpdater:
 
     def download(self) -> None:
         resp = requests.get(self.url, stream=True, timeout=30)
+        resp.raise_for_status()
         total = int(resp.headers.get('content-length', 0))
         
         progress = Progress(
@@ -265,16 +271,22 @@ class RulesUpdater:
         for ruleset in Path(self.tmpDir).rglob("*.json"):
             with open(ruleset, 'rb') as f:
                 hash_new = hashlib.md5(f.read()).hexdigest()
-            
-            dest_file = rules_dir / ruleset.name
+
+            # Preserve the archive's relative directory structure so same-named
+            # rulesets in different subdirectories do not overwrite each other
+            rel_path = ruleset.relative_to(Path(self.tmpDir))
+            # Drop the archive's top-level folder (e.g. Zircolite-Rules-v2-main/)
+            parts = rel_path.parts[1:] if len(rel_path.parts) > 1 else rel_path.parts
+            dest_file = rules_dir.joinpath(*parts)
             hash_old = ""
-            
+
             if dest_file.is_file():
                 with open(dest_file, 'rb') as f:
                     hash_old = hashlib.md5(f.read()).hexdigest()
-            
+
             if hash_new != hash_old:
                 count += 1
+                dest_file.parent.mkdir(parents=True, exist_ok=True)
                 shutil.move(ruleset, dest_file)
                 self.updated_rulesets.append(str(dest_file))
                 self.logger.info(f"    [>] Updated : {make_file_link(str(dest_file))}")
@@ -353,11 +365,29 @@ class RulesetHandler:
                         self.logger.error(f"[red]    [-] {pipelineName} not found. You can list installed pipelines with '--pipeline-list'[/]")
 
         # Parse & (if necessary) convert ruleset, final list is stored in self.rulesets
+        # (--pipeline-list only prints the installed pipelines: skip loading entirely)
+        if list_pipelines_only:
+            self.rulesets = []
+            return
+
         raw_rulesets = self.ruleset_parsing()
         # Flatten list of rulesets into a single list of rules
         self.rulesets = [
             item for sub_ruleset in raw_rulesets if sub_ruleset for item in sub_ruleset
         ]
+
+        # Sort by level FIRST so that, among duplicates sharing the same SQL,
+        # the surviving rule is the highest-severity one (stable sort keeps
+        # file order within a level).
+        level_order = {
+            "critical": 1,
+            "high": 2,
+            "medium": 3,
+            "low": 4,
+            "informational": 5
+        }
+        self.rulesets = sorted(self.rulesets, key=lambda d: level_order.get(d.get('level', 'informational'), float('inf')))
+
         # Remove duplicates based on SQL query
         unique_rules = []
         seen_keys = set()
@@ -369,14 +399,7 @@ class RulesetHandler:
                 seen_keys.add(rule_key)
                 unique_rules.append(rule)
 
-        level_order = {
-            "critical": 1,
-            "high": 2,
-            "medium": 3,
-            "low": 4,
-            "informational": 5
-        }
-        self.rulesets = sorted(unique_rules, key=lambda d: level_order.get(d.get('level', 'informational'), float('inf'))) # Sorting by level
+        self.rulesets = unique_rules
             
         if all(not sub_ruleset for sub_ruleset in self.rulesets):
             self.logger.error("[red]    [-] No rules to execute ![/]")
@@ -607,6 +630,11 @@ class RulesetHandler:
                         ruleset_list.append(self.sigma_rules_to_ruleset([ruleset_path], self.pipelines))
                     except Exception as e:
                         self.logger.error(f"[red]    [-] Cannot convert {str(ruleset_path)} {e}[/]")
+                else:
+                    self.logger.warning(
+                        f"[yellow]    [!] Skipping unrecognized ruleset file "
+                        f"(not a valid JSON ruleset or Sigma YAML file): {str(ruleset_path)}[/]"
+                    )
             elif ruleset_path.is_dir():  # Directory
                 try:
                     self.logger.info(f"    [>] Converting Native Sigma to Zircolite ruleset : {make_file_link(str(ruleset_path))}")

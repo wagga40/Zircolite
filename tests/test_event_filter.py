@@ -606,7 +606,9 @@ class TestTimestampAutoDetection:
         
         processed_count = sum(1 for _ in processor.stream_json_events(str(test_file), json_array=False))
         assert processed_count == 1
-        assert processor._detected_time_field == "SystemTime"
+        # With no explicit field, the config's timestamp_detection.default_field
+        # seeds the processor's time field
+        assert processor.time_field == "SystemTime"
 
     def test_auto_detect_timestamp_field(self, tmp_path):
         """Test auto-detection of @timestamp field (ECS format)."""
@@ -725,3 +727,95 @@ class TestEventFilterFieldMappingsConfig:
         assert "auto_detect" in config["timestamp_detection"]
         assert "detection_fields" in config["timestamp_detection"]
         assert len(config["timestamp_detection"]["detection_fields"]) > 0
+
+
+class TestEventFilterConfigKeys:
+    """Regression tests: event_filter.enabled / filter_all_sources must be honored."""
+
+    def _filter(self):
+        rulesets = [{
+            "title": "Sysmon Rule",
+            "channel": ["Microsoft-Windows-Sysmon/Operational"],
+            "eventid": [1],
+        }]
+        return EventFilter(rulesets)
+
+    def _write_config(self, tmp_path, event_filter_cfg):
+        import json as std_json
+        cfg = {
+            "exclusions": [], "useless": [None, ""], "mappings": {},
+            "alias": {}, "split": {}, "transforms_enabled": False, "transforms": {},
+            "event_filter": event_filter_cfg,
+        }
+        cfg_file = tmp_path / "config.json"
+        cfg_file.write_text(std_json.dumps(cfg))
+        return str(cfg_file)
+
+    def test_event_filter_enabled_false_disables_filtering(self, tmp_path):
+        """event_filter.enabled: false must disable filtering entirely."""
+        from zircolite.streaming import StreamingEventProcessor
+        from zircolite.config import ProcessingConfig
+        from argparse import Namespace
+
+        config_file = self._write_config(tmp_path, {
+            "enabled": False,
+            "channel_fields": ["Channel"],
+            "eventid_fields": ["EventID"],
+        })
+        test_file = tmp_path / "events.json"
+        # This event would be filtered OUT if filtering were active
+        test_file.write_text('{"Channel": "Unknown/Channel", "EventID": 9999}\n')
+
+        args = Namespace(json_input=True, json_array_input=False)
+        processor = StreamingEventProcessor(
+            config_file=config_file,
+            args_config=args,
+            processing_config=ProcessingConfig(),
+            event_filter=self._filter(),
+        )
+        assert processor._filtering_enabled is False
+        count = sum(1 for _ in processor.stream_json_events(str(test_file), json_array=False))
+        assert count == 1
+
+    def test_filter_all_sources_false_skips_non_windows_input(self, tmp_path):
+        """With filter_all_sources false, auditd input bypasses filtering."""
+        from zircolite.streaming import StreamingEventProcessor
+        from zircolite.config import ProcessingConfig
+        from argparse import Namespace
+
+        config_file = self._write_config(tmp_path, {
+            "enabled": True,
+            "filter_all_sources": False,
+            "channel_fields": ["Channel"],
+            "eventid_fields": ["EventID"],
+        })
+        args = Namespace(json_input=False, json_array_input=False, auditd_input=True)
+        processor = StreamingEventProcessor(
+            config_file=config_file,
+            args_config=args,
+            processing_config=ProcessingConfig(),
+            event_filter=self._filter(),
+        )
+        assert processor._filtering_enabled is True
+        assert processor._should_process_event({"Channel": "Unknown", "EventID": 9999}) is True
+
+    def test_filter_all_sources_true_filters_non_windows_input(self, tmp_path):
+        """With filter_all_sources true, auditd input is filtered too."""
+        from zircolite.streaming import StreamingEventProcessor
+        from zircolite.config import ProcessingConfig
+        from argparse import Namespace
+
+        config_file = self._write_config(tmp_path, {
+            "enabled": True,
+            "filter_all_sources": True,
+            "channel_fields": ["Channel"],
+            "eventid_fields": ["EventID"],
+        })
+        args = Namespace(json_input=False, json_array_input=False, auditd_input=True)
+        processor = StreamingEventProcessor(
+            config_file=config_file,
+            args_config=args,
+            processing_config=ProcessingConfig(),
+            event_filter=self._filter(),
+        )
+        assert processor._should_process_event({"Channel": "Unknown", "EventID": 9999}) is False

@@ -104,6 +104,8 @@ class ZircoliteCore:
         "hashes",
         "delimiter",
         "first_json_output",
+        "_csv_header_written",
+        "_csv_fieldnames",
         "disable_progress",
         "_escape_cache",
         "_cursor",
@@ -113,6 +115,7 @@ class ZircoliteCore:
         "add_index",
         "remove_index",
         "auto_index_top_n",
+        "_auto_index_applied",
         "strict_evtx",
     )
     _cursor: Optional[sqlite3.Cursor]
@@ -148,6 +151,11 @@ class ZircoliteCore:
         self.hashes = proc.hashes
         self.delimiter = proc.delimiter
         self.first_json_output = True  # To manage commas in JSON output
+        # Track the CSV header and its fieldnames across execute_ruleset calls:
+        # append flows re-enter with a fresh local writer, and rows must stay
+        # aligned with the header written on the first call
+        self._csv_header_written = False
+        self._csv_fieldnames: Optional[List[str]] = None
         self.disable_progress = proc.disable_progress
         self.profile_rules = proc.profile_rules
         self._profiling_data: dict = {}
@@ -155,6 +163,7 @@ class ZircoliteCore:
         self.add_index = list(proc.add_index) if proc.add_index else []
         self.remove_index = list(proc.remove_index) if proc.remove_index else []
         self.auto_index_top_n = max(0, int(proc.auto_index_top_n or 0))
+        self._auto_index_applied = False
         self.strict_evtx = proc.strict_evtx
         # Cache for escaped identifiers to avoid repeated string operations
         self._escape_cache: dict = {}
@@ -342,14 +351,7 @@ class ZircoliteCore:
             except sqlite3.OperationalError:
                 pass
 
-        auto_index_cols = self._auto_index_candidates(columns)
-        if auto_index_cols:
-            self.logger.info(
-                f"[+] Auto-indexing top [yellow]{len(auto_index_cols)}[/] columns "
-                f"from ruleset: [cyan]{', '.join(auto_index_cols)}[/]"
-            )
-
-        for col in list(self.add_index) + auto_index_cols:
+        for col in self.add_index:
             if col not in columns:
                 self.logger.debug("Column %s not present; skipping index", col)
                 continue
@@ -369,6 +371,42 @@ class ZircoliteCore:
                 conn.commit()
             except sqlite3.OperationalError as e:
                 self.logger.debug("Could not drop index %s: %s", idx_name, e)
+
+    def apply_auto_index(self) -> None:
+        """Create indexes for the top-N rule-referenced columns.
+
+        Called from ``execute_ruleset`` (not ``create_index``) because the
+        candidates are derived from the loaded ruleset, which is unavailable
+        at the end of ingestion in every processing flow.
+        """
+        if self._auto_index_applied or not self.auto_index_top_n:
+            return
+        self._auto_index_applied = True
+        if self.db_connection is None:
+            return
+
+        columns = self._get_table_columns()
+        auto_index_cols = self._auto_index_candidates(columns)
+        if not auto_index_cols:
+            return
+
+        self.logger.info(
+            f"[+] Auto-indexing top [yellow]{len(auto_index_cols)}[/] columns "
+            f"from ruleset: [cyan]{', '.join(auto_index_cols)}[/]"
+        )
+        cursor = self._get_cursor()
+        for col in auto_index_cols:
+            if col not in columns:
+                self.logger.debug("Column %s not present; skipping index", col)
+                continue
+            idx_name = "idx_" + col.replace(".", "_")
+            q_idx = self.escape_identifier(idx_name)
+            q_col = self.escape_identifier(col)
+            try:
+                cursor.execute(f'CREATE INDEX "{q_idx}" ON "logs" ("{q_col}");')
+                self.db_connection.commit()
+            except sqlite3.OperationalError as e:
+                self.logger.debug("Could not create index on %s: %s", col, e)
 
     def execute_query(self, query: str) -> bool:
         """Perform a SQL query with the provided connection."""
@@ -415,6 +453,9 @@ class ZircoliteCore:
 
     def load_db_in_memory(self, db: str) -> None:
         """In db-only mode, restore an on-disk database to avoid EVTX extraction and flattening."""
+        # sqlite3.connect() would silently create a 0-byte file for a missing path
+        if not Path(db).is_file():
+            raise RuntimeError(f"Database file does not exist: {db}")
         try:
             db_file_connection = sqlite3.connect(db, check_same_thread=False)
             db_file_connection.execute("PRAGMA wal_checkpoint(TRUNCATE)")
@@ -426,6 +467,9 @@ class ZircoliteCore:
             db_file_connection.backup(self.db_connection)
         finally:
             db_file_connection.close()
+        # backup() replaced the whole in-memory DB, indexes included: the next
+        # execute_ruleset must be able to auto-index the newly loaded data
+        self._auto_index_applied = False
 
     def escape_identifier(self, identifier: str) -> str:
         """Escape SQL identifiers like table or column names with caching."""
@@ -472,7 +516,9 @@ class ZircoliteCore:
                 batches_by_columns[cols].append(row)
                 
             for cols, rows in batches_by_columns.items():
-                columns_escaped = ', '.join([self.escape_identifier(col) for col in cols])
+                # Identifiers must be quoted: event keys can be SQL keywords
+                # ('Group') or contain spaces
+                columns_escaped = ', '.join([f'"{self.escape_identifier(col)}"' for col in cols])
                 placeholders = ', '.join(['?'] * len(cols))
                 insert_stmt = f'INSERT INTO logs ({columns_escaped}) VALUES ({placeholders})'
                 
@@ -520,6 +566,10 @@ class ZircoliteCore:
         sigma_queries = rule.get("rule")
         if sigma_queries is None:
             self.logger.debug("RULE FORMAT ERROR: 'rule' key missing")
+            return {}
+        if not isinstance(sigma_queries, list):
+            # A string would be iterated character by character below
+            self.logger.debug("RULE FORMAT ERROR: 'rule' value must be a list of SQL queries")
             return {}
 
         # Pre-allocate list with estimated capacity
@@ -603,14 +653,20 @@ class ZircoliteCore:
         if self.csv_mode:
             # Initialize CSV writer if not already done
             if csv_writer is None:
-                fieldnames = ["rule_title", "rule_description", "rule_level", "rule_count"] + list(rule_results["matches"][0].keys())
+                # Fieldnames persist across calls: in append mode (per-file /
+                # multi-DB flows) each call re-enters with a fresh local writer,
+                # and rows must stay aligned with the single header.
+                if self._csv_fieldnames is None:
+                    self._csv_fieldnames = ["rule_title", "rule_description", "rule_level", "rule_count"] + list(rule_results["matches"][0].keys())
                 csv_writer = csv.DictWriter(
                     file_handle,
                     delimiter=self.delimiter,
-                    fieldnames=fieldnames,
+                    fieldnames=self._csv_fieldnames,
                     extrasaction="ignore",
                 )
-                csv_writer.writeheader()
+                if not self._csv_header_written:
+                    csv_writer.writeheader()
+                    self._csv_header_written = True
             # Write matches to CSV - pre-compute common values
             title = rule_results["title"]
             description = rule_results["description"]
@@ -628,6 +684,12 @@ class ZircoliteCore:
         else:
             # Write results as JSON using orjson
             try:
+                # Serialize first: on failure the comma bookkeeping must stay untouched
+                json_bytes = json.dumps(rule_results, option=json.OPT_INDENT_2)
+            except Exception as e:
+                self.logger.error(f"[error]    [-] Error serializing some results: {e}[/]")
+                return csv_writer, needs_comma_prefix
+            try:
                 # Handle commas between JSON objects
                 if needs_comma_prefix and self.first_json_output:
                     file_handle.write(',\n')
@@ -637,8 +699,6 @@ class ZircoliteCore:
                     file_handle.write(',\n')
                 else:
                     self.first_json_output = False
-                # Serialize rule_results to JSON bytes with indentation
-                json_bytes = json.dumps(rule_results, option=json.OPT_INDENT_2)
                 file_handle.write(json_bytes.decode('utf-8'))
             except Exception as e:
                 self.logger.error(f"[error]    [-] Error saving some results: {e}[/]")
@@ -660,8 +720,10 @@ class ZircoliteCore:
         is_json_mode = not self.csv_mode
         _disable = disable_progress if disable_progress is not None else self.disable_progress
 
-        # Refresh the query planner's stats now that all events are inserted and
-        # any optional indices have been created. Cheap; helps rule queries.
+        # Apply auto-index now that the ruleset is loaded (create_index runs at
+        # the end of ingestion, before the ruleset is available in every flow),
+        # then refresh the query planner's stats. Cheap; helps rule queries.
+        self.apply_auto_index()
         if self.db_connection is not None:
             try:
                 self.db_connection.execute("PRAGMA optimize")
@@ -672,22 +734,44 @@ class ZircoliteCore:
         file_handle = None
         needs_comma_prefix = False
         if not self.no_output:
-            # For append mode in JSON, check if file exists and has content
-            if is_json_mode and write_mode == 'a' and Path(out_file).exists():
-                with open(out_file, 'r', encoding='utf-8') as f:
-                    content = f.read().rstrip()
-                    if content and not content.endswith('[') and not content.endswith(','):
-                        # Remove closing bracket if present, we'll add it back at the end
-                        if content.endswith(']'):
-                            content = content[:-1].rstrip()
-                            with open(out_file, 'w', encoding='utf-8') as f:
-                                f.write(content)
-                        needs_comma_prefix = True
-            
+            json_fresh_output = False
+            if is_json_mode and write_mode == 'a':
+                out_path = Path(out_file)
+                file_size = out_path.stat().st_size if out_path.exists() else 0
+                if file_size == 0:
+                    # Nothing to append to: behave like a fresh write
+                    json_fresh_output = True
+                else:
+                    # The closing bracket can only sit in the file tail, so
+                    # reading it is enough to prepare the array for appending
+                    with open(out_file, 'rb+') as f:
+                        tail_start = max(0, file_size - 65536)
+                        f.seek(tail_start)
+                        tail = f.read(file_size - tail_start)
+                        stripped = tail.rstrip()
+                        if not stripped:
+                            json_fresh_output = True
+                        else:
+                            if stripped.endswith(b']'):
+                                # Remove the closing bracket; it is re-added when
+                                # the last ruleset closes the array
+                                f.seek(tail_start + len(stripped) - 1)
+                                f.truncate()
+                                stripped = stripped[:-1].rstrip()
+                                if not stripped:
+                                    json_fresh_output = True
+                            if not json_fresh_output:
+                                # Prefix a comma only when the file already holds
+                                # a complete element
+                                needs_comma_prefix = not stripped.endswith((b'[', b','))
+
             # Open file in text mode since we will write decoded strings
             file_handle = open(out_file, write_mode, encoding='utf-8', newline='')
-            if is_json_mode and write_mode != 'a':
+            if is_json_mode and (write_mode != 'a' or json_fresh_output):
                 file_handle.write('[')  # Start JSON array
+            if self.csv_mode and write_mode != 'a':
+                self._csv_header_written = False
+                self._csv_fieldnames = None
 
         try:
             # Cache frequently accessed attributes and methods
@@ -835,6 +919,29 @@ class ZircoliteCore:
                     file_handle.write(']')  # Close JSON array
                 file_handle.close()
 
+    @staticmethod
+    def _infer_field_statement(events: List[Dict[str, Any]]) -> str:
+        """Build a field statement with column types inferred from event values.
+
+        The production pipeline stores ints in INTEGER columns; an all-TEXT test
+        schema would make numeric predicates compare lexicographically and
+        diverge from production behavior.
+        """
+        types: Dict[str, str] = {}
+        for ev in events:
+            for key, value in ev.items():
+                if key in types or value is None:
+                    continue
+                if isinstance(value, bool) or isinstance(value, int):
+                    types[key] = "INTEGER"
+                elif isinstance(value, float):
+                    types[key] = "REAL"
+        keys = sorted({k for ev in events for k in ev})
+        return ", ".join(
+            '"{}" {}'.format(k.replace('"', '""'), types.get(k, "TEXT COLLATE NOCASE"))
+            for k in keys
+        )
+
     def run_rule_tests(self, test_file: str) -> list:
         """Validate rules against known-positive and known-negative events.
 
@@ -857,10 +964,29 @@ class ZircoliteCore:
             self.logger.error("[red]    [-] Rule test file must be a JSON array[/]")
             return []
 
+        invalid_entries = sum(1 for tc in test_cases if not isinstance(tc, dict))
+        if invalid_entries:
+            self.logger.warning(
+                f"[yellow]    [!] Ignoring {invalid_entries} non-object "
+                f"entries in the rule test file[/]"
+            )
+            test_cases = [tc for tc in test_cases if isinstance(tc, dict)]
+
         # Index test cases by title and id for fast lookup
         by_title = {tc.get('title', ''): tc for tc in test_cases if tc.get('title')}
         by_id = {tc.get('id', ''): tc for tc in test_cases if tc.get('id')}
+        if len(by_title) != sum(1 for tc in test_cases if tc.get('title')):
+            self.logger.warning(
+                "[yellow]    [!] Duplicate rule titles in test file; "
+                "only the last test case for each title is used[/]"
+            )
+        if len(by_id) != sum(1 for tc in test_cases if tc.get('id')):
+            self.logger.warning(
+                "[yellow]    [!] Duplicate rule ids in test file; "
+                "only the last test case for each id is used[/]"
+            )
 
+        matched_case_ids: set = set()
         results = []
         for rule in self.ruleset:
             title = rule.get('title', '')
@@ -874,6 +1000,7 @@ class ZircoliteCore:
                     'error': 'no test case',
                 })
                 continue
+            matched_case_ids.add(id(tc))
 
             tp_events = tc.get('true_positive', [])
             tn_events = tc.get('true_negative', [])
@@ -886,41 +1013,37 @@ class ZircoliteCore:
             try:
                 # Run true-positive check
                 if tp_events:
-                    all_keys: set = set()
-                    for ev in tp_events:
-                        all_keys.update(ev.keys())
                     tp_core = ZircoliteCore(
                         self.config,
                         processing_config=None,  # defaults
                         logger=self.logger,
                     )
-                    tp_core.create_db(
-                        ', '.join(f'"{k}" TEXT' for k in sorted(all_keys))
-                    )
-                    tp_core.insert_data_to_db(tp_events)
-                    tp_res = tp_core.execute_rule(rule)
-                    tp_count = tp_res.get('count', 0) if tp_res else 0
-                    tp_pass = tp_count > 0
-                    tp_core.close()
+                    try:
+                        tp_core.create_db(self._infer_field_statement(tp_events))
+                        if not tp_core.insert_data_to_db(tp_events):
+                            raise RuntimeError("could not insert true-positive test events")
+                        tp_res = tp_core.execute_rule(rule)
+                        tp_count = tp_res.get('count', 0) if tp_res else 0
+                        tp_pass = tp_count > 0
+                    finally:
+                        tp_core.close()
 
                 # Run true-negative check
                 if tn_events:
-                    all_keys = set()
-                    for ev in tn_events:
-                        all_keys.update(ev.keys())
                     tn_core = ZircoliteCore(
                         self.config,
                         processing_config=None,
                         logger=self.logger,
                     )
-                    tn_core.create_db(
-                        ', '.join(f'"{k}" TEXT' for k in sorted(all_keys))
-                    )
-                    tn_core.insert_data_to_db(tn_events)
-                    tn_res = tn_core.execute_rule(rule)
-                    tn_count = tn_res.get('count', 0) if tn_res else 0
-                    tn_pass = tn_count == 0
-                    tn_core.close()
+                    try:
+                        tn_core.create_db(self._infer_field_statement(tn_events))
+                        if not tn_core.insert_data_to_db(tn_events):
+                            raise RuntimeError("could not insert true-negative test events")
+                        tn_res = tn_core.execute_rule(rule)
+                        tn_count = tn_res.get('count', 0) if tn_res else 0
+                        tn_pass = tn_count == 0
+                    finally:
+                        tn_core.close()
 
             except Exception as exc:
                 error = str(exc)
@@ -933,6 +1056,16 @@ class ZircoliteCore:
                 'tp_count': tp_count, 'tn_count': tn_count,
                 'error': error,
             })
+
+        # Surface test cases that matched no rule in the loaded ruleset
+        for tc in test_cases:
+            if id(tc) not in matched_case_ids:
+                results.append({
+                    'title': tc.get('title', ''), 'id': tc.get('id', ''),
+                    'tp_pass': None, 'tn_pass': None,
+                    'tp_count': 0, 'tn_count': 0,
+                    'error': 'no matching rule in ruleset',
+                })
 
         return results
 

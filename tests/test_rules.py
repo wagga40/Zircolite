@@ -1284,3 +1284,74 @@ detection:
         assert isinstance(result, list)
         mock_error.assert_called()
         assert "Cannot convert" in str(mock_error.call_args) or "dir convert failed" in str(mock_error.call_args)
+
+
+class TestRulesetHandlerRobustness:
+    """Regression tests for rules module fixes."""
+
+    def test_download_raises_for_http_error_status(self, test_logger, tmp_path):
+        """A 404/500 response must raise instead of saving the error page."""
+        import requests
+        mock_resp = MagicMock()
+        mock_resp.headers.get.return_value = "100"
+        mock_resp.raise_for_status.side_effect = requests.exceptions.HTTPError("404")
+
+        with patch("zircolite.rules.requests.get", return_value=mock_resp):
+            updater = RulesUpdater(logger=test_logger)
+            updater.tempFile = str(tmp_path / "tmp-rules-abc.zip")
+            updater.tmpDir = str(tmp_path / "tmp-rules-dir")
+            with pytest.raises(requests.exceptions.HTTPError):
+                updater.download()
+
+    def test_event_filter_tolerates_non_numeric_eventid(self, test_logger):
+        """A ruleset with a non-numeric eventid must not crash EventFilter."""
+        from zircolite.rules import EventFilter
+        rules = [
+            {"channel": ["Security"], "eventid": ["N/A", 4688], "title": "r1"},
+        ]
+        event_filter = EventFilter(rules, logger=test_logger)
+        assert event_filter.is_enabled
+        assert 4688 in event_filter.eventids
+
+    def test_dedup_keeps_highest_severity_rule(self, test_logger, tmp_path):
+        """Among SQL-identical duplicates, the highest-level rule survives."""
+        ruleset_file = tmp_path / "rules.json"
+        same_sql = "SELECT * FROM logs WHERE CommandLine LIKE '%x%'"
+        ruleset_file.write_text(json.dumps([
+            {"title": "low dup", "id": "1", "level": "low", "rule": [same_sql]},
+            {"title": "critical dup", "id": "2", "level": "critical", "rule": [same_sql]},
+        ]))
+        from zircolite.rules import RulesetHandler
+        from zircolite.config import RulesetConfig
+        handler = RulesetHandler(
+            RulesetConfig(ruleset=[str(ruleset_file)]),
+            logger=test_logger,
+        )
+        assert len(handler.rulesets) == 1
+        assert handler.rulesets[0]["title"] == "critical dup"
+
+    def test_pipeline_list_skips_ruleset_loading(self, test_logger):
+        """--pipeline-list must not load/convert the ruleset."""
+        from zircolite.rules import RulesetHandler
+        from zircolite.config import RulesetConfig
+        handler = RulesetHandler(
+            RulesetConfig(ruleset=["/nonexistent/rules.json"]),
+            logger=test_logger,
+            list_pipelines_only=True,
+        )
+        assert handler.rulesets == []
+
+    def test_unrecognized_ruleset_file_warns(self, test_logger, tmp_path, caplog):
+        """A file that is neither valid JSON nor Sigma YAML must log a warning."""
+        bad = tmp_path / "broken.json"
+        bad.write_text("{not json")
+        from zircolite.rules import RulesetHandler
+        from zircolite.config import RulesetConfig
+        with patch("zircolite.rules.RulesetHandler.sigma_rules_to_ruleset"):
+            with caplog.at_level("WARNING"):
+                handler = RulesetHandler(
+                    RulesetConfig(ruleset=[str(bad)]),
+                    logger=test_logger,
+                )
+        assert handler.rulesets == []
+        assert any("Skipping unrecognized ruleset" in r.message for r in caplog.records)

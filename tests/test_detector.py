@@ -1419,6 +1419,32 @@ class TestCsvEdgeCases:
         assert result.log_source == "generic_csv"
         assert result.confidence in ("low", "medium")
 
+    def test_ragged_rows_do_not_downgrade_detection(self, detector, tmp_path):
+        """A data row with extra fields (None restkey) must not break detection."""
+        f = tmp_path / "ragged.csv"
+        f.write_text(
+            "EventID,Channel,Computer\n"
+            "1,Security,HOST,unexpected_extra\n"
+            "2,Security,HOST\n"
+        )
+        result = detector.detect(f)
+        assert result.input_type == "csv"
+        assert result.log_source == "windows_evtx_csv"
+        assert result.confidence == "high"
+
+    def test_sniffer_does_not_pick_recurring_data_letter(self, detector, tmp_path):
+        """A 'Security'-valued column must not make the sniffer pick 'y' as delimiter."""
+        f = tmp_path / "sec.csv"
+        f.write_text(
+            "EventID,Channel,Computer\n"
+            "1,Security,MYHOST\n"
+            "2,Security,MYHOST\n"
+        )
+        result = detector.detect(f)
+        assert result.input_type == "csv"
+        assert result.log_source == "windows_evtx_csv"
+        assert result.confidence == "high"
+
     def test_no_delimiter_match_returns_none_from_content(self, detector, tmp_path):
         """Content with no consistent delimiter and non-csv extension returns None from _detect_from_content."""
         f = tmp_path / "single_col.txt"
@@ -1801,3 +1827,125 @@ class TestRealFixtureBatchDetection:
         assert result.confidence in ("high", "medium")
         assert result.log_source != "unknown"
         assert result.details
+
+
+class TestMagicBytesRobustness:
+    """Regression tests for magic-byte detection edge cases."""
+
+    def test_elf_file_text_prefix_not_evtx(self, detector, tmp_path):
+        """A text file starting with 'ElfFile' (7-byte prefix) is not EVTX."""
+        f = tmp_path / "notme.txt"
+        f.write_bytes(b"ElfFileX is just text\nwith more lines\n")
+        result = detector._check_magic_bytes(f)
+        assert result is None
+
+    def test_gzipped_evtx_detected_via_inner_magic(self, detector, tmp_path):
+        """A .gz containing EVTX bytes is detected as EVTX, not unknown."""
+        import gzip
+        payload = b"ElfFile\x00" + b"\x00" * 2048
+        f = tmp_path / "data.gz"
+        with gzip.open(f, "wb") as gz:
+            gz.write(payload)
+        result = detector.detect(f)
+        assert result.input_type == "evtx"
+        assert result.confidence == "high"
+
+    def test_gzipped_sqlite_detected_via_inner_magic(self, detector, tmp_path):
+        import gzip
+        payload = b"SQLite format 3\x00" + b"\x00" * 2048
+        f = tmp_path / "db.gz"
+        with gzip.open(f, "wb") as gz:
+            gz.write(payload)
+        result = detector.detect(f)
+        assert result.input_type == "sqlite"
+
+    def test_encrypted_zip_raises_password_error(self, detector, tmp_path):
+        """An encrypted ZIP without password must raise the friendly ValueError."""
+        import zipfile
+        zip_path = tmp_path / "enc.zip"
+        with zipfile.ZipFile(zip_path, "w") as zf:
+            zf.writestr("a.json", b'{"a":1}\n')
+        # Simulate encryption by patching zf.open to raise RuntimeError
+        from unittest.mock import patch
+        with patch("zipfile.ZipFile.open", side_effect=RuntimeError("password required")):
+            with pytest.raises(ValueError, match="password"):
+                detector.detect(zip_path)
+
+    def test_winzip_aes_zip_raises_password_error(self, detector, tmp_path):
+        """zipfile raises NotImplementedError for WinZip-AES members; the friendly
+        error must surface instead of being silently swallowed."""
+        import zipfile
+        zip_path = tmp_path / "aes.zip"
+        with zipfile.ZipFile(zip_path, "w") as zf:
+            zf.writestr("a.json", b'{"a":1}\n')
+        from unittest.mock import patch
+        with patch(
+            "zipfile.ZipFile.open",
+            side_effect=NotImplementedError("That compression method is not supported"),
+        ):
+            with pytest.raises(ValueError, match="password"):
+                detector.detect(zip_path)
+
+
+class TestSampleDecoding:
+    """Regression tests for BOM/UTF-16 sample decoding."""
+
+    def test_utf8_bom_json_detected(self, detector, tmp_path):
+        f = tmp_path / "bom.json"
+        f.write_bytes(b'\xef\xbb\xbf{"EventID":1,"timestamp":"2024-06-15T10:30:00Z"}\n')
+        result = detector.detect(f)
+        assert result.input_type == "json"
+
+    def test_utf16le_json_detected(self, detector, tmp_path):
+        f = tmp_path / "utf16.json"
+        content = '{"EventID":1,"timestamp":"2024-06-15T10:30:00Z"}\n'
+        f.write_bytes(b"\xff\xfe" + content.encode("utf-16-le"))
+        result = detector.detect(f)
+        assert result.input_type == "json"
+
+    def test_leading_blank_lines_json_detected(self, detector, tmp_path):
+        f = tmp_path / "blank.json"
+        f.write_text('\n\n{"EventID":1,"timestamp":"2024-06-15T10:30:00Z"}\n')
+        result = detector.detect(f)
+        assert result.input_type == "json"
+
+
+class TestFormatClassificationFixes:
+    """Regression tests for format-classification ordering issues."""
+
+    def test_auditd_with_node_prefix_detected(self, detector, tmp_path):
+        f = tmp_path / "auditd.log"
+        f.write_text(
+            "node=myhost type=SYSCALL msg=audit(1705318200.123:456): arch=c000003e\n"
+            "node=myhost type=EXECVE msg=audit(1705318200.124:457): argc=1\n"
+        )
+        result = detector.detect(f)
+        assert result.input_type == "auditd"
+
+    def test_single_line_xml_not_sysmon_linux(self, detector, tmp_path):
+        """One namespace-less XML event must not be classified sysmon_linux."""
+        f = tmp_path / "one.xml"
+        f.write_text(
+            "<Event><System><EventID>1</EventID></System>"
+            "<EventData><Data Name='RuleName'>x</Data>"
+            "<Data Name='ProcessGuid'>y</Data></EventData></Event>\n"
+        )
+        result = detector.detect(f)
+        assert result.input_type != "sysmon_linux"
+
+    def test_11_and_12_digit_strings_are_not_timestamps(self, detector):
+        assert detector._looks_like_timestamp("12345678901") is False
+        assert detector._looks_like_timestamp("123456789012") is False
+        assert detector._looks_like_timestamp("1718442600") is True
+        assert detector._looks_like_timestamp("1718442600000") is True
+
+    def test_filetime_regex_beyond_2054(self, detector):
+        """FileTime values starting with 14x/15x (post-2054) must match."""
+        text = "value 156987840000000000 end"
+        result = detector._detect_timestamp_from_raw_content(text)
+        assert result is not None
+        assert result["pattern_name"] == "Windows FileTime"
+
+    def test_find_key_for_numeric_value(self, detector):
+        event = {"@timestamp": 1718442600, "message": "hello"}
+        assert detector._find_key_for_value(event, "1718442600") == "@timestamp"

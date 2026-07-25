@@ -87,7 +87,8 @@ def calculate_optimal_workers(
         return 1
 
     if max_workers is not None:
-        return max(min_workers, min(max_workers, file_count))
+        # Clamped to file count so no idle workers are spawned
+        return max(1, min(max_workers, file_count))
 
     avg_file_size_mb = (sum(file_sizes) / file_count) / (1024 * 1024)
 
@@ -135,7 +136,7 @@ class ParallelConfig:
     max_workers: Optional[int] = None
     min_workers: int = 1
     memory_limit_percent: float = 85.0
-    memory_check_interval: int = 5
+    memory_check_interval: int = 5  # kept for config compatibility; memory is sampled on every completion
     adaptive_workers: bool = True
     batch_size: int = 10
     sort_by_size: bool = True  # LPT scheduling – process largest files first
@@ -222,6 +223,23 @@ class MemoryAwareParallelProcessor:
     def should_throttle(self) -> bool:
         """Check if we should reduce workers due to high memory usage."""
         return self.get_memory_percent() > self.config.memory_limit_percent
+
+    def _would_exceed_memory_budget(self) -> bool:
+        """Predictive throttle based on the calibrated per-file estimate.
+
+        Returns True when submitting one more file would likely push the
+        process RSS past the configured memory budget. Inert until adaptive
+        calibration has produced an estimate.
+        """
+        if self._calibrated_memory_per_file_mb is None:
+            return False
+        try:
+            total_mb = psutil.virtual_memory().total / (1024 * 1024)
+        except Exception:
+            return False
+        budget_mb = total_mb * (self.config.memory_limit_percent / 100.0)
+        projected = self.get_current_memory_mb() + self._calibrated_memory_per_file_mb
+        return projected > budget_mb
 
     # ------------------------------------------------------------------
     # Estimation & calibration
@@ -374,6 +392,10 @@ class MemoryAwareParallelProcessor:
         start_time = time.time()
         self.stats = ParallelStats(total_files=len(file_list))
         self._memory_samples = []
+        # Reset calibration state so a reused processor instance does not
+        # inherit estimates from a previous run
+        self._calibrated_memory_per_file_mb = None
+        self._first_file_memory_before = None
 
         # LPT scheduling
         if self.config.sort_by_size:
@@ -389,7 +411,6 @@ class MemoryAwareParallelProcessor:
 
         results: List[Any] = []
         failed_files: List[Tuple[Path, str]] = []
-        first_file_path = file_list[0] if file_list else None
         first_file_calibrated = False
 
         # Use a deque so throttled files remain available for later submission
@@ -510,28 +531,25 @@ class MemoryAwareParallelProcessor:
                             failed_files.append((file_path, str(e)))
                             progress_main.update(task_id, advance=1)
 
-                        if (
-                            not first_file_calibrated
-                            and self.config.adaptive_memory
-                            and file_path == first_file_path
-                        ):
+                        # Calibrate on the first file to COMPLETE (not the LPT-first
+                        # file, which typically finishes last): the estimate is only
+                        # useful if it exists early enough to gate submissions.
+                        if not first_file_calibrated and self.config.adaptive_memory:
                             first_file_calibrated = True
                             self.calibrate_memory(
                                 file_path, self.get_current_memory_mb()
                             )
 
-                        total_done = (
-                            self.stats.processed_files + self.stats.failed_files
+                        # Sample memory on every completion — interval-based sampling
+                        # misses peaks in spiky workloads.
+                        current_mem = self.get_current_memory_mb()
+                        self._memory_samples.append(current_mem)
+                        self.stats.peak_memory_mb = max(
+                            self.stats.peak_memory_mb, current_mem
                         )
-                        if total_done % self.config.memory_check_interval == 0:
-                            current_mem = self.get_current_memory_mb()
-                            self._memory_samples.append(current_mem)
-                            self.stats.peak_memory_mb = max(
-                                self.stats.peak_memory_mb, current_mem
-                            )
 
                         if file_queue and not is_shutdown_requested():
-                            if self.should_throttle():
+                            if self.should_throttle() or self._would_exceed_memory_budget():
                                 self.stats.throttle_events += 1
                                 self.stats.submissions_paused += 1
                             else:
@@ -580,6 +598,17 @@ class MemoryAwareParallelProcessor:
             summary_parts.append(throughput_str)
 
         self.logger.info(f"[+] Processed: {' │ '.join(summary_parts)}")
+
+        if failed_files:
+            self.logger.warning(
+                f"[!] [yellow]{len(failed_files)}[/] file(s) failed to process:"
+            )
+            for path, error in failed_files[:5]:
+                self.logger.warning(f"    [-] {path.name}: {error}")
+            if len(failed_files) > 5:
+                self.logger.warning(
+                    f"    ... and [yellow]{len(failed_files) - 5}[/] more"
+                )
 
         if self.stats.throttle_events > 0:
             self.logger.warning(

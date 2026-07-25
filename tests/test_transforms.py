@@ -17,6 +17,7 @@ import json
 import pytest
 import sqlite3
 from argparse import Namespace
+from pathlib import Path
 
 from zircolite.streaming import StreamingEventProcessor
 from zircolite.config import ProcessingConfig
@@ -3437,6 +3438,117 @@ class TestEnabledTransformsList:
         
         conn.close()
     
+    def test_enabled_transforms_matches_field_name_for_non_alias_transforms(self, tmp_path, test_logger):
+        """Non-alias transforms (alias_name='') are named by their field in enabled_transforms.
+
+        Regression: the default config lists 'proctitle'/'cmd' (field names) but the
+        hot path only matched alias_name, so those transforms never ran.
+        """
+        config = {
+            "exclusions": [],
+            "useless": [None, ""],
+            "mappings": {},
+            "alias": {},
+            "split": {},
+            "transforms_enabled": True,
+            "enabled_transforms": ["proctitle"],
+            "transforms": {
+                "proctitle": [
+                    {
+                        "info": "Uppercase in place",
+                        "type": "python",
+                        "code": "def transform(param):\n    return param.upper()",
+                        "alias": False,
+                        "alias_name": "",
+                        "source_condition": ["auditd_input"],
+                        "enabled": True,
+                    }
+                ]
+            }
+        }
+        config_file = tmp_path / "config.json"
+        config_file.write_text(json.dumps(config))
+
+        event = {"proctitle": "bash"}
+        json_file = tmp_path / "events.json"
+        json_file.write_text(json.dumps(event) + "\n")
+
+        args = make_args_config("auditd_input")
+        proc_config = ProcessingConfig(disable_progress=True)
+        processor = StreamingEventProcessor(
+            config_file=str(config_file),
+            args_config=args,
+            processing_config=proc_config,
+            logger=test_logger
+        )
+
+        conn = sqlite3.connect(':memory:')
+        processor.create_initial_table(conn)
+
+        count = processor.process_file_streaming(conn, str(json_file), input_type='json')
+        assert count == 1
+
+        cursor = conn.cursor()
+        cursor.execute('SELECT "proctitle" FROM logs')
+        row = cursor.fetchone()
+        assert row[0] == "BASH"  # in-place transform ran
+
+        conn.close()
+
+    def test_all_transforms_enables_non_alias_transforms(self, tmp_path, test_logger):
+        """--all-transforms must collect non-alias transforms by field name."""
+        config = {
+            "exclusions": [],
+            "useless": [None, ""],
+            "mappings": {},
+            "alias": {},
+            "split": {},
+            "transforms_enabled": True,
+            "enabled_transforms": [],  # nothing enabled by default
+            "transforms": {
+                "proctitle": [
+                    {
+                        "info": "Uppercase in place",
+                        "type": "python",
+                        "code": "def transform(param):\n    return param.upper()",
+                        "alias": False,
+                        "alias_name": "",
+                        "source_condition": ["auditd_input"],
+                        "enabled": True,
+                    }
+                ]
+            }
+        }
+        config_file = tmp_path / "config.json"
+        config_file.write_text(json.dumps(config))
+
+        event = {"proctitle": "bash"}
+        json_file = tmp_path / "events.json"
+        json_file.write_text(json.dumps(event) + "\n")
+
+        args = make_args_config("auditd_input")
+        args.all_transforms = True
+        args.transform_categories = None
+        proc_config = ProcessingConfig(disable_progress=True)
+        processor = StreamingEventProcessor(
+            config_file=str(config_file),
+            args_config=args,
+            processing_config=proc_config,
+            logger=test_logger
+        )
+
+        conn = sqlite3.connect(':memory:')
+        processor.create_initial_table(conn)
+        count = processor.process_file_streaming(conn, str(json_file), input_type='json')
+        assert count == 1
+
+        cursor = conn.cursor()
+        cursor.execute('SELECT "proctitle" FROM logs')
+        row = cursor.fetchone()
+        assert row[0] == "BASH"
+
+        conn.close()
+    
     def test_empty_enabled_transforms_list_disables_all(self, tmp_path, test_logger):
         """Test that empty enabled_transforms list disables all transforms."""
         config = {
@@ -3600,4 +3712,39 @@ class TestStreamingProcessorTransformsEndToEnd:
         assert row[0] == "powershell.exe -c whoami"
         assert row[1] == "POWERSHELL.EXE -C WHOAMI"
         
+        conn.close()
+
+
+class TestRealConfigTransforms:
+    """End-to-end tests loading the shipped config/config.yaml."""
+
+    def test_default_config_enables_auditd_proctitle_transform(self, tmp_path, test_logger):
+        """The default enabled_transforms list must actually run proctitle decoding.
+
+        Regression: enabled_transforms lists field names ('proctitle') but the hot
+        path matched only alias_name (''), so the shipped defaults never ran.
+        """
+        config_path = Path(__file__).parent.parent / "config" / "config.yaml"
+        args = make_args_config("auditd_input")
+        proc_config = ProcessingConfig(disable_progress=True)
+        processor = StreamingEventProcessor(
+            config_file=str(config_path),
+            args_config=args,
+            processing_config=proc_config,
+            logger=test_logger,
+        )
+
+        event = {"proctitle": "62617368"}  # hex for 'bash'
+        json_file = tmp_path / "events.json"
+        json_file.write_text(json.dumps(event) + "\n")
+
+        conn = sqlite3.connect(':memory:')
+        processor.create_initial_table(conn)
+        count = processor.process_file_streaming(conn, str(json_file), input_type='json')
+        assert count == 1
+
+        cursor = conn.cursor()
+        cursor.execute('SELECT "proctitle" FROM logs')
+        row = cursor.fetchone()
+        assert row[0] == "bash"
         conn.close()

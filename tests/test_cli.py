@@ -3338,3 +3338,477 @@ class TestApplyDetectionResultTimefieldSanitization:
         assert args.timefield == "SystemTime"
 
 
+
+
+class TestFormatFlagExtension:
+    """Tests for _format_flag_extension / get_file_extension (re-discovery fix)."""
+
+    def _args(self, **kw):
+        defaults = dict(
+            fileext=None, json_input=False, json_array_input=False,
+            sysmon_linux_input=False, auditd_input=False, xml_input=False,
+            csv_input=False,
+        )
+        defaults.update(kw)
+        return argparse.Namespace(**defaults)
+
+    def test_flag_extension_ignores_fileext(self):
+        """_format_flag_extension reflects format flags only, not args.fileext."""
+        args = self._args(fileext="evtx", json_input=True)
+        assert zircolite_script._format_flag_extension(args) == "json"
+        # get_file_extension still honors the explicit/auto-derived fileext
+        assert zircolite_script.get_file_extension(args) == "evtx"
+
+    def test_flag_extension_defaults(self):
+        assert zircolite_script._format_flag_extension(self._args()) == "evtx"
+        assert zircolite_script._format_flag_extension(self._args(xml_input=True)) == "xml"
+        assert zircolite_script._format_flag_extension(self._args(auditd_input=True)) == "log"
+        assert zircolite_script._format_flag_extension(self._args(csv_input=True)) == "csv"
+
+
+class TestTestRulesCLI:
+    """Tests for --test-rules CLI flow."""
+
+    def _write_ruleset(self, tmp_path, rules):
+        ruleset_file = tmp_path / "rules.json"
+        ruleset_file.write_text(json.dumps(rules))
+        return str(ruleset_file)
+
+    def test_test_rules_with_rulefilter_does_not_crash(self, tmp_path):
+        """--test-rules combined with -R must not raise TypeError (flatten ordering)."""
+        ruleset = self._write_ruleset(tmp_path, [
+            {"title": "Noisy Rule", "id": "1", "rule": ["SELECT 1"]},
+        ])
+        test_file = tmp_path / "tests.json"
+        test_file.write_text(json.dumps([]))
+
+        with pytest.raises(SystemExit) as exc_info:
+            with patch('sys.argv', [
+                'zircolite.py', '-r', ruleset,
+                '--test-rules', str(test_file),
+                '-R', 'Noisy', '-n',
+            ]):
+                zircolite_script.main()
+        # The only rule is filtered out -> no results -> success
+        assert exc_info.value.code == 0
+
+    def test_test_rules_exit_zero_on_pass(self, tmp_path):
+        ruleset = self._write_ruleset(tmp_path, [
+            {"title": "R", "id": "1",
+             "rule": ["SELECT * FROM logs WHERE CommandLine LIKE '%cmd%' ESCAPE '\\'"]},
+        ])
+        test_file = tmp_path / "tests.json"
+        test_file.write_text(json.dumps([
+            {"title": "R",
+             "true_positive": [{"CommandLine": "cmd.exe /c whoami"}],
+             "true_negative": [{"CommandLine": "powershell.exe"}]},
+        ]))
+
+        with pytest.raises(SystemExit) as exc_info:
+            with patch('sys.argv', [
+                'zircolite.py', '-r', ruleset,
+                '--test-rules', str(test_file), '-n',
+            ]):
+                zircolite_script.main()
+        assert exc_info.value.code == 0
+
+    def test_test_rules_exit_nonzero_on_failure(self, tmp_path):
+        """Failing rule tests must produce a non-zero exit code (CI usage)."""
+        ruleset = self._write_ruleset(tmp_path, [
+            {"title": "R", "id": "1",
+             "rule": ["SELECT * FROM logs WHERE CommandLine LIKE '%cmd%' ESCAPE '\\'"]},
+        ])
+        test_file = tmp_path / "tests.json"
+        test_file.write_text(json.dumps([
+            {"title": "R",
+             "true_positive": [{"CommandLine": "definitely not matching"}],
+             "true_negative": []},
+        ]))
+
+        with pytest.raises(SystemExit) as exc_info:
+            with patch('sys.argv', [
+                'zircolite.py', '-r', ruleset,
+                '--test-rules', str(test_file), '-n',
+            ]):
+                zircolite_script.main()
+        assert exc_info.value.code == 1
+
+
+class TestCLIValidation:
+    """Regression tests for CLI argument validation fixes."""
+
+    def test_template_output_without_template_errors(self, tmp_path):
+        """-T without -t must exit with an error, not be silently ignored."""
+        ruleset_file = tmp_path / "rules.json"
+        ruleset_file.write_text(json.dumps([
+            {"title": "R", "id": "1", "rule": ["SELECT 1"]}
+        ]))
+        events = tmp_path / "events.json"
+        events.write_text(json.dumps({"EventID": 1}) + "\n")
+
+        with pytest.raises(SystemExit) as exc_info:
+            with patch('sys.argv', [
+                'zircolite.py', '-e', str(events), '-j',
+                '-r', str(ruleset_file),
+                '-T', str(tmp_path / "out.json"), '-n',
+            ]):
+                zircolite_script.main()
+        assert exc_info.value.code == 1
+
+    def test_limit_zero_rejected(self, tmp_path):
+        """--limit 0 would discard every detection: reject it."""
+        ruleset_file = tmp_path / "rules.json"
+        ruleset_file.write_text(json.dumps([
+            {"title": "R", "id": "1", "rule": ["SELECT 1"]}
+        ]))
+        events = tmp_path / "events.json"
+        events.write_text(json.dumps({"EventID": 1}) + "\n")
+
+        with pytest.raises(SystemExit) as exc_info:
+            with patch('sys.argv', [
+                'zircolite.py', '-e', str(events), '-j',
+                '-r', str(ruleset_file),
+                '--limit', '0', '-n',
+            ]):
+                zircolite_script.main()
+        assert exc_info.value.code == 1
+
+    def test_multiple_templates_per_flag_rejected(self, tmp_path):
+        """-t a.tmpl b.tmpl must error (second template would be ignored)."""
+        ruleset_file = tmp_path / "rules.json"
+        ruleset_file.write_text(json.dumps([
+            {"title": "R", "id": "1", "rule": ["SELECT 1"]}
+        ]))
+        events = tmp_path / "events.json"
+        events.write_text(json.dumps({"EventID": 1}) + "\n")
+        tmpl = tmp_path / "a.tmpl"
+        tmpl.write_text("{{ data }}")
+        tmpl2 = tmp_path / "b.tmpl"
+        tmpl2.write_text("{{ data }}")
+
+        with pytest.raises(SystemExit) as exc_info:
+            with patch('sys.argv', [
+                'zircolite.py', '-e', str(events), '-j',
+                '-r', str(ruleset_file),
+                '-t', str(tmpl), str(tmpl2),
+                '-T', str(tmp_path / "out.json"), '-n',
+            ]):
+                zircolite_script.main()
+        assert exc_info.value.code == 1
+
+    def test_transform_list_missing_config_exits_nonzero(self, tmp_path):
+        """--transform-list with a missing config must exit non-zero."""
+        with pytest.raises(SystemExit) as exc_info:
+            with patch('sys.argv', [
+                'zircolite.py', '--transform-list',
+                '-c', str(tmp_path / "nope.yaml"), '-n',
+            ]):
+                zircolite_script.main()
+        assert exc_info.value.code == 1
+
+    def test_transform_list_ok_exits_zero(self):
+        with pytest.raises(SystemExit) as exc_info:
+            with patch('sys.argv', ['zircolite.py', '--transform-list', '-n']):
+                zircolite_script.main()
+        assert exc_info.value.code == 0
+
+
+class TestDbfileCollision:
+    """Same-named input files in different dirs must not crash --dbfile."""
+
+    def test_perfile_dbfile_same_basename_both_saved(self, tmp_path):
+        dir1 = tmp_path / "dir1"
+        dir2 = tmp_path / "dir2"
+        dir1.mkdir()
+        dir2.mkdir()
+        for d, cmd in ((dir1, "a"), (dir2, "b")):
+            (d / "same.json").write_text(
+                json.dumps({"Event": {"System": {"EventID": 1}, "EventData": {"CommandLine": cmd}}})
+            )
+        ruleset_file = tmp_path / "ruleset.json"
+        ruleset_file.write_text("[]")
+        config_file = tmp_path / "config.json"
+        config_file.write_text(json.dumps({
+            "exclusions": [], "useless": [],
+            "mappings": {
+                "Event.System.EventID": "EventID",
+                "Event.EventData.CommandLine": "CommandLine",
+            },
+            "alias": {}, "split": {}, "transforms_enabled": False, "transforms": {},
+        }))
+        db_file = tmp_path / "out" / "db.db"
+
+        with patch("sys.argv", [
+            "zircolite.py",
+            "-e", str(tmp_path),
+            "-r", str(ruleset_file),
+            "-c", str(config_file),
+            "-j",
+            "-o", str(tmp_path / "output.json"),
+            "--no-auto-mode",
+            "--no-parallel",
+            "-d", str(db_file),
+            "--file-pattern", "dir*/same.json",
+        ] + get_log_arg(tmp_path)):
+            zircolite_script.main()
+
+        db_dir = tmp_path / "out"
+        saved = sorted(p.name for p in db_dir.glob("*.db"))
+        assert len(saved) == 2  # no FileExistsError crash, no overwrite
+
+
+class TestCLIRegressionFixes:
+    """Regressions for CLI/code alignment defects."""
+
+    @staticmethod
+    def _fixture(tmp_path, *, events_name="events.json"):
+        """Write a matching ruleset/config/event triplet and return the paths."""
+        ruleset = tmp_path / "rules.json"
+        ruleset.write_text(json.dumps([{
+            "title": "Test Rule", "id": "test-001", "level": "high", "tags": [],
+            "rule": ["SELECT * FROM logs WHERE EventID = 4688"],
+        }]))
+        config = tmp_path / "config.json"
+        config.write_text(json.dumps({
+            "exclusions": [], "useless": [],
+            "mappings": {
+                "Event.System.EventID": "EventID",
+                "Event.System.Channel": "Channel",
+                "Event.EventData.CommandLine": "CommandLine",
+            },
+            "alias": {}, "split": {}, "transforms_enabled": False, "transforms": {},
+        }))
+        events = tmp_path / events_name
+        events.write_text(json.dumps({
+            "Event": {
+                "System": {"EventID": 4688, "Channel": "Security"},
+                "EventData": {"CommandLine": "powershell.exe"},
+            }
+        }) + "\n")
+        return ruleset, config, events
+
+    def test_limit_below_minus_one_rejected(self, tmp_path):
+        """--limit -5 silently discarded every detection: reject it like 0."""
+        ruleset, config, events = self._fixture(tmp_path)
+        with pytest.raises(SystemExit) as exc_info:
+            with patch('sys.argv', [
+                'zircolite.py', '-e', str(events), '-j',
+                '-r', str(ruleset), '-c', str(config), '--limit', '-5', '-n',
+            ]):
+                zircolite_script.main()
+        assert exc_info.value.code == 1
+
+    def test_limit_minus_one_still_allowed(self, tmp_path):
+        """-1 is the documented 'no limit' value and must keep working."""
+        ruleset, config, events = self._fixture(tmp_path)
+        out = tmp_path / "out.json"
+        with patch('sys.argv', [
+            'zircolite.py', '-e', str(events), '-j', '-r', str(ruleset),
+            '-c', str(config), '-o', str(out), '--limit', '-1',
+        ] + get_log_arg(tmp_path)):
+            zircolite_script.main()
+        assert len(json.loads(out.read_text())) == 1
+
+    def test_directory_of_json_autodetects_without_fileext(self, tmp_path):
+        """A directory of non-EVTX logs must not abort with 'No file found'."""
+        ruleset, config, _ = self._fixture(tmp_path)
+        events_dir = tmp_path / "logs"
+        events_dir.mkdir()
+        for name in ("a.json", "b.json"):
+            (events_dir / name).write_text(json.dumps({
+                "Event": {
+                    "System": {"EventID": 4688, "Channel": "Security"},
+                    "EventData": {"CommandLine": "powershell.exe"},
+                }
+            }) + "\n")
+
+        out = tmp_path / "out.json"
+        with patch('sys.argv', [
+            'zircolite.py', '-e', str(events_dir), '-r', str(ruleset),
+            '-c', str(config), '-o', str(out),
+        ] + get_log_arg(tmp_path)):
+            zircolite_script.main()
+
+        assert out.exists()
+        assert len(json.loads(out.read_text())) >= 1
+
+    def test_explicit_fileext_still_wins_over_detection(self, tmp_path):
+        """--fileext must not be overridden by the auto-detected extension."""
+        ruleset, config, _ = self._fixture(tmp_path)
+        events_dir = tmp_path / "logs"
+        events_dir.mkdir()
+        (events_dir / "a.ndjson").write_text(json.dumps({
+            "Event": {
+                "System": {"EventID": 4688, "Channel": "Security"},
+                "EventData": {"CommandLine": "powershell.exe"},
+            }
+        }) + "\n")
+        (events_dir / "ignored.json").write_text("{}\n")
+
+        out = tmp_path / "out.json"
+        with patch('sys.argv', [
+            'zircolite.py', '-e', str(events_dir), '-f', 'ndjson',
+            '-r', str(ruleset), '-c', str(config), '-o', str(out),
+        ] + get_log_arg(tmp_path)):
+            zircolite_script.main()
+
+        detections = json.loads(out.read_text())
+        assert len(detections) == 1
+        assert detections[0]["count"] == 1
+
+    def test_bundled_templates_resolve_from_any_cwd(self, tmp_path, monkeypatch):
+        """--timesketch/--navigator-output must not depend on the working directory."""
+        ruleset, config, events = self._fixture(tmp_path)
+        workdir = tmp_path / "elsewhere"
+        workdir.mkdir()
+        monkeypatch.chdir(workdir)
+
+        with patch('sys.argv', [
+            'zircolite.py', '-e', str(events), '-j', '-r', str(ruleset),
+            '-c', str(config), '-o', str(tmp_path / "out.json"),
+            '--timesketch', '--navigator-output',
+        ] + get_log_arg(tmp_path)):
+            zircolite_script.main()
+
+        assert list(workdir.glob("timesketch-*.json"))
+        assert list(workdir.glob("navigator-*.json"))
+
+    def test_default_config_and_ruleset_resolve_from_any_cwd(self, tmp_path, monkeypatch):
+        """The bundled default config/ruleset must be found outside the repo."""
+        workdir = tmp_path / "elsewhere"
+        workdir.mkdir()
+        monkeypatch.chdir(workdir)
+
+        resolved_config = zircolite_script._resolve_default_path(
+            "config/config.yaml", "config", "config.yaml"
+        )
+        assert Path(resolved_config).is_file()
+        resolved_rules = zircolite_script._resolve_default_path(
+            "rules/rules_windows_generic.json", "rules", "rules_windows_generic.json"
+        )
+        assert Path(resolved_rules).is_file()
+
+    def test_local_file_still_wins_over_bundled_default(self, tmp_path, monkeypatch):
+        """A config/config.yaml in the CWD keeps priority over the bundled one."""
+        workdir = tmp_path / "elsewhere"
+        (workdir / "config").mkdir(parents=True)
+        local = workdir / "config" / "config.yaml"
+        local.write_text("mappings: {}\n")
+        monkeypatch.chdir(workdir)
+
+        resolved = zircolite_script._resolve_default_path(
+            "config/config.yaml", "config", "config.yaml"
+        )
+        assert resolved == "config/config.yaml"
+
+    def test_warn_ignored_db_flags_lists_inert_flags(self):
+        """DB-input mode must report every flag it silently ignores."""
+        import logging
+        from unittest.mock import MagicMock
+        logger = MagicMock(spec=logging.Logger)
+        args = argparse.Namespace(
+            unified_db=False, no_auto_mode=False, no_parallel=False,
+            add_index=[], remove_index=[], hashes=False,
+            keepflat=True, dbfile="x.db", strict=True,
+            archive_password="pw", no_event_filter=True, logs_encoding="utf-8",
+        )
+        zircolite_script._warn_ignored_db_flags(args, logger)
+
+        assert logger.warning.called
+        message = logger.warning.call_args[0][0]
+        for flag in ("--keepflat", "--dbfile", "--strict",
+                     "--archive-password", "--no-event-filter", "--logs-encoding"):
+            assert flag in message
+
+
+class TestTestRulesOrphanCases:
+    """A test case naming a rule that is not in the ruleset must fail the run."""
+
+    @staticmethod
+    def _ruleset(tmp_path):
+        ruleset = tmp_path / "rules.json"
+        ruleset.write_text(json.dumps([{
+            "title": "Detect PowerShell", "id": "ps-001", "level": "high", "tags": [],
+            "rule": ["SELECT * FROM logs WHERE CommandLine LIKE '%powershell%'"],
+        }]))
+        return ruleset
+
+    def test_matching_test_case_exits_zero(self, tmp_path):
+        ruleset = self._ruleset(tmp_path)
+        tests = tmp_path / "tests.json"
+        tests.write_text(json.dumps([{
+            "title": "Detect PowerShell",
+            "true_positive": [{"CommandLine": "powershell.exe -c x"}],
+            "true_negative": [{"CommandLine": "notepad.exe"}],
+        }]))
+
+        with pytest.raises(SystemExit) as exc_info:
+            with patch('sys.argv', [
+                'zircolite.py', '-r', str(ruleset),
+                '--test-rules', str(tests), '-n',
+            ]):
+                zircolite_script.main()
+        assert exc_info.value.code == 0
+
+    def test_test_case_matching_no_rule_exits_nonzero(self, tmp_path):
+        """A typo in the test file's rule title would otherwise pass CI silently."""
+        ruleset = self._ruleset(tmp_path)
+        tests = tmp_path / "tests.json"
+        tests.write_text(json.dumps([{
+            "title": "Detect PowerShel",  # typo: matches no rule
+            "true_positive": [{"CommandLine": "powershell.exe -c x"}],
+            "true_negative": [],
+        }]))
+
+        with pytest.raises(SystemExit) as exc_info:
+            with patch('sys.argv', [
+                'zircolite.py', '-r', str(ruleset),
+                '--test-rules', str(tests), '-n',
+            ]):
+                zircolite_script.main()
+        assert exc_info.value.code == 1
+
+    def test_failing_true_positive_exits_nonzero(self, tmp_path):
+        ruleset = self._ruleset(tmp_path)
+        tests = tmp_path / "tests.json"
+        tests.write_text(json.dumps([{
+            "title": "Detect PowerShell",
+            "true_positive": [{"CommandLine": "notepad.exe"}],
+            "true_negative": [],
+        }]))
+
+        with pytest.raises(SystemExit) as exc_info:
+            with patch('sys.argv', [
+                'zircolite.py', '-r', str(ruleset),
+                '--test-rules', str(tests), '-n',
+            ]):
+                zircolite_script.main()
+        assert exc_info.value.code == 1
+
+
+class TestYamlConfigTemplateValidation:
+    """A malformed output.templates entry must fail with the validation message."""
+
+    def test_template_entry_missing_output_is_fatal(self, tmp_path):
+        ruleset = tmp_path / "rules.json"
+        ruleset.write_text(json.dumps([
+            {"title": "R", "id": "1", "level": "high", "tags": [], "rule": ["SELECT 1"]}
+        ]))
+        events = tmp_path / "events.json"
+        events.write_text(json.dumps({"EventID": 1}) + "\n")
+        cfg = tmp_path / "cfg.yaml"
+        cfg.write_text(
+            "input:\n"
+            f"  path: {events}\n"
+            "  format: json\n"
+            "rules:\n"
+            f"  rulesets: [{ruleset}]\n"
+            "output:\n"
+            "  templates:\n"
+            "    - template: templates/exportForSplunk.tmpl\n"
+        )
+
+        with pytest.raises(SystemExit) as exc_info:
+            with patch('sys.argv', ['zircolite.py', '-Y', str(cfg), '-n']):
+                zircolite_script.main()
+        assert exc_info.value.code == 1

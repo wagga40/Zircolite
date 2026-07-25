@@ -110,6 +110,20 @@ class TestOpenMaybeCompressed:
         with open_maybe_compressed(p, password=b"pass123") as f:
             assert f.read() == data
 
+    def test_zip_unsupported_compression_raises_password_error(self, tmp_path):
+        """zipfile raises NotImplementedError for WinZip-AES members; the friendly
+        archive-password error must surface instead of a raw traceback."""
+        from unittest.mock import patch
+        p = tmp_path / "aes.json.zip"
+        with zipfile.ZipFile(p, "w") as zf:
+            zf.writestr("data.json", b'{"x": 1}')
+        with patch(
+            "zipfile.ZipFile.read",
+            side_effect=NotImplementedError("That compression method is not supported"),
+        ):
+            with pytest.raises(ValueError, match=ARCHIVE_PASSWORD_ERROR_MESSAGE):
+                open_maybe_compressed(p)
+
     def test_zip_multi_file_raises(self, tmp_path):
         """Archives with more than one member are rejected."""
         p = tmp_path / "multi.zip"
@@ -357,3 +371,18 @@ class TestDetectorWithCompressedFiles:
 
         result = LogTypeDetector().detect(zip_file)
         assert result.input_type == "json"
+
+
+class TestZipMacOSMetadata:
+    """Regression tests for macOS-created ZIP archives."""
+
+    def test_zip_with_macosx_entries_accepted(self, tmp_path):
+        """A single real file plus __MACOSX metadata counts as single-file archive."""
+        import zipfile
+        zip_path = tmp_path / "mac.zip"
+        with zipfile.ZipFile(zip_path, "w") as zf:
+            zf.writestr("events.json", b'{"EventID": 1}\n')
+            zf.writestr("__MACOSX/._events.json", b"\x00\x05\x16\x07")
+        with open_maybe_compressed(zip_path) as f:
+            data = f.read()
+        assert data == b'{"EventID": 1}\n'

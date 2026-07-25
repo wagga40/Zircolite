@@ -10,6 +10,7 @@ This module contains:
 - Field mappings configuration loader (JSON/YAML support)
 """
 
+import csv
 import logging
 import os
 import random
@@ -95,10 +96,10 @@ def load_field_mappings(
     suffix = config_path.suffix.lower()
 
     if suffix == ".json":
-        # JSON format - use orjson for speed
+        # JSON format - use orjson for speed (tolerate a UTF-8 BOM)
         with open(config_path, "rb") as f:
             try:
-                config = orjson.loads(f.read())
+                config = orjson.loads(f.read().lstrip(b"\xef\xbb\xbf"))
             except orjson.JSONDecodeError as e:
                 raise ValueError(f"Invalid JSON in field mappings file: {e}")
     elif suffix in (".yaml", ".yml"):
@@ -113,14 +114,14 @@ def load_field_mappings(
         with open(config_path, "rb") as f:
             content = f.read()
 
-        # Try JSON first (most common)
+        # Try JSON first (most common; tolerate a UTF-8 BOM)
         try:
-            config = orjson.loads(content)
+            config = orjson.loads(content.lstrip(b"\xef\xbb\xbf"))
         except orjson.JSONDecodeError:
             # Try YAML as fallback
             try:
-                config = yaml.safe_load(content.decode("utf-8"))
-            except yaml.YAMLError:
+                config = yaml.safe_load(content.decode("utf-8-sig"))
+            except (yaml.YAMLError, UnicodeDecodeError):
                 raise ValueError(
                     f"Unable to parse field mappings file: {config_file}. "
                     f"Supported formats: .json, .yaml, .yml"
@@ -198,6 +199,7 @@ def open_maybe_compressed(
     mode: str = "rb",
     encoding: Optional[str] = None,
     password: Optional[Union[str, bytes]] = None,
+    errors: str = "replace",
 ) -> Any:
     """Open a file, transparently decompressing gz/bz2 or extracting from a zip/7z archive.
 
@@ -207,6 +209,9 @@ def open_maybe_compressed(
         encoding: Character encoding for text-mode opens (defaults to ``'utf-8'``).
         password: Archive password for encrypted ZIP or 7-Zip archives.
                   May be a ``str`` or ``bytes``.  Ignored for non-archive formats.
+        errors: Decoding error policy for text-mode opens.  Defaults to
+                ``'replace'`` so a single undecodable byte cannot abort a whole
+                log file.
 
     Returns:
         A file-like object.  For ZIP and 7-Zip archives the member is buffered
@@ -227,14 +232,14 @@ def open_maybe_compressed(
         import gzip
 
         if text_mode:
-            return gzip.open(p, mode, encoding=encoding or "utf-8")
+            return gzip.open(p, mode, encoding=encoding or "utf-8", errors=errors)
         return gzip.open(p, "rb")
 
     if suffix == ".bz2":
         import bz2
 
         if text_mode:
-            return bz2.open(p, mode, encoding=encoding or "utf-8")
+            return bz2.open(p, mode, encoding=encoding or "utf-8", errors=errors)
         return bz2.open(p, "rb")
 
     if suffix == ".zip":
@@ -243,7 +248,12 @@ def open_maybe_compressed(
         pwd = password.encode() if isinstance(password, str) else password
         try:
             with zipfile.ZipFile(p, "r") as zf:
-                members = [m for m in zf.namelist() if not m.endswith("/")]
+                # Ignore directory entries and macOS resource-fork metadata so a
+                # single real file in a macOS-created zip is still accepted
+                members = [
+                    m for m in zf.namelist()
+                    if not m.endswith("/") and not m.startswith("__MACOSX/")
+                ]
                 if not members:
                     raise ValueError(f"ZIP archive '{p}' contains no files")
                 if len(members) > 1:
@@ -252,13 +262,17 @@ def open_maybe_compressed(
                         "only single-file archives are supported"
                     )
                 data = zf.read(members[0], pwd=pwd)
+        except NotImplementedError as e:
+            # WinZip AES-encrypted members are unsupported by zipfile; this
+            # clause must precede RuntimeError, its parent class
+            raise ValueError(ARCHIVE_PASSWORD_ERROR_MESSAGE) from e
         except RuntimeError as e:
             # ZIP raises RuntimeError for wrong/missing password
             if "password" in str(e).lower() or "decrypt" in str(e).lower():
                 raise ValueError(ARCHIVE_PASSWORD_ERROR_MESSAGE) from e
             raise
         if text_mode:
-            return io.TextIOWrapper(io.BytesIO(data), encoding=encoding or "utf-8")
+            return io.TextIOWrapper(io.BytesIO(data), encoding=encoding or "utf-8", errors=errors)
         return io.BytesIO(data)
 
     if suffix == ".7z":
@@ -281,6 +295,16 @@ def open_maybe_compressed(
             password.decode() if isinstance(password, bytes) else password
         )
 
+        class _NonClosingBytesIO(io.BytesIO):
+            """BytesIO that survives close().
+
+            py7zr's MemIO closes the writer after extraction, which would
+            otherwise invalidate the buffer before we can read it back.
+            """
+
+            def close(self) -> None:
+                self.flush()
+
         class _MemFactory:
             """Factory for py7zr in-memory extraction (create() is called per member)."""
 
@@ -288,7 +312,7 @@ def open_maybe_compressed(
                 self._buf = None
 
             def create(self, fname):
-                self._buf = io.BytesIO()
+                self._buf = _NonClosingBytesIO()
                 return self._buf
 
         try:
@@ -305,8 +329,7 @@ def open_maybe_compressed(
                 szf.extract(path=None, targets=names, factory=factory)  # type: ignore[arg-type]
                 if factory._buf is None:
                     raise RuntimeError("7z extract produced no data")
-                factory._buf.seek(0)
-                data = factory._buf.read()
+                data = factory._buf.getvalue()
         except PasswordRequired:
             raise ValueError(ARCHIVE_PASSWORD_ERROR_MESSAGE) from None
         except Bad7zFile as e:
@@ -318,18 +341,52 @@ def open_maybe_compressed(
             # Wrong 7z password often yields LZMAError/CrcError during decompression
             raise ValueError(ARCHIVE_PASSWORD_ERROR_MESSAGE) from e
         if text_mode:
-            return io.TextIOWrapper(io.BytesIO(data), encoding=encoding or "utf-8")
+            return io.TextIOWrapper(io.BytesIO(data), encoding=encoding or "utf-8", errors=errors)
         return io.BytesIO(data)
 
     # Plain file fallback
     if text_mode:
-        return open(p, mode, encoding=encoding or "utf-8")
+        return open(p, mode, encoding=encoding or "utf-8", errors=errors)
     return open(p, mode)
 
 
 # ---------------------------------------------------------------------------
 # CSV and string helpers
 # ---------------------------------------------------------------------------
+
+
+CSV_DELIMITER_CANDIDATES = ",;\t|"
+
+
+def sniff_csv_delimiter(sample: str, *, default: str = ",") -> str:
+    """Pick the delimiter of a CSV sample, restricted to plausible candidates.
+
+    ``csv.Sniffer`` can latch onto a recurring data letter (e.g. the 'y' in
+    "Security"), so candidates are limited to ``CSV_DELIMITER_CANDIDATES`` and
+    the result is only accepted when it actually splits the header line.
+    Otherwise the first candidate that appears consistently across the first two
+    lines wins, and *default* is the last resort.
+    """
+    lines = [line for line in sample.splitlines() if line.strip()]
+    if not lines:
+        return default
+
+    try:
+        sniffed = csv.Sniffer().sniff(sample, delimiters=CSV_DELIMITER_CANDIDATES)
+        if lines[0].count(sniffed.delimiter) >= 1:
+            return sniffed.delimiter
+    except csv.Error:
+        pass
+
+    header = lines[0]
+    for candidate in CSV_DELIMITER_CANDIDATES:
+        count = header.count(candidate)
+        if count < 1:
+            continue
+        if len(lines) < 2 or abs(count - lines[1].count(candidate)) <= 2:
+            return candidate
+
+    return default
 
 
 def sanitize_value_for_csv(value: Any) -> str:
@@ -392,7 +449,13 @@ def init_logger(
     logger = logging.getLogger(name)
     logger.setLevel(logging.DEBUG if debug_mode else logging.INFO)
 
-    # Clear any existing handlers to avoid duplicates
+    # Clear any existing handlers to avoid duplicates; close them first so
+    # repeated initialization does not leak open log files
+    for handler in logger.handlers:
+        try:
+            handler.close()
+        except Exception:
+            pass
     logger.handlers.clear()
 
     # Prevent propagation to root logger to avoid duplicate messages
@@ -409,7 +472,7 @@ def init_logger(
         file_log_format = "%(asctime)s %(levelname)-8s %(message)s"
         if debug_mode:
             file_log_format = "%(asctime)s %(levelname)-8s %(module)s:%(lineno)s %(funcName)s %(message)s"
-        file_handler = logging.FileHandler(log_file)
+        file_handler = logging.FileHandler(log_file, encoding="utf-8", errors="replace")
         file_handler.setLevel(logging.DEBUG if debug_mode else logging.INFO)
         file_handler.setFormatter(
             logging.Formatter(file_log_format, datefmt="%Y-%m-%d %H:%M:%S")
@@ -446,7 +509,7 @@ def select_files(
         return list(path_list)
 
     paths = list(path_list)
-    filters = [f[0].lower() for f in select_files_list if f]
+    filters = [term.lower() for group in select_files_list for term in group if group]
     selected: List[str] = []
     for element in paths:
         path_str = str(element)
@@ -465,7 +528,7 @@ def avoid_files(
         return list(path_list)
 
     paths = list(path_list)
-    filters = [f[0].lower() for f in avoid_files_list if f]
+    filters = [term.lower() for group in avoid_files_list for term in group if group]
     filtered: List[str] = []
     for element in paths:
         path_str = str(element)
@@ -643,8 +706,8 @@ def analyze_files_and_recommend_mode(
     elif optimal_workers <= 1:
         parallel_reason = "Insufficient resources for parallel processing"
     elif (
-        memory_per_file > (available_ram * 0.85) * 0.6
-    ):  # Single file uses >60% of usable RAM
+        max_size * memory_multiplier > (available_ram * 0.85) * 0.6
+    ):  # Largest single file uses >60% of usable RAM
         parallel_reason = "Very large files - sequential processing safer"
     else:
         parallel_recommended = True
@@ -684,9 +747,6 @@ def analyze_files_and_recommend_mode(
     LARGE_FILE_THRESHOLD = 50 * 1024 * 1024  # 50 MB
     LOW_RAM_THRESHOLD = 2 * 1024 * 1024 * 1024  # 2 GB
     HIGH_RAM_THRESHOLD = 8 * 1024 * 1024 * 1024  # 8 GB
-    RAM_SAFETY_FACTOR = (
-        3  # Total data should be < available_ram / factor for unified mode
-    )
 
     # Decision logic for database mode
 
@@ -698,8 +758,10 @@ def analyze_files_and_recommend_mode(
     if available_ram < LOW_RAM_THRESHOLD:
         return ("per-file", f"Low available RAM ({format_size(available_ram)})", stats)
 
-    # Rule 3: Total size exceeds safe RAM threshold - use per-file
-    if total_size > available_ram / RAM_SAFETY_FACTOR:
+    # Rule 3: Estimated in-memory footprint exceeds safe RAM threshold - use per-file.
+    # The in-memory SQLite DB expands file size by up to memory_multiplier, so
+    # comparing raw total size against RAM would underestimate the footprint.
+    if total_size * memory_multiplier > available_ram * 0.85:
         return (
             "per-file",
             f"Total data size ({format_size(total_size)}) is large compared to available RAM ({format_size(available_ram)})",
@@ -724,11 +786,17 @@ def analyze_files_and_recommend_mode(
 
     # Rule 6: High RAM + moderate number of files - per-file mode (enables parallel processing)
     if available_ram >= HIGH_RAM_THRESHOLD and file_count >= 3:
-        return (
-            "per-file",
-            f"Sufficient RAM available ({format_size(available_ram)}) with {file_count} files - parallel processing enabled",
-            stats,
-        )
+        if parallel_recommended:
+            reason = (
+                f"Sufficient RAM available ({format_size(available_ram)}) "
+                f"with {file_count} files - parallel processing enabled"
+            )
+        else:
+            reason = (
+                f"Sufficient RAM available ({format_size(available_ram)}) "
+                f"with {file_count} files"
+            )
+        return ("per-file", reason, stats)
 
     # Rule 7: Many files (even if not tiny) - unified mode for correlation benefits
     if file_count >= MANY_FILES_THRESHOLD:

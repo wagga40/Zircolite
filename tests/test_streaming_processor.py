@@ -67,8 +67,6 @@ class TestStreamingEventProcessorInit:
         )
         
         assert processor._has_time_filter is True
-        assert processor._time_after_parsed is not None
-        assert processor._time_before_parsed is not None
         assert processor._time_after_str == "2024-01-01T00:00:00"
         assert processor._time_before_str == "2024-12-31T23:59:59"
 
@@ -841,6 +839,25 @@ class TestStreamingEventProcessorCSV:
         assert "OriginalLogfile" in events[0]
         assert "EventID" in events[0]
     
+    def test_stream_csv_with_bom_keeps_first_header_clean(
+        self, field_mappings_file, test_logger, default_args_config, tmp_path
+    ):
+        """A UTF-8 BOM must not corrupt the first header name into '\\ufeffEventID'."""
+        csv_file = tmp_path / "bom.csv"
+        csv_file.write_bytes(b"\xef\xbb\xbfEventID,Channel\n1,Security\n")
+
+        processor = StreamingEventProcessor(
+            config_file=field_mappings_file,
+            args_config=default_args_config,
+            logger=test_logger
+        )
+
+        events = list(processor.stream_csv_events(str(csv_file)))
+
+        assert len(events) == 1
+        assert "EventID" in events[0]
+        assert "﻿EventID" not in events[0]
+
     def test_stream_csv_preserves_fields(self, field_mappings_file, test_logger, default_args_config, tmp_csv_file):
         """Test that CSV streaming preserves all fields."""
         processor = StreamingEventProcessor(
@@ -1119,7 +1136,7 @@ class TestStreamingEventProcessorFormatStreams:
         self, field_mappings_file, test_logger, default_args_config, tmp_xml_file, tmp_path
     ):
         """Stream XML file yields flattened events."""
-        config = ExtractorConfig(xml_logs=True, tmp_dir=str(tmp_path / "xml_tmp"))
+        config = ExtractorConfig(xml_logs=True)
         extractor = EvtxExtractor(extractor_config=config, logger=test_logger)
         processor = StreamingEventProcessor(
             config_file=field_mappings_file,
@@ -1129,13 +1146,12 @@ class TestStreamingEventProcessorFormatStreams:
         events = list(processor.stream_xml_events(tmp_xml_file, extractor))
         assert len(events) >= 1
         assert "OriginalLogfile" in events[0]
-        extractor.cleanup()
 
     def test_stream_auditd_events(
         self, field_mappings_file, test_logger, default_args_config, tmp_auditd_file, tmp_path
     ):
         """Stream Auditd file yields flattened events."""
-        config = ExtractorConfig(auditd_logs=True, tmp_dir=str(tmp_path / "auditd_tmp"))
+        config = ExtractorConfig(auditd_logs=True)
         extractor = EvtxExtractor(extractor_config=config, logger=test_logger)
         processor = StreamingEventProcessor(
             config_file=field_mappings_file,
@@ -1145,7 +1161,6 @@ class TestStreamingEventProcessorFormatStreams:
         events = list(processor.stream_auditd_events(tmp_auditd_file, extractor))
         assert len(events) >= 1
         assert "OriginalLogfile" in events[0]
-        extractor.cleanup()
 
     def test_stream_sysmon_linux_events(
         self, field_mappings_file, test_logger, default_args_config, tmp_path
@@ -1157,7 +1172,7 @@ class TestStreamingEventProcessorFormatStreams:
             'Jan 15 10:30:00 host sysmon: <Event><System><EventID>1</EventID></System>'
             '<EventData><Data Name="Image">/usr/bin/bash</Data></EventData></Event>\n'
         )
-        config = ExtractorConfig(sysmon4linux=True, tmp_dir=str(tmp_path / "sysmon_tmp"))
+        config = ExtractorConfig(sysmon4linux=True)
         extractor = EvtxExtractor(extractor_config=config, logger=test_logger)
         processor = StreamingEventProcessor(
             config_file=field_mappings_file,
@@ -1167,13 +1182,12 @@ class TestStreamingEventProcessorFormatStreams:
         events = list(processor.stream_sysmon_linux_events(str(sysmon_file), extractor))
         # May be 0 if flattener expects Windows channel/time fields; we still cover the stream path
         assert isinstance(events, list)
-        extractor.cleanup()
 
     def test_process_file_streaming_xml(
         self, field_mappings_file, test_logger, default_args_config, tmp_xml_file, tmp_path
     ):
         """process_file_streaming with input_type xml inserts events."""
-        config = ExtractorConfig(xml_logs=True, tmp_dir=str(tmp_path / "xml_tmp"))
+        config = ExtractorConfig(xml_logs=True)
         extractor = EvtxExtractor(extractor_config=config, logger=test_logger)
         proc_config = ProcessingConfig(disable_progress=True)
         processor = StreamingEventProcessor(
@@ -1189,13 +1203,12 @@ class TestStreamingEventProcessorFormatStreams:
         )
         assert count >= 1
         conn.close()
-        extractor.cleanup()
 
     def test_process_file_streaming_auditd(
         self, field_mappings_file, test_logger, default_args_config, tmp_auditd_file, tmp_path
     ):
         """process_file_streaming with input_type auditd inserts events."""
-        config = ExtractorConfig(auditd_logs=True, tmp_dir=str(tmp_path / "auditd_tmp"))
+        config = ExtractorConfig(auditd_logs=True)
         extractor = EvtxExtractor(extractor_config=config, logger=test_logger)
         proc_config = ProcessingConfig(disable_progress=True)
         processor = StreamingEventProcessor(
@@ -1211,7 +1224,6 @@ class TestStreamingEventProcessorFormatStreams:
         )
         assert count >= 1
         conn.close()
-        extractor.cleanup()
 
     def test_process_file_streaming_unsupported_type(
         self, field_mappings_file, test_logger, default_args_config, tmp_path
@@ -1243,7 +1255,7 @@ class TestStreamingEventProcessorFormatStreams:
 '''
         evtxtract_file = tmp_path / "evtxtract.log"
         evtxtract_file.write_text(evtxtract_content)
-        config = ExtractorConfig(evtxtract=True, tmp_dir=str(tmp_path / "evtxtract_tmp"))
+        config = ExtractorConfig(evtxtract=True)
         extractor = EvtxExtractor(extractor_config=config, logger=test_logger)
         processor = StreamingEventProcessor(
             config_file=field_mappings_file,
@@ -1251,7 +1263,6 @@ class TestStreamingEventProcessorFormatStreams:
             logger=test_logger,
         )
         events = list(processor.stream_evtxtract_events(str(evtxtract_file), extractor))
-        extractor.cleanup()
         assert isinstance(events, list)
         if events:
             assert "OriginalLogfile" in events[0]
@@ -1376,7 +1387,11 @@ class TestStreamingEventProcessorErrorPaths:
         evtx_7z.write_bytes(b"\x37\x7a\xbc\xaf\x27\x1c")  # 7z magic
 
         evtx_magic = b"ElfFile\x00\x00"
-        mock_open_compressed.return_value.__enter__.return_value.read.return_value = evtx_magic
+        # Emulate a real stream: content once, then EOF (the implementation
+        # stream-copies the decompressed data)
+        mock_open_compressed.return_value.__enter__.return_value.read.side_effect = [
+            evtx_magic, b""
+        ]
 
         mock_parser = MagicMock()
         mock_parser.records_json.return_value = iter([{"data": json.dumps(sample_windows_event)}])
@@ -1643,7 +1658,7 @@ class TestStreamingJsonXmlErrorPaths:
     ):
         """When XML file cannot be read, error is logged and no events."""
         from zircolite.extractor import EvtxExtractor
-        config = __import__('zircolite.config').ExtractorConfig(xml_logs=True, tmp_dir=str(tmp_path / "xml_tmp"))
+        config = __import__('zircolite.config').ExtractorConfig(xml_logs=True)
         extractor = EvtxExtractor(extractor_config=config, logger=test_logger)
         processor = StreamingEventProcessor(
             config_file=field_mappings_file,
@@ -1653,7 +1668,6 @@ class TestStreamingJsonXmlErrorPaths:
         path = str(tmp_path / "does_not_exist.xml")
         events = list(processor.stream_xml_events(path, extractor))
         assert events == []
-        extractor.cleanup()
 
 
 class TestStreamingJsonArrayChunkedLargeFile:
@@ -1692,42 +1706,6 @@ class TestStreamingJsonArrayChunkedLargeFile:
         )
         events = list(processor.stream_json_array_chunked(str(arr_file)))
         assert events == []
-
-
-class TestStreamingTimeParsing:
-    """Tests for _parse_time_bound edge cases."""
-
-    def test_parse_time_bound_struct_time(self, field_mappings_file, test_logger, default_args_config):
-        """Cover line 204: struct_time input is returned as-is."""
-        import time
-        processor = StreamingEventProcessor(
-            config_file=field_mappings_file,
-            args_config=default_args_config,
-            logger=test_logger,
-        )
-        st = time.strptime("2024-01-01T00:00:00", "%Y-%m-%dT%H:%M:%S")
-        result = processor._parse_time_bound(st, "1970-01-01T00:00:00")
-        assert result == st
-
-    def test_parse_time_bound_invalid_string(self, field_mappings_file, test_logger, default_args_config):
-        """Cover lines 207-208: invalid string falls back."""
-        processor = StreamingEventProcessor(
-            config_file=field_mappings_file,
-            args_config=default_args_config,
-            logger=test_logger,
-        )
-        result = processor._parse_time_bound("not-a-date", "1970-01-01T00:00:00")
-        assert result is not None  # Falls back to the fallback value
-
-    def test_parse_time_bound_none_value(self, field_mappings_file, test_logger, default_args_config):
-        """Cover line 207: None value falls back."""
-        processor = StreamingEventProcessor(
-            config_file=field_mappings_file,
-            args_config=default_args_config,
-            logger=test_logger,
-        )
-        result = processor._parse_time_bound(None, "1970-01-01T00:00:00")
-        assert result is not None
 
 
 class TestStreamingTimeFiltering:
@@ -2357,3 +2335,355 @@ class TestStreamingBugFixes:
         processor._ensure_columns_exist_cached(conn, cursor, ("colA", "colB"))
         assert "colb" in processor._db_columns
         conn.close()
+
+
+class TestStreamingHostileKeysAndCaseVariants:
+    """Regression tests for SQL identifier escaping and case-variant columns."""
+
+    def _make_processor(self, field_mappings_file, test_logger, default_args_config):
+        return StreamingEventProcessor(
+            config_file=field_mappings_file,
+            args_config=default_args_config,
+            processing_config=ProcessingConfig(disable_progress=True),
+            logger=test_logger,
+        )
+
+    def test_key_with_double_quote_does_not_abort_file(
+        self, field_mappings_file, test_logger, default_args_config, tmp_path
+    ):
+        """A split-derived column name containing a double quote must not abort ingestion.
+
+        Top-level keys are sanitized during flattening, but keys produced by the
+        'split' feature (key=value parsing of field values, i.e. log content)
+        reach the DB layer unsanitized.
+        """
+        processor = self._make_processor(field_mappings_file, test_logger, default_args_config)
+        json_file = tmp_path / "events.json"
+        # 'Hashes' is split on ',' into key=value pairs by the test config
+        json_file.write_text(
+            json.dumps({"EventID": 1, "Hashes": 'MD5=abc,bad"key=x'}) + "\n"
+        )
+
+        conn = sqlite3.connect(":memory:")
+        processor.create_initial_table(conn)
+        count = processor.process_file_streaming(conn, str(json_file), input_type="json")
+
+        assert count == 1
+        cursor = conn.cursor()
+        cursor.execute('SELECT "MD5", "bad""key" FROM logs')
+        row = cursor.fetchone()
+        assert row == ("abc", "x")
+        conn.close()
+
+    def test_case_variant_columns_merge_values(
+        self, field_mappings_file, test_logger, default_args_config, tmp_path
+    ):
+        """EventID and eventid in one batch map to a single canonical column."""
+        processor = self._make_processor(field_mappings_file, test_logger, default_args_config)
+        json_file = tmp_path / "events.json"
+        json_file.write_text(
+            json.dumps({"EventID": 1, "Message": "a"}) + "\n"
+            + json.dumps({"eventid": 2, "Message": "b"}) + "\n"
+        )
+
+        conn = sqlite3.connect(":memory:")
+        processor.create_initial_table(conn)
+        count = processor.process_file_streaming(conn, str(json_file), input_type="json")
+
+        assert count == 2
+        cursor = conn.cursor()
+        cursor.execute('SELECT "EventID" FROM logs ORDER BY "EventID"')
+        values = [row[0] for row in cursor.fetchall()]
+        assert values == [1, 2]
+        conn.close()
+
+    def test_same_event_case_collision_keeps_first_non_none(
+        self, field_mappings_file, test_logger, default_args_config, tmp_path
+    ):
+        """A single event carrying both cases must not break the INSERT."""
+        processor = self._make_processor(field_mappings_file, test_logger, default_args_config)
+        json_file = tmp_path / "events.json"
+        json_file.write_text(json.dumps({"EventID": 7, "eventid": 9}) + "\n")
+
+        conn = sqlite3.connect(":memory:")
+        processor.create_initial_table(conn)
+        count = processor.process_file_streaming(conn, str(json_file), input_type="json")
+
+        assert count == 1
+        cursor = conn.cursor()
+        cursor.execute('SELECT "EventID" FROM logs')
+        assert cursor.fetchone()[0] in (7, 9)
+        conn.close()
+
+    def test_keepflat_single_write_per_event(
+        self, field_mappings_file, test_logger, default_args_config, tmp_path
+    ):
+        """Each event must be written with one write() call.
+
+        In parallel mode the shared handle's lock covers a single write, so two
+        writes per event could interleave between workers and corrupt JSONL.
+        """
+        processor = self._make_processor(field_mappings_file, test_logger, default_args_config)
+        json_file = tmp_path / "events.json"
+        json_file.write_text(json.dumps({"EventID": 1}) + "\n" + json.dumps({"EventID": 2}) + "\n")
+
+        writes = []
+
+        class CountingWriter:
+            def write(self, data):
+                writes.append(bytes(data))
+                return len(data)
+
+        conn = sqlite3.connect(":memory:")
+        processor.create_initial_table(conn)
+        count = processor.process_file_streaming(
+            conn, str(json_file), input_type="json", keepflat_file=CountingWriter()
+        )
+        conn.close()
+
+        assert count == 2
+        assert len(writes) == 2
+        for w in writes:
+            assert w.endswith(b"\n")
+            json.loads(w)  # each write is a complete JSONL line
+
+
+class TestStreamingRobustness:
+    """Regression tests for BOM handling, time filtering, and input precedence."""
+
+    def _make_processor(self, field_mappings_file, test_logger, default_args_config, **proc_kwargs):
+        return StreamingEventProcessor(
+            config_file=field_mappings_file,
+            args_config=default_args_config,
+            processing_config=ProcessingConfig(disable_progress=True, **proc_kwargs),
+            logger=test_logger,
+        )
+
+    def test_jsonl_utf8_bom_first_event_not_lost(
+        self, field_mappings_file, test_logger, default_args_config, tmp_path
+    ):
+        """A UTF-8 BOM must not silently drop the first JSONL event."""
+        processor = self._make_processor(field_mappings_file, test_logger, default_args_config)
+        json_file = tmp_path / "bom.json"
+        json_file.write_bytes(
+            b'\xef\xbb\xbf{"EventID": 1}\n{"EventID": 2}\n'
+        )
+        conn = sqlite3.connect(":memory:")
+        processor.create_initial_table(conn)
+        count = processor.process_file_streaming(conn, str(json_file), input_type="json")
+        assert count == 2
+        conn.close()
+
+    def test_json_array_utf8_bom_accepted(
+        self, field_mappings_file, test_logger, default_args_config, tmp_path
+    ):
+        processor = self._make_processor(field_mappings_file, test_logger, default_args_config)
+        json_file = tmp_path / "bom_array.json"
+        json_file.write_bytes(b'\xef\xbb\xbf[{"EventID": 1}, {"EventID": 2}]')
+        events = list(processor.stream_json_events(str(json_file), json_array=True))
+        assert len(events) == 2
+
+    def test_time_filter_bounds_are_inclusive(
+        self, field_mappings_file, test_logger, default_args_config, tmp_path
+    ):
+        """Events exactly on --after/--before boundaries must be kept."""
+        processor = self._make_processor(
+            field_mappings_file, test_logger, default_args_config,
+            time_after="2024-06-15T10:00:00", time_before="2024-06-15T12:00:00",
+        )
+        json_file = tmp_path / "events.json"
+        json_file.write_text(
+            json.dumps({"EventID": 1, "SystemTime": "2024-06-15T10:00:00Z"}) + "\n"
+            + json.dumps({"EventID": 2, "SystemTime": "2024-06-15T12:00:00Z"}) + "\n"
+            + json.dumps({"EventID": 3, "SystemTime": "2024-06-15T11:00:00Z"}) + "\n"
+        )
+        conn = sqlite3.connect(":memory:")
+        processor.create_initial_table(conn)
+        count = processor.process_file_streaming(conn, str(json_file), input_type="json")
+        assert count == 3
+        conn.close()
+
+    def test_time_filter_coerces_non_string_timestamp(
+        self, field_mappings_file, test_logger, default_args_config, tmp_path
+    ):
+        """A numeric timestamp must not crash/bypass the time filter logic."""
+        processor = self._make_processor(
+            field_mappings_file, test_logger, default_args_config,
+            time_after="1970-01-01T00:00:00", time_before="9999-12-12T23:59:59",
+        )
+        json_file = tmp_path / "events.json"
+        json_file.write_text(json.dumps({"EventID": 1, "SystemTime": 1718442600}) + "\n")
+        conn = sqlite3.connect(":memory:")
+        processor.create_initial_table(conn)
+        count = processor.process_file_streaming(conn, str(json_file), input_type="json")
+        assert count == 1
+        conn.close()
+
+    def test_empty_source_condition_warns(
+        self, field_mappings_file, test_logger, default_args_config, tmp_path, caplog
+    ):
+        """A transform without source_condition must produce a load-time warning."""
+        config = {
+            "exclusions": [], "useless": [None, ""], "mappings": {}, "alias": {},
+            "split": {}, "transforms_enabled": True,
+            "transforms": {
+                "Field": [{
+                    "info": "dead transform", "type": "python",
+                    "code": "def transform(param):\n    return param",
+                    "alias": True, "alias_name": "T",
+                    "enabled": True,
+                }]
+            },
+        }
+        config_file = tmp_path / "config.json"
+        config_file.write_text(json.dumps(config))
+        with caplog.at_level("WARNING"):
+            StreamingEventProcessor(
+                config_file=str(config_file),
+                args_config=default_args_config,
+                logger=test_logger,
+            )
+        assert any("source_condition" in r.message for r in caplog.records)
+
+    def test_chosen_input_deterministic_precedence(
+        self, field_mappings_file, test_logger
+    ):
+        """With multiple *_input flags set, precedence is deterministic."""
+        from argparse import Namespace
+        args = Namespace(
+            evtx_input=True, json_input=True, auditd_input=False,
+            json_array_input=False, csv_input=False, xml_input=False,
+            sysmon_linux_input=False, evtxtract_input=False, db_input=False,
+        )
+        processor = StreamingEventProcessor(
+            config_file=field_mappings_file,
+            args_config=args,
+            logger=test_logger,
+        )
+        assert processor.chosen_input == "json_input"
+
+
+class TestStreamingCsvDelimiter:
+    """CSV streaming must honour the delimiter actually used by the file."""
+
+    def _stream(self, path, field_mappings_file, test_logger, args_config):
+        processor = StreamingEventProcessor(
+            config_file=field_mappings_file,
+            args_config=args_config,
+            logger=test_logger,
+        )
+        return list(processor.stream_csv_events(str(path)))
+
+    @pytest.mark.parametrize(
+        "delimiter,suffix",
+        [(",", "csv"), (";", "csv"), ("\t", "tsv"), ("|", "csv")],
+    )
+    def test_delimiter_is_sniffed(
+        self, delimiter, suffix, tmp_path, field_mappings_file, test_logger,
+        default_args_config,
+    ):
+        """Non-comma exports must not collapse into a single column."""
+        src = tmp_path / f"events.{suffix}"
+        src.write_text(
+            delimiter.join(["EventID", "Channel", "CommandLine"]) + "\n"
+            + delimiter.join(["4688", "Security", "powershell.exe"]) + "\n"
+        )
+        events = self._stream(src, field_mappings_file, test_logger, default_args_config)
+        assert len(events) == 1
+        assert events[0]["EventID"] == "4688"
+        assert events[0]["Channel"] == "Security"
+        assert events[0]["CommandLine"] == "powershell.exe"
+
+    def test_quoted_field_containing_delimiter(
+        self, tmp_path, field_mappings_file, test_logger, default_args_config,
+    ):
+        """A quoted value holding the delimiter stays intact."""
+        src = tmp_path / "events.csv"
+        src.write_text(
+            'EventID;Channel;CommandLine\n'
+            '4688;Security;"cmd.exe /c a;b"\n'
+        )
+        events = self._stream(src, field_mappings_file, test_logger, default_args_config)
+        assert events[0]["CommandLine"] == "cmd.exe /c a;b"
+
+    def test_logs_encoding_is_honoured(
+        self, tmp_path, field_mappings_file, test_logger, default_args_config,
+    ):
+        """--logs-encoding reaches the CSV reader."""
+        src = tmp_path / "events.csv"
+        src.write_bytes("EventID,Computer\n4688,héte\n".encode("ISO-8859-1"))
+        default_args_config.logs_encoding = "ISO-8859-1"
+        events = self._stream(src, field_mappings_file, test_logger, default_args_config)
+        assert events[0]["Computer"] == "héte"
+
+
+class TestStreamingDecodeTolerance:
+    """One undecodable byte must not cost the whole file."""
+
+    def test_auditd_bad_byte_keeps_other_lines(
+        self, tmp_path, field_mappings_file, test_logger, default_args_config,
+    ):
+        log = tmp_path / "audit.log"
+        log.write_bytes(
+            b'type=SYSCALL msg=audit(1600000000.123:456): exe="/bin/ok"\n'
+            b'type=SYSCALL msg=audit(1600000000.124:457): exe="/bin/\xffbad"\n'
+            b'type=SYSCALL msg=audit(1600000000.125:458): exe="/bin/after"\n'
+        )
+        extractor = EvtxExtractor(
+            extractor_config=ExtractorConfig(auditd_logs=True), logger=test_logger
+        )
+        processor = StreamingEventProcessor(
+            config_file=field_mappings_file,
+            args_config=default_args_config,
+            logger=test_logger,
+        )
+        events = list(processor.stream_auditd_events(str(log), extractor))
+        assert len(events) == 3
+
+
+class TestStreamingXmlEncodingAndDiagnostics:
+    """XML streaming covers what the removed extractor conversion used to."""
+
+    def test_utf16_xml_yields_events(
+        self, tmp_path, field_mappings_file, test_logger, default_args_config,
+    ):
+        """A UTF-16 XML export (with BOM) must not silently yield zero events."""
+        xml = (
+            '<?xml version="1.0" encoding="UTF-16"?>'
+            '<Events><Event xmlns="http://schemas.microsoft.com/win/2004/08/events/event">'
+            '<System><EventID>1</EventID></System>'
+            '<EventData><Data Name="CommandLine">test.exe</Data></EventData>'
+            '</Event></Events>'
+        )
+        src = tmp_path / "events.xml"
+        src.write_bytes(xml.encode("utf-16"))
+
+        extractor = EvtxExtractor(
+            extractor_config=ExtractorConfig(xml_logs=True), logger=test_logger
+        )
+        processor = StreamingEventProcessor(
+            config_file=field_mappings_file,
+            args_config=default_args_config,
+            logger=test_logger,
+        )
+        events = list(processor.stream_xml_events(str(src), extractor))
+        assert len(events) == 1
+
+    def test_xml_without_events_warns(
+        self, tmp_path, field_mappings_file, default_args_config,
+    ):
+        """A non-empty XML file yielding zero events must warn, not stay silent."""
+        mock_logger = MagicMock()
+        src = tmp_path / "notevents.xml"
+        src.write_text("<Stuff>no events here</Stuff>")
+
+        extractor = EvtxExtractor(
+            extractor_config=ExtractorConfig(xml_logs=True), logger=mock_logger
+        )
+        processor = StreamingEventProcessor(
+            config_file=field_mappings_file,
+            args_config=default_args_config,
+            logger=mock_logger,
+        )
+        assert list(processor.stream_xml_events(str(src), extractor)) == []
+        assert mock_logger.warning.called

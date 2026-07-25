@@ -34,6 +34,7 @@ import orjson as json
 from zircolite.utils import (
     ARCHIVE_PASSWORD_ERROR_MESSAGE,
     COMPRESSED_SUFFIXES,
+    sniff_csv_delimiter,
 )
 
 
@@ -80,15 +81,15 @@ TIMESTAMP_RAW_PATTERNS = [
         "Jun 15 10:30:00",
     ),
     # Windows FileTime / LDAP: 18-digit integer (e.g. 133627842000000000)
-    (re.compile(r"(?<!\d)1[23]\d{16}(?!\d)"), "Windows FileTime", "133627842000000000"),
+    (re.compile(r"(?<!\d)1\d{17}(?!\d)"), "Windows FileTime", "133627842000000000"),
     # Epoch seconds: 10-digit integer (standalone)
     (re.compile(r"(?<!\d)\d{10}(?!\d)"), "Epoch seconds", "1718442600"),
     # Epoch milliseconds: 13-digit integer (standalone)
     (re.compile(r"(?<!\d)\d{13}(?!\d)"), "Epoch milliseconds", "1718442600000"),
 ]
 
-# Auditd line pattern: type=XXXX msg=audit(TIMESTAMP.NNN:SEQ):
-AUDITD_LINE_PATTERN = re.compile(r"^type=\w+\s+msg=audit\(\d+\.\d+:\d+\):")
+# Auditd line pattern: [node=HOST] type=XXXX msg=audit(TIMESTAMP.NNN:SEQ):
+AUDITD_LINE_PATTERN = re.compile(r"^(?:node=\S+\s+)?type=\w+\s+msg=audit\(\d+\.\d+:\d+\):")
 
 # Sysmon for Linux: syslog header before XML
 SYSMON_LINUX_SYSLOG_PATTERN = re.compile(r"^\w+\s+\d+\s+[\d:]+\s+\S+\s+\S+.*<Event>")
@@ -501,11 +502,24 @@ class LogTypeDetector:
                 import zipfile
 
                 with zipfile.ZipFile(file_path, "r") as zf:
-                    members = [m for m in zf.namelist() if not m.endswith("/")]
+                    members = [
+                        m for m in zf.namelist()
+                        if not m.endswith("/") and not m.startswith("__MACOSX/")
+                    ]
                     if members:
-                        sample_bytes = zf.read(
+                        # zf.open() streams: only the sample is decompressed
+                        with zf.open(
                             members[0], pwd=self._archive_password_bytes()
-                        )[: self.SAMPLE_BYTES]
+                        ) as member:
+                            sample_bytes = member.read(self.SAMPLE_BYTES)
+            except NotImplementedError:
+                # WinZip AES encryption is unsupported by zipfile; this clause
+                # must precede RuntimeError, its parent class
+                raise ValueError(ARCHIVE_PASSWORD_ERROR_MESSAGE) from None
+            except RuntimeError as e:
+                # Encrypted ZIP without (or with a wrong) password
+                if "password" in str(e).lower() or "decrypt" in str(e).lower():
+                    raise ValueError(ARCHIVE_PASSWORD_ERROR_MESSAGE) from None
             except Exception:
                 pass
         elif suffix == ".7z":
@@ -514,12 +528,18 @@ class LogTypeDetector:
                 import py7zr
                 from py7zr.exceptions import PasswordRequired
 
+                class _NonClosingBytesIO(_io.BytesIO):
+                    """py7zr closes the writer after extraction; keep it readable."""
+
+                    def close(self) -> None:
+                        self.flush()
+
                 class _MemFactory:
                     def __init__(self):
                         self._buf = None
 
                     def create(self, fname):
-                        self._buf = _io.BytesIO()
+                        self._buf = _NonClosingBytesIO()
                         return self._buf
 
                 with py7zr.SevenZipFile(
@@ -530,17 +550,13 @@ class LogTypeDetector:
                         factory = _MemFactory()
                         szf.extract(path=None, targets=[names[0]], factory=factory)  # type: ignore[arg-type]
                         if factory._buf is not None:
-                            factory._buf.seek(0)
-                            sample_bytes = factory._buf.read(self.SAMPLE_BYTES)
+                            sample_bytes = factory._buf.getvalue()[: self.SAMPLE_BYTES]
             except PasswordRequired:  # type: ignore[misc]
                 raise ValueError(ARCHIVE_PASSWORD_ERROR_MESSAGE) from None
             except Exception:
                 pass  # e.g. corrupt or wrong password (LZMAError) — fall back to empty sample
 
-        try:
-            text = sample_bytes.decode("utf-8")
-        except UnicodeDecodeError:
-            text = sample_bytes.decode("iso-8859-1")
+        text = self._decode_sample(sample_bytes)
         lines = text.splitlines()[: self.SAMPLE_LINES]
         return (base_ext, sample_bytes, text, lines)
 
@@ -556,7 +572,7 @@ class LogTypeDetector:
             with open(file_path, "rb") as f:
                 header = f.read(16)
 
-            if header[:7] == EVTX_MAGIC[:7]:
+            if len(header) >= 8 and header[:8] == EVTX_MAGIC:
                 return DetectionResult(
                     input_type="evtx",
                     log_source="windows_evtx",
@@ -579,6 +595,24 @@ class LogTypeDetector:
 
         return None
 
+    @staticmethod
+    def _decode_sample(sample_bytes: bytes) -> str:
+        """Decode a content sample, honoring BOMs before plain UTF-8/Latin-1.
+
+        Windows tooling often emits UTF-16 (with BOM) and editors add a UTF-8
+        BOM; without this, no pattern can match the NUL-laden or BOM-prefixed
+        content and detection silently degrades to extension fallback.
+        """
+        if sample_bytes.startswith((b"\xff\xfe", b"\xfe\xff")):
+            try:
+                return sample_bytes.decode("utf-16")
+            except UnicodeDecodeError:
+                pass
+        try:
+            return sample_bytes.decode("utf-8-sig")
+        except UnicodeDecodeError:
+            return sample_bytes.decode("iso-8859-1")
+
     def _read_sample(self, file_path: Path) -> Tuple[bytes, str, List[str]]:
         """
         Read a sample of a plain (non-compressed) file for content analysis.
@@ -591,10 +625,7 @@ class LogTypeDetector:
         with open(file_path, "rb") as f:
             sample_bytes = f.read(self.SAMPLE_BYTES)
 
-        try:
-            text = sample_bytes.decode("utf-8")
-        except UnicodeDecodeError:
-            text = sample_bytes.decode("iso-8859-1")
+        text = self._decode_sample(sample_bytes)
 
         lines = text.splitlines()[: self.SAMPLE_LINES]
         return sample_bytes, text, lines
@@ -611,10 +642,33 @@ class LogTypeDetector:
         ext: str,
     ) -> Optional[DetectionResult]:
         """Detect format from file content."""
+        # Binary formats can arrive here after decompression (e.g. .evtx.gz):
+        # re-check magic bytes on the (possibly decompressed) sample first.
+        if len(sample_bytes) >= 8 and sample_bytes[:8] == EVTX_MAGIC:
+            return DetectionResult(
+                input_type="evtx",
+                log_source="windows_evtx",
+                confidence="high",
+                timestamp_field="SystemTime",
+                suggested_pipeline="sysmon",
+                details="EVTX binary detected via magic bytes after decompression",
+            )
+        if len(sample_bytes) >= 16 and sample_bytes[:16] == SQLITE_MAGIC:
+            return DetectionResult(
+                input_type="sqlite",
+                log_source="sqlite_db",
+                confidence="high",
+                timestamp_field=None,
+                suggested_pipeline=None,
+                details="SQLite database detected via magic bytes after decompression",
+            )
+
         if not sample_lines:
             return None
 
-        first_char = sample_lines[0].lstrip()[:1]
+        # Skip leading blank lines (and BOM-only lines) when picking the family
+        first_line = next((ln for ln in sample_lines if ln.strip()), "")
+        first_char = first_line.lstrip()[:1]
 
         # Fast-path: first non-whitespace character determines the family
         if first_char in ("{", "["):
@@ -714,7 +768,7 @@ class LogTypeDetector:
                 details=f"Sysmon for Linux log format detected ({sysmon_matches} matching lines)",
                 metadata={"has_syslog_header": has_syslog_header},
             )
-        if sysmon_matches == 1:
+        if sysmon_matches == 1 and has_syslog_header:
             return DetectionResult(
                 input_type="sysmon_linux",
                 log_source="sysmon_linux",
@@ -724,6 +778,8 @@ class LogTypeDetector:
                 details="Sysmon for Linux log format detected (1 matching line)",
             )
 
+        # A single namespace-less XML line without a syslog header is more
+        # likely a Windows Sysmon/Event XML file: let _check_xml decide.
         return None
 
     def _check_evtxtract(self, text: str) -> Optional[DetectionResult]:
@@ -972,6 +1028,7 @@ class LogTypeDetector:
 
     def _check_csv(self, lines: List[str], ext: str) -> Optional[DetectionResult]:
         """Check if content is CSV format and classify it."""
+        heuristic_delim: Optional[str] = None
         if ext not in (".csv", ".tsv"):
             if len(lines) < 2:
                 return None
@@ -982,20 +1039,28 @@ class LogTypeDetector:
                 if count >= 2:
                     second_count = lines[1].count(delimiter)
                     if abs(count - second_count) <= 2:
+                        heuristic_delim = delimiter
                         break
             else:
                 return None
+        elif ext == ".tsv":
+            heuristic_delim = "\t"
 
         try:
             sample_text = "\n".join(lines[:5])
-            dialect = csv.Sniffer().sniff(sample_text)
-            reader = csv.DictReader(io.StringIO(sample_text), dialect=dialect)
+            delimiter = sniff_csv_delimiter(
+                sample_text, default=heuristic_delim or ","
+            )
+            reader = csv.DictReader(io.StringIO(sample_text), delimiter=delimiter)
             first_row = next(reader, None)
 
             if first_row is None:
                 return None
 
-            headers = set(first_row.keys())
+            # Ragged rows store extra fields under the None restkey — drop it
+            headers = {h for h in first_row.keys() if h is not None}
+            if not headers:
+                return None
 
             # Detect timestamp field from headers
             ts_field = next((c for c in self._timestamp_fields if c in headers), None)
@@ -1009,7 +1074,7 @@ class LogTypeDetector:
                     details="Windows Event Log CSV format detected",
                     metadata={
                         "headers": sorted(headers)[:20],
-                        "delimiter": dialect.delimiter,
+                        "delimiter": delimiter,
                     },
                 )
 
@@ -1022,7 +1087,7 @@ class LogTypeDetector:
                 + (f" (timestamp field: {ts_field})" if ts_field else ""),
                 metadata={
                     "headers": sorted(headers)[:20],
-                    "delimiter": dialect.delimiter,
+                    "delimiter": delimiter,
                 },
             )
 
@@ -1120,13 +1185,21 @@ class LogTypeDetector:
 
     @staticmethod
     def _find_key_for_value(event: dict, needle: str) -> Optional[str]:
-        """Find the key in *event* (one level deep) whose value contains *needle*."""
+        """Find the key in *event* (one level deep) whose value contains *needle*.
+
+        Numeric values are compared via their string form so epoch/FileTime
+        timestamps stored as JSON numbers can be tied back to their key.
+        """
         for key, value in event.items():
             if isinstance(value, str) and needle in value:
+                return key
+            if isinstance(value, (int, float)) and needle == str(value):
                 return key
             if isinstance(value, dict):
                 for sub_key, sub_val in value.items():
                     if isinstance(sub_val, str) and needle in sub_val:
+                        return sub_key
+                    if isinstance(sub_val, (int, float)) and needle == str(sub_val):
                         return sub_key
         return None
 
@@ -1208,9 +1281,10 @@ class LogTypeDetector:
         if _RE_SYSLOG_TS.match(value):
             return True
 
-        # Pure-digit fast path: epoch or Windows FileTime strings
+        # Pure-digit fast path: epoch seconds (10), epoch millis (13),
+        # or Windows FileTime (18) strings. Lengths 11-12 are neither.
         if value.isdigit():
-            if 10 <= length <= 13:
+            if length in (10, 13):
                 return True
             if length == 18 and value[0] == "1":
                 return True

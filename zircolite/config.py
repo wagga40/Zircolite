@@ -58,8 +58,8 @@ class ProcessingConfig:
 @dataclass
 class ExtractorConfig:
     """
-    Configuration for log extraction operations.
-    
+    Configuration for log line conversion.
+
     Used by EvtxExtractor for specifying input format and options.
     """
     # Input format flags (mutually exclusive in practice)
@@ -67,15 +67,10 @@ class ExtractorConfig:
     sysmon4linux: bool = False
     auditd_logs: bool = False
     evtxtract: bool = False
-    csv_input: bool = False
-    
-    # Processing options
-    tmp_dir: Optional[str] = None
+
+    # Encoding used when the streaming processor opens the source file
     encoding: Optional[str] = None
 
-    # EVTX parsing strictness
-    strict_evtx: bool = False
-    
     def __post_init__(self) -> None:
         """Set default encoding based on input type if not specified."""
         if self.encoding is None:

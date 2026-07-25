@@ -287,3 +287,30 @@ class TestLoadFieldMappingsIntegration:
         msg = log_capture[0].lower()
         assert "deprecated" in msg
         assert "config.yaml" in msg
+
+
+class TestFieldMappingsEncoding:
+    """Regression tests for encoding robustness in load_field_mappings."""
+
+    def test_json_with_utf8_bom_accepted(self, tmp_path, test_logger):
+        """A JSON config saved with a UTF-8 BOM must load."""
+        from zircolite.utils import load_field_mappings
+        cfg = tmp_path / "config.json"
+        cfg.write_bytes(b'\xef\xbb\xbf{"mappings": {}, "exclusions": []}')
+        config = load_field_mappings(str(cfg), logger=test_logger)
+        assert config["mappings"] == {}
+
+    def test_extensionless_non_utf8_raises_valueerror(self, tmp_path, test_logger):
+        """Non-UTF-8 content in an extension-less file must raise ValueError, not UnicodeDecodeError."""
+        from zircolite.utils import load_field_mappings
+        cfg = tmp_path / "config"
+        cfg.write_bytes(b"\xff\xfe\x00\x01binary garbage")
+        with pytest.raises(ValueError):
+            load_field_mappings(str(cfg), logger=test_logger)
+
+    def test_extensionless_yaml_with_bom_accepted(self, tmp_path, test_logger):
+        from zircolite.utils import load_field_mappings
+        cfg = tmp_path / "config"
+        cfg.write_bytes(b"\xef\xbb\xbfmappings: {}\n")
+        config = load_field_mappings(str(cfg), logger=test_logger)
+        assert config["mappings"] == {}

@@ -2,6 +2,7 @@
 Tests for the ZircoliteCore class.
 """
 
+import csv
 import gc
 import json
 import pytest
@@ -388,6 +389,9 @@ class TestZircoliteCoreDatabase:
             },
         ]
         zircore.create_index()
+        # Auto-index candidates come from the loaded ruleset, so they are
+        # applied via apply_auto_index() (called by execute_ruleset)
+        zircore.apply_auto_index()
         cursor = zircore.db_connection.cursor()
         cursor.execute("SELECT name FROM sqlite_master WHERE type='index'")
         names = {row[0] for row in cursor.fetchall()}
@@ -1460,4 +1464,353 @@ class TestBugFixes:
         assert len(results) == 1
         assert results[0]["error"] == ""
         assert results[0]["tp_pass"] is True
+        zircore.close()
+
+
+class TestAppendModeOutput:
+    """Regression tests for JSON/CSV append-mode output corruption."""
+
+    def _make_core(self, field_mappings_file, test_logger, csv_mode=False):
+        proc_config = ProcessingConfig(csv_mode=csv_mode, disable_progress=True)
+        zircore = ZircoliteCore(
+            config=field_mappings_file,
+            processing_config=proc_config,
+            logger=test_logger,
+        )
+        zircore.create_db("'CommandLine' TEXT COLLATE NOCASE,\n")
+        zircore.db_connection.execute(
+            "INSERT INTO logs (CommandLine) VALUES ('powershell.exe test')"
+        )
+        zircore.db_connection.commit()
+        zircore.load_ruleset_from_var(
+            [{
+                "title": "PS Rule",
+                "id": "ps-1",
+                "description": "d",
+                "level": "high",
+                "tags": [],
+                "rule": ["SELECT * FROM logs WHERE CommandLine LIKE '%powershell%' ESCAPE '\\'"],
+            }],
+            rule_filters=None,
+        )
+        return zircore
+
+    def test_append_to_nonexistent_file_produces_valid_json(
+        self, field_mappings_file, tmp_path, test_logger
+    ):
+        """Appending to a missing file must start a new JSON array."""
+        zircore = self._make_core(field_mappings_file, test_logger)
+        out = str(tmp_path / "out.json")
+        zircore.execute_ruleset(out, write_mode="a", last_ruleset=True)
+        with open(out) as f:
+            results = json.load(f)
+        assert len(results) == 1
+        zircore.close()
+
+    def test_csv_append_keeps_header_alignment_across_calls(
+        self, field_mappings_file, tmp_path, test_logger
+    ):
+        """Append calls must reuse the first call's fieldnames, not rebuild them."""
+        proc_config = ProcessingConfig(csv_mode=True, disable_progress=True)
+        zircore = ZircoliteCore(
+            config=field_mappings_file,
+            processing_config=proc_config,
+            logger=test_logger,
+        )
+        zircore.create_db(
+            "'CommandLine' TEXT COLLATE NOCASE, 'User' TEXT COLLATE NOCASE,\n"
+        )
+        zircore.db_connection.execute(
+            "INSERT INTO logs (CommandLine, User) VALUES ('powershell.exe', 'SECRETUSER')"
+        )
+        zircore.db_connection.commit()
+        out = str(tmp_path / "out.csv")
+
+        zircore.load_ruleset_from_var(
+            [{
+                "title": "CmdLine Rule", "id": "c1", "description": "d",
+                "level": "high", "tags": [],
+                "rule": ["SELECT CommandLine FROM logs WHERE CommandLine LIKE '%powershell%' ESCAPE '\\'"],
+            }],
+            rule_filters=None,
+        )
+        zircore.execute_ruleset(out, write_mode="w", last_ruleset=False)
+
+        zircore.load_ruleset_from_var(
+            [{
+                "title": "User Rule", "id": "u1", "description": "d",
+                "level": "high", "tags": [],
+                "rule": ["SELECT User FROM logs WHERE User = 'SECRETUSER'"],
+            }],
+            rule_filters=None,
+        )
+        zircore.execute_ruleset(out, write_mode="a", last_ruleset=True)
+
+        with open(out, newline="") as f:
+            rows = list(csv.DictReader(f, delimiter=";"))
+        assert len(rows) == 2
+        # A row from the second call must not land its values under the
+        # first call's columns
+        assert all(r["CommandLine"] != "SECRETUSER" for r in rows)
+        zircore.close()
+
+    def test_append_to_empty_file_produces_valid_json(
+        self, field_mappings_file, tmp_path, test_logger
+    ):
+        out = tmp_path / "out.json"
+        out.write_text("")
+        zircore = self._make_core(field_mappings_file, test_logger)
+        zircore.execute_ruleset(str(out), write_mode="a", last_ruleset=True)
+        with open(out) as f:
+            results = json.load(f)
+        assert len(results) == 1
+        zircore.close()
+
+    def test_append_to_empty_array_produces_valid_json(
+        self, field_mappings_file, tmp_path, test_logger
+    ):
+        """Appending to '[]' must not produce '[, ...]'."""
+        out = tmp_path / "out.json"
+        out.write_text("[]")
+        zircore = self._make_core(field_mappings_file, test_logger)
+        zircore.execute_ruleset(str(out), write_mode="a", last_ruleset=True)
+        with open(out) as f:
+            results = json.load(f)
+        assert len(results) == 1
+        zircore.close()
+
+    def test_two_appends_produce_valid_json_with_both_results(
+        self, field_mappings_file, tmp_path, test_logger
+    ):
+        out = str(tmp_path / "out.json")
+        zircore = self._make_core(field_mappings_file, test_logger)
+        zircore.execute_ruleset(out, write_mode="w", last_ruleset=True)
+        zircore.execute_ruleset(out, write_mode="a", last_ruleset=True)
+        with open(out) as f:
+            results = json.load(f)
+        assert len(results) == 2
+        zircore.close()
+
+    def test_csv_append_writes_header_once(
+        self, field_mappings_file, tmp_path, test_logger
+    ):
+        """CSV append across two execute_ruleset calls must not duplicate the header."""
+        out = str(tmp_path / "out.csv")
+        zircore = self._make_core(field_mappings_file, test_logger, csv_mode=True)
+        zircore.execute_ruleset(out, write_mode="w", last_ruleset=True)
+        zircore.execute_ruleset(out, write_mode="a", last_ruleset=True)
+        with open(out) as f:
+            lines = [ln for ln in f.read().splitlines() if ln.strip()]
+        header_count = sum(1 for ln in lines if ln.startswith("rule_title"))
+        assert header_count == 1
+        zircore.close()
+
+
+class TestRunRuleTestsTyping:
+    """run_rule_tests must build typed schemas matching production semantics."""
+
+    def test_numeric_range_predicate_matches_production(self, field_mappings_file, tmp_path, test_logger):
+        """A >= predicate must behave numerically (all-TEXT schemas compare lexicographically)."""
+        test_file = tmp_path / "tests.json"
+        test_cases = [{
+            "title": "Range Rule",
+            "true_positive": [{"EventID": 10001}],
+            "true_negative": [{"EventID": 9999}],
+        }]
+        test_file.write_text(json.dumps(test_cases))
+
+        zircore = ZircoliteCore(config=field_mappings_file, logger=test_logger)
+        zircore.ruleset = [{
+            "title": "Range Rule",
+            "id": "range-1",
+            "rule": ["SELECT * FROM logs WHERE EventID >= 10000"],
+        }]
+        results = zircore.run_rule_tests(str(test_file))
+        assert len(results) == 1
+        assert results[0]["tp_pass"] is True
+        assert results[0]["tn_pass"] is True
+        zircore.close()
+
+    def test_text_predicate_case_insensitive_matches_production(
+        self, field_mappings_file, tmp_path, test_logger
+    ):
+        """Production TEXT columns are COLLATE NOCASE; '=' must ignore case here too."""
+        test_file = tmp_path / "tests.json"
+        test_cases = [{
+            "title": "Case Rule",
+            "true_positive": [{"CommandLine": "POWERSHELL.EXE"}],
+            "true_negative": [{"CommandLine": "cmd.exe"}],
+        }]
+        test_file.write_text(json.dumps(test_cases))
+
+        zircore = ZircoliteCore(config=field_mappings_file, logger=test_logger)
+        zircore.ruleset = [{
+            "title": "Case Rule",
+            "id": "case-1",
+            "rule": ["SELECT * FROM logs WHERE CommandLine = 'powershell.exe'"],
+        }]
+        results = zircore.run_rule_tests(str(test_file))
+        assert len(results) == 1
+        assert results[0]["tp_pass"] is True
+        assert results[0]["tn_pass"] is True
+        zircore.close()
+
+    def test_sql_keyword_event_key_is_inserted(
+        self, field_mappings_file, tmp_path, test_logger
+    ):
+        """Event keys that are SQL keywords (e.g. 'Group') must insert and match."""
+        test_file = tmp_path / "tests.json"
+        test_cases = [{
+            "title": "Group Rule",
+            "true_positive": [{"Group": "admins"}],
+            "true_negative": [{"Group": "users"}],
+        }]
+        test_file.write_text(json.dumps(test_cases))
+
+        zircore = ZircoliteCore(config=field_mappings_file, logger=test_logger)
+        zircore.ruleset = [{
+            "title": "Group Rule",
+            "id": "group-1",
+            "rule": ["SELECT * FROM logs WHERE \"Group\" = 'admins'"],
+        }]
+        results = zircore.run_rule_tests(str(test_file))
+        assert len(results) == 1
+        assert results[0]["error"] == ""
+        assert results[0]["tp_pass"] is True
+        assert results[0]["tn_pass"] is True
+        zircore.close()
+
+    def test_insert_failure_is_reported_as_error(
+        self, field_mappings_file, tmp_path, test_logger
+    ):
+        """A failed test-event insert must surface as an error, not a silent miss."""
+        test_file = tmp_path / "tests.json"
+        test_cases = [{
+            "title": "Broken Insert",
+            "true_positive": [{"CommandLine": "cmd.exe"}],
+            "true_negative": [],
+        }]
+        test_file.write_text(json.dumps(test_cases))
+
+        zircore = ZircoliteCore(config=field_mappings_file, logger=test_logger)
+        zircore.ruleset = [{
+            "title": "Broken Insert",
+            "id": "broken-1",
+            "rule": ["SELECT * FROM logs WHERE CommandLine LIKE '%cmd%'"],
+        }]
+        with patch.object(ZircoliteCore, "insert_data_to_db", return_value=False):
+            results = zircore.run_rule_tests(str(test_file))
+        assert len(results) == 1
+        assert results[0]["tp_pass"] is False
+        assert "insert" in results[0]["error"].lower()
+        zircore.close()
+
+    def test_non_dict_test_case_entries_are_ignored(
+        self, field_mappings_file, tmp_path, test_logger
+    ):
+        """Malformed (non-object) entries must be skipped, not crash the run."""
+        test_file = tmp_path / "tests.json"
+        test_file.write_text(json.dumps([
+            "junk",
+            {
+                "title": "Test Rule",
+                "true_positive": [{"CommandLine": "cmd.exe"}],
+                "true_negative": [],
+            },
+        ]))
+
+        zircore = ZircoliteCore(config=field_mappings_file, logger=test_logger)
+        zircore.ruleset = [{
+            "title": "Test Rule",
+            "id": "t1",
+            "rule": ["SELECT * FROM logs WHERE CommandLine LIKE '%cmd%'"],
+        }]
+        results = zircore.run_rule_tests(str(test_file))
+        assert any(r["title"] == "Test Rule" and r["tp_pass"] for r in results)
+        zircore.close()
+
+
+class TestCoreRobustness:
+    """Regression tests for core robustness fixes."""
+
+    def test_load_db_in_memory_missing_file_raises(self, field_mappings_file, test_logger, tmp_path):
+        """A missing DB path must raise instead of creating a 0-byte file."""
+        zircore = ZircoliteCore(config=field_mappings_file, logger=test_logger)
+        missing = str(tmp_path / "nope.db")
+        with pytest.raises(RuntimeError, match="does not exist"):
+            zircore.load_db_in_memory(missing)
+        assert not Path(missing).exists()
+        zircore.close()
+
+    def test_load_db_in_memory_reapplies_auto_index(
+        self, field_mappings_file, test_logger, tmp_path
+    ):
+        """Each loaded DB must get auto-indexes; backup() replaces the whole in-memory DB."""
+        def make_db(path):
+            conn = sqlite3.connect(str(path))
+            conn.execute(
+                "CREATE TABLE logs (row_id INTEGER PRIMARY KEY, CommandLine TEXT)"
+            )
+            conn.execute("INSERT INTO logs (CommandLine) VALUES ('powershell.exe')")
+            conn.commit()
+            conn.close()
+
+        db1 = tmp_path / "a.db"
+        db2 = tmp_path / "b.db"
+        make_db(db1)
+        make_db(db2)
+
+        proc_config = ProcessingConfig(auto_index_top_n=5, disable_progress=True)
+        zircore = ZircoliteCore(
+            config=field_mappings_file,
+            processing_config=proc_config,
+            logger=test_logger,
+        )
+        zircore.load_ruleset_from_var(
+            [{
+                "title": "PS Rule", "id": "ps-1", "description": "d",
+                "level": "high", "tags": [],
+                "rule": ["SELECT * FROM logs WHERE CommandLine LIKE '%powershell%' ESCAPE '\\'"],
+            }],
+            rule_filters=None,
+        )
+
+        def index_names():
+            cur = zircore.db_connection.execute(
+                "SELECT name FROM sqlite_master WHERE type='index' AND name LIKE 'idx_%'"
+            )
+            return {row[0] for row in cur.fetchall()}
+
+        zircore.load_db_in_memory(str(db1))
+        zircore.apply_auto_index()
+        assert index_names()
+
+        zircore.load_db_in_memory(str(db2))
+        zircore.apply_auto_index()
+        assert index_names()
+        zircore.close()
+
+    def test_execute_rule_with_string_rule_value_yields_nothing(self, field_mappings_file, test_logger):
+        """A 'rule' given as a string must be rejected, not iterated by character."""
+        zircore = ZircoliteCore(config=field_mappings_file, logger=test_logger)
+        zircore.create_db("'CommandLine' TEXT COLLATE NOCASE,\n")
+        result = zircore.execute_rule({"title": "Bad", "rule": "SELECT * FROM logs"})
+        assert result == {}
+        zircore.close()
+
+    def test_run_rule_tests_reports_orphan_cases(self, field_mappings_file, tmp_path, test_logger):
+        """Test cases referencing missing rules must appear in results."""
+        test_file = tmp_path / "tests.json"
+        test_file.write_text(json.dumps([
+            {"title": "Ghost Rule", "true_positive": [{"CommandLine": "x"}]},
+        ]))
+        zircore = ZircoliteCore(config=field_mappings_file, logger=test_logger)
+        zircore.ruleset = [{
+            "title": "Real Rule", "id": "r1",
+            "rule": ["SELECT * FROM logs WHERE CommandLine LIKE '%x%'"],
+        }]
+        results = zircore.run_rule_tests(str(test_file))
+        orphan = [r for r in results if r["title"] == "Ghost Rule"]
+        assert len(orphan) == 1
+        assert orphan[0]["error"] == "no matching rule in ruleset"
         zircore.close()

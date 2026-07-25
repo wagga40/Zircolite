@@ -204,10 +204,22 @@ class TestSelectFiles:
         
         # Any file matching any filter should be included
         result = select_files(path_list, [["sysmon"], ["security"]])
-        
-        # Note: Current implementation uses first filter only
-        # This tests the actual behavior
+
         assert len(result) >= 1
+
+    def test_select_files_multiple_patterns_per_group(self):
+        """All patterns in a nargs='+' group must be honored, not just the first."""
+        path_list = [
+            Path("/logs/sysmon.evtx"),
+            Path("/logs/security.evtx"),
+            Path("/logs/application.evtx"),
+        ]
+
+        result = select_files(path_list, [["sysmon", "security"]])
+
+        assert len(result) == 2
+        assert any("sysmon" in p for p in result)
+        assert any("security" in p for p in result)
 
 
 class TestAvoidFiles:
@@ -232,11 +244,23 @@ class TestAvoidFiles:
             Path("/logs/SYSMON.evtx"),
             Path("/logs/security.evtx"),
         ]
-        
+
         result = avoid_files(path_list, [["sysmon"]])
-        
+
         assert len(result) == 1
         assert "security" in str(result[0])
+
+    def test_avoid_files_multiple_patterns_per_group(self):
+        """All patterns in a nargs='+' group must be honored, not just the first."""
+        path_list = [
+            Path("/logs/sysmon.evtx"),
+            Path("/logs/security.evtx"),
+            Path("/logs/application.evtx"),
+        ]
+
+        result = avoid_files(path_list, [["sysmon", "security"]])
+
+        assert result == [str(Path("/logs/application.evtx"))]
     
     def test_avoid_files_no_filter(self):
         """Test with no filter (returns all files)."""
@@ -610,3 +634,194 @@ class TestSelectAvoidFilesBugFixes:
         result = avoid_files(paths, [["a"], []])
         assert len(result) == 1
         assert "b.evtx" in str(result[0])
+
+
+class TestModeRecommendationRamHeuristics:
+    """Regression tests for RAM-heuristic fixes in analyze_files_and_recommend_mode."""
+
+    def test_rule3_accounts_for_memory_expansion(self):
+        """Unified mode must compare the expanded footprint, not raw file size.
+
+        1 GB of small files expands ~5x in the in-memory DB (5 GB) which is
+        over 85% of 4 GB available RAM: per-file must be chosen even though
+        raw size (1 GB) is under the old RAM/3 threshold.
+        """
+        from zircolite.utils import analyze_files_and_recommend_mode
+        from unittest.mock import patch, MagicMock
+
+        files = [f"/fake/f{i}.evtx" for i in range(1024)]
+        one_mb = 1024 * 1024
+        vm = MagicMock()
+        vm.available = 4 * 1024**3
+        vm.total = 16 * 1024**3
+        with patch("zircolite.utils.psutil.virtual_memory", return_value=vm), \
+             patch("zircolite.utils.os.path.getsize", return_value=one_mb), \
+             patch("zircolite.utils.os.cpu_count", return_value=8):
+            mode, reason, stats = analyze_files_and_recommend_mode(files)
+        assert mode == "per-file"
+
+    def test_rule6_reason_reflects_actual_parallel_recommendation(self):
+        """Rule 6 must not claim parallel is enabled when it is not."""
+        from zircolite.utils import analyze_files_and_recommend_mode
+        from unittest.mock import patch, MagicMock
+
+        # One huge file hides behind two small ones: parallel must be rejected
+        files = ["/fake/big.evtx", "/fake/s1.evtx", "/fake/s2.evtx"]
+        sizes = {
+            "/fake/big.evtx": 8 * 1024**3,
+            "/fake/s1.evtx": 1024 * 1024,
+            "/fake/s2.evtx": 1024 * 1024,
+        }
+        vm = MagicMock()
+        vm.available = 16 * 1024**3
+        vm.total = 32 * 1024**3
+        with patch("zircolite.utils.psutil.virtual_memory", return_value=vm), \
+             patch("zircolite.utils.os.path.getsize", side_effect=lambda p: sizes[p]), \
+             patch("zircolite.utils.os.cpu_count", return_value=8):
+            mode, reason, stats = analyze_files_and_recommend_mode(files)
+        assert stats["parallel_recommended"] is False
+        assert "parallel processing enabled" not in reason
+
+    def test_one_huge_file_blocks_parallel_even_with_small_avg(self):
+        """The parallel safety check must use the largest file, not the average."""
+        from zircolite.utils import analyze_files_and_recommend_mode
+        from unittest.mock import patch, MagicMock
+
+        files = ["/fake/big.evtx"] + [f"/fake/s{i}.evtx" for i in range(9)]
+        sizes = {"/fake/big.evtx": 6 * 1024**3}
+        for f in files[1:]:
+            sizes[f] = 1024 * 1024
+        vm = MagicMock()
+        vm.available = 8 * 1024**3
+        vm.total = 16 * 1024**3
+        with patch("zircolite.utils.psutil.virtual_memory", return_value=vm), \
+             patch("zircolite.utils.os.path.getsize", side_effect=lambda p: sizes[p]), \
+             patch("zircolite.utils.os.cpu_count", return_value=8):
+            mode, reason, stats = analyze_files_and_recommend_mode(files)
+        assert stats["parallel_recommended"] is False
+        assert "Very large files" in stats["parallel_reason"]
+
+
+class TestInitLoggerHandlerManagement:
+    """Regression tests for init_logger handler management."""
+
+    def test_reinit_closes_previous_file_handler(self, tmp_path):
+        """Re-initializing the logger must close the old file handler."""
+        import logging
+        from zircolite.utils import init_logger
+        log1 = tmp_path / "one.log"
+        log2 = tmp_path / "two.log"
+        logger1 = init_logger(debug_mode=False, log_file=str(log1), use_rich=False)
+        old_handlers = list(logger1.handlers)
+        logger2 = init_logger(debug_mode=False, log_file=str(log2), use_rich=False)
+        assert logger1 is logger2  # same named logger
+        for h in old_handlers:
+            if isinstance(h, logging.FileHandler):
+                assert h.stream is None or h.stream.closed
+
+
+class TestModeRecommendationRemainingRules:
+    """Coverage for recommendation Rules 5, 7 and the empty-input edge."""
+
+    def _analyze(self, files, sizes, avail_gb=16, cpus=8):
+        from zircolite.utils import analyze_files_and_recommend_mode
+        from unittest.mock import patch, MagicMock
+        vm = MagicMock()
+        vm.available = avail_gb * 1024**3
+        vm.total = avail_gb * 2 * 1024**3
+        with patch("zircolite.utils.psutil.virtual_memory", return_value=vm), \
+             patch("zircolite.utils.os.path.getsize", side_effect=lambda p: sizes[p]), \
+             patch("zircolite.utils.os.cpu_count", return_value=cpus):
+            return analyze_files_and_recommend_mode(files)
+
+    def test_rule5_few_large_files_perfile(self):
+        """Few large files (>50MB avg) → per-file."""
+        files = ["/fake/a.evtx", "/fake/b.evtx", "/fake/c.evtx"]
+        sizes = {f: 80 * 1024 * 1024 for f in files}
+        mode, reason, stats = self._analyze(files, sizes, avail_gb=4)
+        # 240MB * 3.5x = 840MB < 4GB*0.85 → passes Rule 3, avg >= 50MB → Rule 5
+        assert mode == "per-file"
+        assert "large files" in reason.lower()
+
+    def test_rule7_many_medium_files_unified(self):
+        """Many files that are not tiny but fit in RAM → unified."""
+        files = [f"/fake/f{i}.evtx" for i in range(12)]
+        sizes = {f: 20 * 1024 * 1024 for f in files}  # 240 MB total
+        mode, reason, stats = self._analyze(files, sizes, avail_gb=4)
+        # 240MB * 4x = 960MB < 4GB*0.85 → Rule 7 (>= 10 files)
+        assert mode == "unified"
+
+    def test_empty_file_list_returns_perfile(self):
+        from zircolite.utils import analyze_files_and_recommend_mode
+        from unittest.mock import patch, MagicMock
+        vm = MagicMock()
+        vm.available = 8 * 1024**3
+        vm.total = 16 * 1024**3
+        with patch("zircolite.utils.psutil.virtual_memory", return_value=vm):
+            mode, reason, stats = analyze_files_and_recommend_mode([])
+        assert mode == "per-file"
+
+
+class TestSniffCsvDelimiter:
+    """Delimiter detection shared by the log detector and the CSV stream."""
+
+    @pytest.mark.parametrize("delimiter", [",", ";", "\t", "|"])
+    def test_detects_each_supported_delimiter(self, delimiter):
+        from zircolite.utils import sniff_csv_delimiter
+        sample = (
+            delimiter.join(["EventID", "Channel", "Computer"]) + "\n"
+            + delimiter.join(["4688", "Security", "HOST01"]) + "\n"
+        )
+        assert sniff_csv_delimiter(sample) == delimiter
+
+    def test_does_not_latch_onto_a_data_letter(self):
+        """csv.Sniffer can pick a recurring letter; candidates stay restricted."""
+        from zircolite.utils import sniff_csv_delimiter
+        sample = "EventID;Channel\n4688;Security\n1;Security\n"
+        assert sniff_csv_delimiter(sample) == ";"
+
+    def test_single_column_falls_back_to_default(self):
+        from zircolite.utils import sniff_csv_delimiter
+        assert sniff_csv_delimiter("OnlyColumn\nvalue\n") == ","
+
+    def test_empty_sample_falls_back_to_default(self):
+        from zircolite.utils import sniff_csv_delimiter
+        assert sniff_csv_delimiter("") == ","
+        assert sniff_csv_delimiter("\n  \n") == ","
+
+    def test_custom_default_is_honoured(self):
+        from zircolite.utils import sniff_csv_delimiter
+        assert sniff_csv_delimiter("OnlyColumn\nvalue\n", default="\t") == "\t"
+
+    def test_header_only_sample(self):
+        from zircolite.utils import sniff_csv_delimiter
+        assert sniff_csv_delimiter("EventID;Channel;Computer\n") == ";"
+
+
+class TestOpenMaybeCompressedDecodeErrors:
+    """A single undecodable byte must not abort a whole log file."""
+
+    def test_text_mode_replaces_bad_bytes_by_default(self, tmp_path):
+        from zircolite.utils import open_maybe_compressed
+        src = tmp_path / "audit.log"
+        src.write_bytes(b"good line\nbad \xff line\nlast line\n")
+        with open_maybe_compressed(str(src), "rt") as f:
+            lines = f.readlines()
+        assert len(lines) == 3
+
+    def test_errors_policy_is_overridable(self, tmp_path):
+        from zircolite.utils import open_maybe_compressed
+        src = tmp_path / "audit.log"
+        src.write_bytes(b"bad \xff line\n")
+        with pytest.raises(UnicodeDecodeError):
+            with open_maybe_compressed(str(src), "rt", errors="strict") as f:
+                f.read()
+
+    def test_gzip_text_mode_replaces_bad_bytes(self, tmp_path):
+        import gzip
+        from zircolite.utils import open_maybe_compressed
+        src = tmp_path / "audit.log.gz"
+        with gzip.open(src, "wb") as f:
+            f.write(b"good line\nbad \xff line\n")
+        with open_maybe_compressed(str(src), "rt") as f:
+            assert len(f.readlines()) == 2

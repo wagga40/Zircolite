@@ -250,12 +250,6 @@ def sample_windows_events_list():
 
 
 @pytest.fixture
-def sample_auditd_log_line():
-    """Sample Auditd log line for testing."""
-    return 'type=SYSCALL msg=audit(1705318200.123:456): arch=c000003e syscall=59 success=yes exit=0 a0=7f1234567890 a1=7f1234567890 a2=7f1234567890 a3=0 items=2 ppid=1234 pid=5678 auid=1000 uid=0 gid=0 euid=0 suid=0 fsuid=0 egid=0 sgid=0 fsgid=0 tty=pts0 ses=1 comm="bash" exe="/bin/bash" key="commands"'
-
-
-@pytest.fixture
 def sample_xml_event():
     """Sample XML Windows Event for testing."""
     return '''<Event xmlns="http://schemas.microsoft.com/win/2004/08/events/event">
@@ -341,16 +335,6 @@ def empty_ruleset():
     return []
 
 
-@pytest.fixture
-def malformed_ruleset():
-    """Malformed ruleset for error handling tests."""
-    return [
-        {"title": "Missing Rule Key"},  # Missing 'rule' key
-        None,  # Null entry
-        {},  # Empty dict
-    ]
-
-
 # =============================================================================
 # Temporary Directory and File Fixtures
 # =============================================================================
@@ -415,14 +399,6 @@ def tmp_xml_file(tmp_path, sample_xml_event):
 </Events>'''
     xml_file.write_text(xml_content)
     return str(xml_file)
-
-
-@pytest.fixture
-def tmp_output_dir(tmp_path):
-    """Create a temporary output directory."""
-    output_dir = tmp_path / "output"
-    output_dir.mkdir()
-    return str(output_dir)
 
 
 # =============================================================================
@@ -513,6 +489,7 @@ def default_args_config():
         json_input=False,
         json_array_input=False,
         db_input=False,
+        evtx_input=False,
         sysmon_linux_input=False,
         auditd_input=False,
         xml_input=False,
@@ -597,12 +574,6 @@ def test_logger():
     return init_logger(debug_mode=False, log_file=None)
 
 
-@pytest.fixture
-def debug_logger():
-    """Create a debug test logger."""
-    return init_logger(debug_mode=True, log_file=None)
-
-
 # =============================================================================
 # Mock Fixtures
 # =============================================================================
@@ -617,17 +588,6 @@ def mock_psutil():
         yield mock
 
 
-@pytest.fixture
-def mock_requests():
-    """Mock requests for network-related tests."""
-    with patch('zircolite.rules.requests') as mock:
-        mock_response = MagicMock()
-        mock_response.iter_content.return_value = [b'test content']
-        mock_response.headers = {'content-length': '100'}
-        mock.get.return_value = mock_response
-        yield mock
-
-
 # =============================================================================
 # Database Fixtures
 # =============================================================================
@@ -639,41 +599,6 @@ def in_memory_db():
     conn.row_factory = sqlite3.Row
     yield conn
     conn.close()
-
-
-@pytest.fixture
-def populated_db(in_memory_db):
-    """Create an in-memory database with sample data."""
-    cursor = in_memory_db.cursor()
-    cursor.execute('''
-        CREATE TABLE logs (
-            row_id INTEGER PRIMARY KEY AUTOINCREMENT,
-            EventID TEXT,
-            Channel TEXT,
-            Computer TEXT,
-            CommandLine TEXT,
-            Image TEXT,
-            User TEXT,
-            SystemTime TEXT,
-            TargetFileName TEXT
-        )
-    ''')
-    
-    # Insert sample data
-    sample_data = [
-        (1, 'Sysmon', 'WORKSTATION01', 'powershell.exe -c whoami', 'C:\\powershell.exe', 'admin', '2024-01-15T10:30:00', None),
-        (1, 'Sysmon', 'WORKSTATION01', 'cmd.exe /c whoami', 'C:\\cmd.exe', 'admin', '2024-01-15T10:31:00', None),
-        (11, 'Sysmon', 'WORKSTATION01', None, 'C:\\explorer.exe', 'admin', '2024-01-15T10:32:00', 'C:\\malware.exe'),
-        (3, 'Sysmon', 'WORKSTATION02', None, 'C:\\firefox.exe', 'user', '2024-01-15T10:33:00', None),
-    ]
-    
-    cursor.executemany('''
-        INSERT INTO logs (EventID, Channel, Computer, CommandLine, Image, User, SystemTime, TargetFileName)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-    ''', sample_data)
-    
-    in_memory_db.commit()
-    return in_memory_db
 
 
 # =============================================================================
@@ -692,9 +617,7 @@ _CLEANUP_PATTERNS = [
     'ruleset-*.json',
     # Log files
     'zircolite*.log',
-    # Database files
-    '*.db',
-    # Temporary directories
+    # Temporary directories created by the extractor / rules updater / GUI
     'tmp-*',
     # GUI output
     'zircogui-output*',
@@ -702,11 +625,18 @@ _CLEANUP_PATTERNS = [
     'fields.json',
 ]
 
+# Snapshot of tmp-* entries present at session start: never deleted, so a
+# pytest run launched from a directory containing pre-existing tmp-* dirs
+# (e.g. user files) cannot destroy them.
+_PRE_EXISTING_TMP = set(Path(_ORIGINAL_CWD).glob('tmp-*'))
+
 
 def _cleanup_artifacts(directory: Path):
     """Remove artifacts matching patterns from the given directory."""
     for pattern in _CLEANUP_PATTERNS:
         for item in directory.glob(pattern):
+            if item in _PRE_EXISTING_TMP:
+                continue
             try:
                 if item.is_file():
                     item.unlink()

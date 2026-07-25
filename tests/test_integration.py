@@ -155,41 +155,45 @@ class TestFullPipelineCSV:
 class TestFullPipelineAuditd:
     """Integration tests for Auditd log processing."""
     
-    def test_auditd_to_detection(self, tmp_path, test_logger, default_args_config):
+    def test_auditd_to_detection(
+        self, tmp_path, test_logger, default_args_config, minimal_field_mappings
+    ):
         """Test processing Auditd logs."""
-        # Create auditd log file
+        config_file = tmp_path / "config.json"
+        config_file.write_text(json.dumps(minimal_field_mappings))
+
         auditd_file = tmp_path / "audit.log"
         auditd_content = """type=SYSCALL msg=audit(1705318200.123:456): arch=c000003e syscall=59 success=yes exit=0 pid=5678 uid=0 comm="bash" exe="/bin/bash"
 type=SYSCALL msg=audit(1705318201.456:457): arch=c000003e syscall=59 success=yes exit=0 pid=5679 uid=0 comm="ls" exe="/bin/ls"
 type=SYSCALL msg=audit(1705318202.789:458): arch=c000003e syscall=59 success=yes exit=0 pid=5680 uid=0 comm="curl" exe="/usr/bin/curl"
 """
         auditd_file.write_text(auditd_content)
-        
-        # Extract to JSON (extractor still needed for auditd conversion)
-        ext_config = ExtractorConfig(auditd_logs=True)
+
+        default_args_config.auditd_input = True
         extractor = EvtxExtractor(
-            extractor_config=ext_config,
-            logger=test_logger
+            extractor_config=ExtractorConfig(auditd_logs=True), logger=test_logger
         )
-        extractor.run(str(auditd_file))
-        
-        # Get converted JSON
-        json_files = list(Path(extractor.tmpDir).glob("*.json"))
-        assert len(json_files) == 1
-        
-        # Read and verify JSON content
-        with open(json_files[0]) as f:
-            lines = f.readlines()
-        
-        assert len(lines) == 3
-        
-        # Verify JSON structure
-        first_event = json.loads(lines[0])
-        assert "type" in first_event
-        assert first_event["type"] == "SYSCALL"
-        assert "timestamp" in first_event
-        
-        extractor.cleanup()
+        zircore = ZircoliteCore(
+            config=str(config_file),
+            processing_config=ProcessingConfig(disable_progress=True),
+            logger=test_logger,
+        )
+        total = zircore.run_streaming(
+            [str(auditd_file)],
+            input_type='auditd',
+            args_config=default_args_config,
+            extractor=extractor,
+            disable_progress=True,
+        )
+        assert total == 3
+
+        rows = zircore.execute_select_query("SELECT type, timestamp, exe FROM logs")
+        assert len(rows) == 3
+        assert rows[0]["type"] == "SYSCALL"
+        assert rows[0]["timestamp"]
+        assert {r["exe"] for r in rows} == {"/bin/bash", "/bin/ls", "/usr/bin/curl"}
+
+        zircore.close()
 
 
 @pytest.mark.integration
@@ -649,16 +653,11 @@ class TestFullPipelineXML:
         xml_file = tmp_path / "events.xml"
         xml_file.write_text(xml_content)
 
-        # Extract XML to JSON
-        ext_config = ExtractorConfig(xml_logs=True)
-        extractor = EvtxExtractor(extractor_config=ext_config, logger=test_logger)
-        extractor.run(str(xml_file))
-
-        json_files = list(Path(extractor.tmpDir).glob("*.json"))
-        assert len(json_files) == 1
-
-        # Stream extracted JSON through ZircoliteCore
+        # Stream the XML file directly, as the CLI does
         default_args_config.xml_input = True
+        extractor = EvtxExtractor(
+            extractor_config=ExtractorConfig(xml_logs=True), logger=test_logger
+        )
         proc_config = ProcessingConfig(disable_progress=True)
         zircore = ZircoliteCore(
             config=str(config_file),
@@ -666,9 +665,10 @@ class TestFullPipelineXML:
             logger=test_logger,
         )
         total = zircore.run_streaming(
-            [str(json_files[0])],
-            input_type='json',
+            [str(xml_file)],
+            input_type='xml',
             args_config=default_args_config,
+            extractor=extractor,
             disable_progress=True,
         )
         assert total == 1
@@ -685,7 +685,6 @@ class TestFullPipelineXML:
         titles = [d["title"] for d in detections]
         assert any("PowerShell" in t for t in titles)
 
-        extractor.cleanup()
         zircore.close()
 
 
@@ -696,7 +695,7 @@ class TestFullPipelineAuditdDetection:
     def test_auditd_extraction_and_detection(
         self, tmp_path, test_logger, default_args_config, minimal_field_mappings
     ):
-        """Test complete pipeline: Auditd log → extraction → streaming → detection."""
+        """Test complete pipeline: Auditd log → streaming → detection."""
         config_file = tmp_path / "config.json"
         config_file.write_text(json.dumps(minimal_field_mappings))
 
@@ -708,16 +707,10 @@ class TestFullPipelineAuditdDetection:
             'success=yes exit=0 pid=5679 uid=0 comm="curl" exe="/usr/bin/curl"\n'
         )
 
-        # Extract auditd to JSON
-        ext_config = ExtractorConfig(auditd_logs=True)
-        extractor = EvtxExtractor(extractor_config=ext_config, logger=test_logger)
-        extractor.run(str(auditd_file))
-
-        json_files = list(Path(extractor.tmpDir).glob("*.json"))
-        assert len(json_files) == 1
-
-        # Stream extracted events into ZircoliteCore
         default_args_config.auditd_input = True
+        extractor = EvtxExtractor(
+            extractor_config=ExtractorConfig(auditd_logs=True), logger=test_logger
+        )
         proc_config = ProcessingConfig(disable_progress=True)
         zircore = ZircoliteCore(
             config=str(config_file),
@@ -725,9 +718,10 @@ class TestFullPipelineAuditdDetection:
             logger=test_logger,
         )
         total = zircore.run_streaming(
-            [str(json_files[0])],
-            input_type='json',
+            [str(auditd_file)],
+            input_type='auditd',
             args_config=default_args_config,
+            extractor=extractor,
             disable_progress=True,
         )
         assert total == 2
@@ -736,5 +730,4 @@ class TestFullPipelineAuditdDetection:
         results = zircore.execute_select_query("SELECT COUNT(*) as cnt FROM logs")
         assert results[0]['cnt'] == 2
 
-        extractor.cleanup()
         zircore.close()

@@ -196,7 +196,7 @@ Zircolite is built around several key classes, organized in the `zircolite/` pac
 - **ZircoliteConsole** (`console.py`): Rich-based terminal output with styled messages, progress bars, live detection counters, detection results tables, summary panels, MITRE ATT&CK coverage panels, terminal hyperlinks, post-run suggestions, file tree views, and quiet mode support.
 - **StreamingEventProcessor** (`streaming.py`): Single-pass processor for efficient event extraction, flattening, and database insertion.
 - **Processing pipeline helpers** (`processing.py`): Coordinates processing modes (per-file, unified-db, parallel workers), result aggregation, and output writing.
-- **EvtxExtractor** (`extractor.py`): Converts various log formats (EVTX, XML, Auditd, Sysmon for Linux, CSV) to JSON.
+- **EvtxExtractor** (`extractor.py`): Converts individual raw log lines and XML elements into event dictionaries for the formats that need it (Auditd, Sysmon for Linux, XML/EVTXtract). It is a helper for `StreamingEventProcessor`, not a separate extraction pass: nothing is written to an intermediate file.
 - **RulesetHandler** (`rules.py`): Manages ruleset loading and conversion, including native Sigma (YAML) to Zircolite format (JSON) conversion using pySigma. Sigma correlation rules use the same SQLite backend; base rules referenced only by a correlation are still compiled during conversion so correlation SQL can embed their conditions, but they are not added as separate rules in the emitted ruleset. The backend's `timestamp_field` is set from `RulesetConfig.time_field` so that correlation SQL references the correct column (auto-detected or user-specified via `--timefield`).
 - **RulesUpdater** (`rules.py`): Downloads and updates rulesets from the Zircolite-Rules-v2 repository.
 - **TemplateEngine** (`templates.py`): Generates output using Jinja2 templates.
@@ -324,7 +324,7 @@ Transforms use **RestrictedPython** for safe, sandboxed execution of custom Pyth
     ├── core.py             # ZircoliteCore class (database and rule execution)
     ├── detector.py         # LogTypeDetector (automatic log format detection)
     ├── streaming.py        # StreamingEventProcessor (single-pass processing)
-    ├── extractor.py        # EvtxExtractor (log format conversion)
+    ├── extractor.py        # EvtxExtractor (log line / XML conversion)
     ├── parallel.py         # MemoryAwareParallelProcessor (parallel processing)
     ├── processing.py       # Processing mode coordination, result aggregation
     ├── rules.py            # RulesetHandler, RulesUpdater (rule management)
@@ -342,7 +342,7 @@ The `zircolite/` package contains modular implementations of all core components
 - **`core.py`**: Contains `ZircoliteCore`, the main detection engine managing SQLite operations and rule execution. The `execute_ruleset` method accepts a `show_table` parameter to control detection table display (used to suppress per-worker output in parallel mode).
 - **`detector.py`**: Contains `LogTypeDetector` and `DetectionResult` for automatic log format, log source, and timestamp detection via magic bytes, content analysis, and regex fallback.
 - **`streaming.py`**: Contains `StreamingEventProcessor` for efficient single-pass event processing (extraction, flattening, and DB insertion in one pass).
-- **`extractor.py`**: Contains `EvtxExtractor` for converting various log formats to JSON.
+- **`extractor.py`**: Contains `EvtxExtractor`, which converts Auditd lines, Sysmon for Linux lines and XML elements into event dictionaries for the streaming processor.
 - **`parallel.py`**: Contains `MemoryAwareParallelProcessor` and `ParallelConfig` for memory-aware parallel file processing.
 - **`processing.py`**: Coordinates processing modes (per-file, unified-db, parallel workers), result aggregation, and output writing.
 - **`rules.py`**: Contains `RulesetHandler` and `RulesUpdater` for rule management.

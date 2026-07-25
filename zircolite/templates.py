@@ -169,9 +169,12 @@ class TemplateEngine:
             with open(template_file, 'r', encoding='utf-8') as tmpl:
                 template = _make_jinja2_env().from_string(tmpl.read())
 
+            # Render before opening the output file so a render failure does
+            # not leave a truncated/empty file behind
+            rendered = template.render(data=data, timeField=self.time_field)
             mode = 'a' if (self.append if append is None else append) else 'w'
             with open(output_filename, mode, encoding='utf-8') as tpl:
-                tpl.write(template.render(data=data, timeField=self.time_field))
+                tpl.write(rendered)
         except Exception as e:
             self.logger.error("[red]    [-] Template error, activate debug mode to check for errors[/]")
             self.logger.debug(f"    [-] {e}")
@@ -215,17 +218,26 @@ class ZircoliteGuiGenerator:
     def generate(
         self, data: List[Dict[str, Any]], directory: str = ""
     ) -> None:
-        # Check if directory exists, fallback to current directory if not
-        final_directory = directory.rstrip("/") if os.path.exists(directory) else ""
+        # Check if directory exists, fallback to current directory if not.
+        # rstrip("/") would map the filesystem root "/" to "", so only strip
+        # when something remains.
+        stripped = directory.rstrip("/")
+        final_directory = (stripped or directory) if os.path.exists(directory) else ""
         if directory and not final_directory:
             self.logger.error(f"[red]    [-] {directory} does not exist, fallback to current directory[/]")
-        
+
         try:
             # Extract the GUI package
             shutil.unpack_archive(self.packageDir, self.tmpDir, "zip")
-            
+
             # Generate data file
-            self.logger.info(f"[+] Generating ZircoGui package to: {final_directory}/{self.outputFile}.zip")
+            target_name = f"{self.outputFile}.zip"
+            target_display = (
+                os.path.join(final_directory, target_name)
+                if final_directory
+                else target_name
+            )
+            self.logger.info(f"[+] Generating ZircoGui package to: {target_display}")
             tmpl_config = TemplateConfig(
                 template=[[self.templateFile]],
                 template_output=[[self.tmpFile]],
@@ -233,20 +245,22 @@ class ZircoliteGuiGenerator:
             )
             export_for_zircogui_tmpl = TemplateEngine(tmpl_config, logger=self.logger)
             export_for_zircogui_tmpl.generate_from_template(self.templateFile, self.tmpFile, data)
-            
+
             # Move data file to package directory
-            shutil.move(self.tmpFile, f'{self.tmpDir}/zircogui/data.js')
-            
+            shutil.move(self.tmpFile, os.path.join(self.tmpDir, "zircogui", "data.js"))
+
             # Create zip archive
             shutil.make_archive(self.outputFile, 'zip', f"{self.tmpDir}/zircogui")
-            
+
             # Move to final destination if specified
             if final_directory:
-                shutil.move(f"{self.outputFile}.zip", f"{final_directory}/{self.outputFile}.zip")
-                
+                shutil.move(target_name, os.path.join(final_directory, target_name))
+
         except Exception as e:
             self.logger.error(f"[red]    [-] {e}[/]")
         finally:
-            # Clean up temporary directory
+            # Clean up temporary directory and any leftover data file
             if os.path.exists(self.tmpDir):
                 shutil.rmtree(self.tmpDir)
+            if os.path.exists(self.tmpFile):
+                os.remove(self.tmpFile)

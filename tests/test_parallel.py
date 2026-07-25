@@ -256,13 +256,24 @@ class TestConsolidatedWorkerCalc:
 
     def test_respects_min_workers(self):
         result = calculate_optimal_workers(
-            file_sizes=[1024],
+            file_sizes=[1024] * 5,
             available_memory_mb=8192,
             cpu_count=4,
             min_workers=2,
             max_workers=5,
         )
         assert result >= 2
+
+    def test_min_workers_clamped_to_file_count(self):
+        """Never spawn more workers than files (idle threads)."""
+        result = calculate_optimal_workers(
+            file_sizes=[1024],
+            available_memory_mb=8192,
+            cpu_count=4,
+            min_workers=4,
+            max_workers=5,
+        )
+        assert result == 1
 
     def test_empty_file_list(self):
         assert calculate_optimal_workers([], 8192, 4) == 1
@@ -800,3 +811,38 @@ class TestMemoryAwareParallelProcessorEdgeCases:
 
         current = processor.get_current_memory_mb()
         assert current == 0
+
+
+class TestParallelRobustness:
+    """Regression tests for parallel processing fixes."""
+
+    def test_log_summary_reports_failed_files(self, test_logger):
+        """Failed files must be named in the log summary."""
+        from zircolite.parallel import MemoryAwareParallelProcessor
+        processor = MemoryAwareParallelProcessor(logger=test_logger)
+        processor.stats.processed_files = 1
+        processor.stats.total_events = 10
+        processor.stats.processing_time_seconds = 0.5
+        with patch.object(processor.logger, "warning") as mock_warn:
+            processor._log_summary([(Path("/logs/bad.evtx"), "boom")])
+        assert mock_warn.called
+        messages = " ".join(str(c.args[0]) for c in mock_warn.call_args_list)
+        assert "bad.evtx" in messages
+        assert "boom" in messages
+
+    def test_calibration_state_reset_between_runs(self, test_logger, tmp_path):
+        """A reused processor instance must not inherit calibration."""
+        from zircolite.parallel import MemoryAwareParallelProcessor, ParallelConfig
+        processor = MemoryAwareParallelProcessor(
+            config=ParallelConfig(adaptive_memory=False), logger=test_logger
+        )
+        processor._calibrated_memory_per_file_mb = 999.0
+        files = [tmp_path / f"f{i}.txt" for i in range(2)]
+        for f in files:
+            f.write_text("x")
+
+        def process_func(p):
+            return 1, None
+
+        processor.process_files_parallel(files, process_func, disable_progress=True)
+        assert processor._calibrated_memory_per_file_mb is None

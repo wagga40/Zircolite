@@ -47,17 +47,9 @@ class TestExtractorConfigEncoding:
         cfg = ExtractorConfig()
         assert cfg.encoding is None
 
-    def test_csv_input_no_default_encoding(self):
-        cfg = ExtractorConfig(csv_input=True)
-        assert cfg.encoding is None
-
-    def test_strict_evtx_default_false(self):
-        cfg = ExtractorConfig()
-        assert cfg.strict_evtx is False
-
-    def test_strict_evtx_set_true(self):
-        cfg = ExtractorConfig(strict_evtx=True)
-        assert cfg.strict_evtx is True
+    def test_evtxtract_default_encoding(self):
+        cfg = ExtractorConfig(evtxtract=True)
+        assert cfg.encoding == "utf-8"
 
 
 # =============================================================================

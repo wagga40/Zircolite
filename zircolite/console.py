@@ -10,6 +10,7 @@ This module provides styled terminal output using the Rich library:
 """
 
 import logging
+import sys
 import time
 from contextlib import contextmanager
 from dataclasses import dataclass, field
@@ -66,6 +67,16 @@ ZIRCOLITE_THEME = Theme({
     "stat.label": "dim",
     "stat.value": "bold cyan",
 })
+
+# On Windows, redirected stdout/stderr default to the legacy ANSI codepage
+# (e.g. cp1252) and crash on the banner/checkmark glyphs. Reconfigure to UTF-8
+# so piped output works; errors are replaced rather than raised.
+if sys.platform == "win32":
+    for _stream in (sys.stdout, sys.stderr):
+        try:
+            _stream.reconfigure(encoding="utf-8", errors="replace")  # type: ignore[union-attr]
+        except (AttributeError, ValueError, OSError):
+            pass
 
 # Global console instance for consistent output
 console = Console(theme=ZIRCOLITE_THEME, highlight=False)
@@ -322,23 +333,30 @@ class ProcessingStats:
 class ZircoliteConsole:
     """
     Rich-based console for Zircolite output.
-    
+
     Provides styled output, progress tracking, and summary dashboards.
+
+    .. note::
+        Kept for API compatibility. Production output uses the module-level
+        helpers in this module (``print_step``, ``build_detection_table``,
+        ``make_detection_counter``) and inline Rich widgets in
+        ``zircolite.core``/``zircolite.processing``.
     """
-    
+
     def __init__(self, quiet: bool = False, no_color: bool = False):
         """
         Initialize the console.
-        
+
         Args:
             quiet: Suppress non-essential output
             no_color: Disable colors (for CI/piping)
         """
         self.quiet = quiet
+        # force_terminal left to auto-detect: forcing it on would emit ANSI
+        # sequences even when stdout is a pipe or file
         self.console = Console(
             theme=ZIRCOLITE_THEME,
             highlight=False,
-            force_terminal=not no_color,
             no_color=no_color
         )
         self.stats = ProcessingStats()
@@ -387,6 +405,8 @@ class ZircoliteConsole:
         parallel_reason: str = ""
     ):
         """Print workload analysis with styled output."""
+        if self.quiet:
+            return
         self.info("Analyzing workload...")
         
         # Create a nice table for workload info
@@ -421,7 +441,7 @@ class ZircoliteConsole:
         self.console.print()
     
     def create_file_progress(self, total_files: int, description: str = "Processing") -> Progress:
-        """Create a progress bar for file processing."""
+        """Create a progress bar for file processing with one task pre-added."""
         self._progress = Progress(
             SpinnerColumn(),
             TextColumn("[progress.description]{task.description}"),
@@ -434,11 +454,12 @@ class ZircoliteConsole:
             console=self.console,
             transient=True,
         )
+        self._current_task = self._progress.add_task(description, total=total_files)
         return self._progress
-    
+
     def create_rule_progress(self, total_rules: int, description: str = "Executing rules") -> Progress:
-        """Create a progress bar for rule execution."""
-        return Progress(
+        """Create a progress bar for rule execution with one task pre-added."""
+        progress = Progress(
             SpinnerColumn(),
             TextColumn("[progress.description]{task.description}"),
             BarColumn(bar_width=40),
@@ -448,6 +469,8 @@ class ZircoliteConsole:
             console=self.console,
             transient=True,
         )
+        progress.add_task(description, total=total_rules)
+        return progress
     
     @contextmanager
     def live_status(self, status: str = "Processing..."):
@@ -665,10 +688,15 @@ class RichProgressTracker:
         
         with progress:
             task_id = progress.add_task(description, total=total, events=0)
-            
-            def update(advance: int = 1, events: int = 0):
-                progress.update(task_id, advance=advance, events=events)
-            
+
+            def update(advance: int = 1, events: Optional[int] = None):
+                # events is updated only when supplied: a bare advance must not
+                # reset a previously reported event count to 0
+                if events is None:
+                    progress.update(task_id, advance=advance)
+                else:
+                    progress.update(task_id, advance=advance, events=events)
+
             yield update
     
     @contextmanager
@@ -708,29 +736,28 @@ class RichProgressTracker:
             
             return table
         
-        # Group progress and detections
+        # Group progress and detections.
+        # The progress is never started: the outer Live renders the Group, and
+        # starting it would create a second nested Live rendering path.
         task_id = None
-        
+
         with Live(console=self.console, refresh_per_second=10, transient=True) as live:
-            progress.start()
             task_id = progress.add_task("Executing rules", total=total_rules)
-            
+
             def update(advance: int = 1, detection: Optional[Dict] = None):
                 progress.update(task_id, advance=advance)
-                
+
                 if detection:
                     level = detection.get("level", "unknown").lower()
                     count = detection.get("count", 0)
                     if level in self._detection_count:
                         self._detection_count[level] += count
-                
+
                 # Update live display
                 group = Group(progress, make_detection_table())
                 live.update(group)
-            
+
             yield progress, update
-            
-            progress.stop()
         
         # Reset for next run
         self._detection_count = {k: 0 for k in self._detection_count}
@@ -750,6 +777,12 @@ def get_rich_logger(name: str = "zircolite", debug: bool = False, log_file: Opti
     """
     logger = logging.getLogger(name)
     logger.setLevel(logging.DEBUG if debug else logging.INFO)
+    # Close existing handlers before clearing to avoid leaking open log files
+    for handler in logger.handlers:
+        try:
+            handler.close()
+        except Exception:
+            pass
     logger.handlers.clear()
     logger.propagate = False
     
@@ -771,7 +804,7 @@ def get_rich_logger(name: str = "zircolite", debug: bool = False, log_file: Opti
         file_format = "%(asctime)s %(levelname)-8s %(message)s"
         if debug:
             file_format = "%(asctime)s %(levelname)-8s %(module)s:%(lineno)s %(funcName)s %(message)s"
-        file_handler = logging.FileHandler(log_file)
+        file_handler = logging.FileHandler(log_file, encoding="utf-8", errors="replace")
         file_handler.setLevel(logging.DEBUG if debug else logging.INFO)
         file_handler.setFormatter(logging.Formatter(file_format, datefmt='%Y-%m-%d %H:%M:%S'))
         logger.addHandler(file_handler)

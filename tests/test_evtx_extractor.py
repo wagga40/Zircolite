@@ -2,7 +2,6 @@
 Tests for the EvtxExtractor class.
 """
 
-import json
 import pytest
 import sys
 from pathlib import Path
@@ -15,49 +14,9 @@ from zircolite import EvtxExtractor, ExtractorConfig
 class TestEvtxExtractorInit:
     """Tests for EvtxExtractor initialization."""
     
-    def test_init_creates_tmp_dir(self, test_logger):
-        """Test that initialization creates a temporary directory."""
-        extractor = EvtxExtractor(logger=test_logger)
-        
-        assert Path(extractor.tmpDir).exists()
-        assert extractor.tmpDir.startswith("tmp-")
-        
-        extractor.cleanup()
     
-    def test_init_with_provided_tmpdir(self, tmp_path, test_logger):
-        """Test initialization with a custom temp directory."""
-        custom_dir = str(tmp_path / "custom_tmp")
-        
-        config = ExtractorConfig(tmp_dir=custom_dir)
-        extractor = EvtxExtractor(extractor_config=config, logger=test_logger)
-        
-        assert extractor.tmpDir == custom_dir
-        assert Path(custom_dir).exists()
-        
-        extractor.cleanup()
     
-    def test_init_handles_existing_directory(self, tmp_path, test_logger):
-        """Test that when provided directory already exists, it is used."""
-        existing_dir = tmp_path / "existing"
-        existing_dir.mkdir()
-        
-        config = ExtractorConfig(tmp_dir=str(existing_dir))
-        extractor = EvtxExtractor(extractor_config=config, logger=test_logger)
-        
-        assert extractor.tmpDir == str(existing_dir)
-        assert Path(existing_dir).exists()
-        
-        extractor.cleanup()
 
-    def test_init_when_tmp_dir_path_is_file_uses_random_dir(self, tmp_path, test_logger):
-        """When tmp_dir path exists and is not a directory, use a random tmp dir."""
-        file_path = tmp_path / "a_file"
-        file_path.write_text("not a dir")
-        config = ExtractorConfig(tmp_dir=str(file_path))
-        extractor = EvtxExtractor(extractor_config=config, logger=test_logger)
-        assert extractor.tmpDir != str(file_path)
-        assert "tmp-" in extractor.tmpDir
-        extractor.cleanup()
     
     def test_init_sysmon_linux_mode(self, test_logger):
         """Test initialization for Sysmon for Linux logs."""
@@ -67,7 +26,6 @@ class TestEvtxExtractorInit:
         assert extractor.sysmon4linux is True
         assert extractor.encoding == "ISO-8859-1"
         
-        extractor.cleanup()
     
     def test_init_auditd_mode(self, test_logger):
         """Test initialization for Auditd logs."""
@@ -77,7 +35,6 @@ class TestEvtxExtractorInit:
         assert extractor.auditdLogs is True
         assert extractor.encoding == "utf-8"
         
-        extractor.cleanup()
     
     def test_init_xml_mode(self, test_logger):
         """Test initialization for XML logs."""
@@ -87,16 +44,7 @@ class TestEvtxExtractorInit:
         assert extractor.xmlLogs is True
         assert extractor.encoding == "utf-8"
         
-        extractor.cleanup()
     
-    def test_init_csv_mode(self, test_logger):
-        """Test initialization for CSV input."""
-        config = ExtractorConfig(csv_input=True)
-        extractor = EvtxExtractor(extractor_config=config, logger=test_logger)
-        
-        assert extractor.csvInput is True
-        
-        extractor.cleanup()
     
     def test_init_custom_encoding(self, test_logger):
         """Test initialization with custom encoding."""
@@ -105,7 +53,6 @@ class TestEvtxExtractorInit:
         
         assert extractor.encoding == "utf-16"
         
-        extractor.cleanup()
 
 
 class TestRandomSuffix:
@@ -142,7 +89,6 @@ class TestEvtxExtractorAuditdConversion:
         
         # Should be a valid timestamp string
         assert len(result) == 19  # YYYY-MM-DD HH:MM:SS format
-        extractor.cleanup()
     
     def test_auditd_line_to_json_basic(self, test_logger):
         """Test basic Auditd line conversion."""
@@ -160,8 +106,42 @@ class TestEvtxExtractorAuditdConversion:
         assert 'pid' in result
         assert result['pid'] == '5678'
         
-        extractor.cleanup()
     
+    def test_auditd_user_record_msg_payload_is_flattened(self, test_logger):
+        """USER_* records carry key=value pairs inside msg='...'; they must stay queryable."""
+        config = ExtractorConfig(auditd_logs=True)
+        extractor = EvtxExtractor(extractor_config=config, logger=test_logger)
+
+        line = (
+            "type=USER_ACCT msg=audit(1571830893.700:361): pid=1735 uid=0 "
+            "msg='op=PAM:accounting grantors=pam_permit acct=\"root\" "
+            "exe=\"/usr/sbin/crond\" hostname=? addr=? terminal=cron res=success'"
+        )
+
+        result = extractor.auditd_line_to_json(line)
+
+        assert result["op"] == "PAM:accounting"
+        assert result["acct"] == "root"
+        assert result["exe"] == "/usr/sbin/crond"
+        assert result["res"] == "success"
+        assert result["pid"] == "1735"
+
+
+    def test_auditd_proctitle_with_equals_stays_intact(self, test_logger):
+        """Quoted values that merely contain '=' (e.g. proctitle) must not be split."""
+        config = ExtractorConfig(auditd_logs=True)
+        extractor = EvtxExtractor(extractor_config=config, logger=test_logger)
+
+        line = (
+            "type=PROCTITLE msg=audit(1571830893.700:362): "
+            "proctitle=\"java -Dfoo=bar -jar app.jar\""
+        )
+
+        result = extractor.auditd_line_to_json(line)
+
+        assert result["proctitle"] == "java -Dfoo=bar -jar app.jar"
+
+
     def test_auditd_line_to_json_adds_offline_host(self, test_logger):
         """Test that missing host is set to 'offline'."""
         config = ExtractorConfig(auditd_logs=True)
@@ -172,7 +152,6 @@ class TestEvtxExtractorAuditdConversion:
         result = extractor.auditd_line_to_json(line)
         
         assert result['host'] == 'offline'
-        extractor.cleanup()
     
     def test_auditd_line_to_json_removes_special_chars(self, test_logger):
         """Test that special characters (GS) are handled."""
@@ -186,37 +165,15 @@ class TestEvtxExtractorAuditdConversion:
         
         # Should process without error
         assert result is not None
-        extractor.cleanup()
 
 
-class TestEvtxExtractorCsvConversion:
-    """Tests for CSV log conversion."""
-    
-    def test_csv_to_json(self, tmp_csv_file, test_logger):
-        """Test CSV to JSON conversion."""
-        config = ExtractorConfig(csv_input=True)
-        extractor = EvtxExtractor(extractor_config=config, logger=test_logger)
-        
-        output_file = str(Path(extractor.tmpDir) / "output.json")
-        extractor.csv_to_json(tmp_csv_file, output_file)
-        
-        assert Path(output_file).exists()
-        
-        with open(output_file) as f:
-            lines = f.readlines()
-        
-        assert len(lines) >= 1
-        
-        # Verify JSON structure
-        first_event = json.loads(lines[0])
-        assert 'EventID' in first_event
-        
-        extractor.cleanup()
 
 
 @pytest.mark.requires_lxml
 class TestEvtxExtractorXmlConversion:
     """Tests for XML log conversion."""
+
+
 
     def test_xml_to_dict(self, test_logger):
         """Test XML to dictionary conversion."""
@@ -246,7 +203,6 @@ class TestEvtxExtractorXmlConversion:
         assert 'TimeCreated' in result['Event']['System']
         assert result['Event']['System']['TimeCreated'] == {"#attributes": {"SystemTime": "2024-06-15T10:30:00.000Z"}}
 
-        extractor.cleanup()
 
     def test_xml_to_dict_multiple_eventdata_fields(self, test_logger):
         """xml_to_dict merges multiple EventData Data elements into one dict."""
@@ -274,37 +230,9 @@ class TestEvtxExtractorXmlConversion:
         assert event_data['ParentCommandLine'] == 'explorer.exe'
         assert len(event_data) == 3
 
-        extractor.cleanup()
 
-    def test_xml_line_to_json(self, test_logger, sample_xml_event):
-        """Test XML line to JSON conversion."""
-        config = ExtractorConfig(xml_logs=True)
-        extractor = EvtxExtractor(extractor_config=config, logger=test_logger)
 
-        result = extractor.xml_line_to_json(sample_xml_event)
 
-        assert result is not None
-        assert 'Event' in result
-
-        extractor.cleanup()
-
-    def test_xml_line_to_json_invalid(self, test_logger):
-        """Test handling of invalid XML."""
-        config = ExtractorConfig(xml_logs=True)
-        extractor = EvtxExtractor(extractor_config=config, logger=test_logger)
-
-        result = extractor.xml_line_to_json("not xml at all")
-
-        assert result is None
-        extractor.cleanup()
-
-    def test_xml_line_to_json_malformed_triggers_exception_path(self, test_logger):
-        """When XML contains <Event but is malformed, exception is caught and returns None."""
-        config = ExtractorConfig(xml_logs=True)
-        extractor = EvtxExtractor(extractor_config=config, logger=test_logger)
-        result = extractor.xml_line_to_json('<Event ><System><EventID>1</System></Event>')
-        assert result is None
-        extractor.cleanup()
 
 
 @pytest.mark.requires_lxml
@@ -323,7 +251,6 @@ class TestEvtxExtractorSysmonLinux:
         assert result is not None
         assert 'Event' in result
 
-        extractor.cleanup()
 
     def test_sysmon_xml_line_to_json_malformed_returns_none(self, test_logger):
         """When Sysmon XML line is malformed, exception is caught and returns None."""
@@ -331,7 +258,6 @@ class TestEvtxExtractorSysmonLinux:
         extractor = EvtxExtractor(extractor_config=config, logger=test_logger)
         result = extractor.sysmon_xml_line_to_json('Jan 15 10:30:00 host sysmon: <Event><System>unclosed')
         assert result is None
-        extractor.cleanup()
 
     def test_sysmon_xml_line_no_event(self, test_logger):
         """Test handling of lines without Event tag."""
@@ -341,202 +267,17 @@ class TestEvtxExtractorSysmonLinux:
         result = extractor.sysmon_xml_line_to_json("just a regular log line")
 
         assert result is None
-        extractor.cleanup()
 
 
-class TestEvtxExtractorLogsToJson:
-    """Tests for logs_to_json method."""
-    
-    def test_logs_to_json_from_file(self, tmp_auditd_file, test_logger):
-        """Test converting logs from file."""
-        config = ExtractorConfig(auditd_logs=True)
-        extractor = EvtxExtractor(extractor_config=config, logger=test_logger)
-        
-        output_file = str(Path(extractor.tmpDir) / "output.json")
-        extractor.logs_to_json(
-            extractor.auditd_line_to_json,
-            tmp_auditd_file,
-            output_file,
-            is_file=True
-        )
-        
-        assert Path(output_file).exists()
-        
-        with open(output_file) as f:
-            lines = f.readlines()
-        
-        assert len(lines) >= 1
-        extractor.cleanup()
-    
-    def test_logs_to_json_from_string(self, test_logger):
-        """Test converting logs from string data."""
-        config = ExtractorConfig(auditd_logs=True)
-        extractor = EvtxExtractor(extractor_config=config, logger=test_logger)
-        
-        data = """type=SYSCALL msg=audit(1705318200.123:456): pid=1
-type=SYSCALL msg=audit(1705318201.456:457): pid=2"""
-        
-        output_file = str(Path(extractor.tmpDir) / "output.json")
-        extractor.logs_to_json(
-            extractor.auditd_line_to_json,
-            data,
-            output_file,
-            is_file=False
-        )
-        
-        assert Path(output_file).exists()
-        
-        with open(output_file) as f:
-            lines = f.readlines()
-        
-        assert len(lines) == 2
-        extractor.cleanup()
 
 
-class TestEvtxExtractorRun:
-    """Tests for the run method."""
-    
-    def test_run_csv_input(self, tmp_csv_file, test_logger):
-        """Test run method with CSV input."""
-        config = ExtractorConfig(csv_input=True)
-        extractor = EvtxExtractor(extractor_config=config, logger=test_logger)
-        
-        extractor.run(tmp_csv_file)
-        
-        # Should have created JSON file
-        json_files = list(Path(extractor.tmpDir).glob("*.json"))
-        assert len(json_files) == 1
-        
-        extractor.cleanup()
-    
-    def test_run_auditd_input(self, tmp_auditd_file, test_logger):
-        """Test run method with Auditd input."""
-        config = ExtractorConfig(auditd_logs=True)
-        extractor = EvtxExtractor(extractor_config=config, logger=test_logger)
-        
-        extractor.run(tmp_auditd_file)
-        
-        json_files = list(Path(extractor.tmpDir).glob("*.json"))
-        assert len(json_files) == 1
-        
-        extractor.cleanup()
-    
-    @pytest.mark.requires_lxml
-    def test_run_xml_input(self, tmp_xml_file, test_logger):
-        """Test run method with XML input."""
-        config = ExtractorConfig(xml_logs=True)
-        extractor = EvtxExtractor(extractor_config=config, logger=test_logger)
-
-        extractor.run(tmp_xml_file)
-
-        json_files = list(Path(extractor.tmpDir).glob("*.json"))
-        assert len(json_files) == 1
-
-        extractor.cleanup()
 
 
-class TestEvtxExtractorCleanup:
-    """Tests for cleanup functionality."""
-    
-    def test_cleanup_removes_tmpdir(self, test_logger):
-        """Test that cleanup removes temporary directory."""
-        extractor = EvtxExtractor(logger=test_logger)
-        
-        tmp_dir = extractor.tmpDir
-        assert Path(tmp_dir).exists()
-        
-        extractor.cleanup()
-        
-        assert not Path(tmp_dir).exists()
-    
-    def test_cleanup_with_files(self, test_logger):
-        """Test cleanup with files in temp directory."""
-        extractor = EvtxExtractor(logger=test_logger)
-        
-        # Create some files
-        (Path(extractor.tmpDir) / "test1.json").touch()
-        (Path(extractor.tmpDir) / "test2.json").touch()
-        
-        tmp_dir = extractor.tmpDir
-        extractor.cleanup()
-        
-        assert not Path(tmp_dir).exists()
 
 
-class TestEvtxExtractorEvtxBinding:
-    """Tests for EVTX Python binding functionality."""
-    
-    @pytest.mark.requires_evtx
-    def test_run_using_bindings_with_real_evtx(self, test_logger):
-        """Test EVTX processing with real EVTX file (Sigma regression sample)."""
-        # Sample from SigmaHQ/sigma regression_data: proc_creation_win_bitsadmin_download
-        sample_evtx = Path(__file__).parent / "fixtures" / "sample_bitsadmin.evtx"
-        if not sample_evtx.exists():
-            pytest.skip("No sample EVTX file available (tests/fixtures/sample_bitsadmin.evtx)")
-        extractor = EvtxExtractor(logger=test_logger)
-        extractor.run_using_bindings(str(sample_evtx))
-        
-        json_files = list(Path(extractor.tmpDir).glob("*.json"))
-        assert len(json_files) == 1
-        
-        extractor.cleanup()
-    
-    def test_run_using_bindings_handles_errors(self, tmp_path, test_logger):
-        """Test that run_using_bindings handles errors gracefully."""
-        # Create an invalid EVTX file
-        invalid_evtx = tmp_path / "invalid.evtx"
-        invalid_evtx.write_text("not a valid EVTX file")
-        
-        extractor = EvtxExtractor(logger=test_logger)
-        
-        # Should not raise exception
-        extractor.run_using_bindings(str(invalid_evtx))
-        
-        # Invalid input should not produce JSON output
-        json_files = list(Path(extractor.tmpDir).glob("*.json"))
-        assert len(json_files) == 0
-        
-        extractor.cleanup()
 
 
 @pytest.mark.requires_lxml
-class TestEvtxExtractorEvtxtract:
-    """Tests for EVTXtract log conversion."""
-
-    def test_evtxtract_to_json(self, tmp_path, test_logger):
-        """Test EVTXtract log conversion."""
-        
-        # Create sample EVTXtract output
-        evtxtract_content = '''<Event xmlns="http://schemas.microsoft.com/win/2004/08/events/event">
-    <System>
-        <EventID>1</EventID>
-    </System>
-    <EventData>
-        <Data Name="CommandLine">test.exe</Data>
-    </EventData>
-</Event>
-<Event xmlns="http://schemas.microsoft.com/win/2004/08/events/event">
-    <System>
-        <EventID>2</EventID>
-    </System>
-</Event>'''
-        
-        evtxtract_file = tmp_path / "evtxtract.log"
-        evtxtract_file.write_text(evtxtract_content)
-        
-        config = ExtractorConfig(evtxtract=True)
-        extractor = EvtxExtractor(extractor_config=config, logger=test_logger)
-        
-        output_file = str(Path(extractor.tmpDir) / "output.json")
-        extractor.evtxtract_to_json(str(evtxtract_file), output_file)
-        
-        assert Path(output_file).exists()
-        
-        with open(output_file) as f:
-            lines = f.readlines()
-        
-        assert len(lines) == 2
-        extractor.cleanup()
 
 
 class TestExtractorBugFixes:
@@ -545,27 +286,103 @@ class TestExtractorBugFixes:
     def test_auditd_attribute_with_equals_in_value(self, tmp_path):
         """Auditd attributes with '=' in the value should not be truncated."""
         extractor = EvtxExtractor(
-            ExtractorConfig(tmp_dir=str(tmp_path / "tmp"), auditd_logs=True)
+            ExtractorConfig(auditd_logs=True)
         )
         line = 'type=EXECVE msg=audit(1600000000.123:456): argc=1 a0=ls key=user=admin'
         event = extractor.auditd_line_to_json(line)
         assert event.get("key") == "user=admin"
-        extractor.cleanup()
 
     def test_get_time_malformed_returns_empty(self, tmp_path):
         """get_time returns empty string on malformed auditd timestamp."""
         extractor = EvtxExtractor(
-            ExtractorConfig(tmp_dir=str(tmp_path / "tmp"))
+            ExtractorConfig()
         )
         result = extractor.get_time("msg=audit():")
         assert result == ""
-        extractor.cleanup()
 
-    def test_cleanup_missing_dir_no_error(self, tmp_path):
-        """cleanup() does not raise if tmpDir was already removed."""
+
+
+
+    def test_get_time_is_utc_not_local(self, tmp_path, monkeypatch):
+        """auditd epoch timestamps must render in UTC regardless of host TZ."""
+        import time as time_module
+        monkeypatch.setenv("TZ", "America/New_York")
+        time_module.tzset()
+        try:
+            extractor = EvtxExtractor(
+                ExtractorConfig()
+            )
+            result = extractor.get_time("msg=audit(1705318200.123:456):")
+            assert result == time_module.strftime(
+                "%Y-%m-%d %H:%M:%S", time_module.gmtime(1705318200.123)
+            )
+        finally:
+            monkeypatch.undo()
+            time_module.tzset()
+
+    def test_sysmon_xml_line_without_event_tag_returns_none(self, tmp_path):
+        """A syslog line containing 'Event' but no '<Event>' must not crash."""
         extractor = EvtxExtractor(
-            ExtractorConfig(tmp_dir=str(tmp_path / "tmp"))
+            ExtractorConfig(sysmon4linux=True)
         )
-        import shutil
-        shutil.rmtree(extractor.tmpDir)
-        extractor.cleanup()
+        line = "Jan  1 00:00:00 host myapp: Event something happened"
+        assert extractor.sysmon_xml_line_to_json(line) is None
+
+
+class TestExtractorRobustness:
+    """Regression tests for extractor robustness fixes."""
+
+    def test_auditd_quoted_value_with_spaces_preserved(self, tmp_path):
+        """Quoted auditd values containing spaces must not be truncated."""
+        extractor = EvtxExtractor(
+            ExtractorConfig(auditd_logs=True)
+        )
+        line = 'type=SYSCALL msg=audit(1600000000.123:456): comm="my proc" exe="/bin/my proc"'
+        event = extractor.auditd_line_to_json(line)
+        assert event.get("comm") == "my proc"
+        assert event.get("exe") == "/bin/my proc"
+
+    def test_auditd_quotes_inside_value_preserved(self, tmp_path):
+        extractor = EvtxExtractor(
+            ExtractorConfig(auditd_logs=True)
+        )
+        line = 'type=EXECVE msg=audit(1600000000.123:456): a0=sh a1=-c a2=echo "hi'
+        event = extractor.auditd_line_to_json(line)
+        # Unterminated quote: kept as-is (minus nothing), no crash
+        assert event.get("a0") == "sh"
+
+
+    def test_xml_to_dict_flattens_userdata(self, tmp_path):
+        """UserData subtrees must be flattened, not dropped."""
+        from lxml import etree
+        extractor = EvtxExtractor(
+            ExtractorConfig(xml_logs=True)
+        )
+        xml_str = (
+            '<Event xmlns="http://schemas.microsoft.com/win/2004/08/events/event">'
+            "<System><EventID>1</EventID></System>"
+            "<UserData><EventXML><Param1>value1</Param1></EventXML></UserData>"
+            "</Event>"
+        )
+        root = etree.fromstring(xml_str)
+        result = extractor.xml_to_dict(root, "{http://schemas.microsoft.com/win/2004/08/events/event}")
+        assert result["Event"]["UserData"].get("Param1") == "value1"
+
+    def test_xml_to_dict_eventdata_values_stay_strings(self, tmp_path):
+        """EventData values must not be int-converted (EVTX/JSON parity)."""
+        from lxml import etree
+        extractor = EvtxExtractor(
+            ExtractorConfig(xml_logs=True)
+        )
+        xml_str = (
+            '<Event xmlns="http://schemas.microsoft.com/win/2004/08/events/event">'
+            "<System><EventID>5</EventID></System>"
+            '<EventData><Data Name="ProcessId">010</Data></EventData>'
+            "</Event>"
+        )
+        root = etree.fromstring(xml_str)
+        result = extractor.xml_to_dict(root, "{http://schemas.microsoft.com/win/2004/08/events/event}")
+        assert result["Event"]["EventData"]["ProcessId"] == "010"
+        assert result["Event"]["System"]["EventID"] == 5  # System stays int
+
+

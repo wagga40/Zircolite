@@ -129,8 +129,9 @@ class TestParallelProcessingConfig:
     def test_default_values(self):
         """Test ParallelProcessingConfig default values."""
         config = ParallelProcessingConfig()
-        
-        assert config.enabled is False
+
+        # Parallel auto-mode is enabled by default; YAML 'enabled: false' opts out
+        assert config.enabled is True
         assert config.max_workers is None
         assert config.min_workers == 1
         assert config.memory_limit_percent == 85.0
@@ -1116,12 +1117,20 @@ class TestConfigLoaderBugFixes:
     """Tests for specific bug fixes in config_loader."""
 
     def test_validate_config_list_path(self, test_logger, tmp_path):
-        """validate_config should handle list-type input.path without TypeError."""
+        """validate_config rejects list-type input.path with a clear message."""
         loader = ConfigLoader(logger=test_logger)
         config = ZircoliteConfig()
         config.input.path = [str(tmp_path), "/nonexistent"]
         issues = loader.validate_config(config)
-        assert any("nonexistent" in i for i in issues)
+        assert any("single path string" in i for i in issues)
+
+    def test_parse_config_null_rulesets_uses_default(self, test_logger):
+        """A 'rulesets: null' entry must not crash parsing/validation."""
+        loader = ConfigLoader(logger=test_logger)
+        config = loader.parse_config({'rules': {'rulesets': None}})
+        assert config.rules.rulesets == ["rules/rules_windows_generic.json"]
+        # validate_config must not raise TypeError iterating None
+        loader.validate_config(config)
 
     def test_merge_with_args_template_mismatch_length(self, test_logger):
         """merge_with_args handles templateOutput shorter than template."""
