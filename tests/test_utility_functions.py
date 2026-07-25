@@ -268,10 +268,50 @@ class TestAvoidFiles:
             Path("/logs/file1.evtx"),
             Path("/logs/file2.evtx"),
         ]
-        
+
         result = avoid_files(path_list, None)
-        
+
         assert result == path_list
+
+    def test_avoid_matches_the_filename_not_the_directory(self):
+        """--avoid is documented as matching filenames.
+
+        Matching the whole path meant `-e /data/evtx-archive/ -a evtx` excluded
+        every file, and the resulting "no file found" error blamed the
+        extension.
+        """
+        path_list = [
+            Path("/data/evtx-archive/security.json"),
+            Path("/data/evtx-archive/sysmon.json"),
+        ]
+
+        result = avoid_files(path_list, [["evtx"]])
+
+        assert len(result) == 2
+
+
+class TestSelectFilesPathSemantics:
+    """--select is documented as matching filenames, not whole paths."""
+
+    def test_select_matches_the_filename_not_the_directory(self):
+        path_list = [
+            Path("/data/sysmon-exports/security.json"),
+            Path("/data/sysmon-exports/application.json"),
+        ]
+
+        result = select_files(path_list, [["sysmon"]])
+
+        assert result == []
+
+    def test_select_still_matches_a_real_filename(self):
+        path_list = [
+            Path("/data/exports/sysmon.json"),
+            Path("/data/exports/application.json"),
+        ]
+
+        result = select_files(path_list, [["sysmon"]])
+
+        assert result == [str(Path("/data/exports/sysmon.json"))]
     
     def test_avoid_files_all_excluded(self):
         """Test when all files are excluded."""

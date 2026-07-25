@@ -22,6 +22,7 @@ from zircolite import (
 from zircolite.streaming import (
     _NON_ALNUM_RE,
     _RESTRICTED_BUILTINS as STREAMING_BUILTINS,
+    StrictParseError,
 )
 
 
@@ -1484,8 +1485,9 @@ class TestStreamingEvtxStrictMode:
             processing_config=proc_config,
             logger=test_logger,
         )
-        with pytest.raises(RuntimeError, match="Failed to parse chunk header"):
+        with pytest.raises(StrictParseError, match="Failed to parse chunk header") as exc:
             list(processor.stream_evtx_events(str(evtx_file)))
+        assert isinstance(exc.value.__cause__, RuntimeError)
 
     @patch('zircolite.streaming.PyEvtxParser')
     def test_lenient_mode_still_handles_invalid_evtx_for_7z(
@@ -1520,7 +1522,7 @@ class TestStreamingEvtxStrictMode:
             processing_config=proc_config,
             logger=test_logger,
         )
-        with pytest.raises(RuntimeError, match="EVTX open failed"):
+        with pytest.raises(StrictParseError, match="EVTX open failed"):
             list(processor.stream_evtx_events(str(evtx_file)))
 
     def test_strict_evtx_flag_stored_from_config(
@@ -2703,3 +2705,95 @@ class TestStreamingXmlEncodingAndDiagnostics:
         )
         assert list(processor.stream_xml_events(str(src), extractor)) == []
         assert mock_logger.warning.called
+
+
+class TestMalformedInputIsolation:
+    """One bad record must not cost the rest of the file."""
+
+    def test_csv_row_with_extra_values_is_kept(
+        self, tmp_path, field_mappings_file, default_args_config, test_logger
+    ):
+        """Surplus values used to land under the key None.
+
+        That key broke field resolution, the exception was swallowed, and the
+        whole row disappeared without a log line at any level.
+        """
+        src = tmp_path / "ragged.csv"
+        src.write_text("Channel,EventID\nSecurity,4624,surplus\nSystem,7036\n")
+
+        processor = StreamingEventProcessor(
+            config_file=field_mappings_file,
+            args_config=default_args_config,
+            logger=test_logger,
+        )
+        events = list(processor.stream_csv_events(str(src)))
+
+        assert len(events) == 2
+        assert events[0]["EventID"] == "4624"
+
+    def test_csv_row_with_missing_values_is_kept(
+        self, tmp_path, field_mappings_file, default_args_config, test_logger
+    ):
+        src = tmp_path / "short.csv"
+        src.write_text("Channel,EventID,Computer\nSecurity,4624\n")
+
+        processor = StreamingEventProcessor(
+            config_file=field_mappings_file,
+            args_config=default_args_config,
+            logger=test_logger,
+        )
+        events = list(processor.stream_csv_events(str(src)))
+
+        assert len(events) == 1
+
+    def test_json_array_survives_a_non_scalar_channel(
+        self, tmp_path, field_mappings_file, default_args_config, test_logger
+    ):
+        """A dict-shaped Channel is unhashable, and the filter does a set test.
+
+        In the chunked array reader the filter call sat outside the per-event
+        guard, so the TypeError abandoned every remaining event in the file.
+        Filtering has to be genuinely active for this to exercise anything.
+        """
+        from zircolite.rules import EventFilter
+
+        event_filter = EventFilter([
+            {"title": "r", "rule": ["SELECT * FROM logs"],
+             "channel": ["Security", "System"], "eventid": [4624, 7036]},
+        ])
+        assert event_filter._has_filter_data
+        src = tmp_path / "events.json"
+        src.write_text(json.dumps([
+            {"Event": {"System": {"Channel": {"#attributes": {"a": "b"}},
+                                  "EventID": 4624}}},
+            {"Event": {"System": {"Channel": "Security", "EventID": 4624}}},
+            {"Event": {"System": {"Channel": "System", "EventID": 7036}}},
+        ]))
+
+        processor = StreamingEventProcessor(
+            config_file=field_mappings_file,
+            args_config=default_args_config,
+            logger=test_logger,
+            event_filter=event_filter,
+        )
+        events = list(processor.stream_json_array_chunked(str(src)))
+
+        # An unusable channel means "cannot classify", so the event is kept
+        # rather than dropped -- and crucially the two after it still arrive.
+        assert len(events) == 3
+
+    def test_non_scalar_channel_normalises_to_none(
+        self, field_mappings_file, default_args_config, test_logger
+    ):
+        processor = StreamingEventProcessor(
+            config_file=field_mappings_file,
+            args_config=default_args_config,
+            logger=test_logger,
+        )
+        event = {"Event": {"System": {"Channel": {"#attributes": {"x": "y"}},
+                                      "EventID": {"#text": "4624"}}}}
+
+        channel, eventid = processor._extract_event_filter_fields(event)
+
+        assert channel is None
+        assert eventid == 4624

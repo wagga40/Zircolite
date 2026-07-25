@@ -106,6 +106,7 @@ from zircolite.processing import (
     process_parallel_streaming,
 )
 
+from zircolite import StrictParseError
 from zircolite.shutdown import (
     install_signal_handler,
     is_shutdown_requested,
@@ -878,7 +879,10 @@ def _run_processing(
         logger,
     )
 
-    original_ext = args.fileext or "evtx"
+    # The extension in force before auto-detection may run. Reading the
+    # registry rather than assuming EVTX keeps an explicit format flag from
+    # looking like a change and triggering a needless second directory walk.
+    original_ext = args.fileext or _format_flag_extension(args)
     fileext_from_cli = _fileext_is_explicit(args)
     file_list = discover_files(args, logger)
     log_list = file_list
@@ -999,7 +1003,15 @@ def main() -> None:
 
     # Handle generate-config before logging setup
     if args.generate_config:
-        create_default_config_file(args.generate_config)
+        try:
+            create_default_config_file(args.generate_config)
+        except (FileExistsError, OSError) as e:
+            print_error_panel(
+                "Cannot Write Configuration",
+                str(e),
+                "Choose a different path or remove the existing file.",
+            )
+            sys.exit(2)
         sys.exit(0)
 
     # Set up quiet mode before any output
@@ -1297,6 +1309,7 @@ def main() -> None:
     log_list = []
     all_results = []
     phase_setup_end = 0.0
+    strict_error = None
 
     try:
         zircolite_core, all_results, log_list, phase_setup_end = _run_processing(
@@ -1312,6 +1325,8 @@ def main() -> None:
 
             # Handle templating and package generation
             handle_templating(ctx, all_results, args)
+    except StrictParseError as e:
+        strict_error = str(e)
     except KeyboardInterrupt:
         request_shutdown()
     finally:
@@ -1324,6 +1339,14 @@ def main() -> None:
                 zircolite_core.close()
             except Exception as e:
                 logger.debug(f"Core close: {e}")
+
+    if strict_error is not None:
+        quit_on_error(
+            f"[red]    [-] {strict_error}[/]\n"
+            "[yellow]   [!] Aborted because [cyan]--strict[/] is set; "
+            "omit it to skip malformed chunks and keep the events read so far.[/]",
+            logger,
+        )
 
     if is_shutdown_requested():
         logger.info("[yellow][!] Shutdown complete.[/]")

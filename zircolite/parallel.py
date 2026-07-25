@@ -50,6 +50,14 @@ def _truncate_filename(name: str, max_len: int = _FILE_PROGRESS_NAME_MAX_LEN) ->
     return name[: max_len - 1] + "…"
 
 
+def _file_size(path: Path) -> int:
+    """Size of *path* in bytes, 0 when it cannot be read."""
+    try:
+        return os.path.getsize(path)
+    except OSError:
+        return 0
+
+
 # ============================================================================
 # CONSOLIDATED WORKER CALCULATION
 # ============================================================================
@@ -148,8 +156,7 @@ class ParallelStats:
     total_events: int = 0
     processing_time_seconds: float = 0.0
     workers_used: int = 0
-    throttle_events: int = 0
-    submissions_paused: int = 0  # Times new work was deferred due to memory pressure
+    throttle_events: int = 0  # Times a submission was deferred under memory pressure
 
 
 # ============================================================================
@@ -223,12 +230,17 @@ class MemoryAwareParallelProcessor:
         if self._calibrated_memory_per_file_mb is None:
             return False
         try:
-            total_mb = psutil.virtual_memory().total / (1024 * 1024)
+            vm = psutil.virtual_memory()
         except Exception:
             return False
-        budget_mb = total_mb * (self.config.memory_limit_percent / 100.0)
-        projected = self.get_current_memory_mb() + self._calibrated_memory_per_file_mb
-        return projected > budget_mb
+        total_mb = vm.total / (1024 * 1024)
+        if total_mb <= 0:
+            return False
+        used_mb = (vm.total - vm.available) / (1024 * 1024)
+        projected_percent = (
+            (used_mb + self._calibrated_memory_per_file_mb) / total_mb * 100.0
+        )
+        return projected_percent > self.config.memory_limit_percent
 
     # ------------------------------------------------------------------
     # Estimation & calibration
@@ -265,10 +277,22 @@ class MemoryAwareParallelProcessor:
 
         return avg_file_size_mb * memory_multiplier
 
-    def calibrate_memory(self, file_path: Path, memory_after_mb: float):
+    def calibrate_memory(
+        self,
+        file_path: Path,
+        memory_after_mb: float,
+        resident_bytes: Optional[int] = None,
+    ):
         """
         Calibrate memory-per-file estimate using the actual memory delta
         observed after processing the first file.
+
+        The snapshot is taken before any file is submitted, so by the time the
+        first one completes the delta covers every worker still in flight.
+        *resident_bytes* is the total input size those workers hold, and the
+        ratio has to be taken against it -- dividing an aggregate delta by a
+        single file's size overestimated by roughly the worker count, which
+        left the predictive throttle permanently on and serialised the run.
 
         The result blends 70 % actual measurement with 30 % heuristic to
         avoid over-correcting on a single sample.
@@ -288,7 +312,12 @@ class MemoryAwareParallelProcessor:
         if file_size_mb < 0.01:
             return
 
-        actual_ratio = memory_delta / file_size_mb
+        resident_mb = (
+            resident_bytes / (1024 * 1024)
+            if resident_bytes and resident_bytes > 0
+            else file_size_mb
+        )
+        actual_ratio = memory_delta / max(resident_mb, 0.01)
         heuristic = self.estimate_memory_per_file([file_path])
         heuristic_ratio = heuristic / max(file_size_mb, 0.01)
         blended_ratio = 0.7 * actual_ratio + 0.3 * heuristic_ratio
@@ -392,6 +421,7 @@ class MemoryAwareParallelProcessor:
         results: List[Any] = []
         failed_files: List[Tuple[Path, str]] = []
         first_file_calibrated = False
+        inflight_bytes = 0
 
         # Use a deque so throttled files remain available for later submission
         file_queue: deque = deque(file_list)
@@ -427,7 +457,7 @@ class MemoryAwareParallelProcessor:
         )
 
         def run_parallel_loop() -> None:
-            nonlocal first_file_calibrated
+            nonlocal first_file_calibrated, inflight_bytes
             task_id = progress_main.add_task(
                 desc,
                 total=len(file_list),
@@ -439,9 +469,13 @@ class MemoryAwareParallelProcessor:
             with ThreadPoolExecutor(max_workers=num_workers) as executor:
                 active_futures: dict = {}
 
+                def submit(path: Path) -> None:
+                    nonlocal inflight_bytes
+                    inflight_bytes += _file_size(path)
+                    active_futures[executor.submit(process_func, path)] = path
+
                 for _ in range(min(num_workers, len(file_queue))):
-                    f = file_queue.popleft()
-                    active_futures[executor.submit(process_func, f)] = f
+                    submit(file_queue.popleft())
 
                 while active_futures:
                     if is_shutdown_requested():
@@ -513,20 +547,21 @@ class MemoryAwareParallelProcessor:
                         if not first_file_calibrated and self.config.adaptive_memory:
                             first_file_calibrated = True
                             self.calibrate_memory(
-                                file_path, self.get_current_memory_mb()
+                                file_path,
+                                self.get_current_memory_mb(),
+                                resident_bytes=inflight_bytes,
                             )
+
+                        inflight_bytes -= _file_size(file_path)
 
                         if file_queue and not is_shutdown_requested():
                             if self.should_throttle() or self._would_exceed_memory_budget():
                                 self.stats.throttle_events += 1
-                                self.stats.submissions_paused += 1
                             else:
-                                f = file_queue.popleft()
-                                active_futures[executor.submit(process_func, f)] = f
+                                submit(file_queue.popleft())
 
                     if not active_futures and file_queue and not is_shutdown_requested():
-                        f = file_queue.popleft()
-                        active_futures[executor.submit(process_func, f)] = f
+                        submit(file_queue.popleft())
 
         if rule_progress_queue is not None:
             with Live(
@@ -576,6 +611,6 @@ class MemoryAwareParallelProcessor:
 
         if self.stats.throttle_events > 0:
             self.logger.warning(
-                f"[!] Memory pressure detected [yellow]{self.stats.throttle_events}[/] times "
-                f"([yellow]{self.stats.submissions_paused}[/] submissions deferred)"
+                f"[!] Memory pressure deferred [yellow]{self.stats.throttle_events}[/] "
+                "submission(s)"
             )

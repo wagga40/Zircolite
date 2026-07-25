@@ -10,6 +10,7 @@ Covers:
 - Module-level imports / public API surface
 """
 
+import argparse
 import json
 import os
 import sqlite3
@@ -943,3 +944,50 @@ class TestPerfileShutdownFinalization:
         with open(outfile) as f:
             results = json.load(f)  # must be a valid, closed JSON array
         assert len(results) == 1
+
+
+class TestDbInputDirectoryExpansion:
+    """-D pointed at a directory used to fail while auto-detection coped."""
+
+    def test_directory_expands_to_the_databases_inside(self, tmp_path, test_logger):
+        from zircolite.processing import _expand_db_path
+
+        (tmp_path / "a.db").write_bytes(b"")
+        (tmp_path / "sub").mkdir()
+        (tmp_path / "sub" / "b.sqlite").write_bytes(b"")
+        (tmp_path / "notes.txt").write_text("ignore me")
+
+        args = argparse.Namespace(fileext=None, no_recursion=False)
+        found = _expand_db_path(tmp_path, args, test_logger)
+
+        assert [p.name for p in found] == ["a.db", "b.sqlite"]
+
+    def test_fileext_narrows_the_search(self, tmp_path, test_logger):
+        from zircolite.processing import _expand_db_path
+
+        (tmp_path / "a.db").write_bytes(b"")
+        (tmp_path / "b.sqlite").write_bytes(b"")
+
+        args = argparse.Namespace(fileext="db", no_recursion=False)
+        found = _expand_db_path(tmp_path, args, test_logger)
+
+        assert [p.name for p in found] == ["a.db"]
+
+    def test_a_plain_path_is_passed_through(self, tmp_path, test_logger):
+        from zircolite.processing import _expand_db_path
+
+        db = tmp_path / "single.db"
+        db.write_bytes(b"")
+
+        args = argparse.Namespace(fileext=None, no_recursion=False)
+        assert _expand_db_path(db, args, test_logger) == [db]
+
+    def test_empty_directory_warns(self, tmp_path):
+        from unittest.mock import MagicMock
+        from zircolite.processing import _expand_db_path
+
+        logger = MagicMock()
+        args = argparse.Namespace(fileext=None, no_recursion=False)
+
+        assert _expand_db_path(tmp_path, args, logger) == []
+        assert logger.warning.called

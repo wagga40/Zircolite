@@ -789,6 +789,28 @@ class TestTimestampDetection:
         event = {"id": 1, "message": "hello", "count": 42}
         assert detector.detect_timestamp_field(event) is None
 
+    @pytest.mark.parametrize(
+        "event",
+        [
+            {"user": "bob", "bytes_sent": 1500000000},
+            {"user": "bob", "serial": "1234567890"},
+            {"CommandLine": "whoami", "Version": "10/12/2024"},
+        ],
+        ids=["byte-count", "serial-number", "version-string"],
+    )
+    def test_timestamp_shaped_value_needs_a_timestamp_shaped_name(
+        self, detector, event
+    ):
+        """A field name with no time signal must not become the time field.
+
+        Any large integer or 10/13-digit string looks like an epoch, so scoring
+        an unrecognised name as a match picked byte counts and serial numbers.
+        That value then drove correlation windows and -A/-B filtering, and it
+        also lifted detection confidence from low to medium, suppressing the
+        warning that would have shown the problem.
+        """
+        assert detector.detect_timestamp_field(event) is None
+
     def test_epoch_timestamp_detection(self, detector):
         """Epoch timestamps (numeric) should be detected."""
         event = {"ts": 1718442600, "message": "test"}

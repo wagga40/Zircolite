@@ -1792,3 +1792,42 @@ class TestCoreRobustness:
         assert len(orphan) == 1
         assert orphan[0]["error"] == "no matching rule in ruleset"
         zircore.close()
+
+
+class TestAutoIndexRespectsRemoveIndex:
+    """--auto-index must not resurrect an index --remove-index dropped."""
+
+    def _core(self, tmp_path, field_mappings_file, remove_index):
+        from zircolite import ProcessingConfig, ZircoliteCore
+
+        core = ZircoliteCore(
+            config=str(field_mappings_file),
+            processing_config=ProcessingConfig(
+                auto_index_top_n=5, remove_index=remove_index
+            ),
+        )
+        core.ruleset = [{
+            "title": "t",
+            "rule": ["SELECT * FROM logs WHERE CommandLine LIKE '%x%' "
+                     "AND Computer = 'a'"],
+        }]
+        return core
+
+    def test_dropped_index_is_not_a_candidate(self, tmp_path, field_mappings_file):
+        core = self._core(tmp_path, field_mappings_file, ["idx_CommandLine"])
+        try:
+            candidates = core._auto_index_candidates(["CommandLine", "Computer"])
+        finally:
+            core.close()
+
+        assert "CommandLine" not in candidates
+        assert "Computer" in candidates
+
+    def test_other_columns_are_untouched(self, tmp_path, field_mappings_file):
+        core = self._core(tmp_path, field_mappings_file, [])
+        try:
+            candidates = core._auto_index_candidates(["CommandLine", "Computer"])
+        finally:
+            core.close()
+
+        assert set(candidates) == {"CommandLine", "Computer"}

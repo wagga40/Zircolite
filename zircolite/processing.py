@@ -468,6 +468,37 @@ def process_perfile_streaming(
 # DATABASE INPUT
 # ============================================================================
 
+_DB_EXTENSIONS = ("db", "sqlite", "sqlite3")
+
+
+def _expand_db_path(
+    path: Path, args: argparse.Namespace, logger: logging.Logger
+) -> List[Path]:
+    """Resolve a -D argument to a list of database files.
+
+    A database is normally named explicitly, but pointing -D at a directory
+    used to fail with "Database file does not exist: <dir>" while the
+    auto-detected route handled the same input.
+    """
+    if not path.is_dir():
+        return [path]
+
+    patterns = (
+        [f"*.{args.fileext.lstrip('.')}"]
+        if getattr(args, "fileext", None)
+        else [f"*.{ext}" for ext in _DB_EXTENSIONS]
+    )
+    walk = path.glob if getattr(args, "no_recursion", False) else path.rglob
+    found = sorted({p for pattern in patterns for p in walk(pattern) if p.is_file()})
+    if not found:
+        logger.warning(
+            f"[yellow]   [!] No database file found in {path} "
+            f"(looked for {', '.join(patterns)}); use [cyan]--fileext[/] to "
+            "name a different extension[/]"
+        )
+    return found
+
+
 def process_db_input(
     ctx: ProcessingContext,
     args: argparse.Namespace,
@@ -477,10 +508,14 @@ def process_db_input(
 
     When *file_list* is provided (directory of DB files), each file is
     loaded, rules are executed, and results are aggregated — similar to
-    per-file streaming mode.  When *file_list* is ``None`` (the legacy
-    ``-D`` path), ``args.evtx`` is used as the single DB path.
+    per-file streaming mode.  When *file_list* is ``None`` (the ``-D`` path),
+    ``args.evtx`` is used, and a directory there is expanded the same way the
+    auto-detected path expands it.
     """
-    db_files = [Path(f) for f in file_list] if file_list else [Path(args.evtx)]
+    if file_list:
+        db_files = [Path(f) for f in file_list]
+    else:
+        db_files = _expand_db_path(Path(args.evtx), args, ctx.logger)
     all_results: list = []
     first_file = True
     processed_any = False

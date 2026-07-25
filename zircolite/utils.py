@@ -513,8 +513,8 @@ def select_files(
     selected: List[str] = []
     for element in paths:
         path_str = str(element)
-        path_str_lower = path_str.lower()
-        if any(file_filter in path_str_lower for file_filter in filters):
+        name_lower = Path(path_str).name.lower()
+        if any(file_filter in name_lower for file_filter in filters):
             selected.append(path_str)
     return cast(List[Union[Path, str]], selected)
 
@@ -532,8 +532,8 @@ def avoid_files(
     filtered: List[str] = []
     for element in paths:
         path_str = str(element)
-        path_str_lower = path_str.lower()
-        if all(file_filter not in path_str_lower for file_filter in filters):
+        name_lower = Path(path_str).name.lower()
+        if all(file_filter not in name_lower for file_filter in filters):
             filtered.append(path_str)
     return cast(List[Union[Path, str]], filtered)
 

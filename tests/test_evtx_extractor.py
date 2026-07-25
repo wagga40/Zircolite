@@ -382,4 +382,64 @@ class TestExtractorRobustness:
         assert result["Event"]["EventData"]["ProcessId"] == "010"
         assert result["Event"]["System"]["EventID"] == 5  # System stays int
 
+    def test_auditd_msg_audit_inside_a_value_is_not_a_timestamp(self):
+        """The `msg=audit(` test must look at the key, not the whole pair.
+
+        An EXECVE record can carry the literal text in an argument, e.g. a
+        grep pattern. Matching on the pair dropped that argument and blanked
+        the timestamp that had already been parsed.
+        """
+        extractor = EvtxExtractor(ExtractorConfig(auditd_logs=True))
+        line = (
+            'type=EXECVE msg=audit(1600000000.123:456): '
+            'a0="grep" a1="msg=audit(" a2="/var/log/audit"'
+        )
+        event = extractor.auditd_line_to_json(line)
+
+        assert event["a1"] == "msg=audit("
+        assert event["a0"] == "grep"
+        assert event["a2"] == "/var/log/audit"
+        assert event["timestamp"] == "2020-09-13 12:26:40"
+
+    def test_xml_unnamed_data_elements_are_all_kept(self):
+        """`<Data>` without a Name attribute is common (e.g. SCM 7036).
+
+        Keying them all on the missing attribute collapsed them into a single
+        column named "None", so only the last value survived.
+        """
+        from lxml import etree
+        extractor = EvtxExtractor(ExtractorConfig(xml_logs=True))
+        xml_str = (
+            '<Event xmlns="http://schemas.microsoft.com/win/2004/08/events/event">'
+            "<System><EventID>7036</EventID></System>"
+            "<EventData><Data>Print Spooler</Data><Data>running</Data></EventData>"
+            "</Event>"
+        )
+        root = etree.fromstring(xml_str)
+        result = extractor.xml_to_dict(
+            root, "{http://schemas.microsoft.com/win/2004/08/events/event}"
+        )
+        event_data = result["Event"]["EventData"]
+
+        assert "None" not in event_data
+        assert event_data["Data"] == ["Print Spooler", "running"]
+
+    def test_xml_named_and_unnamed_data_coexist(self):
+        from lxml import etree
+        extractor = EvtxExtractor(ExtractorConfig(xml_logs=True))
+        xml_str = (
+            '<Event xmlns="http://schemas.microsoft.com/win/2004/08/events/event">'
+            "<System><EventID>1</EventID></System>"
+            '<EventData><Data Name="Image">a.exe</Data><Data>extra</Data></EventData>'
+            "</Event>"
+        )
+        root = etree.fromstring(xml_str)
+        result = extractor.xml_to_dict(
+            root, "{http://schemas.microsoft.com/win/2004/08/events/event}"
+        )
+        event_data = result["Event"]["EventData"]
+
+        assert event_data["Image"] == "a.exe"
+        assert event_data["Data"] == ["extra"]
+
 

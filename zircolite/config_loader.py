@@ -559,8 +559,14 @@ parallel:
   adaptive: true
 """
     
-    with open(output_path, 'w', encoding='utf-8') as f:
+    target = Path(output_path)
+    if target.exists():
+        raise FileExistsError(
+            f"Refusing to overwrite existing file: {output_path}"
+        )
+
+    with open(target, 'w', encoding='utf-8') as f:
         f.write(default_config)
-    
+
     from .console import console
     console.print(f"[green]\\[✓][/] Created default configuration file: [cyan]{output_path}[/]")

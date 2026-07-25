@@ -405,9 +405,13 @@ class LogTypeDetector:
             if field_name in event and looks_like(event[field_name]):
                 return field_name
 
-        # Phase 2: Scan all fields for timestamp-like values, scored by name
+        # Phase 2: Scan all fields for timestamp-like values, scored by name.
+        # The name has to carry some signal: any large integer or 10/13-digit
+        # string looks like an epoch, so an unscored field (a byte count, a
+        # serial number) would otherwise be picked as the time field and then
+        # drive correlation windows and -A/-B filtering.
         best_key = None
-        best_score = -1
+        best_score = 0
         for key, value in event.items():
             if looks_like(value):
                 score = self._timestamp_field_score(key)
@@ -868,7 +872,7 @@ class LogTypeDetector:
                         if isinstance(event, dict):
                             return event
                 return None
-        except (json.JSONDecodeError, Exception):
+        except Exception:
             # For truncated JSON arrays, try line-by-line recovery
             for line in sample_bytes.split(b"\n"):
                 line = line.strip()

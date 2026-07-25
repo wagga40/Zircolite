@@ -3812,3 +3812,40 @@ class TestYamlConfigTemplateValidation:
             with patch('sys.argv', ['zircolite.py', '-Y', str(cfg), '-n']):
                 zircolite_script.main()
         assert exc_info.value.code == 1
+
+
+class TestGenerateConfigDoesNotClobber:
+    """--dbfile already refuses to overwrite; --generate-config did not."""
+
+    def test_refuses_to_overwrite_an_existing_file(self, tmp_path):
+        from zircolite.config_loader import create_default_config_file
+
+        target = tmp_path / "mine.yaml"
+        target.write_text("# hand-written, do not lose me\n")
+
+        with pytest.raises(FileExistsError):
+            create_default_config_file(str(target))
+
+        assert target.read_text() == "# hand-written, do not lose me\n"
+
+    def test_writes_when_the_path_is_free(self, tmp_path):
+        from zircolite.config_loader import create_default_config_file
+
+        target = tmp_path / "fresh.yaml"
+        create_default_config_file(str(target))
+
+        assert target.exists()
+        assert "input:" in target.read_text()
+
+    def test_cli_exits_2_instead_of_clobbering(self, tmp_path):
+        target = tmp_path / "existing.yaml"
+        target.write_text("keep me\n")
+
+        result = subprocess.run(
+            [sys.executable, str(WORKSPACE_ROOT / "zircolite.py"),
+             "--generate-config", str(target)],
+            capture_output=True, text=True, cwd=str(WORKSPACE_ROOT),
+        )
+
+        assert result.returncode == 2
+        assert target.read_text() == "keep me\n"

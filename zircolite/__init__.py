@@ -26,7 +26,7 @@ from .config import (
     GuiConfig,
 )
 from .core import ZircoliteCore
-from .streaming import StreamingEventProcessor
+from .streaming import StreamingEventProcessor, StrictParseError
 from .extractor import EvtxExtractor
 from .rules import RulesetHandler, RulesUpdater, EventFilter
 from .templates import TemplateEngine, ZircoliteGuiGenerator
@@ -137,6 +137,7 @@ __all__ = [
     # Core classes
     'ZircoliteCore',
     'StreamingEventProcessor',
+    'StrictParseError',
     'EvtxExtractor',
     'RulesetHandler',
     'RulesUpdater',

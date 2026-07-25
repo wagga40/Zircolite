@@ -44,7 +44,7 @@ from .console import (
     make_detection_counter,
 )
 from .shutdown import is_shutdown_requested
-from .streaming import StreamingEventProcessor
+from .streaming import StreamingEventProcessor, StrictParseError
 from .utils import sanitize_row_for_csv
 
 # Translation table for stripping newline characters from CSV descriptions.
@@ -78,6 +78,11 @@ _SQL_RESERVED_WORDS = frozenset({
 def _compile_regex(pattern: str) -> re.Pattern:
     """Return a compiled regex, cached for repeated use by the SQLite UDF."""
     return re.compile(pattern)
+
+
+def _index_name_for(column: str) -> str:
+    """Index name Zircolite gives a column, as accepted by --remove-index."""
+    return "idx_" + column.replace(".", "_")
 
 
 if TYPE_CHECKING:
@@ -303,14 +308,17 @@ class ZircoliteCore:
 
         Columns already covered by built-in indices (``eventid``, ``Channel``)
         and those queued via ``add_index`` are excluded so the work isn't
-        duplicated. Names are matched case-insensitively against the actual
-        table columns.
+        duplicated. Columns whose index name ``remove_index`` drops are
+        excluded too, so auto-indexing cannot silently recreate an index the
+        user asked for gone. Names are matched case-insensitively against the
+        actual table columns.
         """
         if not self.auto_index_top_n or not self.ruleset:
             return []
 
         already_indexed_lower = {"eventid", "channel"}
         already_indexed_lower.update(c.lower() for c in self.add_index)
+        dropped_lower = {name.lower() for name in self.remove_index}
         columns_by_lower = {c.lower(): c for c in columns}
 
         counts: Dict[str, int] = {}
@@ -325,6 +333,8 @@ class ZircoliteCore:
                         continue
                     actual = columns_by_lower.get(cl)
                     if actual is None:
+                        continue
+                    if _index_name_for(actual).lower() in dropped_lower:
                         continue
                     counts[actual] = counts.get(actual, 0) + 1
 
@@ -351,18 +361,7 @@ class ZircoliteCore:
             except sqlite3.OperationalError:
                 pass
 
-        for col in self.add_index:
-            if col not in columns:
-                self.logger.debug("Column %s not present; skipping index", col)
-                continue
-            idx_name = "idx_" + col.replace(".", "_")
-            q_idx = self.escape_identifier(idx_name)
-            q_col = self.escape_identifier(col)
-            try:
-                cursor.execute(f'CREATE INDEX "{q_idx}" ON "logs" ("{q_col}");')
-                conn.commit()
-            except sqlite3.OperationalError as e:
-                self.logger.debug("Could not create index on %s: %s", col, e)
+        self._create_column_indexes(self.add_index, columns)
 
         for idx_name in self.remove_index:
             q_idx = self.escape_identifier(idx_name)
@@ -394,13 +393,20 @@ class ZircoliteCore:
             f"[+] Auto-indexing top [yellow]{len(auto_index_cols)}[/] columns "
             f"from ruleset: [cyan]{', '.join(auto_index_cols)}[/]"
         )
+        self._create_column_indexes(auto_index_cols, columns)
+
+    def _create_column_indexes(
+        self, cols: List[str], columns: List[str]
+    ) -> None:
+        """Create one ``idx_<column>`` index per entry of *cols* that exists."""
+        if self.db_connection is None:
+            return
         cursor = self._get_cursor()
-        for col in auto_index_cols:
+        for col in cols:
             if col not in columns:
                 self.logger.debug("Column %s not present; skipping index", col)
                 continue
-            idx_name = "idx_" + col.replace(".", "_")
-            q_idx = self.escape_identifier(idx_name)
+            q_idx = self.escape_identifier(_index_name_for(col))
             q_col = self.escape_identifier(col)
             try:
                 cursor.execute(f'CREATE INDEX "{q_idx}" ON "logs" ("{q_col}");')
@@ -1156,7 +1162,11 @@ class ZircoliteCore:
                     progress_callback=progress_cb,
                 )
                 return event_count
-                    
+
+            except StrictParseError:
+                # --strict asked us to stop on parse errors, so this one must
+                # not be swallowed into a "0 events" result like the rest.
+                raise
             except Exception as e:
                 self.logger.error(f"[error]    [-] Error processing {log_file}: {e}[/]")
                 return 0

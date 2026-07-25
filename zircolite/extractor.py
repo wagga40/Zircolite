@@ -70,7 +70,10 @@ class EvtxExtractor:
         # embedded quotes
         for match in _AUDITD_ATTR_RE.finditer(line):
             key, value = match.group(1), match.group(2)
-            if 'msg=audit' in match.group(0):
+            # Test the key, not the whole pair: an EXECVE argument can contain
+            # the literal text "msg=audit(" (a grep pattern, for instance) and
+            # must not be mistaken for the record header.
+            if key == "msg" and value.startswith("audit("):
                 event['timestamp'] = self.get_time(match.group(0))
                 continue
             # Strip only the surrounding quotes, not quotes inside the value
@@ -138,6 +141,13 @@ class EvtxExtractor:
                         pass
                 if cleaned_tag == "Data":
                     child_node = elem.get("Name")
+                    if child_node is None:
+                        # Unnamed <Data> is common (Service Control Manager
+                        # 7036 and friends). Collect them into a list under
+                        # "Data" so several in one event cannot overwrite each
+                        # other, matching what the EVTX parser produces.
+                        node_value.setdefault("Data", []).append(text)
+                        continue
                 elif cleaned_tag == "Qualifiers":
                     child_node = cleaned_tag
                     text = elem.text

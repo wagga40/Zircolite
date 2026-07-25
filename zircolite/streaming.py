@@ -75,6 +75,14 @@ _MAX_JSON_OBJECT_BUFFER_CHARS = 64 * 1024 * 1024
 _NON_WINDOWS_INPUTS = NON_WINDOWS_INPUT_FLAGS
 
 
+class StrictParseError(Exception):
+    """A parse error that --strict asked us to stop on.
+
+    Distinct from the generic per-file failure so that the run aborts instead
+    of continuing over a partially ingested file.
+    """
+
+
 def _quote_identifier(name: str) -> str:
     """Quote a SQL identifier, escaping embedded double quotes.
 
@@ -576,6 +584,14 @@ class StreamingEventProcessor:
             event_dict, self._eventid_field_paths, self._eventid_path_hint
         )
 
+        # Both values are handed to a set membership test, so they have to come
+        # back hashable. XML-derived events carry them as {"#text": ...} or
+        # {"#attributes": {...}} when the element had attributes.
+        if isinstance(channel, dict):
+            channel = channel.get("#text")
+        if not isinstance(channel, (str, type(None))):
+            channel = None
+
         # Convert eventid to int if possible (guarantees int or None for caller)
         if eventid is not None:
             # Handle EventID as dict with '#text' (XML style)
@@ -1046,10 +1062,9 @@ class StreamingEventProcessor:
                     )
                     return
             if self.strict_evtx:
-                self.logger.error(
-                    f"[red]    [-] Error streaming EVTX file {evtx_file}: {e}[/]"
-                )
-                raise
+                raise StrictParseError(
+                    f"Error streaming EVTX file {evtx_file}: {e}"
+                ) from e
             self.logger.warning(
                 f"[yellow]    [!] EVTX parsing error in {evtx_file}: {e} — "
                 "recovered events before the error were kept (use [cyan]--strict[/] to abort on parse errors)[/]"
@@ -1171,10 +1186,13 @@ class StreamingEventProcessor:
                         del elem.getparent()[0]
 
             if not seen_events:
+                # Deliberately no --logs-encoding hint: XML is parsed with the
+                # encoding declared in the document, so that flag changes
+                # nothing here.
                 self.logger.warning(
                     f"[yellow]    [!] No <Event> documents found in "
-                    f"{Path(xml_file).name}; check the file encoding "
-                    f"([cyan]--logs-encoding[/]) and format[/]"
+                    f"{Path(xml_file).name}; check that it is an EVTX-to-XML "
+                    f"export and that its encoding declaration is correct[/]"
                 )
 
         except Exception as e:
@@ -1286,8 +1304,14 @@ class StreamingEventProcessor:
                 # lines, so the sample is chained back in front of the rest.
                 sample_lines = list(islice(f, 5))
                 delimiter = sniff_csv_delimiter("".join(sample_lines))
+                # A row with more values than the header would otherwise land
+                # under the key None, which breaks flattening and silently
+                # discards the whole row; restkey gives it a real name.
                 reader = csv_module.DictReader(
-                    chain(sample_lines, f), delimiter=delimiter
+                    chain(sample_lines, f),
+                    delimiter=delimiter,
+                    restkey="_extra_values",
+                    restval="",
                 )
                 for row in reader:
                     try:
@@ -1297,7 +1321,8 @@ class StreamingEventProcessor:
                         flattened = flatten(row, filename, None)
                         if flattened:
                             yield flattened
-                    except Exception:
+                    except Exception as exc:
+                        self.logger.debug(f"Skipping CSV row in {csv_file}: {exc}")
                         continue
         except Exception as e:
             self.logger.error(
@@ -1380,6 +1405,20 @@ class StreamingEventProcessor:
             flatten = self._flatten_event  # Local reference
             should_process = self._should_process_event  # Local reference
 
+            def process_one(event_dict: dict) -> Optional[dict]:
+                """Filter and flatten one event, isolating per-event failures.
+
+                Without this, a single malformed event aborts the rest of the
+                file instead of being skipped like the other readers do.
+                """
+                try:
+                    if not should_process(event_dict):
+                        return None
+                    return flatten(event_dict, filename, None)
+                except Exception as exc:
+                    self.logger.debug(f"Skipping event in {json_file}: {exc}")
+                    return None
+
             file_size = os.path.getsize(json_file)
 
             # For files under 50MB, use standard single-load approach (faster)
@@ -1394,10 +1433,7 @@ class StreamingEventProcessor:
                 for event_dict in logs:
                     if not isinstance(event_dict, dict):
                         continue
-                    # Early filter check before expensive flattening
-                    if not should_process(event_dict):
-                        continue
-                    flattened = flatten(event_dict, filename, None)
+                    flattened = process_one(event_dict)
                     if flattened:
                         yield flattened
                 return
@@ -1431,12 +1467,12 @@ class StreamingEventProcessor:
                         if buffer and not buffer.startswith("]"):
                             try:
                                 obj, _ = decoder.raw_decode(buffer)
-                                if isinstance(obj, dict) and should_process(obj):
-                                    flattened = flatten(obj, filename, None)
-                                    if flattened:
-                                        yield flattened
                             except Exception:
-                                pass
+                                obj = None
+                            if isinstance(obj, dict):
+                                flattened = process_one(obj)
+                                if flattened:
+                                    yield flattened
                         break
 
                     buffer += chunk
@@ -1459,14 +1495,14 @@ class StreamingEventProcessor:
 
                         try:
                             obj, idx = decoder.raw_decode(buffer)
-                            if isinstance(obj, dict) and should_process(obj):
-                                flattened = flatten(obj, filename, None)
-                                if flattened:
-                                    yield flattened
-                            buffer = buffer[idx:]
                         except std_json.JSONDecodeError:
                             # Need more data
                             break
+                        if isinstance(obj, dict):
+                            flattened = process_one(obj)
+                            if flattened:
+                                yield flattened
+                        buffer = buffer[idx:]
 
         except Exception as e:
             self.logger.error(
@@ -1526,6 +1562,10 @@ class StreamingEventProcessor:
         cursor = db_connection.cursor()
         insert_batch = self._insert_batch
 
+        # Events already committed when a later batch fails. Reporting 0 for
+        # the whole file would contradict the rows rules then match against.
+        inserted_count = 0
+
         try:
             for event in event_stream:
                 batch_append(event)
@@ -1539,6 +1579,7 @@ class StreamingEventProcessor:
 
                 if len(batch) >= batch_size:
                     insert_batch(db_connection, cursor, batch)
+                    inserted_count = event_count
                     batch = []
                     batch_append = batch.append  # Rebind after list replacement
                     if progress_callback is not None:
@@ -1549,10 +1590,23 @@ class StreamingEventProcessor:
             # Insert remaining batch
             if batch:
                 insert_batch(db_connection, cursor, batch)
+                inserted_count = event_count
                 if progress_callback is not None:
                     progress_callback(event_count)
 
             return event_count
+        except StrictParseError:
+            raise
+        except Exception as e:
+            if inserted_count == 0:
+                raise
+            self.logger.error(
+                f"[red]    [-] Partial ingest of {os.path.basename(log_file)}: "
+                f"{e}[/]\n"
+                f"[yellow]   [!] {inserted_count:,} event(s) were committed "
+                f"before the failure and are included in the results[/]"
+            )
+            return inserted_count
         finally:
             cursor.close()
 

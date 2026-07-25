@@ -4,6 +4,8 @@ Tests for the parallel processing module.
 
 import queue
 import sys
+
+import pytest
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
@@ -62,18 +64,17 @@ class TestParallelStats:
         assert stats.processing_time_seconds == 0.0
         assert stats.workers_used == 0
         assert stats.throttle_events == 0
-        assert stats.submissions_paused == 0
 
     def test_custom_values(self):
         stats = ParallelStats(
             processed_files=8,
             total_events=1000,
-            submissions_paused=5,
+            throttle_events=5,
         )
 
         assert stats.processed_files == 8
         assert stats.total_events == 1000
-        assert stats.submissions_paused == 5
+        assert stats.throttle_events == 5
 
 
 # ============================================================================
@@ -454,7 +455,7 @@ class TestAdaptiveMemory:
 class TestRealThrottling:
     """Tests for submission-pausing throttle behaviour."""
 
-    def test_submissions_paused_under_pressure(self, test_logger, tmp_path):
+    def test_submissions_deferred_under_pressure(self, test_logger, tmp_path):
         files = []
         for i in range(8):
             f = tmp_path / f"test_{i}.json"
@@ -478,7 +479,7 @@ class TestRealThrottling:
             )
 
         assert stats.processed_files == 8
-        assert stats.submissions_paused > 0
+        assert stats.throttle_events > 0
 
     def test_all_files_eventually_processed_despite_throttle(
         self, test_logger, tmp_path
@@ -733,3 +734,90 @@ class TestParallelRobustness:
 
         processor.process_files_parallel(files, process_func, disable_progress=True)
         assert processor._calibrated_memory_per_file_mb is None
+
+
+class TestCalibrationDoesNotSerialiseTheRun:
+    """The memory snapshot precedes every submission, so the first delta
+    covers all workers in flight. Dividing it by one file's size scaled the
+    estimate by roughly the worker count, which pinned the predictive
+    throttle on and reduced parallel processing to one file at a time."""
+
+    def test_ratio_is_taken_against_all_resident_input(self, test_logger, tmp_path):
+        from zircolite.parallel import MemoryAwareParallelProcessor
+
+        f = tmp_path / "one.evtx"
+        f.write_bytes(b"x" * (1024 * 1024))  # 1 MB
+
+        # 4 workers, each holding a 1 MB file, 20 MB total delta -> 5x, not 20x
+        processor = MemoryAwareParallelProcessor(logger=test_logger)
+        processor._first_file_memory_before = 100.0
+        processor.calibrate_memory(f, 120.0, resident_bytes=4 * 1024 * 1024)
+        with_context = processor._calibrated_memory_per_file_mb
+
+        naive = MemoryAwareParallelProcessor(logger=test_logger)
+        naive._first_file_memory_before = 100.0
+        naive.calibrate_memory(f, 120.0)
+        without_context = naive._calibrated_memory_per_file_mb
+
+        assert with_context < without_context
+        # 0.7 * 5 + 0.3 * 5 (heuristic for a 1 MB file) == 5 MB
+        assert with_context == pytest.approx(5.0, rel=0.01)
+
+    def test_budget_projection_uses_system_wide_percent(self, test_logger):
+        """should_throttle compares a system-wide percentage, so the
+        predictive check has to compare the same quantity."""
+        from zircolite.parallel import MemoryAwareParallelProcessor, ParallelConfig
+
+        processor = MemoryAwareParallelProcessor(
+            config=ParallelConfig(memory_limit_percent=85.0), logger=test_logger
+        )
+        processor._calibrated_memory_per_file_mb = 100.0
+
+        with patch("psutil.virtual_memory") as mock_vm:
+            total = 16 * 1024 * 1024 * 1024
+            mock_vm.return_value.total = total
+            mock_vm.return_value.available = int(total * 0.50)  # 50% used
+            assert processor._would_exceed_memory_budget() is False
+
+            mock_vm.return_value.available = int(total * 0.10)  # 90% used
+            assert processor._would_exceed_memory_budget() is True
+
+    def test_all_workers_stay_busy_when_memory_is_fine(self, test_logger, tmp_path):
+        """With headroom, every file must still be submitted concurrently."""
+        import threading
+        from zircolite.parallel import MemoryAwareParallelProcessor, ParallelConfig
+
+        files = []
+        for i in range(6):
+            f = tmp_path / f"f{i}.json"
+            f.write_bytes(b"x" * 4096)
+            files.append(f)
+
+        peak = 0
+        active = 0
+        lock = threading.Lock()
+        gate = threading.Barrier(3, timeout=5)
+
+        def slow(path):
+            nonlocal peak, active
+            with lock:
+                active += 1
+                peak = max(peak, active)
+            try:
+                gate.wait()
+            except threading.BrokenBarrierError:
+                pass
+            with lock:
+                active -= 1
+            return 1, {"file": str(path)}
+
+        processor = MemoryAwareParallelProcessor(
+            config=ParallelConfig(max_workers=3, sort_by_size=False),
+            logger=test_logger,
+        )
+        _, stats = processor.process_files_parallel(
+            files, slow, disable_progress=True
+        )
+
+        assert stats.processed_files == 6
+        assert peak >= 2
