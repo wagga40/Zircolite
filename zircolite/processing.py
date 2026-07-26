@@ -769,6 +769,9 @@ def process_single_file_worker(
             "results": file_results,
             "events": event_count,
             "filtered": filtered_count,
+            # Workers log to a silent logger, so the warning the core emits at
+            # the end of its run is discarded; carry it out for aggregation.
+            "rules_in_error": dict(core.rules_in_error),
         }
         if degraded:
             summary["error"] = (
@@ -1010,6 +1013,18 @@ def process_parallel_streaming(
             ctx.logger.error(f"    \u2192 {fname}: {err}")
         if len(errors) > 5:
             ctx.logger.error(f"    \u2192 ... and {len(errors) - 5} more")
+
+    rules_in_error: dict = {}
+    for file_data in results_list:
+        if isinstance(file_data, dict):
+            rules_in_error.update(file_data.get("rules_in_error") or {})
+    if rules_in_error:
+        names = list(rules_in_error)
+        shown = ", ".join(names[:3]) + (" ..." if len(names) > 3 else "")
+        ctx.logger.warning(
+            f"[yellow]   [!] {len(names)} rule(s) could not be evaluated and "
+            f"matched nothing: {shown} (use --debug for the SQL error)[/]"
+        )
 
     ctx.memory_tracker.sample()
     ctx.workers_used = stats.workers_used

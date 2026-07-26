@@ -43,6 +43,12 @@ The default rulesets are converted from the **Windows** and **linux** rule direc
 
 To generate your own ruleset, see the [Usage documentation](../docs/Usage.md#rulesets--rules) in the repository or the [online docs](https://wagga40.github.io/Zircolite/).
 
+A handful of rules enumerate thousands of values — *Vulnerable Driver Load*, *Shai-Hulud
+2.0 Malicious NPM Package Installation*, the emoji-evasion rules. Converted straight from
+Sigma, their SQL nests one level per value and exceeds SQLite's parser depth limit.
+Zircolite rewrites those expressions into an equivalent, shallower form at execution time,
+so they work without any action on your part.
+
 Examples of rules that may be noisy or slow:
 
 - **Suspicious Eventlog Clear or Configuration Using Wevtutil** : very noisy on fresh environments (e.g. labs), often generates useless detections

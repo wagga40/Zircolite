@@ -3,6 +3,7 @@ Tests for the RulesetHandler and RulesUpdater classes in zircolite/rules.py.
 """
 
 import json
+import re
 import sqlite3
 import sys
 from pathlib import Path
@@ -14,6 +15,7 @@ import requests
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from zircolite.rules import RulesetHandler, RulesUpdater
+from zircolite.sqlrewrite import rebalance_sql
 from zircolite.config import RulesetConfig
 
 
@@ -1355,3 +1357,72 @@ class TestRulesetHandlerRobustness:
                 )
         assert handler.rulesets == []
         assert any("Skipping unrecognized ruleset" in r.message for r in caplog.records)
+
+
+@pytest.mark.slow
+class TestShippedRulesetsCompile:
+    """Every shipped rule must produce SQL SQLite can actually prepare.
+
+    A rule whose SQL never compiles matches nothing and looks exactly like a
+    rule that simply found nothing, so a ruleset update can retire a detection
+    without anyone noticing.
+    """
+
+    STRING_LITERAL = re.compile(r"'(?:[^']|'')*'")
+    RESERVED = frozenset(
+        {
+            "SELECT", "FROM", "WHERE", "AND", "OR", "NOT", "LIKE", "ESCAPE", "IN",
+            "IS", "NULL", "LOGS", "GROUP", "BY", "HAVING", "COUNT", "DISTINCT",
+            "AS", "ORDER", "LIMIT", "CAST", "INT", "TEXT", "REGEXP", "UNION",
+            "ALL", "ON", "JOIN", "CASE", "WHEN", "THEN", "ELSE", "END", "EXISTS",
+            "BETWEEN", "LEFT", "INNER", "WITH", "GLOB",
+        }
+    )
+
+    @staticmethod
+    def _rulesets():
+        rules_dir = Path(__file__).parent.parent / "rules"
+        return sorted(rules_dir.glob("*.json"))
+
+    @classmethod
+    def _connection_for(cls, ruleset):
+        """A logs table wide enough to resolve every column the ruleset names."""
+        columns = {}
+        for rule in ruleset:
+            for query in rule.get("rule", []):
+                bare = cls.STRING_LITERAL.sub("''", query)
+                for match in re.finditer(r"\b([A-Za-z_][A-Za-z0-9_]*)\b", bare):
+                    name = match.group(1)
+                    if name.upper() not in cls.RESERVED:
+                        columns.setdefault(name.lower(), name)
+        conn = sqlite3.connect(":memory:")
+        conn.create_function("regexp", 2, lambda x, y: 0)
+        conn.execute(
+            "CREATE TABLE logs ("
+            + ",".join(f'"{c}" TEXT COLLATE NOCASE' for c in columns.values())
+            + ")"
+        )
+        return conn
+
+    def test_rules_directory_is_not_empty(self):
+        assert self._rulesets(), "no rulesets found to check"
+
+    @pytest.mark.parametrize(
+        "ruleset_path", _rulesets.__func__(), ids=lambda p: p.name
+    )
+    def test_every_rule_sql_compiles(self, ruleset_path):
+        ruleset = json.loads(ruleset_path.read_text(encoding="utf-8"))
+        conn = self._connection_for(ruleset)
+
+        broken = []
+        for rule in ruleset:
+            for query in rule.get("rule", []):
+                try:
+                    conn.execute(f"EXPLAIN {rebalance_sql(query)}")
+                except sqlite3.Error as exc:
+                    broken.append(f"{rule.get('title', '?')}: {exc}")
+
+        assert not broken, (
+            f"{len(broken)} rule(s) in {ruleset_path.name} produce SQL SQLite "
+            f"cannot prepare:\n  " + "\n  ".join(broken[:10])
+        )

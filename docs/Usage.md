@@ -736,6 +736,25 @@ python3 zircolite.py -e sample.evtx -r schtasks.yml -r ./sigma/rules/windows/pro
 
 ```
 
+### Rules with very large value lists
+
+Some rules enumerate thousands of values — vulnerable driver hashes, malicious package
+names. Converted straight from Sigma, their SQL nests one level per value and exceeds
+SQLite's parser depth limit, so they cannot be prepared at all.
+
+Zircolite detects this when it happens and rewrites the expression into an equivalent,
+shallower form before retrying, so these rules run normally. Nothing is required of you.
+Two consequences are worth knowing:
+
+- The `sigma` field in `detected_events.json` always reports the rule's declared SQL, even
+  when the statement actually executed was the rewritten one.
+- `--save-ruleset` writes the SQL exactly as pySigma produced it. The repair happens on
+  load, so an exported ruleset stays faithful to the conversion.
+
+If a rule genuinely cannot be evaluated, Zircolite says so at the end of the run rather
+than letting it pass for a rule that simply matched nothing; use `--debug` for the SQL
+error.
+
 ## Rule testing
 
 You can validate a ruleset against a set of test cases without processing real log files. This is useful for regression testing when you change rules or field mappings, or for CI/CD.

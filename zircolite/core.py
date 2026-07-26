@@ -45,6 +45,7 @@ from .console import (
 )
 from .formats import json_array_requested
 from .shutdown import is_shutdown_requested
+from .sqlrewrite import rebalance_sql
 from .streaming import StreamingEventProcessor, StrictParseError
 from .utils import sanitize_row_for_csv
 
@@ -62,6 +63,10 @@ _SQL_COLUMN_REF_RE = re.compile(
 
 # SQLite reports one missing column at a time, quoted or bare.
 _MISSING_COLUMN_RE = re.compile(r"no such column", re.IGNORECASE)
+
+# Raised while parsing when a rule's value list is deeper than
+# SQLITE_MAX_EXPR_DEPTH; see zircolite/sqlrewrite.py for the repair.
+_DEPTH_LIMIT_RE = re.compile(r"expression tree is too large", re.IGNORECASE)
 
 # Reserved SQL words to exclude from column-reference extraction.
 _SQL_RESERVED_WORDS = frozenset({
@@ -82,6 +87,14 @@ _SQL_RESERVED_WORDS = frozenset({
 def _compile_regex(pattern: str) -> re.Pattern:
     """Return a compiled regex, cached for repeated use by the SQLite UDF."""
     return re.compile(pattern)
+
+
+# Rebalancing a 350 KB rule takes ~100 ms, and per-file and parallel modes run
+# the same ruleset once per input file. Only a handful of rules ever reach here.
+@lru_cache(maxsize=32)
+def _rebalance_cached(query: str) -> str:
+    """Return the depth-repaired form of ``query``, memoised across files."""
+    return rebalance_sql(query)
 
 
 def _index_name_for(column: str) -> str:
@@ -275,11 +288,14 @@ class ZircoliteCore:
                 re.compile() calls when the same SIGMA rule pattern is
                 evaluated against many rows.
                 """
-                if y is None: 
+                if y is None:
                     return 0
                 try:
-                    return 1 if _compile_regex(x).search(y) else 0
-                except re.error:
+                    # str(): a column whose first value was an int is typed
+                    # INTEGER, and re.search would raise TypeError on it --
+                    # which SQLite reports as a failure of the whole rule.
+                    return 1 if _compile_regex(x).search(str(y)) else 0
+                except (re.error, TypeError):
                     return 0
 
             conn.create_function('regexp', 2, udf_regex)  # Allows to use regex in SQLite
@@ -511,7 +527,11 @@ class ZircoliteCore:
                 border_style="dim",
                 padding=(0, 1),
             ))
-        for widened in (False, True):
+        # A query can need more than one repair, and the first failure hides the
+        # rest: an over-deep rule is rejected while parsing, before SQLite ever
+        # looks up its column names. Each repair is attempted at most once.
+        attempted: Set[str] = set()
+        while True:
             try:
                 cursor = self._get_cursor()
                 cursor.execute(query)
@@ -524,15 +544,24 @@ class ZircoliteCore:
                     for row in rows
                 ]
             except sqlite3.Error as e:
-                if _MISSING_COLUMN_RE.search(str(e)) is None:
+                message = str(e)
+                if _DEPTH_LIMIT_RE.search(message) and "rebalance" not in attempted:
+                    attempted.add("rebalance")
+                    rebalanced = _rebalance_cached(query)
+                    if rebalanced != query:
+                        query = rebalanced
+                        continue
+                    self._note_broken_rule(rule_title, e)
+                    return []
+                if _MISSING_COLUMN_RE.search(message) is None:
                     # Syntax errors, parser-depth limits, UDF failures: the rule
                     # can never match, and staying quiet about it hides a blind spot.
                     self._note_broken_rule(rule_title, e)
                     return []
-                if widened or not self._widen_logs_table(query):
+                if "widen" in attempted or not self._widen_logs_table(query):
                     self.logger.debug(f"    [-] Rule fields absent from dataset: {e}")
                     return []
-        return []
+                attempted.add("widen")
 
     def load_db_in_memory(self, db: str) -> None:
         """In db-only mode, restore an on-disk database to avoid EVTX extraction and flattening."""

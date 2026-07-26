@@ -381,15 +381,61 @@ Zircolite adds a custom `regexp` function to SQLite for regex matching in rule q
 
 ```python
 def udf_regex(pattern, value):
-    if value is None: 
+    if value is None:
         return 0
-    if re.search(pattern, value):
-        return 1
-    else:
+    try:
+        return 1 if _compile_regex(pattern).search(str(value)) else 0
+    except (re.error, TypeError):
         return 0
 ```
 
-This allows Sigma rules that use regex matching to work correctly.
+This allows Sigma rules that use regex matching to work correctly. Compiled patterns
+are cached (`_compile_regex`), since the same pattern is evaluated against every row.
+
+`str(value)` matters: a column is typed from the first value observed for that field,
+so a field whose first event carried a number becomes `INTEGER` for the rest of the run.
+Passing an `int` to `re.search` raises `TypeError`, which SQLite reports as a failure of
+the whole statement — the rule would be written off as broken rather than simply not
+matching. Coercing to text matches what `LIKE` already does with a numeric column.
+
+## Runtime SQL Repairs
+
+A rule whose SQL cannot be prepared matches nothing and looks exactly like a rule that
+found nothing. `execute_select_query` therefore attempts two repairs, each at most once,
+before giving up and recording the rule in `rules_in_error`.
+
+**Missing columns.** SQLite resolves column names when it prepares a statement, so a rule
+naming one field the dataset never produced fails as a whole — losing the branches that
+reference fields it does have. `_widen_logs_table` adds the absent columns as NULL, which
+makes the rule evaluate exactly as it would against an event that simply lacks them. A
+rule whose fields are *all* absent cannot match either way, so the table is left alone.
+
+**Over-deep expressions.** `pysigma-backend-sqlite` emits value lists as a left-deep chain
+(`a OR b OR c OR ...`), whose parse-tree depth equals the number of terms. SQLite refuses
+anything past `SQLITE_MAX_EXPR_DEPTH` (1000 by default), so rules listing a few thousand
+hashes or filenames never ran at all. `zircolite/sqlrewrite.py` re-associates those chains
+into a balanced binary tree, bringing the depth down to O(log n).
+
+The limit cannot simply be raised: `sqlite3_limit` clamps to the compile-time bound, and
+`Connection.setlimit` only exists on Python 3.11+ while Zircolite targets 3.10+.
+
+Two properties keep the rewrite safe:
+
+- **Only `OR` is re-associated, never `AND`.** The `AND` in `x BETWEEN a AND b` is syntax
+  rather than a boolean operator; re-associating it compiles cleanly and silently returns
+  the wrong rows. Since `OR` has the lowest precedence in SQL, splitting on it and
+  re-associating the operands always preserves meaning.
+- **Anything unmodelled bails out**, returning the statement untouched — comments,
+  unterminated quotes, unbalanced parentheses, `UNION`/`INTERSECT`/`EXCEPT`. Leaving a
+  rule reported as broken is far better than emitting subtly wrong SQL.
+
+The repair runs only when SQLite itself raises the error, so a statement that already
+compiles is never rewritten. Results are memoised, because per-file and parallel modes run
+the same ruleset once per input file.
+
+The two repairs chain: an over-deep statement is rejected while parsing, before SQLite
+ever resolves column names, so widening only becomes reachable once the expression has
+been rebalanced.
 
 ## Memory Management
 

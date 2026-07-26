@@ -275,6 +275,60 @@ class TestZircoliteCoreDatabase:
 
         zircore.close()
 
+    def test_over_deep_rule_is_repaired_and_matches(
+        self, field_mappings_file, test_logger
+    ):
+        """A rule with a huge value list must run, not be written off as broken.
+
+        pySigma emits value lists as a left-deep OR chain, and SQLite refuses to
+        parse one deeper than SQLITE_MAX_EXPR_DEPTH.
+        """
+        zircore = ZircoliteCore(config=field_mappings_file, logger=test_logger)
+        zircore.execute_query(
+            "CREATE TABLE logs (row_id INTEGER PRIMARY KEY, CommandLine TEXT)"
+        )
+        zircore.insert_data_to_db({"CommandLine": "payload-1500"})
+
+        chain = " OR ".join(
+            f"CommandLine LIKE '%payload-{i}%' ESCAPE '\\'" for i in range(2000)
+        )
+        results = zircore.execute_select_query(
+            f"SELECT * FROM logs WHERE ({chain})", rule_title="Huge Rule"
+        )
+
+        assert len(results) == 1
+        assert not zircore.rules_in_error
+
+        zircore.close()
+
+    def test_over_deep_rule_also_gets_its_columns_widened(
+        self, field_mappings_file, test_logger
+    ):
+        """The depth error masks the missing-column error, so both repairs must chain.
+
+        SQLite rejects an over-deep statement while parsing, before it ever
+        resolves column names -- so widening only becomes reachable once the
+        expression has been rebalanced.
+        """
+        zircore = ZircoliteCore(config=field_mappings_file, logger=test_logger)
+        zircore.execute_query(
+            "CREATE TABLE logs (row_id INTEGER PRIMARY KEY, CommandLine TEXT)"
+        )
+        zircore.insert_data_to_db({"CommandLine": "payload-1500"})
+
+        chain = " OR ".join(
+            f"CommandLine LIKE '%payload-{i}%' ESCAPE '\\'" for i in range(2000)
+        )
+        results = zircore.execute_select_query(
+            f"SELECT * FROM logs WHERE ({chain}) OR OriginalFileName='absent.exe'",
+            rule_title="Huge Rule With Absent Field",
+        )
+
+        assert len(results) == 1
+        assert not zircore.rules_in_error
+
+        zircore.close()
+
     def test_insert_data_to_db_multiple_rows(self, field_mappings_file, test_logger):
         """Test inserting multiple data rows individually."""
         proc_config = ProcessingConfig(disable_progress=True)
@@ -1139,6 +1193,27 @@ class TestZircoliteCoreRegexSupport:
         results = zircore.execute_select_query("SELECT * FROM test WHERE value REGEXP 'valid'")
         
         assert len(results) == 1
+        zircore.close()
+
+    def test_regex_against_non_text_column_does_not_break_the_rule(
+        self, field_mappings_file, test_logger
+    ):
+        """A column typed INTEGER must not turn a REGEXP branch into a broken rule.
+
+        Column types are inferred from the first value seen, so a field whose
+        first event carried a number is INTEGER for the rest of the run.
+        """
+        zircore = ZircoliteCore(config=field_mappings_file, logger=test_logger)
+        zircore.execute_query("CREATE TABLE test (v INTEGER)")
+        zircore.execute_query("INSERT INTO test VALUES (4688)")
+
+        results = zircore.execute_select_query(
+            "SELECT * FROM test WHERE v REGEXP '46'", rule_title="Numeric Field Rule"
+        )
+
+        assert len(results) == 1
+        assert not zircore.rules_in_error
+
         zircore.close()
 
     def test_regex_invalid_pattern_returns_no_match(self, field_mappings_file, test_logger):

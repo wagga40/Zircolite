@@ -486,6 +486,70 @@ class TestProcessSingleFileWorker:
         assert len(file_data["results"]) >= 1
         assert file_data["events"] == 1
 
+    def test_broken_rule_is_reported_out_of_the_worker(
+        self, default_args_config, tmp_path, make_processing_context,
+    ):
+        """Workers log to a silent logger, so a broken rule must ride out in the result.
+
+        Otherwise a rule that cannot run on any file produces no user-visible
+        output at all in parallel mode.
+        """
+        ctx = make_processing_context(
+            rulesets=[
+                {
+                    "title": "Broken Rule",
+                    "id": "broken-1",
+                    "level": "high",
+                    "rule": ["SELECT * FROM logs WHERE CommandLine REGEXP ']'["],
+                }
+            ],
+            outfile=str(tmp_path / "out.json"),
+        )
+        jf = tmp_path / "ev.json"
+        jf.write_text(
+            '{"Event": {"System": {"EventID": 1}, "EventData": {"CommandLine": "powershell.exe"}}}\n'
+        )
+
+        _, file_data = process_single_file_worker(
+            jf,
+            ctx,
+            "json",
+            None,
+            default_args_config,
+            counter_lock=threading.Lock(),
+            worker_counter=[0],
+            total_filtered_count=[0, 0],
+            thread_local=threading.local(),
+        )
+
+        assert "Broken Rule" in file_data["rules_in_error"]
+
+    def test_worker_reports_no_broken_rules_for_valid_ruleset(
+        self, default_args_config, sample_ruleset, tmp_path, make_processing_context,
+    ):
+        ctx = make_processing_context(
+            rulesets=sample_ruleset,
+            outfile=str(tmp_path / "out.json"),
+        )
+        jf = tmp_path / "ev.json"
+        jf.write_text(
+            '{"Event": {"System": {"EventID": 1}, "EventData": {"CommandLine": "powershell.exe"}}}\n'
+        )
+
+        _, file_data = process_single_file_worker(
+            jf,
+            ctx,
+            "json",
+            None,
+            default_args_config,
+            counter_lock=threading.Lock(),
+            worker_counter=[0],
+            total_filtered_count=[0, 0],
+            thread_local=threading.local(),
+        )
+
+        assert file_data["rules_in_error"] == {}
+
     def test_returns_empty_matches_when_no_rule_matches(
         self, default_args_config, sample_ruleset, tmp_path, make_processing_context,
     ):
