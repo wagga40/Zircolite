@@ -201,6 +201,32 @@ class TestEvtxExtractorXmlConversion:
         assert result['Event']['System']['TimeCreated'] == {"#attributes": {"SystemTime": "2024-06-15T10:30:00.000Z"}}
 
 
+    def test_xml_to_dict_keeps_text_of_an_element_with_attributes(self, test_logger):
+        """Classic providers write <EventID Qualifiers="...">7045</EventID>.
+
+        Regression: the attribute dict used to replace the text outright, so the
+        event ended up with a Qualifiers field and no EventID at all, and every
+        rule for a classic provider's event ID silently stopped matching.
+        """
+        from lxml import etree
+
+        config = ExtractorConfig(xml_logs=True)
+        extractor = EvtxExtractor(extractor_config=config, logger=test_logger)
+
+        xml_str = '''<Event xmlns="http://schemas.microsoft.com/win/2004/08/events/event">
+            <System>
+                <EventID Qualifiers="16384">7045</EventID>
+                <Channel>System</Channel>
+            </System>
+        </Event>'''
+
+        root = etree.fromstring(xml_str)
+        ns = '{http://schemas.microsoft.com/win/2004/08/events/event}'
+
+        event_id = extractor.xml_to_dict(root, ns)['Event']['System']['EventID']
+        assert event_id['#text'] == 7045
+        assert event_id['#attributes'] == {"Qualifiers": "16384"}
+
     def test_xml_to_dict_multiple_eventdata_fields(self, test_logger):
         """xml_to_dict merges multiple EventData Data elements into one dict."""
         from lxml import etree

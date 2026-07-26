@@ -7,7 +7,6 @@ import os
 import time
 import pytest
 import shutil
-import sqlite3
 import sys
 import yaml
 from pathlib import Path
@@ -321,18 +320,6 @@ def sample_ruleset():
     ]
 
 
-@pytest.fixture
-def sample_ruleset_file(tmp_path, sample_ruleset):
-    """Create a temporary ruleset JSON file."""
-    ruleset_file = tmp_path / "test_ruleset.json"
-    ruleset_file.write_text(json.dumps(sample_ruleset))
-    return str(ruleset_file)
-
-
-@pytest.fixture
-def empty_ruleset():
-    """Empty ruleset for edge case testing."""
-    return []
 
 
 # =============================================================================
@@ -550,12 +537,6 @@ def args_config_evtx(default_args_config):
     return default_args_config
 
 
-@pytest.fixture
-def args_config_json(default_args_config):
-    """Args configuration for JSON input."""
-    default_args_config.json_input = True
-    return default_args_config
-
 
 @pytest.fixture
 def args_config_auditd(default_args_config):
@@ -591,14 +572,6 @@ def mock_psutil():
 # =============================================================================
 # Database Fixtures
 # =============================================================================
-
-@pytest.fixture
-def in_memory_db():
-    """Create an in-memory SQLite database for testing."""
-    conn = sqlite3.connect(':memory:')
-    conn.row_factory = sqlite3.Row
-    yield conn
-    conn.close()
 
 
 # =============================================================================

@@ -18,7 +18,7 @@ import time as _time_module
 from functools import lru_cache
 from pathlib import Path
 from sqlite3 import Error
-from typing import TYPE_CHECKING, Any, Callable, Dict, List, Optional, Tuple, Union
+from typing import TYPE_CHECKING, Any, Callable, Dict, List, Optional, Set, Tuple, Union
 
 import orjson as json
 
@@ -59,6 +59,9 @@ _SQL_COLUMN_REF_RE = re.compile(
     r"(?:=|!=|<>|<=|>=|<|>|\bLIKE\b|\bIN\b|\bBETWEEN\b|\bIS\b)",
     re.IGNORECASE,
 )
+
+# SQLite reports one missing column at a time, quoted or bare.
+_MISSING_COLUMN_RE = re.compile(r"no such column", re.IGNORECASE)
 
 # Reserved SQL words to exclude from column-reference extraction.
 _SQL_RESERVED_WORDS = frozenset({
@@ -123,6 +126,9 @@ class ZircoliteCore:
         "auto_index_top_n",
         "_auto_index_applied",
         "strict_evtx",
+        "rules_in_error",
+        "failed_files",
+        "_logs_columns_lower",
     )
     _cursor: Optional[sqlite3.Cursor]
 
@@ -171,6 +177,14 @@ class ZircoliteCore:
         self.auto_index_top_n = max(0, int(proc.auto_index_top_n or 0))
         self._auto_index_applied = False
         self.strict_evtx = proc.strict_evtx
+        # Rules whose SQL cannot run at all, by title: reported once, then counted
+        # in the summary so a broken rule is never mistaken for a quiet one
+        self.rules_in_error: Dict[str, str] = {}
+        # Inputs that raised during ingestion; --remove-events must not
+        # delete a source whose events never made it into the results
+        self.failed_files: Set[str] = set()
+        # Lowercased logs columns; rebuilt on demand, dropped on any schema change
+        self._logs_columns_lower: Optional[Set[str]] = None
         # Cache for escaped identifiers to avoid repeated string operations
         self._escape_cache: dict = {}
         # Reusable cursor to avoid creating new cursors for each query
@@ -179,6 +193,7 @@ class ZircoliteCore:
     def close(self) -> None:
         """Close the database connection. Safe to call multiple times."""
         self._cursor = None
+        self._logs_columns_lower = None
         conn = self.db_connection
         if conn is not None:
             conn.close()
@@ -416,6 +431,7 @@ class ZircoliteCore:
     def execute_query(self, query: str) -> bool:
         """Perform a SQL query with the provided connection."""
         if self.db_connection is not None:
+            self._logs_columns_lower = None  # the query may be DDL
             self.logger.debug(f"EXECUTING : {query}")
             try:
                 self._get_cursor().execute(query)
@@ -428,33 +444,95 @@ class ZircoliteCore:
             self.logger.error("[error]    [-] No connection to Db[/]")
             return False
 
-    def execute_select_query(self, query: str) -> List[Dict[str, Any]]:
+    def _query_columns(self, query: str) -> Set[str]:
+        """Column names a rule query compares against, minus SQL keywords."""
+        return {
+            match.group(1)
+            for match in _SQL_COLUMN_REF_RE.finditer(query)
+            if match.group(1).lower() not in _SQL_RESERVED_WORDS
+        }
+
+    def _logs_columns(self) -> Set[str]:
+        """Lowercased column names of the logs table, cached between rules."""
+        if self._logs_columns_lower is None:
+            self._logs_columns_lower = {c.lower() for c in self._get_table_columns()}
+        return self._logs_columns_lower
+
+    def _widen_logs_table(self, query: str) -> bool:
+        """Materialise the query's referenced-but-absent columns. True if widened.
+
+        SQLite resolves column names when it prepares a statement, so a rule
+        naming one field this dataset never produced fails as a whole -- losing
+        the branches that reference fields it *does* have. Adding the absent ones
+        as NULL makes the rule evaluate exactly as it would against an event that
+        simply lacks those fields. A rule whose fields are *all* absent cannot
+        match anything either way, so the table is left alone for it.
+        """
+        columns = self._logs_columns()
+        referenced = self._query_columns(query)
+        missing = [c for c in referenced if c.lower() not in columns]
+        if not missing or len(missing) == len(referenced):
+            return False
+        cursor = self._get_cursor()
+        for name in missing:
+            escaped = self.escape_identifier(name)
+            try:
+                cursor.execute(
+                    f'ALTER TABLE "logs" ADD COLUMN "{escaped}" TEXT COLLATE NOCASE'
+                )
+            except sqlite3.Error as exc:
+                # Typically SQLITE_MAX_COLUMN; the rule stays unevaluated.
+                self.logger.debug(f"Could not add column {name}: {exc}")
+                self._logs_columns_lower = None
+                return False
+            columns.add(name.lower())
+        return True
+
+    def _note_broken_rule(self, rule_title: Optional[str], error: Exception) -> None:
+        """Record a rule whose SQL cannot run at all; reported once, in the summary."""
+        title = rule_title or "unknown rule"
+        if title in self.rules_in_error:
+            return
+        self.rules_in_error[title] = str(error)
+        self.logger.debug(f"Rule '{title}' could not be evaluated: {error}")
+
+    def execute_select_query(
+        self, query: str, rule_title: Optional[str] = None
+    ) -> List[Dict[str, Any]]:
         """Execute a SELECT SQL query and return the results as a list of dictionaries."""
         if self.db_connection is None:
             self.logger.error("[error]    [-] No connection to Db[/]")
             return []
-        try:
-            cursor = self._get_cursor()
-            # Syntax-highlighted SQL in debug mode
-            if self.logger.isEnabledFor(logging.DEBUG):
-                console.print(Panel(
-                    Syntax(query, "sql", theme="monokai", line_numbers=False, word_wrap=True),
-                    title="[dim]SQL Query[/]",
-                    border_style="dim",
-                    padding=(0, 1),
-                ))
-            cursor.execute(query)
-            rows = cursor.fetchall()
-            if not rows:
-                return []
-            col_names = [d[0] for d in cursor.description]
-            return [
-                {k: v for k, v in zip(col_names, row) if v is not None}
-                for row in rows
-            ]
-        except sqlite3.Error as e:
-            self.logger.debug(f"    [-] SQL query error: {e}")
-            return []
+        # Syntax-highlighted SQL in debug mode
+        if self.logger.isEnabledFor(logging.DEBUG):
+            console.print(Panel(
+                Syntax(query, "sql", theme="monokai", line_numbers=False, word_wrap=True),
+                title="[dim]SQL Query[/]",
+                border_style="dim",
+                padding=(0, 1),
+            ))
+        for widened in (False, True):
+            try:
+                cursor = self._get_cursor()
+                cursor.execute(query)
+                rows = cursor.fetchall()
+                if not rows:
+                    return []
+                col_names = [d[0] for d in cursor.description]
+                return [
+                    {k: v for k, v in zip(col_names, row) if v is not None}
+                    for row in rows
+                ]
+            except sqlite3.Error as e:
+                if _MISSING_COLUMN_RE.search(str(e)) is None:
+                    # Syntax errors, parser-depth limits, UDF failures: the rule
+                    # can never match, and staying quiet about it hides a blind spot.
+                    self._note_broken_rule(rule_title, e)
+                    return []
+                if widened or not self._widen_logs_table(query):
+                    self.logger.debug(f"    [-] Rule fields absent from dataset: {e}")
+                    return []
+        return []
 
     def load_db_in_memory(self, db: str) -> None:
         """In db-only mode, restore an on-disk database to avoid EVTX extraction and flattening."""
@@ -472,9 +550,10 @@ class ZircoliteCore:
             db_file_connection.backup(self.db_connection)
         finally:
             db_file_connection.close()
-        # backup() replaced the whole in-memory DB, indexes included: the next
-        # execute_ruleset must be able to auto-index the newly loaded data
+        # backup() replaced the whole in-memory DB, indexes and schema included:
+        # the next execute_ruleset must re-read both
         self._auto_index_applied = False
+        self._logs_columns_lower = None
 
     def escape_identifier(self, identifier: str) -> str:
         """Escape SQL identifiers like table or column names with caching."""
@@ -582,10 +661,11 @@ class ZircoliteCore:
         filtered_rows_extend = filtered_rows.extend  # Cache method reference
         csv_mode = self.csv_mode  # Cache instance variable
         execute_select = self.execute_select_query  # Cache method reference
+        rule_title = rule.get("title", "Unnamed Rule")
 
         # Process each SQL query in the rule
         for sql_query in sigma_queries:
-            data = execute_select(sql_query)
+            data = execute_select(sql_query, rule_title=rule_title)
             if data:
                 if csv_mode:
                     cleaned_rows = [sanitize_row_for_csv(row) for row in data]
@@ -598,11 +678,10 @@ class ZircoliteCore:
 
         # Extract rule metadata only when we have results (avoid work for non-matching rules)
         rule_get = rule.get  # Cache method
-        title = rule_get("title", "Unnamed Rule")
         description = rule_get("description", "")
-        
+
         results = {
-            "title": title,
+            "title": rule_title,
             "id": rule_get("id", ""),
             "description": description.translate(_NEWLINE_TRANSLATE) if csv_mode else description,
             "sigmafile": rule_get("filename", ""),
@@ -612,7 +691,7 @@ class ZircoliteCore:
             "count": len(filtered_rows),
             "matches": filtered_rows
         }
-        self.logger.debug(f'DETECTED: {title} - Matches: {len(filtered_rows)} events')
+        self.logger.debug(f'DETECTED: {rule_title} - Matches: {len(filtered_rows)} events')
         return results
 
     def load_ruleset_from_var(
@@ -651,7 +730,12 @@ class ZircoliteCore:
                 # multi-DB flows) each call re-enters with a fresh local writer,
                 # and rows must stay aligned with the single header.
                 if self._csv_fieldnames is None:
-                    self._csv_fieldnames = ["rule_title", "rule_description", "rule_level", "rule_count"] + list(rule_results["matches"][0].keys())
+                    self._csv_fieldnames = [
+                        "rule_title",
+                        "rule_description",
+                        "rule_level",
+                        "rule_count",
+                    ] + self._csv_event_columns(rule_results)
                 csv_writer = csv.DictWriter(
                     file_handle,
                     delimiter=self.delimiter,
@@ -698,6 +782,25 @@ class ZircoliteCore:
                 self.logger.error(f"[error]    [-] Error saving some results: {e}[/]")
         return csv_writer, needs_comma_prefix
 
+    def _csv_event_columns(self, rule_results: Dict[str, Any]) -> List[str]:
+        """Event columns for the CSV header.
+
+        The table schema, not the first matching row: rows carry only their
+        non-NULL fields, so a header taken from the first match silently dropped
+        User, ParentImage, hashes and the rest from every later row -- and which
+        columns survived depended on which detection happened to be written
+        first. Falls back to the first row if the schema is unavailable.
+        """
+        try:
+            columns = self._get_table_columns()
+        except sqlite3.Error as exc:
+            self.logger.debug(f"Could not read the logs schema for the CSV header: {exc}")
+            columns = []
+        columns = [c for c in columns if c != "row_id"]
+        if columns:
+            return columns
+        return list(rule_results["matches"][0].keys())
+
     def execute_ruleset(
         self,
         out_file: str,
@@ -713,6 +816,8 @@ class ZircoliteCore:
         csv_writer = None
         is_json_mode = not self.csv_mode
         _disable = disable_progress if disable_progress is not None else self.disable_progress
+        # Ingestion discovered the schema through its own connection
+        self._logs_columns_lower = None
 
         # Apply auto-index now that the ruleset is loaded (create_index runs at
         # the end of ingestion, before the ruleset is available in every flow),
@@ -776,6 +881,11 @@ class ZircoliteCore:
 
             # Collect all results for sorting by level
             all_rule_results = []
+
+            # Per-call timings: in per-file mode the caller merges this dict
+            # after every file, so keeping the running total across files would
+            # count each file's rules once more than the last
+            self._profiling_data = {}
 
             # Cache profiling flag locally for the inner loop
             _profile = self.profile_rules
@@ -851,7 +961,12 @@ class ZircoliteCore:
                         if rule_results is not None:
                             det_level = rule_results.get("rule_level", "unknown").lower()
                             if det_level in detection_counts:
-                                detection_counts[det_level] += 1
+                                # Matching events, like the summary panel: the
+                                # two badges look identical, so counting rules
+                                # here made the same run show two numbers
+                                detection_counts[det_level] += rule_results.get(
+                                    "count", 0
+                                )
                             if not no_output:
                                 csv_writer, needs_comma_prefix = self._write_result_to_output(
                                     rule_results, file_handle, csv_writer, needs_comma_prefix
@@ -868,6 +983,14 @@ class ZircoliteCore:
                 console.print()
                 console.print(build_detection_table(all_rule_results, title=source_label))
                 console.print()
+
+            if self.rules_in_error:
+                names = list(self.rules_in_error)
+                shown = ", ".join(names[:3]) + (" ..." if len(names) > 3 else "")
+                self.logger.warning(
+                    f"[yellow]   [!] {len(names)} rule(s) could not be evaluated and "
+                    f"matched nothing: {shown} (use --debug for the SQL error)[/]"
+                )
         finally:
             # Close output file handle if needed (always run, including on exception)
             if file_handle is not None:
@@ -908,17 +1031,20 @@ class ZircoliteCore:
 
         Returns a list of result dicts with keys:
         ``title``, ``id``, ``tp_pass``, ``tn_pass``, ``tp_count``, ``tn_count``, ``error``
+
+        Raises:
+            ValueError: the test file cannot be read or is not a JSON array.
+                Returning "no results" instead would let a typo in a CI job
+                report success, which is exactly what rule testing is for.
         """
         try:
             with open(test_file, encoding='utf-8') as f:
                 test_cases = json.loads(f.read())
         except Exception as e:
-            self.logger.error(f"[red]    [-] Cannot load rule test file: {e}[/]")
-            return []
+            raise ValueError(f"Cannot load rule test file: {e}") from e
 
         if not isinstance(test_cases, list):
-            self.logger.error("[red]    [-] Rule test file must be a JSON array[/]")
-            return []
+            raise ValueError("Rule test file must be a JSON array")
 
         invalid_entries = sum(1 for tc in test_cases if not isinstance(tc, dict))
         if invalid_entries:
@@ -1122,6 +1248,9 @@ class ZircoliteCore:
                     keepflat_file=keepflat_file,
                     progress_callback=progress_cb,
                 )
+                if processor.ingest_degraded:
+                    # Read only in part: --remove-events must not delete it
+                    self.failed_files.add(str(log_file))
                 return event_count
 
             except StrictParseError:
@@ -1130,6 +1259,7 @@ class ZircoliteCore:
                 raise
             except Exception as e:
                 self.logger.error(f"[error]    [-] Error processing {log_file}: {e}[/]")
+                self.failed_files.add(str(log_file))
                 return 0
         
         show_progress = not is_quiet()

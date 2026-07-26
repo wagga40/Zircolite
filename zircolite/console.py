@@ -273,8 +273,9 @@ def make_detection_counter(counts: Dict[str, int]) -> Text:
     Build a live detection severity counter for display under a progress bar.
     
     Args:
-        counts: Dict mapping severity levels to rule-match counts
-        
+        counts: Dict mapping severity levels to matching-event counts, the same
+            unit the final summary panel reports
+
     Returns:
         Rich Text renderable showing detection summary
     """
@@ -459,7 +460,11 @@ def build_attack_summary(results: List[Dict[str, Any]]) -> Optional[Panel]:
         techniques = extract_attack_techniques(tags)
 
         for tactic in tactics:
-            display_name = _ATTACK_TACTICS[tactic]
+            # attack.py owns the alias list; an entry added there and not here
+            # must not take down the summary panel of an otherwise good run
+            display_name = _ATTACK_TACTICS.get(tactic) or tactic.replace(
+                "-", " "
+            ).title()
             if display_name not in tactic_techniques:
                 tactic_techniques[display_name] = set()
                 tactic_hits[display_name] = 0

@@ -136,8 +136,11 @@ mappings:
   Event.EventData.UserData: UserData
   Event.System.Provider.#attributes.Guid: Guid
   Event.EventData.ContextInfo: ContextInfo
-  Event.System.Execution.#attributes.ProcessID: ProcessID
-  Event.System.Execution.#attributes.ThreadID: ThreadID
+  # The logging provider's own PID/TID, not the event's. SQLite column names are
+  # case-insensitive, so mapping these to ProcessID/ThreadID collided with
+  # EventData's ProcessId and whichever value came first in the document won.
+  Event.System.Execution.#attributes.ProcessID: Execution_ProcessID
+  Event.System.Execution.#attributes.ThreadID: Execution_ThreadID
   Event.System.EventID: EventID
   Event.System.EventID.#text: EventID  # Alternative format
   Event.System.Channel: Channel

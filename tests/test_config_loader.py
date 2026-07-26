@@ -285,7 +285,7 @@ output:
         yaml_file.write_text(yaml_content)
         
         loader = ConfigLoader(logger=test_logger)
-        config = loader.load(str(yaml_file))
+        config = loader.parse_config(loader.load_yaml(str(yaml_file)))
         
         assert isinstance(config, ZircoliteConfig)
         assert config.input.path == "./test_logs/"
@@ -598,7 +598,7 @@ parallel:
         
         # Load and parse
         loader = ConfigLoader(logger=test_logger)
-        config = loader.load(str(yaml_file))
+        config = loader.parse_config(loader.load_yaml(str(yaml_file)))
         
         # Validate
         issues = loader.validate_config(config)
@@ -677,7 +677,7 @@ class TestExampleConfigStaysComplete:
 
     def test_it_loads_and_validates(self, test_logger):
         loader = ConfigLoader(logger=test_logger)
-        config = loader.load(str(self.EXAMPLE))
+        config = loader.parse_config(loader.load_yaml(str(self.EXAMPLE)))
         issues = loader.validate_config(config)
 
         assert not any("Unknown configuration key" in i for i in issues)

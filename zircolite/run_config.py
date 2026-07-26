@@ -288,6 +288,13 @@ def resolve(
         section = (raw.get(setting.section) or {}) if setting.section else {}
         yaml_value = section.get(setting.key, UNSET) if setting.key else UNSET
 
+        # "The user set this", not "the CLI set this": a value pinned in the
+        # configuration file is just as deliberate as one typed on the command
+        # line, and callers use this to decide whether auto-detection may
+        # override the value.
+        if yaml_value is not UNSET and yaml_value is not None and yaml_value != []:
+            explicit.add(setting.dest)
+
         value = _combine(setting, cli, yaml_value)
         if value is UNSET:
             default = setting.default

@@ -161,7 +161,13 @@ class EvtxExtractor:
                 else:
                     child_node = cleaned_tag
                     if elem.attrib:
-                        text = {"#attributes": dict(elem.attrib)}
+                        # Classic providers write both, e.g.
+                        # <EventID Qualifiers="16384">7045</EventID>. Keeping only
+                        # the attributes would throw the EventID away.
+                        node: Dict[str, Any] = {"#attributes": dict(elem.attrib)}
+                        if elem.text and elem.text.strip():
+                            node["#text"] = text
+                        text = node
                 node_value[str(child_node)] = text
             child[str(node_name)] = node_value
         event = {"Event": child}

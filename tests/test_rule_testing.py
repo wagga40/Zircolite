@@ -152,9 +152,10 @@ class TestRunRuleTests:
         cmd_result = next(r for r in results if r["id"] == "cmd-001")
         assert cmd_result["tp_pass"] is True
 
-    def test_missing_test_file_returns_empty(self, rule_test_core):
-        results = rule_test_core.run_rule_tests("/nonexistent/path/tests.json")
-        assert results == []
+    def test_missing_test_file_is_fatal(self, rule_test_core):
+        """A test file that cannot be read must not read as 'all tests passed'."""
+        with pytest.raises(ValueError, match="Cannot load rule test file"):
+            rule_test_core.run_rule_tests("/nonexistent/path/tests.json")
 
     def test_both_tp_and_tn_pass(self, rule_test_core, tmp_path):
         test_data = [
@@ -181,14 +182,15 @@ class TestRunRuleTests:
 class TestRunRuleTestsEdgeCases:
     """Malformed or invalid test file handling."""
 
-    def test_json_not_a_list_returns_empty(self, rule_test_core, tmp_path):
+    def test_json_not_a_list_is_fatal(self, rule_test_core, tmp_path):
         test_file = tmp_path / "tests.json"
         test_file.write_text('{"title": "X"}')
-        results = rule_test_core.run_rule_tests(str(test_file))
-        assert results == []
+        with pytest.raises(ValueError, match="must be a JSON array"):
+            rule_test_core.run_rule_tests(str(test_file))
 
-    def test_malformed_json_returns_empty(self, rule_test_core, tmp_path):
+    def test_malformed_json_is_fatal(self, rule_test_core, tmp_path):
+        """A trailing comma in the test file must fail CI, not pass it."""
         test_file = tmp_path / "tests.json"
         test_file.write_text("not valid json{{{")
-        results = rule_test_core.run_rule_tests(str(test_file))
-        assert results == []
+        with pytest.raises(ValueError, match="Cannot load rule test file"):
+            rule_test_core.run_rule_tests(str(test_file))

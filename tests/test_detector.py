@@ -437,6 +437,28 @@ class TestWindowsEvtxJsonDetection:
         assert result.log_source in ("sysmon_windows", "windows_evtx_json")
         assert result.confidence == "high"
 
+    def test_detect_json_array_with_a_leading_blank_line(self, detector, tmp_path):
+        """A blank first line must not turn a JSON array into JSONL.
+
+        Regression: the family was chosen from the first non-blank line but the
+        array check re-read line 0, so the file was read line by line, every line
+        failed to parse, and the run reported 0 events with no error.
+        """
+        content = json.dumps([
+            {"Event": {"System": {"Channel": "Security", "EventID": 4624}}},
+            {"Event": {"System": {"Channel": "Security", "EventID": 4625}}},
+        ])
+        blank_first = tmp_path / "blank_first.json"
+        blank_first.write_text("\n" + content)
+        plain = tmp_path / "plain.json"
+        plain.write_text(content)
+
+        assert detector.detect(blank_first).input_type == "json_array"
+        assert (
+            detector.detect(blank_first).input_type
+            == detector.detect(plain).input_type
+        )
+
     def test_detect_flattened_windows_json(self, detector, flattened_windows_json_file):
         """Pre-flattened Windows JSON (Channel + EventID at top level) should be detected."""
         result = detector.detect(flattened_windows_json_file)
@@ -1219,6 +1241,22 @@ class TestRawTimestampFallbackIntegration:
         # catch this via _looks_like_timestamp on the value, but if it doesn't,
         # the raw fallback should still find the ISO pattern.
         assert result.timestamp_field is not None
+
+    def test_epoch_shaped_number_needs_a_timestamp_like_name(self, detector, tmp_path):
+        """A 10-digit counter must not be promoted to the time field.
+
+        Regression: the raw regex matches any 10/13/18-digit number, and the
+        matched key was accepted without the name scoring detect_timestamp_field
+        applies -- so a byte counter became the field driving -A/-B filtering.
+        """
+        f = tmp_path / "counters.json"
+        f.write_text(
+            json.dumps({"bytes_sent": 1718442600, "user": "bob"}) + "\n"
+            + json.dumps({"bytes_sent": 1718442601, "user": "alice"}) + "\n"
+        )
+
+        result = detector.detect(f)
+        assert result.timestamp_field != "bytes_sent"
 
     def test_fallback_extension_gets_raw_timestamp(self, detector, tmp_path):
         """Extension-only fallback should still detect timestamp format from content."""

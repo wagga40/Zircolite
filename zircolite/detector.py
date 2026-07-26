@@ -362,9 +362,6 @@ class LogTypeDetector:
         # Sample up to 3 files for consistency
         results = [self.detect(fp) for fp in file_paths[:3]]
 
-        if not results:
-            return self._unknown_result("All files failed detection")
-
         # Return highest confidence result
         confidence_order = {"high": 0, "medium": 1, "low": 2}
         results.sort(key=lambda r: confidence_order.get(r.confidence, 3))
@@ -560,11 +557,9 @@ class LogTypeDetector:
     def _check_magic_bytes(self, file_path: Path) -> Optional[DetectionResult]:
         """Check file magic bytes for binary format detection.
 
-        Compressed files are skipped here — their inner format is detected
-        via content sampling after decompression/extraction in ``_read_sample``.
+        Only ever called on plain files: ``detect`` resolves every compressed
+        suffix to its inner member before the magic-byte phase.
         """
-        if file_path.suffix.lower() in COMPRESSED_SUFFIXES:
-            return None
         try:
             with open(file_path, "rb") as f:
                 header = f.read(16)
@@ -669,7 +664,7 @@ class LogTypeDetector:
 
         # Fast-path: first non-whitespace character determines the family
         if first_char in ("{", "["):
-            return self._check_json(sample_lines, sample_bytes, ext)
+            return self._check_json(first_line, sample_bytes)
 
         if first_char == "<":
             # Could be XML, but first rule out Sysmon-for-Linux (syslog + XML)
@@ -827,11 +822,15 @@ class LogTypeDetector:
         )
 
     def _check_json(
-        self, lines: List[str], sample_bytes: bytes, ext: str
+        self, first_line: str, sample_bytes: bytes
     ) -> Optional[DetectionResult]:
-        """Analyze JSON content to determine the specific log source."""
-        first_line = lines[0].strip()
-        is_json_array = first_line.startswith("[")
+        """Analyze JSON content to determine the specific log source.
+
+        *first_line* is the first non-blank line, as chosen by the caller: a
+        leading blank line used to make an array look like JSONL here, and the
+        line-by-line reader then dropped every line of the file.
+        """
+        is_json_array = first_line.lstrip().startswith("[")
 
         first_event = self._parse_first_json_event(sample_bytes, is_json_array)
         if first_event is None:
@@ -845,7 +844,7 @@ class LogTypeDetector:
                 details="JSON file detected but could not parse first event",
             )
 
-        return self._classify_json_event(first_event, is_json_array, ext)
+        return self._classify_json_event(first_event, is_json_array)
 
     def _parse_first_json_event(
         self, sample_bytes: bytes, is_json_array: bool
@@ -883,7 +882,7 @@ class LogTypeDetector:
         return None
 
     def _classify_json_event(
-        self, event: dict, is_json_array: bool, ext: str
+        self, event: dict, is_json_array: bool
     ) -> DetectionResult:
         """Classify a JSON event based on its structure and fields."""
         flat_keys: set = set()
@@ -1147,13 +1146,23 @@ class LogTypeDetector:
 
         matched_value = ts_info["match"]
 
-        # Try to tie the raw hit to a JSON key
+        # Try to tie the raw hit to a JSON key. A date-shaped hit speaks for
+        # itself, but an all-digit one does not: the epoch and FileTime patterns
+        # match any 10/13/18-digit number, so a byte counter or a serial number
+        # would be promoted to the time field and then drive -A/-B filtering and
+        # correlation windows. There the name has to carry the signal, exactly as
+        # detect_timestamp_field requires.
         matched_key = None
         first_char = sample_text.lstrip()[:1]
         if first_char in ("{", "["):
             event = self._parse_first_json_event(sample_bytes, first_char == "[")
             if event:
-                matched_key = self._find_key_for_value(event, matched_value)
+                candidate = self._find_key_for_value(event, matched_value)
+                if candidate and (
+                    not matched_value.isdigit()
+                    or self._timestamp_field_score(candidate) > 0
+                ):
+                    matched_key = candidate
 
         if matched_key:
             result.timestamp_field = matched_key

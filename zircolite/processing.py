@@ -104,6 +104,8 @@ class ProcessingContext:
     remove_index: list = field(default_factory=list)
     auto_index_top_n: int = 0
     strict_evtx: bool = False
+    # Inputs that failed to ingest; --remove-events skips these
+    failed_files: set = field(default_factory=set)
 
     # Cached formatted time strings (computed in __post_init__)
     time_after_str: str = field(init=False, repr=False)
@@ -299,6 +301,7 @@ def process_unified_streaming(
     )
     ctx.memory_tracker.sample()
 
+    ctx.failed_files |= zircolite_core.failed_files
     results = list(zircolite_core.full_results) if zircolite_core.full_results else []
     return zircolite_core, results
 
@@ -446,6 +449,7 @@ def process_perfile_streaming(
                     fh.write(']')
             except OSError as exc:
                 ctx.logger.debug(f"Could not finalize JSON output: {exc}")
+        ctx.failed_files |= zircolite_core.failed_files
         zircolite_core.close()
         if profiling_core is not None:
             profiling_core.close()
@@ -466,7 +470,7 @@ def process_perfile_streaming(
 _DB_EXTENSIONS = ("db", "sqlite", "sqlite3")
 
 
-def _expand_db_path(
+def expand_db_path(
     path: Path, args: argparse.Namespace, logger: logging.Logger
 ) -> List[Path]:
     """Resolve a -D argument to a list of database files.
@@ -486,10 +490,13 @@ def _expand_db_path(
     walk = path.glob if getattr(args, "no_recursion", False) else path.rglob
     found = sorted({p for pattern in patterns for p in walk(pattern) if p.is_file()})
     if not found:
-        logger.warning(
-            f"[yellow]   [!] No database file found in {path} "
+        # Fatal, like a single missing database: a run that analysed nothing
+        # must not exit 0 while the summary advertises an output file
+        quit_on_error(
+            f"[red]    [-] No database file found in {path} "
             f"(looked for {', '.join(patterns)}); use [cyan]--fileext[/] to "
-            "name a different extension[/]"
+            "name a different extension[/]",
+            logger,
         )
     return found
 
@@ -510,7 +517,7 @@ def process_db_input(
     if file_list:
         db_files = [Path(f) for f in file_list]
     else:
-        db_files = _expand_db_path(Path(args.evtx), args, ctx.logger)
+        db_files = expand_db_path(Path(args.evtx), args, ctx.logger)
     all_results: list = []
     first_file = True
     processed_any = False
@@ -563,6 +570,15 @@ def process_db_input(
                 )
                 continue
 
+            # The summary reports events too when analysing saved databases
+            try:
+                _cur = zircolite_core.db_connection.cursor()
+                _cur.execute("SELECT COUNT(*) FROM logs")
+                ctx.total_events += _cur.fetchone()[0]
+                _cur.close()
+            except sqlite3.Error as e:
+                ctx.logger.debug(f"Could not count events in '{file_name}': {e}")
+
             zircolite_core.load_ruleset_from_var(
                 ruleset=ctx.rulesets, rule_filters=ctx.rule_filters
             )
@@ -608,8 +624,19 @@ def process_db_input(
         # files or a failure on a later file cannot leave the JSON output
         # unterminated.
         if processed_any and not ctx.csv_mode and not zircolite_core.no_output:
-            with open(ctx.outfile, 'a', encoding='utf-8', newline='') as fh:
-                fh.write(']')
+            try:
+                with open(ctx.outfile, 'a', encoding='utf-8', newline='') as fh:
+                    fh.write(']')
+            except OSError as exc:
+                # Never let this replace the exception that unwound the loop
+                ctx.logger.error(f"[red]    [-] Could not finalize output: {exc}[/]")
+
+    if not processed_any:
+        # Every database was unreadable or skipped: nothing was analysed, so the
+        # run must not exit 0 while the summary advertises an output file
+        quit_on_error(
+            "[red]    [-] No database could be analysed[/]", ctx.logger
+        )
 
     if len(db_files) > 1 and file_stats and not is_quiet():
         console.print()
@@ -681,17 +708,22 @@ def process_single_file_worker(
         with counter_lock:
             total_filtered_count[0] += filtered_count
 
+        # The worker's logger is silent, so a file Zircolite could only read in
+        # part is indistinguishable from a clean one unless it is reported here
+        degraded = str(log_file) in core.failed_files
+        core.failed_files.discard(str(log_file))
+
         if event_count == 0:
-            return (
-                0,
-                {
-                    "name": file_name,
-                    "path": str(log_file),
-                    "results": [],
-                    "events": 0,
-                    "filtered": filtered_count,
-                },
-            )
+            summary = {
+                "name": file_name,
+                "path": str(log_file),
+                "results": [],
+                "events": 0,
+                "filtered": filtered_count,
+            }
+            if degraded:
+                summary["error"] = "no event could be read (see the log for details)"
+            return (0, summary)
 
         core.load_ruleset_from_var(
             ruleset=ctx.rulesets, rule_filters=ctx.rule_filters
@@ -714,16 +746,18 @@ def process_single_file_worker(
         )
 
         file_results = list(core.full_results) if core.full_results else []
-        return (
-            event_count,
-            {
-                "name": file_name,
-                "path": str(log_file),
-                "results": file_results,
-                "events": event_count,
-                "filtered": filtered_count,
-            },
-        )
+        summary = {
+            "name": file_name,
+            "path": str(log_file),
+            "results": file_results,
+            "events": event_count,
+            "filtered": filtered_count,
+        }
+        if degraded:
+            summary["error"] = (
+                f"only part of the file could be read; {event_count:,} event(s) kept"
+            )
+        return (event_count, summary)
 
     except Exception as e:
         return (
@@ -773,10 +807,7 @@ class _IncrementalResultWriter:
         if self._fh is None or not isinstance(file_data, dict):
             return
         for result in file_data.get("results", []):
-            self._write_one(result)
-
-    def _write_one(self, result: dict) -> None:
-        self._write_json(result)
+            self._write_json(result)
 
     def _write_json(self, result: dict) -> None:
         if self._fh is None:
@@ -798,55 +829,46 @@ class _IncrementalResultWriter:
 def _write_parallel_results(
     ctx: ProcessingContext, all_results: List[Dict[str, Any]]
 ) -> None:
-    """Write combined parallel results to the output file.
+    """Write combined parallel results as CSV.
 
-    Uses binary I/O for JSON (avoids an unnecessary decode/encode
-    round-trip) and text I/O for CSV. This is the CSV-mode output path for
-    parallel processing; JSON mode uses :class:`_IncrementalResultWriter`.
+    CSV needs the full field set up front, so parallel results are buffered and
+    written here; JSON streams out through :class:`_IncrementalResultWriter` as
+    each file completes.
     """
     if ctx.no_output:
         return
 
-    if ctx.csv_mode:
-        all_keys: set = set()
+    all_keys: set = set()
+    for result in all_results:
+        for row in result.get("matches", []):
+            all_keys.update(row.keys())
+    fieldnames = [
+        "rule_title",
+        "rule_description",
+        "rule_level",
+        "rule_count",
+    ] + sorted(all_keys)
+    with open(ctx.outfile, "w", encoding="utf-8", newline="") as f:
+        writer = csv.DictWriter(
+            f, delimiter=ctx.delimiter, fieldnames=fieldnames, extrasaction="ignore"
+        )
+        writer.writeheader()
         for result in all_results:
+            title = result.get("title", "")
+            description = sanitize_value_for_csv(result.get("description") or "")
+            level = result.get("rule_level", "")
+            count = result.get("count", 0)
             for row in result.get("matches", []):
-                all_keys.update(row.keys())
-        fieldnames = [
-            "rule_title",
-            "rule_description",
-            "rule_level",
-            "rule_count",
-        ] + sorted(all_keys)
-        with open(ctx.outfile, "w", encoding="utf-8", newline="") as f:
-            writer = csv.DictWriter(
-                f, delimiter=ctx.delimiter, fieldnames=fieldnames, extrasaction="ignore"
-            )
-            writer.writeheader()
-            for result in all_results:
-                title = result.get("title", "")
-                description = sanitize_value_for_csv(result.get("description") or "")
-                level = result.get("rule_level", "")
-                count = result.get("count", 0)
-                for row in result.get("matches", []):
-                    clean_row = sanitize_row_for_csv(row)
-                    writer.writerow(
-                        {
-                            "rule_title": title,
-                            "rule_description": description,
-                            "rule_level": level,
-                            "rule_count": count,
-                            **clean_row,
-                        }
-                    )
-    else:
-        with open(ctx.outfile, "wb") as f:
-            f.write(b"[")
-            for i, result in enumerate(all_results):
-                if i > 0:
-                    f.write(b",\n")
-                f.write(orjson.dumps(result, option=orjson.OPT_INDENT_2))
-            f.write(b"]")
+                clean_row = sanitize_row_for_csv(row)
+                writer.writerow(
+                    {
+                        "rule_title": title,
+                        "rule_description": description,
+                        "rule_level": level,
+                        "rule_count": count,
+                        **clean_row,
+                    }
+                )
 
 
 def process_parallel_streaming(
@@ -961,6 +983,8 @@ def process_parallel_streaming(
     for file_data in results_list:
         if isinstance(file_data, dict) and file_data.get("error"):
             errors.append((file_data.get("name", "unknown"), file_data["error"]))
+            if file_data.get("path"):
+                ctx.failed_files.add(file_data["path"])
 
     if errors:
         ctx.logger.error(f"[!] {len(errors)} file(s) failed to process:")

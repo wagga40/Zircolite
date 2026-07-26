@@ -24,7 +24,7 @@ import string
 import sys
 import time
 from pathlib import Path
-from typing import Any, List, Optional, Tuple
+from typing import Any, List, Optional, Set, Tuple
 
 # External libs - Rich for styled terminal output
 from rich.logging import RichHandler
@@ -86,6 +86,7 @@ from zircolite import (
 from zircolite.processing import (
     ProcessingContext,
     create_extractor,
+    expand_db_path,
     process_unified_streaming,
     process_perfile_streaming,
     process_db_input,
@@ -174,7 +175,7 @@ def parse_arguments() -> argparse.Namespace:
     output_formats_args.add_argument("-d", "--dbfile", "--db-file", help="Save all logs to a SQLite database file", type=str)
     output_formats_args.add_argument("-l", "--logfile", "--log-file", help=f"Log file name (default: {DEFAULTS['logfile']})", default=None, type=str)
     output_formats_args.add_argument("--hashes", help="Add xxhash64 of the original log event to each event", action='store_true')
-    output_formats_args.add_argument("-L", "--limit", "--limit-results", help=f"Discard results exceeding this limit from output file (default: {DEFAULTS['limit']}, i.e. no limit)", type=int, default=None)
+    output_formats_args.add_argument("-L", "--limit", "--limit-results", help=f"Discard rules matching more events than this, per input database — so per file in the default mode, and across the whole corpus with --unified-db (default: {DEFAULTS['limit']}, i.e. no limit)", type=int, default=None)
     
     # Advanced configuration options
     config_formats_args = parser.add_argument_group('⚙️  ADVANCED CONFIGURATION')  
@@ -182,15 +183,15 @@ def parse_arguments() -> argparse.Namespace:
     config_formats_args.add_argument("-LE", "--logs-encoding", help="Encoding of the source files, for the formats read as text: Sysmon for Linux, Auditd, EVTXtract and CSV (XML uses the encoding declared in the document, JSON is read as UTF-8)", type=str)
     config_formats_args.add_argument("-q", "--quiet", help="Quiet mode: suppress banner, progress, and info messages. Only the summary panel and errors are shown.", action='store_true')
     config_formats_args.add_argument("--debug", help="Enable debug logging", action='store_true')
-    config_formats_args.add_argument("-n", "--nolog", "--no-log", help="Don't create log or result files", action='store_true')
-    config_formats_args.add_argument("-RE", "--remove-events", help="Remove processed log files after successful analysis (use with caution)", action='store_true')
+    config_formats_args.add_argument("-n", "--nolog", "--no-log", help="Don't create the log file or the detections output file (files requested explicitly with --template, --dbfile, --keepflat or --package are still written)", action='store_true')
+    config_formats_args.add_argument("-RE", "--remove-events", help="Remove input log files that were read successfully; files that failed to parse are kept (use with caution)", action='store_true')
     config_formats_args.add_argument("-U", "--update-rules", help="Update rulesets in the 'rules' directory", action='store_true')
     config_formats_args.add_argument("-v", "--version", help="Display Zircolite version", action='store_true')
     config_formats_args.add_argument("--timefield", "--time-field", help="Specify time field name for time filtering (default: 'SystemTime', auto-detects if not found)", type=str, default=None)
     config_formats_args.add_argument("--unified-db", "--all-in-one", help="Force unified database mode (all files in one DB, enables cross-file correlation)", action='store_true')
     config_formats_args.add_argument("--no-auto-mode", help="Disable automatic processing mode selection based on file analysis", action='store_true')
     config_formats_args.add_argument("--no-auto-detect", help="Disable automatic log type and timestamp detection (use explicit format flags instead)", action='store_true')
-    config_formats_args.add_argument("--strict", help="Strict EVTX parsing: stop on corrupted or malformed chunks instead of skipping them (default: lenient, recovers as many events as possible)", action='store_true')
+    config_formats_args.add_argument("--strict", help="Strict EVTX parsing: stop on corrupted or malformed chunks instead of skipping them. Forces sequential processing (default: lenient, recovers as many events as possible)", action='store_true')
     config_formats_args.add_argument("--add-index", help="Create an index on the given column(s). Can be repeated or list multiple columns (e.g. --add-index Channel EventID).", action='append', nargs='+', metavar="COL", default=None)
     config_formats_args.add_argument("--remove-index", help="Drop the given index name(s) after creation. Can be repeated or list multiple (e.g. --remove-index idx_channel idx_eventid).", action='append', nargs='+', metavar="IDX", default=None)
     config_formats_args.add_argument("--auto-index", help="Inspect the loaded ruleset and auto-create indices on the top-N most-referenced columns (default N=5 when used without an explicit number). Combine with --add-index for additional manually chosen columns.", type=int, nargs='?', const=5, default=None, metavar="N")
@@ -560,8 +561,9 @@ def handle_templating(
     ctx: ProcessingContext,
     results: List[Any],
     args: argparse.Namespace,
-) -> None:
-    """Handle template generation and package creation."""
+) -> bool:
+    """Handle template generation and package creation. False if a template failed."""
+    succeeded = True
     if ctx.ready_for_templating:
         tmpl_config = TemplateConfig(
             template=args.template,
@@ -570,8 +572,9 @@ def handle_templating(
             append=getattr(args, 'template_append', False),
         )
         template_generator = TemplateEngine(tmpl_config, logger=ctx.logger)
-        template_generator.run(results)
-    
+        succeeded = template_generator.run(results)
+
+
     if ctx.package:
         if not results:
             ctx.logger.info(
@@ -597,17 +600,30 @@ def handle_templating(
                 ctx.logger.warning(
                     f"[yellow]   [!] Cannot create GUI package: missing file(s): {', '.join(missing)}[/]"
                 )
+    return succeeded
 
 
 def cleanup(
     args: argparse.Namespace,
     logger: logging.Logger,
     log_list: Optional[List[Path]] = None,
+    failed: Optional[Set[str]] = None,
 ) -> None:
-    """Clean up temporary files and optionally remove original events."""
+    """Remove the original event files, as ``--remove-events`` asks.
+
+    Files whose ingestion failed are kept: their events are absent from the
+    results, so deleting them would destroy evidence nothing ever analysed.
+    """
     if args.remove_events and log_list:
         logger.info("[+] Cleaning")
+        failed = failed or set()
         for evtx in log_list:
+            if str(evtx) in failed:
+                logger.warning(
+                    f"[yellow]   [!] Keeping {evtx}: it failed to process, so its "
+                    "events are not in the results[/]"
+                )
+                continue
             try:
                 os.remove(evtx)
             except OSError as e:
@@ -854,8 +870,10 @@ def _run_processing(
     # ----- DB input mode (explicit -D) -----
     if args.db_input:
         _warn_ignored_db_flags(args, logger)
-        zircolite_core, all_results = process_db_input(ctx, args)
-        return zircolite_core, all_results, log_list, phase_setup_end
+        db_files = expand_db_path(Path(args.evtx), args, logger)
+        zircolite_core, all_results = process_db_input(ctx, args, file_list=db_files)
+        # Report the databases actually scanned, not a hardcoded 1
+        return zircolite_core, all_results, db_files, phase_setup_end
 
     # ----- File input mode -----
     check_if_exists(
@@ -907,16 +925,30 @@ def _run_processing(
     use_parallel = False
     parallel_workers = 1
 
+    # Flags whose contract needs one file at a time. --strict has to abort the
+    # whole run on a parse error, but a worker exception can only be logged and
+    # counted, so in parallel the flag would quietly do nothing.
+    # --profile-rules times rules against one database at a time.
+    sequential_reasons = [
+        flag
+        for flag, enabled in (
+            ("--strict", getattr(args, 'strict', False)),
+            ("--profile-rules", getattr(args, 'profile_rules', False)),
+        )
+        if enabled
+    ]
+    force_sequential = bool(sequential_reasons)
+
     if not args.no_auto_mode and not args.unified_db:
-        recommended_mode, reason, stats = analyze_files_and_recommend_mode(file_list, logger)
+        recommended_mode, reason, stats = analyze_files_and_recommend_mode(file_list)
         forced_workers = getattr(args, 'parallel_workers', None)
         print_mode_recommendation(
-            recommended_mode, reason, stats, logger,
+            recommended_mode, reason, stats,
             show_parallel=True, forced_workers=forced_workers,
         )
         if recommended_mode == 'unified':
             args.unified_db = True
-        if not args.unified_db and not getattr(args, 'no_parallel', False) and not getattr(args, 'profile_rules', False):
+        if not args.unified_db and not getattr(args, 'no_parallel', False) and not force_sequential:
             if stats.get('parallel_recommended', False):
                 use_parallel = True
                 parallel_workers = stats.get('parallel_workers', 1)
@@ -927,8 +959,8 @@ def _run_processing(
         logger.info("[+] [cyan]Database mode:[/] [green]UNIFIED[/] (forced)")
         logger.info("")
     else:
-        if not getattr(args, 'no_parallel', False) and not getattr(args, 'profile_rules', False) and len(file_list) > 1:
-            _, _, stats = analyze_files_and_recommend_mode(file_list, logger)
+        if not getattr(args, 'no_parallel', False) and not force_sequential and len(file_list) > 1:
+            _, _, stats = analyze_files_and_recommend_mode(file_list)
             forced_workers = getattr(args, 'parallel_workers', None)
             if stats.get('parallel_recommended', False):
                 use_parallel = True
@@ -939,11 +971,12 @@ def _run_processing(
                 use_parallel = True
                 parallel_workers = forced_workers
 
-    if getattr(args, 'profile_rules', False):
+    if force_sequential and len(file_list) > 1:
         logger.info(
-            "[+] [cyan]Profile mode[/] (--profile-rules): rule execution will be timed; "
-            "files will be processed sequentially (parallel disabled)."
+            f"[+] [cyan]Sequential mode:[/] {' and '.join(sequential_reasons)} "
+            "requires one file at a time (parallel disabled)."
         )
+    if getattr(args, 'profile_rules', False):
         if args.unified_db:
             logger.info(
                 "[+] [cyan]Note:[/] --profile-rules with --unified-db reports per-rule "
@@ -1141,7 +1174,11 @@ def main() -> None:
         logger.info(f"[+] Running rule tests from: {make_file_link(args.test_rules)}")
         _test_core = ZircoliteCore(args.config, logger=logger)
         _test_core.load_ruleset_from_var(rulesets_manager.rulesets, args.rulefilter)
-        test_results = _test_core.run_rule_tests(args.test_rules)
+        try:
+            test_results = _test_core.run_rule_tests(args.test_rules)
+        except ValueError as e:
+            _test_core.close()
+            quit_on_error(f"[red]    [-] {e}[/]", logger)
         _test_core.close()
         print_section("Rule Testing")
         print_rule_test_results(test_results)
@@ -1184,6 +1221,16 @@ def main() -> None:
         )
         sys.exit(2)
     
+    if len(args.csv_delimiter) != 1:
+        # csv.DictWriter would raise mid-run, after the output file was opened
+        # and truncated, leaving a zero-byte CSV and a bare traceback
+        print_error_panel(
+            "Invalid Configuration",
+            f"The CSV delimiter must be exactly one character (got {args.csv_delimiter!r}).",
+            "Use a single character, e.g. --csv-delimiter ';'"
+        )
+        sys.exit(2)
+
     logger.info("[+] Checking prerequisites")
 
     # Parse timestamps
@@ -1296,6 +1343,7 @@ def main() -> None:
     all_results = []
     phase_setup_end = 0.0
     strict_error = None
+    templating_ok = True
 
     try:
         zircolite_core, all_results, log_list, phase_setup_end = _run_processing(
@@ -1310,14 +1358,14 @@ def main() -> None:
                 print_profiling_report(zircolite_core.get_profiling_report())
 
             # Handle templating and package generation
-            handle_templating(ctx, all_results, args)
+            templating_ok = handle_templating(ctx, all_results, args)
     except StrictParseError as e:
         strict_error = str(e)
     except KeyboardInterrupt:
         request_shutdown()
     finally:
         try:
-            cleanup(args, logger, log_list)
+            cleanup(args, logger, log_list, failed=ctx.failed_files)
         except Exception as e:
             logger.debug(f"Cleanup: {e}")
         if zircolite_core is not None:
@@ -1364,6 +1412,11 @@ def main() -> None:
         phase_times=phase_times,
         outfile=ctx.outfile if not ctx.no_output else None,
     )
+
+    # A template that did not write is a failed run: whatever consumes that file
+    # would otherwise read a stale one, or nothing, and call it success
+    if not templating_ok:
+        sys.exit(1)
 
 
 if __name__ == "__main__":

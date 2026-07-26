@@ -41,25 +41,22 @@ class EventFilter:
     This class extracts all unique channel and eventID values from a ruleset
     and provides fast lookup to determine if an event should be processed.
     
-    Filtering is enabled only when:
-    - There is at least one channel and one eventID across the ruleset, and
-    - No rule has empty channel and eventid (i.e. "any" log source).
-    
-    If any rule has no channel/eventid constraints, filtering is disabled so
-    that events needed by such rules are not dropped, keeping alert counts
-    consistent whether you run a single rule or a full ruleset.
-    
-    When enabled, filtering logic:
+    The channel and eventID axes are enabled independently: an axis filters only
+    when *every* rule constrains it. A rule naming a channel but no eventID
+    matches any eventID, so filtering on the other rules' eventIDs would drop
+    events it should have seen -- alert counts would then differ between a
+    single-rule and a full-ruleset run (issue #117). Deciding one axis at a time
+    keeps that guarantee without giving up the filtering the other axis allows.
+
+    When an axis is enabled:
     - If event's Channel is NOT in the set of all channels from rules → discard
     - If event's EventID is NOT in the set of all eventIDs from rules → discard
-    
-    Both checks are independent - an event must have BOTH a known channel AND
-    a known eventID to be processed.
     """
 
     __slots__ = (
         'channels', 'eventids', '_has_filter_data', 'logger',
-        '_channels_lower', '_rules_with_filter', '_rules_without_filter'
+        '_channels_lower', '_rules_with_filter', '_rules_without_filter',
+        '_channel_filter', '_eventid_filter'
     )
 
     def __init__(
@@ -88,7 +85,9 @@ class EventFilter:
         
         # Flags
         self._has_filter_data = False
-        
+        self._channel_filter = False
+        self._eventid_filter = False
+
         # Pre-computed lowercase channels for case-insensitive matching
         self._channels_lower: FrozenSet[str] = frozenset()
         
@@ -99,24 +98,26 @@ class EventFilter:
         """Extract all unique channels and eventIDs from all rules."""
         rules_with_filter = 0
         rules_without_filter = 0
-        
+        rules_without_channel = 0
+        rules_without_eventid = 0
+
         # Build as mutable sets first
         channels_set: Set[str] = set()
         eventids_set: Set[int] = set()
-        
+
         for rule in rulesets:
             channels = rule.get('channel', [])
             eventids = rule.get('eventid', [])
-            
+
             # Check if this rule has filter metadata
             if channels or eventids:
                 rules_with_filter += 1
-                
+
                 # Add all channels from this rule
                 for channel in channels:
                     if channel:
                         channels_set.add(channel)
-                
+
                 # Add all eventids from this rule
                 for eventid in eventids:
                     if eventid is not None:
@@ -128,33 +129,42 @@ class EventFilter:
                             )
             else:
                 rules_without_filter += 1
-        
+
+            if not channels:
+                rules_without_channel += 1
+            if not eventids:
+                rules_without_eventid += 1
+
         # Convert to immutable frozensets for faster lookups
         self.channels = frozenset(channels_set)
         self.eventids = frozenset(eventids_set)
-        
+
         # Pre-compute lowercase channels for case-insensitive matching
         self._channels_lower = frozenset(c.lower() for c in self.channels)
-        
+
         # Store stats
         self._rules_with_filter = rules_with_filter
         self._rules_without_filter = rules_without_filter
-        
-        # Enable filtering only if we have BOTH channels AND eventIDs AND no rule
-        # has "any" log source. Rules with empty channel/eventid match any event;
-        # if we filtered by other rules' log sources we would drop events needed
-        # by those rules and get inconsistent counts (see issue #117).
-        self._has_filter_data = bool(
-            self.channels and self.eventids and (rules_without_filter == 0)
-        )
-        
+
+        # The two axes are decided independently. A rule that constrains only its
+        # channel still matches any EventID, so judging its events against the
+        # other rules' EventIDs would drop events it should have seen -- the
+        # inconsistency issue #117 is about, one axis at a time.
+        self._channel_filter = bool(self.channels) and rules_without_channel == 0
+        self._eventid_filter = bool(self.eventids) and rules_without_eventid == 0
+        self._has_filter_data = self._channel_filter or self._eventid_filter
+
         if not self._has_filter_data:
-            if rules_without_filter > 0:
-                self.logger.debug(
-                    "EventFilter: At least one rule has no channel/eventid (any log source) - filtering disabled"
-                )
-            else:
-                self.logger.debug("EventFilter: Missing channels or eventIDs - filtering disabled")
+            self.logger.debug(
+                "EventFilter: every rule leaves at least one of channel/eventid "
+                "unconstrained (any log source) - filtering disabled"
+            )
+        elif not (self._channel_filter and self._eventid_filter):
+            axis = "channel" if self._channel_filter else "eventID"
+            self.logger.debug(
+                f"EventFilter: filtering on {axis} only; the other axis is "
+                "unconstrained by at least one rule"
+            )
 
     @property
     def is_enabled(self) -> bool:
@@ -166,41 +176,44 @@ class EventFilter:
         Check if an event should be processed based on its channel and eventID.
         
         Filtering logic:
-        - If event's Channel is NOT in the set of all channels → discard
-        - If event's EventID is NOT in the set of all eventIDs → discard
-        
-        Both checks are independent. An event must have a known channel AND 
-        a known eventID to be processed.
-        
+        - If every rule constrains its channel and the event's Channel is in none
+          of them → discard
+        - If every rule constrains its EventID and the event's EventID is in none
+          of them → discard
+
+        Each axis is enabled on its own, so a ruleset where some rules name only a
+        channel still filters on channel. An event with no usable value for an
+        enabled axis is kept: too little information to discard it safely.
+
         Args:
             channel: The event's channel name (e.g., 'Microsoft-Windows-Sysmon/Operational')
             eventid: The event's EventID (int, str convertible to int, or None)
-            
+
         Returns:
             True if the event should be processed, False if it can be skipped
         """
-        # Fast path: if no filter data or incomplete event info, process everything
-        if not self._has_filter_data or channel is None or eventid is None:
+        # Fast path: nothing to filter on
+        if not self._has_filter_data:
             return True
-        
-        # Convert eventid to int if needed (internal callers pass int, but API accepts str)
-        # isinstance check is cheap; only convert when necessary for external callers
-        if not isinstance(eventid, int):
-            try:
-                eventid = int(eventid)
-            except (ValueError, TypeError):
-                return True
-        
-        # Local bindings for faster attribute access in tight loop
-        channels = self.channels
-        channels_lower = self._channels_lower
-        
-        # Check 1: Is the channel in our known channels? (case-insensitive fallback)
-        if channel not in channels and channel.lower() not in channels_lower:
-            return False
-        
-        # Check 2: Is the eventID in our known eventIDs?
-        return eventid in self.eventids
+
+        if self._channel_filter and channel is not None:
+            if (
+                channel not in self.channels
+                and channel.lower() not in self._channels_lower
+            ):
+                return False
+
+        if self._eventid_filter and eventid is not None:
+            # Internal callers pass int, but the API accepts str
+            if not isinstance(eventid, int):
+                try:
+                    eventid = int(eventid)
+                except (ValueError, TypeError):
+                    return True
+            if eventid not in self.eventids:
+                return False
+
+        return True
 
     def get_stats(self) -> Dict[str, Any]:
         """Get statistics about the filter data."""
@@ -208,6 +221,8 @@ class EventFilter:
             'channels_count': len(self.channels),
             'eventids_count': len(self.eventids),
             'is_enabled': self.is_enabled,
+            'channel_filter': self._channel_filter,
+            'eventid_filter': self._eventid_filter,
             'rules_with_filter': self._rules_with_filter,
             'rules_without_filter': self._rules_without_filter
         }
@@ -396,7 +411,7 @@ class RulesetHandler:
 
         self.rulesets = unique_rules
             
-        if all(not sub_ruleset for sub_ruleset in self.rulesets):
+        if not self.rulesets:
             self.logger.error("[red]    [-] No rules to execute ![/]")
         else:
             self.logger.info(f"[+] {len(self.rulesets)} rules loaded")
@@ -407,10 +422,12 @@ class RulesetHandler:
             self.event_filter = EventFilter(non_correlation_rules, logger=self.logger)
             if self.event_filter.is_enabled:
                 stats = self.event_filter.get_stats()
-                self.logger.info(
-                    f"[+] Event filter enabled: [cyan]{stats['channels_count']}[/] channels, "
-                    f"[cyan]{stats['eventids_count']}[/] eventIDs"
-                )
+                axes = []
+                if stats['channel_filter']:
+                    axes.append(f"[cyan]{stats['channels_count']}[/] channels")
+                if stats['eventid_filter']:
+                    axes.append(f"[cyan]{stats['eventids_count']}[/] eventIDs")
+                self.logger.info(f"[+] Event filter enabled: {', '.join(axes)}")
 
     def is_yaml(self, filepath: Path) -> Optional[bool]:
         """Test if the file is a YAML file (including multi-document streams)."""

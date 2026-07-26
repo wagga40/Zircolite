@@ -308,19 +308,6 @@ class ConfigLoader:
 
         return config
 
-    def load(self, config_path: str) -> ZircoliteConfig:
-        """
-        Load and parse YAML configuration file.
-        
-        Args:
-            config_path: Path to YAML configuration file
-            
-        Returns:
-            ZircoliteConfig instance
-        """
-        config_dict = self.load_yaml(config_path)
-        return self.parse_config(config_dict)
-
     def validate_config(self, config: ZircoliteConfig) -> List[str]:
         """
         Validate configuration and return list of issues.

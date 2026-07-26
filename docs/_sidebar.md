@@ -22,7 +22,7 @@
     * [Working with large datasets](Advanced.md#working-with-large-datasets)
     * [Automatic Processing Optimization](Advanced.md#automatic-processing-optimization)
     * [Parallel Processing](Advanced.md#parallel-processing)
-    * [Streaming Mode](Advanced.md#streaming-mode)
+    * [The Streaming Pipeline](Advanced.md#the-streaming-pipeline)
     * [Early Event Filtering](Advanced.md#early-event-filtering)
     * [Keep data used by Zircolite](Advanced.md#keeping-data-used-by-zircolite)
     * [Filtering](Advanced.md#filtering)

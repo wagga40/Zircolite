@@ -14,7 +14,6 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from zircolite import (
     StreamingEventProcessor,
-    ZircoliteCore,
     ProcessingConfig,
     EvtxExtractor,
     ExtractorConfig,
@@ -53,11 +52,35 @@ class TestStreamingEventProcessorInit:
         
         assert processor.batch_size == 1000
     
-    def test_init_with_time_filters(self, field_mappings_file, test_logger, default_args_config):
-        """Test initialization with time filters."""
+    @pytest.mark.parametrize(
+        "timestamp,kept",
+        [
+            ("2024-06-15T08:30:00", True),
+            ("2024-06-15T08:30:00Z", True),
+            ("2024-06-15T08:30:00+02:00", True),
+            ("2024-06-15 08:30:00", True),  # auditd and several JSON exporters
+            ("2024-06-15T08:30:00.1234567Z", True),  # Windows writes 7 digits
+            (1718440200, True),  # epoch seconds
+            (1718440200000, True),  # epoch milliseconds
+            ("1718440200", True),
+            ("2023-06-15T08:30:00Z", False),  # before the window
+            ("2025-06-15T08:30:00Z", False),  # after the window
+            (1686817800, False),  # epoch, before the window
+        ],
+    )
+    def test_time_filter_accepts_every_timestamp_spelling(
+        self, field_mappings_file, test_logger, default_args_config, timestamp, kept
+    ):
+        """Regression: bounds used to be compared as strings, not as instants.
+
+        Lexicographically an epoch number sorts below every ISO string and a
+        space separator sorts below a 'T', so whole formats -- including the one
+        Zircolite's own auditd extractor emits -- silently lost every event.
+        """
         proc_config = ProcessingConfig(
             time_after="2024-01-01T00:00:00",
-            time_before="2024-12-31T23:59:59"
+            time_before="2024-12-31T23:59:59",
+            time_field="SystemTime",
         )
         processor = StreamingEventProcessor(
             config_file=field_mappings_file,
@@ -65,10 +88,12 @@ class TestStreamingEventProcessorInit:
             processing_config=proc_config,
             logger=test_logger
         )
-        
         assert processor._has_time_filter is True
-        assert processor._time_after_str == "2024-01-01T00:00:00"
-        assert processor._time_before_str == "2024-12-31T23:59:59"
+
+        flat = processor._flatten_event(
+            {"Event": {"System": {"SystemTime": timestamp}}}, "t.evtx"
+        )
+        assert (flat is not None) is kept
 
     def test_init_with_hashes(self, field_mappings_file, test_logger, default_args_config):
         """Test initialization with hash generation enabled."""
@@ -294,10 +319,10 @@ class TestFlattenHotPathOptimizations:
         )
         assert flat["EventID"] == str(int64_min)
 
-    def test_split_only_field_drops_original_and_repeats(
+    def test_split_field_keeps_original_and_repeats(
         self, field_mappings_file, test_logger, default_args_config
     ):
-        """Split-only fields emit sub-fields (dropping the original) every event."""
+        """Split fields emit sub-fields *and* keep the source field, every event."""
         processor = StreamingEventProcessor(
             config_file=field_mappings_file,
             args_config=default_args_config,
@@ -308,14 +333,53 @@ class TestFlattenHotPathOptimizations:
         )
         assert first["MD5"] == "aaa"
         assert first["SHA256"] == "bbb"
-        assert "Hashes" not in first
+        # Rules query the unsplit field too, so dropping it made them unmatchable.
+        assert first["Hashes"] == "MD5=aaa,SHA256=bbb"
         # Second event with the same (now seen) sub-keys still splits correctly.
         second = processor._flatten_event(
             {"Event": {"EventData": {"Hashes": "MD5=ccc,SHA256=ddd"}}}, "t.evtx"
         )
         assert second["MD5"] == "ccc"
         assert second["SHA256"] == "ddd"
-        assert "Hashes" not in second
+        assert second["Hashes"] == "MD5=ccc,SHA256=ddd"
+
+    def test_json_booleans_are_stored_as_sigma_spells_them(
+        self, field_mappings_file, test_logger, default_args_config
+    ):
+        """Regression: bool is a subclass of int, so booleans became INTEGER 1/0.
+
+        Sigma-generated SQL compares against the lowercase JSON spelling, so a
+        stored 1 made every rule on a boolean field (Sysmon Initiated, ECS and
+        CloudTrail flags) unmatchable.
+        """
+        processor = StreamingEventProcessor(
+            config_file=field_mappings_file,
+            args_config=default_args_config,
+            logger=test_logger,
+        )
+        flat = processor._flatten_event(
+            {"Event": {"EventData": {"Initiated": True, "Ended": False}}}, "t.evtx"
+        )
+        assert flat["Initiated"] == "true"
+        assert flat["Ended"] == "false"
+        assert processor.field_types["Initiated"] != "INTEGER"
+
+    def test_split_survives_a_malformed_pair(
+        self, field_mappings_file, test_logger, default_args_config
+    ):
+        """One pair without a separator must not cost the pairs after it."""
+        processor = StreamingEventProcessor(
+            config_file=field_mappings_file,
+            args_config=default_args_config,
+            logger=test_logger,
+        )
+        flat = processor._flatten_event(
+            {"Event": {"EventData": {"Hashes": "MD5=aaa,GARBAGE,SHA256=bbb"}}},
+            "t.evtx",
+        )
+        assert flat["MD5"] == "aaa"
+        assert flat["SHA256"] == "bbb"
+        assert flat["Hashes"] == "MD5=aaa,GARBAGE,SHA256=bbb"
 
     def test_event_filter_path_hint_reused_and_falls_back(
         self, field_mappings_file, test_logger, default_args_config
@@ -496,7 +560,7 @@ class TestStreamingEventProcessorJSONStreaming:
             logger=test_logger
         )
         
-        events = list(processor.stream_json_events(tmp_json_file, json_array=False))
+        events = list(processor.stream_json_events(tmp_json_file))
         
         assert len(events) > 0
         assert "OriginalLogfile" in events[0]
@@ -509,7 +573,7 @@ class TestStreamingEventProcessorJSONStreaming:
             logger=test_logger
         )
         
-        events = list(processor.stream_json_events(tmp_json_array_file, json_array=True))
+        events = list(processor.stream_json_array_chunked(tmp_json_array_file))
         
         assert len(events) > 0
     
@@ -521,7 +585,7 @@ class TestStreamingEventProcessorJSONStreaming:
             logger=test_logger
         )
         
-        events = list(processor.stream_json_events(tmp_json_file_multiple, json_array=False))
+        events = list(processor.stream_json_events(tmp_json_file_multiple))
         
         # Should have 3 events from sample_windows_events_list
         assert len(events) == 3
@@ -602,163 +666,6 @@ class TestStreamingEventProcessorDatabaseInsertion:
         assert db_count == 5
         
         conn.close()
-
-
-class TestZircoliteCoreRunStreaming:
-    """Tests for ZircoliteCore.run_streaming() method."""
-    
-    def test_run_streaming_json_input(self, field_mappings_file, test_logger, default_args_config, tmp_json_file_multiple):
-        """Test run_streaming with JSON input."""
-        proc_config = ProcessingConfig(disable_progress=True)
-        zircore = ZircoliteCore(
-            config=field_mappings_file,
-            processing_config=proc_config,
-            logger=test_logger
-        )
-        
-        total_events = zircore.run_streaming(
-            [tmp_json_file_multiple],
-            input_type='json',
-            args_config=default_args_config,
-            disable_progress=True
-        )
-        
-        assert total_events == 3
-        
-        # Verify data in database
-        results = zircore.execute_select_query("SELECT COUNT(*) as cnt FROM logs")
-        assert results[0]['cnt'] == 3
-        
-        zircore.close()
-    
-    def test_run_streaming_creates_index(self, field_mappings_file, test_logger, default_args_config, tmp_json_file):
-        """Test that run_streaming creates indexes."""
-        proc_config = ProcessingConfig(disable_progress=True)
-        zircore = ZircoliteCore(
-            config=field_mappings_file,
-            processing_config=proc_config,
-            logger=test_logger
-        )
-        
-        zircore.run_streaming(
-            [tmp_json_file],
-            input_type='json',
-            args_config=default_args_config,
-            disable_progress=True
-        )
-        
-        # Verify index exists
-        cursor = zircore.db_connection.cursor()
-        cursor.execute("SELECT name FROM sqlite_master WHERE type='index' AND name='idx_eventid'")
-        result = cursor.fetchone()
-        
-        assert result is not None
-        
-        zircore.close()
-    
-    def test_run_streaming_multiple_files(self, field_mappings_file, test_logger, default_args_config, tmp_path):
-        """Test run_streaming with multiple files."""
-        # Create two JSON files
-        created_files = []
-        for i in range(2):
-            events = [
-                {"Event": {"System": {"EventID": j}, "EventData": {"Value": f"file{i}_event{j}"}}}
-                for j in range(3)
-            ]
-            json_file = tmp_path / f"test_file_{i}.json"
-            with open(json_file, 'w') as f:
-                for event in events:
-                    f.write(json.dumps(event) + "\n")
-            created_files.append(json_file)
-        
-        # Use explicit file list to avoid picking up fieldMappings.json from tmp_path
-        json_files = created_files
-        
-        proc_config = ProcessingConfig(disable_progress=True)
-        zircore = ZircoliteCore(
-            config=field_mappings_file,
-            processing_config=proc_config,
-            logger=test_logger
-        )
-        
-        total_events = zircore.run_streaming(
-            json_files,
-            input_type='json',
-            args_config=default_args_config,
-            disable_progress=True
-        )
-        
-        assert total_events == 6  # 2 files × 3 events each
-        
-        zircore.close()
-    
-    def test_run_streaming_then_execute_ruleset(self, field_mappings_file, test_logger, default_args_config, sample_ruleset, tmp_path):
-        """Test that run_streaming works with rule execution."""
-        # Create a JSON file with matching events
-        events = [
-            {"Event": {"System": {"EventID": 1}, "EventData": {"CommandLine": "powershell.exe whoami"}}},
-            {"Event": {"System": {"EventID": 1}, "EventData": {"CommandLine": "notepad.exe"}}},
-        ]
-        
-        json_file = tmp_path / "test_events.json"
-        with open(json_file, 'w') as f:
-            for event in events:
-                f.write(json.dumps(event) + "\n")
-        
-        proc_config = ProcessingConfig(disable_progress=True)
-        zircore = ZircoliteCore(
-            config=field_mappings_file,
-            processing_config=proc_config,
-            logger=test_logger
-        )
-        
-        # Run streaming
-        zircore.run_streaming(
-            [str(json_file)],
-            input_type='json',
-            args_config=default_args_config,
-            disable_progress=True
-        )
-        
-        # Load and execute rules
-        zircore.load_ruleset_from_var(sample_ruleset, rule_filters=None)
-        
-        output_file = str(tmp_path / "output.json")
-        zircore.execute_ruleset(output_file, write_mode='w', last_ruleset=True)
-        
-        # Verify output
-        assert Path(output_file).exists()
-        
-        with open(output_file) as f:
-            results = json.load(f)
-        
-        # Should have at least one detection (powershell rule)
-        assert len(results) > 0
-        
-        zircore.close()
-    
-    def test_run_streaming_empty_file(self, field_mappings_file, test_logger, default_args_config, tmp_path):
-        """Test run_streaming with an empty file."""
-        empty_file = tmp_path / "empty.json"
-        empty_file.write_text("")
-        
-        proc_config = ProcessingConfig(disable_progress=True)
-        zircore = ZircoliteCore(
-            config=field_mappings_file,
-            processing_config=proc_config,
-            logger=test_logger
-        )
-        
-        total_events = zircore.run_streaming(
-            [str(empty_file)],
-            input_type='json',
-            args_config=default_args_config,
-            disable_progress=True
-        )
-        
-        assert total_events == 0
-        
-        zircore.close()
 
 
 class TestStreamingEventProcessorTransforms:
@@ -1038,7 +945,7 @@ class TestStreamingEventProcessorRestrictedPythonBuiltins:
         )
         json_file = tmp_path / "e.json"
         json_file.write_text(json.dumps(sample_windows_event) + "\n")
-        events = list(processor.stream_json_events(str(json_file), json_array=False))
+        events = list(processor.stream_json_events(str(json_file)))
         assert len(events) == 1
         assert events[0].get("CommandLine")  # value preserved when transform raises
 
@@ -1076,7 +983,7 @@ class TestStreamingEventProcessorRestrictedPythonBuiltins:
         )
         json_file = tmp_path / "e.json"
         json_file.write_text(json.dumps(sample_windows_event) + "\n")
-        events = list(processor.stream_json_events(str(json_file), json_array=False))
+        events = list(processor.stream_json_events(str(json_file)))
         assert len(events) == 1
         assert events[0].get("CommandLine")
 
@@ -1135,7 +1042,7 @@ class TestStreamingEventProcessorMemoryEfficiency:
         )
         
         # Get stream - should be a generator, not a list
-        stream = processor.stream_json_events(tmp_json_file_multiple, json_array=False)
+        stream = processor.stream_json_events(tmp_json_file_multiple)
         
         # Verify it's a generator
         import types
@@ -1298,7 +1205,7 @@ class TestStreamingEventProcessorErrorPaths:
             logger=test_logger,
         )
         path = str(tmp_path / "does_not_exist.json")
-        events = list(processor.stream_json_events(path, json_array=False))
+        events = list(processor.stream_json_events(path))
         assert events == []
 
     def test_stream_csv_events_nonexistent_file(
@@ -1654,7 +1561,7 @@ class TestStreamingJsonXmlErrorPaths:
             args_config=default_args_config,
             logger=test_logger,
         )
-        events = list(processor.stream_json_events(str(json_file), json_array=False))
+        events = list(processor.stream_json_events(str(json_file)))
         assert len(events) == 2
 
     def test_stream_json_events_outer_exception(
@@ -1668,7 +1575,7 @@ class TestStreamingJsonXmlErrorPaths:
             args_config=default_args_config,
             logger=test_logger,
         )
-        events = list(processor.stream_json_events(str(dir_path), json_array=False))
+        events = list(processor.stream_json_events(str(dir_path)))
         assert events == []
 
     def test_stream_xml_events_outer_exception(
@@ -1753,7 +1660,7 @@ class TestStreamingTimeFiltering:
         }
         json_file.write_text(json.dumps(event) + "\n")
 
-        events = list(processor.stream_json_events(str(json_file), json_array=False))
+        events = list(processor.stream_json_events(str(json_file)))
         assert len(events) == 1
 
     def test_time_filter_rejects_old_event(self, field_mappings_file, test_logger, default_args_config, tmp_path):
@@ -1787,7 +1694,7 @@ class TestStreamingTimeFiltering:
         }
         json_file.write_text(json.dumps(event) + "\n")
 
-        events = list(processor.stream_json_events(str(json_file), json_array=False))
+        events = list(processor.stream_json_events(str(json_file)))
         assert len(events) == 0  # Event should be rejected by time filter
 
     def test_time_filter_with_timezone_offset(self, field_mappings_file, test_logger, default_args_config, tmp_path):
@@ -1814,7 +1721,7 @@ class TestStreamingTimeFiltering:
         }
         json_file.write_text(json.dumps(event) + "\n")
 
-        events = list(processor.stream_json_events(str(json_file), json_array=False))
+        events = list(processor.stream_json_events(str(json_file)))
         assert len(events) == 1
 
 
@@ -1832,7 +1739,7 @@ class TestStreamingJsonEdgeCases:
         event = {"Event": {"System": {"EventID": 1, "Channel": "Sysmon"}, "EventData": {"CommandLine": "test"}}}
         json_file.write_text(json.dumps(event) + "\n\n\n" + json.dumps(event) + "\n")
 
-        events = list(processor.stream_json_events(str(json_file), json_array=False))
+        events = list(processor.stream_json_events(str(json_file)))
         assert len(events) == 2
 
     def test_stream_json_array_mode(self, field_mappings_file, test_logger, default_args_config, tmp_path):
@@ -1849,7 +1756,7 @@ class TestStreamingJsonEdgeCases:
         ]
         json_file.write_text(json.dumps(events_data))
 
-        events = list(processor.stream_json_events(str(json_file), json_array=True))
+        events = list(processor.stream_json_array_chunked(str(json_file)))
         assert len(events) == 2
 
 
@@ -2332,7 +2239,7 @@ class TestStreamingBugFixes:
             args_config=default_args_config,
             logger=test_logger,
         )
-        events = list(processor.stream_json_events(str(json_file), json_array=True))
+        events = list(processor.stream_json_array_chunked(str(json_file)))
         assert len(events) == 2
 
     def test_column_cache_refreshed_on_alter_failure(
@@ -2498,7 +2405,7 @@ class TestStreamingRobustness:
         processor = self._make_processor(field_mappings_file, test_logger, default_args_config)
         json_file = tmp_path / "bom_array.json"
         json_file.write_bytes(b'\xef\xbb\xbf[{"EventID": 1}, {"EventID": 2}]')
-        events = list(processor.stream_json_events(str(json_file), json_array=True))
+        events = list(processor.stream_json_array_chunked(str(json_file)))
         assert len(events) == 2
 
     def test_time_filter_bounds_are_inclusive(

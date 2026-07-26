@@ -126,8 +126,6 @@ The tester uses the exact same RestrictedPython sandbox as Zircolite, so if a tr
 
 | Alias Field | Description |
 |-------------|-------------|
-| `CommandLine_b64decoded` | Decodes Base64 strings in command lines |
-| `CommandLine_Extracted_Creds` | Extracts credentials from net/wmic/psexec commands |
 | `CommandLine_URLs` | Extracts HTTP/HTTPS/FTP URLs |
 | `CommandLine_RegistryPaths` | Extracts registry key paths |
 | `CommandLine_Length` | Categorizes command line length: SHORT, NORMAL, LONG, VERY_LONG, EXTREME |
@@ -164,7 +162,6 @@ The tester uses the exact same RestrictedPython sandbox as Zircolite, so if a tr
 
 | Alias Field | Description |
 |-------------|-------------|
-| `ScriptBlockText_b64decoded` | Decodes Base64 in PowerShell scripts |
 | `ScriptBlockText_ObfuscationIndicators` | Detects char substitution, string concat, GzipStream, etc. |
 | `ScriptBlockText_XORPatterns` | Detects XOR keys and patterns |
 | `ScriptBlockText_ReflectionAbuse` | Detects reflection-based attacks |
@@ -813,7 +810,8 @@ python3 zircolite.py --evtx logs/ --ruleset rules/rules_windows_merged.json \
 
 Sometimes you only want to work on a specific time range to speed up analysis. With Zircolite, it is possible to filter on a specific time range using the `--after` and `--before` arguments and their respective shorter versions `-A` and `-B`. Please note that: 
 
-- The filter will apply to the `SystemTime` field of each event.
+- The filter applies to the field named by `--timefield` (`SystemTime` by default), falling back to the auto-detected timestamp field when that one is absent from the events.
+- Event timestamps are compared as instants, so epoch seconds/milliseconds, a trailing `Z`, an explicit UTC offset and a space instead of `T` are all understood.
 - The `--after` and `--before` arguments can be used independently.
 - The timestamps provided must have the following format: `YYYY-MM-DDTHH:MM:SS` (hours are in 24-hour format).
 
@@ -916,7 +914,7 @@ output:
 
 ## Mini-GUI
 
-![](pics/gui.webp)
+![](../pics/gui.webp)
 
 
 The Mini-GUI can be used completely offline. It allows the user to display and search results. It uses [DataTables](https://datatables.net/) and the [SB Admin 2 theme](https://github.com/StartBootstrap/startbootstrap-sb-admin-2). 

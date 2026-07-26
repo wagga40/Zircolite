@@ -1,5 +1,6 @@
 """Tests for resolving a YAML config file onto the CLI args namespace."""
 import argparse
+import logging
 import importlib.util
 import sys
 from pathlib import Path
@@ -419,3 +420,53 @@ class TestSettingsTable:
     def test_early_dests_are_all_settings(self):
         dests = {s.dest for s in run_config.SETTINGS}
         assert EARLY_DESTS <= dests
+
+
+class TestYamlValuesCountAsUserSet:
+    """A value pinned in the config file is as deliberate as a CLI flag.
+
+    Regression: ``_explicit`` was populated from argparse only, so
+    auto-detection silently overrode YAML-set ``processing.time_field`` and
+    ``input.file_extension`` while the CLI equivalents were respected.
+    """
+
+    def test_yaml_time_field_is_explicit(self):
+        args = _args()
+
+        resolve(args, {"processing": {"time_field": "UtcTime"}})
+
+        assert args.timefield == "UtcTime"
+        assert zircolite_script._is_explicit(args, "timefield", "SystemTime")
+
+    def test_yaml_file_extension_is_explicit(self):
+        args = _args()
+
+        resolve(args, {"input": {"file_extension": "xml"}})
+
+        assert args.fileext == "xml"
+        assert zircolite_script._fileext_is_explicit(args)
+
+    def test_unset_keys_stay_implicit(self):
+        args = _args()
+
+        resolve(args, {"input": {"path": "logs/"}})
+
+        assert not zircolite_script._is_explicit(args, "timefield", "SystemTime")
+        assert not zircolite_script._fileext_is_explicit(args)
+
+    def test_detection_does_not_override_a_yaml_time_field(self):
+        """The whole point: auto-detection must leave a pinned field alone."""
+        from zircolite.detector import DetectionResult
+
+        args = _args()
+        resolve(args, {"processing": {"time_field": "UtcTime"}})
+
+        detection = DetectionResult(
+            input_type="json",
+            log_source="generic_json",
+            confidence="high",
+            timestamp_field="@timestamp",
+        )
+        zircolite_script._apply_detection_result(args, detection, logging.getLogger("t"))
+
+        assert args.timefield == "UtcTime"

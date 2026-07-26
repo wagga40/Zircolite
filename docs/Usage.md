@@ -138,7 +138,7 @@ python3 zircolite.py --events sample.evtx --ruleset rules/rules_windows_merged.j
 By default: 
 
 - `--ruleset` is not mandatory; the default ruleset is `rules/rules_windows_generic.json`.
-- Results are written to `detected_events.json` in the same directory as Zircolite. You can choose a CSV-formatted output with `--csv` (see [CSV detection output](Usage.md#csv-detection-output)).
+- Results are written to `detected_events.json` in the current working directory. You can choose a CSV-formatted output with `--csv` (see [CSV detection output](Usage.md#csv-detection-output)).
 - A `zircolite.log` file will be created in the current working directory; it can be disabled with `--nolog`.
 - When providing a directory for event logs, Zircolite will automatically filter by file extension. You can change this with `--fileext`. You can also use `--file-pattern` for custom glob patterns.
 - Use `--no-recursion` to disable recursive directory search.
@@ -147,11 +147,22 @@ By default:
 
 Pressing `Ctrl+C` triggers a graceful shutdown: in-flight workers finish their current event batch or rule, temporary files are cleaned up, the SQLite database is closed, and Zircolite exits with status code `130` — no Python traceback.
 
-If shutdown takes longer than you want to wait (for example, a worker is mid-way through a large file), press `Ctrl+C` a second time to force an immediate exit. The first message confirms the request:
+If shutdown takes longer than you want to wait (for example, a worker is mid-way through a large file), press `Ctrl+C` a second time. Zircolite stops scheduling new work and exits as soon as the files already in flight finish, with status code `130`. The first message confirms the request:
 
 ```
 [!] Interrupt received - finishing current work and shutting down. Press Ctrl+C again to force quit.
 ```
+
+### Exit Codes
+
+| Code | Meaning |
+|------|---------|
+| `0` | The run completed. Detections may or may not have been found — that is not an error. |
+| `1` | The run did not produce the analysis it was asked for: a `--strict` parse error, a template that could not be written, a `--test-rules` file that could not be read or whose cases failed, or no input/database that could be analysed. |
+| `2` | The command line or configuration file is invalid (conflicting options, a bad timestamp, a `--dbfile` that already exists). Nothing was processed. |
+| `130` | Interrupted with `Ctrl+C`. |
+
+A run that could not read part of its input still exits `0` when the rest was analysed, but the affected files are named on the console and are never deleted by `--remove-events`.
 
 ### Command-Line Options Summary
 
@@ -218,16 +229,21 @@ extension is globbed, unless `--fileext` or `--file-pattern` says otherwise.
 | `-l`, `--logfile` | Log file name |
 | `--hashes` | Add xxhash64 to each event |
 | `-L`, `--limit` | Discard results exceeding limit (must be a positive integer, or `-1` to disable) |
-| `--profile-rules` | Time each rule execution and print a performance report at the end (Rule Performance table) |
+| `--profile-rules` | Time each rule execution and print a performance report at the end (Rule Performance table). Forces sequential processing, so runs over many files are slower |
 
 > [!NOTE]
 > `--dbfile` cannot be combined with parallel processing of multiple files: each worker would need to write the same database. Use `--unified-db` to get a single database file, or `--no-parallel` to save one database per input file. Zircolite exits with an error rather than silently dropping databases.
 
 #### CSV detection output
 
-When you use `--csv`, detections are written as one flat table. The header row is built from the **first** match row that is written (plus `rule_title`, `rule_description`, `rule_level`, and `rule_count`). If another rule later returns rows with **additional** columns—for example one rule uses a narrow `SELECT` and another uses `SELECT *`—those extra fields are not added as new CSV columns; values for those keys are omitted from the CSV for that row.
+When you use `--csv`, detections are written as one flat table. The header covers every column of the events table, plus `rule_title`, `rule_description`, `rule_level` and `rule_count`, so a rule returning wider rows than the ones before it does not lose fields.
 
-JSON output does not have this limitation: each rule’s result object includes full `matches` with whatever columns the rule’s SQL returns. Use JSON (or post-process) when you need every field from every rule in the export file.
+Two values are rewritten so the report stays readable and safe to open:
+
+- Embedded newlines become spaces. A multi-line `ScriptBlockText` or `CommandLine` stays on one CSV row without gluing the ends of adjacent lines together.
+- A value starting with `=`, `+`, `-` or `@` is prefixed with a single quote, so a logged string cannot execute as a formula when the report is opened in a spreadsheet.
+
+Use JSON when you need the values exactly as stored.
 
 #### Advanced Configuration
 
@@ -364,7 +380,7 @@ In **per-file mode**, each file's detection table includes the filename as its t
 
 ### Rule performance profiling
 
-Use `--profile-rules` to measure how long each rule takes to execute. After the run, Zircolite prints a **Rule Performance** section with a table of rules sorted by elapsed time (slowest first), plus total rule execution time. This helps you identify rules that are slow on your dataset so you can tune or exclude them (e.g. with `--rulefilter`).
+Use `--profile-rules` to measure how long each rule takes to execute. Files are processed sequentially while profiling, so timings are comparable; expect a run over many files to take longer than usual. After the run, Zircolite prints a **Rule Performance** section with a table of rules sorted by elapsed time (slowest first), plus total rule execution time. This helps you identify rules that are slow on your dataset so you can tune or exclude them (e.g. with `--rulefilter`).
 
 ```shell
 python3 zircolite.py --evtx logs/ --ruleset rules/rules_windows_merged.json --profile-rules
@@ -502,6 +518,10 @@ Use `--strict` to abort on the first parsing error instead, which is useful when
 ```shell
 python3 zircolite.py --evtx ../Logs --ruleset rules/rules_windows_merged.json --strict
 ```
+
+The run stops and exits `1`, whether the bad file was given on its own or found in a directory. Because aborting the whole run is the point, `--strict` forces sequential processing — over many files it is slower than a default run.
+
+Either way, a file Zircolite could not read in full is named on the console and is never removed by `--remove-events`, which only deletes inputs that were read successfully.
 
 ### XML Logs
 
@@ -1044,8 +1064,8 @@ Zircolite can skip events before processing based on **Channel** and **EventID**
 **How it works:**
 
 - When rules are loaded, Zircolite collects all unique `Channel` and `EventID` values from the ruleset (from each rule’s `channel` and `eventid` metadata).
-- Filtering is **enabled** only when the ruleset has at least one channel and one eventID **and** every rule has at least one channel and one eventID. If any rule has empty or missing channel/eventid (“any” log source), filtering is **disabled** so that rule still sees all events and alert counts stay consistent whether you run one rule or the full ruleset.
-- When enabled, an event is **kept** only if both its Channel is in the ruleset’s channel set and its EventID is in the ruleset’s eventID set; otherwise it is skipped before flattening and database insertion.
+- The two axes are decided **independently**. Channel filtering is enabled only when every rule constrains its channel; EventID filtering only when every rule constrains its EventID. A rule that names a channel but no EventID matches any EventID on that channel, so filtering on the other rules' EventIDs would drop events it should have seen — alert counts would then differ between a single-rule and a full-ruleset run.
+- When an axis is enabled, an event whose value is in none of the ruleset's values for that axis is skipped before flattening and database insertion. An event that carries no usable value for an enabled axis is kept.
 
 The filter supports multiple log formats through configurable field paths:
 
@@ -1060,17 +1080,22 @@ event_filter:
     - Event.System.EventID      # Standard EVTX
     - EventID                   # Pre-flattened
     - winlog.event_id           # Elastic Winlogbeat
+  # Windows-only by default. Set to true to filter every input format by
+  # Channel/EventID, including Linux, auditd and generic JSON sources.
+  filter_all_sources: false
 ```
 
 Disable with the `--no-event-filter` CLI option or set `enabled: false` in config.
 
-### Timestamp Auto-Detection
+### Timestamp Detection Configuration
 
 Zircolite automatically detects the timestamp field when the default (`SystemTime`) is not found:
 
 ```yaml
 timestamp_detection:
   auto_detect: true
+  # Field used when none of the detection_fields is present
+  default_field: SystemTime
   detection_fields:
     - SystemTime                # Windows EVTX default
     - UtcTime                   # Sysmon logs
@@ -1078,6 +1103,9 @@ timestamp_detection:
     - timestamp                 # Common generic name
     - _time                     # Splunk format
 ```
+
+A field set with `--timefield`, or with `processing.time_field` in a run
+configuration file, is never overridden by auto-detection.
 
 Explicitly specify a timestamp field:
 

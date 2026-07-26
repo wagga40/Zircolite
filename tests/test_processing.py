@@ -6,7 +6,7 @@ Covers:
 - LEVEL_PRIORITY constant
 - Factory helpers (create_zircolite_core, create_worker_core, create_extractor)
 - sort_key_severity helper
-- _write_parallel_results (binary JSON + CSV output)
+- _write_parallel_results (parallel CSV output)
 - Module-level imports / public API surface
 """
 
@@ -216,12 +216,12 @@ class TestHelpers:
     def test_unpack_streaming_result_int(self):
         assert _unpack_streaming_result(42) == (42, 0)
 
-    def testsort_key_severity_ordering(self):
+    def test_sort_key_severity_ordering(self):
         critical = {"rule_level": "critical", "count": 1}
         high = {"rule_level": "high", "count": 100}
         assert sort_key_severity(critical) < sort_key_severity(high)
 
-    def testsort_key_severity_count_descending(self):
+    def test_sort_key_severity_count_descending(self):
         a = {"rule_level": "high", "count": 50}
         b = {"rule_level": "high", "count": 10}
         assert sort_key_severity(a) < sort_key_severity(b)
@@ -237,33 +237,11 @@ class TestHelpers:
 # =============================================================================
 
 class TestWriteParallelResults:
-    """Tests for _write_parallel_results (binary JSON + CSV)."""
+    """Tests for _write_parallel_results, the parallel CSV output path.
 
-    def test_json_output_is_valid(self, dummy_ctx, tmp_path):
-        dummy_ctx.no_output = False
-        dummy_ctx.outfile = str(tmp_path / "results.json")
-
-        sample_results = [
-            {"title": "Rule A", "rule_level": "high", "count": 3, "matches": []},
-            {"title": "Rule B", "rule_level": "low", "count": 1, "matches": []},
-        ]
-        _write_parallel_results(dummy_ctx, sample_results)
-
-        with open(dummy_ctx.outfile, "rb") as f:
-            data = json.loads(f.read())
-        assert len(data) == 2
-        assert data[0]["title"] == "Rule A"
-
-    def test_json_output_binary_mode(self, dummy_ctx, tmp_path):
-        """Ensure output is written in binary mode (no BOM, valid UTF-8)."""
-        dummy_ctx.no_output = False
-        dummy_ctx.outfile = str(tmp_path / "results.json")
-
-        _write_parallel_results(dummy_ctx, [{"title": "Test", "count": 1, "matches": []}])
-
-        raw = Path(dummy_ctx.outfile).read_bytes()
-        assert raw.startswith(b"[")
-        assert raw.endswith(b"]")
+    JSON does not come through here: it streams out per file via
+    _IncrementalResultWriter, which has its own tests below.
+    """
 
     def test_csv_output_is_valid(self, dummy_ctx, tmp_path):
         dummy_ctx.no_output = False
@@ -285,18 +263,29 @@ class TestWriteParallelResults:
         assert "rule_title" in content
         assert "val1" in content
 
+    def test_csv_header_unions_every_rule_s_columns(self, dummy_ctx, tmp_path):
+        """A later rule's wider rows must not lose columns to the first one."""
+        dummy_ctx.no_output = False
+        dummy_ctx.csv_mode = True
+        dummy_ctx.outfile = str(tmp_path / "results.csv")
+
+        _write_parallel_results(dummy_ctx, [
+            {"title": "Narrow", "rule_level": "high", "count": 1,
+             "matches": [{"CommandLine": "a"}]},
+            {"title": "Wide", "rule_level": "low", "count": 1,
+             "matches": [{"CommandLine": "b", "User": "alice"}]},
+        ])
+
+        content = Path(dummy_ctx.outfile).read_text(encoding="utf-8")
+        assert "User" in content.splitlines()[0]
+        assert "alice" in content
+
     def test_no_output_flag_skips_write(self, dummy_ctx, tmp_path):
         dummy_ctx.no_output = True
-        dummy_ctx.outfile = str(tmp_path / "should_not_exist.json")
+        dummy_ctx.csv_mode = True
+        dummy_ctx.outfile = str(tmp_path / "should_not_exist.csv")
         _write_parallel_results(dummy_ctx, [{"title": "Rule A"}])
         assert not Path(dummy_ctx.outfile).exists()
-
-    def test_empty_results_writes_empty_array(self, dummy_ctx, tmp_path):
-        dummy_ctx.no_output = False
-        dummy_ctx.outfile = str(tmp_path / "empty.json")
-        _write_parallel_results(dummy_ctx, [])
-        raw = Path(dummy_ctx.outfile).read_bytes()
-        assert raw == b"[]"
 
 
 # =============================================================================
@@ -744,8 +733,11 @@ class TestProcessDbInputSkippedFiles:
         ctx = self._ctx(tmp_path, memory_tracker)
         args = Namespace(logs_encoding=None)
 
-        process_db_input(ctx, args, file_list=[bad1, bad2])
-        # No file was ever processed: nothing should have been written
+        # Nothing was analysed, so the run must fail rather than exit 0 with a
+        # summary pointing at an output file that was never written
+        with pytest.raises(SystemExit) as exc_info:
+            process_db_input(ctx, args, file_list=[bad1, bad2])
+        assert exc_info.value.code != 0
         assert not Path(ctx.outfile).exists()
 
     def test_missing_db_file_is_skipped_in_multi_file_mode(self, tmp_path, memory_tracker):
@@ -925,7 +917,7 @@ class TestDbInputDirectoryExpansion:
     """-D pointed at a directory used to fail while auto-detection coped."""
 
     def test_directory_expands_to_the_databases_inside(self, tmp_path, test_logger):
-        from zircolite.processing import _expand_db_path
+        from zircolite.processing import expand_db_path
 
         (tmp_path / "a.db").write_bytes(b"")
         (tmp_path / "sub").mkdir()
@@ -933,36 +925,42 @@ class TestDbInputDirectoryExpansion:
         (tmp_path / "notes.txt").write_text("ignore me")
 
         args = argparse.Namespace(fileext=None, no_recursion=False)
-        found = _expand_db_path(tmp_path, args, test_logger)
+        found = expand_db_path(tmp_path, args, test_logger)
 
         assert [p.name for p in found] == ["a.db", "b.sqlite"]
 
     def test_fileext_narrows_the_search(self, tmp_path, test_logger):
-        from zircolite.processing import _expand_db_path
+        from zircolite.processing import expand_db_path
 
         (tmp_path / "a.db").write_bytes(b"")
         (tmp_path / "b.sqlite").write_bytes(b"")
 
         args = argparse.Namespace(fileext="db", no_recursion=False)
-        found = _expand_db_path(tmp_path, args, test_logger)
+        found = expand_db_path(tmp_path, args, test_logger)
 
         assert [p.name for p in found] == ["a.db"]
 
     def test_a_plain_path_is_passed_through(self, tmp_path, test_logger):
-        from zircolite.processing import _expand_db_path
+        from zircolite.processing import expand_db_path
 
         db = tmp_path / "single.db"
         db.write_bytes(b"")
 
         args = argparse.Namespace(fileext=None, no_recursion=False)
-        assert _expand_db_path(db, args, test_logger) == [db]
+        assert expand_db_path(db, args, test_logger) == [db]
 
-    def test_empty_directory_warns(self, tmp_path):
+    def test_empty_directory_is_fatal(self, tmp_path):
+        """Finding no database is as fatal as being handed a missing one.
+
+        Returning [] left the run exiting 0 while the summary still advertised
+        an output file that was never written.
+        """
         from unittest.mock import MagicMock
-        from zircolite.processing import _expand_db_path
+        from zircolite.processing import expand_db_path
 
         logger = MagicMock()
         args = argparse.Namespace(fileext=None, no_recursion=False)
 
-        assert _expand_db_path(tmp_path, args, logger) == []
-        assert logger.warning.called
+        with pytest.raises(SystemExit) as exc_info:
+            expand_db_path(tmp_path, args, logger)
+        assert exc_info.value.code != 0

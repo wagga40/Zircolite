@@ -738,12 +738,25 @@ class TestCsvSanitisation:
     the writers in core.py and processing.py run every value through these.
     """
 
-    def test_newlines_are_stripped(self):
+    def test_newlines_become_spaces(self):
+        """Deleting them glued adjacent lines into tokens that never existed."""
         from zircolite.utils import sanitize_value_for_csv
 
-        assert sanitize_value_for_csv("a\nb") == "ab"
-        assert sanitize_value_for_csv("a\r\nb") == "ab"
-        assert sanitize_value_for_csv("a\rb") == "ab"
+        assert sanitize_value_for_csv("a\nb") == "a b"
+        assert sanitize_value_for_csv("a\r\nb") == "a b"
+        assert sanitize_value_for_csv("a\rb") == "a b"
+        assert sanitize_value_for_csv("Invoke-Expression\n$payload") == (
+            "Invoke-Expression $payload"
+        )
+
+    def test_formula_prefixes_are_neutralised(self):
+        """A logged string must not become live code in the analyst's spreadsheet."""
+        from zircolite.utils import sanitize_value_for_csv
+
+        assert sanitize_value_for_csv('=cmd|/c calc!A1') == "'=cmd|/c calc!A1"
+        assert sanitize_value_for_csv("+1+1") == "'+1+1"
+        assert sanitize_value_for_csv("-2+3") == "'-2+3"
+        assert sanitize_value_for_csv("@SUM(A1)") == "'@SUM(A1)"
 
     def test_none_becomes_empty_string(self):
         from zircolite.utils import sanitize_value_for_csv
@@ -768,7 +781,7 @@ class TestCsvSanitisation:
         row = {"a": "one\ntwo", "b": None, "c": 7, "d": "fine"}
         out = sanitize_row_for_csv(row)
 
-        assert out == {"a": "onetwo", "b": "", "c": "7", "d": "fine"}
+        assert out == {"a": "one two", "b": "", "c": "7", "d": "fine"}
         assert set(out) == set(row)
 
     def test_row_sanitisation_does_not_mutate_the_input(self):

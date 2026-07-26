@@ -16,6 +16,7 @@ import os
 import random
 import string
 import sys
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import (
     Any,
@@ -33,6 +34,64 @@ import psutil
 import yaml
 
 from .console import console, get_rich_logger
+
+
+# Above this, an epoch number is milliseconds rather than seconds (1973-03-03).
+_EPOCH_MS_THRESHOLD = 100_000_000_000
+
+
+def parse_timestamp(value: Any) -> Optional[datetime]:
+    """Parse a log timestamp into an aware UTC datetime, or None if it is not one.
+
+    Log producers do not agree on a spelling, and comparing the spellings instead
+    of the instants silently mis-filters: an epoch number sorts below every ISO
+    string, and a space separator sorts below a ``T``. So this accepts what they
+    actually emit -- epoch seconds or milliseconds, a trailing ``Z``, an explicit
+    offset, a space instead of ``T``, fractional seconds, a bare date -- and
+    returns one comparable type. Naive values are read as UTC, which is what
+    Windows and auditd both write.
+    """
+    if value is None or isinstance(value, bool):
+        return None
+
+    if isinstance(value, (int, float)):
+        seconds = value / 1000 if abs(value) >= _EPOCH_MS_THRESHOLD else value
+        try:
+            return datetime.fromtimestamp(seconds, timezone.utc)
+        except (OverflowError, OSError, ValueError):
+            return None
+
+    if not isinstance(value, str):
+        return None
+    text = value.strip()
+    if not text:
+        return None
+
+    # Only the two standard epoch widths: "20240615" is a date, not an instant
+    digits = text[1:] if text[0] == "-" else text
+    if digits.isdigit():
+        return parse_timestamp(int(text)) if len(digits) in (10, 13) else None
+
+    if text[-1] in "Zz":
+        text = text[:-1] + "+00:00"
+    if len(text) > 10 and text[10] == " ":
+        text = text[:10] + "T" + text[11:]
+    # Python 3.10's fromisoformat accepts only 3 or 6 fractional digits; Windows
+    # writes 7
+    dot = text.find(".")
+    if dot != -1:
+        end = dot + 1
+        while end < len(text) and text[end].isdigit():
+            end += 1
+        text = f"{text[:dot]}.{text[dot + 1:end][:6].ljust(6, '0')}{text[end:]}"
+
+    try:
+        parsed = datetime.fromisoformat(text)
+    except ValueError:
+        return None
+    if parsed.tzinfo is None:
+        return parsed.replace(tzinfo=timezone.utc)
+    return parsed.astimezone(timezone.utc)
 
 
 def load_field_mappings(
@@ -375,9 +434,24 @@ def sniff_csv_delimiter(sample: str, *, default: str = ",") -> str:
     return default
 
 
+# Spreadsheets treat a value starting with one of these as a formula, so an
+# attacker-controlled command line or filename becomes code in the report.
+_CSV_FORMULA_PREFIXES = ("=", "+", "-", "@", "\t", "\r")
+
+
 def sanitize_value_for_csv(value: Any) -> str:
-    """Normalize a value for safe CSV output (no newlines, None -> empty string)."""
-    return ("" if value is None else str(value)).replace("\n", "").replace("\r", "")
+    """Normalize a value for CSV output (None -> empty string).
+
+    Newlines become spaces rather than disappearing: deleting them glued the
+    adjacent lines of a multi-line PowerShell block or command line into tokens
+    that never existed in the log, breaking IOC searches over the report.
+    """
+    if value is None:
+        return ""
+    text = str(value).replace("\r\n", " ").replace("\n", " ").replace("\r", " ")
+    if text[:1] in _CSV_FORMULA_PREFIXES:
+        text = "'" + text
+    return text
 
 
 def sanitize_row_for_csv(row: Dict[str, Any]) -> Dict[str, str]:
@@ -549,7 +623,6 @@ def format_size(size: Union[int, float]) -> str:
 
 def analyze_files_and_recommend_mode(
     file_list: Sequence[Union[Path, str]],
-    logger: Optional[logging.Logger] = None,
 ) -> Tuple[str, str, Dict[str, Any]]:
     """
     Analyze files and available RAM to recommend optimal processing settings.
@@ -734,7 +807,6 @@ def print_mode_recommendation(
     recommended_mode: str,
     reason: str,
     stats: Dict[str, Any],
-    logger: Optional[logging.Logger],
     show_parallel: bool = True,
     forced_workers: Optional[int] = None,
 ) -> None:

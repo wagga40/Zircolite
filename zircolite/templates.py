@@ -145,8 +145,8 @@ class TemplateEngine:
         output_filename: str,
         data: List[Dict[str, Any]],
         append: Optional[bool] = None,
-    ) -> None:
-        """Use Jinja2 to output data in a specific format.
+    ) -> bool:
+        """Use Jinja2 to output data in a specific format. True when written.
 
         If ``append`` is ``None``, the engine-wide ``self.append`` setting is
         used. Pass ``True``/``False`` explicitly to override per-call.
@@ -161,18 +161,28 @@ class TemplateEngine:
             mode = 'a' if (self.append if append is None else append) else 'w'
             with open(output_filename, mode, encoding='utf-8') as tpl:
                 tpl.write(rendered)
+            return True
         except Exception as e:
-            self.logger.error("[red]    [-] Template error, activate debug mode to check for errors[/]")
-            self.logger.debug(f"    [-] {e}")
+            # The message has to name the cause: a pipeline that consumes the
+            # template output cannot re-run the whole analysis with --debug
+            self.logger.error(
+                f"[red]    [-] Template error writing '{output_filename}': {e}[/]"
+            )
+            return False
 
-    def run(self, data: List[Dict[str, Any]]) -> None:
-        """Run template generation for all configured templates."""
+    def run(self, data: List[Dict[str, Any]]) -> bool:
+        """Run template generation for all configured templates. True if all wrote."""
+        succeeded = True
         for template_spec, output_spec in zip(self.template, self.template_output):
             mode_label = "appending" if self.append else "writing"
             self.logger.info(
                 f'[+] Applying template "{template_spec[0]}", {mode_label} to : {output_spec[0]}'
             )
-            self.generate_from_template(template_spec[0], output_spec[0], data)
+            if not self.generate_from_template(
+                template_spec[0], output_spec[0], data
+            ):
+                succeeded = False
+        return succeeded
 
 
 class ZircoliteGuiGenerator:

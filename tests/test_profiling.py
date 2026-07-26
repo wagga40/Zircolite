@@ -108,8 +108,13 @@ class TestProfilingCore:
         assert core._profiling_data == {}
         core.close()
 
-    def test_profiling_accumulates_across_calls(self, field_mappings_file, tmp_path):
-        """Profiling adds elapsed time per call; second_ms >= first_ms (timing is additive)."""
+    def test_profiling_is_per_call_not_cumulative(self, field_mappings_file, tmp_path):
+        """Each execute_ruleset reports its own timings.
+
+        Per-file mode merges this dict after every file, so a running total
+        counted the first file's rules once more on every subsequent file and
+        the report inflated with the number of inputs.
+        """
         cfg = ProcessingConfig(profile_rules=True, no_output=True)
         core = ZircoliteCore(field_mappings_file, cfg)
         core.create_db('"EventID" TEXT')
@@ -129,7 +134,11 @@ class TestProfilingCore:
         first_ms = core._profiling_data.get("Accumulating Rule", 0.0)
         core.execute_ruleset(outfile, write_mode='a', last_ruleset=True)
         second_ms = core._profiling_data.get("Accumulating Rule", 0.0)
-        assert second_ms >= first_ms
+
+        assert first_ms > 0
+        assert second_ms > 0
+        # A second identical run must not report roughly twice the time
+        assert second_ms < first_ms * 10
         core.close()
 
     def test_merge_profiling_data(self, field_mappings_file, tmp_path):

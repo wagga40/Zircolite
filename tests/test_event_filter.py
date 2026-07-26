@@ -47,7 +47,7 @@ class TestEventFilterInit:
         assert 4624 in event_filter.eventids
 
     def test_init_with_channel_only(self):
-        """Test initialization with rules containing only channel."""
+        """Every rule constrains the channel, so that axis filters; eventID does not."""
         rulesets = [
             {
                 "title": "Test Rule",
@@ -56,14 +56,20 @@ class TestEventFilterInit:
             }
         ]
         event_filter = EventFilter(rulesets)
-        
-        # Filter not enabled (need BOTH channels AND eventIDs)
-        assert not event_filter.is_enabled
+
+        assert event_filter.is_enabled
+        assert event_filter._channel_filter
+        assert not event_filter._eventid_filter
         assert len(event_filter.channels) == 1
         assert len(event_filter.eventids) == 0
+        # The rule matches any EventID on its channel, so none may be discarded.
+        assert event_filter.should_process_event(
+            "Microsoft-Windows-Sysmon/Operational", 4104
+        )
+        assert not event_filter.should_process_event("Security", 4104)
 
     def test_init_with_eventid_only(self):
-        """Test initialization with rules containing only eventID."""
+        """Every rule constrains the eventID, so that axis filters; channel does not."""
         rulesets = [
             {
                 "title": "Test Rule",
@@ -72,11 +78,44 @@ class TestEventFilterInit:
             }
         ]
         event_filter = EventFilter(rulesets)
-        
-        # Filter not enabled (need BOTH channels AND eventIDs)
-        assert not event_filter.is_enabled
+
+        assert event_filter.is_enabled
+        assert not event_filter._channel_filter
+        assert event_filter._eventid_filter
         assert len(event_filter.channels) == 0
         assert len(event_filter.eventids) == 3
+        assert event_filter.should_process_event("Any-Channel", 1)
+        assert not event_filter.should_process_event("Any-Channel", 4624)
+
+    def test_channel_only_rule_does_not_lose_its_events(self):
+        """Regression: a channel-only rule must not be filtered by other rules' eventIDs.
+
+        Before, one global "has filter data" flag meant a ruleset mixing a fully
+        constrained rule with a channel-only rule judged the latter's events
+        against the former's EventIDs, silently dropping events it would match.
+        """
+        rulesets = [
+            {
+                "title": "Fully constrained",
+                "channel": ["Microsoft-Windows-Sysmon/Operational"],
+                "eventid": [1],
+            },
+            {
+                "title": "Channel only",
+                "channel": ["Microsoft-Windows-PowerShell/Operational"],
+                "eventid": [],
+            },
+        ]
+        event_filter = EventFilter(rulesets)
+
+        assert event_filter._channel_filter
+        assert not event_filter._eventid_filter
+        # 4104 belongs to no rule's eventid list, but the channel-only rule wants it.
+        assert event_filter.should_process_event(
+            "Microsoft-Windows-PowerShell/Operational", 4104
+        )
+        # A channel no rule mentions is still discarded.
+        assert not event_filter.should_process_event("Security", 4104)
 
     def test_init_mixed_rules(self):
         """Test that filtering is disabled when any rule has no log source (issue #117)."""
@@ -403,7 +442,7 @@ class TestStreamingProcessorWithFilter:
         
         # Stream events and count
         processed_count = 0
-        for event in processor.stream_json_events(str(test_file), json_array=False):
+        for event in processor.stream_json_events(str(test_file)):
             processed_count += 1
         
         # Should have processed 2 events and filtered 2
@@ -436,7 +475,7 @@ class TestStreamingProcessorWithFilter:
         
         # Stream events and count
         processed_count = 0
-        for event in processor.stream_json_events(str(test_file), json_array=False):
+        for event in processor.stream_json_events(str(test_file)):
             processed_count += 1
         
         # Should have processed all 3 events
@@ -479,7 +518,7 @@ class TestConfigurableFieldPaths:
             event_filter=sysmon_filter
         )
         
-        processed_count = sum(1 for _ in processor.stream_json_events(str(test_file), json_array=False))
+        processed_count = sum(1 for _ in processor.stream_json_events(str(test_file)))
         assert processed_count == 1
 
     def test_extract_from_flat_structure(self, sysmon_filter, tmp_path):
@@ -502,7 +541,7 @@ class TestConfigurableFieldPaths:
             event_filter=sysmon_filter
         )
         
-        processed_count = sum(1 for _ in processor.stream_json_events(str(test_file), json_array=False))
+        processed_count = sum(1 for _ in processor.stream_json_events(str(test_file)))
         assert processed_count == 1
 
     def test_extract_from_system_top_level(self, sysmon_filter, tmp_path):
@@ -525,7 +564,7 @@ class TestConfigurableFieldPaths:
             event_filter=sysmon_filter
         )
         
-        processed_count = sum(1 for _ in processor.stream_json_events(str(test_file), json_array=False))
+        processed_count = sum(1 for _ in processor.stream_json_events(str(test_file)))
         assert processed_count == 1
 
     def test_extract_eventid_with_text_attribute(self, sysmon_filter, tmp_path):
@@ -548,7 +587,7 @@ class TestConfigurableFieldPaths:
             event_filter=sysmon_filter
         )
         
-        processed_count = sum(1 for _ in processor.stream_json_events(str(test_file), json_array=False))
+        processed_count = sum(1 for _ in processor.stream_json_events(str(test_file)))
         assert processed_count == 1
 
     def test_extract_lowercase_fields(self, sysmon_filter, tmp_path):
@@ -571,7 +610,7 @@ class TestConfigurableFieldPaths:
             event_filter=sysmon_filter
         )
         
-        processed_count = sum(1 for _ in processor.stream_json_events(str(test_file), json_array=False))
+        processed_count = sum(1 for _ in processor.stream_json_events(str(test_file)))
         assert processed_count == 1
 
 
@@ -604,7 +643,7 @@ class TestTimestampAutoDetection:
             event_filter=None
         )
         
-        processed_count = sum(1 for _ in processor.stream_json_events(str(test_file), json_array=False))
+        processed_count = sum(1 for _ in processor.stream_json_events(str(test_file)))
         assert processed_count == 1
         # With no explicit field, the config's timestamp_detection.default_field
         # seeds the processor's time field
@@ -635,7 +674,7 @@ class TestTimestampAutoDetection:
             event_filter=None
         )
         
-        processed_count = sum(1 for _ in processor.stream_json_events(str(test_file), json_array=False))
+        processed_count = sum(1 for _ in processor.stream_json_events(str(test_file)))
         assert processed_count == 1
         # After flattening, @timestamp becomes "timestamp" (@ removed)
         # The detection should find a valid timestamp field
@@ -666,7 +705,7 @@ class TestTimestampAutoDetection:
             event_filter=None
         )
         
-        processed_count = sum(1 for _ in processor.stream_json_events(str(test_file), json_array=False))
+        processed_count = sum(1 for _ in processor.stream_json_events(str(test_file)))
         assert processed_count == 1
         assert processor._detected_time_field == "UtcTime"
 
@@ -697,7 +736,7 @@ class TestTimestampAutoDetection:
             event_filter=None
         )
         
-        processed_events = list(processor.stream_json_events(str(test_file), json_array=False))
+        processed_events = list(processor.stream_json_events(str(test_file)))
         assert len(processed_events) == 1
         assert processed_events[0].get("EventID") == 2
 
@@ -774,7 +813,7 @@ class TestEventFilterConfigKeys:
             event_filter=self._filter(),
         )
         assert processor._filtering_enabled is False
-        count = sum(1 for _ in processor.stream_json_events(str(test_file), json_array=False))
+        count = sum(1 for _ in processor.stream_json_events(str(test_file)))
         assert count == 1
 
     def test_filter_all_sources_false_skips_non_windows_input(self, tmp_path):

@@ -236,6 +236,45 @@ class TestZircoliteCoreDatabase:
         
         zircore.close()
     
+    def test_rule_still_matches_when_one_referenced_field_is_absent(
+        self, field_mappings_file, test_logger
+    ):
+        """A field this dataset never produced must not disable the whole rule.
+
+        SQLite resolves column names when it prepares the statement, so the
+        entire query used to fail and the rule reported no match -- including the
+        OR branch on a field that *is* present.
+        """
+        zircore = ZircoliteCore(config=field_mappings_file, logger=test_logger)
+        zircore.execute_query(
+            "CREATE TABLE logs (row_id INTEGER PRIMARY KEY, CommandLine TEXT)"
+        )
+        zircore.insert_data_to_db({"CommandLine": "mimikatz.exe"})
+
+        results = zircore.execute_select_query(
+            "SELECT * FROM logs WHERE CommandLine LIKE '%mimikatz%' "
+            "OR OriginalFileName LIKE '%mimikatz%'"
+        )
+        assert len(results) == 1
+        assert not zircore.rules_in_error
+
+        zircore.close()
+
+    def test_unparsable_rule_sql_is_reported_not_swallowed(
+        self, field_mappings_file, test_logger
+    ):
+        """Broken SQL must be surfaced: silence looks exactly like 'no detections'."""
+        zircore = ZircoliteCore(config=field_mappings_file, logger=test_logger)
+        zircore.execute_query("CREATE TABLE logs (row_id INTEGER PRIMARY KEY, A TEXT)")
+
+        results = zircore.execute_select_query(
+            "SELECT * FROM logs WHERE A REGEXP ']'[", rule_title="Broken Rule"
+        )
+        assert results == []
+        assert "Broken Rule" in zircore.rules_in_error
+
+        zircore.close()
+
     def test_insert_data_to_db_multiple_rows(self, field_mappings_file, test_logger):
         """Test inserting multiple data rows individually."""
         proc_config = ProcessingConfig(disable_progress=True)
@@ -855,10 +894,15 @@ class TestZircoliteCoreRulesetExecution:
         assert "rule_title" in content
         zircore.close()
 
-    def test_execute_ruleset_csv_extra_keys_from_later_rules_ignored(
+    def test_execute_ruleset_csv_header_covers_every_event_column(
         self, field_mappings_file, tmp_path, test_logger
     ):
-        """CSV DictWriter must not raise when a later rule returns wider rows than the first."""
+        """The CSV header comes from the schema, so no later row loses fields.
+
+        It used to be frozen from the first matching row, and rows carry only
+        their non-NULL fields -- so whichever detection was written first
+        decided which columns the whole report kept.
+        """
         proc_config = ProcessingConfig(csv_mode=True, disable_progress=True)
         zircore = ZircoliteCore(
             config=field_mappings_file,
@@ -906,7 +950,12 @@ class TestZircoliteCoreRulesetExecution:
         assert Path(output_file).exists()
         with open(output_file, encoding="utf-8") as f:
             header = f.readline()
-        assert "PrivilegeList" not in header
+            rows = f.read()
+        # The narrow rule is written first, but the wide rule's evidence survives
+        assert "PrivilegeList" in header
+        assert "CommandLine" in header
+        assert "SeSecurityPrivilege" in rows
+        assert "row_id" not in header
         zircore.close()
 
     def test_execute_ruleset_progress_callback_invoked(

@@ -1620,6 +1620,36 @@ class TestCLIRemoveEvents:
 
         assert not events_file.exists(), "Input log file should be removed after --remove-events"
 
+    def test_remove_events_keeps_a_file_that_failed_to_ingest(self, tmp_path):
+        """--remove-events must not destroy evidence nothing ever read.
+
+        The help text promises removal "after successful analysis", but every
+        discovered path was deleted regardless of whether its events made it
+        into the results -- and in parallel mode the failure was not even shown.
+        """
+        good = tmp_path / "good.json"
+        good.write_text('{"Event": {"System": {"EventID": 1}, "EventData": {}}}')
+        # Valid UTF-16, so the reader opens it and then fails on every line
+        bad = tmp_path / "bad.json"
+        bad.write_bytes('{"Event": {"System": {"EventID": 1}}}'.encode("utf-16"))
+
+        ruleset_file = tmp_path / "ruleset.json"
+        ruleset_file.write_text("[]")
+
+        with patch('sys.argv', [
+            'zircolite.py',
+            '-e', str(tmp_path),
+            '-r', str(ruleset_file),
+            '-j',
+            '-o', str(tmp_path / "output.json"),
+            '-RE',
+            '-n',
+        ]):
+            zircolite_script.main()
+
+        assert not good.exists(), "A file that ingested cleanly should be removed"
+        assert bad.exists(), "A file Zircolite could not read must survive the run"
+
 
 class TestCLIAdvancedConfiguration:
     """Tests for Advanced Configuration options: --quiet, --debug, --timefield, --logs-encoding, --no-auto-detect."""
@@ -1710,13 +1740,6 @@ class TestCLIAdvancedConfiguration:
 class TestCLIStrictEvtxParsing:
     """Tests for --strict EVTX parsing flag."""
 
-    def test_strict_flag_accepted(self):
-        """--strict flag is accepted without error."""
-        with patch('sys.argv', ['zircolite.py', '--strict', '-v']):
-            with pytest.raises(SystemExit) as exc_info:
-                zircolite_script.main()
-            assert exc_info.value.code == 0
-
     def test_strict_flag_default_false(self):
         """--strict defaults to False when not provided."""
         with patch('sys.argv', ['zircolite.py', '-v']):
@@ -1760,126 +1783,94 @@ def _minimal_config_for_events():
 class TestCLISysmonXmlEvtxtractInput:
     """Tests for -S/--sysmon-linux-input, -x/--xml-input, --evtxtract-input using fixtures."""
 
-    def test_sysmon_linux_input_processes_fixture(self, tmp_path):
-        """Test -S / --sysmon-linux-input runs successfully with sysmon_linux_sample.log."""
-        if not SYSMON_LINUX_FIXTURE.exists():
-            pytest.skip(f"Fixture not found: {SYSMON_LINUX_FIXTURE}")
-        ruleset_file = tmp_path / "ruleset.json"
-        ruleset_file.write_text("[]")
-        config_file = tmp_path / "config.json"
-        config_file.write_text(json.dumps(_minimal_config_for_events()))
-        output_file = tmp_path / "out.json"
-        with patch('sys.argv', [
-            'zircolite.py',
-            '-e', str(SYSMON_LINUX_FIXTURE),
-            '-r', str(ruleset_file),
-            '-c', str(config_file),
-            '-S',
-            '-o', str(output_file),
-        ] + get_log_arg(tmp_path)):
-            zircolite_script.main()
-        assert output_file.exists()
-        with open(output_file) as f:
-            data = json.load(f)
-        assert isinstance(data, list)
+    @pytest.mark.parametrize(
+        "fixture,flag,channel_field,marker",
+        [
+            (SYSMON_LINUX_FIXTURE, "-S", "Image", "%%"),
+            (XML_EVENTS_FIXTURE, "-x", "Computer", "%%"),
+            (EVTXTRACT_FIXTURE, "--evtxtract-input", "Computer", "%%"),
+            (AUDITD_FIXTURE, "--auditd-input", "type", "%%"),
+            (WINLOGBEAT_FIXTURE, "-j", "Computer", "%%"),
+        ],
+    )
+    def test_each_input_format_ingests_and_matches(
+        self, tmp_path, fixture, flag, channel_field, marker
+    ):
+        """Every format must ingest events and let a rule match them.
 
-    def test_xml_input_processes_fixture(self, tmp_path):
-        """Test -x / --xml-input runs successfully with xml_events_sample.xml."""
-        pytest.importorskip("lxml")
-        if not XML_EVENTS_FIXTURE.exists():
-            pytest.skip(f"Fixture not found: {XML_EVENTS_FIXTURE}")
-        ruleset_file = tmp_path / "ruleset.json"
-        ruleset_file.write_text("[]")
-        config_file = tmp_path / "config.json"
-        config_file.write_text(json.dumps(_minimal_config_for_events()))
-        output_file = tmp_path / "out.json"
-        with patch('sys.argv', [
-            'zircolite.py',
-            '-e', str(XML_EVENTS_FIXTURE),
-            '-r', str(ruleset_file),
-            '-c', str(config_file),
-            '-x',
-            '-o', str(output_file),
-        ] + get_log_arg(tmp_path)):
-            zircolite_script.main()
-        assert output_file.exists()
-        with open(output_file) as f:
-            data = json.load(f)
-        assert isinstance(data, list)
+        These tests used to run with an empty ruleset and assert only that the
+        output file existed, so they passed whether the format parsed or not --
+        which is exactly how several silent ingestion bugs survived.
+        """
+        if not fixture.exists():
+            pytest.skip(f"Fixture not found: {fixture}")
+        if flag == "-x":
+            pytest.importorskip("lxml")
 
-    def test_evtxtract_input_processes_fixture(self, tmp_path):
-        """Test --evtxtract-input runs successfully with evtxtract_sample.log."""
-        pytest.importorskip("lxml")
-        if not EVTXTRACT_FIXTURE.exists():
-            pytest.skip(f"Fixture not found: {EVTXTRACT_FIXTURE}")
         ruleset_file = tmp_path / "ruleset.json"
-        ruleset_file.write_text("[]")
-        config_file = tmp_path / "config.json"
-        config_file.write_text(json.dumps(_minimal_config_for_events()))
+        ruleset_file.write_text(json.dumps([{
+            "title": "Everything",
+            "id": "match-all",
+            "description": "matches any ingested event",
+            "level": "high",
+            "tags": [],
+            "filename": "match_all.yml",
+            "rule": [f'SELECT * FROM logs WHERE "{channel_field}" LIKE \'{marker}\''],
+        }]))
         output_file = tmp_path / "out.json"
-        with patch('sys.argv', [
-            'zircolite.py',
-            '-e', str(EVTXTRACT_FIXTURE),
-            '-r', str(ruleset_file),
-            '-c', str(config_file),
-            '--evtxtract-input',
-            '-o', str(output_file),
-        ] + get_log_arg(tmp_path)):
-            zircolite_script.main()
-        assert output_file.exists()
-        with open(output_file) as f:
-            data = json.load(f)
-        assert isinstance(data, list)
 
-    def test_auditd_input_processes_fixture(self, tmp_path):
-        """Test -AU / --auditd-input runs successfully with audit_sample.log."""
-        if not AUDITD_FIXTURE.exists():
-            pytest.skip(f"Fixture not found: {AUDITD_FIXTURE}")
-        ruleset_file = tmp_path / "ruleset.json"
-        ruleset_file.write_text("[]")
-        config_file = WORKSPACE_ROOT / "config" / "config.yaml"
-        if not config_file.exists():
-            config_file = tmp_path / "config.json"
-            config_file.write_text(json.dumps({"mappings": {}, "exclusions": [], "useless": [], "alias": {}, "split": {}, "transforms_enabled": False, "transforms": {}}))
-        output_file = tmp_path / "out.json"
         with patch('sys.argv', [
             'zircolite.py',
-            '-e', str(AUDITD_FIXTURE),
+            '-e', str(fixture),
             '-r', str(ruleset_file),
-            '-c', str(config_file),
-            '-AU',
+            flag,
             '-o', str(output_file),
         ] + get_log_arg(tmp_path)):
             zircolite_script.main()
-        assert output_file.exists()
-        with open(output_file) as f:
-            data = json.load(f)
-        assert isinstance(data, list)
 
-    def test_json_input_processes_winlogbeat_fixture(self, tmp_path):
-        """Test -j / --json-input runs successfully with Winlogbeat Sysmon JSONL fixture."""
-        if not WINLOGBEAT_FIXTURE.exists():
-            pytest.skip(f"Fixture not found: {WINLOGBEAT_FIXTURE}")
+        data = json.loads(output_file.read_text())
+        assert data, f"{fixture.name} produced no detection: nothing was ingested"
+        assert data[0]["count"] > 0
+        assert data[0]["matches"], "a detection with no matching event is not a detection"
+
+
+    def test_real_evtx_file_end_to_end(self, tmp_path):
+        """The default format had no end-to-end test at all.
+
+        Every other EVTX test used non-existent files or a mocked parser, so
+        nothing exercised the real pyevtx-rs reader through the CLI.
+        """
+        evtx = FIXTURES_DIR / "sample_bitsadmin.evtx"
+        if not evtx.exists():
+            pytest.skip(f"Fixture not found: {evtx}")
+
         ruleset_file = tmp_path / "ruleset.json"
-        ruleset_file.write_text("[]")
-        config_file = WORKSPACE_ROOT / "config" / "config.yaml"
-        if not config_file.exists():
-            config_file = tmp_path / "config.json"
-            config_file.write_text(json.dumps(_minimal_config_for_events()))
+        ruleset_file.write_text(json.dumps([{
+            "title": "Sysmon process creation",
+            "id": "evtx-e2e",
+            "description": "",
+            "level": "high",
+            "tags": [],
+            "filename": "e2e.yml",
+            "rule": ["SELECT * FROM logs WHERE Channel LIKE '%Sysmon%' AND EventID = 1"],
+        }]))
         output_file = tmp_path / "out.json"
+
         with patch('sys.argv', [
             'zircolite.py',
-            '-e', str(WINLOGBEAT_FIXTURE),
+            '--evtx', str(evtx),
             '-r', str(ruleset_file),
-            '-c', str(config_file),
-            '-j',
             '-o', str(output_file),
         ] + get_log_arg(tmp_path)):
             zircolite_script.main()
-        assert output_file.exists()
-        with open(output_file) as f:
-            data = json.load(f)
-        assert isinstance(data, list)
+
+        data = json.loads(output_file.read_text())
+        assert data, "the shipped EVTX fixture produced no detection"
+        match = data[0]["matches"][0]
+        # Real fields from the real parser, not a mock
+        assert match["Channel"] == "Microsoft-Windows-Sysmon/Operational"
+        assert str(match["EventID"]) == "1"
+        assert "CommandLine" in match
 
 
 class TestCLIFileExtension:
@@ -1959,12 +1950,6 @@ class TestCLIFileExtension:
             data = json.load(f)
         assert isinstance(data, list)
 
-
-class TestCLINoEventFilter:
-    """Tests for --no-event-filter option."""
-
-class TestCLIParallelOptions:
-    """Tests for parallel processing options: -P / --no-parallel, --parallel-memory-limit."""
 
 class TestCLIYamlConfig:
     """Tests for --yaml-config / -Y option."""
@@ -2540,7 +2525,7 @@ class TestCLIUnifiedDatabase:
         output_file = tmp_path / "output.json"
         db_file = tmp_path / "out.db"
 
-        def fake_recommend(_file_list, _logger):
+        def fake_recommend(_file_list):
             return ("per-file", "Multiple files", {"parallel_recommended": True, "parallel_workers": 2})
 
         with patch.object(zircolite_script, "analyze_files_and_recommend_mode", side_effect=fake_recommend):

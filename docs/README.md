@@ -17,7 +17,7 @@ Documentation for **Zircolite 3.8.0**. Zircolite is a standalone SIGMA-based det
 - **Multiple Input Formats**: Supports EVTX, JSON Lines, JSON Arrays, CSV, XML, Auditd, and Sysmon for Linux logs.
 - **Automatic Log Type Detection**: Automatically identifies log formats (EVTX, Windows JSON/XML, Sysmon, Auditd, ECS, CSV, etc.) and timestamp fields using magic bytes, content analysis, and regex-based fallback -- reducing the need for explicit CLI flags.
 - **Parallel Processing**: Automatic parallel file processing. Worker count is calculated based on available RAM, CPU cores, and file sizes.
-- **Streaming Mode**: Single-pass event processing (enabled by default) that combines extraction, flattening, and database insertion.
+- **Single-pass processing**: extraction, flattening and database insertion happen in one streaming pass — there is no alternative pipeline to select.
 - **YAML Configuration**: Support for YAML configuration files for complex analysis workflows.
 - **SIGMA Backend**: Based on a SQLite backend for SIGMA rules.
 - **Native Sigma Support**: Directly use native Sigma rules (YAML) via pySigma conversion.
@@ -55,5 +55,5 @@ The `Taskfile.yml` in the repository defines these production tasks. Development
 ### Documentation Contents
 
 - [Usage](Usage.md) - Installation, first run, basic usage, and input formats
-- [Advanced](Advanced.md) - Working with large datasets, streaming mode, parallel processing, filtering, templating, and the Mini-GUI
+- [Advanced](Advanced.md) - Working with large datasets, the streaming pipeline, parallel processing, filtering, templating, and the Mini-GUI
 - [Internals](Internals.md) - Architecture and project structure

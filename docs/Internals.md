@@ -349,26 +349,13 @@ Transforms use **RestrictedPython** for safe, sandboxed execution of custom Pyth
     └── utils.py            # Utility functions, MemoryTracker, heuristics
 ```
 
-### Package Modules
+### Why the format registry matters
 
-The `zircolite/` package contains modular implementations of all core components:
-
-- **`config.py`**: Contains dataclasses for configuration (`ProcessingConfig`, `ExtractorConfig`, `RulesetConfig`, etc.).
-- **`config_loader.py`**: Contains `ConfigLoader` for loading and validating YAML configuration files.
-- **`formats.py`**: The `INPUT_FORMATS` registry — one row per input format holding its CLI flag, YAML `input.format` value, default file extension, streaming generator and extractor requirement. The CLI, the YAML loader, the streaming dispatcher and `create_extractor` all resolve formats through it, so adding a format means adding a row rather than editing eight switches.
-- **`console.py`**: Helper functions and renderables for Rich-based terminal output: the shared `console` instance, styled messages, detection results tables (`build_detection_table`), MITRE ATT&CK coverage panels (`build_attack_summary`), terminal hyperlinks (`make_file_link`), file tree views (`build_file_tree`), severity ordering (`LEVEL_PRIORITY`), `DetectionStats`, and a global quiet mode (`set_quiet_mode`, `is_quiet`). Progress bars and live detection counters are constructed inline by their owners in `core.py` and `processing.py`.
-- **`core.py`**: Contains `ZircoliteCore`, the main detection engine managing SQLite operations and rule execution. The `execute_ruleset` method accepts a `show_table` parameter to control detection table display (used to suppress per-worker output in parallel mode).
-- **`detector.py`**: Contains `LogTypeDetector` and `DetectionResult` for automatic log format, log source, and timestamp detection via magic bytes, content analysis, and regex fallback.
-- **`streaming.py`**: Contains `StreamingEventProcessor` for efficient single-pass event processing (extraction, flattening, and DB insertion in one pass).
-- **`extractor.py`**: Contains `EvtxExtractor`, which converts Auditd lines, Sysmon for Linux lines and XML elements into event dictionaries for the streaming processor.
-- **`parallel.py`**: Contains `MemoryAwareParallelProcessor` and `ParallelConfig` for memory-aware parallel file processing.
-- **`processing.py`**: Coordinates processing modes (per-file, unified-db, parallel workers), result aggregation, and output writing.
-- **`rules.py`**: Contains `RulesetHandler` and `RulesUpdater` for rule management.
-- **`templates.py`**: Contains `TemplateEngine` and `ZircoliteGuiGenerator` for output generation.
-- **`utils.py`**: Contains utility functions (`init_logger`, file filters), `MemoryTracker`, and workload analysis heuristics (`analyze_files_and_recommend_mode`).
-- **`run_config.py`**: One-pass resolution of CLI arguments against a YAML configuration file. The `SETTINGS` table names every option, its YAML key, its default and how the two combine.
-- **`shutdown.py`**: Graceful shutdown on SIGINT.
-- **`attack.py`**: MITRE ATT&CK technique and tactic extraction from Sigma tags.
+`formats.py` holds one row per input format: its CLI flag, YAML `input.format`
+value, default file extension, default encoding, streaming generator and
+extractor requirement. The CLI, the YAML loader, the streaming dispatcher and
+`create_extractor` all resolve formats through it, so adding a format means
+adding a row rather than editing eight switch statements.
 
 ## SQLite Optimizations
 
@@ -407,34 +394,11 @@ This allows Sigma rules that use regex matching to work correctly.
 ## Memory Management
 
 - **MemoryTracker** class samples memory usage at key points during execution
-- Uses `psutil` if available, falls back to `resource` module on Unix
+- Uses `psutil`, which is a required dependency
 - Reports peak and average memory usage at the end of execution
 - Per-file processing ensures databases are released after processing
 
 ## Dependencies
 
-### Required (requirements.txt)
-- `orjson` - Fast JSON parsing/serialization
-- `xxhash` - Fast hashing for log line identification
-- `rich` - Styled terminal output with colors, progress bars, tables, and formatted text
-- `RestrictedPython` - Safe execution of field transforms
-- `requests` - For rule updates
-- `pySigma` and related packages - For native Sigma rule conversion
-- `evtx` (pyevtx-rs) - For EVTX file parsing
-- `jinja2` - For templating
-- `lxml` - For XML input support
-- `psutil` - For memory tracking and parallel processing
-- `pyyaml` - For YAML configuration file parsing
-- `chardet` - Encoding detection, and available to sandboxed transforms
-- `rich-argparse` - Coloured `--help` output
-- `urllib3` - HTTP transport for rule updates
-
-### Optional
-
-- `py7zr` - Reading `.7z` archives; the other archive formats use the standard library
-
-Install the required set with:
-
-```shell
-pip3 install -r requirements.txt
-```
+See [Dependencies](Usage.md#dependencies) in the usage guide for the full list
+and installation instructions.

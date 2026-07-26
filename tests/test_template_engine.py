@@ -760,14 +760,26 @@ Techniques: {{ elem.tags | extract_attack_techniques | join(',') }}
         layer = json.loads(output_file.read_text())
         assert layer["techniques"] == []
 
-    def test_generate_from_template_missing_file_logs_error(self, tmp_path, sample_detection_results):
-        """When template file is missing, error and debug are logged."""
+    def test_generate_from_template_reports_the_real_error(self, tmp_path, sample_detection_results):
+        """A failure must return False and name the cause, not just 'template error'.
+
+        The generic message sent the real exception to debug only, so a pipeline
+        whose export silently produced nothing had to re-run the whole analysis
+        with --debug to find out why.
+        """
         mock_logger = MagicMock()
         output_file = str(tmp_path / "out.txt")
         engine = TemplateEngine(logger=mock_logger)
-        engine.generate_from_template("/nonexistent/template.tmpl", output_file, sample_detection_results)
+
+        written = engine.generate_from_template(
+            "/nonexistent/template.tmpl", output_file, sample_detection_results
+        )
+
+        assert written is False
         mock_logger.error.assert_called_once()
-        mock_logger.debug.assert_called_once()
+        message = mock_logger.error.call_args[0][0]
+        assert "out.txt" in message
+        assert "No such file" in message
 
     def test_generate_from_template_overwrites_existing(self, tmp_path, sample_detection_results):
         """Template output should overwrite (not append to) existing files."""
