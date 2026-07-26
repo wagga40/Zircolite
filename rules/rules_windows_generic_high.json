@@ -9085,7 +9085,7 @@
         ],
         "level": "high",
         "rule": [
-            "SELECT * FROM logs WHERE Channel='Security' AND (EventID=4688 AND (NewProcessName LIKE '%\\\\wsass.exe' ESCAPE '\\' OR Hashes LIKE '%IMPHASH=32F5095C9BBDCACF28FD4060EB4DFC42%' ESCAPE '\\' OR CommandLine REGEXP '(?i)\\.exe[\\\"\\']?\\s+[^\\\"]{0,64}werfaultsecure\\.exe[\\\"\\']?\\s+\\d{2,10}'))"
+            "SELECT * FROM logs WHERE Channel='Security' AND (EventID=4688 AND (NewProcessName LIKE '%\\\\wsass.exe' ESCAPE '\\' OR Hashes LIKE '%IMPHASH=32F5095C9BBDCACF28FD4060EB4DFC42%' ESCAPE '\\' OR CommandLine REGEXP '(?i)\\.exe[\\\"\\'']?\\s+[^\\\"]{0,64}werfaultsecure\\.exe[\\\"\\'']?\\s+\\d{2,10}'))"
         ],
         "filename": "",
         "channel": [
@@ -25874,7 +25874,7 @@
         ],
         "level": "high",
         "rule": [
-            "SELECT * FROM logs WHERE Channel='Security' AND (EventID=4688 AND CommandLine REGEXP '\\\\[a-zA-Z0-9]{1,32}\\.[a-zA-Z0-9]{1,6}\\.[ \"']{1}')"
+            "SELECT * FROM logs WHERE Channel='Security' AND (EventID=4688 AND CommandLine REGEXP '\\\\[a-zA-Z0-9]{1,32}\\.[a-zA-Z0-9]{1,6}\\.[ \"'']{1}')"
         ],
         "filename": "",
         "channel": [
