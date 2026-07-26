@@ -638,6 +638,8 @@ def print_stats(
     total_events: int = 0,
     workers_used: int = 1,
     filtered_events: int = 0,
+    time_filtered_events: int = 0,
+    event_filter_active: bool = False,
     total_rules: int = 0,
     phase_times: Optional[dict] = None,
     outfile: Optional[str] = None,
@@ -678,14 +680,32 @@ def print_stats(
     if files_processed > 0:
         summary_table.add_row("📁 Files", f"[cyan]{files_processed:,}[/]")
     
-    # ── Events with filter efficiency (#5) ──
+    # ── Events with filter efficiency ──
+    # Report whenever a filter was active, not only when it dropped something:
+    # a silent line makes "dropped nothing" look like "never ran".
     if total_events > 0:
         events_text = f"[magenta]{total_events:,}[/]"
-        if filtered_events > 0:
-            total_scanned = total_events + filtered_events
+        if event_filter_active:
+            total_scanned = total_events + filtered_events + time_filtered_events
+            match_rate = (total_events / total_scanned * 100) if total_scanned > 0 else 0
+            if filtered_events > 0:
+                events_text += (
+                    f" [dim]({filtered_events:,} filtered out — "
+                    f"{match_rate:.1f}% match rate)[/]"
+                )
+            else:
+                events_text += " [dim](0 filtered out — every event matched a rule's log source)[/]"
+        elif filtered_events > 0:
+            total_scanned = total_events + filtered_events + time_filtered_events
             match_rate = (total_events / total_scanned * 100) if total_scanned > 0 else 0
             events_text += f" [dim]({filtered_events:,} filtered out — {match_rate:.1f}% match rate)[/]"
         summary_table.add_row("📊 Events", events_text)
+
+    # ── Time range ──
+    if time_filtered_events > 0:
+        summary_table.add_row(
+            "🕐 Time range", f"[dim]{time_filtered_events:,} events outside --after/--before[/]"
+        )
     
     # ── Throughput ──
     if processing_time > 0 and total_events > 0:
@@ -835,6 +855,12 @@ def _warn_ignored_db_flags(
         ignored.append("--no-event-filter")
     if getattr(args, 'logs_encoding', None):
         ignored.append("--logs-encoding")
+    # Time filtering happens during ingestion, which DB input skips entirely.
+    # --timefield is not listed: it still drives templates and correlation SQL.
+    if getattr(args, 'after', None) not in (None, DEFAULTS['after']):
+        ignored.append("--after")
+    if getattr(args, 'before', None) not in (None, DEFAULTS['before']):
+        ignored.append("--before")
     if ignored:
         logger.warning(
             f"[yellow]DB input mode: the following flags have no effect and will be "
@@ -1408,6 +1434,8 @@ def main() -> None:
         total_events=ctx.total_events,
         workers_used=ctx.workers_used,
         filtered_events=ctx.total_filtered_events,
+        time_filtered_events=ctx.total_time_filtered_events,
+        event_filter_active=ctx.event_filter is not None and ctx.event_filter.is_enabled,
         total_rules=len(ctx.rulesets) if ctx.rulesets else 0,
         phase_times=phase_times,
         outfile=ctx.outfile if not ctx.no_output else None,

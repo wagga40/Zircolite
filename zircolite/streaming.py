@@ -260,6 +260,7 @@ class StreamingEventProcessor:
         # Event filtering (early skip based on channel/eventID)
         "event_filter",
         "_events_filtered_count",
+        "_events_time_filtered_count",
         "_skipped_records",
         "_had_parse_error",
         "_filtering_enabled",
@@ -310,6 +311,7 @@ class StreamingEventProcessor:
         # Event filter for early filtering based on channel/eventID
         self.event_filter = event_filter
         self._events_filtered_count = 0
+        self._events_time_filtered_count = 0
         self._skipped_records = 0
         self._had_parse_error = False
         # Pre-compute filtering enabled flag (avoids repeated checks in hot loop)
@@ -745,6 +747,21 @@ class StreamingEventProcessor:
         """Return the number of events skipped by the event filter."""
         return self._events_filtered_count
 
+    @property
+    def has_time_filter(self) -> bool:
+        """Return True when --after/--before narrow the range being processed."""
+        return self._has_time_filter
+
+    @property
+    def events_time_filtered_count(self) -> int:
+        """Return the number of events skipped by --after/--before.
+
+        Kept separate from the channel/eventID count: the two drop events at
+        different stages and conflating them would make the per-file "filtered"
+        column ambiguous.
+        """
+        return self._events_time_filtered_count
+
     def _warn_if_no_transform_applies(self, requested: List[str]) -> None:
         """Warn when the selected transforms all exclude the current input format.
 
@@ -1029,6 +1046,7 @@ class StreamingEventProcessor:
                     if moment is not None and not (
                         self._time_after <= moment <= self._time_before
                     ):
+                        self._events_time_filtered_count += 1
                         return None
 
         return json_line

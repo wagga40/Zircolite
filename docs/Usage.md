@@ -173,8 +173,8 @@ For the full list of options and up-to-date help, run: `python3 zircolite.py -h`
 | Option | Description |
 |--------|-------------|
 | `-e`, `--evtx`, `--events` | Path to log file or directory |
-| `-s`, `--select` | Process only files containing the specified string |
-| `-a`, `--avoid` | Skip files containing the specified string |
+| `-s`, `--select` | Process only files whose *filename* contains the specified string |
+| `-a`, `--avoid` | Skip files whose *filename* contains the specified string |
 | `-f`, `--fileext` | File extension of logs to process |
 | `-fp`, `--file-pattern` | Python glob pattern for file selection |
 | `--no-recursion` | Disable recursive directory search |
@@ -184,8 +184,8 @@ For the full list of options and up-to-date help, run: `python3 zircolite.py -h`
 
 | Option | Description |
 |--------|-------------|
-| `-A`, `--after` | Process only events at or after this timestamp (inclusive) |
-| `-B`, `--before` | Process only events at or before this timestamp (inclusive) |
+| `-A`, `--after` | Process only events at or after this timestamp (inclusive). Ignored with `--db-input` |
+| `-B`, `--before` | Process only events at or before this timestamp (inclusive). Ignored with `--db-input` |
 | `--no-event-filter` | Disable early event filtering based on channel/eventID |
 
 #### Input Formats
@@ -347,7 +347,8 @@ At the end of every run, Zircolite displays a summary panel with:
 - **Duration** and **throughput** (events/second)
 - **Phase timing breakdown** — a visual bar showing how time was split between setup and processing phases (shown when phases exceed 0.5 s)
 - **File count** and **event count** (with filtered events noted)
-- **Event filter efficiency** — match rate percentage showing how many events passed the early channel/eventID filter vs. total scanned
+- **Event filter efficiency** — match rate percentage showing how many events passed the early channel/eventID filter vs. total scanned. Shown whenever the filter was active, including when it dropped nothing
+- **Time range** — events dropped by `--after`/`--before`, counted separately from the log-source filter
 - **Peak memory** usage
 - **Workers** — number of parallel workers used (shown when parallel processing is active)
 - **Detection summary** by severity (CRIT / HIGH / MED / LOW / INFO)
@@ -1063,9 +1064,20 @@ Zircolite can skip events before processing based on **Channel** and **EventID**
 
 **How it works:**
 
-- When rules are loaded, Zircolite collects all unique `Channel` and `EventID` values from the ruleset (from each rule’s `channel` and `eventid` metadata).
-- The two axes are decided **independently**. Channel filtering is enabled only when every rule constrains its channel; EventID filtering only when every rule constrains its EventID. A rule that names a channel but no EventID matches any EventID on that channel, so filtering on the other rules' EventIDs would drop events it should have seen — alert counts would then differ between a single-rule and a full-ruleset run.
-- When an axis is enabled, an event whose value is in none of the ruleset's values for that axis is skipped before flattening and database insertion. An event that carries no usable value for an enabled axis is kept.
+- When rules are loaded, Zircolite maps each `Channel` in the ruleset to the set of `EventID` values the rules on that channel ask for (from each rule’s `channel` and `eventid` metadata).
+- **EventIDs are bounded per channel.** A rule that names a channel but no EventID matches any EventID *on that channel*, so it leaves its own channel unbounded and the others narrowed. Judging a rule's events against unrelated rules' EventIDs would drop events it should have seen — alert counts would then differ between a single-rule and a full-ruleset run.
+- An event is skipped, before flattening and database insertion, when its Channel is claimed by no rule, or when that channel carries a finite EventID set the event's EventID is absent from. An event with no usable Channel, or no usable EventID on a bounded channel, is kept.
+- A rule constraining EventIDs but **no** channel cannot be keyed by channel. A ruleset containing one falls back to two independent global axes, where each axis filters only when every rule constrains it.
+- Rulesets containing **correlation** rules keep every channel unbounded: correlation rules carry their Channel/EventID predicates in SQL rather than in metadata, so bounding EventIDs would leave them with no events.
+
+At load time Zircolite reports what it will filter on:
+
+```
+[+] Event filter enabled: 36 channels, 34 EventID-bounded (217 channel/eventID pairs)
+[+]   any EventID allowed on: Security, Windows PowerShell
+```
+
+The second line names the channels no rule narrowed — the reason those channels are not being reduced.
 
 The filter supports multiple log formats through configurable field paths:
 

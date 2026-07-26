@@ -211,10 +211,14 @@ class TestHelpers:
     """Tests for module-level helper functions."""
 
     def test_unpack_streaming_result_tuple(self):
-        assert _unpack_streaming_result((42, 5)) == (42, 5)
+        assert _unpack_streaming_result((42, 5, 3)) == (42, 5, 3)
+
+    def test_unpack_streaming_result_short_tuple(self):
+        """A 2-tuple from an older caller pads the time-filter count to zero."""
+        assert _unpack_streaming_result((42, 5)) == (42, 5, 0)
 
     def test_unpack_streaming_result_int(self):
-        assert _unpack_streaming_result(42) == (42, 0)
+        assert _unpack_streaming_result(42) == (42, 0, 0)
 
     def test_sort_key_severity_ordering(self):
         critical = {"rule_level": "critical", "count": 1}
@@ -463,7 +467,7 @@ class TestProcessSingleFileWorker:
         thread_local = threading.local()
         counter_lock = threading.Lock()
         worker_counter = [0]
-        total_filtered_count = [0]
+        total_filtered_count = [0, 0]
 
         event_count, file_data = process_single_file_worker(
             jf,
@@ -496,7 +500,7 @@ class TestProcessSingleFileWorker:
         thread_local = threading.local()
         counter_lock = threading.Lock()
         worker_counter = [0]
-        total_filtered_count = [0]
+        total_filtered_count = [0, 0]
 
         event_count, file_data = process_single_file_worker(
             jf,
@@ -852,7 +856,7 @@ class TestWorkerCoreReuse:
         kwargs = dict(
             counter_lock=_threading.Lock(),
             worker_counter=[0],
-            total_filtered_count=[0],
+            total_filtered_count=[0, 0],
             thread_local=thread_local,
         )
         count1, _ = process_single_file_worker(f1, dummy_ctx, "json", None, dummy_args, **kwargs)

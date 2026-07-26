@@ -72,7 +72,7 @@ flowchart TB
 
 | Stage | Description | Example |
 |-------|-------------|---------|
-| **1. Filter** | Skip events not matching any rule | Channel/EventID check |
+| **1. Filter** | Skip events whose Channel, or that channel's EventID bound, is claimed by no rule | Channel/EventID check |
 | **2. Flatten** | Nested → flat structure | `Event.System.Channel` → `Channel` |
 | **3. Mappings** | Rename fields | `Event.EventData.CommandLine` → `CommandLine` |
 | **4. Aliases** | Duplicate fields with new names | `CommandLine` → `cmdline` |

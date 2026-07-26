@@ -698,26 +698,28 @@ There are several ways to speed up Zircolite:
 
 ### Early Event Filtering
 
-Zircolite includes an **early event filtering** mechanism that skips events before flattening and database insertion. This reduces memory and CPU when your rules only reference a subset of log sources. **Event filtering applies only to Windows logs** (EVTX, Windows JSON/XML, Winlogbeat, etc.); other log types (Linux, Auditd, generic JSON, etc.) are not filtered by channel/eventID.
+Zircolite includes an **early event filtering** mechanism that skips events before flattening and database insertion. This reduces memory and CPU when your rules only reference a subset of log sources. **Event filtering applies only to Windows logs** (EVTX, Windows JSON/XML, Winlogbeat, etc.) unless `event_filter.filter_all_sources` is set; other log types (Linux, Auditd, generic JSON, etc.) are not filtered by channel/eventID.
 
 #### How the filter is built
 
-When rules are loaded, Zircolite collects all unique **Channel** and **EventID** values from the ruleset (from each rule’s `channel` and `eventid` metadata in the converted rules). Only events whose **(Channel, EventID)** pair is in that set are kept; others are skipped before processing.
+When rules are loaded, Zircolite maps each **Channel** in the ruleset to the set of **EventID** values the rules on that channel ask for (from each rule’s `channel` and `eventid` metadata in the converted rules).
 
-#### When filtering is enabled or disabled
-
-Filtering is **enabled** only when:
-
-- The ruleset has at least one channel and one eventID across all rules, **and**
-- **Every** rule has at least one channel and one eventID (no rule has “any” log source).
-
-If **any** rule has empty or missing channel/eventid (i.e. the rule applies to any log source), filtering is **disabled** for the whole run. That way, rules that match on any Channel/EventID still see all events, and **alert counts stay consistent** whether you run a single rule or the full ruleset. Otherwise, the same rule could report different counts (e.g. 74 alone vs 40 with the full ruleset) because events would be dropped when other rules’ log sources are used to build the filter.
+A rule that names a channel but no eventID matches *any* eventID on that channel, so it marks its own channel unbounded — the other channels keep their bounds. This is what keeps **alert counts consistent** whether you run a single rule or the full ruleset. Bounding every channel by the union of all rules’ eventIDs would drop events a channel-only rule should have seen, and the same rule could then report different counts (e.g. 74 alone vs 40 with the full ruleset).
 
 #### Filtering logic
 
-- An event is **kept** only if **both** its Channel is in the ruleset’s channel set **and** its EventID is in the ruleset’s eventID set.
-- Channel matching is case-insensitive.
-- If the filter is disabled (see above), all events are processed.
+An event is **discarded** when:
+
+- its Channel is claimed by no rule, **or**
+- that channel carries a finite eventID set and the event’s EventID is not in it.
+
+An event with no usable Channel, or no usable EventID on a bounded channel, is **kept** — too little information to discard it safely. Channel matching is case-insensitive.
+
+#### When the per-channel bounds do not apply
+
+- A rule constraining eventIDs but **no** channel cannot be keyed by channel. A ruleset containing one falls back to two independent global axes, where each axis filters only when every rule constrains it.
+- Rulesets containing **correlation** rules keep every channel unbounded. Correlation rules carry their Channel/EventID predicates in SQL rather than in metadata, so bounding eventIDs would leave them with no events.
+- With `--no-event-filter`, or `enabled: false` in config, all events are processed.
 
 #### Configuration and formats
 
@@ -729,15 +731,24 @@ The event filter uses configurable field paths to read Channel and EventID from 
 - And more (configurable in `config/config.yaml`).
 
 ```shell
-# Event filtering is enabled when all rules have channel/eventid
-# You'll see a log message like:
-# [+] Event filter enabled: 15 channels, 45 eventIDs
+# At load time Zircolite reports what it will filter on:
+# [+] Event filter enabled: 36 channels, 34 EventID-bounded (217 channel/eventID pairs)
+# [+]   any EventID allowed on: Security, Windows PowerShell
 
 # Disable event filtering if needed (process all events)
 python3 zircolite.py --evtx logs/ --ruleset rules.json --no-event-filter
 ```
 
-The event filter statistics are displayed in the summary panel after processing.
+The second line names the channels no rule narrowed, which is why those channels are not being reduced.
+
+The event filter statistics are displayed in the summary panel after processing. The panel reports the filter whenever it was active, so a run that dropped nothing is distinguishable from one where the filter never ran:
+
+```
+📊 Events   1,234,567  (412,003 filtered out — 75.0% match rate)
+📊 Events   1,234,567  (0 filtered out — every event matched a rule's log source)
+```
+
+Events dropped by `--after`/`--before` are counted separately and reported on their own `Time range` row, since the two filters act at different stages.
 
 ## Keeping Data Used by Zircolite
 
@@ -758,13 +769,16 @@ Some EVTX files are not used by SIGMA rules but can become quite large (a good e
 
 To speed up the detection process, you may want to use Zircolite on files matching or not matching a specific pattern. For that, you can use **filters** provided by the following command-line arguments:
 
-- `-s` or `--select`: Select files partly matching the provided string (case insensitive).
-- `-a` or `--avoid`: Exclude files partly matching the provided string (case insensitive).
+- `-s` or `--select`: Select files whose **filename** partly matches the provided string (case insensitive).
+- `-a` or `--avoid`: Exclude files whose **filename** partly matches the provided string (case insensitive).
 - `-fp` or `--file-pattern`: Use a Python glob pattern for file selection.
 - `--no-recursion`: Disable recursive directory search.
 
 > [!NOTE]  
 > When using both `--select` and `--avoid` arguments, the "select" argument is always applied first, and then the "avoid" argument is applied. So it is possible to exclude files from included files, but not the opposite.
+
+> [!IMPORTANT]
+> Both filters match the **filename only**, never the directory path. `--select HOST01` will not select `logs/HOST01/Security.evtx`, and `--avoid HOST02` will not exclude `logs/HOST02/` — it silently excludes nothing. Use `--file-pattern` or point `--events` at the directory you want instead.
 
 - Only use EVTX files that contain "sysmon" in their names:
 
@@ -793,18 +807,15 @@ To speed up the detection process, you may want to use Zircolite on files matchi
 		--file-pattern "Security*.evtx"
 	```
 
-For example, the **Sysmon** ruleset available in the `rules` directory only uses the following channels (names have been shortened): *Sysmon, Security, System, Powershell, Defender, AppLocker, DriverFrameworks, Application, NTLM, DNS, MSExchange, WMI-Activity, TaskScheduler*. 
-
-So if you use the Sysmon ruleset with the following rules, it should speed up Zircolite's execution: 
-
-```shell
-python3 zircolite.py --evtx logs/ --ruleset rules/rules_windows_merged.json \
-	--select sysmon --select security.evtx --select system.evtx \
-	--select application.evtx --select Windows-NTLM --select DNS \
-	--select powershell --select defender --select applocker \
-	--select driverframeworks --select "msexchange management" \
-	--select TaskScheduler --select WMI-activity
-```
+> [!NOTE]
+> You no longer need to enumerate a ruleset's channels with `--select` to gain the channel-level speedup — [early event filtering](#early-event-filtering) derives that from the ruleset automatically, and does it per EventID as well. File filters remain useful for a different reason: they skip a file *before it is opened and decoded*, which the event filter cannot do because it runs per event. Excluding one large irrelevant file is where they pay off:
+>
+> ```shell
+> python3 zircolite.py --evtx logs/ --ruleset rules/rules_windows_merged.json \
+> 	--avoid systemdataarchiver
+> ```
+>
+> They are also the only file-level reduction available for Linux and auditd input, which the event filter does not apply to by default.
 
 ### Time Filters
 

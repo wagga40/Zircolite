@@ -1174,7 +1174,7 @@ class ZircoliteCore:
                       event_filter: 'Optional[EventFilter]' = None,
                       return_filtered_count: bool = False,
                       keepflat_file=None,
-                      _raw_config: Optional[dict] = None) -> 'int | tuple[int, int]':
+                      _raw_config: Optional[dict] = None) -> 'int | tuple[int, int, int]':
         """
         Process log files using streaming mode - single-pass extraction, flattening, and DB insertion.
         
@@ -1193,14 +1193,16 @@ class ZircoliteCore:
             extractor: EvtxExtractor instance (required for xml, sysmon_linux, auditd)
             disable_progress: Whether to disable progress bars
             event_filter: Optional EventFilter for early event filtering based on channel/eventID
-            return_filtered_count: If True, return (total_events, filtered_count) tuple
+            return_filtered_count: If True, return (total_events, filtered_count,
+                          time_filtered_count) tuple
             keepflat_file: Open binary file handle to write flattened JSONL events to (caller
                           is responsible for opening and closing the file)
             _raw_config: Pre-parsed field-mappings dict passed through to
                         StreamingEventProcessor to skip redundant config reads.
             
         Returns:
-            Total number of events processed, or (total_events, filtered_count) if return_filtered_count=True
+            Total number of events processed, or (total_events, filtered_count,
+            time_filtered_count) if return_filtered_count=True
         """
         self.logger.info("[+] Processing events (streaming mode)")
         
@@ -1315,16 +1317,24 @@ class ZircoliteCore:
         self.logger.info("[+] Creating indexes")
         self.create_index()
         
-        # Log filtered events statistics
+        # Log filtered events statistics. Report whenever a filter was active,
+        # not only when it dropped something: "ran and dropped nothing" and
+        # "never ran" are different answers to "is the filter working?".
         filtered_count = processor.events_filtered_count
-        if filtered_count > 0:
+        time_filtered_count = processor.events_time_filtered_count
+        dropped = []
+        if event_filter is not None and event_filter.is_enabled:
+            dropped.append(f"{filtered_count:,} filtered out by log source")
+        if processor.has_time_filter:
+            dropped.append(f"{time_filtered_count:,} outside the time range")
+        if dropped:
             self.logger.info(
                 f"[+] Total events processed: [magenta]{total_events:,}[/] "
-                f"([dim]{filtered_count:,} events filtered out[/])"
+                f"([dim]{', '.join(dropped)}[/])"
             )
         else:
             self.logger.info(f"[+] Total events processed: [magenta]{total_events:,}[/]")
         
         if return_filtered_count:
-            return total_events, filtered_count
+            return total_events, filtered_count, time_filtered_count
         return total_events

@@ -3457,14 +3457,33 @@ class TestCLIRegressionFixes:
             add_index=[], remove_index=[], hashes=False,
             keepflat=True, dbfile="x.db", strict=True,
             archive_password="pw", no_event_filter=True, logs_encoding="utf-8",
+            after="2024-01-01T00:00:00", before="2024-12-31T23:59:59",
         )
         zircolite_script._warn_ignored_db_flags(args, logger)
 
         assert logger.warning.called
         message = logger.warning.call_args[0][0]
         for flag in ("--keepflat", "--dbfile", "--strict",
-                     "--archive-password", "--no-event-filter", "--logs-encoding"):
+                     "--archive-password", "--no-event-filter", "--logs-encoding",
+                     "--after", "--before"):
             assert flag in message
+
+    def test_warn_ignored_db_flags_ignores_default_time_range(self):
+        """The default time range is not a user request, so it is not reported."""
+        import logging
+        from unittest.mock import MagicMock
+        from zircolite.run_config import DEFAULTS
+        logger = MagicMock(spec=logging.Logger)
+        args = argparse.Namespace(
+            unified_db=False, no_auto_mode=False, no_parallel=False,
+            add_index=[], remove_index=[], hashes=False,
+            keepflat=False, dbfile=None, strict=False,
+            archive_password=None, no_event_filter=False, logs_encoding=None,
+            after=DEFAULTS['after'], before=DEFAULTS['before'],
+        )
+        zircolite_script._warn_ignored_db_flags(args, logger)
+
+        assert not logger.warning.called
 
 
 class TestTestRulesOrphanCases:

@@ -50,12 +50,14 @@ from .parallel import ParallelConfig, MemoryAwareParallelProcessor
 from .shutdown import is_shutdown_requested
 from .utils import (
     MemoryTracker,
+    avoid_files,
     create_silent_logger,
     load_field_mappings,
     quit_on_error,
     random_suffix,
     sanitize_row_for_csv,
     sanitize_value_for_csv,
+    select_files,
 )
 
 if TYPE_CHECKING:
@@ -96,6 +98,7 @@ class ProcessingContext:
     memory_tracker: MemoryTracker
     event_filter: Optional["EventFilter"] = None
     total_filtered_events: int = 0
+    total_time_filtered_events: int = 0
     total_events: int = 0
     workers_used: int = 1
     profile_rules: bool = False
@@ -190,10 +193,12 @@ def create_extractor(
 # ============================================================================
 
 def _unpack_streaming_result(
-    result: Union[int, Tuple[int, int]]
-) -> Tuple[int, int]:
-    """Safely unpack (total_events, filtered_count) from run_streaming."""
-    return result if isinstance(result, tuple) else (result, 0)
+    result: Union[int, Tuple[int, ...]]
+) -> Tuple[int, int, int]:
+    """Safely unpack (total_events, filtered_count, time_filtered_count)."""
+    if not isinstance(result, tuple):
+        return (result, 0, 0)
+    return (result + (0, 0))[:3]  # type: ignore[return-value]
 
 
 class _ThreadSafeWriter:
@@ -268,8 +273,9 @@ def process_unified_streaming(
             return_filtered_count=True,
             keepflat_file=kf,
         )
-    total_events, filtered_count = _unpack_streaming_result(result)
+    total_events, filtered_count, time_filtered_count = _unpack_streaming_result(result)
     ctx.total_filtered_events += filtered_count
+    ctx.total_time_filtered_events += time_filtered_count
     ctx.total_events += total_events
     ctx.memory_tracker.sample()
 
@@ -368,8 +374,9 @@ def process_perfile_streaming(
                     return_filtered_count=True,
                     keepflat_file=kf,
                 )
-                event_count, filtered_count = _unpack_streaming_result(result)
+                event_count, filtered_count, time_filtered_count = _unpack_streaming_result(result)
                 ctx.total_filtered_events += filtered_count
+                ctx.total_time_filtered_events += time_filtered_count
                 ctx.total_events += event_count
                 ctx.memory_tracker.sample()
 
@@ -489,6 +496,15 @@ def expand_db_path(
     )
     walk = path.glob if getattr(args, "no_recursion", False) else path.rglob
     found = sorted({p for pattern in patterns for p in walk(pattern) if p.is_file()})
+    # Same filename filters the auto-detected route applies, so -s/-a behave the
+    # same whether the databases were named with -D or discovered
+    found = [
+        Path(p)
+        for p in avoid_files(
+            select_files(found, getattr(args, "select", None)),
+            getattr(args, "avoid", None),
+        )
+    ]
     if not found:
         # Fatal, like a single missing database: a run that analysed nothing
         # must not exit 0 while the summary advertises an output file
@@ -703,10 +719,11 @@ def process_single_file_worker(
             keepflat_file=keepflat_file,
             _raw_config=raw_config,
         )
-        event_count, filtered_count = _unpack_streaming_result(_streaming_result)
+        event_count, filtered_count, time_filtered_count = _unpack_streaming_result(_streaming_result)
 
         with counter_lock:
             total_filtered_count[0] += filtered_count
+            total_filtered_count[1] += time_filtered_count
 
         # The worker's logger is silent, so a file Zircolite could only read in
         # part is indistinguishable from a clean one unless it is reported here
@@ -903,7 +920,8 @@ def process_parallel_streaming(
     thread_local = threading.local()
     worker_counter = [0]
     counter_lock = threading.Lock()
-    total_filtered_count = [0]
+    # [log-source drops, time-range drops]
+    total_filtered_count = [0, 0]
     errors: list = []
 
     processor = MemoryAwareParallelProcessor(
@@ -1038,14 +1056,20 @@ def process_parallel_streaming(
         console.print()
 
     # Propagate stats
-    filtered_count = total_filtered_count[0]
+    filtered_count, time_filtered_count = total_filtered_count
     ctx.total_filtered_events += filtered_count
+    ctx.total_time_filtered_events += time_filtered_count
     total_events = stats.total_events
     ctx.total_events += total_events
-    if filtered_count > 0:
+    dropped = []
+    if ctx.event_filter is not None and ctx.event_filter.is_enabled:
+        dropped.append(f"{filtered_count:,} filtered out by log source")
+    if time_filtered_count > 0:
+        dropped.append(f"{time_filtered_count:,} outside the time range")
+    if dropped:
         ctx.logger.info(
             f"[+] Total events processed: [magenta]{total_events:,}[/] "
-            f"([dim]{filtered_count:,} events filtered out[/])"
+            f"([dim]{', '.join(dropped)}[/])"
         )
 
     return None, all_results

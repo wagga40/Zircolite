@@ -109,13 +109,17 @@ class TestEventFilterInit:
         event_filter = EventFilter(rulesets)
 
         assert event_filter._channel_filter
-        assert not event_filter._eventid_filter
+        assert event_filter._eventid_bounded
         # 4104 belongs to no rule's eventid list, but the channel-only rule wants it.
         assert event_filter.should_process_event(
             "Microsoft-Windows-PowerShell/Operational", 4104
         )
         # A channel no rule mentions is still discarded.
         assert not event_filter.should_process_event("Security", 4104)
+        # The channel-only rule widens its own channel, not Sysmon's bounds.
+        assert not event_filter.should_process_event(
+            "Microsoft-Windows-Sysmon/Operational", 4104
+        )
 
     def test_init_mixed_rules(self):
         """Test that filtering is disabled when any rule has no log source (issue #117)."""
@@ -234,24 +238,23 @@ class TestEventFilterShouldProcess:
 
     def test_should_process_multi_channel(self, multi_channel_filter):
         """Test filtering with multiple channels.
-        
-        With the current logic, channels and eventIDs are checked independently.
-        If channel is in known channels AND eventID is in known eventIDs → process.
+
+        EventIDs are bounded per channel, so an eventID only admits events on
+        the channels whose rules asked for it.
         """
-        # Should process - channel known, eventID known
+        # Should process - channel known, eventID known on that channel
         assert multi_channel_filter.should_process_event(
             "Microsoft-Windows-Sysmon/Operational", 1
         )
         assert multi_channel_filter.should_process_event(
             "Microsoft-Windows-Security-Auditing", 4624
         )
-        # Should also process - both channel and eventID are in the known sets
-        # (even if they originally came from different rules)
-        assert multi_channel_filter.should_process_event(
-            "Microsoft-Windows-Sysmon/Operational", 4624  # Channel known, EventID known
+        # Should NOT process - each eventID belongs to the other channel's rule
+        assert not multi_channel_filter.should_process_event(
+            "Microsoft-Windows-Sysmon/Operational", 4624
         )
-        assert multi_channel_filter.should_process_event(
-            "Microsoft-Windows-Security-Auditing", 1  # Channel known, EventID known
+        assert not multi_channel_filter.should_process_event(
+            "Microsoft-Windows-Security-Auditing", 1
         )
         # Should NOT process - unknown channel
         assert not multi_channel_filter.should_process_event(
@@ -291,6 +294,158 @@ class TestEventFilterShouldProcess:
         event_filter = EventFilter([])  # Empty = disabled
         assert event_filter.should_process_event("Any-Channel", 9999)
         assert event_filter.should_process_event(None, None)
+
+
+class TestPerChannelEventIDBounds:
+    """Tests for the per-channel eventID bounds."""
+
+    def test_eventid_bounds_are_per_channel(self):
+        """An eventID admits events only on the channels whose rules asked for it."""
+        rulesets = [
+            {"title": "A", "channel": ["Channel-A"], "eventid": [1]},
+            {"title": "B", "channel": ["Channel-B"], "eventid": [2]},
+        ]
+        event_filter = EventFilter(rulesets)
+
+        assert event_filter.should_process_event("Channel-A", 1)
+        assert event_filter.should_process_event("Channel-B", 2)
+        assert not event_filter.should_process_event("Channel-A", 2)
+        assert not event_filter.should_process_event("Channel-B", 1)
+
+    def test_channel_only_rule_makes_only_its_own_channel_any(self):
+        """A rule with no eventID widens its channel, leaving the others bounded."""
+        rulesets = [
+            {"title": "Bounded", "channel": ["Channel-A"], "eventid": [1]},
+            {"title": "Unbounded", "channel": ["Channel-B"], "eventid": []},
+        ]
+        event_filter = EventFilter(rulesets)
+
+        assert not event_filter.should_process_event("Channel-A", 999)
+        assert event_filter.should_process_event("Channel-B", 999)
+
+    def test_second_rule_on_same_channel_with_no_eventid_makes_it_any(self):
+        """Once a channel is unbounded it stays unbounded, whatever the rule order."""
+        rulesets = [
+            {"title": "Bounded", "channel": ["Channel-A"], "eventid": [1]},
+            {"title": "Unbounded", "channel": ["Channel-A"], "eventid": []},
+        ]
+        event_filter = EventFilter(rulesets)
+
+        assert event_filter.should_process_event("Channel-A", 999)
+        assert event_filter.should_process_event("Channel-A", 1)
+
+    def test_missing_eventid_on_bounded_channel_is_kept(self):
+        """An event with no usable eventID carries too little information to discard."""
+        rulesets = [{"title": "Bounded", "channel": ["Channel-A"], "eventid": [1]}]
+        event_filter = EventFilter(rulesets)
+
+        assert event_filter.should_process_event("Channel-A", None)
+
+    def test_rule_with_eventid_and_no_channel_falls_back_to_global_axis(self):
+        """Per-channel bounds need every rule to name a channel."""
+        rulesets = [
+            {"title": "No channel", "channel": [], "eventid": [1]},
+            {"title": "With channel", "channel": ["Channel-A"], "eventid": [2]},
+        ]
+        event_filter = EventFilter(rulesets)
+
+        assert not event_filter._channel_filter
+        assert event_filter._eventid_filter
+        # The channel axis is off, so any channel carrying a known eventID passes
+        assert event_filter.should_process_event("Any-Channel", 1)
+        assert event_filter.should_process_event("Channel-A", 2)
+        assert not event_filter.should_process_event("Any-Channel", 999)
+
+    def test_channel_map_merges_case_variants(self):
+        """Two spellings of one channel merge their bounds instead of overwriting."""
+        rulesets = [
+            {"title": "A", "channel": ["Security"], "eventid": [1]},
+            {"title": "B", "channel": ["SECURITY"], "eventid": [2]},
+        ]
+        event_filter = EventFilter(rulesets)
+
+        assert event_filter.should_process_event("Security", 1)
+        assert event_filter.should_process_event("Security", 2)
+        assert event_filter.should_process_event("security", 1)
+        assert not event_filter.should_process_event("Security", 3)
+
+    def test_correlation_rules_disable_eventid_bounds(self):
+        """Correlation rules carry their filters in SQL, so bounds would starve them."""
+        rulesets = [
+            {"title": "A", "channel": ["Microsoft-Windows-Sysmon/Operational"], "eventid": [1]},
+        ]
+        event_filter = EventFilter(rulesets, has_correlation_rules=True)
+
+        assert event_filter._channel_filter
+        assert not event_filter._eventid_bounded
+        assert event_filter.should_process_event(
+            "Microsoft-Windows-Sysmon/Operational", 5
+        )
+        # The channel axis still applies
+        assert not event_filter.should_process_event("Security", 5)
+
+    def test_unparseable_eventids_make_channel_any(self):
+        """An empty bound must never mean "nothing" -- it means "any"."""
+        rulesets = [{"title": "A", "channel": ["Channel-A"], "eventid": ["not_a_number"]}]
+        event_filter = EventFilter(rulesets)
+
+        assert event_filter.should_process_event("Channel-A", 999)
+
+    def test_no_false_negatives_vs_per_rule_ground_truth(self):
+        """The filter must never drop an event some rule would have matched."""
+        rulesets = [
+            {"title": "A", "channel": ["Channel-A"], "eventid": [1, 2]},
+            {"title": "B", "channel": ["Channel-B", "channel-a"], "eventid": [3]},
+            {"title": "C", "channel": ["Channel-C"], "eventid": []},
+        ]
+        event_filter = EventFilter(rulesets)
+
+        def accepted_by_some_rule(channel, eventid):
+            for rule in rulesets:
+                channels = [c for c in rule["channel"] if c]
+                eventids = rule["eventid"]
+                if channels and (
+                    channel is None
+                    or not any(channel.lower() == c.lower() for c in channels)
+                ):
+                    continue
+                if eventids and eventid is not None and eventid not in eventids:
+                    continue
+                return True
+            return False
+
+        probes = ["Channel-A", "CHANNEL-A", "channel-b", "Channel-C", "Absent", None]
+        for channel in probes:
+            for eventid in [1, 2, 3, 999, None]:
+                if accepted_by_some_rule(channel, eventid):
+                    assert event_filter.should_process_event(channel, eventid), (
+                        f"false negative for {channel!r} / {eventid!r}"
+                    )
+
+    @pytest.mark.integration
+    def test_shipped_merged_ruleset_bounds_sysmon(self):
+        """The shipped Windows ruleset must bound eventIDs on all but two channels."""
+        import orjson
+        from pathlib import Path
+
+        ruleset_path = Path(__file__).parent.parent / "rules" / "rules_windows_merged.json"
+        if not ruleset_path.exists():
+            pytest.skip("shipped ruleset not available")
+
+        rules = orjson.loads(ruleset_path.read_bytes())
+        non_correlation = [r for r in rules if not r.get("correlation")]
+        event_filter = EventFilter(non_correlation)
+        stats = event_filter.get_stats()
+
+        assert stats["mode"] == "per-channel"
+        assert stats["any_eventid_channels"] == ["Security", "Windows PowerShell"]
+        assert stats["bounded_channels_count"] == stats["channels_count"] - 2
+        # Sysmon 5 (ProcessTerminate) is claimed by no rule
+        assert not event_filter.should_process_event(
+            "Microsoft-Windows-Sysmon/Operational", 5
+        )
+        # Security is unbounded, so its high-volume IDs still pass
+        assert event_filter.should_process_event("Security", 4672)
 
 
 class TestEventFilterStats:

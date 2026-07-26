@@ -2428,6 +2428,42 @@ class TestStreamingRobustness:
         assert count == 3
         conn.close()
 
+    def test_time_filtered_events_are_counted_separately(
+        self, field_mappings_file, test_logger, default_args_config, tmp_path
+    ):
+        """--after/--before drops get their own counter, not the log-source one."""
+        processor = self._make_processor(
+            field_mappings_file, test_logger, default_args_config,
+            time_after="2024-06-15T10:00:00", time_before="2024-06-15T12:00:00",
+        )
+        json_file = tmp_path / "events.json"
+        json_file.write_text(
+            json.dumps({"EventID": 1, "SystemTime": "2024-06-15T11:00:00Z"}) + "\n"
+            + json.dumps({"EventID": 2, "SystemTime": "2023-01-01T00:00:00Z"}) + "\n"
+            + json.dumps({"EventID": 3, "SystemTime": "2025-01-01T00:00:00Z"}) + "\n"
+        )
+        conn = sqlite3.connect(":memory:")
+        processor.create_initial_table(conn)
+        count = processor.process_file_streaming(conn, str(json_file), input_type="json")
+        conn.close()
+
+        assert count == 1
+        assert processor.has_time_filter
+        assert processor.events_time_filtered_count == 2
+        # The log-source filter dropped nothing; the two counts must not merge
+        assert processor.events_filtered_count == 0
+
+    def test_no_time_filter_reports_no_bounds(
+        self, field_mappings_file, test_logger, default_args_config
+    ):
+        """Default bounds mean no time filtering is in effect."""
+        processor = self._make_processor(
+            field_mappings_file, test_logger, default_args_config,
+            time_after="1970-01-01T00:00:00", time_before="9999-12-12T23:59:59",
+        )
+        assert not processor.has_time_filter
+        assert processor.events_time_filtered_count == 0
+
     def test_time_filter_coerces_non_string_timestamp(
         self, field_mappings_file, test_logger, default_args_config, tmp_path
     ):
