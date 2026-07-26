@@ -6,6 +6,7 @@ import json
 import re
 import sqlite3
 import sys
+from contextlib import closing
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
@@ -1412,15 +1413,15 @@ class TestShippedRulesetsCompile:
     )
     def test_every_rule_sql_compiles(self, ruleset_path):
         ruleset = json.loads(ruleset_path.read_text(encoding="utf-8"))
-        conn = self._connection_for(ruleset)
 
         broken = []
-        for rule in ruleset:
-            for query in rule.get("rule", []):
-                try:
-                    conn.execute(f"EXPLAIN {rebalance_sql(query)}")
-                except sqlite3.Error as exc:
-                    broken.append(f"{rule.get('title', '?')}: {exc}")
+        with closing(self._connection_for(ruleset)) as conn:
+            for rule in ruleset:
+                for query in rule.get("rule", []):
+                    try:
+                        conn.execute(f"EXPLAIN {rebalance_sql(query)}")
+                    except sqlite3.Error as exc:
+                        broken.append(f"{rule.get('title', '?')}: {exc}")
 
         assert not broken, (
             f"{len(broken)} rule(s) in {ruleset_path.name} produce SQL SQLite "

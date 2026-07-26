@@ -1,6 +1,7 @@
 """Tests for the OR-chain rebalancer used to repair over-deep rule SQL."""
 
 import sqlite3
+from contextlib import closing
 
 import pytest
 
@@ -28,14 +29,18 @@ class TestRebalanceFixesDepthLimit:
     """The rebalancer must make over-deep statements parseable."""
 
     def test_oversized_chain_compiles_after_rebalance(self):
-        conn = sqlite3.connect(":memory:")
-        conn.execute("CREATE TABLE logs (Channel TEXT, EventID TEXT, CommandLine TEXT)")
-        query = _chain(2000)
+        with closing(sqlite3.connect(":memory:")) as conn:
+            conn.execute(
+                "CREATE TABLE logs (Channel TEXT, EventID TEXT, CommandLine TEXT)"
+            )
+            query = _chain(2000)
 
-        with pytest.raises(sqlite3.OperationalError, match="Expression tree is too large"):
-            conn.execute(query)
+            with pytest.raises(
+                sqlite3.OperationalError, match="Expression tree is too large"
+            ):
+                conn.execute(query)
 
-        conn.execute(f"EXPLAIN {rebalance_sql(query)}")
+            conn.execute(f"EXPLAIN {rebalance_sql(query)}")
 
     def test_depth_becomes_logarithmic(self):
         rewritten = rebalance_sql(_chain(1024))
@@ -61,7 +66,8 @@ class TestRebalancePreservesMeaning:
         conn.executemany(
             "INSERT INTO logs VALUES (?, ?, ?)", [(3, 9, 1), (7, 2, 1), (3, 2, 1)]
         )
-        return conn
+        yield conn
+        conn.close()
 
     @pytest.mark.parametrize(
         "query",
