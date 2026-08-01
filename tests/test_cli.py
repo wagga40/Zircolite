@@ -3608,3 +3608,64 @@ class TestSummaryCountsDistinctRules:
         assert "300.0%" not in out
         # Top Hits lists each rule once
         assert out.count("Noisy rule") == 1, out
+
+
+class TestPerFileDbfilePreflight:
+    """--dbfile in per-file mode writes derived names, so those are what to check.
+
+    The pre-flight tested the literal path, which per-file mode never writes:
+    it writes `<stem>_<file><suffix>`. Run 1 succeeded, run 2 passed the check
+    and wrote differently-named databases without saying the name had changed,
+    and run 3 died on an uncaught FileExistsError.
+    """
+
+    def _corpus(self, tmp_path):
+        corpus = tmp_path / "in"
+        corpus.mkdir()
+        for name in ("a.json", "b.json"):
+            (corpus / name).write_text(
+                '{"Event": {"System": {"EventID": 1}, "EventData": {}}}'
+            )
+        ruleset = tmp_path / "ruleset.json"
+        ruleset.write_text(NO_MATCH_RULESET)
+        return corpus, ruleset
+
+    def _run(self, tmp_path, corpus, ruleset, dbfile):
+        with patch('sys.argv', [
+            'zircolite.py', '-e', str(corpus), '-r', str(ruleset), '-j',
+            '-o', str(tmp_path / "out.json"), '--dbfile', str(dbfile),
+            '--no-parallel', '--no-auto-mode', *get_log_arg(tmp_path),
+        ]):
+            zircolite_script.main()
+
+    def test_names_are_stable_and_a_rerun_is_a_clean_error(self, tmp_path):
+        corpus, ruleset = self._corpus(tmp_path)
+        dbfile = tmp_path / "save.db"
+
+        self._run(tmp_path, corpus, ruleset, dbfile)
+        first = sorted(p.name for p in tmp_path.glob("save*.db"))
+        assert first == ["save_a.json.db", "save_b.json.db"], first
+
+        # Re-running must not quietly invent new names, and must not traceback
+        with pytest.raises(SystemExit) as excinfo:
+            self._run(tmp_path, corpus, ruleset, dbfile)
+        assert excinfo.value.code != 0
+
+        assert sorted(p.name for p in tmp_path.glob("save*.db")) == first, (
+            "a failed re-run must not leave extra databases behind"
+        )
+
+    def test_inputs_sharing_a_basename_still_get_distinct_databases(self, tmp_path):
+        corpus = tmp_path / "in"
+        (corpus / "one").mkdir(parents=True)
+        (corpus / "two").mkdir(parents=True)
+        for sub in ("one", "two"):
+            (corpus / sub / "events.json").write_text(
+                '{"Event": {"System": {"EventID": 1}, "EventData": {}}}'
+            )
+        ruleset = tmp_path / "ruleset.json"
+        ruleset.write_text(NO_MATCH_RULESET)
+
+        self._run(tmp_path, corpus, ruleset, tmp_path / "save.db")
+        written = sorted(p.name for p in tmp_path.glob("save*.db"))
+        assert len(written) == 2, written

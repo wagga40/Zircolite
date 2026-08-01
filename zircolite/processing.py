@@ -316,6 +316,31 @@ def process_unified_streaming(
 # PER-FILE STREAMING
 # ============================================================================
 
+def perfile_db_paths(dbfile: str, file_list: list[Path]) -> list[Path]:
+    """The database path each input gets in per-file mode.
+
+    Per-file mode never writes the literal ``--dbfile`` path -- it derives one
+    name per input -- so that is what an "already exists" check has to test.
+    Two inputs can share a basename (``one/events.json`` and
+    ``two/events.json``), and those are disambiguated by position so the names
+    stay the same from run to run: a re-run has to collide predictably rather
+    than quietly choose a different name.
+    """
+    base = Path(dbfile)
+    parent = base.parent
+    paths: list[Path] = []
+    claimed: set[Path] = set()
+    for index, log_file in enumerate(file_list):
+        candidate = parent / f"{base.stem}_{Path(log_file).name}{base.suffix}"
+        if candidate in claimed:
+            candidate = (
+                parent / f"{base.stem}_{index + 1}_{Path(log_file).name}{base.suffix}"
+            )
+        claimed.add(candidate)
+        paths.append(candidate)
+    return paths
+
+
 def process_perfile_streaming(
     ctx: ProcessingContext,
     file_list: list[Path],
@@ -332,6 +357,26 @@ def process_perfile_streaming(
     all_results = []
     first_file = True
     file_stats = []
+
+    # Resolve every database path before anything is processed, and refuse the
+    # run if one is already there. Discovering it half-way through left some
+    # databases written and the rest not, and used to surface as an uncaught
+    # FileExistsError with a traceback.
+    db_paths: list[Path] = []
+    if ctx.dbfile:
+        db_paths = perfile_db_paths(ctx.dbfile, file_list)
+        existing = [str(p) for p in db_paths if p.exists()]
+        if existing:
+            quit_on_error(
+                "[red]    [-] These database files already exist: "
+                f"{', '.join(existing[:5])}"
+                f"{' ...' if len(existing) > 5 else ''}. Remove them or choose "
+                "another path with [cyan]--dbfile[/][/]",
+                ctx.logger,
+            )
+        parent = Path(ctx.dbfile).parent
+        if parent != Path("."):
+            parent.mkdir(parents=True, exist_ok=True)
     profiling_core = create_zircolite_core(ctx, disable_progress=disable_nested) if ctx.profile_rules else None
 
     # Always accumulate results – they are needed for the ATT&CK Coverage
@@ -377,19 +422,7 @@ def process_perfile_streaming(
                 ctx.memory_tracker.sample()
 
                 if ctx.dbfile:
-                    dbfile_path = Path(ctx.dbfile)
-                    parent = dbfile_path.parent
-                    if parent != Path("."):
-                        parent.mkdir(parents=True, exist_ok=True)
-                    file_db_name = str(
-                        parent / f"{dbfile_path.stem}_{file_name}{dbfile_path.suffix}"
-                    )
-                    if Path(file_db_name).exists():
-                        # Two input files share the same basename: add the
-                        # file index to keep the DB path unique
-                        file_db_name = str(
-                            parent / f"{dbfile_path.stem}_{file_idx + 1}_{file_name}{dbfile_path.suffix}"
-                        )
+                    file_db_name = str(db_paths[file_idx])
                     zircolite_core.save_db_to_disk(file_db_name)
                     ctx.logger.info(
                         f"[+] Saved database for {file_link} to: {make_file_link(file_db_name)}"
