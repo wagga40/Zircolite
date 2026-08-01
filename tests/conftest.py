@@ -4,22 +4,24 @@ Shared pytest fixtures for Zircolite test suite.
 
 import json
 import os
-import time
-import pytest
 import shutil
 import sys
-import yaml
+import time
+from argparse import Namespace
 from pathlib import Path
 from unittest.mock import MagicMock, patch
-from argparse import Namespace
+
+import pytest
+import yaml
 
 # Add parent directory to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
+import contextlib
+
 from zircolite import (
     init_logger,
 )
-
 
 # =============================================================================
 # Field Mappings Configuration Fixtures
@@ -339,8 +341,7 @@ def tmp_json_file_multiple(tmp_path, sample_windows_events_list):
     """Create a temporary JSON file with multiple events (JSONL format)."""
     json_file = tmp_path / "sample_events_multi.json"
     with open(json_file, 'w') as f:
-        for event in sample_windows_events_list:
-            f.write(json.dumps(event) + "\n")
+        f.writelines(json.dumps(event) + "\n" for event in sample_windows_events_list)
     return str(json_file)
 
 
@@ -598,17 +599,22 @@ _CLEANUP_PATTERNS = [
     'fields.json',
 ]
 
-# Snapshot of tmp-* entries present at session start: never deleted, so a
-# pytest run launched from a directory containing pre-existing tmp-* dirs
-# (e.g. user files) cannot destroy them.
-_PRE_EXISTING_TMP = set(Path(_ORIGINAL_CWD).glob('tmp-*'))
+# Snapshot of every artifact present at session start: never deleted, so a
+# pytest run launched from a working directory that already holds real output
+# (a developer's own detected_events.json, zircolite.log or tmp-* dir) cannot
+# destroy it. Only files the run itself creates are cleaned up.
+_PRE_EXISTING = {
+    item
+    for pattern in _CLEANUP_PATTERNS
+    for item in Path(_ORIGINAL_CWD).glob(pattern)
+}
 
 
 def _cleanup_artifacts(directory: Path):
     """Remove artifacts matching patterns from the given directory."""
     for pattern in _CLEANUP_PATTERNS:
         for item in directory.glob(pattern):
-            if item in _PRE_EXISTING_TMP:
+            if item in _PRE_EXISTING:
                 continue
             try:
                 if item.is_file():
@@ -637,20 +643,20 @@ def pytest_runtest_setup(item):
 def cleanup_test_artifacts():
     """
     Automatically clean up any artifacts created during tests.
-    
+
     This fixture runs before and after each test to ensure a clean state.
     It also restores the working directory if a test changes it.
     """
     # Store the current working directory
     test_start_cwd = os.getcwd()
-    
+
     # Clean artifacts before test (in case previous test left any)
     _cleanup_artifacts(Path(_ORIGINAL_CWD))
     if test_start_cwd != _ORIGINAL_CWD:
         _cleanup_artifacts(Path(test_start_cwd))
-    
+
     yield
-    
+
     # Restore working directory if changed during test
     current_cwd = os.getcwd()
     if current_cwd != test_start_cwd:
@@ -658,11 +664,9 @@ def cleanup_test_artifacts():
             os.chdir(test_start_cwd)
         except (OSError, FileNotFoundError):
             # If the directory no longer exists, go to original
-            try:
+            with contextlib.suppress(OSError, FileNotFoundError):
                 os.chdir(_ORIGINAL_CWD)
-            except (OSError, FileNotFoundError):
-                pass
-    
+
     # Clean artifacts after test
     _cleanup_artifacts(Path(_ORIGINAL_CWD))
     # Also clean from test start directory if different

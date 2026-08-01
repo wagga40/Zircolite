@@ -20,18 +20,18 @@ import gzip
 import json
 import logging
 import os
-import pytest
 from pathlib import Path
 from unittest.mock import patch
 
+import pytest
+
 from zircolite.detector import (
-    LogTypeDetector,
-    DetectionResult,
+    AUDITD_LINE_PATTERN,
     EVTX_MAGIC,
     SQLITE_MAGIC,
-    AUDITD_LINE_PATTERN,
+    DetectionResult,
+    LogTypeDetector,
 )
-
 
 # =============================================================================
 # Fixtures
@@ -95,8 +95,7 @@ def windows_evtx_json_file(tmp_path):
         },
     ]
     with open(f, "w") as fp:
-        for event in events:
-            fp.write(json.dumps(event) + "\n")
+        fp.writelines(json.dumps(event) + "\n" for event in events)
     return f
 
 
@@ -126,8 +125,7 @@ def sysmon_windows_json_file(tmp_path):
         },
     ]
     with open(f, "w") as fp:
-        for event in events:
-            fp.write(json.dumps(event) + "\n")
+        fp.writelines(json.dumps(event) + "\n" for event in events)
     return f
 
 
@@ -191,8 +189,7 @@ def flattened_windows_json_file(tmp_path):
         },
     ]
     with open(f, "w") as fp:
-        for event in events:
-            fp.write(json.dumps(event) + "\n")
+        fp.writelines(json.dumps(event) + "\n" for event in events)
     return f
 
 
@@ -290,8 +287,7 @@ def ecs_json_file(tmp_path):
         },
     ]
     with open(f, "w") as fp:
-        for event in events:
-            fp.write(json.dumps(event) + "\n")
+        fp.writelines(json.dumps(event) + "\n" for event in events)
     return f
 
 
@@ -342,8 +338,7 @@ def generic_json_file(tmp_path):
         {"id": 2, "message": "World", "timestamp": "2024-06-15T10:31:00Z", "level": "warn"},
     ]
     with open(f, "w") as fp:
-        for event in events:
-            fp.write(json.dumps(event) + "\n")
+        fp.writelines(json.dumps(event) + "\n" for event in events)
     return f
 
 
@@ -356,8 +351,7 @@ def auditd_json_file(tmp_path):
         {"type": "EXECVE", "timestamp": "2024-06-15 10:30:00", "argc": "3", "a0": "bash"},
     ]
     with open(f, "w") as fp:
-        for event in events:
-            fp.write(json.dumps(event) + "\n")
+        fp.writelines(json.dumps(event) + "\n" for event in events)
     return f
 
 
@@ -527,8 +521,9 @@ class TestAuditdDetection:
     def test_detect_auditd_from_fixture(self, detector):
         """Real auditd fixture (audit_sample.log) is detected as auditd."""
         fixture = FIXTURES_DIR / "audit_sample.log"
-        if not fixture.exists():
-            pytest.skip(f"Fixture not found: {fixture}")
+        assert fixture.exists(), (
+            f"missing tracked fixture {fixture}"
+        )
         result = detector.detect(fixture)
         assert result.input_type == "auditd"
         assert result.log_source == "auditd"
@@ -564,8 +559,9 @@ class TestSysmonLinuxDetection:
     def test_detect_sysmon_linux_from_fixture(self, detector):
         """Real Sysmon for Linux fixture (sysmon_linux_sample.log) is detected."""
         fixture = FIXTURES_DIR / "sysmon_linux_sample.log"
-        if not fixture.exists():
-            pytest.skip(f"Fixture not found: {fixture}")
+        assert fixture.exists(), (
+            f"missing tracked fixture {fixture}"
+        )
         result = detector.detect(fixture)
         assert result.input_type == "sysmon_linux"
         assert result.log_source == "sysmon_linux"
@@ -677,8 +673,7 @@ class TestEcsDetection:
             {"@timestamp": "2024-06-15T10:30:00.000Z", "message": "test event"},
         ]
         with open(f, "w") as fp:
-            for event in events:
-                fp.write(json.dumps(event) + "\n")
+            fp.writelines(json.dumps(event) + "\n" for event in events)
         result = detector.detect(f)
         assert result.log_source == "ecs_elastic"
         assert result.timestamp_field == "@timestamp"
@@ -686,8 +681,9 @@ class TestEcsDetection:
     def test_detect_winlogbeat_sysmon_from_fixture(self, detector):
         """Real Winlogbeat Sysmon JSONL fixture is detected as ECS/Elastic."""
         fixture = FIXTURES_DIR / "winlogbeat_sysmon_sample.json"
-        if not fixture.exists():
-            pytest.skip(f"Fixture not found: {fixture}")
+        assert fixture.exists(), (
+            f"missing tracked fixture {fixture}"
+        )
         result = detector.detect(fixture)
         assert result.input_type == "json"
         assert result.log_source == "ecs_elastic"
@@ -711,8 +707,9 @@ class TestEvtxtractDetection:
     def test_detect_evtxtract_from_fixture(self, detector):
         """Real EVTXtract fixture (evtxtract_sample.log) is detected as xml or evtxtract."""
         fixture = FIXTURES_DIR / "evtxtract_sample.log"
-        if not fixture.exists():
-            pytest.skip(f"Fixture not found: {fixture}")
+        assert fixture.exists(), (
+            f"missing tracked fixture {fixture}"
+        )
         result = detector.detect(fixture)
         # EVTXtract output is concatenated Event XML; detector may report xml or evtxtract
         assert result.input_type in ("xml", "evtxtract")
@@ -747,8 +744,7 @@ class TestGenericJsonDetection:
             },
         ]
         with open(f, "w") as fp:
-            for event in events:
-                fp.write(json.dumps(event) + "\n")
+            fp.writelines(json.dumps(event) + "\n" for event in events)
         result = detector.detect(f)
         assert result.log_source == "sysmon_windows"
         assert result.timestamp_field == "UtcTime"
@@ -1232,8 +1228,7 @@ class TestRawTimestampFallbackIntegration:
             {"id": 2, "event_logged_at": "2024-06-15T10:31:00Z", "action": "logout"},
         ]
         with open(f, "w") as fp:
-            for e in events:
-                fp.write(json.dumps(e) + "\n")
+            fp.writelines(json.dumps(e) + "\n" for e in events)
 
         result = detector.detect(f)
         assert result.input_type == "json"
@@ -1664,8 +1659,9 @@ class TestRealFixtureSingleFile:
     def test_sample_events_json(self, detector):
         """sample_events.json: Windows Sysmon JSONL should be detected."""
         fixture = FIXTURES_DIR / "sample_events.json"
-        if not fixture.exists():
-            pytest.skip(f"Fixture not found: {fixture}")
+        assert fixture.exists(), (
+            f"missing tracked fixture {fixture}"
+        )
         result = detector.detect(fixture)
         assert result.input_type == "json"
         assert result.log_source in ("windows_evtx_json", "sysmon_windows")
@@ -1676,8 +1672,9 @@ class TestRealFixtureSingleFile:
     def test_winlogbeat_sysmon_json(self, detector):
         """winlogbeat_sysmon_sample.json: ECS/Winlogbeat format detection."""
         fixture = FIXTURES_DIR / "winlogbeat_sysmon_sample.json"
-        if not fixture.exists():
-            pytest.skip(f"Fixture not found: {fixture}")
+        assert fixture.exists(), (
+            f"missing tracked fixture {fixture}"
+        )
         result = detector.detect(fixture)
         assert result.input_type == "json"
         assert result.log_source == "ecs_elastic"
@@ -1688,8 +1685,9 @@ class TestRealFixtureSingleFile:
     def test_xml_events_sample(self, detector):
         """xml_events_sample.xml: Windows Event XML with MS namespace."""
         fixture = FIXTURES_DIR / "xml_events_sample.xml"
-        if not fixture.exists():
-            pytest.skip(f"Fixture not found: {fixture}")
+        assert fixture.exists(), (
+            f"missing tracked fixture {fixture}"
+        )
         result = detector.detect(fixture)
         assert result.input_type == "xml"
         assert result.log_source == "windows_evtx_xml"
@@ -1700,8 +1698,9 @@ class TestRealFixtureSingleFile:
     def test_audit_sample_log(self, detector):
         """audit_sample.log: Linux Auditd key=value format."""
         fixture = FIXTURES_DIR / "audit_sample.log"
-        if not fixture.exists():
-            pytest.skip(f"Fixture not found: {fixture}")
+        assert fixture.exists(), (
+            f"missing tracked fixture {fixture}"
+        )
         result = detector.detect(fixture)
         assert result.input_type == "auditd"
         assert result.log_source == "auditd"
@@ -1711,8 +1710,9 @@ class TestRealFixtureSingleFile:
     def test_sysmon_linux_sample_log(self, detector):
         """sysmon_linux_sample.log: Sysmon for Linux (syslog + embedded XML)."""
         fixture = FIXTURES_DIR / "sysmon_linux_sample.log"
-        if not fixture.exists():
-            pytest.skip(f"Fixture not found: {fixture}")
+        assert fixture.exists(), (
+            f"missing tracked fixture {fixture}"
+        )
         result = detector.detect(fixture)
         assert result.input_type == "sysmon_linux"
         assert result.log_source == "sysmon_linux"
@@ -1723,8 +1723,9 @@ class TestRealFixtureSingleFile:
     def test_evtxtract_sample_log(self, detector):
         """evtxtract_sample.log: EVTXtract output (concatenated Event XML)."""
         fixture = FIXTURES_DIR / "evtxtract_sample.log"
-        if not fixture.exists():
-            pytest.skip(f"Fixture not found: {fixture}")
+        assert fixture.exists(), (
+            f"missing tracked fixture {fixture}"
+        )
         result = detector.detect(fixture)
         assert result.input_type in ("xml", "evtxtract")
         assert result.log_source in ("windows_evtx_xml", "evtxtract", "generic_xml")
@@ -1734,8 +1735,9 @@ class TestRealFixtureSingleFile:
     def test_sample_bitsadmin_evtx(self, detector):
         """sample_bitsadmin.evtx: EVTX binary detected via magic bytes."""
         fixture = FIXTURES_DIR / "sample_bitsadmin.evtx"
-        if not fixture.exists():
-            pytest.skip(f"Fixture not found: {fixture}")
+        assert fixture.exists(), (
+            f"missing tracked fixture {fixture}"
+        )
         result = detector.detect(fixture)
         assert result.input_type == "evtx"
         assert result.log_source == "windows_evtx"
@@ -1745,8 +1747,9 @@ class TestRealFixtureSingleFile:
     def test_sample_bitsadmin_db(self, detector):
         """sample_bitsadmin.db: SQLite database detected via magic bytes."""
         fixture = FIXTURES_DIR / "sample_bitsadmin.db"
-        if not fixture.exists():
-            pytest.skip(f"Fixture not found: {fixture}")
+        assert fixture.exists(), (
+            f"missing tracked fixture {fixture}"
+        )
         result = detector.detect(fixture)
         assert result.input_type == "sqlite"
         assert result.log_source == "sqlite_db"
@@ -1772,8 +1775,9 @@ class TestRealFixtureBatchDetection:
         paths = []
         for name in names:
             src = FIXTURES_DIR / name
-            if not src.exists():
-                pytest.skip(f"Fixture not found: {src}")
+            assert src.exists(), (
+                f"missing tracked fixture {src}"
+            )
             dst = dest_dir / name
             shutil.copy2(src, dst)
             paths.append(dst)
@@ -1783,8 +1787,9 @@ class TestRealFixtureBatchDetection:
         """Batch of identical Windows EVTX JSON files agrees on type."""
         import shutil
         src = FIXTURES_DIR / "sample_events.json"
-        if not src.exists():
-            pytest.skip(f"Fixture not found: {src}")
+        assert src.exists(), (
+            f"missing tracked fixture {src}"
+        )
         files = []
         for i in range(3):
             dst = tmp_path / f"events_{i}.json"
@@ -1800,8 +1805,9 @@ class TestRealFixtureBatchDetection:
         """Batch of identical auditd files agrees on type."""
         import shutil
         src = FIXTURES_DIR / "audit_sample.log"
-        if not src.exists():
-            pytest.skip(f"Fixture not found: {src}")
+        assert src.exists(), (
+            f"missing tracked fixture {src}"
+        )
         files = []
         for i in range(3):
             dst = tmp_path / f"audit_{i}.log"
@@ -1817,8 +1823,9 @@ class TestRealFixtureBatchDetection:
         """Batch of identical Sysmon Linux files agrees on type."""
         import shutil
         src = FIXTURES_DIR / "sysmon_linux_sample.log"
-        if not src.exists():
-            pytest.skip(f"Fixture not found: {src}")
+        assert src.exists(), (
+            f"missing tracked fixture {src}"
+        )
         files = []
         for i in range(3):
             dst = tmp_path / f"sysmon_{i}.log"
@@ -1855,8 +1862,9 @@ class TestRealFixtureBatchDetection:
     def test_batch_single_evtx(self, detector):
         """Single EVTX file in a batch list is handled correctly."""
         fixture = FIXTURES_DIR / "sample_bitsadmin.evtx"
-        if not fixture.exists():
-            pytest.skip(f"Fixture not found: {fixture}")
+        assert fixture.exists(), (
+            f"missing tracked fixture {fixture}"
+        )
         result = detector.detect_batch([fixture])
         assert result.input_type == "evtx"
         assert result.log_source == "windows_evtx"
@@ -1865,8 +1873,9 @@ class TestRealFixtureBatchDetection:
     def test_batch_single_sqlite(self, detector):
         """Single SQLite file in a batch list is handled correctly."""
         fixture = FIXTURES_DIR / "sample_bitsadmin.db"
-        if not fixture.exists():
-            pytest.skip(f"Fixture not found: {fixture}")
+        assert fixture.exists(), (
+            f"missing tracked fixture {fixture}"
+        )
         result = detector.detect_batch([fixture])
         assert result.input_type == "sqlite"
         assert result.log_source == "sqlite_db"
@@ -1942,9 +1951,8 @@ class TestMagicBytesRobustness:
         with patch(
             "zipfile.ZipFile.open",
             side_effect=NotImplementedError("That compression method is not supported"),
-        ):
-            with pytest.raises(ValueError, match="password"):
-                detector.detect(zip_path)
+        ), pytest.raises(ValueError, match="password"):
+            detector.detect(zip_path)
 
 
 class TestSampleDecoding:

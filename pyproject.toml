@@ -1,0 +1,116 @@
+[project]
+name = "Zircolite"
+version = "3.8.0"
+description = "A standalone SIGMA-based detection tool for EVTX, Auditd and Sysmon for Linux logs "
+authors = [
+    {name = "wagga40", email = "6437862+wagga40@users.noreply.github.com"},
+]
+dependencies = [
+    "orjson>=3.9.15",
+    "xxhash",
+    "rich>=14.2.0",
+    "chardet>=5.0,<6",
+    "RestrictedPython",
+    "requests>=2.32.4",
+    "jinja2>=2.11.3",
+    "evtx>=0.6.2",
+    "lxml",
+    "pysigma>=0.10.10",
+    "pysigma-pipeline-sysmon>=1.0.3",
+    "pysigma-pipeline-windows>=1.1.1",
+    "pysigma-backend-sqlite>=0.1.1",
+    "pyyaml",
+    "psutil>=5.9.0",
+    "urllib3>=2.6.3",
+    "rich-argparse>=1.7.2",
+    "py7zr>=1.1.0",
+]
+requires-python = ">=3.10"
+readme = "README.md"
+license = {text = "LGPL-3.0-or-later"}
+
+
+[tool.pdm]
+distribution = false
+
+[tool.ruff]
+# Without an explicit config ruff lints against whatever its current default
+# happens to be, so the result changed with the installed version and nobody
+# could tell a regression from an upgrade. Pin it.
+target-version = "py310"
+line-length = 100
+# Transform snippets are not modules: they are compiled by RestrictedPython
+# with `re`, `base64`, `chardet` and `math` injected into the sandbox, so a
+# standalone lint reports every one of those as an undefined name.
+extend-exclude = ["config/transforms"]
+
+[tool.ruff.lint]
+# Rules that catch defects. Deliberately excluded: the PLR complexity metrics
+# (too-many-branches and friends), which would demand restructuring working
+# parsers to hit an arbitrary number, and most of TRY, which is house style
+# rather than correctness.
+select = [
+    "E", "W", "F",   # pycodestyle + pyflakes: real errors
+    "I",             # import ordering
+    "UP",            # pyupgrade -- the floor is 3.10, so modern syntax applies
+    "B",             # bugbear
+    "SIM",           # simplifications
+    "RUF",           # ruff-specific
+    "S",             # bandit: this is a security tool
+    "EXE",           # shebang/executable-bit consistency
+    "FURB", "PYI",
+]
+ignore = [
+    # Line length is a formatter's job, and `ruff format` is not run over this
+    # codebase yet (doing so would bury every behavioural diff).
+    "E501",
+    # Catching bare Exception at a record or file boundary is the deliberate
+    # isolation strategy: one malformed event must not cost the other million.
+    # Every such site records the failure -- see `marks_degraded` and
+    # `_note_skipped_record` in streaming.py -- so none of them is silent.
+    "BLE001",
+    # Same reasoning, for the cleanup paths where the failure is genuinely
+    # uninteresting (closing a handle that is already broken).
+    "S110", "S112",
+    # The console output, the ASCII-art banner and the docs use typographic
+    # characters (em dashes, box drawing, arrows) on purpose.
+    "RUF001", "RUF002", "RUF003",
+]
+
+[tool.ruff.lint.per-file-ignores]
+# RestrictedPython transforms are executed on purpose; that is the feature.
+"zircolite/streaming.py" = ["S102"]
+"tests/*" = [
+    "S101",           # assert *is* the test
+    "S105", "S106",   # archive passwords in fixtures are test data
+    "S603",           # the CLI is invoked as a subprocess on purpose
+    "S608",           # fixture SQL is written by the test, not by input
+    "SIM115",         # handles are opened to be closed by the assertion
+    "SIM117",         # nested `with` keeps long fixture setups readable
+    "RUF059",         # unpacking and ignoring a value documents the shape
+]
+
+[tool.mypy]
+ignore_missing_imports = true
+check_untyped_defs = true
+
+[[tool.mypy.overrides]]
+module = "tests.*"
+ignore_errors = true
+
+[dependency-groups]
+dev = [
+    "pytest>=9.0.2",
+    "pytest-timeout>=2.4.0",
+    # Coverage is opt-in (`pytest --cov=zircolite`), but CI reports it.
+    "pytest-cov>=7.0.0",
+    # Declared so everyone lints with the same version. Left undeclared, ruff
+    # ran from PATH against whatever rule set that build shipped, and a
+    # regression was indistinguishable from an upgrade.
+    "ruff>=0.16.1",
+    "mypy>=1.19.1",
+    # tools/sigma-regression.py only
+    "sqlparse>=0.5.5",
+    # binary builds only (.github/workflows/build_pyinstaller.yml)
+    "pyinstaller>=6.18.0",
+]

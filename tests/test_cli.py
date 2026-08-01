@@ -10,14 +10,15 @@ These tests verify the command-line interface behavior including:
 """
 
 import argparse
+import importlib.util
 import json
 import os
-import pytest
 import subprocess
 import sys
 from pathlib import Path
 from unittest.mock import patch
-import importlib.util
+
+import pytest
 
 from zircolite import DetectionResult
 
@@ -31,7 +32,7 @@ sys.path.insert(0, str(WORKSPACE_ROOT))
 def load_zircolite_script():
     """Load zircolite.py script directly, bypassing the package."""
     spec = importlib.util.spec_from_file_location(
-        "zircolite_script", 
+        "zircolite_script",
         WORKSPACE_ROOT / "zircolite.py"
     )
     module = importlib.util.module_from_spec(spec)
@@ -47,6 +48,22 @@ def get_log_arg(tmp_path):
     return ['-l', str(tmp_path / "test.log")]
 
 
+def _matched_events(output_file):
+    """Every matched event across every rule in a detections file."""
+    if not Path(output_file).exists():
+        return []
+    return [
+        event
+        for rule in json.loads(Path(output_file).read_text())
+        for event in rule.get("matches", [])
+    ]
+
+
+def _matched_command_lines(output_file):
+    """The CommandLine of every matched event, for asserting *which* events fired."""
+    return {event.get("CommandLine") for event in _matched_events(output_file)}
+
+
 class TestCLIArgumentParsing:
     """Tests for CLI argument parsing."""
 
@@ -55,7 +72,7 @@ class TestCLIArgumentParsing:
         with pytest.raises(SystemExit) as exc_info:
             with patch('sys.argv', ['zircolite.py', '--version']):
                 zircolite_script.main()
-        
+
         # Should exit with code 0
         assert exc_info.value.code == 0
 
@@ -64,18 +81,18 @@ class TestCLIArgumentParsing:
         with pytest.raises(SystemExit) as exc_info:
             with patch('sys.argv', ['zircolite.py', '-v']):
                 zircolite_script.main()
-        
+
         assert exc_info.value.code == 0
 
     def test_missing_events_source_error(self, tmp_path, capsys):
         """Test error when no events source is provided."""
         ruleset_file = tmp_path / "ruleset.json"
         ruleset_file.write_text("[]")
-        
+
         with pytest.raises(SystemExit) as exc_info:
             with patch('sys.argv', ['zircolite.py', '-r', str(ruleset_file), '-n']):
                 zircolite_script.main()
-        
+
         # Should exit with error code 2
         assert exc_info.value.code == 2
 
@@ -86,87 +103,83 @@ class TestCLIArgumentParsing:
         ruleset2 = tmp_path / "ruleset2.json"
         ruleset1.write_text("[]")
         ruleset2.write_text("[]")
-        
+
         # Create dummy events file
         events_file = tmp_path / "events.json"
         events_file.write_text("{}")
-        
-        with pytest.raises(SystemExit) as exc_info:
-            with patch('sys.argv', [
-                'zircolite.py',
-                '-e', str(events_file),
-                '-r', str(ruleset1), str(ruleset2),
-                '--csv',
-                '-n'
-            ]):
-                zircolite_script.main()
-        
+
+        with pytest.raises(SystemExit) as exc_info, patch('sys.argv', [
+            'zircolite.py',
+            '-e', str(events_file),
+            '-r', str(ruleset1), str(ruleset2),
+            '--csv',
+            '-n'
+        ]):
+            zircolite_script.main()
+
         assert exc_info.value.code == 2
 
     def test_invalid_timestamp_format_error(self, tmp_path):
         """Test error with invalid timestamp format."""
         events_file = tmp_path / "events.json"
         events_file.write_text("{}")
-        
+
         ruleset_file = tmp_path / "ruleset.json"
         ruleset_file.write_text("[]")
-        
-        with pytest.raises(SystemExit):
-            with patch('sys.argv', [
-                'zircolite.py',
-                '-e', str(events_file),
-                '-r', str(ruleset_file),
-                '-A', 'invalid-timestamp',
-                '-n'
-            ]):
-                zircolite_script.main()
+
+        with pytest.raises(SystemExit), patch('sys.argv', [
+            'zircolite.py',
+            '-e', str(events_file),
+            '-r', str(ruleset_file),
+            '-A', 'invalid-timestamp',
+            '-n'
+        ]):
+            zircolite_script.main()
 
     def test_template_without_output_error(self, tmp_path):
         """Test error when template is provided without output."""
         events_file = tmp_path / "events.json"
         events_file.write_text('{"Event": {"System": {"EventID": 1}}}')
-        
+
         ruleset_file = tmp_path / "ruleset.json"
         ruleset_file.write_text("[]")
-        
+
         template_file = tmp_path / "template.tmpl"
         template_file.write_text("test template")
-        
-        with pytest.raises(SystemExit):
-            with patch('sys.argv', [
-                'zircolite.py',
-                '-e', str(events_file),
-                '-r', str(ruleset_file),
-                '--template', str(template_file),
-                '-n'
-            ]):
-                zircolite_script.main()
+
+        with pytest.raises(SystemExit), patch('sys.argv', [
+            'zircolite.py',
+            '-e', str(events_file),
+            '-r', str(ruleset_file),
+            '--template', str(template_file),
+            '-n'
+        ]):
+            zircolite_script.main()
 
     def test_template_count_mismatch_error(self, tmp_path):
         """Test error when template and templateOutput counts don't match."""
         events_file = tmp_path / "events.json"
         events_file.write_text('{"Event": {"System": {"EventID": 1}}}')
-        
+
         ruleset_file = tmp_path / "ruleset.json"
         ruleset_file.write_text("[]")
-        
+
         template1 = tmp_path / "template1.tmpl"
         template2 = tmp_path / "template2.tmpl"
         template1.write_text("template 1")
         template2.write_text("template 2")
-        
+
         # Use separate --template calls to provide 2 templates, but only 1 output
-        with pytest.raises(SystemExit):
-            with patch('sys.argv', [
-                'zircolite.py',
-                '-e', str(events_file),
-                '-r', str(ruleset_file),
-                '--template', str(template1),
-                '--template', str(template2),
-                '--templateOutput', 'output1.txt',
-                '-n'
-            ]):
-                zircolite_script.main()
+        with pytest.raises(SystemExit), patch('sys.argv', [
+            'zircolite.py',
+            '-e', str(events_file),
+            '-r', str(ruleset_file),
+            '--template', str(template1),
+            '--template', str(template2),
+            '--templateOutput', 'output1.txt',
+            '-n'
+        ]):
+            zircolite_script.main()
 
 
 class TestCLITransformOptions:
@@ -244,10 +257,10 @@ class TestCLIInputModes:
         # Create CSV events file
         events_file = tmp_path / "events.csv"
         events_file.write_text("EventID,CommandLine\n1,test command\n")
-        
+
         ruleset_file = tmp_path / "ruleset.json"
         ruleset_file.write_text("[]")
-        
+
         config_file = tmp_path / "config.json"
         config_file.write_text(json.dumps({
             "exclusions": [],
@@ -258,19 +271,12 @@ class TestCLIInputModes:
             "transforms_enabled": False,
             "transforms": {}
         }))
-        
+
         output_file = tmp_path / "output.json"
-        
-        with patch('sys.argv', [
-            'zircolite.py',
-            '-e', str(events_file),
-            '-r', str(ruleset_file),
-            '-c', str(config_file),
-            '--csv-input',
-            '-o', str(output_file)
-        ] + get_log_arg(tmp_path)):
+
+        with patch('sys.argv', ['zircolite.py', '-e', str(events_file), '-r', str(ruleset_file), '-c', str(config_file), '--csv-input', '-o', str(output_file), *get_log_arg(tmp_path)]):
             zircolite_script.main()
-        
+
         assert output_file.exists()
 
 
@@ -287,10 +293,10 @@ class TestCLIStreamingMode:
         monkeypatch.chdir(tmp_path)
         events_file = tmp_path / "events.json"
         events_file.write_text('{"Event": {"System": {"EventID": 1}, "EventData": {}}}')
-        
+
         ruleset_file = tmp_path / "ruleset.json"
         ruleset_file.write_text("[]")
-        
+
         config_file = tmp_path / "config.json"
         config_file.write_text(json.dumps({
             "exclusions": [],
@@ -301,19 +307,10 @@ class TestCLIStreamingMode:
             "transforms_enabled": False,
             "transforms": {}
         }))
-        
+
         output_file = tmp_path / "output.json"
-        
-        with patch('sys.argv', [
-            'zircolite.py',
-            '-e', str(events_file),
-            '-r', str(ruleset_file),
-            '-c', str(config_file),
-            '-j',
-            '-o', str(output_file),
-            '--keepflat',
-            '--no-auto-mode'
-        ] + get_log_arg(tmp_path)):
+
+        with patch('sys.argv', ['zircolite.py', '-e', str(events_file), '-r', str(ruleset_file), '-c', str(config_file), '-j', '-o', str(output_file), '--keepflat', '--no-auto-mode', *get_log_arg(tmp_path)]):
             zircolite_script.main()
 
         assert output_file.exists()
@@ -333,7 +330,7 @@ class TestCLIOutputFormats:
         """Test JSON output is default."""
         events_file = tmp_path / "events.json"
         events_file.write_text('{"Event": {"System": {"EventID": 1}, "EventData": {"CommandLine": "powershell.exe"}}}')
-        
+
         ruleset_file = tmp_path / "ruleset.json"
         ruleset_file.write_text(json.dumps([{
             "title": "Test Rule",
@@ -342,7 +339,7 @@ class TestCLIOutputFormats:
             "tags": [],
             "rule": ["SELECT * FROM logs WHERE CommandLine LIKE '%powershell%'"]
         }]))
-        
+
         config_file = tmp_path / "config.json"
         config_file.write_text(json.dumps({
             "exclusions": [],
@@ -356,19 +353,12 @@ class TestCLIOutputFormats:
             "transforms_enabled": False,
             "transforms": {}
         }))
-        
+
         output_file = tmp_path / "detected_events.json"
-        
-        with patch('sys.argv', [
-            'zircolite.py',
-            '-e', str(events_file),
-            '-r', str(ruleset_file),
-            '-c', str(config_file),
-            '-j',
-            '-o', str(output_file)
-        ] + get_log_arg(tmp_path)):
+
+        with patch('sys.argv', ['zircolite.py', '-e', str(events_file), '-r', str(ruleset_file), '-c', str(config_file), '-j', '-o', str(output_file), *get_log_arg(tmp_path)]):
             zircolite_script.main()
-        
+
         assert output_file.exists()
         with open(output_file) as f:
             content = f.read()
@@ -380,7 +370,7 @@ class TestCLIOutputFormats:
         """Test CSV output mode."""
         events_file = tmp_path / "events.json"
         events_file.write_text('{"Event": {"System": {"EventID": 1}, "EventData": {"CommandLine": "powershell.exe"}}}')
-        
+
         ruleset_file = tmp_path / "ruleset.json"
         ruleset_file.write_text(json.dumps([{
             "title": "Test Rule",
@@ -389,7 +379,7 @@ class TestCLIOutputFormats:
             "tags": [],
             "rule": ["SELECT * FROM logs WHERE CommandLine LIKE '%powershell%'"]
         }]))
-        
+
         config_file = tmp_path / "config.json"
         config_file.write_text(json.dumps({
             "exclusions": [],
@@ -403,20 +393,12 @@ class TestCLIOutputFormats:
             "transforms_enabled": False,
             "transforms": {}
         }))
-        
+
         output_file = tmp_path / "detected_events.csv"
-        
-        with patch('sys.argv', [
-            'zircolite.py',
-            '-e', str(events_file),
-            '-r', str(ruleset_file),
-            '-c', str(config_file),
-            '-j',
-            '-o', str(output_file),
-            '--csv'
-        ] + get_log_arg(tmp_path)):
+
+        with patch('sys.argv', ['zircolite.py', '-e', str(events_file), '-r', str(ruleset_file), '-c', str(config_file), '-j', '-o', str(output_file), '--csv', *get_log_arg(tmp_path)]):
             zircolite_script.main()
-        
+
         assert output_file.exists()
         with open(output_file) as f:
             content = f.read()
@@ -473,17 +455,7 @@ class TestCLIOutputFormats:
             return mock_analyze(files, logger)
 
         with patch.object(zircolite_script, 'analyze_files_and_recommend_mode', side_effect=tracking_analyze):
-            with patch('sys.argv', [
-                'zircolite.py',
-                '-e', str(events_dir),
-                '-r', str(ruleset_file),
-                '-c', str(config_file),
-                '-j',
-                '--csv',
-                '--csv-delimiter', ',',
-                '-o', str(output_file),
-                '--no-auto-mode'
-            ] + get_log_arg(tmp_path)):
+            with patch('sys.argv', ['zircolite.py', '-e', str(events_dir), '-r', str(ruleset_file), '-c', str(config_file), '-j', '--csv', '--csv-delimiter', ',', '-o', str(output_file), '--no-auto-mode', *get_log_arg(tmp_path)]):
                 zircolite_script.main()
 
         # Without this the test silently exercised the sequential path
@@ -505,7 +477,7 @@ class TestCLIDetection:
         """Test that matching events are detected."""
         events_file = tmp_path / "events.json"
         events_file.write_text('{"Event": {"System": {"EventID": 1}, "EventData": {"CommandLine": "powershell.exe -encodedCommand test"}}}')
-        
+
         ruleset_file = tmp_path / "ruleset.json"
         ruleset_file.write_text(json.dumps([{
             "title": "Suspicious PowerShell",
@@ -515,7 +487,7 @@ class TestCLIDetection:
             "tags": ["attack.execution"],
             "rule": ["SELECT * FROM logs WHERE CommandLine LIKE '%powershell%'"]
         }]))
-        
+
         config_file = tmp_path / "config.json"
         config_file.write_text(json.dumps({
             "exclusions": [],
@@ -529,23 +501,16 @@ class TestCLIDetection:
             "transforms_enabled": False,
             "transforms": {}
         }))
-        
+
         output_file = tmp_path / "detected_events.json"
-        
-        with patch('sys.argv', [
-            'zircolite.py',
-            '-e', str(events_file),
-            '-r', str(ruleset_file),
-            '-c', str(config_file),
-            '-j',
-            '-o', str(output_file)
-        ] + get_log_arg(tmp_path)):
+
+        with patch('sys.argv', ['zircolite.py', '-e', str(events_file), '-r', str(ruleset_file), '-c', str(config_file), '-j', '-o', str(output_file), *get_log_arg(tmp_path)]):
             zircolite_script.main()
-        
+
         assert output_file.exists()
         with open(output_file) as f:
             detections = json.loads(f.read())
-        
+
         # Should have at least one detection
         assert len(detections) >= 1
         assert detections[0]["title"] == "Suspicious PowerShell"
@@ -554,7 +519,7 @@ class TestCLIDetection:
         """Test that non-matching events produce no detections."""
         events_file = tmp_path / "events.json"
         events_file.write_text('{"Event": {"System": {"EventID": 1}, "EventData": {"CommandLine": "notepad.exe"}}}')
-        
+
         ruleset_file = tmp_path / "ruleset.json"
         ruleset_file.write_text(json.dumps([{
             "title": "Suspicious PowerShell",
@@ -563,7 +528,7 @@ class TestCLIDetection:
             "tags": [],
             "rule": ["SELECT * FROM logs WHERE CommandLine LIKE '%mimikatz%'"]
         }]))
-        
+
         config_file = tmp_path / "config.json"
         config_file.write_text(json.dumps({
             "exclusions": [],
@@ -577,23 +542,16 @@ class TestCLIDetection:
             "transforms_enabled": False,
             "transforms": {}
         }))
-        
+
         output_file = tmp_path / "detected_events.json"
-        
-        with patch('sys.argv', [
-            'zircolite.py',
-            '-e', str(events_file),
-            '-r', str(ruleset_file),
-            '-c', str(config_file),
-            '-j',
-            '-o', str(output_file)
-        ] + get_log_arg(tmp_path)):
+
+        with patch('sys.argv', ['zircolite.py', '-e', str(events_file), '-r', str(ruleset_file), '-c', str(config_file), '-j', '-o', str(output_file), *get_log_arg(tmp_path)]):
             zircolite_script.main()
-        
+
         assert output_file.exists()
         with open(output_file) as f:
             detections = json.loads(f.read())
-        
+
         # Should have no detections
         assert len(detections) == 0
 
@@ -605,7 +563,7 @@ class TestCLIRuleFiltering:
         """Test that -R filter removes rules by title."""
         events_file = tmp_path / "events.json"
         events_file.write_text('{"Event": {"System": {"EventID": 1}, "EventData": {"CommandLine": "powershell.exe test"}}}')
-        
+
         ruleset_file = tmp_path / "ruleset.json"
         ruleset_file.write_text(json.dumps([
             {
@@ -623,7 +581,7 @@ class TestCLIRuleFiltering:
                 "rule": ["SELECT * FROM logs WHERE CommandLine LIKE '%cmd%'"]
             }
         ]))
-        
+
         config_file = tmp_path / "config.json"
         config_file.write_text(json.dumps({
             "exclusions": [],
@@ -637,25 +595,17 @@ class TestCLIRuleFiltering:
             "transforms_enabled": False,
             "transforms": {}
         }))
-        
+
         output_file = tmp_path / "detected_events.json"
-        
+
         # Filter out PowerShell rule
-        with patch('sys.argv', [
-            'zircolite.py',
-            '-e', str(events_file),
-            '-r', str(ruleset_file),
-            '-c', str(config_file),
-            '-j',
-            '-o', str(output_file),
-            '-R', 'PowerShell'
-        ] + get_log_arg(tmp_path)):
+        with patch('sys.argv', ['zircolite.py', '-e', str(events_file), '-r', str(ruleset_file), '-c', str(config_file), '-j', '-o', str(output_file), '-R', 'PowerShell', *get_log_arg(tmp_path)]):
             zircolite_script.main()
-        
+
         assert output_file.exists()
         with open(output_file) as f:
             detections = json.loads(f.read())
-        
+
         # Should have no detections since PowerShell rule was filtered
         assert len(detections) == 0
 
@@ -676,7 +626,7 @@ class TestCLITimeFiltering:
                 "EventData": {"CommandLine": "powershell.exe"}
             }
         }))
-        
+
         ruleset_file = tmp_path / "ruleset.json"
         ruleset_file.write_text(json.dumps([{
             "title": "Test Rule",
@@ -685,7 +635,7 @@ class TestCLITimeFiltering:
             "tags": [],
             "rule": ["SELECT * FROM logs WHERE CommandLine LIKE '%powershell%'"]
         }]))
-        
+
         config_file = tmp_path / "config.json"
         config_file.write_text(json.dumps({
             "exclusions": [],
@@ -700,25 +650,17 @@ class TestCLITimeFiltering:
             "transforms_enabled": False,
             "transforms": {}
         }))
-        
+
         output_file = tmp_path / "detected_events.json"
-        
+
         # Filter to only events after 2024
-        with patch('sys.argv', [
-            'zircolite.py',
-            '-e', str(events_file),
-            '-r', str(ruleset_file),
-            '-c', str(config_file),
-            '-j',
-            '-o', str(output_file),
-            '-A', '2024-01-01T00:00:00'
-        ] + get_log_arg(tmp_path)):
+        with patch('sys.argv', ['zircolite.py', '-e', str(events_file), '-r', str(ruleset_file), '-c', str(config_file), '-j', '-o', str(output_file), '-A', '2024-01-01T00:00:00', *get_log_arg(tmp_path)]):
             zircolite_script.main()
-        
+
         assert output_file.exists()
         with open(output_file) as f:
             detections = json.loads(f.read())
-        
+
         # Should have no detections (event was filtered)
         assert len(detections) == 0
 
@@ -735,7 +677,7 @@ class TestCLITimeFiltering:
                 "EventData": {"CommandLine": "powershell.exe"}
             }
         }))
-        
+
         ruleset_file = tmp_path / "ruleset.json"
         ruleset_file.write_text(json.dumps([{
             "title": "Test Rule",
@@ -744,7 +686,7 @@ class TestCLITimeFiltering:
             "tags": [],
             "rule": ["SELECT * FROM logs WHERE CommandLine LIKE '%powershell%'"]
         }]))
-        
+
         config_file = tmp_path / "config.json"
         config_file.write_text(json.dumps({
             "exclusions": [],
@@ -759,25 +701,17 @@ class TestCLITimeFiltering:
             "transforms_enabled": False,
             "transforms": {}
         }))
-        
+
         output_file = tmp_path / "detected_events.json"
-        
+
         # Filter to only events before 2025
-        with patch('sys.argv', [
-            'zircolite.py',
-            '-e', str(events_file),
-            '-r', str(ruleset_file),
-            '-c', str(config_file),
-            '-j',
-            '-o', str(output_file),
-            '-B', '2025-01-01T00:00:00'
-        ] + get_log_arg(tmp_path)):
+        with patch('sys.argv', ['zircolite.py', '-e', str(events_file), '-r', str(ruleset_file), '-c', str(config_file), '-j', '-o', str(output_file), '-B', '2025-01-01T00:00:00', *get_log_arg(tmp_path)]):
             zircolite_script.main()
-        
+
         assert output_file.exists()
         with open(output_file) as f:
             detections = json.loads(f.read())
-        
+
         # Should have no detections (event was filtered)
         assert len(detections) == 0
 
@@ -796,10 +730,10 @@ class TestCLILimitOption:
                     "EventData": {"CommandLine": f"powershell.exe test{i}"}
                 }
             }))
-        
+
         events_file = tmp_path / "events.json"
         events_file.write_text("\n".join(events))
-        
+
         ruleset_file = tmp_path / "ruleset.json"
         ruleset_file.write_text(json.dumps([{
             "title": "Test Rule",
@@ -808,7 +742,7 @@ class TestCLILimitOption:
             "tags": [],
             "rule": ["SELECT * FROM logs WHERE CommandLine LIKE '%powershell%'"]
         }]))
-        
+
         config_file = tmp_path / "config.json"
         config_file.write_text(json.dumps({
             "exclusions": [],
@@ -822,25 +756,17 @@ class TestCLILimitOption:
             "transforms_enabled": False,
             "transforms": {}
         }))
-        
+
         output_file = tmp_path / "detected_events.json"
-        
+
         # Set limit to 5 (rule matches 20 events, exceeds limit)
-        with patch('sys.argv', [
-            'zircolite.py',
-            '-e', str(events_file),
-            '-r', str(ruleset_file),
-            '-c', str(config_file),
-            '-j',
-            '-o', str(output_file),
-            '-L', '5'
-        ] + get_log_arg(tmp_path)):
+        with patch('sys.argv', ['zircolite.py', '-e', str(events_file), '-r', str(ruleset_file), '-c', str(config_file), '-j', '-o', str(output_file), '-L', '5', *get_log_arg(tmp_path)]):
             zircolite_script.main()
-        
+
         assert output_file.exists()
         with open(output_file) as f:
             detections = json.loads(f.read())
-        
+
         # Results should be empty (20 > 5 limit)
         assert len(detections) == 0
 
@@ -852,7 +778,7 @@ class TestCLIMultipleFiles:
         """Test processing a directory with multiple JSON files."""
         events_dir = tmp_path / "events"
         events_dir.mkdir()
-        
+
         # Create multiple JSON files
         for i in range(3):
             events_file = events_dir / f"events_{i}.json"
@@ -862,7 +788,7 @@ class TestCLIMultipleFiles:
                     "EventData": {"CommandLine": f"powershell.exe test{i}"}
                 }
             }))
-        
+
         ruleset_file = tmp_path / "ruleset.json"
         ruleset_file.write_text(json.dumps([{
             "title": "Test Rule",
@@ -871,7 +797,7 @@ class TestCLIMultipleFiles:
             "tags": [],
             "rule": ["SELECT * FROM logs WHERE CommandLine LIKE '%powershell%'"]
         }]))
-        
+
         config_file = tmp_path / "config.json"
         config_file.write_text(json.dumps({
             "exclusions": [],
@@ -885,23 +811,16 @@ class TestCLIMultipleFiles:
             "transforms_enabled": False,
             "transforms": {}
         }))
-        
+
         output_file = tmp_path / "detected_events.json"
-        
-        with patch('sys.argv', [
-            'zircolite.py',
-            '-e', str(events_dir),
-            '-r', str(ruleset_file),
-            '-c', str(config_file),
-            '-j',
-            '-o', str(output_file)
-        ] + get_log_arg(tmp_path)):
+
+        with patch('sys.argv', ['zircolite.py', '-e', str(events_dir), '-r', str(ruleset_file), '-c', str(config_file), '-j', '-o', str(output_file), *get_log_arg(tmp_path)]):
             zircolite_script.main()
-        
+
         assert output_file.exists()
         with open(output_file) as f:
             detections = json.loads(f.read())
-        
+
         # Should have detections from all files
         assert len(detections) >= 1
 
@@ -909,15 +828,19 @@ class TestCLIMultipleFiles:
         """Test -s (select) filter to process only matching files."""
         events_dir = tmp_path / "events"
         events_dir.mkdir()
-        
+
         # Create files with different names
+        # Distinguishable payloads: identical ones would pass even if -s were
+        # ignored entirely, which is exactly what this test exists to catch.
         (events_dir / "important_events.json").write_text(json.dumps({
-            "Event": {"System": {"EventID": 1}, "EventData": {"CommandLine": "powershell.exe"}}
+            "Event": {"System": {"EventID": 1},
+                      "EventData": {"CommandLine": "powershell.exe -selected"}}
         }))
         (events_dir / "other_events.json").write_text(json.dumps({
-            "Event": {"System": {"EventID": 1}, "EventData": {"CommandLine": "powershell.exe"}}
+            "Event": {"System": {"EventID": 1},
+                      "EventData": {"CommandLine": "powershell.exe -excluded"}}
         }))
-        
+
         ruleset_file = tmp_path / "ruleset.json"
         ruleset_file.write_text(json.dumps([{
             "title": "Test Rule",
@@ -926,7 +849,7 @@ class TestCLIMultipleFiles:
             "tags": [],
             "rule": ["SELECT * FROM logs WHERE CommandLine LIKE '%powershell%'"]
         }]))
-        
+
         config_file = tmp_path / "config.json"
         config_file.write_text(json.dumps({
             "exclusions": [],
@@ -940,36 +863,35 @@ class TestCLIMultipleFiles:
             "transforms_enabled": False,
             "transforms": {}
         }))
-        
+
         output_file = tmp_path / "detected_events.json"
-        
+
         # Select only "important" files
-        with patch('sys.argv', [
-            'zircolite.py',
-            '-e', str(events_dir),
-            '-r', str(ruleset_file),
-            '-c', str(config_file),
-            '-j',
-            '-o', str(output_file),
-            '-s', 'important'
-        ] + get_log_arg(tmp_path)):
+        with patch('sys.argv', ['zircolite.py', '-e', str(events_dir), '-r', str(ruleset_file), '-c', str(config_file), '-j', '-o', str(output_file), '-s', 'important', *get_log_arg(tmp_path)]):
             zircolite_script.main()
-        
+
         assert output_file.exists()
+        command_lines = _matched_command_lines(output_file)
+        assert "powershell.exe -selected" in command_lines
+        assert "powershell.exe -excluded" not in command_lines
 
     def test_avoid_filter(self, tmp_path):
         """Test -a (avoid) filter to skip matching files."""
         events_dir = tmp_path / "events"
         events_dir.mkdir()
-        
+
         # Create files
+        # Distinguishable payloads: identical ones would pass even if -a were
+        # ignored entirely, which is exactly what this test exists to catch.
         (events_dir / "good_events.json").write_text(json.dumps({
-            "Event": {"System": {"EventID": 1}, "EventData": {"CommandLine": "powershell.exe"}}
+            "Event": {"System": {"EventID": 1},
+                      "EventData": {"CommandLine": "powershell.exe -kept"}}
         }))
         (events_dir / "skip_events.json").write_text(json.dumps({
-            "Event": {"System": {"EventID": 1}, "EventData": {"CommandLine": "powershell.exe"}}
+            "Event": {"System": {"EventID": 1},
+                      "EventData": {"CommandLine": "powershell.exe -avoided"}}
         }))
-        
+
         ruleset_file = tmp_path / "ruleset.json"
         ruleset_file.write_text(json.dumps([{
             "title": "Test Rule",
@@ -978,7 +900,7 @@ class TestCLIMultipleFiles:
             "tags": [],
             "rule": ["SELECT * FROM logs WHERE CommandLine LIKE '%powershell%'"]
         }]))
-        
+
         config_file = tmp_path / "config.json"
         config_file.write_text(json.dumps({
             "exclusions": [],
@@ -992,22 +914,17 @@ class TestCLIMultipleFiles:
             "transforms_enabled": False,
             "transforms": {}
         }))
-        
+
         output_file = tmp_path / "detected_events.json"
-        
+
         # Avoid "skip" files
-        with patch('sys.argv', [
-            'zircolite.py',
-            '-e', str(events_dir),
-            '-r', str(ruleset_file),
-            '-c', str(config_file),
-            '-j',
-            '-o', str(output_file),
-            '-a', 'skip'
-        ] + get_log_arg(tmp_path)):
+        with patch('sys.argv', ['zircolite.py', '-e', str(events_dir), '-r', str(ruleset_file), '-c', str(config_file), '-j', '-o', str(output_file), '-a', 'skip', *get_log_arg(tmp_path)]):
             zircolite_script.main()
-        
+
         assert output_file.exists()
+        command_lines = _matched_command_lines(output_file)
+        assert "powershell.exe -kept" in command_lines
+        assert "powershell.exe -avoided" not in command_lines
 
 
 class TestCLIDatabaseOperations:
@@ -1017,10 +934,10 @@ class TestCLIDatabaseOperations:
         """Test -d flag saves database to disk."""
         events_file = tmp_path / "events.json"
         events_file.write_text('{"Event": {"System": {"EventID": 1}, "EventData": {}}}')
-        
+
         ruleset_file = tmp_path / "ruleset.json"
         ruleset_file.write_text("[]")
-        
+
         config_file = tmp_path / "config.json"
         config_file.write_text(json.dumps({
             "exclusions": [],
@@ -1031,27 +948,19 @@ class TestCLIDatabaseOperations:
             "transforms_enabled": False,
             "transforms": {}
         }))
-        
+
         output_file = tmp_path / "output.json"
         # Use absolute path for db file
         db_file = tmp_path / "testdb.db"
-        
+
         # Change to tmp_path to ensure db file is created there
         original_cwd = os.getcwd()
         try:
             os.chdir(tmp_path)
-            
-            with patch('sys.argv', [
-                'zircolite.py',
-                '-e', str(events_file),
-                '-r', str(ruleset_file),
-                '-c', str(config_file),
-                '-j',
-                '-o', str(output_file),
-                '-d', str(db_file)
-            ] + get_log_arg(tmp_path)):
+
+            with patch('sys.argv', ['zircolite.py', '-e', str(events_file), '-r', str(ruleset_file), '-c', str(config_file), '-j', '-o', str(output_file), '-d', str(db_file), *get_log_arg(tmp_path)]):
                 zircolite_script.main()
-            
+
             # Database file should be created (with suffix for single-file processing)
             # The filename pattern is: {db_stem}_{source_filename}{db_suffix}
             db_files = list(tmp_path.glob("testdb*.db"))
@@ -1062,8 +971,8 @@ class TestCLIDatabaseOperations:
     def test_db_input_mode(self, tmp_path, test_logger):
         """Test --db-input mode loads existing database."""
         # First, create a database
-        from zircolite import ZircoliteCore, ProcessingConfig
-        
+        from zircolite import ProcessingConfig, ZircoliteCore
+
         config_file = tmp_path / "config.json"
         config_file.write_text(json.dumps({
             "exclusions": [],
@@ -1074,34 +983,27 @@ class TestCLIDatabaseOperations:
             "transforms_enabled": False,
             "transforms": {}
         }))
-        
+
         # Create and populate a database
         proc_config = ProcessingConfig(disable_progress=True)
         zircore = ZircoliteCore(str(config_file), processing_config=proc_config, logger=test_logger)
         field_stmt = "EventID TEXT, CommandLine TEXT"
         zircore.create_db(field_stmt)
         zircore.insert_data_to_db({"EventID": "1", "CommandLine": "test"})
-        
+
         db_file = tmp_path / "test.db"
         zircore.save_db_to_disk(str(db_file))
         zircore.close()
-        
+
         # Now test loading it via CLI
         ruleset_file = tmp_path / "ruleset.json"
         ruleset_file.write_text("[]")
-        
+
         output_file = tmp_path / "output.json"
-        
-        with patch('sys.argv', [
-            'zircolite.py',
-            '-e', str(db_file),
-            '-r', str(ruleset_file),
-            '-c', str(config_file),
-            '--db-input',
-            '-o', str(output_file)
-        ] + get_log_arg(tmp_path)):
+
+        with patch('sys.argv', ['zircolite.py', '-e', str(db_file), '-r', str(ruleset_file), '-c', str(config_file), '--db-input', '-o', str(output_file), *get_log_arg(tmp_path)]):
             zircolite_script.main()
-        
+
         assert output_file.exists()
 
 
@@ -1112,7 +1014,7 @@ class TestCLITemplateGeneration:
         """Test template output generation."""
         events_file = tmp_path / "events.json"
         events_file.write_text('{"Event": {"System": {"EventID": 1}, "EventData": {"CommandLine": "powershell.exe"}}}')
-        
+
         ruleset_file = tmp_path / "ruleset.json"
         ruleset_file.write_text(json.dumps([{
             "title": "Test Rule",
@@ -1121,7 +1023,7 @@ class TestCLITemplateGeneration:
             "tags": [],
             "rule": ["SELECT * FROM logs WHERE CommandLine LIKE '%powershell%'"]
         }]))
-        
+
         config_file = tmp_path / "config.json"
         config_file.write_text(json.dumps({
             "exclusions": [],
@@ -1135,30 +1037,21 @@ class TestCLITemplateGeneration:
             "transforms_enabled": False,
             "transforms": {}
         }))
-        
+
         template_file = tmp_path / "template.tmpl"
         template_file.write_text("""{% for elem in data %}
 Alert: {{ elem.title }} ({{ elem.rule_level }})
 {% endfor %}""")
-        
+
         output_file = tmp_path / "detected_events.json"
         template_output = tmp_path / "alerts.txt"
-        
-        with patch('sys.argv', [
-            'zircolite.py',
-            '-e', str(events_file),
-            '-r', str(ruleset_file),
-            '-c', str(config_file),
-            '-j',
-            '-o', str(output_file),
-            '--template', str(template_file),
-            '--templateOutput', str(template_output)
-        ] + get_log_arg(tmp_path)):
+
+        with patch('sys.argv', ['zircolite.py', '-e', str(events_file), '-r', str(ruleset_file), '-c', str(config_file), '-j', '-o', str(output_file), '--template', str(template_file), '--templateOutput', str(template_output), *get_log_arg(tmp_path)]):
             zircolite_script.main()
-        
+
         assert output_file.exists()
         assert template_output.exists()
-        
+
         with open(template_output) as f:
             content = f.read()
         assert "Alert:" in content
@@ -1197,17 +1090,7 @@ Alert: {{ elem.title }} ({{ elem.rule_level }})
         output_file = tmp_path / "detected_events.json"
         template_output = tmp_path / "alerts.txt"
 
-        argv_base = [
-            'zircolite.py',
-            '-e', str(events_file),
-            '-r', str(ruleset_file),
-            '-c', str(config_file),
-            '-j',
-            '-o', str(output_file),
-            '--template', str(template_file),
-            '--templateOutput', str(template_output),
-            '--template-append',
-        ] + get_log_arg(tmp_path)
+        argv_base = ['zircolite.py', '-e', str(events_file), '-r', str(ruleset_file), '-c', str(config_file), '-j', '-o', str(output_file), '--template', str(template_file), '--templateOutput', str(template_output), '--template-append', *get_log_arg(tmp_path)]
 
         with patch('sys.argv', argv_base):
             zircolite_script.main()
@@ -1250,16 +1133,7 @@ Alert: {{ elem.title }} ({{ elem.rule_level }})
         output_file = tmp_path / "detected_events.json"
         template_output = tmp_path / "alerts.txt"
 
-        argv_base = [
-            'zircolite.py',
-            '-e', str(events_file),
-            '-r', str(ruleset_file),
-            '-c', str(config_file),
-            '-j',
-            '-o', str(output_file),
-            '--template', str(template_file),
-            '--templateOutput', str(template_output),
-        ] + get_log_arg(tmp_path)
+        argv_base = ['zircolite.py', '-e', str(events_file), '-r', str(ruleset_file), '-c', str(config_file), '-j', '-o', str(output_file), '--template', str(template_file), '--templateOutput', str(template_output), *get_log_arg(tmp_path)]
 
         with patch('sys.argv', argv_base):
             zircolite_script.main()
@@ -1280,13 +1154,7 @@ Alert: {{ elem.title }} ({{ elem.rule_level }})
         original_cwd = os.getcwd()
         try:
             os.chdir(WORKSPACE_ROOT)
-            with patch('sys.argv', [
-                'zircolite.py',
-                '-e', str(events_file),
-                '-r', str(ruleset_file),
-                '-j',
-                '--navigator-output', str(nav_output),
-            ] + get_log_arg(tmp_path)):
+            with patch('sys.argv', ['zircolite.py', '-e', str(events_file), '-r', str(ruleset_file), '-j', '--navigator-output', str(nav_output), *get_log_arg(tmp_path)]):
                 zircolite_script.main()
         finally:
             os.chdir(original_cwd)
@@ -1313,16 +1181,8 @@ Alert: {{ elem.title }} ({{ elem.rule_level }})
         original_cwd = os.getcwd()
         try:
             os.chdir(WORKSPACE_ROOT)
-            with pytest.raises(SystemExit) as exc_info:
-                with patch('sys.argv', [
-                    'zircolite.py',
-                    '-e', str(events_file),
-                    '-r', str(ruleset_file),
-                    '-j',
-                    '--template', str(template_file),
-                    '--navigator-output', str(tmp_path / "navigator.json"),
-                ] + get_log_arg(tmp_path)):
-                    zircolite_script.main()
+            with pytest.raises(SystemExit) as exc_info, patch('sys.argv', ['zircolite.py', '-e', str(events_file), '-r', str(ruleset_file), '-j', '--template', str(template_file), '--navigator-output', str(tmp_path / "navigator.json"), *get_log_arg(tmp_path)]):
+                zircolite_script.main()
         finally:
             os.chdir(original_cwd)
 
@@ -1368,16 +1228,7 @@ class TestCLIPackage:
         original_cwd = os.getcwd()
         try:
             os.chdir(WORKSPACE_ROOT)
-            with patch('sys.argv', [
-                'zircolite.py',
-                '-e', str(events_file),
-                '-r', str(ruleset_file),
-                '-c', str(config_file),
-                '-j',
-                '-o', str(tmp_path / "out.json"),
-                '--package',
-                '-n'
-            ] + get_log_arg(tmp_path)):
+            with patch('sys.argv', ['zircolite.py', '-e', str(events_file), '-r', str(ruleset_file), '-c', str(config_file), '-j', '-o', str(tmp_path / "out.json"), '--package', '-n', *get_log_arg(tmp_path)]):
                 zircolite_script.main()
 
             zips = list(WORKSPACE_ROOT.glob("zircogui-output-*.zip"))
@@ -1424,17 +1275,7 @@ class TestCLIPackage:
         original_cwd = os.getcwd()
         try:
             os.chdir(WORKSPACE_ROOT)
-            with patch('sys.argv', [
-                'zircolite.py',
-                '-e', str(events_file),
-                '-r', str(ruleset_file),
-                '-c', str(config_file),
-                '-j',
-                '-o', str(tmp_path / "out.json"),
-                '--package',
-                '--package-dir', str(package_dir),
-                '-n'
-            ] + get_log_arg(tmp_path)):
+            with patch('sys.argv', ['zircolite.py', '-e', str(events_file), '-r', str(ruleset_file), '-c', str(config_file), '-j', '-o', str(tmp_path / "out.json"), '--package', '--package-dir', str(package_dir), '-n', *get_log_arg(tmp_path)]):
                 zircolite_script.main()
 
             zips = list(package_dir.glob("zircogui-output-*.zip"))
@@ -1450,7 +1291,7 @@ class TestCLIHashGeneration:
         """Test --hashes option adds xxhash to events."""
         events_file = tmp_path / "events.json"
         events_file.write_text('{"Event": {"System": {"EventID": 1}, "EventData": {"CommandLine": "test"}}}')
-        
+
         ruleset_file = tmp_path / "ruleset.json"
         ruleset_file.write_text(json.dumps([{
             "title": "Test Rule",
@@ -1459,7 +1300,7 @@ class TestCLIHashGeneration:
             "tags": [],
             "rule": ["SELECT * FROM logs"]
         }]))
-        
+
         config_file = tmp_path / "config.json"
         config_file.write_text(json.dumps({
             "exclusions": [],
@@ -1473,28 +1314,20 @@ class TestCLIHashGeneration:
             "transforms_enabled": False,
             "transforms": {}
         }))
-        
+
         output_file = tmp_path / "detected_events.json"
-        
-        with patch('sys.argv', [
-            'zircolite.py',
-            '-e', str(events_file),
-            '-r', str(ruleset_file),
-            '-c', str(config_file),
-            '-j',
-            '-o', str(output_file),
-            '--hashes'
-        ] + get_log_arg(tmp_path)):
+
+        with patch('sys.argv', ['zircolite.py', '-e', str(events_file), '-r', str(ruleset_file), '-c', str(config_file), '-j', '-o', str(output_file), '--hashes', *get_log_arg(tmp_path)]):
             zircolite_script.main()
-        
+
         assert output_file.exists()
-        with open(output_file) as f:
-            detections = json.loads(f.read())
-        
-        # Check if hash field is present in matches
-        if len(detections) > 0 and detections[0].get("matches"):
-            # Hash should be in the matched events
-            pass  # Hash verification would depend on implementation
+        events = _matched_events(output_file)
+
+        # The point of --hashes is the hash field; asserting only that a file
+        # exists passes just as well when the flag does nothing at all.
+        assert events, "expected at least one matched event to carry a hash"
+        for event in events:
+            assert event.get("OriginalLogLinexxHash")
 
 
 class TestCLINoLogOption:
@@ -1504,10 +1337,10 @@ class TestCLINoLogOption:
         """Test -n flag prevents log file creation (but also prevents output file)."""
         events_file = tmp_path / "events.json"
         events_file.write_text('{"Event": {"System": {"EventID": 1}, "EventData": {}}}')
-        
+
         ruleset_file = tmp_path / "ruleset.json"
         ruleset_file.write_text("[]")
-        
+
         config_file = tmp_path / "config.json"
         config_file.write_text(json.dumps({
             "exclusions": [],
@@ -1518,15 +1351,15 @@ class TestCLINoLogOption:
             "transforms_enabled": False,
             "transforms": {}
         }))
-        
+
         output_file = tmp_path / "output.json"
         log_file = tmp_path / "zircolite.log"
-        
+
         # Change to tmp_path to check log file creation
         original_cwd = os.getcwd()
         try:
             os.chdir(tmp_path)
-            
+
             with patch('sys.argv', [
                 'zircolite.py',
                 '-e', str(events_file),
@@ -1537,7 +1370,7 @@ class TestCLINoLogOption:
                 '-n'
             ]):
                 zircolite_script.main()
-            
+
             # Log file should NOT exist
             assert not log_file.exists()
             # Note: output file also won't exist with -n flag (no_output=True)
@@ -1687,16 +1520,7 @@ class TestCLIAdvancedConfiguration:
             "transforms": {}
         }))
         output_file = tmp_path / "out.json"
-        with patch('sys.argv', [
-            'zircolite.py',
-            '-e', str(events_file),
-            '-r', str(ruleset_file),
-            '-c', str(config_file),
-            '-j',
-            '-o', str(output_file),
-            '--timefield', 'timestamp',
-            '-A', '2024-01-01T00:00:00'
-        ] + get_log_arg(tmp_path)):
+        with patch('sys.argv', ['zircolite.py', '-e', str(events_file), '-r', str(ruleset_file), '-c', str(config_file), '-j', '-o', str(output_file), '--timefield', 'timestamp', '-A', '2024-01-01T00:00:00', *get_log_arg(tmp_path)]):
             zircolite_script.main()
         assert output_file.exists()
         with open(output_file) as f:
@@ -1721,15 +1545,7 @@ class TestCLIAdvancedConfiguration:
             "transforms": {}
         }))
         output_file = tmp_path / "out.json"
-        with patch('sys.argv', [
-            'zircolite.py',
-            '-e', str(events_file),
-            '-r', str(ruleset_file),
-            '-c', str(config_file),
-            '--no-auto-detect',
-            '-j',
-            '-o', str(output_file)
-        ] + get_log_arg(tmp_path)):
+        with patch('sys.argv', ['zircolite.py', '-e', str(events_file), '-r', str(ruleset_file), '-c', str(config_file), '--no-auto-detect', '-j', '-o', str(output_file), *get_log_arg(tmp_path)]):
             zircolite_script.main()
         assert output_file.exists()
         with open(output_file) as f:
@@ -1802,8 +1618,9 @@ class TestCLISysmonXmlEvtxtractInput:
         output file existed, so they passed whether the format parsed or not --
         which is exactly how several silent ingestion bugs survived.
         """
-        if not fixture.exists():
-            pytest.skip(f"Fixture not found: {fixture}")
+        assert fixture.exists(), (
+            f"missing tracked fixture {fixture}"
+        )
         if flag == "-x":
             pytest.importorskip("lxml")
 
@@ -1819,13 +1636,7 @@ class TestCLISysmonXmlEvtxtractInput:
         }]))
         output_file = tmp_path / "out.json"
 
-        with patch('sys.argv', [
-            'zircolite.py',
-            '-e', str(fixture),
-            '-r', str(ruleset_file),
-            flag,
-            '-o', str(output_file),
-        ] + get_log_arg(tmp_path)):
+        with patch('sys.argv', ['zircolite.py', '-e', str(fixture), '-r', str(ruleset_file), flag, '-o', str(output_file), *get_log_arg(tmp_path)]):
             zircolite_script.main()
 
         data = json.loads(output_file.read_text())
@@ -1841,8 +1652,9 @@ class TestCLISysmonXmlEvtxtractInput:
         nothing exercised the real pyevtx-rs reader through the CLI.
         """
         evtx = FIXTURES_DIR / "sample_bitsadmin.evtx"
-        if not evtx.exists():
-            pytest.skip(f"Fixture not found: {evtx}")
+        assert evtx.exists(), (
+            f"missing tracked fixture {evtx}"
+        )
 
         ruleset_file = tmp_path / "ruleset.json"
         ruleset_file.write_text(json.dumps([{
@@ -1856,12 +1668,7 @@ class TestCLISysmonXmlEvtxtractInput:
         }]))
         output_file = tmp_path / "out.json"
 
-        with patch('sys.argv', [
-            'zircolite.py',
-            '--evtx', str(evtx),
-            '-r', str(ruleset_file),
-            '-o', str(output_file),
-        ] + get_log_arg(tmp_path)):
+        with patch('sys.argv', ['zircolite.py', '--evtx', str(evtx), '-r', str(ruleset_file), '-o', str(output_file), *get_log_arg(tmp_path)]):
             zircolite_script.main()
 
         data = json.loads(output_file.read_text())
@@ -1880,14 +1687,14 @@ class TestCLIFileExtension:
         """Test --fileext option for custom file extensions."""
         events_dir = tmp_path / "events"
         events_dir.mkdir()
-        
+
         # Create file with custom extension
         events_file = events_dir / "events.custom"
         events_file.write_text('{"Event": {"System": {"EventID": 1}, "EventData": {}}}')
-        
+
         ruleset_file = tmp_path / "ruleset.json"
         ruleset_file.write_text("[]")
-        
+
         config_file = tmp_path / "config.json"
         config_file.write_text(json.dumps({
             "exclusions": [],
@@ -1898,20 +1705,12 @@ class TestCLIFileExtension:
             "transforms_enabled": False,
             "transforms": {}
         }))
-        
+
         output_file = tmp_path / "output.json"
-        
-        with patch('sys.argv', [
-            'zircolite.py',
-            '-e', str(events_dir),
-            '-r', str(ruleset_file),
-            '-c', str(config_file),
-            '-j',
-            '-o', str(output_file),
-            '-f', 'custom'
-        ] + get_log_arg(tmp_path)):
+
+        with patch('sys.argv', ['zircolite.py', '-e', str(events_dir), '-r', str(ruleset_file), '-c', str(config_file), '-j', '-o', str(output_file), '-f', 'custom', *get_log_arg(tmp_path)]):
             zircolite_script.main()
-        
+
         assert output_file.exists()
 
     def test_file_pattern_filters_files(self, tmp_path):
@@ -1934,15 +1733,7 @@ class TestCLIFileExtension:
             "transforms": {}
         }))
         output_file = tmp_path / "out.json"
-        with patch('sys.argv', [
-            'zircolite.py',
-            '-e', str(events_dir),
-            '-r', str(ruleset_file),
-            '-c', str(config_file),
-            '-j',
-            '-o', str(output_file),
-            '-fp', 'a.json'
-        ] + get_log_arg(tmp_path)):
+        with patch('sys.argv', ['zircolite.py', '-e', str(events_dir), '-r', str(ruleset_file), '-c', str(config_file), '-j', '-o', str(output_file), '-fp', 'a.json', *get_log_arg(tmp_path)]):
             zircolite_script.main()
         assert output_file.exists()
         # Only a.json should be processed (single file)
@@ -1982,14 +1773,7 @@ rules:
 output:
   file: {output_file.as_posix()}
 """)
-        with patch('sys.argv', [
-            'zircolite.py',
-            '-Y', str(yaml_config),
-            '-e', str(events_file),
-            '-r', str(ruleset_file),
-            '-c', str(config_file),
-            '-j'
-        ] + get_log_arg(tmp_path)):
+        with patch('sys.argv', ['zircolite.py', '-Y', str(yaml_config), '-e', str(events_file), '-r', str(ruleset_file), '-c', str(config_file), '-j', *get_log_arg(tmp_path)]):
             zircolite_script.main()
         assert output_file.exists()
 
@@ -2005,7 +1789,7 @@ class TestCLISubprocessExecution:
             text=True,
             cwd=str(Path(__file__).parent.parent)
         )
-        
+
         assert result.returncode == 0
         assert 'usage:' in result.stdout.lower() or 'Usage:' in result.stdout
         assert '--evtx' in result.stdout or '-e' in result.stdout
@@ -2018,7 +1802,7 @@ class TestCLISubprocessExecution:
             text=True,
             cwd=str(Path(__file__).parent.parent)
         )
-        
+
         assert result.returncode == 0
         # Version info should be in stderr (logging) or stdout
         assert 'Zircolite' in result.stdout or 'Zircolite' in result.stderr
@@ -2031,7 +1815,7 @@ class TestCLISubprocessExecution:
             text=True,
             cwd=str(Path(__file__).parent.parent)
         )
-        
+
         assert result.returncode == 2
 
     def test_pipeline_list_exits_zero(self):
@@ -2069,18 +1853,18 @@ class TestCLINoRecursion:
         """Test --no-recursion only searches current directory."""
         events_dir = tmp_path / "events"
         events_dir.mkdir()
-        
+
         subdir = events_dir / "subdir"
         subdir.mkdir()
-        
+
         # Create file in main dir
         (events_dir / "events.json").write_text('{"Event": {"System": {"EventID": 1}, "EventData": {}}}')
         # Create file in subdir (should be ignored with --no-recursion)
         (subdir / "subevents.json").write_text('{"Event": {"System": {"EventID": 2}, "EventData": {}}}')
-        
+
         ruleset_file = tmp_path / "ruleset.json"
         ruleset_file.write_text("[]")
-        
+
         config_file = tmp_path / "config.json"
         config_file.write_text(json.dumps({
             "exclusions": [],
@@ -2091,20 +1875,12 @@ class TestCLINoRecursion:
             "transforms_enabled": False,
             "transforms": {}
         }))
-        
+
         output_file = tmp_path / "output.json"
-        
-        with patch('sys.argv', [
-            'zircolite.py',
-            '-e', str(events_dir),
-            '-r', str(ruleset_file),
-            '-c', str(config_file),
-            '-j',
-            '-o', str(output_file),
-            '--no-recursion'
-        ] + get_log_arg(tmp_path)):
+
+        with patch('sys.argv', ['zircolite.py', '-e', str(events_dir), '-r', str(ruleset_file), '-c', str(config_file), '-j', '-o', str(output_file), '--no-recursion', *get_log_arg(tmp_path)]):
             zircolite_script.main()
-        
+
         assert output_file.exists()
 
 
@@ -2118,7 +1894,7 @@ class TestCLIJsonArrayInput:
             {"Event": {"System": {"EventID": 1}, "EventData": {"CommandLine": "powershell.exe"}}},
             {"Event": {"System": {"EventID": 2}, "EventData": {"CommandLine": "cmd.exe"}}}
         ]))
-        
+
         ruleset_file = tmp_path / "ruleset.json"
         ruleset_file.write_text(json.dumps([{
             "title": "Test Rule",
@@ -2127,7 +1903,7 @@ class TestCLIJsonArrayInput:
             "tags": [],
             "rule": ["SELECT * FROM logs WHERE CommandLine LIKE '%powershell%'"]
         }]))
-        
+
         config_file = tmp_path / "config.json"
         config_file.write_text(json.dumps({
             "exclusions": [],
@@ -2141,23 +1917,16 @@ class TestCLIJsonArrayInput:
             "transforms_enabled": False,
             "transforms": {}
         }))
-        
+
         output_file = tmp_path / "output.json"
-        
-        with patch('sys.argv', [
-            'zircolite.py',
-            '-e', str(events_file),
-            '-r', str(ruleset_file),
-            '-c', str(config_file),
-            '--json-array-input',
-            '-o', str(output_file)
-        ] + get_log_arg(tmp_path)):
+
+        with patch('sys.argv', ['zircolite.py', '-e', str(events_file), '-r', str(ruleset_file), '-c', str(config_file), '--json-array-input', '-o', str(output_file), *get_log_arg(tmp_path)]):
             zircolite_script.main()
-        
+
         assert output_file.exists()
         with open(output_file) as f:
             detections = json.loads(f.read())
-        
+
         # Should detect the powershell event
         assert len(detections) >= 1
 
@@ -2169,7 +1938,7 @@ class TestCLIUnifiedDatabase:
         """Test --unified-db with a single file."""
         events_file = tmp_path / "events.json"
         events_file.write_text('{"Event": {"System": {"EventID": 1}, "EventData": {"CommandLine": "powershell.exe"}}}')
-        
+
         ruleset_file = tmp_path / "ruleset.json"
         ruleset_file.write_text(json.dumps([{
             "title": "Test Rule",
@@ -2178,7 +1947,7 @@ class TestCLIUnifiedDatabase:
             "tags": [],
             "rule": ["SELECT * FROM logs WHERE CommandLine LIKE '%powershell%'"]
         }]))
-        
+
         config_file = tmp_path / "config.json"
         config_file.write_text(json.dumps({
             "exclusions": [],
@@ -2192,20 +1961,12 @@ class TestCLIUnifiedDatabase:
             "transforms_enabled": False,
             "transforms": {}
         }))
-        
+
         output_file = tmp_path / "detected_events.json"
-        
-        with patch('sys.argv', [
-            'zircolite.py',
-            '-e', str(events_file),
-            '-r', str(ruleset_file),
-            '-c', str(config_file),
-            '-j',
-            '-o', str(output_file),
-            '--unified-db'
-        ] + get_log_arg(tmp_path)):
+
+        with patch('sys.argv', ['zircolite.py', '-e', str(events_file), '-r', str(ruleset_file), '-c', str(config_file), '-j', '-o', str(output_file), '--unified-db', *get_log_arg(tmp_path)]):
             zircolite_script.main()
-        
+
         assert output_file.exists()
         with open(output_file) as f:
             detections = json.loads(f.read())
@@ -2216,7 +1977,7 @@ class TestCLIUnifiedDatabase:
         """Test --unified-db with multiple files."""
         events_dir = tmp_path / "events"
         events_dir.mkdir()
-        
+
         # Create multiple JSON files with different events
         (events_dir / "events_1.json").write_text(json.dumps({
             "Event": {"System": {"EventID": 1}, "EventData": {"CommandLine": "powershell.exe test1"}}
@@ -2227,7 +1988,7 @@ class TestCLIUnifiedDatabase:
         (events_dir / "events_3.json").write_text(json.dumps({
             "Event": {"System": {"EventID": 1}, "EventData": {"CommandLine": "cmd.exe test3"}}
         }))
-        
+
         ruleset_file = tmp_path / "ruleset.json"
         ruleset_file.write_text(json.dumps([{
             "title": "PowerShell Detection",
@@ -2236,7 +1997,7 @@ class TestCLIUnifiedDatabase:
             "tags": [],
             "rule": ["SELECT * FROM logs WHERE CommandLine LIKE '%powershell%'"]
         }]))
-        
+
         config_file = tmp_path / "config.json"
         config_file.write_text(json.dumps({
             "exclusions": [],
@@ -2250,24 +2011,16 @@ class TestCLIUnifiedDatabase:
             "transforms_enabled": False,
             "transforms": {}
         }))
-        
+
         output_file = tmp_path / "detected_events.json"
-        
-        with patch('sys.argv', [
-            'zircolite.py',
-            '-e', str(events_dir),
-            '-r', str(ruleset_file),
-            '-c', str(config_file),
-            '-j',
-            '-o', str(output_file),
-            '--unified-db'
-        ] + get_log_arg(tmp_path)):
+
+        with patch('sys.argv', ['zircolite.py', '-e', str(events_dir), '-r', str(ruleset_file), '-c', str(config_file), '-j', '-o', str(output_file), '--unified-db', *get_log_arg(tmp_path)]):
             zircolite_script.main()
-        
+
         assert output_file.exists()
         with open(output_file) as f:
             detections = json.loads(f.read())
-        
+
         # Should detect PowerShell events from both files (events_1 and events_2)
         assert len(detections) >= 1
         # In unified mode, all matching events are counted together
@@ -2278,7 +2031,7 @@ class TestCLIUnifiedDatabase:
         """Test --unified-db with streaming mode."""
         events_dir = tmp_path / "events"
         events_dir.mkdir()
-        
+
         # Create multiple JSON files
         (events_dir / "events_1.json").write_text(json.dumps({
             "Event": {"System": {"EventID": 1}, "EventData": {"CommandLine": "powershell.exe test1"}}
@@ -2286,7 +2039,7 @@ class TestCLIUnifiedDatabase:
         (events_dir / "events_2.json").write_text(json.dumps({
             "Event": {"System": {"EventID": 1}, "EventData": {"CommandLine": "powershell.exe test2"}}
         }))
-        
+
         ruleset_file = tmp_path / "ruleset.json"
         ruleset_file.write_text(json.dumps([{
             "title": "PowerShell Detection",
@@ -2295,7 +2048,7 @@ class TestCLIUnifiedDatabase:
             "tags": [],
             "rule": ["SELECT * FROM logs WHERE CommandLine LIKE '%powershell%'"]
         }]))
-        
+
         config_file = tmp_path / "config.json"
         config_file.write_text(json.dumps({
             "exclusions": [],
@@ -2309,24 +2062,16 @@ class TestCLIUnifiedDatabase:
             "transforms_enabled": False,
             "transforms": {}
         }))
-        
+
         output_file = tmp_path / "detected_events.json"
-        
-        with patch('sys.argv', [
-            'zircolite.py',
-            '-e', str(events_dir),
-            '-r', str(ruleset_file),
-            '-c', str(config_file),
-            '-j',
-            '-o', str(output_file),
-            '--unified-db'
-        ] + get_log_arg(tmp_path)):
+
+        with patch('sys.argv', ['zircolite.py', '-e', str(events_dir), '-r', str(ruleset_file), '-c', str(config_file), '-j', '-o', str(output_file), '--unified-db', *get_log_arg(tmp_path)]):
             zircolite_script.main()
-        
+
         assert output_file.exists()
         with open(output_file) as f:
             detections = json.loads(f.read())
-        
+
         # Should have detections from both files in unified mode
         assert len(detections) >= 1
         total_matches = sum(d["count"] for d in detections)
@@ -2336,7 +2081,7 @@ class TestCLIUnifiedDatabase:
         """Test that unified mode enables cross-file event correlation."""
         events_dir = tmp_path / "events"
         events_dir.mkdir()
-        
+
         # Create files with events that should be correlated
         # File 1: Event from workstation1
         (events_dir / "events_1.json").write_text(json.dumps({
@@ -2352,7 +2097,7 @@ class TestCLIUnifiedDatabase:
                 "Computer": "WORKSTATION2"
             }}
         }))
-        
+
         ruleset_file = tmp_path / "ruleset.json"
         # Rule that counts events across all systems
         ruleset_file.write_text(json.dumps([{
@@ -2362,7 +2107,7 @@ class TestCLIUnifiedDatabase:
             "tags": [],
             "rule": ["SELECT * FROM logs WHERE CommandLine LIKE '%powershell%'"]
         }]))
-        
+
         config_file = tmp_path / "config.json"
         config_file.write_text(json.dumps({
             "exclusions": [],
@@ -2377,24 +2122,16 @@ class TestCLIUnifiedDatabase:
             "transforms_enabled": False,
             "transforms": {}
         }))
-        
+
         output_file = tmp_path / "detected_events.json"
-        
-        with patch('sys.argv', [
-            'zircolite.py',
-            '-e', str(events_dir),
-            '-r', str(ruleset_file),
-            '-c', str(config_file),
-            '-j',
-            '-o', str(output_file),
-            '--unified-db'
-        ] + get_log_arg(tmp_path)):
+
+        with patch('sys.argv', ['zircolite.py', '-e', str(events_dir), '-r', str(ruleset_file), '-c', str(config_file), '-j', '-o', str(output_file), '--unified-db', *get_log_arg(tmp_path)]):
             zircolite_script.main()
-        
+
         assert output_file.exists()
         with open(output_file) as f:
             detections = json.loads(f.read())
-        
+
         # In unified mode, both events should be in the same detection result
         assert len(detections) == 1
         assert detections[0]["count"] == 2
@@ -2407,17 +2144,17 @@ class TestCLIUnifiedDatabase:
         """Test --unified-db with -d saves a single unified database file."""
         events_dir = tmp_path / "events"
         events_dir.mkdir()
-        
+
         (events_dir / "events_1.json").write_text(json.dumps({
             "Event": {"System": {"EventID": 1}, "EventData": {"CommandLine": "test1"}}
         }))
         (events_dir / "events_2.json").write_text(json.dumps({
             "Event": {"System": {"EventID": 1}, "EventData": {"CommandLine": "test2"}}
         }))
-        
+
         ruleset_file = tmp_path / "ruleset.json"
         ruleset_file.write_text("[]")
-        
+
         config_file = tmp_path / "config.json"
         config_file.write_text(json.dumps({
             "exclusions": [],
@@ -2431,22 +2168,13 @@ class TestCLIUnifiedDatabase:
             "transforms_enabled": False,
             "transforms": {}
         }))
-        
+
         output_file = tmp_path / "output.json"
         db_file = tmp_path / "unified.db"
-        
-        with patch('sys.argv', [
-            'zircolite.py',
-            '-e', str(events_dir),
-            '-r', str(ruleset_file),
-            '-c', str(config_file),
-            '-j',
-            '-o', str(output_file),
-            '--unified-db',
-            '-d', str(db_file)
-        ] + get_log_arg(tmp_path)):
+
+        with patch('sys.argv', ['zircolite.py', '-e', str(events_dir), '-r', str(ruleset_file), '-c', str(config_file), '-j', '-o', str(output_file), '--unified-db', '-d', str(db_file), *get_log_arg(tmp_path)]):
             zircolite_script.main()
-        
+
         # Should create a single unified database file (not multiple per-file DBs)
         assert db_file.exists()
         # Should NOT create individual db files
@@ -2482,17 +2210,7 @@ class TestCLIUnifiedDatabase:
         db_dir = tmp_path / "out"
         db_file = db_dir / "db.db"
 
-        with patch("sys.argv", [
-            "zircolite.py",
-            "-e", str(events_dir),
-            "-r", str(ruleset_file),
-            "-c", str(config_file),
-            "-j",
-            "-o", str(output_file),
-            "--no-auto-mode",
-            "--no-parallel",
-            "-d", str(db_file),
-        ] + get_log_arg(tmp_path)):
+        with patch("sys.argv", ["zircolite.py", "-e", str(events_dir), "-r", str(ruleset_file), "-c", str(config_file), "-j", "-o", str(output_file), "--no-auto-mode", "--no-parallel", "-d", str(db_file), *get_log_arg(tmp_path)]):
             zircolite_script.main()
 
         assert db_dir.is_dir()
@@ -2530,16 +2248,7 @@ class TestCLIUnifiedDatabase:
 
         with patch.object(zircolite_script, "analyze_files_and_recommend_mode", side_effect=fake_recommend):
             with pytest.raises(SystemExit) as exc_info:
-                with patch("sys.argv", [
-                    "zircolite.py",
-                    "-e", str(events_dir),
-                    "-r", str(ruleset_file),
-                    "-c", str(config_file),
-                    "-j",
-                    "-o", str(output_file),
-                    "--no-auto-mode",
-                    "-d", str(db_file),
-                ] + get_log_arg(tmp_path)):
+                with patch("sys.argv", ["zircolite.py", "-e", str(events_dir), "-r", str(ruleset_file), "-c", str(config_file), "-j", "-o", str(output_file), "--no-auto-mode", "-d", str(db_file), *get_log_arg(tmp_path)]):
                     zircolite_script.main()
         assert exc_info.value.code == 2
         assert not db_file.exists()
@@ -2548,7 +2257,7 @@ class TestCLIUnifiedDatabase:
         """Test that unified mode produces different results than per-file mode."""
         events_dir = tmp_path / "events"
         events_dir.mkdir()
-        
+
         # Create files with events
         (events_dir / "events_1.json").write_text(json.dumps({
             "Event": {"System": {"EventID": 1}, "EventData": {"CommandLine": "powershell.exe"}}
@@ -2556,7 +2265,7 @@ class TestCLIUnifiedDatabase:
         (events_dir / "events_2.json").write_text(json.dumps({
             "Event": {"System": {"EventID": 1}, "EventData": {"CommandLine": "powershell.exe"}}
         }))
-        
+
         ruleset_file = tmp_path / "ruleset.json"
         ruleset_file.write_text(json.dumps([{
             "title": "Test Rule",
@@ -2565,7 +2274,7 @@ class TestCLIUnifiedDatabase:
             "tags": [],
             "rule": ["SELECT * FROM logs WHERE CommandLine LIKE '%powershell%'"]
         }]))
-        
+
         config_file = tmp_path / "config.json"
         config_file.write_text(json.dumps({
             "exclusions": [],
@@ -2579,20 +2288,12 @@ class TestCLIUnifiedDatabase:
             "transforms_enabled": False,
             "transforms": {}
         }))
-        
+
         # First, run in unified mode (explicit)
         output_unified = tmp_path / "detected_unified.json"
-        with patch('sys.argv', [
-            'zircolite.py',
-            '-e', str(events_dir),
-            '-r', str(ruleset_file),
-            '-c', str(config_file),
-            '-j',
-            '-o', str(output_unified),
-            '--unified-db'
-        ] + get_log_arg(tmp_path)):
+        with patch('sys.argv', ['zircolite.py', '-e', str(events_dir), '-r', str(ruleset_file), '-c', str(config_file), '-j', '-o', str(output_unified), '--unified-db', *get_log_arg(tmp_path)]):
             zircolite_script.main()
-        
+
         # Then, run in per-file mode (disable auto-mode)
         output_perfile = tmp_path / "detected_perfile.json"
         with patch('sys.argv', [
@@ -2602,20 +2303,21 @@ class TestCLIUnifiedDatabase:
             '-c', str(config_file),
             '-j',
             '-o', str(output_perfile),
-            '--no-auto-mode'  # Force per-file mode
-        ] + get_log_arg(tmp_path)):
+            '--no-auto-mode',  # Force per-file mode
+            *get_log_arg(tmp_path),
+        ]):
             zircolite_script.main()
-        
+
         with open(output_unified) as f:
             unified_detections = json.loads(f.read())
         with open(output_perfile) as f:
             perfile_detections = json.loads(f.read())
-        
+
         # Unified mode: 1 detection with count=2 (both events in one result)
         # Per-file mode: 2 detections with count=1 each (one result per file)
         assert len(unified_detections) == 1
         assert unified_detections[0]["count"] == 2
-        
+
         assert len(perfile_detections) == 2
         assert all(d["count"] == 1 for d in perfile_detections)
 
@@ -2623,10 +2325,10 @@ class TestCLIUnifiedDatabase:
         """Test --all-in-one alias works same as --unified-db."""
         events_file = tmp_path / "events.json"
         events_file.write_text('{"Event": {"System": {"EventID": 1}, "EventData": {"CommandLine": "test"}}}')
-        
+
         ruleset_file = tmp_path / "ruleset.json"
         ruleset_file.write_text("[]")
-        
+
         config_file = tmp_path / "config.json"
         config_file.write_text(json.dumps({
             "exclusions": [],
@@ -2637,21 +2339,13 @@ class TestCLIUnifiedDatabase:
             "transforms_enabled": False,
             "transforms": {}
         }))
-        
+
         output_file = tmp_path / "output.json"
-        
+
         # Use the --all-in-one alias
-        with patch('sys.argv', [
-            'zircolite.py',
-            '-e', str(events_file),
-            '-r', str(ruleset_file),
-            '-c', str(config_file),
-            '-j',
-            '-o', str(output_file),
-            '--all-in-one'
-        ] + get_log_arg(tmp_path)):
+        with patch('sys.argv', ['zircolite.py', '-e', str(events_file), '-r', str(ruleset_file), '-c', str(config_file), '-j', '-o', str(output_file), '--all-in-one', *get_log_arg(tmp_path)]):
             zircolite_script.main()
-        
+
         assert output_file.exists()
 
 
@@ -2662,14 +2356,14 @@ class TestCLIAutoMode:
         """Test default auto-mode selects unified mode for many small files."""
         events_dir = tmp_path / "events"
         events_dir.mkdir()
-        
+
         # Create 15 small files (should trigger unified mode)
         for i in range(15):
             events_file = events_dir / f"events_{i}.json"
             events_file.write_text(json.dumps({
                 "Event": {"System": {"EventID": 1}, "EventData": {"CommandLine": f"test{i}"}}
             }))
-        
+
         ruleset_file = tmp_path / "ruleset.json"
         ruleset_file.write_text(json.dumps([{
             "title": "Test Rule",
@@ -2678,7 +2372,7 @@ class TestCLIAutoMode:
             "tags": [],
             "rule": ["SELECT * FROM logs"]
         }]))
-        
+
         config_file = tmp_path / "config.json"
         config_file.write_text(json.dumps({
             "exclusions": [],
@@ -2689,24 +2383,17 @@ class TestCLIAutoMode:
             "transforms_enabled": False,
             "transforms": {}
         }))
-        
+
         output_file = tmp_path / "output.json"
-        
+
         # Auto-mode is now default - no flag needed
-        with patch('sys.argv', [
-            'zircolite.py',
-            '-e', str(events_dir),
-            '-r', str(ruleset_file),
-            '-c', str(config_file),
-            '-j',
-            '-o', str(output_file)
-        ] + get_log_arg(tmp_path)):
+        with patch('sys.argv', ['zircolite.py', '-e', str(events_dir), '-r', str(ruleset_file), '-c', str(config_file), '-j', '-o', str(output_file), *get_log_arg(tmp_path)]):
             zircolite_script.main()
-        
+
         assert output_file.exists()
         with open(output_file) as f:
             detections = json.loads(f.read())
-        
+
         # In unified mode, we should have 1 detection with count=15
         # (all events matched by "SELECT * FROM logs")
         assert len(detections) == 1
@@ -2718,7 +2405,7 @@ class TestCLIAutoMode:
         events_file.write_text(json.dumps({
             "Event": {"System": {"EventID": 1}, "EventData": {"CommandLine": "test"}}
         }))
-        
+
         ruleset_file = tmp_path / "ruleset.json"
         ruleset_file.write_text(json.dumps([{
             "title": "Test Rule",
@@ -2727,7 +2414,7 @@ class TestCLIAutoMode:
             "tags": [],
             "rule": ["SELECT * FROM logs"]
         }]))
-        
+
         config_file = tmp_path / "config.json"
         config_file.write_text(json.dumps({
             "exclusions": [],
@@ -2738,34 +2425,27 @@ class TestCLIAutoMode:
             "transforms_enabled": False,
             "transforms": {}
         }))
-        
+
         output_file = tmp_path / "output.json"
-        
+
         # Auto-mode is default, single file should use per-file mode
-        with patch('sys.argv', [
-            'zircolite.py',
-            '-e', str(events_file),
-            '-r', str(ruleset_file),
-            '-c', str(config_file),
-            '-j',
-            '-o', str(output_file)
-        ] + get_log_arg(tmp_path)):
+        with patch('sys.argv', ['zircolite.py', '-e', str(events_file), '-r', str(ruleset_file), '-c', str(config_file), '-j', '-o', str(output_file), *get_log_arg(tmp_path)]):
             zircolite_script.main()
-        
+
         assert output_file.exists()
 
     def test_no_auto_mode_disables_auto_selection(self, tmp_path):
         """Test --no-auto-mode disables automatic mode selection."""
         events_dir = tmp_path / "events"
         events_dir.mkdir()
-        
+
         # Create 15 files (would normally trigger unified mode)
         for i in range(15):
             events_file = events_dir / f"events_{i}.json"
             events_file.write_text(json.dumps({
                 "Event": {"System": {"EventID": 1}, "EventData": {"CommandLine": f"powershell.exe test{i}"}}
             }))
-        
+
         ruleset_file = tmp_path / "ruleset.json"
         ruleset_file.write_text(json.dumps([{
             "title": "Test Rule",
@@ -2774,7 +2454,7 @@ class TestCLIAutoMode:
             "tags": [],
             "rule": ["SELECT * FROM logs WHERE CommandLine LIKE '%powershell%'"]
         }]))
-        
+
         config_file = tmp_path / "config.json"
         config_file.write_text(json.dumps({
             "exclusions": [],
@@ -2785,25 +2465,17 @@ class TestCLIAutoMode:
             "transforms_enabled": False,
             "transforms": {}
         }))
-        
+
         output_file = tmp_path / "output.json"
-        
+
         # With --no-auto-mode, should use per-file mode (default) even for many files
-        with patch('sys.argv', [
-            'zircolite.py',
-            '-e', str(events_dir),
-            '-r', str(ruleset_file),
-            '-c', str(config_file),
-            '-j',
-            '-o', str(output_file),
-            '--no-auto-mode'
-        ] + get_log_arg(tmp_path)):
+        with patch('sys.argv', ['zircolite.py', '-e', str(events_dir), '-r', str(ruleset_file), '-c', str(config_file), '-j', '-o', str(output_file), '--no-auto-mode', *get_log_arg(tmp_path)]):
             zircolite_script.main()
-        
+
         assert output_file.exists()
         with open(output_file) as f:
             detections = json.loads(f.read())
-        
+
         # Per-file mode: 15 separate detections (one per file)
         assert len(detections) == 15
 
@@ -2813,10 +2485,10 @@ class TestCLIAutoMode:
         events_file.write_text(json.dumps({
             "Event": {"System": {"EventID": 1}, "EventData": {"CommandLine": "test"}}
         }))
-        
+
         ruleset_file = tmp_path / "ruleset.json"
         ruleset_file.write_text("[]")
-        
+
         config_file = tmp_path / "config.json"
         config_file.write_text(json.dumps({
             "exclusions": [],
@@ -2827,21 +2499,13 @@ class TestCLIAutoMode:
             "transforms_enabled": False,
             "transforms": {}
         }))
-        
+
         output_file = tmp_path / "output.json"
-        
+
         # Even for single file (which would auto-select per-file), --unified-db forces unified
-        with patch('sys.argv', [
-            'zircolite.py',
-            '-e', str(events_file),
-            '-r', str(ruleset_file),
-            '-c', str(config_file),
-            '-j',
-            '-o', str(output_file),
-            '--unified-db'
-        ] + get_log_arg(tmp_path)):
+        with patch('sys.argv', ['zircolite.py', '-e', str(events_file), '-r', str(ruleset_file), '-c', str(config_file), '-j', '-o', str(output_file), '--unified-db', *get_log_arg(tmp_path)]):
             zircolite_script.main()
-        
+
         assert output_file.exists()
 
 
@@ -2852,9 +2516,9 @@ class TestAnalyzeFilesAndRecommendMode:
         """Test single file recommends per-file mode."""
         events_file = tmp_path / "events.json"
         events_file.write_text('{"test": "data"}')
-        
+
         mode, reason, stats = zircolite_script.analyze_files_and_recommend_mode([events_file])
-        
+
         assert mode == 'per-file'
         assert 'Single file' in reason
         assert stats['file_count'] == 1
@@ -2866,9 +2530,9 @@ class TestAnalyzeFilesAndRecommendMode:
             f = tmp_path / f"small_{i}.json"
             f.write_text('{"small": "data"}')  # ~20 bytes each
             files.append(f)
-        
+
         mode, reason, stats = zircolite_script.analyze_files_and_recommend_mode(files)
-        
+
         assert mode == 'unified'
         assert stats['file_count'] == 15
 
@@ -2879,18 +2543,18 @@ class TestAnalyzeFilesAndRecommendMode:
             f = tmp_path / f"file_{i}.json"
             f.write_text('{"data": "value"}')
             files.append(f)
-        
+
         mode, reason, stats = zircolite_script.analyze_files_and_recommend_mode(files)
-        
+
         assert stats['file_count'] == 3
 
     def test_stats_contain_expected_fields(self, tmp_path):
         """Test stats dictionary contains all expected fields."""
         events_file = tmp_path / "events.json"
         events_file.write_text('{"test": "data" }')
-        
+
         _, _, stats = zircolite_script.analyze_files_and_recommend_mode([events_file])
-        
+
         expected_fields = [
             'file_count', 'total_size', 'total_size_fmt',
             'avg_size', 'avg_size_fmt', 'max_size', 'max_size_fmt',
@@ -3128,13 +2792,12 @@ class TestTestRulesCLI:
         test_file = tmp_path / "tests.json"
         test_file.write_text(json.dumps([]))
 
-        with pytest.raises(SystemExit) as exc_info:
-            with patch('sys.argv', [
-                'zircolite.py', '-r', ruleset,
-                '--test-rules', str(test_file),
-                '-R', 'Noisy', '-n',
-            ]):
-                zircolite_script.main()
+        with pytest.raises(SystemExit) as exc_info, patch('sys.argv', [
+            'zircolite.py', '-r', ruleset,
+            '--test-rules', str(test_file),
+            '-R', 'Noisy', '-n',
+        ]):
+            zircolite_script.main()
         # The only rule is filtered out -> no results -> success
         assert exc_info.value.code == 0
 
@@ -3150,12 +2813,11 @@ class TestTestRulesCLI:
              "true_negative": [{"CommandLine": "powershell.exe"}]},
         ]))
 
-        with pytest.raises(SystemExit) as exc_info:
-            with patch('sys.argv', [
-                'zircolite.py', '-r', ruleset,
-                '--test-rules', str(test_file), '-n',
-            ]):
-                zircolite_script.main()
+        with pytest.raises(SystemExit) as exc_info, patch('sys.argv', [
+            'zircolite.py', '-r', ruleset,
+            '--test-rules', str(test_file), '-n',
+        ]):
+            zircolite_script.main()
         assert exc_info.value.code == 0
 
     def test_test_rules_exit_nonzero_on_failure(self, tmp_path):
@@ -3171,12 +2833,11 @@ class TestTestRulesCLI:
              "true_negative": []},
         ]))
 
-        with pytest.raises(SystemExit) as exc_info:
-            with patch('sys.argv', [
-                'zircolite.py', '-r', ruleset,
-                '--test-rules', str(test_file), '-n',
-            ]):
-                zircolite_script.main()
+        with pytest.raises(SystemExit) as exc_info, patch('sys.argv', [
+            'zircolite.py', '-r', ruleset,
+            '--test-rules', str(test_file), '-n',
+        ]):
+            zircolite_script.main()
         assert exc_info.value.code == 1
 
 
@@ -3192,13 +2853,12 @@ class TestCLIValidation:
         events = tmp_path / "events.json"
         events.write_text(json.dumps({"EventID": 1}) + "\n")
 
-        with pytest.raises(SystemExit) as exc_info:
-            with patch('sys.argv', [
-                'zircolite.py', '-e', str(events), '-j',
-                '-r', str(ruleset_file),
-                '-T', str(tmp_path / "out.json"), '-n',
-            ]):
-                zircolite_script.main()
+        with pytest.raises(SystemExit) as exc_info, patch('sys.argv', [
+            'zircolite.py', '-e', str(events), '-j',
+            '-r', str(ruleset_file),
+            '-T', str(tmp_path / "out.json"), '-n',
+        ]):
+            zircolite_script.main()
         assert exc_info.value.code == 1
 
     def test_limit_zero_rejected(self, tmp_path):
@@ -3210,13 +2870,12 @@ class TestCLIValidation:
         events = tmp_path / "events.json"
         events.write_text(json.dumps({"EventID": 1}) + "\n")
 
-        with pytest.raises(SystemExit) as exc_info:
-            with patch('sys.argv', [
-                'zircolite.py', '-e', str(events), '-j',
-                '-r', str(ruleset_file),
-                '--limit', '0', '-n',
-            ]):
-                zircolite_script.main()
+        with pytest.raises(SystemExit) as exc_info, patch('sys.argv', [
+            'zircolite.py', '-e', str(events), '-j',
+            '-r', str(ruleset_file),
+            '--limit', '0', '-n',
+        ]):
+            zircolite_script.main()
         assert exc_info.value.code == 1
 
     def test_multiple_templates_per_flag_rejected(self, tmp_path):
@@ -3232,24 +2891,22 @@ class TestCLIValidation:
         tmpl2 = tmp_path / "b.tmpl"
         tmpl2.write_text("{{ data }}")
 
-        with pytest.raises(SystemExit) as exc_info:
-            with patch('sys.argv', [
-                'zircolite.py', '-e', str(events), '-j',
-                '-r', str(ruleset_file),
-                '-t', str(tmpl), str(tmpl2),
-                '-T', str(tmp_path / "out.json"), '-n',
-            ]):
-                zircolite_script.main()
+        with pytest.raises(SystemExit) as exc_info, patch('sys.argv', [
+            'zircolite.py', '-e', str(events), '-j',
+            '-r', str(ruleset_file),
+            '-t', str(tmpl), str(tmpl2),
+            '-T', str(tmp_path / "out.json"), '-n',
+        ]):
+            zircolite_script.main()
         assert exc_info.value.code == 1
 
     def test_transform_list_missing_config_exits_nonzero(self, tmp_path):
         """--transform-list with a missing config must exit non-zero."""
-        with pytest.raises(SystemExit) as exc_info:
-            with patch('sys.argv', [
-                'zircolite.py', '--transform-list',
-                '-c', str(tmp_path / "nope.yaml"), '-n',
-            ]):
-                zircolite_script.main()
+        with pytest.raises(SystemExit) as exc_info, patch('sys.argv', [
+            'zircolite.py', '--transform-list',
+            '-c', str(tmp_path / "nope.yaml"), '-n',
+        ]):
+            zircolite_script.main()
         assert exc_info.value.code == 1
 
     def test_transform_list_ok_exits_zero(self):
@@ -3284,18 +2941,7 @@ class TestDbfileCollision:
         }))
         db_file = tmp_path / "out" / "db.db"
 
-        with patch("sys.argv", [
-            "zircolite.py",
-            "-e", str(tmp_path),
-            "-r", str(ruleset_file),
-            "-c", str(config_file),
-            "-j",
-            "-o", str(tmp_path / "output.json"),
-            "--no-auto-mode",
-            "--no-parallel",
-            "-d", str(db_file),
-            "--file-pattern", "dir*/same.json",
-        ] + get_log_arg(tmp_path)):
+        with patch("sys.argv", ["zircolite.py", "-e", str(tmp_path), "-r", str(ruleset_file), "-c", str(config_file), "-j", "-o", str(tmp_path / "output.json"), "--no-auto-mode", "--no-parallel", "-d", str(db_file), "--file-pattern", "dir*/same.json", *get_log_arg(tmp_path)]):
             zircolite_script.main()
 
         db_dir = tmp_path / "out"
@@ -3336,22 +2982,18 @@ class TestCLIRegressionFixes:
     def test_limit_below_minus_one_rejected(self, tmp_path):
         """--limit -5 silently discarded every detection: reject it like 0."""
         ruleset, config, events = self._fixture(tmp_path)
-        with pytest.raises(SystemExit) as exc_info:
-            with patch('sys.argv', [
-                'zircolite.py', '-e', str(events), '-j',
-                '-r', str(ruleset), '-c', str(config), '--limit', '-5', '-n',
-            ]):
-                zircolite_script.main()
+        with pytest.raises(SystemExit) as exc_info, patch('sys.argv', [
+            'zircolite.py', '-e', str(events), '-j',
+            '-r', str(ruleset), '-c', str(config), '--limit', '-5', '-n',
+        ]):
+            zircolite_script.main()
         assert exc_info.value.code == 1
 
     def test_limit_minus_one_still_allowed(self, tmp_path):
         """-1 is the documented 'no limit' value and must keep working."""
         ruleset, config, events = self._fixture(tmp_path)
         out = tmp_path / "out.json"
-        with patch('sys.argv', [
-            'zircolite.py', '-e', str(events), '-j', '-r', str(ruleset),
-            '-c', str(config), '-o', str(out), '--limit', '-1',
-        ] + get_log_arg(tmp_path)):
+        with patch('sys.argv', ['zircolite.py', '-e', str(events), '-j', '-r', str(ruleset), '-c', str(config), '-o', str(out), '--limit', '-1', *get_log_arg(tmp_path)]):
             zircolite_script.main()
         assert len(json.loads(out.read_text())) == 1
 
@@ -3369,10 +3011,7 @@ class TestCLIRegressionFixes:
             }) + "\n")
 
         out = tmp_path / "out.json"
-        with patch('sys.argv', [
-            'zircolite.py', '-e', str(events_dir), '-r', str(ruleset),
-            '-c', str(config), '-o', str(out),
-        ] + get_log_arg(tmp_path)):
+        with patch('sys.argv', ['zircolite.py', '-e', str(events_dir), '-r', str(ruleset), '-c', str(config), '-o', str(out), *get_log_arg(tmp_path)]):
             zircolite_script.main()
 
         assert out.exists()
@@ -3392,10 +3031,7 @@ class TestCLIRegressionFixes:
         (events_dir / "ignored.json").write_text("{}\n")
 
         out = tmp_path / "out.json"
-        with patch('sys.argv', [
-            'zircolite.py', '-e', str(events_dir), '-f', 'ndjson',
-            '-r', str(ruleset), '-c', str(config), '-o', str(out),
-        ] + get_log_arg(tmp_path)):
+        with patch('sys.argv', ['zircolite.py', '-e', str(events_dir), '-f', 'ndjson', '-r', str(ruleset), '-c', str(config), '-o', str(out), *get_log_arg(tmp_path)]):
             zircolite_script.main()
 
         detections = json.loads(out.read_text())
@@ -3409,11 +3045,7 @@ class TestCLIRegressionFixes:
         workdir.mkdir()
         monkeypatch.chdir(workdir)
 
-        with patch('sys.argv', [
-            'zircolite.py', '-e', str(events), '-j', '-r', str(ruleset),
-            '-c', str(config), '-o', str(tmp_path / "out.json"),
-            '--timesketch', '--navigator-output',
-        ] + get_log_arg(tmp_path)):
+        with patch('sys.argv', ['zircolite.py', '-e', str(events), '-j', '-r', str(ruleset), '-c', str(config), '-o', str(tmp_path / "out.json"), '--timesketch', '--navigator-output', *get_log_arg(tmp_path)]):
             zircolite_script.main()
 
         assert list(workdir.glob("timesketch-*.json"))
@@ -3472,6 +3104,7 @@ class TestCLIRegressionFixes:
         """The default time range is not a user request, so it is not reported."""
         import logging
         from unittest.mock import MagicMock
+
         from zircolite.run_config import DEFAULTS
         logger = MagicMock(spec=logging.Logger)
         args = argparse.Namespace(
@@ -3507,12 +3140,11 @@ class TestTestRulesOrphanCases:
             "true_negative": [{"CommandLine": "notepad.exe"}],
         }]))
 
-        with pytest.raises(SystemExit) as exc_info:
-            with patch('sys.argv', [
-                'zircolite.py', '-r', str(ruleset),
-                '--test-rules', str(tests), '-n',
-            ]):
-                zircolite_script.main()
+        with pytest.raises(SystemExit) as exc_info, patch('sys.argv', [
+            'zircolite.py', '-r', str(ruleset),
+            '--test-rules', str(tests), '-n',
+        ]):
+            zircolite_script.main()
         assert exc_info.value.code == 0
 
     def test_test_case_matching_no_rule_exits_nonzero(self, tmp_path):
@@ -3525,12 +3157,11 @@ class TestTestRulesOrphanCases:
             "true_negative": [],
         }]))
 
-        with pytest.raises(SystemExit) as exc_info:
-            with patch('sys.argv', [
-                'zircolite.py', '-r', str(ruleset),
-                '--test-rules', str(tests), '-n',
-            ]):
-                zircolite_script.main()
+        with pytest.raises(SystemExit) as exc_info, patch('sys.argv', [
+            'zircolite.py', '-r', str(ruleset),
+            '--test-rules', str(tests), '-n',
+        ]):
+            zircolite_script.main()
         assert exc_info.value.code == 1
 
     def test_failing_true_positive_exits_nonzero(self, tmp_path):
@@ -3542,12 +3173,11 @@ class TestTestRulesOrphanCases:
             "true_negative": [],
         }]))
 
-        with pytest.raises(SystemExit) as exc_info:
-            with patch('sys.argv', [
-                'zircolite.py', '-r', str(ruleset),
-                '--test-rules', str(tests), '-n',
-            ]):
-                zircolite_script.main()
+        with pytest.raises(SystemExit) as exc_info, patch('sys.argv', [
+            'zircolite.py', '-r', str(ruleset),
+            '--test-rules', str(tests), '-n',
+        ]):
+            zircolite_script.main()
         assert exc_info.value.code == 1
 
 
@@ -3651,14 +3281,7 @@ class TestFlagsThatMustNotChangeDetections:
         }))
 
         output_file = tmp_path / "out.json"
-        argv = [
-            'zircolite.py',
-            '-e', str(events_file),
-            '-r', str(ruleset_file),
-            '-c', str(config_file),
-            '-j',
-            '-o', str(output_file),
-        ] + extra_args + get_log_arg(tmp_path)
+        argv = ['zircolite.py', '-e', str(events_file), '-r', str(ruleset_file), '-c', str(config_file), '-j', '-o', str(output_file), *extra_args, *get_log_arg(tmp_path)]
         with patch('sys.argv', argv):
             zircolite_script.main()
         return output_file
@@ -3706,6 +3329,16 @@ def test_version_has_a_single_source():
 
     taskfile = (WORKSPACE_ROOT / "Taskfile.yml").read_text()
     assert "zircolite/__init__.py" in taskfile
+
+    # Tracked docs must not carry the literal either: docs/README.md did, and
+    # nothing here caught it, so it would silently drift at the next bump.
+    # pyproject.toml is exempt -- there the version *is* the package metadata.
+    for doc in ("docs/README.md", "README.md"):
+        path = WORKSPACE_ROOT / doc
+        if path.exists():
+            assert __version__ not in path.read_text(), (
+                f"{doc} duplicates the version literal; reference it instead"
+            )
 
     result = subprocess.run(
         [sys.executable, str(WORKSPACE_ROOT / "zircolite.py"), "-v"],

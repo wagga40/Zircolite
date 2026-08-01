@@ -57,8 +57,9 @@ __pycache__/
 venv/
 .env
 *.log
-pdm.lock
-pyproject.toml
+# pdm.lock and pyproject.toml are tracked: without them
+# `pdm install`, `poetry install` and `uv sync` all fail on a fresh
+# clone, and pytest.ini forces --cov with no pytest-cov to satisfy it.
 Makefile*
 build/
 gui_dev/
@@ -88,3 +89,9 @@ tests/external
 
 # PyInstaller
 dist/
+
+# The test fixtures are real sample logs, and the end-to-end tests that read
+# them exist precisely because synthetic dicts let silent ingestion bugs
+# through. The blanket *.evtx / *.log rules above are for user data.
+!tests/fixtures/
+!tests/fixtures/**
