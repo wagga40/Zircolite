@@ -1483,6 +1483,72 @@ class TestCLIRemoveEvents:
         assert not good.exists(), "A file that ingested cleanly should be removed"
         assert bad.exists(), "A file Zircolite could not read must survive the run"
 
+    def test_remove_events_keeps_every_file_when_interrupted(self, tmp_path):
+        """Ctrl+C must not delete inputs the run never opened.
+
+        The first SIGINT only sets an event, so the file loop breaks and returns
+        normally. Control still reaches the cleanup in main()'s finally block,
+        which was handed the full discovered list -- deleting files nothing had
+        read, and whose events are therefore in no result.
+        """
+        from zircolite import shutdown as shutdown_module
+        from zircolite.core import ZircoliteCore
+
+        # The ruleset lives outside the input directory: -e globs *.json
+        inputs = tmp_path / "logs"
+        inputs.mkdir()
+        for index in range(4):
+            (inputs / f"events{index}.json").write_text(
+                '{"Event": {"System": {"EventID": 1}, "EventData": {}}}'
+            )
+        ruleset_file = tmp_path / "ruleset.json"
+        ruleset_file.write_text(json.dumps([{
+            "title": "Any event",
+            "id": "interrupt-001",
+            "level": "low",
+            "tags": [],
+            "rule": ["SELECT * FROM logs WHERE EventID = 1"],
+        }]))
+
+        # Stand in for the interrupt landing once the first file is ingested
+        real_run_streaming = ZircoliteCore.run_streaming
+
+        def interrupt_after_first_file(self, *args, **kwargs):
+            result = real_run_streaming(self, *args, **kwargs)
+            shutdown_module.request_shutdown()
+            return result
+
+        shutdown_module.reset_shutdown_state()
+        try:
+            with patch.object(
+                ZircoliteCore, "run_streaming", interrupt_after_first_file
+            ), patch('sys.argv', [
+                'zircolite.py',
+                '-e', str(inputs),
+                '-r', str(ruleset_file),
+                '-j',
+                '-o', str(tmp_path / "output.json"),
+                # Sequential per-file mode, so the loop reaches its shutdown
+                # checkpoint with files still unread
+                '--no-parallel',
+                '--no-auto-mode',
+                '-RE',
+                '-n',
+            ]):
+                with pytest.raises(SystemExit) as excinfo:
+                    zircolite_script.main()
+            assert excinfo.value.code == 130
+        finally:
+            shutdown_module.reset_shutdown_state()
+
+        survivors = sorted(p.name for p in inputs.glob("events*.json"))
+        assert survivors == [
+            "events0.json", "events1.json", "events2.json", "events3.json"
+        ], (
+            "An interrupted run must keep every input: the files it never read "
+            f"contributed nothing to the results. Survivors: {survivors}"
+        )
+
 
 class TestCLIAdvancedConfiguration:
     """Tests for Advanced Configuration options: --quiet, --debug, --timefield, --logs-encoding, --no-auto-detect."""

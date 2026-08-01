@@ -1392,7 +1392,18 @@ def main() -> None:
         request_shutdown()
     finally:
         try:
-            cleanup(args, logger, log_list, failed=ctx.failed_files)
+            # An interrupted run stops at the next checkpoint and returns
+            # normally, so log_list still names every discovered file -- including
+            # the ones nothing opened. Deleting those would destroy evidence that
+            # never reached the results.
+            if is_shutdown_requested():
+                if args.remove_events and log_list:
+                    logger.warning(
+                        "[yellow]   [!] Keeping the input files: the run was "
+                        "interrupted, so not every event was analysed[/]"
+                    )
+            else:
+                cleanup(args, logger, log_list, failed=ctx.failed_files)
         except Exception as e:
             logger.debug(f"Cleanup: {e}")
         if zircolite_core is not None:
