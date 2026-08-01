@@ -195,3 +195,77 @@ class TestRunRuleTestsEdgeCases:
         test_file.write_text("not valid json{{{")
         with pytest.raises(ValueError, match="Cannot load rule test file"):
             rule_test_core.run_rule_tests(str(test_file))
+
+
+class TestUnrunnableRuleIsNotAPass:
+    """A rule that cannot execute at all must not report as passing.
+
+    run_rule_tests built throwaway cores, closed them in a finally, and never
+    read their rules_in_error -- so an uncompilable regex or broken SQL came
+    back tp_pass=True, tn_pass=True, error=''. And with no true_positive events
+    to check, tp_pass defaulted to True: an untested half read as a pass.
+    """
+
+    def _core(self, field_mappings_file, test_logger, rule):
+        cfg = ProcessingConfig(no_output=True)
+        core = ZircoliteCore(field_mappings_file, cfg, logger=test_logger)
+        core.ruleset = [rule]
+        return core
+
+    def _run(self, core, tmp_path, case):
+        test_file = tmp_path / "cases.json"
+        test_file.write_text(json.dumps([case]))
+        try:
+            return core.run_rule_tests(str(test_file))[0]
+        finally:
+            core.close()
+
+    def test_uncompilable_regex_is_reported_as_a_failure(
+        self, tmp_path, field_mappings_file, test_logger
+    ):
+        # \p{L} is PCRE, which Python's re rejects
+        core = self._core(field_mappings_file, test_logger, {
+            "title": "Broken regex rule", "id": "br-1", "level": "high", "tags": [],
+            "rule": [r"SELECT * FROM logs WHERE CommandLine REGEXP '\p{L}+evil'"],
+        })
+        result = self._run(core, tmp_path, {
+            "title": "Broken regex rule",
+            "true_positive": [{"CommandLine": "evil.exe"}],
+            "true_negative": [{"CommandLine": "notepad.exe"}],
+        })
+
+        assert result["tp_pass"] is False
+        assert result["error"], "the reason must be reported, not left blank"
+
+    def test_broken_sql_is_reported_as_a_failure(
+        self, tmp_path, field_mappings_file, test_logger
+    ):
+        core = self._core(field_mappings_file, test_logger, {
+            "title": "Syntax error rule", "id": "se-1", "level": "high", "tags": [],
+            "rule": ["SELECT * FROM logs WHERE CommandLine LIKE"],
+        })
+        result = self._run(core, tmp_path, {
+            "title": "Syntax error rule",
+            "true_positive": [],
+            "true_negative": [{"CommandLine": "notepad.exe"}],
+        })
+
+        assert result["tn_pass"] is False
+        assert result["error"]
+
+    def test_an_untested_half_is_not_a_pass(
+        self, tmp_path, field_mappings_file, test_logger
+    ):
+        """No true_positive events means untested, which is not the same as passing."""
+        core = self._core(field_mappings_file, test_logger, {
+            "title": "Fine rule", "id": "ok-1", "level": "high", "tags": [],
+            "rule": ["SELECT * FROM logs WHERE CommandLine LIKE '%evil%'"],
+        })
+        result = self._run(core, tmp_path, {
+            "title": "Fine rule",
+            "true_positive": [],
+            "true_negative": [{"CommandLine": "notepad.exe"}],
+        })
+
+        assert result["tp_pass"] is None, "untested must not read as passed"
+        assert result["tn_pass"] is True

@@ -12,9 +12,11 @@ These tests verify the command-line interface behavior including:
 import argparse
 import importlib.util
 import json
+import logging
 import os
 import subprocess
 import sys
+import time
 from pathlib import Path
 from unittest.mock import patch
 
@@ -3556,3 +3558,53 @@ class TestCLIPackageFailureIsReported:
             assert excinfo.value.code != 0
         finally:
             os.chdir(original_cwd)
+
+
+class TestSummaryCountsDistinctRules:
+    """The panel must count a rule once, however many files it fired in.
+
+    Per-file, parallel and multi---dbfile modes each append one result entry
+    per file, so a rule matching in three files was counted three times:
+    `3/1 rules matched (300.0%)`, and Top Hits listed it three times.
+    """
+
+    def _results(self):
+        return [
+            {"title": "Noisy rule", "id": "r-1", "rule_level": "high", "count": 2},
+            {"title": "Noisy rule", "id": "r-1", "rule_level": "high", "count": 3},
+            {"title": "Noisy rule", "id": "r-1", "rule_level": "high", "count": 1},
+            {"title": "Other rule", "id": "r-2", "rule_level": "low", "count": 4},
+        ]
+
+    def test_entries_are_collapsed_by_rule_identity(self):
+        collapsed = zircolite_script.collapse_results_by_rule(self._results())
+
+        assert len(collapsed) == 2
+        by_id = {r["id"]: r for r in collapsed}
+        assert by_id["r-1"]["count"] == 6, "per-file counts must be summed"
+        assert by_id["r-2"]["count"] == 4
+
+    def test_a_rule_without_an_id_falls_back_to_its_title(self):
+        collapsed = zircolite_script.collapse_results_by_rule([
+            {"title": "No id", "rule_level": "low", "count": 1},
+            {"title": "No id", "rule_level": "low", "count": 2},
+        ])
+        assert len(collapsed) == 1
+        assert collapsed[0]["count"] == 3
+
+    def test_coverage_cannot_exceed_one_hundred_percent(self, capsys):
+        from zircolite.utils import MemoryTracker
+
+        zircolite_script.print_stats(
+            MemoryTracker(logger=logging.getLogger("test")),
+            start_time=time.time() - 1,
+            all_results=self._results(),
+            files_processed=3,
+            total_events=10,
+            total_rules=2,
+        )
+        out = capsys.readouterr().out
+        assert "2/2 rules matched (100.0%)" in out, out
+        assert "300.0%" not in out
+        # Top Hits lists each rule once
+        assert out.count("Noisy rule") == 1, out

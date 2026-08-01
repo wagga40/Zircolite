@@ -1184,8 +1184,11 @@ class ZircoliteCore:
 
             tp_events = [self._as_ingested(e) for e in tc.get('true_positive', [])]
             tn_events = [self._as_ingested(e) for e in tc.get('true_negative', [])]
-            tp_pass = True
-            tn_pass = True
+            # None means "not tested": with no events on that side there is
+            # nothing to conclude, and defaulting to True reported an untested
+            # half as a pass.
+            tp_pass: bool | None = None
+            tn_pass: bool | None = None
             tp_count = 0
             tn_count = 0
             error = ''
@@ -1205,6 +1208,12 @@ class ZircoliteCore:
                         tp_res = tp_core.execute_rule(rule)
                         tp_count = tp_res.get('count', 0) if tp_res else 0
                         tp_pass = tp_count > 0
+                        # A rule that could not run returns no matches, which is
+                        # indistinguishable from one that ran and matched
+                        # nothing unless its recorded error is read back.
+                        if tp_core.rules_in_error:
+                            error = next(iter(tp_core.rules_in_error.values()))
+                            tp_pass = False
                     finally:
                         tp_core.close()
 
@@ -1222,6 +1231,11 @@ class ZircoliteCore:
                         tn_res = tn_core.execute_rule(rule)
                         tn_count = tn_res.get('count', 0) if tn_res else 0
                         tn_pass = tn_count == 0
+                        # A broken rule matches nothing, so the true-negative
+                        # side would otherwise always pass.
+                        if tn_core.rules_in_error:
+                            error = next(iter(tn_core.rules_in_error.values()))
+                            tn_pass = False
                     finally:
                         tn_core.close()
 

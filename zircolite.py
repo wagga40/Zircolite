@@ -637,6 +637,27 @@ def cleanup(
                 logger.error(f"[red]    [-] Cannot remove file {e}[/]")
 
 
+def collapse_results_by_rule(all_results: list[Any]) -> list[dict[str, Any]]:
+    """One entry per rule, with its per-file counts summed.
+
+    Per-file, parallel and multi---dbfile input each append a result entry per
+    file, so a rule matching in three files arrived three times. Counting those
+    entries reported `3/1 rules matched (300.0%)` and listed the same rule three
+    times under Top Hits. Only --unified-db was ever free of it.
+    """
+    collapsed: dict[Any, dict[str, Any]] = {}
+    for result in all_results or []:
+        if not isinstance(result, dict):
+            continue
+        key = result.get("id") or result.get("title")
+        existing = collapsed.get(key)
+        if existing is None:
+            collapsed[key] = dict(result)
+        else:
+            existing["count"] = existing.get("count", 0) + result.get("count", 0)
+    return list(collapsed.values())
+
+
 def print_stats(
     memory_tracker: MemoryTracker,
     start_time: float,
@@ -730,6 +751,7 @@ def print_stats(
 
     # ── Detection summary ──
     if all_results:
+        all_results = collapse_results_by_rule(all_results)
         det_stats = DetectionStats()
         for result in all_results:
             level = result.get("rule_level", "unknown")
@@ -758,7 +780,9 @@ def print_stats(
             matched_rules = det_stats.total_rules_matched
             coverage_pct = matched_rules / total_rules * 100
             bar_w = 16
-            filled = max(0, int(bar_w * matched_rules / total_rules))
+            # Clamped: a stale total would otherwise render a bar wider than
+            # its column rather than simply reading oddly.
+            filled = min(bar_w, max(0, int(bar_w * matched_rules / total_rules)))
             cov_bar = "\u2588" * filled + "\u2591" * (bar_w - filled)
             summary_table.add_row(
                 "\U0001f4cf Coverage",
