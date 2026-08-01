@@ -477,9 +477,10 @@ rules:
 
 # Output configuration
 output:
-  # Output file path. With format: csv this defaults to detected_events.csv
-  # unless you name a file here.
-  file: detected_events.json
+  # Output file path. Left unset it is detected_events.json, or
+  # detected_events.csv with format: csv. Naming a file here fixes it for both,
+  # which is why it ships commented out.
+  # file: detected_events.json
 
   # Output format: json, csv
   # CSV fixes its column headers from the first detection row, so match
@@ -544,9 +545,10 @@ processing:
   # keeps a single noisy rule from dominating the output. -1 disables it.
   limit: -1
 
-  # Field holding the event timestamp. Auto-detected when this one is absent
-  # from the events.
-  time_field: SystemTime
+  # Field holding the event timestamp. Left unset it is auto-detected from the
+  # events, falling back to SystemTime. Naming one here pins it and turns that
+  # detection off, which is why it ships commented out.
+  # time_field: SystemTime
 
   # Skip events whose Channel/EventID cannot match any loaded rule, before
   # the expensive flattening step. Applies to Windows-shaped inputs only.

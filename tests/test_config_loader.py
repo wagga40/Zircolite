@@ -654,13 +654,22 @@ class TestExampleConfigStaysComplete:
         assert unknown_yaml_keys(self._parsed()) == []
 
     def test_it_covers_every_key(self):
+        """Every key is documented, set or shown commented out.
+
+        A conditional default has to ship commented: written out, it counts as
+        a deliberate choice and switches off the very detection it describes.
+        It is still documented, and still one character from being enabled.
+        """
+        import re
         from dataclasses import fields as dc_fields
 
         from zircolite.config_loader import SECTIONS
 
         parsed = self._parsed()
+        text = self.EXAMPLE.read_text()
+        commented = set(re.findall(r"^\s*#\s*([a-z_]+):", text, re.MULTILINE))
         for section, cls in SECTIONS.items():
-            present = set((parsed.get(section) or {}).keys())
+            present = set((parsed.get(section) or {}).keys()) | commented
             known = {f.name for f in dc_fields(cls)}
             assert known - present == set(), f"{section} is missing keys"
 

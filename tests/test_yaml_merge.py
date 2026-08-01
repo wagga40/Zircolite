@@ -506,3 +506,61 @@ class TestScalarWhereAListIsExpected:
         args = _args()
         resolve(args, {"input": {"select": ["Security", "System"]}}, skip=EARLY_DESTS)
         assert flatten_groups(args.select) == ["Security", "System"]
+
+
+class TestGeneratedConfigRoundTrip:
+    """`--generate-config` must not write a config that changes behaviour.
+
+    resolve() treats any non-null YAML value as a deliberate choice, so a
+    generated file pinning a conditional default silently switches it off --
+    even though the user changed nothing.
+    """
+
+    def _generated(self, tmp_path):
+        import yaml as _yaml
+
+        from zircolite.config_loader import create_default_config_file
+
+        target = tmp_path / "generated.yaml"
+        create_default_config_file(str(target))
+        return _yaml.safe_load(target.read_text()) or {}
+
+    def test_timestamp_auto_detection_survives(self, tmp_path):
+        """A pinned time_field counts as explicit and disables auto-detection."""
+        args = _args()
+        resolve(args, self._generated(tmp_path), skip=EARLY_DESTS)
+        assert "timefield" not in args._explicit, (
+            "the generated config turned off timestamp auto-detection"
+        )
+
+    def test_csv_output_still_picks_the_csv_name(self, tmp_path):
+        """A pinned output.file makes --csv write CSV into detected_events.json."""
+        args = _args(csv=True)
+        resolve(args, self._generated(tmp_path), skip=EARLY_DESTS)
+        assert args.outfile == "detected_events.csv"
+
+    def test_no_setting_differs_from_a_run_without_the_file(self, tmp_path):
+        """The whole point: generating a config and passing it back is a no-op.
+
+        `rules.rulesets` is excluded: it names the very file zircolite.py
+        applies when no ruleset is given, and nothing reads its explicitness,
+        so pinning it is the one difference that cannot change an outcome.
+        """
+        generated = self._generated(tmp_path)
+
+        without = _args()
+        resolve(without, {}, skip=EARLY_DESTS)
+        with_file = _args()
+        resolve(with_file, generated, skip=EARLY_DESTS)
+
+        differences = {
+            setting.dest: (
+                getattr(without, setting.dest, None),
+                getattr(with_file, setting.dest, None),
+            )
+            for setting in run_config.SETTINGS
+            if setting.dest != "ruleset"
+            and getattr(without, setting.dest, None)
+            != getattr(with_file, setting.dest, None)
+        }
+        assert differences == {}
