@@ -1,6 +1,6 @@
 # Zircolite Documentation
 
-Documentation for **Zircolite 3.8.0**. Zircolite is a standalone SIGMA-based detection tool for EVTX, Auditd, Sysmon for Linux, XML, CSV, and JSONL/NDJSON logs. It uses SQLite as a backend for SIGMA rule execution.
+Documentation for **Zircolite**. Zircolite is a standalone SIGMA-based detection tool for EVTX, Auditd, Sysmon for Linux, XML, CSV, and JSONL/NDJSON logs. It uses SQLite as a backend for SIGMA rule execution.
 
 **Zircolite** supports the following log sources:
 
@@ -47,10 +47,10 @@ The project uses [Task](https://taskfile.dev/) (go-task) for automation. Install
 | `task docker-build` | Build the Docker image (requires Docker) |
 | `task docker-build-multi-arch` | Build multi-architecture image (linux/amd64, linux/arm64) |
 | `task docker-push` | Push the image to Docker Hub (after multi-arch build) |
-| `task get-version` | Print version from zircolite.py |
+| `task get-version` | Print version from `zircolite/__init__.py` |
 | `task save` | Save the Docker image to an archive (set `DOCKER_TAG` as needed) |
 
-The `Taskfile.yml` in the repository defines these production tasks. Development tasks (lint, format, tests) may use a separate Taskfile that is not committed to the repository.
+The `Taskfile.yml` in the repository defines these production tasks. Development tasks (lint, format, tests) live in a separate Taskfile that is not committed; see [CONTRIBUTING.md](https://github.com/wagga40/Zircolite/blob/master/CONTRIBUTING.md) for running them directly.
 
 ### Documentation Contents
 

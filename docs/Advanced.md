@@ -702,7 +702,29 @@ Zircolite includes an **early event filtering** mechanism that skips events befo
 
 #### How the filter is built
 
-When rules are loaded, Zircolite maps each **Channel** in the ruleset to the set of **EventID** values the rules on that channel ask for (from each rule’s `channel` and `eventid` metadata in the converted rules).
+When rules are loaded, Zircolite maps each **Channel** in the ruleset to the set of **EventID** values the rules on that channel can actually match.
+
+Those eventIDs are read from each rule's **SQL**, not from its `eventid` metadata. The metadata is collected by `pysigma-backend-sqlite` from every detection group — including negated `filter:` blocks — and without regard to the rule's `condition`, so it is a bag of values rather than a set of eventIDs the rule matches. A rule written as
+
+```yaml
+detection:
+    selection:
+        Channel: Security
+    filter:
+        EventID: 4624
+    condition: selection and not filter
+```
+
+arrives carrying `eventid: [4624]` — the one eventID it *excludes*. Read as an allow-list that inverts the rule: the filter would admit only 4624 and discard everything the rule is looking for, and the rule would report nothing while looking perfectly healthy.
+
+Reading the SQL instead means the filter narrows a channel only on what it can prove. **Every uncertainty leaves the channel unbounded**, because a wrong bound drops events at ingest and costs detections, while a missing bound only costs a little speed. A channel stays unbounded when the rule's SQL:
+
+- constrains `EventID` under a `NOT`, where the listed values are the ones the rule refuses;
+- has an `OR` branch that does not constrain `EventID` at all, so that branch can match any event;
+- does not mention `EventID`, or constrains it in a form this cannot read (`BETWEEN`, `>`, `LIKE`);
+- belongs to a **correlation** rule, whose subquery shape is deliberately not second-guessed.
+
+Across the shipped rulesets this keeps a finite eventID bound on about 98% of rules, so the optimisation survives essentially intact.
 
 A rule that names a channel but no eventID matches *any* eventID on that channel, so it marks its own channel unbounded — the other channels keep their bounds. This is what keeps **alert counts consistent** whether you run a single rule or the full ruleset. Bounding every channel by the union of all rules’ eventIDs would drop events a channel-only rule should have seen, and the same rule could then report different counts (e.g. 74 alone vs 40 with the full ruleset).
 
@@ -718,7 +740,7 @@ An event with no usable Channel, or no usable EventID on a bounded channel, is *
 #### When the per-channel bounds do not apply
 
 - A rule constraining eventIDs but **no** channel cannot be keyed by channel. A ruleset containing one falls back to two independent global axes, where each axis filters only when every rule constrains it.
-- Rulesets containing **correlation** rules keep every channel unbounded. Correlation rules carry their Channel/EventID predicates in SQL rather than in metadata, so bounding eventIDs would leave them with no events.
+- **Correlation** rules carry no channel/eventID metadata at all, so their channel is read from the SQL that embeds the base rule's detection, and left unbounded. If that SQL names no channel either — pySigma emits correlation queries without one when the logsource carried no pipeline — nothing says which channel the rule consumes, and event filtering is switched off for the whole run rather than guessing.
 - With `--no-event-filter`, or `enabled: false` in config, all events are processed.
 
 #### Configuration and formats

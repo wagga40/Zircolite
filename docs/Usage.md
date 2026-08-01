@@ -48,6 +48,9 @@ git clone https://github.com/wagga40/Zircolite.git
 cd Zircolite 
 pdm install
 
+# To run the test suite as well, install the dev group:
+# pdm install --dev
+
 # EXAMPLE RUN
 git clone https://github.com/sbousseaden/EVTX-ATTACK-SAMPLES.git
 pdm run python3 zircolite.py -e EVTX-ATTACK-SAMPLES/ -r rules/rules_windows_merged.json
@@ -60,7 +63,6 @@ pdm run python3 zircolite.py -e EVTX-ATTACK-SAMPLES/ -r rules/rules_windows_merg
 git clone https://github.com/wagga40/Zircolite.git
 cd Zircolite 
 poetry install
-pip install -r requirements.txt  # if pyproject.toml doesn't cover all deps
 
 # EXAMPLE RUN
 git clone https://github.com/sbousseaden/EVTX-ATTACK-SAMPLES.git
@@ -1079,15 +1081,7 @@ Zircolite includes an early event filtering mechanism and automatic timestamp de
 
 ### Early Event Filtering
 
-Zircolite can skip events before processing based on **Channel** and **EventID**, so only events that could match at least one rule’s log source are loaded. This reduces memory and CPU when rules use a subset of channels/eventIDs. **Event filtering applies only to Windows logs** (EVTX, Windows JSON/XML, etc.); other log types (Linux, Auditd, generic JSON, etc.) are not filtered by channel/eventID.
-
-**How it works:**
-
-- When rules are loaded, Zircolite maps each `Channel` in the ruleset to the set of `EventID` values the rules on that channel ask for (from each rule’s `channel` and `eventid` metadata).
-- **EventIDs are bounded per channel.** A rule that names a channel but no EventID matches any EventID *on that channel*, so it leaves its own channel unbounded and the others narrowed. Judging a rule's events against unrelated rules' EventIDs would drop events it should have seen — alert counts would then differ between a single-rule and a full-ruleset run.
-- An event is skipped, before flattening and database insertion, when its Channel is claimed by no rule, or when that channel carries a finite EventID set the event's EventID is absent from. An event with no usable Channel, or no usable EventID on a bounded channel, is kept.
-- A rule constraining EventIDs but **no** channel cannot be keyed by channel. A ruleset containing one falls back to two independent global axes, where each axis filters only when every rule constrains it.
-- Rulesets containing **correlation** rules keep every channel unbounded: correlation rules carry their Channel/EventID predicates in SQL rather than in metadata, so bounding EventIDs would leave them with no events.
+Zircolite can skip events before processing based on **Channel** and **EventID**, so only events that could match at least one rule’s log source are loaded. This reduces memory and CPU when rules use a subset of channels/eventIDs. **Event filtering applies only to Windows logs** (EVTX, Windows JSON/XML, etc.) unless `filter_all_sources` is set; other log types (Linux, Auditd, generic JSON, etc.) are not filtered by channel/eventID.
 
 At load time Zircolite reports what it will filter on:
 
@@ -1117,6 +1111,8 @@ event_filter:
 ```
 
 Disable with the `--no-event-filter` CLI option or set `enabled: false` in config.
+
+See [Early Event Filtering](Advanced.md#early-event-filtering) in the advanced guide for how the per-channel bounds are derived, when they do not apply, and how the filter is reported in the summary panel.
 
 ### Timestamp Detection Configuration
 

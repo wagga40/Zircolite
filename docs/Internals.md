@@ -216,7 +216,7 @@ Zircolite is built around several key classes, organized in the `zircolite/` pac
 - **`shutdown.py`**: Installs the SIGINT handler so a Ctrl+C finishes the current batch and writes results instead of leaving a partial file behind.
 - **`attack.py`**: Extracts MITRE ATT&CK technique and tactic IDs from Sigma tags, normalising the hyphen and underscore spellings both appear in.
 - **`run_config.py`**: Resolves CLI arguments against a YAML configuration file in a single pass, and holds the merge semantics for every option.
-- **ConfigLoader** (`config_loader.py`): Loads and validates YAML configuration files, merges with CLI arguments.
+- **ConfigLoader** (`config_loader.py`): Loads and validates YAML configuration files, and generates the annotated template behind `--generate-config`. Merging with CLI arguments belongs to `run_config.resolve()` above.
 - **Input format registry** (`formats.py`): Single source of truth for every input format. Resolution precedence, the default extension used to glob a directory, and which formats need an extractor all come from this one table.
 
 ### Processing Flow
@@ -341,7 +341,8 @@ Transforms use **RestrictedPython** for safe, sandboxed execution of custom Pyth
     ├── extractor.py        # EvtxExtractor (log line / XML conversion)
     ├── parallel.py         # MemoryAwareParallelProcessor (parallel processing)
     ├── processing.py       # Processing mode coordination, result aggregation
-    ├── rules.py            # RulesetHandler, RulesUpdater (rule management)
+    ├── rules.py            # RulesetHandler, RulesUpdater, EventFilter
+    ├── sqlscan.py          # Quote-aware rule-SQL reader and OR-chain repair
     ├── templates.py        # TemplateEngine, ZircoliteGuiGenerator (output)
     ├── run_config.py       # CLI/YAML resolution and merge semantics
     ├── shutdown.py         # Graceful Ctrl+C handling
@@ -407,13 +408,22 @@ before giving up and recording the rule in `rules_in_error`.
 **Missing columns.** SQLite resolves column names when it prepares a statement, so a rule
 naming one field the dataset never produced fails as a whole — losing the branches that
 reference fields it does have. `_widen_logs_table` adds the absent columns as NULL, which
-makes the rule evaluate exactly as it would against an event that simply lacks them. A
-rule whose fields are *all* absent cannot match either way, so the table is left alone.
+makes the rule evaluate exactly as it would against an event that simply lacks them.
+Rules whose fields are *all* absent are widened too: `|exists: false` becomes `IS NULL`,
+which matches every row once the column is there.
+
+Referenced columns are read with `zircolite/sqlscan.py`, not with a regex. The backend
+backtick-quotes every field name that is not `^[a-zA-Z0-9_]*$` — which is every ECS and
+Winlogbeat name (`event.code`, `winlog.event_data.*`, `@timestamp`, `Data[1]`) — and a
+regex over bare identifiers cannot see them, so those rules were lost whole and silently.
+The same scan also refuses to read a column name out of a string literal, where
+`CommandLine LIKE '%user=bob%'` would otherwise invent a `user` column and `ALTER` it into
+the table.
 
 **Over-deep expressions.** `pysigma-backend-sqlite` emits value lists as a left-deep chain
 (`a OR b OR c OR ...`), whose parse-tree depth equals the number of terms. SQLite refuses
 anything past `SQLITE_MAX_EXPR_DEPTH` (1000 by default), so rules listing a few thousand
-hashes or filenames never ran at all. `zircolite/sqlrewrite.py` re-associates those chains
+hashes or filenames never ran at all. `zircolite/sqlscan.py` re-associates those chains
 into a balanced binary tree, bringing the depth down to O(log n).
 
 The limit cannot simply be raised: `sqlite3_limit` clamps to the compile-time bound, and
@@ -426,8 +436,11 @@ Two properties keep the rewrite safe:
   the wrong rows. Since `OR` has the lowest precedence in SQL, splitting on it and
   re-associating the operands always preserves meaning.
 - **Anything unmodelled bails out**, returning the statement untouched — comments,
-  unterminated quotes, unbalanced parentheses, `UNION`/`INTERSECT`/`EXCEPT`. Leaving a
-  rule reported as broken is far better than emitting subtly wrong SQL.
+  unterminated quotes, unbalanced parentheses, `UNION`/`INTERSECT`/`EXCEPT`, and any
+  parenthesised group holding a `SELECT`. That last one matters because a subquery is not
+  a boolean expression: re-associating the `OR`s inside `x IN (SELECT ... OR ...)` turns
+  it into a truth value, which still compiles and quietly matches the wrong rows. Leaving
+  a rule reported as broken is far better than emitting subtly wrong SQL.
 
 The repair runs only when SQLite itself raises the error, so a statement that already
 compiles is never rewritten. Results are memoised, because per-file and parallel modes run

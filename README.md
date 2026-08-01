@@ -120,36 +120,13 @@ docker run --rm --tty \
 
 ### Automatic Processing Optimization
 
-Zircolite automatically optimizes processing based on your workload. When you run Zircolite with multiple files, it:
-
-1. **Analyzes your files** - counts files, measures sizes, checks available RAM
-2. **Selects optimal database mode** - unified (all files in one DB) vs. per-file (separate DB per file)
-3. **Enables parallel processing** - when beneficial, automatically processes files in parallel
+Given several files, Zircolite measures them against available RAM and CPU, picks a database mode (one shared database, or one per file) and decides whether processing them in parallel is worth it — then adapts the worker count to memory pressure as it runs.
 
 ```shell
 python3 zircolite.py --evtx ./logs/ --ruleset rules/rules_windows_merged.json
 ```
 
-You can control this behavior:
-
-```shell
-# Disable automatic mode selection (force per-file mode)
-python3 zircolite.py --evtx ./logs/ --ruleset rules/rules_windows_merged.json --no-auto-mode
-
-# Force unified database mode (enables cross-file correlation)
-python3 zircolite.py --evtx ./logs/ --ruleset rules/rules_windows_merged.json --unified-db
-
-# Disable parallel processing
-python3 zircolite.py --evtx ./logs/ --ruleset rules/rules_windows_merged.json --no-parallel
-
-# Specify maximum workers manually
-python3 zircolite.py --evtx ./logs/ --ruleset rules/rules_windows_merged.json --parallel-workers 4
-```
-
-The parallel processor automatically:
-- Calculates optimal worker count based on available memory, CPU cores, and file sizes
-- Monitors memory usage and throttles if approaching limits
-- Falls back to sequential processing if parallel isn't beneficial
+Override any of it with `--no-auto-mode`, `--unified-db` (one database for all files, which is what cross-file correlation rules need), `--no-parallel` or `--parallel-workers N`. See [Automatic Processing Optimization](docs/Advanced.md#automatic-processing-optimization) for how the choice is made.
 
 ### Using YAML Configuration Files
 
@@ -205,89 +182,38 @@ Alternatively, if you use [Task](https://taskfile.dev/) (go-task), run `task upd
 > [!IMPORTANT]  
 > Please note that these rulesets are provided to use Zircolite out of the box, but [you should generate your own rulesets](docs/Usage.md#why-you-should-build-your-own-rulesets) as they can be noisy or slow. These auto-updated rulesets are available in the dedicated repository: [Zircolite-Rules-v2](https://github.com/wagga40/Zircolite-Rules-v2).
 
-### Field Splitting
+### Field Splitting and Transforms
 
-Field splitting extracts key-value pairs from fields. For example, Sysmon logs contain a `Hashes` field like:
+Two configuration features shape events as they are ingested, both in `config/config.yaml`:
 
-```
-SHA1=abc123,MD5=def456,SHA256=789xyz
-```
-
-With field splitting configured in `config/config.yaml`:
+- **Field splitting** turns a packed key-value field into queryable ones. Sysmon's `Hashes` field (`SHA1=abc123,MD5=def456,SHA256=789xyz`) becomes separate `SHA1`, `MD5` and `SHA256` fields, so rules can match a hash directly.
+- **Field transforms** run sandboxed Python over a field's value — decoding base64 command lines, extracting IOCs, flagging LOLBins — and can write the result to a new field rather than replacing the original.
 
 ```yaml
 split:
   Hashes:
     separator: ","
     equal: "="
-```
 
-The event becomes:
-
-```json
-{
-  "SHA1": "abc123",
-  "MD5": "def456",
-  "SHA256": "789xyz",
-  "Hashes": "SHA1=abc123,MD5=def456,SHA256=789xyz"
-}
-```
-
-Now you can write rules that match on `SHA256` or `MD5` directly.
-
-### Field Transforms
-
-Transforms apply Python code to field values during processing. They can decode data, extract IOCs, or detect attack patterns.
-
-**Example: Base64 Decoding**
-
-When a command line contains `powershell -enc SGVsbG8gV29ybGQ=`, the transform:
-
-```yaml
 transforms:
   CommandLine:
     - info: "Base64 decode"
       type: python
       code: |
         def transform(param):
-            import base64
-            import re
+            import base64, re
             match = re.search(r'-[eE]nc(?:odedcommand)?\s+([A-Za-z0-9+/=]+)', param)
             if match:
                 try:
                     return base64.b64decode(match.group(1)).decode('utf-16-le')
-                except:
+                except Exception:
                     return ""
             return ""
       alias: true
       alias_name: "CommandLine_b64decoded"
 ```
 
-Creates a new field `CommandLine_b64decoded` containing `Hello World`.
-
-**Example: LOLBin Detection**
-
-```yaml
-transforms:
-  Image:
-    - info: "Detect Living Off The Land Binaries"
-      type: python
-      code: |
-        def transform(param):
-            import re
-            lolbins = ['certutil', 'mshta', 'regsvr32', 'rundll32', 'bitsadmin']
-            exe_name = param.lower().split('\\')[-1].replace('.exe', '')
-            for lolbin in lolbins:
-                if exe_name == lolbin:
-                    return f"LOLBIN:{lolbin}"
-            return ""
-      alias: true
-      alias_name: "Image_LOLBinMatch"
-```
-
-When `Image` is `C:\Windows\System32\certutil.exe`, creates `Image_LOLBinMatch` = `LOLBIN:certutil`.
-
-See [Advanced documentation](docs/Advanced.md#field-transforms) for all available transforms and detailed configuration.
+See [Field Splitting](docs/Usage.md#field-splitting) and [Field Transforms](docs/Advanced.md#field-transforms) for the full configuration, the transforms Zircolite ships, and how to test your own.
 
 ## Documentation
 

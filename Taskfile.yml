@@ -13,7 +13,7 @@ tasks:
     deps: [clean]
 
   get-version:
-    desc: Get the version from zircolite.py
+    desc: Get the version from zircolite/__init__.py
     cmds:
       - 'echo "Version: {{.VERSION}}"'
     vars:
