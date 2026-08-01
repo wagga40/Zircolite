@@ -259,7 +259,7 @@ extension is globbed, unless `--fileext` or `--file-pattern` says otherwise.
 | `--csv`, `--csv-output` | Output results in CSV format. Accepts only one ruleset |
 | `--csv-delimiter` | Delimiter for CSV output, exactly one character (default: `;`) |
 | `--keepflat` | Save flattened events as JSON (only processed events; filtered events are excluded) |
-| `-d`, `--dbfile` | Save logs to SQLite database |
+| `-d`, `--dbfile` | Save logs to a SQLite database. Per-file mode writes one per input, named `<stem>_<input><suffix>`; the run refuses to start if any of them already exists |
 | `-l`, `--logfile` | Log file name |
 | `--hashes` | Add xxhash64 to each event. For CSV, EVTXtract and JSON-array input the reader hands over a parsed record rather than a source line, so the hash covers a canonical form of the event |
 | `-L`, `--limit` | Discard results from any rule matching more than this many events (a positive integer, or `-1` to disable). Counted per input database: per file by default, across the whole corpus with `--unified-db` |
@@ -267,6 +267,11 @@ extension is globbed, unless `--fileext` or `--file-pattern` says otherwise.
 
 > [!NOTE]
 > `--dbfile` cannot be combined with parallel processing of multiple files: each worker would need to write the same database. Use `--unified-db` to get a single database file, or `--no-parallel` to save one database per input file. Zircolite exits with an error rather than silently dropping databases.
+>
+> In per-file mode the name is derived from each input, so `--dbfile save.db`
+> over `a.json` and `b.json` writes `save_a.json.db` and `save_b.json.db`. Those
+> names are stable between runs, and every one of them is checked before any
+> processing starts rather than half-way through.
 
 #### CSV detection output
 
@@ -1177,6 +1182,13 @@ timestamp_detection:
 
 A field set with `--timefield`, or with `processing.time_field` in a run
 configuration file, is never overridden by auto-detection.
+
+When none of the `detection_fields` is present, Zircolite falls back to scanning
+the sample for something timestamp-shaped and tying it back to the field that
+holds it. A field is only accepted on that path when its **whole value** is the
+timestamp, or when its name reads like a time field. A free-text `message` that
+happens to mention a date is not a timestamp field — treating it as one would
+leave `--after`/`--before` filtering on prose.
 
 Explicitly specify a timestamp field:
 

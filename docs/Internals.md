@@ -394,10 +394,22 @@ This allows Sigma rules that use regex matching to work correctly. Compiled patt
 are cached (`_compile_regex`), since the same pattern is evaluated against every row.
 
 `str(value)` matters: a column is typed from the first value observed for that field,
-so a field whose first event carried a number becomes `INTEGER` for the rest of the run.
-Passing an `int` to `re.search` raises `TypeError`, which SQLite reports as a failure of
-the whole statement — the rule would be written off as broken rather than simply not
-matching. Coercing to text matches what `LIKE` already does with a numeric column.
+so a field whose first event carried a number becomes `INTEGER` for the rest of that
+database. Passing an `int` to `re.search` raises `TypeError`, which SQLite reports as a
+failure of the whole statement — the rule would be written off as broken rather than
+simply not matching. Coercing to text matches what `LIKE` already does with a numeric
+column.
+
+Both declarations carry `COLLATE NOCASE`, integer columns included. Without it a numeric
+first value left the column comparing text case-sensitively for the rest of the run, so a
+later string value silently stopped matching a rule written in another case. `NOCASE` on
+an `INTEGER` column costs nothing: numeric equality and range comparisons are unaffected.
+
+The scope of "the rest of that database" differs by mode. `--unified-db` really is one
+table, so the first value seen anywhere in the corpus types the column. Per-file and
+parallel modes rebuild the table between files, so each input is typed by its own events
+— otherwise one file's schema decided what every later file could match, and the same
+corpus produced different detections depending on the mode.
 
 ## Runtime SQL Repairs
 
