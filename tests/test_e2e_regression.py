@@ -220,3 +220,31 @@ class TestGoldenDetections:
         assert detection_summary(detections) == [
             tuple(entry) for entry in json.loads(expected_path.read_text())
         ]
+
+
+class TestHashesCoverEveryFormat:
+    """--hashes must produce its column whatever the input format.
+
+    OriginalLogLinexxHash is written only when the reader supplies the source
+    bytes, and the CSV, EVTXtract and JSON-array readers hand over a parsed
+    record instead -- so the flag was accepted and did nothing for three of the
+    supported formats.
+    """
+
+    @pytest.mark.parametrize(
+        "fmt,filename,flags", FORMAT_FIXTURES, ids=[
+            f"{fmt}-{name}" for fmt, name, _ in FORMAT_FIXTURES
+        ]
+    )
+    def test_hash_column_is_present(self, fmt, filename, flags, tmp_path):
+        if fmt == "sqlite":
+            pytest.skip("database input replays an existing table; nothing is flattened")
+
+        detections = run_zircolite(
+            tmp_path, FIXTURES / filename, flags, extra=["--hashes"]
+        )
+        matches = [m for d in detections for m in d["matches"]]
+        assert matches, f"{filename} produced no matches to check"
+        assert all("OriginalLogLinexxHash" in m for m in matches), (
+            f"--hashes produced no hash column for {fmt}"
+        )

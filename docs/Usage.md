@@ -261,7 +261,7 @@ extension is globbed, unless `--fileext` or `--file-pattern` says otherwise.
 | `--keepflat` | Save flattened events as JSON (only processed events; filtered events are excluded) |
 | `-d`, `--dbfile` | Save logs to SQLite database |
 | `-l`, `--logfile` | Log file name |
-| `--hashes` | Add xxhash64 to each event |
+| `--hashes` | Add xxhash64 to each event. For CSV, EVTXtract and JSON-array input the reader hands over a parsed record rather than a source line, so the hash covers a canonical form of the event |
 | `-L`, `--limit` | Discard results from any rule matching more than this many events (a positive integer, or `-1` to disable). Counted per input database: per file by default, across the whole corpus with `--unified-db` |
 | `--profile-rules` | Time each rule execution and print a performance report at the end (Rule Performance table). Forces sequential processing, so runs over many files are slower |
 
