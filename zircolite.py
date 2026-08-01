@@ -134,8 +134,12 @@ def parse_arguments() -> argparse.Namespace:
     event_args.add_argument("-B", "--before", help=f"Process only events at or before this timestamp, inclusive (UTC format: 1970-01-01T00:00:00, default: {DEFAULTS['before']})", type=str, default=None)
     event_args.add_argument("--no-event-filter", help="Disable early event filtering based on channel/eventID (process all events)", action='store_true')
 
-    # Event and log formats options
-    event_formats_args = parser.add_mutually_exclusive_group()
+    # Attached to a titled group rather than the parser root, so the format
+    # flags appear under their own heading in --help alongside every other
+    # group instead of above them under a bare "Options:".
+    event_formats_args = parser.add_argument_group(
+        '📥 INPUT FORMATS'
+    ).add_mutually_exclusive_group()
     event_formats_args.add_argument("-j", "--json-input", "--jsononly", "--jsonline", "--jsonl", help="Input logs are in JSON lines format", action='store_true')
     event_formats_args.add_argument("--json-array-input", "--jsonarray", "--json-array", help="Input logs are in JSON array format", action='store_true')
     event_formats_args.add_argument("--db-input", "-D", "--dbonly", help="Use a previously saved database file (time range filters will not work)", action='store_true')
@@ -1258,13 +1262,26 @@ def main() -> None:
         )
         sys.exit(2)
 
-    if len(args.csv_delimiter) != 1:
+    # Only when CSV is actually being written: a delimiter set in a config file
+    # otherwise aborted an unrelated JSON run over a value nothing would read.
+    if args.csv and len(args.csv_delimiter) != 1:
         # csv.DictWriter would raise mid-run, after the output file was opened
         # and truncated, leaving a zero-byte CSV and a bare traceback
         print_error_panel(
             "Invalid Configuration",
             f"The CSV delimiter must be exactly one character (got {args.csv_delimiter!r}).",
             "Use a single character, e.g. --csv-delimiter ';'"
+        )
+        sys.exit(2)
+
+    # "All" already includes every category, so passing both means one of them
+    # was going to be ignored. Silently is the wrong way to do that.
+    if args.all_transforms and args.transform_categories:
+        print_error_panel(
+            "Invalid Configuration",
+            "--all-transforms and --transform-category cannot be combined: "
+            "--all-transforms already enables every category.",
+            "Drop one of the two."
         )
         sys.exit(2)
 

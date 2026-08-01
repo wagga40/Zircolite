@@ -298,7 +298,7 @@ Use JSON when you need the values exactly as stored.
 | `--add-index` | Create an index on the given column(s); repeat or list multiple (e.g. `--add-index Channel EventID`) |
 | `--remove-index` | Drop the given index name(s) after creation; repeat or list multiple (e.g. `--remove-index idx_channel`) |
 | `--auto-index [N]` | Inspect the loaded ruleset and auto-create indices on the top-N most-referenced columns (defaults to N=5 when used without a value, 0 = off). Combines with `--add-index`. |
-| `--all-transforms` | Enable all defined transforms (overrides enabled_transforms list) |
+| `--all-transforms` | Enable all defined transforms (overrides enabled_transforms list). Cannot be combined with `--transform-category`, which it already includes |
 | `--transform-category` | Enable transforms by category name (repeatable) |
 | `--transform-list` | List available transform categories and exit |
 

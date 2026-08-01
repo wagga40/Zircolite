@@ -3505,3 +3505,22 @@ class TestCLIConfigValidationIsFatal:
             '-o', str(tmp_path / "out.json"), '-n',
         ]):
             zircolite_script.main()
+
+
+class TestCLIContradictoryTransformFlags:
+    """--all-transforms already includes every category; both together is a mistake."""
+
+    def test_all_transforms_with_a_category_is_rejected(self, tmp_path):
+        """The category was silently dropped by an if/elif before."""
+        events_file = tmp_path / "events.json"
+        events_file.write_text('{"Event": {"System": {"EventID": 1}, "EventData": {}}}')
+        ruleset_file = tmp_path / "ruleset.json"
+        ruleset_file.write_text(NO_MATCH_RULESET)
+
+        with patch('sys.argv', [
+            'zircolite.py', '-e', str(events_file), '-r', str(ruleset_file), '-j',
+            '--all-transforms', '--transform-category', 'powershell', '-n',
+        ]):
+            with pytest.raises(SystemExit) as excinfo:
+                zircolite_script.main()
+        assert excinfo.value.code == 2
