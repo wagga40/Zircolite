@@ -1,0 +1,5 @@
+EventID,Channel,Computer,CommandLine,Image,User,SystemTime
+1,Microsoft-Windows-Sysmon/Operational,WORKSTATION01,powershell.exe -encodedCommand SGVsbG8gV29ybGQ=,C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe,WORKSTATION01\analyst,2024-01-15T10:30:00.000Z
+1,Microsoft-Windows-Sysmon/Operational,WORKSTATION01,whoami /priv,C:\Windows\System32\whoami.exe,WORKSTATION01\analyst,2024-01-15T10:31:00.000Z
+3,Microsoft-Windows-Sysmon/Operational,WORKSTATION01,,C:\Windows\System32\svchost.exe,NT AUTHORITY\SYSTEM,2024-01-15T10:32:00.000Z
+11,Microsoft-Windows-Sysmon/Operational,WORKSTATION01,,C:\Windows\explorer.exe,WORKSTATION01\analyst,2024-01-15T10:33:00.000Z

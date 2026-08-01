@@ -1,0 +1,40 @@
+name: external_tests
+
+# The scenario harness drives the real CLI inside the shipping image: flags,
+# exit codes and output files, none of which the pytest suite exercises end to
+# end. It found two scenarios asserting behaviour the code had already replaced,
+# which is exactly what it is for.
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  external_tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - uses: pdm-project/setup-pdm@v4
+        with:
+          python-version: "3.13"
+      - name: Install dependencies
+        run: pdm install --dev
+
+      # Dockerfile.external-tests is the shipping image minus the `-U` ruleset
+      # refresh, so the run needs no network and cannot be changed underneath by
+      # an upstream ruleset release.
+      - name: Run scenarios
+        run: pdm run python tests/external/run_external_tests.py --build --parallel 4
+
+      - name: Upload results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: external-test-results
+          path: results/external-tests.json
+          if-no-files-found: ignore

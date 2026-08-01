@@ -20,6 +20,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import (
     Any,
+    NoReturn,
     cast,
 )
 
@@ -463,8 +464,12 @@ def random_suffix(length: int = 4) -> str:
     )
 
 
-def quit_on_error(message: str, logger: logging.Logger | None = None) -> None:
-    """Log error message and exit with error code."""
+def quit_on_error(message: str, logger: logging.Logger | None = None) -> NoReturn:
+    """Log error message and exit with error code.
+
+    Declared NoReturn so callers do not have to convince a type checker that
+    the value they validated is still set on the line after the check.
+    """
     logger = logger or logging.getLogger(__name__)
     logger.error(message)
     sys.exit(1)

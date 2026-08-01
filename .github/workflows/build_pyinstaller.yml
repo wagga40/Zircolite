@@ -122,6 +122,11 @@ jobs:
           if not isinstance(d, list):
               print('Expected JSON array')
               sys.exit(1)
+          # The sample is a known-malicious EVTX: a build that detects nothing
+          # in it is broken, and printing the count let that pass silently.
+          if not d:
+              print('No detections in a sample that must produce some')
+              sys.exit(1)
           print(f'Detections: {len(d)}')
           "
         shell: bash
@@ -155,6 +160,9 @@ jobs:
               d = json.load(f)
           if not isinstance(d, list):
               print('Expected JSON array')
+              sys.exit(1)
+          if not d:
+              print('No detections in a sample that must produce some')
               sys.exit(1)
           print(f'Package run OK, detections: {len(d)}')
           "
