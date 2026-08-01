@@ -1,5 +1,8 @@
 {# CSV summary: one row per rule (not per event). Use for triage and reporting. #}
 {# Use with: --template templates/exportSummaryCSV.tmpl --templateOutput summary.csv #}
+{# csv_field, not tojson: tojson escapes for JSON, so an apostrophe in a rule
+   title arrives as ' and an embedded quote as \" rather than the doubled
+   "" a CSV reader expects. count is numeric and needs no quoting. #}
 rule_title,rule_id,rule_level,count,description
-{% for elem in data %}{{ elem["title"]|tojson }},{{ elem["id"]|tojson }},{{ elem["rule_level"]|tojson }},{{ elem["count"] }},{{ elem["description"]|tojson }}
+{% for elem in data %}{{ elem["title"]|csv_field }},{{ elem["id"]|csv_field }},{{ elem["rule_level"]|csv_field }},{{ elem["count"] }},{{ elem["description"]|csv_field }}
 {% endfor %}

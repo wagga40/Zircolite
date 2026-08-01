@@ -104,6 +104,20 @@ def _collect_navigator_techniques(data: list) -> list:
     return entries
 
 
+def csv_field(value: Any) -> str:
+    """Quote *value* for a CSV field, RFC 4180 style.
+
+    ``tojson`` is the wrong tool here even though the surrounding template is
+    text: it escapes for JSON, so an apostrophe in a rule title arrives as
+    ``\\u0027`` and an embedded double quote as ``\\"`` rather than the doubled
+    ``""`` a CSV reader expects. Newlines are folded to spaces so one rule stays
+    on one row.
+    """
+    text = "" if value is None else str(value)
+    text = text.replace("\r\n", " ").replace("\n", " ").replace("\r", " ")
+    return '"' + text.replace('"', '""') + '"'
+
+
 def _make_jinja2_env() -> Environment:
     """Create a Jinja2 Environment with Zircolite-specific filters.
 
@@ -111,12 +125,14 @@ def _make_jinja2_env() -> Environment:
     format -- JSON for Splunk, Elastic, Zinc and the Mini-GUI, NDJSON for
     Timesketch, JSON for SARIF and ATT&CK Navigator, CSV for the summary --
     and HTML-escaping a command line inside a JSON string would corrupt it.
-    Values are escaped for their real target instead, by Jinja's ``tojson``.
+    Values are escaped for their real target instead: ``tojson`` for the JSON
+    formats, ``csv_field`` for the CSV one.
 
     A template that emits HTML would need `autoescape=True`; none ships, and
     the Mini-GUI loads its data as JavaScript rather than interpolating it.
     """
     env = Environment(autoescape=False)  # noqa: S701 - see docstring
+    env.filters['csv_field'] = csv_field
     env.filters['extract_attack_techniques'] = extract_attack_techniques
     env.filters['extract_attack_tactics'] = extract_attack_tactics
     env.globals['collect_navigator_techniques'] = _collect_navigator_techniques
@@ -223,14 +239,24 @@ class ZircoliteGuiGenerator:
 
     def generate(
         self, data: list[dict[str, Any]], directory: str = ""
-    ) -> None:
-        # Check if directory exists, fallback to current directory if not.
+    ) -> bool:
+        """Write the Mini-GUI package. False if it could not be written.
+
+        The caller folds this into the exit code: a package the user asked for
+        and did not get is a failed run, and it used to be reported only as a
+        line of log output on an otherwise successful exit.
+        """
         # rstrip("/") would map the filesystem root "/" to "", so only strip
         # when something remains.
         stripped = directory.rstrip("/")
         final_directory = (stripped or directory) if os.path.exists(directory) else ""
         if directory and not final_directory:
-            self.logger.error(f"[red]    [-] {directory} does not exist, fallback to current directory[/]")
+            # Writing to the current directory instead would put the package
+            # somewhere the user did not ask for and would not think to look.
+            self.logger.error(
+                f"[red]    [-] Cannot create GUI package: {directory} does not exist[/]"
+            )
+            return False
 
         try:
             # Extract the GUI package
@@ -264,9 +290,11 @@ class ZircoliteGuiGenerator:
 
         except Exception as e:
             self.logger.error(f"[red]    [-] {e}[/]")
+            return False
         finally:
             # Clean up temporary directory and any leftover data file
             if os.path.exists(self.tmpDir):
                 shutil.rmtree(self.tmpDir)
             if os.path.exists(self.tmpFile):
                 os.remove(self.tmpFile)
+        return True

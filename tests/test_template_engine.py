@@ -3,6 +3,7 @@ Tests for the TemplateEngine and ZircoliteGuiGenerator classes.
 """
 
 import json
+import logging
 import sys
 from pathlib import Path
 from unittest.mock import MagicMock, patch
@@ -797,3 +798,52 @@ Techniques: {{ elem.tags | extract_attack_techniques | join(',') }}
         content = open(output_file).read()
         expected = str(len(sample_detection_results))
         assert content == expected
+
+
+class TestSummaryCsvTemplateIsParseableCsv:
+    """The shipped CSV summary must survive a CSV reader.
+
+    It escaped every text column with `tojson`, which escapes for JSON: an
+    apostrophe in a rule title came out as \\u0027, an ampersand as \\u0026, and
+    an embedded double quote as \\" rather than the doubled "" a CSV reader
+    expects -- so the row silently lost its column boundaries.
+    """
+
+    TEMPLATE = Path(__file__).parent.parent / "templates" / "exportSummaryCSV.tmpl"
+
+    def _render(self, tmp_path, data):
+        from zircolite.config import TemplateConfig
+        from zircolite.templates import TemplateEngine
+
+        out = tmp_path / "summary.csv"
+        engine = TemplateEngine(
+            TemplateConfig(template=[[str(self.TEMPLATE)]], template_output=[[str(out)]]),
+            logger=logging.getLogger("test"),
+        )
+        engine.run(data)
+        return out.read_text()
+
+    def test_quotes_apostrophes_and_separators_survive_a_csv_reader(self, tmp_path):
+        import csv
+        import io
+
+        data = [{
+            "title": 'Rule with "quotes", a comma and an apostrophe\'s tail',
+            "id": "rule-001",
+            "rule_level": "high",
+            "count": 3,
+            "description": "A & B <tag>\nsecond line",
+        }]
+
+        rendered = self._render(tmp_path, data)
+        rows = [r for r in csv.reader(io.StringIO(rendered)) if r]
+
+        assert rows[0] == [
+            "rule_title", "rule_id", "rule_level", "count", "description"
+        ]
+        assert len(rows[1]) == 5, f"row split into {len(rows[1])} columns: {rows[1]}"
+        assert rows[1][0] == 'Rule with "quotes", a comma and an apostrophe\'s tail'
+        assert rows[1][3] == "3"
+        assert "\\u0027" not in rendered and "\\u0026" not in rendered
+        # Folded to one row so a multi-line description cannot break the table
+        assert rows[1][4] == "A & B <tag> second line"

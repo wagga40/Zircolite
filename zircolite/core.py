@@ -434,13 +434,23 @@ class ZircoliteCore:
     def _create_column_indexes(
         self, cols: list[str], columns: list[str]
     ) -> None:
-        """Create one ``idx_<column>`` index per entry of *cols* that exists."""
+        """Create one ``idx_<column>`` index per entry of *cols* that exists.
+
+        Matched case-insensitively: the flattened column is whatever spelling
+        the events used, so ``--add-index commandline`` against a dataset
+        carrying ``CommandLine`` created nothing and said so only at DEBUG.
+        """
         if self.db_connection is None:
             return
+        by_lower = {c.lower(): c for c in columns}
         cursor = self._get_cursor()
-        for col in cols:
-            if col not in columns:
-                self.logger.debug("Column %s not present; skipping index", col)
+        for requested in cols:
+            col = by_lower.get(requested.lower())
+            if col is None:
+                self.logger.warning(
+                    f"[yellow]   [!] Cannot index '{requested}': no such column "
+                    "in the ingested events[/]"
+                )
                 continue
             q_idx = self.escape_identifier(_index_name_for(col))
             q_col = self.escape_identifier(col)

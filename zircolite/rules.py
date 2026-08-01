@@ -819,7 +819,19 @@ class RulesetHandler:
                 if self.is_json(ruleset_path):  # JSON Ruleset
                     try:
                         with open(ruleset_path, encoding='utf-8') as f:
-                            ruleset_list.append(json.loads(f.read()))
+                            parsed = json.loads(f.read())
+                        # A Zircolite ruleset is an array of rule objects. Well-formed
+                        # JSON of any other shape reached the rule loop and died on a
+                        # bare AttributeError naming neither the file nor the problem.
+                        if not isinstance(parsed, list) or not all(
+                            isinstance(rule, dict) for rule in parsed
+                        ):
+                            self.logger.error(
+                                f"[red]    [-] {ruleset_path!s} is not a Zircolite "
+                                "ruleset: expected a JSON array of rule objects[/]"
+                            )
+                            continue
+                        ruleset_list.append(parsed)
                         self.logger.info(f"    [>] Loaded JSON/Zircolite ruleset : {make_file_link(str(ruleset_path))}")
                     except Exception as e:
                         self.logger.error(f"[red]    [-] Cannot load {ruleset_path!s} {e}[/]")

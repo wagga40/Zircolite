@@ -1480,3 +1480,23 @@ class TestShippedRulesetsCompile:
             f"{len(broken)} rule(s) in {ruleset_path.name} produce SQL SQLite "
             f"cannot prepare:\n  " + "\n  ".join(broken[:10])
         )
+
+
+class TestMalformedJsonRuleset:
+    """Well-formed JSON of the wrong shape must be reported, not crash."""
+
+    @pytest.mark.parametrize("body", [
+        '{"title": "a dict, not a list"}',
+        '["a list of strings", "not objects"]',
+        '42',
+    ], ids=["dict", "list-of-strings", "scalar"])
+    def test_non_ruleset_json_is_reported(self, tmp_path, test_logger, body):
+        ruleset = tmp_path / "ruleset.json"
+        ruleset.write_text(body)
+
+        handler = RulesetHandler(
+            ruleset_config=RulesetConfig(ruleset=[str(ruleset)], pipeline=[]),
+            logger=test_logger,
+        )
+
+        assert handler.rulesets == []

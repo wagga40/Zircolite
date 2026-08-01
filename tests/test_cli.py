@@ -3524,3 +3524,35 @@ class TestCLIContradictoryTransformFlags:
             with pytest.raises(SystemExit) as excinfo:
                 zircolite_script.main()
         assert excinfo.value.code == 2
+
+
+class TestCLIPackageFailureIsReported:
+    """A Mini-GUI package the user asked for and did not get is a failed run."""
+
+    def test_missing_package_dir_exits_non_zero(self, tmp_path):
+        """--package-dir used to fall back to the current directory silently."""
+        events_file = tmp_path / "events.json"
+        events_file.write_text(
+            '{"Event": {"System": {"EventID": 1}, "EventData": '
+            '{"CommandLine": "powershell.exe"}}}'
+        )
+        ruleset_file = tmp_path / "ruleset.json"
+        ruleset_file.write_text(json.dumps([{
+            "title": "Any event", "id": "pkg-001", "level": "high", "tags": [],
+            "rule": ["SELECT * FROM logs"],
+        }]))
+
+        original_cwd = os.getcwd()
+        os.chdir(tmp_path)
+        try:
+            with patch('sys.argv', [
+                'zircolite.py', '-e', str(events_file), '-r', str(ruleset_file), '-j',
+                '-o', str(tmp_path / "out.json"),
+                '--package', '--package-dir', str(tmp_path / "nope"),
+                *get_log_arg(tmp_path),
+            ]):
+                with pytest.raises(SystemExit) as excinfo:
+                    zircolite_script.main()
+            assert excinfo.value.code != 0
+        finally:
+            os.chdir(original_cwd)

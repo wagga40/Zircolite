@@ -595,16 +595,18 @@ def handle_templating(
                     time_field=ctx.time_field
                 )
                 packager = ZircoliteGuiGenerator(gui_config, logger=ctx.logger)
-                packager.generate(results, args.package_dir)
+                # A package the user asked for and did not get is a failed run
+                succeeded = packager.generate(results, args.package_dir) and succeeded
             else:
                 missing = []
                 if not template_path.is_file():
                     missing.append(str(template_path))
                 if not gui_zip_path.is_file():
                     missing.append(str(gui_zip_path))
-                ctx.logger.warning(
-                    f"[yellow]   [!] Cannot create GUI package: missing file(s): {', '.join(missing)}[/]"
+                ctx.logger.error(
+                    f"[red]    [-] Cannot create GUI package: missing file(s): {', '.join(missing)}[/]"
                 )
+                succeeded = False
     return succeeded
 
 
