@@ -322,6 +322,32 @@ class ZircoliteCore:
         if not self.execute_query(create_table_stmt):
             raise RuntimeError("Unable to create database table")
 
+    def reset_logs_table(self) -> None:
+        """Drop the logs table so the next file starts from an empty schema.
+
+        ``DELETE FROM logs`` empties the rows but keeps the declaration, and a
+        column is typed from the first value ever seen for that field. A field
+        that one file carried as a number therefore stayed ``INTEGER`` -- and so
+        kept ``BINARY`` collation rather than ``TEXT COLLATE NOCASE`` -- for
+        every later file, and a rule comparing it case-insensitively silently
+        stopped matching. That is correct for ``--unified-db``, which really is
+        one table; per-file mode promises the files are processed separately.
+
+        Dropping the table takes its indexes with it, and the next
+        ``run_streaming`` recreates both.
+        """
+        self._cursor = None
+        self._logs_columns_lower = None
+        self._auto_index_applied = False
+        conn = self.db_connection
+        if conn is None:
+            return
+        try:
+            conn.execute("DROP TABLE IF EXISTS logs")
+            conn.commit()
+        except sqlite3.Error as exc:
+            self.logger.debug(f"Could not reset the logs table between files: {exc}")
+
     def _get_table_columns(self) -> list[str]:
         """Return the list of column names for the logs table."""
         cursor = self._get_cursor()

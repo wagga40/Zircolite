@@ -281,7 +281,10 @@ class TestFlattenHotPathOptimizations:
         flat = processor._flatten_event(event, "t.evtx")
         assert flat["EventID"] == 4688
         assert flat["Channel"] == "Security"
-        assert processor.field_types["EventID"] == "INTEGER"
+        # NOCASE on both: a column is typed from the first value seen for the
+        # field, so a numeric first value must not leave later text values
+        # comparing case-sensitively for the rest of the run.
+        assert processor.field_types["EventID"] == "INTEGER COLLATE NOCASE"
         assert processor.field_types["Channel"] == "TEXT COLLATE NOCASE"
         # The key is now remembered so repeat work is skipped.
         assert "EventID" in processor._seen_leaf_keys

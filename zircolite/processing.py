@@ -17,7 +17,6 @@ Contents
 """
 
 import argparse
-import contextlib
 import csv
 import logging
 import queue
@@ -356,14 +355,10 @@ def process_perfile_streaming(
                     ctx.logger.info(f"[+] Processing file: {file_link}")
 
                 if file_idx > 0:
-                    try:
-                        if zircolite_core.db_connection is not None:
-                            zircolite_core.db_connection.execute("DELETE FROM logs")
-                    except Exception as exc:
-                        ctx.logger.debug(
-                            f"Failed to clear 'logs' table between files: {exc}"
-                        )
-                    zircolite_core._cursor = None
+                    # Rebuild rather than empty: emptying keeps the column
+                    # declarations, so one file's types and collations decided
+                    # what every later file could match.
+                    zircolite_core.reset_logs_table()
 
                 result = zircolite_core.run_streaming(
                     [log_file],
@@ -702,13 +697,10 @@ def process_single_file_worker(
             thread_local.worker_id = worker_id
             thread_local.core = create_worker_core(ctx, worker_id)
         else:
-            # Reuse table schema across files: DELETE keeps columns intact so
-            # _ensure_columns_exist_cached sees them immediately, avoiding
-            # redundant ALTER TABLE statements for files with similar structure.
-            # The table may not exist if the previous file failed early
-            with contextlib.suppress(Exception):
-                thread_local.core.db_connection.execute("DELETE FROM logs")
-            thread_local.core._cursor = None
+            # A worker core is reused across files, so it inherits a schema the
+            # same way the sequential loop did. Rebuild it: keeping the column
+            # declarations let one file's types decide what the next could match.
+            thread_local.core.reset_logs_table()
 
         core = thread_local.core
 

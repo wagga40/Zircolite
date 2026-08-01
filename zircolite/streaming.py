@@ -143,9 +143,22 @@ def _dedupe_case_variant_columns(
 
     SQLite identifiers are case-insensitive: "EventID" and "eventid" are the
     same column. Keeping both in an INSERT would silently drop one binding.
-    The surviving spelling is the one the schema recorded a type under, so a
-    collapsed column keeps its type instead of falling back to TEXT.
+    Where two spellings really do collide here, the survivor is the one the
+    schema recorded a type under, so the column keeps its type instead of
+    falling back to TEXT.
+
+    A column with only one spelling in this batch keeps that spelling, even
+    when the schema knows another. ``canonical`` spans the whole run, so
+    rewriting unconditionally renamed columns to a spelling the events in this
+    batch do not carry -- and the row builder then either raised KeyError and
+    abandoned the file, or wrote NULL into every one of those cells. SQLite
+    matches the identifier case-insensitively either way.
     """
+    spellings_per_name: dict[str, int] = {}
+    for col in columns:
+        col_lower = col.lower()
+        spellings_per_name[col_lower] = spellings_per_name.get(col_lower, 0) + 1
+
     result: list[str] = []
     seen_lower: set[str] = set()
     for col in sorted(columns):
@@ -153,7 +166,8 @@ def _dedupe_case_variant_columns(
         if col_lower in seen_lower:
             continue
         seen_lower.add(col_lower)
-        result.append(canonical.get(col_lower, col))
+        collided = spellings_per_name[col_lower] > 1
+        result.append(canonical.get(col_lower, col) if collided else col)
     return tuple(result)
 
 
@@ -363,7 +377,13 @@ class StreamingEventProcessor:
 
         # Schema tracking - fields discovered during streaming
         self.discovered_fields: dict = {}  # field_name_lower -> original_field_name
-        self.field_types: dict = {}  # field_name -> 'INTEGER' or 'TEXT'
+        # field_name -> SQLite declaration. Both carry COLLATE NOCASE: a field
+        # is typed from the first value ever seen for it, so a numeric first
+        # value would otherwise leave the column comparing text case-sensitively
+        # for the rest of the run -- and a later string value silently stopped
+        # matching. NOCASE on an INTEGER column costs nothing: numeric equality
+        # and range comparisons are unaffected.
+        self.field_types: dict = {}
         # Leaf keys already passed through schema bookkeeping. Shares the
         # lifetime of discovered_fields (never cleared mid-instance).
         self._seen_leaf_keys: set = set()
@@ -967,7 +987,7 @@ class StreamingEventProcessor:
                     if key_lower not in discovered_fields:
                         discovered_fields[key_lower] = key
                         field_types[key] = (
-                            "INTEGER" if is_int else "TEXT COLLATE NOCASE"
+                            "INTEGER COLLATE NOCASE" if is_int else "TEXT COLLATE NOCASE"
                         )
                     seen_leaf_keys.add(key)
                 return
@@ -1056,7 +1076,7 @@ class StreamingEventProcessor:
                     key_lower = k.lower()
                     if key_lower not in discovered_fields:
                         discovered_fields[key_lower] = k
-                        field_types[k] = "INTEGER" if is_int else "TEXT COLLATE NOCASE"
+                        field_types[k] = "INTEGER COLLATE NOCASE" if is_int else "TEXT COLLATE NOCASE"
                     seen_leaf_keys.add(k)
 
         # Descend through the event tree, carrying the dotted path as a string

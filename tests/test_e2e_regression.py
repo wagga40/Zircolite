@@ -152,36 +152,107 @@ class TestProcessingModeEquivalence:
     different from what another mode would have produced.
     """
 
-    def _corpus(self, tmp_path):
+    MODES: ClassVar[dict] = {
+        "per-file": ["--no-parallel", "--no-auto-mode"],
+        "unified": ["--unified-db", "--no-auto-mode"],
+        "parallel": ["--no-auto-mode"],
+    }
+
+    def _run_every_mode(self, tmp_path, corpus, ruleset=MATCH_ALL_RULESET):
+        results = {}
+        for name, flags in self.MODES.items():
+            run_dir = tmp_path / name
+            run_dir.mkdir()
+            results[name] = detection_summary(
+                run_zircolite(run_dir, corpus, ["-j", *flags], ruleset=ruleset)
+            )
+        return results
+
+    @staticmethod
+    def _assert_agree(results):
+        baseline = results["per-file"]
+        for name, summary in results.items():
+            assert summary == baseline, (
+                f"per-file and {name} disagree on the same input:\n"
+                f"  per-file: {baseline}\n  {name+':':9} {summary}"
+            )
+
+    def test_identical_files_agree(self, tmp_path):
         source = (FIXTURES / "sample_events.json").read_text()
         corpus = tmp_path / "corpus"
         corpus.mkdir()
         for index in range(4):
             (corpus / f"events{index}.json").write_text(source)
+
+        self._assert_agree(self._run_every_mode(tmp_path, corpus))
+
+    # One field typed differently per file, one spelled with different case, one
+    # present in a single file. Four identical copies of a fixture cannot show
+    # any of this: every file yields the same schema, so schema state carried
+    # between files stays invisible.
+    HETEROGENEOUS: ClassVar[dict] = {
+        "a.json": {"Foo": 1, "Widget": "alpha"},
+        "b.json": {"Foo": "ABC", "widget": "mimikatz.exe"},
+        "c.json": {"Foo": "xyz", "Extra": "only here"},
+    }
+
+    SCHEMA_RULESET = json.dumps([
+        {"title": "Foo matched case-insensitively", "id": "eq-1", "level": "high",
+         "tags": [], "rule": ["SELECT * FROM logs WHERE Foo = 'abc'"]},
+        {"title": "Widget whatever its spelling", "id": "eq-2", "level": "high",
+         "tags": [], "rule": ["SELECT * FROM logs WHERE Widget LIKE '%mimikatz%'"]},
+        {"title": "Field only one file carries", "id": "eq-3", "level": "low",
+         "tags": [], "rule": ["SELECT * FROM logs WHERE Extra IS NOT NULL"]},
+    ])
+
+    def _heterogeneous_corpus(self, tmp_path, order=None):
+        corpus = tmp_path / "corpus"
+        corpus.mkdir()
+        names = order or list(self.HETEROGENEOUS)
+        for name in names:
+            event = {
+                "Event": {
+                    "System": {"Channel": "Security", "EventID": 1},
+                    "EventData": self.HETEROGENEOUS[name],
+                }
+            }
+            (corpus / name).write_text(json.dumps(event))
         return corpus
 
-    def test_perfile_unified_and_parallel_agree(self, tmp_path):
-        corpus = self._corpus(tmp_path)
-
-        modes = {
-            "per-file": ["--no-parallel", "--no-auto-mode"],
-            "unified": ["--unified-db", "--no-auto-mode"],
-            "parallel": ["--no-auto-mode"],
-        }
-        results = {}
-        for name, flags in modes.items():
-            run_dir = tmp_path / name
-            run_dir.mkdir()
-            detections = run_zircolite(run_dir, corpus, ["-j", *flags])
-            results[name] = detection_summary(detections)
-
-        assert results["per-file"] == results["unified"], (
-            f"per-file and --unified-db disagree:\n"
-            f"  per-file: {results['per-file']}\n  unified:  {results['unified']}"
+    def test_files_with_different_schemas_agree(self, tmp_path):
+        """A column typed or spelled by one file must not decide for the others."""
+        corpus = self._heterogeneous_corpus(tmp_path)
+        self._assert_agree(
+            self._run_every_mode(tmp_path, corpus, ruleset=self.SCHEMA_RULESET)
         )
-        assert results["per-file"] == results["parallel"], (
-            f"per-file and parallel disagree:\n"
-            f"  per-file: {results['per-file']}\n  parallel: {results['parallel']}"
+
+    def test_every_rule_still_fires_across_a_mixed_corpus(self, tmp_path):
+        """Agreement is worthless if every mode agrees on finding nothing."""
+        corpus = self._heterogeneous_corpus(tmp_path)
+        results = self._run_every_mode(
+            tmp_path, corpus, ruleset=self.SCHEMA_RULESET
+        )
+        assert [title for title, _ in results["per-file"]] == [
+            "Field only one file carries",
+            "Foo matched case-insensitively",
+            "Widget whatever its spelling",
+        ]
+
+    def test_glob_order_does_not_change_the_answer(self, tmp_path):
+        """Whichever file is read first must not decide what the rest can match."""
+        names = list(self.HETEROGENEOUS)
+        summaries = {}
+        for label, order in (("forward", names), ("reverse", list(reversed(names)))):
+            run_root = tmp_path / label
+            run_root.mkdir()
+            corpus = self._heterogeneous_corpus(run_root, order=order)
+            summaries[label] = self._run_every_mode(
+                run_root, corpus, ruleset=self.SCHEMA_RULESET
+            )["per-file"]
+
+        assert summaries["forward"] == summaries["reverse"], (
+            f"reading the same files in the other order changed the result:\n"
+            f"  forward: {summaries['forward']}\n  reverse: {summaries['reverse']}"
         )
 
 
