@@ -1,6 +1,7 @@
 """Tests for the Sigma rule testing mode (Feature 2)."""
 
 import json
+
 import pytest
 
 from zircolite.config import ProcessingConfig

@@ -1,10 +1,11 @@
 """Tests for compressed / archived file input support (Feature 1)."""
 
-import gzip
 import bz2
+import gzip
 import importlib.util
 import json
 import zipfile
+
 import pytest
 
 from zircolite.utils import (
@@ -12,7 +13,6 @@ from zircolite.utils import (
     COMPRESSED_SUFFIXES,
     open_maybe_compressed,
 )
-
 
 _HAS_PY7ZR = importlib.util.find_spec("py7zr") is not None
 
@@ -120,9 +120,8 @@ class TestOpenMaybeCompressed:
         with patch(
             "zipfile.ZipFile.read",
             side_effect=NotImplementedError("That compression method is not supported"),
-        ):
-            with pytest.raises(ValueError, match=ARCHIVE_PASSWORD_ERROR_MESSAGE):
-                open_maybe_compressed(p)
+        ), pytest.raises(ValueError, match=ARCHIVE_PASSWORD_ERROR_MESSAGE):
+            open_maybe_compressed(p)
 
     def test_zip_multi_file_raises(self, tmp_path):
         """Archives with more than one member are rejected."""
@@ -280,6 +279,7 @@ class TestStreamingWithCompressedJSON:
     @pytest.mark.skipif(not _HAS_PY7ZR, reason="py7zr not installed")
     def test_stream_jsonl_7z(self, tmp_path, field_mappings_file, test_logger):
         import py7zr
+
         from zircolite.config import ProcessingConfig
         from zircolite.core import ZircoliteCore
 
@@ -299,6 +299,7 @@ class TestStreamingWithCompressedJSON:
     @pytest.mark.skipif(not _HAS_PY7ZR, reason="py7zr not installed")
     def test_stream_jsonl_7z_with_password(self, tmp_path, field_mappings_file, test_logger):
         import py7zr
+
         from zircolite.config import ProcessingConfig
         from zircolite.core import ZircoliteCore
 
@@ -324,7 +325,7 @@ class TestCompressedConstants:
 
     def test_compressed_suffixes_defined(self):
         """COMPRESSED_SUFFIXES contains expected archive/compression extensions."""
-        assert COMPRESSED_SUFFIXES == frozenset(('.gz', '.bz2', '.zip', '.7z'))
+        assert frozenset(('.gz', '.bz2', '.zip', '.7z')) == COMPRESSED_SUFFIXES
 
 
 # =============================================================================

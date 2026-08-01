@@ -31,15 +31,12 @@ from evtx import PyEvtxParser
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from zircolite import ProcessingConfig, StreamingEventProcessor  # noqa: E402
+from zircolite import ProcessingConfig, StreamingEventProcessor
 
 
 def collect_raw_events(path: Path, limit: int) -> list:
     """Parse up to *limit* raw (pre-flatten) event dicts from EVTX file(s)."""
-    if path.is_dir():
-        files = sorted(path.rglob("*.evtx"))
-    else:
-        files = [path]
+    files = sorted(path.rglob("*.evtx")) if path.is_dir() else [path]
 
     raws: list = []
     for evtx_file in files:

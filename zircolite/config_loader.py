@@ -1,4 +1,3 @@
-#!python3
 """
 YAML configuration file loader for Zircolite.
 
@@ -11,12 +10,12 @@ This module provides:
 
 import logging
 from dataclasses import dataclass, field, fields
-
-from .formats import YAML_INPUT_FORMATS, is_valid_yaml_format
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 import yaml
+
+from .formats import YAML_INPUT_FORMATS, is_valid_yaml_format
 
 # Defaults shared by the dataclasses below and by the CLI. argparse declares
 # these options with `default=None` so that "the user passed the default
@@ -36,14 +35,14 @@ DEFAULT_PACKAGE_DIR = ""
 @dataclass
 class InputConfig:
     """Configuration for input files and formats."""
-    path: Optional[str] = None
+    path: str | None = None
     format: str = "evtx"  # see zircolite.formats.YAML_INPUT_FORMATS
     recursive: bool = True
-    file_pattern: Optional[str] = None
-    file_extension: Optional[str] = None
-    select: Optional[List[str]] = None  # Include only files matching these strings
-    avoid: Optional[List[str]] = None  # Exclude files matching these strings
-    encoding: Optional[str] = None
+    file_pattern: str | None = None
+    file_extension: str | None = None
+    select: list[str] | None = None  # Include only files matching these strings
+    avoid: list[str] | None = None  # Exclude files matching these strings
+    encoding: str | None = None
 
 
 @dataclass
@@ -52,9 +51,9 @@ class RulesConfig:
     # Empty on purpose: an absent `rules:` section must stay distinguishable
     # from an explicit choice, so that the CLI can still fall back to the
     # ruleset bundled with the install rather than a bare relative path.
-    rulesets: List[str] = field(default_factory=list)
-    pipelines: Optional[List[str]] = None
-    filters: Optional[List[str]] = None  # Rule title filters to exclude
+    rulesets: list[str] = field(default_factory=list)
+    pipelines: list[str] | None = None
+    filters: list[str] | None = None  # Rule title filters to exclude
     save_ruleset: bool = False
 
 
@@ -64,12 +63,12 @@ class OutputConfig:
     file: str = DEFAULT_OUTFILE
     format: str = "json"  # json, csv
     csv_delimiter: str = DEFAULT_CSV_DELIMITER
-    templates: Optional[List[Dict[str, str]]] = None  # List of {template, output} pairs
+    templates: list[dict[str, str]] | None = None  # List of {template, output} pairs
     template_append: bool = False
     package: bool = False
     package_dir: str = DEFAULT_PACKAGE_DIR
     keep_flat: bool = False
-    db_file: Optional[str] = None
+    db_file: str | None = None
     log_file: str = DEFAULT_LOG_FILE
     no_output: bool = False
 
@@ -86,9 +85,9 @@ class YamlProcessingConfig:
     debug: bool = False
     remove_events: bool = False
     all_transforms: bool = False
-    transform_categories: Optional[list] = None
-    add_index: Optional[List[str]] = None
-    remove_index: Optional[List[str]] = None
+    transform_categories: list | None = None
+    add_index: list[str] | None = None
+    remove_index: list[str] | None = None
     auto_index: int = 0
     strict_evtx: bool = False
 
@@ -104,7 +103,7 @@ class TimeFilterConfig:
 class ParallelProcessingConfig:
     """Configuration for parallel processing."""
     enabled: bool = True  # parallel auto-mode is on unless explicitly disabled
-    max_workers: Optional[int] = None  # None = auto-detect
+    max_workers: int | None = None  # None = auto-detect
     min_workers: int = 1
     memory_limit_percent: float = DEFAULT_MEMORY_LIMIT_PERCENT
     adaptive: bool = True
@@ -121,13 +120,13 @@ class ZircoliteConfig:
     parallel: ParallelProcessingConfig = field(default_factory=ParallelProcessingConfig)
     # Dotted keys found in the YAML file that no section recognises. Reported
     # by validate_config so a typo does not silently do nothing.
-    unknown_keys: List[str] = field(default_factory=list)
+    unknown_keys: list[str] = field(default_factory=list)
 
 
 # Section name -> dataclass. Every accepted YAML key is a field of one of these,
 # which is what makes unknown-key detection drift-proof: adding a field to a
 # dataclass is the only way to add a key, so the two cannot disagree.
-SECTIONS: Dict[str, Any] = {
+SECTIONS: dict[str, Any] = {
     'input': InputConfig,
     'rules': RulesConfig,
     'output': OutputConfig,
@@ -137,14 +136,14 @@ SECTIONS: Dict[str, Any] = {
 }
 
 
-def unknown_yaml_keys(config_dict: Dict[str, Any]) -> List[str]:
+def unknown_yaml_keys(config_dict: dict[str, Any]) -> list[str]:
     """Dotted keys in *config_dict* that no configuration section defines.
 
     Many YAML names deliberately differ from their CLI flag (``--keepflat`` is
     ``keep_flat``, ``--nolog`` is ``no_output``), so a typo is easy to make and
     would otherwise do nothing at all.
     """
-    unknown: List[str] = []
+    unknown: list[str] = []
     for name, value in (config_dict or {}).items():
         if name not in SECTIONS:
             unknown.append(name)
@@ -159,7 +158,7 @@ def unknown_yaml_keys(config_dict: Dict[str, Any]) -> List[str]:
 class ConfigLoader:
     """
     Load and validate Zircolite configuration from YAML files.
-    
+
     Supports:
     - Full YAML configuration files
     - Merging with CLI arguments (CLI takes precedence)
@@ -167,25 +166,25 @@ class ConfigLoader:
     - Configuration validation
     """
 
-    def __init__(self, *, logger: Optional[logging.Logger] = None):
+    def __init__(self, *, logger: logging.Logger | None = None):
         """
         Initialize ConfigLoader.
-        
+
         Args:
             logger: Logger instance
         """
         self.logger = logger or logging.getLogger(__name__)
 
-    def load_yaml(self, config_path: str) -> Dict[str, Any]:
+    def load_yaml(self, config_path: str) -> dict[str, Any]:
         """
         Load YAML configuration file.
-        
+
         Args:
             config_path: Path to YAML configuration file
-            
+
         Returns:
             Dictionary with configuration values
-            
+
         Raises:
             FileNotFoundError: If config file doesn't exist
             yaml.YAMLError: If YAML is invalid
@@ -193,23 +192,23 @@ class ConfigLoader:
         config_file = Path(config_path)
         if not config_file.exists():
             raise FileNotFoundError(f"Configuration file not found: {config_path}")
-        
-        with open(config_file, 'r', encoding='utf-8') as f:
+
+        with open(config_file, encoding='utf-8') as f:
             config_dict = yaml.safe_load(f)
-        
+
         if config_dict is None:
             config_dict = {}
-        
+
         self.logger.info(f"[cyan][+] Loaded configuration from: {config_path}[/]")
         return config_dict
 
-    def parse_config(self, config_dict: Dict[str, Any]) -> ZircoliteConfig:
+    def parse_config(self, config_dict: dict[str, Any]) -> ZircoliteConfig:
         """
         Parse configuration dictionary into ZircoliteConfig dataclass.
-        
+
         Args:
             config_dict: Raw configuration dictionary
-            
+
         Returns:
             ZircoliteConfig instance
         """
@@ -232,7 +231,7 @@ class ConfigLoader:
                 avoid=inp.get('avoid'),
                 encoding=inp.get('encoding')
             )
-        
+
         # Parse rules section
         if 'rules' in config_dict:
             rules = config_dict['rules'] or {}
@@ -246,7 +245,7 @@ class ConfigLoader:
                 filters=rules.get('filters'),
                 save_ruleset=rules.get('save_ruleset', False)
             )
-        
+
         # Parse output section
         if 'output' in config_dict:
             out = config_dict['output'] or {}
@@ -284,7 +283,7 @@ class ConfigLoader:
                 auto_index=int(proc.get('auto_index', 0) or 0),
                 strict_evtx=proc.get('strict_evtx', False),
             )
-        
+
         # Parse time_filter section
         if 'time_filter' in config_dict:
             tf = config_dict['time_filter'] or {}
@@ -308,13 +307,13 @@ class ConfigLoader:
 
         return config
 
-    def validate_config(self, config: ZircoliteConfig) -> List[str]:
+    def validate_config(self, config: ZircoliteConfig) -> list[str]:
         """
         Validate configuration and return list of issues.
-        
+
         Args:
             config: Configuration to validate
-            
+
         Returns:
             List of validation error messages (empty if valid)
         """
@@ -328,25 +327,25 @@ class ConfigLoader:
             issues.append("input.path must be a single path string, not a list")
         elif config.input.path and not Path(config.input.path).exists():
             issues.append(f"Input path does not exist: {config.input.path}")
-        
+
         if not is_valid_yaml_format(config.input.format):
             issues.append(
                 f"Invalid input format: {config.input.format}. "
                 f"Must be one of: {sorted(YAML_INPUT_FORMATS)}"
             )
-        
+
         # Validate rules
         for ruleset in config.rules.rulesets:
             if not Path(ruleset).exists():
                 issues.append(f"Ruleset not found: {ruleset}")
-        
+
         # Validate output
         if config.output.format not in ['json', 'csv']:
             issues.append(f"Invalid output format: {config.output.format}. Must be 'json' or 'csv'")
-        
+
         if config.output.format == 'csv' and len(config.rules.rulesets) > 1:
             issues.append("CSV output is not supported with multiple rulesets")
-        
+
         # Validate templates
         if config.output.templates:
             for tmpl in config.output.templates:
@@ -354,19 +353,19 @@ class ConfigLoader:
                     issues.append("Template entries must have 'template' and 'output' keys")
                 elif not Path(tmpl['template']).exists():
                     issues.append(f"Template file not found: {tmpl['template']}")
-        
+
         # Validate time filters
         import time
         try:
             time.strptime(config.time_filter.after, '%Y-%m-%dT%H:%M:%S')
         except ValueError:
             issues.append(f"Invalid 'after' timestamp format: {config.time_filter.after}")
-        
+
         try:
             time.strptime(config.time_filter.before, '%Y-%m-%dT%H:%M:%S')
         except ValueError:
             issues.append(f"Invalid 'before' timestamp format: {config.time_filter.before}")
-        
+
         # Validate parallel config
         if config.parallel.enabled:
             if config.parallel.min_workers < 1:
@@ -375,13 +374,13 @@ class ConfigLoader:
                 issues.append("max_workers must be at least 1")
             if not (0 < config.parallel.memory_limit_percent <= 100):
                 issues.append("memory_limit_percent must be between 0 and 100")
-        
+
         return issues
 
 
 # One line of prose per format for the generated config file. A format with no
 # entry is still listed, so a new one cannot silently go undescribed.
-_FORMAT_NOTES: Dict[str, str] = {
+_FORMAT_NOTES: dict[str, str] = {
     "evtx": "Windows Event Log files (default)",
     "json": "JSON Lines (JSONL/NDJSON), one event per line",
     "json_array": "a single JSON array of events",
@@ -406,7 +405,7 @@ def _format_comment_block() -> str:
 def create_default_config_file(output_path: str = "zircolite_config.yaml") -> None:
     """
     Create a default configuration file with all options documented.
-    
+
     Args:
         output_path: Path to write the configuration file
     """
@@ -418,8 +417,8 @@ def create_default_config_file(output_path: str = "zircolite_config.yaml") -> No
 #   Regenerate: python3 zircolite.py --generate-config my_config.yaml
 #
 # CLI arguments override this file, with three deliberate exceptions --
-# transform_categories, add_index and remove_index are *added* to whatever the
-# CLI passes rather than replaced by it, because they name things to include
+# transform_categories, add_index and remove_index are *added* to whatever this
+# file lists rather than replacing it, because they name things to include
 # rather than which things to use.
 #
 # This is a *run* configuration: which logs to read, which rules to apply and
@@ -625,7 +624,7 @@ parallel:
 #   < 10 MB  -> 5.0x    < 50 MB -> 4.0x    >= 50 MB -> 3.5x
 # These multipliers are informational; they are not configurable.
 """
-    
+
     target = Path(output_path)
     if target.exists():
         raise FileExistsError(

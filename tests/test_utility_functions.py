@@ -3,71 +3,72 @@ Tests for utility functions in zircolite.py.
 """
 
 import logging
-import pytest
 import sys
 from pathlib import Path
+
+import pytest
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from zircolite import (
-    init_logger,
-    create_silent_logger,
+    avoid_files,
     check_if_exists,
+    create_silent_logger,
+    init_logger,
     quit_on_error,
     select_files,
-    avoid_files,
 )
 
 
 class TestInitLogger:
     """Tests for init_logger function."""
-    
+
     def test_init_logger_default(self):
         """Test logger initialization with default settings."""
         logger = init_logger(debug_mode=False)
-        
+
         assert logger is not None
         assert isinstance(logger, logging.Logger)
-    
+
     def test_init_logger_debug_mode(self):
         """Test logger initialization with debug mode."""
         logger = init_logger(debug_mode=True)
-        
+
         assert logger is not None
-    
+
     def test_init_logger_with_log_file(self, tmp_path):
         """Test logger initialization with log file."""
         log_file = str(tmp_path / "test.log")
-        
+
         logger = init_logger(debug_mode=False, log_file=log_file)
-        
+
         assert logger is not None
         # Log a message
         logger.info("Test message")
-        
+
         # Force flush handlers
         for handler in logger.handlers:
             handler.flush()
-        
+
         # File creation may be delayed - check logger has file handler configured
         file_handlers = [h for h in logger.handlers if hasattr(h, 'baseFilename')]
         assert len(file_handlers) >= 1
-    
+
     def test_init_logger_debug_with_file(self, tmp_path):
         """Test logger in debug mode with file output."""
         log_file = str(tmp_path / "debug.log")
-        
+
         logger = init_logger(debug_mode=True, log_file=log_file)
-        
+
         assert logger is not None
-        
+
         # Log debug message
         logger.debug("Debug test message")
-        
+
         # Force flush handlers
         for handler in logger.handlers:
             handler.flush()
-        
+
         # Check logger is properly configured (file may be delayed)
         assert logger.level in [logging.DEBUG, logging.INFO, logging.NOTSET]
 
@@ -88,7 +89,7 @@ class TestCreateSilentLogger:
 
 class TestCheckIfExists:
     """Tests for check_if_exists function."""
-    
+
     def test_check_existing_file(self, tmp_path, test_logger):
         """Test checking an existing file."""
         test_file = tmp_path / "existing.txt"
@@ -97,14 +98,14 @@ class TestCheckIfExists:
         # Existing files should pass validation and return None
         result = check_if_exists(str(test_file), "File not found", test_logger)
         assert result is None
-    
+
     def test_check_nonexistent_file(self, test_logger):
         """Test checking a non-existent file."""
         with pytest.raises(SystemExit) as exc_info:
             check_if_exists("/nonexistent/path/file.txt", "File not found", test_logger)
-        
+
         assert exc_info.value.code == 1
-    
+
     def test_check_if_exists_rejects_directory(self, tmp_path, test_logger):
         """check_if_exists uses is_file(), so a directory must be rejected."""
         assert tmp_path.is_dir()
@@ -131,7 +132,7 @@ class TestQuitOnError:
 
 class TestSelectFiles:
     """Tests for select_files function."""
-    
+
     def test_select_files_with_match(self):
         """Test selecting files that match filter."""
         path_list = [
@@ -140,12 +141,12 @@ class TestSelectFiles:
             Path("/logs/application.evtx"),
             Path("/logs/sysmon_backup.evtx"),
         ]
-        
+
         result = select_files(path_list, [["sysmon"]])
-        
+
         assert len(result) == 2
         assert all("sysmon" in str(p).lower() for p in result)
-    
+
     def test_select_files_case_insensitive(self):
         """Test that select is case-insensitive."""
         path_list = [
@@ -153,33 +154,33 @@ class TestSelectFiles:
             Path("/logs/Sysmon.evtx"),
             Path("/logs/sysmon.evtx"),
         ]
-        
+
         result = select_files(path_list, [["sysmon"]])
-        
+
         assert len(result) == 3
-    
+
     def test_select_files_no_match(self):
         """Test when no files match filter."""
         path_list = [
             Path("/logs/security.evtx"),
             Path("/logs/application.evtx"),
         ]
-        
+
         result = select_files(path_list, [["sysmon"]])
-        
+
         assert len(result) == 0
-    
+
     def test_select_files_no_filter(self):
         """Test with no filter (returns all files)."""
         path_list = [
             Path("/logs/file1.evtx"),
             Path("/logs/file2.evtx"),
         ]
-        
+
         result = select_files(path_list, None)
-        
+
         assert result == path_list
-    
+
     def test_select_files_multiple_filters(self):
         """Test with multiple filter terms."""
         path_list = [
@@ -187,7 +188,7 @@ class TestSelectFiles:
             Path("/logs/security.evtx"),
             Path("/logs/dns.evtx"),
         ]
-        
+
         # Any file matching any filter should be included
         result = select_files(path_list, [["sysmon"], ["security"]])
 
@@ -210,7 +211,7 @@ class TestSelectFiles:
 
 class TestAvoidFiles:
     """Tests for avoid_files function."""
-    
+
     def test_avoid_files_excludes_match(self):
         """Test excluding files that match filter."""
         path_list = [
@@ -218,12 +219,12 @@ class TestAvoidFiles:
             Path("/logs/security.evtx"),
             Path("/logs/application.evtx"),
         ]
-        
+
         result = avoid_files(path_list, [["sysmon"]])
-        
+
         assert len(result) == 2
         assert all("sysmon" not in str(p).lower() for p in result)
-    
+
     def test_avoid_files_case_insensitive(self):
         """Test that avoid is case-insensitive."""
         path_list = [
@@ -247,7 +248,7 @@ class TestAvoidFiles:
         result = avoid_files(path_list, [["sysmon", "security"]])
 
         assert result == [str(Path("/logs/application.evtx"))]
-    
+
     def test_avoid_files_no_filter(self):
         """Test with no filter (returns all files)."""
         path_list = [
@@ -298,18 +299,18 @@ class TestSelectFilesPathSemantics:
         result = select_files(path_list, [["sysmon"]])
 
         assert result == [str(Path("/data/exports/sysmon.json"))]
-    
+
     def test_avoid_files_all_excluded(self):
         """Test when all files are excluded."""
         path_list = [
             Path("/logs/sysmon1.evtx"),
             Path("/logs/sysmon2.evtx"),
         ]
-        
+
         result = avoid_files(path_list, [["sysmon"]])
-        
+
         assert len(result) == 0
-    
+
     def test_avoid_files_multiple_filters(self):
         """Test with multiple exclusion filters."""
         path_list = [
@@ -317,16 +318,16 @@ class TestSelectFilesPathSemantics:
             Path("/logs/security.evtx"),
             Path("/logs/application.evtx"),
         ]
-        
+
         result = avoid_files(path_list, [["sysmon"], ["security"]])
-        
+
         # Files should be excluded if they match ANY filter
         assert len(result) <= 3
 
 
 class TestSelectAndAvoidCombined:
     """Tests for combining select_files and avoid_files."""
-    
+
     def test_select_then_avoid(self):
         """Test applying select first, then avoid."""
         path_list = [
@@ -335,52 +336,52 @@ class TestSelectAndAvoidCombined:
             Path("/logs/security.evtx"),
             Path("/logs/application.evtx"),
         ]
-        
+
         # Select sysmon files
         selected = select_files(path_list, [["sysmon"]])
-        
+
         # Avoid backup files
         final = avoid_files(selected, [["backup"]])
-        
+
         assert len(final) == 1
         assert "sysmon_2024" in str(final[0])
 
 
 class TestPathHandling:
     """Tests for path-related edge cases."""
-    
+
     def test_select_files_with_path_objects(self):
         """Test select_files with Path objects."""
         paths = [
             Path("/test/sysmon.evtx"),
             Path("/test/other.evtx"),
         ]
-        
+
         result = select_files(paths, [["sysmon"]])
-        
+
         assert len(result) == 1
-    
+
     def test_avoid_files_with_path_objects(self):
         """Test avoid_files with Path objects."""
         paths = [
             Path("/test/sysmon.evtx"),
             Path("/test/other.evtx"),
         ]
-        
+
         result = avoid_files(paths, [["sysmon"]])
-        
+
         assert len(result) == 1
         assert "other" in str(result[0])
-    
+
     def test_select_files_with_mixed_separators(self):
         """Test file selection with different path separators."""
         paths = [
             Path("C:/Users/test/sysmon.evtx"),
             Path("C:\\Users\\test\\other.evtx"),
         ]
-        
+
         result = select_files(paths, [["sysmon"]])
-        
+
         assert len(result) == 1
 
 
@@ -430,8 +431,9 @@ class TestAnalyzeFilesAndRecommendMode:
 
     def test_psutil_failure_fallback(self, tmp_path):
         """Cover lines 362-366: psutil failure fallback."""
-        from zircolite.utils import analyze_files_and_recommend_mode
         from unittest.mock import patch
+
+        from zircolite.utils import analyze_files_and_recommend_mode
 
         f1 = tmp_path / "a.evtx"
         f2 = tmp_path / "b.evtx"
@@ -441,7 +443,7 @@ class TestAnalyzeFilesAndRecommendMode:
         with patch("zircolite.utils.psutil") as mock_psutil:
             mock_psutil.virtual_memory.side_effect = Exception("no psutil")
             mode, reason, stats = analyze_files_and_recommend_mode([str(f1), str(f2)])
-        
+
         assert stats['has_psutil'] is False
 
     def test_file_size_error_returns_zero(self, tmp_path):
@@ -481,8 +483,9 @@ class TestAnalyzeFilesAndRecommendMode:
 
     def test_memory_multiplier_large_files(self, tmp_path):
         """Cover line 388: large file multiplier (>50MB avg)."""
-        from zircolite.utils import analyze_files_and_recommend_mode
         from unittest.mock import patch
+
+        from zircolite.utils import analyze_files_and_recommend_mode
 
         # Mock file sizes instead of creating large files
         files = [str(tmp_path / f"large_{i}.evtx") for i in range(3)]
@@ -495,8 +498,9 @@ class TestAnalyzeFilesAndRecommendMode:
 
     def test_low_ram_rejection(self, tmp_path):
         """Cover line 415: very low RAM rejects parallel."""
+        from unittest.mock import MagicMock, patch
+
         from zircolite.utils import analyze_files_and_recommend_mode
-        from unittest.mock import patch, MagicMock
 
         files = []
         for i in range(3):
@@ -510,7 +514,7 @@ class TestAnalyzeFilesAndRecommendMode:
 
         with patch("zircolite.utils.psutil.virtual_memory", return_value=mock_vm):
             mode, reason, stats = analyze_files_and_recommend_mode(files)
-        
+
         assert stats['parallel_recommended'] is False
         assert "RAM" in stats.get('parallel_reason', '') or "Low" in reason
 
@@ -550,8 +554,9 @@ class TestModeRecommendationRamHeuristics:
         over 85% of 4 GB available RAM: per-file must be chosen even though
         raw size (1 GB) is under the old RAM/3 threshold.
         """
+        from unittest.mock import MagicMock, patch
+
         from zircolite.utils import analyze_files_and_recommend_mode
-        from unittest.mock import patch, MagicMock
 
         files = [f"/fake/f{i}.evtx" for i in range(1024)]
         one_mb = 1024 * 1024
@@ -566,8 +571,9 @@ class TestModeRecommendationRamHeuristics:
 
     def test_rule6_reason_reflects_actual_parallel_recommendation(self):
         """Rule 6 must not claim parallel is enabled when it is not."""
+        from unittest.mock import MagicMock, patch
+
         from zircolite.utils import analyze_files_and_recommend_mode
-        from unittest.mock import patch, MagicMock
 
         # One huge file hides behind two small ones: parallel must be rejected
         files = ["/fake/big.evtx", "/fake/s1.evtx", "/fake/s2.evtx"]
@@ -588,8 +594,9 @@ class TestModeRecommendationRamHeuristics:
 
     def test_one_huge_file_blocks_parallel_even_with_small_avg(self):
         """The parallel safety check must use the largest file, not the average."""
+        from unittest.mock import MagicMock, patch
+
         from zircolite.utils import analyze_files_and_recommend_mode
-        from unittest.mock import patch, MagicMock
 
         files = ["/fake/big.evtx"] + [f"/fake/s{i}.evtx" for i in range(9)]
         sizes = {"/fake/big.evtx": 6 * 1024**3}
@@ -612,6 +619,7 @@ class TestInitLoggerHandlerManagement:
     def test_reinit_closes_previous_file_handler(self, tmp_path):
         """Re-initializing the logger must close the old file handler."""
         import logging
+
         from zircolite.utils import init_logger
         log1 = tmp_path / "one.log"
         log2 = tmp_path / "two.log"
@@ -628,8 +636,9 @@ class TestModeRecommendationRemainingRules:
     """Coverage for recommendation Rules 5, 7 and the empty-input edge."""
 
     def _analyze(self, files, sizes, avail_gb=16, cpus=8):
+        from unittest.mock import MagicMock, patch
+
         from zircolite.utils import analyze_files_and_recommend_mode
-        from unittest.mock import patch, MagicMock
         vm = MagicMock()
         vm.available = avail_gb * 1024**3
         vm.total = avail_gb * 2 * 1024**3
@@ -656,8 +665,9 @@ class TestModeRecommendationRemainingRules:
         assert mode == "unified"
 
     def test_empty_file_list_returns_perfile(self):
+        from unittest.mock import MagicMock, patch
+
         from zircolite.utils import analyze_files_and_recommend_mode
-        from unittest.mock import patch, MagicMock
         vm = MagicMock()
         vm.available = 8 * 1024**3
         vm.total = 16 * 1024**3
@@ -723,6 +733,7 @@ class TestOpenMaybeCompressedDecodeErrors:
 
     def test_gzip_text_mode_replaces_bad_bytes(self, tmp_path):
         import gzip
+
         from zircolite.utils import open_maybe_compressed
         src = tmp_path / "audit.log.gz"
         with gzip.open(src, "wb") as f:

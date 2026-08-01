@@ -54,8 +54,12 @@ except ImportError:
     print("[!] chardet not installed -- transforms using chardet will fail", file=sys.stderr)
 
 try:
-    from RestrictedPython import compile_restricted
-    from RestrictedPython import limited_builtins, safe_builtins, utility_builtins
+    from RestrictedPython import (
+        compile_restricted,
+        limited_builtins,
+        safe_builtins,
+        utility_builtins,
+    )
     from RestrictedPython.Eval import default_guarded_getiter
     from RestrictedPython.Guards import guarded_iter_unpack_sequence
 except ImportError:
@@ -126,7 +130,8 @@ def compile_transform(source: str, filename: str = "<transform>"):
         raise SyntaxError("RestrictedPython compilation returned None")
 
     namespace = {}
-    exec(byte_code, BUILTINS, namespace)
+    # Executing the transform is the point of this tool
+    exec(byte_code, BUILTINS, namespace)  # noqa: S102
 
     func = namespace.get("transform")
     if func is None:
@@ -210,7 +215,7 @@ Examples:
     source = transform_path.read_text(encoding="utf-8")
     if args.verbose:
         print(f"[*] Loaded transform: {transform_path} ({len(source)} bytes)")
-        print(f"[*] Compiling with RestrictedPython...")
+        print("[*] Compiling with RestrictedPython...")
 
     # Compile
     try:
@@ -220,11 +225,11 @@ Examples:
         sys.exit(1)
 
     if args.verbose:
-        print(f"[*] Compilation successful")
+        print("[*] Compilation successful")
 
     # Interactive mode
     if args.interactive:
-        print(f"[*] Interactive mode — enter values (Ctrl+D / Ctrl+C to quit):")
+        print("[*] Interactive mode — enter values (Ctrl+D / Ctrl+C to quit):")
         print(f"[*] Transform: {transform_path.name}")
         print("-" * 60)
         try:
@@ -243,10 +248,7 @@ Examples:
     if args.value is None:
         parser.error("value is required (use --interactive for interactive mode, or '-' for stdin)")
 
-    if args.value == "-":
-        value = sys.stdin.read().strip()
-    else:
-        value = args.value
+    value = sys.stdin.read().strip() if args.value == "-" else args.value
 
     if args.verbose:
         print(f"[*] Input: {value!r}")

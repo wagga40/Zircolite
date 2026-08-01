@@ -1,4 +1,3 @@
-#!python3
 """
 Processing modes for Zircolite.
 
@@ -18,6 +17,7 @@ Contents
 """
 
 import argparse
+import contextlib
 import csv
 import logging
 import queue
@@ -28,25 +28,25 @@ from contextlib import contextmanager
 from copy import deepcopy
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple, Union, TYPE_CHECKING
+from typing import TYPE_CHECKING, Any, Optional
 
 import orjson
 
-from .config import ProcessingConfig, ExtractorConfig
+from .config import ExtractorConfig, ProcessingConfig
 from .console import (
+    build_detection_table,
+    build_file_tree,
     console,
     is_quiet,
     make_file_link,
-    print_section,
     print_no_detections,
-    build_file_tree,
-    build_detection_table,
+    print_section,
     sort_key_severity,
 )
 from .core import ZircoliteCore
 from .extractor import EvtxExtractor
 from .formats import format_by_name
-from .parallel import ParallelConfig, MemoryAwareParallelProcessor
+from .parallel import MemoryAwareParallelProcessor, ParallelConfig
 from .shutdown import is_shutdown_requested
 from .utils import (
     MemoryTracker,
@@ -89,11 +89,11 @@ class ProcessingContext:
     db_location: str
     delimiter: str
     rulesets: list
-    rule_filters: Optional[list]
+    rule_filters: list | None
     outfile: str
     ready_for_templating: bool
     package: bool
-    dbfile: Optional[str]
+    dbfile: str | None
     keepflat: bool
     memory_tracker: MemoryTracker
     event_filter: Optional["EventFilter"] = None
@@ -102,7 +102,7 @@ class ProcessingContext:
     total_events: int = 0
     workers_used: int = 1
     profile_rules: bool = False
-    archive_password: Optional[str] = None
+    archive_password: str | None = None
     add_index: list = field(default_factory=list)
     remove_index: list = field(default_factory=list)
     auto_index_top_n: int = 0
@@ -125,7 +125,7 @@ class ProcessingContext:
 
 def create_zircolite_core(
     ctx: ProcessingContext,
-    db_location: Optional[str] = None,
+    db_location: str | None = None,
     disable_progress: bool = False,
 ) -> ZircoliteCore:
     """Create a ``ZircoliteCore`` instance with standard configuration."""
@@ -175,7 +175,7 @@ def create_worker_core(ctx: ProcessingContext, worker_id: int) -> ZircoliteCore:
 
 def create_extractor(
     args: argparse.Namespace, logger: logging.Logger, input_type: str
-) -> Optional[EvtxExtractor]:
+) -> EvtxExtractor | None:
     """Create extractor for formats that need conversion."""
     spec = format_by_name(input_type)
     if spec is None or spec.extractor_flag is None:
@@ -183,7 +183,7 @@ def create_extractor(
     # ExtractorConfig derives its default encoding from the format flags in
     # __post_init__, so the flag has to go through the constructor rather than
     # being set afterwards.
-    flags: Dict[str, Any] = {spec.extractor_flag: True}
+    flags: dict[str, Any] = {spec.extractor_flag: True}
     extractor_config = ExtractorConfig(encoding=args.logs_encoding, **flags)
     return EvtxExtractor(extractor_config, logger=logger)
 
@@ -193,12 +193,12 @@ def create_extractor(
 # ============================================================================
 
 def _unpack_streaming_result(
-    result: Union[int, Tuple[int, ...]]
-) -> Tuple[int, int, int]:
+    result: int | tuple[int, ...]
+) -> tuple[int, int, int]:
     """Safely unpack (total_events, filtered_count, time_filtered_count)."""
     if not isinstance(result, tuple):
         return (result, 0, 0)
-    return (result + (0, 0))[:3]  # type: ignore[return-value]
+    return ((*result, 0, 0))[:3]  # type: ignore[return-value]
 
 
 class _ThreadSafeWriter:
@@ -234,9 +234,10 @@ def _keepflat_context(ctx: 'ProcessingContext', *, thread_safe: bool = False):
     if not ctx.keepflat:
         yield None
         return
-    filename = "flattened_events_{}.json".format(random_suffix(4))
+    filename = f"flattened_events_{random_suffix(4)}.json"
     ctx.logger.info(f"[+] Saving flattened events to: {make_file_link(filename)}")
-    fh = open(filename, 'wb', buffering=1048576)
+    # This *is* the context manager; the finally below closes the handle.
+    fh = open(filename, 'wb', buffering=1048576)  # noqa: SIM115
     try:
         yield _ThreadSafeWriter(fh) if thread_safe else fh
     finally:
@@ -249,11 +250,11 @@ def _keepflat_context(ctx: 'ProcessingContext', *, thread_safe: bool = False):
 
 def process_unified_streaming(
     ctx: ProcessingContext,
-    file_list: List[Path],
+    file_list: list[Path],
     input_type: str,
-    extractor: Optional[EvtxExtractor],
+    extractor: EvtxExtractor | None,
     args: argparse.Namespace,
-) -> Tuple[Any, ...]:
+) -> tuple[Any, ...]:
     """Process all files into a single database using streaming mode."""
     ctx.logger.info(
         f"[+] Loading all [yellow]{len(file_list)}[/] file(s) into a single unified database"
@@ -318,11 +319,11 @@ def process_unified_streaming(
 
 def process_perfile_streaming(
     ctx: ProcessingContext,
-    file_list: List[Path],
+    file_list: list[Path],
     input_type: str,
-    extractor: Optional[EvtxExtractor],
+    extractor: EvtxExtractor | None,
     args: argparse.Namespace,
-) -> Tuple[Any, ...]:
+) -> tuple[Any, ...]:
     """Process each file separately using streaming mode."""
     ctx.logger.info(
         f"[+] Processing [yellow]{len(file_list)}[/] file(s) separately in streaming mode"
@@ -479,7 +480,7 @@ _DB_EXTENSIONS = ("db", "sqlite", "sqlite3")
 
 def expand_db_path(
     path: Path, args: argparse.Namespace, logger: logging.Logger
-) -> List[Path]:
+) -> list[Path]:
     """Resolve a -D argument to a list of database files.
 
     A database is normally named explicitly, but pointing -D at a directory
@@ -520,8 +521,8 @@ def expand_db_path(
 def process_db_input(
     ctx: ProcessingContext,
     args: argparse.Namespace,
-    file_list: Optional[List[Path]] = None,
-) -> Tuple[Any, ...]:
+    file_list: list[Path] | None = None,
+) -> tuple[Any, ...]:
     """Process from existing database file(s).
 
     When *file_list* is provided (directory of DB files), each file is
@@ -671,17 +672,17 @@ def process_single_file_worker(
     log_file: Path,
     ctx: ProcessingContext,
     input_type: str,
-    extractor: Optional[EvtxExtractor],
+    extractor: EvtxExtractor | None,
     args: argparse.Namespace,
     *,
     counter_lock: threading.Lock,
-    worker_counter: List[int],
-    total_filtered_count: List[int],
+    worker_counter: list[int],
+    total_filtered_count: list[int],
     thread_local: Any,
-    raw_config: Optional[dict] = None,
-    keepflat_file: Optional[Any] = None,
-    rule_progress_queue: Optional[queue.Queue] = None,
-) -> Tuple[int, Dict[str, Any]]:
+    raw_config: dict | None = None,
+    keepflat_file: Any | None = None,
+    rule_progress_queue: queue.Queue | None = None,
+) -> tuple[int, dict[str, Any]]:
     """Process a single file inside a parallel worker thread.
 
     Returns ``(event_count, file_data_dict)``.  This is a top-level function
@@ -700,10 +701,9 @@ def process_single_file_worker(
             # Reuse table schema across files: DELETE keeps columns intact so
             # _ensure_columns_exist_cached sees them immediately, avoiding
             # redundant ALTER TABLE statements for files with similar structure.
-            try:
+            # The table may not exist if the previous file failed early
+            with contextlib.suppress(Exception):
                 thread_local.core.db_connection.execute("DELETE FROM logs")
-            except Exception:
-                pass  # Table may not exist if previous file failed early
             thread_local.core._cursor = None
 
         core = thread_local.core
@@ -847,7 +847,7 @@ class _IncrementalResultWriter:
 
 
 def _write_parallel_results(
-    ctx: ProcessingContext, all_results: List[Dict[str, Any]]
+    ctx: ProcessingContext, all_results: list[dict[str, Any]]
 ) -> None:
     """Write combined parallel results as CSV.
 
@@ -862,12 +862,7 @@ def _write_parallel_results(
     for result in all_results:
         for row in result.get("matches", []):
             all_keys.update(row.keys())
-    fieldnames = [
-        "rule_title",
-        "rule_description",
-        "rule_level",
-        "rule_count",
-    ] + sorted(all_keys)
+    fieldnames = ["rule_title", "rule_description", "rule_level", "rule_count", *sorted(all_keys)]
     with open(ctx.outfile, "w", encoding="utf-8", newline="") as f:
         writer = csv.DictWriter(
             f, delimiter=ctx.delimiter, fieldnames=fieldnames, extrasaction="ignore"
@@ -893,12 +888,12 @@ def _write_parallel_results(
 
 def process_parallel_streaming(
     ctx: ProcessingContext,
-    file_list: List[Path],
+    file_list: list[Path],
     input_type: str,
-    extractor: Optional[EvtxExtractor],
+    extractor: EvtxExtractor | None,
     args: argparse.Namespace,
-    recommended_workers: Optional[int] = None,
-) -> Tuple[Any, ...]:
+    recommended_workers: int | None = None,
+) -> tuple[Any, ...]:
     """Process files in parallel using memory-aware parallel processor."""
 
     parallel_config = ParallelConfig(
@@ -953,7 +948,9 @@ def process_parallel_streaming(
     # time, so columns from later files would be silently dropped.  CSV
     # falls back to _write_parallel_results which collects all columns first.
     use_incremental = not ctx.csv_mode
-    rule_progress_queue = queue.Queue() if not is_quiet() else None
+    rule_progress_queue: queue.Queue | None = (
+        queue.Queue() if not is_quiet() else None
+    )
 
     with _keepflat_context(ctx, thread_safe=True) as kf:
 

@@ -1,4 +1,3 @@
-#!python3
 """
 Utility functions and helper classes for Zircolite.
 
@@ -16,16 +15,11 @@ import os
 import random
 import string
 import sys
+from collections.abc import Sequence
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import (
     Any,
-    Dict,
-    List,
-    Optional,
-    Sequence,
-    Tuple,
-    Union,
     cast,
 )
 
@@ -35,12 +29,11 @@ import yaml
 
 from .console import console, get_rich_logger
 
-
 # Above this, an epoch number is milliseconds rather than seconds (1973-03-03).
 _EPOCH_MS_THRESHOLD = 100_000_000_000
 
 
-def parse_timestamp(value: Any) -> Optional[datetime]:
+def parse_timestamp(value: Any) -> datetime | None:
     """Parse a log timestamp into an aware UTC datetime, or None if it is not one.
 
     Log producers do not agree on a spelling, and comparing the spellings instead
@@ -95,8 +88,8 @@ def parse_timestamp(value: Any) -> Optional[datetime]:
 
 
 def load_field_mappings(
-    config_file: str, *, logger: Optional[logging.Logger] = None
-) -> Dict[str, Any]:
+    config_file: str, *, logger: logging.Logger | None = None
+) -> dict[str, Any]:
     """
     Load field mappings configuration from JSON or YAML file.
 
@@ -146,14 +139,14 @@ def load_field_mappings(
             try:
                 config = orjson.loads(f.read().lstrip(b"\xef\xbb\xbf"))
             except orjson.JSONDecodeError as e:
-                raise ValueError(f"Invalid JSON in field mappings file: {e}")
+                raise ValueError(f"Invalid JSON in field mappings file: {e}") from e
     elif suffix in (".yaml", ".yml"):
         # YAML format
-        with open(config_path, "r", encoding="utf-8") as f:
+        with open(config_path, encoding="utf-8") as f:
             try:
                 config = yaml.safe_load(f)
             except yaml.YAMLError as e:
-                raise ValueError(f"Invalid YAML in field mappings file: {e}")
+                raise ValueError(f"Invalid YAML in field mappings file: {e}") from e
     else:
         # Try to auto-detect based on content
         with open(config_path, "rb") as f:
@@ -166,11 +159,11 @@ def load_field_mappings(
             # Try YAML as fallback
             try:
                 config = yaml.safe_load(content.decode("utf-8-sig"))
-            except (yaml.YAMLError, UnicodeDecodeError):
+            except (yaml.YAMLError, UnicodeDecodeError) as e:
                 raise ValueError(
                     f"Unable to parse field mappings file: {config_file}. "
                     f"Supported formats: .json, .yaml, .yml"
-                )
+                ) from e
 
     if config is None:
         config = {}
@@ -236,14 +229,17 @@ def load_field_mappings(
 COMPRESSED_SUFFIXES = frozenset((".gz", ".bz2", ".zip", ".7z"))
 
 # Shown when decompression fails due to wrong or missing archive password.
-ARCHIVE_PASSWORD_ERROR_MESSAGE = "Wrong or missing archive password. Use --archive-password with the correct password."
+ARCHIVE_PASSWORD_ERROR_MESSAGE = (
+    "Wrong or missing archive password. "  # noqa: S105 - a message, not a credential
+    "Use --archive-password with the correct password."
+)
 
 
 def open_maybe_compressed(
-    path: Union[Path, str],
+    path: Path | str,
     mode: str = "rb",
-    encoding: Optional[str] = None,
-    password: Optional[Union[str, bytes]] = None,
+    encoding: str | None = None,
+    password: str | bytes | None = None,
     errors: str = "replace",
 ) -> Any:
     """Open a file, transparently decompressing gz/bz2 or extracting from a zip/7z archive.
@@ -331,12 +327,12 @@ def open_maybe_compressed(
                 DecompressionError,
                 PasswordRequired,
             )
-        except ImportError:
+        except ImportError as e:
             raise ImportError(
                 "The 'py7zr' package is required to read .7z files. "
                 "Install it with: pip install py7zr"
-            )
-        pwd_7z: Optional[str] = (
+            ) from e
+        pwd_7z: str | None = (
             password.decode() if isinstance(password, bytes) else password
         )
 
@@ -454,7 +450,7 @@ def sanitize_value_for_csv(value: Any) -> str:
     return text
 
 
-def sanitize_row_for_csv(row: Dict[str, Any]) -> Dict[str, str]:
+def sanitize_row_for_csv(row: dict[str, Any]) -> dict[str, str]:
     """Return a new dict with all values sanitized for CSV output."""
     return {k: sanitize_value_for_csv(v) for k, v in row.items()}
 
@@ -467,7 +463,7 @@ def random_suffix(length: int = 4) -> str:
     )
 
 
-def quit_on_error(message: str, logger: Optional[logging.Logger] = None) -> None:
+def quit_on_error(message: str, logger: logging.Logger | None = None) -> None:
     """Log error message and exit with error code."""
     logger = logger or logging.getLogger(__name__)
     logger.error(message)
@@ -475,9 +471,9 @@ def quit_on_error(message: str, logger: Optional[logging.Logger] = None) -> None
 
 
 def check_if_exists(
-    path: Union[Path, str],
+    path: Path | str,
     error_message: str,
-    logger: Optional[logging.Logger] = None,
+    logger: logging.Logger | None = None,
 ) -> None:
     """Check if the provided path is a file."""
     if not Path(path).is_file():
@@ -486,7 +482,7 @@ def check_if_exists(
 
 def init_logger(
     debug_mode: bool,
-    log_file: Optional[str] = None,
+    log_file: str | None = None,
     name: str = "zircolite",
 ) -> logging.Logger:
     """Initialize logger with appropriate configuration.
@@ -521,47 +517,47 @@ def create_silent_logger(name: str = "zircolite_worker") -> logging.Logger:
 
 
 def select_files(
-    path_list: Sequence[Union[Path, str]],
-    select_files_list: Optional[List[List[str]]],
-) -> List[Union[Path, str]]:
+    path_list: Sequence[Path | str],
+    select_files_list: list[list[str]] | None,
+) -> list[Path | str]:
     """Select files from path list based on filter criteria."""
     if select_files_list is None:
         return list(path_list)
 
     paths = list(path_list)
     filters = [term.lower() for group in select_files_list for term in group if group]
-    selected: List[str] = []
+    selected: list[str] = []
     for element in paths:
         path_str = str(element)
         name_lower = Path(path_str).name.lower()
         if any(file_filter in name_lower for file_filter in filters):
             selected.append(path_str)
-    return cast(List[Union[Path, str]], selected)
+    return cast(list[Path | str], selected)
 
 
 def avoid_files(
-    path_list: Sequence[Union[Path, str]],
-    avoid_files_list: Optional[List[List[str]]],
-) -> List[Union[Path, str]]:
+    path_list: Sequence[Path | str],
+    avoid_files_list: list[list[str]] | None,
+) -> list[Path | str]:
     """Filter out files from path list based on exclusion criteria."""
     if avoid_files_list is None:
         return list(path_list)
 
     paths = list(path_list)
     filters = [term.lower() for group in avoid_files_list for term in group if group]
-    filtered: List[str] = []
+    filtered: list[str] = []
     for element in paths:
         path_str = str(element)
         name_lower = Path(path_str).name.lower()
         if all(file_filter not in name_lower for file_filter in filters):
             filtered.append(path_str)
-    return cast(List[Union[Path, str]], filtered)
+    return cast(list[Path | str], filtered)
 
 
 class MemoryTracker:
     """Track memory usage during execution."""
 
-    def __init__(self, *, logger: Optional[logging.Logger] = None):
+    def __init__(self, *, logger: logging.Logger | None = None):
         """
         Initialize MemoryTracker.
 
@@ -569,7 +565,7 @@ class MemoryTracker:
             logger: Logger instance (creates default if None)
         """
         self.logger = logger or logging.getLogger(__name__)
-        self.memory_samples: List[float] = []
+        self.memory_samples: list[float] = []
         self.peak_memory: float = 0.0
         self.process = psutil.Process(os.getpid())
 
@@ -589,7 +585,7 @@ class MemoryTracker:
             if memory_mb > self.peak_memory:
                 self.peak_memory = memory_mb
 
-    def get_stats(self) -> Tuple[float, float]:
+    def get_stats(self) -> tuple[float, float]:
         """Get peak and average memory usage."""
         if not self.memory_samples:
             return 0, 0
@@ -610,7 +606,7 @@ class MemoryTracker:
 ################################################################
 # HEURISTICS FOR OPTIMAL PROCESSING MODE
 ################################################################
-def format_size(size: Union[int, float]) -> str:
+def format_size(size: float) -> str:
     """Format byte size for human-readable display."""
     if size >= 1024 * 1024 * 1024:
         return f"{size / (1024 * 1024 * 1024):.1f} GB"
@@ -622,8 +618,8 @@ def format_size(size: Union[int, float]) -> str:
 
 
 def analyze_files_and_recommend_mode(
-    file_list: Sequence[Union[Path, str]],
-) -> Tuple[str, str, Dict[str, Any]]:
+    file_list: Sequence[Path | str],
+) -> tuple[str, str, dict[str, Any]]:
     """
     Analyze files and available RAM to recommend optimal processing settings.
 
@@ -674,6 +670,8 @@ def analyze_files_and_recommend_mode(
     # with MemoryAwareParallelProcessor.
     from .parallel import (
         calculate_optimal_workers as _calc_workers,
+    )
+    from .parallel import (
         memory_multiplier_for,
     )
 
@@ -806,9 +804,9 @@ def analyze_files_and_recommend_mode(
 def print_mode_recommendation(
     recommended_mode: str,
     reason: str,
-    stats: Dict[str, Any],
+    stats: dict[str, Any],
     show_parallel: bool = True,
-    forced_workers: Optional[int] = None,
+    forced_workers: int | None = None,
 ) -> None:
     """Print the mode recommendation to the user with clean formatting."""
     _print_mode_recommendation_rich(
@@ -819,9 +817,9 @@ def print_mode_recommendation(
 def _print_mode_recommendation_rich(
     recommended_mode: str,
     reason: str,
-    stats: Dict[str, Any],
+    stats: dict[str, Any],
     show_parallel: bool = True,
-    forced_workers: Optional[int] = None,
+    forced_workers: int | None = None,
 ) -> None:
     """Print mode recommendation using Rich console."""
     from rich.table import Table

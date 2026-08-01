@@ -28,23 +28,29 @@ import sys
 import time
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Set, Tuple
+from typing import Any
 
-import yaml
 import sqlparse
-from sqlparse.tokens import Name as TokenName
-
+import yaml
 from rich.console import Console
 from rich.panel import Panel
-from rich.progress import Progress, SpinnerColumn, TextColumn, BarColumn, MofNCompleteColumn, TimeElapsedColumn
+from rich.progress import (
+    BarColumn,
+    MofNCompleteColumn,
+    Progress,
+    SpinnerColumn,
+    TextColumn,
+    TimeElapsedColumn,
+)
 from rich.rule import Rule
 from rich.table import Table
 from rich.theme import Theme
+from sqlparse.tokens import Name as TokenName
 
 # Zircolite package (run from project root or with PYTHONPATH)
 try:
     from zircolite.config import ProcessingConfig, RulesetConfig
-    from zircolite.console import set_quiet_mode, make_file_link
+    from zircolite.console import make_file_link, set_quiet_mode
     from zircolite.core import ZircoliteCore
     from zircolite.rules import RulesetHandler
     from zircolite.utils import init_logger
@@ -54,7 +60,7 @@ except ImportError:
     if str(_root) not in sys.path:
         sys.path.insert(0, str(_root))
     from zircolite.config import ProcessingConfig, RulesetConfig
-    from zircolite.console import set_quiet_mode, make_file_link
+    from zircolite.console import make_file_link, set_quiet_mode
     from zircolite.core import ZircoliteCore
     from zircolite.rules import RulesetHandler
     from zircolite.utils import init_logger
@@ -72,7 +78,7 @@ REGRESSION_THEME = Theme({
 console = Console(theme=REGRESSION_THEME, highlight=False)
 
 
-def _file_link(path: Path, display: Optional[str] = None) -> str:
+def _file_link(path: Path, display: str | None = None) -> str:
     """Rich markup for a clickable file/dir link, with optional display text."""
     try:
         uri = path.resolve().as_uri()
@@ -103,29 +109,29 @@ class RegressionTestEntry:
     path: str  # relative to sigma repo root
     match_count: int
     match_count_explicit: bool = True  # False when inferred from test name (no match_count in info.yml)
-    provider: Optional[str] = None
+    provider: str | None = None
 
 
 @dataclass
 class TestCase:
     """One test case directory: info.yml + rule refs + test entries."""
     dir_path: Path
-    rule_refs: List[RuleRef]
-    tests: List[RegressionTestEntry]
+    rule_refs: list[RuleRef]
+    tests: list[RegressionTestEntry]
 
 
-def load_info_yml(path: Path) -> Optional[Dict[str, Any]]:
+def load_info_yml(path: Path) -> dict[str, Any] | None:
     """Load and parse an info.yml file."""
     if not path.exists():
         return None
     try:
-        with open(path, "r", encoding="utf-8") as f:
+        with open(path, encoding="utf-8") as f:
             return yaml.safe_load(f)
     except Exception:
         return None
 
 
-def parse_test_case(dir_path: Path) -> Optional[TestCase]:
+def parse_test_case(dir_path: Path) -> TestCase | None:
     """
     Parse a test case directory: read info.yml and build TestCase.
     Paths in info.yml are relative to the Sigma repo root.
@@ -135,7 +141,7 @@ def parse_test_case(dir_path: Path) -> Optional[TestCase]:
     if not data:
         return None
 
-    rule_refs: List[RuleRef] = []
+    rule_refs: list[RuleRef] = []
     for item in data.get("rule_metadata") or []:
         if isinstance(item, dict):
             rule_id = item.get("id") or ""
@@ -143,7 +149,7 @@ def parse_test_case(dir_path: Path) -> Optional[TestCase]:
             if title:
                 rule_refs.append(RuleRef(id=rule_id, title=title))
 
-    tests: List[RegressionTestEntry] = []
+    tests: list[RegressionTestEntry] = []
     for item in data.get("regression_tests_info") or []:
         if not isinstance(item, dict):
             continue
@@ -181,7 +187,7 @@ def parse_test_case(dir_path: Path) -> Optional[TestCase]:
     return TestCase(dir_path=dir_path, rule_refs=rule_refs, tests=tests)
 
 
-def discover_test_cases(regression_data_root: Path) -> List[TestCase]:
+def discover_test_cases(regression_data_root: Path) -> list[TestCase]:
     """
     Discover all test cases under the given path (recursively).
     Each directory that contains an info.yml is a test case.
@@ -189,7 +195,7 @@ def discover_test_cases(regression_data_root: Path) -> List[TestCase]:
     if not regression_data_root.is_dir():
         return []
 
-    cases: List[TestCase] = []
+    cases: list[TestCase] = []
     for info_file in regression_data_root.rglob("info.yml"):
         dir_path = info_file.parent
         case = parse_test_case(dir_path)
@@ -200,7 +206,7 @@ def discover_test_cases(regression_data_root: Path) -> List[TestCase]:
 
 def resolve_data_file(
     regression_data_root: Path, test_entry: RegressionTestEntry, case_dir: Path
-) -> Optional[Path]:
+) -> Path | None:
     """
     Resolve the data file (EVTX or JSON) for a test entry.
     Tries: path relative to regression_data, then relative to case dir, then filename in case dir.
@@ -220,9 +226,9 @@ def resolve_data_file(
     return None
 
 
-def build_rules_index_by_title(ruleset: List[Dict[str, Any]]) -> Dict[str, List[Dict[str, Any]]]:
+def build_rules_index_by_title(ruleset: list[dict[str, Any]]) -> dict[str, list[dict[str, Any]]]:
     """Build title -> rules index while preserving ruleset order."""
-    index: Dict[str, List[Dict[str, Any]]] = {}
+    index: dict[str, list[dict[str, Any]]] = {}
     for rule in ruleset:
         title = rule.get("title")
         if isinstance(title, str) and title:
@@ -231,12 +237,12 @@ def build_rules_index_by_title(ruleset: List[Dict[str, Any]]) -> Dict[str, List[
 
 
 def find_rules_by_title(
-    rules_by_title: Dict[str, List[Dict[str, Any]]],
-    titles: List[str],
-) -> List[Dict[str, Any]]:
+    rules_by_title: dict[str, list[dict[str, Any]]],
+    titles: list[str],
+) -> list[dict[str, Any]]:
     """Return rules matching titles, preserving title order and removing duplicates."""
-    matched: List[Dict[str, Any]] = []
-    seen_ids: Set[int] = set()
+    matched: list[dict[str, Any]] = []
+    seen_ids: set[int] = set()
     for title in titles:
         for rule in rules_by_title.get(title, []):
             rule_obj_id = id(rule)
@@ -254,9 +260,9 @@ _FAILED_RULE_ALIGN = 8
 _SQLITE_LOGS_TABLE = "logs"
 
 
-def _columns_used_in_sql(sql_list: List[str]) -> Set[str]:
+def _columns_used_in_sql(sql_list: list[str]) -> set[str]:
     """Extract column names from SQL using sqlparse (quoted and unquoted identifiers)."""
-    columns: Set[str] = set()
+    columns: set[str] = set()
     for sql in sql_list or []:
         if not sql or not sql.strip():
             continue
@@ -279,9 +285,9 @@ def _columns_used_in_sql(sql_list: List[str]) -> Set[str]:
 
 
 def _filter_events_to_rule_fields(
-    events: List[Dict[str, Any]],
-    rule_sql: List[str],
-) -> List[Dict[str, Any]]:
+    events: list[dict[str, Any]],
+    rule_sql: list[str],
+) -> list[dict[str, Any]]:
     """Return events with only keys that appear in the rule SQL (from sqlparse)."""
     used = _columns_used_in_sql(rule_sql or [])
     if not used:
@@ -322,7 +328,7 @@ def format_failed_rule_lines(
     prefix: str = "    ",
     icon: str = "!",
     style: str = "yellow",
-) -> List[str]:
+) -> list[str]:
     """Format a failed-rule message as multiple lines; rule title and detail align with case name."""
     continuation = " " * _FAILED_RULE_ALIGN
     icon_markup = f"[{style}]\\[{icon}][/]"
@@ -335,9 +341,9 @@ def format_failed_rule_lines(
     ]
 
 
-def build_sigma_yaml_index(sigma_rules_dir: Optional[Path]) -> Dict[str, str]:
+def build_sigma_yaml_index(sigma_rules_dir: Path | None) -> dict[str, str]:
     """Build a map of Sigma rule title -> YAML content."""
-    index: Dict[str, str] = {}
+    index: dict[str, str] = {}
     if sigma_rules_dir is None:
         return index
 
@@ -364,12 +370,12 @@ def build_sigma_yaml_index(sigma_rules_dir: Optional[Path]) -> Dict[str, str]:
     return index
 
 
-def find_sigma_yaml_for_rule(sigma_yaml_index: Dict[str, str], rule_title: str) -> Optional[str]:
+def find_sigma_yaml_for_rule(sigma_yaml_index: dict[str, str], rule_title: str) -> str | None:
     """Return Sigma YAML for a rule title from a prebuilt index."""
     return sigma_yaml_index.get(rule_title)
 
 
-def detect_rules_type(rules_path: Path) -> Tuple[str, Path]:
+def detect_rules_type(rules_path: Path) -> tuple[str, Path]:
     """
     Detect whether the path is a Zircolite JSON ruleset or a Sigma YAML rules directory.
     Returns ('zircolite', path) or ('sigma', path).
@@ -384,7 +390,7 @@ def detect_rules_type(rules_path: Path) -> Tuple[str, Path]:
                 head = f.read(100)
             if head.lstrip().startswith(b"["):
                 return "zircolite", resolved
-        except (OSError, IOError):
+        except OSError:
             pass
         print(f"Error: rules path is a file but not a JSON ruleset: {resolved}", file=sys.stderr)
         raise SystemExit(1)
@@ -396,7 +402,7 @@ def detect_rules_type(rules_path: Path) -> Tuple[str, Path]:
 
 def write_report_markdown(
     path: Path,
-    report: Dict[str, Any],
+    report: dict[str, Any],
     elapsed_seconds: float,
 ) -> None:
     """Write a human-readable Markdown report with full failed-test details (SQL, YAML, events)."""
@@ -431,8 +437,7 @@ def write_report_markdown(
                 if t.get("error"):
                     f.write(f"- **Error:** {t.get('error')}  \n")
                 f.write("\n#### Rule (SQL)\n\n```sql\n")
-                for q in t.get("rule_sql") or []:
-                    f.write(_beautify_sql(q.strip()) + "\n")
+                f.writelines(_beautify_sql(q.strip()) + "\n" for q in t.get("rule_sql") or [])
                 f.write("```\n\n")
                 f.write("#### Rule (Sigma YAML)\n\n```yaml\n")
                 f.write((t.get("sigma_yaml") or "# Sigma YAML not found for this rule title.\n").rstrip() + "\n")
@@ -450,7 +455,7 @@ def write_report_markdown(
             f.write("\n*Events in this report show only fields referenced in the rule SQL.*\n")
 
 
-def write_report_json(path: Path, report: Dict[str, Any]) -> None:
+def write_report_json(path: Path, report: dict[str, Any]) -> None:
     """Write a structured JSON report including full failed-test data (rule_sql, sigma_yaml, events)."""
     out = {k: v for k, v in report.items() if k != "failed_tests"}
     if report.get("failed_tests"):
@@ -476,13 +481,13 @@ def write_report_json(path: Path, report: Dict[str, Any]) -> None:
 def run_single_test(
     data_file: Path,
     input_type: str,
-    rule: Dict[str, Any],
+    rule: dict[str, Any],
     config_path: str,
     logger: logging.Logger,
     json_array: bool = True,
     quiet: bool = True,
     return_events_on_fail: bool = False,
-) -> Tuple[bool, int, str, Optional[List[Dict[str, Any]]]]:
+) -> tuple[bool, int, str, list[dict[str, Any]] | None]:
     """
     Run Zircolite on one file with one rule.
     Returns (passed, match_count, error_message, events_from_db).
@@ -503,7 +508,7 @@ def run_single_test(
             no_output=True,
         )
         core = ZircoliteCore(config_path, proc_config, logger=test_logger)
-        events_from_db: Optional[List[Dict[str, Any]]] = None
+        events_from_db: list[dict[str, Any]] | None = None
         try:
             # Minimal args for streaming (no transforms needed for regression).
             # A Namespace, not a class: attributes declared on a class body are
@@ -554,14 +559,14 @@ def run_single_test(
 def build_failed_result(
     case_name: str,
     data_file: Path,
-    rule: Dict[str, Any],
+    rule: dict[str, Any],
     expected: Any,
     got: int,
     error: str,
-    events: Optional[List[Dict[str, Any]]],
-    sigma_yaml_index: Dict[str, str],
+    events: list[dict[str, Any]] | None,
+    sigma_yaml_index: dict[str, str],
     include_report_data: bool,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Build a normalized failed-test payload for console/report output."""
     rule_title = rule.get("title", "")
     result = {
@@ -646,7 +651,7 @@ def main() -> int:
         rules_type, rules_path = detect_rules_type(args.rules)
     except SystemExit:
         return 1
-    sigma_rules: Optional[Path] = rules_path if rules_type == "sigma" else None
+    sigma_rules: Path | None = rules_path if rules_type == "sigma" else None
 
     # Zircolite config: prefer project root config/config.yaml
     if args.zircolite_config:
@@ -674,7 +679,7 @@ def main() -> int:
     if rules_type == "zircolite":
         console.print("[bold white]\\[+][/] Loading Zircolite ruleset (no conversion)…")
         try:
-            with open(rules_path, "r", encoding="utf-8") as f:
+            with open(rules_path, encoding="utf-8") as f:
                 full_ruleset = json.load(f)
         except Exception as e:
             console.print(f"[red]\\[-][/] Failed to load ruleset: {e}")
@@ -718,12 +723,12 @@ def main() -> int:
     failed = 0
     skipped = 0
     quiet_tests = not args.verbose
-    failed_results: List[Dict[str, Any]] = []
+    failed_results: list[dict[str, Any]] = []
     total_tests = sum(len(c.tests) for c in cases)
     need_events = bool(args.report)
     rules_by_title = build_rules_index_by_title(full_ruleset)
     sigma_yaml_index = build_sigma_yaml_index(sigma_rules) if need_events else {}
-    buffered_lines: List[str] = []  # Rich markup strings to print after progress
+    buffered_lines: list[str] = []  # Rich markup strings to print after progress
 
     # Batch progress updates to reduce flicker (update every N tests, not every test)
     progress_batch_size = max(1, min(10, total_tests // 15)) if total_tests else 1
@@ -773,7 +778,7 @@ def main() -> int:
             rule = rules[0]
             rule_title = rule.get("title", "")
             rule_id = rule.get("id", "")
-            ok, count, err, events_from_db = run_single_test(
+            _ok, count, err, events_from_db = run_single_test(
                 data_file,
                 input_type,
                 rule,
@@ -914,7 +919,7 @@ def main() -> int:
         }
         write_report_markdown(md_path, report, elapsed)
         write_report_json(json_path, report)
-        console.print("[bold white]\\[+][/] Report: %s  [dim]|[/]  %s" % (make_file_link(str(md_path)), make_file_link(str(json_path))))
+        console.print(f"[bold white]\\[+][/] Report: {make_file_link(str(md_path))}  [dim]|[/]  {make_file_link(str(json_path))}")
         console.print()
 
     return 0 if failed == 0 else 1

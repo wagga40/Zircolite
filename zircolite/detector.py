@@ -1,4 +1,3 @@
-#!python3
 """
 Automatic log type and timestamp detection for Zircolite.
 
@@ -27,11 +26,8 @@ import logging
 import re
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
 
 import orjson as json
-
-from .formats import EXTENSION_FALLBACKS
 
 from zircolite.utils import (
     ARCHIVE_PASSWORD_ERROR_MESSAGE,
@@ -39,6 +35,7 @@ from zircolite.utils import (
     sniff_csv_delimiter,
 )
 
+from .formats import EXTENSION_FALLBACKS
 
 # =========================================================================
 # Pre-compiled module-level constants
@@ -190,16 +187,16 @@ class DetectionResult:
     confidence: str
 
     # Suggested timestamp field name (None if unknown)
-    timestamp_field: Optional[str] = None
+    timestamp_field: str | None = None
 
     # Suggested Sigma pipeline (None if unknown)
-    suggested_pipeline: Optional[str] = None
+    suggested_pipeline: str | None = None
 
     # Human-readable description of the detection
     details: str = ""
 
     # Additional metadata from detection
-    metadata: Dict = field(default_factory=dict)
+    metadata: dict = field(default_factory=dict)
 
 
 class LogTypeDetector:
@@ -223,9 +220,9 @@ class LogTypeDetector:
 
     def __init__(
         self,
-        logger: Optional[logging.Logger] = None,
-        timestamp_detection_fields: Optional[List[str]] = None,
-        archive_password: Optional[str] = None,
+        logger: logging.Logger | None = None,
+        timestamp_detection_fields: list[str] | None = None,
+        archive_password: str | None = None,
     ):
         """
         Initialize LogTypeDetector.
@@ -343,7 +340,7 @@ class LogTypeDetector:
             self._enrich_timestamp_from_raw(fallback, sample_text, sample_bytes)
         return fallback
 
-    def detect_batch(self, file_paths: List[Path]) -> DetectionResult:
+    def detect_batch(self, file_paths: list[Path]) -> DetectionResult:
         """
         Detect the log type from a batch of files.
 
@@ -368,14 +365,17 @@ class LogTypeDetector:
         best = results[0]
 
         # If all files agree on input_type, boost confidence
-        if len(results) > 1 and best.confidence == "medium":
-            if all(r.input_type == best.input_type for r in results):
-                best.confidence = "high"
-                best.details += " (confirmed across multiple files)"
+        if (
+            len(results) > 1
+            and best.confidence == "medium"
+            and all(r.input_type == best.input_type for r in results)
+        ):
+            best.confidence = "high"
+            best.details += " (confirmed across multiple files)"
 
         return best
 
-    def detect_timestamp_field(self, event: dict) -> Optional[str]:
+    def detect_timestamp_field(self, event: dict) -> str | None:
         """
         Detect the timestamp field from a parsed event dictionary.
 
@@ -415,7 +415,7 @@ class LogTypeDetector:
     # Internal: compressed file resolution, then sampling and magic bytes
     # ----------------------------------------------------------------
 
-    def _archive_password_bytes(self) -> Optional[bytes]:
+    def _archive_password_bytes(self) -> bytes | None:
         """Return archive password as bytes for ZIP/7z APIs, or None."""
         if self._archive_password is None:
             return None
@@ -425,7 +425,7 @@ class LogTypeDetector:
 
     def _resolve_compressed(
         self, file_path: Path
-    ) -> Optional[Tuple[str, bytes, str, List[str]]]:
+    ) -> tuple[str, bytes, str, list[str]] | None:
         """
         If the file is a compressed/archived type (.gz, .bz2, .zip, .7z), resolve
         the inner extension and decompressed sample for format detection.
@@ -454,8 +454,7 @@ class LogTypeDetector:
                         base_ext = Path(file_path.stem).suffix.lower()
             except Exception:
                 base_ext = Path(file_path.stem).suffix.lower()
-        else:
-            assert suffix == ".7z"
+        elif suffix == ".7z":
             try:
                 import py7zr
                 from py7zr.exceptions import PasswordRequired
@@ -472,6 +471,11 @@ class LogTypeDetector:
                 raise ValueError(ARCHIVE_PASSWORD_ERROR_MESSAGE) from None
             except Exception:
                 base_ext = Path(file_path.stem).suffix.lower()
+        else:
+            # Unreachable while COMPRESSED_SUFFIXES holds only the four handled
+            # above, but a new suffix must degrade to the filename rather than
+            # leave base_ext unbound.
+            base_ext = Path(file_path.stem).suffix.lower()
 
         # Step 2: Decompress and sample (same password used for ZIP/7z)
         sample_bytes = b""
@@ -519,6 +523,7 @@ class LogTypeDetector:
         elif suffix == ".7z":
             try:
                 import io as _io
+
                 import py7zr
                 from py7zr.exceptions import PasswordRequired
 
@@ -554,7 +559,7 @@ class LogTypeDetector:
         lines = text.splitlines()[: self.SAMPLE_LINES]
         return (base_ext, sample_bytes, text, lines)
 
-    def _check_magic_bytes(self, file_path: Path) -> Optional[DetectionResult]:
+    def _check_magic_bytes(self, file_path: Path) -> DetectionResult | None:
         """Check file magic bytes for binary format detection.
 
         Only ever called on plain files: ``detect`` resolves every compressed
@@ -605,7 +610,7 @@ class LogTypeDetector:
         except UnicodeDecodeError:
             return sample_bytes.decode("iso-8859-1")
 
-    def _read_sample(self, file_path: Path) -> Tuple[bytes, str, List[str]]:
+    def _read_sample(self, file_path: Path) -> tuple[bytes, str, list[str]]:
         """
         Read a sample of a plain (non-compressed) file for content analysis.
 
@@ -630,9 +635,9 @@ class LogTypeDetector:
         self,
         sample_bytes: bytes,
         sample_text: str,
-        sample_lines: List[str],
+        sample_lines: list[str],
         ext: str,
-    ) -> Optional[DetectionResult]:
+    ) -> DetectionResult | None:
         """Detect format from file content."""
         # Binary formats can arrive here after decompression (e.g. .evtx.gz):
         # re-check magic bytes on the (possibly decompressed) sample first.
@@ -700,7 +705,7 @@ class LogTypeDetector:
     # Internal: format-specific checks
     # ----------------------------------------------------------------
 
-    def _check_auditd(self, lines: List[str]) -> Optional[DetectionResult]:
+    def _check_auditd(self, lines: list[str]) -> DetectionResult | None:
         """Check if content matches auditd log format."""
         match = AUDITD_LINE_PATTERN.match  # local ref
         auditd_matches = sum(
@@ -728,7 +733,7 @@ class LogTypeDetector:
 
         return None
 
-    def _check_sysmon_linux(self, lines: List[str]) -> Optional[DetectionResult]:
+    def _check_sysmon_linux(self, lines: list[str]) -> DetectionResult | None:
         """Check if content matches Sysmon for Linux log format."""
         sysmon_matches = 0
         has_syslog_header = False
@@ -774,7 +779,7 @@ class LogTypeDetector:
         # likely a Windows Sysmon/Event XML file: let _check_xml decide.
         return None
 
-    def _check_evtxtract(self, text: str) -> Optional[DetectionResult]:
+    def _check_evtxtract(self, text: str) -> DetectionResult | None:
         """Check if content matches EVTXtract output format."""
         marker_count = sum(1 for m in EVTXTRACT_MARKERS if m in text)
 
@@ -790,7 +795,7 @@ class LogTypeDetector:
 
         return None
 
-    def _check_xml(self, text: str) -> Optional[DetectionResult]:
+    def _check_xml(self, text: str) -> DetectionResult | None:
         """Analyze XML content to determine the specific log source."""
         has_windows_ns = WINDOWS_EVENT_NS in text
         has_event_tag = "<Event " in text or "<Event>" in text
@@ -823,7 +828,7 @@ class LogTypeDetector:
 
     def _check_json(
         self, first_line: str, sample_bytes: bytes
-    ) -> Optional[DetectionResult]:
+    ) -> DetectionResult | None:
         """Analyze JSON content to determine the specific log source.
 
         *first_line* is the first non-blank line, as chosen by the caller: a
@@ -848,7 +853,7 @@ class LogTypeDetector:
 
     def _parse_first_json_event(
         self, sample_bytes: bytes, is_json_array: bool
-    ) -> Optional[dict]:
+    ) -> dict | None:
         """Parse the first JSON event from a sample."""
         try:
             if is_json_array:
@@ -1022,9 +1027,9 @@ class LogTypeDetector:
             metadata={"sample_keys": list(event.keys())[:20]},
         )
 
-    def _check_csv(self, lines: List[str], ext: str) -> Optional[DetectionResult]:
+    def _check_csv(self, lines: list[str], ext: str) -> DetectionResult | None:
         """Check if content is CSV format and classify it."""
-        heuristic_delim: Optional[str] = None
+        heuristic_delim: str | None = None
         if ext not in (".csv", ".tsv"):
             if len(lines) < 2:
                 return None
@@ -1054,7 +1059,7 @@ class LogTypeDetector:
                 return None
 
             # Ragged rows store extra fields under the None restkey — drop it
-            headers = {h for h in first_row.keys() if h is not None}
+            headers = {h for h in first_row if h is not None}
             if not headers:
                 return None
 
@@ -1179,7 +1184,7 @@ class LogTypeDetector:
             )
 
     @staticmethod
-    def _find_key_for_value(event: dict, needle: str) -> Optional[str]:
+    def _find_key_for_value(event: dict, needle: str) -> str | None:
         """Find the key in *event* (one level deep) whose value contains *needle*.
 
         Numeric values are compared via their string form so epoch/FileTime
@@ -1212,7 +1217,7 @@ class LogTypeDetector:
     # ----------------------------------------------------------------
 
     @staticmethod
-    def _detect_timestamp_from_raw_content(text: str) -> Optional[dict]:
+    def _detect_timestamp_from_raw_content(text: str) -> dict | None:
         """
         Scan raw file content with regex to find timestamp patterns.
 
@@ -1249,9 +1254,7 @@ class LogTypeDetector:
             if 946_684_800_000 <= value <= 4_102_444_800_000:
                 return True
             # Windows FileTime (18-digit)
-            if 100_000_000_000_000_000 <= value <= 200_000_000_000_000_000:
-                return True
-            return False
+            return 100000000000000000 <= value <= 200000000000000000
 
         if not isinstance(value, str):
             return False

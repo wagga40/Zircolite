@@ -14,30 +14,30 @@ import argparse
 import json
 import os
 import sqlite3
-import time
 import threading
-import pytest
+import time
 from argparse import Namespace
 from pathlib import Path
 from unittest.mock import MagicMock
+
+import pytest
 
 from zircolite.console import LEVEL_PRIORITY
 from zircolite.processing import (
     ProcessingContext,
     _IncrementalResultWriter,
-    _ThreadSafeWriter,
     _keepflat_context,
-    create_zircolite_core,
-    create_worker_core,
-    create_extractor,
-    sort_key_severity,
+    _ThreadSafeWriter,
     _unpack_streaming_result,
     _write_parallel_results,
-    process_single_file_worker,
+    create_extractor,
+    create_worker_core,
+    create_zircolite_core,
     process_perfile_streaming,
+    process_single_file_worker,
+    sort_key_severity,
 )
 from zircolite.utils import MemoryTracker
-
 
 # =============================================================================
 # Fixtures
@@ -357,10 +357,10 @@ class TestPublicAPI:
 
     def test_process_functions_from_package(self):
         from zircolite import (
-            process_unified_streaming,
-            process_perfile_streaming,
             process_db_input,
             process_parallel_streaming,
+            process_perfile_streaming,
+            process_unified_streaming,
         )
         # Just check they're callable
         for fn in [
@@ -412,7 +412,7 @@ class TestIncrementalResultWriter:
                 ]
             })
 
-        with open(ctx.outfile, "r") as f:
+        with open(ctx.outfile) as f:
             data = json.loads(f.read())
 
         assert len(data) == 2
@@ -436,7 +436,7 @@ class TestIncrementalResultWriter:
         with _IncrementalResultWriter(ctx) as writer:
             writer.write_file_results({"results": []})
 
-        with open(ctx.outfile, "r") as f:
+        with open(ctx.outfile) as f:
             data = json.loads(f.read())
         assert data == []
 
@@ -865,6 +865,7 @@ class TestParallelKeepflatEndToEnd:
 
     def test_parallel_keepflat_all_lines_parse(self, tmp_path, memory_tracker, monkeypatch):
         import orjson
+
         from zircolite.processing import process_parallel_streaming
 
         monkeypatch.chdir(tmp_path)
@@ -909,6 +910,7 @@ class TestWorkerCoreReuse:
 
     def test_worker_reuses_core_and_clears_table(self, tmp_path, dummy_ctx, dummy_args):
         import threading as _threading
+
         from zircolite.processing import process_single_file_worker
 
         f1 = tmp_path / "a.json"
@@ -1024,6 +1026,7 @@ class TestDbInputDirectoryExpansion:
         an output file that was never written.
         """
         from unittest.mock import MagicMock
+
         from zircolite.processing import expand_db_path
 
         logger = MagicMock()

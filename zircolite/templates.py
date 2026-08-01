@@ -1,4 +1,3 @@
-#!python3
 """
 Template engine and GUI generator for Zircolite.
 
@@ -10,14 +9,13 @@ This module contains:
 import logging
 import os
 import shutil
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from jinja2 import Environment
 
 from .attack import extract_attack_tactics, extract_attack_techniques
-from .config import TemplateConfig, GuiConfig
+from .config import GuiConfig, TemplateConfig
 from .utils import random_suffix
-
 
 _LEVEL_ORDER = {'unknown': -1, 'informational': 0, 'low': 1, 'medium': 2, 'high': 3, 'critical': 4}
 _LEVEL_COLOR = {
@@ -107,8 +105,18 @@ def _collect_navigator_techniques(data: list) -> list:
 
 
 def _make_jinja2_env() -> Environment:
-    """Create a Jinja2 Environment with Zircolite-specific filters."""
-    env = Environment()
+    """Create a Jinja2 Environment with Zircolite-specific filters.
+
+    Autoescaping stays off deliberately. Every template renders a machine
+    format -- JSON for Splunk, Elastic, Zinc and the Mini-GUI, NDJSON for
+    Timesketch, JSON for SARIF and ATT&CK Navigator, CSV for the summary --
+    and HTML-escaping a command line inside a JSON string would corrupt it.
+    Values are escaped for their real target instead, by Jinja's ``tojson``.
+
+    A template that emits HTML would need `autoescape=True`; none ships, and
+    the Mini-GUI loads its data as JavaScript rather than interpolating it.
+    """
+    env = Environment(autoescape=False)  # noqa: S701 - see docstring
     env.filters['extract_attack_techniques'] = extract_attack_techniques
     env.filters['extract_attack_tactics'] = extract_attack_tactics
     env.globals['collect_navigator_techniques'] = _collect_navigator_techniques
@@ -117,22 +125,22 @@ def _make_jinja2_env() -> Environment:
 
 class TemplateEngine:
     """Engine for generating output from Jinja2 templates."""
-    
+
     def __init__(
         self,
-        template_config: Optional[TemplateConfig] = None,
+        template_config: TemplateConfig | None = None,
         *,
-        logger: Optional[logging.Logger] = None
+        logger: logging.Logger | None = None
     ):
         """
         Initialize TemplateEngine.
-        
+
         Args:
             template_config: Template configuration (uses defaults if None)
             logger: Logger instance (creates default if None)
         """
         cfg = template_config or TemplateConfig()
-        
+
         self.logger = logger or logging.getLogger(__name__)
         self.template = cfg.template
         self.template_output = cfg.template_output
@@ -143,8 +151,8 @@ class TemplateEngine:
         self,
         template_file: str,
         output_filename: str,
-        data: List[Dict[str, Any]],
-        append: Optional[bool] = None,
+        data: list[dict[str, Any]],
+        append: bool | None = None,
     ) -> bool:
         """Use Jinja2 to output data in a specific format. True when written.
 
@@ -152,7 +160,7 @@ class TemplateEngine:
         used. Pass ``True``/``False`` explicitly to override per-call.
         """
         try:
-            with open(template_file, 'r', encoding='utf-8') as tmpl:
+            with open(template_file, encoding='utf-8') as tmpl:
                 template = _make_jinja2_env().from_string(tmpl.read())
 
             # Render before opening the output file so a render failure does
@@ -170,10 +178,12 @@ class TemplateEngine:
             )
             return False
 
-    def run(self, data: List[Dict[str, Any]]) -> bool:
+    def run(self, data: list[dict[str, Any]]) -> bool:
         """Run template generation for all configured templates. True if all wrote."""
         succeeded = True
-        for template_spec, output_spec in zip(self.template, self.template_output):
+        for template_spec, output_spec in zip(
+            self.template, self.template_output, strict=True
+        ):
             mode_label = "appending" if self.append else "writing"
             self.logger.info(
                 f'[+] Applying template "{template_spec[0]}", {mode_label} to : {output_spec[0]}'
@@ -187,22 +197,22 @@ class TemplateEngine:
 
 class ZircoliteGuiGenerator:
     """Generate the mini GUI."""
-    
+
     def __init__(
         self,
-        gui_config: Optional[GuiConfig] = None,
+        gui_config: GuiConfig | None = None,
         *,
-        logger: Optional[logging.Logger] = None
+        logger: logging.Logger | None = None
     ):
         """
         Initialize ZircoliteGuiGenerator.
-        
+
         Args:
             gui_config: GUI configuration (uses defaults if None)
             logger: Logger instance (creates default if None)
         """
         cfg = gui_config or GuiConfig()
-        
+
         self.logger = logger or logging.getLogger(__name__)
         self.templateFile = cfg.template_file
         self.tmpDir = f'tmp-zircogui-{random_suffix(4)}'
@@ -212,7 +222,7 @@ class ZircoliteGuiGenerator:
         self.timeField = cfg.time_field
 
     def generate(
-        self, data: List[Dict[str, Any]], directory: str = ""
+        self, data: list[dict[str, Any]], directory: str = ""
     ) -> None:
         # Check if directory exists, fallback to current directory if not.
         # rstrip("/") would map the filesystem root "/" to "", so only strip

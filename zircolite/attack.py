@@ -2,7 +2,6 @@
 
 import re
 
-
 _TECHNIQUE_RE = re.compile(r"^attack\.(t\d{4}(?:\.\d{3})?)$", re.IGNORECASE)
 
 _TACTIC_ALIASES = {

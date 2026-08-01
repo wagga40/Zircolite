@@ -1,4 +1,3 @@
-#!python3
 """
 Single-direction resolution of CLI arguments and YAML configuration.
 
@@ -24,9 +23,10 @@ Resolution happens in two phases because the logger is built from ``debug``,
 :data:`EARLY_DESTS` names those three; everything else is resolved afterwards.
 """
 
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from enum import Enum, auto
-from typing import Any, Callable, Dict, FrozenSet, List, Mapping, Optional, Tuple
+from typing import Any
 
 from .config_loader import (
     DEFAULT_AFTER,
@@ -60,22 +60,22 @@ class Setting:
     """One argparse destination and the YAML key that feeds it."""
 
     dest: str
-    section: Optional[str]
-    key: Optional[str]
+    section: str | None
+    key: str | None
     default: Any = None
     merge: Merge = Merge.CLI_WINS
     # YAML shape -> argparse shape, e.g. ["a"] -> [["a"]] for append/nargs opts
-    from_yaml: Optional[Callable[[Any], Any]] = None
+    from_yaml: Callable[[Any], Any] | None = None
     # YAML says `recursive: false` to mean the CLI's `--no-recursion`
     invert: bool = False
 
 
-def nest_each(values: Any) -> List[List[str]]:
+def nest_each(values: Any) -> list[list[str]]:
     """``["a", "b"]`` -> ``[["a"], ["b"]]``, the shape append/nargs produces."""
     return [[v] for v in values or []]
 
 
-def flatten_groups(value: Any) -> List[str]:
+def flatten_groups(value: Any) -> list[str]:
     """Flatten an argparse append/nargs list of lists into a single list."""
     if not value:
         return []
@@ -87,7 +87,7 @@ def _default_outfile(args: Any) -> str:
     return "detected_events.csv" if getattr(args, "csv", False) else DEFAULT_OUTFILE
 
 
-SETTINGS: Tuple[Setting, ...] = (
+SETTINGS: tuple[Setting, ...] = (
     # -- input ------------------------------------------------------------
     Setting("evtx", "input", "path"),
     Setting("no_recursion", "input", "recursive", False, Merge.OR, invert=True),
@@ -161,13 +161,13 @@ SETTINGS: Tuple[Setting, ...] = (
 
 # Defaults keyed by destination, so that `--help` and the resolver quote the
 # same literal. Callables are resolved against the namespace.
-DEFAULTS: Dict[str, Any] = {s.dest: s.default for s in SETTINGS}
+DEFAULTS: dict[str, Any] = {s.dest: s.default for s in SETTINGS}
 
 # Resolved before the logger exists; see the module docstring.
-EARLY_DESTS: FrozenSet[str] = frozenset({"debug", "nolog", "logfile"})
+EARLY_DESTS: frozenset[str] = frozenset({"debug", "nolog", "logfile"})
 
 
-def _dedup(values: List[Any]) -> List[Any]:
+def _dedup(values: list[Any]) -> list[Any]:
     """Order-preserving de-duplication."""
     seen = set()
     out = []
@@ -252,10 +252,10 @@ def _apply_custom(args: Any, raw: Mapping[str, Any]) -> None:
 
 def resolve(
     args: Any,
-    raw: Optional[Mapping[str, Any]] = None,
+    raw: Mapping[str, Any] | None = None,
     *,
-    only: Optional[FrozenSet[str]] = None,
-    skip: Optional[FrozenSet[str]] = None,
+    only: frozenset[str] | None = None,
+    skip: frozenset[str] | None = None,
 ) -> Any:
     """Resolve *raw* YAML onto *args* in place: CLI wins, YAML fills in, default last.
 

@@ -2,9 +2,10 @@
 Tests for the EvtxExtractor class.
 """
 
-import pytest
 import sys
 from pathlib import Path
+
+import pytest
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
@@ -13,43 +14,43 @@ from zircolite import EvtxExtractor, ExtractorConfig
 
 class TestEvtxExtractorInit:
     """Tests for EvtxExtractor initialization."""
-    
-    
-    
 
-    
+
+
+
+
     def test_init_sysmon_linux_mode(self, test_logger):
         """Test initialization for Sysmon for Linux logs."""
         config = ExtractorConfig(sysmon4linux=True)
         extractor = EvtxExtractor(extractor_config=config, logger=test_logger)
-        
+
         assert extractor.encoding == "ISO-8859-1"
-        
-    
+
+
     def test_init_auditd_mode(self, test_logger):
         """Test initialization for Auditd logs."""
         config = ExtractorConfig(auditd_logs=True)
         extractor = EvtxExtractor(extractor_config=config, logger=test_logger)
-        
+
         assert extractor.encoding == "utf-8"
-        
-    
+
+
     def test_init_xml_mode(self, test_logger):
         """Test initialization for XML logs."""
         config = ExtractorConfig(xml_logs=True)
         extractor = EvtxExtractor(extractor_config=config, logger=test_logger)
-        
+
         assert extractor.encoding == "utf-8"
-        
-    
-    
+
+
+
     def test_init_custom_encoding(self, test_logger):
         """Test initialization with custom encoding."""
         config = ExtractorConfig(sysmon4linux=True, encoding="utf-16")
         extractor = EvtxExtractor(extractor_config=config, logger=test_logger)
-        
+
         assert extractor.encoding == "utf-16"
-        
+
 
 
 class TestRandomSuffix:
@@ -76,34 +77,34 @@ class TestRandomSuffix:
 
 class TestEvtxExtractorAuditdConversion:
     """Tests for Auditd log conversion."""
-    
+
     def test_get_time(self, test_logger):
         """Test timestamp extraction from auditd log."""
         extractor = EvtxExtractor(logger=test_logger)
-        
+
         audit_time = "msg=audit(1705318200.123:456):"
         result = extractor.get_time(audit_time)
-        
+
         # Should be a valid timestamp string
         assert len(result) == 19  # YYYY-MM-DD HH:MM:SS format
-    
+
     def test_auditd_line_to_json_basic(self, test_logger):
         """Test basic Auditd line conversion."""
         config = ExtractorConfig(auditd_logs=True)
         extractor = EvtxExtractor(extractor_config=config, logger=test_logger)
-        
+
         line = 'type=SYSCALL msg=audit(1705318200.123:456): arch=c000003e syscall=59 success=yes exit=0 pid=5678 uid=0 comm="bash" exe="/bin/bash"'
-        
+
         result = extractor.auditd_line_to_json(line)
-        
+
         assert result is not None
         assert 'type' in result
         assert result['type'] == 'SYSCALL'
         assert 'timestamp' in result
         assert 'pid' in result
         assert result['pid'] == '5678'
-        
-    
+
+
     def test_auditd_user_record_msg_payload_is_flattened(self, test_logger):
         """USER_* records carry key=value pairs inside msg='...'; they must stay queryable."""
         config = ExtractorConfig(auditd_logs=True)
@@ -143,23 +144,23 @@ class TestEvtxExtractorAuditdConversion:
         """Test that missing host is set to 'offline'."""
         config = ExtractorConfig(auditd_logs=True)
         extractor = EvtxExtractor(extractor_config=config, logger=test_logger)
-        
+
         line = 'type=SYSCALL msg=audit(1705318200.123:456): pid=5678'
-        
+
         result = extractor.auditd_line_to_json(line)
-        
+
         assert result['host'] == 'offline'
-    
+
     def test_auditd_line_to_json_removes_special_chars(self, test_logger):
         """Test that special characters (GS) are handled."""
         config = ExtractorConfig(auditd_logs=True)
         extractor = EvtxExtractor(extractor_config=config, logger=test_logger)
-        
+
         # Include GS character (0x1D) in line
         line = 'type=SYSCALL msg=audit(1705318200.123:456): comm="bash"\x1dcomm_enriched="Bourne Again Shell"'
-        
+
         result = extractor.auditd_line_to_json(line)
-        
+
         # Should process without error
         assert result is not None
 

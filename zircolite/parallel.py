@@ -1,4 +1,3 @@
-#!python3
 """
 Parallel processing module for Zircolite.
 
@@ -16,10 +15,11 @@ import os
 import queue
 import time
 from collections import deque
+from collections.abc import Callable
 from concurrent.futures import FIRST_COMPLETED, ThreadPoolExecutor, wait
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional, Tuple
+from typing import Any
 
 import psutil
 from rich.console import Group
@@ -79,12 +79,12 @@ def memory_multiplier_for(avg_file_size_mb: float) -> float:
 
 
 def calculate_optimal_workers(
-    file_sizes: List[int],
+    file_sizes: list[int],
     available_memory_mb: float,
     cpu_count: int,
     *,
     min_workers: int = 1,
-    max_workers: Optional[int] = None,
+    max_workers: int | None = None,
     max_cap: int = 32,
 ) -> int:
     """
@@ -148,7 +148,7 @@ def calculate_optimal_workers(
 class ParallelConfig:
     """Configuration for parallel processing."""
 
-    max_workers: Optional[int] = None
+    max_workers: int | None = None
     min_workers: int = 1
     memory_limit_percent: float = 85.0
     sort_by_size: bool = True  # LPT scheduling – process largest files first
@@ -187,16 +187,16 @@ class MemoryAwareParallelProcessor:
 
     def __init__(
         self,
-        config: Optional[ParallelConfig] = None,
+        config: ParallelConfig | None = None,
         *,
-        logger: Optional[logging.Logger] = None,
+        logger: logging.Logger | None = None,
     ):
         self.config = config or ParallelConfig()
         self.logger = logger or logging.getLogger(__name__)
         self.stats = ParallelStats()
         self._process = psutil.Process(os.getpid())
-        self._calibrated_memory_per_file_mb: Optional[float] = None
-        self._first_file_memory_before: Optional[float] = None
+        self._calibrated_memory_per_file_mb: float | None = None
+        self._first_file_memory_before: float | None = None
 
     # ------------------------------------------------------------------
     # Memory helpers
@@ -253,7 +253,7 @@ class MemoryAwareParallelProcessor:
     # Estimation & calibration
     # ------------------------------------------------------------------
 
-    def estimate_memory_per_file(self, file_list: List[Path]) -> float:
+    def estimate_memory_per_file(self, file_list: list[Path]) -> float:
         """
         Estimate memory required per file in MB.
 
@@ -280,7 +280,7 @@ class MemoryAwareParallelProcessor:
         self,
         file_path: Path,
         memory_after_mb: float,
-        resident_bytes: Optional[int] = None,
+        resident_bytes: int | None = None,
     ):
         """
         Calibrate memory-per-file estimate using the actual memory delta
@@ -332,7 +332,7 @@ class MemoryAwareParallelProcessor:
     # Worker calculation
     # ------------------------------------------------------------------
 
-    def calculate_optimal_workers(self, file_list: List[Path]) -> int:
+    def calculate_optimal_workers(self, file_list: list[Path]) -> int:
         """Calculate optimal workers, delegating to the module-level function."""
         file_sizes = []
         for f in file_list:
@@ -354,7 +354,7 @@ class MemoryAwareParallelProcessor:
     # ------------------------------------------------------------------
 
     @staticmethod
-    def sort_files_by_size(file_list: List[Path]) -> List[Path]:
+    def sort_files_by_size(file_list: list[Path]) -> list[Path]:
         """Sort files largest-first (Longest Processing Time scheduling)."""
 
         def _safe_size(f):
@@ -371,13 +371,13 @@ class MemoryAwareParallelProcessor:
 
     def process_files_parallel(
         self,
-        file_list: List[Path],
-        process_func: Callable[[Path], Tuple[int, Any]],
+        file_list: list[Path],
+        process_func: Callable[[Path], tuple[int, Any]],
         desc: str = "Processing",
         disable_progress: bool = False,
-        on_result: Optional[Callable[[Any], None]] = None,
-        rule_progress_queue: Optional[queue.Queue] = None,
-    ) -> Tuple[List[Any], ParallelStats]:
+        on_result: Callable[[Any], None] | None = None,
+        rule_progress_queue: queue.Queue | None = None,
+    ) -> tuple[list[Any], ParallelStats]:
         """
         Process files in parallel with memory awareness.
 
@@ -417,8 +417,8 @@ class MemoryAwareParallelProcessor:
         if self.config.adaptive_memory:
             self._first_file_memory_before = self.get_current_memory_mb()
 
-        results: List[Any] = []
-        failed_files: List[Tuple[Path, str]] = []
+        results: list[Any] = []
+        failed_files: list[tuple[Path, str]] = []
         first_file_calibrated = False
         inflight_bytes = 0
 
@@ -463,7 +463,7 @@ class MemoryAwareParallelProcessor:
                 events=0,
                 workers=num_workers,
             )
-            worker_file_task_ids: Dict[int, Any] = {}
+            worker_file_task_ids: dict[int, Any] = {}
 
             with ThreadPoolExecutor(max_workers=num_workers) as executor:
                 active_futures: dict = {}
@@ -580,7 +580,7 @@ class MemoryAwareParallelProcessor:
 
         return results, self.stats
 
-    def _log_summary(self, failed_files: List[Tuple[Path, str]]):
+    def _log_summary(self, failed_files: list[tuple[Path, str]]):
         """Log processing summary with clean formatting using Rich markup."""
         files_str = f"[cyan]{self.stats.processed_files}[/] files"
         events_str = f"[magenta]{self.stats.total_events:,}[/] events"

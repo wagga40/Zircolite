@@ -1,7 +1,7 @@
 """Tests for resolving a YAML config file onto the CLI args namespace."""
 import argparse
-import logging
 import importlib.util
+import logging
 import sys
 from pathlib import Path
 
@@ -411,6 +411,7 @@ class TestSettingsTable:
 
     def test_every_setting_key_is_a_real_config_field(self):
         from dataclasses import fields as dc_fields
+
         from zircolite.config_loader import SECTIONS
 
         for setting in run_config.SETTINGS:
@@ -419,7 +420,7 @@ class TestSettingsTable:
 
     def test_early_dests_are_all_settings(self):
         dests = {s.dest for s in run_config.SETTINGS}
-        assert EARLY_DESTS <= dests
+        assert dests >= EARLY_DESTS
 
 
 class TestYamlValuesCountAsUserSet:

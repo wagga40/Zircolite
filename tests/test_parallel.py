@@ -4,20 +4,21 @@ Tests for the parallel processing module.
 
 import queue
 import sys
-
-import pytest
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
+import pytest
+
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
+import contextlib
+
 from zircolite.parallel import (
+    MemoryAwareParallelProcessor,
     ParallelConfig,
     ParallelStats,
-    MemoryAwareParallelProcessor,
     calculate_optimal_workers,
 )
-
 
 # ============================================================================
 # CONFIGURATION DATACLASSES
@@ -785,6 +786,7 @@ class TestCalibrationDoesNotSerialiseTheRun:
     def test_all_workers_stay_busy_when_memory_is_fine(self, test_logger, tmp_path):
         """With headroom, every file must still be submitted concurrently."""
         import threading
+
         from zircolite.parallel import MemoryAwareParallelProcessor, ParallelConfig
 
         files = []
@@ -803,10 +805,8 @@ class TestCalibrationDoesNotSerialiseTheRun:
             with lock:
                 active += 1
                 peak = max(peak, active)
-            try:
+            with contextlib.suppress(threading.BrokenBarrierError):
                 gate.wait()
-            except threading.BrokenBarrierError:
-                pass
             with lock:
                 active -= 1
             return 1, {"file": str(path)}

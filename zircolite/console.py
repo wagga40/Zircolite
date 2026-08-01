@@ -1,4 +1,3 @@
-#!python3
 """
 Rich-based console output for Zircolite.
 
@@ -11,11 +10,12 @@ Progress bars and live displays are built inline by the callers that own
 them (``zircolite.core`` and ``zircolite.processing``).
 """
 
+import contextlib
 import logging
 import sys
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any
 
 from rich.bar import Bar
 from rich.console import Console
@@ -62,10 +62,8 @@ ZIRCOLITE_THEME = Theme({
 # so piped output works; errors are replaced rather than raised.
 if sys.platform == "win32":
     for _stream in (sys.stdout, sys.stderr):
-        try:
+        with contextlib.suppress(AttributeError, ValueError, OSError):
             _stream.reconfigure(encoding="utf-8", errors="replace")  # type: ignore[union-attr]
-        except (AttributeError, ValueError, OSError):
-            pass
 
 # Global console instance for consistent output
 console = Console(theme=ZIRCOLITE_THEME, highlight=False)
@@ -80,7 +78,7 @@ _quiet_mode: bool = False
 
 def set_quiet_mode(quiet: bool = True):
     """Enable/disable quiet mode globally.
-    
+
     When quiet mode is active, non-essential output (banners, progress info,
     detection listings) is suppressed. Errors, warnings, and the final
     summary panel still display.
@@ -197,7 +195,7 @@ class DetectionStats:
     informational: int = 0
     total_events: int = 0
     total_rules_matched: int = 0
-    
+
     def add_detection(self, level: str, count: int):
         """Add a detection to the stats."""
         level_lower = level.lower()
@@ -215,15 +213,15 @@ class DetectionStats:
         self.total_rules_matched += 1
 
 
-def get_rich_logger(name: str = "zircolite", debug: bool = False, log_file: Optional[str] = None) -> logging.Logger:
+def get_rich_logger(name: str = "zircolite", debug: bool = False, log_file: str | None = None) -> logging.Logger:
     """
     Create a logger with Rich handler for styled console output.
-    
+
     Args:
         name: Logger name
         debug: Enable debug level logging
         log_file: Optional file path for persistent logging
-        
+
     Returns:
         Configured logger with Rich handler
     """
@@ -231,13 +229,11 @@ def get_rich_logger(name: str = "zircolite", debug: bool = False, log_file: Opti
     logger.setLevel(logging.DEBUG if debug else logging.INFO)
     # Close existing handlers before clearing to avoid leaking open log files
     for handler in logger.handlers:
-        try:
+        with contextlib.suppress(Exception):
             handler.close()
-        except Exception:
-            pass
     logger.handlers.clear()
     logger.propagate = False
-    
+
     # Rich console handler - hide level prefix for clean output
     rich_handler = RichHandler(
         console=console,
@@ -250,7 +246,7 @@ def get_rich_logger(name: str = "zircolite", debug: bool = False, log_file: Opti
     rich_handler.setLevel(logging.INFO)
     rich_handler.setFormatter(logging.Formatter("%(message)s"))
     logger.addHandler(rich_handler)
-    
+
     # File handler (if requested)
     if log_file:
         file_format = "%(asctime)s %(levelname)-8s %(message)s"
@@ -260,7 +256,7 @@ def get_rich_logger(name: str = "zircolite", debug: bool = False, log_file: Opti
         file_handler.setLevel(logging.DEBUG if debug else logging.INFO)
         file_handler.setFormatter(logging.Formatter(file_format, datefmt='%Y-%m-%d %H:%M:%S'))
         logger.addHandler(file_handler)
-    
+
     return logger
 
 
@@ -268,10 +264,10 @@ def get_rich_logger(name: str = "zircolite", debug: bool = False, log_file: Opti
 # LIVE DETECTION COUNTER (for rule execution progress)
 # ============================================================================
 
-def make_detection_counter(counts: Dict[str, int]) -> Text:
+def make_detection_counter(counts: dict[str, int]) -> Text:
     """
     Build a live detection severity counter for display under a progress bar.
-    
+
     Args:
         counts: Dict mapping severity levels to matching-event counts, the same
             unit the final summary panel reports
@@ -290,7 +286,7 @@ def make_detection_counter(counts: Dict[str, int]) -> Text:
         parts.append(f"[green]{counts['low']} LOW[/]")
     if counts.get("informational", 0):
         parts.append(f"[dim]{counts['informational']} INFO[/]")
-    
+
     if parts:
         return Text.from_markup("    " + "  ".join(parts))
     return Text("    No detections yet", style="dim")
@@ -300,7 +296,7 @@ def make_detection_counter(counts: Dict[str, int]) -> Text:
 # FILE TREE VIEW (for multi-file per-file processing)
 # ============================================================================
 
-def _format_file_node(fs: Dict[str, Any]) -> str:
+def _format_file_node(fs: dict[str, Any]) -> str:
     """Format a single file stat dict as a Rich-markup tree label."""
     name = Path(fs["name"]).name
     events = fs.get("events", 0)
@@ -327,24 +323,24 @@ def _format_file_node(fs: Dict[str, Any]) -> str:
     return " \u2014 ".join(parts)
 
 
-def build_file_tree(label: str, file_stats: List[Dict[str, Any]]) -> Tree:
+def build_file_tree(label: str, file_stats: list[dict[str, Any]]) -> Tree:
     """
     Build a Rich Tree showing per-file processing results.
 
     When files come from multiple directories, they are automatically
     grouped by parent directory for a nested, navigable tree.
-    
+
     Args:
         label: Root label for the tree
         file_stats: List of dicts with keys: name, events, detections, filtered (optional)
-        
+
     Returns:
         Rich Tree renderable
     """
     tree = Tree(f"[bold]{label}[/]")
 
     # Group by parent directory
-    by_dir: Dict[str, list] = {}
+    by_dir: dict[str, list] = {}
     for fs in file_stats:
         parent = str(Path(fs["name"]).parent)
         by_dir.setdefault(parent, []).append(fs)
@@ -377,7 +373,7 @@ LEVEL_PRIORITY = {
 }
 
 
-def sort_key_severity(result: Dict[str, Any]) -> Tuple[int, int]:
+def sort_key_severity(result: dict[str, Any]) -> tuple[int, int]:
     """Sort key for a detection row: critical first, then descending count."""
     level = result.get("rule_level", "unknown").lower()
     return (LEVEL_PRIORITY.get(level, 5), -result.get("count", 0))
@@ -434,7 +430,7 @@ _ATTACK_TACTICS = {
 }
 
 
-def build_attack_summary(results: List[Dict[str, Any]]) -> Optional[Panel]:
+def build_attack_summary(results: list[dict[str, Any]]) -> Panel | None:
     """
     Build a MITRE ATT&CK tactics summary panel from detection results.
 
@@ -447,8 +443,8 @@ def build_attack_summary(results: List[Dict[str, Any]]) -> Optional[Panel]:
     Returns:
         Rich Panel with ATT&CK summary, or None if no ATT&CK tags found
     """
-    tactic_techniques: Dict[str, set] = {}
-    tactic_hits: Dict[str, int] = {}
+    tactic_techniques: dict[str, set] = {}
+    tactic_hits: dict[str, int] = {}
 
     for result in results:
         tags = result.get("tags", [])
@@ -500,7 +496,7 @@ def build_attack_summary(results: List[Dict[str, Any]]) -> Optional[Panel]:
 # DETECTION RESULTS TABLE
 # ============================================================================
 
-def build_detection_table(results: List[Dict[str, Any]], title: Optional[str] = None) -> Table:
+def build_detection_table(results: list[dict[str, Any]], title: str | None = None) -> Table:
     """
     Build a Rich Table showing detection results with severity, rule name,
     event count, and ATT&CK technique IDs.
@@ -550,7 +546,7 @@ def build_detection_table(results: List[Dict[str, Any]], title: Optional[str] = 
 # TERMINAL HYPERLINKS
 # ============================================================================
 
-def print_rule_test_results(results: List[Dict[str, Any]]) -> None:
+def print_rule_test_results(results: list[dict[str, Any]]) -> None:
     """Print rule test results as a Rich table.
 
     Args:
@@ -608,7 +604,7 @@ def print_rule_test_results(results: List[Dict[str, Any]]) -> None:
     )
 
 
-def print_profiling_report(report: List[Dict[str, Any]], top_n: int = 20) -> None:
+def print_profiling_report(report: list[dict[str, Any]], top_n: int = 20) -> None:
     """Print a rule performance report as a Rich table.
 
     Args:
@@ -650,7 +646,7 @@ def print_profiling_report(report: List[Dict[str, Any]], top_n: int = 20) -> Non
     )
 
 
-def make_file_link(path: str, display: Optional[str] = None) -> str:
+def make_file_link(path: str, display: str | None = None) -> str:
     """
     Create a Rich markup string with a clickable file:// hyperlink.
 

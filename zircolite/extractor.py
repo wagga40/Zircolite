@@ -1,4 +1,3 @@
-#!python3
 """
 Log line and XML conversion helpers for Zircolite.
 
@@ -10,10 +9,11 @@ processor for the formats that need conversion before flattening:
 - XML events (EVTX exports, EVTXtract output)
 """
 
+import contextlib
 import logging
 import re
 import time
-from typing import Any, Dict, Optional
+from typing import Any
 
 from lxml import etree  # type: ignore[attr-defined]
 
@@ -28,9 +28,9 @@ class EvtxExtractor:
 
     def __init__(
         self,
-        extractor_config: Optional[ExtractorConfig] = None,
+        extractor_config: ExtractorConfig | None = None,
         *,
-        logger: Optional[logging.Logger] = None
+        logger: logging.Logger | None = None
     ):
         """
         Initialize EvtxExtractor.
@@ -59,7 +59,7 @@ class EvtxExtractor:
         except (ValueError, IndexError, OSError):
             return ""
 
-    def auditd_line_to_json(self, auditd_line: str) -> Dict[str, Any]:
+    def auditd_line_to_json(self, auditd_line: str) -> dict[str, Any]:
         """Convert auditd logs to JSON. Code from https://github.com/csark/audit2json."""
         event = {}
         # According to auditd specs https://github.com/linux-audit/audit-documentation/wiki/SPEC-Audit-Event-Enrichment
@@ -100,7 +100,7 @@ class EvtxExtractor:
             event['host'] = 'offline'
         return event
 
-    def sysmon_xml_line_to_json(self, xml_line: str) -> Optional[Dict[str, Any]]:
+    def sysmon_xml_line_to_json(self, xml_line: str) -> dict[str, Any] | None:
         """Remove syslog header and convert XML data to JSON. Code from ZikyHD (https://github.com/ZikyHD)."""
         if "<Event>" not in xml_line:
             return None
@@ -116,7 +116,7 @@ class EvtxExtractor:
         self,
         event_root: Any,
         ns: str = "http://schemas.microsoft.com/win/2004/08/events/event",
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Convert XML event to dictionary structure."""
         def clean_tag(tag: str, ns: str) -> str:
             """Remove namespace from XML tag (namespace may be braced or not)."""
@@ -125,20 +125,18 @@ class EvtxExtractor:
                 return tag[len(braced):]
             return tag
 
-        child: Dict[str, Any] = {"#attributes": {"xmlns": ns}}
+        child: dict[str, Any] = {"#attributes": {"xmlns": ns}}
         for appt in event_root:
             node_name = clean_tag(appt.tag, ns)
-            node_value: Dict[str, Any] = {}
+            node_value: dict[str, Any] = {}
             for elem in appt:
                 cleaned_tag = clean_tag(elem.tag, ns)
                 text: Any = "" if not elem.text else elem.text
                 if elem.text and node_name == "System":
                     # Numeric conversion is limited to System fields: EventData
                     # values stay strings, consistent with the EVTX/JSON paths.
-                    try:
+                    with contextlib.suppress(Exception):
                         text = int(elem.text)
-                    except Exception:
-                        pass
                 if cleaned_tag == "Data":
                     child_node = elem.get("Name")
                     if child_node is None:
@@ -164,7 +162,7 @@ class EvtxExtractor:
                         # Classic providers write both, e.g.
                         # <EventID Qualifiers="16384">7045</EventID>. Keeping only
                         # the attributes would throw the EventID away.
-                        node: Dict[str, Any] = {"#attributes": dict(elem.attrib)}
+                        node: dict[str, Any] = {"#attributes": dict(elem.attrib)}
                         if elem.text and elem.text.strip():
                             node["#text"] = text
                         text = node

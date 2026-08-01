@@ -1,23 +1,33 @@
 name: lint_python
 
 on:
+  push:
+    branches: [master]
+  pull_request:
   workflow_dispatch:
 
 jobs:
   lint_python:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v2
-      - uses: actions/setup-python@v2
-      - run: pip install bandit black codespell flake8 isort mypy pytest pyupgrade
-      - run: bandit --recursive --skip B101 . || true  # B101 is assert statements
-      - run: black --check . || true
-      - run: codespell || true # --ignore-words-list="" --skip="
-      - run: flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
-      - run: flake8 . --count --exit-zero --max-complexity=10 --max-line-length=88 --show-source --statistics
-      - run: isort --check-only --profile black . || true
-      - run: pip install -r requirements.txt || true
-      - run: python -m mypy zircolite
-      - run: pytest . || true
-      - run: pytest --doctest-modules . || true
-      - run: shopt -s globstar && pyupgrade --py36-plus **/*.py || true
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - uses: pdm-project/setup-pdm@v4
+        with:
+          python-version: "3.13"
+      - run: pdm install --dev
+
+      # Both are clean, so both block. The rule set and its exemptions live in
+      # pyproject.toml; without them ruff lints against whatever its current
+      # default happens to be and the result changes with the installed version.
+      - name: Lint
+        run: pdm run ruff check .
+      - name: Types
+        run: pdm run python -m mypy zircolite
+
+      # Formatting is not enforced: running `ruff format` over this codebase
+      # would rewrite most of it and bury every behavioural diff.
+      - name: Format (advisory)
+        run: pdm run ruff format --check zircolite/ zircolite.py || true

@@ -15,15 +15,15 @@ Tests cover:
 
 import argparse
 import json
-import pytest
 import sqlite3
-import yaml
 from argparse import Namespace
 from pathlib import Path
 
-from zircolite.streaming import StreamingEventProcessor
-from zircolite.config import ProcessingConfig
+import pytest
+import yaml
 
+from zircolite.config import ProcessingConfig
+from zircolite.streaming import StreamingEventProcessor
 
 # =============================================================================
 # Test Fixtures
@@ -248,7 +248,7 @@ def args_config_auditd_input():
 
 class TestTransformValueExecution:
     """Tests for basic transform value execution."""
-    
+
     def test_simple_string_transform(self, field_mappings_file_multi, test_logger, args_config_evtx_input):
         """Test simple string transformation."""
         processor = StreamingEventProcessor(
@@ -256,13 +256,13 @@ class TestTransformValueExecution:
             args_config=args_config_evtx_input,
             logger=test_logger
         )
-        
+
         result = processor._transform_value(
             "def transform(param):\n    return param.upper()",
             "hello world"
         )
         assert result == "HELLO WORLD"
-    
+
     def test_transform_with_numeric_input(self, field_mappings_file_multi, test_logger, args_config_evtx_input):
         """Test transform with numeric input converted to string."""
         processor = StreamingEventProcessor(
@@ -270,13 +270,13 @@ class TestTransformValueExecution:
             args_config=args_config_evtx_input,
             logger=test_logger
         )
-        
+
         result = processor._transform_value(
             "def transform(param):\n    return str(param) + '_suffix'",
             12345
         )
         assert result == "12345_suffix"
-    
+
     def test_transform_empty_string(self, field_mappings_file_multi, test_logger, args_config_evtx_input):
         """Test transform with empty string input."""
         processor = StreamingEventProcessor(
@@ -284,13 +284,13 @@ class TestTransformValueExecution:
             args_config=args_config_evtx_input,
             logger=test_logger
         )
-        
+
         result = processor._transform_value(
             "def transform(param):\n    return 'empty' if param == '' else param",
             ""
         )
         assert result == "empty"
-    
+
     def test_transform_returns_original_on_error(self, field_mappings_file_multi, test_logger, args_config_evtx_input):
         """Test that transform returns original value on error."""
         processor = StreamingEventProcessor(
@@ -298,14 +298,14 @@ class TestTransformValueExecution:
             args_config=args_config_evtx_input,
             logger=test_logger
         )
-        
+
         # This code will raise an exception (division by zero)
         result = processor._transform_value(
             "def transform(param):\n    return 1/0",
             "original_value"
         )
         assert result == "original_value"
-    
+
     def test_transform_with_invalid_syntax_returns_original(self, field_mappings_file_multi, test_logger, args_config_evtx_input):
         """Test that invalid Python syntax returns original value."""
         processor = StreamingEventProcessor(
@@ -313,7 +313,7 @@ class TestTransformValueExecution:
             args_config=args_config_evtx_input,
             logger=test_logger
         )
-        
+
         result = processor._transform_value(
             "def transform(param:\n    return param",  # Missing closing paren
             "original_value"
@@ -323,7 +323,7 @@ class TestTransformValueExecution:
 
 def make_args_config(input_type="json_input"):
     """Create a complete args config for testing.
-    
+
     Args:
         input_type: One of "evtx_input", "json_input", "auditd_input", etc.
     """
@@ -344,7 +344,7 @@ def make_args_config(input_type="json_input"):
 
 class TestTransformSourceCondition:
     """Tests for source condition filtering."""
-    
+
     def test_transform_applies_only_to_matching_source(self, tmp_path, test_logger):
         """Test that transforms only apply to specified source conditions."""
         # Create config with transform only for auditd_input
@@ -369,7 +369,7 @@ class TestTransformSourceCondition:
         }
         config_file = tmp_path / "config.json"
         config_file.write_text(json.dumps(config))
-        
+
         # Test with evtx_input - should NOT transform
         args_evtx = make_args_config("evtx_input")
         processor_evtx = StreamingEventProcessor(
@@ -378,7 +378,7 @@ class TestTransformSourceCondition:
             logger=test_logger
         )
         assert processor_evtx.chosen_input == "evtx_input"
-        
+
         # Test with auditd_input - should transform
         args_auditd = make_args_config("auditd_input")
         processor_auditd = StreamingEventProcessor(
@@ -391,7 +391,7 @@ class TestTransformSourceCondition:
 
 class TestTransformAlias:
     """Tests for transform alias functionality."""
-    
+
     def test_transform_alias_true_creates_new_field(self, tmp_path, test_logger):
         """Test that alias=true creates a new field without modifying original."""
         config = {
@@ -415,12 +415,12 @@ class TestTransformAlias:
         }
         config_file = tmp_path / "config.json"
         config_file.write_text(json.dumps(config))
-        
+
         # Create test JSON file
         event = {"SourceField": "hello"}
         json_file = tmp_path / "events.json"
         json_file.write_text(json.dumps(event) + "\n")
-        
+
         args = make_args_config("json_input")
         proc_config = ProcessingConfig(disable_progress=True)
         processor = StreamingEventProcessor(
@@ -429,16 +429,16 @@ class TestTransformAlias:
             processing_config=proc_config,
             logger=test_logger
         )
-        
+
         events = list(processor.stream_json_events(str(json_file)))
-        
+
         if events:
             first_event = events[0]
             # Original should be unchanged
             assert first_event.get("SourceField") == "hello"
             # Alias should have transformed value
             assert first_event.get("SourceField_Alias") == "HELLO"
-    
+
     def test_transform_alias_false_modifies_original(self, tmp_path, test_logger):
         """Test that alias=false modifies the original field value."""
         config = {
@@ -462,12 +462,12 @@ class TestTransformAlias:
         }
         config_file = tmp_path / "config.json"
         config_file.write_text(json.dumps(config))
-        
+
         # Create test JSON file
         event = {"SourceField": "hello"}
         json_file = tmp_path / "events.json"
         json_file.write_text(json.dumps(event) + "\n")
-        
+
         args = make_args_config("json_input")
         proc_config = ProcessingConfig(disable_progress=True)
         processor = StreamingEventProcessor(
@@ -476,9 +476,9 @@ class TestTransformAlias:
             processing_config=proc_config,
             logger=test_logger
         )
-        
+
         events = list(processor.stream_json_events(str(json_file)))
-        
+
         if events:
             first_event = events[0]
             # Original should be modified
@@ -487,7 +487,7 @@ class TestTransformAlias:
 
 class TestMultipleTransforms:
     """Tests for multiple transforms on the same field."""
-    
+
     def test_multiple_transforms_same_field(self, tmp_path, test_logger):
         """Test that multiple transforms on same field all execute."""
         config = {
@@ -531,11 +531,11 @@ class TestMultipleTransforms:
         }
         config_file = tmp_path / "config.json"
         config_file.write_text(json.dumps(config))
-        
+
         event = {"MultiField": "HeLLo"}
         json_file = tmp_path / "events.json"
         json_file.write_text(json.dumps(event) + "\n")
-        
+
         args = make_args_config("json_input")
         proc_config = ProcessingConfig(disable_progress=True)
         processor = StreamingEventProcessor(
@@ -544,9 +544,9 @@ class TestMultipleTransforms:
             processing_config=proc_config,
             logger=test_logger
         )
-        
+
         events = list(processor.stream_json_events(str(json_file)))
-        
+
         if events:
             first_event = events[0]
             assert first_event.get("MultiField") == "HeLLo"
@@ -557,7 +557,7 @@ class TestMultipleTransforms:
 
 class TestDisabledTransforms:
     """Tests for disabled transforms."""
-    
+
     def test_disabled_transform_not_executed(self, tmp_path, test_logger):
         """Test that disabled transforms are not executed."""
         config = {
@@ -581,11 +581,11 @@ class TestDisabledTransforms:
         }
         config_file = tmp_path / "config.json"
         config_file.write_text(json.dumps(config))
-        
+
         event = {"TestField": "original"}
         json_file = tmp_path / "events.json"
         json_file.write_text(json.dumps(event) + "\n")
-        
+
         args = make_args_config("json_input")
         proc_config = ProcessingConfig(disable_progress=True)
         processor = StreamingEventProcessor(
@@ -594,14 +594,14 @@ class TestDisabledTransforms:
             processing_config=proc_config,
             logger=test_logger
         )
-        
+
         events = list(processor.stream_json_events(str(json_file)))
-        
+
         if events:
             first_event = events[0]
             assert first_event.get("TestField") == "original"
             assert "TestField_Disabled" not in first_event
-    
+
     def test_transforms_enabled_false_skips_all(self, tmp_path, test_logger):
         """Test that transforms_enabled=false skips all transforms."""
         config = {
@@ -625,11 +625,11 @@ class TestDisabledTransforms:
         }
         config_file = tmp_path / "config.json"
         config_file.write_text(json.dumps(config))
-        
+
         event = {"TestField": "original"}
         json_file = tmp_path / "events.json"
         json_file.write_text(json.dumps(event) + "\n")
-        
+
         args = make_args_config("json_input")
         proc_config = ProcessingConfig(disable_progress=True)
         processor = StreamingEventProcessor(
@@ -638,9 +638,9 @@ class TestDisabledTransforms:
             processing_config=proc_config,
             logger=test_logger
         )
-        
+
         events = list(processor.stream_json_events(str(json_file)))
-        
+
         if events:
             first_event = events[0]
             assert first_event.get("TestField") == "original"
@@ -649,15 +649,15 @@ class TestDisabledTransforms:
 
 class TestRestrictedPythonSecurity:
     """Tests for RestrictedPython security features.
-    
+
     Note: The current RestrictedPython configuration includes utility_builtins which
     provides __import__, allowing arbitrary module imports. These tests document
     current behavior and will be updated when security is hardened.
     """
-    
+
     def test_import_os_currently_allowed(self, field_mappings_file_security, test_logger, args_config_json_input):
         """Test current behavior: os module import is allowed (known limitation).
-        
+
         WARNING: This is a security limitation that should be addressed.
         When utility_builtins is removed from the configuration, this test
         should be updated to verify that os import is blocked.
@@ -667,7 +667,7 @@ class TestRestrictedPythonSecurity:
             args_config=args_config_json_input,
             logger=test_logger
         )
-        
+
         # Current behavior: import succeeds (this is a security limitation)
         # This test documents the current behavior - transforms can access os module
         result = processor._transform_value(
@@ -677,10 +677,10 @@ class TestRestrictedPythonSecurity:
         # Currently this returns 'os_imported' because import is allowed
         # When hardened, this should return 'test' (original value on error)
         assert result in ["test", "os_imported"]  # Accept either behavior
-    
+
     def test_import_subprocess_currently_allowed(self, field_mappings_file_security, test_logger, args_config_json_input):
         """Test current behavior: subprocess import is allowed (known limitation).
-        
+
         WARNING: This is a security limitation that should be addressed.
         """
         processor = StreamingEventProcessor(
@@ -688,7 +688,7 @@ class TestRestrictedPythonSecurity:
             args_config=args_config_json_input,
             logger=test_logger
         )
-        
+
         # This test documents that subprocess import currently works
         result = processor._transform_value(
             "def transform(param):\n    import subprocess\n    return 'subprocess_imported'",
@@ -696,10 +696,10 @@ class TestRestrictedPythonSecurity:
         )
         # Accept either behavior (for when security is hardened)
         assert result in ["test", "subprocess_imported"]
-    
+
     def test_file_operations_currently_allowed(self, field_mappings_file_security, test_logger, args_config_json_input):
         """Test current behavior: file operations are allowed (known limitation).
-        
+
         WARNING: This is a security limitation that should be addressed.
         """
         processor = StreamingEventProcessor(
@@ -707,7 +707,7 @@ class TestRestrictedPythonSecurity:
             args_config=args_config_json_input,
             logger=test_logger
         )
-        
+
         # Test that open() currently works (this is a security concern)
         # When hardened, this should fail and return original value
         result = processor._transform_value(
@@ -716,7 +716,7 @@ class TestRestrictedPythonSecurity:
         )
         # This simpler test just verifies the transform system works
         assert result == "file_op_attempted"
-    
+
     def test_dunder_access_restricted(self, field_mappings_file_security, test_logger, args_config_json_input):
         """Test that dunder attribute access is restricted by RestrictedPython."""
         processor = StreamingEventProcessor(
@@ -724,7 +724,7 @@ class TestRestrictedPythonSecurity:
             args_config=args_config_json_input,
             logger=test_logger
         )
-        
+
         # RestrictedPython should block direct __class__ access
         result = processor._transform_value(
             "def transform(param):\n    return param.__class__.__name__",
@@ -732,7 +732,7 @@ class TestRestrictedPythonSecurity:
         )
         # Should return original on error due to restricted attribute access
         assert result == "test"
-    
+
     def test_exec_not_available(self, field_mappings_file_security, test_logger, args_config_json_input):
         """Test that exec is not available in transforms."""
         processor = StreamingEventProcessor(
@@ -740,7 +740,7 @@ class TestRestrictedPythonSecurity:
             args_config=args_config_json_input,
             logger=test_logger
         )
-        
+
         # exec should not be available or should fail
         result = processor._transform_value(
             "def transform(param):\n    exec('x = 1')\n    return str(x)",
@@ -752,7 +752,7 @@ class TestRestrictedPythonSecurity:
 
 class TestBuiltinFunctions:
     """Tests for built-in functions available in transforms."""
-    
+
     def test_base64_decode_available(self, field_mappings_file_builtins, test_logger, args_config_json_input):
         """Test that base64 module is available in transforms."""
         processor = StreamingEventProcessor(
@@ -760,13 +760,13 @@ class TestBuiltinFunctions:
             args_config=args_config_json_input,
             logger=test_logger
         )
-        
+
         result = processor._transform_value(
             "def transform(param):\n    import base64\n    return base64.b64decode(param).decode('utf-8')",
             "SGVsbG8gV29ybGQ="  # "Hello World" in base64
         )
         assert result == "Hello World"
-    
+
     def test_re_module_available(self, field_mappings_file_builtins, test_logger, args_config_json_input):
         """Test that re (regex) module is available in transforms."""
         processor = StreamingEventProcessor(
@@ -774,13 +774,13 @@ class TestBuiltinFunctions:
             args_config=args_config_json_input,
             logger=test_logger
         )
-        
+
         result = processor._transform_value(
             "def transform(param):\n    import re\n    match = re.search(r'(\\d+)', param)\n    return match.group(1) if match else ''",
             "Event ID: 4624"
         )
         assert result == "4624"
-    
+
     def test_chardet_available(self, field_mappings_file_builtins, test_logger, args_config_json_input):
         """Test that chardet module is available in transforms."""
         processor = StreamingEventProcessor(
@@ -788,13 +788,13 @@ class TestBuiltinFunctions:
             args_config=args_config_json_input,
             logger=test_logger
         )
-        
+
         result = processor._transform_value(
             "def transform(param):\n    import chardet\n    return str(type(chardet.detect(b'hello')))",
             "test"
         )
         assert "dict" in result
-    
+
     def test_string_methods_work(self, field_mappings_file_builtins, test_logger, args_config_json_input):
         """Test that string methods work in transforms."""
         processor = StreamingEventProcessor(
@@ -802,21 +802,21 @@ class TestBuiltinFunctions:
             args_config=args_config_json_input,
             logger=test_logger
         )
-        
+
         # Test split and join
         result = processor._transform_value(
             "def transform(param):\n    parts = param.split(',')\n    return '|'.join(parts)",
             "a,b,c"
         )
         assert result == "a|b|c"
-        
+
         # Test strip
         result = processor._transform_value(
             "def transform(param):\n    return param.strip()",
             "  hello  "
         )
         assert result == "hello"
-        
+
         # Test replace
         result = processor._transform_value(
             "def transform(param):\n    return param.replace('old', 'new')",
@@ -1300,7 +1300,7 @@ class TestTransformCategories:
 
 class TestTransformCaching:
     """Tests for transform function caching."""
-    
+
     def test_transform_func_cached(self, field_mappings_file_multi, test_logger, args_config_json_input):
         """Test that transform functions are properly cached."""
         processor = StreamingEventProcessor(
@@ -1308,20 +1308,20 @@ class TestTransformCaching:
             args_config=args_config_json_input,
             logger=test_logger
         )
-        
+
         code = "def transform(param):\n    return param.upper()"
-        
+
         # First call - should compile and cache
         func1 = processor._get_transform_func(code)
         assert func1 is not None
-        
+
         # Second call - should return cached function
         func2 = processor._get_transform_func(code)
         assert func2 is func1  # Same object reference
-        
+
         # Verify it works
         assert func1("hello") == "HELLO"
-    
+
     def test_bytecode_cached(self, field_mappings_file_multi, test_logger, args_config_json_input):
         """Test that compiled bytecode is cached."""
         processor = StreamingEventProcessor(
@@ -1329,17 +1329,17 @@ class TestTransformCaching:
             args_config=args_config_json_input,
             logger=test_logger
         )
-        
+
         code = "def transform(param):\n    return param.lower()"
-        
+
         # Clear caches
         processor.compiled_code_cache.clear()
         processor._transform_func_cache.clear()
-        
+
         # First call
         processor._get_transform_func(code)
         assert code in processor.compiled_code_cache
-        
+
         # Bytecode should be cached
         bytecode = processor.compiled_code_cache[code]
         processor._get_transform_func(code)
@@ -1348,7 +1348,7 @@ class TestTransformCaching:
 
 class TestHexToAsciiTransform:
     """Tests for hex to ASCII transformation (used in auditd logs)."""
-    
+
     def test_hex_to_ascii_transform(self, tmp_path, test_logger):
         """Test hex to ASCII transformation for proctitle."""
         config = {
@@ -1372,21 +1372,21 @@ class TestHexToAsciiTransform:
         }
         config_file = tmp_path / "config.json"
         config_file.write_text(json.dumps(config))
-        
+
         args = Namespace(evtx_input=False, json_input=False, auditd_input=True)
         processor = StreamingEventProcessor(
             config_file=str(config_file),
             args_config=args,
             logger=test_logger
         )
-        
+
         # "ls -la" in hex: 6c73002d6c61
         result = processor._transform_value(
             "def transform(param):\n    return bytes.fromhex(param).decode('ascii').replace('\\x00', ' ')",
             "6c73002d6c61"
         )
         assert result == "ls -la"
-    
+
     def test_invalid_hex_returns_original(self, tmp_path, test_logger):
         """Test that invalid hex returns original value."""
         config = {
@@ -1400,14 +1400,14 @@ class TestHexToAsciiTransform:
         }
         config_file = tmp_path / "config.json"
         config_file.write_text(json.dumps(config))
-        
+
         args = Namespace(evtx_input=False, json_input=False, auditd_input=True)
         processor = StreamingEventProcessor(
             config_file=str(config_file),
             args_config=args,
             logger=test_logger
         )
-        
+
         result = processor._transform_value(
             "def transform(param):\n    return bytes.fromhex(param).decode('ascii')",
             "not_valid_hex"
@@ -1418,7 +1418,7 @@ class TestHexToAsciiTransform:
 
 class TestEdgeCases:
     """Tests for edge cases in transforms."""
-    
+
     def test_transform_with_none_value(self, tmp_path, test_logger):
         """Test transform behavior with None values."""
         config = {
@@ -1442,20 +1442,20 @@ class TestEdgeCases:
         }
         config_file = tmp_path / "config.json"
         config_file.write_text(json.dumps(config))
-        
+
         args = Namespace(evtx_input=False, json_input=True, auditd_input=False)
         processor = StreamingEventProcessor(
             config_file=str(config_file),
             args_config=args,
             logger=test_logger
         )
-        
+
         result = processor._transform_value(
             "def transform(param):\n    return 'was_none' if param is None else param",
             None
         )
         assert result == "was_none"
-    
+
     def test_transform_with_special_characters(self, tmp_path, test_logger):
         """Test transform with special characters."""
         config = {
@@ -1469,28 +1469,28 @@ class TestEdgeCases:
         }
         config_file = tmp_path / "config.json"
         config_file.write_text(json.dumps(config))
-        
+
         args = Namespace(evtx_input=False, json_input=True, auditd_input=False)
         processor = StreamingEventProcessor(
             config_file=str(config_file),
             args_config=args,
             logger=test_logger
         )
-        
+
         # Test with unicode
         result = processor._transform_value(
             "def transform(param):\n    return param.upper()",
             "héllo wörld 日本語"
         )
         assert result == "HÉLLO WÖRLD 日本語"
-        
+
         # Test with escape sequences
         result = processor._transform_value(
             "def transform(param):\n    return param.replace('\\n', ' ')",
             "line1\nline2"
         )
         assert result == "line1 line2"
-    
+
     def test_transform_with_very_long_string(self, tmp_path, test_logger):
         """Test transform with very long string input."""
         config = {
@@ -1504,14 +1504,14 @@ class TestEdgeCases:
         }
         config_file = tmp_path / "config.json"
         config_file.write_text(json.dumps(config))
-        
+
         args = Namespace(evtx_input=False, json_input=True, auditd_input=False)
         processor = StreamingEventProcessor(
             config_file=str(config_file),
             args_config=args,
             logger=test_logger
         )
-        
+
         long_string = "a" * 100000
         result = processor._transform_value(
             "def transform(param):\n    return str(len(param))",
@@ -1522,7 +1522,7 @@ class TestEdgeCases:
 
 class TestEnabledTransformsList:
     """Tests for the enabled_transforms list feature."""
-    
+
     def test_enabled_transforms_list_controls_which_transforms_run(self, tmp_path, test_logger):
         """Test that only transforms in enabled_transforms list are executed."""
         config = {
@@ -1559,11 +1559,11 @@ class TestEnabledTransformsList:
         }
         config_file = tmp_path / "config.json"
         config_file.write_text(json.dumps(config))
-        
+
         event = {"TestField": "value"}
         json_file = tmp_path / "events.json"
         json_file.write_text(json.dumps(event) + "\n")
-        
+
         args = make_args_config("json_input")
         proc_config = ProcessingConfig(disable_progress=True)
         processor = StreamingEventProcessor(
@@ -1572,25 +1572,25 @@ class TestEnabledTransformsList:
             processing_config=proc_config,
             logger=test_logger
         )
-        
+
         conn = sqlite3.connect(':memory:')
         processor.create_initial_table(conn)
-        
+
         count = processor.process_file_streaming(conn, str(json_file), input_type='json')
         assert count == 1
-        
+
         cursor = conn.cursor()
         cursor.execute("SELECT * FROM logs")
         columns = [desc[0] for desc in cursor.description]
-        
+
         # Transform_A should be present (in enabled list)
         assert "Transform_A" in columns
-        
+
         # Transform_B should NOT be present (not in enabled list)
         assert "Transform_B" not in columns
-        
+
         conn.close()
-    
+
     def test_enabled_transforms_matches_field_name_for_non_alias_transforms(self, tmp_path, test_logger):
         """Non-alias transforms (alias_name='') are named by their field in enabled_transforms.
 
@@ -1701,7 +1701,7 @@ class TestEnabledTransformsList:
         assert row[0] == "BASH"
 
         conn.close()
-    
+
     def test_empty_enabled_transforms_list_disables_all(self, tmp_path, test_logger):
         """Test that empty enabled_transforms list disables all transforms."""
         config = {
@@ -1726,11 +1726,11 @@ class TestEnabledTransformsList:
         }
         config_file = tmp_path / "config.json"
         config_file.write_text(json.dumps(config))
-        
+
         event = {"TestField": "value"}
         json_file = tmp_path / "events.json"
         json_file.write_text(json.dumps(event) + "\n")
-        
+
         args = make_args_config("json_input")
         proc_config = ProcessingConfig(disable_progress=True)
         processor = StreamingEventProcessor(
@@ -1739,22 +1739,22 @@ class TestEnabledTransformsList:
             processing_config=proc_config,
             logger=test_logger
         )
-        
+
         conn = sqlite3.connect(':memory:')
         processor.create_initial_table(conn)
-        
+
         count = processor.process_file_streaming(conn, str(json_file), input_type='json')
         assert count == 1
-        
+
         cursor = conn.cursor()
         cursor.execute("SELECT * FROM logs")
         columns = [desc[0] for desc in cursor.description]
-        
+
         # No transforms should run
         assert "Transform_A" not in columns
-        
+
         conn.close()
-    
+
     def test_missing_enabled_transforms_disables_all(self, tmp_path, test_logger):
         """Test that missing enabled_transforms list disables all transforms."""
         config = {
@@ -1780,11 +1780,11 @@ class TestEnabledTransformsList:
         }
         config_file = tmp_path / "config.json"
         config_file.write_text(json.dumps(config))
-        
+
         event = {"TestField": "value"}
         json_file = tmp_path / "events.json"
         json_file.write_text(json.dumps(event) + "\n")
-        
+
         args = make_args_config("json_input")
         proc_config = ProcessingConfig(disable_progress=True)
         processor = StreamingEventProcessor(
@@ -1793,27 +1793,27 @@ class TestEnabledTransformsList:
             processing_config=proc_config,
             logger=test_logger
         )
-        
+
         conn = sqlite3.connect(':memory:')
         processor.create_initial_table(conn)
-        
+
         count = processor.process_file_streaming(conn, str(json_file), input_type='json')
         assert count == 1
-        
+
         cursor = conn.cursor()
         cursor.execute("SELECT * FROM logs")
         columns = [desc[0] for desc in cursor.description]
-        
+
         # Without enabled_transforms list, transforms fall back to their individual
         # enabled flag (True by default), so Transform_A should run
         assert "Transform_A" in columns
-        
+
         conn.close()
 
 
 class TestStreamingProcessorTransformsEndToEnd:
     """End-to-end tests for transforms in StreamingEventProcessor."""
-    
+
     def test_streaming_with_transforms_creates_alias_field(self, tmp_path, test_logger):
         """Test that streaming processor creates alias fields from transforms."""
         config = {
@@ -1837,11 +1837,11 @@ class TestStreamingProcessorTransformsEndToEnd:
         }
         config_file = tmp_path / "config.json"
         config_file.write_text(json.dumps(config))
-        
+
         event = {"CommandLine": "powershell.exe -c whoami"}
         json_file = tmp_path / "events.json"
         json_file.write_text(json.dumps(event) + "\n")
-        
+
         args = make_args_config("json_input")
         proc_config = ProcessingConfig(disable_progress=True)
         processor = StreamingEventProcessor(
@@ -1850,21 +1850,21 @@ class TestStreamingProcessorTransformsEndToEnd:
             processing_config=proc_config,
             logger=test_logger
         )
-        
+
         conn = sqlite3.connect(':memory:')
         processor.create_initial_table(conn)
-        
+
         count = processor.process_file_streaming(conn, str(json_file), input_type='json')
-        
+
         assert count == 1
-        
+
         cursor = conn.cursor()
         cursor.execute("SELECT CommandLine, CommandLine_Upper FROM logs")
         row = cursor.fetchone()
-        
+
         assert row[0] == "powershell.exe -c whoami"
         assert row[1] == "POWERSHELL.EXE -C WHOAMI"
-        
+
         conn.close()
 
 

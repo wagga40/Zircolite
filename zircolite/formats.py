@@ -1,4 +1,3 @@
-#!python3
 """
 Input format registry for Zircolite.
 
@@ -12,8 +11,9 @@ This module deliberately imports nothing from the rest of the package.
 leaf lets every other module consume it without an import cycle.
 """
 
+from collections.abc import Mapping
 from dataclasses import dataclass
-from typing import Any, Dict, FrozenSet, Mapping, Optional, Tuple
+from typing import Any
 
 
 @dataclass(frozen=True)
@@ -24,12 +24,12 @@ class InputFormat:
     args_flag: str  # attribute set on the argparse namespace
     yaml_format: str  # accepted value for `input.format`
     has_cli_flag: bool = True  # False for EVTX: it is the implicit default
-    default_extension: Optional[str] = None
-    stream_method: Optional[str] = None  # StreamingEventProcessor generator
-    extractor_flag: Optional[str] = None  # ExtractorConfig field to enable
+    default_extension: str | None = None
+    stream_method: str | None = None  # StreamingEventProcessor generator
+    extractor_flag: str | None = None  # ExtractorConfig field to enable
     # Encoding used to open the file when --logs-encoding is not given. None
     # for the binary formats, which carry their own.
-    default_encoding: Optional[str] = None
+    default_encoding: str | None = None
     reads_json: bool = False
     json_array: bool = False
     windows_event_semantics: bool = True  # Channel/EventID early filtering applies
@@ -38,7 +38,7 @@ class InputFormat:
 # Order is the resolution precedence when several *_input flags are truthy.
 # The CLI puts the format flags in a mutually exclusive group, so this only
 # matters for library callers that build a namespace by hand.
-INPUT_FORMATS: Tuple[InputFormat, ...] = (
+INPUT_FORMATS: tuple[InputFormat, ...] = (
     InputFormat(
         name="sqlite",
         args_flag="db_input",
@@ -125,16 +125,16 @@ INPUT_FORMATS: Tuple[InputFormat, ...] = (
     ),
 )
 
-_BY_NAME: Dict[str, InputFormat] = {f.name: f for f in INPUT_FORMATS}
-_BY_YAML: Dict[str, InputFormat] = {f.yaml_format: f for f in INPUT_FORMATS}
+_BY_NAME: dict[str, InputFormat] = {f.name: f for f in INPUT_FORMATS}
+_BY_YAML: dict[str, InputFormat] = {f.yaml_format: f for f in INPUT_FORMATS}
 
 DEFAULT_INPUT_FORMAT: InputFormat = _BY_NAME["evtx"]
 
-YAML_INPUT_FORMATS: Tuple[str, ...] = tuple(f.yaml_format for f in INPUT_FORMATS)
+YAML_INPUT_FORMATS: tuple[str, ...] = tuple(f.yaml_format for f in INPUT_FORMATS)
 
 # Formats without Channel/EventID semantics: event filtering is skipped for
 # these unless event_filter.filter_all_sources is enabled in the config.
-NON_WINDOWS_INPUT_FLAGS: FrozenSet[str] = frozenset(
+NON_WINDOWS_INPUT_FLAGS: frozenset[str] = frozenset(
     f.args_flag for f in INPUT_FORMATS if not f.windows_event_semantics
 )
 
@@ -145,8 +145,8 @@ class ExtensionFallback:
 
     format_name: str
     log_source: str
-    timestamp_field: Optional[str] = None
-    pipeline: Optional[str] = None
+    timestamp_field: str | None = None
+    pipeline: str | None = None
 
 
 # Deliberately not derived from `default_extension`: that mapping is
@@ -170,15 +170,15 @@ EXTENSION_FALLBACKS: Mapping[str, ExtensionFallback] = {
 }
 
 # Extensions with no `default_extension` claim in the registry above.
-ALIAS_EXTENSIONS: FrozenSet[str] = frozenset({".jsonl", ".ndjson", ".tsv"})
+ALIAS_EXTENSIONS: frozenset[str] = frozenset({".jsonl", ".ndjson", ".tsv"})
 
 
-def format_by_name(name: str) -> Optional[InputFormat]:
+def format_by_name(name: str) -> InputFormat | None:
     """Look up a format by its canonical input_type."""
     return _BY_NAME.get(name)
 
 
-def format_by_yaml(value: str) -> Optional[InputFormat]:
+def format_by_yaml(value: str) -> InputFormat | None:
     """Look up a format by the value accepted in `input.format`."""
     return _BY_YAML.get(value)
 

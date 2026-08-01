@@ -12,23 +12,23 @@ import pytest
 from rich.console import Console
 
 from zircolite.console import (
-    set_quiet_mode,
-    is_quiet,
-    print_banner,
-    print_section,
-    print_no_detections,
-    print_error_panel,
-    print_rule_test_results,
-    print_profiling_report,
     DetectionStats,
-    make_detection_counter,
     _format_file_node,
-    build_file_tree,
-    make_severity_badge,
     build_attack_summary,
     build_detection_table,
-    make_file_link,
+    build_file_tree,
     console,
+    is_quiet,
+    make_detection_counter,
+    make_file_link,
+    make_severity_badge,
+    print_banner,
+    print_error_panel,
+    print_no_detections,
+    print_profiling_report,
+    print_rule_test_results,
+    print_section,
+    set_quiet_mode,
 )
 
 
@@ -398,7 +398,7 @@ class TestBuildDetectionTable:
 
         # Read the cell, not the rendering: the ATT&CK column is fixed-width
         # and Rich ellipsises the marker away at any console size.
-        attack_cell = list(table.columns[3].cells)[0]
+        attack_cell = next(iter(table.columns[3].cells))
         assert attack_cell == "T1059.001, T1055, T1003 +2"
 
     def test_three_or_fewer_attack_ids_are_listed_in_full(self):
@@ -408,7 +408,7 @@ class TestBuildDetectionTable:
         ]
         table = build_detection_table(results)
 
-        assert list(table.columns[3].cells)[0] == "T1059.001, T1055"
+        assert next(iter(table.columns[3].cells)) == "T1059.001, T1055"
 
     def test_empty_results_render_without_rows(self):
         out = self._render(build_detection_table([]))
@@ -534,6 +534,7 @@ class TestConsoleLoggerHandling:
     def test_make_file_link_fallback_on_uri_error(self):
         """When as_uri() fails, make_file_link falls back to plain markup."""
         from unittest.mock import patch
+
         from zircolite.console import make_file_link
         with patch("pathlib.Path.as_uri", side_effect=ValueError("relative")):
             result = make_file_link("some/relative.json")
