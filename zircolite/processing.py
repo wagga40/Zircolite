@@ -490,11 +490,15 @@ def expand_db_path(
     if not path.is_dir():
         return [path]
 
-    patterns = (
-        [f"*.{args.fileext.lstrip('.')}"]
-        if getattr(args, "fileext", None)
-        else [f"*.{ext}" for ext in _DB_EXTENSIONS]
-    )
+    # --file-pattern wins over the extension, the same precedence discover_files
+    # applies. Without it here, the flag worked on the auto-detected SQLite
+    # route (which discovers first) and was silently dropped on the -D one.
+    if getattr(args, "file_pattern", None):
+        patterns = [args.file_pattern]
+    elif getattr(args, "fileext", None):
+        patterns = [f"*.{args.fileext.lstrip('.')}"]
+    else:
+        patterns = [f"*.{ext}" for ext in _DB_EXTENSIONS]
     walk = path.glob if getattr(args, "no_recursion", False) else path.rglob
     found = sorted({p for pattern in patterns for p in walk(pattern) if p.is_file()})
     # Same filename filters the auto-detected route applies, so -s/-a behave the

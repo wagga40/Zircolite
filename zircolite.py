@@ -506,17 +506,16 @@ def resolve_run_config(args, logger) -> argparse.Namespace:
         raw = config_loader.load_yaml(args.yaml_config)
         yaml_config = config_loader.parse_config(raw)
 
+        # Every issue here names something the run cannot honour: a key that
+        # will be ignored, a ruleset that is not there, a format that does not
+        # exist. Warning and carrying on meant Zircolite ran with something
+        # other than what the file asked for and still exited 0 -- a typo'd
+        # `input.format` fell back to EVTX and reported zero detections. All of
+        # them are reported together so one run names every problem.
         issues = config_loader.validate_config(yaml_config)
-        fatal_issues = []
-        for issue in issues:
-            # Malformed template entries would otherwise resurface as an opaque
-            # KeyError once the sections are applied to the args namespace
-            if issue.startswith("Template entries must have"):
-                fatal_issues.append(issue)
+        if issues:
+            for issue in issues:
                 logger.error(f"[red]    [-] Config error: {issue}[/]")
-            else:
-                logger.warning(f"[yellow]   [!] Config warning: {issue}[/]")
-        if fatal_issues:
             sys.exit(1)
 
         run_config.resolve(args, raw, skip=EARLY_DESTS)

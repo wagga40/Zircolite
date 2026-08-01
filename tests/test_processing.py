@@ -1010,6 +1010,25 @@ class TestDbInputDirectoryExpansion:
 
         assert [p.name for p in found] == ["a.db"]
 
+    def test_file_pattern_narrows_the_search(self, tmp_path, test_logger):
+        """-D pointed at a directory honours --file-pattern.
+
+        The explicit -D route skips discover_files entirely, so the pattern was
+        silently dropped -- while the auto-detected SQLite route honoured it,
+        because discovery had already run.
+        """
+        from zircolite.processing import expand_db_path
+
+        (tmp_path / "Security.db").write_bytes(b"")
+        (tmp_path / "System.db").write_bytes(b"")
+
+        args = argparse.Namespace(
+            fileext=None, no_recursion=False, file_pattern="Sec*.db"
+        )
+        found = expand_db_path(tmp_path, args, test_logger)
+
+        assert [p.name for p in found] == ["Security.db"]
+
     def test_a_plain_path_is_passed_through(self, tmp_path, test_logger):
         from zircolite.processing import expand_db_path
 

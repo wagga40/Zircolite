@@ -320,7 +320,7 @@ class ConfigLoader:
         issues = []
 
         for key in config.unknown_keys:
-            issues.append(f"Unknown configuration key (ignored): {key}")
+            issues.append(f"Unknown configuration key: {key}")
 
         # Validate input
         if isinstance(config.input.path, list):

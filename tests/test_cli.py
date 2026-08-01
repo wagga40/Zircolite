@@ -3454,3 +3454,54 @@ class TestCLIEmptyRuleset:
         assert excinfo.value.code != 0, (
             "a run with no rules must not report success"
         )
+
+
+class TestCLIConfigValidationIsFatal:
+    """A configuration file that cannot be honoured stops the run.
+
+    These were warnings, so a typo'd key, a missing ruleset or an invalid
+    format left Zircolite running with something other than what the file
+    asked for -- and exiting 0 while doing it.
+    """
+
+    def _run(self, tmp_path, config_body):
+        events_file = tmp_path / "events.json"
+        events_file.write_text('{"Event": {"System": {"EventID": 1}, "EventData": {}}}')
+        yaml_config = tmp_path / "run.yaml"
+        yaml_config.write_text(config_body)
+
+        with patch('sys.argv', [
+            'zircolite.py', '-e', str(events_file), '-Y', str(yaml_config), '-n',
+        ]):
+            with pytest.raises(SystemExit) as excinfo:
+                zircolite_script.main()
+        return excinfo.value.code
+
+    def test_unknown_key_is_fatal(self, tmp_path):
+        assert self._run(tmp_path, "processing:\n  no_such_key: true\n") != 0
+
+    def test_missing_ruleset_is_fatal(self, tmp_path):
+        assert self._run(tmp_path, "rules:\n  rulesets:\n    - /nope/missing.json\n") != 0
+
+    def test_invalid_input_format_is_fatal(self, tmp_path):
+        """A typo'd format silently fell back to EVTX and found nothing."""
+        assert self._run(tmp_path, "input:\n  format: jsonn\n") != 0
+
+    def test_invalid_time_filter_is_fatal(self, tmp_path):
+        assert self._run(tmp_path, "time_filter:\n  after: not-a-date\n") != 0
+
+    def test_a_valid_config_still_runs(self, tmp_path):
+        """The gate must not fire on a file that is simply fine."""
+        ruleset = tmp_path / "ruleset.json"
+        ruleset.write_text(NO_MATCH_RULESET)
+        events_file = tmp_path / "events.json"
+        events_file.write_text('{"Event": {"System": {"EventID": 1}, "EventData": {}}}')
+        yaml_config = tmp_path / "run.yaml"
+        yaml_config.write_text(
+            f"input:\n  format: json\nrules:\n  rulesets:\n    - {ruleset}\n"
+        )
+        with patch('sys.argv', [
+            'zircolite.py', '-e', str(events_file), '-Y', str(yaml_config),
+            '-o', str(tmp_path / "out.json"), '-n',
+        ]):
+            zircolite_script.main()
