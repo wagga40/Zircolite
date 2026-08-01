@@ -35,6 +35,11 @@ class InputFormat:
     windows_event_semantics: bool = True  # Channel/EventID early filtering applies
 
 
+# The default format is where every extension fallback lands, so unlike a
+# per-format extension this one is never absent. Naming it lets callers use it
+# without re-proving that.
+DEFAULT_EXTENSION: str = "evtx"
+
 # Order is the resolution precedence when several *_input flags are truthy.
 # The CLI puts the format flags in a mutually exclusive group, so this only
 # matters for library callers that build a namespace by hand.
@@ -120,7 +125,7 @@ INPUT_FORMATS: tuple[InputFormat, ...] = (
         # EVTX is what you get when no format flag is set. The flag name still
         # exists as a transform `source_condition` value.
         has_cli_flag=False,
-        default_extension="evtx",
+        default_extension=DEFAULT_EXTENSION,
         stream_method="stream_evtx_events",
     ),
 )

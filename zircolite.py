@@ -41,8 +41,6 @@ except ImportError:
 
 # Import from package
 from zircolite import (
-    # Input format registry
-    DEFAULT_INPUT_FORMAT,
     LEVEL_PRIORITY,
     # YAML configuration
     ConfigLoader,
@@ -85,6 +83,9 @@ from zircolite import (
     set_quiet_mode,
 )
 
+# Input format registry
+from zircolite.formats import DEFAULT_EXTENSION
+
 # Processing modes and context (from the dedicated processing module)
 from zircolite.processing import (
     ProcessingContext,
@@ -113,10 +114,10 @@ from zircolite.shutdown import (
 ################################################################
 def parse_arguments() -> argparse.Namespace:
     """Parse command line arguments."""
-    kwargs = {}
     if _HAS_RICH_ARGPARSE:
-        kwargs["formatter_class"] = RichHelpFormatter
-    parser = argparse.ArgumentParser(**kwargs)
+        parser = argparse.ArgumentParser(formatter_class=RichHelpFormatter)
+    else:
+        parser = argparse.ArgumentParser()
 
     # Input files and filtering/selection options
     logs_input_args = parser.add_argument_group('📁 INPUT FILES AND FILTERING')
@@ -237,7 +238,7 @@ def _format_flag_extension(args: argparse.Namespace) -> str:
     spec = format_from_args(args)
     # A format without its own extension (SQLite) must not narrow a directory
     # scan, so it falls back to the default format's extension.
-    return spec.default_extension or DEFAULT_INPUT_FORMAT.default_extension
+    return spec.default_extension or DEFAULT_EXTENSION
 
 
 def get_file_extension(args: argparse.Namespace) -> str:
@@ -331,12 +332,10 @@ def _apply_detection_result(
     spec = format_by_name(input_type)
     # EVTX has no flag of its own, so an unknown source that resolves to it
     # (or to nothing) is indistinguishable from a failed detection.
-    selectable = spec is not None and spec.has_cli_flag
-
-    if detection.log_source == "unknown" and not selectable:
-        return "evtx"
-
-    if selectable:
+    if spec is None or not spec.has_cli_flag:
+        if detection.log_source == "unknown":
+            return "evtx"
+    else:
         setattr(args, spec.args_flag, True)
 
     # Update timefield if detection found a timestamp and user didn't override.
@@ -1419,8 +1418,8 @@ def main() -> None:
     )
 
     zircolite_core = None
-    log_list = []
-    all_results = []
+    log_list: list[Path] | None = None
+    all_results: list[Any] = []
     phase_setup_end = 0.0
     strict_error = None
     templating_ok = True
