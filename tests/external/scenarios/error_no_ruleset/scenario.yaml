@@ -1,0 +1,8 @@
+# Running without -r is handled gracefully (no crash, default behavior)
+tags: [error]
+command:
+  - "-e"
+  - "/data/input/events.jsonl"
+  - "-j"
+expected_exit_code: 0
+allow_stderr_errors: true

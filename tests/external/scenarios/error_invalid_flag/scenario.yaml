@@ -1,0 +1,5 @@
+# Unknown flag should cause argparse to exit 2
+tags: [error, smoke]
+command: ["--nonexistent-flag"]
+expected_exit_code: 2
+allow_stderr_errors: true

@@ -1,0 +1,19 @@
+# Events are from 2024; -A 2025-01-01 filters them all out -> 0 detections
+tags: [json]
+command:
+  - "-e"
+  - "/data/input/events.jsonl"
+  - "-r"
+  - "/data/input/ruleset.json"
+  - "-o"
+  - "/data/output/detected_events.json"
+  - "-j"
+  - "-A"
+  - "2025-01-01T00:00:00"
+  - "-l"
+  - "/data/output/zircolite.log"
+expected_exit_code: 0
+compare_files:
+  - actual: /data/output/detected_events.json
+    compare: json_exact_count
+    count: 0

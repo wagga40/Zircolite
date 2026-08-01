@@ -1,0 +1,12 @@
+# A broken ruleset file is handled gracefully (0 rules loaded, no crash)
+tags: [error]
+command:
+  - "-e"
+  - "/data/input/events.jsonl"
+  - "-r"
+  - "/data/input/broken.json"
+  - "-j"
+expected_exit_code: 0
+allow_stderr_errors: true
+stdout_contains:
+  - "0 rules"

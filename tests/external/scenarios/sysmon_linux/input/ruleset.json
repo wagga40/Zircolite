@@ -1,0 +1,14 @@
+[
+  {
+    "title": "Sysmon Linux File Delete",
+    "id": "sysmon-linux-001",
+    "status": "test",
+    "description": "Detects file deletion events from Sysmon for Linux",
+    "author": "Test",
+    "tags": [],
+    "falsepositives": [],
+    "level": "informational",
+    "rule": ["SELECT * FROM logs WHERE EventID = 23"],
+    "filename": "sysmon_linux_file_delete.yml"
+  }
+]

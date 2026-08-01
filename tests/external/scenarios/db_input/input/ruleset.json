@@ -1,0 +1,16 @@
+[
+    {
+        "title": "Bitsadmin Download Activity",
+        "id": "test-rule-bitsadmin",
+        "status": "test",
+        "description": "Detects bitsadmin used to download files",
+        "author": "Test Author",
+        "tags": ["attack.execution", "attack.t1218.011"],
+        "falsepositives": ["Legitimate admin"],
+        "level": "high",
+        "rule": [
+            "SELECT * FROM logs WHERE CommandLine LIKE '%bitsadmin%' ESCAPE '\\'"
+        ],
+        "filename": "test_rule_bitsadmin.yml"
+    }
+]

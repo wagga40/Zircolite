@@ -1,0 +1,4 @@
+[
+  {"title": "PowerShell", "id": "r1", "status": "test", "description": "PowerShell", "author": "Test", "tags": [], "falsepositives": [], "level": "high", "rule": ["SELECT * FROM logs WHERE CommandLine LIKE '%powershell%' ESCAPE '\\'"], "filename": "a.yml"},
+  {"title": "Exe creation", "id": "r2", "status": "test", "description": "Exe", "author": "Test", "tags": [], "falsepositives": [], "level": "medium", "rule": ["SELECT * FROM logs WHERE CommandLine LIKE '%.exe%' ESCAPE '\\' OR Image LIKE '%.exe%' ESCAPE '\\'"], "filename": "b.yml"}
+]

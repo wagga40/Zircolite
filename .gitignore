@@ -84,7 +84,6 @@ htmlcov/
 
 .tmp/
 .temp/
-tests/external
 *coverage*
 
 # PyInstaller
@@ -95,3 +94,10 @@ dist/
 # through. The blanket *.evtx / *.log rules above are for user data.
 !tests/fixtures/
 !tests/fixtures/**
+
+# Same reasoning for the external scenario harness: its inputs are sample
+# .evtx and .log files, and a scenario without its input is not a test.
+# `results` above still covers what a run writes.
+!tests/external/
+!tests/external/**
+tests/external/**/__pycache__/

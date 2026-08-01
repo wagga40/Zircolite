@@ -1,0 +1,4 @@
+tags: [smoke, cli]
+command: ["--help"]
+expected_exit_code: 0
+stdout_contains: ["usage", "--evtx"]

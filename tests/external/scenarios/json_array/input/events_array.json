@@ -1,0 +1,4 @@
+[
+  {"Event": {"System": {"EventID": 1, "Channel": "Microsoft-Windows-Sysmon/Operational", "TimeCreated": {"#attributes": {"SystemTime": "2024-01-15T10:30:00.000Z"}}}, "EventData": {"CommandLine": "powershell.exe -nop", "Image": "C:\\Windows\\System32\\powershell.exe"}}},
+  {"Event": {"System": {"EventID": 1, "Channel": "Microsoft-Windows-Sysmon/Operational", "TimeCreated": {"#attributes": {"SystemTime": "2024-01-15T10:31:00.000Z"}}}, "EventData": {"CommandLine": "cmd.exe /c whoami", "Image": "C:\\Windows\\System32\\cmd.exe"}}}
+]

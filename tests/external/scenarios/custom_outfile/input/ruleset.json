@@ -1,0 +1,1 @@
+[{"title": "PowerShell", "id": "r1", "status": "test", "description": "x", "author": "Test", "tags": [], "falsepositives": [], "level": "high", "rule": ["SELECT * FROM logs WHERE CommandLine LIKE '%powershell%' ESCAPE '\\'"], "filename": "a.yml"}]

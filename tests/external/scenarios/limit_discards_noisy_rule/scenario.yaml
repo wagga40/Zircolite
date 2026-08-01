@@ -1,0 +1,22 @@
+# --limit drops a rule matching more events than the limit, so one rule that
+# matches all 3 events leaves nothing behind at -L 2. Without the flag the same
+# rule reports 3 matches, which is what makes this a real check and not a
+# tautology.
+tags: [json, output]
+command:
+  - "-e"
+  - "/data/input/events.jsonl"
+  - "-r"
+  - "/data/input/ruleset.json"
+  - "-o"
+  - "/data/output/detected_events.json"
+  - "-j"
+  - "-L"
+  - "2"
+  - "-l"
+  - "/data/output/zircolite.log"
+expected_exit_code: 0
+compare_files:
+  - actual: /data/output/detected_events.json
+    compare: json_exact_count
+    count: 0

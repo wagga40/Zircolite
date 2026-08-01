@@ -1,0 +1,16 @@
+[
+    {
+        "title": "PowerShell or Whoami",
+        "id": "test-rule-001",
+        "status": "test",
+        "description": "Detects PowerShell or whoami",
+        "author": "Test Author",
+        "tags": ["attack.execution"],
+        "falsepositives": ["Unknown"],
+        "level": "high",
+        "rule": [
+            "SELECT * FROM logs WHERE CommandLine LIKE '%powershell%' ESCAPE '\\' OR CommandLine LIKE '%whoami%' ESCAPE '\\'"
+        ],
+        "filename": "test_rule.yml"
+    }
+]

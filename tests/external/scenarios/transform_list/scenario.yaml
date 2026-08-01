@@ -1,0 +1,4 @@
+tags: [cli]
+command: ["--transform-list"]
+expected_exit_code: 0
+stdout_contains: ["Categories"]

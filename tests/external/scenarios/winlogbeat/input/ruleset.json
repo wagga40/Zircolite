@@ -1,0 +1,14 @@
+[
+  {
+    "title": "Sysmon File Created via Winlogbeat",
+    "id": "winlogbeat-001",
+    "status": "test",
+    "description": "Detects file creation events in Winlogbeat/ECS format (EventID 11)",
+    "author": "Test",
+    "tags": [],
+    "falsepositives": [],
+    "level": "informational",
+    "rule": ["SELECT * FROM logs WHERE EventID = 11"],
+    "filename": "file_created.yml"
+  }
+]

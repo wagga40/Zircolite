@@ -1,0 +1,15 @@
+# Runner configuration for Docker-based external tests.
+# All keys are optional. CLI arguments always take precedence over values here.
+#
+# Supported keys:
+#   image_tag     — Docker image tag to use (default: zircolite:external-test)
+#   dockerfile    — Path to the Dockerfile, relative to repo root
+#   results_file  — Write a detailed JSON results log to this path after each run
+#   markdown_file — Write a Markdown results report to this path after each run
+
+# image_tag: zircolite:external-test
+# dockerfile: tests/external/Dockerfile.external-tests
+results_file: results/external-tests.json
+# markdown_file: results/external-tests.md
+default_timeout: 120
+# parallel: 1

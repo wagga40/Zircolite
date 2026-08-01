@@ -1,0 +1,12 @@
+exclusions: []
+useless: [null, ""]
+mappings:
+  EventID: EventID
+  CommandLine: CommandLine
+  Image: Image
+  Computer: Computer
+  TargetFileName: TargetFileName
+alias: {}
+split: {}
+transforms_enabled: false
+transforms: {}

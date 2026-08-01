@@ -1,0 +1,24 @@
+# Two files, unified DB: both events in one DB
+tags: [json]
+command:
+  - "-e"
+  - "/data/input"
+  - "-r"
+  - "/data/input/ruleset.json"
+  - "-o"
+  - "/data/output/detected_events.json"
+  - "-j"
+  - "-f"
+  - "jsonl"
+  - "--unified-db"
+  - "-l"
+  - "/data/output/zircolite.log"
+expected_exit_code: 0
+compare_files:
+  - actual: /data/output/detected_events.json
+    compare: json_count_min
+    min_count: 1
+  - actual: /data/output/detected_events.json
+    compare: json_schema
+    required_keys: [title, id, tags, rule_level, matches]
+    matches_min: 1

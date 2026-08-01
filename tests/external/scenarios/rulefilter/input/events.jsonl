@@ -1,0 +1,2 @@
+{"Event": {"System": {"EventID": 1}, "EventData": {"CommandLine": "whoami", "Image": "C:\\cmd.exe"}}}
+{"Event": {"System": {"EventID": 11}, "EventData": {"TargetFilename": "C:\\x.exe", "Image": "C:\\explorer.exe"}}}

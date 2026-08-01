@@ -1,0 +1,17 @@
+tags: [csv, output]
+command:
+  - "-e"
+  - "/data/input/events.jsonl"
+  - "-r"
+  - "/data/input/ruleset.json"
+  - "-o"
+  - "/data/output/detected_events.csv"
+  - "-j"
+  - "--csv"
+  - "-l"
+  - "/data/output/zircolite.log"
+expected_exit_code: 0
+compare_files:
+  - actual: /data/output/detected_events.csv
+    compare: lines_min
+    min_count: 2

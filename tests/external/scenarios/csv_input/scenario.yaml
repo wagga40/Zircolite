@@ -1,0 +1,22 @@
+tags: [csv]
+command:
+  - "-e"
+  - "/data/input/events.csv"
+  - "-r"
+  - "/data/input/ruleset.json"
+  - "-c"
+  - "/data/input/config.yaml"
+  - "-o"
+  - "/data/output/detected_events.json"
+  - "--csv-input"
+  - "-l"
+  - "/data/output/zircolite.log"
+expected_exit_code: 0
+compare_files:
+  - actual: /data/output/detected_events.json
+    compare: json_count_min
+    min_count: 1
+  - actual: /data/output/detected_events.json
+    compare: json_schema
+    required_keys: [title, id, tags, rule_level, matches]
+    matches_min: 1

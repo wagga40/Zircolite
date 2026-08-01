@@ -1,0 +1,6 @@
+tags: [smoke, cli]
+command: ["--version"]
+expected_exit_code: 0
+stdout_contains:
+  - "Zircolite"
+  - "3."

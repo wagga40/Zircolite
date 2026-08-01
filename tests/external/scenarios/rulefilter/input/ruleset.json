@@ -1,0 +1,4 @@
+[
+  {"title": "CMD Whoami Execution", "id": "r1", "status": "test", "description": "Detects whoami execution", "author": "Test", "tags": [], "falsepositives": [], "level": "medium", "rule": ["SELECT * FROM logs WHERE CommandLine LIKE '%whoami%' ESCAPE '\\'"], "filename": "whoami.yml"},
+  {"title": "Suspicious File Creation", "id": "r2", "status": "test", "description": "Detects .exe file creation", "author": "Test", "tags": [], "falsepositives": [], "level": "low", "rule": ["SELECT * FROM logs WHERE TargetFilename LIKE '%.exe%' ESCAPE '\\'"], "filename": "file_creation.yml"}
+]

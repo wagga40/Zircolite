@@ -1,0 +1,25 @@
+# Directory of two EVTX files merged into one unified SQLite DB before rule execution
+tags: [evtx]
+skip_if:
+  missing_input: true
+command:
+  - "-e"
+  - "/data/input"
+  - "-r"
+  - "/data/input/ruleset.json"
+  - "-o"
+  - "/data/output/detected_events.json"
+  - "-f"
+  - "evtx"
+  - "--unified-db"
+  - "-l"
+  - "/data/output/zircolite.log"
+expected_exit_code: 0
+compare_files:
+  - actual: /data/output/detected_events.json
+    compare: json_count_min
+    min_count: 1
+  - actual: /data/output/detected_events.json
+    compare: json_schema
+    required_keys: [title, id, tags, rule_level, matches]
+    matches_min: 1

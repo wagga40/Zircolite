@@ -1,0 +1,4 @@
+EventID,CommandLine,Image,Computer
+1,powershell.exe -encodedCommand abc,C:\Windows\powershell.exe,PC1
+1,whoami,C:\Windows\cmd.exe,PC1
+11,C:\Users\admin\file.exe,C:\Windows\explorer.exe,PC1

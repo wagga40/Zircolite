@@ -1,0 +1,10 @@
+# Referencing a non-existent events file should fail
+tags: [error]
+command:
+  - "-e"
+  - "/data/input/nonexistent.jsonl"
+  - "-r"
+  - "/data/input/ruleset.json"
+  - "-j"
+expected_exit_code: 1
+allow_stderr_errors: true

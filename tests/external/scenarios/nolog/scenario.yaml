@@ -1,0 +1,10 @@
+# -n suppresses all file output (no log, no result files beyond the output JSON); process should still exit 0
+tags: [json, cli]
+command:
+  - "-e"
+  - "/data/input/events.jsonl"
+  - "-r"
+  - "/data/input/ruleset.json"
+  - "-j"
+  - "-n"
+expected_exit_code: 0

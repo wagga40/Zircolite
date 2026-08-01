@@ -1,0 +1,21 @@
+tags: [json]
+command:
+  - "-e"
+  - "/data/input/events.jsonl"
+  - "-r"
+  - "/data/input/ruleset.json"
+  - "-o"
+  - "/data/output/detected_events.json"
+  - "-j"
+  - "--no-auto-mode"
+  - "-l"
+  - "/data/output/zircolite.log"
+expected_exit_code: 0
+compare_files:
+  - actual: /data/output/detected_events.json
+    compare: json_exact_count
+    count: 1
+  - actual: /data/output/detected_events.json
+    compare: json_schema
+    required_keys: [title, id, tags, rule_level, matches]
+    matches_min: 1

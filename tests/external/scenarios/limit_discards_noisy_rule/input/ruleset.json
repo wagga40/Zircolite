@@ -1,0 +1,20 @@
+[
+  {
+    "title": "Matches every event",
+    "id": "test-limit-001",
+    "status": "test",
+    "description": "Noisy rule used to prove --limit discards it",
+    "author": "Test Author",
+    "tags": [
+      "attack.execution"
+    ],
+    "falsepositives": [
+      "Unknown"
+    ],
+    "level": "low",
+    "rule": [
+      "SELECT * FROM logs"
+    ],
+    "filename": "test_rule_noisy.yml"
+  }
+]

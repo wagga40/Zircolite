@@ -1,0 +1,23 @@
+# Jinja2 template rendering via -t / -T
+tags: [output]
+command:
+  - "-e"
+  - "/data/input/events.jsonl"
+  - "-r"
+  - "/data/input/ruleset.json"
+  - "-o"
+  - "/data/output/detected_events.json"
+  - "-j"
+  - "-t"
+  - "templates/exportForSARIF.tmpl"
+  - "-T"
+  - "/data/output/sarif_output.json"
+  - "-l"
+  - "/data/output/zircolite.log"
+expected_exit_code: 0
+compare_files:
+  - actual: /data/output/detected_events.json
+    compare: json_exact_count
+    count: 3
+  - actual: /data/output/sarif_output.json
+    compare: exists

@@ -1,0 +1,14 @@
+[
+  {
+    "title": "Special Privileges Logon",
+    "id": "evtxtract-001",
+    "status": "test",
+    "description": "Detects special privilege assignment via PrivilegeList field",
+    "author": "Test",
+    "tags": [],
+    "falsepositives": [],
+    "level": "informational",
+    "rule": ["SELECT * FROM logs WHERE PrivilegeList LIKE '%SeSecurityPrivilege%' ESCAPE '\\'"],
+    "filename": "special_privileges.yml"
+  }
+]

@@ -1,0 +1,1 @@
+{"Event": {"System": {"EventID": 1, "Channel": "Microsoft-Windows-Sysmon/Operational", "TimeCreated": {"#attributes": {"SystemTime": "2024-01-15T10:30:00.000Z"}}}, "EventData": {"CommandLine": "powershell.exe", "Image": "C:\\Windows\\powershell.exe"}}}

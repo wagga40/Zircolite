@@ -1,0 +1,20 @@
+# -L 0 is rejected. Any non-positive value other than -1 would silently discard
+# every detection, since execute_ruleset drops results whose count exceeds the
+# limit. The scenario predates that check and expected the silent-empty run.
+tags: [json, output, error]
+command:
+  - "-e"
+  - "/data/input/events.jsonl"
+  - "-r"
+  - "/data/input/ruleset.json"
+  - "-o"
+  - "/data/output/detected_events.json"
+  - "-j"
+  - "-L"
+  - "0"
+  - "-l"
+  - "/data/output/zircolite.log"
+expected_exit_code: 1
+allow_stderr_errors: true
+stdout_contains:
+  - "--limit must be a positive integer"

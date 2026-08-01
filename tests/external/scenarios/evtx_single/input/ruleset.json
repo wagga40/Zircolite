@@ -1,0 +1,14 @@
+[
+  {
+    "title": "BITSAdmin Download Activity",
+    "id": "evtx-001",
+    "status": "test",
+    "description": "Detects bitsadmin.exe used to download files (SigmaHQ regression sample)",
+    "author": "Test",
+    "tags": ["attack.defense_evasion", "attack.t1197"],
+    "falsepositives": [],
+    "level": "medium",
+    "rule": ["SELECT * FROM logs WHERE CommandLine LIKE '%bitsadmin%' ESCAPE '\\'"],
+    "filename": "bitsadmin_download.yml"
+  }
+]

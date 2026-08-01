@@ -1,0 +1,19 @@
+# YAML config file via -Y provides input path and format; -r provided via CLI
+# (YAML rulesets handling has a known issue with path iteration)
+tags: [json, cli]
+command:
+  - "-Y"
+  - "/data/input/zircolite_config.yaml"
+  - "-r"
+  - "/data/input/ruleset.json"
+  - "-l"
+  - "/data/output/zircolite.log"
+expected_exit_code: 0
+compare_files:
+  - actual: /data/output/detected_events.json
+    compare: json_exact_count
+    count: 3
+  - actual: /data/output/detected_events.json
+    compare: json_schema
+    required_keys: [title, id, tags, rule_level, matches]
+    matches_min: 1

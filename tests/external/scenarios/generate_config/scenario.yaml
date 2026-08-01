@@ -1,0 +1,6 @@
+tags: [cli]
+command: ["--generate-config", "/data/output/config.yaml"]
+expected_exit_code: 0
+compare_files:
+  - actual: /data/output/config.yaml
+    compare: exists
