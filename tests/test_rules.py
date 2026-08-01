@@ -15,9 +15,9 @@ import requests
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from zircolite.rules import RulesetHandler, RulesUpdater
-from zircolite.sqlrewrite import rebalance_sql
 from zircolite.config import RulesetConfig
+from zircolite.rules import RulesetHandler, RulesUpdater
+from zircolite.sqlscan import rebalance_sql
 
 
 class TestIsValidSigmaRule:
@@ -37,14 +37,14 @@ detection:
     condition: selection
 level: high
 """)
-        
+
         # Create handler with empty ruleset to test the method
         with patch.object(RulesetHandler, 'ruleset_parsing', return_value=[]):
             handler = RulesetHandler(
                 ruleset_config=RulesetConfig(ruleset=[]),
                 logger=test_logger
             )
-        
+
         assert handler.is_valid_sigma_rule(valid_rule) is True
 
     def test_invalid_sigma_rule_missing_title(self, tmp_path, test_logger):
@@ -58,13 +58,13 @@ detection:
         EventID: 1
     condition: selection
 """)
-        
+
         with patch.object(RulesetHandler, 'ruleset_parsing', return_value=[]):
             handler = RulesetHandler(
                 ruleset_config=RulesetConfig(ruleset=[]),
                 logger=test_logger
             )
-        
+
         assert handler.is_valid_sigma_rule(invalid_rule) is False
 
     def test_invalid_sigma_rule_missing_logsource(self, tmp_path, test_logger):
@@ -77,13 +77,13 @@ detection:
         EventID: 1
     condition: selection
 """)
-        
+
         with patch.object(RulesetHandler, 'ruleset_parsing', return_value=[]):
             handler = RulesetHandler(
                 ruleset_config=RulesetConfig(ruleset=[]),
                 logger=test_logger
             )
-        
+
         assert handler.is_valid_sigma_rule(invalid_rule) is False
 
     def test_invalid_sigma_rule_missing_detection(self, tmp_path, test_logger):
@@ -94,13 +94,13 @@ title: Test Rule
 logsource:
     product: windows
 """)
-        
+
         with patch.object(RulesetHandler, 'ruleset_parsing', return_value=[]):
             handler = RulesetHandler(
                 ruleset_config=RulesetConfig(ruleset=[]),
                 logger=test_logger
             )
-        
+
         assert handler.is_valid_sigma_rule(invalid_rule) is False
 
     def test_invalid_sigma_rule_not_dict(self, tmp_path, test_logger):
@@ -111,13 +111,13 @@ logsource:
 - item2
 - item3
 """)
-        
+
         with patch.object(RulesetHandler, 'ruleset_parsing', return_value=[]):
             handler = RulesetHandler(
                 ruleset_config=RulesetConfig(ruleset=[]),
                 logger=test_logger
             )
-        
+
         assert handler.is_valid_sigma_rule(invalid_rule) is False
 
     def test_invalid_sigma_rule_malformed_yaml(self, tmp_path, test_logger):
@@ -128,38 +128,38 @@ title: Test Rule
 logsource: [invalid
 detection: }malformed
 """)
-        
+
         with patch.object(RulesetHandler, 'ruleset_parsing', return_value=[]):
             handler = RulesetHandler(
                 ruleset_config=RulesetConfig(ruleset=[]),
                 logger=test_logger
             )
-        
+
         assert handler.is_valid_sigma_rule(invalid_rule) is False
 
     def test_invalid_sigma_rule_empty_file(self, tmp_path, test_logger):
         """Test that an empty YAML file is rejected."""
         invalid_rule = tmp_path / "empty.yml"
         invalid_rule.write_text("")
-        
+
         with patch.object(RulesetHandler, 'ruleset_parsing', return_value=[]):
             handler = RulesetHandler(
                 ruleset_config=RulesetConfig(ruleset=[]),
                 logger=test_logger
             )
-        
+
         assert handler.is_valid_sigma_rule(invalid_rule) is False
 
     def test_invalid_sigma_rule_nonexistent_file(self, tmp_path, test_logger):
         """Test that a nonexistent file is rejected."""
         nonexistent = tmp_path / "nonexistent.yml"
-        
+
         with patch.object(RulesetHandler, 'ruleset_parsing', return_value=[]):
             handler = RulesetHandler(
                 ruleset_config=RulesetConfig(ruleset=[]),
                 logger=test_logger
             )
-        
+
         assert handler.is_valid_sigma_rule(nonexistent) is False
 
     def test_is_valid_sigma_rule_exception_returns_false(self, tmp_path, test_logger):
@@ -270,13 +270,13 @@ class TestDuplicateRemovalBySqlQuery:
                 "rule": ["SELECT * FROM logs WHERE EventID = 2"]  # Different query
             }
         ]
-        
+
         with patch.object(RulesetHandler, 'ruleset_parsing', return_value=[mock_rules]):
             handler = RulesetHandler(
                 ruleset_config=RulesetConfig(ruleset=[]),
                 logger=test_logger
             )
-        
+
         # Should have 2 rules after deduplication (Rule A and Rule C)
         assert len(handler.rulesets) == 2
         # Verify both unique queries are present
@@ -300,13 +300,13 @@ class TestDuplicateRemovalBySqlQuery:
                 "rule": ["SELECT * FROM logs WHERE EventID = 1"]
             }
         ]
-        
+
         with patch.object(RulesetHandler, 'ruleset_parsing', return_value=[mock_rules]):
             handler = RulesetHandler(
                 ruleset_config=RulesetConfig(ruleset=[]),
                 logger=test_logger
             )
-        
+
         # Should keep the first rule (higher level wins after sorting)
         assert len(handler.rulesets) == 1
         assert handler.rulesets[0]['title'] == "First Rule"
@@ -333,13 +333,13 @@ class TestDuplicateRemovalBySqlQuery:
                 "rule": ["SELECT * FROM logs WHERE EventID = 1"]  # Different (only one query)
             }
         ]
-        
+
         with patch.object(RulesetHandler, 'ruleset_parsing', return_value=[mock_rules]):
             handler = RulesetHandler(
                 ruleset_config=RulesetConfig(ruleset=[]),
                 logger=test_logger
             )
-        
+
         # Should have 2 rules (A and C)
         assert len(handler.rulesets) == 2
 
@@ -359,13 +359,13 @@ class TestDuplicateRemovalBySqlQuery:
                 # Missing 'rule' field
             }
         ]
-        
+
         with patch.object(RulesetHandler, 'ruleset_parsing', return_value=[mock_rules]):
             handler = RulesetHandler(
                 ruleset_config=RulesetConfig(ruleset=[]),
                 logger=test_logger
             )
-        
+
         # Should only have 1 rule (the valid one)
         assert len(handler.rulesets) == 1
         assert handler.rulesets[0]['title'] == "Rule A"
@@ -392,29 +392,37 @@ class TestDuplicateRemovalBySqlQuery:
                 "rule": ["SELECT * FROM logs WHERE EventID = 3"]
             }
         ]
-        
+
         with patch.object(RulesetHandler, 'ruleset_parsing', return_value=[mock_rules]):
             handler = RulesetHandler(
                 ruleset_config=RulesetConfig(ruleset=[]),
                 logger=test_logger
             )
-        
+
         # All 3 rules should be present
         assert len(handler.rulesets) == 3
 
-    def test_event_filter_excludes_correlation_rules(self, test_logger):
-        """Correlation rules must not disable EventFilter when base rules have channel/eventid."""
+    def test_event_filter_survives_a_correlation_rule_naming_its_channel(
+        self, test_logger
+    ):
+        """A correlation rule whose SQL names its channel must not disable filtering."""
         mock_rules = [
             {
                 "title": "Base",
-                "rule": ["SELECT 1"],
+                "rule": [
+                    "SELECT * FROM logs WHERE Channel='Security' AND EventID=4625"
+                ],
                 "level": "high",
                 "channel": ["Security"],
                 "eventid": [4625],
             },
             {
                 "title": "Correlation",
-                "rule": ["SELECT 2"],
+                "rule": [
+                    "SELECT u, COUNT(*) AS c FROM (SELECT * FROM logs WHERE "
+                    "Channel='Security' AND EventID=4625) AS subquery "
+                    "GROUP BY u HAVING c >= 5"
+                ],
                 "level": "high",
                 "correlation": True,
             },
@@ -440,13 +448,13 @@ class TestRulesetSortingByLevel:
             {"title": "Medium Rule", "level": "medium", "rule": ["SELECT 4"]},
             {"title": "Info Rule", "level": "informational", "rule": ["SELECT 5"]},
         ]
-        
+
         with patch.object(RulesetHandler, 'ruleset_parsing', return_value=[mock_rules]):
             handler = RulesetHandler(
                 ruleset_config=RulesetConfig(ruleset=[]),
                 logger=test_logger
             )
-        
+
         levels = [r['level'] for r in handler.rulesets]
         assert levels == ["critical", "high", "medium", "low", "informational"]
 
@@ -456,13 +464,13 @@ class TestRulesetSortingByLevel:
             {"title": "No Level Rule", "rule": ["SELECT 1"]},
             {"title": "Critical Rule", "level": "critical", "rule": ["SELECT 2"]},
         ]
-        
+
         with patch.object(RulesetHandler, 'ruleset_parsing', return_value=[mock_rules]):
             handler = RulesetHandler(
                 ruleset_config=RulesetConfig(ruleset=[]),
                 logger=test_logger
             )
-        
+
         # Critical should be first, no-level last
         assert handler.rulesets[0]['level'] == "critical"
         assert handler.rulesets[1].get('level') is None
@@ -483,12 +491,12 @@ class TestRulesetJsonParsing:
             }
         ]
         ruleset_file.write_text(json.dumps(ruleset_data))
-        
+
         handler = RulesetHandler(
             ruleset_config=RulesetConfig(ruleset=[str(ruleset_file)]),
             logger=test_logger
         )
-        
+
         assert len(handler.rulesets) == 1
         assert handler.rulesets[0]['title'] == "Test Rule"
 
@@ -496,12 +504,12 @@ class TestRulesetJsonParsing:
         """Test handling of empty ruleset file."""
         ruleset_file = tmp_path / "empty_ruleset.json"
         ruleset_file.write_text("[]")
-        
+
         handler = RulesetHandler(
             ruleset_config=RulesetConfig(ruleset=[str(ruleset_file)]),
             logger=test_logger
         )
-        
+
         assert len(handler.rulesets) == 0
 
 
@@ -1109,7 +1117,7 @@ def _make_bare_handler(logger, **overrides):
     handler.rulesetPathList = overrides.get('rulesetPathList', [])
     handler.saveRuleset = overrides.get('saveRuleset', False)
     handler.pipelines = overrides.get('pipelines', [])
-    handler.event_filter = overrides.get('event_filter', None)
+    handler.event_filter = overrides.get('event_filter')
     for key, val in overrides.items():
         if key not in ('rulesetPathList', 'saveRuleset', 'pipelines', 'event_filter'):
             setattr(handler, key, val)
@@ -1324,8 +1332,8 @@ class TestRulesetHandlerRobustness:
             {"title": "low dup", "id": "1", "level": "low", "rule": [same_sql]},
             {"title": "critical dup", "id": "2", "level": "critical", "rule": [same_sql]},
         ]))
-        from zircolite.rules import RulesetHandler
         from zircolite.config import RulesetConfig
+        from zircolite.rules import RulesetHandler
         handler = RulesetHandler(
             RulesetConfig(ruleset=[str(ruleset_file)]),
             logger=test_logger,
@@ -1335,8 +1343,8 @@ class TestRulesetHandlerRobustness:
 
     def test_pipeline_list_skips_ruleset_loading(self, test_logger):
         """--pipeline-list must not load/convert the ruleset."""
-        from zircolite.rules import RulesetHandler
         from zircolite.config import RulesetConfig
+        from zircolite.rules import RulesetHandler
         handler = RulesetHandler(
             RulesetConfig(ruleset=["/nonexistent/rules.json"]),
             logger=test_logger,
@@ -1348,8 +1356,8 @@ class TestRulesetHandlerRobustness:
         """A file that is neither valid JSON nor Sigma YAML must log a warning."""
         bad = tmp_path / "broken.json"
         bad.write_text("{not json")
-        from zircolite.rules import RulesetHandler
         from zircolite.config import RulesetConfig
+        from zircolite.rules import RulesetHandler
         with patch("zircolite.rules.RulesetHandler.sigma_rules_to_ruleset"):
             with caplog.at_level("WARNING"):
                 handler = RulesetHandler(

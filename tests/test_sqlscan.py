@@ -1,11 +1,16 @@
-"""Tests for the OR-chain rebalancer used to repair over-deep rule SQL."""
+"""Tests for the quote-aware SQL scanner and the OR-chain rebalancer."""
 
 import sqlite3
 from contextlib import closing
 
 import pytest
 
-from zircolite.sqlrewrite import rebalance_sql
+from zircolite.sqlscan import (
+    channel_constraints,
+    column_refs,
+    eventid_constraints,
+    rebalance_sql,
+)
 
 
 def _depth(sql: str) -> int:
@@ -148,3 +153,112 @@ class TestRebalanceLexing:
     def test_tail_keyword_inside_literal_is_not_the_tail(self):
         query = "SELECT * FROM logs WHERE a='x ORDER BY y' OR b=1"
         assert "'x ORDER BY y'" in rebalance_sql(query)
+
+
+class TestRebalanceRefusesNonBooleanParens:
+    """A parenthesised group holding a SELECT is a subquery, not an expression."""
+
+    def test_or_chain_inside_a_subquery_is_left_alone(self):
+        """Re-associating it turns the subquery into a truth value.
+
+        The result still prepares cleanly, which is what makes it dangerous:
+        ``x IN (SELECT ...)`` silently becomes ``x IN (0 or 1)``.
+        """
+        body = " OR ".join(f"a={i}" for i in range(12))
+        query = f"SELECT * FROM logs WHERE a IN (SELECT a FROM t WHERE {body})"
+
+        assert rebalance_sql(query) == query
+
+    def test_a_plain_deep_chain_is_still_rebalanced(self):
+        """The guard must not disarm the repair it sits next to."""
+        assert rebalance_sql(_chain(512)) != _chain(512)
+
+
+class TestColumnRefs:
+    """Column extraction has to respect SQL quoting."""
+
+    def test_backtick_quoted_names_are_found(self):
+        query = (
+            "SELECT * FROM logs WHERE Channel='Security' "
+            "AND (`event.code`='4688' OR `winlog.event_data.Image` LIKE '%x%')"
+        )
+
+        assert column_refs(query) == {
+            "Channel", "event.code", "winlog.event_data.Image"
+        }
+
+    def test_text_inside_string_literals_is_ignored(self):
+        query = "SELECT * FROM logs WHERE CommandLine LIKE '%user=bob%' OR Image='x'"
+
+        assert column_refs(query) == {"CommandLine", "Image"}
+
+    def test_negated_comparisons_still_name_their_column(self):
+        query = "SELECT * FROM logs WHERE CommandLine NOT LIKE '%a%' AND Image IS NOT NULL"
+
+        assert column_refs(query) == {"CommandLine", "Image"}
+
+    def test_double_quoted_and_bracketed_names_are_found(self):
+        query = 'SELECT * FROM logs WHERE "odd name"=\'x\' AND [Data]=\'y\''
+
+        assert column_refs(query) == {"odd name", "Data"}
+
+
+class TestEventIdConstraints:
+    """What a rule can match, read from the SQL that actually runs."""
+
+    @pytest.mark.parametrize(
+        "where,expected",
+        [
+            ("Channel='S' AND EventID=4688", {4688}),
+            ("Channel='S' AND (EventID=4688 AND CommandLine LIKE '%a%')", {4688}),
+            ("Channel='S' AND EventID IN (1,3,5)", {1, 3, 5}),
+            ("Channel='S' AND (EventID=1 OR EventID=2)", {1, 2}),
+            ("EventID='4688'", {4688}),
+            ("`EventID`=4688", {4688}),
+            # Unbounded: the rule may match an eventID this cannot name
+            ("Channel='S' AND NOT (EventID=4624)", None),
+            ("Channel='S' AND (EventID=4688 OR CommandLine LIKE '%m%')", None),
+            ("Channel='S'", None),
+            ("EventID BETWEEN 1 AND 5", None),
+            ("EventID > 100", None),
+        ],
+    )
+    def test_reads_the_bound_or_gives_up(self, where, expected):
+        assert eventid_constraints([f"SELECT * FROM logs WHERE {where}"]) == expected
+
+    def test_one_unbounded_statement_unbounds_the_rule(self):
+        queries = [
+            "SELECT * FROM logs WHERE EventID=1",
+            "SELECT * FROM logs WHERE Channel='S'",
+        ]
+
+        assert eventid_constraints(queries) is None
+
+    def test_statements_union_their_bounds(self):
+        queries = [
+            "SELECT * FROM logs WHERE EventID=1",
+            "SELECT * FROM logs WHERE EventID=2",
+        ]
+
+        assert eventid_constraints(queries) == {1, 2}
+
+
+class TestChannelConstraints:
+    """Correlation rules carry no metadata, so their channel comes from SQL."""
+
+    def test_channels_are_read_from_a_correlation_subquery(self):
+        query = (
+            "SELECT u, COUNT(*) AS c FROM (SELECT * FROM logs WHERE "
+            "Channel='Security' AND EventID=4625) AS subquery "
+            "GROUP BY u HAVING c >= 5"
+        )
+
+        assert channel_constraints([query]) == {"Security"}
+
+    def test_an_unconstrained_channel_reads_as_unknown(self):
+        query = (
+            "SELECT u, COUNT(*) AS c FROM (SELECT * FROM logs WHERE "
+            "EventID=4625) AS subquery GROUP BY u HAVING c >= 5"
+        )
+
+        assert channel_constraints([query]) is None

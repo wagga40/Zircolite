@@ -1,4 +1,3 @@
-#!python3
 """
 Core processing engine for Zircolite.
 
@@ -15,22 +14,23 @@ import os
 import re
 import sqlite3
 import time as _time_module
+from collections.abc import Callable
+from contextlib import nullcontext, suppress
 from functools import lru_cache
 from pathlib import Path
 from sqlite3 import Error
-from typing import TYPE_CHECKING, Any, Callable, Dict, List, Optional, Set, Tuple, Union
+from typing import TYPE_CHECKING, Any, Optional
 
 import orjson as json
-
 from rich.console import Group
 from rich.live import Live
 from rich.panel import Panel
 from rich.progress import (
+    BarColumn,
+    MofNCompleteColumn,
     Progress,
     SpinnerColumn,
     TextColumn,
-    BarColumn,
-    MofNCompleteColumn,
     TimeElapsedColumn,
 )
 from rich.syntax import Syntax
@@ -45,38 +45,19 @@ from .console import (
 )
 from .formats import json_array_requested
 from .shutdown import is_shutdown_requested
-from .sqlrewrite import rebalance_sql
+from .sqlscan import column_refs, rebalance_sql, regex_literals
 from .streaming import StreamingEventProcessor, StrictParseError
 from .utils import sanitize_row_for_csv
 
 # Translation table for stripping newline characters from CSV descriptions.
 _NEWLINE_TRANSLATE = str.maketrans("", "", "\n\r")
 
-# Identifier followed by a comparison/predicate operator in SIGMA-derived SQL.
-# Matches the column name in patterns like `Channel='x'`, `EventID = 1`,
-# `CommandLine LIKE '%foo%'`, `Image IN (...)`, `Score >= 5`.
-_SQL_COLUMN_REF_RE = re.compile(
-    r"(?<![A-Za-z0-9_.])([A-Za-z_][A-Za-z0-9_]*)\s*"
-    r"(?:=|!=|<>|<=|>=|<|>|\bLIKE\b|\bIN\b|\bBETWEEN\b|\bIS\b)",
-    re.IGNORECASE,
-)
-
 # SQLite reports one missing column at a time, quoted or bare.
 _MISSING_COLUMN_RE = re.compile(r"no such column", re.IGNORECASE)
 
 # Raised while parsing when a rule's value list is deeper than
-# SQLITE_MAX_EXPR_DEPTH; see zircolite/sqlrewrite.py for the repair.
+# SQLITE_MAX_EXPR_DEPTH; see zircolite/sqlscan.py for the repair.
 _DEPTH_LIMIT_RE = re.compile(r"expression tree is too large", re.IGNORECASE)
-
-# Reserved SQL words to exclude from column-reference extraction.
-_SQL_RESERVED_WORDS = frozenset({
-    "select", "from", "where", "and", "or", "not", "in", "is", "null",
-    "like", "between", "exists", "case", "when", "then", "else", "end",
-    "as", "on", "join", "inner", "outer", "left", "right", "full",
-    "order", "by", "group", "having", "limit", "offset", "asc", "desc",
-    "distinct", "all", "union", "intersect", "except", "escape",
-    "true", "false",
-})
 
 # ---------------------------------------------------------------------------
 # LRU-cached regex compilation for the SQLite ``regexp`` UDF.
@@ -97,6 +78,23 @@ def _rebalance_cached(query: str) -> str:
     return rebalance_sql(query)
 
 
+@lru_cache(maxsize=256)
+def _uncompilable_regex(query: str) -> str | None:
+    """Why ``query``'s REGEXP patterns cannot compile, or None if they all can.
+
+    SIGMA rules are written against PCRE, so a pattern can use a construct
+    Python's ``re`` rejects -- ``\\p{L}``, a possessive quantifier, a mistyped
+    ``(?<name>)``. Discovering that inside the UDF means discovering it once per
+    row, with nowhere to report it; the rule then looks like a clean non-match.
+    """
+    for pattern in regex_literals(query):
+        try:
+            re.compile(pattern)
+        except re.error as exc:
+            return f"invalid regex {pattern!r}: {exc}"
+    return None
+
+
 def _index_name_for(column: str) -> str:
     """Index name Zircolite gives a column, as accepted by --remove-index."""
     return "idx_" + column.replace(".", "_")
@@ -112,56 +110,57 @@ class ZircoliteCore:
 
     # Use __slots__ for reduced memory footprint per instance
     __slots__ = (
-        "logger",
+        "_auto_index_applied",
+        "_csv_fieldnames",
+        "_csv_header_written",
+        "_cursor",
+        "_escape_cache",
+        "_logs_columns_lower",
+        "_profiling_data",
+        "add_index",
+        "archive_password",
+        "auto_index_top_n",
+        "config",
+        "csv_mode",
         "db_connection",
+        "delimiter",
+        "disable_progress",
+        "failed_files",
+        "first_json_output",
         "full_results",
-        "ruleset",
+        "hashes",
+        "limit",
+        "logger",
         "no_output",
+        "profile_rules",
+        "remove_index",
+        "rules_in_error",
+        "ruleset",
+        "strict_evtx",
         "time_after",
         "time_before",
-        "config",
-        "limit",
-        "csv_mode",
         "time_field",
-        "hashes",
-        "delimiter",
-        "first_json_output",
-        "_csv_header_written",
-        "_csv_fieldnames",
-        "disable_progress",
-        "_escape_cache",
-        "_cursor",
-        "profile_rules",
-        "_profiling_data",
-        "archive_password",
-        "add_index",
-        "remove_index",
-        "auto_index_top_n",
-        "_auto_index_applied",
-        "strict_evtx",
-        "rules_in_error",
-        "failed_files",
-        "_logs_columns_lower",
     )
-    _cursor: Optional[sqlite3.Cursor]
+    _cursor: sqlite3.Cursor | None
+    db_connection: sqlite3.Connection | None
 
     def __init__(
         self,
         config: str,
-        processing_config: Optional[ProcessingConfig] = None,
+        processing_config: ProcessingConfig | None = None,
         *,
-        logger: Optional[logging.Logger] = None
+        logger: logging.Logger | None = None
     ):
         """
         Initialize ZircoliteCore.
-        
+
         Args:
             config: Path to field mappings configuration file
             processing_config: Processing configuration (uses defaults if None)
             logger: Logger instance (creates default if None)
         """
         proc = processing_config or ProcessingConfig()
-        
+
         self.logger = logger or logging.getLogger(__name__)
         self.db_connection = self.create_connection(proc.db_location)
         self.full_results: list = []
@@ -180,7 +179,7 @@ class ZircoliteCore:
         # append flows re-enter with a fresh local writer, and rows must stay
         # aligned with the header written on the first call
         self._csv_header_written = False
-        self._csv_fieldnames: Optional[List[str]] = None
+        self._csv_fieldnames: list[str] | None = None
         self.disable_progress = proc.disable_progress
         self.profile_rules = proc.profile_rules
         self._profiling_data: dict = {}
@@ -192,17 +191,17 @@ class ZircoliteCore:
         self.strict_evtx = proc.strict_evtx
         # Rules whose SQL cannot run at all, by title: reported once, then counted
         # in the summary so a broken rule is never mistaken for a quiet one
-        self.rules_in_error: Dict[str, str] = {}
+        self.rules_in_error: dict[str, str] = {}
         # Inputs that raised during ingestion; --remove-events must not
         # delete a source whose events never made it into the results
-        self.failed_files: Set[str] = set()
+        self.failed_files: set[str] = set()
         # Lowercased logs columns; rebuilt on demand, dropped on any schema change
-        self._logs_columns_lower: Optional[Set[str]] = None
+        self._logs_columns_lower: set[str] | None = None
         # Cache for escaped identifiers to avoid repeated string operations
         self._escape_cache: dict = {}
         # Reusable cursor to avoid creating new cursors for each query
         self._cursor = None
-    
+
     def close(self) -> None:
         """Close the database connection. Safe to call multiple times."""
         self._cursor = None
@@ -216,10 +215,8 @@ class ZircoliteCore:
         """Ensure connection is closed when the instance is garbage-collected."""
         conn = getattr(self, "db_connection", None)
         if conn is not None:
-            try:
+            with suppress(Exception):
                 conn.close()
-            except Exception:
-                pass
             self.db_connection = None
         self._cursor = None
 
@@ -244,7 +241,7 @@ class ZircoliteCore:
         try:
             # Connect to database
             conn = sqlite3.connect(db, isolation_level=None, check_same_thread=False)
-            
+
             # Configure PRAGMA settings based on database type
             # Common PRAGMA settings for both in-memory and on-disk databases.
             # SQLite's auxiliary worker threads (sorting, index scans) scale with cores,
@@ -256,7 +253,7 @@ class ZircoliteCore:
                 ('page_size', '4096'),
                 ('threads', str(sqlite_threads)),
             ]
-            
+
             if db == ':memory:':
                 # In-memory database settings
                 pragmas = [
@@ -264,7 +261,8 @@ class ZircoliteCore:
                     ('synchronous', 'OFF'),
                     ('cache_size', '-128000'),         # 128MB cache
                     ('locking_mode', 'EXCLUSIVE'),     # Single-user mode
-                ] + common_pragmas
+                    *common_pragmas,
+                ]
             else:
                 # On-disk database settings
                 pragmas = [
@@ -272,55 +270,50 @@ class ZircoliteCore:
                     ('synchronous', 'NORMAL'),         # Balance safety and speed
                     ('cache_size', '-64000'),          # 64MB cache
                     ('wal_autocheckpoint', '10000'),   # Less frequent checkpoints
-                ] + common_pragmas
-            
+                    *common_pragmas,
+                ]
+
             # Apply all PRAGMA settings
             for pragma, value in pragmas:
                 conn.execute(f'PRAGMA {pragma} = {value};')
-            
+
             # Raw tuples; we build dicts with None filtered in execute_select_query
             conn.row_factory = None
 
             def udf_regex(x, y):
                 """User-defined function for regex matching in SQLite.
-                
+
                 Uses LRU-cached compiled patterns to avoid redundant
                 re.compile() calls when the same SIGMA rule pattern is
-                evaluated against many rows.
+                evaluated against many rows. Patterns that cannot compile are
+                caught before the query runs, by ``_uncompilable_regex``.
                 """
                 if y is None:
                     return 0
-                try:
-                    # str(): a column whose first value was an int is typed
-                    # INTEGER, and re.search would raise TypeError on it --
-                    # which SQLite reports as a failure of the whole rule.
-                    return 1 if _compile_regex(x).search(str(y)) else 0
-                except (re.error, TypeError):
-                    return 0
+                # str(): a column whose first value was an int is typed
+                # INTEGER, and re.search would raise TypeError on it --
+                # which SQLite reports as a failure of the whole rule.
+                return 1 if _compile_regex(x).search(str(y)) else 0
 
             conn.create_function('regexp', 2, udf_regex)  # Allows to use regex in SQLite
             return conn
-        except Error as e:
-            self.logger.error(f"[red]    [-] {e}[/]")
+        except BaseException as exc:
+            # Half-opened connections must not leak, whatever went wrong --
+            # including KeyboardInterrupt part-way through the PRAGMAs.
             if conn is not None:
-                try:
+                with suppress(Exception):
                     conn.close()
-                except Exception:
-                    pass
-            raise RuntimeError(f"Unable to open SQLite database '{db}': {e}") from e
-        except BaseException:
-            if conn is not None:
-                try:
-                    conn.close()
-                except Exception:
-                    pass
+            if isinstance(exc, Error):
+                self.logger.error(f"[red]    [-] {exc}[/]")
+                raise RuntimeError(
+                    f"Unable to open SQLite database '{db}': {exc}"
+                ) from exc
             raise
 
     def create_db(self, field_stmt: str) -> None:
         """Create the database table with the specified field statement."""
         cleaned_field_stmt = field_stmt.strip()
-        if cleaned_field_stmt.endswith(','):
-            cleaned_field_stmt = cleaned_field_stmt[:-1]
+        cleaned_field_stmt = cleaned_field_stmt.removesuffix(',')
         if cleaned_field_stmt:
             create_table_stmt = f"CREATE TABLE logs ( row_id INTEGER PRIMARY KEY AUTOINCREMENT, {cleaned_field_stmt} );"
         else:
@@ -329,13 +322,13 @@ class ZircoliteCore:
         if not self.execute_query(create_table_stmt):
             raise RuntimeError("Unable to create database table")
 
-    def _get_table_columns(self) -> List[str]:
+    def _get_table_columns(self) -> list[str]:
         """Return the list of column names for the logs table."""
         cursor = self._get_cursor()
         cursor.execute('PRAGMA table_info("logs")')
         return [row[1] for row in cursor.fetchall()]
 
-    def _auto_index_candidates(self, columns: List[str]) -> List[str]:
+    def _auto_index_candidates(self, columns: list[str]) -> list[str]:
         """Pick the top-N columns referenced by the loaded ruleset.
 
         Columns already covered by built-in indices (``eventid``, ``Channel``)
@@ -344,6 +337,10 @@ class ZircoliteCore:
         excluded too, so auto-indexing cannot silently recreate an index the
         user asked for gone. Names are matched case-insensitively against the
         actual table columns.
+
+        Columns are ranked by how many *rules* filter on them, not by how often
+        they appear: one rule listing three thousand hashes says no more about
+        which index earns its keep than a rule listing one.
         """
         if not self.auto_index_top_n or not self.ruleset:
             return []
@@ -353,22 +350,21 @@ class ZircoliteCore:
         dropped_lower = {name.lower() for name in self.remove_index}
         columns_by_lower = {c.lower(): c for c in columns}
 
-        counts: Dict[str, int] = {}
+        counts: dict[str, int] = {}
         for rule in self.ruleset:
+            referenced: set[str] = set()
             for sql_query in rule.get("rule", []):
-                if not isinstance(sql_query, str):
+                if isinstance(sql_query, str):
+                    referenced |= column_refs(sql_query)
+            for candidate in referenced:
+                if candidate.lower() in already_indexed_lower:
                     continue
-                for match in _SQL_COLUMN_REF_RE.finditer(sql_query):
-                    candidate = match.group(1)
-                    cl = candidate.lower()
-                    if cl in _SQL_RESERVED_WORDS or cl in already_indexed_lower:
-                        continue
-                    actual = columns_by_lower.get(cl)
-                    if actual is None:
-                        continue
-                    if _index_name_for(actual).lower() in dropped_lower:
-                        continue
-                    counts[actual] = counts.get(actual, 0) + 1
+                actual = columns_by_lower.get(candidate.lower())
+                if actual is None:
+                    continue
+                if _index_name_for(actual).lower() in dropped_lower:
+                    continue
+                counts[actual] = counts.get(actual, 0) + 1
 
         if not counts:
             return []
@@ -378,15 +374,25 @@ class ZircoliteCore:
 
     def create_index(self) -> None:
         """Create standard and optional indexes; drop any requested by remove_index."""
+        conn = self.db_connection
+        if conn is None:
+            self.logger.error("[error]    [-] No connection to Db[/]")
+            return
         columns = self._get_table_columns()
         cursor = self._get_cursor()
-        conn = self.db_connection
 
         self.execute_query('CREATE INDEX "idx_eventid" ON "logs" ("eventid");')
 
-        if "Channel" in columns:
+        # Case-folded like every other column lookup: a dataset whose channel
+        # arrives as `winlog.channel` produces a lowercase `channel` column,
+        # and an exact-case test would leave it unindexed.
+        channel_column = next((c for c in columns if c.lower() == "channel"), None)
+        if channel_column is not None:
             try:
-                cursor.execute('CREATE INDEX "idx_channel" ON "logs" ("Channel");')
+                escaped = self.escape_identifier(channel_column)
+                cursor.execute(
+                    f'CREATE INDEX "idx_channel" ON "logs" ("{escaped}");'
+                )
                 conn.commit()
             except sqlite3.OperationalError:
                 pass
@@ -426,7 +432,7 @@ class ZircoliteCore:
         self._create_column_indexes(auto_index_cols, columns)
 
     def _create_column_indexes(
-        self, cols: List[str], columns: List[str]
+        self, cols: list[str], columns: list[str]
     ) -> None:
         """Create one ``idx_<column>`` index per entry of *cols* that exists."""
         if self.db_connection is None:
@@ -460,15 +466,11 @@ class ZircoliteCore:
             self.logger.error("[error]    [-] No connection to Db[/]")
             return False
 
-    def _query_columns(self, query: str) -> Set[str]:
+    def _query_columns(self, query: str) -> set[str]:
         """Column names a rule query compares against, minus SQL keywords."""
-        return {
-            match.group(1)
-            for match in _SQL_COLUMN_REF_RE.finditer(query)
-            if match.group(1).lower() not in _SQL_RESERVED_WORDS
-        }
+        return column_refs(query)
 
-    def _logs_columns(self) -> Set[str]:
+    def _logs_columns(self) -> set[str]:
         """Lowercased column names of the logs table, cached between rules."""
         if self._logs_columns_lower is None:
             self._logs_columns_lower = {c.lower() for c in self._get_table_columns()}
@@ -481,13 +483,14 @@ class ZircoliteCore:
         naming one field this dataset never produced fails as a whole -- losing
         the branches that reference fields it *does* have. Adding the absent ones
         as NULL makes the rule evaluate exactly as it would against an event that
-        simply lacks those fields. A rule whose fields are *all* absent cannot
-        match anything either way, so the table is left alone for it.
+        simply lacks those fields.
+
+        Rules whose fields are *all* absent are widened too: ``|exists: false``
+        becomes ``IS NULL``, which matches every row once the column is there.
         """
         columns = self._logs_columns()
-        referenced = self._query_columns(query)
-        missing = [c for c in referenced if c.lower() not in columns]
-        if not missing or len(missing) == len(referenced):
+        missing = [c for c in self._query_columns(query) if c.lower() not in columns]
+        if not missing:
             return False
         cursor = self._get_cursor()
         for name in missing:
@@ -504,7 +507,9 @@ class ZircoliteCore:
             columns.add(name.lower())
         return True
 
-    def _note_broken_rule(self, rule_title: Optional[str], error: Exception) -> None:
+    def _note_broken_rule(
+        self, rule_title: str | None, error: Exception | str
+    ) -> None:
         """Record a rule whose SQL cannot run at all; reported once, in the summary."""
         title = rule_title or "unknown rule"
         if title in self.rules_in_error:
@@ -513,11 +518,15 @@ class ZircoliteCore:
         self.logger.debug(f"Rule '{title}' could not be evaluated: {error}")
 
     def execute_select_query(
-        self, query: str, rule_title: Optional[str] = None
-    ) -> List[Dict[str, Any]]:
+        self, query: str, rule_title: str | None = None
+    ) -> list[dict[str, Any]]:
         """Execute a SELECT SQL query and return the results as a list of dictionaries."""
         if self.db_connection is None:
             self.logger.error("[error]    [-] No connection to Db[/]")
+            return []
+        bad_regex = _uncompilable_regex(query)
+        if bad_regex is not None:
+            self._note_broken_rule(rule_title, bad_regex)
             return []
         # Syntax-highlighted SQL in debug mode
         if self.logger.isEnabledFor(logging.DEBUG):
@@ -530,7 +539,7 @@ class ZircoliteCore:
         # A query can need more than one repair, and the first failure hides the
         # rest: an over-deep rule is rejected while parsing, before SQLite ever
         # looks up its column names. Each repair is attempted at most once.
-        attempted: Set[str] = set()
+        attempted: set[str] = set()
         while True:
             try:
                 cursor = self._get_cursor()
@@ -540,7 +549,7 @@ class ZircoliteCore:
                     return []
                 col_names = [d[0] for d in cursor.description]
                 return [
-                    {k: v for k, v in zip(col_names, row) if v is not None}
+                    {k: v for k, v in zip(col_names, row, strict=True) if v is not None}
                     for row in rows
                 ]
             except sqlite3.Error as e:
@@ -593,7 +602,7 @@ class ZircoliteCore:
             self._escape_cache[identifier] = escaped
         return escaped
 
-    def insert_data_to_db(self, data: Union[Dict[str, Any], List[Dict[str, Any]]]) -> bool:
+    def insert_data_to_db(self, data: dict[str, Any] | list[dict[str, Any]]) -> bool:
         """Build a parameterized INSERT INTO query and insert data into the database.
         Supports both single dictionaries and lists of dictionaries (batch insertion).
         """
@@ -621,32 +630,35 @@ class ZircoliteCore:
             conn.execute('BEGIN TRANSACTION')
 
             # Group rows by their column signatures
-            batches_by_columns: Dict[Tuple[str, ...], List[Dict[str, Any]]] = {}
+            batches_by_columns: dict[tuple[str, ...], list[dict[str, Any]]] = {}
             for row in batch:
                 cols = tuple(row.keys())
                 if cols not in batches_by_columns:
                     batches_by_columns[cols] = []
                 batches_by_columns[cols].append(row)
-                
+
             for cols, rows in batches_by_columns.items():
                 # Identifiers must be quoted: event keys can be SQL keywords
                 # ('Group') or contain spaces
                 columns_escaped = ', '.join([f'"{self.escape_identifier(col)}"' for col in cols])
                 placeholders = ', '.join(['?'] * len(cols))
-                insert_stmt = f'INSERT INTO logs ({columns_escaped}) VALUES ({placeholders})'
-                
+                # Column names go through escape_identifier; the values are
+                # bound parameters and are never interpolated.
+                insert_stmt = (
+                    f'INSERT INTO logs ({columns_escaped}) VALUES ({placeholders})'  # noqa: S608
+                )
+
                 values_list = []
                 for row in rows:
                     values = []
                     for col in cols:
                         value = row[col]
-                        if isinstance(value, int):
-                            # Check if value exceeds SQLite INTEGER limits
-                            if abs(value) > 9223372036854775807:
-                                value = str(value)  # Convert to string
+                        # Values past SQLite's INTEGER range must go in as text
+                        if isinstance(value, int) and abs(value) > 9223372036854775807:
+                            value = str(value)
                         values.append(value)
                     values_list.append(tuple(values))
-                
+
                 conn.executemany(insert_stmt, values_list)
 
             conn.execute('COMMIT')
@@ -673,7 +685,7 @@ class ZircoliteCore:
         finally:
             on_disk_db.close()
 
-    def execute_rule(self, rule: Dict[str, Any]) -> Dict[str, Any]:
+    def execute_rule(self, rule: dict[str, Any]) -> dict[str, Any]:
         """Execute a single Sigma rule against the database and return the results."""
         # Fast path: check for required key first
         sigma_queries = rule.get("rule")
@@ -686,7 +698,7 @@ class ZircoliteCore:
             return {}
 
         # Pre-allocate list with estimated capacity
-        filtered_rows: List[Dict[str, Any]] = []
+        filtered_rows: list[dict[str, Any]] = []
         filtered_rows_extend = filtered_rows.extend  # Cache method reference
         csv_mode = self.csv_mode  # Cache instance variable
         execute_select = self.execute_select_query  # Cache method reference
@@ -696,10 +708,7 @@ class ZircoliteCore:
         for sql_query in sigma_queries:
             data = execute_select(sql_query, rule_title=rule_title)
             if data:
-                if csv_mode:
-                    cleaned_rows = [sanitize_row_for_csv(row) for row in data]
-                else:
-                    cleaned_rows = data
+                cleaned_rows = [sanitize_row_for_csv(row) for row in data] if csv_mode else data
                 filtered_rows_extend(cleaned_rows)
 
         if not filtered_rows:
@@ -724,14 +733,14 @@ class ZircoliteCore:
         return results
 
     def load_ruleset_from_var(
-        self, ruleset: List[Dict[str, Any]], rule_filters: Optional[List[str]]
+        self, ruleset: list[dict[str, Any]], rule_filters: list[str] | None
     ) -> None:
         """Load a ruleset from a variable."""
         self.ruleset = ruleset
         self.apply_ruleset_filters(rule_filters)
-    
+
     def apply_ruleset_filters(
-        self, rule_filters: Optional[List[str]] = None
+        self, rule_filters: list[str] | None = None
     ) -> None:
         """Remove empty rules and filtered rules from the ruleset."""
         self.ruleset = list(filter(None, self.ruleset))
@@ -740,11 +749,11 @@ class ZircoliteCore:
 
     def _write_result_to_output(
         self,
-        rule_results: Dict[str, Any],
+        rule_results: dict[str, Any],
         file_handle: Any,
-        csv_writer: Optional[Any],
+        csv_writer: Any | None,
         needs_comma_prefix: bool,
-    ) -> Tuple[Optional[Any], bool]:
+    ) -> tuple[Any | None, bool]:
         """Write rule results to output file. Returns (csv_writer, needs_comma_prefix).
 
         In CSV mode, the writer is created once with fieldnames from the first match row
@@ -759,12 +768,7 @@ class ZircoliteCore:
                 # multi-DB flows) each call re-enters with a fresh local writer,
                 # and rows must stay aligned with the single header.
                 if self._csv_fieldnames is None:
-                    self._csv_fieldnames = [
-                        "rule_title",
-                        "rule_description",
-                        "rule_level",
-                        "rule_count",
-                    ] + self._csv_event_columns(rule_results)
+                    self._csv_fieldnames = ["rule_title", "rule_description", "rule_level", "rule_count", *self._csv_event_columns(rule_results)]
                 csv_writer = csv.DictWriter(
                     file_handle,
                     delimiter=self.delimiter,
@@ -811,7 +815,7 @@ class ZircoliteCore:
                 self.logger.error(f"[error]    [-] Error saving some results: {e}[/]")
         return csv_writer, needs_comma_prefix
 
-    def _csv_event_columns(self, rule_results: Dict[str, Any]) -> List[str]:
+    def _csv_event_columns(self, rule_results: dict[str, Any]) -> list[str]:
         """Event columns for the CSV header.
 
         The table schema, not the first matching row: rows carry only their
@@ -836,10 +840,10 @@ class ZircoliteCore:
         write_mode: str = "w",
         keep_results: bool = False,
         last_ruleset: bool = False,
-        source_label: Optional[str] = None,
+        source_label: str | None = None,
         show_table: bool = True,
-        disable_progress: Optional[bool] = None,
-        progress_callback: Optional[Callable[[int, int], None]] = None,
+        disable_progress: bool | None = None,
+        progress_callback: Callable[[int, int], None] | None = None,
     ) -> None:
         """Execute all rules in the ruleset and handle output."""
         csv_writer = None
@@ -894,7 +898,11 @@ class ZircoliteCore:
                                 needs_comma_prefix = not stripped.endswith((b'[', b','))
 
             # Open file in text mode since we will write decoded strings
-            file_handle = open(out_file, write_mode, encoding='utf-8', newline='')
+            # Results stream out rule by rule, so the handle has to outlive
+            # this scope; the enclosing try/finally closes it.
+            file_handle = open(  # noqa: SIM115
+                out_file, write_mode, encoding='utf-8', newline=''
+            )
             if is_json_mode and (write_mode != 'a' or json_fresh_output):
                 file_handle.write('[')  # Start JSON array
             if self.csv_mode and write_mode != 'a':
@@ -922,7 +930,7 @@ class ZircoliteCore:
             _perf_counter = _time_module.perf_counter
             total_rules = len(self.ruleset)
 
-            def run_rule(rule) -> Optional[dict]:
+            def run_rule(rule) -> dict | None:
                 """Execute one rule, timing it and recording the summary row."""
                 _t0 = _perf_counter() if _profile else 0.0
                 rule_results = execute_rule(rule)
@@ -945,30 +953,20 @@ class ZircoliteCore:
                     full_results_append(rule_results)
                 return rule_results
 
+            # One loop, three ways of showing it: an external callback, no
+            # display at all, or a Rich Live progress bar with a running
+            # detection counter. Only the reporting differs, so only the
+            # reporting is branched on.
+            detection_counts = {
+                "critical": 0, "high": 0, "medium": 0, "low": 0, "informational": 0
+            }
+            progress = None
+            task_id = None
+            live_display: Any = nullcontext(None)
+
             if progress_callback is not None:
                 progress_callback(0, total_rules)
-                for i, rule in enumerate(self.ruleset):
-                    if is_shutdown_requested():
-                        break
-                    rule_results = run_rule(rule)
-                    progress_callback(i + 1, total_rules)
-                    if rule_results is not None and not no_output:
-                        csv_writer, needs_comma_prefix = self._write_result_to_output(
-                            rule_results, file_handle, csv_writer, needs_comma_prefix
-                        )
-            elif _disable:
-                for rule in self.ruleset:
-                    if is_shutdown_requested():
-                        break
-                    rule_results = run_rule(rule)
-                    if rule_results is not None and not no_output:
-                        csv_writer, needs_comma_prefix = self._write_result_to_output(
-                            rule_results, file_handle, csv_writer, needs_comma_prefix
-                        )
-            else:
-                # Process with Rich Live display: progress bar + live detection counter
-                detection_counts = {"critical": 0, "high": 0, "medium": 0, "low": 0, "informational": 0}
-
+            elif not _disable:
                 progress = Progress(
                     SpinnerColumn(),
                     TextColumn("[progress.description]{task.description}"),
@@ -977,17 +975,24 @@ class ZircoliteCore:
                     TextColumn("\u2022"),
                     TimeElapsedColumn(),
                 )
-
                 task_id = progress.add_task("Executing rules", total=total_rules)
+                live_display = Live(
+                    console=console, refresh_per_second=10, transient=True
+                )
 
-                with Live(console=console, refresh_per_second=10, transient=True) as live:
-                    for rule in self.ruleset:
-                        if is_shutdown_requested():
-                            break
-                        rule_results = run_rule(rule)
+            with live_display as live:
+                for i, rule in enumerate(self.ruleset):
+                    if is_shutdown_requested():
+                        break
+                    rule_results = run_rule(rule)
+
+                    if progress_callback is not None:
+                        progress_callback(i + 1, total_rules)
+                    elif progress is not None and task_id is not None:
                         progress.advance(task_id)
 
-                        if rule_results is not None:
+                    if rule_results is not None:
+                        if progress is not None:
                             det_level = rule_results.get("rule_level", "unknown").lower()
                             if det_level in detection_counts:
                                 # Matching events, like the summary panel: the
@@ -996,17 +1001,19 @@ class ZircoliteCore:
                                 detection_counts[det_level] += rule_results.get(
                                     "count", 0
                                 )
-                            if not no_output:
-                                csv_writer, needs_comma_prefix = self._write_result_to_output(
-                                    rule_results, file_handle, csv_writer, needs_comma_prefix
-                                )
+                        if not no_output:
+                            csv_writer, needs_comma_prefix = self._write_result_to_output(
+                                rule_results, file_handle, csv_writer, needs_comma_prefix
+                            )
 
-                        # Update live display with progress + detection counter
-                        live.update(Group(progress, make_detection_counter(detection_counts)))
+                    if live is not None and progress is not None:
+                        live.update(
+                            Group(progress, make_detection_counter(detection_counts))
+                        )
 
             # Sort results by level priority, then by count (descending)
             all_rule_results.sort(key=sort_key_severity)
-            
+
             # Display sorted results as a table (suppressed in quiet mode or when show_table=False)
             if show_table and not is_quiet() and all_rule_results:
                 console.print()
@@ -1028,19 +1035,38 @@ class ZircoliteCore:
                 file_handle.close()
 
     @staticmethod
-    def _infer_field_statement(events: List[Dict[str, Any]]) -> str:
+    def _as_ingested(event: dict[str, Any]) -> dict[str, Any]:
+        """Normalise a test event the way ingestion normalises a real one.
+
+        Only booleans differ: ingestion writes them as ``'true'``/``'false'``
+        (streaming.py), so a rule matching ``IsExecutable='true'`` fires in a
+        real run. Handing sqlite3 a Python ``True`` instead stores ``'1'``, and
+        --test-rules would report a false negative against a working rule.
+        """
+        return {
+            key: ("true" if value else "false") if isinstance(value, bool) else value
+            for key, value in event.items()
+        }
+
+    @staticmethod
+    def _infer_field_statement(events: list[dict[str, Any]]) -> str:
         """Build a field statement with column types inferred from event values.
 
         The production pipeline stores ints in INTEGER columns; an all-TEXT test
         schema would make numeric predicates compare lexicographically and
         diverge from production behavior.
+
+        Booleans are the exception: ingestion writes them as the strings
+        ``'true'``/``'false'`` (streaming.py), so typing them INTEGER here would
+        report a rule matching ``IsExecutable='true'`` as a failure while it
+        fires perfectly well in a real run.
         """
-        types: Dict[str, str] = {}
+        types: dict[str, str] = {}
         for ev in events:
             for key, value in ev.items():
-                if key in types or value is None:
+                if key in types or value is None or isinstance(value, bool):
                     continue
-                if isinstance(value, bool) or isinstance(value, int):
+                if isinstance(value, int):
                     types[key] = "INTEGER"
                 elif isinstance(value, float):
                     types[key] = "REAL"
@@ -1113,8 +1139,8 @@ class ZircoliteCore:
                 continue
             matched_case_ids.add(id(tc))
 
-            tp_events = tc.get('true_positive', [])
-            tn_events = tc.get('true_negative', [])
+            tp_events = [self._as_ingested(e) for e in tc.get('true_positive', [])]
+            tn_events = [self._as_ingested(e) for e in tc.get('true_negative', [])]
             tp_pass = True
             tn_pass = True
             tp_count = 0
@@ -1197,16 +1223,16 @@ class ZircoliteCore:
         for title, ms in other._profiling_data.items():
             self._profiling_data[title] = self._profiling_data.get(title, 0.0) + ms
 
-    def run_streaming(self, log_files: list, input_type: str = 'evtx', 
+    def run_streaming(self, log_files: list, input_type: str = 'evtx',
                       args_config=None, extractor: Optional['EvtxExtractor'] = None,
                       disable_progress: bool = False,
-                      event_filter: 'Optional[EventFilter]' = None,
+                      event_filter: 'EventFilter | None' = None,
                       return_filtered_count: bool = False,
                       keepflat_file=None,
-                      _raw_config: Optional[dict] = None) -> 'int | tuple[int, int, int]':
+                      _raw_config: dict | None = None) -> 'int | tuple[int, int, int]':
         """
         Process log files using streaming mode - single-pass extraction, flattening, and DB insertion.
-        
+
         Features:
         - Eliminates intermediate JSON file I/O
         - Avoids double JSON parsing
@@ -1214,7 +1240,7 @@ class ZircoliteCore:
         - Uses dynamic schema discovery
         - Supports early event filtering based on channel/eventID
         - Optional keepflat: writes flattened events to a caller-managed file handle
-        
+
         Args:
             log_files: List of log files to process
             input_type: Type of input ('evtx', 'json', 'json_array', 'xml', 'sysmon_linux', 'auditd')
@@ -1228,15 +1254,15 @@ class ZircoliteCore:
                           is responsible for opening and closing the file)
             _raw_config: Pre-parsed field-mappings dict passed through to
                         StreamingEventProcessor to skip redundant config reads.
-            
+
         Returns:
             Total number of events processed, or (total_events, filtered_count,
             time_filtered_count) if return_filtered_count=True
         """
         self.logger.info("[+] Processing events (streaming mode)")
-        
+
         json_array = json_array_requested(args_config) if args_config else False
-        
+
         # Create streaming processor with ProcessingConfig
         proc_config = ProcessingConfig(
             time_after=self.time_after,
@@ -1255,11 +1281,11 @@ class ZircoliteCore:
             event_filter=event_filter,
             _raw_config=_raw_config,
         )
-        
+
         # Create initial table structure
         self.logger.info("[+] Creating dynamic model")
         processor.create_initial_table(self.db_connection)
-        
+
         # Process each file
         total_events = 0
 
@@ -1269,7 +1295,7 @@ class ZircoliteCore:
                 file_size = os.path.getsize(log_file)
                 if file_size == 0:
                     return 0
-                
+
                 event_count = processor.process_file_streaming(
                     self.db_connection,
                     str(log_file),
@@ -1292,7 +1318,7 @@ class ZircoliteCore:
                 self.logger.error(f"[error]    [-] Error processing {log_file}: {e}[/]")
                 self.failed_files.add(str(log_file))
                 return 0
-        
+
         show_progress = not is_quiet()
         if show_progress:
             if disable_progress:
@@ -1345,7 +1371,7 @@ class ZircoliteCore:
         # Create index after all data is inserted
         self.logger.info("[+] Creating indexes")
         self.create_index()
-        
+
         # Log filtered events statistics. Report whenever a filter was active,
         # not only when it dropped something: "ran and dropped nothing" and
         # "never ran" are different answers to "is the filter working?".
@@ -1363,7 +1389,7 @@ class ZircoliteCore:
             )
         else:
             self.logger.info(f"[+] Total events processed: [magenta]{total_events:,}[/]")
-        
+
         if return_filtered_count:
             return total_events, filtered_count, time_filtered_count
         return total_events

@@ -1,4 +1,3 @@
-#!python3
 """
 Ruleset handling and updating for Zircolite.
 
@@ -14,23 +13,34 @@ import os
 import re
 import shutil
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Set, FrozenSet, Union
+from typing import Any
 
 import orjson as json
 import requests  # type: ignore[import-untyped]
 import yaml
-# Rich console for styled output
-from .console import console, is_quiet, make_file_link
+
+# Rich progress for downloads and conversion
+from rich.progress import (
+    BarColumn,
+    DownloadColumn,
+    Progress,
+    SpinnerColumn,
+    TextColumn,
+    TimeRemainingColumn,
+    TransferSpeedColumn,
+)
+from sigma.backends.sqlite import sqlite
 from sigma.collection import SigmaCollection
 from sigma.correlations import SigmaCorrelationRule
-from sigma.rule import SigmaRule
-from sigma.backends.sqlite import sqlite
-from sigma.processing.resolver import ProcessingPipelineResolver
 from sigma.plugins import InstalledSigmaPlugins
-# Rich progress for downloads and conversion
-from rich.progress import Progress, SpinnerColumn, TextColumn, BarColumn, DownloadColumn, TransferSpeedColumn, TimeRemainingColumn
+from sigma.processing.resolver import ProcessingPipelineResolver
+from sigma.rule import SigmaRule
 
 from .config import RulesetConfig
+
+# Rich console for styled output
+from .console import console, is_quiet, make_file_link
+from .sqlscan import channel_constraints, eventid_constraints
 from .utils import random_suffix
 
 
@@ -40,6 +50,15 @@ class EventFilter:
 
     This class extracts the channel and eventID values from a ruleset and
     provides fast lookup to determine if an event should be processed.
+
+    EventID bounds come from each rule's SQL, never from its ``eventid``
+    metadata. The backend collects that metadata from every detection group
+    including negated ``filter`` blocks, so a rule that *excludes* an eventID
+    arrives claiming to want it; bounding on that drops exactly the events the
+    rule is looking for. Anything the SQL does not pin down -- a negated
+    comparison, an OR branch free of EventID, a correlation subquery -- leaves
+    the channel unbounded, because a filter that guesses wrong produces a rule
+    that finds nothing and says nothing.
 
     EventIDs are bounded *per channel*. A rule naming a channel but no eventID
     matches any eventID on that channel, so it widens only its own channel
@@ -60,18 +79,24 @@ class EventFilter:
     """
 
     __slots__ = (
-        'channels', 'eventids', '_has_filter_data', 'logger',
-        '_channels_lower', '_rules_with_filter', '_rules_without_filter',
-        '_channel_filter', '_eventid_filter', '_channel_map',
-        '_eventid_bounded', '_has_correlation_rules'
+        '_channel_filter',
+        '_channel_map',
+        '_channels_lower',
+        '_eventid_bounded',
+        '_eventid_filter',
+        '_has_filter_data',
+        '_rules_with_filter',
+        '_rules_without_filter',
+        'channels',
+        'eventids',
+        'logger'
     )
 
     def __init__(
         self,
-        rulesets: List[Dict[str, Any]],
+        rulesets: list[dict[str, Any]],
         *,
-        logger: Optional[logging.Logger] = None,
-        has_correlation_rules: bool = False
+        logger: logging.Logger | None = None,
     ):
         """
         Initialize EventFilter from a list of rules.
@@ -80,19 +105,16 @@ class EventFilter:
             rulesets: List of rule dictionaries, each potentially containing
                       'channel' (list of strings) and 'eventid' (list of ints)
             logger: Logger instance (creates default if None)
-            has_correlation_rules: True when the ruleset contains correlation
-                      rules. They carry no channel/eventID metadata while their
-                      SQL does, so per-channel eventID bounds would starve them.
         """
         self.logger = logger or logging.getLogger(__name__)
 
         # Storage for unique values across ALL rules (built as sets, converted to frozenset)
-        self.channels: FrozenSet[str] = frozenset()
-        self.eventids: FrozenSet[int] = frozenset()
+        self.channels: frozenset[str] = frozenset()
+        self.eventids: frozenset[int] = frozenset()
 
         # Channel (lowercase, plus an original-case alias) -> frozenset of
         # eventIDs, or True when any eventID is allowed on that channel.
-        self._channel_map: Dict[str, Union[FrozenSet[int], bool]] = {}
+        self._channel_map: dict[str, frozenset[int] | bool] = {}
 
         # Stats
         self._rules_with_filter = 0
@@ -103,15 +125,61 @@ class EventFilter:
         self._channel_filter = False
         self._eventid_filter = False
         self._eventid_bounded = False
-        self._has_correlation_rules = has_correlation_rules
 
         # Pre-computed lowercase channels for case-insensitive matching
-        self._channels_lower: FrozenSet[str] = frozenset()
+        self._channels_lower: frozenset[str] = frozenset()
 
         # Extract filter data from rulesets
         self._extract_filter_data(rulesets)
 
-    def _extract_filter_data(self, rulesets: List[Dict[str, Any]]) -> None:
+    @staticmethod
+    def _rule_channels(rule: dict[str, Any], queries: list[str]) -> list[str]:
+        """The channels a rule can match.
+
+        The ``channel`` metadata is a bag of values collected from every
+        detection group, so it can name channels the rule *excludes* as well as
+        ones it wants. Naming a spare channel only keeps events that would
+        otherwise be skipped, so it is safe to trust. Correlation rules carry no
+        metadata at all; theirs have to be read out of the SQL that embeds the
+        base rule, or their channel is dropped from the filter and they can
+        never fire.
+        """
+        channels = [channel for channel in (rule.get('channel') or []) if channel]
+        return channels or sorted(channel_constraints(queries) or [])
+
+    def _rule_eventids(
+        self, rule: dict[str, Any], queries: list[str]
+    ) -> set[int] | None:
+        """The eventIDs a rule can match, or None when it cannot be bounded.
+
+        Read from the rule's SQL, which is what actually runs. The ``eventid``
+        metadata cannot be trusted: ``pysigma-backend-sqlite`` harvests it from
+        every detection group including negated ``filter`` blocks, so a rule
+        that *excludes* EventID 4624 arrives claiming to want it. Bounding a
+        channel on that drops precisely the events the rule is looking for.
+
+        Correlation rules stay unbounded: their SQL wraps the base rule's
+        detection in a subquery, and mistaking that shape would starve them.
+        Rules carrying no SQL fall back to the metadata -- they cannot run, and
+        bounds only ever union, so they can widen a channel but never narrow it.
+        """
+        if rule.get('correlation'):
+            return None
+        if queries:
+            return eventid_constraints(queries)
+        ids: set[int] = set()
+        for eventid in rule.get('eventid') or []:
+            if eventid is None:
+                continue
+            try:
+                ids.add(int(eventid))
+            except (ValueError, TypeError):
+                self.logger.debug(
+                    f"EventFilter: skipping non-numeric eventid '{eventid}'"
+                )
+        return ids or None
+
+    def _extract_filter_data(self, rulesets: list[dict[str, Any]]) -> None:
         """Collect the channels, the eventIDs, and the per-channel bounds."""
         rules_with_filter = 0
         rules_without_filter = 0
@@ -119,24 +187,16 @@ class EventFilter:
         rules_without_eventid = 0
 
         # Build as mutable sets first
-        channels_set: Set[str] = set()
-        eventids_set: Set[int] = set()
+        channels_set: set[str] = set()
+        eventids_set: set[int] = set()
         # Lowercase channel -> mutable eventID set, or True for "any eventID"
-        channel_bounds: Dict[str, Union[Set[int], bool]] = {}
+        channel_bounds: dict[str, set[int] | bool] = {}
 
         for rule in rulesets:
-            channels = rule.get('channel', [])
-            eventids = rule.get('eventid', [])
-
-            rule_ids: Set[int] = set()
-            for eventid in eventids:
-                if eventid is not None:
-                    try:
-                        rule_ids.add(int(eventid))
-                    except (ValueError, TypeError):
-                        self.logger.debug(
-                            f"EventFilter: skipping non-numeric eventid '{eventid}'"
-                        )
+            queries = rule.get('rule') or []
+            channels = self._rule_channels(rule, queries)
+            rule_ids = self._rule_eventids(rule, queries)
+            eventids = rule_ids if rule_ids is not None else []
 
             # Check if this rule has filter metadata
             if channels or eventids:
@@ -147,7 +207,7 @@ class EventFilter:
                     if channel:
                         channels_set.add(channel)
 
-                eventids_set.update(rule_ids)
+                eventids_set.update(eventids)
             else:
                 rules_without_filter += 1
 
@@ -207,24 +267,13 @@ class EventFilter:
             )
 
     def _freeze_channel_bounds(
-        self, channel_bounds: Dict[str, Union[Set[int], bool]]
-    ) -> Dict[str, Union[FrozenSet[int], bool]]:
-        """Freeze the per-channel bounds and add original-case aliases.
-
-        Correlation rules are excluded from the ruleset the filter is built
-        from, yet their SQL carries its own Channel/EventID predicates. Bounding
-        eventIDs would leave them with no events, so their presence keeps every
-        channel unbounded -- the channel axis alone, as before.
-        """
-        if self._has_correlation_rules:
-            frozen: Dict[str, Union[FrozenSet[int], bool]] = {
-                key: True for key in channel_bounds
-            }
-        else:
-            frozen = {
-                key: (True if value is True else frozenset(value))  # type: ignore[arg-type]
-                for key, value in channel_bounds.items()
-            }
+        self, channel_bounds: dict[str, set[int] | bool]
+    ) -> dict[str, frozenset[int] | bool]:
+        """Freeze the per-channel bounds and add original-case aliases."""
+        frozen: dict[str, frozenset[int] | bool] = {
+            key: (True if value is True else frozenset(value))  # type: ignore[arg-type]
+            for key, value in channel_bounds.items()
+        }
 
         # Alias the original spelling so the common case costs one dict lookup
         for channel in self.channels:
@@ -239,7 +288,7 @@ class EventFilter:
         """Check if the filter has anything to filter on."""
         return self._has_filter_data
 
-    def should_process_event(self, channel: Optional[str], eventid: Optional[int]) -> bool:
+    def should_process_event(self, channel: str | None, eventid: int | None) -> bool:
         """
         Check if an event should be processed based on its channel and eventID.
 
@@ -272,7 +321,8 @@ class EventFilter:
                 allowed = self._channel_map.get(channel.lower())
             if allowed is None:
                 return False
-            if allowed is True:
+            if not isinstance(allowed, frozenset):
+                # True: this channel accepts any eventID
                 return True
             if eventid is None:
                 return True
@@ -296,7 +346,7 @@ class EventFilter:
 
         return True
 
-    def get_stats(self) -> Dict[str, Any]:
+    def get_stats(self) -> dict[str, Any]:
         """Get statistics about the filter data."""
         # Original-case aliases always carry an uppercase letter, so the
         # all-lowercase keys are exactly the canonical entries
@@ -323,7 +373,9 @@ class EventFilter:
             'bounded_channels_count': len(canonical) - len(any_eventid_channels),
             'any_eventid_channels': any_eventid_channels,
             'channel_eventid_pairs': sum(
-                len(value) for value in canonical.values() if value is not True
+                len(value)
+                for value in canonical.values()
+                if isinstance(value, frozenset)
             ),
             'is_enabled': self.is_enabled,
             'channel_filter': self._channel_filter,
@@ -336,10 +388,10 @@ class EventFilter:
 class RulesUpdater:
     """Download rulesets from the https://github.com/wagga40/Zircolite-Rules-v2 repository and update if necessary."""
 
-    def __init__(self, *, logger: Optional[logging.Logger] = None):
+    def __init__(self, *, logger: logging.Logger | None = None):
         """
         Initialize RulesUpdater.
-        
+
         Args:
             logger: Logger instance (creates default if None)
         """
@@ -347,13 +399,13 @@ class RulesUpdater:
         self.logger = logger or logging.getLogger(__name__)
         self.tempFile = f'tmp-rules-{random_suffix(4)}.zip'
         self.tmpDir = f'tmp-rules-{random_suffix(4)}'
-        self.updated_rulesets: List[str] = []
+        self.updated_rulesets: list[str] = []
 
     def download(self) -> None:
         resp = requests.get(self.url, stream=True, timeout=30)
         resp.raise_for_status()
         total = int(resp.headers.get('content-length', 0))
-        
+
         progress = Progress(
             SpinnerColumn(),
             TextColumn("[progress.description]{task.description}"),
@@ -365,27 +417,27 @@ class RulesUpdater:
             transient=True,
             disable=is_quiet(),
         )
-        
+
         with progress:
             task_id = progress.add_task(f"Downloading {self.tempFile}", total=total)
             with open(self.tempFile, 'wb') as file:
                 for data in resp.iter_content(chunk_size=1024):
                     size = file.write(data)
                     progress.update(task_id, advance=size)
-    
+
     def unzip(self) -> None:
         shutil.unpack_archive(self.tempFile, self.tmpDir, "zip")
-    
+
     def checkIfNewerAndMove(self) -> None:
         count = 0
         rules_dir = Path('rules/')
-        
+
         if not rules_dir.exists():
             rules_dir.mkdir()
-            
+
         for ruleset in Path(self.tmpDir).rglob("*.json"):
             with open(ruleset, 'rb') as f:
-                hash_new = hashlib.md5(f.read()).hexdigest()
+                hash_new = hashlib.md5(f.read(), usedforsecurity=False).hexdigest()
 
             # Preserve the archive's relative directory structure so same-named
             # rulesets in different subdirectories do not overwrite each other
@@ -397,7 +449,7 @@ class RulesUpdater:
 
             if dest_file.is_file():
                 with open(dest_file, 'rb') as f:
-                    hash_old = hashlib.md5(f.read()).hexdigest()
+                    hash_old = hashlib.md5(f.read(), usedforsecurity=False).hexdigest()
 
             if hash_new != hash_old:
                 count += 1
@@ -405,16 +457,16 @@ class RulesUpdater:
                 shutil.move(ruleset, dest_file)
                 self.updated_rulesets.append(str(dest_file))
                 self.logger.info(f"    [>] Updated : {make_file_link(str(dest_file))}")
-                
-        if count == 0: 
+
+        if count == 0:
             self.logger.info("[cyan]    [>] No newer rulesets found")
-    
+
     def clean(self) -> None:
         if Path(self.tempFile).exists():
             os.remove(self.tempFile)
         if Path(self.tmpDir).exists():
             shutil.rmtree(self.tmpDir)
-    
+
     def run(self) -> None:
         try:
             self.download()
@@ -437,27 +489,27 @@ class RulesetHandler:
 
     def __init__(
         self,
-        ruleset_config: Optional[RulesetConfig] = None,
+        ruleset_config: RulesetConfig | None = None,
         *,
-        logger: Optional[logging.Logger] = None,
+        logger: logging.Logger | None = None,
         list_pipelines_only: bool = False
     ):
         """
         Initialize RulesetHandler.
-        
+
         Args:
             ruleset_config: Ruleset configuration (uses defaults if None)
             logger: Logger instance (creates default if None)
             list_pipelines_only: If True, only list available pipelines and return
         """
         cfg = ruleset_config or RulesetConfig()
-        
+
         self.logger = logger or logging.getLogger(__name__)
         self.saveRuleset = cfg.save_ruleset
         self.rulesetPathList = cfg.ruleset
         self.time_field = cfg.time_field
         self.pipelines = []
-        self.event_filter: Optional[EventFilter] = None  # Will be populated after loading
+        self.event_filter: EventFilter | None = None  # Will be populated after loading
 
         # Init pipelines
         plugins = InstalledSigmaPlugins.autodiscover()
@@ -465,12 +517,12 @@ class RulesetHandler:
         pipeline_list = list(pipeline_resolver.pipelines.keys())
 
         if list_pipelines_only:
-            self.logger.info("[+] Installed pipelines : " 
-                            + ", ".join(pipeline_list) 
+            self.logger.info("[+] Installed pipelines : "
+                            + ", ".join(pipeline_list)
                             + "\n    You can install pipelines with your Python package manager"
                             + "\n    e.g : pip install pysigma-pipeline-sysmon"
-                            ) 
-        else: 
+                            )
+        else:
             # Resolving pipelines
             if cfg.pipeline:
                 for pipelineName in [item for pipeline in cfg.pipeline for item in pipeline]: # Flatten the list of pipeline names list
@@ -515,20 +567,13 @@ class RulesetHandler:
                 unique_rules.append(rule)
 
         self.rulesets = unique_rules
-            
+
         if not self.rulesets:
             self.logger.error("[red]    [-] No rules to execute ![/]")
         else:
             self.logger.info(f"[+] {len(self.rulesets)} rules loaded")
-            
-            # Correlation rules carry no Channel/EventID for filtering; excluding them
-            # avoids disabling EventFilter for the whole ruleset (see EventFilter docstring).
-            non_correlation_rules = [r for r in self.rulesets if not r.get("correlation")]
-            self.event_filter = EventFilter(
-                non_correlation_rules,
-                logger=self.logger,
-                has_correlation_rules=len(non_correlation_rules) != len(self.rulesets),
-            )
+
+            self.event_filter = EventFilter(self.rulesets, logger=self.logger)
             if self.event_filter.is_enabled:
                 stats = self.event_filter.get_stats()
                 if stats['mode'] == 'per-channel':
@@ -547,10 +592,10 @@ class RulesetHandler:
                         f"[+] Event filter enabled: [cyan]{stats['eventids_count']}[/] eventIDs"
                     )
 
-    def is_yaml(self, filepath: Path) -> Optional[bool]:
+    def is_yaml(self, filepath: Path) -> bool | None:
         """Test if the file is a YAML file (including multi-document streams)."""
         if filepath.suffix in (".yml", ".yaml"):
-            with open(filepath, "r", encoding="utf-8") as file:
+            with open(filepath, encoding="utf-8") as file:
                 content = file.read()
                 try:
                     for _ in yaml.safe_load_all(content):
@@ -560,10 +605,10 @@ class RulesetHandler:
                     return False
         return None
 
-    def is_json(self, filepath: Path) -> Optional[bool]:
+    def is_json(self, filepath: Path) -> bool | None:
         """Test if the file is a JSON file."""
         if filepath.suffix == ".json":
-            with open(filepath, "r", encoding="utf-8") as file:
+            with open(filepath, encoding="utf-8") as file:
                 content = file.read()
                 try:
                     json.loads(content)
@@ -575,7 +620,7 @@ class RulesetHandler:
     def is_valid_sigma_rule(self, filepath: Path) -> bool:
         """Check if a YAML file contains at least one valid Sigma or correlation rule."""
         try:
-            with open(filepath, 'r', encoding="utf-8") as file:
+            with open(filepath, encoding="utf-8") as file:
                 for doc in yaml.safe_load_all(file):
                     if not isinstance(doc, dict):
                         continue
@@ -596,7 +641,7 @@ class RulesetHandler:
         cleaned_name = re.sub(r'-+', '-', cleaned_name)
         return f"ruleset-{cleaned_name}-{random_suffix(8)}.json"
 
-    def convert_sigma_rules(self, backend: Any, rule: Any) -> Optional[Dict[str, Any]]:
+    def convert_sigma_rules(self, backend: Any, rule: Any) -> dict[str, Any] | None:
         """Convert a single Sigma rule using the provided backend."""
         try:
             converted = backend.convert_rule(rule, "zircolite")
@@ -604,12 +649,12 @@ class RulesetHandler:
                 return None
             return converted[0]
         except Exception as e:
-            self.logger.debug(f"[red]    [-] Cannot convert rule '{str(rule)}' : {e}[/]")
+            self.logger.debug(f"[red]    [-] Cannot convert rule '{rule!s}' : {e}[/]")
             return None
 
     def convert_correlation_rule(
         self, backend: Any, rule: SigmaCorrelationRule
-    ) -> Optional[Dict[str, Any]]:
+    ) -> dict[str, Any] | None:
         """Convert a Sigma correlation rule using the provided backend."""
         try:
             converted = backend.convert_correlation_rule(rule, "zircolite")
@@ -624,10 +669,10 @@ class RulesetHandler:
             return None
 
     def sigma_rules_to_ruleset(
-        self, sigma_rules_list: List[Union[Path, str]], pipelines: List[Any]
-    ) -> List[Dict[str, Any]]:
+        self, sigma_rules_list: list[Path | str], pipelines: list[Any]
+    ) -> list[dict[str, Any]]:
         """Convert Sigma rules to Zircolite ruleset format."""
-        combined_ruleset: List[Dict[str, Any]] = []
+        combined_ruleset: list[dict[str, Any]] = []
 
         for sigma_rules in sigma_rules_list:
             # Create the pipeline resolver
@@ -645,7 +690,7 @@ class RulesetHandler:
                 # Resolve using pipeline names in user order (lower priority = earlier)
                 combined_pipeline = pipeline_resolver.resolve([p.name for p in pipelines])
             finally:
-                for pipeline, orig in zip(pipelines, original_priorities):
+                for pipeline, orig in zip(pipelines, original_priorities, strict=True):
                     pipeline.priority = orig
             # Instantiate backend, using our resolved pipeline
             sqlite_backend = sqlite.sqliteBackend(combined_pipeline)
@@ -657,20 +702,20 @@ class RulesetHandler:
                 rule_list = list(rules.rglob("*.yml")) + list(rules.rglob("*.yaml"))
             else:
                 rule_list = [rules]
-            
+
             # Filter out invalid Sigma rules
             valid_rule_list = [r for r in rule_list if self.is_valid_sigma_rule(r)]
             skipped_count = len(rule_list) - len(valid_rule_list)
             if skipped_count > 0:
                 self.logger.debug(f"[yellow]    [!] Skipped {skipped_count} invalid Sigma rule(s)[/]")
-            
+
             if not valid_rule_list:
                 continue
 
             rule_collection = SigmaCollection.load_ruleset(
                 [str(p) for p in valid_rule_list]
             )
-            ruleset: List[Dict[str, Any]] = []
+            ruleset: list[dict[str, Any]] = []
 
             # Process rules with Rich progress bar
             progress = Progress(
@@ -682,7 +727,7 @@ class RulesetHandler:
                 transient=True,
                 disable=is_quiet(),
             )
-            
+
             with progress:
                 task_id = progress.add_task("Converting rules", total=len(rule_collection))
                 skipped_referenced_only = 0
@@ -695,7 +740,7 @@ class RulesetHandler:
                             sqlite_backend.convert_rule(rule, "zircolite")
                         except Exception as e:
                             self.logger.debug(
-                                f"[red]    [-] Cannot convert rule '{str(rule)}' : {e}[/]"
+                                f"[red]    [-] Cannot convert rule '{rule!s}' : {e}[/]"
                             )
                         skipped_referenced_only += 1
                         progress.update(task_id, advance=1)
@@ -709,7 +754,7 @@ class RulesetHandler:
                     if converted_rule is not None:
                         ruleset.append(converted_rule)
                     progress.update(task_id, advance=1)
-            
+
             # Print conversion summary
             conversion_errors = (
                 len(rule_collection) - skipped_referenced_only - len(ruleset)
@@ -723,7 +768,7 @@ class RulesetHandler:
                     detail_parts.append(f"{conversion_errors} failed")
                 summary_parts.append(f" [dim]({', '.join(detail_parts)})[/]")
             self.logger.info("".join(summary_parts))
-            
+
             ruleset = sorted(ruleset, key=lambda d: d.get('level', 'informational'))
 
             if self.saveRuleset:
@@ -738,13 +783,13 @@ class RulesetHandler:
 
         return combined_ruleset
 
-    def ruleset_parsing(self) -> List[List[Dict[str, Any]]]:
+    def ruleset_parsing(self) -> list[list[dict[str, Any]]]:
         """Parse and convert rulesets from files or directories."""
         ruleset_list = []
         for ruleset in self.rulesetPathList:
             ruleset_path = Path(ruleset)
             if not ruleset_path.exists():
-                self.logger.warning(f"[yellow]    [!] Ruleset path does not exist: {str(ruleset_path)}[/]")
+                self.logger.warning(f"[yellow]    [!] Ruleset path does not exist: {ruleset_path!s}[/]")
                 continue
             if ruleset_path.is_file():
                 if self.is_json(ruleset_path):  # JSON Ruleset
@@ -753,22 +798,22 @@ class RulesetHandler:
                             ruleset_list.append(json.loads(f.read()))
                         self.logger.info(f"    [>] Loaded JSON/Zircolite ruleset : {make_file_link(str(ruleset_path))}")
                     except Exception as e:
-                        self.logger.error(f"[red]    [-] Cannot load {str(ruleset_path)} {e}[/]")
+                        self.logger.error(f"[red]    [-] Cannot load {ruleset_path!s} {e}[/]")
                 elif self.is_yaml(ruleset_path):  # YAML Ruleset
                     try:
                         self.logger.info(f"    [>] Converting Native Sigma to Zircolite ruleset : {make_file_link(str(ruleset_path))}")
                         ruleset_list.append(self.sigma_rules_to_ruleset([ruleset_path], self.pipelines))
                     except Exception as e:
-                        self.logger.error(f"[red]    [-] Cannot convert {str(ruleset_path)} {e}[/]")
+                        self.logger.error(f"[red]    [-] Cannot convert {ruleset_path!s} {e}[/]")
                 else:
                     self.logger.warning(
                         f"[yellow]    [!] Skipping unrecognized ruleset file "
-                        f"(not a valid JSON ruleset or Sigma YAML file): {str(ruleset_path)}[/]"
+                        f"(not a valid JSON ruleset or Sigma YAML file): {ruleset_path!s}[/]"
                     )
             elif ruleset_path.is_dir():  # Directory
                 try:
                     self.logger.info(f"    [>] Converting Native Sigma to Zircolite ruleset : {make_file_link(str(ruleset_path))}")
                     ruleset_list.append(self.sigma_rules_to_ruleset([ruleset_path], self.pipelines))
                 except Exception as e:
-                    self.logger.error(f"[red]    [-] Cannot convert {str(ruleset_path)} {e}[/]")
+                    self.logger.error(f"[red]    [-] Cannot convert {ruleset_path!s} {e}[/]")
         return ruleset_list

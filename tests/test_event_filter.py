@@ -1,4 +1,3 @@
-#!python3
 """
 Tests for EventFilter functionality.
 
@@ -7,6 +6,7 @@ based on channel and eventID from loaded rules.
 """
 
 import pytest
+
 from zircolite.rules import EventFilter
 
 
@@ -36,7 +36,7 @@ class TestEventFilterInit:
             }
         ]
         event_filter = EventFilter(rulesets)
-        
+
         assert event_filter.is_enabled
         assert event_filter.is_enabled
         assert len(event_filter.channels) == 2
@@ -136,7 +136,7 @@ class TestEventFilterInit:
             }
         ]
         event_filter = EventFilter(rulesets)
-        
+
         # Filter must be disabled so the rule without channel/eventid sees all events;
         # otherwise alert counts for that rule would differ between single-rule and
         # full-ruleset runs.
@@ -168,7 +168,7 @@ class TestEventFilterInit:
             {"title": "Rule 2"}  # Missing channel/eventid fields entirely
         ]
         event_filter = EventFilter(rulesets)
-        
+
         assert not event_filter.is_enabled
         assert not event_filter.is_enabled
 
@@ -369,20 +369,82 @@ class TestPerChannelEventIDBounds:
         assert event_filter.should_process_event("security", 1)
         assert not event_filter.should_process_event("Security", 3)
 
-    def test_correlation_rules_disable_eventid_bounds(self):
-        """Correlation rules carry their filters in SQL, so bounds would starve them."""
-        rulesets = [
-            {"title": "A", "channel": ["Microsoft-Windows-Sysmon/Operational"], "eventid": [1]},
-        ]
-        event_filter = EventFilter(rulesets, has_correlation_rules=True)
+    def test_correlation_rule_keeps_its_own_channel_alive(self):
+        """A channel only a correlation rule needs must survive the filter.
 
-        assert event_filter._channel_filter
-        assert not event_filter._eventid_bounded
+        Correlation rules carry no channel/eventid metadata, so their channel
+        has to be read out of the SQL that embeds the base rule. Miss it and
+        every event on that channel is dropped at ingest and the correlation
+        can never fire.
+        """
+        rulesets = [
+            {
+                "title": "Sysmon",
+                "channel": ["Microsoft-Windows-Sysmon/Operational"],
+                "eventid": [1],
+                "rule": [
+                    "SELECT * FROM logs WHERE "
+                    "Channel='Microsoft-Windows-Sysmon/Operational' AND EventID=1"
+                ],
+            },
+            {
+                "title": "Correlation",
+                "correlation": True,
+                "channel": [],
+                "eventid": [],
+                "rule": [
+                    "SELECT u, COUNT(*) AS c FROM (SELECT * FROM logs WHERE "
+                    "Channel='Security' AND EventID=4625) AS subquery "
+                    "GROUP BY u HAVING c >= 5"
+                ],
+            },
+        ]
+        event_filter = EventFilter(rulesets)
+
+        # The correlation's channel is claimed, and left unbounded: its SQL
+        # decides which eventIDs matter, not the filter.
+        assert event_filter.should_process_event("Security", 4625)
+        assert event_filter.should_process_event("Security", 1234)
+        # Unrelated channels keep the selectivity the filter exists for
         assert event_filter.should_process_event(
-            "Microsoft-Windows-Sysmon/Operational", 5
+            "Microsoft-Windows-Sysmon/Operational", 1
         )
-        # The channel axis still applies
-        assert not event_filter.should_process_event("Security", 5)
+        assert not event_filter.should_process_event(
+            "Microsoft-Windows-Sysmon/Operational", 99
+        )
+        assert not event_filter.should_process_event("Application", 1)
+
+    def test_correlation_rule_without_a_readable_channel_disables_filtering(self):
+        """An unreadable correlation rule must switch filtering off, not guess.
+
+        pySigma emits correlation SQL with no Channel predicate whenever the
+        logsource carried no pipeline. Nothing then says which channel the rule
+        consumes, and the only safe answer is to stop dropping events.
+        """
+        rulesets = [
+            {
+                "title": "Sysmon",
+                "channel": ["Microsoft-Windows-Sysmon/Operational"],
+                "eventid": [1],
+                "rule": [
+                    "SELECT * FROM logs WHERE "
+                    "Channel='Microsoft-Windows-Sysmon/Operational' AND EventID=1"
+                ],
+            },
+            {
+                "title": "Correlation",
+                "correlation": True,
+                "rule": [
+                    "SELECT u, COUNT(*) AS c FROM (SELECT * FROM logs WHERE "
+                    "EventID=4625) AS subquery GROUP BY u HAVING c >= 5"
+                ],
+            },
+        ]
+        event_filter = EventFilter(rulesets)
+
+        assert event_filter.is_enabled is False
+        assert event_filter.should_process_event("Security", 4625)
+        assert event_filter.should_process_event("Anything", 999)
 
     def test_unparseable_eventids_make_channel_any(self):
         """An empty bound must never mean "nothing" -- it means "any"."""
@@ -425,8 +487,9 @@ class TestPerChannelEventIDBounds:
     @pytest.mark.integration
     def test_shipped_merged_ruleset_bounds_sysmon(self):
         """The shipped Windows ruleset must bound eventIDs on all but two channels."""
-        import orjson
         from pathlib import Path
+
+        import orjson
 
         ruleset_path = Path(__file__).parent.parent / "rules" / "rules_windows_merged.json"
         if not ruleset_path.exists():
@@ -462,7 +525,7 @@ class TestEventFilterStats:
         ]
         event_filter = EventFilter(rulesets)
         stats = event_filter.get_stats()
-        
+
         assert stats['channels_count'] == 2
         assert stats['eventids_count'] == 3
         assert stats['is_enabled']
@@ -483,7 +546,7 @@ class TestEventFilterExtraction:
             }
         ]
         event_filter = EventFilter(rulesets)
-        
+
         assert "Ch1" in event_filter.channels
         assert "Ch2" in event_filter.channels
         assert 10 in event_filter.eventids
@@ -506,7 +569,7 @@ class TestEventFilterExtraction:
             }
         ]
         event_filter = EventFilter(rulesets)
-        
+
         # Should have unique values only
         assert len(event_filter.channels) == 2  # Ch1, Ch2
         assert len(event_filter.eventids) == 2  # 1, 2
@@ -538,11 +601,11 @@ class TestEventFilterRealWorldScenarios:
             }
         ]
         event_filter = EventFilter(rulesets)
-        
+
         assert event_filter.is_enabled
         assert len(event_filter.eventids) == 3  # 1, 17, 18
         assert len(event_filter.channels) == 1
-        
+
         # Test filtering
         assert event_filter.should_process_event("Microsoft-Windows-Sysmon/Operational", 1)
         assert event_filter.should_process_event("Microsoft-Windows-Sysmon/Operational", 17)
@@ -568,10 +631,11 @@ class TestStreamingProcessorWithFilter:
 
     def test_streaming_processor_filter_counts(self, sysmon_filter, tmp_path):
         """Test that StreamingEventProcessor tracks filtered event counts."""
-        from zircolite.streaming import StreamingEventProcessor
-        from zircolite.config import ProcessingConfig
         from argparse import Namespace
-        
+
+        from zircolite.config import ProcessingConfig
+        from zircolite.streaming import StreamingEventProcessor
+
         # Create test JSONL file with mixed events
         test_file = tmp_path / "test_events.json"
         events = [
@@ -585,7 +649,7 @@ class TestStreamingProcessorWithFilter:
             '{"Event": {"System": {"Channel": "Microsoft-Windows-Sysmon/Operational", "EventID": 1}}}',
         ]
         test_file.write_text('\n'.join(events))
-        
+
         # Create processor with filter
         args = Namespace(json_input=True, json_array_input=False)
         processor = StreamingEventProcessor(
@@ -594,22 +658,23 @@ class TestStreamingProcessorWithFilter:
             processing_config=ProcessingConfig(),
             event_filter=sysmon_filter
         )
-        
+
         # Stream events and count
         processed_count = 0
-        for event in processor.stream_json_events(str(test_file)):
+        for _event in processor.stream_json_events(str(test_file)):
             processed_count += 1
-        
+
         # Should have processed 2 events and filtered 2
         assert processed_count == 2
         assert processor.events_filtered_count == 2
 
     def test_streaming_processor_no_filter(self, tmp_path):
         """Test that StreamingEventProcessor processes all events without filter."""
-        from zircolite.streaming import StreamingEventProcessor
-        from zircolite.config import ProcessingConfig
         from argparse import Namespace
-        
+
+        from zircolite.config import ProcessingConfig
+        from zircolite.streaming import StreamingEventProcessor
+
         # Create test JSONL file
         test_file = tmp_path / "test_events.json"
         events = [
@@ -618,7 +683,7 @@ class TestStreamingProcessorWithFilter:
             '{"Event": {"System": {"Channel": "Channel3", "EventID": 3}}}',
         ]
         test_file.write_text('\n'.join(events))
-        
+
         # Create processor without filter
         args = Namespace(json_input=True, json_array_input=False)
         processor = StreamingEventProcessor(
@@ -627,12 +692,12 @@ class TestStreamingProcessorWithFilter:
             processing_config=ProcessingConfig(),
             event_filter=None
         )
-        
+
         # Stream events and count
         processed_count = 0
-        for event in processor.stream_json_events(str(test_file)):
+        for _event in processor.stream_json_events(str(test_file)):
             processed_count += 1
-        
+
         # Should have processed all 3 events
         assert processed_count == 3
         assert processor.events_filtered_count == 0
@@ -655,16 +720,17 @@ class TestConfigurableFieldPaths:
 
     def test_extract_from_standard_evtx_structure(self, sysmon_filter, tmp_path):
         """Test extraction from standard Event.System structure."""
-        from zircolite.streaming import StreamingEventProcessor
-        from zircolite.config import ProcessingConfig
         from argparse import Namespace
-        
+
+        from zircolite.config import ProcessingConfig
+        from zircolite.streaming import StreamingEventProcessor
+
         test_file = tmp_path / "test_events.json"
         events = [
             '{"Event": {"System": {"Channel": "Microsoft-Windows-Sysmon/Operational", "EventID": 1}}}',
         ]
         test_file.write_text('\n'.join(events))
-        
+
         args = Namespace(json_input=True, json_array_input=False)
         processor = StreamingEventProcessor(
             config_file="config/config.yaml",
@@ -672,22 +738,23 @@ class TestConfigurableFieldPaths:
             processing_config=ProcessingConfig(),
             event_filter=sysmon_filter
         )
-        
+
         processed_count = sum(1 for _ in processor.stream_json_events(str(test_file)))
         assert processed_count == 1
 
     def test_extract_from_flat_structure(self, sysmon_filter, tmp_path):
         """Test extraction from flat pre-flattened structure."""
-        from zircolite.streaming import StreamingEventProcessor
-        from zircolite.config import ProcessingConfig
         from argparse import Namespace
-        
+
+        from zircolite.config import ProcessingConfig
+        from zircolite.streaming import StreamingEventProcessor
+
         test_file = tmp_path / "test_events.json"
         events = [
             '{"Channel": "Microsoft-Windows-Sysmon/Operational", "EventID": 1}',
         ]
         test_file.write_text('\n'.join(events))
-        
+
         args = Namespace(json_input=True, json_array_input=False)
         processor = StreamingEventProcessor(
             config_file="config/config.yaml",
@@ -695,22 +762,23 @@ class TestConfigurableFieldPaths:
             processing_config=ProcessingConfig(),
             event_filter=sysmon_filter
         )
-        
+
         processed_count = sum(1 for _ in processor.stream_json_events(str(test_file)))
         assert processed_count == 1
 
     def test_extract_from_system_top_level(self, sysmon_filter, tmp_path):
         """Test extraction from System at top level structure."""
-        from zircolite.streaming import StreamingEventProcessor
-        from zircolite.config import ProcessingConfig
         from argparse import Namespace
-        
+
+        from zircolite.config import ProcessingConfig
+        from zircolite.streaming import StreamingEventProcessor
+
         test_file = tmp_path / "test_events.json"
         events = [
             '{"System": {"Channel": "Microsoft-Windows-Sysmon/Operational", "EventID": 1}}',
         ]
         test_file.write_text('\n'.join(events))
-        
+
         args = Namespace(json_input=True, json_array_input=False)
         processor = StreamingEventProcessor(
             config_file="config/config.yaml",
@@ -718,22 +786,23 @@ class TestConfigurableFieldPaths:
             processing_config=ProcessingConfig(),
             event_filter=sysmon_filter
         )
-        
+
         processed_count = sum(1 for _ in processor.stream_json_events(str(test_file)))
         assert processed_count == 1
 
     def test_extract_eventid_with_text_attribute(self, sysmon_filter, tmp_path):
         """Test extraction when EventID is a dict with #text attribute."""
-        from zircolite.streaming import StreamingEventProcessor
-        from zircolite.config import ProcessingConfig
         from argparse import Namespace
-        
+
+        from zircolite.config import ProcessingConfig
+        from zircolite.streaming import StreamingEventProcessor
+
         test_file = tmp_path / "test_events.json"
         events = [
             '{"Event": {"System": {"Channel": "Microsoft-Windows-Sysmon/Operational", "EventID": {"#text": "1"}}}}',
         ]
         test_file.write_text('\n'.join(events))
-        
+
         args = Namespace(json_input=True, json_array_input=False)
         processor = StreamingEventProcessor(
             config_file="config/config.yaml",
@@ -741,22 +810,23 @@ class TestConfigurableFieldPaths:
             processing_config=ProcessingConfig(),
             event_filter=sysmon_filter
         )
-        
+
         processed_count = sum(1 for _ in processor.stream_json_events(str(test_file)))
         assert processed_count == 1
 
     def test_extract_lowercase_fields(self, sysmon_filter, tmp_path):
         """Test extraction from lowercase field names."""
-        from zircolite.streaming import StreamingEventProcessor
-        from zircolite.config import ProcessingConfig
         from argparse import Namespace
-        
+
+        from zircolite.config import ProcessingConfig
+        from zircolite.streaming import StreamingEventProcessor
+
         test_file = tmp_path / "test_events.json"
         events = [
             '{"channel": "Microsoft-Windows-Sysmon/Operational", "eventid": 1}',
         ]
         test_file.write_text('\n'.join(events))
-        
+
         args = Namespace(json_input=True, json_array_input=False)
         processor = StreamingEventProcessor(
             config_file="config/config.yaml",
@@ -764,7 +834,7 @@ class TestConfigurableFieldPaths:
             processing_config=ProcessingConfig(),
             event_filter=sysmon_filter
         )
-        
+
         processed_count = sum(1 for _ in processor.stream_json_events(str(test_file)))
         assert processed_count == 1
 
@@ -774,16 +844,17 @@ class TestTimestampAutoDetection:
 
     def test_auto_detect_system_time(self, tmp_path):
         """Test auto-detection of SystemTime field."""
-        from zircolite.streaming import StreamingEventProcessor
-        from zircolite.config import ProcessingConfig
         from argparse import Namespace
-        
+
+        from zircolite.config import ProcessingConfig
+        from zircolite.streaming import StreamingEventProcessor
+
         test_file = tmp_path / "test_events.json"
         events = [
             '{"SystemTime": "2024-01-01T10:00:00.000Z", "Channel": "Test", "EventID": 1}',
         ]
         test_file.write_text('\n'.join(events))
-        
+
         # Set up processor with time filter but no explicit time_field
         config = ProcessingConfig(
             time_after="2024-01-01T09:00:00",
@@ -797,7 +868,7 @@ class TestTimestampAutoDetection:
             processing_config=config,
             event_filter=None
         )
-        
+
         processed_count = sum(1 for _ in processor.stream_json_events(str(test_file)))
         assert processed_count == 1
         # With no explicit field, the config's timestamp_detection.default_field
@@ -806,16 +877,17 @@ class TestTimestampAutoDetection:
 
     def test_auto_detect_timestamp_field(self, tmp_path):
         """Test auto-detection of @timestamp field (ECS format)."""
-        from zircolite.streaming import StreamingEventProcessor
-        from zircolite.config import ProcessingConfig
         from argparse import Namespace
-        
+
+        from zircolite.config import ProcessingConfig
+        from zircolite.streaming import StreamingEventProcessor
+
         test_file = tmp_path / "test_events.json"
         events = [
             '{"@timestamp": "2024-01-01T10:00:00.000Z", "Channel": "Test", "EventID": 1}',
         ]
         test_file.write_text('\n'.join(events))
-        
+
         config = ProcessingConfig(
             time_after="2024-01-01T09:00:00",
             time_before="2024-01-01T11:00:00",
@@ -828,7 +900,7 @@ class TestTimestampAutoDetection:
             processing_config=config,
             event_filter=None
         )
-        
+
         processed_count = sum(1 for _ in processor.stream_json_events(str(test_file)))
         assert processed_count == 1
         # After flattening, @timestamp becomes "timestamp" (@ removed)
@@ -837,16 +909,17 @@ class TestTimestampAutoDetection:
 
     def test_auto_detect_utc_time_field(self, tmp_path):
         """Test auto-detection of UtcTime field (Sysmon format)."""
-        from zircolite.streaming import StreamingEventProcessor
-        from zircolite.config import ProcessingConfig
         from argparse import Namespace
-        
+
+        from zircolite.config import ProcessingConfig
+        from zircolite.streaming import StreamingEventProcessor
+
         test_file = tmp_path / "test_events.json"
         events = [
             '{"UtcTime": "2024-01-01T10:00:00.000Z", "Channel": "Test", "EventID": 1}',
         ]
         test_file.write_text('\n'.join(events))
-        
+
         config = ProcessingConfig(
             time_after="2024-01-01T09:00:00",
             time_before="2024-01-01T11:00:00",
@@ -859,17 +932,18 @@ class TestTimestampAutoDetection:
             processing_config=config,
             event_filter=None
         )
-        
+
         processed_count = sum(1 for _ in processor.stream_json_events(str(test_file)))
         assert processed_count == 1
         assert processor._detected_time_field == "UtcTime"
 
     def test_time_filter_excludes_events(self, tmp_path):
         """Test that time filtering excludes events outside the range."""
-        from zircolite.streaming import StreamingEventProcessor
-        from zircolite.config import ProcessingConfig
         from argparse import Namespace
-        
+
+        from zircolite.config import ProcessingConfig
+        from zircolite.streaming import StreamingEventProcessor
+
         test_file = tmp_path / "test_events.json"
         events = [
             '{"SystemTime": "2024-01-01T08:00:00.000Z", "Channel": "Test", "EventID": 1}',  # Before range
@@ -877,7 +951,7 @@ class TestTimestampAutoDetection:
             '{"SystemTime": "2024-01-01T12:00:00.000Z", "Channel": "Test", "EventID": 3}',  # After range
         ]
         test_file.write_text('\n'.join(events))
-        
+
         config = ProcessingConfig(
             time_after="2024-01-01T09:00:00",
             time_before="2024-01-01T11:00:00",
@@ -890,7 +964,7 @@ class TestTimestampAutoDetection:
             processing_config=config,
             event_filter=None
         )
-        
+
         processed_events = list(processor.stream_json_events(str(test_file)))
         assert len(processed_events) == 1
         assert processed_events[0].get("EventID") == 2
@@ -902,21 +976,21 @@ class TestEventFilterFieldMappingsConfig:
     def test_load_field_mappings_includes_event_filter(self):
         """Test that load_field_mappings includes event_filter section."""
         from zircolite.utils import load_field_mappings
-        
+
         config = load_field_mappings("config/config.yaml")
-        
+
         assert "event_filter" in config
         assert "channel_fields" in config["event_filter"]
         assert "eventid_fields" in config["event_filter"]
         assert len(config["event_filter"]["channel_fields"]) > 0
         assert len(config["event_filter"]["eventid_fields"]) > 0
-        
+
     def test_load_field_mappings_includes_timestamp_detection(self):
         """Test that load_field_mappings includes timestamp_detection section."""
         from zircolite.utils import load_field_mappings
-        
+
         config = load_field_mappings("config/config.yaml")
-        
+
         assert "timestamp_detection" in config
         assert "auto_detect" in config["timestamp_detection"]
         assert "detection_fields" in config["timestamp_detection"]
@@ -947,9 +1021,10 @@ class TestEventFilterConfigKeys:
 
     def test_event_filter_enabled_false_disables_filtering(self, tmp_path):
         """event_filter.enabled: false must disable filtering entirely."""
-        from zircolite.streaming import StreamingEventProcessor
-        from zircolite.config import ProcessingConfig
         from argparse import Namespace
+
+        from zircolite.config import ProcessingConfig
+        from zircolite.streaming import StreamingEventProcessor
 
         config_file = self._write_config(tmp_path, {
             "enabled": False,
@@ -973,9 +1048,10 @@ class TestEventFilterConfigKeys:
 
     def test_filter_all_sources_false_skips_non_windows_input(self, tmp_path):
         """With filter_all_sources false, auditd input bypasses filtering."""
-        from zircolite.streaming import StreamingEventProcessor
-        from zircolite.config import ProcessingConfig
         from argparse import Namespace
+
+        from zircolite.config import ProcessingConfig
+        from zircolite.streaming import StreamingEventProcessor
 
         config_file = self._write_config(tmp_path, {
             "enabled": True,
@@ -995,9 +1071,10 @@ class TestEventFilterConfigKeys:
 
     def test_filter_all_sources_true_filters_non_windows_input(self, tmp_path):
         """With filter_all_sources true, auditd input is filtered too."""
-        from zircolite.streaming import StreamingEventProcessor
-        from zircolite.config import ProcessingConfig
         from argparse import Namespace
+
+        from zircolite.config import ProcessingConfig
+        from zircolite.streaming import StreamingEventProcessor
 
         config_file = self._write_config(tmp_path, {
             "enabled": True,
@@ -1013,3 +1090,106 @@ class TestEventFilterConfigKeys:
             event_filter=self._filter(),
         )
         assert processor._should_process_event({"Channel": "Unknown", "EventID": 9999}) is False
+
+
+class TestBoundsComeFromRuleSql:
+    """The eventID metadata is a bag of values, so bounds come from the SQL.
+
+    ``pysigma-backend-sqlite`` harvests ``eventid`` from every detection group
+    including negated ``filter`` blocks, and ignores the rule's condition. Read
+    as an allow-list it inverts the rule: the filter then admits exactly the
+    eventIDs the rule excludes and drops the ones it wants.
+    """
+
+    def test_eventid_only_in_a_negated_filter_does_not_bound_the_channel(self):
+        rulesets = [
+            {
+                "title": "Excludes 4624",
+                "channel": ["Security"],
+                "eventid": [4624],  # harvested from the `filter:` block
+                "rule": [
+                    "SELECT * FROM logs WHERE Channel='Security' "
+                    "AND CommandLine LIKE '%x%' AND NOT (EventID=4624)"
+                ],
+            }
+        ]
+        event_filter = EventFilter(rulesets)
+
+        # Every eventID on the channel must survive: the rule wants all but one
+        assert event_filter.should_process_event("Security", 4688)
+        assert event_filter.should_process_event("Security", 4720)
+        assert event_filter.should_process_event("Security", 4624)
+
+    def test_or_branch_without_an_eventid_does_not_bound_the_channel(self):
+        """One free branch frees the disjunction, so the branch stays reachable."""
+        rulesets = [
+            {
+                "title": "EventID or CommandLine",
+                "channel": ["Security"],
+                "eventid": [4688],
+                "rule": [
+                    "SELECT * FROM logs WHERE Channel='Security' "
+                    "AND (EventID=4688 OR CommandLine LIKE '%mimikatz%')"
+                ],
+            }
+        ]
+        event_filter = EventFilter(rulesets)
+
+        assert event_filter.should_process_event("Security", 4104)
+        assert event_filter.should_process_event("Security", 4688)
+
+    def test_a_positive_eventid_still_bounds_the_channel(self):
+        """The optimisation must survive the fix, or ingestion slows for nothing."""
+        rulesets = [
+            {
+                "title": "Process creation",
+                "channel": ["Security"],
+                "eventid": [4688],
+                "rule": [
+                    "SELECT * FROM logs WHERE Channel='Security' AND EventID=4688"
+                ],
+            }
+        ]
+        event_filter = EventFilter(rulesets)
+
+        assert event_filter.should_process_event("Security", 4688)
+        assert not event_filter.should_process_event("Security", 4104)
+        assert not event_filter.should_process_event("Application", 4688)
+
+    def test_eventid_in_an_in_list_bounds_the_channel(self):
+        rulesets = [
+            {
+                "title": "Several ids",
+                "channel": ["Security"],
+                "rule": [
+                    "SELECT * FROM logs WHERE Channel='Security' "
+                    "AND EventID IN (4624,4625,4634)"
+                ],
+            }
+        ]
+        event_filter = EventFilter(rulesets)
+
+        assert event_filter.should_process_event("Security", 4625)
+        assert not event_filter.should_process_event("Security", 4688)
+
+    def test_eventid_written_inside_a_string_literal_is_not_a_constraint(self):
+        """A CommandLine pattern mentioning an eventID must not bound anything.
+
+        Shipped rules really do this: a rule hunting ``wevtutil`` command lines
+        contains the text ``.eventid -eq 462`` inside a LIKE pattern.
+        """
+        rulesets = [
+            {
+                "title": "Log query recon",
+                "channel": ["Security"],
+                "rule": [
+                    "SELECT * FROM logs WHERE Channel='Security' AND EventID=4688 "
+                    "AND CommandLine LIKE '%.eventid -eq 462%'"
+                ],
+            }
+        ]
+        event_filter = EventFilter(rulesets)
+
+        # Bounded by the real constraint (4688) and not by the text 462
+        assert event_filter.should_process_event("Security", 4688)
+        assert not event_filter.should_process_event("Security", 462)
