@@ -25,6 +25,18 @@ from zircolite import DetectionResult
 # Path to the workspace root
 WORKSPACE_ROOT = Path(__file__).parent.parent
 
+# A valid ruleset that cannot match anything, for tests about discovery, output
+# paths or database modes rather than detection. An empty `[]` ruleset is not
+# usable here: a run that loaded no rules exits non-zero, because it analysed
+# nothing and must not look like a clean run that simply found nothing.
+NO_MATCH_RULESET = json.dumps([{
+    "title": "Matches nothing",
+    "id": "00000000-0000-0000-0000-000000000000",
+    "level": "informational",
+    "tags": [],
+    "rule": ["SELECT * FROM logs WHERE EventID = -1"],
+}])
+
 # Add parent directory to path for imports
 sys.path.insert(0, str(WORKSPACE_ROOT))
 
@@ -87,7 +99,7 @@ class TestCLIArgumentParsing:
     def test_missing_events_source_error(self, tmp_path, capsys):
         """Test error when no events source is provided."""
         ruleset_file = tmp_path / "ruleset.json"
-        ruleset_file.write_text("[]")
+        ruleset_file.write_text(NO_MATCH_RULESET)
 
         with pytest.raises(SystemExit) as exc_info:
             with patch('sys.argv', ['zircolite.py', '-r', str(ruleset_file), '-n']):
@@ -101,8 +113,8 @@ class TestCLIArgumentParsing:
         # Create dummy rulesets
         ruleset1 = tmp_path / "ruleset1.json"
         ruleset2 = tmp_path / "ruleset2.json"
-        ruleset1.write_text("[]")
-        ruleset2.write_text("[]")
+        ruleset1.write_text(NO_MATCH_RULESET)
+        ruleset2.write_text(NO_MATCH_RULESET)
 
         # Create dummy events file
         events_file = tmp_path / "events.json"
@@ -125,7 +137,7 @@ class TestCLIArgumentParsing:
         events_file.write_text("{}")
 
         ruleset_file = tmp_path / "ruleset.json"
-        ruleset_file.write_text("[]")
+        ruleset_file.write_text(NO_MATCH_RULESET)
 
         with pytest.raises(SystemExit), patch('sys.argv', [
             'zircolite.py',
@@ -142,7 +154,7 @@ class TestCLIArgumentParsing:
         events_file.write_text('{"Event": {"System": {"EventID": 1}}}')
 
         ruleset_file = tmp_path / "ruleset.json"
-        ruleset_file.write_text("[]")
+        ruleset_file.write_text(NO_MATCH_RULESET)
 
         template_file = tmp_path / "template.tmpl"
         template_file.write_text("test template")
@@ -162,7 +174,7 @@ class TestCLIArgumentParsing:
         events_file.write_text('{"Event": {"System": {"EventID": 1}}}')
 
         ruleset_file = tmp_path / "ruleset.json"
-        ruleset_file.write_text("[]")
+        ruleset_file.write_text(NO_MATCH_RULESET)
 
         template1 = tmp_path / "template1.tmpl"
         template2 = tmp_path / "template2.tmpl"
@@ -259,7 +271,7 @@ class TestCLIInputModes:
         events_file.write_text("EventID,CommandLine\n1,test command\n")
 
         ruleset_file = tmp_path / "ruleset.json"
-        ruleset_file.write_text("[]")
+        ruleset_file.write_text(NO_MATCH_RULESET)
 
         config_file = tmp_path / "config.json"
         config_file.write_text(json.dumps({
@@ -295,7 +307,7 @@ class TestCLIStreamingMode:
         events_file.write_text('{"Event": {"System": {"EventID": 1}, "EventData": {}}}')
 
         ruleset_file = tmp_path / "ruleset.json"
-        ruleset_file.write_text("[]")
+        ruleset_file.write_text(NO_MATCH_RULESET)
 
         config_file = tmp_path / "config.json"
         config_file.write_text(json.dumps({
@@ -936,7 +948,7 @@ class TestCLIDatabaseOperations:
         events_file.write_text('{"Event": {"System": {"EventID": 1}, "EventData": {}}}')
 
         ruleset_file = tmp_path / "ruleset.json"
-        ruleset_file.write_text("[]")
+        ruleset_file.write_text(NO_MATCH_RULESET)
 
         config_file = tmp_path / "config.json"
         config_file.write_text(json.dumps({
@@ -997,7 +1009,7 @@ class TestCLIDatabaseOperations:
 
         # Now test loading it via CLI
         ruleset_file = tmp_path / "ruleset.json"
-        ruleset_file.write_text("[]")
+        ruleset_file.write_text(NO_MATCH_RULESET)
 
         output_file = tmp_path / "output.json"
 
@@ -1148,7 +1160,7 @@ Alert: {{ elem.title }} ({{ elem.rule_level }})
         events_file.write_text('{"Event": {"System": {"EventID": 1}}}')
 
         ruleset_file = tmp_path / "ruleset.json"
-        ruleset_file.write_text("[]")
+        ruleset_file.write_text(NO_MATCH_RULESET)
 
         nav_output = tmp_path / "navigator.json"
         original_cwd = os.getcwd()
@@ -1173,7 +1185,7 @@ Alert: {{ elem.title }} ({{ elem.rule_level }})
         events_file.write_text('{"Event": {"System": {"EventID": 1}}}')
 
         ruleset_file = tmp_path / "ruleset.json"
-        ruleset_file.write_text("[]")
+        ruleset_file.write_text(NO_MATCH_RULESET)
 
         template_file = tmp_path / "template.tmpl"
         template_file.write_text("{{ data | length }}")
@@ -1339,7 +1351,7 @@ class TestCLINoLogOption:
         events_file.write_text('{"Event": {"System": {"EventID": 1}, "EventData": {}}}')
 
         ruleset_file = tmp_path / "ruleset.json"
-        ruleset_file.write_text("[]")
+        ruleset_file.write_text(NO_MATCH_RULESET)
 
         config_file = tmp_path / "config.json"
         config_file.write_text(json.dumps({
@@ -1382,7 +1394,7 @@ class TestCLINoLogOption:
         events_file = tmp_path / "events.json"
         events_file.write_text('{"Event": {"System": {"EventID": 1}, "EventData": {}}}')
         ruleset_file = tmp_path / "ruleset.json"
-        ruleset_file.write_text("[]")
+        ruleset_file.write_text(NO_MATCH_RULESET)
         config_file = tmp_path / "config.json"
         config_file.write_text(json.dumps({
             "exclusions": [],
@@ -1423,7 +1435,7 @@ class TestCLIRemoveEvents:
         events_file.write_text('{"Event": {"System": {"EventID": 1}, "EventData": {}}}')
 
         ruleset_file = tmp_path / "ruleset.json"
-        ruleset_file.write_text("[]")
+        ruleset_file.write_text(NO_MATCH_RULESET)
 
         config_file = tmp_path / "config.json"
         config_file.write_text(json.dumps({
@@ -1467,7 +1479,7 @@ class TestCLIRemoveEvents:
         bad.write_bytes('{"Event": {"System": {"EventID": 1}}}'.encode("utf-16"))
 
         ruleset_file = tmp_path / "ruleset.json"
-        ruleset_file.write_text("[]")
+        ruleset_file.write_text(NO_MATCH_RULESET)
 
         with patch('sys.argv', [
             'zircolite.py',
@@ -1599,7 +1611,7 @@ class TestCLIAdvancedConfiguration:
         events_file = tmp_path / "data.json"
         events_file.write_text('{"Event": {"System": {"EventID": 1}, "EventData": {}}}')
         ruleset_file = tmp_path / "ruleset.json"
-        ruleset_file.write_text("[]")
+        ruleset_file.write_text(NO_MATCH_RULESET)
         config_file = tmp_path / "config.json"
         config_file.write_text(json.dumps({
             "exclusions": [],
@@ -1759,7 +1771,7 @@ class TestCLIFileExtension:
         events_file.write_text('{"Event": {"System": {"EventID": 1}, "EventData": {}}}')
 
         ruleset_file = tmp_path / "ruleset.json"
-        ruleset_file.write_text("[]")
+        ruleset_file.write_text(NO_MATCH_RULESET)
 
         config_file = tmp_path / "config.json"
         config_file.write_text(json.dumps({
@@ -1787,7 +1799,7 @@ class TestCLIFileExtension:
         (events_dir / "b.json").write_text('{"Event": {"System": {"EventID": 2}, "EventData": {}}}')
         (events_dir / "other.txt").write_text("not json")
         ruleset_file = tmp_path / "ruleset.json"
-        ruleset_file.write_text("[]")
+        ruleset_file.write_text(NO_MATCH_RULESET)
         config_file = tmp_path / "config.json"
         config_file.write_text(json.dumps({
             "exclusions": [],
@@ -1816,7 +1828,7 @@ class TestCLIYamlConfig:
         events_file = tmp_path / "events.json"
         events_file.write_text('{"Event": {"System": {"EventID": 1}, "EventData": {}}}')
         ruleset_file = tmp_path / "ruleset.json"
-        ruleset_file.write_text("[]")
+        ruleset_file.write_text(NO_MATCH_RULESET)
         config_file = tmp_path / "config.json"
         config_file.write_text(json.dumps({
             "exclusions": [],
@@ -1929,7 +1941,7 @@ class TestCLINoRecursion:
         (subdir / "subevents.json").write_text('{"Event": {"System": {"EventID": 2}, "EventData": {}}}')
 
         ruleset_file = tmp_path / "ruleset.json"
-        ruleset_file.write_text("[]")
+        ruleset_file.write_text(NO_MATCH_RULESET)
 
         config_file = tmp_path / "config.json"
         config_file.write_text(json.dumps({
@@ -2219,7 +2231,7 @@ class TestCLIUnifiedDatabase:
         }))
 
         ruleset_file = tmp_path / "ruleset.json"
-        ruleset_file.write_text("[]")
+        ruleset_file.write_text(NO_MATCH_RULESET)
 
         config_file = tmp_path / "config.json"
         config_file.write_text(json.dumps({
@@ -2258,7 +2270,7 @@ class TestCLIUnifiedDatabase:
             json.dumps({"Event": {"System": {"EventID": 1}, "EventData": {"CommandLine": "b"}}})
         )
         ruleset_file = tmp_path / "ruleset.json"
-        ruleset_file.write_text("[]")
+        ruleset_file.write_text(NO_MATCH_RULESET)
         config_file = tmp_path / "config.json"
         config_file.write_text(json.dumps({
             "exclusions": [],
@@ -2295,7 +2307,7 @@ class TestCLIUnifiedDatabase:
             json.dumps({"Event": {"System": {"EventID": 1}, "EventData": {"CommandLine": "y"}}})
         )
         ruleset_file = tmp_path / "ruleset.json"
-        ruleset_file.write_text("[]")
+        ruleset_file.write_text(NO_MATCH_RULESET)
         config_file = tmp_path / "config.json"
         config_file.write_text(json.dumps({
             "exclusions": [],
@@ -2393,7 +2405,7 @@ class TestCLIUnifiedDatabase:
         events_file.write_text('{"Event": {"System": {"EventID": 1}, "EventData": {"CommandLine": "test"}}}')
 
         ruleset_file = tmp_path / "ruleset.json"
-        ruleset_file.write_text("[]")
+        ruleset_file.write_text(NO_MATCH_RULESET)
 
         config_file = tmp_path / "config.json"
         config_file.write_text(json.dumps({
@@ -2553,7 +2565,7 @@ class TestCLIAutoMode:
         }))
 
         ruleset_file = tmp_path / "ruleset.json"
-        ruleset_file.write_text("[]")
+        ruleset_file.write_text(NO_MATCH_RULESET)
 
         config_file = tmp_path / "config.json"
         config_file.write_text(json.dumps({
@@ -2995,7 +3007,7 @@ class TestDbfileCollision:
                 json.dumps({"Event": {"System": {"EventID": 1}, "EventData": {"CommandLine": cmd}}})
             )
         ruleset_file = tmp_path / "ruleset.json"
-        ruleset_file.write_text("[]")
+        ruleset_file.write_text(NO_MATCH_RULESET)
         config_file = tmp_path / "config.json"
         config_file.write_text(json.dumps({
             "exclusions": [], "useless": [],
@@ -3411,3 +3423,34 @@ def test_version_has_a_single_source():
         capture_output=True, text=True, cwd=str(WORKSPACE_ROOT),
     )
     assert __version__ in result.stdout
+
+
+class TestCLIEmptyRuleset:
+    """A run that loaded no rules analysed nothing and must say so in its exit code."""
+
+    def test_zero_rules_exits_non_zero(self, tmp_path):
+        """`No rules to execute` was logged at ERROR, then the run exited 0.
+
+        The empty detected_events.json it leaves behind is indistinguishable
+        from a clean run that genuinely found nothing, so any pipeline checking
+        the exit code treats a totally failed run as a success.
+        """
+        events_file = tmp_path / "events.json"
+        events_file.write_text('{"Event": {"System": {"EventID": 1}, "EventData": {}}}')
+        empty_ruleset = tmp_path / "ruleset.json"
+        empty_ruleset.write_text("[]")
+
+        with patch('sys.argv', [
+            'zircolite.py',
+            '-e', str(events_file),
+            '-r', str(empty_ruleset),
+            '-j',
+            '-o', str(tmp_path / "output.json"),
+            '-n',
+        ]):
+            with pytest.raises(SystemExit) as excinfo:
+                zircolite_script.main()
+
+        assert excinfo.value.code != 0, (
+            "a run with no rules must not report success"
+        )

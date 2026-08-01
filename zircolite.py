@@ -1189,6 +1189,16 @@ def main() -> None:
     if args.pipeline_list:
         sys.exit(0)
 
+    # Nothing was going to be applied to the events. The empty result file this
+    # would otherwise write is indistinguishable from a clean run that found
+    # nothing, so anything reading the exit code calls a failed run a success.
+    if not rulesets_manager.rulesets:
+        quit_on_error(
+            "[red]    [-] No rules to execute: check the ruleset(s) given to "
+            "[cyan]--ruleset[/][/]",
+            logger,
+        )
+
     # Flatten rule filters (must happen before any ruleset filtering below)
     if args.rulefilter:
         args.rulefilter = [item for sublist in args.rulefilter for item in sublist]

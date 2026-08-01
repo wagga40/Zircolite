@@ -471,3 +471,38 @@ class TestYamlValuesCountAsUserSet:
         zircolite_script._apply_detection_result(args, detection, logging.getLogger("t"))
 
         assert args.timefield == "UtcTime"
+
+
+class TestScalarWhereAListIsExpected:
+    """A bare string for a list-valued key must mean one item, not one per character.
+
+    YAML makes this an easy mistake -- `rulesets: rules/x.json` reads perfectly
+    naturally -- and iterating the string produced one single-character entry
+    per character, gutting the ruleset, the filters or the file selection.
+    """
+
+    def test_ruleset_scalar_becomes_one_entry(self):
+        args = _args()
+        resolve(args, {"rules": {"rulesets": "rules/rules_windows_generic.json"}},
+                skip=EARLY_DESTS)
+        assert flatten_groups(args.ruleset) == ["rules/rules_windows_generic.json"]
+
+    def test_select_scalar_becomes_one_entry(self):
+        args = _args()
+        resolve(args, {"input": {"select": "Security"}}, skip=EARLY_DESTS)
+        assert flatten_groups(args.select) == ["Security"]
+
+    def test_rulefilter_scalar_becomes_one_entry(self):
+        args = _args()
+        resolve(args, {"rules": {"filters": "Noisy Rule"}}, skip=EARLY_DESTS)
+        assert flatten_groups(args.rulefilter) == ["Noisy Rule"]
+
+    def test_concat_setting_scalar_becomes_one_entry(self):
+        args = _args()
+        resolve(args, {"processing": {"add_index": "CommandLine"}}, skip=EARLY_DESTS)
+        assert flatten_groups(args.add_index) == ["CommandLine"]
+
+    def test_a_real_list_is_still_a_list(self):
+        args = _args()
+        resolve(args, {"input": {"select": ["Security", "System"]}}, skip=EARLY_DESTS)
+        assert flatten_groups(args.select) == ["Security", "System"]

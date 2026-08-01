@@ -23,7 +23,7 @@ Resolution happens in two phases because the logger is built from ``debug``,
 :data:`EARLY_DESTS` names those three; everything else is resolved afterwards.
 """
 
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Iterable, Mapping
 from dataclasses import dataclass
 from enum import Enum, auto
 from typing import Any
@@ -70,9 +70,24 @@ class Setting:
     invert: bool = False
 
 
+def as_list(value: Any) -> list:
+    """A YAML value for a list-valued key, as a list.
+
+    ``rulesets: rules/x.json`` reads naturally and is the obvious way to name a
+    single one, but iterating that string yields one entry per character --
+    silently replacing the ruleset with 32 one-character paths. A scalar means
+    one item.
+    """
+    if value is None:
+        return []
+    if isinstance(value, (str, bytes)) or not isinstance(value, Iterable):
+        return [value]
+    return list(value)
+
+
 def nest_each(values: Any) -> list[list[str]]:
     """``["a", "b"]`` -> ``[["a"], ["b"]]``, the shape append/nargs produces."""
-    return [[v] for v in values or []]
+    return [[v] for v in as_list(values)]
 
 
 def flatten_groups(value: Any) -> list[str]:
@@ -209,7 +224,7 @@ def _combine(setting: Setting, cli: Any, yaml_value: Any) -> Any:
         return bool(cli) or yaml_sets
 
     if setting.merge is Merge.CONCAT:
-        yaml_items = list(yaml_value) if has_yaml else []
+        yaml_items = as_list(yaml_value) if has_yaml else []
         cli_items = flatten_groups(cli) if nested else list(cli or [])
         merged = _dedup(yaml_items + cli_items)
         if not merged:
