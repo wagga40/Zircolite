@@ -1,17 +1,10 @@
-#!python3
 """
-Zircolite - Standalone SIGMA-Based Detection Tool for EVTX, Auditd, Sysmon Linux, and more.
+Command-line interface for Zircolite.
 
-This is the main entry point for Zircolite. The core functionality has been modularized into
-the zircolite/ package for better maintainability and code organization.
-
-Package structure:
-- zircolite/core.py: ZircoliteCore class for database and rule execution
-- zircolite/streaming.py: StreamingEventProcessor for single-pass processing
-- zircolite/extractor.py: EvtxExtractor for log format conversion
-- zircolite/rules.py: RulesetHandler and RulesUpdater for rule management
-- zircolite/templates.py: TemplateEngine and ZircoliteGuiGenerator for output
-- zircolite/utils.py: Utility functions and MemoryTracker
+Argument parsing, file discovery, log type detection and run orchestration.
+The processing modes themselves live in ``zircolite/processing.py``; this
+module wires them to the flags. ``zircolite.py`` at the repository root is a
+shim that calls :func:`main`, as is ``python -m zircolite``.
 """
 
 # Standard libs
@@ -545,7 +538,14 @@ def resolve_run_config(args, logger) -> argparse.Namespace:
 ################################################################
 def _bundled_asset(*parts: str) -> Path:
     """Resolve a file shipped with Zircolite, independent of the current directory."""
-    return Path(__file__).resolve().parent.joinpath(*parts)
+    # A PyInstaller build unpacks config/, rules/ and templates/ beside the
+    # bootloader rather than beside this module, and the module's own frozen
+    # path is an implementation detail of whichever PyInstaller version built
+    # it. Ask the bootloader instead of counting directories.
+    frozen_root = getattr(sys, "_MEIPASS", None)
+    if frozen_root is not None:
+        return Path(frozen_root).joinpath(*parts)
+    return Path(__file__).resolve().parent.parent.joinpath(*parts)
 
 
 def _resolve_default_path(value: str, *parts: str) -> str:
@@ -1509,7 +1509,3 @@ def main() -> None:
     # would otherwise read a stale one, or nothing, and call it success
     if not templating_ok:
         sys.exit(1)
-
-
-if __name__ == "__main__":
-    main()
