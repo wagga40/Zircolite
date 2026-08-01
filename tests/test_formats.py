@@ -90,6 +90,12 @@ PARITY_TABLE = [
     ("evtxtract_input", "evtxtract", True, "log", "evtxtract"),
 ]
 
+# The rows that actually carry a CLI flag. EVTX is the implicit default and has
+# no flag, so "the flag beats the YAML value" is not a question that can be
+# asked of it -- its side of the contract is the opposite one, and is asserted
+# by TestImplicitEvtxDefault below.
+FLAGGED_FORMATS = [row for row in PARITY_TABLE if row[0] is not None]
+
 
 @pytest.mark.parametrize("flag,input_type,explicit,extension,yaml_format", PARITY_TABLE)
 class TestFormatParity:
@@ -107,18 +113,6 @@ class TestFormatParity:
         self, flag, input_type, explicit, extension, yaml_format
     ):
         assert zircolite_cli._format_flag_extension(make_args(flag)) == extension
-
-    def test_cli_flag_wins_over_yaml_format(
-        self, flag, input_type, explicit, extension, yaml_format
-    ):
-        """An explicit CLI format flag is not overridden by `input.format`."""
-        if flag is None:
-            pytest.skip("EVTX is the implicit default; it has no flag to win with")
-        args = make_args(flag, evtx=None, no_recursion=False)
-        # Deliberately pick a different format in the YAML document
-        other = "csv" if yaml_format != "csv" else "json"
-        run_config.resolve(args, {"input": {"format": other}})
-        assert zircolite_cli.get_input_type(args) == input_type
 
     def test_yaml_format_round_trip(
         self, flag, input_type, explicit, extension, yaml_format
@@ -146,6 +140,45 @@ class TestFormatParity:
         config.input.path = "."
         issues = loader.validate_config(config)
         assert not any("Invalid input format" in i for i in issues)
+
+
+@pytest.mark.parametrize(
+    "flag,input_type,explicit,extension,yaml_format", FLAGGED_FORMATS
+)
+class TestExplicitFlagPrecedence:
+    """A CLI format flag outranks `input.format` in the YAML document."""
+
+    def test_cli_flag_wins_over_yaml_format(
+        self, flag, input_type, explicit, extension, yaml_format
+    ):
+        args = make_args(flag, evtx=None, no_recursion=False)
+        # Deliberately pick a different format in the YAML document
+        other = "csv" if yaml_format != "csv" else "json"
+        run_config.resolve(args, {"input": {"format": other}})
+        assert zircolite_cli.get_input_type(args) == input_type
+
+
+class TestImplicitEvtxDefault:
+    """EVTX carries no flag, so it holds the other side of that contract.
+
+    With nothing on the command line there is no flag to outrank the YAML
+    document, and `input.format` must therefore decide -- including when it
+    selects EVTX itself.
+    """
+
+    @pytest.mark.parametrize(
+        "yaml_format,expected", [(row[4], row[1]) for row in PARITY_TABLE]
+    )
+    def test_yaml_format_decides_when_no_flag_is_given(self, yaml_format, expected):
+        args = make_args(None, evtx=None, no_recursion=False)
+        run_config.resolve(args, {"input": {"format": yaml_format}})
+        assert zircolite_cli.get_input_type(args) == expected
+
+    def test_no_flag_and_no_yaml_format_is_evtx(self):
+        args = make_args(None, evtx=None, no_recursion=False)
+        run_config.resolve(args, {})
+        assert zircolite_cli.get_input_type(args) == "evtx"
+        assert zircolite_cli._has_explicit_format_flag(args) is False
 
 
 class TestValidationRejectsUnknown:
@@ -194,9 +227,9 @@ class TestRegistryInvariants:
         )
 
     def test_non_windows_inputs(self):
-        assert NON_WINDOWS_INPUT_FLAGS == frozenset(
+        assert frozenset(
             {"auditd_input", "sysmon_linux_input"}
-        )
+        ) == NON_WINDOWS_INPUT_FLAGS
 
     def test_evtx_is_the_only_implicit_format(self):
         implicit = [f for f in INPUT_FORMATS if not f.has_cli_flag]
