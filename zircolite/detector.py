@@ -26,6 +26,7 @@ import logging
 import re
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Any
 
 import orjson as json
 
@@ -197,6 +198,42 @@ class DetectionResult:
 
     # Additional metadata from detection
     metadata: dict = field(default_factory=dict)
+
+
+def _first_balanced_object(text: str) -> str | None:
+    """The first complete top-level ``{...}`` in *text*, or None.
+
+    Quote- and escape-aware, so a brace inside a string value does not throw
+    the count off. This is what makes array recovery independent of layout: a
+    compact array has no line to parse, and a pretty-printed one has no
+    *complete* object on any single line, so both defeated the line-by-line
+    fallback once the array outgrew the sample.
+    """
+    start = text.find("{")
+    if start < 0:
+        return None
+    depth = 0
+    in_string = False
+    escaped = False
+    for index in range(start, len(text)):
+        char = text[index]
+        if in_string:
+            if escaped:
+                escaped = False
+            elif char == "\\":
+                escaped = True
+            elif char == '"':
+                in_string = False
+            continue
+        if char == '"':
+            in_string = True
+        elif char == "{":
+            depth += 1
+        elif char == "}":
+            depth -= 1
+            if depth == 0:
+                return text[start : index + 1]
+    return None
 
 
 class LogTypeDetector:
@@ -854,35 +891,50 @@ class LogTypeDetector:
     def _parse_first_json_event(
         self, sample_bytes: bytes, is_json_array: bool
     ) -> dict | None:
-        """Parse the first JSON event from a sample."""
+        """Parse the first JSON event from a sample.
+
+        Decoded first: parsing the raw bytes meant a UTF-8 BOM poisoned the
+        first line and UTF-16 defeated the parse entirely, degrading a
+        perfectly ordinary PowerShell export to generic_json with no timestamp
+        field.
+        """
+        text = self._decode_sample(sample_bytes)
         try:
             if is_json_array:
-                data = json.loads(sample_bytes)
+                data = json.loads(text)
                 if isinstance(data, list) and data and isinstance(data[0], dict):
                     return data[0]
                 return None
-            else:
-                for line in sample_bytes.split(b"\n"):
-                    line = line.strip()
-                    if line:
-                        event = json.loads(line)
-                        if isinstance(event, dict):
-                            return event
-                return None
-        except Exception:
-            # For truncated JSON arrays, try line-by-line recovery
-            for line in sample_bytes.split(b"\n"):
+            for line in text.split("\n"):
                 line = line.strip()
-                if not line or line in (b"[", b"]", b","):
+                if line:
+                    event = json.loads(line)
+                    if isinstance(event, dict):
+                        return event
+            return None
+        except Exception:
+            # The sample stops wherever 64 KB ran out, so an array larger than
+            # it never parses whole. Recover one event from it instead.
+            for line in text.split("\n"):
+                line = line.strip()
+                if not line or line in ("[", "]", ","):
                     continue
-                if line.endswith(b","):
-                    line = line[:-1]
+                line = line.removesuffix(",")
                 try:
                     event = json.loads(line)
                     if isinstance(event, dict):
                         return event
                 except Exception:
                     continue
+
+            candidate = _first_balanced_object(text)
+            if candidate is not None:
+                try:
+                    event = json.loads(candidate)
+                    if isinstance(event, dict):
+                        return event
+                except Exception:
+                    pass
 
         return None
 
@@ -1162,7 +1214,20 @@ class LogTypeDetector:
         if first_char in ("{", "["):
             event = self._parse_first_json_event(sample_bytes, first_char == "[")
             if event:
-                candidate = self._find_key_for_value(event, matched_value)
+                # A field whose whole value is the timestamp speaks for itself,
+                # whatever it is called -- `logged_at` scores nothing by name.
+                candidate = self._find_key_for_value(
+                    event, matched_value, exact=True
+                )
+                if candidate is None:
+                    # Found inside a longer string: only a field named like a
+                    # timestamp earns that, or a prose message mentioning a
+                    # date becomes the time field and -A/-B filter on prose.
+                    loose = self._find_key_for_value(
+                        event, matched_value, exact=False
+                    )
+                    if loose and self._timestamp_field_score(loose) > 0:
+                        candidate = loose
                 if candidate and (
                     not matched_value.isdigit()
                     or self._timestamp_field_score(candidate) > 0
@@ -1184,22 +1249,31 @@ class LogTypeDetector:
             )
 
     @staticmethod
-    def _find_key_for_value(event: dict, needle: str) -> str | None:
-        """Find the key in *event* (one level deep) whose value contains *needle*.
+    def _find_key_for_value(
+        event: dict, needle: str, *, exact: bool = False
+    ) -> str | None:
+        """The key in *event* (one level deep) whose value carries *needle*.
+
+        With ``exact``, the value must *be* the timestamp. Without it, the
+        needle only has to appear somewhere inside -- which is how a free-text
+        message that happens to mention a date became the time field.
 
         Numeric values are compared via their string form so epoch/FileTime
         timestamps stored as JSON numbers can be tied back to their key.
         """
+        def carries(value: Any) -> bool:
+            if isinstance(value, str):
+                return value.strip() == needle if exact else needle in value
+            if isinstance(value, (int, float)):
+                return needle == str(value)
+            return False
+
         for key, value in event.items():
-            if isinstance(value, str) and needle in value:
-                return key
-            if isinstance(value, (int, float)) and needle == str(value):
+            if carries(value):
                 return key
             if isinstance(value, dict):
                 for sub_key, sub_val in value.items():
-                    if isinstance(sub_val, str) and needle in sub_val:
-                        return sub_key
-                    if isinstance(sub_val, (int, float)) and needle == str(sub_val):
+                    if carries(sub_val):
                         return sub_key
         return None
 

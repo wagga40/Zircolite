@@ -21,6 +21,7 @@ import json
 import logging
 import os
 from pathlib import Path
+from typing import ClassVar
 from unittest.mock import patch
 
 import pytest
@@ -2017,3 +2018,139 @@ class TestFormatClassificationFixes:
     def test_find_key_for_numeric_value(self, detector):
         event = {"@timestamp": 1718442600, "message": "hello"}
         assert detector._find_key_for_value(event, "1718442600") == "@timestamp"
+
+
+class TestDetectionSurvivesTheSampleShape:
+    """Detection reads a 64 KB sample; three shapes of real file broke it.
+
+    Each degraded silently to generic_json / low confidence / no timestamp
+    field, which costs the log source, the suggested pipeline and -- on the
+    native-Sigma path -- the column correlation SQL is written against.
+    """
+
+    SYSMON_EVENT: ClassVar[dict] = {
+        "Event": {
+            "System": {
+                "Channel": "Microsoft-Windows-Sysmon/Operational",
+                "EventID": 1,
+            },
+            "EventData": {
+                "Image": "C:\\x.exe",
+                "UtcTime": "2024-06-15 10:30:00",
+                "ProcessGuid": "{g}",
+            },
+        }
+    }
+    ECS_EVENT: ClassVar[dict] = {
+        "@timestamp": "2024-06-15T10:30:00.000Z",
+        "winlog": {"channel": "Security", "event_id": 4688},
+        "message": "m",
+    }
+
+    def _detect(self, path, test_logger):
+        return LogTypeDetector(logger=test_logger).detect(str(path))
+
+    @pytest.mark.parametrize("indent", [None, 2], ids=["compact", "pretty"])
+    def test_a_json_array_larger_than_the_sample_is_still_classified(
+        self, tmp_path, test_logger, indent
+    ):
+        """Recovery only handled newline-separated objects.
+
+        A 4000-event array is nearly a megabyte, so the sample stops mid-array
+        and json.loads fails; the fallback then found no parsable line because
+        a compact array has none, and a pretty-printed one has no *complete*
+        object on any single line either.
+        """
+        big = tmp_path / "big.json"
+        big.write_text(json.dumps([self.SYSMON_EVENT] * 4000, indent=indent))
+        small = tmp_path / "small.json"
+        small.write_text(json.dumps([self.SYSMON_EVENT] * 5, indent=indent))
+
+        assert big.stat().st_size > 64 * 1024
+        expected = self._detect(small, test_logger)
+        got = self._detect(big, test_logger)
+
+        assert got.log_source == expected.log_source == "sysmon_windows"
+        assert got.timestamp_field == expected.timestamp_field == "UtcTime"
+
+    def test_a_byte_order_mark_does_not_hide_the_first_event(
+        self, tmp_path, test_logger
+    ):
+        plain = tmp_path / "plain.json"
+        plain.write_text(json.dumps(self.ECS_EVENT))
+        bom = tmp_path / "bom.json"
+        bom.write_bytes(b"\xef\xbb\xbf" + json.dumps(self.ECS_EVENT).encode())
+
+        expected = self._detect(plain, test_logger)
+        got = self._detect(bom, test_logger)
+
+        assert got.log_source == expected.log_source == "ecs_elastic"
+        assert got.timestamp_field == expected.timestamp_field == "@timestamp"
+
+    def test_utf16_json_is_classified(self, tmp_path, test_logger):
+        """PowerShell 5.1's `ConvertTo-Json | Out-File` emits UTF-16LE."""
+        source = tmp_path / "utf16.json"
+        source.write_bytes(json.dumps(self.ECS_EVENT).encode("utf-16"))
+
+        got = self._detect(source, test_logger)
+
+        assert got.log_source == "ecs_elastic"
+        assert got.timestamp_field == "@timestamp"
+
+
+class TestTimestampFieldMustBeATimestamp:
+    """A field is not the time field just because its text mentions a date."""
+
+    def test_a_prose_field_containing_a_date_is_rejected(
+        self, tmp_path, test_logger
+    ):
+        source = tmp_path / "app.json"
+        source.write_text(json.dumps({
+            "lvl": "info",
+            "msg": "backup finished at 2024-06-15T10:30:00Z ok",
+            "host": "h1",
+        }))
+
+        result = LogTypeDetector(logger=test_logger).detect(str(source))
+
+        assert result.timestamp_field != "msg", (
+            "a free-text message is not a timestamp field; --after/--before "
+            "would then filter on prose"
+        )
+
+    def test_an_unscored_name_holding_only_a_timestamp_is_still_accepted(
+        self, tmp_path, test_logger
+    ):
+        """`logged_at` scores 0 by name, so the guard cannot be name-only."""
+        source = tmp_path / "app.json"
+        source.write_text(json.dumps({
+            "lvl": "info", "logged_at": "2024-06-15T10:30:00Z", "host": "h1",
+        }))
+
+        result = LogTypeDetector(logger=test_logger).detect(str(source))
+
+        assert result.timestamp_field == "logged_at"
+
+
+class TestFindKeyForValueExactMode:
+    """`exact` separates "this field is a timestamp" from "this text mentions one"."""
+
+    EVENT: ClassVar[dict] = {
+        "msg": "backup finished at 2024-06-15T10:30:00Z ok",
+        "logged_at": "2024-06-15T10:30:00Z",
+    }
+
+    def test_exact_skips_a_value_that_merely_contains_the_needle(self):
+        assert LogTypeDetector._find_key_for_value(
+            self.EVENT, "2024-06-15T10:30:00Z", exact=True
+        ) == "logged_at"
+
+    def test_exact_tolerates_surrounding_whitespace(self):
+        assert LogTypeDetector._find_key_for_value(
+            {"when": "  2024-06-15T10:30:00Z  "}, "2024-06-15T10:30:00Z", exact=True
+        ) == "when"
+
+    def test_loose_still_matches_inside_a_longer_string(self):
+        assert LogTypeDetector._find_key_for_value(
+            {"msg": self.EVENT["msg"]}, "2024-06-15T10:30:00Z"
+        ) == "msg"
