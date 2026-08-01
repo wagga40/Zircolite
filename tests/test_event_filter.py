@@ -1193,3 +1193,73 @@ class TestBoundsComeFromRuleSql:
         # Bounded by the real constraint (4688) and not by the text 462
         assert event_filter.should_process_event("Security", 4688)
         assert not event_filter.should_process_event("Security", 462)
+
+
+class TestEventFilterChannelMetadataIsNotAChannel:
+    """The `channel` metadata is not always a channel name.
+
+    pysigma-backend-sqlite harvests the raw SigmaString of every Channel
+    detection item, so a wildcard match contributes a pattern and a negated
+    match contributes the channel the rule *excludes*. Neither names a channel
+    the rule wants, but both are non-empty -- so the rule still counted as
+    channel-bounded and the fail-open path never fired.
+    """
+
+    def test_wildcard_channel_pattern_does_not_bound_the_filter(self):
+        """`Channel|contains: PowerShell` becomes '*PowerShell*', which matches nothing."""
+        rulesets = [
+            {
+                "title": "PowerShell script block",
+                "channel": ["*powershell*"],
+                "rule": [
+                    "SELECT * FROM logs WHERE Channel LIKE '%PowerShell%' "
+                    "AND EventID = 4104"
+                ],
+            },
+            {
+                "title": "Logon",
+                "channel": ["Security"],
+                "rule": [
+                    "SELECT * FROM logs WHERE Channel = 'Security' AND EventID = 4624"
+                ],
+            },
+        ]
+        event_filter = EventFilter(rulesets)
+
+        assert event_filter.should_process_event(
+            "Microsoft-Windows-PowerShell/Operational", 4104
+        ), "the events the wildcard rule needs must survive the early filter"
+
+    def test_channel_named_only_under_a_negation_does_not_bound_the_filter(self):
+        """A rule excluding a channel matches every *other* channel."""
+        rulesets = [
+            {
+                "title": "Script block outside Windows PowerShell",
+                "channel": ["Windows PowerShell"],
+                "rule": [
+                    "SELECT * FROM logs WHERE EventID = 4104 "
+                    "AND (NOT Channel = 'Windows PowerShell')"
+                ],
+            },
+            {
+                "title": "Logon",
+                "channel": ["Security"],
+                "rule": [
+                    "SELECT * FROM logs WHERE Channel = 'Security' AND EventID = 4624"
+                ],
+            },
+        ]
+        event_filter = EventFilter(rulesets)
+
+        assert event_filter.should_process_event(
+            "Microsoft-Windows-PowerShell/Operational", 4104
+        ), "the filter must not admit only the channel the rule excludes"
+
+    def test_metadata_still_used_when_the_rule_carries_no_sql(self):
+        """Rules without SQL cannot run; their metadata may still widen a channel."""
+        rulesets = [
+            {"title": "Metadata only", "channel": ["Security"], "eventid": [4624]}
+        ]
+        event_filter = EventFilter(rulesets)
+
+        assert event_filter.should_process_event("Security", 4624)

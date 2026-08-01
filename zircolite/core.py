@@ -567,7 +567,13 @@ class ZircoliteCore:
                     # can never match, and staying quiet about it hides a blind spot.
                     self._note_broken_rule(rule_title, e)
                     return []
-                if "widen" in attempted or not self._widen_logs_table(query):
+                if "widen" in attempted:
+                    # Widening ran and the column is still missing, so the name
+                    # was never reported to it. That is a blind spot, not a
+                    # dataset that simply lacks the field.
+                    self._note_broken_rule(rule_title, e)
+                    return []
+                if not self._widen_logs_table(query):
                     self.logger.debug(f"    [-] Rule fields absent from dataset: {e}")
                     return []
                 attempted.add("widen")

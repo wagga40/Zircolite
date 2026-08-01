@@ -614,6 +614,51 @@ level: high
 
 
 @pytest.mark.requires_sigma
+class TestSigmaListCondition:
+    """A Sigma `condition:` may be a YAML list, which converts to several queries."""
+
+    RULE = """
+title: Two conditions
+id: cccccccc-cccc-cccc-cccc-cccccccccccc
+logsource:
+  product: windows
+  service: security
+detection:
+  selection_a:
+    EventID: 4624
+  selection_b:
+    EventID: 4688
+  condition:
+    - selection_a
+    - selection_b
+level: high
+"""
+
+    def test_every_branch_of_a_list_condition_is_kept(self, tmp_path, test_logger):
+        """pySigma returns one query per condition; dropping the tail loses detections.
+
+        The Zircolite format is a list of SELECTs per rule and execute_rule ORs
+        them, so the branches belong together in one rule rather than being
+        thrown away.
+        """
+        rule_file = tmp_path / "multi.yml"
+        rule_file.write_text(self.RULE)
+
+        handler = RulesetHandler(
+            ruleset_config=RulesetConfig(ruleset=[str(rule_file)], pipeline=[]),
+            logger=test_logger,
+        )
+
+        assert len(handler.rulesets) == 1
+        queries = handler.rulesets[0]["rule"]
+        joined = " ".join(queries)
+        assert "4624" in joined, "the first condition must survive"
+        assert "4688" in joined, (
+            "the second condition was dropped, so those events are never detected"
+        )
+
+
+@pytest.mark.requires_sigma
 class TestSigmaCorrelationConversion:
     """End-to-end conversion of multi-document Sigma rules with correlation."""
 

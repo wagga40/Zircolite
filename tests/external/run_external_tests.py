@@ -19,15 +19,14 @@ import tempfile
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
-from typing import Optional
-from xml.etree.ElementTree import Element, SubElement, ElementTree, indent
-
-_ANSI_ESCAPE = re.compile(r"\x1b\[[0-9;]*[A-Za-z]|\x1b\][^\x07]*\x07|\x1b[@-Z\\-_]")
+from xml.etree.ElementTree import Element, ElementTree, SubElement, indent
 
 from rich.console import Console
 from rich.panel import Panel
 from rich.progress import Progress, SpinnerColumn, TextColumn
 from rich.table import Table
+
+_ANSI_ESCAPE = re.compile(r"\x1b\[[0-9;]*[A-Za-z]|\x1b\][^\x07]*\x07|\x1b[@-Z\\-_]")
 
 console = Console()
 
@@ -88,7 +87,7 @@ def load_scenario_yaml(scenario_dir: Path) -> dict:
         return yaml.safe_load(f) or {}
 
 
-def _check_skip(manifest: dict, scenario_dir: Path) -> Optional[str]:
+def _check_skip(manifest: dict, scenario_dir: Path) -> str | None:
     """Return a skip reason if the scenario should be skipped, or None."""
     skip_if = manifest.get("skip_if", {})
     if not skip_if:
@@ -134,7 +133,10 @@ def build_image(repo_root: Path, dockerfile: Path, image_tag: str) -> bool:
 
 def image_exists(image_tag: str) -> bool:
     result = subprocess.run(
-        ["docker", "image", "inspect", image_tag],
+        # S607: docker is resolved from PATH on purpose. Its location differs
+        # between Docker Desktop, Colima and a Linux package, and a developer
+        # tool has no threat model that pinning the path would improve.
+        ["docker", "image", "inspect", image_tag],  # noqa: S607
         capture_output=True,
         cwd=os.getcwd(),
     )
@@ -267,12 +269,12 @@ def run_scenario(
                 )
             expected_path = expected_dir / expected_name if expected_name else None
             compare_mode = pair.get("compare", "content")
-            if compare_mode not in _MODES_WITHOUT_EXPECTED or expected_name:
-                if not expected_path or not expected_path.exists():
-                    return _fail(
-                        f"expected file missing: {expected_path}",
-                        docker_cmd, stdout, stderr, exit_code, duration,
-                    )
+            needs_expected = compare_mode not in _MODES_WITHOUT_EXPECTED or expected_name
+            if needs_expected and (not expected_path or not expected_path.exists()):
+                return _fail(
+                    f"expected file missing: {expected_path}",
+                    docker_cmd, stdout, stderr, exit_code, duration,
+                )
             ok, reason = _compare_files(host_actual, expected_path, pair)
             if not ok:
                 return _fail(
@@ -289,7 +291,7 @@ def run_scenario(
     )
 
 
-def _compare_files(actual_path: Path, expected_path: Optional[Path], pair: dict) -> tuple[bool, str]:
+def _compare_files(actual_path: Path, expected_path: Path | None, pair: dict) -> tuple[bool, str]:
     compare_mode = pair.get("compare", "content")
 
     if compare_mode == "content":
@@ -312,7 +314,7 @@ def _compare_files(actual_path: Path, expected_path: Optional[Path], pair: dict)
             return True, ""
         if len(a) != len(e):
             return False, f"list length differs: {len(a)} != {len(e)}"
-        for i, (ax, ex) in enumerate(zip(a, e)):
+        for i, (ax, ex) in enumerate(zip(a, e, strict=True)):
             if not isinstance(ax, dict) or not isinstance(ex, dict):
                 if ax != ex:
                     return False, f"item {i} differs: {ax!r} != {ex!r}"
@@ -445,8 +447,8 @@ def _write_markdown_file(
     # ── Header ──────────────────────────────────────────────────────────────
     L.append("# Zircolite External Test Results")
     L.append("")
-    L.append(f"| | |")
-    L.append(f"|---|---|")
+    L.append("| | |")
+    L.append("|---|---|")
     L.append(f"| **Date** | {ts} |")
     L.append(f"| **Image** | `{image_tag}` |")
     L.append(f"| **Total scenarios** | {len(results)} |")
@@ -489,8 +491,8 @@ def _write_markdown_file(
             result_label = "FAIL"
         L.append(f"### {icon} `{r.name}`")
         L.append("")
-        L.append(f"| | |")
-        L.append(f"|---|---|")
+        L.append("| | |")
+        L.append("|---|---|")
         L.append(f"| **Result** | {result_label} |")
         if not r.ok:
             L.append(f"| **Failure reason** | {r.message} |")
@@ -699,13 +701,13 @@ def main() -> int:
     image_tag: str = args.image_tag or runner_cfg.get("image_tag") or DEFAULT_IMAGE_TAG
     default_timeout: int = runner_cfg.get("default_timeout", DEFAULT_TIMEOUT)
     parallel: int = args.parallel or runner_cfg.get("parallel", 1)
-    results_file: Optional[Path] = args.results_file or (
+    results_file: Path | None = args.results_file or (
         Path(runner_cfg["results_file"]) if runner_cfg.get("results_file") else None
     )
-    markdown_file: Optional[Path] = args.markdown_file or (
+    markdown_file: Path | None = args.markdown_file or (
         Path(runner_cfg["markdown_file"]) if runner_cfg.get("markdown_file") else None
     )
-    junit_file: Optional[Path] = args.junit_file or (
+    junit_file: Path | None = args.junit_file or (
         Path(runner_cfg["junit_file"]) if runner_cfg.get("junit_file") else None
     )
 

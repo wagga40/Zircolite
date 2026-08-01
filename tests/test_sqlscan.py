@@ -262,3 +262,34 @@ class TestChannelConstraints:
         )
 
         assert channel_constraints([query]) is None
+
+
+class TestColumnRefsRightHandOperand:
+    """A field-to-field comparison names a column on both sides.
+
+    Sigma's ``|fieldref`` produces exactly this shape. Missing the right-hand
+    name meant _widen_logs_table found nothing to widen, so the query kept
+    failing on `no such column` and the rule returned no matches without ever
+    being recorded as broken.
+    """
+
+    def test_bare_column_after_equals_is_a_column(self):
+        refs = column_refs(
+            "SELECT * FROM logs WHERE EventID = 23 AND TargetFilename = Image"
+        )
+        assert "TargetFilename" in refs
+        assert "Image" in refs
+
+    def test_literal_and_number_operands_are_not_columns(self):
+        refs = column_refs(
+            "SELECT * FROM logs WHERE Channel = 'Security' AND EventID = 4624"
+        )
+        assert refs == {"Channel", "EventID"}
+
+    def test_null_after_is_not_is_not_a_column(self):
+        refs = column_refs("SELECT * FROM logs WHERE Image IS NOT NULL")
+        assert refs == {"Image"}
+
+    def test_like_pattern_is_not_a_column(self):
+        refs = column_refs("SELECT * FROM logs WHERE CommandLine LIKE '%user=bob%'")
+        assert refs == {"CommandLine"}

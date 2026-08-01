@@ -2703,8 +2703,12 @@ class TestMalformedInputIsolation:
         """
         from zircolite.rules import EventFilter
 
+        # The bounds are read from the SQL, so a match-all query would disable
+        # the filter and leave this test exercising nothing.
         event_filter = EventFilter([
-            {"title": "r", "rule": ["SELECT * FROM logs"],
+            {"title": "r",
+             "rule": ["SELECT * FROM logs WHERE Channel = 'Security' AND EventID = 4624",
+                      "SELECT * FROM logs WHERE Channel = 'System' AND EventID = 7036"],
              "channel": ["Security", "System"], "eventid": [4624, 7036]},
         ])
         assert event_filter._has_filter_data

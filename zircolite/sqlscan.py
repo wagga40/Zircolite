@@ -196,9 +196,15 @@ def column_refs(sql: str) -> set[str]:
     every field name carrying a dot, ``@``, bracket or space. Text inside a
     string literal never does: ``CommandLine LIKE '%user=bob%'`` names one
     column, not two.
+
+    Both sides of a comparison count. Sigma's ``|fieldref`` compares two fields,
+    and a right-hand name the caller never hears about is one it cannot widen
+    the table for -- leaving the query to keep failing on ``no such column``.
+    Only a bare identifier qualifies: literals and numbers are values.
     """
     names: set[str] = set()
     previous: str | None = None
+    expect_operand = False
     try:
         tokens = _typed_tokens(sql)
     except _Unsupported:
@@ -206,21 +212,33 @@ def column_refs(sql: str) -> set[str]:
         return names
     for kind, text in tokens:
         if kind == "name":
+            if expect_operand:
+                names.add(text)
+                expect_operand = False
             previous = text
         elif kind == "word":
             upper = text.upper()
             if upper in _COMPARISON_WORDS:
                 if previous is not None:
                     names.add(previous)
+                expect_operand = True
             elif upper == "NOT":
                 # Keeps ``x NOT LIKE y`` and ``x IS NOT NULL`` pointing at x
                 continue
             elif text.lower() in SQL_RESERVED_WORDS:
                 previous = None
+                expect_operand = False
             else:
+                if expect_operand:
+                    names.add(text)
+                    expect_operand = False
                 previous = text
-        elif kind == "punct" and text in _COMPARISON_PUNCT and previous is not None:
-            names.add(previous)
+        elif kind == "punct" and text in _COMPARISON_PUNCT:
+            if previous is not None:
+                names.add(previous)
+            expect_operand = True
+        else:
+            expect_operand = False
     return names
 
 

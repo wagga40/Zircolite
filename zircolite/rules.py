@@ -134,18 +134,25 @@ class EventFilter:
 
     @staticmethod
     def _rule_channels(rule: dict[str, Any], queries: list[str]) -> list[str]:
-        """The channels a rule can match.
+        """The channels a rule can match, empty when it cannot be bounded.
 
-        The ``channel`` metadata is a bag of values collected from every
-        detection group, so it can name channels the rule *excludes* as well as
-        ones it wants. Naming a spare channel only keeps events that would
-        otherwise be skipped, so it is safe to trust. Correlation rules carry no
-        metadata at all; theirs have to be read out of the SQL that embeds the
-        base rule, or their channel is dropped from the filter and they can
-        never fire.
+        Read from the SQL, which is what actually runs, for the same reason
+        ``_rule_eventids`` does. The ``channel`` metadata is a bag of raw
+        SigmaStrings collected from every detection group, so two shapes make it
+        name no channel the rule wants: ``Channel|contains`` contributes a
+        wildcard pattern that matches no real channel, and a Channel named only
+        under a negation is the one channel the rule *excludes*. Both are
+        non-empty, so trusting them left the rule counted as bounded and starved
+        it of its own events.
+
+        Returning empty hands the decision to the caller, which disables the
+        channel axis entirely -- the fail-open the eventID axis already uses.
+        Rules carrying no SQL cannot run, and bounds only ever union, so their
+        metadata can widen a channel but never narrow one.
         """
-        channels = [channel for channel in (rule.get('channel') or []) if channel]
-        return channels or sorted(channel_constraints(queries) or [])
+        if queries:
+            return sorted(channel_constraints(queries) or [])
+        return [channel for channel in (rule.get('channel') or []) if channel]
 
     def _rule_eventids(
         self, rule: dict[str, Any], queries: list[str]
@@ -641,13 +648,30 @@ class RulesetHandler:
         cleaned_name = re.sub(r'-+', '-', cleaned_name)
         return f"ruleset-{cleaned_name}-{random_suffix(8)}.json"
 
+    @staticmethod
+    def _merge_converted_queries(converted: list[dict[str, Any]]) -> dict[str, Any]:
+        """Fold every query the backend produced into one Zircolite rule.
+
+        A Sigma ``condition:`` may be a YAML list, and pySigma then returns one
+        finalized rule per branch. Keeping only the first silently drops the
+        others: nothing counts them, because the conversion tally is per rule,
+        not per query. A Zircolite rule already carries a list of SELECTs that
+        ``execute_rule`` ORs together, so the branches belong in one rule.
+        """
+        merged = converted[0]
+        if len(converted) > 1:
+            merged["rule"] = [
+                query for entry in converted for query in entry.get("rule", [])
+            ]
+        return merged
+
     def convert_sigma_rules(self, backend: Any, rule: Any) -> dict[str, Any] | None:
         """Convert a single Sigma rule using the provided backend."""
         try:
             converted = backend.convert_rule(rule, "zircolite")
             if not converted:
                 return None
-            return converted[0]
+            return self._merge_converted_queries(converted)
         except Exception as e:
             self.logger.debug(f"[red]    [-] Cannot convert rule '{rule!s}' : {e}[/]")
             return None
@@ -660,7 +684,7 @@ class RulesetHandler:
             converted = backend.convert_correlation_rule(rule, "zircolite")
             if not converted:
                 return None
-            result = converted[0]
+            result = self._merge_converted_queries(converted)
             result["correlation"] = True
             return result
         except Exception as e:
