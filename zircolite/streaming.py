@@ -1,4 +1,3 @@
-#!python3
 """
 Streaming event processor for Zircolite.
 
@@ -10,6 +9,7 @@ This module contains the StreamingEventProcessor class for:
 """
 
 import base64
+import contextlib
 import csv as csv_module
 import logging
 import math
@@ -18,9 +18,16 @@ import os
 import re
 import shutil
 import tempfile
+from collections.abc import Generator
+from functools import wraps
 from itertools import chain, islice
 from pathlib import Path
-from typing import Any, Dict, FrozenSet, Generator, List, NamedTuple, Optional, Set, Tuple, TYPE_CHECKING
+from typing import (
+    TYPE_CHECKING,
+    Any,
+    NamedTuple,
+    Optional,
+)
 
 import chardet
 import orjson as json
@@ -28,10 +35,7 @@ import xxhash
 
 # Rich console for styled output
 from evtx import PyEvtxParser
-from RestrictedPython import compile_restricted
-from RestrictedPython import limited_builtins
-from RestrictedPython import safe_builtins
-from RestrictedPython import utility_builtins
+from RestrictedPython import compile_restricted, limited_builtins, safe_builtins, utility_builtins
 from RestrictedPython.Eval import default_guarded_getiter
 from RestrictedPython.Guards import guarded_iter_unpack_sequence
 
@@ -84,6 +88,45 @@ class StrictParseError(Exception):
     """
 
 
+def _json_array_encoding() -> str:
+    """Default encoding for JSON arrays, per the format registry."""
+    spec = format_by_name("json_array")
+    return (spec.default_encoding if spec else None) or "utf-8"
+
+
+def marks_degraded(label: str):
+    """Wrap a reader so aborting mid-file is recorded, not merely logged.
+
+    A reader that catches, logs and returns leaves every caller believing the
+    file was read to the end: the event count looks healthy, the path never
+    reaches ``failed_files``, and ``--remove-events`` then deletes the only copy
+    of a log nothing ever finished analysing. Marking the run degraded is what
+    keeps that file on disk.
+
+    Every reader is wrapped, so a new one inherits the guarantee rather than
+    having to remember it. ``stream_evtx_events`` handles its own errors first
+    -- it distinguishes a truncated EVTX from an archive of the wrong format --
+    and re-raises whatever it cannot explain into this.
+    """
+
+    def decorate(reader):
+        @wraps(reader)
+        def wrapper(self, source, *args, **kwargs):
+            try:
+                yield from reader(self, source, *args, **kwargs)
+            except StrictParseError:
+                raise
+            except Exception as exc:
+                self._had_parse_error = True
+                self.logger.error(
+                    f"[red]    [-] Error streaming {label} file {source}: {exc}[/]"
+                )
+
+        return wrapper
+
+    return decorate
+
+
 def _quote_identifier(name: str) -> str:
     """Quote a SQL identifier, escaping embedded double quotes.
 
@@ -94,8 +137,8 @@ def _quote_identifier(name: str) -> str:
 
 
 def _dedupe_case_variant_columns(
-    columns: FrozenSet[str], canonical: Dict[str, str]
-) -> Tuple[str, ...]:
+    columns: frozenset[str], canonical: dict[str, str]
+) -> tuple[str, ...]:
     """Sort columns, collapsing names that differ only by case.
 
     SQLite identifiers are case-insensitive: "EventID" and "eventid" are the
@@ -103,8 +146,8 @@ def _dedupe_case_variant_columns(
     The surviving spelling is the one the schema recorded a type under, so a
     collapsed column keeps its type instead of falling back to TEXT.
     """
-    result: List[str] = []
-    seen_lower: Set[str] = set()
+    result: list[str] = []
+    seen_lower: set[str] = set()
     for col in sorted(columns):
         col_lower = col.lower()
         if col_lower in seen_lower:
@@ -119,7 +162,7 @@ class _TransformSpec(NamedTuple):
 
     alias_name: str
     alias: bool
-    source_condition: FrozenSet[str]
+    source_condition: frozenset[str]
     enabled: bool
     code: str
 
@@ -196,93 +239,94 @@ class StreamingEventProcessor:
     """
 
     __slots__ = (
-        "logger",
-        "config_file",
-        "time_field",
-        "hashes",
-        "args_config",
-        "batch_size",
-        # Config data (loaded once)
-        "field_exclusions",
-        "field_mappings",
-        "useless_values",
-        "aliases",
-        "field_split_list",
-        "transforms",
-        "_transforms_baked",
-        "transforms_enabled",
-        "enabled_transforms_set",
-        "transform_categories",
-        "_ignore_source_condition",
-        "transforms_dir",
-        "chosen_input",
-        # Field names that need alias/split/transform handling. Leaves whose
-        # mapped or raw name is absent here take the ultra-fast leaf path.
-        "_special_fields",
+        "RestrictedPython_BUILTINS",
         # Event filter config (from fieldMappings config)
         "_channel_field_paths",
-        "_eventid_field_paths",
-        "_event_filter_config_enabled",
-        "_filter_all_sources",
         # Last field path that yielded a Channel/EventID value; tried first on
         # the next event since a file's schema is stable
         "_channel_path_hint",
-        "_eventid_path_hint",
-        # Timestamp config (from fieldMappings config)
-        "_timestamp_detection_fields",
-        "_timestamp_auto_detect",
+        # DB column caching
+        "_db_columns",
         "_detected_time_field",
-        # Schema tracking
-        "discovered_fields",
-        "field_types",
-        # Leaf keys whose schema bookkeeping is already done (skip repeat work)
-        "_seen_leaf_keys",
-        # Caches
-        "compiled_code_cache",
-        "_transform_func_cache",
+        "_event_filter_config_enabled",
+        "_eventid_field_paths",
+        "_eventid_path_hint",
+        "_events_filtered_count",
+        "_events_time_filtered_count",
+        "_failed_splits",
         "_failed_transforms",
-        "RestrictedPython_BUILTINS",
+        "_filter_all_sources",
+        "_filtering_enabled",
+        "_had_parse_error",
+        # Time filter cache – includes string bounds for comparison
+        "_has_time_filter",
+        "_ignore_source_condition",
+        # Sorted-column caching for _insert_batch
+        "_last_column_frozenset",
+        "_last_insert_columns",
+        "_last_insert_stmt",
+        "_last_sorted_columns",
         # Path resolution cache – maps (raw_field_name, last_part) to resolved
         # (raw_name, mapped_key) or _EXCLUDED_SENTINEL; avoids repeated
         # exclusion/mapping lookups per leaf
         "_resolve_path",
-        # Time filter cache – includes string bounds for comparison
-        "_has_time_filter",
+        # Leaf keys whose schema bookkeeping is already done (skip repeat work)
+        "_seen_leaf_keys",
+        "_skipped_records",
+        # Field names that need alias/split/transform handling. Leaves whose
+        # mapped or raw name is absent here take the ultra-fast leaf path.
+        "_special_fields",
         "_time_after",
         "_time_before",
-        # DB column caching
-        "_db_columns",
-        "_last_insert_stmt",
-        "_last_insert_columns",
-        # Sorted-column caching for _insert_batch
-        "_last_column_frozenset",
-        "_last_sorted_columns",
-        # Event filtering (early skip based on channel/eventID)
-        "event_filter",
-        "_events_filtered_count",
-        "_events_time_filtered_count",
-        "_skipped_records",
-        "_had_parse_error",
-        "_filtering_enabled",
-        # Archive password for encrypted zip/7z files
-        "archive_password",
         # One-shot flag: warn once when --timefield value is absent from events
         "_timefield_warned",
+        "_timestamp_auto_detect",
+        # Timestamp config (from fieldMappings config)
+        "_timestamp_detection_fields",
+        "_transform_func_cache",
+        "_transforms_baked",
+        "aliases",
+        # Archive password for encrypted zip/7z files
+        "archive_password",
+        "args_config",
+        "batch_size",
+        "chosen_input",
+        # Caches
+        "compiled_code_cache",
+        "config_file",
+        # Schema tracking
+        "discovered_fields",
+        "enabled_transforms_set",
+        # Event filtering (early skip based on channel/eventID)
+        "event_filter",
+        # Config data (loaded once)
+        "field_exclusions",
+        "field_mappings",
+        "field_split_list",
+        "field_types",
+        "hashes",
+        "logger",
         # EVTX parsing strictness
         "strict_evtx",
+        "time_field",
+        "transform_categories",
+        "transforms",
+        "transforms_dir",
+        "transforms_enabled",
+        "useless_values",
     )
-    enabled_transforms_set: Optional[FrozenSet[Any]]
-    _detected_time_field: Optional[str]
+    enabled_transforms_set: frozenset[Any] | None
+    _detected_time_field: str | None
 
     def __init__(
         self,
         config_file: str,
         args_config: Any,
-        processing_config: Optional[ProcessingConfig] = None,
+        processing_config: ProcessingConfig | None = None,
         *,
-        logger: Optional[logging.Logger] = None,
-        event_filter: "Optional[EventFilter]" = None,
-        _raw_config: Optional[dict] = None,
+        logger: logging.Logger | None = None,
+        event_filter: "EventFilter | None" = None,
+        _raw_config: dict | None = None,
     ):
         """
         Initialize StreamingEventProcessor.
@@ -325,20 +369,21 @@ class StreamingEventProcessor:
         self._seen_leaf_keys: set = set()
 
         # Event-filter path hints (populated lazily during streaming)
-        self._channel_path_hint: Optional[tuple] = None
-        self._eventid_path_hint: Optional[tuple] = None
+        self._channel_path_hint: tuple | None = None
+        self._eventid_path_hint: tuple | None = None
 
         # Caches for transforms
         self.compiled_code_cache: dict = {}
         self._transform_func_cache: dict = {}
-        self._failed_transforms: Set[str] = set()
+        self._failed_transforms: set[str] = set()
+        self._failed_splits: set[str] = set()
 
         # DB column caching for batch inserts (avoid repeated PRAGMA queries)
-        self._db_columns: Optional[set] = (
+        self._db_columns: set | None = (
             None  # Set of known columns in DB, None = needs refresh
         )
-        self._last_insert_stmt: Optional[str] = None  # Cached INSERT statement
-        self._last_insert_columns: Optional[tuple] = (
+        self._last_insert_stmt: str | None = None  # Cached INSERT statement
+        self._last_insert_columns: tuple | None = (
             None  # Columns used in cached statement (as tuple for comparison)
         )
 
@@ -364,7 +409,7 @@ class StreamingEventProcessor:
 
         # Sorted-column caching for _insert_batch
         self._last_column_frozenset: frozenset = frozenset()
-        self._last_sorted_columns = ()
+        self._last_sorted_columns: tuple[str, ...] = ()
 
         # Use module-level RestrictedPython builtins. Must be set before
         # _load_config(), which eagerly compiles transforms via _get_transform_func.
@@ -396,7 +441,7 @@ class StreamingEventProcessor:
 
         self._resolve_path = _resolve_path
 
-    def _load_config(self, *, _raw_config: Optional[dict] = None):
+    def _load_config(self, *, _raw_config: dict | None = None):
         """Load field mappings configuration (supports JSON and YAML formats).
 
         When *_raw_config* is provided the disk read is skipped, which
@@ -461,7 +506,7 @@ class StreamingEventProcessor:
                 self._ignore_source_condition = True
             elif getattr(self.args_config, "transform_categories", None):
                 # Enable transforms belonging to the requested categories
-                requested = getattr(self.args_config, "transform_categories")
+                requested = self.args_config.transform_categories
                 combined = (
                     set(self.enabled_transforms_set)
                     if self.enabled_transforms_set
@@ -499,7 +544,7 @@ class StreamingEventProcessor:
             self.time_field = timestamp.get("default_field", "SystemTime")
 
         # Bake transform dicts to NamedTuples for fast access in the hot path
-        self._transforms_baked: Dict[str, List[_TransformSpec]] = {}
+        self._transforms_baked: dict[str, list[_TransformSpec]] = {}
         for field_name, field_transforms in self.transforms.items():
             for t in field_transforms:
                 if not t.get("source_condition"):
@@ -524,7 +569,7 @@ class StreamingEventProcessor:
         # pays the compile_restricted/exec cost. Failures fall through to the
         # lazy path which logs and skips the offending transform.
         if self.transforms_enabled:
-            seen_codes: Set[str] = set()
+            seen_codes: set[str] = set()
             for specs in self._transforms_baked.values():
                 for spec in specs:
                     if spec.code and spec.code not in seen_codes:
@@ -629,7 +674,7 @@ class StreamingEventProcessor:
         return channel, eventid
 
     def _extract_field_value_hinted(
-        self, event_dict: dict, field_paths: tuple, hint: Optional[tuple]
+        self, event_dict: dict, field_paths: tuple, hint: tuple | None
     ) -> tuple:
         """
         Extract a field value, trying the last winning path first.
@@ -687,7 +732,7 @@ class StreamingEventProcessor:
 
         return current
 
-    def _detect_timestamp_field(self, flattened_event: dict) -> Optional[str]:
+    def _detect_timestamp_field(self, flattened_event: dict) -> str | None:
         """
         Auto-detect the timestamp field from a flattened event.
 
@@ -762,7 +807,7 @@ class StreamingEventProcessor:
         """
         return self._events_time_filtered_count
 
-    def _warn_if_no_transform_applies(self, requested: List[str]) -> None:
+    def _warn_if_no_transform_applies(self, requested: list[str]) -> None:
         """Warn when the selected transforms all exclude the current input format.
 
         Every transform is gated on ``source_condition``, so asking for a
@@ -809,17 +854,22 @@ class StreamingEventProcessor:
                     code, filename="<inline code>", mode="exec"
                 )
                 self.compiled_code_cache[code] = byte_code
-            transform_ns: Dict[str, Any] = {}
+            transform_ns: dict[str, Any] = {}
             exec(byte_code, self.RestrictedPython_BUILTINS, transform_ns)
             func = transform_ns.get("transform")
             if func:
                 self._transform_func_cache[code] = func
             return func
         except Exception as e:
-            snippet = code[:80].replace("\n", " ")
-            self.logger.warning(
-                f"[yellow]   [!] Transform compilation failed: {e} (code: {snippet!r})[/]"
-            )
+            # Warn once, not once per value: a transform on CommandLine that
+            # fails to compile would otherwise emit one line per event.
+            if code not in self._failed_transforms:
+                self._failed_transforms.add(code)
+                snippet = code[:80].replace("\n", " ")
+                self.logger.warning(
+                    f"[yellow]   [!] Transform compilation failed: {e} "
+                    f"(code: {snippet!r})[/]"
+                )
             return None
 
     def _transform_value(self, code, param):
@@ -845,8 +895,8 @@ class StreamingEventProcessor:
             return param
 
     def _flatten_event(
-        self, event_dict: dict, filename: str, raw_bytes: Optional[bytes] = None
-    ) -> Optional[dict]:
+        self, event_dict: dict, filename: str, raw_bytes: bytes | None = None
+    ) -> dict | None:
         """
         Flatten a single event dictionary and track discovered fields.
         Returns flattened dict or None if filtered out.
@@ -875,7 +925,7 @@ class StreamingEventProcessor:
         _sentinel = _EXCLUDED_SENTINEL
 
         # Result dict
-        json_line: Dict[str, Any] = {}
+        json_line: dict[str, Any] = {}
 
         def process_leaf(raw_field_name: str, last_part: str, obj: Any) -> None:
             cached = resolve_path(raw_field_name, last_part)
@@ -898,8 +948,9 @@ class StreamingEventProcessor:
             # rule, or active transform. They only need a value assignment plus a
             # one-time column-type record, so they skip the lookups below.
             if key not in special_fields and raw_field_name not in special_fields:
+                # Past SQLite's INTEGER range the value has to go in as text
                 is_int = isinstance(value, int)
-                if is_int and abs(value) > 9223372036854775807:
+                if isinstance(value, int) and abs(value) > 9223372036854775807:
                     value = str(value)
                     is_int = False
                 json_line[key] = value
@@ -923,8 +974,8 @@ class StreamingEventProcessor:
                 keys.append(alias_key)
             if alias_raw is not None:
                 keys.append(alias_raw)
-            transformed_keys: Optional[set] = None
-            transformed_values: Dict[str, Any] = {}
+            transformed_keys: set | None = None
+            transformed_values: dict[str, Any] = {}
             if transforms_enabled:
                 for field_name in (key, raw_field_name):
                     field_transforms = transforms_get(field_name)
@@ -972,15 +1023,24 @@ class StreamingEventProcessor:
                                 discovered_fields[key_lower] = k
                                 field_types[k] = "TEXT COLLATE NOCASE"
                             seen_leaf_keys.add(k)
-                except (KeyError, AttributeError):
-                    pass
+                except (KeyError, AttributeError) as exc:
+                    # A missing separator/equal key or a non-string value drops
+                    # every derived column, and every hash-based IOC rule then
+                    # matches nothing. Say so once per field rather than never.
+                    if last_part not in self._failed_splits:
+                        self._failed_splits.add(last_part)
+                        self.logger.warning(
+                            f"[yellow]   [!] Cannot split field "
+                            f"[cyan]{last_part}[/]: {exc}; no derived field "
+                            f"will be created for it[/]"
+                        )
+            # Past SQLite's INTEGER range the value has to go in as text
             is_int = isinstance(value, int)
-            if is_int and abs(value) > 9223372036854775807:
+            if isinstance(value, int) and abs(value) > 9223372036854775807:
                 value = str(value)
                 is_int = False
-            has_transforms = transformed_keys is not None
             for k in keys:
-                if has_transforms and k in transformed_keys:
+                if transformed_keys is not None and k in transformed_keys:
                     json_line[k] = transformed_values[k]
                 else:
                     json_line[k] = value
@@ -994,25 +1054,23 @@ class StreamingEventProcessor:
         # Descend through the event tree, carrying the dotted path as a string
         # (cheaper than re-allocating a path tuple at every node). Leaves are
         # processed without an extra stack push/pop.
-        stack: List[Tuple[Any, str, str]] = [(event_dict, "", "")]
+        # Only dicts are ever pushed, so every popped node is one.
+        stack: list[tuple[dict[str, Any], str]] = [(event_dict, "")]
         while stack:
-            obj, raw_path, last_part = stack.pop()
-            if isinstance(obj, dict):
-                if raw_path:
-                    for k, v in obj.items():
-                        new_path = f"{raw_path}.{k}"
-                        if isinstance(v, dict):
-                            stack.append((v, new_path, k))
-                        else:
-                            process_leaf(new_path, k, v)
-                else:
-                    for k, v in obj.items():
-                        if isinstance(v, dict):
-                            stack.append((v, k, k))
-                        else:
-                            process_leaf(k, k, v)
+            obj, raw_path = stack.pop()
+            if raw_path:
+                for k, v in obj.items():
+                    new_path = f"{raw_path}.{k}"
+                    if isinstance(v, dict):
+                        stack.append((v, new_path))
+                    else:
+                        process_leaf(new_path, k, v)
             else:
-                process_leaf(raw_path, last_part, obj)
+                for k, v in obj.items():
+                    if isinstance(v, dict):
+                        stack.append((v, k))
+                    else:
+                        process_leaf(k, k, v)
 
         # Time filtering (with pre-parsed bounds)
         if self._has_time_filter:
@@ -1043,8 +1101,11 @@ class StreamingEventProcessor:
                     # Bounds are inclusive. An unparsable timestamp keeps the
                     # event: dropping it would hide data behind a format quirk.
                     moment = parse_timestamp(ts_value)
-                    if moment is not None and not (
-                        self._time_after <= moment <= self._time_before
+                    if (
+                        moment is not None
+                        and self._time_after is not None
+                        and self._time_before is not None
+                        and not (self._time_after <= moment <= self._time_before)
                     ):
                         self._events_time_filtered_count += 1
                         return None
@@ -1065,7 +1126,7 @@ class StreamingEventProcessor:
                     evtx_file, password=self.archive_password
                 ) as f:
                     fd, tmp_path = tempfile.mkstemp(suffix=".evtx")
-                    fd_handle: Optional[int] = fd
+                    fd_handle: int | None = fd
                     try:
                         # Chunked copy keeps memory bounded for large
                         # compressed EVTX members
@@ -1075,15 +1136,11 @@ class StreamingEventProcessor:
                         path_to_parse = tmp_path
                     except Exception:
                         if fd_handle is not None:
-                            try:
+                            with contextlib.suppress(OSError):
                                 os.close(fd_handle)
-                            except OSError:
-                                pass
                         if tmp_path and os.path.exists(tmp_path):
-                            try:
+                            with contextlib.suppress(OSError):
                                 os.unlink(tmp_path)
-                            except OSError:
-                                pass
                         raise
 
             parser = PyEvtxParser(path_to_parse)
@@ -1117,8 +1174,9 @@ class StreamingEventProcessor:
                     continue
         except Exception as e:
             err_msg = str(e)
-            if "Invalid EVTX" in err_msg or "ElfFile0" in err_msg:
-                if Path(evtx_file).suffix.lower() == ".7z":
+            if (
+                "Invalid EVTX" in err_msg or "ElfFile0" in err_msg
+            ) and Path(evtx_file).suffix.lower() == ".7z":
                     self.logger.error(
                         f"[red]    [-] Error streaming EVTX file {evtx_file}: {e}[/]\n"
                         "[yellow]   [!] This archive contains non-EVTX data (e.g. JSON). "
@@ -1137,47 +1195,40 @@ class StreamingEventProcessor:
             )
         finally:
             if tmp_path and os.path.exists(tmp_path):
-                try:
+                with contextlib.suppress(OSError):
                     os.unlink(tmp_path)
-                except OSError:
-                    pass
 
+    @marks_degraded("JSON")
     def stream_json_events(self, json_file: str) -> Generator[dict, None, None]:
         """Stream and flatten events from a JSONL file, line by line.
 
         Arrays go to :meth:`stream_json_array_chunked`, which isolates errors
         per event instead of losing the whole file to one bad element.
         """
-        try:
-            filename = os.path.basename(json_file)
-            flatten = self._flatten_event  # Local reference
-            should_process = self._should_process_event  # Local reference
+        filename = os.path.basename(json_file)
+        flatten = self._flatten_event  # Local reference
+        should_process = self._should_process_event  # Local reference
 
-            with open_maybe_compressed(
-                json_file, password=self.archive_password
-            ) as f:
-                for line in f:
-                    line = line.rstrip(b"\n\r")
-                    if not line:
+        with open_maybe_compressed(json_file, password=self.archive_password) as f:
+            for line in f:
+                line = line.rstrip(b"\n\r")
+                if not line:
+                    continue
+                if line.startswith(b"\xef\xbb\xbf"):  # UTF-8 BOM (first line)
+                    line = line[3:]
+                try:
+                    event_dict = json.loads(line)
+                    # Early filter check before expensive flattening
+                    if not should_process(event_dict):
                         continue
-                    if line.startswith(b"\xef\xbb\xbf"):  # UTF-8 BOM (first line)
-                        line = line[3:]
-                    try:
-                        event_dict = json.loads(line)
-                        # Early filter check before expensive flattening
-                        if not should_process(event_dict):
-                            continue
-                        flattened = flatten(event_dict, filename, line)
-                        if flattened:
-                            yield flattened
-                    except Exception as exc:
-                        self._note_skipped_record(json_file, exc)
-                        continue
-        except Exception as e:
-            self.logger.error(
-                f"[red]    [-] Error streaming JSON file {json_file}: {e}[/]"
-            )
+                    flattened = flatten(event_dict, filename, line)
+                    if flattened:
+                        yield flattened
+                except Exception as exc:
+                    self._note_skipped_record(json_file, exc)
+                    continue
 
+    @marks_degraded("XML")
     def stream_xml_events(
         self, xml_file: str, extractor: "EvtxExtractor"
     ) -> Generator[dict, None, None]:
@@ -1199,7 +1250,7 @@ class StreamingEventProcessor:
             else:
                 context = etree.iterparse(xml_file, events=("end",), recover=True)
             seen_events = False
-            for action, elem in context:
+            for _action, elem in context:
                 if elem.tag.endswith("Event"):
                     seen_events = True
                     try:
@@ -1238,16 +1289,10 @@ class StreamingEventProcessor:
                     f"export and that its encoding declaration is correct[/]"
                 )
 
-        except Exception as e:
-            self.logger.error(
-                f"[red]    [-] Error streaming XML file {xml_file}: {e}[/]"
-            )
         finally:
             if _fh is not None:
-                try:
+                with contextlib.suppress(Exception):
                     _fh.close()
-                except Exception:
-                    pass
 
     def _stream_line_events(
         self, log_file: str, extractor: "EvtxExtractor", convert, label: str
@@ -1257,40 +1302,41 @@ class StreamingEventProcessor:
         Shared by the Sysmon-for-Linux and Auditd readers, which differ only
         in the converter and the wording of the error.
         """
-        try:
-            filename = Path(log_file).name
-            flatten = self._flatten_event  # Local reference
-            should_process = self._should_process_event  # Local reference
+        filename = Path(log_file).name
+        flatten = self._flatten_event  # Local reference
+        should_process = self._should_process_event  # Local reference
 
-            with open_maybe_compressed(
-                log_file,
-                "rt",
-                encoding=extractor.encoding,
-                password=self.archive_password,
-            ) as f:
-                for line in f:
-                    if not line.strip():
-                        continue
-                    try:
-                        event_dict = convert(line)
-                        if not event_dict:
-                            continue
-                        # Early filter check before expensive flattening
-                        if not should_process(event_dict):
-                            continue
-                        flattened = flatten(
-                            event_dict, filename, line.encode("utf-8")
+        with open_maybe_compressed(
+            log_file,
+            "rt",
+            encoding=extractor.encoding,
+            password=self.archive_password,
+        ) as f:
+            for line in f:
+                if not line.strip():
+                    continue
+                try:
+                    event_dict = convert(line)
+                    if not event_dict:
+                        # A line the converter makes nothing of is a skipped
+                        # record, not an absent one. Pointing --sysmon-linux at
+                        # a plain syslog file yields one per line and would
+                        # otherwise report a clean run over zero events.
+                        self._note_skipped_record(
+                            log_file, ValueError(f"{label} line yielded no event")
                         )
-                        if flattened:
-                            yield flattened
-                    except Exception as exc:
-                        self.logger.debug(f"Skipping line in {log_file}: {exc}")
                         continue
-        except Exception as e:
-            self.logger.error(
-                f"[red]    [-] Error streaming {label} file {log_file}: {e}[/]"
-            )
+                    # Early filter check before expensive flattening
+                    if not should_process(event_dict):
+                        continue
+                    flattened = flatten(event_dict, filename, line.encode("utf-8"))
+                    if flattened:
+                        yield flattened
+                except Exception as exc:
+                    self._note_skipped_record(log_file, exc)
+                    continue
 
+    @marks_degraded("Sysmon Linux")
     def stream_sysmon_linux_events(
         self, log_file: str, extractor: "EvtxExtractor"
     ) -> Generator[dict, None, None]:
@@ -1299,6 +1345,7 @@ class StreamingEventProcessor:
             log_file, extractor, extractor.sysmon_xml_line_to_json, "Sysmon Linux"
         )
 
+    @marks_degraded("Auditd")
     def stream_auditd_events(
         self, log_file: str, extractor: "EvtxExtractor"
     ) -> Generator[dict, None, None]:
@@ -1307,6 +1354,7 @@ class StreamingEventProcessor:
             log_file, extractor, extractor.auditd_line_to_json, "Auditd"
         )
 
+    @marks_degraded("CSV")
     def stream_csv_events(self, csv_file: str) -> Generator[dict, None, None]:
         """
         Stream and flatten events from a CSV file.
@@ -1315,109 +1363,100 @@ class StreamingEventProcessor:
         The delimiter is sniffed from the first lines so semicolon, tab and
         pipe separated exports are not collapsed into a single column.
         """
-        try:
-            filename = os.path.basename(csv_file)
-            flatten = self._flatten_event  # Local reference
-            should_process = self._should_process_event  # Local reference
-            encoding = getattr(
-                self.args_config, "logs_encoding", None
-            ) or format_from_args(self.args_config).default_encoding
+        filename = os.path.basename(csv_file)
+        flatten = self._flatten_event  # Local reference
+        should_process = self._should_process_event  # Local reference
+        encoding = getattr(
+            self.args_config, "logs_encoding", None
+        ) or format_from_args(self.args_config).default_encoding
 
-            with open_maybe_compressed(
-                csv_file, "rt", encoding=encoding, password=self.archive_password
-            ) as f:
-                # Buffer the sample instead of seeking: archive-backed streams
-                # are not reliably seekable. DictReader accepts any iterable of
-                # lines, so the sample is chained back in front of the rest.
-                sample_lines = list(islice(f, 5))
-                delimiter = sniff_csv_delimiter("".join(sample_lines))
-                # A row with more values than the header would otherwise land
-                # under the key None, which breaks flattening and silently
-                # discards the whole row; restkey gives it a real name.
-                reader = csv_module.DictReader(
-                    chain(sample_lines, f),
-                    delimiter=delimiter,
-                    restkey="_extra_values",
-                    restval="",
-                )
-                for row in reader:
-                    try:
-                        # CSV rows are already flat dicts, check filter on them directly
-                        if not should_process(row):
-                            continue
-                        flattened = flatten(row, filename, None)
-                        if flattened:
-                            yield flattened
-                    except Exception as exc:
-                        self.logger.debug(f"Skipping CSV row in {csv_file}: {exc}")
-                        continue
-        except Exception as e:
-            self.logger.error(
-                f"[red]    [-] Error streaming CSV file {csv_file}: {e}[/]"
+        with open_maybe_compressed(
+            csv_file, "rt", encoding=encoding, password=self.archive_password
+        ) as f:
+            # Buffer the sample instead of seeking: archive-backed streams
+            # are not reliably seekable. DictReader accepts any iterable of
+            # lines, so the sample is chained back in front of the rest.
+            sample_lines = list(islice(f, 5))
+            delimiter = sniff_csv_delimiter("".join(sample_lines))
+            # A row with more values than the header would otherwise land
+            # under the key None, which breaks flattening and silently
+            # discards the whole row; restkey gives it a real name.
+            reader = csv_module.DictReader(
+                chain(sample_lines, f),
+                delimiter=delimiter,
+                restkey="_extra_values",
+                restval="",
             )
+            for row in reader:
+                try:
+                    # CSV rows are already flat dicts, check filter on them directly
+                    if not should_process(row):
+                        continue
+                    flattened = flatten(row, filename, None)
+                    if flattened:
+                        yield flattened
+                except Exception as exc:
+                    self._note_skipped_record(csv_file, exc)
+                    continue
 
+    @marks_degraded("EVTXtract")
     def stream_evtxtract_events(
         self, log_file: str, extractor: "EvtxExtractor"
     ) -> Generator[dict, None, None]:
         """
         Stream and flatten events from an EVTXtract output file.
 
-        EVTXtract produces XML-like output that needs special parsing.
-        Events are processed as they're parsed rather than loading all at once.
+        EVTXtract output is not well-formed XML, so it cannot be parsed
+        incrementally: the whole file is read, wrapped in a root element and
+        recovered in one pass.
         """
         from lxml import etree  # type: ignore[attr-defined]
 
-        try:
-            filename = Path(log_file).name
-            flatten = self._flatten_event  # Local reference
-            should_process = self._should_process_event  # Local reference
-            xml_to_dict = extractor.xml_to_dict
+        filename = Path(log_file).name
+        flatten = self._flatten_event  # Local reference
+        should_process = self._should_process_event  # Local reference
+        xml_to_dict = extractor.xml_to_dict
 
-            # Read and clean the file content
-            with open_maybe_compressed(
-                log_file,
-                "rt",
-                encoding=extractor.encoding,
-                password=self.archive_password,
-            ) as f:
-                data = f.read()
+        # Read and clean the file content
+        with open_maybe_compressed(
+            log_file,
+            "rt",
+            encoding=extractor.encoding,
+            password=self.archive_password,
+        ) as f:
+            data = f.read()
 
-            # Clean non-UTF-8 characters
-            data = bytes(data.replace("\x00", "").replace("\x0b", ""), "utf-8").decode(
-                "utf-8", "ignore"
-            )
-            data = f"<evtxtract>\n{data}\n</evtxtract>"
+        # Clean non-UTF-8 characters
+        data = bytes(data.replace("\x00", "").replace("\x0b", ""), "utf-8").decode(
+            "utf-8", "ignore"
+        )
+        data = f"<evtxtract>\n{data}\n</evtxtract>"
 
-            # Parse with recovery mode for malformed XML
-            parser = etree.XMLParser(recover=True)
-            root = etree.fromstring(data, parser=parser)
+        # Parse with recovery mode for malformed XML
+        parser = etree.XMLParser(recover=True)
+        root = etree.fromstring(data, parser=parser)
 
-            # Stream events from parsed tree
-            ns = "{http://schemas.microsoft.com/win/2004/08/events/event}"
-            for event in root.getchildren():
-                if "Event" in event.tag:
-                    try:
-                        event_dict = xml_to_dict(event, ns)
-                        if event_dict:
-                            # Early filter check before expensive flattening
-                            if not should_process(event_dict):
-                                continue
-                            flattened = flatten(event_dict, filename, None)
-                            if flattened:
-                                yield flattened
-                    except Exception as exc:
-                        self._note_skipped_record(log_file, exc)
-                        continue
+        # Stream events from parsed tree
+        ns = "{http://schemas.microsoft.com/win/2004/08/events/event}"
+        for event in root.getchildren():
+            if "Event" in event.tag:
+                try:
+                    event_dict = xml_to_dict(event, ns)
+                    if event_dict:
+                        # Early filter check before expensive flattening
+                        if not should_process(event_dict):
+                            continue
+                        flattened = flatten(event_dict, filename, None)
+                        if flattened:
+                            yield flattened
+                except Exception as exc:
+                    self._note_skipped_record(log_file, exc)
+                    continue
 
-            # Free memory from parsed tree
-            root.clear()
-            del data
+        # Free memory from parsed tree
+        root.clear()
 
-        except Exception as e:
-            self.logger.error(
-                f"[red]    [-] Error streaming EVTXtract file {log_file}: {e}[/]"
-            )
-
+    @marks_degraded("JSON array")
     def stream_json_array_chunked(self, json_file: str) -> Generator[dict, None, None]:
         """
         Stream and flatten events from a large JSON array file incrementally.
@@ -1428,117 +1467,112 @@ class StreamingEventProcessor:
         Yields events incrementally rather than all at once.
         Includes early event filtering based on channel/eventID.
         """
-        try:
-            filename = os.path.basename(json_file)
-            flatten = self._flatten_event  # Local reference
-            should_process = self._should_process_event  # Local reference
+        filename = os.path.basename(json_file)
+        flatten = self._flatten_event  # Local reference
+        should_process = self._should_process_event  # Local reference
 
-            def process_one(event_dict: dict) -> Optional[dict]:
-                """Filter and flatten one event, isolating per-event failures.
+        def process_one(event_dict: dict) -> dict | None:
+            """Filter and flatten one event, isolating per-event failures.
 
-                Without this, a single malformed event aborts the rest of the
-                file instead of being skipped like the other readers do.
-                """
-                try:
-                    if not should_process(event_dict):
-                        return None
-                    return flatten(event_dict, filename, None)
-                except Exception as exc:
-                    self.logger.debug(f"Skipping event in {json_file}: {exc}")
+            Without this, a single malformed event aborts the rest of the
+            file instead of being skipped like the other readers do.
+            """
+            try:
+                if not should_process(event_dict):
                     return None
+                return flatten(event_dict, filename, None)
+            except Exception as exc:
+                self._note_skipped_record(json_file, exc)
+                return None
 
-            file_size = os.path.getsize(json_file)
+        file_size = os.path.getsize(json_file)
 
-            # For files under 50MB, use standard single-load approach (faster)
-            if file_size < 50 * 1024 * 1024:
-                with open_maybe_compressed(
-                    json_file, password=self.archive_password
-                ) as f:
-                    data = f.read()
-                if data.startswith(b"\xef\xbb\xbf"):  # UTF-8 BOM
-                    data = data[3:]
-                logs = json.loads(data)
-                for event_dict in logs:
-                    if not isinstance(event_dict, dict):
-                        continue
-                    flattened = process_one(event_dict)
-                    if flattened:
-                        yield flattened
-                return
-
-            # For larger files, use incremental parsing
-            self.logger.debug(
-                f"Large JSON array ({file_size / 1024 / 1024:.1f}MB), using incremental processing"
-            )
-
-            import json as std_json
-
-            decoder = std_json.JSONDecoder()
-
+        # For files under 50MB, use standard single-load approach (faster)
+        if file_size < 50 * 1024 * 1024:
             with open_maybe_compressed(
-                json_file,
-                "rt",
-                encoding=format_by_name("json_array").default_encoding,
-                password=self.archive_password,
+                json_file, password=self.archive_password
             ) as f:
-                # Find the start of the array
-                while True:
-                    char = f.read(1)
-                    if not char:
-                        return
-                    if char == "[":
-                        break
+                data = f.read()
+            if data.startswith(b"\xef\xbb\xbf"):  # UTF-8 BOM
+                data = data[3:]
+            logs = json.loads(data)
+            for event_dict in logs:
+                if not isinstance(event_dict, dict):
+                    continue
+                flattened = process_one(event_dict)
+                if flattened:
+                    yield flattened
+            return
 
-                buffer = ""
-                while True:
-                    chunk = f.read(65536)
-                    if not chunk:
-                        # Process remaining buffer if any
-                        buffer = buffer.lstrip(" \t\n\r,")
-                        if buffer and not buffer.startswith("]"):
-                            try:
-                                obj, _ = decoder.raw_decode(buffer)
-                            except Exception:
-                                obj = None
-                            if isinstance(obj, dict):
-                                flattened = process_one(obj)
-                                if flattened:
-                                    yield flattened
-                        break
+        # For larger files, use incremental parsing
+        self.logger.debug(
+            f"Large JSON array ({file_size / 1024 / 1024:.1f}MB), using incremental processing"
+        )
 
-                    buffer += chunk
-                    if len(buffer) > _MAX_JSON_OBJECT_BUFFER_CHARS:
-                        # raw_decode keeps failing (truncated/malformed content):
-                        # fail fast instead of buffering the rest of the file
-                        self.logger.error(
-                            f"[red]    [-] Cannot parse JSON array in {json_file}: "
-                            f"invalid or truncated content near current position[/]"
-                        )
-                        return
+        import json as std_json
 
-                    while True:
-                        buffer = buffer.lstrip(" \t\n\r,")
-                        if not buffer:
-                            break
-                        if buffer.startswith("]"):
-                            # End of array
-                            return
+        decoder = std_json.JSONDecoder()
 
+        with open_maybe_compressed(
+            json_file,
+            "rt",
+            encoding=_json_array_encoding(),
+            password=self.archive_password,
+        ) as f:
+            # Find the start of the array
+            while True:
+                char = f.read(1)
+                if not char:
+                    return
+                if char == "[":
+                    break
+
+            buffer = ""
+            while True:
+                chunk = f.read(65536)
+                if not chunk:
+                    # Process remaining buffer if any
+                    buffer = buffer.lstrip(" \t\n\r,")
+                    if buffer and not buffer.startswith("]"):
                         try:
-                            obj, idx = decoder.raw_decode(buffer)
-                        except std_json.JSONDecodeError:
-                            # Need more data
-                            break
+                            obj, _ = decoder.raw_decode(buffer)
+                        except Exception:
+                            obj = None
                         if isinstance(obj, dict):
                             flattened = process_one(obj)
                             if flattened:
                                 yield flattened
-                        buffer = buffer[idx:]
+                    break
 
-        except Exception as e:
-            self.logger.error(
-                f"[red]    [-] Error streaming JSON array file {json_file}: {e}[/]"
-            )
+                buffer += chunk
+                if len(buffer) > _MAX_JSON_OBJECT_BUFFER_CHARS:
+                    # raw_decode keeps failing (truncated/malformed content):
+                    # fail fast instead of buffering the rest of the file
+                    self._had_parse_error = True
+                    self.logger.error(
+                        f"[red]    [-] Cannot parse JSON array in {json_file}: "
+                        f"invalid or truncated content near current position[/]"
+                    )
+                    return
+
+                while True:
+                    buffer = buffer.lstrip(" \t\n\r,")
+                    if not buffer:
+                        break
+                    if buffer.startswith("]"):
+                        # End of array
+                        return
+
+                    try:
+                        obj, idx = decoder.raw_decode(buffer)
+                    except std_json.JSONDecodeError:
+                        # Need more data
+                        break
+                    if isinstance(obj, dict):
+                        flattened = process_one(obj)
+                        if flattened:
+                            yield flattened
+                    buffer = buffer[idx:]
 
     def process_file_streaming(
         self,
@@ -1590,7 +1624,7 @@ class StreamingEventProcessor:
             event_stream = getattr(self, spec.stream_method)(log_file)
 
         # Batch processing with local variable caching
-        batch: List[Dict[str, Any]] = []
+        batch: list[dict[str, Any]] = []
         batch_append = batch.append
         batch_size = self.batch_size
         event_count = 0
@@ -1644,6 +1678,9 @@ class StreamingEventProcessor:
         except Exception as e:
             if inserted_count == 0:
                 raise
+            # The committed rows stay, but the file was not read to the end:
+            # --remove-events must not treat this as a completed ingest.
+            self._had_parse_error = True
             self.logger.error(
                 f"[red]    [-] Partial ingest of {os.path.basename(log_file)}: "
                 f"{e}[/]\n"
@@ -1654,7 +1691,7 @@ class StreamingEventProcessor:
         finally:
             cursor.close()
 
-    def _insert_batch(self, db_connection, cursor, batch: List[dict]):
+    def _insert_batch(self, db_connection, cursor, batch: list[dict]):
         """Insert a batch of events into the database with dynamic schema handling.
 
         Large-integer normalization is handled upstream in ``_flatten_event``,
@@ -1669,10 +1706,11 @@ class StreamingEventProcessor:
         # We delay materializing the union set until we know the batch is non-uniform,
         # which is the common case for stable event sources.
         first_keys = batch[0].keys()
-        extra_columns: Optional[Set[str]] = None
+        extra_columns: set[str] | None = None
         for event in batch[1:]:
             event_keys = event.keys()
-            if len(event_keys) != len(first_keys) or event_keys != first_keys:
+            # dict_keys compares as a set, so this already covers a size change
+            if event_keys != first_keys:
                 if extra_columns is None:
                     extra_columns = set(first_keys)
                 extra_columns.update(event_keys)
@@ -1705,8 +1743,10 @@ class StreamingEventProcessor:
         else:
             columns_escaped = ", ".join(_quote_identifier(col) for col in all_columns)
             placeholders = ", ".join(["?"] * len(all_columns))
+            # Column names go through _quote_identifier; the values are bound
+            # parameters and are never interpolated.
             insert_stmt = (
-                f"INSERT INTO logs ({columns_escaped}) VALUES ({placeholders})"
+                f"INSERT INTO logs ({columns_escaped}) VALUES ({placeholders})"  # noqa: S608
             )
             self._last_insert_stmt = insert_stmt
             self._last_insert_columns = all_columns
@@ -1721,7 +1761,7 @@ class StreamingEventProcessor:
             canonical_lower = tuple(col.lower() for col in all_columns)
             rows = []
             for event in batch:
-                merged: Dict[str, Any] = {}
+                merged: dict[str, Any] = {}
                 for k, v in event.items():
                     kl = k.lower()
                     if kl not in merged or merged[kl] is None:

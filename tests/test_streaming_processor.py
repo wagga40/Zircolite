@@ -13,21 +13,23 @@ import pytest
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from zircolite import (
-    StreamingEventProcessor,
-    ProcessingConfig,
     EvtxExtractor,
     ExtractorConfig,
+    ProcessingConfig,
+    StreamingEventProcessor,
 )
 from zircolite.streaming import (
     _NON_ALNUM_RE,
-    _RESTRICTED_BUILTINS as STREAMING_BUILTINS,
     StrictParseError,
+)
+from zircolite.streaming import (
+    _RESTRICTED_BUILTINS as STREAMING_BUILTINS,
 )
 
 
 class TestStreamingEventProcessorInit:
     """Tests for StreamingEventProcessor initialization."""
-    
+
     def test_init_basic(self, field_mappings_file, test_logger, default_args_config):
         """Test basic initialization."""
         processor = StreamingEventProcessor(
@@ -39,7 +41,7 @@ class TestStreamingEventProcessorInit:
         assert processor.config_file == field_mappings_file
         assert processor.batch_size == ProcessingConfig().batch_size
         assert processor.hashes is False
-    
+
     def test_init_with_custom_batch_size(self, field_mappings_file, test_logger, default_args_config):
         """Test initialization with custom batch size."""
         proc_config = ProcessingConfig(batch_size=1000)
@@ -49,9 +51,9 @@ class TestStreamingEventProcessorInit:
             processing_config=proc_config,
             logger=test_logger
         )
-        
+
         assert processor.batch_size == 1000
-    
+
     @pytest.mark.parametrize(
         "timestamp,kept",
         [
@@ -104,9 +106,9 @@ class TestStreamingEventProcessorInit:
             processing_config=proc_config,
             logger=test_logger
         )
-        
+
         assert processor.hashes is True
-    
+
     def test_config_loaded(self, field_mappings_file, test_logger, default_args_config):
         """Test that configuration is properly loaded."""
         processor = StreamingEventProcessor(
@@ -114,7 +116,7 @@ class TestStreamingEventProcessorInit:
             args_config=default_args_config,
             logger=test_logger
         )
-        
+
         assert processor.field_exclusions is not None
         assert processor.field_mappings is not None
         assert processor.useless_values is not None
@@ -122,7 +124,7 @@ class TestStreamingEventProcessorInit:
 
 class TestStreamingEventProcessorFlattening:
     """Tests for event flattening functionality."""
-    
+
     def test_flatten_simple_event(self, field_mappings_file, test_logger, default_args_config, sample_windows_event):
         """Test flattening a simple Windows event."""
         processor = StreamingEventProcessor(
@@ -130,14 +132,14 @@ class TestStreamingEventProcessorFlattening:
             args_config=default_args_config,
             logger=test_logger
         )
-        
+
         flattened = processor._flatten_event(sample_windows_event, "test.evtx")
-        
+
         assert flattened is not None
         assert "OriginalLogfile" in flattened
         assert flattened["OriginalLogfile"] == "test.evtx"
-        assert "EventID" in flattened or "eventid" in flattened.keys()
-    
+        assert "EventID" in flattened or "eventid" in flattened
+
     def test_flatten_tracks_fields(self, field_mappings_file, test_logger, default_args_config, sample_windows_event):
         """Test that flattening tracks discovered fields."""
         processor = StreamingEventProcessor(
@@ -145,16 +147,16 @@ class TestStreamingEventProcessorFlattening:
             args_config=default_args_config,
             logger=test_logger
         )
-        
+
         # Initially empty
         assert len(processor.discovered_fields) == 0
-        
+
         processor._flatten_event(sample_windows_event, "test.evtx")
-        
+
         # Should have discovered fields
         assert len(processor.discovered_fields) > 0
         assert len(processor.field_types) > 0
-    
+
     def test_flatten_with_hash(self, field_mappings_file, test_logger, default_args_config, sample_windows_event):
         """Test flattening with hash generation."""
         proc_config = ProcessingConfig(hashes=True)
@@ -164,12 +166,12 @@ class TestStreamingEventProcessorFlattening:
             processing_config=proc_config,
             logger=test_logger
         )
-        
+
         raw_bytes = json.dumps(sample_windows_event).encode('utf-8')
         flattened = processor._flatten_event(sample_windows_event, "test.evtx", raw_bytes)
-        
+
         assert "OriginalLogLinexxHash" in flattened
-    
+
     def test_flatten_excludes_fields(self, field_mappings_file, test_logger, default_args_config):
         """Test that excluded fields are not included."""
         processor = StreamingEventProcessor(
@@ -177,7 +179,7 @@ class TestStreamingEventProcessorFlattening:
             args_config=default_args_config,
             logger=test_logger
         )
-        
+
         # Event with xmlns field (should be excluded)
         event = {
             "Event": {
@@ -185,11 +187,11 @@ class TestStreamingEventProcessorFlattening:
                 "System": {"EventID": 1}
             }
         }
-        
+
         flattened = processor._flatten_event(event, "test.evtx")
-        
+
         # xmlns should not appear in flattened output
-        for key in flattened.keys():
+        for key in flattened:
             assert "xmlns" not in key.lower()
 
     def test_time_filter_accepts_in_range(self, field_mappings_file, test_logger, default_args_config):
@@ -447,7 +449,7 @@ class TestFlattenHotPathOptimizations:
 
 class TestStreamingEventProcessorSchemaGeneration:
     """Tests for SQL schema generation."""
-    
+
     def test_create_initial_table(self, field_mappings_file, test_logger, default_args_config):
         """Test initial table creation."""
         processor = StreamingEventProcessor(
@@ -455,18 +457,18 @@ class TestStreamingEventProcessorSchemaGeneration:
             args_config=default_args_config,
             logger=test_logger
         )
-        
+
         conn = sqlite3.connect(':memory:')
         processor.create_initial_table(conn)
-        
+
         # Verify table exists
         cursor = conn.cursor()
         cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='logs'")
         result = cursor.fetchone()
-        
+
         assert result is not None
         assert result[0] == 'logs'
-        
+
         conn.close()
 
     def test_insert_batch_updates_column_cache_on_new_columns(
@@ -551,7 +553,7 @@ class TestStreamingEventProcessorModuleHelpers:
 
 class TestStreamingEventProcessorJSONStreaming:
     """Tests for JSON file streaming."""
-    
+
     def test_stream_json_events(self, field_mappings_file, test_logger, default_args_config, tmp_json_file):
         """Test streaming events from a JSON file."""
         processor = StreamingEventProcessor(
@@ -559,12 +561,12 @@ class TestStreamingEventProcessorJSONStreaming:
             args_config=default_args_config,
             logger=test_logger
         )
-        
+
         events = list(processor.stream_json_events(tmp_json_file))
-        
+
         assert len(events) > 0
         assert "OriginalLogfile" in events[0]
-    
+
     def test_stream_json_array_events(self, field_mappings_file, test_logger, default_args_config, tmp_json_array_file):
         """Test streaming events from a JSON array file."""
         processor = StreamingEventProcessor(
@@ -572,11 +574,11 @@ class TestStreamingEventProcessorJSONStreaming:
             args_config=default_args_config,
             logger=test_logger
         )
-        
+
         events = list(processor.stream_json_array_chunked(tmp_json_array_file))
-        
+
         assert len(events) > 0
-    
+
     def test_stream_json_multiple_events(self, field_mappings_file, test_logger, default_args_config, tmp_json_file_multiple):
         """Test streaming multiple events from a JSONL file."""
         processor = StreamingEventProcessor(
@@ -584,16 +586,16 @@ class TestStreamingEventProcessorJSONStreaming:
             args_config=default_args_config,
             logger=test_logger
         )
-        
+
         events = list(processor.stream_json_events(tmp_json_file_multiple))
-        
+
         # Should have 3 events from sample_windows_events_list
         assert len(events) == 3
 
 
 class TestStreamingEventProcessorDatabaseInsertion:
     """Tests for database insertion during streaming."""
-    
+
     def test_process_file_streaming_json(self, field_mappings_file, test_logger, default_args_config, tmp_json_file_multiple):
         """Test processing a JSON file with streaming into database."""
         proc_config = ProcessingConfig(disable_progress=True)
@@ -603,28 +605,28 @@ class TestStreamingEventProcessorDatabaseInsertion:
             processing_config=proc_config,
             logger=test_logger
         )
-        
+
         conn = sqlite3.connect(':memory:')
         processor.create_initial_table(conn)
-        
+
         event_count = processor.process_file_streaming(
             conn,
             tmp_json_file_multiple,
             input_type='json',
             json_array=False
         )
-        
+
         assert event_count == 3
-        
+
         # Verify data in database
         cursor = conn.cursor()
         cursor.execute("SELECT COUNT(*) FROM logs")
         db_count = cursor.fetchone()[0]
-        
+
         assert db_count == 3
-        
+
         conn.close()
-    
+
     def test_batch_insertion(self, field_mappings_file, test_logger, default_args_config, tmp_path):
         """Test batch insertion with multiple events."""
         proc_config = ProcessingConfig(batch_size=2, disable_progress=True)
@@ -634,43 +636,42 @@ class TestStreamingEventProcessorDatabaseInsertion:
             processing_config=proc_config,
             logger=test_logger
         )
-        
+
         # Create a file with 5 events
         events = [
             {"Event": {"System": {"EventID": i}, "EventData": {"Value": f"test{i}"}}}
             for i in range(5)
         ]
-        
+
         json_file = tmp_path / "batch_test.json"
         with open(json_file, 'w') as f:
-            for event in events:
-                f.write(json.dumps(event) + "\n")
-        
+            f.writelines(json.dumps(event) + "\n" for event in events)
+
         conn = sqlite3.connect(':memory:')
         processor.create_initial_table(conn)
-        
+
         event_count = processor.process_file_streaming(
             conn,
             str(json_file),
             input_type='json',
             json_array=False
         )
-        
+
         assert event_count == 5
-        
+
         # Verify all events were inserted
         cursor = conn.cursor()
         cursor.execute("SELECT COUNT(*) FROM logs")
         db_count = cursor.fetchone()[0]
-        
+
         assert db_count == 5
-        
+
         conn.close()
 
 
 class TestStreamingEventProcessorTransforms:
     """Tests for transform functionality in streaming mode."""
-    
+
     def test_transform_value(self, field_mappings_file_with_transforms, test_logger, args_config_auditd):
         """Test that transforms are applied during streaming."""
         processor = StreamingEventProcessor(
@@ -678,15 +679,15 @@ class TestStreamingEventProcessorTransforms:
             args_config=args_config_auditd,
             logger=test_logger
         )
-        
+
         # Test transform function
         result = processor._transform_value(
             "def transform(param):\n\treturn param.upper()",
             "hello"
         )
-        
+
         assert result == "HELLO"
-    
+
     def test_get_transform_func_caching(self, field_mappings_file_with_transforms, test_logger, args_config_auditd):
         """Test that transform functions are cached."""
         processor = StreamingEventProcessor(
@@ -694,21 +695,21 @@ class TestStreamingEventProcessorTransforms:
             args_config=args_config_auditd,
             logger=test_logger
         )
-        
+
         code = "def transform(param):\n\treturn param.upper()"
-        
+
         # First call - compiles and caches
         func1 = processor._get_transform_func(code)
-        
+
         # Second call - should return cached function
         func2 = processor._get_transform_func(code)
-        
+
         assert func1 is func2  # Same object (cached)
 
 
 class TestStreamingEventProcessorCSV:
     """Tests for CSV file streaming."""
-    
+
     def test_stream_csv_events(self, field_mappings_file, test_logger, default_args_config, tmp_csv_file):
         """Test streaming events from a CSV file."""
         processor = StreamingEventProcessor(
@@ -716,13 +717,13 @@ class TestStreamingEventProcessorCSV:
             args_config=default_args_config,
             logger=test_logger
         )
-        
+
         events = list(processor.stream_csv_events(tmp_csv_file))
-        
+
         assert len(events) == 3  # 3 data rows in the CSV
         assert "OriginalLogfile" in events[0]
         assert "EventID" in events[0]
-    
+
     def test_stream_csv_with_bom_keeps_first_header_clean(
         self, field_mappings_file, test_logger, default_args_config, tmp_path
     ):
@@ -749,14 +750,14 @@ class TestStreamingEventProcessorCSV:
             args_config=default_args_config,
             logger=test_logger
         )
-        
+
         events = list(processor.stream_csv_events(tmp_csv_file))
-        
+
         # Check that expected fields are present
         first_event = events[0]
         assert "Channel" in first_event
         assert "Computer" in first_event
-    
+
     def test_process_file_streaming_csv(self, field_mappings_file, test_logger, default_args_config, tmp_csv_file):
         """Test processing a CSV file with streaming into database."""
         proc_config = ProcessingConfig(disable_progress=True)
@@ -766,31 +767,31 @@ class TestStreamingEventProcessorCSV:
             processing_config=proc_config,
             logger=test_logger
         )
-        
+
         conn = sqlite3.connect(':memory:')
         processor.create_initial_table(conn)
-        
+
         event_count = processor.process_file_streaming(
             conn,
             tmp_csv_file,
             input_type='csv'
         )
-        
+
         assert event_count == 3
-        
+
         # Verify data in database
         cursor = conn.cursor()
         cursor.execute("SELECT COUNT(*) FROM logs")
         db_count = cursor.fetchone()[0]
-        
+
         assert db_count == 3
-        
+
         conn.close()
 
 
 class TestStreamingEventProcessorJSONArrayChunked:
     """Tests for chunked JSON array streaming."""
-    
+
     def test_stream_json_array_chunked_small_file(self, field_mappings_file, test_logger, default_args_config, tmp_json_array_file):
         """Test chunked streaming with a small JSON array file."""
         processor = StreamingEventProcessor(
@@ -798,13 +799,13 @@ class TestStreamingEventProcessorJSONArrayChunked:
             args_config=default_args_config,
             logger=test_logger
         )
-        
+
         events = list(processor.stream_json_array_chunked(tmp_json_array_file))
-        
+
         # Should have 3 events from sample_windows_events_list
         assert len(events) == 3
         assert "OriginalLogfile" in events[0]
-    
+
     def test_process_file_streaming_json_array_chunked(self, field_mappings_file, test_logger, default_args_config, tmp_json_array_file):
         """Test processing a JSON array file with chunked streaming into database."""
         proc_config = ProcessingConfig(disable_progress=True)
@@ -814,26 +815,26 @@ class TestStreamingEventProcessorJSONArrayChunked:
             processing_config=proc_config,
             logger=test_logger
         )
-        
+
         conn = sqlite3.connect(':memory:')
         processor.create_initial_table(conn)
-        
+
         event_count = processor.process_file_streaming(
             conn,
             tmp_json_array_file,
             input_type='json',
             json_array=True,
         )
-        
+
         assert event_count == 3
-        
+
         # Verify data in database
         cursor = conn.cursor()
         cursor.execute("SELECT COUNT(*) FROM logs")
         db_count = cursor.fetchone()[0]
-        
+
         assert db_count == 3
-        
+
         conn.close()
 
     def test_process_file_streaming_json_array_input_type(
@@ -990,7 +991,7 @@ class TestStreamingEventProcessorRestrictedPythonBuiltins:
 
 class TestStreamingEventProcessorMemoryEfficiency:
     """Tests for memory efficiency of streaming operations."""
-    
+
     def test_batch_processing_memory(self, field_mappings_file, test_logger, default_args_config, tmp_path):
         """Test that batch processing doesn't accumulate memory excessively."""
         proc_config = ProcessingConfig(batch_size=100, disable_progress=True)
@@ -1000,39 +1001,38 @@ class TestStreamingEventProcessorMemoryEfficiency:
             processing_config=proc_config,
             logger=test_logger
         )
-        
+
         # Create a file with many events
         events = [
             {"Event": {"System": {"EventID": i}, "EventData": {"Value": f"test{i}"}}}
             for i in range(500)
         ]
-        
+
         json_file = tmp_path / "large_test.json"
         with open(json_file, 'w') as f:
-            for event in events:
-                f.write(json.dumps(event) + "\n")
-        
+            f.writelines(json.dumps(event) + "\n" for event in events)
+
         conn = sqlite3.connect(':memory:')
         processor.create_initial_table(conn)
-        
+
         event_count = processor.process_file_streaming(
             conn,
             str(json_file),
             input_type='json',
             json_array=False
         )
-        
+
         assert event_count == 500
-        
+
         # Verify all events were inserted
         cursor = conn.cursor()
         cursor.execute("SELECT COUNT(*) FROM logs")
         db_count = cursor.fetchone()[0]
-        
+
         assert db_count == 500
-        
+
         conn.close()
-    
+
     def test_generator_based_streaming(self, field_mappings_file, test_logger, default_args_config, tmp_json_file_multiple):
         """Test that streaming uses generators for memory efficiency."""
         processor = StreamingEventProcessor(
@@ -1040,14 +1040,14 @@ class TestStreamingEventProcessorMemoryEfficiency:
             args_config=default_args_config,
             logger=test_logger
         )
-        
+
         # Get stream - should be a generator, not a list
         stream = processor.stream_json_events(tmp_json_file_multiple)
-        
+
         # Verify it's a generator
         import types
         assert isinstance(stream, types.GeneratorType)
-        
+
         # Consume generator
         events = list(stream)
         assert len(events) == 3
@@ -1665,7 +1665,7 @@ class TestStreamingTimeFiltering:
 
     def test_time_filter_rejects_old_event(self, field_mappings_file, test_logger, default_args_config, tmp_path):
         """Cover lines 595-596: events outside time range are rejected.
-        
+
         Time filtering is controlled by ProcessingConfig.time_after / time_before.
         Uses a flat JSON event so the time_field is immediately accessible.
         """
@@ -2100,8 +2100,9 @@ class TestPreParsedConfig:
 
     def test_streaming_processor_uses_raw_config(self, field_mappings_file):
         """StreamingEventProcessor uses _raw_config instead of reading disk."""
-        from zircolite.config import ProcessingConfig
         from argparse import Namespace
+
+        from zircolite.config import ProcessingConfig
 
         raw_config = {
             "exclusions": ["xmlns"],
@@ -2128,8 +2129,9 @@ class TestPreParsedConfig:
 
     def test_streaming_processor_falls_back_to_file(self, field_mappings_file):
         """Without _raw_config, config is loaded from disk as before."""
-        from zircolite.config import ProcessingConfig
         from argparse import Namespace
+
+        from zircolite.config import ProcessingConfig
 
         args = Namespace(evtx_input=True)
         proc = ProcessingConfig()
@@ -2153,8 +2155,9 @@ class TestTableReuse:
 
     def test_create_initial_table_refreshes_cache(self):
         """create_initial_table queries actual schema for its column cache."""
-        from zircolite.config import ProcessingConfig
         from argparse import Namespace
+
+        from zircolite.config import ProcessingConfig
 
         raw_config = {
             "exclusions": [],
@@ -2740,3 +2743,118 @@ class TestMalformedInputIsolation:
 
         assert channel is None
         assert eventid == 4624
+
+
+class TestIngestDegradation:
+    """A file Zircolite could not read in full must be reported as such.
+
+    ``--remove-events`` deletes every source file that is absent from
+    ``failed_files``, and that set is fed from ``ingest_degraded``. A reader
+    that aborts without marking the run therefore reports a healthy event
+    count, exits 0, and deletes the only copy of a log nothing ever finished
+    analysing.
+    """
+
+    def _processor(self, field_mappings_file, default_args_config, test_logger):
+        return StreamingEventProcessor(
+            config_file=field_mappings_file,
+            args_config=default_args_config,
+            logger=test_logger,
+        )
+
+    def test_truncated_gzip_marks_the_run_degraded(
+        self, tmp_path, field_mappings_file, default_args_config, test_logger
+    ):
+        import gzip
+
+        payload = b"".join(
+            b'{"Event":{"System":{"Channel":"Security","EventID":%d}}}\n' % i
+            for i in range(2000)
+        )
+        blob = gzip.compress(payload)
+        src = tmp_path / "truncated.jsonl.gz"
+        src.write_bytes(blob[: len(blob) // 2])
+
+        processor = self._processor(
+            field_mappings_file, default_args_config, test_logger
+        )
+        list(processor.stream_json_events(str(src)))
+
+        assert processor.ingest_degraded is True
+
+    def test_unreadable_file_marks_the_run_degraded(
+        self, tmp_path, field_mappings_file, default_args_config, test_logger
+    ):
+        processor = self._processor(
+            field_mappings_file, default_args_config, test_logger
+        )
+        events = list(processor.stream_json_events(str(tmp_path / "absent.json")))
+
+        assert events == []
+        assert processor.ingest_degraded is True
+
+    def test_syslog_read_as_sysmon_linux_marks_the_run_degraded(
+        self, tmp_path, field_mappings_file, default_args_config, test_logger
+    ):
+        """Every line converts to nothing, which is a skip, not an empty file."""
+        src = tmp_path / "syslog.log"
+        src.write_text("Jan  1 00:00:00 host kernel: nothing to see\n" * 50)
+        extractor = EvtxExtractor(extractor_config=ExtractorConfig(), logger=test_logger)
+
+        processor = self._processor(
+            field_mappings_file, default_args_config, test_logger
+        )
+        events = list(processor.stream_sysmon_linux_events(str(src), extractor))
+
+        assert events == []
+        assert processor.ingest_degraded is True
+
+    @pytest.mark.parametrize(
+        "reader,filename",
+        [
+            ("stream_json_events", "absent.json"),
+            ("stream_json_array_chunked", "absent.json"),
+            ("stream_csv_events", "absent.csv"),
+        ],
+    )
+    def test_every_reader_marks_an_unreadable_source(
+        self,
+        tmp_path,
+        field_mappings_file,
+        default_args_config,
+        test_logger,
+        reader,
+        filename,
+    ):
+        processor = self._processor(
+            field_mappings_file, default_args_config, test_logger
+        )
+        list(getattr(processor, reader)(str(tmp_path / filename)))
+
+        assert processor.ingest_degraded is True
+
+    @pytest.mark.parametrize(
+        "reader,filename",
+        [
+            ("stream_sysmon_linux_events", "absent.log"),
+            ("stream_auditd_events", "absent.log"),
+            ("stream_evtxtract_events", "absent.log"),
+            ("stream_xml_events", "absent.xml"),
+        ],
+    )
+    def test_every_extractor_reader_marks_an_unreadable_source(
+        self,
+        tmp_path,
+        field_mappings_file,
+        default_args_config,
+        test_logger,
+        reader,
+        filename,
+    ):
+        extractor = EvtxExtractor(extractor_config=ExtractorConfig(), logger=test_logger)
+        processor = self._processor(
+            field_mappings_file, default_args_config, test_logger
+        )
+        list(getattr(processor, reader)(str(tmp_path / filename), extractor))
+
+        assert processor.ingest_degraded is True

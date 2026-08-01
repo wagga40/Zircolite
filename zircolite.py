@@ -24,7 +24,7 @@ import string
 import sys
 import time
 from pathlib import Path
-from typing import Any, List, Optional, Set, Tuple
+from typing import Any
 
 # External libs - Rich for styled terminal output
 from rich.logging import RichHandler
@@ -41,45 +41,48 @@ except ImportError:
 
 # Import from package
 from zircolite import (
-    RulesetHandler,
-    RulesUpdater,
-    TemplateEngine,
-    ZircoliteGuiGenerator,
-    MemoryTracker,
-    init_logger,
-    quit_on_error,
-    check_if_exists,
-    select_files,
-    avoid_files,
-    analyze_files_and_recommend_mode,
-    print_mode_recommendation,
-    # Config dataclasses
-    RulesetConfig,
-    TemplateConfig,
+    # Input format registry
+    DEFAULT_INPUT_FORMAT,
+    LEVEL_PRIORITY,
+    # YAML configuration
+    ConfigLoader,
+    DetectionResult,
+    DetectionStats,
     GuiConfig,
     # Log type detection
     LogTypeDetector,
-    DetectionResult,
-    # Input format registry
-    DEFAULT_INPUT_FORMAT,
+    MemoryTracker,
+    # Config dataclasses
+    RulesetConfig,
+    RulesetHandler,
+    RulesUpdater,
+    StrictParseError,
+    TemplateConfig,
+    TemplateEngine,
+    ZircoliteGuiGenerator,
+    __version__,
+    analyze_files_and_recommend_mode,
+    avoid_files,
+    build_attack_summary,
+    check_if_exists,
+    # Rich console
+    console,
+    create_default_config_file,
     format_by_name,
     format_from_args,
     has_explicit_format,
-    # YAML configuration
-    ConfigLoader,
-    create_default_config_file,
-    # Rich console
-    console,
-    DetectionStats,
-    LEVEL_PRIORITY,
+    init_logger,
+    is_quiet,
+    make_file_link,
+    print_banner,
+    print_error_panel,
+    print_mode_recommendation,
+    print_section,
+    quit_on_error,
+    run_config,
+    select_files,
     # UI/UX helpers
     set_quiet_mode,
-    is_quiet,
-    print_banner,
-    print_section,
-    print_error_panel,
-    build_attack_summary,
-    make_file_link,
 )
 
 # Processing modes and context (from the dedicated processing module)
@@ -87,22 +90,17 @@ from zircolite.processing import (
     ProcessingContext,
     create_extractor,
     expand_db_path,
-    process_unified_streaming,
-    process_perfile_streaming,
     process_db_input,
     process_parallel_streaming,
+    process_perfile_streaming,
+    process_unified_streaming,
 )
-
-from zircolite import StrictParseError
+from zircolite.run_config import DEFAULTS, EARLY_DESTS, flatten_groups
 from zircolite.shutdown import (
     install_signal_handler,
     is_shutdown_requested,
     request_shutdown,
 )
-
-from zircolite import __version__, run_config
-from zircolite.run_config import DEFAULTS, EARLY_DESTS, flatten_groups
-
 
 ################################################################
 # NOTE: ProcessingContext and all process_* functions live in
@@ -119,13 +117,13 @@ def parse_arguments() -> argparse.Namespace:
     if _HAS_RICH_ARGPARSE:
         kwargs["formatter_class"] = RichHelpFormatter
     parser = argparse.ArgumentParser(**kwargs)
-    
+
     # Input files and filtering/selection options
     logs_input_args = parser.add_argument_group('📁 INPUT FILES AND FILTERING')
     logs_input_args.add_argument("-e", "--evtx", "--events", help="Path to log file or directory containing log files in supported format", type=str)
     logs_input_args.add_argument("-s", "--select", help="Process only files with filenames containing the specified string (applied before exclusions)", action='append', nargs='+')
     logs_input_args.add_argument("-a", "--avoid", help="Skip files with filenames containing the specified string", action='append', nargs='+')
-    logs_input_args.add_argument("-f", "--fileext", help="File extension of the log files to process", type=str)    
+    logs_input_args.add_argument("-f", "--fileext", help="File extension of the log files to process", type=str)
     logs_input_args.add_argument("-fp", "--file-pattern", help="Python Glob pattern to select files (only works with directories)", type=str)
     logs_input_args.add_argument("--no-recursion", help="Search for log files only in the specified directory (disable recursive search)", action="store_true")
     logs_input_args.add_argument("--archive-password", help="Password for encrypted ZIP or 7-Zip archives", type=str, metavar="PASSWORD")
@@ -135,7 +133,7 @@ def parse_arguments() -> argparse.Namespace:
     event_args.add_argument("-A", "--after", help=f"Process only events at or after this timestamp, inclusive (UTC format: 1970-01-01T00:00:00, default: {DEFAULTS['after']})", type=str, default=None)
     event_args.add_argument("-B", "--before", help=f"Process only events at or before this timestamp, inclusive (UTC format: 1970-01-01T00:00:00, default: {DEFAULTS['before']})", type=str, default=None)
     event_args.add_argument("--no-event-filter", help="Disable early event filtering based on channel/eventID (process all events)", action='store_true')
-    
+
     # Event and log formats options
     event_formats_args = parser.add_mutually_exclusive_group()
     event_formats_args.add_argument("-j", "--json-input", "--jsononly", "--jsonline", "--jsonl", help="Input logs are in JSON lines format", action='store_true')
@@ -146,16 +144,16 @@ def parse_arguments() -> argparse.Namespace:
     event_formats_args.add_argument("-x", "--xml-input", "--xml", help="Process EVTX files converted to XML format (default extension: '.xml')", action='store_true')
     event_formats_args.add_argument("--evtxtract-input", "--evtxtract", help="Process log files extracted with EVTXtract (default extension: '.log')", action='store_true')
     event_formats_args.add_argument("--csv-input", "--csvonly", help="Process log files in CSV format (extension: '.csv')", action='store_true')
-    
+
     # Ruleset options
-    rulesets_formats_args = parser.add_argument_group('📋 RULES AND RULESETS')  
+    rulesets_formats_args = parser.add_argument_group('📋 RULES AND RULESETS')
     rulesets_formats_args.add_argument("-r", "--ruleset", help="Sigma ruleset in JSON (Zircolite format) or YAML/directory of YAML files (Native Sigma format)", action='append', nargs='+')
     rulesets_formats_args.add_argument("-sr", "--save-ruleset", help="Save converted ruleset (from Sigma to Zircolite format) to disk", action='store_true')
     rulesets_formats_args.add_argument("-p", "--pipeline", help="Use specified pipeline for native Sigma rulesets (YAML). Examples: 'sysmon', 'windows-logsources', 'windows-audit'. Use '--pipeline-list' to see available pipelines.", action='append', nargs='+')
     rulesets_formats_args.add_argument("-pl", "--pipeline-list", help="List all installed pysigma pipelines", action='store_true')
     rulesets_formats_args.add_argument("-R", "--rulefilter", help="Remove rules from ruleset by matching rule title (case sensitive)", action='append', nargs='*')
     rulesets_formats_args.add_argument("--test-rules", help="JSON file with rule test cases (true-positive / true-negative events per rule)", type=str, metavar="TEST_FILE")
-    
+
     # Output formats and output files options
     output_formats_args = parser.add_argument_group('💾 OUTPUT FORMATS AND FILES')
     output_formats_args.add_argument("-o", "--outfile", help="Output file for detected events (default: detected_events.json, or detected_events.csv with --csv)", type=str, default=None)
@@ -176,9 +174,9 @@ def parse_arguments() -> argparse.Namespace:
     output_formats_args.add_argument("-l", "--logfile", "--log-file", help=f"Log file name (default: {DEFAULTS['logfile']})", default=None, type=str)
     output_formats_args.add_argument("--hashes", help="Add xxhash64 of the original log event to each event", action='store_true')
     output_formats_args.add_argument("-L", "--limit", "--limit-results", help=f"Discard rules matching more events than this, per input database — so per file in the default mode, and across the whole corpus with --unified-db (default: {DEFAULTS['limit']}, i.e. no limit)", type=int, default=None)
-    
+
     # Advanced configuration options
-    config_formats_args = parser.add_argument_group('⚙️  ADVANCED CONFIGURATION')  
+    config_formats_args = parser.add_argument_group('⚙️  ADVANCED CONFIGURATION')
     config_formats_args.add_argument("-c", "--config", help="JSON or YAML file containing field mappings and exclusions", type=str, default="config/config.yaml")
     config_formats_args.add_argument("-LE", "--logs-encoding", help="Encoding of the source files, for the formats read as text: Sysmon for Linux, Auditd, EVTXtract and CSV (XML uses the encoding declared in the document, JSON is read as UTF-8)", type=str)
     config_formats_args.add_argument("-q", "--quiet", help="Quiet mode: suppress banner, progress, and info messages. Only the summary panel and errors are shown.", action='store_true')
@@ -206,13 +204,13 @@ def parse_arguments() -> argparse.Namespace:
     yaml_config_args = parser.add_argument_group('📄 YAML CONFIGURATION FILE')
     yaml_config_args.add_argument("--yaml-config", "-Y", help="YAML configuration file (CLI arguments override file settings)", type=str)
     yaml_config_args.add_argument("--generate-config", help="Generate a default YAML configuration file and exit", type=str, metavar="OUTPUT_FILE")
-    
+
     # Parallel processing options
     parallel_args = parser.add_argument_group('⚡ PARALLEL PROCESSING')
     parallel_args.add_argument("-P", "--no-parallel", help="Disable automatic parallel processing (parallel is enabled by default when beneficial)", action='store_true')
     parallel_args.add_argument("-w", "--parallel-workers", help="Maximum number of parallel workers (default: auto-detect based on CPU/memory)", type=int)
     parallel_args.add_argument("--parallel-memory-limit", help=f"Memory usage threshold percentage before throttling (default: {DEFAULTS['parallel_memory_limit']:g})", type=float, default=None)
-    
+
     # Templating and Mini GUI options
     templating_formats_args = parser.add_argument_group('🎨 TEMPLATING AND MINI GUI')
     templating_formats_args.add_argument("-t", "--template", help="Jinja2 template to use for output generation", type=str, action='append', nargs='+')
@@ -222,7 +220,7 @@ def parse_arguments() -> argparse.Namespace:
     templating_formats_args.add_argument("--navigator-output", help="Shortcut: generate ATT&CK Navigator layer JSON and write to navigator-<RAND>.json (or specify a custom filename)", type=str, metavar="OUTPUT_FILE", nargs='?', const="")
     templating_formats_args.add_argument("-G", "--package", help="Create a ZircoGui/Mini GUI package", action='store_true')
     templating_formats_args.add_argument("--package-dir", help="Directory to save the ZircoGui/Mini GUI package", type=str, default=None)
-    
+
     return parser.parse_args()
 
 
@@ -273,15 +271,15 @@ def _fileext_is_explicit(args: argparse.Namespace) -> bool:
 
 def discover_files(
     args: argparse.Namespace, logger: logging.Logger
-) -> List[Path]:
+) -> list[Path]:
     """Discover log files based on path and filters."""
     explicit_ext = _fileext_is_explicit(args)
     args.fileext = get_file_extension(args)
 
     log_path = Path(args.evtx)
-    log_list: List[Path] = []
+    log_list: list[Path] = []
     if log_path.is_dir():
-        pattern = args.file_pattern if args.file_pattern else f"*.{args.fileext}"
+        pattern = args.file_pattern or f"*.{args.fileext}"
         fn_glob = log_path.rglob if not args.no_recursion else log_path.glob
         log_list = list(fn_glob(pattern))
         if not log_list and not explicit_ext and not args.file_pattern:
@@ -347,21 +345,21 @@ def _apply_detection_result(
 
 
 def auto_detect_log_type(
-    file_list: List[Path], args, logger,
-    field_mappings_config: Optional[dict] = None,
+    file_list: list[Path], args, logger,
+    field_mappings_config: dict | None = None,
 ) -> str:
     """
     Automatically detect log type from the provided files.
-    
+
     Analyzes file content and structure to determine the log format.
     If an explicit format flag was set by the user, this is skipped.
-    
+
     Args:
         file_list: List of discovered log files
         args: Parsed CLI arguments
         logger: Logger instance
         field_mappings_config: Optional field mappings config (for timestamp detection fields)
-        
+
     Returns:
         The detected input_type string
     """
@@ -370,19 +368,19 @@ def auto_detect_log_type(
         input_type = get_input_type(args)
         logger.debug(f"Using explicit format flag: {input_type}")
         return input_type
-    
+
     # If auto-detect is disabled, fall back to flag-based detection
     if getattr(args, 'no_auto_detect', False):
         input_type = get_input_type(args)
         logger.debug(f"Auto-detect disabled, using default: {input_type}")
         return input_type
-    
+
     # Load timestamp detection fields from config if available
     ts_fields = None
     if field_mappings_config:
         ts_config = field_mappings_config.get("timestamp_detection", {})
         ts_fields = ts_config.get("detection_fields")
-    
+
     detector = LogTypeDetector(
         logger=logger,
         timestamp_detection_fields=ts_fields,
@@ -394,16 +392,19 @@ def auto_detect_log_type(
     # of reading every file twice.
     detection = getattr(args, '_early_detection', None)
     early_files = getattr(args, '_early_detection_files', None)
-    if detection is not None and early_files is not None:
-        if set(map(str, early_files)) != set(map(str, file_list)):
-            detection = None  # file set changed (re-discovery): re-run
+    if (
+        detection is not None
+        and early_files is not None
+        and set(map(str, early_files)) != set(map(str, file_list))
+    ):
+        detection = None  # file set changed (re-discovery): re-run
     if detection is None:
         try:
             detection = detector.detect_batch(file_list)
         except ValueError as e:
             # e.g. password-protected archive without --archive-password
             quit_on_error(f"[red]    [-] {e}[/]", logger)
-    
+
     logger.info(
         f"[+] Auto-detected log type: "
         f"[cyan]{detection.log_source}[/] "
@@ -417,16 +418,16 @@ def auto_detect_log_type(
         logger.info(f"[+] Auto-detected timestamp field: [cyan]{detection.timestamp_field}[/]")
     if detection.suggested_pipeline:
         logger.debug(f"    Suggested pipeline: {detection.suggested_pipeline}")
-    
+
     if detection.confidence == "low":
         logger.warning(
             "[yellow]   [!] Low confidence detection. "
             "Consider using explicit format flags (-j, -x, -S, -AU, etc.)[/]"
         )
-    
+
     # Apply detection result to args
     input_type = _apply_detection_result(args, detection, logger)
-    
+
     # If detection changed the format from default, update the file extension
     # for directory scanning (re-discover files if needed)
     return input_type
@@ -467,7 +468,7 @@ def _print_transform_categories(config_path: str, logger) -> bool:
     return True
 
 
-def _read_yaml_quietly(path: Optional[str]) -> dict:
+def _read_yaml_quietly(path: str | None) -> dict:
     """Best-effort YAML read for the pre-logger phase.
 
     Any problem here is left for :func:`resolve_run_config`, which has a logger
@@ -478,7 +479,7 @@ def _read_yaml_quietly(path: Optional[str]) -> dict:
     try:
         import yaml
 
-        with open(path, 'r', encoding='utf-8') as f:
+        with open(path, encoding='utf-8') as f:
             raw = yaml.safe_load(f) or {}
     except Exception:
         return {}
@@ -559,7 +560,7 @@ def _resolve_default_path(value: str, *parts: str) -> str:
 
 def handle_templating(
     ctx: ProcessingContext,
-    results: List[Any],
+    results: list[Any],
     args: argparse.Namespace,
 ) -> bool:
     """Handle template generation and package creation. False if a template failed."""
@@ -606,8 +607,8 @@ def handle_templating(
 def cleanup(
     args: argparse.Namespace,
     logger: logging.Logger,
-    log_list: Optional[List[Path]] = None,
-    failed: Optional[Set[str]] = None,
+    log_list: list[Path] | None = None,
+    failed: set[str] | None = None,
 ) -> None:
     """Remove the original event files, as ``--remove-events`` asks.
 
@@ -633,7 +634,7 @@ def cleanup(
 def print_stats(
     memory_tracker: MemoryTracker,
     start_time: float,
-    all_results: Optional[List[Any]] = None,
+    all_results: list[Any] | None = None,
     files_processed: int = 0,
     total_events: int = 0,
     workers_used: int = 1,
@@ -641,26 +642,26 @@ def print_stats(
     time_filtered_events: int = 0,
     event_filter_active: bool = False,
     total_rules: int = 0,
-    phase_times: Optional[dict] = None,
-    outfile: Optional[str] = None,
+    phase_times: dict | None = None,
+    outfile: str | None = None,
 ) -> None:
     """Print final execution statistics with a Rich summary dashboard."""
     memory_tracker.sample()
     peak_memory, _ = memory_tracker.get_stats()
     processing_time = time.time() - start_time
-    
+
     # Build summary table
     summary_table = Table(show_header=False, box=None, padding=(0, 2), expand=True)
     summary_table.add_column("Metric", style="dim", width=16)
     summary_table.add_column("Value", style="bold", ratio=1)
-    
+
     # ── Duration with phase breakdown ──
     if processing_time >= 60:
         time_str = f"{int(processing_time // 60)}m {int(processing_time % 60)}s"
     else:
         time_str = f"{processing_time:.1f}s"
     summary_table.add_row("⏱  Duration", f"[yellow]{time_str}[/]")
-    
+
     # Phase timing breakdown
     if phase_times and processing_time > 0:
         bar_width = 16
@@ -675,11 +676,11 @@ def print_stats(
             else:
                 t_str = f"{phase_secs:.1f}s"
             summary_table.add_row("", f"    [dim]\u251c\u2500 {phase_name}  {bar}  {t_str} ({pct:.0%})[/]")
-    
+
     # ── Files ──
     if files_processed > 0:
         summary_table.add_row("📁 Files", f"[cyan]{files_processed:,}[/]")
-    
+
     # ── Events with filter efficiency ──
     # Report whenever a filter was active, not only when it dropped something:
     # a silent line makes "dropped nothing" look like "never ran".
@@ -706,21 +707,21 @@ def print_stats(
         summary_table.add_row(
             "🕐 Time range", f"[dim]{time_filtered_events:,} events outside --after/--before[/]"
         )
-    
+
     # ── Throughput ──
     if processing_time > 0 and total_events > 0:
         throughput = total_events / processing_time
         summary_table.add_row("⚡ Throughput", f"[green]{throughput:,.0f}[/] events/s")
-    
+
     # Workers (if parallel)
     if workers_used > 1:
         summary_table.add_row("👥 Workers", f"[yellow]{workers_used}[/]")
-    
+
     # Memory
     if peak_memory > 0:
         mem_str = memory_tracker.format_memory(peak_memory)
         summary_table.add_row("💾 Peak Memory", f"[cyan]{mem_str}[/]")
-    
+
     # ── Detection summary ──
     if all_results:
         det_stats = DetectionStats()
@@ -728,7 +729,7 @@ def print_stats(
             level = result.get("rule_level", "unknown")
             count = result.get("count", 0)
             det_stats.add_detection(level, count)
-        
+
         detection_parts = []
         if det_stats.critical > 0:
             detection_parts.append(f"[bold red]{det_stats.critical} CRIT[/]")
@@ -740,12 +741,12 @@ def print_stats(
             detection_parts.append(f"[green]{det_stats.low} LOW[/]")
         if det_stats.informational > 0:
             detection_parts.append(f"[dim]{det_stats.informational} INFO[/]")
-        
+
         if detection_parts:
             summary_table.add_row("🎯 Detections", " │ ".join(detection_parts))
         else:
             summary_table.add_row("🎯 Detections", "[dim]None[/]")
-        
+
         # Rule coverage bar
         if total_rules > 0:
             matched_rules = det_stats.total_rules_matched
@@ -757,14 +758,14 @@ def print_stats(
                 "\U0001f4cf Coverage",
                 f"[cyan]{matched_rules}[/]/[cyan]{total_rules}[/] rules matched ({coverage_pct:.1f}%)  [dim]{cov_bar}[/]"
             )
-        
+
         # Total matched events
         if det_stats.total_events > 0:
             summary_table.add_row(
-                "🔍 Matched", 
+                "🔍 Matched",
                 f"[magenta]{det_stats.total_events:,}[/] events across [cyan]{det_stats.total_rules_matched}[/] rules"
             )
-        
+
         # Top-N detections by severity (most critical first)
         sorted_results = sorted(
             all_results,
@@ -796,10 +797,10 @@ def print_stats(
                 summary_table.add_row("", line)
     else:
         summary_table.add_row("\U0001f3af Detections", "[dim]None[/]")
-    
+
     # Section separator before summary
     print_section("Results")
-    
+
     # Print summary panel
     console.print()
     panel = Panel(
@@ -817,7 +818,7 @@ def print_stats(
         attack_panel = build_attack_summary(all_results)
         if attack_panel:
             console.print(attack_panel)
-    
+
     # Output file location - prominent and always visible
     if outfile:
         console.print()
@@ -830,7 +831,7 @@ def _warn_ignored_db_flags(
     args: argparse.Namespace, logger: logging.Logger
 ) -> None:
     """Warn when CLI flags incompatible with DB input mode were supplied."""
-    ignored: List[str] = []
+    ignored: list[str] = []
     if args.unified_db:
         ignored.append("--unified-db")
     if getattr(args, 'no_auto_mode', False):
@@ -872,7 +873,7 @@ def _run_processing(
     ctx: ProcessingContext,
     args: argparse.Namespace,
     logger: logging.Logger,
-) -> Tuple[Any, Any, Optional[List[Path]], float]:
+) -> tuple[Any, Any, list[Path] | None, float]:
     """Run the main processing pipeline and return all state needed by main().
 
     Returns:
@@ -1080,7 +1081,7 @@ def main() -> None:
     print_banner(version)
 
     # Handle special commands
-    if args.version: 
+    if args.version:
         logger.info(f"Zircolite - v{version}")
         sys.exit(0)
 
@@ -1094,7 +1095,7 @@ def main() -> None:
 
     if args.transform_list:
         sys.exit(0 if _print_transform_categories(args.config, logger) else 1)
-    
+
     # Resolve CLI arguments against the YAML configuration file, if any. This
     # also applies the built-in defaults, so it must run even without -Y.
     args = resolve_run_config(args, logger)
@@ -1194,8 +1195,8 @@ def main() -> None:
 
     # Handle --test-rules: validate rules against test cases and exit
     if getattr(args, 'test_rules', None):
-        from zircolite.core import ZircoliteCore
         from zircolite.console import print_rule_test_results
+        from zircolite.core import ZircoliteCore
         check_if_exists(args.test_rules, f"[red]    [-] Cannot find test file: {args.test_rules}[/]", logger)
         logger.info(f"[+] Running rule tests from: {make_file_link(args.test_rules)}")
         _test_core = ZircoliteCore(args.config, logger=logger)
@@ -1246,7 +1247,7 @@ def main() -> None:
             f"CSV output was enabled via {csv_source}. Use a single ruleset for CSV output."
         )
         sys.exit(2)
-    
+
     if len(args.csv_delimiter) != 1:
         # csv.DictWriter would raise mid-run, after the output file was opened
         # and truncated, leaving a zero-byte CSV and a bare traceback
@@ -1306,7 +1307,7 @@ def main() -> None:
             "[red]    [-] --limit must be a positive integer (or -1 to disable)[/]",
             logger,
         )
-    
+
     # CSV mode adjustments (the .csv output name is applied while resolving)
     if args.csv:
         ready_for_templating = False
@@ -1333,18 +1334,18 @@ def main() -> None:
         active_event_filter = rulesets_manager.event_filter
     else:
         logger.info("[+] Event filtering disabled (--no-event-filter)")
-    
+
     # Create processing context
     ctx = ProcessingContext(
         config=args.config,
         logger=logger,
-        no_output=args.nolog, 
+        no_output=args.nolog,
         events_after=events_after,
         events_before=events_before,
-        limit=args.limit, 
-        csv_mode=args.csv, 
-        time_field=args.timefield, 
-        hashes=args.hashes, 
+        limit=args.limit,
+        csv_mode=args.csv,
+        time_field=args.timefield,
+        hashes=args.hashes,
         db_location=":memory:",
         delimiter=args.csv_delimiter,
         rulesets=rulesets_manager.rulesets,

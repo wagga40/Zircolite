@@ -12,9 +12,9 @@ from argparse import Namespace
 
 from zircolite.processing import (
     ProcessingContext,
-    process_unified_streaming,
-    process_parallel_streaming,
     process_db_input,
+    process_parallel_streaming,
+    process_unified_streaming,
 )
 from zircolite.utils import MemoryTracker
 
@@ -222,6 +222,17 @@ class TestProcessParallelStreaming:
         data = json.loads(outfile.read_text())
         assert isinstance(data, list)
         assert len(results) >= 1
+
+        # Both workers' detections must reach the merged output. Asserting only
+        # that the list is non-empty passes even when one worker's results are
+        # dropped on the way back, which is the failure this mode invites.
+        command_lines = {
+            event.get("CommandLine")
+            for rule in data
+            for event in rule.get("matches", [])
+        }
+        assert "powershell.exe" in command_lines
+        assert "powershell.exe -c x" in command_lines
 
     def test_parallel_single_file_falls_back_to_perfile(
         self,
