@@ -2,7 +2,7 @@
 Processing modes for Zircolite.
 
 This module centralises every file-processing path so that the CLI entry
-point (``zircolite.py``) stays focused on argument parsing, validation,
+point (``zircolite/cli.py``) stays focused on argument parsing, validation,
 and orchestration.
 
 Contents

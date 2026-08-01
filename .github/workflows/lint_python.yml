@@ -24,14 +24,12 @@ jobs:
       # default happens to be and the result changes with the installed version.
       - name: Lint
         run: pdm run ruff check .
-      # The package only. zircolite.py cannot be added as things stand: the
-      # script shares its name with the package, so mypy resolves `zircolite`
-      # to the script and reports 43 phantom "Module has no attribute" errors,
-      # plus 11 more where `getattr` widens a value to `Any | None`. Checking
-      # it was tried and produced 61 errors and zero real defects, so the fix
-      # is to move the remaining logic into zircolite/cli.py -- which this job
-      # would then cover for free, and which the project already asks for --
-      # rather than to add ~58 suppressions.
+      # This covers the CLI too: zircolite.py is a shim over zircolite/cli.py.
+      # Naming zircolite.py here as well would not add the shim, it would abort
+      # the whole run -- the script shares its name with the package, and mypy
+      # answers "Duplicate module named zircolite" without checking anything.
+      # tests/test_entry_point.py is what guarantees the shim has nothing in it
+      # to check.
       - name: Types
         run: pdm run python -m mypy zircolite
 
