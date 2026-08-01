@@ -12,7 +12,6 @@ names exactly what to add.
 
 import argparse
 import contextlib
-import importlib.util
 import re
 import sys
 from pathlib import Path
@@ -26,20 +25,9 @@ USAGE = DOCS / "Usage.md"
 sys.path.insert(0, str(WORKSPACE_ROOT))
 
 from zircolite import __version__  # noqa: E402
+from zircolite import cli as zircolite_script  # noqa: E402
 from zircolite.config_loader import SECTIONS  # noqa: E402
 from zircolite.run_config import SETTINGS  # noqa: E402
-
-
-def load_zircolite_script():
-    spec = importlib.util.spec_from_file_location(
-        "zircolite_script", WORKSPACE_ROOT / "zircolite.py"
-    )
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-    return module
-
-
-zircolite_script = load_zircolite_script()
 
 
 def all_option_strings() -> set[str]:

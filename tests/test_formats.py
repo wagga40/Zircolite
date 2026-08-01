@@ -10,7 +10,6 @@ which files get processed.
 
 import argparse
 import dataclasses
-import importlib.util
 import sys
 from pathlib import Path
 
@@ -19,6 +18,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 import pytest
 
 import zircolite as zc_pkg
+from zircolite import cli as zircolite_cli
 from zircolite import run_config
 from zircolite.config import ExtractorConfig
 from zircolite.config_loader import ConfigLoader, ZircoliteConfig
@@ -37,15 +37,6 @@ from zircolite.formats import (
 )
 from zircolite.processing import create_extractor
 from zircolite.streaming import StreamingEventProcessor
-
-# The CLI lives in top-level zircolite.py, whose name is shadowed by the
-# package, so it has to be loaded from its path.
-_spec = importlib.util.spec_from_file_location(
-    "zircolite_cli", Path(__file__).parent.parent / "zircolite.py"
-)
-zircolite_cli = importlib.util.module_from_spec(_spec)
-_spec.loader.exec_module(zircolite_cli)
-
 
 # Every format flag the CLI can set, so a namespace is always complete.
 ALL_FLAGS = (

@@ -1,5 +1,5 @@
 """
-Tests for Zircolite CLI (zircolite.py).
+Tests for Zircolite CLI (zircolite/cli.py).
 
 These tests verify the command-line interface behavior including:
 - Argument parsing
@@ -10,7 +10,6 @@ These tests verify the command-line interface behavior including:
 """
 
 import argparse
-import importlib.util
 import json
 import logging
 import os
@@ -23,6 +22,7 @@ from unittest.mock import patch
 import pytest
 
 from zircolite import DetectionResult
+from zircolite import cli as zircolite_script
 
 # Path to the workspace root
 WORKSPACE_ROOT = Path(__file__).parent.parent
@@ -41,19 +41,6 @@ NO_MATCH_RULESET = json.dumps([{
 
 # Add parent directory to path for imports
 sys.path.insert(0, str(WORKSPACE_ROOT))
-
-# Load the zircolite.py script as a module (not the package)
-def load_zircolite_script():
-    """Load zircolite.py script directly, bypassing the package."""
-    spec = importlib.util.spec_from_file_location(
-        "zircolite_script",
-        WORKSPACE_ROOT / "zircolite.py"
-    )
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-    return module
-
-zircolite_script = load_zircolite_script()
 
 
 # Helper to get common test args without -n (for tests that need output files)
@@ -3402,10 +3389,10 @@ def test_version_has_a_single_source():
     """The Taskfile greps zircolite/__init__.py, so nothing may duplicate it."""
     from zircolite import __version__
 
-    cli_source = (WORKSPACE_ROOT / "zircolite.py").read_text()
-    assert 'version = "' not in cli_source, (
-        "zircolite.py must read __version__, not carry its own literal"
-    )
+    for path in (WORKSPACE_ROOT / "zircolite.py", WORKSPACE_ROOT / "zircolite" / "cli.py"):
+        assert 'version = "' not in path.read_text(), (
+            f"{path.name} must read __version__, not carry its own literal"
+        )
 
     taskfile = (WORKSPACE_ROOT / "Taskfile.yml").read_text()
     assert "zircolite/__init__.py" in taskfile

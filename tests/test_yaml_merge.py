@@ -1,29 +1,16 @@
 """Tests for resolving a YAML config file onto the CLI args namespace."""
 import argparse
-import importlib.util
 import logging
 import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
+from zircolite import cli as zircolite_script
 from zircolite import run_config
 from zircolite.run_config import EARLY_DESTS, flatten_groups, resolve
 
 WORKSPACE_ROOT = Path(__file__).parent.parent
-
-
-def load_zircolite_script():
-    """Load zircolite.py script directly, bypassing the package."""
-    spec = importlib.util.spec_from_file_location(
-        "zircolite_script", WORKSPACE_ROOT / "zircolite.py"
-    )
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-    return module
-
-
-zircolite_script = load_zircolite_script()
 
 
 def _args(**overrides):
