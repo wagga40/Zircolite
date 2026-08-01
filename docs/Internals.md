@@ -245,7 +245,7 @@ Use `--no-auto-mode` to disable automatic selection and use per-file mode by def
 2. **Dynamic Schema Discovery**: Database columns are added dynamically as new fields are discovered.
 3. **Batch Insertion**: Events are inserted in batches for optimal performance.
 4. **Rule Execution**: `ZircoliteCore` executes each rule's SQL query against the database. Matching results are displayed in a severity-sorted Rich Table with Rule, Events, and ATT&CK columns. In parallel mode, table display is suppressed per-worker (`show_table=False`) and an aggregated table is shown after all workers complete.
-5. **Result Output**: Matches are written to the output file (JSON or CSV) and optionally processed through templates. CSV from `execute_ruleset` uses a single `DictWriter` whose fieldnames are fixed from the first written match; extra keys in later rules are ignored (`extrasaction="ignore"`). User-facing details: [Usage.md — CSV detection output](Usage.md#csv-detection-output).
+5. **Result Output**: Matches are written to the output file (JSON or CSV) and optionally processed through templates. CSV from `execute_ruleset` takes its header from the events table schema (`PRAGMA table_info`) plus the rule metadata columns, so a rule returning wider rows than the ones before it does not lose fields; rows carry only their non-NULL values, which is why the first match row is not a safe source for the header. Keys outside the header are still ignored (`extrasaction="ignore"`). The parallel path builds its header differently, from the sorted union of the keys across all results. User-facing details: [Usage.md — CSV detection output](Usage.md#csv-detection-output).
 
 Benefits:
 - Fast single-pass processing

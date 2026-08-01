@@ -160,15 +160,47 @@ If shutdown takes longer than you want to wait (for example, a worker is mid-way
 | Code | Meaning |
 |------|---------|
 | `0` | The run completed. Detections may or may not have been found — that is not an error. |
-| `1` | The run did not produce the analysis it was asked for: a `--strict` parse error, a template that could not be written, a `--test-rules` file that could not be read or whose cases failed, or no input/database that could be analysed. |
+| `1` | The run did not produce the analysis it was asked for: a `--strict` parse error, a template that could not be written, a `--test-rules` file that could not be read or whose cases failed, no input/database that could be analysed, a ruleset that loaded no rules, or a configuration file that could not be honoured. |
 | `2` | The command line or configuration file is invalid (conflicting options, a bad timestamp, a `--dbfile` that already exists). Nothing was processed. |
 | `130` | Interrupted with `Ctrl+C`. |
 
 A run that could not read part of its input still exits `0` when the rest was analysed, but the affected files are named on the console and are never deleted by `--remove-events`.
 
+A run that loaded **no** rules exits `1`. It analysed nothing, and the empty
+output file it would otherwise leave behind is indistinguishable from a clean
+run that simply found nothing.
+
+`Ctrl+C` stops at the next checkpoint and exits `130`. Because the files after
+that point were never read, `--remove-events` deletes nothing on an interrupted
+run.
+
 ### Command-Line Options Summary
 
 For the full list of options and up-to-date help, run: `python3 zircolite.py -h`. The tables below summarize the main options.
+
+Several options carry alternative spellings kept for compatibility with older
+command lines. They behave identically to the form documented in the tables:
+
+| Documented form | Also accepted |
+|-----------------|---------------|
+| `-j`, `--json-input` | `--jsononly`, `--jsonline`, `--jsonl` |
+| `--json-array-input` | `--jsonarray`, `--json-array` |
+| `-D`, `--db-input` | `--dbonly` |
+| `-S`, `--sysmon-linux-input` | `--sysmon4linux`, `--sysmon-linux` |
+| `-AU`, `--auditd-input` | `--auditd` |
+| `-x`, `--xml-input` | `--xml` |
+| `--evtxtract-input` | `--evtxtract` |
+| `--csv-input` | `--csvonly` |
+| `--csv` | `--csv-output` |
+| `--keepflat` | `--keep-flat` |
+| `-d`, `--dbfile` | `--db-file` |
+| `-l`, `--logfile` | `--log-file` |
+| `-L`, `--limit` | `--limit-results` |
+| `-n`, `--nolog` | `--no-log` |
+| `--timefield` | `--time-field` |
+| `--unified-db` | `--all-in-one` |
+| `-T`, `--templateOutput` | `--template-output` |
+| `-e`, `--evtx` | `--events` |
 
 #### Input Files and Filtering
 
@@ -200,7 +232,7 @@ extension is globbed, unless `--fileext` or `--file-pattern` says otherwise.
 | *(none)* | Input logs are EVTX files | `.evtx` |
 | `-j`, `--json-input` | Input logs are in JSON lines format | `.json` |
 | `--json-array-input` | Input logs are in JSON array format | `.json` |
-| `--db-input` | Use a previously saved database file | *(path is given explicitly)* |
+| `-D`, `--db-input` | Use a previously saved database file | *(path is given explicitly)* |
 | `-S`, `--sysmon-linux-input` | Process Sysmon for Linux logs | `.log` |
 | `-AU`, `--auditd-input` | Process Auditd logs | `.log` |
 | `-x`, `--xml-input` | Process XML-formatted logs | `.xml` |
@@ -224,13 +256,13 @@ extension is globbed, unless `--fileext` or `--file-pattern` says otherwise.
 | Option | Description |
 |--------|-------------|
 | `-o`, `--outfile` | Output file for results |
-| `--csv` | Output results in CSV format |
-| `--csv-delimiter` | Delimiter for CSV output (default: `;`) |
+| `--csv`, `--csv-output` | Output results in CSV format. Accepts only one ruleset |
+| `--csv-delimiter` | Delimiter for CSV output, exactly one character (default: `;`) |
 | `--keepflat` | Save flattened events as JSON (only processed events; filtered events are excluded) |
 | `-d`, `--dbfile` | Save logs to SQLite database |
 | `-l`, `--logfile` | Log file name |
 | `--hashes` | Add xxhash64 to each event |
-| `-L`, `--limit` | Discard results exceeding limit (must be a positive integer, or `-1` to disable) |
+| `-L`, `--limit` | Discard results from any rule matching more than this many events (a positive integer, or `-1` to disable). Counted per input database: per file by default, across the whole corpus with `--unified-db` |
 | `--profile-rules` | Time each rule execution and print a performance report at the end (Rule Performance table). Forces sequential processing, so runs over many files are slower |
 
 > [!NOTE]
@@ -251,14 +283,14 @@ Use JSON when you need the values exactly as stored.
 
 | Option | Description |
 |--------|-------------|
-| `-c`, `--config` | YAML config file (JSON also accepted) |
+| `-c`, `--config` | Field-mapping config file, YAML or JSON (default: `config/config.yaml`) |
 | `-q`, `--quiet` | Quiet mode: suppress banner, progress bars, and info messages — only the summary panel and errors are shown |
 | `--debug` | Enable debug logging (includes full tracebacks on errors) |
-| `-n`, `--nolog` | Don't create log files |
-| `-RE`, `--remove-events` | Remove log files after analysis |
+| `-n`, `--nolog` | Don't create the log file **or the detections output file**. Files asked for explicitly with `--template`, `--dbfile`, `--keepflat` or `--package` are still written |
+| `-RE`, `--remove-events` | Delete the input log files that were read successfully. Files that failed to parse are kept, and an interrupted run keeps everything |
 | `-U`, `--update-rules` | Update rulesets |
 | `-v`, `--version` | Display version |
-| `--timefield` | Specify timestamp field name (default: 'SystemTime', auto-detects if not found) |
+| `--timefield` | Field holding the event timestamp. Left unset it is auto-detected, falling back to `SystemTime`; naming one pins it and turns detection off |
 | `--unified-db` | Force unified database mode (all files in one DB, enables cross-file correlation) |
 | `--no-auto-mode` | Disable automatic processing mode selection |
 | `--no-auto-detect` | Disable automatic log type and timestamp detection (use explicit format flags instead) |
@@ -282,7 +314,19 @@ Use JSON when you need the values exactly as stored.
 
 `--generate-config` writes a fully commented template covering every supported key, which is the reference for this file's schema. Note that it is a *run* configuration (which logs to read, which rules to apply, where to write) and is unrelated to `-c`/`--config`, which points at the field-mappings and transforms configuration.
 
-Some options have no equivalent key and must be passed on the command line: `-c`/`--config`, `-q`/`--quiet`, `--profile-rules`, `--archive-password`, `--no-auto-detect`, `--test-rules`, `--timesketch`, `--navigator-output`, `--transform-list`, `--pipeline-list`, `-U`/`--update-rules`, `-v`/`--version` and `--generate-config`.
+Passing a freshly generated file straight back with `-Y` changes nothing about
+how Zircolite behaves. Values whose default is conditional -- `output.file`,
+which follows `--csv`, and `processing.time_field`, which is auto-detected --
+ship commented out, because writing them counts as choosing them and would
+switch those behaviours off.
+
+A configuration file that cannot be honoured stops the run: an unknown key, a
+ruleset that is not there, an invalid `input.format`, an unparseable time
+filter. All of the problems are reported together, then Zircolite exits
+non-zero rather than continuing with something other than what the file asked
+for.
+
+Some options have no equivalent key and must be passed on the command line: `-c`/`--config`, `-q`/`--quiet`, `--profile-rules`, `--archive-password`, `--no-auto-detect`, `--test-rules`, `--timesketch`, `--navigator-output`, `--transform-list`, `--pipeline-list`, `-U`/`--update-rules`, `-v`/`--version`, `--generate-config` and `-Y`/`--yaml-config` itself.
 
 CLI arguments override the file, with one deliberate exception: `--transform-category`, `--add-index` and `--remove-index` are added to whatever the file lists rather than replacing it, since they name things to include rather than which things to use.
 
@@ -311,12 +355,12 @@ Parallel processing includes several automatic optimizations:
 
 | Option | Description |
 |--------|-------------|
-| `--template` | Jinja2 template for output |
-| `--templateOutput` | Output file for template |
+| `-t`, `--template` | Jinja2 template for output |
+| `-T`, `--templateOutput` | Output file for template |
 | `--template-append` | Append to template output files instead of overwriting them (see the caveat below) |
 | `--timesketch` | Shortcut: Timesketch template → `timesketch-<RAND>.json` |
 | `--navigator-output` | Shortcut: ATT&CK Navigator layer → `navigator-<RAND>.json` (or optional custom filename) |
-| `--package` | Create ZircoGui package |
+| `-G`, `--package` | Create ZircoGui package |
 | `--package-dir` | Directory for ZircoGui package |
 
 > [!WARNING]
@@ -1081,7 +1125,7 @@ Zircolite includes an early event filtering mechanism and automatic timestamp de
 
 ### Early Event Filtering
 
-Zircolite can skip events before processing based on **Channel** and **EventID**, so only events that could match at least one rule’s log source are loaded. This reduces memory and CPU when rules use a subset of channels/eventIDs. **Event filtering applies only to Windows logs** (EVTX, Windows JSON/XML, etc.) unless `filter_all_sources` is set; other log types (Linux, Auditd, generic JSON, etc.) are not filtered by channel/eventID.
+Zircolite can skip events before processing based on **Channel** and **EventID**, so only events that could match at least one rule’s log source are loaded. This reduces memory and CPU when rules use a subset of channels/eventIDs. **Sysmon for Linux and auditd are exempt**: they carry no Channel/EventID, so they are never filtered on it unless `filter_all_sources` is set. Every other format -- EVTX, JSON, JSON array, CSV, XML, EVTXtract and a saved database -- does go through the filter, because any of them can carry Windows-shaped events. An event with no usable Channel is kept.
 
 At load time Zircolite reports what it will filter on:
 

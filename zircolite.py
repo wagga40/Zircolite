@@ -162,8 +162,9 @@ def parse_arguments() -> argparse.Namespace:
         "--csv-output",
         help=(
             "Output results in CSV format (empty fields included). "
-            "Column headers are fixed from the first detection row; match fields that only "
-            "appear in later rules are omitted—use default JSON output for a full field set."
+            "The header covers every column of the events table, so a rule returning "
+            "wider rows than the ones before it does not lose fields. Rejects more "
+            "than one ruleset."
         ),
         action="store_true",
     )

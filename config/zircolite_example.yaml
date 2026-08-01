@@ -80,9 +80,9 @@ output:
   # file: detected_events.json
 
   # Output format: json, csv
-  # CSV fixes its column headers from the first detection row, so match
-  # fields that only appear in later rules are omitted. Use json for a
-  # complete field set. CSV also rejects more than one ruleset.
+  # CSV takes its header from every column of the events table, so a rule
+  # returning wider rows than the ones before it does not lose fields.
+  # CSV rejects more than one ruleset.
   format: json
 
   # Delimiter used when format is csv

@@ -762,10 +762,11 @@ class ZircoliteCore:
     ) -> tuple[Any | None, bool]:
         """Write rule results to output file. Returns (csv_writer, needs_comma_prefix).
 
-        In CSV mode, the writer is created once with fieldnames from the first match row
-        (plus rule metadata columns). Later rules may return wider rows; keys not in that
-        header are omitted, unlike JSON where each rule is serialized in full. See
-        docs/Usage.md (section CSV detection output).
+        In CSV mode the header comes from the events table schema plus the rule
+        metadata columns, not from the first match row -- see _csv_event_columns
+        for why. Rows carry only their non-NULL fields, so a header taken from
+        whichever detection happened to be written first silently dropped the
+        rest. See docs/Usage.md (section CSV detection output).
         """
         if self.csv_mode:
             # Initialize CSV writer if not already done

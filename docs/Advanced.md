@@ -612,14 +612,23 @@ python3 zircolite.py --evtx ./logs/ --ruleset rules/rules_windows_merged.json
 
 The automatic mode selection uses the following rules:
 
-| Condition | Mode Selected | Reason |
-|-----------|---------------|--------|
-| Single file | Per-file | No benefit from unified mode |
-| Low RAM (<2 GB available) | Per-file | Safer for memory-constrained systems |
-| Total data > Available RAM / 3 | Per-file | Avoid out-of-memory errors |
-| Many small files (>10 files, avg <5 MB) | Unified | Less overhead, enables cross-file correlation |
-| Few large files (<5 files, avg >50 MB) | Per-file | Memory efficient processing |
-| High RAM (>8 GB) + multiple files | Unified | Faster overall processing |
+They are tried in order, and the first one that matches decides:
+
+| # | Condition | Mode Selected | Reason |
+|---|-----------|---------------|--------|
+| 1 | Single file | Per-file | No benefit from unified mode |
+| 2 | Low RAM (< 2 GB available) | Per-file | Safer for memory-constrained systems |
+| 3 | Estimated footprint > 85% of available RAM | Per-file | Avoid out-of-memory errors |
+| 4 | Many small files (>= 10 files, avg <= 5 MB) | Unified | Less overhead, enables cross-file correlation |
+| 5 | Few large files (< 5 files, avg >= 50 MB) | Per-file | Memory efficient processing |
+| 6 | High RAM (>= 8 GB) and >= 3 files | Per-file | Leaves the files free to be processed in parallel |
+| 7 | Any other run of >= 10 files | Unified | Enables cross-file correlation |
+
+Rule 3 compares an *estimate*, not the raw size on disk: an in-memory SQLite
+database is several times larger than the log it was built from, so the total
+is multiplied by 3.5 to 5.0 depending on average file size before being
+compared against 85% of available RAM. In practice it triggers somewhere
+between RAM/4 and RAM/6 of input.
 
 #### Controlling Processing Mode
 
@@ -651,9 +660,13 @@ Zircolite automatically enables parallel processing when it's beneficial. The pa
 | Condition | Parallel | Reason |
 |-----------|----------|--------|
 | Single file | Disabled | No benefit |
-| Very low RAM (<1 GB) | Disabled | Safety |
-| Memory per file > 60% usable RAM | Disabled | Prevent OOM |
+| Very low RAM (< 1 GB) | Disabled | Safety |
+| Estimated footprint of the **largest** file > 60% of usable RAM | Disabled | Prevent OOM |
+| Fewer than 2 workers affordable | Disabled | Insufficient resources for parallel processing |
 | Multiple files + sufficient memory | Enabled | Faster processing |
+
+The memory test uses the largest single file rather than the average, because
+one outsized file is what actually exhausts a worker.
 
 #### Manual Parallel Configuration
 
@@ -698,7 +711,7 @@ There are several ways to speed up Zircolite:
 
 ### Early Event Filtering
 
-Zircolite includes an **early event filtering** mechanism that skips events before flattening and database insertion. This reduces memory and CPU when your rules only reference a subset of log sources. **Event filtering applies only to Windows logs** (EVTX, Windows JSON/XML, Winlogbeat, etc.) unless `event_filter.filter_all_sources` is set; other log types (Linux, Auditd, generic JSON, etc.) are not filtered by channel/eventID.
+Zircolite includes an **early event filtering** mechanism that skips events before flattening and database insertion. This reduces memory and CPU when your rules only reference a subset of log sources. **Sysmon for Linux and auditd are exempt**: they carry no Channel/EventID, so they are never filtered on it unless `event_filter.filter_all_sources` is set. Every other format -- EVTX, JSON, JSON array, CSV, XML, EVTXtract and a saved database -- does go through the filter, because any of them can carry Windows-shaped events. An event with no usable Channel is kept.
 
 #### How the filter is built
 
