@@ -148,11 +148,14 @@ static test is the primary guard and this one is the backstop.
 
 ## Shape
 
-Branch `fix-frozen-gui-package` off `master`. Three commits:
+Branch `fix-frozen-gui-package` off `master`. Five commits, each independently
+reviewable:
 
-1. The resolver change and the template call sites, with their tests.
-2. `Zircolite.spec` plus both guards.
-3. Documentation.
+1. The resolver search order, with its tests.
+2. The `--timesketch` / `--navigator-output` template call sites, with a test.
+3. `Zircolite.spec` plus the static spec/call-site guard.
+4. The `--package` step in `build_pyinstaller.yml`.
+5. Documentation.
 
 The defect predates and is independent of the CLI move, so this can ship on its
 own.
