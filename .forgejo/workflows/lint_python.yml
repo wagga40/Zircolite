@@ -1,0 +1,52 @@
+name: lint_python
+
+# Mirror of .github/workflows/lint_python.yml. Forgejo reads .forgejo/workflows
+# and ignores .github/workflows entirely, so the two never both run here.
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  lint_python:
+    runs-on: ubuntu-latest
+    # The runner's ubuntu-latest label is a Debian image, and actions/setup-python
+    # publishes Linux builds for Ubuntu only -- it fails there with "version not
+    # found for this operating system". This image is Ubuntu, so the action
+    # behaves as it does on GitHub.
+    container:
+      image: ghcr.io/catthehacker/ubuntu:act-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      # data.forgejo.org, which resolves bare `uses:` refs on this instance, has
+      # no mirror for pdm-project/setup-pdm. pip gives the same toolchain.
+      - name: Install pdm
+        run: python -m pip install --upgrade --quiet pip pdm
+
+      - run: pdm install --dev
+
+      # Both are clean, so both block. The rule set and its exemptions live in
+      # pyproject.toml; without them ruff lints against whatever its current
+      # default happens to be and the result changes with the installed version.
+      - name: Lint
+        run: pdm run ruff check .
+      # This covers the CLI too: zircolite.py is a shim over zircolite/cli.py.
+      # Naming zircolite.py here as well would not add the shim, it would abort
+      # the whole run -- the script shares its name with the package, and mypy
+      # answers "Duplicate module named zircolite" without checking anything.
+      - name: Types
+        run: pdm run python -m mypy zircolite
+
+      # Formatting is not enforced: running `ruff format` over this codebase
+      # would rewrite most of it and bury every behavioural diff.
+      - name: Format (advisory)
+        run: pdm run ruff format --check zircolite/ zircolite.py || true

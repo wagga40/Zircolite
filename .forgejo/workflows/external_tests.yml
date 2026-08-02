@@ -1,0 +1,47 @@
+name: external_tests
+
+# Mirror of .github/workflows/external_tests.yml.
+#
+# This job runs on the host label, not in a container, and that is deliberate.
+# run_external_tests.py builds its own `docker run -v <path>:/data/...` commands
+# from paths it resolves itself. In a container job talking to the host's Docker
+# daemon those paths are resolved against the host, so the scenario input/
+# directories silently become empty and the assertions fail for the wrong
+# reason. Host mode is the only arrangement where the daemon and the harness
+# see the same filesystem.
+#
+# Host requirements are listed in .forgejo/README.md.
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  external_tests:
+    runs-on: self-hosted
+    steps:
+      - uses: actions/checkout@v4
+
+      # The harness itself only imports rich (yaml is imported lazily). Every
+      # Zircolite dependency lives inside the image it builds, so installing the
+      # project here would be wasted work.
+      - name: Run scenarios
+        run: |
+          venv="$(mktemp -d)/harness"
+          python3 -m venv "$venv"
+          "$venv/bin/pip" install --quiet rich pyyaml
+          "$venv/bin/python" tests/external/run_external_tests.py --build --parallel 4
+
+      # v4 refuses to run against a non-github.com API; see build_pyinstaller.yml.
+      - name: Upload results
+        if: always()
+        uses: actions/upload-artifact@v3
+        with:
+          name: external-test-results
+          path: results/external-tests.json
+          if-no-files-found: ignore

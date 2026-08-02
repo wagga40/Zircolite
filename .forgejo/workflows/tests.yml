@@ -1,0 +1,42 @@
+name: tests
+
+# Mirror of .github/workflows/tests.yml, restricted to the legs a single
+# x86_64 Linux runner can serve. The windows-latest and macos-latest legs of
+# the GitHub matrix have no counterpart here and stay GitHub-only.
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  tests:
+    runs-on: ubuntu-latest
+    # actions/setup-python has no Debian builds and the runner's ubuntu-latest
+    # label is a Debian image; this one is Ubuntu, as on GitHub.
+    container:
+      image: ghcr.io/catthehacker/ubuntu:act-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.10", "3.13"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install pdm
+        run: python -m pip install --upgrade --quiet pip pdm
+
+      - name: Install dependencies
+        run: pdm install --dev
+
+      # No `|| true`: the suite exists to fail the build. Test fixtures are
+      # tracked, so a missing one is a broken checkout and must fail too.
+      - name: Run tests
+        run: pdm run pytest

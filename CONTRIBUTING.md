@@ -35,6 +35,11 @@ Markers: `slow`, `integration`, `requires_lxml`, `requires_sigma`,
 The suite must be green before you open a pull request; CI runs it on every
 push and pull request across Linux, macOS and Windows.
 
+`.forgejo/workflows/` mirrors those workflows for a self-hosted Forgejo
+instance, so CI can be rehearsed before pushing. It covers Linux x86_64 only —
+see `.forgejo/README.md` for what it does and does not reach, and note that
+Forgejo ignores `.github/workflows/` entirely whenever `.forgejo/` is present.
+
 ### Test fixtures are tracked
 
 `tests/fixtures/` holds real sample logs (EVTX, auditd, Sysmon for Linux,
