@@ -1210,7 +1210,7 @@ files = [
 
 [[package]]
 name = "pysigma"
-version = "1.4.0"
+version = "1.5.0"
 requires_python = "<4.0,>=3.10"
 summary = "Sigma rule processing and conversion tools"
 groups = ["default"]
@@ -1219,22 +1219,22 @@ dependencies = [
     "diskcache-stubs>=5.6.3",
     "diskcache<6.0.0,>=5.6.3",
     "jinja2<4.0.0,>=3.1.6",
-    "jq<2.0,>=1.6",
+    "jq<2.0,>=1.12",
     "packaging<27.0,>=26.0",
     "pyparsing<4.0.0,>=3.2.5",
     "pyyaml<7.0.0,>=6.0.3",
     "requests<3.0.0,>=2.32.5",
-    "types-pyyaml<7.0.0.0,>=6.0.12.20250915",
-    "typing-extensions<5.0.0,>=4.15.0",
+    "types-pyyaml<7.0.0.0,>=6.0.12.20260724",
+    "typing-extensions<5.0.0,>=4.16.0",
 ]
 files = [
-    {file = "pysigma-1.4.0-py3-none-any.whl", hash = "sha256:e04db8cce4f0fd7dc8a3a64bc6d3ecaa49b7939d55ee42b12c7152d143eced47"},
-    {file = "pysigma-1.4.0.tar.gz", hash = "sha256:0a9cc76f76470e8097543b653aecf91e59f7de1199c67e36fc57f2831b35eed7"},
+    {file = "pysigma-1.5.0-py3-none-any.whl", hash = "sha256:871452a262aedb17d9e85344142944c5a0ac50e8b57408ec355efeb1329231b6"},
+    {file = "pysigma-1.5.0.tar.gz", hash = "sha256:2c258cf676d2896c94279fb54c7eea664118cf08285bde122b4df75cc7b6b194"},
 ]
 
 [[package]]
 name = "pysigma-backend-sqlite"
-version = "1.2.0"
+version = "1.2.2"
 requires_python = "<4.0,>=3.10"
 summary = "pySigma sqlite backend"
 groups = ["default"]
@@ -1243,8 +1243,8 @@ dependencies = [
     "pysigma<2,>=1",
 ]
 files = [
-    {file = "pysigma_backend_sqlite-1.2.0-py3-none-any.whl", hash = "sha256:c7f0e1e768fccdec038396bf3c5a4f2bde73857761cd7fb0470fb72ceec1ea92"},
-    {file = "pysigma_backend_sqlite-1.2.0.tar.gz", hash = "sha256:19b0b14313721b82c1c7b54877331a52201b8ddbc79d5c5b7ef5afc84300aa99"},
+    {file = "pysigma_backend_sqlite-1.2.2-py3-none-any.whl", hash = "sha256:db553c8af13aa4290a5769f4e3754ecd8970a33254b8d00a65df48039cdc0e76"},
+    {file = "pysigma_backend_sqlite-1.2.2.tar.gz", hash = "sha256:3970518045192d5aeb93f444221dce4661388e7b5b1aab289568930dacbfd247"},
 ]
 
 [[package]]
@@ -1497,26 +1497,26 @@ files = [
 
 [[package]]
 name = "types-pyyaml"
-version = "6.0.12.20250915"
-requires_python = ">=3.9"
+version = "6.0.12.20260724"
+requires_python = ">=3.10"
 summary = "Typing stubs for PyYAML"
 groups = ["default"]
 marker = "python_version == \"3.14\""
 files = [
-    {file = "types_pyyaml-6.0.12.20250915-py3-none-any.whl", hash = "sha256:e7d4d9e064e89a3b3cae120b4990cd370874d2bf12fa5f46c97018dd5d3c9ab6"},
-    {file = "types_pyyaml-6.0.12.20250915.tar.gz", hash = "sha256:0f8b54a528c303f0e6f7165687dd33fafa81c807fcac23f632b63aa624ced1d3"},
+    {file = "types_pyyaml-6.0.12.20260724-py3-none-any.whl", hash = "sha256:d57db930a4b2efbc57cf430ec8882765d246929432fa253092f383902329a453"},
+    {file = "types_pyyaml-6.0.12.20260724.tar.gz", hash = "sha256:3c1ce1bb73cd5ec02e90390c2b1f00e810d241d8825fd73ff359696839271b6b"},
 ]
 
 [[package]]
 name = "typing-extensions"
-version = "4.15.0"
+version = "4.16.0"
 requires_python = ">=3.9"
 summary = "Backported and Experimental Type Hints for Python 3.9+"
 groups = ["default", "dev"]
 marker = "python_version == \"3.14\""
 files = [
-    {file = "typing_extensions-4.15.0-py3-none-any.whl", hash = "sha256:f0fa19c6845758ab08074a0cfa8b7aecb71c999ca73d62883bc25cc018c4e548"},
-    {file = "typing_extensions-4.15.0.tar.gz", hash = "sha256:0cea48d173cc12fa28ecabc3b837ea3cf6f38c6d1136f85cbaaf598984861466"},
+    {file = "typing_extensions-4.16.0-py3-none-any.whl", hash = "sha256:481caa481374e813c1b176ada14e97f1f67a4539ce9cfeb3f350d78d6370c2e8"},
+    {file = "typing_extensions-4.16.0.tar.gz", hash = "sha256:dc983d19a509c94dba722ee6abd33940f7c05a89e243c47e907eb4db6f1a43e5"},
 ]
 
 [[package]]
