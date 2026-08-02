@@ -538,14 +538,24 @@ def resolve_run_config(args, logger) -> argparse.Namespace:
 ################################################################
 def _bundled_asset(*parts: str) -> Path:
     """Resolve a file shipped with Zircolite, independent of the current directory."""
-    # A PyInstaller build unpacks config/, rules/ and templates/ beside the
-    # bootloader rather than beside this module, and the module's own frozen
-    # path is an implementation detail of whichever PyInstaller version built
-    # it. Ask the bootloader instead of counting directories.
+    # A PyInstaller build unpacks config/, rules/, templates/ and gui/ into a
+    # temporary directory the bootloader names, but the release archive also
+    # ships them beside the binary, where a user can edit a rule or drop in a
+    # newer Mini-GUI. Prefer that copy, fall back to the bundle, and when
+    # neither holds the file name the editable location -- it is the only one
+    # of the two a user can do anything about.
+    roots: list[Path] = []
     frozen_root = getattr(sys, "_MEIPASS", None)
     if frozen_root is not None:
-        return Path(frozen_root).joinpath(*parts)
-    return Path(__file__).resolve().parent.parent.joinpath(*parts)
+        roots.append(Path(sys.executable).resolve().parent)
+        roots.append(Path(frozen_root))
+    roots.append(Path(__file__).resolve().parent.parent)
+
+    for root in roots:
+        candidate = root.joinpath(*parts)
+        if candidate.is_file():
+            return candidate
+    return roots[0].joinpath(*parts)
 
 
 def _resolve_default_path(value: str, *parts: str) -> str:
@@ -1137,7 +1147,9 @@ def main() -> None:
             args.template = []
         if args.templateOutput is None:
             args.templateOutput = []
-        args.template.append([str(_bundled_asset("templates", "exportForTimesketch.tmpl"))])
+        args.template.append([_resolve_default_path(
+            "templates/exportForTimesketch.tmpl", "templates", "exportForTimesketch.tmpl"
+        )])
         args.templateOutput.append([out_name])
 
     # Apply --navigator-output shortcut
@@ -1148,7 +1160,9 @@ def main() -> None:
             args.template = []
         if args.templateOutput is None:
             args.templateOutput = []
-        args.template.append([str(_bundled_asset("templates", "exportForAttackNavigator.tmpl"))])
+        args.template.append([_resolve_default_path(
+            "templates/exportForAttackNavigator.tmpl", "templates", "exportForAttackNavigator.tmpl"
+        )])
         args.templateOutput.append([nav_out])
 
     # Handle rulesets

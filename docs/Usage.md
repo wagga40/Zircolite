@@ -368,6 +368,10 @@ Parallel processing includes several automatic optimizations:
 | `-G`, `--package` | Create ZircoGui package |
 | `--package-dir` | Directory for ZircoGui package |
 
+Both shortcuts use the template of the same name from `templates/` in the
+working directory when there is one, and the shipped template otherwise. The
+same rule applies to `-c`/`--config` and `-r`/`--ruleset` defaults.
+
 > [!WARNING]
 > `--template-append` is only safe for templates whose output is a stream of independent records (for example NDJSON exports for Splunk or Timesketch). Templates that emit a **single JSON document** — the ATT&CK Navigator layer produced by `--navigator-output` in particular — become invalid when a second document is concatenated onto the first.
 

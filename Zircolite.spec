@@ -1,7 +1,7 @@
 # -*- mode: python ; coding: utf-8 -*-
 from PyInstaller.utils.hooks import collect_all
 
-datas = [('config', 'config'), ('rules', 'rules'), ('templates', 'templates')]
+datas = [('config', 'config'), ('gui', 'gui'), ('rules', 'rules'), ('templates', 'templates')]
 binaries = []
 hiddenimports = ['zircolite', 'zircolite.config', 'zircolite.config_loader', 'zircolite.console', 'zircolite.core', 'zircolite.detector', 'zircolite.extractor', 'zircolite.parallel', 'zircolite.rules', 'zircolite.streaming', 'zircolite.templates', 'zircolite.utils']
 tmp_ret = collect_all('evtx')

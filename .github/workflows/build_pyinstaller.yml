@@ -131,6 +131,31 @@ jobs:
           "
         shell: bash
 
+      # Run from a directory holding nothing but the binary. The prepared
+      # release package has gui/ beside it, which the asset search prefers, so
+      # a --package run from there would pass even with the archive missing
+      # from the bundle -- exactly the regression this guards.
+      - name: Verify --package works from the bundle alone
+        run: |
+          mkdir -p bare
+          cp "${{ matrix.binary_path }}" bare/
+          cd bare
+          ./${{ matrix.binary_name }} -e ../evtx_sample.evtx -r ../rules/rules_windows_sysmon.json -o ../detected_for_package.json --package
+          cd ..
+          python -c "
+          import pathlib, sys, zipfile
+          zips = sorted(pathlib.Path('bare').glob('zircogui-output-*.zip'))
+          if not zips:
+              print('No zircogui-output-*.zip: gui/zircogui.zip is not in the bundle')
+              sys.exit(1)
+          names = zipfile.ZipFile(zips[0]).namelist()
+          if 'index.html' not in names:
+              print(f'{zips[0]} has no index.html; got {names[:10]}')
+              sys.exit(1)
+          print(f'Package OK: {zips[0]} ({len(names)} entries)')
+          "
+        shell: bash
+
       - name: Prepare release package
         run: |
           pkg="${{ matrix.artifact_name }}"
