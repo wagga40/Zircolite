@@ -137,3 +137,82 @@ def test_the_entry_point_runs_from_another_directory(tmp_path):
     )
 
     assert result.returncode == 0, result.stderr
+
+
+def _spec_bundled_directories() -> set[str]:
+    """Destination names in the literal ``datas = [...]`` of Zircolite.spec.
+
+    The ``datas += collect_all(...)`` lines below it carry third-party payloads
+    resolved at build time, not Zircolite's own assets, so they are not read.
+    """
+    spec = ast.parse((WORKSPACE_ROOT / "Zircolite.spec").read_text(encoding="utf-8"))
+
+    for node in spec.body:
+        if not isinstance(node, ast.Assign):
+            continue
+        if not any(isinstance(target, ast.Name) and target.id == "datas" for target in node.targets):
+            continue
+        assert isinstance(node.value, ast.List), (
+            "datas must stay a list literal, otherwise nothing here can read it"
+        )
+        names = set()
+        for element in node.value.elts:
+            assert isinstance(element, ast.Tuple) and len(element.elts) == 2, (
+                "every datas entry must stay a (source, destination) pair"
+            )
+            destination = element.elts[1]
+            assert isinstance(destination, ast.Constant) and isinstance(destination.value, str)
+            names.add(destination.value)
+        return names
+
+    raise AssertionError("Zircolite.spec has no top-level `datas = [...]` assignment")
+
+
+def _asset_directories_the_code_asks_for() -> tuple[set[str], list[str]]:
+    """Top-level directories the package resolves through the two asset helpers.
+
+    ``_bundled_asset`` takes the directory first; ``_resolve_default_path`` takes
+    the relative default first and the directory second. The forwarding call
+    inside ``_resolve_default_path`` passes ``*parts`` and is skipped.
+    """
+    positions = {"_bundled_asset": 0, "_resolve_default_path": 1}
+    wanted: set[str] = set()
+    unreadable: list[str] = []
+
+    for module in sorted((WORKSPACE_ROOT / "zircolite").glob("*.py")):
+        tree = ast.parse(module.read_text(encoding="utf-8"))
+        for node in ast.walk(tree):
+            if not isinstance(node, ast.Call) or not isinstance(node.func, ast.Name):
+                continue
+            index = positions.get(node.func.id)
+            if index is None or len(node.args) <= index:
+                continue
+            argument = node.args[index]
+            if isinstance(argument, ast.Starred):
+                continue
+            if isinstance(argument, ast.Constant) and isinstance(argument.value, str):
+                wanted.add(argument.value)
+            else:
+                unreadable.append(f"{module.name}:{node.lineno}")
+
+    return wanted, unreadable
+
+
+def test_every_asset_the_code_asks_for_is_bundled():
+    """A directory reachable through the asset helpers but absent from the spec
+    resolves to nothing in a PyInstaller build. gui/ was missing that way and
+    --package failed in every binary ever shipped."""
+    wanted, unreadable = _asset_directories_the_code_asks_for()
+
+    assert not unreadable, (
+        "asset helper called with a computed directory at "
+        f"{', '.join(unreadable)}; this test can no longer tell what needs bundling"
+    )
+    assert wanted, "no asset helper call sites found, so the scan is broken, not clean"
+
+    missing = wanted - _spec_bundled_directories()
+
+    assert not missing, (
+        f"Zircolite.spec does not bundle {sorted(missing)}; a PyInstaller build "
+        "cannot resolve them and whatever needs them fails at runtime"
+    )
