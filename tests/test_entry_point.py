@@ -70,9 +70,52 @@ def test_bundled_assets_resolve_from_another_directory(parts, tmp_path, monkeypa
 
 def test_bundled_asset_uses_the_bootloader_root_when_frozen(tmp_path, monkeypatch):
     """A PyInstaller build unpacks the data beside the bootloader, not beside the module."""
-    monkeypatch.setattr(sys, "_MEIPASS", str(tmp_path), raising=False)
+    unpacked = tmp_path / "unpacked"
+    (unpacked / "config").mkdir(parents=True)
+    (unpacked / "config" / "config.yaml").write_text("", encoding="utf-8")
+    beside = tmp_path / "beside"
+    beside.mkdir()
 
-    assert zircolite_cli._bundled_asset("config", "config.yaml") == tmp_path / "config" / "config.yaml"
+    monkeypatch.setattr(sys, "executable", str(beside / "Zircolite"))
+    monkeypatch.setattr(sys, "_MEIPASS", str(unpacked), raising=False)
+
+    resolved = zircolite_cli._bundled_asset("config", "config.yaml")
+
+    assert resolved == unpacked / "config" / "config.yaml"
+
+
+def test_bundled_asset_prefers_the_copy_beside_the_binary(tmp_path, monkeypatch):
+    """The release archive ships gui/ and rules/ beside the binary so they can be edited."""
+    unpacked = tmp_path / "unpacked"
+    beside = tmp_path / "beside"
+    for root in (unpacked, beside):
+        (root / "gui").mkdir(parents=True)
+        (root / "gui" / "zircogui.zip").write_bytes(b"")
+
+    monkeypatch.setattr(sys, "executable", str(beside / "Zircolite"))
+    monkeypatch.setattr(sys, "_MEIPASS", str(unpacked), raising=False)
+
+    resolved = zircolite_cli._bundled_asset("gui", "zircogui.zip")
+
+    assert resolved == beside / "gui" / "zircogui.zip"
+
+
+def test_bundled_asset_names_a_path_a_user_can_act_on_when_nothing_holds_the_file(tmp_path, monkeypatch):
+    """The caller prints this path; a temporary _MEIxxxx directory tells a user nothing."""
+    unpacked = tmp_path / "unpacked"
+    unpacked.mkdir()
+    beside = tmp_path / "beside"
+    beside.mkdir()
+
+    monkeypatch.setattr(sys, "executable", str(beside / "Zircolite"))
+    monkeypatch.setattr(sys, "_MEIPASS", str(unpacked), raising=False)
+
+    # A name no root can hold. Asking for a real asset would find the source
+    # tree, which is the third root here but is inside _MEIPASS in a real build.
+    resolved = zircolite_cli._bundled_asset("gui", "no-such-archive.zip")
+
+    assert resolved == beside / "gui" / "no-such-archive.zip"
+    assert not resolved.is_file()
 
 
 @pytest.mark.parametrize("argv", [
