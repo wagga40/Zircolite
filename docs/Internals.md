@@ -350,6 +350,35 @@ Transforms use **RestrictedPython** for safe, sandboxed execution of custom Pyth
     └── utils.py            # Utility functions, MemoryTracker, heuristics
 ```
 
+### Bundled Asset Resolution
+
+`config/`, `rules/`, `templates/` and `gui/` ship with Zircolite, and the paths
+that point at them are relative, so they have to resolve whatever the working
+directory is. Two helpers in `zircolite/cli.py` do it.
+
+`_resolve_default_path` handles values a user can override on the command line
+(`--config`, `--ruleset`, and the templates behind `--timesketch` and
+`--navigator-output`): a file of that name in the working directory wins, and
+anything else falls through to `_bundled_asset`.
+
+`_bundled_asset` returns the first of these that holds the file:
+
+| Order | Root | Applies to |
+|-------|------|-----------|
+| 1 | the directory holding the executable | PyInstaller builds only |
+| 2 | `sys._MEIPASS`, where PyInstaller unpacks `datas` | PyInstaller builds only |
+| 3 | the repository root, two levels up from `cli.py` | always |
+
+Root 1 comes first because the release archive ships `config/`, `rules/`,
+`templates/` and `gui/` beside the binary so they can be edited; a rule set
+updated there takes effect without a rebuild. When no root holds the file the
+first candidate is returned, so the error names a directory the user can write
+to rather than a temporary `_MEIxxxx` path.
+
+Anything reachable this way must be listed in `datas` in `Zircolite.spec`.
+`tests/test_entry_point.py::test_every_asset_the_code_asks_for_is_bundled`
+fails the build when it is not.
+
 ### Why the format registry matters
 
 `formats.py` holds one row per input format: its CLI flag, YAML `input.format`

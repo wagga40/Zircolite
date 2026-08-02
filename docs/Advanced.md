@@ -975,6 +975,12 @@ python3 zircolite.py --evtx sample.evtx \
     --package --package-dir /path/to/output
 ```
 
+`--package` needs `gui/zircogui.zip`. Zircolite looks for it beside the
+executable first, then inside the binary itself — the standalone binaries carry
+a copy, so `--package` works with nothing on disk but the executable. Dropping
+an updated `gui/zircogui.zip` next to the binary replaces the built-in Mini-GUI
+without a rebuild.
+
 ### Manual Generation
 
 You need to generate a `data.js` file with the `exportForZircoGui.tmpl` template, decompress the `zircogui.zip` file in the [gui](https://github.com/wagga40/Zircolite/tree/master/gui/) directory, and replace the `data.js` file in it with yours:
