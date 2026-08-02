@@ -43,6 +43,8 @@ def collect_raw_events(path: Path, limit: int) -> list:
         try:
             parser = PyEvtxParser(str(evtx_file))
             for record in parser.records_json():
+                if not record:
+                    continue
                 raws.append(orjson.loads(record["data"]))
                 if len(raws) >= limit:
                     return raws

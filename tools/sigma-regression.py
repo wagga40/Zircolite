@@ -6,7 +6,12 @@ Uses the Sigma repository's regression_data (see
 https://github.com/SigmaHQ/sigma/tree/master/regression_data): each test case
 directory contains an info.yml (rule metadata and test paths), plus EVTX and/or
 JSON files. This script runs detection on those files and checks that the
-expected rules fire with the expected match counts.
+referenced rules fire.
+
+Rules are resolved by Sigma id, falling back to title, and every pipeline
+variant an id resolves to is run against a single ingest of the data file. See
+`expectation_met` for what counts as a pass -- `match_count` states that the
+rule fired, not how many records it fired on.
 
 Requires:
 - A regression data directory and a rules path (or Zircolite ruleset file).
@@ -30,7 +35,6 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-import sqlparse
 import yaml
 from rich.console import Console
 from rich.panel import Panel
@@ -45,7 +49,6 @@ from rich.progress import (
 from rich.rule import Rule
 from rich.table import Table
 from rich.theme import Theme
-from sqlparse.tokens import Name as TokenName
 
 # Zircolite package (run from project root or with PYTHONPATH)
 try:
@@ -53,6 +56,7 @@ try:
     from zircolite.console import make_file_link, set_quiet_mode
     from zircolite.core import ZircoliteCore
     from zircolite.rules import RulesetHandler
+    from zircolite.sqlscan import column_refs
     from zircolite.utils import init_logger
 except ImportError:
     # Allow running from repo root: add parent to path
@@ -63,6 +67,7 @@ except ImportError:
     from zircolite.console import make_file_link, set_quiet_mode
     from zircolite.core import ZircoliteCore
     from zircolite.rules import RulesetHandler
+    from zircolite.sqlscan import column_refs
     from zircolite.utils import init_logger
 
 # Rich theme aligned with Zircolite
@@ -76,16 +81,6 @@ REGRESSION_THEME = Theme({
     "header": "bold cyan",
 })
 console = Console(theme=REGRESSION_THEME, highlight=False)
-
-
-def _file_link(path: Path, display: str | None = None) -> str:
-    """Rich markup for a clickable file/dir link, with optional display text."""
-    try:
-        uri = path.resolve().as_uri()
-        text = display if display is not None else str(path)
-        return f"[link={uri}][cyan]{text}[/][/link]"
-    except (ValueError, OSError):
-        return f"[cyan]{display or path}[/]"
 
 BANNER = """\
 [bold white]-= Sigma regression_data tests =-[/]"""
@@ -108,7 +103,6 @@ class RegressionTestEntry:
     type: str  # 'evtx' or 'json'
     path: str  # relative to sigma repo root
     match_count: int
-    match_count_explicit: bool = True  # False when inferred from test name (no match_count in info.yml)
     provider: str | None = None
 
 
@@ -118,6 +112,29 @@ class TestCase:
     dir_path: Path
     rule_refs: list[RuleRef]
     tests: list[RegressionTestEntry]
+
+
+def expectation_met(entry: RegressionTestEntry, count: int) -> bool:
+    """Whether *count* matches satisfies *entry*.
+
+    Sigma's ``match_count`` says the rule fired, not how many records it fired
+    on: every entry in regression_data is a positive test declaring ``1``, and
+    a sample commonly carries several records that all legitimately match --
+    the IE Change Domain Zone capture holds three. Zircolite counts matching
+    events, so demanding equality fails correct detections. A positive test
+    therefore passes on *at least* the declared count; only a negative one
+    (``match_count: 0``) demands silence.
+    """
+    if entry.match_count == 0:
+        return count == 0
+    return count >= entry.match_count
+
+
+def expectation_label(entry: RegressionTestEntry) -> str:
+    """How the expectation reads in the console and the report."""
+    if entry.match_count == 0:
+        return "0"
+    return f"≥{entry.match_count}"
 
 
 def load_info_yml(path: Path) -> dict[str, Any] | None:
@@ -158,17 +175,11 @@ def parse_test_case(dir_path: Path) -> TestCase | None:
         path_str = item.get("path") or ""
         if "match_count" in item and item["match_count"] is not None:
             match_count = int(item["match_count"])
-            match_count_explicit = True
         else:
-            # Sigma info.yml often omits match_count; infer from test name
-            name_lower = name.lower()
-            if "positive" in name_lower:
-                match_count = 1
-            elif "negative" in name_lower:
-                match_count = 0
-            else:
-                match_count = 0
-            match_count_explicit = False
+            # Sigma info.yml often omits match_count; the test name carries the
+            # intent. An unrecognised name counts as positive: a test that
+            # silently expects nothing would pass on a rule that never fires.
+            match_count = 0 if "negative" in name.lower() else 1
         provider = item.get("provider")
         if path_str and typ in ("evtx", "json"):
             tests.append(
@@ -177,7 +188,6 @@ def parse_test_case(dir_path: Path) -> TestCase | None:
                     type=typ,
                     path=path_str,
                     match_count=match_count,
-                    match_count_explicit=match_count_explicit,
                     provider=provider,
                 )
             )
@@ -226,61 +236,51 @@ def resolve_data_file(
     return None
 
 
-def build_rules_index_by_title(ruleset: list[dict[str, Any]]) -> dict[str, list[dict[str, Any]]]:
-    """Build title -> rules index while preserving ruleset order."""
-    index: dict[str, list[dict[str, Any]]] = {}
-    for rule in ruleset:
-        title = rule.get("title")
-        if isinstance(title, str) and title:
-            index.setdefault(title, []).append(rule)
-    return index
+class RulesIndex:
+    """Ruleset lookup by Sigma rule id, falling back to title.
 
+    A merged Zircolite ruleset carries one rule per pipeline variant, all
+    sharing the Sigma id but suffixing the title -- "… - Generic" and
+    "… - Sysmon". Keying on the title alone therefore misses most of a merged
+    ruleset: against rules_windows_merged.json, 112 of 136 regression cases
+    resolve by id and by id only. Titles still matter because a converted
+    ruleset need not carry ids.
+    """
 
-def find_rules_by_title(
-    rules_by_title: dict[str, list[dict[str, Any]]],
-    titles: list[str],
-) -> list[dict[str, Any]]:
-    """Return rules matching titles, preserving title order and removing duplicates."""
-    matched: list[dict[str, Any]] = []
-    seen_ids: set[int] = set()
-    for title in titles:
-        for rule in rules_by_title.get(title, []):
-            rule_obj_id = id(rule)
-            if rule_obj_id in seen_ids:
-                continue
-            seen_ids.add(rule_obj_id)
-            matched.append(rule)
-    return matched
+    def __init__(self, ruleset: list[dict[str, Any]]):
+        self.by_id: dict[str, list[dict[str, Any]]] = {}
+        self.by_title: dict[str, list[dict[str, Any]]] = {}
+        for rule in ruleset:
+            rule_id = rule.get("id")
+            if isinstance(rule_id, str) and rule_id:
+                self.by_id.setdefault(rule_id, []).append(rule)
+            title = rule.get("title")
+            if isinstance(title, str) and title:
+                self.by_title.setdefault(title, []).append(rule)
+
+    def find(self, refs: list[RuleRef]) -> list[dict[str, Any]]:
+        """Every rule the refs resolve to, in ruleset order, without duplicates."""
+        matched: list[dict[str, Any]] = []
+        seen: set[int] = set()
+        for ref in refs:
+            for rule in self.by_id.get(ref.id) or self.by_title.get(ref.title, []):
+                if id(rule) in seen:
+                    continue
+                seen.add(id(rule))
+                matched.append(rule)
+        return matched
 
 
 # Column where case name starts on line 1: prefix "    " + "[!] " = 8. Continuation lines use same indent.
 _FAILED_RULE_ALIGN = 8
 
-# Table name in Zircolite SQL (exclude from column set)
-_SQLITE_LOGS_TABLE = "logs"
-
 
 def _columns_used_in_sql(sql_list: list[str]) -> set[str]:
-    """Extract column names from SQL using sqlparse (quoted and unquoted identifiers)."""
+    """Column names the rule SQL compares against."""
     columns: set[str] = set()
     for sql in sql_list or []:
-        if not sql or not sql.strip():
-            continue
-        try:
-            for stmt in sqlparse.parse(sql):
-                for token in stmt.flatten():
-                    if not isinstance(token.value, str):
-                        continue
-                    v = token.value.strip()
-                    # Double-quoted identifiers (SQLite)
-                    if len(v) >= 2 and v.startswith('"') and v.endswith('"'):
-                        columns.add(v[1:-1])
-                        continue
-                    # Unquoted identifiers (Token.Name); exclude table name "logs"
-                    if token.ttype == TokenName and v and v != _SQLITE_LOGS_TABLE:
-                        columns.add(v)
-        except Exception:
-            pass
+        if sql and sql.strip():
+            columns |= column_refs(sql)
     return columns
 
 
@@ -288,7 +288,7 @@ def _filter_events_to_rule_fields(
     events: list[dict[str, Any]],
     rule_sql: list[str],
 ) -> list[dict[str, Any]]:
-    """Return events with only keys that appear in the rule SQL (from sqlparse)."""
+    """Return events with only keys that appear in the rule SQL."""
     used = _columns_used_in_sql(rule_sql or [])
     if not used:
         return events
@@ -305,18 +305,15 @@ def _filter_events_to_rule_fields(
 
 
 def _beautify_sql(sql: str) -> str:
-    """Format SQL for readability in the report using sqlparse."""
+    """Break rule SQL over several lines so the report stays readable."""
     if not sql or not sql.strip():
         return sql
-    try:
-        return sqlparse.format(sql.strip(), reindent=True)
-    except Exception:
-        s = sql.strip()
-        s = re.sub(r"\s+FROM\s+", "\nFROM ", s, flags=re.IGNORECASE)
-        s = re.sub(r"\s+WHERE\s+", "\nWHERE ", s, flags=re.IGNORECASE)
-        s = re.sub(r"\s+AND\s+", "\n  AND ", s, flags=re.IGNORECASE)
-        s = re.sub(r"\s+OR\s+", "\n  OR ", s, flags=re.IGNORECASE)
-        return s
+    s = sql.strip()
+    s = re.sub(r"\s+FROM\s+", "\nFROM ", s, flags=re.IGNORECASE)
+    s = re.sub(r"\s+WHERE\s+", "\nWHERE ", s, flags=re.IGNORECASE)
+    s = re.sub(r"\s+AND\s+", "\n  AND ", s, flags=re.IGNORECASE)
+    s = re.sub(r"\s+OR\s+", "\n  OR ", s, flags=re.IGNORECASE)
+    return s
 
 
 def format_failed_rule_lines(
@@ -332,8 +329,8 @@ def format_failed_rule_lines(
     """Format a failed-rule message as multiple lines; rule title and detail align with case name."""
     continuation = " " * _FAILED_RULE_ALIGN
     icon_markup = f"[{style}]\\[{icon}][/]"
-    case_link = _file_link(case_dir_path, case_dir_path.name)
-    file_link = _file_link(data_file_path, data_file_path.name)
+    case_link = make_file_link(str(case_dir_path), case_dir_path.name)
+    file_link = make_file_link(str(data_file_path), data_file_path.name)
     return [
         f"{prefix}{icon_markup} {case_link} ({file_link})",
         f"{continuation}[dim]{rule_title}[/] [dim](id: {rule_id})[/]",
@@ -347,26 +344,16 @@ def build_sigma_yaml_index(sigma_rules_dir: Path | None) -> dict[str, str]:
     if sigma_rules_dir is None:
         return index
 
-    for yml_path in sigma_rules_dir.rglob("*.yml"):
+    for yml_path in sorted(sigma_rules_dir.rglob("*.y*ml")):
         try:
             content = yml_path.read_text(encoding="utf-8")
             data = yaml.safe_load(content)
-            if isinstance(data, dict):
-                title = data.get("title")
-                if isinstance(title, str) and title:
-                    index.setdefault(title, content)
         except Exception:
             continue
-    for yml_path in sigma_rules_dir.rglob("*.yaml"):
-        try:
-            content = yml_path.read_text(encoding="utf-8")
-            data = yaml.safe_load(content)
-            if isinstance(data, dict):
-                title = data.get("title")
-                if isinstance(title, str) and title:
-                    index.setdefault(title, content)
-        except Exception:
-            continue
+        if isinstance(data, dict):
+            title = data.get("title")
+            if isinstance(title, str) and title:
+                index.setdefault(title, content)
     return index
 
 
@@ -434,11 +421,15 @@ def write_report_markdown(
                 f.write(f"- **Rule id:** `{t.get('rule_id', '')}`  \n")
                 f.write(f"- **Expected:** {t.get('expected', '')} match(es)  \n")
                 f.write(f"- **Got:** {t.get('got', '')} match(es)  \n")
+                variants = t.get("variants") or []
+                if len(variants) > 1:
+                    counts = ", ".join(f"{v['title']}: {v['count']}" for v in variants)
+                    f.write(f"- **Per rule variant:** {counts}  \n")
                 if t.get("error"):
                     f.write(f"- **Error:** {t.get('error')}  \n")
                 f.write("\n#### Rule (SQL)\n\n```sql\n")
-                f.writelines(_beautify_sql(q.strip()) + "\n" for q in t.get("rule_sql") or [])
-                f.write("```\n\n")
+                f.write("\n\n".join(_beautify_sql(q.strip()) for q in t.get("rule_sql") or []))
+                f.write("\n```\n\n")
                 f.write("#### Rule (Sigma YAML)\n\n```yaml\n")
                 f.write((t.get("sigma_yaml") or "# Sigma YAML not found for this rule title.\n").rstrip() + "\n")
                 f.write("```\n\n")
@@ -467,6 +458,7 @@ def write_report_json(path: Path, report: dict[str, Any]) -> None:
                 "rule_id": t.get("rule_id"),
                 "expected": t.get("expected"),
                 "got": t.get("got"),
+                "variants": t.get("variants"),
                 "error": t.get("error"),
                 "rule_sql": t.get("rule_sql"),
                 "sigma_yaml": t.get("sigma_yaml"),
@@ -481,16 +473,21 @@ def write_report_json(path: Path, report: dict[str, Any]) -> None:
 def run_single_test(
     data_file: Path,
     input_type: str,
-    rule: dict[str, Any],
+    rules: list[dict[str, Any]],
     config_path: str,
     logger: logging.Logger,
     json_array: bool = True,
     quiet: bool = True,
     return_events_on_fail: bool = False,
-) -> tuple[bool, int, str, list[dict[str, Any]] | None]:
+) -> tuple[dict[str, int], str, list[dict[str, Any]] | None]:
     """
-    Run Zircolite on one file with one rule.
-    Returns (passed, match_count, error_message, events_from_db).
+    Run Zircolite once on one file with every variant of the rule loaded.
+
+    A Sigma id resolves to one rule per pipeline in a merged ruleset, and the
+    sample only carries one provider, so all of them are executed against a
+    single ingest of the file rather than re-reading it per variant.
+
+    Returns (match count per rule title, error_message, events_from_db).
     events_from_db is set when return_events_on_fail=True (for --report).
     """
     if quiet:
@@ -527,7 +524,7 @@ def run_single_test(
                 extractor=None,
                 disable_progress=True,
             )
-            core.load_ruleset_from_var(ruleset=[rule], rule_filters=None)
+            core.load_ruleset_from_var(ruleset=rules, rule_filters=None)
             core.execute_ruleset(
                 "",  # no output
                 write_mode="w",
@@ -537,18 +534,21 @@ def run_single_test(
             )
             if return_events_on_fail:
                 events_from_db = core.execute_select_query("SELECT * FROM logs")
-            # full_results: list of result dicts with 'title', 'count', etc.
+            # full_results holds one entry per rule that matched; a rule that
+            # fired on nothing is absent, hence the 0 default at the call site.
+            counts: dict[str, int] = {}
             for res in core.full_results:
-                if res.get("title") == rule.get("title"):
-                    return True, res.get("count", 0), "", events_from_db
-            return True, 0, "", events_from_db
+                title = res.get("title")
+                if isinstance(title, str):
+                    counts[title] = max(counts.get(title, 0), res.get("count", 0))
+            return counts, "", events_from_db
         except Exception as e:
             if return_events_on_fail and core.db_connection:
                 try:
                     events_from_db = core.execute_select_query("SELECT * FROM logs")
                 except Exception:
                     events_from_db = []
-            return False, 0, str(e), events_from_db
+            return {}, str(e), events_from_db
         finally:
             core.close()
     finally:
@@ -559,8 +559,10 @@ def run_single_test(
 def build_failed_result(
     case_name: str,
     data_file: Path,
-    rule: dict[str, Any],
-    expected: Any,
+    ref: RuleRef,
+    rules: list[dict[str, Any]],
+    counts: dict[str, int],
+    expected: str,
     got: int,
     error: str,
     events: list[dict[str, Any]] | None,
@@ -568,21 +570,25 @@ def build_failed_result(
     include_report_data: bool,
 ) -> dict[str, Any]:
     """Build a normalized failed-test payload for console/report output."""
-    rule_title = rule.get("title", "")
     result = {
         "case_name": case_name,
         "data_file": str(data_file),
-        "rule": rule,
-        "rule_title": rule_title,
-        "rule_id": rule.get("id", ""),
+        "rule_title": ref.title,
+        "rule_id": ref.id,
         "expected": expected,
         "got": got,
         "error": error,
         "events": events or [],
+        # Which encoding of the rule saw what, so a report reader can tell a
+        # Sysmon-only miss from a rule that fired nowhere.
+        "variants": [
+            {"title": r.get("title", ""), "count": counts.get(r.get("title", ""), 0)}
+            for r in rules
+        ],
     }
     if include_report_data:
-        result["rule_sql"] = rule.get("rule") or []
-        result["sigma_yaml"] = find_sigma_yaml_for_rule(sigma_yaml_index, rule_title)
+        result["rule_sql"] = [sql for r in rules for sql in (r.get("rule") or [])]
+        result["sigma_yaml"] = find_sigma_yaml_for_rule(sigma_yaml_index, ref.title)
     return result
 
 
@@ -640,6 +646,11 @@ def main() -> int:
         action="store_true",
         help="In the report, include all event fields. By default only fields referenced in the rule SQL are included.",
     )
+    parser.add_argument(
+        "--fail-on-skip",
+        action="store_true",
+        help="Exit non-zero when any test was skipped. A skipped test asserts nothing, so a run that skips most of its cases still reports success without this.",
+    )
     args = parser.parse_args()
 
     regression_data = args.regression_data.resolve()
@@ -690,7 +701,7 @@ def main() -> int:
         if not full_ruleset:
             console.print(f"[red]\\[-][/] No rules in {make_file_link(str(rules_path))}")
             return 1
-        console.print(f"    [>] Loaded [bold magenta]{len(full_ruleset)}[/] rules from {_file_link(rules_path, rules_path.name)}\n")
+        console.print(f"    [>] Loaded [bold magenta]{len(full_ruleset)}[/] rules from {make_file_link(str(rules_path), rules_path.name)}\n")
     else:
         pipelines = args.pipelines or ["sysmon", "windows-logsources"]
         ruleset_config = RulesetConfig(
@@ -726,7 +737,7 @@ def main() -> int:
     failed_results: list[dict[str, Any]] = []
     total_tests = sum(len(c.tests) for c in cases)
     need_events = bool(args.report)
-    rules_by_title = build_rules_index_by_title(full_ruleset)
+    rules_index = RulesIndex(full_ruleset)
     sigma_yaml_index = build_sigma_yaml_index(sigma_rules) if need_events else {}
     buffered_lines: list[str] = []  # Rich markup strings to print after progress
 
@@ -750,18 +761,18 @@ def main() -> int:
     pending_advance = 0
 
     for case in cases:
-        titles = [r.title for r in case.rule_refs]
-        rules = find_rules_by_title(rules_by_title, titles)
+        rules = rules_index.find(case.rule_refs)
         if not rules:
-            buffered_lines.append(f"    [yellow]\\[!][/] No matching rules for {_file_link(case.dir_path, case.dir_path.name)} (titles: {titles})")
+            titles = [r.title for r in case.rule_refs]
+            buffered_lines.append(f"    [yellow]\\[!][/] No matching rules for {make_file_link(str(case.dir_path), case.dir_path.name)} (titles: {titles})")
             skipped += len(case.tests)
-            n = len(case.tests)
-            pending_advance += n
+            pending_advance += len(case.tests)
             if pending_advance >= progress_batch_size:
                 progress.advance(task_id, advance=pending_advance)
                 pending_advance = 0
             continue
 
+        ref = case.rule_refs[0]
         for test_entry in case.tests:
             pending_advance += 1
             if pending_advance >= progress_batch_size:
@@ -769,95 +780,77 @@ def main() -> int:
                 pending_advance = 0
             data_file = resolve_data_file(regression_data, test_entry, case.dir_path)
             if not data_file:
-                buffered_lines.append(f"    [yellow]\\[!][/] Data file not found: {_file_link(case.dir_path, case.dir_path.name)} ([dim]{test_entry.path}[/])")
+                buffered_lines.append(f"    [yellow]\\[!][/] Data file not found: {make_file_link(str(case.dir_path), case.dir_path.name)} ([dim]{test_entry.path}[/])")
                 skipped += 1
                 continue
 
             input_type = test_entry.type
-            json_array = input_type == "json"
-            rule = rules[0]
-            rule_title = rule.get("title", "")
-            rule_id = rule.get("id", "")
-            _ok, count, err, events_from_db = run_single_test(
+            counts, err, events_from_db = run_single_test(
                 data_file,
                 input_type,
-                rule,
+                rules,
                 config_path,
                 logger,
-                json_array=json_array,
+                json_array=input_type == "json",
                 quiet=quiet_tests,
                 return_events_on_fail=need_events,
             )
-            expected = test_entry.match_count
-            # When match_count is not in info.yml and test is positive, any count >= 1 passes; only 0 is a failure
-            if test_entry.match_count_explicit:
-                pass_count = count == expected
-                expected_label = str(expected)
-            else:
-                if expected == 1:  # positive test (inferred)
-                    pass_count = count >= 1
-                    expected_label = "≥1" if not pass_count else str(count)
-                else:  # negative or other inferred
-                    pass_count = count == expected
-                    expected_label = str(expected)
+            # The best any encoding of the rule managed. A positive test needs
+            # one variant to fire; a negative one needs the maximum to be 0,
+            # which is the same as every variant staying silent.
+            count = max((counts.get(r.get("title", ""), 0) for r in rules), default=0)
+            expected_label = expectation_label(test_entry)
+
             if err:
                 buffered_lines.extend(
                     format_failed_rule_lines(
-                        case.dir_path,
-                        data_file,
-                        rule_title,
-                        rule_id,
-                        err,
-                        icon="-",
-                        style="red",
+                        case.dir_path, data_file, ref.title, ref.id, err,
+                        icon="-", style="red",
                     )
                 )
                 failed += 1
-                expected_value = expected if test_entry.match_count_explicit else (expected_label if expected == 1 else expected)
-                fr = build_failed_result(
+                failed_results.append(build_failed_result(
                     case_name=case.dir_path.name,
                     data_file=data_file,
-                    rule=rule,
-                    expected=expected_value,
+                    ref=ref,
+                    rules=rules,
+                    counts=counts,
+                    expected=expected_label,
                     got=count,
                     error=err,
                     events=events_from_db,
                     sigma_yaml_index=sigma_yaml_index,
                     include_report_data=need_events,
-                )
-                failed_results.append(fr)
+                ))
                 continue
-            if pass_count:
+
+            if expectation_met(test_entry, count):
                 passed += 1
                 if args.verbose:
-                    buffered_lines.append(f"    [green]\\[✓][/] {_file_link(case.dir_path, case.dir_path.name)} ({_file_link(data_file, data_file.name)}) [green]rule[/] [dim]{rule_title}[/] [dim](id: {rule_id})[/] [green]→ {count} matches[/]")
+                    buffered_lines.append(f"    [green]\\[✓][/] {make_file_link(str(case.dir_path), case.dir_path.name)} ({make_file_link(str(data_file), data_file.name)}) [green]rule[/] [dim]{ref.title}[/] [dim](id: {ref.id})[/] [green]→ {count} matches[/]")
             else:
                 failed += 1
-                detail = f"expected at least 1 match, got {count}" if (not test_entry.match_count_explicit and expected == 1) else f"expected {expected}, got {count}"
                 buffered_lines.extend(
                     format_failed_rule_lines(
-                        case.dir_path,
-                        data_file,
-                        rule_title,
-                        rule_id,
-                        detail,
-                        icon="!",
-                        style="yellow",
+                        case.dir_path, data_file, ref.title, ref.id,
+                        f"expected {expected_label}, got {count}"
+                        + (f" across {len(rules)} rule variants" if len(rules) > 1 else ""),
+                        icon="!", style="yellow",
                     )
                 )
-                expected_value = expected_label if (not test_entry.match_count_explicit and expected == 1) else expected
-                fr = build_failed_result(
+                failed_results.append(build_failed_result(
                     case_name=case.dir_path.name,
                     data_file=data_file,
-                    rule=rule,
-                    expected=expected_value,
+                    ref=ref,
+                    rules=rules,
+                    counts=counts,
+                    expected=expected_label,
                     got=count,
                     error="",
                     events=events_from_db,
                     sigma_yaml_index=sigma_yaml_index,
                     include_report_data=need_events,
-                )
-                failed_results.append(fr)
+                ))
 
     if pending_advance > 0:
         progress.advance(task_id, advance=pending_advance)
@@ -874,7 +867,11 @@ def main() -> int:
     summary_table.add_column("Value", style="bold")
     summary_table.add_row("Passed", f"[green]{passed}[/]")
     summary_table.add_row("Failed", f"[red]{failed}[/]" if failed else f"[dim]{failed}[/]")
-    summary_table.add_row("Skipped", f"[yellow]{skipped}[/]")
+    # A skipped test asserts nothing, so a large skip count is a result in its
+    # own right, not a footnote: it is what a title-matched run used to hide.
+    skipped_style = "red" if (skipped and args.fail_on_skip) else ("yellow" if skipped else "dim")
+    skipped_note = f" [dim]({skipped / total:.0%} of total)[/]" if skipped and total else ""
+    summary_table.add_row("Skipped", f"[{skipped_style}]{skipped}[/]{skipped_note}")
     summary_table.add_row("Total", f"[bold magenta]{total}[/]")
     summary_table.add_row("Duration", f"[dim]{elapsed:.1f}s[/]")
 
@@ -884,8 +881,14 @@ def main() -> int:
         for fr in failed_results:
             summary_table.add_row("  •", f"[cyan]{fr['rule_title']}[/] [dim](id: {fr['rule_id']})[/]")
 
-    result_style = "green" if failed == 0 else "red"
-    result_text = "All tests passed" if failed == 0 else f"{failed} test(s) failed"
+    skip_fails = bool(skipped) and args.fail_on_skip
+    if failed:
+        result_text = f"{failed} test(s) failed"
+    elif skip_fails:
+        result_text = f"{skipped} test(s) skipped"
+    else:
+        result_text = "All tests passed"
+    result_style = "green" if not (failed or skip_fails) else "red"
     console.print()
     console.print(Panel(summary_table, title=f"[bold] Summary · {result_text} [/]", border_style=result_style, padding=(1, 2)))
     console.print()
@@ -897,14 +900,14 @@ def main() -> int:
             base = base.with_suffix("")
         md_path = base.with_suffix(".md")
         json_path = base.with_suffix(".json")
-        report_all_fields = getattr(args, "report_all_event_fields", False)
+        report_all_fields = args.report_all_event_fields
         failed_tests_for_report = []
         for fr in failed_results:
-            entry = {k: v for k, v in fr.items() if k != "rule"}
+            entry = dict(fr)
             if not report_all_fields and entry.get("events"):
                 entry["events"] = _filter_events_to_rule_fields(
                     entry["events"],
-                    entry.get("rule_sql"),
+                    entry.get("rule_sql") or [],
                 )
             failed_tests_for_report.append(entry)
         report = {
@@ -922,7 +925,7 @@ def main() -> int:
         console.print(f"[bold white]\\[+][/] Report: {make_file_link(str(md_path))}  [dim]|[/]  {make_file_link(str(json_path))}")
         console.print()
 
-    return 0 if failed == 0 else 1
+    return 0 if not (failed or skip_fails) else 1
 
 
 if __name__ == "__main__":

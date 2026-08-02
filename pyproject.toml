@@ -110,8 +110,6 @@ dev = [
     # regression was indistinguishable from an upgrade.
     "ruff>=0.16.1",
     "mypy>=1.19.1",
-    # tools/sigma-regression.py only
-    "sqlparse>=0.5.5",
     # binary builds only (.github/workflows/build_pyinstaller.yml)
     "pyinstaller>=6.18.0",
 ]

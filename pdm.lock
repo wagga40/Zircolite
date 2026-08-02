@@ -5,7 +5,7 @@
 groups = ["default", "dev"]
 strategy = ["inherit_metadata"]
 lock_version = "4.5.0"
-content_hash = "sha256:d628d79d25d09db7cabb611edb868f9fb3ee1d41598802646e82b3ec16e3b07d"
+content_hash = "sha256:9a687f6c6050640a17b866de2cdd2464176761e7f7643200fe035be44639ccd8"
 
 [[metadata.targets]]
 requires_python = "==3.14.*"
@@ -2077,18 +2077,6 @@ marker = "python_version == \"3.10\" or python_version == \"3.13\""
 files = [
     {file = "setuptools-83.0.0-py3-none-any.whl", hash = "sha256:29b23c360f22f414dc7336bb39178cc7bcbf6021ed2733cde173f09dba19abb3"},
     {file = "setuptools-83.0.0.tar.gz", hash = "sha256:025bccbbf0fa05b6192bc64ae1e7b16e001fd6d6d4d5de03c97b1c1ade523bef"},
-]
-
-[[package]]
-name = "sqlparse"
-version = "0.5.5"
-requires_python = ">=3.8"
-summary = "A non-validating SQL parser."
-groups = ["dev"]
-marker = "python_version == \"3.14\" or python_version == \"3.10\" or python_version == \"3.13\""
-files = [
-    {file = "sqlparse-0.5.5-py3-none-any.whl", hash = "sha256:12a08b3bf3eec877c519589833aed092e2444e68240a3577e8e26148acc7b1ba"},
-    {file = "sqlparse-0.5.5.tar.gz", hash = "sha256:e20d4a9b0b8585fdf63b10d30066c7c94c5d7a7ec47c889a2d83a3caa93ff28e"},
 ]
 
 [[package]]

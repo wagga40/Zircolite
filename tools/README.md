@@ -2,18 +2,44 @@
 
 This directory holds scripts intended for regular use with Zircolite (tracked in git).
 
+Both reach into the package internals, so `tests/test_tools.py` drives each of them
+end-to-end over the tracked fixtures: a rename in `StreamingEventProcessor` or
+`ZircoliteCore` fails the suite rather than waiting for somebody to run a script by hand.
+
 ## sigma-regression.py
 
 Runs detection tests using the [Sigma repository’s regression_data](https://github.com/SigmaHQ/sigma/tree/master/regression_data). Each test case directory there contains:
 
-- **info.yml** – rule metadata (`rule_metadata`, with `title`) and test definitions (`regression_tests_info`: path to EVTX/JSON, optional `match_count`, etc.). If `match_count` is omitted, it is inferred from the test name: "Positive Detection Test" → expect 1 match, "Negative Detection Test" → expect 0.
-- **.evtx / .json** – sample logs that should trigger the referenced rule with the expected match count.
+- **info.yml** – rule metadata (`rule_metadata`, with `id` and `title`) and test definitions (`regression_tests_info`: path to EVTX/JSON, optional `match_count`, etc.).
+- **.evtx / .json** – sample logs that should trigger the referenced rule.
 
 The script:
 
 1. Loads rules from the path given by `--rules` / `-r`. The type is **auto-detected**: a `.json` file (or a file whose content starts with `[`) is treated as a Zircolite JSON ruleset and used as-is; a directory is treated as Sigma YAML rules and converted with pySigma (pipelines such as `sysmon`, `windows-logsources`; rules loaded recursively from that path).
 2. Discovers all test cases under the path given by `--regression-data` (recursively: every directory containing an `info.yml` is a test case).
-3. For each test, resolves the data file from `info.yml`, runs Zircolite on that file with only the related rule(s), and checks that the rule fires with the expected `match_count`.
+3. For each test, resolves the data file from `info.yml`, ingests it once, runs every rule the case refers to against it, and checks the outcome against `match_count`.
+
+### How a test is matched and judged
+
+**Rules are looked up by Sigma `id` first, and by `title` only as a fallback.** A merged
+Zircolite ruleset carries one rule per pipeline, all sharing the Sigma id but suffixing
+the title — `Anydesk Temporary Artefact` ships as `… - Generic` and `… - Sysmon`.
+Matching on the title alone therefore misses most of a merged ruleset: against
+`rules/rules_windows_merged.json`, 112 of 136 Windows cases resolve by id and by id
+only. Titles still matter because a converted ruleset need not carry ids.
+
+**Every variant a case resolves to is executed**, against a single ingest of the data
+file. A positive test passes when *any* variant fires, since the sample only carries one
+provider; a negative test requires all of them to stay silent. The report lists the
+count each variant saw.
+
+**`match_count` states that the rule fired, not how many records it fired on.** Every
+entry in the current regression_data is a positive test declaring `1`, while several
+samples hold more than one matching record — the `IE Change Domain Zone` capture holds
+three, all of which legitimately match. Zircolite counts matching *events*, so a
+positive test passes on **at least** the declared count. Only `match_count: 0` demands
+silence. When `match_count` is absent it is inferred from the test name: a name
+containing "negative" expects 0, anything else expects a detection.
 
 ### Requirements
 
@@ -24,6 +50,7 @@ The script:
 
 - **`--regression-data`** (required): Path to the directory under which test cases are discovered (recursively; each directory containing an `info.yml` is a test case). Data file paths from `info.yml` are resolved relative to this path or the test case directory.
 - **`--rules`** / **`-r`** (required): Path to rules; type is auto-detected. A **file** with extension `.json` or content starting with `[` is used as a Zircolite JSON ruleset. A **directory** is used as Sigma YAML rules (converted recursively).
+- **`--fail-on-skip`**: Exit non-zero when any test was skipped. A skipped test asserts nothing, so without this a run whose ruleset covers almost none of the cases still reports success.
 - **`--zircolite-config`**, **`--pipeline`**, **`--verbose`**, **`--report`**, **`--report-all-event-fields`**: Optional (see `--help`).
 
 ### Usage
@@ -62,27 +89,42 @@ pdm run python tools/sigma-regression.py \
 pdm run python tools/sigma-regression.py \
   --regression-data /path/to/sigma/regression_data/rules/windows \
   -r /path/to/sigma/rules/windows --report regression_report --report-all-event-fields
+
+# Treat a case the ruleset does not cover as a failure
+pdm run python tools/sigma-regression.py \
+  --regression-data /path/to/sigma/regression_data/rules/windows \
+  -r rules/rules_windows_merged.json --fail-on-skip
 ```
 
 ### Output files
 
 - **`--report PATH`**: Writes two files with **full failed-test data**:
-  - **PATH.md** – Markdown: summary table, failed-tests table, then for each failed test: Rule (SQL, beautified), Rule (Sigma YAML), Events (from DB). By default, events include only fields referenced in the rule SQL.
-  - **PATH.json** – JSON: same summary and `failed_tests[]` with `rule_sql`, `sigma_yaml`, `events` for each entry.
+  - **PATH.md** – Markdown: summary table, failed-tests table, then for each failed test: Rule (SQL, beautified), Rule (Sigma YAML), Events (from DB), and the count each rule variant saw. By default, events include only fields referenced in the rule SQL.
+  - **PATH.json** – JSON: same summary and `failed_tests[]` with `rule_sql`, `sigma_yaml`, `events` and `variants` for each entry.
 - **`--report-all-event-fields`**: Include all event fields in the report; by default only fields used in the rule SQL are included.
+
+The fields kept in the report come from `zircolite.sqlscan.column_refs`, the same
+quote-aware SQL reader the engine uses to widen the events table.
 
 ### Exit code
 
 - `0` if all run tests passed.
-- `1` if any test failed or the script could not load the ruleset / find regression data.
+- `1` if any test failed, if `--fail-on-skip` was given and any test was skipped, or if the script could not load the ruleset / find regression data.
 
-Skipped tests (missing data file or no matching rule in the ruleset) are reported in the summary but do not change the exit code unless you treat "skipped" as failure in your workflow.
+A test is skipped when its data file is missing or no rule in the ruleset matches the
+case. Skips are shown in the summary with their share of the total; pass
+`--fail-on-skip` to make them fail the run.
 
 ## flatten-benchmark.py
 
 Measures Zircolite's event-**flattening** throughput, isolated from EVTX parsing, SQLite insertion, and rule execution. Flattening is the dominant cost of log ingestion, so this harness is useful when changing the `_flatten_event` / `process_leaf` hot path.
 
 The script reads raw events once, then repeatedly calls `StreamingEventProcessor._flatten_event` over them. The first pass warms schema discovery and the seen-key cache, so the reported numbers reflect steady-state flattening.
+
+**An external EVTX corpus is required.** Every EVTX file tracked in this repository holds a
+single event, so pointing the benchmark at `tests/fixtures/` runs but measures noise. Use a
+real capture set such as [EVTX-ATTACK-SAMPLES](https://github.com/sbousseaden/EVTX-ATTACK-SAMPLES)
+and enough events for the median to settle.
 
 ### Arguments
 
