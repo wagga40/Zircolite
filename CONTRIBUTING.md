@@ -52,7 +52,13 @@ pdm run ruff check --fix .    # most findings fix themselves
 pdm run python -m mypy zircolite   # must be clean too
 ```
 
-Both are clean and both block in CI. The rule set and its exemptions live in
+Both are clean and both block in CI. The type check names the package, not the
+tree, and that is not a gap: `zircolite.py` is a shim over `zircolite/cli.py`,
+so every line that ships is inside the package. Naming `zircolite.py` there as
+well would abort the run rather than widen it — the script shares its name with
+the package. Keep logic out of it; `tests/test_entry_point.py` enforces that.
+
+The rule set and its exemptions live in
 `[tool.ruff.lint]` in `pyproject.toml`, and `ruff` is pinned as a dev
 dependency — left undeclared it ran from `PATH` against whatever rule set that
 build shipped, so a regression looked exactly like an upgrade.

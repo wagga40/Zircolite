@@ -203,7 +203,7 @@ Zircolite is built around several key classes, organized in the `zircolite/` pac
 
 - **LogTypeDetector** (`detector.py`): Automatic log format and timestamp detection. Analyzes magic bytes, content structure, and file extension to determine the input type and log source.
 - **ZircoliteCore** (`core.py`): The main detection engine that manages the SQLite database, loads rulesets, and executes detection rules.
-- **`console.py`**: Rich-based terminal output — the shared `console` instance and theme, styled messages, detection results tables, MITRE ATT&CK coverage panels, terminal hyperlinks, file tree views, rule-test and rule-profiling reports, and quiet mode support. Progress bars, live displays and the summary panel are built inline by `core.py`, `processing.py` and `zircolite.py`.
+- **`console.py`**: Rich-based terminal output — the shared `console` instance and theme, styled messages, detection results tables, MITRE ATT&CK coverage panels, terminal hyperlinks, file tree views, rule-test and rule-profiling reports, and quiet mode support. Progress bars, live displays and the summary panel are built inline by `core.py`, `processing.py` and `cli.py`.
 - **StreamingEventProcessor** (`streaming.py`): Single-pass processor for efficient event extraction, flattening, and database insertion.
 - **Processing pipeline helpers** (`processing.py`): Coordinates processing modes (per-file, unified-db, parallel workers), result aggregation, and output writing.
 - **EvtxExtractor** (`extractor.py`): Converts individual raw log lines and XML elements into event dictionaries for the formats that need it (Auditd, Sysmon for Linux, XML/EVTXtract). It is a helper for `StreamingEventProcessor`, not a separate extraction pass: nothing is written to an intermediate file.
@@ -328,7 +328,7 @@ Transforms use **RestrictedPython** for safe, sandboxed execution of custom Pyth
 ├── tests/                  # Unit tests
 ├── requirements.txt        # Dependencies
 ├── pyproject.toml          # Project metadata
-├── zircolite.py            # Main entry point (CLI and argument handling)
+├── zircolite.py            # Entry-point shim (calls zircolite/cli.py)
 └── zircolite/              # Core package (modular implementation)
     ├── __init__.py         # Package exports
     ├── config.py           # Configuration dataclasses

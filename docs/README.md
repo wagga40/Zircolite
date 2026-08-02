@@ -33,6 +33,10 @@ Documentation for **Zircolite**. Zircolite is a standalone SIGMA-based detection
 2. Run: `python3 zircolite.py --events <logs> --ruleset <ruleset>`
 3. For EVTX with Windows rules (merged): `python3 zircolite.py --evtx sample.evtx --ruleset rules/rules_windows_merged.json`
 
+`python3 -m zircolite ...` is equivalent, from the project root. `python -m` searches the
+working directory rather than the script's own, so the `zircolite.py` form is the one that
+works from anywhere.
+
 See [Usage → First run](Usage.md#first-run), [Usage → Basic usage](Usage.md#basic-usage), and [Usage → Automatic Log Type Detection](Usage.md#automatic-log-type-detection) for details.
 
 ### Task and Taskfile

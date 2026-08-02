@@ -13,6 +13,12 @@ Modules:
 - utils: Utility functions and MemoryTracker
 - parallel: Memory-aware parallel file processing
 - config_loader: YAML configuration file support
+- cli: The command line interface, reached through zircolite.py or `python -m`
+
+`cli` is deliberately not imported below. It consumes this module, so
+re-exporting it would put it inside the package's own import graph, and mypy
+then resolves `from zircolite import console` to the submodule rather than to
+the Console object defined in it -- ten errors that describe nothing real.
 """
 
 import logging
