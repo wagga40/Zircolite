@@ -1147,7 +1147,9 @@ def main() -> None:
             args.template = []
         if args.templateOutput is None:
             args.templateOutput = []
-        args.template.append([str(_bundled_asset("templates", "exportForTimesketch.tmpl"))])
+        args.template.append([_resolve_default_path(
+            "templates/exportForTimesketch.tmpl", "templates", "exportForTimesketch.tmpl"
+        )])
         args.templateOutput.append([out_name])
 
     # Apply --navigator-output shortcut
@@ -1158,7 +1160,9 @@ def main() -> None:
             args.template = []
         if args.templateOutput is None:
             args.templateOutput = []
-        args.template.append([str(_bundled_asset("templates", "exportForAttackNavigator.tmpl"))])
+        args.template.append([_resolve_default_path(
+            "templates/exportForAttackNavigator.tmpl", "templates", "exportForAttackNavigator.tmpl"
+        )])
         args.templateOutput.append([nav_out])
 
     # Handle rulesets

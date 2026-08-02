@@ -3118,6 +3118,23 @@ class TestCLIRegressionFixes:
         assert list(workdir.glob("timesketch-*.json"))
         assert list(workdir.glob("navigator-*.json"))
 
+    def test_a_local_timesketch_template_overrides_the_bundled_one(self, tmp_path, monkeypatch):
+        """--config and --ruleset defaults let the CWD win; these templates must too."""
+        ruleset, config, events = self._fixture(tmp_path)
+        workdir = tmp_path / "elsewhere"
+        (workdir / "templates").mkdir(parents=True)
+        (workdir / "templates" / "exportForTimesketch.tmpl").write_text(
+            "LOCAL-OVERRIDE", encoding="utf-8"
+        )
+        monkeypatch.chdir(workdir)
+
+        with patch('sys.argv', ['zircolite.py', '-e', str(events), '-j', '-r', str(ruleset), '-c', str(config), '-o', str(tmp_path / "out.json"), '--timesketch', *get_log_arg(tmp_path)]):
+            zircolite_script.main()
+
+        produced = list(workdir.glob("timesketch-*.json"))
+        assert produced, "the --timesketch shortcut produced no output"
+        assert "LOCAL-OVERRIDE" in produced[0].read_text(encoding="utf-8")
+
     def test_default_config_and_ruleset_resolve_from_any_cwd(self, tmp_path, monkeypatch):
         """The bundled default config/ruleset must be found outside the repo."""
         workdir = tmp_path / "elsewhere"
