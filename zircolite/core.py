@@ -897,13 +897,20 @@ class ZircoliteCore:
 
         # Apply auto-index now that the ruleset is loaded (create_index runs at
         # the end of ingestion, before the ruleset is available in every flow),
-        # then refresh the query planner's stats. Cheap; helps rule queries.
+        # then analyse, so the indexes it just created are covered too. Rules
+        # widen the table with an all-NULL column per absent field, and with no
+        # statistics SQLite prices a row by its column count alone -- the wider
+        # the table, the more queries leave their selective index. PRAGMA
+        # optimize cannot stand in: it samples at an implicit analysis_limit, so
+        # both indexes report the same capped figure once the corpus is large
+        # enough, and it then treats the table as analysed. Once is enough;
+        # ADD COLUMN leaves sqlite_stat1 intact.
         self.apply_auto_index()
         if self.db_connection is not None:
             try:
-                self.db_connection.execute("PRAGMA optimize")
+                self.db_connection.execute("ANALYZE logs")
             except sqlite3.Error as exc:
-                self.logger.debug(f"PRAGMA optimize failed (non-fatal): {exc}")
+                self.logger.debug(f"ANALYZE failed (non-fatal): {exc}")
 
         # Prepare output file handle if needed
         file_handle = None

@@ -9,6 +9,7 @@ import re
 import sqlite3
 import sys
 from pathlib import Path
+from typing import ClassVar
 from unittest.mock import patch
 
 import pytest
@@ -2081,3 +2082,259 @@ class TestRulesThatSilentlyMatchedNothing:
         assert '"IsExecutable" INTEGER' not in statement
         assert normalised["IsExecutable"] == "true"
         assert normalised["EventID"] == 1
+
+
+class TestQueryPlannerStatistics:
+    """Widening the table for a rule must not cost the planner its bearings.
+
+    A rule naming a field the dataset never produced has that column added as
+    NULL, which more than doubled the column count on a real corpus. With no
+    statistics SQLite prices a row by its column count alone, so the wider table
+    moved every query off the selective index -- several times the wall clock
+    for exactly the same detections.
+    """
+
+    # 5,000 rows, 20 distinct EventIDs and 2 distinct Channels, so a lookup on
+    # EventID returns 250 rows where one on Channel returns 2,500.
+    ROWS = 5000
+    EVENTID_ROWS_PER_KEY = 250
+    CHANNEL_ROWS_PER_KEY = 2500
+
+    SELECTIVE_QUERY = "SELECT * FROM logs WHERE Channel = 'Security' AND EventID = '4601'"
+
+    RULESET: ClassVar[list[dict]] = [
+        {
+            "title": "channel and one eventid",
+            "id": "aaaaaaaa-0000-0000-0000-000000000001",
+            "level": "high",
+            "tags": [],
+            "rule": [SELECTIVE_QUERY],
+        },
+        {
+            "title": "channel and an eventid list",
+            "id": "aaaaaaaa-0000-0000-0000-000000000002",
+            "level": "medium",
+            "tags": [],
+            "rule": [
+                "SELECT * FROM logs WHERE Channel = 'Security' AND "
+                "(EventID = '4601' OR EventID = '4603' OR EventID = '4605')"
+            ],
+        },
+        {
+            "title": "a substring of the command line",
+            "id": "aaaaaaaa-0000-0000-0000-000000000003",
+            "level": "low",
+            "tags": [],
+            "rule": ["SELECT * FROM logs WHERE CommandLine LIKE '%evil%' ESCAPE '\\'"],
+        },
+        {
+            "title": "a field this dataset never produced",
+            "id": "aaaaaaaa-0000-0000-0000-000000000004",
+            "level": "informational",
+            "tags": [],
+            "rule": ["SELECT * FROM logs WHERE OriginalFileName IS NULL"],
+        },
+    ]
+
+    def _core(self, field_mappings_file, test_logger):
+        """A corpus shaped like a real one: EventID is selective, Channel is not."""
+        core = ZircoliteCore(
+            config=field_mappings_file,
+            processing_config=ProcessingConfig(disable_progress=True, no_output=True),
+            logger=test_logger,
+        )
+        core.create_db(
+            '"EventID" TEXT COLLATE NOCASE, "Channel" TEXT COLLATE NOCASE, '
+            '"CommandLine" TEXT COLLATE NOCASE'
+        )
+        core.db_connection.executemany(
+            "INSERT INTO logs (EventID, Channel, CommandLine) VALUES (?, ?, ?)",
+            [
+                (str(4600 + i % 20), "Security" if i % 2 else "System", "c:/evil.exe")
+                for i in range(self.ROWS)
+            ],
+        )
+        core.db_connection.commit()
+        core.create_index()
+        return core
+
+    def _run_ruleset(self, core):
+        core.load_ruleset_from_var(self.RULESET, rule_filters=None)
+        core.execute_ruleset("", write_mode="w", last_ruleset=True, show_table=False)
+
+    def _stat1(self, core):
+        """What ANALYZE recorded for the logs table, keyed by index name."""
+        return {
+            idx: stat
+            for idx, stat in core.db_connection.execute(
+                "SELECT idx, stat FROM sqlite_stat1 WHERE tbl = 'logs'"
+            )
+            if idx
+        }
+
+    def _rows_per_key(self, core, index_name):
+        return int(self._stat1(core)[index_name].split()[1])
+
+    def _plan(self, core, query):
+        return " | ".join(
+            row[3] for row in core.db_connection.execute("EXPLAIN QUERY PLAN " + query)
+        )
+
+    def test_execute_ruleset_measures_the_statistics_instead_of_sampling_them(
+        self, field_mappings_file, test_logger
+    ):
+        """Sampled statistics stop discriminating exactly when the corpus grows.
+
+        ``PRAGMA optimize`` samples at an implicit ``analysis_limit``, so its
+        figures are capped rather than counted -- and once a corpus is large
+        enough for both indexes to hit that cap they report the same number, the
+        one thing the planner needed to tell them apart. A small
+        ``analysis_limit`` reproduces the bad plan for the same reason, so this
+        pins the counted values, not merely that some statistics exist.
+        """
+        core = self._core(field_mappings_file, test_logger)
+        try:
+            self._run_ruleset(core)
+
+            assert self._rows_per_key(core, "idx_eventid") == self.EVENTID_ROWS_PER_KEY
+            assert self._rows_per_key(core, "idx_channel") == self.CHANNEL_ROWS_PER_KEY
+        finally:
+            core.close()
+
+    def test_execute_ruleset_leaves_statistics_for_the_logs_table(
+        self, field_mappings_file, test_logger
+    ):
+        core = self._core(field_mappings_file, test_logger)
+        try:
+            self._run_ruleset(core)
+
+            analysed = core.db_connection.execute(
+                "SELECT name FROM sqlite_master WHERE name = 'sqlite_stat1'"
+            ).fetchone()
+            assert analysed, "the logs table was never analysed"
+            assert set(self._stat1(core)) >= {"idx_eventid", "idx_channel"}
+        finally:
+            core.close()
+
+    def test_the_statistics_tell_the_selective_index_from_the_broad_one(
+        self, field_mappings_file, test_logger
+    ):
+        core = self._core(field_mappings_file, test_logger)
+        try:
+            self._run_ruleset(core)
+
+            assert self._rows_per_key(core, "idx_eventid") < self._rows_per_key(
+                core, "idx_channel"
+            )
+        finally:
+            core.close()
+
+    def test_a_rule_naming_eventid_and_channel_searches_the_selective_index(
+        self, field_mappings_file, test_logger
+    ):
+        """Only the post-condition: which index the planner guesses without
+        statistics is its own business, and changes between SQLite releases."""
+        core = self._core(field_mappings_file, test_logger)
+        try:
+            self._run_ruleset(core)
+
+            assert "idx_eventid" in self._plan(core, self.SELECTIVE_QUERY)
+        finally:
+            core.close()
+
+    def test_widening_the_table_does_not_discard_the_statistics(
+        self, field_mappings_file, test_logger
+    ):
+        """One pass before the rule loop is enough only if ADD COLUMN spares them.
+
+        This is what would fail if the analysis were ever moved after the loop,
+        or a mid-loop invalidation added.
+        """
+        core = self._core(field_mappings_file, test_logger)
+        try:
+            self._run_ruleset(core)
+            before = self._stat1(core)
+
+            widening_rule = "SELECT * FROM logs WHERE " + " OR ".join(
+                f"pad{i} IS NULL" for i in range(120)
+            )
+            core.execute_select_query(widening_rule, rule_title="a very absent rule")
+
+            assert len(core._get_table_columns()) >= 120
+            assert self._stat1(core) == before
+            assert "idx_eventid" in self._plan(core, self.SELECTIVE_QUERY)
+        finally:
+            core.close()
+
+    def test_the_same_rules_match_the_same_events_before_and_after_analyze(
+        self, field_mappings_file, test_logger
+    ):
+        """A set comparison on purpose, never an order or byte one.
+
+        Driving a query from a different index returns the same rows in a
+        different order, and ``execute_rule`` reports them as SQLite hands them
+        over. Counts and matched events are what must not move.
+        """
+        core = self._core(field_mappings_file, test_logger)
+        try:
+            core.load_ruleset_from_var(self.RULESET, rule_filters=None)
+
+            def matched():
+                found = {}
+                for rule in core.ruleset:
+                    results = core.execute_rule(rule)
+                    if results:
+                        found[results["title"]] = {
+                            row["row_id"] for row in results["matches"]
+                        }
+                return found
+
+            before = matched()
+            core.db_connection.execute("ANALYZE logs")
+            after = matched()
+
+            assert before, "the fixture ruleset should match something"
+            assert before == after
+        finally:
+            core.close()
+
+    def test_a_field_the_dataset_never_produced_is_added_and_still_matches_is_null(
+        self, field_mappings_file, test_logger
+    ):
+        core = self._core(field_mappings_file, test_logger)
+        try:
+            self._run_ruleset(core)
+
+            assert "OriginalFileName" in core._get_table_columns()
+            results = core.execute_select_query(
+                "SELECT * FROM logs WHERE OriginalFileName IS NULL", rule_title="absent"
+            )
+            assert len(results) == self.ROWS
+        finally:
+            core.close()
+
+    def test_an_added_column_matches_only_the_is_null_test(
+        self, field_mappings_file, test_logger
+    ):
+        """``IS NULL`` is the one construct widening changes the answer to.
+
+        Giving the added column a DEFAULT instead of NULL would look harmless and
+        would turn every ``|exists: false`` rule into a corpus-wide false positive.
+        """
+        core = self._core(field_mappings_file, test_logger)
+        try:
+            core.execute_select_query(
+                "SELECT * FROM logs WHERE Absent IS NULL", rule_title="widen it"
+            )
+            assert "Absent" in core._get_table_columns()
+
+            silent = [
+                "SELECT * FROM logs WHERE NOT Absent = Absent",
+                "SELECT * FROM logs WHERE Absent = 'v'",
+                "SELECT * FROM logs WHERE Absent LIKE '%v%'",
+                "SELECT * FROM logs WHERE NOT (Absent LIKE '%v%')",
+            ]
+            for query in silent:
+                assert core.execute_select_query(query, rule_title="quiet") == []
+        finally:
+            core.close()

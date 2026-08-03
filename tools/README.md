@@ -2,7 +2,7 @@
 
 This directory holds scripts intended for regular use with Zircolite (tracked in git).
 
-Both reach into the package internals, so `tests/test_tools.py` drives each of them
+Each of these reaches into the package internals, so `tests/test_tools.py` drives them
 end-to-end over the tracked fixtures: a rename in `StreamingEventProcessor` or
 `ZircoliteCore` fails the suite rather than waiting for somebody to run a script by hand.
 
@@ -155,3 +155,57 @@ Prints the event count and, for the timed passes, the median and best wall time 
 
 - `0` on success.
 - `1` if no events could be collected (for example, a bad `--evtx` path or a capture with no standard records).
+
+## db-benchmark.py
+
+Measures everything that happens **after** flattening: the SQLite insert, the indexes, the widening a ruleset forces on the table, and the rule queries themselves. Use it when changing the schema, the indexes, `execute_select_query`'s repairs, or anything that touches how rule SQL reaches SQLite.
+
+It ingests the corpus once, then runs the whole ruleset twice — before and after `ANALYZE` — and reports the wall time of each alongside how many rule queries the planner put on the narrowest index available to them. That last number is the point: widening adds an all-NULL column for every field a rule names and the dataset never produced, and with no statistics SQLite prices a row by its column count, so a wide table quietly moves every query off its selective index. Same rules, same detections, several times the wall clock. Wall time alone blames the machine; the plan count names the cause.
+
+**"Selective" is never a hardcoded index name.** Each query is judged against its own options: whichever of the indexes it was ever planned on returns the fewest rows per key, as `ANALYZE` measured it. A query that can only ever be a full scan — `CommandLine LIKE '%x%'` — is counted apart rather than held against the planner.
+
+**An external EVTX corpus is required.** Every EVTX file tracked in this repository holds a
+single event, so pointing the benchmark at `tests/fixtures/` runs but measures noise. Use a
+real capture set such as [EVTX-ATTACK-SAMPLES](https://github.com/sbousseaden/EVTX-ATTACK-SAMPLES).
+
+Two deliberate properties worth knowing before reading the numbers:
+
+- It does **not** call `execute_ruleset`, which analyses the table itself and would leave the harness structurally unable to measure a run without statistics. It drives `ZircoliteCore.execute_rule` directly, which also skips output files and the detection table.
+- The two rule passes are compared by `{title: count}`, not by row order — driving a query from a different index returns the same rows in a different order. A mismatch exits `1`, so the harness is a correctness check as well as a timer.
+
+Measurement caveats: the first rule pass runs on a colder cache than the second, so `--rule-passes N` (best of N) is worth using before trusting a small delta; and `--index-delta` runs last, on a warm cache, which biases it in favour of the no-index configuration and therefore under-reports what the indexes are worth.
+
+### Arguments
+
+- **`--evtx`** (required): Path to an EVTX file or a directory of EVTX files (searched recursively).
+- **`--ruleset`** (required): Zircolite JSON ruleset to execute.
+- **`--config`**: Field mappings config file (default: `config/config.yaml`).
+- **`--max-files`**: Ingest at most this many files (default: `0`, meaning all).
+- **`--rule-passes`**: Ruleset runs per pass; the fastest is reported (default: `1`).
+- **`--auto-index`**: Index the top-N columns the ruleset references, as `--auto-index` does (default: `0`).
+- **`--index-delta`**: Add a third rule pass with the `idx_%` indexes dropped.
+
+### Usage
+
+From the Zircolite project root:
+
+```bash
+# Whole corpus, one ruleset
+pdm run python tools/db-benchmark.py \
+  --evtx /path/to/EVTX-ATTACK-SAMPLES \
+  --ruleset rules/rules_windows_generic.json
+
+# Best of three passes, plus the cost of running with no indexes at all
+pdm run python tools/db-benchmark.py \
+  --evtx /path/to/captures \
+  --ruleset rules/rules_windows_merged.json --rule-passes 3 --index-delta
+```
+
+### Output
+
+Prints the file and event counts, ingest throughput, the column count before and after widening, how many rule queries could be planned, the wall time of each rule pass and of `ANALYZE`, the selective-plan count either side of it, and the detection totals — followed by a per-pass tally of which index each plan drove from.
+
+### Exit code
+
+- `0` on success.
+- `1` if no events could be ingested, if `--ruleset` is not a Zircolite JSON ruleset, if no rule query could be planned, or if the two rule passes disagree about what matched.

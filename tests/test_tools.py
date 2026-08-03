@@ -1,11 +1,12 @@
 """Tests for the scripts in tools/.
 
 These scripts reach into the package -- ``StreamingEventProcessor._flatten_event``,
-``ZircoliteCore.run_streaming``, ``load_ruleset_from_var`` -- but nothing else in
-the suite drives them, so a rename in the engine used to leave them broken until
-somebody ran one by hand. The end-to-end cases here exist to fail at that moment.
+``ZircoliteCore.run_streaming``, ``load_ruleset_from_var``, ``execute_rule``,
+``_widen_logs_table`` -- but nothing else in the suite drives them, so a rename in
+the engine used to leave them broken until somebody ran one by hand. The
+end-to-end cases here exist to fail at that moment.
 
-Both filenames are hyphenated, so they are loaded by path rather than imported.
+The filenames are hyphenated, so they are loaded by path rather than imported.
 """
 
 import importlib.util
@@ -15,6 +16,8 @@ from pathlib import Path
 from unittest.mock import patch
 
 import pytest
+
+from zircolite import ProcessingConfig, ZircoliteCore
 
 WORKSPACE_ROOT = Path(__file__).parent.parent
 TOOLS = WORKSPACE_ROOT / "tools"
@@ -41,6 +44,11 @@ def regression():
 @pytest.fixture(scope="module")
 def benchmark():
     return load_tool("flatten-benchmark")
+
+
+@pytest.fixture(scope="module")
+def db_benchmark():
+    return load_tool("db-benchmark")
 
 
 # A rule split across pipelines: one Sigma id, two titles, as a merged Zircolite
@@ -290,3 +298,129 @@ class TestFlattenBenchmark:
 
     def test_collect_raw_events_returns_nothing_for_a_missing_path(self, benchmark, tmp_path):
         assert benchmark.collect_raw_events(tmp_path / "absent.evtx", 10) == []
+
+
+# One real MULTI-INDEX OR plan, captured from SQLite rather than invented: the
+# index names live on the nested rows, not on the row naming the strategy.
+MULTI_INDEX_OR_PLAN = [
+    "MULTI-INDEX OR",
+    "INDEX 1",
+    "SEARCH logs USING INDEX idx_eventid (EventID=?)",
+    "INDEX 2",
+    "SEARCH logs USING INDEX idx_channel (Channel=?)",
+]
+
+
+@pytest.mark.integration
+class TestDbBenchmark:
+    """Pins the ingest, widening and plan-reading surfaces the harness drives."""
+
+    def _core(self, field_mappings_file, test_logger):
+        core = ZircoliteCore(
+            config=field_mappings_file,
+            processing_config=ProcessingConfig(disable_progress=True, no_output=True),
+            logger=test_logger,
+        )
+        core.create_db('"Channel" TEXT COLLATE NOCASE, "CommandLine" TEXT COLLATE NOCASE')
+        core.db_connection.execute(
+            "INSERT INTO logs (Channel, CommandLine) VALUES (?, ?)",
+            ("Security", "c:/evil.exe"),
+        )
+        core.db_connection.commit()
+        return core
+
+    def test_runs_over_the_evtx_fixture(self, db_benchmark, capsys):
+        argv = [
+            "db-benchmark.py",
+            "--evtx", str(FIXTURES / "sample_bitsadmin.evtx"),
+            "--ruleset", str(FIXTURES / "sample_ruleset.json"),
+            "--config", str(CONFIG),
+        ]
+        with patch.object(sys, "argv", argv):
+            assert db_benchmark.main() == 0
+        out = capsys.readouterr().out
+        assert "events/s" in out
+        assert "selective:" in out
+
+    def test_a_missing_corpus_is_an_error_not_a_zero_measurement(self, db_benchmark, tmp_path):
+        argv = [
+            "db-benchmark.py",
+            "--evtx", str(tmp_path / "nothing-here.evtx"),
+            "--ruleset", str(FIXTURES / "sample_ruleset.json"),
+            "--config", str(CONFIG),
+        ]
+        with patch.object(sys, "argv", argv):
+            assert db_benchmark.main() == 1
+
+    def test_an_unreadable_ruleset_is_an_error(self, db_benchmark, tmp_path):
+        not_a_ruleset = tmp_path / "notes.txt"
+        not_a_ruleset.write_text("this is not a ruleset")
+        argv = [
+            "db-benchmark.py",
+            "--evtx", str(FIXTURES / "sample_bitsadmin.evtx"),
+            "--ruleset", str(not_a_ruleset),
+            "--config", str(CONFIG),
+        ]
+        with patch.object(sys, "argv", argv):
+            assert db_benchmark.main() == 1
+
+    def test_a_rule_naming_an_absent_field_is_planned_not_written_off(
+        self, db_benchmark, field_mappings_file, test_logger
+    ):
+        """Widening has to run before EXPLAIN, or 43% of rules never get a plan."""
+        core = self._core(field_mappings_file, test_logger)
+        try:
+            ruleset = [{"rule": ["SELECT * FROM logs WHERE OriginalFileName = 'x'"]}]
+            prepared, unpreparable = db_benchmark.prepare_queries(core, ruleset)
+
+            assert len(prepared) == 1
+            assert not unpreparable
+            assert "OriginalFileName" in core._get_table_columns()
+        finally:
+            core.close()
+
+    def test_a_regexp_rule_can_be_planned(self, db_benchmark, field_mappings_file, test_logger):
+        """SQLite resolves function names when it prepares, so EXPLAIN needs the UDF.
+
+        A bare ``sqlite3.connect`` raises ``no such function: REGEXP`` here, which
+        would silently write off every regex rule as unplannable.
+        """
+        core = self._core(field_mappings_file, test_logger)
+        try:
+            details = db_benchmark.plan_for(
+                core, "SELECT * FROM logs WHERE CommandLine REGEXP 'evil'"
+            )
+
+            assert details
+        finally:
+            core.close()
+
+    def test_a_scan_is_not_a_selective_plan(self, db_benchmark):
+        search_b = ["SEARCH logs USING INDEX idx_b (x=?)"]
+
+        assert db_benchmark.plan_verdict(["SCAN logs"], {"idx_a"}, {"idx_a"}) == "scan"
+        assert db_benchmark.plan_verdict(search_b, {"idx_a", "idx_b"}, {"idx_a"}) == "broad"
+        assert db_benchmark.plan_verdict(search_b, {"idx_a", "idx_b"}, {"idx_b"}) == "selective"
+        assert db_benchmark.plan_verdict(["SCAN logs"], set(), set()) == "unindexable"
+
+    def test_a_multi_index_or_plan_counts_its_indexes(self, db_benchmark):
+        assert db_benchmark.indexes_used(MULTI_INDEX_OR_PLAN) == {"idx_eventid", "idx_channel"}
+
+    def test_a_transient_index_is_not_counted_as_one(self, db_benchmark):
+        """An automatic index means no stored index served the query."""
+        details = ["SEARCH logs USING AUTOMATIC COVERING INDEX (CommandLine=?)"]
+
+        assert db_benchmark.indexes_used(details) == set()
+        assert db_benchmark.plan_label(details) == "AUTOMATIC INDEX"
+
+    def test_narrowest_picks_the_index_with_the_fewest_rows_per_key(self, db_benchmark):
+        stats = {"idx_eventid": 12.0, "idx_channel": 75000.0}
+
+        assert db_benchmark.narrowest({"idx_eventid", "idx_channel"}, stats) == {"idx_eventid"}
+        assert db_benchmark.narrowest(set(), stats) == set()
+
+    def test_collect_evtx_files_searches_a_directory(self, db_benchmark):
+        files = db_benchmark.collect_evtx_files(FIXTURES, 0)
+
+        assert files, "the EVTX fixture should be found by the recursive search"
+        assert all(f.suffix == ".evtx" for f in files)
