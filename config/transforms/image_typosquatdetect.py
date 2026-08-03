@@ -1,13 +1,17 @@
 def transform(param):
     # High-value targets for typosquatting detection
-    # These are processes attackers commonly impersonate
+    # These are processes attackers commonly impersonate.
+    # Names under five characters are deliberately absent: the comparison loop
+    # skips them, because at that length an edit distance of one matches far
+    # too much. Short ones (cmd, dwm, smss, wmic) are whitelisted instead, so
+    # they are never flagged themselves.
     typosquat_targets = [
         # Critical Windows processes (most commonly impersonated)
-        'svchost', 'services', 'lsass', 'csrss', 'smss', 'wininit',
-        'winlogon', 'explorer', 'taskhost', 'taskhostw', 'dwm',
+        'svchost', 'services', 'lsass', 'csrss', 'wininit',
+        'winlogon', 'explorer', 'taskhost', 'taskhostw',
         'conhost', 'dllhost', 'spoolsv', 'searchindexer', 'wmiprvse',
         # LOLBins (commonly abused)
-        'powershell', 'cmd', 'rundll32', 'regsvr32', 'mshta', 'wmic',
+        'powershell', 'rundll32', 'regsvr32', 'mshta',
         'cscript', 'wscript', 'msiexec', 'certutil', 'bitsadmin',
         # Browsers
         'chrome', 'firefox', 'msedge', 'iexplore',
@@ -36,7 +40,7 @@ def transform(param):
         'cmd', 'command',
         # Windows services and hosts
         'svchost', 'taskhost', 'taskhostw', 'dllhost', 'conhost',
-        'RuntimeBroker', 'smartscreen', 'fontdrvhost', 'sihost',
+        'runtimebroker', 'smartscreen', 'fontdrvhost', 'sihost',
         'ctfmon', 'dwm', 'winlogon', 'wininit', 'csrss', 'smss',
         'lsass', 'lsm', 'services', 'spoolsv', 'wuauclt', 'trustedinstaller',
         # Microsoft Office
@@ -58,6 +62,8 @@ def transform(param):
         # Network tools
         'ping', 'nslookup', 'dig', 'curl', 'wget', 'ssh', 'scp', 'sftp',
         'ftp', 'telnet', 'putty', 'plink', 'pscp', 'psftp',
+        # Too short to be compared as targets, but still legitimate
+        'cmd', 'dwm', 'smss', 'wmic',
         # All typosquat targets are also legitimate
     ] + typosquat_targets)
     
@@ -145,9 +151,10 @@ def transform(param):
                 if not patterns:
                     patterns.append('CHAR_SWAP')
             
-            # Only report if we found suspicious patterns
+            # Only report if we found suspicious patterns. Every branch above
+            # that sets is_suspicious also names the pattern that set it, so a
+            # finding always says which technique fired.
             if is_suspicious:
-                pattern_str = ','.join(patterns) if patterns else 'SIMILAR'
-                findings.append(f'TYPOSQUAT:{target}({pattern_str})')
+                findings.append(f"TYPOSQUAT:{target}({','.join(patterns)})")
     
     return '|'.join(findings[:2]) if findings else ''  # Limit output

@@ -15,6 +15,7 @@ Tests cover:
 
 import argparse
 import json
+import re
 import sqlite3
 from argparse import Namespace
 from pathlib import Path
@@ -2050,6 +2051,75 @@ class TestShippedTransformsAreWired:
             assert body in inline_bodies, (
                 f"{orphan} is loaded by nothing and matches no inline transform"
             )
+
+
+def _string_literals(source: str, first_line: int, last_line: int) -> list[str]:
+    """Single-quoted literals between two 1-based line numbers."""
+    body = "\n".join(source.splitlines()[first_line - 1:last_line])
+    return re.findall(r"'([^']*)'", body)
+
+
+def _typosquat_source() -> str:
+    return (TRANSFORMS_DIR / "image_typosquatdetect.py").read_text()
+
+
+def _typosquat_block(marker: str, end_marker: str) -> list[str]:
+    source = _typosquat_source()
+    lines = source.splitlines()
+    start = next(i for i, line in enumerate(lines, 1) if marker in line)
+    end = next(i for i, line in enumerate(lines[start:], start + 1) if end_marker in line)
+    return _string_literals(source, start, end)
+
+
+class TestTyposquatDetectDataIsReachable:
+    """Data the typosquat transform can never act on is a silent gap.
+
+    Every entry here is looked up against a value the code has already
+    lower-cased, or compared against a length floor the code enforces itself.
+    An entry on the wrong side of either is dead weight that reads as coverage.
+    """
+
+    def test_no_target_is_below_the_length_floor(self):
+        """Targets shorter than the floor are skipped before comparison."""
+        source = _typosquat_source()
+        floor = int(re.search(r"if len\(target\) < (\d+):", source).group(1))
+        targets = _typosquat_block("typosquat_targets = [", "]")
+        unreachable = sorted({t for t in targets if len(t) < floor})
+        assert unreachable == [], (
+            f"these typosquat targets are never compared, the loop skips "
+            f"anything under {floor} characters: {unreachable}"
+        )
+
+    def test_whitelist_is_lower_case(self):
+        """`exe_name` is lower-cased before the lookup, so entries must be too."""
+        source = _typosquat_source()
+        assert ".lower()" in source
+        entries = _typosquat_block("legit_whitelist = set([", "] + typosquat_targets)")
+        mixed = sorted({w for w in entries if w != w.lower()})
+        assert mixed == [], (
+            f"these whitelist entries can never match a lower-cased exe name: {mixed}"
+        )
+
+    def test_whitelisted_names_are_not_flagged(self, shipped_processor):
+        """The whitelist is what keeps legitimate binaries out of the report."""
+        code = _typosquat_source()
+        for name in ("RuntimeBroker", "runtimebroker", "wevtutil", "cmd", "wmic"):
+            value = f"C:\\Windows\\System32\\{name}.exe"
+            assert shipped_processor._transform_value(code, value) == "", (
+                f"{name} is whitelisted but was flagged as a typosquat"
+            )
+
+    def test_every_reported_technique_is_named(self, shipped_processor):
+        """A finding must say which technique fired, never an empty bracket."""
+        code = _typosquat_source()
+        for value in ("svch0st.exe", "1sass.exe", "chr0me.exe", "svchosts.exe",
+                      "explore.exe", "powershel.exe"):
+            result = shipped_processor._transform_value(code, value)
+            if not result:
+                continue
+            for finding in result.split("|"):
+                technique = finding.partition("(")[2].rstrip(")")
+                assert technique, f"{value} produced a finding with no technique: {finding}"
 
 
 @pytest.mark.parametrize("transform_file", SHIPPED_TRANSFORMS)
