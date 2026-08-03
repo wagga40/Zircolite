@@ -1,63 +1,54 @@
 # Zircolite Documentation
 
-Documentation for **Zircolite**. Zircolite is a standalone SIGMA-based detection tool for EVTX, Auditd, Sysmon for Linux, XML, CSV, and JSONL/NDJSON logs. It uses SQLite as a backend for SIGMA rule execution.
+**Zircolite** is a standalone Python 3 tool that applies SIGMA detection rules to log
+files. Rules are converted to SQLite SQL, events are flattened into an in-memory SQLite
+database, and each rule runs as a query against it.
 
-**Zircolite** supports the following log sources:
+It reads MS Windows EVTX (binary, XML and JSONL), Auditd, Sysmon for Linux, EVTXtract,
+CSV, XML and JSON — plain, compressed or archived — and in most cases works out which is
+which on its own.
 
-- MS Windows EVTX (EVTX, XML, and JSONL formats)
-- Auditd logs
-- Sysmon for Linux
-- EVTXtract
-- CSV and XML logs
-- JSON Array logs
+## Quick start
 
-### Key Features
+```shell
+pip3 install -r requirements.txt
+python3 zircolite.py --events <logs> --ruleset rules/rules_windows_merged.json
+```
 
+Results are written to `detected_events.json`, with a detection table and summary panel on
+the terminal. `python3 -m zircolite …` is equivalent from the project root — though
+`python -m` searches the working directory rather than the script's own, so the
+`zircolite.py` form is the one that works from anywhere.
 
-- **Multiple Input Formats**: Supports EVTX, JSON Lines, JSON Arrays, CSV, XML, Auditd, and Sysmon for Linux logs.
-- **Automatic Log Type Detection**: Automatically identifies log formats (EVTX, Windows JSON/XML, Sysmon, Auditd, ECS, CSV, etc.) and timestamp fields using magic bytes, content analysis, and regex-based fallback -- reducing the need for explicit CLI flags.
-- **Parallel Processing**: Automatic parallel file processing. Worker count is calculated based on available RAM, CPU cores, and file sizes.
-- **Single-pass processing**: extraction, flattening and database insertion happen in one streaming pass — there is no alternative pipeline to select.
-- **YAML Configuration**: Support for YAML configuration files for complex analysis workflows.
-- **SIGMA Backend**: Based on a SQLite backend for SIGMA rules.
-- **Native Sigma Support**: Directly use native Sigma rules (YAML) via pySigma conversion.
-- **Field Transforms**: Apply Python transformations to fields during processing (e.g., Base64 decoding, IOC extraction) using RestrictedPython.
-- **Field Splitting**: Extract key-value pairs from fields (e.g., split Sysmon `Hashes` field into `MD5`, `SHA256` fields).
-- **Flexible Export**: Export results to JSON, CSV, Splunk, Elastic, Zinc, Timesketch, and more using Jinja templates.
+Start with [Usage → Requirements and Installation](Usage.md#requirements-and-installation)
+and [Usage → Basic Usage](Usage.md#basic-usage).
 
-**You can use Zircolite directly with Python.**
+## Contents
 
-### Quick start
+| Page | Covers |
+|------|--------|
+| [Usage](Usage.md) | Installation, running, every command-line option, input formats, rulesets, rule testing, configuration, Docker |
+| [Advanced](Advanced.md) | Field transforms, large datasets, parallel processing, event filtering, templating, the Mini-GUI |
+| [Internals](Internals.md) | Architecture, module map, SQLite behaviour, automatic SQL repairs |
 
-1. Install dependencies: `pip3 install -r requirements.txt`
-2. Run: `python3 zircolite.py --events <logs> --ruleset <ruleset>`
-3. For EVTX with Windows rules (merged): `python3 zircolite.py --evtx sample.evtx --ruleset rules/rules_windows_merged.json`
+## Task and Taskfile
 
-`python3 -m zircolite ...` is equivalent, from the project root. `python -m` searches the
-working directory rather than the script's own, so the `zircolite.py` form is the one that
-works from anywhere.
-
-See [Usage → First run](Usage.md#first-run), [Usage → Basic usage](Usage.md#basic-usage), and [Usage → Automatic Log Type Detection](Usage.md#automatic-log-type-detection) for details.
-
-### Task and Taskfile
-
-The project uses [Task](https://taskfile.dev/) (go-task) for automation. Install Task from [taskfile.dev](https://taskfile.dev/installation/) or your package manager, then run tasks from the project root:
+The project uses [Task](https://taskfile.dev/) (go-task) for automation. Install it from
+[taskfile.dev](https://taskfile.dev/installation/) or your package manager, then run from
+the project root:
 
 | Task | Description |
 |------|-------------|
 | `task --list` | List all available tasks |
-| `task clean` | Remove default artifacts (detected_events.json, tmp-*, zircolite.log, etc.) |
-| `task update-rules` | Update default rulesets from [Zircolite-Rules-v2](https://github.com/wagga40/Zircolite-Rules-v2) (overwrites existing rules in `rules/`) |
-| `task docker-build` | Build the Docker image (requires Docker) |
-| `task docker-build-multi-arch` | Build multi-architecture image (linux/amd64, linux/arm64) |
-| `task docker-push` | Push the image to Docker Hub (after multi-arch build) |
-| `task get-version` | Print version from `zircolite/__init__.py` |
-| `task save` | Save the Docker image to an archive (set `DOCKER_TAG` as needed) |
+| `task clean` | Remove default artifacts (`detected_events.json`, `tmp-*`, `zircolite.log`, …) |
+| `task update-rules` | Update the default rulesets from [Zircolite-Rules-v2](https://github.com/wagga40/Zircolite-Rules-v2), overwriting `rules/` |
+| `task docker-build` | Build the Docker image |
+| `task docker-build-multi-arch` | Build for linux/amd64 and linux/arm64 |
+| `task docker-push` | Push to Docker Hub, after a multi-arch build |
+| `task save` | Save the Docker image to an archive |
+| `task get-version` | Print the version from `zircolite/__init__.py` |
 
-The `Taskfile.yml` in the repository defines these production tasks. Development tasks (lint, format, tests) live in a separate Taskfile that is not committed; see [CONTRIBUTING.md](https://github.com/wagga40/Zircolite/blob/master/CONTRIBUTING.md) for running them directly.
-
-### Documentation Contents
-
-- [Usage](Usage.md) - Installation, first run, basic usage, and input formats
-- [Advanced](Advanced.md) - Working with large datasets, the streaming pipeline, parallel processing, filtering, templating, and the Mini-GUI
-- [Internals](Internals.md) - Architecture and project structure
+`Taskfile.yml` holds these production tasks. Development tasks — lint, format, tests —
+live in a separate Taskfile that is not committed; see
+[CONTRIBUTING.md](https://github.com/wagga40/Zircolite/blob/master/CONTRIBUTING.md) for
+running them directly.

@@ -43,7 +43,7 @@ The project has been tested with Python 3.10 and above. Install dependencies wit
 
 ## Quick Start
 
-Check out tutorials made by others (EN, ES, and FR) [here](#tutorials).
+Check out (old) tutorials made by others (EN, ES, and FR) [here](#tutorials).
 
 ### EVTX Files
 
@@ -133,43 +133,19 @@ Override any of it with `--no-auto-mode`, `--unified-db` (one database for all f
 For complex or repeated analysis workflows, use a YAML configuration file:
 
 ```shell
-# Generate a default configuration file
+# Generate a fully commented configuration file
 python3 zircolite.py --generate-config my_config.yaml
 
-# Run with a configuration file
+# Run with it
 python3 zircolite.py --yaml-config my_config.yaml
 
-# CLI arguments override config file settings
+# CLI arguments override the file
 python3 zircolite.py --yaml-config my_config.yaml --evtx ./other_logs/
 ```
 
-Example configuration file (`config/zircolite_example.yaml`):
-
-```yaml
-input:
-  path: ./logs/
-  format: evtx
-  recursive: true
-
-rules:
-  rulesets:
-    - rules/rules_windows_merged.json
-  pipelines:
-    - sysmon
-
-output:
-  file: detected_events.json
-  format: json
-
-processing:
-  unified_db: false    # Per-file databases (default)
-  auto_mode: true      # Automatic mode selection (default: enabled)
-
-parallel:
-  enabled: true        # Parallel processing (auto-enabled when beneficial)
-  max_workers: null    # Auto-detect based on CPU/memory
-  memory_limit_percent: 85.0
-```
+The generated file documents every supported key; `config/zircolite_example.yaml` is a
+worked example. See [YAML configuration](docs/Usage.md#yaml-configuration) for the merge
+rules and the options that have no YAML equivalent.
 
 ### Updating Default Rulesets
 
@@ -187,30 +163,13 @@ Alternatively, if you use [Task](https://taskfile.dev/) (go-task), run `task upd
 Two configuration features shape events as they are ingested, both in `config/config.yaml`:
 
 - **Field splitting** turns a packed key-value field into queryable ones. Sysmon's `Hashes` field (`SHA1=abc123,MD5=def456,SHA256=789xyz`) becomes separate `SHA1`, `MD5` and `SHA256` fields, so rules can match a hash directly.
-- **Field transforms** run sandboxed Python over a field's value — decoding base64 command lines, extracting IOCs, flagging LOLBins — and can write the result to a new field rather than replacing the original.
+- **Field transforms** run sandboxed Python over a field's value — decoding base64 command lines, extracting IOCs, flagging LOLBins — and can write the result to a new field rather than replacing the original. Zircolite ships 55 of them across 11 categories, off by default apart from the two auditd ones.
 
 ```yaml
 split:
   Hashes:
     separator: ","
     equal: "="
-
-transforms:
-  CommandLine:
-    - info: "Base64 decode"
-      type: python
-      code: |
-        def transform(param):
-            import base64, re
-            match = re.search(r'-[eE]nc(?:odedcommand)?\s+([A-Za-z0-9+/=]+)', param)
-            if match:
-                try:
-                    return base64.b64decode(match.group(1)).decode('utf-16-le')
-                except Exception:
-                    return ""
-            return ""
-      alias: true
-      alias_name: "CommandLine_b64decoded"
 ```
 
 See [Field Splitting](docs/Usage.md#field-splitting) and [Field Transforms](docs/Advanced.md#field-transforms) for the full configuration, the transforms Zircolite ships, and how to test your own.
