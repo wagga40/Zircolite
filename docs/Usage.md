@@ -655,18 +655,25 @@ python3 zircolite.py --evtx output.db --ruleset <RULESET> --db-input
 
 #### Database indexes
 
-An index on `eventid` is always created, and one on `Channel` too when the logs table has
-that column. Adjust the set by hand:
+An index on `eventid` is created when the logs table has that column. When it has a
+`Channel` column too, the second index is the composite `idx_channel_eventid` on
+`(Channel, eventid)` rather than one on `Channel` alone — the Sigma shape is
+`Channel = … AND EventID = …`, and a channel-only index leaves SQLite fetching and
+re-checking every row of the channel. Its leading column still serves the rules that
+name only a channel, so it replaces `idx_channel` rather than joining it; a dataset with
+a `Channel` column but no `eventid` still gets a plain `idx_channel`. Adjust the set by
+hand:
 
 ```shell
 # Add indexes
 python3 zircolite.py --evtx logs/ --ruleset rules/rules_windows_merged.json --add-index Channel EventID
 
 # Drop one by name
-python3 zircolite.py --evtx logs/ --ruleset rules/rules_windows_merged.json --remove-index idx_channel
+python3 zircolite.py --evtx logs/ --ruleset rules/rules_windows_merged.json --remove-index idx_channel_eventid
 ```
 
-Index names follow the `idx_<column>` form: `idx_eventid`, `idx_channel`, `idx_SystemTime`.
+Index names follow the `idx_<column>` form: `idx_eventid`, `idx_SystemTime`. The
+composite is named for both of its columns, `idx_channel_eventid`.
 
 To let Zircolite choose, `--auto-index` inspects the loaded ruleset and indexes the N
 columns that the most *rules* filter on (N defaults to 5). It ranks by rule count, not

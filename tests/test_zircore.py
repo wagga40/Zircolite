@@ -415,8 +415,12 @@ class TestZircoliteCoreDatabase:
         assert "Channel" in cols
         zircore.close()
 
-    def test_create_index_with_channel_column_creates_idx_channel(self, field_mappings_file, test_logger):
-        """When logs table has Channel column, create_index creates idx_channel."""
+    def test_create_index_with_channel_column_creates_the_composite(self, field_mappings_file, test_logger):
+        """A Channel column earns a (Channel, eventid) index, not a lone one.
+
+        The Sigma shape is ``Channel = … AND EventID = …``; a channel-only index
+        leaves SQLite re-checking every row of the channel.
+        """
         zircore = ZircoliteCore(
             config=field_mappings_file,
             logger=test_logger
@@ -425,8 +429,50 @@ class TestZircoliteCoreDatabase:
         zircore.create_db(field_stmt)
         zircore.create_index()
         cursor = zircore.db_connection.cursor()
-        cursor.execute("SELECT name FROM sqlite_master WHERE type='index' AND name='idx_channel'")
-        assert cursor.fetchone() is not None
+        cursor.execute("SELECT name FROM sqlite_master WHERE type='index'")
+        names = {row[0] for row in cursor.fetchall()}
+        assert "idx_channel_eventid" in names
+        assert "idx_eventid" in names
+        zircore.close()
+
+    def test_a_channel_without_an_eventid_still_gets_indexed(self, field_mappings_file, test_logger):
+        """The composite needs both columns; falling back is not optional.
+
+        A dataset carrying Channel but no eventid would otherwise leave the one
+        column rules do filter on unindexed.
+        """
+        zircore = ZircoliteCore(
+            config=field_mappings_file,
+            logger=test_logger
+        )
+        zircore.create_db("'Channel' TEXT")
+        zircore.create_index()
+        cursor = zircore.db_connection.cursor()
+        cursor.execute("SELECT name FROM sqlite_master WHERE type='index'")
+        names = {row[0] for row in cursor.fetchall()}
+        assert "idx_channel" in names
+        assert "idx_channel_eventid" not in names
+        zircore.close()
+
+    def test_an_absent_column_is_not_indexed_over_a_constant(self, field_mappings_file, test_logger):
+        """SQLite would accept the statement and index nothing useful.
+
+        A double-quoted name that matches no column is read as a string literal
+        rather than rejected, so `CREATE INDEX ... ON logs ("eventid")` against a
+        table without one succeeds and builds an index over the constant
+        'eventid'. No error is raised and none of the queries can use it, so the
+        only signal is the wasted index sitting in the schema.
+        """
+        zircore = ZircoliteCore(
+            config=field_mappings_file,
+            logger=test_logger
+        )
+        zircore.create_db("'Channel' TEXT")
+        zircore.create_index()
+        cursor = zircore.db_connection.cursor()
+        cursor.execute("SELECT name FROM sqlite_master WHERE type='index'")
+        names = {row[0] for row in cursor.fetchall()}
+        assert "idx_eventid" not in names
         zircore.close()
 
     def test_create_index_add_index_creates_extra_indexes(self, field_mappings_file, test_logger):
@@ -448,7 +494,7 @@ class TestZircoliteCoreDatabase:
         cursor.execute("SELECT name FROM sqlite_master WHERE type='index'")
         names = [row[0] for row in cursor.fetchall()]
         assert "idx_eventid" in names
-        assert "idx_channel" in names  # auto-created when Channel column exists
+        assert "idx_channel_eventid" in names  # auto-created when Channel column exists
         assert "idx_SystemTime" in names  # from add_index (idx_Channel may be skipped if same as idx_channel)
         zircore.close()
 
@@ -496,7 +542,7 @@ class TestZircoliteCoreDatabase:
         assert "idx_TargetFilename" not in names
         # Built-in indices remain.
         assert "idx_eventid" in names
-        assert "idx_channel" in names
+        assert "idx_channel_eventid" in names
         zircore.close()
 
     def test_auto_index_zero_creates_no_extra_indices(self, field_mappings_file, test_logger):
@@ -2197,7 +2243,10 @@ class TestQueryPlannerStatistics:
             self._run_ruleset(core)
 
             assert self._rows_per_key(core, "idx_eventid") == self.EVENTID_ROWS_PER_KEY
-            assert self._rows_per_key(core, "idx_channel") == self.CHANNEL_ROWS_PER_KEY
+            assert (
+                self._rows_per_key(core, "idx_channel_eventid")
+                == self.CHANNEL_ROWS_PER_KEY
+            )
         finally:
             core.close()
 
@@ -2212,33 +2261,61 @@ class TestQueryPlannerStatistics:
                 "SELECT name FROM sqlite_master WHERE name = 'sqlite_stat1'"
             ).fetchone()
             assert analysed, "the logs table was never analysed"
-            assert set(self._stat1(core)) >= {"idx_eventid", "idx_channel"}
+            assert set(self._stat1(core)) >= {"idx_eventid", "idx_channel_eventid"}
         finally:
             core.close()
 
     def test_the_statistics_tell_the_selective_index_from_the_broad_one(
         self, field_mappings_file, test_logger
     ):
+        """A channel is the broad key here, an eventID the narrow one.
+
+        ``_rows_per_key`` reads the leading column, so the composite is being
+        priced as the channel lookup it starts with.
+        """
         core = self._core(field_mappings_file, test_logger)
         try:
             self._run_ruleset(core)
 
             assert self._rows_per_key(core, "idx_eventid") < self._rows_per_key(
-                core, "idx_channel"
+                core, "idx_channel_eventid"
             )
         finally:
             core.close()
 
-    def test_a_rule_naming_eventid_and_channel_searches_the_selective_index(
+    def test_a_rule_naming_eventid_and_channel_searches_on_both(
         self, field_mappings_file, test_logger
     ):
         """Only the post-condition: which index the planner guesses without
-        statistics is its own business, and changes between SQLite releases."""
+        statistics is its own business, and changes between SQLite releases.
+
+        Both columns must appear in the seek. A plan naming the composite but
+        constraining only ``Channel`` would still be fetching and re-checking
+        every row of that channel, which is the cost the composite exists to
+        remove.
+        """
         core = self._core(field_mappings_file, test_logger)
         try:
             self._run_ruleset(core)
+            plan = self._plan(core, self.SELECTIVE_QUERY)
 
-            assert "idx_eventid" in self._plan(core, self.SELECTIVE_QUERY)
+            assert "idx_channel_eventid" in plan
+            assert "Channel=? AND EventID=?" in plan
+        finally:
+            core.close()
+
+    def test_the_composite_narrows_further_than_either_column_alone(
+        self, field_mappings_file, test_logger
+    ):
+        """Why it replaced the channel-only index rather than joining it."""
+        core = self._core(field_mappings_file, test_logger)
+        try:
+            self._run_ruleset(core)
+            composite = self._stat1(core)["idx_channel_eventid"].split()
+            both_columns = int(composite[2])
+
+            assert both_columns < int(composite[1])  # narrower than Channel alone
+            assert both_columns <= self._rows_per_key(core, "idx_eventid")
         finally:
             core.close()
 
@@ -2262,7 +2339,7 @@ class TestQueryPlannerStatistics:
 
             assert len(core._get_table_columns()) >= 120
             assert self._stat1(core) == before
-            assert "idx_eventid" in self._plan(core, self.SELECTIVE_QUERY)
+            assert "idx_channel_eventid" in self._plan(core, self.SELECTIVE_QUERY)
         finally:
             core.close()
 

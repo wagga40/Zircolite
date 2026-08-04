@@ -231,6 +231,19 @@ after so the new indexes are covered. That analysis is not optional: rule wideni
 below) can more than double the column count, and with no statistics SQLite prices a row
 by column count alone and starts abandoning selective indexes.
 
+The built-in pair is `idx_eventid` and the composite `idx_channel_eventid`. A lone
+`Channel` index prices a rule's channel test correctly and then leaves SQLite fetching
+every row of that channel to re-check the eventID — which on a corpus carrying six
+channels measured ~1.6× the rule-phase wall clock against the same detections. The
+composite's leading column still serves channel-only rules, so it replaces the single
+index rather than joining it. `idx_eventid` stays because a `(Channel, …)` index cannot
+serve a rule that names only an eventID, and many do.
+
+Both are created only when the column is actually present. SQLite would otherwise accept
+`CREATE INDEX ... ON logs ("eventid")` against a table without that column by reading the
+quoted name as a string literal, building an index over a constant: no error raised, and
+nothing able to use it.
+
 ## Automatic SQL repairs
 
 A rule whose SQL cannot be prepared matches nothing, and looks exactly like a rule that

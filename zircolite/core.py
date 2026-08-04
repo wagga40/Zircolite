@@ -410,21 +410,40 @@ class ZircoliteCore:
         columns = self._get_table_columns()
         cursor = self._get_cursor()
 
-        self.execute_query('CREATE INDEX "idx_eventid" ON "logs" ("eventid");')
-
         # Case-folded like every other column lookup: a dataset whose channel
         # arrives as `winlog.channel` produces a lowercase `channel` column,
         # and an exact-case test would leave it unindexed.
-        channel_column = next((c for c in columns if c.lower() == "channel"), None)
-        if channel_column is not None:
+        #
+        # Presence is checked here rather than left to SQLite, which accepts
+        # `CREATE INDEX ... ON logs ("absent")` by reading the name as a string
+        # literal and building an index over a constant -- no error, no use.
+        by_lower = {c.lower(): c for c in columns}
+        eventid_column = by_lower.get("eventid")
+        channel_column = by_lower.get("channel")
+
+        def build(name: str, *cols: str) -> None:
+            keys = ", ".join(f'"{self.escape_identifier(c)}"' for c in cols)
             try:
-                escaped = self.escape_identifier(channel_column)
-                cursor.execute(
-                    f'CREATE INDEX "idx_channel" ON "logs" ("{escaped}");'
-                )
+                cursor.execute(f'CREATE INDEX "{name}" ON "logs" ({keys});')
                 conn.commit()
-            except sqlite3.OperationalError:
-                pass
+            except sqlite3.OperationalError as e:
+                self.logger.debug("Could not create index %s: %s", name, e)
+
+        # Kept alongside the composite: a (Channel, …) index cannot serve a rule
+        # that names only an eventID, and plenty do.
+        if eventid_column is not None:
+            build("idx_eventid", eventid_column)
+
+        if channel_column is not None:
+            if eventid_column is not None:
+                # Composite rather than an index on Channel alone. The Sigma
+                # shape is `Channel = … AND EventID = …`, and a channel-only
+                # index leaves SQLite fetching and re-checking every row of the
+                # channel. Its left prefix still serves the channel-only rules a
+                # lone idx_channel did, so this replaces it rather than joining.
+                build("idx_channel_eventid", channel_column, eventid_column)
+            else:
+                build("idx_channel", channel_column)
 
         self._create_column_indexes(self.add_index, columns)
 
