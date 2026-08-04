@@ -216,6 +216,107 @@ def print_histogram(title: str, counts: Counter) -> None:
         print(f"  {label:<28} {count:>5,}")
 
 
+# What Zircolite builds, what it used to build, and the floor. Each entry is a
+# label and the index definitions to create; the columns are resolved against
+# the corpus, so a set naming one the dataset lacks is skipped rather than faked.
+_INDEX_SETS: list[tuple[str, list[tuple[str, tuple[str, ...]]]]] = [
+    ("none", []),
+    ("eventid only", [("idx_eventid", ("eventid",))]),
+    (
+        "eventid + channel",
+        [("idx_eventid", ("eventid",)), ("idx_channel", ("channel",))],
+    ),
+    (
+        "eventid + composite",
+        [
+            ("idx_eventid", ("eventid",)),
+            ("idx_channel_eventid", ("channel", "eventid")),
+        ],
+    ),
+]
+
+
+def build_index_set(
+    core: ZircoliteCore, definitions: list[tuple[str, tuple[str, ...]]]
+) -> tuple[list[str], float]:
+    """Drop every index, build *definitions*, ANALYZE. Returns names and build time.
+
+    Column names are matched case-insensitively against the corpus, the way
+    ``create_index`` does: a dataset whose channel arrives as ``winlog.channel``
+    flattens to a lowercase column, and an exact-case test would silently build
+    nothing. A definition naming an absent column is skipped, because SQLite
+    would otherwise accept the quoted name as a string literal and index a
+    constant.
+    """
+    drop_indexes(core)
+    by_lower = {c.lower(): c for c in core._get_table_columns()}
+    built: list[str] = []
+    start = time.perf_counter()
+    for name, columns in definitions:
+        resolved = [by_lower.get(c) for c in columns]
+        if any(c is None for c in resolved):
+            continue
+        keys = ", ".join(f'"{core.escape_identifier(c)}"' for c in resolved)
+        core.db_connection.execute(f'CREATE INDEX "{name}" ON "logs" ({keys})')
+        built.append(name)
+    core.db_connection.execute("ANALYZE logs")
+    core.db_connection.commit()
+    return built, time.perf_counter() - start
+
+
+def compare_index_sets(core: ZircoliteCore, prepared: list[str], args) -> int:
+    """Time the ruleset under each index set, and refuse to differ on detections.
+
+    Wall time is only half the answer: an index set that is faster because it
+    found less is a regression, not a win. Detections are compared as
+    ``{title: count}`` rather than by row order, since driving a query from a
+    different index returns the same rows in a different order.
+    """
+    print(f"index sets (best of {max(1, args.rule_passes)} rule passes each)")
+    baseline: dict[str, int] | None = None
+    baseline_label = ""
+    slowest = 0.0
+    rows: list[tuple[str, str, float, float, int]] = []
+
+    for label, definitions in _INDEX_SETS:
+        built, build_seconds = build_index_set(core, definitions)
+        elapsed, counts = best_of(core, args.rule_passes)
+        slowest = max(slowest, elapsed)
+        selective = 0
+        stats = rows_per_key(core.db_connection)
+        for query in prepared:
+            plan = plan_for(core, query)
+            candidates = indexes_used(plan)
+            if plan_verdict(plan, candidates, narrowest(candidates, stats)) == "selective":
+                selective += 1
+        rows.append(
+            (label, ", ".join(built) or "-", build_seconds, elapsed, selective)
+        )
+
+        if baseline is None:
+            baseline, baseline_label = counts, label
+        elif counts != baseline:
+            moved = sorted(set(counts.items()) ^ set(baseline.items()))
+            print(
+                f"Detections under '{label}' differ from '{baseline_label}': "
+                f"{moved[:10]}",
+                file=sys.stderr,
+            )
+            return 1
+
+    print(f"{'set':<22}{'rules':>10}{'vs slowest':>12}{'build':>10}{'selective':>11}")
+    for label, built, build_seconds, elapsed, selective in rows:
+        print(
+            f"{label:<22}{elapsed * 1000:>9,.0f}ms"
+            f"{slowest / elapsed:>11.2f}x"
+            f"{build_seconds * 1000:>8,.0f}ms"
+            f"{selective:>11,}"
+        )
+        print(f"  {built}")
+    print(f"\ndetections identical across every set: {len(baseline or {}):,} rules")
+    return 0
+
+
 def benchmark(core: ZircoliteCore, files: list[Path], ruleset: list[dict], args) -> int:
     """Ingest once, then run the ruleset either side of ANALYZE and report."""
     start = time.perf_counter()
@@ -241,6 +342,9 @@ def benchmark(core: ZircoliteCore, files: list[Path], ruleset: list[dict], args)
     if not prepared:
         print("No rule query could be planned against this corpus.", file=sys.stderr)
         return 1
+
+    if args.index_sets:
+        return compare_index_sets(core, prepared, args)
 
     plans_cold = {query: plan_for(core, query) for query in prepared}
     cold, counts_cold = best_of(core, args.rule_passes)
@@ -329,6 +433,11 @@ def main() -> int:
     )
     ap.add_argument(
         "--index-delta", action="store_true", help="Add a third rule pass with the indexes dropped"
+    )
+    ap.add_argument(
+        "--index-sets",
+        action="store_true",
+        help="Time the ruleset under each candidate index set instead of either side of ANALYZE",
     )
     args = ap.parse_args()
 

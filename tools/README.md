@@ -184,6 +184,29 @@ Measurement caveats: the first rule pass runs on a colder cache than the second,
 - **`--rule-passes`**: Ruleset runs per pass; the fastest is reported (default: `1`).
 - **`--auto-index`**: Index the top-N columns the ruleset references, as `--auto-index` does (default: `0`).
 - **`--index-delta`**: Add a third rule pass with the `idx_%` indexes dropped.
+- **`--index-sets`**: Time the ruleset under each candidate index set instead of either side of `ANALYZE`.
+
+### Comparing index sets
+
+`--index-sets` answers a different question from the default mode: not "do the statistics
+help?" but "which indexes are worth building?". It drops every index, builds one candidate
+set, runs `ANALYZE`, times the ruleset, and repeats — reporting build cost and rule time
+side by side, plus the selective-plan count for each.
+
+The sets are `none`, `eventid only`, `eventid + channel` (what Zircolite built before) and
+`eventid + composite` (what it builds now). A set naming a column the corpus does not carry
+is skipped rather than faked, so an auditd or sysmon-for-linux capture simply reports fewer
+rows.
+
+**Detections are compared across every set and a difference exits `1`.** An index set that
+is faster because it found less is a regression, and wall time alone cannot tell the two
+apart.
+
+**The corpus decides whether this measures anything.** The composite `(Channel, eventid)`
+exists to stop SQLite fetching every row of a channel to re-check the eventID, so a corpus
+carrying a single `Channel` value — which is common, and includes some large public
+captures — cannot show a difference between it and a channel-only index. Read this mode on
+a multi-channel corpus, or it will report a tie and mean nothing by it.
 
 ### Usage
 
