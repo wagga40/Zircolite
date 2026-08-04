@@ -18,6 +18,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from zircolite import ProcessingConfig, ZircoliteCore, sqlscan
 from zircolite.core import _compile_regex
+from zircolite.streaming import StreamingEventProcessor
 
 
 class TestZircoliteCoreInit:
@@ -2528,5 +2529,71 @@ class TestTheRulesetIsLexedOnce:
 
             assert "Absent" in core._get_table_columns()
             assert lexed == [query]
+        finally:
+            core.close()
+
+
+class TestBatchSizeReachesTheProcessor:
+    """``ProcessingConfig.batch_size`` must survive the trip into streaming.
+
+    ``run_streaming`` builds a fresh ``ProcessingConfig`` for the processor, and
+    every field it forgets to copy is silently replaced by a default -- the
+    caller's value is accepted without complaint and never used.
+    """
+
+    def test_a_configured_batch_size_is_what_streaming_inserts_with(
+        self, field_mappings_file, test_logger, tmp_path
+    ):
+        events = tmp_path / "events.json"
+        events.write_text(
+            "\n".join(
+                json.dumps(
+                    {
+                        "Event": {
+                            "System": {
+                                "Channel": "Security",
+                                "EventID": 4624,
+                                "SystemTime": "2024-01-01T00:00:00Z",
+                            }
+                        }
+                    }
+                )
+                for _ in range(7)
+            ),
+            encoding="utf-8",
+        )
+        core = ZircoliteCore(
+            config=field_mappings_file,
+            processing_config=ProcessingConfig(
+                batch_size=3, disable_progress=True, no_output=True
+            ),
+            logger=test_logger,
+        )
+        seen = []
+        try:
+            original = StreamingEventProcessor._insert_batch
+
+            def spy(processor, connection, cursor, batch):
+                seen.append(len(batch))
+                return original(processor, connection, cursor, batch)
+
+            with patch.object(StreamingEventProcessor, "_insert_batch", spy):
+                core.run_streaming(
+                    [str(events)],
+                    input_type="json",
+                    args_config=None,
+                    disable_progress=True,
+                )
+        finally:
+            core.close()
+
+        assert seen == [3, 3, 1]
+
+    def test_the_default_is_unchanged_when_nothing_asks_for_one(
+        self, field_mappings_file, test_logger
+    ):
+        core = ZircoliteCore(config=field_mappings_file, logger=test_logger)
+        try:
+            assert core.batch_size == ProcessingConfig().batch_size
         finally:
             core.close()

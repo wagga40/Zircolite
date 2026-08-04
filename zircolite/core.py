@@ -123,6 +123,7 @@ class ZircoliteCore:
         "add_index",
         "archive_password",
         "auto_index_top_n",
+        "batch_size",
         "config",
         "csv_mode",
         "db_connection",
@@ -187,6 +188,7 @@ class ZircoliteCore:
         self.profile_rules = proc.profile_rules
         self._profiling_data: dict = {}
         self.archive_password = proc.archive_password
+        self.batch_size = proc.batch_size
         self.add_index = list(proc.add_index) if proc.add_index else []
         self.remove_index = list(proc.remove_index) if proc.remove_index else []
         self.auto_index_top_n = max(0, int(proc.auto_index_top_n or 0))
@@ -1363,6 +1365,7 @@ class ZircoliteCore:
             disable_progress=disable_progress or self.disable_progress,
             archive_password=self.archive_password,
             strict_evtx=self.strict_evtx,
+            batch_size=self.batch_size,
         )
         processor = StreamingEventProcessor(
             config_file=self.config,
