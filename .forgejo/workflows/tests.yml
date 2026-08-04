@@ -13,6 +13,11 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
+# Inert here -- this runner is Linux, where UTF-8 is already the default. It
+# mirrors the GitHub side, where the Windows legs need it.
+env:
+  PYTHONUTF8: "1"
+
 jobs:
   tests:
     runs-on: ubuntu-latest

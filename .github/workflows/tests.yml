@@ -6,6 +6,14 @@ on:
   pull_request:
   workflow_dispatch:
 
+# Windows defaults to cp1252, and the suite reads Zircolite's UTF-8 output --
+# the emoji in the argparse group names alone are enough to break it. Zircolite
+# itself never relies on the platform default: every open() in the package names
+# its encoding. This puts the harness on the same footing rather than papering
+# over a product bug.
+env:
+  PYTHONUTF8: "1"
+
 jobs:
   tests:
     runs-on: ${{ matrix.os }}

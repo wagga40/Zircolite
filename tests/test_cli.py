@@ -1854,6 +1854,7 @@ class TestCLISubprocessExecution:
             [sys.executable, 'zircolite.py', '--help'],
             capture_output=True,
             text=True,
+            encoding="utf-8",
             cwd=str(Path(__file__).parent.parent)
         )
 
@@ -1867,6 +1868,7 @@ class TestCLISubprocessExecution:
             [sys.executable, 'zircolite.py', '-v'],
             capture_output=True,
             text=True,
+            encoding="utf-8",
             cwd=str(Path(__file__).parent.parent)
         )
 
@@ -1880,6 +1882,7 @@ class TestCLISubprocessExecution:
             [sys.executable, 'zircolite.py', '-n'],
             capture_output=True,
             text=True,
+            encoding="utf-8",
             cwd=str(Path(__file__).parent.parent)
         )
 
@@ -1891,6 +1894,7 @@ class TestCLISubprocessExecution:
             [sys.executable, 'zircolite.py', '--pipeline-list'],
             capture_output=True,
             text=True,
+            encoding="utf-8",
             cwd=str(WORKSPACE_ROOT)
         )
         assert result.returncode == 0
@@ -1904,6 +1908,7 @@ class TestCLISubprocessExecution:
             [sys.executable, 'zircolite.py', '--generate-config', str(output_yaml)],
             capture_output=True,
             text=True,
+            encoding="utf-8",
             cwd=str(WORKSPACE_ROOT)
         )
         assert result.returncode == 0
@@ -3373,7 +3378,7 @@ class TestGenerateConfigDoesNotClobber:
         result = subprocess.run(
             [sys.executable, str(WORKSPACE_ROOT / "zircolite.py"),
              "--generate-config", str(target)],
-            capture_output=True, text=True, cwd=str(WORKSPACE_ROOT),
+            capture_output=True, text=True, encoding="utf-8", cwd=str(WORKSPACE_ROOT),
         )
 
         assert result.returncode == 2
@@ -3456,12 +3461,14 @@ def test_version_has_a_single_source():
     """The Taskfile greps zircolite/__init__.py, so nothing may duplicate it."""
     from zircolite import __version__
 
+    # These carry the emoji argparse group names, which no single-byte locale
+    # can decode; the encoding is named rather than left to the platform.
     for path in (WORKSPACE_ROOT / "zircolite.py", WORKSPACE_ROOT / "zircolite" / "cli.py"):
-        assert 'version = "' not in path.read_text(), (
+        assert 'version = "' not in path.read_text(encoding="utf-8"), (
             f"{path.name} must read __version__, not carry its own literal"
         )
 
-    taskfile = (WORKSPACE_ROOT / "Taskfile.yml").read_text()
+    taskfile = (WORKSPACE_ROOT / "Taskfile.yml").read_text(encoding="utf-8")
     assert "zircolite/__init__.py" in taskfile
 
     # Tracked docs must not carry the literal either: docs/README.md did, and
@@ -3470,13 +3477,13 @@ def test_version_has_a_single_source():
     for doc in ("docs/README.md", "README.md"):
         path = WORKSPACE_ROOT / doc
         if path.exists():
-            assert __version__ not in path.read_text(), (
+            assert __version__ not in path.read_text(encoding="utf-8"), (
                 f"{doc} duplicates the version literal; reference it instead"
             )
 
     result = subprocess.run(
         [sys.executable, str(WORKSPACE_ROOT / "zircolite.py"), "-v"],
-        capture_output=True, text=True, cwd=str(WORKSPACE_ROOT),
+        capture_output=True, text=True, encoding="utf-8", cwd=str(WORKSPACE_ROOT),
     )
     assert __version__ in result.stdout
 

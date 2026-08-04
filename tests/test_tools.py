@@ -255,7 +255,10 @@ class TestSigmaRegressionEndToEnd:
         ]
         with patch.object(sys, "argv", argv):
             assert regression.main() == 1
-        failed = json.loads((tmp_path / "report.json").read_text())["failed_tests"]
+        # The report is written UTF-8 with ensure_ascii=False, so "≥" arrives as
+        # multi-byte; decoding it with the platform default mangles it silently.
+        report_json = (tmp_path / "report.json").read_text(encoding="utf-8")
+        failed = json.loads(report_json)["failed_tests"]
         assert failed[0]["expected"] == "≥1"
         assert failed[0]["got"] == 0
         assert failed[0]["events"], "the report must carry the events that did not match"
