@@ -16,8 +16,9 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from zircolite import ProcessingConfig, ZircoliteCore
+from zircolite import ProcessingConfig, ZircoliteCore, sqlscan
 from zircolite.core import _compile_regex
+from zircolite.streaming import StreamingEventProcessor
 
 
 class TestZircoliteCoreInit:
@@ -415,8 +416,12 @@ class TestZircoliteCoreDatabase:
         assert "Channel" in cols
         zircore.close()
 
-    def test_create_index_with_channel_column_creates_idx_channel(self, field_mappings_file, test_logger):
-        """When logs table has Channel column, create_index creates idx_channel."""
+    def test_create_index_with_channel_column_creates_the_composite(self, field_mappings_file, test_logger):
+        """A Channel column earns a (Channel, eventid) index, not a lone one.
+
+        The Sigma shape is ``Channel = … AND EventID = …``; a channel-only index
+        leaves SQLite re-checking every row of the channel.
+        """
         zircore = ZircoliteCore(
             config=field_mappings_file,
             logger=test_logger
@@ -425,8 +430,50 @@ class TestZircoliteCoreDatabase:
         zircore.create_db(field_stmt)
         zircore.create_index()
         cursor = zircore.db_connection.cursor()
-        cursor.execute("SELECT name FROM sqlite_master WHERE type='index' AND name='idx_channel'")
-        assert cursor.fetchone() is not None
+        cursor.execute("SELECT name FROM sqlite_master WHERE type='index'")
+        names = {row[0] for row in cursor.fetchall()}
+        assert "idx_channel_eventid" in names
+        assert "idx_eventid" in names
+        zircore.close()
+
+    def test_a_channel_without_an_eventid_still_gets_indexed(self, field_mappings_file, test_logger):
+        """The composite needs both columns; falling back is not optional.
+
+        A dataset carrying Channel but no eventid would otherwise leave the one
+        column rules do filter on unindexed.
+        """
+        zircore = ZircoliteCore(
+            config=field_mappings_file,
+            logger=test_logger
+        )
+        zircore.create_db("'Channel' TEXT")
+        zircore.create_index()
+        cursor = zircore.db_connection.cursor()
+        cursor.execute("SELECT name FROM sqlite_master WHERE type='index'")
+        names = {row[0] for row in cursor.fetchall()}
+        assert "idx_channel" in names
+        assert "idx_channel_eventid" not in names
+        zircore.close()
+
+    def test_an_absent_column_is_not_indexed_over_a_constant(self, field_mappings_file, test_logger):
+        """SQLite would accept the statement and index nothing useful.
+
+        A double-quoted name that matches no column is read as a string literal
+        rather than rejected, so `CREATE INDEX ... ON logs ("eventid")` against a
+        table without one succeeds and builds an index over the constant
+        'eventid'. No error is raised and none of the queries can use it, so the
+        only signal is the wasted index sitting in the schema.
+        """
+        zircore = ZircoliteCore(
+            config=field_mappings_file,
+            logger=test_logger
+        )
+        zircore.create_db("'Channel' TEXT")
+        zircore.create_index()
+        cursor = zircore.db_connection.cursor()
+        cursor.execute("SELECT name FROM sqlite_master WHERE type='index'")
+        names = {row[0] for row in cursor.fetchall()}
+        assert "idx_eventid" not in names
         zircore.close()
 
     def test_create_index_add_index_creates_extra_indexes(self, field_mappings_file, test_logger):
@@ -448,7 +495,7 @@ class TestZircoliteCoreDatabase:
         cursor.execute("SELECT name FROM sqlite_master WHERE type='index'")
         names = [row[0] for row in cursor.fetchall()]
         assert "idx_eventid" in names
-        assert "idx_channel" in names  # auto-created when Channel column exists
+        assert "idx_channel_eventid" in names  # auto-created when Channel column exists
         assert "idx_SystemTime" in names  # from add_index (idx_Channel may be skipped if same as idx_channel)
         zircore.close()
 
@@ -496,7 +543,7 @@ class TestZircoliteCoreDatabase:
         assert "idx_TargetFilename" not in names
         # Built-in indices remain.
         assert "idx_eventid" in names
-        assert "idx_channel" in names
+        assert "idx_channel_eventid" in names
         zircore.close()
 
     def test_auto_index_zero_creates_no_extra_indices(self, field_mappings_file, test_logger):
@@ -2197,7 +2244,10 @@ class TestQueryPlannerStatistics:
             self._run_ruleset(core)
 
             assert self._rows_per_key(core, "idx_eventid") == self.EVENTID_ROWS_PER_KEY
-            assert self._rows_per_key(core, "idx_channel") == self.CHANNEL_ROWS_PER_KEY
+            assert (
+                self._rows_per_key(core, "idx_channel_eventid")
+                == self.CHANNEL_ROWS_PER_KEY
+            )
         finally:
             core.close()
 
@@ -2212,33 +2262,61 @@ class TestQueryPlannerStatistics:
                 "SELECT name FROM sqlite_master WHERE name = 'sqlite_stat1'"
             ).fetchone()
             assert analysed, "the logs table was never analysed"
-            assert set(self._stat1(core)) >= {"idx_eventid", "idx_channel"}
+            assert set(self._stat1(core)) >= {"idx_eventid", "idx_channel_eventid"}
         finally:
             core.close()
 
     def test_the_statistics_tell_the_selective_index_from_the_broad_one(
         self, field_mappings_file, test_logger
     ):
+        """A channel is the broad key here, an eventID the narrow one.
+
+        ``_rows_per_key`` reads the leading column, so the composite is being
+        priced as the channel lookup it starts with.
+        """
         core = self._core(field_mappings_file, test_logger)
         try:
             self._run_ruleset(core)
 
             assert self._rows_per_key(core, "idx_eventid") < self._rows_per_key(
-                core, "idx_channel"
+                core, "idx_channel_eventid"
             )
         finally:
             core.close()
 
-    def test_a_rule_naming_eventid_and_channel_searches_the_selective_index(
+    def test_a_rule_naming_eventid_and_channel_searches_on_both(
         self, field_mappings_file, test_logger
     ):
         """Only the post-condition: which index the planner guesses without
-        statistics is its own business, and changes between SQLite releases."""
+        statistics is its own business, and changes between SQLite releases.
+
+        Both columns must appear in the seek. A plan naming the composite but
+        constraining only ``Channel`` would still be fetching and re-checking
+        every row of that channel, which is the cost the composite exists to
+        remove.
+        """
         core = self._core(field_mappings_file, test_logger)
         try:
             self._run_ruleset(core)
+            plan = self._plan(core, self.SELECTIVE_QUERY)
 
-            assert "idx_eventid" in self._plan(core, self.SELECTIVE_QUERY)
+            assert "idx_channel_eventid" in plan
+            assert "Channel=? AND EventID=?" in plan
+        finally:
+            core.close()
+
+    def test_the_composite_narrows_further_than_either_column_alone(
+        self, field_mappings_file, test_logger
+    ):
+        """Why it replaced the channel-only index rather than joining it."""
+        core = self._core(field_mappings_file, test_logger)
+        try:
+            self._run_ruleset(core)
+            composite = self._stat1(core)["idx_channel_eventid"].split()
+            both_columns = int(composite[2])
+
+            assert both_columns < int(composite[1])  # narrower than Channel alone
+            assert both_columns <= self._rows_per_key(core, "idx_eventid")
         finally:
             core.close()
 
@@ -2262,7 +2340,7 @@ class TestQueryPlannerStatistics:
 
             assert len(core._get_table_columns()) >= 120
             assert self._stat1(core) == before
-            assert "idx_eventid" in self._plan(core, self.SELECTIVE_QUERY)
+            assert "idx_channel_eventid" in self._plan(core, self.SELECTIVE_QUERY)
         finally:
             core.close()
 
@@ -2336,5 +2414,186 @@ class TestQueryPlannerStatistics:
             ]
             for query in silent:
                 assert core.execute_select_query(query, rule_title="quiet") == []
+        finally:
+            core.close()
+
+
+class TestTheRulesetIsLexedOnce:
+    """Rule SQL is read once per statement, not once per statement per file.
+
+    Reading a ruleset is dominated by lexing it, and per-file and parallel modes
+    run the same ruleset against every input file. The scan cache used to be an
+    LRU far smaller than a real ruleset, read in a fixed order, so it evicted
+    every entry just before it was needed and each file re-lexed everything.
+    """
+
+    RULE_COUNT = 300
+
+    def _ruleset(self):
+        return [
+            {
+                "title": f"rule {i}",
+                "id": f"id-{i}",
+                "level": "medium",
+                "rule": [
+                    "SELECT * FROM logs WHERE Channel = 'Security' "
+                    f"AND EventID = {4000 + i}"
+                ],
+            }
+            for i in range(self.RULE_COUNT)
+        ]
+
+    def _core(self, field_mappings_file, test_logger):
+        core = ZircoliteCore(
+            config=field_mappings_file,
+            processing_config=ProcessingConfig(no_output=True, disable_progress=True),
+            logger=test_logger,
+        )
+        core.create_db('"Channel" TEXT COLLATE NOCASE, "EventID" INTEGER COLLATE NOCASE')
+        core.db_connection.execute(
+            "INSERT INTO logs (Channel, EventID) VALUES ('Security', 4001)"
+        )
+        core.db_connection.commit()
+        core.load_ruleset_from_var(ruleset=self._ruleset(), rule_filters=None)
+        return core
+
+    def _counting_lexer(self, monkeypatch):
+        """Count statements lexed, not seconds spent -- timings are not evidence."""
+        lexed = []
+        original = sqlscan._typed_tokens
+
+        def counting(sql):
+            lexed.append(sql)
+            return original(sql)
+
+        monkeypatch.setattr(sqlscan, "_typed_tokens", counting)
+        return lexed
+
+    def test_a_second_ruleset_run_lexes_nothing(
+        self, field_mappings_file, test_logger, tmp_path, monkeypatch
+    ):
+        sqlscan.clear_scan_cache()
+        core = self._core(field_mappings_file, test_logger)
+        lexed = self._counting_lexer(monkeypatch)
+        try:
+            core.execute_ruleset(str(tmp_path / "a.json"), disable_progress=True)
+            first = len(lexed)
+            lexed.clear()
+            core.execute_ruleset(str(tmp_path / "b.json"), disable_progress=True)
+
+            assert first > 0, "the first run must actually lex the ruleset"
+            assert lexed == []
+        finally:
+            core.close()
+
+    def test_the_next_file_lexes_nothing(
+        self, field_mappings_file, test_logger, tmp_path, monkeypatch
+    ):
+        """``reset_logs_table`` is what per-file mode does between inputs.
+
+        It drops the table, so index and schema state must be rebuilt -- but the
+        rule SQL has not changed, and re-reading it is pure waste.
+        """
+        sqlscan.clear_scan_cache()
+        core = self._core(field_mappings_file, test_logger)
+        lexed = self._counting_lexer(monkeypatch)
+        try:
+            core.execute_ruleset(str(tmp_path / "file1.json"), disable_progress=True)
+            assert len(lexed) > 0
+
+            core.reset_logs_table()
+            core.create_db(
+                '"Channel" TEXT COLLATE NOCASE, "EventID" INTEGER COLLATE NOCASE'
+            )
+            core.db_connection.execute(
+                "INSERT INTO logs (Channel, EventID) VALUES ('Security', 4002)"
+            )
+            core.db_connection.commit()
+            lexed.clear()
+            core.execute_ruleset(str(tmp_path / "file2.json"), disable_progress=True)
+
+            assert lexed == []
+        finally:
+            core.close()
+
+    def test_widening_reuses_the_scan_the_regex_check_already_took(
+        self, field_mappings_file, test_logger, monkeypatch
+    ):
+        """Both sites read the same statement in one ``execute_select_query``."""
+        sqlscan.clear_scan_cache()
+        core = self._core(field_mappings_file, test_logger)
+        lexed = self._counting_lexer(monkeypatch)
+        try:
+            query = "SELECT * FROM logs WHERE Channel = 'Security' AND Absent IS NULL"
+            core.execute_select_query(query, rule_title="widens once")
+
+            assert "Absent" in core._get_table_columns()
+            assert lexed == [query]
+        finally:
+            core.close()
+
+
+class TestBatchSizeReachesTheProcessor:
+    """``ProcessingConfig.batch_size`` must survive the trip into streaming.
+
+    ``run_streaming`` builds a fresh ``ProcessingConfig`` for the processor, and
+    every field it forgets to copy is silently replaced by a default -- the
+    caller's value is accepted without complaint and never used.
+    """
+
+    def test_a_configured_batch_size_is_what_streaming_inserts_with(
+        self, field_mappings_file, test_logger, tmp_path
+    ):
+        events = tmp_path / "events.json"
+        events.write_text(
+            "\n".join(
+                json.dumps(
+                    {
+                        "Event": {
+                            "System": {
+                                "Channel": "Security",
+                                "EventID": 4624,
+                                "SystemTime": "2024-01-01T00:00:00Z",
+                            }
+                        }
+                    }
+                )
+                for _ in range(7)
+            ),
+            encoding="utf-8",
+        )
+        core = ZircoliteCore(
+            config=field_mappings_file,
+            processing_config=ProcessingConfig(
+                batch_size=3, disable_progress=True, no_output=True
+            ),
+            logger=test_logger,
+        )
+        seen = []
+        try:
+            original = StreamingEventProcessor._insert_batch
+
+            def spy(processor, connection, cursor, batch):
+                seen.append(len(batch))
+                return original(processor, connection, cursor, batch)
+
+            with patch.object(StreamingEventProcessor, "_insert_batch", spy):
+                core.run_streaming(
+                    [str(events)],
+                    input_type="json",
+                    args_config=None,
+                    disable_progress=True,
+                )
+        finally:
+            core.close()
+
+        assert seen == [3, 3, 1]
+
+    def test_the_default_is_unchanged_when_nothing_asks_for_one(
+        self, field_mappings_file, test_logger
+    ):
+        core = ZircoliteCore(config=field_mappings_file, logger=test_logger)
+        try:
+            assert core.batch_size == ProcessingConfig().batch_size
         finally:
             core.close()

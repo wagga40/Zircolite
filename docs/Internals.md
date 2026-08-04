@@ -231,6 +231,19 @@ after so the new indexes are covered. That analysis is not optional: rule wideni
 below) can more than double the column count, and with no statistics SQLite prices a row
 by column count alone and starts abandoning selective indexes.
 
+The built-in pair is `idx_eventid` and the composite `idx_channel_eventid`. A lone
+`Channel` index prices a rule's channel test correctly and then leaves SQLite fetching
+every row of that channel to re-check the eventID — which on a corpus carrying six
+channels measured ~1.6× the rule-phase wall clock against the same detections. The
+composite's leading column still serves channel-only rules, so it replaces the single
+index rather than joining it. `idx_eventid` stays because a `(Channel, …)` index cannot
+serve a rule that names only an eventID, and many do.
+
+Both are created only when the column is actually present. SQLite would otherwise accept
+`CREATE INDEX ... ON logs ("eventid")` against a table without that column by reading the
+quoted name as a string literal, building an index over a constant: no error raised, and
+nothing able to use it.
+
 ## Automatic SQL repairs
 
 A rule whose SQL cannot be prepared matches nothing, and looks exactly like a rule that
@@ -248,6 +261,25 @@ Column names are read with `sqlscan.py`, not with a regex, for two reasons: the 
 backtick-quotes every field name that is not `^[a-zA-Z0-9_]*$` — which is every ECS and
 Winlogbeat name (`event.code`, `@timestamp`, `Data[1]`) — and a name inside a string
 literal is not a column, so `CommandLine LIKE '%user=bob%'` must not invent a `user`.
+
+### Reading a statement
+
+Four questions are asked of every rule statement: which channels it can match, which
+eventIDs, which columns it names, and which patterns it hands to `REGEXP`. All four need
+the same quote-aware lexer, and lexing is what reading a ruleset costs — roughly 100 ms
+per megabyte of SQL, against merged rulesets carrying several.
+
+So `sqlscan.scan_query` lexes a statement once, answers all four from that single token
+list, and memoises the result; `column_refs`, `regex_literals`, `channel_constraints` and
+`eventid_constraints` are folds over it. Every one of those answers is a pure function of
+the statement text — no schema, no database, no config — so nothing can invalidate an
+entry and there is no cache key beyond the SQL itself. Per-file and parallel modes ask the
+same questions of the same statements once per input file, and after the first file they
+are answered from memory.
+
+The corollary is the rule to keep: anything schema-dependent stays out of `sqlscan.py`.
+Deciding which of a statement's columns are *missing* needs the live table, so that stays
+in `core.py`; only the list of names it mentions is cached.
 
 **Over-deep expressions.** The SQLite backend emits value lists as a left-deep chain
 (`a OR b OR c OR …`), whose parse-tree depth equals the number of terms. SQLite refuses
@@ -272,9 +304,9 @@ Two properties keep the rewrite safe:
   wrong SQL.
 
 Both repairs run only when SQLite itself raises the error, so a statement that already
-compiles is never rewritten. The depth repair is memoised, because per-file and parallel
-modes run the same ruleset once per input file; widening cannot be, since it alters the
-live table. They also chain: an over-deep statement is
+compiles is never rewritten. The depth repair is memoised like the statement scan above,
+because per-file and parallel modes run the same ruleset once per input file; widening
+cannot be, since it alters the live table. They also chain: an over-deep statement is
 rejected while parsing, before SQLite ever resolves column names, so widening only becomes
 reachable once the expression has been rebalanced.
 

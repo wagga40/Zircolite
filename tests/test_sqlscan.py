@@ -1,15 +1,23 @@
 """Tests for the quote-aware SQL scanner and the OR-chain rebalancer."""
 
+import json
 import sqlite3
+from concurrent.futures import ThreadPoolExecutor
 from contextlib import closing
+from pathlib import Path
 
 import pytest
 
 from zircolite.sqlscan import (
+    _SCANS,
+    QueryScan,
     channel_constraints,
+    clear_scan_cache,
     column_refs,
     eventid_constraints,
     rebalance_sql,
+    regex_literals,
+    scan_query,
 )
 
 
@@ -293,3 +301,137 @@ class TestColumnRefsRightHandOperand:
     def test_like_pattern_is_not_a_column(self):
         refs = column_refs("SELECT * FROM logs WHERE CommandLine LIKE '%user=bob%'")
         assert refs == {"CommandLine"}
+
+
+class TestQueryScan:
+    """One lex per statement, answering every question, memoised by content."""
+
+    def setup_method(self):
+        clear_scan_cache()
+
+    def test_it_agrees_with_reading_each_fact_separately(self):
+        """The contract: folding the four readers over one scan changes nothing.
+
+        Anything that only ``scan_query`` can see is a semantic change, not an
+        optimisation.
+        """
+        queries = [
+            "SELECT * FROM logs WHERE Channel = 'Security' AND EventID IN (4624, 4625)",
+            "SELECT * FROM logs WHERE `event.code` = 1 AND Image REGEXP 'a+b'",
+            "SELECT * FROM logs WHERE NOT (EventID = 4624)",
+            "SELECT * FROM logs WHERE CommandLine LIKE '%user=bob%'",
+            "SELECT * FROM logs WHERE TargetFilename = Image",
+        ]
+        for query in queries:
+            scan = scan_query(query)
+            assert set(scan.columns) == column_refs(query)
+            assert list(scan.regex_patterns) == regex_literals(query)
+            assert (
+                None if scan.channels is None else set(scan.channels)
+            ) == channel_constraints([query])
+            assert (
+                None if scan.eventids is None else set(scan.eventids)
+            ) == eventid_constraints([query])
+
+    def test_unscannable_sql_answers_nothing_rather_than_guessing(self):
+        scan = scan_query("SELECT * FROM logs WHERE Image = 'unterminated")
+        assert scan == QueryScan(None, None, frozenset(), ())
+
+    def test_a_statement_with_no_where_is_unbounded_but_still_names_columns(self):
+        scan = scan_query("SELECT Channel, EventID FROM logs")
+        assert scan.channels is None
+        assert scan.eventids is None
+
+    def test_a_field_pinned_to_nothing_stays_empty_rather_than_unbounded(self):
+        """``frozenset()`` and ``None`` are different answers.
+
+        An empty set is "this statement can match no eventID"; ``None`` is "any
+        eventID might match". Collapsing the first into the second would widen
+        the ingest filter and quietly re-admit events the rules cannot use.
+        """
+        scan = scan_query("SELECT * FROM logs WHERE EventID = 1 AND EventID = 2")
+        assert scan.eventids == frozenset()
+        assert scan.eventids is not None
+
+    def test_one_reader_failing_does_not_decide_the_other_answer(self):
+        """The two readers recurse identically, so they must fail independently."""
+        scan = scan_query(
+            "SELECT * FROM logs WHERE Channel = 'Security' AND EventID > 4000"
+        )
+        assert scan.channels == frozenset({"Security"})
+        assert scan.eventids is None
+
+    def test_the_same_statement_is_scanned_once(self):
+        query = "SELECT * FROM logs WHERE Channel = 'Security' AND EventID = 4624"
+        assert scan_query(query) is scan_query(query)
+
+    def test_rescanning_a_ruleset_adds_no_entries(self):
+        """The regression test for the cache that never hit.
+
+        ``_uncompilable_regex`` was an LRU of 256 over thousands of statements
+        read in a fixed order, so every lookup evicted the entry it would need
+        next and every pass re-lexed the whole ruleset.
+        """
+        queries = [
+            f"SELECT * FROM logs WHERE Channel = 'C{i}' AND EventID = {i}"
+            for i in range(300)
+        ]
+        for query in queries:
+            scan_query(query)
+        after_first = len(_SCANS)
+        for query in queries:
+            scan_query(query)
+
+        assert len(_SCANS) == after_first == 300
+
+    def test_clearing_the_cache_reproduces_identical_answers(self):
+        query = "SELECT * FROM logs WHERE Channel = 'Security' AND EventID IN (1, 2)"
+        before = scan_query(query)
+        clear_scan_cache()
+        assert _SCANS == {}
+        assert scan_query(query) == before
+
+    def test_concurrent_scans_agree_and_store_one_entry_per_statement(self):
+        """No lock, so the only tolerable race is writing equal answers."""
+        queries = [
+            f"SELECT * FROM logs WHERE Channel = 'C{i}' AND EventID = {i}"
+            for i in range(200)
+        ]
+        with ThreadPoolExecutor(max_workers=8) as pool:
+            results = list(pool.map(lambda _: [scan_query(q) for q in queries], range(8)))
+
+        assert all(run == results[0] for run in results)
+        assert len(_SCANS) == len(queries)
+
+
+@pytest.mark.slow
+class TestQueryScanAgainstShippedRulesets:
+    """The equivalence that matters is on the SQL Zircolite actually ships."""
+
+    @pytest.mark.parametrize(
+        "ruleset", ["rules_windows_sysmon.json", "rules_linux.json"]
+    )
+    def test_every_shipped_statement_scans_the_same_four_facts(self, ruleset):
+        path = Path(__file__).resolve().parent.parent / "rules" / ruleset
+        if not path.exists():
+            pytest.skip(f"{ruleset} not present")
+        rules = json.loads(path.read_text(encoding="utf-8"))
+
+        for rule in rules:
+            for query in rule.get("rule", []):
+                if not isinstance(query, str):
+                    continue
+                clear_scan_cache()
+                scan = scan_query(query)
+                clear_scan_cache()
+                assert set(scan.columns) == column_refs(query)
+                clear_scan_cache()
+                assert list(scan.regex_patterns) == regex_literals(query)
+                clear_scan_cache()
+                assert (
+                    None if scan.channels is None else set(scan.channels)
+                ) == channel_constraints([query])
+                clear_scan_cache()
+                assert (
+                    None if scan.eventids is None else set(scan.eventids)
+                ) == eventid_constraints([query])

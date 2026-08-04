@@ -126,8 +126,14 @@ def create_zircolite_core(
     ctx: ProcessingContext,
     db_location: str | None = None,
     disable_progress: bool = False,
+    *,
+    no_output: bool | None = None,
 ) -> ZircoliteCore:
-    """Create a ``ZircoliteCore`` instance with standard configuration."""
+    """Create a ``ZircoliteCore`` instance with standard configuration.
+
+    ``no_output`` overrides ``ctx.no_output`` for callers that write the output
+    file themselves rather than letting ``execute_ruleset`` stream it.
+    """
     proc_config = ProcessingConfig(
         time_after=ctx.time_after_str,
         time_before=ctx.time_before_str,
@@ -135,7 +141,7 @@ def create_zircolite_core(
         hashes=ctx.hashes,
         disable_progress=disable_progress,
         db_location=db_location or ctx.db_location,
-        no_output=ctx.no_output,
+        no_output=ctx.no_output if no_output is None else no_output,
         csv_mode=ctx.csv_mode,
         delimiter=ctx.delimiter,
         limit=ctx.limit,
@@ -382,8 +388,19 @@ def process_perfile_streaming(
     # Always accumulate results – they are needed for the ATT&CK Coverage
     # panel in the summary dashboard, not only for templates/packaging.
 
+    # A CSV header is written before the rows it describes, but the field set is
+    # only complete once every file has been read: one input can carry columns an
+    # earlier one never produced. Streaming the header from the first detection
+    # dropped those columns from every later row without saying so. The results
+    # are being accumulated anyway, so CSV writes once at the end from the union,
+    # the way parallel mode already does. JSON is unaffected and still streams.
+    defer_csv = ctx.csv_mode and not ctx.no_output
+
     zircolite_core = create_zircolite_core(
-        ctx, db_location=":memory:", disable_progress=disable_nested
+        ctx,
+        db_location=":memory:",
+        disable_progress=disable_nested,
+        no_output=True if defer_csv else None,
     )
     try:
         with _keepflat_context(ctx) as kf:
@@ -477,6 +494,10 @@ def process_perfile_streaming(
                     profiling_core.merge_profiling_data(zircolite_core)
                 first_file = False
     finally:
+        # Written here rather than per file so an interrupted run still gets the
+        # detections it did find, with a header covering all of them.
+        if defer_csv:
+            _write_csv_results(ctx, all_results)
         # Close the JSON array even when the loop was interrupted (Ctrl+C):
         # every execute_ruleset call above used last_ruleset=False
         if file_stats and not ctx.csv_mode and not zircolite_core.no_output:
@@ -831,7 +852,7 @@ class _IncrementalResultWriter:
 
     Writes each detection result to disk as it arrives rather than buffering
     everything in memory and flushing at the end. JSON only: CSV needs the
-    full field set up front, so it goes through ``_write_parallel_results``.
+    full field set up front, so it goes through ``_write_csv_results``.
 
     Not thread-safe by design -- ``on_result`` is invoked from the main
     scheduling loop as futures complete, never from a worker.
@@ -875,14 +896,20 @@ class _IncrementalResultWriter:
                 self._fh = None
 
 
-def _write_parallel_results(
+def _write_csv_results(
     ctx: ProcessingContext, all_results: list[dict[str, Any]]
 ) -> None:
-    """Write combined parallel results as CSV.
+    """Write buffered results as CSV, from the union of every matched field.
 
-    CSV needs the full field set up front, so parallel results are buffered and
-    written here; JSON streams out through :class:`_IncrementalResultWriter` as
-    each file completes.
+    A CSV header has to be written before the rows it describes, but the field
+    set is only known once every file has been read: one input can carry columns
+    an earlier one never produced. Writing the header from the first detection
+    and dropping whatever later rows do not fit loses evidence silently -- the
+    detection is still reported, the field is simply gone from it.
+
+    So every multi-file mode buffers and writes here. JSON has no such
+    constraint and streams out per file, through
+    :class:`_IncrementalResultWriter` in parallel mode.
     """
     if ctx.no_output:
         return
@@ -891,6 +918,11 @@ def _write_parallel_results(
     for result in all_results:
         for row in result.get("matches", []):
             all_keys.update(row.keys())
+    # ``SELECT *`` hands back the table's primary key with everything else, and
+    # it identifies a row in a database the run does not keep. The streaming
+    # header drops it (see ZircoliteCore._csv_event_columns); this one must too,
+    # or the same corpus gains a column purely from the mode it was run in.
+    all_keys.discard("row_id")
     fieldnames = ["rule_title", "rule_description", "rule_level", "rule_count", *sorted(all_keys)]
     with open(ctx.outfile, "w", encoding="utf-8", newline="") as f:
         writer = csv.DictWriter(
@@ -975,7 +1007,7 @@ def process_parallel_streaming(
     # Incremental writing streams JSON results to disk as files complete.
     # CSV mode is excluded: the CSV DictWriter header is fixed at creation
     # time, so columns from later files would be silently dropped.  CSV
-    # falls back to _write_parallel_results which collects all columns first.
+    # falls back to _write_csv_results which collects all columns first.
     use_incremental = not ctx.csv_mode
     rule_progress_queue: queue.Queue | None = (
         queue.Queue() if not is_quiet() else None
@@ -1024,7 +1056,7 @@ def process_parallel_streaming(
                 on_result=_on_file_complete,
                 rule_progress_queue=rule_progress_queue,
             )
-            _write_parallel_results(ctx, all_results)
+            _write_csv_results(ctx, all_results)
 
     # Collect errors
     for file_data in results_list:

@@ -45,7 +45,7 @@ from .console import (
 )
 from .formats import json_array_requested
 from .shutdown import is_shutdown_requested
-from .sqlscan import column_refs, rebalance_sql, regex_literals
+from .sqlscan import rebalance_sql, scan_query
 from .streaming import StreamingEventProcessor, StrictParseError
 from .utils import sanitize_row_for_csv
 
@@ -78,7 +78,6 @@ def _rebalance_cached(query: str) -> str:
     return rebalance_sql(query)
 
 
-@lru_cache(maxsize=256)
 def _uncompilable_regex(query: str) -> str | None:
     """Why ``query``'s REGEXP patterns cannot compile, or None if they all can.
 
@@ -86,8 +85,12 @@ def _uncompilable_regex(query: str) -> str | None:
     Python's ``re`` rejects -- ``\\p{L}``, a possessive quantifier, a mistyped
     ``(?<name>)``. Discovering that inside the UDF means discovering it once per
     row, with nowhere to report it; the rule then looks like a clean non-match.
+
+    Uncached on purpose. ``scan_query`` already memoises the pattern list, and
+    the overwhelming majority of rules carry no REGEXP at all, so what is left
+    here is a loop over an empty tuple.
     """
-    for pattern in regex_literals(query):
+    for pattern in scan_query(query).regex_patterns:
         try:
             re.compile(pattern)
         except re.error as exc:
@@ -120,6 +123,7 @@ class ZircoliteCore:
         "add_index",
         "archive_password",
         "auto_index_top_n",
+        "batch_size",
         "config",
         "csv_mode",
         "db_connection",
@@ -184,6 +188,7 @@ class ZircoliteCore:
         self.profile_rules = proc.profile_rules
         self._profiling_data: dict = {}
         self.archive_password = proc.archive_password
+        self.batch_size = proc.batch_size
         self.add_index = list(proc.add_index) if proc.add_index else []
         self.remove_index = list(proc.remove_index) if proc.remove_index else []
         self.auto_index_top_n = max(0, int(proc.auto_index_top_n or 0))
@@ -381,7 +386,7 @@ class ZircoliteCore:
             referenced: set[str] = set()
             for sql_query in rule.get("rule", []):
                 if isinstance(sql_query, str):
-                    referenced |= column_refs(sql_query)
+                    referenced |= scan_query(sql_query).columns
             for candidate in referenced:
                 if candidate.lower() in already_indexed_lower:
                     continue
@@ -407,21 +412,40 @@ class ZircoliteCore:
         columns = self._get_table_columns()
         cursor = self._get_cursor()
 
-        self.execute_query('CREATE INDEX "idx_eventid" ON "logs" ("eventid");')
-
         # Case-folded like every other column lookup: a dataset whose channel
         # arrives as `winlog.channel` produces a lowercase `channel` column,
         # and an exact-case test would leave it unindexed.
-        channel_column = next((c for c in columns if c.lower() == "channel"), None)
-        if channel_column is not None:
+        #
+        # Presence is checked here rather than left to SQLite, which accepts
+        # `CREATE INDEX ... ON logs ("absent")` by reading the name as a string
+        # literal and building an index over a constant -- no error, no use.
+        by_lower = {c.lower(): c for c in columns}
+        eventid_column = by_lower.get("eventid")
+        channel_column = by_lower.get("channel")
+
+        def build(name: str, *cols: str) -> None:
+            keys = ", ".join(f'"{self.escape_identifier(c)}"' for c in cols)
             try:
-                escaped = self.escape_identifier(channel_column)
-                cursor.execute(
-                    f'CREATE INDEX "idx_channel" ON "logs" ("{escaped}");'
-                )
+                cursor.execute(f'CREATE INDEX "{name}" ON "logs" ({keys});')
                 conn.commit()
-            except sqlite3.OperationalError:
-                pass
+            except sqlite3.OperationalError as e:
+                self.logger.debug("Could not create index %s: %s", name, e)
+
+        # Kept alongside the composite: a (Channel, …) index cannot serve a rule
+        # that names only an eventID, and plenty do.
+        if eventid_column is not None:
+            build("idx_eventid", eventid_column)
+
+        if channel_column is not None:
+            if eventid_column is not None:
+                # Composite rather than an index on Channel alone. The Sigma
+                # shape is `Channel = … AND EventID = …`, and a channel-only
+                # index leaves SQLite fetching and re-checking every row of the
+                # channel. Its left prefix still serves the channel-only rules a
+                # lone idx_channel did, so this replaces it rather than joining.
+                build("idx_channel_eventid", channel_column, eventid_column)
+            else:
+                build("idx_channel", channel_column)
 
         self._create_column_indexes(self.add_index, columns)
 
@@ -502,9 +526,14 @@ class ZircoliteCore:
             self.logger.error("[error]    [-] No connection to Db[/]")
             return False
 
-    def _query_columns(self, query: str) -> set[str]:
-        """Column names a rule query compares against, minus SQL keywords."""
-        return column_refs(query)
+    def _query_columns(self, query: str) -> frozenset[str]:
+        """Column names a rule query compares against, minus SQL keywords.
+
+        ``query`` may be the rebalanced form rather than the one in the ruleset.
+        That only re-associates OR, so the columns are the same; it costs one
+        extra memo entry and is not worth guarding against.
+        """
+        return scan_query(query).columns
 
     def _logs_columns(self) -> set[str]:
         """Lowercased column names of the logs table, cached between rules."""
@@ -1336,6 +1365,7 @@ class ZircoliteCore:
             disable_progress=disable_progress or self.disable_progress,
             archive_password=self.archive_password,
             strict_evtx=self.strict_evtx,
+            batch_size=self.batch_size,
         )
         processor = StreamingEventProcessor(
             config_file=self.config,

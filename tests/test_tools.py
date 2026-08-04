@@ -427,3 +427,78 @@ class TestDbBenchmark:
 
         assert files, "the EVTX fixture should be found by the recursive search"
         assert all(f.suffix == ".evtx" for f in files)
+
+    def test_index_sets_reports_every_candidate(self, db_benchmark, capsys):
+        argv = [
+            "db-benchmark.py",
+            "--evtx", str(FIXTURES / "sample_bitsadmin.evtx"),
+            "--ruleset", str(FIXTURES / "sample_ruleset.json"),
+            "--config", str(CONFIG),
+            "--index-sets",
+        ]
+        with patch.object(sys, "argv", argv):
+            assert db_benchmark.main() == 0
+        out = capsys.readouterr().out
+        for label, _ in db_benchmark._INDEX_SETS:
+            assert label in out
+        assert "detections identical across every set" in out
+
+    def test_a_set_naming_an_absent_column_is_skipped_not_faked(
+        self, db_benchmark, field_mappings_file, test_logger
+    ):
+        """SQLite would index the quoted name as a constant instead of refusing.
+
+        The corpus here has a Channel but no eventid, so the composite cannot be
+        built; reporting it as built would credit an index that indexes nothing.
+        """
+        core = self._core(field_mappings_file, test_logger)
+        try:
+            built, _ = db_benchmark.build_index_set(
+                core,
+                [("idx_channel", ("channel",)), ("idx_channel_eventid", ("channel", "eventid"))],
+            )
+
+            assert built == ["idx_channel"]
+        finally:
+            core.close()
+
+    def test_index_columns_are_matched_case_insensitively(
+        self, db_benchmark, field_mappings_file, test_logger
+    ):
+        """The corpus spells it ``Channel``; the set asks for ``channel``."""
+        core = self._core(field_mappings_file, test_logger)
+        try:
+            built, _ = db_benchmark.build_index_set(core, [("idx_channel", ("channel",))])
+
+            assert built == ["idx_channel"]
+            indexes = {
+                row[0]
+                for row in core.db_connection.execute(
+                    "SELECT name FROM sqlite_master WHERE type = 'index'"
+                )
+            }
+            assert "idx_channel" in indexes
+        finally:
+            core.close()
+
+    def test_each_set_starts_from_a_clean_slate(
+        self, db_benchmark, field_mappings_file, test_logger
+    ):
+        """Otherwise every set after the first is timed with its predecessors."""
+        core = self._core(field_mappings_file, test_logger)
+        try:
+            db_benchmark.build_index_set(core, [("idx_channel", ("channel",))])
+            built, _ = db_benchmark.build_index_set(
+                core, [("idx_CommandLine", ("commandline",))]
+            )
+
+            assert built == ["idx_CommandLine"]
+            indexes = {
+                row[0]
+                for row in core.db_connection.execute(
+                    "SELECT name FROM sqlite_master WHERE type = 'index'"
+                )
+            }
+            assert "idx_channel" not in indexes
+        finally:
+            core.close()
