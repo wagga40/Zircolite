@@ -552,7 +552,7 @@ class TestTemplateEngineExportFormats:
                 )
 
     def test_elk_style_template(self, tmp_path, test_logger, sample_detection_results):
-        """Test Elasticsearch/ELK-style bulk export template."""
+        """Test the Elasticsearch/ELK export template, which is plain NDJSON."""
         template_content = """{% for elem in data %}{% for match in elem.matches %}
 {"index":{}}
 {"rule_title":{{ elem.title | tojson }},"rule_level":{{ elem.rule_level | tojson }},"event":{{ match | tojson }}}
@@ -581,14 +581,56 @@ class TestZircoliteGuiGenerator:
     """Tests for ZircoliteGuiGenerator.generate() with mocks."""
 
     def test_generate_directory_nonexistent_logs_error(self, sample_detection_results):
-        """When directory is given but does not exist, error is logged and fallback used."""
+        """A --package-dir that does not exist is an error, not a silent fallback."""
         mock_logger = MagicMock()
         gen = ZircoliteGuiGenerator(logger=mock_logger)
         gen.source_archive = __file__  # exists but not a zip
-        with patch("zircolite.templates.os.path.exists", return_value=False):
-            with patch("zircolite.templates.shutil.unpack_archive", side_effect=ValueError("not a zip")):
-                gen.generate(sample_detection_results, directory="/nonexistent/path")
-        mock_logger.error.assert_called()
+
+        assert gen.generate(sample_detection_results, directory="/nonexistent/path") is False
+
+        assert any(
+            "does not exist" in str(call) for call in mock_logger.error.call_args_list
+        )
+
+    def test_generate_rejects_a_package_dir_that_is_a_file(
+        self, sample_detection_results, tmp_path
+    ):
+        """os.path.exists() accepted a file, which then failed inside shutil.move."""
+        target = tmp_path / "not-a-directory"
+        target.write_text("", encoding="utf-8")
+        mock_logger = MagicMock()
+        gen = ZircoliteGuiGenerator(logger=mock_logger)
+
+        assert gen.generate(sample_detection_results, directory=str(target)) is False
+
+        assert any(
+            "is not a directory" in str(call) for call in mock_logger.error.call_args_list
+        )
+
+    def test_generate_names_the_template_when_it_produces_nothing(
+        self, sample_detection_results, tmp_path
+    ):
+        """The failure used to surface as a missing data-XXXX.js two lines later."""
+        (tmp_path / "pkg.zip").write_bytes(b"x")
+        mock_logger = MagicMock()
+        gen = ZircoliteGuiGenerator(logger=mock_logger)
+        gen.source_archive = str(tmp_path / "pkg.zip")
+        gen.templateFile = str(tmp_path / "broken.tmpl")
+        gen.tmpFile = str(tmp_path / "data.js")
+        gen.tmpDir = str(tmp_path / "tmp-zircogui-xyz")
+
+        with patch("zircolite.templates.shutil.unpack_archive"), \
+             patch.object(TemplateEngine, "generate_from_template", return_value=False), \
+             patch("zircolite.templates.shutil.move") as mock_move, \
+             patch("zircolite.templates.shutil.make_archive") as mock_archive:
+            assert gen.generate(sample_detection_results, directory="") is False
+
+        # A partial data.js must never reach the package
+        mock_move.assert_not_called()
+        mock_archive.assert_not_called()
+        assert any(
+            "broken.tmpl" in str(call) for call in mock_logger.error.call_args_list
+        )
 
     def test_generate_exception_calls_finally_cleanup(self, test_logger, sample_detection_results, tmp_path):
         """When unpack_archive raises, finally block still runs and cleans tmpDir."""

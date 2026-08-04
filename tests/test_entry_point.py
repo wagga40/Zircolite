@@ -6,12 +6,12 @@ abort with "Duplicate module named zircolite" without checking anything at all.
 So whatever lives in ``zircolite.py`` is checked by nothing. It held the whole
 CLI that way for as long as it existed. These tests keep it at zero.
 
-The asset tests are here for a related reason: ``_bundled_asset`` moved one
-directory deeper with the CLI. ``test_cli.py`` already drives that path through
-whole runs from a foreign directory; these pin the resolved path itself, so a
-failure names the wrong directory instead of reporting a run that produced no
-output. The frozen branch has no other coverage at all -- the binaries are
-built only on release.
+The asset tests are here for a related reason: ``bundled_asset`` moved one
+directory deeper with the CLI, and then out of it again into ``assets``.
+``test_cli.py`` already drives that path through whole runs from a foreign
+directory; these pin the resolved path itself, so a failure names the wrong
+directory instead of reporting a run that produced no output. The frozen branch
+has no other coverage at all -- the binaries are built only on release.
 """
 
 import ast
@@ -21,7 +21,7 @@ from pathlib import Path
 
 import pytest
 
-from zircolite import cli as zircolite_cli
+from zircolite import assets
 
 WORKSPACE_ROOT = Path(__file__).parent.parent
 ENTRY_POINT = WORKSPACE_ROOT / "zircolite.py"
@@ -62,7 +62,7 @@ def test_bundled_assets_resolve_from_another_directory(parts, tmp_path, monkeypa
     """The defaults are relative paths, so a run from elsewhere must still find them."""
     monkeypatch.chdir(tmp_path)
 
-    resolved = zircolite_cli._bundled_asset(*parts)
+    resolved = assets.bundled_asset(*parts)
 
     assert resolved == WORKSPACE_ROOT.resolve().joinpath(*parts)
     assert resolved.is_file(), f"{resolved} does not exist"
@@ -79,7 +79,7 @@ def test_bundled_asset_uses_the_bootloader_root_when_frozen(tmp_path, monkeypatc
     monkeypatch.setattr(sys, "executable", str(beside / "Zircolite"))
     monkeypatch.setattr(sys, "_MEIPASS", str(unpacked), raising=False)
 
-    resolved = zircolite_cli._bundled_asset("config", "config.yaml")
+    resolved = assets.bundled_asset("config", "config.yaml")
 
     assert resolved == unpacked / "config" / "config.yaml"
 
@@ -95,7 +95,7 @@ def test_bundled_asset_prefers_the_copy_beside_the_binary(tmp_path, monkeypatch)
     monkeypatch.setattr(sys, "executable", str(beside / "Zircolite"))
     monkeypatch.setattr(sys, "_MEIPASS", str(unpacked), raising=False)
 
-    resolved = zircolite_cli._bundled_asset("gui", "zircogui.zip")
+    resolved = assets.bundled_asset("gui", "zircogui.zip")
 
     assert resolved == beside / "gui" / "zircogui.zip"
 
@@ -112,10 +112,64 @@ def test_bundled_asset_names_a_path_a_user_can_act_on_when_nothing_holds_the_fil
 
     # A name no root can hold. Asking for a real asset would find the source
     # tree, which is the third root here but is inside _MEIPASS in a real build.
-    resolved = zircolite_cli._bundled_asset("gui", "no-such-archive.zip")
+    resolved = assets.bundled_asset("gui", "no-such-archive.zip")
 
     assert resolved == beside / "gui" / "no-such-archive.zip"
     assert not resolved.is_file()
+
+
+def _pretend_frozen(monkeypatch, beside: Path, unpacked: Path) -> None:
+    monkeypatch.setattr(sys, "executable", str(beside / "Zircolite"))
+    monkeypatch.setattr(sys, "_MEIPASS", str(unpacked), raising=False)
+
+
+def test_a_bundled_ruleset_directory_resolves(tmp_path, monkeypatch):
+    """--ruleset also takes a directory of native Sigma YAML, and is_file() rejects those."""
+    beside = tmp_path / "beside"
+    (beside / "rules" / "sigma").mkdir(parents=True)
+    _pretend_frozen(monkeypatch, beside, tmp_path / "unpacked")
+    monkeypatch.chdir(tmp_path)
+
+    assert assets.resolve_default_path("rules/sigma", "rules", "sigma") == "rules/sigma"
+    assert assets.resolve_shipped_ruleset("rules/sigma") == str(beside / "rules" / "sigma")
+
+
+def test_a_ruleset_outside_the_shipped_directory_is_left_alone(tmp_path, monkeypatch):
+    """`-r myrules/x.json` must report itself missing, not load rules/x.json."""
+    beside = tmp_path / "beside"
+    (beside / "rules").mkdir(parents=True)
+    (beside / "rules" / "windows.json").write_text("[]", encoding="utf-8")
+    _pretend_frozen(monkeypatch, beside, tmp_path / "unpacked")
+    monkeypatch.chdir(tmp_path)
+
+    assert assets.resolve_shipped_ruleset("myrules/windows.json") == "myrules/windows.json"
+    assert assets.resolve_shipped_ruleset("rules/windows.json") == str(
+        beside / "rules" / "windows.json"
+    )
+
+
+def test_bundled_dir_prefers_the_copy_beside_the_binary(tmp_path, monkeypatch):
+    """-U has to write where the next run will read, and that is the editable copy."""
+    beside, unpacked = tmp_path / "beside", tmp_path / "unpacked"
+    for root in (beside, unpacked):
+        (root / "rules").mkdir(parents=True)
+    _pretend_frozen(monkeypatch, beside, unpacked)
+
+    assert assets.bundled_dir("rules") == beside / "rules"
+
+
+def test_bundled_dir_skips_a_directory_it_cannot_write_to(tmp_path, monkeypatch):
+    """_MEIPASS is writable but a read-only install directory is not."""
+    beside, unpacked = tmp_path / "beside", tmp_path / "unpacked"
+    for root in (beside, unpacked):
+        (root / "rules").mkdir(parents=True)
+    _pretend_frozen(monkeypatch, beside, unpacked)
+    # Permissions are not a reliable signal: CI containers run as root.
+    monkeypatch.setattr(
+        assets.os, "access", lambda path, mode: Path(path) != beside / "rules"
+    )
+
+    assert assets.bundled_dir("rules") == unpacked / "rules"
 
 
 @pytest.mark.parametrize("argv", [
@@ -169,13 +223,23 @@ def _spec_bundled_directories() -> set[str]:
 
 
 def _asset_directories_the_code_asks_for() -> tuple[set[str], list[str]]:
-    """Top-level directories the package resolves through the two asset helpers.
+    """Top-level directories the package resolves through the asset helpers.
 
-    ``_bundled_asset`` takes the directory first; ``_resolve_default_path`` takes
-    the relative default first and the directory second. The forwarding call
-    inside ``_resolve_default_path`` passes ``*parts`` and is skipped.
+    The ``bundled_*`` helpers take the directory first; the ``resolve_*`` ones
+    take the relative default first and the directory second. Forwarding calls
+    that pass ``*parts`` are skipped.
+
+    Every helper that accepts a directory must be listed here. One that is not
+    resolves whatever it likes without the spec ever being consulted, which is
+    how ``gui/`` went missing.
     """
-    positions = {"_bundled_asset": 0, "_resolve_default_path": 1}
+    positions = {
+        "bundled_asset": 0,
+        "bundled_path": 0,
+        "bundled_dir": 0,
+        "resolve_default_path": 1,
+        "resolve_asset_path": 1,
+    }
     wanted: set[str] = set()
     unreadable: list[str] = []
 

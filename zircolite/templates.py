@@ -9,6 +9,7 @@ This module contains:
 import logging
 import os
 import shutil
+from pathlib import Path
 from typing import Any
 
 from jinja2 import Environment
@@ -246,17 +247,21 @@ class ZircoliteGuiGenerator:
         and did not get is a failed run, and it used to be reported only as a
         line of log output on an otherwise successful exit.
         """
-        # rstrip("/") would map the filesystem root "/" to "", so only strip
-        # when something remains.
-        stripped = directory.rstrip("/")
-        final_directory = (stripped or directory) if os.path.exists(directory) else ""
-        if directory and not final_directory:
-            # Writing to the current directory instead would put the package
-            # somewhere the user did not ask for and would not think to look.
-            self.logger.error(
-                f"[red]    [-] Cannot create GUI package: {directory} does not exist[/]"
-            )
-            return False
+        # An empty value means the working directory. Path normalises the
+        # trailing separator that rstrip used to have to special-case, including
+        # on the filesystem root, where stripping it meant the working directory.
+        package_dir: Path | None = None
+        if directory:
+            candidate = Path(directory)
+            if not candidate.is_dir():
+                # Writing to the working directory instead would put the package
+                # somewhere the user did not ask for and would not think to look.
+                reason = "is not a directory" if candidate.exists() else "does not exist"
+                self.logger.error(
+                    f"[red]    [-] Cannot create GUI package: {directory} {reason}[/]"
+                )
+                return False
+            package_dir = candidate
 
         try:
             # Extract the GUI package
@@ -264,11 +269,7 @@ class ZircoliteGuiGenerator:
 
             # Generate data file
             target_name = f"{self.outputFile}.zip"
-            target_display = (
-                os.path.join(final_directory, target_name)
-                if final_directory
-                else target_name
-            )
+            target_display = str(package_dir / target_name) if package_dir else target_name
             self.logger.info(f"[+] Generating ZircoGui package to: {target_display}")
             tmpl_config = TemplateConfig(
                 template=[[self.templateFile]],
@@ -276,7 +277,16 @@ class ZircoliteGuiGenerator:
                 time_field=self.timeField
             )
             export_for_zircogui_tmpl = TemplateEngine(tmpl_config, logger=self.logger)
-            export_for_zircogui_tmpl.generate_from_template(self.templateFile, self.tmpFile, data)
+            if not export_for_zircogui_tmpl.generate_from_template(
+                self.templateFile, self.tmpFile, data
+            ):
+                # Reported two lines down as a missing data-XXXX.js otherwise,
+                # which names neither the template nor what went wrong with it.
+                self.logger.error(
+                    "[red]    [-] Cannot create GUI package: "
+                    f"{self.templateFile} produced no data file[/]"
+                )
+                return False
 
             # Move data file to package directory
             shutil.move(self.tmpFile, os.path.join(self.tmpDir, "zircogui", "data.js"))
@@ -285,8 +295,8 @@ class ZircoliteGuiGenerator:
             shutil.make_archive(self.outputFile, 'zip', f"{self.tmpDir}/zircogui")
 
             # Move to final destination if specified
-            if final_directory:
-                shutil.move(target_name, os.path.join(final_directory, target_name))
+            if package_dir:
+                shutil.move(target_name, package_dir / target_name)
 
         except Exception as e:
             self.logger.error(f"[red]    [-] {e}[/]")

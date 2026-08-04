@@ -377,10 +377,11 @@ Every input format is read the same way: extraction, flattening and insertion ha
 a single pass, with no intermediate files. What is selectable is how the database is
 organised across files — see [Internals → Processing modes](Internals.md#processing-modes).
 
-`--keepflat` writes the flattened events to a JSONL file as they are processed. It
-contains only events that were actually processed: anything dropped by early event
-filtering or by `--after`/`--before` is not there. Combine with `--no-event-filter` to
-capture everything.
+`--keepflat` writes the flattened events to `flattened_events_<RAND>.json` in the working
+directory as they are processed. The contents are JSONL — one event per line — despite the
+extension. It contains only events that were actually processed: anything dropped by early
+event filtering or by `--after`/`--before` is not there. Combine with `--no-event-filter`
+to capture everything.
 
 ### Memory usage
 
@@ -606,7 +607,7 @@ do not overwrite each other.
 | `exportForSplunk.tmpl` | NDJSON | Splunk HEC or bulk import |
 | `exportForSplunkWithRuleID.tmpl` | NDJSON | Splunk, with the rule ID for correlation |
 | `exportForELK.tmpl` | NDJSON | Elasticsearch / ELK |
-| `exportForZinc.tmpl` | Bulk JSON | OpenSearch/Elasticsearch bulk API |
+| `exportForZinc.tmpl` | Bulk JSON | OpenSearch/Elasticsearch bulk API — each record preceded by an `index` action line |
 | `exportForTimesketch.tmpl` | NDJSON | Timesketch; shortcut `--timesketch` |
 | `exportForZircoGui.tmpl` | JavaScript | Mini-GUI `data.js`, used by `--package` |
 | `exportNDJSON.tmpl` | NDJSON | Generic: rule metadata plus event fields |
@@ -653,10 +654,11 @@ python3 zircolite.py --evtx sample.evtx --ruleset rules/rules_windows_merged.jso
     --package --package-dir /path/to/output
 ```
 
-`--package` produces a ZIP holding everything needed. Two things to know: a run with no
-detections skips package creation and says so, and `--package-dir` must point at a
-directory that already exists — Zircolite reports an error rather than writing the package
-somewhere you would not think to look.
+`--package` produces `zircogui-output-<RAND>.zip`, holding everything needed, with
+`index.html` at its root. Two things to know: a run with no detections skips package
+creation and says so, and `--package-dir` must point at a directory that already exists —
+Zircolite reports an error rather than writing the package somewhere you would not think
+to look.
 
 It needs `gui/zircogui.zip`, which Zircolite looks for beside the executable first and
 then inside the binary itself — the standalone binaries carry a copy, so `--package` works
@@ -672,7 +674,8 @@ python3 zircolite.py --evtx sample.evtx --ruleset rules/rules_windows_merged.jso
 mv data.js zircogui/
 ```
 
-Then open `index.html` and click a MITRE ATT&CK category or an alert level.
+Then open `zircogui/index.html` — the shipped archive unpacks under that directory, unlike
+the one `--package` builds — and click a MITRE ATT&CK category or an alert level.
 
 > [!WARNING]
 > The Mini-GUI was not built to handle large datasets.

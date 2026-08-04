@@ -76,6 +76,14 @@ from zircolite import (
     set_quiet_mode,
 )
 
+# Bundled asset resolution
+from zircolite.assets import (
+    bundled_asset,
+    resolve_default_path,
+    resolve_shipped_ruleset,
+    resolve_shipped_template,
+)
+
 # Input format registry
 from zircolite.formats import DEFAULT_EXTENSION
 
@@ -167,7 +175,7 @@ def parse_arguments() -> argparse.Namespace:
         action="store_true",
     )
     output_formats_args.add_argument("--csv-delimiter", help=f"Delimiter for CSV output (default: '{DEFAULTS['csv_delimiter']}')", type=str, default=None)
-    output_formats_args.add_argument("--keepflat", "--keep-flat", help="Save flattened events as JSON", action='store_true')
+    output_formats_args.add_argument("--keepflat", "--keep-flat", help="Save the flattened events as JSONL to flattened_events_<RAND>.json", action='store_true')
     output_formats_args.add_argument("--profile-rules", help="Time each rule execution and print a performance report at the end", action='store_true')
     output_formats_args.add_argument("-d", "--dbfile", "--db-file", help="Save all logs to a SQLite database file", type=str)
     output_formats_args.add_argument("-l", "--logfile", "--log-file", help=f"Log file name (default: {DEFAULTS['logfile']})", default=None, type=str)
@@ -191,7 +199,7 @@ def parse_arguments() -> argparse.Namespace:
     config_formats_args.add_argument("--strict", help="Strict EVTX parsing: stop on corrupted or malformed chunks instead of skipping them. Forces sequential processing (default: lenient, recovers as many events as possible)", action='store_true')
     config_formats_args.add_argument("--add-index", help="Create an index on the given column(s). Can be repeated or list multiple columns (e.g. --add-index Channel EventID).", action='append', nargs='+', metavar="COL", default=None)
     config_formats_args.add_argument("--remove-index", help="Drop the given index name(s) after creation. Can be repeated or list multiple (e.g. --remove-index idx_channel idx_eventid).", action='append', nargs='+', metavar="IDX", default=None)
-    config_formats_args.add_argument("--auto-index", help="Inspect the loaded ruleset and auto-create indices on the top-N most-referenced columns (default N=5 when used without an explicit number). Combine with --add-index for additional manually chosen columns.", type=int, nargs='?', const=5, default=None, metavar="N")
+    config_formats_args.add_argument("--auto-index", help="Inspect the loaded ruleset and auto-create indices on the top-N columns that the most rules filter on (default N=5 when used without an explicit number). Combine with --add-index for additional manually chosen columns.", type=int, nargs='?', const=5, default=None, metavar="N")
 
     # Transform options
     transform_args = parser.add_argument_group('🔄 TRANSFORMS')
@@ -536,41 +544,6 @@ def resolve_run_config(args, logger) -> argparse.Namespace:
 ################################################################
 # POST-PROCESSING
 ################################################################
-def _bundled_asset(*parts: str) -> Path:
-    """Resolve a file shipped with Zircolite, independent of the current directory."""
-    # A PyInstaller build unpacks config/, rules/, templates/ and gui/ into a
-    # temporary directory the bootloader names, but the release archive also
-    # ships them beside the binary, where a user can edit a rule or drop in a
-    # newer Mini-GUI. Prefer that copy, fall back to the bundle, and when
-    # neither holds the file name the editable location -- it is the only one
-    # of the two a user can do anything about.
-    roots: list[Path] = []
-    frozen_root = getattr(sys, "_MEIPASS", None)
-    if frozen_root is not None:
-        roots.append(Path(sys.executable).resolve().parent)
-        roots.append(Path(frozen_root))
-    roots.append(Path(__file__).resolve().parent.parent)
-
-    for root in roots:
-        candidate = root.joinpath(*parts)
-        if candidate.is_file():
-            return candidate
-    return roots[0].joinpath(*parts)
-
-
-def _resolve_default_path(value: str, *parts: str) -> str:
-    """Fall back to the bundled copy of a default path when it is not in the CWD.
-
-    Defaults such as ``config/config.yaml`` are relative, so they only resolve
-    when Zircolite runs from its own directory. A file of the same name in the
-    working directory still wins, keeping local overrides working.
-    """
-    if Path(value).is_file():
-        return value
-    bundled = _bundled_asset(*parts)
-    return str(bundled) if bundled.is_file() else value
-
-
 def handle_templating(
     ctx: ProcessingContext,
     results: list[Any],
@@ -595,8 +568,11 @@ def handle_templating(
                 "[yellow]   [!] No detections: skipping GUI package creation[/]"
             )
         else:
-            template_path = _bundled_asset("templates", "exportForZircoGui.tmpl")
-            gui_zip_path = _bundled_asset("gui", "zircogui.zip")
+            # Deliberately not resolve_default_path: the template and the archive
+            # have to come from the same build, and a copy of only one of them in
+            # the working directory would pair a new data.js with an old GUI.
+            template_path = bundled_asset("templates", "exportForZircoGui.tmpl")
+            gui_zip_path = bundled_asset("gui", "zircogui.zip")
             if template_path.is_file() and gui_zip_path.is_file():
                 gui_config = GuiConfig(
                     source_archive=str(gui_zip_path),
@@ -1125,12 +1101,19 @@ def main() -> None:
         sys.exit(0)
 
     if args.update_rules:
-        logger.info("[+] Updating rules")
-        RulesUpdater(logger=logger).run()
+        updater = RulesUpdater(logger=logger)
+        logger.info(f"[+] Updating rules in {make_file_link(str(updater.rules_dir))}")
+        updater.run()
         sys.exit(0)
 
-    if args.config == "config/config.yaml":
-        args.config = _resolve_default_path(args.config, "config", "config.yaml")
+    # A relative --config names a file shipped in config/, so it has to resolve
+    # from the install as well as from the working directory -- the default is
+    # the most common such value, not the only one. Only a value already rooted
+    # at config/ may fall back, or `-c mine/config.yaml` would quietly load the
+    # bundled one instead of reporting that it is missing.
+    config_path = Path(args.config)
+    if not config_path.is_absolute() and config_path.parent == Path("config"):
+        args.config = resolve_default_path(args.config, "config", config_path.name)
 
     if args.transform_list:
         sys.exit(0 if _print_transform_categories(args.config, logger) else 1)
@@ -1147,7 +1130,7 @@ def main() -> None:
             args.template = []
         if args.templateOutput is None:
             args.templateOutput = []
-        args.template.append([_resolve_default_path(
+        args.template.append([resolve_default_path(
             "templates/exportForTimesketch.tmpl", "templates", "exportForTimesketch.tmpl"
         )])
         args.templateOutput.append([out_name])
@@ -1160,17 +1143,18 @@ def main() -> None:
             args.template = []
         if args.templateOutput is None:
             args.templateOutput = []
-        args.template.append([_resolve_default_path(
+        args.template.append([resolve_default_path(
             "templates/exportForAttackNavigator.tmpl", "templates", "exportForAttackNavigator.tmpl"
         )])
         args.templateOutput.append([nav_out])
 
     # Handle rulesets
     if args.ruleset:
-        args.ruleset = [item for sublist in args.ruleset for item in sublist]
+        flattened = [item for sublist in args.ruleset for item in sublist]
+        args.ruleset = [resolve_shipped_ruleset(item) for item in flattened]
     else:
         args.ruleset = [
-            _resolve_default_path(
+            resolve_default_path(
                 "rules/rules_windows_generic.json",
                 "rules", "rules_windows_generic.json",
             )
@@ -1345,6 +1329,12 @@ def main() -> None:
             logger,
         )
     if args.template is not None:
+        # A relative templates/... path has to resolve from the install as well,
+        # so a -t or a YAML config written once works from any directory.
+        args.template = [
+            [resolve_shipped_template(entry) for entry in template]
+            for template in args.template
+        ]
         if args.csv:
             quit_on_error("[red]    [-] You cannot use templates in CSV mode[/]", logger)
         if args.templateOutput is None or len(args.template) != len(args.templateOutput):

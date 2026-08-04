@@ -21,7 +21,7 @@ from unittest.mock import patch
 
 import pytest
 
-from zircolite import DetectionResult
+from zircolite import DetectionResult, assets
 from zircolite import cli as zircolite_script
 
 # Path to the workspace root
@@ -3141,11 +3141,11 @@ class TestCLIRegressionFixes:
         workdir.mkdir()
         monkeypatch.chdir(workdir)
 
-        resolved_config = zircolite_script._resolve_default_path(
+        resolved_config = assets.resolve_default_path(
             "config/config.yaml", "config", "config.yaml"
         )
         assert Path(resolved_config).is_file()
-        resolved_rules = zircolite_script._resolve_default_path(
+        resolved_rules = assets.resolve_default_path(
             "rules/rules_windows_generic.json", "rules", "rules_windows_generic.json"
         )
         assert Path(resolved_rules).is_file()
@@ -3158,10 +3158,60 @@ class TestCLIRegressionFixes:
         local.write_text("mappings: {}\n")
         monkeypatch.chdir(workdir)
 
-        resolved = zircolite_script._resolve_default_path(
+        resolved = assets.resolve_default_path(
             "config/config.yaml", "config", "config.yaml"
         )
         assert resolved == "config/config.yaml"
+
+    def test_an_explicit_relative_ruleset_resolves_from_the_install(self, tmp_path, monkeypatch):
+        """`-r rules/...` used to work only when the CWD was Zircolite's own."""
+        _, config, events = self._fixture(tmp_path)
+        workdir = tmp_path / "elsewhere"
+        workdir.mkdir()
+        monkeypatch.chdir(workdir)
+        out = tmp_path / "out.json"
+
+        with patch('sys.argv', [
+            'zircolite.py', '-e', str(events), '-j',
+            '-r', 'rules/rules_linux_high.json',
+            '-c', str(config), '-o', str(out), *get_log_arg(tmp_path),
+        ]):
+            zircolite_script.main()
+
+    def test_a_ruleset_outside_rules_still_reports_itself_missing(self, tmp_path, monkeypatch):
+        """The fallback must not turn a typo'd directory into the bundled ruleset."""
+        _, config, events = self._fixture(tmp_path)
+        workdir = tmp_path / "elsewhere"
+        workdir.mkdir()
+        monkeypatch.chdir(workdir)
+
+        with pytest.raises(SystemExit) as exc_info, patch('sys.argv', [
+            'zircolite.py', '-e', str(events), '-j',
+            '-r', 'myrules/rules_linux_high.json',
+            '-c', str(config), '-o', str(tmp_path / "out.json"), *get_log_arg(tmp_path),
+        ]):
+            zircolite_script.main()
+
+        assert exc_info.value.code != 0
+
+    def test_a_relative_config_resolves_even_when_it_is_not_the_default_string(
+        self, tmp_path, monkeypatch
+    ):
+        """The fallback was gated on the exact string, so `./config/config.yaml` failed."""
+        workdir = tmp_path / "elsewhere"
+        workdir.mkdir()
+        monkeypatch.chdir(workdir)
+
+        ruleset, _, events = self._fixture(tmp_path)
+        out = tmp_path / "out.json"
+
+        with patch('sys.argv', [
+            'zircolite.py', '-e', str(events), '-j', '-r', str(ruleset),
+            '-c', './config/config.yaml', '-o', str(out), *get_log_arg(tmp_path),
+        ]):
+            zircolite_script.main()
+
+        assert out.exists()
 
     def test_warn_ignored_db_flags_lists_inert_flags(self):
         """DB-input mode must report every flag it silently ignores."""

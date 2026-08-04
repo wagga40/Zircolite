@@ -196,6 +196,28 @@ class TestOpenMaybeCompressed:
         with pytest.raises(ImportError):
             open_maybe_compressed(p)
 
+    def test_detection_degrades_without_py7zr_instead_of_crashing(
+        self, tmp_path, monkeypatch
+    ):
+        """Detection runs before open_maybe_compressed, so it must not raise first.
+
+        Both 7z branches used to name PasswordRequired in an except clause the
+        import itself could reach, so a missing py7zr surfaced as an
+        UnboundLocalError no later clause caught.
+        """
+        import sys
+
+        from zircolite.detector import LogTypeDetector
+
+        monkeypatch.setitem(sys.modules, "py7zr", None)
+        p = tmp_path / "events.json.7z"
+        p.write_bytes(b"\x37\x7a\xbc\xaf\x27\x1c")
+
+        detector = LogTypeDetector()
+
+        assert detector._sevenzip_inner_extension(p) == ".json"
+        assert detector._sevenzip_sample(p) == b""
+
 
 # =============================================================================
 # Integration tests: stream JSON events from compressed/archived files

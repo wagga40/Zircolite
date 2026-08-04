@@ -20,7 +20,7 @@ Zircolite needs **Python 3.10 or above** and runs on Linux, macOS and Windows.
 | `chardet` | Encoding detection |
 | `psutil` | Memory tracking and parallel-processing heuristics |
 | `pyyaml` | YAML configuration |
-| `py7zr` | 7-Zip archives. ZIP, gzip and bzip2 use the standard library. It is imported lazily, so Zircolite runs without it and only fails on a `.7z` input |
+| `py7zr` | 7-Zip archives. ZIP, gzip and bzip2 use the standard library. It is required like the rest, but imported only when a `.7z` is opened |
 
 > [!NOTE]
 > On some systems (macOS, ARM), the `evtx` library needs Rust and Cargo installed before
@@ -222,7 +222,7 @@ unless `--fileext` or `--file-pattern` says otherwise.
 | `-o`, `--outfile` | Output file for results |
 | `--csv`, `--csv-output` | Write results as CSV. Accepts only one ruleset |
 | `--csv-delimiter` | CSV delimiter, exactly one character (default: `;`) |
-| `--keepflat` | Save the flattened events as JSONL — processed events only |
+| `--keepflat` | Save the flattened events — processed events only — to `flattened_events_<RAND>.json` in the working directory. The contents are JSONL despite the extension |
 | `-d`, `--dbfile` | Save the logs to an SQLite database |
 | `-l`, `--logfile` | Log file name |
 | `--hashes` | Add an xxhash64 to each event. For CSV, EVTXtract and JSON-array input the reader hands over a parsed record rather than a source line, so the hash covers a canonical form of the event |
@@ -857,6 +857,9 @@ Logs often need reshaping before rules can match them. The canonical configurati
 [`config/config.yaml`](https://github.com/wagga40/Zircolite/tree/master/config/); point at
 your own with `-c`/`--config`. YAML is the expected format; JSON is still accepted for
 backward compatibility and is recognised from the extension.
+
+`config/fieldMappings.yaml` is the former name of this file. It is still read, and still
+warns that it is deprecated on every run; it may be dropped in a future version.
 
 ```yaml
 exclusions:               # drop these fields entirely

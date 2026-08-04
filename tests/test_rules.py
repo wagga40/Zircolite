@@ -19,6 +19,8 @@ from zircolite.config import RulesetConfig
 from zircolite.rules import RulesetHandler, RulesUpdater
 from zircolite.sqlscan import rebalance_sql
 
+WORKSPACE_ROOT = Path(__file__).parent.parent
+
 
 class TestIsValidSigmaRule:
     """Tests for the is_valid_sigma_rule method."""
@@ -1008,7 +1010,7 @@ class TestRulesUpdater:
                 mock_clean.assert_called_once()
 
     def test_checkIfNewerAndMove_new_files(self, test_logger, tmp_path):
-        """checkIfNewerAndMove moves new JSON rulesets to rules/ directory."""
+        """checkIfNewerAndMove moves new JSON rulesets to the rules directory."""
         # Set up temp dir with a JSON ruleset
         tmp_dir = tmp_path / "tmp-rules-dir"
         tmp_dir.mkdir()
@@ -1019,18 +1021,12 @@ class TestRulesUpdater:
         rules_dir = tmp_path / "rules"
         rules_dir.mkdir()
 
-        import os
-        old_cwd = os.getcwd()
-        os.chdir(str(tmp_path))
-        try:
-            updater = RulesUpdater(logger=test_logger)
-            updater.tmpDir = str(tmp_dir)
-            updater.checkIfNewerAndMove()
+        updater = RulesUpdater(logger=test_logger, rules_dir=rules_dir)
+        updater.tmpDir = str(tmp_dir)
+        updater.checkIfNewerAndMove()
 
-            assert (rules_dir / "test_rules.json").exists()
-            assert "test_rules.json" in str(updater.updated_rulesets[0])
-        finally:
-            os.chdir(old_cwd)
+        assert (rules_dir / "test_rules.json").exists()
+        assert "test_rules.json" in str(updater.updated_rulesets[0])
 
     def test_checkIfNewerAndMove_same_hash_skipped(self, test_logger, tmp_path):
         """checkIfNewerAndMove skips files with identical hashes."""
@@ -1046,35 +1042,48 @@ class TestRulesUpdater:
         rules_dir.mkdir()
         (rules_dir / "test_rules.json").write_text(content)
 
-        import os
-        old_cwd = os.getcwd()
-        os.chdir(str(tmp_path))
-        try:
-            updater = RulesUpdater(logger=test_logger)
-            updater.tmpDir = str(tmp_dir)
-            updater.checkIfNewerAndMove()
+        updater = RulesUpdater(logger=test_logger, rules_dir=rules_dir)
+        updater.tmpDir = str(tmp_dir)
+        updater.checkIfNewerAndMove()
 
-            assert len(updater.updated_rulesets) == 0
-        finally:
-            os.chdir(old_cwd)
+        assert len(updater.updated_rulesets) == 0
 
     def test_checkIfNewerAndMove_creates_rules_dir(self, test_logger, tmp_path):
-        """checkIfNewerAndMove creates rules/ directory if it doesn't exist."""
+        """checkIfNewerAndMove creates the rules directory if it doesn't exist."""
         tmp_dir = tmp_path / "tmp-rules-dir"
         tmp_dir.mkdir()
         (tmp_dir / "new.json").write_text("[]")
 
-        import os
-        old_cwd = os.getcwd()
-        os.chdir(str(tmp_path))
-        try:
-            updater = RulesUpdater(logger=test_logger)
-            updater.tmpDir = str(tmp_dir)
-            updater.checkIfNewerAndMove()
+        rules_dir = tmp_path / "rules"
+        updater = RulesUpdater(logger=test_logger, rules_dir=rules_dir)
+        updater.tmpDir = str(tmp_dir)
+        updater.checkIfNewerAndMove()
 
-            assert (tmp_path / "rules").exists()
-        finally:
-            os.chdir(old_cwd)
+        assert rules_dir.is_dir()
+
+    def test_rules_are_installed_where_a_run_will_look_for_them(self, test_logger, tmp_path, monkeypatch):
+        """-U used to write ./rules, which a run from anywhere else never reads."""
+        monkeypatch.chdir(tmp_path)
+
+        updater = RulesUpdater(logger=test_logger)
+
+        assert Path(updater.rules_dir).resolve() == (WORKSPACE_ROOT / "rules").resolve()
+        assert Path(updater.rules_dir) != Path("rules")
+
+    def test_rules_fall_back_to_the_cwd_when_the_install_cannot_be_written(
+        self, test_logger, tmp_path, monkeypatch
+    ):
+        """A binary unpacked somewhere unwritable must still be able to update."""
+        # A missing parent stands in for an unwritable one: permissions are not
+        # a reliable test signal because CI containers run as root.
+        unreachable = tmp_path / "does-not-exist" / "rules"
+        monkeypatch.setattr(
+            "zircolite.rules.bundled_dir", lambda *parts: unreachable
+        )
+
+        updater = RulesUpdater(logger=test_logger)
+
+        assert Path(updater.rules_dir) == Path("rules")
 
     def test_run_exception_in_unzip(self, test_logger):
         """run() logs error and calls clean when unzip raises."""
