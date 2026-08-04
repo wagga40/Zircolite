@@ -185,6 +185,46 @@ class TestOpenMaybeCompressed:
         with pytest.raises(ValueError, match=ARCHIVE_PASSWORD_ERROR_MESSAGE):
             open_maybe_compressed(p, password="wrong")
 
+    @pytest.mark.requires_py7zr
+    @pytest.mark.skipif(not _HAS_PY7ZR, reason="py7zr not installed")
+    def test_7z_wrong_password_reported_when_py7zr_raises_eof(self, tmp_path, monkeypatch):
+        """A wrong key can run the stream out instead of tripping the CRC.
+
+        Which one happens is not stable across archives or py7zr backends, so
+        the EOF case has to reach the same message as the others.
+        """
+        import py7zr
+
+        p = tmp_path / "secure.json.7z"
+        with py7zr.SevenZipFile(p, 'w', password="correct") as szf:
+            szf.writestr(b'{"x": 1}', "data.json")
+
+        def boom(*args, **kwargs):
+            raise EOFError("Already at end of stream")
+
+        monkeypatch.setattr(py7zr, "SevenZipFile", boom)
+        with pytest.raises(ValueError, match=ARCHIVE_PASSWORD_ERROR_MESSAGE):
+            open_maybe_compressed(p, password="wrong")
+
+    @pytest.mark.requires_py7zr
+    @pytest.mark.skipif(not _HAS_PY7ZR, reason="py7zr not installed")
+    def test_7z_truncated_without_password_is_not_called_a_password_problem(
+        self, tmp_path, monkeypatch
+    ):
+        """The same EOFError with no password means the archive is short."""
+        import py7zr
+
+        p = tmp_path / "plain.json.7z"
+        with py7zr.SevenZipFile(p, 'w') as szf:
+            szf.writestr(b'{"x": 1}', "data.json")
+
+        def boom(*args, **kwargs):
+            raise EOFError("Already at end of stream")
+
+        monkeypatch.setattr(py7zr, "SevenZipFile", boom)
+        with pytest.raises(ValueError, match="truncated or corrupt"):
+            open_maybe_compressed(p)
+
     def test_7z_missing_package_raises_importerror(self, tmp_path, monkeypatch):
         """Opening a .7z without py7zr installed raises ImportError."""
         import sys

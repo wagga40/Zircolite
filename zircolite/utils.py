@@ -382,6 +382,18 @@ def open_maybe_compressed(
         except (CrcError, DecompressionError, lzma.LZMAError) as e:
             # Wrong 7z password often yields LZMAError/CrcError during decompression
             raise ValueError(ARCHIVE_PASSWORD_ERROR_MESSAGE) from e
+        except EOFError as e:
+            # Which of these a wrong key produces is not stable: decrypting with
+            # it yields garbage, and whether that garbage trips the CRC or simply
+            # runs out before the declared size varies per archive and per py7zr
+            # backend. Without a password the same exception means the archive
+            # really is short, and calling that a password problem would send the
+            # user looking for the wrong thing.
+            if pwd_7z is not None:
+                raise ValueError(ARCHIVE_PASSWORD_ERROR_MESSAGE) from e
+            raise ValueError(
+                f"7-Zip archive '{p}' is truncated or corrupt"
+            ) from e
         if text_mode:
             return io.TextIOWrapper(io.BytesIO(data), encoding=encoding or "utf-8", errors=errors)
         return io.BytesIO(data)
