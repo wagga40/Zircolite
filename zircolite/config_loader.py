@@ -15,6 +15,7 @@ from typing import Any
 
 import yaml
 
+from .assets import resolve_shipped_ruleset, resolve_shipped_template
 from .formats import YAML_INPUT_FORMATS, is_valid_yaml_format
 
 # Defaults shared by the dataclasses below and by the CLI. argparse declares
@@ -334,9 +335,11 @@ class ConfigLoader:
                 f"Must be one of: {sorted(YAML_INPUT_FORMATS)}"
             )
 
-        # Validate rules
+        # Validate rules. A configuration file is written once and run from
+        # anywhere, so a relative rules/ or templates/ entry has to be tested
+        # where the run will actually look for it, not only in the CWD.
         for ruleset in config.rules.rulesets:
-            if not Path(ruleset).exists():
+            if not Path(resolve_shipped_ruleset(ruleset)).exists():
                 issues.append(f"Ruleset not found: {ruleset}")
 
         # Validate output
@@ -351,7 +354,7 @@ class ConfigLoader:
             for tmpl in config.output.templates:
                 if 'template' not in tmpl or 'output' not in tmpl:
                     issues.append("Template entries must have 'template' and 'output' keys")
-                elif not Path(tmpl['template']).exists():
+                elif not Path(resolve_shipped_template(tmpl['template'])).exists():
                     issues.append(f"Template file not found: {tmpl['template']}")
 
         # Validate time filters
@@ -579,8 +582,9 @@ processing:
   # are added to their CLI equivalents rather than replaced by them.
   add_index: []       # Extra columns to index, e.g. ["SystemTime", "Computer"]
   remove_index: []    # SQLite index names to drop after creation
-  auto_index: 0       # >0 = also index the top-N columns the ruleset
-                      # references in WHERE clauses (5 is a reasonable value).
+  auto_index: 0       # >0 = also index the top-N columns that the most rules
+                      # filter on (5 is a reasonable value). Ranked by rule
+                      # count, not by how often a column appears.
                       # Never recreates an index listed in remove_index.
 
 # Time-based event filtering

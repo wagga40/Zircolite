@@ -176,8 +176,9 @@ processing:
   # are added to their CLI equivalents rather than replaced by them.
   add_index: []       # Extra columns to index, e.g. ["SystemTime", "Computer"]
   remove_index: []    # SQLite index names to drop after creation
-  auto_index: 0       # >0 = also index the top-N columns the ruleset
-                      # references in WHERE clauses (5 is a reasonable value).
+  auto_index: 0       # >0 = also index the top-N columns that the most rules
+                      # filter on (5 is a reasonable value). Ranked by rule
+                      # count, not by how often a column appears.
                       # Never recreates an index listed in remove_index.
 
 # Time-based event filtering

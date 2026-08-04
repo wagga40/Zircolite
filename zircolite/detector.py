@@ -460,6 +460,79 @@ class LogTypeDetector:
             return self._archive_password.encode()
         return self._archive_password
 
+    def _sevenzip_inner_extension(self, file_path: Path) -> str:
+        """Extension of the archive's first member, or the file name's own.
+
+        The import is guarded separately from the archive read on purpose:
+        naming ``PasswordRequired`` in an except clause that the import itself
+        can reach makes a missing py7zr raise ``UnboundLocalError`` out of the
+        handler, where no later clause catches it.
+        """
+        fallback = Path(file_path.stem).suffix.lower()
+        try:
+            import py7zr
+            from py7zr.exceptions import PasswordRequired
+        except ImportError:
+            return fallback
+
+        try:
+            with py7zr.SevenZipFile(
+                file_path, "r", password=self._archive_password
+            ) as szf:
+                names = szf.getnames()
+                return Path(names[0]).suffix.lower() if names else fallback
+        except PasswordRequired:
+            raise ValueError(ARCHIVE_PASSWORD_ERROR_MESSAGE) from None
+        except Exception:
+            return fallback
+
+    def _sevenzip_sample(self, file_path: Path) -> bytes:
+        """First bytes of the archive's first member, empty when unreadable.
+
+        The import is guarded separately for the same reason as in
+        :meth:`_sevenzip_inner_extension`.
+        """
+        try:
+            import io as _io
+
+            import py7zr
+            from py7zr.exceptions import PasswordRequired
+        except ImportError:
+            return b""
+
+        class _NonClosingBytesIO(_io.BytesIO):
+            """py7zr closes the writer after extraction; keep it readable."""
+
+            def close(self) -> None:
+                self.flush()
+
+        class _MemFactory:
+            def __init__(self):
+                self._buf: _NonClosingBytesIO | None = None
+
+            def create(self, fname):
+                self._buf = _NonClosingBytesIO()
+                return self._buf
+
+        try:
+            with py7zr.SevenZipFile(
+                file_path, "r", password=self._archive_password
+            ) as szf:
+                names = szf.getnames()
+                if not names:
+                    return b""
+                factory = _MemFactory()
+                szf.extract(path=None, targets=[names[0]], factory=factory)  # type: ignore[arg-type]
+                if factory._buf is None:
+                    return b""
+                return factory._buf.getvalue()[: self.SAMPLE_BYTES]
+        except PasswordRequired:
+            raise ValueError(ARCHIVE_PASSWORD_ERROR_MESSAGE) from None
+        except Exception:
+            # e.g. corrupt or wrong password (LZMAError) -- fall back to an
+            # empty sample and let detection work from the file name
+            return b""
+
     def _resolve_compressed(
         self, file_path: Path
     ) -> tuple[str, bytes, str, list[str]] | None:
@@ -492,22 +565,7 @@ class LogTypeDetector:
             except Exception:
                 base_ext = Path(file_path.stem).suffix.lower()
         elif suffix == ".7z":
-            try:
-                import py7zr
-                from py7zr.exceptions import PasswordRequired
-
-                with py7zr.SevenZipFile(
-                    file_path, "r", password=self._archive_password
-                ) as szf:
-                    names = szf.getnames()
-                    if names:
-                        base_ext = Path(names[0]).suffix.lower()
-                    else:
-                        base_ext = Path(file_path.stem).suffix.lower()
-            except PasswordRequired:  # type: ignore[misc]
-                raise ValueError(ARCHIVE_PASSWORD_ERROR_MESSAGE) from None
-            except Exception:
-                base_ext = Path(file_path.stem).suffix.lower()
+            base_ext = self._sevenzip_inner_extension(file_path)
         else:
             # Unreachable while COMPRESSED_SUFFIXES holds only the four handled
             # above, but a new suffix must degrade to the filename rather than
@@ -558,39 +616,7 @@ class LogTypeDetector:
             except Exception:
                 pass
         elif suffix == ".7z":
-            try:
-                import io as _io
-
-                import py7zr
-                from py7zr.exceptions import PasswordRequired
-
-                class _NonClosingBytesIO(_io.BytesIO):
-                    """py7zr closes the writer after extraction; keep it readable."""
-
-                    def close(self) -> None:
-                        self.flush()
-
-                class _MemFactory:
-                    def __init__(self):
-                        self._buf = None
-
-                    def create(self, fname):
-                        self._buf = _NonClosingBytesIO()
-                        return self._buf
-
-                with py7zr.SevenZipFile(
-                    file_path, "r", password=self._archive_password
-                ) as szf:
-                    names = szf.getnames()
-                    if names:
-                        factory = _MemFactory()
-                        szf.extract(path=None, targets=[names[0]], factory=factory)  # type: ignore[arg-type]
-                        if factory._buf is not None:
-                            sample_bytes = factory._buf.getvalue()[: self.SAMPLE_BYTES]
-            except PasswordRequired:  # type: ignore[misc]
-                raise ValueError(ARCHIVE_PASSWORD_ERROR_MESSAGE) from None
-            except Exception:
-                pass  # e.g. corrupt or wrong password (LZMAError) — fall back to empty sample
+            sample_bytes = self._sevenzip_sample(file_path) or sample_bytes
 
         text = self._decode_sample(sample_bytes)
         lines = text.splitlines()[: self.SAMPLE_LINES]

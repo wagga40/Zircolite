@@ -342,6 +342,44 @@ class TestConfigLoaderValidate:
 
         assert any("Ruleset not found" in issue for issue in issues)
 
+    def test_validate_accepts_a_shipped_ruleset_from_any_directory(
+        self, test_logger, tmp_path, monkeypatch
+    ):
+        """A config file is written once and run from anywhere; rules/ has to follow."""
+        monkeypatch.chdir(tmp_path)
+        config = ZircoliteConfig()
+        config.rules.rulesets = ["rules/rules_windows_generic.json"]
+
+        issues = ConfigLoader(logger=test_logger).validate_config(config)
+
+        assert not any("Ruleset not found" in issue for issue in issues)
+
+    def test_validate_accepts_a_shipped_template_from_any_directory(
+        self, test_logger, tmp_path, monkeypatch
+    ):
+        """Same for output.templates, which the run resolves the same way."""
+        monkeypatch.chdir(tmp_path)
+        config = ZircoliteConfig()
+        config.output.templates = [
+            {"template": "templates/exportForSplunk.tmpl", "output": "out.json"}
+        ]
+
+        issues = ConfigLoader(logger=test_logger).validate_config(config)
+
+        assert not any("Template file not found" in issue for issue in issues)
+
+    def test_validate_still_rejects_a_ruleset_outside_the_shipped_directory(
+        self, test_logger, tmp_path, monkeypatch
+    ):
+        """The fallback must not make a typo'd directory validate."""
+        monkeypatch.chdir(tmp_path)
+        config = ZircoliteConfig()
+        config.rules.rulesets = ["myrules/rules_windows_generic.json"]
+
+        issues = ConfigLoader(logger=test_logger).validate_config(config)
+
+        assert any("Ruleset not found" in issue for issue in issues)
+
     def test_validate_invalid_output_format(self, test_logger):
         """Test validation with invalid output format."""
         config = ZircoliteConfig()

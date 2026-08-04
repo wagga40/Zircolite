@@ -61,8 +61,8 @@ batches.
 
 ## Processing modes
 
-Every mode reads events through the same pipeline. The mode chooses how the database
-is organised across input files.
+Every mode reads events through the same pipeline. There are two database layouts, and
+parallelism is an overlay on one of them rather than a third layout.
 
 ```mermaid
 flowchart LR
@@ -74,20 +74,21 @@ flowchart LR
     subgraph Unified[Unified]
         U1[All files] --> U2[Single DB]
     end
-
-    subgraph Parallel[Parallel]
-        R1[Worker 1] --> R3[Combine results]
-        R2[Worker 2] --> R3
-    end
 ```
 
-| Mode | Flag | Database | Enables |
-|------|------|----------|---------|
+| Layout | Flag | Database | Enables |
+|--------|------|----------|---------|
 | Per-file | default | One per file, reused | Parallel processing |
 | Unified | `--unified-db` | One for all files | Cross-file correlation rules |
-| Parallel | automatic | One per worker | Concurrent file processing |
 
-The choice is made from file count, file sizes, available RAM and CPU count.
+`analyze_files_and_recommend_mode` returns only `per-file` or `unified`. When the answer
+is per-file and there is more than one input, the same function separately recommends
+running those files across worker threads — one database per worker, which is why it is
+available in per-file mode and not with `--unified-db`. `--no-parallel` declines it;
+`--strict` and `--profile-rules` force it off, because a parse error and a per-rule timing
+both need one file at a time.
+
+The layout choice is made from file count, file sizes, available RAM and CPU count.
 `--no-auto-mode` disables it and keeps per-file. The heuristics are documented in
 [Advanced → Automatic processing optimization](Advanced.md#automatic-processing-optimization).
 
@@ -98,8 +99,9 @@ All the logic lives in the `zircolite/` package. `zircolite.py` is a shim that c
 
 | Module | Contents |
 |--------|----------|
-| `cli.py` | The whole command line: `parse_arguments`, `discover_files`, asset resolution, `main` |
+| `cli.py` | The whole command line: `parse_arguments`, `discover_files`, `main` |
 | `__main__.py` | Entry point for `python -m zircolite` |
+| `assets.py` | Resolution of the shipped `config/`, `rules/`, `templates/` and `gui/` |
 | `streaming.py` | `StreamingEventProcessor` — single-pass read, flatten, transform, insert |
 | `core.py` | `ZircoliteCore` — database management, indexes, rule execution, output |
 | `detector.py` | `LogTypeDetector` — format, log source and timestamp-field detection |
@@ -126,20 +128,39 @@ so a new format is a new row rather than an edit in each of them.
 ## Bundled asset resolution
 
 `config/`, `rules/`, `templates/` and `gui/` ship with Zircolite, and the paths pointing
-at them are relative, so they have to resolve whatever the working directory is. Two
-helpers in `cli.py` do it.
+at them are relative, so they have to resolve whatever the working directory is.
+`assets.py` does it, and lives outside `cli.py` because `config_loader` needs it too and
+cannot import `cli` — `cli` imports it in turn.
 
-`_resolve_default_path` handles values a user can override (`--config`, `--ruleset`, and
-the templates behind `--timesketch` and `--navigator-output`): a file of that name in the
-working directory wins, and anything else falls through to `_bundled_asset`.
+For every value a user can override, a file of that name in the working directory wins and
+anything else falls through to `bundled_asset`. That covers
 
-`_bundled_asset` returns the first root that holds the file:
+- `--config`, for any relative path under `config/`, not only the default
+- `--ruleset`, both the default and an explicit `-r rules/…`
+- `--template`, and the templates behind `--timesketch` and `--navigator-output`
+- the `rules` and `templates` entries of a `-Y` configuration file
+
+`resolve_default_path` tests for a file. `resolve_asset_path` tests for existence instead,
+and rulesets go through it because `--ruleset` also accepts a *directory* of native Sigma
+YAML, which the file test would reject.
+
+Only a value already rooted at the shipped directory falls back, so
+`-r myrules/windows.json` keeps reporting itself missing instead of quietly loading
+`rules/windows.json`.
+
+Two paths deliberately do not follow that rule. `--package` reads the ZircoGui template
+and `gui/zircogui.zip` from the bundle only: the two have to come from the same build, and
+a copy of just one of them in the working directory would pair a new `data.js` with an old
+GUI. `-U` writes to the installed `rules/` — the directory a later run will actually read
+— and falls back to `./rules` only when that one cannot be written to.
+
+`bundled_asset` returns the first root that holds the file:
 
 | Order | Root | Applies to |
 |-------|------|-----------|
 | 1 | the directory holding the executable | PyInstaller builds only |
 | 2 | `sys._MEIPASS`, where PyInstaller unpacks `datas` | PyInstaller builds only |
-| 3 | the repository root, two levels up from `cli.py` | always |
+| 3 | the repository root, two levels up from `assets.py` | always |
 
 The executable's own directory comes first so that the `config/`, `rules/`, `templates/`
 and `gui/` shipped beside a binary can be edited: an updated ruleset dropped there takes

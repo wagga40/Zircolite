@@ -4,15 +4,24 @@ Zircolite - Standalone SIGMA-Based Detection Tool for EVTX, Auditd, Sysmon Linux
 This package provides modular components for log processing and SIGMA rule detection:
 
 Modules:
+- assets: Resolution of the shipped config/, rules/, templates/ and gui/
+- attack: MITRE ATT&CK technique and tactic IDs from Sigma tags
 - config: Configuration dataclasses for all components
+- config_loader: YAML configuration file support
+- console: Rich output -- theme, detection tables, ATT&CK panels, reports
 - core: ZircoliteCore class for database and rule execution
-- streaming: StreamingEventProcessor for single-pass processing
+- detector: LogTypeDetector for format, log source and timestamp detection
 - extractor: EvtxExtractor for log format conversion
+- formats: The input-format registry every format switch reads from
+- parallel: Memory-aware parallel file processing
+- processing: Per-file, unified and parallel run coordination
 - rules: RulesetHandler and RulesUpdater for rule management
+- run_config: SETTINGS -- one row per option: YAML key, default, merge rule
+- shutdown: Graceful Ctrl+C handling
+- sqlscan: Quote-aware rule-SQL reader and OR-chain depth repair
+- streaming: StreamingEventProcessor for single-pass processing
 - templates: TemplateEngine and ZircoliteGuiGenerator for output generation
 - utils: Utility functions and MemoryTracker
-- parallel: Memory-aware parallel file processing
-- config_loader: YAML configuration file support
 - cli: The command line interface, reached through zircolite.py or `python -m`
 
 `cli` is deliberately not imported below. It consumes this module, so

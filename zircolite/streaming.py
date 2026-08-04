@@ -254,7 +254,7 @@ class StreamingEventProcessor:
 
     __slots__ = (
         "RestrictedPython_BUILTINS",
-        # Event filter config (from fieldMappings config)
+        # Event filter config (from the field-mappings config)
         "_channel_field_paths",
         # Last field path that yielded a Channel/EventID value; tried first on
         # the next event since a file's schema is stable
@@ -295,7 +295,7 @@ class StreamingEventProcessor:
         # One-shot flag: warn once when --timefield value is absent from events
         "_timefield_warned",
         "_timestamp_auto_detect",
-        # Timestamp config (from fieldMappings config)
+        # Timestamp config (from the field-mappings config)
         "_timestamp_detection_fields",
         "_transform_func_cache",
         "_transforms_baked",

@@ -36,6 +36,7 @@ from sigma.plugins import InstalledSigmaPlugins
 from sigma.processing.resolver import ProcessingPipelineResolver
 from sigma.rule import SigmaRule
 
+from .assets import bundled_dir
 from .config import RulesetConfig
 
 # Rich console for styled output
@@ -395,18 +396,42 @@ class EventFilter:
 class RulesUpdater:
     """Download rulesets from the https://github.com/wagga40/Zircolite-Rules-v2 repository and update if necessary."""
 
-    def __init__(self, *, logger: logging.Logger | None = None):
+    def __init__(
+        self,
+        *,
+        logger: logging.Logger | None = None,
+        rules_dir: Path | None = None,
+    ):
         """
         Initialize RulesUpdater.
 
         Args:
             logger: Logger instance (creates default if None)
+            rules_dir: Where to install rulesets (resolved from the install if None)
         """
         self.url = "https://github.com/wagga40/Zircolite-Rules-v2/archive/refs/heads/main.zip"
         self.logger = logger or logging.getLogger(__name__)
         self.tempFile = f'tmp-rules-{random_suffix(4)}.zip'
         self.tmpDir = f'tmp-rules-{random_suffix(4)}'
+        self.rules_dir = rules_dir if rules_dir is not None else self._install_rules_dir()
         self.updated_rulesets: list[str] = []
+
+    def _install_rules_dir(self) -> Path:
+        """The ``rules/`` directory a run would read, not the one the shell is in.
+
+        A run resolves a relative ``rules/...`` against the install when the
+        working directory has none, so rulesets written to the working directory
+        would be invisible to the next run started from anywhere else.
+        """
+        destination = bundled_dir("rules")
+        probe = destination if destination.is_dir() else destination.parent
+        if probe.is_dir() and os.access(probe, os.W_OK):
+            return destination
+        self.logger.warning(
+            f"[yellow]    [!] Cannot write to {destination}, "
+            "installing rulesets into ./rules instead[/]"
+        )
+        return Path('rules')
 
     def download(self) -> None:
         resp = requests.get(self.url, stream=True, timeout=30)
@@ -437,10 +462,8 @@ class RulesUpdater:
 
     def checkIfNewerAndMove(self) -> None:
         count = 0
-        rules_dir = Path('rules/')
-
-        if not rules_dir.exists():
-            rules_dir.mkdir()
+        rules_dir = Path(self.rules_dir)
+        rules_dir.mkdir(parents=True, exist_ok=True)
 
         for ruleset in Path(self.tmpDir).rglob("*.json"):
             with open(ruleset, 'rb') as f:

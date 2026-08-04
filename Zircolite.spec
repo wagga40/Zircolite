@@ -3,7 +3,11 @@ from PyInstaller.utils.hooks import collect_all
 
 datas = [('config', 'config'), ('gui', 'gui'), ('rules', 'rules'), ('templates', 'templates')]
 binaries = []
-hiddenimports = ['zircolite', 'zircolite.config', 'zircolite.config_loader', 'zircolite.console', 'zircolite.core', 'zircolite.detector', 'zircolite.extractor', 'zircolite.parallel', 'zircolite.rules', 'zircolite.streaming', 'zircolite.templates', 'zircolite.utils']
+hiddenimports = ['zircolite', 'zircolite.assets', 'zircolite.config', 'zircolite.config_loader', 'zircolite.console', 'zircolite.core', 'zircolite.detector', 'zircolite.extractor', 'zircolite.parallel', 'zircolite.rules', 'zircolite.streaming', 'zircolite.templates', 'zircolite.utils']
+# py7zr is only ever imported inside a function, so it reaches the bundle
+# through the bytecode scan alone. Name it, or a .7z input fails in a binary
+# that no CI step feeds one to.
+hiddenimports += ['py7zr']
 tmp_ret = collect_all('evtx')
 datas += tmp_ret[0]; binaries += tmp_ret[1]; hiddenimports += tmp_ret[2]
 # Rich: bundle full package and explicitly include dynamic unicode data modules (e.g. unicode17-0-0)
