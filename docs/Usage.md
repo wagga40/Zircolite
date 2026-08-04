@@ -399,6 +399,12 @@ With `--csv`, detections are written as one flat table. The header covers every 
 the events table plus `rule_title`, `rule_description`, `rule_level` and `rule_count`, so
 a rule returning wider rows than the ones before it does not lose fields.
 
+The same holds across inputs. A header has to be written before the rows it describes,
+but one file can carry fields an earlier one never produced, so multi-file runs collect
+the detections and write the table once at the end — the column set covers every file,
+not just the first one to match. That is why a CSV run holds its results in memory where
+a JSON run streams them out per file.
+
 Two values are rewritten so the report stays readable and safe to open:
 
 - Embedded newlines and carriage returns become spaces, so a multi-line `ScriptBlockText`

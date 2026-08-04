@@ -6,22 +6,27 @@ Covers:
 - LEVEL_PRIORITY constant
 - Factory helpers (create_zircolite_core, create_worker_core, create_extractor)
 - sort_key_severity helper
-- _write_parallel_results (parallel CSV output)
+- _write_csv_results (buffered CSV output, shared by per-file and parallel)
 - Module-level imports / public API surface
+- CSV output keeping fields that only later files carry
 """
 
 import argparse
+import csv
 import json
 import os
 import sqlite3
+import sys
 import threading
 import time
 from argparse import Namespace
 from pathlib import Path
-from unittest.mock import MagicMock
+from typing import ClassVar
+from unittest.mock import MagicMock, patch
 
 import pytest
 
+import zircolite.cli
 from zircolite.console import LEVEL_PRIORITY
 from zircolite.processing import (
     ProcessingContext,
@@ -29,7 +34,7 @@ from zircolite.processing import (
     _keepflat_context,
     _ThreadSafeWriter,
     _unpack_streaming_result,
-    _write_parallel_results,
+    _write_csv_results,
     create_extractor,
     create_worker_core,
     create_zircolite_core,
@@ -237,14 +242,15 @@ class TestHelpers:
 
 
 # =============================================================================
-# _write_parallel_results
+# _write_csv_results
 # =============================================================================
 
-class TestWriteParallelResults:
-    """Tests for _write_parallel_results, the parallel CSV output path.
+class TestWriteCsvResults:
+    """Tests for _write_csv_results, the buffered CSV output path.
 
-    JSON does not come through here: it streams out per file via
-    _IncrementalResultWriter, which has its own tests below.
+    Shared by per-file and parallel mode: both need every column known before
+    the header is written. JSON does not come through here -- it streams out
+    per file via _IncrementalResultWriter, which has its own tests below.
     """
 
     def test_csv_output_is_valid(self, dummy_ctx, tmp_path):
@@ -261,7 +267,7 @@ class TestWriteParallelResults:
                 "matches": [{"field1": "val1", "field2": "val2"}],
             },
         ]
-        _write_parallel_results(dummy_ctx, sample_results)
+        _write_csv_results(dummy_ctx, sample_results)
 
         content = Path(dummy_ctx.outfile).read_text(encoding="utf-8")
         assert "rule_title" in content
@@ -273,7 +279,7 @@ class TestWriteParallelResults:
         dummy_ctx.csv_mode = True
         dummy_ctx.outfile = str(tmp_path / "results.csv")
 
-        _write_parallel_results(dummy_ctx, [
+        _write_csv_results(dummy_ctx, [
             {"title": "Narrow", "rule_level": "high", "count": 1,
              "matches": [{"CommandLine": "a"}]},
             {"title": "Wide", "rule_level": "low", "count": 1,
@@ -288,7 +294,7 @@ class TestWriteParallelResults:
         dummy_ctx.no_output = True
         dummy_ctx.csv_mode = True
         dummy_ctx.outfile = str(tmp_path / "should_not_exist.csv")
-        _write_parallel_results(dummy_ctx, [{"title": "Rule A"}])
+        _write_csv_results(dummy_ctx, [{"title": "Rule A"}])
         assert not Path(dummy_ctx.outfile).exists()
 
 
@@ -1054,3 +1060,116 @@ class TestDbInputDirectoryExpansion:
         with pytest.raises(SystemExit) as exc_info:
             expand_db_path(tmp_path, args, logger)
         assert exc_info.value.code != 0
+
+
+class TestCsvKeepsFieldsFromEveryFile:
+    """A field only later files carry must survive into the CSV.
+
+    The header is written before the rows it describes, but the field set is
+    only complete once every input has been read. Taking it from the first
+    detection and letting ``extrasaction='ignore'`` swallow the rest lost
+    evidence without a word: the detection was still reported, the field was
+    simply gone from it.
+    """
+
+    RULE: ClassVar[list[dict]] = [
+        {
+            "title": "encoded powershell",
+            "id": "cccccccc-0000-0000-0000-000000000001",
+            "level": "high",
+            "tags": [],
+            "rule": ["SELECT * FROM logs WHERE CommandLine LIKE '%-enc %'"],
+        }
+    ]
+
+    def _corpus(self, tmp_path):
+        """Two files, both detecting; only the second carries ParentImage.
+
+        The narrow file is padded so it sorts first, which is what puts the
+        incomplete schema in front of the complete one.
+        """
+        logs = tmp_path / "logs"
+        logs.mkdir(parents=True)
+
+        def event(extra, padding=""):
+            return json.dumps(
+                {
+                    "Event": {
+                        "System": {
+                            "Channel": "Security",
+                            "EventID": 4688,
+                            "SystemTime": "2024-01-01T00:00:00Z",
+                            "Padding": padding,
+                        },
+                        "EventData": {"CommandLine": "powershell -enc AAAA", **extra},
+                    }
+                }
+            )
+
+        (logs / "narrow.json").write_text(event({}, "x" * 500), encoding="utf-8")
+        (logs / "wide.json").write_text(
+            event({"ParentImage": "C:\\evil\\dropper.exe"}), encoding="utf-8"
+        )
+        ruleset = tmp_path / "rules.json"
+        ruleset.write_text(json.dumps(self.RULE), encoding="utf-8")
+        return logs, ruleset
+
+    def _run(self, tmp_path, *mode_flags):
+        logs, ruleset = self._corpus(tmp_path)
+        out = tmp_path / "out.csv"
+        argv = [
+            "zircolite.py",
+            "--evtx", str(logs),
+            "-j",
+            "--ruleset", str(ruleset),
+            "--csv",
+            "--no-auto-mode",
+            "-o", str(out),
+            "--quiet",
+            *mode_flags,
+        ]
+        with patch.object(sys, "argv", argv):
+            zircolite.cli.main()
+        rows = list(csv.DictReader(out.read_text(encoding="utf-8").splitlines(), delimiter=";"))
+        return rows
+
+    @pytest.mark.parametrize(
+        "mode_flags",
+        [pytest.param(("--no-parallel",), id="per-file"),
+         pytest.param((), id="parallel"),
+         pytest.param(("--unified-db",), id="unified")],
+    )
+    def test_the_later_file_s_field_reaches_the_csv(self, tmp_path, mode_flags):
+        rows = self._run(tmp_path, *mode_flags)
+
+        assert len(rows) == 2
+        assert "ParentImage" in rows[0]
+        assert {r.get("ParentImage") for r in rows} == {"", "C:\\evil\\dropper.exe"}
+
+    @pytest.mark.parametrize(
+        "mode_flags",
+        [pytest.param(("--no-parallel",), id="per-file"),
+         pytest.param((), id="parallel"),
+         pytest.param(("--unified-db",), id="unified")],
+    )
+    def test_the_database_row_id_is_not_a_detection_field(self, tmp_path, mode_flags):
+        """``SELECT *`` returns it; it identifies a row in a discarded database.
+
+        The streaming header always dropped it, so leaving it in the buffered
+        one gave the same corpus a different column set per mode.
+        """
+        rows = self._run(tmp_path, *mode_flags)
+
+        assert "row_id" not in rows[0]
+
+    def test_every_mode_produces_the_same_columns(self, tmp_path):
+        columns = [
+            set(self._run(tmp_path / mode, *flags)[0])
+            for mode, flags in (
+                ("perfile", ("--no-parallel",)),
+                ("parallel", ()),
+                ("unified", ("--unified-db",)),
+            )
+        ]
+
+        assert columns[0] == columns[1] == columns[2]
