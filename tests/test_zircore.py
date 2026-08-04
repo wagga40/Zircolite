@@ -16,7 +16,7 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from zircolite import ProcessingConfig, ZircoliteCore
+from zircolite import ProcessingConfig, ZircoliteCore, sqlscan
 from zircolite.core import _compile_regex
 
 
@@ -2336,5 +2336,120 @@ class TestQueryPlannerStatistics:
             ]
             for query in silent:
                 assert core.execute_select_query(query, rule_title="quiet") == []
+        finally:
+            core.close()
+
+
+class TestTheRulesetIsLexedOnce:
+    """Rule SQL is read once per statement, not once per statement per file.
+
+    Reading a ruleset is dominated by lexing it, and per-file and parallel modes
+    run the same ruleset against every input file. The scan cache used to be an
+    LRU far smaller than a real ruleset, read in a fixed order, so it evicted
+    every entry just before it was needed and each file re-lexed everything.
+    """
+
+    RULE_COUNT = 300
+
+    def _ruleset(self):
+        return [
+            {
+                "title": f"rule {i}",
+                "id": f"id-{i}",
+                "level": "medium",
+                "rule": [
+                    "SELECT * FROM logs WHERE Channel = 'Security' "
+                    f"AND EventID = {4000 + i}"
+                ],
+            }
+            for i in range(self.RULE_COUNT)
+        ]
+
+    def _core(self, field_mappings_file, test_logger):
+        core = ZircoliteCore(
+            config=field_mappings_file,
+            processing_config=ProcessingConfig(no_output=True, disable_progress=True),
+            logger=test_logger,
+        )
+        core.create_db('"Channel" TEXT COLLATE NOCASE, "EventID" INTEGER COLLATE NOCASE')
+        core.db_connection.execute(
+            "INSERT INTO logs (Channel, EventID) VALUES ('Security', 4001)"
+        )
+        core.db_connection.commit()
+        core.load_ruleset_from_var(ruleset=self._ruleset(), rule_filters=None)
+        return core
+
+    def _counting_lexer(self, monkeypatch):
+        """Count statements lexed, not seconds spent -- timings are not evidence."""
+        lexed = []
+        original = sqlscan._typed_tokens
+
+        def counting(sql):
+            lexed.append(sql)
+            return original(sql)
+
+        monkeypatch.setattr(sqlscan, "_typed_tokens", counting)
+        return lexed
+
+    def test_a_second_ruleset_run_lexes_nothing(
+        self, field_mappings_file, test_logger, tmp_path, monkeypatch
+    ):
+        sqlscan.clear_scan_cache()
+        core = self._core(field_mappings_file, test_logger)
+        lexed = self._counting_lexer(monkeypatch)
+        try:
+            core.execute_ruleset(str(tmp_path / "a.json"), disable_progress=True)
+            first = len(lexed)
+            lexed.clear()
+            core.execute_ruleset(str(tmp_path / "b.json"), disable_progress=True)
+
+            assert first > 0, "the first run must actually lex the ruleset"
+            assert lexed == []
+        finally:
+            core.close()
+
+    def test_the_next_file_lexes_nothing(
+        self, field_mappings_file, test_logger, tmp_path, monkeypatch
+    ):
+        """``reset_logs_table`` is what per-file mode does between inputs.
+
+        It drops the table, so index and schema state must be rebuilt -- but the
+        rule SQL has not changed, and re-reading it is pure waste.
+        """
+        sqlscan.clear_scan_cache()
+        core = self._core(field_mappings_file, test_logger)
+        lexed = self._counting_lexer(monkeypatch)
+        try:
+            core.execute_ruleset(str(tmp_path / "file1.json"), disable_progress=True)
+            assert len(lexed) > 0
+
+            core.reset_logs_table()
+            core.create_db(
+                '"Channel" TEXT COLLATE NOCASE, "EventID" INTEGER COLLATE NOCASE'
+            )
+            core.db_connection.execute(
+                "INSERT INTO logs (Channel, EventID) VALUES ('Security', 4002)"
+            )
+            core.db_connection.commit()
+            lexed.clear()
+            core.execute_ruleset(str(tmp_path / "file2.json"), disable_progress=True)
+
+            assert lexed == []
+        finally:
+            core.close()
+
+    def test_widening_reuses_the_scan_the_regex_check_already_took(
+        self, field_mappings_file, test_logger, monkeypatch
+    ):
+        """Both sites read the same statement in one ``execute_select_query``."""
+        sqlscan.clear_scan_cache()
+        core = self._core(field_mappings_file, test_logger)
+        lexed = self._counting_lexer(monkeypatch)
+        try:
+            query = "SELECT * FROM logs WHERE Channel = 'Security' AND Absent IS NULL"
+            core.execute_select_query(query, rule_title="widens once")
+
+            assert "Absent" in core._get_table_columns()
+            assert lexed == [query]
         finally:
             core.close()

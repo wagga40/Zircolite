@@ -45,7 +45,7 @@ from .console import (
 )
 from .formats import json_array_requested
 from .shutdown import is_shutdown_requested
-from .sqlscan import column_refs, rebalance_sql, regex_literals
+from .sqlscan import rebalance_sql, scan_query
 from .streaming import StreamingEventProcessor, StrictParseError
 from .utils import sanitize_row_for_csv
 
@@ -78,7 +78,6 @@ def _rebalance_cached(query: str) -> str:
     return rebalance_sql(query)
 
 
-@lru_cache(maxsize=256)
 def _uncompilable_regex(query: str) -> str | None:
     """Why ``query``'s REGEXP patterns cannot compile, or None if they all can.
 
@@ -86,8 +85,12 @@ def _uncompilable_regex(query: str) -> str | None:
     Python's ``re`` rejects -- ``\\p{L}``, a possessive quantifier, a mistyped
     ``(?<name>)``. Discovering that inside the UDF means discovering it once per
     row, with nowhere to report it; the rule then looks like a clean non-match.
+
+    Uncached on purpose. ``scan_query`` already memoises the pattern list, and
+    the overwhelming majority of rules carry no REGEXP at all, so what is left
+    here is a loop over an empty tuple.
     """
-    for pattern in regex_literals(query):
+    for pattern in scan_query(query).regex_patterns:
         try:
             re.compile(pattern)
         except re.error as exc:
@@ -381,7 +384,7 @@ class ZircoliteCore:
             referenced: set[str] = set()
             for sql_query in rule.get("rule", []):
                 if isinstance(sql_query, str):
-                    referenced |= column_refs(sql_query)
+                    referenced |= scan_query(sql_query).columns
             for candidate in referenced:
                 if candidate.lower() in already_indexed_lower:
                     continue
@@ -502,9 +505,14 @@ class ZircoliteCore:
             self.logger.error("[error]    [-] No connection to Db[/]")
             return False
 
-    def _query_columns(self, query: str) -> set[str]:
-        """Column names a rule query compares against, minus SQL keywords."""
-        return column_refs(query)
+    def _query_columns(self, query: str) -> frozenset[str]:
+        """Column names a rule query compares against, minus SQL keywords.
+
+        ``query`` may be the rebalanced form rather than the one in the ruleset.
+        That only re-associates OR, so the columns are the same; it costs one
+        extra memo entry and is not worth guarding against.
+        """
+        return scan_query(query).columns
 
     def _logs_columns(self) -> set[str]:
         """Lowercased column names of the logs table, cached between rules."""

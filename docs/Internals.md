@@ -249,6 +249,25 @@ backtick-quotes every field name that is not `^[a-zA-Z0-9_]*$` — which is ever
 Winlogbeat name (`event.code`, `@timestamp`, `Data[1]`) — and a name inside a string
 literal is not a column, so `CommandLine LIKE '%user=bob%'` must not invent a `user`.
 
+### Reading a statement
+
+Four questions are asked of every rule statement: which channels it can match, which
+eventIDs, which columns it names, and which patterns it hands to `REGEXP`. All four need
+the same quote-aware lexer, and lexing is what reading a ruleset costs — roughly 100 ms
+per megabyte of SQL, against merged rulesets carrying several.
+
+So `sqlscan.scan_query` lexes a statement once, answers all four from that single token
+list, and memoises the result; `column_refs`, `regex_literals`, `channel_constraints` and
+`eventid_constraints` are folds over it. Every one of those answers is a pure function of
+the statement text — no schema, no database, no config — so nothing can invalidate an
+entry and there is no cache key beyond the SQL itself. Per-file and parallel modes ask the
+same questions of the same statements once per input file, and after the first file they
+are answered from memory.
+
+The corollary is the rule to keep: anything schema-dependent stays out of `sqlscan.py`.
+Deciding which of a statement's columns are *missing* needs the live table, so that stays
+in `core.py`; only the list of names it mentions is cached.
+
 **Over-deep expressions.** The SQLite backend emits value lists as a left-deep chain
 (`a OR b OR c OR …`), whose parse-tree depth equals the number of terms. SQLite refuses
 anything past `SQLITE_MAX_EXPR_DEPTH` (1000 by default), so rules listing a few thousand
@@ -272,9 +291,9 @@ Two properties keep the rewrite safe:
   wrong SQL.
 
 Both repairs run only when SQLite itself raises the error, so a statement that already
-compiles is never rewritten. The depth repair is memoised, because per-file and parallel
-modes run the same ruleset once per input file; widening cannot be, since it alters the
-live table. They also chain: an over-deep statement is
+compiles is never rewritten. The depth repair is memoised like the statement scan above,
+because per-file and parallel modes run the same ruleset once per input file; widening
+cannot be, since it alters the live table. They also chain: an over-deep statement is
 rejected while parsing, before SQLite ever resolves column names, so widening only becomes
 reachable once the expression has been rebalanced.
 

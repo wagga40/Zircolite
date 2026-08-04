@@ -11,9 +11,17 @@ as a column named ``user``, and it cannot see ```event.code``` at all, because
 the backend backtick-quotes every field name that is not ``^[a-zA-Z0-9_]*$`` --
 which is every ECS and Winlogbeat name. Both mistakes are silent, and both end
 in a rule that matches nothing while reporting no error.
+
+Since they all want the same scan, they share one. ``scan_query`` lexes a
+statement once, answers every question from that single token list and memoises
+the answers; the public readers below are folds over it. Lexing is the dominant
+cost of reading a ruleset -- roughly 100 ms per megabyte of SQL, against a
+merged ruleset that carries several -- and per-file and parallel modes ask the
+same questions of the same statements once per input file.
 """
 
 from collections.abc import Iterator
+from dataclasses import dataclass
 
 # Opening delimiter -> its closer. Only ``'`` introduces a string literal; the
 # rest quote identifiers, which is why they are told apart below.
@@ -169,6 +177,17 @@ def _peek_word(tokens: list[tuple[str, str]], pos: int) -> str:
     return text.upper() if kind == "word" else ""
 
 
+def _regex_patterns(tokens: list[tuple[str, str]]) -> tuple[str, ...]:
+    """The patterns ``tokens`` hands to REGEXP, stripped of their SQL quoting."""
+    patterns: list[str] = []
+    for i, (kind, text) in enumerate(tokens):
+        if kind == "word" and text.upper() == "REGEXP":
+            kind_, text_ = _peek(tokens, i + 1)
+            if kind_ == "literal":
+                patterns.append(text_[1:-1].replace("''", "'"))
+    return tuple(patterns)
+
+
 def regex_literals(sql: str) -> list[str]:
     """The patterns ``sql`` hands to REGEXP, stripped of their SQL quoting.
 
@@ -176,40 +195,14 @@ def regex_literals(sql: str) -> list[str]:
     Left to the UDF, it raises once per row and is swallowed once per row, and
     the rule ends up indistinguishable from one that simply matched nothing.
     """
-    patterns: list[str] = []
-    try:
-        tokens = _typed_tokens(sql)
-    except _Unsupported:
-        return patterns
-    for i, (kind, text) in enumerate(tokens):
-        if kind == "word" and text.upper() == "REGEXP":
-            kind_, text_ = _peek(tokens, i + 1)
-            if kind_ == "literal":
-                patterns.append(text_[1:-1].replace("''", "'"))
-    return patterns
+    return list(scan_query(sql).regex_patterns)
 
 
-def column_refs(sql: str) -> set[str]:
-    """Column names ``sql`` compares against, minus SQL keywords.
-
-    Quoted names count -- ```event.code``` is a column, and the backend quotes
-    every field name carrying a dot, ``@``, bracket or space. Text inside a
-    string literal never does: ``CommandLine LIKE '%user=bob%'`` names one
-    column, not two.
-
-    Both sides of a comparison count. Sigma's ``|fieldref`` compares two fields,
-    and a right-hand name the caller never hears about is one it cannot widen
-    the table for -- leaving the query to keep failing on ``no such column``.
-    Only a bare identifier qualifies: literals and numbers are values.
-    """
+def _column_names(tokens: list[tuple[str, str]]) -> frozenset[str]:
+    """Column names ``tokens`` compares against, minus SQL keywords."""
     names: set[str] = set()
     previous: str | None = None
     expect_operand = False
-    try:
-        tokens = _typed_tokens(sql)
-    except _Unsupported:
-        # Unscannable SQL cannot be repaired here, and will fail loudly when run.
-        return names
     for kind, text in tokens:
         if kind == "name":
             if expect_operand:
@@ -239,7 +232,23 @@ def column_refs(sql: str) -> set[str]:
             expect_operand = True
         else:
             expect_operand = False
-    return names
+    return frozenset(names)
+
+
+def column_refs(sql: str) -> set[str]:
+    """Column names ``sql`` compares against, minus SQL keywords.
+
+    Quoted names count -- ```event.code``` is a column, and the backend quotes
+    every field name carrying a dot, ``@``, bracket or space. Text inside a
+    string literal never does: ``CommandLine LIKE '%user=bob%'`` names one
+    column, not two.
+
+    Both sides of a comparison count. Sigma's ``|fieldref`` compares two fields,
+    and a right-hand name the caller never hears about is one it cannot widen
+    the table for -- leaving the query to keep failing on ``no such column``.
+    Only a bare identifier qualifies: literals and numbers are values.
+    """
+    return set(scan_query(sql).columns)
 
 
 # ---------------------------------------------------------------------------
@@ -373,8 +382,81 @@ class _FieldReader:
         return value, pos
 
 
-def _constraints(queries: list[str], reader: _FieldReader) -> set | None:
-    """Union of ``reader``'s values across a rule's statements, or None.
+@dataclass(frozen=True, slots=True)
+class QueryScan:
+    """Everything one statement can be asked about, read in a single pass.
+
+    ``channels`` and ``eventids`` follow the convention above: ``None`` is
+    unbounded, and an empty frozenset is the rarer "provably matches nothing".
+    """
+
+    channels: frozenset[str] | None
+    eventids: frozenset[int] | None
+    columns: frozenset[str]
+    regex_patterns: tuple[str, ...]
+
+
+_UNSCANNABLE = QueryScan(None, None, frozenset(), ())
+
+# Keyed by the statement text, which is what every fact here is a pure function
+# of -- no schema, no database, no config, no file. Nothing can invalidate an
+# entry, so per-file and parallel modes reuse one warm cache for the whole run
+# instead of re-lexing the ruleset once per input file. Values are immutable, so
+# two threads racing on the same statement can only write equal answers; that is
+# why this is a plain dict and not a lock-taking ``lru_cache``.
+_SCANS: dict[str, QueryScan] = {}
+
+
+def scan_query(sql: str) -> QueryScan:
+    """Read ``sql`` once, answering every question this module supports."""
+    cached = _SCANS.get(sql)
+    if cached is not None:
+        return cached
+
+    try:
+        tokens = _typed_tokens(sql)
+    except _Unsupported:
+        # Unscannable SQL cannot be repaired here, and will fail loudly when run.
+        _SCANS[sql] = _UNSCANNABLE
+        return _UNSCANNABLE
+
+    where = next(
+        (
+            i + 1
+            for i, (kind, text) in enumerate(tokens)
+            if kind == "word" and text.upper() == "WHERE"
+        ),
+        None,
+    )
+
+    def bounds(reader: _FieldReader) -> frozenset | None:
+        # One try per reader on purpose: they recurse identically, so a shared
+        # one would let the channel reader's blow-up decide the eventID answer.
+        if where is None:
+            return None
+        try:
+            value = reader.read(tokens, where)
+        except (_Unsupported, RecursionError):
+            return None
+        return None if value is None else frozenset(value)
+
+    scan = QueryScan(
+        channels=bounds(_FieldReader("channel", _as_text)),
+        eventids=bounds(_FieldReader("eventid", _as_int)),
+        columns=_column_names(tokens),
+        regex_patterns=_regex_patterns(tokens),
+    )
+    _SCANS[sql] = scan
+    return scan
+
+
+def clear_scan_cache() -> None:
+    """Drop every memoised scan. For tests and long-lived library callers."""
+    _SCANS.clear()
+
+
+def _constraints(queries: list[str], field: str) -> set | None:
+    """Union of one field's bounds across a rule's statements, or None.
 
     A rule matches when any one of its statements does, so a single unbounded
     statement leaves the whole rule unbounded.
@@ -383,21 +465,7 @@ def _constraints(queries: list[str], reader: _FieldReader) -> set | None:
     for query in queries:
         if not isinstance(query, str):
             return None
-        try:
-            tokens = _typed_tokens(query)
-            where = next(
-                (
-                    i + 1
-                    for i, (kind, text) in enumerate(tokens)
-                    if kind == "word" and text.upper() == "WHERE"
-                ),
-                None,
-            )
-            if where is None:
-                return None
-            value = reader.read(tokens, where)
-        except (_Unsupported, RecursionError):
-            return None
+        value = getattr(scan_query(query), field)
         if value is None:
             return None
         total |= value
@@ -406,12 +474,12 @@ def _constraints(queries: list[str], reader: _FieldReader) -> set | None:
 
 def eventid_constraints(queries: list[str]) -> set[int] | None:
     """The eventIDs a rule's SQL can match, or None when it cannot be bounded."""
-    return _constraints(queries, _FieldReader("eventid", _as_int))
+    return _constraints(queries, "eventids")
 
 
 def channel_constraints(queries: list[str]) -> set[str] | None:
     """The channels a rule's SQL can match, or None when it cannot be bounded."""
-    return _constraints(queries, _FieldReader("channel", _as_text))
+    return _constraints(queries, "channels")
 
 
 def _balance(parts: list) -> str:

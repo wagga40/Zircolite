@@ -82,7 +82,6 @@ class EventFilter:
     __slots__ = (
         '_channel_filter',
         '_channel_map',
-        '_channels_lower',
         '_eventid_bounded',
         '_eventid_filter',
         '_has_filter_data',
@@ -126,9 +125,6 @@ class EventFilter:
         self._channel_filter = False
         self._eventid_filter = False
         self._eventid_bounded = False
-
-        # Pre-computed lowercase channels for case-insensitive matching
-        self._channels_lower: frozenset[str] = frozenset()
 
         # Extract filter data from rulesets
         self._extract_filter_data(rulesets)
@@ -241,9 +237,6 @@ class EventFilter:
         # Convert to immutable frozensets for faster lookups
         self.channels = frozenset(channels_set)
         self.eventids = frozenset(eventids_set)
-
-        # Pre-compute lowercase channels for case-insensitive matching
-        self._channels_lower = frozenset(c.lower() for c in self.channels)
 
         # Store stats
         self._rules_with_filter = rules_with_filter
