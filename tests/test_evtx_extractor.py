@@ -327,8 +327,13 @@ class TestExtractorBugFixes:
 
 
 
+    @pytest.mark.skipif(sys.platform == "win32", reason="POSIX-only TZ semantics")
     def test_get_time_is_utc_not_local(self, tmp_path, monkeypatch):
-        """auditd epoch timestamps must render in UTC regardless of host TZ."""
+        """auditd epoch timestamps must render in UTC regardless of host TZ.
+
+        Only reachable where ``time.tzset`` exists: Windows resolves the time
+        zone at process start and offers no way to change it from the test.
+        """
         import time as time_module
         monkeypatch.setenv("TZ", "America/New_York")
         time_module.tzset()

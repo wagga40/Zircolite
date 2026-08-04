@@ -177,7 +177,9 @@ def test_bundled_dir_skips_a_directory_it_cannot_write_to(tmp_path, monkeypatch)
     [sys.executable, "-m", "zircolite", "--help"],
 ])
 def test_both_invocations_reach_the_same_cli(argv):
-    result = subprocess.run(argv, capture_output=True, text=True, cwd=str(WORKSPACE_ROOT))
+    result = subprocess.run(
+        argv, capture_output=True, text=True, encoding="utf-8", cwd=str(WORKSPACE_ROOT)
+    )
 
     assert result.returncode == 0, result.stderr
     assert "--ruleset" in result.stdout
@@ -187,7 +189,7 @@ def test_the_entry_point_runs_from_another_directory(tmp_path):
     """sys.path[0] is the script's directory, not the CWD, so the package still imports."""
     result = subprocess.run(
         [sys.executable, str(ENTRY_POINT), "-v"],
-        capture_output=True, text=True, cwd=str(tmp_path),
+        capture_output=True, text=True, encoding="utf-8", cwd=str(tmp_path),
     )
 
     assert result.returncode == 0, result.stderr
