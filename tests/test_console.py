@@ -3,6 +3,7 @@ Tests for the console module (quiet mode, output helpers, stats).
 """
 
 import logging
+import re
 import sys
 from pathlib import Path
 
@@ -598,3 +599,48 @@ class TestAttackTacticExtraction:
         from zircolite.attack import extract_attack_tactics
 
         assert extract_attack_tactics(["cve.2024.1234", "car.2013-05-002"]) == []
+
+    def test_v19_successors_of_defense_evasion_resolve(self):
+        """ATT&CK v19 split Defense Evasion into Stealth and Defense Impairment."""
+        from zircolite.attack import extract_attack_tactics
+
+        assert extract_attack_tactics(["attack.stealth"]) == ["stealth"]
+        assert extract_attack_tactics(["attack.defense-impairment"]) == ["defense-impairment"]
+
+    def test_retired_defense_evasion_maps_to_the_tactic_that_kept_its_id(self):
+        """Stealth inherited TA0005, so the retired spelling has to land there."""
+        from zircolite.attack import extract_attack_tactics
+
+        assert extract_attack_tactics(["attack.defense-evasion"]) == ["stealth"]
+        assert extract_attack_tactics(["attack.defense_evasion"]) == ["stealth"]
+
+    def test_every_tactic_tag_in_the_shipped_rulesets_resolves(self):
+        """A tactic the alias table does not know is dropped silently.
+
+        That is how the v19 rename went unnoticed: rules tagged attack.stealth
+        produced no tactic at all, so Navigator entries merged under a null
+        tactic and the Mini-GUI's lanes for them stayed empty.
+        """
+        import json
+
+        from zircolite.attack import extract_attack_tactics
+
+        rules_dir = Path(__file__).parent.parent / "rules"
+        rulesets = sorted(rules_dir.glob("*.json"))
+        if not rulesets:
+            pytest.skip("no rulesets in rules/ to check against")
+
+        # Technique (attack.tXXXX), software (attack.sXXXX), group (attack.gXXXX)
+        # and data-source (attack.dsXXXX) tags are not tactics and never resolve.
+        non_tactic = re.compile(r"^attack\.(t|s|g|ds)\d", re.IGNORECASE)
+        unresolved = set()
+        for ruleset in rulesets:
+            for rule in json.loads(ruleset.read_text()):
+                for tag in rule.get("tags", []):
+                    tag = str(tag)
+                    if not tag.lower().startswith("attack.") or non_tactic.match(tag):
+                        continue
+                    if not extract_attack_tactics([tag]):
+                        unresolved.add(tag)
+
+        assert not unresolved, f"tactic tags no alias covers: {sorted(unresolved)}"

@@ -4,8 +4,10 @@ Tests for the TemplateEngine and ZircoliteGuiGenerator classes.
 
 import json
 import logging
+import re
 import sys
 from pathlib import Path
+from typing import ClassVar
 from unittest.mock import MagicMock, patch
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
@@ -889,3 +891,103 @@ class TestSummaryCsvTemplateIsParseableCsv:
         assert "\\u0027" not in rendered and "\\u0026" not in rendered
         # Folded to one row so a multi-line description cannot break the table
         assert rows[1][4] == "A & B <tag> second line"
+
+
+class TestZircoGuiTacticBuckets:
+    """Every ATT&CK tactic the rulesets emit must reach a Mini-GUI lane.
+
+    The template used to test hardcoded underscored tag names
+    (``attack.privilege_escalation``) while the rulesets emit hyphenated ones,
+    so seven of the fifteen tactic lanes could never populate. Routing the test
+    through ``extract_attack_tactics`` makes ``zircolite.attack`` the only place
+    tag spellings are known.
+    """
+
+    TEMPLATE = Path(__file__).parent.parent / "templates" / "exportForZircoGui.tmpl"
+
+    # Mini-GUI array name -> the tactic shortnames that must land in it.
+    LANES: ClassVar[dict[str, list[str]]] = {
+        "Reconnaissance": ["reconnaissance"],
+        "ResourceDevelopment": ["resource-development"],
+        "InitialAccess": ["initial-access"],
+        "Execution": ["execution"],
+        "Persistence": ["persistence"],
+        "PrivilegeEscalation": ["privilege-escalation"],
+        # v19 retired Defense Evasion; this lane carries both successors.
+        "DefenseEvasion": ["stealth", "defense-impairment"],
+        "CredentialAccess": ["credential-access"],
+        "Discovery": ["discovery"],
+        "LateralMovement": ["lateral-movement"],
+        "Collection": ["collection"],
+        "CommandAndControl": ["command-and-control"],
+        "Exfiltration": ["exfiltration"],
+        "Impact": ["impact"],
+    }
+
+    def _render(self, tmp_path, data):
+        from zircolite.config import TemplateConfig
+        from zircolite.templates import TemplateEngine
+
+        out = tmp_path / "data.js"
+        engine = TemplateEngine(
+            TemplateConfig(
+                template=[[str(self.TEMPLATE)]],
+                template_output=[[str(out)]],
+                time_field="SystemTime",
+            ),
+            logger=logging.getLogger("test"),
+        )
+        assert engine.generate_from_template(str(self.TEMPLATE), str(out), data)
+        return out.read_text()
+
+    @staticmethod
+    def _detection(title, tags):
+        return {
+            "title": title,
+            "rule_level": "high",
+            "sigmafile": "",
+            "description": "d",
+            "tags": tags,
+            "matches": [{"row_id": 1, "SystemTime": "2026-01-01T00:00:00Z"}],
+        }
+
+    @staticmethod
+    def _titles_in(rendered, lane):
+        body = re.search(rf"var {lane}Data = \[(.*?)\n\];", rendered, re.DOTALL).group(1)
+        return re.findall(r'"title":"(.*?)"', body)
+
+    def test_every_tactic_lane_receives_its_detections(self, tmp_path):
+        shortname_to_tag = {
+            s: f"attack.{s}" for lane in self.LANES.values() for s in lane
+        }
+        data = [
+            self._detection(f"rule-{s}", [tag, "attack.t1059"])
+            for s, tag in shortname_to_tag.items()
+        ]
+
+        rendered = self._render(tmp_path, data)
+
+        for lane, shortnames in self.LANES.items():
+            assert sorted(self._titles_in(rendered, lane)) == sorted(
+                f"rule-{s}" for s in shortnames
+            ), f"{lane}Data did not receive its detections"
+
+    def test_legacy_tag_spellings_still_route(self, tmp_path):
+        data = [
+            self._detection("underscored", ["attack.privilege_escalation"]),
+            self._detection("retired", ["attack.defense-evasion"]),
+        ]
+
+        rendered = self._render(tmp_path, data)
+
+        assert self._titles_in(rendered, "PrivilegeEscalation") == ["underscored"]
+        assert self._titles_in(rendered, "DefenseEvasion") == ["retired"]
+
+    def test_a_rule_with_no_resolvable_tactic_lands_in_other(self, tmp_path):
+        """'Other' tested ``tags == []``, so a rule with only technique tags
+        fell out of every lane instead of into this one."""
+        data = [self._detection("orphan", ["attack.t1059.001", "cve.2024.1234"])]
+
+        rendered = self._render(tmp_path, data)
+
+        assert self._titles_in(rendered, "Other") == ["orphan"]
