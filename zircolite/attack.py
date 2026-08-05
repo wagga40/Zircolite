@@ -4,6 +4,10 @@ import re
 
 _TECHNIQUE_RE = re.compile(r"^attack\.(t\d{4}(?:\.\d{3})?)$", re.IGNORECASE)
 
+# Values are ATT&CK tactic shortnames, which is what a Navigator layer's
+# "tactic" field expects. ATT&CK v19 retired Defense Evasion: Stealth kept
+# TA0005 and Defense Impairment is the new TA0112, so a rule still carrying
+# the retired tag maps to Stealth, the tactic that inherited the ID.
 _TACTIC_ALIASES = {
     "reconnaissance": "reconnaissance",
     "resource-development": "resource-development",
@@ -14,8 +18,11 @@ _TACTIC_ALIASES = {
     "persistence": "persistence",
     "privilege-escalation": "privilege-escalation",
     "privilege_escalation": "privilege-escalation",
-    "defense-evasion": "defense-evasion",
-    "defense_evasion": "defense-evasion",
+    "stealth": "stealth",
+    "defense-impairment": "defense-impairment",
+    "defense_impairment": "defense-impairment",
+    "defense-evasion": "stealth",
+    "defense_evasion": "stealth",
     "credential-access": "credential-access",
     "credential_access": "credential-access",
     "discovery": "discovery",
