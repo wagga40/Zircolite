@@ -1,6 +1,6 @@
 [project]
 name = "Zircolite"
-version = "3.8.0"
+version = "3.8.1"
 description = "A standalone SIGMA-based detection tool for EVTX, Auditd and Sysmon for Linux logs "
 authors = [
     {name = "wagga40", email = "6437862+wagga40@users.noreply.github.com"},
