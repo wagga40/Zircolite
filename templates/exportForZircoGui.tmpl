@@ -1,4 +1,4 @@
-var ReconnaissanceData = [{% for elem in data %}{% if "attack.reconnaissance" in elem["tags"] %}{% for match in elem["matches"] %}
+var ReconnaissanceData = [{% for elem in data %}{% if "reconnaissance" in elem["tags"]|extract_attack_tactics %}{% for match in elem["matches"] %}
 	{
 		"Rule level":{{ elem["rule_level"]|tojson }},
 		"title":{{ elem["title"]|tojson }},
@@ -8,7 +8,7 @@ var ReconnaissanceData = [{% for elem in data %}{% if "attack.reconnaissance" in
 	}{{ "," if not loop.last }}{% endfor %}{{ "," if not loop.last }}{% endif %}{% endfor %}
 ];
 
-var ResourceDevelopmentData = [{% for elem in data %}{% if "attack.resource_development" in elem["tags"] %}{% for match in elem["matches"] %}
+var ResourceDevelopmentData = [{% for elem in data %}{% if "resource-development" in elem["tags"]|extract_attack_tactics %}{% for match in elem["matches"] %}
 	{
 		"Rule level":{{ elem["rule_level"]|tojson }},
 		"title":{{ elem["title"]|tojson }},
@@ -18,7 +18,7 @@ var ResourceDevelopmentData = [{% for elem in data %}{% if "attack.resource_deve
 	}{{ "," if not loop.last }}{% endfor %}{{ "," if not loop.last }}{% endif %}{% endfor %}
 ];
 
-var InitialAccessData = [{% for elem in data %}{% if "attack.initial_access" in elem["tags"] %}{% for match in elem["matches"] %}
+var InitialAccessData = [{% for elem in data %}{% if "initial-access" in elem["tags"]|extract_attack_tactics %}{% for match in elem["matches"] %}
 	{
 		"Rule level":{{ elem["rule_level"]|tojson }},
 		"title":{{ elem["title"]|tojson }},
@@ -28,7 +28,7 @@ var InitialAccessData = [{% for elem in data %}{% if "attack.initial_access" in 
 	}{{ "," if not loop.last }}{% endfor %}{{ "," if not loop.last }}{% endif %}{% endfor %}
 ];
 
-var ExecutionData = [{% for elem in data %}{% if "attack.execution" in elem["tags"] %}{% for match in elem["matches"] %}
+var ExecutionData = [{% for elem in data %}{% if "execution" in elem["tags"]|extract_attack_tactics %}{% for match in elem["matches"] %}
 	{
 		"Rule level":{{ elem["rule_level"]|tojson }},
 		"title":{{ elem["title"]|tojson }},
@@ -38,7 +38,7 @@ var ExecutionData = [{% for elem in data %}{% if "attack.execution" in elem["tag
 	}{{ "," if not loop.last }}{% endfor %}{{ "," if not loop.last }}{% endif %}{% endfor %}
 ];
 
-var PersistenceData = [{% for elem in data %}{% if "attack.persistence" in elem["tags"] %}{% for match in elem["matches"] %}
+var PersistenceData = [{% for elem in data %}{% if "persistence" in elem["tags"]|extract_attack_tactics %}{% for match in elem["matches"] %}
 	{
 		"Rule level":{{ elem["rule_level"]|tojson }},
 		"title":{{ elem["title"]|tojson }},
@@ -48,7 +48,7 @@ var PersistenceData = [{% for elem in data %}{% if "attack.persistence" in elem[
 	}{{ "," if not loop.last }}{% endfor %}{{ "," if not loop.last }}{% endif %}{% endfor %}
 ];
 
-var PrivilegeEscalationData = [{% for elem in data %}{% if "attack.privilege_escalation" in elem["tags"] %}{% for match in elem["matches"] %}
+var PrivilegeEscalationData = [{% for elem in data %}{% if "privilege-escalation" in elem["tags"]|extract_attack_tactics %}{% for match in elem["matches"] %}
 	{
 		"Rule level":{{ elem["rule_level"]|tojson }},
 		"title":{{ elem["title"]|tojson }},
@@ -58,7 +58,7 @@ var PrivilegeEscalationData = [{% for elem in data %}{% if "attack.privilege_esc
 	}{{ "," if not loop.last }}{% endfor %}{{ "," if not loop.last }}{% endif %}{% endfor %}
 ];
 
-var DefenseEvasionData = [{% for elem in data %}{% if "attack.defense_evasion" in elem["tags"] %}{% for match in elem["matches"] %}
+var DefenseEvasionData = [{% for elem in data %}{% if "stealth" in elem["tags"]|extract_attack_tactics or "defense-impairment" in elem["tags"]|extract_attack_tactics %}{% for match in elem["matches"] %}
 	{
 		"Rule level":{{ elem["rule_level"]|tojson }},
 		"title":{{ elem["title"]|tojson }},
@@ -68,7 +68,7 @@ var DefenseEvasionData = [{% for elem in data %}{% if "attack.defense_evasion" i
 	}{{ "," if not loop.last }}{% endfor %}{{ "," if not loop.last }}{% endif %}{% endfor %}
 ];
 
-var CredentialAccessData = [{% for elem in data %}{% if "attack.credential_access" in elem["tags"] %}{% for match in elem["matches"] %}
+var CredentialAccessData = [{% for elem in data %}{% if "credential-access" in elem["tags"]|extract_attack_tactics %}{% for match in elem["matches"] %}
 	{
 		"Rule level":{{ elem["rule_level"]|tojson }},
 		"title":{{ elem["title"]|tojson }},
@@ -78,7 +78,7 @@ var CredentialAccessData = [{% for elem in data %}{% if "attack.credential_acces
 	}{{ "," if not loop.last }}{% endfor %}{{ "," if not loop.last }}{% endif %}{% endfor %}
 ];
 
-var DiscoveryData = [{% for elem in data %}{% if "attack.discovery" in elem["tags"] %}{% for match in elem["matches"] %}
+var DiscoveryData = [{% for elem in data %}{% if "discovery" in elem["tags"]|extract_attack_tactics %}{% for match in elem["matches"] %}
 	{
 		"Rule level":{{ elem["rule_level"]|tojson }},
 		"title":{{ elem["title"]|tojson }},
@@ -88,7 +88,7 @@ var DiscoveryData = [{% for elem in data %}{% if "attack.discovery" in elem["tag
 	}{{ "," if not loop.last }}{% endfor %}{{ "," if not loop.last }}{% endif %}{% endfor %}
 ];
 
-var LateralMovementData = [{% for elem in data %}{% if "attack.lateral_movement" in elem["tags"] %}{% for match in elem["matches"] %}
+var LateralMovementData = [{% for elem in data %}{% if "lateral-movement" in elem["tags"]|extract_attack_tactics %}{% for match in elem["matches"] %}
 	{
 		"Rule level":{{ elem["rule_level"]|tojson }},
 		"title":{{ elem["title"]|tojson }},
@@ -98,7 +98,7 @@ var LateralMovementData = [{% for elem in data %}{% if "attack.lateral_movement"
 	}{{ "," if not loop.last }}{% endfor %}{{ "," if not loop.last }}{% endif %}{% endfor %}
 ];
 
-var CollectionData = [{% for elem in data %}{% if "attack.collection" in elem["tags"] %}{% for match in elem["matches"] %}
+var CollectionData = [{% for elem in data %}{% if "collection" in elem["tags"]|extract_attack_tactics %}{% for match in elem["matches"] %}
 	{
 		"Rule level":{{ elem["rule_level"]|tojson }},
 		"title":{{ elem["title"]|tojson }},
@@ -108,7 +108,7 @@ var CollectionData = [{% for elem in data %}{% if "attack.collection" in elem["t
 	}{{ "," if not loop.last }}{% endfor %}{{ "," if not loop.last }}{% endif %}{% endfor %}
 ];
 
-var CommandAndControlData = [{% for elem in data %}{% if "attack.command_and_control" in elem["tags"] %}{% for match in elem["matches"] %}
+var CommandAndControlData = [{% for elem in data %}{% if "command-and-control" in elem["tags"]|extract_attack_tactics %}{% for match in elem["matches"] %}
 	{
 		"Rule level":{{ elem["rule_level"]|tojson }},
 		"title":{{ elem["title"]|tojson }},
@@ -118,7 +118,7 @@ var CommandAndControlData = [{% for elem in data %}{% if "attack.command_and_con
 	}{{ "," if not loop.last }}{% endfor %}{{ "," if not loop.last }}{% endif %}{% endfor %}
 ];
 
-var ExfiltrationData = [{% for elem in data %}{% if "attack.exfiltration" in elem["tags"] %}{% for match in elem["matches"] %}
+var ExfiltrationData = [{% for elem in data %}{% if "exfiltration" in elem["tags"]|extract_attack_tactics %}{% for match in elem["matches"] %}
 	{
 		"Rule level":{{ elem["rule_level"]|tojson }},
 		"title":{{ elem["title"]|tojson }},
@@ -128,7 +128,7 @@ var ExfiltrationData = [{% for elem in data %}{% if "attack.exfiltration" in ele
 	}{{ "," if not loop.last }}{% endfor %}{{ "," if not loop.last }}{% endif %}{% endfor %}
 ];
 
-var ImpactData = [{% for elem in data %}{% if "attack.impact" in elem["tags"] %}{% for match in elem["matches"] %}
+var ImpactData = [{% for elem in data %}{% if "impact" in elem["tags"]|extract_attack_tactics %}{% for match in elem["matches"] %}
 	{
 		"Rule level":{{ elem["rule_level"]|tojson }},
 		"title":{{ elem["title"]|tojson }},
@@ -138,7 +138,7 @@ var ImpactData = [{% for elem in data %}{% if "attack.impact" in elem["tags"] %}
 	}{{ "," if not loop.last }}{% endfor %}{{ "," if not loop.last }}{% endif %}{% endfor %}
 ];
 
-var OtherData = [{% for elem in data %}{% if elem["tags"]==[] %}{% for match in elem["matches"] %}
+var OtherData = [{% for elem in data %}{% if not elem["tags"]|extract_attack_tactics %}{% for match in elem["matches"] %}
 	{
 		"Rule level":{{ elem["rule_level"]|tojson }},
 		"title":{{ elem["title"]|tojson }},
