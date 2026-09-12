@@ -216,6 +216,7 @@ def parse_arguments() -> argparse.Namespace:
     parallel_args = parser.add_argument_group('⚡ PARALLEL PROCESSING')
     parallel_args.add_argument("-P", "--no-parallel", help="Disable automatic parallel processing (parallel is enabled by default when beneficial)", action='store_true')
     parallel_args.add_argument("-w", "--parallel-workers", help="Maximum number of parallel workers (default: auto-detect based on CPU/memory)", type=int)
+    parallel_args.add_argument("--executor", choices=("thread", "process"), default=None, help="File worker executor (default: thread). Processes can accelerate Python-heavy ingestion.")
     parallel_args.add_argument("--parallel-memory-limit", help=f"Memory usage threshold percentage before throttling (default: {DEFAULTS['parallel_memory_limit']:g})", type=float, default=None)
 
     # Templating and Mini GUI options
@@ -988,7 +989,7 @@ def _run_processing(
             recommended_mode, reason, stats,
             show_parallel=True, forced_workers=forced_workers,
         )
-        if recommended_mode == 'unified':
+        if recommended_mode == 'unified' and getattr(args, 'executor', 'thread') != 'process':
             args.unified_db = True
         if not args.unified_db and not getattr(args, 'no_parallel', False) and not force_sequential:
             if stats.get('parallel_recommended', False):
@@ -1027,6 +1028,9 @@ def _run_processing(
         logger.info("")
 
     # Streaming processing (single-pass pipeline)
+    if (getattr(args, 'executor', 'thread') == 'process' and len(file_list) > 1
+            and not args.unified_db and not args.no_parallel and not force_sequential):
+        use_parallel = True
     extractor = create_extractor(args, logger, input_type)
 
     if use_parallel and len(file_list) > 1 and getattr(args, "dbfile", None):
@@ -1057,6 +1061,9 @@ def _run_processing(
 # MAIN
 ################################################################
 def main() -> None:
+    # PyInstaller workers re-enter the executable; divert them before argparse.
+    from multiprocessing import freeze_support
+    freeze_support()
     version = __version__
     args = parse_arguments()
 
@@ -1419,6 +1426,7 @@ def main() -> None:
         remove_index=flatten_groups(getattr(args, 'remove_index', None)),
         auto_index_top_n=getattr(args, 'auto_index', 0),
         strict_evtx=getattr(args, 'strict', False),
+        retain_results=ready_for_templating or args.package,
     )
 
     zircolite_core = None

@@ -12,20 +12,25 @@ Contents
   ``create_extractor``
 - Processing modes:
     - ``process_unified_streaming`` / ``process_perfile_streaming``
-    - ``process_parallel_streaming`` (multi-threaded per-file)
+    - ``process_parallel_streaming`` (threads or processes, per file)
     - ``process_db_input``
 """
 
 import argparse
 import csv
 import logging
+import multiprocessing
+import os
 import queue
+import shutil
+import signal
 import sqlite3
+import tempfile
 import threading
 import time
-from contextlib import contextmanager
+from contextlib import closing, contextmanager, nullcontext
 from copy import deepcopy
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, fields
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Optional
 
@@ -46,7 +51,8 @@ from .core import ZircoliteCore
 from .extractor import EvtxExtractor
 from .formats import format_by_name
 from .parallel import MemoryAwareParallelProcessor, ParallelConfig
-from .shutdown import is_shutdown_requested
+from .results import RowSpool, result_summary, write_result_json
+from .shutdown import is_shutdown_requested, set_worker_shutdown_event
 from .utils import (
     MemoryTracker,
     avoid_files,
@@ -106,6 +112,10 @@ class ProcessingContext:
     remove_index: list = field(default_factory=list)
     auto_index_top_n: int = 0
     strict_evtx: bool = False
+    # Library callers retain the historical full-match return value. The CLI
+    # needs only summaries unless templates or packaging request the matches.
+    retain_results: bool = True
+    evtx_threads: int | None = None
     # Inputs that failed to ingest; --remove-events skips these
     failed_files: set = field(default_factory=set)
 
@@ -151,6 +161,7 @@ def create_zircolite_core(
         remove_index=ctx.remove_index,
         auto_index_top_n=ctx.auto_index_top_n,
         strict_evtx=ctx.strict_evtx,
+        evtx_threads=ctx.evtx_threads,
     )
     return ZircoliteCore(ctx.config, proc_config, logger=ctx.logger)
 
@@ -174,6 +185,7 @@ def create_worker_core(ctx: ProcessingContext, worker_id: int) -> ZircoliteCore:
         remove_index=ctx.remove_index,
         auto_index_top_n=ctx.auto_index_top_n,
         strict_evtx=ctx.strict_evtx,
+        evtx_threads=ctx.evtx_threads,
     )
     return ZircoliteCore(ctx.config, proc_config, logger=silent_logger)
 
@@ -253,6 +265,45 @@ def _keepflat_context(ctx: 'ProcessingContext', *, thread_safe: bool = False):
 # UNIFIED STREAMING
 # ============================================================================
 
+class _CsvResultSpool:
+    def __init__(self, ctx):
+        self.ctx = ctx
+        self.rows = RowSpool()
+        self.columns = set()
+
+    def add(self, result):
+        metadata = {
+            "rule_title": result["title"], "rule_description": result["description"],
+            "rule_level": result["rule_level"], "rule_count": result["count"],
+        }
+        for row in result.get("matches", ()):
+            self.columns.update(row)
+            self.rows.append({**metadata, **row})
+
+    def finish(self):
+        try:
+            columns = sorted(self.columns - {"row_id", "rule_title", "rule_description", "rule_level", "rule_count"})
+            with open(self.ctx.outfile, "w", encoding="utf-8", newline="") as fh:
+                writer = csv.DictWriter(fh, delimiter=self.ctx.delimiter, extrasaction="ignore",
+                    fieldnames=["rule_title", "rule_description", "rule_level", "rule_count", *columns])
+                writer.writeheader()
+                for row in self.rows:
+                    writer.writerow(sanitize_row_for_csv(row))
+        finally:
+            self.close()
+
+    def close(self):
+        self.rows.close()
+
+
+def _summary_sink(results, csv_spool=None):
+    def add(result):
+        results.append(result_summary(result))
+        if csv_spool is not None:
+            csv_spool.add(result)
+    return add
+
+
 def process_unified_streaming(
     ctx: ProcessingContext,
     file_list: list[Path],
@@ -304,17 +355,20 @@ def process_unified_streaming(
         f"([magenta]{total_events:,}[/] events) - "
         f"[yellow]{len(zircolite_core.ruleset)}[/] rules"
     )
+    summaries: list[dict[str, Any]] = []
     zircolite_core.execute_ruleset(
         ctx.outfile,
         write_mode="w",
-        keep_results=True,
+        keep_results=ctx.retain_results,
+        stream_results=not ctx.retain_results,
+        result_sink=_summary_sink(summaries) if not ctx.retain_results else None,
         last_ruleset=True,
         disable_progress=is_quiet(),
     )
     ctx.memory_tracker.sample()
 
     ctx.failed_files |= zircolite_core.failed_files
-    results = list(zircolite_core.full_results) if zircolite_core.full_results else []
+    results = list(zircolite_core.full_results) if ctx.retain_results else summaries
     return zircolite_core, results
 
 
@@ -385,15 +439,14 @@ def process_perfile_streaming(
             parent.mkdir(parents=True, exist_ok=True)
     profiling_core = create_zircolite_core(ctx, disable_progress=disable_nested) if ctx.profile_rules else None
 
-    # Always accumulate results – they are needed for the ATT&CK Coverage
-    # panel in the summary dashboard, not only for templates/packaging.
+    # Retain metadata for the ATT&CK Coverage panel. Matches are retained only
+    # when a downstream consumer (templates/packaging/library API) needs them.
 
     # A CSV header is written before the rows it describes, but the field set is
     # only complete once every file has been read: one input can carry columns an
     # earlier one never produced. Streaming the header from the first detection
-    # dropped those columns from every later row without saying so. The results
-    # are being accumulated anyway, so CSV writes once at the end from the union,
-    # the way parallel mode already does. JSON is unaffected and still streams.
+    # dropped those columns from every later row without saying so. CSV writes
+    # once at the end from the union, spooling rows when retention is disabled.
     defer_csv = ctx.csv_mode and not ctx.no_output
 
     zircolite_core = create_zircolite_core(
@@ -402,6 +455,8 @@ def process_perfile_streaming(
         disable_progress=disable_nested,
         no_output=True if defer_csv else None,
     )
+    raw_config = load_field_mappings(ctx.config)
+    csv_spool = _CsvResultSpool(ctx) if defer_csv and not ctx.retain_results else None
     try:
         with _keepflat_context(ctx) as kf:
             for file_idx, log_file in enumerate(file_list):
@@ -431,6 +486,7 @@ def process_perfile_streaming(
                     event_filter=ctx.event_filter,
                     return_filtered_count=True,
                     keepflat_file=kf,
+                    _raw_config=deepcopy(raw_config),
                 )
                 event_count, filtered_count, time_filtered_count = _unpack_streaming_result(result)
                 ctx.total_filtered_events += filtered_count
@@ -462,21 +518,22 @@ def process_perfile_streaming(
                     f"[+] Executing ruleset for {file_link} - "
                     f"[yellow]{len(zircolite_core.ruleset)}[/] rules"
                 )
+                file_results: list[dict[str, Any]] = []
                 zircolite_core.execute_ruleset(
                     ctx.outfile,
                     write_mode=write_mode,
-                    keep_results=True,
+                    keep_results=ctx.retain_results,
+                    stream_results=not ctx.retain_results,
+                    result_sink=_summary_sink(file_results, csv_spool) if not ctx.retain_results else None,
                     last_ruleset=False,
                     source_label=file_name,
                     disable_progress=is_quiet(),
                 )
                 ctx.memory_tracker.sample()
 
-                file_detection_count = (
-                    len(zircolite_core.full_results)
-                    if zircolite_core.full_results
-                    else 0
-                )
+                if ctx.retain_results:
+                    file_results = zircolite_core.full_results
+                file_detection_count = len(file_results)
                 file_stats.append(
                     {
                         "name": file_name,
@@ -487,29 +544,32 @@ def process_perfile_streaming(
                     }
                 )
 
-                if zircolite_core.full_results:
-                    all_results.extend(zircolite_core.full_results)
+                all_results.extend(file_results)
 
                 if profiling_core is not None:
                     profiling_core.merge_profiling_data(zircolite_core)
                 first_file = False
     finally:
-        # Written here rather than per file so an interrupted run still gets the
-        # detections it did find, with a header covering all of them.
-        if defer_csv:
-            _write_csv_results(ctx, all_results)
-        # Close the JSON array even when the loop was interrupted (Ctrl+C):
-        # every execute_ruleset call above used last_ruleset=False
-        if file_stats and not ctx.csv_mode and not zircolite_core.no_output:
-            try:
-                with open(ctx.outfile, 'a', encoding='utf-8', newline='') as fh:
-                    fh.write(']')
-            except OSError as exc:
-                ctx.logger.debug(f"Could not finalize JSON output: {exc}")
-        ctx.failed_files |= zircolite_core.failed_files
-        zircolite_core.close()
-        if profiling_core is not None:
-            profiling_core.close()
+        try:
+            # Written here rather than per file so an interrupted run still gets the
+            # detections it did find, with a header covering all of them.
+            if csv_spool is not None:
+                csv_spool.finish()
+            elif defer_csv:
+                _write_csv_results(ctx, all_results)
+            # Close the JSON array even when the loop was interrupted (Ctrl+C):
+            # every execute_ruleset call above used last_ruleset=False
+            if file_stats and not ctx.csv_mode and not zircolite_core.no_output:
+                try:
+                    with open(ctx.outfile, 'a', encoding='utf-8', newline='') as fh:
+                        fh.write(']')
+                except OSError as exc:
+                    ctx.logger.debug(f"Could not finalize JSON output: {exc}")
+        finally:
+            ctx.failed_files |= zircolite_core.failed_files
+            zircolite_core.close()
+            if profiling_core is not None:
+                profiling_core.close()
 
     if len(file_list) > 1 and file_stats and not is_quiet():
         console.print()
@@ -592,7 +652,9 @@ def process_db_input(
     first_file = True
     processed_any = False
     file_stats: list = []
-    zircolite_core = create_zircolite_core(ctx, disable_progress=is_quiet())
+    defer_csv = ctx.csv_mode and not ctx.no_output
+    csv_spool = _CsvResultSpool(ctx) if defer_csv and not ctx.retain_results else None
+    zircolite_core = create_zircolite_core(ctx, disable_progress=is_quiet(), no_output=True if defer_csv else None)
 
     try:
         for file_idx, db_path in enumerate(db_files):
@@ -665,17 +727,22 @@ def process_db_input(
             ctx.logger.info(
                 f"[+] Executing ruleset - [yellow]{len(zircolite_core.ruleset)}[/] rules"
             )
+            file_results: list[dict[str, Any]] = []
             zircolite_core.execute_ruleset(
                 ctx.outfile,
                 write_mode=write_mode,
-                keep_results=True,
+                keep_results=ctx.retain_results,
+                stream_results=not ctx.retain_results,
+                result_sink=_summary_sink(file_results, csv_spool) if not ctx.retain_results else None,
                 last_ruleset=False,
                 source_label=file_name if len(db_files) > 1 else None,
                 disable_progress=is_quiet(),
             )
             ctx.memory_tracker.sample()
 
-            file_detection_count = len(zircolite_core.full_results) if zircolite_core.full_results else 0
+            if ctx.retain_results:
+                file_results = zircolite_core.full_results
+            file_detection_count = len(file_results)
             file_stats.append({
                 "name": file_name,
                 "path": str(db_path),
@@ -684,12 +751,15 @@ def process_db_input(
                 "filtered": 0,
             })
 
-            if zircolite_core.full_results:
-                all_results.extend(zircolite_core.full_results)
+            all_results.extend(file_results)
 
             first_file = False
             processed_any = True
     finally:
+        if csv_spool is not None:
+            csv_spool.finish()
+        elif defer_csv:
+            _write_csv_results(ctx, all_results)
         # The closing ']' is written here (not via last_ruleset) so skipped DB
         # files or a failure on a later file cannot leave the JSON output
         # unterminated.
@@ -735,8 +805,9 @@ def process_single_file_worker(
     raw_config: dict | None = None,
     keepflat_file: Any | None = None,
     rule_progress_queue: queue.Queue | None = None,
+    spool_dir: str | None = None,
 ) -> tuple[int, dict[str, Any]]:
-    """Process a single file inside a parallel worker thread.
+    """Process a single file inside a thread or process worker.
 
     Returns ``(event_count, file_data_dict)``.  This is a top-level function
     (not a closure) to improve readability and testability.
@@ -787,6 +858,7 @@ def process_single_file_worker(
                 "results": [],
                 "events": 0,
                 "filtered": filtered_count,
+                "time_filtered": time_filtered_count,
             }
             if degraded:
                 summary["error"] = "no event could be read (see the log for details)"
@@ -803,22 +875,65 @@ def process_single_file_worker(
             if rule_progress_queue is not None
             else None
         )
-        core.execute_ruleset(
-            ctx.outfile,
-            write_mode="w",
-            keep_results=True,
-            last_ruleset=True,
-            show_table=False,
-            progress_callback=progress_callback,
-        )
+        spool_output = spool_dir is not None
+        file_results = []
+        result_path = None
+        csv_columns = set()
+        csv_rows = 0
+        csv_spooled = spool_output and ctx.csv_mode and not ctx.retain_results
+        if spool_output and (not ctx.no_output or ctx.retain_results):
+            fd, result_path = tempfile.mkstemp(dir=spool_dir, suffix=".jsonl" if csv_spooled else ".json")
+            output = os.fdopen(fd, "wb")
+        else:
+            output = None
+        first = True
 
-        file_results = list(core.full_results) if core.full_results else []
+        def receive(result):
+            nonlocal first, csv_rows
+            file_results.append(result_summary(result))
+            if output is None:
+                return
+            if csv_spooled:
+                metadata = {
+                    "rule_title": result["title"], "rule_description": result["description"],
+                    "rule_level": result["rule_level"], "rule_count": result["count"],
+                }
+                for row in result["matches"]:
+                    csv_columns.update(row)
+                    output.write(orjson.dumps({**metadata, **row}) + b"\n")
+                    csv_rows += 1
+            else:
+                if not first:
+                    output.write(b",\n")
+                write_result_json(output.write, result)
+                first = False
+
+        try:
+            if output is not None and not csv_spooled:
+                output.write(b"[")
+            core.execute_ruleset(
+                ctx.outfile, write_mode="w", keep_results=not spool_output,
+                stream_results=spool_output, result_sink=receive if spool_output else None,
+                last_ruleset=True, show_table=False, progress_callback=progress_callback,
+            )
+        finally:
+            if output is not None:
+                if not csv_spooled:
+                    output.write(b"]")
+                output.close()
+        if not spool_output:
+            file_results = list(core.full_results)
         summary = {
             "name": file_name,
             "path": str(log_file),
             "results": file_results,
             "events": event_count,
             "filtered": filtered_count,
+            "time_filtered": time_filtered_count,
+            "result_path": result_path,
+            "csv_spooled": csv_spooled,
+            "csv_columns": sorted(csv_columns),
+            "csv_rows": csv_rows,
             # Workers log to a silent logger, so the warning the core emits at
             # the end of its run is discarded; carry it out for aggregation.
             "rules_in_error": dict(core.rules_in_error),
@@ -846,6 +961,52 @@ def process_single_file_worker(
 # ============================================================================
 # PARALLEL STREAMING
 # ============================================================================
+
+_PROCESS_STATE = None
+
+
+def _initialize_process_worker(payload, args, input_type, raw_config, spool_dir, cancel_event):
+    global _PROCESS_STATE
+    from multiprocessing.util import Finalize
+
+    from .console import set_quiet_mode
+    set_quiet_mode(True)
+    signal.signal(signal.SIGINT, signal.SIG_IGN)
+    set_worker_shutdown_event(cancel_event)
+    logger = create_silent_logger("zircolite_process")
+    ctx = ProcessingContext(**payload, logger=logger, memory_tracker=MemoryTracker(logger=logger))
+    local = threading.local()
+    state = dict(ctx=ctx, args=args, input_type=input_type,
+        extractor=create_extractor(args, logger, input_type), raw_config=raw_config,
+        spool_dir=spool_dir, thread_local=local, counter_lock=threading.Lock(),
+        worker_counter=[0], total_filtered_count=[0, 0])
+    _PROCESS_STATE = state
+
+    def close_core():
+        if hasattr(local, "core"):
+            local.core.close()
+    Finalize(None, close_core, exitpriority=10)
+
+
+def _process_file_job(log_file):
+    if _PROCESS_STATE is None:
+        raise RuntimeError("Process worker was not initialized")
+    state = dict(_PROCESS_STATE)
+    state["raw_config"] = deepcopy(state["raw_config"])
+    keepflat_path = None
+    keepflat = None
+    if state["ctx"].keepflat:
+        fd, keepflat_path = tempfile.mkstemp(dir=state["spool_dir"], suffix=".flat.jsonl")
+        keepflat = os.fdopen(fd, "wb")
+    try:
+        count, result = process_single_file_worker(log_file, **state, keepflat_file=keepflat)
+        if keepflat_path is not None:
+            result["keepflat_path"] = keepflat_path
+        return count, result
+    finally:
+        if keepflat is not None:
+            keepflat.close()
+
 
 class _IncrementalResultWriter:
     """Incremental writer for parallel JSON detection results.
@@ -875,6 +1036,24 @@ class _IncrementalResultWriter:
     def write_file_results(self, file_data) -> None:
         """Write all detection results from a single file's output dict."""
         if self._fh is None or not isinstance(file_data, dict):
+            return
+        result_path = file_data.get("result_path")
+        if result_path:
+            size = os.path.getsize(result_path)
+            if size <= 2:
+                return
+            if not self._first_json:
+                self._fh.write(b",\n")
+            self._first_json = False
+            with open(result_path, "rb") as source:
+                source.read(1)
+                remaining = size - 2
+                while remaining:
+                    chunk = source.read(min(remaining, 1024 * 1024))
+                    if not chunk:
+                        raise OSError("Incomplete worker result spool")
+                    self._fh.write(chunk)
+                    remaining -= len(chunk)
             return
         for result in file_data.get("results", []):
             self._write_json(result)
@@ -957,12 +1136,18 @@ def process_parallel_streaming(
 ) -> tuple[Any, ...]:
     """Process files in parallel using memory-aware parallel processor."""
 
+    executor_kind = getattr(args, "executor", None) or "thread"
     parallel_config = ParallelConfig(
-        max_workers=getattr(args, "parallel_workers", None) or recommended_workers,
+        # The CLI recommendation uses thread heuristics. Processes need their
+        # own interpreter-memory and CPU budget unless the user set a count.
+        max_workers=getattr(args, "parallel_workers", None) or (
+            recommended_workers if executor_kind == "thread" else None
+        ),
         min_workers=getattr(args, "parallel_min_workers", 1),
         memory_limit_percent=getattr(args, "parallel_memory_limit", 85.0),
         sort_by_size=True,
         adaptive_memory=getattr(args, "parallel_adaptive", True),
+        executor=executor_kind,
     )
 
     if len(file_list) < 2:
@@ -987,12 +1172,46 @@ def process_parallel_streaming(
         config=parallel_config, logger=ctx.logger
     )
 
+    # Give each file worker a share of the native parser CPU budget.
+    worker_count = processor.calculate_optimal_workers(file_list)
+    ctx.evtx_threads = max(1, (os.cpu_count() or 1) // worker_count)
+    process_mode = parallel_config.executor == "process"
+    spool_results = process_mode or not ctx.retain_results
+    csv_spool = _CsvResultSpool(ctx) if ctx.csv_mode and not ctx.no_output and not ctx.retain_results else None
     all_results: list = []
     file_stats: list = []
+
+    def _discard_file_spools(file_data):
+        if not isinstance(file_data, dict):
+            return
+        for key in ("result_path", "keepflat_path"):
+            if file_data.get(key):
+                try:
+                    Path(file_data[key]).unlink(missing_ok=True)
+                except OSError as exc:
+                    # The owning TemporaryDirectory retries cleanup on exit.
+                    ctx.logger.debug(f"Could not remove completed worker spool: {exc}")
 
     def _on_file_complete(file_data) -> None:
         if not isinstance(file_data, dict):
             return
+        if process_mode:
+            total_filtered_count[0] += file_data.get("filtered", 0)
+            total_filtered_count[1] += file_data.get("time_filtered", 0)
+        result_path = file_data.get("result_path")
+        if result_path and ctx.retain_results:
+            with open(result_path, "rb") as source:
+                # Retention is explicitly unbounded (templates/library API).
+                # A result may contain far more than one event's parser limit.
+                file_data["results"] = orjson.loads(source.read())
+        elif result_path and csv_spool is not None:
+            csv_spool.columns.update(file_data.get("csv_columns", []))
+            with open(result_path, "rb") as source:
+                shutil.copyfileobj(source, csv_spool.rows.file)
+            csv_spool.rows.count += file_data.get("csv_rows", 0)
+        if file_data.get("keepflat_path") and kf is not None:
+            with open(file_data["keepflat_path"], "rb") as source:
+                shutil.copyfileobj(source, kf)
         file_results = file_data.get("results", [])
         if file_results:
             all_results.extend(file_results)
@@ -1010,10 +1229,14 @@ def process_parallel_streaming(
     # falls back to _write_csv_results which collects all columns first.
     use_incremental = not ctx.csv_mode
     rule_progress_queue: queue.Queue | None = (
-        queue.Queue() if not is_quiet() else None
+        queue.Queue() if not is_quiet() and not process_mode else None
     )
 
-    with _keepflat_context(ctx, thread_safe=True) as kf:
+    with (
+        closing(csv_spool) if csv_spool is not None else nullcontext(),
+        tempfile.TemporaryDirectory(prefix="zircolite-results-") as spool_dir,
+        _keepflat_context(ctx, thread_safe=True) as kf,
+    ):
 
         def _process_file(log_file: Path) -> tuple:
             """Thin wrapper adapting the top-level worker to the parallel API."""
@@ -1030,33 +1253,64 @@ def process_parallel_streaming(
                 raw_config=deepcopy(raw_config),
                 keepflat_file=kf,
                 rule_progress_queue=rule_progress_queue,
+                spool_dir=spool_dir if spool_results else None,
             )
+
+        process_options: dict[str, Any] = {}
+        worker = _process_file
+        if process_mode:
+            cancel_event = multiprocessing.get_context("spawn").Event()
+            payload = {f.name: getattr(ctx, f.name) for f in fields(ctx)
+                       if f.init and f.name not in ("logger", "memory_tracker")}
+            worker = _process_file_job
+            process_options = dict(initializer=_initialize_process_worker,
+                initargs=(payload, args, input_type, raw_config, spool_dir, cancel_event),
+                cancel_event=cancel_event)
 
         if use_incremental:
             with _IncrementalResultWriter(ctx) as writer:
 
                 def _on_result(file_data) -> None:
-                    _on_file_complete(file_data)
-                    writer.write_file_results(file_data)
+                    try:
+                        _on_file_complete(file_data)
+                        writer.write_file_results(file_data)
+                    finally:
+                        _discard_file_spools(file_data)
 
                 results_list, stats = processor.process_files_parallel(
                     file_list,
-                    _process_file,
+                    worker,
                     desc="Processing",
                     disable_progress=is_quiet(),
                     on_result=_on_result,
                     rule_progress_queue=rule_progress_queue,
+                    **process_options,
                 )
         else:
+            def _on_csv_result(file_data):
+                try:
+                    _on_file_complete(file_data)
+                finally:
+                    _discard_file_spools(file_data)
+
             results_list, stats = processor.process_files_parallel(
                 file_list,
-                _process_file,
+                worker,
                 desc="Processing",
                 disable_progress=is_quiet(),
-                on_result=_on_file_complete,
+                on_result=_on_csv_result,
                 rule_progress_queue=rule_progress_queue,
+                **process_options,
             )
-            _write_csv_results(ctx, all_results)
+            if csv_spool is not None:
+                csv_spool.finish()
+            else:
+                _write_csv_results(ctx, all_results)
+
+    # Preserve sources when a worker dies before returning its summary.
+    for path, error in stats.failed_files:
+        ctx.failed_files.add(path)
+        errors.append((Path(path).name, error))
 
     # Collect errors
     for file_data in results_list:

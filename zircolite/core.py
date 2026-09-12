@@ -15,7 +15,7 @@ import re
 import sqlite3
 import time as _time_module
 from collections.abc import Callable
-from contextlib import nullcontext, suppress
+from contextlib import closing, nullcontext, suppress
 from functools import lru_cache
 from pathlib import Path
 from sqlite3 import Error
@@ -44,8 +44,9 @@ from .console import (
     sort_key_severity,
 )
 from .formats import json_array_requested
+from .results import RowSpool, write_result_json
 from .shutdown import is_shutdown_requested
-from .sqlscan import rebalance_sql, scan_query
+from .sqlscan import quote_sql_identifiers, rebalance_sql, scan_query
 from .streaming import StreamingEventProcessor, StrictParseError
 from .utils import sanitize_row_for_csv
 
@@ -108,6 +109,10 @@ if TYPE_CHECKING:
     from .rules import EventFilter
 
 
+class _QueryFailed(Exception):
+    """The current query failed; discard any rows it already yielded."""
+
+
 class ZircoliteCore:
     """Load data into database and apply detection rules."""
 
@@ -129,6 +134,7 @@ class ZircoliteCore:
         "db_connection",
         "delimiter",
         "disable_progress",
+        "evtx_threads",
         "failed_files",
         "first_json_output",
         "full_results",
@@ -194,6 +200,7 @@ class ZircoliteCore:
         self.auto_index_top_n = max(0, int(proc.auto_index_top_n or 0))
         self._auto_index_applied = False
         self.strict_evtx = proc.strict_evtx
+        self.evtx_threads = proc.evtx_threads
         # Rules whose SQL cannot run at all, by title: reported once, then counted
         # in the summary so a broken rule is never mistaken for a quiet one
         self.rules_in_error: dict[str, str] = {}
@@ -262,7 +269,7 @@ class ZircoliteCore:
             if db == ':memory:':
                 # In-memory database settings
                 pragmas = [
-                    ('journal_mode', 'OFF'),           # No journal needed for in-memory
+                    ('journal_mode', 'MEMORY'),        # Failed batches must roll back
                     ('synchronous', 'OFF'),
                     ('cache_size', '-128000'),         # 128MB cache
                     ('locking_mode', 'EXCLUSIVE'),     # Single-user mode
@@ -582,10 +589,17 @@ class ZircoliteCore:
         self.rules_in_error[title] = str(error)
         self.logger.debug(f"Rule '{title}' could not be evaluated: {error}")
 
-    def execute_select_query(
-        self, query: str, rule_title: str | None = None
-    ) -> list[dict[str, Any]]:
-        """Execute a SELECT SQL query and return the results as a list of dictionaries."""
+    def execute_select_query(self, query: str, rule_title: str | None = None) -> list[dict[str, Any]]:
+        """Return materialized rows for library callers; failed queries return []."""
+        try:
+            return list(self._iter_select_query(query, rule_title))
+        except _QueryFailed:
+            return []
+
+    def _iter_select_query(
+        self, query: str, rule_title: str | None = None, max_rows: int | None = None
+    ):
+        """Yield rows in bounded chunks; raise _QueryFailed on an SQL failure."""
         if self.db_connection is None:
             self.logger.error("[error]    [-] No connection to Db[/]")
             return []
@@ -593,6 +607,7 @@ class ZircoliteCore:
         if bad_regex is not None:
             self._note_broken_rule(rule_title, bad_regex)
             return []
+        query = quote_sql_identifiers(query)
         # Syntax-highlighted SQL in debug mode
         if self.logger.isEnabledFor(logging.DEBUG):
             console.print(Panel(
@@ -606,17 +621,20 @@ class ZircoliteCore:
         # looks up its column names. Each repair is attempted at most once.
         attempted: set[str] = set()
         while True:
+            cursor = None
             try:
-                cursor = self._get_cursor()
+                cursor = self.db_connection.cursor()
                 cursor.execute(query)
-                rows = cursor.fetchall()
-                if not rows:
-                    return []
                 col_names = [d[0] for d in cursor.description]
-                return [
-                    {k: v for k, v in zip(col_names, row, strict=True) if v is not None}
-                    for row in rows
-                ]
+                remaining = max_rows
+                while rows := cursor.fetchmany(256 if remaining is None else min(256, remaining)):
+                    for row in rows:
+                        yield {k: v for k, v in zip(col_names, row, strict=True) if v is not None}
+                    if remaining is not None:
+                        remaining -= len(rows)
+                        if remaining <= 0:
+                            return
+                return
             except sqlite3.Error as e:
                 message = str(e)
                 if _DEPTH_LIMIT_RE.search(message) and "rebalance" not in attempted:
@@ -626,22 +644,26 @@ class ZircoliteCore:
                         query = rebalanced
                         continue
                     self._note_broken_rule(rule_title, e)
-                    return []
+                    raise _QueryFailed from e
                 if _MISSING_COLUMN_RE.search(message) is None:
                     # Syntax errors, parser-depth limits, UDF failures: the rule
                     # can never match, and staying quiet about it hides a blind spot.
                     self._note_broken_rule(rule_title, e)
-                    return []
+                    raise _QueryFailed from e
                 if "widen" in attempted:
                     # Widening ran and the column is still missing, so the name
                     # was never reported to it. That is a blind spot, not a
                     # dataset that simply lacks the field.
                     self._note_broken_rule(rule_title, e)
-                    return []
+                    raise _QueryFailed from e
                 if not self._widen_logs_table(query):
-                    self.logger.debug(f"    [-] Rule fields absent from dataset: {e}")
-                    return []
+                    self._note_broken_rule(rule_title, e)
+                    raise _QueryFailed from e
                 attempted.add("widen")
+
+            finally:
+                if cursor is not None:
+                    cursor.close()
 
     def load_db_in_memory(self, db: str) -> None:
         """In db-only mode, restore an on-disk database to avoid EVTX extraction and flattening."""
@@ -725,7 +747,7 @@ class ZircoliteCore:
                     for col in cols:
                         value = row[col]
                         # Values past SQLite's INTEGER range must go in as text
-                        if isinstance(value, int) and abs(value) > 9223372036854775807:
+                        if isinstance(value, int) and not -(1 << 63) <= value < (1 << 63):
                             value = str(value)
                         values.append(value)
                     values_list.append(tuple(values))
@@ -757,6 +779,9 @@ class ZircoliteCore:
             on_disk_db.close()
 
     def execute_rule(self, rule: dict[str, Any]) -> dict[str, Any]:
+        return self._execute_rule(rule)
+
+    def _execute_rule(self, rule: dict[str, Any], *, stream_rows=False) -> dict[str, Any]:
         """Execute a single Sigma rule against the database and return the results."""
         # Fast path: check for required key first
         sigma_queries = rule.get("rule")
@@ -768,22 +793,34 @@ class ZircoliteCore:
             self.logger.debug("RULE FORMAT ERROR: 'rule' value must be a list of SQL queries")
             return {}
 
-        # Pre-allocate list with estimated capacity
-        filtered_rows: list[dict[str, Any]] = []
-        filtered_rows_extend = filtered_rows.extend  # Cache method reference
-        csv_mode = self.csv_mode  # Cache instance variable
-        execute_select = self.execute_select_query  # Cache method reference
+        filtered_rows: RowSpool | list[dict[str, Any]] = RowSpool() if stream_rows else []
         rule_title = rule.get("title", "Unnamed Rule")
-
-        # Process each SQL query in the rule
-        for sql_query in sigma_queries:
-            data = execute_select(sql_query, rule_title=rule_title)
-            if data:
-                cleaned_rows = [sanitize_row_for_csv(row) for row in data] if csv_mode else data
-                filtered_rows_extend(cleaned_rows)
-
-        if not filtered_rows:
-            return {}
+        try:
+            for sql_query in sigma_queries:
+                checkpoint = filtered_rows.checkpoint() if isinstance(filtered_rows, RowSpool) else len(filtered_rows)
+                try:
+                    remaining = None if self.limit == -1 else self.limit + 1 - len(filtered_rows)
+                    with closing(self._iter_select_query(sql_query, rule_title, remaining)) as rows:
+                        for row in rows:
+                            filtered_rows.append(sanitize_row_for_csv(row) if self.csv_mode else row)
+                            if self.limit != -1 and len(filtered_rows) > self.limit:
+                                if isinstance(filtered_rows, RowSpool):
+                                    filtered_rows.close()
+                                return {}
+                except _QueryFailed:
+                    if isinstance(filtered_rows, RowSpool):
+                        filtered_rows.rollback(checkpoint)
+                    else:
+                        del filtered_rows[checkpoint:]
+            if not filtered_rows:
+                if isinstance(filtered_rows, RowSpool):
+                    filtered_rows.close()
+                return {}
+        except BaseException:
+            if isinstance(filtered_rows, RowSpool):
+                filtered_rows.close()
+            raise
+        csv_mode = self.csv_mode
 
         # Extract rule metadata only when we have results (avoid work for non-matching rules)
         rule_get = rule.get  # Cache method
@@ -864,6 +901,12 @@ class ZircoliteCore:
                     **data
                 }
                 csv_writer.writerow(dict_csv)
+        elif isinstance(rule_results.get("matches"), RowSpool):
+            if needs_comma_prefix or not self.first_json_output:
+                file_handle.write(',\n')
+            self.first_json_output = False
+            write_result_json(lambda data: file_handle.write(data.decode('utf-8')), rule_results)
+            needs_comma_prefix = False
         else:
             # Write results as JSON using orjson
             try:
@@ -916,6 +959,8 @@ class ZircoliteCore:
         show_table: bool = True,
         disable_progress: bool | None = None,
         progress_callback: Callable[[int, int], None] | None = None,
+        result_sink: Callable[[dict[str, Any]], None] | None = None,
+        stream_results: bool = False,
     ) -> None:
         """Execute all rules in the ruleset and handle output."""
         csv_writer = None
@@ -990,7 +1035,7 @@ class ZircoliteCore:
 
         try:
             # Cache frequently accessed attributes and methods
-            execute_rule = self.execute_rule
+            execute_rule = (lambda rule: self._execute_rule(rule, stream_rows=True)) if stream_results and not keep_results else self.execute_rule
             limit = self.limit
             no_output = self.no_output
             full_results_append = self.full_results.append
@@ -1065,25 +1110,26 @@ class ZircoliteCore:
                         break
                     rule_results = run_rule(rule)
 
-                    if progress_callback is not None:
-                        progress_callback(i + 1, total_rules)
-                    elif progress is not None and task_id is not None:
-                        progress.advance(task_id)
+                    try:
+                        if progress_callback is not None:
+                            progress_callback(i + 1, total_rules)
+                        elif progress is not None and task_id is not None:
+                            progress.advance(task_id)
 
-                    if rule_results is not None:
-                        if progress is not None:
-                            det_level = rule_results.get("rule_level", "unknown").lower()
-                            if det_level in detection_counts:
-                                # Matching events, like the summary panel: the
-                                # two badges look identical, so counting rules
-                                # here made the same run show two numbers
-                                detection_counts[det_level] += rule_results.get(
-                                    "count", 0
+                        if rule_results is not None:
+                            if progress is not None:
+                                det_level = rule_results.get("rule_level", "unknown").lower()
+                                if det_level in detection_counts:
+                                    detection_counts[det_level] += rule_results.get("count", 0)
+                            if not no_output:
+                                csv_writer, needs_comma_prefix = self._write_result_to_output(
+                                    rule_results, file_handle, csv_writer, needs_comma_prefix
                                 )
-                        if not no_output:
-                            csv_writer, needs_comma_prefix = self._write_result_to_output(
-                                rule_results, file_handle, csv_writer, needs_comma_prefix
-                            )
+                            if result_sink is not None:
+                                result_sink(rule_results)
+                    finally:
+                        if rule_results is not None and isinstance(rule_results.get("matches"), RowSpool):
+                            rule_results["matches"].close()
 
                     if live is not None and progress is not None:
                         live.update(
@@ -1366,6 +1412,7 @@ class ZircoliteCore:
             archive_password=self.archive_password,
             strict_evtx=self.strict_evtx,
             batch_size=self.batch_size,
+            evtx_threads=self.evtx_threads,
         )
         processor = StreamingEventProcessor(
             config_file=self.config,

@@ -1,0 +1,2 @@
+# Optional JSON-array acceleration; the core reader also works without it.
+ijson>=3.5.1

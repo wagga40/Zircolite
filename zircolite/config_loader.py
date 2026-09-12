@@ -108,6 +108,7 @@ class ParallelProcessingConfig:
     min_workers: int = 1
     memory_limit_percent: float = DEFAULT_MEMORY_LIMIT_PERCENT
     adaptive: bool = True
+    executor: str = "thread"
 
 
 @dataclass
@@ -303,7 +304,8 @@ class ConfigLoader:
                 memory_limit_percent=par.get(
                     'memory_limit_percent', DEFAULT_MEMORY_LIMIT_PERCENT
                 ),
-                adaptive=par.get('adaptive', True)
+                adaptive=par.get('adaptive', True),
+                executor=par.get('executor', 'thread'),
             )
 
         return config
@@ -370,6 +372,8 @@ class ConfigLoader:
             issues.append(f"Invalid 'before' timestamp format: {config.time_filter.before}")
 
         # Validate parallel config
+        if config.parallel.executor not in ("thread", "process"):
+            issues.append("executor must be thread or process")
         if config.parallel.enabled:
             if config.parallel.min_workers < 1:
                 issues.append("min_workers must be at least 1")
@@ -606,6 +610,8 @@ time_filter:
 parallel:
   # Set false to disable automatic parallel processing entirely
   enabled: true
+  # Processes isolate Python ingestion work; threads retain the current default.
+  executor: thread
 
   # Maximum number of workers. null = auto-detect, which takes the smallest of:
   #   - memory:    (available RAM x 0.85) / estimated memory per file

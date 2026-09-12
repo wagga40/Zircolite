@@ -53,6 +53,8 @@ class ProcessingConfig:
 
     # EVTX parsing strictness (False = lenient/skip bad chunks, True = stop on errors)
     strict_evtx: bool = False
+    # None leaves parser defaults intact; file workers share a CPU budget.
+    evtx_threads: int | None = None
 
 
 @dataclass

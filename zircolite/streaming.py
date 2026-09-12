@@ -19,7 +19,7 @@ import re
 import shutil
 import tempfile
 from collections.abc import Generator
-from functools import wraps
+from functools import lru_cache, wraps
 from itertools import chain, islice
 from pathlib import Path
 from typing import (
@@ -46,6 +46,7 @@ from .formats import (
     format_by_name,
     format_from_args,
 )
+from .jsonstream import iter_json_array
 from .shutdown import is_shutdown_requested
 from .utils import (
     COMPRESSED_SUFFIXES,
@@ -70,10 +71,26 @@ _NON_ALNUM_RE = re.compile(r"[^a-zA-Z0-9]")
 # Sentinel for excluded paths in the path resolution cache
 _EXCLUDED_SENTINEL = object()
 
-# Upper bound for one buffered JSON object in the chunked array reader:
-# bounds memory usage on permanently malformed content while staying
-# generous for legitimate large events
-_MAX_JSON_OBJECT_BUFFER_CHARS = 64 * 1024 * 1024
+@lru_cache(maxsize=1024)
+def _compile_transform(code: str):
+    """Share immutable bytecode, never mutable transform namespaces."""
+    return compile_restricted(code, filename="<inline code>", mode="exec")
+
+
+@lru_cache(maxsize=256)
+def _read_transform(path: str, mtime_ns: int, size: int) -> str:
+    """Reload an external transform when its file changes."""
+    return Path(path).read_text(encoding="utf-8")
+
+
+def _normalize_scalar(value):
+    if isinstance(value, bool):
+        return "true" if value else "false"
+    if isinstance(value, int) and not -(1 << 63) <= value < (1 << 63):
+        return str(value)
+    if isinstance(value, list):
+        return str(value)
+    return value
 
 # Input formats without Channel/EventID semantics: event filtering is skipped
 # for these unless event_filter.filter_all_sources is enabled in the config
@@ -86,12 +103,6 @@ class StrictParseError(Exception):
     Distinct from the generic per-file failure so that the run aborts instead
     of continuing over a partially ingested file.
     """
-
-
-def _json_array_encoding() -> str:
-    """Default encoding for JSON arrays, per the format registry."""
-    spec = format_by_name("json_array")
-    return (spec.default_encoding if spec else None) or "utf-8"
 
 
 def marks_degraded(label: str):
@@ -313,6 +324,7 @@ class StreamingEventProcessor:
         "enabled_transforms_set",
         # Event filtering (early skip based on channel/eventID)
         "event_filter",
+        "evtx_threads",
         # Config data (loaded once)
         "field_exclusions",
         "field_mappings",
@@ -365,6 +377,7 @@ class StreamingEventProcessor:
         self.batch_size = proc.batch_size
         self.archive_password = proc.archive_password
         self.strict_evtx = proc.strict_evtx
+        self.evtx_threads = proc.evtx_threads
 
         # Event filter for early filtering based on channel/eventID
         self.event_filter = event_filter
@@ -585,9 +598,13 @@ class StreamingEventProcessor:
                 for t in field_transforms
             ]
 
-        # Warm the transform function cache so the per-event hot path never
-        # pays the compile_restricted/exec cost. Failures fall through to the
-        # lazy path which logs and skips the offending transform.
+        # Bake only transforms which can run for this input and selection.
+        # This also lets inactive transform fields take the simple leaf path.
+        self._transforms_baked = {
+            name: [spec for spec in specs if self._transform_applies(name, spec)]
+            for name, specs in self._transforms_baked.items()
+        } if self.transforms_enabled else {}
+        self._transforms_baked = {name: specs for name, specs in self._transforms_baked.items() if specs}
         if self.transforms_enabled:
             seen_codes: set[str] = set()
             for specs in self._transforms_baked.values():
@@ -605,6 +622,11 @@ class StreamingEventProcessor:
         if self.transforms_enabled:
             special_fields |= set(self._transforms_baked)
         self._special_fields = special_fields
+
+    def _transform_applies(self, field_name: str, spec: _TransformSpec) -> bool:
+        enabled = ((spec.alias_name or field_name) in self.enabled_transforms_set
+                   if self.enabled_transforms_set is not None else spec.enabled)
+        return enabled and (self._ignore_source_condition or self.chosen_input in spec.source_condition)
 
     def _resolve_file_transforms(self):
         """Resolve python_file transforms by loading code from external files.
@@ -633,7 +655,8 @@ class StreamingEventProcessor:
                 if not file_path.is_absolute():
                     file_path = self.transforms_dir / file_path
                 try:
-                    transform["code"] = file_path.read_text(encoding="utf-8")
+                    stat = file_path.stat()
+                    transform["code"] = _read_transform(str(file_path), stat.st_mtime_ns, stat.st_size)
                 except FileNotFoundError:
                     self.logger.error(
                         f"    [!] Transform file not found: {file_path} (field '{field_name}')"
@@ -697,16 +720,14 @@ class StreamingEventProcessor:
         self, event_dict: dict, field_paths: tuple, hint: tuple | None
     ) -> tuple:
         """
-        Extract a field value, trying the last winning path first.
+        Extract a field value in configured precedence order.
 
         Paths support dot notation for nested access (e.g. "Event.System.Channel")
         and are otherwise tried in order until one yields a non-None value.
 
-        A log file's schema is stable, so the path that produced a value on the
-        previous event almost always produces it again. Probing that path first
-        avoids re-walking earlier candidate paths that are absent from the
-        event. On a miss the full ordered scan runs as before, keeping results
-        identical to a plain first-match scan.
+        A previous winner is not evidence that higher-priority fields are
+        absent from this event. Keep the hint for callers, but never let it
+        change precedence on mixed-schema inputs.
 
         An empty value does not count as found: a present-but-blank field would
         otherwise stop the scan and then fail the filter, silently discarding
@@ -717,10 +738,6 @@ class StreamingEventProcessor:
             produced the value (the new hint), or the unchanged hint when no
             path matched.
         """
-        if hint is not None:
-            value = self._get_nested_value(event_dict, hint)
-            if value is not None and value != "":
-                return value, hint
         for path in field_paths:
             value = self._get_nested_value(event_dict, path)
             if value is not None and value != "":
@@ -870,9 +887,7 @@ class StreamingEventProcessor:
         try:
             byte_code = self.compiled_code_cache.get(code)
             if byte_code is None:
-                byte_code = compile_restricted(
-                    code, filename="<inline code>", mode="exec"
-                )
+                byte_code = _compile_transform(code)
                 self.compiled_code_cache[code] = byte_code
             transform_ns: dict[str, Any] = {}
             exec(byte_code, self.RestrictedPython_BUILTINS, transform_ns)
@@ -978,7 +993,7 @@ class StreamingEventProcessor:
             if key not in special_fields and raw_field_name not in special_fields:
                 # Past SQLite's INTEGER range the value has to go in as text
                 is_int = isinstance(value, int)
-                if isinstance(value, int) and abs(value) > 9223372036854775807:
+                if isinstance(value, int) and not -(1 << 63) <= value < (1 << 63):
                     value = str(value)
                     is_int = False
                 json_line[key] = value
@@ -1064,19 +1079,20 @@ class StreamingEventProcessor:
                         )
             # Past SQLite's INTEGER range the value has to go in as text
             is_int = isinstance(value, int)
-            if isinstance(value, int) and abs(value) > 9223372036854775807:
+            if isinstance(value, int) and not -(1 << 63) <= value < (1 << 63):
                 value = str(value)
                 is_int = False
             for k in keys:
                 if transformed_keys is not None and k in transformed_keys:
-                    json_line[k] = transformed_values[k]
+                    final_value = _normalize_scalar(transformed_values[k])
                 else:
-                    json_line[k] = value
+                    final_value = _normalize_scalar(value)
+                json_line[k] = final_value
                 if k not in seen_leaf_keys:
                     key_lower = k.lower()
                     if key_lower not in discovered_fields:
                         discovered_fields[key_lower] = k
-                        field_types[k] = "INTEGER COLLATE NOCASE" if is_int else "TEXT COLLATE NOCASE"
+                        field_types[k] = "INTEGER COLLATE NOCASE" if isinstance(final_value, int) else "TEXT COLLATE NOCASE"
                     seen_leaf_keys.add(k)
 
         # Descend through the event tree, carrying the dotted path as a string
@@ -1171,7 +1187,8 @@ class StreamingEventProcessor:
                                 os.unlink(tmp_path)
                         raise
 
-            parser = PyEvtxParser(path_to_parse)
+            parser = (PyEvtxParser(path_to_parse, number_of_threads=self.evtx_threads)
+                      if self.evtx_threads is not None else PyEvtxParser(path_to_parse))
             flatten = self._flatten_event  # Local reference for speed
             json_loads = json.loads
             should_process = self._should_process_event  # Local reference for speed
@@ -1180,9 +1197,11 @@ class StreamingEventProcessor:
                 if record is None:
                     continue
                 try:
+                    if isinstance(record, Exception):
+                        raise record
                     raw_data = record.get("data")
                     if raw_data is None:
-                        continue
+                        raise ValueError("EVTX record contains no event data")
                     if isinstance(raw_data, str):
                         raw_bytes = raw_data.encode("utf-8")
                         event_dict = json_loads(raw_bytes)
@@ -1198,8 +1217,12 @@ class StreamingEventProcessor:
                     if flattened:
                         yield flattened
                 except Exception as e:
-                    self.logger.debug(f"Error processing EVTX record: {e}")
+                    self._note_skipped_record(evtx_file, e)
+                    if self.strict_evtx:
+                        raise StrictParseError(f"Error processing EVTX record in {evtx_file}: {e}") from e
                     continue
+        except StrictParseError:
+            raise
         except Exception as e:
             err_msg = str(e)
             if (
@@ -1489,11 +1512,9 @@ class StreamingEventProcessor:
         """
         Stream and flatten events from a large JSON array file incrementally.
 
-        For very large JSON arrays, this parses incrementally using raw_decode.
-        Falls back to standard parsing if file is small enough.
-
-        Yields events incrementally rather than all at once.
-        Includes early event filtering based on channel/eventID.
+        Uses ijson when installed, with a validating incremental fallback.
+        Includes early event filtering based on channel/eventID and detects
+        incomplete arrays even after yielding their valid prefix.
         """
         filename = os.path.basename(json_file)
         flatten = self._flatten_event  # Local reference
@@ -1513,94 +1534,11 @@ class StreamingEventProcessor:
                 self._note_skipped_record(json_file, exc)
                 return None
 
-        file_size = os.path.getsize(json_file)
-
-        # For files under 50MB, use standard single-load approach (faster)
-        if file_size < 50 * 1024 * 1024:
-            with open_maybe_compressed(
-                json_file, password=self.archive_password
-            ) as f:
-                data = f.read()
-            if data.startswith(b"\xef\xbb\xbf"):  # UTF-8 BOM
-                data = data[3:]
-            logs = json.loads(data)
-            for event_dict in logs:
-                if not isinstance(event_dict, dict):
-                    continue
+        with open_maybe_compressed(json_file, password=self.archive_password) as source:
+            for event_dict in iter_json_array(source):
                 flattened = process_one(event_dict)
                 if flattened:
                     yield flattened
-            return
-
-        # For larger files, use incremental parsing
-        self.logger.debug(
-            f"Large JSON array ({file_size / 1024 / 1024:.1f}MB), using incremental processing"
-        )
-
-        import json as std_json
-
-        decoder = std_json.JSONDecoder()
-
-        with open_maybe_compressed(
-            json_file,
-            "rt",
-            encoding=_json_array_encoding(),
-            password=self.archive_password,
-        ) as f:
-            # Find the start of the array
-            while True:
-                char = f.read(1)
-                if not char:
-                    return
-                if char == "[":
-                    break
-
-            buffer = ""
-            while True:
-                chunk = f.read(65536)
-                if not chunk:
-                    # Process remaining buffer if any
-                    buffer = buffer.lstrip(" \t\n\r,")
-                    if buffer and not buffer.startswith("]"):
-                        try:
-                            obj, _ = decoder.raw_decode(buffer)
-                        except Exception:
-                            obj = None
-                        if isinstance(obj, dict):
-                            flattened = process_one(obj)
-                            if flattened:
-                                yield flattened
-                    break
-
-                buffer += chunk
-                if len(buffer) > _MAX_JSON_OBJECT_BUFFER_CHARS:
-                    # raw_decode keeps failing (truncated/malformed content):
-                    # fail fast instead of buffering the rest of the file
-                    self._had_parse_error = True
-                    self.logger.error(
-                        f"[red]    [-] Cannot parse JSON array in {json_file}: "
-                        f"invalid or truncated content near current position[/]"
-                    )
-                    return
-
-                while True:
-                    buffer = buffer.lstrip(" \t\n\r,")
-                    if not buffer:
-                        break
-                    if buffer.startswith("]"):
-                        # End of array
-                        return
-
-                    try:
-                        obj, idx = decoder.raw_decode(buffer)
-                    except std_json.JSONDecodeError:
-                        # Need more data
-                        break
-                    if isinstance(obj, dict):
-                        flattened = process_one(obj)
-                        if flattened:
-                            yield flattened
-                    buffer = buffer[idx:]
 
     def process_file_streaming(
         self,

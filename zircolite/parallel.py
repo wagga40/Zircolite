@@ -11,13 +11,14 @@ This module provides memory-aware parallel file processing capabilities:
 """
 
 import logging
+import multiprocessing
 import os
 import queue
 import time
 from collections import deque
 from collections.abc import Callable
-from concurrent.futures import FIRST_COMPLETED, ThreadPoolExecutor, wait
-from dataclasses import dataclass
+from concurrent.futures import FIRST_COMPLETED, ProcessPoolExecutor, ThreadPoolExecutor, wait
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
@@ -35,6 +36,7 @@ from rich.progress import (
 
 from .console import console
 from .shutdown import is_shutdown_requested
+from .utils import estimate_input_size
 
 # Refresh interval for draining rule-progress queue (matches Live refresh_per_second=10)
 _RULE_PROGRESS_POLL_SECONDS = 0.1
@@ -54,7 +56,7 @@ def _truncate_filename(name: str) -> str:
 def _file_size(path: Path) -> int:
     """Size of *path* in bytes, 0 when it cannot be read."""
     try:
-        return os.path.getsize(path)
+        return estimate_input_size(path)
     except OSError:
         return 0
 
@@ -153,6 +155,7 @@ class ParallelConfig:
     memory_limit_percent: float = 85.0
     sort_by_size: bool = True  # LPT scheduling – process largest files first
     adaptive_memory: bool = True  # Calibrate memory estimates after first file
+    executor: str = "thread"
 
 
 @dataclass
@@ -164,6 +167,7 @@ class ParallelStats:
     processing_time_seconds: float = 0.0
     workers_used: int = 0
     throttle_events: int = 0  # Times a submission was deferred under memory pressure
+    failed_files: list[tuple[str, str]] = field(default_factory=list)
 
 
 # ============================================================================
@@ -212,7 +216,17 @@ class MemoryAwareParallelProcessor:
     def get_current_memory_mb(self) -> float:
         """Get current process memory usage in MB."""
         try:
-            return self._process.memory_info().rss / (1024 * 1024)
+            rss = self._process.memory_info().rss
+            if self.config.executor == "process":
+                try:
+                    for child in self._process.children(recursive=True):
+                        try:
+                            rss += child.memory_info().rss
+                        except (psutil.Error, OSError):
+                            continue
+                except (psutil.Error, OSError):
+                    pass
+            return rss / (1024 * 1024)
         except Exception:
             return 0
 
@@ -269,7 +283,7 @@ class MemoryAwareParallelProcessor:
         total_size = 0
         for f in file_list[:10]:
             try:
-                total_size += os.path.getsize(f)
+                total_size += estimate_input_size(f)
             except OSError:
                 total_size += 10 * 1024 * 1024
 
@@ -304,7 +318,7 @@ class MemoryAwareParallelProcessor:
             return
 
         try:
-            file_size_mb = os.path.getsize(file_path) / (1024 * 1024)
+            file_size_mb = estimate_input_size(file_path) / (1024 * 1024)
         except OSError:
             return
 
@@ -337,17 +351,25 @@ class MemoryAwareParallelProcessor:
         file_sizes = []
         for f in file_list:
             try:
-                file_sizes.append(os.path.getsize(f))
+                file_sizes.append(estimate_input_size(f))
             except OSError:
                 file_sizes.append(10 * 1024 * 1024)
 
-        return calculate_optimal_workers(
+        workers = calculate_optimal_workers(
             file_sizes=file_sizes,
             available_memory_mb=self.get_available_memory_mb(),
             cpu_count=os.cpu_count() or 4,
             min_workers=self.config.min_workers,
             max_workers=self.config.max_workers,
         )
+        if self.config.executor == "process" and self.config.max_workers is None:
+            # Separate interpreters cost memory even for tiny inputs, and
+            # Python-heavy workers gain little from exceeding the CPU count.
+            avg_mb = sum(file_sizes) / max(1, len(file_sizes)) / (1024 * 1024)
+            per_worker_mb = 64 + avg_mb * memory_multiplier_for(avg_mb)
+            memory_workers = max(1, int(self.get_available_memory_mb() * 0.85 / per_worker_mb))
+            workers = min(workers, os.cpu_count() or 4, memory_workers)
+        return workers
 
     # ------------------------------------------------------------------
     # LPT scheduling
@@ -359,7 +381,7 @@ class MemoryAwareParallelProcessor:
 
         def _safe_size(f):
             try:
-                return os.path.getsize(f)
+                return estimate_input_size(f)
             except OSError:
                 return 0
 
@@ -377,6 +399,9 @@ class MemoryAwareParallelProcessor:
         disable_progress: bool = False,
         on_result: Callable[[Any], None] | None = None,
         rule_progress_queue: queue.Queue | None = None,
+        initializer=None,
+        initargs: tuple = (),
+        cancel_event=None,
     ) -> tuple[list[Any], ParallelStats]:
         """
         Process files in parallel with memory awareness.
@@ -465,7 +490,12 @@ class MemoryAwareParallelProcessor:
             )
             worker_file_task_ids: dict[int, Any] = {}
 
-            with ThreadPoolExecutor(max_workers=num_workers) as executor:
+            pool = (ProcessPoolExecutor(max_workers=num_workers,
+                        mp_context=multiprocessing.get_context("spawn"),
+                        initializer=initializer, initargs=initargs)
+                    if self.config.executor == "process"
+                    else ThreadPoolExecutor(max_workers=num_workers))
+            with pool as executor:
                 active_futures: dict = {}
 
                 def submit(path: Path) -> None:
@@ -479,6 +509,8 @@ class MemoryAwareParallelProcessor:
                 while active_futures:
                     if is_shutdown_requested():
                         file_queue.clear()
+                        if cancel_event is not None:
+                            cancel_event.set()
                     if rule_progress_queue is not None:
                         while True:
                             try:
@@ -526,8 +558,6 @@ class MemoryAwareParallelProcessor:
                             self.stats.processed_files += 1
                             if result is not None:
                                 results.append(result)
-                                if on_result is not None:
-                                    on_result(result)
 
                             progress_main.update(
                                 task_id,
@@ -537,7 +567,12 @@ class MemoryAwareParallelProcessor:
 
                         except Exception as e:
                             failed_files.append((file_path, str(e)))
+                            self.stats.failed_files.append((str(file_path), str(e)))
                             progress_main.update(task_id, advance=1)
+                        else:
+                            # An output failure must abort the run before cleanup.
+                            if result is not None and on_result is not None:
+                                on_result(result)
 
                         # Calibrate on the first file to COMPLETE (not the LPT-first
                         # file, which typically finishes last): the estimate is only

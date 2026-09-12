@@ -200,6 +200,8 @@ time_filter:
 parallel:
   # Set false to disable automatic parallel processing entirely
   enabled: true
+  # Processes isolate Python ingestion work; threads retain the current default.
+  executor: thread
 
   # Maximum number of workers. null = auto-detect, which takes the smallest of:
   #   - memory:    (available RAM x 0.85) / estimated memory per file

@@ -1,5 +1,6 @@
 # -*- mode: python ; coding: utf-8 -*-
 from PyInstaller.utils.hooks import collect_all
+from importlib.util import find_spec
 
 datas = [('config', 'config'), ('gui', 'gui'), ('rules', 'rules'), ('templates', 'templates')]
 binaries = []
@@ -8,6 +9,11 @@ hiddenimports = ['zircolite', 'zircolite.assets', 'zircolite.config', 'zircolite
 # through the bytecode scan alone. Name it, or a .7z input fails in a binary
 # that no CI step feeds one to.
 hiddenimports += ['py7zr']
+if find_spec('ijson') is not None:
+    optional_data, optional_binaries, optional_imports = collect_all('ijson')
+    datas += optional_data
+    binaries += optional_binaries
+    hiddenimports += optional_imports
 tmp_ret = collect_all('evtx')
 datas += tmp_ret[0]; binaries += tmp_ret[1]; hiddenimports += tmp_ret[2]
 # Rich: bundle full package and explicitly include dynamic unicode data modules (e.g. unicode17-0-0)

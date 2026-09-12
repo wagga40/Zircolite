@@ -118,7 +118,7 @@ class TestOpenMaybeCompressed:
         with zipfile.ZipFile(p, "w") as zf:
             zf.writestr("data.json", b'{"x": 1}')
         with patch(
-            "zipfile.ZipFile.read",
+            "zipfile.ZipFile.open",
             side_effect=NotImplementedError("That compression method is not supported"),
         ), pytest.raises(ValueError, match=ARCHIVE_PASSWORD_ERROR_MESSAGE):
             open_maybe_compressed(p)

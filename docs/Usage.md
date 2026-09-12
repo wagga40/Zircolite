@@ -9,6 +9,7 @@ Zircolite needs **Python 3.10 or above** and runs on Linux, macOS and Windows.
 | Package | Purpose |
 |---------|---------|
 | `orjson` | Fast JSON parsing |
+| `ijson` | Incremental JSON-array parsing when installed; a standard-library fallback is available |
 | `xxhash` | Log-line hashing for `--hashes` |
 | `rich`, `rich-argparse` | Terminal output, progress bars, tables, coloured help |
 | `RestrictedPython` | Sandbox for field transforms |
@@ -279,12 +280,21 @@ unless `--fileext` or `--file-pattern` says otherwise.
 |--------|-------------|
 | `-P`, `--no-parallel` | Disable automatic parallel processing |
 | `-w`, `--parallel-workers` | Maximum worker count (default: auto) |
+| `--executor` | File worker type: `thread` (default) or `process` |
 | `--parallel-memory-limit` | Memory-pressure threshold before throttling, as a percentage (default: 85) |
 
 `--parallel-workers` is also an explicit override: passing a value above 1 enables
 parallel processing even where the built-in heuristic would not have recommended it. Two
 further settings exist only in the YAML file — `parallel.min_workers` and
 `parallel.adaptive`.
+
+Use `--executor process` to run files in separate Python processes. The YAML
+equivalent is `parallel.executor: process`. This can improve Python-heavy
+ingestion but adds startup cost and interpreter memory. Automatic process sizing
+caps workers at the CPU count and reserves memory for each interpreter.
+`--no-parallel`, `--unified-db`, `--strict` and `--profile-rules` take precedence.
+Results are equivalent within the same database layout; compare representative
+inputs before changing defaults.
 
 How the worker count and the database mode are chosen is described in
 [Advanced → Automatic processing optimization](Advanced.md#automatic-processing-optimization).

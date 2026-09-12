@@ -22,6 +22,12 @@ def request_shutdown() -> None:
     _shutdown_event.set()
 
 
+def set_worker_shutdown_event(event) -> None:
+    """Use the parent's multiprocessing event at worker checkpoints."""
+    global _shutdown_event
+    _shutdown_event = event
+
+
 def reset_shutdown_state() -> None:
     """Reset shutdown state. Intended for use by tests only."""
     global _force_quit_armed

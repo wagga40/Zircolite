@@ -16,6 +16,7 @@ import random
 import string
 import sys
 from collections.abc import Sequence
+from contextlib import suppress
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import (
@@ -256,8 +257,9 @@ def open_maybe_compressed(
                 log file.
 
     Returns:
-        A file-like object.  For ZIP and 7-Zip archives the member is buffered
-        in memory and returned as ``io.BytesIO`` / ``io.TextIOWrapper``.
+        A file-like object. ZIP members stream directly; 7-Zip members spool
+        to an automatically removed temporary file. Closing the returned
+        handle releases all owned resources.
 
     Raises:
         ValueError: If an archive contains zero or more than one member, or if
@@ -303,7 +305,7 @@ def open_maybe_compressed(
                         f"ZIP archive '{p}' contains {len(members)} files; "
                         "only single-file archives are supported"
                     )
-                data = zf.read(members[0], pwd=pwd)
+                data = zf.open(members[0], pwd=pwd)
         except NotImplementedError as e:
             # WinZip AES-encrypted members are unsupported by zipfile; this
             # clause must precede RuntimeError, its parent class
@@ -314,8 +316,8 @@ def open_maybe_compressed(
                 raise ValueError(ARCHIVE_PASSWORD_ERROR_MESSAGE) from e
             raise
         if text_mode:
-            return io.TextIOWrapper(io.BytesIO(data), encoding=encoding or "utf-8", errors=errors)
-        return io.BytesIO(data)
+            return io.TextIOWrapper(data, encoding=encoding or "utf-8", errors=errors)
+        return data
 
     if suffix == ".7z":
         try:
@@ -337,25 +339,25 @@ def open_maybe_compressed(
             password.decode() if isinstance(password, bytes) else password
         )
 
-        class _NonClosingBytesIO(io.BytesIO):
-            """BytesIO that survives close().
+        import tempfile
 
-            py7zr's MemIO closes the writer after extraction, which would
-            otherwise invalidate the buffer before we can read it back.
-            """
+        spool = tempfile.TemporaryFile(mode="w+b")  # noqa: SIM115 -- ownership transfers to caller
+        complete = False
 
-            def close(self) -> None:
-                self.flush()
+        class _FileWriter:
+            def __getattr__(self, name):
+                return getattr(spool, name)
 
-        class _MemFactory:
-            """Factory for py7zr in-memory extraction (create() is called per member)."""
+            def close(self):
+                # py7zr closes its writer; the caller owns the actual handle.
+                spool.flush()
 
-            def __init__(self):
-                self._buf = None
+            def size(self):
+                return os.fstat(spool.fileno()).st_size
 
+        class _FileFactory:
             def create(self, fname):
-                self._buf = _NonClosingBytesIO()
-                return self._buf
+                return _FileWriter()
 
         try:
             with py7zr.SevenZipFile(p, "r", password=pwd_7z) as szf:
@@ -367,11 +369,10 @@ def open_maybe_compressed(
                         f"7-Zip archive '{p}' contains {len(names)} files; "
                         "only single-file archives are supported"
                     )
-                factory = _MemFactory()
+                factory = _FileFactory()
                 szf.extract(path=None, targets=names, factory=factory)  # type: ignore[arg-type]
-                if factory._buf is None:
-                    raise RuntimeError("7z extract produced no data")
-                data = factory._buf.getvalue()
+                spool.seek(0)
+                complete = True
         except PasswordRequired:
             raise ValueError(ARCHIVE_PASSWORD_ERROR_MESSAGE) from None
         except Bad7zFile as e:
@@ -394,14 +395,48 @@ def open_maybe_compressed(
             raise ValueError(
                 f"7-Zip archive '{p}' is truncated or corrupt"
             ) from e
+        finally:
+            if not complete:
+                spool.close()
         if text_mode:
-            return io.TextIOWrapper(io.BytesIO(data), encoding=encoding or "utf-8", errors=errors)
-        return io.BytesIO(data)
+            return io.TextIOWrapper(spool, encoding=encoding or "utf-8", errors=errors)
+        return spool
 
     # Plain file fallback
     if text_mode:
         return open(p, mode, encoding=encoding or "utf-8", errors=errors)
     return open(p, mode)
+
+
+def estimate_input_size(path: Path | str) -> int:
+    """Estimate expanded bytes for scheduling without decompressing the input.
+
+    gzip's trailer is modulo 2**32 and bzip2 has no expanded-size header, so
+    their estimates remain heuristic. Runtime memory throttling still applies.
+    """
+    p = Path(path)
+    try:
+        size = os.path.getsize(path)
+        if p.suffix.lower() == ".zip":
+            import zipfile
+            with zipfile.ZipFile(p) as archive:
+                return max(size, sum(info.file_size for info in archive.infolist() if not info.is_dir()))
+        if p.suffix.lower() == ".7z":
+            import py7zr
+            with py7zr.SevenZipFile(p) as archive:
+                return max(size, sum(info.uncompressed or 0 for info in archive.list()))
+        if p.suffix.lower() == ".gz":
+            with p.open("rb") as source:
+                source.seek(-4, os.SEEK_END)
+                return max(size * 4, int.from_bytes(source.read(4), "little"))
+        if p.suffix.lower() == ".bz2":
+            return size * 8
+        return size
+    except Exception:
+        try:
+            return p.stat().st_size * (8 if p.suffix.lower() in COMPRESSED_SUFFIXES else 1)
+        except OSError:
+            return 0
 
 
 # ---------------------------------------------------------------------------
@@ -590,7 +625,14 @@ class MemoryTracker:
         """Get current memory usage in MB."""
         try:
             # Get RSS (Resident Set Size) in bytes, convert to MB
-            return self.process.memory_info().rss / (1024 * 1024)
+            rss = self.process.memory_info().rss
+            try:
+                for child in self.process.children(recursive=True):
+                    with suppress(psutil.Error, OSError):
+                        rss += child.memory_info().rss
+            except (psutil.Error, OSError):
+                pass
+            return rss / (1024 * 1024)
         except Exception:
             return 0
 
@@ -674,7 +716,7 @@ def analyze_files_and_recommend_mode(
     file_sizes = []
     for f in file_list:
         try:
-            file_sizes.append(os.path.getsize(f))
+            file_sizes.append(estimate_input_size(f))
         except OSError:
             file_sizes.append(0)
 

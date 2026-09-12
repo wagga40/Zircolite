@@ -162,6 +162,7 @@ SETTINGS: tuple[Setting, ...] = (
     # -- parallel ---------------------------------------------------------
     Setting("no_parallel", "parallel", "enabled", False, Merge.OR, invert=True),
     Setting("parallel_workers", "parallel", "max_workers"),
+    Setting("executor", "parallel", "executor", "thread"),
     # These two are YAML-only -- no CLI flag of their own -- but are still
     # resolved so the namespace always carries a usable value.
     # --parallel-memory-limit below does have a flag.

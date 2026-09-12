@@ -59,6 +59,24 @@ directly, so aliases do not apply to them.
 Database columns are added as new fields are discovered, and events are inserted in
 batches.
 
+JSON arrays are validated incrementally, including delimiters and the closing
+bracket. The optional `ijson` backend accelerates parsing; its numeric values are
+normalized to Python integers and floats before insertion. ZIP members stream from
+the archive, and 7-Zip members spool to automatically removed temporary files.
+Compressed file size never selects an unbounded full-load array path.
+
+Only transforms enabled for the selected source and CLI selection are compiled.
+Immutable bytecode is cached by source; function namespaces remain local to each
+processor. External transform source is cached by path, modification time and size.
+
+CLI output uses a temporary row spool per matching rule, releasing it after the
+output and summary callbacks finish. Multi-file CSV runs spool rows until their
+complete header is known. Summaries retain counts and metadata, while templates,
+packaging and library callers requesting `keep_results` retain complete matches.
+`execute_ruleset` additionally accepts `result_sink` and `stream_results`; sinks must
+consume the temporary row iterator during the callback. Public `execute_rule` and
+`execute_select_query` still return ordinary dictionaries and lists.
+
 ## Processing modes
 
 Every mode reads events through the same pipeline. There are two database layouts, and
@@ -89,8 +107,16 @@ available in per-file mode and not with `--unified-db`. `--no-parallel` declines
 both need one file at a time.
 
 The layout choice is made from file count, file sizes, available RAM and CPU count.
-`--no-auto-mode` disables it and keeps per-file. The heuristics are documented in
-[Advanced → Automatic processing optimization](Advanced.md#automatic-processing-optimization).
+`--no-auto-mode` disables this choice and keeps per-file mode. The heuristics are
+documented in [Advanced → Automatic processing optimization](Advanced.md#automatic-processing-optimization).
+
+`--executor process` selects separate interpreters with one database each; threads
+remain the default. Processes return summaries and temporary output paths instead
+of pickling large match lists. Workers share a shutdown event, and EVTX parser
+threads are divided across the file-worker CPU budget. ZIP/7z expanded sizes and
+gzip/bzip2 estimates inform scheduling; estimates are advisory, with runtime memory
+throttling still applied. gzip sizes can wrap at 4 GiB, so compressed-size estimates
+cannot guarantee a fixed process memory ceiling.
 
 ## Module map
 
@@ -103,6 +129,8 @@ All the logic lives in the `zircolite/` package. `zircolite.py` is a shim that c
 | `__main__.py` | Entry point for `python -m zircolite` |
 | `assets.py` | Resolution of the shipped `config/`, `rules/`, `templates/` and `gui/` |
 | `streaming.py` | `StreamingEventProcessor` — single-pass read, flatten, transform, insert |
+| `jsonstream.py` | Validating JSON-array reader with an optional C parser |
+| `results.py` | Temporary detection row storage and incremental JSON output |
 | `core.py` | `ZircoliteCore` — database management, indexes, rule execution, output |
 | `detector.py` | `LogTypeDetector` — format, log source and timestamp-field detection |
 | `processing.py` | Coordinates per-file, unified and parallel runs; aggregates results |
@@ -184,7 +212,7 @@ The rest depend on where the database lives:
 
 | Pragma | In-memory | On disk |
 |--------|-----------|---------|
-| `journal_mode` | `OFF` | `WAL` |
+| `journal_mode` | `MEMORY` | `WAL` |
 | `synchronous` | `OFF` | `NORMAL` |
 | `cache_size` | `-128000` (128 MB) | `-64000` (64 MB) |
 | `locking_mode` | `EXCLUSIVE` | — |

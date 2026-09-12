@@ -1,5 +1,40 @@
 # Zircolite tools
 
+## throughput-benchmark.py
+
+See [implementation measurements](performance-results.md) for the recorded baseline
+comparison and its limits.
+
+Compare complete CLI runs with sequential, thread, and process workers:
+
+```sh
+python tools/throughput-benchmark.py --scenario mixed --event-count 100000 --passes 3 --report benchmark.json
+python tools/throughput-benchmark.py --events /path/to/evtx --ruleset rules/rules_windows_merged.json
+```
+
+Generated scenarios include `many-small`, `large`, `mixed`, `gzip`, `array`,
+`array-gzip`, `csv`, `noisy`, and `transforms`. The harness includes process startup, ingestion, index building,
+rule execution, and output in its wall time. It samples RSS for the subprocess and
+its children, interleaves modes, and rejects mismatched detection multisets.
+Input generation and output verification happen outside the timed region.
+Verification loads the detection file in the harness; its memory is excluded from
+the CLI RSS sample. Restricted systems report `parent-only` when child RSS cannot
+be inspected, so those process measurements must not be treated as total memory.
+The `db-benchmark.py` harness below isolates ingestion and rule execution phases.
+
+For JSON arrays, install optional C parsing with
+`python -m pip install -r requirements-performance.txt`. Without it, Zircolite
+uses a validating standard-library parser. Record the parser backend with results;
+the throughput report includes the installed `ijson` version and selected backend.
+
+Alternative engine experiments should use a representative corpus and compare
+complete detections: DuckDB is a candidate for large unified scans, while native
+Rust ingestion and Vectorscan are candidates for flattening and grouped pattern
+matching. They are not interchangeable SQLite backends. Keep SQL NULL, collation,
+numeric and regex semantics in the acceptance tests. Trigram FTS5 cannot directly
+accelerate the bundled `LIKE ... ESCAPE` predicates; any candidate filter must
+produce a superset that the original SQL verifies.
+
 This directory holds scripts intended for regular use with Zircolite (tracked in git).
 
 Each of these reaches into the package internals, so `tests/test_tools.py` drives them
