@@ -93,7 +93,11 @@ queries. It is built once per `execute_ruleset` call and discarded after its out
 callbacks finish. `literal` forces construction; `off` disables it. Aho–Corasick searches necessary literals in each
 field; Roaring bitmaps retain row IDs. Unknown predicates have an unbounded
 candidate set. AND intersects candidates, OR unions them, and NOT supplies no
-bound. Only simple `SELECT * FROM logs WHERE ...` statements qualify. Unsupported
+bound. Only simple `SELECT * FROM logs WHERE ...` statements qualify, and a pattern
+contributes its longest literal run when that run is three characters or more, or holds
+a non-ASCII character (emoji and homoglyph lists), which LIKE compares exactly. A rule
+too deep to prepare is indexed in the rebalanced form the rule loop retries it with
+(see [Automatic SQL repairs](#automatic-sql-repairs)). Unsupported
 queries, custom LIKE implementations, uncertain schemas, and negative IDs take
 the ordinary query path. A column exceeding an index budget becomes unbounded;
 completed indexes for other columns remain usable. NULL values contribute no
@@ -101,8 +105,8 @@ positive LIKE candidates. Other non-text values remain candidates in a shared
 per-column bitmap so SQLite owns their conversion. REGEXP queries remain on the
 normal path as well. Candidate filtering never removes the original WHERE predicate.
 
-The filter limits construction to one million pattern characters and two
-million physically retained row IDs per ruleset (including shared uncertain IDs),
+The filter limits construction to one million pattern characters and sixteen
+retained row IDs per event, at least two million (including shared uncertain IDs),
 and bypasses a candidate set containing at least half the events. These limits bound indexing work; they are not a process memory
 ceiling. The temporary ID table does not change exported rules or event columns. Referenced
 fields are scanned together in batches of 256 rows. Immutable normalized SQL and

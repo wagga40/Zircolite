@@ -634,6 +634,10 @@ def _rewrite(sql: str, lo: int, hi: int) -> str:
     return _balance([part.strip() for part in operands])
 
 
+# Rebalancing a 350 KB rule takes ~100 ms, and per-file and parallel modes run the
+# same ruleset once per input file -- through both the rule loop and the literal
+# prefilter. Only a handful of rules ever need it.
+@lru_cache(maxsize=32)
 def rebalance_sql(sql: str) -> str:
     """Return ``sql`` with deep OR chains re-associated into a balanced tree.
 

@@ -17,7 +17,7 @@ import ahocorasick
 from pyroaring import BitMap64
 
 from .shutdown import is_shutdown_requested
-from .sqlscan import _unquote, _Unsupported, iter_tokens, quote_sql_identifiers
+from .sqlscan import _unquote, _Unsupported, iter_tokens, quote_sql_identifiers, rebalance_sql
 
 _ASCII_FOLD = str.maketrans("ABCDEFGHIJKLMNOPQRSTUVWXYZ", "abcdefghijklmnopqrstuvwxyz")
 _ASCII_UPPER = str.maketrans("abcdefghijklmnopqrstuvwxyz", "ABCDEFGHIJKLMNOPQRSTUVWXYZ")
@@ -51,9 +51,19 @@ def _literal(pattern, escape):
             run.append(char)
         i += 1
     runs.append("".join(run))
-    longest = max(runs, key=len)
-    # Very short literals generally cost more to index than they eliminate.
-    return longest.translate(_ASCII_FOLD) if len(longest) >= 3 else None
+    best = max(runs, key=lambda candidate: (_selective(candidate), len(candidate)))
+    return best.translate(_ASCII_FOLD) if _selective(best) else None
+
+
+def _selective(run):
+    # Short ASCII runs cost more to index than they eliminate. Any non-ASCII
+    # character is rare in logs, and LIKE compares it exactly.
+    return len(run) >= 3 or not run.isascii()
+
+
+def _posting_budget(rows):
+    """Row IDs the index may retain: enough for dense literals on large tables."""
+    return max(2_000_000, 16 * rows)
 
 
 def _combine(operator, nodes):
@@ -254,7 +264,7 @@ class LiteralPrefilter:
     """One bounded candidate index for one ruleset execution over stable logs."""
 
     def __init__(self, connection, rules, *, automatic=False, automaton_factory=None, bitmap_factory=None,
-                 max_postings=2_000_000, max_pattern_chars=1_000_000, prepared=None):
+                 max_postings=None, max_pattern_chars=1_000_000, prepared=None):
         self.connection = connection
         self.plans: dict[str, LiteralPlan] = {}
         self.postings: dict[tuple[str, str], Any] = {}
@@ -315,24 +325,22 @@ class LiteralPrefilter:
         queries = rule_queries(rules)
         normalized = (self.prepared or prepare_rules(queries)).normalized
         for query in queries:
-            plan = _plan_for(normalized.get(query) or quote_sql_identifiers(query))
+            text = normalized.get(query) or quote_sql_identifiers(query)
+            plan = _plan_for(text)
             if plan is None or plan.sql in self.plans or plan.max_literal_bytes > like_limit:
                 continue
             leaves = set(_leaves(plan.expression))
             if any(column not in known for column, _ in leaves):
                 continue
-            try:
-                # Broken rules must still take the ordinary repair/error path.
-                # Result columns cannot fail where the WHERE clause succeeds, and
-                # compiling SELECT * costs one opcode per column of a wide table.
-                with closing(conn.execute("EXPLAIN SELECT 1 FROM logs WHERE" + plan.sql[plan.where_start:])) as cursor:  # noqa: S608 -- the rule's own WHERE clause
-                    cursor.fetchall()
-            except sqlite3.Error:
+            plan = self._runnable_plan(plan, text)
+            if plan is None:
                 continue
             self.plans[plan.sql] = plan
             for column, literal in leaves:
                 patterns[column].add(literal)
         self.eligible_queries = len(self.plans)
+        if max_postings is None:
+            max_postings = _posting_budget(self.total_rows)
         if automatic and len(self.plans) < AUTO_MIN_QUERIES:
             self.reason = "too few eligible queries for automatic filtering"
             self.plans.clear()
@@ -405,6 +413,34 @@ class LiteralPrefilter:
         if self.plans:
             conn.execute(f'CREATE TEMP TABLE "{self.table}" (row_id INTEGER PRIMARY KEY)').close()
             self._created = True
+
+    def _runnable_plan(self, plan, text):
+        """The plan SQLite will execute for this rule, or None if it cannot run.
+
+        Broken rules must still take the ordinary repair/error path. A rule too
+        deep to prepare is retried by the rule loop as ``rebalance_sql(text)``,
+        so index that form: it is the SQL the loop will pass to rewrite().
+        """
+        try:
+            self._explain(plan)
+            return plan
+        except sqlite3.Error as exc:
+            if "expression tree is too large" not in str(exc).lower():
+                return None
+        rebalanced = _plan_for(rebalance_sql(text))
+        if rebalanced is None or rebalanced.sql == plan.sql:
+            return None
+        try:
+            self._explain(rebalanced)
+        except sqlite3.Error:
+            return None
+        return rebalanced
+
+    def _explain(self, plan):
+        # Result columns cannot fail where the WHERE clause succeeds, and
+        # compiling SELECT * costs one opcode per column of a wide table.
+        with closing(self.connection.execute("EXPLAIN SELECT 1 FROM logs WHERE" + plan.sql[plan.where_start:])) as cursor:  # noqa: S608 -- the rule's own WHERE clause
+            cursor.fetchall()
 
     def rewrite(self, sql):
         plan = self.plans.get(sql.strip().removesuffix(";").rstrip())

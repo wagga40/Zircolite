@@ -21,7 +21,7 @@ import yaml
 
 from zircolite import ProcessingConfig, ZircoliteCore
 from zircolite.config_loader import ConfigLoader
-from zircolite.prefilter import LiteralPrefilter, _plan_for
+from zircolite.prefilter import LiteralPrefilter, _plan_for, _posting_budget
 from zircolite.sqlscan import quote_sql_identifiers
 from zircolite.streaming import StreamingEventProcessor, select_flatten_kernel
 from zircolite.utils import open_maybe_compressed, safe_load, safe_load_all
@@ -245,7 +245,8 @@ def test_literal_prefilter_matches_sqlite_boolean_wildcard_semantics(event_datab
              "text IS NULL", "n=1", "n LIKE '%234%'", "other LIKE '%alpha%'",
              "NOT (text LIKE '%alpha%')", "text LIKE 'a%'", "text LIKE '%missing%'",
              "text LIKE '%alpha*_%' ESCAPE '*'", "text LIKE '%alpha%bet%'",
-             "text LIKE '%alpha%_%' ESCAPE '%'", "text LIKE '%alpha\\\\%' ESCAPE '\\'"]
+             "text LIKE '%alpha%_%' ESCAPE '%'", "text LIKE '%alpha\\\\%' ESCAPE '\\'",
+             "text LIKE '%é%'", "text LIKE '%É%'", "text LIKE '%k%'"]
     rng = random.Random(90210)  # noqa: S311 -- reproducible test inputs
     queries = ["SELECT * FROM logs WHERE " + atom for atom in atoms]
     for _ in range(250):
@@ -260,6 +261,38 @@ def test_literal_prefilter_matches_sqlite_boolean_wildcard_semantics(event_datab
             assert Counter(actual) == Counter(expected), query
         assert prefilter.accelerated > 0
     assert not event_database.execute("SELECT name FROM sqlite_temp_master").fetchall()
+
+
+def test_short_literals_are_indexed_only_when_they_hold_non_ascii_characters():
+    # A single emoji or accented letter is selective in logs; a one-letter ASCII
+    # run is not, and SQLite LIKE folds case for ASCII only.
+    assert _plan_for("SELECT * FROM logs WHERE text LIKE '%🦆%'") is not None
+    assert _plan_for("SELECT * FROM logs WHERE text LIKE '%é%'") is not None
+    assert _plan_for("SELECT * FROM logs WHERE text LIKE '%é_ab%'") is not None
+    assert _plan_for("SELECT * FROM logs WHERE text LIKE '%ab%'") is None
+
+
+def test_posting_budget_scales_with_the_table():
+    assert _posting_budget(0) == 2_000_000
+    assert _posting_budget(1_000_000) == 16_000_000
+
+
+def test_depth_repaired_rules_are_accelerated(tmp_path):
+    native("ahocorasick")
+    native("pyroaring")
+    terms = " OR ".join(f"text LIKE '%needle{i:04d}%'" for i in range(1500))
+    query = f"SELECT * FROM logs WHERE {terms}"
+    outcomes = []
+    for mode in ("off", "literal"):
+        with closing(ZircoliteCore(CONFIG, ProcessingConfig(rule_prefilter=mode, no_output=True))) as core:
+            core.create_db("text TEXT")
+            core.insert_data_to_db([{"text": "a needle0042 here"}, *[{"text": "quiet"} for _ in range(30)]])
+            core.load_ruleset_from_var([{"id": "deep", "title": "deep", "level": "high", "rule": [query]}], None)
+            core.execute_ruleset(str(tmp_path / "unused.json"), keep_results=True, disable_progress=True)
+            outcomes.append(([r["count"] for r in core.full_results], dict(core.rules_in_error)))
+            if mode == "literal":
+                assert core.metrics.data["prefilter"][0]["applied_queries"] == 1
+    assert outcomes[0] == outcomes[1] == ([1], {})
 
 
 @pytest.mark.parametrize("query", [

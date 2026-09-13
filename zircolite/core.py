@@ -74,14 +74,6 @@ def _compile_regex(pattern: str) -> re.Pattern:
     return re.compile(pattern)
 
 
-# Rebalancing a 350 KB rule takes ~100 ms, and per-file and parallel modes run
-# the same ruleset once per input file. Only a handful of rules ever reach here.
-@lru_cache(maxsize=32)
-def _rebalance_cached(query: str) -> str:
-    """Return the depth-repaired form of ``query``, memoised across files."""
-    return rebalance_sql(query)
-
-
 def _uncompilable_regex(query: str) -> str | None:
     """Why ``query``'s REGEXP patterns cannot compile, or None if they all can.
 
@@ -760,7 +752,7 @@ class ZircoliteCore:
                 message = str(e)
                 if _DEPTH_LIMIT_RE.search(message) and "rebalance" not in attempted:
                     attempted.add("rebalance")
-                    rebalanced = _rebalance_cached(query)
+                    rebalanced = rebalance_sql(query)
                     if rebalanced != query:
                         query = rebalanced
                         continue
