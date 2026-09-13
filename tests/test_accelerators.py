@@ -21,7 +21,8 @@ import yaml
 
 from zircolite import ProcessingConfig, ZircoliteCore
 from zircolite.config_loader import ConfigLoader
-from zircolite.prefilter import LiteralPrefilter, prepare_rules
+from zircolite.prefilter import LiteralPrefilter, _plan_for
+from zircolite.sqlscan import quote_sql_identifiers
 from zircolite.streaming import StreamingEventProcessor, select_flatten_kernel
 from zircolite.utils import open_maybe_compressed, safe_load, safe_load_all
 
@@ -282,7 +283,7 @@ def test_literal_prefilter_matches_sqlite_boolean_wildcard_semantics(event_datab
     "SELECT * FROM logs WHERE text LIKE '%alpha%' AND text ->> '$.k' = 1",
 ])
 def test_unsupported_sql_has_no_prefilter_plan(query):
-    assert not prepare_rules((query,)).plans
+    assert _plan_for(quote_sql_identifiers(query)) is None
 
 
 def test_a_keyword_is_never_mistaken_for_a_same_named_column():

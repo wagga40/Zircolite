@@ -242,7 +242,7 @@ def test_small_databases_do_not_prepare_literal_plans(monkeypatch):
 
     clear_prepared_rules()
     queries = tuple(f"SELECT * FROM logs WHERE text LIKE '%literal{i}%'" for i in range(32))
-    prepared = prepare_rules(queries, with_literals=False)
+    prepared = prepare_rules(queries)
     monkeypatch.setattr("zircolite.prefilter._parse_literal_plan", Mock(side_effect=AssertionError("unnecessary planning")))
     with closing(sqlite3.connect(":memory:")) as conn:
         conn.execute("CREATE TABLE logs(row_id INTEGER PRIMARY KEY, text TEXT)")

@@ -917,12 +917,7 @@ class ZircoliteCore:
         self.ruleset = list(filter(None, self.ruleset))
         if rule_filters is not None:
             self.ruleset = [rule for rule in self.ruleset if not any(rule_filter in rule.get("title", "") for rule_filter in rule_filters)]
-        self._prepared = prepare_rules(
-            rule_queries(self.ruleset),
-            # The builder prepares literals after database/query thresholds
-            # pass. Small inputs should pay only for SQL normalization.
-            with_literals=False,
-        )
+        self._prepared = prepare_rules(rule_queries(self.ruleset))
 
     @timed_stage("output")
     def _write_result_to_output(

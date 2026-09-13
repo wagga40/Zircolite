@@ -137,11 +137,14 @@ class LiteralPlan:
     sql: str
     where_start: int
     expression: Any
+    # SQLite rejects a LIKE pattern past SQLITE_LIMIT_LIKE_PATTERN_LENGTH.
+    max_literal_bytes: int = 0
 
 
 def _parse_literal_plan(sql):
     try:
         tokens, ends = [], []
+        longest = 0
         for kind, start, end in iter_tokens(sql):
             value = sql[start:end]
             if kind == "comment":
@@ -150,6 +153,7 @@ def _parse_literal_plan(sql):
                 continue
             if kind == "literal":
                 value = value[1:-1].replace("''", "'")
+                longest = max(longest, len(value.encode("utf-8")))
             elif kind == "identifier":
                 kind, value = "name", _unquote(value)
             elif kind == "word":
@@ -181,9 +185,15 @@ def _parse_literal_plan(sql):
         expression = reader.read_or()
         if reader.pos != len(body) or expression is None:
             return None
-        return LiteralPlan(sql, ends[4], expression)
+        return LiteralPlan(sql, ends[4], expression, longest)
     except (_Unsupported, RecursionError):
         return None
+
+
+@lru_cache(maxsize=16384)
+def _plan_for(sql):
+    """Plans depend on the SQL text alone, so every file and worker shares them."""
+    return _parse_literal_plan(sql.strip())
 
 
 def _leaves(expression):
@@ -220,8 +230,6 @@ def _evaluate(expression, postings, uncertain=None):
 @dataclass(frozen=True)
 class PreparedRules:
     normalized: dict[str, str]
-    plans: dict[str, LiteralPlan]
-    with_literals: bool
 
 
 def rule_queries(rules):
@@ -232,26 +240,14 @@ def rule_queries(rules):
 
 
 @lru_cache(maxsize=8)
-def _normalize_rules(queries):
-    return {sql: quote_sql_identifiers(sql) for sql in queries}
-
-
-@lru_cache(maxsize=8)
-def prepare_rules(queries, with_literals=True):
-    """Share immutable preparation across files; never cache database state."""
-    normalized = _normalize_rules(queries)
-    plans = {}
-    if with_literals:
-        for sql in normalized.values():
-            plan = _parse_literal_plan(sql.strip())
-            if plan is not None:
-                plans[plan.sql] = plan
-    return PreparedRules(normalized, plans, with_literals)
+def prepare_rules(queries):
+    """Share immutable SQL normalization across files; never cache database state."""
+    return PreparedRules({sql: quote_sql_identifiers(sql) for sql in queries})
 
 
 def clear_prepared_rules():
     prepare_rules.cache_clear()
-    _normalize_rules.cache_clear()
+    _plan_for.cache_clear()
 
 
 class LiteralPrefilter:
@@ -316,19 +312,20 @@ class LiteralPrefilter:
                     if option.startswith("MAX_LIKE_PATTERN_LENGTH="):
                         like_limit = int(option.split("=", 1)[1])
         patterns = defaultdict(set)
-        prepared = self.prepared
-        if prepared is None or not prepared.with_literals:
-            prepared = prepare_rules(rule_queries(rules))
-        for plan in prepared.plans.values():
-            if any(len(plan.sql[start + 1:end - 1].replace("''", "'").encode("utf-8")) > like_limit
-                   for kind, start, end in iter_tokens(plan.sql) if kind == "literal"):
+        queries = rule_queries(rules)
+        normalized = (self.prepared or prepare_rules(queries)).normalized
+        for query in queries:
+            plan = _plan_for(normalized.get(query) or quote_sql_identifiers(query))
+            if plan is None or plan.sql in self.plans or plan.max_literal_bytes > like_limit:
                 continue
             leaves = set(_leaves(plan.expression))
             if any(column not in known for column, _ in leaves):
                 continue
             try:
                 # Broken rules must still take the ordinary repair/error path.
-                with closing(conn.execute("EXPLAIN " + plan.sql)) as cursor:
+                # Result columns cannot fail where the WHERE clause succeeds, and
+                # compiling SELECT * costs one opcode per column of a wide table.
+                with closing(conn.execute("EXPLAIN SELECT 1 FROM logs WHERE" + plan.sql[plan.where_start:])) as cursor:  # noqa: S608 -- the rule's own WHERE clause
                     cursor.fetchall()
             except sqlite3.Error:
                 continue
