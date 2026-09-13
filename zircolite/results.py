@@ -1,33 +1,51 @@
 """Temporary row storage and incremental serialization for detection output."""
 
+import shutil
 import tempfile
 
 import orjson
 
 
 class RowSpool:
-    """A repeatable row iterator backed by an automatically removed file."""
+    """A repeatable row iterator backed by an automatically removed file.
+
+    The file is created with the first row. Most rules match nothing, and
+    creating and removing a temporary file costs about 0.1 ms per rule.
+    """
 
     def __init__(self):
-        self.file = tempfile.TemporaryFile(mode="w+b")  # noqa: SIM115 -- owned until close()
+        self.file = None
         self.count = 0
 
     def __len__(self):
         return self.count
 
+    def _writable(self):
+        if self.file is None:
+            self.file = tempfile.TemporaryFile(mode="w+b")  # noqa: SIM115 -- owned until close()
+        return self.file
+
     def append(self, row):
-        self.file.write(orjson.dumps(row) + b"\n")
+        self._writable().write(orjson.dumps(row) + b"\n")
         self.count += 1
 
+    def extend_serialized(self, source, rows):
+        """Append ``rows`` rows that ``source`` already holds one JSON line each."""
+        shutil.copyfileobj(source, self._writable())
+        self.count += rows
+
     def checkpoint(self):
-        return self.count, self.file.tell()
+        return self.count, 0 if self.file is None else self.file.tell()
 
     def rollback(self, checkpoint):
         self.count, position = checkpoint
-        self.file.seek(position)
-        self.file.truncate()
+        if self.file is not None:
+            self.file.seek(position)
+            self.file.truncate()
 
     def __iter__(self):
+        if self.file is None:
+            return
         self.file.flush()
         self.file.seek(0)
         for line in self.file:
@@ -35,6 +53,8 @@ class RowSpool:
 
     def json_chunks(self):
         """Reuse serialized rows when writing JSON; keep each copy bounded."""
+        if self.file is None:
+            return
         self.file.flush()
         self.file.seek(0)
         first = True
@@ -43,7 +63,8 @@ class RowSpool:
             first = False
 
     def close(self):
-        self.file.close()
+        if self.file is not None:
+            self.file.close()
 
 
 def result_summary(result):

@@ -1250,8 +1250,7 @@ def process_parallel_streaming(
         elif result_path and csv_spool is not None:
             csv_spool.columns.update(file_data.get("csv_columns", []))
             with open(result_path, "rb") as source:
-                shutil.copyfileobj(source, csv_spool.rows.file)
-            csv_spool.rows.count += file_data.get("csv_rows", 0)
+                csv_spool.rows.extend_serialized(source, file_data.get("csv_rows", 0))
         if file_data.get("keepflat_path") and kf is not None:
             with open(file_data["keepflat_path"], "rb") as source:
                 shutil.copyfileobj(source, kf)

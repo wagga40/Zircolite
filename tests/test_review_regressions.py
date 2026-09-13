@@ -7,6 +7,7 @@ import json
 import logging
 import subprocess
 import sys
+import tempfile
 import time
 from argparse import Namespace
 from pathlib import Path
@@ -379,3 +380,41 @@ def test_spooled_json_serialization_across_chunks():
         assert list(spool) == expected
     finally:
         spool.close()
+
+
+def test_spool_creates_its_file_only_once_a_row_arrives(field_mappings_file):
+    # Most rules match nothing; a temporary file per rule per database cost
+    # 0.1 ms each, 0.44 s for one pass of the merged Windows ruleset.
+    spool = RowSpool()
+    try:
+        assert spool.file is None
+        checkpoint = spool.checkpoint()
+        assert list(spool) == []
+        assert b"".join(spool.json_chunks()) == b""
+        spool.append({"n": 1})
+        spool.rollback(checkpoint)
+        assert len(spool) == 0 and list(spool) == []
+        spool.append({"n": 2})
+        assert list(spool) == [{"n": 2}]
+    finally:
+        spool.close()
+
+    created = []
+    real = tempfile.TemporaryFile
+
+    def counting(*args, **kwargs):
+        created.append(1)
+        return real(*args, **kwargs)
+
+    core = ZircoliteCore(field_mappings_file, ProcessingConfig(no_output=True))
+    try:
+        core.create_db("n INTEGER")
+        core.insert_data_to_db({"n": 1})
+        rules = [{"title": f"quiet {i}", "rule": [f"SELECT * FROM logs WHERE n = {i + 2}"]} for i in range(20)]
+        rules.append({"title": "match", "rule": ["SELECT * FROM logs WHERE n = 1"]})
+        core.load_ruleset_from_var(rules, rule_filters=None)
+        with patch("zircolite.results.tempfile.TemporaryFile", counting):
+            core.execute_ruleset("unused", stream_results=True, disable_progress=True, show_table=False)
+    finally:
+        core.close()
+    assert len(created) == 1
