@@ -15,6 +15,7 @@ import hashlib
 import importlib
 import logging
 import math
+import operator
 import os
 import re
 import shutil
@@ -241,6 +242,33 @@ def _build_restricted_builtins() -> dict:
 _RESTRICTED_BUILTINS = _build_restricted_builtins()
 
 
+def _build_rows(batch, all_columns, all_columns_frozen, uniform):
+    """Bind each event to ``all_columns``; a field the event lacks becomes NULL.
+
+    Large-integer normalisation already happened while flattening. Plain Python on
+    purpose: every step here is a C call already, and the compiled kernel measured
+    slower (5.4 µs per event against 3.3 µs for ``map`` over ``dict.get``).
+    """
+    if len(all_columns) != len(all_columns_frozen):
+        # Case-collision batch: merge values across case variants per event
+        # (first non-None wins) and bind against the canonical column.
+        canonical_lower = tuple(col.lower() for col in all_columns)
+        rows = []
+        for event in batch:
+            merged: dict[str, Any] = {}
+            for k, v in event.items():
+                kl = k.lower()
+                if kl not in merged or merged[kl] is None:
+                    merged[kl] = v
+            rows.append(tuple(merged.get(cl) for cl in canonical_lower))
+        return rows
+    if uniform and len(all_columns) > 1:
+        # Every event shares the first event's columns (a stable source).
+        row_getter = operator.itemgetter(*all_columns)
+        return [row_getter(event) for event in batch]
+    return [tuple(map(event.get, all_columns)) for event in batch]
+
+
 def _load_native_kernel():
     """Return ``(module, None)``, or ``(None, reason)`` when it cannot be used.
 
@@ -321,7 +349,6 @@ class StreamingEventProcessor:
         # (raw_name, mapped_key) or _EXCLUDED_SENTINEL; avoids repeated
         # exclusion/mapping lookups per leaf
         "_resolve_path",
-        "_rows_impl",
         # Leaf keys whose schema bookkeeping is already done (skip repeat work)
         "_seen_leaf_keys",
         "_skipped_records",
@@ -412,7 +439,6 @@ class StreamingEventProcessor:
         if proc.flatten_backend == "auto" and self.flattening_info["selected"] == "python":
             self.flattening_info["reason"] = _load_native_kernel()[1]
         self._flatten_impl = kernel.flatten_event
-        self._rows_impl = kernel.build_rows
         self.archive_password = proc.archive_password
         self.strict_evtx = proc.strict_evtx
         self.evtx_threads = proc.evtx_threads
@@ -1527,7 +1553,7 @@ class StreamingEventProcessor:
             self._last_insert_stmt = insert_stmt
             self._last_insert_columns = all_columns
 
-        rows = self._rows_impl(batch, all_columns, all_columns_frozen, extra_columns is None)
+        rows = _build_rows(batch, all_columns, all_columns_frozen, extra_columns is None)
 
         # Execute batch insert with transaction
         try:

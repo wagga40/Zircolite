@@ -160,6 +160,20 @@ def test_disk_cleanup_when_connection_setup_fails(tmp_path, monkeypatch):
     assert not list(tmp_path.iterdir())
 
 
+def test_row_building_binds_missing_fields_as_null_and_merges_case_variants():
+    from zircolite.streaming import _build_rows
+
+    rng = random.Random(4688)  # noqa: S311 -- reproducible test inputs
+    columns = ("Channel", "CommandLine", "EventID", "Image")
+    batch = [{name: rng.choice([None, "x", 7]) for name in columns if rng.random() < 0.6} for _ in range(200)]
+    assert _build_rows(batch, columns, frozenset(columns), False) == [
+        tuple(event.get(name) for name in columns) for event in batch]
+    uniform = [dict.fromkeys(columns, "v") for _ in range(3)]
+    assert _build_rows(uniform, columns, frozenset(columns), True) == [("v",) * 4] * 3
+    collided = [{"EventID": None, "eventid": 4688}, {"EventID": 1, "eventid": 2}]
+    assert _build_rows(collided, ("EventID",), frozenset(("EventID", "eventid")), False) == [(4688,), (1,)]
+
+
 @pytest.mark.parametrize("hashes", [False, True])
 def test_cython_ingestion_matches_python_with_transforms(tmp_path, hashes):
     native("zircolite._flatten_native")

@@ -5,7 +5,6 @@ scalar rules and keep transforms in the existing RestrictedPython sandbox.
 """
 
 import contextlib
-import operator
 from typing import Any
 
 import orjson as json
@@ -240,29 +239,3 @@ def flatten_event(
                     return None
 
     return json_line
-
-
-def build_rows(batch, all_columns, all_columns_frozen, uniform):
-    # Build rows – large-int normalisation already done in _flatten_event.
-    # When every event shares the first event's columns (the common case for
-    # a stable source), a single itemgetter beats a per-column .get genexpr.
-    # Heterogeneous batches keep .get so missing columns map to NULL.
-    if len(all_columns) != len(all_columns_frozen):
-        # Case-collision batch: merge values across case variants per event
-        # (first non-None wins) and bind against the canonical column.
-        canonical_lower = tuple(col.lower() for col in all_columns)
-        rows = []
-        for event in batch:
-            merged: dict[str, Any] = {}
-            for k, v in event.items():
-                kl = k.lower()
-                if kl not in merged or merged[kl] is None:
-                    merged[kl] = v
-            rows.append(tuple(merged.get(cl) for cl in canonical_lower))
-    elif uniform and len(all_columns) > 1:
-        row_getter = operator.itemgetter(*all_columns)
-        rows = [row_getter(event) for event in batch]
-    else:
-        rows = [tuple(event.get(col) for col in all_columns) for event in batch]
-
-    return rows
