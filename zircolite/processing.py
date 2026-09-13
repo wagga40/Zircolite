@@ -51,6 +51,7 @@ from .core import ZircoliteCore
 from .extractor import EvtxExtractor
 from .formats import format_by_name
 from .parallel import MemoryAwareParallelProcessor, ParallelConfig
+from .performance import FileMetrics
 from .results import RowSpool, result_summary, write_result_json
 from .shutdown import is_shutdown_requested, set_worker_shutdown_event
 from .utils import (
@@ -116,6 +117,13 @@ class ProcessingContext:
     # needs only summaries unless templates or packaging request the matches.
     retain_results: bool = True
     evtx_threads: int | None = None
+    working_db: str = "memory"
+    working_db_dir: str | None = None
+    sqlite_cache_mib: int = 64
+    flatten_backend: str = "auto"
+    rule_prefilter: str = "auto"
+    performance_files: list = field(default_factory=list)
+    parent_metrics: FileMetrics = field(default_factory=FileMetrics, repr=False)
     # Inputs that failed to ingest; --remove-events skips these
     failed_files: set = field(default_factory=set)
 
@@ -162,6 +170,11 @@ def create_zircolite_core(
         auto_index_top_n=ctx.auto_index_top_n,
         strict_evtx=ctx.strict_evtx,
         evtx_threads=ctx.evtx_threads,
+        working_db=ctx.working_db,
+        working_db_dir=ctx.working_db_dir,
+        sqlite_cache_mib=ctx.sqlite_cache_mib,
+        flatten_backend=ctx.flatten_backend,
+        rule_prefilter=ctx.rule_prefilter,
     )
     return ZircoliteCore(ctx.config, proc_config, logger=ctx.logger)
 
@@ -186,6 +199,11 @@ def create_worker_core(ctx: ProcessingContext, worker_id: int) -> ZircoliteCore:
         auto_index_top_n=ctx.auto_index_top_n,
         strict_evtx=ctx.strict_evtx,
         evtx_threads=ctx.evtx_threads,
+        working_db=ctx.working_db,
+        working_db_dir=ctx.working_db_dir,
+        sqlite_cache_mib=ctx.sqlite_cache_mib,
+        flatten_backend=ctx.flatten_backend,
+        rule_prefilter=ctx.rule_prefilter,
     )
     return ZircoliteCore(ctx.config, proc_config, logger=silent_logger)
 
@@ -281,6 +299,10 @@ class _CsvResultSpool:
             self.rows.append({**metadata, **row})
 
     def finish(self):
+        with self.ctx.parent_metrics.stage("output"):
+            self._finish()
+
+    def _finish(self):
         try:
             columns = sorted(self.columns - {"row_id", "rule_title", "rule_description", "rule_level", "rule_count"})
             with open(self.ctx.outfile, "w", encoding="utf-8", newline="") as fh:
@@ -318,6 +340,7 @@ def process_unified_streaming(
 
     disable_nested = len(file_list) > 1 or is_quiet()
     zircolite_core = create_zircolite_core(ctx, disable_progress=disable_nested)
+    ctx.performance_files.append(zircolite_core.metrics.data)
 
     with _keepflat_context(ctx) as kf:
         result = zircolite_core.run_streaming(
@@ -477,6 +500,8 @@ def process_perfile_streaming(
                     # what every later file could match.
                     zircolite_core.reset_logs_table()
 
+                zircolite_core.metrics = FileMetrics()
+                ctx.performance_files.append(zircolite_core.metrics.data)
                 result = zircolite_core.run_streaming(
                     [log_file],
                     input_type=input_type,
@@ -567,9 +592,10 @@ def process_perfile_streaming(
                     ctx.logger.debug(f"Could not finalize JSON output: {exc}")
         finally:
             ctx.failed_files |= zircolite_core.failed_files
-            zircolite_core.close()
-            if profiling_core is not None:
-                profiling_core.close()
+            with ctx.parent_metrics.stage("finalization"):
+                zircolite_core.close()
+                if profiling_core is not None:
+                    profiling_core.close()
 
     if len(file_list) > 1 and file_stats and not is_quiet():
         console.print()
@@ -669,6 +695,9 @@ def process_db_input(
                 ctx.logger.info(f"[+] Creating model from disk: {file_link}")
 
             try:
+                zircolite_core.metrics = FileMetrics()
+                zircolite_core.metrics.data["sources"] = [str(db_path)]
+                ctx.performance_files.append(zircolite_core.metrics.data)
                 zircolite_core.load_db_in_memory(str(db_path))
             except (RuntimeError, sqlite3.Error) as e:
                 if file_list is None:
@@ -706,7 +735,9 @@ def process_db_input(
             try:
                 _cur = zircolite_core.db_connection.cursor()
                 _cur.execute("SELECT COUNT(*) FROM logs")
-                ctx.total_events += _cur.fetchone()[0]
+                event_count = _cur.fetchone()[0]
+                ctx.total_events += event_count
+                zircolite_core.metrics.data["events"] = event_count
                 _cur.close()
             except sqlite3.Error as e:
                 ctx.logger.debug(f"Could not count events in '{file_name}': {e}")
@@ -813,6 +844,8 @@ def process_single_file_worker(
     (not a closure) to improve readability and testability.
     """
     file_name = Path(log_file).name
+    metrics = FileMetrics()
+    metrics.data["sources"] = [str(log_file)]
     try:
         # Get or create thread-local ZircoliteCore
         if not hasattr(thread_local, "core"):
@@ -828,6 +861,7 @@ def process_single_file_worker(
             thread_local.core.reset_logs_table()
 
         core = thread_local.core
+        core.metrics = metrics
 
         _streaming_result = core.run_streaming(
             [log_file],
@@ -852,7 +886,10 @@ def process_single_file_worker(
         core.failed_files.discard(str(log_file))
 
         if event_count == 0:
+            metrics.data["status"] = "partial" if degraded else "complete"
+            metrics.data["prefilter"].append({"requested": ctx.rule_prefilter, "reason": "no events"})
             summary = {
+                "performance": metrics.data,
                 "name": file_name,
                 "path": str(log_file),
                 "results": [],
@@ -937,14 +974,17 @@ def process_single_file_worker(
             # Workers log to a silent logger, so the warning the core emits at
             # the end of its run is discarded; carry it out for aggregation.
             "rules_in_error": dict(core.rules_in_error),
+            "performance": core.metrics.data,
         }
         if degraded:
+            metrics.data["status"] = "partial"
             summary["error"] = (
                 f"only part of the file could be read; {event_count:,} event(s) kept"
             )
         return (event_count, summary)
 
     except Exception as e:
+        metrics.data["status"] = "failed"
         return (
             0,
             {
@@ -954,6 +994,7 @@ def process_single_file_worker(
                 "events": 0,
                 "filtered": 0,
                 "error": str(e),
+                "performance": metrics.data,
             },
         )
 
@@ -1195,6 +1236,8 @@ def process_parallel_streaming(
     def _on_file_complete(file_data) -> None:
         if not isinstance(file_data, dict):
             return
+        if file_data.get("performance"):
+            ctx.performance_files.append(file_data["performance"])
         if process_mode:
             total_filtered_count[0] += file_data.get("filtered", 0)
             total_filtered_count[1] += file_data.get("time_filtered", 0)
@@ -1261,7 +1304,7 @@ def process_parallel_streaming(
         if process_mode:
             cancel_event = multiprocessing.get_context("spawn").Event()
             payload = {f.name: getattr(ctx, f.name) for f in fields(ctx)
-                       if f.init and f.name not in ("logger", "memory_tracker")}
+                       if f.init and f.name not in ("logger", "memory_tracker", "parent_metrics", "performance_files")}
             worker = _process_file_job
             process_options = dict(initializer=_initialize_process_worker,
                 initargs=(payload, args, input_type, raw_config, spool_dir, cancel_event),
@@ -1272,8 +1315,9 @@ def process_parallel_streaming(
 
                 def _on_result(file_data) -> None:
                     try:
-                        _on_file_complete(file_data)
-                        writer.write_file_results(file_data)
+                        with ctx.parent_metrics.stage("output"):
+                            _on_file_complete(file_data)
+                            writer.write_file_results(file_data)
                     finally:
                         _discard_file_spools(file_data)
 
@@ -1289,7 +1333,8 @@ def process_parallel_streaming(
         else:
             def _on_csv_result(file_data):
                 try:
-                    _on_file_complete(file_data)
+                    with ctx.parent_metrics.stage("output"):
+                        _on_file_complete(file_data)
                 finally:
                     _discard_file_spools(file_data)
 
@@ -1307,10 +1352,17 @@ def process_parallel_streaming(
             else:
                 _write_csv_results(ctx, all_results)
 
+    ctx.parent_metrics.data["seconds"]["finalization"] += stats.shutdown_seconds
+
     # Preserve sources when a worker dies before returning its summary.
     for path, error in stats.failed_files:
         ctx.failed_files.add(path)
         errors.append((Path(path).name, error))
+        missing_metrics = FileMetrics().data
+        missing_metrics.update(sources=[str(path)], status="failed", error=str(error),
+                               flattening={"requested": ctx.flatten_backend, "selected": "unknown",
+                                           "reason": "worker failed before returning metrics"})
+        ctx.performance_files.append(missing_metrics)
 
     # Collect errors
     for file_data in results_list:

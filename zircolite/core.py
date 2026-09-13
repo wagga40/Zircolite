@@ -13,6 +13,7 @@ import logging
 import os
 import re
 import sqlite3
+import tempfile
 import time as _time_module
 from collections.abc import Callable
 from contextlib import closing, nullcontext, suppress
@@ -44,6 +45,8 @@ from .console import (
     sort_key_severity,
 )
 from .formats import json_array_requested
+from .performance import FileMetrics, timed_stage
+from .prefilter import prepare_rules, rule_queries
 from .results import RowSpool, write_result_json
 from .shutdown import is_shutdown_requested
 from .sqlscan import quote_sql_identifiers, rebalance_sql, scan_query
@@ -106,6 +109,7 @@ def _index_name_for(column: str) -> str:
 
 if TYPE_CHECKING:
     from .extractor import EvtxExtractor
+    from .prefilter import LiteralPrefilter
     from .rules import EventFilter
 
 
@@ -122,9 +126,13 @@ class ZircoliteCore:
         "_csv_fieldnames",
         "_csv_header_written",
         "_cursor",
+        "_disk_working",
         "_escape_cache",
         "_logs_columns_lower",
+        "_prefilter",
+        "_prepared",
         "_profiling_data",
+        "_working_directory",
         "add_index",
         "archive_password",
         "auto_index_top_n",
@@ -137,15 +145,19 @@ class ZircoliteCore:
         "evtx_threads",
         "failed_files",
         "first_json_output",
+        "flatten_backend",
         "full_results",
         "hashes",
         "limit",
         "logger",
+        "metrics",
         "no_output",
         "profile_rules",
         "remove_index",
+        "rule_prefilter",
         "rules_in_error",
         "ruleset",
+        "sqlite_cache_mib",
         "strict_evtx",
         "time_after",
         "time_before",
@@ -172,7 +184,31 @@ class ZircoliteCore:
         proc = processing_config or ProcessingConfig()
 
         self.logger = logger or logging.getLogger(__name__)
-        self.db_connection = self.create_connection(proc.db_location)
+        self.metrics = FileMetrics()
+        self._prepared = None
+        self.db_connection = None
+        self._working_directory = None
+        self._prefilter: LiteralPrefilter | None = None
+        self._disk_working = proc.working_db == "disk"
+        self.sqlite_cache_mib = proc.sqlite_cache_mib
+        self.flatten_backend = proc.flatten_backend
+        self.rule_prefilter = proc.rule_prefilter
+        if self.flatten_backend == "cython":
+            from .streaming import select_flatten_kernel
+
+            select_flatten_kernel("cython")
+        db_location = proc.db_location
+        try:
+            if self._disk_working and db_location == ":memory:":
+                self._working_directory = tempfile.TemporaryDirectory(
+                    prefix="zircolite-db-", dir=proc.working_db_dir
+                )
+                db_location = str(Path(self._working_directory.name) / "events.sqlite")
+            self.db_connection = self.create_connection(db_location)
+        except BaseException:
+            if self._working_directory is not None:
+                self._working_directory.cleanup()
+            raise
         self.full_results: list = []
         self.ruleset: list = []
         self.no_output = proc.no_output
@@ -222,15 +258,15 @@ class ZircoliteCore:
         if conn is not None:
             conn.close()
             self.db_connection = None
+        directory = getattr(self, "_working_directory", None)
+        if directory is not None:
+            directory.cleanup()
+            self._working_directory = None
 
     def __del__(self) -> None:
         """Ensure connection is closed when the instance is garbage-collected."""
-        conn = getattr(self, "db_connection", None)
-        if conn is not None:
-            with suppress(Exception):
-                conn.close()
-            self.db_connection = None
-        self._cursor = None
+        with suppress(Exception):
+            self.close()
 
     def _get_cursor(self) -> sqlite3.Cursor:
         """Get a reusable cursor for better performance."""
@@ -252,7 +288,7 @@ class ZircoliteCore:
         self.logger.debug(f"CONNECTING TO : {db}")
         try:
             # Connect to database
-            conn = sqlite3.connect(db, isolation_level=None, check_same_thread=False)
+            conn = self._connect(db)
 
             # Configure PRAGMA settings based on database type
             # Common PRAGMA settings for both in-memory and on-disk databases.
@@ -260,8 +296,8 @@ class ZircoliteCore:
             # but more than 8 rarely helps and adds context-switch overhead.
             sqlite_threads = min(8, os.cpu_count() or 4)
             common_pragmas = [
-                ('temp_store', 'MEMORY'),
-                ('mmap_size', '268435456'),        # 256MB memory-mapped I/O
+                ('temp_store', 'FILE' if self._disk_working else 'MEMORY'),
+                ('mmap_size', '0' if self._disk_working else '268435456'),
                 ('page_size', '4096'),
                 ('threads', str(sqlite_threads)),
             ]
@@ -280,14 +316,14 @@ class ZircoliteCore:
                 pragmas = [
                     ('journal_mode', 'WAL'),           # Write-Ahead Logging
                     ('synchronous', 'NORMAL'),         # Balance safety and speed
-                    ('cache_size', '-64000'),          # 64MB cache
+                    ('cache_size', str(-self.sqlite_cache_mib * 1024)),
                     ('wal_autocheckpoint', '10000'),   # Less frequent checkpoints
                     *common_pragmas,
                 ]
 
             # Apply all PRAGMA settings
             for pragma, value in pragmas:
-                conn.execute(f'PRAGMA {pragma} = {value};')
+                conn.execute(f'PRAGMA {pragma} = {value};').close()
 
             # Raw tuples; we build dicts with None filtered in execute_select_query
             conn.row_factory = None
@@ -321,6 +357,10 @@ class ZircoliteCore:
                     f"Unable to open SQLite database '{db}': {exc}"
                 ) from exc
             raise
+
+    @staticmethod
+    def _connect(db):
+        return sqlite3.connect(db, isolation_level=None, check_same_thread=False)
 
     def create_db(self, field_stmt: str) -> None:
         """Create the database table with the specified field statement."""
@@ -410,6 +450,7 @@ class ZircoliteCore:
         ranked = sorted(counts.items(), key=lambda kv: (-kv[1], kv[0]))
         return [col for col, _ in ranked[: self.auto_index_top_n]]
 
+    @timed_stage("indexes")
     def create_index(self) -> None:
         """Create standard and optional indexes; drop any requested by remove_index."""
         conn = self.db_connection
@@ -584,6 +625,7 @@ class ZircoliteCore:
     ) -> None:
         """Record a rule whose SQL cannot run at all; reported once, in the summary."""
         title = rule_title or "unknown rule"
+        self.metrics.data["rule_errors"][title] = str(error)
         if title in self.rules_in_error:
             return
         self.rules_in_error[title] = str(error)
@@ -607,7 +649,8 @@ class ZircoliteCore:
         if bad_regex is not None:
             self._note_broken_rule(rule_title, bad_regex)
             return []
-        query = quote_sql_identifiers(query)
+        normalized = self._prepared.normalized.get(query) if self._prepared is not None else None
+        query = normalized if normalized is not None else quote_sql_identifiers(query)
         # Syntax-highlighted SQL in debug mode
         if self.logger.isEnabledFor(logging.DEBUG):
             console.print(Panel(
@@ -624,7 +667,24 @@ class ZircoliteCore:
             cursor = None
             try:
                 cursor = self.db_connection.cursor()
-                cursor.execute(query)
+                effective_query = query
+                if self._prefilter is not None:
+                    try:
+                        effective_query = self._prefilter.rewrite(query)
+                    except Exception as exc:
+                        self.logger.debug(f"Literal prefilter bypassed: {exc}")
+                        self._prefilter.reason = f"runtime failure: {exc}"
+                        self._prefilter.plans.clear()
+                        self._prefilter.postings.clear()
+                        self._prefilter.uncertain.clear()
+                try:
+                    cursor.execute(effective_query)
+                except sqlite3.Error:
+                    if effective_query is query:
+                        raise
+                    # The rewrite adds expression depth. It must never be what
+                    # turns a rule SQLite accepts into one reported as broken.
+                    cursor.execute(query)
                 col_names = [d[0] for d in cursor.description]
                 remaining = max_rows
                 while rows := cursor.fetchmany(256 if remaining is None else min(256, remaining)):
@@ -665,13 +725,14 @@ class ZircoliteCore:
                 if cursor is not None:
                     cursor.close()
 
+    @timed_stage("ingestion")
     def load_db_in_memory(self, db: str) -> None:
         """In db-only mode, restore an on-disk database to avoid EVTX extraction and flattening."""
         # sqlite3.connect() would silently create a 0-byte file for a missing path
         if not Path(db).is_file():
             raise RuntimeError(f"Database file does not exist: {db}")
         try:
-            db_file_connection = sqlite3.connect(db, check_same_thread=False)
+            db_file_connection = self._connect(db)
             db_file_connection.execute("PRAGMA wal_checkpoint(TRUNCATE)")
         except Error as e:
             raise RuntimeError(f"Could not connect to database: {db} ({e})") from e
@@ -761,6 +822,7 @@ class ZircoliteCore:
             self.logger.debug(f"    [-] {e}")
             return False
 
+    @timed_stage("finalization")
     def save_db_to_disk(self, db_filename: str) -> None:
         """Save the working database to disk as a SQLite DB file."""
         self.logger.info("[+] Saving working data to disk as a SQLite DB")
@@ -771,7 +833,7 @@ class ZircoliteCore:
                 f"Database file '{db_filename}' already exists. "
                 f"Remove it first or choose a different path."
             )
-        on_disk_db = sqlite3.connect(db_filename)
+        on_disk_db = self._connect(db_filename)
         try:
             self.db_connection.backup(on_disk_db)
             on_disk_db.execute("PRAGMA journal_mode = DELETE")
@@ -840,6 +902,7 @@ class ZircoliteCore:
         self.logger.debug(f'DETECTED: {rule_title} - Matches: {len(filtered_rows)} events')
         return results
 
+    @timed_stage("setup")
     def load_ruleset_from_var(
         self, ruleset: list[dict[str, Any]], rule_filters: list[str] | None
     ) -> None:
@@ -854,7 +917,14 @@ class ZircoliteCore:
         self.ruleset = list(filter(None, self.ruleset))
         if rule_filters is not None:
             self.ruleset = [rule for rule in self.ruleset if not any(rule_filter in rule.get("title", "") for rule_filter in rule_filters)]
+        self._prepared = prepare_rules(
+            rule_queries(self.ruleset),
+            # The builder prepares literals after database/query thresholds
+            # pass. Small inputs should pay only for SQL normalization.
+            with_literals=False,
+        )
 
+    @timed_stage("output")
     def _write_result_to_output(
         self,
         rule_results: dict[str, Any],
@@ -949,6 +1019,7 @@ class ZircoliteCore:
             return columns
         return list(rule_results["matches"][0].keys())
 
+    @timed_stage("detection")
     def execute_ruleset(
         self,
         out_file: str,
@@ -979,12 +1050,13 @@ class ZircoliteCore:
         # both indexes report the same capped figure once the corpus is large
         # enough, and it then treats the table as analysed. Once is enough;
         # ADD COLUMN leaves sqlite_stat1 intact.
-        self.apply_auto_index()
-        if self.db_connection is not None:
-            try:
-                self.db_connection.execute("ANALYZE logs")
-            except sqlite3.Error as exc:
-                self.logger.debug(f"ANALYZE failed (non-fatal): {exc}")
+        with self.metrics.stage("indexes"):
+            self.apply_auto_index()
+            if self.db_connection is not None:
+                try:
+                    self.db_connection.execute("ANALYZE logs")
+                except sqlite3.Error as exc:
+                    self.logger.debug(f"ANALYZE failed (non-fatal): {exc}")
 
         # Prepare output file handle if needed
         file_handle = None
@@ -1035,6 +1107,18 @@ class ZircoliteCore:
 
         try:
             # Cache frequently accessed attributes and methods
+            if self.rule_prefilter != "off" and self.db_connection is not None:
+                from .prefilter import LiteralPrefilter
+
+                with self.metrics.stage("prefilter"):
+                    self._prefilter = LiteralPrefilter(
+                        self.db_connection, self.ruleset,
+                        automatic=self.rule_prefilter == "auto", prepared=self._prepared,
+                    )
+                self.logger.debug(
+                    f"Literal prefilter: {len(self._prefilter.plans)} eligible queries; "
+                    f"{self._prefilter.reason or 'index ready'}"
+                )
             execute_rule = (lambda rule: self._execute_rule(rule, stream_rows=True)) if stream_results and not keep_results else self.execute_rule
             limit = self.limit
             no_output = self.no_output
@@ -1126,7 +1210,8 @@ class ZircoliteCore:
                                     rule_results, file_handle, csv_writer, needs_comma_prefix
                                 )
                             if result_sink is not None:
-                                result_sink(rule_results)
+                                with self.metrics.stage("output"):
+                                    result_sink(rule_results)
                     finally:
                         if rule_results is not None and isinstance(rule_results.get("matches"), RowSpool):
                             rule_results["matches"].close()
@@ -1154,6 +1239,19 @@ class ZircoliteCore:
                 )
         finally:
             # Close output file handle if needed (always run, including on exception)
+            if self._prefilter is not None:
+                self.metrics.data["prefilter"].append({"requested": self.rule_prefilter, **self._prefilter.stats()})
+                try:
+                    self.logger.debug(f"Literal prefilter accelerated {self._prefilter.accelerated} queries")
+                    self._prefilter.close()
+                except sqlite3.Error as exc:
+                    self.logger.debug(f"Literal prefilter cleanup failed: {exc}")
+                finally:
+                    self._prefilter = None
+            elif self.rule_prefilter == "off":
+                self.metrics.data["prefilter"].append({"requested": "off", "reason": "disabled"})
+            failed_sources = self.failed_files.intersection(self.metrics.data["sources"])
+            self.metrics.data["status"] = "interrupted" if is_shutdown_requested() else "partial" if self.metrics.data["rule_errors"] or failed_sources else "complete"
             if file_handle is not None:
                 if is_json_mode and last_ruleset:
                     file_handle.write(']')  # Close JSON array
@@ -1362,6 +1460,7 @@ class ZircoliteCore:
         for title, ms in other._profiling_data.items():
             self._profiling_data[title] = self._profiling_data.get(title, 0.0) + ms
 
+    @timed_stage("ingestion")
     def run_streaming(self, log_files: list, input_type: str = 'evtx',
                       args_config=None, extractor: Optional['EvtxExtractor'] = None,
                       disable_progress: bool = False,
@@ -1413,6 +1512,7 @@ class ZircoliteCore:
             strict_evtx=self.strict_evtx,
             batch_size=self.batch_size,
             evtx_threads=self.evtx_threads,
+            flatten_backend=self.flatten_backend,
         )
         processor = StreamingEventProcessor(
             config_file=self.config,
@@ -1421,6 +1521,12 @@ class ZircoliteCore:
             logger=self.logger,
             event_filter=event_filter,
             _raw_config=_raw_config,
+        )
+        self.metrics.data["sources"] = [str(path) for path in log_files]
+        self.metrics.data["flattening"] = processor.flattening_info
+        self.logger.info(
+            f"[+] Flattening: {self.flatten_backend} → {processor.flattening_info['selected']}"
+            + (f" ({processor.flattening_info['reason']})" if processor.flattening_info.get("reason") else "")
         )
 
         # Create initial table structure
@@ -1531,6 +1637,8 @@ class ZircoliteCore:
         else:
             self.logger.info(f"[+] Total events processed: [magenta]{total_events:,}[/]")
 
+        self.metrics.data.update(events=total_events, filtered_events=filtered_count,
+                                 time_filtered_events=processor.events_time_filtered_count)
         if return_filtered_count:
             return total_events, filtered_count, time_filtered_count
         return total_events

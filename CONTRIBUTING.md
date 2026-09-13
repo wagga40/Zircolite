@@ -18,6 +18,14 @@ pip install -r requirements.txt
 pip install pytest pytest-timeout
 ```
 
+The compiled flattening kernel is optional for a checkout and needs a C
+compiler. CI builds it before running the suite, so build it too when you touch
+`zircolite/flatten_kernel.py`:
+
+```bash
+pdm run python tools/build-accelerators.py
+```
+
 ## Running the tests
 
 ```bash

@@ -79,6 +79,37 @@ consume the temporary row iterator during the callback. Public `execute_rule` an
 
 ## Processing modes
 
+Working storage is independent of database layout and export. With
+`--working-db disk`, each core owns a temporary directory and a SQLite file;
+closing the core removes the database and its WAL sidecars. The page cache is
+configurable, query temporary storage can spill to disk, and mmap is disabled.
+Explicit library `db_location` paths remain caller-owned. Database export still
+uses SQLite backup, including when working storage is on disk.
+
+Flattening selects the compiled kernel once per processor when it is built from the
+current `flatten_kernel.py`, and otherwise runs the same source as Python.
+
+Automatic literal filtering requires at least 1,000 rows and 32 distinct eligible
+queries. It is built once per `execute_ruleset` call and discarded after its output
+callbacks finish. `literal` forces construction; `off` disables it. Aho–Corasick searches necessary literals in each
+field; Roaring bitmaps retain row IDs. Unknown predicates have an unbounded
+candidate set. AND intersects candidates, OR unions them, and NOT supplies no
+bound. Only simple `SELECT * FROM logs WHERE ...` statements qualify. Unsupported
+queries, custom LIKE implementations, uncertain schemas, and negative IDs take
+the ordinary query path. A column exceeding an index budget becomes unbounded;
+completed indexes for other columns remain usable. NULL values contribute no
+positive LIKE candidates. Other non-text values remain candidates in a shared
+per-column bitmap so SQLite owns their conversion. REGEXP queries remain on the
+normal path as well. Candidate filtering never removes the original WHERE predicate.
+
+The filter limits construction to one million pattern characters and two
+million physically retained row IDs per ruleset (including shared uncertain IDs),
+and bypasses a candidate set containing at least half the events. These limits bound indexing work; they are not a process memory
+ceiling. The temporary ID table does not change exported rules or event columns. Referenced
+fields are scanned together in batches of 256 rows. Immutable normalized SQL and
+literal plans are cached across files; schema validation and postings stay local
+to each database.
+
 Every mode reads events through the same pipeline. There are two database layouts, and
 parallelism is an overlay on one of them rather than a third layout.
 
@@ -101,7 +132,7 @@ flowchart LR
 
 `analyze_files_and_recommend_mode` returns only `per-file` or `unified`. When the answer
 is per-file and there is more than one input, the same function separately recommends
-running those files across worker threads — one database per worker, which is why it is
+running those files across workers — one database per worker, which is why it is
 available in per-file mode and not with `--unified-db`. `--no-parallel` declines it;
 `--strict` and `--profile-rules` force it off, because a parse error and a per-rule timing
 both need one file at a time.
@@ -110,13 +141,20 @@ The layout choice is made from file count, file sizes, available RAM and CPU cou
 `--no-auto-mode` disables this choice and keeps per-file mode. The heuristics are
 documented in [Advanced → Automatic processing optimization](Advanced.md#automatic-processing-optimization).
 
-`--executor process` selects separate interpreters with one database each; threads
-remain the default. Processes return summaries and temporary output paths instead
+`--executor auto` is the CLI default. Parallel per-file workloads averaging at least
+50 MiB select separate interpreters when CPU and RAM permit at least two process
+workers; smaller workloads use threads. Explicit `thread` and `process` settings
+remain available. Low-level `ParallelConfig` retains its thread default. Processes return summaries and temporary output paths instead
 of pickling large match lists. Workers share a shutdown event, and EVTX parser
 threads are divided across the file-worker CPU budget. ZIP/7z expanded sizes and
 gzip/bzip2 estimates inform scheduling; estimates are advisory, with runtime memory
 throttling still applied. gzip sizes can wrap at 4 GiB, so compressed-size estimates
 cannot guarantee a fixed process memory ceiling.
+
+Performance records are owned by each core and returned as plain dictionaries
+from workers. Nested stage timers pause their parent, preventing index/output
+time from also counting as ingestion/detection. The CLI aggregates worker stage
+seconds separately from wall time and samples RSS in a background thread.
 
 ## Module map
 

@@ -42,7 +42,7 @@ from .config import RulesetConfig
 # Rich console for styled output
 from .console import console, is_quiet, make_file_link
 from .sqlscan import channel_constraints, eventid_constraints
-from .utils import random_suffix
+from .utils import random_suffix, safe_load_all
 
 
 class EventFilter:
@@ -621,7 +621,7 @@ class RulesetHandler:
             with open(filepath, encoding="utf-8") as file:
                 content = file.read()
                 try:
-                    for _ in yaml.safe_load_all(content):
+                    for _ in safe_load_all(content):
                         pass
                     return True
                 except yaml.YAMLError:
@@ -644,7 +644,7 @@ class RulesetHandler:
         """Check if a YAML file contains at least one valid Sigma or correlation rule."""
         try:
             with open(filepath, encoding="utf-8") as file:
-                for doc in yaml.safe_load_all(file):
+                for doc in safe_load_all(file):
                     if not isinstance(doc, dict):
                         continue
                     has_standard = all(

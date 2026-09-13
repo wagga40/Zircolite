@@ -36,8 +36,12 @@ The project has been tested with Python 3.10 and above. Install dependencies wit
 
 ### Dependencies
 
-- **Required**: `orjson`, `xxhash`, `rich`, `rich-argparse`, `RestrictedPython`, `requests`, `urllib3`, `pySigma`, `evtx` (pyevtx-rs), `jinja2`, `lxml`, `chardet`, `psutil`, `pyyaml`, `py7zr`
+- **Required**: `orjson`, `xxhash`, `rich`, `rich-argparse`, `RestrictedPython`, `requests`, `urllib3`, `pySigma`, `evtx` (pyevtx-rs), `jinja2`, `lxml`, `chardet`, `psutil`, `pyyaml`, `py7zr`, `ijson`, `pyahocorasick`, `pyroaring`
 - `py7zr` is imported only when a `.7z` input is opened; ZIP, gzip and bzip2 use the standard library.
+
+Release binaries and Docker images include a compiled flattening kernel; a source
+checkout uses it once built (`python tools/build-accelerators.py`, needs a C compiler)
+and runs the same code as Python otherwise.
 
 :warning: On some systems (Mac, ARM, etc.), the `evtx` Python library may require Rust and Cargo to be installed.
 

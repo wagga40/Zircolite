@@ -25,6 +25,16 @@ COPY gui/ gui/
 COPY zircolite/ zircolite/
 COPY zircolite.py .
 
+# Build tools live in their own environment and remain in this stage.
+COPY tools/build-accelerators.py tools/
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends build-essential && \
+    rm -rf /var/lib/apt/lists/* && \
+    python -m venv /tmp/zircolite-build-env && \
+    /tmp/zircolite-build-env/bin/python -m pip install --no-cache-dir "Cython>=3.1" "setuptools>=78.1.1" && \
+    /tmp/zircolite-build-env/bin/python tools/build-accelerators.py && \
+    python -c "from zircolite.streaming import select_flatten_kernel; select_flatten_kernel('cython')"
+
 # Refresh rulesets at build time (needs network); kept in the builder layer only
 RUN python3 zircolite.py -U
 
@@ -47,8 +57,16 @@ WORKDIR ${ZIRCOLITE_INSTALL_PREFIX}/zircolite
 
 # The venv symlinks the base interpreter; safe because both stages share the same base image
 COPY --from=builder ${VIRTUAL_ENV} ${VIRTUAL_ENV}
-# Copy the app from the builder so the rulesets refreshed by -U are carried over
-COPY --from=builder ${ZIRCOLITE_INSTALL_PREFIX}/zircolite ${ZIRCOLITE_INSTALL_PREFIX}/zircolite
+# Carry over runtime code and assets, including the native extension and refreshed rules.
+COPY --from=builder ${ZIRCOLITE_INSTALL_PREFIX}/zircolite/zircolite ./zircolite
+COPY --from=builder ${ZIRCOLITE_INSTALL_PREFIX}/zircolite/zircolite.py .
+COPY --from=builder ${ZIRCOLITE_INSTALL_PREFIX}/zircolite/config ./config
+COPY --from=builder ${ZIRCOLITE_INSTALL_PREFIX}/zircolite/rules ./rules
+COPY --from=builder ${ZIRCOLITE_INSTALL_PREFIX}/zircolite/templates ./templates
+COPY --from=builder ${ZIRCOLITE_INSTALL_PREFIX}/zircolite/gui ./gui
+
+# Validate the final runtime, after leaving the compiler/build environment behind.
+RUN python -c "from importlib.metadata import distributions; names = {d.metadata['Name'].lower() for d in distributions()}; assert not names & {'cython', 'memray', 'pytest', 'ruff', 'mypy', 'pyinstaller'}, 'Build tools leaked into runtime'; from zircolite.streaming import select_flatten_kernel; select_flatten_kernel('cython')"
 
 # Run as a non-root user that owns every asset under the install prefix
 RUN chmod 0755 zircolite.py && \

@@ -20,6 +20,8 @@ concurrency:
 env:
   EVTX_SAMPLE_URL: "https://raw.githubusercontent.com/sbousseaden/EVTX-ATTACK-SAMPLES/master/Execution/Exec_sysmon_meterpreter_reversetcp_msipackage.evtx"
   EVTX_OUTPUT: "detected_events.json"
+  ZIRCOLITE_REQUIRE_NATIVE: "1"
+  PYTHONUTF8: "1"
 
 jobs:
   build:
@@ -39,10 +41,18 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install -r requirements.txt "pyinstaller>=6.18.0"
+          python -m pip install -r requirements.txt "pyinstaller>=6.18.0" "Cython>=3.1" "setuptools>=78.1.1" "pytest>=9.0.2" "pytest-timeout>=2.4.0"
+
+      - name: Build native flattening
+        run: python tools/build-accelerators.py
 
       - name: Build with PyInstaller
         run: pyinstaller --noconfirm Zircolite.spec
+
+      - name: Verify native bundle
+        env:
+          ZIRCOLITE_NATIVE_BINARY: dist/Zircolite
+        run: python -m pytest tests/test_accelerators.py -k frozen
 
       - name: Download EVTX sample
         run: |

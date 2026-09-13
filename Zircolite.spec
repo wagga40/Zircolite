@@ -9,11 +9,13 @@ hiddenimports = ['zircolite', 'zircolite.assets', 'zircolite.config', 'zircolite
 # through the bytecode scan alone. Name it, or a .7z input fails in a binary
 # that no CI step feeds one to.
 hiddenimports += ['py7zr']
-if find_spec('ijson') is not None:
-    optional_data, optional_binaries, optional_imports = collect_all('ijson')
-    datas += optional_data
-    binaries += optional_binaries
-    hiddenimports += optional_imports
+for library in ('ijson', 'ahocorasick', 'pyroaring'):
+    library_data, library_binaries, library_imports = collect_all(library)
+    datas += library_data
+    binaries += library_binaries
+    hiddenimports += library_imports
+if find_spec('zircolite._flatten_native') is not None:
+    hiddenimports += ['zircolite._flatten_native']
 tmp_ret = collect_all('evtx')
 datas += tmp_ret[0]; binaries += tmp_ret[1]; hiddenimports += tmp_ret[2]
 # Rich: bundle full package and explicitly include dynamic unicode data modules (e.g. unicode17-0-0)

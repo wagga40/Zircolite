@@ -1,6 +1,8 @@
 # Docker-based external tests
 
-External tests run Zircolite inside a Docker image built from the **current directory**, so they always test the version under development. The image is built from `tests/external/Dockerfile.external-tests`, which is **not** committed (see `.gitignore`). Tests are invoked via Taskfile.dev.yml (or by running the runner script directly).
+External tests run Zircolite inside a Docker image built from the **current directory**,
+using the tracked `tests/external/Dockerfile.external-tests`. Run the scenario
+runner directly to test the version under development.
 
 ## Requirements
 
@@ -225,12 +227,12 @@ Pass `--results-file PATH` (or set `results_file` in `runner.yaml`) to write a d
 
 Pass `--junit-file PATH` to write a JUnit XML report for CI systems (GitHub Actions, GitLab CI, Jenkins).
 
-## Creating the Dockerfile
+## Building the test image
 
-`tests/external/Dockerfile.external-tests` is listed in `.gitignore` and is not shipped. Create it in `tests/external/` by copying the main `Dockerfile` and:
-
-1. Removing the step that runs `python3 zircolite.py -U` (so the build does not require network).
-2. Keeping the same layout (WORKDIR, COPY of `zircolite/`, `config/`, `rules/`, etc.).
+The test image shares the shipping image's native build and runtime dependency
+layout. It keeps the tracked rulesets instead of refreshing them with `-U`, and
+runs as root to write into the harness's host-owned output mounts. Python and
+system dependencies still need network access when their build layers are uncached.
 
 Build from the repo root with:
 

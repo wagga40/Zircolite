@@ -1,45 +1,60 @@
 # Zircolite tools
 
-## throughput-benchmark.py
-
-See [implementation measurements](performance-results.md) for the recorded baseline
-comparison and its limits.
-
-Compare complete CLI runs with sequential, thread, and process workers:
-
-```sh
-python tools/throughput-benchmark.py --scenario mixed --event-count 100000 --passes 3 --report benchmark.json
-python tools/throughput-benchmark.py --events /path/to/evtx --ruleset rules/rules_windows_merged.json
-```
-
-Generated scenarios include `many-small`, `large`, `mixed`, `gzip`, `array`,
-`array-gzip`, `csv`, `noisy`, and `transforms`. The harness includes process startup, ingestion, index building,
-rule execution, and output in its wall time. It samples RSS for the subprocess and
-its children, interleaves modes, and rejects mismatched detection multisets.
-Input generation and output verification happen outside the timed region.
-Verification loads the detection file in the harness; its memory is excluded from
-the CLI RSS sample. Restricted systems report `parent-only` when child RSS cannot
-be inspected, so those process measurements must not be treated as total memory.
-The `db-benchmark.py` harness below isolates ingestion and rule execution phases.
-
-For JSON arrays, install optional C parsing with
-`python -m pip install -r requirements-performance.txt`. Without it, Zircolite
-uses a validating standard-library parser. Record the parser backend with results;
-the throughput report includes the installed `ijson` version and selected backend.
-
-Alternative engine experiments should use a representative corpus and compare
-complete detections: DuckDB is a candidate for large unified scans, while native
-Rust ingestion and Vectorscan are candidates for flattening and grouped pattern
-matching. They are not interchangeable SQLite backends. Keep SQL NULL, collation,
-numeric and regex semantics in the acceptance tests. Trigram FTS5 cannot directly
-accelerate the bundled `LIKE ... ESCAPE` predicates; any candidate filter must
-produce a superset that the original SQL verifies.
-
 This directory holds scripts intended for regular use with Zircolite (tracked in git).
 
 Each of these reaches into the package internals, so `tests/test_tools.py` drives them
 end-to-end over the tracked fixtures: a rename in `StreamingEventProcessor` or
 `ZircoliteCore` fails the suite rather than waiting for somebody to run a script by hand.
+
+## throughput-benchmark.py
+
+Compares complete CLI runs -- process startup, ingestion, indexing, rule execution,
+output and cleanup -- and rejects any pass whose detection multiset (rule identity,
+event contents, duplicate counts) differs from the first variant. Runs are
+interleaved; input generation and verification happen outside the timed region.
+Each run's `--performance-json` report is embedded, so stage timings, the selected
+flattening backend, literal-filter counters and the resolved executor come with it.
+
+```sh
+# Real captures, several executors
+pdm run python tools/throughput-benchmark.py --events /path/to/logs --ruleset rules/rules_windows_merged.json --passes 3 --modes sequential thread process --workers 4
+
+# Generated workload, Python reference path against the defaults
+pdm run python tools/throughput-benchmark.py --scenario sparse --event-count 500000 --files 4 --rule-count 32 --passes 3 --variants reference current
+
+# Before/after: a preserved checkout against the working tree
+pdm run python tools/throughput-benchmark.py --events /path/to/logs --ruleset rules/rules_windows_merged.json --variants baseline current --baseline-root /path/to/old-checkout
+```
+
+- `--variants`: `reference` (Python flattening, literal filter off), `current` (defaults),
+  `disk` (defaults with `--working-db disk`), `baseline` (the `--baseline-root`
+  checkout), and `python-auto`, `python-literal`, `cython-off`, `cython-auto`,
+  `cython-literal` to isolate one accelerator at a time.
+- `--scenario`: `many-small`, `large`, `mixed`, `sparse`, `gzip`, `array`,
+  `array-gzip`, `csv`, `noisy`, `transforms`, `evtx-derived`, `linux` (use
+  `rules/rules_linux.json` with the last one). Generated inputs reproduce a change;
+  draw conclusions from real captures. Use `--rule-count 32` or more, or automatic
+  literal filtering never engages.
+- A `.db` file exported with `--dbfile` can be passed as `--events` to measure the
+  rule phase alone.
+
+The report lands in a new file in the system temporary directory unless `--report`
+names one. RSS is sampled every 20 ms; where child processes cannot be inspected the
+report says `parent-only`, and those figures exclude worker memory. Keep benchmarks
+apart from builds and test runs.
+
+## build-accelerators.py
+
+Compiles `zircolite/flatten_kernel.py` into `zircolite._flatten_native` in place.
+It needs a C compiler plus Cython and setuptools, both in the `dev` group:
+
+```sh
+pdm run python tools/build-accelerators.py
+```
+
+Generated C lands under the ignored `build/` directory. Rebuild whenever
+`flatten_kernel.py` changes: a stale extension is detected and ignored in favour of
+the Python kernel. Without the extension a checkout runs the same code as Python.
 
 ## sigma-regression.py
 
@@ -149,121 +164,3 @@ quote-aware SQL reader the engine uses to widen the events table.
 A test is skipped when its data file is missing or no rule in the ruleset matches the
 case. Skips are shown in the summary with their share of the total; pass
 `--fail-on-skip` to make them fail the run.
-
-## flatten-benchmark.py
-
-Measures Zircolite's event-**flattening** throughput, isolated from EVTX parsing, SQLite insertion, and rule execution. Flattening is the dominant cost of log ingestion, so this harness is useful when changing the `_flatten_event` / `process_leaf` hot path.
-
-The script reads raw events once, then repeatedly calls `StreamingEventProcessor._flatten_event` over them. The first pass warms schema discovery and the seen-key cache, so the reported numbers reflect steady-state flattening.
-
-**An external EVTX corpus is required.** Every EVTX file tracked in this repository holds a
-single event, so pointing the benchmark at `tests/fixtures/` runs but measures noise. Use a
-real capture set such as [EVTX-ATTACK-SAMPLES](https://github.com/sbousseaden/EVTX-ATTACK-SAMPLES)
-and enough events for the median to settle.
-
-### Arguments
-
-- **`--evtx`** (required): Path to an EVTX file or a directory of EVTX files (searched recursively).
-- **`--config`**: Field mappings config file (default: `config/config.yaml`).
-- **`--max-events`**: Maximum number of events to load and flatten (default: `20000`).
-- **`--passes`**: Number of timed passes over the loaded events (default: `11`); the median and best are reported.
-
-### Usage
-
-From the Zircolite project root:
-
-```bash
-# Single file
-pdm run python tools/flatten-benchmark.py --evtx sample.evtx
-
-# Directory of EVTX files, custom event count and pass count
-pdm run python tools/flatten-benchmark.py \
-  --evtx /path/to/EVTX-ATTACK-SAMPLES \
-  --max-events 20000 --passes 11
-```
-
-### Output
-
-Prints the event count and, for the timed passes, the median and best wall time plus the corresponding events/second.
-
-### Exit code
-
-- `0` on success.
-- `1` if no events could be collected (for example, a bad `--evtx` path or a capture with no standard records).
-
-## db-benchmark.py
-
-Measures everything that happens **after** flattening: the SQLite insert, the indexes, the widening a ruleset forces on the table, and the rule queries themselves. Use it when changing the schema, the indexes, `execute_select_query`'s repairs, or anything that touches how rule SQL reaches SQLite.
-
-It ingests the corpus once, then runs the whole ruleset twice — before and after `ANALYZE` — and reports the wall time of each alongside how many rule queries the planner put on the narrowest index available to them. That last number is the point: widening adds an all-NULL column for every field a rule names and the dataset never produced, and with no statistics SQLite prices a row by its column count, so a wide table quietly moves every query off its selective index. Same rules, same detections, several times the wall clock. Wall time alone blames the machine; the plan count names the cause.
-
-**"Selective" is never a hardcoded index name.** Each query is judged against its own options: whichever of the indexes it was ever planned on returns the fewest rows per key, as `ANALYZE` measured it. A query that can only ever be a full scan — `CommandLine LIKE '%x%'` — is counted apart rather than held against the planner.
-
-**An external EVTX corpus is required.** Every EVTX file tracked in this repository holds a
-single event, so pointing the benchmark at `tests/fixtures/` runs but measures noise. Use a
-real capture set such as [EVTX-ATTACK-SAMPLES](https://github.com/sbousseaden/EVTX-ATTACK-SAMPLES).
-
-Two deliberate properties worth knowing before reading the numbers:
-
-- It does **not** call `execute_ruleset`, which analyses the table itself and would leave the harness structurally unable to measure a run without statistics. It drives `ZircoliteCore.execute_rule` directly, which also skips output files and the detection table.
-- The two rule passes are compared by `{title: count}`, not by row order — driving a query from a different index returns the same rows in a different order. A mismatch exits `1`, so the harness is a correctness check as well as a timer.
-
-Measurement caveats: the first rule pass runs on a colder cache than the second, so `--rule-passes N` (best of N) is worth using before trusting a small delta; and `--index-delta` runs last, on a warm cache, which biases it in favour of the no-index configuration and therefore under-reports what the indexes are worth.
-
-### Arguments
-
-- **`--evtx`** (required): Path to an EVTX file or a directory of EVTX files (searched recursively).
-- **`--ruleset`** (required): Zircolite JSON ruleset to execute.
-- **`--config`**: Field mappings config file (default: `config/config.yaml`).
-- **`--max-files`**: Ingest at most this many files (default: `0`, meaning all).
-- **`--rule-passes`**: Ruleset runs per pass; the fastest is reported (default: `1`).
-- **`--auto-index`**: Index the top-N columns the ruleset references, as `--auto-index` does (default: `0`).
-- **`--index-delta`**: Add a third rule pass with the `idx_%` indexes dropped.
-- **`--index-sets`**: Time the ruleset under each candidate index set instead of either side of `ANALYZE`.
-
-### Comparing index sets
-
-`--index-sets` answers a different question from the default mode: not "do the statistics
-help?" but "which indexes are worth building?". It drops every index, builds one candidate
-set, runs `ANALYZE`, times the ruleset, and repeats — reporting build cost and rule time
-side by side, plus the selective-plan count for each.
-
-The sets are `none`, `eventid only`, `eventid + channel` (what Zircolite built before) and
-`eventid + composite` (what it builds now). A set naming a column the corpus does not carry
-is skipped rather than faked, so an auditd or sysmon-for-linux capture simply reports fewer
-rows.
-
-**Detections are compared across every set and a difference exits `1`.** An index set that
-is faster because it found less is a regression, and wall time alone cannot tell the two
-apart.
-
-**The corpus decides whether this measures anything.** The composite `(Channel, eventid)`
-exists to stop SQLite fetching every row of a channel to re-check the eventID, so a corpus
-carrying a single `Channel` value — which is common, and includes some large public
-captures — cannot show a difference between it and a channel-only index. Read this mode on
-a multi-channel corpus, or it will report a tie and mean nothing by it.
-
-### Usage
-
-From the Zircolite project root:
-
-```bash
-# Whole corpus, one ruleset
-pdm run python tools/db-benchmark.py \
-  --evtx /path/to/EVTX-ATTACK-SAMPLES \
-  --ruleset rules/rules_windows_generic.json
-
-# Best of three passes, plus the cost of running with no indexes at all
-pdm run python tools/db-benchmark.py \
-  --evtx /path/to/captures \
-  --ruleset rules/rules_windows_merged.json --rule-passes 3 --index-delta
-```
-
-### Output
-
-Prints the file and event counts, ingest throughput, the column count before and after widening, how many rule queries could be planned, the wall time of each rule pass and of `ANALYZE`, the selective-plan count either side of it, and the detection totals — followed by a per-pass tally of which index each plan drove from.
-
-### Exit code
-
-- `0` on success.
-- `1` if no events could be ingested, if `--ruleset` is not a Zircolite JSON ruleset, if no rule query could be planned, or if the two rule passes disagree about what matched.

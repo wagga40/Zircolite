@@ -16,12 +16,15 @@ operating systems and two architectures. What the mirror does and does not cover
 | Workflow | GitHub | Forgejo |
 |---|---|---|
 | `lint_python` | ubuntu-latest | same |
-| `tests` | {ubuntu, windows, macos} × {3.10, 3.13} | ubuntu × {3.10, 3.13} — 2 of 6 legs |
+| `tests` | {ubuntu, windows, macos} × {3.10, 3.14} | ubuntu × {3.10, 3.14} — 2 of 6 legs |
 | `external_tests` | ubuntu-latest | same, on the host label |
-| `build_pyinstaller` | linux x64/arm64, windows x64/arm64 | linux x64 only — 1 of 4 legs |
+| `build_pyinstaller` | linux x64/arm64, windows x64/arm64, macOS arm64 | linux x64 only — 1 of 5 legs |
 
 Windows, macOS and arm64 remain GitHub-only. A green Forgejo run is a strong
 signal, not a substitute for the GitHub matrix.
+
+Tests and release builds compile the native flattening kernel first; the release
+workflow also checks that the frozen binary loads it.
 
 ## Deliberate differences
 

@@ -1,4 +1,4 @@
-# Build PyInstaller binaries for Linux (x64, arm64) and Windows (x64, arm64),
+# Build PyInstaller binaries for Linux and Windows (x64, arm64), and macOS (arm64),
 # verify they run (--help, --version), and test with an EVTX from
 # https://github.com/sbousseaden/EVTX-ATTACK-SAMPLES (Execution folder).
 # Only runs on push/PR when the commit or PR message contains "Release v", or when triggered manually.
@@ -14,6 +14,8 @@ on:
 env:
   EVTX_SAMPLE_URL: "https://raw.githubusercontent.com/sbousseaden/EVTX-ATTACK-SAMPLES/master/Execution/Exec_sysmon_meterpreter_reversetcp_msipackage.evtx"
   EVTX_OUTPUT: "detected_events.json"
+  ZIRCOLITE_REQUIRE_NATIVE: "1"
+  PYTHONUTF8: "1"
 
 jobs:
   build:
@@ -32,6 +34,13 @@ jobs:
             runner: ubuntu-24.04-arm
             arch: arm64
             artifact_name: Zircolite-linux-arm64
+            binary_path: dist/Zircolite
+            binary_name: Zircolite
+            python_version: "3.14"
+          - os: macos-latest
+            runner: macos-latest
+            arch: arm64
+            artifact_name: Zircolite-macos-arm64
             binary_path: dist/Zircolite
             binary_name: Zircolite
             python_version: "3.14"
@@ -65,10 +74,18 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install -r requirements.txt "pyinstaller>=6.18.0"
+          python -m pip install -r requirements.txt "pyinstaller>=6.18.0" "Cython>=3.1" "setuptools>=78.1.1" "pytest>=9.0.2" "pytest-timeout>=2.4.0"
+
+      - name: Build native flattening
+        run: python tools/build-accelerators.py
 
       - name: Build with PyInstaller
         run: pyinstaller --noconfirm Zircolite.spec
+
+      - name: Verify native bundle
+        env:
+          ZIRCOLITE_NATIVE_BINARY: ${{ matrix.binary_path }}
+        run: python -m pytest tests/test_accelerators.py -k frozen
 
       - name: Download EVTX sample
         run: |

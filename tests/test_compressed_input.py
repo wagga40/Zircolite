@@ -378,6 +378,48 @@ class TestStreamingWithCompressedJSON:
         core.close()
 
 
+class TestLineAndXmlReadersWithArchivePassword:
+    """Every reader must hand the archive password on, not only the JSON ones.
+
+    py7zr, because the standard library cannot write an encrypted zip: setting a
+    zip password there only affects reading, so the archive would open without one.
+    """
+
+    @pytest.mark.requires_py7zr
+    @pytest.mark.skipif(not _HAS_PY7ZR, reason="py7zr not installed")
+    @pytest.mark.parametrize(("fixture", "reader", "flag"), [
+        ("audit_sample.log", "stream_auditd_events", "auditd_logs"),
+        ("sysmon_linux_sample.log", "stream_sysmon_linux_events", "sysmon4linux"),
+        ("evtxtract_sample.log", "stream_evtxtract_events", "evtxtract"),
+    ])
+    def test_password_protected_archive_is_read(
+        self, tmp_path, field_mappings_file, test_logger, default_args_config, fixture, reader, flag
+    ):
+        from pathlib import Path
+
+        import py7zr
+
+        from zircolite.config import ExtractorConfig, ProcessingConfig
+        from zircolite.extractor import EvtxExtractor
+        from zircolite.streaming import StreamingEventProcessor
+
+        source = Path(__file__).parent / "fixtures" / fixture
+        archive = tmp_path / (fixture + ".7z")
+        with py7zr.SevenZipFile(archive, "w", password="hunter2") as szf:
+            szf.writestr(source.read_bytes(), fixture)
+        extractor = EvtxExtractor(extractor_config=ExtractorConfig(**{flag: True}), logger=test_logger)
+        processor = StreamingEventProcessor(
+            field_mappings_file, default_args_config,
+            ProcessingConfig(no_output=True, archive_password="hunter2"), logger=test_logger,
+        )
+
+        plain = list(getattr(processor, reader)(str(source), extractor))
+        from_archive = list(getattr(processor, reader)(str(archive), extractor))
+
+        assert plain, f"{fixture} yields no events; the comparison would prove nothing"
+        assert len(from_archive) == len(plain)
+
+
 # =============================================================================
 # Constants and detection tests
 # =============================================================================

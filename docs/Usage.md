@@ -9,7 +9,8 @@ Zircolite needs **Python 3.10 or above** and runs on Linux, macOS and Windows.
 | Package | Purpose |
 |---------|---------|
 | `orjson` | Fast JSON parsing |
-| `ijson` | Incremental JSON-array parsing when installed; a standard-library fallback is available |
+| `ijson` | Incremental JSON-array parsing |
+| `pyahocorasick`, `pyroaring` | Literal prefilter: candidate events for `LIKE` patterns |
 | `xxhash` | Log-line hashing for `--hashes` |
 | `rich`, `rich-argparse` | Terminal output, progress bars, tables, coloured help |
 | `RestrictedPython` | Sandbox for field transforms |
@@ -40,6 +41,10 @@ Clone the repository, then pick whichever tool you already use:
 
 PDM, Poetry and UV read `pyproject.toml` and manage the virtual environment themselves.
 Add `--dev` (PDM) or the equivalent to get the test suite as well.
+
+Release binaries and the Docker image include a compiled flattening kernel. A source
+checkout runs the same code as Python until it is built, which needs a C compiler:
+`pdm run python tools/build-accelerators.py` (see [tools/README.md](../tools/README.md)).
 
 A complete first run, from nothing:
 
@@ -130,8 +135,8 @@ path that matched no files, a ruleset that loaded no rules, a `--strict` parse e
 `--timefield` value or `--after`/`--before` timestamp that could not be parsed, an
 inverted time range, a `--limit` that is not positive, `--templateOutput` without a
 matching `--template`, a template file that is not there, a per-file database name that
-already exists, an unreadable or failing `--test-rules` file, or a configuration file
-that could not be honoured. Treat `1` as "the run did not happen or did not finish" and
+already exists, an unreadable or failing `--test-rules` file, a `--performance-json`
+report that could not be written, or a configuration file that could not be honoured. Treat `1` as "the run did not happen or did not finish" and
 `2` as "these particular options cannot be combined".
 
 A run that could only read part of its input still exits `0` when the rest was analysed.
@@ -280,7 +285,7 @@ unless `--fileext` or `--file-pattern` says otherwise.
 |--------|-------------|
 | `-P`, `--no-parallel` | Disable automatic parallel processing |
 | `-w`, `--parallel-workers` | Maximum worker count (default: auto) |
-| `--executor` | File worker type: `thread` (default) or `process` |
+| `--executor` | File worker type: `auto` (default), `thread` or `process` |
 | `--parallel-memory-limit` | Memory-pressure threshold before throttling, as a percentage (default: 85) |
 
 `--parallel-workers` is also an explicit override: passing a value above 1 enables
@@ -288,16 +293,41 @@ parallel processing even where the built-in heuristic would not have recommended
 further settings exist only in the YAML file — `parallel.min_workers` and
 `parallel.adaptive`.
 
-Use `--executor process` to run files in separate Python processes. The YAML
-equivalent is `parallel.executor: process`. This can improve Python-heavy
-ingestion but adds startup cost and interpreter memory. Automatic process sizing
-caps workers at the CPU count and reserves memory for each interpreter.
-`--no-parallel`, `--unified-db`, `--strict` and `--profile-rules` take precedence.
-Results are equivalent within the same database layout; compare representative
-inputs before changing defaults.
+`auto` runs files in separate Python processes when there are at least two, they average
+50 MiB or more, and CPU and RAM allow at least two process workers; otherwise it uses
+threads, as does `--no-auto-mode`. Processes speed up ingestion, which is Python-heavy,
+at the cost of startup time and one interpreter's memory per worker. The YAML key is
+`parallel.executor`. `--no-parallel`, `--unified-db`, `--strict` and `--profile-rules`
+take precedence. Results are the same whichever executor runs them.
 
 How the worker count and the database mode are chosen is described in
 [Advanced → Automatic processing optimization](Advanced.md#automatic-processing-optimization).
+
+### Performance
+
+| Option | Description |
+|--------|-------------|
+| `--performance-json` | Write a JSON report of stage timings, the flattening kernel and literal-filter use per file, and sampled memory |
+| `--flatten-backend` | `auto` (default) uses the compiled kernel when it is built from the current source, otherwise Python; `python` always uses Python; `cython` stops the run when the compiled kernel cannot be used |
+| `--rule-prefilter` | `auto` (default), `literal` to build the filter whatever the input size, or `off` |
+| `--working-db` | `memory` (default) or `disk`: keep each working database in a temporary SQLite file instead of RAM. Unrelated to `--dbfile` |
+| `--working-db-dir` | Existing directory for those temporary files (default: the system temporary directory) |
+| `--sqlite-cache-mib` | Page cache per on-disk working database, in MiB (default: 64). It is not a cap on total memory |
+
+The YAML keys are `output.performance_json` and, under `processing`, `flatten_backend`,
+`rule_prefilter`, `working_db`, `working_db_dir` and `sqlite_cache_mib`. Quote
+`rule_prefilter: 'off'`: YAML reads a bare `off` as `false`.
+
+The **literal prefilter** reads the fields named by the rules' `LIKE` patterns once, and
+records which events could satisfy each pattern. Each query then runs only on those
+candidate events, and SQLite still evaluates its whole condition on every one of them, so
+the detections are identical with the filter on or off. `auto` builds it for databases of
+at least 1,000 events and rulesets with at least 32 queries it can use.
+
+The report's `status` is `complete`, `partial` (a file was only partly read or a rule
+could not run), `failed` or `interrupted`. In parallel mode its stage times — and those
+in the summary panel — are summed across workers, so they can add up to more than the
+wall-clock duration. Memory is sampled, so a short peak can be missed.
 
 ### Templating and Mini-GUI
 
@@ -365,10 +395,11 @@ The log file still captures full detail regardless of the mode, unless disabled 
 
 ### Summary panel
 
-Every run ends with a summary panel showing duration and throughput, a phase-timing bar
-(when phases exceed 0.5 s), file and event counts, peak memory, the worker count when
-parallel processing was used, detections by severity, a rule-coverage bar, and the top 5
-detections.
+Every run ends with a summary panel showing duration and throughput, time spent in each
+stage (setup, ingestion, indexes, literal filter, detection, output, finalization), the
+flattening kernel used, how many queries the literal filter handled, the executor, file
+and event counts, sampled peak memory, detections by severity, a rule-coverage bar, and
+the top 5 detections.
 
 Two filter statistics appear there, counted separately because the filters act at
 different stages: the **event filter** match rate, shown whenever the filter was active

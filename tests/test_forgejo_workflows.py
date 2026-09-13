@@ -36,13 +36,16 @@ LOAD_BEARING_COMMANDS = {
         "pdm run ruff format --check zircolite/ zircolite.py || true",
     ],
     "tests.yml": [
+        "pdm run python tools/build-accelerators.py",
         "pdm run pytest",
     ],
     "external_tests.yml": [
         "tests/external/run_external_tests.py --build --parallel 4",
     ],
     "build_pyinstaller.yml": [
+        "python tools/build-accelerators.py",
         "pyinstaller --noconfirm Zircolite.spec",
+        "python -m pytest tests/test_accelerators.py -k frozen",
     ],
 }
 

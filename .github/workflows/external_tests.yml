@@ -25,9 +25,9 @@ jobs:
       - name: Install dependencies
         run: pdm install --dev
 
-      # Dockerfile.external-tests is the shipping image minus the `-U` ruleset
-      # refresh, so the run needs no network and cannot be changed underneath by
-      # an upstream ruleset release.
+      # The test image uses the shipping native build and runtime dependencies,
+      # tracked rules, and root execution for the harness's host-owned mounts.
+      # Rules are not refreshed, so an upstream release cannot change assertions.
       - name: Run scenarios
         run: pdm run python tests/external/run_external_tests.py --build --parallel 4
 

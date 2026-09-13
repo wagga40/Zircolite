@@ -258,13 +258,19 @@ class TestGoldenDetections:
     # hash column to find:
     #     zircolite.py -e tests/fixtures/sample_bitsadmin.evtx --hashes -d out.db
     # and move the resulting out_sample_bitsadmin.evtx.db over the fixture.
+    #
+    # CI builds the compiled flattening kernel, so the default run uses it. The
+    # Python kernel is what a checkout without a compiler runs, and it must reach
+    # the same golden detections.
     CASES: ClassVar[list] = [
         ("bitsadmin_sysmon", "sample_bitsadmin.evtx", [], "rules_windows_sysmon.json"),
+        ("bitsadmin_sysmon", "sample_bitsadmin.evtx", ["--flatten-backend", "python"],
+         "rules_windows_sysmon.json"),
         ("bitsadmin_sqlite", "sample_bitsadmin.db", ["-D"], "rules_windows_sysmon.json"),
     ]
 
     @pytest.mark.parametrize(
-        "name,filename,flags,ruleset", CASES, ids=[c[0] for c in CASES]
+        "name,filename,flags,ruleset", CASES, ids=["-".join([c[0], *c[2]]) for c in CASES]
     )
     def test_detections_match_the_golden_file(
         self, name, filename, flags, ruleset, tmp_path

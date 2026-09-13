@@ -18,6 +18,7 @@ import time
 from collections import deque
 from collections.abc import Callable
 from concurrent.futures import FIRST_COMPLETED, ProcessPoolExecutor, ThreadPoolExecutor, wait
+from contextlib import contextmanager
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -64,6 +65,24 @@ def _file_size(path: Path) -> int:
 # ============================================================================
 # CONSOLIDATED WORKER CALCULATION
 # ============================================================================
+
+
+def select_executor(requested, file_sizes, available_memory_mb, cpu_count, *,
+                    auto_mode=True, max_workers=None):
+    """Resolve CLI auto selection without changing explicit/library choices."""
+    if requested != "auto":
+        return requested, "explicit selection"
+    if not auto_mode:
+        return "thread", "automatic mode disabled"
+    average_mib = sum(file_sizes) / max(1, len(file_sizes)) / 1024**2
+    if len(file_sizes) < 2 or average_mib < 50:
+        return "thread", "files below the 50 MiB average process threshold"
+    process_mib = 64 + average_mib * memory_multiplier_for(average_mib)
+    workers = min(len(file_sizes), cpu_count,
+                  int(available_memory_mb * 0.85 / process_mib), max_workers or 32)
+    if available_memory_mb < 1024 or workers < 2:
+        return "thread", "insufficient resources for two process workers"
+    return "process", "large files with CPU and memory available for processes"
 
 
 def memory_multiplier_for(avg_file_size_mb: float) -> float:
@@ -165,6 +184,7 @@ class ParallelStats:
     processed_files: int = 0
     total_events: int = 0
     processing_time_seconds: float = 0.0
+    shutdown_seconds: float = 0.0
     workers_used: int = 0
     throttle_events: int = 0  # Times a submission was deferred under memory pressure
     failed_files: list[tuple[str, str]] = field(default_factory=list)
@@ -495,7 +515,20 @@ class MemoryAwareParallelProcessor:
                         initializer=initializer, initargs=initargs)
                     if self.config.executor == "process"
                     else ThreadPoolExecutor(max_workers=num_workers))
-            with pool as executor:
+            @contextmanager
+            def measured_pool():
+                shutdown_started = None
+                try:
+                    with pool as active_pool:
+                        try:
+                            yield active_pool
+                        finally:
+                            shutdown_started = time.perf_counter()
+                finally:
+                    if shutdown_started is not None:
+                        self.stats.shutdown_seconds += time.perf_counter() - shutdown_started
+
+            with measured_pool() as executor:
                 active_futures: dict = {}
 
                 def submit(path: Path) -> None:

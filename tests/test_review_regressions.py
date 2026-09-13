@@ -325,7 +325,7 @@ def test_throughput_harness_checks_output(tmp_path):
     ], cwd=root, capture_output=True, text=True, timeout=60)
     assert completed.returncode == 0, completed.stdout + completed.stderr
     saved = json.loads(report.read_text())
-    assert saved["results"]["sequential"][0]["fingerprint"] == saved["results"]["thread"][0]["fingerprint"]
+    assert len({run["fingerprint"] for runs in saved["results"].values() for run in runs}) == 1
 
 
 @pytest.mark.parametrize("payload", [b'[{}\x0b]', b'[\xc2\xa0{}]'])

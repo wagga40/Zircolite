@@ -21,7 +21,10 @@ build
 dist
 gui_dev
 helpers
-tools
+tools/*
+!tools/build-accelerators.py
+*.so
+*.pyd
 
 # Dev tooling, docs, project meta (not needed at runtime)
 docs

@@ -13,10 +13,9 @@ from dataclasses import dataclass, field, fields
 from pathlib import Path
 from typing import Any
 
-import yaml
-
 from .assets import resolve_shipped_ruleset, resolve_shipped_template
 from .formats import YAML_INPUT_FORMATS, is_valid_yaml_format
+from .utils import safe_load
 
 # Defaults shared by the dataclasses below and by the CLI. argparse declares
 # these options with `default=None` so that "the user passed the default
@@ -72,6 +71,7 @@ class OutputConfig:
     db_file: str | None = None
     log_file: str = DEFAULT_LOG_FILE
     no_output: bool = False
+    performance_json: str | None = None
 
 
 @dataclass
@@ -91,6 +91,11 @@ class YamlProcessingConfig:
     remove_index: list[str] | None = None
     auto_index: int = 0
     strict_evtx: bool = False
+    working_db: str = "memory"
+    working_db_dir: str | None = None
+    sqlite_cache_mib: int = 64
+    flatten_backend: str = "auto"
+    rule_prefilter: str = "auto"
 
 
 @dataclass
@@ -108,7 +113,7 @@ class ParallelProcessingConfig:
     min_workers: int = 1
     memory_limit_percent: float = DEFAULT_MEMORY_LIMIT_PERCENT
     adaptive: bool = True
-    executor: str = "thread"
+    executor: str = "auto"
 
 
 @dataclass
@@ -196,7 +201,7 @@ class ConfigLoader:
             raise FileNotFoundError(f"Configuration file not found: {config_path}")
 
         with open(config_file, encoding='utf-8') as f:
-            config_dict = yaml.safe_load(f)
+            config_dict = safe_load(f)
 
         if config_dict is None:
             config_dict = {}
@@ -263,7 +268,8 @@ class ConfigLoader:
                 keep_flat=out.get('keep_flat', False),
                 db_file=out.get('db_file'),
                 log_file=out.get('log_file', DEFAULT_LOG_FILE),
-                no_output=out.get('no_output', False)
+                no_output=out.get('no_output', False),
+                performance_json=out.get('performance_json'),
             )
 
         # Parse processing section
@@ -284,6 +290,11 @@ class ConfigLoader:
                 remove_index=proc.get('remove_index'),
                 auto_index=int(proc.get('auto_index', 0) or 0),
                 strict_evtx=proc.get('strict_evtx', False),
+                working_db=proc.get("working_db", "memory"),
+                working_db_dir=proc.get("working_db_dir", None),
+                sqlite_cache_mib=proc.get("sqlite_cache_mib", 64),
+                flatten_backend=proc.get("flatten_backend", "auto"),
+                rule_prefilter=proc.get("rule_prefilter", "auto"),
             )
 
         # Parse time_filter section
@@ -305,7 +316,7 @@ class ConfigLoader:
                     'memory_limit_percent', DEFAULT_MEMORY_LIMIT_PERCENT
                 ),
                 adaptive=par.get('adaptive', True),
-                executor=par.get('executor', 'thread'),
+                executor=par.get('executor', 'auto'),
             )
 
         return config
@@ -372,8 +383,21 @@ class ConfigLoader:
             issues.append(f"Invalid 'before' timestamp format: {config.time_filter.before}")
 
         # Validate parallel config
-        if config.parallel.executor not in ("thread", "process"):
-            issues.append("executor must be thread or process")
+        for name, choices in (
+            ("working_db", ("memory", "disk")),
+            ("flatten_backend", ("auto", "python", "cython")),
+            ("rule_prefilter", ("auto", "off", "literal")),
+        ):
+            if getattr(config.processing, name) not in choices:
+                issues.append(f"{name} must be one of: {', '.join(choices)}")
+        cache = config.processing.sqlite_cache_mib
+        if isinstance(cache, bool) or not isinstance(cache, int) or cache < 1:
+            issues.append("sqlite_cache_mib must be a positive integer")
+        directory = config.processing.working_db_dir
+        if directory is not None and (not isinstance(directory, str) or not Path(directory).is_dir()):
+            issues.append("working_db_dir must name an existing directory")
+        if config.parallel.executor not in ("auto", "thread", "process"):
+            issues.append("executor must be auto, thread or process")
         if config.parallel.enabled:
             if config.parallel.min_workers < 1:
                 issues.append("min_workers must be at least 1")
@@ -528,6 +552,10 @@ output:
   # format `sqlite` later. Zircolite refuses to overwrite an existing file.
   db_file: null  # Example: events.db
 
+  # Optional performance report: timings, accelerator use and sampled RSS.
+  # Written even with no_output; keep it outside the input directory.
+  performance_json: null  # Example: performance.json
+
   # Log file path
   log_file: zircolite.log
 
@@ -544,6 +572,18 @@ processing:
   # Let Zircolite pick the processing mode from file count, file sizes,
   # available RAM and CPU count. Set false to force per-file mode.
   auto_mode: true
+
+  # Working storage is separate from output.db_file (database export).
+  # Disk mode limits the page cache and allows query scratch data on disk.
+  working_db: memory  # memory or disk
+  working_db_dir: null  # Existing directory; null uses the system temp directory
+  sqlite_cache_mib: 64  # Per disk database, not a process memory limit
+
+  # Auto uses compiled flattening when built, otherwise the Python implementation.
+  flatten_backend: auto  # auto, python or cython
+  # Auto builds literal candidates for at least 1000 events and 32 eligible queries.
+  # SQLite always evaluates the original predicates on the candidate rows.
+  rule_prefilter: auto  # auto, 'off' or literal (force construction)
 
   # Add an xxhash64 of the original log line to every event
   hashes: false
@@ -610,8 +650,10 @@ time_filter:
 parallel:
   # Set false to disable automatic parallel processing entirely
   enabled: true
-  # Processes isolate Python ingestion work; threads retain the current default.
-  executor: thread
+  # auto selects processes for parallel per-file inputs averaging >=50 MiB
+  # when CPU/RAM permit at least two workers; otherwise it selects threads.
+  # Explicit thread/process values override selection.
+  executor: auto
 
   # Maximum number of workers. null = auto-detect, which takes the smallest of:
   #   - memory:    (available RAM x 0.85) / estimated memory per file

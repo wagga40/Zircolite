@@ -353,8 +353,11 @@ python3 zircolite.py --evtx logs/ --ruleset rules.json --parallel-memory-limit 8
 
 ### Parallel processing
 
-Workers are threads, which suits the I/O-bound work of decoding EVTX. Beyond picking a
-worker count, the parallel path:
+The default `--executor auto` selects processes for parallel per-file workloads
+averaging at least 50 MiB when CPU and RAM permit at least two process workers.
+Smaller workloads use threads. Explicit `--executor thread` and `--executor process`
+override selection; `--no-auto-mode` makes automatic executor selection use threads.
+Beyond picking a worker count, the parallel path:
 
 - **Schedules largest-first**, so big files start early and small ones fill the gaps at
   the end.
@@ -385,9 +388,11 @@ to capture everything.
 
 ### Memory usage
 
-Peak memory is measured throughout the run with `psutil` and reported in the summary
-panel. In per-file mode each database is released once its file is done, so the peak
-tracks the largest file rather than the corpus.
+Process-tree RSS is sampled every 100 ms throughout the run and reported as a
+sampled peak. Inaccessible descendants are marked as incomplete, and peaks shorter
+than the interval may be missed. Per-file mode releases each database after use;
+parallel runs hold multiple worker databases at once. `--performance-json` records
+the sampling scope, stage timings and per-file acceleration status.
 
 Other ways to go faster: let auto-mode do its work, use [file filters](#file-filters) to
 skip irrelevant files, drop `--no-recursion` in when you do not need subdirectories, and

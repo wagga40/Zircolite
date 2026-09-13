@@ -10,13 +10,16 @@ This module contains:
 """
 
 import csv
+import gzip
 import logging
+import multiprocessing
 import os
 import random
 import string
 import sys
+import threading
+from collections import deque
 from collections.abc import Sequence
-from contextlib import suppress
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import (
@@ -30,6 +33,28 @@ import psutil
 import yaml
 
 from .console import console, get_rich_logger
+
+SafeLoader = getattr(yaml, "CSafeLoader", yaml.SafeLoader)
+_EXCLUDED_SENTINEL = object()
+
+
+def safe_load(stream):
+    return yaml.load(stream, Loader=SafeLoader)  # noqa: S506 -- only safe loaders
+
+
+def safe_load_all(stream):
+    return yaml.load_all(stream, Loader=SafeLoader)
+
+
+def _normalize_scalar(value):
+    if isinstance(value, bool):
+        return "true" if value else "false"
+    if isinstance(value, int) and not -(1 << 63) <= value < (1 << 63):
+        return str(value)
+    if isinstance(value, list):
+        return str(value)
+    return value
+
 
 # Above this, an epoch number is milliseconds rather than seconds (1973-03-03).
 _EPOCH_MS_THRESHOLD = 100_000_000_000
@@ -146,7 +171,7 @@ def load_field_mappings(
         # YAML format
         with open(config_path, encoding="utf-8") as f:
             try:
-                config = yaml.safe_load(f)
+                config = safe_load(f)
             except yaml.YAMLError as e:
                 raise ValueError(f"Invalid YAML in field mappings file: {e}") from e
     else:
@@ -160,7 +185,7 @@ def load_field_mappings(
         except orjson.JSONDecodeError:
             # Try YAML as fallback
             try:
-                config = yaml.safe_load(content.decode("utf-8-sig"))
+                config = safe_load(content.decode("utf-8-sig"))
             except (yaml.YAMLError, UnicodeDecodeError) as e:
                 raise ValueError(
                     f"Unable to parse field mappings file: {config_file}. "
@@ -273,8 +298,6 @@ def open_maybe_compressed(
     text_mode = "t" in mode
 
     if suffix == ".gz":
-        import gzip
-
         if text_mode:
             return gzip.open(p, mode, encoding=encoding or "utf-8", errors=errors)
         return gzip.open(p, "rb")
@@ -617,7 +640,14 @@ class MemoryTracker:
             logger: Logger instance (creates default if None)
         """
         self.logger = logger or logging.getLogger(__name__)
-        self.memory_samples: list[float] = []
+        # A bounded compatibility window; averages use all samples.
+        self.memory_samples: deque[float] = deque(maxlen=128)
+        self._sample_count = 0
+        self._sample_sum = 0.0
+        self._sample_lock = threading.Lock()
+        self._stop_sampling = threading.Event()
+        self._sampling_thread: threading.Thread | None = None
+        self.complete_scope = True
         self.peak_memory: float = 0.0
         self.process = psutil.Process(os.getpid())
 
@@ -628,31 +658,62 @@ class MemoryTracker:
             rss = self.process.memory_info().rss
             try:
                 for child in self.process.children(recursive=True):
-                    with suppress(psutil.Error, OSError):
+                    try:
                         rss += child.memory_info().rss
+                    except psutil.NoSuchProcess:
+                        continue
+                    except (psutil.Error, OSError):
+                        self.complete_scope = False
             except (psutil.Error, OSError):
-                pass
+                self.complete_scope = False
+                # Sandboxes may deny system-wide PID enumeration while allowing
+                # reads of our known workers. Include those without claiming a
+                # complete tree (unregistered descendants may still be hidden).
+                for child in multiprocessing.active_children():
+                    try:
+                        rss += psutil.Process(child.pid).memory_info().rss
+                    except (psutil.Error, OSError):
+                        continue
             return rss / (1024 * 1024)
         except Exception:
+            self.complete_scope = False
             return 0
 
     def sample(self):
         """Take a memory usage sample."""
         memory_mb = self.get_memory_usage()
         if memory_mb > 0:
-            self.memory_samples.append(memory_mb)
-            if memory_mb > self.peak_memory:
-                self.peak_memory = memory_mb
+            with self._sample_lock:
+                self.memory_samples.append(memory_mb)
+                self._sample_count += 1
+                self._sample_sum += memory_mb
+                self.peak_memory = max(self.peak_memory, memory_mb)
+
+    def start(self):
+        """Sample during active workers, not just before and after the pool."""
+        if self._sampling_thread is not None:
+            return
+        self.sample()
+        self._stop_sampling.clear()
+
+        def monitor():
+            while not self._stop_sampling.wait(0.1):
+                self.sample()
+
+        self._sampling_thread = threading.Thread(target=monitor, name="zircolite-rss", daemon=True)
+        self._sampling_thread.start()
+
+    def stop(self):
+        self._stop_sampling.set()
+        if self._sampling_thread is not None:
+            self._sampling_thread.join()
+            self._sampling_thread = None
+        self.sample()
 
     def get_stats(self) -> tuple[float, float]:
         """Get peak and average memory usage."""
-        if not self.memory_samples:
-            return 0, 0
-
-        peak = self.peak_memory
-        average = sum(self.memory_samples) / len(self.memory_samples)
-
-        return peak, average
+        with self._sample_lock:
+            return self.peak_memory, self._sample_sum / self._sample_count if self._sample_count else 0.0
 
     def format_memory(self, memory_mb: float) -> str:
         """Format memory value for display."""

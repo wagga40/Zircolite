@@ -124,6 +124,7 @@ SETTINGS: tuple[Setting, ...] = (
     Setting("package_dir", "output", "package_dir", DEFAULT_PACKAGE_DIR),
     Setting("keepflat", "output", "keep_flat", False, Merge.OR),
     Setting("dbfile", "output", "db_file"),
+    Setting("performance_json", "output", "performance_json"),
     Setting("logfile", "output", "log_file", DEFAULT_LOG_FILE),
     Setting("nolog", "output", "no_output", False, Merge.OR),
     # -- processing -------------------------------------------------------
@@ -156,13 +157,18 @@ SETTINGS: tuple[Setting, ...] = (
         invert=True,
     ),
     Setting("strict", "processing", "strict_evtx", False, Merge.OR),
+    Setting("working_db", "processing", "working_db", "memory"),
+    Setting("working_db_dir", "processing", "working_db_dir", None),
+    Setting("sqlite_cache_mib", "processing", "sqlite_cache_mib", 64),
+    Setting("flatten_backend", "processing", "flatten_backend", "auto"),
+    Setting("rule_prefilter", "processing", "rule_prefilter", "auto"),
     # -- time_filter ------------------------------------------------------
     Setting("after", "time_filter", "after", DEFAULT_AFTER),
     Setting("before", "time_filter", "before", DEFAULT_BEFORE),
     # -- parallel ---------------------------------------------------------
     Setting("no_parallel", "parallel", "enabled", False, Merge.OR, invert=True),
     Setting("parallel_workers", "parallel", "max_workers"),
-    Setting("executor", "parallel", "executor", "thread"),
+    Setting("executor", "parallel", "executor", "auto"),
     # These two are YAML-only -- no CLI flag of their own -- but are still
     # resolved so the namespace always carries a usable value.
     # --parallel-memory-limit below does have a flag.

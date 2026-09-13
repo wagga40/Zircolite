@@ -17,8 +17,6 @@ from unittest.mock import patch
 
 import pytest
 
-from zircolite import ProcessingConfig, ZircoliteCore
-
 WORKSPACE_ROOT = Path(__file__).parent.parent
 TOOLS = WORKSPACE_ROOT / "tools"
 FIXTURES = WORKSPACE_ROOT / "tests" / "fixtures"
@@ -36,19 +34,23 @@ def load_tool(name: str):
     return module
 
 
+def test_benchmark_default_report_stays_outside_worktree(tmp_path, monkeypatch):
+    import tempfile
+
+    benchmark = load_tool("throughput-benchmark")
+    monkeypatch.setattr(tempfile, "tempdir", str(tmp_path))
+    monkeypatch.setattr(sys, "argv", ["throughput-benchmark.py", "--event-count", "12", "--files", "1",
+                                     "--passes", "1", "--modes", "sequential", "--variants", "current"])
+    assert benchmark.main() == 0
+    reports = list(tmp_path.glob("zircolite-benchmark-*.json"))
+    assert len(reports) == 1
+    assert json.loads(reports[0].read_text())["results"]["sequential"][0]["matches"] == 1
+    assert list(tmp_path.iterdir()) == reports
+
+
 @pytest.fixture(scope="module")
 def regression():
     return load_tool("sigma-regression")
-
-
-@pytest.fixture(scope="module")
-def benchmark():
-    return load_tool("flatten-benchmark")
-
-
-@pytest.fixture(scope="module")
-def db_benchmark():
-    return load_tool("db-benchmark")
 
 
 # A rule split across pipelines: one Sigma id, two titles, as a merged Zircolite
@@ -268,237 +270,3 @@ class TestSigmaRegressionEndToEnd:
         # Testing only rules[0] would report a failure here.
         code, report = self.run(regression, tmp_path)
         assert code == 0 and report["failed"] == 0
-
-
-@pytest.mark.integration
-class TestFlattenBenchmark:
-    """Pins the private flattening entry point the benchmark measures."""
-
-    def test_runs_over_the_evtx_fixture(self, benchmark, capsys):
-        argv = [
-            "flatten-benchmark.py",
-            "--evtx", str(FIXTURES / "sample_bitsadmin.evtx"),
-            "--config", str(CONFIG),
-            "--passes", "1",
-        ]
-        with patch.object(sys, "argv", argv):
-            assert benchmark.main() == 0
-        assert "events/s" in capsys.readouterr().out
-
-    def test_missing_input_is_an_error_not_a_zero_measurement(self, benchmark, tmp_path):
-        argv = [
-            "flatten-benchmark.py",
-            "--evtx", str(tmp_path / "nothing-here.evtx"),
-            "--config", str(CONFIG),
-        ]
-        with patch.object(sys, "argv", argv):
-            assert benchmark.main() == 1
-
-    def test_collect_raw_events_searches_a_directory(self, benchmark):
-        events = benchmark.collect_raw_events(FIXTURES, 10)
-        assert events, "the EVTX fixture should be found by the recursive search"
-        assert "Event" in events[0]
-
-    def test_collect_raw_events_returns_nothing_for_a_missing_path(self, benchmark, tmp_path):
-        assert benchmark.collect_raw_events(tmp_path / "absent.evtx", 10) == []
-
-
-# One real MULTI-INDEX OR plan, captured from SQLite rather than invented: the
-# index names live on the nested rows, not on the row naming the strategy.
-MULTI_INDEX_OR_PLAN = [
-    "MULTI-INDEX OR",
-    "INDEX 1",
-    "SEARCH logs USING INDEX idx_eventid (EventID=?)",
-    "INDEX 2",
-    "SEARCH logs USING INDEX idx_channel (Channel=?)",
-]
-
-
-@pytest.mark.integration
-class TestDbBenchmark:
-    """Pins the ingest, widening and plan-reading surfaces the harness drives."""
-
-    def _core(self, field_mappings_file, test_logger):
-        core = ZircoliteCore(
-            config=field_mappings_file,
-            processing_config=ProcessingConfig(disable_progress=True, no_output=True),
-            logger=test_logger,
-        )
-        core.create_db('"Channel" TEXT COLLATE NOCASE, "CommandLine" TEXT COLLATE NOCASE')
-        core.db_connection.execute(
-            "INSERT INTO logs (Channel, CommandLine) VALUES (?, ?)",
-            ("Security", "c:/evil.exe"),
-        )
-        core.db_connection.commit()
-        return core
-
-    def test_runs_over_the_evtx_fixture(self, db_benchmark, capsys):
-        argv = [
-            "db-benchmark.py",
-            "--evtx", str(FIXTURES / "sample_bitsadmin.evtx"),
-            "--ruleset", str(FIXTURES / "sample_ruleset.json"),
-            "--config", str(CONFIG),
-        ]
-        with patch.object(sys, "argv", argv):
-            assert db_benchmark.main() == 0
-        out = capsys.readouterr().out
-        assert "events/s" in out
-        assert "selective:" in out
-
-    def test_a_missing_corpus_is_an_error_not_a_zero_measurement(self, db_benchmark, tmp_path):
-        argv = [
-            "db-benchmark.py",
-            "--evtx", str(tmp_path / "nothing-here.evtx"),
-            "--ruleset", str(FIXTURES / "sample_ruleset.json"),
-            "--config", str(CONFIG),
-        ]
-        with patch.object(sys, "argv", argv):
-            assert db_benchmark.main() == 1
-
-    def test_an_unreadable_ruleset_is_an_error(self, db_benchmark, tmp_path):
-        not_a_ruleset = tmp_path / "notes.txt"
-        not_a_ruleset.write_text("this is not a ruleset")
-        argv = [
-            "db-benchmark.py",
-            "--evtx", str(FIXTURES / "sample_bitsadmin.evtx"),
-            "--ruleset", str(not_a_ruleset),
-            "--config", str(CONFIG),
-        ]
-        with patch.object(sys, "argv", argv):
-            assert db_benchmark.main() == 1
-
-    def test_a_rule_naming_an_absent_field_is_planned_not_written_off(
-        self, db_benchmark, field_mappings_file, test_logger
-    ):
-        """Widening has to run before EXPLAIN, or 43% of rules never get a plan."""
-        core = self._core(field_mappings_file, test_logger)
-        try:
-            ruleset = [{"rule": ["SELECT * FROM logs WHERE OriginalFileName = 'x'"]}]
-            prepared, unpreparable = db_benchmark.prepare_queries(core, ruleset)
-
-            assert len(prepared) == 1
-            assert not unpreparable
-            assert "OriginalFileName" in core._get_table_columns()
-        finally:
-            core.close()
-
-    def test_a_regexp_rule_can_be_planned(self, db_benchmark, field_mappings_file, test_logger):
-        """SQLite resolves function names when it prepares, so EXPLAIN needs the UDF.
-
-        A bare ``sqlite3.connect`` raises ``no such function: REGEXP`` here, which
-        would silently write off every regex rule as unplannable.
-        """
-        core = self._core(field_mappings_file, test_logger)
-        try:
-            details = db_benchmark.plan_for(
-                core, "SELECT * FROM logs WHERE CommandLine REGEXP 'evil'"
-            )
-
-            assert details
-        finally:
-            core.close()
-
-    def test_a_scan_is_not_a_selective_plan(self, db_benchmark):
-        search_b = ["SEARCH logs USING INDEX idx_b (x=?)"]
-
-        assert db_benchmark.plan_verdict(["SCAN logs"], {"idx_a"}, {"idx_a"}) == "scan"
-        assert db_benchmark.plan_verdict(search_b, {"idx_a", "idx_b"}, {"idx_a"}) == "broad"
-        assert db_benchmark.plan_verdict(search_b, {"idx_a", "idx_b"}, {"idx_b"}) == "selective"
-        assert db_benchmark.plan_verdict(["SCAN logs"], set(), set()) == "unindexable"
-
-    def test_a_multi_index_or_plan_counts_its_indexes(self, db_benchmark):
-        assert db_benchmark.indexes_used(MULTI_INDEX_OR_PLAN) == {"idx_eventid", "idx_channel"}
-
-    def test_a_transient_index_is_not_counted_as_one(self, db_benchmark):
-        """An automatic index means no stored index served the query."""
-        details = ["SEARCH logs USING AUTOMATIC COVERING INDEX (CommandLine=?)"]
-
-        assert db_benchmark.indexes_used(details) == set()
-        assert db_benchmark.plan_label(details) == "AUTOMATIC INDEX"
-
-    def test_narrowest_picks_the_index_with_the_fewest_rows_per_key(self, db_benchmark):
-        stats = {"idx_eventid": 12.0, "idx_channel": 75000.0}
-
-        assert db_benchmark.narrowest({"idx_eventid", "idx_channel"}, stats) == {"idx_eventid"}
-        assert db_benchmark.narrowest(set(), stats) == set()
-
-    def test_collect_evtx_files_searches_a_directory(self, db_benchmark):
-        files = db_benchmark.collect_evtx_files(FIXTURES, 0)
-
-        assert files, "the EVTX fixture should be found by the recursive search"
-        assert all(f.suffix == ".evtx" for f in files)
-
-    def test_index_sets_reports_every_candidate(self, db_benchmark, capsys):
-        argv = [
-            "db-benchmark.py",
-            "--evtx", str(FIXTURES / "sample_bitsadmin.evtx"),
-            "--ruleset", str(FIXTURES / "sample_ruleset.json"),
-            "--config", str(CONFIG),
-            "--index-sets",
-        ]
-        with patch.object(sys, "argv", argv):
-            assert db_benchmark.main() == 0
-        out = capsys.readouterr().out
-        for label, _ in db_benchmark._INDEX_SETS:
-            assert label in out
-        assert "detections identical across every set" in out
-
-    def test_a_set_naming_an_absent_column_is_skipped_not_faked(
-        self, db_benchmark, field_mappings_file, test_logger
-    ):
-        """SQLite would index the quoted name as a constant instead of refusing.
-
-        The corpus here has a Channel but no eventid, so the composite cannot be
-        built; reporting it as built would credit an index that indexes nothing.
-        """
-        core = self._core(field_mappings_file, test_logger)
-        try:
-            built, _ = db_benchmark.build_index_set(
-                core,
-                [("idx_channel", ("channel",)), ("idx_channel_eventid", ("channel", "eventid"))],
-            )
-
-            assert built == ["idx_channel"]
-        finally:
-            core.close()
-
-    def test_index_columns_are_matched_case_insensitively(
-        self, db_benchmark, field_mappings_file, test_logger
-    ):
-        """The corpus spells it ``Channel``; the set asks for ``channel``."""
-        core = self._core(field_mappings_file, test_logger)
-        try:
-            built, _ = db_benchmark.build_index_set(core, [("idx_channel", ("channel",))])
-
-            assert built == ["idx_channel"]
-            indexes = {
-                row[0]
-                for row in core.db_connection.execute(
-                    "SELECT name FROM sqlite_master WHERE type = 'index'"
-                )
-            }
-            assert "idx_channel" in indexes
-        finally:
-            core.close()
-
-    def test_each_set_starts_from_a_clean_slate(
-        self, db_benchmark, field_mappings_file, test_logger
-    ):
-        """Otherwise every set after the first is timed with its predecessors."""
-        core = self._core(field_mappings_file, test_logger)
-        try:
-            db_benchmark.build_index_set(core, [("idx_channel", ("channel",))])
-            built, _ = db_benchmark.build_index_set(
-                core, [("idx_CommandLine", ("commandline",))]
-            )
-
-            assert built == ["idx_CommandLine"]
-            indexes = {
-                row[0]
-                for row in core.db_connection.execute(
-                    "SELECT name FROM sqlite_master WHERE type = 'index'"
-                )
-            }
-            assert "idx_channel" not in indexes
-        finally:
-            core.close()

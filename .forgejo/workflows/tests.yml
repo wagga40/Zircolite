@@ -17,6 +17,7 @@ concurrency:
 # mirrors the GitHub side, where the Windows legs need it.
 env:
   PYTHONUTF8: "1"
+  ZIRCOLITE_REQUIRE_NATIVE: "1"
 
 jobs:
   tests:
@@ -28,7 +29,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        python-version: ["3.10", "3.13"]
+        python-version: ["3.10", "3.14"]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -40,6 +41,9 @@ jobs:
 
       - name: Install dependencies
         run: pdm install --dev
+
+      - name: Build native flattening
+        run: pdm run python tools/build-accelerators.py
 
       # No `|| true`: the suite exists to fail the build. Test fixtures are
       # tracked, so a missing one is a broken checkout and must fail too.
