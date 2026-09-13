@@ -77,17 +77,16 @@ packaging and library callers requesting `keep_results` retain complete matches.
 consume the temporary row iterator during the callback. Public `execute_rule` and
 `execute_select_query` still return ordinary dictionaries and lists.
 
-## Processing modes
+## Rule execution
 
-Working storage is independent of database layout and export. With
-`--working-db disk`, each core owns a temporary directory and a SQLite file;
-closing the core removes the database and its WAL sidecars. The page cache is
-configurable, query temporary storage can spill to disk, and mmap is disabled.
-Explicit library `db_location` paths remain caller-owned. Database export still
-uses SQLite backup, including when working storage is on disk.
-
-Flattening selects the compiled kernel once per processor when it is built from the
-current `flatten_kernel.py`, and otherwise runs the same source as Python.
+Before the rules run, `execute_ruleset` reads the distinct `(Channel, EventID)` pairs of
+the logs table through `idx_channel_eventid`. A rule is skipped when every one of its
+statements has `sqlscan` bounds that miss all of those pairs, the same bounds
+`EventFilter` uses to drop events before ingestion. Channels are compared case-folded,
+text EventIDs as integers, and a missing column as NULL. A statement without bounds, a
+correlation rule, or a column holding values SQLite would coerce (numbers in `Channel`,
+BLOBs) always runs. The saving is the statement preparation: about 0.3 ms per rule,
+paid for every rule on every file in per-file and parallel modes.
 
 Automatic literal filtering requires at least 1,000 rows and 32 distinct eligible
 queries. It is built once per `execute_ruleset` call and discarded after its output
@@ -109,6 +108,18 @@ ceiling. The temporary ID table does not change exported rules or event columns.
 fields are scanned together in batches of 256 rows. Immutable normalized SQL and
 literal plans are cached across files; schema validation and postings stay local
 to each database.
+
+## Processing modes
+
+Working storage is independent of database layout and export. With
+`--working-db disk`, each core owns a temporary directory and a SQLite file;
+closing the core removes the database and its WAL sidecars. The page cache is
+configurable, query temporary storage can spill to disk, and mmap is disabled.
+Explicit library `db_location` paths remain caller-owned. Database export still
+uses SQLite backup, including when working storage is on disk.
+
+Flattening selects the compiled kernel once per processor when it is built from the
+current `flatten_kernel.py`, and otherwise runs the same source as Python.
 
 Every mode reads events through the same pipeline. There are two database layouts, and
 parallelism is an overlay on one of them rather than a third layout.

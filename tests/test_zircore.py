@@ -2597,3 +2597,96 @@ class TestBatchSizeReachesTheProcessor:
             assert core.batch_size == ProcessingConfig().batch_size
         finally:
             core.close()
+
+
+class TestRuleCensus:
+    """Rules that cannot match the database's log sources are not executed.
+
+    The census reads the distinct (Channel, EventID) pairs the logs table holds and
+    compares them with the bounds sqlscan proves from each rule's SQL. Preparing a
+    rule costs a fraction of a millisecond whether or not its channel is present,
+    and per-file runs pay it for every rule on every file.
+    """
+
+    RULES: ClassVar[list] = [
+        {"title": "case differs", "rule": ["SELECT * FROM logs WHERE Channel='SECURITY' AND EventID=4688"]},
+        {"title": "absent channel", "rule": ["SELECT * FROM logs WHERE Channel='System' AND EventID=7045"]},
+        {"title": "eventids only", "rule": ["SELECT * FROM logs WHERE EventID IN (1, 13)"]},
+        {"title": "unbounded", "rule": ["SELECT * FROM logs WHERE Image LIKE '%cmd.exe'"]},
+        {"title": "correlation", "correlation": {"type": "event_count"},
+         "rule": ["SELECT * FROM logs WHERE Channel='System' AND EventID=7045"]},
+        {"title": "one query can match", "rule": [
+            "SELECT * FROM logs WHERE Channel='System' AND EventID=7045",
+            "SELECT * FROM logs WHERE EventID=1",
+        ]},
+    ]
+
+    def _run(self, core, rules, monkeypatch):
+        executed = []
+        original = ZircoliteCore._execute_rule
+
+        def spy(self, rule, **kwargs):
+            executed.append(rule["title"])
+            return original(self, rule, **kwargs)
+
+        monkeypatch.setattr(ZircoliteCore, "_execute_rule", spy)
+        core.load_ruleset_from_var(rules, None)
+        core.execute_ruleset("unused.json", keep_results=True, disable_progress=True, show_table=False)
+        return executed, {r["title"]: r["count"] for r in core.full_results}
+
+    def test_only_rules_with_disjoint_bounds_are_skipped(self, field_mappings_file, test_logger, monkeypatch):
+        core = ZircoliteCore(field_mappings_file, ProcessingConfig(no_output=True), logger=test_logger)
+        try:
+            core.create_db("Channel TEXT COLLATE NOCASE, EventID INTEGER, Image TEXT")
+            core.insert_data_to_db([
+                {"Channel": "Security", "EventID": 4688, "Image": "C:\\cmd.exe"},
+                {"Channel": "Microsoft-Windows-Sysmon/Operational", "EventID": 1, "Image": "x"},
+            ])
+            executed, counts = self._run(core, self.RULES, monkeypatch)
+        finally:
+            core.close()
+        assert "absent channel" not in executed
+        assert set(executed) == {r["title"] for r in self.RULES} - {"absent channel"}
+        assert counts == {"case differs": 1, "eventids only": 1, "unbounded": 1, "one query can match": 1}
+        assert core.metrics.data["pruned_rules"] == 1
+
+    def test_text_eventids_are_compared_as_sqlite_compares_them(self, field_mappings_file, test_logger, monkeypatch):
+        core = ZircoliteCore(field_mappings_file, ProcessingConfig(no_output=True), logger=test_logger)
+        try:
+            core.create_db("Channel TEXT COLLATE NOCASE, EventID TEXT")
+            core.insert_data_to_db([{"Channel": "Security", "EventID": "4688"}])
+            rules = [{"title": "text eventid", "rule": ["SELECT * FROM logs WHERE Channel='Security' AND EventID=4688"]}]
+            executed, counts = self._run(core, rules, monkeypatch)
+        finally:
+            core.close()
+        assert executed == ["text eventid"]
+        assert counts == {"text eventid": 1}
+
+    def test_a_missing_channel_column_prunes_like_an_all_null_one(self, field_mappings_file, test_logger, monkeypatch):
+        core = ZircoliteCore(field_mappings_file, ProcessingConfig(no_output=True), logger=test_logger)
+        try:
+            core.create_db("EventID INTEGER")
+            core.insert_data_to_db([{"EventID": 4688}])
+            rules = [
+                {"title": "needs channel", "rule": ["SELECT * FROM logs WHERE Channel='Security' AND EventID=4688"]},
+                {"title": "eventid only", "rule": ["SELECT * FROM logs WHERE EventID=4688"]},
+            ]
+            executed, counts = self._run(core, rules, monkeypatch)
+            assert not core.rules_in_error
+        finally:
+            core.close()
+        assert executed == ["eventid only"]
+        assert counts == {"eventid only": 1}
+
+    def test_values_sqlite_would_coerce_disable_pruning(self, field_mappings_file, test_logger, monkeypatch):
+        core = ZircoliteCore(field_mappings_file, ProcessingConfig(no_output=True), logger=test_logger)
+        try:
+            # A numeric Channel column applies INTEGER affinity to '123'.
+            core.create_db("Channel INTEGER, EventID INTEGER")
+            core.insert_data_to_db([{"Channel": 123, "EventID": 1}])
+            rules = [{"title": "numeric channel", "rule": ["SELECT * FROM logs WHERE Channel='123' AND EventID=1"]}]
+            executed, counts = self._run(core, rules, monkeypatch)
+        finally:
+            core.close()
+        assert executed == ["numeric channel"]
+        assert counts == {"numeric channel": 1}

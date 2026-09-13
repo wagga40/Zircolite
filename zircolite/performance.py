@@ -29,7 +29,7 @@ class FileMetrics:
             "sources": [], "seconds": dict.fromkeys(STAGES, 0.0),
             "flattening": {"requested": "auto", "selected": "unused", "reason": "database input"},
             "prefilter": [], "events": 0, "filtered_events": 0, "time_filtered_events": 0,
-            "status": "running",
+            "status": "running", "pruned_rules": 0,
             "rule_errors": {},
         }
         self._stack: list[list] = []

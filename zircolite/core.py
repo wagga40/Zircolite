@@ -107,6 +107,30 @@ def _index_name_for(column: str) -> str:
     return "idx_" + column.replace(".", "_")
 
 
+def _rule_may_match(rule: dict[str, Any], census: frozenset) -> bool:
+    """False only when no statement of ``rule`` can match a pair in ``census``.
+
+    The bounds are the ones EventFilter already trusts to drop events before
+    ingestion. An unbounded or unreadable statement always runs, and so does a
+    correlation rule, whose SQL wraps its base rule in a subquery.
+    """
+    queries = rule.get("rule")
+    if rule.get("correlation") or not isinstance(queries, list):
+        return True
+    for sql in queries:
+        if not isinstance(sql, str):
+            return True
+        scan = scan_query(sql)
+        if scan.channels is None and scan.eventids is None:
+            return True
+        channels = None if scan.channels is None else {c.lower() for c in scan.channels}
+        eventids = scan.eventids
+        if any((channels is None or channel in channels) and (eventids is None or eventid in eventids)
+               for channel, eventid in census):
+            return True
+    return False
+
+
 if TYPE_CHECKING:
     from .extractor import EvtxExtractor
     from .prefilter import LiteralPrefilter
@@ -399,6 +423,43 @@ class ZircoliteCore:
             conn.commit()
         except sqlite3.Error as exc:
             self.logger.debug(f"Could not reset the logs table between files: {exc}")
+
+    def _log_source_census(self) -> frozenset | None:
+        """The (channel, eventid) pairs in logs, folded the way rules compare them.
+
+        A missing column reads as NULL, which is exactly what widening would add
+        before the rule ran. Values that SQLite would compare through numeric
+        affinity -- a Channel column holding numbers, BLOBs -- are not modelled:
+        they return None, which turns pruning off rather than guessing.
+        """
+        if self.db_connection is None:
+            return None
+        columns = {name.lower(): name for name in self._get_table_columns()}
+        channel_sql, eventid_sql = (
+            f'"{self.escape_identifier(columns[name])}"' if name in columns else "NULL"
+            for name in ("channel", "eventid")
+        )
+        try:
+            with closing(self.db_connection.execute(
+                f"SELECT {channel_sql}, {eventid_sql} FROM logs GROUP BY 1, 2"  # noqa: S608 -- quoted column names
+            )) as cursor:
+                rows = cursor.fetchall()
+        except sqlite3.Error as exc:
+            self.logger.debug(f"Rule census unavailable: {exc}")
+            return None
+        census = set()
+        for channel, eventid in rows:
+            if channel is not None and not isinstance(channel, str):
+                return None
+            if isinstance(eventid, str):
+                with suppress(ValueError):
+                    eventid = int(eventid)
+            elif isinstance(eventid, float) and eventid.is_integer():
+                eventid = int(eventid)
+            elif eventid is not None and not isinstance(eventid, (int, float)):
+                return None
+            census.add((None if channel is None else channel.lower(), eventid))
+        return frozenset(census)
 
     def _get_table_columns(self) -> list[str]:
         """Return the list of column names for the logs table."""
@@ -1053,6 +1114,15 @@ class ZircoliteCore:
                 except sqlite3.Error as exc:
                     self.logger.debug(f"ANALYZE failed (non-fatal): {exc}")
 
+        # A rule whose Channel/EventID bounds miss every pair in this database
+        # cannot match, so it is neither prepared nor handed to the prefilter.
+        census = self._log_source_census()
+        may_run = [census is None or _rule_may_match(rule, census) for rule in self.ruleset]
+        pruned = may_run.count(False)
+        self.metrics.data["pruned_rules"] += pruned
+        if pruned:
+            self.logger.debug(f"Rule census: {pruned} of {len(may_run)} rules cannot match these log sources")
+
         # Prepare output file handle if needed
         file_handle = None
         needs_comma_prefix = False
@@ -1107,7 +1177,7 @@ class ZircoliteCore:
 
                 with self.metrics.stage("prefilter"):
                     self._prefilter = LiteralPrefilter(
-                        self.db_connection, self.ruleset,
+                        self.db_connection, [rule for rule, run in zip(self.ruleset, may_run, strict=True) if run],
                         automatic=self.rule_prefilter == "auto", prepared=self._prepared,
                     )
                 self.logger.debug(
@@ -1187,7 +1257,7 @@ class ZircoliteCore:
                 for i, rule in enumerate(self.ruleset):
                     if is_shutdown_requested():
                         break
-                    rule_results = run_rule(rule)
+                    rule_results = run_rule(rule) if may_run[i] else None
 
                     try:
                         if progress_callback is not None:
