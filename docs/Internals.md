@@ -175,6 +175,27 @@ from workers. Nested stage timers pause their parent, preventing index/output
 time from also counting as ingestion/detection. The CLI aggregates worker stage
 seconds separately from wall time and samples RSS in a background thread.
 
+## Measured results
+
+Complete CLI runs with `rules/rules_windows_merged.json` (4,319 rules) on a 10-core arm64
+Mac, Python 3.14 and SQLite 3.53, compiled flattening built. Every run reported the same
+detections as the same workload with `--rule-prefilter off`, compared as per-rule event
+multisets.
+
+| Workload | Before (`c972b28`) | After |
+|---|---:|---:|
+| HANCITOR, 4 EVTX / 452,554 events, auto (processes) | 42.0 s | 11.0 s |
+| HANCITOR, `--unified-db` | — | 22.8 s |
+| HANCITOR database input (`-D`) | — | 11.7 s (51.8 s with the prefilter off) |
+| EVTX-ATTACK-SAMPLES, 278 files, auto (unified) | 7.0 s | 5.8 s |
+| EVTX-ATTACK-SAMPLES, 278 files, per-file | 473 s | 55.7 s |
+
+HANCITOR holds a single channel, so its gains come from the literal prefilter and process
+workers; the 278 small multi-channel files show the per-rule costs of per-file mode that
+the census prune and lazy result spools remove. Reproduce comparisons with
+`tools/throughput-benchmark.py`, and measure the rule phase alone with `-D` and
+`--performance-json`.
+
 ## Module map
 
 All the logic lives in the `zircolite/` package. `zircolite.py` is a shim that calls
