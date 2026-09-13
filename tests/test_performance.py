@@ -128,6 +128,55 @@ def test_memory_reports_incomplete_tree_and_includes_known_workers(monkeypatch):
     assert not tracker.complete_scope
 
 
+def test_memory_skips_the_process_table_without_worker_processes(monkeypatch):
+    # psutil walks every PID on the system to find children: about 8 ms per
+    # sample on macOS, for nothing when no worker process exists.
+    tracker = MemoryTracker()
+    tracker.process = Mock()
+    tracker.process.memory_info.return_value.rss = 10 * 1024**2
+    tracker.process.children.side_effect = AssertionError("walked the process table")
+    monkeypatch.setattr("zircolite.utils.multiprocessing.active_children", list)
+    assert tracker.get_memory_usage() == 10
+    assert tracker.complete_scope
+
+
+def test_nested_sampling_leaves_the_outer_sampler_running():
+    tracker = MemoryTracker()
+    tracker.start()
+    try:
+        with tracker.sampling():
+            pass
+        assert tracker._sampling_thread is not None
+    finally:
+        tracker.stop()
+    with tracker.sampling():
+        assert tracker._sampling_thread is not None
+    assert tracker._sampling_thread is None
+
+
+@pytest.mark.parametrize("report", [True, False])
+def test_continuous_sampling_runs_only_for_a_report(corpus, tmp_path, monkeypatch, report):
+    from zircolite import cli
+
+    seen = []
+
+    def processing(*args, **kwargs):
+        seen.append(any(thread.name == "zircolite-rss" for thread in threading.enumerate()))
+        raise RuntimeError("stop here")
+
+    argv = ["zircolite.py", "-e", str(corpus[0]), "-r", str(corpus[1]), "--nolog", "--quiet"]
+    if report:
+        argv += ["--performance-json", str(tmp_path / "metrics.json")]
+    monkeypatch.setattr(sys, "argv", argv)
+    monkeypatch.setattr(cli, "_run_processing", processing)
+    try:
+        with pytest.raises(RuntimeError, match="stop here"):
+            cli.main()
+    finally:
+        cli.set_quiet_mode(False)
+    assert seen == [report]
+
+
 @pytest.mark.parametrize("requested,average,count,ram,cpus,auto,maximum,expected", [
     ("auto", 50, 2, 4096, 2, True, None, "process"),
     ("auto", 49, 2, 4096, 2, True, None, "thread"),

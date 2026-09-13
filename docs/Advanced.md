@@ -388,11 +388,11 @@ to capture everything.
 
 ### Memory usage
 
-Process-tree RSS is sampled every 100 ms throughout the run and reported as a
-sampled peak. Inaccessible descendants are marked as incomplete, and peaks shorter
-than the interval may be missed. Per-file mode releases each database after use;
-parallel runs hold multiple worker databases at once. `--performance-json` records
-the sampling scope, stage timings and per-file acceleration status.
+Memory is sampled at phase boundaries and reported as a sampled peak. While process
+workers run, and for the whole run when `--performance-json` is given, RSS of the
+process tree is also sampled every 100 ms; peaks shorter than that can be missed, and a
+tree whose descendants cannot be inspected is reported as incomplete. Per-file mode
+releases each database after use; parallel runs hold several worker databases at once.
 
 Other ways to go faster: let auto-mode do its work, use [file filters](#file-filters) to
 skip irrelevant files, drop `--no-recursion` in when you do not need subdirectories, and

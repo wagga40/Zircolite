@@ -20,6 +20,7 @@ import sys
 import threading
 from collections import deque
 from collections.abc import Sequence
+from contextlib import contextmanager
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import (
@@ -656,6 +657,10 @@ class MemoryTracker:
         try:
             # Get RSS (Resident Set Size) in bytes, convert to MB
             rss = self.process.memory_info().rss
+            # Finding children walks every PID on the system (about 8 ms on
+            # macOS); only worker processes can add to this process's memory.
+            if not multiprocessing.active_children():
+                return rss / (1024 * 1024)
             try:
                 for child in self.process.children(recursive=True):
                     try:
@@ -702,6 +707,18 @@ class MemoryTracker:
 
         self._sampling_thread = threading.Thread(target=monitor, name="zircolite-rss", daemon=True)
         self._sampling_thread.start()
+
+    @contextmanager
+    def sampling(self):
+        """Sample continuously inside the block, leaving an outer sampler running."""
+        if self._sampling_thread is not None:
+            yield
+            return
+        self.start()
+        try:
+            yield
+        finally:
+            self.stop()
 
     def stop(self):
         self._stop_sampling.set()

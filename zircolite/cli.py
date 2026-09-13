@@ -1104,7 +1104,6 @@ def main() -> None:
     freeze_support()
     started = time.perf_counter()
     memory_tracker = MemoryTracker()
-    memory_tracker.start()
     try:
         _main(memory_tracker, started)
     finally:
@@ -1454,8 +1453,12 @@ def _main(memory_tracker, start_time) -> None:
     # Section separator before processing
     print_section("Processing")
 
-    # The run timer and sampler already include configuration and rule loading.
-    memory_tracker.sample()
+    # The run timer already includes configuration and rule loading. Between
+    # phase boundaries memory is sampled only for a report or a process pool.
+    if args.performance_json is not None:
+        memory_tracker.start()
+    else:
+        memory_tracker.sample()
     if args.performance_json is not None:
         try:
             report_path = Path(args.performance_json).resolve()

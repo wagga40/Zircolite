@@ -1309,14 +1309,33 @@ def process_parallel_streaming(
                 initargs=(payload, args, input_type, raw_config, spool_dir, cancel_event),
                 cancel_event=cancel_event)
 
-        if use_incremental:
-            with _IncrementalResultWriter(ctx) as writer:
+        # Workers are separate processes, invisible to the phase-boundary samples.
+        with ctx.memory_tracker.sampling() if process_mode else nullcontext():
+            if use_incremental:
+                with _IncrementalResultWriter(ctx) as writer:
 
-                def _on_result(file_data) -> None:
+                    def _on_result(file_data) -> None:
+                        try:
+                            with ctx.parent_metrics.stage("output"):
+                                _on_file_complete(file_data)
+                                writer.write_file_results(file_data)
+                        finally:
+                            _discard_file_spools(file_data)
+
+                    results_list, stats = processor.process_files_parallel(
+                        file_list,
+                        worker,
+                        desc="Processing",
+                        disable_progress=is_quiet(),
+                        on_result=_on_result,
+                        rule_progress_queue=rule_progress_queue,
+                        **process_options,
+                    )
+            else:
+                def _on_csv_result(file_data):
                     try:
                         with ctx.parent_metrics.stage("output"):
                             _on_file_complete(file_data)
-                            writer.write_file_results(file_data)
                     finally:
                         _discard_file_spools(file_data)
 
@@ -1325,31 +1344,14 @@ def process_parallel_streaming(
                     worker,
                     desc="Processing",
                     disable_progress=is_quiet(),
-                    on_result=_on_result,
+                    on_result=_on_csv_result,
                     rule_progress_queue=rule_progress_queue,
                     **process_options,
                 )
-        else:
-            def _on_csv_result(file_data):
-                try:
-                    with ctx.parent_metrics.stage("output"):
-                        _on_file_complete(file_data)
-                finally:
-                    _discard_file_spools(file_data)
-
-            results_list, stats = processor.process_files_parallel(
-                file_list,
-                worker,
-                desc="Processing",
-                disable_progress=is_quiet(),
-                on_result=_on_csv_result,
-                rule_progress_queue=rule_progress_queue,
-                **process_options,
-            )
-            if csv_spool is not None:
-                csv_spool.finish()
-            else:
-                _write_csv_results(ctx, all_results)
+                if csv_spool is not None:
+                    csv_spool.finish()
+                else:
+                    _write_csv_results(ctx, all_results)
 
     ctx.parent_metrics.data["seconds"]["finalization"] += stats.shutdown_seconds
 
