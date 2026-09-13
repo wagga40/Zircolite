@@ -107,9 +107,13 @@ normal path as well. Candidate filtering never removes the original WHERE predic
 
 The filter limits construction to one million pattern characters and sixteen
 retained row IDs per event, at least two million (including shared uncertain IDs),
-and bypasses a candidate set containing at least half the events. These limits bound indexing work; they are not a process memory
-ceiling. The temporary ID table does not change exported rules or event columns. Referenced
-fields are scanned together in batches of 256 rows. Immutable normalized SQL and
+and bypasses a candidate set holding at least half the rows the rule's Channel/EventID
+bounds select (half the table for an unbounded rule). These limits bound indexing work;
+they are not a process memory ceiling. Candidates reach SQLite as
+`logs.row_id IN (SELECT value FROM json_each('[...]'))` in front of the original
+predicate, so the filter creates no tables; an empty candidate set becomes `0 AND (...)`,
+which still compiles the rule but scans nothing. JSON1 is required, and the filter stays
+off without it. Referenced fields are scanned together in batches of 256 rows. Immutable normalized SQL and
 literal plans are cached across files; schema validation and postings stay local
 to each database.
 

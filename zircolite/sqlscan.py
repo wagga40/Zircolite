@@ -20,7 +20,7 @@ merged ruleset that carries several -- and per-file and parallel modes ask the
 same questions of the same statements once per input file.
 """
 
-from collections.abc import Iterator
+from collections.abc import Iterable, Iterator
 from dataclasses import dataclass
 from functools import lru_cache
 
@@ -536,6 +536,21 @@ def _constraints(queries: list[str], field: str) -> set | None:
             return None
         total |= value
     return total or None
+
+
+def admitted_pairs(sql: str, pairs: Iterable[tuple]) -> list[tuple] | None:
+    """The ``(channel, eventid)`` pairs ``sql``'s bounds admit, or None if unbounded.
+
+    Channels in ``pairs`` must already be lower-cased: the Channel column is
+    NOCASE, so the bounds are folded the same way before comparing.
+    """
+    scan = scan_query(sql)
+    if scan.channels is None and scan.eventids is None:
+        return None
+    channels = None if scan.channels is None else {channel.lower() for channel in scan.channels}
+    eventids = scan.eventids
+    return [pair for pair in pairs
+            if (channels is None or pair[0] in channels) and (eventids is None or pair[1] in eventids)]
 
 
 def eventid_constraints(queries: list[str]) -> set[int] | None:

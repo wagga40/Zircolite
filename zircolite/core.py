@@ -49,7 +49,7 @@ from .performance import FileMetrics, timed_stage
 from .prefilter import prepare_rules, rule_queries
 from .results import RowSpool, write_result_json
 from .shutdown import is_shutdown_requested
-from .sqlscan import quote_sql_identifiers, rebalance_sql, scan_query
+from .sqlscan import admitted_pairs, quote_sql_identifiers, rebalance_sql, scan_query
 from .streaming import StreamingEventProcessor, StrictParseError
 from .utils import sanitize_row_for_csv
 
@@ -99,7 +99,7 @@ def _index_name_for(column: str) -> str:
     return "idx_" + column.replace(".", "_")
 
 
-def _rule_may_match(rule: dict[str, Any], census: frozenset) -> bool:
+def _rule_may_match(rule: dict[str, Any], census: dict[tuple, int]) -> bool:
     """False only when no statement of ``rule`` can match a pair in ``census``.
 
     The bounds are the ones EventFilter already trusts to drop events before
@@ -112,13 +112,8 @@ def _rule_may_match(rule: dict[str, Any], census: frozenset) -> bool:
     for sql in queries:
         if not isinstance(sql, str):
             return True
-        scan = scan_query(sql)
-        if scan.channels is None and scan.eventids is None:
-            return True
-        channels = None if scan.channels is None else {c.lower() for c in scan.channels}
-        eventids = scan.eventids
-        if any((channels is None or channel in channels) and (eventids is None or eventid in eventids)
-               for channel, eventid in census):
+        admitted = admitted_pairs(sql, census)
+        if admitted is None or admitted:
             return True
     return False
 
@@ -416,8 +411,8 @@ class ZircoliteCore:
         except sqlite3.Error as exc:
             self.logger.debug(f"Could not reset the logs table between files: {exc}")
 
-    def _log_source_census(self) -> frozenset | None:
-        """The (channel, eventid) pairs in logs, folded the way rules compare them.
+    def _log_source_census(self) -> dict[tuple, int] | None:
+        """Event counts per (channel, eventid) pair, folded the way rules compare them.
 
         A missing column reads as NULL, which is exactly what widening would add
         before the rule ran. Values that SQLite would compare through numeric
@@ -433,14 +428,14 @@ class ZircoliteCore:
         )
         try:
             with closing(self.db_connection.execute(
-                f"SELECT {channel_sql}, {eventid_sql} FROM logs GROUP BY 1, 2"  # noqa: S608 -- quoted column names
+                f"SELECT {channel_sql}, {eventid_sql}, count(*) FROM logs GROUP BY 1, 2"  # noqa: S608 -- quoted column names
             )) as cursor:
                 rows = cursor.fetchall()
         except sqlite3.Error as exc:
             self.logger.debug(f"Rule census unavailable: {exc}")
             return None
-        census = set()
-        for channel, eventid in rows:
+        census: dict[tuple, int] = {}
+        for channel, eventid, count in rows:
             if channel is not None and not isinstance(channel, str):
                 return None
             if isinstance(eventid, str):
@@ -450,8 +445,9 @@ class ZircoliteCore:
                 eventid = int(eventid)
             elif eventid is not None and not isinstance(eventid, (int, float)):
                 return None
-            census.add((None if channel is None else channel.lower(), eventid))
-        return frozenset(census)
+            pair = (None if channel is None else channel.lower(), eventid)
+            census[pair] = census.get(pair, 0) + count
+        return census
 
     def _get_table_columns(self) -> list[str]:
         """Return the list of column names for the logs table."""
@@ -1170,7 +1166,7 @@ class ZircoliteCore:
                 with self.metrics.stage("prefilter"):
                     self._prefilter = LiteralPrefilter(
                         self.db_connection, [rule for rule, run in zip(self.ruleset, may_run, strict=True) if run],
-                        automatic=self.rule_prefilter == "auto", prepared=self._prepared,
+                        automatic=self.rule_prefilter == "auto", prepared=self._prepared, census=census,
                     )
                 self.logger.debug(
                     f"Literal prefilter: {len(self._prefilter.plans)} eligible queries; "

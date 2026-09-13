@@ -272,6 +272,67 @@ def test_short_literals_are_indexed_only_when_they_hold_non_ascii_characters():
     assert _plan_for("SELECT * FROM logs WHERE text LIKE '%ab%'") is None
 
 
+def test_candidates_reach_sqlite_without_temporary_tables(event_database):
+    factories = {"automaton_factory": ReferenceAutomaton, "bitmap_factory": set}
+    query = "SELECT * FROM logs WHERE text LIKE '%beta%'"
+    with closing(LiteralPrefilter(event_database, [{"rule": [query]}], **factories)) as prefilter:
+        rewritten = prefilter.rewrite(query)
+        assert "json_each" in rewritten
+        assert Counter(event_database.execute(rewritten).fetchall()) == Counter(event_database.execute(query).fetchall())
+        assert not event_database.execute("SELECT name FROM sqlite_temp_master").fetchall()
+
+
+def test_an_empty_candidate_set_skips_the_scan_but_not_the_errors():
+    factories = {"automaton_factory": ReferenceAutomaton, "bitmap_factory": set}
+    with closing(sqlite3.connect(":memory:", isolation_level=None)) as conn:
+        conn.execute("CREATE TABLE logs(row_id INTEGER PRIMARY KEY, text TEXT)")
+        conn.executemany("INSERT INTO logs(text) VALUES (?)", [("quiet",)] * 10)
+        absent = "SELECT * FROM logs WHERE text LIKE '%missing%'"
+        broken = "SELECT * FROM logs WHERE text LIKE '%missing%' AND nowhere = 1"
+        with closing(LiteralPrefilter(conn, [{"rule": [absent, broken]}], **factories)) as prefilter:
+            rewritten = prefilter.rewrite(absent)
+            assert "json_each" not in rewritten and rewritten != absent
+            assert conn.execute(rewritten).fetchall() == []
+            assert prefilter.accelerated == 1
+            # Never planned, so it still reaches SQLite and the repair path.
+            assert prefilter.rewrite(broken) == broken
+
+
+def test_without_json_each_the_filter_stays_off(event_database):
+    class NoJson:
+        def __init__(self, conn):
+            self.conn = conn
+
+        def execute(self, sql, *args):
+            if "json_each" in sql:
+                raise sqlite3.OperationalError("no such table: json_each")
+            return self.conn.execute(sql, *args)
+
+        def __getattr__(self, name):
+            return getattr(self.conn, name)
+
+    factories = {"automaton_factory": ReferenceAutomaton, "bitmap_factory": set}
+    query = "SELECT * FROM logs WHERE text LIKE '%alpha%'"
+    with closing(LiteralPrefilter(NoJson(event_database), [{"rule": [query]}], **factories)) as prefilter:
+        assert prefilter.rewrite(query) == query
+        assert "json_each" in prefilter.reason
+
+
+def test_broad_bypass_is_judged_against_the_rule_partition():
+    factories = {"automaton_factory": ReferenceAutomaton, "bitmap_factory": set}
+    with closing(sqlite3.connect(":memory:", isolation_level=None)) as conn:
+        conn.execute("CREATE TABLE logs(row_id INTEGER PRIMARY KEY, EventID INTEGER, text TEXT)")
+        conn.executemany("INSERT INTO logs(EventID, text) VALUES (?,?)",
+                         [(1, "needle")] * 100 + [(2, "quiet")] * 900)
+        query = "SELECT * FROM logs WHERE EventID=1 AND text LIKE '%needle%'"
+        census = {(None, 1): 100, (None, 2): 900}
+        with closing(LiteralPrefilter(conn, [{"rule": [query]}], census=census, **factories)) as prefilter:
+            assert prefilter.rewrite(query) == query
+            assert prefilter.broad_bypasses == 1
+        with closing(LiteralPrefilter(conn, [{"rule": [query]}], **factories)) as prefilter:
+            assert prefilter.rewrite(query) != query
+
+
 def test_posting_budget_scales_with_the_table():
     assert _posting_budget(0) == 2_000_000
     assert _posting_budget(1_000_000) == 16_000_000

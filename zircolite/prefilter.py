@@ -11,18 +11,29 @@ from contextlib import closing
 from dataclasses import dataclass
 from functools import lru_cache
 from typing import Any
-from uuid import uuid4
 
 import ahocorasick
+import orjson
 from pyroaring import BitMap64
 
 from .shutdown import is_shutdown_requested
-from .sqlscan import _unquote, _Unsupported, iter_tokens, quote_sql_identifiers, rebalance_sql
+from .sqlscan import (
+    _unquote,
+    _Unsupported,
+    admitted_pairs,
+    iter_tokens,
+    quote_sql_identifiers,
+    rebalance_sql,
+)
 
 _ASCII_FOLD = str.maketrans("ABCDEFGHIJKLMNOPQRSTUVWXYZ", "abcdefghijklmnopqrstuvwxyz")
 _ASCII_UPPER = str.maketrans("abcdefghijklmnopqrstuvwxyz", "ABCDEFGHIJKLMNOPQRSTUVWXYZ")
 AUTO_MIN_ROWS = 1000
 AUTO_MIN_QUERIES = 32
+# Share of the rows a rule's Channel/EventID bounds select past which the
+# candidates narrow its scan too little to repay handing them over. Measured
+# insensitive between 0.25 and 1.0 on HANCITOR; a third of a partition still won.
+BROAD_FRACTION = 0.5
 _UNSUPPORTED_WORDS = frozenset((
     "SELECT", "FROM", "WHERE", "JOIN", "UNION", "INTERSECT", "EXCEPT", "ORDER",
     "GROUP", "HAVING", "LIMIT", "OFFSET", "WINDOW", "CASE", "WHEN", "THEN",
@@ -264,7 +275,7 @@ class LiteralPrefilter:
     """One bounded candidate index for one ruleset execution over stable logs."""
 
     def __init__(self, connection, rules, *, automatic=False, automaton_factory=None, bitmap_factory=None,
-                 max_postings=None, max_pattern_chars=1_000_000, prepared=None):
+                 max_postings=None, max_pattern_chars=1_000_000, prepared=None, census=None):
         self.connection = connection
         self.plans: dict[str, LiteralPlan] = {}
         self.postings: dict[tuple[str, str], Any] = {}
@@ -274,8 +285,8 @@ class LiteralPrefilter:
         self.broad_bypasses = 0
         self.unbounded_bypasses = 0
         self.prepared = prepared
-        self.table = "zirc_candidates_" + uuid4().hex
-        self._created = False
+        self.census = census
+        self._partition_rows: dict[str, int] = {}
         self.reason = None
         self.accelerated = 0
         self.total_rows = 0
@@ -291,7 +302,6 @@ class LiteralPrefilter:
             self.plans.clear()
             self.postings.clear()
             self.uncertain.clear()
-            self.close()
 
     def _build(self, rules, max_postings, max_pattern_chars, automatic):
         conn = self.connection
@@ -304,6 +314,11 @@ class LiteralPrefilter:
             if cursor.fetchone():
                 self.reason = "LIKE has been overridden"
                 return
+        try:
+            conn.execute("SELECT 1 FROM json_each('[]')").close()
+        except sqlite3.Error:
+            self.reason = "json_each is unavailable in this SQLite build"
+            return
         with closing(conn.execute("SELECT count(*), min(row_id) FROM logs")) as cursor:
             self.total_rows, minimum = cursor.fetchone()
         if automatic and self.total_rows < AUTO_MIN_ROWS:
@@ -336,6 +351,7 @@ class LiteralPrefilter:
             if plan is None:
                 continue
             self.plans[plan.sql] = plan
+            self._partition_rows[plan.sql] = self._rows_within_bounds(plan.sql)
             for column, literal in leaves:
                 patterns[column].add(literal)
         self.eligible_queries = len(self.plans)
@@ -410,9 +426,6 @@ class LiteralPrefilter:
             self.reason = next(iter(self.skipped_columns.values()), "no eligible queries")
             self.postings.clear()
             self.uncertain.clear()
-        if self.plans:
-            conn.execute(f'CREATE TEMP TABLE "{self.table}" (row_id INTEGER PRIMARY KEY)').close()
-            self._created = True
 
     def _runnable_plan(self, plan, text):
         """The plan SQLite will execute for this rule, or None if it cannot run.
@@ -442,6 +455,11 @@ class LiteralPrefilter:
         with closing(self.connection.execute("EXPLAIN SELECT 1 FROM logs WHERE" + plan.sql[plan.where_start:])) as cursor:  # noqa: S608 -- the rule's own WHERE clause
             cursor.fetchall()
 
+    def _rows_within_bounds(self, sql):
+        """Rows the statement's Channel/EventID bounds select, per the census."""
+        admitted = None if self.census is None else admitted_pairs(sql, self.census)
+        return self.total_rows if admitted is None else sum(self.census[pair] for pair in admitted)
+
     def rewrite(self, sql):
         plan = self.plans.get(sql.strip().removesuffix(";").rstrip())
         if plan is None:
@@ -450,16 +468,19 @@ class LiteralPrefilter:
         if candidates is None:
             self.unbounded_bypasses += 1
             return sql
-        # A broad candidate table adds work without sufficiently narrowing the scan.
-        if len(candidates) >= self.total_rows * 0.5:
+        head, body = plan.sql[:plan.where_start], plan.sql[plan.where_start:]
+        if not candidates:
+            # Still compiled, so a broken rule reports its error, but never scanned.
+            self.accelerated += 1
+            return f"{head} 0 AND ({body})"
+        if len(candidates) >= BROAD_FRACTION * self._partition_rows.get(plan.sql, self.total_rows):
             self.broad_bypasses += 1
             return sql
-        table = f'temp."{self.table}"'
-        self.connection.execute(f"DELETE FROM {table}").close()  # noqa: S608
-        self.connection.executemany(f"INSERT INTO {table} VALUES (?)", ((row_id,) for row_id in candidates)).close()  # noqa: S608
         self.accelerated += 1
-        return (plan.sql[:plan.where_start] + f" logs.row_id IN (SELECT row_id FROM {table}) AND ("  # noqa: S608
-                + plan.sql[plan.where_start:] + ")")
+        # Row IDs are integers, so the JSON text needs no escaping. A literal keeps
+        # rewrite() a plain statement; SQLite parses it once per execution.
+        row_ids = orjson.dumps(list(candidates)).decode()
+        return f"{head} logs.row_id IN (SELECT value FROM json_each('{row_ids}')) AND ({body})"  # noqa: S608 -- integers serialised by orjson
 
     def stats(self):
         return {
@@ -471,6 +492,7 @@ class LiteralPrefilter:
         }
 
     def close(self):
-        if self._created:
-            self.connection.execute(f'DROP TABLE IF EXISTS temp."{self.table}"').close()
-            self._created = False
+        """Release the index; it holds no database state."""
+        self.plans.clear()
+        self.postings.clear()
+        self.uncertain.clear()
