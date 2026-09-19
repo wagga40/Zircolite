@@ -2,9 +2,114 @@
 
 This directory holds scripts intended for regular use with Zircolite (tracked in git).
 
-Each of these reaches into the package internals, so `tests/test_tools.py` drives them
-end-to-end over the tracked fixtures: a rename in `StreamingEventProcessor` or
-`ZircoliteCore` fails the suite rather than waiting for somebody to run a script by hand.
+The benchmark and the regression runner reach into the package internals, so
+`tests/test_tools.py` drives them end-to-end over the tracked fixtures: a rename in
+`StreamingEventProcessor` or `ZircoliteCore` fails the suite rather than waiting for
+somebody to run a script by hand. The two release scripts only run on CI build legs;
+the same test module pins what they decide against fake checkouts.
+
+## package-release.py
+
+Turns the PyInstaller onedir build in `dist/Zircolite/` into a release archive. It uses
+only the standard library, so it runs on any supported Python.
+
+```sh
+pdm run pyinstaller --noconfirm Zircolite.spec
+ZIRCOLITE_TARGET=macos-arm64 pdm run python tools/package-release.py
+```
+
+`ZIRCOLITE_TARGET` is required and must be one of `linux-x64`, `linux-arm64`,
+`macos-arm64`, `windows-x64` or `windows-arm64`. The script stages
+`dist/Zircolite-<version>-<target>/`, which holds:
+
+- the onedir build: the executable (`Zircolite`, or `Zircolite.exe` on Windows) and
+  `_internal/`;
+- editable copies of `config/`, `rules/`, `templates/` and `gui/`, which the binary uses
+  in preference to its bundled copies;
+- `docs/`, `pics/`, `README.md` and `LICENSE`;
+- a generated `THIRD_PARTY_LICENSES`.
+
+It then writes `dist/Zircolite-<version>-<target>.tar.gz` (a `.zip` for the Windows
+targets) and prints the archive's path, which is all it writes to stdout. The tarball
+keeps every file's mode and always marks the executable as executable. Entries are
+sorted and owned by root, and `SOURCE_DATE_EPOCH` caps the timestamps when it is set.
+The version comes from `zircolite/__init__.py`, read as text rather than imported.
+
+`THIRD_PARTY_LICENSES` is built from the environment the binary was built in. It covers:
+
+- the interpreter's licence (`LICENSE.txt` beside the standard library);
+- PyInstaller, whose licence carries the bootloader exception, and
+  pyinstaller-hooks-contrib, whose runtime hooks are in the executable;
+- every distribution in the runtime dependency closure of the installed `Zircolite`
+  project. It follows `Requires-Dist`, evaluates environment markers for the running
+  interpreter and ignores extras nobody requested;
+- the Detection Rule License for `rules/`.
+
+A distribution's licence files are the ones in its own `.dist-info`: those listed in
+`License-File`, anything under `licenses/`, and files named `LICENSE*`, `LICENCE*`,
+`COPYING*`, `NOTICE*` or `AUTHORS*`. A distribution that ships none falls back to
+`tools/licenses/<name>.txt`. evtx is the only one today.
+
+The script fails, and writes nothing, when:
+
+- `dist/Zircolite/` or its executable is missing, or the build is not a onedir build
+  (no `_internal/`);
+- a required distribution is not installed. The only exception is jq on
+  `windows-arm64`; see below;
+- a distribution has no licence text and nothing is vendored for it;
+- the interpreter's licence, the PyInstaller licence or the rules licence cannot be found.
+
+To take in a new dependency that ships no licence file, add its published text to
+`tools/licenses/` under its normalised name (lower case, runs of `-_.` replaced by `-`).
+
+```sh
+pdm run python tools/package-release.py --check-tag v1.2.3
+```
+
+`--check-tag` only checks a release tag. The tag must be `v` followed by the version,
+and that version must match `__version__` in `zircolite/__init__.py`, the `[project]`
+version in `pyproject.toml`, and what the built executable prints for `--version`. On
+a mismatch, the script lists every source that disagrees and exits 1.
+
+`--root DIR` points either mode at another checkout, which must contain `dist/Zircolite`
+and the assets. The tests use it; releases do not.
+
+`tools/licenses/` holds the vendored texts:
+
+- `evtx.txt`: the evtx wheel has no licence file. pyevtx-rs declares MIT/Apache-2.0;
+  the text is the evtx crate's `LICENSE-MIT` plus the Apache-2.0 notice.
+- `DRL-1.1.txt`: the [Detection Rule License](https://github.com/SigmaHQ/Detection-Rule-License)
+  that SigmaHQ publishes its rules under, copied verbatim.
+
+## install-win-arm64.py
+
+Installs the development environment on Windows on ARM64. `pdm install` cannot do it
+there: evtx has neither a `win_arm64` wheel nor an sdist, and jq does not build on that
+platform.
+
+```sh
+uvx maturin build --release   # in a pyevtx-rs checkout at the tag the lock pins
+python tools/install-win-arm64.py --wheels <directory holding the evtx wheel>
+```
+
+Run it from the Python that should host the environment, with `pdm` and `uv` on `PATH`.
+It runs, and prints, these steps:
+
+1. `pdm export -G dev -o dist/reqs.txt`, then removes the `evtx` and `jq` requirements
+   and their hash lines. It stops if either is missing from the export, since that
+   means the recipe is out of date.
+2. `uv venv --clear .venv --python <this interpreter>`. An existing `.venv` is replaced.
+3. `uv pip install --no-config --no-deps --python .venv -r dist/reqs.txt`.
+4. `uv pip install --no-config --no-deps --python .venv <evtx wheel>`.
+5. `uv pip install --no-config --no-deps --python .venv -e .`. The editable install
+   compiles the flattening kernel in place, where `Zircolite.spec` finds it. Set
+   `ZIRCOLITE_REQUIRE_NATIVE=1` to make a failed compile fail the step.
+6. `pdm use -f .venv`, so later `pdm run` commands use this environment.
+
+`--no-deps` stops uv from resolving jq back in. `--no-config` stops the project's
+`[tool.uv] exclude-newer` from rejecting versions the lock already pins. Leaving jq out
+is safe: pySigma imports it only in its jq transformation, which Zircolite never uses.
+The same reason lets `package-release.py` accept its absence on `windows-arm64`.
 
 ## throughput-benchmark.py
 
