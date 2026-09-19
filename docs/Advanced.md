@@ -696,8 +696,10 @@ the one `--package` builds — and click a MITRE ATT&CK category or an alert lev
 The repository ships a few scripts of its own in `tools/`, documented in
 [`tools/README.md`](https://github.com/wagga40/Zircolite/tree/master/tools):
 `sigma-regression.py` runs the SigmaHQ regression suite against a ruleset,
-and `throughput-benchmark.py` compares complete Zircolite runs across settings or
-checkouts. `package-release.py` and `install-win-arm64.py` build the release packages.
+`throughput-benchmark.py` compares complete Zircolite runs across settings or checkouts,
+and `tool-benchmark.py` times Zircolite against Hayabusa and Chainsaw on the same logs (see
+[Benchmark](Benchmark.md)). `package-release.py` and `install-win-arm64.py` build the
+release packages.
 
 Zircolite is also driven by third-party tooling:
 

@@ -194,7 +194,8 @@ HANCITOR holds a single channel, so its gains come from the literal prefilter an
 workers; the 278 small multi-channel files show the per-rule costs of per-file mode that
 the census prune and lazy result spools remove. Reproduce comparisons with
 `tools/throughput-benchmark.py`, and measure the rule phase alone with `-D` and
-`--performance-json`.
+`--performance-json`. [Benchmark](Benchmark.md) compares the same HANCITOR run with
+Hayabusa and Chainsaw.
 
 ## Module map
 

@@ -34,6 +34,7 @@ and [Usage → Basic Usage](Usage.md#basic-usage).
 | [Usage](Usage.md) | Installation, standalone binaries, running, every command-line option, input formats, rulesets, rule testing, configuration, Docker |
 | [Advanced](Advanced.md) | Field transforms, large datasets, parallel processing, event filtering, templating, the Mini-GUI |
 | [Internals](Internals.md) | Architecture, module map, SQLite behaviour, packaging and release builds, automatic SQL repairs |
+| [Benchmark](Benchmark.md) | Zircolite, Hayabusa and Chainsaw on the same logs, and how to reproduce it |
 
 ## Task and Taskfile
 

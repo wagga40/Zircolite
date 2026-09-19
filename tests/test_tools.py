@@ -61,6 +61,144 @@ def test_benchmark_default_report_stays_outside_worktree(tmp_path, monkeypatch):
 
 
 @pytest.fixture(scope="module")
+def tool_benchmark():
+    return load_tool("tool-benchmark")
+
+
+def write_fake_tool(path, body):
+    """A stand-in for a Hayabusa or Chainsaw binary: a script run by this interpreter."""
+    path.write_text(f"#!{sys.executable}\nimport sys\nfrom pathlib import Path\n{body}", encoding="utf-8")
+    path.chmod(0o755)
+    return path
+
+
+FAKE_HAYABUSA = """
+if sys.argv[1] == "help":
+    print("Hayabusa v4.1.0 - Suzumushi Release")
+    raise SystemExit(0)
+print("\\x1b[0mTotal detection rules: 4,658\\x1b[0m")
+print("Detection rules enabled after channel filter: 2,293")
+lines = ['{ "RuleTitle":"Proc Exec","RuleID":"a" }', '{ "RuleTitle":"Net Conn","RuleID":"b" }',
+         '{ "RuleTitle":"Proc Exec","RuleID":"a" }']
+Path(sys.argv[sys.argv.index("-o") + 1]).write_text("\\n".join(lines) + "\\n")
+"""
+
+FAKE_CHAINSAW = """
+if sys.argv[1] == "--version":
+    print("chainsaw 2.16.0")
+    raise SystemExit(0)
+print("[!] Loaded 3,524 detection rules (388 not loaded)")
+Path(sys.argv[sys.argv.index("-o") + 1]).write_text('{"id":"x","name":"Rule X"}\\n')
+"""
+
+
+class TestToolBenchmarkCounting:
+    def test_zircolite_counts_merged_variants_as_one_rule(self, tool_benchmark, tmp_path):
+        output = tmp_path / "out.json"
+        output.write_text(json.dumps([
+            {"id": "r1", "title": "Rule - Sysmon", "matches": [{"row_id": 1}, {"row_id": 2}]},
+            {"id": "r1", "title": "Rule - Generic", "matches": [{"row_id": 3}]},
+            {"id": "r2", "title": "Other", "matches": [{"row_id": 4}]},
+        ]))
+        assert tool_benchmark.count_zircolite(output) == (4, 2)
+
+    def test_jsonl_skips_blank_lines_and_falls_back_to_the_title(self, tool_benchmark, tmp_path):
+        output = tmp_path / "out.jsonl"
+        output.write_text('{"id": "a", "name": "A"}\n\n{"name": "B"}\n{"id": "a", "name": "A"}\n')
+        assert tool_benchmark.count_jsonl(output, "id", "name") == (3, 2)
+
+    def test_rule_counts_ignore_colour_and_thousands_separators(self, tool_benchmark):
+        text = "\x1b[0mTotal detection rules: 4,658\x1b[0m\nDetection rules enabled after channel filter: 2,293\n"
+        assert tool_benchmark.rules_loaded("hayabusa", text) == {"loaded": 4658, "after channel filter": 2293}
+        assert tool_benchmark.rules_loaded("chainsaw", "[!] Loaded 3,524 detection rules") == {"loaded": 3524}
+        assert tool_benchmark.rules_loaded("zircolite", "INFO [+] 4319 rules loaded") == {"loaded": 4319}
+
+
+class TestToolBenchmarkCommands:
+    def test_hayabusa_reads_a_file_with_f_and_a_directory_with_d(self, tool_benchmark, tmp_path):
+        binary = tmp_path / "hayabusa" / "hayabusa"
+        single = tmp_path / "one.evtx"
+        single.write_bytes(b"")
+        for events, flag in ((single, "-f"), (tmp_path, "-d")):
+            args = tool_benchmark.parse_arguments(["--events", str(events), "--hayabusa", str(binary)])
+            command, cwd, output = tool_benchmark.hayabusa_command(args, tmp_path)
+            assert command[1:4] == ["dfir-timeline", flag, str(events.resolve())]
+            assert "-w" in command and command[command.index("-t") + 1] == "jsonl"
+            assert cwd == binary.parent.resolve()
+            assert command[command.index("-o") + 1] == str(output)
+
+    def test_chainsaw_repeats_sigma_and_adds_its_own_rules_only_when_given(self, tool_benchmark, tmp_path):
+        base = ["--events", str(tmp_path), "--chainsaw", str(tmp_path / "chainsaw"),
+                "--chainsaw-mapping", str(tmp_path / "map.yml"),
+                "--chainsaw-sigma", str(tmp_path / "a"), "--chainsaw-sigma", str(tmp_path / "b")]
+        command, _, _ = tool_benchmark.chainsaw_command(tool_benchmark.parse_arguments(base), tmp_path)
+        assert [command[i + 1] for i, part in enumerate(command) if part == "-s"] == [
+            str((tmp_path / "a").resolve()), str((tmp_path / "b").resolve())]
+        assert "-r" not in command
+        with_rules = tool_benchmark.parse_arguments([*base, "--chainsaw-rules", str(tmp_path / "rules")])
+        command, _, _ = tool_benchmark.chainsaw_command(with_rules, tmp_path)
+        assert command[command.index("-r") + 1] == str((tmp_path / "rules").resolve())
+
+    @pytest.mark.parametrize("argv", [
+        ["--chainsaw", "chainsaw", "--chainsaw-sigma", "sigma"],
+        ["--chainsaw", "chainsaw", "--chainsaw-mapping", "map.yml"],
+        ["--runs", "0"],
+        ["--warmup", "-1"],
+    ])
+    def test_incomplete_arguments_are_refused(self, tool_benchmark, tmp_path, argv):
+        with pytest.raises(SystemExit) as refused:
+            tool_benchmark.parse_arguments(["--events", str(tmp_path), *argv])
+        assert refused.value.code == 2
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="the fake tools are shebang scripts")
+class TestToolBenchmarkEndToEnd:
+    @pytest.fixture
+    def setup(self, tool_benchmark, tmp_path, monkeypatch):
+        import tempfile
+
+        scratch = tmp_path / "tmp"
+        scratch.mkdir()
+        monkeypatch.setattr(tempfile, "tempdir", str(scratch))
+        ruleset = tmp_path / "rules.json"
+        ruleset.write_text(json.dumps([{
+            "id": "bits", "title": "Bitsadmin", "level": "high",
+            "rule": ["SELECT * FROM logs WHERE CommandLine LIKE '%bitsadmin%'"],
+        }]))
+        (tmp_path / "hayabusa").mkdir()
+        (tmp_path / "chainsaw").mkdir()
+        hayabusa = write_fake_tool(tmp_path / "hayabusa" / "hayabusa", FAKE_HAYABUSA)
+        chainsaw = write_fake_tool(tmp_path / "chainsaw" / "chainsaw", FAKE_CHAINSAW)
+        argv = ["--events", str(FIXTURES / "sample_bitsadmin.evtx"), "--zircolite-ruleset", str(ruleset),
+                "--hayabusa", str(hayabusa), "--chainsaw", str(chainsaw),
+                "--chainsaw-mapping", str(tmp_path / "map.yml"), "--chainsaw-sigma", str(tmp_path / "sigma"),
+                "--runs", "2", "--warmup", "1"]
+        return scratch, argv, chainsaw
+
+    def test_report_covers_every_tool_and_stays_outside_worktree(self, tool_benchmark, setup, capsys):
+        scratch, argv, _ = setup
+        assert tool_benchmark.main(argv) == 0
+        reports = list(scratch.glob("tool-benchmark-*.json"))
+        assert len(reports) == 1 and list(scratch.iterdir()) == reports
+        tools = json.loads(reports[0].read_text())["tools"]
+        assert list(tools) == ["zircolite", "hayabusa", "chainsaw"]
+        assert [len(tool["runs"]) for tool in tools.values()] == [2, 2, 2]
+        assert (tools["zircolite"]["detections"], tools["zircolite"]["rules_matched"]) == (1, 1)
+        assert tools["zircolite"]["rules_loaded"] == {"loaded": 1}
+        assert (tools["hayabusa"]["version"], tools["hayabusa"]["detections"], tools["hayabusa"]["rules_matched"]) == (
+            "4.1.0", 3, 2)
+        assert tools["hayabusa"]["rules_loaded"] == {"loaded": 4658, "after channel filter": 2293}
+        assert (tools["chainsaw"]["version"], tools["chainsaw"]["rules_loaded"]) == ("2.16.0", {"loaded": 3524})
+        assert "| chainsaw | 2.16.0 | 3,524 |" in capsys.readouterr().out
+
+    def test_a_failing_tool_stops_the_benchmark(self, tool_benchmark, setup):
+        _, argv, chainsaw = setup
+        write_fake_tool(chainsaw, FAKE_CHAINSAW.replace('print("[!] Loaded', 'raise SystemExit(3)\nprint("'))
+        with pytest.raises(RuntimeError, match="chainsaw exited 3"):
+            tool_benchmark.main(argv)
+
+
+@pytest.fixture(scope="module")
 def regression():
     return load_tool("sigma-regression")
 
