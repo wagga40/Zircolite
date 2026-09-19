@@ -178,7 +178,7 @@ python3 zircolite.py --events sample.evtx \
 
 Defaults worth knowing:
 
-- `--ruleset` is optional; without it Zircolite uses `rules/rules_windows_generic.json`.
+- `--ruleset` is optional; without it Zircolite uses `rules/rules_windows_merged.json`.
 - Results go to `detected_events.json`, or a `.csv` with `--csv` (see
   [CSV detection output](Usage.md#csv-detection-output)).
 - A `zircolite.log` is written alongside; `--nolog` disables it.
@@ -832,9 +832,9 @@ published in [Zircolite-Rules-v2](https://github.com/wagga40/Zircolite-Rules-v2)
 
 | Ruleset | Covers |
 |---------|--------|
-| `rules_windows_merged.json` | Sysmon and generic Windows channels — the best default for Windows EVTX |
+| `rules_windows_merged.json` | Sysmon and generic Windows channels. Used when `--ruleset` is omitted |
 | `rules_windows_sysmon.json` | Sysmon only |
-| `rules_windows_generic.json` | Windows event logs without Sysmon (Security, System, …). Used when `--ruleset` is omitted |
+| `rules_windows_generic.json` | Windows event logs without Sysmon (Security, System, …) |
 | `rules_linux.json` | Auditd and Sysmon for Linux |
 
 Each also has `_high` and `_medium` variants (that severity and above). `-U` or

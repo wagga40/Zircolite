@@ -10,21 +10,21 @@ These rulesets are generated from SIGMA rules using **pySigma** from the [offici
 
 - `rules_windows_generic_high.json` — Level high and above from the **Windows** directory (no Sysmon rewriting)
 - `rules_windows_generic_medium.json` — Level medium and above from the **Windows** directory (no Sysmon rewriting)
-- `rules_windows_generic.json` — Same as `rules_windows_generic_high.json` (default when `--ruleset` is omitted)
+- `rules_windows_generic.json` — Every level from the **Windows** directory (no Sysmon rewriting)
 
 ### Windows (Sysmon)
 
 - `rules_windows_sysmon_high.json` — Level high and above from the **Windows** directory (Sysmon)
 - `rules_windows_sysmon_medium.json` — Level medium and above from the **Windows** directory (Sysmon)
-- `rules_windows_sysmon.json` — Same as `rules_windows_sysmon_high.json`
+- `rules_windows_sysmon.json` — Every level from the **Windows** directory (Sysmon)
 
 ### Windows (merged)
 
 - `rules_windows_merged_high.json` — Level high and above, merged Windows log sources
 - `rules_windows_merged_medium.json` — Level medium and above, merged Windows log sources
-- `rules_windows_merged.json` — Same as `rules_windows_merged_high.json`
+- `rules_windows_merged.json` — Every level, merged Windows log sources (default when `--ruleset` is omitted)
 
-Documentation and examples in this repository use `rules_windows_merged.json` as the default Windows ruleset for EVTX.
+`rules_windows_merged.json` covers both the Sysmon and the generic Windows channels, which is why Zircolite uses it when no `--ruleset` is given. Rules whose channel is absent from the logs are skipped before they run, so the larger ruleset costs little on logs that only carry one of them.
 
 ### Linux
 

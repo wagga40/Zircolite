@@ -1215,8 +1215,8 @@ def _main(memory_tracker, start_time) -> None:
     else:
         args.ruleset = [
             resolve_default_path(
-                "rules/rules_windows_generic.json",
-                "rules", "rules_windows_generic.json",
+                "rules/rules_windows_merged.json",
+                "rules", "rules_windows_merged.json",
             )
         ]
 

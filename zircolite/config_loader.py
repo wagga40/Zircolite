@@ -492,7 +492,7 @@ rules:
   # Ruleset files or directories. Accepts both the Zircolite JSON format and
   # directories of native Sigma YAML rules.
   rulesets:
-    - rules/rules_windows_generic.json
+    - rules/rules_windows_merged.json
     # - rules/rules_windows_sysmon.json
     # - /path/to/sigma/rules/windows/process_creation/
 

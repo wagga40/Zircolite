@@ -3181,9 +3181,30 @@ class TestCLIRegressionFixes:
         )
         assert Path(resolved_config).is_file()
         resolved_rules = assets.resolve_default_path(
-            "rules/rules_windows_generic.json", "rules", "rules_windows_generic.json"
+            "rules/rules_windows_merged.json", "rules", "rules_windows_merged.json"
         )
         assert Path(resolved_rules).is_file()
+
+    def test_merged_windows_ruleset_is_the_default(self, tmp_path, monkeypatch):
+        """Without -r a run loads the merged ruleset, which covers Sysmon and the generic channels."""
+        _, config, events = self._fixture(tmp_path)
+        monkeypatch.chdir(tmp_path)
+        loaded = []
+
+        def stop_after_resolution(ruleset_config, **_):
+            loaded.extend(ruleset_config.ruleset)
+            raise SystemExit(0)
+
+        with pytest.raises(SystemExit), patch.object(
+            zircolite_script, "RulesetHandler", side_effect=stop_after_resolution
+        ), patch('sys.argv', [
+            'zircolite.py', '-e', str(events), '-j', '-c', str(config),
+            '-o', str(tmp_path / "out.json"), *get_log_arg(tmp_path),
+        ]):
+            zircolite_script.main()
+
+        assert [Path(path).name for path in loaded] == ["rules_windows_merged.json"]
+        assert Path(loaded[0]).is_file()
 
     def test_local_file_still_wins_over_bundled_default(self, tmp_path, monkeypatch):
         """A config/config.yaml in the CWD keeps priority over the bundled one."""
