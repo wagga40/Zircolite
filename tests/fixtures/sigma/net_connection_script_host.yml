@@ -1,0 +1,24 @@
+title: Outbound Connection From Script Host
+id: 3f6b1e2a-7c4d-4e8f-9a0b-1c2d3e4f5a63
+status: test
+description: A script host initiated an outbound network connection.
+author: Zircolite test fixture
+date: 2026-09-19
+tags:
+    - attack.command-and-control
+logsource:
+    category: network_connection
+    product: windows
+detection:
+    selection:
+        Initiated: 'true'
+        Image|endswith:
+            - '\wscript.exe'
+            - '\cscript.exe'
+            - '\mshta.exe'
+    filter_local:
+        DestinationIp|cidr: '127.0.0.0/8'
+    condition: selection and not filter_local
+falsepositives:
+    - Unknown
+level: medium

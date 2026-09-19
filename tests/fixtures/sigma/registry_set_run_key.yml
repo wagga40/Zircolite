@@ -1,0 +1,20 @@
+title: Run Key Persistence
+id: 3f6b1e2a-7c4d-4e8f-9a0b-1c2d3e4f5a64
+status: test
+description: A value was written under a Run key.
+author: Zircolite test fixture
+date: 2026-09-19
+tags:
+    - attack.persistence
+    - attack.t1547.001
+logsource:
+    category: registry_set
+    product: windows
+detection:
+    selection:
+        TargetObject|contains: '\Software\Microsoft\Windows\CurrentVersion\Run\'
+        Details|contains|windash: '-nop'
+    condition: selection
+falsepositives:
+    - Software installers
+level: high

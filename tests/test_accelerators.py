@@ -560,25 +560,6 @@ def test_yaml_performance_settings_reach_resolution(tmp_path):
     assert args.rule_prefilter == "off"
 
 
-def test_frozen_native_binary(tmp_path):
-    binary = os.environ.get("ZIRCOLITE_NATIVE_BINARY")
-    if not binary:
-        pytest.skip("Set ZIRCOLITE_NATIVE_BINARY to test a PyInstaller build")
-    binary = str(Path(binary).resolve())
-    events, output, rules = tmp_path / "events.json.gz", tmp_path / "output.json", tmp_path / "rules.json"
-    events.write_bytes(gzip.compress(b'{"CommandLine":"whoami"}\n' + b'{"CommandLine":"quiet"}\n' * 999))
-    queries = ["SELECT * FROM logs WHERE CommandLine LIKE '%whoami%'"]
-    queries += [f"SELECT * FROM logs WHERE CommandLine LIKE '%missing{i}%'" for i in range(31)]
-    rules.write_text(json.dumps([{"title": "native smoke", "id": "native", "level": "high", "rule": queries}]))
-    result = subprocess.run([
-        binary, "-e", str(events), "-r", str(rules), "-o", str(output), "--quiet",
-        "--no-parallel", "--no-auto-mode", "--json-input", "--working-db", "disk",
-        "--flatten-backend", "cython",
-    ], cwd=tmp_path, capture_output=True, text=True, timeout=90)
-    assert result.returncode == 0, result.stdout + result.stderr
-    assert sum(len(rule["matches"]) for rule in json.loads(output.read_text())) == 1
-
-
 def test_throughput_variant_reports_compare_native_results(tmp_path, monkeypatch):
     from tests.test_tools import load_tool
 

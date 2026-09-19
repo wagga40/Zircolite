@@ -1,0 +1,24 @@
+title: Bitsadmin Download
+id: 3f6b1e2a-7c4d-4e8f-9a0b-1c2d3e4f5a60
+status: test
+description: Bitsadmin used to download a file (process creation).
+author: Zircolite test fixture
+date: 2026-09-19
+tags:
+    - attack.defense-evasion
+    - attack.t1197
+logsource:
+    category: process_creation
+    product: windows
+detection:
+    selection_img:
+        - Image|endswith: '\bitsadmin.exe'
+        - OriginalFileName: 'bitsadmin.exe'
+    selection_cmd:
+        CommandLine|contains|all:
+            - ' /transfer '
+            - 'http'
+    condition: all of selection_*
+falsepositives:
+    - Legitimate administration
+level: high

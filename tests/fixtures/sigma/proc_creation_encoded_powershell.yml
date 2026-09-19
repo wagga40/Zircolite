@@ -1,0 +1,23 @@
+title: Encoded PowerShell Command Line
+id: 3f6b1e2a-7c4d-4e8f-9a0b-1c2d3e4f5a61
+status: test
+description: PowerShell started with an encoded command, matched with a regular expression.
+author: Zircolite test fixture
+date: 2026-09-19
+tags:
+    - attack.execution
+    - attack.t1059.001
+logsource:
+    category: process_creation
+    product: windows
+detection:
+    selection_img:
+        Image|endswith:
+            - '\powershell.exe'
+            - '\pwsh.exe'
+    selection_re:
+        CommandLine|re: '(?i)\s-e(nc(odedcommand)?)?\s+[A-Za-z0-9+/=]{16,}'
+    condition: all of selection_*
+falsepositives:
+    - Unknown
+level: medium

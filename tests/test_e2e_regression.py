@@ -12,9 +12,14 @@ Three things are pinned here:
   change cannot quietly depend on which mode auto-mode chose;
 * the detections for a fixture match a committed expectation, so a change that
   alters which events match has to say so in the diff.
+
+With ``ZIRCOLITE_BINARY`` set, every run goes through that executable instead
+of the in-process CLI, so a built binary has to pass the same checks.
 """
 
 import json
+import os
+import subprocess
 import sys
 from pathlib import Path
 from typing import ClassVar
@@ -70,8 +75,23 @@ def run_zircolite(tmp_path, source, flags, ruleset=MATCH_ALL_RULESET, extra=()):
         *flags,
         *extra,
     ]
-    with patch("sys.argv", argv):
-        zircolite_script.main()
+    binary = os.environ.get("ZIRCOLITE_BINARY")
+    if binary:
+        # Run from tmp_path so config/ and the transforms come from the bundle,
+        # not from the checkout the tests happen to run in. A relative path
+        # names the binary from where pytest started, so it is resolved first.
+        binary = str(Path(binary).resolve())
+        result = subprocess.run(
+            [binary, *argv[1:]], cwd=tmp_path, capture_output=True,
+            encoding="utf-8", errors="replace", timeout=240,
+        )
+        assert result.returncode == 0, (
+            f"{binary} exited {result.returncode}\n"
+            f"--- stdout\n{result.stdout}\n--- stderr\n{result.stderr}"
+        )
+    else:
+        with patch("sys.argv", argv):
+            zircolite_script.main()
 
     assert outfile.exists(), f"no output written for {source}"
     return json.loads(outfile.read_text())

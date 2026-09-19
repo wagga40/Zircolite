@@ -1,0 +1,21 @@
+title: Special Privileges Assigned To New Logon
+id: 3f6b1e2a-7c4d-4e8f-9a0b-1c2d3e4f5a62
+status: test
+description: Security log event for a logon holding sensitive privileges.
+author: Zircolite test fixture
+date: 2026-09-19
+tags:
+    - attack.privilege-escalation
+logsource:
+    product: windows
+    service: security
+detection:
+    selection:
+        EventID: 4672
+        PrivilegeList|contains: 'SeDebugPrivilege'
+    filter_system:
+        SubjectUserSid: 'S-1-5-18'
+    condition: selection and not filter_system
+falsepositives:
+    - Administrators
+level: low
