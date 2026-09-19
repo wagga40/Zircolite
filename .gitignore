@@ -52,7 +52,7 @@ __pycache__/
 *.pyz
 *.pyzw
 
-# Python virtual environments & cache 
+# Python virtual environments & cache
 .venv/
 venv/
 .env
@@ -70,6 +70,7 @@ zircolite/_flatten_native*.pyd
 gui_dev/
 helpers/
 Taskfile.dev.yml
+
 # Default files for Editors and IDEs (vscode, cursor, idea, zed, sublime, etc.)
 .vscode/*
 .cursor/*
@@ -106,3 +107,6 @@ dist/
 !tests/external/
 !tests/external/**
 tests/external/**/__pycache__/
+
+# Others
+samples/
