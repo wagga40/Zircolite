@@ -16,7 +16,7 @@ import requests
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from zircolite.config import RulesetConfig
-from zircolite.rules import RulesetHandler, RulesUpdater
+from zircolite.rules import RulesetHandler, RulesUpdater, UnknownPipelineError
 from zircolite.sqlscan import rebalance_sql
 
 WORKSPACE_ROOT = Path(__file__).parent.parent
@@ -1121,21 +1121,45 @@ class TestRulesUpdater:
 class TestRulesetHandlerInitBranches:
     """Tests for RulesetHandler __init__ branches that are often uncovered."""
 
-    def test_invalid_pipeline_name_logs_error(self, tmp_path, test_logger):
-        """When a pipeline name is not found, logger.error is called."""
+    def test_invalid_pipeline_name_raises(self, tmp_path, test_logger):
+        """An unknown pipeline is fatal, and every unknown name is reported at once.
+
+        Converting without it still produces SQL, just without the conditions
+        the pipeline adds, so carrying on after a log line gives wrong results.
+        """
         valid_json = tmp_path / "rules.json"
         valid_json.write_text('[{"title": "R", "level": "high", "rule": ["SELECT 1"]}]')
-        with patch.object(test_logger, "error") as mock_error:
-            RulesetHandler(
-                ruleset_config=RulesetConfig(
-                    ruleset=[str(valid_json)],
-                    pipeline=[["nonexistent-pipeline-xyz123"]],
-                ),
-                logger=test_logger,
-            )
-            mock_error.assert_called()
-            call_str = " ".join(str(c) for c in mock_error.call_args_list)
-            assert "nonexistent-pipeline-xyz123" in call_str or "not found" in call_str.lower()
+        with patch.object(RulesetHandler, "ruleset_parsing") as parsing:
+            with pytest.raises(UnknownPipelineError) as raised:
+                RulesetHandler(
+                    ruleset_config=RulesetConfig(
+                        ruleset=[str(valid_json)],
+                        pipeline=[["nonexistent-pipeline-xyz123", "sysmon"], ["also-missing"]],
+                    ),
+                    logger=test_logger,
+                )
+
+        parsing.assert_not_called()
+        assert raised.value.unknown == ["nonexistent-pipeline-xyz123", "also-missing"]
+        assert "sysmon" in raised.value.installed
+        assert isinstance(raised.value, ValueError)
+        message = str(raised.value)
+        assert "nonexistent-pipeline-xyz123" in message
+        assert "also-missing" in message
+        assert "sysmon" in message
+
+    def test_pipeline_hint_depends_on_the_install(self, monkeypatch):
+        """A binary cannot take a package-manager install, so it must not suggest one."""
+        from zircolite.rules import pipeline_install_hint
+
+        monkeypatch.delattr(sys, "frozen", raising=False)
+        assert "pdm add" in pipeline_install_hint()
+
+        monkeypatch.setattr(sys, "frozen", True, raising=False)
+        frozen_hint = pipeline_install_hint()
+        assert "pdm add" not in frozen_hint
+        assert "source install" in frozen_hint
+        assert UnknownPipelineError(["nope"], ["sysmon"]).hint == frozen_hint
 
     def test_no_rules_to_execute_logs_error(self, test_logger):
         """When ruleset_parsing returns only empty lists, 'No rules to execute' is logged."""

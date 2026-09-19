@@ -21,6 +21,7 @@ from typing import Any
 
 # External libs - Rich for styled terminal output
 from rich.logging import RichHandler
+from rich.markup import escape
 from rich.panel import Panel
 from rich.table import Table
 
@@ -50,6 +51,7 @@ from zircolite import (
     StrictParseError,
     TemplateConfig,
     TemplateEngine,
+    UnknownPipelineError,
     ZircoliteGuiGenerator,
     __version__,
     analyze_files_and_recommend_mode,
@@ -1266,11 +1268,19 @@ def _main(memory_tracker, start_time) -> None:
         save_ruleset=args.save_ruleset,
         time_field=args.timefield,
     )
-    if not is_quiet():
-        with console.status("[bold cyan]Loading and converting rulesets...", spinner="dots"):
+    try:
+        if not is_quiet():
+            with console.status("[bold cyan]Loading and converting rulesets...", spinner="dots"):
+                rulesets_manager = RulesetHandler(ruleset_config, logger=logger, list_pipelines_only=args.pipeline_list)
+        else:
             rulesets_manager = RulesetHandler(ruleset_config, logger=logger, list_pipelines_only=args.pipeline_list)
-    else:
-        rulesets_manager = RulesetHandler(ruleset_config, logger=logger, list_pipelines_only=args.pipeline_list)
+    except UnknownPipelineError as e:
+        print_error_panel(
+            "Unknown Pipeline",
+            escape(str(e)),
+            f"List installed pipelines with '--pipeline-list'. {e.hint}.",
+        )
+        sys.exit(2)
     if args.pipeline_list:
         sys.exit(0)
 

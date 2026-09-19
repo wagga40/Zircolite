@@ -1901,6 +1901,36 @@ class TestCLISubprocessExecution:
         out = result.stdout + result.stderr
         assert 'pipeline' in out.lower() or 'sysmon' in out.lower() or 'sigma' in out.lower()
 
+    def test_unknown_pipeline_exits_2_and_names_it(self, tmp_path):
+        """A misspelt -p used to be logged and dropped, and the run went on to
+        convert every rule without the conditions the pipeline adds."""
+        rule = tmp_path / "rule.yml"
+        rule.write_text(
+            "title: Process creation\n"
+            "id: 5f3c6c4e-8a4b-4c55-9a0e-6c2f0a6b7d11\n"
+            "status: test\n"
+            "logsource:\n"
+            "    category: process_creation\n"
+            "    product: windows\n"
+            "detection:\n"
+            "    selection:\n"
+            "        Image|endswith: '\\\\bitsadmin.exe'\n"
+            "    condition: selection\n"
+            "level: high\n",
+            encoding="utf-8",
+        )
+
+        result = subprocess.run(
+            [sys.executable, str(WORKSPACE_ROOT / "zircolite.py"),
+             "-r", str(rule), "-e", str(FIXTURES_DIR / "sample_bitsadmin.evtx"),
+             "-p", "nope"],
+            capture_output=True, text=True, encoding="utf-8", cwd=str(tmp_path),
+        )
+
+        assert result.returncode == 2, result.stdout + result.stderr
+        assert "nope" in result.stdout + result.stderr
+        assert not list(tmp_path.glob("detected_events*"))
+
     def test_generate_config_creates_file(self, tmp_path):
         """Test --generate-config creates a YAML config file and exits."""
         output_yaml = tmp_path / "generated_config.yaml"

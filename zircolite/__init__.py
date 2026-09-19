@@ -106,7 +106,7 @@ from .processing import (
     process_single_file_worker,
     process_unified_streaming,
 )
-from .rules import EventFilter, RulesetHandler, RulesUpdater
+from .rules import EventFilter, RulesetHandler, RulesUpdater, UnknownPipelineError
 from .streaming import StreamingEventProcessor, StrictParseError
 from .templates import TemplateEngine, ZircoliteGuiGenerator
 from .utils import (
@@ -168,6 +168,7 @@ __all__ = [
     'TemplateConfig',
     'TemplateEngine',
     'TimeFilterConfig',
+    'UnknownPipelineError',
     'ZircoliteConfig',
     # Core classes
     'ZircoliteCore',
