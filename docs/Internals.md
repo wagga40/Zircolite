@@ -598,3 +598,26 @@ What this means for output is covered in
 One further consequence: a repaired or re-planned query can return the same events in a
 different order, because a query driven by one index visits rows in a different order than
 one driven by another. Rules, counts and matched events are identical.
+
+### Negated conditions on absent fields
+
+Sigma reads a condition on a field the event does not carry as false, so
+`selection and not filter` still matches when the filter names such a field. SQLite
+evaluates that comparison to `NULL`, and `NOT NULL` is `NULL`, so the row is dropped.
+Sysmon network events have no `CommandLine`, and a network rule whose filters mention one
+matched nothing at all: *Rundll32 Internet Connection* found none of the 75,793 events on
+the HANCITOR corpus that Sigma's semantics select.
+
+Unlike the two repairs, this rewrite applies to every statement before it runs.
+`sqlscan.normalize_rule_sql` wraps the operand of each prefix `NOT` in
+`COALESCE((…), 0)`, turning that `NULL` back into the false Sigma means. The operand runs
+to the next `AND`/`OR` or closing parenthesis at its own depth, since `NOT` binds tighter
+than those and looser than every comparison. Nested negations are rewritten too, so what
+reaches a `COALESCE` is only `AND`/`OR` over comparisons, and reading its `NULL` as false
+is exactly Sigma's answer. `NOT LIKE`, `NOT IN` and `IS NOT NULL` compare rather than
+negate, and are left as written; so is a `NOT` whose operand holds a `BETWEEN` or `CASE`,
+whose own `AND` would end the operand too early. The same pass quotes identifiers, so a
+ruleset is still lexed once.
+
+The literal prefilter plans the rewritten form (a negation never narrows its candidates),
+and the Channel/EventID bounds read from it are unchanged.

@@ -2023,6 +2023,42 @@ class TestRulesThatSilentlyMatchedNothing:
         core.db_connection.commit()
         return core
 
+    def test_negated_filter_on_a_field_the_event_lacks_keeps_the_event(
+        self, field_mappings_file, test_logger
+    ):
+        """Sigma reads a condition on an absent field as a non-match.
+
+        ``not filter`` therefore holds, but SQLite evaluates ``NOT (x LIKE ...)``
+        on a NULL ``x`` to NULL and drops the row. Sysmon network events carry
+        no CommandLine, so *Rundll32 Internet Connection* matched none of the
+        75,793 events Hayabusa reports on the HANCITOR corpus.
+        """
+        core = ZircoliteCore(config=field_mappings_file, logger=test_logger)
+        try:
+            core.create_db(
+                '"Image" TEXT COLLATE NOCASE, "DestinationIp" TEXT COLLATE NOCASE, '
+                '"CommandLine" TEXT COLLATE NOCASE'
+            )
+            core.db_connection.executemany(
+                "INSERT INTO logs (Image, DestinationIp, CommandLine) VALUES (?, ?, ?)",
+                [
+                    ("c:\\windows\\rundll32.exe", "8.8.8.8", None),
+                    ("c:\\windows\\rundll32.exe", "10.0.0.1", None),
+                    ("c:\\windows\\rundll32.exe", "8.8.4.4", "x PcaSvc.dll,PcaPatchSdbTask"),
+                ],
+            )
+            core.db_connection.commit()
+            query = (
+                "SELECT * FROM logs WHERE Image LIKE '%\\rundll32.exe' ESCAPE '\\' "
+                "AND (NOT (DestinationIp LIKE '10.%' ESCAPE '\\' "
+                "OR CommandLine LIKE '%PcaSvc.dll,PcaPatchSdbTask' ESCAPE '\\'))"
+            )
+            results = core.execute_select_query(query, rule_title="rundll32 network")
+
+            assert [row["DestinationIp"] for row in results] == ["8.8.8.8"]
+        finally:
+            core.close()
+
     def test_backtick_quoted_field_is_widened_and_matches(
         self, field_mappings_file, test_logger
     ):
@@ -2394,26 +2430,33 @@ class TestQueryPlannerStatistics:
     def test_an_added_column_matches_only_the_is_null_test(
         self, field_mappings_file, test_logger
     ):
-        """``IS NULL`` is the one construct widening changes the answer to.
+        """An added column holds NULL: a field no event carries.
 
-        Giving the added column a DEFAULT instead of NULL would look harmless and
-        would turn every ``|exists: false`` rule into a corpus-wide false positive.
+        Giving it a DEFAULT instead would look harmless and would turn every
+        ``|exists: false`` rule into a corpus-wide false positive. A comparison
+        on it matches nothing; negated, Sigma reads that as true for every row.
         """
         core = self._core(field_mappings_file, test_logger)
         try:
-            core.execute_select_query(
+            everything = core.execute_select_query(
                 "SELECT * FROM logs WHERE Absent IS NULL", rule_title="widen it"
             )
             assert "Absent" in core._get_table_columns()
+            assert everything
 
             silent = [
-                "SELECT * FROM logs WHERE NOT Absent = Absent",
                 "SELECT * FROM logs WHERE Absent = 'v'",
                 "SELECT * FROM logs WHERE Absent LIKE '%v%'",
-                "SELECT * FROM logs WHERE NOT (Absent LIKE '%v%')",
             ]
             for query in silent:
                 assert core.execute_select_query(query, rule_title="quiet") == []
+
+            negated = [
+                "SELECT * FROM logs WHERE NOT Absent = Absent",
+                "SELECT * FROM logs WHERE NOT (Absent LIKE '%v%')",
+            ]
+            for query in negated:
+                assert len(core.execute_select_query(query, rule_title="negated")) == len(everything)
         finally:
             core.close()
 

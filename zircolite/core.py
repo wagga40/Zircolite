@@ -49,7 +49,7 @@ from .performance import FileMetrics, timed_stage
 from .prefilter import prepare_rules, rule_queries
 from .results import RowSpool, write_result_json
 from .shutdown import is_shutdown_requested
-from .sqlscan import admitted_pairs, quote_sql_identifiers, rebalance_sql, scan_query
+from .sqlscan import admitted_pairs, normalize_rule_sql, rebalance_sql, scan_query
 from .streaming import StreamingEventProcessor, StrictParseError
 from .utils import sanitize_row_for_csv
 
@@ -699,7 +699,7 @@ class ZircoliteCore:
             self._note_broken_rule(rule_title, bad_regex)
             return []
         normalized = self._prepared.normalized.get(query) if self._prepared is not None else None
-        query = normalized if normalized is not None else quote_sql_identifiers(query)
+        query = normalized if normalized is not None else normalize_rule_sql(query)
         # Syntax-highlighted SQL in debug mode
         if self.logger.isEnabledFor(logging.DEBUG):
             console.print(Panel(
