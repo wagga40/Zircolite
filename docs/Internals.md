@@ -207,9 +207,12 @@ All the logic lives in the `zircolite/` package. `zircolite.py` is a shim that c
 | `__main__.py` | Entry point for `python -m zircolite` |
 | `assets.py` | Resolution of the shipped `config/`, `rules/`, `templates/` and `gui/` |
 | `streaming.py` | `StreamingEventProcessor` — single-pass read, flatten, transform, insert |
+| `flatten_kernel.py` | Flattening kernel; the reference Python implementation, also compiled as `_flatten_native` |
 | `jsonstream.py` | Validating JSON-array reader with an optional C parser |
 | `results.py` | Temporary detection row storage and incremental JSON output |
 | `core.py` | `ZircoliteCore` — database management, indexes, rule execution, output |
+| `prefilter.py` | Literal prefilter: rows that may satisfy a rule's `LIKE` literals, handed to SQLite, which still runs the full rule |
+| `performance.py` | Stage timers, per-file metrics and the `--performance-json` report |
 | `detector.py` | `LogTypeDetector` — format, log source and timestamp-field detection |
 | `processing.py` | Coordinates per-file, unified and parallel runs; aggregates results |
 | `utils.py` | Logging, `MemoryTracker`, compressed-input handling, mode heuristics |
@@ -405,7 +408,7 @@ transformation, which Zircolite never uses.
 | Trigger | What runs |
 |---------|-----------|
 | A `v*` tag | All five targets, then the release |
-| A push to `master`, or a pull request, touching the spec, the package, `pyproject.toml`, `pdm.lock`, `setup.py`, the shipped assets, the test fixtures, the binary tests, `tools/` or the workflow | The `linux-x64` leg only, as a canary |
+| A push to `master`, or a pull request, touching the spec, `zircolite.py`, the package, `pyproject.toml`, `pdm.lock`, `setup.py`, the shipped assets, the test fixtures and golden files, `tests/conftest.py`, `pytest.ini`, the binary tests, `tools/`, the packaged docs (`docs/`, `pics/`, `README.md`, `LICENSE`) or the workflow | The `linux-x64` leg only, as a canary |
 | `workflow_dispatch` (`dry_run`, true by default) and a weekly schedule | All five targets |
 
 **Build.** Each leg installs the project, builds with the spec, then runs
@@ -451,14 +454,13 @@ GitHub, because Forgejo job containers get no Docker socket.
 
 ### Pragmas
 
-Four pragmas apply to every database:
+Two pragmas apply to every database: `page_size` `4096` and `threads`
+`min(8, cpu_count)`. Two follow the working storage chosen with `--working-db`:
 
-| Pragma | Value |
-|--------|-------|
-| `temp_store` | `MEMORY` |
-| `mmap_size` | `268435456` (256 MB) |
-| `page_size` | `4096` |
-| `threads` | `min(8, cpu_count)` |
+| Pragma | `memory` (default) | `disk` |
+|--------|--------------------|--------|
+| `temp_store` | `MEMORY` | `FILE` |
+| `mmap_size` | `268435456` (256 MB) | `0` |
 
 The rest depend on where the database lives:
 
@@ -466,7 +468,7 @@ The rest depend on where the database lives:
 |--------|-----------|---------|
 | `journal_mode` | `MEMORY` | `WAL` |
 | `synchronous` | `OFF` | `NORMAL` |
-| `cache_size` | `-128000` (128 MB) | `-64000` (64 MB) |
+| `cache_size` | `-128000` (128 MB) | `--sqlite-cache-mib` × `-1024` (default 64 MiB: `-65536`) |
 | `locking_mode` | `EXCLUSIVE` | — |
 | `wal_autocheckpoint` | — | `10000` |
 

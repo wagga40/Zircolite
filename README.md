@@ -3,7 +3,7 @@
 ## Standalone SIGMA-Based Detection Tool for EVTX, Auditd, Sysmon for Linux, XML, CSV, or JSONL/NDJSON Logs 
 ![](pics/Zircolite-v3-cli.webp)
 
-[![python](https://img.shields.io/badge/python-3.10-blue)](https://www.python.org/)
+[![python](https://img.shields.io/badge/python-3.10--3.14-blue)](https://www.python.org/)
 ![version](https://img.shields.io/badge/Architecture-64bit-red)
 
 **Zircolite** is a standalone tool written in Python 3 that allows you to use SIGMA rules on:
@@ -49,7 +49,7 @@ Installing also compiles the flattening kernel when a C compiler is available. W
 the install still succeeds and Zircolite runs the same code as Python. Release binaries and
 Docker images always include it.
 
-:warning: On some systems (Mac, ARM, etc.), the `evtx` Python library may require Rust and Cargo to be installed.
+:warning: `evtx` publishes wheels for Linux (x86_64, ARM64), macOS and Windows x64. Windows ARM64 has neither a wheel nor a source package; see [Internals → Windows ARM64](docs/Internals.md#windows-arm64), or use the standalone binary.
 
 ### Standalone binaries
 
@@ -126,6 +126,9 @@ If your EVTX files have the extension ".evtx":
 python3 zircolite.py --evtx sysmon.evtx --ruleset rules/rules_windows_merged.json
 ```
 
+`--ruleset` can be left out: Zircolite then uses `rules/rules_windows_merged.json`, which
+covers Sysmon and the generic Windows channels.
+
 ### Using Native Sigma Rules (YAML)
 
 You can use native Sigma rules (YAML) directly:
@@ -186,6 +189,7 @@ docker run --rm --tty \
 ```
 
 - Replace `$PWD` with the directory (absolute path only) where your logs and rules/rulesets are stored.
+- On a Linux host, add `--user "$(id -u):$(id -g)"` and `-l /case/output/zircolite.log`: the image runs as an unprivileged user that cannot write to a directory you own. See [Docker](docs/Usage.md#docker).
 
 ### Automatic Processing Optimization
 
@@ -212,8 +216,8 @@ python3 zircolite.py --yaml-config my_config.yaml
 python3 zircolite.py --yaml-config my_config.yaml --evtx ./other_logs/
 ```
 
-The generated file documents every supported key; `config/zircolite_example.yaml` is a
-worked example. See [YAML configuration](docs/Usage.md#yaml-configuration) for the merge
+The generated file documents every supported key at its default value;
+`config/zircolite_example.yaml` is the same file, kept in the repository. See [YAML configuration](docs/Usage.md#yaml-configuration) for the merge
 rules and the options that have no YAML equivalent.
 
 ### Updating Default Rulesets
@@ -296,7 +300,7 @@ The Mini-GUI can be used completely offline. It allows you to display and search
 ## License
 
 - All the **code** of the project is licensed under the [GNU Lesser General Public License](https://www.gnu.org/licenses/lgpl-3.0.en.html).
-- `evtx_dump` is under the MIT license.
+- EVTX parsing uses [`evtx`](https://github.com/omerbenamram/pyevtx-rs) (pyevtx-rs), under the MIT or Apache-2.0 license. Release packages list every bundled library and its license in `THIRD_PARTY_LICENSES`.
 - The rules are released under the [Detection Rule License (DRL) 1.1](https://github.com/SigmaHQ/Detection-Rule-License/blob/main/LICENSE.Detection.Rules.md).
 
 ---

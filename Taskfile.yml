@@ -86,7 +86,11 @@ tasks:
           echo "Docker (https://docs.docker.com/install/) is required. Please install it first"
           exit 1
         fi
-      - '{{.DOCKER}} image save --output zircolite.tar {{.DOCKER_REGISTRY}}/{{.DOCKER_REPO}}:{{.DOCKER_TAG}}'
+      - '{{.DOCKER}} image save --output zircolite.tar {{.DOCKER_REPO}}:{{.VERSION}}'
+    vars:
+      VERSION:
+        sh: |
+          cat zircolite/__init__.py | grep "^__version__ = " | cut -d'"' -f2
 
   update-rules:
     desc: Update default rulesets using Zircolite-Rules-v2 repository

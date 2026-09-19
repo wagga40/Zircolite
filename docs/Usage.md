@@ -26,8 +26,9 @@ Zircolite needs **Python 3.10 or above** and runs on Linux, macOS and Windows. T
 | `py7zr` | 7-Zip archives. ZIP, gzip and bzip2 use the standard library. It is required like the rest, but imported only when a `.7z` is opened |
 
 > [!NOTE]
-> On some systems (macOS, ARM), the `evtx` library needs Rust and Cargo installed before
-> it will build. Without it, use one of the other input formats.
+> `evtx` publishes wheels for Linux (x86_64, ARM64), macOS and Windows x64, and Zircolite
+> cannot start without it. Windows ARM64 has neither a wheel nor a source package; see
+> [Internals → Windows ARM64](Internals.md#windows-arm64), or use a standalone binary.
 
 ### Installing
 
@@ -181,7 +182,7 @@ Defaults worth knowing:
 - `--ruleset` is optional; without it Zircolite uses `rules/rules_windows_merged.json`.
 - Results go to `detected_events.json`, or a `.csv` with `--csv` (see
   [CSV detection output](Usage.md#csv-detection-output)).
-- A `zircolite.log` is written alongside; `--nolog` disables it.
+- A `zircolite.log` is written alongside; `--nolog` disables it, and the detections file too.
 - Pointing at a directory filters by file extension, which `--fileext` overrides and
   `--file-pattern` replaces with a glob. `--no-recursion` stops the descent into
   subdirectories.
@@ -210,11 +211,13 @@ on an interrupted run.
 |------|---------|
 | `0` | The run completed. Detections may or may not have been found — that is not an error. |
 | `1` | The run did not produce the analysis it was asked for. |
-| `2` | The command line or configuration file was rejected before anything was processed. |
+| `2` | The command line was rejected before anything was processed. |
 | `130` | Interrupted with `Ctrl+C`. |
 
-`2` is reserved for a specific set of conflicting or impossible invocations: no events
-path given at all, `--csv` with more than one ruleset, a `--csv-delimiter` that is not
+`2` is reserved for a command line that cannot be run as given. argparse rejects some of
+it itself: an unknown flag, a value outside a flag's choices, a non-numeric value where a
+number is expected, or two input format flags together. Zircolite rejects the rest of the
+conflicting or impossible invocations: no events path given at all, `--csv` with more than one ruleset, a `--csv-delimiter` that is not
 exactly one character, `--all-transforms` together with `--transform-category`, a
 `--dbfile` whose path already exists, `--dbfile` with parallel processing over several
 files, a `-p`/`--pipeline` naming a pipeline that is not installed, or a
@@ -293,7 +296,7 @@ unless `--fileext` or `--file-pattern` says otherwise.
 | *(none)* | EVTX files | `.evtx` |
 | `-j`, `--json-input` | JSON lines | `.json` |
 | `--json-array-input` | JSON array | `.json` |
-| `-D`, `--db-input` | A previously saved database | *(path given explicitly)* |
+| `-D`, `--db-input` | A previously saved database, or a directory of them | `.db`, `.sqlite`, `.sqlite3` |
 | `-S`, `--sysmon-linux-input` | Sysmon for Linux | `.log` |
 | `-AU`, `--auditd-input` | Auditd | `.log` |
 | `-x`, `--xml-input` | XML | `.xml` |
@@ -308,7 +311,7 @@ unless `--fileext` or `--file-pattern` says otherwise.
 | `-sr`, `--save-ruleset` | Save the converted ruleset to disk |
 | `-p`, `--pipeline` | Use a pySigma pipeline; repeatable. A name that is not installed exits `2` |
 | `-pl`, `--pipeline-list` | List installed pipelines and exit |
-| `-R`, `--rulefilter` | Skip rules by title (case-sensitive); repeatable |
+| `-R`, `--rulefilter` | Skip rules whose title contains this text (case-sensitive); repeatable |
 | `--test-rules` | JSON file of rule test cases; validate and exit |
 
 ### Output
@@ -331,8 +334,9 @@ unless `--fileext` or `--file-pattern` says otherwise.
 > file, or `--no-parallel` to save one per input. Zircolite exits with an error rather
 > than silently dropping databases.
 >
-> In per-file mode the name is derived from each input, so `--dbfile save.db` over
-> `a.json` and `b.json` writes `save_a.json.db` and `save_b.json.db`; inputs sharing a
+> In per-file mode the name is derived from each input, even when there is only one, so
+> `--dbfile save.db` over `a.json` and `b.json` writes `save_a.json.db` and
+> `save_b.json.db`; inputs sharing a
 > basename get a numbered form. Those names are stable between runs, and every one of them
 > is checked before any processing starts rather than half-way through.
 
@@ -379,9 +383,11 @@ unless `--fileext` or `--file-pattern` says otherwise.
 | `--parallel-memory-limit` | Memory-pressure threshold before throttling, as a percentage (default: 85) |
 
 `--parallel-workers` is also an explicit override: passing a value above 1 enables
-parallel processing even where the built-in heuristic would not have recommended it. Two
-further settings exist only in the YAML file — `parallel.min_workers` and
-`parallel.adaptive`.
+parallel processing even where the built-in heuristic would not have recommended it, as
+long as the run stays per-file. When auto-mode picks the unified layout it has no effect;
+add `--no-auto-mode`. `--executor process` goes further: with several files it keeps the
+run per-file and parallel even where auto-mode would have unified it. Two further settings
+exist only in the YAML file — `parallel.min_workers` and `parallel.adaptive`.
 
 `auto` runs files in separate Python processes when there are at least two, they average
 50 MiB or more, and CPU and RAM allow at least two process workers; otherwise it uses
@@ -583,7 +589,8 @@ detected timestamp field), **low** for an extension-based guess.
 |------------|-------------------|-----------------|
 | Windows EVTX (binary) | Magic bytes `ElfFile\x00` | `SystemTime` |
 | Windows EVTX JSON | Nested `Event.System` with `Channel`/`EventID` | `SystemTime` |
-| Windows EVTX XML | XML with the Microsoft Event namespace | `SystemTime` |
+| Windows EVTX XML | XML with the Microsoft Event namespace, or `<Event>` tags without it (medium confidence) | `SystemTime` |
+| Generic XML | Any other XML; read as Event Log XML, with low confidence | — |
 | Sysmon Windows | Channel is `Microsoft-Windows-Sysmon/Operational` | `UtcTime` |
 | Sysmon for Linux | Syslog header plus embedded `<Event>` XML | `UtcTime` |
 | Auditd (raw) | `type=XXXX msg=audit(...)` | `timestamp` |
@@ -601,7 +608,8 @@ logs needs no extra flag. An explicit `--fileext` always wins.
 
 ```shell
 python3 zircolite.py --events logs/ --ruleset rules/rules_windows_merged.json
-# [+] Auto-detected log type: sysmon_windows (json), confidence=high, timestamp=UtcTime
+# [+] Auto-detected log type: sysmon_windows (json) - confidence: high
+# [+] Auto-detected timestamp field: UtcTime
 ```
 
 ### Timestamp detection
@@ -769,6 +777,10 @@ archive to read the member name and a sample; when it is password-protected and 
 password was given, it falls back to the outer filename (`data.json.7z` → JSON). A wrong
 or missing password is reported rather than guessed at.
 
+An encrypted `.zip` must use the traditional ZipCrypto scheme. Python's `zipfile` cannot
+decrypt AES-encrypted (WinZip AES) members, and Zircolite reports those as a wrong or
+missing password; repack them as `.7z`, which supports AES.
+
 ```shell
 python3 zircolite.py --events logs.json.gz --ruleset rules/rules_windows_merged.json
 python3 zircolite.py --events export.json.7z --ruleset rules/rules_windows_merged.json \
@@ -777,10 +789,11 @@ python3 zircolite.py --events export.json.7z --ruleset rules/rules_windows_merge
 
 ### SQLite database files
 
-Everything lives in an in-memory SQLite database, and `--dbfile` saves it:
+Everything lives in an in-memory SQLite database, and `--dbfile` saves it. With
+`--unified-db` every input goes into one database, written to exactly that path:
 
 ```shell
-python3 zircolite.py --evtx <EVTX_FOLDER> --ruleset <RULESET> --dbfile output.db
+python3 zircolite.py --evtx <EVTX_FOLDER> --ruleset <RULESET> --unified-db --dbfile output.db
 ```
 
 Re-running against that database with `--db-input` skips parsing, flattening and insertion
@@ -789,6 +802,11 @@ entirely, which saves a great deal of time:
 ```shell
 python3 zircolite.py --evtx output.db --ruleset <RULESET> --db-input
 ```
+
+Without `--unified-db` each input gets its own database, named after it
+(`output_<input name>.db`, see the note under [Output](#output)),
+and a folder of several files needs `--no-parallel` as well. Point `--db-input` at the
+directory holding them to run the rules over all of them.
 
 #### Database indexes
 
@@ -1172,6 +1190,22 @@ docker run --rm --tty \
 That uses the rulesets baked into the image. To use your own, put them in a mounted
 directory and give the container path: `--ruleset /case/input/my_ruleset.json`.
 
+The image runs as the unprivileged user `zircolite` (uid 999). Docker Desktop and OrbStack
+on macOS remap bind mounts so that works as it is. On a Linux host the results folder
+belongs to you, not to uid 999, so the container cannot write into it: run it as yourself,
+and put the log file beside the results, because the default one is written into the
+image's own directory:
+
+```shell
+docker run --rm --tty --user "$(id -u):$(id -g)" \
+    -v <Logs folder>:/case/input:ro \
+    -v <Results folder>:/case/output \
+    wagga40/zircolite:latest \
+    --events /case/input \
+    -o /case/output/detected_events.json \
+    -l /case/output/zircolite.log
+```
+
 To build the image yourself: `docker build . -t <image name>`.
 
 ## Troubleshooting
@@ -1180,11 +1214,11 @@ To build the image yourself: `docker build . -t <image name>`.
 |-------|-------------|
 | **Wrong format detected** | `--no-auto-detect` plus an explicit format flag |
 | **Missing or wrong timestamp field** | `--timefield "FieldName"` |
-| **No detections** | Make sure the ruleset matches the log source — Sysmon rules for Sysmon EVTX, generic Windows rules for Security/System. For mixed or unknown Windows logs use `rules_windows_merged.json`. Then check that your field names match what the rules expect. |
+| **No detections** | Make sure the ruleset matches the log source. The default `rules_windows_merged.json` covers Sysmon and the generic Windows channels; `rules_windows_sysmon.json` and `rules_windows_generic.json` each match only their own. Then check that your field names match what the rules expect. |
 | **Out of memory on large datasets** | `--no-parallel`, `--no-auto-mode`, or a lower `--parallel-workers` |
 | **A run is slow** | `--profile-rules` to find the expensive rules, then `--rulefilter` to drop them |
 | **Ruleset file not found** | Default rulesets are in `rules/`; run `python3 zircolite.py -U` to download them |
-| **`evtx` (pyevtx-rs) fails to install** | On macOS and ARM, install Rust and Cargo first — see [Requirements and Installation](Usage.md#requirements-and-installation) |
+| **`evtx` (pyevtx-rs) fails to install** | Only Windows ARM64 lacks a wheel — see [Internals → Windows ARM64](Internals.md#windows-arm64), or use a standalone binary |
 | **Exit code `2` naming an unknown pipeline** | `-pl` lists the installed pipelines. A standalone binary carries only the ones it was built with; run from source for others |
 | **macOS refuses to open the binary** | Clear the quarantine flag from the whole extracted directory: `xattr -dr com.apple.quarantine <directory>` — see [Standalone binaries](Usage.md#standalone-binaries) |
 | **A Linux binary fails with `GLIBC_2.xx not found`** | The distribution is older than glibc 2.28. Run from source or use Docker |

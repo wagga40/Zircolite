@@ -147,10 +147,46 @@ Concretely:
 
 ## Adding things
 
-`CLAUDE.md` documents the exact steps for adding an input format, a CLI option
-or a field mapping, along with the architecture and code style. Read it before
-adding to those surfaces — a CLI flag without its `SETTINGS` row is accepted by
-argparse and silently ignored by the YAML config.
+[Internals](docs/Internals.md) describes the architecture and has a map of every
+module. Three surfaces have more than one place to touch:
+
+**A CLI option**
+
+1. Add the argument in `zircolite/cli.py::parse_arguments()`. Declare
+   `default=None` when the default is ambiguous, so "the user passed the default"
+   stays distinguishable from "the user passed nothing"; `run_config.resolve`
+   applies the real default.
+2. Add a `Setting(...)` row to `SETTINGS` in `zircolite/run_config.py`, naming
+   the YAML section and key, the default and the merge rule. Without it argparse
+   accepts the flag and the YAML config silently ignores the key.
+3. Add the field to the section dataclass in `zircolite/config_loader.py`, and
+   to its `parse_config` branch, so `validate_config` accepts the key. Document
+   the key in the template `create_default_config_file()` writes, then
+   regenerate `config/zircolite_example.yaml` from it rather than editing it by
+   hand: `tests/test_config_loader.py` checks it covers every key.
+4. Update the dataclass in `zircolite/config.py` if the value reaches the
+   engine.
+5. Add tests in `tests/test_cli.py` and a resolution test in
+   `tests/test_yaml_merge.py`, and document the flag in `docs/Usage.md`. An
+   option with no YAML equivalent skips steps 2 and 3, but `docs/Usage.md` must
+   list it as CLI-only.
+
+**An input format**
+
+1. Add a row to `INPUT_FORMATS` in `zircolite/formats.py`. It is the single
+   source for the CLI flag, the YAML `input.format` value, the default
+   extension and encoding, the streaming reader and whether the extractor is
+   needed.
+2. Add the flag to the format group in `zircolite/cli.py::parse_arguments()`.
+3. Add the reader to `StreamingEventProcessor` in `zircolite/streaming.py`.
+4. If detection needs an extension fallback, add it to `EXTENSION_FALLBACKS`
+   in `formats.py` (and to `ALIAS_EXTENSIONS` if no format claims it).
+5. Add the format to the parity table in `tests/test_formats.py` and reader
+   tests in `tests/test_streaming_processor.py`.
+
+**A field mapping** goes in `config/config.yaml`, with tests in
+`tests/test_field_mappings_loader.py`. If the structure of the file changes,
+update `load_field_mappings()` in `zircolite/utils.py` too.
 
 Also, when changing behaviour:
 

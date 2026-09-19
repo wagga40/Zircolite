@@ -72,9 +72,10 @@ pdm run python tests/external/run_external_tests.py \
 | `hashes`            | `--hashes` (xxhash field in every detection) | json |
 | `time_filter`       | `-A` (after-timestamp filter, expects 0 detections) | json |
 | `before_timestamp`  | `-B` (before-timestamp filter, expects 0 detections) | json |
-| `nolog`             | `-n` (no log/result files beyond the output JSON) | json, cli |
+| `nolog`             | `-n` (no log file and no detections file; exit 0) | json, cli |
 | `debug_mode`        | `--debug` (debug logging, same detections as normal) | json, cli |
-| `limit_results`     | `-L` (limit output to N detections) | json, output |
+| `limit_results`     | `-L 0` is rejected (exit 1) rather than discarding every detection | json, output, error |
+| `limit_discards_noisy_rule` | `-L 2` drops a rule matching 3 events | json, output |
 | `yaml_config`       | `-Y` (YAML configuration file) | json, cli |
 | `evtx_single`       | EVTX auto-detection, single file (bitsadmin regression sample) | evtx |
 | `evtx_no_parallel`  | `--no-parallel` with two EVTX files in a directory | evtx |
@@ -218,7 +219,7 @@ Pass `--results-file PATH` (or set `results_file` in `runner.yaml`) to write a d
       "duration_seconds": 1.2,
       "docker_command": ["docker", "run", "--rm", "-e", "PYTHONUNBUFFERED=1", "..."],
       "zircolite_args": ["--version"],
-      "stdout": "Zircolite - v3.5.0\n",
+      "stdout": "Zircolite - vX.Y.Z\n",
       "stderr": ""
     }
   ]

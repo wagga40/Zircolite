@@ -49,7 +49,7 @@ FROM python:${PYTHON_VERSION}
 ARG ZIRCOLITE_INSTALL_PREFIX="/opt"
 
 LABEL org.opencontainers.image.title="Zircolite" \
-      org.opencontainers.image.description="A standalone SIGMA-based detection tool for EVTX, Auditd and Sysmon for Linux logs" \
+      org.opencontainers.image.description="A standalone SIGMA-based detection tool for EVTX, Auditd, Sysmon for Linux, XML, CSV and JSON logs" \
       org.opencontainers.image.authors="wagga40" \
       org.opencontainers.image.source="https://github.com/wagga40/Zircolite"
 
