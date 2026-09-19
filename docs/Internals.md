@@ -264,14 +264,177 @@ GUI. `-U` writes to the installed `rules/` — the directory a later run will ac
 
 | Order | Root | Applies to |
 |-------|------|-----------|
-| 1 | the directory holding the executable | PyInstaller builds only |
-| 2 | `sys._MEIPASS`, where PyInstaller unpacks `datas` | PyInstaller builds only |
-| 3 | the repository root, two levels up from `assets.py` | always |
+| 1 | the directory holding the executable | frozen builds only |
+| 2 | `sys._MEIPASS`: the `_internal/` directory beside the executable, where PyInstaller puts `datas` | frozen builds only |
+| 3 | two levels up from `assets.py`: the repository root from source, `_internal/` again in a binary | always |
 
 The executable's own directory comes first so that the `config/`, `rules/`, `templates/`
-and `gui/` shipped beside a binary can be edited: an updated ruleset dropped there takes
-effect without a rebuild. When no root holds the file, the first candidate is returned,
-so the error names a directory you can actually write to.
+and `gui/` the release package ships beside the binary can be edited: an updated ruleset
+dropped there takes effect without a rebuild. The copy under `_internal/` is what lets a
+bare build — `dist/Zircolite/` straight out of PyInstaller, holding only the executable
+and `_internal/` — run on its own, and it is what the binary tests run against. When no
+root holds the file, the first candidate is returned, so the error names a directory you
+can actually write to.
+
+`bundled_dir`, which `-U` uses to choose where to write, skips every root inside
+`sys._MEIPASS`, comparing resolved paths so that the third root is caught as well.
+`_internal/` still holds a readable copy, but it is the part of the package nobody should
+edit and the next release replaces it whole; in a onefile build the same root would be a
+temporary directory deleted when the process exits. In a binary that leaves the
+executable's directory, and `RulesUpdater` falls back to `./rules`, with a warning, when
+that cannot be written to.
+
+## Packaging
+
+The standalone binaries are PyInstaller builds in its *onedir* layout, made from
+`Zircolite.spec` in the repository root:
+
+```shell
+pdm run pyinstaller --noconfirm Zircolite.spec
+```
+
+That writes `dist/Zircolite/`: the executable (`Zircolite`, or `Zircolite.exe`) and
+`_internal/`, which holds the Python runtime, the extension modules, the bytecode and a
+copy of `config/`, `rules/`, `templates/` and `gui/`. `tools/package-release.py` stages the
+release from it, adding editable copies of those four directories beside the executable,
+`docs/`, `pics/`, `README.md`, `LICENSE` and a generated `THIRD_PARTY_LICENSES`, and
+archives the result as `dist/Zircolite-<version>-<target>.tar.gz` — `.zip` on Windows. A
+tarball keeps the executable bit, which a zip extracted on Linux or macOS drops.
+
+### Why onedir
+
+A onefile executable unpacks its whole runtime into a temporary directory on every start.
+On macOS that cost 2–4 s per run, against about 0.37 s for onedir or a source checkout. It
+also fails outright where `/tmp` is mounted `noexec`, and self-extracting executables draw
+more antivirus false positives. The release package is a directory anyway — the editable
+assets sit beside the executable — so a single file bought nothing.
+
+The spec keeps PyInstaller's default `_internal/` contents directory. Flattening it into
+the executable's directory (`contents_directory='.'`) would put the `zircolite/` package
+directory next to the `Zircolite` executable, and the two collide on case-insensitive
+filesystems, the default on macOS and Windows.
+
+### What the spec has to name
+
+PyInstaller follows the imports it can see in bytecode. Everything below is reached some
+other way, and each gap failed silently rather than loudly:
+
+- **pySigma pipelines and backends.** pySigma discovers them by walking the
+  `sigma.pipelines` and `sigma.backends` namespace packages at run time, so the spec
+  collects those submodules itself, test modules excluded. Without them `--pipeline-list`
+  came back empty and `-p sysmon` converted rules without their `EventID=1` condition.
+  That silent outcome is also why an unknown `-p` name is an error that exits `2` rather
+  than a line in the log.
+- **The flattening kernel.** `streaming.py` loads `zircolite._flatten_native` through
+  `importlib`. A binary ships no `flatten_kernel.py` either, so the run-time
+  `SOURCE_SHA256` staleness check has nothing to compare against; the spec runs that
+  check at build time instead and, under `ZIRCOLITE_REQUIRE_NATIVE=1`, refuses to build
+  from a missing or stale kernel. It checks the kernel beside the spec, so the project
+  must be installed in place (`pdm install`) before building.
+- **`py7zr`**, which is imported only inside a function.
+- **`evtx` and `ijson`**, collected whole with their data files and binaries.
+
+UPX compression is off, and the test and build-only packages (`pytest`, `Cython`,
+`tkinter`, `IPython`) are excluded.
+
+### Why PyInstaller
+
+PyInstaller onedir, Nuitka standalone and PyApp over python-build-standalone (PBS) were
+each built and run against a parity harness on macOS arm64 with Python 3.14 (Homebrew).
+Timings are medians.
+
+| | PyInstaller onedir | Nuitka 4.2.1 standalone | PyApp + PBS |
+|---|---|---|---|
+| Parity with source | all pass | all pass, after a loader-race patch (onefile also needs an asset-root patch) | all pass |
+| `--version` start-up | 0.375 s, the same as source | **0.27 s** | 0.32 s, after a first run of 2–3 s that extracts ~180 MB into the user's home |
+| Run time against source | −4 % to +1 % | 5–18 % slower, +25–35 MiB RSS | 11–29 % faster, from the PBS interpreter rather than the launcher |
+| Local build time | 17–30 s | 105–180 s | 81 s, plus a Rust toolchain |
+| Problems found | pipelines not bundled (fixed in the spec) | a thread-import race dropped files with exit `0` in 8 of 15 runs; `.py` data files skipped silently; the executable and package names collide; SIGBUS in a cached onefile | a permanent per-user install; Rust on every build leg; Windows `Ctrl+C` untested |
+
+- **Nuitka** starts about 0.1 s sooner but is slower on real workloads. The hot paths —
+  the Rust EVTX parser, SQLite, orjson and the Cython kernel — are native already, so
+  compiling the remaining Python buys little, and it brought new silent failures and
+  builds several times slower.
+- **PyApp with PBS** runs fastest but deploys worse: it installs itself permanently into
+  the user's home on first run and needs Rust on every build leg. Its speed comes from the
+  PBS interpreter, not from PyApp. The Linux legs already build on PBS; whether a
+  PyInstaller build on PBS reproduces the gain on macOS and Windows has yet to be
+  measured.
+- **Not viable:** cx_Freeze uses the same model as PyInstaller onedir, with nothing to
+  gain; PyOxidizer is no longer maintained; Briefcase only produces installers; Mojo and
+  Codon cannot compile pySigma, lxml or evtx and still need CPython to run them, and Mojo
+  has no native Windows support; a whole-application Cython build is effectively what
+  Nuitka does, and that measured slower.
+
+### Support floors
+
+| Target | Floor | What sets it |
+|--------|-------|--------------|
+| `linux-x64`, `linux-arm64` | glibc 2.28: RHEL 8, Debian 10, Ubuntu 20.04 | The build runs inside a `manylinux_2_28` container, on a PBS 3.14 installed by uv. A runner's own Python links against the runner's glibc — 2.39 on Ubuntu 24.04 — and the binary inherits it |
+| `macos-arm64` | macOS 15.0 | The `macos-15` runner, with `MACOSX_DEPLOYMENT_TARGET=15.0`. The wheels PDM selects there, orjson's among them, are built for macOS 15, and the older runners are being retired |
+| `windows-x64`, `windows-arm64` | Windows 10 | Python 3.14, which the binary carries, supports nothing older |
+
+The binary tests check the first two when `ZIRCOLITE_GLIBC_FLOOR` and
+`ZIRCOLITE_MACOS_FLOOR` are set, as CI sets them: the highest `GLIBC_` symbol version
+across every ELF file in the build and a non-executable stack for libpython on Linux, the
+`minos` of every Mach-O file on macOS.
+
+### Windows ARM64
+
+`pdm.lock` cannot be installed on Windows ARM64 as it stands. `evtx` publishes neither a
+`win_arm64` wheel nor an sdist, and `jq`, which pySigma requires, does not build there.
+`tools/install-win-arm64.py` assembles the environment instead: it exports the locked
+development requirements without those two, installs them into a uv virtual environment
+with `--no-deps` so that `jq` is never resolved again, adds an `evtx` wheel the workflow
+builds with maturin from pyevtx-rs `0.12.1`, installs Zircolite editable so the kernel is
+compiled into the tree where the spec looks for it, and points PDM at that environment so
+the shared `pdm run` steps work unchanged. pySigma imports `jq` only inside its jq
+transformation, which Zircolite never uses.
+
+### CI gates
+
+`.github/workflows/build_pyinstaller.yml` builds, tests, verifies and releases:
+
+| Trigger | What runs |
+|---------|-----------|
+| A `v*` tag | All five targets, then the release |
+| A push to `master`, or a pull request, touching the spec, the package, `pyproject.toml`, `pdm.lock`, `setup.py`, the shipped assets, the test fixtures, the binary tests, `tools/` or the workflow | The `linux-x64` leg only, as a canary |
+| `workflow_dispatch` (`dry_run`, true by default) and a weekly schedule | All five targets |
+
+**Build.** Each leg installs the project, builds with the spec, then runs
+
+```shell
+pdm run python -m pytest tests/test_frozen_binary.py tests/test_e2e_regression.py
+```
+
+with `ZIRCOLITE_BINARY` naming the built executable. `test_e2e_regression.py` then runs its
+format-parity, mode-equivalence and golden-detection cases through the binary instead of
+in process. `test_frozen_binary.py` compares the binary with `python -m zircolite` from the
+same environment: version and layout, the pipeline list and the SQL each pipeline
+produces, compressed and encrypted archives, both executors, assets and `--package` from a
+foreign working directory, transforms, the selected flattening kernel, platform floors and
+`Ctrl+C`. The raw `dist/Zircolite/` is tested, without the editable directories the
+release adds, so anything missing from `_internal/` fails here. On a tag,
+`tools/package-release.py --check-tag` confirms that the tag, `__version__`, the
+`pyproject.toml` version and the binary's `--version` all agree. The leg then packages its
+single archive and uploads it.
+
+**Verify.** One job per target downloads that archive onto a clean runner, with no Python
+and no PDM, extracts it, and from the package directory runs `--version`, a detection
+over `tests/fixtures/sample_bitsadmin.evtx` with `rules/rules_windows_sysmon.json` that
+must return exactly the golden result, and `--package`. The Linux targets repeat this in
+`rockylinux:8`, `debian:11` and `ubuntu:20.04` containers.
+
+**Release.** Once every verify job passes, one job collects the archives and writes
+`SHA256SUMS`. On a tag it then attests the archives' build provenance and creates a
+*draft* GitHub release carrying them, or replaces the assets of the release if it already
+exists; publishing is done by hand. Any other run, including a `dry_run` dispatch, stops
+after `SHA256SUMS`.
+
+**Forgejo pre-flight.** `.forgejo/workflows/build_pyinstaller.yml` mirrors the
+`linux-x64` leg for the self-hosted instance: the same container image and commands, then
+the verify smoke inside the same job. The distro containers and the release stay on
+GitHub, because Forgejo job containers get no Docker socket.
 
 ## SQLite behaviour
 

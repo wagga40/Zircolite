@@ -20,6 +20,10 @@ the terminal. `python3 -m zircolite …` is equivalent from the project root —
 `python -m` searches the working directory rather than the script's own, so the
 `zircolite.py` form is the one that works from anywhere.
 
+To run it without Python, download the standalone binary for your platform from the
+[releases](https://github.com/wagga40/Zircolite/releases) — see
+[Usage → Standalone binaries](Usage.md#standalone-binaries).
+
 Start with [Usage → Requirements and Installation](Usage.md#requirements-and-installation)
 and [Usage → Basic Usage](Usage.md#basic-usage).
 
@@ -27,9 +31,9 @@ and [Usage → Basic Usage](Usage.md#basic-usage).
 
 | Page | Covers |
 |------|--------|
-| [Usage](Usage.md) | Installation, running, every command-line option, input formats, rulesets, rule testing, configuration, Docker |
+| [Usage](Usage.md) | Installation, standalone binaries, running, every command-line option, input formats, rulesets, rule testing, configuration, Docker |
 | [Advanced](Advanced.md) | Field transforms, large datasets, parallel processing, event filtering, templating, the Mini-GUI |
-| [Internals](Internals.md) | Architecture, module map, SQLite behaviour, automatic SQL repairs |
+| [Internals](Internals.md) | Architecture, module map, SQLite behaviour, packaging and release builds, automatic SQL repairs |
 
 ## Task and Taskfile
 
@@ -46,6 +50,7 @@ the project root:
 | `task docker-build-multi-arch` | Build for linux/amd64 and linux/arm64 |
 | `task docker-push` | Push to Docker Hub, after a multi-arch build |
 | `task save` | Save the Docker image to an archive |
+| `task binary-build` | Build the standalone binary into `dist/Zircolite/` with PyInstaller, then run the binary tests against it |
 | `task get-version` | Print the version from `zircolite/__init__.py` |
 
 `Taskfile.yml` holds these production tasks. Development tasks — lint, format, tests —

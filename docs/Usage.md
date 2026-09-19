@@ -2,7 +2,8 @@
 
 ## Requirements and Installation
 
-Zircolite needs **Python 3.10 or above** and runs on Linux, macOS and Windows.
+Zircolite needs **Python 3.10 or above** and runs on Linux, macOS and Windows. The
+[standalone binaries](Usage.md#standalone-binaries) need no Python installation at all.
 
 ### Dependencies
 
@@ -72,6 +73,87 @@ After installation you can use [Task](https://taskfile.dev/) for automation — 
 rules, building the Docker image, cleaning up. See
 [Task and Taskfile](README.md#task-and-taskfile).
 
+### Standalone binaries
+
+Each [GitHub release](https://github.com/wagga40/Zircolite/releases) publishes a
+self-contained package per platform, built with PyInstaller. It carries its own Python,
+every dependency, the compiled flattening kernel and the pySigma pipelines that ship as
+dependencies, so nothing has to be installed first.
+
+| Target | Archive | Minimum platform |
+|--------|---------|------------------|
+| `linux-x64` | `Zircolite-<version>-linux-x64.tar.gz` | glibc 2.28: RHEL 8, Debian 10, Ubuntu 20.04 |
+| `linux-arm64` | `Zircolite-<version>-linux-arm64.tar.gz` | glibc 2.28 |
+| `macos-arm64` | `Zircolite-<version>-macos-arm64.tar.gz` | macOS 15, Apple silicon |
+| `windows-x64` | `Zircolite-<version>-windows-x64.zip` | Windows 10 |
+| `windows-arm64` | `Zircolite-<version>-windows-arm64.zip` | Windows 10, ARM64 |
+
+There is no binary for Intel Macs or for musl-based distributions such as Alpine; run
+from source or use [Docker](Usage.md#docker) there.
+
+An archive unpacks to one directory:
+
+```
+Zircolite-<version>-<target>/
+├── Zircolite             Zircolite.exe on Windows
+├── _internal/            Python, the libraries, and a built-in copy of the four directories below
+├── config/               field mappings and transforms
+├── rules/                default rulesets
+├── templates/            output templates
+├── gui/                  Mini-GUI archive
+├── docs/  pics/  README.md
+├── LICENSE
+└── THIRD_PARTY_LICENSES
+```
+
+The executable loads everything from `_internal/` and cannot start without it, so move or
+copy the directory as a whole, never the executable alone. Leave `_internal/` as it is:
+the editable copies are the ones beside the executable, and they take precedence over the
+built-in ones. An edited ruleset in `rules/`, a changed `config/config.yaml` or a newer
+`gui/zircogui.zip` takes effect on the next run, without a rebuild.
+
+Relative paths to the shipped files, such as `rules/rules_windows_merged.json` or
+`templates/exportForSplunk.tmpl`, resolve against the working directory first and against
+the package when the working directory has no such file, so the executable can be run from
+anywhere. Output such as `detected_events.json` and `zircolite.log` goes to the working
+directory, as it does from source. The rest of this documentation writes
+`python3 zircolite.py`; with a binary, use the path to the executable instead:
+
+```shell
+tar -xzf Zircolite-<version>-linux-x64.tar.gz -C ~/tools
+~/tools/Zircolite-<version>-linux-x64/Zircolite -e /cases/host1/ -r rules/rules_windows_merged.json
+```
+
+**macOS.** The binaries are not signed or notarized. A browser marks a download as
+quarantined, the extracted files inherit the mark, and Gatekeeper then refuses the
+executable and each library in `_internal/`. Clear it from the whole directory once,
+recursively:
+
+```shell
+xattr -dr com.apple.quarantine Zircolite-<version>-macos-arm64
+```
+
+**Verifying a download.** Each release publishes `SHA256SUMS` next to the archives, and
+every archive has a build provenance attestation tying it to the workflow run in
+`wagga40/Zircolite` that built it. `gh attestation verify` needs the
+[GitHub CLI](https://cli.github.com/):
+
+```shell
+sha256sum --check --ignore-missing SHA256SUMS         # Linux
+shasum -a 256 --check --ignore-missing SHA256SUMS     # macOS
+Get-FileHash Zircolite-<version>-windows-x64.zip      # Windows: compare with SHA256SUMS
+gh attestation verify Zircolite-<version>-<target>.tar.gz --repo wagga40/Zircolite
+```
+
+**Updating rulesets.** In a binary, `-U` writes to the `rules/` directory beside the
+executable, which is the one later runs read. When that directory cannot be written to —
+a package extracted somewhere read-only or owned by another user — the rulesets go to
+`./rules` in the working directory instead, with a warning; later runs started from that
+directory pick them up first. `-U` never writes into `_internal/`.
+
+**Pipelines.** A binary can apply only the pySigma pipelines it was built with, which
+`-pl` lists. Any other pipeline needs a source install.
+
 ## Basic Usage
 
 ```shell
@@ -132,7 +214,8 @@ on an interrupted run.
 path given at all, `--csv` with more than one ruleset, a `--csv-delimiter` that is not
 exactly one character, `--all-transforms` together with `--transform-category`, a
 `--dbfile` whose path already exists, `--dbfile` with parallel processing over several
-files, or a `--generate-config` that could not be written.
+files, a `-p`/`--pipeline` naming a pipeline that is not installed, or a
+`--generate-config` that could not be written.
 
 Everything else that stops a run is `1`, including some problems found just as early: a
 path that matched no files, a ruleset that loaded no rules, a `--strict` parse error, a
@@ -220,7 +303,7 @@ unless `--fileext` or `--file-pattern` says otherwise.
 |--------|-------------|
 | `-r`, `--ruleset` | Sigma ruleset, JSON or YAML; repeatable |
 | `-sr`, `--save-ruleset` | Save the converted ruleset to disk |
-| `-p`, `--pipeline` | Use a pySigma pipeline; repeatable |
+| `-p`, `--pipeline` | Use a pySigma pipeline; repeatable. A name that is not installed exits `2` |
 | `-pl`, `--pipeline-list` | List installed pipelines and exit |
 | `-R`, `--rulefilter` | Skip rules by title (case-sensitive); repeatable |
 | `--test-rules` | JSON file of rule test cases; validate and exit |
@@ -752,7 +835,10 @@ published in [Zircolite-Rules-v2](https://github.com/wagga40/Zircolite-Rules-v2)
 | `rules_linux.json` | Auditd and Sysmon for Linux |
 
 Each also has `_high` and `_medium` variants (that severity and above). `-U` or
-`task update-rules` fetches the current versions.
+`task update-rules` fetches the current versions. `-U` writes to the `rules/` directory
+later runs read — the repository's from source, the one beside the executable in a
+[standalone binary](Usage.md#standalone-binaries) — and falls back to `./rules`, with a
+warning, when that directory cannot be written to.
 
 Native Sigma rules in YAML work directly — Zircolite detects the format and converts them
 with [pySigma](https://github.com/SigmaHQ/pySigma):
@@ -902,6 +988,16 @@ python3 zircolite.py -e sample.evtx -r schtasks.yml -p sysmon -p windows-logsour
 ```
 
 The converted result can be saved with `-sr`/`--save-ruleset`.
+
+A name that is not installed stops the run before any rule is converted. Every unknown
+name is reported at once, together with the installed pipelines, and Zircolite exits `2`.
+Carrying on without the pipeline would still convert every rule, only without the
+conditions the pipeline adds — without `sysmon`, process-creation rules lose their
+`EventID=1` test and match events they should not — while the run looked successful.
+
+The [standalone binaries](Usage.md#standalone-binaries) carry the pipelines they were
+built with: those from `pysigma-pipeline-sysmon` and `pysigma-pipeline-windows`. `-pl`
+lists them, and any other needs a source install.
 
 > [!NOTE]
 > With multiple native Sigma rulesets you cannot vary the pipeline per ruleset — every
@@ -1084,6 +1180,10 @@ To build the image yourself: `docker build . -t <image name>`.
 | **A run is slow** | `--profile-rules` to find the expensive rules, then `--rulefilter` to drop them |
 | **Ruleset file not found** | Default rulesets are in `rules/`; run `python3 zircolite.py -U` to download them |
 | **`evtx` (pyevtx-rs) fails to install** | On macOS and ARM, install Rust and Cargo first — see [Requirements and Installation](Usage.md#requirements-and-installation) |
+| **Exit code `2` naming an unknown pipeline** | `-pl` lists the installed pipelines. A standalone binary carries only the ones it was built with; run from source for others |
+| **macOS refuses to open the binary** | Clear the quarantine flag from the whole extracted directory: `xattr -dr com.apple.quarantine <directory>` — see [Standalone binaries](Usage.md#standalone-binaries) |
+| **A Linux binary fails with `GLIBC_2.xx not found`** | The distribution is older than glibc 2.28. Run from source or use Docker |
+| **`-U` warns that it cannot write and uses `./rules`** | The package directory is read-only for your user. Later runs from the same working directory still find the new rulesets; to update the package itself, extract it somewhere writable |
 
 `--debug` gives full tracebacks and debug logging. For large datasets, filtering and
 templating see [Advanced](Advanced.md); for architecture see [Internals](Internals.md).

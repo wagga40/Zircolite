@@ -665,10 +665,14 @@ creation and says so, and `--package-dir` must point at a directory that already
 Zircolite reports an error rather than writing the package somewhere you would not think
 to look.
 
-It needs `gui/zircogui.zip`, which Zircolite looks for beside the executable first and
-then inside the binary itself — the standalone binaries carry a copy, so `--package` works
-with nothing on disk but the executable. Dropping an updated `gui/zircogui.zip` next to
-the binary replaces the built-in Mini-GUI without a rebuild.
+It needs `gui/zircogui.zip` from Zircolite's own files, never from the working directory.
+From source that is the repository's `gui/`. A
+[standalone binary](Usage.md#standalone-binaries) looks in the `gui/` beside the executable
+first and then in the copy under `_internal/`, so dropping an updated `gui/zircogui.zip`
+next to the executable replaces the built-in Mini-GUI without a rebuild, and removing it
+falls back to the built-in one. Either way the executable still needs the rest of its
+package directory: the binaries are a directory with `_internal/` beside the executable,
+not a single file.
 
 To build it by hand instead, render `data.js` and drop it into the unpacked archive:
 
