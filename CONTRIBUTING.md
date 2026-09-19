@@ -117,9 +117,9 @@ ZIRCOLITE_TARGET=<target> pdm run python tools/package-release.py
 
 `<target>` is one of `linux-x64`, `linux-arm64`, `macos-arm64`, `windows-x64` and
 `windows-arm64`. The script reads `dist/Zircolite/` and writes
-`dist/Zircolite-<version>-<target>.tar.gz`, or a `.zip` on Windows. Extract it
-somewhere outside the repository and run it from there, so that nothing resolves
-against the checkout by accident.
+`dist/Zircolite-<version>-<target>.zip`. Extract it with `unzip` somewhere outside the
+repository and run it from there, so that nothing resolves against the checkout by
+accident.
 
 Windows ARM64 cannot install `pdm.lock` as it stands; `tools/install-win-arm64.py`
 assembles the environment there instead. See

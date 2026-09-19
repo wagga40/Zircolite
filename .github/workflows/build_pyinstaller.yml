@@ -231,7 +231,7 @@ jobs:
         run: |
           pdm run python tools/package-release.py
           shopt -s nullglob
-          archives=(dist/Zircolite-*-"$ZIRCOLITE_TARGET".tar.gz dist/Zircolite-*-"$ZIRCOLITE_TARGET".zip)
+          archives=(dist/Zircolite-*-"$ZIRCOLITE_TARGET".zip)
           if [ "${#archives[@]}" -ne 1 ]; then
             echo "expected one archive for $ZIRCOLITE_TARGET, found: ${archives[*]}" >&2
             exit 1
@@ -241,7 +241,7 @@ jobs:
 
       # archive: false uploads the package as it is rather than wrapped in a
       # zip, so the verify and release jobs and anyone downloading from the run
-      # page get the .tar.gz or .zip itself. The artifact is then named after
+      # page get the .zip itself. The artifact is then named after
       # the file; name repeats it only so that overwrite, on a re-run, deletes
       # the artifact the upload is about to replace.
       - name: Upload the archive
@@ -292,13 +292,15 @@ jobs:
         if: runner.os != 'Windows'
         run: |
           shopt -s nullglob
-          archives=(dist/Zircolite-*-"$TARGET".tar.gz)
+          archives=(dist/Zircolite-*-"$TARGET".zip)
           if [ "${#archives[@]}" -ne 1 ]; then
             echo "expected one archive for $TARGET, found: ${archives[*]}" >&2
             exit 1
           fi
-          tar -xzf "${archives[0]}"
-          pkg=$(basename "${archives[0]}" .tar.gz)
+          # unzip, as a user would; it restores the executable bit and the
+          # symlinks the archive records.
+          unzip -q "${archives[0]}"
+          pkg=$(basename "${archives[0]}" .zip)
           if [ ! -x "$pkg/Zircolite" ]; then
             echo "${archives[0]} has no executable $pkg/Zircolite" >&2
             exit 1

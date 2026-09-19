@@ -7,8 +7,8 @@
 The first form stages dist/Zircolite-<version>-<target>/ -- the onedir build,
 editable copies of config/, rules/, templates/ and gui/, the documentation,
 LICENSE and a generated THIRD_PARTY_LICENSES -- and writes it to
-dist/Zircolite-<version>-<target>.tar.gz (.zip for Windows targets). The
-archive path is the only thing printed on stdout.
+dist/Zircolite-<version>-<target>.zip. The archive path is the only thing
+printed on stdout.
 
 The second checks a release tag against every place the version is written
 down, including what the built binary reports.
@@ -22,17 +22,17 @@ regexes rather than tomllib, which Python 3.10 lacks.
 from __future__ import annotations
 
 import argparse
-import gzip
 import importlib.metadata as metadata
 import os
 import platform
 import re
 import shutil
+import stat
 import subprocess
 import sys
 import sysconfig
-import tarfile
 import tempfile
+import time
 import zipfile
 from collections.abc import Callable, Iterator
 from pathlib import Path, PurePosixPath
@@ -447,13 +447,14 @@ def stage(root: Path, version: str, target: str) -> Path:
     for name in TOP_LEVEL_FILES:
         if not (root / name).is_file():
             raise PackagingError(f"{root / name} does not exist")
-    # Only a zip cannot carry a symlink, but refusing them for every target lets
-    # the linux-x64 canary build catch one, rather than the Windows legs of a release.
+    # Only a Windows archive cannot hold a symlink, but refusing them for every
+    # target lets the linux-x64 canary build catch one, rather than the Windows
+    # legs of a release.
     links = copied_symlinks(root)
     if links:
         raise PackagingError(
-            "symlinks cannot go in the Windows zip archives, so none is packaged for any "
-            "target; replace each with the file it points to: "
+            "symlinks cannot be extracted from the Windows archives, so none is packaged "
+            "for any target; replace each with the file it points to: "
             + ", ".join(link.relative_to(root).as_posix() for link in links))
     # Before anything is copied, so a gap in the notices leaves no half-built tree.
     notices = third_party_licences(version, target)
@@ -484,52 +485,60 @@ def source_date_epoch() -> int | None:
     return int(value) if value else None
 
 
-def write_tar(staging: Path, archive: Path, executable: str) -> None:
+def _zip_timestamp(path: Path, epoch: int | None) -> tuple[int, int, int, int, int, int]:
+    mtime = path.lstat().st_mtime
+    if epoch is not None:
+        mtime = min(mtime, epoch)
+    # Zip timestamps have no time zone and start in 1980.
+    return max(time.gmtime(mtime)[:6], (1980, 1, 1, 0, 0, 0))
+
+
+def write_zip(staging: Path, archive: Path, executable: str, target: str) -> None:
+    """Write `staging` as a zip that keeps what a Unix extraction needs.
+
+    unzip and macOS's Archive Utility restore the Unix mode and symlinks that
+    an entry records when its "made by" system is Unix, which the executable
+    bit and the macOS build's Python.framework links depend on. Windows cannot
+    extract a symlink from a zip, and no Windows build has one.
+    """
     epoch = source_date_epoch()
-    with archive.open("wb") as raw, \
-            gzip.GzipFile(filename="", mode="wb", fileobj=raw, mtime=epoch or 0) as compressed, \
-            tarfile.open(fileobj=compressed, mode="w", format=tarfile.PAX_FORMAT) as tar:
+    windows = target.startswith("windows-")
+    with zipfile.ZipFile(archive, "w", compression=zipfile.ZIP_DEFLATED, compresslevel=9) as bundle:
         for path in [staging, *walk(staging)]:
             relative = path.relative_to(staging).as_posix()
             name = staging.name if relative == "." else f"{staging.name}/{relative}"
-            info = tar.gettarinfo(str(path), arcname=name)
-            info.uid = info.gid = 0
-            info.uname = info.gname = ""
-            if epoch is not None:
-                info.mtime = min(int(info.mtime), epoch)
+            if path.is_symlink():
+                if windows:
+                    raise PackagingError(f"{path} is a symlink, which Windows cannot extract "
+                                         "from a zip archive")
+                info = zipfile.ZipInfo(name, date_time=_zip_timestamp(path, epoch))
+                info.create_system = 3
+                info.external_attr = (stat.S_IFLNK | 0o777) << 16
+                bundle.writestr(info, os.readlink(path))
+                continue
+            info = zipfile.ZipInfo.from_file(path, name, strict_timestamps=False)
+            info.date_time = _zip_timestamp(path, epoch)
+            if not windows:
+                # Recorded as Unix whatever the packaging host, so the mode is honoured.
+                info.create_system = 3
+            if path.is_dir():
+                bundle.writestr(info, b"", compress_type=zipfile.ZIP_STORED)
+                continue
             # The mode on disk is whatever the checkout or an artifact
             # round-trip left; the executable must come out executable.
             if relative == executable:
-                info.mode |= 0o755
-            if info.isreg():
-                with path.open("rb") as handle:
-                    tar.addfile(info, handle)
-            else:
-                tar.addfile(info)
-
-
-def write_zip(staging: Path, archive: Path) -> None:
-    with zipfile.ZipFile(archive, "w", compression=zipfile.ZIP_DEFLATED, compresslevel=9,
-                         strict_timestamps=False) as bundle:
-        for path in walk(staging):
-            if path.is_symlink():
-                raise PackagingError(f"{path} is a symlink, which a zip archive cannot carry")
-            bundle.write(path, f"{staging.name}/{path.relative_to(staging).as_posix()}")
+                info.external_attr |= 0o755 << 16
+            bundle.writestr(info, path.read_bytes(), compress_type=zipfile.ZIP_DEFLATED,
+                            compresslevel=9)
 
 
 def package(root: Path, target: str) -> Path:
     version = package_version(root)
     staging = stage(root, version, target)
-    if target.startswith("windows-"):
-        archive = staging.with_name(f"{staging.name}.zip")
-    else:
-        archive = staging.with_name(f"{staging.name}.tar.gz")
+    archive = staging.with_name(f"{staging.name}.zip")
     archive.unlink(missing_ok=True)
     log(f"Writing {archive}")
-    if archive.suffix == ".zip":
-        write_zip(staging, archive)
-    else:
-        write_tar(staging, archive, executable_name(target))
+    write_zip(staging, archive, executable_name(target), target)
     return archive
 
 

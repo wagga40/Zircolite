@@ -84,7 +84,7 @@ the `@actions/artifact` v2 library it wraps refuse to talk to anything that is
 not github.com, failing with `GHESNotSupportedError`. v3 uses the older upload
 API, which Forgejo implements. It zips what it uploads, where GitHub's
 `build_pyinstaller` uploads the archive as it is; the executable bit survives
-either way, inside the tarball.
+either way, recorded inside the zip.
 
 Every workflow also adds a `concurrency` group. The runner has capacity 1, so
 without it each superseded push queues behind the last. `build_pyinstaller`'s group

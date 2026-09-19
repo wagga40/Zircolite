@@ -298,8 +298,11 @@ That writes `dist/Zircolite/`: the executable (`Zircolite`, or `Zircolite.exe`) 
 copy of `config/`, `rules/`, `templates/` and `gui/`. `tools/package-release.py` stages the
 release from it, adding editable copies of those four directories beside the executable,
 `docs/`, `pics/`, `README.md`, `LICENSE` and a generated `THIRD_PARTY_LICENSES`, and
-archives the result as `dist/Zircolite-<version>-<target>.tar.gz` — `.zip` on Windows. A
-tarball keeps the executable bit, which a zip extracted on Linux or macOS drops.
+archives the result as `dist/Zircolite-<version>-<target>.zip` for every target. The Linux
+and macOS archives record each entry as made on Unix, with its mode and, for the symlinks
+a macOS build keeps in `Python.framework`, its link target: `unzip` and Archive Utility
+restore both, so the executable comes out executable. Windows cannot extract a symlink
+from a zip, and a Windows build with one fails to package.
 
 ### Why onedir
 

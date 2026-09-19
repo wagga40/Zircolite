@@ -82,16 +82,19 @@ dependencies, so nothing has to be installed first.
 
 | Target | Archive | Minimum platform |
 |--------|---------|------------------|
-| `linux-x64` | `Zircolite-<version>-linux-x64.tar.gz` | glibc 2.28: RHEL 8, Debian 10, Ubuntu 20.04 |
-| `linux-arm64` | `Zircolite-<version>-linux-arm64.tar.gz` | glibc 2.28 |
-| `macos-arm64` | `Zircolite-<version>-macos-arm64.tar.gz` | macOS 15, Apple silicon |
+| `linux-x64` | `Zircolite-<version>-linux-x64.zip` | glibc 2.28: RHEL 8, Debian 10, Ubuntu 20.04 |
+| `linux-arm64` | `Zircolite-<version>-linux-arm64.zip` | glibc 2.28 |
+| `macos-arm64` | `Zircolite-<version>-macos-arm64.zip` | macOS 15, Apple silicon |
 | `windows-x64` | `Zircolite-<version>-windows-x64.zip` | Windows 10 |
 | `windows-arm64` | `Zircolite-<version>-windows-arm64.zip` | Windows 10, ARM64 |
 
 There is no binary for Intel Macs or for musl-based distributions such as Alpine; run
 from source or use [Docker](Usage.md#docker) there.
 
-An archive unpacks to one directory:
+Every archive is a zip. On Linux and macOS, extract it with `unzip` or Archive Utility,
+which restore the executable bit and the symlinks it records; after a tool that drops
+them, the executable will not start (`chmod +x Zircolite` fixes that on Linux). It
+unpacks to one directory:
 
 ```
 Zircolite-<version>-<target>/
@@ -120,7 +123,7 @@ directory, as it does from source. The rest of this documentation writes
 `python3 zircolite.py`; with a binary, use the path to the executable instead:
 
 ```shell
-tar -xzf Zircolite-<version>-linux-x64.tar.gz -C ~/tools
+unzip -q Zircolite-<version>-linux-x64.zip -d ~/tools
 ~/tools/Zircolite-<version>-linux-x64/Zircolite -e /cases/host1/ -r rules/rules_windows_merged.json
 ```
 
@@ -142,7 +145,7 @@ every archive has a build provenance attestation tying it to the workflow run in
 sha256sum --check --ignore-missing SHA256SUMS         # Linux
 shasum -a 256 --check --ignore-missing SHA256SUMS     # macOS
 Get-FileHash Zircolite-<version>-windows-x64.zip      # Windows: compare with SHA256SUMS
-gh attestation verify Zircolite-<version>-<target>.tar.gz --repo wagga40/Zircolite
+gh attestation verify Zircolite-<version>-<target>.zip --repo wagga40/Zircolite
 ```
 
 **Updating rulesets.** In a binary, `-U` writes to the `rules/` directory beside the

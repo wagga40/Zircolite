@@ -107,7 +107,7 @@ jobs:
         run: |
           pdm run python tools/package-release.py
           shopt -s nullglob
-          archives=(dist/Zircolite-*-"$ZIRCOLITE_TARGET".tar.gz)
+          archives=(dist/Zircolite-*-"$ZIRCOLITE_TARGET".zip)
           if [ "${#archives[@]}" -ne 1 ]; then
             echo "expected one archive for $ZIRCOLITE_TARGET, found: ${archives[*]}" >&2
             exit 1
@@ -121,8 +121,8 @@ jobs:
         env:
           ARCHIVE: ${{ steps.package.outputs.path }}
         run: |
-          tar -xzf "$ARCHIVE"
-          pkg=$(basename "$ARCHIVE" .tar.gz)
+          unzip -q "$ARCHIVE"
+          pkg=$(basename "$ARCHIVE" .zip)
           if [ ! -x "$pkg/Zircolite" ]; then
             echo "$ARCHIVE has no executable $pkg/Zircolite" >&2
             exit 1
@@ -163,7 +163,7 @@ jobs:
       # "GHESNotSupportedError: @actions/artifact v2.0.0+ ... not currently
       # supported on GHES". v3 uses the older API, which Forgejo implements. It
       # zips what it uploads, which is harmless here: the executable bit lives
-      # inside the tarball.
+      # inside the archive.
       - name: Upload the archive
         uses: actions/upload-artifact@v3
         with:

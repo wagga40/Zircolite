@@ -32,10 +32,11 @@ ZIRCOLITE_TARGET=macos-arm64 pdm run python tools/package-release.py
 - `docs/`, `pics/`, `README.md` and `LICENSE`;
 - a generated `THIRD_PARTY_LICENSES`.
 
-It then writes `dist/Zircolite-<version>-<target>.tar.gz` (a `.zip` for the Windows
-targets) and prints the archive's path, which is all it writes to stdout. The tarball
-keeps every file's mode and always marks the executable as executable. Entries are
-sorted and owned by root, and `SOURCE_DATE_EPOCH` caps the timestamps when it is set.
+It then writes `dist/Zircolite-<version>-<target>.zip` and prints the archive's path,
+which is all it writes to stdout. For the Linux and macOS targets every entry is recorded
+as made on Unix, with its mode, so `unzip` and Archive Utility restore it; the executable
+is always marked executable, and symlinks in the build are stored as symlinks. Entries
+are sorted, and `SOURCE_DATE_EPOCH` caps the timestamps when it is set.
 The version comes from `zircolite/__init__.py`, read as text rather than imported.
 
 `THIRD_PARTY_LICENSES` is built from the environment the binary was built in. It covers:
@@ -62,9 +63,10 @@ The script fails, and writes nothing, when:
 - `dist/Zircolite/` or its executable is missing, or the build is not a onedir build
   (no `_internal/`);
 - anything it copies from the checkout (`config/`, `rules/`, `templates/`, `gui/`,
-  `docs/`, `pics/`, `README.md`, `LICENSE`) is or contains a symlink. Only the Windows
-  zip cannot carry one, but the check runs for every target so that the linux-x64
-  canary build catches it. Symlinks inside the onedir build are kept in the tarballs;
+  `docs/`, `pics/`, `README.md`, `LICENSE`) is or contains a symlink. Only a Windows
+  archive cannot hold one, but the check runs for every target so that the linux-x64
+  canary build catches it. Symlinks inside the onedir build are kept in the Linux and
+  macOS archives, and fail a Windows target;
 - a required distribution is not installed. The only exception is jq on
   `windows-arm64`; see below;
 - a distribution has no licence text and nothing is vendored for it;

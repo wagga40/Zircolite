@@ -21,8 +21,8 @@ import os
 import re
 import shutil
 import stat
+import subprocess
 import sys
-import tarfile
 import zipfile
 from pathlib import Path
 from unittest.mock import patch
@@ -340,47 +340,68 @@ def package(release, root, target, monkeypatch, capsys):
     return code, captured.out.strip(), captured.err
 
 
+def unix_mode(bundle: zipfile.ZipFile, name: str) -> int:
+    info = bundle.getinfo(name)
+    assert info.create_system == 3, f"{name} is not recorded as made on Unix"
+    return info.external_attr >> 16
+
+
 class TestPackageArchive:
     @pytest.mark.parametrize("target", ["linux-x64", "linux-arm64", "macos-arm64"])
-    def test_posix_targets_get_a_tarball(self, release, checkout, target, monkeypatch, capsys):
+    def test_posix_targets_get_a_zip(self, release, checkout, target, monkeypatch, capsys):
         code, printed, _ = package(release, checkout, target, monkeypatch, capsys)
         assert code == 0
-        archive = checkout / "dist" / f"Zircolite-{FAKE_VERSION}-{target}.tar.gz"
+        archive = checkout / "dist" / f"Zircolite-{FAKE_VERSION}-{target}.zip"
         assert Path(printed) == archive
-        assert archive.is_file()
-        assert not archive.with_name(archive.name.replace(".tar.gz", ".zip")).exists()
+        with zipfile.ZipFile(archive) as bundle:
+            assert bundle.testzip() is None
 
-    def test_tarball_layout(self, release, checkout, monkeypatch, capsys):
+    def test_archive_layout(self, release, checkout, monkeypatch, capsys):
         code, printed, _ = package(release, checkout, "linux-x64", monkeypatch, capsys)
         assert code == 0
         top = f"Zircolite-{FAKE_VERSION}-linux-x64"
-        with tarfile.open(printed) as tar:
-            names = set(tar.getnames())
-            assert all(name == top or name.startswith(f"{top}/") for name in names)
-            for expected in ["Zircolite", "_internal/base_library.zip", "config/config.yaml",
-                             "rules/rules_linux.json", "templates/exportForSplunk.tmpl",
-                             "gui/zircogui.zip", "docs/Usage.md", "pics/Zircolite.png",
-                             "README.md", "LICENSE", "THIRD_PARTY_LICENSES"]:
-                assert f"{top}/{expected}" in names, expected
-            assert not [name for name in names if "__pycache__" in name]
-            assert {member.uid for member in tar.getmembers()} == {0}
+        with zipfile.ZipFile(printed) as bundle:
+            names = {name.rstrip("/") for name in bundle.namelist()}
+        assert all(name == top or name.startswith(f"{top}/") for name in names)
+        for expected in ["Zircolite", "_internal/base_library.zip", "config/config.yaml",
+                         "rules/rules_linux.json", "templates/exportForSplunk.tmpl",
+                         "gui/zircogui.zip", "docs/Usage.md", "pics/Zircolite.png",
+                         "README.md", "LICENSE", "THIRD_PARTY_LICENSES"]:
+            assert f"{top}/{expected}" in names, expected
+        assert not [name for name in names if "__pycache__" in name]
 
     def test_executable_bit_survives(self, release, checkout, monkeypatch, capsys):
         # Checked in the archive itself: upload-artifact zips loose files, which drops the bit.
         _, printed, _ = package(release, checkout, "macos-arm64", monkeypatch, capsys)
         top = f"Zircolite-{FAKE_VERSION}-macos-arm64"
-        with tarfile.open(printed) as tar:
-            assert tar.getmember(f"{top}/Zircolite").mode & 0o111 == 0o111
-            assert tar.getmember(f"{top}/README.md").mode & 0o111 == 0
+        with zipfile.ZipFile(printed) as bundle:
+            assert unix_mode(bundle, f"{top}/Zircolite") & 0o111 == 0o111
+            assert unix_mode(bundle, f"{top}/README.md") & 0o111 == 0
 
     def test_executable_bit_is_restored_when_the_build_lost_it(self, release, checkout,
                                                               monkeypatch, capsys):
         binary = checkout / "dist" / "Zircolite" / "Zircolite"
         binary.chmod(stat.S_IRUSR | stat.S_IWUSR)
         _, printed, _ = package(release, checkout, "linux-arm64", monkeypatch, capsys)
-        with tarfile.open(printed) as tar:
-            member = tar.getmember(f"Zircolite-{FAKE_VERSION}-linux-arm64/Zircolite")
-            assert member.mode & 0o111 == 0o111
+        with zipfile.ZipFile(printed) as bundle:
+            mode = unix_mode(bundle, f"Zircolite-{FAKE_VERSION}-linux-arm64/Zircolite")
+        assert mode & 0o111 == 0o111
+
+    @pytest.mark.skipif(os.name == "nt" or not shutil.which("unzip"),
+                        reason="needs unzip and symlinks, as a Linux or macOS user has")
+    def test_unzip_restores_the_executable_and_symlinks(self, release, checkout, tmp_path,
+                                                         monkeypatch, capsys):
+        # What a user gets, rather than what the archive records.
+        (checkout / "dist" / "Zircolite" / "_internal" / "Python").symlink_to("base_library.zip")
+        _, printed, _ = package(release, checkout, "macos-arm64", monkeypatch, capsys)
+        extracted = tmp_path / "extracted"
+        unzip = shutil.which("unzip")
+        assert unzip
+        subprocess.run([unzip, "-q", printed, "-d", str(extracted)], check=True)
+        top = extracted / f"Zircolite-{FAKE_VERSION}-macos-arm64"
+        assert os.access(top / "Zircolite", os.X_OK)
+        link = top / "_internal" / "Python"
+        assert link.is_symlink() and os.readlink(link) == "base_library.zip"
 
     @pytest.mark.parametrize("target", ["windows-x64", "windows-arm64"])
     def test_windows_targets_get_a_zip(self, release, tmp_path, target, monkeypatch, capsys):
@@ -400,6 +421,12 @@ class TestPackageArchive:
                          "LICENSE", "THIRD_PARTY_LICENSES"]:
             assert f"{top}/{expected}" in names, expected
 
+    def test_source_date_epoch_caps_timestamps(self, release, checkout, monkeypatch, capsys):
+        monkeypatch.setenv("SOURCE_DATE_EPOCH", "946684800")
+        _, printed, _ = package(release, checkout, "linux-x64", monkeypatch, capsys)
+        with zipfile.ZipFile(printed) as bundle:
+            assert {info.date_time for info in bundle.infolist()} == {(2000, 1, 1, 0, 0, 0)}
+
     def test_repackaging_replaces_the_previous_run(self, release, checkout, monkeypatch, capsys):
         package(release, checkout, "linux-x64", monkeypatch, capsys)
         stale = checkout / "dist" / f"Zircolite-{FAKE_VERSION}-linux-x64" / "stale.txt"
@@ -407,8 +434,8 @@ class TestPackageArchive:
         code, printed, _ = package(release, checkout, "linux-x64", monkeypatch, capsys)
         assert code == 0
         assert not stale.exists()
-        with tarfile.open(printed) as tar:
-            assert not [name for name in tar.getnames() if name.endswith("stale.txt")]
+        with zipfile.ZipFile(printed) as bundle:
+            assert not [name for name in bundle.namelist() if name.endswith("stale.txt")]
 
 
 class TestPackageRefusals:
@@ -446,14 +473,26 @@ class TestPackageRefusals:
 
     @pytest.mark.skipif(os.name == "nt", reason="creating a symlink needs a privilege on Windows")
     def test_symlinks_inside_the_build_are_kept(self, release, checkout, monkeypatch, capsys):
-        # A macOS build links into Python.framework; the tarball must keep that.
+        # A macOS build links into Python.framework; the archive must keep that.
         internal = checkout / "dist" / "Zircolite" / "_internal"
         (internal / "Python").symlink_to("base_library.zip")
         code, printed, _ = package(release, checkout, "macos-arm64", monkeypatch, capsys)
         assert code == 0
-        with tarfile.open(printed) as tar:
-            member = tar.getmember(f"Zircolite-{FAKE_VERSION}-macos-arm64/_internal/Python")
-            assert member.issym() and member.linkname == "base_library.zip"
+        name = f"Zircolite-{FAKE_VERSION}-macos-arm64/_internal/Python"
+        with zipfile.ZipFile(printed) as bundle:
+            assert stat.S_ISLNK(unix_mode(bundle, name))
+            assert bundle.read(name) == b"base_library.zip"
+
+    @pytest.mark.skipif(os.name == "nt", reason="creating a symlink needs a privilege on Windows")
+    def test_a_symlink_in_a_windows_build_is_refused(self, release, tmp_path, monkeypatch, capsys):
+        licence = tmp_path / "PYTHON-LICENSE.txt"
+        licence.write_text(PYTHON_LICENCE_TEXT, encoding="utf-8")
+        monkeypatch.setattr(release, "python_licence", lambda: licence)
+        root = make_checkout(tmp_path / "checkout", executable="Zircolite.exe")
+        (root / "dist" / "Zircolite" / "_internal" / "alias").symlink_to("base_library.zip")
+        code, printed, err = package(release, root, "windows-x64", monkeypatch, capsys)
+        assert code == 1 and printed == ""
+        assert "symlink" in err and "Windows" in err
 
     @pytest.mark.parametrize("value", [None, "", "linux-x86", "macos-x64"])
     def test_target_must_be_known(self, release, checkout, value, monkeypatch, capsys):

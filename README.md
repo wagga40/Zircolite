@@ -59,9 +59,9 @@ be installed first.
 
 | Target | Archive | Runs on |
 |--------|---------|---------|
-| `linux-x64` | `Zircolite-<version>-linux-x64.tar.gz` | glibc 2.28 or later: RHEL 8, Debian 10, Ubuntu 20.04 and newer |
-| `linux-arm64` | `Zircolite-<version>-linux-arm64.tar.gz` | glibc 2.28 or later |
-| `macos-arm64` | `Zircolite-<version>-macos-arm64.tar.gz` | macOS 15 or later, Apple silicon |
+| `linux-x64` | `Zircolite-<version>-linux-x64.zip` | glibc 2.28 or later: RHEL 8, Debian 10, Ubuntu 20.04 and newer |
+| `linux-arm64` | `Zircolite-<version>-linux-arm64.zip` | glibc 2.28 or later |
+| `macos-arm64` | `Zircolite-<version>-macos-arm64.zip` | macOS 15 or later, Apple silicon |
 | `windows-x64` | `Zircolite-<version>-windows-x64.zip` | Windows 10 or later |
 | `windows-arm64` | `Zircolite-<version>-windows-arm64.zip` | Windows 10 or later, ARM64 |
 
@@ -74,8 +74,12 @@ always move the directory as a whole. The `config/`, `rules/`, `templates/` and 
 directories next to the executable are yours to edit: a file there takes precedence over
 the copy built into `_internal/`.
 
+Extract with `unzip` or, on macOS, Archive Utility: both restore the executable bit and
+the symlinks the archive records. A tool that drops them leaves an executable that will
+not start (`chmod +x Zircolite` fixes that on Linux).
+
 ```shell
-tar -xzf Zircolite-<version>-linux-x64.tar.gz
+unzip Zircolite-<version>-linux-x64.zip
 cd Zircolite-<version>-linux-x64
 ./Zircolite --events sysmon.evtx --ruleset rules/rules_windows_merged.json
 ```
@@ -96,7 +100,7 @@ attestation that ties it to the workflow run in this repository that built it:
 
 ```shell
 sha256sum --check --ignore-missing SHA256SUMS        # macOS: shasum -a 256 --check --ignore-missing SHA256SUMS
-gh attestation verify Zircolite-<version>-linux-x64.tar.gz --repo wagga40/Zircolite
+gh attestation verify Zircolite-<version>-linux-x64.zip --repo wagga40/Zircolite
 ```
 
 On Windows, `Get-FileHash <archive>` prints the SHA-256 to compare with its line in
