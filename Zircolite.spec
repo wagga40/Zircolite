@@ -1,36 +1,70 @@
 # -*- mode: python ; coding: utf-8 -*-
-from PyInstaller.utils.hooks import collect_all
+import hashlib
+import importlib
+import os
+import sys
 from importlib.util import find_spec
+from pathlib import Path
+
+from PyInstaller.utils.hooks import collect_all, collect_submodules
+
+# Analysis bundles the zircolite package that sits beside this spec, so the
+# kernel check below has to look at that tree and not at an installed copy.
+sys.path.insert(0, SPECPATH)
 
 datas = [('config', 'config'), ('gui', 'gui'), ('rules', 'rules'), ('templates', 'templates')]
 binaries = []
-hiddenimports = ['zircolite', 'zircolite.assets', 'zircolite.config', 'zircolite.config_loader', 'zircolite.console', 'zircolite.core', 'zircolite.detector', 'zircolite.extractor', 'zircolite.parallel', 'zircolite.rules', 'zircolite.streaming', 'zircolite.templates', 'zircolite.utils']
 # py7zr is only ever imported inside a function, so it reaches the bundle
 # through the bytecode scan alone. Name it, or a .7z input fails in a binary
 # that no CI step feeds one to.
-hiddenimports += ['py7zr']
-for library in ('ijson', 'ahocorasick', 'pyroaring'):
+hiddenimports = ['py7zr']
+
+
+def _not_a_test_module(name):
+    return '.test' not in name
+
+
+# pySigma discovers pipelines and backends with pkgutil.iter_modules at run
+# time, which the bytecode scan cannot follow. Without them `-p sysmon` finds
+# nothing to apply and the rules convert without their EventID conditions.
+hiddenimports += collect_submodules('sigma.pipelines', filter=_not_a_test_module)
+hiddenimports += collect_submodules('sigma.backends', filter=_not_a_test_module)
+for library in ('evtx', 'ijson'):
     library_data, library_binaries, library_imports = collect_all(library)
     datas += library_data
     binaries += library_binaries
     hiddenimports += library_imports
-if find_spec('zircolite._flatten_native') is not None:
+
+# streaming.py loads the kernel through importlib, so the scan misses it too.
+# A frozen build ships no flatten_kernel.py for the run-time staleness check to
+# read, which makes this the last point where a stale kernel can be caught.
+kernel_source = Path(SPECPATH, 'zircolite', 'flatten_kernel.py')
+kernel = find_spec('zircolite._flatten_native')
+kernel_problem = None
+if kernel is None:
+    kernel_problem = f'zircolite._flatten_native is not built beside {kernel_source}'
+elif Path(kernel.origin).resolve().parent != kernel_source.resolve().parent:
+    # An editable install's import hook can answer for a package tree other
+    # than the one Analysis is about to bundle.
+    kernel_problem = f'found {kernel.origin}, which is not beside {kernel_source}'
+else:
+    try:
+        built_from = importlib.import_module('zircolite._flatten_native').SOURCE_SHA256
+    except (ImportError, AttributeError) as exc:
+        kernel_problem = f'{kernel.origin} cannot be used ({exc})'
+    else:
+        if built_from != hashlib.sha256(kernel_source.read_bytes()).hexdigest():
+            kernel_problem = f'{kernel.origin} was compiled from an older {kernel_source}'
+if kernel_problem is None:
     hiddenimports += ['zircolite._flatten_native']
-tmp_ret = collect_all('evtx')
-datas += tmp_ret[0]; binaries += tmp_ret[1]; hiddenimports += tmp_ret[2]
-# Rich: bundle full package and explicitly include dynamic unicode data modules (e.g. unicode17-0-0)
-tmp_ret = collect_all('rich')
-datas += tmp_ret[0]; binaries += tmp_ret[1]; hiddenimports += tmp_ret[2]
-try:
-    import os
-    import rich._unicode_data as _ud
-    _ud_path = getattr(_ud, '__path__', [os.path.dirname(getattr(_ud, '__file__', ''))])
-    if _ud_path:
-        for _f in os.listdir(_ud_path[0]):
-            if _f.startswith('unicode') and _f.endswith('.py') and _f != '__init__.py':
-                hiddenimports.append('rich._unicode_data.' + _f[:-3])
-except Exception:
-    pass
+elif os.environ.get('ZIRCOLITE_REQUIRE_NATIVE') == '1':
+    raise SystemExit(
+        f'ZIRCOLITE_REQUIRE_NATIVE=1: {kernel_problem}. The kernel must be built in '
+        'place, beside flatten_kernel.py: run pdm install (or another editable '
+        'install of the project) with a C compiler available, then build again.'
+    )
+else:
+    print(f'WARNING: {kernel_problem}; the binary will flatten events in Python.')
 
 
 a = Analysis(
@@ -42,29 +76,40 @@ a = Analysis(
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],
-    excludes=[],
+    excludes=['tkinter', '_tkinter', 'pytest', 'Cython', 'IPython'],
     noarchive=False,
     optimize=0,
 )
 pyz = PYZ(a.pure)
 
+# One directory rather than one file: a onefile build unpacks itself on every
+# start, which costs seconds on macOS and fails where /tmp is mounted noexec.
+# The default _internal/ contents directory is kept on purpose; '.' would put
+# zircolite/ beside the Zircolite executable, and those collide on
+# case-insensitive filesystems.
 exe = EXE(
     pyz,
     a.scripts,
-    a.binaries,
-    a.datas,
     [],
+    exclude_binaries=True,
     name='Zircolite',
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
-    upx=True,
-    upx_exclude=[],
-    runtime_tmpdir=None,
+    upx=False,
     console=True,
     disable_windowed_traceback=False,
     argv_emulation=False,
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
+)
+coll = COLLECT(
+    exe,
+    a.binaries,
+    a.datas,
+    strip=False,
+    upx=False,
+    upx_exclude=[],
+    name='Zircolite',
 )
