@@ -6,9 +6,10 @@ These scripts reach into the package -- ``StreamingEventProcessor._flatten_event
 the engine used to leave them broken until somebody ran one by hand. The
 end-to-end cases here exist to fail at that moment.
 
-The release scripts only run in CI, on the build legs, so their decisions -- what
-goes in the archive, which licences are demanded, which requirements Windows on
-ARM64 skips -- are pinned here against fake checkouts instead.
+The release scripts need a real PyInstaller build or a Windows ARM64 host, so the
+suite does not run them end-to-end. Their decisions -- what goes in the archive,
+which licences are demanded, which requirements Windows on ARM64 skips -- are
+pinned here against fake checkouts instead.
 
 The filenames are hyphenated, so they are loaded by path rather than imported.
 """
@@ -365,7 +366,7 @@ class TestPackageArchive:
             assert {member.uid for member in tar.getmembers()} == {0}
 
     def test_executable_bit_survives(self, release, checkout, monkeypatch, capsys):
-        # Checked in the archive itself: upload-artifact is what used to lose it.
+        # Checked in the archive itself: upload-artifact zips loose files, which drops the bit.
         _, printed, _ = package(release, checkout, "macos-arm64", monkeypatch, capsys)
         top = f"Zircolite-{FAKE_VERSION}-macos-arm64"
         with tarfile.open(printed) as tar:
@@ -429,6 +430,31 @@ class TestPackageRefusals:
         assert code == 1
         assert "not a onedir build" in err
 
+    @pytest.mark.skipif(os.name == "nt", reason="creating a symlink needs a privilege on Windows")
+    @pytest.mark.parametrize("link", ["docs/Alias.md", "config/nested/config.yaml", "README.md"])
+    def test_symlink_in_the_copied_sources_fails_a_posix_target(self, release, checkout, link,
+                                                                monkeypatch, capsys):
+        # Only the Windows zip cannot carry it, but the linux-x64 canary must catch it.
+        path = checkout / link
+        path.parent.mkdir(exist_ok=True)
+        path.unlink(missing_ok=True)
+        path.symlink_to(checkout / "LICENSE")
+        code, printed, err = package(release, checkout, "linux-x64", monkeypatch, capsys)
+        assert code == 1 and printed == ""
+        assert "symlink" in err and link in err
+        assert not list((checkout / "dist").glob("Zircolite-*"))
+
+    @pytest.mark.skipif(os.name == "nt", reason="creating a symlink needs a privilege on Windows")
+    def test_symlinks_inside_the_build_are_kept(self, release, checkout, monkeypatch, capsys):
+        # A macOS build links into Python.framework; the tarball must keep that.
+        internal = checkout / "dist" / "Zircolite" / "_internal"
+        (internal / "Python").symlink_to("base_library.zip")
+        code, printed, _ = package(release, checkout, "macos-arm64", monkeypatch, capsys)
+        assert code == 0
+        with tarfile.open(printed) as tar:
+            member = tar.getmember(f"Zircolite-{FAKE_VERSION}-macos-arm64/_internal/Python")
+            assert member.issym() and member.linkname == "base_library.zip"
+
     @pytest.mark.parametrize("value", [None, "", "linux-x86", "macos-x64"])
     def test_target_must_be_known(self, release, checkout, value, monkeypatch, capsys):
         if value is None:
@@ -478,12 +504,15 @@ class TestThirdPartyLicences:
         assert titles[0].startswith("Python ")
         assert titles[-1] == "Detection rules (rules/)"
 
+    def vendored_without(self, release, tmp_path, monkeypatch, missing):
+        vendored = tmp_path / "vendored"
+        shutil.copytree(release.VENDORED_LICENCES, vendored)
+        (vendored / missing).unlink()
+        monkeypatch.setattr(release, "VENDORED_LICENCES", vendored)
+
     def test_a_distribution_without_licence_fails(self, release, checkout, tmp_path,
                                                   monkeypatch, capsys):
-        vendored = tmp_path / "vendored"
-        vendored.mkdir()
-        (vendored / "DRL-1.1.txt").write_text("rules licence", encoding="utf-8")
-        monkeypatch.setattr(release, "VENDORED_LICENCES", vendored)
+        self.vendored_without(release, tmp_path, monkeypatch, "evtx.txt")
         code, printed, err = package(release, checkout, "linux-x64", monkeypatch, capsys)
         assert code == 1 and printed == ""
         assert "no licence text for: evtx" in err
@@ -491,13 +520,39 @@ class TestThirdPartyLicences:
         assert not list((checkout / "dist").glob("Zircolite-*"))
 
     def test_the_rules_licence_is_required(self, release, checkout, tmp_path, monkeypatch, capsys):
-        vendored = tmp_path / "vendored"
-        vendored.mkdir()
-        (vendored / "evtx.txt").write_text("MIT", encoding="utf-8")
-        monkeypatch.setattr(release, "VENDORED_LICENCES", vendored)
+        self.vendored_without(release, tmp_path, monkeypatch, "DRL-1.1.txt")
         code, _, err = package(release, checkout, "linux-x64", monkeypatch, capsys)
         assert code == 1
         assert "DRL-1.1.txt" in err
+
+    @pytest.mark.parametrize("target", ["linux-x64", "linux-arm64", "macos-arm64"])
+    def test_posix_targets_carry_the_runtime_libraries(self, release, checkout, target):
+        notices = release.third_party_licences(FAKE_VERSION, target)
+        assert self.titles(release, notices)[1] == "Libraries linked into the Python runtime"
+        marker = "--- tools/licenses/python-runtime-libraries.txt ---"
+        assert marker in notices
+        runtime = notices.split(marker, 1)[1].split(release.SEPARATOR, 1)[0]
+        # Apache-2.0 section 4(a) requires the whole text, not a pointer to it.
+        openssl = runtime.split("\nOpenSSL 3\nLicense: Apache-2.0\n", 1)[1].split("\nlibffi\n", 1)[0]
+        assert "Apache License\n                           Version 2.0, January 2004" in openssl
+        assert "END OF TERMS AND CONDITIONS" in openssl
+        for library in ["libffi", "mpdecimal", "liblzma", "libbzip2", "Zstandard", "Expat",
+                        "zlib", "SQLite", "libedit", "ncurses", "libuuid"]:
+            assert re.search(rf"^.*{library}.*\nLicense: ", runtime, re.MULTILINE), library
+
+    @pytest.mark.parametrize("target", ["windows-x64", "windows-arm64"])
+    def test_windows_leaves_the_runtime_libraries_to_the_python_licence(self, release, checkout,
+                                                                        target):
+        notices = release.third_party_licences(FAKE_VERSION, target)
+        assert "Libraries linked into the Python runtime" not in self.titles(release, notices)
+        assert "python-runtime-libraries.txt" not in notices
+
+    def test_the_runtime_libraries_notice_is_required(self, release, checkout, tmp_path,
+                                                      monkeypatch, capsys):
+        self.vendored_without(release, tmp_path, monkeypatch, "python-runtime-libraries.txt")
+        code, _, err = package(release, checkout, "macos-arm64", monkeypatch, capsys)
+        assert code == 1
+        assert "python-runtime-libraries.txt is missing" in err
 
     def test_python_licence_is_found_beside_the_stdlib(self, release, tmp_path, monkeypatch):
         stdlib = tmp_path / "lib" / "python3.14"
@@ -619,63 +674,42 @@ class TestShippedLicences:
         assert release.declared_licence(distribution) == "MIT"
 
 
-MARKER_ENVIRONMENTS = {
-    "linux-3.10": {
-        "implementation_name": "cpython", "implementation_version": "3.10.14", "os_name": "posix",
-        "platform_machine": "x86_64", "platform_python_implementation": "CPython",
-        "platform_release": "6.8.0", "platform_system": "Linux", "platform_version": "#1 SMP",
-        "python_full_version": "3.10.14", "python_version": "3.10", "sys_platform": "linux",
-        "extra": "",
-    },
-    "windows-arm64-3.14": {
-        "implementation_name": "cpython", "implementation_version": "3.14.0", "os_name": "nt",
-        "platform_machine": "ARM64", "platform_python_implementation": "CPython",
-        "platform_release": "11", "platform_system": "Windows", "platform_version": "10.0.26100",
-        "python_full_version": "3.14.0", "python_version": "3.14", "sys_platform": "win32",
-        "extra": "test-extra",
-    },
+LINUX_310 = {
+    "implementation_name": "cpython", "implementation_version": "3.10.14", "os_name": "posix",
+    "platform_machine": "x86_64", "platform_python_implementation": "CPython",
+    "platform_release": "6.8.0", "platform_system": "Linux", "platform_version": "#1 SMP",
+    "python_full_version": "3.10.14", "python_version": "3.10", "sys_platform": "linux",
+    "extra": "",
 }
-MARKERS = [
-    'python_version < "3.14"',
-    "python_version >= '3.10'",
-    'python_full_version <= "3.11.0a6"',
-    'python_version == "3.14" or python_version == "3.10" or python_version == "3.13"',
-    'python_version == "3.*"',
-    'python_version != "3.14.*"',
-    "python_version ~= '3.11'",
-    'sys_platform == "win32"',
-    'sys_platform != "cygwin"',
-    '"win" in sys_platform',
-    '"lin" not in sys_platform',
-    'platform_python_implementation == "CPython"',
-    '(os_name == "nt" and implementation_name != "pypy") and extra == \'dev\'',
-    'extra == "Test_Extra"',
-    '(python_version < "3.14") and extra == "zstd"',
-    'python_version == "3.14" and platform_python_implementation == "PyPy" or '
-    'python_version == "3.10" and platform_python_implementation == "CPython"',
-]
 
 
 class TestMarkers:
-    @pytest.mark.parametrize("environment", sorted(MARKER_ENVIRONMENTS))
-    @pytest.mark.parametrize("marker", MARKERS)
-    def test_agrees_with_the_packaging_library(self, release, marker, environment):
-        markers = pytest.importorskip("packaging.markers")
-        values = MARKER_ENVIRONMENTS[environment]
-        expected = markers.Marker(marker).evaluate(dict(values))
-        assert release.evaluate_marker(marker, values) is expected
+    """Markers are evaluated for the environment given, whatever the host is."""
+
+    @pytest.mark.parametrize(("marker", "expected"), [
+        ('sys_platform == "linux" and python_version < "3.11"', True),
+        ('os_name == "nt" or platform_machine == "ARM64"', False),
+        ('python_full_version < "3.10.14.post1"', True),
+        ('python_version == "3.10.*"', True),
+        ('extra == "test"', False),
+    ])
+    def test_evaluates_against_the_given_environment(self, release, marker, expected):
+        assert release.evaluate_marker(marker, LINUX_310) is expected
+
+    def test_extras_compare_normalised(self, release):
+        assert release.evaluate_marker('extra == "Test_Extra"', {**LINUX_310, "extra": "test-extra"})
 
     @pytest.mark.parametrize("marker", [
         'python_version <',
         'python_version < "3.14" and',
         '(python_version < "3.14"',
         'no_such_variable == "x"',
-        'sys_platform < "win32"',
         'python_version = "3.14"',
+        'python_version ~= "3"',
     ])
     def test_malformed_markers_fail_loudly(self, release, marker):
         with pytest.raises(release.PackagingError, match="cannot evaluate marker"):
-            release.evaluate_marker(marker, MARKER_ENVIRONMENTS["linux-3.10"])
+            release.evaluate_marker(marker, LINUX_310)
 
     def test_requirement_parsing(self, release):
         assert release.parse_requirement("coverage[toml, Fast_Path]>=5.2; extra == 'test'") == (

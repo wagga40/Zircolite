@@ -5,13 +5,16 @@ This directory holds scripts intended for regular use with Zircolite (tracked in
 The benchmark and the regression runner reach into the package internals, so
 `tests/test_tools.py` drives them end-to-end over the tracked fixtures: a rename in
 `StreamingEventProcessor` or `ZircoliteCore` fails the suite rather than waiting for
-somebody to run a script by hand. The two release scripts only run on CI build legs;
-the same test module pins what they decide against fake checkouts.
+somebody to run a script by hand. The two release scripts need a real PyInstaller build
+or a Windows ARM64 host, so the suite does not run them end-to-end; the same test
+module pins what they decide against fake checkouts.
 
 ## package-release.py
 
-Turns the PyInstaller onedir build in `dist/Zircolite/` into a release archive. It uses
-only the standard library, so it runs on any supported Python.
+Turns the PyInstaller onedir build in `dist/Zircolite/` into a release archive. It needs
+the standard library, plus `packaging` to evaluate environment markers while it gathers
+the licences. PyInstaller depends on `packaging`, so any environment that can build the
+binary has it.
 
 ```sh
 pdm run pyinstaller --noconfirm Zircolite.spec
@@ -38,11 +41,15 @@ The version comes from `zircolite/__init__.py`, read as text rather than importe
 `THIRD_PARTY_LICENSES` is built from the environment the binary was built in. It covers:
 
 - the interpreter's licence (`LICENSE.txt` beside the standard library);
+- on Linux and macOS targets, the native libraries the interpreter is built with
+  (OpenSSL, libffi, mpdecimal, liblzma, bzip2, zstd, Expat, zlib, SQLite, libedit,
+  ncurses, libuuid), from `tools/licenses/python-runtime-libraries.txt`, since only
+  the Windows `LICENSE.txt` carries their notices;
 - PyInstaller, whose licence carries the bootloader exception, and
   pyinstaller-hooks-contrib, whose runtime hooks are in the executable;
 - every distribution in the runtime dependency closure of the installed `Zircolite`
   project. It follows `Requires-Dist`, evaluates environment markers for the running
-  interpreter and ignores extras nobody requested;
+  interpreter with `packaging` and ignores extras nobody requested;
 - the Detection Rule License for `rules/`.
 
 A distribution's licence files are the ones in its own `.dist-info`: those listed in
@@ -54,10 +61,15 @@ The script fails, and writes nothing, when:
 
 - `dist/Zircolite/` or its executable is missing, or the build is not a onedir build
   (no `_internal/`);
+- anything it copies from the checkout (`config/`, `rules/`, `templates/`, `gui/`,
+  `docs/`, `pics/`, `README.md`, `LICENSE`) is or contains a symlink. Only the Windows
+  zip cannot carry one, but the check runs for every target so that the linux-x64
+  canary build catches it. Symlinks inside the onedir build are kept in the tarballs;
 - a required distribution is not installed. The only exception is jq on
   `windows-arm64`; see below;
 - a distribution has no licence text and nothing is vendored for it;
-- the interpreter's licence, the PyInstaller licence or the rules licence cannot be found.
+- the interpreter's licence, the PyInstaller licence, the rules licence or, for a Linux
+  or macOS target, `python-runtime-libraries.txt` cannot be found.
 
 To take in a new dependency that ships no licence file, add its published text to
 `tools/licenses/` under its normalised name (lower case, runs of `-_.` replaced by `-`).
@@ -80,6 +92,11 @@ and the assets. The tests use it; releases do not.
   the text is the evtx crate's `LICENSE-MIT` plus the Apache-2.0 notice.
 - `DRL-1.1.txt`: the [Detection Rule License](https://github.com/SigmaHQ/Detection-Rule-License)
   that SigmaHQ publishes its rules under, copied verbatim.
+- `python-runtime-libraries.txt`: the licence texts of the native libraries in the
+  Linux and macOS interpreters, each copied from its upstream source, which heads its
+  section. The list follows python-build-standalone's `pythonbuild/downloads.json` and
+  the python.org macOS installer's `Mac/BuildScript/build-installer.py`; check both
+  when the interpreter version changes.
 
 ## install-win-arm64.py
 

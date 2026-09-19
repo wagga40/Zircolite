@@ -13,8 +13,10 @@ archive path is the only thing printed on stdout.
 The second checks a release tag against every place the version is written
 down, including what the built binary reports.
 
-It uses the standard library only, so it runs on every supported Python,
-including 3.10, which has no tomllib.
+It needs the standard library, plus `packaging` to evaluate environment
+markers while it gathers the licences. PyInstaller depends on `packaging`, so
+any environment that can build the binary has it. Versions are read with
+regexes rather than tomllib, which Python 3.10 lacks.
 """
 
 from __future__ import annotations
@@ -22,7 +24,6 @@ from __future__ import annotations
 import argparse
 import gzip
 import importlib.metadata as metadata
-import operator
 import os
 import platform
 import re
@@ -35,12 +36,13 @@ import tempfile
 import zipfile
 from collections.abc import Callable, Iterator
 from pathlib import Path, PurePosixPath
-from typing import Any, NoReturn
 
 TARGETS = ("linux-x64", "linux-arm64", "macos-arm64", "windows-x64", "windows-arm64")
 REPO_ROOT = Path(__file__).resolve().parent.parent
 VENDORED_LICENCES = Path(__file__).resolve().parent / "licenses"
 RULES_LICENCE = "DRL-1.1.txt"
+# CPython's LICENSE.txt appends these libraries' notices on Windows only.
+RUNTIME_LIBRARIES_LICENCE = "python-runtime-libraries.txt"
 
 ONEDIR = "Zircolite"
 # Shipped outside the bundle so users can edit them; the binary prefers these
@@ -144,28 +146,8 @@ def check_tag(tag: str, root: Path, executable: Path) -> None:
 
 
 # --------------------------------------------------------------------------
-# Environment markers (PEP 508), evaluated without the packaging library
+# Environment markers (PEP 508)
 # --------------------------------------------------------------------------
-
-MARKER_TOKEN = re.compile(r"""\s*(?:
-      (?P<string>'[^']*'|"[^"]*")
-    | (?P<op>===|==|!=|~=|<=|>=|<|>|not\s+in(?![\w.])|in(?![\w.]))
-    | (?P<paren>[()])
-    | (?P<name>[A-Za-z_][\w.]*)
-)""", re.VERBOSE)
-# As in the packaging library, only these compare as versions; every other
-# variable compares as a plain string.
-VERSION_VARIABLES = frozenset({
-    "python_version", "python_full_version", "implementation_version", "platform_release",
-})
-VERSION = re.compile(r"v?(\d+(?:\.\d+)*)(.*)")
-PRE_RELEASE = re.compile(r"[-_.]?(a|b|c|rc|alpha|beta|pre|preview|dev)[-_.]?\d*", re.IGNORECASE)
-FINAL_SUFFIX = re.compile(r"([-_.]?post[-_.]?\d*)?(\+[\w.]*)?", re.IGNORECASE)
-VERSION_OPERATORS: dict[str, Callable[[Any, Any], bool]] = {
-    "==": operator.eq, "!=": operator.ne, "<": operator.lt,
-    "<=": operator.le, ">": operator.gt, ">=": operator.ge,
-}
-
 
 def canonical_name(name: str) -> str:
     return re.sub(r"[-_.]+", "-", name).lower()
@@ -192,142 +174,21 @@ def marker_environment() -> dict[str, str]:
     }
 
 
-def _release(value: str) -> tuple[tuple[int, ...], bool] | None:
-    """Release numbers and whether this is a pre-release; None if it is no version."""
-    match = VERSION.fullmatch(value.strip())
-    if not match:
-        return None
-    release = tuple(int(part) for part in match.group(1).split("."))
-    if PRE_RELEASE.fullmatch(match.group(2)):
-        return release, True
-    if FINAL_SUFFIX.fullmatch(match.group(2)):
-        return release, False
-    return None
-
-
-def _pad(release: tuple[int, ...], width: int) -> tuple[int, ...]:
-    return release + (0,) * (width - len(release))
-
-
-def compare_versions(lhs: str, op: str, rhs: str) -> bool | None:
-    """`lhs op rhs` as versions, or None when `op rhs` is no version specifier."""
-    wildcard = op in ("==", "!=") and rhs.endswith(".*")
-    right = _release(rhs[:-2] if wildcard else rhs)
-    if right is None or op not in (*VERSION_OPERATORS, "~=") or (op == "~=" and len(right[0]) < 2):
-        return None
-    left = _release(lhs)
-    if left is None:
-        return False
-    if wildcard:
-        matches = _pad(left[0], len(right[0]))[:len(right[0])] == right[0]
-        return matches if op == "==" else not matches
-    width = max(len(left[0]), len(right[0]))
-    left_key = (_pad(left[0], width), not left[1])
-    right_key = (_pad(right[0], width), not right[1])
-    if op == "~=":
-        prefix = right[0][:-1]
-        return left_key >= right_key and left_key[0][:len(prefix)] == prefix
-    return VERSION_OPERATORS[op](left_key, right_key)
-
-
-class MarkerEvaluator:
-    """Recursive descent over `or`, `and`, parentheses and comparisons."""
-
-    def __init__(self, marker: str, environment: dict[str, str]) -> None:
-        self.marker = marker
-        self.environment = environment
-        self.tokens: list[tuple[str, str]] = []
-        self.position = 0
-        text = marker.strip()
-        offset = 0
-        while offset < len(text):
-            match = MARKER_TOKEN.match(text, offset)
-            if not match or not match.lastgroup:
-                self._fail(f"unexpected text at {text[offset:]!r}")
-            self.tokens.append((match.lastgroup, match.group(match.lastgroup)))
-            offset = match.end()
-
-    def _fail(self, reason: str) -> NoReturn:
-        raise PackagingError(f"cannot evaluate marker {self.marker!r}: {reason}")
-
-    def _peek(self) -> tuple[str, str]:
-        return self.tokens[self.position] if self.position < len(self.tokens) else ("end", "")
-
-    def _take(self) -> tuple[str, str]:
-        token = self._peek()
-        if token[0] == "end":
-            self._fail("it ends early")
-        self.position += 1
-        return token
-
-    def evaluate(self) -> bool:
-        result = self._or()
-        if self._peek()[0] != "end":
-            self._fail(f"unexpected {self._peek()[1]!r}")
-        return result
-
-    def _or(self) -> bool:
-        result = self._and()
-        while self._peek() == ("name", "or"):
-            self.position += 1
-            right = self._and()
-            result = result or right
-        return result
-
-    def _and(self) -> bool:
-        result = self._atom()
-        while self._peek() == ("name", "and"):
-            self.position += 1
-            right = self._atom()
-            result = result and right
-        return result
-
-    def _atom(self) -> bool:
-        if self._peek() == ("paren", "("):
-            self.position += 1
-            result = self._or()
-            if self._take() != ("paren", ")"):
-                self._fail("unbalanced parenthesis")
-            return result
-        left = self._operand()
-        kind, op = self._take()
-        if kind != "op":
-            self._fail(f"expected a comparison, got {op!r}")
-        return self._compare(left, " ".join(op.split()), self._operand())
-
-    def _operand(self) -> tuple[str | None, str]:
-        kind, value = self._take()
-        if kind == "string":
-            return None, value[1:-1]
-        if kind == "name" and value not in ("and", "or"):
-            variable = value.replace(".", "_")
-            if variable not in self.environment:
-                self._fail(f"unknown variable {value!r}")
-            return variable, self.environment[variable]
-        self._fail(f"expected a variable or a string, got {value!r}")
-
-    def _compare(self, left: tuple[str | None, str], op: str, right: tuple[str | None, str]) -> bool:
-        (left_variable, lhs), (right_variable, rhs) = left, right
-        variable = left_variable or right_variable
-        if variable == "extra":
-            lhs, rhs = canonical_name(lhs), canonical_name(rhs)
-        if op == "in":
-            return lhs in rhs
-        if op == "not in":
-            return lhs not in rhs
-        if variable in VERSION_VARIABLES:
-            outcome = compare_versions(lhs, op, rhs)
-            if outcome is not None:
-                return outcome
-        if op in ("==", "==="):
-            return lhs == rhs
-        if op == "!=":
-            return lhs != rhs
-        self._fail(f"{lhs!r} {op} {rhs!r} compares strings that are not versions")
-
-
 def evaluate_marker(marker: str, environment: dict[str, str]) -> bool:
-    return MarkerEvaluator(marker, environment).evaluate()
+    # Imported here so that reading versions and checking a tag need nothing
+    # outside the standard library.
+    from packaging.markers import (
+        InvalidMarker,
+        Marker,
+        UndefinedComparison,
+        UndefinedEnvironmentName,
+    )
+
+    try:
+        return Marker(marker).evaluate(environment)
+    # Before packaging 26.3, a name missing from the environment raised a bare KeyError.
+    except (InvalidMarker, UndefinedComparison, UndefinedEnvironmentName, KeyError) as error:
+        raise PackagingError(f"cannot evaluate marker {marker!r}: {error}") from error
 
 
 # --------------------------------------------------------------------------
@@ -487,16 +348,21 @@ def distribution_section(distribution: metadata.Distribution) -> str | None:
 def third_party_licences(version: str, target: str) -> str:
     parts = [
         f"Third-party software in Zircolite {version} ({target})\n\n"
-        "This package contains the Python interpreter, the PyInstaller bootloader and\n"
-        "runtime hooks, and the Python distributions Zircolite depends on. Each section\n"
-        "names one of them, with the licence it declares and the licence texts it ships.\n"
-        "The rulesets in rules/ are covered by the Detection Rule License in the last\n"
-        "section.\n"
+        "This package contains the Python interpreter and the native libraries it was\n"
+        "built with, the PyInstaller bootloader and runtime hooks, and the Python\n"
+        "distributions Zircolite depends on. Each section names one of them, with the\n"
+        "licence it declares and the licence texts it ships. The rulesets in rules/ are\n"
+        "covered by the Detection Rule License in the last section.\n"
     ]
 
     interpreter = python_licence()
     parts.append(section(f"Python {platform.python_version()} ({platform.python_implementation()})",
                          "Python-2.0", [(interpreter.name, _decode(interpreter.read_bytes()))]))
+    if not target.startswith("windows-"):
+        parts.append(section("Libraries linked into the Python runtime", None, [
+            vendored(RUNTIME_LIBRARIES_LICENCE,
+                     "the Python licence on Linux and macOS leaves these notices out"),
+        ]))
 
     for tool in BUILD_TOOLS:
         try:
@@ -546,6 +412,23 @@ def resolve_target(value: str | None) -> str:
     return value
 
 
+def copied_symlinks(root: Path) -> list[Path]:
+    """Symlinks among what stage() copies from the checkout.
+
+    The onedir build is not searched: it legitimately holds symlinks on macOS
+    (Python.framework) and Linux (to the libraries a wheel keeps in its .libs
+    directory).
+    """
+    found = []
+    for name in EDITABLE_ASSETS + DOCUMENTATION + TOP_LEVEL_FILES:
+        path = root / name
+        if path.is_symlink():
+            found.append(path)
+        elif path.is_dir():
+            found.extend(entry for entry in walk(path) if entry.is_symlink())
+    return found
+
+
 def stage(root: Path, version: str, target: str) -> Path:
     onedir = root / "dist" / ONEDIR
     executable = onedir / executable_name(target)
@@ -564,6 +447,14 @@ def stage(root: Path, version: str, target: str) -> Path:
     for name in TOP_LEVEL_FILES:
         if not (root / name).is_file():
             raise PackagingError(f"{root / name} does not exist")
+    # Only a zip cannot carry a symlink, but refusing them for every target lets
+    # the linux-x64 canary build catch one, rather than the Windows legs of a release.
+    links = copied_symlinks(root)
+    if links:
+        raise PackagingError(
+            "symlinks cannot go in the Windows zip archives, so none is packaged for any "
+            "target; replace each with the file it points to: "
+            + ", ".join(link.relative_to(root).as_posix() for link in links))
     # Before anything is copied, so a gap in the notices leaves no half-built tree.
     notices = third_party_licences(version, target)
 
