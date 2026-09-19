@@ -61,8 +61,8 @@ targets, verifies each archive on a separate clean runner and releases on a tag.
 Here the linux-x64 leg builds, runs the binary tests and packages exactly as
 GitHub does, then runs GitHub's verify smoke from the extracted archive at the
 end of the same job: `--version`, the golden detection over
-`sample_bitsadmin.evtx` and `--package`. That job still has Python and pdm
-installed, so it is not the clean machine GitHub's verify job is. Not mirrored:
+`sample_bitsadmin.evtx` and `--package`. That job still has the project's Python environment
+and pdm, so it is not the fresh runner GitHub's verify job is. Not mirrored:
 
 - the runs in `rockylinux:8`, `debian:11` and `ubuntu:20.04`, since job
   containers here get no Docker socket. The binary tests' glibc floor check,
@@ -87,7 +87,8 @@ API, which Forgejo implements. It zips what it uploads, where GitHub's
 either way, inside the tarball.
 
 Every workflow also adds a `concurrency` group. The runner has capacity 1, so
-without it each superseded push queues behind the last.
+without it each superseded push queues behind the last. `build_pyinstaller`'s group
+includes the event name, as on GitHub, so a push does not cancel a manual run.
 
 ## Runner requirements
 

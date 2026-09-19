@@ -331,11 +331,15 @@ other way, and each gap failed silently rather than loudly:
   check at build time instead and, under `ZIRCOLITE_REQUIRE_NATIVE=1`, refuses to build
   from a missing or stale kernel. It checks the kernel beside the spec, so the project
   must be installed in place (`pdm install`) before building.
-- **`py7zr`**, which is imported only inside a function.
 - **`evtx` and `ijson`**, collected whole with their data files and binaries.
 
+The spec also names `py7zr`. The scan does find it, because `detector.py` and `utils.py`
+import it inside functions, but naming it keeps `.7z` support from depending on that.
+
 UPX compression is off, and the test and build-only packages (`pytest`, `Cython`,
-`tkinter`, `IPython`) are excluded.
+`tkinter`, `IPython`) are excluded, as is `setuptools`: PyInstaller's `backports` alias
+follows the `backports.zstd` import that py7zr and urllib3 keep for Pythons older than
+3.14 into `setuptools._vendor`, which the binary never runs.
 
 ### Why PyInstaller
 
@@ -419,17 +423,21 @@ release adds, so anything missing from `_internal/` fails here. On a tag,
 `pyproject.toml` version and the binary's `--version` all agree. The leg then packages its
 single archive and uploads it.
 
-**Verify.** One job per target downloads that archive onto a clean runner, with no Python
-and no PDM, extracts it, and from the package directory runs `--version`, a detection
-over `tests/fixtures/sample_bitsadmin.evtx` with `rules/rules_windows_sysmon.json` that
-must return exactly the golden result, and `--package`. The Linux targets repeat this in
-`rockylinux:8`, `debian:11` and `ubuntu:20.04` containers.
+**Verify.** One job per target downloads that archive onto a fresh runner that never sets
+up Python, PDM or the project (the image's own `python3` only compares the output with
+the golden file on Linux and macOS), extracts it, and from the package directory runs
+`--version`, a detection over `tests/fixtures/sample_bitsadmin.evtx` with
+`rules/rules_windows_sysmon.json` that must return exactly the golden result, and
+`--package`. The Linux targets repeat `--version` and the detection, but not `--package`,
+in `rockylinux:8`, `debian:11` and `ubuntu:20.04` containers, which have no Python at
+all.
 
-**Release.** Once every verify job passes, one job collects the archives and writes
-`SHA256SUMS`. On a tag it then attests the archives' build provenance and creates a
-*draft* GitHub release carrying them, or replaces the assets of the release if it already
-exists; publishing is done by hand. Any other run, including a `dry_run` dispatch, stops
-after `SHA256SUMS`.
+**Release.** Once every verify job passes on a tag, a dispatch or the weekly schedule,
+one job collects the archives and writes `SHA256SUMS`. On a tag it then attests the
+archives' build provenance and creates a *draft* GitHub release carrying them, or replaces
+the assets of the release if it already exists; publishing is done by hand. A dispatch
+that is not on a tag, a `dry_run` dispatch and the schedule stop after `SHA256SUMS`; the
+pull-request and master-push canaries never reach this job.
 
 **Forgejo pre-flight.** `.forgejo/workflows/build_pyinstaller.yml` mirrors the
 `linux-x64` leg for the self-hosted instance: the same container image and commands, then

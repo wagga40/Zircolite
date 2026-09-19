@@ -29,11 +29,17 @@ on:
       - tests/test_frozen_binary.py
       - tests/test_e2e_regression.py
       - "tools/**"
+      - "docs/**"
+      - "pics/**"
+      - README.md
+      - LICENSE
       - .forgejo/workflows/build_pyinstaller.yml
   workflow_dispatch:
 
+# The event name keeps a push from cancelling a manual run, the only one that
+# tests -U, as on GitHub.
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
+  group: ${{ github.workflow }}-${{ github.event_name }}-${{ github.ref }}
   cancel-in-progress: true
 
 defaults:

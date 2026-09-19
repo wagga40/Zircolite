@@ -30,6 +30,10 @@ on:
       - tests/test_frozen_binary.py
       - tests/test_e2e_regression.py
       - "tools/**"
+      - "docs/**"
+      - "pics/**"
+      - README.md
+      - LICENSE
       - .github/workflows/build_pyinstaller.yml
   pull_request:
     paths:
@@ -50,6 +54,10 @@ on:
       - tests/test_frozen_binary.py
       - tests/test_e2e_regression.py
       - "tools/**"
+      - "docs/**"
+      - "pics/**"
+      - README.md
+      - LICENSE
       - .github/workflows/build_pyinstaller.yml
   workflow_dispatch:
     inputs:
@@ -231,10 +239,11 @@ jobs:
           echo "path=${archives[0]}" >> "$GITHUB_OUTPUT"
           echo "name=$(basename "${archives[0]}")" >> "$GITHUB_OUTPUT"
 
-      # archive: false uploads the file as it is, so the tarball keeps the
-      # executable bit that a zipped artifact would drop. The artifact is then
-      # named after the file; name repeats it only so that overwrite, on a
-      # re-run, deletes the artifact the upload is about to replace.
+      # archive: false uploads the package as it is rather than wrapped in a
+      # zip, so the verify and release jobs and anyone downloading from the run
+      # page get the .tar.gz or .zip itself. The artifact is then named after
+      # the file; name repeats it only so that overwrite, on a re-run, deletes
+      # the artifact the upload is about to replace.
       - name: Upload the archive
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
@@ -244,8 +253,10 @@ jobs:
           if-no-files-found: error
           overwrite: true
 
-  # Each archive on a runner that has never seen Python or pdm, used the way a
-  # user would: extracted, and run from inside its own directory.
+  # Each archive on a fresh runner that never sets up Python, pdm or the
+  # project, used the way a user would: extracted, and run from inside its own
+  # directory. The image's own python3 only compares the output with the golden
+  # file.
   verify:
     needs: build
     # One failed build leg would otherwise skip every target's verification.
@@ -388,6 +399,12 @@ jobs:
     if: github.ref_type == 'tag' || github.event_name == 'workflow_dispatch' || github.event_name == 'schedule'
     runs-on: ubuntu-24.04
     timeout-minutes: 15
+    # One release job per ref at a time, whichever event started the run, so a
+    # second run on a tag finds the first one's draft and replaces its assets
+    # instead of creating another.
+    concurrency:
+      group: ${{ github.workflow }}-release-${{ github.ref }}
+      cancel-in-progress: false
     permissions:
       contents: write
       id-token: write
