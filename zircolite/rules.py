@@ -543,7 +543,7 @@ class RulesetHandler:
             self.logger.info("[+] Installed pipelines : "
                             + ", ".join(pipeline_list)
                             + "\n    You can install pipelines with your Python package manager"
-                            + "\n    e.g : pip install pysigma-pipeline-sysmon"
+                            + "\n    e.g : pdm add pysigma-pipeline-sysmon"
                             )
         else:
             # Resolving pipelines

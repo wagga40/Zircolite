@@ -10,21 +10,15 @@ cd Zircolite
 pdm install --dev
 ```
 
-A plain virtualenv works too:
+Dependencies live in `pyproject.toml` and `pdm.lock` only; `uv sync` and
+`poetry install` read the same file.
 
-```bash
-python3 -m venv .venv && source .venv/bin/activate
-pip install -r requirements.txt
-pip install pytest pytest-timeout
-```
-
-The compiled flattening kernel is optional for a checkout and needs a C
-compiler. CI builds it before running the suite, so build it too when you touch
-`zircolite/flatten_kernel.py`:
-
-```bash
-pdm run python tools/build-accelerators.py
-```
+Installing also compiles `zircolite/flatten_kernel.py` into
+`zircolite._flatten_native` (see `setup.py`) when a C compiler is available.
+Rerun `pdm install` after editing `flatten_kernel.py`: a kernel built from an
+older copy is detected and ignored, so the suite would quietly run the Python
+kernel instead. CI sets `ZIRCOLITE_REQUIRE_NATIVE=1`, which turns a failed
+compile into a failed install; set it locally to get the same guarantee.
 
 ## Running the tests
 

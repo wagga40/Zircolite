@@ -4,35 +4,40 @@ ARG PYTHON_VERSION="3.14-slim"
 FROM python:${PYTHON_VERSION} AS builder
 
 ARG ZIRCOLITE_INSTALL_PREFIX="/opt"
-ARG ZIRCOLITE_REQUIREMENTS_FILE="requirements.txt"
 
-# Isolate dependencies in a venv so only resolved packages reach the runtime stage
+# The compiler and PDM stay in this stage. PDM gets an environment of its own so
+# it never lands in the one copied to the runtime.
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends build-essential && \
+    rm -rf /var/lib/apt/lists/* && \
+    python -m venv /tmp/pdm && \
+    /tmp/pdm/bin/python -m pip install --no-cache-dir pdm
+
+# PDM installs into the activated environment. A kernel that fails to compile
+# fails the build instead of shipping an image that runs the Python kernel.
 ENV VIRTUAL_ENV="/opt/venv" \
-    PATH="/opt/venv/bin:${PATH}"
+    PATH="/opt/venv/bin:${PATH}" \
+    PDM_CHECK_UPDATE=false \
+    ZIRCOLITE_REQUIRE_NATIVE=1
 RUN python -m venv "${VIRTUAL_ENV}"
 
 WORKDIR ${ZIRCOLITE_INSTALL_PREFIX}/zircolite
 
 # Install dependencies first so this layer is cached across code changes
-COPY ${ZIRCOLITE_REQUIREMENTS_FILE} .
-RUN pip install --no-cache-dir -r ${ZIRCOLITE_REQUIREMENTS_FILE}
+COPY pyproject.toml pdm.lock ./
+RUN /tmp/pdm/bin/pdm sync --prod --no-self
 
 # Static assets and application code
+COPY README.md setup.py zircolite.py ./
 COPY templates/ templates/
 COPY config/ config/
 COPY rules/ rules/
 COPY gui/ gui/
 COPY zircolite/ zircolite/
-COPY zircolite.py .
 
-# Build tools live in their own environment and remain in this stage.
-COPY tools/build-accelerators.py tools/
-RUN apt-get update && \
-    apt-get install -y --no-install-recommends build-essential && \
-    rm -rf /var/lib/apt/lists/* && \
-    python -m venv /tmp/zircolite-build-env && \
-    /tmp/zircolite-build-env/bin/python -m pip install --no-cache-dir "Cython>=3.1" "setuptools>=78.1.1" && \
-    /tmp/zircolite-build-env/bin/python tools/build-accelerators.py && \
+# Installing the project compiles the flattening kernel beside its source; the
+# build requirements (setuptools, Cython) only exist in PDM's isolated build.
+RUN /tmp/pdm/bin/pdm sync --prod && \
     python -c "from zircolite.streaming import select_flatten_kernel; select_flatten_kernel('cython')"
 
 # Refresh rulesets at build time (needs network); kept in the builder layer only
@@ -66,7 +71,7 @@ COPY --from=builder ${ZIRCOLITE_INSTALL_PREFIX}/zircolite/templates ./templates
 COPY --from=builder ${ZIRCOLITE_INSTALL_PREFIX}/zircolite/gui ./gui
 
 # Validate the final runtime, after leaving the compiler/build environment behind.
-RUN python -c "from importlib.metadata import distributions; names = {d.metadata['Name'].lower() for d in distributions()}; assert not names & {'cython', 'memray', 'pytest', 'ruff', 'mypy', 'pyinstaller'}, 'Build tools leaked into runtime'; from zircolite.streaming import select_flatten_kernel; select_flatten_kernel('cython')"
+RUN python -c "from importlib.metadata import distributions; names = {d.metadata['Name'].lower() for d in distributions()}; assert not names & {'cython', 'setuptools', 'pdm', 'memray', 'pytest', 'ruff', 'mypy', 'pyinstaller'}, 'Build tools leaked into runtime'; from zircolite.streaming import select_flatten_kernel; select_flatten_kernel('cython')"
 
 # Run as a non-root user that owns every asset under the install prefix
 RUN chmod 0755 zircolite.py && \

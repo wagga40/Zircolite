@@ -357,7 +357,7 @@ def open_maybe_compressed(
         except ImportError as e:
             raise ImportError(
                 "The 'py7zr' package is required to read .7z files. "
-                "Install it with: pip install py7zr"
+                "It is a declared dependency: rerun pdm install, uv sync or poetry install"
             ) from e
         pwd_7z: str | None = (
             password.decode() if isinstance(password, bytes) else password

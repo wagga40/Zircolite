@@ -31,10 +31,10 @@ jobs:
       - uses: pdm-project/setup-pdm@v4
         with:
           python-version: ${{ matrix.python-version }}
+      # Installing the project compiles the flattening kernel, and
+      # ZIRCOLITE_REQUIRE_NATIVE turns a failed compile into a failed step.
       - name: Install dependencies
         run: pdm install --dev
-      - name: Build native flattening
-        run: pdm run python tools/build-accelerators.py
       # No `|| true`: the suite exists to fail the build. Test fixtures are
       # tracked, so a missing one is a broken checkout and must fail too.
       - name: Run tests

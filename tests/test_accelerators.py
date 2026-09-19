@@ -39,16 +39,30 @@ def native(name):
         pytest.skip(f"Native dependency unavailable: {name}")
 
 
-def test_runtime_dependencies_match_and_exclude_developer_tools():
+def _requirement_names(requirements):
+    return {re.split(r"[<>=!~;\[ ]", name, maxsplit=1)[0].lower() for name in requirements}
+
+
+def test_runtime_dependencies_exclude_developer_tools():
     project = (ROOT / "pyproject.toml").read_text()
     declared = ast.literal_eval(re.search(r"(?ms)^dependencies = (\[.*?^\])", project)[1])
-    requirements = [line.strip() for line in (ROOT / "requirements.txt").read_text().splitlines()
-                    if line.strip() and not line.lstrip().startswith("#")]
-    assert sorted(declared) == sorted(requirements)
     assert len(declared) == len(set(declared))
-    names = {re.split(r"[<>=!~;\[]", name, maxsplit=1)[0].lower() for name in declared}
+    names = _requirement_names(declared)
     assert {"ijson", "pyahocorasick", "pyroaring"} <= names
     assert not names & {"apsw", "isal", "cython", "setuptools", "memray", "pytest", "ruff", "mypy", "pyinstaller"}
+
+
+def test_every_supported_installer_compiles_the_kernel():
+    # A hook that goes missing costs no correctness -- the Python kernel takes
+    # over -- only the speed, so nothing else would notice.
+    tomllib = pytest.importorskip("tomllib")
+    project = tomllib.loads((ROOT / "pyproject.toml").read_text(encoding="utf-8"))
+    assert project["build-system"]["build-backend"] == "setuptools.build_meta"
+    assert {"setuptools", "cython"} <= _requirement_names(project["build-system"]["requires"])
+    assert "distribution" not in project["tool"].get("pdm", {})
+    assert project["tool"]["poetry"]["build"]["script"] == "setup.py"
+    assert {"file": "zircolite/flatten_kernel.py"} in project["tool"]["uv"]["cache-keys"]
+    assert "zircolite._flatten_native" in (ROOT / "setup.py").read_text(encoding="utf-8")
 
 
 def test_auto_flattening_uses_native_when_available():
@@ -67,7 +81,7 @@ def test_auto_flattening_falls_back_without_extension(monkeypatch):
     processor = StreamingEventProcessor(CONFIG, argparse.Namespace(), ProcessingConfig())
     assert processor._flatten_impl.__module__ == "zircolite.flatten_kernel"
     assert processor._flatten_event({"CommandLine": "whoami"}, "events.json")["CommandLine"] == "whoami"
-    with pytest.raises(RuntimeError, match="build-accelerators"):
+    with pytest.raises(RuntimeError, match="pdm install"):
         select_flatten_kernel("cython")
 
 
@@ -91,9 +105,9 @@ def test_a_stale_native_kernel_is_never_used(monkeypatch):
     assert select_flatten_kernel("auto").__name__ == "zircolite.flatten_kernel"
     processor = StreamingEventProcessor(CONFIG, argparse.Namespace(), ProcessingConfig())
     assert processor.flattening_info["selected"] == "python"
-    assert "build-accelerators" in processor.flattening_info["reason"]
+    assert "pdm install" in processor.flattening_info["reason"]
     assert "older" in processor.flattening_info["reason"]
-    with pytest.raises(RuntimeError, match="build-accelerators"):
+    with pytest.raises(RuntimeError, match="pdm install"):
         select_flatten_kernel("cython")
 
 

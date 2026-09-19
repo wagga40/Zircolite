@@ -36,17 +36,25 @@ LOAD_BEARING_COMMANDS = {
         "pdm run ruff format --check zircolite/ zircolite.py || true",
     ],
     "tests.yml": [
-        "pdm run python tools/build-accelerators.py",
+        "pdm install --dev",
         "pdm run pytest",
     ],
     "external_tests.yml": [
         "tests/external/run_external_tests.py --build --parallel 4",
     ],
     "build_pyinstaller.yml": [
-        "python tools/build-accelerators.py",
-        "pyinstaller --noconfirm Zircolite.spec",
-        "python -m pytest tests/test_accelerators.py -k frozen",
+        "pdm install --dev",
+        "pdm run pyinstaller --noconfirm Zircolite.spec",
+        "pdm run python -m pytest tests/test_accelerators.py -k frozen",
     ],
+}
+
+# `pdm install` compiles the flattening kernel, and a failed compile is only a
+# warning unless this is set -- the suite would then pass on the Python kernel
+# and the binaries would ship without the compiled one.
+REQUIRED_ENVIRONMENT = {
+    "tests.yml": {"ZIRCOLITE_REQUIRE_NATIVE": "1"},
+    "build_pyinstaller.yml": {"ZIRCOLITE_REQUIRE_NATIVE": "1"},
 }
 
 # Arguments that appear mid-command, so they cannot be anchored to a line end.
@@ -125,6 +133,18 @@ def test_the_mirror_runs_the_same_commands(name):
             f"{argument!r} is in .github/workflows/{name} but not "
             f".forgejo/workflows/{name}; the mirror has drifted"
         )
+
+
+@pytest.mark.parametrize("name", sorted(REQUIRED_ENVIRONMENT))
+def test_both_forges_require_the_compiled_kernel(name):
+    for directory in (GITHUB_WORKFLOWS, FORGEJO_WORKFLOWS):
+        document = yaml.safe_load((directory / name).read_text(encoding="utf-8"))
+        environment = document.get("env") or {}
+        for key, value in REQUIRED_ENVIRONMENT[name].items():
+            assert str(environment.get(key)) == value, (
+                f"{directory.parent.name}/workflows/{name} must set {key}={value} "
+                "at workflow level"
+            )
 
 
 @pytest.mark.parametrize("name", sorted(LOAD_BEARING_COMMANDS))

@@ -11,8 +11,8 @@ which on its own.
 ## Quick start
 
 ```shell
-pip3 install -r requirements.txt
-python3 zircolite.py --events <logs> --ruleset rules/rules_windows_merged.json
+pdm install    # or: uv sync / poetry install
+pdm run python3 zircolite.py --events <logs> --ruleset rules/rules_windows_merged.json
 ```
 
 Results are written to `detected_events.json`, with a detection table and summary panel on

@@ -63,7 +63,7 @@ try:
     from RestrictedPython.Eval import default_guarded_getiter
     from RestrictedPython.Guards import guarded_iter_unpack_sequence
 except ImportError:
-    print("[!] RestrictedPython not installed. Install: pip install RestrictedPython", file=sys.stderr)
+    print("[!] RestrictedPython not installed. Run this from the project environment (pdm install, uv sync or poetry install)", file=sys.stderr)
     sys.exit(1)
 
 

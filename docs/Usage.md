@@ -30,35 +30,39 @@ Zircolite needs **Python 3.10 or above** and runs on Linux, macOS and Windows.
 
 ### Installing
 
+Dependencies are declared in `pyproject.toml`, with `pdm.lock` as the tracked lock file.
 Clone the repository, then pick whichever tool you already use:
 
 | Tool | Install | Run |
 |------|---------|-----|
-| pip + venv | `python3 -m venv .venv && source .venv/bin/activate && pip3 install -r requirements.txt` | `python3 zircolite.py …` |
 | [PDM](https://pdm-project.org/latest/) | `pdm install` | `pdm run python3 zircolite.py …` |
-| [Poetry](https://python-poetry.org) | `poetry install` | `poetry run python3 zircolite.py …` |
+| [Poetry](https://python-poetry.org) (2.2 or later) | `poetry install` | `poetry run python3 zircolite.py …` |
 | [UV](https://docs.astral.sh/uv/) | `uv sync` | `uv run python zircolite.py …` |
 
-PDM, Poetry and UV read `pyproject.toml` and manage the virtual environment themselves.
-Add `--dev` (PDM) or the equivalent to get the test suite as well.
+Each tool creates and manages the virtual environment itself. All three install the `dev`
+group (tests, linters, PyInstaller) by default; `pdm install --prod`, `uv sync --no-dev`
+or `poetry install --without dev` leave it out. The rest of this documentation writes
+`python3 zircolite.py`: activate the environment, or prefix the command as in the table.
 
-Release binaries and the Docker image include a compiled flattening kernel. A source
-checkout runs the same code as Python until it is built, which needs a C compiler:
-`pdm run python tools/build-accelerators.py` (see [tools/README.md](../tools/README.md)).
+Installing also compiles `zircolite/flatten_kernel.py` into a native extension, which
+needs a C compiler (Xcode Command Line Tools on macOS, `build-essential` on Debian and
+Ubuntu, the Visual C++ Build Tools on Windows). Without one the install still succeeds
+and Zircolite runs the same code as Python; set `ZIRCOLITE_REQUIRE_NATIVE=1` to make it
+fail instead. Release binaries and the Docker image always include the compiled kernel.
 
 A complete first run, from nothing:
 
 ```shell
 git clone https://github.com/wagga40/Zircolite.git
 cd Zircolite
-pip3 install -r requirements.txt
+pdm install
 
 # Optional: fetch the latest rulesets
-python3 zircolite.py -U
+pdm run python3 zircolite.py -U
 
 # Some sample logs to try it on
 git clone https://github.com/sbousseaden/EVTX-ATTACK-SAMPLES.git
-python3 zircolite.py -e EVTX-ATTACK-SAMPLES/ -r rules/rules_windows_merged.json
+pdm run python3 zircolite.py -e EVTX-ATTACK-SAMPLES/ -r rules/rules_windows_merged.json
 ```
 
 Results land in `detected_events.json` in the working directory, and the detection table
@@ -802,11 +806,11 @@ passing for a rule that simply matched nothing; use `--debug` for the SQL error.
 
 ### Generating your own rulesets
 
-Install [sigma-cli](https://github.com/SigmaHQ/pySigma) with the SQLite backend and the
-pipelines you need, then convert:
+[sigma-cli](https://github.com/SigmaHQ/sigma-cli) is a separate tool with its own
+environment. Install it with the SQLite backend and the pipelines you need, then convert:
 
 ```shell
-pip install sigma-cli pysigma-pipeline-sysmon pysigma-pipeline-windows pysigma-backend-sqlite
+uv tool install sigma-cli --with pysigma-backend-sqlite --with pysigma-pipeline-sysmon --with pysigma-pipeline-windows
 
 git clone https://github.com/SigmaHQ/sigma.git
 cd sigma
@@ -817,9 +821,6 @@ sigma convert -t sqlite -f zircolite -p sysmon -p windows-logsources rules/windo
 # Generic (no Sysmon)
 sigma convert -t sqlite -f zircolite -p windows-audit -p windows-logsources rules/windows/ -s -o rules.json
 ```
-
-With PDM, Poetry or UV, add the same packages and prefix the command with `pdm run`,
-`poetry run` or `uv run`.
 
 - `-t` is the backend (SQLite); `-f zircolite` selects the Zircolite output format.
 - `-p` names a pipeline; repeat for several.
@@ -891,8 +892,9 @@ and the run exits `1`.
 
 ## Pipelines
 
-Zircolite uses no pySigma pipeline by default. Install the ones you need
-(`pip3 install pysigma-pipeline-<name>`), list what is available, and pass them with `-p`:
+Zircolite uses no pySigma pipeline by default. `sysmon` and `windows` ship as dependencies;
+add others to the project environment (`pdm add pysigma-pipeline-<name>`, or `uv add` /
+`poetry add`), list what is available, and pass them with `-p`:
 
 ```bash
 python3 zircolite.py -pl

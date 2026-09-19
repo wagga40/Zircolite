@@ -19,21 +19,23 @@ htmlcov
 # Build / packaging / dev-only sources
 build
 dist
+*.egg-info
 gui_dev
 helpers
-tools/*
-!tools/build-accelerators.py
+tools
 *.so
 *.pyd
 
-# Dev tooling, docs, project meta (not needed at runtime)
+# Dev tooling, docs, project meta (not needed at runtime). pyproject.toml,
+# pdm.lock, setup.py and README.md stay: the image installs the project from them.
 docs
 pics
 tests
 *.md
+!README.md
 Taskfile*.yml
-pdm.lock
-pyproject.toml
+poetry.lock
+uv.lock
 .cursor
 .cursorrules
 CLAUDE.md

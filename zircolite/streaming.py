@@ -279,13 +279,15 @@ def _load_native_kernel():
     try:
         native = importlib.import_module("zircolite._flatten_native")
     except ImportError as exc:
-        return None, f"native extension unavailable ({exc}); build with python tools/build-accelerators.py"
+        return None, (f"native extension unavailable ({exc}); build it by rerunning pdm install, "
+                      "uv sync or poetry install with a C compiler available")
     try:
         source = Path(__file__).with_name("flatten_kernel.py").read_bytes()
     except OSError:
         return native, None
     if getattr(native, "SOURCE_SHA256", None) != hashlib.sha256(source).hexdigest():
-        return None, "native extension is older than flatten_kernel.py; rebuild with python tools/build-accelerators.py"
+        return None, ("native extension is older than flatten_kernel.py; rebuild it by rerunning "
+                      "pdm install, uv sync or poetry install")
     return native, None
 
 

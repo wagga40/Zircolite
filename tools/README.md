@@ -43,19 +43,6 @@ names one. RSS is sampled every 20 ms; where child processes cannot be inspected
 report says `parent-only`, and those figures exclude worker memory. Keep benchmarks
 apart from builds and test runs.
 
-## build-accelerators.py
-
-Compiles `zircolite/flatten_kernel.py` into `zircolite._flatten_native` in place.
-It needs a C compiler plus Cython and setuptools, both in the `dev` group:
-
-```sh
-pdm run python tools/build-accelerators.py
-```
-
-Generated C lands under the ignored `build/` directory. Rebuild whenever
-`flatten_kernel.py` changes: a stale extension is detected and ignored in favour of
-the Python kernel. Without the extension a checkout runs the same code as Python.
-
 ## sigma-regression.py
 
 Runs detection tests using the [Sigma repository’s regression_data](https://github.com/SigmaHQ/sigma/tree/master/regression_data). Each test case directory there contains:

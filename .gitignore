@@ -59,9 +59,14 @@ venv/
 *.log
 # pdm.lock and pyproject.toml are tracked: without them
 # `pdm install`, `poetry install` and `uv sync` all fail on a fresh clone.
+# pdm.lock is the lock CI and the Docker image install from; the others are local.
+poetry.lock
+uv.lock
 Makefile*
 build/
+*.egg-info/
 zircolite/_flatten_native*.so
+zircolite/_flatten_native*.pyd
 gui_dev/
 helpers/
 Taskfile.dev.yml

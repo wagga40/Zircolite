@@ -32,16 +32,22 @@
 
 ## Requirements / Installation
 
-The project has been tested with Python 3.10 and above. Install dependencies with: `pip3 install -r requirements.txt`.
+The project has been tested with Python 3.10 and above. Dependencies are declared in
+`pyproject.toml`; install them from the cloned repository with
+[PDM](https://pdm-project.org/latest/) (`pdm install`), [uv](https://docs.astral.sh/uv/)
+(`uv sync`) or [Poetry](https://python-poetry.org) (`poetry install`).
+
+The examples below run `python3 zircolite.py`: activate the environment the tool created,
+or prefix them with `pdm run`, `uv run` or `poetry run`.
 
 ### Dependencies
 
 - **Required**: `orjson`, `xxhash`, `rich`, `rich-argparse`, `RestrictedPython`, `requests`, `urllib3`, `pySigma`, `evtx` (pyevtx-rs), `jinja2`, `lxml`, `chardet`, `psutil`, `pyyaml`, `py7zr`, `ijson`, `pyahocorasick`, `pyroaring`
 - `py7zr` is imported only when a `.7z` input is opened; ZIP, gzip and bzip2 use the standard library.
 
-Release binaries and Docker images include a compiled flattening kernel; a source
-checkout uses it once built (`python tools/build-accelerators.py`, needs a C compiler)
-and runs the same code as Python otherwise.
+Installing also compiles the flattening kernel when a C compiler is available. Without one
+the install still succeeds and Zircolite runs the same code as Python. Release binaries and
+Docker images always include it.
 
 :warning: On some systems (Mac, ARM, etc.), the `evtx` Python library may require Rust and Cargo to be installed.
 

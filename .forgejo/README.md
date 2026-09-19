@@ -23,8 +23,9 @@ operating systems and two architectures. What the mirror does and does not cover
 Windows, macOS and arm64 remain GitHub-only. A green Forgejo run is a strong
 signal, not a substitute for the GitHub matrix.
 
-Tests and release builds compile the native flattening kernel first; the release
-workflow also checks that the frozen binary loads it.
+Tests and release builds compile the native flattening kernel while `pdm install`
+installs the project, with `ZIRCOLITE_REQUIRE_NATIVE=1` so a failed compile fails the
+job; the release workflow also checks that the frozen binary loads it.
 
 ## Deliberate differences
 
