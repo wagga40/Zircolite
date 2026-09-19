@@ -20,8 +20,9 @@ merged ruleset that carries several -- and per-file and parallel modes ask the
 same questions of the same statements once per input file.
 """
 
-from collections.abc import Iterator
+from collections.abc import Iterable, Iterator
 from dataclasses import dataclass
+from functools import lru_cache
 
 # Opening delimiter -> its closer. Only ``'`` introduces a string literal; the
 # rest quote identifiers, which is why they are told apart below.
@@ -148,6 +149,27 @@ def iter_tokens(sql: str) -> Iterator[tuple[str, int, int]]:
             continue
         yield ("punct", i, i + 1)
         i += 1
+
+
+@lru_cache(maxsize=1024)
+def quote_sql_identifiers(sql: str) -> str:
+    """Prevent SQLite from interpreting missing double-quoted names as strings.
+
+    Also works on Python 3.10/3.11, which cannot disable DQS via setconfig.
+    String literals and comments are preserved byte for byte.
+    """
+    try:
+        edits = [(start, end) for kind, start, end in iter_tokens(sql)
+                 if kind == "identifier" and sql[start] == '"']
+    except _Unsupported:
+        return sql
+    parts: list[str] = []
+    previous = 0
+    for start, end in edits:
+        parts.extend((sql[previous:start], '`' + _unquote(sql[start:end]).replace('`', '``') + '`'))
+        previous = end
+    parts.append(sql[previous:])
+    return ''.join(parts)
 
 
 def _typed_tokens(sql: str) -> list[tuple[str, str]]:
@@ -296,33 +318,32 @@ class _FieldReader:
         self.coerce = coerce
 
     def read(self, tokens: list[tuple[str, str]], start: int) -> set | None:
-        value, _ = self._or(tokens, start)
-        return value
+        value, end = self._or(tokens, start)
+        return value if end == len(tokens) else None
 
     def _atom_values(self, atom: list[tuple[str, str]]) -> set | None:
-        for i, (kind, text) in enumerate(atom):
-            if kind not in ("word", "name") or text.lower() != self.field:
-                continue
-            following = _peek(atom, i + 1)
-            if following == ("punct", "="):
-                value = self.coerce(*_peek(atom, i + 2))
-                return None if value is None else {value}
-            if following[0] == "word" and following[1].upper() == "IN":
-                if _peek(atom, i + 2) != ("punct", "("):
-                    return None
-                values: set = set()
-                for value_kind, value_text in atom[i + 3 :]:
-                    if (value_kind, value_text) == ("punct", ")"):
-                        return values or None
-                    if (value_kind, value_text) == ("punct", ","):
-                        continue
-                    value = self.coerce(value_kind, value_text)
+        # Only complete, direct comparisons prove a bound. Searching inside
+        # arbitrary expressions mistook EventID=1+1 for EventID=1, for example.
+        kind, name = _peek(atom, 0)
+        if kind not in ("word", "name") or name.lower() != self.field:
+            return None
+        if len(atom) == 3 and atom[1] == ("punct", "="):
+            value = self.coerce(*atom[2])
+            return None if value is None else {value}
+        if (len(atom) >= 5 and _peek_word(atom, 1) == "IN"
+                and atom[2] == ("punct", "(") and atom[-1] == ("punct", ")")):
+            values = set()
+            for i, token in enumerate(atom[3:-1]):
+                if i % 2:
+                    if token != ("punct", ","):
+                        return None
+                else:
+                    value = self.coerce(*token)
                     if value is None:
                         return None
                     values.add(value)
-                return None
-            # ``EventID > 100``, ``Channel LIKE ...``: real, but not a finite set.
-            return None
+            if len(atom[3:-1]) % 2:
+                return values or None
         return None
 
     def _atom(self, tokens: list[tuple[str, str]], pos: int) -> tuple[set | None, int]:
@@ -434,8 +455,53 @@ def scan_query(sql: str) -> QueryScan:
         # one would let the channel reader's blow-up decide the eventID answer.
         if where is None:
             return None
+        words = [text.upper() for kind, text in tokens if kind == "word"]
+        if any(word in words for word in
+                (*_COMPOUND_KEYWORDS, "WITH", "JOIN", "CASE", "BETWEEN")):
+            return None
+        # GROUP/ORDER/etc. do not constrain the input. Stop at the first tail
+        # clause; require the boolean reader to consume the entire predicate.
+        end = next((i for i in range(where, len(tokens))
+                    if tokens[i][0] == "word" and tokens[i][1].upper() in _TAIL_KEYWORDS), len(tokens))
+        if words.count("SELECT") == 2:
+            # Recognize only the backend's single-input aggregation wrapper:
+            # SELECT ... FROM (SELECT ... FROM logs WHERE ...) AS name GROUP ...
+            # Arbitrary subqueries can negate or otherwise change the meaning
+            # of their inner predicate and must remain unbounded.
+            froms = [i for i in range(len(tokens)) if _peek_word(tokens, i) == "FROM"]
+            if (len(froms) != 2 or words.count("WHERE") != 1
+                    or _peek(tokens, froms[0] + 1) != ("punct", "(")
+                    or _peek_word(tokens, froms[0] + 2) != "SELECT"
+                    or _peek(tokens, froms[1] + 1)[1].lower() != "logs"
+                    or froms[1] + 3 != where):
+                return None
+            depth = 0
+            closing = None
+            for i in range(where, end):
+                if tokens[i] == ("punct", "("):
+                    depth += 1
+                elif tokens[i] == ("punct", ")"):
+                    if depth == 0:
+                        closing = i
+                        break
+                    depth -= 1
+            if closing is None:
+                return None
+            alias = tokens[closing + 1:end]
+            if alias and alias[-1] == ("punct", ";"):
+                alias = alias[:-1]
+            if alias and _peek_word(alias, 0) == "AS":
+                alias = alias[1:]
+            if len(alias) > 1 or (alias and alias[0][0] not in ("word", "name")):
+                return None
+            end = closing
+        elif words.count("SELECT") != 1:
+            return None
+        predicate = tokens[where:end]
+        if predicate and predicate[-1] == ("punct", ";"):
+            predicate = predicate[:-1]
         try:
-            value = reader.read(tokens, where)
+            value = reader.read(predicate, 0)
         except (_Unsupported, RecursionError):
             return None
         return None if value is None else frozenset(value)
@@ -470,6 +536,21 @@ def _constraints(queries: list[str], field: str) -> set | None:
             return None
         total |= value
     return total or None
+
+
+def admitted_pairs(sql: str, pairs: Iterable[tuple]) -> list[tuple] | None:
+    """The ``(channel, eventid)`` pairs ``sql``'s bounds admit, or None if unbounded.
+
+    Channels in ``pairs`` must already be lower-cased: the Channel column is
+    NOCASE, so the bounds are folded the same way before comparing.
+    """
+    scan = scan_query(sql)
+    if scan.channels is None and scan.eventids is None:
+        return None
+    channels = None if scan.channels is None else {channel.lower() for channel in scan.channels}
+    eventids = scan.eventids
+    return [pair for pair in pairs
+            if (channels is None or pair[0] in channels) and (eventids is None or pair[1] in eventids)]
 
 
 def eventid_constraints(queries: list[str]) -> set[int] | None:
@@ -568,6 +649,10 @@ def _rewrite(sql: str, lo: int, hi: int) -> str:
     return _balance([part.strip() for part in operands])
 
 
+# Rebalancing a 350 KB rule takes ~100 ms, and per-file and parallel modes run the
+# same ruleset once per input file -- through both the rule loop and the literal
+# prefilter. Only a handful of rules ever need it.
+@lru_cache(maxsize=32)
 def rebalance_sql(sql: str) -> str:
     """Return ``sql`` with deep OR chains re-associated into a balanced tree.
 

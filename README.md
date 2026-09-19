@@ -26,20 +26,86 @@
 - **Flexible Export**: Zircolite can export results to multiple formats using Jinja [templates](templates), including JSON, CSV, JSONL, Splunk, Elastic, OpenSearch, Timesketch, SARIF, ATT&CK Navigator, and more.
 - **Rich Terminal Output**: Detection results displayed in severity-sorted tables with MITRE ATT&CK technique IDs, ATT&CK tactics heatmap, rule coverage metrics, and clickable output file links.
 
-**You can use Zircolite directly with Python.** 
+**You can use Zircolite directly with Python, or download a [standalone binary](#standalone-binaries) that needs no Python installation.**
 
 **Documentation is available [here](https://wagga40.github.io/Zircolite/) (dedicated site) or [here](docs) (repository directory).**
 
 ## Requirements / Installation
 
-The project has been tested with Python 3.10 and above. Install dependencies with: `pip3 install -r requirements.txt`.
+The project has been tested with Python 3.10 and above. Dependencies are declared in
+`pyproject.toml`; install them from the cloned repository with
+[PDM](https://pdm-project.org/latest/) (`pdm install`), [uv](https://docs.astral.sh/uv/)
+(`uv sync`) or [Poetry](https://python-poetry.org) (`poetry install`).
+
+The examples below run `python3 zircolite.py`: activate the environment the tool created,
+or prefix them with `pdm run`, `uv run` or `poetry run`.
 
 ### Dependencies
 
-- **Required**: `orjson`, `xxhash`, `rich`, `rich-argparse`, `RestrictedPython`, `requests`, `urllib3`, `pySigma`, `evtx` (pyevtx-rs), `jinja2`, `lxml`, `chardet`, `psutil`, `pyyaml`, `py7zr`
+- **Required**: `orjson`, `xxhash`, `rich`, `rich-argparse`, `RestrictedPython`, `requests`, `urllib3`, `pySigma`, `evtx` (pyevtx-rs), `jinja2`, `lxml`, `chardet`, `psutil`, `pyyaml`, `py7zr`, `ijson`, `pyahocorasick`, `pyroaring`
 - `py7zr` is imported only when a `.7z` input is opened; ZIP, gzip and bzip2 use the standard library.
 
+Installing also compiles the flattening kernel when a C compiler is available. Without one
+the install still succeeds and Zircolite runs the same code as Python. Release binaries and
+Docker images always include it.
+
 :warning: On some systems (Mac, ARM, etc.), the `evtx` Python library may require Rust and Cargo to be installed.
+
+### Standalone binaries
+
+Every [release](https://github.com/wagga40/Zircolite/releases) publishes a self-contained
+package per platform. Each carries its own Python and every dependency, so nothing has to
+be installed first.
+
+| Target | Archive | Runs on |
+|--------|---------|---------|
+| `linux-x64` | `Zircolite-<version>-linux-x64.zip` | glibc 2.28 or later: RHEL 8, Debian 10, Ubuntu 20.04 and newer |
+| `linux-arm64` | `Zircolite-<version>-linux-arm64.zip` | glibc 2.28 or later |
+| `macos-arm64` | `Zircolite-<version>-macos-arm64.zip` | macOS 15 or later, Apple silicon |
+| `windows-x64` | `Zircolite-<version>-windows-x64.zip` | Windows 10 or later |
+| `windows-arm64` | `Zircolite-<version>-windows-arm64.zip` | Windows 10 or later, ARM64 |
+
+Intel Macs and musl-based distributions such as Alpine have no binary; use Python or
+Docker there.
+
+An archive unpacks to a single `Zircolite-<version>-<target>/` directory. The executable
+(`Zircolite`, or `Zircolite.exe` on Windows) needs the `_internal/` directory beside it, so
+always move the directory as a whole. The `config/`, `rules/`, `templates/` and `gui/`
+directories next to the executable are yours to edit: a file there takes precedence over
+the copy built into `_internal/`.
+
+Extract with `unzip` or, on macOS, Archive Utility: both restore the executable bit and
+the symlinks the archive records. A tool that drops them leaves an executable that will
+not start (`chmod +x Zircolite` fixes that on Linux).
+
+```shell
+unzip Zircolite-<version>-linux-x64.zip
+cd Zircolite-<version>-linux-x64
+./Zircolite --events sysmon.evtx --ruleset rules/rules_windows_merged.json
+```
+
+In the examples below, replace `python3 zircolite.py` with the path to the executable.
+
+The binaries are not code-signed. macOS quarantines a download made with a browser, the
+extracted files inherit the flag, and Gatekeeper then blocks the executable and every
+library in `_internal/`. Clear it from the whole directory, recursively, before the first
+run:
+
+```shell
+xattr -dr com.apple.quarantine Zircolite-<version>-macos-arm64
+```
+
+Each release also publishes `SHA256SUMS`, and every archive has a build provenance
+attestation that ties it to the workflow run in this repository that built it:
+
+```shell
+sha256sum --check --ignore-missing SHA256SUMS        # macOS: shasum -a 256 --check --ignore-missing SHA256SUMS
+gh attestation verify Zircolite-<version>-linux-x64.zip --repo wagga40/Zircolite
+```
+
+On Windows, `Get-FileHash <archive>` prints the SHA-256 to compare with its line in
+`SHA256SUMS`. See [Standalone binaries](docs/Usage.md#standalone-binaries) for the full
+package layout and where `-U` installs rulesets.
 
 ## Quick Start
 
@@ -74,6 +140,9 @@ python3 zircolite.py --evtx sample.evtx --ruleset ./sigma/rules/windows/process_
 # With pySigma pipelines
 python3 zircolite.py --evtx sample.evtx --ruleset rule.yml --pipeline sysmon --pipeline windows-logsources
 ```
+
+`--pipeline-list` shows the installed pipelines. Naming one that is not installed stops
+the run with exit code `2`, before any rule is converted.
 
 ### Other Log Formats
 
@@ -153,6 +222,10 @@ rules and the options that have no YAML equivalent.
 python3 zircolite.py -U
 ```
 
+From source this rewrites the repository's `rules/`. A standalone binary writes to the
+`rules/` directory beside its executable, and falls back to `./rules` in the working
+directory, with a warning, when that one cannot be written to.
+
 Alternatively, if you use [Task](https://taskfile.dev/) (go-task), run `task update-rules` from the project root to update rules from [Zircolite-Rules-v2](https://github.com/wagga40/Zircolite-Rules-v2). See [docs](docs/README.md) for other tasks (Docker build, clean, etc.).
 
 > [!IMPORTANT]  
@@ -224,6 +297,6 @@ The Mini-GUI can be used completely offline. It allows you to display and search
 
 - All the **code** of the project is licensed under the [GNU Lesser General Public License](https://www.gnu.org/licenses/lgpl-3.0.en.html).
 - `evtx_dump` is under the MIT license.
-- The rules are released under the [Detection Rule License (DRL) 1.0](https://github.com/SigmaHQ/Detection-Rule-License/blob/main/LICENSE.Detection.Rules.md).
+- The rules are released under the [Detection Rule License (DRL) 1.1](https://github.com/SigmaHQ/Detection-Rule-License/blob/main/LICENSE.Detection.Rules.md).
 
 ---

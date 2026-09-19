@@ -266,7 +266,8 @@ class TestFlattenHotPathOptimizations:
             args_config=default_args_config,
             logger=test_logger,
         )
-        assert processor._special_fields == {"CommandLine", "proctitle"}
+        # The auditd-only proctitle transform cannot run for this input.
+        assert processor._special_fields == {"CommandLine"}
 
     def test_fast_path_assigns_value_and_discovers_field(
         self, field_mappings_file, test_logger, default_args_config
@@ -309,10 +310,10 @@ class TestFlattenHotPathOptimizations:
         assert second["EventID"] == str(huge)
         assert isinstance(second["EventID"], str)
 
-    def test_int64_min_is_stringified_like_baseline(
+    def test_int64_min_remains_a_sqlite_integer(
         self, field_mappings_file, test_logger, default_args_config
     ):
-        """INT64_MIN trips the abs()-based overflow guard (historical behaviour)."""
+        """Both endpoints of SQLite's signed 64-bit range stay numeric."""
         processor = StreamingEventProcessor(
             config_file=field_mappings_file,
             args_config=default_args_config,
@@ -322,7 +323,8 @@ class TestFlattenHotPathOptimizations:
         flat = processor._flatten_event(
             {"Event": {"System": {"EventID": int64_min}}}, "t.evtx"
         )
-        assert flat["EventID"] == str(int64_min)
+        assert flat["EventID"] == int64_min
+        assert isinstance(flat["EventID"], int)
 
     def test_split_field_keeps_original_and_repeats(
         self, field_mappings_file, test_logger, default_args_config

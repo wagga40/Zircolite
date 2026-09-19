@@ -21,6 +21,7 @@ from typing import Any
 
 # External libs - Rich for styled terminal output
 from rich.logging import RichHandler
+from rich.markup import escape
 from rich.panel import Panel
 from rich.table import Table
 
@@ -50,6 +51,7 @@ from zircolite import (
     StrictParseError,
     TemplateConfig,
     TemplateEngine,
+    UnknownPipelineError,
     ZircoliteGuiGenerator,
     __version__,
     analyze_files_and_recommend_mode,
@@ -86,6 +88,7 @@ from zircolite.assets import (
 
 # Input format registry
 from zircolite.formats import DEFAULT_EXTENSION
+from zircolite.performance import STAGE_LABELS, aggregate_stages, write_performance_report
 
 # Processing modes and context (from the dedicated processing module)
 from zircolite.processing import (
@@ -201,6 +204,14 @@ def parse_arguments() -> argparse.Namespace:
     config_formats_args.add_argument("--remove-index", help="Drop the given index name(s) after creation. Can be repeated or list multiple (e.g. --remove-index idx_channel idx_eventid).", action='append', nargs='+', metavar="IDX", default=None)
     config_formats_args.add_argument("--auto-index", help="Inspect the loaded ruleset and auto-create indices on the top-N columns that the most rules filter on (default N=5 when used without an explicit number). Combine with --add-index for additional manually chosen columns.", type=int, nargs='?', const=5, default=None, metavar="N")
 
+    performance_args = parser.add_argument_group('PERFORMANCE')
+    performance_args.add_argument("--performance-json", default=None, metavar="PATH", help="Write timings, accelerator status and sampled memory to a JSON report")
+    performance_args.add_argument("--working-db", choices=("memory", "disk"), default=None, help="Working database storage (default: memory); independent of --dbfile export")
+    performance_args.add_argument("--working-db-dir", default=None, metavar="DIR", help="Existing directory for temporary working databases (default: system temporary directory)")
+    performance_args.add_argument("--sqlite-cache-mib", type=int, default=None, metavar="MIB", help="Page cache budget per disk database in MiB (default: 64); not a process memory limit")
+    performance_args.add_argument("--flatten-backend", choices=("auto", "python", "cython"), default=None, help="Flattening implementation (default: auto uses Cython when built, otherwise Python)")
+    performance_args.add_argument("--rule-prefilter", choices=("auto", "off", "literal"), default=None, help="Literal candidate filtering verified by SQLite (default: auto for sufficiently large databases and rulesets)")
+
     # Transform options
     transform_args = parser.add_argument_group('🔄 TRANSFORMS')
     transform_args.add_argument("--all-transforms", help="Enable all defined transforms (overrides enabled_transforms list)", action='store_true')
@@ -216,6 +227,7 @@ def parse_arguments() -> argparse.Namespace:
     parallel_args = parser.add_argument_group('⚡ PARALLEL PROCESSING')
     parallel_args.add_argument("-P", "--no-parallel", help="Disable automatic parallel processing (parallel is enabled by default when beneficial)", action='store_true')
     parallel_args.add_argument("-w", "--parallel-workers", help="Maximum number of parallel workers (default: auto-detect based on CPU/memory)", type=int)
+    parallel_args.add_argument("--executor", choices=("auto", "thread", "process"), default=None, help="File worker executor (default: auto selects processes for large files when resources permit)")
     parallel_args.add_argument("--parallel-memory-limit", help=f"Memory usage threshold percentage before throttling (default: {DEFAULTS['parallel_memory_limit']:g})", type=float, default=None)
 
     # Templating and Mini GUI options
@@ -482,10 +494,10 @@ def _read_yaml_quietly(path: str | None) -> dict:
     if not path:
         return {}
     try:
-        import yaml
+        from zircolite.utils import safe_load
 
         with open(path, encoding='utf-8') as f:
-            raw = yaml.safe_load(f) or {}
+            raw = safe_load(f) or {}
     except Exception:
         return {}
     return raw if isinstance(raw, dict) else {}
@@ -654,13 +666,13 @@ def print_stats(
     time_filtered_events: int = 0,
     event_filter_active: bool = False,
     total_rules: int = 0,
-    phase_times: dict | None = None,
     outfile: str | None = None,
+    performance: dict | None = None,
 ) -> None:
     """Print final execution statistics with a Rich summary dashboard."""
     memory_tracker.sample()
     peak_memory, _ = memory_tracker.get_stats()
-    processing_time = time.time() - start_time
+    processing_time = performance["wall_seconds"] if performance else time.time() - start_time
 
     # Build summary table
     summary_table = Table(show_header=False, box=None, padding=(0, 2), expand=True)
@@ -675,19 +687,29 @@ def print_stats(
     summary_table.add_row("⏱  Duration", f"[yellow]{time_str}[/]")
 
     # Phase timing breakdown
-    if phase_times and processing_time > 0:
-        bar_width = 16
-        for phase_name, phase_secs in phase_times.items():
-            if phase_secs <= 0:
-                continue
-            pct = phase_secs / processing_time
-            filled = max(1, int(bar_width * pct))
-            bar = "\u2588" * filled + "\u2591" * (bar_width - filled)
-            if phase_secs >= 60:
-                t_str = f"{int(phase_secs // 60)}m {int(phase_secs % 60)}s"
-            else:
-                t_str = f"{phase_secs:.1f}s"
-            summary_table.add_row("", f"    [dim]\u251c\u2500 {phase_name}  {bar}  {t_str} ({pct:.0%})[/]")
+    if performance:
+        summary_table.add_row("", "[dim]Stage times (summed across workers; stages can overlap):[/]" if workers_used > 1 else "[dim]Stage times:[/]")
+        for name, seconds in performance["stage_seconds"].items():
+            summary_table.add_row("", f"    [dim]{STAGE_LABELS[name]}: {seconds:.3f}s[/]")
+        backends: dict[str, int] = {}
+        filters = []
+        for record in performance["files"]:
+            info = record["flattening"]
+            label = f"{info['requested']} → {info['selected']}"
+            if info.get("reason"):
+                label += f" ({info['reason']})"
+            backends[label] = backends.get(label, 0) + 1
+            filters.extend(record["prefilter"])
+        summary_table.add_row("Flattening", "; ".join(backends) or "unused")
+        applied = sum(item.get("applied_queries", 0) for item in filters)
+        eligible = sum(item.get("eligible_queries", 0) for item in filters)
+        broad = sum(item.get("broad_bypasses", 0) for item in filters)
+        reasons = sorted({item["reason"] for item in filters if item.get("reason")}
+                         | {reason for item in filters for reason in item.get("skipped_columns", {}).values()})
+        summary_table.add_row("Literal filter", f"{applied:,} queries filtered / {eligible:,} eligible; {broad:,} broad bypasses")
+        if reasons:
+            summary_table.add_row("", "[dim]" + "; ".join(reasons) + "[/]")
+        summary_table.add_row("Executor", performance["settings"]["executor_selected"])
 
     # ── Files ──
     if files_processed > 0:
@@ -732,7 +754,9 @@ def print_stats(
     # Memory
     if peak_memory > 0:
         mem_str = memory_tracker.format_memory(peak_memory)
-        summary_table.add_row("💾 Peak Memory", f"[cyan]{mem_str}[/]")
+        memory_label = "Sampled peak RSS" if performance else "💾 Peak Memory"
+        scope = " (process tree)" if memory_tracker.complete_scope else " (incomplete process tree)"
+        summary_table.add_row(memory_label, f"[cyan]{mem_str}[/]" + (scope if performance else ""))
 
     # ── Detection summary ──
     if all_results:
@@ -907,12 +931,13 @@ def _run_processing(
         except Exception:
             field_mappings_config = None
 
-    phase_setup_end = time.time()
+    phase_setup_end = time.perf_counter()
 
     # ----- DB input mode (explicit -D) -----
     if args.db_input:
         _warn_ignored_db_flags(args, logger)
         db_files = expand_db_path(Path(args.evtx), args, logger)
+        ctx.parent_metrics.data["seconds"]["setup"] += time.perf_counter() - phase_setup_end
         zircolite_core, all_results = process_db_input(ctx, args, file_list=db_files)
         # Report the databases actually scanned, not a hardcoded 1
         return zircolite_core, all_results, db_files, phase_setup_end
@@ -960,6 +985,7 @@ def _run_processing(
     # DB input mode (auto-detected SQLite file)
     if args.db_input:
         _warn_ignored_db_flags(args, logger)
+        ctx.parent_metrics.data["seconds"]["setup"] += time.perf_counter() - phase_setup_end
         zircolite_core, all_results = process_db_input(ctx, args, file_list=file_list)
         return zircolite_core, all_results, log_list, phase_setup_end
 
@@ -988,7 +1014,7 @@ def _run_processing(
             recommended_mode, reason, stats,
             show_parallel=True, forced_workers=forced_workers,
         )
-        if recommended_mode == 'unified':
+        if recommended_mode == 'unified' and getattr(args, 'executor', 'thread') != 'process':
             args.unified_db = True
         if not args.unified_db and not getattr(args, 'no_parallel', False) and not force_sequential:
             if stats.get('parallel_recommended', False):
@@ -1027,6 +1053,23 @@ def _run_processing(
         logger.info("")
 
     # Streaming processing (single-pass pipeline)
+    if (getattr(args, 'executor', 'thread') == 'process' and len(file_list) > 1
+            and not args.unified_db and not args.no_parallel and not force_sequential):
+        use_parallel = True
+    if use_parallel:
+        import psutil
+
+        from zircolite.parallel import select_executor
+        from zircolite.utils import estimate_input_size
+
+        args.executor, executor_reason = select_executor(
+            getattr(args, "executor", "thread"), [estimate_input_size(path) for path in file_list],
+            psutil.virtual_memory().available / 1024**2, os.cpu_count() or 1,
+            auto_mode=not args.no_auto_mode, max_workers=getattr(args, "parallel_workers", None),
+        )
+        logger.info(f"[+] Executor: {args.executor} ({executor_reason})")
+    elif getattr(args, "executor", "thread") == "auto":
+        args.executor = "thread"
     extractor = create_extractor(args, logger, input_type)
 
     if use_parallel and len(file_list) > 1 and getattr(args, "dbfile", None):
@@ -1037,6 +1080,7 @@ def _run_processing(
         )
         sys.exit(2)
 
+    ctx.parent_metrics.data["seconds"]["setup"] += time.perf_counter() - phase_setup_end
     if use_parallel and not args.unified_db and len(file_list) > 1:
         zircolite_core, all_results = process_parallel_streaming(
             ctx, file_list, input_type, extractor, args, parallel_workers
@@ -1057,6 +1101,21 @@ def _run_processing(
 # MAIN
 ################################################################
 def main() -> None:
+    # PyInstaller workers re-enter the executable; divert them before argparse.
+    from multiprocessing import freeze_support
+    freeze_support()
+    started = time.perf_counter()
+    memory_tracker = MemoryTracker()
+    try:
+        _main(memory_tracker, started)
+    finally:
+        memory_tracker.stop()
+        from zircolite.prefilter import clear_prepared_rules
+
+        clear_prepared_rules()
+
+
+def _main(memory_tracker, start_time) -> None:
     version = __version__
     args = parse_arguments()
 
@@ -1085,6 +1144,7 @@ def main() -> None:
     if args.nolog:
         args.logfile = None
     logger = init_logger(args.debug, args.logfile)
+    memory_tracker.logger = logger
 
     # In quiet mode, suppress INFO-level console output (file handler keeps everything)
     if args.quiet:
@@ -1208,11 +1268,19 @@ def main() -> None:
         save_ruleset=args.save_ruleset,
         time_field=args.timefield,
     )
-    if not is_quiet():
-        with console.status("[bold cyan]Loading and converting rulesets...", spinner="dots"):
+    try:
+        if not is_quiet():
+            with console.status("[bold cyan]Loading and converting rulesets...", spinner="dots"):
+                rulesets_manager = RulesetHandler(ruleset_config, logger=logger, list_pipelines_only=args.pipeline_list)
+        else:
             rulesets_manager = RulesetHandler(ruleset_config, logger=logger, list_pipelines_only=args.pipeline_list)
-    else:
-        rulesets_manager = RulesetHandler(ruleset_config, logger=logger, list_pipelines_only=args.pipeline_list)
+    except UnknownPipelineError as e:
+        print_error_panel(
+            "Unknown Pipeline",
+            escape(str(e)),
+            f"List installed pipelines with '--pipeline-list'. {e.hint}.",
+        )
+        sys.exit(2)
     if args.pipeline_list:
         sys.exit(0)
 
@@ -1310,6 +1378,22 @@ def main() -> None:
 
     logger.info("[+] Checking prerequisites")
 
+    from zircolite.config import ProcessingConfig
+
+    try:
+        processing_options = ProcessingConfig(**{
+            name: getattr(args, name) for name in (
+                "working_db", "working_db_dir", "sqlite_cache_mib",
+                "flatten_backend", "rule_prefilter",
+            )
+        })
+        if processing_options.flatten_backend == "cython":
+            from zircolite.streaming import select_flatten_kernel
+
+            select_flatten_kernel("cython")
+    except (ValueError, RuntimeError, OSError) as exc:
+        quit_on_error(f"[red]    [-] {exc}[/]", logger)
+
     # Parse timestamps
     for flag, value in (('--after', args.after), ('--before', args.before)):
         try:
@@ -1379,10 +1463,26 @@ def main() -> None:
     # Section separator before processing
     print_section("Processing")
 
-    # Start timing and memory tracking
-    start_time = time.time()
-    memory_tracker = MemoryTracker(logger=logger)
-    memory_tracker.sample()
+    # The run timer already includes configuration and rule loading. Between
+    # phase boundaries memory is sampled only for a report or a process pool.
+    if args.performance_json is not None:
+        memory_tracker.start()
+    else:
+        memory_tracker.sample()
+    if args.performance_json is not None:
+        try:
+            report_path = Path(args.performance_json).resolve()
+            protected = [args.evtx, args.config, args.yaml_config, args.outfile, args.dbfile, args.logfile]
+            protected.extend(flatten_groups(args.ruleset))
+            if any(report_path == Path(path).resolve() for path in protected if path):
+                raise ValueError("performance report must be separate from inputs, rules and other outputs")
+            source = Path(args.evtx).resolve()
+            if source.is_dir() and report_path.is_relative_to(source):
+                raise ValueError("performance report must be outside the input directory")
+            if not report_path.parent.is_dir() or report_path.is_dir():
+                raise ValueError("performance report must name a file in an existing directory")
+        except (TypeError, ValueError, OSError) as exc:
+            quit_on_error(f"Invalid --performance-json: {exc}", logger)
 
     # Handle event filter configuration
     active_event_filter = None
@@ -1419,17 +1519,27 @@ def main() -> None:
         remove_index=flatten_groups(getattr(args, 'remove_index', None)),
         auto_index_top_n=getattr(args, 'auto_index', 0),
         strict_evtx=getattr(args, 'strict', False),
+        retain_results=ready_for_templating or args.package,
+        working_db=args.working_db,
+        working_db_dir=args.working_db_dir,
+        sqlite_cache_mib=args.sqlite_cache_mib,
+        flatten_backend=args.flatten_backend,
+        rule_prefilter=args.rule_prefilter,
     )
 
     zircolite_core = None
     log_list: list[Path] | None = None
     all_results: list[Any] = []
-    phase_setup_end = 0.0
     strict_error = None
     templating_ok = True
+    processing_failed = False
+    report_failed = False
+    requested_executor = args.executor
+    setup_seconds = time.perf_counter() - start_time
+    finalization_seconds = 0.0
 
     try:
-        zircolite_core, all_results, log_list, phase_setup_end = _run_processing(
+        zircolite_core, all_results, log_list, _phase_setup_end = _run_processing(
             ctx, args, logger
         )
 
@@ -1441,12 +1551,20 @@ def main() -> None:
                 print_profiling_report(zircolite_core.get_profiling_report())
 
             # Handle templating and package generation
-            templating_ok = handle_templating(ctx, all_results, args)
+            finalization_start = time.perf_counter()
+            try:
+                templating_ok = handle_templating(ctx, all_results, args)
+            finally:
+                finalization_seconds += time.perf_counter() - finalization_start
     except StrictParseError as e:
         strict_error = str(e)
     except KeyboardInterrupt:
         request_shutdown()
+    except BaseException:
+        processing_failed = True
+        raise
     finally:
+        finalization_start = time.perf_counter()
         try:
             # An interrupted run stops at the next checkpoint and returns
             # normally, so log_list still names every discovered file -- including
@@ -1467,6 +1585,34 @@ def main() -> None:
                 zircolite_core.close()
             except Exception as e:
                 logger.debug(f"Core close: {e}")
+        finalization_seconds += time.perf_counter() - finalization_start
+        memory_tracker.stop()
+        status = "interrupted" if is_shutdown_requested() else "failed" if strict_error is not None or processing_failed or not templating_ok else "partial" if ctx.failed_files or any(record["status"] in ("partial", "failed", "running") for record in ctx.performance_files) else "complete"
+        stages = aggregate_stages([*ctx.performance_files, ctx.parent_metrics.data])
+        stages["setup"] += setup_seconds
+        stages["finalization"] += finalization_seconds
+        peak, average = memory_tracker.get_stats()
+        performance = {
+            "schema_version": 1, "status": status,
+            "wall_seconds": time.perf_counter() - start_time,
+            "stage_time_scope": "sum of exclusive stages across workers plus parent stages; workers may overlap",
+            "stage_seconds": stages, "files": ctx.performance_files,
+            "settings": {"executor_requested": requested_executor,
+                         "executor_selected": args.executor if ctx.workers_used > 1 else "sequential",
+                         "workers": ctx.workers_used, "flatten_backend": args.flatten_backend,
+                         "rule_prefilter": args.rule_prefilter, "working_db": args.working_db},
+            "events": ctx.total_events, "filtered_events": ctx.total_filtered_events,
+            "time_filtered_events": ctx.total_time_filtered_events,
+            "memory": {"sampled_peak_rss_mib": peak, "average_rss_mib": average,
+                       "scope": "process-tree", "complete_scope": memory_tracker.complete_scope,
+                       "sample_interval_seconds": 0.1},
+        }
+        if args.performance_json:
+            try:
+                write_performance_report(args.performance_json, performance)
+            except (OSError, ValueError, TypeError) as exc:
+                logger.error(f"Could not write performance report: {exc}")
+                report_failed = True
 
     if strict_error is not None:
         quit_on_error(
@@ -1479,18 +1625,6 @@ def main() -> None:
     if is_shutdown_requested():
         logger.info("[yellow][!] Shutdown complete.[/]")
         sys.exit(130)
-
-    # Build phase timing breakdown
-    now = time.time()
-    phase_times = None
-    setup_time = phase_setup_end - start_time
-    processing_time = now - phase_setup_end
-    if setup_time > 0.5 or processing_time > 0.5:
-        phase_times = {}
-        if setup_time > 0.5:
-            phase_times["Setup"] = setup_time
-        if processing_time > 0.5:
-            phase_times["Processing"] = processing_time
 
     # Print final stats with summary dashboard (always shown, even in quiet mode)
     files_processed = len(log_list) if log_list else 1
@@ -1505,11 +1639,11 @@ def main() -> None:
         time_filtered_events=ctx.total_time_filtered_events,
         event_filter_active=ctx.event_filter is not None and ctx.event_filter.is_enabled,
         total_rules=len(ctx.rulesets) if ctx.rulesets else 0,
-        phase_times=phase_times,
         outfile=ctx.outfile if not ctx.no_output else None,
+        performance=performance,
     )
 
     # A template that did not write is a failed run: whatever consumes that file
     # would otherwise read a stale one, or nothing, and call it success
-    if not templating_ok:
+    if not templating_ok or report_failed:
         sys.exit(1)

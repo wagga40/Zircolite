@@ -118,6 +118,10 @@ output:
   # format `sqlite` later. Zircolite refuses to overwrite an existing file.
   db_file: null  # Example: events.db
 
+  # Optional performance report: timings, accelerator use and sampled RSS.
+  # Written even with no_output; keep it outside the input directory.
+  performance_json: null  # Example: performance.json
+
   # Log file path
   log_file: zircolite.log
 
@@ -134,6 +138,18 @@ processing:
   # Let Zircolite pick the processing mode from file count, file sizes,
   # available RAM and CPU count. Set false to force per-file mode.
   auto_mode: true
+
+  # Working storage is separate from output.db_file (database export).
+  # Disk mode limits the page cache and allows query scratch data on disk.
+  working_db: memory  # memory or disk
+  working_db_dir: null  # Existing directory; null uses the system temp directory
+  sqlite_cache_mib: 64  # Per disk database, not a process memory limit
+
+  # Auto uses compiled flattening when built, otherwise the Python implementation.
+  flatten_backend: auto  # auto, python or cython
+  # Auto builds literal candidates for at least 1000 events and 32 eligible queries.
+  # SQLite always evaluates the original predicates on the candidate rows.
+  rule_prefilter: auto  # auto, 'off' or literal (force construction)
 
   # Add an xxhash64 of the original log line to every event
   hashes: false
@@ -200,6 +216,10 @@ time_filter:
 parallel:
   # Set false to disable automatic parallel processing entirely
   enabled: true
+  # auto selects processes for parallel per-file inputs averaging >=50 MiB
+  # when CPU/RAM permit at least two workers; otherwise it selects threads.
+  # Explicit thread/process values override selection.
+  executor: auto
 
   # Maximum number of workers. null = auto-detect, which takes the smallest of:
   #   - memory:    (available RAM x 0.85) / estimated memory per file

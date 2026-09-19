@@ -50,6 +50,22 @@ tasks:
         sh: |
           cat zircolite/__init__.py | grep "^__version__ = " | cut -d'"' -f2
 
+  binary-build:
+    desc: Build the standalone binary with PyInstaller and run the binary tests against it
+    preconditions:
+      - sh: command -v pdm
+        msg: "PDM (https://pdm-project.org/) is required. Please install it first, then run pdm install"
+    env:
+      # The spec refuses a missing or stale flattening kernel instead of
+      # quietly shipping a binary that flattens in Python.
+      ZIRCOLITE_REQUIRE_NATIVE: '1'
+      ZIRCOLITE_BINARY: '{{.BINARY}}'
+    cmds:
+      - pdm run pyinstaller --noconfirm Zircolite.spec
+      - pdm run python -m pytest tests/test_frozen_binary.py tests/test_e2e_regression.py
+    vars:
+      BINARY: '{{.ROOT_DIR}}/dist/Zircolite/Zircolite{{exeExt}}'
+
   clean:
     desc: Remove all default artifacts
     cmds:

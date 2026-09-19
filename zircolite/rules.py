@@ -5,6 +5,7 @@ This module contains:
 - EventFilter: Filter events based on channel and eventID from rules
 - RulesetHandler: Parse and convert Sigma rules to Zircolite format
 - RulesUpdater: Download and update rulesets from repository
+- UnknownPipelineError: A requested pySigma pipeline is not installed
 """
 
 import hashlib
@@ -12,6 +13,7 @@ import logging
 import os
 import re
 import shutil
+import sys
 from pathlib import Path
 from typing import Any
 
@@ -42,7 +44,7 @@ from .config import RulesetConfig
 # Rich console for styled output
 from .console import console, is_quiet, make_file_link
 from .sqlscan import channel_constraints, eventid_constraints
-from .utils import random_suffix
+from .utils import random_suffix, safe_load_all
 
 
 class EventFilter:
@@ -507,6 +509,36 @@ class RulesUpdater:
             self.clean()
 
 
+def pipeline_install_hint() -> str:
+    """How to get a pipeline that is not installed, for this kind of install."""
+    # A binary bundles the pipelines it was built with; a package manager
+    # cannot add one to it.
+    if getattr(sys, "frozen", False):
+        return ("This build bundles only the pipelines listed; "
+                "any other needs a source install of Zircolite")
+    return ("You can install pipelines with your Python package manager, "
+            "e.g. pdm add pysigma-pipeline-sysmon")
+
+
+class UnknownPipelineError(ValueError):
+    """One or more requested pySigma pipelines are not installed.
+
+    Raised rather than logged: a Sigma rule converts without its pipeline all
+    the same, only without the conditions the pipeline adds (``EventID=1`` for
+    sysmon process creation, for instance), so carrying on turns every rule
+    into a broader one that matches events it should not.
+    """
+
+    def __init__(self, unknown: list[str], installed: list[str]):
+        self.unknown = unknown
+        self.installed = installed
+        self.hint = pipeline_install_hint()
+        super().__init__(
+            f"Unknown pipeline(s): {', '.join(unknown)}. "
+            f"Installed pipelines: {', '.join(installed) or 'none'}"
+        )
+
+
 class RulesetHandler:
     """Handle ruleset parsing and Sigma rule conversion."""
 
@@ -542,17 +574,14 @@ class RulesetHandler:
         if list_pipelines_only:
             self.logger.info("[+] Installed pipelines : "
                             + ", ".join(pipeline_list)
-                            + "\n    You can install pipelines with your Python package manager"
-                            + "\n    e.g : pip install pysigma-pipeline-sysmon"
+                            + f"\n    {pipeline_install_hint()}"
                             )
-        else:
-            # Resolving pipelines
-            if cfg.pipeline:
-                for pipelineName in [item for pipeline in cfg.pipeline for item in pipeline]: # Flatten the list of pipeline names list
-                    if pipelineName in pipeline_list:
-                        self.pipelines.append(plugins.pipelines[pipelineName]())
-                    else:
-                        self.logger.error(f"[red]    [-] {pipelineName} not found. You can list installed pipelines with '--pipeline-list'[/]")
+        elif cfg.pipeline:
+            requested = [item for pipeline in cfg.pipeline for item in pipeline]
+            unknown = [name for name in dict.fromkeys(requested) if name not in pipeline_list]
+            if unknown:
+                raise UnknownPipelineError(unknown, pipeline_list)
+            self.pipelines = [plugins.pipelines[name]() for name in requested]
 
         # Parse & (if necessary) convert ruleset, final list is stored in self.rulesets
         # (--pipeline-list only prints the installed pipelines: skip loading entirely)
@@ -621,7 +650,7 @@ class RulesetHandler:
             with open(filepath, encoding="utf-8") as file:
                 content = file.read()
                 try:
-                    for _ in yaml.safe_load_all(content):
+                    for _ in safe_load_all(content):
                         pass
                     return True
                 except yaml.YAMLError:
@@ -644,7 +673,7 @@ class RulesetHandler:
         """Check if a YAML file contains at least one valid Sigma or correlation rule."""
         try:
             with open(filepath, encoding="utf-8") as file:
-                for doc in yaml.safe_load_all(file):
+                for doc in safe_load_all(file):
                     if not isinstance(doc, dict):
                         continue
                     has_standard = all(

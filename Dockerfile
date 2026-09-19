@@ -4,26 +4,41 @@ ARG PYTHON_VERSION="3.14-slim"
 FROM python:${PYTHON_VERSION} AS builder
 
 ARG ZIRCOLITE_INSTALL_PREFIX="/opt"
-ARG ZIRCOLITE_REQUIREMENTS_FILE="requirements.txt"
 
-# Isolate dependencies in a venv so only resolved packages reach the runtime stage
+# The compiler and PDM stay in this stage. PDM gets an environment of its own so
+# it never lands in the one copied to the runtime.
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends build-essential && \
+    rm -rf /var/lib/apt/lists/* && \
+    python -m venv /tmp/pdm && \
+    /tmp/pdm/bin/python -m pip install --no-cache-dir pdm
+
+# PDM installs into the activated environment. A kernel that fails to compile
+# fails the build instead of shipping an image that runs the Python kernel.
 ENV VIRTUAL_ENV="/opt/venv" \
-    PATH="/opt/venv/bin:${PATH}"
+    PATH="/opt/venv/bin:${PATH}" \
+    PDM_CHECK_UPDATE=false \
+    ZIRCOLITE_REQUIRE_NATIVE=1
 RUN python -m venv "${VIRTUAL_ENV}"
 
 WORKDIR ${ZIRCOLITE_INSTALL_PREFIX}/zircolite
 
 # Install dependencies first so this layer is cached across code changes
-COPY ${ZIRCOLITE_REQUIREMENTS_FILE} .
-RUN pip install --no-cache-dir -r ${ZIRCOLITE_REQUIREMENTS_FILE}
+COPY pyproject.toml pdm.lock ./
+RUN /tmp/pdm/bin/pdm sync --prod --no-self
 
 # Static assets and application code
+COPY README.md setup.py zircolite.py ./
 COPY templates/ templates/
 COPY config/ config/
 COPY rules/ rules/
 COPY gui/ gui/
 COPY zircolite/ zircolite/
-COPY zircolite.py .
+
+# Installing the project compiles the flattening kernel beside its source; the
+# build requirements (setuptools, Cython) only exist in PDM's isolated build.
+RUN /tmp/pdm/bin/pdm sync --prod && \
+    python -c "from zircolite.streaming import select_flatten_kernel; select_flatten_kernel('cython')"
 
 # Refresh rulesets at build time (needs network); kept in the builder layer only
 RUN python3 zircolite.py -U
@@ -47,8 +62,16 @@ WORKDIR ${ZIRCOLITE_INSTALL_PREFIX}/zircolite
 
 # The venv symlinks the base interpreter; safe because both stages share the same base image
 COPY --from=builder ${VIRTUAL_ENV} ${VIRTUAL_ENV}
-# Copy the app from the builder so the rulesets refreshed by -U are carried over
-COPY --from=builder ${ZIRCOLITE_INSTALL_PREFIX}/zircolite ${ZIRCOLITE_INSTALL_PREFIX}/zircolite
+# Carry over runtime code and assets, including the native extension and refreshed rules.
+COPY --from=builder ${ZIRCOLITE_INSTALL_PREFIX}/zircolite/zircolite ./zircolite
+COPY --from=builder ${ZIRCOLITE_INSTALL_PREFIX}/zircolite/zircolite.py .
+COPY --from=builder ${ZIRCOLITE_INSTALL_PREFIX}/zircolite/config ./config
+COPY --from=builder ${ZIRCOLITE_INSTALL_PREFIX}/zircolite/rules ./rules
+COPY --from=builder ${ZIRCOLITE_INSTALL_PREFIX}/zircolite/templates ./templates
+COPY --from=builder ${ZIRCOLITE_INSTALL_PREFIX}/zircolite/gui ./gui
+
+# Validate the final runtime, after leaving the compiler/build environment behind.
+RUN python -c "from importlib.metadata import distributions; names = {d.metadata['Name'].lower() for d in distributions()}; assert not names & {'cython', 'setuptools', 'pdm', 'memray', 'pytest', 'ruff', 'mypy', 'pyinstaller'}, 'Build tools leaked into runtime'; from zircolite.streaming import select_flatten_kernel; select_flatten_kernel('cython')"
 
 # Run as a non-root user that owns every asset under the install prefix
 RUN chmod 0755 zircolite.py && \

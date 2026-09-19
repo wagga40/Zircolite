@@ -18,7 +18,7 @@ class TestMemoryTrackerInit:
         """Test MemoryTracker initialization with defaults."""
         tracker = MemoryTracker(logger=test_logger)
 
-        assert tracker.memory_samples == []
+        assert not tracker.memory_samples
         assert tracker.peak_memory == 0
 
     def test_init_with_psutil(self, test_logger, mock_psutil):
@@ -141,8 +141,9 @@ class TestMemoryTrackerGetStats:
     def test_get_stats_with_samples(self, test_logger):
         """Test get_stats with samples."""
         tracker = MemoryTracker(logger=test_logger)
-        tracker.memory_samples = [50.0, 100.0, 75.0]
-        tracker.peak_memory = 100.0
+        with patch.object(tracker, "get_memory_usage", side_effect=[50.0, 100.0, 75.0]):
+            for _ in range(3):
+                tracker.sample()
 
         peak, average = tracker.get_stats()
 
@@ -152,8 +153,8 @@ class TestMemoryTrackerGetStats:
     def test_get_stats_single_sample(self, test_logger):
         """Test get_stats with single sample."""
         tracker = MemoryTracker(logger=test_logger)
-        tracker.memory_samples = [42.0]
-        tracker.peak_memory = 42.0
+        with patch.object(tracker, "get_memory_usage", return_value=42.0):
+            tracker.sample()
 
         peak, average = tracker.get_stats()
 

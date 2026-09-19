@@ -353,8 +353,11 @@ python3 zircolite.py --evtx logs/ --ruleset rules.json --parallel-memory-limit 8
 
 ### Parallel processing
 
-Workers are threads, which suits the I/O-bound work of decoding EVTX. Beyond picking a
-worker count, the parallel path:
+The default `--executor auto` selects processes for parallel per-file workloads
+averaging at least 50 MiB when CPU and RAM permit at least two process workers.
+Smaller workloads use threads. Explicit `--executor thread` and `--executor process`
+override selection; `--no-auto-mode` makes automatic executor selection use threads.
+Beyond picking a worker count, the parallel path:
 
 - **Schedules largest-first**, so big files start early and small ones fill the gaps at
   the end.
@@ -385,9 +388,11 @@ to capture everything.
 
 ### Memory usage
 
-Peak memory is measured throughout the run with `psutil` and reported in the summary
-panel. In per-file mode each database is released once its file is done, so the peak
-tracks the largest file rather than the corpus.
+Memory is sampled at phase boundaries and reported as a sampled peak. While process
+workers run, and for the whole run when `--performance-json` is given, RSS of the
+process tree is also sampled every 100 ms; peaks shorter than that can be missed, and a
+tree whose descendants cannot be inspected is reported as incomplete. Per-file mode
+releases each database after use; parallel runs hold several worker databases at once.
 
 Other ways to go faster: let auto-mode do its work, use [file filters](#file-filters) to
 skip irrelevant files, drop `--no-recursion` in when you do not need subdirectories, and
@@ -660,10 +665,14 @@ creation and says so, and `--package-dir` must point at a directory that already
 Zircolite reports an error rather than writing the package somewhere you would not think
 to look.
 
-It needs `gui/zircogui.zip`, which Zircolite looks for beside the executable first and
-then inside the binary itself — the standalone binaries carry a copy, so `--package` works
-with nothing on disk but the executable. Dropping an updated `gui/zircogui.zip` next to
-the binary replaces the built-in Mini-GUI without a rebuild.
+It needs `gui/zircogui.zip` from Zircolite's own files, never from the working directory.
+From source that is the repository's `gui/`. A
+[standalone binary](Usage.md#standalone-binaries) looks in the `gui/` beside the executable
+first and then in the copy under `_internal/`, so dropping an updated `gui/zircogui.zip`
+next to the executable replaces the built-in Mini-GUI without a rebuild, and removing it
+falls back to the built-in one. Either way the executable still needs the rest of its
+package directory: the binaries are a directory with `_internal/` beside the executable,
+not a single file.
 
 To build it by hand instead, render `data.js` and drop it into the unpacked archive:
 

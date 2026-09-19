@@ -30,6 +30,11 @@ class ProcessingConfig:
     # Database options
     db_location: str = ":memory:"
     batch_size: int = 5000
+    working_db: str = "memory"
+    working_db_dir: str | None = None
+    sqlite_cache_mib: int = 64
+    flatten_backend: str = "auto"
+    rule_prefilter: str = "auto"
 
     # Output options
     no_output: bool = False
@@ -53,6 +58,23 @@ class ProcessingConfig:
 
     # EVTX parsing strictness (False = lenient/skip bad chunks, True = stop on errors)
     strict_evtx: bool = False
+    # None leaves parser defaults intact; file workers share a CPU budget.
+    evtx_threads: int | None = None
+
+    def __post_init__(self) -> None:
+        from pathlib import Path
+
+        for name, choices in (
+            ("working_db", ("memory", "disk")),
+            ("flatten_backend", ("auto", "python", "cython")),
+            ("rule_prefilter", ("auto", "off", "literal")),
+        ):
+            if getattr(self, name) not in choices:
+                raise ValueError(f"Unknown {name}: {getattr(self, name)}")
+        if isinstance(self.sqlite_cache_mib, bool) or not isinstance(self.sqlite_cache_mib, int) or self.sqlite_cache_mib < 1:
+            raise ValueError("sqlite_cache_mib must be a positive integer")
+        if self.working_db_dir is not None and not Path(self.working_db_dir).is_dir():
+            raise ValueError("working_db_dir must name an existing directory")
 
 
 @dataclass

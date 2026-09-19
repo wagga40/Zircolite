@@ -6,18 +6,28 @@ These scripts reach into the package -- ``StreamingEventProcessor._flatten_event
 the engine used to leave them broken until somebody ran one by hand. The
 end-to-end cases here exist to fail at that moment.
 
+The release scripts need a real PyInstaller build or a Windows ARM64 host, so the
+suite does not run them end-to-end. Their decisions -- what goes in the archive,
+which licences are demanded, which requirements Windows on ARM64 skips -- are
+pinned here against fake checkouts instead.
+
 The filenames are hyphenated, so they are loaded by path rather than imported.
 """
 
+import importlib.metadata
 import importlib.util
 import json
+import os
+import re
+import shutil
+import stat
+import subprocess
 import sys
+import zipfile
 from pathlib import Path
 from unittest.mock import patch
 
 import pytest
-
-from zircolite import ProcessingConfig, ZircoliteCore
 
 WORKSPACE_ROOT = Path(__file__).parent.parent
 TOOLS = WORKSPACE_ROOT / "tools"
@@ -36,19 +46,23 @@ def load_tool(name: str):
     return module
 
 
+def test_benchmark_default_report_stays_outside_worktree(tmp_path, monkeypatch):
+    import tempfile
+
+    benchmark = load_tool("throughput-benchmark")
+    monkeypatch.setattr(tempfile, "tempdir", str(tmp_path))
+    monkeypatch.setattr(sys, "argv", ["throughput-benchmark.py", "--event-count", "12", "--files", "1",
+                                     "--passes", "1", "--modes", "sequential", "--variants", "current"])
+    assert benchmark.main() == 0
+    reports = list(tmp_path.glob("zircolite-benchmark-*.json"))
+    assert len(reports) == 1
+    assert json.loads(reports[0].read_text())["results"]["sequential"][0]["matches"] == 1
+    assert list(tmp_path.iterdir()) == reports
+
+
 @pytest.fixture(scope="module")
 def regression():
     return load_tool("sigma-regression")
-
-
-@pytest.fixture(scope="module")
-def benchmark():
-    return load_tool("flatten-benchmark")
-
-
-@pytest.fixture(scope="module")
-def db_benchmark():
-    return load_tool("db-benchmark")
 
 
 # A rule split across pipelines: one Sigma id, two titles, as a merged Zircolite
@@ -270,235 +284,647 @@ class TestSigmaRegressionEndToEnd:
         assert code == 0 and report["failed"] == 0
 
 
-@pytest.mark.integration
-class TestFlattenBenchmark:
-    """Pins the private flattening entry point the benchmark measures."""
+# ---------------------------------------------------------------------------
+# tools/package-release.py
+# ---------------------------------------------------------------------------
 
-    def test_runs_over_the_evtx_fixture(self, benchmark, capsys):
-        argv = [
-            "flatten-benchmark.py",
-            "--evtx", str(FIXTURES / "sample_bitsadmin.evtx"),
-            "--config", str(CONFIG),
-            "--passes", "1",
-        ]
-        with patch.object(sys, "argv", argv):
-            assert benchmark.main() == 0
-        assert "events/s" in capsys.readouterr().out
-
-    def test_missing_input_is_an_error_not_a_zero_measurement(self, benchmark, tmp_path):
-        argv = [
-            "flatten-benchmark.py",
-            "--evtx", str(tmp_path / "nothing-here.evtx"),
-            "--config", str(CONFIG),
-        ]
-        with patch.object(sys, "argv", argv):
-            assert benchmark.main() == 1
-
-    def test_collect_raw_events_searches_a_directory(self, benchmark):
-        events = benchmark.collect_raw_events(FIXTURES, 10)
-        assert events, "the EVTX fixture should be found by the recursive search"
-        assert "Event" in events[0]
-
-    def test_collect_raw_events_returns_nothing_for_a_missing_path(self, benchmark, tmp_path):
-        assert benchmark.collect_raw_events(tmp_path / "absent.evtx", 10) == []
+@pytest.fixture(scope="module")
+def release():
+    return load_tool("package-release")
 
 
-# One real MULTI-INDEX OR plan, captured from SQLite rather than invented: the
-# index names live on the nested rows, not on the row naming the strategy.
-MULTI_INDEX_OR_PLAN = [
-    "MULTI-INDEX OR",
-    "INDEX 1",
-    "SEARCH logs USING INDEX idx_eventid (EventID=?)",
-    "INDEX 2",
-    "SEARCH logs USING INDEX idx_channel (Channel=?)",
-]
+FAKE_VERSION = "1.2.3"
+PYTHON_LICENCE_TEXT = "PYTHON SOFTWARE FOUNDATION LICENSE VERSION 2 (test copy)"
 
 
-@pytest.mark.integration
-class TestDbBenchmark:
-    """Pins the ingest, widening and plan-reading surfaces the harness drives."""
+def make_checkout(root, executable="Zircolite"):
+    """Just what the packager reads from a checkout, around a fake onedir build."""
+    (root / "zircolite").mkdir(parents=True)
+    (root / "zircolite" / "__init__.py").write_text(
+        f'"""Docstring."""\n\n__version__ = "{FAKE_VERSION}"\n', encoding="utf-8")
+    (root / "pyproject.toml").write_text(
+        f'[project]\nname = "Zircolite"\nversion = "{FAKE_VERSION}"\ndependencies = [\n'
+        '    "rich>=14",\n]\n\n[tool.other]\nversion = "9.9.9"\n', encoding="utf-8")
+    for directory, name in [("config", "config.yaml"), ("rules", "rules_linux.json"),
+                            ("templates", "exportForSplunk.tmpl"), ("gui", "zircogui.zip"),
+                            ("docs", "Usage.md"), ("pics", "Zircolite.png")]:
+        (root / directory).mkdir()
+        (root / directory / name).write_text(directory, encoding="utf-8")
+    (root / "config" / "__pycache__").mkdir()
+    (root / "config" / "__pycache__" / "stale.cpython-314.pyc").write_bytes(b"")
+    (root / "README.md").write_text("readme", encoding="utf-8")
+    (root / "LICENSE").write_text("LGPL", encoding="utf-8")
+    onedir = root / "dist" / "Zircolite"
+    (onedir / "_internal").mkdir(parents=True)
+    (onedir / "_internal" / "base_library.zip").write_bytes(b"PK")
+    binary = onedir / executable
+    binary.write_text(f"#!/bin/sh\necho banner v{FAKE_VERSION}\necho 'Zircolite - v{FAKE_VERSION}'\n",
+                      encoding="utf-8")
+    binary.chmod(0o755)
+    return root
 
-    def _core(self, field_mappings_file, test_logger):
-        core = ZircoliteCore(
-            config=field_mappings_file,
-            processing_config=ProcessingConfig(disable_progress=True, no_output=True),
-            logger=test_logger,
-        )
-        core.create_db('"Channel" TEXT COLLATE NOCASE, "CommandLine" TEXT COLLATE NOCASE')
-        core.db_connection.execute(
-            "INSERT INTO logs (Channel, CommandLine) VALUES (?, ?)",
-            ("Security", "c:/evil.exe"),
-        )
-        core.db_connection.commit()
-        return core
 
-    def test_runs_over_the_evtx_fixture(self, db_benchmark, capsys):
-        argv = [
-            "db-benchmark.py",
-            "--evtx", str(FIXTURES / "sample_bitsadmin.evtx"),
-            "--ruleset", str(FIXTURES / "sample_ruleset.json"),
-            "--config", str(CONFIG),
-        ]
-        with patch.object(sys, "argv", argv):
-            assert db_benchmark.main() == 0
-        out = capsys.readouterr().out
-        assert "events/s" in out
-        assert "selective:" in out
+@pytest.fixture
+def checkout(tmp_path, release, monkeypatch):
+    """A fake checkout, with the interpreter licence pinned so no test depends on the host Python."""
+    licence = tmp_path / "PYTHON-LICENSE.txt"
+    licence.write_text(PYTHON_LICENCE_TEXT, encoding="utf-8")
+    monkeypatch.setattr(release, "python_licence", lambda: licence)
+    return make_checkout(tmp_path / "checkout")
 
-    def test_a_missing_corpus_is_an_error_not_a_zero_measurement(self, db_benchmark, tmp_path):
-        argv = [
-            "db-benchmark.py",
-            "--evtx", str(tmp_path / "nothing-here.evtx"),
-            "--ruleset", str(FIXTURES / "sample_ruleset.json"),
-            "--config", str(CONFIG),
-        ]
-        with patch.object(sys, "argv", argv):
-            assert db_benchmark.main() == 1
 
-    def test_an_unreadable_ruleset_is_an_error(self, db_benchmark, tmp_path):
-        not_a_ruleset = tmp_path / "notes.txt"
-        not_a_ruleset.write_text("this is not a ruleset")
-        argv = [
-            "db-benchmark.py",
-            "--evtx", str(FIXTURES / "sample_bitsadmin.evtx"),
-            "--ruleset", str(not_a_ruleset),
-            "--config", str(CONFIG),
-        ]
-        with patch.object(sys, "argv", argv):
-            assert db_benchmark.main() == 1
+def package(release, root, target, monkeypatch, capsys):
+    monkeypatch.setenv("ZIRCOLITE_TARGET", target)
+    code = release.main(["--root", str(root)])
+    captured = capsys.readouterr()
+    return code, captured.out.strip(), captured.err
 
-    def test_a_rule_naming_an_absent_field_is_planned_not_written_off(
-        self, db_benchmark, field_mappings_file, test_logger
-    ):
-        """Widening has to run before EXPLAIN, or 43% of rules never get a plan."""
-        core = self._core(field_mappings_file, test_logger)
+
+def unix_mode(bundle: zipfile.ZipFile, name: str) -> int:
+    info = bundle.getinfo(name)
+    assert info.create_system == 3, f"{name} is not recorded as made on Unix"
+    return info.external_attr >> 16
+
+
+class TestPackageArchive:
+    @pytest.mark.parametrize("target", ["linux-x64", "linux-arm64", "macos-arm64"])
+    def test_posix_targets_get_a_zip(self, release, checkout, target, monkeypatch, capsys):
+        code, printed, _ = package(release, checkout, target, monkeypatch, capsys)
+        assert code == 0
+        archive = checkout / "dist" / f"Zircolite-{FAKE_VERSION}-{target}.zip"
+        assert Path(printed) == archive
+        with zipfile.ZipFile(archive) as bundle:
+            assert bundle.testzip() is None
+
+    def test_archive_layout(self, release, checkout, monkeypatch, capsys):
+        code, printed, _ = package(release, checkout, "linux-x64", monkeypatch, capsys)
+        assert code == 0
+        top = f"Zircolite-{FAKE_VERSION}-linux-x64"
+        with zipfile.ZipFile(printed) as bundle:
+            names = {name.rstrip("/") for name in bundle.namelist()}
+        assert all(name == top or name.startswith(f"{top}/") for name in names)
+        for expected in ["Zircolite", "_internal/base_library.zip", "config/config.yaml",
+                         "rules/rules_linux.json", "templates/exportForSplunk.tmpl",
+                         "gui/zircogui.zip", "docs/Usage.md", "pics/Zircolite.png",
+                         "README.md", "LICENSE", "THIRD_PARTY_LICENSES"]:
+            assert f"{top}/{expected}" in names, expected
+        assert not [name for name in names if "__pycache__" in name]
+
+    def test_executable_bit_survives(self, release, checkout, monkeypatch, capsys):
+        # Checked in the archive itself: upload-artifact zips loose files, which drops the bit.
+        _, printed, _ = package(release, checkout, "macos-arm64", monkeypatch, capsys)
+        top = f"Zircolite-{FAKE_VERSION}-macos-arm64"
+        with zipfile.ZipFile(printed) as bundle:
+            assert unix_mode(bundle, f"{top}/Zircolite") & 0o111 == 0o111
+            assert unix_mode(bundle, f"{top}/README.md") & 0o111 == 0
+
+    def test_executable_bit_is_restored_when_the_build_lost_it(self, release, checkout,
+                                                              monkeypatch, capsys):
+        binary = checkout / "dist" / "Zircolite" / "Zircolite"
+        binary.chmod(stat.S_IRUSR | stat.S_IWUSR)
+        _, printed, _ = package(release, checkout, "linux-arm64", monkeypatch, capsys)
+        with zipfile.ZipFile(printed) as bundle:
+            mode = unix_mode(bundle, f"Zircolite-{FAKE_VERSION}-linux-arm64/Zircolite")
+        assert mode & 0o111 == 0o111
+
+    @pytest.mark.skipif(os.name == "nt" or not shutil.which("unzip"),
+                        reason="needs unzip and symlinks, as a Linux or macOS user has")
+    def test_unzip_restores_the_executable_and_symlinks(self, release, checkout, tmp_path,
+                                                         monkeypatch, capsys):
+        # What a user gets, rather than what the archive records.
+        (checkout / "dist" / "Zircolite" / "_internal" / "Python").symlink_to("base_library.zip")
+        _, printed, _ = package(release, checkout, "macos-arm64", monkeypatch, capsys)
+        extracted = tmp_path / "extracted"
+        unzip = shutil.which("unzip")
+        assert unzip
+        subprocess.run([unzip, "-q", printed, "-d", str(extracted)], check=True)
+        top = extracted / f"Zircolite-{FAKE_VERSION}-macos-arm64"
+        assert os.access(top / "Zircolite", os.X_OK)
+        link = top / "_internal" / "Python"
+        assert link.is_symlink() and os.readlink(link) == "base_library.zip"
+
+    @pytest.mark.parametrize("target", ["windows-x64", "windows-arm64"])
+    def test_windows_targets_get_a_zip(self, release, tmp_path, target, monkeypatch, capsys):
+        licence = tmp_path / "PYTHON-LICENSE.txt"
+        licence.write_text(PYTHON_LICENCE_TEXT, encoding="utf-8")
+        monkeypatch.setattr(release, "python_licence", lambda: licence)
+        root = make_checkout(tmp_path / "checkout", executable="Zircolite.exe")
+        code, printed, _ = package(release, root, target, monkeypatch, capsys)
+        assert code == 0
+        archive = root / "dist" / f"Zircolite-{FAKE_VERSION}-{target}.zip"
+        assert Path(printed) == archive
+        top = f"Zircolite-{FAKE_VERSION}-{target}"
+        with zipfile.ZipFile(archive) as bundle:
+            assert bundle.testzip() is None
+            names = set(bundle.namelist())
+        for expected in ["Zircolite.exe", "_internal/base_library.zip", "rules/rules_linux.json",
+                         "LICENSE", "THIRD_PARTY_LICENSES"]:
+            assert f"{top}/{expected}" in names, expected
+
+    def test_source_date_epoch_caps_timestamps(self, release, checkout, monkeypatch, capsys):
+        monkeypatch.setenv("SOURCE_DATE_EPOCH", "946684800")
+        _, printed, _ = package(release, checkout, "linux-x64", monkeypatch, capsys)
+        with zipfile.ZipFile(printed) as bundle:
+            assert {info.date_time for info in bundle.infolist()} == {(2000, 1, 1, 0, 0, 0)}
+
+    def test_repackaging_replaces_the_previous_run(self, release, checkout, monkeypatch, capsys):
+        package(release, checkout, "linux-x64", monkeypatch, capsys)
+        stale = checkout / "dist" / f"Zircolite-{FAKE_VERSION}-linux-x64" / "stale.txt"
+        stale.write_text("left over", encoding="utf-8")
+        code, printed, _ = package(release, checkout, "linux-x64", monkeypatch, capsys)
+        assert code == 0
+        assert not stale.exists()
+        with zipfile.ZipFile(printed) as bundle:
+            assert not [name for name in bundle.namelist() if name.endswith("stale.txt")]
+
+
+class TestPackageRefusals:
+    def test_missing_build(self, release, checkout, monkeypatch, capsys):
+        shutil.rmtree(checkout / "dist" / "Zircolite")
+        code, printed, err = package(release, checkout, "linux-x64", monkeypatch, capsys)
+        assert code == 1 and printed == ""
+        assert "pyinstaller --noconfirm Zircolite.spec" in err
+
+    def test_missing_executable(self, release, checkout, monkeypatch, capsys):
+        # The fake build has a POSIX executable; a Windows target wants Zircolite.exe.
+        code, _, err = package(release, checkout, "windows-x64", monkeypatch, capsys)
+        assert code == 1
+        assert "Zircolite.exe does not exist" in err
+
+    def test_onefile_build_is_refused(self, release, checkout, monkeypatch, capsys):
+        shutil.rmtree(checkout / "dist" / "Zircolite" / "_internal")
+        code, _, err = package(release, checkout, "linux-x64", monkeypatch, capsys)
+        assert code == 1
+        assert "not a onedir build" in err
+
+    @pytest.mark.skipif(os.name == "nt", reason="creating a symlink needs a privilege on Windows")
+    @pytest.mark.parametrize("link", ["docs/Alias.md", "config/nested/config.yaml", "README.md"])
+    def test_symlink_in_the_copied_sources_fails_a_posix_target(self, release, checkout, link,
+                                                                monkeypatch, capsys):
+        # Only the Windows zip cannot carry it, but the linux-x64 canary must catch it.
+        path = checkout / link
+        path.parent.mkdir(exist_ok=True)
+        path.unlink(missing_ok=True)
+        path.symlink_to(checkout / "LICENSE")
+        code, printed, err = package(release, checkout, "linux-x64", monkeypatch, capsys)
+        assert code == 1 and printed == ""
+        assert "symlink" in err and link in err
+        assert not list((checkout / "dist").glob("Zircolite-*"))
+
+    @pytest.mark.skipif(os.name == "nt", reason="creating a symlink needs a privilege on Windows")
+    def test_symlinks_inside_the_build_are_kept(self, release, checkout, monkeypatch, capsys):
+        # A macOS build links into Python.framework; the archive must keep that.
+        internal = checkout / "dist" / "Zircolite" / "_internal"
+        (internal / "Python").symlink_to("base_library.zip")
+        code, printed, _ = package(release, checkout, "macos-arm64", monkeypatch, capsys)
+        assert code == 0
+        name = f"Zircolite-{FAKE_VERSION}-macos-arm64/_internal/Python"
+        with zipfile.ZipFile(printed) as bundle:
+            assert stat.S_ISLNK(unix_mode(bundle, name))
+            assert bundle.read(name) == b"base_library.zip"
+
+    @pytest.mark.skipif(os.name == "nt", reason="creating a symlink needs a privilege on Windows")
+    def test_a_symlink_in_a_windows_build_is_refused(self, release, tmp_path, monkeypatch, capsys):
+        licence = tmp_path / "PYTHON-LICENSE.txt"
+        licence.write_text(PYTHON_LICENCE_TEXT, encoding="utf-8")
+        monkeypatch.setattr(release, "python_licence", lambda: licence)
+        root = make_checkout(tmp_path / "checkout", executable="Zircolite.exe")
+        (root / "dist" / "Zircolite" / "_internal" / "alias").symlink_to("base_library.zip")
+        code, printed, err = package(release, root, "windows-x64", monkeypatch, capsys)
+        assert code == 1 and printed == ""
+        assert "symlink" in err and "Windows" in err
+
+    @pytest.mark.parametrize("value", [None, "", "linux-x86", "macos-x64"])
+    def test_target_must_be_known(self, release, checkout, value, monkeypatch, capsys):
+        if value is None:
+            monkeypatch.delenv("ZIRCOLITE_TARGET", raising=False)
+        else:
+            monkeypatch.setenv("ZIRCOLITE_TARGET", value)
+        assert release.main(["--root", str(checkout)]) == 1
+        err = capsys.readouterr().err
+        assert "windows-arm64" in err
+        assert not list((checkout / "dist").glob("Zircolite-*"))
+
+
+class TestThirdPartyLicences:
+    @pytest.fixture
+    def notices(self, release, checkout, monkeypatch, capsys):
+        code, _, _ = package(release, checkout, "linux-x64", monkeypatch, capsys)
+        assert code == 0
+        staged = checkout / "dist" / f"Zircolite-{FAKE_VERSION}-linux-x64" / "THIRD_PARTY_LICENSES"
+        return staged.read_text(encoding="utf-8")
+
+    def titles(self, release, notices):
+        # A header is separator, title, optional "License:" line, separator.
+        lines = notices.splitlines()
+        return [lines[i + 1] for i in range(len(lines) - 2)
+                if lines[i] == release.SEPARATOR and lines[i + 1]
+                and (lines[i + 2] == release.SEPARATOR or lines[i + 2].startswith("License: "))]
+
+    def test_every_runtime_dependency_has_a_section(self, release, notices):
+        titles = {title.split(" ")[0].lower() for title in self.titles(release, notices)}
+        for name in ["rich", "pysigma", "orjson", "lxml", "py7zr", "requests", "pyroaring"]:
+            assert name in titles, name
+        # The project itself is under LICENSE, not in the third-party file.
+        assert "zircolite" not in titles
+
+    def test_evtx_falls_back_to_the_vendored_text(self, notices):
+        # The evtx wheel ships no licence file at all.
+        assert re.search(r"^evtx \S+$", notices, re.MULTILINE)
+        assert "--- tools/licenses/evtx.txt ---" in notices
+        assert "Omer Ben-Amram" in notices
+
+    def test_interpreter_bootloader_and_rules(self, release, notices):
+        assert PYTHON_LICENCE_TEXT in notices
+        assert re.search(r"^pyinstaller \S+$", notices, re.MULTILINE)
+        assert "bootloader" in notices.lower()
+        assert "Detection Rule License (DRL) 1.1" in notices
+        titles = self.titles(release, notices)
+        assert titles[0].startswith("Python ")
+        assert titles[-1] == "Detection rules (rules/)"
+
+    def vendored_without(self, release, tmp_path, monkeypatch, missing):
+        vendored = tmp_path / "vendored"
+        shutil.copytree(release.VENDORED_LICENCES, vendored)
+        (vendored / missing).unlink()
+        monkeypatch.setattr(release, "VENDORED_LICENCES", vendored)
+
+    def test_a_distribution_without_licence_fails(self, release, checkout, tmp_path,
+                                                  monkeypatch, capsys):
+        self.vendored_without(release, tmp_path, monkeypatch, "evtx.txt")
+        code, printed, err = package(release, checkout, "linux-x64", monkeypatch, capsys)
+        assert code == 1 and printed == ""
+        assert "no licence text for: evtx" in err
+        # Nothing half-built is left for a later step to pick up.
+        assert not list((checkout / "dist").glob("Zircolite-*"))
+
+    def test_the_rules_licence_is_required(self, release, checkout, tmp_path, monkeypatch, capsys):
+        self.vendored_without(release, tmp_path, monkeypatch, "DRL-1.1.txt")
+        code, _, err = package(release, checkout, "linux-x64", monkeypatch, capsys)
+        assert code == 1
+        assert "DRL-1.1.txt" in err
+
+    @pytest.mark.parametrize("target", ["linux-x64", "linux-arm64", "macos-arm64"])
+    def test_posix_targets_carry_the_runtime_libraries(self, release, checkout, target):
+        notices = release.third_party_licences(FAKE_VERSION, target)
+        assert self.titles(release, notices)[1] == "Libraries linked into the Python runtime"
+        marker = "--- tools/licenses/python-runtime-libraries.txt ---"
+        assert marker in notices
+        runtime = notices.split(marker, 1)[1].split(release.SEPARATOR, 1)[0]
+        # Apache-2.0 section 4(a) requires the whole text, not a pointer to it.
+        openssl = runtime.split("\nOpenSSL 3\nLicense: Apache-2.0\n", 1)[1].split("\nlibffi\n", 1)[0]
+        assert "Apache License\n                           Version 2.0, January 2004" in openssl
+        assert "END OF TERMS AND CONDITIONS" in openssl
+        for library in ["libffi", "mpdecimal", "liblzma", "libbzip2", "Zstandard", "Expat",
+                        "zlib", "SQLite", "libedit", "ncurses", "libuuid"]:
+            assert re.search(rf"^.*{library}.*\nLicense: ", runtime, re.MULTILINE), library
+
+    @pytest.mark.parametrize("target", ["windows-x64", "windows-arm64"])
+    def test_windows_leaves_the_runtime_libraries_to_the_python_licence(self, release, checkout,
+                                                                        target):
+        notices = release.third_party_licences(FAKE_VERSION, target)
+        assert "Libraries linked into the Python runtime" not in self.titles(release, notices)
+        assert "python-runtime-libraries.txt" not in notices
+
+    def test_the_runtime_libraries_notice_is_required(self, release, checkout, tmp_path,
+                                                      monkeypatch, capsys):
+        self.vendored_without(release, tmp_path, monkeypatch, "python-runtime-libraries.txt")
+        code, _, err = package(release, checkout, "macos-arm64", monkeypatch, capsys)
+        assert code == 1
+        assert "python-runtime-libraries.txt is missing" in err
+
+    def test_python_licence_is_found_beside_the_stdlib(self, release, tmp_path, monkeypatch):
+        stdlib = tmp_path / "lib" / "python3.14"
+        stdlib.mkdir(parents=True)
+        (stdlib / "LICENSE.txt").write_text("PSF", encoding="utf-8")
+        monkeypatch.setattr(release.sysconfig, "get_path", lambda name: str(stdlib))
+        assert release.python_licence() == stdlib / "LICENSE.txt"
+
+    def test_python_licence_is_found_in_a_windows_layout(self, release, tmp_path, monkeypatch):
+        (tmp_path / "Lib").mkdir()
+        (tmp_path / "LICENSE.txt").write_text("PSF", encoding="utf-8")
+        monkeypatch.setattr(release.sysconfig, "get_path", lambda name: str(tmp_path / "Lib"))
+        monkeypatch.setattr(release.sys, "base_prefix", str(tmp_path))
+        assert release.python_licence() == tmp_path / "LICENSE.txt"
+
+    def test_missing_python_licence_fails(self, release, tmp_path, monkeypatch):
+        monkeypatch.setattr(release.sysconfig, "get_path", lambda name: str(tmp_path / "lib"))
+        monkeypatch.setattr(release.sys, "base_prefix", str(tmp_path))
+        with pytest.raises(release.PackagingError, match="Python licence"):
+            release.python_licence()
+
+    def test_only_windows_arm64_may_lack_jq(self, release):
+        assert dict(release.ALLOWED_ABSENT) == {"windows-arm64": frozenset({"jq"})}
+
+
+class FakeDistribution:
+    def __init__(self, name, requires=()):
+        self.metadata = {"Name": name}
+        self.requires = list(requires)
+
+
+def fake_lookup(*distributions):
+    table = {dist.metadata["Name"].lower(): dist for dist in distributions}
+
+    def lookup(name):
         try:
-            ruleset = [{"rule": ["SELECT * FROM logs WHERE OriginalFileName = 'x'"]}]
-            prepared, unpreparable = db_benchmark.prepare_queries(core, ruleset)
+            return table[name.lower()]
+        except KeyError:
+            raise importlib.metadata.PackageNotFoundError(name) from None
+    return lookup
 
-            assert len(prepared) == 1
-            assert not unpreparable
-            assert "OriginalFileName" in core._get_table_columns()
-        finally:
-            core.close()
 
-    def test_a_regexp_rule_can_be_planned(self, db_benchmark, field_mappings_file, test_logger):
-        """SQLite resolves function names when it prepares, so EXPLAIN needs the UDF.
+class TestRuntimeClosure:
+    def names(self, closure):
+        return [dist.metadata["Name"] for dist in closure]
 
-        A bare ``sqlite3.connect`` raises ``no such function: REGEXP`` here, which
-        would silently write off every regex rule as unplannable.
-        """
-        core = self._core(field_mappings_file, test_logger)
-        try:
-            details = db_benchmark.plan_for(
-                core, "SELECT * FROM logs WHERE CommandLine REGEXP 'evil'"
-            )
+    def test_walks_transitive_requirements_without_the_root(self, release):
+        lookup = fake_lookup(FakeDistribution("root", ["a>=1", "b (>=2)"]),
+                             FakeDistribution("a", ["c"]), FakeDistribution("b"),
+                             FakeDistribution("c", ["a"]))
+        assert self.names(release.runtime_closure("root", lookup=lookup)) == ["a", "b", "c"]
 
-            assert details
-        finally:
-            core.close()
+    def test_extras_nobody_asked_for_are_skipped(self, release):
+        lookup = fake_lookup(FakeDistribution("root", ["a", 'pytest; extra == "test"']),
+                             FakeDistribution("a", ['sphinx ; extra == "docs"']))
+        assert self.names(release.runtime_closure("root", lookup=lookup)) == ["a"]
 
-    def test_a_scan_is_not_a_selective_plan(self, db_benchmark):
-        search_b = ["SEARCH logs USING INDEX idx_b (x=?)"]
+    def test_requested_extras_are_followed(self, release):
+        lookup = fake_lookup(FakeDistribution("root", ["a[Fast_Path]"]),
+                             FakeDistribution("a", ['speedups; extra == "fast-path"']),
+                             FakeDistribution("speedups"))
+        assert self.names(release.runtime_closure("root", lookup=lookup)) == ["a", "speedups"]
 
-        assert db_benchmark.plan_verdict(["SCAN logs"], {"idx_a"}, {"idx_a"}) == "scan"
-        assert db_benchmark.plan_verdict(search_b, {"idx_a", "idx_b"}, {"idx_a"}) == "broad"
-        assert db_benchmark.plan_verdict(search_b, {"idx_a", "idx_b"}, {"idx_b"}) == "selective"
-        assert db_benchmark.plan_verdict(["SCAN logs"], set(), set()) == "unindexable"
+    def test_markers_false_here_are_skipped(self, release):
+        lookup = fake_lookup(FakeDistribution("root", [
+            'pypy-only; platform_python_implementation == "PyPy"',
+            'old-python; python_version < "3.0"',
+            "present",
+        ]), FakeDistribution("present"))
+        assert self.names(release.runtime_closure("root", lookup=lookup)) == ["present"]
 
-    def test_a_multi_index_or_plan_counts_its_indexes(self, db_benchmark):
-        assert db_benchmark.indexes_used(MULTI_INDEX_OR_PLAN) == {"idx_eventid", "idx_channel"}
+    def test_absent_requirement_fails_and_names_who_wanted_it(self, release):
+        lookup = fake_lookup(FakeDistribution("root", ["a"]), FakeDistribution("a", ["gone"]))
+        with pytest.raises(release.PackagingError, match=r"gone \(required by a\)"):
+            release.runtime_closure("root", lookup=lookup)
 
-    def test_a_transient_index_is_not_counted_as_one(self, db_benchmark):
-        """An automatic index means no stored index served the query."""
-        details = ["SEARCH logs USING AUTOMATIC COVERING INDEX (CommandLine=?)"]
+    def test_allow_list_covers_only_what_it_names(self, release):
+        lookup = fake_lookup(FakeDistribution("root", ["a", "jq"]), FakeDistribution("a"))
+        assert self.names(release.runtime_closure("root", frozenset({"jq"}), lookup)) == ["a"]
+        lookup = fake_lookup(FakeDistribution("root", ["b", "jq"]))
+        with pytest.raises(release.PackagingError, match="b"):
+            release.runtime_closure("root", frozenset({"jq"}), lookup)
 
-        assert db_benchmark.indexes_used(details) == set()
-        assert db_benchmark.plan_label(details) == "AUTOMATIC INDEX"
+    def test_uninstalled_project_says_how_to_fix_it(self, release):
+        with pytest.raises(release.PackagingError, match="pdm install"):
+            release.runtime_closure("root", lookup=fake_lookup())
 
-    def test_narrowest_picks_the_index_with_the_fewest_rows_per_key(self, db_benchmark):
-        stats = {"idx_eventid": 12.0, "idx_channel": 75000.0}
 
-        assert db_benchmark.narrowest({"idx_eventid", "idx_channel"}, stats) == {"idx_eventid"}
-        assert db_benchmark.narrowest(set(), stats) == set()
+class TestShippedLicences:
+    """Licence files come from the distribution's own metadata directory only."""
 
-    def test_collect_evtx_files_searches_a_directory(self, db_benchmark):
-        files = db_benchmark.collect_evtx_files(FIXTURES, 0)
+    @pytest.fixture
+    def distribution(self, tmp_path):
+        info = tmp_path / "demo-1.0.dist-info"
+        (info / "licenses").mkdir(parents=True)
+        (info / "METADATA").write_text(
+            "Metadata-Version: 2.4\nName: demo\nVersion: 1.0\nLicense-Expression: MIT\n"
+            "License-File: LICENSE\n", encoding="utf-8")
+        (info / "licenses" / "LICENSE").write_text("MIT text\r\n", encoding="utf-8")
+        (info / "COPYING.rst").write_text("copying text", encoding="utf-8")
+        (info / "WHEEL").write_text("Wheel-Version: 1.0\n", encoding="utf-8")
+        vendored = tmp_path / "demo" / "_vendor" / "other-2.0.dist-info"
+        vendored.mkdir(parents=True)
+        (vendored / "LICENSE").write_text("vendored text", encoding="utf-8")
+        (info / "RECORD").write_text("\n".join([
+            "demo-1.0.dist-info/METADATA,,", "demo-1.0.dist-info/licenses/LICENSE,,",
+            "demo-1.0.dist-info/COPYING.rst,,", "demo-1.0.dist-info/WHEEL,,",
+            "demo-1.0.dist-info/RECORD,,", "demo/_vendor/other-2.0.dist-info/LICENSE,,",
+        ]) + "\n", encoding="utf-8")
+        return importlib.metadata.PathDistribution(info)
 
-        assert files, "the EVTX fixture should be found by the recursive search"
-        assert all(f.suffix == ".evtx" for f in files)
-
-    def test_index_sets_reports_every_candidate(self, db_benchmark, capsys):
-        argv = [
-            "db-benchmark.py",
-            "--evtx", str(FIXTURES / "sample_bitsadmin.evtx"),
-            "--ruleset", str(FIXTURES / "sample_ruleset.json"),
-            "--config", str(CONFIG),
-            "--index-sets",
+    def test_declared_and_licence_named_files(self, release, distribution):
+        assert release.shipped_licences(distribution) == [
+            ("COPYING.rst", "copying text"),
+            ("licenses/LICENSE", "MIT text"),
         ]
-        with patch.object(sys, "argv", argv):
-            assert db_benchmark.main() == 0
-        out = capsys.readouterr().out
-        for label, _ in db_benchmark._INDEX_SETS:
-            assert label in out
-        assert "detections identical across every set" in out
 
-    def test_a_set_naming_an_absent_column_is_skipped_not_faked(
-        self, db_benchmark, field_mappings_file, test_logger
-    ):
-        """SQLite would index the quoted name as a constant instead of refusing.
+    def test_declared_licence_prefers_the_expression(self, release, distribution):
+        assert release.declared_licence(distribution) == "MIT"
 
-        The corpus here has a Channel but no eventid, so the composite cannot be
-        built; reporting it as built would credit an index that indexes nothing.
-        """
-        core = self._core(field_mappings_file, test_logger)
-        try:
-            built, _ = db_benchmark.build_index_set(
-                core,
-                [("idx_channel", ("channel",)), ("idx_channel_eventid", ("channel", "eventid"))],
-            )
 
-            assert built == ["idx_channel"]
-        finally:
-            core.close()
+LINUX_310 = {
+    "implementation_name": "cpython", "implementation_version": "3.10.14", "os_name": "posix",
+    "platform_machine": "x86_64", "platform_python_implementation": "CPython",
+    "platform_release": "6.8.0", "platform_system": "Linux", "platform_version": "#1 SMP",
+    "python_full_version": "3.10.14", "python_version": "3.10", "sys_platform": "linux",
+    "extra": "",
+}
 
-    def test_index_columns_are_matched_case_insensitively(
-        self, db_benchmark, field_mappings_file, test_logger
-    ):
-        """The corpus spells it ``Channel``; the set asks for ``channel``."""
-        core = self._core(field_mappings_file, test_logger)
-        try:
-            built, _ = db_benchmark.build_index_set(core, [("idx_channel", ("channel",))])
 
-            assert built == ["idx_channel"]
-            indexes = {
-                row[0]
-                for row in core.db_connection.execute(
-                    "SELECT name FROM sqlite_master WHERE type = 'index'"
-                )
-            }
-            assert "idx_channel" in indexes
-        finally:
-            core.close()
+class TestMarkers:
+    """Markers are evaluated for the environment given, whatever the host is."""
 
-    def test_each_set_starts_from_a_clean_slate(
-        self, db_benchmark, field_mappings_file, test_logger
-    ):
-        """Otherwise every set after the first is timed with its predecessors."""
-        core = self._core(field_mappings_file, test_logger)
-        try:
-            db_benchmark.build_index_set(core, [("idx_channel", ("channel",))])
-            built, _ = db_benchmark.build_index_set(
-                core, [("idx_CommandLine", ("commandline",))]
-            )
+    @pytest.mark.parametrize(("marker", "expected"), [
+        ('sys_platform == "linux" and python_version < "3.11"', True),
+        ('os_name == "nt" or platform_machine == "ARM64"', False),
+        ('python_full_version < "3.10.14.post1"', True),
+        ('python_version == "3.10.*"', True),
+        ('extra == "test"', False),
+    ])
+    def test_evaluates_against_the_given_environment(self, release, marker, expected):
+        assert release.evaluate_marker(marker, LINUX_310) is expected
 
-            assert built == ["idx_CommandLine"]
-            indexes = {
-                row[0]
-                for row in core.db_connection.execute(
-                    "SELECT name FROM sqlite_master WHERE type = 'index'"
-                )
-            }
-            assert "idx_channel" not in indexes
-        finally:
-            core.close()
+    def test_extras_compare_normalised(self, release):
+        assert release.evaluate_marker('extra == "Test_Extra"', {**LINUX_310, "extra": "test-extra"})
+
+    @pytest.mark.parametrize("marker", [
+        'python_version <',
+        'python_version < "3.14" and',
+        '(python_version < "3.14"',
+        'no_such_variable == "x"',
+        'python_version = "3.14"',
+        'python_version ~= "3"',
+    ])
+    def test_malformed_markers_fail_loudly(self, release, marker):
+        with pytest.raises(release.PackagingError, match="cannot evaluate marker"):
+            release.evaluate_marker(marker, LINUX_310)
+
+    def test_requirement_parsing(self, release):
+        assert release.parse_requirement("coverage[toml, Fast_Path]>=5.2; extra == 'test'") == (
+            "coverage", frozenset({"toml", "fast-path"}), "extra == 'test'")
+        assert release.parse_requirement("diskcache (>=5.6.3,<6.0.0)") == (
+            "diskcache", frozenset(), None)
+
+
+class TestVersionsAndTag:
+    def test_versions_are_read_without_importing(self, release, checkout):
+        assert release.package_version(checkout) == FAKE_VERSION
+        # Only the [project] table counts; [tool.other] also has a version key.
+        assert release.pyproject_version(checkout) == FAKE_VERSION
+
+    def test_real_checkout_versions_agree(self, release):
+        from zircolite import __version__
+
+        assert release.package_version(WORKSPACE_ROOT) == __version__
+        assert release.pyproject_version(WORKSPACE_ROOT) == __version__
+
+    def test_version_is_found_after_the_banner(self, release):
+        output = ("\x1b[1m███ banner ███\x1b[0m\n   v9.9.9\n\n"
+                  "\x1b[32mZircolite - v3.9.0\x1b[0m\n")
+        assert release.version_from_output(output) == "3.9.0"
+        with pytest.raises(release.PackagingError):
+            release.version_from_output("banner only v3.9.0\n")
+
+    def check(self, release, root, tag, monkeypatch, capsys, binary=FAKE_VERSION):
+        monkeypatch.setattr(release, "binary_version", lambda executable: binary)
+        monkeypatch.delenv("ZIRCOLITE_TARGET", raising=False)
+        code = release.main(["--root", str(root), "--check-tag", tag])
+        return code, capsys.readouterr().err
+
+    def test_matching_tag_passes(self, release, checkout, monkeypatch, capsys):
+        assert self.check(release, checkout, f"v{FAKE_VERSION}", monkeypatch, capsys)[0] == 0
+
+    @pytest.mark.parametrize("tag", [FAKE_VERSION, "v1.2.4", "v1.2.3.0", "refs/tags/v1.2.3"])
+    def test_other_tags_fail_and_name_every_source(self, release, checkout, tag,
+                                                    monkeypatch, capsys):
+        code, err = self.check(release, checkout, tag, monkeypatch, capsys)
+        assert code == 1
+        assert "__version__" in err and "pyproject.toml" in err and "--version" in err
+
+    def test_pyproject_drift_is_named(self, release, checkout, monkeypatch, capsys):
+        pyproject = checkout / "pyproject.toml"
+        pyproject.write_text(pyproject.read_text(encoding="utf-8").replace(
+            f'version = "{FAKE_VERSION}"', 'version = "1.2.2"', 1), encoding="utf-8")
+        code, err = self.check(release, checkout, f"v{FAKE_VERSION}", monkeypatch, capsys)
+        assert code == 1
+        assert "pyproject.toml [project] version: 1.2.2" in err
+        assert "__version__" not in err
+
+    def test_stale_binary_is_named(self, release, checkout, monkeypatch, capsys):
+        code, err = self.check(release, checkout, f"v{FAKE_VERSION}", monkeypatch, capsys,
+                               binary="1.2.2")
+        assert code == 1
+        assert "--version: 1.2.2" in err
+        assert "pyproject.toml" not in err
+
+    @pytest.mark.skipif(os.name == "nt", reason="the fake binary is a shell script")
+    def test_binary_version_runs_the_build(self, release, checkout):
+        binary = checkout / "dist" / "Zircolite" / "Zircolite"
+        assert release.binary_version(binary) == FAKE_VERSION
+        binary.write_text("#!/bin/sh\necho 'Zircolite - v1.2.3'\nexit 3\n", encoding="utf-8")
+        with pytest.raises(release.PackagingError, match="exited 3"):
+            release.binary_version(binary)
+
+    def test_missing_binary_fails(self, release, tmp_path):
+        with pytest.raises(release.PackagingError, match="does not exist"):
+            release.binary_version(tmp_path / "Zircolite")
+
+
+# ---------------------------------------------------------------------------
+# tools/install-win-arm64.py
+# ---------------------------------------------------------------------------
+
+@pytest.fixture(scope="module")
+def win_arm64():
+    return load_tool("install-win-arm64")
+
+
+EXPORT = """\
+# This file is @generated by PDM.
+# Please do not edit it manually.
+
+colorama==0.4.6; sys_platform == "win32" \\
+    --hash=sha256:aaaa \\
+    --hash=sha256:bbbb
+evtx==0.12.1; python_version == "3.14" or python_version == "3.10" \\
+    --hash=sha256:cccc \\
+    --hash=sha256:dddd
+evtx-tools==1.0 \\
+    --hash=sha256:eeee
+jq==1.12.0; python_version == "3.14" \\
+    --hash=sha256:ffff
+jqlang==2.0
+pysigma==1.5.0 \\
+    --hash=sha256:9999
+"""
+
+
+class TestWinArm64Requirements:
+    def test_drops_evtx_and_jq_with_their_hashes(self, win_arm64):
+        text, removed = win_arm64.drop_requirements(EXPORT)
+        assert removed == {"evtx", "jq"}
+        assert "evtx==" not in text and "jq==" not in text
+        for gone in ("cccc", "dddd", "ffff"):
+            assert gone not in text
+        # Neighbours keep every line, so hash-checking mode still accepts the file.
+        for kept in ("colorama==0.4.6", "aaaa", "bbbb", "evtx-tools==1.0", "eeee",
+                     "jqlang==2.0", "pysigma==1.5.0", "9999", "# This file is @generated"):
+            assert kept in text
+
+    def test_every_kept_continuation_is_closed(self, win_arm64):
+        text, _ = win_arm64.drop_requirements(EXPORT)
+        records = win_arm64.requirement_records(text)
+        assert all(not record[-1].rstrip().endswith("\\") for record in records)
+
+    def test_names_are_normalised(self, win_arm64):
+        text, removed = win_arm64.drop_requirements("EVTX==0.12.1\nJQ==1.0 \\\n    --hash=x\n")
+        assert removed == {"evtx", "jq"}
+        assert text == ""
+
+    def test_crlf_export(self, win_arm64):
+        text, removed = win_arm64.drop_requirements(EXPORT.replace("\n", "\r\n"))
+        assert removed == {"evtx", "jq"}
+        assert "cccc" not in text and "9999" in text
+
+    def test_recipe(self, win_arm64, tmp_path, monkeypatch):
+        commands = []
+
+        def fake_run(command):
+            commands.append(command)
+            if command[:2] == ["pdm", "export"]:
+                (tmp_path / "dist" / "reqs.txt").write_text(EXPORT, encoding="utf-8")
+
+        wheels = tmp_path / "wheels"
+        wheels.mkdir()
+        wheel = wheels / "evtx-0.12.1-cp310-abi3-win_arm64.whl"
+        wheel.write_bytes(b"")
+        monkeypatch.setattr(win_arm64, "ROOT", tmp_path)
+        monkeypatch.setattr(win_arm64, "run", fake_run)
+        assert win_arm64.main(["--wheels", str(wheels)]) == 0
+
+        uv_install = ["uv", "pip", "install", "--no-config", "--no-deps", "--python", ".venv"]
+        assert commands == [
+            ["pdm", "export", "-G", "dev", "-o", "dist/reqs.txt"],
+            ["uv", "venv", "--clear", ".venv", "--python", sys.executable],
+            [*uv_install, "-r", "dist/reqs.txt"],
+            [*uv_install, str(wheel.resolve())],
+            [*uv_install, "-e", "."],
+            ["pdm", "use", "-f", ".venv"],
+        ]
+        filtered = (tmp_path / "dist" / "reqs.txt").read_text(encoding="utf-8")
+        assert "evtx==" not in filtered and "jq==" not in filtered and "pysigma==" in filtered
+
+    def test_export_without_jq_stops_the_recipe(self, win_arm64, tmp_path, monkeypatch, capsys):
+        commands = []
+
+        def fake_run(command):
+            commands.append(command)
+            if command[:2] == ["pdm", "export"]:
+                (tmp_path / "dist" / "reqs.txt").write_text("evtx==0.12.1\n", encoding="utf-8")
+
+        wheels = tmp_path / "wheels"
+        wheels.mkdir()
+        (wheels / "evtx-0.12.1-cp310-abi3-win_arm64.whl").write_bytes(b"")
+        monkeypatch.setattr(win_arm64, "ROOT", tmp_path)
+        monkeypatch.setattr(win_arm64, "run", fake_run)
+        assert win_arm64.main(["--wheels", str(wheels)]) == 1
+        assert "no requirement for: jq" in capsys.readouterr().err
+        assert len(commands) == 1
+
+    @pytest.mark.parametrize("wheels", [[], ["evtx-0.12.1-a.whl", "evtx-0.12.1-b.whl"]])
+    def test_exactly_one_evtx_wheel(self, win_arm64, tmp_path, wheels):
+        for name in wheels:
+            (tmp_path / name).write_bytes(b"")
+        with pytest.raises(win_arm64.InstallError, match="exactly one evtx"):
+            win_arm64.evtx_wheel(tmp_path)

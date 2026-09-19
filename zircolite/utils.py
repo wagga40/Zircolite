@@ -10,12 +10,17 @@ This module contains:
 """
 
 import csv
+import gzip
 import logging
+import multiprocessing
 import os
 import random
 import string
 import sys
+import threading
+from collections import deque
 from collections.abc import Sequence
+from contextlib import contextmanager
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import (
@@ -29,6 +34,28 @@ import psutil
 import yaml
 
 from .console import console, get_rich_logger
+
+SafeLoader = getattr(yaml, "CSafeLoader", yaml.SafeLoader)
+_EXCLUDED_SENTINEL = object()
+
+
+def safe_load(stream):
+    return yaml.load(stream, Loader=SafeLoader)  # noqa: S506 -- only safe loaders
+
+
+def safe_load_all(stream):
+    return yaml.load_all(stream, Loader=SafeLoader)
+
+
+def _normalize_scalar(value):
+    if isinstance(value, bool):
+        return "true" if value else "false"
+    if isinstance(value, int) and not -(1 << 63) <= value < (1 << 63):
+        return str(value)
+    if isinstance(value, list):
+        return str(value)
+    return value
+
 
 # Above this, an epoch number is milliseconds rather than seconds (1973-03-03).
 _EPOCH_MS_THRESHOLD = 100_000_000_000
@@ -145,7 +172,7 @@ def load_field_mappings(
         # YAML format
         with open(config_path, encoding="utf-8") as f:
             try:
-                config = yaml.safe_load(f)
+                config = safe_load(f)
             except yaml.YAMLError as e:
                 raise ValueError(f"Invalid YAML in field mappings file: {e}") from e
     else:
@@ -159,7 +186,7 @@ def load_field_mappings(
         except orjson.JSONDecodeError:
             # Try YAML as fallback
             try:
-                config = yaml.safe_load(content.decode("utf-8-sig"))
+                config = safe_load(content.decode("utf-8-sig"))
             except (yaml.YAMLError, UnicodeDecodeError) as e:
                 raise ValueError(
                     f"Unable to parse field mappings file: {config_file}. "
@@ -256,8 +283,9 @@ def open_maybe_compressed(
                 log file.
 
     Returns:
-        A file-like object.  For ZIP and 7-Zip archives the member is buffered
-        in memory and returned as ``io.BytesIO`` / ``io.TextIOWrapper``.
+        A file-like object. ZIP members stream directly; 7-Zip members spool
+        to an automatically removed temporary file. Closing the returned
+        handle releases all owned resources.
 
     Raises:
         ValueError: If an archive contains zero or more than one member, or if
@@ -271,8 +299,6 @@ def open_maybe_compressed(
     text_mode = "t" in mode
 
     if suffix == ".gz":
-        import gzip
-
         if text_mode:
             return gzip.open(p, mode, encoding=encoding or "utf-8", errors=errors)
         return gzip.open(p, "rb")
@@ -303,7 +329,7 @@ def open_maybe_compressed(
                         f"ZIP archive '{p}' contains {len(members)} files; "
                         "only single-file archives are supported"
                     )
-                data = zf.read(members[0], pwd=pwd)
+                data = zf.open(members[0], pwd=pwd)
         except NotImplementedError as e:
             # WinZip AES-encrypted members are unsupported by zipfile; this
             # clause must precede RuntimeError, its parent class
@@ -314,8 +340,8 @@ def open_maybe_compressed(
                 raise ValueError(ARCHIVE_PASSWORD_ERROR_MESSAGE) from e
             raise
         if text_mode:
-            return io.TextIOWrapper(io.BytesIO(data), encoding=encoding or "utf-8", errors=errors)
-        return io.BytesIO(data)
+            return io.TextIOWrapper(data, encoding=encoding or "utf-8", errors=errors)
+        return data
 
     if suffix == ".7z":
         try:
@@ -331,31 +357,31 @@ def open_maybe_compressed(
         except ImportError as e:
             raise ImportError(
                 "The 'py7zr' package is required to read .7z files. "
-                "Install it with: pip install py7zr"
+                "It is a declared dependency: rerun pdm install, uv sync or poetry install"
             ) from e
         pwd_7z: str | None = (
             password.decode() if isinstance(password, bytes) else password
         )
 
-        class _NonClosingBytesIO(io.BytesIO):
-            """BytesIO that survives close().
+        import tempfile
 
-            py7zr's MemIO closes the writer after extraction, which would
-            otherwise invalidate the buffer before we can read it back.
-            """
+        spool = tempfile.TemporaryFile(mode="w+b")  # noqa: SIM115 -- ownership transfers to caller
+        complete = False
 
-            def close(self) -> None:
-                self.flush()
+        class _FileWriter:
+            def __getattr__(self, name):
+                return getattr(spool, name)
 
-        class _MemFactory:
-            """Factory for py7zr in-memory extraction (create() is called per member)."""
+            def close(self):
+                # py7zr closes its writer; the caller owns the actual handle.
+                spool.flush()
 
-            def __init__(self):
-                self._buf = None
+            def size(self):
+                return os.fstat(spool.fileno()).st_size
 
+        class _FileFactory:
             def create(self, fname):
-                self._buf = _NonClosingBytesIO()
-                return self._buf
+                return _FileWriter()
 
         try:
             with py7zr.SevenZipFile(p, "r", password=pwd_7z) as szf:
@@ -367,11 +393,10 @@ def open_maybe_compressed(
                         f"7-Zip archive '{p}' contains {len(names)} files; "
                         "only single-file archives are supported"
                     )
-                factory = _MemFactory()
+                factory = _FileFactory()
                 szf.extract(path=None, targets=names, factory=factory)  # type: ignore[arg-type]
-                if factory._buf is None:
-                    raise RuntimeError("7z extract produced no data")
-                data = factory._buf.getvalue()
+                spool.seek(0)
+                complete = True
         except PasswordRequired:
             raise ValueError(ARCHIVE_PASSWORD_ERROR_MESSAGE) from None
         except Bad7zFile as e:
@@ -394,14 +419,48 @@ def open_maybe_compressed(
             raise ValueError(
                 f"7-Zip archive '{p}' is truncated or corrupt"
             ) from e
+        finally:
+            if not complete:
+                spool.close()
         if text_mode:
-            return io.TextIOWrapper(io.BytesIO(data), encoding=encoding or "utf-8", errors=errors)
-        return io.BytesIO(data)
+            return io.TextIOWrapper(spool, encoding=encoding or "utf-8", errors=errors)
+        return spool
 
     # Plain file fallback
     if text_mode:
         return open(p, mode, encoding=encoding or "utf-8", errors=errors)
     return open(p, mode)
+
+
+def estimate_input_size(path: Path | str) -> int:
+    """Estimate expanded bytes for scheduling without decompressing the input.
+
+    gzip's trailer is modulo 2**32 and bzip2 has no expanded-size header, so
+    their estimates remain heuristic. Runtime memory throttling still applies.
+    """
+    p = Path(path)
+    try:
+        size = os.path.getsize(path)
+        if p.suffix.lower() == ".zip":
+            import zipfile
+            with zipfile.ZipFile(p) as archive:
+                return max(size, sum(info.file_size for info in archive.infolist() if not info.is_dir()))
+        if p.suffix.lower() == ".7z":
+            import py7zr
+            with py7zr.SevenZipFile(p) as archive:
+                return max(size, sum(info.uncompressed or 0 for info in archive.list()))
+        if p.suffix.lower() == ".gz":
+            with p.open("rb") as source:
+                source.seek(-4, os.SEEK_END)
+                return max(size * 4, int.from_bytes(source.read(4), "little"))
+        if p.suffix.lower() == ".bz2":
+            return size * 8
+        return size
+    except Exception:
+        try:
+            return p.stat().st_size * (8 if p.suffix.lower() in COMPRESSED_SUFFIXES else 1)
+        except OSError:
+            return 0
 
 
 # ---------------------------------------------------------------------------
@@ -582,7 +641,14 @@ class MemoryTracker:
             logger: Logger instance (creates default if None)
         """
         self.logger = logger or logging.getLogger(__name__)
-        self.memory_samples: list[float] = []
+        # A bounded compatibility window; averages use all samples.
+        self.memory_samples: deque[float] = deque(maxlen=128)
+        self._sample_count = 0
+        self._sample_sum = 0.0
+        self._sample_lock = threading.Lock()
+        self._stop_sampling = threading.Event()
+        self._sampling_thread: threading.Thread | None = None
+        self.complete_scope = True
         self.peak_memory: float = 0.0
         self.process = psutil.Process(os.getpid())
 
@@ -590,27 +656,81 @@ class MemoryTracker:
         """Get current memory usage in MB."""
         try:
             # Get RSS (Resident Set Size) in bytes, convert to MB
-            return self.process.memory_info().rss / (1024 * 1024)
+            rss = self.process.memory_info().rss
+            # Finding children walks every PID on the system (about 8 ms on
+            # macOS); only worker processes can add to this process's memory.
+            if not multiprocessing.active_children():
+                return rss / (1024 * 1024)
+            try:
+                for child in self.process.children(recursive=True):
+                    try:
+                        rss += child.memory_info().rss
+                    except psutil.NoSuchProcess:
+                        continue
+                    except (psutil.Error, OSError):
+                        self.complete_scope = False
+            except (psutil.Error, OSError):
+                self.complete_scope = False
+                # Sandboxes may deny system-wide PID enumeration while allowing
+                # reads of our known workers. Include those without claiming a
+                # complete tree (unregistered descendants may still be hidden).
+                for child in multiprocessing.active_children():
+                    try:
+                        rss += psutil.Process(child.pid).memory_info().rss
+                    except (psutil.Error, OSError):
+                        continue
+            return rss / (1024 * 1024)
         except Exception:
+            self.complete_scope = False
             return 0
 
     def sample(self):
         """Take a memory usage sample."""
         memory_mb = self.get_memory_usage()
         if memory_mb > 0:
-            self.memory_samples.append(memory_mb)
-            if memory_mb > self.peak_memory:
-                self.peak_memory = memory_mb
+            with self._sample_lock:
+                self.memory_samples.append(memory_mb)
+                self._sample_count += 1
+                self._sample_sum += memory_mb
+                self.peak_memory = max(self.peak_memory, memory_mb)
+
+    def start(self):
+        """Sample during active workers, not just before and after the pool."""
+        if self._sampling_thread is not None:
+            return
+        self.sample()
+        self._stop_sampling.clear()
+
+        def monitor():
+            while not self._stop_sampling.wait(0.1):
+                self.sample()
+
+        self._sampling_thread = threading.Thread(target=monitor, name="zircolite-rss", daemon=True)
+        self._sampling_thread.start()
+
+    @contextmanager
+    def sampling(self):
+        """Sample continuously inside the block, leaving an outer sampler running."""
+        if self._sampling_thread is not None:
+            yield
+            return
+        self.start()
+        try:
+            yield
+        finally:
+            self.stop()
+
+    def stop(self):
+        self._stop_sampling.set()
+        if self._sampling_thread is not None:
+            self._sampling_thread.join()
+            self._sampling_thread = None
+        self.sample()
 
     def get_stats(self) -> tuple[float, float]:
         """Get peak and average memory usage."""
-        if not self.memory_samples:
-            return 0, 0
-
-        peak = self.peak_memory
-        average = sum(self.memory_samples) / len(self.memory_samples)
-
-        return peak, average
+        with self._sample_lock:
+            return self.peak_memory, self._sample_sum / self._sample_count if self._sample_count else 0.0
 
     def format_memory(self, memory_mb: float) -> str:
         """Format memory value for display."""
@@ -674,7 +794,7 @@ def analyze_files_and_recommend_mode(
     file_sizes = []
     for f in file_list:
         try:
-            file_sizes.append(os.path.getsize(f))
+            file_sizes.append(estimate_input_size(f))
         except OSError:
             file_sizes.append(0)
 

@@ -17,6 +17,7 @@ concurrency:
 # mirrors the GitHub side, where the Windows legs need it.
 env:
   PYTHONUTF8: "1"
+  ZIRCOLITE_REQUIRE_NATIVE: "1"
 
 jobs:
   tests:
@@ -28,7 +29,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        python-version: ["3.10", "3.13"]
+        python-version: ["3.10", "3.14"]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -38,6 +39,8 @@ jobs:
       - name: Install pdm
         run: python -m pip install --upgrade --quiet pip pdm
 
+      # Installing the project compiles the flattening kernel, and
+      # ZIRCOLITE_REQUIRE_NATIVE turns a failed compile into a failed step.
       - name: Install dependencies
         run: pdm install --dev
 

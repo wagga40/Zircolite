@@ -1,142 +1,172 @@
 name: build_pyinstaller
 
-# Mirror of .github/workflows/build_pyinstaller.yml, reduced to the one leg a
-# single x86_64 Linux runner can serve. The linux-arm64, windows-x64 and
-# windows-arm64 legs stay GitHub-only.
+# Mirror of .github/workflows/build_pyinstaller.yml, reduced to the linux-x64
+# leg -- the one a single x86_64 Linux runner can serve -- with that leg's
+# verify smoke run at the end of the same job. The other four legs, the
+# older-distribution containers and the release stay GitHub-only; see
+# .forgejo/README.md.
 #
-# The GitHub gate only lets this run on a commit or PR whose message contains
-# "Release v". Here workflow_dispatch always runs, so a release build can be
-# rehearsed before the release commit exists -- which is the point of the
-# whole mirror.
+# A push stands in for GitHub's canary and a manual run for its full build: only
+# the manual run tests -U, which downloads rulesets.
 
 on:
   push:
+    paths:
+      - Zircolite.spec
+      - zircolite.py
+      - "zircolite/**"
+      - pyproject.toml
+      - pdm.lock
+      - setup.py
+      - "config/**"
+      - "rules/**"
+      - "templates/**"
+      - "gui/**"
+      - "tests/fixtures/**"
+      - "tests/golden/**"
+      - tests/conftest.py
+      - pytest.ini
+      - tests/test_frozen_binary.py
+      - tests/test_e2e_regression.py
+      - "tools/**"
+      - "docs/**"
+      - "pics/**"
+      - README.md
+      - LICENSE
+      - .forgejo/workflows/build_pyinstaller.yml
   workflow_dispatch:
 
+# The event name keeps a push from cancelling a manual run, the only one that
+# tests -U, as on GitHub.
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
+  group: ${{ github.workflow }}-${{ github.event_name }}-${{ github.ref }}
   cancel-in-progress: true
 
+defaults:
+  run:
+    shell: bash
+
 env:
-  EVTX_SAMPLE_URL: "https://raw.githubusercontent.com/sbousseaden/EVTX-ATTACK-SAMPLES/master/Execution/Exec_sysmon_meterpreter_reversetcp_msipackage.evtx"
-  EVTX_OUTPUT: "detected_events.json"
+  ZIRCOLITE_REQUIRE_NATIVE: "1"
+  # Inert on this Linux runner; it mirrors the GitHub side, where the Windows
+  # legs need it.
+  PYTHONUTF8: "1"
+  GLIBC_FLOOR: "2.28"
 
 jobs:
   build:
-    if: github.event_name == 'workflow_dispatch' || contains(github.event.head_commit.message, 'Release v')
     runs-on: ubuntu-latest
+    # The image GitHub builds linux-x64 in, at the same dated tag.
     container:
-      image: ghcr.io/catthehacker/ubuntu:act-24.04
+      image: quay.io/pypa/manylinux_2_28_x86_64:2026.09.14-1
+    timeout-minutes: 90
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      # GitHub mounts its own node into a job container; this runner does not,
+      # and the image has none, so every JS action below needs this first. The
+      # nodejs:22 stream has no default profile, hence /common.
+      - name: Install node
+        run: dnf -y module install nodejs:22/common
 
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.14"
+      - uses: actions/checkout@v4
 
-      - name: Install dependencies
+      # The image's CPython builds are static, and PyInstaller needs a shared
+      # libpython, so they only run pdm.
+      - name: Install pdm
         run: |
-          python -m pip install --upgrade pip
-          pip install -r requirements.txt "pyinstaller>=6.18.0"
+          /opt/python/cp314-cp314/bin/python -m pip install --upgrade --quiet pip pdm
+          echo /opt/python/cp314-cp314/bin >> "$GITHUB_PATH"
+
+      # uv marks the Python it installs EXTERNALLY-MANAGED, so nothing is
+      # pip-installed into it: pdm builds the project's venv from it.
+      - name: Select Python 3.14
+        run: |
+          uv python install 3.14
+          pdm use -f "$(uv python find 3.14)"
+
+      # Installing the project compiles the flattening kernel the spec bundles,
+      # and ZIRCOLITE_REQUIRE_NATIVE turns a failed compile into a failed step.
+      - name: Install dependencies
+        run: pdm install --dev
 
       - name: Build with PyInstaller
-        run: pyinstaller --noconfirm Zircolite.spec
+        run: pdm run pyinstaller --noconfirm Zircolite.spec
 
-      - name: Download EVTX sample
+      - name: Test the binary against the source tree
         run: |
-          curl -sSL -o evtx_sample.evtx "${{ env.EVTX_SAMPLE_URL }}"
-          if [ ! -f evtx_sample.evtx ] || [ ! -s evtx_sample.evtx ]; then
-            echo "Download failed or file empty"
+          export ZIRCOLITE_BINARY="$GITHUB_WORKSPACE/dist/Zircolite/Zircolite"
+          export ZIRCOLITE_GLIBC_FLOOR="$GLIBC_FLOOR"
+          if [ "$GITHUB_EVENT_NAME" = "workflow_dispatch" ]; then
+            export ZIRCOLITE_TEST_NETWORK=1
+          fi
+          pdm run python -m pytest tests/test_frozen_binary.py tests/test_e2e_regression.py
+
+      - name: Package
+        id: package
+        env:
+          ZIRCOLITE_TARGET: linux-x64
+        run: |
+          pdm run python tools/package-release.py
+          shopt -s nullglob
+          archives=(dist/Zircolite-*-"$ZIRCOLITE_TARGET".zip)
+          if [ "${#archives[@]}" -ne 1 ]; then
+            echo "expected one archive for $ZIRCOLITE_TARGET, found: ${archives[*]}" >&2
+            exit 1
+          fi
+          echo "path=${archives[0]}" >> "$GITHUB_OUTPUT"
+          echo "name=$(basename "${archives[0]}")" >> "$GITHUB_OUTPUT"
+
+      # GitHub's verify job, minus the clean machine: the archive is extracted
+      # and run from inside its own directory, as a user would.
+      - name: Run the package
+        env:
+          ARCHIVE: ${{ steps.package.outputs.path }}
+        run: |
+          unzip -q "$ARCHIVE"
+          pkg=$(basename "$ARCHIVE" .zip)
+          if [ ! -x "$pkg/Zircolite" ]; then
+            echo "$ARCHIVE has no executable $pkg/Zircolite" >&2
+            exit 1
+          fi
+          mkdir -p "$RUNNER_TEMP/detections"
+          cd "$pkg"
+          ./Zircolite --version
+          ./Zircolite -e ../tests/fixtures/sample_bitsadmin.evtx -r rules/rules_windows_sysmon.json -o "$RUNNER_TEMP/detections/runner.json"
+          ./Zircolite -e ../tests/fixtures/sample_bitsadmin.evtx -r rules/rules_windows_sysmon.json -o "$RUNNER_TEMP/detections/package.json" --package
+          shopt -s nullglob
+          zips=(zircogui-output-*.zip)
+          if [ "${#zips[@]}" -ne 1 ] || ! unzip -l "${zips[0]}" index.html > /dev/null; then
+            echo "--package did not write a Mini-GUI zip holding index.html: ${zips[*]}" >&2
             exit 1
           fi
 
-      - name: Verify binary
+      - name: Check the detections
         run: |
-          chmod +x dist/Zircolite
-          dist/Zircolite --help
-          dist/Zircolite --version
+          shopt -s nullglob
+          python3 - tests/golden/bitsadmin_sysmon.json "$RUNNER_TEMP"/detections/*.json <<'EOF'
+          import json
+          import sys
 
-      # Do not use -n (--nolog): it sets no_output=True and prevents writing detected_events.json
-      - name: Run binary on EVTX
-        run: dist/Zircolite -e evtx_sample.evtx -r rules/rules_windows_sysmon.json -o "${{ env.EVTX_OUTPUT }}"
-
-      - name: Verify EVTX output
-        run: |
-          python -c "
-          import json, sys
-          p = '${{ env.EVTX_OUTPUT }}'
-          with open(p) as f:
-              d = json.load(f)
-          if not isinstance(d, list):
-              print('Expected JSON array')
-              sys.exit(1)
-          # The sample is a known-malicious EVTX: a build that detects nothing
-          # in it is broken, and printing the count let that pass silently.
-          if not d:
-              print('No detections in a sample that must produce some')
-              sys.exit(1)
-          print(f'Detections: {len(d)}')
-          "
-
-      # Run from a directory holding nothing but the binary. The prepared
-      # release package has gui/ beside it, which the asset search prefers, so
-      # a --package run from there would pass even with the archive missing
-      # from the bundle -- exactly the regression this guards.
-      - name: Verify --package works from the bundle alone
-        run: |
-          mkdir -p bare
-          cp dist/Zircolite bare/
-          cd bare
-          ./Zircolite -e ../evtx_sample.evtx -r ../rules/rules_windows_sysmon.json -o ../detected_for_package.json --package
-          cd ..
-          python -c "
-          import pathlib, sys, zipfile
-          zips = sorted(pathlib.Path('bare').glob('zircogui-output-*.zip'))
-          if not zips:
-              print('No zircogui-output-*.zip: gui/zircogui.zip is not in the bundle')
-              sys.exit(1)
-          names = zipfile.ZipFile(zips[0]).namelist()
-          if 'index.html' not in names:
-              print(f'{zips[0]} has no index.html; got {names[:10]}')
-              sys.exit(1)
-          print(f'Package OK: {zips[0]} ({len(names)} entries)')
-          "
-
-      - name: Prepare release package
-        run: |
-          pkg="Zircolite-linux-x64"
-          mkdir -p "$pkg"
-          cp dist/Zircolite "$pkg/"
-          cp -r config rules templates gui docs pics "$pkg/"
-          cp README.md "$pkg/"
-          chmod +x "$pkg/Zircolite"
-
-      # Do not use -n (--nolog): it sets no_output=True and prevents writing the output file
-      - name: Verify package runs (from package dir)
-        run: |
-          cd Zircolite-linux-x64
-          ./Zircolite -e ../evtx_sample.evtx -r rules/rules_windows_sysmon.json -o ../detected_from_pkg.json
-          cd ..
-          python -c "
-          import json, sys
-          with open('detected_from_pkg.json') as f:
-              d = json.load(f)
-          if not isinstance(d, list):
-              print('Expected JSON array')
-              sys.exit(1)
-          if not d:
-              print('No detections in a sample that must produce some')
-              sys.exit(1)
-          print(f'Package run OK, detections: {len(d)}')
-          "
+          golden, *outputs = sys.argv[1:]
+          if not outputs:
+              sys.exit("no detection output to check")
+          with open(golden, encoding="utf-8") as f:
+              expected = sorted(json.load(f))
+          for output in outputs:
+              with open(output, encoding="utf-8") as f:
+                  found = sorted([d["title"], d["count"]] for d in json.load(f))
+              if found != expected:
+                  sys.exit(f"{output}: expected {expected}, got {found}")
+              print(f"{output}: {found}")
+          EOF
 
       # v4 refuses to run against anything that is not github.com:
       # "GHESNotSupportedError: @actions/artifact v2.0.0+ ... not currently
-      # supported on GHES". v3 uses the older API, which Forgejo implements.
-      - name: Upload artifact
+      # supported on GHES". v3 uses the older API, which Forgejo implements. It
+      # zips what it uploads, which is harmless here: the executable bit lives
+      # inside the archive.
+      - name: Upload the archive
         uses: actions/upload-artifact@v3
         with:
-          name: Zircolite-linux-x64
-          path: Zircolite-linux-x64
+          name: ${{ steps.package.outputs.name }}
+          path: ${{ steps.package.outputs.path }}
+          if-no-files-found: error
