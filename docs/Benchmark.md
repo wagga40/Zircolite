@@ -13,18 +13,20 @@ after one warm-up pass, with the range in brackets.
 
 | Tool | Rules loaded | Wall time | Peak memory | Detections | Rules matched |
 |------|-------------:|----------:|------------:|-----------:|--------------:|
-| Zircolite | 4,319 | **11.7 s** (11.2–11.8) | 1,200 MiB | 73,246 | 86 |
-| Hayabusa 4.1.0 | 4,658 (2,293 after its channel filter) | 26.9 s (24.0–28.3) | 905 MiB | 589,409 | 132 |
-| Chainsaw 2.16.0 | 3,524 (388 could not be loaded) | 100.0 s (97.3–102.9) | 346 MiB | 40,843 | 86 |
+| Zircolite | 4,319 | **11.6 s** (11.6–14.4) | 1,207 MiB | 149,069 | 88 |
+| Hayabusa 4.1.0 | 4,658 (2,293 after its channel filter) | 24.7 s (23.3–25.1) | 900 MiB | 589,409 | 132 |
+| Chainsaw 2.16.0 | 3,524 (388 could not be loaded) | 113.5 s (92.8–125.5) | 346 MiB | 40,843 | 86 |
 
-Zircolite was measured at commit `49a309b`, the code this release ships.
+Zircolite was measured at commit `e53a803`, the code this release ships. Chainsaw's times
+varied the most between passes; an earlier series on the same machine gave it 100.0 s
+(97.3–102.9).
 
 ## Reading the numbers
 
 - **The rule sets differ.** Each tool loads its own conversion of SigmaHQ, and Hayabusa
   adds 181 rules of its own. Hayabusa's own informational and "Sysmon Alert" rules
   (`Net Conn (Sysmon Alert)`, `DLL Loaded (Sysmon Alert)`, …) match most Sysmon events,
-  and account for most of its eightfold lead in detections. Of its 589,409 hits, 46,783 are
+  and account for most of its fourfold lead in detections. Of its 589,409 hits, 46,783 are
   informational, 92,205 low and 439,194 medium. Chainsaw loads only the rules its mapping
   file can express. Detections and rules matched are shown for context. They are not a
   score.

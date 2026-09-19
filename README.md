@@ -260,9 +260,9 @@ M1 Max. Median of three runs:
 
 | Tool | Rules loaded | Wall time | Peak memory |
 |------|-------------:|----------:|------------:|
-| Zircolite | 4,319 | **11.7 s** | 1,200 MiB (4 worker processes) |
-| Hayabusa 4.1.0 | 4,658 | 26.9 s | 905 MiB |
-| Chainsaw 2.16.0 | 3,524 | 100.0 s | 346 MiB |
+| Zircolite | 4,319 | **11.6 s** | 1,207 MiB (4 worker processes) |
+| Hayabusa 4.1.0 | 4,658 | 24.7 s | 900 MiB |
+| Chainsaw 2.16.0 | 3,524 | 113.5 s | 346 MiB |
 
 The rule sets differ, so detection counts are not comparable; see [Benchmark](docs/Benchmark.md)
 for the setup, the caveats and how to reproduce it with `tools/tool-benchmark.py`.
