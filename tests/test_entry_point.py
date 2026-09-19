@@ -11,17 +11,19 @@ directory deeper with the CLI, and then out of it again into ``assets``.
 ``test_cli.py`` already drives that path through whole runs from a foreign
 directory; these pin the resolved path itself, so a failure names the wrong
 directory instead of reporting a run that produced no output. The frozen branch
-has no other coverage at all -- the binaries are built only on release.
+is otherwise covered only by ``tests/test_frozen_binary.py``, which needs a
+built binary; these run everywhere and name the directory that went wrong.
 """
 
 import ast
+import logging
 import subprocess
 import sys
 from pathlib import Path
 
 import pytest
 
-from zircolite import assets
+from zircolite import RulesUpdater, assets
 
 WORKSPACE_ROOT = Path(__file__).parent.parent
 ENTRY_POINT = WORKSPACE_ROOT / "zircolite.py"
@@ -121,6 +123,9 @@ def test_bundled_asset_names_a_path_a_user_can_act_on_when_nothing_holds_the_fil
 def _pretend_frozen(monkeypatch, beside: Path, unpacked: Path) -> None:
     monkeypatch.setattr(sys, "executable", str(beside / "Zircolite"))
     monkeypatch.setattr(sys, "_MEIPASS", str(unpacked), raising=False)
+    # Frozen, the package is unpacked with everything else, so the module root
+    # is _MEIPASS and not the source tree.
+    monkeypatch.setattr(assets, "__file__", str(unpacked / "zircolite" / "assets.py"))
 
 
 def test_a_bundled_ruleset_directory_resolves(tmp_path, monkeypatch):
@@ -159,7 +164,11 @@ def test_bundled_dir_prefers_the_copy_beside_the_binary(tmp_path, monkeypatch):
 
 
 def test_bundled_dir_skips_a_directory_it_cannot_write_to(tmp_path, monkeypatch):
-    """_MEIPASS is writable but a read-only install directory is not."""
+    """A read-only install directory sends -U to ./rules, never into _MEIPASS.
+
+    _MEIPASS is writable, which is the trap: rules written there vanish with a
+    onefile build and are shadowed by the copy beside a onedir one.
+    """
     beside, unpacked = tmp_path / "beside", tmp_path / "unpacked"
     for root in (beside, unpacked):
         (root / "rules").mkdir(parents=True)
@@ -169,7 +178,48 @@ def test_bundled_dir_skips_a_directory_it_cannot_write_to(tmp_path, monkeypatch)
         assets.os, "access", lambda path, mode: Path(path) != beside / "rules"
     )
 
-    assert assets.bundled_dir("rules") == unpacked / "rules"
+    resolved = assets.bundled_dir("rules")
+
+    assert not resolved.resolve().is_relative_to(unpacked.resolve())
+    assert RulesUpdater(logger=logging.getLogger("test")).rules_dir == Path("rules")
+
+
+def test_bundled_dir_in_a_raw_onedir_dist_is_beside_the_binary(tmp_path, monkeypatch):
+    """dist/Zircolite/ as PyInstaller leaves it has rules/ only inside _internal/.
+
+    The first -U must create rules/ beside the executable, where the next run
+    looks first, and leave the bundle alone.
+    """
+    beside = tmp_path / "Zircolite"
+    unpacked = beside / "_internal"
+    (unpacked / "rules").mkdir(parents=True)
+    _pretend_frozen(monkeypatch, beside, unpacked)
+
+    assert assets.bundled_dir("rules") == beside / "rules"
+
+
+@pytest.mark.parametrize("layout", ["onedir", "onefile"])
+def test_bundled_dir_never_points_into_the_bundle(tmp_path, monkeypatch, layout):
+    """Whatever is or is not writable, nothing is ever written under _MEIPASS."""
+    if layout == "onedir":
+        beside = tmp_path / "Zircolite"
+        unpacked = beside / "_internal"
+    else:
+        beside = tmp_path / "bin"
+        unpacked = tmp_path / "_MEI12345"
+    (unpacked / "rules").mkdir(parents=True)
+    (beside / "rules").mkdir(parents=True)
+    _pretend_frozen(monkeypatch, beside, unpacked)
+    bundle = unpacked.resolve()
+
+    for writable in (True, False):
+        monkeypatch.setattr(
+            assets.os, "access",
+            lambda path, mode, writable=writable: writable or Path(path).resolve().is_relative_to(bundle),
+        )
+        for parts in (("rules",), ("config",), ("gui", "nested")):
+            resolved = assets.bundled_dir(*parts)
+            assert not resolved.resolve().is_relative_to(bundle), (layout, writable, parts, resolved)
 
 
 @pytest.mark.parametrize("argv", [

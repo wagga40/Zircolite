@@ -21,10 +21,11 @@ from pathlib import Path
 
 def asset_roots() -> list[Path]:
     """The directories a shipped asset can live in, most specific first."""
-    # A PyInstaller build unpacks config/, rules/, templates/ and gui/ into a
-    # temporary directory the bootloader names, but the release archive also
-    # ships them beside the binary, where a user can edit a rule or drop in a
-    # newer Mini-GUI. Prefer that copy, fall back to the bundle.
+    # A PyInstaller build carries config/, rules/, templates/ and gui/ in the
+    # directory the bootloader names (_internal/ in a onedir build), but the
+    # release archive also ships them beside the binary, where a user can edit
+    # a rule or drop in a newer Mini-GUI. Prefer that copy, fall back to the
+    # bundle.
     roots: list[Path] = []
     frozen_root = getattr(sys, "_MEIPASS", None)
     if frozen_root is not None:
@@ -56,6 +57,14 @@ def bundled_path(*parts: str) -> Path:
     return roots[0].joinpath(*parts)
 
 
+def _inside_bundle(path: Path) -> bool:
+    """True when *path* lies in the directory a PyInstaller build unpacked."""
+    frozen_root = getattr(sys, "_MEIPASS", None)
+    if frozen_root is None:
+        return False
+    return path.resolve().is_relative_to(Path(frozen_root).resolve())
+
+
 def bundled_dir(*parts: str) -> Path:
     """Resolve a shipped directory to write into.
 
@@ -64,7 +73,11 @@ def bundled_dir(*parts: str) -> Path:
     that can be written to -- ``-U`` has to create ``rules/`` the first time it
     runs. When no root can be written to, the caller is expected to fall back.
     """
-    roots = asset_roots()
+    # Nothing written into the unpacked bundle is worth keeping: a onefile
+    # build deletes it at exit, and in a onedir build the copy beside the
+    # binary shadows it. Once frozen the package itself sits in there too, so
+    # its root goes with it.
+    roots = [root for root in asset_roots() if not _inside_bundle(root)]
     for root in roots:
         candidate = root.joinpath(*parts)
         if candidate.is_dir() and os.access(candidate, os.W_OK):
@@ -72,7 +85,7 @@ def bundled_dir(*parts: str) -> Path:
     for root in roots:
         if root.is_dir() and os.access(root, os.W_OK):
             return root.joinpath(*parts)
-    return roots[0].joinpath(*parts)
+    return roots[0].joinpath(*parts) if roots else Path(*parts)
 
 
 def resolve_default_path(value: str, *parts: str) -> str:
