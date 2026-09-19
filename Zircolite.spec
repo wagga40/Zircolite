@@ -14,9 +14,8 @@ sys.path.insert(0, SPECPATH)
 
 datas = [('config', 'config'), ('gui', 'gui'), ('rules', 'rules'), ('templates', 'templates')]
 binaries = []
-# py7zr is only ever imported inside a function, so it reaches the bundle
-# through the bytecode scan alone. Name it, or a .7z input fails in a binary
-# that no CI step feeds one to.
+# py7zr is only imported inside functions. The bytecode scan finds those
+# imports today; naming it keeps .7z support from depending on that.
 hiddenimports = ['py7zr']
 
 
@@ -76,7 +75,12 @@ a = Analysis(
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],
-    excludes=['tkinter', '_tkinter', 'pytest', 'Cython', 'IPython'],
+    # setuptools arrives through PyInstaller's `backports` alias: py7zr and
+    # urllib3 import backports.zstd on Pythons older than 3.14, and the scan
+    # follows that dead branch into setuptools._vendor. Nothing here runs it,
+    # and bundling it would ship code no licence notice covers.
+    excludes=['tkinter', '_tkinter', 'pytest', 'Cython', 'IPython',
+              'setuptools', '_distutils_hack', 'pkg_resources'],
     noarchive=False,
     optimize=0,
 )

@@ -124,7 +124,10 @@ def _assert_no_orphans(children: set[tuple[int, float]], grace: float = 10.0) ->
         living = []
         for pid, created in children:
             try:
-                if psutil.Process(pid).create_time() == created:
+                process = psutil.Process(pid)
+                # A child re-parented to a container's PID 1 stays a zombie
+                # when that PID 1 never reaps: it has exited all the same.
+                if process.create_time() == created and process.status() != psutil.STATUS_ZOMBIE:
                     living.append(pid)
             except psutil.NoSuchProcess:
                 pass
@@ -398,6 +401,14 @@ class TestIdentityAndLayout:
         assert (dist / "_internal" / "base_library.zip").is_file()
         beside = [name for name in ("config", "rules", "templates", "gui") if (dist / name).exists()]
         assert not beside, f"ZIRCOLITE_BINARY must be the raw build, not a package: found {beside}"
+
+    def test_no_build_tooling_is_bundled(self, dist):
+        """The spec excludes these; a hook that aliased its way back would ship
+        code that THIRD_PARTY_LICENSES has no notice for."""
+        internal = dist / "_internal"
+        bundled = [name for name in ("setuptools", "_distutils_hack", "pkg_resources", "Cython", "pytest")
+                   if (internal / name).exists()]
+        assert not bundled, f"build tooling in the bundle: {bundled}"
 
     def test_architecture_matches_the_interpreter(self, binary):
         """A cross-built or emulated leg would ship the wrong CPU under the right name."""
