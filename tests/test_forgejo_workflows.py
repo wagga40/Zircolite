@@ -9,9 +9,11 @@ mirror at all.
 
 These tests pin the payload, not the YAML. Runner labels, job images and the
 matrix legs a single x86_64 Linux runner cannot serve are expected to differ and
-are documented in ``.forgejo/README.md``; the commands under test are not.
+are documented in ``.forgejo/README.md``; the commands under test are not, and
+neither is the image the release binaries are built in.
 """
 
+import re
 from pathlib import Path
 
 import pytest
@@ -45,7 +47,8 @@ LOAD_BEARING_COMMANDS = {
     "build_pyinstaller.yml": [
         "pdm install --dev",
         "pdm run pyinstaller --noconfirm Zircolite.spec",
-        "pdm run python -m pytest tests/test_accelerators.py -k frozen",
+        "pdm run python -m pytest tests/test_frozen_binary.py tests/test_e2e_regression.py",
+        "pdm run python tools/package-release.py",
     ],
 }
 
@@ -64,6 +67,11 @@ REQUIRED_ARGUMENTS = {
         "--package",
     ],
 }
+
+# The Linux binaries' glibc floor comes from the manylinux image they are built
+# in, and its dated tag also fixes the uv inside it and so the Python the build
+# uses. A mirror on another tag rehearses a different build.
+MANYLINUX_IMAGE = re.compile(r"quay\.io/pypa/manylinux_2_28_\w+:([\w.-]+)")
 
 
 def _workflow_names(directory: Path) -> set[str]:
@@ -145,6 +153,26 @@ def test_both_forges_require_the_compiled_kernel(name):
                 f"{directory.parent.name}/workflows/{name} must set {key}={value} "
                 "at workflow level"
             )
+
+
+def test_the_mirror_builds_in_the_same_linux_image():
+    tags = {
+        directory.parent.name: set(
+            MANYLINUX_IMAGE.findall(
+                (directory / "build_pyinstaller.yml").read_text(encoding="utf-8")
+            )
+        )
+        for directory in (GITHUB_WORKFLOWS, FORGEJO_WORKFLOWS)
+    }
+
+    assert len(tags[".github"]) == 1, (
+        "every Linux leg of .github/workflows/build_pyinstaller.yml must build "
+        f"in one manylinux_2_28 tag; found {sorted(tags['.github'])}"
+    )
+    assert tags[".forgejo"] == tags[".github"], (
+        f".forgejo builds in manylinux_2_28 {sorted(tags['.forgejo'])} but "
+        f".github in {sorted(tags['.github'])}; the mirror has drifted"
+    )
 
 
 @pytest.mark.parametrize("name", sorted(LOAD_BEARING_COMMANDS))

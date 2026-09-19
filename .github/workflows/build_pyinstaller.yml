@@ -1,218 +1,440 @@
-# Build PyInstaller binaries for Linux and Windows (x64, arm64), and macOS (arm64),
-# verify they run (--help, --version), and test with an EVTX from
-# https://github.com/sbousseaden/EVTX-ATTACK-SAMPLES (Execution folder).
-# Only runs on push/PR when the commit or PR message contains "Release v", or when triggered manually.
+# Builds a PyInstaller onedir package for each target, tests every binary
+# against the source tree, smoke-tests every archive on a clean runner, and
+# turns a version tag into a draft release.
+#
+# A v* tag, a manual run and the weekly schedule build all five targets. Pushes
+# to master and pull requests that touch what ends up in a package build only
+# linux-x64, as a canary.
 name: build_pyinstaller
 
 on:
   push:
-    branches: [master, main]
+    branches: [master]
+    # Path filters are not applied to tag pushes, so every v* tag builds.
+    tags: ["v*"]
+    paths:
+      - Zircolite.spec
+      - zircolite.py
+      - "zircolite/**"
+      - pyproject.toml
+      - pdm.lock
+      - setup.py
+      - "config/**"
+      - "rules/**"
+      - "templates/**"
+      - "gui/**"
+      - "tests/fixtures/**"
+      - "tests/golden/**"
+      - tests/conftest.py
+      - pytest.ini
+      - tests/test_frozen_binary.py
+      - tests/test_e2e_regression.py
+      - "tools/**"
+      - .github/workflows/build_pyinstaller.yml
   pull_request:
-    branches: [master, main]
+    paths:
+      - Zircolite.spec
+      - zircolite.py
+      - "zircolite/**"
+      - pyproject.toml
+      - pdm.lock
+      - setup.py
+      - "config/**"
+      - "rules/**"
+      - "templates/**"
+      - "gui/**"
+      - "tests/fixtures/**"
+      - "tests/golden/**"
+      - tests/conftest.py
+      - pytest.ini
+      - tests/test_frozen_binary.py
+      - tests/test_e2e_regression.py
+      - "tools/**"
+      - .github/workflows/build_pyinstaller.yml
   workflow_dispatch:
+    inputs:
+      dry_run:
+        description: Stop after SHA256SUMS, with no attestation and no release, even on a tag
+        type: boolean
+        default: true
+  schedule:
+    - cron: "23 4 * * 1"
+
+permissions:
+  contents: read
+
+# A newer push supersedes a canary. Nothing supersedes a tag, a manual run or
+# the schedule, and the event name keeps those out of the canaries' group.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event_name }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' || (github.event_name == 'push' && github.ref_type == 'branch') }}
+
+defaults:
+  run:
+    shell: bash
 
 env:
-  EVTX_SAMPLE_URL: "https://raw.githubusercontent.com/sbousseaden/EVTX-ATTACK-SAMPLES/master/Execution/Exec_sysmon_meterpreter_reversetcp_msipackage.evtx"
-  EVTX_OUTPUT: "detected_events.json"
   ZIRCOLITE_REQUIRE_NATIVE: "1"
+  # Windows defaults to cp1252 and the tests read Zircolite's UTF-8 output.
   PYTHONUTF8: "1"
+  # The oldest systems the packages support. The binary tests check every
+  # shipped library against them.
+  GLIBC_FLOOR: "2.28"
+  MACOS_FLOOR: "15.0"
+  # The canary condition. strategy and concurrency cannot read env, so they
+  # spell it out again.
+  CANARY: ${{ github.event_name == 'pull_request' || (github.event_name == 'push' && github.ref_type == 'branch') }}
 
 jobs:
   build:
     strategy:
       fail-fast: false
       matrix:
-        include:
-          - os: ubuntu-24.04
-            runner: ubuntu-24.04
-            arch: x64
-            artifact_name: Zircolite-linux-x64
-            binary_path: dist/Zircolite
-            binary_name: Zircolite
-            python_version: "3.14"
-          - os: ubuntu-24.04-arm
-            runner: ubuntu-24.04-arm
-            arch: arm64
-            artifact_name: Zircolite-linux-arm64
-            binary_path: dist/Zircolite
-            binary_name: Zircolite
-            python_version: "3.14"
-          - os: macos-latest
-            runner: macos-latest
-            arch: arm64
-            artifact_name: Zircolite-macos-arm64
-            binary_path: dist/Zircolite
-            binary_name: Zircolite
-            python_version: "3.14"
-          - os: windows-2022
-            runner: windows-2022
-            arch: x64
-            artifact_name: Zircolite-windows-x64
-            binary_path: dist/Zircolite.exe
-            binary_name: Zircolite.exe
-            python_version: "3.14"
-          - os: windows-11-arm
-            runner: windows-11-arm
-            arch: arm64
-            artifact_name: Zircolite-windows-arm64
-            binary_path: dist/Zircolite.exe
-            binary_name: Zircolite.exe
-            python_version: "3.12"
-
-    if: github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && contains(github.event.head_commit.message, 'Release v')) || (github.event_name == 'pull_request' && (contains(github.event.pull_request.title, 'Release v') || contains(github.event.pull_request.body || '', 'Release v')))
-    runs-on: ${{ matrix.runner }}
-
+        target: ${{ fromJSON((github.event_name == 'pull_request' || (github.event_name == 'push' && github.ref_type == 'branch')) && '["linux-x64"]' || '["linux-x64", "linux-arm64", "macos-arm64", "windows-x64", "windows-arm64"]') }}
+    runs-on: ${{ fromJSON('{"linux-x64":"ubuntu-24.04","linux-arm64":"ubuntu-24.04-arm","macos-arm64":"macos-15","windows-x64":"windows-2022","windows-arm64":"windows-11-arm"}')[matrix.target] }}
+    # manylinux_2_28 is what holds the Linux binaries to glibc 2.28; building on
+    # the runner itself would tie them to its glibc 2.39. Both architectures use
+    # one dated tag, which also fixes the uv inside the image and so the Python
+    # it installs. The other targets get '' and run on the runner itself.
+    container: ${{ fromJSON('{"linux-x64":"quay.io/pypa/manylinux_2_28_x86_64:2026.09.14-1","linux-arm64":"quay.io/pypa/manylinux_2_28_aarch64:2026.09.14-1"}')[matrix.target] || '' }}
+    timeout-minutes: 90
+    env:
+      EXE_NAME: ${{ startsWith(matrix.target, 'windows-') && 'Zircolite.exe' || 'Zircolite' }}
+      # omerbenamram/pyevtx-rs tag 0.12.1
+      PYEVTX_RS_COMMIT: a2479984c37e701a8546432c2443e3325d4335b5
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - name: Check out
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      # The image's CPython builds are static, and PyInstaller needs a shared
+      # libpython, so they only run pdm.
+      - name: Install pdm (Linux)
+        if: startsWith(matrix.target, 'linux-')
+        run: |
+          /opt/python/cp314-cp314/bin/python -m pip install --upgrade --quiet pip pdm
+          echo /opt/python/cp314-cp314/bin >> "$GITHUB_PATH"
+
+      # uv marks the Python it installs EXTERNALLY-MANAGED, so nothing is
+      # pip-installed into it: pdm builds the project's venv from it.
+      - name: Select Python 3.14 (Linux)
+        if: startsWith(matrix.target, 'linux-')
+        run: |
+          uv python install 3.14
+          pdm use -f "$(uv python find 3.14)"
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        if: "!startsWith(matrix.target, 'linux-')"
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
-          python-version: ${{ matrix.python_version }}
+          python-version: "3.14"
+          architecture: ${{ endsWith(matrix.target, '-arm64') && 'arm64' || 'x64' }}
 
-      - uses: pdm-project/setup-pdm@v4
+      - name: Set up pdm
+        if: "!startsWith(matrix.target, 'linux-')"
+        uses: pdm-project/setup-pdm@544d7237314ee09c256785bd360f6b30add38b37 # v4.6
         with:
-          python-version: ${{ matrix.python_version }}
+          python-version: "3.14"
+          architecture: ${{ endsWith(matrix.target, '-arm64') && 'arm64' || 'x64' }}
+
+      # Without it, compiled extensions take the runner's macOS as their minimum.
+      - name: Target the macOS floor
+        if: startsWith(matrix.target, 'macos-')
+        run: echo "MACOSX_DEPLOYMENT_TARGET=$MACOS_FLOOR" >> "$GITHUB_ENV"
+
+      - name: Install uv (Windows arm64)
+        if: matrix.target == 'windows-arm64'
+        run: python -m pip install --upgrade --quiet uv
+
+      # evtx 0.12.1 publishes neither a win_arm64 wheel nor an sdist, so the
+      # wheel is built from the release commit. It is abi3: one build serves
+      # every Python, and the commit alone keys it.
+      - name: Restore the evtx wheel (Windows arm64)
+        if: matrix.target == 'windows-arm64'
+        id: evtx-wheel
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: build/wheels
+          key: evtx-${{ env.PYEVTX_RS_COMMIT }}-windows-arm64
+
+      - name: Check out pyevtx-rs (Windows arm64)
+        if: matrix.target == 'windows-arm64' && steps.evtx-wheel.outputs.cache-hit != 'true'
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: omerbenamram/pyevtx-rs
+          ref: ${{ env.PYEVTX_RS_COMMIT }}
+          path: build/pyevtx-rs
+          persist-credentials: false
+
+      - name: Build the evtx wheel (Windows arm64)
+        if: matrix.target == 'windows-arm64' && steps.evtx-wheel.outputs.cache-hit != 'true'
+        run: uvx maturin build --release --manifest-path build/pyevtx-rs/Cargo.toml --out build/wheels --interpreter python
+
+      # Saved as soon as it exists, so a failure later in the job does not
+      # throw the build away.
+      - name: Cache the evtx wheel (Windows arm64)
+        if: matrix.target == 'windows-arm64' && steps.evtx-wheel.outputs.cache-hit != 'true'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: build/wheels
+          key: ${{ steps.evtx-wheel.outputs.cache-primary-key }}
+
+      # pdm cannot install the lock here: evtx has no wheel and jq does not
+      # build. The script installs the rest of the lock, adds the evtx wheel and
+      # points pdm at the result, so the steps below run unchanged.
+      - name: Install dependencies (Windows arm64)
+        if: matrix.target == 'windows-arm64'
+        run: python tools/install-win-arm64.py --wheels build/wheels
 
       # Installing the project compiles the flattening kernel the spec bundles,
       # and ZIRCOLITE_REQUIRE_NATIVE turns a failed compile into a failed step.
       - name: Install dependencies
+        if: matrix.target != 'windows-arm64'
         run: pdm install --dev
 
       - name: Build with PyInstaller
         run: pdm run pyinstaller --noconfirm Zircolite.spec
 
-      - name: Verify native bundle
+      # The floors apply to the platform they name, and only there. Canaries
+      # leave out the -U test, which downloads rulesets from GitHub.
+      - name: Test the binary against the source tree
+        run: |
+          export ZIRCOLITE_BINARY="$GITHUB_WORKSPACE/dist/Zircolite/$EXE_NAME"
+          case "$RUNNER_OS" in
+            Linux) export ZIRCOLITE_GLIBC_FLOOR="$GLIBC_FLOOR" ;;
+            macOS) export ZIRCOLITE_MACOS_FLOOR="$MACOS_FLOOR" ;;
+          esac
+          if [ "$CANARY" != "true" ]; then
+            export ZIRCOLITE_TEST_NETWORK=1
+          fi
+          pdm run python -m pytest tests/test_frozen_binary.py tests/test_e2e_regression.py
+
+      - name: Check the tag against every version
+        if: github.ref_type == 'tag'
         env:
-          ZIRCOLITE_NATIVE_BINARY: ${{ matrix.binary_path }}
-        run: pdm run python -m pytest tests/test_accelerators.py -k frozen
+          ZIRCOLITE_TARGET: ${{ matrix.target }}
+        run: pdm run python tools/package-release.py --check-tag "$GITHUB_REF_NAME"
 
-      - name: Download EVTX sample
+      - name: Package
+        id: package
+        env:
+          ZIRCOLITE_TARGET: ${{ matrix.target }}
         run: |
-          curl -sSL -o evtx_sample.evtx "${{ env.EVTX_SAMPLE_URL }}"
-          if [ ! -f evtx_sample.evtx ] || [ ! -s evtx_sample.evtx ]; then
-            echo "Download failed or file empty"
+          pdm run python tools/package-release.py
+          shopt -s nullglob
+          archives=(dist/Zircolite-*-"$ZIRCOLITE_TARGET".tar.gz dist/Zircolite-*-"$ZIRCOLITE_TARGET".zip)
+          if [ "${#archives[@]}" -ne 1 ]; then
+            echo "expected one archive for $ZIRCOLITE_TARGET, found: ${archives[*]}" >&2
             exit 1
           fi
-        shell: bash
+          echo "path=${archives[0]}" >> "$GITHUB_OUTPUT"
+          echo "name=$(basename "${archives[0]}")" >> "$GITHUB_OUTPUT"
 
-      - name: Verify binary (Linux)
-        if: matrix.os != 'windows-2022' && matrix.os != 'windows-11-arm'
-        run: |
-          chmod +x "${{ matrix.binary_path }}"
-          "${{ matrix.binary_path }}" --help
-          "${{ matrix.binary_path }}" --version
-        shell: bash
-
-      - name: Verify binary (Windows)
-        if: matrix.os == 'windows-2022' || matrix.os == 'windows-11-arm'
-        run: |
-          & "dist/Zircolite.exe" --help
-          & "dist/Zircolite.exe" --version
-        shell: pwsh
-
-      # Do not use -n (--nolog): it sets no_output=True and prevents writing detected_events.json
-      - name: Run binary on EVTX (Linux)
-        if: matrix.os != 'windows-2022' && matrix.os != 'windows-11-arm'
-        run: |
-          "${{ matrix.binary_path }}" -e evtx_sample.evtx -r rules/rules_windows_sysmon.json -o "${{ env.EVTX_OUTPUT }}"
-        shell: bash
-
-      - name: Run binary on EVTX (Windows)
-        if: matrix.os == 'windows-2022' || matrix.os == 'windows-11-arm'
-        run: |
-          & "${{ matrix.binary_path }}" -e evtx_sample.evtx -r rules/rules_windows_sysmon.json -o "${{ env.EVTX_OUTPUT }}"
-        shell: pwsh
-
-      - name: Verify EVTX output
-        run: |
-          p='${{ env.EVTX_OUTPUT }}'
-          if [ ! -f "$p" ]; then
-            echo "Error: $p was not created by the binary (binary may have failed)"
-            exit 1
-          fi
-          python -c "
-          import json, sys
-          p = '${{ env.EVTX_OUTPUT }}'
-          with open(p) as f:
-              d = json.load(f)
-          if not isinstance(d, list):
-              print('Expected JSON array')
-              sys.exit(1)
-          # The sample is a known-malicious EVTX: a build that detects nothing
-          # in it is broken, and printing the count let that pass silently.
-          if not d:
-              print('No detections in a sample that must produce some')
-              sys.exit(1)
-          print(f'Detections: {len(d)}')
-          "
-        shell: bash
-
-      # Run from a directory holding nothing but the binary. The prepared
-      # release package has gui/ beside it, which the asset search prefers, so
-      # a --package run from there would pass even with the archive missing
-      # from the bundle -- exactly the regression this guards.
-      - name: Verify --package works from the bundle alone
-        run: |
-          mkdir -p bare
-          cp "${{ matrix.binary_path }}" bare/
-          cd bare
-          ./${{ matrix.binary_name }} -e ../evtx_sample.evtx -r ../rules/rules_windows_sysmon.json -o ../detected_for_package.json --package
-          cd ..
-          python -c "
-          import pathlib, sys, zipfile
-          zips = sorted(pathlib.Path('bare').glob('zircogui-output-*.zip'))
-          if not zips:
-              print('No zircogui-output-*.zip: gui/zircogui.zip is not in the bundle')
-              sys.exit(1)
-          names = zipfile.ZipFile(zips[0]).namelist()
-          if 'index.html' not in names:
-              print(f'{zips[0]} has no index.html; got {names[:10]}')
-              sys.exit(1)
-          print(f'Package OK: {zips[0]} ({len(names)} entries)')
-          "
-        shell: bash
-
-      - name: Prepare release package
-        run: |
-          pkg="${{ matrix.artifact_name }}"
-          mkdir -p "$pkg"
-          cp "${{ matrix.binary_path }}" "$pkg/"
-          cp -r config rules templates gui docs pics "$pkg/"
-          cp README.md "$pkg/"
-          if [ "${{ matrix.os }}" != "windows-2022" ] && [ "${{ matrix.os }}" != "windows-11-arm" ]; then
-            chmod +x "$pkg/${{ matrix.binary_name }}"
-          fi
-        shell: bash
-
-      # Do not use -n (--nolog): it sets no_output=True and prevents writing the output file
-      - name: Verify package runs (from package dir)
-        run: |
-          pkg="${{ matrix.artifact_name }}"
-          cd "$pkg"
-          ./${{ matrix.binary_name }} -e ../evtx_sample.evtx -r rules/rules_windows_sysmon.json -o ../detected_from_pkg.json
-          cd ..
-          if [ ! -f detected_from_pkg.json ]; then
-            echo "Error: detected_from_pkg.json was not created (package binary may have failed)"
-            exit 1
-          fi
-          python -c "
-          import json, sys
-          with open('detected_from_pkg.json') as f:
-              d = json.load(f)
-          if not isinstance(d, list):
-              print('Expected JSON array')
-              sys.exit(1)
-          if not d:
-              print('No detections in a sample that must produce some')
-              sys.exit(1)
-          print(f'Package run OK, detections: {len(d)}')
-          "
-        shell: bash
-
-      - name: Upload artifact
-        uses: actions/upload-artifact@v4
+      # archive: false uploads the file as it is, so the tarball keeps the
+      # executable bit that a zipped artifact would drop. The artifact is then
+      # named after the file; name repeats it only so that overwrite, on a
+      # re-run, deletes the artifact the upload is about to replace.
+      - name: Upload the archive
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: ${{ matrix.artifact_name }}
-          path: ${{ matrix.artifact_name }}
+          name: ${{ steps.package.outputs.name }}
+          path: ${{ steps.package.outputs.path }}
+          archive: false
+          if-no-files-found: error
+          overwrite: true
+
+  # Each archive on a runner that has never seen Python or pdm, used the way a
+  # user would: extracted, and run from inside its own directory.
+  verify:
+    needs: build
+    # One failed build leg would otherwise skip every target's verification.
+    # Its own verify leg fails for want of an archive, which still holds the
+    # release back.
+    if: ${{ !cancelled() }}
+    strategy:
+      fail-fast: false
+      matrix:
+        target: ${{ fromJSON((github.event_name == 'pull_request' || (github.event_name == 'push' && github.ref_type == 'branch')) && '["linux-x64"]' || '["linux-x64", "linux-arm64", "macos-arm64", "windows-x64", "windows-arm64"]') }}
+    runs-on: ${{ fromJSON('{"linux-x64":"ubuntu-24.04","linux-arm64":"ubuntu-24.04-arm","macos-arm64":"macos-15","windows-x64":"windows-2022","windows-arm64":"windows-11-arm"}')[matrix.target] }}
+    timeout-minutes: 20
+    env:
+      TARGET: ${{ matrix.target }}
+    steps:
+      - name: Check out the fixtures
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          sparse-checkout: |
+            tests/fixtures
+            tests/golden
+
+      - name: Download the archive
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          pattern: Zircolite-*-${{ matrix.target }}.*
+          merge-multiple: true
+          skip-decompress: true
+          path: dist
+
+      - name: Extract
+        if: runner.os != 'Windows'
+        run: |
+          shopt -s nullglob
+          archives=(dist/Zircolite-*-"$TARGET".tar.gz)
+          if [ "${#archives[@]}" -ne 1 ]; then
+            echo "expected one archive for $TARGET, found: ${archives[*]}" >&2
+            exit 1
+          fi
+          tar -xzf "${archives[0]}"
+          pkg=$(basename "${archives[0]}" .tar.gz)
+          if [ ! -x "$pkg/Zircolite" ]; then
+            echo "${archives[0]} has no executable $pkg/Zircolite" >&2
+            exit 1
+          fi
+          echo "PKG=$pkg" >> "$GITHUB_ENV"
+          mkdir -p "$RUNNER_TEMP/detections"
+
+      - name: Run the package
+        if: runner.os != 'Windows'
+        run: |
+          cd "$PKG"
+          ./Zircolite --version
+          ./Zircolite -e ../tests/fixtures/sample_bitsadmin.evtx -r rules/rules_windows_sysmon.json -o "$RUNNER_TEMP/detections/runner.json"
+          ./Zircolite -e ../tests/fixtures/sample_bitsadmin.evtx -r rules/rules_windows_sysmon.json -o "$RUNNER_TEMP/detections/package.json" --package
+          shopt -s nullglob
+          zips=(zircogui-output-*.zip)
+          if [ "${#zips[@]}" -ne 1 ] || ! unzip -l "${zips[0]}" index.html > /dev/null; then
+            echo "--package did not write a Mini-GUI zip holding index.html: ${zips[*]}" >&2
+            exit 1
+          fi
+
+      # The runner's glibc is far above the floor; these images are not, and
+      # rockylinux:8 sits on it.
+      - name: Run the package on older distributions
+        if: runner.os == 'Linux'
+        run: |
+          for image in rockylinux:8 debian:11 ubuntu:20.04; do
+            echo "::group::$image"
+            docker run --rm -w /tmp -v "$PWD/$PKG:/opt/zircolite:ro" "$image" /opt/zircolite/Zircolite --version
+            docker run --rm -w /tmp \
+              -v "$PWD/$PKG:/opt/zircolite:ro" \
+              -v "$PWD/tests/fixtures:/fixtures:ro" \
+              -v "$RUNNER_TEMP/detections:/detections" \
+              "$image" \
+              /opt/zircolite/Zircolite -e /fixtures/sample_bitsadmin.evtx -r /opt/zircolite/rules/rules_windows_sysmon.json -o "/detections/${image/:/-}.json"
+            echo "::endgroup::"
+          done
+
+      # The expectation is the golden file the end-to-end tests pin, so a rule
+      # update that regenerates it moves this check too.
+      - name: Check the detections
+        if: runner.os != 'Windows'
+        run: |
+          shopt -s nullglob
+          python3 - tests/golden/bitsadmin_sysmon.json "$RUNNER_TEMP"/detections/*.json <<'EOF'
+          import json
+          import sys
+
+          golden, *outputs = sys.argv[1:]
+          if not outputs:
+              sys.exit("no detection output to check")
+          with open(golden, encoding="utf-8") as f:
+              expected = sorted(json.load(f))
+          for output in outputs:
+              with open(output, encoding="utf-8") as f:
+                  found = sorted([d["title"], d["count"]] for d in json.load(f))
+              if found != expected:
+                  sys.exit(f"{output}: expected {expected}, got {found}")
+              print(f"{output}: {found}")
+          EOF
+
+      # pwsh rather than bash: nothing guarantees a usable Python on a bare
+      # Windows runner, and the check must not install one.
+      - name: Run and check the package (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $PSNativeCommandUseErrorActionPreference = $true
+          $archives = @(Get-ChildItem "dist/Zircolite-*-$env:TARGET.zip")
+          if ($archives.Count -ne 1) { throw "expected one archive for $env:TARGET, found $($archives.Count)" }
+          Expand-Archive -LiteralPath $archives[0].FullName -DestinationPath .
+          $pkg = $archives[0].BaseName
+          if (-not (Test-Path "$pkg/Zircolite.exe")) { throw "$($archives[0].Name) has no $pkg/Zircolite.exe" }
+          Set-Location $pkg
+
+          ./Zircolite.exe --version
+          ./Zircolite.exe -e ../tests/fixtures/sample_bitsadmin.evtx -r rules/rules_windows_sysmon.json -o ../runner.json
+          ./Zircolite.exe -e ../tests/fixtures/sample_bitsadmin.evtx -r rules/rules_windows_sysmon.json -o ../package.json --package
+
+          $zips = @(Get-ChildItem zircogui-output-*.zip)
+          if ($zips.Count -ne 1) { throw "--package wrote $($zips.Count) Mini-GUI zips" }
+          Add-Type -AssemblyName System.IO.Compression.FileSystem
+          $zip = [System.IO.Compression.ZipFile]::OpenRead($zips[0].FullName)
+          try { $names = @($zip.Entries.FullName) } finally { $zip.Dispose() }
+          if ($names -notcontains 'index.html') { throw "$($zips[0].Name) holds no index.html" }
+
+          $expected = (Get-Content ../tests/golden/bitsadmin_sysmon.json -Raw | ConvertFrom-Json |
+            ForEach-Object { '{0} x{1}' -f $_[0], $_[1] } | Sort-Object) -join '; '
+          foreach ($output in '../runner.json', '../package.json') {
+            $found = (Get-Content $output -Raw | ConvertFrom-Json |
+              ForEach-Object { '{0} x{1}' -f $_.title, $_.PSObject.Properties['count'].Value } | Sort-Object) -join '; '
+            if ($found -ne $expected) { throw "${output}: expected $expected, got $found" }
+            Write-Output "${output}: $found"
+          }
+
+  release:
+    needs: verify
+    if: github.ref_type == 'tag' || github.event_name == 'workflow_dispatch' || github.event_name == 'schedule'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: write
+      id-token: write
+      attestations: write
+    steps:
+      - name: Download the archives
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          pattern: Zircolite-*
+          merge-multiple: true
+          skip-decompress: true
+          path: release
+
+      - name: Write SHA256SUMS
+        working-directory: release
+        run: |
+          sha256sum Zircolite-* > SHA256SUMS
+          cat SHA256SUMS
+
+      - name: Upload SHA256SUMS
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: SHA256SUMS
+          path: release/SHA256SUMS
+          archive: false
+          if-no-files-found: error
+          overwrite: true
+
+      # A tag push has no inputs, so dry_run is null there and the tag
+      # publishes; only a manual run can hold a tag back.
+      - name: Attest build provenance
+        if: github.ref_type == 'tag' && inputs.dry_run != true
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
+        with:
+          subject-path: release/Zircolite-*
+
+      # Always a draft: a maintainer reviews the assets and notes and publishes
+      # it by hand. A tag that already has a release gets its assets replaced.
+      - name: Create or update the draft release
+        if: github.ref_type == 'tag' && inputs.dry_run != true
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          if gh release view "$TAG" > /dev/null 2>&1; then
+            gh release upload "$TAG" release/Zircolite-* release/SHA256SUMS --clobber
+          else
+            gh release create "$TAG" release/Zircolite-* release/SHA256SUMS --draft --verify-tag --title "$TAG" --notes ""
+          fi
