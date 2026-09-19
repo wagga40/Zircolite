@@ -270,11 +270,10 @@ class TestLoadFieldMappingsIntegration:
             assert len(json_config["mappings"]) == len(yaml_config["mappings"])
             assert json_config["transforms_enabled"] == yaml_config["transforms_enabled"]
 
-    def test_deprecated_field_mappings_yaml_warns(self):
-        """Loading config/fieldMappings.yaml (deprecated) emits a deprecation warning."""
-        deprecated_path = Path(__file__).parent.parent / "config" / "fieldMappings.yaml"
-        if not deprecated_path.exists():
-            pytest.skip("Deprecated file config/fieldMappings.yaml not present")
+    def test_removed_field_mappings_yaml_warns(self, tmp_path):
+        """A kept copy of the removed fieldMappings.yaml still loads, but says it is stale."""
+        deprecated_path = tmp_path / "fieldMappings.yaml"
+        deprecated_path.write_text("mappings:\n  Event.System.EventID: EventID\n", encoding="utf-8")
         # Use a dedicated logger so we can capture the warning regardless of Rich/caplog
         log_capture = []
         handler = logging.Handler()
@@ -282,12 +281,13 @@ class TestLoadFieldMappingsIntegration:
         test_logger = logging.getLogger("zircolite.utils.deprecation_test")
         test_logger.setLevel(logging.WARNING)
         test_logger.addHandler(handler)
-        load_field_mappings(str(deprecated_path), logger=test_logger)
+        config = load_field_mappings(str(deprecated_path), logger=test_logger)
         test_logger.removeHandler(handler)
+        assert config["mappings"] == {"Event.System.EventID": "EventID"}
         assert len(log_capture) >= 1
         msg = log_capture[0].lower()
-        assert "deprecated" in msg
-        assert "config.yaml" in msg
+        assert "removed in zircolite 4.0" in msg
+        assert "config/config.yaml" in msg
 
 
 class TestFieldMappingsEncoding:

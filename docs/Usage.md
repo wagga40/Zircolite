@@ -1013,8 +1013,10 @@ Logs often need reshaping before rules can match them. The canonical configurati
 your own with `-c`/`--config`. YAML is the expected format; JSON is still accepted for
 backward compatibility and is recognised from the extension.
 
-`config/fieldMappings.yaml` is the former name of this file. It is still read, and still
-warns that it is deprecated on every run; it may be dropped in a future version.
+`config/fieldMappings.yaml`, the former name of this file, was removed in 4.0. It had not
+been updated since 3.2.0, so a copy kept from an older release lacks every mapping and
+transform added since. Such a copy still loads with `-c`, with a warning on every run;
+move to `config/config.yaml`.
 
 ```yaml
 exclusions:               # drop these fields entirely
