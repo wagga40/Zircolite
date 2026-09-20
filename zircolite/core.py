@@ -12,6 +12,7 @@ import csv
 import logging
 import os
 import re
+import shutil
 import sqlite3
 import tempfile
 import time as _time_module
@@ -211,14 +212,20 @@ class ZircoliteCore:
         db_location = proc.db_location
         try:
             if self._disk_working and db_location == ":memory:":
-                self._working_directory = tempfile.TemporaryDirectory(
+                # mkdtemp rather than TemporaryDirectory: the latter removes
+                # itself from a weakref finalizer at interpreter exit, which
+                # atexit runs *before* the multiprocessing finalizer that closes
+                # a process worker's core. Windows refuses to remove a database
+                # whose connection is still open, so every run ended in a
+                # traceback and left the working database behind. Owning the
+                # removal keeps it after the connection is closed.
+                self._working_directory = tempfile.mkdtemp(
                     prefix="zircolite-db-", dir=proc.working_db_dir
                 )
-                db_location = str(Path(self._working_directory.name) / "events.sqlite")
+                db_location = str(Path(self._working_directory) / "events.sqlite")
             self.db_connection = self.create_connection(db_location)
         except BaseException:
-            if self._working_directory is not None:
-                self._working_directory.cleanup()
+            self._remove_working_directory()
             raise
         self.full_results: list = []
         self.ruleset: list = []
@@ -269,10 +276,25 @@ class ZircoliteCore:
         if conn is not None:
             conn.close()
             self.db_connection = None
+        self._remove_working_directory()
+
+    @property
+    def working_directory(self) -> str | None:
+        """The directory holding an on-disk working database, while it exists."""
+        return self._working_directory
+
+    def _remove_working_directory(self) -> None:
+        """Remove the working directory, once the connection using it is closed."""
         directory = getattr(self, "_working_directory", None)
-        if directory is not None:
-            directory.cleanup()
-            self._working_directory = None
+        if directory is None:
+            return
+        self._working_directory = None
+        try:
+            shutil.rmtree(directory)
+        except OSError as exc:
+            # A leftover temporary database wastes space; losing the run over it
+            # would waste the analysis.
+            self.logger.debug(f"Could not remove the working directory {directory}: {exc}")
 
     def __del__(self) -> None:
         """Ensure connection is closed when the instance is garbage-collected."""

@@ -2,6 +2,7 @@
 
 import argparse
 import ast
+import gc
 import gzip
 import importlib
 import json
@@ -139,7 +140,7 @@ def test_disk_storage_exports_rolls_back_and_cleans_up(tmp_path):
     proc = ProcessingConfig(working_db="disk", working_db_dir=str(tmp_path),
                             sqlite_cache_mib=2, no_output=True)
     core = ZircoliteCore(CONFIG, proc)
-    working = Path(core._working_directory.name)
+    working = Path(core.working_directory)
     saved = tmp_path / "saved.sqlite"
     try:
         conn = core.db_connection
@@ -163,6 +164,57 @@ def test_disk_storage_exports_rolls_back_and_cleans_up(tmp_path):
         reloaded.load_db_in_memory(str(saved))
         assert reloaded.execute_select_query("SELECT value FROM logs") == [{"value": "Alpha"}]
     assert list(tmp_path.iterdir()) == [saved]
+
+
+def test_disk_working_directory_is_not_left_to_interpreter_exit(tmp_path):
+    """The core owns the removal, so the connection is always closed first.
+
+    A `tempfile.TemporaryDirectory` registers a `weakref.finalize`, and atexit
+    runs LIFO: that finalizer fires *before* the `multiprocessing` finalizer
+    that closes a process worker's core. POSIX unlinks an open file happily, so
+    nothing showed; Windows refuses, and every `--executor process
+    --working-db disk` run ended in a PermissionError traceback and a working
+    database left behind.
+    """
+    core = ZircoliteCore(CONFIG, ProcessingConfig(working_db="disk", working_db_dir=str(tmp_path)))
+    try:
+        working = Path(core.working_directory)
+        assert working.is_dir()
+        assert not hasattr(core._working_directory, "cleanup"), (
+            "a TemporaryDirectory would clean itself up at interpreter exit"
+        )
+    finally:
+        core.close()
+    assert not working.exists()
+
+
+def test_disk_working_directory_goes_when_the_core_is_dropped(tmp_path):
+    """A worker that is never closed explicitly still leaves nothing behind."""
+    core = ZircoliteCore(CONFIG, ProcessingConfig(working_db="disk", working_db_dir=str(tmp_path)))
+    working = Path(core.working_directory)
+    assert working.is_dir()
+
+    del core
+    gc.collect()
+
+    assert not working.exists()
+
+
+def test_a_worker_exiting_without_closing_reports_nothing(tmp_path):
+    """The process-worker path at its worst: interpreter exit with the core alive."""
+    script = "\n".join((
+        f"import sys; sys.path.insert(0, {str(ROOT)!r})",
+        "from zircolite import ProcessingConfig, ZircoliteCore",
+        f"core = ZircoliteCore({str(CONFIG)!r}, "
+        f"ProcessingConfig(working_db='disk', working_db_dir={str(tmp_path)!r}))",
+        "core.create_db('value TEXT')",
+        "print(core.working_directory)",
+    ))
+    done = subprocess.run([sys.executable, "-c", script], capture_output=True, text=True, check=True)
+
+    assert "Traceback" not in done.stderr, done.stderr
+    assert not Path(done.stdout.strip()).exists()
+    assert not list(tmp_path.iterdir())
 
 
 def test_disk_cleanup_when_connection_setup_fails(tmp_path, monkeypatch):
