@@ -17,7 +17,7 @@
 
 ### Key Features
 
-- **Fast**: 452,554 events against 4,319 Sigma rules in 11.6 s — 2.1× faster than Hayabusa and 9.8× faster than Chainsaw on the same logs, both of them Rust tools. See the [benchmark](#benchmark).
+- **Fast**: 452,554 events against 4,319 Sigma rules in 11.6 s, and 1.7 million events in 105 s — the fastest of the three on both test corpora, ahead of Hayabusa and Chainsaw, both of them Rust tools. See the [benchmark](#benchmark).
 - **Automatic Log Type Detection**: Automatically identifies log formats and timestamp fields using magic bytes, content analysis, and regex-based fallback -- no need to specify format flags in most cases.
 - **Multiple Input Formats**: Supports various log formats including EVTX, JSON Lines, JSON Arrays, CSV, XML, and more. Compressed or archived logs (gzip, bzip2, ZIP, 7-Zip) are supported; use `--archive-password` for encrypted ZIP/7z.
 - **Native Sigma Support**: Zircolite can directly use native Sigma rules (YAML) by converting them with pySigma.
@@ -253,12 +253,15 @@ See [Field Splitting](docs/Usage.md#field-splitting) and [Field Transforms](docs
 
 ## Benchmark
 
-**Zircolite is the fastest of the three: 2.1× faster than [Hayabusa](https://github.com/Yamato-Security/hayabusa)
-and 9.8× faster than [Chainsaw](https://github.com/WithSecureLabs/chainsaw)** — and it is
-the only one of them written in Python, against two tools written in Rust.
+**Zircolite is the fastest of the three on both test corpora**, ahead of
+[Hayabusa](https://github.com/Yamato-Security/hayabusa) and
+[Chainsaw](https://github.com/WithSecureLabs/chainsaw) — and it is the only one written in
+Python, against two tools written in Rust.
 
-Same 4 Sysmon EVTX files (478 MB, 452,554 events), each tool at its defaults with its own
-rules, on a 10-core Apple M1 Max. Median of three runs:
+Each tool at its defaults with its own rules, on a 10-core Apple M1 Max. Median of three
+runs.
+
+**4 Sysmon EVTX files, one channel (478 MB, 452,554 events):**
 
 | Tool | Rules loaded | Wall time | Throughput | Peak memory |
 |------|-------------:|----------:|-----------:|------------:|
@@ -266,8 +269,21 @@ rules, on a 10-core Apple M1 Max. Median of three runs:
 | Hayabusa 4.1.0 | 4,658 | 24.7 s | 18,300 events/s | 900 MiB |
 | Chainsaw 2.16.0 | 3,524 | 113.5 s | 4,000 events/s | 346 MiB |
 
-Zircolite trades memory for that speed: it runs one worker process per file, and the
-figure above is their total. `--no-parallel` keeps it to a single process.
+**8 EVTX files, 11 channels (13.3 GB, 1,720,377 events):**
+
+| Tool | Rules loaded | Wall time | Throughput | Peak memory |
+|------|-------------:|----------:|-----------:|------------:|
+| **Zircolite** | 4,319 | **104.8 s** | **16,400 events/s** | 8,103 MiB (5 worker processes) |
+| Hayabusa 4.1.0 | 4,658 | 518.8 s | 3,300 events/s | 1,599 MiB |
+| Chainsaw 2.16.0 | 3,524 | 206.3 s | 8,300 events/s | 338 MiB |
+
+The channel mix is what moves these numbers: on logs from a single channel both Zircolite
+and Hayabusa skip most of their ruleset, and on a mixed corpus they cannot. Zircolite
+leads either way, but the two Rust tools swap places between the two.
+
+Zircolite trades memory for that speed: it spreads the files over several worker
+processes, and the figures above are their total. `--no-parallel` keeps it to a single
+process.
 
 The rule sets differ, so detection counts are not comparable; see [Benchmark](docs/Benchmark.md)
 for the setup, the caveats and how to reproduce it with `tools/tool-benchmark.py`.
