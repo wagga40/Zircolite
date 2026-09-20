@@ -145,12 +145,13 @@ def load_field_mappings(
     logger = logger or logging.getLogger(__name__)
     config_path = Path(config_file)
 
-    # Deprecation: prefer config/config.yaml over fieldMappings.yaml
+    # A kept copy still parses, so without this it would load quietly and
+    # simply match less than config/config.yaml does.
     path_lower = config_path.name.lower()
     if path_lower in ("fieldmappings.yaml", "fieldmappings.yml"):
         logger.warning(
-            "fieldMappings.yaml is deprecated; use config/config.yaml instead. "
-            "Support for fieldMappings.yaml may be removed in a future version."
+            "config/fieldMappings.yaml was removed in Zircolite 4.0; a copy of it lacks "
+            "every mapping and transform added since 3.2.0. Use config/config.yaml instead."
         )
 
     if not config_path.exists():

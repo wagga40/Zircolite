@@ -3,7 +3,7 @@
 ## Standalone SIGMA-Based Detection Tool for EVTX, Auditd, Sysmon for Linux, XML, CSV, or JSONL/NDJSON Logs 
 ![](pics/Zircolite-v3-cli.webp)
 
-[![python](https://img.shields.io/badge/python-3.10-blue)](https://www.python.org/)
+[![python](https://img.shields.io/badge/python-3.10--3.14-blue)](https://www.python.org/)
 ![version](https://img.shields.io/badge/Architecture-64bit-red)
 
 **Zircolite** is a standalone tool written in Python 3 that allows you to use SIGMA rules on:
@@ -17,6 +17,7 @@
 
 ### Key Features
 
+- **Fast**: 452,554 events against 4,319 Sigma rules in 11.6 s — 2.1× faster than Hayabusa and 9.8× faster than Chainsaw on the same logs, both of them Rust tools. See the [benchmark](#benchmark).
 - **Automatic Log Type Detection**: Automatically identifies log formats and timestamp fields using magic bytes, content analysis, and regex-based fallback -- no need to specify format flags in most cases.
 - **Multiple Input Formats**: Supports various log formats including EVTX, JSON Lines, JSON Arrays, CSV, XML, and more. Compressed or archived logs (gzip, bzip2, ZIP, 7-Zip) are supported; use `--archive-password` for encrypted ZIP/7z.
 - **Native Sigma Support**: Zircolite can directly use native Sigma rules (YAML) by converting them with pySigma.
@@ -32,6 +33,12 @@
 
 ## Requirements / Installation
 
+> [!NOTE]
+> Everything in this section applies **only when running Zircolite from source**. The
+> [standalone binaries](#standalone-binaries) and the [Docker image](#running-with-docker)
+> carry their own Python, every dependency and the compiled kernel: they need no Python, no
+> package manager and no C compiler.
+
 The project has been tested with Python 3.10 and above. Dependencies are declared in
 `pyproject.toml`; install them from the cloned repository with
 [PDM](https://pdm-project.org/latest/) (`pdm install`), [uv](https://docs.astral.sh/uv/)
@@ -45,11 +52,25 @@ or prefix them with `pdm run`, `uv run` or `poetry run`.
 - **Required**: `orjson`, `xxhash`, `rich`, `rich-argparse`, `RestrictedPython`, `requests`, `urllib3`, `pySigma`, `evtx` (pyevtx-rs), `jinja2`, `lxml`, `chardet`, `psutil`, `pyyaml`, `py7zr`, `ijson`, `pyahocorasick`, `pyroaring`
 - `py7zr` is imported only when a `.7z` input is opened; ZIP, gzip and bzip2 use the standard library.
 
-Installing also compiles the flattening kernel when a C compiler is available. Without one
-the install still succeeds and Zircolite runs the same code as Python. Release binaries and
-Docker images always include it.
+### :warning: Install a C compiler first
 
-:warning: On some systems (Mac, ARM, etc.), the `evtx` Python library may require Rust and Cargo to be installed.
+Installing from source compiles Zircolite's flattening kernel with Cython — but **only if a
+C compiler is already there**. Without one the install still succeeds and every run
+flattens events in Python instead, which is slower. The binaries and the Docker image are
+built with the kernel already compiled, so this does not concern them.
+
+So install the toolchain **before** `pdm install`:
+
+| Platform | Prerequisite |
+|----------|--------------|
+| Debian, Ubuntu | `apt install build-essential python3-dev` |
+| RHEL, Fedora, Rocky | `dnf install gcc python3-devel` |
+| Alpine | `apk add build-base python3-dev` |
+| macOS | `xcode-select --install` |
+| Windows | [Build Tools for Visual Studio](https://visualstudio.microsoft.com/visual-cpp-build-tools/) ("Desktop development with C++") |
+
+Cython itself needs no installing: it is a build-time requirement, fetched into an isolated
+build environment and never added to your environment.
 
 ### Standalone binaries
 
@@ -68,16 +89,6 @@ be installed first.
 Intel Macs and musl-based distributions such as Alpine have no binary; use Python or
 Docker there.
 
-An archive unpacks to a single `Zircolite-<version>-<target>/` directory. The executable
-(`Zircolite`, or `Zircolite.exe` on Windows) needs the `_internal/` directory beside it, so
-always move the directory as a whole. The `config/`, `rules/`, `templates/` and `gui/`
-directories next to the executable are yours to edit: a file there takes precedence over
-the copy built into `_internal/`.
-
-Extract with `unzip` or, on macOS, Archive Utility: both restore the executable bit and
-the symlinks the archive records. A tool that drops them leaves an executable that will
-not start (`chmod +x Zircolite` fixes that on Linux).
-
 ```shell
 unzip Zircolite-<version>-linux-x64.zip
 cd Zircolite-<version>-linux-x64
@@ -95,18 +106,6 @@ run:
 xattr -dr com.apple.quarantine Zircolite-<version>-macos-arm64
 ```
 
-Each release also publishes `SHA256SUMS`, and every archive has a build provenance
-attestation that ties it to the workflow run in this repository that built it:
-
-```shell
-sha256sum --check --ignore-missing SHA256SUMS        # macOS: shasum -a 256 --check --ignore-missing SHA256SUMS
-gh attestation verify Zircolite-<version>-linux-x64.zip --repo wagga40/Zircolite
-```
-
-On Windows, `Get-FileHash <archive>` prints the SHA-256 to compare with its line in
-`SHA256SUMS`. See [Standalone binaries](docs/Usage.md#standalone-binaries) for the full
-package layout and where `-U` installs rulesets.
-
 ## Quick Start
 
 Check out (old) tutorials made by others (EN, ES, and FR) [here](#tutorials).
@@ -116,6 +115,7 @@ Check out (old) tutorials made by others (EN, ES, and FR) [here](#tutorials).
 Help is available with:
 
 ```shell
+# Don't forget to prefix with "pdm run" or "uv run" or "poetry run" when needed
 python3 zircolite.py -h
 ```
 
@@ -125,6 +125,9 @@ If your EVTX files have the extension ".evtx":
 # python3 zircolite.py --evtx <EVTX FOLDER or EVTX FILE> --ruleset <SIGMA RULESET> [--ruleset <OTHER RULESET>]
 python3 zircolite.py --evtx sysmon.evtx --ruleset rules/rules_windows_merged.json
 ```
+
+`--ruleset` can be left out: Zircolite then uses `rules/rules_windows_merged.json`, which
+covers Sysmon and the generic Windows channels.
 
 ### Using Native Sigma Rules (YAML)
 
@@ -186,6 +189,7 @@ docker run --rm --tty \
 ```
 
 - Replace `$PWD` with the directory (absolute path only) where your logs and rules/rulesets are stored.
+- On a Linux host, add `--user "$(id -u):$(id -g)"` and `-l /case/output/zircolite.log`: the image runs as an unprivileged user that cannot write to a directory you own. See [Docker](docs/Usage.md#docker).
 
 ### Automatic Processing Optimization
 
@@ -212,8 +216,8 @@ python3 zircolite.py --yaml-config my_config.yaml
 python3 zircolite.py --yaml-config my_config.yaml --evtx ./other_logs/
 ```
 
-The generated file documents every supported key; `config/zircolite_example.yaml` is a
-worked example. See [YAML configuration](docs/Usage.md#yaml-configuration) for the merge
+The generated file documents every supported key at its default value;
+`config/zircolite_example.yaml` is the same file, kept in the repository. See [YAML configuration](docs/Usage.md#yaml-configuration) for the merge
 rules and the options that have no YAML equivalent.
 
 ### Updating Default Rulesets
@@ -246,6 +250,27 @@ split:
 ```
 
 See [Field Splitting](docs/Usage.md#field-splitting) and [Field Transforms](docs/Advanced.md#field-transforms) for the full configuration, the transforms Zircolite ships, and how to test your own.
+
+## Benchmark
+
+**Zircolite is the fastest of the three: 2.1× faster than [Hayabusa](https://github.com/Yamato-Security/hayabusa)
+and 9.8× faster than [Chainsaw](https://github.com/WithSecureLabs/chainsaw)** — and it is
+the only one of them written in Python, against two tools written in Rust.
+
+Same 4 Sysmon EVTX files (478 MB, 452,554 events), each tool at its defaults with its own
+rules, on a 10-core Apple M1 Max. Median of three runs:
+
+| Tool | Rules loaded | Wall time | Throughput | Peak memory |
+|------|-------------:|----------:|-----------:|------------:|
+| **Zircolite** | 4,319 | **11.6 s** | **39,000 events/s** | 1,207 MiB (4 worker processes) |
+| Hayabusa 4.1.0 | 4,658 | 24.7 s | 18,300 events/s | 900 MiB |
+| Chainsaw 2.16.0 | 3,524 | 113.5 s | 4,000 events/s | 346 MiB |
+
+Zircolite trades memory for that speed: it runs one worker process per file, and the
+figure above is their total. `--no-parallel` keeps it to a single process.
+
+The rule sets differ, so detection counts are not comparable; see [Benchmark](docs/Benchmark.md)
+for the setup, the caveats and how to reproduce it with `tools/tool-benchmark.py`.
 
 ## Documentation
 
@@ -296,7 +321,7 @@ The Mini-GUI can be used completely offline. It allows you to display and search
 ## License
 
 - All the **code** of the project is licensed under the [GNU Lesser General Public License](https://www.gnu.org/licenses/lgpl-3.0.en.html).
-- `evtx_dump` is under the MIT license.
+- EVTX parsing uses [`evtx`](https://github.com/omerbenamram/pyevtx-rs) (pyevtx-rs), under the MIT or Apache-2.0 license. Release packages list every bundled library and its license in `THIRD_PARTY_LICENSES`.
 - The rules are released under the [Detection Rule License (DRL) 1.1](https://github.com/SigmaHQ/Detection-Rule-License/blob/main/LICENSE.Detection.Rules.md).
 
 ---

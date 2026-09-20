@@ -492,7 +492,7 @@ rules:
   # Ruleset files or directories. Accepts both the Zircolite JSON format and
   # directories of native Sigma YAML rules.
   rulesets:
-    - rules/rules_windows_generic.json
+    - rules/rules_windows_merged.json
     # - rules/rules_windows_sysmon.json
     # - /path/to/sigma/rules/windows/process_creation/
 
@@ -621,9 +621,10 @@ processing:
   # damaged file and warns.
   strict_evtx: false
 
-  # Database indexes. Zircolite always indexes `eventid`, and indexes
-  # `Channel` when that column is present. Like transform_categories, these
-  # are added to their CLI equivalents rather than replaced by them.
+  # Database indexes. Zircolite indexes `eventid` when that column is present,
+  # and `Channel` together with it (or alone, without one). Like
+  # transform_categories, these are added to their CLI equivalents rather than
+  # replaced by them.
   add_index: []       # Extra columns to index, e.g. ["SystemTime", "Computer"]
   remove_index: []    # SQLite index names to drop after creation
   auto_index: 0       # >0 = also index the top-N columns that the most rules

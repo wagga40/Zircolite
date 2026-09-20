@@ -56,7 +56,7 @@ def test_the_entry_point_holds_no_logic():
 
 @pytest.mark.parametrize("parts", [
     ("config", "config.yaml"),
-    ("rules", "rules_windows_generic.json"),
+    ("rules", "rules_windows_merged.json"),
     ("templates", "exportForZircoGui.tmpl"),
     ("gui", "zircogui.zip"),
 ])

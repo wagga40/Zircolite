@@ -260,7 +260,8 @@ micros0ft.xyz
 ### Querying transform results
 
 Alias fields are ordinary columns, so Sigma rules can match them and SQL can query them.
-Keep the database with `--dbfile events.db`:
+Keep the database with `--unified-db --dbfile events.db` (without `--unified-db`, each input
+gets its own `events_<input name>.db`):
 
 ```sql
 -- Obfuscated commands: long and high-entropy
@@ -405,8 +406,9 @@ and **EventID**, so only events that could match some rule's log source are load
 
 **Sysmon for Linux and auditd are exempt** — they carry no Channel or EventID — unless
 `event_filter.filter_all_sources` is set. Every other format (EVTX, JSON, JSON array, CSV,
-XML, EVTXtract, and a saved database) goes through the filter, because any of them can
-carry Windows-shaped events. An event with no usable Channel is kept.
+XML and EVTXtract) goes through the filter, because any of them can carry Windows-shaped
+events. A saved database (`--db-input`) skips ingestion altogether, so it is never
+filtered. An event with no usable Channel is kept.
 
 > [!IMPORTANT]
 > The filter only engages when the ruleset yields channels. The shipped Windows rulesets
@@ -693,8 +695,11 @@ the one `--package` builds — and click a MITRE ATT&CK category or an alert lev
 
 The repository ships a few scripts of its own in `tools/`, documented in
 [`tools/README.md`](https://github.com/wagga40/Zircolite/tree/master/tools):
-`sigma-regression.py` runs the SigmaHQ regression suite against a ruleset, and the
-benchmark scripts measure flattening and database performance.
+`sigma-regression.py` runs the SigmaHQ regression suite against a ruleset,
+`throughput-benchmark.py` compares complete Zircolite runs across settings or checkouts,
+and `tool-benchmark.py` times Zircolite against Hayabusa and Chainsaw on the same logs (see
+[Benchmark](Benchmark.md)). `package-release.py` and `install-win-arm64.py` build the
+release packages.
 
 Zircolite is also driven by third-party tooling:
 

@@ -22,7 +22,7 @@ from .sqlscan import (
     _Unsupported,
     admitted_pairs,
     iter_tokens,
-    quote_sql_identifiers,
+    normalize_rule_sql,
     rebalance_sql,
 )
 
@@ -32,7 +32,7 @@ AUTO_MIN_ROWS = 1000
 AUTO_MIN_QUERIES = 32
 # Share of the rows a rule's Channel/EventID bounds select past which the
 # candidates narrow its scan too little to repay handing them over. Measured
-# insensitive between 0.25 and 1.0 on HANCITOR; a third of a partition still won.
+# insensitive between 0.25 and 1.0 on the test corpus; a third of a partition still won.
 BROAD_FRACTION = 0.5
 _UNSUPPORTED_WORDS = frozenset((
     "SELECT", "FROM", "WHERE", "JOIN", "UNION", "INTERSECT", "EXCEPT", "ORDER",
@@ -109,6 +109,18 @@ class _Reader:
     def primary(self):
         if self.peek() == ("word", "NOT"):
             self.pos += 1
+            if self.peek() == ("word", "COALESCE"):
+                # normalize_rule_sql's NOT COALESCE((group), 0): the group is
+                # read like any other; a negation never narrows the candidates.
+                self.pos += 1
+                if self.peek() != ("punct", "("):
+                    raise _Unsupported("COALESCE")
+                self.pos += 1
+                self.primary()
+                if self.tokens[self.pos:self.pos + 3] != [("punct", ","), ("number", "0"), ("punct", ")")]:
+                    raise _Unsupported("COALESCE")
+                self.pos += 3
+                return None
             self.primary()
             return None
         if self.peek() == ("punct", "("):
@@ -200,7 +212,12 @@ def _parse_literal_plan(sql):
             if (kind, value) == ("punct", "-") and body[i + 1:i + 2] == [("punct", ">")]:
                 return None
             # Function calls may change error behavior when rows are skipped.
-            if kind in ("word", "name") and body[i + 1:i + 2] == [("punct", "(")] and not (kind == "word" and value in ("IN", "NOT", "AND", "OR")):
+            # COALESCE directly under NOT is normalize_rule_sql's wrapper, and
+            # cannot raise.
+            if kind in ("word", "name") and body[i + 1:i + 2] == [("punct", "(")] and not (
+                kind == "word" and (value in ("IN", "NOT", "AND", "OR")
+                                    or (value == "COALESCE" and body[i - 1:i] == [("word", "NOT")]))
+            ):
                 return None
         reader = _Reader(body)
         expression = reader.read_or()
@@ -263,7 +280,7 @@ def rule_queries(rules):
 @lru_cache(maxsize=8)
 def prepare_rules(queries):
     """Share immutable SQL normalization across files; never cache database state."""
-    return PreparedRules({sql: quote_sql_identifiers(sql) for sql in queries})
+    return PreparedRules({sql: normalize_rule_sql(sql) for sql in queries})
 
 
 def clear_prepared_rules():
@@ -340,7 +357,7 @@ class LiteralPrefilter:
         queries = rule_queries(rules)
         normalized = (self.prepared or prepare_rules(queries)).normalized
         for query in queries:
-            text = normalized.get(query) or quote_sql_identifiers(query)
+            text = normalized.get(query) or normalize_rule_sql(query)
             plan = _plan_for(text)
             if plan is None or plan.sql in self.plans or plan.max_literal_bytes > like_limit:
                 continue

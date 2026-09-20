@@ -1,4 +1,4 @@
-# -n suppresses all file output (no log, no result files beyond the output JSON); process should still exit 0
+# -n suppresses the log file and the detections file; the process should still exit 0
 tags: [json, cli]
 command:
   - "-e"

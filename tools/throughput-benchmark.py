@@ -135,13 +135,19 @@ def source_fingerprint(root):
     return digest.hexdigest()
 
 
-def measure(command, output, log, *, temp_dir=None, performance_path=None):
+def run_sampled(command, log, *, cwd=ROOT, temp_dir=None):
+    """Run a command to completion, sampling the RSS of its whole process tree.
+
+    Returns (exit code, wall seconds, peak RSS bytes, RSS scope, peak bytes
+    visible under temp_dir). The scope is "parent-only" when child processes
+    could not be inspected, so worker memory is missing from the peak.
+    """
     peak = 0
     disk_peak = 0
     tree_access = True
     start = time.perf_counter()
     with log.open("wb") as transcript, subprocess.Popen(  # noqa: S603
-        command, cwd=ROOT, stdout=transcript, stderr=subprocess.STDOUT
+        command, cwd=cwd, stdout=transcript, stderr=subprocess.STDOUT
     ) as child:
         process = psutil.Process(child.pid)
         while child.poll() is None:
@@ -170,6 +176,11 @@ def measure(command, output, log, *, temp_dir=None, performance_path=None):
             time.sleep(0.02)
         code = child.wait()
     elapsed = time.perf_counter() - start
+    return code, elapsed, peak, "process-tree" if tree_access else "parent-only", disk_peak
+
+
+def measure(command, output, log, *, temp_dir=None, performance_path=None):
+    code, elapsed, peak, rss_scope, disk_peak = run_sampled(command, log, temp_dir=temp_dir)
     if code:
         raise RuntimeError(f"CLI exited {code}: {log.read_text(errors='replace')[-4000:]}")
     count, digest = fingerprint(output)
@@ -184,7 +195,7 @@ def measure(command, output, log, *, temp_dir=None, performance_path=None):
     return {"seconds": elapsed, "peak_rss_mib": peak / 1024**2,
             "visible_temp_peak_mib": disk_peak / 1024**2,
             "matches": count, "fingerprint": digest,
-            "rss_scope": "process-tree" if tree_access else "parent-only", "performance": metrics}
+            "rss_scope": rss_scope, "performance": metrics}
 
 
 def main():

@@ -159,17 +159,144 @@ def quote_sql_identifiers(sql: str) -> str:
     String literals and comments are preserved byte for byte.
     """
     try:
-        edits = [(start, end) for kind, start, end in iter_tokens(sql)
-                 if kind == "identifier" and sql[start] == '"']
+        return _apply_edits(sql, _identifier_edits(sql, iter_tokens(sql)))
     except _Unsupported:
+        return sql
+
+
+def _identifier_edits(sql: str, tokens: Iterable[tuple[str, int, int]]) -> list[tuple[int, int, int, str]]:
+    return [(start, 2, end, "`" + _unquote(sql[start:end]).replace("`", "``") + "`")
+            for kind, start, end in tokens if kind == "identifier" and sql[start] == '"']
+
+
+# A NOT opens an operand only where an operand can start. Anywhere else it is
+# part of NOT LIKE, NOT IN, IS NOT NULL and the like, which compare rather than
+# negate a condition.
+_PREFIX_NOT_AFTER = frozenset({"WHERE", "AND", "OR", "NOT"})
+_STOPS_OPERAND = frozenset({"AND", "OR", *_TAIL_KEYWORDS})
+
+
+def _negation_edits(sql: str, tokens: list[tuple[str, int, int]]) -> list[tuple[int, int, int, str]]:
+    """Edits wrapping every prefix NOT's operand in ``COALESCE((...), 0)``.
+
+    NOT binds tighter than AND and OR and looser than every comparison, so its
+    operand runs to the next AND/OR, closing parenthesis or tail clause at its
+    own depth. A BETWEEN or CASE there carries an AND of its own, which would
+    end the operand too early; that NOT is left as written.
+    """
+    edits: list[tuple[int, int, int, str]] = []
+    for i, (kind, start, end) in enumerate(tokens):
+        if kind != "word" or sql[start:end].upper() != "NOT" or i + 1 == len(tokens):
+            continue
+        if i:
+            before_kind, before_start, before_end = tokens[i - 1]
+            before = sql[before_start:before_end]
+            if not ((before_kind == "word" and before.upper() in _PREFIX_NOT_AFTER)
+                    or (before_kind == "punct" and before == "(")):
+                continue
+        after_kind, after_start, after_end = tokens[i + 1]
+        if after_kind == "word" and sql[after_start:after_end].upper() == "COALESCE":
+            continue
+        depth, j, last = 0, i + 1, i
+        while j < len(tokens):
+            kind_j, start_j, end_j = tokens[j]
+            text = sql[start_j:end_j]
+            if kind_j == "punct" and text == "(":
+                depth += 1
+            elif kind_j == "punct" and text == ")":
+                if depth == 0:
+                    break
+                depth -= 1
+            elif depth == 0 and kind_j == "punct" and text == ";":
+                break
+            elif depth == 0 and kind_j == "word":
+                word = text.upper()
+                if word in _STOPS_OPERAND:
+                    break
+                if word in ("BETWEEN", "CASE"):
+                    last = i
+                    break
+            last = j
+            j += 1
+        if last == i or depth:
+            continue
+        first_start = tokens[i + 1][1]
+        last_end = tokens[last][2]
+        group = sql[first_start] == "(" and _closes_at(sql, tokens, i + 1) == last
+        edits.append((first_start, 1, first_start, "COALESCE(" if group else "COALESCE(("))
+        edits.append((last_end, 0, last_end, ", 0)" if group else "), 0)"))
+    return edits
+
+
+def _closes_at(sql: str, tokens: list[tuple[str, int, int]], opening: int) -> int:
+    """Index of the token closing the parenthesis at ``opening``."""
+    depth = 0
+    for j in range(opening, len(tokens)):
+        if tokens[j][0] == "punct":
+            char = sql[tokens[j][1]]
+            if char == "(":
+                depth += 1
+            elif char == ")":
+                depth -= 1
+                if depth == 0:
+                    return j
+    return -1
+
+
+def _apply_edits(sql: str, edits: list[tuple[int, int, int, str]]) -> str:
+    """Apply ``(start, order, end, text)`` edits: ``text`` replaces ``sql[start:end]``.
+
+    Insertions (start == end) sharing a position go in ``order``: a closing
+    wrapper before an opening one, both before a replaced token starting there.
+    """
+    if not edits:
         return sql
     parts: list[str] = []
     previous = 0
-    for start, end in edits:
-        parts.extend((sql[previous:start], '`' + _unquote(sql[start:end]).replace('`', '``') + '`'))
+    for start, _, end, text in sorted(edits):
+        parts.extend((sql[previous:start], text))
         previous = end
     parts.append(sql[previous:])
-    return ''.join(parts)
+    return "".join(parts)
+
+
+def _significant(sql: str, tokens: Iterable[tuple[str, int, int]]) -> list[tuple[str, int, int]]:
+    return [(kind, start, end) for kind, start, end in tokens
+            if kind != "comment" and not (kind == "punct" and sql[start:end].isspace())]
+
+
+def null_safe_negation(sql: str) -> str:
+    """Make every negated condition read a missing field as a non-match.
+
+    Sigma reads a condition on a field the event does not carry as false, so
+    ``selection and not filter`` holds when the filter names such a field.
+    SQLite evaluates the comparison to NULL instead, and ``NOT NULL`` is NULL,
+    so the row was dropped: Sysmon network events have no CommandLine, and a
+    network rule whose filters mention one matched nothing. Each negated
+    operand becomes ``COALESCE((operand), 0)``, turning that NULL back into the
+    false Sigma means. Nested negations are rewritten too, so what reaches a
+    COALESCE is AND/OR over comparisons, and reading its NULL as false is
+    exactly Sigma's answer.
+    """
+    try:
+        tokens = _significant(sql, iter_tokens(sql))
+    except _Unsupported:
+        return sql
+    return _apply_edits(sql, _negation_edits(sql, tokens))
+
+
+@lru_cache(maxsize=1024)
+def normalize_rule_sql(sql: str) -> str:
+    """The text a rule statement is run, planned and repaired as.
+
+    Double-quoted names become backtick-quoted (see ``quote_sql_identifiers``)
+    and negation becomes null-safe (see ``null_safe_negation``), from one lex.
+    """
+    try:
+        tokens = _significant(sql, iter_tokens(sql))
+    except _Unsupported:
+        return sql
+    return _apply_edits(sql, _negation_edits(sql, tokens) + _identifier_edits(sql, tokens))
 
 
 def _typed_tokens(sql: str) -> list[tuple[str, str]]:

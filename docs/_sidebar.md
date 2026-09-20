@@ -2,3 +2,4 @@
 * [Usage](Usage.md)
 * [Advanced use](Advanced.md)
 * [Internals](Internals.md)
+* [Benchmark](Benchmark.md)

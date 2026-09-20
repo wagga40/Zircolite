@@ -484,7 +484,7 @@ def default_args_config():
         evtxtract_input=False,
         csv_input=False,
         logs_encoding=None,
-        ruleset=["rules/rules_windows_generic.json"],
+        ruleset=["rules/rules_windows_merged.json"],
         save_ruleset=False,
         pipeline=None,
         pipeline_list=False,

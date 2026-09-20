@@ -167,6 +167,44 @@ names one. RSS is sampled every 20 ms; where child processes cannot be inspected
 report says `parent-only`, and those figures exclude worker memory. Keep benchmarks
 apart from builds and test runs.
 
+## tool-benchmark.py
+
+Times Zircolite against [Hayabusa](https://github.com/Yamato-Security/hayabusa) and
+[Chainsaw](https://github.com/WithSecureLabs/chainsaw) on the same logs, each at its own
+defaults with its own rules. It measures what a user gets out of the box, not
+rule-for-rule engine speed. The results and their caveats are in
+[docs/Benchmark.md](../docs/Benchmark.md).
+
+```sh
+pdm run python tools/tool-benchmark.py --events /path/to/evtx \
+    --hayabusa /opt/hayabusa/hayabusa \
+    --chainsaw /opt/chainsaw/chainsaw \
+    --chainsaw-sigma /opt/sigma/rules \
+    --chainsaw-sigma /opt/sigma/rules-emerging-threats \
+    --chainsaw-sigma /opt/sigma/rules-threat-hunting \
+    --chainsaw-rules /opt/chainsaw/rules \
+    --chainsaw-mapping /opt/chainsaw/mappings/sigma-event-logs-all.yml
+```
+
+- Zircolite runs from this checkout under the current interpreter, with
+  `rules/rules_windows_merged.json`. `--zircolite` names an executable instead (a
+  standalone build), and `--zircolite-ruleset` another ruleset.
+- Hayabusa runs `dfir-timeline -w` from its own directory, so the `rules/` and `config/`
+  beside the binary are the ones it loads. Update them yourself beforehand if you want
+  current rules; the script never does.
+- Chainsaw needs a mapping file and at least one of `--chainsaw-sigma` (repeatable) and
+  `--chainsaw-rules`.
+- Either other tool can be left out. `--runs` (default 3) timed passes follow `--warmup`
+  (default 1) unrecorded ones. The tools are interleaved and their order rotates every
+  pass.
+
+Each pass records wall time and the peak RSS of the process tree, sampled every 20 ms by
+the same code as `throughput-benchmark.py`. Detections and distinct rules matched are
+counted after each run, outside the timed region; a tool whose count changes between
+passes stops the benchmark. The JSON report also names each tool's version, the rules it
+says it loaded, and the commit of every rule checkout. It lands in the system temporary
+directory unless `--report` names a path, and a markdown table is printed at the end.
+
 ## sigma-regression.py
 
 Runs detection tests using the [Sigma repository’s regression_data](https://github.com/SigmaHQ/sigma/tree/master/regression_data). Each test case directory there contains:

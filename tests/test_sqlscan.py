@@ -15,6 +15,8 @@ from zircolite.sqlscan import (
     clear_scan_cache,
     column_refs,
     eventid_constraints,
+    normalize_rule_sql,
+    null_safe_negation,
     rebalance_sql,
     regex_literals,
     scan_query,
@@ -209,6 +211,121 @@ class TestColumnRefs:
         query = 'SELECT * FROM logs WHERE "odd name"=\'x\' AND [Data]=\'y\''
 
         assert column_refs(query) == {"odd name", "Data"}
+
+
+class TestNullSafeNegation:
+    """``not filter`` must hold when the filter names a field the event lacks."""
+
+    def test_a_negated_group_reads_null_as_no_match(self):
+        query = "SELECT * FROM logs WHERE Image='x' AND NOT (CommandLine LIKE '%a%' OR User='b')"
+
+        assert null_safe_negation(query) == (
+            "SELECT * FROM logs WHERE Image='x' AND NOT COALESCE((CommandLine LIKE '%a%' OR User='b'), 0)"
+        )
+
+    @pytest.mark.parametrize("query", [
+        "SELECT * FROM logs WHERE EventID NOT IN (1, 2)",
+        "SELECT * FROM logs WHERE CommandLine NOT LIKE '%a%'",
+        "SELECT * FROM logs WHERE Image IS NOT NULL",
+        "SELECT * FROM logs WHERE CommandLine LIKE '%NOT (x)%'",
+        "SELECT * FROM logs WHERE `NOT (a)`='b'",
+    ])
+    def test_other_uses_of_not_are_left_alone(self, query):
+        assert null_safe_negation(query) == query
+
+    def test_nested_groups_are_each_rewritten_once(self):
+        query = "SELECT * FROM logs WHERE NOT (a='1' AND NOT (b='2'))"
+        rewritten = null_safe_negation(query)
+
+        assert rewritten == "SELECT * FROM logs WHERE NOT COALESCE((a='1' AND NOT COALESCE((b='2'), 0)), 0)"
+        assert null_safe_negation(rewritten) == rewritten
+
+    def test_rows_missing_the_filtered_field_are_kept(self):
+        query = "SELECT id FROM logs WHERE Image='x' AND NOT (CommandLine LIKE '%evil%' OR User='bad')"
+        with closing(sqlite3.connect(":memory:")) as conn:
+            conn.execute("CREATE TABLE logs (id INTEGER, Image TEXT, CommandLine TEXT, User TEXT)")
+            conn.executemany("INSERT INTO logs VALUES (?, ?, ?, ?)", [
+                (1, "x", None, None),
+                (2, "x", "evil", None),
+                (3, "x", None, "bad"),
+                (4, "x", "fine", "good"),
+                (5, "y", None, None),
+            ])
+            matched = sorted(row[0] for row in conn.execute(null_safe_negation(query)))
+
+        assert matched == [1, 4]
+
+    def test_unscannable_sql_is_returned_unchanged(self):
+        query = "SELECT * FROM logs WHERE NOT (CommandLine LIKE 'unterminated"
+
+        assert null_safe_negation(query) == query
+
+    @pytest.mark.parametrize("query,expected", [
+        ("SELECT * FROM logs WHERE a='1' AND NOT Image LIKE '%x%' ESCAPE '\\'",
+         "SELECT * FROM logs WHERE a='1' AND NOT COALESCE((Image LIKE '%x%' ESCAPE '\\'), 0)"),
+        ("SELECT * FROM logs WHERE (NOT NewValue='DWORD' AND b=2) OR c=3",
+         "SELECT * FROM logs WHERE (NOT COALESCE((NewValue='DWORD'), 0) AND b=2) OR c=3"),
+        ("SELECT * FROM logs WHERE NOT User=ParentUser",
+         "SELECT * FROM logs WHERE NOT COALESCE((User=ParentUser), 0)"),
+        ("SELECT * FROM logs WHERE NOT `event.code`='4688' GROUP BY Computer",
+         "SELECT * FROM logs WHERE NOT COALESCE((`event.code`='4688'), 0) GROUP BY Computer"),
+    ])
+    def test_a_negated_comparison_is_wrapped_up_to_the_next_connective(self, query, expected):
+        assert null_safe_negation(query) == expected
+
+    def test_a_negated_between_is_left_alone(self):
+        """Its AND is syntax, not a connective, so the operand's end is unknowable here."""
+        query = "SELECT * FROM logs WHERE NOT n BETWEEN 1 AND 5 AND a='x'"
+
+        assert null_safe_negation(query) == query
+
+    def test_rows_missing_a_bare_negated_field_are_kept(self):
+        query = "SELECT id FROM logs WHERE Image='x' AND NOT CommandLine LIKE '%evil%' AND NOT User='bad'"
+        with closing(sqlite3.connect(":memory:")) as conn:
+            conn.execute("CREATE TABLE logs (id INTEGER, Image TEXT, CommandLine TEXT, User TEXT)")
+            conn.executemany("INSERT INTO logs VALUES (?, ?, ?, ?)", [
+                (1, "x", None, None),
+                (2, "x", "evil", None),
+                (3, "x", None, "bad"),
+                (4, "x", "fine", "good"),
+            ])
+            matched = sorted(row[0] for row in conn.execute(null_safe_negation(query)))
+
+        assert matched == [1, 4]
+
+
+class TestNormalizeRuleSql:
+    """The one text every consumer of a rule runs, plans and scans."""
+
+    def test_quotes_identifiers_and_makes_negation_null_safe(self):
+        query = 'SELECT * FROM logs WHERE "odd name"=\'x\' AND NOT ("other name"=\'y\')'
+
+        assert normalize_rule_sql(query) == (
+            "SELECT * FROM logs WHERE `odd name`='x' AND NOT COALESCE((`other name`='y'), 0)"
+        )
+
+    def test_scanned_facts_do_not_change(self):
+        query = (
+            "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' "
+            "AND (EventID=3 AND (Image LIKE '%rundll32.exe' AND NOT (CommandLine LIKE '%a%' "
+            "OR DestinationIp LIKE '10.%')))"
+        )
+        raw, normalized = scan_query(query), scan_query(normalize_rule_sql(query))
+
+        assert normalized.columns == raw.columns
+        assert "COALESCE" not in {column.upper() for column in column_refs(normalize_rule_sql(query))}
+        assert (normalized.channels, normalized.eventids) == (raw.channels, raw.eventids)
+
+    def test_deep_negated_chains_still_rebalance(self):
+        body = " OR ".join(f"Hashes LIKE '%h{i}%'" for i in range(1500))
+        query = f"SELECT * FROM logs WHERE Image LIKE '%x%' AND NOT ({body})"
+        rebalanced = rebalance_sql(normalize_rule_sql(query))
+
+        assert _depth(rebalanced) < 30
+        with closing(sqlite3.connect(":memory:")) as conn:
+            conn.execute("CREATE TABLE logs (Image TEXT, Hashes TEXT)")
+            conn.execute("INSERT INTO logs VALUES ('x', NULL)")
+            assert len(conn.execute(rebalanced).fetchall()) == 1
 
 
 class TestEventIdConstraints:

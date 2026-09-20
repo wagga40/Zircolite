@@ -22,7 +22,7 @@ import yaml
 from zircolite import ProcessingConfig, ZircoliteCore
 from zircolite.config_loader import ConfigLoader
 from zircolite.prefilter import LiteralPrefilter, _plan_for, _posting_budget
-from zircolite.sqlscan import quote_sql_identifiers
+from zircolite.sqlscan import normalize_rule_sql, quote_sql_identifiers
 from zircolite.streaming import StreamingEventProcessor, select_flatten_kernel
 from zircolite.utils import open_maybe_compressed, safe_load, safe_load_all
 
@@ -289,6 +289,43 @@ def test_literal_prefilter_matches_sqlite_boolean_wildcard_semantics(event_datab
             assert Counter(actual) == Counter(expected), query
         assert prefilter.accelerated > 0
     assert not event_database.execute("SELECT name FROM sqlite_temp_master").fetchall()
+
+
+def test_rules_with_null_safe_negation_are_still_planned():
+    """A Sigma filter is negated in nearly every rule; losing the plan for them all
+    would switch the prefilter off in practice."""
+    query = normalize_rule_sql(
+        "SELECT * FROM logs WHERE text LIKE '%alpha%' AND NOT (other LIKE '%beta%' OR n=1)")
+
+    assert "NOT COALESCE((" in query
+    plan = _plan_for(query)
+    assert plan is not None and plan.expression == ("literal", ("text", "alpha"))
+
+
+def test_only_the_negation_wrapper_is_exempt_from_the_function_call_rule():
+    assert _plan_for("SELECT * FROM logs WHERE text LIKE '%alpha%' AND COALESCE(other, 0)") is None
+    assert _plan_for("SELECT * FROM logs WHERE text LIKE '%alpha%' AND NOT COALESCE(lower(other), 0)") is None
+
+
+@pytest.mark.parametrize("implementation", ["reference", "native"])
+def test_prefilter_keeps_null_safe_negation_semantics(event_database, implementation):
+    kwargs = {"automaton_factory": ReferenceAutomaton, "bitmap_factory": set}
+    if implementation == "native":
+        native("ahocorasick")
+        native("pyroaring")
+        kwargs = {}
+    raw = ["SELECT * FROM logs WHERE text LIKE '%alpha%' AND NOT (other LIKE '%alpha%')",
+           "SELECT * FROM logs WHERE text LIKE '%alpha%' AND NOT (other LIKE '%x%' OR n=1)",
+           "SELECT * FROM logs WHERE (text LIKE '%éco%' OR text LIKE '%kel%') AND NOT (NOT (n=2))",
+           "SELECT * FROM logs WHERE NOT (text LIKE '%alpha%') AND other LIKE '%alpha%'"]
+    queries = [normalize_rule_sql(query) for query in raw]
+    with closing(LiteralPrefilter(event_database, [{"rule": raw}], **kwargs)) as prefilter:
+        assert prefilter.reason is None
+        assert all(query in prefilter.plans for query in queries)
+        for query in queries:
+            actual = event_database.execute(prefilter.rewrite(query)).fetchall()
+            assert Counter(actual) == Counter(event_database.execute(query).fetchall()), query
+        assert prefilter.accelerated > 0
 
 
 def test_short_literals_are_indexed_only_when_they_hold_non_ascii_characters():

@@ -184,17 +184,18 @@ multisets.
 
 | Workload | Before (`c972b28`) | After |
 |---|---:|---:|
-| HANCITOR, 4 EVTX / 452,554 events, auto (processes) | 42.0 s | 11.0 s |
-| HANCITOR, `--unified-db` | — | 22.8 s |
-| HANCITOR database input (`-D`) | — | 11.7 s (51.8 s with the prefilter off) |
+| Test corpus, 4 EVTX / 452,554 events, auto (processes) | 42.0 s | 11.0 s |
+| Test corpus, `--unified-db` | — | 22.8 s |
+| Test corpus as database input (`-D`) | — | 11.7 s (51.8 s with the prefilter off) |
 | EVTX-ATTACK-SAMPLES, 278 files, auto (unified) | 7.0 s | 5.8 s |
 | EVTX-ATTACK-SAMPLES, 278 files, per-file | 473 s | 55.7 s |
 
-HANCITOR holds a single channel, so its gains come from the literal prefilter and process
+That corpus holds a single channel, so its gains come from the literal prefilter and process
 workers; the 278 small multi-channel files show the per-rule costs of per-file mode that
 the census prune and lazy result spools remove. Reproduce comparisons with
 `tools/throughput-benchmark.py`, and measure the rule phase alone with `-D` and
-`--performance-json`.
+`--performance-json`. [Benchmark](Benchmark.md) compares the same run with Hayabusa and
+Chainsaw.
 
 ## Module map
 
@@ -207,9 +208,12 @@ All the logic lives in the `zircolite/` package. `zircolite.py` is a shim that c
 | `__main__.py` | Entry point for `python -m zircolite` |
 | `assets.py` | Resolution of the shipped `config/`, `rules/`, `templates/` and `gui/` |
 | `streaming.py` | `StreamingEventProcessor` — single-pass read, flatten, transform, insert |
+| `flatten_kernel.py` | Flattening kernel; the reference Python implementation, also compiled as `_flatten_native` |
 | `jsonstream.py` | Validating JSON-array reader with an optional C parser |
 | `results.py` | Temporary detection row storage and incremental JSON output |
 | `core.py` | `ZircoliteCore` — database management, indexes, rule execution, output |
+| `prefilter.py` | Literal prefilter: rows that may satisfy a rule's `LIKE` literals, handed to SQLite, which still runs the full rule |
+| `performance.py` | Stage timers, per-file metrics and the `--performance-json` report |
 | `detector.py` | `LogTypeDetector` — format, log source and timestamp-field detection |
 | `processing.py` | Coordinates per-file, unified and parallel runs; aggregates results |
 | `utils.py` | Logging, `MemoryTracker`, compressed-input handling, mode heuristics |
@@ -405,7 +409,7 @@ transformation, which Zircolite never uses.
 | Trigger | What runs |
 |---------|-----------|
 | A `v*` tag | All five targets, then the release |
-| A push to `master`, or a pull request, touching the spec, the package, `pyproject.toml`, `pdm.lock`, `setup.py`, the shipped assets, the test fixtures, the binary tests, `tools/` or the workflow | The `linux-x64` leg only, as a canary |
+| A push to `master`, or a pull request, touching the spec, `zircolite.py`, the package, `pyproject.toml`, `pdm.lock`, `setup.py`, the shipped assets, the test fixtures and golden files, `tests/conftest.py`, `pytest.ini`, the binary tests, `tools/`, the packaged docs (`docs/`, `pics/`, `README.md`, `LICENSE`) or the workflow | The `linux-x64` leg only, as a canary |
 | `workflow_dispatch` (`dry_run`, true by default) and a weekly schedule | All five targets |
 
 **Build.** Each leg installs the project, builds with the spec, then runs
@@ -451,14 +455,13 @@ GitHub, because Forgejo job containers get no Docker socket.
 
 ### Pragmas
 
-Four pragmas apply to every database:
+Two pragmas apply to every database: `page_size` `4096` and `threads`
+`min(8, cpu_count)`. Two follow the working storage chosen with `--working-db`:
 
-| Pragma | Value |
-|--------|-------|
-| `temp_store` | `MEMORY` |
-| `mmap_size` | `268435456` (256 MB) |
-| `page_size` | `4096` |
-| `threads` | `min(8, cpu_count)` |
+| Pragma | `memory` (default) | `disk` |
+|--------|--------------------|--------|
+| `temp_store` | `MEMORY` | `FILE` |
+| `mmap_size` | `268435456` (256 MB) | `0` |
 
 The rest depend on where the database lives:
 
@@ -466,7 +469,7 @@ The rest depend on where the database lives:
 |--------|-----------|---------|
 | `journal_mode` | `MEMORY` | `WAL` |
 | `synchronous` | `OFF` | `NORMAL` |
-| `cache_size` | `-128000` (128 MB) | `-64000` (64 MB) |
+| `cache_size` | `-128000` (128 MB) | `--sqlite-cache-mib` × `-1024` (default 64 MiB: `-65536`) |
 | `locking_mode` | `EXCLUSIVE` | — |
 | `wal_autocheckpoint` | — | `10000` |
 
@@ -595,3 +598,26 @@ What this means for output is covered in
 One further consequence: a repaired or re-planned query can return the same events in a
 different order, because a query driven by one index visits rows in a different order than
 one driven by another. Rules, counts and matched events are identical.
+
+### Negated conditions on absent fields
+
+Sigma reads a condition on a field the event does not carry as false, so
+`selection and not filter` still matches when the filter names such a field. SQLite
+evaluates that comparison to `NULL`, and `NOT NULL` is `NULL`, so the row is dropped.
+Sysmon network events have no `CommandLine`, and a network rule whose filters mention one
+matched nothing at all: *Rundll32 Internet Connection* found none of the 75,793 events on
+the test corpus that Sigma's semantics select.
+
+Unlike the two repairs, this rewrite applies to every statement before it runs.
+`sqlscan.normalize_rule_sql` wraps the operand of each prefix `NOT` in
+`COALESCE((…), 0)`, turning that `NULL` back into the false Sigma means. The operand runs
+to the next `AND`/`OR` or closing parenthesis at its own depth, since `NOT` binds tighter
+than those and looser than every comparison. Nested negations are rewritten too, so what
+reaches a `COALESCE` is only `AND`/`OR` over comparisons, and reading its `NULL` as false
+is exactly Sigma's answer. `NOT LIKE`, `NOT IN` and `IS NOT NULL` compare rather than
+negate, and are left as written; so is a `NOT` whose operand holds a `BETWEEN` or `CASE`,
+whose own `AND` would end the operand too early. The same pass quotes identifiers, so a
+ruleset is still lexed once.
+
+The literal prefilter plans the rewritten form (a negation never narrows its candidates),
+and the Channel/EventID bounds read from it are unchanged.

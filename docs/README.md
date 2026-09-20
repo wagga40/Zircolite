@@ -16,9 +16,9 @@ pdm run python3 zircolite.py --events <logs> --ruleset rules/rules_windows_merge
 ```
 
 Results are written to `detected_events.json`, with a detection table and summary panel on
-the terminal. `python3 -m zircolite …` is equivalent from the project root — though
-`python -m` searches the working directory rather than the script's own, so the
-`zircolite.py` form is the one that works from anywhere.
+the terminal. `python3 -m zircolite …` is equivalent: installing puts the package in the
+environment, so it works from any directory once that environment is active (or through
+`pdm run`, `uv run` or `poetry run`).
 
 To run it without Python, download the standalone binary for your platform from the
 [releases](https://github.com/wagga40/Zircolite/releases) — see
@@ -34,6 +34,7 @@ and [Usage → Basic Usage](Usage.md#basic-usage).
 | [Usage](Usage.md) | Installation, standalone binaries, running, every command-line option, input formats, rulesets, rule testing, configuration, Docker |
 | [Advanced](Advanced.md) | Field transforms, large datasets, parallel processing, event filtering, templating, the Mini-GUI |
 | [Internals](Internals.md) | Architecture, module map, SQLite behaviour, packaging and release builds, automatic SQL repairs |
+| [Benchmark](Benchmark.md) | Zircolite, Hayabusa and Chainsaw on the same logs, and how to reproduce it |
 
 ## Task and Taskfile
 
