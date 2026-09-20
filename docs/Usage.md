@@ -48,6 +48,9 @@ or `poetry install --without dev` leave it out. The rest of this documentation w
 
 #### The C compiler is a prerequisite, not an option
 
+This concerns installs from source only: the [standalone binaries](#standalone-binaries)
+and the [Docker image](#docker) ship the kernel already compiled.
+
 Installing compiles `zircolite/flatten_kernel.py` into a native extension with Cython.
 That compile is skipped, silently, when no C compiler is present: the install still
 reports success, and every run afterwards flattens events in Python instead — 19.2 µs per

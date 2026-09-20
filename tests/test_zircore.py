@@ -2031,7 +2031,7 @@ class TestRulesThatSilentlyMatchedNothing:
         ``not filter`` therefore holds, but SQLite evaluates ``NOT (x LIKE ...)``
         on a NULL ``x`` to NULL and drops the row. Sysmon network events carry
         no CommandLine, so *Rundll32 Internet Connection* matched none of the
-        75,793 events Hayabusa reports on the HANCITOR corpus.
+        75,793 events Hayabusa reports on the Sysmon test corpus.
         """
         core = ZircoliteCore(config=field_mappings_file, logger=test_logger)
         try:

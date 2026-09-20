@@ -33,6 +33,12 @@
 
 ## Requirements / Installation
 
+> [!NOTE]
+> Everything in this section applies **only when running Zircolite from source**. The
+> [standalone binaries](#standalone-binaries) and the [Docker image](#running-with-docker)
+> carry their own Python, every dependency and the compiled kernel: they need no Python, no
+> package manager and no C compiler.
+
 The project has been tested with Python 3.10 and above. Dependencies are declared in
 `pyproject.toml`; install them from the cloned repository with
 [PDM](https://pdm-project.org/latest/) (`pdm install`), [uv](https://docs.astral.sh/uv/)
@@ -48,11 +54,10 @@ or prefix them with `pdm run`, `uv run` or `poetry run`.
 
 ### :warning: Install a C compiler first
 
-Installing compiles Zircolite's flattening kernel with Cython — but **only if a C compiler
-is already there**. Without one the install still succeeds, prints nothing about it, and
-every later run flattens events in Python: 8.1 µs per event becomes 19.2 µs, and on the
-478 MB corpus below a full run goes from 11.8 s to 13.5 s. The detections are identical;
-you simply pay for it on every run, forever, without being told.
+Installing from source compiles Zircolite's flattening kernel with Cython — but **only if a
+C compiler is already there**. Without one the install still succeeds and every run
+flattens events in Python instead, which is slower. The binaries and the Docker image are
+built with the kernel already compiled, so this does not concern them.
 
 So install the toolchain **before** `pdm install`:
 
@@ -66,21 +71,6 @@ So install the toolchain **before** `pdm install`:
 
 Cython itself needs no installing: it is a build-time requirement, fetched into an isolated
 build environment and never added to your environment.
-
-**Check which kernel you got.** Every run prints it in the summary panel, and the line says
-why when it is the slow one:
-
-```
-    Flattening          auto → cython
-    Flattening          auto → python (native extension unavailable (...); build it by
-                        rerunning pdm install, uv sync or poetry install with a C compiler)
-```
-
-Set `ZIRCOLITE_REQUIRE_NATIVE=1` before installing to turn a failed compile into a failed
-install rather than a silent fallback, and run with `--flatten-backend cython` to refuse to
-start without it. Release binaries and Docker images always ship the compiled kernel.
-
-:warning: `evtx` publishes wheels for Linux (x86_64, ARM64), macOS and Windows x64. Windows ARM64 has neither a wheel nor a source package; see [Internals → Windows ARM64](docs/Internals.md#windows-arm64), or use the standalone binary.
 
 ### Standalone binaries
 
@@ -99,16 +89,6 @@ be installed first.
 Intel Macs and musl-based distributions such as Alpine have no binary; use Python or
 Docker there.
 
-An archive unpacks to a single `Zircolite-<version>-<target>/` directory. The executable
-(`Zircolite`, or `Zircolite.exe` on Windows) needs the `_internal/` directory beside it, so
-always move the directory as a whole. The `config/`, `rules/`, `templates/` and `gui/`
-directories next to the executable are yours to edit: a file there takes precedence over
-the copy built into `_internal/`.
-
-Extract with `unzip` or, on macOS, Archive Utility: both restore the executable bit and
-the symlinks the archive records. A tool that drops them leaves an executable that will
-not start (`chmod +x Zircolite` fixes that on Linux).
-
 ```shell
 unzip Zircolite-<version>-linux-x64.zip
 cd Zircolite-<version>-linux-x64
@@ -125,18 +105,6 @@ run:
 ```shell
 xattr -dr com.apple.quarantine Zircolite-<version>-macos-arm64
 ```
-
-Each release also publishes `SHA256SUMS`, and every archive has a build provenance
-attestation that ties it to the workflow run in this repository that built it:
-
-```shell
-sha256sum --check --ignore-missing SHA256SUMS        # macOS: shasum -a 256 --check --ignore-missing SHA256SUMS
-gh attestation verify Zircolite-<version>-linux-x64.zip --repo wagga40/Zircolite
-```
-
-On Windows, `Get-FileHash <archive>` prints the SHA-256 to compare with its line in
-`SHA256SUMS`. See [Standalone binaries](docs/Usage.md#standalone-binaries) for the full
-package layout and where `-U` installs rulesets.
 
 ## Quick Start
 

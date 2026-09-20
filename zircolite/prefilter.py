@@ -32,7 +32,7 @@ AUTO_MIN_ROWS = 1000
 AUTO_MIN_QUERIES = 32
 # Share of the rows a rule's Channel/EventID bounds select past which the
 # candidates narrow its scan too little to repay handing them over. Measured
-# insensitive between 0.25 and 1.0 on HANCITOR; a third of a partition still won.
+# insensitive between 0.25 and 1.0 on the test corpus; a third of a partition still won.
 BROAD_FRACTION = 0.5
 _UNSUPPORTED_WORDS = frozenset((
     "SELECT", "FROM", "WHERE", "JOIN", "UNION", "INTERSECT", "EXCEPT", "ORDER",

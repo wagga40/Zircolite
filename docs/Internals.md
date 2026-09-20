@@ -184,18 +184,18 @@ multisets.
 
 | Workload | Before (`c972b28`) | After |
 |---|---:|---:|
-| HANCITOR, 4 EVTX / 452,554 events, auto (processes) | 42.0 s | 11.0 s |
-| HANCITOR, `--unified-db` | — | 22.8 s |
-| HANCITOR database input (`-D`) | — | 11.7 s (51.8 s with the prefilter off) |
+| Test corpus, 4 EVTX / 452,554 events, auto (processes) | 42.0 s | 11.0 s |
+| Test corpus, `--unified-db` | — | 22.8 s |
+| Test corpus as database input (`-D`) | — | 11.7 s (51.8 s with the prefilter off) |
 | EVTX-ATTACK-SAMPLES, 278 files, auto (unified) | 7.0 s | 5.8 s |
 | EVTX-ATTACK-SAMPLES, 278 files, per-file | 473 s | 55.7 s |
 
-HANCITOR holds a single channel, so its gains come from the literal prefilter and process
+That corpus holds a single channel, so its gains come from the literal prefilter and process
 workers; the 278 small multi-channel files show the per-rule costs of per-file mode that
 the census prune and lazy result spools remove. Reproduce comparisons with
 `tools/throughput-benchmark.py`, and measure the rule phase alone with `-D` and
-`--performance-json`. [Benchmark](Benchmark.md) compares the same HANCITOR run with
-Hayabusa and Chainsaw.
+`--performance-json`. [Benchmark](Benchmark.md) compares the same run with Hayabusa and
+Chainsaw.
 
 ## Module map
 
@@ -606,7 +606,7 @@ Sigma reads a condition on a field the event does not carry as false, so
 evaluates that comparison to `NULL`, and `NOT NULL` is `NULL`, so the row is dropped.
 Sysmon network events have no `CommandLine`, and a network rule whose filters mention one
 matched nothing at all: *Rundll32 Internet Connection* found none of the 75,793 events on
-the HANCITOR corpus that Sigma's semantics select.
+the test corpus that Sigma's semantics select.
 
 Unlike the two repairs, this rewrite applies to every statement before it runs.
 `sqlscan.normalize_rule_sql` wraps the operand of each prefix `NOT` in
