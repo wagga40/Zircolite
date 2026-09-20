@@ -253,10 +253,7 @@ See [Field Splitting](docs/Usage.md#field-splitting) and [Field Transforms](docs
 
 ## Benchmark
 
-**Zircolite is the fastest of the three on both test corpora**, ahead of
-[Hayabusa](https://github.com/Yamato-Security/hayabusa) and
-[Chainsaw](https://github.com/WithSecureLabs/chainsaw) — and it is the only one written in
-Python, against two tools written in Rust.
+**Zircolite is the fastest of the three on both tested corpora**.
 
 Each tool at its defaults with its own rules, on a 10-core Apple M1 Max. Median of three
 runs.
