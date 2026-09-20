@@ -1,6 +1,6 @@
 # Benchmark
 
-How Zircolite compares with [Hayabusa](https://github.com/Yamato-Security/hayabusa) and
+How Zircolite compares with [Hayabusa](https://github.com/Yamato-Security/hayabusa) and 
 [Chainsaw](https://github.com/WithSecureLabs/chainsaw), two Rust tools that also run Sigma
 rules over Windows event logs, on the same logs and the same machine. Each tool runs at its
 own defaults with its own rules: this is what a user gets out of the box, not a
@@ -8,7 +8,7 @@ rule-for-rule comparison of the engines.
 
 ## Results
 
-HANCITOR corpus: 4 Sysmon EVTX files, 478 MB, 452,554 events. Median of three timed passes
+Test corpus: 4 Sysmon EVTX files, 478 MB, 452,554 events. Median of three timed passes
 after one warm-up pass, with the range in brackets.
 
 | Tool | Rules loaded | Wall time | Peak memory | Detections | Rules matched |
@@ -17,8 +17,7 @@ after one warm-up pass, with the range in brackets.
 | Hayabusa 4.1.0 | 4,658 (2,293 after its channel filter) | 24.7 s (23.3–25.1) | 900 MiB | 589,409 | 132 |
 | Chainsaw 2.16.0 | 3,524 (388 could not be loaded) | 113.5 s (92.8–125.5) | 346 MiB | 40,843 | 86 |
 
-Zircolite was measured at commit `e53a803`, the code this release ships. Chainsaw's times
-varied the most between passes; an earlier series on the same machine gave it 100.0 s
+Chainsaw's times varied the most between passes; an earlier series on the same machine gave it 100.0 s
 (97.3–102.9).
 
 ## Reading the numbers
@@ -35,7 +34,7 @@ varied the most between passes; an earlier series on the same machine gave it 10
 - **Memory is the whole process tree.** Zircolite picks four worker processes for four
   large files, and its figure is their sum. Hayabusa and Chainsaw run as one process with
   several threads. `--no-parallel` trades Zircolite's speed for a single process.
-- **HANCITOR holds a single channel, Sysmon.** Zircolite and Hayabusa skip the rules
+- **The test corpus holds a single channel, Sysmon.** Zircolite and Hayabusa skip the rules
   written for channels the logs do not contain, about half of each ruleset. A corpus
   that mixes Security, System and Sysmon logs runs more of them.
 - **Zircolite's time includes Python start-up and loading 7.6 MB of rule SQL.** On very
@@ -57,13 +56,13 @@ The commands, as `tools/tool-benchmark.py` runs them:
 
 ```shell
 # Zircolite
-python3 zircolite.py -e HANCITOR/ -r rules/rules_windows_merged.json -o zircolite.json -l zircolite.log
+python3 zircolite.py -e TEST_CORPUS/ -r rules/rules_windows_merged.json -o zircolite.json -l zircolite.log
 
 # Hayabusa, from its own directory
-./hayabusa dfir-timeline -d HANCITOR/ -w -q -Q -K -C -t jsonl -o hayabusa.jsonl
+./hayabusa dfir-timeline -d TEST_CORPUS/ -w -q -Q -K -C -t jsonl -o hayabusa.jsonl
 
 # Chainsaw, from its own directory
-./chainsaw --no-banner hunt HANCITOR/ -s sigma/rules -s sigma/rules-emerging-threats \
+./chainsaw --no-banner hunt TEST_CORPUS/ -s sigma/rules -s sigma/rules-emerging-threats \
     -s sigma/rules-threat-hunting -r rules/ --mapping mappings/sigma-event-logs-all.yml \
     --jsonl -o chainsaw.jsonl
 ```

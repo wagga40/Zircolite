@@ -46,11 +46,42 @@ group (tests, linters, PyInstaller) by default; `pdm install --prod`, `uv sync -
 or `poetry install --without dev` leave it out. The rest of this documentation writes
 `python3 zircolite.py`: activate the environment, or prefix the command as in the table.
 
-Installing also compiles `zircolite/flatten_kernel.py` into a native extension, which
-needs a C compiler (Xcode Command Line Tools on macOS, `build-essential` on Debian and
-Ubuntu, the Visual C++ Build Tools on Windows). Without one the install still succeeds
-and Zircolite runs the same code as Python; set `ZIRCOLITE_REQUIRE_NATIVE=1` to make it
-fail instead. Release binaries and the Docker image always include the compiled kernel.
+#### The C compiler is a prerequisite, not an option
+
+Installing compiles `zircolite/flatten_kernel.py` into a native extension with Cython.
+That compile is skipped, silently, when no C compiler is present: the install still
+reports success, and every run afterwards flattens events in Python instead — 19.2 µs per
+event rather than 8.1 µs. On a 478 MB, 452,554-event corpus that is 15.4 s of ingestion
+against 10.9 s, and 13.5 s against 11.8 s for the whole run. Nothing is wrong with the
+results; the run is simply slower, on every run, and nothing at install time says so.
+
+Install the toolchain **before** installing Zircolite:
+
+| Platform | Prerequisite |
+|----------|--------------|
+| Debian, Ubuntu | `apt install build-essential python3-dev` |
+| RHEL, Fedora, Rocky | `dnf install gcc python3-devel` |
+| Alpine | `apk add build-base python3-dev` |
+| macOS | `xcode-select --install` |
+| Windows | [Build Tools for Visual Studio](https://visualstudio.microsoft.com/visual-cpp-build-tools/), "Desktop development with C++" |
+
+Cython and setuptools are build-time requirements: PDM, uv and Poetry fetch them into an
+isolated build environment and never install them beside Zircolite, so they do not appear
+in your environment afterwards.
+
+Three ways to see which kernel a run used:
+
+- the **Flattening** row of the summary panel, `auto → cython` or `auto → python` with the
+  reason attached;
+- `--performance-json`, which records the backend and the same reason;
+- `--flatten-backend cython`, which exits 1 rather than running without it.
+
+`ZIRCOLITE_REQUIRE_NATIVE=1` makes the *install* fail instead of falling back, which is
+what CI, the Docker images and the release builds all set. After editing the kernel,
+reinstall: a native extension built from an older copy carries its source hash, is
+detected as stale and is ignored in favour of Python.
+
+Release binaries and the Docker image always include the compiled kernel.
 
 A complete first run, from nothing:
 

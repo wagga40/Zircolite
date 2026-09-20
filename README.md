@@ -17,6 +17,7 @@
 
 ### Key Features
 
+- **Fast**: 452,554 events against 4,319 Sigma rules in 11.6 s — 2.1× faster than Hayabusa and 9.8× faster than Chainsaw on the same logs, both of them Rust tools. See the [benchmark](#benchmark).
 - **Automatic Log Type Detection**: Automatically identifies log formats and timestamp fields using magic bytes, content analysis, and regex-based fallback -- no need to specify format flags in most cases.
 - **Multiple Input Formats**: Supports various log formats including EVTX, JSON Lines, JSON Arrays, CSV, XML, and more. Compressed or archived logs (gzip, bzip2, ZIP, 7-Zip) are supported; use `--archive-password` for encrypted ZIP/7z.
 - **Native Sigma Support**: Zircolite can directly use native Sigma rules (YAML) by converting them with pySigma.
@@ -45,9 +46,39 @@ or prefix them with `pdm run`, `uv run` or `poetry run`.
 - **Required**: `orjson`, `xxhash`, `rich`, `rich-argparse`, `RestrictedPython`, `requests`, `urllib3`, `pySigma`, `evtx` (pyevtx-rs), `jinja2`, `lxml`, `chardet`, `psutil`, `pyyaml`, `py7zr`, `ijson`, `pyahocorasick`, `pyroaring`
 - `py7zr` is imported only when a `.7z` input is opened; ZIP, gzip and bzip2 use the standard library.
 
-Installing also compiles the flattening kernel when a C compiler is available. Without one
-the install still succeeds and Zircolite runs the same code as Python. Release binaries and
-Docker images always include it.
+### :warning: Install a C compiler first
+
+Installing compiles Zircolite's flattening kernel with Cython — but **only if a C compiler
+is already there**. Without one the install still succeeds, prints nothing about it, and
+every later run flattens events in Python: 8.1 µs per event becomes 19.2 µs, and on the
+478 MB corpus below a full run goes from 11.8 s to 13.5 s. The detections are identical;
+you simply pay for it on every run, forever, without being told.
+
+So install the toolchain **before** `pdm install`:
+
+| Platform | Prerequisite |
+|----------|--------------|
+| Debian, Ubuntu | `apt install build-essential python3-dev` |
+| RHEL, Fedora, Rocky | `dnf install gcc python3-devel` |
+| Alpine | `apk add build-base python3-dev` |
+| macOS | `xcode-select --install` |
+| Windows | [Build Tools for Visual Studio](https://visualstudio.microsoft.com/visual-cpp-build-tools/) ("Desktop development with C++") |
+
+Cython itself needs no installing: it is a build-time requirement, fetched into an isolated
+build environment and never added to your environment.
+
+**Check which kernel you got.** Every run prints it in the summary panel, and the line says
+why when it is the slow one:
+
+```
+    Flattening          auto → cython
+    Flattening          auto → python (native extension unavailable (...); build it by
+                        rerunning pdm install, uv sync or poetry install with a C compiler)
+```
+
+Set `ZIRCOLITE_REQUIRE_NATIVE=1` before installing to turn a failed compile into a failed
+install rather than a silent fallback, and run with `--flatten-backend cython` to refuse to
+start without it. Release binaries and Docker images always ship the compiled kernel.
 
 :warning: `evtx` publishes wheels for Linux (x86_64, ARM64), macOS and Windows x64. Windows ARM64 has neither a wheel nor a source package; see [Internals → Windows ARM64](docs/Internals.md#windows-arm64), or use the standalone binary.
 
@@ -116,6 +147,7 @@ Check out (old) tutorials made by others (EN, ES, and FR) [here](#tutorials).
 Help is available with:
 
 ```shell
+# Don't forget to prefix with "pdm run" or "uv run" or "poetry run" when needed
 python3 zircolite.py -h
 ```
 
@@ -253,16 +285,21 @@ See [Field Splitting](docs/Usage.md#field-splitting) and [Field Transforms](docs
 
 ## Benchmark
 
-Zircolite against [Hayabusa](https://github.com/Yamato-Security/hayabusa) and
-[Chainsaw](https://github.com/WithSecureLabs/chainsaw) on the same 4 Sysmon EVTX files
-(478 MB, 452,554 events), each tool at its defaults with its own rules, on a 10-core Apple
-M1 Max. Median of three runs:
+**Zircolite is the fastest of the three: 2.1× faster than [Hayabusa](https://github.com/Yamato-Security/hayabusa)
+and 9.8× faster than [Chainsaw](https://github.com/WithSecureLabs/chainsaw)** — and it is
+the only one of them written in Python, against two tools written in Rust.
 
-| Tool | Rules loaded | Wall time | Peak memory |
-|------|-------------:|----------:|------------:|
-| Zircolite | 4,319 | **11.6 s** | 1,207 MiB (4 worker processes) |
-| Hayabusa 4.1.0 | 4,658 | 24.7 s | 900 MiB |
-| Chainsaw 2.16.0 | 3,524 | 113.5 s | 346 MiB |
+Same 4 Sysmon EVTX files (478 MB, 452,554 events), each tool at its defaults with its own
+rules, on a 10-core Apple M1 Max. Median of three runs:
+
+| Tool | Rules loaded | Wall time | Throughput | Peak memory |
+|------|-------------:|----------:|-----------:|------------:|
+| **Zircolite** | 4,319 | **11.6 s** | **39,000 events/s** | 1,207 MiB (4 worker processes) |
+| Hayabusa 4.1.0 | 4,658 | 24.7 s | 18,300 events/s | 900 MiB |
+| Chainsaw 2.16.0 | 3,524 | 113.5 s | 4,000 events/s | 346 MiB |
+
+Zircolite trades memory for that speed: it runs one worker process per file, and the
+figure above is their total. `--no-parallel` keeps it to a single process.
 
 The rule sets differ, so detection counts are not comparable; see [Benchmark](docs/Benchmark.md)
 for the setup, the caveats and how to reproduce it with `tools/tool-benchmark.py`.
