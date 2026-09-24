@@ -19,8 +19,13 @@ from lxml import etree  # type: ignore[attr-defined]
 
 from .config import ExtractorConfig
 
-# auditd key=value pairs: values may be double/single-quoted (with spaces) or bare
-_AUDITD_ATTR_RE = re.compile(r"([\w\[\].]+)=(\"[^\"]*\"|'[^']*'|\S*)")
+# auditd key=value pairs: values may be double/single-quoted (with spaces) or bare.
+# A key can only start where a run of key characters starts: from anywhere
+# inside the run the key would end at the same place, so it would fail the
+# same way. The lookbehind says so up front; without it a long run with no
+# '=' after it (tampered or forged logs) is rescanned from every character,
+# which is quadratic in the line length.
+_AUDITD_ATTR_RE = re.compile(r"(?<![\w\[\].])([\w\[\].]+)=(\"[^\"]*\"|'[^']*'|\S*)")
 
 # ENRICHED logs (auditd's default log_format) append interpreted fields after a
 # 0x1D separator, each named as the upper-case spelling of the raw field it
