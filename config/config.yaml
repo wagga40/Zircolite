@@ -29,13 +29,17 @@
 # Field paths support:
 #   - Dot notation for nested fields (e.g., "Event.System.Channel")
 #   - Direct field names (e.g., "Channel")
-#   - Paths are tried in order until a value is found
+#   - Every path is read. If the paths present in an event disagree, the event
+#     is kept: the filter runs before flattening and cannot tell which one the
+#     Channel/EventID column will hold
+#   - List only fields that hold the channel (or EventID) itself: a field that
+#     holds something else can make the filter discard events rules would match
 # -----------------------------------------------------------------------------
 event_filter:
   # Enable/disable event filtering globally
   enabled: true
   
-  # Field paths for Channel extraction (tried in order)
+  # Field paths for Channel extraction
   channel_fields:
     - Event.System.Channel      # Standard EVTX structure
     - Channel                   # Pre-flattened or direct field
@@ -43,10 +47,9 @@ event_filter:
     - channel                   # Lowercase variant
     - log_name                  # Common in SIEM exports
     - LogName                   # Windows Event Forwarding
-    - source.name               # ECS format
     - winlog.channel            # Elastic Winlogbeat
   
-  # Field paths for EventID extraction (tried in order)
+  # Field paths for EventID extraction
   eventid_fields:
     - Event.System.EventID      # Standard EVTX (can be int or dict)
     - Event.System.EventID.#text  # EVTX with dict structure

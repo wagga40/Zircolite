@@ -410,6 +410,12 @@ XML and EVTXtract) goes through the filter, because any of them can carry Window
 events. A saved database (`--db-input`) skips ingestion altogether, so it is never
 filtered. An event with no usable Channel is kept.
 
+The filter runs before flattening, so it reads Channel and EventID from the raw event
+through `event_filter.channel_fields` and `eventid_fields`, not from the columns the
+rules query. When an event carries several of those fields with different values (a
+top-level `Channel` next to `winlog.channel`, say), the flattener decides which one lands
+in the column, so the filter treats the value as unusable and keeps the event.
+
 > [!IMPORTANT]
 > The filter only engages when the ruleset yields channels. The shipped Windows rulesets
 > bound over 99% of their rules, but **no rule in `rules_linux*.json` names a channel**, so

@@ -20,7 +20,7 @@ import os
 import re
 import shutil
 import tempfile
-from collections.abc import Generator
+from collections.abc import Callable, Generator
 from functools import lru_cache, wraps
 from itertools import chain, islice
 from pathlib import Path
@@ -86,6 +86,36 @@ def _read_transform(path: str, mtime_ns: int, size: int) -> str:
 # Input formats without Channel/EventID semantics: event filtering is skipped
 # for these unless event_filter.filter_all_sources is enabled in the config
 _NON_WINDOWS_INPUTS = NON_WINDOWS_INPUT_FLAGS
+
+
+# The event filter hands both values to a set membership test, so they have to
+# come back hashable. XML-derived events carry them as {"#text": ...}, or as
+# {"#attributes": {...}} when the element had attributes and no text.
+def _channel_filter_value(value: Any) -> str | None:
+    """A Channel the event filter can use: a non-empty string, else None."""
+    if isinstance(value, dict):
+        value = value.get("#text")
+    if isinstance(value, str) and value:
+        return value
+    return None
+
+
+def _eventid_filter_value(value: Any) -> int | None:
+    """An EventID the event filter can use: an int, else None."""
+    if isinstance(value, dict):
+        value = value.get("#text")
+    try:
+        return int(value) if value is not None else None
+    except (ValueError, TypeError):
+        return None
+
+
+def _field_path_plan(field_paths: tuple) -> dict:
+    """Group pre-split field paths by top-level key: {key: ((rest, path), ...)}."""
+    plan: dict[str, list] = {}
+    for path in field_paths:
+        plan.setdefault(path[0], []).append((path[1:], path))
+    return {key: tuple(entries) for key, entries in plan.items()}
 
 
 class StrictParseError(Exception):
@@ -322,6 +352,7 @@ class StreamingEventProcessor:
         "RestrictedPython_BUILTINS",
         # Event filter config (from the field-mappings config)
         "_channel_field_paths",
+        "_channel_field_plan",
         # Last field path that yielded a Channel/EventID value; tried first on
         # the next event since a file's schema is stable
         "_channel_path_hint",
@@ -330,6 +361,7 @@ class StreamingEventProcessor:
         "_detected_time_field",
         "_event_filter_config_enabled",
         "_eventid_field_paths",
+        "_eventid_field_plan",
         "_eventid_path_hint",
         "_events_filtered_count",
         "_events_time_filtered_count",
@@ -633,6 +665,8 @@ class StreamingEventProcessor:
         self._eventid_field_paths = tuple(
             tuple(p.split(".")) for p in event_filter_cfg.get("eventid_fields", [])
         )
+        self._channel_field_plan = _field_path_plan(self._channel_field_paths)
+        self._eventid_field_plan = _field_path_plan(self._eventid_field_paths)
 
         # Load timestamp detection config (defaults provided by load_field_mappings)
         timestamp = config.get("timestamp_detection", {})
@@ -738,8 +772,9 @@ class StreamingEventProcessor:
         """
         Extract Channel and EventID from raw event data for early filtering.
 
-        This method tries to extract these fields using configured field paths.
-        Paths are tried in order until a value is found.
+        Every configured path is read. When the paths present in the event
+        disagree, the value is None and the filter keeps the event: see
+        ``_extract_field_value_hinted``.
 
         The field paths support:
         - Dot notation for nested fields (e.g., "Event.System.Channel")
@@ -750,65 +785,87 @@ class StreamingEventProcessor:
             event_dict: Raw event dictionary (not yet flattened)
 
         Returns:
-            Tuple of (channel, eventid) where eventid is int or None
+            Tuple of (channel, eventid): channel is a non-empty str or None,
+            eventid is int or None
         """
+        if not isinstance(event_dict, dict):
+            # A JSON line can hold any value; it is not this filter's to drop
+            return None, None
         channel, self._channel_path_hint = self._extract_field_value_hinted(
-            event_dict, self._channel_field_paths, self._channel_path_hint
+            event_dict, self._channel_field_plan, self._channel_path_hint,
+            _channel_filter_value,
         )
         eventid, self._eventid_path_hint = self._extract_field_value_hinted(
-            event_dict, self._eventid_field_paths, self._eventid_path_hint
+            event_dict, self._eventid_field_plan, self._eventid_path_hint,
+            _eventid_filter_value,
         )
-
-        # Both values are handed to a set membership test, so they have to come
-        # back hashable. XML-derived events carry them as {"#text": ...} or
-        # {"#attributes": {...}} when the element had attributes.
-        if isinstance(channel, dict):
-            channel = channel.get("#text")
-        if not isinstance(channel, (str, type(None))):
-            channel = None
-        if channel == "":
-            # Too little information to discard the event; the filter keeps None
-            channel = None
-
-        # Convert eventid to int if possible (guarantees int or None for caller)
-        if eventid is not None:
-            # Handle EventID as dict with '#text' (XML style)
-            if isinstance(eventid, dict):
-                eventid = eventid.get("#text")
-            try:
-                eventid = int(eventid) if eventid is not None else None
-            except (ValueError, TypeError):
-                eventid = None
-
         return channel, eventid
 
     def _extract_field_value_hinted(
-        self, event_dict: dict, field_paths: tuple, hint: tuple | None
+        self, event_dict: dict, field_plan: dict, hint: tuple | None,
+        normalize: Callable[[Any], Any],
     ) -> tuple:
         """
-        Extract a field value in configured precedence order.
+        Extract a field value from every configured path, failing open.
 
-        Paths support dot notation for nested access (e.g. "Event.System.Channel")
-        and are otherwise tried in order until one yields a non-None value.
+        ``field_plan`` holds the configured paths grouped by top-level key
+        (see ``_field_path_plan``); paths support dot notation for nested
+        access (e.g. "Event.System.Channel"). Each value found goes through
+        ``normalize``, which returns None for a value the filter cannot use.
 
-        A previous winner is not evidence that higher-priority fields are
-        absent from this event. Keep the hint for callers, but never let it
-        change precedence on mixed-schema inputs.
+        The filter runs before flattening, so it cannot read the column the
+        rules query. When an event carries several of these paths, which one
+        ends up in that column is decided by the flattener's traversal order
+        and the field mappings, not by the configured order: a
+        top-level ``Channel`` next to ``winlog.channel`` yields the nested
+        value. So every path is read, and if two present paths disagree, or
+        one holds an unusable value, the result is None and the filter keeps
+        the event rather than discard it on a value no rule would have seen.
 
         An empty value does not count as found: a present-but-blank field would
-        otherwise stop the scan and then fail the filter, silently discarding
-        events whose real channel sits in a later candidate path.
+        otherwise make the event look ambiguous when its real value sits in
+        another candidate path.
+
+        A previous winner is not evidence that other fields are absent from
+        this event. Keep the hint for callers, but never let it change the
+        result on mixed-schema inputs.
 
         Returns:
-            Tuple of (value, winning_path). ``winning_path`` is the path that
+            Tuple of (value, winning_path). ``winning_path`` is a path that
             produced the value (the new hint), or the unchanged hint when no
             path matched.
         """
-        for path in field_paths:
-            value = self._get_nested_value(event_dict, path)
-            if value is not None and value != "":
-                return value, path
-        return None, hint
+        found = None
+        winner = hint
+        # Every path is read on every event, and most are absent at their
+        # top-level key. Walk whichever is shorter: the event's top-level keys
+        # (one for EVTX) or the configured ones.
+        keys = event_dict if len(event_dict) < len(field_plan) else field_plan
+        for key in keys:
+            entries = field_plan.get(key)
+            if entries is None:
+                continue
+            node = event_dict.get(key)
+            if node is None:
+                continue
+            for rest, path in entries:
+                raw = node
+                for part in rest:
+                    if not isinstance(raw, dict):
+                        raw = None
+                        break
+                    raw = raw.get(part)
+                    if raw is None:
+                        break
+                if raw is None or raw == "":
+                    continue
+                value = normalize(raw)
+                if value is None or (found is not None and value != found):
+                    return None, winner
+                if found is None:
+                    found = value
+                    winner = path
+        return found, winner
 
     def _get_nested_value(self, obj: dict, parts: tuple) -> Any:
         """
