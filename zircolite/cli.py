@@ -1174,6 +1174,15 @@ def _main(memory_tracker, start_time) -> None:
     config_path = Path(args.config)
     if not config_path.is_absolute() and config_path.parent == Path("config"):
         args.config = resolve_default_path(args.config, "config", config_path.name)
+        # A copy in the working directory still wins, but not silently: a config
+        # decides mappings and which transforms run, and one sitting in a log
+        # bundle the analyst cd'ed into would otherwise go unnoticed.
+        bundled_config = bundled_asset("config", config_path.name)
+        if bundled_config.is_file() and Path(args.config).resolve() != bundled_config.resolve():
+            logger.warning(
+                f"[yellow]   [!] Using {Path(args.config).resolve()} from the working directory "
+                f"instead of the bundled {bundled_config} (pass -c to choose explicitly)[/]"
+            )
 
     if args.transform_list:
         sys.exit(0 if _print_transform_categories(args.config, logger) else 1)

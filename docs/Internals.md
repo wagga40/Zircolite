@@ -245,7 +245,8 @@ cannot import `cli` — `cli` imports it in turn.
 For every value a user can override, a file of that name in the working directory wins and
 anything else falls through to `bundled_asset`. That covers
 
-- `--config`, for any relative path under `config/`, not only the default
+- `--config`, for any relative path under `config/`, not only the default (the CLI warns
+  when the working-directory copy shadows a shipped one)
 - `--ruleset`, both the default and an explicit `-r rules/…`
 - `--template`, and the templates behind `--timesketch` and `--navigator-output`
 - the `rules` and `templates` entries of a `-Y` configuration file

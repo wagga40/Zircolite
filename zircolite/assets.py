@@ -93,7 +93,9 @@ def resolve_default_path(value: str, *parts: str) -> str:
 
     Defaults such as ``config/config.yaml`` are relative, so they only resolve
     when Zircolite runs from its own directory. A file of the same name in the
-    working directory still wins, keeping local overrides working.
+    working directory still wins, keeping local overrides working; the CLI
+    warns when that happens for ``--config``, since the file decides which
+    transforms run.
     """
     if Path(value).is_file():
         return value
