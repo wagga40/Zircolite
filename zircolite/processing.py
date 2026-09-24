@@ -25,6 +25,7 @@ import queue
 import shutil
 import signal
 import sqlite3
+import sys
 import tempfile
 import threading
 import time
@@ -1013,6 +1014,10 @@ def _initialize_process_worker(payload, args, input_type, raw_config, spool_dir,
     from .console import set_quiet_mode
     set_quiet_mode(True)
     signal.signal(signal.SIGINT, signal.SIG_IGN)
+    if sys.platform != "win32":
+        # Spawned with SIGINT held (parallel.py); ignoring it discarded any
+        # Ctrl+C from start-up, so the mask can go back to normal.
+        signal.pthread_sigmask(signal.SIG_UNBLOCK, {signal.SIGINT})
     set_worker_shutdown_event(cancel_event)
     logger = create_silent_logger("zircolite_process")
     ctx = ProcessingContext(**payload, logger=logger, memory_tracker=MemoryTracker(logger=logger))
