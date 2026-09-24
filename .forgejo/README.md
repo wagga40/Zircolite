@@ -14,7 +14,7 @@ The mirror runs on one x86_64 Linux runner:
 |---|---|---|
 | `lint_python` | ubuntu-latest | same |
 | `tests` | {ubuntu, windows, macos} × {3.10, 3.14} | ubuntu × {3.10, 3.14} — 2 of 6 legs |
-| `external_tests` | ubuntu-latest | same, on the host label |
+| `external_tests` | ubuntu-latest | same, on the host label; push and manual runs only, no `pull_request` |
 | `build_pyinstaller` | linux x64/arm64, windows x64/arm64, macOS arm64; verify on clean runners and older distributions; release | linux x64 build, binary tests and package smoke in one job — 1 of 5 legs, no release |
 
 Windows, macOS and arm64 validation requires the GitHub matrix.
@@ -43,6 +43,11 @@ that the tags agree.
 See the comment at the top of `external_tests.yml` — the harness computes its
 own bind-mount paths, so it only works where the Docker daemon and the job share
 a filesystem.
+
+**`external_tests` does not run on `pull_request`.** On GitHub it does, on a
+disposable VM. Here it would run a pull request's code on the runner host
+itself; see [Pull requests and the host runner](#pull-requests-and-the-host-runner).
+Every branch pushed to this repository still runs it through `push`.
 
 **`build_pyinstaller` installs Node before JavaScript actions.** Neither the
 manylinux image nor this runner supplies it to job containers. The first step
@@ -91,6 +96,32 @@ The `external_tests` job runs directly on the runner host and needs:
 - `git`
 - `node` — `actions/checkout` and `actions/upload-artifact` are JavaScript
   actions and a host-mode job has no image to supply it
+
+### Pull requests and the host runner
+
+A host-label job runs as the runner's user, with no isolation, on a host that
+keeps its state between jobs. Through the Docker daemon it needs, that user is
+root on the host. Anyone whose code reaches this job can read the runner's
+`.runner` registration file and impersonate it, leave something behind for the
+next job, and collect the automatic token of later push jobs.
+
+`external_tests.yml` therefore has no `pull_request` trigger. That is not enough
+on its own: for `pull_request`, Forgejo uses the workflow files *from the pull
+request*, so a PR can put the trigger back, or add a new workflow with
+`runs-on: self-hosted`. The controls that hold are on the forge and the runner:
+
+- Keep the repository private, or register the host runner only on this
+  repository and only while nobody else can open pull requests against it.
+- Do not approve workflow runs for pull requests from forks, and never use
+  **Approve always** for them. Forgejo holds fork PRs from users with read access
+  until someone approves them, and approving once runs whatever workflows that
+  PR carries, including edits to `.forgejo/workflows/`.
+- Run the host runner in ephemeral mode (`forgejo-runner register --ephemeral`,
+  one job each) or in a VM that is reset after each job, so neither its token
+  nor anything left on disk outlives a job.
+
+See Forgejo's [Security of Pull Requests](https://forgejo.org/docs/latest/user/actions/security-pull-request/)
+and [Securing Forgejo Actions Deployments](https://forgejo.org/docs/latest/admin/actions/security/#execution-on-host-host).
 
 ### Docker inside an LXC guest
 
