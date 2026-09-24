@@ -573,6 +573,18 @@ def sanitize_row_for_csv(row: dict[str, Any]) -> dict[str, str]:
     return {k: sanitize_value_for_csv(v) for k, v in row.items()}
 
 
+def write_csv_header(writer: csv.DictWriter) -> None:
+    """Write *writer*'s header row with each column name sanitized for CSV.
+
+    Use this instead of ``writeheader()``. Column names come from the logs as
+    well: split fields (``Hashes``) turn value text into keys, and a ``-D``
+    database brings its own schema. A name such as ``+HYPERLINK(...)`` is a
+    formula in the header row just as it would be in a data cell. The
+    fieldnames themselves stay raw because rows are matched to them by key.
+    """
+    writer.writerow({name: sanitize_value_for_csv(name) for name in writer.fieldnames})
+
+
 def random_suffix(length: int = 4) -> str:
     """Return a random alphanumeric string (uppercase + digits) of given length."""
     return "".join(

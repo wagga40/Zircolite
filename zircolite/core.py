@@ -68,7 +68,7 @@ from .sqlscan import (
     scan_query,
 )
 from .streaming import StreamingEventProcessor, StrictParseError
-from .utils import rounded_integer_warning, sanitize_row_for_csv
+from .utils import rounded_integer_warning, sanitize_row_for_csv, write_csv_header
 
 # Translation table for stripping newline characters from CSV descriptions.
 _NEWLINE_TRANSLATE = str.maketrans("", "", "\n\r")
@@ -1156,7 +1156,7 @@ class ZircoliteCore:
                     extrasaction="ignore",
                 )
                 if not self._csv_header_written:
-                    csv_writer.writeheader()
+                    write_csv_header(csv_writer)
                     self._csv_header_written = True
             # Write matches to CSV - pre-compute common values
             title = rule_results["title"]

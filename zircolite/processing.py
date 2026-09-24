@@ -67,6 +67,7 @@ from .utils import (
     sanitize_row_for_csv,
     sanitize_value_for_csv,
     select_files,
+    write_csv_header,
 )
 
 if TYPE_CHECKING:
@@ -334,7 +335,7 @@ class _CsvResultSpool:
             with open(self.ctx.outfile, "w", encoding="utf-8", newline="") as fh:
                 writer = csv.DictWriter(fh, delimiter=self.ctx.delimiter, extrasaction="ignore",
                     fieldnames=["rule_title", "rule_description", "rule_level", "rule_count", *columns])
-                writer.writeheader()
+                write_csv_header(writer)
                 for row in self.rows:
                     writer.writerow(sanitize_row_for_csv(row))
         finally:
@@ -1187,7 +1188,7 @@ def _write_csv_results(
         writer = csv.DictWriter(
             f, delimiter=ctx.delimiter, fieldnames=fieldnames, extrasaction="ignore"
         )
-        writer.writeheader()
+        write_csv_header(writer)
         for result in all_results:
             title = result.get("title", "")
             description = sanitize_value_for_csv(result.get("description") or "")
