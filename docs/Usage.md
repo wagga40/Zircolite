@@ -740,6 +740,19 @@ python3 zircolite.py --events auditd.log --ruleset rules/rules_linux.json --audi
 Auditd `timestamp` fields are rendered in UTC, since auditd epoch timestamps are UTC,
 regardless of the timezone of the machine running the analysis.
 
+Records in the `ENRICHED` log format (auditd's default) carry interpreted fields after
+a `0x1D` separator, named as the upper-case spelling of the raw field they interpret
+(`syscall=59` … `SYSCALL=execve EUID="www-data"`). Field names are case-insensitive in
+rules, so the two cannot share a name:
+
+| Field | Column holds | Other value kept as |
+|-------|--------------|---------------------|
+| `SYSCALL`, `ARCH` | the interpreted name (`execve`, `x86_64`) | `syscallRaw`, `archRaw` (`59`, `c000003e`) |
+| any other (`UID`, `AUID`, `EUID`, `OUID`, …) | the raw value (`33`) | `EUIDEnriched`, `AUIDEnriched`, … (`www-data`) |
+
+This matches how Sigma rules use them (`SYSCALL: execve`, `euid: 33`). `RAW`-format
+logs have no `0x1D` and are read as before, so there `syscall` stays numeric.
+
 ### Sysmon for Linux
 
 Sysmon for Linux writes XML in text form, one event per line.
