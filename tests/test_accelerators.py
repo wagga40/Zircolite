@@ -248,6 +248,7 @@ def test_cython_ingestion_matches_python_with_transforms(tmp_path):
                                  "Hashes": "MD5=aa,SHA256=bb", "Flag": True, "Large": 2**70,
                                  "List": [1, "two"], "Empty": None}}},
         {"EventID": 3, "eventid": None, "User": "DOMAIN\\user", "Message": "héllo", "Flag": False},
+        {"Image": "C:\\a.exe", "Hashes": 'MD5=aa,image=b,x"];alert(1);//=c,=d'},
     ]
     args = argparse.Namespace(all_transforms=True, transform_categories=None)
     results = []

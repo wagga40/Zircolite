@@ -15,6 +15,7 @@ import logging
 import multiprocessing
 import os
 import random
+import re
 import string
 import sys
 import threading
@@ -37,6 +38,10 @@ from .console import console, get_rich_logger
 
 SafeLoader = getattr(yaml, "CSafeLoader", yaml.SafeLoader)
 _EXCLUDED_SENTINEL = object()
+
+# Characters a flattened column name may keep. Field names come from log
+# content, and every export template writes them out as JSON keys.
+_NON_ALNUM_RE = re.compile(r"[^a-zA-Z0-9]")
 
 
 def _configure_csv_field_limit() -> None:

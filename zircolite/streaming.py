@@ -53,6 +53,7 @@ from .jsonstream import iter_json_array
 from .shutdown import is_shutdown_requested
 from .utils import (
     _EXCLUDED_SENTINEL,
+    _NON_ALNUM_RE,
     COMPRESSED_SUFFIXES,
     load_field_mappings,
     open_maybe_compressed,
@@ -68,10 +69,6 @@ if TYPE_CHECKING:
 # ---------------------------------------------------------------------------
 # Module-level constants – built once, shared across all instances
 # ---------------------------------------------------------------------------
-
-# Pre-compiled regex for stripping non-alphanumeric characters
-_NON_ALNUM_RE = re.compile(r"[^a-zA-Z0-9]")
-
 
 @lru_cache(maxsize=1024)
 def _compile_transform(code: str):

@@ -374,6 +374,54 @@ class TestFlattenHotPathOptimizations:
         assert flat["SHA256"] == "bbb"
         assert flat["Hashes"] == "MD5=aaa,GARBAGE,SHA256=bbb"
 
+    # A split pair names its column from log content, and every export
+    # template writes column names out as JSON keys.
+    HOSTILE_HASHES = 'SHA1=abc,x":0}];alert(document.domain);[{"a=1'
+
+    @pytest.mark.parametrize("backend", ["python", "auto"])
+    def test_split_keys_are_sanitised_like_leaf_keys(
+        self, field_mappings_file, test_logger, default_args_config, backend
+    ):
+        processor = StreamingEventProcessor(
+            config_file=field_mappings_file,
+            args_config=default_args_config,
+            processing_config=ProcessingConfig(flatten_backend=backend),
+            logger=test_logger,
+        )
+        flat = processor._flatten_event(
+            {"Event": {"EventData": {"Hashes": self.HOSTILE_HASHES + ",=x,!!=y"}}},
+            "t.evtx",
+        )
+        assert flat["SHA1"] == "abc"
+        assert flat["x0alertdocumentdomaina"] == "1"
+        assert "" not in flat
+        assert all(_NON_ALNUM_RE.search(key) is None for key in flat)
+        assert all(_NON_ALNUM_RE.search(key) is None for key in processor.field_types)
+
+    @pytest.mark.parametrize("backend", ["python", "auto"])
+    @pytest.mark.parametrize("image_first", [True, False])
+    @pytest.mark.parametrize("spelling", ["Image", "image"])
+    def test_split_pair_cannot_replace_a_real_field(
+        self, field_mappings_file, test_logger, default_args_config,
+        backend, image_first, spelling,
+    ):
+        """'Hashes: MD5=x,Image=benign.exe' rewrote Image, so rules on the
+        real process path never saw it."""
+        processor = StreamingEventProcessor(
+            config_file=field_mappings_file,
+            args_config=default_args_config,
+            processing_config=ProcessingConfig(flatten_backend=backend),
+            logger=test_logger,
+        )
+        image = ("Image", "C:\\evil.exe")
+        hashes = ("Hashes", f"MD5=aaa,{spelling}=C:\\benign.exe")
+        data = dict([image, hashes] if image_first else [hashes, image])
+        flat = processor._flatten_event({"Event": {"EventData": data}}, "t.evtx")
+
+        assert flat["Image"] == "C:\\evil.exe"
+        assert flat["MD5"] == "aaa"
+        assert [key for key in flat if key.lower() == "image"] == ["Image"]
+
     def test_event_filter_path_hint_reused_and_falls_back(
         self, field_mappings_file, test_logger, default_args_config
     ):
@@ -2270,9 +2318,9 @@ class TestStreamingHostileKeysAndCaseVariants:
     ):
         """A split-derived column name containing a double quote must not abort ingestion.
 
-        Top-level keys are sanitized during flattening, but keys produced by the
-        'split' feature (key=value parsing of field values, i.e. log content)
-        reach the DB layer unsanitized.
+        Keys produced by the 'split' feature (key=value parsing of field
+        values, i.e. log content) are sanitized like every other field name,
+        so the quote is dropped instead of reaching the DB layer.
         """
         processor = self._make_processor(field_mappings_file, test_logger, default_args_config)
         json_file = tmp_path / "events.json"
@@ -2287,9 +2335,37 @@ class TestStreamingHostileKeysAndCaseVariants:
 
         assert count == 1
         cursor = conn.cursor()
-        cursor.execute('SELECT "MD5", "bad""key" FROM logs')
+        cursor.execute('SELECT "MD5", "badkey" FROM logs')
         row = cursor.fetchone()
         assert row == ("abc", "x")
+        conn.close()
+
+    @pytest.mark.parametrize("pair", ["row_id=1", "row_id=9223372036854775807"])
+    def test_split_pair_cannot_write_row_id(
+        self, field_mappings_file, test_logger, default_args_config, tmp_path, pair
+    ):
+        """A 'row_id' pair used to be bound into the INTEGER PRIMARY KEY.
+
+        A duplicate id (UNIQUE) or 2**63-1 (AUTOINCREMENT exhausted) failed
+        the batch, and every other event of the file went unanalysed.
+        """
+        processor = self._make_processor(field_mappings_file, test_logger, default_args_config)
+        json_file = tmp_path / "events.json"
+        events = [
+            {"EventID": 1, "Hashes": "MD5=aa"},
+            {"EventID": 1, "Hashes": pair},
+            {"EventID": 1, "Hashes": "MD5=bb"},
+        ]
+        json_file.write_text("".join(json.dumps(event) + "\n" for event in events))
+
+        conn = sqlite3.connect(":memory:")
+        processor.create_initial_table(conn)
+        count = processor.process_file_streaming(conn, str(json_file), input_type="json")
+
+        assert count == 3
+        assert conn.execute("SELECT row_id FROM logs ORDER BY row_id").fetchall() == [
+            (1,), (2,), (3,)
+        ]
         conn.close()
 
     def test_case_variant_columns_merge_values(

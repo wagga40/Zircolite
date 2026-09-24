@@ -6,7 +6,13 @@ scalar rules and keep transforms in the existing RestrictedPython sandbox.
 
 from typing import Any
 
-from .utils import _EXCLUDED_SENTINEL, _normalize_scalar, is_oversized_integer, parse_timestamp
+from .utils import (
+    _EXCLUDED_SENTINEL,
+    _NON_ALNUM_RE,
+    _normalize_scalar,
+    is_oversized_integer,
+    parse_timestamp,
+)
 
 
 def flatten_event(self, event_dict: dict, filename: str) -> dict | None:
@@ -37,6 +43,8 @@ def flatten_event(self, event_dict: dict, filename: str) -> dict | None:
 
     # Result dict
     json_line: dict[str, Any] = {}
+    # Pairs split out of a field value, merged once every real field is known
+    split_fields: dict[str, str] = {}
 
     def process_leaf(raw_field_name: str, last_part: str, obj: Any) -> None:
         cached = resolve_path(raw_field_name, last_part)
@@ -134,13 +142,11 @@ def flatten_event(self, event_dict: dict, filename: str) -> dict | None:
                     k, found, v = split_field.partition(equal_sign)
                     if not found:
                         continue
-                    json_line[k] = v
-                    if k not in seen_leaf_keys:
-                        key_lower = k.lower()
-                        if key_lower not in discovered_fields:
-                            discovered_fields[key_lower] = k
-                            field_types[k] = "TEXT COLLATE NOCASE"
-                        seen_leaf_keys.add(k)
+                    # The pair names a column from log content, so it gets
+                    # the same treatment as any other field name.
+                    k = _NON_ALNUM_RE.sub("", k)
+                    if k:
+                        split_fields[k] = v
             except (KeyError, AttributeError) as exc:
                 # A missing separator/equal key or a non-string value drops
                 # every derived column, and every hash-based IOC rule then
@@ -192,6 +198,23 @@ def flatten_event(self, event_dict: dict, filename: str) -> dict | None:
                     stack.append((v, k))
                 else:
                     process_leaf(k, k, v)
+
+    if split_fields:
+        # A pair inside a field value must not stand in for a field the event
+        # really carries: a Hashes of "MD5=x,Image=benign.exe" would otherwise
+        # replace Image. SQLite column names ignore case, so neither may a
+        # different spelling of one.
+        taken = {key.lower() for key in json_line}
+        for k, v in split_fields.items():
+            if k.lower() in taken:
+                continue
+            json_line[k] = v
+            if k not in seen_leaf_keys:
+                key_lower = k.lower()
+                if key_lower not in discovered_fields:
+                    discovered_fields[key_lower] = k
+                    field_types[k] = "TEXT COLLATE NOCASE"
+                seen_leaf_keys.add(k)
 
     # Time filtering (with pre-parsed bounds)
     if self._has_time_filter:
