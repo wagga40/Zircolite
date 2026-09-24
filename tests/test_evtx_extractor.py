@@ -397,6 +397,30 @@ class TestExtractorRobustness:
         result = extractor.xml_to_dict(root, "{http://schemas.microsoft.com/win/2004/08/events/event}")
         assert result["Event"]["UserData"].get("Param1") == "value1"
 
+    def test_xml_to_dict_strips_userdata_payload_namespace(self, tmp_path):
+        """UserData payloads declare their own namespace; it must not leak into
+        field names, or the column becomes e.g.
+        httpmanifestsmicrosoftcomwin200408windowseventlogSubjectUserName
+        instead of the SubjectUserName the EVTX parser yields."""
+        from lxml import etree
+        extractor = EvtxExtractor(
+            ExtractorConfig(xml_logs=True)
+        )
+        xml_str = (
+            '<Event xmlns="http://schemas.microsoft.com/win/2004/08/events/event">'
+            "<System><EventID>1102</EventID></System>"
+            "<UserData>"
+            '<LogFileCleared xmlns="http://manifests.microsoft.com/win/2004/08/windows/eventlog">'
+            "<SubjectUserName>bob</SubjectUserName>"
+            "</LogFileCleared>"
+            "</UserData>"
+            "</Event>"
+        )
+        root = etree.fromstring(xml_str)
+        result = extractor.xml_to_dict(root, "{http://schemas.microsoft.com/win/2004/08/events/event}")
+        user_data = result["Event"]["UserData"]
+        assert user_data == {"SubjectUserName": "bob"}
+
     def test_xml_to_dict_eventdata_values_stay_strings(self, tmp_path):
         """EventData values must not be int-converted (EVTX/JSON parity)."""
         from lxml import etree
