@@ -508,7 +508,7 @@ class TestRealThrottling:
                 files, simple, disable_progress=True
             )
 
-        assert stats.processed_files <= 5
+        assert stats.processed_files == 5
 
     def test_throttle_events_counted_under_memory_pressure(self, test_logger, tmp_path):
         """Legacy throttle_events counter is also incremented."""
@@ -535,6 +535,57 @@ class TestRealThrottling:
 
         assert stats.processed_files == 6
         assert stats.throttle_events > 0
+
+    def test_pool_refills_after_throttle_clears(self, test_logger, tmp_path):
+        """A brief memory spike must not cost worker slots for the rest of the run.
+
+        Each completion used to submit at most one file, and none while
+        throttled, so every deferral removed a slot for good: once memory
+        recovered the run carried on one file at a time.
+        """
+        import threading
+        import time
+
+        num_workers, spike = 4, 3
+        files = []
+        for i in range(24):
+            f = tmp_path / f"f{i:02}.json"
+            f.write_text("{}")
+            files.append(f)
+
+        lock = threading.Lock()
+        active = 0
+        samples = []  # files in flight as each one starts
+
+        def slow(path):
+            nonlocal active
+            with lock:
+                active += 1
+                samples.append(active)
+            time.sleep(0.05)
+            with lock:
+                active -= 1
+            return 1, None
+
+        processor = MemoryAwareParallelProcessor(
+            config=ParallelConfig(
+                max_workers=num_workers, adaptive_memory=False, sort_by_size=False
+            ),
+            logger=test_logger,
+        )
+        checks = 0
+
+        def spike_then_recover():
+            nonlocal checks
+            checks += 1
+            return checks <= spike
+
+        processor.should_throttle = spike_then_recover
+        _, stats = processor.process_files_parallel(files, slow, disable_progress=True)
+
+        assert stats.processed_files == 24
+        assert stats.throttle_events == spike
+        assert max(samples[num_workers:]) == num_workers
 
 
 # ============================================================================

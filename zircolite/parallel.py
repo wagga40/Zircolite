@@ -620,11 +620,22 @@ class MemoryAwareParallelProcessor:
 
                         inflight_bytes -= _file_size(file_path)
 
-                        if file_queue and not is_shutdown_requested():
+                    # Top the pool back up to num_workers rather than replacing
+                    # only the files that just finished: otherwise every slot
+                    # left empty under memory pressure stays empty once the
+                    # pressure is gone, and the run ends up one file at a time.
+                    # Pressure is checked before each submission; a deferral
+                    # counts once per batch of completions, not once per slot.
+                    if done:
+                        while (
+                            file_queue
+                            and len(active_futures) < num_workers
+                            and not is_shutdown_requested()
+                        ):
                             if self.should_throttle() or self._would_exceed_memory_budget():
                                 self.stats.throttle_events += 1
-                            else:
-                                submit(file_queue.popleft())
+                                break
+                            submit(file_queue.popleft())
 
                     if not active_futures and file_queue and not is_shutdown_requested():
                         submit(file_queue.popleft())
