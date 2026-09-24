@@ -122,6 +122,12 @@ from zircolite.utils import COMPRESSED_SUFFIXES
 ################################################################
 # ARGUMENT PARSING
 ################################################################
+# Environment variable read for the archive password when neither
+# --archive-password nor --ask-archive-password is given. Unlike argv, the
+# environment of a process is readable only by its owner (and root).
+ARCHIVE_PASSWORD_ENV = "ZIRCOLITE_ARCHIVE_PASSWORD"  # noqa: S105 -- a variable name, not a secret
+
+
 def parse_arguments() -> argparse.Namespace:
     """Parse command line arguments."""
     if _HAS_RICH_ARGPARSE:
@@ -137,7 +143,9 @@ def parse_arguments() -> argparse.Namespace:
     logs_input_args.add_argument("-f", "--fileext", help="File extension of the log files to process", type=str)
     logs_input_args.add_argument("-fp", "--file-pattern", help="Python Glob pattern to select files (only works with directories)", type=str)
     logs_input_args.add_argument("--no-recursion", help="Search for log files only in the specified directory (disable recursive search)", action="store_true")
-    logs_input_args.add_argument("--archive-password", help="Password for encrypted ZIP or 7-Zip archives", type=str, metavar="PASSWORD")
+    archive_password_args = logs_input_args.add_mutually_exclusive_group()
+    archive_password_args.add_argument("--archive-password", help=f"Password for encrypted ZIP or 7-Zip archives. Visible to other local users in the process list: prefer --ask-archive-password or the {ARCHIVE_PASSWORD_ENV} environment variable", type=str, metavar="PASSWORD")
+    archive_password_args.add_argument("--ask-archive-password", help="Prompt for the password of encrypted ZIP or 7-Zip archives without echoing it", action="store_true")
 
     # Events filtering options
     event_args = parser.add_argument_group('🔍 EVENTS FILTERING')
@@ -244,6 +252,37 @@ def parse_arguments() -> argparse.Namespace:
     templating_formats_args.add_argument("--package-dir", help="Directory to save the ZircoGui/Mini GUI package", type=str, default=None)
 
     return parser.parse_args()
+
+
+def resolve_archive_password(
+    args: argparse.Namespace, logger: logging.Logger
+) -> None:
+    """Fill ``args.archive_password`` from the first channel that has one.
+
+    Order: ``--archive-password`` (kept for compatibility, with a warning,
+    since argv is world-readable through /proc and ps and lands in shell
+    history), then ``--ask-archive-password`` (an interactive prompt), then
+    the :data:`ARCHIVE_PASSWORD_ENV` environment variable. Records which
+    one was used in ``args.archive_unlock_channel``.
+    """
+    if getattr(args, 'archive_password', None) is not None:
+        args.archive_unlock_channel = "argv"
+        logger.warning(
+            "[!] --archive-password exposes the password to other local users "
+            "through the process list and keeps it in shell history. Prefer "
+            f"--ask-archive-password or the {ARCHIVE_PASSWORD_ENV} environment variable."
+        )
+        return
+    if getattr(args, 'ask_archive_password', False):
+        import getpass
+
+        args.archive_password = getpass.getpass("Archive password: ") or None
+        args.archive_unlock_channel = "prompt"
+        return
+    from_env = os.environ.get(ARCHIVE_PASSWORD_ENV)
+    if from_env:
+        args.archive_password = from_env
+        args.archive_unlock_channel = "env"
 
 
 ################################################################
@@ -890,8 +929,14 @@ def _warn_ignored_db_flags(
         ignored.append("--dbfile")
     if getattr(args, 'strict', False):
         ignored.append("--strict")
+    # A password taken from the environment was not asked for on this run,
+    # so it is not reported as an ignored flag.
     if getattr(args, 'archive_password', None):
-        ignored.append("--archive-password")
+        channel = getattr(args, "archive_unlock_channel", "argv")
+        if channel == "argv":
+            ignored.append("--archive-password")
+        elif channel == "prompt":
+            ignored.append("--ask-archive-password")
     if getattr(args, 'no_event_filter', False):
         ignored.append("--no-event-filter")
     if getattr(args, 'logs_encoding', None):
@@ -1237,6 +1282,7 @@ def _main(memory_tracker, start_time) -> None:
     # Resolve CLI arguments against the YAML configuration file, if any. This
     # also applies the built-in defaults, so it must run even without -Y.
     args = resolve_run_config(args, logger)
+    resolve_archive_password(args, logger)
 
     # Apply --timesketch shortcut
     if getattr(args, 'timesketch', False):

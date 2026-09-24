@@ -17,7 +17,7 @@
 
 ### Key Features
 
-- **Format detection**: Identifies log formats and timestamp fields automatically. Reads gzip, bzip2, ZIP and 7-Zip inputs; encrypted ZIP/7z inputs use `--archive-password`.
+- **Format detection**: Identifies log formats and timestamp fields automatically. Reads gzip, bzip2, ZIP and 7-Zip inputs; encrypted ZIP/7z inputs take their password from `--ask-archive-password` or the `ZIRCOLITE_ARCHIVE_PASSWORD` environment variable.
 - **Sigma rules**: Converts native YAML rules with pySigma's SQLite backend or loads preconverted JSON rulesets.
 - **Correlations**: Counts, statistics, temporal sequences, absence conditions and chained rules, with supporting events in each alert. Unified mode supports cross-file correlations.
 - **Field processing**: Splits key-value fields and applies Python transforms, including Base64 and hex decoding.

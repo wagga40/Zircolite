@@ -304,7 +304,8 @@ lines. They behave identically to the documented form:
 | `-f`, `--fileext` | File extension to look for |
 | `-fp`, `--file-pattern` | Python glob pattern; only applies when the input is a directory |
 | `--no-recursion` | Do not descend into subdirectories |
-| `--archive-password` | Password for encrypted ZIP or 7-Zip archives, used for both detection and reading |
+| `--ask-archive-password` | Prompt, without echo, for the password of encrypted ZIP or 7-Zip archives; used for both detection and reading |
+| `--archive-password` | The same password given inline. Other local users can read it in the process list (`ps`, `/proc/<pid>/cmdline`) and it stays in shell history, so Zircolite warns; prefer `--ask-archive-password` or the `ZIRCOLITE_ARCHIVE_PASSWORD` environment variable |
 
 ### Event filtering
 
@@ -501,7 +502,7 @@ Invalid configuration stops the run with a non-zero exit code. Validation report
 problems together, including unknown keys, missing rulesets, invalid `input.format`
 values and unparseable time filters.
 
-Some options have no equivalent key and must be passed on the command line: `-c`/`--config`, `-q`/`--quiet`, `--profile-rules`, `--archive-password`, `--test-rules`, `--timesketch`, `--navigator-output`, `--transform-list`, `--pipeline-list`, `-U`/`--update-rules`, `-v`/`--version`, `--generate-config` and `-Y`/`--yaml-config` itself.
+Some options have no equivalent key and must be passed on the command line: `-c`/`--config`, `-q`/`--quiet`, `--profile-rules`, `--archive-password`, `--ask-archive-password`, `--test-rules`, `--timesketch`, `--navigator-output`, `--transform-list`, `--pipeline-list`, `-U`/`--update-rules`, `-v`/`--version`, `--generate-config` and `-Y`/`--yaml-config` itself.
 
 CLI arguments override the file, with three deliberate exceptions:
 `--transform-category`, `--add-index` and `--remove-index` are *added* to whatever the
@@ -830,8 +831,8 @@ The **inner** format is auto-detected where possible.
 |--------|--------|-------|
 | `.gz` | gzip | Standard library; inner format from the filename, e.g. `logs.json.gz` |
 | `.bz2` | bzip2 | Standard library; inner format from the filename |
-| `.zip` | ZIP | Single-file only; inner format from the member name. Encrypted archives need `--archive-password` |
-| `.7z` | 7-Zip | Requires `py7zr`. Single-file only (directories inside do not count); inner format from the member name. Encrypted archives need `--archive-password` |
+| `.zip` | ZIP | Single-file only; inner format from the member name. Encrypted archives need a password (see below) |
+| `.7z` | 7-Zip | Requires `py7zr`. Single-file only (directories inside do not count); inner format from the member name. Encrypted archives need a password (see below) |
 
 Archives must contain **exactly one file**. For `.zip` and `.7z`, Zircolite opens the
 archive to read the member name and a sample; when it is password-protected and no
@@ -847,8 +848,14 @@ missing password; repack them as `.7z`, which supports AES.
 ```shell
 python3 zircolite.py --events logs.json.gz --ruleset rules/rules_windows_merged.json
 python3 zircolite.py --events export.json.7z --ruleset rules/rules_windows_merged.json \
-    --archive-password "yourpassword"
+    --ask-archive-password
 ```
+
+The password of an encrypted archive is taken from, in order: `--archive-password`,
+`--ask-archive-password` (an interactive prompt that does not echo), then the
+`ZIRCOLITE_ARCHIVE_PASSWORD` environment variable, which suits unattended runs. Avoid
+`--archive-password` on shared hosts: the command line of a running process is readable by
+every local user, while its environment is readable only by the same user and root.
 
 ### SQLite database files
 
