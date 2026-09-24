@@ -496,6 +496,14 @@ same pattern is evaluated against every row.
   `re`, such as `\p{L}`, cause the rule to be recorded as broken.
 - **Values are coerced with `str()`.** This allows regex rules to query numeric values,
   consistent with `LIKE` converting numbers to text.
+- **Each match has a time limit.** Rule values come from the logs, so whoever wrote
+  the events chooses the input to every rule regex. A backtracking pattern, such as
+  `-f(?:.*\)){1,}.*"` in the Invoke-Obfuscation VAR+ rules, would otherwise run for
+  hours on a crafted command line. Matching uses the `regex` module, which accepts the
+  same syntax as `re` and takes a time budget (`REGEX_TIMEOUT_SECONDS`, one second). A
+  value that exceeds it counts as a non-match for that event only; a warning names the
+  rule and the run summary counts these events. Patterns are still validated with
+  `re`, so the matcher accepts no extra syntax.
 
 ### Typing and collation
 

@@ -12,6 +12,7 @@ Zircolite needs **Python 3.10 or above** and runs on Linux, macOS and Windows. T
 | `orjson` | Fast JSON parsing |
 | `ijson` | Incremental JSON-array parsing |
 | `pyahocorasick`, `pyroaring` | Literal prefilter: candidate events for `LIKE` patterns |
+| `regex` | Rule `REGEXP` matching with a per-value time limit |
 | `rich`, `rich-argparse` | Terminal output, progress bars, tables, coloured help |
 | `RestrictedPython` | Sandbox for field transforms |
 | `requests` | Ruleset updates (`-U`) |
