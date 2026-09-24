@@ -1055,3 +1055,76 @@ class TestTemplatesSerialiseAnyMatch:
 
         assert rows[0][self.KEY] == "v"
         assert json.loads(rows[0]["group_keys"]) == {"Host": "h"}
+
+
+class TestZircoGuiRuleMetadataCannotBeShadowed:
+    """A log field must not replace the rule's own title, level, file or description.
+
+    Each Mini-GUI record is a JS object literal that lists the rule metadata
+    first and the matched event's fields after it. A field with the same name
+    (a JSON ``title``, or a split pair such as ``Hashes=...,title=...``) became
+    a duplicate key, and the later, log-supplied value won: an attacker could
+    relabel their own detection, and the GUI rendered the value as the rule
+    title. Colliding fields are kept under a ``log_`` prefix instead.
+    """
+
+    TEMPLATE = Path(__file__).parent.parent / "templates" / "exportForZircoGui.tmpl"
+    RESERVED = ("Rule level", "title", "sigma_yml", "description")
+
+    def _execution_records(self, tmp_path, match):
+        from zircolite.config import TemplateConfig
+        from zircolite.templates import TemplateEngine
+
+        out = tmp_path / "data.js"
+        engine = TemplateEngine(
+            TemplateConfig(
+                template=[[str(self.TEMPLATE)]],
+                template_output=[[str(out)]],
+                time_field="SystemTime",
+            ),
+            logger=logging.getLogger("test"),
+        )
+        data = [{
+            "title": "Real Rule",
+            "rule_level": "high",
+            "sigmafile": "real.yml",
+            "description": "real description",
+            "tags": ["attack.execution"],
+            "matches": [match],
+        }]
+        assert engine.generate_from_template(str(self.TEMPLATE), str(out), data)
+        body = re.search(
+            r"var ExecutionData = \[(.*?)\n\];", out.read_text(), re.DOTALL
+        ).group(1)
+        # Keep duplicate keys visible: plain json.loads would silently keep the last one
+        return json.loads(f"[{body}]", object_pairs_hook=lambda pairs: pairs)
+
+    def test_log_fields_named_like_rule_metadata_do_not_override_it(self, tmp_path):
+        match = {"row_id": 1, "SystemTime": "2026-01-01T00:00:00Z"}
+        match.update({key: f"<img src=x onerror=alert('{key}')>" for key in self.RESERVED})
+
+        [record] = self._execution_records(tmp_path, match)
+
+        keys = [key for key, _ in record]
+        assert len(keys) == len(set(keys)), f"duplicate keys: {keys}"
+        values = dict(record)
+        assert values["title"] == "Real Rule"
+        assert values["Rule level"] == "high"
+        assert values["sigma_yml"] == "real.yml"
+        assert values["description"] == "real description"
+        # The log's values are kept, not dropped: they are evidence
+        for key in self.RESERVED:
+            assert values[f"log_{key}"] == f"<img src=x onerror=alert('{key}')>"
+        # Rule metadata stays first: the GUI puts select filters on columns 0-1
+        assert keys[:4] == ["Rule level", "title", "sigma_yml", "description"]
+
+    def test_ordinary_fields_keep_their_names(self, tmp_path):
+        [record] = self._execution_records(
+            tmp_path, {"row_id": 1, "CommandLine": "cmd", "Title": "window title"}
+        )
+
+        values = dict(record)
+        assert values["CommandLine"] == "cmd"
+        # Only exact names collide: JS keys are case-sensitive
+        assert values["Title"] == "window title"
+        assert values["title"] == "Real Rule"
