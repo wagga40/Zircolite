@@ -74,7 +74,9 @@ line-length = 100
 # Transform snippets are not modules: they are compiled by RestrictedPython
 # with `re`, `base64`, `chardet` and `math` injected into the sandbox, so a
 # standalone lint reports every one of those as an undefined name.
-extend-exclude = ["config/transforms"]
+# tests/fixtures/transforms_pre_redos holds earlier copies of some of them,
+# kept byte for byte as the reference the rewrites are compared against.
+extend-exclude = ["config/transforms", "tests/fixtures/transforms_pre_redos"]
 
 [tool.ruff.lint]
 # Rules that catch defects. Deliberately excluded: the PLR complexity metrics

@@ -18,13 +18,8 @@ def transform(param):
     if re.search(r'-[fF]\s*[\'"]', param):
         indicators.append('FORMAT_STR')
     
-    # Variable substitution in strings: re.search(r'\$\{[^}]+\}', param)
-    # in linear time. The leftmost '${' followed by something other than
-    # '}' matches as soon as any '}' comes after it. The regex form scans
-    # to the end of the input from every '${' when there is no '}', which
-    # is quadratic on '${${${...'.
-    var_open = re.search(r'\$\{[^}]', param)
-    if var_open and param.find('}', var_open.end()) != -1:
+    # Variable substitution in strings
+    if re.search(r'\$\{[^}]+\}', param):
         indicators.append('VAR_SUBST')
     
     # Encoded command indicator
