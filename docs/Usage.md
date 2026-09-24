@@ -482,7 +482,7 @@ and `-r` defaults.
 | Option | Description |
 |--------|-------------|
 | `-Y`, `--yaml-config` | YAML run-configuration file |
-| `--generate-config` | Write a default configuration file and exit |
+| `--generate-config` | Write a default configuration file and exit. The file is created exclusively: an existing file, or a symlink at that path (even a dangling one), is refused rather than overwritten or followed |
 
 This is a *run* configuration — which logs to read, which rules to apply, where to write.
 It is unrelated to `-c`/`--config`, which points at the field-mappings and transforms
