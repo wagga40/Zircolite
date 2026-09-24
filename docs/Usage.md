@@ -836,7 +836,9 @@ The **inner** format is auto-detected where possible.
 Archives must contain **exactly one file**. For `.zip` and `.7z`, Zircolite opens the
 archive to read the member name and a sample; when it is password-protected and no
 password was given, it falls back to the outer filename (`data.json.7z` → JSON). A wrong
-or missing password is reported rather than guessed at.
+or missing password is reported rather than guessed at. The sample is the first 64 KB of
+the member, and decompression stops once it is read, so the memory detection needs does
+not grow with the size the member expands to.
 
 An encrypted `.zip` must use the traditional ZipCrypto scheme. Python's `zipfile` cannot
 decrypt AES-encrypted (WinZip AES) members, and Zircolite reports those as a wrong or

@@ -494,6 +494,65 @@ class TestDetectorWithCompressedFiles:
         result = LogTypeDetector().detect(zip_file)
         assert result.input_type == "json"
 
+    @staticmethod
+    def _large_json_7z(path, size):
+        """A .7z whose single JSON-lines member expands to ``size`` bytes."""
+        import py7zr
+
+        line = b'{"EventID": "4688", "CommandLine": "cmd.exe"}\n'
+        payload = line * (size // len(line))
+        # A fast preset keeps building the fixture cheap; the ratio is still
+        # in the hundreds for repetitive data like this.
+        filters = [{"id": py7zr.FILTER_LZMA2, "preset": 1}]
+        with py7zr.SevenZipFile(path, "w", filters=filters) as szf:
+            szf.writestr(payload, "events.json")
+        return payload
+
+    @pytest.mark.requires_py7zr
+    @pytest.mark.skipif(not _HAS_PY7ZR, reason="py7zr not installed")
+    def test_7z_sample_is_the_members_first_bytes(self, tmp_path):
+        from zircolite.detector import LogTypeDetector
+
+        archive = tmp_path / "events.json.7z"
+        payload = self._large_json_7z(archive, 4 * LogTypeDetector.SAMPLE_BYTES)
+
+        sample = LogTypeDetector()._sevenzip_sample(archive)
+
+        assert sample == payload[: LogTypeDetector.SAMPLE_BYTES]
+        assert LogTypeDetector().detect(archive).input_type == "json"
+
+    @pytest.mark.requires_py7zr
+    @pytest.mark.skipif(not _HAS_PY7ZR, reason="py7zr not installed")
+    def test_7z_sample_does_not_hold_the_whole_member(self, tmp_path, monkeypatch):
+        """Sampling must stop at SAMPLE_BYTES, not extract the member first.
+
+        py7zr hands the writer blocks of up to its memory limit (128 MB by
+        default), so shrink the block to make the member decompress in many
+        small steps. Opening the archive costs a fixed ~16 MB of LZMA
+        dictionary whatever the member size, so the member is made three
+        times that: holding it would push the peak well past the bound,
+        stopping at the sample leaves the peak near the fixed cost.
+        """
+        import tracemalloc
+
+        import py7zr.py7zr
+
+        from zircolite.detector import LogTypeDetector
+
+        archive = tmp_path / "events.json.7z"
+        self._large_json_7z(archive, 48 * 1024 * 1024)
+        monkeypatch.setattr(py7zr.py7zr, "get_memory_limit", lambda: 64 * 1024)
+
+        tracemalloc.start()
+        try:
+            sample = LogTypeDetector()._sevenzip_sample(archive)
+            _, peak = tracemalloc.get_traced_memory()
+        finally:
+            tracemalloc.stop()
+
+        assert len(sample) == LogTypeDetector.SAMPLE_BYTES
+        assert peak < 32 * 1024 * 1024
+
 
 class TestZipMacOSMetadata:
     """Regression tests for macOS-created ZIP archives."""

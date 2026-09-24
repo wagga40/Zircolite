@@ -498,29 +498,59 @@ class LogTypeDetector:
 
         The import is guarded separately for the same reason as in
         :meth:`_sevenzip_inner_extension`.
+
+        Only :attr:`SAMPLE_BYTES` are kept, and decompression is aborted as
+        soon as they are in hand. Extracting the whole member first would
+        let a small archive of highly compressible data (a few KB that
+        expand to many GB) exhaust memory before detection even starts.
         """
         try:
-            import io as _io
-
             import py7zr
             from py7zr.exceptions import PasswordRequired
         except ImportError:
             return b""
 
-        class _NonClosingBytesIO(_io.BytesIO):
-            """py7zr closes the writer after extraction; keep it readable."""
+        limit = self.SAMPLE_BYTES
+
+        class _SampleComplete(Exception):
+            """Raised from the writer to stop py7zr decompressing further."""
+
+        class _SampleWriter:
+            """py7zr writer that keeps the first ``limit`` bytes only."""
+
+            def __init__(self) -> None:
+                self.data = bytearray()
+
+            def write(self, s: bytes | bytearray) -> int:
+                self.data += s[: limit - len(self.data)]
+                if len(self.data) >= limit:
+                    raise _SampleComplete
+                return len(s)
+
+            def read(self, size: int | None = None) -> bytes:
+                return bytes(self.data)
+
+            def seek(self, offset: int, whence: int = 0) -> int:
+                return 0
+
+            def flush(self) -> None:
+                pass
+
+            def size(self) -> int:
+                return len(self.data)
 
             def close(self) -> None:
-                self.flush()
+                pass
 
-        class _MemFactory:
-            def __init__(self):
-                self._buf: _NonClosingBytesIO | None = None
+        class _SampleFactory:
+            def __init__(self) -> None:
+                self.writer: _SampleWriter | None = None
 
-            def create(self, fname):
-                self._buf = _NonClosingBytesIO()
-                return self._buf
+            def create(self, fname: str) -> _SampleWriter:
+                self.writer = _SampleWriter()
+                return self.writer
 
+        factory = _SampleFactory()
         try:
             with py7zr.SevenZipFile(
                 file_path, "r", password=self._archive_password
@@ -528,17 +558,18 @@ class LogTypeDetector:
                 names = sevenzip_members(szf)
                 if not names:
                     return b""
-                factory = _MemFactory()
                 szf.extract(path=None, targets=[names[0]], factory=factory)  # type: ignore[arg-type]
-                if factory._buf is None:
-                    return b""
-                return factory._buf.getvalue()[: self.SAMPLE_BYTES]
+        except _SampleComplete:
+            pass
         except PasswordRequired:
             raise ValueError(ARCHIVE_PASSWORD_ERROR_MESSAGE) from None
         except Exception:
             # e.g. corrupt or wrong password (LZMAError) -- fall back to an
             # empty sample and let detection work from the file name
             return b""
+        if factory.writer is None:
+            return b""
+        return bytes(factory.writer.data)
 
     def _resolve_compressed(
         self, file_path: Path
