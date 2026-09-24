@@ -544,6 +544,10 @@ Column names are read with `sqlscan.py`, not with a regex, for two reasons: the 
 backtick-quotes every field name that is not `^[a-zA-Z0-9_]*$` — which is every ECS and
 Winlogbeat name (`event.code`, `@timestamp`, `Data[1]`) — and a name inside a string
 literal is not a column, so `CommandLine LIKE '%user=bob%'` must not invent a `user`.
+Nor is a name the statement binds with `AS`: a correlation's `HAVING event_count >= 3`
+compares its own aggregate, and a NULL `event_count` column in logs would shadow it
+through the subquery's `SELECT *`, silently emptying that rule and every later one using
+the alias.
 
 ### Reading a statement
 

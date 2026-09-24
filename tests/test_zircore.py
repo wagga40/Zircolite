@@ -2117,6 +2117,48 @@ class TestRulesThatSilentlyMatchedNothing:
         finally:
             core.close()
 
+    def test_correlation_alias_is_not_widened_into_logs(
+        self, field_mappings_file, test_logger
+    ):
+        """A SELECT alias must never become a NULL logs column.
+
+        ``HAVING event_count >= 3`` read as a column reference, so a correlation
+        whose base detection names an absent field widened logs with
+        ``event_count`` too. The subquery's ``SELECT *`` then exposed that NULL
+        column, which shadowed the aggregate in HAVING: the rule, and every later
+        correlation using the alias, returned nothing and recorded no error.
+        """
+        core = ZircoliteCore(config=field_mappings_file, logger=test_logger)
+        try:
+            core.create_db('"EventID" INTEGER, "Image" TEXT COLLATE NOCASE')
+            core.db_connection.executemany(
+                "INSERT INTO logs (EventID, Image) VALUES (?, ?)",
+                [(1, "c:\\evil.exe")] * 3 + [(1, "c:\\calc.exe")],
+            )
+            core.db_connection.commit()
+            absent_field_rule = (
+                "SELECT Image, COUNT(*) AS event_count FROM (SELECT * FROM logs "
+                "WHERE EventID=1 AND (Image LIKE '%evil%' OR OriginalFileName='evil.exe')) "
+                "AS subquery GROUP BY Image HAVING event_count >= 3"
+            )
+            clean_rule = (
+                "SELECT Image, COUNT(*) AS event_count FROM (SELECT * FROM logs "
+                "WHERE EventID=1 AND Image LIKE '%calc%') "
+                "AS subquery GROUP BY Image HAVING event_count >= 1"
+            )
+
+            first = core.execute_select_query(absent_field_rule, rule_title="rule A")
+            later = core.execute_select_query(clean_rule, rule_title="rule B")
+
+            assert [row["event_count"] for row in first] == [3]
+            assert [row["event_count"] for row in later] == [1]
+            columns = {c.lower() for c in core._get_table_columns()}
+            assert "originalfilename" in columns
+            assert "event_count" not in columns
+            assert core.rules_in_error == {}
+        finally:
+            core.close()
+
     def test_uncompilable_regex_is_reported_not_silently_empty(
         self, field_mappings_file, test_logger
     ):
