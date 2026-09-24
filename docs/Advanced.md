@@ -86,11 +86,20 @@ the raw and the mapped name, the mapped-name list runs first, then the raw-name 
 The function must be named `transform` and take a single `param` — the field value.
 Numeric fields can arrive as numbers; use `str(param)` when a transform expects text.
 
-**Available in the sandbox:** a subset of Python built-ins (`len`, `int`, `str`, …); the
-modules `re`, `base64`, `chardet` and `math`; `dict[k] = v` / `list[i] = v` writes; and
-augmented assignments (`+=`, `-=`, …).
+**Available in the sandbox:** a subset of Python built-ins (`len`, `int`, `str`,
+`enumerate`, `min`, `sum`, …); `re`, `base64`, `chardet` and `math`; `dict[k] = v` /
+`list[i] = v` writes; and augmented assignments (`+=`, `-=`, …). The four modules are
+read-only stand-ins that expose their public functions and constants only (`re.search`,
+`base64.b64decode`, `chardet.detect`, `math.log2`, …), not the modules they import in
+turn. `import re` and the other three work and return the same stand-in; any other
+`import` fails.
 
-**Blocked:** file I/O, network, system calls, and writes to arbitrary object attributes.
+**Blocked:** file I/O, network, system calls, other imports, and writes to arbitrary
+object attributes.
+
+The sandbox is RestrictedPython, which reduces what transform code can do but is not a
+hard security boundary. Treat a transform like any other code you run: only use
+configurations and transform files from sources you trust.
 
 Develop against the tester, which uses the exact same sandbox:
 
