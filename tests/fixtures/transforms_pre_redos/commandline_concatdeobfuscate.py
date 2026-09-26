@@ -24,11 +24,7 @@ def transform(param):
             findings.append('DEOBF:CONCAT:' + reconstructed[:50])
 
     # PowerShell format operator: '{0}{1}'-f'power','shell'
-    # Matches wherever "'(\{[0-9]+\}[^']*)'?\s*-f..." did. Whitespace before
-    # -f is only taken after the closing quote: without the quote, [^']*
-    # already covers it, and letting both [^']* and \s* claim the same
-    # spaces made a long run of them quadratic.
-    fmt_match = re.search(r"'(\{[0-9]+\}[^']*)(?:'\s*)?-f\s*'([^']+)'(?:\s*,\s*'([^']+)')*", param)
+    fmt_match = re.search(r"'(\{[0-9]+\}[^']*)'?\s*-f\s*'([^']+)'(?:\s*,\s*'([^']+)')*", param)
     if fmt_match:
         findings.append('DEOBF:FORMAT_OP')
 
