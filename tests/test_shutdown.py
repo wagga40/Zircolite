@@ -1,6 +1,7 @@
 """Tests for graceful shutdown coordination (Ctrl+C handling)."""
 
 import json
+import os
 import signal
 import sys
 import time
@@ -10,6 +11,7 @@ from pathlib import Path
 import pytest
 
 from zircolite import shutdown
+from zircolite.parallel import MemoryAwareParallelProcessor, ParallelConfig
 from zircolite.processing import ProcessingContext, process_perfile_streaming
 from zircolite.utils import MemoryTracker
 
@@ -68,6 +70,49 @@ class TestSignalHandler:
                 shutdown._sigint_handler(signal.SIGINT, None)
         finally:
             signal.signal(signal.SIGINT, previous)
+
+
+def _ctrl_c_during_start_up():
+    # Stands in for a Ctrl+C that reaches a worker still importing Zircolite,
+    # before any initializer has had the chance to ignore SIGINT.
+    os.kill(os.getpid(), signal.SIGINT)
+
+
+def _sigint_held(_path):
+    return 0, signal.SIGINT in signal.pthread_sigmask(signal.SIG_BLOCK, [])
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="POSIX-only signal semantics")
+class TestWorkerStartUp:
+    """A terminal Ctrl+C reaches the workers too, including ones still starting.
+
+    One Ctrl+C during process-pool start-up used to raise KeyboardInterrupt in
+    every starting worker: the pool broke and each file in flight was reported
+    as "terminated abruptly", although the parent had promised to finish them.
+    """
+
+    def _run(self, tmp_path, executor, initializer=None):
+        source = tmp_path / "events.jsonl"
+        source.write_text("{}\n")
+        processor = MemoryAwareParallelProcessor(ParallelConfig(max_workers=1, executor=executor))
+        return processor.process_files_parallel(
+            [source], _sigint_held, disable_progress=True, initializer=initializer)
+
+    def test_ctrl_c_before_the_initializer_does_not_break_the_pool(self, tmp_path):
+        results, stats = self._run(tmp_path, "process", initializer=_ctrl_c_during_start_up)
+        assert stats.failed_files == []
+        assert results == [True]
+
+    def test_parent_signal_state_is_restored(self, tmp_path):
+        handler = signal.getsignal(signal.SIGINT)
+        mask = signal.pthread_sigmask(signal.SIG_BLOCK, [])
+        self._run(tmp_path, "process")
+        assert signal.getsignal(signal.SIGINT) is handler
+        assert signal.pthread_sigmask(signal.SIG_BLOCK, []) == mask
+
+    def test_thread_workers_are_left_alone(self, tmp_path):
+        results, _ = self._run(tmp_path, "thread")
+        assert results == [False]
 
 
 class TestLoopsObserveShutdown:
