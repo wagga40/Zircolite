@@ -1116,6 +1116,12 @@ The same file also holds `transforms_enabled`, `enabled_transforms`,
 **Mappings** rename a field; the original name is not kept. Zircolite uses this internally
 to flatten nested JSON paths into simple names.
 
+Unnamed `<Data>` elements, which MsiInstaller, MSSQL, classic PowerShell and many other
+Application-log sources use for their payload, are read before any mapping applies: their
+values are joined with newlines into `Data`, which is what Sigma rules test with
+`Data|contains`, and copied to `Message` unless the event has a `Message` of its own. The
+EVTX, XML and EVTX-derived JSON readers all produce the same text.
+
 **Exclusions** drop a field from every event — `xmlns` by default. **Value exclusions**
 (`useless`) drop a field when its value matches, which is how `null` and empty strings are
 removed.
