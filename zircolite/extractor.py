@@ -154,19 +154,21 @@ class EvtxExtractor:
         ns: str = "http://schemas.microsoft.com/win/2004/08/events/event",
     ) -> dict[str, Any]:
         """Convert XML event to dictionary structure."""
-        def clean_tag(tag: str, ns: str) -> str:
-            """Remove namespace from XML tag (namespace may be braced or not)."""
-            braced = ns if ns.startswith("{") else "{" + ns + "}"
-            if tag.startswith(braced):
-                return tag[len(braced):]
-            return tag
+        def clean_tag(tag: str) -> str:
+            """Remove any namespace from an XML tag, not only the Event one.
+
+            UserData payloads declare their own, e.g. <LogFileCleared
+            xmlns="http://manifests.microsoft.com/win/2004/08/windows/eventlog">,
+            and the EVTX parser drops it from field names too.
+            """
+            return tag.split("}", 1)[1] if tag.startswith("{") else tag
 
         child: dict[str, Any] = {"#attributes": {"xmlns": ns}}
         for appt in event_root:
-            node_name = clean_tag(appt.tag, ns)
+            node_name = clean_tag(appt.tag)
             node_value: dict[str, Any] = {}
             for elem in appt:
-                cleaned_tag = clean_tag(elem.tag, ns)
+                cleaned_tag = clean_tag(elem.tag)
                 text: Any = "" if not elem.text else elem.text
                 if elem.text and node_name == "System":
                     # Numeric conversion is limited to System fields: EventData
@@ -189,7 +191,7 @@ class EvtxExtractor:
                     # Container element (e.g. UserData payloads): flatten one
                     # level of grandchildren
                     for sub in elem:
-                        sub_tag = clean_tag(sub.tag, ns)
+                        sub_tag = clean_tag(sub.tag)
                         node_value[sub_tag] = "" if not sub.text else sub.text
                     continue
                 else:

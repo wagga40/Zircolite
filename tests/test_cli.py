@@ -1640,6 +1640,8 @@ class TestCLIStrictEvtxParsing:
 FIXTURES_DIR = WORKSPACE_ROOT / "tests" / "fixtures"
 SYSMON_LINUX_FIXTURE = FIXTURES_DIR / "sysmon_linux_sample.log"
 XML_EVENTS_FIXTURE = FIXTURES_DIR / "xml_events_sample.xml"
+XML_USERDATA_NS_FIXTURE = FIXTURES_DIR / "xml_userdata_namespace_sample.xml"
+EVTXTRACT_USERDATA_NS_FIXTURE = FIXTURES_DIR / "evtxtract_userdata_namespace_sample.log"
 EVTXTRACT_FIXTURE = FIXTURES_DIR / "evtxtract_sample.log"
 AUDITD_FIXTURE = FIXTURES_DIR / "audit_sample.log"
 WINLOGBEAT_FIXTURE = FIXTURES_DIR / "winlogbeat_sysmon_sample.json"
@@ -1710,6 +1712,64 @@ class TestCLISysmonXmlEvtxtractInput:
         assert data, f"{fixture.name} produced no detection: nothing was ingested"
         assert data[0]["count"] > 0
         assert data[0]["matches"], "a detection with no matching event is not a detection"
+
+    @pytest.mark.parametrize(
+        "fixture,flag",
+        [
+            # Event Viewer "Save As" export: events under an <Events> root
+            (XML_USERDATA_NS_FIXTURE, "-x"),
+            # EVTXtract output: the same records, concatenated
+            (EVTXTRACT_USERDATA_NS_FIXTURE, "--evtxtract-input"),
+        ],
+    )
+    def test_userdata_fields_match_despite_payload_namespace(self, tmp_path, fixture, flag):
+        """UserData payloads carry their own xmlns (Security 1102's
+        LogFileCleared, TerminalServices' EventXML). Their fields must get the
+        same column names as from EVTX, or every rule on them silently misses.
+        """
+        assert fixture.exists(), (
+            f"missing tracked fixture {fixture}"
+        )
+        pytest.importorskip("lxml")
+
+        ruleset_file = tmp_path / "ruleset.json"
+        ruleset_file.write_text(json.dumps([
+            {
+                "title": "Security log cleared",
+                "id": "userdata-1102",
+                "description": "",
+                "level": "high",
+                "tags": [],
+                "filename": "log_cleared.yml",
+                "rule": ["SELECT * FROM logs WHERE EventID = 1102 AND SubjectUserName = 'bob'"],
+            },
+            {
+                "title": "RDP logon",
+                "id": "userdata-21",
+                "description": "",
+                "level": "high",
+                "tags": [],
+                "filename": "rdp_logon.yml",
+                "rule": ["SELECT * FROM logs WHERE EventID = 21 AND Address = '10.0.0.5'"],
+            },
+        ]))
+        output_file = tmp_path / "out.json"
+
+        with patch('sys.argv', ['zircolite.py', '-e', str(fixture), '-r', str(ruleset_file), flag, '-o', str(output_file), *get_log_arg(tmp_path)]):
+            zircolite_script.main()
+
+        data = json.loads(output_file.read_text())
+        by_title = {d["title"]: d for d in data}
+        assert set(by_title) == {"Security log cleared", "RDP logon"}
+        cleared = by_title["Security log cleared"]["matches"][0]
+        assert cleared["SubjectUserName"] == "bob"
+        assert cleared["SubjectUserSid"] == "S-1-5-21-1111111111-2222222222-3333333333-1001"
+        rdp = by_title["RDP logon"]["matches"][0]
+        assert rdp["User"] == "LOCAL\\bob"
+        for match in (cleared, rdp):
+            assert not [k for k in match if "http" in k or "EventNS" in k], (
+                f"namespace leaked into column names: {sorted(match)}"
+            )
 
 
     def test_real_evtx_file_end_to_end(self, tmp_path):
