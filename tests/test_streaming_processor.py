@@ -3126,3 +3126,75 @@ class TestIngestDegradation:
         list(getattr(processor, reader)(str(tmp_path / filename), extractor))
 
         assert processor.ingest_degraded is True
+
+
+class TestUnnamedEventData:
+    """Unnamed <Data> values reach rules as one string, whatever the reader.
+
+    EVTX stored them in Message as the repr of a Python list and left Data
+    unset, so rules on Data could not match (and a NOT on it always held); XML
+    stored the same repr in Data, where the doubled backslashes made a UNC
+    test such as Data LIKE '%\\\\%' match every local path.
+    """
+
+    VALUES: ClassVar[list[str]] = ["C:\\Program Files\\App\\setup.msi", "2128", "(NULL)", ""]
+    JOINED = "C:\\Program Files\\App\\setup.msi\n2128\n(NULL)\n"
+
+    @pytest.fixture
+    def processor(self, field_mappings_file, test_logger, default_args_config):
+        return StreamingEventProcessor(
+            config_file=field_mappings_file,
+            args_config=default_args_config,
+            logger=test_logger,
+        )
+
+    @staticmethod
+    def _event(event_data):
+        return {"Event": {"System": {"EventID": 1040, "Channel": "Application"},
+                          "EventData": event_data}}
+
+    @pytest.mark.parametrize("data", [
+        {"#text": VALUES},  # pyevtx-rs, and evtx_dump's JSON
+        VALUES,  # the XML reader
+    ], ids=["evtx", "xml"])
+    def test_values_are_joined_into_data_and_message(self, processor, data):
+        flat = processor._flatten_event(self._event({"Data": data}), "f")
+
+        assert flat["Data"] == self.JOINED
+        assert flat["Message"] == self.JOINED
+
+    def test_single_value(self, processor):
+        flat = processor._flatten_event(self._event({"Data": {"#text": "only"}}), "f")
+
+        assert (flat["Data"], flat["Message"]) == ("only", "only")
+
+    def test_an_event_message_is_kept(self, processor):
+        flat = processor._flatten_event(
+            self._event({"Data": ["a", "b"], "Message": "rendered"}), "f"
+        )
+
+        assert (flat["Data"], flat["Message"]) == ("a\nb", "rendered")
+
+    def test_named_data_is_left_alone(self, processor):
+        flat = processor._flatten_event(self._event({"CommandLine": "x", "Image": "y"}), "f")
+
+        assert flat["CommandLine"] == "x" and "Data" not in flat and "Message" not in flat
+
+    def test_xml_and_json_readers_agree(self, processor, tmp_path):
+        xml = tmp_path / "e.xml"
+        xml.write_text(
+            '<Event xmlns="http://schemas.microsoft.com/win/2004/08/events/event">'
+            "<System><EventID>1040</EventID><Channel>Application</Channel></System>"
+            "<EventData>" + "".join(f"<Data>{v}</Data>" for v in self.VALUES)
+            + "</EventData></Event>"
+        )
+        jsonl = tmp_path / "e.json"
+        jsonl.write_text(json.dumps(self._event({"Data": {"#text": self.VALUES}})) + "\n")
+        extractor = EvtxExtractor(
+            extractor_config=ExtractorConfig(xml_logs=True), logger=processor.logger
+        )
+
+        from_xml = next(iter(processor.stream_xml_events(str(xml), extractor)))
+        from_json = next(iter(processor.stream_json_events(str(jsonl))))
+
+        assert from_xml["Data"] == from_json["Data"] == self.JOINED

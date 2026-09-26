@@ -307,6 +307,37 @@ def _field_path_plan(field_paths: tuple) -> dict:
         plan.setdefault(path[0], []).append((path[1:], path))
     return {key: tuple(entries) for key, entries in plan.items()}
 
+
+def _join_unnamed_event_data(event_dict: Any) -> None:
+    """Store an event's unnamed ``<Data>`` values as one string, in place.
+
+    Application-log sources such as MsiInstaller, MSSQL or classic
+    PowerShell write their payload as unnamed ``<Data>`` elements, which
+    pyevtx-rs reads as ``{"#text": [...]}`` and the XML reader as a list.
+    Flattened as they are, either would become the repr of a Python list,
+    with every backslash doubled, which rules on ``Data`` cannot match
+    reliably. The values are joined with newlines instead: every such rule
+    tests ``Data|contains``, which then holds when any one value does.
+    Message gets the same text unless the event has one of its own, for the
+    rules that read it there.
+    """
+    event = event_dict.get("Event") if isinstance(event_dict, dict) else None
+    section = event.get("EventData") if isinstance(event, dict) else None
+    if not isinstance(section, dict):
+        return
+    data = section.get("Data")
+    if isinstance(data, dict) and data.keys() == {"#text"}:
+        data = data["#text"]
+        values = data if isinstance(data, list) else [data]
+    elif isinstance(data, list):
+        values = data
+    else:
+        return
+    joined = "\n".join("" if value is None else str(value) for value in values)
+    section["Data"] = joined
+    section.setdefault("Message", joined)
+
+
 class StrictParseError(Exception):
     """A parse error that --strict asked us to stop on.
 
@@ -1262,6 +1293,7 @@ class StreamingEventProcessor:
             return param
 
     def _flatten_event(self, event_dict: dict, filename: str, raw_bytes: bytes | None = None) -> dict | None:
+        _join_unnamed_event_data(event_dict)
         return self._flatten_impl(self, event_dict, filename, raw_bytes)
 
     def stream_evtx_events(self, evtx_file: str) -> Generator[dict, None, None]:
