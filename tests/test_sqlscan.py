@@ -212,6 +212,28 @@ class TestColumnRefs:
 
         assert column_refs(query) == {"odd name", "Data"}
 
+    def test_select_aliases_are_not_columns(self):
+        """``HAVING event_count >= 3`` compares an aggregate, not a logs column.
+
+        Returned as a column, the alias was widened into logs as NULL, and the
+        correlation subquery's ``SELECT *`` then shadowed the aggregate with it.
+        """
+        query = (
+            "SELECT Image, COUNT(*) AS event_count FROM (SELECT * FROM logs "
+            "WHERE EventID=1 AND (Image LIKE '%evil%' OR OriginalFileName='evil.exe')) "
+            "AS subquery GROUP BY Image HAVING EVENT_COUNT >= 3"
+        )
+
+        assert column_refs(query) == {"EventID", "Image", "OriginalFileName"}
+
+    def test_quoted_select_alias_is_not_a_column(self):
+        query = (
+            'SELECT u, COUNT(DISTINCT h) AS "value count" FROM logs '
+            'WHERE EventID=4625 GROUP BY u HAVING "value count" > 2'
+        )
+
+        assert column_refs(query) == {"EventID"}
+
 
 class TestNullSafeNegation:
     """``not filter`` must hold when the filter names a field the event lacks."""

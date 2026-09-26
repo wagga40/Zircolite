@@ -348,11 +348,27 @@ def regex_literals(sql: str) -> list[str]:
 
 
 def _column_names(tokens: list[tuple[str, str]]) -> frozenset[str]:
-    """Column names ``tokens`` compares against, minus SQL keywords."""
+    """Column names ``tokens`` compares against, minus SQL keywords and aliases.
+
+    A name bound by ``AS`` belongs to the statement, not to logs:
+    ``HAVING event_count >= 3`` compares the aggregate ``COUNT(*) AS
+    event_count``. Widening the table with it adds a NULL column that the
+    correlation subquery's ``SELECT *`` then exposes, shadowing the aggregate,
+    so the rule returns nothing and records no error -- and so does every later
+    rule using the same alias. SQLite names are case-insensitive, and so is the
+    comparison.
+    """
     names: set[str] = set()
+    aliases: set[str] = set()
     previous: str | None = None
     expect_operand = False
+    after_as = False
     for kind, text in tokens:
+        if after_as and (
+            kind == "name" or (kind == "word" and text.lower() not in SQL_RESERVED_WORDS)
+        ):
+            aliases.add(text.lower())
+        after_as = kind == "word" and text.upper() == "AS"
         if kind == "name":
             if expect_operand:
                 names.add(text)
@@ -381,7 +397,7 @@ def _column_names(tokens: list[tuple[str, str]]) -> frozenset[str]:
             expect_operand = True
         else:
             expect_operand = False
-    return frozenset(names)
+    return frozenset(name for name in names if name.lower() not in aliases)
 
 
 def column_refs(sql: str) -> set[str]:
