@@ -188,8 +188,9 @@ executable, which is the one later runs read. When that directory cannot be writ
 a package extracted somewhere read-only or owned by another user — the rulesets go to
 `./rules` in the working directory instead, with a warning; later runs started from that
 directory pick them up first. `-U` never writes into `_internal/`. The release archive
-ships only the SigmaHQ rulesets; `-U` adds the community and experimental ones described
-in [Rulesets](#rulesets--rules).
+ships every ruleset the repository holds when it is built — SigmaHQ, community and
+experimental, described in [Rulesets](#rulesets--rules) — each under its source's licence,
+which `THIRD_PARTY_LICENSES` names; `-U` brings them up to date.
 
 **Pipelines.** A binary can apply only the pySigma pipelines it was built with, which
 `-pl` lists. Any other pipeline needs a source install.
@@ -914,7 +915,8 @@ python3 zircolite.py --evtx logs/ --ruleset rules/rules_windows_merged.json --au
 
 Zircolite has its own ruleset format: a single JSON file. Default rulesets live in
 [`rules/`](https://github.com/wagga40/Zircolite/tree/master/rules/), and the latest are
-published in [Zircolite-Rules-v2](https://github.com/wagga40/Zircolite-Rules-v2).
+published in [Zircolite-Rules-v2](https://github.com/wagga40/Zircolite-Rules-v2). The
+repository, its release archives and the Docker image carry everything listed below.
 
 | Ruleset | Covers |
 |---------|--------|
@@ -927,7 +929,8 @@ These SigmaHQ rulesets carry every level; `--min-level medium` (or `high`, …) 
 rules at that level and above. The `_high` and `_medium` variants older installs carry are
 no longer published.
 
-`-U` installs everything the rules repository publishes for Zircolite:
+`-U` installs everything the rules repository publishes for Zircolite, the same set the
+repository tracks:
 
 - the SigmaHQ rulesets above;
 - `rules_windows_all.json`, the Windows detections of SigmaHQ and every community source
@@ -937,16 +940,21 @@ no longer published.
   (`rules_mbabinski_*`), mdecrevoisier (`rules_mdecrevoisier_*`) and tsale (`rules_tsale_*`).
   They keep their own licences — DRL 1.1, GPL 3.0 or CC0 1.0 — whose texts go to
   `rules/licenses/`;
-- `rules/experimental/` — [correlation rulesets](#sigma-correlation-rules).
+- `rules/experimental/` — [correlation rulesets](#sigma-correlation-rules);
+- `release-manifest.json`, which names the source, licence and revision of every file
+  above. A release archive credits each ruleset from it in `THIRD_PARTY_LICENSES`.
 
 Every file is checked against the SHA-256 the repository's `release-manifest.json` lists for
 it before any is installed; a file that does not match, or a ruleset the manifest does not
-name, leaves `rules/` as it was and makes `-U` exit `1`. A source whose last update failed
-upstream keeps its previous rulesets and is reported as stale. `-U` writes to the `rules/`
-directory later runs read — the repository's from source, the one beside the executable in
-a [standalone binary](Usage.md#standalone-binaries) — and falls back to `./rules`, with a
-warning, when that directory cannot be written to. `task update-rules` fetches the SigmaHQ
-rulesets only.
+name, leaves `rules/` as it was and makes `-U` exit `1`. The repository rebuilds each source
+on its own; when a build cannot refresh one, it keeps publishing that source's previous
+rulesets, and `-U` installs them as usual. After its own outcome, `-U` then lists those
+sources with the revision and age of the rulesets they ship and the reason the build gave.
+Nothing on your side needs fixing: a later `-U` fetches newer rulesets once a build succeeds.
+`-U` writes to the `rules/` directory later runs read — the repository's from source, the
+one beside the executable in a [standalone binary](Usage.md#standalone-binaries) — and falls
+back to `./rules`, with a warning, when that directory cannot be written to.
+`task update-rules` runs `-U` on the repository's `rules/`.
 
 A JSON ruleset is an array of rules, each with its `title`, `level`, `tags` and the SQL it
 runs (`rule`). Rulesets converted by pySigma's SQLite backend 2 also carry
@@ -1420,6 +1428,7 @@ To build the image yourself: `docker build . -t <image name>`.
 | **macOS refuses to open the binary** | Clear the quarantine flag from the whole extracted directory: `xattr -dr com.apple.quarantine <directory>` — see [Standalone binaries](Usage.md#standalone-binaries) |
 | **A Linux binary fails with `GLIBC_2.xx not found`** | The distribution is older than glibc 2.28. Run from source or use Docker |
 | **`-U` warns that it cannot write and uses `./rules`** | The package directory is read-only for your user. Later runs from the same working directory still find the new rulesets; to update the package itself, extract it somewhere writable |
+| **`-U` says the latest rules build could not refresh some sources** | The rules repository failed to rebuild them (a GitHub rate limit, a rule that no longer validates). Their previous rulesets were installed and work; run `-U` again later for newer ones |
 | **`-U` exits `1`: files do not match the release manifest** | The download is incomplete or the repository was caught mid-update; nothing was installed. Run `-U` again later |
 | **A correlation rule raises no alert, and the run warns that events were set aside** | The time field does not hold what the rule expects: check `--timefield`, and `--timestamp-format` for Unix time. See [Sigma correlation rules](#sigma-correlation-rules) |
 | **Correlation rules are reported as needing SQLite 3.38** | The Python running Zircolite links an older SQLite (Ubuntu 22.04's, for one). Use a newer Python, a standalone binary or Docker |

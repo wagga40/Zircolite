@@ -5,10 +5,6 @@ vars:
   DOCKER_BUILD_FLAGS: ''
   DOCKER_REGISTRY: docker.io
   DOCKER_REPO: wagga40/zircolite
-  RULES_URL: https://github.com/wagga40/Zircolite-Rules-v2/archive/refs/heads/main.tar.gz
-  # The SigmaHQ rulesets: the only ones the repository ships, all under the DRL.
-  # -U installs the community rulesets, which carry other licences.
-  SIGMAHQ_RULESETS: rules_windows_sysmon.json rules_windows_generic.json rules_windows_merged.json rules_linux.json
   PLATFORMS: linux/amd64,linux/arm64
 
 tasks:
@@ -96,13 +92,10 @@ tasks:
           cat zircolite/__init__.py | grep "^__version__ = " | cut -d'"' -f2
 
   update-rules:
-    desc: Update the SigmaHQ rulesets from the Zircolite-Rules-v2 repository
-    preconditions:
-      - sh: command -v curl
-        msg: "curl is required. Please install it first"
+    desc: Update rules/ from the Zircolite-Rules-v2 repository, as -U does
     prompt: "This task will overwrite the existing rulesets. Are you sure you want to continue?"
-    cmds: 
-      - curl -sSL {{.RULES_URL}} | tar -xzf -
-      - defer: rm -rf Zircolite-Rules-v2-main
-      - for f in {{.SIGMAHQ_RULESETS}}; do mv "Zircolite-Rules-v2-main/$f" ./rules/; done
+    cmds:
+      # -U checks every file against the release manifest and installs the
+      # manifest too, which tools/package-release.py credits each ruleset from.
+      - pdm run python zircolite.py -U
 

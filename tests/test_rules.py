@@ -4,7 +4,6 @@ Tests for the RulesetHandler and RulesUpdater classes in zircolite/rules.py.
 
 import json
 import os
-import re
 import sqlite3
 import subprocess
 import sys
@@ -21,7 +20,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 from zircolite import ProcessingConfig, ZircoliteCore
 from zircolite.config import RulesetConfig
 from zircolite.rules import RulesetHandler, RulesUpdateError, RulesUpdater, UnknownPipelineError
-from zircolite.sqlscan import rebalance_sql
+from zircolite.sqlscan import column_refs, rebalance_sql
 
 WORKSPACE_ROOT = Path(__file__).parent.parent
 
@@ -1057,7 +1056,7 @@ class TestRulesUpdater:
         updater.install()
         return updater
 
-    def test_rulesets_and_licences_are_installed_nothing_else(self, test_logger, tmp_path):
+    def test_rulesets_licences_and_manifest_are_installed_nothing_else(self, test_logger, tmp_path):
         updater = self._install(test_logger, tmp_path, self._release(tmp_path, self.FILES))
 
         installed = sorted(p.relative_to(tmp_path / "rules").as_posix()
@@ -1065,10 +1064,34 @@ class TestRulesUpdater:
         assert installed == [
             "experimental/rules_x_correlation.json",
             "licenses/tsale.txt",
+            "release-manifest.json",
             "rules_tsale_windows_merged.json",
             "rules_windows_merged.json",
         ]
-        assert len(updater.updated_rulesets) == 4
+        assert len(updater.updated_rulesets) == 5
+
+    def test_the_manifest_is_installed_last_and_not_counted_as_a_ruleset(self, test_logger,
+                                                                         tmp_path, caplog):
+        """A release packaged from rules/ credits each ruleset's licence from it."""
+        with caplog.at_level("INFO"):
+            updater = self._install(test_logger, tmp_path, self._release(tmp_path, self.FILES))
+
+        assert Path(updater.updated_rulesets[-1]).name == "release-manifest.json"
+        assert "3 rulesets updated" in caplog.text
+        manifest = json.loads((tmp_path / "rules" / "release-manifest.json").read_text())
+        assert "rules_tsale_windows_merged.json" in manifest["sources"]["sigmahq"]["artifacts"]
+
+    def test_a_newer_manifest_alone_is_not_a_ruleset_update(self, test_logger, tmp_path, caplog):
+        self._install(test_logger, tmp_path, self._release(tmp_path, self.FILES))
+        again = tmp_path / "again"
+        again.mkdir()
+        unpacked = self._release(again, self.FILES, statuses={"hayabusa": "stale"})
+
+        with caplog.at_level("INFO"):
+            updater = self._install(test_logger, again, unpacked, rules_dir=tmp_path / "rules")
+
+        assert [Path(p).name for p in updater.updated_rulesets] == ["release-manifest.json"]
+        assert "No newer rulesets" in caplog.text
 
     def test_a_ruleset_combining_several_sources_is_installed(self, test_logger, tmp_path):
         """rules_windows_all.json is listed under the manifest's aggregates, not a source."""
@@ -1085,7 +1108,7 @@ class TestRulesUpdater:
         updater = self._install(test_logger, tmp_path, unpacked)
 
         assert (tmp_path / "rules" / "rules_windows_all.json").is_file()
-        assert len(updater.updated_rulesets) == 5
+        assert len(updater.updated_rulesets) == 6
 
     def test_unchanged_files_are_left_alone(self, test_logger, tmp_path):
         self._install(test_logger, tmp_path, self._release(tmp_path, self.FILES))
@@ -1131,9 +1154,106 @@ class TestRulesUpdater:
         with caplog.at_level("WARNING"):
             self._install(test_logger, tmp_path, unpacked)
 
-        assert "hayabusa: its latest update failed" in caplog.text
-        assert "bbbbbbbbbbbb" in caplog.text
-        assert "joesecurity: no rulesets are published" in caplog.text
+        assert "could not refresh 1 of its 3 sources" in caplog.text
+        assert "hayabusa" in caplog.text and "bbbbbbbbbbbb" in caplog.text
+        assert "(2026-09-01 00:00 UTC)" in caplog.text
+        assert "no joesecurity rulesets have been published yet" in caplog.text
+
+    def test_sources_failing_for_one_reason_are_reported_together(self, test_logger, tmp_path, caplog):
+        """A rate-limited build marks every source stale; that is one notice, not one per source."""
+        unpacked = self._release(tmp_path, self.FILES, statuses={"hayabusa": "stale", "tsale": "stale"})
+        path = unpacked / "Zircolite-Rules-v2-main" / "release-manifest.json"
+        manifest = json.loads(path.read_text())
+        for name, source in manifest["sources"].items():
+            source.update(status="stale", last_success="2026-09-01T00:00:00+00:00",
+                          error=f"403 Client Error: rate limit exceeded for url: https://api.github.com/repos/{name}")
+        path.write_text(json.dumps(manifest))
+
+        with caplog.at_level("WARNING"):
+            self._install(test_logger, tmp_path, unpacked)
+
+        warnings = [r.getMessage() for r in caplog.records if r.levelname == "WARNING"]
+        assert len(warnings) == 1
+        assert "could not refresh any of its 3 sources (403 Client Error: rate limit exceeded)" in warnings[0]
+        assert "api.github.com" not in warnings[0]
+        assert all(name in warnings[0] for name in ("hayabusa", "sigmahq", "tsale"))
+
+    def test_a_release_of_one_source_says_so(self, test_logger, tmp_path, caplog):
+        unpacked = self._release(tmp_path, self.FILES)
+        path = unpacked / "Zircolite-Rules-v2-main" / "release-manifest.json"
+        manifest = json.loads(path.read_text())
+        manifest["sources"]["sigmahq"]["status"] = "stale"
+        path.write_text(json.dumps(manifest))
+
+        with caplog.at_level("WARNING"):
+            self._install(test_logger, tmp_path, unpacked)
+
+        assert "could not refresh its only source" in caplog.text
+
+    def test_sources_failing_for_different_reasons_each_give_theirs(self, test_logger, tmp_path, caplog):
+        unpacked = self._release(tmp_path, self.FILES, statuses={"hayabusa": "stale", "tsale": "stale"})
+        path = unpacked / "Zircolite-Rules-v2-main" / "release-manifest.json"
+        manifest = json.loads(path.read_text())
+        manifest["sources"]["hayabusa"]["error"] = "clone failed"
+        manifest["sources"]["tsale"]["error"] = "3 unexpected failures; see reports/tsale.json"
+        path.write_text(json.dumps(manifest))
+
+        with caplog.at_level("WARNING"):
+            self._install(test_logger, tmp_path, unpacked)
+
+        lines = caplog.text.splitlines()
+        assert any("hayabusa" in line and "clone failed" in line for line in lines)
+        assert any("tsale" in line and "3 unexpected failures" in line for line in lines)
+
+    def test_the_outcome_comes_before_the_upstream_notice(self, test_logger, tmp_path, caplog):
+        """The stale notice read as the update's own failure when it came first."""
+        self._install(test_logger, tmp_path, self._release(tmp_path, self.FILES))
+        again = tmp_path / "again"
+        again.mkdir()
+        unpacked = self._release(again, self.FILES, statuses={"hayabusa": "stale"})
+
+        with caplog.at_level("INFO"):
+            self._install(test_logger, again, unpacked, rules_dir=tmp_path / "rules")
+
+        messages = [r.getMessage() for r in caplog.records]
+        outcome = next(i for i, m in enumerate(messages) if "No newer rulesets" in m)
+        notice = next(i for i, m in enumerate(messages) if "could not refresh" in m)
+        assert outcome < notice
+
+    def test_updated_rulesets_are_counted(self, test_logger, tmp_path, caplog):
+        with caplog.at_level("INFO"):
+            self._install(test_logger, tmp_path, self._release(tmp_path, self.FILES))
+
+        assert "3 rulesets updated" in caplog.text
+        assert "No newer rulesets" not in caplog.text
+
+    def test_a_licence_alone_is_not_reported_as_a_ruleset_update(self, test_logger, tmp_path, caplog):
+        self._install(test_logger, tmp_path, self._release(tmp_path, self.FILES))
+        (tmp_path / "rules" / "licenses" / "tsale.txt").write_text("older")
+        again = tmp_path / "again"
+        again.mkdir()
+
+        with caplog.at_level("INFO"):
+            updater = self._install(test_logger, again, self._release(again, self.FILES),
+                                    rules_dir=tmp_path / "rules")
+
+        assert [Path(p).name for p in updater.updated_rulesets] == ["tsale.txt"]
+        assert "No newer rulesets" in caplog.text
+
+    @pytest.mark.parametrize(("timestamp", "expected"), [
+        ("2026-09-26T17:11:28+00:00", "1 hour ago (2026-09-26 17:11 UTC)"),
+        ("2026-09-26T19:05:00Z", "1 minute ago (2026-09-26 19:05 UTC)"),
+        ("2026-09-26T21:06:00+02:00", "less than a minute ago (2026-09-26 19:06 UTC)"),
+        ("2026-09-04T19:06:00+00:00", "22 days ago (2026-09-04 19:06 UTC)"),
+        ("yesterday", "yesterday"),
+        (None, "at an unknown date"),
+    ])
+    def test_build_times_read_as_an_age(self, timestamp, expected):
+        from datetime import datetime, timezone
+
+        now = datetime(2026, 9, 26, 19, 6, 30, tzinfo=timezone.utc)
+
+        assert RulesUpdater._built(timestamp, now) == expected
 
     def test_a_release_without_a_manifest_installs_its_top_level_rulesets(self, test_logger, tmp_path, caplog):
         unpacked = self._release(tmp_path, self.FILES, manifest=False)
@@ -1632,38 +1752,27 @@ class TestShippedRulesetsCompile:
     without anyone noticing.
     """
 
-    STRING_LITERAL = re.compile(r"'(?:[^']|'')*'")
-    RESERVED = frozenset(
-        {
-            "SELECT", "FROM", "WHERE", "AND", "OR", "NOT", "LIKE", "ESCAPE", "IN",
-            "IS", "NULL", "LOGS", "GROUP", "BY", "HAVING", "COUNT", "DISTINCT",
-            "AS", "ORDER", "LIMIT", "CAST", "INT", "TEXT", "REGEXP", "UNION",
-            "ALL", "ON", "JOIN", "CASE", "WHEN", "THEN", "ELSE", "END", "EXISTS",
-            "BETWEEN", "LEFT", "INNER", "WITH", "GLOB",
-        }
-    )
-
     @staticmethod
     def _rulesets():
         rules_dir = Path(__file__).parent.parent / "rules"
-        return sorted(rules_dir.glob("*.json"))
+        return sorted(rules_dir.glob("rules_*.json"))
 
     @classmethod
     def _connection_for(cls, ruleset):
-        """A logs table wide enough to resolve every column the ruleset names."""
+        """The logs table a run widens for the ruleset: the columns its SQL and
+        its required_fields name, quoted ones (`EventXML.Param3`) included."""
         columns = {}
         for rule in ruleset:
+            names = list(rule.get("required_fields") or ())
             for query in rule.get("rule", []):
-                bare = cls.STRING_LITERAL.sub("''", query)
-                for match in re.finditer(r"\b([A-Za-z_][A-Za-z0-9_]*)\b", bare):
-                    name = match.group(1)
-                    if name.upper() not in cls.RESERVED:
-                        columns.setdefault(name.lower(), name)
+                names += sorted(column_refs(query))
+            for name in names:
+                columns.setdefault(name.lower(), name)
         conn = sqlite3.connect(":memory:")
         conn.create_function("regexp", 2, lambda x, y: 0)
         conn.execute(
             "CREATE TABLE logs ("
-            + ",".join(f'"{c}" TEXT COLLATE NOCASE' for c in columns.values())
+            + ",".join(f'"{c.replace(chr(34), chr(34) * 2)}" TEXT COLLATE NOCASE' for c in columns.values())
             + ")"
         )
         return conn

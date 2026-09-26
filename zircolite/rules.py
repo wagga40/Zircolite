@@ -15,6 +15,7 @@ import re
 import shutil
 import sys
 from collections.abc import Sequence
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -449,12 +450,14 @@ class RulesUpdater:
     """Install the rulesets published by the Zircolite-Rules-v2 repository.
 
     The repository publishes a release manifest naming every artifact with its
-    SHA-256. The rulesets -- ``rules_*.json`` and ``experimental/*.json`` -- and
-    the licence texts of their sources are installed; reports, provenance and
-    the repository's own tests are not. Every file is checked against the
-    manifest before any is installed, and one that fails leaves ``rules/`` as
-    it was. The manifest arrives in the same archive, so this proves the
-    download complete and consistent, not who published it.
+    SHA-256. The rulesets -- ``rules_*.json`` and ``experimental/*.json`` --
+    the licence texts of their sources and the manifest itself are installed;
+    reports, provenance and the repository's own tests are not. The manifest
+    stays beside the rulesets because it names each one's source and licence,
+    which a release built from ``rules/`` needs to credit them. Every file is
+    checked against the manifest before any is installed, and one that fails
+    leaves ``rules/`` as it was. The manifest arrives in the same archive, so
+    this proves the download complete and consistent, not who published it.
     """
 
     url = "https://github.com/wagga40/Zircolite-Rules-v2/archive/refs/heads/main.zip"
@@ -561,18 +564,74 @@ class RulesUpdater:
             raise RulesUpdateError(f"{self.manifest_name} lists no sources")
         return manifest
 
+    @staticmethod
+    def _build_error(source: dict[str, Any]) -> str:
+        """Why the rules build could not refresh *source*, without the URL.
+
+        requests ends its HTTP errors with the URL fetched, which differs for
+        every source and hides that they all failed for one reason.
+        """
+        return re.sub(r"\s+for url: \S+$", "", str(source.get("error") or "")).strip()
+
+    @staticmethod
+    def _built(timestamp: object, now: datetime | None = None) -> str:
+        """When a ruleset was built: its age first, since that is what matters."""
+        try:
+            built = datetime.fromisoformat(str(timestamp).replace("Z", "+00:00"))
+        except ValueError:
+            return literal(timestamp) if timestamp else "at an unknown date"
+        if built.tzinfo is None:
+            built = built.replace(tzinfo=timezone.utc)
+        built = built.astimezone(timezone.utc)
+        seconds = max(0, int(((now or datetime.now(timezone.utc)) - built).total_seconds()))
+        age = "less than a minute ago"
+        for unit, size in (("day", 86400), ("hour", 3600), ("minute", 60)):
+            if seconds >= size:
+                count = seconds // size
+                age = f"{count} {unit}{'s' if count != 1 else ''} ago"
+                break
+        return f"{age} ({built:%Y-%m-%d %H:%M} UTC)"
+
     def _report_sources(self, manifest: dict[str, Any]) -> None:
-        """Warn about sources whose rulesets are not the current ones."""
-        for name, source in sorted(manifest["sources"].items()):
-            status = source.get("status") if isinstance(source, dict) else None
-            if status == "stale":
+        """Explain sources whose rulesets are older than their upstream.
+
+        The rules repository rebuilds each source on its own and keeps the last
+        good rulesets of one it cannot rebuild, so a stale source says nothing
+        about this update: what it installed is exactly what is published.
+        """
+        sources = {name: s for name, s in sorted(manifest["sources"].items()) if isinstance(s, dict)}
+        stale = {name: s for name, s in sources.items() if s.get("status") == "stale"}
+        if stale:
+            errors = {self._build_error(s) for s in stale.values()}
+            shared = errors.pop() if len(errors) == 1 else ""
+            if len(sources) == 1:
+                scope = "its only source"
+            elif len(stale) == len(sources):
+                scope = f"any of its {len(sources)} sources"
+            else:
+                scope = f"{len(stale)} of its {len(sources)} sources"
+            reason = f" ({literal(shared)})" if shared else ""
+            lines = [
+                f"[yellow]    [!] Upstream, the latest rules build could not refresh {scope}{reason}[/]",
+                "        Their previous rulesets are still published and work as before; "
+                "a later -U fetches newer ones once a build succeeds:",
+            ]
+            width = max(len(name) for name in stale)
+            for name, source in stale.items():
                 revision = str(source.get("revision") or "unknown")[:12]
+                line = (f"          {literal(name.ljust(width))}  {literal(revision.ljust(12))}  "
+                        f"built {self._built(source.get('last_success'))}")
+                if not shared and (error := self._build_error(source)):
+                    line += f"  [dim]{literal(error)}[/]"
+                lines.append(line)
+            self.logger.warning("\n".join(lines))
+        for name, source in sources.items():
+            if source.get("status") == "unavailable":
+                error = self._build_error(source)
+                reason = f" ({literal(error)})" if error else ""
                 self.logger.warning(
-                    f"[yellow]    [!] {literal(name)}: its latest update failed; its rulesets are "
-                    f"from revision {literal(revision)}, generated {literal(source.get('last_success') or 'at an unknown date')}[/]"
+                    f"[yellow]    [!] Upstream, no {literal(name)} rulesets have been published yet{reason}[/]"
                 )
-            elif status == "unavailable":
-                self.logger.warning(f"[yellow]    [!] {literal(name)}: no rulesets are published[/]")
 
     def _selection(self, root: Path, manifest: dict[str, Any] | None) -> list[tuple[str, str | None]]:
         """(relative path, expected SHA-256) of every file to install.
@@ -617,15 +676,17 @@ class RulesUpdater:
                 f"[yellow]    [!] The rules repository publishes no {self.manifest_name}: "
                 "installing its top-level rulesets unverified[/]"
             )
-        else:
-            self._report_sources(manifest)
         selection = self._selection(root, manifest)
         if not any(name.endswith(".json") for name, _ in selection):
             raise RulesUpdateError("the downloaded archive holds no rulesets")
+        if manifest is not None:
+            # Last, so an interrupted install never leaves a manifest that
+            # describes files it did not get to.
+            selection.append((self.manifest_name, None))
 
         rules_dir = Path(self.rules_dir)
         rules_dir.mkdir(parents=True, exist_ok=True)
-        count = 0
+        rulesets = 0
         for name, digest in selection:
             source = root / name
             destination = rules_dir.joinpath(*name.split("/"))
@@ -633,15 +694,19 @@ class RulesUpdater:
                 continue
             destination.parent.mkdir(parents=True, exist_ok=True)
             shutil.move(source, destination)
-            count += 1
             self.updated_rulesets.append(str(destination))
-            if name.endswith(".json"):
+            if name.endswith(".json") and name != self.manifest_name:
+                rulesets += 1
                 self.logger.info(f"    [>] Updated : {make_file_link(str(destination))}")
             else:
                 self.logger.debug(f"    [>] Updated : {destination}")
 
-        if count == 0:
-            self.logger.info("[cyan]    [>] No newer rulesets found")
+        if rulesets:
+            self.logger.info(f"[green]    [>] {rulesets} ruleset{'s' if rulesets != 1 else ''} updated[/]")
+        else:
+            self.logger.info("[green]    [>] No newer rulesets: yours already match the latest release[/]")
+        if manifest is not None:
+            self._report_sources(manifest)
 
     def clean(self) -> None:
         if Path(self.tempFile).exists():

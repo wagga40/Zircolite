@@ -110,13 +110,3 @@ tests/external/**/__pycache__/
 
 # Others
 samples/
-
-# -U installs community rulesets, their licence texts and experimental
-# correlations into rules/. Only the SigmaHQ rulesets belong to the repository,
-# and tools/package-release.py refuses to ship anything else as DRL.
-rules/*
-!rules/README.md
-!rules/rules_windows_sysmon*.json
-!rules/rules_windows_generic*.json
-!rules/rules_windows_merged*.json
-!rules/rules_linux*.json

@@ -46,7 +46,7 @@ the project root:
 |------|-------------|
 | `task --list` | List all available tasks |
 | `task clean` | Remove default artifacts (`detected_events.json`, `flattened_events_*.json`, `tmp-*`, `zircolite.log`, …) |
-| `task update-rules` | Update the default rulesets from [Zircolite-Rules-v2](https://github.com/wagga40/Zircolite-Rules-v2), overwriting `rules/` |
+| `task update-rules` | Update `rules/` from [Zircolite-Rules-v2](https://github.com/wagga40/Zircolite-Rules-v2) with `-U`, overwriting what is there |
 | `task docker-build` | Build the Docker image |
 | `task docker-build-multi-arch` | Build for linux/amd64 and linux/arm64 |
 | `task docker-push` | Push to Docker Hub, after a multi-arch build |
