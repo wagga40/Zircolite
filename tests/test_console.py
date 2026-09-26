@@ -243,6 +243,13 @@ class TestFileTree:
         assert "100" in result
         assert "0 detections" in result
 
+    @pytest.mark.parametrize("path", [None, "/evidence/[bold]x.evtx"])
+    def test_format_file_node_prints_the_name_as_written(self, path):
+        from rich.text import Text
+
+        fs = {"name": "[bold]x.evtx", "events": 1, "detections": 0, "path": path}
+        assert "[bold]x.evtx" in Text.from_markup(_format_file_node(fs)).plain
+
     def test_format_file_node_few_detections(self):
         fs = {"name": "test.evtx", "events": 100, "detections": 3}
         result = _format_file_node(fs)

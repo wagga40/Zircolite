@@ -317,7 +317,7 @@ def _format_file_node(fs: dict[str, Any]) -> str:
     det_text = f"[{det_style}]{detections} {det_label}[/]"
 
     full_path = fs.get("path")
-    name_markup = make_file_link(full_path, name) if full_path else f"[cyan]{name}[/]"
+    name_markup = make_file_link(full_path, name) if full_path else f"[cyan]{literal(name)}[/]"
     parts = [name_markup, f"[magenta]{events:,}[/] events", det_text]
     if filtered > 0:
         parts.append(f"[dim]{filtered:,} filtered[/]")
