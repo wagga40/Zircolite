@@ -28,11 +28,12 @@ Each ruleset carries every level, from informational to critical. `--min-level m
 - `rules_windows_all.json` — the Windows detections of SigmaHQ and every community source, combined and deduplicated;
 - community rulesets kept apart from them, one file per source and profile: Hayabusa (`rules_hayabusa_*`, DRL 1.1), Joe Security (`rules_joesecurity_*`, GPL 3.0), Micah Babinski (`rules_mbabinski_*`, GPL 3.0), mdecrevoisier (`rules_mdecrevoisier_*`, CC0 1.0) and tsale (`rules_tsale_*`, GPL 3.0);
 - `experimental/` — Sigma correlation rulesets, run with `-r rules/experimental/<file>.json`;
-- `licenses/` — the licence text of every source.
+- `licenses/` — the licence text of every source;
+- `release-manifest.json` — the source, licence, revision and SHA-256 of every file above.
 
 Each file is checked against the SHA-256 the repository's `release-manifest.json` lists for it, and a file that does not match leaves `rules/` untouched. A source whose last update failed keeps its previous rulesets and is reported as stale. Files `-U` no longer finds upstream are never deleted.
 
-Only the SigmaHQ rulesets are part of the Zircolite repository and its release archives; the community ones are fetched by `-U` and keep their own licences.
+The Zircolite repository, its release archives and its Docker image carry all of these. Each ruleset stays under its source's licence, not under one covering `rules/` as a whole: `rules_windows_all.json` holds rules under DRL 1.1, GPL 3.0 and CC0 1.0 alike, each keeping its own. A release's `THIRD_PARTY_LICENSES` lists every source with its files, revision and licence text.
 
 ## Why you should make your own rulesets
 

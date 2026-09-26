@@ -1,0 +1,370 @@
+[
+  {
+    "author": "Micah Babinski, Based on Morphisec report by Michael Gorelik (@smgoreli)",
+    "channel": [],
+    "correlation": true,
+    "correlation_plan": {
+      "cleanup": [
+        "sigma_4a524d6d1b93_n0_alerts",
+        "sigma_4a524d6d1b93_n0_merged",
+        "sigma_4a524d6d1b93_n0_windows",
+        "sigma_4a524d6d1b93_n0_combined",
+        "sigma_4a524d6d1b93_n0_t0_qualified",
+        "sigma_4a524d6d1b93_n0_t0_measured",
+        "sigma_4a524d6d1b93_n0_t0_anchors",
+        "sigma_4a524d6d1b93_n0_metrics",
+        "sigma_4a524d6d1b93_n0_unique_events",
+        "sigma_4a524d6d1b93_n0_events",
+        "sigma_4a524d6d1b93_n0_matches",
+        "sigma_4a524d6d1b93_n0_input",
+        "sigma_4a524d6d1b93_horizon",
+        "sigma_4a524d6d1b93_raw0"
+      ],
+      "diagnostics": "SELECT 'invalid_timestamp' AS reason, COUNT(*) AS count FROM sigma_4a524d6d1b93_raw0 WHERE ts IS NULL AND (b0) UNION ALL SELECT 'missing_group_key' AS reason, COUNT(DISTINCT eid) AS count FROM sigma_4a524d6d1b93_n0_input WHERE g0 IS NULL",
+      "event_id_field": "row_id",
+      "prepare": [
+        {
+          "indexes": [
+            [
+              "eid"
+            ],
+            [
+              "ts"
+            ]
+          ],
+          "name": "sigma_4a524d6d1b93_raw0",
+          "select": "SELECT CAST(`row_id` AS TEXT) AS rid, '0:' || CAST(`row_id` AS TEXT) AS eid, ROUND((julianday(SystemTime) - 2440587.5) * 86400000) / 1000.0 AS ts, json_object('f0', CASE WHEN typeof(`Computer`)='real' AND abs(`Computer`) > 1.7976931348623157e308 THEN NULL ELSE `Computer` END) AS payload, COALESCE(((Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=1 AND ((Image LIKE '%\\\\taskkill.exe' ESCAPE '\\' OR OriginalFileName='taskkill.exe') AND (CommandLine LIKE '%agntsvc%' ESCAPE '\\' OR CommandLine LIKE '%onenote%' ESCAPE '\\' OR CommandLine LIKE '%bedbh%' ESCAPE '\\' OR CommandLine LIKE '%tv\\_x64%' ESCAPE '\\' OR CommandLine LIKE '%dbeng50%' ESCAPE '\\' OR CommandLine LIKE '%oracle%' ESCAPE '\\' OR CommandLine LIKE '%vxmon%' ESCAPE '\\' OR CommandLine LIKE '%CVMountd%' ESCAPE '\\' OR CommandLine LIKE '%dbsnmp%' ESCAPE '\\' OR CommandLine LIKE '%outlook%' ESCAPE '\\' OR CommandLine LIKE '%benetns%' ESCAPE '\\' OR CommandLine LIKE '%cvd%' ESCAPE '\\' OR CommandLine LIKE '%encsvc%' ESCAPE '\\' OR CommandLine LIKE '%powerpnt%' ESCAPE '\\' OR CommandLine LIKE '%bengien%' ESCAPE '\\' OR CommandLine LIKE '%cvfwd%' ESCAPE '\\' OR CommandLine LIKE '%excel%' ESCAPE '\\' OR CommandLine LIKE '%sqbcoreservic%' ESCAPE '\\' OR CommandLine LIKE '%pvlsvr%' ESCAPE '\\' OR CommandLine LIKE '%CVODS%' ESCAPE '\\' OR CommandLine LIKE '%firefox%' ESCAPE '\\' OR CommandLine LIKE '%sql%' ESCAPE '\\' OR CommandLine LIKE '%beserver%' ESCAPE '\\' OR CommandLine LIKE '%saphostexe%' ESCAPE '\\' OR CommandLine LIKE '%infopath%' ESCAPE '\\' OR CommandLine LIKE '%steam%' ESCAPE '\\' OR CommandLine LIKE '%raw\\_agent\\_svc%' ESCAPE '\\' OR CommandLine LIKE '%saposcol%' ESCAPE '\\' OR CommandLine LIKE '%isqlplussvc%' ESCAPE '\\' OR CommandLine LIKE '%synctime%' ESCAPE '\\' OR CommandLine LIKE '%vsnapvss%' ESCAPE '\\' OR CommandLine LIKE '%sapstartsrv%' ESCAPE '\\' OR CommandLine LIKE '%msaccess%' ESCAPE '\\' OR CommandLine LIKE '%tbirdconfig%' ESCAPE '\\' OR CommandLine LIKE '%CagService%' ESCAPE '\\' OR CommandLine LIKE '%avagent%' ESCAPE '\\' OR CommandLine LIKE '%mspub%' ESCAPE '\\' OR CommandLine LIKE '%thebat%' ESCAPE '\\' OR CommandLine LIKE '%QBIDPService%' ESCAPE '\\' OR CommandLine LIKE '%avscc%' ESCAPE '\\' OR CommandLine LIKE '%mydesktopq%' ESCAPE '\\' OR CommandLine LIKE '%thunderbird%' ESCAPE '\\' OR CommandLine LIKE '%QBDBMgrN%' ESCAPE '\\' OR CommandLine LIKE '%DellSystem%' ESCAPE '\\' OR CommandLine LIKE '%mydesktopservic%' ESCAPE '\\' OR CommandLine LIKE '%visio%' ESCAPE '\\' OR CommandLine LIKE '%QBCFMonitorSe%' ESCAPE '\\' OR CommandLine LIKE '%EnterpriseClient%' ESCAPE '\\' OR CommandLine LIKE '%notepad%' ESCAPE '\\' OR CommandLine LIKE '%winword%' ESCAPE '\\' OR CommandLine LIKE '%SAP%' ESCAPE '\\' OR CommandLine LIKE '%VeeamNFSSvc%' ESCAPE '\\' OR CommandLine LIKE '%ocautoupds%' ESCAPE '\\' OR CommandLine LIKE '%wordpad%' ESCAPE '\\' OR CommandLine LIKE '%TeamViewer\\_Service%' ESCAPE '\\' OR CommandLine LIKE '%VeeamTransportSvc%' ESCAPE '\\' OR CommandLine LIKE '%oco%' ESCAPE '\\' OR CommandLine LIKE '%xfssvccon%' ESCAPE '\\' OR CommandLine LIKE '%TeamViewer%' ESCAPE '\\' OR CommandLine LIKE '%VeeamDeploymentSvc%' ESCAPE '\\' OR CommandLine LIKE '%ocssd%' ESCAPE '\\' OR CommandLine LIKE '%sql%' ESCAPE '\\' OR CommandLine LIKE '%tv\\_w32%' ESCAPE '\\'))))), 0) AS b0 FROM logs"
+        },
+        {
+          "indexes": [],
+          "name": "sigma_4a524d6d1b93_horizon",
+          "select": "SELECT (SELECT MAX(ts) FROM (SELECT ts FROM sigma_4a524d6d1b93_raw0)) AS ts"
+        },
+        {
+          "indexes": [],
+          "name": "sigma_4a524d6d1b93_n0_input",
+          "select": "SELECT s.*, 0 AS slot, CASE WHEN typeof(json_extract(s.payload, '$.f0'))='text' THEN lower(json_extract(s.payload, '$.f0')) ELSE json_extract(s.payload, '$.f0') END AS g0, NULL AS v FROM (SELECT 'e:' || eid AS eid, ts, payload, json_array(eid) AS evidence, '[]' AS children FROM sigma_4a524d6d1b93_raw0 WHERE b0) s"
+        },
+        {
+          "indexes": [
+            [
+              "g0",
+              "ts"
+            ],
+            [
+              "g0",
+              "slot",
+              "ts"
+            ],
+            [
+              "eid"
+            ]
+          ],
+          "name": "sigma_4a524d6d1b93_n0_matches",
+          "select": "SELECT DISTINCT * FROM sigma_4a524d6d1b93_n0_input WHERE ts IS NOT NULL AND eid IS NOT NULL AND g0 IS NOT NULL"
+        },
+        {
+          "indexes": [
+            [
+              "g0",
+              "ts"
+            ]
+          ],
+          "name": "sigma_4a524d6d1b93_n0_events",
+          "select": "SELECT DISTINCT eid, ts, g0, v FROM sigma_4a524d6d1b93_n0_matches"
+        },
+        {
+          "indexes": [],
+          "name": "sigma_4a524d6d1b93_n0_unique_events",
+          "select": "SELECT DISTINCT eid, ts, g0 FROM sigma_4a524d6d1b93_n0_events"
+        },
+        {
+          "indexes": [
+            [
+              "g0",
+              "end"
+            ]
+          ],
+          "name": "sigma_4a524d6d1b93_n0_metrics",
+          "select": "SELECT DISTINCT ts AS end, g0, COUNT(*) OVER (PARTITION BY g0 ORDER BY ts RANGE BETWEEN 600 PRECEDING AND CURRENT ROW) AS metric FROM sigma_4a524d6d1b93_n0_unique_events"
+        },
+        {
+          "indexes": [
+            [
+              "g0",
+              "end"
+            ]
+          ],
+          "name": "sigma_4a524d6d1b93_n0_t0_anchors",
+          "select": "SELECT DISTINCT ts - 600 AS start, ts AS end, g0 FROM sigma_4a524d6d1b93_n0_matches"
+        },
+        {
+          "indexes": [],
+          "name": "sigma_4a524d6d1b93_n0_t0_measured",
+          "select": "SELECT a.*, (SELECT m.metric FROM sigma_4a524d6d1b93_n0_metrics m WHERE m.g0 = a.g0 AND m.end=a.end) AS metric FROM sigma_4a524d6d1b93_n0_t0_anchors a WHERE 1"
+        },
+        {
+          "indexes": [],
+          "name": "sigma_4a524d6d1b93_n0_t0_qualified",
+          "select": "SELECT * FROM sigma_4a524d6d1b93_n0_t0_measured WHERE metric >= 5"
+        },
+        {
+          "indexes": [],
+          "name": "sigma_4a524d6d1b93_n0_combined",
+          "select": "SELECT a.start, a.end, g0, a.metric, (SELECT json_group_array(DISTINCT e.value) FROM sigma_4a524d6d1b93_n0_matches m, json_each(m.evidence) e WHERE m.g0 = a.g0 AND m.ts BETWEEN a.start AND a.end) AS evidence, (SELECT json_group_array(DISTINCT c.value) FROM sigma_4a524d6d1b93_n0_matches m, json_each(m.children) c WHERE m.g0 = a.g0 AND m.ts BETWEEN a.start AND a.end) AS children FROM sigma_4a524d6d1b93_n0_t0_qualified a"
+        },
+        {
+          "indexes": [],
+          "name": "sigma_4a524d6d1b93_n0_windows",
+          "select": "SELECT start, end, g0, MAX(metric) AS metric FROM sigma_4a524d6d1b93_n0_combined GROUP BY start, end, g0"
+        },
+        {
+          "indexes": [],
+          "name": "sigma_4a524d6d1b93_n0_merged",
+          "select": "SELECT a.*, (SELECT json_group_array(value) FROM (SELECT DISTINCT e.value FROM sigma_4a524d6d1b93_n0_combined c, json_each(c.evidence) e WHERE c.g0 = a.g0 AND c.start=a.start AND c.end=a.end ORDER BY e.value)) AS evidence, (SELECT json_group_array(value) FROM (SELECT DISTINCT e.value FROM sigma_4a524d6d1b93_n0_combined c, json_each(c.children) e WHERE c.g0 = a.g0 AND c.start=a.start AND c.end=a.end ORDER BY e.value)) AS children FROM sigma_4a524d6d1b93_n0_windows a"
+        },
+        {
+          "indexes": [
+            [
+              "end"
+            ],
+            [
+              "alert_id"
+            ]
+          ],
+          "name": "sigma_4a524d6d1b93_n0_alerts",
+          "select": "SELECT 'sigma_alert_4a524d6d1b93bf7a:' || ROW_NUMBER() OVER (ORDER BY g0, end, start, metric, evidence) AS alert_id, start, end, json_object('Computer', `g0`) AS group_keys, metric, evidence, children, json_object('f0', `g0`) AS payload FROM sigma_4a524d6d1b93_n0_merged"
+        }
+      ],
+      "query": "SELECT alert_id, group_keys, end AS occurrence_time, start AS window_start, end AS window_end, 'event_count' AS metric_name, metric AS metric_value, json_array_length(evidence) AS event_count, evidence AS event_ids, children AS child_alert_ids FROM sigma_4a524d6d1b93_n0_alerts ORDER BY occurrence_time, alert_id",
+      "required_fields": {
+        "logs": [
+          "Channel",
+          "CommandLine",
+          "Computer",
+          "EventID",
+          "Image",
+          "OriginalFileName",
+          "SystemTime",
+          "row_id"
+        ]
+      },
+      "source_tables": {
+        "0": "logs"
+      },
+      "sqlite_min_version": "3.38.0",
+      "version": 2
+    },
+    "description": "Detects repeated use of the taskkill utility to terminate processes as documented in the 2024 Morphisec Cicada3301 ransomware report.",
+    "eventid": [],
+    "falsepositives": [],
+    "filename": "2024_Cicada3301_Ransomware/correlation_proc_creation_win_taskkill_cicada3301.yml",
+    "id": "135e717e-2b3a-485f-9976-40e74a2e558c",
+    "level": "medium",
+    "required_fields": [
+      "Channel",
+      "CommandLine",
+      "Computer",
+      "EventID",
+      "Image",
+      "OriginalFileName",
+      "SystemTime",
+      "row_id"
+    ],
+    "result_type": "correlation",
+    "rule": [
+      "WITH sigma_4a524d6d1b93_raw0 AS (SELECT CAST(`row_id` AS TEXT) AS rid, '0:' || CAST(`row_id` AS TEXT) AS eid, ROUND((julianday(SystemTime) - 2440587.5) * 86400000) / 1000.0 AS ts, json_object('f0', CASE WHEN typeof(`Computer`)='real' AND abs(`Computer`) > 1.7976931348623157e308 THEN NULL ELSE `Computer` END) AS payload, COALESCE(((Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=1 AND ((Image LIKE '%\\\\taskkill.exe' ESCAPE '\\' OR OriginalFileName='taskkill.exe') AND (CommandLine LIKE '%agntsvc%' ESCAPE '\\' OR CommandLine LIKE '%onenote%' ESCAPE '\\' OR CommandLine LIKE '%bedbh%' ESCAPE '\\' OR CommandLine LIKE '%tv\\_x64%' ESCAPE '\\' OR CommandLine LIKE '%dbeng50%' ESCAPE '\\' OR CommandLine LIKE '%oracle%' ESCAPE '\\' OR CommandLine LIKE '%vxmon%' ESCAPE '\\' OR CommandLine LIKE '%CVMountd%' ESCAPE '\\' OR CommandLine LIKE '%dbsnmp%' ESCAPE '\\' OR CommandLine LIKE '%outlook%' ESCAPE '\\' OR CommandLine LIKE '%benetns%' ESCAPE '\\' OR CommandLine LIKE '%cvd%' ESCAPE '\\' OR CommandLine LIKE '%encsvc%' ESCAPE '\\' OR CommandLine LIKE '%powerpnt%' ESCAPE '\\' OR CommandLine LIKE '%bengien%' ESCAPE '\\' OR CommandLine LIKE '%cvfwd%' ESCAPE '\\' OR CommandLine LIKE '%excel%' ESCAPE '\\' OR CommandLine LIKE '%sqbcoreservic%' ESCAPE '\\' OR CommandLine LIKE '%pvlsvr%' ESCAPE '\\' OR CommandLine LIKE '%CVODS%' ESCAPE '\\' OR CommandLine LIKE '%firefox%' ESCAPE '\\' OR CommandLine LIKE '%sql%' ESCAPE '\\' OR CommandLine LIKE '%beserver%' ESCAPE '\\' OR CommandLine LIKE '%saphostexe%' ESCAPE '\\' OR CommandLine LIKE '%infopath%' ESCAPE '\\' OR CommandLine LIKE '%steam%' ESCAPE '\\' OR CommandLine LIKE '%raw\\_agent\\_svc%' ESCAPE '\\' OR CommandLine LIKE '%saposcol%' ESCAPE '\\' OR CommandLine LIKE '%isqlplussvc%' ESCAPE '\\' OR CommandLine LIKE '%synctime%' ESCAPE '\\' OR CommandLine LIKE '%vsnapvss%' ESCAPE '\\' OR CommandLine LIKE '%sapstartsrv%' ESCAPE '\\' OR CommandLine LIKE '%msaccess%' ESCAPE '\\' OR CommandLine LIKE '%tbirdconfig%' ESCAPE '\\' OR CommandLine LIKE '%CagService%' ESCAPE '\\' OR CommandLine LIKE '%avagent%' ESCAPE '\\' OR CommandLine LIKE '%mspub%' ESCAPE '\\' OR CommandLine LIKE '%thebat%' ESCAPE '\\' OR CommandLine LIKE '%QBIDPService%' ESCAPE '\\' OR CommandLine LIKE '%avscc%' ESCAPE '\\' OR CommandLine LIKE '%mydesktopq%' ESCAPE '\\' OR CommandLine LIKE '%thunderbird%' ESCAPE '\\' OR CommandLine LIKE '%QBDBMgrN%' ESCAPE '\\' OR CommandLine LIKE '%DellSystem%' ESCAPE '\\' OR CommandLine LIKE '%mydesktopservic%' ESCAPE '\\' OR CommandLine LIKE '%visio%' ESCAPE '\\' OR CommandLine LIKE '%QBCFMonitorSe%' ESCAPE '\\' OR CommandLine LIKE '%EnterpriseClient%' ESCAPE '\\' OR CommandLine LIKE '%notepad%' ESCAPE '\\' OR CommandLine LIKE '%winword%' ESCAPE '\\' OR CommandLine LIKE '%SAP%' ESCAPE '\\' OR CommandLine LIKE '%VeeamNFSSvc%' ESCAPE '\\' OR CommandLine LIKE '%ocautoupds%' ESCAPE '\\' OR CommandLine LIKE '%wordpad%' ESCAPE '\\' OR CommandLine LIKE '%TeamViewer\\_Service%' ESCAPE '\\' OR CommandLine LIKE '%VeeamTransportSvc%' ESCAPE '\\' OR CommandLine LIKE '%oco%' ESCAPE '\\' OR CommandLine LIKE '%xfssvccon%' ESCAPE '\\' OR CommandLine LIKE '%TeamViewer%' ESCAPE '\\' OR CommandLine LIKE '%VeeamDeploymentSvc%' ESCAPE '\\' OR CommandLine LIKE '%ocssd%' ESCAPE '\\' OR CommandLine LIKE '%sql%' ESCAPE '\\' OR CommandLine LIKE '%tv\\_w32%' ESCAPE '\\'))))), 0) AS b0 FROM logs), sigma_4a524d6d1b93_horizon AS (SELECT (SELECT MAX(ts) FROM (SELECT ts FROM sigma_4a524d6d1b93_raw0)) AS ts), sigma_4a524d6d1b93_n0_input AS (SELECT s.*, 0 AS slot, CASE WHEN typeof(json_extract(s.payload, '$.f0'))='text' THEN lower(json_extract(s.payload, '$.f0')) ELSE json_extract(s.payload, '$.f0') END AS g0, NULL AS v FROM (SELECT 'e:' || eid AS eid, ts, payload, json_array(eid) AS evidence, '[]' AS children FROM sigma_4a524d6d1b93_raw0 WHERE b0) s), sigma_4a524d6d1b93_n0_matches AS (SELECT DISTINCT * FROM sigma_4a524d6d1b93_n0_input WHERE ts IS NOT NULL AND eid IS NOT NULL AND g0 IS NOT NULL), sigma_4a524d6d1b93_n0_events AS (SELECT DISTINCT eid, ts, g0, v FROM sigma_4a524d6d1b93_n0_matches), sigma_4a524d6d1b93_n0_unique_events AS (SELECT DISTINCT eid, ts, g0 FROM sigma_4a524d6d1b93_n0_events), sigma_4a524d6d1b93_n0_metrics AS (SELECT DISTINCT ts AS end, g0, COUNT(*) OVER (PARTITION BY g0 ORDER BY ts RANGE BETWEEN 600 PRECEDING AND CURRENT ROW) AS metric FROM sigma_4a524d6d1b93_n0_unique_events), sigma_4a524d6d1b93_n0_t0_anchors AS (SELECT DISTINCT ts - 600 AS start, ts AS end, g0 FROM sigma_4a524d6d1b93_n0_matches), sigma_4a524d6d1b93_n0_t0_measured AS (SELECT a.*, (SELECT m.metric FROM sigma_4a524d6d1b93_n0_metrics m WHERE m.g0 = a.g0 AND m.end=a.end) AS metric FROM sigma_4a524d6d1b93_n0_t0_anchors a WHERE 1), sigma_4a524d6d1b93_n0_t0_qualified AS (SELECT * FROM sigma_4a524d6d1b93_n0_t0_measured WHERE metric >= 5), sigma_4a524d6d1b93_n0_combined AS (SELECT a.start, a.end, g0, a.metric, (SELECT json_group_array(DISTINCT e.value) FROM sigma_4a524d6d1b93_n0_matches m, json_each(m.evidence) e WHERE m.g0 = a.g0 AND m.ts BETWEEN a.start AND a.end) AS evidence, (SELECT json_group_array(DISTINCT c.value) FROM sigma_4a524d6d1b93_n0_matches m, json_each(m.children) c WHERE m.g0 = a.g0 AND m.ts BETWEEN a.start AND a.end) AS children FROM sigma_4a524d6d1b93_n0_t0_qualified a), sigma_4a524d6d1b93_n0_windows AS (SELECT start, end, g0, MAX(metric) AS metric FROM sigma_4a524d6d1b93_n0_combined GROUP BY start, end, g0), sigma_4a524d6d1b93_n0_merged AS (SELECT a.*, (SELECT json_group_array(value) FROM (SELECT DISTINCT e.value FROM sigma_4a524d6d1b93_n0_combined c, json_each(c.evidence) e WHERE c.g0 = a.g0 AND c.start=a.start AND c.end=a.end ORDER BY e.value)) AS evidence, (SELECT json_group_array(value) FROM (SELECT DISTINCT e.value FROM sigma_4a524d6d1b93_n0_combined c, json_each(c.children) e WHERE c.g0 = a.g0 AND c.start=a.start AND c.end=a.end ORDER BY e.value)) AS children FROM sigma_4a524d6d1b93_n0_windows a), sigma_4a524d6d1b93_n0_alerts AS (SELECT 'sigma_alert_4a524d6d1b93bf7a:' || ROW_NUMBER() OVER (ORDER BY g0, end, start, metric, evidence) AS alert_id, start, end, json_object('Computer', `g0`) AS group_keys, metric, evidence, children, json_object('f0', `g0`) AS payload FROM sigma_4a524d6d1b93_n0_merged) SELECT alert_id, group_keys, end AS occurrence_time, start AS window_start, end AS window_end, 'event_count' AS metric_name, metric AS metric_value, json_array_length(evidence) AS event_count, evidence AS event_ids, children AS child_alert_ids FROM sigma_4a524d6d1b93_n0_alerts ORDER BY occurrence_time, alert_id"
+    ],
+    "schema_version": 2,
+    "status": "experimental",
+    "tags": [
+      "attack.impact",
+      "attack.t1489"
+    ],
+    "title": "Correlation - Mass Taskkill Usage Associated with Cicada3301 Ransomware"
+  },
+  {
+    "author": "Micah Babinski, Based on Morphisec report by Michael Gorelik (@smgoreli)",
+    "channel": [],
+    "correlation": true,
+    "correlation_plan": {
+      "cleanup": [
+        "sigma_b10228256daf_n0_alerts",
+        "sigma_b10228256daf_n0_merged",
+        "sigma_b10228256daf_n0_windows",
+        "sigma_b10228256daf_n0_combined",
+        "sigma_b10228256daf_n0_t0_qualified",
+        "sigma_b10228256daf_n0_t0_measured",
+        "sigma_b10228256daf_n0_t0_anchors",
+        "sigma_b10228256daf_n0_metrics",
+        "sigma_b10228256daf_n0_unique_events",
+        "sigma_b10228256daf_n0_events",
+        "sigma_b10228256daf_n0_matches",
+        "sigma_b10228256daf_n0_input",
+        "sigma_b10228256daf_horizon",
+        "sigma_b10228256daf_raw0"
+      ],
+      "diagnostics": "SELECT 'invalid_timestamp' AS reason, COUNT(*) AS count FROM sigma_b10228256daf_raw0 WHERE ts IS NULL AND (b0) UNION ALL SELECT 'missing_group_key' AS reason, COUNT(DISTINCT eid) AS count FROM sigma_b10228256daf_n0_input WHERE g0 IS NULL",
+      "event_id_field": "row_id",
+      "prepare": [
+        {
+          "indexes": [
+            [
+              "eid"
+            ],
+            [
+              "ts"
+            ]
+          ],
+          "name": "sigma_b10228256daf_raw0",
+          "select": "SELECT CAST(`row_id` AS TEXT) AS rid, '0:' || CAST(`row_id` AS TEXT) AS eid, ROUND((julianday(SystemTime) - 2440587.5) * 86400000) / 1000.0 AS ts, json_object('f0', CASE WHEN typeof(`Computer`)='real' AND abs(`Computer`) > 1.7976931348623157e308 THEN NULL ELSE `Computer` END) AS payload, COALESCE(((Channel='System' AND (EventID=7036 AND Provider_Name='Service Control Manager' AND (param1='mepocs' OR param1='PDVFSService' OR param1='GxFWD' OR param1='MVarmor64' OR param1='memtas' OR param1='BackupExecVSSProvider' OR param1='SAPService' OR param1='VSNAPVSS' OR param1='veeam' OR param1='BackupExecAgentAccelerator' OR param1='SAP' OR param1='AcrSch2Svc' OR param1='svc$' OR param1='BackupExecAgentBrowser' OR param1='SAP$' OR param1='DefWatch' OR param1='backup' OR param1='BackupExecDiveciMediaService' OR param1='SAPD$' OR param1='ccEvtMgr' OR param1='sql' OR param1='BackupExecJobEngine' OR param1='SAPHostControl' OR param1='ccSetMgr' OR param1='vss' OR param1='BackupExecManagerService' OR param1='SAPHostExec' OR param1='SavRoam' OR param1='msexchange' OR param1='BackupExecRPCService' OR param1='QBCFMonitorService' OR param1='RTVscan' OR param1='sql$' OR param1='GxBlr' OR param1='QBDBMgrN' OR param1='QBFCService' OR param1='mysql' OR param1='GxVss' OR param1='QBIDPService' OR param1='Intuit.QuickBooks.FCS' OR param1='mysql$' OR param1='GxCIMgr' OR param1='AcronisAgent' OR param1='zhudongfangyu' OR param1='sophos' OR param1='GxCIMgrS' OR param1='VeeamNFSSvc' OR param1 LIKE 'stc\\_raw\\_agent' ESCAPE '\\' OR param1='MSExchange' OR param1='GxCVD' OR param1='VeeamDeploymentService' OR param1='BackupExecManagementService' OR param1='MSExchange$' OR param1='GXMMM' OR param1='VeeamTransportSvc' OR param1='CASAD2DWebSvc' OR param1='WSBExchange' OR param1='GxVssHWProv' OR param1='MVArmor' OR param1='CAARCUpdateSvc') AND param2='stopped'))), 0) AS b0 FROM logs"
+        },
+        {
+          "indexes": [],
+          "name": "sigma_b10228256daf_horizon",
+          "select": "SELECT (SELECT MAX(ts) FROM (SELECT ts FROM sigma_b10228256daf_raw0)) AS ts"
+        },
+        {
+          "indexes": [],
+          "name": "sigma_b10228256daf_n0_input",
+          "select": "SELECT s.*, 0 AS slot, CASE WHEN typeof(json_extract(s.payload, '$.f0'))='text' THEN lower(json_extract(s.payload, '$.f0')) ELSE json_extract(s.payload, '$.f0') END AS g0, NULL AS v FROM (SELECT 'e:' || eid AS eid, ts, payload, json_array(eid) AS evidence, '[]' AS children FROM sigma_b10228256daf_raw0 WHERE b0) s"
+        },
+        {
+          "indexes": [
+            [
+              "g0",
+              "ts"
+            ],
+            [
+              "g0",
+              "slot",
+              "ts"
+            ],
+            [
+              "eid"
+            ]
+          ],
+          "name": "sigma_b10228256daf_n0_matches",
+          "select": "SELECT DISTINCT * FROM sigma_b10228256daf_n0_input WHERE ts IS NOT NULL AND eid IS NOT NULL AND g0 IS NOT NULL"
+        },
+        {
+          "indexes": [
+            [
+              "g0",
+              "ts"
+            ]
+          ],
+          "name": "sigma_b10228256daf_n0_events",
+          "select": "SELECT DISTINCT eid, ts, g0, v FROM sigma_b10228256daf_n0_matches"
+        },
+        {
+          "indexes": [],
+          "name": "sigma_b10228256daf_n0_unique_events",
+          "select": "SELECT DISTINCT eid, ts, g0 FROM sigma_b10228256daf_n0_events"
+        },
+        {
+          "indexes": [
+            [
+              "g0",
+              "end"
+            ]
+          ],
+          "name": "sigma_b10228256daf_n0_metrics",
+          "select": "SELECT DISTINCT ts AS end, g0, COUNT(*) OVER (PARTITION BY g0 ORDER BY ts RANGE BETWEEN 600 PRECEDING AND CURRENT ROW) AS metric FROM sigma_b10228256daf_n0_unique_events"
+        },
+        {
+          "indexes": [
+            [
+              "g0",
+              "end"
+            ]
+          ],
+          "name": "sigma_b10228256daf_n0_t0_anchors",
+          "select": "SELECT DISTINCT ts - 600 AS start, ts AS end, g0 FROM sigma_b10228256daf_n0_matches"
+        },
+        {
+          "indexes": [],
+          "name": "sigma_b10228256daf_n0_t0_measured",
+          "select": "SELECT a.*, (SELECT m.metric FROM sigma_b10228256daf_n0_metrics m WHERE m.g0 = a.g0 AND m.end=a.end) AS metric FROM sigma_b10228256daf_n0_t0_anchors a WHERE 1"
+        },
+        {
+          "indexes": [],
+          "name": "sigma_b10228256daf_n0_t0_qualified",
+          "select": "SELECT * FROM sigma_b10228256daf_n0_t0_measured WHERE metric >= 5"
+        },
+        {
+          "indexes": [],
+          "name": "sigma_b10228256daf_n0_combined",
+          "select": "SELECT a.start, a.end, g0, a.metric, (SELECT json_group_array(DISTINCT e.value) FROM sigma_b10228256daf_n0_matches m, json_each(m.evidence) e WHERE m.g0 = a.g0 AND m.ts BETWEEN a.start AND a.end) AS evidence, (SELECT json_group_array(DISTINCT c.value) FROM sigma_b10228256daf_n0_matches m, json_each(m.children) c WHERE m.g0 = a.g0 AND m.ts BETWEEN a.start AND a.end) AS children FROM sigma_b10228256daf_n0_t0_qualified a"
+        },
+        {
+          "indexes": [],
+          "name": "sigma_b10228256daf_n0_windows",
+          "select": "SELECT start, end, g0, MAX(metric) AS metric FROM sigma_b10228256daf_n0_combined GROUP BY start, end, g0"
+        },
+        {
+          "indexes": [],
+          "name": "sigma_b10228256daf_n0_merged",
+          "select": "SELECT a.*, (SELECT json_group_array(value) FROM (SELECT DISTINCT e.value FROM sigma_b10228256daf_n0_combined c, json_each(c.evidence) e WHERE c.g0 = a.g0 AND c.start=a.start AND c.end=a.end ORDER BY e.value)) AS evidence, (SELECT json_group_array(value) FROM (SELECT DISTINCT e.value FROM sigma_b10228256daf_n0_combined c, json_each(c.children) e WHERE c.g0 = a.g0 AND c.start=a.start AND c.end=a.end ORDER BY e.value)) AS children FROM sigma_b10228256daf_n0_windows a"
+        },
+        {
+          "indexes": [
+            [
+              "end"
+            ],
+            [
+              "alert_id"
+            ]
+          ],
+          "name": "sigma_b10228256daf_n0_alerts",
+          "select": "SELECT 'sigma_alert_b10228256daf1658:' || ROW_NUMBER() OVER (ORDER BY g0, end, start, metric, evidence) AS alert_id, start, end, json_object('Computer', `g0`) AS group_keys, metric, evidence, children, json_object('f0', `g0`) AS payload FROM sigma_b10228256daf_n0_merged"
+        }
+      ],
+      "query": "SELECT alert_id, group_keys, end AS occurrence_time, start AS window_start, end AS window_end, 'event_count' AS metric_name, metric AS metric_value, json_array_length(evidence) AS event_count, evidence AS event_ids, children AS child_alert_ids FROM sigma_b10228256daf_n0_alerts ORDER BY occurrence_time, alert_id",
+      "required_fields": {
+        "logs": [
+          "Channel",
+          "Computer",
+          "EventID",
+          "Provider_Name",
+          "SystemTime",
+          "param1",
+          "param2",
+          "row_id"
+        ]
+      },
+      "source_tables": {
+        "0": "logs"
+      },
+      "sqlite_min_version": "3.38.0",
+      "version": 2
+    },
+    "description": "Detects repeated \"service entered the stopped state\" events, where numerous services are stopped as documented in the 2024 Morphisec Cicada3301 ransomware report.",
+    "eventid": [],
+    "falsepositives": [],
+    "filename": "2024_Cicada3301_Ransomware/correlation_win_system_service_stopped_cicada3301.yml",
+    "id": "6039c5a5-d765-424c-b30d-cb391c9f76de",
+    "level": "medium",
+    "required_fields": [
+      "Channel",
+      "Computer",
+      "EventID",
+      "Provider_Name",
+      "SystemTime",
+      "param1",
+      "param2",
+      "row_id"
+    ],
+    "result_type": "correlation",
+    "rule": [
+      "WITH sigma_b10228256daf_raw0 AS (SELECT CAST(`row_id` AS TEXT) AS rid, '0:' || CAST(`row_id` AS TEXT) AS eid, ROUND((julianday(SystemTime) - 2440587.5) * 86400000) / 1000.0 AS ts, json_object('f0', CASE WHEN typeof(`Computer`)='real' AND abs(`Computer`) > 1.7976931348623157e308 THEN NULL ELSE `Computer` END) AS payload, COALESCE(((Channel='System' AND (EventID=7036 AND Provider_Name='Service Control Manager' AND (param1='mepocs' OR param1='PDVFSService' OR param1='GxFWD' OR param1='MVarmor64' OR param1='memtas' OR param1='BackupExecVSSProvider' OR param1='SAPService' OR param1='VSNAPVSS' OR param1='veeam' OR param1='BackupExecAgentAccelerator' OR param1='SAP' OR param1='AcrSch2Svc' OR param1='svc$' OR param1='BackupExecAgentBrowser' OR param1='SAP$' OR param1='DefWatch' OR param1='backup' OR param1='BackupExecDiveciMediaService' OR param1='SAPD$' OR param1='ccEvtMgr' OR param1='sql' OR param1='BackupExecJobEngine' OR param1='SAPHostControl' OR param1='ccSetMgr' OR param1='vss' OR param1='BackupExecManagerService' OR param1='SAPHostExec' OR param1='SavRoam' OR param1='msexchange' OR param1='BackupExecRPCService' OR param1='QBCFMonitorService' OR param1='RTVscan' OR param1='sql$' OR param1='GxBlr' OR param1='QBDBMgrN' OR param1='QBFCService' OR param1='mysql' OR param1='GxVss' OR param1='QBIDPService' OR param1='Intuit.QuickBooks.FCS' OR param1='mysql$' OR param1='GxCIMgr' OR param1='AcronisAgent' OR param1='zhudongfangyu' OR param1='sophos' OR param1='GxCIMgrS' OR param1='VeeamNFSSvc' OR param1 LIKE 'stc\\_raw\\_agent' ESCAPE '\\' OR param1='MSExchange' OR param1='GxCVD' OR param1='VeeamDeploymentService' OR param1='BackupExecManagementService' OR param1='MSExchange$' OR param1='GXMMM' OR param1='VeeamTransportSvc' OR param1='CASAD2DWebSvc' OR param1='WSBExchange' OR param1='GxVssHWProv' OR param1='MVArmor' OR param1='CAARCUpdateSvc') AND param2='stopped'))), 0) AS b0 FROM logs), sigma_b10228256daf_horizon AS (SELECT (SELECT MAX(ts) FROM (SELECT ts FROM sigma_b10228256daf_raw0)) AS ts), sigma_b10228256daf_n0_input AS (SELECT s.*, 0 AS slot, CASE WHEN typeof(json_extract(s.payload, '$.f0'))='text' THEN lower(json_extract(s.payload, '$.f0')) ELSE json_extract(s.payload, '$.f0') END AS g0, NULL AS v FROM (SELECT 'e:' || eid AS eid, ts, payload, json_array(eid) AS evidence, '[]' AS children FROM sigma_b10228256daf_raw0 WHERE b0) s), sigma_b10228256daf_n0_matches AS (SELECT DISTINCT * FROM sigma_b10228256daf_n0_input WHERE ts IS NOT NULL AND eid IS NOT NULL AND g0 IS NOT NULL), sigma_b10228256daf_n0_events AS (SELECT DISTINCT eid, ts, g0, v FROM sigma_b10228256daf_n0_matches), sigma_b10228256daf_n0_unique_events AS (SELECT DISTINCT eid, ts, g0 FROM sigma_b10228256daf_n0_events), sigma_b10228256daf_n0_metrics AS (SELECT DISTINCT ts AS end, g0, COUNT(*) OVER (PARTITION BY g0 ORDER BY ts RANGE BETWEEN 600 PRECEDING AND CURRENT ROW) AS metric FROM sigma_b10228256daf_n0_unique_events), sigma_b10228256daf_n0_t0_anchors AS (SELECT DISTINCT ts - 600 AS start, ts AS end, g0 FROM sigma_b10228256daf_n0_matches), sigma_b10228256daf_n0_t0_measured AS (SELECT a.*, (SELECT m.metric FROM sigma_b10228256daf_n0_metrics m WHERE m.g0 = a.g0 AND m.end=a.end) AS metric FROM sigma_b10228256daf_n0_t0_anchors a WHERE 1), sigma_b10228256daf_n0_t0_qualified AS (SELECT * FROM sigma_b10228256daf_n0_t0_measured WHERE metric >= 5), sigma_b10228256daf_n0_combined AS (SELECT a.start, a.end, g0, a.metric, (SELECT json_group_array(DISTINCT e.value) FROM sigma_b10228256daf_n0_matches m, json_each(m.evidence) e WHERE m.g0 = a.g0 AND m.ts BETWEEN a.start AND a.end) AS evidence, (SELECT json_group_array(DISTINCT c.value) FROM sigma_b10228256daf_n0_matches m, json_each(m.children) c WHERE m.g0 = a.g0 AND m.ts BETWEEN a.start AND a.end) AS children FROM sigma_b10228256daf_n0_t0_qualified a), sigma_b10228256daf_n0_windows AS (SELECT start, end, g0, MAX(metric) AS metric FROM sigma_b10228256daf_n0_combined GROUP BY start, end, g0), sigma_b10228256daf_n0_merged AS (SELECT a.*, (SELECT json_group_array(value) FROM (SELECT DISTINCT e.value FROM sigma_b10228256daf_n0_combined c, json_each(c.evidence) e WHERE c.g0 = a.g0 AND c.start=a.start AND c.end=a.end ORDER BY e.value)) AS evidence, (SELECT json_group_array(value) FROM (SELECT DISTINCT e.value FROM sigma_b10228256daf_n0_combined c, json_each(c.children) e WHERE c.g0 = a.g0 AND c.start=a.start AND c.end=a.end ORDER BY e.value)) AS children FROM sigma_b10228256daf_n0_windows a), sigma_b10228256daf_n0_alerts AS (SELECT 'sigma_alert_b10228256daf1658:' || ROW_NUMBER() OVER (ORDER BY g0, end, start, metric, evidence) AS alert_id, start, end, json_object('Computer', `g0`) AS group_keys, metric, evidence, children, json_object('f0', `g0`) AS payload FROM sigma_b10228256daf_n0_merged) SELECT alert_id, group_keys, end AS occurrence_time, start AS window_start, end AS window_end, 'event_count' AS metric_name, metric AS metric_value, json_array_length(evidence) AS event_count, evidence AS event_ids, children AS child_alert_ids FROM sigma_b10228256daf_n0_alerts ORDER BY occurrence_time, alert_id"
+    ],
+    "schema_version": 2,
+    "status": "experimental",
+    "tags": [
+      "attack.impact",
+      "attack.t1489"
+    ],
+    "title": "Correlation - Mass Service Stoppage Associated with Cicada3301 Ransomware"
+  }
+]

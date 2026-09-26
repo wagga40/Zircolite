@@ -235,7 +235,7 @@ standalone binary writes to the `rules/` directory beside its executable, and fa
 to `./rules` in the working directory, with a warning, when that one cannot be written to.
 See [Rulesets](docs/Usage.md#rulesets--rules).
 
-Alternatively, if you use [Task](https://taskfile.dev/) (go-task), run `task update-rules` from the project root to update the SigmaHQ rulesets from [Zircolite-Rules-v2](https://github.com/wagga40/Zircolite-Rules-v2). See [docs](docs/README.md) for other tasks (Docker build, clean, etc.).
+Alternatively, if you use [Task](https://taskfile.dev/) (go-task), run `task update-rules` from the project root to update the rulesets from [Zircolite-Rules-v2](https://github.com/wagga40/Zircolite-Rules-v2), as `-U` does. See [docs](docs/README.md) for other tasks (Docker build, clean, etc.).
 
 > [!IMPORTANT]  
 > Please note that these rulesets are provided to use Zircolite out of the box, but [you should generate your own rulesets](docs/Usage.md#why-you-should-build-your-own-rulesets) as they can be noisy or slow. These auto-updated rulesets are available in the dedicated repository: [Zircolite-Rules-v2](https://github.com/wagga40/Zircolite-Rules-v2).
@@ -340,6 +340,6 @@ The Mini-GUI can be used completely offline. It allows you to display and search
 
 - All the **code** of the project is licensed under the [GNU Lesser General Public License](https://www.gnu.org/licenses/lgpl-3.0.en.html).
 - EVTX parsing uses [`evtx`](https://github.com/omerbenamram/pyevtx-rs) (pyevtx-rs), under the MIT or Apache-2.0 license. Release packages list every bundled library and its license in `THIRD_PARTY_LICENSES`.
-- The rules are released under the [Detection Rule License (DRL) 1.1](https://github.com/SigmaHQ/Detection-Rule-License/blob/main/LICENSE.Detection.Rules.md).
+- The rules keep the licence of their source, whose text is in [`rules/licenses/`](rules/licenses/): the SigmaHQ and Hayabusa rules are under the [Detection Rule License (DRL) 1.1](https://github.com/SigmaHQ/Detection-Rule-License/blob/main/LICENSE.Detection.Rules.md), the Joe Security, Micah Babinski and tsale rules under the GPL 3.0, and the mdecrevoisier rules under CC0 1.0. `rules_windows_all.json` combines them, each rule keeping its own. Release packages credit every ruleset in `THIRD_PARTY_LICENSES`.
 
 ---

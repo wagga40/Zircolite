@@ -658,15 +658,24 @@ class TestAttackTacticExtraction:
         That is how the v19 rename went unnoticed: rules tagged attack.stealth
         produced no tactic at all, so Navigator entries merged under a null
         tactic and the Mini-GUI's lanes for them stayed empty.
+
+        Only SigmaHQ's rulesets are checked. The community ones carry their
+        authors' misspellings (attack.defense_evesion, attack.11136.001), which
+        no alias should guess at.
         """
         import json
 
         from zircolite.attack import extract_attack_tactics
 
         rules_dir = Path(__file__).parent.parent / "rules"
-        rulesets = sorted(rules_dir.glob("*.json"))
+        manifest = rules_dir / "release-manifest.json"
+        if not manifest.is_file():
+            pytest.skip("no release-manifest.json in rules/ to find the SigmaHQ rulesets by")
+        artifacts = json.loads(manifest.read_text())["sources"]["sigmahq"]["artifacts"]
+        rulesets = sorted(rules_dir / name for name in artifacts
+                          if name.endswith(".json") and (rules_dir / name).is_file())
         if not rulesets:
-            pytest.skip("no rulesets in rules/ to check against")
+            pytest.skip("no SigmaHQ rulesets in rules/ to check against")
 
         # Technique (attack.tXXXX), software (attack.sXXXX), group (attack.gXXXX)
         # and data-source (attack.dsXXXX) tags are not tactics and never resolve.
