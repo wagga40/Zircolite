@@ -12,6 +12,7 @@ them (``zircolite.core`` and ``zircolite.processing``).
 
 import contextlib
 import logging
+import re
 import sys
 from dataclasses import dataclass
 from pathlib import Path
@@ -20,6 +21,7 @@ from typing import Any
 from rich.bar import Bar
 from rich.console import Console
 from rich.logging import RichHandler
+from rich.markup import escape
 from rich.panel import Panel
 from rich.rule import Rule
 from rich.table import Table
@@ -315,7 +317,9 @@ def _format_file_node(fs: dict[str, Any]) -> str:
     det_text = f"[{det_style}]{detections} {det_label}[/]"
 
     full_path = fs.get("path")
-    name_markup = make_file_link(full_path, name) if full_path else f"[cyan]{name}[/]"
+    name_markup = (
+        make_file_link(full_path, name) if full_path else f"[cyan]{safe_markup(name)}[/]"
+    )
     parts = [name_markup, f"[magenta]{events:,}[/] events", det_text]
     if filtered > 0:
         parts.append(f"[dim]{filtered:,} filtered[/]")
@@ -661,11 +665,27 @@ def make_file_link(path: str, display: str | None = None) -> str:
         Rich markup string with clickable link
     """
     text = display if display is not None else path
+    # The display text comes from file names analysts do not control; escape it
+    # so "[" never renders as markup or raises MarkupError out of a log call.
+    safe_text = safe_markup(text)
     try:
         abs_path = Path(path).resolve()
         uri = abs_path.as_uri()
-        return f"[link={uri}][cyan]{text}[/][/link]"
+        return f"[link={uri}][cyan]{safe_text}[/][/link]"
     except (ValueError, OSError):
-        return f"[cyan]{text}[/]"
+        return f"[cyan]{safe_text}[/]"
 
 
+# Control characters that Rich markup must never see, kept from #146's _safe().
+_UNSAFE_CONTROL_CHARS = re.compile(r"[\x00-\x08\x0b-\x1f\x7f-\x9f]")
+
+
+def safe_markup(value: object) -> str:
+    """Render text from file names, paths or errors literally inside Rich markup.
+
+    Analysts process evidence whose names they did not choose: put into markup
+    as-is, "[/]" raises MarkupError and ends the run, and "[link=...]" or style
+    tags forge or hide output lines. Control characters are stripped first, the
+    rest is escaped. Same treatment as tools/sigma-regression.py (_safe, #146).
+    """
+    return escape(_UNSAFE_CONTROL_CHARS.sub("", str(value)))

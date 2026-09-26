@@ -60,6 +60,7 @@ from .console import (
     # Live display helpers
     make_detection_counter,
     make_file_link,
+    safe_markup,
     # Severity badges
     make_severity_badge,
     # Banner

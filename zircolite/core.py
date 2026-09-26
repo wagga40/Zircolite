@@ -43,6 +43,7 @@ from .console import (
     console,
     is_quiet,
     make_detection_counter,
+    safe_markup,
     sort_key_severity,
 )
 from .formats import json_array_requested
@@ -1637,7 +1638,9 @@ class ZircoliteCore:
                 # not be swallowed into a "0 events" result like the rest.
                 raise
             except Exception as e:
-                self.logger.error(f"[error]    [-] Error processing {log_file}: {e}[/]")
+                self.logger.error(
+                    f"[error]    [-] Error processing {safe_markup(str(log_file))}: {safe_markup(e)}[/]"
+                )
                 self.failed_files.add(str(log_file))
                 return 0
 

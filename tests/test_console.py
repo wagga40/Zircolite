@@ -442,6 +442,21 @@ class TestMakeFileLink:
         result = make_file_link("")
         assert isinstance(result, str)
 
+    def test_display_text_with_brackets_is_escaped(self, tmp_path):
+        """File names containing Rich markup are rendered literally (GH #153)."""
+        test_file = tmp_path / "[bold]x.evtx"
+        test_file.write_text("{}")
+        result = make_file_link(str(test_file))
+        assert "link=" in result
+        # escape() only escapes the opening bracket, which neutralizes the tag.
+        assert "\\[bold]x.evtx" in result
+
+    def test_display_text_closing_tag_does_not_raise(self):
+        """A display name forming a closing tag must not raise MarkupError."""
+        result = make_file_link("evidence.evtx", display="a[/]b")
+        assert isinstance(result, str)
+        assert "a" in result and "b" in result
+
 
 # =============================================================================
 # print_rule_test_results
