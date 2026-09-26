@@ -3,8 +3,10 @@ Tests for the RulesetHandler and RulesUpdater classes in zircolite/rules.py.
 """
 
 import json
+import os
 import re
 import sqlite3
+import subprocess
 import sys
 from contextlib import closing
 from pathlib import Path
@@ -1185,6 +1187,43 @@ class TestRulesetHandlerInitBranches:
                 mock_info.assert_called()
                 call_str = " ".join(str(c) for c in mock_info.call_args_list)
                 assert "Installed pipelines" in call_str or "pipelines" in call_str.lower()
+
+    def test_sigma_conversion_never_loads_diskcache(self, tmp_path):
+        """Converting a Sigma rule must not import pySigma's pickle-backed cache.
+
+        diskcache unpickles whatever sits in ~/.cache/pysigma, so anyone who can
+        write there gets code execution in a process that reads it. Only the MITRE
+        tag validators read it, and Zircolite never runs them. A subprocess keeps
+        modules imported by other tests from hiding a regression.
+        """
+        rule = tmp_path / "rule.yml"
+        rule.write_text(
+            "title: Whoami\n"
+            "id: 0f3b1c2d-1111-4222-8333-444455556666\n"
+            "status: test\n"
+            "tags:\n  - attack.discovery\n  - attack.t1033\n"
+            "logsource:\n  product: windows\n  category: process_creation\n"
+            "detection:\n  sel:\n    Image|endswith: '\\whoami.exe'\n  condition: sel\n"
+            "level: low\n"
+        )
+        script = (
+            "import logging, sys\n"
+            "sys.path.insert(0, sys.argv[2])\n"
+            "from zircolite.config import RulesetConfig\n"
+            "from zircolite.rules import RulesetHandler\n"
+            "handler = RulesetHandler(RulesetConfig(ruleset=[sys.argv[1]], pipeline=[['sysmon']]),\n"
+            "                         logger=logging.getLogger('t'))\n"
+            "assert len(handler.rulesets) == 1, handler.rulesets\n"
+            "print(sorted(m for m in sys.modules if m.startswith(('diskcache', 'sigma.data', 'sigma.validators.core'))))\n"
+        )
+        result = subprocess.run(
+            [sys.executable, "-c", script, str(rule), str(WORKSPACE_ROOT)],
+            capture_output=True, text=True, cwd=tmp_path, check=False, timeout=120,
+            env={**os.environ, "HOME": str(tmp_path), "USERPROFILE": str(tmp_path)},
+        )
+        assert result.returncode == 0, result.stderr
+        assert result.stdout.strip() == "[]"
+        assert not (tmp_path / ".cache" / "pysigma").exists()
 
 
 def _make_bare_handler(logger, **overrides):
