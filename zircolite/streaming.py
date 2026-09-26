@@ -42,6 +42,7 @@ from RestrictedPython.Eval import default_guarded_getiter
 from RestrictedPython.Guards import guarded_iter_unpack_sequence
 
 from .config import ProcessingConfig
+from .console import literal
 from .formats import (
     DEFAULT_INPUT_FORMAT,
     NON_WINDOWS_INPUT_FLAGS,
@@ -266,7 +267,7 @@ def marks_degraded(label: str):
             except Exception as exc:
                 self._had_parse_error = True
                 self.logger.error(
-                    f"[red]    [-] Error streaming {label} file {source}: {exc}[/]"
+                    f"[red]    [-] Error streaming {label} file {literal(source)}: {literal(exc)}[/]"
                 )
 
         return wrapper
@@ -799,7 +800,7 @@ class StreamingEventProcessor:
                     # An empty source_condition matches no input type: the
                     # transform would be silently skipped for every event
                     self.logger.warning(
-                        f"    [!] Transform on field '{field_name}' has no "
+                        f"    [!] Transform on field '{literal(field_name)}' has no "
                         f"source_condition and will never run"
                     )
             self._transforms_baked[field_name] = [
@@ -862,7 +863,7 @@ class StreamingEventProcessor:
                 rel_path = transform.get("file", "")
                 if not rel_path:
                     self.logger.warning(
-                        f"    [!] Transform for '{field_name}' has type python_file but no 'file' key – skipped"
+                        f"    [!] Transform for '{literal(field_name)}' has type python_file but no 'file' key – skipped"
                     )
                     transform["code"] = _NOOP_TRANSFORM_CODE
                     continue
@@ -874,12 +875,12 @@ class StreamingEventProcessor:
                     transform["code"] = _read_transform(str(file_path), stat.st_mtime_ns, stat.st_size)
                 except FileNotFoundError:
                     self.logger.error(
-                        f"    [!] Transform file not found: {file_path} (field '{field_name}')"
+                        f"    [!] Transform file not found: {literal(file_path)} (field '{literal(field_name)}')"
                     )
                     transform["code"] = _NOOP_TRANSFORM_CODE
                 except Exception as exc:
                     self.logger.error(
-                        f"    [!] Error reading transform file {file_path}: {exc}"
+                        f"    [!] Error reading transform file {literal(file_path)}: {literal(exc)}"
                     )
                     transform["code"] = _NOOP_TRANSFORM_CODE
 
@@ -1140,7 +1141,7 @@ class StreamingEventProcessor:
                 self._failed_transforms.add(code)
                 snippet = code[:80].replace("\n", " ")
                 self.logger.warning(
-                    f"[yellow]   [!] Transform compilation failed: {e} "
+                    f"[yellow]   [!] Transform compilation failed: {literal(e)} "
                     f"(code: {snippet!r})[/]"
                 )
             return None
@@ -1163,7 +1164,7 @@ class StreamingEventProcessor:
                 snippet = code[:80].replace("\n", " ")
                 self.logger.warning(
                     f"[yellow]   [!] Transform failed at runtime, values left "
-                    f"untransformed: {exc} (code: {snippet!r})[/]"
+                    f"untransformed: {literal(exc)} (code: {snippet!r})[/]"
                 )
             return param
 
@@ -1239,7 +1240,7 @@ class StreamingEventProcessor:
                 "Invalid EVTX" in err_msg or "ElfFile0" in err_msg
             ) and Path(evtx_file).suffix.lower() == ".7z":
                     self.logger.error(
-                        f"[red]    [-] Error streaming EVTX file {evtx_file}: {e}[/]\n"
+                        f"[red]    [-] Error streaming EVTX file {literal(evtx_file)}: {literal(e)}[/]\n"
                         "[yellow]   [!] This archive contains non-EVTX data (e.g. JSON). "
                         "Use [cyan]-e/--events[/] without forcing EVTX so auto-detect can run, or [cyan]--json-input[/] for JSON in archives.[/]"
                     )
@@ -1251,7 +1252,7 @@ class StreamingEventProcessor:
                 ) from e
             self._had_parse_error = True
             self.logger.warning(
-                f"[yellow]    [!] EVTX parsing error in {evtx_file}: {e} — "
+                f"[yellow]    [!] EVTX parsing error in {literal(evtx_file)}: {literal(e)} — "
                 "recovered events before the error were kept (use [cyan]--strict[/] to abort on parse errors)[/]"
             )
         finally:
@@ -1346,7 +1347,7 @@ class StreamingEventProcessor:
                 # nothing here.
                 self.logger.warning(
                     f"[yellow]    [!] No <Event> documents found in "
-                    f"{Path(xml_file).name}; check that it is an EVTX-to-XML "
+                    f"{literal(Path(xml_file).name)}; check that it is an EVTX-to-XML "
                     f"export and that its encoding declaration is correct[/]"
                 )
 
@@ -1644,7 +1645,7 @@ class StreamingEventProcessor:
                 # encoding or format mismatch that lost every record.
                 self.logger.warning(
                     f"[yellow]   [!] No event could be parsed from "
-                    f"{os.path.basename(log_file)}: {self._skipped_records:,} "
+                    f"{literal(os.path.basename(log_file))}: {self._skipped_records:,} "
                     f"record(s) were skipped. Check the format and encoding "
                     f"(--debug shows the first error)[/]"
                 )
@@ -1658,8 +1659,8 @@ class StreamingEventProcessor:
             # --remove-events must not treat this as a completed ingest.
             self._had_parse_error = True
             self.logger.error(
-                f"[red]    [-] Partial ingest of {os.path.basename(log_file)}: "
-                f"{e}[/]\n"
+                f"[red]    [-] Partial ingest of {literal(os.path.basename(log_file))}: "
+                f"{literal(e)}[/]\n"
                 f"[yellow]   [!] {inserted_count:,} event(s) were committed "
                 f"before the failure and are included in the results[/]"
             )
@@ -1776,7 +1777,7 @@ class StreamingEventProcessor:
                     if col_lower not in db_columns:
                         self.logger.warning(
                             f"[yellow]   [!] Could not add column '{col}' to the "
-                            f"events table: {exc}[/]"
+                            f"events table: {literal(exc)}[/]"
                         )
 
         return schema_changed
@@ -1805,7 +1806,7 @@ class StreamingEventProcessor:
             self._last_column_frozenset = frozenset()
             self._last_sorted_columns = ()
         except Exception as e:
-            self.logger.error(f"[error]    [-] Error creating initial table: {e}[/]")
+            self.logger.error(f"[error]    [-] Error creating initial table: {literal(e)}[/]")
             raise
         finally:
             cursor.close()

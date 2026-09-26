@@ -16,6 +16,7 @@ from jinja2 import Environment
 
 from .attack import extract_attack_tactics, extract_attack_techniques
 from .config import GuiConfig, TemplateConfig
+from .console import literal
 from .utils import random_suffix
 
 _LEVEL_ORDER = {'unknown': -1, 'informational': 0, 'low': 1, 'medium': 2, 'high': 3, 'critical': 4}
@@ -191,7 +192,7 @@ class TemplateEngine:
             # The message has to name the cause: a pipeline that consumes the
             # template output cannot re-run the whole analysis with --debug
             self.logger.error(
-                f"[red]    [-] Template error writing '{output_filename}': {e}[/]"
+                f"[red]    [-] Template error writing '{literal(output_filename)}': {literal(e)}[/]"
             )
             return False
 
@@ -203,7 +204,7 @@ class TemplateEngine:
         ):
             mode_label = "appending" if self.append else "writing"
             self.logger.info(
-                f'[+] Applying template "{template_spec[0]}", {mode_label} to : {output_spec[0]}'
+                f'[+] Applying template "{literal(template_spec[0])}", {mode_label} to : {literal(output_spec[0])}'
             )
             if not self.generate_from_template(
                 template_spec[0], output_spec[0], data
@@ -258,7 +259,7 @@ class ZircoliteGuiGenerator:
                 # somewhere the user did not ask for and would not think to look.
                 reason = "is not a directory" if candidate.exists() else "does not exist"
                 self.logger.error(
-                    f"[red]    [-] Cannot create GUI package: {directory} {reason}[/]"
+                    f"[red]    [-] Cannot create GUI package: {literal(directory)} {reason}[/]"
                 )
                 return False
             package_dir = candidate
@@ -270,7 +271,7 @@ class ZircoliteGuiGenerator:
             # Generate data file
             target_name = f"{self.outputFile}.zip"
             target_display = str(package_dir / target_name) if package_dir else target_name
-            self.logger.info(f"[+] Generating ZircoGui package to: {target_display}")
+            self.logger.info(f"[+] Generating ZircoGui package to: {literal(target_display)}")
             tmpl_config = TemplateConfig(
                 template=[[self.templateFile]],
                 template_output=[[self.tmpFile]],
@@ -284,7 +285,7 @@ class ZircoliteGuiGenerator:
                 # which names neither the template nor what went wrong with it.
                 self.logger.error(
                     "[red]    [-] Cannot create GUI package: "
-                    f"{self.templateFile} produced no data file[/]"
+                    f"{literal(self.templateFile)} produced no data file[/]"
                 )
                 return False
 
@@ -299,7 +300,7 @@ class ZircoliteGuiGenerator:
                 shutil.move(target_name, package_dir / target_name)
 
         except Exception as e:
-            self.logger.error(f"[red]    [-] {e}[/]")
+            self.logger.error(f"[red]    [-] {literal(e)}[/]")
             return False
         finally:
             # Clean up temporary directory and any leftover data file

@@ -37,7 +37,7 @@ from rich.progress import (
     TimeElapsedColumn,
 )
 
-from .console import console
+from .console import console, literal
 from .shutdown import is_shutdown_requested
 from .utils import estimate_input_size
 
@@ -712,7 +712,7 @@ class MemoryAwareParallelProcessor:
                 f"[!] [yellow]{len(failed_files)}[/] file(s) failed to process:"
             )
             for path, error in failed_files[:5]:
-                self.logger.warning(f"    [-] {path.name}: {error}")
+                self.logger.warning(f"    [-] {literal(path.name)}: {literal(error)}")
             if len(failed_files) > 5:
                 self.logger.warning(
                     f"    ... and [yellow]{len(failed_files) - 5}[/] more"

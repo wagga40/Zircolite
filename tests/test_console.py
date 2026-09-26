@@ -20,6 +20,7 @@ from zircolite.console import (
     build_file_tree,
     console,
     is_quiet,
+    literal,
     make_detection_counter,
     make_file_link,
     make_severity_badge,
@@ -441,6 +442,36 @@ class TestMakeFileLink:
         # An empty path should still produce markup without crashing
         result = make_file_link("")
         assert isinstance(result, str)
+
+    @pytest.mark.parametrize("name", ["[bold]x.evtx", "a[/]b.evtx", "[link=https://x]y[/link]"])
+    def test_names_print_as_written(self, tmp_path, name):
+        """Evidence file names are not markup: "[bold]x.evtx" printed as "x.evtx"."""
+        from rich.text import Text
+
+        assert Text.from_markup(make_file_link(str(tmp_path / "f"), name)).plain == name
+        assert Text.from_markup(make_file_link(name)).plain == name
+
+
+class TestLiteral:
+    """Text from the evidence, interpolated into Rich markup."""
+
+    def test_markup_is_printed_not_applied(self):
+        from rich.text import Text
+
+        text = "[red]x[/] [link=https://attacker.example]y[/link] a[/]b"
+        assert Text.from_markup(f"[cyan]{literal(text)}[/]").plain == text
+
+    def test_terminal_control_characters_are_removed(self):
+        from rich.text import Text
+
+        rendered = Text.from_markup(literal("a\x1b[2Jb\x07c\x9bd\te\nf")).plain
+        assert rendered == "a[2Jbcd\te\nf"
+
+    def test_exceptions_are_accepted(self):
+        from rich.text import Text
+
+        error = FileNotFoundError(2, "No such file", "[bold]x[/]")
+        assert Text.from_markup(literal(error)).plain == str(error)
 
 
 # =============================================================================

@@ -43,6 +43,7 @@ from .console import (
     build_file_tree,
     console,
     is_quiet,
+    literal,
     make_file_link,
     print_no_detections,
     print_section,
@@ -704,7 +705,7 @@ def process_db_input(
                 if file_list is None:
                     quit_on_error(f"[red]    [-] {e}[/]", ctx.logger)
                 ctx.logger.warning(
-                    f"[yellow]    [!] Could not load database '{file_name}': {e}. Skipping.[/]"
+                    f"[yellow]    [!] Could not load database '{literal(file_name)}': {literal(e)}. Skipping.[/]"
                 )
                 continue
             ctx.memory_tracker.sample()
@@ -712,7 +713,7 @@ def process_db_input(
             # Warn and skip if the DB cannot be used (no connection, no 'logs' table)
             if zircolite_core.db_connection is None:
                 ctx.logger.warning(
-                    f"[yellow]    [!] Could not open database '{file_name}'. Skipping.[/]"
+                    f"[yellow]    [!] Could not open database '{literal(file_name)}'. Skipping.[/]"
                 )
                 continue
             try:
@@ -722,12 +723,12 @@ def process_db_input(
                 _cur.close()
             except Exception as e:
                 ctx.logger.warning(
-                    f"[yellow]    [!] Cannot inspect database '{file_name}': {e}. Skipping.[/]"
+                    f"[yellow]    [!] Cannot inspect database '{literal(file_name)}': {literal(e)}. Skipping.[/]"
                 )
                 continue
             if not _has_logs_table:
                 ctx.logger.warning(
-                    f"[yellow]    [!] Database '{file_name}' has no 'logs' table. "
+                    f"[yellow]    [!] Database '{literal(file_name)}' has no 'logs' table. "
                     f"The file may be damaged (e.g. missing WAL journal). Skipping.[/]"
                 )
                 continue
@@ -801,7 +802,7 @@ def process_db_input(
                     fh.write(']')
             except OSError as exc:
                 # Never let this replace the exception that unwound the loop
-                ctx.logger.error(f"[red]    [-] Could not finalize output: {exc}[/]")
+                ctx.logger.error(f"[red]    [-] Could not finalize output: {literal(exc)}[/]")
 
     if not processed_any:
         # Every database was unreadable or skipped: nothing was analysed, so the
@@ -1380,7 +1381,7 @@ def process_parallel_streaming(
     if errors:
         ctx.logger.error(f"[!] {len(errors)} file(s) failed to process:")
         for fname, err in errors[:5]:
-            ctx.logger.error(f"    \u2192 {fname}: {err}")
+            ctx.logger.error(f"    \u2192 {literal(fname)}: {literal(err)}")
         if len(errors) > 5:
             ctx.logger.error(f"    \u2192 ... and {len(errors) - 5} more")
 

@@ -3864,3 +3864,21 @@ class TestPerFileDbfilePreflight:
         self._run(tmp_path, corpus, ruleset, tmp_path / "save.db")
         written = sorted(p.name for p in tmp_path.glob("save*.db"))
         assert len(written) == 2, written
+
+
+class TestEvidenceNamesPrintAsWritten:
+    """File names come from the evidence and must not be read as Rich markup."""
+
+    def test_markup_in_a_file_name(self, tmp_path, capsys):
+        import shutil
+
+        evidence = tmp_path / "evidence"
+        evidence.mkdir()
+        shutil.copy(FIXTURES_DIR / "sample_bitsadmin.evtx", evidence / "[bold]x.evtx")
+
+        with patch('sys.argv', ['zircolite.py', '-e', str(evidence),
+                                '-r', str(FIXTURES_DIR / "sample_ruleset.json"),
+                                '-o', str(tmp_path / "out.json"), *get_log_arg(tmp_path)]):
+            zircolite_script.main()
+
+        assert "[bold]x.evtx" in capsys.readouterr().out

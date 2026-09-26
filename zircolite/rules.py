@@ -42,7 +42,7 @@ from .assets import bundled_dir
 from .config import RulesetConfig
 
 # Rich console for styled output
-from .console import console, is_quiet, make_file_link
+from .console import console, is_quiet, literal, make_file_link
 from .sqlscan import channel_constraints, eventid_constraints
 from .utils import random_suffix, safe_load_all
 
@@ -498,13 +498,13 @@ class RulesUpdater:
             self.unzip()
             self.checkIfNewerAndMove()
         except requests.exceptions.ConnectionError as e:
-            self.logger.error(f"    [-] Network connection failed: {e}")
+            self.logger.error(f"    [-] Network connection failed: {literal(e)}")
         except requests.exceptions.Timeout:
             self.logger.error(f"    [-] Download timed out after 30s: {self.url}")
         except requests.exceptions.HTTPError as e:
-            self.logger.error(f"    [-] Server returned an error: {e}")
+            self.logger.error(f"    [-] Server returned an error: {literal(e)}")
         except Exception as e:
-            self.logger.error(f"    [-] {e}")
+            self.logger.error(f"    [-] {literal(e)}")
         finally:
             self.clean()
 
@@ -858,7 +858,7 @@ class RulesetHandler:
         for ruleset in self.rulesetPathList:
             ruleset_path = Path(ruleset)
             if not ruleset_path.exists():
-                self.logger.warning(f"[yellow]    [!] Ruleset path does not exist: {ruleset_path!s}[/]")
+                self.logger.warning(f"[yellow]    [!] Ruleset path does not exist: {literal(ruleset_path)}[/]")
                 continue
             if ruleset_path.is_file():
                 if self.is_json(ruleset_path):  # JSON Ruleset
@@ -872,29 +872,29 @@ class RulesetHandler:
                             isinstance(rule, dict) for rule in parsed
                         ):
                             self.logger.error(
-                                f"[red]    [-] {ruleset_path!s} is not a Zircolite "
+                                f"[red]    [-] {literal(ruleset_path)} is not a Zircolite "
                                 "ruleset: expected a JSON array of rule objects[/]"
                             )
                             continue
                         ruleset_list.append(parsed)
                         self.logger.info(f"    [>] Loaded JSON/Zircolite ruleset : {make_file_link(str(ruleset_path))}")
                     except Exception as e:
-                        self.logger.error(f"[red]    [-] Cannot load {ruleset_path!s} {e}[/]")
+                        self.logger.error(f"[red]    [-] Cannot load {literal(ruleset_path)} {literal(e)}[/]")
                 elif self.is_yaml(ruleset_path):  # YAML Ruleset
                     try:
                         self.logger.info(f"    [>] Converting Native Sigma to Zircolite ruleset : {make_file_link(str(ruleset_path))}")
                         ruleset_list.append(self.sigma_rules_to_ruleset([ruleset_path], self.pipelines))
                     except Exception as e:
-                        self.logger.error(f"[red]    [-] Cannot convert {ruleset_path!s} {e}[/]")
+                        self.logger.error(f"[red]    [-] Cannot convert {literal(ruleset_path)} {literal(e)}[/]")
                 else:
                     self.logger.warning(
                         f"[yellow]    [!] Skipping unrecognized ruleset file "
-                        f"(not a valid JSON ruleset or Sigma YAML file): {ruleset_path!s}[/]"
+                        f"(not a valid JSON ruleset or Sigma YAML file): {literal(ruleset_path)}[/]"
                     )
             elif ruleset_path.is_dir():  # Directory
                 try:
                     self.logger.info(f"    [>] Converting Native Sigma to Zircolite ruleset : {make_file_link(str(ruleset_path))}")
                     ruleset_list.append(self.sigma_rules_to_ruleset([ruleset_path], self.pipelines))
                 except Exception as e:
-                    self.logger.error(f"[red]    [-] Cannot convert {ruleset_path!s} {e}[/]")
+                    self.logger.error(f"[red]    [-] Cannot convert {literal(ruleset_path)} {literal(e)}[/]")
         return ruleset_list
