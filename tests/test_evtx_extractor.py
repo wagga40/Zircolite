@@ -475,3 +475,90 @@ class TestExtractorRobustness:
         assert event_data["Data"] == ["extra"]
 
 
+
+
+class TestAuditdEnrichedFields:
+    """auditd's default ENRICHED format appends interpreted fields after 0x1D.
+
+    Each enriched key is the upper-case spelling of a raw one (syscall=59 ->
+    SYSCALL=execve), and SQLite column names are case-insensitive, so both
+    landed in one column and the raw value won: every rule on SYSCALL='...'
+    was silent on ENRICHED logs.
+    """
+
+    SYSCALL_LINE = (
+        'type=SYSCALL msg=audit(1717430461.332:5188): arch=c000003e syscall=59 '
+        'success=yes exit=0 items=2 ppid=812 pid=4390 auid=4294967295 uid=33 '
+        'gid=33 euid=33 tty=(none) comm="sh" exe="/usr/bin/dash" key="exec"'
+        '\x1dARCH=x86_64 SYSCALL=execve AUID="unset" UID="www-data" '
+        'GID="www-data" EUID="www-data"'
+    )
+
+    @staticmethod
+    def _no_case_collisions(event):
+        folded = [key.lower() for key in event]
+        return len(folded) == len(set(folded))
+
+    def test_syscall_and_arch_carry_the_interpreted_name(self):
+        event = EvtxExtractor(ExtractorConfig(auditd_logs=True)).auditd_line_to_json(
+            self.SYSCALL_LINE
+        )
+
+        assert event["SYSCALL"] == "execve"
+        assert event["syscallRaw"] == "59"
+        assert event["ARCH"] == "x86_64"
+        assert event["archRaw"] == "c000003e"
+        assert self._no_case_collisions(event)
+
+    def test_ids_keep_the_raw_number(self):
+        """Rules match ids numerically (euid=33); the name is kept beside it."""
+        event = EvtxExtractor(ExtractorConfig(auditd_logs=True)).auditd_line_to_json(
+            self.SYSCALL_LINE
+        )
+
+        assert event["euid"] == "33"
+        assert event["EUIDEnriched"] == "www-data"
+        assert event["auid"] == "4294967295"
+        assert event["AUIDEnriched"] == "unset"
+        assert event["comm"] == "sh"
+        assert event["key"] == "exec"
+        assert event["timestamp"] == "2024-06-03 16:01:01"
+        assert self._no_case_collisions(event)
+
+    def test_user_record_payload_and_enriched_tail(self):
+        line = (
+            "type=USER_START msg=audit(1717430400.050:5118): pid=4211 uid=1000 "
+            "auid=1000 ses=4 msg='op=PAM:session_open acct=\"root\" "
+            "exe=\"/usr/bin/sudo\" res=success'\x1dUID=\"alice\" AUID=\"alice\""
+        )
+        event = EvtxExtractor(ExtractorConfig(auditd_logs=True)).auditd_line_to_json(line)
+
+        assert event["uid"] == "1000"
+        assert event["UIDEnriched"] == "alice"
+        assert event["acct"] == "root"
+        assert event["res"] == "success"
+        assert self._no_case_collisions(event)
+
+    def test_sockaddr_brace_group_is_flattened(self):
+        line = (
+            "type=SOCKADDR msg=audit(1717430461.340:5189): "
+            "saddr=02001F90C0A8010A0000000000000000"
+            "\x1dSADDR={ saddr_fam=inet laddr=192.168.1.10 lport=8080 }"
+        )
+        event = EvtxExtractor(ExtractorConfig(auditd_logs=True)).auditd_line_to_json(line)
+
+        assert event["saddr"] == "02001F90C0A8010A0000000000000000"
+        assert event["laddr"] == "192.168.1.10"
+        assert event["lport"] == "8080"
+        assert "SADDREnriched" not in event
+        assert self._no_case_collisions(event)
+
+    def test_raw_format_is_unchanged(self):
+        """Without 0x1D (log_format = RAW) nothing is renamed."""
+        line = self.SYSCALL_LINE.split("\x1d")[0]
+        event = EvtxExtractor(ExtractorConfig(auditd_logs=True)).auditd_line_to_json(line)
+
+        assert event["syscall"] == "59"
+        assert event["arch"] == "c000003e"
+        assert event["euid"] == "33"
+        assert not any(k.endswith(("Raw", "Enriched")) for k in event)

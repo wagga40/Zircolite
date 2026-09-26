@@ -22,6 +22,27 @@ from .config import ExtractorConfig
 # auditd key=value pairs: values may be double/single-quoted (with spaces) or bare
 _AUDITD_ATTR_RE = re.compile(r"([\w\[\].]+)=(\"[^\"]*\"|'[^']*'|\S*)")
 
+# ENRICHED logs (auditd's default log_format) append interpreted fields after a
+# 0x1D separator, each named as the upper-case spelling of the raw field it
+# interprets: syscall=59 ... \x1dSYSCALL=execve EUID="www-data". SQLite folds
+# column names, so the two spellings cannot both keep their name. For these
+# fields the interpreted value takes the name: a syscall number only means
+# something alongside the architecture, and Sigma rules name the call
+# (SYSCALL: execve). The raw value moves to "<name>Raw" (no separator: column
+# names lose every non-alphanumeric character when events are flattened).
+_AUDITD_ENRICHED_WINS = frozenset({"arch", "syscall"})
+# For every other collision (AUID, UID, EUID, OUID, SADDR, ...) the raw value
+# keeps the name, because the interpretation is a lookup in the logging host's
+# own tables and rules match the number (euid: 33). The interpreted value is
+# kept as "<NAME>Enriched".
+
+
+def _strip_quotes(value: str) -> str:
+    """Remove one pair of matching surrounding quotes, and only those."""
+    if len(value) >= 2 and value[0] == value[-1] and value[0] in ('"', "'"):
+        return value[1:-1]
+    return value
+
 
 class EvtxExtractor:
     """Convert raw log lines and XML events to event dictionaries."""
@@ -63,9 +84,10 @@ class EvtxExtractor:
         """Convert auditd logs to JSON. Code from https://github.com/csark/audit2json."""
         event = {}
         # According to auditd specs https://github.com/linux-audit/audit-documentation/wiki/SPEC-Audit-Event-Enrichment
-        # a GS ASCII character, 0x1D, will be inserted to separate original and translated fields
-        # Best way to deal with it is to remove it.
-        line = auditd_line.replace('\x1d', ' ')
+        # a GS ASCII character, 0x1D, separates the original fields from the
+        # translated ones. They are parsed separately: a translated field has
+        # the upper-case name of the original it translates.
+        line, _, enriched = auditd_line.partition('\x1d')
         # Regex parsing preserves quoted values containing spaces and
         # embedded quotes
         for match in _AUDITD_ATTR_RE.finditer(line):
@@ -77,28 +99,42 @@ class EvtxExtractor:
                 event['timestamp'] = self.get_time(match.group(0))
                 continue
             # Strip only the surrounding quotes, not quotes inside the value
-            if len(value) >= 2 and value[0] == value[-1] and value[0] in ('"', "'"):
-                value = value[1:-1]
+            value = _strip_quotes(value)
             if key == "msg" and "=" in value:
                 # USER_* records carry an enriched key=value payload in
                 # msg='...'; flatten it so fields like acct/exe/res stay
                 # queryable by rules
                 for sub in _AUDITD_ATTR_RE.finditer(value):
-                    sub_key, sub_value = sub.group(1), sub.group(2)
-                    if (
-                        len(sub_value) >= 2
-                        and sub_value[0] == sub_value[-1]
-                        and sub_value[0] in ('"', "'")
-                    ):
-                        sub_value = sub_value[1:-1]
+                    sub_key, sub_value = sub.group(1), _strip_quotes(sub.group(2))
                     if sub_key:
                         event[sub_key] = sub_value.rstrip()
                 continue
             if key:
                 event[key] = value.rstrip()
+        if enriched:
+            self._add_auditd_enriched_fields(event, enriched)
         if "host" not in event:
             event['host'] = 'offline'
         return event
+
+    @staticmethod
+    def _add_auditd_enriched_fields(event: dict[str, Any], enriched: str) -> None:
+        """Merge the fields after 0x1D without two keys differing only in case."""
+        existing = {key.lower(): key for key in event}
+        for match in _AUDITD_ATTR_RE.finditer(enriched):
+            key, value = match.group(1), _strip_quotes(match.group(2)).rstrip()
+            # SADDR={ saddr_fam=inet laddr=... lport=... }: the brace opens a
+            # group whose members parse as fields of their own
+            if not key or value == "{":
+                continue
+            raw_key = existing.get(key.lower())
+            if raw_key is None:
+                event[key] = value
+            elif key.lower() in _AUDITD_ENRICHED_WINS:
+                event[f"{raw_key}Raw"] = event.pop(raw_key)
+                event[key] = value
+            else:
+                event[f"{key}Enriched"] = value
 
     def sysmon_xml_line_to_json(self, xml_line: str) -> dict[str, Any] | None:
         """Remove syslog header and convert XML data to JSON. Code from ZikyHD (https://github.com/ZikyHD)."""
