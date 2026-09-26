@@ -15,6 +15,11 @@ def transform(param):
     # - A token can only start after the whole whitespace run, since
     #   neither token form can start with whitespace, and a quoted token
     #   has exactly one possible end (the first unescaped quote).
+    #
+    # Every pattern begins with its tool's name, matched case-sensitively, so
+    # a command line naming none of them has nothing to extract.
+    if 'net' not in param and 'schtasks' not in param and 'wmic' not in param and 'psexec' not in param:
+        return ''
     quoted_re = re.compile(r'"((?:\\.|[^"\\])*)"')
     bare_re = re.compile(r'[^\s"]+')
     newline_ends = [m.start() for m in re.finditer('\n', param)]
@@ -76,13 +81,16 @@ def transform(param):
         # Where a password flag followed by a password token starts, keyed
         # by the end of its line: only the last one on each line matters,
         # because the second '.+' is greedy and cannot leave the line.
+        starts = tool_starts(tool)
+        if not starts:
+            return None
         last_password = {}
         for flag in password_flag_literal.finditer(param):
             full = password_flag_re.match(param, flag.start())
             if full is not None and token(full.end()) is not None:
                 last_password[line_end(flag.start())] = flag.start()
 
-        for start in tool_starts(tool):
+        for start in starts:
             first_end = start + len(tool)
             end = line_end(first_end)
             # The first '.+' needs at least one character, on this line.

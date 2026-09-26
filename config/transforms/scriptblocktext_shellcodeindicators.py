@@ -12,7 +12,15 @@ def transform(param):
         # line the previous match ended on. A p0 match that ends on the same
         # line as an earlier one that failed can only fail too. p1 and p2 are
         # plain tokens, so their leftmost match on the line is the best one.
+        # Most text lacks the first step, or any later one after it: one
+        # search each settles that before the ordered scan is paid for.
+        head = re.search(patterns[0], text, flags)
+        if head is None:
+            return False
         compiled = [re.compile(p, flags) for p in patterns]
+        for step in compiled[1:]:
+            if step.search(text, head.start()) is None:
+                return False
         searched_from = [-1] * len(compiled)
         found = [None] * len(compiled)
         newline = [-1, -1]
@@ -62,7 +70,11 @@ def transform(param):
             failed_line = line_end(start.end())
 
     # VirtualAlloc with executable permissions
-    if in_order(param, ['virtualalloc', '0x40'], re.IGNORECASE) or in_order(param, ['virtualalloc', 'page_execute'], re.IGNORECASE):
+    # One case-insensitive search rules out most scripts; 'i' also matches
+    # dotless and dotted I under IGNORECASE, so a lowercase test would not.
+    if (re.search('virtualalloc', param, re.IGNORECASE)
+            and (in_order(param, ['virtualalloc', '0x40'], re.IGNORECASE)
+                 or in_order(param, ['virtualalloc', 'page_execute'], re.IGNORECASE))):
         indicators.append('EXEC_MEMORY_ALLOC')
 
     # Kernel32/ntdll function calls

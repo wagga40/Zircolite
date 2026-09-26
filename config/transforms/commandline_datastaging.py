@@ -12,7 +12,15 @@ def transform(param):
         # line the previous match ended on. A p0 match that ends on the same
         # line as an earlier one that failed can only fail too. p1 and p2 are
         # plain tokens, so their leftmost match on the line is the best one.
+        # Most text lacks the first step, or any later one after it: one
+        # search each settles that before the ordered scan is paid for.
+        head = re.search(patterns[0], text, flags)
+        if head is None:
+            return False
         compiled = [re.compile(p, flags) for p in patterns]
+        for step in compiled[1:]:
+            if step.search(text, head.start()) is None:
+                return False
         searched_from = [-1] * len(compiled)
         found = [None] * len(compiled)
         newline = [-1, -1]
@@ -63,27 +71,30 @@ def transform(param):
 
     # Archiving / compression
     if (re.search(r'\brar\s+a\b|7z\s+a\b|tar\s+(-czf|-cf|--create)|makecab|compact\s+/c', param_lower)
-            or in_order(param_lower, [r'\bzip\b', '-r'])):
+            or ('zip' in param_lower and in_order(param_lower, [r'\bzip\b', '-r']))):
         findings.append('STAGING:ARCHIVE')
 
     # Bulk copy operations
     if (re.search(r'\brobocopy\b', param_lower)
-            or in_order(param_lower, [r'\bxcopy\b', '(/s|/e)'])
-            or in_order(param_lower, [r'\bcopy\b', r'\*\.'])):
+            or ('xcopy' in param_lower and in_order(param_lower, [r'\bxcopy\b', '(/s|/e)']))
+            or ('copy' in param_lower and in_order(param_lower, [r'\bcopy\b', r'\*\.']))):
         findings.append('STAGING:BULK_COPY')
 
     # Database dumps
     if (re.search(r'mysqldump|pg_dump', param_lower)
-            or in_order(param_lower, [r'sqlcmd\s+', '-[Qq]'])
-            or in_order(param_lower, [r'sqlite3\s+', r'\.dump'])):
+            or ('sqlcmd' in param_lower and in_order(param_lower, [r'sqlcmd\s+', '-[Qq]']))
+            or ('sqlite3' in param_lower and in_order(param_lower, [r'sqlite3\s+', r'\.dump']))):
         findings.append('STAGING:DB_DUMP')
 
     # Email collection (.pst, .ost)
     if re.search(r'\.(pst|ost)\b', param_lower):
         findings.append('STAGING:EMAIL_COLLECT')
 
-    # Sensitive file hunting
-    if in_order(param_lower, [r'(findstr|dir|find|ls|get-childitem)', r'\.(docx?|xlsx?|pptx?|pdf|kdbx|key|pem)']):
+    # Sensitive file hunting. The tool names are common substrings, the
+    # extensions are not, so those are looked for first.
+    sensitive_ext = r'\.(docx?|xlsx?|pptx?|pdf|kdbx|key|pem)'
+    if (re.search(sensitive_ext, param_lower)
+            and in_order(param_lower, [r'(findstr|dir|find|ls|get-childitem)', sensitive_ext])):
         findings.append('STAGING:FILE_HUNT')
 
     # ntdsutil / active directory dumping

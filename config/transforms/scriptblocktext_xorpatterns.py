@@ -11,7 +11,15 @@ def transform(param):
         # line the previous match ended on. A p0 match that ends on the same
         # line as an earlier one that failed can only fail too. p1 and p2 are
         # plain tokens, so their leftmost match on the line is the best one.
+        # Most text lacks the first step, or any later one after it: one
+        # search each settles that before the ordered scan is paid for.
+        head = re.search(patterns[0], text, flags)
+        if head is None:
+            return False
         compiled = [re.compile(p, flags) for p in patterns]
+        for step in compiled[1:]:
+            if step.search(text, head.start()) is None:
+                return False
         searched_from = [-1] * len(compiled)
         found = [None] * len(compiled)
         newline = [-1, -1]
@@ -64,6 +72,12 @@ def transform(param):
     bxor_matches = re.findall(r'-bxor\s*(\d+|0x[0-9a-fA-F]+)', param, re.IGNORECASE)
     for key in bxor_matches:
         results.append('XOR_KEY:' + key)
+
+    # Every check below needs -bxor. None of its letters case-folds to
+    # anything beyond ASCII, so a lowercase substring test rules it out
+    # exactly, and a script without it skips them all.
+    if '-bxor' not in param.lower():
+        return '|'.join(results) if results else ''
 
     # XOR in foreach/for loops
     if in_order(param, ['foreach', '-bxor'], re.IGNORECASE) or in_order(param, [r'for\s*\(', '-bxor'], re.IGNORECASE):
