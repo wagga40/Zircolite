@@ -222,4 +222,4 @@ __all__ = [
     'set_quiet_mode',
 ]
 
-__version__ = "4.0.0"
+__version__ = "4.0.1"
