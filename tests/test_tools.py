@@ -225,18 +225,19 @@ BITSADMIN_RULESET = [
 ]
 
 
-def write_case(tmp_path, *, match_count=1, name="Positive Detection Test", rule_id=BITSADMIN_ID):
+def write_case(tmp_path, *, match_count=1, name="Positive Detection Test", rule_id=BITSADMIN_ID,
+               title=BITSADMIN_TITLE, path=None):
     """Build a one-case regression_data tree around the tracked EVTX fixture."""
     case_dir = tmp_path / "regression_data" / "bitsadmin"
     case_dir.mkdir(parents=True)
     info = {
         "id": "11111111-2222-3333-4444-555555555555",
-        "rule_metadata": [{"id": rule_id, "title": BITSADMIN_TITLE}],
+        "rule_metadata": [{"id": rule_id, "title": title}],
         "regression_tests_info": [{
             "name": name,
             "type": "evtx",
             "match_count": match_count,
-            "path": str(FIXTURES / "sample_bitsadmin.evtx"),
+            "path": path if path is not None else str(FIXTURES / "sample_bitsadmin.evtx"),
         }],
     }
     (case_dir / "info.yml").write_text(json.dumps(info), encoding="utf-8")
@@ -420,6 +421,78 @@ class TestSigmaRegressionEndToEnd:
         # Testing only rules[0] would report a failure here.
         code, report = self.run(regression, tmp_path)
         assert code == 0 and report["failed"] == 0
+
+
+@pytest.mark.integration
+class TestSigmaRegressionUntrustedText:
+    """Titles, ids and paths from info.yml must print literally.
+
+    Put into Rich markup as-is, "[/]" raised MarkupError out of main() before
+    the report was written, "[link=...]" planted hyperlinks, and style tags
+    forged pass lines.
+    """
+
+    NEVER_FIRES = ({
+        "title": BITSADMIN_TITLE, "id": BITSADMIN_ID, "level": "low", "tags": [],
+        "rule": ["SELECT * FROM logs WHERE CommandLine LIKE '%not-here%' ESCAPE '\\'"],
+    },)
+
+    def run(self, regression, tmp_path, ruleset, **case):
+        from io import StringIO
+
+        from rich.console import Console
+
+        data = write_case(tmp_path, **case)
+        report = tmp_path / "report"
+        buf = StringIO()
+        recording = Console(file=buf, force_terminal=True, width=300,
+                            theme=regression.REGRESSION_THEME, highlight=False)
+        argv = [
+            "sigma-regression.py",
+            "--regression-data", str(data),
+            "-r", str(write_ruleset(tmp_path, ruleset)),
+            "--zircolite-config", str(CONFIG),
+            "--report", str(report),
+        ]
+        with patch.object(sys, "argv", argv), patch.object(regression, "console", recording):
+            code = regression.main()
+        return code, buf.getvalue(), tmp_path / "report.json"
+
+    @staticmethod
+    def plain(out):
+        return re.sub(r"\x1b\][^\x1b]*\x1b\\|\x1b\[[0-9;?]*[A-Za-z]", "", out)
+
+    def test_failed_rule_title_with_markup(self, regression, tmp_path):
+        title = f"{BITSADMIN_TITLE}[/][/] [green]PASS all good[/] [link=https://attacker.example]x[/link]"
+        code, out, report = self.run(regression, tmp_path, self.NEVER_FIRES, title=title)
+        assert code == 1
+        assert report.exists(), "the report must still be written"
+        assert self.plain(out).count(title) == 2, "failure line and summary row"
+        assert "https://attacker.example" not in re.findall(r"\x1b\]8;[^;]*;([^\x1b]*)", out)
+
+    def test_title_control_characters_do_not_reach_the_terminal(self, regression, tmp_path):
+        title = f"{BITSADMIN_TITLE}\x1b[2J\x1b[H"
+        code, out, _ = self.run(regression, tmp_path, self.NEVER_FIRES, title=title)
+        assert code == 1
+        assert "\x1b[2J" not in out
+        assert f"{BITSADMIN_TITLE}[2J[H" in self.plain(out)
+
+    def test_missing_data_file_path_with_markup(self, regression, tmp_path):
+        path = "x[/][/] [link=https://attacker.example]click[/link]"
+        code, out, report = self.run(regression, tmp_path, BITSADMIN_RULESET, path=path)
+        assert code == 0
+        assert report.exists()
+        assert path in self.plain(out)
+        assert "https://attacker.example" not in re.findall(r"\x1b\]8;[^;]*;([^\x1b]*)", out)
+
+    def test_failed_rule_lines_escape_every_field(self, regression, tmp_path):
+        from rich.text import Text
+        lines = regression.format_failed_rule_lines(
+            tmp_path, tmp_path / "x.evtx", "t[/]", "i[/]", "err [/] [bold]x",
+        )
+        assert [Text.from_markup(line).plain.strip() for line in lines[1:]] == [
+            "t[/] (id: i[/])", "err [/] [bold]x",
+        ]
 
 
 # ---------------------------------------------------------------------------
