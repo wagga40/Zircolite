@@ -702,7 +702,11 @@ removed by `--remove-events`.
 ### XML
 
 `evtx_dump` and services such as VirusTotal produce text files with XML events inside,
-either one `<Event>` per line or wrapped in an `<Events>` element. Zircolite handles both:
+either one `<Event>` per line or wrapped in an `<Events>` element. Zircolite handles both,
+and reads every record of a file whose events follow one another with no element around
+them, as `evtx_dump`, `wevtutil qe <log> /f:xml` and `Get-WinEvent | ForEach-Object
+{ $_.ToXml() }` write them (UTF-16 included, which is what Windows PowerShell's `>`
+produces):
 
 ```shell
 python3 zircolite.py --events Microsoft-Windows-SysmonOperational.xml \

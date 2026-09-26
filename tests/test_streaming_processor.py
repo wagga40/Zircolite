@@ -6,6 +6,7 @@ import json
 import sqlite3
 import sys
 from pathlib import Path
+from typing import ClassVar
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -2656,6 +2657,84 @@ class TestStreamingXmlEncodingAndDiagnostics:
         )
         assert list(processor.stream_xml_events(str(src), extractor)) == []
         assert mock_logger.warning.called
+
+
+def _xml_event(event_id):
+    return (
+        '<Event xmlns="http://schemas.microsoft.com/win/2004/08/events/event">'
+        f"<System><EventID>{event_id}</EventID><Channel>Security</Channel></System>"
+        f'<EventData><Data Name="CommandLine">cmd{event_id}.exe</Data></EventData></Event>'
+    )
+
+
+_THREE_EVENTS = [_xml_event(n) for n in (1, 2, 3)]
+_DECLARATION = '<?xml version="1.0" encoding="utf-8"?>'
+
+
+class TestStreamingXmlWithoutRootElement:
+    """Event records written back to back, with no element around them.
+
+    wevtutil qe /f:xml, Get-WinEvent's ToXml() and evtx_dump all write that
+    shape. An XML parser stops at the end of the first document element, so
+    every event after the first was dropped without a word.
+    """
+
+    SHAPES: ClassVar[dict[str, bytes]] = {
+        "concatenated": "".join(_THREE_EVENTS).encode(),
+        "one_per_line": "\n".join(_THREE_EVENTS).encode(),
+        # evtx_dump repeats the declaration in front of every record
+        "evtx_dump": "\n".join(_DECLARATION + e for e in _THREE_EVENTS).encode(),
+        "declaration_first": (_DECLARATION + "\n" + "\n".join(_THREE_EVENTS)).encode(),
+        "comment_first": ("<!-- exported -->\n" + "\n".join(_THREE_EVENTS)).encode(),
+        "utf8_bom": b"\xef\xbb\xbf" + "\n".join(_THREE_EVENTS).encode(),
+        # Windows PowerShell's > redirection writes UTF-16LE with a BOM
+        "utf16_bom": "\n".join(_THREE_EVENTS).encode("utf-16"),
+        "utf16_declaration": (
+            '<?xml version="1.0" encoding="UTF-16"?>\n' + "\n".join(_THREE_EVENTS)
+        ).encode("utf-16"),
+        "two_exports": (
+            f"<Events>{_THREE_EVENTS[0]}{_THREE_EVENTS[1]}</Events>\n"
+            f"<Events>{_THREE_EVENTS[2]}</Events>"
+        ).encode(),
+        "rooted": f"<Events>{''.join(_THREE_EVENTS)}</Events>".encode(),
+        "doctype_rooted": (
+            f"<!DOCTYPE Events>\n<Events>{''.join(_THREE_EVENTS)}</Events>"
+        ).encode(),
+    }
+
+    @pytest.fixture
+    def read(self, field_mappings_file, test_logger, default_args_config):
+        extractor = EvtxExtractor(
+            extractor_config=ExtractorConfig(xml_logs=True), logger=test_logger
+        )
+        processor = StreamingEventProcessor(
+            config_file=field_mappings_file,
+            args_config=default_args_config,
+            logger=test_logger,
+        )
+
+        def read(path):
+            return [
+                event["CommandLine"]
+                for event in processor.stream_xml_events(str(path), extractor)
+            ]
+
+        return read
+
+    @pytest.mark.parametrize("shape", sorted(SHAPES))
+    def test_every_event_is_read(self, read, tmp_path, shape):
+        src = tmp_path / "events.xml"
+        src.write_bytes(self.SHAPES[shape])
+
+        assert read(src) == ["cmd1.exe", "cmd2.exe", "cmd3.exe"]
+
+    def test_compressed_file_is_read_whole(self, read, tmp_path):
+        import gzip
+
+        src = tmp_path / "events.xml.gz"
+        src.write_bytes(gzip.compress(self.SHAPES["one_per_line"]))
+
+        assert read(src) == ["cmd1.exe", "cmd2.exe", "cmd3.exe"]
 
 
 class TestMalformedInputIsolation:
