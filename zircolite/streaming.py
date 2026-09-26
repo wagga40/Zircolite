@@ -40,7 +40,6 @@ from evtx import PyEvtxParser
 from RestrictedPython import compile_restricted, limited_builtins, safe_builtins, utility_builtins
 from RestrictedPython.Eval import default_guarded_getiter
 from RestrictedPython.Guards import guarded_iter_unpack_sequence
-from rich.markup import escape
 
 from .config import ProcessingConfig
 from .console import literal
@@ -1238,8 +1237,8 @@ class StreamingEventProcessor:
         first = errors[0]
         self.logger.warning(
             f"[yellow]    [!] Recovered from {len(errors):,} XML error(s) in "
-            f"{escape(Path(source).name)} (first at line {first.line}: "
-            f"{escape(first.message)}); the records concerned may be incomplete[/]"
+            f"{literal(Path(source).name)} (first at line {first.line}: "
+            f"{literal(first.message)}); the records concerned may be incomplete[/]"
         )
 
     def _get_transform_func(self, code):
