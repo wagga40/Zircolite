@@ -12,7 +12,15 @@ def transform(param):
         # line the previous match ended on. A p0 match that ends on the same
         # line as an earlier one that failed can only fail too. p1 and p2 are
         # plain tokens, so their leftmost match on the line is the best one.
+        # Most text lacks the first step, or any later one after it: one
+        # search each settles that before the ordered scan is paid for.
+        head = re.search(patterns[0], text, flags)
+        if head is None:
+            return False
         compiled = [re.compile(p, flags) for p in patterns]
+        for step in compiled[1:]:
+            if step.search(text, head.start()) is None:
+                return False
         searched_from = [-1] * len(compiled)
         found = [None] * len(compiled)
         newline = [-1, -1]

@@ -19,23 +19,24 @@ def transform(param):
 
     # Domains (simplified): what
     #   re.findall(r'\b([a-zA-Z0-9][-a-zA-Z0-9]*\.(?:com|...))\b', param, re.I)
-    # returns, in linear time. Every start inside one run of [-a-zA-Z0-9]
-    # ends at the same place, the end of the run, so if the first start
-    # fails they all do. The findall form retries each of them anyway, and
-    # a run such as 'a-a-a-...' has a word boundary after every hyphen,
-    # which makes it quadratic.
-    run_re = re.compile(r'[-a-zA-Z0-9]+', re.IGNORECASE)
+    # returns, in linear time. A domain is the run of [-a-zA-Z0-9] that ends
+    # where a TLD begins, from its first start at a word boundary. The findall
+    # form retries every start inside a run, and a run such as 'a-a-a-...' has
+    # a word boundary after every hyphen, which makes it quadratic. Starting
+    # from the TLD matches, which are few, and walking back over the run
+    # visits each character at most once: runs never cross the '.' of a TLD.
+    run_char = re.compile(r'[-a-zA-Z0-9]', re.IGNORECASE)
     start_re = re.compile(r'\b[a-zA-Z0-9]', re.IGNORECASE)
     tld_re = re.compile(r'\.(?:com|net|org|io|ru|cn|tk|xyz|top|info|biz)\b', re.IGNORECASE)
     domains = []
     pos = 0
-    for run in run_re.finditer(param):
-        first = run.start() if run.start() > pos else pos
-        start = start_re.search(param, first, run.end())
+    for tld in tld_re.finditer(param):
+        end = tld.start()
+        begin = end
+        while begin > pos and run_char.match(param, begin - 1):
+            begin -= 1
+        start = start_re.search(param, begin, end)
         if start is None:
-            continue
-        tld = tld_re.match(param, run.end())
-        if tld is None:
             continue
         domains.append(param[start.start():tld.end()])
         pos = tld.end()
