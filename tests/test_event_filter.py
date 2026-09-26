@@ -5,6 +5,8 @@ This module tests the EventFilter class that provides early event filtering
 based on channel and eventID from loaded rules.
 """
 
+import json
+
 import pytest
 
 from zircolite.rules import EventFilter
@@ -837,6 +839,162 @@ class TestConfigurableFieldPaths:
 
         processed_count = sum(1 for _ in processor.stream_json_events(str(test_file)))
         assert processed_count == 1
+
+
+SYSMON = "Microsoft-Windows-Sysmon/Operational"
+
+# A Winlogbeat event: the flattener maps winlog.channel and winlog.event_id to
+# the Channel and EventID columns through the shipped field mappings.
+WINLOGBEAT_SYSMON_3 = {
+    "winlog": {"channel": SYSMON, "event_id": "3",
+               "event_data": {"DestinationPort": "4444"}},
+    "event": {"code": "3"},
+}
+
+
+class TestFilterReadsTheColumnsRulesSee:
+    """The filter must not discard an event on a value no rule would see.
+
+    It runs before flattening, so it reads Channel and EventID from the raw
+    event, while rules query the flattened columns. Where the two readings can
+    differ, the event must be kept.
+    """
+
+    @pytest.fixture
+    def sysmon_filter(self):
+        return EventFilter([{
+            "title": "Sysmon network connection",
+            "channel": [SYSMON],
+            "eventid": [3],
+        }])
+
+    def _stream(self, event_filter, tmp_path, events):
+        from argparse import Namespace
+
+        from zircolite.config import ProcessingConfig
+        from zircolite.streaming import StreamingEventProcessor
+
+        test_file = tmp_path / "events.json"
+        test_file.write_text("\n".join(json.dumps(e) for e in events))
+        processor = StreamingEventProcessor(
+            config_file="config/config.yaml",
+            args_config=Namespace(json_input=True, json_array_input=False),
+            processing_config=ProcessingConfig(),
+            event_filter=event_filter,
+        )
+        return processor, list(processor.stream_json_events(str(test_file)))
+
+    def test_ecs_source_name_is_not_read_as_the_channel(self, sysmon_filter, tmp_path):
+        """ECS source.name is a host name, not a channel."""
+        event = {**WINLOGBEAT_SYSMON_3, "source": {"name": "WS01.corp.local"}}
+
+        processor, rows = self._stream(sysmon_filter, tmp_path, [event])
+
+        assert len(rows) == 1
+        assert rows[0]["Channel"] == SYSMON
+        assert processor.events_filtered_count == 0
+
+    def test_disagreeing_channel_fields_keep_the_event(self, sysmon_filter, tmp_path):
+        """A top-level Channel loses the column to the nested winlog.channel."""
+        event = {"Channel": "ForwardedEvents", **WINLOGBEAT_SYSMON_3}
+
+        processor, rows = self._stream(sysmon_filter, tmp_path, [event])
+
+        assert len(rows) == 1
+        assert rows[0]["Channel"] == SYSMON
+        assert processor.events_filtered_count == 0
+
+    def test_disagreeing_eventid_fields_keep_the_event(self, sysmon_filter, tmp_path):
+        event = {"EventID": 1, **WINLOGBEAT_SYSMON_3}
+
+        processor, rows = self._stream(sysmon_filter, tmp_path, [event])
+
+        assert len(rows) == 1
+        assert str(rows[0]["EventID"]) == "3"
+        assert processor.events_filtered_count == 0
+
+    def test_agreeing_fields_are_still_filtered(self, sysmon_filter, tmp_path):
+        """Failing open is for disagreement only: agreeing fields still decide."""
+        events = [
+            {"Channel": "Security", "winlog": {"channel": "Security", "event_id": 3}},
+            {"Channel": SYSMON, "EventID": 7, "winlog": {"channel": SYSMON, "event_id": 7}},
+            {"Channel": SYSMON, **WINLOGBEAT_SYSMON_3},
+        ]
+
+        processor, rows = self._stream(sysmon_filter, tmp_path, events)
+
+        assert len(rows) == 1
+        assert processor.events_filtered_count == 2
+
+    def test_evtx_eventid_and_its_text_node_agree(self, sysmon_filter, tmp_path):
+        """Event.System.EventID and Event.System.EventID.#text are one value."""
+        events = [
+            {"Event": {"System": {"Channel": SYSMON, "EventID": {"#text": "3"}}}},
+            {"Event": {"System": {"Channel": SYSMON, "EventID": {"#text": "1"}}}},
+        ]
+
+        processor, rows = self._stream(sysmon_filter, tmp_path, events)
+
+        assert len(rows) == 1
+        assert processor.events_filtered_count == 1
+
+    def test_shipped_config_does_not_list_source_name(self):
+        import yaml
+
+        with open("config/config.yaml", encoding="utf-8") as f:
+            config = yaml.safe_load(f)
+        assert "source.name" not in config["event_filter"]["channel_fields"]
+
+
+SYSMON_3_RULESET = [{
+    "title": "Sysmon network connection to 4444",
+    "id": "event-filter-00000000-0000-0000-0000-000000000001",
+    "level": "high",
+    "tags": [],
+    "logsource": {"product": "windows", "service": "sysmon"},
+    "channel": [SYSMON],
+    "eventid": [3],
+    "rule": [f"SELECT * FROM logs WHERE Channel = '{SYSMON}' "
+             "AND EventID = 3 AND DestinationPort = '4444'"],
+}]
+
+
+class TestEventFilterMatchesUnfilteredDetections:
+    """Through the CLI, the filter must not change what the rules detect."""
+
+    def _detections(self, tmp_path, name, events, extra=()):
+        from unittest.mock import patch
+
+        from zircolite import cli
+
+        source = tmp_path / f"{name}.json"
+        source.write_text("\n".join(json.dumps(e) for e in events) + "\n")
+        ruleset = tmp_path / "ruleset.json"
+        ruleset.write_text(json.dumps(SYSMON_3_RULESET))
+        outfile = tmp_path / f"{name}-{len(extra)}.json"
+        argv = ["zircolite.py", "-e", str(source), "-j", "-r", str(ruleset),
+                "-o", str(outfile), "-l", str(tmp_path / "zircolite.log"), *extra]
+        with patch("sys.argv", argv):
+            cli.main()
+        return sum(len(d["matches"]) for d in json.loads(outfile.read_text()))
+
+    @pytest.mark.parametrize("name,event", [
+        ("ecs_source_name", {**WINLOGBEAT_SYSMON_3, "source": {"name": "WS01.corp.local"}}),
+        ("toplevel_channel", {"Channel": "ForwardedEvents", **WINLOGBEAT_SYSMON_3}),
+    ])
+    def test_filter_does_not_drop_a_detection(self, tmp_path, name, event):
+        unfiltered = self._detections(tmp_path, name, [event], ["--no-event-filter"])
+        filtered = self._detections(tmp_path, name, [event])
+
+        assert unfiltered == 1
+        assert filtered == unfiltered
+
+    def test_filter_still_discards_other_channels(self, tmp_path):
+        events = [
+            WINLOGBEAT_SYSMON_3,
+            {"winlog": {"channel": "Security", "event_id": 4624}},
+        ]
+        assert self._detections(tmp_path, "mixed", events) == 1
 
 
 class TestTimestampAutoDetection:
