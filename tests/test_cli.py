@@ -3302,6 +3302,35 @@ class TestCLIRegressionFixes:
         )
         assert resolved == "config/config.yaml"
 
+    def _run_transform_list(self, tmp_path, workdir, monkeypatch):
+        """Resolve the default --config from *workdir*; return the log text."""
+        monkeypatch.chdir(workdir)
+        log = tmp_path / "run.log"
+        with patch('sys.argv', ['zircolite.py', '--transform-list', '-l', str(log)]), \
+                pytest.raises(SystemExit):
+            zircolite_script.main()
+        return log.read_text(encoding="utf-8") if log.exists() else ""
+
+    def test_local_config_override_is_announced(self, tmp_path, monkeypatch):
+        """The CWD copy wins, but a planted config must not win silently."""
+        workdir = tmp_path / "bundle"
+        (workdir / "config").mkdir(parents=True)
+        local = workdir / "config" / "config.yaml"
+        local.write_text("mappings: {}\ntransforms: {}\n")
+
+        log = self._run_transform_list(tmp_path, workdir, monkeypatch)
+
+        assert "from the working directory instead of the bundled" in log
+        assert str(local.resolve()) in log
+
+    def test_bundled_config_is_not_announced(self, tmp_path, monkeypatch):
+        workdir = tmp_path / "elsewhere"
+        workdir.mkdir()
+
+        log = self._run_transform_list(tmp_path, workdir, monkeypatch)
+
+        assert "instead of the bundled" not in log
+
     def test_an_explicit_relative_ruleset_resolves_from_the_install(self, tmp_path, monkeypatch):
         """`-r rules/...` used to work only when the CWD was Zircolite's own."""
         _, config, events = self._fixture(tmp_path)
