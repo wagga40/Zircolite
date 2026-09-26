@@ -42,6 +42,7 @@ from .console import (
     build_detection_table,
     console,
     is_quiet,
+    literal,
     make_detection_counter,
     sort_key_severity,
 )
@@ -385,7 +386,7 @@ class ZircoliteCore:
                 with suppress(Exception):
                     conn.close()
             if isinstance(exc, Error):
-                self.logger.error(f"[red]    [-] {exc}[/]")
+                self.logger.error(f"[red]    [-] {literal(exc)}[/]")
                 raise RuntimeError(
                     f"Unable to open SQLite database '{db}': {exc}"
                 ) from exc
@@ -1049,7 +1050,7 @@ class ZircoliteCore:
                 # Serialize first: on failure the comma bookkeeping must stay untouched
                 json_bytes = json.dumps(rule_results, option=json.OPT_INDENT_2)
             except Exception as e:
-                self.logger.error(f"[error]    [-] Error serializing some results: {e}[/]")
+                self.logger.error(f"[error]    [-] Error serializing some results: {literal(e)}[/]")
                 return csv_writer, needs_comma_prefix
             try:
                 # Handle commas between JSON objects
@@ -1063,7 +1064,7 @@ class ZircoliteCore:
                     self.first_json_output = False
                 file_handle.write(json_bytes.decode('utf-8'))
             except Exception as e:
-                self.logger.error(f"[error]    [-] Error saving some results: {e}[/]")
+                self.logger.error(f"[error]    [-] Error saving some results: {literal(e)}[/]")
         return csv_writer, needs_comma_prefix
 
     def _csv_event_columns(self, rule_results: dict[str, Any]) -> list[str]:
@@ -1637,7 +1638,7 @@ class ZircoliteCore:
                 # not be swallowed into a "0 events" result like the rest.
                 raise
             except Exception as e:
-                self.logger.error(f"[error]    [-] Error processing {log_file}: {e}[/]")
+                self.logger.error(f"[error]    [-] Error processing {literal(log_file)}: {literal(e)}[/]")
                 self.failed_files.add(str(log_file))
                 return 0
 

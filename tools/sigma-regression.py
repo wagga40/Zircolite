@@ -37,7 +37,6 @@ from typing import Any
 
 import yaml
 from rich.console import Console
-from rich.markup import escape
 from rich.panel import Panel
 from rich.progress import (
     BarColumn,
@@ -54,7 +53,7 @@ from rich.theme import Theme
 # Zircolite package (run from project root or with PYTHONPATH)
 try:
     from zircolite.config import ProcessingConfig, RulesetConfig
-    from zircolite.console import make_file_link, set_quiet_mode
+    from zircolite.console import literal, make_file_link, set_quiet_mode
     from zircolite.core import ZircoliteCore
     from zircolite.rules import RulesetHandler
     from zircolite.sqlscan import column_refs
@@ -65,7 +64,7 @@ except ImportError:
     if str(_root) not in sys.path:
         sys.path.insert(0, str(_root))
     from zircolite.config import ProcessingConfig, RulesetConfig
-    from zircolite.console import make_file_link, set_quiet_mode
+    from zircolite.console import literal, make_file_link, set_quiet_mode
     from zircolite.core import ZircoliteCore
     from zircolite.rules import RulesetHandler
     from zircolite.sqlscan import column_refs
@@ -82,20 +81,6 @@ REGRESSION_THEME = Theme({
     "header": "bold cyan",
 })
 console = Console(theme=REGRESSION_THEME, highlight=False)
-
-# C0 controls except tab and newline, DEL, and C1 controls. Rich strips only
-# BEL, BS, VT, FF and CR, so an ESC in info.yml would reach the terminal.
-_UNSAFE_CONTROL_CHARS = re.compile(r"[\x00-\x08\x0b-\x1f\x7f-\x9f]")
-
-
-def _safe(value: object) -> str:
-    """Render text from info.yml, rules or errors literally inside Rich markup.
-
-    Titles, ids and paths come from the regression_data checkout. Put into
-    markup as-is, "[/]" raises MarkupError and ends the run before the report
-    is written, and "[link=...]" or style tags forge or hide output lines.
-    """
-    return escape(_UNSAFE_CONTROL_CHARS.sub("", str(value)))
 
 BANNER = """\
 [bold white]-= Sigma regression_data tests =-[/]"""
@@ -348,8 +333,8 @@ def format_failed_rule_lines(
     file_link = make_file_link(str(data_file_path), data_file_path.name)
     return [
         f"{prefix}{icon_markup} {case_link} ({file_link})",
-        f"{continuation}[dim]{_safe(rule_title)}[/] [dim](id: {_safe(rule_id)})[/]",
-        f"{continuation}[{style}]{_safe(detail)}[/]",
+        f"{continuation}[dim]{literal(rule_title)}[/] [dim](id: {literal(rule_id)})[/]",
+        f"{continuation}[{style}]{literal(detail)}[/]",
     ]
 
 
@@ -708,7 +693,7 @@ def main() -> int:
             with open(rules_path, encoding="utf-8") as f:
                 full_ruleset = json.load(f)
         except Exception as e:
-            console.print(f"[red]\\[-][/] Failed to load ruleset: {_safe(e)}")
+            console.print(f"[red]\\[-][/] Failed to load ruleset: {literal(e)}")
             return 1
         if not isinstance(full_ruleset, list):
             console.print("[red]\\[-][/] Zircolite ruleset must be a JSON array of rules")
@@ -729,7 +714,7 @@ def main() -> int:
             handler = RulesetHandler(ruleset_config, logger=logger)
             full_ruleset = handler.rulesets
         except Exception as e:
-            console.print(f"[red]\\[-][/] Failed to load ruleset: {_safe(e)}")
+            console.print(f"[red]\\[-][/] Failed to load ruleset: {literal(e)}")
             return 1
         if not full_ruleset:
             console.print(f"[red]\\[-][/] No rules loaded from {make_file_link(str(rules_path))}")
@@ -779,7 +764,7 @@ def main() -> int:
         rules = rules_index.find(case.rule_refs)
         if not rules:
             titles = [r.title for r in case.rule_refs]
-            buffered_lines.append(f"    [yellow]\\[!][/] No matching rules for {make_file_link(str(case.dir_path), case.dir_path.name)} (titles: {_safe(titles)})")
+            buffered_lines.append(f"    [yellow]\\[!][/] No matching rules for {make_file_link(str(case.dir_path), case.dir_path.name)} (titles: {literal(titles)})")
             skipped += len(case.tests)
             pending_advance += len(case.tests)
             if pending_advance >= progress_batch_size:
@@ -795,7 +780,7 @@ def main() -> int:
                 pending_advance = 0
             data_file = resolve_data_file(regression_data, test_entry, case.dir_path)
             if not data_file:
-                buffered_lines.append(f"    [yellow]\\[!][/] Data file not found: {make_file_link(str(case.dir_path), case.dir_path.name)} ([dim]{_safe(test_entry.path)}[/])")
+                buffered_lines.append(f"    [yellow]\\[!][/] Data file not found: {make_file_link(str(case.dir_path), case.dir_path.name)} ([dim]{literal(test_entry.path)}[/])")
                 skipped += 1
                 continue
 
@@ -842,7 +827,7 @@ def main() -> int:
             if expectation_met(test_entry, count):
                 passed += 1
                 if args.verbose:
-                    buffered_lines.append(f"    [green]\\[✓][/] {make_file_link(str(case.dir_path), case.dir_path.name)} ({make_file_link(str(data_file), data_file.name)}) [green]rule[/] [dim]{_safe(ref.title)}[/] [dim](id: {_safe(ref.id)})[/] [green]→ {count} matches[/]")
+                    buffered_lines.append(f"    [green]\\[✓][/] {make_file_link(str(case.dir_path), case.dir_path.name)} ({make_file_link(str(data_file), data_file.name)}) [green]rule[/] [dim]{literal(ref.title)}[/] [dim](id: {literal(ref.id)})[/] [green]→ {count} matches[/]")
             else:
                 failed += 1
                 buffered_lines.extend(
@@ -894,7 +879,7 @@ def main() -> int:
         summary_table.add_row("", "")
         summary_table.add_row("Failed rules", "")
         for fr in failed_results:
-            summary_table.add_row("  •", f"[cyan]{_safe(fr['rule_title'])}[/] [dim](id: {_safe(fr['rule_id'])})[/]")
+            summary_table.add_row("  •", f"[cyan]{literal(fr['rule_title'])}[/] [dim](id: {literal(fr['rule_id'])})[/]")
 
     skip_fails = bool(skipped) and args.fail_on_skip
     if failed:

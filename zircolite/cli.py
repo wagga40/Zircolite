@@ -85,6 +85,7 @@ from zircolite.assets import (
     resolve_shipped_ruleset,
     resolve_shipped_template,
 )
+from zircolite.console import literal
 
 # Input format registry
 from zircolite.formats import DEFAULT_EXTENSION
@@ -465,7 +466,7 @@ def _print_transform_categories(config_path: str, logger) -> bool:
     try:
         config = load_field_mappings(config_path, logger=logger)
     except (FileNotFoundError, ValueError) as e:
-        logger.error(f"[red]    [-] {e}[/]")
+        logger.error(f"[red]    [-] {literal(e)}[/]")
         return False
 
     categories = config.get("transform_categories", {})
@@ -540,12 +541,12 @@ def resolve_run_config(args, logger) -> argparse.Namespace:
         logger.info(f"[+] Configuration loaded and merged from: {make_file_link(args.yaml_config)}")
 
     except FileNotFoundError as e:
-        logger.error(f"[red]    [-] {e}[/]")
+        logger.error(f"[red]    [-] {literal(e)}[/]")
         sys.exit(1)
     except SystemExit:
         raise
     except Exception as e:
-        logger.error(f"[red]    [-] Error loading YAML config: {e}[/]")
+        logger.error(f"[red]    [-] Error loading YAML config: {literal(e)}[/]")
         if logger.isEnabledFor(logging.DEBUG):
             console.print_exception(show_locals=False)
         sys.exit(1)
@@ -631,7 +632,7 @@ def cleanup(
             try:
                 os.remove(evtx)
             except OSError as e:
-                logger.error(f"[red]    [-] Cannot remove file {e}[/]")
+                logger.error(f"[red]    [-] Cannot remove file {literal(e)}[/]")
 
 
 def collapse_results_by_rule(all_results: list[Any]) -> list[dict[str, Any]]:
@@ -1349,7 +1350,7 @@ def _main(memory_tracker, start_time) -> None:
         print_error_panel(
             "Invalid Configuration",
             "CSV output is not supported with multiple rulesets.",
-            f"CSV output was enabled via {csv_source}. Use a single ruleset for CSV output."
+            f"CSV output was enabled via {literal(csv_source)}. Use a single ruleset for CSV output."
         )
         sys.exit(2)
 
@@ -1455,7 +1456,7 @@ def _main(memory_tracker, start_time) -> None:
     if args.dbfile and Path(args.dbfile).exists():
         print_error_panel(
             "Database File Exists",
-            f"The database file '{args.dbfile}' already exists.",
+            f"The database file '{literal(args.dbfile)}' already exists.",
             "Remove the existing file or choose a different path with --dbfile."
         )
         sys.exit(2)
@@ -1611,7 +1612,7 @@ def _main(memory_tracker, start_time) -> None:
             try:
                 write_performance_report(args.performance_json, performance)
             except (OSError, ValueError, TypeError) as exc:
-                logger.error(f"Could not write performance report: {exc}")
+                logger.error(f"Could not write performance report: {literal(exc)}")
                 report_failed = True
 
     if strict_error is not None:

@@ -206,7 +206,9 @@ class ConfigLoader:
         if config_dict is None:
             config_dict = {}
 
-        self.logger.info(f"[cyan][+] Loaded configuration from: {config_path}[/]")
+        from .console import literal
+
+        self.logger.info(f"[cyan][+] Loaded configuration from: {literal(config_path)}[/]")
         return config_dict
 
     def parse_config(self, config_dict: dict[str, Any]) -> ZircoliteConfig:
@@ -689,5 +691,5 @@ parallel:
     with open(target, 'w', encoding='utf-8') as f:
         f.write(default_config)
 
-    from .console import console
-    console.print(f"[green]\\[✓][/] Created default configuration file: [cyan]{output_path}[/]")
+    from .console import console, literal
+    console.print(f"[green]\\[✓][/] Created default configuration file: [cyan]{literal(output_path)}[/]")

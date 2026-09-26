@@ -12,6 +12,7 @@ them (``zircolite.core`` and ``zircolite.processing``).
 
 import contextlib
 import logging
+import re
 import sys
 from dataclasses import dataclass
 from pathlib import Path
@@ -20,6 +21,7 @@ from typing import Any
 from rich.bar import Bar
 from rich.console import Console
 from rich.logging import RichHandler
+from rich.markup import escape
 from rich.panel import Panel
 from rich.rule import Rule
 from rich.table import Table
@@ -315,7 +317,7 @@ def _format_file_node(fs: dict[str, Any]) -> str:
     det_text = f"[{det_style}]{detections} {det_label}[/]"
 
     full_path = fs.get("path")
-    name_markup = make_file_link(full_path, name) if full_path else f"[cyan]{name}[/]"
+    name_markup = make_file_link(full_path, name) if full_path else f"[cyan]{literal(name)}[/]"
     parts = [name_markup, f"[magenta]{events:,}[/] events", det_text]
     if filtered > 0:
         parts.append(f"[dim]{filtered:,} filtered[/]")
@@ -646,6 +648,23 @@ def print_profiling_report(report: list[dict[str, Any]], top_n: int = 20) -> Non
     )
 
 
+# C0 controls other than tab and newline, DEL, and C1 controls. Rich removes
+# only a few of them, so an ESC in a file name would reach the terminal as a
+# live escape sequence.
+_UNSAFE_CONTROL_CHARS = re.compile(r"[\x00-\x08\x0b-\x1f\x7f-\x9f]")
+
+
+def literal(value: object) -> str:
+    """*value* as markup that prints exactly as written.
+
+    File names, paths and the error messages that quote them come from the
+    evidence under analysis. Interpolated into Rich markup as they are,
+    "[bold]x.evtx" prints as "x.evtx", a stray closing tag raises MarkupError
+    out of the log call, and a control character reaches the terminal.
+    """
+    return escape(_UNSAFE_CONTROL_CHARS.sub("", str(value)))
+
+
 def make_file_link(path: str, display: str | None = None) -> str:
     """
     Create a Rich markup string with a clickable file:// hyperlink.
@@ -660,7 +679,7 @@ def make_file_link(path: str, display: str | None = None) -> str:
     Returns:
         Rich markup string with clickable link
     """
-    text = display if display is not None else path
+    text = literal(display if display is not None else path)
     try:
         abs_path = Path(path).resolve()
         uri = abs_path.as_uri()
