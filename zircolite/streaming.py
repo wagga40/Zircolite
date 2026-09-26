@@ -9,6 +9,7 @@ This module contains the StreamingEventProcessor class for:
 """
 
 import base64
+import codecs
 import contextlib
 import csv as csv_module
 import hashlib
@@ -86,6 +87,120 @@ def _read_transform(path: str, mtime_ns: int, size: int) -> str:
 # Input formats without Channel/EventID semantics: event filtering is skipped
 # for these unless event_filter.filter_all_sources is enabled in the config
 _NON_WINDOWS_INPUTS = NON_WINDOWS_INPUT_FLAGS
+
+# wevtutil qe /f:xml, Get-WinEvent's ToXml() and evtx_dump write <Event> records
+# back to back with no element around them, and an XML parser stops at the end
+# of the first one, leaving the rest of the file unread without an error. The
+# reader puts one synthetic document element around the whole file instead.
+# The name must not end in "Event", which is how the reader recognises a record.
+_XML_WRAPPER_TAG = "ZircoliteXmlDocument"
+# How much of a file may precede its first element before the reader gives up
+# on wrapping it and parses it as it is
+_XML_PROLOG_LIMIT = 1 << 20
+
+
+def _xml_byte_layout(head: bytes) -> tuple[int, str] | None:
+    """(BOM length, codec) for reading the prolog of an XML byte stream.
+
+    Any ASCII-compatible encoding reads as latin-1, which maps bytes to
+    characters one to one, so character offsets are byte offsets. None for
+    the encodings the prolog scan cannot be trusted with.
+    """
+    if head.startswith((codecs.BOM_UTF32_LE, codecs.BOM_UTF32_BE)):
+        return None
+    if head.startswith(codecs.BOM_UTF8):
+        return len(codecs.BOM_UTF8), "latin-1"
+    if head.startswith(codecs.BOM_UTF16_LE):
+        return len(codecs.BOM_UTF16_LE), "utf-16-le"
+    if head.startswith(codecs.BOM_UTF16_BE):
+        return len(codecs.BOM_UTF16_BE), "utf-16-be"
+    if head.startswith(b"<\x00"):
+        return 0, "utf-16-le"
+    if head.startswith(b"\x00<"):
+        return 0, "utf-16-be"
+    return 0, "latin-1"
+
+
+def _first_element_offset(prolog: str) -> int | None:
+    """Index of the first element's ``<`` in *prolog*.
+
+    The XML declaration, processing instructions and comments are skipped.
+    -1 for a DOCTYPE, which cannot sit inside an element, so the file has to
+    be parsed exactly as written; None when *prolog* ends before telling.
+    """
+    i = 0
+    while (i := prolog.find("<", i)) != -1:
+        if i + 1 == len(prolog):
+            return None
+        if prolog.startswith("<?", i):
+            end, skip = prolog.find("?>", i + 2), 2
+        elif prolog.startswith("<!--", i):
+            end, skip = prolog.find("-->", i + 4), 3
+        elif prolog.startswith("<!", i):
+            return -1
+        else:
+            return i
+        if end == -1:
+            return None
+        i = end + skip
+    return None
+
+
+class _XmlDocumentStream:
+    """A binary file read with every top-level element under one root.
+
+    ``head`` is what has already been read from ``raw``; the synthetic start
+    tag goes in at ``split``, a byte offset into it, and the end tag after the
+    last byte of ``raw``. Without a codec the bytes pass through untouched.
+    """
+
+    def __init__(self, raw: Any, head: bytes, split: int = 0, codec: str | None = None):
+        self._raw = raw
+        if codec is None:
+            self._pending, self._closing = head, b""
+        else:
+            opening = f"<{_XML_WRAPPER_TAG}>".encode(codec)
+            self._pending = head[:split] + opening + head[split:]
+            self._closing = f"</{_XML_WRAPPER_TAG}>".encode(codec)
+
+    def read(self, size: int = -1) -> bytes:
+        if size is None or size < 0:
+            data = self._pending + self._raw.read() + self._closing
+            self._pending = self._closing = b""
+            return data
+        if self._pending:
+            data, self._pending = self._pending[:size], self._pending[size:]
+            return data
+        data = self._raw.read(size)
+        if data:
+            return data
+        data, self._closing = self._closing, b""
+        return data
+
+
+def _xml_document_stream(raw: Any) -> _XmlDocumentStream:
+    """Wrap *raw* so that records written back to back parse as one document."""
+    head = b""
+    while len(head) < _XML_PROLOG_LIMIT:
+        chunk = raw.read(64 * 1024)
+        if not chunk:
+            break
+        head += chunk
+        layout = _xml_byte_layout(head)
+        if layout is None:
+            break
+        bom, codec = layout
+        body = head[bom:]
+        if codec != "latin-1":
+            body = body[: len(body) // 2 * 2]
+        prolog = body.decode(codec, errors="replace")
+        offset = _first_element_offset(prolog)
+        if offset == -1:
+            break
+        if offset is not None:
+            split = bom + len(prolog[:offset].encode(codec, errors="replace"))
+            return _XmlDocumentStream(raw, head, split, codec)
+    return _XmlDocumentStream(raw, head)
 
 
 class StrictParseError(Exception):
@@ -1124,20 +1239,20 @@ class StreamingEventProcessor:
         """Stream and flatten events from an XML file using incremental parsing."""
         from lxml import etree  # type: ignore[attr-defined]
 
-        _fh = None  # Track compressed file handle for cleanup
+        _fh = None
         try:
             filename = Path(xml_file).name
             flatten = self._flatten_event  # Local reference
             should_process = self._should_process_event  # Local reference
             xml_to_dict = extractor.xml_to_dict
 
-            # For compressed/archived XML files, open a decompressed stream for iterparse
-            _suffix = Path(xml_file).suffix.lower()
-            if _suffix in COMPRESSED_SUFFIXES:
+            if Path(xml_file).suffix.lower() in COMPRESSED_SUFFIXES:
                 _fh = open_maybe_compressed(xml_file, password=self.archive_password)
-                context = etree.iterparse(_fh, events=("end",), recover=True)
             else:
-                context = etree.iterparse(xml_file, events=("end",), recover=True)
+                _fh = open(xml_file, "rb")  # noqa: SIM115 -- closed in the finally below
+            context = etree.iterparse(
+                _xml_document_stream(_fh), events=("end",), recover=True
+            )
             seen_events = False
             for _action, elem in context:
                 if elem.tag.endswith("Event"):

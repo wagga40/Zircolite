@@ -1711,6 +1711,29 @@ class TestCLISysmonXmlEvtxtractInput:
         assert data[0]["count"] > 0
         assert data[0]["matches"], "a detection with no matching event is not a detection"
 
+    def test_xml_without_root_element_is_read_whole(self, tmp_path):
+        """The XML fixture holds two <Event> records and no element around them.
+
+        Only the first one used to be ingested, so "count > 0" above kept
+        passing while half the file went unread.
+        """
+        assert XML_EVENTS_FIXTURE.exists(), f"missing tracked fixture {XML_EVENTS_FIXTURE}"
+        pytest.importorskip("lxml")
+        records = XML_EVENTS_FIXTURE.read_text(encoding="utf-8").count("<Event ")
+        assert records == 2
+
+        ruleset_file = tmp_path / "ruleset.json"
+        ruleset_file.write_text(json.dumps([{
+            "title": "Everything", "id": "match-all", "description": "", "level": "high",
+            "tags": [], "filename": "match_all.yml", "rule": ["SELECT * FROM logs"],
+        }]))
+        output_file = tmp_path / "out.json"
+
+        with patch('sys.argv', ['zircolite.py', '-e', str(XML_EVENTS_FIXTURE), '-r', str(ruleset_file), '-x', '-o', str(output_file), *get_log_arg(tmp_path)]):
+            zircolite_script.main()
+
+        data = json.loads(output_file.read_text())
+        assert data[0]["count"] == records
 
     def test_real_evtx_file_end_to_end(self, tmp_path):
         """The default format had no end-to-end test at all.
