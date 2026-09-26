@@ -566,8 +566,9 @@ class RulesetHandler:
         self.pipelines = []
         self.event_filter: EventFilter | None = None  # Will be populated after loading
 
-        # Init pipelines
-        plugins = InstalledSigmaPlugins.autodiscover()
+        # Init pipelines. Validators are never run, and loading them imports
+        # pySigma's MITRE tag data, which unpickles a cache under ~/.cache/pysigma.
+        plugins = InstalledSigmaPlugins.autodiscover(include_validators=False)
         pipeline_resolver = plugins.get_pipeline_resolver()
         pipeline_list = list(pipeline_resolver.pipelines.keys())
 
