@@ -40,6 +40,7 @@ from evtx import PyEvtxParser
 from RestrictedPython import compile_restricted, limited_builtins, safe_builtins, utility_builtins
 from RestrictedPython.Eval import default_guarded_getiter
 from RestrictedPython.Guards import guarded_iter_unpack_sequence
+from rich.markup import escape
 
 from .config import ProcessingConfig
 from .formats import (
@@ -92,11 +93,68 @@ _NON_WINDOWS_INPUTS = NON_WINDOWS_INPUT_FLAGS
 # back to back with no element around them, and an XML parser stops at the end
 # of the first one, leaving the rest of the file unread without an error. The
 # reader puts one synthetic document element around the whole file instead.
-# The name must not end in "Event", which is how the reader recognises a record.
+# The name must not be "Event", which is how the reader recognises a record.
 _XML_WRAPPER_TAG = "ZircoliteXmlDocument"
 # How much of a file may precede its first element before the reader gives up
 # on wrapping it and parses it as it is
 _XML_PROLOG_LIMIT = 1 << 20
+_XML_READ_SIZE = 64 * 1024
+
+# Once libxml2's recovering parser has met one error, it stops expanding entity
+# references for the rest of the document, so a single malformed record would
+# erase every later &gt; &amp; and &lt; (2>&1 read as 21). Character references
+# are expanded regardless and mean the same, so the readers hand libxml2 those.
+_PREDEFINED_ENTITY_REFS = {
+    "amp": "&#38;", "lt": "&#60;", "gt": "&#62;", "quot": "&#34;", "apos": "&#39;",
+}
+_PREDEFINED_ENTITY_RE = re.compile(r"&(amp|lt|gt|quot|apos);")
+
+
+def _as_character_references(text: str) -> str:
+    """*text* with every predefined entity reference spelled as a character reference."""
+    return _PREDEFINED_ENTITY_RE.sub(lambda m: _PREDEFINED_ENTITY_REFS[m.group(1)], text)
+
+
+class _EntityReferenceRewriter:
+    """``_as_character_references`` over a byte stream in one encoding, chunk by chunk.
+
+    A reference cut in two by a read boundary is held back until the next
+    chunk completes it. In UTF-16 only matches that start on a code unit
+    count: the same bytes read one byte off belong to other characters.
+    """
+
+    def __init__(self, codec: str):
+        self._unit = 1 if codec == "latin-1" else 2
+        self._amp = "&".encode(codec)
+        self._refs = {
+            f"&{name};".encode(codec): ref.encode(codec)
+            for name, ref in _PREDEFINED_ENTITY_REFS.items()
+        }
+        self._pattern = re.compile(b"|".join(re.escape(ref) for ref in self._refs))
+        self._longest = max(map(len, self._refs))
+        self._pending = b""
+        self._offset = 0  # stream offset of self._pending[0]
+
+    def feed(self, data: bytes) -> bytes:
+        data = self._pending + data
+        base, unit = self._offset, self._unit
+        end = len(data) - (base + len(data)) % unit
+        amp = data.rfind(self._amp, max(0, end - self._longest + 1), end)
+        cut = end if amp == -1 else amp - (base + amp) % unit
+        self._pending, self._offset = data[cut:], base + cut
+        return self._rewrite(data[:cut], base)
+
+    def flush(self) -> bytes:
+        data, self._pending = self._pending, b""
+        return self._rewrite(data, self._offset)
+
+    def _rewrite(self, data: bytes, base: int) -> bytes:
+        unit, refs = self._unit, self._refs
+
+        def swap(match: re.Match) -> bytes:
+            return match.group() if (base + match.start()) % unit else refs[match.group()]
+
+        return self._pattern.sub(swap, data)
 
 
 def _xml_byte_layout(head: bytes) -> tuple[int, str] | None:
@@ -151,43 +209,59 @@ class _XmlDocumentStream:
 
     ``head`` is what has already been read from ``raw``; the synthetic start
     tag goes in at ``split``, a byte offset into it, and the end tag after the
-    last byte of ``raw``. Without a codec the bytes pass through untouched.
+    last byte of ``raw``. With a codec, predefined entity references are
+    rewritten as character references; without one the bytes pass through.
     """
 
-    def __init__(self, raw: Any, head: bytes, split: int = 0, codec: str | None = None):
+    def __init__(
+        self, raw: Any, head: bytes, split: int | None = None, codec: str | None = None
+    ):
         self._raw = raw
-        if codec is None:
-            self._pending, self._closing = head, b""
-        else:
-            opening = f"<{_XML_WRAPPER_TAG}>".encode(codec)
-            self._pending = head[:split] + opening + head[split:]
+        self._head: bytes | None = head
+        self._closing = b""
+        if codec is not None and split is not None:
+            self._head = head[:split] + f"<{_XML_WRAPPER_TAG}>".encode(codec) + head[split:]
             self._closing = f"</{_XML_WRAPPER_TAG}>".encode(codec)
+        self._rewriter = _EntityReferenceRewriter(codec) if codec is not None else None
+        self._buffer = bytearray()
+        self._done = False
 
-    def read(self, size: int = -1) -> bytes:
-        if size is None or size < 0:
-            data = self._pending + self._raw.read() + self._closing
-            self._pending = self._closing = b""
-            return data
-        if self._pending:
-            data, self._pending = self._pending[:size], self._pending[size:]
-            return data
-        data = self._raw.read(size)
-        if data:
-            return data
-        data, self._closing = self._closing, b""
+    def _fill(self, size: int) -> None:
+        while not self._done and (size < 0 or len(self._buffer) < size):
+            if self._head is not None:
+                piece, self._head = self._head, None
+            else:
+                piece = self._raw.read(_XML_READ_SIZE)
+                if not piece:
+                    piece, self._done = self._closing, True
+            if self._rewriter is not None:
+                piece = self._rewriter.feed(piece)
+                if self._done:
+                    piece += self._rewriter.flush()
+            self._buffer += piece
+
+    def read(self, size: int | None = -1) -> bytes:
+        size = -1 if size is None else size
+        self._fill(size)
+        if size < 0:
+            size = len(self._buffer)
+        data = bytes(self._buffer[:size])
+        del self._buffer[:size]
         return data
 
 
 def _xml_document_stream(raw: Any) -> _XmlDocumentStream:
     """Wrap *raw* so that records written back to back parse as one document."""
     head = b""
+    codec = None
     while len(head) < _XML_PROLOG_LIMIT:
-        chunk = raw.read(64 * 1024)
+        chunk = raw.read(_XML_READ_SIZE)
         if not chunk:
             break
         head += chunk
         layout = _xml_byte_layout(head)
         if layout is None:
+            codec = None
             break
         bom, codec = layout
         body = head[bom:]
@@ -200,7 +274,7 @@ def _xml_document_stream(raw: Any) -> _XmlDocumentStream:
         if offset is not None:
             split = bom + len(prolog[:offset].encode(codec, errors="replace"))
             return _XmlDocumentStream(raw, head, split, codec)
-    return _XmlDocumentStream(raw, head)
+    return _XmlDocumentStream(raw, head, codec=codec)
 
 
 # The event filter hands both values to a set membership test, so they have to
@@ -231,7 +305,6 @@ def _field_path_plan(field_paths: tuple) -> dict:
     for path in field_paths:
         plan.setdefault(path[0], []).append((path[1:], path))
     return {key: tuple(entries) for key, entries in plan.items()}
-
 
 class StrictParseError(Exception):
     """A parse error that --strict asked us to stop on.
@@ -1117,6 +1190,26 @@ class StreamingEventProcessor:
         if self._skipped_records == 1:
             self.logger.debug(f"Skipping unparsable record in {source}: {exc}")
 
+    def _note_recovered_xml(self, source: str, error_log: Any) -> None:
+        """Flag an XML file lxml had to recover: what was read is not what was written.
+
+        Recovery drops the offending characters or markup and carries on, so
+        the records around an error arrive incomplete rather than missing. The
+        file is marked degraded, which also keeps --remove-events off it.
+        """
+        from lxml import etree  # type: ignore[attr-defined]
+
+        errors = [e for e in error_log if e.level >= etree.ErrorLevels.ERROR]
+        if not errors:
+            return
+        self._had_parse_error = True
+        first = errors[0]
+        self.logger.warning(
+            f"[yellow]    [!] Recovered from {len(errors):,} XML error(s) in "
+            f"{escape(Path(source).name)} (first at line {first.line}: "
+            f"{escape(first.message)}); the records concerned may be incomplete[/]"
+        )
+
     def _get_transform_func(self, code):
         """Get or create cached transform function."""
         func = self._transform_func_cache.get(code)
@@ -1312,7 +1405,9 @@ class StreamingEventProcessor:
             )
             seen_events = False
             for _action, elem in context:
-                if elem.tag.endswith("Event"):
+                # The exact name: UserData payloads such as CompatibilityFixEvent
+                # belong to the record around them
+                if elem.tag == "Event" or elem.tag.endswith("}Event"):
                     seen_events = True
                     try:
                         ns = ""
@@ -1340,6 +1435,7 @@ class StreamingEventProcessor:
                     while elem.getprevious() is not None:
                         del elem.getparent()[0]
 
+            self._note_recovered_xml(xml_file, context.error_log)
             if not seen_events:
                 # Deliberately no --logs-encoding hint: XML is parsed with the
                 # encoding declared in the document, so that flag changes
@@ -1491,11 +1587,12 @@ class StreamingEventProcessor:
         data = bytes(data.replace("\x00", "").replace("\x0b", ""), "utf-8").decode(
             "utf-8", "ignore"
         )
-        data = f"<evtxtract>\n{data}\n</evtxtract>"
+        data = f"<evtxtract>\n{_as_character_references(data)}\n</evtxtract>"
 
         # Parse with recovery mode for malformed XML
         parser = etree.XMLParser(recover=True)
         root = etree.fromstring(data, parser=parser)
+        self._note_recovered_xml(log_file, parser.error_log)
 
         # Stream events from parsed tree
         ns = "{http://schemas.microsoft.com/win/2004/08/events/event}"
