@@ -725,6 +725,12 @@ Each line then looks like this (truncated):
 <?xml version="1.0" encoding="utf-8"?><Event xmlns="http://schemas.microsoft.com/win/2004/08/events/event"><System><Provider Name="Microsoft-Windows-Sysmon" Guid="XXXXXX"></Provider><EventID>1</EventID><TimeCreated SystemTime="XXXX-XX-XXTXX:XX:XX.XXXXXXZ"></TimeCreated><Channel>Microsoft-Windows-Sysmon/Operational</Channel><Computer>XXXXXXX</Computer></System><EventData><Data Name="UtcTime">XXXX-XX-XX XX:XX:XX.XXX</Data><Data Name="Image">XXXXXX</Data><Data Name="CommandLine">XXXX</Data></EventData></Event>
 ```
 
+Exports are not always well-formed: some carry control characters XML does not allow,
+copied from the event data. XML and EVTXtract input are parsed leniently: the offending
+characters are dropped and the rest of the file is read normally. When that happens
+Zircolite warns with the number of errors and the line of the first one, and treats the
+file as not read in full, so `--remove-events` keeps it.
+
 ### EVTXtract
 
 [EVTXtract](https://github.com/williballenthin/EVTXtract) recovers EVTX fragments from raw
