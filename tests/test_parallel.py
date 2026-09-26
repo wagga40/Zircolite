@@ -587,6 +587,71 @@ class TestRealThrottling:
         assert stats.throttle_events == spike
         assert max(samples[num_workers:]) == num_workers
 
+    def test_budget_counts_files_submitted_but_not_yet_resident(self, test_logger):
+        """RSS does not include a file submitted a moment ago, so it is added in."""
+        processor = MemoryAwareParallelProcessor(
+            config=ParallelConfig(memory_limit_percent=90.0), logger=test_logger
+        )
+        processor._calibrated_memory_per_file_mb = 40.0
+
+        with patch("psutil.virtual_memory") as mock_vm:
+            mock_vm.return_value.total = 1000 * 1024 * 1024
+            mock_vm.return_value.available = 180 * 1024 * 1024  # 82% used
+
+            assert processor._would_exceed_memory_budget() is False  # 86%
+            assert processor._would_exceed_memory_budget(pending=1) is False  # 90%
+            assert processor._would_exceed_memory_budget(pending=2) is True  # 94%
+
+    def test_refill_projects_each_file_on_top_of_the_ones_before(self, test_logger, tmp_path):
+        """One refill can submit several files within microseconds.
+
+        Checking each against current RSS alone let a refill of k slots commit
+        k estimates while checking for one.
+        """
+        import time
+
+        num_workers, spike = 4, 3
+        files = []
+        for i in range(12):
+            f = tmp_path / f"f{i:02}.json"
+            f.write_text("{}")
+            files.append(f)
+
+        def slow(path):
+            time.sleep(0.05)
+            return 1, None
+
+        processor = MemoryAwareParallelProcessor(
+            config=ParallelConfig(
+                max_workers=num_workers, adaptive_memory=False, sort_by_size=False
+            ),
+            logger=test_logger,
+        )
+        checks = 0
+
+        def spike_then_recover():
+            nonlocal checks
+            checks += 1
+            return checks <= spike
+
+        pending_seen = []
+        budget = processor._would_exceed_memory_budget
+
+        def spy(pending=0):
+            pending_seen.append(pending)
+            return budget(pending=pending)
+
+        processor.should_throttle = spike_then_recover
+        processor._would_exceed_memory_budget = spy
+        _, stats = processor.process_files_parallel(files, slow, disable_progress=True)
+
+        assert stats.processed_files == 12
+        # The spike left at most one file in flight, so the refill after it
+        # filled three or four slots, checking each against the ones it had
+        # already submitted; every round starts from zero again
+        assert max(pending_seen) >= 2
+        assert pending_seen.count(0) > 1
+
 
 # ============================================================================
 # CALLBACKS

@@ -289,12 +289,15 @@ class MemoryAwareParallelProcessor:
         """Check if we should reduce workers due to high memory usage."""
         return self.get_memory_percent() > self.config.memory_limit_percent
 
-    def _would_exceed_memory_budget(self) -> bool:
+    def _would_exceed_memory_budget(self, pending: int = 0) -> bool:
         """Predictive throttle based on the calibrated per-file estimate.
 
         Returns True when submitting one more file would likely push the
-        process RSS past the configured memory budget. Inert until adaptive
-        calibration has produced an estimate.
+        process RSS past the configured memory budget. ``pending`` counts
+        files submitted so recently that RSS cannot include them yet: a
+        refill submits several within microseconds, and checking each against
+        RSS alone would commit all of them on the strength of one estimate.
+        Inert until adaptive calibration has produced an estimate.
         """
         if self._calibrated_memory_per_file_mb is None:
             return False
@@ -307,7 +310,8 @@ class MemoryAwareParallelProcessor:
             return False
         used_mb = (vm.total - vm.available) / (1024 * 1024)
         projected_percent = (
-            (used_mb + self._calibrated_memory_per_file_mb) / total_mb * 100.0
+            (used_mb + (pending + 1) * self._calibrated_memory_per_file_mb)
+            / total_mb * 100.0
         )
         return projected_percent > self.config.memory_limit_percent
 
@@ -659,15 +663,18 @@ class MemoryAwareParallelProcessor:
                     # Pressure is checked before each submission; a deferral
                     # counts once per batch of completions, not once per slot.
                     if done:
+                        refilled = 0
                         while (
                             file_queue
                             and len(active_futures) < num_workers
                             and not is_shutdown_requested()
                         ):
-                            if self.should_throttle() or self._would_exceed_memory_budget():
+                            if (self.should_throttle()
+                                    or self._would_exceed_memory_budget(pending=refilled)):
                                 self.stats.throttle_events += 1
                                 break
                             submit(file_queue.popleft())
+                            refilled += 1
 
                     if not active_futures and file_queue and not is_shutdown_requested():
                         submit(file_queue.popleft())

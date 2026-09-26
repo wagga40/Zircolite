@@ -364,7 +364,9 @@ Beyond picking a worker count, the parallel path:
   the end.
 - **Throttles for real** — when memory pressure exceeds `--parallel-memory-limit`
   (85% by default), new submissions are deferred until in-flight work finishes and memory
-  drops back.
+  drops back. Once pressure eases the pool refills to its full size, and each file of a
+  refill is projected on top of the ones submitted just before it, which have not grown
+  the process yet.
 - **Recalibrates** after the first file completes, blending the measured memory-per-file
   ratio into the estimate for the rest.
 - **Reads the field-mappings config once** and hands each worker a copy, rather than
