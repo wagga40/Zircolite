@@ -29,7 +29,7 @@ import sys
 import tempfile
 import threading
 import time
-from contextlib import closing, contextmanager, nullcontext
+from contextlib import closing, contextmanager, nullcontext, suppress
 from copy import deepcopy
 from dataclasses import dataclass, field, fields
 from pathlib import Path
@@ -229,6 +229,30 @@ def create_extractor(
 # HELPERS
 # ============================================================================
 
+class OutputPathConflict(ValueError):
+    """A detections output would replace an input selected for analysis."""
+
+
+def _validate_output_path(ctx: ProcessingContext, files: list[Path]) -> None:
+    if ctx.no_output:
+        return
+    output = Path(ctx.outfile)
+    resolved = output.resolve()
+    output_exists = output.exists()
+    for source in files:
+        source = Path(source)
+        same_file = resolved == source.resolve()
+        if not same_file and output_exists:
+            # Ingestion will report a source that disappeared.
+            with suppress(FileNotFoundError):
+                same_file = output.samefile(source)
+        if same_file:
+            raise OutputPathConflict(
+                f"Detections output '{output}' refers to input '{source}'. "
+                "Choose a separate output path."
+            )
+
+
 def _unpack_streaming_result(
     result: int | tuple[int, ...]
 ) -> tuple[int, int, int]:
@@ -336,6 +360,7 @@ def process_unified_streaming(
     args: argparse.Namespace,
 ) -> tuple[Any, ...]:
     """Process all files into a single database using streaming mode."""
+    _validate_output_path(ctx, file_list)
     ctx.logger.info(
         f"[+] Loading all [yellow]{len(file_list)}[/] file(s) into a single unified database"
     )
@@ -436,6 +461,7 @@ def process_perfile_streaming(
     args: argparse.Namespace,
 ) -> tuple[Any, ...]:
     """Process each file separately using streaming mode."""
+    _validate_output_path(ctx, file_list)
     ctx.logger.info(
         f"[+] Processing [yellow]{len(file_list)}[/] file(s) separately in streaming mode"
     )
@@ -678,6 +704,7 @@ def process_db_input(
         db_files = [Path(f) for f in file_list]
     else:
         db_files = expand_db_path(Path(args.evtx), args, ctx.logger)
+    _validate_output_path(ctx, db_files)
     all_results: list = []
     first_file = True
     processed_any = False
@@ -1191,6 +1218,7 @@ def process_parallel_streaming(
     recommended_workers: int | None = None,
 ) -> tuple[Any, ...]:
     """Process files in parallel using memory-aware parallel processor."""
+    _validate_output_path(ctx, file_list)
 
     executor_kind = getattr(args, "executor", None) or "thread"
     parallel_config = ParallelConfig(

@@ -10,7 +10,7 @@ from typing import Any
 import orjson as json
 import xxhash
 
-from .utils import _EXCLUDED_SENTINEL, _normalize_scalar, parse_timestamp
+from .utils import _EXCLUDED_SENTINEL, _normalize_scalar, is_oversized_integer, parse_timestamp
 
 
 def flatten_event(
@@ -77,7 +77,7 @@ def flatten_event(
         if key not in special_fields and raw_field_name not in special_fields:
             # Past SQLite's INTEGER range the value has to go in as text
             is_int = isinstance(value, int)
-            if isinstance(value, int) and not -(1 << 63) <= value < (1 << 63):
+            if is_oversized_integer(value):
                 self._note_large_integer(key)
                 value = str(value)
                 is_int = False
@@ -149,6 +149,8 @@ def flatten_event(
                     k, found, v = split_field.partition(equal_sign)
                     if not found:
                         continue
+                    if is_oversized_integer(v):
+                        self._note_large_integer(k)
                     json_line[k] = v
                     if k not in seen_leaf_keys:
                         key_lower = k.lower()
@@ -172,7 +174,7 @@ def flatten_event(
                 final_value = transformed_values[k]
             else:
                 final_value = value
-            if isinstance(final_value, int) and not -(1 << 63) <= final_value < (1 << 63):
+            if is_oversized_integer(final_value):
                 self._note_large_integer(k)
             final_value = _normalize_scalar(final_value)
             json_line[k] = final_value

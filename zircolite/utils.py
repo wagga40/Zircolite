@@ -23,6 +23,7 @@ from collections import deque
 from collections.abc import Sequence
 from contextlib import contextmanager
 from datetime import datetime, timezone
+from decimal import Decimal
 from pathlib import Path
 from typing import (
     Any,
@@ -38,6 +39,20 @@ from .console import console, get_rich_logger
 
 SafeLoader = getattr(yaml, "CSafeLoader", yaml.SafeLoader)
 _EXCLUDED_SENTINEL = object()
+
+
+def _configure_csv_field_limit() -> None:
+    """Set once per interpreter, shared by detection and all ingestion workers."""
+    limit = sys.maxsize
+    while True:
+        try:
+            csv.field_size_limit(limit)
+            return
+        except OverflowError:
+            limit //= 10
+
+
+_configure_csv_field_limit()
 
 
 def safe_load(stream):
@@ -59,6 +74,20 @@ def _normalize_scalar(value):
 
 
 _DECIMAL_NUMBER = re.compile(r"[+-]?(?:[0-9]+(?:\.[0-9]*)?|\.[0-9]+)(?:[eE][+-]?[0-9]+)?\Z")
+_INTEGER_NUMBER = re.compile(r"[+-]?[0-9]+\Z")
+
+
+def is_oversized_integer(value) -> bool:
+    """Whether numeric affinity would round an integer, native or decimal text."""
+    if isinstance(value, int):
+        return not -(1 << 63) <= value < (1 << 63)
+    if not isinstance(value, str) or len(value) < 19:
+        return False
+    text = value.strip(" \t\n\r\v\f")
+    if not _INTEGER_NUMBER.fullmatch(text):
+        return False
+    # Decimal also accepts integers beyond Python's int-string digit limit.
+    return not -(1 << 63) <= Decimal(text) < (1 << 63)
 
 
 def lossless_numeric_scalar(value):
@@ -78,6 +107,23 @@ def lossless_numeric_scalar(value):
         return number if -(1 << 63) <= number < (1 << 63) else value
     real = float(text)
     return int(real) if real.is_integer() and -(1 << 63) <= real < (1 << 63) else real
+
+
+def exact_numeric_compare(left, right) -> int | None:
+    """Compare numeric operands exactly; None delegates other values to SQLite.
+
+    The query retains its original comparison as a fallback, preserving NULL,
+    collation and nonnumeric storage-class behavior without emulating SQLite.
+    """
+    values = []
+    for value in (left, right):
+        value = lossless_numeric_scalar(value)
+        if isinstance(value, str) and _INTEGER_NUMBER.fullmatch(value.strip(" \t\n\r\v\f")):
+            value = Decimal(value)
+        if not isinstance(value, (int, float, Decimal)):
+            return None
+        values.append(value)
+    return (values[0] > values[1]) - (values[0] < values[1])
 
 
 # Above this, an epoch number is milliseconds rather than seconds (1973-03-03).

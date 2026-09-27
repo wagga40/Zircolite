@@ -252,7 +252,7 @@ it itself: an unknown flag, a value outside a flag's choices, a non-numeric valu
 number is expected, or two input format flags together. Zircolite rejects the rest of the
 conflicting or impossible invocations: no events path given at all, `--csv` with more than one ruleset, a `--csv-delimiter` that is not
 exactly one character, `--all-transforms` together with `--transform-category`, a
-`--dbfile` whose path already exists, `--dbfile` with parallel processing over several
+`--outfile` referring to a selected input, `--dbfile` whose path already exists, `--dbfile` with parallel processing over several
 files, a `-p`/`--pipeline` naming a pipeline that is not installed, or a
 `--generate-config` that could not be written.
 
@@ -361,6 +361,12 @@ unless `--fileext` or `--file-pattern` says otherwise.
 | `--hashes` | Add an xxhash64 to each event. For CSV, EVTXtract and JSON-array input the reader hands over a parsed record rather than a source line, so the hash covers a canonical form of the event |
 | `-L`, `--limit` | Discard results from any rule matching more than this many events — alerts, for a [correlation rule](#sigma-correlation-rules) (positive integer, or `-1` to disable). Counted per input database: per file by default, corpus-wide with `--unified-db` |
 | `--profile-rules` | Time each rule and print a performance report. Forces sequential processing |
+
+The detections output must be separate from every selected input, including SQLite
+inputs. Zircolite checks resolved paths, symbolic links and hard links before processing
+and exits with code `2` on a conflict. An existing, separate report can still be overwritten.
+For rules with multiple SQL statements, `--limit` counts each event's `row_id` once
+across those statements.
 
 > [!NOTE]
 > `--dbfile` cannot be combined with parallel processing of several files, because each
