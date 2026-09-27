@@ -64,9 +64,8 @@ outside SQLite's signed 64-bit range are stored as floating-point numbers and ma
 rounded, which is also what JSONL parsing produces; the run warns once and names the
 affected fields.
 
-XML entity rewriting leaves CDATA, comments and processing instructions intact, even
-when their delimiters cross read boundaries. XML and EVTXtract readers skip annotations
-between records and continue with the next event.
+XML entity rewriting leaves CDATA, comments and processing instructions intact. XML and
+EVTXtract readers skip comments and processing instructions between records.
 
 JSON arrays are validated incrementally, including delimiters and the closing
 bracket. The optional `ijson` backend accelerates parsing; its numeric values are
@@ -74,8 +73,8 @@ normalized to Python integers and floats before insertion. ZIP members stream fr
 the archive, and 7-Zip members spool to automatically removed temporary files.
 Compressed file size never selects an unbounded full-load array path.
 
-CSV detection and ingestion share the platform's largest supported field-size limit,
-so a field exceeding Python's default 131,072-character limit does not discard later records.
+CSV detection and ingestion raise the field-size limit to the largest the platform
+supports, well past Python's default of 131,072 characters.
 
 Only transforms enabled for the selected source and CLI selection are compiled.
 Immutable bytecode is cached by source; function namespaces remain local to each
@@ -87,12 +86,11 @@ complete header is known. Summaries retain counts and metadata, while templates,
 packaging and library callers requesting `keep_results` retain complete matches.
 `execute_ruleset` additionally accepts `result_sink` and `stream_results`; sinks must
 consume the temporary row iterator during the callback. Public `execute_rule` and
-`execute_select_query` still return ordinary dictionaries and lists.
+`execute_select_query` return ordinary dictionaries and lists.
 
-When a rule has multiple SQL statements, matches with an integer `row_id` are counted
-once across those statements before applying `--limit`, in first-match order. Equal
-payloads with different row IDs remain distinct. Projections without event IDs retain
-their individual rows. A failed statement rolls back both its rows and its newly seen IDs.
+When a rule has multiple SQL statements, an event matched by several of them is kept
+once, identified by its `row_id`, before `--limit` applies. Rows without a `row_id`, such
+as aggregate projections, are kept as they are.
 
 ## Rule execution
 

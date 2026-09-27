@@ -78,9 +78,8 @@ file** — so with the shipped `config/config.yaml` that is `config/transforms/`
 `-c /opt/zircolite/my.yaml` it is `/opt/zircolite/transforms/`. An absolute path works
 too.
 
-Transforms run once for each configured field name. A raw name that is already the
-mapped name does not run its transform list twice. If distinct lists are configured for
-both names, the mapped-name list runs first, then the raw-name list.
+Transforms run once for each configured field name. If distinct lists are configured for
+the raw and the mapped name, the mapped-name list runs first, then the raw-name list.
 
 ### Writing transform functions
 
@@ -576,9 +575,9 @@ python3 zircolite.py --evtx logs/ --ruleset rules/rules_windows_merged.json \
 - The value must be `YYYY-MM-DDTHH:MM:SS`, 24-hour.
 - The filter reads the field named by `--timefield` (`SystemTime` by default), falling
   back to the auto-detected timestamp field when that one is absent.
-- Event timestamps are compared as instants, so epoch seconds or milliseconds, a trailing
-  `Z`, an explicit UTC offset and a space instead of `T` are all understood.
-- Numeric epoch `0` means `1970-01-01T00:00:00Z` and is subject to the same bounds.
+- Event timestamps are compared as instants, so epoch seconds or milliseconds (`0`
+  included), a trailing `Z`, an explicit UTC offset and a space instead of `T` are all
+  understood.
 
 ### Rule filters
 

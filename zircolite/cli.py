@@ -178,10 +178,8 @@ def parse_arguments() -> argparse.Namespace:
         "--csv",
         "--csv-output",
         help=(
-            "Output results in CSV format (empty fields included). "
-            "The header covers every column of the events table, so a rule returning "
-            "wider rows than the ones before it does not lose fields. Rejects more "
-            "than one ruleset."
+            "Output results in CSV format, one row per matched event with every result "
+            "field as a column (empty fields included). Rejects more than one ruleset."
         ),
         action="store_true",
     )
@@ -190,7 +188,7 @@ def parse_arguments() -> argparse.Namespace:
     output_formats_args.add_argument("--profile-rules", help="Time each rule execution and print a performance report at the end", action='store_true')
     output_formats_args.add_argument("-d", "--dbfile", "--db-file", help="Save all logs to a SQLite database file", type=str)
     output_formats_args.add_argument("-l", "--logfile", "--log-file", help=f"Log file name (default: {DEFAULTS['logfile']})", default=None, type=str)
-    output_formats_args.add_argument("-L", "--limit", "--limit-results", help=f"Discard rules matching more events than this (alerts, for a correlation rule), per input database — so per file in the default mode, and across the whole corpus with --unified-db (default: {DEFAULTS['limit']}, i.e. no limit)", type=int, default=None)
+    output_formats_args.add_argument("-L", "--limit", "--limit-results", help=f"Discard rules matching more events than this (alerts, for a correlation rule), per input database: per file in per-file mode, across the whole corpus when the run uses one database (--unified-db, or auto mode choosing it) (default: {DEFAULTS['limit']}, i.e. no limit)", type=int, default=None)
 
     # Advanced configuration options
     config_formats_args = parser.add_argument_group('⚙️  ADVANCED CONFIGURATION')
@@ -201,7 +199,7 @@ def parse_arguments() -> argparse.Namespace:
     config_formats_args.add_argument("-n", "--nolog", "--no-log", help="Don't create the log file or the detections output file (files requested explicitly with --template, --dbfile, --keepflat or --package are still written)", action='store_true')
     config_formats_args.add_argument("-U", "--update-rules", help="Update rulesets in the 'rules' directory", action='store_true')
     config_formats_args.add_argument("-v", "--version", help="Display Zircolite version", action='store_true')
-    config_formats_args.add_argument("--timefield", "--time-field", help="Specify time field name for time filtering (default: 'SystemTime', auto-detects if not found)", type=str, default=None)
+    config_formats_args.add_argument("--timefield", "--time-field", help="Field holding the event timestamp, after field mappings. Left unset it is auto-detected, falling back to 'SystemTime'; naming one pins it", type=str, default=None)
     config_formats_args.add_argument("--unified-db", "--all-in-one", help="Force unified database mode (all files in one DB, enables cross-file correlation)", action='store_true')
     config_formats_args.add_argument("--no-auto-mode", help="Disable automatic processing mode selection based on file analysis", action='store_true')
     config_formats_args.add_argument("--strict", help="Strict EVTX parsing: stop on corrupted or malformed chunks instead of skipping them. Forces sequential processing (default: lenient, recovers as many events as possible)", action='store_true')
