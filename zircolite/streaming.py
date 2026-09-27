@@ -51,10 +51,12 @@ from .formats import (
 )
 from .jsonstream import iter_json_array
 from .shutdown import is_shutdown_requested
+from .sqlscan import lossless_table_schema
 from .utils import (
     _EXCLUDED_SENTINEL,
     COMPRESSED_SUFFIXES,
     load_field_mappings,
+    lossless_numeric_scalar,
     open_maybe_compressed,
     parse_timestamp,
     sniff_csv_delimiter,
@@ -107,12 +109,10 @@ _XML_READ_SIZE = 64 * 1024
 _PREDEFINED_ENTITY_REFS = {
     "amp": "&#38;", "lt": "&#60;", "gt": "&#62;", "quot": "&#34;", "apos": "&#39;",
 }
-_PREDEFINED_ENTITY_RE = re.compile(r"&(amp|lt|gt|quot|apos);")
-
-
 def _as_character_references(text: str) -> str:
-    """*text* with every predefined entity reference spelled as a character reference."""
-    return _PREDEFINED_ENTITY_RE.sub(lambda m: _PREDEFINED_ENTITY_REFS[m.group(1)], text)
+    """Rewrite entities only where XML interprets them, preserving literal sections."""
+    rewriter = _EntityReferenceRewriter("latin-1")
+    return (rewriter.feed(text.encode("utf-8")) + rewriter.flush()).decode("utf-8")
 
 
 class _EntityReferenceRewriter:
@@ -125,36 +125,55 @@ class _EntityReferenceRewriter:
 
     def __init__(self, codec: str):
         self._unit = 1 if codec == "latin-1" else 2
-        self._amp = "&".encode(codec)
         self._refs = {
             f"&{name};".encode(codec): ref.encode(codec)
             for name, ref in _PREDEFINED_ENTITY_REFS.items()
         }
-        self._pattern = re.compile(b"|".join(re.escape(ref) for ref in self._refs))
-        self._longest = max(map(len, self._refs))
+        self._sections = {
+            start.encode(codec): end.encode(codec)
+            for start, end in (("<![CDATA[", "]]>"), ("<!--", "-->"), ("<?", "?>"))
+        }
+        tokens = (*self._refs, *self._sections, *self._sections.values())
+        self._pattern = re.compile(b"|".join(re.escape(token) for token in tokens))
+        self._longest = max(map(len, tokens))
+        self._closing: bytes | None = None
         self._pending = b""
         self._offset = 0  # stream offset of self._pending[0]
 
     def feed(self, data: bytes) -> bytes:
-        data = self._pending + data
-        base, unit = self._offset, self._unit
-        end = len(data) - (base + len(data)) % unit
-        amp = data.rfind(self._amp, max(0, end - self._longest + 1), end)
-        cut = end if amp == -1 else amp - (base + amp) % unit
-        self._pending, self._offset = data[cut:], base + cut
-        return self._rewrite(data[:cut], base)
+        return self._rewrite(self._pending + data)
 
     def flush(self) -> bytes:
-        data, self._pending = self._pending, b""
-        return self._rewrite(data, self._offset)
+        return self._rewrite(self._pending, final=True)
 
-    def _rewrite(self, data: bytes, base: int) -> bytes:
-        unit, refs = self._unit, self._refs
-
-        def swap(match: re.Match) -> bytes:
-            return match.group() if (base + match.start()) % unit else refs[match.group()]
-
-        return self._pattern.sub(swap, data)
+    def _rewrite(self, data: bytes, *, final: bool = False) -> bytes:
+        # Retain enough bytes for a partial entity or markup delimiter. A whole
+        # CDATA section need not fit in memory: only its closing delimiter does.
+        end = len(data) - (self._offset + len(data)) % self._unit
+        limit = len(data) if final else max(0, end - self._longest + self._unit)
+        parts = []
+        pos = 0
+        for match in self._pattern.finditer(data):
+            if match.start() >= limit:
+                break
+            if (self._offset + match.start()) % self._unit:
+                continue
+            parts.append(data[pos:match.start()])
+            token = match.group()
+            if self._closing is not None:
+                if token == self._closing:
+                    self._closing = None
+            elif token in self._sections:
+                self._closing = self._sections[token]
+            else:
+                token = self._refs.get(token, token)
+            parts.append(token)
+            pos = match.end()
+        cut = max(pos, limit)
+        parts.append(data[pos:cut])
+        self._pending = data[cut:]
+        self._offset += cut
+        return b"".join(parts)
 
 
 def _xml_byte_layout(head: bytes) -> tuple[int, str] | None:
@@ -598,6 +617,8 @@ class StreamingEventProcessor:
         "_last_insert_columns",
         "_last_insert_stmt",
         "_last_sorted_columns",
+        "_lossless_columns",
+        "_pending_lossless_columns",
         # Path resolution cache – maps (raw_field_name, last_part) to resolved
         # (raw_name, mapped_key) or _EXCLUDED_SENTINEL; avoids repeated
         # exclusion/mapping lookups per leaf
@@ -714,6 +735,8 @@ class StreamingEventProcessor:
         # matching. NOCASE on an INTEGER column costs nothing: numeric equality
         # and range comparisons are unaffected.
         self.field_types: dict = {}
+        self._pending_lossless_columns: set[str] = set()
+        self._lossless_columns: set[str] = set()
         # Leaf keys already passed through schema bookkeeping. Shares the
         # lifetime of discovered_fields (never cleared mid-instance).
         self._seen_leaf_keys: set = set()
@@ -1749,7 +1772,7 @@ class StreamingEventProcessor:
         # Stream events from parsed tree
         ns = "{http://schemas.microsoft.com/win/2004/08/events/event}"
         for event in root.getchildren():
-            if "Event" in event.tag:
+            if isinstance(event.tag, str) and (event.tag == "Event" or event.tag.endswith("}Event")):
                 try:
                     event_dict = xml_to_dict(event, ns)
                     if event_dict:
@@ -1957,6 +1980,11 @@ class StreamingEventProcessor:
         else:
             all_columns = self._last_sorted_columns
 
+        # Rare mixed numeric/oversized-integer columns need affinity removed
+        # before SQLite sees their decimal strings, including across batches.
+        if self._pending_lossless_columns:
+            self._preserve_integer_precision(db_connection, cursor)
+
         # Check if we need to update schema or INSERT statement
         schema_changed = self._ensure_columns_exist_cached(
             db_connection, cursor, all_columns
@@ -1977,6 +2005,10 @@ class StreamingEventProcessor:
             self._last_insert_columns = all_columns
 
         rows = _build_rows(batch, all_columns, all_columns_frozen, extra_columns is None)
+        if self._lossless_columns:
+            numeric_positions = {i for i, col in enumerate(all_columns) if col.lower() in self._lossless_columns}
+            rows = [tuple(lossless_numeric_scalar(value) if i in numeric_positions else value
+                          for i, value in enumerate(row)) for row in rows]
 
         # Execute batch insert with transaction
         try:
@@ -1987,6 +2019,78 @@ class StreamingEventProcessor:
             db_connection.execute("ROLLBACK")
             self.logger.debug(f"Batch insert error: {e}")
             raise
+
+    def _note_large_integer(self, key: str) -> None:
+        """An oversized integer must stay text even after a numeric first value."""
+        canonical = self.discovered_fields.get(key.lower())
+        if key.lower() in self._lossless_columns:
+            return
+        # A fresh processor may encounter an existing numeric column for the
+        # first time. Inspect the actual table even when local discovery is empty.
+        self._pending_lossless_columns.add(key.lower())
+        if canonical and self.field_types[canonical] in (
+            "INTEGER COLLATE NOCASE", "NUMERIC COLLATE NOCASE",
+        ):
+            self.field_types[canonical] = "BLOB_NUMERIC COLLATE NOCASE"
+            self._lossless_columns.add(key.lower())
+
+    def _preserve_integer_precision(self, db_connection, cursor) -> None:
+        """Rebuild only when an already-created numeric column needs mixed storage.
+
+        BLOB affinity leaves both native numbers and decimal text untouched.
+        Copy existing values without CAST, preserving signed 64-bit integers.
+        The ingestion schema, indexes and triggers survive the transaction.
+        """
+        cursor.execute("PRAGMA table_info(logs)")
+        columns = cursor.fetchall()
+        affected = {
+            name.lower() for _, name, typ, *_ in columns
+            if name.lower() in self._pending_lossless_columns
+            and typ.upper() in ("INTEGER", "NUMERIC")
+        }
+        if affected:
+            for name in affected:
+                canonical = self.discovered_fields.get(name, name)
+                self.field_types[canonical] = "BLOB_NUMERIC COLLATE NOCASE"
+            cursor.execute("SELECT sql FROM sqlite_master WHERE type='table' AND name='logs'")
+            schema = lossless_table_schema(cursor.fetchone()[0], affected)
+            cursor.execute(
+                "SELECT sql FROM sqlite_master WHERE tbl_name='logs' "
+                "AND type IN ('index', 'trigger') AND sql IS NOT NULL"
+            )
+            dependents = [row[0] for row in cursor.fetchall()]
+            # This table belongs to the processor and has an AUTOINCREMENT key.
+            cursor.execute("SELECT seq FROM sqlite_sequence WHERE name='logs'")
+            sequence = cursor.fetchone()
+            names = ", ".join(_quote_identifier(row[1]) for row in columns)
+            # During the drop/rename interval views and external triggers can
+            # temporarily reference a missing logs table. Legacy rename skips
+            # that transient validation without rewriting those references.
+            cursor.execute("PRAGMA legacy_alter_table")
+            legacy_rename = cursor.fetchone()[0]
+            cursor.execute("PRAGMA legacy_alter_table=ON")
+            cursor.execute("SAVEPOINT preserve_integer_precision")
+            try:
+                cursor.execute('CREATE TABLE "_zircolite_lossless_logs" ' + schema[schema.index("("):])
+                cursor.execute(
+                    f'INSERT INTO "_zircolite_lossless_logs" ({names}) SELECT {names} FROM logs'  # noqa: S608 -- quoted column names
+                )
+                cursor.execute("DROP TABLE logs")
+                cursor.execute('ALTER TABLE "_zircolite_lossless_logs" RENAME TO logs')
+                if sequence:
+                    cursor.execute("UPDATE sqlite_sequence SET seq=? WHERE name='logs'", sequence)
+                for statement in dependents:
+                    cursor.execute(statement)
+                cursor.execute("RELEASE preserve_integer_precision")
+            except BaseException:
+                cursor.execute("ROLLBACK TO preserve_integer_precision")
+                cursor.execute("RELEASE preserve_integer_precision")
+                raise
+            finally:
+                cursor.execute(f"PRAGMA legacy_alter_table={int(legacy_rename)}")
+            self._last_insert_columns = None
+            self._lossless_columns.update(affected)
+        self._pending_lossless_columns.clear()
 
     def _ensure_columns_exist_cached(
         self, db_connection, cursor, columns: tuple
@@ -2000,7 +2104,9 @@ class StreamingEventProcessor:
         # Initialize cache if needed
         if self._db_columns is None:
             cursor.execute("PRAGMA table_info(logs)")
-            self._db_columns = {row[1].lower() for row in cursor.fetchall()}
+            schema_columns = cursor.fetchall()
+            self._db_columns = {row[1].lower() for row in schema_columns}
+            self._lossless_columns = {row[1].lower() for row in schema_columns if row[2].upper() == "BLOB_NUMERIC"}
 
         db_columns = self._db_columns
         schema_changed = False
@@ -2010,7 +2116,8 @@ class StreamingEventProcessor:
         for col in columns:
             col_lower = col.lower()
             if col_lower not in db_columns:
-                sql_type = field_types.get(col, "TEXT COLLATE NOCASE")
+                canonical = self.discovered_fields.get(col_lower, col)
+                sql_type = field_types.get(canonical, "TEXT COLLATE NOCASE")
                 try:
                     cursor.execute(f"ALTER TABLE logs ADD COLUMN {_quote_identifier(col)} {sql_type}")
                     db_columns.add(col_lower)
@@ -2048,7 +2155,9 @@ class StreamingEventProcessor:
             # Refresh column cache from actual table state – handles both
             # freshly created tables and reused tables (DELETE FROM path).
             cursor.execute("PRAGMA table_info(logs)")
-            self._db_columns = {row[1].lower() for row in cursor.fetchall()}
+            schema_columns = cursor.fetchall()
+            self._db_columns = {row[1].lower() for row in schema_columns}
+            self._lossless_columns = {row[1].lower() for row in schema_columns if row[2].upper() == "BLOB_NUMERIC"}
             self._last_insert_stmt = None
             self._last_insert_columns = None
             self._last_column_frozenset = frozenset()

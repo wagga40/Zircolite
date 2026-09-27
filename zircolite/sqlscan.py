@@ -20,9 +20,12 @@ merged ruleset that carries several -- and per-file and parallel modes ask the
 same questions of the same statements once per input file.
 """
 
+import re
 from collections.abc import Iterable, Iterator
 from dataclasses import dataclass
 from functools import lru_cache
+
+from .utils import lossless_numeric_scalar
 
 # Opening delimiter -> its closer. Only ``'`` introduces a string literal; the
 # rest quote identifiers, which is why they are told apart below.
@@ -317,6 +320,199 @@ def _typed_tokens(sql: str) -> list[tuple[str, str]]:
     return out
 
 
+@lru_cache(maxsize=128)
+def census_collations_supported(schema: str) -> bool:
+    """Whether Python's census bounds safely overestimate this table's equality.
+
+    Imported tables may use RTRIM or application collations. Their equality
+    cannot be inferred by folding case, so let SQLite evaluate every rule.
+    """
+    try:
+        tokens = _typed_tokens(schema)
+    except _Unsupported:
+        return False
+    return all(
+        _peek(tokens, i + 1)[1].upper() in ("BINARY", "NOCASE")
+        for i in range(len(tokens)) if _peek_word(tokens, i) == "COLLATE"
+    )
+
+
+def lossless_table_schema(schema: str, columns: set[str]) -> str:
+    """Remove numeric affinity from selected columns without changing constraints.
+
+    The caller rebuilds its ingestion table from this declaration. Quoted names,
+    default expressions, collations and constraints must survive unchanged.
+    """
+    depth, field_start, type_start = 0, False, False
+    edits = []
+    for kind, start, end in iter_tokens(schema):
+        text = schema[start:end]
+        if kind == "comment" or text.isspace():
+            continue
+        if text == "(":
+            depth += 1
+            if depth == 1:
+                field_start = True
+        elif text == ")":
+            depth -= 1
+        elif text == "," and depth == 1:
+            field_start = True
+        elif depth == 1 and field_start:
+            name = _unquote(text) if kind == "identifier" else text
+            type_start = name.lower() in columns
+            field_start = False
+        elif depth == 1 and type_start:
+            edits.append((start, end))
+            type_start = False
+    for start, end in reversed(edits):
+        schema = schema[:start] + "BLOB_NUMERIC" + schema[end:]
+    return schema
+
+
+@lru_cache(maxsize=1024)
+def normalize_numeric_literals(sql: str, columns: frozenset[str]) -> str:
+    """Keep literal comparisons numeric in columns promoted to mixed storage.
+
+    Only direct comparisons in single-table logs queries are modeled. Arithmetic,
+    functions, joins and subqueries retain SQLite's expression semantics. The
+    unary plus removes CAST's affinity so it cannot round the stored large text.
+    """
+    if not columns:
+        return sql
+    try:
+        tokens = [(kind, start, end) for kind, start, end in iter_tokens(sql)
+                  if kind != "comment" and not sql[start:end].isspace()]
+    except _Unsupported:
+        return sql
+    words = [sql[start:end].upper() for kind, start, end in tokens if kind == "word"]
+    if words.count("SELECT") != 1 or words.count("FROM") != 1 or any(
+        word in words for word in ("JOIN", "UNION", "INTERSECT", "EXCEPT")
+    ):
+        return sql
+
+    def token(i):
+        return sql[tokens[i][1]:tokens[i][2]] if 0 <= i < len(tokens) else ""
+
+    def name(i):
+        text = token(i)
+        return _unquote(text) if text and tokens[i][0] == "identifier" else text
+
+    source = next(i for i, (kind, _, _) in enumerate(tokens) if kind == "word" and token(i).upper() == "FROM")
+    if name(source + 1).lower() != "logs":
+        return sql
+    # A comma source list is a join too. Restrict the source clause to one table
+    # and its optional alias, up to WHERE/GROUP/ORDER/HAVING/LIMIT.
+    end_source = next((i for i in range(source + 2, len(tokens))
+                       if token(i).upper() in ("WHERE", "GROUP", "ORDER", "HAVING", "LIMIT")), len(tokens))
+    if any(token(i) == "," for i in range(source + 2, end_source)):
+        return sql
+    edits = {}
+
+    def literal(i):
+        if not 0 <= i < len(tokens) or tokens[i][0] != "literal":
+            return
+        text = token(i)
+        if not isinstance(lossless_numeric_scalar(_unquote(text)), str):
+            edits[i] = "+CAST(" + text + " AS NUMERIC)"
+
+    def operand(i, depth=0):
+        """A complete atom: (kind, column/literal token index, next token)."""
+        if i >= len(tokens) or depth > 32:
+            return None
+        start = i
+        kind = tokens[i][0]
+        text = token(i)
+        if text == "(":
+            nested = operand(i + 1, depth + 1)
+            if nested is None or token(nested[2]) != ")":
+                return None
+            atom_kind, atom_index, i = nested
+            i += 1
+        elif kind == "literal":
+            atom_kind, atom_index, i = "literal", i, i + 1
+        elif kind == "number" or text in ("+", "-", "."):
+            # iter_tokens deliberately splits signs and exponent letters. Read
+            # the full numeric span before advancing its constituent tokens.
+            match = re.match(r"[+-]?\s*(?:0[xX][0-9a-fA-F]+|(?:[0-9]+(?:\.[0-9]*)?|\.[0-9]+)(?:[eE][+-]?[0-9]+)?)", sql[tokens[i][1]:])
+            if match is None:
+                return None
+            end = tokens[i][1] + match.end()
+            while i < len(tokens) and tokens[i][2] <= end:
+                i += 1
+            if i == start or tokens[i - 1][2] != end:
+                return None
+            atom_kind, atom_index = "number", start
+        elif kind in ("word", "identifier"):
+            atom_kind, atom_index, i = "column", i, i + 1
+            if token(i) == "." and i + 1 < len(tokens) and tokens[i + 1][0] in ("word", "identifier"):
+                atom_index, i = i + 1, i + 2
+        else:
+            return None
+        while token(i).upper() == "COLLATE":
+            if i + 1 >= len(tokens) or tokens[i + 1][0] not in ("word", "identifier"):
+                return None
+            i += 2
+        return atom_kind, atom_index, i
+
+    def boundary(i):
+        return token(i).upper() in ("", ")", ",", ";", "AND", "OR", "THEN", "ELSE", "END",
+                                    "FROM", "GROUP", "ORDER", "HAVING", "LIMIT", "AS")
+
+    def promoted(atom):
+        return atom[0] == "column" and name(atom[1]).lower() in columns
+
+    for i in range(len(tokens)):
+        before = token(i - 1).upper()
+        if before not in ("", "(", ",", "SELECT", "WHERE", "HAVING", "WHEN", "THEN", "ELSE", "AND", "OR", "NOT"):
+            continue
+        if before == "(" and i > 1 and tokens[i - 2][0] in ("word", "identifier") and token(i - 2).upper() not in ("WHERE", "AND", "OR", "NOT", "SELECT", "HAVING", "WHEN"):
+            continue  # A function's argument does not stand for its column.
+        left = operand(i)
+        if left is None:
+            continue
+        j = left[2]
+        op = token(j).upper()
+        j += 1
+        if op in ("=", "!", "<", ">", "IS"):
+            if token(j).upper() in ("=", ">", "NOT"):
+                j += 1
+            right = operand(j)
+            if right is not None and boundary(right[2]):
+                if promoted(left) and right[0] == "literal":
+                    literal(right[1])
+                if promoted(right) and left[0] == "literal":
+                    literal(left[1])
+            continue
+        if not promoted(left):
+            continue
+        if op == "NOT":
+            op, j = token(j).upper(), j + 1
+        if op == "BETWEEN":
+            lower = operand(j)
+            if lower is None or token(lower[2]).upper() != "AND":
+                continue
+            upper = operand(lower[2] + 1)
+            if upper is not None and boundary(upper[2]):
+                for bound in (lower, upper):
+                    if bound[0] == "literal":
+                        literal(bound[1])
+        elif op == "IN" and token(j) == "(":
+            members = []
+            while (member := operand(j + 1)) is not None:
+                members.append(member)
+                j = member[2]
+                if token(j) != ",":
+                    break
+            if token(j) == ")" and boundary(j + 1):
+                for member in members:
+                    if member[0] == "literal":
+                        literal(member[1])
+    for i in sorted(edits, reverse=True):
+        _, start, end = tokens[i]
+        sql = sql[:start] + edits[i] + sql[end:]
+    return sql
+
+
 def _peek(tokens: list[tuple[str, str]], pos: int) -> tuple[str, str]:
     return tokens[pos] if pos < len(tokens) else ("end", "")
 
@@ -571,6 +767,9 @@ class QueryScan:
     eventids: frozenset[int] | None
     columns: frozenset[str]
     regex_patterns: tuple[str, ...]
+    # Only a direct SELECT * can be skipped solely because its input is empty.
+    # An aggregate projection can still emit one row, including COUNT(*) = 0.
+    row_preserving: bool = False
 
 
 _UNSCANNABLE = QueryScan(None, None, frozenset(), ())
@@ -667,6 +866,13 @@ def scan_query(sql: str) -> QueryScan:
         eventids=bounds(_FieldReader("eventid", _as_int)),
         columns=_column_names(tokens),
         regex_patterns=_regex_patterns(tokens),
+        row_preserving=(
+            _peek_word(tokens, 0) == "SELECT"
+            and _peek(tokens, 1) == ("punct", "*")
+            and _peek_word(tokens, 2) == "FROM"
+            and _peek(tokens, 3)[1].lower() == "logs"
+            and _peek_word(tokens, 4) == "WHERE"
+        ),
     )
     _SCANS[sql] = scan
     return scan

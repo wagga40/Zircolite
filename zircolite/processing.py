@@ -417,10 +417,12 @@ def perfile_db_paths(dbfile: str, file_list: list[Path]) -> list[Path]:
     claimed: set[Path] = set()
     for index, log_file in enumerate(file_list):
         candidate = parent / f"{base.stem}_{Path(log_file).name}{base.suffix}"
-        if candidate in claimed:
+        suffix = index + 1
+        while candidate in claimed:
             candidate = (
-                parent / f"{base.stem}_{index + 1}_{Path(log_file).name}{base.suffix}"
+                parent / f"{base.stem}_{suffix}_{Path(log_file).name}{base.suffix}"
             )
+            suffix += 1
         claimed.add(candidate)
         paths.append(candidate)
     return paths

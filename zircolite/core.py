@@ -59,7 +59,14 @@ from .performance import FileMetrics, timed_stage
 from .prefilter import prepare_rules, rule_queries
 from .results import RowSpool, write_result_json
 from .shutdown import is_shutdown_requested
-from .sqlscan import admitted_pairs, normalize_rule_sql, rebalance_sql, scan_query
+from .sqlscan import (
+    admitted_pairs,
+    census_collations_supported,
+    normalize_numeric_literals,
+    normalize_rule_sql,
+    rebalance_sql,
+    scan_query,
+)
 from .streaming import StreamingEventProcessor, StrictParseError
 from .utils import sanitize_row_for_csv
 
@@ -120,7 +127,7 @@ def _rule_may_match(rule: dict[str, Any], census: dict[tuple, int]) -> bool:
     if rule.get("correlation") or not isinstance(queries, list):
         return True
     for sql in queries:
-        if not isinstance(sql, str):
+        if not isinstance(sql, str) or not scan_query(sql).row_preserving:
             return True
         admitted = admitted_pairs(sql, census)
         if admitted is None or admitted:
@@ -152,6 +159,8 @@ class ZircoliteCore:
         "_escape_cache",
         "_has_correlation_plans",
         "_logs_columns_lower",
+        "_lossless_columns",
+        "_lossless_schema_version",
         "_prefilter",
         "_prepared",
         "_profiling_data",
@@ -277,6 +286,8 @@ class ZircoliteCore:
         self.failed_files: set[str] = set()
         # Lowercased logs columns; rebuilt on demand, dropped on any schema change
         self._logs_columns_lower: set[str] | None = None
+        self._lossless_columns: frozenset[str] = frozenset()
+        self._lossless_schema_version = -1
         # Cache for escaped identifiers to avoid repeated string operations
         self._escape_cache: dict = {}
         # Reusable cursor to avoid creating new cursors for each query
@@ -456,6 +467,12 @@ class ZircoliteCore:
         they return None, which turns pruning off rather than guessing.
         """
         if self.db_connection is None:
+            return None
+        with closing(self.db_connection.execute(
+            "SELECT sql FROM sqlite_master WHERE type='table' AND name='logs'"
+        )) as cursor:
+            schema = cursor.fetchone()
+        if not schema or not schema[0] or not census_collations_supported(schema[0]):
             return None
         columns = {name.lower(): name for name in self._get_table_columns()}
         channel_sql, eventid_sql = (
@@ -761,6 +778,15 @@ class ZircoliteCore:
             cursor = None
             try:
                 cursor = self.db_connection.cursor()
+                with closing(self.db_connection.execute("PRAGMA schema_version")) as schema_cursor:
+                    schema_version = schema_cursor.fetchone()[0]
+                if schema_version != self._lossless_schema_version:
+                    with closing(self.db_connection.execute("PRAGMA table_info(logs)")) as schema_cursor:
+                        self._lossless_columns = frozenset(
+                            row[1].lower() for row in schema_cursor if row[2].upper() == "BLOB_NUMERIC"
+                        )
+                    self._lossless_schema_version = schema_version
+                query = normalize_numeric_literals(query, self._lossless_columns)
                 effective_query = query
                 if self._prefilter is not None:
                     try:
@@ -840,6 +866,7 @@ class ZircoliteCore:
         # the next execute_ruleset must re-read both
         self._auto_index_applied = False
         self._logs_columns_lower = None
+        self._lossless_schema_version = -1
 
     def escape_identifier(self, identifier: str) -> str:
         """Escape SQL identifiers like table or column names with caching."""

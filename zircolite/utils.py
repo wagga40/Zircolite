@@ -15,6 +15,7 @@ import logging
 import multiprocessing
 import os
 import random
+import re
 import string
 import sys
 import threading
@@ -55,6 +56,28 @@ def _normalize_scalar(value):
     if isinstance(value, list):
         return str(value)
     return value
+
+
+_DECIMAL_NUMBER = re.compile(r"[+-]?(?:[0-9]+(?:\.[0-9]*)?|\.[0-9]+)(?:[eE][+-]?[0-9]+)?\Z")
+
+
+def lossless_numeric_scalar(value):
+    """Apply numeric affinity while retaining oversized integer strings exactly."""
+    if isinstance(value, float) and value.is_integer() and -(1 << 63) <= value < (1 << 63):
+        return int(value)
+    if not isinstance(value, str):
+        return value
+    text = value.strip(" \t\n\r\v\f")
+    if not _DECIMAL_NUMBER.fullmatch(text):
+        return value
+    if not any(char in text for char in ".eE"):
+        try:
+            number = int(text)
+        except ValueError:  # Python's limit on extremely long integer strings
+            return value
+        return number if -(1 << 63) <= number < (1 << 63) else value
+    real = float(text)
+    return int(real) if real.is_integer() and -(1 << 63) <= real < (1 << 63) else real
 
 
 # Above this, an epoch number is milliseconds rather than seconds (1973-03-03).

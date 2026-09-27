@@ -885,6 +885,8 @@ Without `--unified-db` each input gets its own database, named after it
 (`output_<input name>.db`, see the note under [Output](#output)),
 and a folder of several files needs `--no-parallel` as well. Point `--db-input` at the
 directory holding them to run the rules over all of them.
+Inputs sharing a basename receive distinct numbered export names; generated names
+are also checked against names already assigned to other inputs.
 
 An unreadable database or one without a `logs` table is skipped and kept on disk even
 with `--remove-events`. If another database can be analysed, the run continues and its

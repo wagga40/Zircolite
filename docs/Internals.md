@@ -63,7 +63,22 @@ because their output can name those columns. Unrelated and inactive transforms d
 disable it.
 
 Database columns are added as new fields are discovered, and events are inserted in
-batches.
+batches. Integers outside SQLite's signed 64-bit range are stored as decimal text.
+If a column was already numeric, its affinity is removed before inserting such a
+value: existing numbers stay numeric and oversized integers stay exact text. When
+earlier batches have created the column, this requires a transactional table rebuild
+that preserves its indexes, triggers and row IDs. Ordinary numeric columns are unchanged.
+These mixed columns use the persisted `BLOB_NUMERIC` declaration (no SQLite affinity).
+Ordinary numeric strings still convert to native numbers during ingestion. Zircolite
+normalizes quoted numeric literals in direct comparisons, `IN` and `BETWEEN` in
+single-table rules, including after a database export and reload. Oversized integers
+remain quoted decimal strings. Custom joins, expressions and queries executed directly
+in another SQLite client use SQLite's native mixed-storage semantics: compare native
+numbers with numeric literals, and exact oversized integers with quoted strings.
+
+XML entity rewriting leaves CDATA, comments and processing instructions intact, even
+when their delimiters cross read boundaries. XML and EVTXtract readers skip annotations
+between records and continue with the next event.
 
 JSON arrays are validated incrementally, including delimiters and the closing
 bracket. The optional `ijson` backend accelerates parsing; its numeric values are
@@ -87,11 +102,14 @@ consume the temporary row iterator during the callback. Public `execute_rule` an
 
 Before the rules run, `execute_ruleset` reads the distinct `(Channel, EventID)` pairs of
 the logs table through `idx_channel_eventid`. A rule is skipped when every one of its
-statements has `sqlscan` bounds that miss all of those pairs, the same bounds
+statements is a direct `SELECT * FROM logs WHERE ...` with `sqlscan` bounds that miss
+all of those pairs, the same bounds
 `EventFilter` uses to drop events before ingestion. Channels are compared case-folded,
 text EventIDs as integers, and a missing column as NULL. A statement without bounds, a
-correlation rule, or a column holding values SQLite would coerce (numbers in `Channel`,
-BLOBs) always runs. The saving is the statement preparation: about 0.3 ms per rule,
+correlation rule, aggregate projection (which can emit a row over empty input), or a
+column holding values SQLite would coerce (numbers in `Channel`, BLOBs) always runs.
+Tables with collations other than BINARY or NOCASE also bypass census pruning, so
+imported databases retain their own comparison semantics. The saving is the statement preparation: about 0.3 ms per rule,
 paid for every rule on every file in per-file and parallel modes.
 
 A rule with a `correlation_plan` (SQLite backend 2) never runs its `rule` SQL. `core.py`

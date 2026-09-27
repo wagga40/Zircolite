@@ -78,6 +78,7 @@ def flatten_event(
             # Past SQLite's INTEGER range the value has to go in as text
             is_int = isinstance(value, int)
             if isinstance(value, int) and not -(1 << 63) <= value < (1 << 63):
+                self._note_large_integer(key)
                 value = str(value)
                 is_int = False
             json_line[key] = value
@@ -166,16 +167,14 @@ def flatten_event(
                         f"[cyan]{last_part}[/]: {exc}; no derived field "
                         f"will be created for it[/]"
                     )
-        # Past SQLite's INTEGER range the value has to go in as text
-        is_int = isinstance(value, int)
-        if isinstance(value, int) and not -(1 << 63) <= value < (1 << 63):
-            value = str(value)
-            is_int = False
         for k in keys:
             if transformed_keys is not None and k in transformed_keys:
-                final_value = _normalize_scalar(transformed_values[k])
+                final_value = transformed_values[k]
             else:
-                final_value = _normalize_scalar(value)
+                final_value = value
+            if isinstance(final_value, int) and not -(1 << 63) <= final_value < (1 << 63):
+                self._note_large_integer(k)
+            final_value = _normalize_scalar(final_value)
             json_line[k] = final_value
             if k not in seen_leaf_keys:
                 key_lower = k.lower()
