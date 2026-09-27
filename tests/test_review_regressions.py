@@ -181,8 +181,8 @@ def test_streamed_results_and_limit(field_mappings_file, tmp_path):
         output = tmp_path / "out.json"
         core.execute_ruleset(str(output), stream_results=True, result_sink=collect, last_ruleset=True)
         saved = json.loads(output.read_bytes())
-        assert [r["title"] for r in saved] == ["small"]
-        assert len(saved[0]["matches"]) == 3
+        assert [r["title"] for r in saved] == ["combined", "small"]
+        assert [len(r["matches"]) for r in saved] == [2, 3]
         assert "matches" not in seen[0]
         assert not core.full_results
     finally:

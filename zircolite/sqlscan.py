@@ -25,7 +25,7 @@ from collections.abc import Iterable, Iterator
 from dataclasses import dataclass
 from functools import lru_cache
 
-from .utils import lossless_numeric_scalar
+from .utils import is_oversized_integer, lossless_numeric_scalar
 
 # Opening delimiter -> its closer. Only ``'`` introduces a string literal; the
 # rest quote identifiers, which is why they are told apart below.
@@ -371,11 +371,12 @@ def lossless_table_schema(schema: str, columns: set[str]) -> str:
 
 @lru_cache(maxsize=1024)
 def normalize_numeric_literals(sql: str, columns: frozenset[str]) -> str:
-    """Keep literal comparisons numeric in columns promoted to mixed storage.
+    """Keep direct numeric predicates exact in columns promoted to mixed storage.
 
-    Only direct comparisons in single-table logs queries are modeled. Arithmetic,
-    functions, joins and subqueries retain SQLite's expression semantics. The
-    unary plus removes CAST's affinity so it cannot round the stored large text.
+    Only direct column/scalar comparisons in single-table logs queries are modeled.
+    Function/arithmetic operands, joins and subqueries retain SQLite's semantics. The UDF
+    compares numeric operands without rounding stored decimal text; COALESCE
+    delegates NULL and nonnumeric cases to the ordinary SQLite comparison.
     """
     if not columns:
         return sql
@@ -406,14 +407,8 @@ def normalize_numeric_literals(sql: str, columns: frozenset[str]) -> str:
                        if token(i).upper() in ("WHERE", "GROUP", "ORDER", "HAVING", "LIMIT")), len(tokens))
     if any(token(i) == "," for i in range(source + 2, end_source)):
         return sql
-    edits = {}
-
-    def literal(i):
-        if not 0 <= i < len(tokens) or tokens[i][0] != "literal":
-            return
-        text = token(i)
-        if not isinstance(lossless_numeric_scalar(_unquote(text)), str):
-            edits[i] = "+CAST(" + text + " AS NUMERIC)"
+    edits: list[tuple[int, int, str]] = []
+    number_pattern = r"[+-]?\s*(?:0[xX][0-9a-fA-F]+|(?:[0-9]+(?:\.[0-9]*)?|\.[0-9]+)(?:[eE][+-]?[0-9]+)?)"
 
     def operand(i, depth=0):
         """A complete atom: (kind, column/literal token index, next token)."""
@@ -433,7 +428,7 @@ def normalize_numeric_literals(sql: str, columns: frozenset[str]) -> str:
         elif kind == "number" or text in ("+", "-", "."):
             # iter_tokens deliberately splits signs and exponent letters. Read
             # the full numeric span before advancing its constituent tokens.
-            match = re.match(r"[+-]?\s*(?:0[xX][0-9a-fA-F]+|(?:[0-9]+(?:\.[0-9]*)?|\.[0-9]+)(?:[eE][+-]?[0-9]+)?)", sql[tokens[i][1]:])
+            match = re.match(number_pattern, sql[tokens[i][1]:])
             if match is None:
                 return None
             end = tokens[i][1] + match.end()
@@ -461,7 +456,59 @@ def normalize_numeric_literals(sql: str, columns: frozenset[str]) -> str:
     def promoted(atom):
         return atom[0] == "column" and name(atom[1]).lower() in columns
 
+    def scalar(atom):
+        return atom[0] in ("literal", "number") or token(atom[1]).upper() == "NULL"
+
+    def expression(atom, start, *, exact):
+        begin, end = tokens[start][1], tokens[atom[2] - 1][2]
+        text = sql[begin:end]
+        index = atom[1]
+        replacement = None
+        atom_end = tokens[index][2]
+        if atom[0] == "literal" and not exact:
+            literal = token(index)
+            if not isinstance(lossless_numeric_scalar(_unquote(literal)), str):
+                # The ordinary numeric affinity fallback, without giving CAST
+                # affinity that would round the stored oversized text as well.
+                replacement = "+CAST(" + literal + " AS NUMERIC)"
+        elif atom[0] == "number" and exact:
+            match = re.match(number_pattern, sql[tokens[index][1]:])
+            if match is not None:
+                number = re.sub(r"\s", "", match[0])
+                if is_oversized_integer(number):
+                    replacement = "'" + number + "'"
+                    atom_end = tokens[index][1] + match.end()
+        if replacement is not None:
+            text = text[:tokens[index][1] - begin] + replacement + text[atom_end - begin:]
+        return text
+
+    def comparison(left, left_start, right, right_start, op, *, membership=False):
+        a = expression(left, left_start, exact=True)
+        b = expression(right, right_start, exact=True)
+        fallback_a = expression(left, left_start, exact=False)
+        fallback_b = expression(right, right_start, exact=False)
+        numeric_op = {"IS": "=", "IS NOT": "!="}.get(op, op)
+        fallback = f"{fallback_a} {op} {fallback_b}"
+        if membership:
+            # Multi-member IN ignores RHS collations; equality (and SQLite's
+            # single-member IN optimization) does not. Repeating the scalar
+            # preserves that behavior without introducing a NULL list member.
+            fallback = f"{fallback_a} IN ({fallback_b}, {fallback_b})"
+        return f"COALESCE(zircolite_numcmp({a}, {b}) {numeric_op} 0, ({fallback}))"
+
+    def replace(start, end, text):
+        edits.append((tokens[start][1], tokens[end - 1][2], text))
+
+    opaque_until = -1
     for i in range(len(tokens)):
+        if i <= opaque_until:
+            continue
+        if (token(i).upper() == "COALESCE" and token(i + 1) == "("
+                and token(i + 2).lower() == "zircolite_numcmp"):
+            # A retry after missing-column repair sees its own normalized SQL.
+            # Keep the fallback comparison inside our wrapper untouched.
+            opaque_until = _closes_at(sql, tokens, i + 1)
+            continue
         before = token(i - 1).upper()
         if before not in ("", "(", ",", "SELECT", "WHERE", "HAVING", "WHEN", "THEN", "ELSE", "AND", "OR", "NOT"):
             continue
@@ -475,16 +522,17 @@ def normalize_numeric_literals(sql: str, columns: frozenset[str]) -> str:
         j += 1
         if op in ("=", "!", "<", ">", "IS"):
             if token(j).upper() in ("=", ">", "NOT"):
+                op += (" " if op == "IS" else "") + token(j).upper()
                 j += 1
             right = operand(j)
-            if right is not None and boundary(right[2]):
-                if promoted(left) and right[0] == "literal":
-                    literal(right[1])
-                if promoted(right) and left[0] == "literal":
-                    literal(left[1])
+            if (op in ("=", "==", "!=", "<>", "<", ">", "<=", ">=", "IS", "IS NOT")
+                    and right is not None and boundary(right[2])
+                    and ((promoted(left) and scalar(right)) or (promoted(right) and scalar(left)))):
+                replace(i, right[2], comparison(left, i, right, j, op))
             continue
         if not promoted(left):
             continue
+        negate = op == "NOT"
         if op == "NOT":
             op, j = token(j).upper(), j + 1
         if op == "BETWEEN":
@@ -492,24 +540,24 @@ def normalize_numeric_literals(sql: str, columns: frozenset[str]) -> str:
             if lower is None or token(lower[2]).upper() != "AND":
                 continue
             upper = operand(lower[2] + 1)
-            if upper is not None and boundary(upper[2]):
-                for bound in (lower, upper):
-                    if bound[0] == "literal":
-                        literal(bound[1])
+            if upper is not None and boundary(upper[2]) and scalar(lower) and scalar(upper):
+                text = (comparison(left, i, lower, j, ">=") + " AND "
+                        + comparison(left, i, upper, lower[2] + 1, "<="))
+                replace(i, upper[2], ("NOT " if negate else "") + "(" + text + ")")
         elif op == "IN" and token(j) == "(":
             members = []
             while (member := operand(j + 1)) is not None:
-                members.append(member)
+                members.append((member, j + 1))
                 j = member[2]
                 if token(j) != ",":
                     break
-            if token(j) == ")" and boundary(j + 1):
-                for member in members:
-                    if member[0] == "literal":
-                        literal(member[1])
-    for i in sorted(edits, reverse=True):
-        _, start, end = tokens[i]
-        sql = sql[:start] + edits[i] + sql[end:]
+            if (members and token(j) == ")" and boundary(j + 1)
+                    and all(scalar(member) for member, _ in members)):
+                text = " OR ".join(comparison(left, i, member, start, "=", membership=len(members) > 1)
+                                   for member, start in members)
+                replace(i, j + 1, ("NOT " if negate else "") + "(" + text + ")")
+    for start, end, text in sorted(edits, reverse=True):
+        sql = sql[:start] + text + sql[end:]
     return sql
 
 

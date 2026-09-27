@@ -95,6 +95,7 @@ from zircolite.performance import STAGE_LABELS, aggregate_stages, write_performa
 
 # Processing modes and context (from the dedicated processing module)
 from zircolite.processing import (
+    OutputPathConflict,
     ProcessingContext,
     create_extractor,
     expand_db_path,
@@ -1650,6 +1651,10 @@ def _main(memory_tracker, start_time) -> None:
                 templating_ok = handle_templating(ctx, all_results, args)
             finally:
                 finalization_seconds += time.perf_counter() - finalization_start
+    except OutputPathConflict as exc:
+        processing_failed = True
+        print_error_panel("Invalid Output Path", literal(exc), "Use -o with a separate output file.")
+        sys.exit(2)
     except StrictParseError as e:
         strict_error = str(e)
     except KeyboardInterrupt:

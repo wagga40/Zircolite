@@ -60,18 +60,21 @@ because their output can name those columns. Unrelated and inactive transforms d
 disable it.
 
 Database columns are added as new fields are discovered, and events are inserted in
-batches. Integers outside SQLite's signed 64-bit range are stored as decimal text.
+batches. Integers outside SQLite's signed 64-bit range, including integer strings,
+are stored as decimal text.
 If a column was already numeric, its affinity is removed before inserting such a
 value: existing numbers stay numeric and oversized integers stay exact text. When
 earlier batches have created the column, this requires a transactional table rebuild
 that preserves its indexes, triggers and row IDs. Ordinary numeric columns are unchanged.
 These mixed columns use the persisted `BLOB_NUMERIC` declaration (no SQLite affinity).
-Ordinary numeric strings still convert to native numbers during ingestion. Zircolite
-normalizes quoted numeric literals in direct comparisons, `IN` and `BETWEEN` in
-single-table rules, including after a database export and reload. Oversized integers
-remain quoted decimal strings. Custom joins, expressions and queries executed directly
-in another SQLite client use SQLite's native mixed-storage semantics: compare native
-numbers with numeric literals, and exact oversized integers with quoted strings.
+Ordinary numeric strings still convert to native numbers during ingestion. In
+single-table rules, direct column/scalar comparisons, `IN` and `BETWEEN` use an exact
+numeric comparator for mixed columns, including after a database export and reload.
+Both quoted and unquoted oversized integer literals compare without rounding; NULL
+and nonnumeric values retain SQLite's comparison and collation behavior. Function or
+arithmetic operands, joins, subqueries and queries executed directly in another SQLite
+client retain SQLite's native mixed-storage semantics. Databases already containing
+rounded values must be rebuilt from the original inputs to recover their precision.
 
 XML entity rewriting leaves CDATA, comments and processing instructions intact, even
 when their delimiters cross read boundaries. XML and EVTXtract readers skip annotations
@@ -82,6 +85,9 @@ bracket. The optional `ijson` backend accelerates parsing; its numeric values ar
 normalized to Python integers and floats before insertion. ZIP members stream from
 the archive, and 7-Zip members spool to automatically removed temporary files.
 Compressed file size never selects an unbounded full-load array path.
+
+CSV detection and ingestion share the platform's largest supported field-size limit,
+so a field exceeding Python's default 131,072-character limit does not discard later records.
 
 Only transforms enabled for the selected source and CLI selection are compiled.
 Immutable bytecode is cached by source; function namespaces remain local to each
@@ -94,6 +100,11 @@ packaging and library callers requesting `keep_results` retain complete matches.
 `execute_ruleset` additionally accepts `result_sink` and `stream_results`; sinks must
 consume the temporary row iterator during the callback. Public `execute_rule` and
 `execute_select_query` still return ordinary dictionaries and lists.
+
+When a rule has multiple SQL statements, matches with an integer `row_id` are counted
+once across those statements before applying `--limit`, in first-match order. Equal
+payloads with different row IDs remain distinct. Projections without event IDs retain
+their individual rows. A failed statement rolls back both its rows and its newly seen IDs.
 
 ## Rule execution
 

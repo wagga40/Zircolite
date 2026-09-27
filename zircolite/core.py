@@ -24,6 +24,7 @@ from sqlite3 import Error
 from typing import TYPE_CHECKING, Any, Optional
 
 import orjson as json
+from pyroaring import BitMap64
 from rich.console import Group
 from rich.live import Live
 from rich.panel import Panel
@@ -68,7 +69,7 @@ from .sqlscan import (
     scan_query,
 )
 from .streaming import StreamingEventProcessor, StrictParseError
-from .utils import sanitize_row_for_csv
+from .utils import exact_numeric_compare, sanitize_row_for_csv
 
 # Translation table for stripping newline characters from CSV descriptions.
 _NEWLINE_TRANSLATE = str.maketrans("", "", "\n\r")
@@ -402,6 +403,7 @@ class ZircoliteCore:
                 return 1 if _compile_regex(x).search(str(y)) else 0
 
             conn.create_function('regexp', 2, udf_regex)  # Allows to use regex in SQLite
+            conn.create_function('zircolite_numcmp', 2, exact_numeric_compare, deterministic=True)
             return conn
         except BaseException as exc:
             # Half-opened connections must not leak, whatever went wrong --
@@ -979,21 +981,35 @@ class ZircoliteCore:
             return {}
 
         filtered_rows: RowSpool | list[dict[str, Any]] = RowSpool() if stream_rows else []
+        # A condition list is an OR of event queries. Track identity rather than
+        # payload so equal events remain distinct and overlaps do not trip --limit.
+        seen_ids = BitMap64() if len(sigma_queries) > 1 else None
         rule_title = rule.get("title", "Unnamed Rule")
         required = [field for field in rule.get("required_fields") or () if isinstance(field, str)]
         try:
             for sql_query in sigma_queries:
                 checkpoint = filtered_rows.checkpoint() if isinstance(filtered_rows, RowSpool) else len(filtered_rows)
+                query_ids = BitMap64() if seen_ids is not None else None
                 try:
-                    remaining = None if self.limit == -1 else self.limit + 1 - len(filtered_rows)
+                    remaining = None if self.limit == -1 or seen_ids is not None else self.limit + 1 - len(filtered_rows)
                     with closing(self._iter_select_query(sql_query, rule_title, remaining, required)) as rows:
                         for row in rows:
+                            row_id = row.get("row_id")
+                            if seen_ids is not None and query_ids is not None and isinstance(row_id, int):
+                                # Saved databases may contain negative SQLite row IDs.
+                                identity = row_id & ((1 << 64) - 1)
+                                if identity in seen_ids:
+                                    continue
+                                seen_ids.add(identity)
+                                query_ids.add(identity)
                             filtered_rows.append(sanitize_row_for_csv(row) if self.csv_mode else row)
                             if self.limit != -1 and len(filtered_rows) > self.limit:
                                 if isinstance(filtered_rows, RowSpool):
                                     filtered_rows.close()
                                 return {}
                 except _QueryFailed:
+                    if seen_ids is not None and query_ids is not None:
+                        seen_ids.difference_update(query_ids)
                     if isinstance(filtered_rows, RowSpool):
                         filtered_rows.rollback(checkpoint)
                     else:
