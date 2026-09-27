@@ -41,7 +41,6 @@ class TestStreamingEventProcessorInit:
 
         assert processor.config_file == field_mappings_file
         assert processor.batch_size == ProcessingConfig().batch_size
-        assert processor.hashes is False
 
     def test_init_with_custom_batch_size(self, field_mappings_file, test_logger, default_args_config):
         """Test initialization with custom batch size."""
@@ -98,18 +97,6 @@ class TestStreamingEventProcessorInit:
         )
         assert (flat is not None) is kept
 
-    def test_init_with_hashes(self, field_mappings_file, test_logger, default_args_config):
-        """Test initialization with hash generation enabled."""
-        proc_config = ProcessingConfig(hashes=True)
-        processor = StreamingEventProcessor(
-            config_file=field_mappings_file,
-            args_config=default_args_config,
-            processing_config=proc_config,
-            logger=test_logger
-        )
-
-        assert processor.hashes is True
-
     def test_config_loaded(self, field_mappings_file, test_logger, default_args_config):
         """Test that configuration is properly loaded."""
         processor = StreamingEventProcessor(
@@ -157,21 +144,6 @@ class TestStreamingEventProcessorFlattening:
         # Should have discovered fields
         assert len(processor.discovered_fields) > 0
         assert len(processor.field_types) > 0
-
-    def test_flatten_with_hash(self, field_mappings_file, test_logger, default_args_config, sample_windows_event):
-        """Test flattening with hash generation."""
-        proc_config = ProcessingConfig(hashes=True)
-        processor = StreamingEventProcessor(
-            config_file=field_mappings_file,
-            args_config=default_args_config,
-            processing_config=proc_config,
-            logger=test_logger
-        )
-
-        raw_bytes = json.dumps(sample_windows_event).encode('utf-8')
-        flattened = processor._flatten_event(sample_windows_event, "test.evtx", raw_bytes)
-
-        assert "OriginalLogLinexxHash" in flattened
 
     def test_flatten_excludes_fields(self, field_mappings_file, test_logger, default_args_config):
         """Test that excluded fields are not included."""

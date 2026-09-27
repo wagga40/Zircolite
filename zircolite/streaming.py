@@ -654,7 +654,6 @@ class StreamingEventProcessor:
         "field_split_list",
         "field_types",
         "flattening_info",
-        "hashes",
         "logger",
         "rounded_integer_fields",
         # EVTX parsing strictness
@@ -697,7 +696,6 @@ class StreamingEventProcessor:
         self.logger = logger or logging.getLogger(__name__)
         self.config_file = config_file
         self.time_field = proc.time_field
-        self.hashes = proc.hashes
         self.args_config = args_config
         self.batch_size = proc.batch_size
         kernel = select_flatten_kernel(proc.flatten_backend)
@@ -1360,9 +1358,9 @@ class StreamingEventProcessor:
                 )
             return param
 
-    def _flatten_event(self, event_dict: dict, filename: str, raw_bytes: bytes | None = None) -> dict | None:
+    def _flatten_event(self, event_dict: dict, filename: str) -> dict | None:
         _join_unnamed_event_data(event_dict)
-        return self._flatten_impl(self, event_dict, filename, raw_bytes)
+        return self._flatten_impl(self, event_dict, filename)
 
     def stream_evtx_events(self, evtx_file: str) -> Generator[dict, None, None]:
         """Stream and flatten events from an EVTX file (supports .evtx inside .gz/.bz2/.zip/.7z)."""
@@ -1416,8 +1414,7 @@ class StreamingEventProcessor:
                     if not should_process(event_dict):
                         continue
 
-                    raw_bytes = raw_data.encode("utf-8") if self.hashes and isinstance(raw_data, str) else raw_data if self.hashes else None
-                    flattened = flatten(event_dict, filename, raw_bytes)
+                    flattened = flatten(event_dict, filename)
                     if flattened:
                         yield flattened
                 except Exception as e:
@@ -1476,7 +1473,7 @@ class StreamingEventProcessor:
                     # Early filter check before expensive flattening
                     if not should_process(event_dict):
                         continue
-                    flattened = flatten(event_dict, filename, line)
+                    flattened = flatten(event_dict, filename)
                     if flattened:
                         yield flattened
                 except Exception as exc:
@@ -1524,8 +1521,7 @@ class StreamingEventProcessor:
                                     del elem.getparent()[0]
                                 continue
 
-                            raw_bytes = etree.tostring(elem) if self.hashes else None
-                            flattened = flatten(event_dict, filename, raw_bytes)
+                            flattened = flatten(event_dict, filename)
                             if flattened:
                                 yield flattened
                     except Exception as exc:
@@ -1587,7 +1583,7 @@ class StreamingEventProcessor:
                     # Early filter check before expensive flattening
                     if not should_process(event_dict):
                         continue
-                    flattened = flatten(event_dict, filename, line.encode("utf-8"))
+                    flattened = flatten(event_dict, filename)
                     if flattened:
                         yield flattened
                 except Exception as exc:
@@ -1650,7 +1646,7 @@ class StreamingEventProcessor:
                     # CSV rows are already flat dicts, check filter on them directly
                     if not should_process(row):
                         continue
-                    flattened = flatten(row, filename, None)
+                    flattened = flatten(row, filename)
                     if flattened:
                         yield flattened
                 except Exception as exc:
@@ -1705,7 +1701,7 @@ class StreamingEventProcessor:
                         # Early filter check before expensive flattening
                         if not should_process(event_dict):
                             continue
-                        flattened = flatten(event_dict, filename, None)
+                        flattened = flatten(event_dict, filename)
                         if flattened:
                             yield flattened
                 except Exception as exc:
@@ -1737,7 +1733,7 @@ class StreamingEventProcessor:
             try:
                 if not should_process(event_dict):
                     return None
-                return flatten(event_dict, filename, None)
+                return flatten(event_dict, filename)
             except Exception as exc:
                 self._note_skipped_record(json_file, exc)
                 return None

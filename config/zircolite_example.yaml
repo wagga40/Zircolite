@@ -160,9 +160,6 @@ processing:
   # SQLite always evaluates the original predicates on the candidate rows.
   rule_prefilter: auto  # auto, 'off' or literal (force construction)
 
-  # Add an xxhash64 of the original log line to every event
-  hashes: false
-
   # Discard results from any rule matching more than this many events, which
   # keeps a single noisy rule from dominating the output. -1 disables it.
   limit: -1

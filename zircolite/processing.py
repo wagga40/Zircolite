@@ -94,7 +94,6 @@ class ProcessingContext:
     limit: int
     csv_mode: bool
     time_field: str
-    hashes: bool
     db_location: str
     delimiter: str
     rulesets: list
@@ -156,7 +155,6 @@ def create_zircolite_core(
         time_after=ctx.time_after_str,
         time_before=ctx.time_before_str,
         time_field=ctx.time_field,
-        hashes=ctx.hashes,
         disable_progress=disable_progress,
         db_location=db_location or ctx.db_location,
         no_output=ctx.no_output if no_output is None else no_output,
@@ -186,7 +184,6 @@ def create_worker_core(ctx: ProcessingContext, worker_id: int) -> ZircoliteCore:
         time_after=ctx.time_after_str,
         time_before=ctx.time_before_str,
         time_field=ctx.time_field,
-        hashes=ctx.hashes,
         disable_progress=True,
         db_location=":memory:",
         no_output=True,

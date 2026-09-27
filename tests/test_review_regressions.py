@@ -225,7 +225,7 @@ def test_executor_output_parity(field_mappings_file, tmp_path, executor, csv_mod
         config=field_mappings_file, logger=logger, no_output=False,
         events_after=time.strptime("1970-01-01T00:00:00", "%Y-%m-%dT%H:%M:%S"),
         events_before=time.strptime("9999-12-12T23:59:59", "%Y-%m-%dT%H:%M:%S"),
-        limit=-1, csv_mode=csv_mode, time_field="SystemTime", hashes=False,
+        limit=-1, csv_mode=csv_mode, time_field="SystemTime",
         db_location=":memory:", delimiter=";", rulesets=[{"title": "match", "id": "test", "rule": ["SELECT * FROM logs WHERE EventID=1"]}],
         rule_filters=None, outfile=str(tmp_path / "out"), ready_for_templating=False,
         package=False, dbfile=None, keepflat=False, memory_tracker=MemoryTracker(), retain_results=retain,

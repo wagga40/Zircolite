@@ -69,7 +69,6 @@ pdm run python tests/external/run_external_tests.py \
 | `navigator_output`  | `--navigator-output` (ATT&CK Navigator layer) | json, output |
 | `template_output`   | `-t`, `-T` (Jinja2 template rendering) | output |
 | `dbfile`            | `-d` (save SQLite database file) | json, output |
-| `hashes`            | `--hashes` (xxhash field in every detection) | json |
 | `time_filter`       | `-A` (after-timestamp filter, expects 0 detections) | json |
 | `before_timestamp`  | `-B` (before-timestamp filter, expects 0 detections) | json |
 | `nolog`             | `-n` (no log file and no detections file; exit 0) | json, cli |

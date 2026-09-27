@@ -12,7 +12,6 @@ Zircolite needs **Python 3.10 or above** and runs on Linux, macOS and Windows. T
 | `orjson` | Fast JSON parsing |
 | `ijson` | Incremental JSON-array parsing |
 | `pyahocorasick`, `pyroaring` | Literal prefilter: candidate events for `LIKE` patterns |
-| `xxhash` | Log-line hashing for `--hashes` |
 | `rich`, `rich-argparse` | Terminal output, progress bars, tables, coloured help |
 | `RestrictedPython` | Sandbox for field transforms |
 | `requests` | Ruleset updates (`-U`) |
@@ -355,7 +354,6 @@ unless `--fileext` or `--file-pattern` says otherwise.
 | `--keepflat` | Save the flattened events — processed events only — to `flattened_events_<RAND>.json` in the working directory. The contents are JSONL despite the extension |
 | `-d`, `--dbfile` | Save the logs to an SQLite database |
 | `-l`, `--logfile` | Log file name |
-| `--hashes` | Add an xxhash64 to each event. For CSV, EVTXtract and JSON-array input the reader hands over a parsed record rather than a source line, so the hash covers a canonical form of the event |
 | `-L`, `--limit` | Discard results from any rule matching more than this many events — alerts, for a [correlation rule](#sigma-correlation-rules) (positive integer, or `-1` to disable). Counted per input database: per file by default, corpus-wide with `--unified-db` |
 | `--profile-rules` | Time each rule and print a performance report. Forces sequential processing |
 

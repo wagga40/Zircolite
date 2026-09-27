@@ -132,7 +132,6 @@ SETTINGS: tuple[Setting, ...] = (
     # -- processing -------------------------------------------------------
     Setting("unified_db", "processing", "unified_db", False, Merge.OR),
     Setting("no_auto_mode", "processing", "auto_mode", False, Merge.OR, invert=True),
-    Setting("hashes", "processing", "hashes", False, Merge.OR),
     Setting("limit", "processing", "limit", DEFAULT_LIMIT),
     Setting("timefield", "processing", "time_field", DEFAULT_TIME_FIELD),
     Setting("debug", "processing", "debug", False, Merge.OR),

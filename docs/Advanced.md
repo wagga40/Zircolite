@@ -528,8 +528,6 @@ Several options keep the data behind the detections:
   and find things the rules did not. In per-file mode each input gets its own file.
 - `--keepflat` saves the flattened events as JSONL — only the events actually processed
   (see [the streaming pipeline](#the-streaming-pipeline)).
-- `--hashes` adds an xxhash64 of the original log line to each event, for deduplication
-  and tracking.
 - **Indexes** can speed up database queries. `--add-index`, `--remove-index` and
   `--auto-index` are covered in [Usage → Database indexes](Usage.md#database-indexes).
 

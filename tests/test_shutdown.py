@@ -132,7 +132,6 @@ class TestLoopsObserveShutdown:
             limit=-1,
             csv_mode=False,
             time_field="SystemTime",
-            hashes=False,
             db_location=":memory:",
             delimiter=";",
             rulesets=sample_ruleset,

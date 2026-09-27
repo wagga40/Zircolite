@@ -7,7 +7,6 @@ authors = [
 ]
 dependencies = [
     "orjson>=3.9.15",
-    "xxhash>=3.0",
     "rich>=14.2.0",
     "rich-argparse>=1.7.2",
     "chardet>=5.0,<6",

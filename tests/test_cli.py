@@ -1286,52 +1286,6 @@ class TestCLIPackage:
             os.chdir(original_cwd)
 
 
-class TestCLIHashGeneration:
-    """Tests for hash generation option."""
-
-    def test_hashes_option(self, tmp_path):
-        """Test --hashes option adds xxhash to events."""
-        events_file = tmp_path / "events.json"
-        events_file.write_text('{"Event": {"System": {"EventID": 1}, "EventData": {"CommandLine": "test"}}}')
-
-        ruleset_file = tmp_path / "ruleset.json"
-        ruleset_file.write_text(json.dumps([{
-            "title": "Test Rule",
-            "id": "test-001",
-            "level": "high",
-            "tags": [],
-            "rule": ["SELECT * FROM logs"]
-        }]))
-
-        config_file = tmp_path / "config.json"
-        config_file.write_text(json.dumps({
-            "exclusions": [],
-            "useless": [],
-            "mappings": {
-                "Event.System.EventID": "EventID",
-                "Event.EventData.CommandLine": "CommandLine"
-            },
-            "alias": {},
-            "split": {},
-            "transforms_enabled": False,
-            "transforms": {}
-        }))
-
-        output_file = tmp_path / "detected_events.json"
-
-        with patch('sys.argv', ['zircolite.py', '-e', str(events_file), '-r', str(ruleset_file), '-c', str(config_file), '-j', '-o', str(output_file), '--hashes', *get_log_arg(tmp_path)]):
-            zircolite_script.main()
-
-        assert output_file.exists()
-        events = _matched_events(output_file)
-
-        # The point of --hashes is the hash field; asserting only that a file
-        # exists passes just as well when the flag does nothing at all.
-        assert events, "expected at least one matched event to carry a hash"
-        for event in events:
-            assert event.get("OriginalLogLinexxHash")
-
-
 class TestCLINoLogOption:
     """Tests for no-log option."""
 
@@ -3264,7 +3218,7 @@ class TestCLIRegressionFixes:
         logger = MagicMock(spec=logging.Logger)
         args = argparse.Namespace(
             unified_db=False, no_auto_mode=False, no_parallel=False,
-            add_index=[], remove_index=[], hashes=False,
+            add_index=[], remove_index=[],
             keepflat=True, dbfile="x.db", strict=True,
             archive_password="pw", no_event_filter=True, logs_encoding="utf-8",
             after="2024-01-01T00:00:00", before="2024-12-31T23:59:59",
@@ -3287,7 +3241,7 @@ class TestCLIRegressionFixes:
         logger = MagicMock(spec=logging.Logger)
         args = argparse.Namespace(
             unified_db=False, no_auto_mode=False, no_parallel=False,
-            add_index=[], remove_index=[], hashes=False,
+            add_index=[], remove_index=[],
             keepflat=False, dbfile=None, strict=False,
             archive_password=None, no_event_filter=False, logs_encoding=None,
             after=DEFAULTS['after'], before=DEFAULTS['before'],

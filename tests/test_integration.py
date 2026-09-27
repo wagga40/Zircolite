@@ -476,38 +476,6 @@ class TestTimeFiltering:
 
 
 @pytest.mark.integration
-class TestHashGeneration:
-    """Integration tests for hash generation."""
-
-    def test_events_with_hashes(self, field_mappings_file, tmp_path, args_config_evtx, test_logger):
-        """Test that xxhash is computed for events via streaming."""
-        events = [
-            {"Event": {"System": {"EventID": 1}, "EventData": {"CommandLine": "test1"}}},
-            {"Event": {"System": {"EventID": 1}, "EventData": {"CommandLine": "test2"}}},
-        ]
-
-        json_file = tmp_path / "events.json"
-        with open(json_file, 'w') as f:
-            f.writelines(json.dumps(event) + "\n" for event in events)
-
-        args_config_evtx.json_input = True
-        proc_config = ProcessingConfig(hashes=True, disable_progress=True)
-        zircore = _run_streaming_pipeline(
-            json_file, field_mappings_file, args_config_evtx, test_logger,
-            proc_config=proc_config
-        )
-
-        # Each event should have a hash in the database
-        results = zircore.execute_select_query("SELECT OriginalLogLinexxHash FROM logs")
-        assert len(results) == 2
-        for row in results:
-            assert row['OriginalLogLinexxHash'] is not None
-            assert len(str(row['OriginalLogLinexxHash'])) > 0
-
-        zircore.close()
-
-
-@pytest.mark.integration
 class TestResultLimiting:
     """Integration tests for result limiting."""
 

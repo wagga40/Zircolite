@@ -83,7 +83,6 @@ class YamlProcessingConfig:
     """Configuration for processing options."""
     unified_db: bool = False
     auto_mode: bool = True
-    hashes: bool = False
     limit: int = DEFAULT_LIMIT
     time_field: str = DEFAULT_TIME_FIELD
     event_filter_enabled: bool = True  # Enable event filtering based on channel/eventID
@@ -285,7 +284,6 @@ class ConfigLoader:
             config.processing = YamlProcessingConfig(
                 unified_db=proc.get('unified_db', False),
                 auto_mode=proc.get('auto_mode', True),
-                hashes=proc.get('hashes', False),
                 limit=proc.get('limit', DEFAULT_LIMIT),
                 time_field=proc.get('time_field', DEFAULT_TIME_FIELD),
                 event_filter_enabled=proc.get('event_filter_enabled', True),
@@ -603,9 +601,6 @@ processing:
   # Auto builds literal candidates for at least 1000 events and 32 eligible queries.
   # SQLite always evaluates the original predicates on the candidate rows.
   rule_prefilter: auto  # auto, 'off' or literal (force construction)
-
-  # Add an xxhash64 of the original log line to every event
-  hashes: false
 
   # Discard results from any rule matching more than this many events, which
   # keeps a single noisy rule from dominating the output. -1 disables it.

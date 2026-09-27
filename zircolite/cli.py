@@ -189,7 +189,6 @@ def parse_arguments() -> argparse.Namespace:
     output_formats_args.add_argument("--profile-rules", help="Time each rule execution and print a performance report at the end", action='store_true')
     output_formats_args.add_argument("-d", "--dbfile", "--db-file", help="Save all logs to a SQLite database file", type=str)
     output_formats_args.add_argument("-l", "--logfile", "--log-file", help=f"Log file name (default: {DEFAULTS['logfile']})", default=None, type=str)
-    output_formats_args.add_argument("--hashes", help="Add xxhash64 of the original log event to each event", action='store_true')
     output_formats_args.add_argument("-L", "--limit", "--limit-results", help=f"Discard rules matching more events than this (alerts, for a correlation rule), per input database — so per file in the default mode, and across the whole corpus with --unified-db (default: {DEFAULTS['limit']}, i.e. no limit)", type=int, default=None)
 
     # Advanced configuration options
@@ -892,8 +891,6 @@ def _warn_ignored_db_flags(
         ignored.append("--add-index")
     if getattr(args, 'remove_index', None):
         ignored.append("--remove-index")
-    if getattr(args, 'hashes', False):
-        ignored.append("--hashes")
     if getattr(args, 'keepflat', False):
         ignored.append("--keepflat")
     if getattr(args, 'dbfile', None):
@@ -1568,7 +1565,6 @@ def _main(memory_tracker, start_time) -> None:
         limit=args.limit,
         csv_mode=args.csv,
         time_field=args.timefield,
-        hashes=args.hashes,
         db_location=":memory:",
         delimiter=args.csv_delimiter,
         rulesets=rulesets_manager.rulesets,

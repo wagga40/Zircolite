@@ -177,7 +177,6 @@ class ZircoliteCore:
         "first_json_output",
         "flatten_backend",
         "full_results",
-        "hashes",
         "limit",
         "logger",
         "metrics",
@@ -258,7 +257,6 @@ class ZircoliteCore:
         self.limit = proc.limit
         self.csv_mode = proc.csv_mode
         self.time_field = proc.time_field
-        self.hashes = proc.hashes
         self.delimiter = proc.delimiter
         self.first_json_output = True  # To manage commas in JSON output
         # Track the CSV header and its fieldnames across execute_ruleset calls:
@@ -1731,7 +1729,6 @@ class ZircoliteCore:
             time_after=self.time_after,
             time_before=self.time_before,
             time_field=self.time_field,
-            hashes=self.hashes,
             disable_progress=disable_progress or self.disable_progress,
             archive_password=self.archive_password,
             strict_evtx=self.strict_evtx,

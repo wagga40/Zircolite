@@ -275,9 +275,8 @@ class TestGoldenDetections:
 
     # The .db fixture is the .evtx one already ingested, so the two cases also
     # pin that reading a saved database detects what reading the EVTX did. To
-    # rebuild it, keeping --hashes so TestHashesCoverEveryFormat still has a
-    # hash column to find:
-    #     zircolite.py -e tests/fixtures/sample_bitsadmin.evtx --hashes -d out.db
+    # rebuild it:
+    #     zircolite.py -e tests/fixtures/sample_bitsadmin.evtx -d out.db
     # and move the resulting out_sample_bitsadmin.evtx.db over the fixture.
     #
     # CI builds the compiled flattening kernel, so the default run uses it. The
@@ -349,33 +348,3 @@ class TestAuditdEnrichedDetections:
         assert (mknod["ARCH"], mknod["archRaw"]) == ("x86_64", "c000003e")
         assert (mknod["auid"], mknod["AUIDEnriched"]) == ("1000", "alice")
 
-
-class TestHashesCoverEveryFormat:
-    """--hashes must produce its column whatever the input format.
-
-    OriginalLogLinexxHash is written only when the reader supplies the source
-    bytes, and the CSV, EVTXtract and JSON-array readers hand over a parsed
-    record instead -- so the flag was accepted and did nothing for three of the
-    supported formats.
-
-    Database input is the one case the flag cannot serve: nothing is flattened,
-    which is why _validate_db_input_flags lists --hashes among the flags it
-    ignores. The .db fixture was saved with --hashes, so what the sqlite case
-    pins is the other half of the contract -- the column survives being written
-    to a database file and read back.
-    """
-
-    @pytest.mark.parametrize(
-        "fmt,filename,flags", FORMAT_FIXTURES, ids=[
-            f"{fmt}-{name}" for fmt, name, _ in FORMAT_FIXTURES
-        ]
-    )
-    def test_hash_column_is_present(self, fmt, filename, flags, tmp_path):
-        extra = [] if fmt == "sqlite" else ["--hashes"]
-
-        detections = run_zircolite(tmp_path, FIXTURES / filename, flags, extra=extra)
-        matches = [m for d in detections for m in d["matches"]]
-        assert matches, f"{filename} produced no matches to check"
-        assert all(m.get("OriginalLogLinexxHash") for m in matches), (
-            f"no hash column for {fmt}"
-        )

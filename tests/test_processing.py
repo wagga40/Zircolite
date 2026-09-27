@@ -80,7 +80,6 @@ def dummy_ctx(tmp_path, memory_tracker):
         limit=-1,
         csv_mode=False,
         time_field="SystemTime",
-        hashes=False,
         db_location=":memory:",
         delimiter=";",
         rulesets=[],
@@ -737,7 +736,6 @@ class TestProcessDbInputSkippedFiles:
             limit=-1,
             csv_mode=False,
             time_field="SystemTime",
-            hashes=False,
             db_location=":memory:",
             delimiter=";",
             rulesets=[{
@@ -894,7 +892,7 @@ class TestParallelKeepflatEndToEnd:
             config=str(config_file), logger=logger, no_output=True,
             events_after=time.strptime("2020-01-01T00:00:00", "%Y-%m-%dT%H:%M:%S"),
             events_before=time.strptime("2030-01-01T00:00:00", "%Y-%m-%dT%H:%M:%S"),
-            limit=-1, csv_mode=False, time_field="SystemTime", hashes=False,
+            limit=-1, csv_mode=False, time_field="SystemTime",
             db_location=":memory:", delimiter=";", rulesets=[], rule_filters=None,
             outfile=str(tmp_path / "out.json"), ready_for_templating=False,
             package=False, dbfile=None, keepflat=True, memory_tracker=memory_tracker,
@@ -964,7 +962,7 @@ class TestPerfileShutdownFinalization:
             config=str(config_file), logger=logger, no_output=False,
             events_after=time.strptime("2020-01-01T00:00:00", "%Y-%m-%dT%H:%M:%S"),
             events_before=time.strptime("2030-01-01T00:00:00", "%Y-%m-%dT%H:%M:%S"),
-            limit=-1, csv_mode=False, time_field="SystemTime", hashes=False,
+            limit=-1, csv_mode=False, time_field="SystemTime",
             db_location=":memory:", delimiter=";",
             rulesets=[{
                 "title": "PS", "id": "1", "description": "", "level": "high", "tags": [],

@@ -4,34 +4,18 @@ The Python module is the reference implementation. Both builds use the same
 scalar rules and keep transforms in the existing RestrictedPython sandbox.
 """
 
-import contextlib
 from typing import Any
-
-import orjson as json
-import xxhash
 
 from .utils import _EXCLUDED_SENTINEL, _normalize_scalar, is_oversized_integer, parse_timestamp
 
 
-def flatten_event(
-    self, event_dict: dict, filename: str, raw_bytes: bytes | None = None
-) -> dict | None:
+def flatten_event(self, event_dict: dict, filename: str) -> dict | None:
     """
     Flatten a single event dictionary and track discovered fields.
     Returns flattened dict or None if filtered out.
     """
     # Add metadata
     event_dict["OriginalLogfile"] = filename
-    if self.hashes:
-        # CSV, EVTXtract and JSON-array rows never reach here with a source
-        # line: the readers hand over a parsed record. Hashing a canonical
-        # form of that record keeps --hashes meaningful for every format
-        # rather than silently producing no column at all for three of them.
-        if raw_bytes is None:
-            with contextlib.suppress(TypeError, json.JSONEncodeError):
-                raw_bytes = json.dumps(event_dict, option=json.OPT_SORT_KEYS)
-        if raw_bytes:
-            event_dict["OriginalLogLinexxHash"] = xxhash.xxh64_hexdigest(raw_bytes)
 
     # Cache references for hot loop (local vars are faster than attribute access)
     useless_values = self.useless_values
