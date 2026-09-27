@@ -56,7 +56,7 @@ pdm run python tests/external/run_external_tests.py \
 | `csv_input`         | `--csv-input`, `-c` (config) | csv |
 | `csv_output`        | `--csv` (CSV output) | csv, output |
 | `keepflat`          | `--keepflat` | json, output |
-| `quiet`             | `-q` (quiet mode — banner suppressed) | json, cli |
+| `quiet`             | `-q` (suppresses banner, progress and informational messages) | json, cli |
 | `custom_outfile`    | `-o` (custom output path) | json, output |
 | `rulefilter`        | `-R` (exclude rules by title, verifies exact count and title) | json |
 | `unified_db`        | `--unified-db`, `-e` (directory), `-f` (fileext) | json |
@@ -74,7 +74,7 @@ pdm run python tests/external/run_external_tests.py \
 | `before_timestamp`  | `-B` (before-timestamp filter, expects 0 detections) | json |
 | `nolog`             | `-n` (no log file and no detections file; exit 0) | json, cli |
 | `debug_mode`        | `--debug` (debug logging, same detections as normal) | json, cli |
-| `limit_results`     | `-L 0` is rejected (exit 1) rather than discarding every detection | json, output, error |
+| `limit_results`     | `-L 0` is rejected (exit 1) | json, output, error |
 | `limit_discards_noisy_rule` | `-L 2` drops a rule matching 3 events | json, output |
 | `yaml_config`       | `-Y` (YAML configuration file) | json, cli |
 | `evtx_single`       | EVTX auto-detection, single file (bitsadmin regression sample) | evtx |
@@ -84,7 +84,7 @@ pdm run python tests/external/run_external_tests.py \
 | `error_invalid_flag` | Unknown CLI flag (expects exit 2) | error, smoke |
 | `error_missing_events` | Non-existent events file (expects exit 1) | error |
 | `error_bad_ruleset` | Broken JSON ruleset (expects exit 1) | error |
-| `error_no_ruleset`  | Events file without a ruleset (expects exit 1) | error |
+| `error_no_ruleset`  | Omitted `-r` uses the default ruleset (expects exit 0) | error |
 
 ## Tags
 

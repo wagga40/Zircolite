@@ -1,17 +1,15 @@
 # Benchmark
 
-How Zircolite compares with [Hayabusa](https://github.com/Yamato-Security/hayabusa) and 
-[Chainsaw](https://github.com/WithSecureLabs/chainsaw), two Rust tools that also run Sigma
-rules over Windows event logs, on the same logs and the same machine. Each tool runs at its
-own defaults with its own rules: this is what a user gets out of the box, not a
-rule-for-rule comparison of the engines.
+Recorded results for Zircolite, [Hayabusa](https://github.com/Yamato-Security/hayabusa)
+and [Chainsaw](https://github.com/WithSecureLabs/chainsaw) on the same Windows logs and
+machine. Each tool used its defaults and its own rules, so the results compare those
+configurations. Tool and rule revisions are listed under [Setup](#setup).
 
 ## Results
 
-Two corpora, chosen for opposite shapes. The first is small and holds one channel; the
-second is about thirty times its size on disk and holds eleven, which is what decides how
-much of a ruleset actually runs. Same machine, same tool versions, same rule checkouts.
-Median of three timed passes after one warm-up pass, with the range in brackets.
+One corpus contains a single channel; the other contains eleven. Both used the same
+machine, tool versions and rule checkouts. Times are medians of three timed passes after
+one warm-up pass, with the range in brackets.
 
 ### Single-channel corpus
 
@@ -39,18 +37,14 @@ WMI-Activity (13,228), TaskScheduler (7,017) and five more.
 | Hayabusa 4.1.0 | 4,658 (4,409 after its channel filter) | 518.8 s (515.6–520.0) | 1,599 MiB | 704,533 | 181 |
 | Chainsaw 2.16.0 | 3,524 | 206.3 s (197.4–215.3) | 338 MiB | 6,871 | 67 |
 
-Zircolite is first on both, but the two Rust tools swap places: Chainsaw is 9.8× behind on
-the small corpus and 2.0× behind on the large one, Hayabusa 2.1× and 5.0×. Nothing about
-the tools changed between the two runs — only the shape of the logs.
-
 ## Reading the numbers
 
-- **The channel mix decides how many rules run, and that dominates everything else.**
+- **Channel mix affects rule pruning and runtime.**
   Hayabusa reports it directly: its channel filter keeps 2,293 of its 4,658 rules on the
   single-channel corpus and 4,409 on the multi-channel one. Per event it goes from 55 µs to
   302 µs between the two, while Zircolite goes from 26 µs to 61 µs and Chainsaw drops from
-  251 µs to 120 µs. A benchmark on one channel measures pruning as much as it measures
-  matching, which is why both corpora are here.
+  251 µs to 120 µs. These rates use the reported corpus counts; the multi-channel count
+  is after Zircolite's event filter, not a measurement of each tool's parsed event count.
 - **The rule sets differ.** Each tool loads its own conversion of SigmaHQ, and Hayabusa
   adds 181 rules of its own. Hayabusa's own informational and "Sysmon Alert" rules
   (`Net Conn (Sysmon Alert)`, `DLL Loaded (Sysmon Alert)`, …) match most Sysmon events,
@@ -58,15 +52,14 @@ the tools changed between the two runs — only the shape of the logs.
   corpus, 46,783 are informational, 92,205 low and 439,194 medium. Chainsaw loads only the
   rules its mapping file can express, and it reports far fewer hits on the multi-channel
   corpus than on the Sysmon-only one — 6,871 against 40,843 — despite the larger input.
-  Detections and rules matched are shown for context. They are not a score.
+  Detection totals therefore do not measure relative detection quality.
 - **Rules matched are counted by Sigma rule id.** Zircolite's merged ruleset carries some
   rules once per log source, under one id.
-- **Memory is the whole process tree, and Zircolite trades it for speed.** It picks its
+- **Memory covers the whole process tree.** Zircolite picks its
   worker count from the files and the free RAM — four on the small corpus, five on the
   large one — and the figure is their sum. Hayabusa and Chainsaw run as one process with
-  several threads. At 8,103 MiB on the multi-channel corpus Zircolite is the heaviest of
-  the three by a wide margin; `--no-parallel` keeps it to a single process and gives most
-  of that back, at the cost of the parallelism.
+  several threads. Zircolite used the most memory in these runs. `--no-parallel` disables
+  its file workers, reducing concurrent databases at the cost of parallelism.
 - **Zircolite's time includes Python start-up and loading 7.6 MB of rule SQL.** On very
   small inputs that fixed cost dominates; it is about a second, so roughly a tenth of the
   small-corpus figure and about 1% of the large one.
@@ -129,5 +122,5 @@ pdm run python tools/tool-benchmark.py --events /path/to/evtx \
 ```
 
 See [`tools/README.md`](https://github.com/wagga40/Zircolite/tree/master/tools) for every
-option. Zircolite's own before/after measurements, and how to measure its rule phase
+option. Historical Zircolite configuration comparisons, and how to measure its rule phase
 alone, are under [Internals → Measured results](Internals.md#measured-results).

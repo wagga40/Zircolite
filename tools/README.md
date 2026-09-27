@@ -1,13 +1,10 @@
 # Zircolite tools
 
-This directory holds scripts intended for regular use with Zircolite (tracked in git).
+Scripts for packaging, benchmarking and Sigma regression tests.
 
-The benchmark and the regression runner reach into the package internals, so
-`tests/test_tools.py` drives them end-to-end over the tracked fixtures: a rename in
-`StreamingEventProcessor` or `ZircoliteCore` fails the suite rather than waiting for
-somebody to run a script by hand. The two release scripts need a real PyInstaller build
-or a Windows ARM64 host, so the suite does not run them end-to-end; the same test
-module pins what they decide against fake checkouts.
+`tests/test_tools.py` runs the benchmark and regression tools over tracked fixtures.
+Release-script unit tests use temporary checkouts; end-to-end validation requires a
+PyInstaller build or a Windows ARM64 host.
 
 ## package-release.py
 
@@ -225,25 +222,18 @@ The script:
 
 ### How a test is matched and judged
 
-**Rules are looked up by Sigma `id` first, and by `title` only as a fallback.** A merged
-Zircolite ruleset carries one rule per pipeline, all sharing the Sigma id but suffixing
-the title — `Anydesk Temporary Artefact` ships as `… - Generic` and `… - Sysmon`.
-Matching on the title alone therefore misses most of a merged ruleset: against
-`rules/rules_windows_merged.json`, 112 of 136 Windows cases resolve by id and by id
-only. Titles still matter because a converted ruleset need not carry ids.
+**Rules are matched by Sigma `id`, falling back to `title`.** Merged rulesets can contain
+pipeline variants with the same ID and different title suffixes, such as `… - Generic`
+and `… - Sysmon`. Title matching supports rulesets without IDs.
 
 **Every variant a case resolves to is executed**, against a single ingest of the data
 file. A positive test passes when *any* variant fires, since the sample only carries one
 provider; a negative test requires all of them to stay silent. The report lists the
 count each variant saw.
 
-**`match_count` states that the rule fired, not how many records it fired on.** Every
-entry in the current regression_data is a positive test declaring `1`, while several
-samples hold more than one matching record — the `IE Change Domain Zone` capture holds
-three, all of which legitimately match. Zircolite counts matching *events*, so a
-positive test passes on **at least** the declared count. Only `match_count: 0` demands
-silence. When `match_count` is absent it is inferred from the test name: a name
-containing "negative" expects 0, anything else expects a detection.
+**A positive `match_count` is a minimum event count.** A test declaring `1` can pass with
+several matching records. `match_count: 0` requires no matches. When absent, a test name
+containing "negative" expects zero matches; other names expect a detection.
 
 ### Requirements
 
@@ -254,7 +244,7 @@ containing "negative" expects 0, anything else expects a detection.
 
 - **`--regression-data`** (required): Path to the directory under which test cases are discovered (recursively; each directory containing an `info.yml` is a test case). Data file paths from `info.yml` are resolved relative to this path or the test case directory.
 - **`--rules`** / **`-r`** (required): Path to rules; type is auto-detected. A **file** with extension `.json` or content starting with `[` is used as a Zircolite JSON ruleset. A **directory** is used as Sigma YAML rules (converted recursively).
-- **`--fail-on-skip`**: Exit non-zero when any test was skipped. A skipped test asserts nothing, so without this a run whose ruleset covers almost none of the cases still reports success.
+- **`--fail-on-skip`**: Exit non-zero when any test was skipped. Without it, a run with only passing or skipped tests exits `0`.
 - **`--zircolite-config`**, **`--pipeline`**, **`--verbose`**, **`--report`**, **`--report-all-event-fields`**: Optional (see `--help`).
 
 ### Usage

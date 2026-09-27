@@ -46,19 +46,22 @@ group (tests, linters, PyInstaller) by default; `pdm install --prod`, `uv sync -
 or `poetry install --without dev` leave it out. The rest of this documentation writes
 `python3 zircolite.py`: activate the environment, or prefix the command as in the table.
 
-#### The C compiler is a prerequisite, not an option
+<a id="the-c-compiler-is-a-prerequisite-not-an-option"></a>
+
+#### C compiler for native acceleration
 
 This concerns installs from source only: the [standalone binaries](#standalone-binaries)
 and the [Docker image](#docker) ship the kernel already compiled.
 
 Installing compiles `zircolite/flatten_kernel.py` into a native extension with Cython.
-That compile is skipped, silently, when no C compiler is present: the install still
-reports success, and every run afterwards flattens events in Python instead — 19.2 µs per
-event rather than 8.1 µs. On a 478 MB, 452,554-event corpus that is 15.4 s of ingestion
-against 10.9 s, and 13.5 s against 11.8 s for the whole run. Nothing is wrong with the
-results; the run is simply slower, on every run, and nothing at install time says so.
+If compilation fails, including when no compiler is available, the build backend warns
+and installation continues with the Python kernel. Both run the same flattening code.
 
-Install the toolchain **before** installing Zircolite:
+In recorded measurements, Python and native flattening took 19.2 and 8.1 µs per event.
+On a 478 MB, 452,554-event corpus, ingestion took 15.4 and 10.9 s respectively; whole-run
+wall times were 13.5 and 11.8 s. Ingestion time sums worker time and can exceed wall time.
+
+For native acceleration, install the toolchain **before** installing Zircolite:
 
 | Platform | Prerequisite |
 |----------|--------------|
@@ -68,9 +71,7 @@ Install the toolchain **before** installing Zircolite:
 | macOS | `xcode-select --install` |
 | Windows | [Build Tools for Visual Studio](https://visualstudio.microsoft.com/visual-cpp-build-tools/), "Desktop development with C++" |
 
-Cython and setuptools are build-time requirements: PDM, uv and Poetry fetch them into an
-isolated build environment and never install them beside Zircolite, so they do not appear
-in your environment afterwards.
+Cython and setuptools are installed automatically as build dependencies.
 
 Three ways to see which kernel a run used:
 
@@ -84,9 +85,7 @@ what CI, the Docker images and the release builds all set. After editing the ker
 reinstall: a native extension built from an older copy carries its source hash, is
 detected as stale and is ignored in favour of Python.
 
-Release binaries and the Docker image always include the compiled kernel.
-
-A complete first run, from nothing:
+A first run from source:
 
 ```shell
 git clone https://github.com/wagga40/Zircolite.git
@@ -144,11 +143,8 @@ Zircolite-<version>-<target>/
 └── THIRD_PARTY_LICENSES
 ```
 
-The executable loads everything from `_internal/` and cannot start without it, so move or
-copy the directory as a whole, never the executable alone. Leave `_internal/` as it is:
-the editable copies are the ones beside the executable, and they take precedence over the
-built-in ones. An edited ruleset in `rules/`, a changed `config/config.yaml` or a newer
-`gui/zircogui.zip` takes effect on the next run, without a rebuild.
+Move or copy the whole package: the executable requires `_internal/`. Edit the asset
+directories beside the executable; they override the bundled copies on the next run.
 
 Relative paths to the shipped files, such as `rules/rules_windows_merged.json` or
 `templates/exportForSplunk.tmpl`, resolve against the working directory first and against
@@ -272,8 +268,7 @@ report that could not be written, or a configuration file that could not be hono
 A run that could only read part of its input still exits `0` when the rest was analysed.
 The affected files are named on the console and are never deleted by `--remove-events`.
 
-A run that loaded **no** rules exits `1`: it analysed nothing, and the empty output file
-it would otherwise leave behind is indistinguishable from a clean run that found nothing.
+A run that loaded **no** rules exits `1` because no analysis was performed.
 
 ## Command-Line Options
 
@@ -504,10 +499,9 @@ is auto-detected — ship commented out, because writing them counts as choosing
 `input.format` accepts `evtx`, `json`, `json_array`, `xml`, `csv`, `sysmon_linux`,
 `auditd`, `evtxtract` and `sqlite` (the equivalent of `-D`/`--db-input`).
 
-A configuration file that cannot be honoured stops the run: an unknown key, a ruleset
-that is not there, an invalid `input.format`, an unparseable time filter. All the problems
-are reported together, then Zircolite exits non-zero rather than continuing with something
-other than what the file asked for.
+Invalid configuration stops the run with a non-zero exit code. Validation reports all
+problems together, including unknown keys, missing rulesets, invalid `input.format`
+values and unparseable time filters.
 
 Some options have no equivalent key and must be passed on the command line: `-c`/`--config`, `-q`/`--quiet`, `--profile-rules`, `--archive-password`, `--no-auto-detect`, `--test-rules`, `--timesketch`, `--navigator-output`, `--transform-list`, `--pipeline-list`, `-U`/`--update-rules`, `-v`/`--version`, `--generate-config` and `-Y`/`--yaml-config` itself.
 
@@ -572,17 +566,14 @@ exclude with `--rulefilter`.
 
 ### CSV detection output
 
-With `--csv`, detections are written as one flat table. The header covers every column of
-the events table plus `rule_title`, `rule_description`, `rule_level` and `rule_count`, so
-a rule returning wider rows than the ones before it does not lose fields. When correlation
-rules are loaded it also carries their alert columns, and nested values — an alert's
-`group_keys`, `event_ids` and `evidence` — are written as JSON text.
+With `--csv`, detections are written as one flat table with result fields plus
+`rule_title`, `rule_description`, `rule_level` and `rule_count`. The internal `row_id`
+is excluded. Correlation results include alert columns; nested values such as
+`group_keys`, `event_ids` and `evidence` are written as JSON text.
 
-The same holds across inputs. A header has to be written before the rows it describes,
-but one file can carry fields an earlier one never produced, so multi-file runs collect
-the detections and write the table once at the end — the column set covers every file,
-not just the first one to match. That is why a CSV run holds its results in memory where
-a JSON run streams them out per file.
+Multi-file CSV runs defer writing until all result columns are known. Ordinary CLI runs
+spool rows to a temporary file; runs that also need full results for templates or
+packaging retain them in memory. JSON output can be written as each file completes.
 
 Two values are rewritten so the report stays readable and safe to open:
 
@@ -671,10 +662,8 @@ The timestamp field is found in three ways, in order:
    syslog, epoch seconds or milliseconds, US date-time, Windows FileTime) and tied back to
    a key where possible.
 
-On that last path a field is only accepted when its **whole value** is the timestamp, or
-when its name reads like a time field. A free-text `message` that happens to mention a
-date is not a timestamp field — treating it as one would leave `--after`/`--before`
-filtering on prose.
+Regex fallback accepts a field only when its whole value is a timestamp or its name
+identifies it as a time field. A date mentioned inside a free-text message is insufficient.
 
 A detected raw field name is resolved through `mappings` before correlation rules are converted
 and before templates receive it. For example, `mappings: {timestamp: SystemTime}` makes
@@ -707,14 +696,10 @@ Explicit format flags always take precedence over detection, whether or not it i
 python3 zircolite.py --evtx ../Logs --ruleset rules/rules_windows_merged.json
 ```
 
-EVTX parsing is **lenient** by default: when a chunk is corrupted or malformed, Zircolite
-keeps every event recovered up to that point, logs a warning and moves on to the next
-file. That is usually what you want with evidence from a damaged disk or an interrupted
-export.
+EVTX parsing is **lenient** by default: when parsing fails, Zircolite keeps recovered
+events, logs a warning and continues with the next file.
 
-`--strict` aborts on the first parsing error instead, for when you need to know a file was
-processed in full. The run stops and exits `1`, whether the bad file was given on its own
-or found in a directory. Because aborting the whole run is the point, `--strict` forces
+`--strict` stops the run on the first parsing error with exit code `1` and forces
 sequential processing.
 
 Either way, a file that could not be read in full is named on the console and is never
@@ -782,7 +767,7 @@ rules, so the two cannot share a name:
 | any other (`UID`, `AUID`, `EUID`, `OUID`, …) | the raw value (`33`) | `EUIDEnriched`, `AUIDEnriched`, … (`www-data`) |
 
 This matches how Sigma rules use them (`SYSCALL: execve`, `euid: 33`). `RAW`-format
-logs have no `0x1D` and are read as before, so there `syscall` stays numeric.
+logs have no `0x1D`; their `syscall` value stays numeric.
 
 ### Sysmon for Linux
 
@@ -837,7 +822,7 @@ The delimiter is detected from the first lines: comma, semicolon, tab (`.tsv` ex
 pipe are all supported, and quoted values containing the delimiter are preserved. Use
 `-LE`/`--logs-encoding` when the file is not UTF-8.
 
-Note the asymmetry: `--csv-input` reads CSV, `--csv` *writes* it.
+`--csv-input` reads CSV; `--csv` writes detections as CSV.
 
 ### Compressed and archived logs
 
@@ -867,15 +852,15 @@ python3 zircolite.py --events export.json.7z --ruleset rules/rules_windows_merge
 
 ### SQLite database files
 
-Everything lives in an in-memory SQLite database, and `--dbfile` saves it. With
+Events are loaded into SQLite, in memory by default or on disk with `--working-db disk`.
+`--dbfile` exports that database. With
 `--unified-db` every input goes into one database, written to exactly that path:
 
 ```shell
 python3 zircolite.py --evtx <EVTX_FOLDER> --ruleset <RULESET> --unified-db --dbfile output.db
 ```
 
-Re-running against that database with `--db-input` skips parsing, flattening and insertion
-entirely, which saves a great deal of time:
+Re-running against that database with `--db-input` skips parsing, flattening and insertion:
 
 ```shell
 python3 zircolite.py --evtx output.db --ruleset <RULESET> --db-input
@@ -895,14 +880,10 @@ can be analysed, the command exits with code `1`.
 
 #### Database indexes
 
-An index on `eventid` is created when the logs table has that column. When it has a
-`Channel` column too, the second index is the composite `idx_channel_eventid` on
-`(Channel, eventid)` rather than one on `Channel` alone — the Sigma shape is
-`Channel = … AND EventID = …`, and a channel-only index leaves SQLite fetching and
-re-checking every row of the channel. Its leading column still serves the rules that
-name only a channel, so it replaces `idx_channel` rather than joining it; a dataset with
-a `Channel` column but no `eventid` still gets a plain `idx_channel`. Adjust the set by
-hand:
+Zircolite creates `idx_eventid` when `eventid` exists. If `Channel` also exists, it adds
+`idx_channel_eventid` on `(Channel, eventid)`, which serves both channel-only and combined
+channel/event-ID conditions. A dataset with only `Channel` gets `idx_channel`.
+Adjust the indexes with:
 
 ```shell
 # Add indexes
@@ -945,8 +926,7 @@ These SigmaHQ rulesets carry every level; `--min-level medium` (or `high`, …) 
 rules at that level and above. The `_high` and `_medium` variants older installs carry are
 no longer published.
 
-`-U` installs everything the rules repository publishes for Zircolite, the same set the
-repository tracks:
+`-U` installs the published rulesets and their metadata:
 
 - the SigmaHQ rulesets above;
 - `rules_windows_all.json`, the Windows detections of SigmaHQ and every community source
@@ -960,13 +940,11 @@ repository tracks:
 - `release-manifest.json`, which names the source, licence and revision of every file
   above. A release archive credits each ruleset from it in `THIRD_PARTY_LICENSES`.
 
-Every file is checked against the SHA-256 the repository's `release-manifest.json` lists for
-it before any is installed; a file that does not match, or a ruleset the manifest does not
-name, leaves `rules/` as it was and makes `-U` exit `1`. The repository rebuilds each source
-on its own; when a build cannot refresh one, it keeps publishing that source's previous
-rulesets, and `-U` installs them as usual. After its own outcome, `-U` then lists those
-sources with the revision and age of the rulesets they ship and the reason the build gave.
-Nothing on your side needs fixing: a later `-U` fetches newer rulesets once a build succeeds.
+Before installation, every downloaded file is checked against `release-manifest.json`.
+A hash mismatch or an unlisted ruleset leaves `rules/` unchanged and makes `-U` exit `1`.
+If an upstream source failed to rebuild, its last published rulesets are installed and
+reported as stale, with their revision, age and build error. Run `-U` again after that
+source has rebuilt to receive newer rulesets.
 `-U` writes to the `rules/` directory later runs read — the repository's from source, the
 one beside the executable in a [standalone binary](Usage.md#standalone-binaries) — and falls
 back to `./rules`, with a warning, when that directory cannot be written to.
@@ -1108,16 +1086,15 @@ Some rules enumerate thousands of values — vulnerable driver hashes, malicious
 names. Converted straight from Sigma, their SQL nests one level per value and exceeds
 SQLite's parser depth limit, so it cannot be prepared at all.
 
-Zircolite detects this and rewrites the expression into an equivalent, shallower form
-before retrying, so these rules run normally. Nothing is required of you. Two consequences:
+Zircolite retries these rules with an equivalent, shallower expression:
 
 - The `sigma` field in `detected_events.json` always reports the rule's declared SQL, even
   when the statement executed was the rewritten one.
 - `--save-ruleset` writes the SQL exactly as pySigma produced it. The repair happens on
   load, so an exported ruleset stays faithful to the conversion.
 
-A rule that genuinely cannot be evaluated is reported at the end of the run rather than
-passing for a rule that simply matched nothing; use `--debug` for the SQL error.
+A rule that cannot be evaluated is reported at the end of the run; use `--debug` for
+the SQL error.
 
 ### Generating your own rulesets
 
@@ -1148,17 +1125,10 @@ for Unix time). Converting with `-r` in Zircolite does this for you.
 
 ### Why You Should Build Your Own Rulesets
 
-The default rulesets are a straight conversion of the Sigma repository's `rules/windows`
-and `rules/linux` directories, provided so Zircolite works out of the box. They are not
-filtered, and two things follow:
-
-- **Some rules are very noisy** or produce many false positives, depending on your
-  environment and the pipelines used. "Suspicious Eventlog Clear or Configuration Using
-  Wevtutil" is a classic on fresh lab environments.
-- **Some rules are very slow** on particular datasets. "Notepad Making Network Connection"
-  can significantly slow a run.
-
-`--profile-rules` tells you which ones cost you time; `--rulefilter` removes them.
+The default SigmaHQ rulesets convert the Sigma repository's `rules/windows` and
+`rules/linux` directories without filtering for your environment. Review detections for
+false positives and use `--profile-rules` to identify expensive rules. Exclude unwanted
+rules with `--rulefilter`, or build a ruleset for your log sources and pipelines.
 
 ## Rule testing
 
@@ -1204,10 +1174,8 @@ table — that is, after field mappings.
 ]
 ```
 
-Rules with no entry in the test file are reported as "no test case" and **skipped** —
-they do not fail the run. The reverse is a failure: a test case whose `title`/`id` matches
-no rule never runs, so counting it as a pass would hide a typo. Those entries are reported
-and the run exits `1`.
+Rules without a test case are reported and skipped without failing the run. A test case
+whose `title`/`id` matches no rule is an error and makes the run exit `1`.
 
 ## Pipelines
 
@@ -1222,11 +1190,9 @@ python3 zircolite.py -e sample.evtx -r schtasks.yml -p sysmon -p windows-logsour
 
 The converted result can be saved with `-sr`/`--save-ruleset`.
 
-A name that is not installed stops the run before any rule is converted. Every unknown
-name is reported at once, together with the installed pipelines, and Zircolite exits `2`.
-Carrying on without the pipeline would still convert every rule, only without the
-conditions the pipeline adds — without `sysmon`, process-creation rules lose their
-`EventID=1` test and match events they should not — while the run looked successful.
+Unknown pipeline names are reported with the installed choices and stop conversion with
+exit code `2`. Pipelines add log-source conditions, such as `EventID=1` for Sysmon
+process-creation rules, so select them to match your input.
 
 The [standalone binaries](Usage.md#standalone-binaries) carry the pipelines they were
 built with: those from `pysigma-pipeline-sysmon` and `pysigma-pipeline-windows`. `-pl`
@@ -1243,10 +1209,8 @@ Logs often need reshaping before rules can match them. The canonical configurati
 your own with `-c`/`--config`. YAML is the expected format; JSON is still accepted for
 backward compatibility and is recognised from the extension.
 
-`config/fieldMappings.yaml`, the former name of this file, was removed in 4.0. It had not
-been updated since 3.2.0, so a copy kept from an older release lacks every mapping and
-transform added since. Such a copy still loads with `-c`, with a warning on every run;
-move to `config/config.yaml`.
+The legacy `config/fieldMappings.yaml` still loads with `-c` but emits a warning.
+Migrate custom settings to `config/config.yaml` to retain current mappings and transforms.
 
 ```yaml
 exclusions:               # drop these fields entirely

@@ -2,7 +2,7 @@
 
 ## Supported versions
 
-Security updates are provided for the latest major release line. We encourage you to run the current stable version.
+Security updates are provided for the release line listed below. Use its latest stable version.
 
 | Version | Supported          |
 | ------- | ------------------ |
@@ -10,8 +10,6 @@ Security updates are provided for the latest major release line. We encourage yo
 | < 4.1   | :x:                |
 
 ## Reporting a vulnerability
-
-If you believe you have found a security vulnerability, please report it so we can address it.
 
 **Preferred method:** Open a [GitHub Security Advisory](https://github.com/wagga40/Zircolite/security/advisories/new) in this repository. This allows private discussion and coordinated disclosure.
 
@@ -23,4 +21,4 @@ If you believe you have found a security vulnerability, please report it so we c
 - We will keep you updated on the status and any fix or advisory.
 - We credit reporters in advisories and release notes unless you prefer to remain anonymous.
 
-Please do not disclose the vulnerability publicly before we have had a chance to assess and address it. Thank you for helping keep Zircolite and its users safe.
+Please allow us to assess and address the vulnerability before disclosing it publicly.

@@ -1,8 +1,6 @@
 # Internals
 
-Zircolite is more a workflow than a detection engine of its own. It leans on the Sigma
-converter's ability to emit rules as SQLite `SELECT` statements: events are flattened
-into an SQLite database, and each rule is a query run against it.
+Zircolite flattens events into SQLite and evaluates queries converted from Sigma rules.
 
 This page covers the architecture and the parts of the runtime whose behaviour is not
 obvious from the command line. For how to *use* any of it, see
@@ -23,9 +21,8 @@ graph TD
     ZC -->|"Stream results"| OUT["Disk / console"]
 ```
 
-Reading, flattening and insertion happen in a single pass. There is no intermediate
-file and no alternative pipeline to select — what *is* selectable is how the database
-is organised across input files.
+Reading, flattening and insertion happen in a single pass without intermediate event
+files. The database layout can be selected for the input workload.
 
 ## Event processing pipeline
 
@@ -164,12 +161,12 @@ uses SQLite backup, including when working storage is on disk.
 Flattening selects the compiled kernel once per processor when it is built from the
 current `flatten_kernel.py`, and otherwise runs the same source as Python.
 
-Every mode reads events through the same pipeline. There are two database layouts, and
-parallelism is an overlay on one of them rather than a third layout.
+Every mode uses the same event pipeline. Per-file mode can run sequentially or across
+thread/process workers; unified mode uses one shared database.
 
 ```mermaid
 flowchart LR
-    subgraph PerFile[Per-file - default]
+    subgraph PerFile[Per-file]
         P1[File 1 -> DB] --> P3[Combine results]
         P2[File 2 -> DB] --> P3
     end
@@ -181,7 +178,7 @@ flowchart LR
 
 | Layout | Flag | Database | Enables |
 |--------|------|----------|---------|
-| Per-file | default | One per file, reused | Parallel processing |
+| Per-file | `--no-auto-mode` | One per file, reused | Parallel processing |
 | Unified | `--unified-db` | One for all files | Cross-file correlation rules |
 
 `analyze_files_and_recommend_mode` returns only `per-file` or `unified`. When the answer
@@ -192,7 +189,9 @@ available in per-file mode and not with `--unified-db`. `--no-parallel` declines
 both need one file at a time.
 
 The layout choice is made from file count, file sizes, available RAM and CPU count.
-`--no-auto-mode` disables this choice and keeps per-file mode. The heuristics are
+`--no-auto-mode` disables this choice and keeps per-file mode unless `--unified-db` is
+also set. With multiple files, correlation rules select unified mode unless automatic
+selection is disabled. The heuristics are
 documented in [Advanced → Automatic processing optimization](Advanced.md#automatic-processing-optimization).
 
 `--executor auto` is the CLI default. Parallel per-file workloads averaging at least
@@ -212,12 +211,13 @@ seconds separately from wall time and samples RSS in a background thread.
 
 ## Measured results
 
-Complete CLI runs with `rules/rules_windows_merged.json` (4,319 rules) on a 10-core arm64
-Mac, Python 3.14 and SQLite 3.53, compiled flattening built. Every run reported the same
+Historical CLI measurements with `rules/rules_windows_merged.json` (4,319 rules) on a
+10-core arm64 Mac, Python 3.14 and SQLite 3.53, with compiled flattening. These describe
+the measured configurations, not every subsequent release. Every run reported the same
 detections as the same workload with `--rule-prefilter off`, compared as per-rule event
 multisets.
 
-| Workload | Before (`c972b28`) | After |
+| Workload | Baseline (`c972b28`) | Measured configuration |
 |---|---:|---:|
 | Test corpus, 4 EVTX / 452,554 events, auto (processes) | 42.0 s | 11.0 s |
 | Test corpus, `--unified-db` | — | 22.8 s |
@@ -272,10 +272,8 @@ so a new format is a new row rather than an edit in each of them.
 
 ## Bundled asset resolution
 
-`config/`, `rules/`, `templates/` and `gui/` ship with Zircolite, and the paths pointing
-at them are relative, so they have to resolve whatever the working directory is.
-`assets.py` does it, and lives outside `cli.py` because `config_loader` needs it too and
-cannot import `cli` — `cli` imports it in turn.
+`assets.py` resolves shipped paths under `config/`, `rules/`, `templates/` and `gui/`
+independently of the working directory. Both the CLI and configuration loader use it.
 
 For every value a user can override, a file of that name in the working directory wins and
 anything else falls through to `bundled_asset`. That covers
@@ -315,13 +313,9 @@ and `_internal/` — run on its own, and it is what the binary tests run against
 root holds the file, the first candidate is returned, so the error names a directory you
 can actually write to.
 
-`bundled_dir`, which `-U` uses to choose where to write, skips every root inside
-`sys._MEIPASS`, comparing resolved paths so that the third root is caught as well.
-`_internal/` still holds a readable copy, but it is the part of the package nobody should
-edit and the next release replaces it whole; in a onefile build the same root would be a
-temporary directory deleted when the process exits. In a binary that leaves the
-executable's directory, and `RulesUpdater` falls back to `./rules`, with a warning, when
-that cannot be written to.
+`bundled_dir`, used by `-U`, excludes roots inside `sys._MEIPASS` after resolving paths.
+Updates go beside the executable, preserving `_internal/` as the bundled fallback.
+If that directory is unwritable, `RulesUpdater` uses `./rules` and logs a warning.
 
 ## Packaging
 
@@ -346,10 +340,9 @@ from a zip, and a Windows build with one fails to package.
 ### Why onedir
 
 A onefile executable unpacks its whole runtime into a temporary directory on every start.
-On macOS that cost 2–4 s per run, against about 0.37 s for onedir or a source checkout. It
-also fails outright where `/tmp` is mounted `noexec`, and self-extracting executables draw
-more antivirus false positives. The release package is a directory anyway — the editable
-assets sit beside the executable — so a single file bought nothing.
+In macOS measurements this took 2–4 s per run, against about 0.37 s for onedir or source.
+It also requires an executable temporary location. Onedir keeps the runtime beside the
+editable assets and avoids extraction on startup.
 
 The spec keeps PyInstaller's default `_internal/` contents directory. Flattening it into
 the executable's directory (`contents_directory='.'`) would put the `zircolite/` package
@@ -358,15 +351,12 @@ filesystems, the default on macOS and Windows.
 
 ### What the spec has to name
 
-PyInstaller follows the imports it can see in bytecode. Everything below is reached some
-other way, and each gap failed silently rather than loudly:
+The spec explicitly includes dependencies that static import analysis may miss:
 
 - **pySigma pipelines and backends.** pySigma discovers them by walking the
   `sigma.pipelines` and `sigma.backends` namespace packages at run time, so the spec
-  collects those submodules itself, test modules excluded. Without them `--pipeline-list`
-  came back empty and `-p sysmon` converted rules without their `EventID=1` condition.
-  That silent outcome is also why an unknown `-p` name is an error that exits `2` rather
-  than a line in the log.
+  collects those submodules, excluding tests. Unknown pipeline names stop conversion
+  with exit code `2`.
 - **The flattening kernel.** `streaming.py` loads `zircolite._flatten_native` through
   `importlib`. A binary ships no `flatten_kernel.py` either, so the run-time
   `SOURCE_SHA256` staleness check has nothing to compare against; the spec runs that
@@ -385,32 +375,23 @@ follows the `backports.zstd` import that py7zr and urllib3 keep for Pythons olde
 
 ### Why PyInstaller
 
-PyInstaller onedir, Nuitka standalone and PyApp over python-build-standalone (PBS) were
-each built and run against a parity harness on macOS arm64 with Python 3.14 (Homebrew).
-Timings are medians.
+The packaging choice was evaluated on macOS arm64 with Python 3.14 (Homebrew).
+The following historical measurements are medians; they are not current comparisons of
+the tools' latest releases. PBS means python-build-standalone.
 
 | | PyInstaller onedir | Nuitka 4.2.1 standalone | PyApp + PBS |
 |---|---|---|---|
-| Parity with source | all pass | all pass, after a loader-race patch (onefile also needs an asset-root patch) | all pass |
+| Parity with source | all pass | all pass with local loader patches; onefile also needed an asset-root patch | all pass |
 | `--version` start-up | 0.375 s, the same as source | **0.27 s** | 0.32 s, after a first run of 2–3 s that extracts ~180 MB into the user's home |
 | Run time against source | −4 % to +1 % | 5–18 % slower, +25–35 MiB RSS | 11–29 % faster, from the PBS interpreter rather than the launcher |
 | Local build time | 17–30 s | 105–180 s | 81 s, plus a Rust toolchain |
-| Problems found | pipelines not bundled (fixed in the spec) | a thread-import race dropped files with exit `0` in 8 of 15 runs; `.py` data files skipped silently; the executable and package names collide; SIGBUS in a cached onefile | a permanent per-user install; Rust on every build leg; Windows `Ctrl+C` untested |
+| Deployment constraints | explicit collection of dynamic imports | local patches needed for parity | persistent per-user install; Rust build toolchain; Windows `Ctrl+C` not validated |
 
-- **Nuitka** starts about 0.1 s sooner but is slower on real workloads. The hot paths —
-  the Rust EVTX parser, SQLite, orjson and the Cython kernel — are native already, so
-  compiling the remaining Python buys little, and it brought new silent failures and
-  builds several times slower.
-- **PyApp with PBS** runs fastest but deploys worse: it installs itself permanently into
-  the user's home on first run and needs Rust on every build leg. Its speed comes from the
-  PBS interpreter, not from PyApp. The Linux legs already build on PBS; whether a
-  PyInstaller build on PBS reproduces the gain on macOS and Windows has yet to be
-  measured.
-- **Not viable:** cx_Freeze uses the same model as PyInstaller onedir, with nothing to
-  gain; PyOxidizer is no longer maintained; Briefcase only produces installers; Mojo and
-  Codon cannot compile pySigma, lxml or evtx and still need CPython to run them, and Mojo
-  has no native Windows support; a whole-application Cython build is effectively what
-  Nuitka does, and that measured slower.
+PyInstaller met the portable-directory requirement with shorter builds and no local
+loader patches. The main detection dependencies already run native code. PyApp's PBS
+interpreter improved runtime in this evaluation, but its persistent per-user installation
+did not meet that deployment requirement. Linux release builds use PBS; equivalent
+measurements for PyInstaller on PBS on macOS and Windows were not recorded here.
 
 ### Support floors
 
@@ -514,25 +495,17 @@ Sigma rules that match by regex need a `REGEXP` implementation, which SQLite doe
 ship. Zircolite registers one that compiles patterns through an LRU cache, since the
 same pattern is evaluated against every row.
 
-Two details matter:
-
-- **Patterns are validated before the query runs.** Sigma is written against PCRE, so a
-  rule can carry a construct Python's `re` rejects (`\p{L}`, a possessive quantifier).
-  Discovering that inside the function would mean discovering it once per row with
-  nowhere to report it, and the rule would look like a clean non-match. Instead the
-  patterns are compiled up front and a rule that fails is recorded as broken.
-- **Values are coerced with `str()`.** A column takes its type from the first value
-  observed for that field, so a field whose first event carried a number becomes
-  `INTEGER` for the rest of that database. Passing an `int` to `re.search` raises, and
-  SQLite reports that as a failure of the whole statement. Coercing to text matches what
-  `LIKE` already does with a numeric column.
+- **Patterns are validated before the query runs.** Constructs unsupported by Python's
+  `re`, such as `\p{L}`, cause the rule to be recorded as broken.
+- **Values are coerced with `str()`.** This allows regex rules to query numeric values,
+  consistent with `LIKE` converting numbers to text.
 
 ### Typing and collation
 
-Columns are declared `TEXT` or `INTEGER`, both `COLLATE NOCASE`. `NOCASE` on an integer
-column costs nothing — numeric equality and ranges are unaffected — and without it a
-numeric first value would leave the column comparing text case-sensitively for the rest
-of the run.
+Columns normally use `TEXT` or `INTEGER` with `COLLATE NOCASE`, which affects text
+comparison without changing numeric equality or ranges. Numeric columns that receive
+oversized integers use the no-affinity `BLOB_NUMERIC` declaration described under
+[Event processing pipeline](#event-processing-pipeline).
 
 Because every column is already `NOCASE`, a ruleset converted with the backend's
 `collate_nocase` option (`Channel='Security' COLLATE NOCASE`) compares exactly as the bare
@@ -540,10 +513,9 @@ equality does. The Channel/EventID bounds, the rule census and the literal prefi
 an explicit `COLLATE NOCASE` on an equality as that equality. Any other collation changes
 what matches, so it leaves the bound unread and the statement unplanned.
 
-How far "the rest of that database" reaches depends on the mode. `--unified-db` really
-is one table, so the first value seen anywhere in the corpus types the column. Per-file
-and parallel modes rebuild the table between files, so each input is typed by its own
-events; otherwise one file's schema would decide what every later file could match.
+In unified mode, initial column types come from the first values seen across the corpus.
+Per-file and parallel modes rebuild the table between files, so each input has its own
+schema.
 
 ### Indexes
 
@@ -570,9 +542,8 @@ nothing able to use it.
 
 ## Automatic SQL repairs
 
-A rule whose SQL cannot be prepared matches nothing, and looks exactly like a rule that
-found nothing. Zircolite therefore attempts two repairs, each at most once, before
-giving up and recording the rule as broken in the run summary.
+When SQLite cannot prepare a rule, Zircolite attempts the applicable repairs below,
+each at most once. If the rule still cannot run, it is recorded as broken in the summary.
 
 **Missing columns.** SQLite resolves column names when it prepares a statement, so a
 rule naming one field the dataset never produced fails as a whole — losing the branches
@@ -601,17 +572,10 @@ eventIDs, which columns it names, and which patterns it hands to `REGEXP`. All f
 the same quote-aware lexer, and lexing is what reading a ruleset costs — roughly 100 ms
 per megabyte of SQL, against merged rulesets carrying several.
 
-So `sqlscan.scan_query` lexes a statement once, answers all four from that single token
-list, and memoises the result; `column_refs`, `regex_literals`, `channel_constraints` and
-`eventid_constraints` are folds over it. Every one of those answers is a pure function of
-the statement text — no schema, no database, no config — so nothing can invalidate an
-entry and there is no cache key beyond the SQL itself. Per-file and parallel modes ask the
-same questions of the same statements once per input file, and after the first file they
-are answered from memory.
-
-The corollary is the rule to keep: anything schema-dependent stays out of `sqlscan.py`.
-Deciding which of a statement's columns are *missing* needs the live table, so that stays
-in `core.py`; only the list of names it mentions is cached.
+`sqlscan.scan_query` lexes each statement once and caches the result by SQL text.
+`column_refs`, `regex_literals`, `channel_constraints` and `eventid_constraints` reuse it
+across files. Schema-dependent decisions, such as which columns are missing, stay in
+`core.py` and are not part of this cache.
 
 **Over-deep expressions.** The SQLite backend emits value lists as a left-deep chain
 (`a OR b OR c OR …`), whose parse-tree depth equals the number of terms. SQLite refuses
@@ -630,10 +594,7 @@ Two properties keep the rewrite safe:
   unterminated quotes or `CASE`, unbalanced parentheses, an empty `OR` operand, a
   statement with no top-level `WHERE`, `UNION`/`INTERSECT`/`EXCEPT`, and any
   parenthesised group holding a `SELECT`. That last one matters because a
-  subquery is not a boolean expression — re-associating the `OR`s inside
-  `x IN (SELECT … OR …)` turns it into a truth value, which still compiles and quietly
-  matches the wrong rows. Reporting a rule as broken is far better than emitting subtly
-  wrong SQL.
+  subquery is not a boolean expression, so its `OR`s cannot be reassociated this way.
 
 Both repairs run only when SQLite itself raises the error, so a statement that already
 compiles is never rewritten. The depth repair is memoised like the statement scan above,
@@ -653,9 +614,8 @@ one driven by another. Rules, counts and matched events are identical.
 Sigma reads a condition on a field the event does not carry as false, so
 `selection and not filter` still matches when the filter names such a field. SQLite
 evaluates that comparison to `NULL`, and `NOT NULL` is `NULL`, so the row is dropped.
-Sysmon network events have no `CommandLine`, and a network rule whose filters mention one
-matched nothing at all: *Rundll32 Internet Connection* found none of the 75,793 events on
-the test corpus that Sigma's semantics select.
+For example, a Sysmon network event can lack `CommandLine` while matching the rule's
+selection and therefore pass a negated command-line filter.
 
 Unlike the two repairs, this rewrite applies to every statement before it runs.
 `sqlscan.normalize_rule_sql` wraps the operand of each prefix `NOT` in

@@ -3,15 +3,12 @@
 These workflows are a pre-flight mirror of `.github/workflows/`, used to run CI
 on a self-hosted Forgejo instance before pushing to GitHub.
 
-Forgejo reads `.forgejo/workflows/` and, when that directory exists, ignores
-`.github/workflows/` completely. GitHub never looks at `.forgejo/`. The two sets
-therefore never both run on the same forge, and neither needs conditionals to
-stay out of the other's way.
+Forgejo uses `.forgejo/workflows/` when present, ignoring `.github/workflows/`.
+GitHub uses `.github/workflows/`.
 
 ## Coverage
 
-One x86_64 Linux runner cannot reproduce a GitHub matrix spanning three
-operating systems and two architectures. What the mirror does and does not cover:
+The mirror runs on one x86_64 Linux runner:
 
 | Workflow | GitHub | Forgejo |
 |---|---|---|
@@ -20,8 +17,7 @@ operating systems and two architectures. What the mirror does and does not cover
 | `external_tests` | ubuntu-latest | same, on the host label |
 | `build_pyinstaller` | linux x64/arm64, windows x64/arm64, macOS arm64; verify on clean runners and older distributions; release | linux x64 build, binary tests and package smoke in one job — 1 of 5 legs, no release |
 
-Windows, macOS and arm64 remain GitHub-only. A green Forgejo run is a strong
-signal, not a substitute for the GitHub matrix.
+Windows, macOS and arm64 validation requires the GitHub matrix.
 
 Tests and release builds compile the native flattening kernel while `pdm install`
 installs the project, with `ZIRCOLITE_REQUIRE_NATIVE=1` so a failed compile fails the
@@ -39,22 +35,18 @@ is a Debian image (`node:22-bookworm`), where the action fails with *"version
 not found for this operating system"*. An Ubuntu job container makes it behave
 as it does on GitHub.
 
-`build_pyinstaller` needs no such substitute: it runs in the
-`quay.io/pypa/manylinux_2_28_x86_64` image GitHub builds linux-x64 in, at the same
-dated tag. That image is what holds the binaries to glibc 2.28, so it is pinned
-rather than documented: `tests/test_forgejo_workflows.py` fails if the two tags
-differ.
+`build_pyinstaller` uses the same dated `quay.io/pypa/manylinux_2_28_x86_64`
+image as GitHub to target glibc 2.28. `tests/test_forgejo_workflows.py` checks
+that the tags agree.
 
 **`external_tests` runs on the `self-hosted` (host) label, not in a container.**
 See the comment at the top of `external_tests.yml` — the harness computes its
 own bind-mount paths, so it only works where the Docker daemon and the job share
 a filesystem.
 
-**`build_pyinstaller` installs node before anything else.** The manylinux image
-has none, and this runner, unlike GitHub's, does not mount its own into job
-containers, so every JavaScript action would fail with `Cannot find: node in
-PATH`. The first step runs `dnf -y module install nodejs:22/common`; the
-`nodejs:22` stream has no default profile, and without `/common` dnf refuses.
+**`build_pyinstaller` installs Node before JavaScript actions.** Neither the
+manylinux image nor this runner supplies it to job containers. The first step
+runs `dnf -y module install nodejs:22/common`; the `/common` profile is required.
 
 **`build_pyinstaller` is one leg in one job, with no release.** GitHub builds five
 targets, verifies each archive on a separate clean runner and releases on a tag.
@@ -79,12 +71,9 @@ and no `dry_run` input.
 `build_pyinstaller` pins every action by SHA. Here `uses:` resolves through
 `data.forgejo.org`, as in the other mirrors.
 
-**Artifacts are uploaded with `actions/upload-artifact@v3`, not `@v4`.** v4 and
-the `@actions/artifact` v2 library it wraps refuse to talk to anything that is
-not github.com, failing with `GHESNotSupportedError`. v3 uses the older upload
-API, which Forgejo implements. It zips what it uploads, where GitHub's
-`build_pyinstaller` uploads the archive as it is; the executable bit survives
-either way, recorded inside the zip.
+**Artifacts use `actions/upload-artifact@v3`.** Forgejo implements its upload
+API; v4 is incompatible. The upload adds a zip wrapper around the release
+archive, whose entries preserve executable permissions.
 
 Every workflow also adds a `concurrency` group. The runner has capacity 1, so
 without it each superseded push queues behind the last. `build_pyinstaller`'s group

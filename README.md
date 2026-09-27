@@ -6,7 +6,7 @@
 [![python](https://img.shields.io/badge/python-3.10--3.14-blue)](https://www.python.org/)
 ![version](https://img.shields.io/badge/Architecture-64bit-red)
 
-**Zircolite** is a standalone tool written in Python 3 that allows you to use SIGMA rules on:
+**Zircolite** applies Sigma detection rules to:
 
 - MS Windows EVTX (EVTX, XML, and JSONL formats)
 - Auditd logs
@@ -17,28 +17,23 @@
 
 ### Key Features
 
-- **Fast**: 452,554 events against 4,319 Sigma rules in 11.6 s, and 1.7 million events in 105 s — the fastest of the three on both test corpora, ahead of Hayabusa and Chainsaw, both of them Rust tools. See the [benchmark](#benchmark).
-- **Automatic Log Type Detection**: Automatically identifies log formats and timestamp fields using magic bytes, content analysis, and regex-based fallback -- no need to specify format flags in most cases.
-- **Multiple Input Formats**: Supports various log formats including EVTX, JSON Lines, JSON Arrays, CSV, XML, and more. Compressed or archived logs (gzip, bzip2, ZIP, 7-Zip) are supported; use `--archive-password` for encrypted ZIP/7z.
-- **Native Sigma Support**: Zircolite can directly use native Sigma rules (YAML) by converting them with pySigma.
-- **Sigma Correlations**: Counts, value statistics and temporal sequences — absence conditions and chains included — across every input file, each alert reported with the events behind it.
-- **SIGMA Backend**: It is based on a SIGMA backend (SQLite) and does not use internal SIGMA-to-something conversion.
-- **Advanced Log Manipulation**: It can manipulate input logs by splitting fields and applying transformations, allowing for more flexible and powerful log analysis.
-- **Field Transforms**: Apply custom Python transformations to fields during processing (e.g., Base64 decoding, hex-to-ASCII conversion).
-- **Flexible Export**: Zircolite can export results to multiple formats using Jinja [templates](templates), including JSON, CSV, JSONL, Splunk, Elastic, OpenSearch, Timesketch, SARIF, ATT&CK Navigator, and more.
-- **Rich Terminal Output**: Detection results displayed in severity-sorted tables with MITRE ATT&CK technique IDs, ATT&CK tactics heatmap, rule coverage metrics, and clickable output file links.
+- **Format detection**: Identifies log formats and timestamp fields automatically. Reads gzip, bzip2, ZIP and 7-Zip inputs; encrypted ZIP/7z inputs use `--archive-password`.
+- **Sigma rules**: Converts native YAML rules with pySigma's SQLite backend or loads preconverted JSON rulesets.
+- **Correlations**: Counts, statistics, temporal sequences, absence conditions and chained rules, with supporting events in each alert. Unified mode supports cross-file correlations.
+- **Field processing**: Splits key-value fields and applies Python transforms, including Base64 and hex decoding.
+- **Export**: JSON, CSV and Jinja [templates](templates) for JSONL, Splunk, Elastic, OpenSearch, Timesketch, SARIF and ATT&CK Navigator.
+- **Terminal output**: Severity-sorted detections, MITRE ATT&CK techniques and tactics, rule coverage and output links.
 
 **You can use Zircolite directly with Python, or download a [standalone binary](#standalone-binaries) that needs no Python installation.**
 
-**Documentation is available [here](https://wagga40.github.io/Zircolite/) (dedicated site) or [here](docs) (repository directory).**
+Read the [documentation site](https://wagga40.github.io/Zircolite/) or the [repository docs](docs).
 
 ## Requirements / Installation
 
 > [!NOTE]
-> Everything in this section applies **only when running Zircolite from source**. The
+> Source installs need Python and a package manager. The
 > [standalone binaries](#standalone-binaries) and the [Docker image](#running-with-docker)
-> carry their own Python, every dependency and the compiled kernel: they need no Python, no
-> package manager and no C compiler.
+> include Python, dependencies and the compiled kernel.
 
 The project has been tested with Python 3.10 and above. Dependencies are declared in
 `pyproject.toml`; install them from the cloned repository with
@@ -50,17 +45,16 @@ or prefix them with `pdm run`, `uv run` or `poetry run`.
 
 ### Dependencies
 
-- **Required**: `orjson`, `xxhash`, `rich`, `rich-argparse`, `RestrictedPython`, `requests`, `urllib3`, `pySigma`, `evtx` (pyevtx-rs), `jinja2`, `lxml`, `chardet`, `psutil`, `pyyaml`, `py7zr`, `ijson`, `pyahocorasick`, `pyroaring`
-- `py7zr` is imported only when a `.7z` input is opened; ZIP, gzip and bzip2 use the standard library.
+Dependencies are declared in [`pyproject.toml`](pyproject.toml). See
+[Dependencies](docs/Usage.md#dependencies) for their roles.
 
 ### :warning: Install a C compiler first
 
-Installing from source compiles Zircolite's flattening kernel with Cython — but **only if a
-C compiler is already there**. Without one the install still succeeds and every run
-flattens events in Python instead, which is slower. The binaries and the Docker image are
-built with the kernel already compiled, so this does not concern them.
+Source installs use a C compiler to build the Cython flattening kernel. If compilation
+fails, the build backend warns and installation continues with the slower Python kernel.
+Set `ZIRCOLITE_REQUIRE_NATIVE=1` to require a successful native build.
 
-So install the toolchain **before** `pdm install`:
+For native acceleration, install the toolchain **before** `pdm install`:
 
 | Platform | Prerequisite |
 |----------|--------------|
@@ -70,8 +64,7 @@ So install the toolchain **before** `pdm install`:
 | macOS | `xcode-select --install` |
 | Windows | [Build Tools for Visual Studio](https://visualstudio.microsoft.com/visual-cpp-build-tools/) ("Desktop development with C++") |
 
-Cython itself needs no installing: it is a build-time requirement, fetched into an isolated
-build environment and never added to your environment.
+Cython is installed automatically as a build dependency.
 
 ### Standalone binaries
 
@@ -109,14 +102,14 @@ xattr -dr com.apple.quarantine Zircolite-<version>-macos-arm64
 
 ## Quick Start
 
-Check out (old) tutorials made by others (EN, ES, and FR) [here](#tutorials).
+The [tutorials](#tutorials) cover earlier versions in English, Spanish and French.
 
 ### EVTX Files
 
 Help is available with:
 
 ```shell
-# Don't forget to prefix with "pdm run" or "uv run" or "poetry run" when needed
+# Prefix with pdm run, uv run or poetry run if the environment is not active
 python3 zircolite.py -h
 ```
 
@@ -194,7 +187,8 @@ docker run --rm --tty \
 
 ### Automatic Processing Optimization
 
-Given several files, Zircolite measures them against available RAM and CPU, picks a database mode (one shared database, or one per file) and decides whether processing them in parallel is worth it — then adapts the worker count to memory pressure as it runs.
+For multiple files, Zircolite selects a database layout and worker count using file sizes,
+available RAM and CPU count. It throttles new work under memory pressure.
 
 ```shell
 python3 zircolite.py --evtx ./logs/ --ruleset rules/rules_windows_merged.json
@@ -204,7 +198,7 @@ Override any of it with `--no-auto-mode`, `--unified-db` (one database for all f
 
 ### Using YAML Configuration Files
 
-For complex or repeated analysis workflows, use a YAML configuration file:
+Save reusable run options in a YAML configuration file:
 
 ```shell
 # Generate a fully commented configuration file
@@ -238,7 +232,7 @@ See [Rulesets](docs/Usage.md#rulesets--rules).
 Alternatively, if you use [Task](https://taskfile.dev/) (go-task), run `task update-rules` from the project root to update the rulesets from [Zircolite-Rules-v2](https://github.com/wagga40/Zircolite-Rules-v2), as `-U` does. See [docs](docs/README.md) for other tasks (Docker build, clean, etc.).
 
 > [!IMPORTANT]  
-> Please note that these rulesets are provided to use Zircolite out of the box, but [you should generate your own rulesets](docs/Usage.md#why-you-should-build-your-own-rulesets) as they can be noisy or slow. These auto-updated rulesets are available in the dedicated repository: [Zircolite-Rules-v2](https://github.com/wagga40/Zircolite-Rules-v2).
+> Default rulesets can contain noisy or slow rules. [Select rules for your environment](docs/Usage.md#why-you-should-build-your-own-rulesets).
 
 ### Field Splitting and Transforms
 
@@ -258,10 +252,9 @@ See [Field Splitting](docs/Usage.md#field-splitting) and [Field Transforms](docs
 
 ## Benchmark
 
-**Zircolite is the fastest of the three on both tested corpora**.
-
-Each tool at its defaults with its own rules, on a 10-core Apple M1 Max. Median of three
-runs.
+Recorded results on a 10-core Apple M1 Max, with each tool at its defaults and using its
+own rules. Times are medians of three runs; see [Benchmark](docs/Benchmark.md) for the
+setup and rule revisions.
 
 **4 Sysmon EVTX files, one channel (478 MB, 452,554 events):**
 
@@ -271,7 +264,7 @@ runs.
 | Hayabusa 4.1.0 | 4,658 | 24.7 s | 18,300 events/s | 900 MiB |
 | Chainsaw 2.16.0 | 3,524 | 113.5 s | 4,000 events/s | 346 MiB |
 
-**8 EVTX files, 11 channels (13.3 GB, 1,720,377 events):**
+**8 EVTX files, 11 channels (13.3 GB, 1,720,377 events after Zircolite's event filter):**
 
 | Tool | Rules loaded | Wall time | Throughput | Peak memory |
 |------|-------------:|----------:|-----------:|------------:|
@@ -279,24 +272,20 @@ runs.
 | Hayabusa 4.1.0 | 4,658 | 518.8 s | 3,300 events/s | 1,599 MiB |
 | Chainsaw 2.16.0 | 3,524 | 206.3 s | 8,300 events/s | 338 MiB |
 
-The channel mix is what moves these numbers: on logs from a single channel both Zircolite
-and Hayabusa skip most of their ruleset, and on a mixed corpus they cannot. Zircolite
-leads either way, but the two Rust tools swap places between the two.
-
-Zircolite trades memory for that speed: it spreads the files over several worker
-processes, and the figures above are their total. `--no-parallel` keeps it to a single
-process.
+Channel mix affects rule pruning and runtime. Memory figures cover the whole process
+tree; Zircolite used multiple worker processes. `--no-parallel` disables those workers.
 
 The rule sets differ, so detection counts are not comparable; see [Benchmark](docs/Benchmark.md)
 for the setup, the caveats and how to reproduce it with `tools/tool-benchmark.py`.
 
 ## Documentation
 
-Complete documentation is available [here](docs).
+See the [documentation index](docs/README.md) for usage, configuration and internals.
 
 ## Mini-GUI
 
-The Mini-GUI can be used completely offline. It allows you to display and search results. You can automatically generate a Mini-GUI "package" with the `--package` option. Use `--package-dir` to specify the output directory. To learn how to use the Mini-GUI, check the documentation [here](docs/Advanced.md#mini-gui).
+The Mini-GUI displays and searches results offline. Generate a package with `--package`
+and choose its output directory with `--package-dir`. See [Mini-GUI](docs/Advanced.md#mini-gui).
 
 ### Detected Events by MITRE ATT&CK® Techniques and Criticality Levels
 
@@ -314,13 +303,13 @@ The Mini-GUI can be used completely offline. It allows you to display and search
 
 ### Tutorials
 
-- **English**: [Russ McRee](https://holisticinfosec.io) has published a detailed [tutorial](https://holisticinfosec.io/post/2021-09-28-zircolite/) on SIGMA and Zircolite on his blog.
+- **English**: [Sigma and Zircolite](https://holisticinfosec.io/post/2021-09-28-zircolite/), Russ McRee.
 
-- **Spanish**: **César Marín** has published a tutorial in Spanish [here](https://derechodelared.com/zircolite-ejecucion-de-reglas-sigma-en-ficheros-evtx/).
+- **Spanish**: [Running Sigma rules on EVTX files](https://derechodelared.com/zircolite-ejecucion-de-reglas-sigma-en-ficheros-evtx/), César Marín.
 
-- **French**: [IT-connect.fr](https://www.it-connect.fr/) has published [an extensive tutorial](https://www.it-connect.fr/zircolite-investigation-numerique-journaux-securite-windows/) on Zircolite in French.
+- **French**: [Windows log investigation](https://www.it-connect.fr/zircolite-investigation-numerique-journaux-securite-windows/), IT-Connect.
 
-- **French**: [IT-connect.fr](https://www.it-connect.fr/) has also published a [Hack the Box challenge write-up](https://www.it-connect.fr/hack-the-box-sherlocks-tracer-solution/) using Zircolite.
+- **French**: [Hack the Box challenge write-up](https://www.it-connect.fr/hack-the-box-sherlocks-tracer-solution/), IT-Connect.
 
 ### References 
 
