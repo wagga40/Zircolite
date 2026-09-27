@@ -291,10 +291,10 @@ class TestFlattenHotPathOptimizations:
         # The key is now remembered so repeat work is skipped.
         assert "EventID" in processor._seen_leaf_keys
 
-    def test_seen_key_repeat_large_int_still_stringified(
+    def test_seen_key_repeat_large_int_is_stored_as_real(
         self, field_mappings_file, test_logger, default_args_config
     ):
-        """A >int64 value on an already-seen key must still be stringified."""
+        """A >int64 value on an already-seen key still becomes a float."""
         processor = StreamingEventProcessor(
             config_file=field_mappings_file,
             args_config=default_args_config,
@@ -308,8 +308,9 @@ class TestFlattenHotPathOptimizations:
             {"Event": {"System": {"EventID": huge}}}, "t.evtx"
         )
         assert first["EventID"] == 1
-        assert second["EventID"] == str(huge)
-        assert isinstance(second["EventID"], str)
+        assert second["EventID"] == float(huge)
+        assert isinstance(second["EventID"], float)
+        assert processor.rounded_integer_fields == {"EventID"}
 
     def test_int64_min_remains_a_sqlite_integer(
         self, field_mappings_file, test_logger, default_args_config

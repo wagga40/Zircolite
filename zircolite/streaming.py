@@ -51,12 +51,10 @@ from .formats import (
 )
 from .jsonstream import iter_json_array
 from .shutdown import is_shutdown_requested
-from .sqlscan import lossless_table_schema
 from .utils import (
     _EXCLUDED_SENTINEL,
     COMPRESSED_SUFFIXES,
     load_field_mappings,
-    lossless_numeric_scalar,
     open_maybe_compressed,
     parse_timestamp,
     sniff_csv_delimiter,
@@ -616,8 +614,6 @@ class StreamingEventProcessor:
         "_last_insert_columns",
         "_last_insert_stmt",
         "_last_sorted_columns",
-        "_lossless_columns",
-        "_pending_lossless_columns",
         # Path resolution cache – maps (raw_field_name, last_part) to resolved
         # (raw_name, mapped_key) or _EXCLUDED_SENTINEL; avoids repeated
         # exclusion/mapping lookups per leaf
@@ -660,6 +656,7 @@ class StreamingEventProcessor:
         "flattening_info",
         "hashes",
         "logger",
+        "rounded_integer_fields",
         # EVTX parsing strictness
         "strict_evtx",
         "time_field",
@@ -734,8 +731,8 @@ class StreamingEventProcessor:
         # matching. NOCASE on an INTEGER column costs nothing: numeric equality
         # and range comparisons are unaffected.
         self.field_types: dict = {}
-        self._pending_lossless_columns: set[str] = set()
-        self._lossless_columns: set[str] = set()
+        # Fields that held an integer SQLite can only store as REAL
+        self.rounded_integer_fields: set[str] = set()
         # Leaf keys already passed through schema bookkeeping. Shares the
         # lifetime of discovered_fields (never cleared mid-instance).
         self._seen_leaf_keys: set = set()
@@ -1940,8 +1937,8 @@ class StreamingEventProcessor:
     def _insert_batch(self, db_connection, cursor, batch: list[dict]):
         """Insert a batch of events into the database with dynamic schema handling.
 
-        Large-integer normalization is handled upstream in ``_flatten_event``,
-        so no per-value type check is needed here.
+        Values arrive already normalized by ``_flatten_event``, so no
+        per-value type check is needed here.
         """
         if not batch:
             return
@@ -1978,11 +1975,6 @@ class StreamingEventProcessor:
         else:
             all_columns = self._last_sorted_columns
 
-        # Rare mixed numeric/oversized-integer columns need affinity removed
-        # before SQLite sees their decimal strings, including across batches.
-        if self._pending_lossless_columns:
-            self._preserve_integer_precision(db_connection, cursor)
-
         # Check if we need to update schema or INSERT statement
         schema_changed = self._ensure_columns_exist_cached(
             db_connection, cursor, all_columns
@@ -2003,10 +1995,6 @@ class StreamingEventProcessor:
             self._last_insert_columns = all_columns
 
         rows = _build_rows(batch, all_columns, all_columns_frozen, extra_columns is None)
-        if self._lossless_columns:
-            numeric_positions = {i for i, col in enumerate(all_columns) if col.lower() in self._lossless_columns}
-            rows = [tuple(lossless_numeric_scalar(value) if i in numeric_positions else value
-                          for i, value in enumerate(row)) for row in rows]
 
         # Execute batch insert with transaction
         try:
@@ -2017,78 +2005,6 @@ class StreamingEventProcessor:
             db_connection.execute("ROLLBACK")
             self.logger.debug(f"Batch insert error: {e}")
             raise
-
-    def _note_large_integer(self, key: str) -> None:
-        """An oversized integer must stay text even after a numeric first value."""
-        canonical = self.discovered_fields.get(key.lower())
-        if key.lower() in self._lossless_columns:
-            return
-        # A fresh processor may encounter an existing numeric column for the
-        # first time. Inspect the actual table even when local discovery is empty.
-        self._pending_lossless_columns.add(key.lower())
-        if canonical and self.field_types[canonical] in (
-            "INTEGER COLLATE NOCASE", "NUMERIC COLLATE NOCASE",
-        ):
-            self.field_types[canonical] = "BLOB_NUMERIC COLLATE NOCASE"
-            self._lossless_columns.add(key.lower())
-
-    def _preserve_integer_precision(self, db_connection, cursor) -> None:
-        """Rebuild only when an already-created numeric column needs mixed storage.
-
-        BLOB affinity leaves both native numbers and decimal text untouched.
-        Copy existing values without CAST, preserving signed 64-bit integers.
-        The ingestion schema, indexes and triggers survive the transaction.
-        """
-        cursor.execute("PRAGMA table_info(logs)")
-        columns = cursor.fetchall()
-        affected = {
-            name.lower() for _, name, typ, *_ in columns
-            if name.lower() in self._pending_lossless_columns
-            and typ.upper() in ("INTEGER", "NUMERIC")
-        }
-        if affected:
-            for name in affected:
-                canonical = self.discovered_fields.get(name, name)
-                self.field_types[canonical] = "BLOB_NUMERIC COLLATE NOCASE"
-            cursor.execute("SELECT sql FROM sqlite_master WHERE type='table' AND name='logs'")
-            schema = lossless_table_schema(cursor.fetchone()[0], affected)
-            cursor.execute(
-                "SELECT sql FROM sqlite_master WHERE tbl_name='logs' "
-                "AND type IN ('index', 'trigger') AND sql IS NOT NULL"
-            )
-            dependents = [row[0] for row in cursor.fetchall()]
-            # This table belongs to the processor and has an AUTOINCREMENT key.
-            cursor.execute("SELECT seq FROM sqlite_sequence WHERE name='logs'")
-            sequence = cursor.fetchone()
-            names = ", ".join(_quote_identifier(row[1]) for row in columns)
-            # During the drop/rename interval views and external triggers can
-            # temporarily reference a missing logs table. Legacy rename skips
-            # that transient validation without rewriting those references.
-            cursor.execute("PRAGMA legacy_alter_table")
-            legacy_rename = cursor.fetchone()[0]
-            cursor.execute("PRAGMA legacy_alter_table=ON")
-            cursor.execute("SAVEPOINT preserve_integer_precision")
-            try:
-                cursor.execute('CREATE TABLE "_zircolite_lossless_logs" ' + schema[schema.index("("):])
-                cursor.execute(
-                    f'INSERT INTO "_zircolite_lossless_logs" ({names}) SELECT {names} FROM logs'  # noqa: S608 -- quoted column names
-                )
-                cursor.execute("DROP TABLE logs")
-                cursor.execute('ALTER TABLE "_zircolite_lossless_logs" RENAME TO logs')
-                if sequence:
-                    cursor.execute("UPDATE sqlite_sequence SET seq=? WHERE name='logs'", sequence)
-                for statement in dependents:
-                    cursor.execute(statement)
-                cursor.execute("RELEASE preserve_integer_precision")
-            except BaseException:
-                cursor.execute("ROLLBACK TO preserve_integer_precision")
-                cursor.execute("RELEASE preserve_integer_precision")
-                raise
-            finally:
-                cursor.execute(f"PRAGMA legacy_alter_table={int(legacy_rename)}")
-            self._last_insert_columns = None
-            self._lossless_columns.update(affected)
-        self._pending_lossless_columns.clear()
 
     def _ensure_columns_exist_cached(
         self, db_connection, cursor, columns: tuple
@@ -2102,9 +2018,7 @@ class StreamingEventProcessor:
         # Initialize cache if needed
         if self._db_columns is None:
             cursor.execute("PRAGMA table_info(logs)")
-            schema_columns = cursor.fetchall()
-            self._db_columns = {row[1].lower() for row in schema_columns}
-            self._lossless_columns = {row[1].lower() for row in schema_columns if row[2].upper() == "BLOB_NUMERIC"}
+            self._db_columns = {row[1].lower() for row in cursor.fetchall()}
 
         db_columns = self._db_columns
         schema_changed = False
@@ -2153,9 +2067,7 @@ class StreamingEventProcessor:
             # Refresh column cache from actual table state – handles both
             # freshly created tables and reused tables (DELETE FROM path).
             cursor.execute("PRAGMA table_info(logs)")
-            schema_columns = cursor.fetchall()
-            self._db_columns = {row[1].lower() for row in schema_columns}
-            self._lossless_columns = {row[1].lower() for row in schema_columns if row[2].upper() == "BLOB_NUMERIC"}
+            self._db_columns = {row[1].lower() for row in cursor.fetchall()}
             self._last_insert_stmt = None
             self._last_insert_columns = None
             self._last_column_frozenset = frozenset()

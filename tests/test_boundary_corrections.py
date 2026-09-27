@@ -20,7 +20,6 @@ from zircolite.processing import (
     process_perfile_streaming,
     process_unified_streaming,
 )
-from zircolite.sqlscan import normalize_numeric_literals
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -180,104 +179,6 @@ def test_failed_query_rolls_back_seen_event_ids(field_mappings_file, stream_rows
         finally:
             if stream_rows:
                 result["matches"].close()
-
-
-@pytest.mark.parametrize("backend", ["python", "auto"])
-@pytest.mark.parametrize("batch_size", [1, 5000])
-@pytest.mark.parametrize("first", [1, 1.5])
-@pytest.mark.parametrize("kind", ["plain", "alias", "transform", "split", "case_variant"])
-def test_oversized_integer_strings_remain_exact(tmp_path, backend, batch_size, first, kind):
-    mapping = {}
-    if kind == "alias":
-        mapping = {"alias": {"Value": "Copy"}}
-    elif kind == "transform":
-        mapping = {"transforms_enabled": True, "transforms": {"Source": [{
-            "alias": True, "alias_name": "Value", "source_condition": ["json_input"],
-            "code": "def transform(param):\n    return param",
-        }]}}
-    elif kind == "split":
-        mapping = {"split": {"Payload": {"separator": ",", "equal": "="}}}
-    config = tmp_path / "mapping.json"
-    config.write_text(json.dumps(mapping))
-    values = [first, "18446744073709551615", "-9223372036854775809", "1"]
-    events = [{"Value": value} for value in values]
-    if kind == "transform":
-        events = [{"Source": value} for value in values]
-    elif kind == "split":
-        events[1:] = [{"Payload": f"Value={value}"} for value in values[1:]]
-    elif kind == "case_variant":
-        events[1] = {"value": values[1]}
-    source = tmp_path / "events.jsonl"
-    source.write_text("".join(json.dumps(event) + "\n" for event in events))
-    with closing(ZircoliteCore(str(config), ProcessingConfig(
-        no_output=True, flatten_backend=backend, batch_size=batch_size,
-    ))) as core:
-        assert core.run_streaming([source], "json", Namespace(json_input=True), disable_progress=True) == 4
-        assert [row["Value"] for row in core.execute_select_query("SELECT Value FROM logs ORDER BY row_id")] == [
-            first, "18446744073709551615", "-9223372036854775809", 1,
-        ]
-        if kind == "alias":
-            assert [row["Copy"] for row in core.execute_select_query("SELECT Copy FROM logs ORDER BY row_id")] == [
-                first, "18446744073709551615", "-9223372036854775809", 1,
-            ]
-
-
-@pytest.mark.parametrize("condition,expected", [
-    ("Value < 0", [1, 2]),
-    ("Value < '0'", [1, 2]),
-    ("0 > Value", [1, 2]),
-    ("Value = 18446744073709551615", [6]),
-    ("18446744073709551615 = Value", [6]),
-    ("Value = '18446744073709551614'", [5]),
-    ("Value = - 9223372036854775809", [1]),
-    ("Value >= -9223372036854775809 AND Value <= -1", [1, 2]),
-    ("Value IN (18446744073709551615, '1', NULL)", [4, 6]),
-    ("Value NOT IN (18446744073709551615, '1', NULL)", []),
-    ("Value BETWEEN '-9223372036854775809' AND '-1'", [1, 2]),
-    ("Value IS 18446744073709551615", [6]),
-    ("Value IS NOT 18446744073709551615", [1, 2, 3, 4, 5, 7, 8]),
-    ("Value IS NULL", [8]),
-    ("Value = 'ALPHA'", [7]),
-    ("Value COLLATE BINARY = 'ALPHA'", []),
-    ("Value IN ('ALPHA' COLLATE BINARY)", []),
-    ("Value IN ('ALPHA' COLLATE BINARY, 'x')", [7]),
-    ("Value NOT IN ('ALPHA' COLLATE BINARY, 'x')", [1, 2, 3, 4, 5, 6]),
-    ("Value IN (('ALPHA' COLLATE BINARY), NULL, 18446744073709551615)", [6, 7]),
-    ("Value COLLATE BINARY IN ('ALPHA' COLLATE NOCASE, 'x')", []),
-    ("(logs.Value) = 18446744073709551615", [6]),
-])
-def test_promoted_numeric_predicates_are_exact(field_mappings_file, condition, expected):
-    with closing(ZircoliteCore(field_mappings_file, ProcessingConfig(no_output=True))) as core:
-        core.create_db("Value BLOB_NUMERIC COLLATE NOCASE")
-        core.insert_data_to_db([{"Value": value} for value in [
-            "-9223372036854775809", -1, 0, 1,
-            "18446744073709551614", "18446744073709551615", "Alpha", None,
-        ]])
-        rows = core.execute_select_query(f"SELECT row_id FROM logs WHERE {condition}")
-        assert [row["row_id"] for row in rows] == expected
-
-
-def test_numeric_rewrite_is_stable_across_query_repair():
-    # A missing column retries the normalized SQL; its fallback must not grow
-    # another UDF wrapper on every repair or repeated library execution.
-    columns = frozenset({"value"})
-    normalized = normalize_numeric_literals("SELECT * FROM logs WHERE Value < 0", columns)
-    assert normalize_numeric_literals(normalized, columns) == normalized
-
-
-@pytest.mark.parametrize("backend", ["python", "auto"])
-def test_negative_large_integer_range_survives_database_roundtrip(tmp_path, field_mappings_file, backend):
-    source = tmp_path / "events.json"
-    source.write_text('[{"Value":1},{"Value":-9223372036854775809}]')
-    saved = tmp_path / "saved.db"
-    with closing(ZircoliteCore(field_mappings_file, ProcessingConfig(no_output=True, flatten_backend=backend))) as core:
-        assert core.run_streaming([source], "json_array", Namespace(json_array_input=True), disable_progress=True) == 2
-        query = "SELECT Value FROM logs WHERE Value < 0"
-        assert core.execute_select_query(query) == [{"Value": "-9223372036854775809"}]
-        core.save_db_to_disk(str(saved))
-    with closing(ZircoliteCore(field_mappings_file, ProcessingConfig(no_output=True))) as reloaded:
-        reloaded.load_db_in_memory(str(saved))
-        assert reloaded.execute_select_query(query) == [{"Value": "-9223372036854775809"}]
 
 
 @pytest.mark.parametrize("size", [131072, 131073, 1048576])

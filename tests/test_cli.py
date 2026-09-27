@@ -1981,6 +1981,46 @@ class TestCLIJsonArrayInput:
         assert len(detections) >= 1
 
 
+class TestCLIOutOfRangeIntegers:
+    """Integers past SQLite's 64-bit range are stored as REAL, and the run says so."""
+
+    @pytest.mark.parametrize("fmt", ["--jsononly", "--json-array-input"])
+    @pytest.mark.parametrize("mode", [
+        ["--no-parallel"],
+        ["--no-auto-mode", "--parallel-workers", "2", "--executor", "thread"],
+    ])
+    def test_stored_as_real_and_reported(self, tmp_path, fmt, mode):
+        inputs = tmp_path / "inputs"
+        inputs.mkdir()
+        rows = [{"Value": 1}, {"Value": 18446744073709551615}, {"Value": -9223372036854775809}]
+        for name in ("a", "b"):
+            if fmt == "--jsononly":
+                text = "".join(json.dumps(row) + "\n" for row in rows)
+            else:
+                text = json.dumps(rows)
+            (inputs / f"{name}.json").write_text(text)
+        rules = tmp_path / "rules.json"
+        rules.write_text(json.dumps([
+            {"title": "big", "rule": ["SELECT * FROM logs WHERE Value > 1e19"]},
+            {"title": "negative", "rule": ["SELECT * FROM logs WHERE Value < 0"]},
+        ]))
+        config = tmp_path / "config.json"
+        config.write_text(json.dumps({"exclusions": [], "useless": [], "mappings": {}, "alias": {}, "split": {}}))
+        output = tmp_path / "out.json"
+        log = tmp_path / "run.log"
+        result = subprocess.run([
+            sys.executable, str(WORKSPACE_ROOT / "zircolite.py"), "-e", str(inputs), "-r", str(rules),
+            "-c", str(config), "-o", str(output), "-l", str(log), fmt, *mode,
+        ], cwd=tmp_path, capture_output=True, text=True, timeout=60)
+        assert result.returncode == 0, result.stdout + result.stderr
+        counts = {}
+        for rule in json.loads(output.read_text()):
+            counts[rule["title"]] = counts.get(rule["title"], 0) + rule["count"]
+            assert all(isinstance(match["Value"], float) for match in rule["matches"])
+        assert counts == {"big": 2, "negative": 2}
+        assert "Integers outside the 64-bit range" in log.read_text()
+
+
 class TestCLIUnifiedDatabase:
     """Tests for unified database mode (--unified-db)."""
 

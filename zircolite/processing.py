@@ -63,6 +63,7 @@ from .utils import (
     load_field_mappings,
     quit_on_error,
     random_suffix,
+    rounded_integer_warning,
     sanitize_row_for_csv,
     sanitize_value_for_csv,
     select_files,
@@ -1004,6 +1005,7 @@ def process_single_file_worker(
             # Workers log to a silent logger, so the warning the core emits at
             # the end of its run is discarded; carry it out for aggregation.
             "rules_in_error": dict(core.rules_in_error),
+            "rounded_integer_fields": sorted(core.rounded_integer_fields),
             "performance": core.metrics.data,
         }
         if degraded:
@@ -1412,9 +1414,13 @@ def process_parallel_streaming(
             ctx.logger.error(f"    \u2192 ... and {len(errors) - 5} more")
 
     rules_in_error: dict = {}
+    rounded_fields: set[str] = set()
     for file_data in results_list:
         if isinstance(file_data, dict):
             rules_in_error.update(file_data.get("rules_in_error") or {})
+            rounded_fields.update(file_data.get("rounded_integer_fields") or ())
+    if rounded_fields:
+        ctx.logger.warning(rounded_integer_warning(rounded_fields))
     if rules_in_error:
         names = list(rules_in_error)
         shown = ", ".join(names[:3]) + (" ..." if len(names) > 3 else "")

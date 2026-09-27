@@ -370,7 +370,7 @@ class TestZircoliteCoreDatabase:
             logger=test_logger
         )
 
-        field_stmt = "'EventID' TEXT COLLATE NOCASE,\n'LargeValue' TEXT COLLATE NOCASE,\n"
+        field_stmt = "'EventID' TEXT COLLATE NOCASE,\n'LargeValue' NUMERIC COLLATE NOCASE,\n"
         zircore.create_db(field_stmt)
 
         # Insert data with large integer (exceeds SQLite INTEGER limit)
@@ -379,7 +379,7 @@ class TestZircoliteCoreDatabase:
 
         results = zircore.execute_select_query("SELECT * FROM logs")
         assert len(results) == 1
-        assert results[0]["LargeValue"] == str(large_int)
+        assert results[0]["LargeValue"] == float(large_int)
 
         zircore.close()
 

@@ -63,13 +63,12 @@ from .shutdown import is_shutdown_requested
 from .sqlscan import (
     admitted_pairs,
     census_collations_supported,
-    normalize_numeric_literals,
     normalize_rule_sql,
     rebalance_sql,
     scan_query,
 )
 from .streaming import StreamingEventProcessor, StrictParseError
-from .utils import exact_numeric_compare, sanitize_row_for_csv
+from .utils import rounded_integer_warning, sanitize_row_for_csv
 
 # Translation table for stripping newline characters from CSV descriptions.
 _NEWLINE_TRANSLATE = str.maketrans("", "", "\n\r")
@@ -160,8 +159,6 @@ class ZircoliteCore:
         "_escape_cache",
         "_has_correlation_plans",
         "_logs_columns_lower",
-        "_lossless_columns",
-        "_lossless_schema_version",
         "_prefilter",
         "_prepared",
         "_profiling_data",
@@ -187,6 +184,7 @@ class ZircoliteCore:
         "no_output",
         "profile_rules",
         "remove_index",
+        "rounded_integer_fields",
         "rule_prefilter",
         "rules_in_error",
         "ruleset",
@@ -285,10 +283,10 @@ class ZircoliteCore:
         # Inputs read only in part or not at all; their status becomes
         # "partial" in the performance report and parallel mode names them
         self.failed_files: set[str] = set()
+        # Fields where an integer past SQLite's range was stored as REAL
+        self.rounded_integer_fields: set[str] = set()
         # Lowercased logs columns; rebuilt on demand, dropped on any schema change
         self._logs_columns_lower: set[str] | None = None
-        self._lossless_columns: frozenset[str] = frozenset()
-        self._lossless_schema_version = -1
         # Cache for escaped identifiers to avoid repeated string operations
         self._escape_cache: dict = {}
         # Reusable cursor to avoid creating new cursors for each query
@@ -403,7 +401,6 @@ class ZircoliteCore:
                 return 1 if _compile_regex(x).search(str(y)) else 0
 
             conn.create_function('regexp', 2, udf_regex)  # Allows to use regex in SQLite
-            conn.create_function('zircolite_numcmp', 2, exact_numeric_compare, deterministic=True)
             return conn
         except BaseException as exc:
             # Half-opened connections must not leak, whatever went wrong --
@@ -780,15 +777,6 @@ class ZircoliteCore:
             cursor = None
             try:
                 cursor = self.db_connection.cursor()
-                with closing(self.db_connection.execute("PRAGMA schema_version")) as schema_cursor:
-                    schema_version = schema_cursor.fetchone()[0]
-                if schema_version != self._lossless_schema_version:
-                    with closing(self.db_connection.execute("PRAGMA table_info(logs)")) as schema_cursor:
-                        self._lossless_columns = frozenset(
-                            row[1].lower() for row in schema_cursor if row[2].upper() == "BLOB_NUMERIC"
-                        )
-                    self._lossless_schema_version = schema_version
-                query = normalize_numeric_literals(query, self._lossless_columns)
                 effective_query = query
                 if self._prefilter is not None:
                     try:
@@ -868,7 +856,6 @@ class ZircoliteCore:
         # the next execute_ruleset must re-read both
         self._auto_index_applied = False
         self._logs_columns_lower = None
-        self._lossless_schema_version = -1
 
     def escape_identifier(self, identifier: str) -> str:
         """Escape SQL identifiers like table or column names with caching."""
@@ -930,9 +917,9 @@ class ZircoliteCore:
                     values = []
                     for col in cols:
                         value = row[col]
-                        # Values past SQLite's INTEGER range must go in as text
+                        # Past SQLite's INTEGER range; stored as REAL, as ingestion does
                         if isinstance(value, int) and not -(1 << 63) <= value < (1 << 63):
-                            value = str(value)
+                            value = float(value)
                         values.append(value)
                     values_list.append(tuple(values))
 
@@ -1852,6 +1839,11 @@ class ZircoliteCore:
         else:
             for log_file in log_files:
                 total_events += process_single_file(log_file)
+        new_rounded = processor.rounded_integer_fields - self.rounded_integer_fields
+        if new_rounded:
+            self.rounded_integer_fields |= new_rounded
+            self.logger.warning(rounded_integer_warning(new_rounded))
+
         # Create index after all data is inserted
         self.logger.info("[+] Creating indexes")
         self.create_index()

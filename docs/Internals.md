@@ -60,21 +60,11 @@ because their output can name those columns. Unrelated and inactive transforms d
 disable it.
 
 Database columns are added as new fields are discovered, and events are inserted in
-batches. Integers outside SQLite's signed 64-bit range, including integer strings,
-are stored as decimal text.
-If a column was already numeric, its affinity is removed before inserting such a
-value: existing numbers stay numeric and oversized integers stay exact text. When
-earlier batches have created the column, this requires a transactional table rebuild
-that preserves its indexes, triggers and row IDs. Ordinary numeric columns are unchanged.
-These mixed columns use the persisted `BLOB_NUMERIC` declaration (no SQLite affinity).
-Ordinary numeric strings still convert to native numbers during ingestion. In
-single-table rules, direct column/scalar comparisons, `IN` and `BETWEEN` use an exact
-numeric comparator for mixed columns, including after a database export and reload.
-Both quoted and unquoted oversized integer literals compare without rounding; NULL
-and nonnumeric values retain SQLite's comparison and collation behavior. Function or
-arithmetic operands, joins, subqueries and queries executed directly in another SQLite
-client retain SQLite's native mixed-storage semantics. Databases already containing
-rounded values must be rebuilt from the original inputs to recover their precision.
+batches. A column takes its type from the first value it receives: `INTEGER` for integers,
+`NUMERIC` for floats, so ranges compare numerically, and `TEXT` otherwise. Integers
+outside SQLite's signed 64-bit range are stored as floating-point numbers and may be
+rounded, which is also what JSONL parsing produces; the run warns once and names the
+affected fields.
 
 XML entity rewriting leaves CDATA, comments and processing instructions intact, even
 when their delimiters cross read boundaries. XML and EVTXtract readers skip annotations
@@ -513,10 +503,8 @@ same pattern is evaluated against every row.
 
 ### Typing and collation
 
-Columns normally use `TEXT` or `INTEGER` with `COLLATE NOCASE`, which affects text
-comparison without changing numeric equality or ranges. Numeric columns that receive
-oversized integers use the no-affinity `BLOB_NUMERIC` declaration described under
-[Event processing pipeline](#event-processing-pipeline).
+Columns use `INTEGER`, `NUMERIC` or `TEXT` with `COLLATE NOCASE`, which affects text
+comparison without changing numeric equality or ranges.
 
 Because every column is already `NOCASE`, a ruleset converted with the backend's
 `collate_nocase` option (`Channel='Security' COLLATE NOCASE`) compares exactly as the bare

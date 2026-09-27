@@ -59,6 +59,7 @@ def flatten_event(
         if cached is _sentinel:
             return
         raw_field_name, mapped_key = cached  # type: ignore[misc]
+        value: Any
         if isinstance(obj, list):
             value = str(obj)
         elif obj is True or obj is False:
@@ -75,11 +76,11 @@ def flatten_event(
         # rule, or active transform. They only need a value assignment plus a
         # one-time column-type record, so they skip the lookups below.
         if key not in special_fields and raw_field_name not in special_fields:
-            # Past SQLite's INTEGER range the value has to go in as text
             is_int = isinstance(value, int)
-            if is_oversized_integer(value):
-                self._note_large_integer(key)
-                value = str(value)
+            if isinstance(value, int) and not -(1 << 63) <= value < (1 << 63):
+                # Past SQLite's INTEGER range; stored as REAL, like orjson reads it
+                self.rounded_integer_fields.add(key)
+                value = float(value)
                 is_int = False
             json_line[key] = value
             if key not in seen_leaf_keys:
@@ -149,8 +150,6 @@ def flatten_event(
                     k, found, v = split_field.partition(equal_sign)
                     if not found:
                         continue
-                    if is_oversized_integer(v):
-                        self._note_large_integer(k)
                     json_line[k] = v
                     if k not in seen_leaf_keys:
                         key_lower = k.lower()
@@ -175,7 +174,7 @@ def flatten_event(
             else:
                 final_value = value
             if is_oversized_integer(final_value):
-                self._note_large_integer(k)
+                self.rounded_integer_fields.add(k)
             final_value = _normalize_scalar(final_value)
             json_line[k] = final_value
             if k not in seen_leaf_keys:

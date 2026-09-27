@@ -143,9 +143,10 @@ def test_alias_values_are_normalized_and_typed(field_mappings_file):
     ]}
     processor = StreamingEventProcessor(field_mappings_file, Namespace(json_input=True), _raw_config=config)
     row = processor._flatten_event({"Value": 1}, "sample")
-    assert row["Big"] == str(2**64-1)
+    assert row["Big"] == float(2**64-1)
     assert row["Flag"] == "true"
-    assert processor.field_types["Big"] == "TEXT COLLATE NOCASE"
+    assert processor.field_types["Big"] == "NUMERIC COLLATE NOCASE"
+    assert processor.rounded_integer_fields == {"Big"}
 
 
 def test_missing_quoted_identifier_is_null(field_mappings_file):
