@@ -136,7 +136,6 @@ SETTINGS: tuple[Setting, ...] = (
     Setting("limit", "processing", "limit", DEFAULT_LIMIT),
     Setting("timefield", "processing", "time_field", DEFAULT_TIME_FIELD),
     Setting("debug", "processing", "debug", False, Merge.OR),
-    Setting("remove_events", "processing", "remove_events", False, Merge.OR),
     Setting("all_transforms", "processing", "all_transforms", False, Merge.OR),
     Setting(
         "transform_categories",

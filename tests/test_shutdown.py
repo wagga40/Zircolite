@@ -118,8 +118,8 @@ class TestWorkerStartUp:
 class TestLoopsObserveShutdown:
     """The flag is only useful if the long-running loops actually check it.
 
-    Nothing asserted that before, which is how an interrupted --remove-events
-    run came to delete files it had never opened.
+    A loop that ignores it keeps reading files after Ctrl+C and reports
+    results for a run the user stopped.
     """
 
     def _context(self, tmp_path, field_mappings_file, test_logger, sample_ruleset):

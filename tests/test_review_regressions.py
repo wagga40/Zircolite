@@ -282,8 +282,7 @@ def test_zip_member_is_not_read_eagerly(tmp_path):
         assert source.closed
 
 
-def test_incomplete_evtx_source_is_kept(field_mappings_file, tmp_path):
-    from zircolite.cli import cleanup
+def test_incomplete_evtx_source_is_reported(field_mappings_file, tmp_path):
     source = tmp_path / "events.evtx"
     source.write_bytes(b"fixture placeholder")
     core = ZircoliteCore(field_mappings_file, ProcessingConfig(disable_progress=True))
@@ -293,9 +292,7 @@ def test_incomplete_evtx_source_is_kept(field_mappings_file, tmp_path):
                 {"data": '{"EventID":1}'}, {"data": '{"broken":'},
             ])
             assert core.run_streaming([source], disable_progress=True) == 1
-        cleanup(Namespace(remove_events=True), logging.getLogger("review_test"),
-                [source], failed=core.failed_files)
-        assert source.exists()
+        assert str(source) in core.failed_files
     finally:
         core.close()
 

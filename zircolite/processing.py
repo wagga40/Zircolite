@@ -126,9 +126,6 @@ class ProcessingContext:
     rule_prefilter: str = "auto"
     performance_files: list = field(default_factory=list)
     parent_metrics: FileMetrics = field(default_factory=FileMetrics, repr=False)
-    # Inputs that failed to ingest; --remove-events skips these
-    failed_files: set = field(default_factory=set)
-
     # Cached formatted time strings (computed in __post_init__)
     time_after_str: str = field(init=False, repr=False)
     time_before_str: str = field(init=False, repr=False)
@@ -417,7 +414,6 @@ def process_unified_streaming(
     )
     ctx.memory_tracker.sample()
 
-    ctx.failed_files |= zircolite_core.failed_files
     results = list(zircolite_core.full_results) if ctx.retain_results else summaries
     return zircolite_core, results
 
@@ -621,7 +617,6 @@ def process_perfile_streaming(
                 except OSError as exc:
                     ctx.logger.debug(f"Could not finalize JSON output: {exc}")
         finally:
-            ctx.failed_files |= zircolite_core.failed_files
             with ctx.parent_metrics.stage("finalization"):
                 zircolite_core.close()
                 if profiling_core is not None:
@@ -731,7 +726,7 @@ def process_db_input(
                 ctx.performance_files.append(zircolite_core.metrics.data)
                 zircolite_core.load_db_in_memory(str(db_path))
             except (RuntimeError, sqlite3.Error) as e:
-                ctx.failed_files.add(str(db_path))
+                zircolite_core.metrics.data["status"] = "failed"
                 if file_list is None:
                     quit_on_error(f"[red]    [-] {e}[/]", ctx.logger)
                 ctx.logger.warning(
@@ -742,7 +737,6 @@ def process_db_input(
 
             # Warn and skip if the DB cannot be used (no connection, no 'logs' table)
             if zircolite_core.db_connection is None:
-                ctx.failed_files.add(str(db_path))
                 zircolite_core.metrics.data["status"] = "failed"
                 ctx.logger.warning(
                     f"[yellow]    [!] Could not open database '{literal(file_name)}'. Skipping.[/]"
@@ -754,14 +748,12 @@ def process_db_input(
                 _has_logs_table = _cur.fetchone() is not None
                 _cur.close()
             except Exception as e:
-                ctx.failed_files.add(str(db_path))
                 zircolite_core.metrics.data["status"] = "failed"
                 ctx.logger.warning(
                     f"[yellow]    [!] Cannot inspect database '{literal(file_name)}': {literal(e)}. Skipping.[/]"
                 )
                 continue
             if not _has_logs_table:
-                ctx.failed_files.add(str(db_path))
                 zircolite_core.metrics.data["status"] = "failed"
                 ctx.logger.warning(
                     f"[yellow]    [!] Database '{literal(file_name)}' has no 'logs' table. "
@@ -1398,9 +1390,8 @@ def process_parallel_streaming(
 
     ctx.parent_metrics.data["seconds"]["finalization"] += stats.shutdown_seconds
 
-    # Preserve sources when a worker dies before returning its summary.
+    # A worker that dies before returning its summary still gets a record.
     for path, error in stats.failed_files:
-        ctx.failed_files.add(path)
         errors.append((Path(path).name, error))
         missing_metrics = FileMetrics().data
         missing_metrics.update(sources=[str(path)], status="failed", error=str(error),
@@ -1412,8 +1403,6 @@ def process_parallel_streaming(
     for file_data in results_list:
         if isinstance(file_data, dict) and file_data.get("error"):
             errors.append((file_data.get("name", "unknown"), file_data["error"]))
-            if file_data.get("path"):
-                ctx.failed_files.add(file_data["path"])
 
     if errors:
         ctx.logger.error(f"[!] {len(errors)} file(s) failed to process:")

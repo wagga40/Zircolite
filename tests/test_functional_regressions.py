@@ -53,7 +53,7 @@ def test_non_alias_transform_runs_once(tmp_path, backend):
 
 
 @pytest.mark.parametrize('bad_kind', ['corrupt', 'missing_logs'])
-def test_remove_events_preserves_skipped_database(tmp_path, bad_kind):
+def test_skipped_database_is_reported_as_failed(tmp_path, bad_kind):
     inputs = tmp_path / 'inputs'
     inputs.mkdir()
     rules = write_json(tmp_path / 'rules.json', [
@@ -70,13 +70,11 @@ def test_remove_events_preserves_skipped_database(tmp_path, bad_kind):
             db.execute('CREATE TABLE other_table(Value TEXT)')
     original = bad.read_bytes()
     report = tmp_path / 'performance.json'
-    results = run_cli(tmp_path, inputs, rules, '-D', '--remove-events', '--performance-json', report)
+    results = run_cli(tmp_path, inputs, rules, '-D', '--performance-json', report)
     assert results[0]['count'] == 1
     performance = json.loads(report.read_text())
     assert performance['status'] == 'partial'
     assert next(record for record in performance['files'] if record['sources'] == [str(bad)])['status'] == 'failed'
-    assert not (inputs / 'good.db').exists()
-    assert bad.exists(), 'The input explicitly skipped by the reader was deleted'
     assert bad.read_bytes() == original
 
 

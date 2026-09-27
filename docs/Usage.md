@@ -235,9 +235,6 @@ with no traceback.
 A second `Ctrl+C` is a **force quit**: the default signal handler is restored and Python
 exits immediately, so work in flight is abandoned and the output file may be incomplete.
 
-Because the files after the interrupt were never read, `--remove-events` deletes nothing
-on an interrupted run.
-
 ### Exit codes
 
 | Code | Meaning |
@@ -266,7 +263,7 @@ report that could not be written, or a configuration file that could not be hono
 `2` as "these particular options cannot be combined".
 
 A run that could only read part of its input still exits `0` when the rest was analysed.
-The affected files are named on the console and are never deleted by `--remove-events`.
+The affected files are named on the console.
 
 A run that loaded **no** rules exits `1` because no analysis was performed.
 
@@ -389,7 +386,6 @@ across those statements.
 | `-q`, `--quiet` | Suppress banner, progress bars and info messages — only the summary panel and errors |
 | `--debug` | Debug logging, with full tracebacks |
 | `-n`, `--nolog` | Do not create the log file **or the detections output file**. Files asked for explicitly with `--template`, `--dbfile`, `--keepflat` or `--package` are still written |
-| `-RE`, `--remove-events` | Delete input files that were read successfully. Files that failed to parse are kept, and an interrupted run keeps everything |
 | `-U`, `--update-rules` | Update the default rulesets |
 | `-v`, `--version` | Print the version |
 | `--timefield` | Field holding the event timestamp. Left unset it is auto-detected, falling back to `SystemTime`; naming one pins it and turns detection off |
@@ -708,8 +704,7 @@ events, logs a warning and continues with the next file.
 `--strict` stops the run on the first parsing error with exit code `1` and forces
 sequential processing.
 
-Either way, a file that could not be read in full is named on the console and is never
-removed by `--remove-events`.
+Either way, a file that could not be read in full is named on the console.
 
 ### XML
 
@@ -741,7 +736,7 @@ Exports are not always well-formed: some carry control characters XML does not a
 copied from the event data. XML and EVTXtract input are parsed leniently: the offending
 characters are dropped and the rest of the file is read normally. When that happens
 Zircolite warns with the number of errors and the line of the first one, and treats the
-file as not read in full, so `--remove-events` keeps it.
+file as not read in full.
 
 ### EVTXtract
 
@@ -879,10 +874,9 @@ directory holding them to run the rules over all of them.
 Inputs sharing a basename receive distinct numbered export names; generated names
 are also checked against names already assigned to other inputs.
 
-An unreadable database or one without a `logs` table is skipped and kept on disk even
-with `--remove-events`. If another database can be analysed, the run continues and its
-performance report marks the skipped input as failed and the run as partial. If none
-can be analysed, the command exits with code `1`.
+An unreadable database or one without a `logs` table is skipped. If another database
+can be analysed, the run continues and its performance report marks the skipped input
+as failed and the run as partial. If none can be analysed, the command exits with code `1`.
 
 #### Database indexes
 

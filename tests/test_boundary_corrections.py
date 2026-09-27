@@ -59,7 +59,7 @@ def test_cli_rejects_output_aliasing_an_input(tmp_path, field_mappings_file, mod
     result = subprocess.run([
         sys.executable, str(ROOT / "zircolite.py"), "-e", str(inputs),
         "-r", str(rules), "-c", field_mappings_file, "-o", str(output),
-        "-l", str(tmp_path / "run.log"), "--quiet", "--remove-events", *options,
+        "-l", str(tmp_path / "run.log"), "--quiet", *options,
     ], cwd=tmp_path, capture_output=True, text=True, timeout=30)
     assert result.returncode == 2, result.stdout + result.stderr
     assert source.read_bytes() == original

@@ -3016,11 +3016,9 @@ class TestMalformedInputIsolation:
 class TestIngestDegradation:
     """A file Zircolite could not read in full must be reported as such.
 
-    ``--remove-events`` deletes every source file that is absent from
-    ``failed_files``, and that set is fed from ``ingest_degraded``. A reader
-    that aborts without marking the run therefore reports a healthy event
-    count, exits 0, and deletes the only copy of a log nothing ever finished
-    analysing.
+    ``ingest_degraded`` feeds the "partial" status of the performance report
+    and the parallel-mode error list. A reader that aborts without marking the
+    run reports a healthy event count for a file nothing finished reading.
     """
 
     def _processor(self, field_mappings_file, default_args_config, test_logger):

@@ -88,7 +88,6 @@ class YamlProcessingConfig:
     time_field: str = DEFAULT_TIME_FIELD
     event_filter_enabled: bool = True  # Enable event filtering based on channel/eventID
     debug: bool = False
-    remove_events: bool = False
     all_transforms: bool = False
     transform_categories: list | None = None
     add_index: list[str] | None = None
@@ -291,7 +290,6 @@ class ConfigLoader:
                 time_field=proc.get('time_field', DEFAULT_TIME_FIELD),
                 event_filter_enabled=proc.get('event_filter_enabled', True),
                 debug=proc.get('debug', False),
-                remove_events=proc.get('remove_events', False),
                 all_transforms=proc.get('all_transforms', False),
                 transform_categories=proc.get('transform_categories'),
                 add_index=proc.get('add_index'),
@@ -624,9 +622,6 @@ processing:
 
   # Enable debug logging
   debug: false
-
-  # Delete the source log files after a successful run (use with caution!)
-  remove_events: false
 
   # Run every transform defined in config/config.yaml, ignoring its
   # enabled_transforms list

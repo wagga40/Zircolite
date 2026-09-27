@@ -503,7 +503,6 @@ def default_args_config():
         quiet=False,
         debug=False,
         nolog=True,
-        remove_events=False,
         update_rules=False,
         version=False,
         timefield="SystemTime",

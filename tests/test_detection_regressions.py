@@ -125,20 +125,6 @@ def test_float_storage_and_comparison_through_all_leaf_paths(tmp_path, backend, 
         core.close()
 
 
-@pytest.mark.parametrize('event,config', [
-    ({'EventID': 1, 'Source': 2}, {'mappings': {'Source': 'EventID'}}),
-    ({'EventID': 1, 'Source': 2}, {'alias': {'Source': 'EventID'}}),
-    ({'EventID': 1, 'Payload': 'EventID=2'}, {'split': {'Payload': {'separator': ',', 'equal': '='}}}),
-    ({'EventID': 1, 'Outer': {'EventID': 2}}, {}),
-    ({'Channel': 'Other', 'Source': 'Security'}, {'mappings': {'Source': 'Channel'}}),
-])
-def test_remove_events_retains_detections_after_filter_field_replacement(tmp_path, event, config):
-    query = "SELECT * FROM logs WHERE Channel='Security'" if 'Channel' in event else 'SELECT * FROM logs WHERE EventID=2'
-    actual = run_case(tmp_path, [event], query, config, ('--remove-events',))
-    assert sum(rule['count'] for rule in actual) == 1
-    assert not (tmp_path / 'events.jsonl').exists()
-
-
 @pytest.mark.parametrize('kind', ['evtx', 'xml', 'sysmon_json', 'nested_json'])
 def test_timestamp_detection_preserves_nested_source_path(tmp_path, kind):
     import logging

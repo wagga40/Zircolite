@@ -199,7 +199,6 @@ def parse_arguments() -> argparse.Namespace:
     config_formats_args.add_argument("-q", "--quiet", help="Quiet mode: suppress banner, progress, and info messages. Only the summary panel and errors are shown.", action='store_true')
     config_formats_args.add_argument("--debug", help="Enable debug logging", action='store_true')
     config_formats_args.add_argument("-n", "--nolog", "--no-log", help="Don't create the log file or the detections output file (files requested explicitly with --template, --dbfile, --keepflat or --package are still written)", action='store_true')
-    config_formats_args.add_argument("-RE", "--remove-events", help="Remove input log files that were read successfully; files that failed to parse are kept (use with caution)", action='store_true')
     config_formats_args.add_argument("-U", "--update-rules", help="Update rulesets in the 'rules' directory", action='store_true')
     config_formats_args.add_argument("-v", "--version", help="Display Zircolite version", action='store_true')
     config_formats_args.add_argument("--timefield", "--time-field", help="Specify time field name for time filtering (default: 'SystemTime', auto-detects if not found)", type=str, default=None)
@@ -637,33 +636,6 @@ def handle_templating(
                 )
                 succeeded = False
     return succeeded
-
-
-def cleanup(
-    args: argparse.Namespace,
-    logger: logging.Logger,
-    log_list: list[Path] | None = None,
-    failed: set[str] | None = None,
-) -> None:
-    """Remove the original event files, as ``--remove-events`` asks.
-
-    Files whose ingestion failed are kept: their events are absent from the
-    results, so deleting them would destroy evidence nothing ever analysed.
-    """
-    if args.remove_events and log_list:
-        logger.info("[+] Cleaning")
-        failed = failed or set()
-        for evtx in log_list:
-            if str(evtx) in failed:
-                logger.warning(
-                    f"[yellow]   [!] Keeping {evtx}: it failed to process, so its "
-                    "events are not in the results[/]"
-                )
-                continue
-            try:
-                os.remove(evtx)
-            except OSError as e:
-                logger.error(f"[red]    [-] Cannot remove file {literal(e)}[/]")
 
 
 def collapse_results_by_rule(all_results: list[Any]) -> list[dict[str, Any]]:
@@ -1664,21 +1636,6 @@ def _main(memory_tracker, start_time) -> None:
         raise
     finally:
         finalization_start = time.perf_counter()
-        try:
-            # An interrupted run stops at the next checkpoint and returns
-            # normally, so log_list still names every discovered file -- including
-            # the ones nothing opened. Deleting those would destroy evidence that
-            # never reached the results.
-            if is_shutdown_requested():
-                if args.remove_events and log_list:
-                    logger.warning(
-                        "[yellow]   [!] Keeping the input files: the run was "
-                        "interrupted, so not every event was analysed[/]"
-                    )
-            else:
-                cleanup(args, logger, log_list, failed=ctx.failed_files)
-        except Exception as e:
-            logger.debug(f"Cleanup: {e}")
         if zircolite_core is not None:
             try:
                 zircolite_core.close()
@@ -1686,7 +1643,7 @@ def _main(memory_tracker, start_time) -> None:
                 logger.debug(f"Core close: {e}")
         finalization_seconds += time.perf_counter() - finalization_start
         memory_tracker.stop()
-        status = "interrupted" if is_shutdown_requested() else "failed" if strict_error is not None or processing_failed or not templating_ok else "partial" if ctx.failed_files or any(record["status"] in ("partial", "failed", "running") for record in ctx.performance_files) else "complete"
+        status = "interrupted" if is_shutdown_requested() else "failed" if strict_error is not None or processing_failed or not templating_ok else "partial" if any(record["status"] in ("partial", "failed", "running") for record in ctx.performance_files) else "complete"
         stages = aggregate_stages([*ctx.performance_files, ctx.parent_metrics.data])
         stages["setup"] += setup_seconds
         stages["finalization"] += finalization_seconds

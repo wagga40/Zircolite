@@ -282,8 +282,8 @@ class ZircoliteCore:
         # Rules whose SQL cannot run at all, by title: reported once, then counted
         # in the summary so a broken rule is never mistaken for a quiet one
         self.rules_in_error: dict[str, str] = {}
-        # Inputs that raised during ingestion; --remove-events must not
-        # delete a source whose events never made it into the results
+        # Inputs read only in part or not at all; their status becomes
+        # "partial" in the performance report and parallel mode names them
         self.failed_files: set[str] = set()
         # Lowercased logs columns; rebuilt on demand, dropped on any schema change
         self._logs_columns_lower: set[str] | None = None
@@ -1791,7 +1791,6 @@ class ZircoliteCore:
                     progress_callback=progress_cb,
                 )
                 if processor.ingest_degraded:
-                    # Read only in part: --remove-events must not delete it
                     self.failed_files.add(str(log_file))
                 return event_count
 

@@ -368,10 +368,9 @@ def marks_degraded(label: str):
     """Wrap a reader so aborting mid-file is recorded, not merely logged.
 
     A reader that catches, logs and returns leaves every caller believing the
-    file was read to the end: the event count looks healthy, the path never
-    reaches ``failed_files``, and ``--remove-events`` then deletes the only copy
-    of a log nothing ever finished analysing. Marking the run degraded is what
-    keeps that file on disk.
+    file was read to the end: the event count looks healthy and the file is
+    reported as complete. Marking the run degraded is what makes it show up as
+    partial in the performance report and in parallel-mode errors.
 
     Every reader is wrapped, so a new one inherits the guarantee rather than
     having to remember it. ``stream_evtx_events`` handles its own errors first
@@ -1353,8 +1352,8 @@ class StreamingEventProcessor:
     def ingest_degraded(self) -> bool:
         """Whether the last file failed to ingest fully.
 
-        Used to decide whether --remove-events may delete the source: a file
-        Zircolite could not read in full must survive the run.
+        A file Zircolite could not read in full is reported as partial, never
+        as a clean run with fewer events.
         """
         return self._had_parse_error or (self._skipped_records > 0)
 
@@ -1369,7 +1368,7 @@ class StreamingEventProcessor:
 
         Recovery drops the offending characters or markup and carries on, so
         the records around an error arrive incomplete rather than missing. The
-        file is marked degraded, which also keeps --remove-events off it.
+        file is marked degraded.
         """
         from lxml import etree  # type: ignore[attr-defined]
 
@@ -1926,8 +1925,7 @@ class StreamingEventProcessor:
         except Exception as e:
             if inserted_count == 0:
                 raise
-            # The committed rows stay, but the file was not read to the end:
-            # --remove-events must not treat this as a completed ingest.
+            # The committed rows stay, but the file was not read to the end
             self._had_parse_error = True
             self.logger.error(
                 f"[red]    [-] Partial ingest of {literal(os.path.basename(log_file))}: "

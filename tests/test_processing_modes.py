@@ -94,7 +94,6 @@ def _default_args():
         quiet=False,
         debug=False,
         nolog=True,
-        remove_events=False,
         update_rules=False,
         version=False,
         timefield="SystemTime",

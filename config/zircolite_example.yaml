@@ -179,9 +179,6 @@ processing:
   # Enable debug logging
   debug: false
 
-  # Delete the source log files after a successful run (use with caution!)
-  remove_events: false
-
   # Run every transform defined in config/config.yaml, ignoring its
   # enabled_transforms list
   all_transforms: false
