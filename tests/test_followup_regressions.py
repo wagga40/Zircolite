@@ -10,7 +10,6 @@ import pytest
 from zircolite import ProcessingConfig, StreamingEventProcessor, ZircoliteCore
 from zircolite.config import ExtractorConfig
 from zircolite.extractor import EvtxExtractor
-from zircolite.processing import perfile_db_paths
 from zircolite.streaming import _EntityReferenceRewriter
 
 
@@ -98,15 +97,3 @@ def test_saved_database_matches_use_its_collation(tmp_path, field_mappings_file,
         core.execute_ruleset("unused", keep_results=True, show_table=False, disable_progress=True)
         assert len(core.full_results) == 1
         assert core.full_results[0]["count"] == 1
-
-
-def test_database_export_names_cannot_collide_with_generated_suffixes(tmp_path):
-    paths = perfile_db_paths(str(tmp_path / "out.db"), [
-        tmp_path / "a/4_log.json", tmp_path / "b/5_log.json",
-        tmp_path / "c/log.json", tmp_path / "d/log.json",
-    ])
-    assert len(set(paths)) == 4
-    for path in paths:
-        # Exercise the same non-overwriting contract as save_db_to_disk.
-        with path.open("x") as output:
-            output.write("database")

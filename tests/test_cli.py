@@ -929,6 +929,31 @@ class TestCLIMultipleFiles:
         assert "powershell.exe -avoided" not in command_lines
 
 
+class TestCLIEmptyInputParity:
+    """An empty input runs the rules in every mode, so aggregates agree."""
+
+    @pytest.mark.parametrize("mode", [
+        ["--no-parallel"],
+        ["--no-auto-mode", "--parallel-workers", "2", "--executor", "thread"],
+        ["--no-auto-mode", "--parallel-workers", "2", "--executor", "process"],
+    ])
+    def test_count_rule_on_an_empty_input(self, tmp_path, mode):
+        inputs = tmp_path / "inputs"
+        inputs.mkdir()
+        (inputs / "empty.jsonl").write_text("")
+        (inputs / "full.jsonl").write_text('{"Value": "event"}\n')
+        rules = tmp_path / "rules.json"
+        rules.write_text(json.dumps([{"title": "no events", "rule": ["SELECT COUNT(*) AS n FROM logs HAVING COUNT(*)=0"]}]))
+        output = tmp_path / "out.json"
+        result = subprocess.run([
+            sys.executable, str(WORKSPACE_ROOT / "zircolite.py"), "-e", str(inputs), "-r", str(rules),
+            "-j", "-o", str(output), "-l", str(tmp_path / "run.log"), "--quiet", *mode,
+        ], cwd=tmp_path, capture_output=True, text=True, timeout=60)
+        assert result.returncode == 0, result.stdout + result.stderr
+        detections = json.loads(output.read_text())
+        assert [(d["title"], d["matches"]) for d in detections] == [("no events", [{"n": 0}])]
+
+
 class TestCLIDatabaseOperations:
     """Tests for database operations."""
 
@@ -1011,6 +1036,37 @@ class TestCLIDatabaseOperations:
 
 class TestCLITemplateGeneration:
     """Tests for template-based output generation."""
+
+    @pytest.mark.parametrize("db_input", [False, True])
+    @pytest.mark.parametrize("shortcut", [False, True])
+    def test_template_output_cannot_replace_an_input(self, tmp_path, db_input, shortcut):
+        import sqlite3
+        from contextlib import closing
+        if db_input:
+            source = tmp_path / "events.db"
+            with closing(sqlite3.connect(source)) as db:
+                db.execute("CREATE TABLE logs(row_id INTEGER PRIMARY KEY, Value TEXT)")
+                db.execute("INSERT INTO logs(Value) VALUES ('a')")
+                db.commit()
+            options = ["-D"]
+        else:
+            source = tmp_path / "events.jsonl"
+            source.write_text('{"Value": "a"}\n')
+            options = ["-j"]
+        original = source.read_bytes()
+        rules = tmp_path / "rules.json"
+        rules.write_text(json.dumps([{"title": "all", "rule": ["SELECT * FROM logs"]}]))
+        if shortcut:
+            options += ["--navigator-output", str(source)]
+        else:
+            options += ["-t", str(WORKSPACE_ROOT / "templates" / "exportNDJSON.tmpl"), "-T", str(source)]
+        result = subprocess.run([
+            sys.executable, str(WORKSPACE_ROOT / "zircolite.py"), "-e", str(source), "-r", str(rules),
+            "-o", str(tmp_path / "out.json"), "-l", str(tmp_path / "run.log"), "--quiet", *options,
+        ], cwd=tmp_path, capture_output=True, text=True, timeout=60)
+        assert result.returncode == 2, result.stdout + result.stderr
+        assert "Template output" in result.stdout + result.stderr
+        assert source.read_bytes() == original
 
     def test_template_output(self, tmp_path):
         """Test template output generation."""

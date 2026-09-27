@@ -414,7 +414,7 @@ def open_maybe_compressed(
 
         try:
             with py7zr.SevenZipFile(p, "r", password=pwd_7z) as szf:
-                names = szf.getnames()
+                names = sevenzip_members(szf)
                 if not names:
                     raise ValueError(f"7-Zip archive '{p}' contains no files")
                 if len(names) > 1:
@@ -459,6 +459,14 @@ def open_maybe_compressed(
     if text_mode:
         return open(p, mode, encoding=encoding or "utf-8", errors=errors)
     return open(p, mode)
+
+
+def sevenzip_members(archive) -> list[str]:
+    """File members of an open 7-Zip archive, without directories or macOS metadata."""
+    return [
+        info.filename for info in archive.list()
+        if not info.is_directory and not info.filename.startswith("__MACOSX/")
+    ]
 
 
 def estimate_input_size(path: Path | str) -> int:

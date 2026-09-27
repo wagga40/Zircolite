@@ -354,14 +354,13 @@ unless `--fileext` or `--file-pattern` says otherwise.
 | `--keepflat` | Save the flattened events — processed events only — to `flattened_events_<RAND>.json` in the working directory. The contents are JSONL despite the extension |
 | `-d`, `--dbfile` | Save the logs to an SQLite database |
 | `-l`, `--logfile` | Log file name |
-| `-L`, `--limit` | Discard results from any rule matching more than this many events — alerts, for a [correlation rule](#sigma-correlation-rules) (positive integer, or `-1` to disable). Counted per input database: per file by default, corpus-wide with `--unified-db` |
+| `-L`, `--limit` | Discard results from any rule matching more than this many events — alerts, for a [correlation rule](#sigma-correlation-rules) (positive integer, or `-1` to disable). Counted per input database: per file in per-file mode, corpus-wide when the run uses one database (`--unified-db`, or auto mode choosing it). An event matched by several statements of one rule counts once |
 | `--profile-rules` | Time each rule and print a performance report. Forces sequential processing |
 
-The detections output must be separate from every selected input, including SQLite
+The detections output and every template output (`-T`, `--timesketch`,
+`--navigator-output`) must be separate from every selected input, including SQLite
 inputs. Zircolite checks resolved paths, symbolic links and hard links before processing
-and exits with code `2` on a conflict. An existing, separate report can still be overwritten.
-For rules with multiple SQL statements, `--limit` counts each event's `row_id` once
-across those statements.
+and exits with code `2` on a conflict.
 
 > [!NOTE]
 > `--dbfile` cannot be combined with parallel processing of several files, because each
@@ -832,7 +831,7 @@ The **inner** format is auto-detected where possible.
 | `.gz` | gzip | Standard library; inner format from the filename, e.g. `logs.json.gz` |
 | `.bz2` | bzip2 | Standard library; inner format from the filename |
 | `.zip` | ZIP | Single-file only; inner format from the member name. Encrypted archives need `--archive-password` |
-| `.7z` | 7-Zip | Requires `py7zr`. Single-file only; inner format from the member name. Encrypted archives need `--archive-password` |
+| `.7z` | 7-Zip | Requires `py7zr`. Single-file only (directories inside do not count); inner format from the member name. Encrypted archives need `--archive-password` |
 
 Archives must contain **exactly one file**. For `.zip` and `.7z`, Zircolite opens the
 archive to read the member name and a sample; when it is password-protected and no
@@ -869,8 +868,8 @@ Without `--unified-db` each input gets its own database, named after it
 (`output_<input name>.db`, see the note under [Output](#output)),
 and a folder of several files needs `--no-parallel` as well. Point `--db-input` at the
 directory holding them to run the rules over all of them.
-Inputs sharing a basename receive distinct numbered export names; generated names
-are also checked against names already assigned to other inputs.
+Inputs sharing a basename, even with different letter case, receive distinct
+numbered export names.
 
 An unreadable database or one without a `logs` table is skipped. If another database
 can be analysed, the run continues and its performance report marks the skipped input

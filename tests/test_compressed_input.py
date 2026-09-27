@@ -165,6 +165,23 @@ class TestOpenMaybeCompressed:
 
     @pytest.mark.requires_py7zr
     @pytest.mark.skipif(not _HAS_PY7ZR, reason="py7zr not installed")
+    def test_7z_member_inside_a_directory(self, tmp_path):
+        import py7zr
+
+        from zircolite import LogTypeDetector
+        folder = tmp_path / "logs"
+        folder.mkdir()
+        data = b'{"EventID": 1}\n'
+        (folder / "events.jsonl").write_bytes(data)
+        p = tmp_path / "logs.7z"
+        with py7zr.SevenZipFile(p, 'w') as szf:
+            szf.writeall(folder, "logs")
+        with open_maybe_compressed(p) as f:
+            assert f.read() == data
+        assert LogTypeDetector().detect(p).input_type == "json"
+
+    @pytest.mark.requires_py7zr
+    @pytest.mark.skipif(not _HAS_PY7ZR, reason="py7zr not installed")
     def test_7z_with_password(self, tmp_path):
         import py7zr
         p = tmp_path / "secure.json.7z"

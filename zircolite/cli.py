@@ -97,6 +97,7 @@ from zircolite.performance import STAGE_LABELS, aggregate_stages, write_performa
 from zircolite.processing import (
     OutputPathConflict,
     ProcessingContext,
+    check_output_paths,
     create_extractor,
     expand_db_path,
     process_db_input,
@@ -925,6 +926,11 @@ def _warn_correlations_across_databases(count: int, databases: int, logger: logg
         )
 
 
+def _template_outputs(args: argparse.Namespace) -> list[str]:
+    """Every -T path, including the ones --timesketch and --navigator-output add."""
+    return [output for spec in args.templateOutput or () for output in spec]
+
+
 def _run_processing(
     ctx: ProcessingContext,
     args: argparse.Namespace,
@@ -956,6 +962,7 @@ def _run_processing(
     if args.db_input:
         _warn_ignored_db_flags(args, logger)
         db_files = expand_db_path(Path(args.evtx), args, logger)
+        check_output_paths(_template_outputs(args), db_files, "Template output")
         _warn_correlations_across_databases(correlations, len(db_files), logger)
         ctx.parent_metrics.data["seconds"]["setup"] += time.perf_counter() - phase_setup_end
         zircolite_core, all_results = process_db_input(ctx, args, file_list=db_files)
@@ -1000,6 +1007,7 @@ def _run_processing(
                     f"for input format '{input_type}'"
                 )
 
+    check_output_paths(_template_outputs(args), file_list, "Template output")
     ctx.time_field = args.timefield
 
     # DB input mode (auto-detected SQLite file)
@@ -1613,7 +1621,7 @@ def _main(memory_tracker, start_time) -> None:
                 finalization_seconds += time.perf_counter() - finalization_start
     except OutputPathConflict as exc:
         processing_failed = True
-        print_error_panel("Invalid Output Path", literal(exc), "Use -o with a separate output file.")
+        print_error_panel("Invalid Output Path", literal(exc), "Write the output to a separate file.")
         sys.exit(2)
     except StrictParseError as e:
         strict_error = str(e)

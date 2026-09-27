@@ -38,6 +38,7 @@ from zircolite.processing import (
     create_extractor,
     create_worker_core,
     create_zircolite_core,
+    perfile_db_paths,
     process_perfile_streaming,
     process_single_file_worker,
     sort_key_severity,
@@ -1171,3 +1172,21 @@ class TestCsvKeepsFieldsFromEveryFile:
         ]
 
         assert columns[0] == columns[1] == columns[2]
+
+
+class TestPerfileDbPaths:
+    """Each input gets its own export name, and no two names can collide."""
+
+    def test_generated_suffixes_do_not_collide(self, tmp_path):
+        paths = perfile_db_paths(str(tmp_path / "out.db"), [
+            tmp_path / "a/4_log.json", tmp_path / "b/5_log.json",
+            tmp_path / "c/log.json", tmp_path / "d/log.json",
+        ])
+        assert len(set(paths)) == 4
+        for path in paths:
+            with path.open("x") as output:
+                output.write("database")
+
+    def test_names_differing_only_in_case_do_not_collide(self, tmp_path):
+        paths = perfile_db_paths(str(tmp_path / "x.db"), [tmp_path / "a/Log.json", tmp_path / "b/log.json"])
+        assert [path.name for path in paths] == ["x_Log.json.db", "x_2_log.json.db"]

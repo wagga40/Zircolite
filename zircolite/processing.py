@@ -225,27 +225,32 @@ def create_extractor(
 # ============================================================================
 
 class OutputPathConflict(ValueError):
-    """A detections output would replace an input selected for analysis."""
+    """An output would replace an input selected for analysis."""
+
+
+def check_output_paths(outputs: list[str], files: list[Path], label: str) -> None:
+    """Refuse an output that names one of *files*, directly or through a link."""
+    sources = [Path(source) for source in files]
+    for name in outputs:
+        output = Path(name)
+        resolved = output.resolve()
+        output_exists = output.exists()
+        for source in sources:
+            same_file = resolved == source.resolve()
+            if not same_file and output_exists:
+                # Ingestion will report a source that disappeared.
+                with suppress(FileNotFoundError):
+                    same_file = output.samefile(source)
+            if same_file:
+                raise OutputPathConflict(
+                    f"{label} '{output}' refers to input '{source}'. "
+                    "Choose a separate output path."
+                )
 
 
 def _validate_output_path(ctx: ProcessingContext, files: list[Path]) -> None:
-    if ctx.no_output:
-        return
-    output = Path(ctx.outfile)
-    resolved = output.resolve()
-    output_exists = output.exists()
-    for source in files:
-        source = Path(source)
-        same_file = resolved == source.resolve()
-        if not same_file and output_exists:
-            # Ingestion will report a source that disappeared.
-            with suppress(FileNotFoundError):
-                same_file = output.samefile(source)
-        if same_file:
-            raise OutputPathConflict(
-                f"Detections output '{output}' refers to input '{source}'. "
-                "Choose a separate output path."
-            )
+    if not ctx.no_output:
+        check_output_paths([ctx.outfile], files, "Detections output")
 
 
 def _unpack_streaming_result(
@@ -428,21 +433,22 @@ def perfile_db_paths(dbfile: str, file_list: list[Path]) -> list[Path]:
     Two inputs can share a basename (``one/events.json`` and
     ``two/events.json``), and those are disambiguated by position so the names
     stay the same from run to run: a re-run has to collide predictably rather
-    than quietly choose a different name.
+    than quietly choose a different name. Names are compared case-insensitively:
+    on macOS and Windows ``Log.json`` and ``log.json`` are the same file.
     """
     base = Path(dbfile)
     parent = base.parent
     paths: list[Path] = []
-    claimed: set[Path] = set()
+    claimed: set[str] = set()
     for index, log_file in enumerate(file_list):
         candidate = parent / f"{base.stem}_{Path(log_file).name}{base.suffix}"
         suffix = index + 1
-        while candidate in claimed:
+        while candidate.name.casefold() in claimed:
             candidate = (
                 parent / f"{base.stem}_{suffix}_{Path(log_file).name}{base.suffix}"
             )
             suffix += 1
-        claimed.add(candidate)
+        claimed.add(candidate.name.casefold())
         paths.append(candidate)
     return paths
 
@@ -913,10 +919,12 @@ def process_single_file_worker(
         degraded = str(log_file) in core.failed_files
         core.failed_files.discard(str(log_file))
 
-        if event_count == 0:
-            metrics.data["status"] = "partial" if degraded else "complete"
+        # An empty but readable input still runs the rules, as it does outside
+        # parallel mode: an aggregate such as COUNT(*) = 0 can match nothing.
+        if event_count == 0 and degraded:
+            metrics.data["status"] = "partial"
             metrics.data["prefilter"].append({"requested": ctx.rule_prefilter, "reason": "no events"})
-            summary = {
+            return (0, {
                 "performance": metrics.data,
                 "name": file_name,
                 "path": str(log_file),
@@ -924,10 +932,8 @@ def process_single_file_worker(
                 "events": 0,
                 "filtered": filtered_count,
                 "time_filtered": time_filtered_count,
-            }
-            if degraded:
-                summary["error"] = "no event could be read (see the log for details)"
-            return (0, summary)
+                "error": "no event could be read (see the log for details)",
+            })
 
         core.load_ruleset_from_var(
             ruleset=ctx.rulesets, rule_filters=ctx.rule_filters
