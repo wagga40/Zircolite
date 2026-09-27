@@ -2172,3 +2172,29 @@ def test_shipped_transform_output(
     """
     code = (TRANSFORMS_DIR / transform_file).read_text()
     assert shipped_processor._transform_value(code, value) == expected
+
+
+# ---------------------------------------------------------------------------
+# A transform runs once per value
+# ---------------------------------------------------------------------------
+
+
+def write_json(path, value):
+    path.write_text(json.dumps(value))
+    return path
+
+
+@pytest.mark.parametrize('backend', ['python', 'auto'])
+def test_non_alias_transform_runs_once(tmp_path, backend):
+    config = write_json(tmp_path / 'config.json', {
+        'transforms_enabled': True,
+        'transforms': {'Value': [{
+            'alias': False, 'source_condition': ['json_input'],
+            'code': 'def transform(param):\n    return param + "!"',
+        }]},
+    })
+    processor = StreamingEventProcessor(
+        str(config), Namespace(json_input=True), ProcessingConfig(flatten_backend=backend))
+    # A nested leaf with the same flattened name is a working control.
+    assert processor._flatten_event({'Event': {'Value': 'x'}}, 'source')['Value'] == 'x!'
+    assert processor._flatten_event({'Value': 'x'}, 'source')['Value'] == 'x!'

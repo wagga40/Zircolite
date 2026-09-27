@@ -8,6 +8,7 @@ import json
 import re
 import sqlite3
 import sys
+from contextlib import closing
 from pathlib import Path
 from typing import ClassVar
 from unittest.mock import patch
@@ -2790,3 +2791,118 @@ class TestRuleCensus:
             core.close()
         assert executed == ["numeric channel"]
         assert counts == {"numeric channel": 1}
+
+
+# ---------------------------------------------------------------------------
+# Rules with several statements count each event once
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize("stream_rows", [False, True])
+@pytest.mark.parametrize("limit", [-1, 2])
+def test_overlapping_queries_count_unique_events(field_mappings_file, stream_rows, limit):
+    with closing(ZircoliteCore(field_mappings_file, ProcessingConfig(no_output=True, limit=limit))) as core:
+        core.create_db("Value INTEGER")
+        # Equal payloads still represent two distinct events.
+        core.insert_data_to_db([{"Value": 1}, {"Value": 1}])
+        result = core._execute_rule({"title": "overlap", "rule": [
+            "SELECT * FROM logs WHERE row_id=1", "SELECT * FROM logs WHERE Value=1",
+        ]}, stream_rows=stream_rows)
+        try:
+            assert result.get("count") == 2
+            assert [row["row_id"] for row in result["matches"]] == [1, 2]
+        finally:
+            if stream_rows and result:
+                result["matches"].close()
+
+
+def test_duplicates_do_not_hide_a_later_unique_match(field_mappings_file):
+    with closing(ZircoliteCore(field_mappings_file, ProcessingConfig(no_output=True, limit=2))) as core:
+        core.create_db("Value INTEGER")
+        core.insert_data_to_db([{"Value": 1}, {"Value": 2}])
+        result = core.execute_rule({"title": "overlap", "rule": [
+            "SELECT * FROM logs WHERE row_id=1",
+            "SELECT * FROM logs UNION ALL SELECT * FROM logs ORDER BY row_id",
+        ]})
+        assert result.get("count") == 2
+
+
+def test_one_overlapping_event_survives_limit_one(field_mappings_file):
+    with closing(ZircoliteCore(field_mappings_file, ProcessingConfig(no_output=True, limit=1))) as core:
+        core.create_db("Value INTEGER")
+        core.insert_data_to_db({"Value": 1})
+        rule = {"rule": ["SELECT * FROM logs", "SELECT * FROM logs WHERE Value=1"]}
+        assert core.execute_rule(rule)["count"] == 1
+        core.insert_data_to_db({"Value": 1})
+        assert core.execute_rule(rule) == {}
+
+
+def test_projection_results_without_event_identity_are_preserved(field_mappings_file):
+    with closing(ZircoliteCore(field_mappings_file, ProcessingConfig(no_output=True))) as core:
+        core.create_db("Value INTEGER")
+        result = core.execute_rule({"rule": [
+            "SELECT COUNT(*) AS n FROM logs", "SELECT COUNT(Value) AS n FROM logs",
+        ]})
+        assert result["matches"] == [{"n": 0}, {"n": 0}]
+
+
+def test_overlapping_negative_row_ids_are_deduplicated(field_mappings_file):
+    with closing(ZircoliteCore(field_mappings_file, ProcessingConfig(no_output=True))) as core:
+        core.create_db("Value INTEGER")
+        core.insert_data_to_db([{"row_id": -1, "Value": 1}, {"row_id": 1, "Value": 1}])
+        result = core.execute_rule({"rule": ["SELECT * FROM logs", "SELECT * FROM logs WHERE Value=1"]})
+        assert [row["row_id"] for row in result["matches"]] == [-1, 1]
+
+
+@pytest.mark.parametrize("stream_rows", [False, True])
+def test_failed_query_rolls_back_seen_event_ids(field_mappings_file, stream_rows):
+    with closing(ZircoliteCore(field_mappings_file, ProcessingConfig(no_output=True))) as core:
+        core.create_db("Value INTEGER")
+        core.insert_data_to_db([{"Value": i} for i in range(300)])
+        result = core._execute_rule({"title": "failure", "rule": [
+            "SELECT * FROM logs WHERE Value < 290 OR json_extract('broken', '$.x')=1",
+            "SELECT * FROM logs",
+        ]}, stream_rows=stream_rows)
+        try:
+            assert result["count"] == 300
+            assert len({row["row_id"] for row in result["matches"]}) == 300
+            assert "failure" in core.rules_in_error
+        finally:
+            if stream_rows:
+                result["matches"].close()
+
+
+# ---------------------------------------------------------------------------
+# Census pruning keeps aggregates and imported collations
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize("query", [
+    "SELECT COUNT(*) AS n FROM logs WHERE EventID=1 HAVING COUNT(*)=0",
+    "SELECT COUNT(*) AS n FROM (SELECT * FROM logs WHERE EventID=1) AS filtered",
+])
+def test_zero_count_rules_run_when_no_event_matches(field_mappings_file, query):
+    with closing(ZircoliteCore(field_mappings_file, ProcessingConfig(no_output=True))) as core:
+        core.create_db("EventID INTEGER")
+        core.insert_data_to_db({"EventID": 2})
+        core.load_ruleset_from_var([{"title": "absence", "rule": [query]}], None)
+        core.execute_ruleset("unused", keep_results=True, show_table=False, disable_progress=True)
+        assert len(core.full_results) == 1
+        assert core.full_results[0]["matches"] == [{"n": 0}]
+
+
+@pytest.mark.parametrize("collation", ["RTRIM", '"RTRIM"', "/* source collation */ RTRIM"])
+def test_saved_database_matches_use_its_collation(tmp_path, field_mappings_file, collation):
+    source = tmp_path / "events.db"
+    with closing(sqlite3.connect(source)) as db:
+        db.execute(f"CREATE TABLE logs(Channel TEXT COLLATE {collation}, EventID INTEGER)")
+        db.execute("INSERT INTO logs VALUES ('Security ', 1)")
+        db.commit()
+    with closing(ZircoliteCore(field_mappings_file, ProcessingConfig(no_output=True))) as core:
+        core.load_db_in_memory(str(source))
+        core.load_ruleset_from_var([{"title": "rtrim", "rule": [
+            "SELECT * FROM logs WHERE Channel='Security' AND EventID=1",
+        ]}], None)
+        core.execute_ruleset("unused", keep_results=True, show_table=False, disable_progress=True)
+        assert len(core.full_results) == 1
+        assert core.full_results[0]["count"] == 1

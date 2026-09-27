@@ -10,20 +10,28 @@ These tests verify the command-line interface behavior including:
 """
 
 import argparse
+import bz2
+import gzip
 import json
 import logging
 import os
+import sqlite3
 import subprocess
 import sys
 import time
+from argparse import Namespace
 from pathlib import Path
 from typing import ClassVar
 from unittest.mock import patch
 
 import pytest
+import yaml
 
 from zircolite import DetectionResult, assets
 from zircolite import cli as zircolite_script
+from zircolite.cli import _apply_detection_result, discover_files
+from zircolite.detector import LogTypeDetector
+from zircolite.streaming import StreamingEventProcessor
 
 # Path to the workspace root
 WORKSPACE_ROOT = Path(__file__).parent.parent
@@ -1040,7 +1048,6 @@ class TestCLITemplateGeneration:
     @pytest.mark.parametrize("db_input", [False, True])
     @pytest.mark.parametrize("shortcut", [False, True])
     def test_template_output_cannot_replace_an_input(self, tmp_path, db_input, shortcut):
-        import sqlite3
         from contextlib import closing
         if db_input:
             source = tmp_path / "events.db"
@@ -3912,3 +3919,299 @@ class TestCorrelationRuleCount:
 
         assert len(caplog.records) == 1
         assert "3 databases" in caplog.text
+
+
+# ---------------------------------------------------------------------------
+# Mapped timestamp fields
+# ---------------------------------------------------------------------------
+
+
+ROOT = Path(__file__).resolve().parent.parent
+
+
+def test_nested_timestamp_mapping_works_for_auto_correlations(tmp_path):
+    import yaml
+    source = tmp_path / 'events.jsonl'
+    source.write_text(''.join(json.dumps({'Event': {'System': {
+        'EventID': 1, 'Computer': 'host',
+        'TimeCreated': {'#attributes': {'SystemTime': f'2026-01-01T00:00:0{i}Z'}}
+    }}}) + '\n' for i in range(2)))
+    config = tmp_path / 'config.json'
+    config.write_text(json.dumps({'mappings': {
+        'Event.System.TimeCreated.#attributes.SystemTime': 'RecordedAt'
+    }}))
+    rules = tmp_path / 'rules.yml'
+    rules.write_text(yaml.safe_dump_all([
+        {'title': 'proc', 'name': 'proc', 'logsource': {'product': 'windows', 'category': 'test'},
+         'detection': {'s': {'EventID': 1}, 'condition': 's'}},
+        {'title': 'burst', 'correlation': {'type': 'event_count', 'rules': ['proc'],
+         'group-by': ['Computer'], 'timespan': '5m', 'condition': {'gte': 2}}},
+    ]))
+    output = tmp_path / 'results.json'
+    def run(*options):
+        result = subprocess.run([sys.executable, str(ROOT/'zircolite.py'), '-e', str(source),
+            '-c', str(config), '-r', str(rules), '-o', str(output), '-l', str(tmp_path/'run.log'),
+            '--quiet', *options], cwd=tmp_path, capture_output=True, text=True, timeout=30)
+        assert result.returncode == 0, result.stdout + result.stderr
+        return json.loads(output.read_text())
+    assert run('--timefield', 'RecordedAt')[0]['alert_count'] == 1
+    assert sum(r.get('alert_count', 0) for r in run()) == 1
+
+
+@pytest.mark.parametrize('kind', ['evtx', 'xml', 'sysmon_json', 'nested_json'])
+def test_timestamp_detection_preserves_nested_source_path(tmp_path, kind):
+    import logging
+    from argparse import Namespace
+
+    from zircolite.cli import _apply_detection_result
+    from zircolite.detector import LogTypeDetector
+    detector = LogTypeDetector()
+    if kind == 'evtx':
+        source = tmp_path / 'events.evtx'
+        source.write_bytes(b'ElfFile\x00' + b'\x00' * 8)
+        detection = detector.detect(source)
+        path = 'Event.System.TimeCreated.#attributes.SystemTime'
+    elif kind == 'xml':
+        detection = detector._check_xml('<Event><System><EventID>1</EventID></System></Event>')
+        path = 'Event.System.TimeCreated.#attributes.SystemTime'
+    else:
+        event = {'Event': {'System': {'Channel': 'Microsoft-Windows-Sysmon/Operational'},
+                           'EventData': {'UtcTime': '2026-01-01T00:00:00Z'}}} if kind == 'sysmon_json' else {
+            'outer': {'logged_at': '2026-01-01T00:00:00Z'}}
+        path = 'Event.EventData.UtcTime' if kind == 'sysmon_json' else 'outer.logged_at'
+        source = tmp_path / 'events.json'
+        source.write_text(json.dumps(event))
+        detection = detector.detect(source)
+    args = Namespace(timefield='SystemTime')
+    _apply_detection_result(args, detection, logging.getLogger(__name__), {'mappings': {path: 'RecordedAt'}})
+    assert args.timefield == 'RecordedAt'
+
+
+# ---------------------------------------------------------------------------
+# Directory discovery
+# ---------------------------------------------------------------------------
+
+
+def discovery_args(path, **overrides):
+    values = dict(
+        evtx=str(path), fileext=None, file_pattern=None, no_recursion=False,
+        select=None, avoid=None,
+    )
+    values.update(overrides)
+    values['_explicit'] = set(overrides)
+    return argparse.Namespace(**values)
+
+
+@pytest.mark.parametrize('second_name', [
+    'b.jsonl', 'b.ndjson', 'b.json.gz', 'b.jsonl.bz2', 'b.JSONL.GZ',
+])
+def test_autodetected_directory_processes_equivalent_json_files(tmp_path, second_name):
+    """Rediscovery must not silently discard a second supported JSON input."""
+    inputs = tmp_path / 'inputs'
+    inputs.mkdir()
+    (inputs / 'a.json').write_text('{"Value":"first"}\n')
+    content = b'{"Value":"second"}\n'
+    if second_name.lower().endswith('.gz'):
+        content = gzip.compress(content)
+    elif second_name.lower().endswith('.bz2'):
+        content = bz2.compress(content)
+    (inputs / second_name).write_bytes(content)
+    config = tmp_path / 'config.json'
+    config.write_text('{}')
+    rules = tmp_path / 'rules.json'
+    rules.write_text(json.dumps([{'title': 'All events', 'rule': ['SELECT * FROM logs']}]))
+    output = tmp_path / 'results.json'
+
+    result = subprocess.run(
+        [sys.executable, str(ROOT / 'zircolite.py'), '-e', str(inputs),
+         '-r', str(rules), '-c', str(config), '-o', str(output),
+         '-l', str(tmp_path / 'run.log'), '--quiet', '--no-parallel'],
+        cwd=tmp_path, capture_output=True, text=True, timeout=30,
+    )
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    matches = [event for rule in json.loads(output.read_text()) for event in rule['matches']]
+    assert {event['Value'] for event in matches} == {'first', 'second'}
+
+
+@pytest.mark.parametrize('format_flags,names', [
+    ({}, {'a.evtx', 'b.EVTX', 'c.evtx.gz', 'd.evtx.bz2'}),
+    ({'json_input': True}, {'a.json', 'b.JSONL', 'c.ndjson.gz', 'd.json.bz2', 'e.json.zip'}),
+    ({'json_array_input': True}, {'a.json', 'b.JSON', 'c.json.gz'}),
+    ({'csv_input': True}, {'a.csv', 'b.tsv', 'c.TSV.BZ2'}),
+    ({'xml_input': True}, {'a.xml', 'b.XML.GZ'}),
+    ({'auditd_input': True}, {'a.log', 'b.LOG.BZ2'}),
+])
+def test_default_discovery_includes_format_aliases_and_compression(tmp_path, format_flags, names):
+    for name in names | {'ignored.txt', 'ignored.log.1'}:
+        (tmp_path / name).touch()
+    found = discover_files(discovery_args(tmp_path, **format_flags), logging.getLogger(__name__))
+    assert {path.name for path in found} == names
+
+
+def test_default_discovery_does_not_expand_to_other_formats_when_evtx_exists(tmp_path):
+    for name in ('events.evtx', 'detections.json', 'run.log'):
+        (tmp_path / name).touch()
+    found = discover_files(discovery_args(tmp_path), logging.getLogger(__name__))
+    assert {path.name for path in found} == {'events.evtx'}
+
+
+@pytest.mark.parametrize('overrides,expected', [
+    ({'fileext': 'json'}, {'a.json'}),
+    ({'fileext': 'jsonl'}, {'b.jsonl'}),
+    ({'file_pattern': '*.json'}, {'a.json'}),
+    ({'fileext': 'json', 'file_pattern': '*.jsonl'}, {'b.jsonl'}),
+    ({'file_pattern': '*'}, {'a.json', 'b.jsonl', 'c.json.gz'}),
+])
+def test_explicit_discovery_filters_stay_exact_and_exclude_directories(tmp_path, overrides, expected):
+    for name in ('a.json', 'b.jsonl', 'c.json.gz'):
+        (tmp_path / name).touch()
+    (tmp_path / 'directory.json').mkdir()
+    (tmp_path / 'directory.jsonl').mkdir()
+    args = discovery_args(tmp_path, json_input=True, **overrides)
+    found = discover_files(args, logging.getLogger(__name__))
+    assert {path.name for path in found} == expected
+
+
+@pytest.mark.parametrize('no_recursion,expected', [
+    (False, {'keep.json', 'nested/keep.jsonl.gz'}),
+    (True, {'keep.json'}),
+])
+def test_expanded_discovery_respects_recursion_selection_and_exclusion(tmp_path, no_recursion, expected):
+    (tmp_path / 'nested').mkdir()
+    for name in ('keep.json', 'nested/keep.jsonl.gz', 'keep_skip.ndjson', 'other.json'):
+        (tmp_path / name).touch()
+    args = discovery_args(
+        tmp_path, json_input=True, no_recursion=no_recursion, select=[['keep']], avoid=[['skip']],
+    )
+    found = discover_files(args, logging.getLogger(__name__))
+    assert {str(path.relative_to(tmp_path)) for path in found} == expected
+
+
+def test_discovery_keeps_content_detection_fallback_for_unrecognized_suffixes(tmp_path):
+    (tmp_path / 'events.data').touch()
+    (tmp_path / 'nested').mkdir()
+    found = discover_files(discovery_args(tmp_path), logging.getLogger(__name__))
+    assert {path.name for path in found} == {'events.data'}
+
+
+# ---------------------------------------------------------------------------
+# Timestamp field resolution
+# ---------------------------------------------------------------------------
+
+
+def write_json(path, value):
+    path.write_text(json.dumps(value))
+    return path
+
+
+def run_cli(tmp_path, source, rules, *options):
+    output = tmp_path / 'results.json'
+    completed = subprocess.run(
+        [sys.executable, str(ROOT / 'zircolite.py'), '-e', str(source),
+         '-r', str(rules), '-o', str(output), '-l', str(tmp_path / 'run.log'),
+         '--quiet', *map(str, options)],
+        cwd=tmp_path, capture_output=True, text=True, timeout=30,
+    )
+    assert completed.returncode == 0, completed.stdout + completed.stderr
+    return json.loads(output.read_text())
+
+
+@pytest.mark.parametrize('raw,mapped', [('timestamp', 'SystemTime'), ('@timestamp', 'Recorded_At')])
+def test_correlation_auto_timestamp_uses_mapped_name(tmp_path, raw, mapped):
+    config = write_json(tmp_path / 'config.json', {'mappings': {raw: mapped}})
+    source = tmp_path / 'events.jsonl'
+    source.write_text(''.join(json.dumps({
+        raw: f'2026-01-01T00:00:0{i}Z', 'EventID': 1, 'Computer': 'host',
+    }) + '\n' for i in range(2)))
+    rules = tmp_path / 'rules.yml'
+    rules.write_text(yaml.safe_dump_all([
+        {'title': 'proc', 'name': 'proc',
+         'logsource': {'product': 'windows', 'category': 'test'},
+         'detection': {'s': {'EventID': 1}, 'condition': 's'}},
+        {'title': 'burst', 'level': 'high', 'correlation': {
+            'type': 'event_count', 'rules': ['proc'], 'group-by': ['Computer'],
+            'timespan': '5m', 'condition': {'gte': 2},
+        }},
+    ]))
+    control = run_cli(tmp_path, source, rules, '-c', config, '--timefield', mapped)
+    assert control[0]['alert_count'] == 1
+    actual = run_cli(tmp_path, source, rules, '-c', config)
+    assert sum(rule.get('alert_count', 0) for rule in actual) == 1
+
+
+@pytest.mark.parametrize('kind', ['json', 'sysmon_json', 'evtx', 'xml', 'evtxtract'])
+def test_conventional_timestamp_is_not_remapped_as_a_top_level_field(tmp_path, kind):
+    detector = LogTypeDetector()
+    if kind == 'json':
+        detection = detector._classify_json_event({'Event': {'System': {'EventID': 1}}}, False)
+    elif kind == 'sysmon_json':
+        detection = detector._classify_json_event({'Event': {'System': {
+            'Channel': 'Microsoft-Windows-Sysmon/Operational', 'EventID': 1,
+        }}}, False)
+    elif kind == 'evtx':
+        source = tmp_path / 'events.evtx'
+        source.write_bytes(b'ElfFile\x00' + b'\x00' * 8)
+        detection = detector.detect(source)
+    elif kind == 'xml':
+        detection = detector._check_xml('<Event><System><EventID>1</EventID></System></Event>')
+    else:
+        detection = detector._check_evtxtract('Found at offset 0\nRecord number 1\n<Event><System/></Event>')
+    assert detection is not None
+    config = write_json(tmp_path / 'config.json', {
+        'mappings': {
+            'SystemTime': 'Recorded_At', 'UtcTime': 'Recorded_At',
+            'Event.System.TimeCreated.#attributes.SystemTime': 'SystemTime',
+            'Event.EventData.UtcTime': 'UtcTime',
+        },
+    })
+    args = Namespace(timefield='SystemTime')
+    _apply_detection_result(args, detection, logging.getLogger(__name__), json.loads(config.read_text()))
+    processor = StreamingEventProcessor(str(config), Namespace(json_input=True))
+    flattened = processor._flatten_event({'Event': {
+        'System': {'TimeCreated': {'#attributes': {'SystemTime': '2026-01-01T00:00:00Z'}}},
+        'EventData': {'UtcTime': '2026-01-01T00:00:00Z'},
+    }}, 'source')
+    assert args.timefield == ('UtcTime' if kind == 'sysmon_json' else 'SystemTime')
+    assert flattened[args.timefield] == '2026-01-01T00:00:00Z'
+
+
+@pytest.mark.parametrize('event,expected', [
+    ({'logged_at': '2026-01-01T00:00:00Z'}, 'Recorded_At'),
+    ({'outer': {'logged_at': '2026-01-01T00:00:00Z'}}, 'loggedat'),
+    ({'outer': {'logged_at': '2026-01-01T00:00:00Z'},
+      'logged_at': 'recorded on 2026-01-01T00:00:00Z'}, 'loggedat'),
+])
+def test_regex_timestamp_maps_only_a_confirmed_raw_field(tmp_path, event, expected):
+    config = write_json(tmp_path / 'config.json', {'mappings': {'logged_at': 'Recorded_At'}})
+    source = write_json(tmp_path / 'events.json', event)
+    detection = LogTypeDetector().detect(source)
+    args = Namespace(timefield='SystemTime')
+    _apply_detection_result(args, detection, logging.getLogger(__name__), json.loads(config.read_text()))
+    processor = StreamingEventProcessor(str(config), Namespace(json_input=True))
+    flattened = processor._flatten_event(event, 'source')
+    assert args.timefield == expected
+    assert flattened[expected] == '2026-01-01T00:00:00Z'
+
+
+@pytest.mark.parametrize('event,raw,expected', [
+    ({'Channel': 'Security', 'EventID': 1,
+      'TimeCreated': {'SystemTime': '2026-01-01T00:00:00Z'}}, 'SystemTime', 'SystemTime'),
+    ({'Channel': 'Microsoft-Windows-Sysmon/Operational', 'EventID': 1,
+      'EventData': {'UtcTime': '2026-01-01T00:00:00Z'}}, 'UtcTime', 'UtcTime'),
+    ({'event': {'module': 'winlogbeat'},
+      'outer': {'@timestamp': '2026-01-01T00:00:00Z'}}, '@timestamp', 'timestamp'),
+    ({'event': {'module': 'winlogbeat'}, 'winlog': {'channel': 'Security'},
+      'outer': {'@timestamp': '2026-01-01T00:00:00Z'}}, '@timestamp', 'timestamp'),
+    ({'type': 'SYSCALL', 'outer': {'timestamp': '2026-01-01T00:00:00Z'}}, 'timestamp', 'timestamp'),
+])
+def test_inferred_json_timestamp_ignores_unrelated_top_level_mapping(tmp_path, event, raw, expected):
+    config = write_json(tmp_path / 'config.json', {'mappings': {raw: 'Recorded_At'}})
+    source = write_json(tmp_path / 'events.json', event)
+    detection = LogTypeDetector().detect(source)
+    args = Namespace(timefield='SystemTime')
+    _apply_detection_result(args, detection, logging.getLogger(__name__), json.loads(config.read_text()))
+    processor = StreamingEventProcessor(str(config), Namespace(json_input=True))
+    flattened = processor._flatten_event(event, 'source')
+    assert args.timefield == expected
+    assert flattened[args.timefield] == '2026-01-01T00:00:00Z'

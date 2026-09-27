@@ -14,12 +14,15 @@ Covers:
 import argparse
 import csv
 import json
+import logging
 import os
 import sqlite3
+import subprocess
 import sys
 import threading
 import time
 from argparse import Namespace
+from contextlib import closing
 from pathlib import Path
 from typing import ClassVar
 from unittest.mock import MagicMock, patch
@@ -39,8 +42,11 @@ from zircolite.processing import (
     create_worker_core,
     create_zircolite_core,
     perfile_db_paths,
+    process_db_input,
+    process_parallel_streaming,
     process_perfile_streaming,
     process_single_file_worker,
+    process_unified_streaming,
     sort_key_severity,
 )
 from zircolite.utils import MemoryTracker
@@ -176,7 +182,6 @@ class TestCreateWorkerCore:
     """Tests for create_worker_core."""
 
     def test_creates_silent_logger(self, dummy_ctx):
-        import logging
         core = create_worker_core(dummy_ctx, worker_id=0)
         # Silent loggers have level above CRITICAL
         assert core.logger.level > logging.CRITICAL
@@ -1190,3 +1195,142 @@ class TestPerfileDbPaths:
     def test_names_differing_only_in_case_do_not_collide(self, tmp_path):
         paths = perfile_db_paths(str(tmp_path / "x.db"), [tmp_path / "a/Log.json", tmp_path / "b/log.json"])
         assert [path.name for path in paths] == ["x_Log.json.db", "x_2_log.json.db"]
+
+
+# ---------------------------------------------------------------------------
+# Output paths that alias an input
+# ---------------------------------------------------------------------------
+
+
+ROOT = Path(__file__).resolve().parents[1]
+
+
+@pytest.mark.parametrize("mode", ["perfile", "unified", "thread", "process", "database"])
+@pytest.mark.parametrize("alias", ["direct", "symlink", "hardlink"])
+def test_cli_rejects_output_aliasing_an_input(tmp_path, field_mappings_file, mode, alias):
+    inputs = tmp_path / "inputs"
+    inputs.mkdir()
+    source = inputs / ("a.db" if mode == "database" else "a.jsonl")
+    if mode == "database":
+        with closing(sqlite3.connect(source)) as db:
+            db.execute("CREATE TABLE logs(Value TEXT)")
+            db.execute("INSERT INTO logs VALUES ('a')")
+            db.commit()
+    else:
+        source.write_text('{"Value":"a"}\n')
+        (inputs / "b.jsonl").write_text('{"Value":"b"}\n')
+    original = source.read_bytes()
+    output = source
+    if alias != "direct":
+        output = tmp_path / "alias.json"
+        if alias == "symlink":
+            output.symlink_to(source)
+        else:
+            os.link(source, output)
+    rules = tmp_path / "rules.json"
+    rules.write_text(json.dumps([{"title": "all", "rule": ["SELECT * FROM logs"]}]))
+    options = ["--db-input"] if mode == "database" else ["--jsononly", "--no-auto-mode"]
+    if mode == "unified":
+        options.append("--unified-db")
+    elif mode == "perfile":
+        options.append("--no-parallel")
+    elif mode in ("thread", "process"):
+        options += ["--parallel-workers", "2", "--executor", mode]
+    result = subprocess.run([
+        sys.executable, str(ROOT / "zircolite.py"), "-e", str(inputs),
+        "-r", str(rules), "-c", field_mappings_file, "-o", str(output),
+        "-l", str(tmp_path / "run.log"), "--quiet", *options,
+    ], cwd=tmp_path, capture_output=True, text=True, timeout=30)
+    assert result.returncode == 2, result.stdout + result.stderr
+    assert source.read_bytes() == original
+    assert "output" in (result.stdout + result.stderr).lower()
+
+
+@pytest.mark.parametrize("mode", ["perfile", "unified", "parallel", "database"])
+def test_library_rejects_output_aliasing_an_input(tmp_path, make_processing_context, mode):
+    source = tmp_path / "events.jsonl"
+    if mode == "database":
+        with closing(sqlite3.connect(source)) as db:
+            db.execute("CREATE TABLE logs(Value TEXT)")
+            db.execute("INSERT INTO logs VALUES ('a')")
+            db.commit()
+    else:
+        source.write_text('{"Value":"a"}\n')
+    original = source.read_bytes()
+    ctx = make_processing_context(no_output=False, outfile=str(source))
+    args = Namespace(json_input=True)
+    with pytest.raises(ValueError, match="output"):
+        if mode == "database":
+            process_db_input(ctx, args, file_list=[source])
+        else:
+            process = {"perfile": process_perfile_streaming, "unified": process_unified_streaming,
+                       "parallel": process_parallel_streaming}[mode]
+            process(ctx, [source], "json", None, args)
+    assert source.read_bytes() == original
+
+
+@pytest.mark.parametrize("no_output", [False, True])
+def test_separate_output_or_disabled_output_preserves_input(tmp_path, make_processing_context, no_output):
+    source = tmp_path / "events.jsonl"
+    source.write_text('{"Value":"a"}\n')
+    original = source.read_bytes()
+    output = source if no_output else tmp_path / "results.json"
+    if not no_output:
+        output.write_text("old report")
+    ctx = make_processing_context(no_output=no_output, outfile=str(output), rulesets=[
+        {"title": "all", "rule": ["SELECT * FROM logs"]},
+    ])
+    core, results = process_unified_streaming(ctx, [source], "json", None, Namespace(json_input=True))
+    core.close()
+    assert results[0]["count"] == 1
+    assert source.read_bytes() == original
+    if not no_output:
+        assert json.loads(output.read_text())[0]["matches"][0]["Value"] == "a"
+
+
+# ---------------------------------------------------------------------------
+# Unusable saved databases
+# ---------------------------------------------------------------------------
+
+
+def write_json(path, value):
+    path.write_text(json.dumps(value))
+    return path
+
+
+def run_cli(tmp_path, source, rules, *options):
+    output = tmp_path / 'results.json'
+    completed = subprocess.run(
+        [sys.executable, str(ROOT / 'zircolite.py'), '-e', str(source),
+         '-r', str(rules), '-o', str(output), '-l', str(tmp_path / 'run.log'),
+         '--quiet', *map(str, options)],
+        cwd=tmp_path, capture_output=True, text=True, timeout=30,
+    )
+    assert completed.returncode == 0, completed.stdout + completed.stderr
+    return json.loads(output.read_text())
+
+
+@pytest.mark.parametrize('bad_kind', ['corrupt', 'missing_logs'])
+def test_skipped_database_is_reported_as_failed(tmp_path, bad_kind):
+    inputs = tmp_path / 'inputs'
+    inputs.mkdir()
+    rules = write_json(tmp_path / 'rules.json', [
+        {'title': 'all', 'rule': ['SELECT * FROM logs']},
+    ])
+    with sqlite3.connect(inputs / 'good.db') as db:
+        db.execute('CREATE TABLE logs(row_id INTEGER PRIMARY KEY, Value TEXT)')
+        db.execute("INSERT INTO logs(Value) VALUES ('event')")
+    bad = inputs / 'bad.db'
+    if bad_kind == 'corrupt':
+        bad.write_bytes(b'not a database; preserve me')
+    else:
+        with sqlite3.connect(bad) as db:
+            db.execute('CREATE TABLE other_table(Value TEXT)')
+    original = bad.read_bytes()
+    report = tmp_path / 'performance.json'
+    results = run_cli(tmp_path, inputs, rules, '-D', '--performance-json', report)
+    assert results[0]['count'] == 1
+    performance = json.loads(report.read_text())
+    assert performance['status'] == 'partial'
+    assert next(record for record in performance['files'] if record['sources'] == [str(bad)])['status'] == 'failed'
+    assert bad.read_bytes() == original
