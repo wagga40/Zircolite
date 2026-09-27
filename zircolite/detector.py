@@ -33,6 +33,7 @@ import orjson as json
 from zircolite.utils import (
     ARCHIVE_PASSWORD_ERROR_MESSAGE,
     COMPRESSED_SUFFIXES,
+    sevenzip_members,
     sniff_csv_delimiter,
 )
 
@@ -485,7 +486,7 @@ class LogTypeDetector:
             with py7zr.SevenZipFile(
                 file_path, "r", password=self._archive_password
             ) as szf:
-                names = szf.getnames()
+                names = sevenzip_members(szf)
                 return Path(names[0]).suffix.lower() if names else fallback
         except PasswordRequired:
             raise ValueError(ARCHIVE_PASSWORD_ERROR_MESSAGE) from None
@@ -524,7 +525,7 @@ class LogTypeDetector:
             with py7zr.SevenZipFile(
                 file_path, "r", password=self._archive_password
             ) as szf:
-                names = szf.getnames()
+                names = sevenzip_members(szf)
                 if not names:
                     return b""
                 factory = _MemFactory()

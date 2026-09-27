@@ -15,7 +15,6 @@ import logging
 import multiprocessing
 import os
 import random
-import re
 import string
 import sys
 import threading
@@ -23,7 +22,6 @@ from collections import deque
 from collections.abc import Sequence
 from contextlib import contextmanager
 from datetime import datetime, timezone
-from decimal import Decimal
 from pathlib import Path
 from typing import (
     Any,
@@ -67,63 +65,24 @@ def _normalize_scalar(value):
     if isinstance(value, bool):
         return "true" if value else "false"
     if isinstance(value, int) and not -(1 << 63) <= value < (1 << 63):
-        return str(value)
+        return float(value)
     if isinstance(value, list):
         return str(value)
     return value
 
 
-_DECIMAL_NUMBER = re.compile(r"[+-]?(?:[0-9]+(?:\.[0-9]*)?|\.[0-9]+)(?:[eE][+-]?[0-9]+)?\Z")
-_INTEGER_NUMBER = re.compile(r"[+-]?[0-9]+\Z")
-
-
 def is_oversized_integer(value) -> bool:
-    """Whether numeric affinity would round an integer, native or decimal text."""
-    if isinstance(value, int):
-        return not -(1 << 63) <= value < (1 << 63)
-    if not isinstance(value, str) or len(value) < 19:
-        return False
-    text = value.strip(" \t\n\r\v\f")
-    if not _INTEGER_NUMBER.fullmatch(text):
-        return False
-    # Decimal also accepts integers beyond Python's int-string digit limit.
-    return not -(1 << 63) <= Decimal(text) < (1 << 63)
+    """Whether *value* is a Python int SQLite cannot store as an INTEGER."""
+    return isinstance(value, int) and not isinstance(value, bool) and not -(1 << 63) <= value < (1 << 63)
 
 
-def lossless_numeric_scalar(value):
-    """Apply numeric affinity while retaining oversized integer strings exactly."""
-    if isinstance(value, float) and value.is_integer() and -(1 << 63) <= value < (1 << 63):
-        return int(value)
-    if not isinstance(value, str):
-        return value
-    text = value.strip(" \t\n\r\v\f")
-    if not _DECIMAL_NUMBER.fullmatch(text):
-        return value
-    if not any(char in text for char in ".eE"):
-        try:
-            number = int(text)
-        except ValueError:  # Python's limit on extremely long integer strings
-            return value
-        return number if -(1 << 63) <= number < (1 << 63) else value
-    real = float(text)
-    return int(real) if real.is_integer() and -(1 << 63) <= real < (1 << 63) else real
-
-
-def exact_numeric_compare(left, right) -> int | None:
-    """Compare numeric operands exactly; None delegates other values to SQLite.
-
-    The query retains its original comparison as a fallback, preserving NULL,
-    collation and nonnumeric storage-class behavior without emulating SQLite.
-    """
-    values = []
-    for value in (left, right):
-        value = lossless_numeric_scalar(value)
-        if isinstance(value, str) and _INTEGER_NUMBER.fullmatch(value.strip(" \t\n\r\v\f")):
-            value = Decimal(value)
-        if not isinstance(value, (int, float, Decimal)):
-            return None
-        values.append(value)
-    return (values[0] > values[1]) - (values[0] < values[1])
+def rounded_integer_warning(fields) -> str:
+    """The one warning a run prints for integers stored as REAL."""
+    names = ", ".join(sorted(fields)[:5]) + (", ..." if len(fields) > 5 else "")
+    return (
+        f"[yellow]   [!] Integers outside the 64-bit range were stored as floating-point "
+        f"numbers and may be rounded (fields: {names})[/]"
+    )
 
 
 # Above this, an epoch number is milliseconds rather than seconds (1973-03-03).
@@ -455,7 +414,7 @@ def open_maybe_compressed(
 
         try:
             with py7zr.SevenZipFile(p, "r", password=pwd_7z) as szf:
-                names = szf.getnames()
+                names = sevenzip_members(szf)
                 if not names:
                     raise ValueError(f"7-Zip archive '{p}' contains no files")
                 if len(names) > 1:
@@ -500,6 +459,14 @@ def open_maybe_compressed(
     if text_mode:
         return open(p, mode, encoding=encoding or "utf-8", errors=errors)
     return open(p, mode)
+
+
+def sevenzip_members(archive) -> list[str]:
+    """File members of an open 7-Zip archive, without directories or macOS metadata."""
+    return [
+        info.filename for info in archive.list()
+        if not info.is_directory and not info.filename.startswith("__MACOSX/")
+    ]
 
 
 def estimate_input_size(path: Path | str) -> int:

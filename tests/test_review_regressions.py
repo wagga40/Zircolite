@@ -143,9 +143,10 @@ def test_alias_values_are_normalized_and_typed(field_mappings_file):
     ]}
     processor = StreamingEventProcessor(field_mappings_file, Namespace(json_input=True), _raw_config=config)
     row = processor._flatten_event({"Value": 1}, "sample")
-    assert row["Big"] == str(2**64-1)
+    assert row["Big"] == float(2**64-1)
     assert row["Flag"] == "true"
-    assert processor.field_types["Big"] == "TEXT COLLATE NOCASE"
+    assert processor.field_types["Big"] == "NUMERIC COLLATE NOCASE"
+    assert processor.rounded_integer_fields == {"Big"}
 
 
 def test_missing_quoted_identifier_is_null(field_mappings_file):
@@ -224,7 +225,7 @@ def test_executor_output_parity(field_mappings_file, tmp_path, executor, csv_mod
         config=field_mappings_file, logger=logger, no_output=False,
         events_after=time.strptime("1970-01-01T00:00:00", "%Y-%m-%dT%H:%M:%S"),
         events_before=time.strptime("9999-12-12T23:59:59", "%Y-%m-%dT%H:%M:%S"),
-        limit=-1, csv_mode=csv_mode, time_field="SystemTime", hashes=False,
+        limit=-1, csv_mode=csv_mode, time_field="SystemTime",
         db_location=":memory:", delimiter=";", rulesets=[{"title": "match", "id": "test", "rule": ["SELECT * FROM logs WHERE EventID=1"]}],
         rule_filters=None, outfile=str(tmp_path / "out"), ready_for_templating=False,
         package=False, dbfile=None, keepflat=False, memory_tracker=MemoryTracker(), retain_results=retain,
@@ -282,8 +283,7 @@ def test_zip_member_is_not_read_eagerly(tmp_path):
         assert source.closed
 
 
-def test_incomplete_evtx_source_is_kept(field_mappings_file, tmp_path):
-    from zircolite.cli import cleanup
+def test_incomplete_evtx_source_is_reported(field_mappings_file, tmp_path):
     source = tmp_path / "events.evtx"
     source.write_bytes(b"fixture placeholder")
     core = ZircoliteCore(field_mappings_file, ProcessingConfig(disable_progress=True))
@@ -293,9 +293,7 @@ def test_incomplete_evtx_source_is_kept(field_mappings_file, tmp_path):
                 {"data": '{"EventID":1}'}, {"data": '{"broken":'},
             ])
             assert core.run_streaming([source], disable_progress=True) == 1
-        cleanup(Namespace(remove_events=True), logging.getLogger("review_test"),
-                [source], failed=core.failed_files)
-        assert source.exists()
+        assert str(source) in core.failed_files
     finally:
         core.close()
 

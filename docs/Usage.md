@@ -12,7 +12,6 @@ Zircolite needs **Python 3.10 or above** and runs on Linux, macOS and Windows. T
 | `orjson` | Fast JSON parsing |
 | `ijson` | Incremental JSON-array parsing |
 | `pyahocorasick`, `pyroaring` | Literal prefilter: candidate events for `LIKE` patterns |
-| `xxhash` | Log-line hashing for `--hashes` |
 | `rich`, `rich-argparse` | Terminal output, progress bars, tables, coloured help |
 | `RestrictedPython` | Sandbox for field transforms |
 | `requests` | Ruleset updates (`-U`) |
@@ -235,9 +234,6 @@ with no traceback.
 A second `Ctrl+C` is a **force quit**: the default signal handler is restored and Python
 exits immediately, so work in flight is abandoned and the output file may be incomplete.
 
-Because the files after the interrupt were never read, `--remove-events` deletes nothing
-on an interrupted run.
-
 ### Exit codes
 
 | Code | Meaning |
@@ -266,7 +262,7 @@ report that could not be written, or a configuration file that could not be hono
 `2` as "these particular options cannot be combined".
 
 A run that could only read part of its input still exits `0` when the rest was analysed.
-The affected files are named on the console and are never deleted by `--remove-events`.
+The affected files are named on the console.
 
 A run that loaded **no** rules exits `1` because no analysis was performed.
 
@@ -358,15 +354,13 @@ unless `--fileext` or `--file-pattern` says otherwise.
 | `--keepflat` | Save the flattened events — processed events only — to `flattened_events_<RAND>.json` in the working directory. The contents are JSONL despite the extension |
 | `-d`, `--dbfile` | Save the logs to an SQLite database |
 | `-l`, `--logfile` | Log file name |
-| `--hashes` | Add an xxhash64 to each event. For CSV, EVTXtract and JSON-array input the reader hands over a parsed record rather than a source line, so the hash covers a canonical form of the event |
-| `-L`, `--limit` | Discard results from any rule matching more than this many events — alerts, for a [correlation rule](#sigma-correlation-rules) (positive integer, or `-1` to disable). Counted per input database: per file by default, corpus-wide with `--unified-db` |
+| `-L`, `--limit` | Discard results from any rule matching more than this many events — alerts, for a [correlation rule](#sigma-correlation-rules) (positive integer, or `-1` to disable). Counted per input database: per file in per-file mode, corpus-wide when the run uses one database (`--unified-db`, or auto mode choosing it). An event matched by several statements of one rule counts once |
 | `--profile-rules` | Time each rule and print a performance report. Forces sequential processing |
 
-The detections output must be separate from every selected input, including SQLite
+The detections output and every template output (`-T`, `--timesketch`,
+`--navigator-output`) must be separate from every selected input, including SQLite
 inputs. Zircolite checks resolved paths, symbolic links and hard links before processing
-and exits with code `2` on a conflict. An existing, separate report can still be overwritten.
-For rules with multiple SQL statements, `--limit` counts each event's `row_id` once
-across those statements.
+and exits with code `2` on a conflict.
 
 > [!NOTE]
 > `--dbfile` cannot be combined with parallel processing of several files, because each
@@ -389,13 +383,11 @@ across those statements.
 | `-q`, `--quiet` | Suppress banner, progress bars and info messages — only the summary panel and errors |
 | `--debug` | Debug logging, with full tracebacks |
 | `-n`, `--nolog` | Do not create the log file **or the detections output file**. Files asked for explicitly with `--template`, `--dbfile`, `--keepflat` or `--package` are still written |
-| `-RE`, `--remove-events` | Delete input files that were read successfully. Files that failed to parse are kept, and an interrupted run keeps everything |
 | `-U`, `--update-rules` | Update the default rulesets |
 | `-v`, `--version` | Print the version |
 | `--timefield` | Field holding the event timestamp. Left unset it is auto-detected, falling back to `SystemTime`; naming one pins it and turns detection off |
 | `--unified-db` | One database for all files, which is what cross-file correlation needs |
 | `--no-auto-mode` | Disable automatic processing-mode selection |
-| `--no-auto-detect` | Disable automatic log type and timestamp detection |
 | `--strict` | Abort on a corrupted or malformed EVTX chunk instead of skipping it (default: lenient) |
 | `--add-index` | Create an index on the given column(s), e.g. `--add-index Channel EventID` |
 | `--remove-index` | Drop the given index name(s) after creation, e.g. `--remove-index idx_channel` |
@@ -509,7 +501,7 @@ Invalid configuration stops the run with a non-zero exit code. Validation report
 problems together, including unknown keys, missing rulesets, invalid `input.format`
 values and unparseable time filters.
 
-Some options have no equivalent key and must be passed on the command line: `-c`/`--config`, `-q`/`--quiet`, `--profile-rules`, `--archive-password`, `--no-auto-detect`, `--test-rules`, `--timesketch`, `--navigator-output`, `--transform-list`, `--pipeline-list`, `-U`/`--update-rules`, `-v`/`--version`, `--generate-config` and `-Y`/`--yaml-config` itself.
+Some options have no equivalent key and must be passed on the command line: `-c`/`--config`, `-q`/`--quiet`, `--profile-rules`, `--archive-password`, `--test-rules`, `--timesketch`, `--navigator-output`, `--transform-list`, `--pipeline-list`, `-U`/`--update-rules`, `-v`/`--version`, `--generate-config` and `-Y`/`--yaml-config` itself.
 
 CLI arguments override the file, with three deliberate exceptions:
 `--transform-category`, `--add-index` and `--remove-index` are *added* to whatever the
@@ -686,13 +678,14 @@ Override it explicitly with the **column name after field mappings**:
 python3 zircolite.py --events logs/ --ruleset rules.json --timefield timestamp
 ```
 
-### Disabling detection
+### Skipping detection
+
+An explicit format flag skips format detection, and `--timefield` pins the timestamp
+field:
 
 ```shell
-python3 zircolite.py --events logs/ --ruleset rules.json --no-auto-detect --json-input
+python3 zircolite.py --events logs/ --ruleset rules.json --json-input --timefield timestamp
 ```
-
-Explicit format flags always take precedence over detection, whether or not it is enabled.
 
 ## Input Formats
 
@@ -708,8 +701,7 @@ events, logs a warning and continues with the next file.
 `--strict` stops the run on the first parsing error with exit code `1` and forces
 sequential processing.
 
-Either way, a file that could not be read in full is named on the console and is never
-removed by `--remove-events`.
+Either way, a file that could not be read in full is named on the console.
 
 ### XML
 
@@ -741,7 +733,7 @@ Exports are not always well-formed: some carry control characters XML does not a
 copied from the event data. XML and EVTXtract input are parsed leniently: the offending
 characters are dropped and the rest of the file is read normally. When that happens
 Zircolite warns with the number of errors and the line of the first one, and treats the
-file as not read in full, so `--remove-events` keeps it.
+file as not read in full.
 
 ### EVTXtract
 
@@ -839,7 +831,7 @@ The **inner** format is auto-detected where possible.
 | `.gz` | gzip | Standard library; inner format from the filename, e.g. `logs.json.gz` |
 | `.bz2` | bzip2 | Standard library; inner format from the filename |
 | `.zip` | ZIP | Single-file only; inner format from the member name. Encrypted archives need `--archive-password` |
-| `.7z` | 7-Zip | Requires `py7zr`. Single-file only; inner format from the member name. Encrypted archives need `--archive-password` |
+| `.7z` | 7-Zip | Requires `py7zr`. Single-file only (directories inside do not count); inner format from the member name. Encrypted archives need `--archive-password` |
 
 Archives must contain **exactly one file**. For `.zip` and `.7z`, Zircolite opens the
 archive to read the member name and a sample; when it is password-protected and no
@@ -876,13 +868,12 @@ Without `--unified-db` each input gets its own database, named after it
 (`output_<input name>.db`, see the note under [Output](#output)),
 and a folder of several files needs `--no-parallel` as well. Point `--db-input` at the
 directory holding them to run the rules over all of them.
-Inputs sharing a basename receive distinct numbered export names; generated names
-are also checked against names already assigned to other inputs.
+Inputs sharing a basename, even with different letter case, receive distinct
+numbered export names.
 
-An unreadable database or one without a `logs` table is skipped and kept on disk even
-with `--remove-events`. If another database can be analysed, the run continues and its
-performance report marks the skipped input as failed and the run as partial. If none
-can be analysed, the command exits with code `1`.
+An unreadable database or one without a `logs` table is skipped. If another database
+can be analysed, the run continues and its performance report marks the skipped input
+as failed and the run as partial. If none can be analysed, the command exits with code `1`.
 
 #### Database indexes
 
@@ -1403,7 +1394,7 @@ To build the image yourself: `docker build . -t <image name>`.
 
 | Issue | What to try |
 |-------|-------------|
-| **Wrong format detected** | `--no-auto-detect` plus an explicit format flag |
+| **Wrong format detected** | Pass an explicit format flag |
 | **Missing or wrong timestamp field** | `--timefield "FieldName"` |
 | **No detections** | Make sure the ruleset matches the log source. The default `rules_windows_merged.json` covers Sysmon and the generic Windows channels; `rules_windows_sysmon.json` and `rules_windows_generic.json` each match only their own. Then check that your field names match what the rules expect. |
 | **Out of memory on large datasets** | `--no-parallel`, `--no-auto-mode`, or a lower `--parallel-workers` |

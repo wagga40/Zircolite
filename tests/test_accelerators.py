@@ -240,8 +240,7 @@ def test_row_building_binds_missing_fields_as_null_and_merges_case_variants():
     assert _build_rows(collided, ("EventID",), frozenset(("EventID", "eventid")), False) == [(4688,), (1,)]
 
 
-@pytest.mark.parametrize("hashes", [False, True])
-def test_cython_ingestion_matches_python_with_transforms(tmp_path, hashes):
+def test_cython_ingestion_matches_python_with_transforms(tmp_path):
     native("zircolite._flatten_native")
     events = [
         {"Event": {"System": {"EventID": 1, "Channel": "Microsoft-Windows-Sysmon/Operational"},
@@ -253,7 +252,7 @@ def test_cython_ingestion_matches_python_with_transforms(tmp_path, hashes):
     args = argparse.Namespace(all_transforms=True, transform_categories=None)
     results = []
     for backend in ("python", "cython"):
-        processor = StreamingEventProcessor(CONFIG, args, ProcessingConfig(flatten_backend=backend, hashes=hashes))
+        processor = StreamingEventProcessor(CONFIG, args, ProcessingConfig(flatten_backend=backend))
         rows = [processor._flatten_event(deepcopy(event), "events.json") for event in events]
         with closing(sqlite3.connect(":memory:", isolation_level=None)) as conn:
             processor.create_initial_table(conn)

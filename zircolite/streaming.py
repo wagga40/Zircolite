@@ -51,12 +51,10 @@ from .formats import (
 )
 from .jsonstream import iter_json_array
 from .shutdown import is_shutdown_requested
-from .sqlscan import lossless_table_schema
 from .utils import (
     _EXCLUDED_SENTINEL,
     COMPRESSED_SUFFIXES,
     load_field_mappings,
-    lossless_numeric_scalar,
     open_maybe_compressed,
     parse_timestamp,
     sniff_csv_delimiter,
@@ -368,10 +366,9 @@ def marks_degraded(label: str):
     """Wrap a reader so aborting mid-file is recorded, not merely logged.
 
     A reader that catches, logs and returns leaves every caller believing the
-    file was read to the end: the event count looks healthy, the path never
-    reaches ``failed_files``, and ``--remove-events`` then deletes the only copy
-    of a log nothing ever finished analysing. Marking the run degraded is what
-    keeps that file on disk.
+    file was read to the end: the event count looks healthy and the file is
+    reported as complete. Marking the run degraded is what makes it show up as
+    partial in the performance report and in parallel-mode errors.
 
     Every reader is wrapped, so a new one inherits the guarantee rather than
     having to remember it. ``stream_evtx_events`` handles its own errors first
@@ -617,8 +614,6 @@ class StreamingEventProcessor:
         "_last_insert_columns",
         "_last_insert_stmt",
         "_last_sorted_columns",
-        "_lossless_columns",
-        "_pending_lossless_columns",
         # Path resolution cache – maps (raw_field_name, last_part) to resolved
         # (raw_name, mapped_key) or _EXCLUDED_SENTINEL; avoids repeated
         # exclusion/mapping lookups per leaf
@@ -659,8 +654,8 @@ class StreamingEventProcessor:
         "field_split_list",
         "field_types",
         "flattening_info",
-        "hashes",
         "logger",
+        "rounded_integer_fields",
         # EVTX parsing strictness
         "strict_evtx",
         "time_field",
@@ -701,7 +696,6 @@ class StreamingEventProcessor:
         self.logger = logger or logging.getLogger(__name__)
         self.config_file = config_file
         self.time_field = proc.time_field
-        self.hashes = proc.hashes
         self.args_config = args_config
         self.batch_size = proc.batch_size
         kernel = select_flatten_kernel(proc.flatten_backend)
@@ -735,8 +729,8 @@ class StreamingEventProcessor:
         # matching. NOCASE on an INTEGER column costs nothing: numeric equality
         # and range comparisons are unaffected.
         self.field_types: dict = {}
-        self._pending_lossless_columns: set[str] = set()
-        self._lossless_columns: set[str] = set()
+        # Fields that held an integer SQLite can only store as REAL
+        self.rounded_integer_fields: set[str] = set()
         # Leaf keys already passed through schema bookkeeping. Shares the
         # lifetime of discovered_fields (never cleared mid-instance).
         self._seen_leaf_keys: set = set()
@@ -795,11 +789,13 @@ class StreamingEventProcessor:
         self._filtering_enabled = (
             self._filtering_enabled and self._event_filter_config_enabled
         )
-        if self._filtering_enabled and self._transforms_change_filter_fields():
-            self._filtering_enabled = False
-            self.logger.info(
-                "[+] Event filter disabled: active transforms can change Channel or EventID"
-            )
+        if self._filtering_enabled:
+            writer = self._filter_field_writer()
+            if writer is not None:
+                self._filtering_enabled = False
+                self.logger.info(
+                    f"[+] Event filter disabled: {writer} can change Channel or EventID"
+                )
 
         # Timestamp auto-detection state
         self._detected_time_field = None
@@ -975,17 +971,34 @@ class StreamingEventProcessor:
                    if self.enabled_transforms_set is not None else spec.enabled)
         return enabled and (self._ignore_source_condition or self.chosen_input in spec.source_condition)
 
-    def _transforms_change_filter_fields(self) -> bool:
-        """Raw Channel/EventID bounds are unsafe when a transform can rewrite them."""
+    def _filter_field_writer(self) -> str | None:
+        """Name the configured field that can write Channel/EventID, if any.
+
+        The filter reads Channel and EventID from their configured source paths.
+        It is decided once here, from the configuration: a mapping from another
+        path, an alias or a transform that writes either column makes those
+        paths unreliable, so the filter is turned off rather than consulted.
+        """
         filter_columns = {"channel", "eventid"}
+        source_paths = {
+            "channel": {".".join(path) for path in self._channel_field_paths},
+            "eventid": {".".join(path) for path in self._eventid_field_paths},
+        }
+        for raw, mapped in self.field_mappings.items():
+            column = str(mapped).lower()
+            if column in filter_columns and raw not in source_paths[column]:
+                return f"the mapping '{raw}' -> '{mapped}'"
+        for raw, alias in self.aliases.items():
+            if str(alias).lower() in filter_columns:
+                return f"the alias '{raw}' -> '{alias}'"
         for name, specs in self._transforms_baked.items():
             if any(spec.alias and spec.alias_name.lower() in filter_columns for spec in specs):
-                return True
+                return f"a transform on '{name}'"
             if all(spec.alias for spec in specs):
                 continue
             # A transform can be named by a raw path or its mapped field. An
             # ordinary alias also receives a non-alias transform's new value.
-            for raw in {name, *self.field_mappings, *self.aliases, *self.field_split_list}:
+            for raw in {name, *self.field_mappings, *self.aliases}:
                 mapped = self.field_mappings.get(raw)
                 # Any suffix can be a literal leaf key containing dots.
                 parts = raw.split(".")
@@ -996,13 +1009,10 @@ class StreamingEventProcessor:
                 for mapped in mapped_names:
                     if name not in (raw, mapped):
                         continue
-                    # Split output names depend on the transformed value.
-                    if raw in self.field_split_list or mapped in self.field_split_list:
-                        return True
                     outputs = (name, mapped, self.aliases.get(raw), self.aliases.get(mapped))
                     if any(column is not None and column.lower() in filter_columns for column in outputs):
-                        return True
-        return False
+                        return f"a transform on '{name}'"
+        return None
 
     def _resolve_file_transforms(self):
         """Resolve python_file transforms by loading code from external files.
@@ -1219,95 +1229,9 @@ class StreamingEventProcessor:
         should_process = self.event_filter.should_process_event(channel, eventid)
 
         if not should_process:
-            # Configured paths are hints, not the columns the flattener writes.
-            # Before discarding an event, include every possible writer of those
-            # columns (mappings, aliases, splits and otherwise unknown nesting).
-            channel, eventid = self._filter_output_values(event_dict)
-            should_process = self.event_filter.should_process_event(channel, eventid)
-
-        if not should_process:
             self._events_filtered_count += 1
 
         return should_process
-
-    def _filter_output_values(self, event_dict: dict) -> tuple:
-        """Conservative bounds on the flattened Channel/EventID columns.
-
-        Only called for an event the fast path would discard. Disagreement or
-        an unusable value leaves that column unbounded, since traversal order
-        and case-variant column merging can decide which writer wins. Active
-        transforms affecting these columns already disable early filtering.
-        """
-        # Match the normalization performed immediately before the kernel:
-        # unnamed Data also supplies a Message field, either of which can map
-        # to a filter column. This operation is idempotent.
-        _join_unnamed_event_data(event_dict)
-        values: dict[str, Any] = {}
-        ambiguous: set[str] = set()
-
-        def record(name, value):
-            name = name.lower()
-            if name not in ("channel", "eventid") or name in ambiguous:
-                return
-            normalized = (_channel_filter_value(value) if name == "channel"
-                          else _eventid_filter_value(value))
-            if normalized is None or (name in values and values[name] != normalized):
-                ambiguous.add(name)
-                values.pop(name, None)
-            else:
-                values[name] = normalized
-
-        # The kernel adds these after filtering. Their values are not available
-        # here, so a mapping/alias from metadata must leave its target unbounded.
-        metadata_fields = ["OriginalLogfile"]
-        if self.hashes:
-            metadata_fields.append("OriginalLogLinexxHash")
-        for path in metadata_fields:
-            resolved = self._resolve_path(path, path)
-            if resolved is _EXCLUDED_SENTINEL:
-                continue
-            _, column = resolved
-            record(column, None)
-            for name in (column, path):
-                alias = self.aliases.get(name)
-                if alias is not None:
-                    record(alias, None)
-            if self.field_split_list.get(path) or self.field_split_list.get(column):
-                return None, None
-
-        stack = [(event_dict, "")]
-        while stack:
-            node, prefix = stack.pop()
-            for leaf, value in node.items():
-                path = f"{prefix}.{leaf}" if prefix else leaf
-                if isinstance(value, dict):
-                    stack.append((value, path))
-                    continue
-                resolved = self._resolve_path(path, leaf)
-                if resolved is _EXCLUDED_SENTINEL:
-                    continue
-                _, column = resolved
-                if isinstance(value, list):
-                    value = str(value)
-                elif isinstance(value, bool):
-                    value = "true" if value else "false"
-                if value in self.useless_values:
-                    continue
-                record(column, value)
-                for name in (column, path):
-                    alias = self.aliases.get(name)
-                    if alias is not None:
-                        record(alias, value)
-                split = self.field_split_list.get(path) or self.field_split_list.get(column)
-                if split:
-                    try:
-                        for pair in value.split(split["separator"]):
-                            key, found, item = pair.partition(split["equal"])
-                            if found:
-                                record(key, item)
-                    except (AttributeError, KeyError, ValueError, TypeError):
-                        return None, None
-        return values.get("channel"), values.get("eventid")
 
     @property
     def events_filtered_count(self) -> int:
@@ -1353,8 +1277,8 @@ class StreamingEventProcessor:
     def ingest_degraded(self) -> bool:
         """Whether the last file failed to ingest fully.
 
-        Used to decide whether --remove-events may delete the source: a file
-        Zircolite could not read in full must survive the run.
+        A file Zircolite could not read in full is reported as partial, never
+        as a clean run with fewer events.
         """
         return self._had_parse_error or (self._skipped_records > 0)
 
@@ -1369,7 +1293,7 @@ class StreamingEventProcessor:
 
         Recovery drops the offending characters or markup and carries on, so
         the records around an error arrive incomplete rather than missing. The
-        file is marked degraded, which also keeps --remove-events off it.
+        file is marked degraded.
         """
         from lxml import etree  # type: ignore[attr-defined]
 
@@ -1434,9 +1358,9 @@ class StreamingEventProcessor:
                 )
             return param
 
-    def _flatten_event(self, event_dict: dict, filename: str, raw_bytes: bytes | None = None) -> dict | None:
+    def _flatten_event(self, event_dict: dict, filename: str) -> dict | None:
         _join_unnamed_event_data(event_dict)
-        return self._flatten_impl(self, event_dict, filename, raw_bytes)
+        return self._flatten_impl(self, event_dict, filename)
 
     def stream_evtx_events(self, evtx_file: str) -> Generator[dict, None, None]:
         """Stream and flatten events from an EVTX file (supports .evtx inside .gz/.bz2/.zip/.7z)."""
@@ -1490,8 +1414,7 @@ class StreamingEventProcessor:
                     if not should_process(event_dict):
                         continue
 
-                    raw_bytes = raw_data.encode("utf-8") if self.hashes and isinstance(raw_data, str) else raw_data if self.hashes else None
-                    flattened = flatten(event_dict, filename, raw_bytes)
+                    flattened = flatten(event_dict, filename)
                     if flattened:
                         yield flattened
                 except Exception as e:
@@ -1550,7 +1473,7 @@ class StreamingEventProcessor:
                     # Early filter check before expensive flattening
                     if not should_process(event_dict):
                         continue
-                    flattened = flatten(event_dict, filename, line)
+                    flattened = flatten(event_dict, filename)
                     if flattened:
                         yield flattened
                 except Exception as exc:
@@ -1598,8 +1521,7 @@ class StreamingEventProcessor:
                                     del elem.getparent()[0]
                                 continue
 
-                            raw_bytes = etree.tostring(elem) if self.hashes else None
-                            flattened = flatten(event_dict, filename, raw_bytes)
+                            flattened = flatten(event_dict, filename)
                             if flattened:
                                 yield flattened
                     except Exception as exc:
@@ -1661,7 +1583,7 @@ class StreamingEventProcessor:
                     # Early filter check before expensive flattening
                     if not should_process(event_dict):
                         continue
-                    flattened = flatten(event_dict, filename, line.encode("utf-8"))
+                    flattened = flatten(event_dict, filename)
                     if flattened:
                         yield flattened
                 except Exception as exc:
@@ -1724,7 +1646,7 @@ class StreamingEventProcessor:
                     # CSV rows are already flat dicts, check filter on them directly
                     if not should_process(row):
                         continue
-                    flattened = flatten(row, filename, None)
+                    flattened = flatten(row, filename)
                     if flattened:
                         yield flattened
                 except Exception as exc:
@@ -1779,7 +1701,7 @@ class StreamingEventProcessor:
                         # Early filter check before expensive flattening
                         if not should_process(event_dict):
                             continue
-                        flattened = flatten(event_dict, filename, None)
+                        flattened = flatten(event_dict, filename)
                         if flattened:
                             yield flattened
                 except Exception as exc:
@@ -1811,7 +1733,7 @@ class StreamingEventProcessor:
             try:
                 if not should_process(event_dict):
                     return None
-                return flatten(event_dict, filename, None)
+                return flatten(event_dict, filename)
             except Exception as exc:
                 self._note_skipped_record(json_file, exc)
                 return None
@@ -1926,8 +1848,7 @@ class StreamingEventProcessor:
         except Exception as e:
             if inserted_count == 0:
                 raise
-            # The committed rows stay, but the file was not read to the end:
-            # --remove-events must not treat this as a completed ingest.
+            # The committed rows stay, but the file was not read to the end
             self._had_parse_error = True
             self.logger.error(
                 f"[red]    [-] Partial ingest of {literal(os.path.basename(log_file))}: "
@@ -1942,8 +1863,8 @@ class StreamingEventProcessor:
     def _insert_batch(self, db_connection, cursor, batch: list[dict]):
         """Insert a batch of events into the database with dynamic schema handling.
 
-        Large-integer normalization is handled upstream in ``_flatten_event``,
-        so no per-value type check is needed here.
+        Values arrive already normalized by ``_flatten_event``, so no
+        per-value type check is needed here.
         """
         if not batch:
             return
@@ -1980,11 +1901,6 @@ class StreamingEventProcessor:
         else:
             all_columns = self._last_sorted_columns
 
-        # Rare mixed numeric/oversized-integer columns need affinity removed
-        # before SQLite sees their decimal strings, including across batches.
-        if self._pending_lossless_columns:
-            self._preserve_integer_precision(db_connection, cursor)
-
         # Check if we need to update schema or INSERT statement
         schema_changed = self._ensure_columns_exist_cached(
             db_connection, cursor, all_columns
@@ -2005,10 +1921,6 @@ class StreamingEventProcessor:
             self._last_insert_columns = all_columns
 
         rows = _build_rows(batch, all_columns, all_columns_frozen, extra_columns is None)
-        if self._lossless_columns:
-            numeric_positions = {i for i, col in enumerate(all_columns) if col.lower() in self._lossless_columns}
-            rows = [tuple(lossless_numeric_scalar(value) if i in numeric_positions else value
-                          for i, value in enumerate(row)) for row in rows]
 
         # Execute batch insert with transaction
         try:
@@ -2019,78 +1931,6 @@ class StreamingEventProcessor:
             db_connection.execute("ROLLBACK")
             self.logger.debug(f"Batch insert error: {e}")
             raise
-
-    def _note_large_integer(self, key: str) -> None:
-        """An oversized integer must stay text even after a numeric first value."""
-        canonical = self.discovered_fields.get(key.lower())
-        if key.lower() in self._lossless_columns:
-            return
-        # A fresh processor may encounter an existing numeric column for the
-        # first time. Inspect the actual table even when local discovery is empty.
-        self._pending_lossless_columns.add(key.lower())
-        if canonical and self.field_types[canonical] in (
-            "INTEGER COLLATE NOCASE", "NUMERIC COLLATE NOCASE",
-        ):
-            self.field_types[canonical] = "BLOB_NUMERIC COLLATE NOCASE"
-            self._lossless_columns.add(key.lower())
-
-    def _preserve_integer_precision(self, db_connection, cursor) -> None:
-        """Rebuild only when an already-created numeric column needs mixed storage.
-
-        BLOB affinity leaves both native numbers and decimal text untouched.
-        Copy existing values without CAST, preserving signed 64-bit integers.
-        The ingestion schema, indexes and triggers survive the transaction.
-        """
-        cursor.execute("PRAGMA table_info(logs)")
-        columns = cursor.fetchall()
-        affected = {
-            name.lower() for _, name, typ, *_ in columns
-            if name.lower() in self._pending_lossless_columns
-            and typ.upper() in ("INTEGER", "NUMERIC")
-        }
-        if affected:
-            for name in affected:
-                canonical = self.discovered_fields.get(name, name)
-                self.field_types[canonical] = "BLOB_NUMERIC COLLATE NOCASE"
-            cursor.execute("SELECT sql FROM sqlite_master WHERE type='table' AND name='logs'")
-            schema = lossless_table_schema(cursor.fetchone()[0], affected)
-            cursor.execute(
-                "SELECT sql FROM sqlite_master WHERE tbl_name='logs' "
-                "AND type IN ('index', 'trigger') AND sql IS NOT NULL"
-            )
-            dependents = [row[0] for row in cursor.fetchall()]
-            # This table belongs to the processor and has an AUTOINCREMENT key.
-            cursor.execute("SELECT seq FROM sqlite_sequence WHERE name='logs'")
-            sequence = cursor.fetchone()
-            names = ", ".join(_quote_identifier(row[1]) for row in columns)
-            # During the drop/rename interval views and external triggers can
-            # temporarily reference a missing logs table. Legacy rename skips
-            # that transient validation without rewriting those references.
-            cursor.execute("PRAGMA legacy_alter_table")
-            legacy_rename = cursor.fetchone()[0]
-            cursor.execute("PRAGMA legacy_alter_table=ON")
-            cursor.execute("SAVEPOINT preserve_integer_precision")
-            try:
-                cursor.execute('CREATE TABLE "_zircolite_lossless_logs" ' + schema[schema.index("("):])
-                cursor.execute(
-                    f'INSERT INTO "_zircolite_lossless_logs" ({names}) SELECT {names} FROM logs'  # noqa: S608 -- quoted column names
-                )
-                cursor.execute("DROP TABLE logs")
-                cursor.execute('ALTER TABLE "_zircolite_lossless_logs" RENAME TO logs')
-                if sequence:
-                    cursor.execute("UPDATE sqlite_sequence SET seq=? WHERE name='logs'", sequence)
-                for statement in dependents:
-                    cursor.execute(statement)
-                cursor.execute("RELEASE preserve_integer_precision")
-            except BaseException:
-                cursor.execute("ROLLBACK TO preserve_integer_precision")
-                cursor.execute("RELEASE preserve_integer_precision")
-                raise
-            finally:
-                cursor.execute(f"PRAGMA legacy_alter_table={int(legacy_rename)}")
-            self._last_insert_columns = None
-            self._lossless_columns.update(affected)
-        self._pending_lossless_columns.clear()
 
     def _ensure_columns_exist_cached(
         self, db_connection, cursor, columns: tuple
@@ -2104,9 +1944,7 @@ class StreamingEventProcessor:
         # Initialize cache if needed
         if self._db_columns is None:
             cursor.execute("PRAGMA table_info(logs)")
-            schema_columns = cursor.fetchall()
-            self._db_columns = {row[1].lower() for row in schema_columns}
-            self._lossless_columns = {row[1].lower() for row in schema_columns if row[2].upper() == "BLOB_NUMERIC"}
+            self._db_columns = {row[1].lower() for row in cursor.fetchall()}
 
         db_columns = self._db_columns
         schema_changed = False
@@ -2155,9 +1993,7 @@ class StreamingEventProcessor:
             # Refresh column cache from actual table state – handles both
             # freshly created tables and reused tables (DELETE FROM path).
             cursor.execute("PRAGMA table_info(logs)")
-            schema_columns = cursor.fetchall()
-            self._db_columns = {row[1].lower() for row in schema_columns}
-            self._lossless_columns = {row[1].lower() for row in schema_columns if row[2].upper() == "BLOB_NUMERIC"}
+            self._db_columns = {row[1].lower() for row in cursor.fetchall()}
             self._last_insert_stmt = None
             self._last_insert_columns = None
             self._last_column_frozenset = frozenset()

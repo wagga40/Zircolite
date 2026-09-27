@@ -53,32 +53,19 @@ Transforms run before splitting, so a transform that *replaces* a value (rather 
 writing an alias) changes what the split then parses. Splitting writes its derived fields
 directly, so aliases do not apply to them.
 
-The early filter is bypassed when active transforms can write Channel or EventID,
-including through mappings and aliases: the raw values cannot safely bound the values
-that SQL will see. Replacement transforms feeding split fields also bypass the filter
-because their output can name those columns. Unrelated and inactive transforms do not
-disable it.
+The early filter reads Channel and EventID from their configured source paths. It is
+turned off at startup when a mapping from another path, an alias or an active transform
+can write either column (see [Early event filtering](Advanced.md#early-event-filtering)).
 
 Database columns are added as new fields are discovered, and events are inserted in
-batches. Integers outside SQLite's signed 64-bit range, including integer strings,
-are stored as decimal text.
-If a column was already numeric, its affinity is removed before inserting such a
-value: existing numbers stay numeric and oversized integers stay exact text. When
-earlier batches have created the column, this requires a transactional table rebuild
-that preserves its indexes, triggers and row IDs. Ordinary numeric columns are unchanged.
-These mixed columns use the persisted `BLOB_NUMERIC` declaration (no SQLite affinity).
-Ordinary numeric strings still convert to native numbers during ingestion. In
-single-table rules, direct column/scalar comparisons, `IN` and `BETWEEN` use an exact
-numeric comparator for mixed columns, including after a database export and reload.
-Both quoted and unquoted oversized integer literals compare without rounding; NULL
-and nonnumeric values retain SQLite's comparison and collation behavior. Function or
-arithmetic operands, joins, subqueries and queries executed directly in another SQLite
-client retain SQLite's native mixed-storage semantics. Databases already containing
-rounded values must be rebuilt from the original inputs to recover their precision.
+batches. A column takes its type from the first value it receives: `INTEGER` for integers,
+`NUMERIC` for floats, so ranges compare numerically, and `TEXT` otherwise. Integers
+outside SQLite's signed 64-bit range are stored as floating-point numbers and may be
+rounded, which is also what JSONL parsing produces; the run warns once and names the
+affected fields.
 
-XML entity rewriting leaves CDATA, comments and processing instructions intact, even
-when their delimiters cross read boundaries. XML and EVTXtract readers skip annotations
-between records and continue with the next event.
+XML entity rewriting leaves CDATA, comments and processing instructions intact. XML and
+EVTXtract readers skip comments and processing instructions between records.
 
 JSON arrays are validated incrementally, including delimiters and the closing
 bracket. The optional `ijson` backend accelerates parsing; its numeric values are
@@ -86,8 +73,8 @@ normalized to Python integers and floats before insertion. ZIP members stream fr
 the archive, and 7-Zip members spool to automatically removed temporary files.
 Compressed file size never selects an unbounded full-load array path.
 
-CSV detection and ingestion share the platform's largest supported field-size limit,
-so a field exceeding Python's default 131,072-character limit does not discard later records.
+CSV detection and ingestion raise the field-size limit to the largest the platform
+supports, well past Python's default of 131,072 characters.
 
 Only transforms enabled for the selected source and CLI selection are compiled.
 Immutable bytecode is cached by source; function namespaces remain local to each
@@ -99,12 +86,11 @@ complete header is known. Summaries retain counts and metadata, while templates,
 packaging and library callers requesting `keep_results` retain complete matches.
 `execute_ruleset` additionally accepts `result_sink` and `stream_results`; sinks must
 consume the temporary row iterator during the callback. Public `execute_rule` and
-`execute_select_query` still return ordinary dictionaries and lists.
+`execute_select_query` return ordinary dictionaries and lists.
 
-When a rule has multiple SQL statements, matches with an integer `row_id` are counted
-once across those statements before applying `--limit`, in first-match order. Equal
-payloads with different row IDs remain distinct. Projections without event IDs retain
-their individual rows. A failed statement rolls back both its rows and its newly seen IDs.
+When a rule has multiple SQL statements, an event matched by several of them is kept
+once, identified by its `row_id`, before `--limit` applies. Rows without a `row_id`, such
+as aggregate projections, are kept as they are.
 
 ## Rule execution
 
@@ -513,10 +499,8 @@ same pattern is evaluated against every row.
 
 ### Typing and collation
 
-Columns normally use `TEXT` or `INTEGER` with `COLLATE NOCASE`, which affects text
-comparison without changing numeric equality or ranges. Numeric columns that receive
-oversized integers use the no-affinity `BLOB_NUMERIC` declaration described under
-[Event processing pipeline](#event-processing-pipeline).
+Columns use `INTEGER`, `NUMERIC` or `TEXT` with `COLLATE NOCASE`, which affects text
+comparison without changing numeric equality or ranges.
 
 Because every column is already `NOCASE`, a ruleset converted with the backend's
 `collate_nocase` option (`Channel='Security' COLLATE NOCASE`) compares exactly as the bare

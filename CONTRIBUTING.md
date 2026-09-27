@@ -126,8 +126,8 @@ with no matches:
 
 - Never swallow an exception into an empty result. If a rule cannot run, record
   it (`ZircoliteCore._note_broken_rule`) so it reaches the run summary.
-- If a reader cannot finish a file, mark the run degraded. `--remove-events`
-  deletes source files, and it spares only those reported as failed.
+- If a reader cannot finish a file, mark the run degraded, so the file is
+  reported as partial rather than as a clean run with fewer events.
 - The early event filter (`EventFilter` in `zircolite/rules.py`) must retain
   events when a bound is uncertain, so it cannot discard potential detections.
 - Parse rule SQL with `zircolite/sqlscan.py`, never with a regex. Field names

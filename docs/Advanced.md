@@ -78,9 +78,8 @@ file** — so with the shipped `config/config.yaml` that is `config/transforms/`
 `-c /opt/zircolite/my.yaml` it is `/opt/zircolite/transforms/`. An absolute path works
 too.
 
-Transforms run once for each configured field name. A raw name that is already the
-mapped name does not run its transform list twice. If distinct lists are configured for
-both names, the mapped-name list runs first, then the raw-name list.
+Transforms run once for each configured field name. If distinct lists are configured for
+the raw and the mapped name, the mapped-name list runs first, then the raw-name list.
 
 ### Writing transform functions
 
@@ -422,14 +421,14 @@ rules query. When an event carries several of those fields with different values
 top-level `Channel` next to `winlog.channel`, say), the flattener decides which one lands
 in the column, so the filter treats the value as unusable and keeps the event.
 
-Early filtering is also disabled for an input when its active transforms can replace
-Channel or EventID, including through a field mapping or an alias. For example, a
-transform that strips spaces from `" Security "` must run before a rule tests
-`Channel='Security'`. A replacement transform feeding a split field also disables the
-filter, since the transformed text determines which columns the split creates.
-Disabled transforms, transforms for another input type and
-transforms affecting only unrelated fields leave early filtering available. Rules still
-run their full SQL conditions against the transformed events.
+Whether those paths can be trusted is decided once, from the configuration. The filter
+is turned off, with a log line naming the cause, when a mapping from another path, an
+alias or an active transform can write Channel or EventID: a transform that strips spaces
+from `" Security "`, for example, must run before a rule tests `Channel='Security'`.
+Disabled transforms, transforms for another input type and transforms on unrelated
+fields leave the filter on. Split keys and unmapped nested fields that happen to be
+named Channel or EventID are not considered; use `--no-event-filter` if your data
+relies on them.
 
 > [!IMPORTANT]
 > The filter only engages when the ruleset yields usable Channel or EventID bounds.
@@ -528,8 +527,6 @@ Several options keep the data behind the detections:
   and find things the rules did not. In per-file mode each input gets its own file.
 - `--keepflat` saves the flattened events as JSONL — only the events actually processed
   (see [the streaming pipeline](#the-streaming-pipeline)).
-- `--hashes` adds an xxhash64 of the original log line to each event, for deduplication
-  and tracking.
 - **Indexes** can speed up database queries. `--add-index`, `--remove-index` and
   `--auto-index` are covered in [Usage → Database indexes](Usage.md#database-indexes).
 
@@ -578,9 +575,9 @@ python3 zircolite.py --evtx logs/ --ruleset rules/rules_windows_merged.json \
 - The value must be `YYYY-MM-DDTHH:MM:SS`, 24-hour.
 - The filter reads the field named by `--timefield` (`SystemTime` by default), falling
   back to the auto-detected timestamp field when that one is absent.
-- Event timestamps are compared as instants, so epoch seconds or milliseconds, a trailing
-  `Z`, an explicit UTC offset and a space instead of `T` are all understood.
-- Numeric epoch `0` means `1970-01-01T00:00:00Z` and is subject to the same bounds.
+- Event timestamps are compared as instants, so epoch seconds or milliseconds (`0`
+  included), a trailing `Z`, an explicit UTC offset and a space instead of `T` are all
+  understood.
 
 ### Rule filters
 

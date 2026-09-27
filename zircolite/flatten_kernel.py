@@ -4,34 +4,18 @@ The Python module is the reference implementation. Both builds use the same
 scalar rules and keep transforms in the existing RestrictedPython sandbox.
 """
 
-import contextlib
 from typing import Any
-
-import orjson as json
-import xxhash
 
 from .utils import _EXCLUDED_SENTINEL, _normalize_scalar, is_oversized_integer, parse_timestamp
 
 
-def flatten_event(
-    self, event_dict: dict, filename: str, raw_bytes: bytes | None = None
-) -> dict | None:
+def flatten_event(self, event_dict: dict, filename: str) -> dict | None:
     """
     Flatten a single event dictionary and track discovered fields.
     Returns flattened dict or None if filtered out.
     """
     # Add metadata
     event_dict["OriginalLogfile"] = filename
-    if self.hashes:
-        # CSV, EVTXtract and JSON-array rows never reach here with a source
-        # line: the readers hand over a parsed record. Hashing a canonical
-        # form of that record keeps --hashes meaningful for every format
-        # rather than silently producing no column at all for three of them.
-        if raw_bytes is None:
-            with contextlib.suppress(TypeError, json.JSONEncodeError):
-                raw_bytes = json.dumps(event_dict, option=json.OPT_SORT_KEYS)
-        if raw_bytes:
-            event_dict["OriginalLogLinexxHash"] = xxhash.xxh64_hexdigest(raw_bytes)
 
     # Cache references for hot loop (local vars are faster than attribute access)
     useless_values = self.useless_values
@@ -59,6 +43,7 @@ def flatten_event(
         if cached is _sentinel:
             return
         raw_field_name, mapped_key = cached  # type: ignore[misc]
+        value: Any
         if isinstance(obj, list):
             value = str(obj)
         elif obj is True or obj is False:
@@ -75,11 +60,11 @@ def flatten_event(
         # rule, or active transform. They only need a value assignment plus a
         # one-time column-type record, so they skip the lookups below.
         if key not in special_fields and raw_field_name not in special_fields:
-            # Past SQLite's INTEGER range the value has to go in as text
             is_int = isinstance(value, int)
-            if is_oversized_integer(value):
-                self._note_large_integer(key)
-                value = str(value)
+            if isinstance(value, int) and not -(1 << 63) <= value < (1 << 63):
+                # Past SQLite's INTEGER range; stored as REAL, like orjson reads it
+                self.rounded_integer_fields.add(key)
+                value = float(value)
                 is_int = False
             json_line[key] = value
             if key not in seen_leaf_keys:
@@ -149,8 +134,6 @@ def flatten_event(
                     k, found, v = split_field.partition(equal_sign)
                     if not found:
                         continue
-                    if is_oversized_integer(v):
-                        self._note_large_integer(k)
                     json_line[k] = v
                     if k not in seen_leaf_keys:
                         key_lower = k.lower()
@@ -175,7 +158,7 @@ def flatten_event(
             else:
                 final_value = value
             if is_oversized_integer(final_value):
-                self._note_large_integer(k)
+                self.rounded_integer_fields.add(k)
             final_value = _normalize_scalar(final_value)
             json_line[k] = final_value
             if k not in seen_leaf_keys:

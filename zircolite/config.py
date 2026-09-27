@@ -27,7 +27,6 @@ class ProcessingConfig:
     time_field: str | None = None
 
     # Processing options
-    hashes: bool = False
     disable_progress: bool = False
 
     # Database options

@@ -107,7 +107,6 @@ class TestProcessingConfig:
 
         assert config.unified_db is False
         assert config.auto_mode is True
-        assert config.hashes is False
         assert config.limit == -1
         assert config.time_field == "SystemTime"
         assert config.strict_evtx is False

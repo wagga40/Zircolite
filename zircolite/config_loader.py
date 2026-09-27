@@ -83,12 +83,10 @@ class YamlProcessingConfig:
     """Configuration for processing options."""
     unified_db: bool = False
     auto_mode: bool = True
-    hashes: bool = False
     limit: int = DEFAULT_LIMIT
     time_field: str = DEFAULT_TIME_FIELD
     event_filter_enabled: bool = True  # Enable event filtering based on channel/eventID
     debug: bool = False
-    remove_events: bool = False
     all_transforms: bool = False
     transform_categories: list | None = None
     add_index: list[str] | None = None
@@ -286,12 +284,10 @@ class ConfigLoader:
             config.processing = YamlProcessingConfig(
                 unified_db=proc.get('unified_db', False),
                 auto_mode=proc.get('auto_mode', True),
-                hashes=proc.get('hashes', False),
                 limit=proc.get('limit', DEFAULT_LIMIT),
                 time_field=proc.get('time_field', DEFAULT_TIME_FIELD),
                 event_filter_enabled=proc.get('event_filter_enabled', True),
                 debug=proc.get('debug', False),
-                remove_events=proc.get('remove_events', False),
                 all_transforms=proc.get('all_transforms', False),
                 transform_categories=proc.get('transform_categories'),
                 add_index=proc.get('add_index'),
@@ -606,9 +602,6 @@ processing:
   # SQLite always evaluates the original predicates on the candidate rows.
   rule_prefilter: auto  # auto, 'off' or literal (force construction)
 
-  # Add an xxhash64 of the original log line to every event
-  hashes: false
-
   # Discard results from any rule matching more than this many events, which
   # keeps a single noisy rule from dominating the output. -1 disables it.
   limit: -1
@@ -624,9 +617,6 @@ processing:
 
   # Enable debug logging
   debug: false
-
-  # Delete the source log files after a successful run (use with caution!)
-  remove_events: false
 
   # Run every transform defined in config/config.yaml, ignoring its
   # enabled_transforms list
