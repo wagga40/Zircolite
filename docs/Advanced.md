@@ -80,10 +80,14 @@ file** — so with the shipped `config/config.yaml` that is `config/transforms/`
 `-c /opt/zircolite/my.yaml` it is `/opt/zircolite/transforms/`. An absolute path works
 too.
 
+Transforms run once for each configured field name. A raw name that is already the
+mapped name does not run its transform list twice. If distinct lists are configured for
+both names, the mapped-name list runs first, then the raw-name list.
+
 ### Writing transform functions
 
-The function must be named `transform` and take a single `param` — the field value,
-always a string.
+The function must be named `transform` and take a single `param` — the field value.
+Numeric fields can arrive as numbers; use `str(param)` when a transform expects text.
 
 **Available in the sandbox:** a subset of Python built-ins (`len`, `int`, `str`, …); the
 modules `re`, `base64`, `chardet` and `math`; `dict[k] = v` / `list[i] = v` writes; and
@@ -413,7 +417,7 @@ and **EventID**, so only events that could match some rule's log source are load
 `event_filter.filter_all_sources` is set. Every other format (EVTX, JSON, JSON array, CSV,
 XML and EVTXtract) goes through the filter, because any of them can carry Windows-shaped
 events. A saved database (`--db-input`) skips ingestion altogether, so it is never
-filtered. An event with no usable Channel is kept.
+filtered. In per-channel mode, an event with no usable Channel is kept.
 
 The filter runs before flattening, so it reads Channel and EventID from the raw event
 through `event_filter.channel_fields` and `eventid_fields`, not from the columns the
@@ -421,11 +425,19 @@ rules query. When an event carries several of those fields with different values
 top-level `Channel` next to `winlog.channel`, say), the flattener decides which one lands
 in the column, so the filter treats the value as unusable and keeps the event.
 
+Early filtering is also disabled for an input when its active transforms can replace
+Channel or EventID, including through a field mapping or an alias. For example, a
+transform that strips spaces from `" Security "` must run before a rule tests
+`Channel='Security'`. A replacement transform feeding a split field also disables the
+filter, since the transformed text determines which columns the split creates.
+Disabled transforms, transforms for another input type and
+transforms affecting only unrelated fields leave early filtering available. Rules still
+run their full SQL conditions against the transformed events.
+
 > [!IMPORTANT]
-> The filter only engages when the ruleset yields channels. The shipped Windows rulesets
-> bound over 99% of their rules, but **no rule in `rules_linux*.json` names a channel**, so
-> with a Linux ruleset the filter reports `disabled` and every event is processed. That is
-> correct behaviour, not a failure — there is simply nothing to filter on.
+> The filter only engages when the ruleset yields usable Channel or EventID bounds.
+> A rule can bound EventID without naming a channel. A ruleset without either bound
+> leaves the filter disabled and every event is processed.
 
 #### How the bounds are derived
 
@@ -580,6 +592,7 @@ python3 zircolite.py --evtx logs/ --ruleset rules/rules_windows_merged.json \
   back to the auto-detected timestamp field when that one is absent.
 - Event timestamps are compared as instants, so epoch seconds or milliseconds, a trailing
   `Z`, an explicit UTC offset and a space instead of `T` are all understood.
+- Numeric epoch `0` means `1970-01-01T00:00:00Z` and is subject to the same bounds.
 
 ### Rule filters
 

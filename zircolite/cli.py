@@ -90,7 +90,7 @@ from zircolite.console import literal
 from zircolite.correlations import TIMESTAMP_FORMATS
 
 # Input format registry
-from zircolite.formats import DEFAULT_EXTENSION
+from zircolite.formats import ALIAS_EXTENSIONS, DEFAULT_EXTENSION, EXTENSION_FALLBACKS
 from zircolite.performance import STAGE_LABELS, aggregate_stages, write_performance_report
 
 # Processing modes and context (from the dedicated processing module)
@@ -109,6 +109,7 @@ from zircolite.shutdown import (
     is_shutdown_requested,
     request_shutdown,
 )
+from zircolite.utils import COMPRESSED_SUFFIXES
 
 ################################################################
 # NOTE: ProcessingContext and all process_* functions live in
@@ -303,15 +304,30 @@ def discover_files(
     log_path = Path(args.evtx)
     log_list: list[Path] = []
     if log_path.is_dir():
-        pattern = args.file_pattern or f"*.{args.fileext}"
         fn_glob = log_path.rglob if not args.no_recursion else log_path.glob
-        log_list = list(fn_glob(pattern))
-        if not log_list and not explicit_ext and not args.file_pattern:
+        if args.file_pattern or explicit_ext:
+            pattern = args.file_pattern or f"*.{args.fileext}"
+            log_list = [p for p in fn_glob(pattern) if p.is_file()]
+        else:
+            spec = format_from_args(args)
+            extensions = {f".{args.fileext}"}
+            extensions.update(
+                ext for ext in ALIAS_EXTENSIONS
+                if EXTENSION_FALLBACKS[ext].format_name == spec.name
+            )
+            suffixes = tuple(
+                ext + compression
+                for ext in extensions
+                for compression in ("", *COMPRESSED_SUFFIXES)
+            )
+            candidates = [p for p in fn_glob("*") if p.is_file()]
+            log_list = [p for p in candidates if p.name.lower().endswith(suffixes)]
             # The extension is only a guess until auto-detection has run, so an
             # empty result here usually means the directory holds another
             # format. Widen to every file so detection gets something to look
-            # at; the caller re-discovers with the detected extension after.
-            log_list = [p for p in fn_glob("*") if p.is_file()]
+            # at; the caller re-discovers with the detected format's suffixes.
+            if not log_list:
+                log_list = candidates
     elif log_path.is_file():
         log_list = [log_path]
     else:
@@ -332,10 +348,19 @@ def get_input_type(args: argparse.Namespace) -> str:
 _TIMEFIELD_SANITIZE_RE = re.compile(r"[^a-zA-Z0-9]")
 
 
+def _mapped_timestamp_field(
+    field: str, config: dict | None, *, raw: bool, path: str | None = None,
+) -> str:
+    """Map raw timestamp names while preserving conventional flattened names."""
+    mapped = (config or {}).get("mappings", {}).get(path or field) if path or raw else None
+    return mapped if mapped is not None else _TIMEFIELD_SANITIZE_RE.sub("", field)
+
+
 def _apply_detection_result(
     args: argparse.Namespace,
     detection: "DetectionResult",
     logger: logging.Logger,
+    field_mappings_config: dict | None = None,
 ) -> str:
     """
     Apply a DetectionResult to the args namespace and return the input_type.
@@ -357,11 +382,12 @@ def _apply_detection_result(
         setattr(args, spec.args_flag, True)
 
     # Update timefield if detection found a timestamp and user didn't override.
-    # The streaming processor strips non-alphanumeric characters from field
-    # names (e.g. "@timestamp" → "timestamp") when storing events in SQLite,
-    # so the timefield must be sanitized the same way to match the column name.
+    # Explicit mappings take precedence over the flattener's name sanitization.
     if detection.timestamp_field and not _is_explicit(args, "timefield", "SystemTime"):
-        args.timefield = _TIMEFIELD_SANITIZE_RE.sub("", detection.timestamp_field)
+        args.timefield = _mapped_timestamp_field(
+            detection.timestamp_field, field_mappings_config,
+            raw=detection.timestamp_field_is_raw, path=detection.timestamp_field_path,
+        )
 
     return input_type
 
@@ -448,7 +474,7 @@ def auto_detect_log_type(
         )
 
     # Apply detection result to args
-    input_type = _apply_detection_result(args, detection, logger)
+    input_type = _apply_detection_result(args, detection, logger, field_mappings_config)
 
     # If detection changed the format from default, update the file extension
     # for directory scanning (re-discover files if needed)
@@ -1008,7 +1034,7 @@ def _run_processing(
             if len(file_list) != old_count:
                 logger.info(
                     f"[+] Re-discovered [yellow]{len(file_list)}[/] file(s) "
-                    f"with extension '.{new_ext}'"
+                    f"for input format '{input_type}'"
                 )
 
     ctx.time_field = args.timefield
@@ -1316,8 +1342,9 @@ def _main(memory_tracker, start_time) -> None:
             args._early_detection = _detection
             args._early_detection_files = _early_files
             if _detection.timestamp_field:
-                args.timefield = _TIMEFIELD_SANITIZE_RE.sub(
-                    "", _detection.timestamp_field
+                args.timefield = _mapped_timestamp_field(
+                    _detection.timestamp_field, _fm,
+                    raw=_detection.timestamp_field_is_raw, path=_detection.timestamp_field_path,
                 )
 
     # Load rulesets (with spinner for visual feedback during pySigma conversion)

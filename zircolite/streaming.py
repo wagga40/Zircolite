@@ -772,6 +772,11 @@ class StreamingEventProcessor:
         self._filtering_enabled = (
             self._filtering_enabled and self._event_filter_config_enabled
         )
+        if self._filtering_enabled and self._transforms_change_filter_fields():
+            self._filtering_enabled = False
+            self.logger.info(
+                "[+] Event filter disabled: active transforms can change Channel or EventID"
+            )
 
         # Timestamp auto-detection state
         self._detected_time_field = None
@@ -946,6 +951,35 @@ class StreamingEventProcessor:
         enabled = ((spec.alias_name or field_name) in self.enabled_transforms_set
                    if self.enabled_transforms_set is not None else spec.enabled)
         return enabled and (self._ignore_source_condition or self.chosen_input in spec.source_condition)
+
+    def _transforms_change_filter_fields(self) -> bool:
+        """Raw Channel/EventID bounds are unsafe when a transform can rewrite them."""
+        filter_columns = {"channel", "eventid"}
+        for name, specs in self._transforms_baked.items():
+            if any(spec.alias and spec.alias_name.lower() in filter_columns for spec in specs):
+                return True
+            if all(spec.alias for spec in specs):
+                continue
+            # A transform can be named by a raw path or its mapped field. An
+            # ordinary alias also receives a non-alias transform's new value.
+            for raw in {name, *self.field_mappings, *self.aliases, *self.field_split_list}:
+                mapped = self.field_mappings.get(raw)
+                # Any suffix can be a literal leaf key containing dots.
+                parts = raw.split(".")
+                mapped_names = (mapped,) if mapped is not None else tuple(
+                    _NON_ALNUM_RE.sub("", ".".join(parts[index:]))
+                    for index in range(len(parts))
+                )
+                for mapped in mapped_names:
+                    if name not in (raw, mapped):
+                        continue
+                    # Split output names depend on the transformed value.
+                    if raw in self.field_split_list or mapped in self.field_split_list:
+                        return True
+                    outputs = (name, mapped, self.aliases.get(raw), self.aliases.get(mapped))
+                    if any(column is not None and column.lower() in filter_columns for column in outputs):
+                        return True
+        return False
 
     def _resolve_file_transforms(self):
         """Resolve python_file transforms by loading code from external files.
@@ -1162,9 +1196,95 @@ class StreamingEventProcessor:
         should_process = self.event_filter.should_process_event(channel, eventid)
 
         if not should_process:
+            # Configured paths are hints, not the columns the flattener writes.
+            # Before discarding an event, include every possible writer of those
+            # columns (mappings, aliases, splits and otherwise unknown nesting).
+            channel, eventid = self._filter_output_values(event_dict)
+            should_process = self.event_filter.should_process_event(channel, eventid)
+
+        if not should_process:
             self._events_filtered_count += 1
 
         return should_process
+
+    def _filter_output_values(self, event_dict: dict) -> tuple:
+        """Conservative bounds on the flattened Channel/EventID columns.
+
+        Only called for an event the fast path would discard. Disagreement or
+        an unusable value leaves that column unbounded, since traversal order
+        and case-variant column merging can decide which writer wins. Active
+        transforms affecting these columns already disable early filtering.
+        """
+        # Match the normalization performed immediately before the kernel:
+        # unnamed Data also supplies a Message field, either of which can map
+        # to a filter column. This operation is idempotent.
+        _join_unnamed_event_data(event_dict)
+        values: dict[str, Any] = {}
+        ambiguous: set[str] = set()
+
+        def record(name, value):
+            name = name.lower()
+            if name not in ("channel", "eventid") or name in ambiguous:
+                return
+            normalized = (_channel_filter_value(value) if name == "channel"
+                          else _eventid_filter_value(value))
+            if normalized is None or (name in values and values[name] != normalized):
+                ambiguous.add(name)
+                values.pop(name, None)
+            else:
+                values[name] = normalized
+
+        # The kernel adds these after filtering. Their values are not available
+        # here, so a mapping/alias from metadata must leave its target unbounded.
+        metadata_fields = ["OriginalLogfile"]
+        if self.hashes:
+            metadata_fields.append("OriginalLogLinexxHash")
+        for path in metadata_fields:
+            resolved = self._resolve_path(path, path)
+            if resolved is _EXCLUDED_SENTINEL:
+                continue
+            _, column = resolved
+            record(column, None)
+            for name in (column, path):
+                alias = self.aliases.get(name)
+                if alias is not None:
+                    record(alias, None)
+            if self.field_split_list.get(path) or self.field_split_list.get(column):
+                return None, None
+
+        stack = [(event_dict, "")]
+        while stack:
+            node, prefix = stack.pop()
+            for leaf, value in node.items():
+                path = f"{prefix}.{leaf}" if prefix else leaf
+                if isinstance(value, dict):
+                    stack.append((value, path))
+                    continue
+                resolved = self._resolve_path(path, leaf)
+                if resolved is _EXCLUDED_SENTINEL:
+                    continue
+                _, column = resolved
+                if isinstance(value, list):
+                    value = str(value)
+                elif isinstance(value, bool):
+                    value = "true" if value else "false"
+                if value in self.useless_values:
+                    continue
+                record(column, value)
+                for name in (column, path):
+                    alias = self.aliases.get(name)
+                    if alias is not None:
+                        record(alias, value)
+                split = self.field_split_list.get(path) or self.field_split_list.get(column)
+                if split:
+                    try:
+                        for pair in value.split(split["separator"]):
+                            key, found, item = pair.partition(split["equal"])
+                            if found:
+                                record(key, item)
+                    except (AttributeError, KeyError, ValueError, TypeError):
+                        return None, None
+        return values.get("channel"), values.get("eventid")
 
     @property
     def events_filtered_count(self) -> int:

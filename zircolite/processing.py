@@ -702,6 +702,7 @@ def process_db_input(
                 ctx.performance_files.append(zircolite_core.metrics.data)
                 zircolite_core.load_db_in_memory(str(db_path))
             except (RuntimeError, sqlite3.Error) as e:
+                ctx.failed_files.add(str(db_path))
                 if file_list is None:
                     quit_on_error(f"[red]    [-] {e}[/]", ctx.logger)
                 ctx.logger.warning(
@@ -712,6 +713,8 @@ def process_db_input(
 
             # Warn and skip if the DB cannot be used (no connection, no 'logs' table)
             if zircolite_core.db_connection is None:
+                ctx.failed_files.add(str(db_path))
+                zircolite_core.metrics.data["status"] = "failed"
                 ctx.logger.warning(
                     f"[yellow]    [!] Could not open database '{literal(file_name)}'. Skipping.[/]"
                 )
@@ -722,11 +725,15 @@ def process_db_input(
                 _has_logs_table = _cur.fetchone() is not None
                 _cur.close()
             except Exception as e:
+                ctx.failed_files.add(str(db_path))
+                zircolite_core.metrics.data["status"] = "failed"
                 ctx.logger.warning(
                     f"[yellow]    [!] Cannot inspect database '{literal(file_name)}': {literal(e)}. Skipping.[/]"
                 )
                 continue
             if not _has_logs_table:
+                ctx.failed_files.add(str(db_path))
+                zircolite_core.metrics.data["status"] = "failed"
                 ctx.logger.warning(
                     f"[yellow]    [!] Database '{literal(file_name)}' has no 'logs' table. "
                     f"The file may be damaged (e.g. missing WAL journal). Skipping.[/]"

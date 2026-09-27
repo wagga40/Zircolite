@@ -431,6 +431,8 @@ def column_refs(sql: str) -> set[str]:
 # whole disjunction), and NOT surrenders.
 # ---------------------------------------------------------------------------
 
+_ASCII_LOWER = str.maketrans("ABCDEFGHIJKLMNOPQRSTUVWXYZ", "abcdefghijklmnopqrstuvwxyz")
+
 
 def _as_int(kind: str, text: str) -> int | None:
     """The integer a value token denotes, or None if it denotes none."""
@@ -540,7 +542,13 @@ class _FieldReader:
             if value is None:
                 value = right
             elif right is not None:
-                value &= right
+                if self.field == "channel":
+                    # SQLite NOCASE folds ASCII only. Keep the original literal
+                    # spelling while comparing bounds with the column's collation.
+                    folded = {item.translate(_ASCII_LOWER) for item in right}
+                    value = {item for item in value if item.translate(_ASCII_LOWER) in folded}
+                else:
+                    value &= right
         return value, pos
 
     def _or(self, tokens: list[tuple[str, str]], pos: int) -> tuple[set | None, int]:

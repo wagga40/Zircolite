@@ -163,18 +163,36 @@ class EvtxExtractor:
             """
             return tag.split("}", 1)[1] if tag.startswith("{") else tag
 
+        def element_text(elem: Any) -> str | None:
+            """Include field text following comments and processing instructions."""
+            if not len(elem):
+                return elem.text
+            parts = [elem.text] if elem.text is not None else []
+            parts.extend(
+                sub.tail for sub in elem
+                if not isinstance(sub.tag, str) and sub.tail
+            )
+            return "".join(parts) if parts else None
+
         child: dict[str, Any] = {"#attributes": {"xmlns": ns}}
         for appt in event_root:
+            # lxml includes comments and processing instructions in child
+            # iteration; their tags are callables rather than field names.
+            if not isinstance(appt.tag, str):
+                continue
             node_name = clean_tag(appt.tag)
             node_value: dict[str, Any] = {}
             for elem in appt:
+                if not isinstance(elem.tag, str):
+                    continue
                 cleaned_tag = clean_tag(elem.tag)
-                text: Any = "" if not elem.text else elem.text
-                if elem.text and node_name == "System":
+                raw_text = element_text(elem)
+                text: Any = raw_text or ""
+                if raw_text and node_name == "System":
                     # Numeric conversion is limited to System fields: EventData
                     # values stay strings, consistent with the EVTX/JSON paths.
                     with contextlib.suppress(Exception):
-                        text = int(elem.text)
+                        text = int(raw_text)
                 if cleaned_tag == "Data":
                     child_node = elem.get("Name")
                     if child_node is None:
@@ -186,13 +204,16 @@ class EvtxExtractor:
                         continue
                 elif cleaned_tag == "Qualifiers":
                     child_node = cleaned_tag
-                    text = elem.text
-                elif len(elem):
+                    text = raw_text
+                elif any(isinstance(sub.tag, str) for sub in elem):
                     # Container element (e.g. UserData payloads): flatten one
-                    # level of grandchildren
+                    # level of grandchildren. Annotations alone do not make a
+                    # value element a container.
                     for sub in elem:
+                        if not isinstance(sub.tag, str):
+                            continue
                         sub_tag = clean_tag(sub.tag)
-                        node_value[sub_tag] = "" if not sub.text else sub.text
+                        node_value[sub_tag] = element_text(sub) or ""
                     continue
                 else:
                     child_node = cleaned_tag
@@ -201,7 +222,7 @@ class EvtxExtractor:
                         # <EventID Qualifiers="16384">7045</EventID>. Keeping only
                         # the attributes would throw the EventID away.
                         node: dict[str, Any] = {"#attributes": dict(elem.attrib)}
-                        if elem.text and elem.text.strip():
+                        if raw_text and raw_text.strip():
                             node["#text"] = text
                         text = node
                 node_value[str(child_node)] = text

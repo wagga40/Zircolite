@@ -199,6 +199,12 @@ class DetectionResult:
     # Additional metadata from detection
     metadata: dict = field(default_factory=dict)
 
+    # False for conventional flattened names inferred from a nested format.
+    timestamp_field_is_raw: bool = False
+
+    # Full raw path when known, distinct from the conventional flattened name.
+    timestamp_field_path: str | None = None
+
 
 def _first_balanced_object(text: str) -> str | None:
     """The first complete top-level ``{...}`` in *text*, or None.
@@ -638,6 +644,7 @@ class LogTypeDetector:
                     log_source="windows_evtx",
                     confidence="high",
                     timestamp_field="SystemTime",
+                    timestamp_field_path="Event.System.TimeCreated.#attributes.SystemTime",
                     suggested_pipeline="sysmon",
                     details="EVTX binary file detected via magic bytes (ElfFile header)",
                 )
@@ -710,6 +717,7 @@ class LogTypeDetector:
                 log_source="windows_evtx",
                 confidence="high",
                 timestamp_field="SystemTime",
+                timestamp_field_path="Event.System.TimeCreated.#attributes.SystemTime",
                 suggested_pipeline="sysmon",
                 details="EVTX binary detected via magic bytes after decompression",
             )
@@ -781,6 +789,7 @@ class LogTypeDetector:
                 log_source="auditd",
                 confidence="high",
                 timestamp_field="timestamp",
+                timestamp_field_is_raw=True,
                 details=f"Auditd log format detected ({auditd_matches} matching lines)",
                 metadata={"matched_lines": auditd_matches},
             )
@@ -790,6 +799,7 @@ class LogTypeDetector:
                 log_source="auditd",
                 confidence="medium",
                 timestamp_field="timestamp",
+                timestamp_field_is_raw=True,
                 details="Auditd log format detected (1 matching line)",
                 metadata={"matched_lines": 1},
             )
@@ -824,6 +834,7 @@ class LogTypeDetector:
                 log_source="sysmon_linux",
                 confidence="high",
                 timestamp_field="UtcTime",
+                timestamp_field_path="Event.EventData.UtcTime",
                 suggested_pipeline="sysmon",
                 details=f"Sysmon for Linux log format detected ({sysmon_matches} matching lines)",
                 metadata={"has_syslog_header": has_syslog_header},
@@ -834,6 +845,7 @@ class LogTypeDetector:
                 log_source="sysmon_linux",
                 confidence="medium",
                 timestamp_field="UtcTime",
+                timestamp_field_path="Event.EventData.UtcTime",
                 suggested_pipeline="sysmon",
                 details="Sysmon for Linux log format detected (1 matching line)",
             )
@@ -852,6 +864,7 @@ class LogTypeDetector:
                 log_source="evtxtract",
                 confidence="high",
                 timestamp_field="SystemTime",
+                timestamp_field_path="Event.System.TimeCreated.#attributes.SystemTime",
                 details=f"EVTXtract output detected ({marker_count} markers found)",
                 metadata={"markers_found": marker_count},
             )
@@ -869,6 +882,7 @@ class LogTypeDetector:
                 log_source="windows_evtx_xml",
                 confidence="high",
                 timestamp_field="SystemTime",
+                timestamp_field_path="Event.System.TimeCreated.#attributes.SystemTime",
                 suggested_pipeline="sysmon",
                 details="Windows Event Log XML format detected (Microsoft namespace found)",
             )
@@ -879,6 +893,7 @@ class LogTypeDetector:
                 log_source="windows_evtx_xml",
                 confidence="medium",
                 timestamp_field="SystemTime",
+                timestamp_field_path="Event.System.TimeCreated.#attributes.SystemTime",
                 details="XML with Event tags detected (no Microsoft namespace)",
             )
 
@@ -964,7 +979,34 @@ class LogTypeDetector:
 
         return None
 
-    def _classify_json_event(
+    def _classify_json_event(self, event: dict, is_json_array: bool) -> DetectionResult:
+        result = self._classify_json_structure(event, is_json_array)
+        field = result.timestamp_field
+        if field is None:
+            return result
+        if result.timestamp_field_is_raw:
+            result.timestamp_field_path = field
+        elif isinstance(event.get("Event"), dict) and isinstance(event["Event"].get("System"), dict):
+            # These names were inferred from the Windows event structure, not
+            # from a similarly named top-level or arbitrary nested field.
+            if field == "SystemTime":
+                result.timestamp_field_path = "Event.System.TimeCreated.#attributes.SystemTime"
+            elif field == "UtcTime":
+                result.timestamp_field_path = "Event.EventData.UtcTime"
+        else:
+            stack = [(event, "")]
+            while stack:
+                node, prefix = stack.pop()
+                for key, value in node.items():
+                    path = f"{prefix}.{key}" if prefix else key
+                    if isinstance(value, dict):
+                        stack.append((value, path))
+                    elif key == field and self._looks_like_timestamp(value):
+                        result.timestamp_field_path = path
+                        return result
+        return result
+
+    def _classify_json_structure(
         self, event: dict, is_json_array: bool
     ) -> DetectionResult:
         """Classify a JSON event based on its structure and fields."""
@@ -1023,6 +1065,7 @@ class LogTypeDetector:
                     timestamp_field="UtcTime",
                     suggested_pipeline="sysmon",
                     details=f"Pre-flattened Sysmon Windows JSON detected (channel: {channel})",
+                    timestamp_field_is_raw=isinstance(event.get("UtcTime"), (str, int, float)),
                     metadata={"channel": channel, "pre_flattened": True},
                 )
 
@@ -1032,6 +1075,7 @@ class LogTypeDetector:
                 log_source="windows_evtx_json",
                 confidence="high",
                 timestamp_field=ts_field or "SystemTime",
+                timestamp_field_is_raw=ts_field is not None,
                 suggested_pipeline="sysmon",
                 details="Pre-flattened Windows Event Log JSON detected"
                 + (f" (channel: {channel})" if channel else ""),
@@ -1048,6 +1092,7 @@ class LogTypeDetector:
                     log_source="ecs_elastic",
                     confidence="high",
                     timestamp_field="@timestamp",
+                    timestamp_field_is_raw=isinstance(event.get("@timestamp"), (str, int, float)),
                     details=f"Elastic/ECS format detected (winlog.channel: {channel})",
                     metadata={"channel": channel, "format": "ecs"},
                 )
@@ -1057,6 +1102,7 @@ class LogTypeDetector:
                 log_source="ecs_elastic",
                 confidence="medium",
                 timestamp_field="@timestamp",
+                timestamp_field_is_raw=isinstance(event.get("@timestamp"), (str, int, float)),
                 details="Elastic/ECS format detected (@timestamp field present)",
                 metadata={"format": "ecs"},
             )
@@ -1071,6 +1117,7 @@ class LogTypeDetector:
                     log_source="auditd",
                     confidence="high",
                     timestamp_field=ts_field or "timestamp",
+                    timestamp_field_is_raw=ts_field is not None,
                     details=f"Auditd JSON format detected (type: {event_type})",
                     metadata={"auditd_type": event_type},
                 )
@@ -1086,6 +1133,7 @@ class LogTypeDetector:
                 timestamp_field="UtcTime",
                 suggested_pipeline="sysmon",
                 details="Sysmon JSON detected (Sysmon-specific fields present)",
+                timestamp_field_is_raw=isinstance(event.get("UtcTime"), (str, int, float)),
                 metadata={"sysmon_fields_found": sorted(matched_sysmon)},
             )
 
@@ -1096,6 +1144,7 @@ class LogTypeDetector:
             log_source="generic_json",
             confidence="medium" if ts_field else "low",
             timestamp_field=ts_field,
+            timestamp_field_is_raw=ts_field is not None,
             details="Generic JSON format detected"
             + (
                 f" (timestamp field: {ts_field})"
@@ -1150,6 +1199,7 @@ class LogTypeDetector:
                     log_source="windows_evtx_csv",
                     confidence="high",
                     timestamp_field=ts_field or "SystemTime",
+                    timestamp_field_is_raw=ts_field is not None,
                     details="Windows Event Log CSV format detected",
                     metadata={
                         "headers": sorted(headers)[:20],
@@ -1162,6 +1212,7 @@ class LogTypeDetector:
                 log_source="generic_csv",
                 confidence="medium",
                 timestamp_field=ts_field,
+                timestamp_field_is_raw=ts_field is not None,
                 details="CSV format detected"
                 + (f" (timestamp field: {ts_field})" if ts_field else ""),
                 metadata={
@@ -1242,23 +1293,26 @@ class LogTypeDetector:
             if event:
                 # A field whose whole value is the timestamp speaks for itself,
                 # whatever it is called -- `logged_at` scores nothing by name.
-                candidate = self._find_key_for_value(
+                candidate_path = self._find_path_for_value(
                     event, matched_value, exact=True
                 )
-                if candidate is None:
+                if candidate_path is None:
                     # Found inside a longer string: only a field named like a
                     # timestamp earns that, or a prose message mentioning a
                     # date becomes the time field and -A/-B filter on prose.
-                    loose = self._find_key_for_value(
+                    loose = self._find_path_for_value(
                         event, matched_value, exact=False
                     )
-                    if loose and self._timestamp_field_score(loose) > 0:
-                        candidate = loose
-                if candidate and (
+                    if loose and self._timestamp_field_score(loose[-1]) > 0:
+                        candidate_path = loose
+                candidate = candidate_path[-1] if candidate_path else None
+                if candidate_path and candidate and (
                     not matched_value.isdigit()
                     or self._timestamp_field_score(candidate) > 0
                 ):
                     matched_key = candidate
+                    result.timestamp_field_is_raw = len(candidate_path) == 1
+                    result.timestamp_field_path = ".".join(candidate_path)
 
         if matched_key:
             result.timestamp_field = matched_key
@@ -1278,7 +1332,14 @@ class LogTypeDetector:
     def _find_key_for_value(
         event: dict, needle: str, *, exact: bool = False
     ) -> str | None:
-        """The key in *event* (one level deep) whose value carries *needle*.
+        path = LogTypeDetector._find_path_for_value(event, needle, exact=exact)
+        return path[-1] if path else None
+
+    @staticmethod
+    def _find_path_for_value(
+        event: dict, needle: str, *, exact: bool = False
+    ) -> tuple[str, ...] | None:
+        """The key path in *event* (one level deep) whose value carries *needle*.
 
         With ``exact``, the value must *be* the timestamp. Without it, the
         needle only has to appear somewhere inside -- which is how a free-text
@@ -1296,11 +1357,11 @@ class LogTypeDetector:
 
         for key, value in event.items():
             if carries(value):
-                return key
+                return (key,)
             if isinstance(value, dict):
                 for sub_key, sub_val in value.items():
                     if carries(sub_val):
-                        return sub_key
+                        return key, sub_key
         return None
 
     def _unknown_result(self, reason: str) -> DetectionResult:

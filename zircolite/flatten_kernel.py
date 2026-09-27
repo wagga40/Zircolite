@@ -85,8 +85,12 @@ def flatten_event(
                 key_lower = key.lower()
                 if key_lower not in discovered_fields:
                     discovered_fields[key_lower] = key
+                    # NUMERIC keeps floats numeric without forcing later
+                    # 64-bit integers through REAL's lossy float conversion.
                     field_types[key] = (
-                        "INTEGER COLLATE NOCASE" if is_int else "TEXT COLLATE NOCASE"
+                        "INTEGER COLLATE NOCASE" if is_int else
+                        "NUMERIC COLLATE NOCASE" if isinstance(value, float) else
+                        "TEXT COLLATE NOCASE"
                     )
                 seen_leaf_keys.add(key)
             return
@@ -104,7 +108,8 @@ def flatten_event(
         transformed_keys: set | None = None
         transformed_values: dict[str, Any] = {}
         if transforms_enabled:
-            for field_name in (key, raw_field_name):
+            transform_fields = (key,) if key == raw_field_name else (key, raw_field_name)
+            for field_name in transform_fields:
                 field_transforms = transforms_get(field_name)
                 if field_transforms:
                     for transform in field_transforms:
@@ -176,7 +181,11 @@ def flatten_event(
                 key_lower = k.lower()
                 if key_lower not in discovered_fields:
                     discovered_fields[key_lower] = k
-                    field_types[k] = "INTEGER COLLATE NOCASE" if isinstance(final_value, int) else "TEXT COLLATE NOCASE"
+                    field_types[k] = (
+                        "INTEGER COLLATE NOCASE" if isinstance(final_value, int) else
+                        "NUMERIC COLLATE NOCASE" if isinstance(final_value, float) else
+                        "TEXT COLLATE NOCASE"
+                    )
                 seen_leaf_keys.add(k)
 
     # Descend through the event tree, carrying the dotted path as a string
@@ -225,7 +234,7 @@ def flatten_event(
 
         if effective_time_field:
             ts_value = json_line.get(effective_time_field)
-            if ts_value:
+            if ts_value is not None:
                 # Bounds are inclusive. An unparsable timestamp keeps the
                 # event: dropping it would hide data behind a format quirk.
                 moment = parse_timestamp(ts_value)

@@ -676,10 +676,19 @@ when its name reads like a time field. A free-text `message` that happens to men
 date is not a timestamp field — treating it as one would leave `--after`/`--before`
 filtering on prose.
 
-Override it explicitly at any time:
+A detected raw field name is resolved through `mappings` before correlation rules are converted
+and before templates receive it. For example, `mappings: {timestamp: SystemTime}` makes
+an automatically detected `timestamp` use the `SystemTime` column. Without a mapping,
+non-alphanumeric characters are removed, so `@timestamp` becomes `timestamp`.
+
+EVTX and other nested Windows formats report conventional flattened names such as
+`SystemTime`. If a custom mapping renames that nested timestamp, set `--timefield` to
+the resulting column.
+
+Override it explicitly with the **column name after field mappings**:
 
 ```shell
-python3 zircolite.py --events logs/ --ruleset rules.json --timefield "@timestamp"
+python3 zircolite.py --events logs/ --ruleset rules.json --timefield timestamp
 ```
 
 ### Disabling detection
@@ -876,6 +885,11 @@ Without `--unified-db` each input gets its own database, named after it
 (`output_<input name>.db`, see the note under [Output](#output)),
 and a folder of several files needs `--no-parallel` as well. Point `--db-input` at the
 directory holding them to run the rules over all of them.
+
+An unreadable database or one without a `logs` table is skipped and kept on disk even
+with `--remove-events`. If another database can be analysed, the run continues and its
+performance report marks the skipped input as failed and the run as partial. If none
+can be analysed, the command exits with code `1`.
 
 #### Database indexes
 
@@ -1353,8 +1367,8 @@ timestamp_detection:
     - _time                     # Splunk
 ```
 
-A field set with `--timefield`, or with `processing.time_field` in a run configuration, is
-never overridden by auto-detection.
+A field set with `--timefield`, or with `processing.time_field` in a run configuration,
+names the column after field mappings and is never overridden by auto-detection.
 
 ## Field Transforms
 
