@@ -162,7 +162,7 @@ python3 zircolite.py --events <XML_FOLDER_OR_FILE> --ruleset rules/rules_windows
 
 - The `--events` argument can be a file or a folder. If it is a folder, all log files in the current folder and subfolders will be selected (use `--no-recursion` to disable).
 - Use `--file-pattern` to specify a custom glob pattern for file selection.
-- Use `--no-auto-detect` to disable automatic format detection.
+- Pass a format flag (`--json-input`, `--xml-input`, ...) to skip automatic format detection.
 
 > [!TIP]
 > If you want to try the tool, you can test with [EVTX-ATTACK-SAMPLES](https://github.com/sbousseaden/EVTX-ATTACK-SAMPLES) (EVTX files).

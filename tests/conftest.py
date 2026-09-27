@@ -507,7 +507,6 @@ def default_args_config():
         timefield="SystemTime",
         unified_db=False,
         no_auto_mode=False,
-        no_auto_detect=False,
         add_index=[],
         remove_index=[],
         all_transforms=False,

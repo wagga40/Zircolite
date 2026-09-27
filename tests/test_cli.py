@@ -1371,7 +1371,7 @@ class TestCLINoLogOption:
 
 
 class TestCLIAdvancedConfiguration:
-    """Tests for Advanced Configuration options: --quiet, --debug, --timefield, --logs-encoding, --no-auto-detect."""
+    """Tests for Advanced Configuration options: --quiet, --debug, --timefield, --logs-encoding."""
 
     def test_timefield_used_for_filtering(self, tmp_path):
         """Test --timefield is used for time range filtering."""
@@ -1413,31 +1413,6 @@ class TestCLIAdvancedConfiguration:
             detections = json.loads(f.read())
         # Event is from 2020, filter is after 2024 -> no detections
         assert len(detections) == 0
-
-    def test_no_auto_detect_with_explicit_format(self, tmp_path):
-        """Test --no-auto-detect with explicit --json-input uses JSON without auto-detection."""
-        events_file = tmp_path / "data.json"
-        events_file.write_text('{"Event": {"System": {"EventID": 1}, "EventData": {}}}')
-        ruleset_file = tmp_path / "ruleset.json"
-        ruleset_file.write_text(NO_MATCH_RULESET)
-        config_file = tmp_path / "config.json"
-        config_file.write_text(json.dumps({
-            "exclusions": [],
-            "useless": [],
-            "mappings": {"Event.System.EventID": "EventID"},
-            "alias": {},
-            "split": {},
-            "transforms_enabled": False,
-            "transforms": {}
-        }))
-        output_file = tmp_path / "out.json"
-        with patch('sys.argv', ['zircolite.py', '-e', str(events_file), '-r', str(ruleset_file), '-c', str(config_file), '--no-auto-detect', '-j', '-o', str(output_file), *get_log_arg(tmp_path)]):
-            zircolite_script.main()
-        assert output_file.exists()
-        with open(output_file) as f:
-            detections = json.loads(f.read())
-        assert isinstance(detections, list)
-
 
 class TestCLIStrictEvtxParsing:
     """Tests for --strict EVTX parsing flag."""

@@ -203,7 +203,6 @@ def parse_arguments() -> argparse.Namespace:
     config_formats_args.add_argument("--timefield", "--time-field", help="Specify time field name for time filtering (default: 'SystemTime', auto-detects if not found)", type=str, default=None)
     config_formats_args.add_argument("--unified-db", "--all-in-one", help="Force unified database mode (all files in one DB, enables cross-file correlation)", action='store_true')
     config_formats_args.add_argument("--no-auto-mode", help="Disable automatic processing mode selection based on file analysis", action='store_true')
-    config_formats_args.add_argument("--no-auto-detect", help="Disable automatic log type and timestamp detection (use explicit format flags instead)", action='store_true')
     config_formats_args.add_argument("--strict", help="Strict EVTX parsing: stop on corrupted or malformed chunks instead of skipping them. Forces sequential processing (default: lenient, recovers as many events as possible)", action='store_true')
     config_formats_args.add_argument("--add-index", help="Create an index on the given column(s). Can be repeated or list multiple columns (e.g. --add-index Channel EventID).", action='append', nargs='+', metavar="COL", default=None)
     config_formats_args.add_argument("--remove-index", help="Drop the given index name(s) after creation. Can be repeated or list multiple (e.g. --remove-index idx_channel idx_eventid).", action='append', nargs='+', metavar="IDX", default=None)
@@ -414,12 +413,6 @@ def auto_detect_log_type(
     if _has_explicit_format_flag(args):
         input_type = get_input_type(args)
         logger.debug(f"Using explicit format flag: {input_type}")
-        return input_type
-
-    # If auto-detect is disabled, fall back to flag-based detection
-    if getattr(args, 'no_auto_detect', False):
-        input_type = get_input_type(args)
-        logger.debug(f"Auto-detect disabled, using default: {input_type}")
         return input_type
 
     # Load timestamp detection fields from config if available
@@ -986,7 +979,7 @@ def _run_processing(
     log_list = file_list
 
     # Auto-detect log type
-    if not is_quiet() and not _has_explicit_format_flag(args) and not getattr(args, 'no_auto_detect', False):
+    if not is_quiet() and not _has_explicit_format_flag(args):
         with console.status("[bold cyan]Auto-detecting log type...", spinner="dots"):
             input_type = auto_detect_log_type(file_list, args, logger, field_mappings_config)
     else:
@@ -1284,7 +1277,6 @@ def _main(memory_tracker, start_time) -> None:
         args.evtx
         and not _is_explicit(args, "timefield", "SystemTime")
         and not _has_explicit_format_flag(args)
-        and not getattr(args, 'no_auto_detect', False)
         and Path(args.evtx).exists()
     ):
         try:

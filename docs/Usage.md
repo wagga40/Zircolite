@@ -389,7 +389,6 @@ across those statements.
 | `--timefield` | Field holding the event timestamp. Left unset it is auto-detected, falling back to `SystemTime`; naming one pins it and turns detection off |
 | `--unified-db` | One database for all files, which is what cross-file correlation needs |
 | `--no-auto-mode` | Disable automatic processing-mode selection |
-| `--no-auto-detect` | Disable automatic log type and timestamp detection |
 | `--strict` | Abort on a corrupted or malformed EVTX chunk instead of skipping it (default: lenient) |
 | `--add-index` | Create an index on the given column(s), e.g. `--add-index Channel EventID` |
 | `--remove-index` | Drop the given index name(s) after creation, e.g. `--remove-index idx_channel` |
@@ -503,7 +502,7 @@ Invalid configuration stops the run with a non-zero exit code. Validation report
 problems together, including unknown keys, missing rulesets, invalid `input.format`
 values and unparseable time filters.
 
-Some options have no equivalent key and must be passed on the command line: `-c`/`--config`, `-q`/`--quiet`, `--profile-rules`, `--archive-password`, `--no-auto-detect`, `--test-rules`, `--timesketch`, `--navigator-output`, `--transform-list`, `--pipeline-list`, `-U`/`--update-rules`, `-v`/`--version`, `--generate-config` and `-Y`/`--yaml-config` itself.
+Some options have no equivalent key and must be passed on the command line: `-c`/`--config`, `-q`/`--quiet`, `--profile-rules`, `--archive-password`, `--test-rules`, `--timesketch`, `--navigator-output`, `--transform-list`, `--pipeline-list`, `-U`/`--update-rules`, `-v`/`--version`, `--generate-config` and `-Y`/`--yaml-config` itself.
 
 CLI arguments override the file, with three deliberate exceptions:
 `--transform-category`, `--add-index` and `--remove-index` are *added* to whatever the
@@ -680,13 +679,14 @@ Override it explicitly with the **column name after field mappings**:
 python3 zircolite.py --events logs/ --ruleset rules.json --timefield timestamp
 ```
 
-### Disabling detection
+### Skipping detection
+
+An explicit format flag skips format detection, and `--timefield` pins the timestamp
+field:
 
 ```shell
-python3 zircolite.py --events logs/ --ruleset rules.json --no-auto-detect --json-input
+python3 zircolite.py --events logs/ --ruleset rules.json --json-input --timefield timestamp
 ```
-
-Explicit format flags always take precedence over detection, whether or not it is enabled.
 
 ## Input Formats
 
@@ -1395,7 +1395,7 @@ To build the image yourself: `docker build . -t <image name>`.
 
 | Issue | What to try |
 |-------|-------------|
-| **Wrong format detected** | `--no-auto-detect` plus an explicit format flag |
+| **Wrong format detected** | Pass an explicit format flag |
 | **Missing or wrong timestamp field** | `--timefield "FieldName"` |
 | **No detections** | Make sure the ruleset matches the log source. The default `rules_windows_merged.json` covers Sysmon and the generic Windows channels; `rules_windows_sysmon.json` and `rules_windows_generic.json` each match only their own. Then check that your field names match what the rules expect. |
 | **Out of memory on large datasets** | `--no-parallel`, `--no-auto-mode`, or a lower `--parallel-workers` |
