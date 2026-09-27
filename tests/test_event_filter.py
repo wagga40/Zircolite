@@ -1441,3 +1441,42 @@ class TestEventFilterChannelMetadataIsNotAChannel:
         event_filter = EventFilter(rulesets)
 
         assert event_filter.should_process_event("Security", 4624)
+
+
+class TestFilterFieldWriters:
+    """The filter reads Channel/EventID from their source paths, decided at startup."""
+
+    def _processor(self, config, **flags):
+        from argparse import Namespace
+
+        from zircolite import StreamingEventProcessor
+        rules = [{"title": "t", "channel": ["Security"], "eventid": [4624]}]
+        return StreamingEventProcessor(config, Namespace(**flags), event_filter=EventFilter(rules))
+
+    @pytest.mark.parametrize("flags", [
+        {"evtx_input": True}, {"json_input": True}, {"xml_input": True},
+        {"evtx_input": True, "all_transforms": True},
+    ])
+    def test_default_config_keeps_the_filter(self, flags):
+        assert self._processor("config/config.yaml", **flags)._filtering_enabled
+
+    @pytest.mark.parametrize("config,writer", [
+        ({"mappings": {"Source": "Channel"}}, "the mapping 'Source' -> 'Channel'"),
+        ({"mappings": {"Event.EventData.Data": "EventID"}}, "the mapping 'Event.EventData.Data' -> 'EventID'"),
+        ({"alias": {"Source": "channel"}}, "the alias 'Source' -> 'channel'"),
+    ])
+    def test_a_config_writing_the_columns_turns_it_off(self, tmp_path, config, writer):
+        path = tmp_path / "config.json"
+        path.write_text(json.dumps(config))
+        processor = self._processor(str(path), json_input=True)
+        assert not processor._filtering_enabled
+        assert processor._filter_field_writer() == writer
+
+    def test_split_keys_are_not_considered(self, tmp_path):
+        path = tmp_path / "config.json"
+        path.write_text(json.dumps({"split": {"Payload": {"separator": ",", "equal": "="}}}))
+        source = tmp_path / "events.jsonl"
+        source.write_text('{"Channel": "Other", "Payload": "Channel=Security"}\n')
+        processor = self._processor(str(path), json_input=True)
+        assert processor._filtering_enabled
+        assert list(processor.stream_json_events(str(source))) == []

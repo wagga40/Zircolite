@@ -230,14 +230,6 @@ def test_early_filter_preserves_matches_after_channel_transform(tmp_path):
         'alias': {'EventSource': 'Channel'},
         'transforms': {'Outer.Event.Source': [{'alias': False, 'code': 'def transform(param):\n    return param.strip()'}]},
     }, "SELECT * FROM logs WHERE Channel='Security'"),
-    ({'Channel': 'Other', 'Outer': {'Event.Payload': ' Security '}}, {
-        'split': {'EventPayload': {'separator': ',', 'equal': '='}},
-        'transforms': {'Outer.Event.Payload': [{'alias': False, 'code': 'def transform(param):\n    return "Channel=" + param.strip()'}]},
-    }, "SELECT * FROM logs WHERE Channel='Security'"),
-    ({'Channel': 'Other', 'Event': {'Payload': ' Security '}}, {
-        'split': {'Event.Payload': {'separator': ',', 'equal': '='}},
-        'transforms': {'Payload': [{'alias': False, 'code': 'def transform(param):\n    return "Channel=" + param.strip()'}]},
-    }, "SELECT * FROM logs WHERE Channel='Security'"),
 ])
 def test_early_filter_preserves_transformed_ids_and_aliases(tmp_path, event, config, query):
     config['transforms_enabled'] = True

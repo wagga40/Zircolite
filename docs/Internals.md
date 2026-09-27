@@ -53,11 +53,9 @@ Transforms run before splitting, so a transform that *replaces* a value (rather 
 writing an alias) changes what the split then parses. Splitting writes its derived fields
 directly, so aliases do not apply to them.
 
-The early filter is bypassed when active transforms can write Channel or EventID,
-including through mappings and aliases: the raw values cannot safely bound the values
-that SQL will see. Replacement transforms feeding split fields also bypass the filter
-because their output can name those columns. Unrelated and inactive transforms do not
-disable it.
+The early filter reads Channel and EventID from their configured source paths. It is
+turned off at startup when a mapping from another path, an alias or an active transform
+can write either column (see [Early event filtering](Advanced.md#early-event-filtering)).
 
 Database columns are added as new fields are discovered, and events are inserted in
 batches. A column takes its type from the first value it receives: `INTEGER` for integers,

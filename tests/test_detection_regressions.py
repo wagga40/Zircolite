@@ -29,8 +29,6 @@ def run_case(tmp_path, events, query, config=None, options=()):
 @pytest.mark.parametrize('config,event', [
     ({'mappings': {'Source': 'Channel'}}, {'Channel': 'Other', 'Source': 'Security'}),
     ({'alias': {'Source': 'Channel'}}, {'Channel': 'Other', 'Source': 'Security'}),
-    ({'split': {'Payload': {'separator': ',', 'equal': '='}}}, {'Channel': 'Other', 'Payload': 'Channel=Security'}),
-    ({}, {'Channel': 'Other', 'Outer': {'Channel': 'Security'}}),
 ])
 def test_raw_filter_does_not_discard_a_matching_flattened_event(tmp_path, config, event):
     query = "SELECT * FROM logs WHERE Channel='Security'"

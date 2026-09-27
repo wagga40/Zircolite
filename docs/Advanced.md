@@ -422,14 +422,14 @@ rules query. When an event carries several of those fields with different values
 top-level `Channel` next to `winlog.channel`, say), the flattener decides which one lands
 in the column, so the filter treats the value as unusable and keeps the event.
 
-Early filtering is also disabled for an input when its active transforms can replace
-Channel or EventID, including through a field mapping or an alias. For example, a
-transform that strips spaces from `" Security "` must run before a rule tests
-`Channel='Security'`. A replacement transform feeding a split field also disables the
-filter, since the transformed text determines which columns the split creates.
-Disabled transforms, transforms for another input type and
-transforms affecting only unrelated fields leave early filtering available. Rules still
-run their full SQL conditions against the transformed events.
+Whether those paths can be trusted is decided once, from the configuration. The filter
+is turned off, with a log line naming the cause, when a mapping from another path, an
+alias or an active transform can write Channel or EventID: a transform that strips spaces
+from `" Security "`, for example, must run before a rule tests `Channel='Security'`.
+Disabled transforms, transforms for another input type and transforms on unrelated
+fields leave the filter on. Split keys and unmapped nested fields that happen to be
+named Channel or EventID are not considered; use `--no-event-filter` if your data
+relies on them.
 
 > [!IMPORTANT]
 > The filter only engages when the ruleset yields usable Channel or EventID bounds.
