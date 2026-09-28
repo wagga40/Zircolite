@@ -1969,7 +1969,7 @@ class StreamingEventProcessor:
                     db_columns = self._db_columns
                     if col_lower not in db_columns:
                         self.logger.warning(
-                            f"[yellow]   [!] Could not add column '{col}' to the "
+                            f"[yellow]   [!] Could not add column '{literal(col)}' to the "
                             f"events table: {literal(exc)}[/]"
                         )
 

@@ -454,7 +454,8 @@ def auto_detect_log_type(
     if detection.details:
         logger.debug(f"    Detection details: {detection.details}")
     if detection.timestamp_field:
-        logger.info(f"[+] Auto-detected timestamp field: [cyan]{detection.timestamp_field}[/]")
+        # The name can come from the log's own keys, so it is evidence.
+        logger.info(f"[+] Auto-detected timestamp field: [cyan]{literal(detection.timestamp_field)}[/]")
     if detection.suggested_pipeline:
         logger.debug(f"    Suggested pipeline: {detection.suggested_pipeline}")
 

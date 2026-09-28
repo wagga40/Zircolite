@@ -3774,6 +3774,21 @@ class TestEvidenceNamesPrintAsWritten:
 
         assert "[bold]x.evtx" in capsys.readouterr().out
 
+    def test_markup_in_an_auto_detected_timestamp_field(self, tmp_path):
+        """The timestamp field is picked from the log's own keys: one JSON line
+        whose key closes a tag ended the run with MarkupError before any file
+        was processed."""
+        events = tmp_path / "events.json"
+        events.write_text('{"log[/]time": "2024-01-01T10:00:00Z", "EventID": 1}\n')
+
+        with patch('sys.argv', ['zircolite.py', '-e', str(events),
+                                '-r', str(FIXTURES_DIR / "sample_ruleset.json"),
+                                '-o', str(tmp_path / "out.json"), *get_log_arg(tmp_path)]):
+            zircolite_script.main()
+
+        assert "Auto-detected timestamp field" in (tmp_path / "test.log").read_text(encoding="utf-8")
+        assert (tmp_path / "out.json").exists()
+
 
 @pytest.mark.requires_sigma
 @pytest.mark.skipif(__import__("sqlite3").sqlite_version_info < (3, 38), reason="correlation plans need SQLite 3.38")
