@@ -30,7 +30,7 @@ class FileMetrics:
             "flattening": {"requested": "auto", "selected": "unused", "reason": "database input"},
             "prefilter": [], "events": 0, "filtered_events": 0, "time_filtered_events": 0,
             "status": "running", "pruned_rules": 0,
-            "rule_errors": {},
+            "rule_errors": {}, "correlation_diagnostics": {},
         }
         self._stack: list[list] = []
 

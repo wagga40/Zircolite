@@ -1,0 +1,585 @@
+[
+  {
+    "author": "Zach Mathis",
+    "channel": [],
+    "correlation": true,
+    "correlation_plan": {
+      "cleanup": [
+        "sigma_abe9222e1271_n0_alerts",
+        "sigma_abe9222e1271_n0_merged",
+        "sigma_abe9222e1271_n0_windows",
+        "sigma_abe9222e1271_n0_combined",
+        "sigma_abe9222e1271_n0_t0_qualified",
+        "sigma_abe9222e1271_n0_t0_measured",
+        "sigma_abe9222e1271_n0_t0_anchors",
+        "sigma_abe9222e1271_n0_events",
+        "sigma_abe9222e1271_n0_matches",
+        "sigma_abe9222e1271_n0_input",
+        "sigma_abe9222e1271_horizon",
+        "sigma_abe9222e1271_raw0"
+      ],
+      "diagnostics": "SELECT 'invalid_timestamp' AS reason, COUNT(*) AS count FROM sigma_abe9222e1271_raw0 WHERE ts IS NULL AND (b0) UNION ALL SELECT 'missing_group_key' AS reason, COUNT(DISTINCT eid) AS count FROM sigma_abe9222e1271_n0_input WHERE g0 IS NULL OR g1 IS NULL OR g2 IS NULL OR g3 IS NULL OR g4 IS NULL OR g5 IS NULL",
+      "event_id_field": "row_id",
+      "prepare": [
+        {
+          "indexes": [
+            [
+              "eid"
+            ],
+            [
+              "ts"
+            ]
+          ],
+          "name": "sigma_abe9222e1271_raw0",
+          "select": "SELECT CAST(`row_id` AS TEXT) AS rid, '0:' || CAST(`row_id` AS TEXT) AS eid, ROUND((julianday(SystemTime) - 2440587.5) * 86400000) / 1000.0 AS ts, json_object('f0', CASE WHEN typeof(`IpAddress`)='real' AND abs(`IpAddress`) > 1.7976931348623157e308 THEN NULL ELSE `IpAddress` END, 'f1', CASE WHEN typeof(`LogonProcessName`)='real' AND abs(`LogonProcessName`) > 1.7976931348623157e308 THEN NULL ELSE `LogonProcessName` END, 'f2', CASE WHEN typeof(`LogonType`)='real' AND abs(`LogonType`) > 1.7976931348623157e308 THEN NULL ELSE `LogonType` END, 'f3', CASE WHEN typeof(`ProcessName`)='real' AND abs(`ProcessName`) > 1.7976931348623157e308 THEN NULL ELSE `ProcessName` END, 'f4', CASE WHEN typeof(`TargetDomainName`)='real' AND abs(`TargetDomainName`) > 1.7976931348623157e308 THEN NULL ELSE `TargetDomainName` END, 'f5', CASE WHEN typeof(`TargetUserName`)='real' AND abs(`TargetUserName`) > 1.7976931348623157e308 THEN NULL ELSE `TargetUserName` END, 'f6', CASE WHEN typeof(`WorkstationName`)='real' AND abs(`WorkstationName`) > 1.7976931348623157e308 THEN NULL ELSE `WorkstationName` END) AS payload, COALESCE((((Channel='Security' AND EventID=4625 AND SubStatus='0xc0000064') AND (NOT COALESCE((IpAddress='-'), 0)))), 0) AS b0 FROM logs"
+        },
+        {
+          "indexes": [],
+          "name": "sigma_abe9222e1271_horizon",
+          "select": "SELECT (SELECT MAX(ts) FROM (SELECT ts FROM sigma_abe9222e1271_raw0)) AS ts"
+        },
+        {
+          "indexes": [],
+          "name": "sigma_abe9222e1271_n0_input",
+          "select": "SELECT s.*, 0 AS slot, CASE WHEN typeof(json_extract(s.payload, '$.f0'))='text' THEN lower(json_extract(s.payload, '$.f0')) ELSE json_extract(s.payload, '$.f0') END AS g0, CASE WHEN typeof(json_extract(s.payload, '$.f2'))='text' THEN lower(json_extract(s.payload, '$.f2')) ELSE json_extract(s.payload, '$.f2') END AS g1, CASE WHEN typeof(json_extract(s.payload, '$.f4'))='text' THEN lower(json_extract(s.payload, '$.f4')) ELSE json_extract(s.payload, '$.f4') END AS g2, CASE WHEN typeof(json_extract(s.payload, '$.f3'))='text' THEN lower(json_extract(s.payload, '$.f3')) ELSE json_extract(s.payload, '$.f3') END AS g3, CASE WHEN typeof(json_extract(s.payload, '$.f1'))='text' THEN lower(json_extract(s.payload, '$.f1')) ELSE json_extract(s.payload, '$.f1') END AS g4, CASE WHEN typeof(json_extract(s.payload, '$.f6'))='text' THEN lower(json_extract(s.payload, '$.f6')) ELSE json_extract(s.payload, '$.f6') END AS g5, json_extract(s.payload, '$.f5') AS v FROM (SELECT 'e:' || eid AS eid, ts, payload, json_array(eid) AS evidence, '[]' AS children FROM sigma_abe9222e1271_raw0 WHERE b0) s"
+        },
+        {
+          "indexes": [
+            [
+              "g0",
+              "g1",
+              "g2",
+              "g3",
+              "g4",
+              "g5",
+              "ts"
+            ],
+            [
+              "g0",
+              "g1",
+              "g2",
+              "g3",
+              "g4",
+              "g5",
+              "slot",
+              "ts"
+            ],
+            [
+              "eid"
+            ]
+          ],
+          "name": "sigma_abe9222e1271_n0_matches",
+          "select": "SELECT DISTINCT * FROM sigma_abe9222e1271_n0_input WHERE ts IS NOT NULL AND eid IS NOT NULL AND g0 IS NOT NULL AND g1 IS NOT NULL AND g2 IS NOT NULL AND g3 IS NOT NULL AND g4 IS NOT NULL AND g5 IS NOT NULL"
+        },
+        {
+          "indexes": [
+            [
+              "g0",
+              "g1",
+              "g2",
+              "g3",
+              "g4",
+              "g5",
+              "ts"
+            ]
+          ],
+          "name": "sigma_abe9222e1271_n0_events",
+          "select": "SELECT DISTINCT eid, ts, g0, g1, g2, g3, g4, g5, v FROM sigma_abe9222e1271_n0_matches"
+        },
+        {
+          "indexes": [
+            [
+              "g0",
+              "g1",
+              "g2",
+              "g3",
+              "g4",
+              "g5",
+              "end"
+            ]
+          ],
+          "name": "sigma_abe9222e1271_n0_t0_anchors",
+          "select": "SELECT DISTINCT ts - 300 AS start, ts AS end, g0, g1, g2, g3, g4, g5 FROM sigma_abe9222e1271_n0_matches"
+        },
+        {
+          "indexes": [],
+          "name": "sigma_abe9222e1271_n0_t0_measured",
+          "select": "SELECT a.*, (SELECT COUNT(DISTINCT m.v COLLATE NOCASE) FROM sigma_abe9222e1271_n0_events m WHERE m.g0 = a.g0 AND m.g1 = a.g1 AND m.g2 = a.g2 AND m.g3 = a.g3 AND m.g4 = a.g4 AND m.g5 = a.g5 AND m.ts BETWEEN a.start AND a.end) AS metric FROM sigma_abe9222e1271_n0_t0_anchors a WHERE 1"
+        },
+        {
+          "indexes": [],
+          "name": "sigma_abe9222e1271_n0_t0_qualified",
+          "select": "SELECT * FROM sigma_abe9222e1271_n0_t0_measured WHERE metric > 3"
+        },
+        {
+          "indexes": [],
+          "name": "sigma_abe9222e1271_n0_combined",
+          "select": "SELECT a.start, a.end, g0, g1, g2, g3, g4, g5, a.metric, (SELECT json_group_array(DISTINCT e.value) FROM sigma_abe9222e1271_n0_matches m, json_each(m.evidence) e WHERE m.g0 = a.g0 AND m.g1 = a.g1 AND m.g2 = a.g2 AND m.g3 = a.g3 AND m.g4 = a.g4 AND m.g5 = a.g5 AND m.ts BETWEEN a.start AND a.end) AS evidence, (SELECT json_group_array(DISTINCT c.value) FROM sigma_abe9222e1271_n0_matches m, json_each(m.children) c WHERE m.g0 = a.g0 AND m.g1 = a.g1 AND m.g2 = a.g2 AND m.g3 = a.g3 AND m.g4 = a.g4 AND m.g5 = a.g5 AND m.ts BETWEEN a.start AND a.end) AS children FROM sigma_abe9222e1271_n0_t0_qualified a"
+        },
+        {
+          "indexes": [],
+          "name": "sigma_abe9222e1271_n0_windows",
+          "select": "SELECT start, end, g0, g1, g2, g3, g4, g5, MAX(metric) AS metric FROM sigma_abe9222e1271_n0_combined GROUP BY start, end, g0, g1, g2, g3, g4, g5"
+        },
+        {
+          "indexes": [],
+          "name": "sigma_abe9222e1271_n0_merged",
+          "select": "SELECT a.*, (SELECT json_group_array(value) FROM (SELECT DISTINCT e.value FROM sigma_abe9222e1271_n0_combined c, json_each(c.evidence) e WHERE c.g0 = a.g0 AND c.g1 = a.g1 AND c.g2 = a.g2 AND c.g3 = a.g3 AND c.g4 = a.g4 AND c.g5 = a.g5 AND c.start=a.start AND c.end=a.end ORDER BY e.value)) AS evidence, (SELECT json_group_array(value) FROM (SELECT DISTINCT e.value FROM sigma_abe9222e1271_n0_combined c, json_each(c.children) e WHERE c.g0 = a.g0 AND c.g1 = a.g1 AND c.g2 = a.g2 AND c.g3 = a.g3 AND c.g4 = a.g4 AND c.g5 = a.g5 AND c.start=a.start AND c.end=a.end ORDER BY e.value)) AS children FROM sigma_abe9222e1271_n0_windows a"
+        },
+        {
+          "indexes": [
+            [
+              "end"
+            ],
+            [
+              "alert_id"
+            ]
+          ],
+          "name": "sigma_abe9222e1271_n0_alerts",
+          "select": "SELECT 'sigma_alert_abe9222e1271f43c:' || ROW_NUMBER() OVER (ORDER BY g0, g1, g2, g3, g4, g5, end, start, metric, evidence) AS alert_id, start, end, json_object('IpAddress', `g0`, 'LogonType', `g1`, 'TargetDomainName', `g2`, 'ProcessName', `g3`, 'LogonProcessName', `g4`, 'WorkstationName', `g5`) AS group_keys, metric, evidence, children, json_object('f0', `g0`, 'f2', `g1`, 'f4', `g2`, 'f3', `g3`, 'f1', `g4`, 'f6', `g5`) AS payload FROM sigma_abe9222e1271_n0_merged"
+        }
+      ],
+      "query": "SELECT alert_id, group_keys, end AS occurrence_time, start AS window_start, end AS window_end, 'value_count' AS metric_name, metric AS metric_value, json_array_length(evidence) AS event_count, evidence AS event_ids, children AS child_alert_ids FROM sigma_abe9222e1271_n0_alerts ORDER BY occurrence_time, alert_id",
+      "required_fields": {
+        "logs": [
+          "Channel",
+          "EventID",
+          "IpAddress",
+          "LogonProcessName",
+          "LogonType",
+          "ProcessName",
+          "SubStatus",
+          "SystemTime",
+          "TargetDomainName",
+          "TargetUserName",
+          "WorkstationName",
+          "row_id"
+        ]
+      },
+      "source_tables": {
+        "0": "logs"
+      },
+      "sqlite_min_version": "3.38.0",
+      "version": 2
+    },
+    "description": "Search for many 4625 failed logon attempts due to wrong usernames in a short period of time.",
+    "eventid": [],
+    "falsepositives": [
+      "User mistyping username"
+    ],
+    "filename": "hayabusa/builtin/Security/LogonLogoff/Logon/Sec_4625_Med_LogonFail_UserGuessing_Correlation.yml",
+    "id": "0ae09af3-f30f-47c2-a31c-83e0b918eeee",
+    "level": "medium",
+    "required_fields": [
+      "Channel",
+      "EventID",
+      "IpAddress",
+      "LogonProcessName",
+      "LogonType",
+      "ProcessName",
+      "SubStatus",
+      "SystemTime",
+      "TargetDomainName",
+      "TargetUserName",
+      "WorkstationName",
+      "row_id"
+    ],
+    "result_type": "correlation",
+    "rule": [
+      "WITH sigma_abe9222e1271_raw0 AS (SELECT CAST(`row_id` AS TEXT) AS rid, '0:' || CAST(`row_id` AS TEXT) AS eid, ROUND((julianday(SystemTime) - 2440587.5) * 86400000) / 1000.0 AS ts, json_object('f0', CASE WHEN typeof(`IpAddress`)='real' AND abs(`IpAddress`) > 1.7976931348623157e308 THEN NULL ELSE `IpAddress` END, 'f1', CASE WHEN typeof(`LogonProcessName`)='real' AND abs(`LogonProcessName`) > 1.7976931348623157e308 THEN NULL ELSE `LogonProcessName` END, 'f2', CASE WHEN typeof(`LogonType`)='real' AND abs(`LogonType`) > 1.7976931348623157e308 THEN NULL ELSE `LogonType` END, 'f3', CASE WHEN typeof(`ProcessName`)='real' AND abs(`ProcessName`) > 1.7976931348623157e308 THEN NULL ELSE `ProcessName` END, 'f4', CASE WHEN typeof(`TargetDomainName`)='real' AND abs(`TargetDomainName`) > 1.7976931348623157e308 THEN NULL ELSE `TargetDomainName` END, 'f5', CASE WHEN typeof(`TargetUserName`)='real' AND abs(`TargetUserName`) > 1.7976931348623157e308 THEN NULL ELSE `TargetUserName` END, 'f6', CASE WHEN typeof(`WorkstationName`)='real' AND abs(`WorkstationName`) > 1.7976931348623157e308 THEN NULL ELSE `WorkstationName` END) AS payload, COALESCE((((Channel='Security' AND EventID=4625 AND SubStatus='0xc0000064') AND (NOT COALESCE((IpAddress='-'), 0)))), 0) AS b0 FROM logs), sigma_abe9222e1271_horizon AS (SELECT (SELECT MAX(ts) FROM (SELECT ts FROM sigma_abe9222e1271_raw0)) AS ts), sigma_abe9222e1271_n0_input AS (SELECT s.*, 0 AS slot, CASE WHEN typeof(json_extract(s.payload, '$.f0'))='text' THEN lower(json_extract(s.payload, '$.f0')) ELSE json_extract(s.payload, '$.f0') END AS g0, CASE WHEN typeof(json_extract(s.payload, '$.f2'))='text' THEN lower(json_extract(s.payload, '$.f2')) ELSE json_extract(s.payload, '$.f2') END AS g1, CASE WHEN typeof(json_extract(s.payload, '$.f4'))='text' THEN lower(json_extract(s.payload, '$.f4')) ELSE json_extract(s.payload, '$.f4') END AS g2, CASE WHEN typeof(json_extract(s.payload, '$.f3'))='text' THEN lower(json_extract(s.payload, '$.f3')) ELSE json_extract(s.payload, '$.f3') END AS g3, CASE WHEN typeof(json_extract(s.payload, '$.f1'))='text' THEN lower(json_extract(s.payload, '$.f1')) ELSE json_extract(s.payload, '$.f1') END AS g4, CASE WHEN typeof(json_extract(s.payload, '$.f6'))='text' THEN lower(json_extract(s.payload, '$.f6')) ELSE json_extract(s.payload, '$.f6') END AS g5, json_extract(s.payload, '$.f5') AS v FROM (SELECT 'e:' || eid AS eid, ts, payload, json_array(eid) AS evidence, '[]' AS children FROM sigma_abe9222e1271_raw0 WHERE b0) s), sigma_abe9222e1271_n0_matches AS (SELECT DISTINCT * FROM sigma_abe9222e1271_n0_input WHERE ts IS NOT NULL AND eid IS NOT NULL AND g0 IS NOT NULL AND g1 IS NOT NULL AND g2 IS NOT NULL AND g3 IS NOT NULL AND g4 IS NOT NULL AND g5 IS NOT NULL), sigma_abe9222e1271_n0_events AS (SELECT DISTINCT eid, ts, g0, g1, g2, g3, g4, g5, v FROM sigma_abe9222e1271_n0_matches), sigma_abe9222e1271_n0_t0_anchors AS (SELECT DISTINCT ts - 300 AS start, ts AS end, g0, g1, g2, g3, g4, g5 FROM sigma_abe9222e1271_n0_matches), sigma_abe9222e1271_n0_t0_measured AS (SELECT a.*, (SELECT COUNT(DISTINCT m.v COLLATE NOCASE) FROM sigma_abe9222e1271_n0_events m WHERE m.g0 = a.g0 AND m.g1 = a.g1 AND m.g2 = a.g2 AND m.g3 = a.g3 AND m.g4 = a.g4 AND m.g5 = a.g5 AND m.ts BETWEEN a.start AND a.end) AS metric FROM sigma_abe9222e1271_n0_t0_anchors a WHERE 1), sigma_abe9222e1271_n0_t0_qualified AS (SELECT * FROM sigma_abe9222e1271_n0_t0_measured WHERE metric > 3), sigma_abe9222e1271_n0_combined AS (SELECT a.start, a.end, g0, g1, g2, g3, g4, g5, a.metric, (SELECT json_group_array(DISTINCT e.value) FROM sigma_abe9222e1271_n0_matches m, json_each(m.evidence) e WHERE m.g0 = a.g0 AND m.g1 = a.g1 AND m.g2 = a.g2 AND m.g3 = a.g3 AND m.g4 = a.g4 AND m.g5 = a.g5 AND m.ts BETWEEN a.start AND a.end) AS evidence, (SELECT json_group_array(DISTINCT c.value) FROM sigma_abe9222e1271_n0_matches m, json_each(m.children) c WHERE m.g0 = a.g0 AND m.g1 = a.g1 AND m.g2 = a.g2 AND m.g3 = a.g3 AND m.g4 = a.g4 AND m.g5 = a.g5 AND m.ts BETWEEN a.start AND a.end) AS children FROM sigma_abe9222e1271_n0_t0_qualified a), sigma_abe9222e1271_n0_windows AS (SELECT start, end, g0, g1, g2, g3, g4, g5, MAX(metric) AS metric FROM sigma_abe9222e1271_n0_combined GROUP BY start, end, g0, g1, g2, g3, g4, g5), sigma_abe9222e1271_n0_merged AS (SELECT a.*, (SELECT json_group_array(value) FROM (SELECT DISTINCT e.value FROM sigma_abe9222e1271_n0_combined c, json_each(c.evidence) e WHERE c.g0 = a.g0 AND c.g1 = a.g1 AND c.g2 = a.g2 AND c.g3 = a.g3 AND c.g4 = a.g4 AND c.g5 = a.g5 AND c.start=a.start AND c.end=a.end ORDER BY e.value)) AS evidence, (SELECT json_group_array(value) FROM (SELECT DISTINCT e.value FROM sigma_abe9222e1271_n0_combined c, json_each(c.children) e WHERE c.g0 = a.g0 AND c.g1 = a.g1 AND c.g2 = a.g2 AND c.g3 = a.g3 AND c.g4 = a.g4 AND c.g5 = a.g5 AND c.start=a.start AND c.end=a.end ORDER BY e.value)) AS children FROM sigma_abe9222e1271_n0_windows a), sigma_abe9222e1271_n0_alerts AS (SELECT 'sigma_alert_abe9222e1271f43c:' || ROW_NUMBER() OVER (ORDER BY g0, g1, g2, g3, g4, g5, end, start, metric, evidence) AS alert_id, start, end, json_object('IpAddress', `g0`, 'LogonType', `g1`, 'TargetDomainName', `g2`, 'ProcessName', `g3`, 'LogonProcessName', `g4`, 'WorkstationName', `g5`) AS group_keys, metric, evidence, children, json_object('f0', `g0`, 'f2', `g1`, 'f4', `g2`, 'f3', `g3`, 'f1', `g4`, 'f6', `g5`) AS payload FROM sigma_abe9222e1271_n0_merged) SELECT alert_id, group_keys, end AS occurrence_time, start AS window_start, end AS window_end, 'value_count' AS metric_name, metric AS metric_value, json_array_length(evidence) AS event_count, evidence AS event_ids, children AS child_alert_ids FROM sigma_abe9222e1271_n0_alerts ORDER BY occurrence_time, alert_id"
+    ],
+    "schema_version": 2,
+    "status": "test",
+    "tags": [
+      "attack.t1110.003",
+      "attack.credential-access"
+    ],
+    "title": "User Guessing"
+  },
+  {
+    "author": "Zach Mathis",
+    "channel": [],
+    "correlation": true,
+    "correlation_plan": {
+      "cleanup": [
+        "sigma_5cd034bdda3f_n0_alerts",
+        "sigma_5cd034bdda3f_n0_merged",
+        "sigma_5cd034bdda3f_n0_windows",
+        "sigma_5cd034bdda3f_n0_combined",
+        "sigma_5cd034bdda3f_n0_t0_qualified",
+        "sigma_5cd034bdda3f_n0_t0_measured",
+        "sigma_5cd034bdda3f_n0_t0_anchors",
+        "sigma_5cd034bdda3f_n0_metrics",
+        "sigma_5cd034bdda3f_n0_unique_events",
+        "sigma_5cd034bdda3f_n0_events",
+        "sigma_5cd034bdda3f_n0_matches",
+        "sigma_5cd034bdda3f_n0_input",
+        "sigma_5cd034bdda3f_horizon",
+        "sigma_5cd034bdda3f_raw0"
+      ],
+      "diagnostics": "SELECT 'invalid_timestamp' AS reason, COUNT(*) AS count FROM sigma_5cd034bdda3f_raw0 WHERE ts IS NULL AND (b0) UNION ALL SELECT 'missing_group_key' AS reason, COUNT(DISTINCT eid) AS count FROM sigma_5cd034bdda3f_n0_input WHERE g0 IS NULL OR g1 IS NULL OR g2 IS NULL OR g3 IS NULL OR g4 IS NULL OR g5 IS NULL",
+      "event_id_field": "row_id",
+      "prepare": [
+        {
+          "indexes": [
+            [
+              "eid"
+            ],
+            [
+              "ts"
+            ]
+          ],
+          "name": "sigma_5cd034bdda3f_raw0",
+          "select": "SELECT CAST(`row_id` AS TEXT) AS rid, '0:' || CAST(`row_id` AS TEXT) AS eid, ROUND((julianday(SystemTime) - 2440587.5) * 86400000) / 1000.0 AS ts, json_object('f0', CASE WHEN typeof(`IpAddress`)='real' AND abs(`IpAddress`) > 1.7976931348623157e308 THEN NULL ELSE `IpAddress` END, 'f1', CASE WHEN typeof(`LogonProcessName`)='real' AND abs(`LogonProcessName`) > 1.7976931348623157e308 THEN NULL ELSE `LogonProcessName` END, 'f2', CASE WHEN typeof(`LogonType`)='real' AND abs(`LogonType`) > 1.7976931348623157e308 THEN NULL ELSE `LogonType` END, 'f3', CASE WHEN typeof(`ProcessName`)='real' AND abs(`ProcessName`) > 1.7976931348623157e308 THEN NULL ELSE `ProcessName` END, 'f4', CASE WHEN typeof(`TargetDomainName`)='real' AND abs(`TargetDomainName`) > 1.7976931348623157e308 THEN NULL ELSE `TargetDomainName` END, 'f5', CASE WHEN typeof(`TargetUserName`)='real' AND abs(`TargetUserName`) > 1.7976931348623157e308 THEN NULL ELSE `TargetUserName` END) AS payload, COALESCE((((Channel='Security' AND EventID=4625 AND SubStatus='0xc000006a') AND (NOT COALESCE((IpAddress='-' OR TargetUserName LIKE '%$' ESCAPE '\\'), 0)))), 0) AS b0 FROM logs"
+        },
+        {
+          "indexes": [],
+          "name": "sigma_5cd034bdda3f_horizon",
+          "select": "SELECT (SELECT MAX(ts) FROM (SELECT ts FROM sigma_5cd034bdda3f_raw0)) AS ts"
+        },
+        {
+          "indexes": [],
+          "name": "sigma_5cd034bdda3f_n0_input",
+          "select": "SELECT s.*, 0 AS slot, CASE WHEN typeof(json_extract(s.payload, '$.f5'))='text' THEN lower(json_extract(s.payload, '$.f5')) ELSE json_extract(s.payload, '$.f5') END AS g0, CASE WHEN typeof(json_extract(s.payload, '$.f4'))='text' THEN lower(json_extract(s.payload, '$.f4')) ELSE json_extract(s.payload, '$.f4') END AS g1, CASE WHEN typeof(json_extract(s.payload, '$.f0'))='text' THEN lower(json_extract(s.payload, '$.f0')) ELSE json_extract(s.payload, '$.f0') END AS g2, CASE WHEN typeof(json_extract(s.payload, '$.f2'))='text' THEN lower(json_extract(s.payload, '$.f2')) ELSE json_extract(s.payload, '$.f2') END AS g3, CASE WHEN typeof(json_extract(s.payload, '$.f3'))='text' THEN lower(json_extract(s.payload, '$.f3')) ELSE json_extract(s.payload, '$.f3') END AS g4, CASE WHEN typeof(json_extract(s.payload, '$.f1'))='text' THEN lower(json_extract(s.payload, '$.f1')) ELSE json_extract(s.payload, '$.f1') END AS g5, NULL AS v FROM (SELECT 'e:' || eid AS eid, ts, payload, json_array(eid) AS evidence, '[]' AS children FROM sigma_5cd034bdda3f_raw0 WHERE b0) s"
+        },
+        {
+          "indexes": [
+            [
+              "g0",
+              "g1",
+              "g2",
+              "g3",
+              "g4",
+              "g5",
+              "ts"
+            ],
+            [
+              "g0",
+              "g1",
+              "g2",
+              "g3",
+              "g4",
+              "g5",
+              "slot",
+              "ts"
+            ],
+            [
+              "eid"
+            ]
+          ],
+          "name": "sigma_5cd034bdda3f_n0_matches",
+          "select": "SELECT DISTINCT * FROM sigma_5cd034bdda3f_n0_input WHERE ts IS NOT NULL AND eid IS NOT NULL AND g0 IS NOT NULL AND g1 IS NOT NULL AND g2 IS NOT NULL AND g3 IS NOT NULL AND g4 IS NOT NULL AND g5 IS NOT NULL"
+        },
+        {
+          "indexes": [
+            [
+              "g0",
+              "g1",
+              "g2",
+              "g3",
+              "g4",
+              "g5",
+              "ts"
+            ]
+          ],
+          "name": "sigma_5cd034bdda3f_n0_events",
+          "select": "SELECT DISTINCT eid, ts, g0, g1, g2, g3, g4, g5, v FROM sigma_5cd034bdda3f_n0_matches"
+        },
+        {
+          "indexes": [],
+          "name": "sigma_5cd034bdda3f_n0_unique_events",
+          "select": "SELECT DISTINCT eid, ts, g0, g1, g2, g3, g4, g5 FROM sigma_5cd034bdda3f_n0_events"
+        },
+        {
+          "indexes": [
+            [
+              "g0",
+              "g1",
+              "g2",
+              "g3",
+              "g4",
+              "g5",
+              "end"
+            ]
+          ],
+          "name": "sigma_5cd034bdda3f_n0_metrics",
+          "select": "SELECT DISTINCT ts AS end, g0, g1, g2, g3, g4, g5, COUNT(*) OVER (PARTITION BY g0, g1, g2, g3, g4, g5 ORDER BY ts RANGE BETWEEN 300 PRECEDING AND CURRENT ROW) AS metric FROM sigma_5cd034bdda3f_n0_unique_events"
+        },
+        {
+          "indexes": [
+            [
+              "g0",
+              "g1",
+              "g2",
+              "g3",
+              "g4",
+              "g5",
+              "end"
+            ]
+          ],
+          "name": "sigma_5cd034bdda3f_n0_t0_anchors",
+          "select": "SELECT DISTINCT ts - 300 AS start, ts AS end, g0, g1, g2, g3, g4, g5 FROM sigma_5cd034bdda3f_n0_matches"
+        },
+        {
+          "indexes": [],
+          "name": "sigma_5cd034bdda3f_n0_t0_measured",
+          "select": "SELECT a.*, (SELECT m.metric FROM sigma_5cd034bdda3f_n0_metrics m WHERE m.g0 = a.g0 AND m.g1 = a.g1 AND m.g2 = a.g2 AND m.g3 = a.g3 AND m.g4 = a.g4 AND m.g5 = a.g5 AND m.end=a.end) AS metric FROM sigma_5cd034bdda3f_n0_t0_anchors a WHERE 1"
+        },
+        {
+          "indexes": [],
+          "name": "sigma_5cd034bdda3f_n0_t0_qualified",
+          "select": "SELECT * FROM sigma_5cd034bdda3f_n0_t0_measured WHERE metric >= 5"
+        },
+        {
+          "indexes": [],
+          "name": "sigma_5cd034bdda3f_n0_combined",
+          "select": "SELECT a.start, a.end, g0, g1, g2, g3, g4, g5, a.metric, (SELECT json_group_array(DISTINCT e.value) FROM sigma_5cd034bdda3f_n0_matches m, json_each(m.evidence) e WHERE m.g0 = a.g0 AND m.g1 = a.g1 AND m.g2 = a.g2 AND m.g3 = a.g3 AND m.g4 = a.g4 AND m.g5 = a.g5 AND m.ts BETWEEN a.start AND a.end) AS evidence, (SELECT json_group_array(DISTINCT c.value) FROM sigma_5cd034bdda3f_n0_matches m, json_each(m.children) c WHERE m.g0 = a.g0 AND m.g1 = a.g1 AND m.g2 = a.g2 AND m.g3 = a.g3 AND m.g4 = a.g4 AND m.g5 = a.g5 AND m.ts BETWEEN a.start AND a.end) AS children FROM sigma_5cd034bdda3f_n0_t0_qualified a"
+        },
+        {
+          "indexes": [],
+          "name": "sigma_5cd034bdda3f_n0_windows",
+          "select": "SELECT start, end, g0, g1, g2, g3, g4, g5, MAX(metric) AS metric FROM sigma_5cd034bdda3f_n0_combined GROUP BY start, end, g0, g1, g2, g3, g4, g5"
+        },
+        {
+          "indexes": [],
+          "name": "sigma_5cd034bdda3f_n0_merged",
+          "select": "SELECT a.*, (SELECT json_group_array(value) FROM (SELECT DISTINCT e.value FROM sigma_5cd034bdda3f_n0_combined c, json_each(c.evidence) e WHERE c.g0 = a.g0 AND c.g1 = a.g1 AND c.g2 = a.g2 AND c.g3 = a.g3 AND c.g4 = a.g4 AND c.g5 = a.g5 AND c.start=a.start AND c.end=a.end ORDER BY e.value)) AS evidence, (SELECT json_group_array(value) FROM (SELECT DISTINCT e.value FROM sigma_5cd034bdda3f_n0_combined c, json_each(c.children) e WHERE c.g0 = a.g0 AND c.g1 = a.g1 AND c.g2 = a.g2 AND c.g3 = a.g3 AND c.g4 = a.g4 AND c.g5 = a.g5 AND c.start=a.start AND c.end=a.end ORDER BY e.value)) AS children FROM sigma_5cd034bdda3f_n0_windows a"
+        },
+        {
+          "indexes": [
+            [
+              "end"
+            ],
+            [
+              "alert_id"
+            ]
+          ],
+          "name": "sigma_5cd034bdda3f_n0_alerts",
+          "select": "SELECT 'sigma_alert_5cd034bdda3f1dd4:' || ROW_NUMBER() OVER (ORDER BY g0, g1, g2, g3, g4, g5, end, start, metric, evidence) AS alert_id, start, end, json_object('TargetUserName', `g0`, 'TargetDomainName', `g1`, 'IpAddress', `g2`, 'LogonType', `g3`, 'ProcessName', `g4`, 'LogonProcessName', `g5`) AS group_keys, metric, evidence, children, json_object('f5', `g0`, 'f4', `g1`, 'f0', `g2`, 'f2', `g3`, 'f3', `g4`, 'f1', `g5`) AS payload FROM sigma_5cd034bdda3f_n0_merged"
+        }
+      ],
+      "query": "SELECT alert_id, group_keys, end AS occurrence_time, start AS window_start, end AS window_end, 'event_count' AS metric_name, metric AS metric_value, json_array_length(evidence) AS event_count, evidence AS event_ids, children AS child_alert_ids FROM sigma_5cd034bdda3f_n0_alerts ORDER BY occurrence_time, alert_id",
+      "required_fields": {
+        "logs": [
+          "Channel",
+          "EventID",
+          "IpAddress",
+          "LogonProcessName",
+          "LogonType",
+          "ProcessName",
+          "SubStatus",
+          "SystemTime",
+          "TargetDomainName",
+          "TargetUserName",
+          "row_id"
+        ]
+      },
+      "source_tables": {
+        "0": "logs"
+      },
+      "sqlite_min_version": "3.38.0",
+      "version": 2
+    },
+    "description": "Detects password guessing attacks",
+    "eventid": [],
+    "falsepositives": [
+      "User mistyping password"
+    ],
+    "filename": "hayabusa/builtin/Security/LogonLogoff/Logon/Sec_4625_Med_LogonFail_WrongPW_PW-Guessing_Correlation.yml",
+    "id": "23179f25-6fce-4827-bae1-b219deaf563e",
+    "level": "medium",
+    "required_fields": [
+      "Channel",
+      "EventID",
+      "IpAddress",
+      "LogonProcessName",
+      "LogonType",
+      "ProcessName",
+      "SubStatus",
+      "SystemTime",
+      "TargetDomainName",
+      "TargetUserName",
+      "row_id"
+    ],
+    "result_type": "correlation",
+    "rule": [
+      "WITH sigma_5cd034bdda3f_raw0 AS (SELECT CAST(`row_id` AS TEXT) AS rid, '0:' || CAST(`row_id` AS TEXT) AS eid, ROUND((julianday(SystemTime) - 2440587.5) * 86400000) / 1000.0 AS ts, json_object('f0', CASE WHEN typeof(`IpAddress`)='real' AND abs(`IpAddress`) > 1.7976931348623157e308 THEN NULL ELSE `IpAddress` END, 'f1', CASE WHEN typeof(`LogonProcessName`)='real' AND abs(`LogonProcessName`) > 1.7976931348623157e308 THEN NULL ELSE `LogonProcessName` END, 'f2', CASE WHEN typeof(`LogonType`)='real' AND abs(`LogonType`) > 1.7976931348623157e308 THEN NULL ELSE `LogonType` END, 'f3', CASE WHEN typeof(`ProcessName`)='real' AND abs(`ProcessName`) > 1.7976931348623157e308 THEN NULL ELSE `ProcessName` END, 'f4', CASE WHEN typeof(`TargetDomainName`)='real' AND abs(`TargetDomainName`) > 1.7976931348623157e308 THEN NULL ELSE `TargetDomainName` END, 'f5', CASE WHEN typeof(`TargetUserName`)='real' AND abs(`TargetUserName`) > 1.7976931348623157e308 THEN NULL ELSE `TargetUserName` END) AS payload, COALESCE((((Channel='Security' AND EventID=4625 AND SubStatus='0xc000006a') AND (NOT COALESCE((IpAddress='-' OR TargetUserName LIKE '%$' ESCAPE '\\'), 0)))), 0) AS b0 FROM logs), sigma_5cd034bdda3f_horizon AS (SELECT (SELECT MAX(ts) FROM (SELECT ts FROM sigma_5cd034bdda3f_raw0)) AS ts), sigma_5cd034bdda3f_n0_input AS (SELECT s.*, 0 AS slot, CASE WHEN typeof(json_extract(s.payload, '$.f5'))='text' THEN lower(json_extract(s.payload, '$.f5')) ELSE json_extract(s.payload, '$.f5') END AS g0, CASE WHEN typeof(json_extract(s.payload, '$.f4'))='text' THEN lower(json_extract(s.payload, '$.f4')) ELSE json_extract(s.payload, '$.f4') END AS g1, CASE WHEN typeof(json_extract(s.payload, '$.f0'))='text' THEN lower(json_extract(s.payload, '$.f0')) ELSE json_extract(s.payload, '$.f0') END AS g2, CASE WHEN typeof(json_extract(s.payload, '$.f2'))='text' THEN lower(json_extract(s.payload, '$.f2')) ELSE json_extract(s.payload, '$.f2') END AS g3, CASE WHEN typeof(json_extract(s.payload, '$.f3'))='text' THEN lower(json_extract(s.payload, '$.f3')) ELSE json_extract(s.payload, '$.f3') END AS g4, CASE WHEN typeof(json_extract(s.payload, '$.f1'))='text' THEN lower(json_extract(s.payload, '$.f1')) ELSE json_extract(s.payload, '$.f1') END AS g5, NULL AS v FROM (SELECT 'e:' || eid AS eid, ts, payload, json_array(eid) AS evidence, '[]' AS children FROM sigma_5cd034bdda3f_raw0 WHERE b0) s), sigma_5cd034bdda3f_n0_matches AS (SELECT DISTINCT * FROM sigma_5cd034bdda3f_n0_input WHERE ts IS NOT NULL AND eid IS NOT NULL AND g0 IS NOT NULL AND g1 IS NOT NULL AND g2 IS NOT NULL AND g3 IS NOT NULL AND g4 IS NOT NULL AND g5 IS NOT NULL), sigma_5cd034bdda3f_n0_events AS (SELECT DISTINCT eid, ts, g0, g1, g2, g3, g4, g5, v FROM sigma_5cd034bdda3f_n0_matches), sigma_5cd034bdda3f_n0_unique_events AS (SELECT DISTINCT eid, ts, g0, g1, g2, g3, g4, g5 FROM sigma_5cd034bdda3f_n0_events), sigma_5cd034bdda3f_n0_metrics AS (SELECT DISTINCT ts AS end, g0, g1, g2, g3, g4, g5, COUNT(*) OVER (PARTITION BY g0, g1, g2, g3, g4, g5 ORDER BY ts RANGE BETWEEN 300 PRECEDING AND CURRENT ROW) AS metric FROM sigma_5cd034bdda3f_n0_unique_events), sigma_5cd034bdda3f_n0_t0_anchors AS (SELECT DISTINCT ts - 300 AS start, ts AS end, g0, g1, g2, g3, g4, g5 FROM sigma_5cd034bdda3f_n0_matches), sigma_5cd034bdda3f_n0_t0_measured AS (SELECT a.*, (SELECT m.metric FROM sigma_5cd034bdda3f_n0_metrics m WHERE m.g0 = a.g0 AND m.g1 = a.g1 AND m.g2 = a.g2 AND m.g3 = a.g3 AND m.g4 = a.g4 AND m.g5 = a.g5 AND m.end=a.end) AS metric FROM sigma_5cd034bdda3f_n0_t0_anchors a WHERE 1), sigma_5cd034bdda3f_n0_t0_qualified AS (SELECT * FROM sigma_5cd034bdda3f_n0_t0_measured WHERE metric >= 5), sigma_5cd034bdda3f_n0_combined AS (SELECT a.start, a.end, g0, g1, g2, g3, g4, g5, a.metric, (SELECT json_group_array(DISTINCT e.value) FROM sigma_5cd034bdda3f_n0_matches m, json_each(m.evidence) e WHERE m.g0 = a.g0 AND m.g1 = a.g1 AND m.g2 = a.g2 AND m.g3 = a.g3 AND m.g4 = a.g4 AND m.g5 = a.g5 AND m.ts BETWEEN a.start AND a.end) AS evidence, (SELECT json_group_array(DISTINCT c.value) FROM sigma_5cd034bdda3f_n0_matches m, json_each(m.children) c WHERE m.g0 = a.g0 AND m.g1 = a.g1 AND m.g2 = a.g2 AND m.g3 = a.g3 AND m.g4 = a.g4 AND m.g5 = a.g5 AND m.ts BETWEEN a.start AND a.end) AS children FROM sigma_5cd034bdda3f_n0_t0_qualified a), sigma_5cd034bdda3f_n0_windows AS (SELECT start, end, g0, g1, g2, g3, g4, g5, MAX(metric) AS metric FROM sigma_5cd034bdda3f_n0_combined GROUP BY start, end, g0, g1, g2, g3, g4, g5), sigma_5cd034bdda3f_n0_merged AS (SELECT a.*, (SELECT json_group_array(value) FROM (SELECT DISTINCT e.value FROM sigma_5cd034bdda3f_n0_combined c, json_each(c.evidence) e WHERE c.g0 = a.g0 AND c.g1 = a.g1 AND c.g2 = a.g2 AND c.g3 = a.g3 AND c.g4 = a.g4 AND c.g5 = a.g5 AND c.start=a.start AND c.end=a.end ORDER BY e.value)) AS evidence, (SELECT json_group_array(value) FROM (SELECT DISTINCT e.value FROM sigma_5cd034bdda3f_n0_combined c, json_each(c.children) e WHERE c.g0 = a.g0 AND c.g1 = a.g1 AND c.g2 = a.g2 AND c.g3 = a.g3 AND c.g4 = a.g4 AND c.g5 = a.g5 AND c.start=a.start AND c.end=a.end ORDER BY e.value)) AS children FROM sigma_5cd034bdda3f_n0_windows a), sigma_5cd034bdda3f_n0_alerts AS (SELECT 'sigma_alert_5cd034bdda3f1dd4:' || ROW_NUMBER() OVER (ORDER BY g0, g1, g2, g3, g4, g5, end, start, metric, evidence) AS alert_id, start, end, json_object('TargetUserName', `g0`, 'TargetDomainName', `g1`, 'IpAddress', `g2`, 'LogonType', `g3`, 'ProcessName', `g4`, 'LogonProcessName', `g5`) AS group_keys, metric, evidence, children, json_object('f5', `g0`, 'f4', `g1`, 'f0', `g2`, 'f2', `g3`, 'f3', `g4`, 'f1', `g5`) AS payload FROM sigma_5cd034bdda3f_n0_merged) SELECT alert_id, group_keys, end AS occurrence_time, start AS window_start, end AS window_end, 'event_count' AS metric_name, metric AS metric_value, json_array_length(evidence) AS event_count, evidence AS event_ids, children AS child_alert_ids FROM sigma_5cd034bdda3f_n0_alerts ORDER BY occurrence_time, alert_id"
+    ],
+    "schema_version": 2,
+    "status": "test",
+    "tags": [
+      "attack.t1110.003",
+      "attack.credential-access"
+    ],
+    "title": "PW Guessing"
+  },
+  {
+    "author": "Zach Mathis",
+    "channel": [],
+    "correlation": true,
+    "correlation_plan": {
+      "cleanup": [
+        "sigma_df70123ebe49_n0_alerts",
+        "sigma_df70123ebe49_n0_merged",
+        "sigma_df70123ebe49_n0_windows",
+        "sigma_df70123ebe49_n0_combined",
+        "sigma_df70123ebe49_n0_t0_qualified",
+        "sigma_df70123ebe49_n0_t0_measured",
+        "sigma_df70123ebe49_n0_t0_anchors",
+        "sigma_df70123ebe49_n0_events",
+        "sigma_df70123ebe49_n0_matches",
+        "sigma_df70123ebe49_n0_input",
+        "sigma_df70123ebe49_horizon",
+        "sigma_df70123ebe49_raw0"
+      ],
+      "diagnostics": "SELECT 'invalid_timestamp' AS reason, COUNT(*) AS count FROM sigma_df70123ebe49_raw0 WHERE ts IS NULL AND (b0) UNION ALL SELECT 'missing_group_key' AS reason, COUNT(DISTINCT eid) AS count FROM sigma_df70123ebe49_n0_input WHERE g0 IS NULL OR g1 IS NULL",
+      "event_id_field": "row_id",
+      "prepare": [
+        {
+          "indexes": [
+            [
+              "eid"
+            ],
+            [
+              "ts"
+            ]
+          ],
+          "name": "sigma_df70123ebe49_raw0",
+          "select": "SELECT CAST(`row_id` AS TEXT) AS rid, '0:' || CAST(`row_id` AS TEXT) AS eid, ROUND((julianday(SystemTime) - 2440587.5) * 86400000) / 1000.0 AS ts, json_object('f0', CASE WHEN typeof(`Computer`)='real' AND abs(`Computer`) > 1.7976931348623157e308 THEN NULL ELSE `Computer` END, 'f1', CASE WHEN typeof(`IpAddress`)='real' AND abs(`IpAddress`) > 1.7976931348623157e308 THEN NULL ELSE `IpAddress` END, 'f2', CASE WHEN typeof(`TargetUserName`)='real' AND abs(`TargetUserName`) > 1.7976931348623157e308 THEN NULL ELSE `TargetUserName` END) AS payload, COALESCE((((Channel='Security' AND EventID=4648) AND (NOT COALESCE((IpAddress='-'), 0)))), 0) AS b0 FROM logs"
+        },
+        {
+          "indexes": [],
+          "name": "sigma_df70123ebe49_horizon",
+          "select": "SELECT (SELECT MAX(ts) FROM (SELECT ts FROM sigma_df70123ebe49_raw0)) AS ts"
+        },
+        {
+          "indexes": [],
+          "name": "sigma_df70123ebe49_n0_input",
+          "select": "SELECT s.*, 0 AS slot, CASE WHEN typeof(json_extract(s.payload, '$.f1'))='text' THEN lower(json_extract(s.payload, '$.f1')) ELSE json_extract(s.payload, '$.f1') END AS g0, CASE WHEN typeof(json_extract(s.payload, '$.f0'))='text' THEN lower(json_extract(s.payload, '$.f0')) ELSE json_extract(s.payload, '$.f0') END AS g1, json_extract(s.payload, '$.f2') AS v FROM (SELECT 'e:' || eid AS eid, ts, payload, json_array(eid) AS evidence, '[]' AS children FROM sigma_df70123ebe49_raw0 WHERE b0) s"
+        },
+        {
+          "indexes": [
+            [
+              "g0",
+              "g1",
+              "ts"
+            ],
+            [
+              "g0",
+              "g1",
+              "slot",
+              "ts"
+            ],
+            [
+              "eid"
+            ]
+          ],
+          "name": "sigma_df70123ebe49_n0_matches",
+          "select": "SELECT DISTINCT * FROM sigma_df70123ebe49_n0_input WHERE ts IS NOT NULL AND eid IS NOT NULL AND g0 IS NOT NULL AND g1 IS NOT NULL"
+        },
+        {
+          "indexes": [
+            [
+              "g0",
+              "g1",
+              "ts"
+            ]
+          ],
+          "name": "sigma_df70123ebe49_n0_events",
+          "select": "SELECT DISTINCT eid, ts, g0, g1, v FROM sigma_df70123ebe49_n0_matches"
+        },
+        {
+          "indexes": [
+            [
+              "g0",
+              "g1",
+              "end"
+            ]
+          ],
+          "name": "sigma_df70123ebe49_n0_t0_anchors",
+          "select": "SELECT DISTINCT ts - 300 AS start, ts AS end, g0, g1 FROM sigma_df70123ebe49_n0_matches"
+        },
+        {
+          "indexes": [],
+          "name": "sigma_df70123ebe49_n0_t0_measured",
+          "select": "SELECT a.*, (SELECT COUNT(DISTINCT m.v COLLATE NOCASE) FROM sigma_df70123ebe49_n0_events m WHERE m.g0 = a.g0 AND m.g1 = a.g1 AND m.ts BETWEEN a.start AND a.end) AS metric FROM sigma_df70123ebe49_n0_t0_anchors a WHERE 1"
+        },
+        {
+          "indexes": [],
+          "name": "sigma_df70123ebe49_n0_t0_qualified",
+          "select": "SELECT * FROM sigma_df70123ebe49_n0_t0_measured WHERE metric >= 5"
+        },
+        {
+          "indexes": [],
+          "name": "sigma_df70123ebe49_n0_combined",
+          "select": "SELECT a.start, a.end, g0, g1, a.metric, (SELECT json_group_array(DISTINCT e.value) FROM sigma_df70123ebe49_n0_matches m, json_each(m.evidence) e WHERE m.g0 = a.g0 AND m.g1 = a.g1 AND m.ts BETWEEN a.start AND a.end) AS evidence, (SELECT json_group_array(DISTINCT c.value) FROM sigma_df70123ebe49_n0_matches m, json_each(m.children) c WHERE m.g0 = a.g0 AND m.g1 = a.g1 AND m.ts BETWEEN a.start AND a.end) AS children FROM sigma_df70123ebe49_n0_t0_qualified a"
+        },
+        {
+          "indexes": [],
+          "name": "sigma_df70123ebe49_n0_windows",
+          "select": "SELECT start, end, g0, g1, MAX(metric) AS metric FROM sigma_df70123ebe49_n0_combined GROUP BY start, end, g0, g1"
+        },
+        {
+          "indexes": [],
+          "name": "sigma_df70123ebe49_n0_merged",
+          "select": "SELECT a.*, (SELECT json_group_array(value) FROM (SELECT DISTINCT e.value FROM sigma_df70123ebe49_n0_combined c, json_each(c.evidence) e WHERE c.g0 = a.g0 AND c.g1 = a.g1 AND c.start=a.start AND c.end=a.end ORDER BY e.value)) AS evidence, (SELECT json_group_array(value) FROM (SELECT DISTINCT e.value FROM sigma_df70123ebe49_n0_combined c, json_each(c.children) e WHERE c.g0 = a.g0 AND c.g1 = a.g1 AND c.start=a.start AND c.end=a.end ORDER BY e.value)) AS children FROM sigma_df70123ebe49_n0_windows a"
+        },
+        {
+          "indexes": [
+            [
+              "end"
+            ],
+            [
+              "alert_id"
+            ]
+          ],
+          "name": "sigma_df70123ebe49_n0_alerts",
+          "select": "SELECT 'sigma_alert_df70123ebe49f4b2:' || ROW_NUMBER() OVER (ORDER BY g0, g1, end, start, metric, evidence) AS alert_id, start, end, json_object('IpAddress', `g0`, 'Computer', `g1`) AS group_keys, metric, evidence, children, json_object('f1', `g0`, 'f0', `g1`) AS payload FROM sigma_df70123ebe49_n0_merged"
+        }
+      ],
+      "query": "SELECT alert_id, group_keys, end AS occurrence_time, start AS window_start, end AS window_end, 'value_count' AS metric_name, metric AS metric_value, json_array_length(evidence) AS event_count, evidence AS event_ids, children AS child_alert_ids FROM sigma_df70123ebe49_n0_alerts ORDER BY occurrence_time, alert_id",
+      "required_fields": {
+        "logs": [
+          "Channel",
+          "Computer",
+          "EventID",
+          "IpAddress",
+          "SystemTime",
+          "TargetUserName",
+          "row_id"
+        ]
+      },
+      "source_tables": {
+        "0": "logs"
+      },
+      "sqlite_min_version": "3.38.0",
+      "version": 2
+    },
+    "description": "Search for many 4648 explicit credential logon attempts in a short period of time.",
+    "eventid": [],
+    "falsepositives": [],
+    "filename": "hayabusa/builtin/Security/LogonLogoff/Logon/Sec_4648_Med_ExplicitLogon_PW-Spray_Correlation.yml",
+    "id": "49d15187-4203-4e11-8acd-8736f25b6608",
+    "level": "medium",
+    "required_fields": [
+      "Channel",
+      "Computer",
+      "EventID",
+      "IpAddress",
+      "SystemTime",
+      "TargetUserName",
+      "row_id"
+    ],
+    "result_type": "correlation",
+    "rule": [
+      "WITH sigma_df70123ebe49_raw0 AS (SELECT CAST(`row_id` AS TEXT) AS rid, '0:' || CAST(`row_id` AS TEXT) AS eid, ROUND((julianday(SystemTime) - 2440587.5) * 86400000) / 1000.0 AS ts, json_object('f0', CASE WHEN typeof(`Computer`)='real' AND abs(`Computer`) > 1.7976931348623157e308 THEN NULL ELSE `Computer` END, 'f1', CASE WHEN typeof(`IpAddress`)='real' AND abs(`IpAddress`) > 1.7976931348623157e308 THEN NULL ELSE `IpAddress` END, 'f2', CASE WHEN typeof(`TargetUserName`)='real' AND abs(`TargetUserName`) > 1.7976931348623157e308 THEN NULL ELSE `TargetUserName` END) AS payload, COALESCE((((Channel='Security' AND EventID=4648) AND (NOT COALESCE((IpAddress='-'), 0)))), 0) AS b0 FROM logs), sigma_df70123ebe49_horizon AS (SELECT (SELECT MAX(ts) FROM (SELECT ts FROM sigma_df70123ebe49_raw0)) AS ts), sigma_df70123ebe49_n0_input AS (SELECT s.*, 0 AS slot, CASE WHEN typeof(json_extract(s.payload, '$.f1'))='text' THEN lower(json_extract(s.payload, '$.f1')) ELSE json_extract(s.payload, '$.f1') END AS g0, CASE WHEN typeof(json_extract(s.payload, '$.f0'))='text' THEN lower(json_extract(s.payload, '$.f0')) ELSE json_extract(s.payload, '$.f0') END AS g1, json_extract(s.payload, '$.f2') AS v FROM (SELECT 'e:' || eid AS eid, ts, payload, json_array(eid) AS evidence, '[]' AS children FROM sigma_df70123ebe49_raw0 WHERE b0) s), sigma_df70123ebe49_n0_matches AS (SELECT DISTINCT * FROM sigma_df70123ebe49_n0_input WHERE ts IS NOT NULL AND eid IS NOT NULL AND g0 IS NOT NULL AND g1 IS NOT NULL), sigma_df70123ebe49_n0_events AS (SELECT DISTINCT eid, ts, g0, g1, v FROM sigma_df70123ebe49_n0_matches), sigma_df70123ebe49_n0_t0_anchors AS (SELECT DISTINCT ts - 300 AS start, ts AS end, g0, g1 FROM sigma_df70123ebe49_n0_matches), sigma_df70123ebe49_n0_t0_measured AS (SELECT a.*, (SELECT COUNT(DISTINCT m.v COLLATE NOCASE) FROM sigma_df70123ebe49_n0_events m WHERE m.g0 = a.g0 AND m.g1 = a.g1 AND m.ts BETWEEN a.start AND a.end) AS metric FROM sigma_df70123ebe49_n0_t0_anchors a WHERE 1), sigma_df70123ebe49_n0_t0_qualified AS (SELECT * FROM sigma_df70123ebe49_n0_t0_measured WHERE metric >= 5), sigma_df70123ebe49_n0_combined AS (SELECT a.start, a.end, g0, g1, a.metric, (SELECT json_group_array(DISTINCT e.value) FROM sigma_df70123ebe49_n0_matches m, json_each(m.evidence) e WHERE m.g0 = a.g0 AND m.g1 = a.g1 AND m.ts BETWEEN a.start AND a.end) AS evidence, (SELECT json_group_array(DISTINCT c.value) FROM sigma_df70123ebe49_n0_matches m, json_each(m.children) c WHERE m.g0 = a.g0 AND m.g1 = a.g1 AND m.ts BETWEEN a.start AND a.end) AS children FROM sigma_df70123ebe49_n0_t0_qualified a), sigma_df70123ebe49_n0_windows AS (SELECT start, end, g0, g1, MAX(metric) AS metric FROM sigma_df70123ebe49_n0_combined GROUP BY start, end, g0, g1), sigma_df70123ebe49_n0_merged AS (SELECT a.*, (SELECT json_group_array(value) FROM (SELECT DISTINCT e.value FROM sigma_df70123ebe49_n0_combined c, json_each(c.evidence) e WHERE c.g0 = a.g0 AND c.g1 = a.g1 AND c.start=a.start AND c.end=a.end ORDER BY e.value)) AS evidence, (SELECT json_group_array(value) FROM (SELECT DISTINCT e.value FROM sigma_df70123ebe49_n0_combined c, json_each(c.children) e WHERE c.g0 = a.g0 AND c.g1 = a.g1 AND c.start=a.start AND c.end=a.end ORDER BY e.value)) AS children FROM sigma_df70123ebe49_n0_windows a), sigma_df70123ebe49_n0_alerts AS (SELECT 'sigma_alert_df70123ebe49f4b2:' || ROW_NUMBER() OVER (ORDER BY g0, g1, end, start, metric, evidence) AS alert_id, start, end, json_object('IpAddress', `g0`, 'Computer', `g1`) AS group_keys, metric, evidence, children, json_object('f1', `g0`, 'f0', `g1`) AS payload FROM sigma_df70123ebe49_n0_merged) SELECT alert_id, group_keys, end AS occurrence_time, start AS window_start, end AS window_end, 'value_count' AS metric_name, metric AS metric_value, json_array_length(evidence) AS event_count, evidence AS event_ids, children AS child_alert_ids FROM sigma_df70123ebe49_n0_alerts ORDER BY occurrence_time, alert_id"
+    ],
+    "schema_version": 2,
+    "status": "test",
+    "tags": [
+      "attack.t1110.003",
+      "attack.credential-access"
+    ],
+    "title": "PW Spray"
+  }
+]

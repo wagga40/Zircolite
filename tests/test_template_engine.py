@@ -10,6 +10,8 @@ from pathlib import Path
 from typing import ClassVar
 from unittest.mock import MagicMock, patch
 
+import pytest
+
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from zircolite import TemplateConfig, TemplateEngine
@@ -991,3 +993,65 @@ class TestZircoGuiTacticBuckets:
         rendered = self._render(tmp_path, data)
 
         assert self._titles_in(rendered, "Other") == ["orphan"]
+
+
+class TestTemplatesSerialiseAnyMatch:
+    """Every per-match template must emit valid JSON whatever the match holds.
+
+    Keys were written between bare quotes, so a field name carrying a quote or
+    backslash (split-derived names can) broke the document. Correlation alerts
+    add nested values: targets that map one scalar per field (Elasticsearch,
+    Zinc, Timesketch, the Mini-GUI) receive them as JSON text.
+    """
+
+    TEMPLATES = Path(__file__).parent.parent / "templates"
+    KEY = 'odd"key\\name'
+    MATCH: ClassVar[dict] = {
+        "row_id": 1,
+        "SystemTime": "2026-01-01T00:00:00Z",
+        KEY: "v",
+        "group_keys": {"Host": "h"},
+        "event_ids": ["0:1", "0:2"],
+    }
+    DATA: ClassVar[list] = [{
+        "title": "t", "id": "i", "description": "d", "rule_level": "high",
+        "sigmafile": "", "tags": ["attack.execution"], "matches": [MATCH],
+    }]
+
+    def _render(self, tmp_path, name):
+        template = self.TEMPLATES / name
+        out = tmp_path / "out.txt"
+        engine = TemplateEngine(
+            TemplateConfig(template=[[str(template)]], template_output=[[str(out)]], time_field="SystemTime"),
+            logger=logging.getLogger("test"),
+        )
+        assert engine.generate_from_template(str(template), str(out), self.DATA)
+        return out.read_text()
+
+    @pytest.mark.parametrize("name,nested", [
+        ("exportForSplunk.tmpl", True),
+        ("exportForSplunkWithRuleID.tmpl", True),
+        ("exportNDJSON.tmpl", True),
+        ("exportForELK.tmpl", False),
+        ("exportForTimesketch.tmpl", False),
+        ("exportForZinc.tmpl", False),
+    ])
+    def test_every_line_is_a_json_document(self, tmp_path, name, nested):
+        lines = [line for line in self._render(tmp_path, name).splitlines() if line.strip()]
+        documents = [json.loads(line) for line in lines]
+        document = documents[-1]
+
+        assert document[self.KEY] == "v"
+        if nested:
+            assert document["group_keys"] == {"Host": "h"}
+            assert document["event_ids"] == ["0:1", "0:2"]
+        else:
+            assert json.loads(document["group_keys"]) == {"Host": "h"}
+            assert json.loads(document["event_ids"]) == ["0:1", "0:2"]
+
+    def test_gui_rows_parse_and_show_nested_values_as_text(self, tmp_path):
+        rendered = self._render(tmp_path, "exportForZircoGui.tmpl")
+        rows = json.loads(re.search(r"var HighData = (\[.*?\n\]);", rendered, re.DOTALL).group(1))
+
+        assert rows[0][self.KEY] == "v"
+        assert json.loads(rows[0]["group_keys"]) == {"Host": "h"}

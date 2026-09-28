@@ -220,7 +220,10 @@ the workflow by hand: `dry_run` is on by default and stops after `SHA256SUMS`.
 
 ## Rules and licensing
 
-Code is LGPL-3.0-or-later; the SIGMA rules under `rules/` are covered by the
-Detection Rule License. Rulesets are generated from
+Code is LGPL-3.0-or-later; the SIGMA rules under `rules/` keep the licence of
+their source (DRL 1.1, GPL 3.0 or CC0 1.0), named with its text in
+`rules/licenses/` and for every file in `rules/release-manifest.json`. Refresh
+them with `-U` rather than by hand: a release refuses files that manifest does
+not list. Rulesets are generated from
 [Zircolite-Rules-v2](https://github.com/wagga40/Zircolite-Rules-v2) — send rule
 changes there, not here.

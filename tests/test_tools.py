@@ -225,18 +225,19 @@ BITSADMIN_RULESET = [
 ]
 
 
-def write_case(tmp_path, *, match_count=1, name="Positive Detection Test", rule_id=BITSADMIN_ID):
+def write_case(tmp_path, *, match_count=1, name="Positive Detection Test", rule_id=BITSADMIN_ID,
+               title=BITSADMIN_TITLE, path=None):
     """Build a one-case regression_data tree around the tracked EVTX fixture."""
     case_dir = tmp_path / "regression_data" / "bitsadmin"
     case_dir.mkdir(parents=True)
     info = {
         "id": "11111111-2222-3333-4444-555555555555",
-        "rule_metadata": [{"id": rule_id, "title": BITSADMIN_TITLE}],
+        "rule_metadata": [{"id": rule_id, "title": title}],
         "regression_tests_info": [{
             "name": name,
             "type": "evtx",
             "match_count": match_count,
-            "path": str(FIXTURES / "sample_bitsadmin.evtx"),
+            "path": path if path is not None else str(FIXTURES / "sample_bitsadmin.evtx"),
         }],
     }
     (case_dir / "info.yml").write_text(json.dumps(info), encoding="utf-8")
@@ -422,6 +423,78 @@ class TestSigmaRegressionEndToEnd:
         assert code == 0 and report["failed"] == 0
 
 
+@pytest.mark.integration
+class TestSigmaRegressionUntrustedText:
+    """Titles, ids and paths from info.yml must print literally.
+
+    Put into Rich markup as-is, "[/]" raised MarkupError out of main() before
+    the report was written, "[link=...]" planted hyperlinks, and style tags
+    forged pass lines.
+    """
+
+    NEVER_FIRES = ({
+        "title": BITSADMIN_TITLE, "id": BITSADMIN_ID, "level": "low", "tags": [],
+        "rule": ["SELECT * FROM logs WHERE CommandLine LIKE '%not-here%' ESCAPE '\\'"],
+    },)
+
+    def run(self, regression, tmp_path, ruleset, **case):
+        from io import StringIO
+
+        from rich.console import Console
+
+        data = write_case(tmp_path, **case)
+        report = tmp_path / "report"
+        buf = StringIO()
+        recording = Console(file=buf, force_terminal=True, width=300,
+                            theme=regression.REGRESSION_THEME, highlight=False)
+        argv = [
+            "sigma-regression.py",
+            "--regression-data", str(data),
+            "-r", str(write_ruleset(tmp_path, ruleset)),
+            "--zircolite-config", str(CONFIG),
+            "--report", str(report),
+        ]
+        with patch.object(sys, "argv", argv), patch.object(regression, "console", recording):
+            code = regression.main()
+        return code, buf.getvalue(), tmp_path / "report.json"
+
+    @staticmethod
+    def plain(out):
+        return re.sub(r"\x1b\][^\x1b]*\x1b\\|\x1b\[[0-9;?]*[A-Za-z]", "", out)
+
+    def test_failed_rule_title_with_markup(self, regression, tmp_path):
+        title = f"{BITSADMIN_TITLE}[/][/] [green]PASS all good[/] [link=https://attacker.example]x[/link]"
+        code, out, report = self.run(regression, tmp_path, self.NEVER_FIRES, title=title)
+        assert code == 1
+        assert report.exists(), "the report must still be written"
+        assert self.plain(out).count(title) == 2, "failure line and summary row"
+        assert "https://attacker.example" not in re.findall(r"\x1b\]8;[^;]*;([^\x1b]*)", out)
+
+    def test_title_control_characters_do_not_reach_the_terminal(self, regression, tmp_path):
+        title = f"{BITSADMIN_TITLE}\x1b[2J\x1b[H"
+        code, out, _ = self.run(regression, tmp_path, self.NEVER_FIRES, title=title)
+        assert code == 1
+        assert "\x1b[2J" not in out
+        assert f"{BITSADMIN_TITLE}[2J[H" in self.plain(out)
+
+    def test_missing_data_file_path_with_markup(self, regression, tmp_path):
+        path = "x[/][/] [link=https://attacker.example]click[/link]"
+        code, out, report = self.run(regression, tmp_path, BITSADMIN_RULESET, path=path)
+        assert code == 0
+        assert report.exists()
+        assert path in self.plain(out)
+        assert "https://attacker.example" not in re.findall(r"\x1b\]8;[^;]*;([^\x1b]*)", out)
+
+    def test_failed_rule_lines_escape_every_field(self, regression, tmp_path):
+        from rich.text import Text
+        lines = regression.format_failed_rule_lines(
+            tmp_path, tmp_path / "x.evtx", "t[/]", "i[/]", "err [/] [bold]x",
+        )
+        assert [Text.from_markup(line).plain.strip() for line in lines[1:]] == [
+            "t[/] (id: i[/])", "err [/] [bold]x",
+        ]
+
+
 # ---------------------------------------------------------------------------
 # tools/package-release.py
 # ---------------------------------------------------------------------------
@@ -435,6 +508,31 @@ FAKE_VERSION = "1.2.3"
 PYTHON_LICENCE_TEXT = "PYTHON SOFTWARE FOUNDATION LICENSE VERSION 2 (test copy)"
 
 
+def publish_rules(rules, sources, aggregates=None):
+    """Write each source's files into rules/ and the manifest -U installs beside them.
+
+    ``sources`` maps a source to (licence, {published path: content}).
+    """
+    manifest = {"schema_version": 1, "sources": {}}
+    for name, (licence, files) in sources.items():
+        for path, content in files.items():
+            (rules / path).parent.mkdir(parents=True, exist_ok=True)
+            (rules / path).write_text(content, encoding="utf-8")
+        manifest["sources"][name] = {
+            "license": licence, "repository": f"example/{name}", "revision": "c" * 40,
+            "status": "current", "artifacts": {path: "0" * 64 for path in files},
+        }
+    if aggregates:
+        manifest["aggregates"] = {}
+        for name, (inputs, path) in aggregates.items():
+            (rules / path).write_text("[]", encoding="utf-8")
+            manifest["aggregates"][name] = {
+                "artifacts": {path: "0" * 64},
+                "inputs": {source: {"status": "current"} for source in inputs},
+            }
+    (rules / "release-manifest.json").write_text(json.dumps(manifest), encoding="utf-8")
+
+
 def make_checkout(root, executable="Zircolite"):
     """Just what the packager reads from a checkout, around a fake onedir build."""
     (root / "zircolite").mkdir(parents=True)
@@ -443,11 +541,13 @@ def make_checkout(root, executable="Zircolite"):
     (root / "pyproject.toml").write_text(
         f'[project]\nname = "Zircolite"\nversion = "{FAKE_VERSION}"\ndependencies = [\n'
         '    "rich>=14",\n]\n\n[tool.other]\nversion = "9.9.9"\n', encoding="utf-8")
-    for directory, name in [("config", "config.yaml"), ("rules", "rules_linux.json"),
+    for directory, name in [("config", "config.yaml"), ("rules", "README.md"),
                             ("templates", "exportForSplunk.tmpl"), ("gui", "zircogui.zip"),
                             ("docs", "Usage.md"), ("pics", "Zircolite.png")]:
         (root / directory).mkdir()
         (root / directory / name).write_text(directory, encoding="utf-8")
+    publish_rules(root / "rules", {"sigmahq": ("DRL-1.1", {
+        "rules_linux.json": "[]", "licenses/sigmahq.txt": "SigmaHQ rules: DRL 1.1 (test copy)"})})
     (root / "config" / "__pycache__").mkdir()
     (root / "config" / "__pycache__" / "stale.cpython-314.pyc").write_bytes(b"")
     (root / "README.md").write_text("readme", encoding="utf-8")
@@ -502,7 +602,8 @@ class TestPackageArchive:
             names = {name.rstrip("/") for name in bundle.namelist()}
         assert all(name == top or name.startswith(f"{top}/") for name in names)
         for expected in ["Zircolite", "_internal/base_library.zip", "config/config.yaml",
-                         "rules/rules_linux.json", "templates/exportForSplunk.tmpl",
+                         "rules/rules_linux.json", "rules/release-manifest.json",
+                         "rules/licenses/sigmahq.txt", "templates/exportForSplunk.tmpl",
                          "gui/zircogui.zip", "docs/Usage.md", "pics/Zircolite.png",
                          "README.md", "LICENSE", "THIRD_PARTY_LICENSES"]:
             assert f"{top}/{expected}" in names, expected
@@ -576,6 +677,30 @@ class TestPackageArchive:
             assert not [name for name in bundle.namelist() if name.endswith("stale.txt")]
 
 
+class TestRepositoryRules:
+    """The rules/ a release is packaged from, checked here rather than on a tag."""
+
+    def test_every_file_is_credited_under_its_licence(self, release):
+        rules = WORKSPACE_ROOT / "rules"
+        manifest = release.read_rules_manifest(rules)
+
+        assert release.unlisted_rules(rules, manifest) == []
+        assert release.rules_sections(rules, manifest)
+
+    @pytest.mark.skipif(not (WORKSPACE_ROOT / ".git").exists() or not shutil.which("git"),
+                        reason="needs a git checkout")
+    def test_git_ignores_nothing_the_release_ships(self, release):
+        """rules/ used to be an allow-list naming the SigmaHQ files only."""
+        git = shutil.which("git")
+        assert git
+        files = [f"rules/{name}" for name in release.shipped_rules(WORKSPACE_ROOT / "rules")]
+        result = subprocess.run(
+            [git, "check-ignore", "--no-index", "rules/release-manifest.json", *files],
+            cwd=WORKSPACE_ROOT, capture_output=True, text=True,
+        )
+        assert result.stdout == "", f"ignored by git: {result.stdout.split()}"
+
+
 class TestPackageRefusals:
     def test_missing_build(self, release, checkout, monkeypatch, capsys):
         shutil.rmtree(checkout / "dist" / "Zircolite")
@@ -632,6 +757,36 @@ class TestPackageRefusals:
         assert code == 1 and printed == ""
         assert "symlink" in err and "Windows" in err
 
+    @pytest.mark.parametrize("stray", [
+        "rules/rules_mine.json",
+        "rules/experimental/rules_x_correlation.json",
+        "rules/licenses/other.txt",
+        "dist/Zircolite/_internal/rules/rules_hayabusa_windows_native.json",
+    ])
+    def test_files_the_rules_manifest_does_not_list_are_refused(self, release, checkout, stray,
+                                                                monkeypatch, capsys):
+        """Nothing says which licence covers them, so the notices cannot credit them."""
+        path = checkout / stray
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text("[]", encoding="utf-8")
+        code, printed, err = package(release, checkout, "linux-x64", monkeypatch, capsys)
+        assert code == 1 and printed == ""
+        assert Path(stray).name in err
+        assert not list((checkout / "dist").glob("Zircolite-*"))
+
+    def test_rules_without_their_manifest_are_refused(self, release, checkout, monkeypatch, capsys):
+        (checkout / "rules" / "release-manifest.json").unlink()
+        code, _, err = package(release, checkout, "linux-x64", monkeypatch, capsys)
+        assert code == 1
+        assert "release-manifest.json is missing" in err and "-U" in err
+
+    def test_rules_without_their_licence_text_are_refused(self, release, checkout,
+                                                          monkeypatch, capsys):
+        (checkout / "rules" / "licenses" / "sigmahq.txt").unlink()
+        code, _, err = package(release, checkout, "linux-x64", monkeypatch, capsys)
+        assert code == 1
+        assert "no licence text for the rules from: sigmahq" in err
+
     @pytest.mark.parametrize("value", [None, "", "linux-x86", "macos-x64"])
     def test_target_must_be_known(self, release, checkout, value, monkeypatch, capsys):
         if value is None:
@@ -676,10 +831,62 @@ class TestThirdPartyLicences:
         assert PYTHON_LICENCE_TEXT in notices
         assert re.search(r"^pyinstaller \S+$", notices, re.MULTILINE)
         assert "bootloader" in notices.lower()
-        assert "Detection Rule License (DRL) 1.1" in notices
+        assert "Permission is hereby granted" in notices
         titles = self.titles(release, notices)
         assert titles[0].startswith("Python ")
-        assert titles[-1] == "Detection rules (rules/)"
+        assert titles[-2:] == ["Detection rules from example/sigmahq", "Detection Rule License (DRL) 1.1"]
+
+    def test_each_source_is_credited_under_its_own_licence(self, release, checkout,
+                                                            monkeypatch, capsys):
+        publish_rules(checkout / "rules", {
+            "sigmahq": ("DRL-1.1", {"rules_linux.json": "[]",
+                                    "licenses/sigmahq.txt": "SigmaHQ rules: DRL 1.1 (test copy)"}),
+            "tsale": ("GPL-3.0", {"rules_tsale_windows_merged.json": "[]",
+                                  "experimental/rules_tsale_correlation.json": "[]",
+                                  "licenses/tsale.txt": "GNU GENERAL PUBLIC LICENSE (test copy)"}),
+        }, aggregates={"windows_all": (["sigmahq", "tsale"], "rules_windows_all.json")})
+
+        code, _, _ = package(release, checkout, "linux-x64", monkeypatch, capsys)
+
+        assert code == 0
+        notices = (checkout / "dist" / f"Zircolite-{FAKE_VERSION}-linux-x64"
+                   / "THIRD_PARTY_LICENSES").read_text(encoding="utf-8")
+        tsale = notices[notices.index("Detection rules from example/tsale"):]
+        tsale = tsale[:tsale.index(release.SEPARATOR, tsale.index("GNU GENERAL"))]
+        assert "License: GPL-3.0" in tsale
+        assert f"https://github.com/example/tsale, revision {'c' * 40}" in tsale
+        assert "rules/rules_tsale_windows_merged.json" in tsale
+        assert "rules/experimental/rules_tsale_correlation.json" in tsale
+        assert "rules/rules_windows_all.json, in part" in tsale
+        assert "--- rules/licenses/tsale.txt ---" in tsale
+        assert "rules_linux.json" not in tsale
+
+    def test_the_drl_text_is_left_out_without_a_drl_source(self, release, checkout,
+                                                            monkeypatch, capsys):
+        rules = checkout / "rules"
+        for path in (rules / "rules_linux.json", rules / "licenses" / "sigmahq.txt"):
+            path.unlink()
+        publish_rules(rules, {"mdecrevoisier": ("CC0-1.0", {
+            "rules_mdecrevoisier_windows_merged.json": "[]", "licenses/mdecrevoisier.txt": "CC0"})})
+
+        code, _, _ = package(release, checkout, "linux-x64", monkeypatch, capsys)
+
+        assert code == 0
+        notices = (checkout / "dist" / f"Zircolite-{FAKE_VERSION}-linux-x64"
+                   / "THIRD_PARTY_LICENSES").read_text(encoding="utf-8")
+        assert "License: CC0-1.0" in notices
+        assert "Detection Rule License" not in notices
+
+    def test_a_combined_ruleset_must_name_known_sources(self, release, checkout,
+                                                        monkeypatch, capsys):
+        publish_rules(checkout / "rules", {"sigmahq": ("DRL-1.1", {
+            "rules_linux.json": "[]", "licenses/sigmahq.txt": "DRL"})},
+            aggregates={"windows_all": (["sigmahq", "ghost"], "rules_windows_all.json")})
+
+        code, _, err = package(release, checkout, "linux-x64", monkeypatch, capsys)
+
+        assert code == 1
+        assert "ghost" in err
 
     def vendored_without(self, release, tmp_path, monkeypatch, missing):
         vendored = tmp_path / "vendored"
@@ -704,7 +911,9 @@ class TestThirdPartyLicences:
 
     @pytest.mark.parametrize("target", ["linux-x64", "linux-arm64", "macos-arm64"])
     def test_posix_targets_carry_the_runtime_libraries(self, release, checkout, target):
-        notices = release.third_party_licences(FAKE_VERSION, target)
+        rules = checkout / "rules"
+        notices = release.third_party_licences(FAKE_VERSION, target, rules,
+                                               release.read_rules_manifest(rules))
         assert self.titles(release, notices)[1] == "Libraries linked into the Python runtime"
         marker = "--- tools/licenses/python-runtime-libraries.txt ---"
         assert marker in notices
@@ -720,7 +929,9 @@ class TestThirdPartyLicences:
     @pytest.mark.parametrize("target", ["windows-x64", "windows-arm64"])
     def test_windows_leaves_the_runtime_libraries_to_the_python_licence(self, release, checkout,
                                                                         target):
-        notices = release.third_party_licences(FAKE_VERSION, target)
+        rules = checkout / "rules"
+        notices = release.third_party_licences(FAKE_VERSION, target, rules,
+                                               release.read_rules_manifest(rules))
         assert "Libraries linked into the Python runtime" not in self.titles(release, notices)
         assert "python-runtime-libraries.txt" not in notices
 

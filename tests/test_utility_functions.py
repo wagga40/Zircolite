@@ -2,6 +2,7 @@
 Tests for utility functions in zircolite.py.
 """
 
+import json
 import logging
 import sys
 from pathlib import Path
@@ -773,6 +774,17 @@ class TestCsvSanitisation:
         from zircolite.utils import sanitize_value_for_csv
 
         assert sanitize_value_for_csv(None) == ""
+
+    def test_nested_values_are_written_as_json(self):
+        """A correlation alert carries group keys and evidence; str() wrote a
+        Python repr (single quotes, None) that nothing downstream can parse."""
+        from zircolite.utils import sanitize_value_for_csv
+
+        text = sanitize_value_for_csv({"Host": "h", "n": None, "lines": "a\nb"})
+        assert json.loads(text) == {"Host": "h", "n": None, "lines": "a\nb"}
+        assert json.loads(sanitize_value_for_csv(["0:1", "0:2"])) == ["0:1", "0:2"]
+        # JSON text never opens with a formula prefix
+        assert json.loads(sanitize_value_for_csv([-1, "=x"])) == [-1, "=x"]
 
     def test_non_strings_are_stringified(self):
         from zircolite.utils import sanitize_value_for_csv

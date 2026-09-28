@@ -1,0 +1,43 @@
+<Event xmlns="http://schemas.microsoft.com/win/2004/08/events/event"><System><Provider Name="Microsoft-Windows-Eventlog" Guid="{fc65ddd8-d6ef-4962-83d5-6e5cfe9ce148}"></Provider>
+<EventID>1102</EventID>
+<Version>0</Version>
+<Level>4</Level>
+<Task>104</Task>
+<Opcode>0</Opcode>
+<Keywords>0x4020000000000000</Keywords>
+<TimeCreated SystemTime="2023-02-06T22:10:00.000000Z"></TimeCreated>
+<EventRecordID>4398962300</EventRecordID>
+<Correlation></Correlation>
+<Execution ProcessID="1000" ThreadID="2000"></Execution>
+<Channel>Security</Channel>
+<Computer>HOST.local</Computer>
+<Security></Security>
+</System>
+<UserData><LogFileCleared xmlns="http://manifests.microsoft.com/win/2004/08/windows/eventlog"><SubjectUserSid>S-1-5-21-1111111111-2222222222-3333333333-1001</SubjectUserSid>
+<SubjectUserName>bob</SubjectUserName>
+<SubjectDomainName>LOCAL</SubjectDomainName>
+<SubjectLogonId>0x3e7</SubjectLogonId>
+</LogFileCleared>
+</UserData>
+</Event>
+<Event xmlns="http://schemas.microsoft.com/win/2004/08/events/event"><System><Provider Name="Microsoft-Windows-TerminalServices-LocalSessionManager" Guid="{5d896912-022d-40aa-a3a8-4fa5515c76d7}"></Provider>
+<EventID>21</EventID>
+<Version>0</Version>
+<Level>4</Level>
+<Task>0</Task>
+<Opcode>0</Opcode>
+<Keywords>0x1000000000000000</Keywords>
+<TimeCreated SystemTime="2023-02-06T22:11:00.000000Z"></TimeCreated>
+<EventRecordID>1201</EventRecordID>
+<Correlation ActivityID="{f420c8b1-3a72-0000-6ec9-20f4723ad901}"></Correlation>
+<Execution ProcessID="1100" ThreadID="1200"></Execution>
+<Channel>Microsoft-Windows-TerminalServices-LocalSessionManager/Operational</Channel>
+<Computer>HOST.local</Computer>
+<Security UserID="S-1-5-18"></Security>
+</System>
+<UserData><EventXML xmlns="Event_NS"><User>LOCAL\bob</User>
+<SessionID>2</SessionID>
+<Address>10.0.0.5</Address>
+</EventXML>
+</UserData>
+</Event>

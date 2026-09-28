@@ -6,33 +6,34 @@ These rulesets are generated from SIGMA rules using **pySigma** from the [offici
 
 :warning: **These rulesets are given "as is" to help new analysts discover SIGMA and Zircolite. They are not filtered for slow rules or high false-positive rules. If you know what you’re doing, you SHOULD generate your own rulesets.**
 
-### Windows (generic – no Sysmon rewriting)
+### Windows
 
-- `rules_windows_generic_high.json` — Level high and above from the **Windows** directory (no Sysmon rewriting)
-- `rules_windows_generic_medium.json` — Level medium and above from the **Windows** directory (no Sysmon rewriting)
-- `rules_windows_generic.json` — Every level from the **Windows** directory (no Sysmon rewriting)
-
-### Windows (Sysmon)
-
-- `rules_windows_sysmon_high.json` — Level high and above from the **Windows** directory (Sysmon)
-- `rules_windows_sysmon_medium.json` — Level medium and above from the **Windows** directory (Sysmon)
-- `rules_windows_sysmon.json` — Every level from the **Windows** directory (Sysmon)
-
-### Windows (merged)
-
-- `rules_windows_merged_high.json` — Level high and above, merged Windows log sources
-- `rules_windows_merged_medium.json` — Level medium and above, merged Windows log sources
-- `rules_windows_merged.json` — Every level, merged Windows log sources (default when `--ruleset` is omitted)
+- `rules_windows_sysmon.json` — the **Windows** rules, mapped to Sysmon events
+- `rules_windows_generic.json` — the **Windows** rules, mapped to Windows audit events (no Sysmon rewriting)
+- `rules_windows_merged.json` — both mappings, merged Windows log sources (default when `--ruleset` is omitted)
 
 `rules_windows_merged.json` covers both the Sysmon and the generic Windows channels, which is why Zircolite uses it when no `--ruleset` is given. Rules whose channel is absent from the logs are skipped before they run, so the larger ruleset costs little on logs that only carry one of them.
 
 ### Linux
 
-- `rules_linux.json` — Full SIGMA ruleset from the **linux** directory (Auditd and Sysmon for Linux)
-- `rules_linux_high.json` — Level high and above from the **linux** directory
-- `rules_linux_medium.json` — Level medium and above from the **linux** directory
+- `rules_linux.json` — the **linux** rules (Auditd and Sysmon for Linux)
 
-**Zircolite can auto-update these rulesets with `-U` or `--update-rules`. Pre-built rules are available in [Zircolite-Rules-v2](https://github.com/wagga40/Zircolite-Rules-v2).**
+Each ruleset carries every level, from informational to critical. `--min-level medium` (or `high`, `critical`) keeps the rules at that level and above; it replaces the `_medium` and `_high` variants, which are no longer published.
+
+## Updating with `-U`
+
+`-U`/`--update-rules` installs everything [Zircolite-Rules-v2](https://github.com/wagga40/Zircolite-Rules-v2) publishes, into the `rules/` directory the next run reads:
+
+- the SigmaHQ rulesets above;
+- `rules_windows_all.json` — the Windows detections of SigmaHQ and every community source, combined and deduplicated;
+- community rulesets kept apart from them, one file per source and profile: Hayabusa (`rules_hayabusa_*`, DRL 1.1), Joe Security (`rules_joesecurity_*`, GPL 3.0), Micah Babinski (`rules_mbabinski_*`, GPL 3.0), mdecrevoisier (`rules_mdecrevoisier_*`, CC0 1.0) and tsale (`rules_tsale_*`, GPL 3.0);
+- `experimental/` — Sigma correlation rulesets, run with `-r rules/experimental/<file>.json`;
+- `licenses/` — the licence text of every source;
+- `release-manifest.json` — the source, licence, revision and SHA-256 of every file above.
+
+Each file is checked against the SHA-256 the repository's `release-manifest.json` lists for it, and a file that does not match leaves `rules/` untouched. A source whose last update failed keeps its previous rulesets and is reported as stale. Files `-U` no longer finds upstream are never deleted.
+
+The Zircolite repository, its release archives and its Docker image carry all of these. Each ruleset stays under its source's licence, not under one covering `rules/` as a whole: `rules_windows_all.json` holds rules under DRL 1.1, GPL 3.0 and CC0 1.0 alike, each keeping its own. A release's `THIRD_PARTY_LICENSES` lists every source with its files, revision and licence text.
 
 ## Why you should make your own rulesets
 

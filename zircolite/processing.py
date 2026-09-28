@@ -25,6 +25,7 @@ import queue
 import shutil
 import signal
 import sqlite3
+import sys
 import tempfile
 import threading
 import time
@@ -42,6 +43,7 @@ from .console import (
     build_file_tree,
     console,
     is_quiet,
+    literal,
     make_file_link,
     print_no_detections,
     print_section,
@@ -370,7 +372,7 @@ def process_unified_streaming(
 
     if ctx.limit > 0:
         ctx.logger.info(
-            f"[+] Limited mode: detections with more than [yellow]{ctx.limit}[/] events will be discarded"
+            f"[+] Limited mode: detections with more than [yellow]{ctx.limit}[/] events (alerts for correlations) will be discarded"
         )
 
     ctx.logger.info(
@@ -534,7 +536,7 @@ def process_perfile_streaming(
 
                 if ctx.limit > 0 and first_file:
                     ctx.logger.info(
-                        f"[+] Limited mode: detections with more than [yellow]{ctx.limit}[/] events will be discarded"
+                        f"[+] Limited mode: detections with more than [yellow]{ctx.limit}[/] events (alerts for correlations) will be discarded"
                     )
 
                 write_mode = "w" if first_file else "a"
@@ -703,7 +705,7 @@ def process_db_input(
                 if file_list is None:
                     quit_on_error(f"[red]    [-] {e}[/]", ctx.logger)
                 ctx.logger.warning(
-                    f"[yellow]    [!] Could not load database '{file_name}': {e}. Skipping.[/]"
+                    f"[yellow]    [!] Could not load database '{literal(file_name)}': {literal(e)}. Skipping.[/]"
                 )
                 continue
             ctx.memory_tracker.sample()
@@ -711,7 +713,7 @@ def process_db_input(
             # Warn and skip if the DB cannot be used (no connection, no 'logs' table)
             if zircolite_core.db_connection is None:
                 ctx.logger.warning(
-                    f"[yellow]    [!] Could not open database '{file_name}'. Skipping.[/]"
+                    f"[yellow]    [!] Could not open database '{literal(file_name)}'. Skipping.[/]"
                 )
                 continue
             try:
@@ -721,12 +723,12 @@ def process_db_input(
                 _cur.close()
             except Exception as e:
                 ctx.logger.warning(
-                    f"[yellow]    [!] Cannot inspect database '{file_name}': {e}. Skipping.[/]"
+                    f"[yellow]    [!] Cannot inspect database '{literal(file_name)}': {literal(e)}. Skipping.[/]"
                 )
                 continue
             if not _has_logs_table:
                 ctx.logger.warning(
-                    f"[yellow]    [!] Database '{file_name}' has no 'logs' table. "
+                    f"[yellow]    [!] Database '{literal(file_name)}' has no 'logs' table. "
                     f"The file may be damaged (e.g. missing WAL journal). Skipping.[/]"
                 )
                 continue
@@ -750,7 +752,7 @@ def process_db_input(
             if ctx.limit > 0 and first_file:
                 ctx.logger.info(
                     f"[+] Limited mode: detections with more than "
-                    f"[yellow]{ctx.limit}[/] events will be discarded"
+                    f"[yellow]{ctx.limit}[/] events (alerts for correlations) will be discarded"
                 )
 
             write_mode = "w" if first_file else "a"
@@ -800,7 +802,7 @@ def process_db_input(
                     fh.write(']')
             except OSError as exc:
                 # Never let this replace the exception that unwound the loop
-                ctx.logger.error(f"[red]    [-] Could not finalize output: {exc}[/]")
+                ctx.logger.error(f"[red]    [-] Could not finalize output: {literal(exc)}[/]")
 
     if not processed_any:
         # Every database was unreadable or skipped: nothing was analysed, so the
@@ -1013,6 +1015,10 @@ def _initialize_process_worker(payload, args, input_type, raw_config, spool_dir,
     from .console import set_quiet_mode
     set_quiet_mode(True)
     signal.signal(signal.SIGINT, signal.SIG_IGN)
+    if sys.platform != "win32":
+        # Spawned with SIGINT held (parallel.py); ignoring it discarded any
+        # Ctrl+C from start-up, so the mask can go back to normal.
+        signal.pthread_sigmask(signal.SIG_UNBLOCK, {signal.SIGINT})
     set_worker_shutdown_event(cancel_event)
     logger = create_silent_logger("zircolite_process")
     ctx = ProcessingContext(**payload, logger=logger, memory_tracker=MemoryTracker(logger=logger))
@@ -1375,7 +1381,7 @@ def process_parallel_streaming(
     if errors:
         ctx.logger.error(f"[!] {len(errors)} file(s) failed to process:")
         for fname, err in errors[:5]:
-            ctx.logger.error(f"    \u2192 {fname}: {err}")
+            ctx.logger.error(f"    \u2192 {literal(fname)}: {literal(err)}")
         if len(errors) > 5:
             ctx.logger.error(f"    \u2192 ... and {len(errors) - 5} more")
 
@@ -1406,7 +1412,8 @@ def process_parallel_streaming(
             if title in rule_summary:
                 rule_summary[title]["count"] += count
             else:
-                rule_summary[title] = {"level": level, "count": count, "tags": tags}
+                rule_summary[title] = {"level": level, "count": count, "tags": tags,
+                                       "result_type": result.get("result_type")}
 
         aggregated_results = [
             {
@@ -1414,6 +1421,7 @@ def process_parallel_streaming(
                 "rule_level": info["level"],
                 "count": info["count"],
                 "tags": info.get("tags", []),
+                "result_type": info["result_type"],
             }
             for title, info in sorted(
                 rule_summary.items(), key=lambda item: sort_key_severity(

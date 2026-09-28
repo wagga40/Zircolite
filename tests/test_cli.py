@@ -17,6 +17,7 @@ import subprocess
 import sys
 import time
 from pathlib import Path
+from typing import ClassVar
 from unittest.mock import patch
 
 import pytest
@@ -1640,6 +1641,8 @@ class TestCLIStrictEvtxParsing:
 FIXTURES_DIR = WORKSPACE_ROOT / "tests" / "fixtures"
 SYSMON_LINUX_FIXTURE = FIXTURES_DIR / "sysmon_linux_sample.log"
 XML_EVENTS_FIXTURE = FIXTURES_DIR / "xml_events_sample.xml"
+XML_USERDATA_NS_FIXTURE = FIXTURES_DIR / "xml_userdata_namespace_sample.xml"
+EVTXTRACT_USERDATA_NS_FIXTURE = FIXTURES_DIR / "evtxtract_userdata_namespace_sample.log"
 EVTXTRACT_FIXTURE = FIXTURES_DIR / "evtxtract_sample.log"
 AUDITD_FIXTURE = FIXTURES_DIR / "audit_sample.log"
 WINLOGBEAT_FIXTURE = FIXTURES_DIR / "winlogbeat_sysmon_sample.json"
@@ -1711,6 +1714,87 @@ class TestCLISysmonXmlEvtxtractInput:
         assert data[0]["count"] > 0
         assert data[0]["matches"], "a detection with no matching event is not a detection"
 
+    @pytest.mark.parametrize(
+        "fixture,flag",
+        [
+            # Event Viewer "Save As" export: events under an <Events> root
+            (XML_USERDATA_NS_FIXTURE, "-x"),
+            # EVTXtract output: the same records, concatenated
+            (EVTXTRACT_USERDATA_NS_FIXTURE, "--evtxtract-input"),
+        ],
+    )
+    def test_userdata_fields_match_despite_payload_namespace(self, tmp_path, fixture, flag):
+        """UserData payloads carry their own xmlns (Security 1102's
+        LogFileCleared, TerminalServices' EventXML). Their fields must get the
+        same column names as from EVTX, or every rule on them silently misses.
+        """
+        assert fixture.exists(), (
+            f"missing tracked fixture {fixture}"
+        )
+        pytest.importorskip("lxml")
+
+        ruleset_file = tmp_path / "ruleset.json"
+        ruleset_file.write_text(json.dumps([
+            {
+                "title": "Security log cleared",
+                "id": "userdata-1102",
+                "description": "",
+                "level": "high",
+                "tags": [],
+                "filename": "log_cleared.yml",
+                "rule": ["SELECT * FROM logs WHERE EventID = 1102 AND SubjectUserName = 'bob'"],
+            },
+            {
+                "title": "RDP logon",
+                "id": "userdata-21",
+                "description": "",
+                "level": "high",
+                "tags": [],
+                "filename": "rdp_logon.yml",
+                "rule": ["SELECT * FROM logs WHERE EventID = 21 AND Address = '10.0.0.5'"],
+            },
+        ]))
+        output_file = tmp_path / "out.json"
+
+        with patch('sys.argv', ['zircolite.py', '-e', str(fixture), '-r', str(ruleset_file), flag, '-o', str(output_file), *get_log_arg(tmp_path)]):
+            zircolite_script.main()
+
+        data = json.loads(output_file.read_text())
+        by_title = {d["title"]: d for d in data}
+        assert set(by_title) == {"Security log cleared", "RDP logon"}
+        cleared = by_title["Security log cleared"]["matches"][0]
+        assert cleared["SubjectUserName"] == "bob"
+        assert cleared["SubjectUserSid"] == "S-1-5-21-1111111111-2222222222-3333333333-1001"
+        rdp = by_title["RDP logon"]["matches"][0]
+        assert rdp["User"] == "LOCAL\\bob"
+        for match in (cleared, rdp):
+            assert not [k for k in match if "http" in k or "EventNS" in k], (
+                f"namespace leaked into column names: {sorted(match)}"
+            )
+
+    def test_xml_without_root_element_is_read_whole(self, tmp_path):
+        """The XML fixture holds two <Event> records and no element around them.
+
+        Only the first one used to be ingested, so "count > 0" above kept
+        passing while half the file went unread.
+        """
+        assert XML_EVENTS_FIXTURE.exists(), f"missing tracked fixture {XML_EVENTS_FIXTURE}"
+        pytest.importorskip("lxml")
+        records = XML_EVENTS_FIXTURE.read_text(encoding="utf-8").count("<Event ")
+        assert records == 2
+
+        ruleset_file = tmp_path / "ruleset.json"
+        ruleset_file.write_text(json.dumps([{
+            "title": "Everything", "id": "match-all", "description": "", "level": "high",
+            "tags": [], "filename": "match_all.yml", "rule": ["SELECT * FROM logs"],
+        }]))
+        output_file = tmp_path / "out.json"
+
+        with patch('sys.argv', ['zircolite.py', '-e', str(XML_EVENTS_FIXTURE), '-r', str(ruleset_file), '-x', '-o', str(output_file), *get_log_arg(tmp_path)]):
+            zircolite_script.main()
+
+        data = json.loads(output_file.read_text())
+        assert data[0]["count"] == records
 
     def test_real_evtx_file_end_to_end(self, tmp_path):
         """The default format had no end-to-end test at all.
@@ -3258,7 +3342,7 @@ class TestCLIRegressionFixes:
 
         with patch('sys.argv', [
             'zircolite.py', '-e', str(events), '-j',
-            '-r', 'rules/rules_linux_high.json',
+            '-r', 'rules/rules_linux.json',
             '-c', str(config), '-o', str(out), *get_log_arg(tmp_path),
         ]):
             zircolite_script.main()
@@ -3272,7 +3356,7 @@ class TestCLIRegressionFixes:
 
         with pytest.raises(SystemExit) as exc_info, patch('sys.argv', [
             'zircolite.py', '-e', str(events), '-j',
-            '-r', 'myrules/rules_linux_high.json',
+            '-r', 'myrules/rules_linux.json',
             '-c', str(config), '-o', str(tmp_path / "out.json"), *get_log_arg(tmp_path),
         ]):
             zircolite_script.main()
@@ -3551,15 +3635,9 @@ def test_version_has_a_single_source():
     taskfile = (WORKSPACE_ROOT / "Taskfile.yml").read_text(encoding="utf-8")
     assert "zircolite/__init__.py" in taskfile
 
-    # Tracked docs must not carry the literal either: docs/README.md did, and
-    # nothing here caught it, so it would silently drift at the next bump.
-    # pyproject.toml is exempt -- there the version *is* the package metadata.
-    for doc in ("docs/README.md", "README.md"):
-        path = WORKSPACE_ROOT / doc
-        if path.exists():
-            assert __version__ not in path.read_text(encoding="utf-8"), (
-                f"{doc} duplicates the version literal; reference it instead"
-            )
+    # Tracked docs must not carry the literal either; tests/test_docs_sync.py
+    # checks them. pyproject.toml is exempt -- there the version *is* the
+    # package metadata.
 
     result = subprocess.run(
         [sys.executable, str(WORKSPACE_ROOT / "zircolite.py"), "-v"],
@@ -3810,3 +3888,167 @@ class TestPerFileDbfilePreflight:
         self._run(tmp_path, corpus, ruleset, tmp_path / "save.db")
         written = sorted(p.name for p in tmp_path.glob("save*.db"))
         assert len(written) == 2, written
+
+
+class TestEvidenceNamesPrintAsWritten:
+    """File names come from the evidence and must not be read as Rich markup."""
+
+    def test_markup_in_a_file_name(self, tmp_path, capsys):
+        import shutil
+
+        evidence = tmp_path / "evidence"
+        evidence.mkdir()
+        shutil.copy(FIXTURES_DIR / "sample_bitsadmin.evtx", evidence / "[bold]x.evtx")
+
+        with patch('sys.argv', ['zircolite.py', '-e', str(evidence),
+                                '-r', str(FIXTURES_DIR / "sample_ruleset.json"),
+                                '-o', str(tmp_path / "out.json"), *get_log_arg(tmp_path)]):
+            zircolite_script.main()
+
+        assert "[bold]x.evtx" in capsys.readouterr().out
+
+
+@pytest.mark.requires_sigma
+@pytest.mark.skipif(__import__("sqlite3").sqlite_version_info < (3, 38), reason="correlation plans need SQLite 3.38")
+class TestCorrelationsNeedOneDatabase:
+    """A correlation only sees the events of its database; per-file and
+    parallel modes give every file a database of its own."""
+
+    BASE: ClassVar[dict] = {"title": "base", "name": "base", "logsource": {"product": "windows"},
+            "detection": {"s": {"EventID": 1}, "condition": "s"}}
+    BURST: ClassVar[dict] = {"title": "burst", "level": "high", "correlation": {
+        "type": "event_count", "rules": ["base"], "group-by": ["Host"],
+        "timespan": "5s", "condition": {"gte": 2}}}
+
+    def _run(self, tmp_path, *extra, stamps=("2024-01-01T00:00:00Z", "2024-01-01T00:00:01Z")):
+        import yaml
+
+        logs = tmp_path / "logs"
+        logs.mkdir()
+        for i, stamp in enumerate(stamps):
+            (logs / f"{i}.json").write_text(json.dumps({"SystemTime": stamp, "Host": "h", "EventID": 1}) + "\n")
+        base = tmp_path / "base.yml"
+        burst = tmp_path / "burst.yml"
+        base.write_text(yaml.safe_dump(self.BASE))
+        burst.write_text(yaml.safe_dump(self.BURST))
+        output = tmp_path / "detections.json"
+        argv = ["zircolite.py", "-e", str(logs), "-j", "-r", str(burst), str(base), "-o", str(output),
+                "--timefield", "SystemTime", *get_log_arg(tmp_path), *extra]
+        with patch("sys.argv", argv):
+            zircolite_script.main()
+        return json.loads(output.read_text()), (tmp_path / "test.log").read_text()
+
+    def test_files_are_correlated_in_one_database(self, tmp_path):
+        results, log = self._run(tmp_path)
+
+        [result] = results
+        assert result["alert_count"] == 1
+        assert result["event_count"] == 2
+        assert {e["event"]["OriginalLogfile"] for e in result["matches"][0]["evidence"]} == {"0.json", "1.json"}
+        assert "correlation rule(s) need every file in one database" in log
+
+    @pytest.mark.parametrize("fmt,stamps", [
+        ("unix", (1704067200, 1704067201)),
+        ("unix_ms", (1704067200000, 1704067201000)),
+        ("unix_us", ("1704067200000000", "1704067201000000")),
+    ])
+    def test_numeric_timestamps_need_their_format(self, tmp_path, fmt, stamps):
+        results, _ = self._run(tmp_path, "--timestamp-format", fmt, stamps=stamps)
+
+        [result] = results
+        assert result["alert_count"] == 1
+        assert result["matches"][0]["SystemTime"] == "2024-01-01T00:00:01.000Z"
+
+    def test_numeric_timestamps_read_as_iso_are_reported(self, tmp_path):
+        results, log = self._run(tmp_path, stamps=(1704067200, 1704067201))
+
+        assert results == []
+        assert "2 event(s) without a valid timestamp" in log
+
+    def test_no_auto_mode_keeps_files_apart_and_says_so(self, tmp_path):
+        results, log = self._run(tmp_path, "--no-auto-mode")
+
+        assert results == []
+        assert "see one file at a time" in log
+
+    def test_an_explicit_process_executor_is_reported_as_ignored(self, tmp_path):
+        results, log = self._run(tmp_path, "--executor", "process")
+
+        assert results[0]["alert_count"] == 1
+        assert "--executor process ignored" in log
+
+
+class TestTimestampFormatOption:
+    def test_an_unknown_format_is_refused(self, tmp_path):
+        with patch("sys.argv", ["zircolite.py", "-e", str(tmp_path), "--timestamp-format", "epoch"]):
+            with pytest.raises(SystemExit) as exc:
+                zircolite_script.parse_arguments()
+        assert exc.value.code == 2
+
+    def test_it_is_said_to_do_nothing_for_json_rulesets(self, tmp_path):
+        events = tmp_path / "events.json"
+        events.write_text('{"EventID": 1}\n')
+        ruleset = tmp_path / "rules.json"
+        ruleset.write_text(json.dumps([{"title": "t", "level": "high", "rule": ["SELECT * FROM logs WHERE EventID=1"]}]))
+        argv = ["zircolite.py", "-e", str(events), "-j", "-r", str(ruleset), "--timestamp-format", "unix",
+                "-o", str(tmp_path / "out.json"), *get_log_arg(tmp_path)]
+
+        with patch("sys.argv", argv):
+            zircolite_script.main()
+
+        assert "--timestamp-format only applies" in (tmp_path / "test.log").read_text()
+
+
+class TestUpdateRulesExitStatus:
+    @pytest.mark.parametrize("installed,code", [(True, 0), (False, 1)])
+    def test_a_failed_update_fails_the_command(self, installed, code):
+        """An image build running -U must not ship stale rulesets quietly."""
+        with patch("sys.argv", ["zircolite.py", "-U"]), \
+                patch.object(zircolite_script.RulesUpdater, "run", return_value=installed):
+            with pytest.raises(SystemExit) as exc:
+                zircolite_script.main()
+
+        assert exc.value.code == code
+
+
+class TestMinLevelOption:
+    def test_only_rules_at_the_level_or_above_run(self, tmp_path):
+        events = tmp_path / "events.json"
+        events.write_text('{"EventID": 1}\n')
+        ruleset = tmp_path / "rules.json"
+        ruleset.write_text(json.dumps([
+            {"title": "loud", "level": "high", "rule": ["SELECT * FROM logs WHERE EventID=1"]},
+            {"title": "quiet", "level": "low", "rule": ["SELECT * FROM logs WHERE EventID=1"]},
+        ]))
+        output = tmp_path / "out.json"
+        argv = ["zircolite.py", "-e", str(events), "-j", "-r", str(ruleset), "--min-level", "medium",
+                "-o", str(output), *get_log_arg(tmp_path)]
+
+        with patch("sys.argv", argv):
+            zircolite_script.main()
+
+        assert [result["title"] for result in json.loads(output.read_text())] == ["loud"]
+
+    def test_an_unknown_level_is_refused(self, tmp_path):
+        with patch("sys.argv", ["zircolite.py", "-e", str(tmp_path), "--min-level", "severe"]):
+            with pytest.raises(SystemExit) as exc:
+                zircolite_script.parse_arguments()
+        assert exc.value.code == 2
+
+
+class TestCorrelationRuleCount:
+    def test_rules_removed_by_rulefilter_do_not_count(self):
+        rules = [{"title": "burst", "correlation": True}, {"title": "noise", "correlation": True}, {"title": "plain"}]
+
+        assert zircolite_script._correlation_rule_count(rules, None) == 2
+        assert zircolite_script._correlation_rule_count(rules, ["noi"]) == 1
+
+    def test_several_databases_are_said_to_stay_apart(self, caplog):
+        logger = logging.getLogger("correlation-databases")
+        with caplog.at_level(logging.WARNING, logger="correlation-databases"):
+            zircolite_script._warn_correlations_across_databases(2, 3, logger)
+            zircolite_script._warn_correlations_across_databases(2, 1, logger)
+            zircolite_script._warn_correlations_across_databases(0, 3, logger)
+
+        assert len(caplog.records) == 1
+        assert "3 databases" in caplog.text

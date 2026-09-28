@@ -17,10 +17,11 @@
 
 ### Key Features
 
-- **Fast**: 452,554 events against 4,319 Sigma rules in 11.6 s — 2.1× faster than Hayabusa and 9.8× faster than Chainsaw on the same logs, both of them Rust tools. See the [benchmark](#benchmark).
+- **Fast**: 452,554 events against 4,319 Sigma rules in 11.6 s, and 1.7 million events in 105 s — the fastest of the three on both test corpora, ahead of Hayabusa and Chainsaw, both of them Rust tools. See the [benchmark](#benchmark).
 - **Automatic Log Type Detection**: Automatically identifies log formats and timestamp fields using magic bytes, content analysis, and regex-based fallback -- no need to specify format flags in most cases.
 - **Multiple Input Formats**: Supports various log formats including EVTX, JSON Lines, JSON Arrays, CSV, XML, and more. Compressed or archived logs (gzip, bzip2, ZIP, 7-Zip) are supported; use `--archive-password` for encrypted ZIP/7z.
 - **Native Sigma Support**: Zircolite can directly use native Sigma rules (YAML) by converting them with pySigma.
+- **Sigma Correlations**: Counts, value statistics and temporal sequences — absence conditions and chains included — across every input file, each alert reported with the events behind it.
 - **SIGMA Backend**: It is based on a SIGMA backend (SQLite) and does not use internal SIGMA-to-something conversion.
 - **Advanced Log Manipulation**: It can manipulate input logs by splitting fields and applying transformations, allowing for more flexible and powerful log analysis.
 - **Field Transforms**: Apply custom Python transformations to fields during processing (e.g., Base64 decoding, hex-to-ASCII conversion).
@@ -199,7 +200,7 @@ Given several files, Zircolite measures them against available RAM and CPU, pick
 python3 zircolite.py --evtx ./logs/ --ruleset rules/rules_windows_merged.json
 ```
 
-Override any of it with `--no-auto-mode`, `--unified-db` (one database for all files, which is what cross-file correlation rules need), `--no-parallel` or `--parallel-workers N`. See [Automatic Processing Optimization](docs/Advanced.md#automatic-processing-optimization) for how the choice is made.
+Override any of it with `--no-auto-mode`, `--unified-db` (one database for all files, which auto mode also picks whenever correlation rules are loaded), `--no-parallel` or `--parallel-workers N`. See [Automatic Processing Optimization](docs/Advanced.md#automatic-processing-optimization) for how the choice is made.
 
 ### Using YAML Configuration Files
 
@@ -226,11 +227,15 @@ rules and the options that have no YAML equivalent.
 python3 zircolite.py -U
 ```
 
-From source this rewrites the repository's `rules/`. A standalone binary writes to the
-`rules/` directory beside its executable, and falls back to `./rules` in the working
-directory, with a warning, when that one cannot be written to.
+`-U` installs the SigmaHQ rulesets, the community rulesets published beside them (each
+under its own licence, whose text goes to `rules/licenses/`) and the experimental
+correlation rulesets in `rules/experimental/`, after checking every file against the rules
+repository's release manifest. From source it writes to the repository's `rules/`. A
+standalone binary writes to the `rules/` directory beside its executable, and falls back
+to `./rules` in the working directory, with a warning, when that one cannot be written to.
+See [Rulesets](docs/Usage.md#rulesets--rules).
 
-Alternatively, if you use [Task](https://taskfile.dev/) (go-task), run `task update-rules` from the project root to update rules from [Zircolite-Rules-v2](https://github.com/wagga40/Zircolite-Rules-v2). See [docs](docs/README.md) for other tasks (Docker build, clean, etc.).
+Alternatively, if you use [Task](https://taskfile.dev/) (go-task), run `task update-rules` from the project root to update the rulesets from [Zircolite-Rules-v2](https://github.com/wagga40/Zircolite-Rules-v2), as `-U` does. See [docs](docs/README.md) for other tasks (Docker build, clean, etc.).
 
 > [!IMPORTANT]  
 > Please note that these rulesets are provided to use Zircolite out of the box, but [you should generate your own rulesets](docs/Usage.md#why-you-should-build-your-own-rulesets) as they can be noisy or slow. These auto-updated rulesets are available in the dedicated repository: [Zircolite-Rules-v2](https://github.com/wagga40/Zircolite-Rules-v2).
@@ -253,12 +258,12 @@ See [Field Splitting](docs/Usage.md#field-splitting) and [Field Transforms](docs
 
 ## Benchmark
 
-**Zircolite is the fastest of the three: 2.1× faster than [Hayabusa](https://github.com/Yamato-Security/hayabusa)
-and 9.8× faster than [Chainsaw](https://github.com/WithSecureLabs/chainsaw)** — and it is
-the only one of them written in Python, against two tools written in Rust.
+**Zircolite is the fastest of the three on both tested corpora**.
 
-Same 4 Sysmon EVTX files (478 MB, 452,554 events), each tool at its defaults with its own
-rules, on a 10-core Apple M1 Max. Median of three runs:
+Each tool at its defaults with its own rules, on a 10-core Apple M1 Max. Median of three
+runs.
+
+**4 Sysmon EVTX files, one channel (478 MB, 452,554 events):**
 
 | Tool | Rules loaded | Wall time | Throughput | Peak memory |
 |------|-------------:|----------:|-----------:|------------:|
@@ -266,8 +271,21 @@ rules, on a 10-core Apple M1 Max. Median of three runs:
 | Hayabusa 4.1.0 | 4,658 | 24.7 s | 18,300 events/s | 900 MiB |
 | Chainsaw 2.16.0 | 3,524 | 113.5 s | 4,000 events/s | 346 MiB |
 
-Zircolite trades memory for that speed: it runs one worker process per file, and the
-figure above is their total. `--no-parallel` keeps it to a single process.
+**8 EVTX files, 11 channels (13.3 GB, 1,720,377 events):**
+
+| Tool | Rules loaded | Wall time | Throughput | Peak memory |
+|------|-------------:|----------:|-----------:|------------:|
+| **Zircolite** | 4,319 | **104.8 s** | **16,400 events/s** | 8,103 MiB (5 worker processes) |
+| Hayabusa 4.1.0 | 4,658 | 518.8 s | 3,300 events/s | 1,599 MiB |
+| Chainsaw 2.16.0 | 3,524 | 206.3 s | 8,300 events/s | 338 MiB |
+
+The channel mix is what moves these numbers: on logs from a single channel both Zircolite
+and Hayabusa skip most of their ruleset, and on a mixed corpus they cannot. Zircolite
+leads either way, but the two Rust tools swap places between the two.
+
+Zircolite trades memory for that speed: it spreads the files over several worker
+processes, and the figures above are their total. `--no-parallel` keeps it to a single
+process.
 
 The rule sets differ, so detection counts are not comparable; see [Benchmark](docs/Benchmark.md)
 for the setup, the caveats and how to reproduce it with `tools/tool-benchmark.py`.
@@ -322,6 +340,6 @@ The Mini-GUI can be used completely offline. It allows you to display and search
 
 - All the **code** of the project is licensed under the [GNU Lesser General Public License](https://www.gnu.org/licenses/lgpl-3.0.en.html).
 - EVTX parsing uses [`evtx`](https://github.com/omerbenamram/pyevtx-rs) (pyevtx-rs), under the MIT or Apache-2.0 license. Release packages list every bundled library and its license in `THIRD_PARTY_LICENSES`.
-- The rules are released under the [Detection Rule License (DRL) 1.1](https://github.com/SigmaHQ/Detection-Rule-License/blob/main/LICENSE.Detection.Rules.md).
+- The rules keep the licence of their source, whose text is in [`rules/licenses/`](rules/licenses/): the SigmaHQ and Hayabusa rules are under the [Detection Rule License (DRL) 1.1](https://github.com/SigmaHQ/Detection-Rule-License/blob/main/LICENSE.Detection.Rules.md), the Joe Security, Micah Babinski and tsale rules under the GPL 3.0, and the mdecrevoisier rules under CC0 1.0. `rules_windows_all.json` combines them, each rule keeping its own. Release packages credit every ruleset in `THIRD_PARTY_LICENSES`.
 
 ---

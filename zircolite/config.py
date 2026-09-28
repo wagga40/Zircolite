@@ -9,6 +9,9 @@ from dataclasses import dataclass, field
 
 from .formats import INPUT_FORMATS
 
+# Sigma rule levels, lowest first
+RULE_LEVELS = ("informational", "low", "medium", "high", "critical")
+
 
 @dataclass
 class ProcessingConfig:
@@ -114,6 +117,10 @@ class RulesetConfig:
     pipeline: list[list[str]] | None = None
     save_ruleset: bool = False
     time_field: str = "SystemTime"
+    # How time_field is written: iso, unix, unix_ms or unix_us
+    timestamp_format: str = "iso"
+    # Lowest rule level kept, one of RULE_LEVELS; None keeps every rule
+    min_level: str | None = None
 
 
 @dataclass

@@ -16,7 +16,7 @@ import shutil
 import sqlite3
 import tempfile
 import time as _time_module
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from contextlib import closing, nullcontext, suppress
 from functools import lru_cache
 from pathlib import Path
@@ -42,8 +42,17 @@ from .console import (
     build_detection_table,
     console,
     is_quiet,
+    literal,
     make_detection_counter,
     sort_key_severity,
+)
+from .correlations import (
+    CORRELATION_COLUMNS,
+    alert_rows,
+    describe_diagnostics,
+    distinct_events,
+    is_correlation_plan_rule,
+    plan_problem,
 )
 from .formats import json_array_requested
 from .performance import FileMetrics, timed_stage
@@ -135,11 +144,13 @@ class ZircoliteCore:
     # Use __slots__ for reduced memory footprint per instance
     __slots__ = (
         "_auto_index_applied",
+        "_correlation_diagnostics",
         "_csv_fieldnames",
         "_csv_header_written",
         "_cursor",
         "_disk_working",
         "_escape_cache",
+        "_has_correlation_plans",
         "_logs_columns_lower",
         "_prefilter",
         "_prepared",
@@ -229,6 +240,9 @@ class ZircoliteCore:
             raise
         self.full_results: list = []
         self.ruleset: list = []
+        self._has_correlation_plans = False
+        # Per execute_ruleset call: correlation title -> diagnostic counts
+        self._correlation_diagnostics: dict[str, dict[str, int]] = {}
         self.no_output = proc.no_output
         self.time_after = proc.time_after
         self.time_before = proc.time_before
@@ -385,7 +399,7 @@ class ZircoliteCore:
                 with suppress(Exception):
                     conn.close()
             if isinstance(exc, Error):
-                self.logger.error(f"[red]    [-] {exc}[/]")
+                self.logger.error(f"[red]    [-] {literal(exc)}[/]")
                 raise RuntimeError(
                     f"Unable to open SQLite database '{db}': {exc}"
                 ) from exc
@@ -501,6 +515,9 @@ class ZircoliteCore:
 
         counts: dict[str, int] = {}
         for rule in self.ruleset:
+            if is_correlation_plan_rule(rule):
+                # A plan scans logs in full into its own indexed TEMP tables.
+                continue
             referenced: set[str] = set()
             for sql_query in rule.get("rule", []):
                 if isinstance(sql_query, str):
@@ -660,7 +677,7 @@ class ZircoliteCore:
             self._logs_columns_lower = {c.lower() for c in self._get_table_columns()}
         return self._logs_columns_lower
 
-    def _widen_logs_table(self, query: str) -> bool:
+    def _widen_logs_table(self, query: str, required: Sequence[str] = ()) -> bool:
         """Materialise the query's referenced-but-absent columns. True if widened.
 
         SQLite resolves column names when it prepares a statement, so a rule
@@ -671,9 +688,14 @@ class ZircoliteCore:
 
         Rules whose fields are *all* absent are widened too: ``|exists: false``
         becomes ``IS NULL``, which matches every row once the column is there.
+
+        ``required`` is the converter's own list of the rule's fields. The SQL
+        scan cannot see a field read inside a function call, such as the second
+        field of a ``|fieldref|contains``, so both sources are used.
         """
         columns = self._logs_columns()
-        missing = [c for c in self._query_columns(query) if c.lower() not in columns]
+        names = dict.fromkeys([*sorted(self._query_columns(query)), *required])
+        missing = [c for c in names if c.lower() not in columns]
         if not missing:
             return False
         cursor = self._get_cursor()
@@ -710,7 +732,8 @@ class ZircoliteCore:
             return []
 
     def _iter_select_query(
-        self, query: str, rule_title: str | None = None, max_rows: int | None = None
+        self, query: str, rule_title: str | None = None, max_rows: int | None = None,
+        required_fields: Sequence[str] = (),
     ):
         """Yield rows in bounded chunks; raise _QueryFailed on an SQL failure."""
         if self.db_connection is None:
@@ -787,7 +810,7 @@ class ZircoliteCore:
                     # dataset that simply lacks the field.
                     self._note_broken_rule(rule_title, e)
                     raise _QueryFailed from e
-                if not self._widen_logs_table(query):
+                if not self._widen_logs_table(query, required_fields):
                     self._note_broken_rule(rule_title, e)
                     raise _QueryFailed from e
                 attempted.add("widen")
@@ -916,6 +939,8 @@ class ZircoliteCore:
 
     def _execute_rule(self, rule: dict[str, Any], *, stream_rows=False) -> dict[str, Any]:
         """Execute a single Sigma rule against the database and return the results."""
+        if is_correlation_plan_rule(rule):
+            return self._execute_correlation(rule, stream_rows=stream_rows)
         # Fast path: check for required key first
         sigma_queries = rule.get("rule")
         if sigma_queries is None:
@@ -928,12 +953,13 @@ class ZircoliteCore:
 
         filtered_rows: RowSpool | list[dict[str, Any]] = RowSpool() if stream_rows else []
         rule_title = rule.get("title", "Unnamed Rule")
+        required = [field for field in rule.get("required_fields") or () if isinstance(field, str)]
         try:
             for sql_query in sigma_queries:
                 checkpoint = filtered_rows.checkpoint() if isinstance(filtered_rows, RowSpool) else len(filtered_rows)
                 try:
                     remaining = None if self.limit == -1 else self.limit + 1 - len(filtered_rows)
-                    with closing(self._iter_select_query(sql_query, rule_title, remaining)) as rows:
+                    with closing(self._iter_select_query(sql_query, rule_title, remaining, required)) as rows:
                         for row in rows:
                             filtered_rows.append(sanitize_row_for_csv(row) if self.csv_mode else row)
                             if self.limit != -1 and len(filtered_rows) > self.limit:
@@ -953,25 +979,101 @@ class ZircoliteCore:
             if isinstance(filtered_rows, RowSpool):
                 filtered_rows.close()
             raise
-        csv_mode = self.csv_mode
-
-        # Extract rule metadata only when we have results (avoid work for non-matching rules)
-        rule_get = rule.get  # Cache method
-        description = rule_get("description", "")
-
-        results = {
-            "title": rule_title,
-            "id": rule_get("id", ""),
-            "description": description.translate(_NEWLINE_TRANSLATE) if csv_mode else description,
-            "sigmafile": rule_get("filename", ""),
-            "sigma": sigma_queries,
-            "rule_level": rule_get("level", "unknown"),
-            "tags": rule_get("tags", []),
-            "count": len(filtered_rows),
-            "matches": filtered_rows
-        }
+        results = self._rule_result(rule, count=len(filtered_rows))
+        results["matches"] = filtered_rows
         self.logger.debug(f'DETECTED: {rule_title} - Matches: {len(filtered_rows)} events')
         return results
+
+    def _rule_result(self, rule: dict[str, Any], **counts: Any) -> dict[str, Any]:
+        """A rule's result metadata; the caller adds its matches last."""
+        description = rule.get("description", "")
+        return {
+            "title": rule.get("title", "Unnamed Rule"),
+            "id": rule.get("id", ""),
+            "description": description.translate(_NEWLINE_TRANSLATE) if self.csv_mode else description,
+            "sigmafile": rule.get("filename", ""),
+            "sigma": rule.get("rule"),
+            "rule_level": rule.get("level", "unknown"),
+            "tags": rule.get("tags", []),
+            **counts,
+        }
+
+    def _execute_correlation(self, rule: dict[str, Any], *, stream_rows: bool = False) -> dict[str, Any]:
+        """Run a correlation plan; each match is an alert summary with its evidence.
+
+        The plan materialises every stage as an indexed TEMP table, reading the
+        whole logs table: the latest timestamp in the input, matched or not, is
+        the horizon absence windows wait for. Its diagnostics count what the
+        plan had to set aside, and are the only trace of a timestamp column
+        that does not hold what the plan expects.
+        """
+        title = rule.get("title", "Unnamed Rule")
+        plan = rule["correlation_plan"]
+        problem = plan_problem(plan)
+        if problem is not None:
+            self._note_broken_rule(title, problem)
+            return {}
+        conn = self.db_connection
+        if conn is None or is_shutdown_requested():
+            return {}
+        # pySigma is only needed once a plan runs; process workers start without it.
+        from sigma.backends.sqlite.runtime import execute_plan
+
+        # A dense window can keep one statement busy for minutes; the handler
+        # lets Ctrl+C stop it instead of waiting for the next rule.
+        conn.set_progress_handler(is_shutdown_requested, 10_000)
+        try:
+            rows, diagnostics = execute_plan(
+                conn, plan, limit=None if self.limit == -1 else self.limit, include_events=True
+            )
+        except sqlite3.Error as exc:
+            if not is_shutdown_requested():
+                self._note_broken_rule(title, exc)
+            return {}
+        except (ValueError, RuntimeError, KeyError, TypeError) as exc:
+            self._note_broken_rule(title, exc)
+            return {}
+        finally:
+            conn.set_progress_handler(None, 0)
+            # An interrupted run can leave the stage it was building behind.
+            for name in plan.get("cleanup") or ():
+                if isinstance(name, str) and re.fullmatch(r"sigma_\w+", name):
+                    with suppress(sqlite3.Error):
+                        conn.execute(f'DROP TABLE IF EXISTS temp."{name}"').close()
+            # The plan adds the fields it needs to logs as NULL columns.
+            self._logs_columns_lower = None
+        self._note_correlation_diagnostics(title, diagnostics)
+        if not rows or (self.limit != -1 and len(rows) > self.limit):
+            return {}
+        alerts = alert_rows(rows, self.time_field or "SystemTime")
+        matches: RowSpool | list[dict[str, Any]] = RowSpool() if stream_rows else []
+        try:
+            for alert in alerts:
+                matches.append(sanitize_row_for_csv(alert) if self.csv_mode else alert)
+        except BaseException:
+            if isinstance(matches, RowSpool):
+                matches.close()
+            raise
+        results = self._rule_result(
+            rule,
+            result_type="correlation",
+            count=len(alerts),
+            alert_count=len(alerts),
+            event_count=distinct_events(rows),
+            diagnostics=diagnostics,
+        )
+        results["matches"] = matches
+        self.logger.debug(f"DETECTED: {title} - Matches: {len(alerts)} alerts")
+        return results
+
+    def _note_correlation_diagnostics(self, title: str, diagnostics: dict[str, int]) -> None:
+        counts = {reason: count for reason, count in diagnostics.items() if count}
+        if not counts:
+            return
+        for store in (self._correlation_diagnostics, self.metrics.data["correlation_diagnostics"]):
+            totals = store.setdefault(title, {})
+            for reason, count in counts.items():
+                totals[reason] = totals.get(reason, 0) + count
 
     @timed_stage("setup")
     def load_ruleset_from_var(
@@ -989,6 +1091,7 @@ class ZircoliteCore:
         if rule_filters is not None:
             self.ruleset = [rule for rule in self.ruleset if not any(rule_filter in rule.get("title", "") for rule_filter in rule_filters)]
         self._prepared = prepare_rules(rule_queries(self.ruleset))
+        self._has_correlation_plans = any(is_correlation_plan_rule(rule) for rule in self.ruleset)
 
     @timed_stage("output")
     def _write_result_to_output(
@@ -1013,7 +1116,11 @@ class ZircoliteCore:
                 # multi-DB flows) each call re-enters with a fresh local writer,
                 # and rows must stay aligned with the single header.
                 if self._csv_fieldnames is None:
-                    self._csv_fieldnames = ["rule_title", "rule_description", "rule_level", "rule_count", *self._csv_event_columns(rule_results)]
+                    fieldnames = ["rule_title", "rule_description", "rule_level", "rule_count", *self._csv_event_columns(rule_results)]
+                    if self._has_correlation_plans:
+                        # Alert summaries are not logs rows, so the schema names none of their columns.
+                        fieldnames += [*CORRELATION_COLUMNS, self.time_field or "SystemTime"]
+                    self._csv_fieldnames = list(dict.fromkeys(fieldnames))
                 csv_writer = csv.DictWriter(
                     file_handle,
                     delimiter=self.delimiter,
@@ -1049,7 +1156,7 @@ class ZircoliteCore:
                 # Serialize first: on failure the comma bookkeeping must stay untouched
                 json_bytes = json.dumps(rule_results, option=json.OPT_INDENT_2)
             except Exception as e:
-                self.logger.error(f"[error]    [-] Error serializing some results: {e}[/]")
+                self.logger.error(f"[error]    [-] Error serializing some results: {literal(e)}[/]")
                 return csv_writer, needs_comma_prefix
             try:
                 # Handle commas between JSON objects
@@ -1063,7 +1170,7 @@ class ZircoliteCore:
                     self.first_json_output = False
                 file_handle.write(json_bytes.decode('utf-8'))
             except Exception as e:
-                self.logger.error(f"[error]    [-] Error saving some results: {e}[/]")
+                self.logger.error(f"[error]    [-] Error saving some results: {literal(e)}[/]")
         return csv_writer, needs_comma_prefix
 
     def _csv_event_columns(self, rule_results: dict[str, Any]) -> list[str]:
@@ -1105,6 +1212,7 @@ class ZircoliteCore:
         _disable = disable_progress if disable_progress is not None else self.disable_progress
         # Ingestion discovered the schema through its own connection
         self._logs_columns_lower = None
+        self._correlation_diagnostics = {}
 
         # Apply auto-index now that the ruleset is loaded (create_index runs at
         # the end of ingestion, before the ruleset is available in every flow),
@@ -1226,12 +1334,16 @@ class ZircoliteCore:
                     return None
                 if limit != -1 and rule_results["count"] > limit:
                     return None
-                all_rule_results.append({
+                summary = {
                     "title": rule_results.get("title", "Unknown"),
                     "rule_level": rule_results.get("rule_level", "unknown"),
                     "count": rule_results.get("count", 0),
                     "tags": rule_results.get("tags", [])
-                })
+                }
+                if rule_results.get("result_type") == "correlation":
+                    summary["result_type"] = "correlation"
+                    summary["event_count"] = rule_results.get("event_count", 0)
+                all_rule_results.append(summary)
                 if keep_results:
                     full_results_append(rule_results)
                 return rule_results
@@ -1305,6 +1417,14 @@ class ZircoliteCore:
                 console.print(build_detection_table(all_rule_results, title=source_label))
                 console.print()
 
+            if self._correlation_diagnostics:
+                items = list(self._correlation_diagnostics.items())
+                shown = "; ".join(f"{literal(title)}: {describe_diagnostics(counts)}" for title, counts in items[:3])
+                self.logger.warning(
+                    f"[yellow]   [!] Correlation input set aside by {len(items)} rule(s): {shown}"
+                    f"{' ...' if len(items) > 3 else ''} (check --timefield and --timestamp-format "
+                    f"if timestamps are invalid)[/]"
+                )
             if self.rules_in_error:
                 names = list(self.rules_in_error)
                 shown = ", ".join(names[:3]) + (" ..." if len(names) > 3 else "")
@@ -1637,7 +1757,7 @@ class ZircoliteCore:
                 # not be swallowed into a "0 events" result like the rest.
                 raise
             except Exception as e:
-                self.logger.error(f"[error]    [-] Error processing {log_file}: {e}[/]")
+                self.logger.error(f"[error]    [-] Error processing {literal(log_file)}: {literal(e)}[/]")
                 self.failed_files.add(str(log_file))
                 return 0
 

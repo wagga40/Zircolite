@@ -4,7 +4,7 @@ var ReconnaissanceData = [{% for elem in data %}{% if "reconnaissance" in elem["
 		"title":{{ elem["title"]|tojson }},
 		"sigma_yml":{{ elem["sigmafile"]|tojson }},
 		"description":{{ elem["description"]|tojson }},{% for key, value in match.items() %}
-		"{{ key }}":{{ value|tojson }}{{ "," if not loop.last }}{% endfor %}
+		{{ key|tojson }}:{{ value|flat_json|tojson }}{{ "," if not loop.last }}{% endfor %}
 	}{{ "," if not loop.last }}{% endfor %}{{ "," if not loop.last }}{% endif %}{% endfor %}
 ];
 
@@ -14,7 +14,7 @@ var ResourceDevelopmentData = [{% for elem in data %}{% if "resource-development
 		"title":{{ elem["title"]|tojson }},
 		"sigma_yml":{{ elem["sigmafile"]|tojson }},
 		"description":{{ elem["description"]|tojson }},{% for key, value in match.items() %}
-		"{{ key }}":{{ value|tojson }}{{ "," if not loop.last }}{% endfor %}
+		{{ key|tojson }}:{{ value|flat_json|tojson }}{{ "," if not loop.last }}{% endfor %}
 	}{{ "," if not loop.last }}{% endfor %}{{ "," if not loop.last }}{% endif %}{% endfor %}
 ];
 
@@ -24,7 +24,7 @@ var InitialAccessData = [{% for elem in data %}{% if "initial-access" in elem["t
 		"title":{{ elem["title"]|tojson }},
 		"sigma_yml":{{ elem["sigmafile"]|tojson }},
 		"description":{{ elem["description"]|tojson }},{% for key, value in match.items() %}
-		"{{ key }}":{{ value|tojson }}{{ "," if not loop.last }}{% endfor %}
+		{{ key|tojson }}:{{ value|flat_json|tojson }}{{ "," if not loop.last }}{% endfor %}
 	}{{ "," if not loop.last }}{% endfor %}{{ "," if not loop.last }}{% endif %}{% endfor %}
 ];
 
@@ -34,7 +34,7 @@ var ExecutionData = [{% for elem in data %}{% if "execution" in elem["tags"]|ext
 		"title":{{ elem["title"]|tojson }},
 		"sigma_yml":{{ elem["sigmafile"]|tojson }},
 		"description":{{ elem["description"]|tojson }},{% for key, value in match.items() %}
-		"{{ key }}":{{ value|tojson }}{{ "," if not loop.last }}{% endfor %}
+		{{ key|tojson }}:{{ value|flat_json|tojson }}{{ "," if not loop.last }}{% endfor %}
 	}{{ "," if not loop.last }}{% endfor %}{{ "," if not loop.last }}{% endif %}{% endfor %}
 ];
 
@@ -44,7 +44,7 @@ var PersistenceData = [{% for elem in data %}{% if "persistence" in elem["tags"]
 		"title":{{ elem["title"]|tojson }},
 		"sigma_yml":{{ elem["sigmafile"]|tojson }},
 		"description":{{ elem["description"]|tojson }},{% for key, value in match.items() %}
-		"{{ key }}":{{ value|tojson }}{{ "," if not loop.last }}{% endfor %}
+		{{ key|tojson }}:{{ value|flat_json|tojson }}{{ "," if not loop.last }}{% endfor %}
 	}{{ "," if not loop.last }}{% endfor %}{{ "," if not loop.last }}{% endif %}{% endfor %}
 ];
 
@@ -54,7 +54,7 @@ var PrivilegeEscalationData = [{% for elem in data %}{% if "privilege-escalation
 		"title":{{ elem["title"]|tojson }},
 		"sigma_yml":{{ elem["sigmafile"]|tojson }},
 		"description":{{ elem["description"]|tojson }},{% for key, value in match.items() %}
-		"{{ key }}":{{ value|tojson }}{{ "," if not loop.last }}{% endfor %}
+		{{ key|tojson }}:{{ value|flat_json|tojson }}{{ "," if not loop.last }}{% endfor %}
 	}{{ "," if not loop.last }}{% endfor %}{{ "," if not loop.last }}{% endif %}{% endfor %}
 ];
 
@@ -64,7 +64,7 @@ var DefenseEvasionData = [{% for elem in data %}{% if "stealth" in elem["tags"]|
 		"title":{{ elem["title"]|tojson }},
 		"sigma_yml":{{ elem["sigmafile"]|tojson }},
 		"description":{{ elem["description"]|tojson }},{% for key, value in match.items() %}
-		"{{ key }}":{{ value|tojson }}{{ "," if not loop.last }}{% endfor %}
+		{{ key|tojson }}:{{ value|flat_json|tojson }}{{ "," if not loop.last }}{% endfor %}
 	}{{ "," if not loop.last }}{% endfor %}{{ "," if not loop.last }}{% endif %}{% endfor %}
 ];
 
@@ -74,7 +74,7 @@ var CredentialAccessData = [{% for elem in data %}{% if "credential-access" in e
 		"title":{{ elem["title"]|tojson }},
 		"sigma_yml":{{ elem["sigmafile"]|tojson }},
 		"description":{{ elem["description"]|tojson }},{% for key, value in match.items() %}
-		"{{ key }}":{{ value|tojson }}{{ "," if not loop.last }}{% endfor %}
+		{{ key|tojson }}:{{ value|flat_json|tojson }}{{ "," if not loop.last }}{% endfor %}
 	}{{ "," if not loop.last }}{% endfor %}{{ "," if not loop.last }}{% endif %}{% endfor %}
 ];
 
@@ -84,7 +84,7 @@ var DiscoveryData = [{% for elem in data %}{% if "discovery" in elem["tags"]|ext
 		"title":{{ elem["title"]|tojson }},
 		"sigma_yml":{{ elem["sigmafile"]|tojson }},
 		"description":{{ elem["description"]|tojson }},{% for key, value in match.items() %}
-		"{{ key }}":{{ value|tojson }}{{ "," if not loop.last }}{% endfor %}
+		{{ key|tojson }}:{{ value|flat_json|tojson }}{{ "," if not loop.last }}{% endfor %}
 	}{{ "," if not loop.last }}{% endfor %}{{ "," if not loop.last }}{% endif %}{% endfor %}
 ];
 
@@ -94,7 +94,7 @@ var LateralMovementData = [{% for elem in data %}{% if "lateral-movement" in ele
 		"title":{{ elem["title"]|tojson }},
 		"sigma_yml":{{ elem["sigmafile"]|tojson }},
 		"description":{{ elem["description"]|tojson }},{% for key, value in match.items() %}
-		"{{ key }}":{{ value|tojson }}{{ "," if not loop.last }}{% endfor %}
+		{{ key|tojson }}:{{ value|flat_json|tojson }}{{ "," if not loop.last }}{% endfor %}
 	}{{ "," if not loop.last }}{% endfor %}{{ "," if not loop.last }}{% endif %}{% endfor %}
 ];
 
@@ -104,7 +104,7 @@ var CollectionData = [{% for elem in data %}{% if "collection" in elem["tags"]|e
 		"title":{{ elem["title"]|tojson }},
 		"sigma_yml":{{ elem["sigmafile"]|tojson }},
 		"description":{{ elem["description"]|tojson }},{% for key, value in match.items() %}
-		"{{ key }}":{{ value|tojson }}{{ "," if not loop.last }}{% endfor %}
+		{{ key|tojson }}:{{ value|flat_json|tojson }}{{ "," if not loop.last }}{% endfor %}
 	}{{ "," if not loop.last }}{% endfor %}{{ "," if not loop.last }}{% endif %}{% endfor %}
 ];
 
@@ -114,7 +114,7 @@ var CommandAndControlData = [{% for elem in data %}{% if "command-and-control" i
 		"title":{{ elem["title"]|tojson }},
 		"sigma_yml":{{ elem["sigmafile"]|tojson }},
 		"description":{{ elem["description"]|tojson }},{% for key, value in match.items() %}
-		"{{ key }}":{{ value|tojson }}{{ "," if not loop.last }}{% endfor %}
+		{{ key|tojson }}:{{ value|flat_json|tojson }}{{ "," if not loop.last }}{% endfor %}
 	}{{ "," if not loop.last }}{% endfor %}{{ "," if not loop.last }}{% endif %}{% endfor %}
 ];
 
@@ -124,7 +124,7 @@ var ExfiltrationData = [{% for elem in data %}{% if "exfiltration" in elem["tags
 		"title":{{ elem["title"]|tojson }},
 		"sigma_yml":{{ elem["sigmafile"]|tojson }},
 		"description":{{ elem["description"]|tojson }},{% for key, value in match.items() %}
-		"{{ key }}":{{ value|tojson }}{{ "," if not loop.last }}{% endfor %}
+		{{ key|tojson }}:{{ value|flat_json|tojson }}{{ "," if not loop.last }}{% endfor %}
 	}{{ "," if not loop.last }}{% endfor %}{{ "," if not loop.last }}{% endif %}{% endfor %}
 ];
 
@@ -134,7 +134,7 @@ var ImpactData = [{% for elem in data %}{% if "impact" in elem["tags"]|extract_a
 		"title":{{ elem["title"]|tojson }},
 		"sigma_yml":{{ elem["sigmafile"]|tojson }},
 		"description":{{ elem["description"]|tojson }},{% for key, value in match.items() %}
-		"{{ key }}":{{ value|tojson }}{{ "," if not loop.last }}{% endfor %}
+		{{ key|tojson }}:{{ value|flat_json|tojson }}{{ "," if not loop.last }}{% endfor %}
 	}{{ "," if not loop.last }}{% endfor %}{{ "," if not loop.last }}{% endif %}{% endfor %}
 ];
 
@@ -144,7 +144,7 @@ var OtherData = [{% for elem in data %}{% if not elem["tags"]|extract_attack_tac
 		"title":{{ elem["title"]|tojson }},
 		"sigma_yml":{{ elem["sigmafile"]|tojson }},
 		"description":{{ elem["description"]|tojson }},{% for key, value in match.items() %}
-		"{{ key }}":{{ value|tojson }}{{ "," if not loop.last }}{% endfor %}
+		{{ key|tojson }}:{{ value|flat_json|tojson }}{{ "," if not loop.last }}{% endfor %}
 	}{{ "," if not loop.last }}{% endfor %}{{ "," if not loop.last }}{% endif %}{% endfor %}
 ];
 
@@ -154,7 +154,7 @@ var UnknownData = [{% for elem in data %}{% if elem["rule_level"] == "unknown" %
 		"title":{{ elem["title"]|tojson }},
 		"sigma_yml":{{ elem["sigmafile"]|tojson }},
 		"description":{{ elem["description"]|tojson }},{% for key, value in match.items() %}
-		"{{ key }}":{{ value|tojson }}{{ "," if not loop.last }}{% endfor %}
+		{{ key|tojson }}:{{ value|flat_json|tojson }}{{ "," if not loop.last }}{% endfor %}
 	}{{ "," if not loop.last }}{% endfor %}{{ "," if not loop.last }}{% endif %}{% endfor %}
 ];
 
@@ -164,7 +164,7 @@ var InformationalData = [{% for elem in data %}{% if elem["rule_level"] == "info
 		"title":{{ elem["title"]|tojson }},
 		"sigma_yml":{{ elem["sigmafile"]|tojson }},
 		"description":{{ elem["description"]|tojson }},{% for key, value in match.items() %}
-		"{{ key }}":{{ value|tojson }}{{ "," if not loop.last }}{% endfor %}
+		{{ key|tojson }}:{{ value|flat_json|tojson }}{{ "," if not loop.last }}{% endfor %}
 	}{{ "," if not loop.last }}{% endfor %}{{ "," if not loop.last }}{% endif %}{% endfor %}
 ];
 
@@ -174,7 +174,7 @@ var LowData = [{% for elem in data %}{% if elem["rule_level"] == "low" %}{% for 
 		"title":{{ elem["title"]|tojson }},
 		"sigma_yml":{{ elem["sigmafile"]|tojson }},
 		"description":{{ elem["description"]|tojson }},{% for key, value in match.items() %}
-		"{{ key }}":{{ value|tojson }}{{ "," if not loop.last }}{% endfor %}
+		{{ key|tojson }}:{{ value|flat_json|tojson }}{{ "," if not loop.last }}{% endfor %}
 	}{{ "," if not loop.last }}{% endfor %}{{ "," if not loop.last }}{% endif %}{% endfor %}
 ];
 
@@ -184,7 +184,7 @@ var MediumData = [{% for elem in data %}{% if elem["rule_level"] == "medium"  %}
 		"title":{{ elem["title"]|tojson }},
 		"sigma_yml":{{ elem["sigmafile"]|tojson }},
 		"description":{{ elem["description"]|tojson }},{% for key, value in match.items() %}
-		"{{ key }}":{{ value|tojson }}{{ "," if not loop.last }}{% endfor %}
+		{{ key|tojson }}:{{ value|flat_json|tojson }}{{ "," if not loop.last }}{% endfor %}
 	}{{ "," if not loop.last }}{% endfor %}{{ "," if not loop.last }}{% endif %}{% endfor %}
 ];
 
@@ -194,7 +194,7 @@ var HighData = [{% for elem in data %}{% if elem["rule_level"] == "high"  %}{% f
 		"title":{{ elem["title"]|tojson }},
 		"sigma_yml":{{ elem["sigmafile"]|tojson }},
 		"description":{{ elem["description"]|tojson }},{% for key, value in match.items() %}
-		"{{ key }}":{{ value|tojson }}{{ "," if not loop.last }}{% endfor %}
+		{{ key|tojson }}:{{ value|flat_json|tojson }}{{ "," if not loop.last }}{% endfor %}
 	}{{ "," if not loop.last }}{% endfor %}{{ "," if not loop.last }}{% endif %}{% endfor %}
 ];
 
@@ -204,7 +204,7 @@ var CriticalData = [{% for elem in data %}{% if elem["rule_level"] == "critical"
 		"title":{{ elem["title"]|tojson }},
 		"sigma_yml":{{ elem["sigmafile"]|tojson }},
 		"description":{{ elem["description"]|tojson }},{% for key, value in match.items() %}
-		"{{ key }}":{{ value|tojson }}{{ "," if not loop.last }}{% endfor %}
+		{{ key|tojson }}:{{ value|flat_json|tojson }}{{ "," if not loop.last }}{% endfor %}
 	}{{ "," if not loop.last }}{% endfor %}{{ "," if not loop.last }}{% endif %}{% endfor %}
 ];
 

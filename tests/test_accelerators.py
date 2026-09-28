@@ -326,7 +326,8 @@ def test_literal_prefilter_matches_sqlite_boolean_wildcard_semantics(event_datab
              "NOT (text LIKE '%alpha%')", "text LIKE 'a%'", "text LIKE '%missing%'",
              "text LIKE '%alpha*_%' ESCAPE '*'", "text LIKE '%alpha%bet%'",
              "text LIKE '%alpha%_%' ESCAPE '%'", "text LIKE '%alpha\\\\%' ESCAPE '\\'",
-             "text LIKE '%é%'", "text LIKE '%É%'", "text LIKE '%k%'"]
+             "text LIKE '%é%'", "text LIKE '%É%'", "text LIKE '%k%'",
+             "text='ALPHA' COLLATE NOCASE", "NOT COALESCE((other='alpha' COLLATE NOCASE), 0)"]
     rng = random.Random(90210)  # noqa: S311 -- reproducible test inputs
     queries = ["SELECT * FROM logs WHERE " + atom for atom in atoms]
     for _ in range(250):
@@ -350,6 +351,17 @@ def test_rules_with_null_safe_negation_are_still_planned():
         "SELECT * FROM logs WHERE text LIKE '%alpha%' AND NOT (other LIKE '%beta%' OR n=1)")
 
     assert "NOT COALESCE((" in query
+    plan = _plan_for(query)
+    assert plan is not None and plan.expression == ("literal", ("text", "alpha"))
+
+
+def test_rules_with_an_explicit_nocase_equality_are_still_planned():
+    """Rulesets built with collate_nocase put COLLATE NOCASE on every Channel
+    equality; refusing it would switch the prefilter off for nearly every rule."""
+    query = ("SELECT * FROM logs WHERE Channel='Security' COLLATE NOCASE AND "
+             "(EventID=4688 AND text LIKE '%alpha%' ESCAPE '\\' "
+             "AND NOT COALESCE((other='x' COLLATE NOCASE), 0))")
+
     plan = _plan_for(query)
     assert plan is not None and plan.expression == ("literal", ("text", "alpha"))
 
@@ -492,6 +504,10 @@ def test_depth_repaired_rules_are_accelerated(tmp_path):
     "SELECT * FROM logs WHERE text LIKE '%alpha%' AND current_date LIKE '%202%'",
     "SELECT * FROM logs WHERE text LIKE '%alpha%' AND text -> '$.k' = 1",
     "SELECT * FROM logs WHERE text LIKE '%alpha%' AND text ->> '$.k' = 1",
+    "SELECT * FROM logs WHERE text LIKE '%alpha%' AND other = 'x' COLLATE RTRIM",
+    "SELECT * FROM logs WHERE text LIKE '%alpha%' AND other = 'x' COLLATE BINARY",
+    "SELECT * FROM logs WHERE text LIKE '%alpha%' COLLATE NOCASE",
+    "SELECT * FROM logs WHERE text LIKE '%alpha%' ESCAPE '\\' COLLATE NOCASE",
 ])
 def test_unsupported_sql_has_no_prefilter_plan(query):
     assert _plan_for(quote_sql_identifiers(query)) is None

@@ -88,6 +88,17 @@ correlation rule, or a column holding values SQLite would coerce (numbers in `Ch
 BLOBs) always runs. The saving is the statement preparation: about 0.3 ms per rule,
 paid for every rule on every file in per-file and parallel modes.
 
+A rule with a `correlation_plan` (SQLite backend 2) never runs its `rule` SQL. `core.py`
+hands the plan to the backend's `runtime.execute_plan`, which widens `logs` with the
+plan's `required_fields`, materialises each stage as an indexed TEMP table, runs the
+result and diagnostic queries, fetches the evidence rows by `row_id` and drops the TEMP
+tables. A progress handler checks for Ctrl+C every 10,000 SQLite instructions, and the
+stages are dropped again after an interruption. Plans are never repaired, scanned,
+prefiltered or used to pick indexes: the SQL scan cannot read their CTEs and window
+functions, and a plan scans `logs` in full anyway. A plan whose version or SQLite
+requirement this install cannot meet is reported when the ruleset loads and recorded as
+a rule error on every run.
+
 Automatic literal filtering requires at least 1,000 rows and 32 distinct eligible
 queries. It is built once per `execute_ruleset` call and discarded after its output
 callbacks finish. `literal` forces construction; `off` disables it. Aho–Corasick searches necessary literals in each
@@ -500,6 +511,12 @@ column costs nothing — numeric equality and ranges are unaffected — and with
 numeric first value would leave the column comparing text case-sensitively for the rest
 of the run.
 
+Because every column is already `NOCASE`, a ruleset converted with the backend's
+`collate_nocase` option (`Channel='Security' COLLATE NOCASE`) compares exactly as the bare
+equality does. The Channel/EventID bounds, the rule census and the literal prefilter read
+an explicit `COLLATE NOCASE` on an equality as that equality. Any other collation changes
+what matches, so it leaves the bound unread and the statement unplanned.
+
 How far "the rest of that database" reaches depends on the mode. `--unified-db` really
 is one table, so the first value seen anywhere in the corpus types the column. Per-file
 and parallel modes rebuild the table between files, so each input is typed by its own
@@ -541,10 +558,18 @@ the rule evaluate exactly as it would against an event that simply lacks them. R
 whose fields are *all* absent are widened too, so `|exists: false` becomes `IS NULL` and
 matches every row.
 
+A backend-2 ruleset lists each rule's fields in `required_fields`, and those are added
+along with the ones the scan reads: a field used only inside a function call — the second
+field of `|fieldref|contains`, inside `replace()` — is invisible to the scan.
+
 Column names are read with `sqlscan.py`, not with a regex, for two reasons: the backend
 backtick-quotes every field name that is not `^[a-zA-Z0-9_]*$` — which is every ECS and
 Winlogbeat name (`event.code`, `@timestamp`, `Data[1]`) — and a name inside a string
 literal is not a column, so `CommandLine LIKE '%user=bob%'` must not invent a `user`.
+Nor is a name the statement binds with `AS`: a correlation's `HAVING event_count >= 3`
+compares its own aggregate, and a NULL `event_count` column in logs would shadow it
+through the subquery's `SELECT *`, silently emptying that rule and every later one using
+the alias.
 
 ### Reading a statement
 

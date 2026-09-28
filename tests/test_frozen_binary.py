@@ -494,6 +494,33 @@ class TestSigma:
         assert "nope" in run.output
 
 
+    def test_a_correlation_runs_across_files(self, runner, tmp_path_factory):
+        """The backend's runtime is imported only when a plan runs, and the
+        plan needs the bundled SQLite to have JSON functions (3.38+)."""
+        root = tmp_path_factory.mktemp("correlation")
+        logs = root / "logs"
+        logs.mkdir()
+        for i in range(2):
+            (logs / f"{i}.json").write_text(json.dumps(
+                {"SystemTime": f"2024-01-01T00:00:0{i}Z", "Host": "h", "EventID": 1}) + "\n")
+        # JSON is YAML, which spares this module a YAML dependency.
+        (root / "base.yml").write_text(json.dumps({
+            "title": "base", "name": "base", "logsource": {"product": "windows"},
+            "detection": {"s": {"EventID": 1}, "condition": "s"}}))
+        (root / "burst.yml").write_text(json.dumps({
+            "title": "burst", "level": "high", "correlation": {
+                "type": "event_count", "rules": ["base"], "group-by": ["Host"],
+                "timespan": "5s", "condition": {"gte": 2}}}))
+        output = root / "detections.json"
+
+        run = runner.binary("-e", str(logs), "-j", "-r", str(root / "burst.yml"), str(root / "base.yml"),
+                            "--timefield", "SystemTime", "-o", str(output), "-l", str(root / "run.log"))
+
+        [result] = json.loads(output.read_text())
+        assert result["alert_count"] == 1, run.output
+        assert {e["event"]["OriginalLogfile"] for e in result["matches"][0]["evidence"]} == {"0.json", "1.json"}
+
+
 # =============================================================================
 # Archives
 # =============================================================================

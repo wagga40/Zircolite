@@ -116,6 +116,8 @@ SETTINGS: tuple[Setting, ...] = (
     Setting("pipeline", "rules", "pipelines", None, Merge.CLI_REPLACES, nest_each),
     Setting("rulefilter", "rules", "filters", None, Merge.CLI_REPLACES, nest_each),
     Setting("save_ruleset", "rules", "save_ruleset", False, Merge.OR),
+    Setting("timestamp_format", "rules", "timestamp_format", "iso"),
+    Setting("min_level", "rules", "min_level"),
     # -- output -----------------------------------------------------------
     Setting("outfile", "output", "file", _default_outfile),
     Setting("csv_delimiter", "output", "csv_delimiter", DEFAULT_CSV_DELIMITER),

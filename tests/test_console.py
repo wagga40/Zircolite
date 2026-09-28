@@ -20,6 +20,7 @@ from zircolite.console import (
     build_file_tree,
     console,
     is_quiet,
+    literal,
     make_detection_counter,
     make_file_link,
     make_severity_badge,
@@ -242,6 +243,13 @@ class TestFileTree:
         assert "100" in result
         assert "0 detections" in result
 
+    @pytest.mark.parametrize("path", [None, "/evidence/[bold]x.evtx"])
+    def test_format_file_node_prints_the_name_as_written(self, path):
+        from rich.text import Text
+
+        fs = {"name": "[bold]x.evtx", "events": 1, "detections": 0, "path": path}
+        assert "[bold]x.evtx" in Text.from_markup(_format_file_node(fs)).plain
+
     def test_format_file_node_few_detections(self):
         fs = {"name": "test.evtx", "events": 100, "detections": 3}
         result = _format_file_node(fs)
@@ -442,6 +450,36 @@ class TestMakeFileLink:
         result = make_file_link("")
         assert isinstance(result, str)
 
+    @pytest.mark.parametrize("name", ["[bold]x.evtx", "a[/]b.evtx", "[link=https://x]y[/link]"])
+    def test_names_print_as_written(self, tmp_path, name):
+        """Evidence file names are not markup: "[bold]x.evtx" printed as "x.evtx"."""
+        from rich.text import Text
+
+        assert Text.from_markup(make_file_link(str(tmp_path / "f"), name)).plain == name
+        assert Text.from_markup(make_file_link(name)).plain == name
+
+
+class TestLiteral:
+    """Text from the evidence, interpolated into Rich markup."""
+
+    def test_markup_is_printed_not_applied(self):
+        from rich.text import Text
+
+        text = "[red]x[/] [link=https://attacker.example]y[/link] a[/]b"
+        assert Text.from_markup(f"[cyan]{literal(text)}[/]").plain == text
+
+    def test_terminal_control_characters_are_removed(self):
+        from rich.text import Text
+
+        rendered = Text.from_markup(literal("a\x1b[2Jb\x07c\x9bd\te\nf")).plain
+        assert rendered == "a[2Jbcd\te\nf"
+
+    def test_exceptions_are_accepted(self):
+        from rich.text import Text
+
+        error = FileNotFoundError(2, "No such file", "[bold]x[/]")
+        assert Text.from_markup(literal(error)).plain == str(error)
+
 
 # =============================================================================
 # print_rule_test_results
@@ -620,15 +658,24 @@ class TestAttackTacticExtraction:
         That is how the v19 rename went unnoticed: rules tagged attack.stealth
         produced no tactic at all, so Navigator entries merged under a null
         tactic and the Mini-GUI's lanes for them stayed empty.
+
+        Only SigmaHQ's rulesets are checked. The community ones carry their
+        authors' misspellings (attack.defense_evesion, attack.11136.001), which
+        no alias should guess at.
         """
         import json
 
         from zircolite.attack import extract_attack_tactics
 
         rules_dir = Path(__file__).parent.parent / "rules"
-        rulesets = sorted(rules_dir.glob("*.json"))
+        manifest = rules_dir / "release-manifest.json"
+        if not manifest.is_file():
+            pytest.skip("no release-manifest.json in rules/ to find the SigmaHQ rulesets by")
+        artifacts = json.loads(manifest.read_text())["sources"]["sigmahq"]["artifacts"]
+        rulesets = sorted(rules_dir / name for name in artifacts
+                          if name.endswith(".json") and (rules_dir / name).is_file())
         if not rulesets:
-            pytest.skip("no rulesets in rules/ to check against")
+            pytest.skip("no SigmaHQ rulesets in rules/ to check against")
 
         # Technique (attack.tXXXX), software (attack.sXXXX), group (attack.gXXXX)
         # and data-source (attack.dsXXXX) tags are not tactics and never resolve.

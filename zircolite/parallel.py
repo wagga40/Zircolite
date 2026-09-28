@@ -14,11 +14,13 @@ import logging
 import multiprocessing
 import os
 import queue
+import signal
+import sys
 import time
 from collections import deque
 from collections.abc import Callable
 from concurrent.futures import FIRST_COMPLETED, ProcessPoolExecutor, ThreadPoolExecutor, wait
-from contextlib import contextmanager
+from contextlib import contextmanager, nullcontext
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -35,7 +37,7 @@ from rich.progress import (
     TimeElapsedColumn,
 )
 
-from .console import console
+from .console import console, literal
 from .shutdown import is_shutdown_requested
 from .utils import estimate_input_size
 
@@ -65,6 +67,32 @@ def _file_size(path: Path) -> int:
 # ============================================================================
 # CONSOLIDATED WORKER CALCULATION
 # ============================================================================
+
+
+@contextmanager
+def _sigint_held_for_new_workers():
+    """Hold SIGINT in this thread while a process worker may be spawned.
+
+    ``Ctrl+C`` in a terminal reaches the whole foreground process group. A
+    ``spawn`` worker ignores SIGINT only once its initializer runs, after it has
+    imported Zircolite, so a first ``Ctrl+C`` in that window raised
+    KeyboardInterrupt in every starting worker and broke the pool. A blocked
+    signal mask survives fork and exec: the worker starts with SIGINT pending
+    rather than delivered, and its initializer discards it. The parent loses
+    nothing either: another thread takes the signal or the restored mask
+    delivers it, at worst once the spawn returns. Ignoring SIGINT here instead
+    would drop it, and a spawn can take as long as the worker's imports.
+    Windows has no signal mask and does not send a console ``Ctrl+C`` as a
+    POSIX signal, so there this does nothing.
+    """
+    if sys.platform == "win32":
+        yield
+        return
+    previous = signal.pthread_sigmask(signal.SIG_BLOCK, {signal.SIGINT})
+    try:
+        yield
+    finally:
+        signal.pthread_sigmask(signal.SIG_SETMASK, previous)
 
 
 def select_executor(requested, file_sizes, available_memory_mb, cpu_count, *,
@@ -261,12 +289,15 @@ class MemoryAwareParallelProcessor:
         """Check if we should reduce workers due to high memory usage."""
         return self.get_memory_percent() > self.config.memory_limit_percent
 
-    def _would_exceed_memory_budget(self) -> bool:
+    def _would_exceed_memory_budget(self, pending: int = 0) -> bool:
         """Predictive throttle based on the calibrated per-file estimate.
 
         Returns True when submitting one more file would likely push the
-        process RSS past the configured memory budget. Inert until adaptive
-        calibration has produced an estimate.
+        process RSS past the configured memory budget. ``pending`` counts
+        files submitted so recently that RSS cannot include them yet: a
+        refill submits several within microseconds, and checking each against
+        RSS alone would commit all of them on the strength of one estimate.
+        Inert until adaptive calibration has produced an estimate.
         """
         if self._calibrated_memory_per_file_mb is None:
             return False
@@ -279,7 +310,8 @@ class MemoryAwareParallelProcessor:
             return False
         used_mb = (vm.total - vm.available) / (1024 * 1024)
         projected_percent = (
-            (used_mb + self._calibrated_memory_per_file_mb) / total_mb * 100.0
+            (used_mb + (pending + 1) * self._calibrated_memory_per_file_mb)
+            / total_mb * 100.0
         )
         return projected_percent > self.config.memory_limit_percent
 
@@ -534,7 +566,11 @@ class MemoryAwareParallelProcessor:
                 def submit(path: Path) -> None:
                     nonlocal inflight_bytes
                     inflight_bytes += _file_size(path)
-                    active_futures[executor.submit(process_func, path)] = path
+                    # A process pool spawns its workers here, on submit.
+                    with (_sigint_held_for_new_workers()
+                          if self.config.executor == "process" else nullcontext()):
+                        future = executor.submit(process_func, path)
+                    active_futures[future] = path
 
                 for _ in range(min(num_workers, len(file_queue))):
                     submit(file_queue.popleft())
@@ -620,11 +656,25 @@ class MemoryAwareParallelProcessor:
 
                         inflight_bytes -= _file_size(file_path)
 
-                        if file_queue and not is_shutdown_requested():
-                            if self.should_throttle() or self._would_exceed_memory_budget():
+                    # Top the pool back up to num_workers rather than replacing
+                    # only the files that just finished: otherwise every slot
+                    # left empty under memory pressure stays empty once the
+                    # pressure is gone, and the run ends up one file at a time.
+                    # Pressure is checked before each submission; a deferral
+                    # counts once per batch of completions, not once per slot.
+                    if done:
+                        refilled = 0
+                        while (
+                            file_queue
+                            and len(active_futures) < num_workers
+                            and not is_shutdown_requested()
+                        ):
+                            if (self.should_throttle()
+                                    or self._would_exceed_memory_budget(pending=refilled)):
                                 self.stats.throttle_events += 1
-                            else:
-                                submit(file_queue.popleft())
+                                break
+                            submit(file_queue.popleft())
+                            refilled += 1
 
                     if not active_futures and file_queue and not is_shutdown_requested():
                         submit(file_queue.popleft())
@@ -669,7 +719,7 @@ class MemoryAwareParallelProcessor:
                 f"[!] [yellow]{len(failed_files)}[/] file(s) failed to process:"
             )
             for path, error in failed_files[:5]:
-                self.logger.warning(f"    [-] {path.name}: {error}")
+                self.logger.warning(f"    [-] {literal(path.name)}: {literal(error)}")
             if len(failed_files) > 5:
                 self.logger.warning(
                     f"    ... and [yellow]{len(failed_files) - 5}[/] more"

@@ -165,15 +165,29 @@ def _parser_actions():
 class TestVersionHasOneSource:
     """No document may carry the version literal; they must reference it."""
 
+    # Another tool's version can coincide with ours: the benchmark tables name
+    # Hayabusa 4.1.0, which is not Zircolite pinning its own.
+    OTHER_TOOL = re.compile(r"(?:Hayabusa|Chainsaw) v?$")
+
     @pytest.mark.parametrize(
         "doc", ["docs/README.md", "README.md", "docs/Usage.md", "docs/Advanced.md",
                 "docs/Internals.md"]
     )
     def test_docs_do_not_pin_the_version(self, doc):
         text = (WORKSPACE_ROOT / doc).read_text(encoding="utf-8")
-        assert __version__ not in text, (
+        pinned = [
+            match.start() for match in re.finditer(re.escape(__version__), text)
+            if not self.OTHER_TOOL.search(text[max(0, match.start() - 20):match.start()])
+        ]
+        assert not pinned, (
             f"{doc} duplicates the version literal; reference it instead"
         )
+
+    def test_another_tools_version_is_not_ours(self):
+        text = f"| Hayabusa {__version__} | 4,658 |"
+
+        assert self.OTHER_TOOL.search(text[: text.index(__version__)])
+        assert not self.OTHER_TOOL.search("Zircolite v")
 
     def test_security_policy_names_the_current_release_line(self):
         """SECURITY.md sat two minor versions behind for months."""

@@ -40,8 +40,22 @@ def test_hints_never_override_precedence(processor):
     processor._extract_event_filter_fields({"Channel": "Other", "EventID": 1})
     event = {"Channel": "Other", "EventID": 1,
              "Event": {"System": {"Channel": "Security", "EventID": 4624}}}
-    assert processor._extract_event_filter_fields(event) == ("Security", 4624)
+    # The fields disagree, so neither precedence nor the hint picks one: the
+    # filter cannot tell which value the flattener puts in the column
+    assert processor._extract_event_filter_fields(event) == (None, None)
     assert processor._should_process_event(event)
+    agreeing = {"Channel": "Security", "EventID": 4624,
+                "Event": {"System": {"Channel": "Security", "EventID": 4624}}}
+    assert processor._extract_event_filter_fields(agreeing) == ("Security", 4624)
+
+
+def test_filter_leaves_non_object_json_lines_alone(processor):
+    processor.event_filter = EventFilter([{"rule": ["SELECT * FROM logs WHERE Channel='Security'"]}])
+    processor._filtering_enabled = True
+    # Longer than the configured channel paths, so the walk would index into it
+    line = list(range(20))
+    assert processor._extract_event_filter_fields(line) == (None, None)
+    assert processor._should_process_event(line)
 
 
 @pytest.mark.parametrize("query,channel,eventid", [

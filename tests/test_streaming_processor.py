@@ -6,6 +6,7 @@ import json
 import sqlite3
 import sys
 from pathlib import Path
+from typing import ClassVar
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -2658,6 +2659,264 @@ class TestStreamingXmlEncodingAndDiagnostics:
         assert mock_logger.warning.called
 
 
+def _xml_event(event_id):
+    return (
+        '<Event xmlns="http://schemas.microsoft.com/win/2004/08/events/event">'
+        f"<System><EventID>{event_id}</EventID><Channel>Security</Channel></System>"
+        f'<EventData><Data Name="CommandLine">cmd{event_id}.exe</Data></EventData></Event>'
+    )
+
+
+_THREE_EVENTS = [_xml_event(n) for n in (1, 2, 3)]
+_DECLARATION = '<?xml version="1.0" encoding="utf-8"?>'
+
+
+class TestStreamingXmlWithoutRootElement:
+    """Event records written back to back, with no element around them.
+
+    wevtutil qe /f:xml, Get-WinEvent's ToXml() and evtx_dump all write that
+    shape. An XML parser stops at the end of the first document element, so
+    every event after the first was dropped without a word.
+    """
+
+    SHAPES: ClassVar[dict[str, bytes]] = {
+        "concatenated": "".join(_THREE_EVENTS).encode(),
+        "one_per_line": "\n".join(_THREE_EVENTS).encode(),
+        # evtx_dump repeats the declaration in front of every record
+        "evtx_dump": "\n".join(_DECLARATION + e for e in _THREE_EVENTS).encode(),
+        "declaration_first": (_DECLARATION + "\n" + "\n".join(_THREE_EVENTS)).encode(),
+        "comment_first": ("<!-- exported -->\n" + "\n".join(_THREE_EVENTS)).encode(),
+        "utf8_bom": b"\xef\xbb\xbf" + "\n".join(_THREE_EVENTS).encode(),
+        # Windows PowerShell's > redirection writes UTF-16LE with a BOM
+        "utf16_bom": "\n".join(_THREE_EVENTS).encode("utf-16"),
+        "utf16_declaration": (
+            '<?xml version="1.0" encoding="UTF-16"?>\n' + "\n".join(_THREE_EVENTS)
+        ).encode("utf-16"),
+        "two_exports": (
+            f"<Events>{_THREE_EVENTS[0]}{_THREE_EVENTS[1]}</Events>\n"
+            f"<Events>{_THREE_EVENTS[2]}</Events>"
+        ).encode(),
+        "rooted": f"<Events>{''.join(_THREE_EVENTS)}</Events>".encode(),
+        "doctype_rooted": (
+            f"<!DOCTYPE Events>\n<Events>{''.join(_THREE_EVENTS)}</Events>"
+        ).encode(),
+    }
+
+    @pytest.fixture
+    def read(self, field_mappings_file, test_logger, default_args_config):
+        extractor = EvtxExtractor(
+            extractor_config=ExtractorConfig(xml_logs=True), logger=test_logger
+        )
+        processor = StreamingEventProcessor(
+            config_file=field_mappings_file,
+            args_config=default_args_config,
+            logger=test_logger,
+        )
+
+        def read(path):
+            return [
+                event["CommandLine"]
+                for event in processor.stream_xml_events(str(path), extractor)
+            ]
+
+        return read
+
+    @pytest.mark.parametrize("shape", sorted(SHAPES))
+    def test_every_event_is_read(self, read, tmp_path, shape):
+        src = tmp_path / "events.xml"
+        src.write_bytes(self.SHAPES[shape])
+
+        assert read(src) == ["cmd1.exe", "cmd2.exe", "cmd3.exe"]
+
+    def test_compressed_file_is_read_whole(self, read, tmp_path):
+        import gzip
+
+        src = tmp_path / "events.xml.gz"
+        src.write_bytes(gzip.compress(self.SHAPES["one_per_line"]))
+
+        assert read(src) == ["cmd1.exe", "cmd2.exe", "cmd3.exe"]
+
+
+_REDIRECTING = "cmd.exe /Q /c cd \\ 1> \\\\127.0.0.1\\C$\\x 2>&1 <in 'q' \"d\""
+
+
+def _xml_record(command_line, event_id=1, payload=""):
+    escaped = (command_line.replace("&", "&amp;").replace("<", "&lt;")
+               .replace(">", "&gt;").replace("'", "&apos;").replace('"', "&quot;"))
+    return (
+        '<Event xmlns="http://schemas.microsoft.com/win/2004/08/events/event">'
+        f"<System><EventID>{event_id}</EventID>"
+        "<Channel>Microsoft-Windows-Sysmon/Operational</Channel></System>"
+        f'<EventData><Data Name="CommandLine">{escaped}</Data></EventData>{payload}</Event>'
+    )
+
+
+# XML 1.0 forbids raw control characters, yet real exports carry them (the
+# PrivilegeList of some Security events holds \x02), and libxml2 recovers by
+# dropping the character.
+_BROKEN_RECORD = _xml_record("before\x02after")
+
+
+class _Trickle:
+    """A binary stream that hands out at most ``size`` bytes per read."""
+
+    def __init__(self, data, size):
+        self.data, self.size = data, size
+
+    def read(self, n=-1):
+        n = self.size if n is None or n < 0 else min(n, self.size)
+        chunk, self.data = self.data[:n], self.data[n:]
+        return chunk
+
+
+class TestXmlRecoveryKeepsLaterRecordsIntact:
+    """One malformed record must not alter the records that follow it.
+
+    Once lxml's recovering parser has met an error, libxml2 stops expanding
+    entity references for the rest of the document, so every later &gt; &amp;
+    and &lt; disappeared: 2>&1 became 21 and the rules looking for it never
+    matched, while the run reported nothing.
+    """
+
+    @pytest.fixture
+    def processor(self, field_mappings_file, default_args_config):
+        return StreamingEventProcessor(
+            config_file=field_mappings_file,
+            args_config=default_args_config,
+            logger=MagicMock(),
+        )
+
+    @pytest.mark.parametrize("encoding", ["utf-8", "utf-16"])
+    def test_xml_record_after_a_broken_one(self, processor, tmp_path, encoding):
+        src = tmp_path / "events.xml"
+        src.write_bytes(
+            ("<Events>" + _BROKEN_RECORD + _xml_record(_REDIRECTING) + "</Events>")
+            .encode(encoding)
+        )
+        extractor = EvtxExtractor(extractor_config=ExtractorConfig(xml_logs=True))
+
+        values = [e["CommandLine"] for e in processor.stream_xml_events(str(src), extractor)]
+
+        assert values == ["beforeafter", _REDIRECTING]
+
+    def test_evtxtract_record_after_a_broken_one(self, processor, tmp_path):
+        src = tmp_path / "evtxtract.log"
+        src.write_text(_BROKEN_RECORD + "\n" + _xml_record(_REDIRECTING) + "\n", encoding="utf-8")
+        extractor = EvtxExtractor(extractor_config=ExtractorConfig(evtxtract=True))
+
+        values = [
+            e["CommandLine"] for e in processor.stream_evtxtract_events(str(src), extractor)
+        ]
+
+        assert values[-1] == _REDIRECTING
+
+    def test_recovered_errors_are_reported(self, processor, tmp_path):
+        """Recovery changes what was read, so the file is flagged, not trusted."""
+        src = tmp_path / "events.xml"
+        src.write_text("<Events>" + _BROKEN_RECORD + _xml_record("x") + "</Events>")
+        extractor = EvtxExtractor(extractor_config=ExtractorConfig(xml_logs=True))
+
+        list(processor.stream_xml_events(str(src), extractor))
+
+        assert processor.ingest_degraded
+        warning = " ".join(str(call) for call in processor.logger.warning.call_args_list)
+        assert "events.xml" in warning and "line 1" in warning
+
+    def test_well_formed_file_is_trusted(self, processor, tmp_path):
+        src = tmp_path / "events.xml"
+        src.write_text("<Events>" + _xml_record(_REDIRECTING) + "</Events>")
+        extractor = EvtxExtractor(extractor_config=ExtractorConfig(xml_logs=True))
+
+        list(processor.stream_xml_events(str(src), extractor))
+
+        assert not processor.ingest_degraded
+        assert not processor.logger.warning.called
+
+
+class TestXmlDocumentStream:
+    """The byte stream the XML reader hands to lxml."""
+
+    DOC = "<Events><E a=\"x&quot;y\">1&gt; 2&gt;&amp;1 &lt;in&apos;s</E></Events>"
+    EXPECTED = (
+        "<ZircoliteXmlDocument><Events><E a=\"x&#34;y\">1&#62; 2&#62;&#38;1 "
+        "&#60;in&#39;s</E></Events></ZircoliteXmlDocument>"
+    )
+
+    @staticmethod
+    def _read_all(stream):
+        out = b""
+        while chunk := stream.read(5):
+            out += chunk
+        return out
+
+    @pytest.mark.parametrize("encoding", ["utf-8", "utf-16-le", "utf-16-be", "utf-16"])
+    @pytest.mark.parametrize("size", [1, 2, 3, 7, 64 * 1024])
+    def test_entities_become_character_references(self, encoding, size):
+        """Across every read boundary, in every encoding the reader supports."""
+        from zircolite.streaming import _xml_document_stream
+
+        out = self._read_all(_xml_document_stream(_Trickle(self.DOC.encode(encoding), size)))
+
+        assert out.decode(encoding) == self.EXPECTED
+
+    def test_misaligned_utf16_bytes_are_left_alone(self):
+        """Bytes that spell &gt; only across two UTF-16 code units are not an entity."""
+        from zircolite.streaming import _xml_document_stream
+
+        text = "<E>\u2641\u6700\u7400\u3b00\u4100</E>"
+        data = text.encode("utf-16-le")
+        assert "&gt;".encode("utf-16-le") in data[1:]
+
+        out = self._read_all(_xml_document_stream(_Trickle(data, 3)))
+
+        assert out.decode("utf-16-le") == f"<ZircoliteXmlDocument>{text}</ZircoliteXmlDocument>"
+
+    def test_whole_read(self):
+        from zircolite.streaming import _xml_document_stream
+
+        out = _xml_document_stream(_Trickle(self.DOC.encode(), 4)).read()
+
+        assert out.decode() == self.EXPECTED
+
+
+class TestXmlPayloadNamedEvent:
+    """A UserData payload whose element name ends in "Event" is not a record.
+
+    CompatibilityFixEvent (Application-Experience 500) and ResolverFiredEvent
+    were each read as a record of their own: an empty row, after which the
+    payload was cleared and its real event stored without it.
+    """
+
+    def test_payload_stays_in_its_record(
+        self, tmp_path, field_mappings_file, test_logger, default_args_config
+    ):
+        payload = (
+            "<UserData><CompatibilityFixEvent "
+            'xmlns="http://www.microsoft.com/Windows/Diagnosis/PCA/events">'
+            "<ExePath>C:\\Windows\\System32\\osk.exe</ExePath>"
+            "<FixName>CorrectFilePaths</FixName>"
+            "</CompatibilityFixEvent></UserData>"
+        )
+        src = tmp_path / "events.xml"
+        src.write_text(
+            "<Events>" + _xml_record("a", 500, payload) + _xml_record("b") + "</Events>"
+        )
+        extractor = EvtxExtractor(
+            extractor_config=ExtractorConfig(xml_logs=True), logger=test_logger
+        )
+        processor = StreamingEventProcessor(
+            config_file=field_mappings_file,
+            args_config=default_args_config,
+            logger=test_logger,
+        )
+
+        events = list(processor.stream_xml_events(str(src), extractor))
+
+        assert [e["CommandLine"] for e in events] == ["a", "b"]
+        assert events[0]["ExePath"] == "C:\\Windows\\System32\\osk.exe"
+        assert events[0]["FixName"] == "CorrectFilePaths"
+
+
 class TestMalformedInputIsolation:
     """One bad record must not cost the rest of the file."""
 
@@ -2867,3 +3126,75 @@ class TestIngestDegradation:
         list(getattr(processor, reader)(str(tmp_path / filename), extractor))
 
         assert processor.ingest_degraded is True
+
+
+class TestUnnamedEventData:
+    """Unnamed <Data> values reach rules as one string, whatever the reader.
+
+    EVTX stored them in Message as the repr of a Python list and left Data
+    unset, so rules on Data could not match (and a NOT on it always held); XML
+    stored the same repr in Data, where the doubled backslashes made a UNC
+    test such as Data LIKE '%\\\\%' match every local path.
+    """
+
+    VALUES: ClassVar[list[str]] = ["C:\\Program Files\\App\\setup.msi", "2128", "(NULL)", ""]
+    JOINED = "C:\\Program Files\\App\\setup.msi\n2128\n(NULL)\n"
+
+    @pytest.fixture
+    def processor(self, field_mappings_file, test_logger, default_args_config):
+        return StreamingEventProcessor(
+            config_file=field_mappings_file,
+            args_config=default_args_config,
+            logger=test_logger,
+        )
+
+    @staticmethod
+    def _event(event_data):
+        return {"Event": {"System": {"EventID": 1040, "Channel": "Application"},
+                          "EventData": event_data}}
+
+    @pytest.mark.parametrize("data", [
+        {"#text": VALUES},  # pyevtx-rs, and evtx_dump's JSON
+        VALUES,  # the XML reader
+    ], ids=["evtx", "xml"])
+    def test_values_are_joined_into_data_and_message(self, processor, data):
+        flat = processor._flatten_event(self._event({"Data": data}), "f")
+
+        assert flat["Data"] == self.JOINED
+        assert flat["Message"] == self.JOINED
+
+    def test_single_value(self, processor):
+        flat = processor._flatten_event(self._event({"Data": {"#text": "only"}}), "f")
+
+        assert (flat["Data"], flat["Message"]) == ("only", "only")
+
+    def test_an_event_message_is_kept(self, processor):
+        flat = processor._flatten_event(
+            self._event({"Data": ["a", "b"], "Message": "rendered"}), "f"
+        )
+
+        assert (flat["Data"], flat["Message"]) == ("a\nb", "rendered")
+
+    def test_named_data_is_left_alone(self, processor):
+        flat = processor._flatten_event(self._event({"CommandLine": "x", "Image": "y"}), "f")
+
+        assert flat["CommandLine"] == "x" and "Data" not in flat and "Message" not in flat
+
+    def test_xml_and_json_readers_agree(self, processor, tmp_path):
+        xml = tmp_path / "e.xml"
+        xml.write_text(
+            '<Event xmlns="http://schemas.microsoft.com/win/2004/08/events/event">'
+            "<System><EventID>1040</EventID><Channel>Application</Channel></System>"
+            "<EventData>" + "".join(f"<Data>{v}</Data>" for v in self.VALUES)
+            + "</EventData></Event>"
+        )
+        jsonl = tmp_path / "e.json"
+        jsonl.write_text(json.dumps(self._event({"Data": {"#text": self.VALUES}})) + "\n")
+        extractor = EvtxExtractor(
+            extractor_config=ExtractorConfig(xml_logs=True), logger=processor.logger
+        )
+
+        from_xml = next(iter(processor.stream_xml_events(str(xml), extractor)))
+        from_json = next(iter(processor.stream_json_events(str(jsonl))))
+
+        assert from_xml["Data"] == from_json["Data"] == self.JOINED

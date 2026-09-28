@@ -82,6 +82,32 @@ class TestRulesResolution:
         assert args.pipeline == [["pipeline_x"]]
         assert args.rulefilter == [["Noisy"]]
 
+    def test_timestamp_format_comes_from_yaml_unless_the_cli_names_one(self):
+        from_yaml = _args()
+        from_cli = _args(timestamp_format="unix")
+        neither = _args()
+
+        resolve(from_yaml, {"rules": {"timestamp_format": "unix_ms"}})
+        resolve(from_cli, {"rules": {"timestamp_format": "unix_ms"}})
+        resolve(neither, {})
+
+        assert from_yaml.timestamp_format == "unix_ms"
+        assert from_cli.timestamp_format == "unix"
+        assert neither.timestamp_format == "iso"
+
+    def test_min_level_comes_from_yaml_unless_the_cli_names_one(self):
+        from_yaml = _args()
+        from_cli = _args(min_level="critical")
+        neither = _args()
+
+        resolve(from_yaml, {"rules": {"min_level": "high"}})
+        resolve(from_cli, {"rules": {"min_level": "high"}})
+        resolve(neither, {})
+
+        assert from_yaml.min_level == "high"
+        assert from_cli.min_level == "critical"
+        assert neither.min_level is None
+
     def test_absent_rules_section_leaves_ruleset_unset(self):
         """main() falls back to the bundled ruleset only when this stays unset."""
         args = _args()

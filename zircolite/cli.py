@@ -85,6 +85,9 @@ from zircolite.assets import (
     resolve_shipped_ruleset,
     resolve_shipped_template,
 )
+from zircolite.config import RULE_LEVELS
+from zircolite.console import literal
+from zircolite.correlations import TIMESTAMP_FORMATS
 
 # Input format registry
 from zircolite.formats import DEFAULT_EXTENSION
@@ -159,7 +162,9 @@ def parse_arguments() -> argparse.Namespace:
     rulesets_formats_args.add_argument("-r", "--ruleset", help="Sigma ruleset in JSON (Zircolite format) or YAML/directory of YAML files (Native Sigma format)", action='append', nargs='+')
     rulesets_formats_args.add_argument("-sr", "--save-ruleset", help="Save converted ruleset (from Sigma to Zircolite format) to disk", action='store_true')
     rulesets_formats_args.add_argument("-p", "--pipeline", help="Use specified pipeline for native Sigma rulesets (YAML). Examples: 'sysmon', 'windows-logsources', 'windows-audit'. Use '--pipeline-list' to see available pipelines.", action='append', nargs='+')
+    rulesets_formats_args.add_argument("--timestamp-format", choices=TIMESTAMP_FORMATS, default=None, help=f"How the time field is written, for correlation rules converted from native Sigma rulesets (YAML): ISO 8601 (iso) or Unix seconds, milliseconds or microseconds (default: {DEFAULTS['timestamp_format']}). Compiled JSON rulesets keep the format they were converted with")
     rulesets_formats_args.add_argument("-pl", "--pipeline-list", help="List all installed pysigma pipelines", action='store_true')
+    rulesets_formats_args.add_argument("--min-level", choices=RULE_LEVELS, default=None, help="Load only the rules at this level or above; a rule without a level counts as informational")
     rulesets_formats_args.add_argument("-R", "--rulefilter", help="Remove rules from ruleset by matching rule title (case sensitive)", action='append', nargs='*')
     rulesets_formats_args.add_argument("--test-rules", help="JSON file with rule test cases (true-positive / true-negative events per rule)", type=str, metavar="TEST_FILE")
 
@@ -183,7 +188,7 @@ def parse_arguments() -> argparse.Namespace:
     output_formats_args.add_argument("-d", "--dbfile", "--db-file", help="Save all logs to a SQLite database file", type=str)
     output_formats_args.add_argument("-l", "--logfile", "--log-file", help=f"Log file name (default: {DEFAULTS['logfile']})", default=None, type=str)
     output_formats_args.add_argument("--hashes", help="Add xxhash64 of the original log event to each event", action='store_true')
-    output_formats_args.add_argument("-L", "--limit", "--limit-results", help=f"Discard rules matching more events than this, per input database — so per file in the default mode, and across the whole corpus with --unified-db (default: {DEFAULTS['limit']}, i.e. no limit)", type=int, default=None)
+    output_formats_args.add_argument("-L", "--limit", "--limit-results", help=f"Discard rules matching more events than this (alerts, for a correlation rule), per input database — so per file in the default mode, and across the whole corpus with --unified-db (default: {DEFAULTS['limit']}, i.e. no limit)", type=int, default=None)
 
     # Advanced configuration options
     config_formats_args = parser.add_argument_group('⚙️  ADVANCED CONFIGURATION')
@@ -465,7 +470,7 @@ def _print_transform_categories(config_path: str, logger) -> bool:
     try:
         config = load_field_mappings(config_path, logger=logger)
     except (FileNotFoundError, ValueError) as e:
-        logger.error(f"[red]    [-] {e}[/]")
+        logger.error(f"[red]    [-] {literal(e)}[/]")
         return False
 
     categories = config.get("transform_categories", {})
@@ -540,12 +545,12 @@ def resolve_run_config(args, logger) -> argparse.Namespace:
         logger.info(f"[+] Configuration loaded and merged from: {make_file_link(args.yaml_config)}")
 
     except FileNotFoundError as e:
-        logger.error(f"[red]    [-] {e}[/]")
+        logger.error(f"[red]    [-] {literal(e)}[/]")
         sys.exit(1)
     except SystemExit:
         raise
     except Exception as e:
-        logger.error(f"[red]    [-] Error loading YAML config: {e}[/]")
+        logger.error(f"[red]    [-] Error loading YAML config: {literal(e)}[/]")
         if logger.isEnabledFor(logging.DEBUG):
             console.print_exception(show_locals=False)
         sys.exit(1)
@@ -631,7 +636,7 @@ def cleanup(
             try:
                 os.remove(evtx)
             except OSError as e:
-                logger.error(f"[red]    [-] Cannot remove file {e}[/]")
+                logger.error(f"[red]    [-] Cannot remove file {literal(e)}[/]")
 
 
 def collapse_results_by_rule(all_results: list[Any]) -> list[dict[str, Any]]:
@@ -651,7 +656,9 @@ def collapse_results_by_rule(all_results: list[Any]) -> list[dict[str, Any]]:
         if existing is None:
             collapsed[key] = dict(result)
         else:
-            existing["count"] = existing.get("count", 0) + result.get("count", 0)
+            for field in ("count", "alert_count", "event_count"):
+                if field in result or field in existing:
+                    existing[field] = existing.get(field, 0) + result.get(field, 0)
     return list(collapsed.values())
 
 
@@ -765,7 +772,7 @@ def print_stats(
         for result in all_results:
             level = result.get("rule_level", "unknown")
             count = result.get("count", 0)
-            det_stats.add_detection(level, count)
+            det_stats.add_detection(level, count, alerts=result.get("result_type") == "correlation")
 
         detection_parts = []
         if det_stats.critical > 0:
@@ -798,11 +805,16 @@ def print_stats(
                 f"[cyan]{matched_rules}[/]/[cyan]{total_rules}[/] rules matched ({coverage_pct:.1f}%)  [dim]{cov_bar}[/]"
             )
 
-        # Total matched events
-        if det_stats.total_events > 0:
+        # Total matched events, and correlation alerts, which are not events
+        if det_stats.total_events or det_stats.total_alerts:
+            matched = []
+            if det_stats.total_events:
+                matched.append(f"[magenta]{det_stats.total_events:,}[/] events")
+            if det_stats.total_alerts:
+                matched.append(f"[magenta]{det_stats.total_alerts:,}[/] correlation alerts")
             summary_table.add_row(
                 "🔍 Matched",
-                f"[magenta]{det_stats.total_events:,}[/] events across [cyan]{det_stats.total_rules_matched}[/] rules"
+                f"{' and '.join(matched)} across [cyan]{det_stats.total_rules_matched}[/] rules"
             )
 
         # Top-N detections by severity (most critical first)
@@ -908,6 +920,22 @@ def _warn_ignored_db_flags(
         )
 
 
+def _correlation_rule_count(rulesets: list[dict[str, Any]], rule_filters: list[str] | None) -> int:
+    """Correlation rules left once -R has removed the rules it names."""
+    return sum(
+        1 for rule in rulesets
+        if rule.get("correlation") and not any(f in rule.get("title", "") for f in rule_filters or ())
+    )
+
+
+def _warn_correlations_across_databases(count: int, databases: int, logger: logging.Logger) -> None:
+    if count and databases > 1:
+        logger.warning(
+            f"[yellow]   [!] Each of the {databases} databases is analysed on its own: the "
+            f"{count} correlation rule(s) do not see events across databases[/]"
+        )
+
+
 def _run_processing(
     ctx: ProcessingContext,
     args: argparse.Namespace,
@@ -933,10 +961,13 @@ def _run_processing(
 
     phase_setup_end = time.perf_counter()
 
+    correlations = _correlation_rule_count(ctx.rulesets, getattr(args, "rulefilter", None))
+
     # ----- DB input mode (explicit -D) -----
     if args.db_input:
         _warn_ignored_db_flags(args, logger)
         db_files = expand_db_path(Path(args.evtx), args, logger)
+        _warn_correlations_across_databases(correlations, len(db_files), logger)
         ctx.parent_metrics.data["seconds"]["setup"] += time.perf_counter() - phase_setup_end
         zircolite_core, all_results = process_db_input(ctx, args, file_list=db_files)
         # Report the databases actually scanned, not a hardcoded 1
@@ -985,6 +1016,7 @@ def _run_processing(
     # DB input mode (auto-detected SQLite file)
     if args.db_input:
         _warn_ignored_db_flags(args, logger)
+        _warn_correlations_across_databases(correlations, len(file_list), logger)
         ctx.parent_metrics.data["seconds"]["setup"] += time.perf_counter() - phase_setup_end
         zircolite_core, all_results = process_db_input(ctx, args, file_list=file_list)
         return zircolite_core, all_results, log_list, phase_setup_end
@@ -1007,6 +1039,29 @@ def _run_processing(
     ]
     force_sequential = bool(sequential_reasons)
 
+    # A correlation only sees the events of its database, and per-file and
+    # parallel modes give every file a database of its own.
+    unified_for_correlations = False
+    if correlations and len(file_list) > 1 and not args.unified_db:
+        if args.no_auto_mode:
+            logger.warning(
+                f"[yellow]   [!] --no-auto-mode keeps one database per file, so the {correlations} "
+                "correlation rule(s) see one file at a time: add --unified-db to correlate across files[/]"
+            )
+        else:
+            args.unified_db = unified_for_correlations = True
+            ignored = [
+                flag for flag, applies in (
+                    ("--executor process", getattr(args, "executor", None) == "process" and _is_explicit(args, "executor")),
+                    ("--parallel-workers", _is_explicit(args, "parallel_workers")),
+                ) if applies
+            ]
+            if ignored:
+                logger.warning(
+                    f"[yellow]   [!] {' and '.join(ignored)} ignored: correlation rules need "
+                    "every file in one database[/]"
+                )
+
     if not args.no_auto_mode and not args.unified_db:
         recommended_mode, reason, stats = analyze_files_and_recommend_mode(file_list)
         forced_workers = getattr(args, 'parallel_workers', None)
@@ -1024,7 +1079,11 @@ def _run_processing(
                 use_parallel = True
                 parallel_workers = forced_workers
     elif args.unified_db:
-        logger.info("[+] [cyan]Database mode:[/] [green]UNIFIED[/] (forced)")
+        reason = (
+            f"{correlations} correlation rule(s) need every file in one database"
+            if unified_for_correlations else "forced"
+        )
+        logger.info(f"[+] [cyan]Database mode:[/] [green]UNIFIED[/] ({reason})")
         logger.info("")
     else:
         if not getattr(args, 'no_parallel', False) and not force_sequential and len(file_list) > 1:
@@ -1163,8 +1222,9 @@ def _main(memory_tracker, start_time) -> None:
     if args.update_rules:
         updater = RulesUpdater(logger=logger)
         logger.info(f"[+] Updating rules in {make_file_link(str(updater.rules_dir))}")
-        updater.run()
-        sys.exit(0)
+        # A failed update must fail the command: an image build that runs -U
+        # would otherwise ship the rulesets it already had.
+        sys.exit(0 if updater.run() else 1)
 
     # A relative --config names a file shipped in config/, so it has to resolve
     # from the install as well as from the working directory -- the default is
@@ -1276,6 +1336,8 @@ def _main(memory_tracker, start_time) -> None:
         pipeline=args.pipeline,
         save_ruleset=args.save_ruleset,
         time_field=args.timefield,
+        timestamp_format=args.timestamp_format,
+        min_level=args.min_level,
     )
     try:
         if not is_quiet():
@@ -1292,6 +1354,11 @@ def _main(memory_tracker, start_time) -> None:
         sys.exit(2)
     if args.pipeline_list:
         sys.exit(0)
+    if _is_explicit(args, "timestamp_format") and not rulesets_manager.yaml_paths:
+        logger.warning(
+            "[yellow]   [!] --timestamp-format only applies to rules converted from native Sigma "
+            "rulesets (YAML): compiled JSON rulesets keep the format they were converted with[/]"
+        )
 
     # Nothing was going to be applied to the events. The empty result file this
     # would otherwise write is indistinguishable from a clean run that found
@@ -1358,7 +1425,7 @@ def _main(memory_tracker, start_time) -> None:
         print_error_panel(
             "Invalid Configuration",
             "CSV output is not supported with multiple rulesets.",
-            f"CSV output was enabled via {csv_source}. Use a single ruleset for CSV output."
+            f"CSV output was enabled via {literal(csv_source)}. Use a single ruleset for CSV output."
         )
         sys.exit(2)
 
@@ -1464,7 +1531,7 @@ def _main(memory_tracker, start_time) -> None:
     if args.dbfile and Path(args.dbfile).exists():
         print_error_panel(
             "Database File Exists",
-            f"The database file '{args.dbfile}' already exists.",
+            f"The database file '{literal(args.dbfile)}' already exists.",
             "Remove the existing file or choose a different path with --dbfile."
         )
         sys.exit(2)
@@ -1620,7 +1687,7 @@ def _main(memory_tracker, start_time) -> None:
             try:
                 write_performance_report(args.performance_json, performance)
             except (OSError, ValueError, TypeError) as exc:
-                logger.error(f"Could not write performance report: {exc}")
+                logger.error(f"Could not write performance report: {literal(exc)}")
                 report_failed = True
 
     if strict_error is not None:

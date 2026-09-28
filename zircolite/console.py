@@ -12,6 +12,7 @@ them (``zircolite.core`` and ``zircolite.processing``).
 
 import contextlib
 import logging
+import re
 import sys
 from dataclasses import dataclass
 from pathlib import Path
@@ -20,6 +21,7 @@ from typing import Any
 from rich.bar import Bar
 from rich.console import Console
 from rich.logging import RichHandler
+from rich.markup import escape
 from rich.panel import Panel
 from rich.rule import Rule
 from rich.table import Table
@@ -194,10 +196,11 @@ class DetectionStats:
     low: int = 0
     informational: int = 0
     total_events: int = 0
+    total_alerts: int = 0
     total_rules_matched: int = 0
 
-    def add_detection(self, level: str, count: int):
-        """Add a detection to the stats."""
+    def add_detection(self, level: str, count: int, *, alerts: bool = False):
+        """Add a detection to the stats; a correlation rule's count is alerts, not events."""
         level_lower = level.lower()
         if level_lower == "critical":
             self.critical += count
@@ -209,7 +212,10 @@ class DetectionStats:
             self.low += count
         elif level_lower == "informational":
             self.informational += count
-        self.total_events += count
+        if alerts:
+            self.total_alerts += count
+        else:
+            self.total_events += count
         self.total_rules_matched += 1
 
 
@@ -315,7 +321,7 @@ def _format_file_node(fs: dict[str, Any]) -> str:
     det_text = f"[{det_style}]{detections} {det_label}[/]"
 
     full_path = fs.get("path")
-    name_markup = make_file_link(full_path, name) if full_path else f"[cyan]{name}[/]"
+    name_markup = make_file_link(full_path, name) if full_path else f"[cyan]{literal(name)}[/]"
     parts = [name_markup, f"[magenta]{events:,}[/] events", det_text]
     if filtered > 0:
         parts.append(f"[dim]{filtered:,} filtered[/]")
@@ -499,7 +505,8 @@ def build_attack_summary(results: list[dict[str, Any]]) -> Panel | None:
 def build_detection_table(results: list[dict[str, Any]], title: str | None = None) -> Table:
     """
     Build a Rich Table showing detection results with severity, rule name,
-    event count, and ATT&CK technique IDs.
+    match count, and ATT&CK technique IDs. A correlation rule matches alerts
+    rather than events, and says so.
 
     Args:
         results: List of detection result dicts, pre-sorted by severity
@@ -518,7 +525,7 @@ def build_detection_table(results: list[dict[str, Any]], title: str | None = Non
     )
     table.add_column("Severity", justify="center", width=14, no_wrap=True)
     table.add_column("Rule", no_wrap=False, ratio=1)
-    table.add_column("Events", justify="right", style="magenta", width=8)
+    table.add_column("Matches", justify="right", style="magenta", width=14)
     table.add_column("ATT&CK", style="dim", width=22, no_wrap=True)
 
     for result in results:
@@ -537,7 +544,8 @@ def build_detection_table(results: list[dict[str, Any]], title: str | None = Non
         else:
             attack_str = ", ".join(attack_ids)
 
-        table.add_row(level_text, rule_title, f"{count:,}", attack_str)
+        count_text = f"{count:,} alerts" if result.get("result_type") == "correlation" else f"{count:,}"
+        table.add_row(level_text, rule_title, count_text, attack_str)
 
     return table
 
@@ -646,6 +654,23 @@ def print_profiling_report(report: list[dict[str, Any]], top_n: int = 20) -> Non
     )
 
 
+# C0 controls other than tab and newline, DEL, and C1 controls. Rich removes
+# only a few of them, so an ESC in a file name would reach the terminal as a
+# live escape sequence.
+_UNSAFE_CONTROL_CHARS = re.compile(r"[\x00-\x08\x0b-\x1f\x7f-\x9f]")
+
+
+def literal(value: object) -> str:
+    """*value* as markup that prints exactly as written.
+
+    File names, paths and the error messages that quote them come from the
+    evidence under analysis. Interpolated into Rich markup as they are,
+    "[bold]x.evtx" prints as "x.evtx", a stray closing tag raises MarkupError
+    out of the log call, and a control character reaches the terminal.
+    """
+    return escape(_UNSAFE_CONTROL_CHARS.sub("", str(value)))
+
+
 def make_file_link(path: str, display: str | None = None) -> str:
     """
     Create a Rich markup string with a clickable file:// hyperlink.
@@ -660,7 +685,7 @@ def make_file_link(path: str, display: str | None = None) -> str:
     Returns:
         Rich markup string with clickable link
     """
-    text = display if display is not None else path
+    text = literal(display if display is not None else path)
     try:
         abs_path = Path(path).resolve()
         uri = abs_path.as_uri()

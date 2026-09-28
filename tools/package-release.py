@@ -23,6 +23,7 @@ from __future__ import annotations
 
 import argparse
 import importlib.metadata as metadata
+import json
 import os
 import platform
 import re
@@ -36,11 +37,19 @@ import time
 import zipfile
 from collections.abc import Callable, Iterator
 from pathlib import Path, PurePosixPath
+from typing import Any
 
 TARGETS = ("linux-x64", "linux-arm64", "macos-arm64", "windows-x64", "windows-arm64")
 REPO_ROOT = Path(__file__).resolve().parent.parent
 VENDORED_LICENCES = Path(__file__).resolve().parent / "licenses"
-RULES_LICENCE = "DRL-1.1.txt"
+# rules/ holds rulesets from several sources, each under its own licence. -U
+# installs the rules repository's manifest beside them, and the release credits
+# every file from it.
+RULES_MANIFEST = "release-manifest.json"
+DRL = "DRL-1.1"
+# SigmaHQ's licence file links to the DRL rather than reproducing it, and the
+# DRL asks for its text or a link to it to travel with the rules.
+DRL_LICENCE = "DRL-1.1.txt"
 # CPython's LICENSE.txt appends these libraries' notices on Windows only.
 RUNTIME_LIBRARIES_LICENCE = "python-runtime-libraries.txt"
 
@@ -345,14 +354,15 @@ def distribution_section(distribution: metadata.Distribution) -> str | None:
     return section(f"{name} {distribution.version}", declared_licence(distribution), texts)
 
 
-def third_party_licences(version: str, target: str) -> str:
+def third_party_licences(version: str, target: str, rules: Path, manifest: dict[str, Any]) -> str:
     parts = [
         f"Third-party software in Zircolite {version} ({target})\n\n"
         "This package contains the Python interpreter and the native libraries it was\n"
         "built with, the PyInstaller bootloader and runtime hooks, and the Python\n"
         "distributions Zircolite depends on. Each section names one of them, with the\n"
-        "licence it declares and the licence texts it ships. The rulesets in rules/ are\n"
-        "covered by the Detection Rule License in the last section.\n"
+        "licence it declares and the licence texts it ships. The rulesets in rules/\n"
+        "come from several sources, each under its own licence: the last sections\n"
+        "name every source, the files holding its rules and its licence.\n"
     ]
 
     interpreter = python_licence()
@@ -391,9 +401,109 @@ def third_party_licences(version: str, target: str) -> str:
             + ". Add tools/licenses/<name>.txt with the text the project publishes."
         )
 
-    parts.append(section("Detection rules (rules/)", "DRL-1.1",
-                         [vendored(RULES_LICENCE, "the licence of rules/")]))
+    parts += rules_sections(rules, manifest)
     return "\n".join(parts)
+
+
+# --------------------------------------------------------------------------
+# Detection rules
+# --------------------------------------------------------------------------
+
+def read_rules_manifest(rules: Path) -> dict[str, Any]:
+    path = rules / RULES_MANIFEST
+    if not path.is_file():
+        raise PackagingError(
+            f"{path} is missing, so nothing says which licence covers each ruleset in "
+            f"{rules}; `python zircolite.py -U` installs it with the rulesets")
+    try:
+        manifest = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError) as error:
+        raise PackagingError(f"{path} cannot be read: {error}") from error
+    if not isinstance(manifest, dict) or not isinstance(manifest.get("sources"), dict):
+        raise PackagingError(f"{path} lists no sources")
+    return manifest
+
+
+def _artifacts(entry: object) -> list[str]:
+    artifacts = entry.get("artifacts") if isinstance(entry, dict) else None
+    return sorted(artifacts) if isinstance(artifacts, dict) else []
+
+
+def _entries(manifest: dict[str, Any], kind: str) -> dict[str, dict[str, Any]]:
+    entries = manifest.get(kind)
+    if not isinstance(entries, dict):
+        return {}
+    return {name: entry for name, entry in sorted(entries.items()) if isinstance(entry, dict)}
+
+
+def shipped_rules(directory: Path) -> list[str]:
+    """What the release ships from a rules/ directory, but its README and the manifest."""
+    if not directory.is_dir():
+        return []
+    return sorted(
+        name for path in directory.rglob("*")
+        if path.is_file() and path.name != ".DS_Store" and "__pycache__" not in path.parts
+        and (name := path.relative_to(directory).as_posix()) not in ("README.md", RULES_MANIFEST)
+    )
+
+
+def unlisted_rules(directory: Path, manifest: dict[str, Any]) -> list[str]:
+    """Files in a rules/ directory the manifest does not list, so of unknown licence."""
+    listed = {name for kind in ("sources", "aggregates")
+              for entry in _entries(manifest, kind).values() for name in _artifacts(entry)}
+    return [name for name in shipped_rules(directory) if name not in listed]
+
+
+def rules_sections(rules: Path, manifest: dict[str, Any]) -> list[str]:
+    """One section per source whose rules the directory holds, with its licence text.
+
+    A combined ruleset (rules_windows_all.json) is listed under every source it
+    takes rules from: each rule in it stays under its own source's licence.
+    """
+    present = set(shipped_rules(rules))
+    sources = _entries(manifest, "sources")
+    files: dict[str, list[str]] = {name: [] for name in sources}
+    for name, source in sources.items():
+        files[name] += [f"rules/{artifact}" for artifact in _artifacts(source)
+                        if artifact in present and not artifact.startswith("licenses/")]
+    for aggregate in _entries(manifest, "aggregates").values():
+        inputs = aggregate.get("inputs")
+        for artifact in _artifacts(aggregate):
+            if artifact not in present:
+                continue
+            for name in sorted(inputs) if isinstance(inputs, dict) else []:
+                if name not in files:
+                    raise PackagingError(f"rules/{artifact} takes rules from {name}, which "
+                                         f"rules/{RULES_MANIFEST} does not list as a source")
+                files[name].append(f"rules/{artifact}, in part")
+
+    sections, missing, licences = [], [], set()
+    for name, source in sources.items():
+        if not files[name]:
+            continue
+        texts = [artifact for artifact in _artifacts(source)
+                 if artifact.startswith("licenses/") and artifact in present]
+        if not texts:
+            missing.append(name)
+            continue
+        licence = str(source.get("license") or "") or None
+        licences.add(licence)
+        repository = str(source.get("repository") or name)
+        url = repository if "://" in repository else f"https://github.com/{repository}"
+        revision = str(source.get("revision") or "unknown")
+        credit = f"Source: {url}, revision {revision}\n\n" + "\n".join(files[name])
+        sections.append(section(f"Detection rules from {repository}", licence, [
+            ("Rulesets", credit),
+            *[(f"rules/{text}", _decode((rules / text).read_bytes())) for text in texts],
+        ]))
+    if missing:
+        raise PackagingError(
+            "rules/licenses/ has no licence text for the rules from: " + ", ".join(missing)
+            + "; `python zircolite.py -U` installs them with the rulesets")
+    if DRL in licences:
+        sections.append(section("Detection Rule License (DRL) 1.1", DRL,
+                                [vendored(DRL_LICENCE, "the licence of the DRL rulesets")]))
+    return sections
 
 
 # --------------------------------------------------------------------------
@@ -456,8 +566,15 @@ def stage(root: Path, version: str, target: str) -> Path:
             "symlinks cannot be extracted from the Windows archives, so none is packaged "
             "for any target; replace each with the file it points to: "
             + ", ".join(link.relative_to(root).as_posix() for link in links))
+    manifest = read_rules_manifest(root / "rules")
+    for rules in (root / "rules", onedir / "_internal" / "rules"):
+        unlisted = unlisted_rules(rules, manifest)
+        if unlisted:
+            raise PackagingError(
+                f"{rules} holds files {RULES_MANIFEST} does not list, so the release cannot "
+                "say which licence covers them; remove them: " + ", ".join(unlisted))
     # Before anything is copied, so a gap in the notices leaves no half-built tree.
-    notices = third_party_licences(version, target)
+    notices = third_party_licences(version, target, root / "rules", manifest)
 
     staging = root / "dist" / f"Zircolite-{version}-{target}"
     if staging.exists():

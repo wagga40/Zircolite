@@ -5,7 +5,7 @@
 groups = ["default", "dev"]
 strategy = ["inherit_metadata"]
 lock_version = "4.5.1"
-content_hash = "sha256:e2fb83db82a3c7e2ee9336c10208d71247a61916a8d0b6be0a82ba4e33313852"
+content_hash = "sha256:21712a9619f7936c0d7b91666c581e5cd6df1add2b4d1d6a80bb10e307a638f1"
 
 [[metadata.targets]]
 requires_python = "==3.14.*"
@@ -2208,7 +2208,7 @@ files = [
 
 [[package]]
 name = "pysigma"
-version = "1.5.0"
+version = "1.5.1"
 requires_python = "<4.0,>=3.10"
 summary = "Sigma rule processing and conversion tools"
 groups = ["default"]
@@ -2218,31 +2218,31 @@ dependencies = [
     "diskcache<6.0.0,>=5.6.3",
     "jinja2<4.0.0,>=3.1.6",
     "jq<2.0,>=1.12",
-    "packaging<27.0,>=26.0",
+    "packaging<27.0,>=26.3",
     "pyparsing<4.0.0,>=3.2.5",
     "pyyaml<7.0.0,>=6.0.3",
     "requests<3.0.0,>=2.32.5",
-    "types-pyyaml<7.0.0.0,>=6.0.12.20260724",
+    "types-pyyaml<7.0.0.0,>=6.0.12.20260815",
     "typing-extensions<5.0.0,>=4.16.0",
 ]
 files = [
-    {file = "pysigma-1.5.0-py3-none-any.whl", hash = "sha256:871452a262aedb17d9e85344142944c5a0ac50e8b57408ec355efeb1329231b6"},
-    {file = "pysigma-1.5.0.tar.gz", hash = "sha256:2c258cf676d2896c94279fb54c7eea664118cf08285bde122b4df75cc7b6b194"},
+    {file = "pysigma-1.5.1-py3-none-any.whl", hash = "sha256:1e6e080bde31db6039eb5d87d43322bf416534f30048091c65038e88225b8200"},
+    {file = "pysigma-1.5.1.tar.gz", hash = "sha256:5f27ea435bc53480b43f9e385104c6df3d473715321d662a52a1fc283ab0b8db"},
 ]
 
 [[package]]
 name = "pysigma-backend-sqlite"
-version = "1.2.4"
+version = "2.0.0"
 requires_python = "<4.0,>=3.10"
 summary = "pySigma sqlite backend"
 groups = ["default"]
 marker = "python_version == \"3.14\" or python_version == \"3.10\" or python_version == \"3.13\" or python_version == \"3.11\" or python_version == \"3.12\""
 dependencies = [
-    "pysigma<2,>=1",
+    "pysigma<2.0,>=1.5.1",
 ]
 files = [
-    {file = "pysigma_backend_sqlite-1.2.4-py3-none-any.whl", hash = "sha256:30fcebe9c114872725bced20c7aaa2deffd9e43c29e893c4176d6dd5c348d61a"},
-    {file = "pysigma_backend_sqlite-1.2.4.tar.gz", hash = "sha256:c83411be2cbddeb9d8aea4e429535c7687ac6c0f45c1b7ddcf182d6e8e643474"},
+    {file = "pysigma_backend_sqlite-2.0.0-py3-none-any.whl", hash = "sha256:08b94d016912c3d14f80197d39c5e0b87a6f51c159f9aca3e06a377e753da67c"},
+    {file = "pysigma_backend_sqlite-2.0.0.tar.gz", hash = "sha256:fbbdd8853e3ddd256016d7bd968c0e53f7cb83cab2a9d837beb8b87bec45f8fe"},
 ]
 
 [[package]]

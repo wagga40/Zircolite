@@ -9,6 +9,7 @@ This module contains the StreamingEventProcessor class for:
 """
 
 import base64
+import codecs
 import contextlib
 import csv as csv_module
 import hashlib
@@ -20,7 +21,7 @@ import os
 import re
 import shutil
 import tempfile
-from collections.abc import Generator
+from collections.abc import Callable, Generator
 from functools import lru_cache, wraps
 from itertools import chain, islice
 from pathlib import Path
@@ -41,6 +42,7 @@ from RestrictedPython.Eval import default_guarded_getiter
 from RestrictedPython.Guards import guarded_iter_unpack_sequence
 
 from .config import ProcessingConfig
+from .console import literal
 from .formats import (
     DEFAULT_INPUT_FORMAT,
     NON_WINDOWS_INPUT_FLAGS,
@@ -87,6 +89,253 @@ def _read_transform(path: str, mtime_ns: int, size: int) -> str:
 # for these unless event_filter.filter_all_sources is enabled in the config
 _NON_WINDOWS_INPUTS = NON_WINDOWS_INPUT_FLAGS
 
+# wevtutil qe /f:xml, Get-WinEvent's ToXml() and evtx_dump write <Event> records
+# back to back with no element around them, and an XML parser stops at the end
+# of the first one, leaving the rest of the file unread without an error. The
+# reader puts one synthetic document element around the whole file instead.
+# The name must not be "Event", which is how the reader recognises a record.
+_XML_WRAPPER_TAG = "ZircoliteXmlDocument"
+# How much of a file may precede its first element before the reader gives up
+# on wrapping it and parses it as it is
+_XML_PROLOG_LIMIT = 1 << 20
+_XML_READ_SIZE = 64 * 1024
+
+# Once libxml2's recovering parser has met one error, it stops expanding entity
+# references for the rest of the document, so a single malformed record would
+# erase every later &gt; &amp; and &lt; (2>&1 read as 21). Character references
+# are expanded regardless and mean the same, so the readers hand libxml2 those.
+_PREDEFINED_ENTITY_REFS = {
+    "amp": "&#38;", "lt": "&#60;", "gt": "&#62;", "quot": "&#34;", "apos": "&#39;",
+}
+_PREDEFINED_ENTITY_RE = re.compile(r"&(amp|lt|gt|quot|apos);")
+
+
+def _as_character_references(text: str) -> str:
+    """*text* with every predefined entity reference spelled as a character reference."""
+    return _PREDEFINED_ENTITY_RE.sub(lambda m: _PREDEFINED_ENTITY_REFS[m.group(1)], text)
+
+
+class _EntityReferenceRewriter:
+    """``_as_character_references`` over a byte stream in one encoding, chunk by chunk.
+
+    A reference cut in two by a read boundary is held back until the next
+    chunk completes it. In UTF-16 only matches that start on a code unit
+    count: the same bytes read one byte off belong to other characters.
+    """
+
+    def __init__(self, codec: str):
+        self._unit = 1 if codec == "latin-1" else 2
+        self._amp = "&".encode(codec)
+        self._refs = {
+            f"&{name};".encode(codec): ref.encode(codec)
+            for name, ref in _PREDEFINED_ENTITY_REFS.items()
+        }
+        self._pattern = re.compile(b"|".join(re.escape(ref) for ref in self._refs))
+        self._longest = max(map(len, self._refs))
+        self._pending = b""
+        self._offset = 0  # stream offset of self._pending[0]
+
+    def feed(self, data: bytes) -> bytes:
+        data = self._pending + data
+        base, unit = self._offset, self._unit
+        end = len(data) - (base + len(data)) % unit
+        amp = data.rfind(self._amp, max(0, end - self._longest + 1), end)
+        cut = end if amp == -1 else amp - (base + amp) % unit
+        self._pending, self._offset = data[cut:], base + cut
+        return self._rewrite(data[:cut], base)
+
+    def flush(self) -> bytes:
+        data, self._pending = self._pending, b""
+        return self._rewrite(data, self._offset)
+
+    def _rewrite(self, data: bytes, base: int) -> bytes:
+        unit, refs = self._unit, self._refs
+
+        def swap(match: re.Match) -> bytes:
+            return match.group() if (base + match.start()) % unit else refs[match.group()]
+
+        return self._pattern.sub(swap, data)
+
+
+def _xml_byte_layout(head: bytes) -> tuple[int, str] | None:
+    """(BOM length, codec) for reading the prolog of an XML byte stream.
+
+    Any ASCII-compatible encoding reads as latin-1, which maps bytes to
+    characters one to one, so character offsets are byte offsets. None for
+    the encodings the prolog scan cannot be trusted with.
+    """
+    if head.startswith((codecs.BOM_UTF32_LE, codecs.BOM_UTF32_BE)):
+        return None
+    if head.startswith(codecs.BOM_UTF8):
+        return len(codecs.BOM_UTF8), "latin-1"
+    if head.startswith(codecs.BOM_UTF16_LE):
+        return len(codecs.BOM_UTF16_LE), "utf-16-le"
+    if head.startswith(codecs.BOM_UTF16_BE):
+        return len(codecs.BOM_UTF16_BE), "utf-16-be"
+    if head.startswith(b"<\x00"):
+        return 0, "utf-16-le"
+    if head.startswith(b"\x00<"):
+        return 0, "utf-16-be"
+    return 0, "latin-1"
+
+
+def _first_element_offset(prolog: str) -> int | None:
+    """Index of the first element's ``<`` in *prolog*.
+
+    The XML declaration, processing instructions and comments are skipped.
+    -1 for a DOCTYPE, which cannot sit inside an element, so the file has to
+    be parsed exactly as written; None when *prolog* ends before telling.
+    """
+    i = 0
+    while (i := prolog.find("<", i)) != -1:
+        if i + 1 == len(prolog):
+            return None
+        if prolog.startswith("<?", i):
+            end, skip = prolog.find("?>", i + 2), 2
+        elif prolog.startswith("<!--", i):
+            end, skip = prolog.find("-->", i + 4), 3
+        elif prolog.startswith("<!", i):
+            return -1
+        else:
+            return i
+        if end == -1:
+            return None
+        i = end + skip
+    return None
+
+
+class _XmlDocumentStream:
+    """A binary file read with every top-level element under one root.
+
+    ``head`` is what has already been read from ``raw``; the synthetic start
+    tag goes in at ``split``, a byte offset into it, and the end tag after the
+    last byte of ``raw``. With a codec, predefined entity references are
+    rewritten as character references; without one the bytes pass through.
+    """
+
+    def __init__(
+        self, raw: Any, head: bytes, split: int | None = None, codec: str | None = None
+    ):
+        self._raw = raw
+        self._head: bytes | None = head
+        self._closing = b""
+        if codec is not None and split is not None:
+            self._head = head[:split] + f"<{_XML_WRAPPER_TAG}>".encode(codec) + head[split:]
+            self._closing = f"</{_XML_WRAPPER_TAG}>".encode(codec)
+        self._rewriter = _EntityReferenceRewriter(codec) if codec is not None else None
+        self._buffer = bytearray()
+        self._done = False
+
+    def _fill(self, size: int) -> None:
+        while not self._done and (size < 0 or len(self._buffer) < size):
+            if self._head is not None:
+                piece, self._head = self._head, None
+            else:
+                piece = self._raw.read(_XML_READ_SIZE)
+                if not piece:
+                    piece, self._done = self._closing, True
+            if self._rewriter is not None:
+                piece = self._rewriter.feed(piece)
+                if self._done:
+                    piece += self._rewriter.flush()
+            self._buffer += piece
+
+    def read(self, size: int | None = -1) -> bytes:
+        size = -1 if size is None else size
+        self._fill(size)
+        if size < 0:
+            size = len(self._buffer)
+        data = bytes(self._buffer[:size])
+        del self._buffer[:size]
+        return data
+
+
+def _xml_document_stream(raw: Any) -> _XmlDocumentStream:
+    """Wrap *raw* so that records written back to back parse as one document."""
+    head = b""
+    codec = None
+    while len(head) < _XML_PROLOG_LIMIT:
+        chunk = raw.read(_XML_READ_SIZE)
+        if not chunk:
+            break
+        head += chunk
+        layout = _xml_byte_layout(head)
+        if layout is None:
+            codec = None
+            break
+        bom, codec = layout
+        body = head[bom:]
+        if codec != "latin-1":
+            body = body[: len(body) // 2 * 2]
+        prolog = body.decode(codec, errors="replace")
+        offset = _first_element_offset(prolog)
+        if offset == -1:
+            break
+        if offset is not None:
+            split = bom + len(prolog[:offset].encode(codec, errors="replace"))
+            return _XmlDocumentStream(raw, head, split, codec)
+    return _XmlDocumentStream(raw, head, codec=codec)
+
+
+# The event filter hands both values to a set membership test, so they have to
+# come back hashable. XML-derived events carry them as {"#text": ...}, or as
+# {"#attributes": {...}} when the element had attributes and no text.
+def _channel_filter_value(value: Any) -> str | None:
+    """A Channel the event filter can use: a non-empty string, else None."""
+    if isinstance(value, dict):
+        value = value.get("#text")
+    if isinstance(value, str) and value:
+        return value
+    return None
+
+
+def _eventid_filter_value(value: Any) -> int | None:
+    """An EventID the event filter can use: an int, else None."""
+    if isinstance(value, dict):
+        value = value.get("#text")
+    try:
+        return int(value) if value is not None else None
+    except (ValueError, TypeError):
+        return None
+
+
+def _field_path_plan(field_paths: tuple) -> dict:
+    """Group pre-split field paths by top-level key: {key: ((rest, path), ...)}."""
+    plan: dict[str, list] = {}
+    for path in field_paths:
+        plan.setdefault(path[0], []).append((path[1:], path))
+    return {key: tuple(entries) for key, entries in plan.items()}
+
+
+def _join_unnamed_event_data(event_dict: Any) -> None:
+    """Store an event's unnamed ``<Data>`` values as one string, in place.
+
+    Application-log sources such as MsiInstaller, MSSQL or classic
+    PowerShell write their payload as unnamed ``<Data>`` elements, which
+    pyevtx-rs reads as ``{"#text": [...]}`` and the XML reader as a list.
+    Flattened as they are, either would become the repr of a Python list,
+    with every backslash doubled, which rules on ``Data`` cannot match
+    reliably. The values are joined with newlines instead: every such rule
+    tests ``Data|contains``, which then holds when any one value does.
+    Message gets the same text unless the event has one of its own, for the
+    rules that read it there.
+    """
+    event = event_dict.get("Event") if isinstance(event_dict, dict) else None
+    section = event.get("EventData") if isinstance(event, dict) else None
+    if not isinstance(section, dict):
+        return
+    data = section.get("Data")
+    if isinstance(data, dict) and data.keys() == {"#text"}:
+        data = data["#text"]
+        values = data if isinstance(data, list) else [data]
+    elif isinstance(data, list):
+        values = data
+    else:
+        return
+    joined = "\n".join("" if value is None else str(value) for value in values)
+    section["Data"] = joined
+    section.setdefault("Message", joined)
+
 
 class StrictParseError(Exception):
     """A parse error that --strict asked us to stop on.
@@ -121,7 +370,7 @@ def marks_degraded(label: str):
             except Exception as exc:
                 self._had_parse_error = True
                 self.logger.error(
-                    f"[red]    [-] Error streaming {label} file {source}: {exc}[/]"
+                    f"[red]    [-] Error streaming {label} file {literal(source)}: {literal(exc)}[/]"
                 )
 
         return wrapper
@@ -322,6 +571,7 @@ class StreamingEventProcessor:
         "RestrictedPython_BUILTINS",
         # Event filter config (from the field-mappings config)
         "_channel_field_paths",
+        "_channel_field_plan",
         # Last field path that yielded a Channel/EventID value; tried first on
         # the next event since a file's schema is stable
         "_channel_path_hint",
@@ -330,6 +580,7 @@ class StreamingEventProcessor:
         "_detected_time_field",
         "_event_filter_config_enabled",
         "_eventid_field_paths",
+        "_eventid_field_plan",
         "_eventid_path_hint",
         "_events_filtered_count",
         "_events_time_filtered_count",
@@ -633,6 +884,8 @@ class StreamingEventProcessor:
         self._eventid_field_paths = tuple(
             tuple(p.split(".")) for p in event_filter_cfg.get("eventid_fields", [])
         )
+        self._channel_field_plan = _field_path_plan(self._channel_field_paths)
+        self._eventid_field_plan = _field_path_plan(self._eventid_field_paths)
 
         # Load timestamp detection config (defaults provided by load_field_mappings)
         timestamp = config.get("timestamp_detection", {})
@@ -650,7 +903,7 @@ class StreamingEventProcessor:
                     # An empty source_condition matches no input type: the
                     # transform would be silently skipped for every event
                     self.logger.warning(
-                        f"    [!] Transform on field '{field_name}' has no "
+                        f"    [!] Transform on field '{literal(field_name)}' has no "
                         f"source_condition and will never run"
                     )
             self._transforms_baked[field_name] = [
@@ -713,7 +966,7 @@ class StreamingEventProcessor:
                 rel_path = transform.get("file", "")
                 if not rel_path:
                     self.logger.warning(
-                        f"    [!] Transform for '{field_name}' has type python_file but no 'file' key – skipped"
+                        f"    [!] Transform for '{literal(field_name)}' has type python_file but no 'file' key – skipped"
                     )
                     transform["code"] = _NOOP_TRANSFORM_CODE
                     continue
@@ -725,12 +978,12 @@ class StreamingEventProcessor:
                     transform["code"] = _read_transform(str(file_path), stat.st_mtime_ns, stat.st_size)
                 except FileNotFoundError:
                     self.logger.error(
-                        f"    [!] Transform file not found: {file_path} (field '{field_name}')"
+                        f"    [!] Transform file not found: {literal(file_path)} (field '{literal(field_name)}')"
                     )
                     transform["code"] = _NOOP_TRANSFORM_CODE
                 except Exception as exc:
                     self.logger.error(
-                        f"    [!] Error reading transform file {file_path}: {exc}"
+                        f"    [!] Error reading transform file {literal(file_path)}: {literal(exc)}"
                     )
                     transform["code"] = _NOOP_TRANSFORM_CODE
 
@@ -738,8 +991,9 @@ class StreamingEventProcessor:
         """
         Extract Channel and EventID from raw event data for early filtering.
 
-        This method tries to extract these fields using configured field paths.
-        Paths are tried in order until a value is found.
+        Every configured path is read. When the paths present in the event
+        disagree, the value is None and the filter keeps the event: see
+        ``_extract_field_value_hinted``.
 
         The field paths support:
         - Dot notation for nested fields (e.g., "Event.System.Channel")
@@ -750,65 +1004,87 @@ class StreamingEventProcessor:
             event_dict: Raw event dictionary (not yet flattened)
 
         Returns:
-            Tuple of (channel, eventid) where eventid is int or None
+            Tuple of (channel, eventid): channel is a non-empty str or None,
+            eventid is int or None
         """
+        if not isinstance(event_dict, dict):
+            # A JSON line can hold any value; it is not this filter's to drop
+            return None, None
         channel, self._channel_path_hint = self._extract_field_value_hinted(
-            event_dict, self._channel_field_paths, self._channel_path_hint
+            event_dict, self._channel_field_plan, self._channel_path_hint,
+            _channel_filter_value,
         )
         eventid, self._eventid_path_hint = self._extract_field_value_hinted(
-            event_dict, self._eventid_field_paths, self._eventid_path_hint
+            event_dict, self._eventid_field_plan, self._eventid_path_hint,
+            _eventid_filter_value,
         )
-
-        # Both values are handed to a set membership test, so they have to come
-        # back hashable. XML-derived events carry them as {"#text": ...} or
-        # {"#attributes": {...}} when the element had attributes.
-        if isinstance(channel, dict):
-            channel = channel.get("#text")
-        if not isinstance(channel, (str, type(None))):
-            channel = None
-        if channel == "":
-            # Too little information to discard the event; the filter keeps None
-            channel = None
-
-        # Convert eventid to int if possible (guarantees int or None for caller)
-        if eventid is not None:
-            # Handle EventID as dict with '#text' (XML style)
-            if isinstance(eventid, dict):
-                eventid = eventid.get("#text")
-            try:
-                eventid = int(eventid) if eventid is not None else None
-            except (ValueError, TypeError):
-                eventid = None
-
         return channel, eventid
 
     def _extract_field_value_hinted(
-        self, event_dict: dict, field_paths: tuple, hint: tuple | None
+        self, event_dict: dict, field_plan: dict, hint: tuple | None,
+        normalize: Callable[[Any], Any],
     ) -> tuple:
         """
-        Extract a field value in configured precedence order.
+        Extract a field value from every configured path, failing open.
 
-        Paths support dot notation for nested access (e.g. "Event.System.Channel")
-        and are otherwise tried in order until one yields a non-None value.
+        ``field_plan`` holds the configured paths grouped by top-level key
+        (see ``_field_path_plan``); paths support dot notation for nested
+        access (e.g. "Event.System.Channel"). Each value found goes through
+        ``normalize``, which returns None for a value the filter cannot use.
 
-        A previous winner is not evidence that higher-priority fields are
-        absent from this event. Keep the hint for callers, but never let it
-        change precedence on mixed-schema inputs.
+        The filter runs before flattening, so it cannot read the column the
+        rules query. When an event carries several of these paths, which one
+        ends up in that column is decided by the flattener's traversal order
+        and the field mappings, not by the configured order: a
+        top-level ``Channel`` next to ``winlog.channel`` yields the nested
+        value. So every path is read, and if two present paths disagree, or
+        one holds an unusable value, the result is None and the filter keeps
+        the event rather than discard it on a value no rule would have seen.
 
         An empty value does not count as found: a present-but-blank field would
-        otherwise stop the scan and then fail the filter, silently discarding
-        events whose real channel sits in a later candidate path.
+        otherwise make the event look ambiguous when its real value sits in
+        another candidate path.
+
+        A previous winner is not evidence that other fields are absent from
+        this event. Keep the hint for callers, but never let it change the
+        result on mixed-schema inputs.
 
         Returns:
-            Tuple of (value, winning_path). ``winning_path`` is the path that
+            Tuple of (value, winning_path). ``winning_path`` is a path that
             produced the value (the new hint), or the unchanged hint when no
             path matched.
         """
-        for path in field_paths:
-            value = self._get_nested_value(event_dict, path)
-            if value is not None and value != "":
-                return value, path
-        return None, hint
+        found = None
+        winner = hint
+        # Every path is read on every event, and most are absent at their
+        # top-level key. Walk whichever is shorter: the event's top-level keys
+        # (one for EVTX) or the configured ones.
+        keys = event_dict if len(event_dict) < len(field_plan) else field_plan
+        for key in keys:
+            entries = field_plan.get(key)
+            if entries is None:
+                continue
+            node = event_dict.get(key)
+            if node is None:
+                continue
+            for rest, path in entries:
+                raw = node
+                for part in rest:
+                    if not isinstance(raw, dict):
+                        raw = None
+                        break
+                    raw = raw.get(part)
+                    if raw is None:
+                        break
+                if raw is None or raw == "":
+                    continue
+                value = normalize(raw)
+                if value is None or (found is not None and value != found):
+                    return None, winner
+                if found is None:
+                    found = value
+                    winner = path
+        return found, winner
 
     def _get_nested_value(self, obj: dict, parts: tuple) -> Any:
         """
@@ -945,6 +1221,26 @@ class StreamingEventProcessor:
         if self._skipped_records == 1:
             self.logger.debug(f"Skipping unparsable record in {source}: {exc}")
 
+    def _note_recovered_xml(self, source: str, error_log: Any) -> None:
+        """Flag an XML file lxml had to recover: what was read is not what was written.
+
+        Recovery drops the offending characters or markup and carries on, so
+        the records around an error arrive incomplete rather than missing. The
+        file is marked degraded, which also keeps --remove-events off it.
+        """
+        from lxml import etree  # type: ignore[attr-defined]
+
+        errors = [e for e in error_log if e.level >= etree.ErrorLevels.ERROR]
+        if not errors:
+            return
+        self._had_parse_error = True
+        first = errors[0]
+        self.logger.warning(
+            f"[yellow]    [!] Recovered from {len(errors):,} XML error(s) in "
+            f"{literal(Path(source).name)} (first at line {first.line}: "
+            f"{literal(first.message)}); the records concerned may be incomplete[/]"
+        )
+
     def _get_transform_func(self, code):
         """Get or create cached transform function."""
         func = self._transform_func_cache.get(code)
@@ -968,7 +1264,7 @@ class StreamingEventProcessor:
                 self._failed_transforms.add(code)
                 snippet = code[:80].replace("\n", " ")
                 self.logger.warning(
-                    f"[yellow]   [!] Transform compilation failed: {e} "
+                    f"[yellow]   [!] Transform compilation failed: {literal(e)} "
                     f"(code: {snippet!r})[/]"
                 )
             return None
@@ -991,11 +1287,12 @@ class StreamingEventProcessor:
                 snippet = code[:80].replace("\n", " ")
                 self.logger.warning(
                     f"[yellow]   [!] Transform failed at runtime, values left "
-                    f"untransformed: {exc} (code: {snippet!r})[/]"
+                    f"untransformed: {literal(exc)} (code: {snippet!r})[/]"
                 )
             return param
 
     def _flatten_event(self, event_dict: dict, filename: str, raw_bytes: bytes | None = None) -> dict | None:
+        _join_unnamed_event_data(event_dict)
         return self._flatten_impl(self, event_dict, filename, raw_bytes)
 
     def stream_evtx_events(self, evtx_file: str) -> Generator[dict, None, None]:
@@ -1067,7 +1364,7 @@ class StreamingEventProcessor:
                 "Invalid EVTX" in err_msg or "ElfFile0" in err_msg
             ) and Path(evtx_file).suffix.lower() == ".7z":
                     self.logger.error(
-                        f"[red]    [-] Error streaming EVTX file {evtx_file}: {e}[/]\n"
+                        f"[red]    [-] Error streaming EVTX file {literal(evtx_file)}: {literal(e)}[/]\n"
                         "[yellow]   [!] This archive contains non-EVTX data (e.g. JSON). "
                         "Use [cyan]-e/--events[/] without forcing EVTX so auto-detect can run, or [cyan]--json-input[/] for JSON in archives.[/]"
                     )
@@ -1079,7 +1376,7 @@ class StreamingEventProcessor:
                 ) from e
             self._had_parse_error = True
             self.logger.warning(
-                f"[yellow]    [!] EVTX parsing error in {evtx_file}: {e} — "
+                f"[yellow]    [!] EVTX parsing error in {literal(evtx_file)}: {literal(e)} — "
                 "recovered events before the error were kept (use [cyan]--strict[/] to abort on parse errors)[/]"
             )
         finally:
@@ -1124,23 +1421,25 @@ class StreamingEventProcessor:
         """Stream and flatten events from an XML file using incremental parsing."""
         from lxml import etree  # type: ignore[attr-defined]
 
-        _fh = None  # Track compressed file handle for cleanup
+        _fh = None
         try:
             filename = Path(xml_file).name
             flatten = self._flatten_event  # Local reference
             should_process = self._should_process_event  # Local reference
             xml_to_dict = extractor.xml_to_dict
 
-            # For compressed/archived XML files, open a decompressed stream for iterparse
-            _suffix = Path(xml_file).suffix.lower()
-            if _suffix in COMPRESSED_SUFFIXES:
+            if Path(xml_file).suffix.lower() in COMPRESSED_SUFFIXES:
                 _fh = open_maybe_compressed(xml_file, password=self.archive_password)
-                context = etree.iterparse(_fh, events=("end",), recover=True)
             else:
-                context = etree.iterparse(xml_file, events=("end",), recover=True)
+                _fh = open(xml_file, "rb")  # noqa: SIM115 -- closed in the finally below
+            context = etree.iterparse(
+                _xml_document_stream(_fh), events=("end",), recover=True
+            )
             seen_events = False
             for _action, elem in context:
-                if elem.tag.endswith("Event"):
+                # The exact name: UserData payloads such as CompatibilityFixEvent
+                # belong to the record around them
+                if elem.tag == "Event" or elem.tag.endswith("}Event"):
                     seen_events = True
                     try:
                         ns = ""
@@ -1168,13 +1467,14 @@ class StreamingEventProcessor:
                     while elem.getprevious() is not None:
                         del elem.getparent()[0]
 
+            self._note_recovered_xml(xml_file, context.error_log)
             if not seen_events:
                 # Deliberately no --logs-encoding hint: XML is parsed with the
                 # encoding declared in the document, so that flag changes
                 # nothing here.
                 self.logger.warning(
                     f"[yellow]    [!] No <Event> documents found in "
-                    f"{Path(xml_file).name}; check that it is an EVTX-to-XML "
+                    f"{literal(Path(xml_file).name)}; check that it is an EVTX-to-XML "
                     f"export and that its encoding declaration is correct[/]"
                 )
 
@@ -1319,11 +1619,12 @@ class StreamingEventProcessor:
         data = bytes(data.replace("\x00", "").replace("\x0b", ""), "utf-8").decode(
             "utf-8", "ignore"
         )
-        data = f"<evtxtract>\n{data}\n</evtxtract>"
+        data = f"<evtxtract>\n{_as_character_references(data)}\n</evtxtract>"
 
         # Parse with recovery mode for malformed XML
         parser = etree.XMLParser(recover=True)
         root = etree.fromstring(data, parser=parser)
+        self._note_recovered_xml(log_file, parser.error_log)
 
         # Stream events from parsed tree
         ns = "{http://schemas.microsoft.com/win/2004/08/events/event}"
@@ -1472,7 +1773,7 @@ class StreamingEventProcessor:
                 # encoding or format mismatch that lost every record.
                 self.logger.warning(
                     f"[yellow]   [!] No event could be parsed from "
-                    f"{os.path.basename(log_file)}: {self._skipped_records:,} "
+                    f"{literal(os.path.basename(log_file))}: {self._skipped_records:,} "
                     f"record(s) were skipped. Check the format and encoding "
                     f"(--debug shows the first error)[/]"
                 )
@@ -1486,8 +1787,8 @@ class StreamingEventProcessor:
             # --remove-events must not treat this as a completed ingest.
             self._had_parse_error = True
             self.logger.error(
-                f"[red]    [-] Partial ingest of {os.path.basename(log_file)}: "
-                f"{e}[/]\n"
+                f"[red]    [-] Partial ingest of {literal(os.path.basename(log_file))}: "
+                f"{literal(e)}[/]\n"
                 f"[yellow]   [!] {inserted_count:,} event(s) were committed "
                 f"before the failure and are included in the results[/]"
             )
@@ -1604,7 +1905,7 @@ class StreamingEventProcessor:
                     if col_lower not in db_columns:
                         self.logger.warning(
                             f"[yellow]   [!] Could not add column '{col}' to the "
-                            f"events table: {exc}[/]"
+                            f"events table: {literal(exc)}[/]"
                         )
 
         return schema_changed
@@ -1633,7 +1934,7 @@ class StreamingEventProcessor:
             self._last_column_frozenset = frozenset()
             self._last_sorted_columns = ()
         except Exception as e:
-            self.logger.error(f"[error]    [-] Error creating initial table: {e}[/]")
+            self.logger.error(f"[error]    [-] Error creating initial table: {literal(e)}[/]")
             raise
         finally:
             cursor.close()

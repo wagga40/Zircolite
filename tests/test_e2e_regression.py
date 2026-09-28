@@ -54,6 +54,7 @@ FORMAT_FIXTURES = [
     ("csv", "sample_events.csv", ["--csv-input"]),
     ("xml", "xml_events_sample.xml", ["-x"]),
     ("auditd", "audit_sample.log", ["-AU"]),
+    ("auditd", "audit_enriched_sample.log", ["-AU"]),
     ("sysmon_linux", "sysmon_linux_sample.log", ["-S"]),
     ("evtxtract", "evtxtract_sample.log", ["--evtxtract-input"]),
     ("sqlite", "sample_bitsadmin.db", ["-D"]),
@@ -310,6 +311,43 @@ class TestGoldenDetections:
         assert detection_summary(detections) == [
             tuple(entry) for entry in json.loads(expected_path.read_text())
         ]
+
+
+class TestAuditdEnrichedDetections:
+    """The bundled Linux rules must fire on auditd's default ENRICHED format.
+
+    The fixture's SYSCALL records carry both syscall=133 and, after 0x1D,
+    SYSCALL=mknod. Those differ only in case, which SQLite does not see, so the
+    raw number used to take the column and every SYSCALL='...' rule matched
+    nothing. The webshell record also pins the other half: its rule tests
+    euid=33, so the enriched EUID="www-data" must not take that column.
+    """
+
+    EXPECTED: ClassVar[list] = [
+        "Special File Creation via Mknod Syscall",
+        "Webshell Remote Command Execution",
+    ]
+
+    def test_syscall_rules_fire(self, tmp_path):
+        source = FIXTURES / "audit_enriched_sample.log"
+        assert source.exists(), f"missing fixture {source}"
+
+        detections = run_zircolite(
+            tmp_path, source, ["-AU"],
+            ruleset=(WORKSPACE_ROOT / "rules" / "rules_linux.json").read_text(),
+        )
+
+        fired = {title for title, _ in detection_summary(detections)}
+        missing = [title for title in self.EXPECTED if title not in fired]
+        assert missing == [], f"rules silent on ENRICHED auditd: {missing}"
+
+        # Neither side of a collision is dropped, under the documented names
+        mknod = next(
+            d for d in detections if d["title"] == self.EXPECTED[0]
+        )["matches"][0]
+        assert (mknod["SYSCALL"], mknod["syscallRaw"]) == ("mknod", "133")
+        assert (mknod["ARCH"], mknod["archRaw"]) == ("x86_64", "c000003e")
+        assert (mknod["auid"], mknod["AUIDEnriched"]) == ("1000", "alice")
 
 
 class TestHashesCoverEveryFormat:

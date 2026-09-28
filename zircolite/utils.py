@@ -517,6 +517,10 @@ def sanitize_value_for_csv(value: Any) -> str:
     """
     if value is None:
         return ""
+    if isinstance(value, (dict, list)):
+        # A correlation alert's group keys and evidence: JSON keeps them readable
+        # by a program, where str() would write Python's repr.
+        value = orjson.dumps(value).decode()
     text = str(value).replace("\r\n", " ").replace("\n", " ").replace("\r", " ")
     if text[:1] in _CSV_FORMULA_PREFIXES:
         text = "'" + text

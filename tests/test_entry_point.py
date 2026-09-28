@@ -153,6 +153,22 @@ def test_a_ruleset_outside_the_shipped_directory_is_left_alone(tmp_path, monkeyp
     )
 
 
+def test_a_ruleset_in_a_subdirectory_of_rules_resolves(tmp_path, monkeypatch):
+    """-U installs experimental/ inside rules/; a run from elsewhere must find it."""
+    beside = tmp_path / "beside"
+    (beside / "rules" / "experimental").mkdir(parents=True)
+    (beside / "rules" / "experimental" / "x.json").write_text("[]", encoding="utf-8")
+    (beside / "secret.json").write_text("[]", encoding="utf-8")
+    _pretend_frozen(monkeypatch, beside, tmp_path / "unpacked")
+    monkeypatch.chdir(tmp_path)
+
+    assert assets.resolve_shipped_ruleset("rules/experimental/x.json") == str(
+        beside / "rules" / "experimental" / "x.json"
+    )
+    # Climbing out of rules/ is not a shipped ruleset
+    assert assets.resolve_shipped_ruleset("rules/../secret.json") == "rules/../secret.json"
+
+
 def test_bundled_dir_prefers_the_copy_beside_the_binary(tmp_path, monkeypatch):
     """-U has to write where the next run will read, and that is the editable copy."""
     beside, unpacked = tmp_path / "beside", tmp_path / "unpacked"

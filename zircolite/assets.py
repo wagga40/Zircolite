@@ -122,12 +122,16 @@ def _needs_fallback(value: str, directory: str) -> bool:
     Only a value already rooted at the shipped directory may fall back to it.
     ``-r myrules/windows.json`` must keep reporting that it is missing rather
     than quietly loading ``rules/windows.json``, which is a different ruleset.
+    Subdirectories count (``rules/experimental/...``, which -U installs); a
+    ``..`` that would climb out of the shipped directory does not.
     """
     path = Path(value)
     return (
         not path.is_absolute()
         and not path.exists()
-        and path.parent == Path(directory)
+        and len(path.parts) > 1
+        and path.parts[0] == directory
+        and ".." not in path.parts
     )
 
 
@@ -138,12 +142,12 @@ def resolve_shipped_ruleset(value: str) -> str:
     resolves on existence rather than on being a file.
     """
     if _needs_fallback(value, "rules"):
-        return resolve_asset_path(value, "rules", Path(value).name)
+        return resolve_asset_path(value, "rules", *Path(value).parts[1:])
     return value
 
 
 def resolve_shipped_template(value: str) -> str:
     """Resolve ``templates/...`` against the install when the CWD has none."""
     if _needs_fallback(value, "templates"):
-        return resolve_default_path(value, "templates", Path(value).name)
+        return resolve_default_path(value, "templates", *Path(value).parts[1:])
     return value

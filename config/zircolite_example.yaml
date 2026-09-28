@@ -72,6 +72,15 @@ rules:
   # Write the converted Sigma -> Zircolite ruleset to disk
   save_ruleset: false
 
+  # Load only the rules at this level or above: informational, low, medium,
+  # high or critical. A rule without a level counts as informational.
+  min_level: null  # Example: medium
+
+  # How the time field is written, for correlation rules converted from native
+  # Sigma rules: iso, unix, unix_ms or unix_us. Compiled JSON rulesets keep the
+  # format they were converted with.
+  # timestamp_format: iso
+
 # Output configuration
 output:
   # Output file path. Left unset it is detected_events.json, or

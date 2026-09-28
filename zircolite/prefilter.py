@@ -37,7 +37,7 @@ BROAD_FRACTION = 0.5
 _UNSUPPORTED_WORDS = frozenset((
     "SELECT", "FROM", "WHERE", "JOIN", "UNION", "INTERSECT", "EXCEPT", "ORDER",
     "GROUP", "HAVING", "LIMIT", "OFFSET", "WINDOW", "CASE", "WHEN", "THEN",
-    "ELSE", "END", "BETWEEN", "COLLATE", "OVER", "FILTER", "REGEXP", "GLOB", "MATCH",
+    "ELSE", "END", "BETWEEN", "OVER", "FILTER", "REGEXP", "GLOB", "MATCH",
     # Always keywords, even where a column carries the same name.
     "CURRENT_TIMESTAMP", "CURRENT_DATE", "CURRENT_TIME",
 ))
@@ -206,6 +206,10 @@ def _parse_literal_plan(sql):
         for i, (kind, value) in enumerate(body):
             if kind == "word" and value in _UNSUPPORTED_WORDS:
                 return None
+            # Every logs column is declared NOCASE, so an explicit NOCASE on an
+            # equality changes nothing; the reader rejects it after a LIKE.
+            if (kind, value) == ("word", "COLLATE") and body[i + 1:i + 2] != [("word", "NOCASE")]:
+                return None
             if kind == "punct" and value in (";", "?", ":", "@", "$", "."):
                 return None
             # JSON operators can raise on rows the candidate set would skip.
@@ -271,9 +275,12 @@ class PreparedRules:
 
 
 def rule_queries(rules):
-    """Prepare SQL only; leave malformed rule values to the existing evaluator."""
+    """Prepare SQL only; leave malformed rule values to the existing evaluator.
+
+    A correlation plan never runs its ``rule`` SQL, so there is nothing to prepare.
+    """
     return tuple(query for rule in rules
-                 if isinstance(rule.get("rule"), (list, tuple))
+                 if isinstance(rule.get("rule"), (list, tuple)) and rule.get("correlation_plan") is None
                  for query in rule["rule"] if isinstance(query, str))
 
 

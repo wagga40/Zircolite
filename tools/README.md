@@ -51,7 +51,11 @@ The version comes from `zircolite/__init__.py`, read as text rather than importe
 - every distribution in the runtime dependency closure of the installed `Zircolite`
   project. It follows `Requires-Dist`, evaluates environment markers for the running
   interpreter with `packaging` and ignores extras nobody requested;
-- the Detection Rule License for `rules/`.
+- one section per rules source, from `rules/release-manifest.json`: the source's
+  repository and revision, the files in `rules/` holding its rules and the licence
+  text `-U` installed in `rules/licenses/`, then the Detection Rule License when a
+  source uses it. A file the manifest does not list, a missing manifest or a missing
+  licence text fails packaging, since nothing would say which licence covers it.
 
 A distribution's licence files are the ones in its own `.dist-info`: those listed in
 `License-File`, anything under `licenses/`, and files named `LICENSE*`, `LICENCE*`,
@@ -93,7 +97,8 @@ and the assets. The tests use it; releases do not.
 - `evtx.txt`: the evtx wheel has no licence file. pyevtx-rs declares MIT/Apache-2.0;
   the text is the evtx crate's `LICENSE-MIT` plus the Apache-2.0 notice.
 - `DRL-1.1.txt`: the [Detection Rule License](https://github.com/SigmaHQ/Detection-Rule-License)
-  that SigmaHQ publishes its rules under, copied verbatim.
+  that SigmaHQ publishes its rules under, copied verbatim. SigmaHQ's own licence file,
+  which `-U` installs, only links to it.
 - `python-runtime-libraries.txt`: the licence texts of the native libraries in the
   Linux and macOS interpreters, each copied from its upstream source, which heads its
   section. The list follows python-build-standalone's `pythonbuild/downloads.json` and

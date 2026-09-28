@@ -3,11 +3,13 @@ Tests for the RulesetHandler and RulesUpdater classes in zircolite/rules.py.
 """
 
 import json
-import re
+import os
 import sqlite3
+import subprocess
 import sys
 from contextlib import closing
 from pathlib import Path
+from typing import ClassVar
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -15,9 +17,10 @@ import requests
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
+from zircolite import ProcessingConfig, ZircoliteCore
 from zircolite.config import RulesetConfig
-from zircolite.rules import RulesetHandler, RulesUpdater, UnknownPipelineError
-from zircolite.sqlscan import rebalance_sql
+from zircolite.rules import RulesetHandler, RulesUpdateError, RulesUpdater, UnknownPipelineError
+from zircolite.sqlscan import column_refs, rebalance_sql
 
 WORKSPACE_ROOT = Path(__file__).parent.parent
 
@@ -704,11 +707,12 @@ level: high
         assert len(handler.rulesets) == 1
         corr = handler.rulesets[0]
         assert corr.get("correlation") is True
-        assert "event_count" in corr["rule"][0] or "GROUP BY" in corr["rule"][0]
+        assert corr["result_type"] == "correlation"
+        assert corr["correlation_plan"]["event_id_field"] == "row_id"
         assert "EventID" in corr["rule"][0]
 
-    def test_correlation_event_count_sql_runs_on_sqlite(self, tmp_path, test_logger):
-        """Generated event_count SQL executes against a minimal logs table."""
+    def test_correlation_event_count_plan_runs_through_the_core(self, tmp_path, test_logger, field_mappings_file):
+        """The converted plan runs on a logs table and reports one alert per burst."""
         rules_yml = tmp_path / "rules.yml"
         rules_yml.write_text("""
 ---
@@ -744,21 +748,23 @@ level: high
             ),
             logger=test_logger,
         )
-        sql = handler.rulesets[0]["rule"][0]
-        conn = sqlite3.connect(":memory:")
+        core = ZircoliteCore(field_mappings_file, ProcessingConfig(no_output=True), logger=test_logger)
         try:
-            conn.execute("CREATE TABLE logs (EventID INTEGER, Image TEXT)")
-            for _ in range(3):
-                conn.execute(
-                    "INSERT INTO logs (EventID, Image) VALUES (?, ?)",
-                    (1, "C:\\\\Windows\\\\System32\\\\cmd.exe"),
-                )
-            rows = conn.execute(sql).fetchall()
-            assert len(rows) == 1
-            assert rows[0][0] == "C:\\\\Windows\\\\System32\\\\cmd.exe"
-            assert rows[0][1] == 3  # event_count
+            core.create_db("SystemTime TEXT COLLATE NOCASE, Channel TEXT COLLATE NOCASE, EventID INTEGER, Image TEXT COLLATE NOCASE")
+            core.insert_data_to_db([
+                {"SystemTime": f"2026-01-01T00:00:0{i}Z", "Channel": "Microsoft-Windows-Sysmon/Operational",
+                 "EventID": 1, "Image": "C:\\Windows\\System32\\cmd.exe"}
+                for i in range(3)
+            ])
+            result = core.execute_rule(handler.rulesets[0])
         finally:
-            conn.close()
+            core.close()
+        assert result["count"] == 1
+        assert result["event_count"] == 3
+        alert = result["matches"][0]
+        # Group keys are folded to lower case; the evidence keeps the original
+        assert alert["group_keys"] == {"Image": "c:\\windows\\system32\\cmd.exe"}
+        assert alert["evidence"][0]["event"]["Image"] == "C:\\Windows\\System32\\cmd.exe"
 
     def test_temporal_correlation_uses_configured_time_field(self, tmp_path, test_logger):
         """Temporal correlation SQL references the time_field from RulesetConfig, not 'timestamp'."""
@@ -816,6 +822,7 @@ level: high
         assert len(corr) == 1
         sql = corr[0]["rule"][0]
         assert "UtcTime" in sql
+        assert "UtcTime" in corr[0]["correlation_plan"]["required_fields"]["logs"]
         assert "timestamp" not in sql.lower().split("utctime")[0]
 
     def test_event_count_correlation_uses_custom_time_field(self, tmp_path, test_logger):
@@ -874,7 +881,7 @@ class TestPipelineOrderPreserved:
         wmi_rule = tmp_path / "wmi_event_subscription.yml"
         wmi_rule.write_text("""
 title: WMI Event Subscription
-id: test-wmi-001
+id: 0d7c7c2a-6a4e-4d0a-9a53-2f1d1b8f3c01
 status: test
 logsource:
     product: windows
@@ -1009,57 +1016,277 @@ class TestRulesUpdater:
                 updater.run()
                 mock_clean.assert_called_once()
 
-    def test_checkIfNewerAndMove_new_files(self, test_logger, tmp_path):
-        """checkIfNewerAndMove moves new JSON rulesets to the rules directory."""
-        # Set up temp dir with a JSON ruleset
-        tmp_dir = tmp_path / "tmp-rules-dir"
-        tmp_dir.mkdir()
-        ruleset = tmp_dir / "test_rules.json"
-        ruleset.write_text('[{"title": "New Rule"}]')
+    @staticmethod
+    def _release(tmp_path, files, *, manifest=True, statuses=None):
+        """An unpacked branch archive: one top folder holding the repository."""
+        import hashlib
 
-        # Create the rules dir (empty)
-        rules_dir = tmp_path / "rules"
-        rules_dir.mkdir()
+        root = tmp_path / "unpacked" / "Zircolite-Rules-v2-main"
+        for name, content in files.items():
+            path = root / name
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(content)
+        if manifest:
+            artifacts = {
+                name: hashlib.sha256(content.encode()).hexdigest()
+                for name, content in files.items()
+                if not name.startswith(("reports/", "tests/")) and name != "sources.json"
+            }
+            sources = {"sigmahq": {"artifacts": artifacts, "status": "current", "revision": "a" * 40}}
+            for name, status in (statuses or {}).items():
+                sources[name] = {"artifacts": {}, "status": status, "revision": "b" * 40,
+                                 "last_success": "2026-09-01T00:00:00+00:00"}
+            (root / "release-manifest.json").write_text(json.dumps({"schema_version": 1, "sources": sources}))
+        return tmp_path / "unpacked"
 
-        updater = RulesUpdater(logger=test_logger, rules_dir=rules_dir)
-        updater.tmpDir = str(tmp_dir)
-        updater.checkIfNewerAndMove()
+    FILES: ClassVar[dict] = {
+        "rules_windows_merged.json": '[{"title": "Merged"}]',
+        "rules_tsale_windows_merged.json": '[{"title": "Community"}]',
+        "experimental/rules_x_correlation.json": '[{"title": "Correlation"}]',
+        "licenses/tsale.txt": "GPL",
+        "provenance/tsale.json": "{}",
+        "reports/tsale.json": "{}",
+        "sources.json": "{}",
+        "tests/fixture.json": "{}",
+    }
 
-        assert (rules_dir / "test_rules.json").exists()
-        assert "test_rules.json" in str(updater.updated_rulesets[0])
+    def _install(self, test_logger, tmp_path, unpacked, rules_dir=None):
+        updater = RulesUpdater(logger=test_logger, rules_dir=rules_dir or tmp_path / "rules")
+        updater.tmpDir = str(unpacked)
+        updater.install()
+        return updater
 
-    def test_checkIfNewerAndMove_same_hash_skipped(self, test_logger, tmp_path):
-        """checkIfNewerAndMove skips files with identical hashes."""
-        content = '[{"title": "Same Rule"}]'
+    def test_rulesets_licences_and_manifest_are_installed_nothing_else(self, test_logger, tmp_path):
+        updater = self._install(test_logger, tmp_path, self._release(tmp_path, self.FILES))
 
-        # Set up temp dir with a JSON ruleset
-        tmp_dir = tmp_path / "tmp-rules-dir"
-        tmp_dir.mkdir()
-        (tmp_dir / "test_rules.json").write_text(content)
+        installed = sorted(p.relative_to(tmp_path / "rules").as_posix()
+                           for p in (tmp_path / "rules").rglob("*") if p.is_file())
+        assert installed == [
+            "experimental/rules_x_correlation.json",
+            "licenses/tsale.txt",
+            "release-manifest.json",
+            "rules_tsale_windows_merged.json",
+            "rules_windows_merged.json",
+        ]
+        assert len(updater.updated_rulesets) == 5
 
-        # Create the rules dir with identical file
-        rules_dir = tmp_path / "rules"
-        rules_dir.mkdir()
-        (rules_dir / "test_rules.json").write_text(content)
+    def test_the_manifest_is_installed_last_and_not_counted_as_a_ruleset(self, test_logger,
+                                                                         tmp_path, caplog):
+        """A release packaged from rules/ credits each ruleset's licence from it."""
+        with caplog.at_level("INFO"):
+            updater = self._install(test_logger, tmp_path, self._release(tmp_path, self.FILES))
 
-        updater = RulesUpdater(logger=test_logger, rules_dir=rules_dir)
-        updater.tmpDir = str(tmp_dir)
-        updater.checkIfNewerAndMove()
+        assert Path(updater.updated_rulesets[-1]).name == "release-manifest.json"
+        assert "3 rulesets updated" in caplog.text
+        manifest = json.loads((tmp_path / "rules" / "release-manifest.json").read_text())
+        assert "rules_tsale_windows_merged.json" in manifest["sources"]["sigmahq"]["artifacts"]
 
-        assert len(updater.updated_rulesets) == 0
+    def test_a_newer_manifest_alone_is_not_a_ruleset_update(self, test_logger, tmp_path, caplog):
+        self._install(test_logger, tmp_path, self._release(tmp_path, self.FILES))
+        again = tmp_path / "again"
+        again.mkdir()
+        unpacked = self._release(again, self.FILES, statuses={"hayabusa": "stale"})
 
-    def test_checkIfNewerAndMove_creates_rules_dir(self, test_logger, tmp_path):
-        """checkIfNewerAndMove creates the rules directory if it doesn't exist."""
-        tmp_dir = tmp_path / "tmp-rules-dir"
-        tmp_dir.mkdir()
-        (tmp_dir / "new.json").write_text("[]")
+        with caplog.at_level("INFO"):
+            updater = self._install(test_logger, again, unpacked, rules_dir=tmp_path / "rules")
 
-        rules_dir = tmp_path / "rules"
-        updater = RulesUpdater(logger=test_logger, rules_dir=rules_dir)
-        updater.tmpDir = str(tmp_dir)
-        updater.checkIfNewerAndMove()
+        assert [Path(p).name for p in updater.updated_rulesets] == ["release-manifest.json"]
+        assert "No newer rulesets" in caplog.text
 
-        assert rules_dir.is_dir()
+    def test_a_ruleset_combining_several_sources_is_installed(self, test_logger, tmp_path):
+        """rules_windows_all.json is listed under the manifest's aggregates, not a source."""
+        import hashlib
+
+        unpacked = self._release(tmp_path, self.FILES)
+        root = unpacked / "Zircolite-Rules-v2-main"
+        (root / "rules_windows_all.json").write_text("[]")
+        manifest = json.loads((root / "release-manifest.json").read_text())
+        manifest["aggregates"] = {"windows_all": {"status": "current", "artifacts": {
+            "rules_windows_all.json": hashlib.sha256(b"[]").hexdigest()}}}
+        (root / "release-manifest.json").write_text(json.dumps(manifest))
+
+        updater = self._install(test_logger, tmp_path, unpacked)
+
+        assert (tmp_path / "rules" / "rules_windows_all.json").is_file()
+        assert len(updater.updated_rulesets) == 6
+
+    def test_unchanged_files_are_left_alone(self, test_logger, tmp_path):
+        self._install(test_logger, tmp_path, self._release(tmp_path, self.FILES))
+        again = tmp_path / "again"
+        again.mkdir()
+
+        updater = self._install(test_logger, again, self._release(again, self.FILES), rules_dir=tmp_path / "rules")
+
+        assert updater.updated_rulesets == []
+
+    def test_a_file_that_differs_from_the_manifest_installs_nothing(self, test_logger, tmp_path):
+        unpacked = self._release(tmp_path, self.FILES)
+        (unpacked / "Zircolite-Rules-v2-main" / "rules_tsale_windows_merged.json").write_text("[]")
+
+        with pytest.raises(RulesUpdateError, match="do not match"):
+            self._install(test_logger, tmp_path, unpacked)
+        assert not (tmp_path / "rules").exists() or not any((tmp_path / "rules").iterdir())
+
+    def test_a_ruleset_the_manifest_does_not_name_installs_nothing(self, test_logger, tmp_path):
+        unpacked = self._release(tmp_path, self.FILES)
+        (unpacked / "Zircolite-Rules-v2-main" / "rules_extra.json").write_text("[]")
+
+        with pytest.raises(RulesUpdateError, match=r"rules_extra\.json"):
+            self._install(test_logger, tmp_path, unpacked)
+
+    def test_a_listed_file_missing_from_the_archive_installs_nothing(self, test_logger, tmp_path):
+        unpacked = self._release(tmp_path, self.FILES)
+        (unpacked / "Zircolite-Rules-v2-main" / "licenses" / "tsale.txt").unlink()
+
+        with pytest.raises(RulesUpdateError, match="missing"):
+            self._install(test_logger, tmp_path, unpacked)
+
+    def test_a_newer_manifest_asks_for_a_newer_zircolite(self, test_logger, tmp_path):
+        unpacked = self._release(tmp_path, self.FILES)
+        (unpacked / "Zircolite-Rules-v2-main" / "release-manifest.json").write_text('{"schema_version": 2}')
+
+        with pytest.raises(RulesUpdateError, match="update Zircolite"):
+            self._install(test_logger, tmp_path, unpacked)
+
+    def test_stale_and_unavailable_sources_are_reported(self, test_logger, tmp_path, caplog):
+        unpacked = self._release(tmp_path, self.FILES, statuses={"hayabusa": "stale", "joesecurity": "unavailable"})
+
+        with caplog.at_level("WARNING"):
+            self._install(test_logger, tmp_path, unpacked)
+
+        assert "could not refresh 1 of its 3 sources" in caplog.text
+        assert "hayabusa" in caplog.text and "bbbbbbbbbbbb" in caplog.text
+        assert "(2026-09-01 00:00 UTC)" in caplog.text
+        assert "no joesecurity rulesets have been published yet" in caplog.text
+
+    def test_sources_failing_for_one_reason_are_reported_together(self, test_logger, tmp_path, caplog):
+        """A rate-limited build marks every source stale; that is one notice, not one per source."""
+        unpacked = self._release(tmp_path, self.FILES, statuses={"hayabusa": "stale", "tsale": "stale"})
+        path = unpacked / "Zircolite-Rules-v2-main" / "release-manifest.json"
+        manifest = json.loads(path.read_text())
+        for name, source in manifest["sources"].items():
+            source.update(status="stale", last_success="2026-09-01T00:00:00+00:00",
+                          error=f"403 Client Error: rate limit exceeded for url: https://api.github.com/repos/{name}")
+        path.write_text(json.dumps(manifest))
+
+        with caplog.at_level("WARNING"):
+            self._install(test_logger, tmp_path, unpacked)
+
+        warnings = [r.getMessage() for r in caplog.records if r.levelname == "WARNING"]
+        assert len(warnings) == 1
+        assert "could not refresh any of its 3 sources (403 Client Error: rate limit exceeded)" in warnings[0]
+        assert "api.github.com" not in warnings[0]
+        assert all(name in warnings[0] for name in ("hayabusa", "sigmahq", "tsale"))
+
+    def test_a_release_of_one_source_says_so(self, test_logger, tmp_path, caplog):
+        unpacked = self._release(tmp_path, self.FILES)
+        path = unpacked / "Zircolite-Rules-v2-main" / "release-manifest.json"
+        manifest = json.loads(path.read_text())
+        manifest["sources"]["sigmahq"]["status"] = "stale"
+        path.write_text(json.dumps(manifest))
+
+        with caplog.at_level("WARNING"):
+            self._install(test_logger, tmp_path, unpacked)
+
+        assert "could not refresh its only source" in caplog.text
+
+    def test_sources_failing_for_different_reasons_each_give_theirs(self, test_logger, tmp_path, caplog):
+        unpacked = self._release(tmp_path, self.FILES, statuses={"hayabusa": "stale", "tsale": "stale"})
+        path = unpacked / "Zircolite-Rules-v2-main" / "release-manifest.json"
+        manifest = json.loads(path.read_text())
+        manifest["sources"]["hayabusa"]["error"] = "clone failed"
+        manifest["sources"]["tsale"]["error"] = "3 unexpected failures; see reports/tsale.json"
+        path.write_text(json.dumps(manifest))
+
+        with caplog.at_level("WARNING"):
+            self._install(test_logger, tmp_path, unpacked)
+
+        lines = caplog.text.splitlines()
+        assert any("hayabusa" in line and "clone failed" in line for line in lines)
+        assert any("tsale" in line and "3 unexpected failures" in line for line in lines)
+
+    def test_the_outcome_comes_before_the_upstream_notice(self, test_logger, tmp_path, caplog):
+        """The stale notice read as the update's own failure when it came first."""
+        self._install(test_logger, tmp_path, self._release(tmp_path, self.FILES))
+        again = tmp_path / "again"
+        again.mkdir()
+        unpacked = self._release(again, self.FILES, statuses={"hayabusa": "stale"})
+
+        with caplog.at_level("INFO"):
+            self._install(test_logger, again, unpacked, rules_dir=tmp_path / "rules")
+
+        messages = [r.getMessage() for r in caplog.records]
+        outcome = next(i for i, m in enumerate(messages) if "No newer rulesets" in m)
+        notice = next(i for i, m in enumerate(messages) if "could not refresh" in m)
+        assert outcome < notice
+
+    def test_updated_rulesets_are_counted(self, test_logger, tmp_path, caplog):
+        with caplog.at_level("INFO"):
+            self._install(test_logger, tmp_path, self._release(tmp_path, self.FILES))
+
+        assert "3 rulesets updated" in caplog.text
+        assert "No newer rulesets" not in caplog.text
+
+    def test_a_licence_alone_is_not_reported_as_a_ruleset_update(self, test_logger, tmp_path, caplog):
+        self._install(test_logger, tmp_path, self._release(tmp_path, self.FILES))
+        (tmp_path / "rules" / "licenses" / "tsale.txt").write_text("older")
+        again = tmp_path / "again"
+        again.mkdir()
+
+        with caplog.at_level("INFO"):
+            updater = self._install(test_logger, again, self._release(again, self.FILES),
+                                    rules_dir=tmp_path / "rules")
+
+        assert [Path(p).name for p in updater.updated_rulesets] == ["tsale.txt"]
+        assert "No newer rulesets" in caplog.text
+
+    @pytest.mark.parametrize(("timestamp", "expected"), [
+        ("2026-09-26T17:11:28+00:00", "1 hour ago (2026-09-26 17:11 UTC)"),
+        ("2026-09-26T19:05:00Z", "1 minute ago (2026-09-26 19:05 UTC)"),
+        ("2026-09-26T21:06:00+02:00", "less than a minute ago (2026-09-26 19:06 UTC)"),
+        ("2026-09-04T19:06:00+00:00", "22 days ago (2026-09-04 19:06 UTC)"),
+        ("yesterday", "yesterday"),
+        (None, "at an unknown date"),
+    ])
+    def test_build_times_read_as_an_age(self, timestamp, expected):
+        from datetime import datetime, timezone
+
+        now = datetime(2026, 9, 26, 19, 6, 30, tzinfo=timezone.utc)
+
+        assert RulesUpdater._built(timestamp, now) == expected
+
+    def test_a_release_without_a_manifest_installs_its_top_level_rulesets(self, test_logger, tmp_path, caplog):
+        unpacked = self._release(tmp_path, self.FILES, manifest=False)
+
+        with caplog.at_level("WARNING"):
+            updater = self._install(test_logger, tmp_path, unpacked)
+
+        assert sorted(Path(p).name for p in updater.updated_rulesets) == [
+            "rules_tsale_windows_merged.json", "rules_windows_merged.json"]
+        assert "unverified" in caplog.text
+
+    def test_run_installs_from_a_downloaded_archive(self, test_logger, tmp_path):
+        import shutil as _shutil
+
+        unpacked = self._release(tmp_path, self.FILES)
+        archive = _shutil.make_archive(str(tmp_path / "branch"), "zip", unpacked)
+        updater = RulesUpdater(logger=test_logger, rules_dir=tmp_path / "rules")
+        updater.tempFile = str(tmp_path / "download.zip")
+        updater.tmpDir = str(tmp_path / "extracted")
+
+        with patch.object(RulesUpdater, "download", lambda self: _shutil.copy(archive, self.tempFile)):
+            assert updater.run() is True
+
+        assert (tmp_path / "rules" / "experimental" / "rules_x_correlation.json").is_file()
+        assert not Path(updater.tempFile).exists() and not Path(updater.tmpDir).exists()
+
+    def test_run_reports_a_refused_release(self, test_logger, tmp_path):
+        with patch.object(RulesUpdater, "download"), patch.object(RulesUpdater, "unzip"), \
+                patch.object(RulesUpdater, "install", side_effect=RulesUpdateError("files do not match")):
+            updater = RulesUpdater(logger=test_logger, rules_dir=tmp_path / "rules")
+            with patch.object(test_logger, "error") as mock_error:
+                assert updater.run() is False
+        assert "Rulesets not updated" in str(mock_error.call_args)
 
     def test_rules_are_installed_where_a_run_will_look_for_them(self, test_logger, tmp_path, monkeypatch):
         """-U used to write ./rules, which a run from anywhere else never reads."""
@@ -1116,6 +1343,39 @@ class TestRulesUpdater:
                 updater = RulesUpdater(logger=test_logger)
                 updater.run()
                 mock_clean.assert_called_once()
+
+
+class TestMinimumLevel:
+    """--min-level replaces the _medium/_high ruleset variants the rules repository retired."""
+
+    RULES: ClassVar[list] = [
+        {"title": "crit", "level": "critical", "rule": ["SELECT * FROM logs WHERE a=1"]},
+        {"title": "high", "level": "High", "rule": ["SELECT * FROM logs WHERE a=2"]},
+        {"title": "medium", "level": "medium", "rule": ["SELECT * FROM logs WHERE a=3"]},
+        {"title": "low", "level": "low", "rule": ["SELECT * FROM logs WHERE a=4"]},
+        {"title": "unrated", "rule": ["SELECT * FROM logs WHERE a=5"]},
+    ]
+
+    def _titles(self, tmp_path, test_logger, level):
+        path = tmp_path / "rules.json"
+        path.write_text(json.dumps(self.RULES))
+        handler = RulesetHandler(RulesetConfig(ruleset=[str(path)], min_level=level), logger=test_logger)
+        return sorted(rule["title"] for rule in handler.rulesets)
+
+    @pytest.mark.parametrize("level,expected", [
+        (None, ["crit", "high", "low", "medium", "unrated"]),
+        ("informational", ["crit", "high", "low", "medium", "unrated"]),
+        ("medium", ["crit", "high", "medium"]),
+        ("high", ["crit", "high"]),
+        ("critical", ["crit"]),
+    ])
+    def test_rules_below_the_level_are_left_out(self, tmp_path, test_logger, level, expected):
+        assert self._titles(tmp_path, test_logger, level) == expected
+
+    def test_the_count_left_out_is_reported(self, tmp_path, test_logger):
+        with patch.object(test_logger, "info") as mock_info:
+            self._titles(tmp_path, test_logger, "high")
+        assert "3 rule(s) below level high left out" in " ".join(str(c) for c in mock_info.call_args_list)
 
 
 class TestRulesetHandlerInitBranches:
@@ -1185,6 +1445,43 @@ class TestRulesetHandlerInitBranches:
                 mock_info.assert_called()
                 call_str = " ".join(str(c) for c in mock_info.call_args_list)
                 assert "Installed pipelines" in call_str or "pipelines" in call_str.lower()
+
+    def test_sigma_conversion_never_loads_diskcache(self, tmp_path):
+        """Converting a Sigma rule must not import pySigma's pickle-backed cache.
+
+        diskcache unpickles whatever sits in ~/.cache/pysigma, so anyone who can
+        write there gets code execution in a process that reads it. Only the MITRE
+        tag validators read it, and Zircolite never runs them. A subprocess keeps
+        modules imported by other tests from hiding a regression.
+        """
+        rule = tmp_path / "rule.yml"
+        rule.write_text(
+            "title: Whoami\n"
+            "id: 0f3b1c2d-1111-4222-8333-444455556666\n"
+            "status: test\n"
+            "tags:\n  - attack.discovery\n  - attack.t1033\n"
+            "logsource:\n  product: windows\n  category: process_creation\n"
+            "detection:\n  sel:\n    Image|endswith: '\\whoami.exe'\n  condition: sel\n"
+            "level: low\n"
+        )
+        script = (
+            "import logging, sys\n"
+            "sys.path.insert(0, sys.argv[2])\n"
+            "from zircolite.config import RulesetConfig\n"
+            "from zircolite.rules import RulesetHandler\n"
+            "handler = RulesetHandler(RulesetConfig(ruleset=[sys.argv[1]], pipeline=[['sysmon']]),\n"
+            "                         logger=logging.getLogger('t'))\n"
+            "assert len(handler.rulesets) == 1, handler.rulesets\n"
+            "print(sorted(m for m in sys.modules if m.startswith(('diskcache', 'sigma.data', 'sigma.validators.core'))))\n"
+        )
+        result = subprocess.run(
+            [sys.executable, "-c", script, str(rule), str(WORKSPACE_ROOT)],
+            capture_output=True, text=True, cwd=tmp_path, check=False, timeout=120,
+            env={**os.environ, "HOME": str(tmp_path), "USERPROFILE": str(tmp_path)},
+        )
+        assert result.returncode == 0, result.stderr
+        assert result.stdout.strip() == "[]"
+        assert not (tmp_path / ".cache" / "pysigma").exists()
 
 
 def _make_bare_handler(logger, **overrides):
@@ -1455,38 +1752,27 @@ class TestShippedRulesetsCompile:
     without anyone noticing.
     """
 
-    STRING_LITERAL = re.compile(r"'(?:[^']|'')*'")
-    RESERVED = frozenset(
-        {
-            "SELECT", "FROM", "WHERE", "AND", "OR", "NOT", "LIKE", "ESCAPE", "IN",
-            "IS", "NULL", "LOGS", "GROUP", "BY", "HAVING", "COUNT", "DISTINCT",
-            "AS", "ORDER", "LIMIT", "CAST", "INT", "TEXT", "REGEXP", "UNION",
-            "ALL", "ON", "JOIN", "CASE", "WHEN", "THEN", "ELSE", "END", "EXISTS",
-            "BETWEEN", "LEFT", "INNER", "WITH", "GLOB",
-        }
-    )
-
     @staticmethod
     def _rulesets():
         rules_dir = Path(__file__).parent.parent / "rules"
-        return sorted(rules_dir.glob("*.json"))
+        return sorted(rules_dir.glob("rules_*.json"))
 
     @classmethod
     def _connection_for(cls, ruleset):
-        """A logs table wide enough to resolve every column the ruleset names."""
+        """The logs table a run widens for the ruleset: the columns its SQL and
+        its required_fields name, quoted ones (`EventXML.Param3`) included."""
         columns = {}
         for rule in ruleset:
+            names = list(rule.get("required_fields") or ())
             for query in rule.get("rule", []):
-                bare = cls.STRING_LITERAL.sub("''", query)
-                for match in re.finditer(r"\b([A-Za-z_][A-Za-z0-9_]*)\b", bare):
-                    name = match.group(1)
-                    if name.upper() not in cls.RESERVED:
-                        columns.setdefault(name.lower(), name)
+                names += sorted(column_refs(query))
+            for name in names:
+                columns.setdefault(name.lower(), name)
         conn = sqlite3.connect(":memory:")
         conn.create_function("regexp", 2, lambda x, y: 0)
         conn.execute(
             "CREATE TABLE logs ("
-            + ",".join(f'"{c}" TEXT COLLATE NOCASE' for c in columns.values())
+            + ",".join(f'"{c.replace(chr(34), chr(34) * 2)}" TEXT COLLATE NOCASE' for c in columns.values())
             + ")"
         )
         return conn
