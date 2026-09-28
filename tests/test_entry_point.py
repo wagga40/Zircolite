@@ -139,6 +139,28 @@ def test_a_bundled_ruleset_directory_resolves(tmp_path, monkeypatch):
     assert assets.resolve_shipped_ruleset("rules/sigma") == str(beside / "rules" / "sigma")
 
 
+def test_a_working_directory_copy_that_shadows_the_shipped_one_is_named(tmp_path, monkeypatch):
+    """The caller warns on a planted config/ or rules/ from this answer."""
+    beside = tmp_path / "beside"
+    (beside / "rules" / "sigma").mkdir(parents=True)
+    (beside / "config").mkdir(parents=True)
+    (beside / "config" / "config.yaml").write_text("{}", encoding="utf-8")
+    _pretend_frozen(monkeypatch, beside, tmp_path / "unpacked")
+    case = tmp_path / "case"
+    (case / "config").mkdir(parents=True)
+    (case / "config" / "config.yaml").write_text("{}", encoding="utf-8")
+    (case / "rules" / "sigma").mkdir(parents=True)
+    monkeypatch.chdir(case)
+
+    assert assets.shipped_copy_shadowed_by("config/config.yaml", "config", "config.yaml") == \
+        beside / "config" / "config.yaml"
+    assert assets.shipped_copy_shadowed_by("rules/sigma", "rules", "sigma") == beside / "rules" / "sigma"
+    # No local copy, or the local copy is the shipped one: nothing to announce.
+    assert assets.shipped_copy_shadowed_by("templates/x.tmpl", "templates", "x.tmpl") is None
+    monkeypatch.chdir(beside)
+    assert assets.shipped_copy_shadowed_by("config/config.yaml", "config", "config.yaml") is None
+
+
 def test_a_ruleset_outside_the_shipped_directory_is_left_alone(tmp_path, monkeypatch):
     """`-r myrules/x.json` must report itself missing, not load rules/x.json."""
     beside = tmp_path / "beside"

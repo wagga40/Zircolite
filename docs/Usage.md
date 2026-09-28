@@ -153,10 +153,13 @@ built-in ones. An edited ruleset in `rules/`, a changed `config/config.yaml` or 
 Relative paths to the shipped files, such as `rules/rules_windows_merged.json` or
 `templates/exportForSplunk.tmpl`, resolve against the working directory first and against
 the package when the working directory has no such file, so the executable can be run from
-anywhere. When a `config/…` file in the working directory takes precedence over the shipped
-copy, Zircolite logs a warning: that file decides the field mappings and which transforms
-run, so do not run Zircolite from inside a directory you received, such as a log bundle,
-without passing `-c`. Output such as `detected_events.json` and `zircolite.log` goes to the working
+anywhere. When a default you did not name (the `-c` config, the default ruleset, or the
+template behind `--timesketch` or `--navigator-output`) is taken from the working directory
+instead of the shipped copy, Zircolite logs a warning naming both files: those files decide
+the field mappings, the rules and the output, and one sitting in a directory you received,
+such as a log bundle, would otherwise apply without notice. Naming the file yourself
+(`-c config/config.yaml`, `-r rules/…`, `-t`) keeps a local override and silences the
+warning. Output such as `detected_events.json` and `zircolite.log` goes to the working
 directory, as it does from source. The rest of this documentation writes
 `python3 zircolite.py`; with a binary, use the path to the executable instead:
 

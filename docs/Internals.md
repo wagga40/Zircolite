@@ -256,8 +256,7 @@ cannot import `cli` — `cli` imports it in turn.
 For every value a user can override, a file of that name in the working directory wins and
 anything else falls through to `bundled_asset`. That covers
 
-- `--config`, for any relative path under `config/`, not only the default (the CLI warns
-  when the working-directory copy shadows a shipped one)
+- `--config`, for any relative path under `config/`, not only the default
 - `--ruleset`, both the default and an explicit `-r rules/…`
 - `--template`, and the templates behind `--timesketch` and `--navigator-output`
 - the `rules` and `templates` entries of a `-Y` configuration file
@@ -265,6 +264,14 @@ anything else falls through to `bundled_asset`. That covers
 `resolve_default_path` tests for a file. `resolve_asset_path` tests for existence instead,
 and rulesets go through it because `--ruleset` also accepts a *directory* of native Sigma
 YAML, which the file test would reject.
+
+`shipped_copy_shadowed_by` answers whether a working-directory copy won over the shipped
+one. The CLI uses it to warn about the defaults the user did not name — the `-c` config, the
+default ruleset and the `--timesketch`/`--navigator-output` templates — since a copy of any of
+them inside a received directory changes mappings, detections or output silently. A value the
+user typed (`-c config/config.yaml`, `-r rules/…`, `-t`) is a deliberate choice and is not
+announced; `-c` records that with a custom argparse action because its default is also its
+most common explicit value.
 
 Only a value already rooted at the shipped directory falls back, so
 `-r myrules/windows.json` keeps reporting itself missing instead of quietly loading
