@@ -24,6 +24,8 @@ from sqlite3 import Error
 from typing import TYPE_CHECKING, Any, Optional
 
 import orjson as json
+import regex as regex_engine
+from pyroaring import BitMap64
 from rich.console import Group
 from rich.live import Live
 from rich.panel import Panel
@@ -59,9 +61,15 @@ from .performance import FileMetrics, timed_stage
 from .prefilter import prepare_rules, rule_queries
 from .results import RowSpool, write_result_json
 from .shutdown import is_shutdown_requested
-from .sqlscan import admitted_pairs, normalize_rule_sql, rebalance_sql, scan_query
+from .sqlscan import (
+    admitted_pairs,
+    census_collations_supported,
+    normalize_rule_sql,
+    rebalance_sql,
+    scan_query,
+)
 from .streaming import StreamingEventProcessor, StrictParseError
-from .utils import sanitize_row_for_csv
+from .utils import rounded_integer_warning, sanitize_row_for_csv, write_csv_header
 
 # Translation table for stripping newline characters from CSV descriptions.
 _NEWLINE_TRANSLATE = str.maketrans("", "", "\n\r")
@@ -76,12 +84,63 @@ _DEPTH_LIMIT_RE = re.compile(r"expression tree is too large", re.IGNORECASE)
 # ---------------------------------------------------------------------------
 # LRU-cached regex compilation for the SQLite ``regexp`` UDF.
 # SIGMA rules reuse the same patterns across thousands of rows; caching the
-# compiled objects avoids redundant ``re.compile`` calls per row.
+# compiled objects avoids redundant compile calls per row.
+#
+# Rule patterns run on event fields an attacker writes (a command line, a
+# script block), so a backtracking pattern must not be able to stall the run.
+# The Invoke-Obfuscation VAR+ rules ship ``-f(?:.*\)){1,}.*"``: under ``re`` a
+# command line of ~30 ``)`` and no closing quote takes minutes, and each extra
+# ``)`` doubles it. The ``regex`` module accepts the same syntax as ``re`` and
+# takes a per-call CPU-time budget; matching a real event takes microseconds,
+# so the budget only ever stops a runaway, and that one value then counts as a
+# non-match rather than failing the rule for every event.
 # ---------------------------------------------------------------------------
+REGEX_TIMEOUT_SECONDS = 1.0
+# How much of a timed-out value the warning quotes
+_TIMEOUT_EXCERPT_CHARS = 80
+
+
 @lru_cache(maxsize=512)
-def _compile_regex(pattern: str) -> re.Pattern:
-    """Return a compiled regex, cached for repeated use by the SQLite UDF."""
-    return re.compile(pattern)
+def _compile_regex(pattern: str) -> Any:
+    """Return a compiled ``regex`` pattern, cached for repeated use by the SQLite UDF."""
+    return regex_engine.compile(pattern)
+
+
+class _RegexTimeouts:
+    """Values the regexp UDF gave up on, counted per rule title.
+
+    Kept apart from ZircoliteCore on purpose: the UDF lives as long as the
+    connection the core owns, so a UDF closing over the core would make a
+    reference cycle, and a dropped core would keep its disk working directory
+    until a garbage collection that may never come.
+    """
+
+    __slots__ = ("counts", "current_rule", "logger")
+
+    def __init__(self, logger: logging.Logger) -> None:
+        self.counts: dict[str, int] = {}
+        self.current_rule: str | None = None
+        self.logger = logger
+
+    def note(self, pattern: str, value: str) -> None:
+        """Count one value; warn the first time a rule hits the limit.
+
+        The warning quotes the start of the value, so the event can be found
+        in the logs: it is the one the rule did not get to judge.
+        """
+        title = self.current_rule or f"regex {pattern[:80]!r}"
+        count = self.counts.get(title, 0) + 1
+        self.counts[title] = count
+        if count == 1:
+            excerpt = value[:_TIMEOUT_EXCERPT_CHARS]
+            if len(value) > _TIMEOUT_EXCERPT_CHARS:
+                excerpt += "..."
+            # Titles and patterns carry brackets, and the value is log content
+            self.logger.warning(
+                f"[yellow]   [!] Rule '{literal(title)}': regex exceeded "
+                f"{REGEX_TIMEOUT_SECONDS:g}s on an event, which was treated as not "
+                f"matching. The value starts with {literal(repr(excerpt))}[/]"
+            )
 
 
 def _uncompilable_regex(query: str) -> str | None:
@@ -97,9 +156,12 @@ def _uncompilable_regex(query: str) -> str | None:
     here is a loop over an empty tuple.
     """
     for pattern in scan_query(query).regex_patterns:
+        # ``re`` stays the gate for what a rule may use, so moving the matcher
+        # to ``regex`` does not quietly start accepting PCRE-only syntax.
         try:
             re.compile(pattern)
-        except re.error as exc:
+            _compile_regex(pattern)
+        except (re.error, regex_engine.error) as exc:
             return f"invalid regex {pattern!r}: {exc}"
     return None
 
@@ -120,7 +182,7 @@ def _rule_may_match(rule: dict[str, Any], census: dict[tuple, int]) -> bool:
     if rule.get("correlation") or not isinstance(queries, list):
         return True
     for sql in queries:
-        if not isinstance(sql, str):
+        if not isinstance(sql, str) or not scan_query(sql).row_preserving:
             return True
         admitted = admitted_pairs(sql, census)
         if admitted is None or admitted:
@@ -155,6 +217,7 @@ class ZircoliteCore:
         "_prefilter",
         "_prepared",
         "_profiling_data",
+        "_regex_timeouts",
         "_working_directory",
         "add_index",
         "archive_password",
@@ -170,13 +233,13 @@ class ZircoliteCore:
         "first_json_output",
         "flatten_backend",
         "full_results",
-        "hashes",
         "limit",
         "logger",
         "metrics",
         "no_output",
         "profile_rules",
         "remove_index",
+        "rounded_integer_fields",
         "rule_prefilter",
         "rules_in_error",
         "ruleset",
@@ -212,6 +275,9 @@ class ZircoliteCore:
         self.db_connection = None
         self._working_directory = None
         self._prefilter: LiteralPrefilter | None = None
+        # Rule regexes that gave up on a value (see REGEX_TIMEOUT_SECONDS);
+        # the rule itself still ran on every other event
+        self._regex_timeouts = _RegexTimeouts(self.logger)
         self._disk_working = proc.working_db == "disk"
         self.sqlite_cache_mib = proc.sqlite_cache_mib
         self.flatten_backend = proc.flatten_backend
@@ -250,7 +316,6 @@ class ZircoliteCore:
         self.limit = proc.limit
         self.csv_mode = proc.csv_mode
         self.time_field = proc.time_field
-        self.hashes = proc.hashes
         self.delimiter = proc.delimiter
         self.first_json_output = True  # To manage commas in JSON output
         # Track the CSV header and its fieldnames across execute_ruleset calls:
@@ -272,9 +337,11 @@ class ZircoliteCore:
         # Rules whose SQL cannot run at all, by title: reported once, then counted
         # in the summary so a broken rule is never mistaken for a quiet one
         self.rules_in_error: dict[str, str] = {}
-        # Inputs that raised during ingestion; --remove-events must not
-        # delete a source whose events never made it into the results
+        # Inputs read only in part or not at all; their status becomes
+        # "partial" in the performance report and parallel mode names them
         self.failed_files: set[str] = set()
+        # Fields where an integer past SQLite's range was stored as REAL
+        self.rounded_integer_fields: set[str] = set()
         # Lowercased logs columns; rebuilt on demand, dropped on any schema change
         self._logs_columns_lower: set[str] | None = None
         # Cache for escaped identifiers to avoid repeated string operations
@@ -375,6 +442,8 @@ class ZircoliteCore:
             # Raw tuples; we build dicts with None filtered in execute_select_query
             conn.row_factory = None
 
+            timeouts = self._regex_timeouts  # not self: see _RegexTimeouts
+
             def udf_regex(x, y):
                 """User-defined function for regex matching in SQLite.
 
@@ -386,9 +455,17 @@ class ZircoliteCore:
                 if y is None:
                     return 0
                 # str(): a column whose first value was an int is typed
-                # INTEGER, and re.search would raise TypeError on it --
+                # INTEGER, and search() would raise TypeError on it --
                 # which SQLite reports as a failure of the whole rule.
-                return 1 if _compile_regex(x).search(str(y)) else 0
+                value = str(y)
+                try:
+                    found = _compile_regex(x).search(value, timeout=REGEX_TIMEOUT_SECONDS)
+                except TimeoutError:
+                    # Raising would fail the whole statement, so one planted
+                    # event could silence the rule for every other event.
+                    timeouts.note(x, value)
+                    return 0
+                return 1 if found else 0
 
             conn.create_function('regexp', 2, udf_regex)  # Allows to use regex in SQLite
             return conn
@@ -456,6 +533,12 @@ class ZircoliteCore:
         they return None, which turns pruning off rather than guessing.
         """
         if self.db_connection is None:
+            return None
+        with closing(self.db_connection.execute(
+            "SELECT sql FROM sqlite_master WHERE type='table' AND name='logs'"
+        )) as cursor:
+            schema = cursor.fetchone()
+        if not schema or not schema[0] or not census_collations_supported(schema[0]):
             return None
         columns = {name.lower(): name for name in self._get_table_columns()}
         channel_sql, eventid_sql = (
@@ -724,6 +807,11 @@ class ZircoliteCore:
         self.rules_in_error[title] = str(error)
         self.logger.debug(f"Rule '{title}' could not be evaluated: {error}")
 
+    @property
+    def regex_timeouts(self) -> dict[str, int]:
+        """Values a rule regex gave up on (see REGEX_TIMEOUT_SECONDS), by rule title."""
+        return self._regex_timeouts.counts
+
     def execute_select_query(self, query: str, rule_title: str | None = None) -> list[dict[str, Any]]:
         """Return materialized rows for library callers; failed queries return []."""
         try:
@@ -743,6 +831,8 @@ class ZircoliteCore:
         if bad_regex is not None:
             self._note_broken_rule(rule_title, bad_regex)
             return []
+        # Read by the regexp UDF, which SQLite calls while rows are fetched
+        self._regex_timeouts.current_rule = rule_title
         normalized = self._prepared.normalized.get(query) if self._prepared is not None else None
         query = normalized if normalized is not None else normalize_rule_sql(query)
         # Syntax-highlighted SQL in debug mode
@@ -901,9 +991,9 @@ class ZircoliteCore:
                     values = []
                     for col in cols:
                         value = row[col]
-                        # Values past SQLite's INTEGER range must go in as text
+                        # Past SQLite's INTEGER range; stored as REAL, as ingestion does
                         if isinstance(value, int) and not -(1 << 63) <= value < (1 << 63):
-                            value = str(value)
+                            value = float(value)
                         values.append(value)
                     values_list.append(tuple(values))
 
@@ -952,21 +1042,35 @@ class ZircoliteCore:
             return {}
 
         filtered_rows: RowSpool | list[dict[str, Any]] = RowSpool() if stream_rows else []
+        # A condition list is an OR of event queries. Track identity rather than
+        # payload so equal events remain distinct and overlaps do not trip --limit.
+        seen_ids = BitMap64() if len(sigma_queries) > 1 else None
         rule_title = rule.get("title", "Unnamed Rule")
         required = [field for field in rule.get("required_fields") or () if isinstance(field, str)]
         try:
             for sql_query in sigma_queries:
                 checkpoint = filtered_rows.checkpoint() if isinstance(filtered_rows, RowSpool) else len(filtered_rows)
+                query_ids = BitMap64() if seen_ids is not None else None
                 try:
-                    remaining = None if self.limit == -1 else self.limit + 1 - len(filtered_rows)
+                    remaining = None if self.limit == -1 or seen_ids is not None else self.limit + 1 - len(filtered_rows)
                     with closing(self._iter_select_query(sql_query, rule_title, remaining, required)) as rows:
                         for row in rows:
+                            row_id = row.get("row_id")
+                            if seen_ids is not None and query_ids is not None and isinstance(row_id, int):
+                                # Saved databases may contain negative SQLite row IDs.
+                                identity = row_id & ((1 << 64) - 1)
+                                if identity in seen_ids:
+                                    continue
+                                seen_ids.add(identity)
+                                query_ids.add(identity)
                             filtered_rows.append(sanitize_row_for_csv(row) if self.csv_mode else row)
                             if self.limit != -1 and len(filtered_rows) > self.limit:
                                 if isinstance(filtered_rows, RowSpool):
                                     filtered_rows.close()
                                 return {}
                 except _QueryFailed:
+                    if seen_ids is not None and query_ids is not None:
+                        seen_ids.difference_update(query_ids)
                     if isinstance(filtered_rows, RowSpool):
                         filtered_rows.rollback(checkpoint)
                     else:
@@ -1128,7 +1232,7 @@ class ZircoliteCore:
                     extrasaction="ignore",
                 )
                 if not self._csv_header_written:
-                    csv_writer.writeheader()
+                    write_csv_header(csv_writer)
                     self._csv_header_written = True
             # Write matches to CSV - pre-compute common values
             title = rule_results["title"]
@@ -1432,6 +1536,13 @@ class ZircoliteCore:
                     f"[yellow]   [!] {len(names)} rule(s) could not be evaluated and "
                     f"matched nothing: {shown} (use --debug for the SQL error)[/]"
                 )
+            if self.regex_timeouts:
+                total = sum(self.regex_timeouts.values())
+                self.logger.warning(
+                    f"[yellow]   [!] {total} event(s) exceeded the {REGEX_TIMEOUT_SECONDS:g}s "
+                    f"regex limit in {len(self.regex_timeouts)} rule(s) and were treated "
+                    f"as not matching[/]"
+                )
         finally:
             # Close output file handle if needed (always run, including on exception)
             if self._prefilter is not None:
@@ -1701,7 +1812,6 @@ class ZircoliteCore:
             time_after=self.time_after,
             time_before=self.time_before,
             time_field=self.time_field,
-            hashes=self.hashes,
             disable_progress=disable_progress or self.disable_progress,
             archive_password=self.archive_password,
             strict_evtx=self.strict_evtx,
@@ -1748,7 +1858,6 @@ class ZircoliteCore:
                     progress_callback=progress_cb,
                 )
                 if processor.ingest_degraded:
-                    # Read only in part: --remove-events must not delete it
                     self.failed_files.add(str(log_file))
                 return event_count
 
@@ -1810,6 +1919,11 @@ class ZircoliteCore:
         else:
             for log_file in log_files:
                 total_events += process_single_file(log_file)
+        new_rounded = processor.rounded_integer_fields - self.rounded_integer_fields
+        if new_rounded:
+            self.rounded_integer_fields |= new_rounded
+            self.logger.warning(rounded_integer_warning(new_rounded))
+
         # Create index after all data is inserted
         self.logger.info("[+] Creating indexes")
         self.create_index()

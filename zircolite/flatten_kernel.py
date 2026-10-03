@@ -4,34 +4,24 @@ The Python module is the reference implementation. Both builds use the same
 scalar rules and keep transforms in the existing RestrictedPython sandbox.
 """
 
-import contextlib
 from typing import Any
 
-import orjson as json
-import xxhash
+from .utils import (
+    _EXCLUDED_SENTINEL,
+    _NON_ALNUM_RE,
+    _normalize_scalar,
+    is_oversized_integer,
+    parse_timestamp,
+)
 
-from .utils import _EXCLUDED_SENTINEL, _normalize_scalar, parse_timestamp
 
-
-def flatten_event(
-    self, event_dict: dict, filename: str, raw_bytes: bytes | None = None
-) -> dict | None:
+def flatten_event(self, event_dict: dict, filename: str) -> dict | None:
     """
     Flatten a single event dictionary and track discovered fields.
     Returns flattened dict or None if filtered out.
     """
     # Add metadata
     event_dict["OriginalLogfile"] = filename
-    if self.hashes:
-        # CSV, EVTXtract and JSON-array rows never reach here with a source
-        # line: the readers hand over a parsed record. Hashing a canonical
-        # form of that record keeps --hashes meaningful for every format
-        # rather than silently producing no column at all for three of them.
-        if raw_bytes is None:
-            with contextlib.suppress(TypeError, json.JSONEncodeError):
-                raw_bytes = json.dumps(event_dict, option=json.OPT_SORT_KEYS)
-        if raw_bytes:
-            event_dict["OriginalLogLinexxHash"] = xxhash.xxh64_hexdigest(raw_bytes)
 
     # Cache references for hot loop (local vars are faster than attribute access)
     useless_values = self.useless_values
@@ -53,12 +43,15 @@ def flatten_event(
 
     # Result dict
     json_line: dict[str, Any] = {}
+    # Pairs split out of a field value, merged once every real field is known
+    split_fields: dict[str, str] = {}
 
     def process_leaf(raw_field_name: str, last_part: str, obj: Any) -> None:
         cached = resolve_path(raw_field_name, last_part)
         if cached is _sentinel:
             return
         raw_field_name, mapped_key = cached  # type: ignore[misc]
+        value: Any
         if isinstance(obj, list):
             value = str(obj)
         elif obj is True or obj is False:
@@ -75,18 +68,23 @@ def flatten_event(
         # rule, or active transform. They only need a value assignment plus a
         # one-time column-type record, so they skip the lookups below.
         if key not in special_fields and raw_field_name not in special_fields:
-            # Past SQLite's INTEGER range the value has to go in as text
             is_int = isinstance(value, int)
             if isinstance(value, int) and not -(1 << 63) <= value < (1 << 63):
-                value = str(value)
+                # Past SQLite's INTEGER range; stored as REAL, like orjson reads it
+                self.rounded_integer_fields.add(key)
+                value = float(value)
                 is_int = False
             json_line[key] = value
             if key not in seen_leaf_keys:
                 key_lower = key.lower()
                 if key_lower not in discovered_fields:
                     discovered_fields[key_lower] = key
+                    # NUMERIC keeps floats numeric without forcing later
+                    # 64-bit integers through REAL's lossy float conversion.
                     field_types[key] = (
-                        "INTEGER COLLATE NOCASE" if is_int else "TEXT COLLATE NOCASE"
+                        "INTEGER COLLATE NOCASE" if is_int else
+                        "NUMERIC COLLATE NOCASE" if isinstance(value, float) else
+                        "TEXT COLLATE NOCASE"
                     )
                 seen_leaf_keys.add(key)
             return
@@ -104,7 +102,8 @@ def flatten_event(
         transformed_keys: set | None = None
         transformed_values: dict[str, Any] = {}
         if transforms_enabled:
-            for field_name in (key, raw_field_name):
+            transform_fields = (key,) if key == raw_field_name else (key, raw_field_name)
+            for field_name in transform_fields:
                 field_transforms = transforms_get(field_name)
                 if field_transforms:
                     for transform in field_transforms:
@@ -143,13 +142,11 @@ def flatten_event(
                     k, found, v = split_field.partition(equal_sign)
                     if not found:
                         continue
-                    json_line[k] = v
-                    if k not in seen_leaf_keys:
-                        key_lower = k.lower()
-                        if key_lower not in discovered_fields:
-                            discovered_fields[key_lower] = k
-                            field_types[k] = "TEXT COLLATE NOCASE"
-                        seen_leaf_keys.add(k)
+                    # The pair names a column from log content, so it gets
+                    # the same treatment as any other field name.
+                    k = _NON_ALNUM_RE.sub("", k)
+                    if k:
+                        split_fields[k] = v
             except (KeyError, AttributeError) as exc:
                 # A missing separator/equal key or a non-string value drops
                 # every derived column, and every hash-based IOC rule then
@@ -161,22 +158,24 @@ def flatten_event(
                         f"[cyan]{last_part}[/]: {exc}; no derived field "
                         f"will be created for it[/]"
                     )
-        # Past SQLite's INTEGER range the value has to go in as text
-        is_int = isinstance(value, int)
-        if isinstance(value, int) and not -(1 << 63) <= value < (1 << 63):
-            value = str(value)
-            is_int = False
         for k in keys:
             if transformed_keys is not None and k in transformed_keys:
-                final_value = _normalize_scalar(transformed_values[k])
+                final_value = transformed_values[k]
             else:
-                final_value = _normalize_scalar(value)
+                final_value = value
+            if is_oversized_integer(final_value):
+                self.rounded_integer_fields.add(k)
+            final_value = _normalize_scalar(final_value)
             json_line[k] = final_value
             if k not in seen_leaf_keys:
                 key_lower = k.lower()
                 if key_lower not in discovered_fields:
                     discovered_fields[key_lower] = k
-                    field_types[k] = "INTEGER COLLATE NOCASE" if isinstance(final_value, int) else "TEXT COLLATE NOCASE"
+                    field_types[k] = (
+                        "INTEGER COLLATE NOCASE" if isinstance(final_value, int) else
+                        "NUMERIC COLLATE NOCASE" if isinstance(final_value, float) else
+                        "TEXT COLLATE NOCASE"
+                    )
                 seen_leaf_keys.add(k)
 
     # Descend through the event tree, carrying the dotted path as a string
@@ -199,6 +198,23 @@ def flatten_event(
                     stack.append((v, k))
                 else:
                     process_leaf(k, k, v)
+
+    if split_fields:
+        # A pair inside a field value must not stand in for a field the event
+        # really carries: a Hashes of "MD5=x,Image=benign.exe" would otherwise
+        # replace Image. SQLite column names ignore case, so neither may a
+        # different spelling of one.
+        taken = {key.lower() for key in json_line}
+        for k, v in split_fields.items():
+            if k.lower() in taken:
+                continue
+            json_line[k] = v
+            if k not in seen_leaf_keys:
+                key_lower = k.lower()
+                if key_lower not in discovered_fields:
+                    discovered_fields[key_lower] = k
+                    field_types[k] = "TEXT COLLATE NOCASE"
+                seen_leaf_keys.add(k)
 
     # Time filtering (with pre-parsed bounds)
     if self._has_time_filter:
@@ -225,7 +241,7 @@ def flatten_event(
 
         if effective_time_field:
             ts_value = json_line.get(effective_time_field)
-            if ts_value:
+            if ts_value is not None:
                 # Bounds are inclusive. An unparsable timestamp keeps the
                 # event: dropping it would hide data behind a format quirk.
                 moment = parse_timestamp(ts_value)

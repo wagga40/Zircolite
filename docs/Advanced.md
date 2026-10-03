@@ -2,18 +2,18 @@
 
 ## Field Transforms
 
-A transform is a small Python function run against a field's value as the event is
-flattened, in a [RestrictedPython](https://restrictedpython.readthedocs.io/) sandbox. It
-can decode data (Base64, hex, URL-encoding), extract IOCs, categorise a value, or flag an
-attack technique — and it can write the result to a **new** field instead of replacing the
-original, so the evidence stays intact.
+A transform runs a Python function on a field during flattening, in a
+[RestrictedPython](https://restrictedpython.readthedocs.io/) sandbox. It can decode data,
+extract IOCs, categorise values or flag attack techniques. Use an alias field to preserve
+the original value.
 
 Zircolite ships 55 transforms across 11 categories. They are defined in
 `config/config.yaml`; most of the code lives in `config/transforms/`.
 
 ### Enabling transforms
 
-Nothing runs unless it is switched on. Two settings in `config/config.yaml` control it:
+Two settings in `config/config.yaml` control which transforms run. The shipped
+configuration enables the two auditd transforms:
 
 ```yaml
 transforms_enabled: true
@@ -34,9 +34,8 @@ python3 zircolite.py -e logs/ --all-transforms              # everything
 ```
 
 > [!NOTE]
-> `--all-transforms` and `--transform-category` are not the same switch at two scales.
-> `--all-transforms` also **ignores `source_condition`**, so every transform runs whatever
-> the input format is; `--transform-category` respects it. Since no shipped transform
+> `--all-transforms` **ignores `source_condition`**; `--transform-category` respects it.
+> Since no shipped transform
 > lists `xml_input` or `csv_input`, `--transform-category` is a no-op on XML and CSV input
 > — use `--all-transforms` there. The two cannot be combined.
 
@@ -57,9 +56,8 @@ transforms:
       enabled: true
 ```
 
-Almost every shipped transform is a `python_file`. `CommandLine_b64decoded` is the one
-kept inline as a worked example of `type: python`; the identical code also ships as
-`config/transforms/commandline_b64decoded.py`, and a test keeps the two in step.
+Most shipped transforms use `python_file`. `CommandLine_b64decoded` demonstrates inline
+`type: python`; its code also ships in `config/transforms/commandline_b64decoded.py`.
 
 | Key | Purpose |
 |-----|---------|
@@ -80,16 +78,28 @@ file** — so with the shipped `config/config.yaml` that is `config/transforms/`
 `-c /opt/zircolite/my.yaml` it is `/opt/zircolite/transforms/`. An absolute path works
 too.
 
+Transforms run once for each configured field name. If distinct lists are configured for
+the raw and the mapped name, the mapped-name list runs first, then the raw-name list.
+
 ### Writing transform functions
 
-The function must be named `transform` and take a single `param` — the field value,
-always a string.
+The function must be named `transform` and take a single `param` — the field value.
+Numeric fields can arrive as numbers; use `str(param)` when a transform expects text.
 
-**Available in the sandbox:** a subset of Python built-ins (`len`, `int`, `str`, …); the
-modules `re`, `base64`, `chardet` and `math`; `dict[k] = v` / `list[i] = v` writes; and
-augmented assignments (`+=`, `-=`, …).
+**Available in the sandbox:** a subset of Python built-ins (`len`, `int`, `str`,
+`enumerate`, `min`, `sum`, …); `re`, `base64`, `chardet` and `math`; `dict[k] = v` /
+`list[i] = v` writes; and augmented assignments (`+=`, `-=`, …). The four modules are
+read-only stand-ins that expose their public functions and constants only (`re.search`,
+`base64.b64decode`, `chardet.detect`, `math.log2`, …), not the modules they import in
+turn. `import re` and the other three work and return the same stand-in; any other
+`import` fails.
 
-**Blocked:** file I/O, network, system calls, and writes to arbitrary object attributes.
+**Blocked:** file I/O, network, system calls, other imports, and writes to arbitrary
+object attributes.
+
+The sandbox is RestrictedPython, which reduces what transform code can do but is not a
+hard security boundary. Treat a transform like any other code you run: only use
+configurations and transform files from sources you trust.
 
 Develop against the tester, which uses the exact same sandbox:
 
@@ -99,10 +109,10 @@ python config/transform_tester.py my_transform.py --interactive
 python config/transform_tester.py --list-builtins
 ```
 
-Four things worth getting right:
+When writing a transform:
 
 - **Return an empty string when nothing matches.** It makes `!= ''` a usable filter.
-- **Prefer `alias: true`.** Replacing a value destroys evidence.
+- **Prefer `alias: true`.** This preserves the original field in the processed event.
 - **Keep it fast.** Transforms run on every event.
 - **Scope with `source_condition`** so a transform only runs where it makes sense.
 
@@ -290,8 +300,9 @@ jq -r '.[].matches[] | select(.CommandLine_C2Indicators // "" != "")
 
 ## Working with Large Datasets
 
-By default each log file is processed in its own database, which keeps peak memory
-proportional to the largest file rather than to the corpus.
+Automatic mode selects a shared database or one database per file. Sequential per-file
+processing limits event storage to one file at a time; parallel processing holds a
+database for each active worker. Use `--working-db disk` to store working databases on disk.
 
 ### Automatic processing optimization
 
@@ -313,8 +324,8 @@ python3 zircolite.py --evtx ./logs/ --ruleset rules/rules_windows_merged.json
 
 **Database mode.** The rules are tried in order; the first match decides. When
 [correlation rules](Usage.md#sigma-correlation-rules) are loaded and there are several
-files, none of this applies: every file goes into one database, since a correlation only
-sees the events of its own.
+files, automatic mode uses one database so correlations can span files. With
+`--no-auto-mode`, files remain separate unless `--unified-db` is also set.
 
 | # | Condition | Mode | Reason |
 |---|-----------|------|--------|
@@ -365,20 +376,18 @@ Beyond picking a worker count, the parallel path:
 
 - **Schedules largest-first**, so big files start early and small ones fill the gaps at
   the end.
-- **Throttles for real** — when memory pressure exceeds `--parallel-memory-limit`
+- **Throttles submissions** when memory pressure exceeds `--parallel-memory-limit`
   (85% by default), new submissions are deferred until in-flight work finishes and memory
-  drops back. Once pressure eases the pool refills to its full size, and each file of a
-  refill is projected on top of the ones submitted just before it, which have not grown
-  the process yet.
+  drops back. Estimates include newly submitted files when refilling the pool.
 - **Recalibrates** after the first file completes, blending the measured memory-per-file
   ratio into the estimate for the rest.
 - **Reads the field-mappings config once** and hands each worker a copy, rather than
   re-reading it per worker.
 - **Rebuilds the table between files**, so each input is typed by its own events. See
-  [Internals → Typing and collation](Internals.md#typing-and-collation) for why sharing a
-  schema across files silently costs detections.
+  [Internals → Typing and collation](Internals.md#typing-and-collation).
 - **Writes results as each file completes**, except in `--csv` mode, where the header has
-  to cover every column and results are therefore buffered to the end.
+  to cover every result column. CSV rows are spooled until the header is known, or retained
+  in memory when templates or packaging also need them.
 
 ### The streaming pipeline
 
@@ -389,8 +398,9 @@ organised across files — see [Internals → Processing modes](Internals.md#pro
 `--keepflat` writes the flattened events to `flattened_events_<RAND>.json` in the working
 directory as they are processed. The contents are JSONL — one event per line — despite the
 extension. It contains only events that were actually processed: anything dropped by early
-event filtering or by `--after`/`--before` is not there. Combine with `--no-event-filter`
-to capture everything.
+event filtering or by `--after`/`--before` is not there. To retain every successfully read
+event from the selected files, use `--no-event-filter` and remove time bounds from both
+the command line and run configuration.
 
 ### Memory usage
 
@@ -400,9 +410,8 @@ process tree is also sampled every 100 ms; peaks shorter than that can be missed
 tree whose descendants cannot be inspected is reported as incomplete. Per-file mode
 releases each database after use; parallel runs hold several worker databases at once.
 
-Other ways to go faster: let auto-mode do its work, use [file filters](#file-filters) to
-skip irrelevant files, drop `--no-recursion` in when you do not need subdirectories, and
-leave early event filtering on.
+Use [file filters](#file-filters) to skip irrelevant files and `--no-recursion` to exclude
+subdirectories. Early event filtering reduces the events loaded into each database.
 
 ### Early event filtering
 
@@ -413,7 +422,7 @@ and **EventID**, so only events that could match some rule's log source are load
 `event_filter.filter_all_sources` is set. Every other format (EVTX, JSON, JSON array, CSV,
 XML and EVTXtract) goes through the filter, because any of them can carry Windows-shaped
 events. A saved database (`--db-input`) skips ingestion altogether, so it is never
-filtered. An event with no usable Channel is kept.
+filtered. In per-channel mode, an event with no usable Channel is kept.
 
 The filter runs before flattening, so it reads Channel and EventID from the raw event
 through `event_filter.channel_fields` and `eventid_fields`, not from the columns the
@@ -421,11 +430,19 @@ rules query. When an event carries several of those fields with different values
 top-level `Channel` next to `winlog.channel`, say), the flattener decides which one lands
 in the column, so the filter treats the value as unusable and keeps the event.
 
+Whether those paths can be trusted is decided once, from the configuration. The filter
+is turned off, with a log line naming the cause, when a mapping from another path, an
+alias or an active transform can write Channel or EventID: a transform that strips spaces
+from `" Security "`, for example, must run before a rule tests `Channel='Security'`.
+Disabled transforms, transforms for another input type and transforms on unrelated
+fields leave the filter on. Split keys and unmapped nested fields that happen to be
+named Channel or EventID are not considered; use `--no-event-filter` if your data
+relies on them.
+
 > [!IMPORTANT]
-> The filter only engages when the ruleset yields channels. The shipped Windows rulesets
-> bound over 99% of their rules, but **no rule in `rules_linux*.json` names a channel**, so
-> with a Linux ruleset the filter reports `disabled` and every event is processed. That is
-> correct behaviour, not a failure — there is simply nothing to filter on.
+> The filter only engages when the ruleset yields usable Channel or EventID bounds.
+> A rule can bound EventID without naming a channel. A ruleset without either bound
+> leaves the filter disabled and every event is processed.
 
 #### How the bounds are derived
 
@@ -446,14 +463,11 @@ detection:
     condition: selection and not filter
 ```
 
-arrives carrying `eventid: [4624]` — the one eventID it *excludes*. Read as an allow-list,
-the filter would admit only 4624, discard everything the rule is looking for, and the rule
-would report nothing while looking perfectly healthy.
+has `eventid: [4624]` metadata, although its condition excludes that ID. The filter must
+derive bounds from the SQL condition to preserve matching events.
 
-Reading the SQL means a channel is narrowed only on what can be proved. **Every
-uncertainty leaves the channel unbounded**, because a wrong bound drops events at ingest
-and costs detections, while a missing bound only costs a little speed. A channel stays
-unbounded when the rule's SQL:
+**Uncertain bounds leave the channel unbounded**, preserving events for the full rule
+query. This applies when the rule's SQL:
 
 - constrains `EventID` under a `NOT`, where the listed values are the ones it refuses;
 - has an `OR` branch that does not constrain `EventID` at all, so that branch can match
@@ -463,10 +477,8 @@ unbounded when the rule's SQL:
 - belongs to a legacy **correlation** rule, whose subquery shape is deliberately not
   second-guessed.
 
-A rule naming a channel but no eventID matches *any* eventID on that channel, so it marks
-its own channel unbounded and leaves the others alone. This is what keeps alert counts
-consistent whether you run one rule or the whole ruleset — bounding every channel by the
-union of all rules' eventIDs would drop events a channel-only rule should have seen.
+A rule naming a channel but no eventID leaves that channel unbounded without affecting
+the bounds on other channels.
 
 #### What gets discarded
 
@@ -524,18 +536,14 @@ Several options keep the data behind the detections:
   and find things the rules did not. In per-file mode each input gets its own file.
 - `--keepflat` saves the flattened events as JSONL — only the events actually processed
   (see [the streaming pipeline](#the-streaming-pipeline)).
-- `--hashes` adds an xxhash64 of the original log line to each event, for deduplication
-  and tracking.
-- **Indexes** make that database worth querying. `--add-index`, `--remove-index` and
+- **Indexes** can speed up database queries. `--add-index`, `--remove-index` and
   `--auto-index` are covered in [Usage → Database indexes](Usage.md#database-indexes).
 
 ## Filtering
 
 ### File filters
 
-Some EVTX files are never touched by Sigma rules but are large all the same —
-`Microsoft-Windows-SystemDataArchiver%4Diagnostic.evtx` is the classic example. Skipping
-them up front avoids opening and decoding them at all. Four options do it: `--select`,
+Skip files outside your analysis scope with `--select`,
 `--avoid`, `--file-pattern` and `--no-recursion` (see
 [Input files and filtering](Usage.md#input-files-and-filtering) for the exact semantics).
 
@@ -559,11 +567,9 @@ python3 zircolite.py --evtx logs/ --ruleset rules/rules_windows_merged.json --fi
 > `logs/HOST02/` — it silently excludes nothing. Use `--file-pattern`, or point `--events`
 > at the directory you actually want.
 
-You no longer need these to gain the channel-level speedup —
-[early event filtering](#early-event-filtering) derives that from the ruleset, per EventID
-as well. File filters still earn their keep by skipping a file *before it is opened*,
-which the event filter cannot do, and they are the only file-level reduction available for
-Linux and auditd input.
+File filters skip inputs before opening them. [Early event filtering](#early-event-filtering)
+instead checks Channel and EventID after reading events; it normally excludes Linux and
+auditd sources from filtering.
 
 ### Time filters
 
@@ -578,13 +584,14 @@ python3 zircolite.py --evtx logs/ --ruleset rules/rules_windows_merged.json \
 - The value must be `YYYY-MM-DDTHH:MM:SS`, 24-hour.
 - The filter reads the field named by `--timefield` (`SystemTime` by default), falling
   back to the auto-detected timestamp field when that one is absent.
-- Event timestamps are compared as instants, so epoch seconds or milliseconds, a trailing
-  `Z`, an explicit UTC offset and a space instead of `T` are all understood.
+- Event timestamps are compared as instants, so epoch seconds or milliseconds (`0`
+  included), a trailing `Z`, an explicit UTC offset and a space instead of `T` are all
+  understood.
 
 ### Rule filters
 
 Some rules are noisy or slow on a particular dataset. `-R` / `--rulefilter` skips them by
-title; repeat it for more. Comparison is **case-sensitive**, to avoid surprises:
+title; repeat it for more. Comparison is **case-sensitive**:
 
 ```shell
 python3 zircolite.py --evtx logs/ --ruleset rules/rules_windows_merged.json -R MSHTA
@@ -596,10 +603,10 @@ Rule Performance report — see
 
 ### Limiting noisy rules
 
-`--limit <N>` discards the results of any rule matching more than N events. The rule still
-runs; only its output is dropped, which is what you want when forwarding to Splunk. The
-count is **per input database** — per file by default, across the whole corpus only with
-`--unified-db`. Use `-1` to disable.
+`--limit <N>` discards the output of any rule matching more than N events, or alerts for a
+correlation rule. It does not reduce the work to evaluate the rule. The count is
+**per input database**: per file in per-file mode, across the corpus in unified mode.
+Use `-1` to disable the limit.
 
 ## Templating and Formatting
 
@@ -610,8 +617,7 @@ python3 zircolite.py --evtx sample.evtx --ruleset rules/rules_windows_merged.jso
     --template templates/exportForSplunk.tmpl --templateOutput exportForSplunk.json
 ```
 
-Pair one `--templateOutput` with each `--template` to write several at once. Two shortcuts
-save the typing:
+Pair one `--templateOutput` with each `--template` to write several at once. Shortcuts:
 
 ```shell
 python3 zircolite.py --evtx sample.evtx --ruleset rules/rules_windows_merged.json --timesketch
@@ -639,9 +645,7 @@ do not overwrite each other.
 
 ### Append mode
 
-Template output is overwritten on every run, so re-running over the same logs is
-idempotent. `--template-append` accumulates instead, which is how you build a cumulative
-feed:
+Template output is overwritten by default. Use `--template-append` to accumulate records:
 
 ```shell
 python3 zircolite.py --evtx logs/ --ruleset rules/rules_windows_merged.json \
@@ -676,20 +680,15 @@ python3 zircolite.py --evtx sample.evtx --ruleset rules/rules_windows_merged.jso
     --package --package-dir /path/to/output
 ```
 
-`--package` produces `zircogui-output-<RAND>.zip`, holding everything needed, with
-`index.html` at its root. Two things to know: a run with no detections skips package
-creation and says so, and `--package-dir` must point at a directory that already exists —
-Zircolite reports an error rather than writing the package somewhere you would not think
-to look.
+`--package` produces `zircogui-output-<RAND>.zip` with `index.html` at its root. No package
+is created when there are no detections. `--package-dir` must name an existing directory.
 
 It needs `gui/zircogui.zip` from Zircolite's own files, never from the working directory.
 From source that is the repository's `gui/`. A
 [standalone binary](Usage.md#standalone-binaries) looks in the `gui/` beside the executable
 first and then in the copy under `_internal/`, so dropping an updated `gui/zircogui.zip`
-next to the executable replaces the built-in Mini-GUI without a rebuild, and removing it
-falls back to the built-in one. Either way the executable still needs the rest of its
-package directory: the binaries are a directory with `_internal/` beside the executable,
-not a single file.
+next to the executable overrides the built-in Mini-GUI. Removing it restores the bundled
+copy. Keep the complete binary package, including `_internal/`.
 
 To build it by hand instead, render `data.js` and drop it into the unpacked archive:
 

@@ -9,6 +9,7 @@ This module provides:
 """
 
 import logging
+import os
 from dataclasses import dataclass, field, fields
 from pathlib import Path
 from typing import Any
@@ -83,12 +84,10 @@ class YamlProcessingConfig:
     """Configuration for processing options."""
     unified_db: bool = False
     auto_mode: bool = True
-    hashes: bool = False
     limit: int = DEFAULT_LIMIT
     time_field: str = DEFAULT_TIME_FIELD
     event_filter_enabled: bool = True  # Enable event filtering based on channel/eventID
     debug: bool = False
-    remove_events: bool = False
     all_transforms: bool = False
     transform_categories: list | None = None
     add_index: list[str] | None = None
@@ -286,12 +285,10 @@ class ConfigLoader:
             config.processing = YamlProcessingConfig(
                 unified_db=proc.get('unified_db', False),
                 auto_mode=proc.get('auto_mode', True),
-                hashes=proc.get('hashes', False),
                 limit=proc.get('limit', DEFAULT_LIMIT),
                 time_field=proc.get('time_field', DEFAULT_TIME_FIELD),
                 event_filter_enabled=proc.get('event_filter_enabled', True),
                 debug=proc.get('debug', False),
-                remove_events=proc.get('remove_events', False),
                 all_transforms=proc.get('all_transforms', False),
                 transform_categories=proc.get('transform_categories'),
                 add_index=proc.get('add_index'),
@@ -606,9 +603,6 @@ processing:
   # SQLite always evaluates the original predicates on the candidate rows.
   rule_prefilter: auto  # auto, 'off' or literal (force construction)
 
-  # Add an xxhash64 of the original log line to every event
-  hashes: false
-
   # Discard results from any rule matching more than this many events, which
   # keeps a single noisy rule from dominating the output. -1 disables it.
   limit: -1
@@ -624,9 +618,6 @@ processing:
 
   # Enable debug logging
   debug: false
-
-  # Delete the source log files after a successful run (use with caution!)
-  remove_events: false
 
   # Run every transform defined in config/config.yaml, ignoring its
   # enabled_transforms list
@@ -701,13 +692,24 @@ parallel:
 # These multipliers are informational; they are not configurable.
 """
 
-    target = Path(output_path)
-    if target.exists():
+    # Exclusive creation (O_CREAT|O_EXCL) makes the existence check and the
+    # open one atomic step, and on POSIX it fails on a symlink -- dangling or
+    # not -- instead of following it. A separate exists() check followed by
+    # open('w') would let someone who can write to the directory plant a
+    # symlink in between and redirect the write to a file of their choosing.
+    # Windows' CREATE_NEW still follows a dangling symlink and creates its
+    # target, so a link already at the path is refused first; planting one
+    # there takes a privilege or Developer Mode on Windows.
+    try:
+        if os.path.lexists(output_path):
+            raise FileExistsError(output_path)
+        f = open(output_path, 'x', encoding='utf-8')  # noqa: SIM115
+    except FileExistsError:
         raise FileExistsError(
             f"Refusing to overwrite existing file: {output_path}"
-        )
+        ) from None
 
-    with open(target, 'w', encoding='utf-8') as f:
+    with f:
         f.write(default_config)
 
     from .console import console, literal

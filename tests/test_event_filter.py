@@ -6,10 +6,17 @@ based on channel and eventID from loaded rules.
 """
 
 import json
+import subprocess
+import sys
+from argparse import Namespace
+from pathlib import Path
 
 import pytest
+import yaml
 
+from zircolite.config import ProcessingConfig
 from zircolite.rules import EventFilter
+from zircolite.streaming import StreamingEventProcessor
 
 
 class TestEventFilterInit:
@@ -635,7 +642,6 @@ class TestStreamingProcessorWithFilter:
         """Test that StreamingEventProcessor tracks filtered event counts."""
         from argparse import Namespace
 
-        from zircolite.config import ProcessingConfig
         from zircolite.streaming import StreamingEventProcessor
 
         # Create test JSONL file with mixed events
@@ -674,7 +680,6 @@ class TestStreamingProcessorWithFilter:
         """Test that StreamingEventProcessor processes all events without filter."""
         from argparse import Namespace
 
-        from zircolite.config import ProcessingConfig
         from zircolite.streaming import StreamingEventProcessor
 
         # Create test JSONL file
@@ -724,7 +729,6 @@ class TestConfigurableFieldPaths:
         """Test extraction from standard Event.System structure."""
         from argparse import Namespace
 
-        from zircolite.config import ProcessingConfig
         from zircolite.streaming import StreamingEventProcessor
 
         test_file = tmp_path / "test_events.json"
@@ -748,7 +752,6 @@ class TestConfigurableFieldPaths:
         """Test extraction from flat pre-flattened structure."""
         from argparse import Namespace
 
-        from zircolite.config import ProcessingConfig
         from zircolite.streaming import StreamingEventProcessor
 
         test_file = tmp_path / "test_events.json"
@@ -772,7 +775,6 @@ class TestConfigurableFieldPaths:
         """Test extraction from System at top level structure."""
         from argparse import Namespace
 
-        from zircolite.config import ProcessingConfig
         from zircolite.streaming import StreamingEventProcessor
 
         test_file = tmp_path / "test_events.json"
@@ -796,7 +798,6 @@ class TestConfigurableFieldPaths:
         """Test extraction when EventID is a dict with #text attribute."""
         from argparse import Namespace
 
-        from zircolite.config import ProcessingConfig
         from zircolite.streaming import StreamingEventProcessor
 
         test_file = tmp_path / "test_events.json"
@@ -820,7 +821,6 @@ class TestConfigurableFieldPaths:
         """Test extraction from lowercase field names."""
         from argparse import Namespace
 
-        from zircolite.config import ProcessingConfig
         from zircolite.streaming import StreamingEventProcessor
 
         test_file = tmp_path / "test_events.json"
@@ -871,7 +871,6 @@ class TestFilterReadsTheColumnsRulesSee:
     def _stream(self, event_filter, tmp_path, events):
         from argparse import Namespace
 
-        from zircolite.config import ProcessingConfig
         from zircolite.streaming import StreamingEventProcessor
 
         test_file = tmp_path / "events.json"
@@ -939,7 +938,6 @@ class TestFilterReadsTheColumnsRulesSee:
         assert processor.events_filtered_count == 1
 
     def test_shipped_config_does_not_list_source_name(self):
-        import yaml
 
         with open("config/config.yaml", encoding="utf-8") as f:
             config = yaml.safe_load(f)
@@ -1004,7 +1002,6 @@ class TestTimestampAutoDetection:
         """Test auto-detection of SystemTime field."""
         from argparse import Namespace
 
-        from zircolite.config import ProcessingConfig
         from zircolite.streaming import StreamingEventProcessor
 
         test_file = tmp_path / "test_events.json"
@@ -1037,7 +1034,6 @@ class TestTimestampAutoDetection:
         """Test auto-detection of @timestamp field (ECS format)."""
         from argparse import Namespace
 
-        from zircolite.config import ProcessingConfig
         from zircolite.streaming import StreamingEventProcessor
 
         test_file = tmp_path / "test_events.json"
@@ -1069,7 +1065,6 @@ class TestTimestampAutoDetection:
         """Test auto-detection of UtcTime field (Sysmon format)."""
         from argparse import Namespace
 
-        from zircolite.config import ProcessingConfig
         from zircolite.streaming import StreamingEventProcessor
 
         test_file = tmp_path / "test_events.json"
@@ -1099,7 +1094,6 @@ class TestTimestampAutoDetection:
         """Test that time filtering excludes events outside the range."""
         from argparse import Namespace
 
-        from zircolite.config import ProcessingConfig
         from zircolite.streaming import StreamingEventProcessor
 
         test_file = tmp_path / "test_events.json"
@@ -1181,7 +1175,6 @@ class TestEventFilterConfigKeys:
         """event_filter.enabled: false must disable filtering entirely."""
         from argparse import Namespace
 
-        from zircolite.config import ProcessingConfig
         from zircolite.streaming import StreamingEventProcessor
 
         config_file = self._write_config(tmp_path, {
@@ -1208,7 +1201,6 @@ class TestEventFilterConfigKeys:
         """With filter_all_sources false, auditd input bypasses filtering."""
         from argparse import Namespace
 
-        from zircolite.config import ProcessingConfig
         from zircolite.streaming import StreamingEventProcessor
 
         config_file = self._write_config(tmp_path, {
@@ -1231,7 +1223,6 @@ class TestEventFilterConfigKeys:
         """With filter_all_sources true, auditd input is filtered too."""
         from argparse import Namespace
 
-        from zircolite.config import ProcessingConfig
         from zircolite.streaming import StreamingEventProcessor
 
         config_file = self._write_config(tmp_path, {
@@ -1441,3 +1432,196 @@ class TestEventFilterChannelMetadataIsNotAChannel:
         event_filter = EventFilter(rulesets)
 
         assert event_filter.should_process_event("Security", 4624)
+
+
+class TestFilterFieldWriters:
+    """The filter reads Channel/EventID from their source paths, decided at startup."""
+
+    def _processor(self, config, **flags):
+        rules = [{"title": "t", "channel": ["Security"], "eventid": [4624]}]
+        return StreamingEventProcessor(config, Namespace(**flags), event_filter=EventFilter(rules))
+
+    @pytest.mark.parametrize("flags", [
+        {"evtx_input": True}, {"json_input": True}, {"xml_input": True},
+        {"evtx_input": True, "all_transforms": True},
+    ])
+    def test_default_config_keeps_the_filter(self, flags):
+        assert self._processor("config/config.yaml", **flags)._filtering_enabled
+
+    @pytest.mark.parametrize("config,writer", [
+        ({"mappings": {"Source": "Channel"}}, "the mapping 'Source' -> 'Channel'"),
+        ({"mappings": {"Event.EventData.Data": "EventID"}}, "the mapping 'Event.EventData.Data' -> 'EventID'"),
+        ({"alias": {"Source": "channel"}}, "the alias 'Source' -> 'channel'"),
+    ])
+    def test_a_config_writing_the_columns_turns_it_off(self, tmp_path, config, writer):
+        path = tmp_path / "config.json"
+        path.write_text(json.dumps(config))
+        processor = self._processor(str(path), json_input=True)
+        assert not processor._filtering_enabled
+        assert processor._filter_field_writer() == writer
+
+    def test_split_keys_are_not_considered(self, tmp_path):
+        path = tmp_path / "config.json"
+        path.write_text(json.dumps({"split": {"Payload": {"separator": ",", "equal": "="}}}))
+        source = tmp_path / "events.jsonl"
+        source.write_text('{"Channel": "Other", "Payload": "Channel=Security"}\n')
+        processor = self._processor(str(path), json_input=True)
+        assert processor._filtering_enabled
+        assert list(processor.stream_json_events(str(source))) == []
+
+
+# ---------------------------------------------------------------------------
+# Mappings and aliases that write Channel/EventID
+# ---------------------------------------------------------------------------
+
+
+ROOT = Path(__file__).resolve().parent.parent
+
+
+def run_case(tmp_path, events, query, config=None, options=()):
+    source = tmp_path / 'events.jsonl'
+    source.write_text(''.join(json.dumps(row) + '\n' for row in events))
+    rules = tmp_path / 'rules.json'
+    rules.write_text(json.dumps([{'title': 'test', 'rule': [query]}]))
+    mapping = tmp_path / 'mapping.json'
+    mapping.write_text(json.dumps(config or {}))
+    output = tmp_path / 'results.json'
+    completed = subprocess.run([
+        sys.executable, str(ROOT / 'zircolite.py'), '-e', str(source),
+        '-r', str(rules), '-c', str(mapping), '-o', str(output),
+        '-l', str(tmp_path / 'run.log'), '-j', '--quiet', *options,
+    ], cwd=tmp_path, capture_output=True, text=True, timeout=30)
+    assert completed.returncode == 0, completed.stdout + completed.stderr
+    return json.loads(output.read_text())
+
+
+@pytest.mark.parametrize('config,event', [
+    ({'mappings': {'Source': 'Channel'}}, {'Channel': 'Other', 'Source': 'Security'}),
+    ({'alias': {'Source': 'Channel'}}, {'Channel': 'Other', 'Source': 'Security'}),
+])
+def test_raw_filter_does_not_discard_a_matching_flattened_event(tmp_path, config, event):
+    query = "SELECT * FROM logs WHERE Channel='Security'"
+    control = run_case(tmp_path, [event], query, config, ('--no-event-filter',))
+    assert control[0]['count'] == 1
+    actual = run_case(tmp_path, [event], query, config)
+    assert sum(rule['count'] for rule in actual) == 1
+
+
+def test_filter_considers_synthesized_metadata_fields(tmp_path):
+    event = {'Channel': 'Other'}
+    config = {'mappings': {'OriginalLogfile': 'Channel'}}
+    query = "SELECT * FROM logs WHERE Channel='events.jsonl'"
+    assert run_case(tmp_path, [event], query, config, ('--no-event-filter',))[0]['count'] == 1
+    assert sum(r['count'] for r in run_case(tmp_path, [event], query, config)) == 1
+
+
+@pytest.mark.parametrize('field', ['Data', 'Message'])
+@pytest.mark.parametrize('data', [['Security'], {'#text': ['Security']}])
+def test_filter_considers_normalized_unnamed_event_data(tmp_path, field, data):
+    event = {'Channel': 'Other', 'Event': {'EventData': {'Data': data}}}
+    config = {'mappings': {f'Event.EventData.{field}': 'Channel'}}
+    query = "SELECT * FROM logs WHERE Channel='Security'"
+    assert run_case(tmp_path, [event], query, config, ('--no-event-filter',))[0]['count'] == 1
+    assert sum(r['count'] for r in run_case(tmp_path, [event], query, config)) == 1
+
+
+# ---------------------------------------------------------------------------
+# Transforms that change Channel/EventID
+# ---------------------------------------------------------------------------
+
+
+def write_json(path, value):
+    path.write_text(json.dumps(value))
+    return path
+
+
+def run_cli(tmp_path, source, rules, *options):
+    output = tmp_path / 'results.json'
+    completed = subprocess.run(
+        [sys.executable, str(ROOT / 'zircolite.py'), '-e', str(source),
+         '-r', str(rules), '-o', str(output), '-l', str(tmp_path / 'run.log'),
+         '--quiet', *map(str, options)],
+        cwd=tmp_path, capture_output=True, text=True, timeout=30,
+    )
+    assert completed.returncode == 0, completed.stdout + completed.stderr
+    return json.loads(output.read_text())
+
+
+def test_early_filter_preserves_matches_after_channel_transform(tmp_path):
+    config = write_json(tmp_path / 'config.json', {
+        'transforms_enabled': True,
+        'transforms': {'Channel': [{
+            'alias': False, 'source_condition': ['json_input'],
+            'code': 'def transform(param):\n    return param.strip()',
+        }]},
+    })
+    source = tmp_path / 'events.jsonl'
+    source.write_text(json.dumps({'Channel': ' Security ', 'EventID': 1}) + '\n')
+    rules = write_json(tmp_path / 'rules.json', [{
+        'title': 'match', 'rule': ["SELECT * FROM logs WHERE Channel='Security' AND EventID=1"],
+    }])
+    control = run_cli(tmp_path, source, rules, '-c', config, '-j', '--no-event-filter')
+    assert control[0]['count'] == 1
+    assert control[0]['matches'][0]['Channel'] == 'Security'
+    actual = run_cli(tmp_path, source, rules, '-c', config, '-j')
+    assert sum(rule['count'] for rule in actual) == 1
+
+
+@pytest.mark.parametrize('event,config,query', [
+    ({'EventID': 1}, {'transforms': {'EventID': [{'alias': False, 'code': 'def transform(param):\n    return 2'}]}},
+     'SELECT * FROM logs WHERE EventID=2'),
+    ({'Event': {'System': {'Channel': ' Security '}}}, {
+        'mappings': {'Event.System.Channel': 'Channel'},
+        'transforms': {'Event.System.Channel': [{'alias': False, 'code': 'def transform(param):\n    return param.strip()'}]},
+    }, "SELECT * FROM logs WHERE Channel='Security'"),
+    ({'Channel': 'Other', 'Source': 'Security'}, {
+        'transforms': {'Source': [{'alias': True, 'alias_name': 'Channel', 'code': 'def transform(param):\n    return param'}]},
+    }, "SELECT * FROM logs WHERE Channel='Security'"),
+    ({'Channel': 'Other', 'Event': {'Source': ' Security '}}, {
+        'alias': {'Event.Source': 'Channel'},
+        'transforms': {'Source': [{'alias': False, 'code': 'def transform(param):\n    return param.strip()'}]},
+    }, "SELECT * FROM logs WHERE Channel='Security'"),
+    ({'Channel': 'Other', 'Event.Source': ' Security '}, {
+        'alias': {'EventSource': 'Channel'},
+        'transforms': {'Event.Source': [{'alias': False, 'code': 'def transform(param):\n    return param.strip()'}]},
+    }, "SELECT * FROM logs WHERE Channel='Security'"),
+    ({'Channel': 'Other', 'Outer': {'Event.Source': ' Security '}}, {
+        'alias': {'EventSource': 'Channel'},
+        'transforms': {'Outer.Event.Source': [{'alias': False, 'code': 'def transform(param):\n    return param.strip()'}]},
+    }, "SELECT * FROM logs WHERE Channel='Security'"),
+])
+def test_early_filter_preserves_transformed_ids_and_aliases(tmp_path, event, config, query):
+    config['transforms_enabled'] = True
+    for specs in config['transforms'].values():
+        for spec in specs:
+            spec['source_condition'] = ['json_input']
+    mapping = write_json(tmp_path / 'config.json', config)
+    source = tmp_path / 'events.jsonl'
+    source.write_text(json.dumps(event) + '\n')
+    rules = write_json(tmp_path / 'rules.json', [{'title': 'match', 'rule': [query]}])
+    assert run_cli(tmp_path, source, rules, '-c', mapping, '-j', '--no-event-filter')[0]['count'] == 1
+    assert sum(rule['count'] for rule in run_cli(tmp_path, source, rules, '-c', mapping, '-j')) == 1
+
+
+@pytest.mark.parametrize('field,spec,enabled', [
+    ('Channel', {'alias': False}, False),
+    ('Channel', {'alias': False, 'enabled': False}, True),
+    ('Channel', {'alias': False, 'source_condition': ['auditd_input']}, True),
+    ('Channel', {'alias': True, 'alias_name': 'ChannelCopy'}, True),
+    ('Message', {'alias': False}, True),
+])
+def test_unrelated_or_inactive_transforms_keep_early_filtering(tmp_path, field, spec, enabled):
+    config = write_json(tmp_path / 'config.json', {
+        'transforms_enabled': enabled,
+        'transforms': {field: [{
+            'code': 'def transform(param):\n    return param.strip()',
+            'source_condition': ['json_input'], **spec,
+        }]},
+    })
+    source = tmp_path / 'events.jsonl'
+    source.write_text('{"Channel":"Other","Message":" text "}\n')
+    processor = StreamingEventProcessor(str(config), Namespace(json_input=True), event_filter=EventFilter([
+        {'rule': ["SELECT * FROM logs WHERE Channel='Security'"]},
+    ]))
+    assert list(processor.stream_json_events(str(source))) == []
+    assert processor.events_filtered_count == 1

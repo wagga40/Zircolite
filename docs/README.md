@@ -1,12 +1,11 @@
 # Zircolite Documentation
 
-**Zircolite** is a standalone Python 3 tool that applies SIGMA detection rules to log
-files. Rules are converted to SQLite SQL, events are flattened into an in-memory SQLite
-database, and each rule runs as a query against it.
+**Zircolite** applies Sigma detection rules to log files using SQLite. It converts rules
+to SQL and flattens events into a database, held in memory by default.
 
 It reads MS Windows EVTX (binary, XML and JSONL), Auditd, Sysmon for Linux, EVTXtract,
-CSV, XML and JSON — plain, compressed or archived — and in most cases works out which is
-which on its own.
+CSV, XML and JSON, including compressed and archived inputs. Formats are usually
+detected automatically.
 
 ## Quick start
 
@@ -18,7 +17,7 @@ pdm run python3 zircolite.py --events <logs> --ruleset rules/rules_windows_merge
 Results are written to `detected_events.json`, with a detection table and summary panel on
 the terminal. `python3 -m zircolite …` is equivalent: installing puts the package in the
 environment, so it works from any directory once that environment is active (or through
-`pdm run`, `uv run` or `poetry run`).
+`pdm run`, `uv run` or `poetry run` from the project directory).
 
 To run it without Python, download the standalone binary for your platform from the
 [releases](https://github.com/wagga40/Zircolite/releases) — see

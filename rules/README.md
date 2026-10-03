@@ -4,7 +4,9 @@
 
 These rulesets are generated from SIGMA rules using **pySigma** from the [official Sigma repository](https://github.com/SigmaHQ/sigma).
 
-:warning: **These rulesets are given "as is" to help new analysts discover SIGMA and Zircolite. They are not filtered for slow rules or high false-positive rules. If you know what you’re doing, you SHOULD generate your own rulesets.**
+> [!NOTE]
+> These rulesets are provided as-is, without filtering for runtime or false positives in
+> your environment. Review detections and select rules for your log sources.
 
 ### Windows
 
@@ -12,7 +14,8 @@ These rulesets are generated from SIGMA rules using **pySigma** from the [offici
 - `rules_windows_generic.json` — the **Windows** rules, mapped to Windows audit events (no Sysmon rewriting)
 - `rules_windows_merged.json` — both mappings, merged Windows log sources (default when `--ruleset` is omitted)
 
-`rules_windows_merged.json` covers both the Sysmon and the generic Windows channels, which is why Zircolite uses it when no `--ruleset` is given. Rules whose channel is absent from the logs are skipped before they run, so the larger ruleset costs little on logs that only carry one of them.
+Rules with provably absent channels are skipped before execution. The merged ruleset
+can therefore cover both Sysmon and generic Windows logs without running every query.
 
 ### Linux
 
@@ -37,23 +40,21 @@ The Zircolite repository, its release archives and its Docker image carry all of
 
 ## Why you should make your own rulesets
 
-The default rulesets are converted from the **Windows** and **linux** rule directories of the Sigma repository. Keep in mind:
-
-- **Some rules are very noisy or produce many false positives** depending on your environment and configuration.
-- **Some rules can be very slow** depending on your log volume and schema.
+The default SigmaHQ rulesets convert the Windows and Linux rule directories of the Sigma
+repository. False positives and runtime depend on your environment, log volume and schema.
+Use `--profile-rules` to measure runtime and `--rulefilter` to exclude rules by title.
 
 To generate your own ruleset, see the [Usage documentation](../docs/Usage.md#rulesets--rules) in the repository or the [online docs](https://wagga40.github.io/Zircolite/).
 
 A handful of rules enumerate thousands of values — *Vulnerable Driver Load*, *Shai-Hulud
 2.0 Malicious NPM Package Installation*, the emoji-evasion rules. Converted straight from
 Sigma, their SQL nests one level per value and exceeds SQLite's parser depth limit.
-Zircolite rewrites those expressions into an equivalent, shallower form at execution time,
-so they work without any action on your part.
+Zircolite retries those expressions in an equivalent, shallower form during execution.
 
-Examples of rules that may be noisy or slow:
+Examples to review for false positives or runtime on your own data:
 
-- **Suspicious Eventlog Clear or Configuration Using Wevtutil** : very noisy on fresh environments (e.g. labs), often generates useless detections
-- **Notepad Making Network Connection** : can slow execution significantly
-- **Rundll32 Internet Connection** : can be very noisy in some environments
-- **Wuauclt Network Connection** : can slow execution significantly
-- **PowerShell Network Connections** : can slow execution significantly
+- **Suspicious Eventlog Clear or Configuration Using Wevtutil**
+- **Notepad Making Network Connection**
+- **Rundll32 Internet Connection**
+- **Wuauclt Network Connection**
+- **PowerShell Network Connections**

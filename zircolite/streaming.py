@@ -9,6 +9,7 @@ This module contains the StreamingEventProcessor class for:
 """
 
 import base64
+import builtins as _py_builtins
 import codecs
 import contextlib
 import csv as csv_module
@@ -21,7 +22,8 @@ import os
 import re
 import shutil
 import tempfile
-from collections.abc import Callable, Generator
+import types
+from collections.abc import Callable, Generator, Iterable
 from functools import lru_cache, wraps
 from itertools import chain, islice
 from pathlib import Path
@@ -39,7 +41,7 @@ import orjson as json
 from evtx import PyEvtxParser
 from RestrictedPython import compile_restricted, limited_builtins, safe_builtins, utility_builtins
 from RestrictedPython.Eval import default_guarded_getiter
-from RestrictedPython.Guards import guarded_iter_unpack_sequence
+from RestrictedPython.Guards import guarded_iter_unpack_sequence, safer_getattr
 
 from .config import ProcessingConfig
 from .console import literal
@@ -53,6 +55,7 @@ from .jsonstream import iter_json_array
 from .shutdown import is_shutdown_requested
 from .utils import (
     _EXCLUDED_SENTINEL,
+    _NON_ALNUM_RE,
     COMPRESSED_SUFFIXES,
     load_field_mappings,
     open_maybe_compressed,
@@ -68,10 +71,6 @@ if TYPE_CHECKING:
 # ---------------------------------------------------------------------------
 # Module-level constants – built once, shared across all instances
 # ---------------------------------------------------------------------------
-
-# Pre-compiled regex for stripping non-alphanumeric characters
-_NON_ALNUM_RE = re.compile(r"[^a-zA-Z0-9]")
-
 
 @lru_cache(maxsize=1024)
 def _compile_transform(code: str):
@@ -107,12 +106,10 @@ _XML_READ_SIZE = 64 * 1024
 _PREDEFINED_ENTITY_REFS = {
     "amp": "&#38;", "lt": "&#60;", "gt": "&#62;", "quot": "&#34;", "apos": "&#39;",
 }
-_PREDEFINED_ENTITY_RE = re.compile(r"&(amp|lt|gt|quot|apos);")
-
-
 def _as_character_references(text: str) -> str:
-    """*text* with every predefined entity reference spelled as a character reference."""
-    return _PREDEFINED_ENTITY_RE.sub(lambda m: _PREDEFINED_ENTITY_REFS[m.group(1)], text)
+    """Rewrite entities only where XML interprets them, preserving literal sections."""
+    rewriter = _EntityReferenceRewriter("latin-1")
+    return (rewriter.feed(text.encode("utf-8")) + rewriter.flush()).decode("utf-8")
 
 
 class _EntityReferenceRewriter:
@@ -125,36 +122,55 @@ class _EntityReferenceRewriter:
 
     def __init__(self, codec: str):
         self._unit = 1 if codec == "latin-1" else 2
-        self._amp = "&".encode(codec)
         self._refs = {
             f"&{name};".encode(codec): ref.encode(codec)
             for name, ref in _PREDEFINED_ENTITY_REFS.items()
         }
-        self._pattern = re.compile(b"|".join(re.escape(ref) for ref in self._refs))
-        self._longest = max(map(len, self._refs))
+        self._sections = {
+            start.encode(codec): end.encode(codec)
+            for start, end in (("<![CDATA[", "]]>"), ("<!--", "-->"), ("<?", "?>"))
+        }
+        tokens = (*self._refs, *self._sections, *self._sections.values())
+        self._pattern = re.compile(b"|".join(re.escape(token) for token in tokens))
+        self._longest = max(map(len, tokens))
+        self._closing: bytes | None = None
         self._pending = b""
         self._offset = 0  # stream offset of self._pending[0]
 
     def feed(self, data: bytes) -> bytes:
-        data = self._pending + data
-        base, unit = self._offset, self._unit
-        end = len(data) - (base + len(data)) % unit
-        amp = data.rfind(self._amp, max(0, end - self._longest + 1), end)
-        cut = end if amp == -1 else amp - (base + amp) % unit
-        self._pending, self._offset = data[cut:], base + cut
-        return self._rewrite(data[:cut], base)
+        return self._rewrite(self._pending + data)
 
     def flush(self) -> bytes:
-        data, self._pending = self._pending, b""
-        return self._rewrite(data, self._offset)
+        return self._rewrite(self._pending, final=True)
 
-    def _rewrite(self, data: bytes, base: int) -> bytes:
-        unit, refs = self._unit, self._refs
-
-        def swap(match: re.Match) -> bytes:
-            return match.group() if (base + match.start()) % unit else refs[match.group()]
-
-        return self._pattern.sub(swap, data)
+    def _rewrite(self, data: bytes, *, final: bool = False) -> bytes:
+        # Retain enough bytes for a partial entity or markup delimiter. A whole
+        # CDATA section need not fit in memory: only its closing delimiter does.
+        end = len(data) - (self._offset + len(data)) % self._unit
+        limit = len(data) if final else max(0, end - self._longest + self._unit)
+        parts = []
+        pos = 0
+        for match in self._pattern.finditer(data):
+            if match.start() >= limit:
+                break
+            if (self._offset + match.start()) % self._unit:
+                continue
+            parts.append(data[pos:match.start()])
+            token = match.group()
+            if self._closing is not None:
+                if token == self._closing:
+                    self._closing = None
+            elif token in self._sections:
+                self._closing = self._sections[token]
+            else:
+                token = self._refs.get(token, token)
+            parts.append(token)
+            pos = match.end()
+        cut = max(pos, limit)
+        parts.append(data[pos:cut])
+        self._pending = data[cut:]
+        self._offset += cut
+        return b"".join(parts)
 
 
 def _xml_byte_layout(head: bytes) -> tuple[int, str] | None:
@@ -349,10 +365,9 @@ def marks_degraded(label: str):
     """Wrap a reader so aborting mid-file is recorded, not merely logged.
 
     A reader that catches, logs and returns leaves every caller believing the
-    file was read to the end: the event count looks healthy, the path never
-    reaches ``failed_files``, and ``--remove-events`` then deletes the only copy
-    of a log nothing ever finished analysing. Marking the run degraded is what
-    keeps that file on disk.
+    file was read to the end: the event count looks healthy and the file is
+    reported as complete. Marking the run degraded is what makes it show up as
+    partial in the performance report and in parallel-mode errors.
 
     Every reader is wrapped, so a new one inherits the guarantee rather than
     having to remember it. ``stream_evtx_events`` handles its own errors first
@@ -435,11 +450,89 @@ class _TransformSpec(NamedTuple):
 _NOOP_TRANSFORM_CODE = "def transform(param):\n    return param"
 
 
+class _SandboxModule:
+    """Read-only stand-in for a module, exposing only a vetted set of names.
+
+    Handing a transform the real module hands it everything that module
+    imported as well: ``re.enum.sys`` reaches ``sys.modules`` without a single
+    underscore, so ``safer_getattr`` lets every hop through.
+
+    Each stand-in is the only instance of its own subclass, built by
+    :func:`_sandbox_module`, which carries the vetted names as class
+    attributes: transforms run per event, and a type-dict hit is cheaper than
+    a failed lookup followed by a Python-level ``__getattr__`` call.
+    """
+
+    __slots__ = ()
+    _name = ""
+    _names: tuple[str, ...] = ()
+
+    def __getattr__(self, attr: str) -> Any:
+        # Only reached for a name the stand-in does not carry
+        raise AttributeError(f"{attr!r} is not available from {self._name!r} in transforms")
+
+    def __setattr__(self, attr: str, value: Any) -> None:
+        raise AttributeError(f"{self._name!r} is read-only in transforms")
+
+    def __delattr__(self, attr: str) -> None:
+        raise AttributeError(f"{self._name!r} is read-only in transforms")
+
+    def __dir__(self) -> list[str]:
+        return sorted(self._names)
+
+    def __repr__(self) -> str:
+        return f"<transform module {self._name!r}>"
+
+
+def _sandbox_module(module: Any, names: Iterable[str]) -> _SandboxModule:
+    attrs = {name: getattr(module, name) for name in names if hasattr(module, name)}
+    # Plain functions would bind to the stand-in as methods
+    namespace: dict[str, Any] = {
+        name: staticmethod(value) if isinstance(value, types.FunctionType) else value
+        for name, value in attrs.items()
+    }
+    namespace.update(__slots__=(), _name=module.__name__, _names=tuple(attrs))
+    stand_in: _SandboxModule = type(f"_Sandbox_{module.__name__}", (_SandboxModule,), namespace)()
+    return stand_in
+
+
+# The only modules a transform can see, whether by name or through ``import``.
+_SANDBOX_MODULES: dict[str, _SandboxModule] = {
+    "re": _sandbox_module(re, (
+        "search", "match", "fullmatch", "findall", "finditer", "sub", "subn",
+        "split", "compile", "escape", "error",
+        "A", "ASCII", "I", "IGNORECASE", "M", "MULTILINE", "S", "DOTALL",
+        "X", "VERBOSE", "U", "UNICODE", "NOFLAG",
+    )),
+    "base64": _sandbox_module(base64, (
+        "b64encode", "b64decode", "standard_b64encode", "standard_b64decode",
+        "urlsafe_b64encode", "urlsafe_b64decode", "b32encode", "b32decode",
+        "b32hexencode", "b32hexdecode", "b16encode", "b16decode",
+        "a85encode", "a85decode", "b85encode", "b85decode",
+    )),
+    "math": _sandbox_module(math, (name for name in dir(math) if not name.startswith("_"))),
+    "chardet": _sandbox_module(chardet, ("detect", "detect_all")),
+}
+
+
+def _guarded_import(name, globals=None, locals=None, fromlist=(), level=0):
+    """``__import__`` for transforms: only the sandboxed modules, never the real ones."""
+    module = _SANDBOX_MODULES.get(name) if level == 0 else None
+    if module is None:
+        raise ImportError(f"import of {name!r} is not allowed in transforms")
+    return module
+
+
 def _build_restricted_builtins() -> dict:
     """Build RestrictedPython builtins dict once at module level."""
 
-    def _default_guarded_getitem(ob, index):
-        return ob[index]
+    def _guarded_getitem(ob, index):
+        item = ob[index]
+        # Defence in depth: no container a transform can reach should hold a
+        # module (``sys.modules['os']`` is the shape of every escape).
+        if isinstance(item, types.ModuleType):
+            raise TypeError("module objects are not available in transforms")
+        return item
 
     def _safe_write_(obj):
         """Allow writes to safe container types (dict, list, set) only."""
@@ -470,20 +563,41 @@ def _build_restricted_builtins() -> dict:
     builtins = {
         "__name__": "script",
         "_getiter_": default_guarded_getiter,
-        "_getattr_": getattr,
-        "_getitem_": _default_guarded_getitem,
+        "_getitem_": _guarded_getitem,
         "_write_": _safe_write_,
         "_inplacevar_": _inplacevar_,
-        "base64": base64,
-        "math": math,
-        "re": re,
-        "chardet": chardet,
         "_iter_unpack_sequence_": guarded_iter_unpack_sequence,
     }
     builtins.update(safe_builtins)
     builtins.update(limited_builtins)
     builtins.update(utility_builtins)
+    # utility_builtins hands out the real random module, which no transform
+    # needs and which is not part of the documented sandbox.
+    del builtins["random"], builtins["whrandom"]
+    # Pure functions RestrictedPython leaves out that the shipped transforms use.
+    for name in ("all", "any", "dict", "enumerate", "filter", "iter", "map",
+                 "max", "min", "next", "reversed", "sum"):
+        builtins.setdefault(name, getattr(_py_builtins, name))
+    # Last, so nothing above can put a real module or plain getattr back:
+    # utility_builtins carries the real ``math`` module.
+    builtins.update(_SANDBOX_MODULES)
+    builtins["_getattr_"] = safer_getattr
+    builtins["__import__"] = _guarded_import
     return builtins
+
+
+def _exec_transform(byte_code, builtins: dict) -> Any:
+    """Run compiled transform code and return its ``transform`` function, if any.
+
+    The builtins must go in as ``__builtins__``: handed to exec() as the globals
+    themselves, CPython adds the interpreter's real builtins module beside them,
+    and ``import os`` or ``open()`` resolve to the real thing. A fresh globals
+    dict per transform also keeps one transform's ``global`` writes out of the
+    next.
+    """
+    namespace: dict[str, Any] = {"__builtins__": builtins}
+    exec(byte_code, namespace)
+    return namespace.get("transform")
 
 
 # Shared builtins constant (identical for all StreamingEventProcessor
@@ -638,8 +752,8 @@ class StreamingEventProcessor:
         "field_split_list",
         "field_types",
         "flattening_info",
-        "hashes",
         "logger",
+        "rounded_integer_fields",
         # EVTX parsing strictness
         "strict_evtx",
         "time_field",
@@ -680,7 +794,6 @@ class StreamingEventProcessor:
         self.logger = logger or logging.getLogger(__name__)
         self.config_file = config_file
         self.time_field = proc.time_field
-        self.hashes = proc.hashes
         self.args_config = args_config
         self.batch_size = proc.batch_size
         kernel = select_flatten_kernel(proc.flatten_backend)
@@ -714,6 +827,8 @@ class StreamingEventProcessor:
         # matching. NOCASE on an INTEGER column costs nothing: numeric equality
         # and range comparisons are unaffected.
         self.field_types: dict = {}
+        # Fields that held an integer SQLite can only store as REAL
+        self.rounded_integer_fields: set[str] = set()
         # Leaf keys already passed through schema bookkeeping. Shares the
         # lifetime of discovered_fields (never cleared mid-instance).
         self._seen_leaf_keys: set = set()
@@ -772,6 +887,13 @@ class StreamingEventProcessor:
         self._filtering_enabled = (
             self._filtering_enabled and self._event_filter_config_enabled
         )
+        if self._filtering_enabled:
+            writer = self._filter_field_writer()
+            if writer is not None:
+                self._filtering_enabled = False
+                self.logger.info(
+                    f"[+] Event filter disabled: {writer} can change Channel or EventID"
+                )
 
         # Timestamp auto-detection state
         self._detected_time_field = None
@@ -946,6 +1068,49 @@ class StreamingEventProcessor:
         enabled = ((spec.alias_name or field_name) in self.enabled_transforms_set
                    if self.enabled_transforms_set is not None else spec.enabled)
         return enabled and (self._ignore_source_condition or self.chosen_input in spec.source_condition)
+
+    def _filter_field_writer(self) -> str | None:
+        """Name the configured field that can write Channel/EventID, if any.
+
+        The filter reads Channel and EventID from their configured source paths.
+        It is decided once here, from the configuration: a mapping from another
+        path, an alias or a transform that writes either column makes those
+        paths unreliable, so the filter is turned off rather than consulted.
+        """
+        filter_columns = {"channel", "eventid"}
+        source_paths = {
+            "channel": {".".join(path) for path in self._channel_field_paths},
+            "eventid": {".".join(path) for path in self._eventid_field_paths},
+        }
+        for raw, mapped in self.field_mappings.items():
+            column = str(mapped).lower()
+            if column in filter_columns and raw not in source_paths[column]:
+                return f"the mapping '{raw}' -> '{mapped}'"
+        for raw, alias in self.aliases.items():
+            if str(alias).lower() in filter_columns:
+                return f"the alias '{raw}' -> '{alias}'"
+        for name, specs in self._transforms_baked.items():
+            if any(spec.alias and spec.alias_name.lower() in filter_columns for spec in specs):
+                return f"a transform on '{name}'"
+            if all(spec.alias for spec in specs):
+                continue
+            # A transform can be named by a raw path or its mapped field. An
+            # ordinary alias also receives a non-alias transform's new value.
+            for raw in {name, *self.field_mappings, *self.aliases}:
+                mapped = self.field_mappings.get(raw)
+                # Any suffix can be a literal leaf key containing dots.
+                parts = raw.split(".")
+                mapped_names = (mapped,) if mapped is not None else tuple(
+                    _NON_ALNUM_RE.sub("", ".".join(parts[index:]))
+                    for index in range(len(parts))
+                )
+                for mapped in mapped_names:
+                    if name not in (raw, mapped):
+                        continue
+                    outputs = (name, mapped, self.aliases.get(raw), self.aliases.get(mapped))
+                    if any(column is not None and column.lower() in filter_columns for column in outputs):
+                        return f"a transform on '{name}'"
+        return None
 
     def _resolve_file_transforms(self):
         """Resolve python_file transforms by loading code from external files.
@@ -1210,8 +1375,8 @@ class StreamingEventProcessor:
     def ingest_degraded(self) -> bool:
         """Whether the last file failed to ingest fully.
 
-        Used to decide whether --remove-events may delete the source: a file
-        Zircolite could not read in full must survive the run.
+        A file Zircolite could not read in full is reported as partial, never
+        as a clean run with fewer events.
         """
         return self._had_parse_error or (self._skipped_records > 0)
 
@@ -1226,7 +1391,7 @@ class StreamingEventProcessor:
 
         Recovery drops the offending characters or markup and carries on, so
         the records around an error arrive incomplete rather than missing. The
-        file is marked degraded, which also keeps --remove-events off it.
+        file is marked degraded.
         """
         from lxml import etree  # type: ignore[attr-defined]
 
@@ -1251,9 +1416,7 @@ class StreamingEventProcessor:
             if byte_code is None:
                 byte_code = _compile_transform(code)
                 self.compiled_code_cache[code] = byte_code
-            transform_ns: dict[str, Any] = {}
-            exec(byte_code, self.RestrictedPython_BUILTINS, transform_ns)
-            func = transform_ns.get("transform")
+            func = _exec_transform(byte_code, self.RestrictedPython_BUILTINS)
             if func:
                 self._transform_func_cache[code] = func
             return func
@@ -1291,9 +1454,9 @@ class StreamingEventProcessor:
                 )
             return param
 
-    def _flatten_event(self, event_dict: dict, filename: str, raw_bytes: bytes | None = None) -> dict | None:
+    def _flatten_event(self, event_dict: dict, filename: str) -> dict | None:
         _join_unnamed_event_data(event_dict)
-        return self._flatten_impl(self, event_dict, filename, raw_bytes)
+        return self._flatten_impl(self, event_dict, filename)
 
     def stream_evtx_events(self, evtx_file: str) -> Generator[dict, None, None]:
         """Stream and flatten events from an EVTX file (supports .evtx inside .gz/.bz2/.zip/.7z)."""
@@ -1347,8 +1510,7 @@ class StreamingEventProcessor:
                     if not should_process(event_dict):
                         continue
 
-                    raw_bytes = raw_data.encode("utf-8") if self.hashes and isinstance(raw_data, str) else raw_data if self.hashes else None
-                    flattened = flatten(event_dict, filename, raw_bytes)
+                    flattened = flatten(event_dict, filename)
                     if flattened:
                         yield flattened
                 except Exception as e:
@@ -1407,7 +1569,7 @@ class StreamingEventProcessor:
                     # Early filter check before expensive flattening
                     if not should_process(event_dict):
                         continue
-                    flattened = flatten(event_dict, filename, line)
+                    flattened = flatten(event_dict, filename)
                     if flattened:
                         yield flattened
                 except Exception as exc:
@@ -1455,8 +1617,7 @@ class StreamingEventProcessor:
                                     del elem.getparent()[0]
                                 continue
 
-                            raw_bytes = etree.tostring(elem) if self.hashes else None
-                            flattened = flatten(event_dict, filename, raw_bytes)
+                            flattened = flatten(event_dict, filename)
                             if flattened:
                                 yield flattened
                     except Exception as exc:
@@ -1518,7 +1679,7 @@ class StreamingEventProcessor:
                     # Early filter check before expensive flattening
                     if not should_process(event_dict):
                         continue
-                    flattened = flatten(event_dict, filename, line.encode("utf-8"))
+                    flattened = flatten(event_dict, filename)
                     if flattened:
                         yield flattened
                 except Exception as exc:
@@ -1581,7 +1742,7 @@ class StreamingEventProcessor:
                     # CSV rows are already flat dicts, check filter on them directly
                     if not should_process(row):
                         continue
-                    flattened = flatten(row, filename, None)
+                    flattened = flatten(row, filename)
                     if flattened:
                         yield flattened
                 except Exception as exc:
@@ -1629,14 +1790,14 @@ class StreamingEventProcessor:
         # Stream events from parsed tree
         ns = "{http://schemas.microsoft.com/win/2004/08/events/event}"
         for event in root.getchildren():
-            if "Event" in event.tag:
+            if isinstance(event.tag, str) and (event.tag == "Event" or event.tag.endswith("}Event")):
                 try:
                     event_dict = xml_to_dict(event, ns)
                     if event_dict:
                         # Early filter check before expensive flattening
                         if not should_process(event_dict):
                             continue
-                        flattened = flatten(event_dict, filename, None)
+                        flattened = flatten(event_dict, filename)
                         if flattened:
                             yield flattened
                 except Exception as exc:
@@ -1668,7 +1829,7 @@ class StreamingEventProcessor:
             try:
                 if not should_process(event_dict):
                     return None
-                return flatten(event_dict, filename, None)
+                return flatten(event_dict, filename)
             except Exception as exc:
                 self._note_skipped_record(json_file, exc)
                 return None
@@ -1783,8 +1944,7 @@ class StreamingEventProcessor:
         except Exception as e:
             if inserted_count == 0:
                 raise
-            # The committed rows stay, but the file was not read to the end:
-            # --remove-events must not treat this as a completed ingest.
+            # The committed rows stay, but the file was not read to the end
             self._had_parse_error = True
             self.logger.error(
                 f"[red]    [-] Partial ingest of {literal(os.path.basename(log_file))}: "
@@ -1799,8 +1959,8 @@ class StreamingEventProcessor:
     def _insert_batch(self, db_connection, cursor, batch: list[dict]):
         """Insert a batch of events into the database with dynamic schema handling.
 
-        Large-integer normalization is handled upstream in ``_flatten_event``,
-        so no per-value type check is needed here.
+        Values arrive already normalized by ``_flatten_event``, so no
+        per-value type check is needed here.
         """
         if not batch:
             return
@@ -1890,7 +2050,8 @@ class StreamingEventProcessor:
         for col in columns:
             col_lower = col.lower()
             if col_lower not in db_columns:
-                sql_type = field_types.get(col, "TEXT COLLATE NOCASE")
+                canonical = self.discovered_fields.get(col_lower, col)
+                sql_type = field_types.get(canonical, "TEXT COLLATE NOCASE")
                 try:
                     cursor.execute(f"ALTER TABLE logs ADD COLUMN {_quote_identifier(col)} {sql_type}")
                     db_columns.add(col_lower)
@@ -1904,7 +2065,7 @@ class StreamingEventProcessor:
                     db_columns = self._db_columns
                     if col_lower not in db_columns:
                         self.logger.warning(
-                            f"[yellow]   [!] Could not add column '{col}' to the "
+                            f"[yellow]   [!] Could not add column '{literal(col)}' to the "
                             f"events table: {literal(exc)}[/]"
                         )
 

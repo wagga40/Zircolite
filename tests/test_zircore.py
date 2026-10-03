@@ -5,14 +5,15 @@ Tests for the ZircoliteCore class.
 import csv
 import gc
 import json
-import re
 import sqlite3
 import sys
+from contextlib import closing
 from pathlib import Path
 from typing import ClassVar
 from unittest.mock import patch
 
 import pytest
+import regex
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
@@ -370,7 +371,7 @@ class TestZircoliteCoreDatabase:
             logger=test_logger
         )
 
-        field_stmt = "'EventID' TEXT COLLATE NOCASE,\n'LargeValue' TEXT COLLATE NOCASE,\n"
+        field_stmt = "'EventID' TEXT COLLATE NOCASE,\n'LargeValue' NUMERIC COLLATE NOCASE,\n"
         zircore.create_db(field_stmt)
 
         # Insert data with large integer (exceeds SQLite INTEGER limit)
@@ -379,7 +380,7 @@ class TestZircoliteCoreDatabase:
 
         results = zircore.execute_select_query("SELECT * FROM logs")
         assert len(results) == 1
-        assert results[0]["LargeValue"] == str(large_int)
+        assert results[0]["LargeValue"] == float(large_int)
 
         zircore.close()
 
@@ -1183,9 +1184,9 @@ class TestZircoliteCoreRegexSupport:
     """Tests for regex support in SQL queries."""
 
     def test_compile_regex_returns_pattern(self):
-        """_compile_regex should return a compiled re.Pattern."""
+        """_compile_regex should return a compiled ``regex`` pattern."""
         pat = _compile_regex(r'hello.*world')
-        assert isinstance(pat, re.Pattern)
+        assert isinstance(pat, regex.Pattern)
 
     def test_compile_regex_caches(self):
         """Repeated calls with the same pattern return the same object."""
@@ -1275,6 +1276,98 @@ class TestZircoliteCoreRegexSupport:
         zircore.execute_query("INSERT INTO test VALUES ('test')")
         results = zircore.execute_select_query("SELECT * FROM test WHERE v REGEXP '[invalid'")
         assert len(results) == 0
+        zircore.close()
+
+
+class TestRegexpTimeLimit:
+    """Rule regexes run on attacker-written values and must not stall the run."""
+
+    # The pattern and the crafted command line of the shipped
+    # "Invoke-Obfuscation VAR+ Launcher" rules: under stdlib re, the time
+    # doubles with every extra ')' and 40 of them take days.
+    VAR_PLUS = (
+        r'cmd.{0,5}(?:/c|/r)(?:\s|)\"set\s[a-zA-Z]{3,6}.*(?:\{\d\}){1,}'
+        r'\\\"\s+?\-f(?:.*\)){1,}.*\"'
+    )
+
+    def test_shipped_var_plus_pattern_finishes_on_crafted_command_line(
+        self, field_mappings_file, test_logger
+    ):
+        zircore = ZircoliteCore(config=field_mappings_file, logger=test_logger)
+        zircore.execute_query("CREATE TABLE logs (CommandLine TEXT)")
+        evil = 'cmd /c"set abc{0}\\" -f' + ")" * 40
+        real = 'cmd /c"set abc{0}\\" -f(x)"'
+        zircore.db_connection.executemany(
+            "INSERT INTO logs VALUES (?)", [(evil,), (real,)]
+        )
+        sql = "SELECT * FROM logs WHERE CommandLine REGEXP '" + self.VAR_PLUS.replace("'", "''") + "'"
+
+        results = zircore.execute_select_query(sql, rule_title="VAR+")
+
+        assert [r["CommandLine"] for r in results] == [real]
+        assert not zircore.rules_in_error
+        zircore.close()
+
+    def test_runaway_regex_gives_up_and_the_rule_still_matches_other_events(
+        self, field_mappings_file, test_logger, monkeypatch
+    ):
+        """A value that exhausts the budget is a non-match, not a failed rule."""
+        import zircolite.core as core_module
+
+        monkeypatch.setattr(core_module, "REGEX_TIMEOUT_SECONDS", 0.05)
+        zircore = ZircoliteCore(config=field_mappings_file, logger=test_logger)
+        zircore.execute_query("CREATE TABLE logs (v TEXT)")
+        # (?:a|aa)+$ is exponential in both re and regex: ~fib(80) steps here
+        zircore.db_connection.executemany(
+            "INSERT INTO logs VALUES (?)", [("a" * 80 + "b",), ("aaaa",)]
+        )
+
+        results = zircore.execute_select_query(
+            "SELECT * FROM logs WHERE v REGEXP '(?:a|aa)+$'", rule_title="Runaway Rule"
+        )
+
+        assert [r["v"] for r in results] == ["aaaa"]
+        assert zircore.regex_timeouts == {"Runaway Rule": 1}
+        assert not zircore.rules_in_error
+        zircore.close()
+
+    def test_timeout_warning_quotes_the_value_as_text(self, field_mappings_file, monkeypatch):
+        """The warning must let the analyst find the event, and its text is log content."""
+        import logging
+        from unittest.mock import MagicMock
+
+        import zircolite.core as core_module
+
+        monkeypatch.setattr(core_module, "REGEX_TIMEOUT_SECONDS", 0.05)
+        logger = MagicMock(spec=logging.Logger)
+        zircore = ZircoliteCore(config=field_mappings_file, logger=logger)
+        zircore.execute_query("CREATE TABLE logs (v TEXT)")
+        evil = "[/]" + "a" * 200 + "b"
+        zircore.db_connection.execute("INSERT INTO logs VALUES (?)", (evil,))
+
+        zircore.execute_select_query(
+            "SELECT * FROM logs WHERE v REGEXP '(?:a|aa)+$'", rule_title="Rule [bold]x"
+        )
+
+        warnings = [call.args[0] for call in logger.warning.call_args_list if "regex exceeded" in call.args[0]]
+        assert len(warnings) == 1
+        assert "\\[/]" + "a" * 77 + "..." in warnings[0]
+        assert "a" * 78 not in warnings[0]
+        assert "Rule \\[bold]x" in warnings[0]
+        zircore.close()
+
+    def test_matcher_accepts_no_syntax_that_re_rejects(self, field_mappings_file, test_logger):
+        r"""``regex`` understands \p{L}; rules may still only use what ``re`` does."""
+        zircore = ZircoliteCore(config=field_mappings_file, logger=test_logger)
+        zircore.execute_query("CREATE TABLE logs (v TEXT)")
+        zircore.execute_query("INSERT INTO logs VALUES ('evil')")
+
+        results = zircore.execute_select_query(
+            r"SELECT * FROM logs WHERE v REGEXP '\p{L}+'", rule_title="PCRE Rule"
+        )
+
+        assert results == []
+        assert "invalid regex" in zircore.rules_in_error["PCRE Rule"]
         zircore.close()
 
 
@@ -2790,3 +2883,118 @@ class TestRuleCensus:
             core.close()
         assert executed == ["numeric channel"]
         assert counts == {"numeric channel": 1}
+
+
+# ---------------------------------------------------------------------------
+# Rules with several statements count each event once
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize("stream_rows", [False, True])
+@pytest.mark.parametrize("limit", [-1, 2])
+def test_overlapping_queries_count_unique_events(field_mappings_file, stream_rows, limit):
+    with closing(ZircoliteCore(field_mappings_file, ProcessingConfig(no_output=True, limit=limit))) as core:
+        core.create_db("Value INTEGER")
+        # Equal payloads still represent two distinct events.
+        core.insert_data_to_db([{"Value": 1}, {"Value": 1}])
+        result = core._execute_rule({"title": "overlap", "rule": [
+            "SELECT * FROM logs WHERE row_id=1", "SELECT * FROM logs WHERE Value=1",
+        ]}, stream_rows=stream_rows)
+        try:
+            assert result.get("count") == 2
+            assert [row["row_id"] for row in result["matches"]] == [1, 2]
+        finally:
+            if stream_rows and result:
+                result["matches"].close()
+
+
+def test_duplicates_do_not_hide_a_later_unique_match(field_mappings_file):
+    with closing(ZircoliteCore(field_mappings_file, ProcessingConfig(no_output=True, limit=2))) as core:
+        core.create_db("Value INTEGER")
+        core.insert_data_to_db([{"Value": 1}, {"Value": 2}])
+        result = core.execute_rule({"title": "overlap", "rule": [
+            "SELECT * FROM logs WHERE row_id=1",
+            "SELECT * FROM logs UNION ALL SELECT * FROM logs ORDER BY row_id",
+        ]})
+        assert result.get("count") == 2
+
+
+def test_one_overlapping_event_survives_limit_one(field_mappings_file):
+    with closing(ZircoliteCore(field_mappings_file, ProcessingConfig(no_output=True, limit=1))) as core:
+        core.create_db("Value INTEGER")
+        core.insert_data_to_db({"Value": 1})
+        rule = {"rule": ["SELECT * FROM logs", "SELECT * FROM logs WHERE Value=1"]}
+        assert core.execute_rule(rule)["count"] == 1
+        core.insert_data_to_db({"Value": 1})
+        assert core.execute_rule(rule) == {}
+
+
+def test_projection_results_without_event_identity_are_preserved(field_mappings_file):
+    with closing(ZircoliteCore(field_mappings_file, ProcessingConfig(no_output=True))) as core:
+        core.create_db("Value INTEGER")
+        result = core.execute_rule({"rule": [
+            "SELECT COUNT(*) AS n FROM logs", "SELECT COUNT(Value) AS n FROM logs",
+        ]})
+        assert result["matches"] == [{"n": 0}, {"n": 0}]
+
+
+def test_overlapping_negative_row_ids_are_deduplicated(field_mappings_file):
+    with closing(ZircoliteCore(field_mappings_file, ProcessingConfig(no_output=True))) as core:
+        core.create_db("Value INTEGER")
+        core.insert_data_to_db([{"row_id": -1, "Value": 1}, {"row_id": 1, "Value": 1}])
+        result = core.execute_rule({"rule": ["SELECT * FROM logs", "SELECT * FROM logs WHERE Value=1"]})
+        assert [row["row_id"] for row in result["matches"]] == [-1, 1]
+
+
+@pytest.mark.parametrize("stream_rows", [False, True])
+def test_failed_query_rolls_back_seen_event_ids(field_mappings_file, stream_rows):
+    with closing(ZircoliteCore(field_mappings_file, ProcessingConfig(no_output=True))) as core:
+        core.create_db("Value INTEGER")
+        core.insert_data_to_db([{"Value": i} for i in range(300)])
+        result = core._execute_rule({"title": "failure", "rule": [
+            "SELECT * FROM logs WHERE Value < 290 OR json_extract('broken', '$.x')=1",
+            "SELECT * FROM logs",
+        ]}, stream_rows=stream_rows)
+        try:
+            assert result["count"] == 300
+            assert len({row["row_id"] for row in result["matches"]}) == 300
+            assert "failure" in core.rules_in_error
+        finally:
+            if stream_rows:
+                result["matches"].close()
+
+
+# ---------------------------------------------------------------------------
+# Census pruning keeps aggregates and imported collations
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize("query", [
+    "SELECT COUNT(*) AS n FROM logs WHERE EventID=1 HAVING COUNT(*)=0",
+    "SELECT COUNT(*) AS n FROM (SELECT * FROM logs WHERE EventID=1) AS filtered",
+])
+def test_zero_count_rules_run_when_no_event_matches(field_mappings_file, query):
+    with closing(ZircoliteCore(field_mappings_file, ProcessingConfig(no_output=True))) as core:
+        core.create_db("EventID INTEGER")
+        core.insert_data_to_db({"EventID": 2})
+        core.load_ruleset_from_var([{"title": "absence", "rule": [query]}], None)
+        core.execute_ruleset("unused", keep_results=True, show_table=False, disable_progress=True)
+        assert len(core.full_results) == 1
+        assert core.full_results[0]["matches"] == [{"n": 0}]
+
+
+@pytest.mark.parametrize("collation", ["RTRIM", '"RTRIM"', "/* source collation */ RTRIM"])
+def test_saved_database_matches_use_its_collation(tmp_path, field_mappings_file, collation):
+    source = tmp_path / "events.db"
+    with closing(sqlite3.connect(source)) as db:
+        db.execute(f"CREATE TABLE logs(Channel TEXT COLLATE {collation}, EventID INTEGER)")
+        db.execute("INSERT INTO logs VALUES ('Security ', 1)")
+        db.commit()
+    with closing(ZircoliteCore(field_mappings_file, ProcessingConfig(no_output=True))) as core:
+        core.load_db_in_memory(str(source))
+        core.load_ruleset_from_var([{"title": "rtrim", "rule": [
+            "SELECT * FROM logs WHERE Channel='Security' AND EventID=1",
+        ]}], None)
+        core.execute_ruleset("unused", keep_results=True, show_table=False, disable_progress=True)
+        assert len(core.full_results) == 1
+        assert core.full_results[0]["count"] == 1

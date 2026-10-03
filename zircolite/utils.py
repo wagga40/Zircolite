@@ -15,6 +15,7 @@ import logging
 import multiprocessing
 import os
 import random
+import re
 import string
 import sys
 import threading
@@ -38,6 +39,24 @@ from .console import console, get_rich_logger
 SafeLoader = getattr(yaml, "CSafeLoader", yaml.SafeLoader)
 _EXCLUDED_SENTINEL = object()
 
+# Characters a flattened column name may keep. Field names come from log
+# content, and every export template writes them out as JSON keys.
+_NON_ALNUM_RE = re.compile(r"[^a-zA-Z0-9]")
+
+
+def _configure_csv_field_limit() -> None:
+    """Set once per interpreter, shared by detection and all ingestion workers."""
+    limit = sys.maxsize
+    while True:
+        try:
+            csv.field_size_limit(limit)
+            return
+        except OverflowError:
+            limit //= 10
+
+
+_configure_csv_field_limit()
+
 
 def safe_load(stream):
     return yaml.load(stream, Loader=SafeLoader)  # noqa: S506 -- only safe loaders
@@ -51,10 +70,24 @@ def _normalize_scalar(value):
     if isinstance(value, bool):
         return "true" if value else "false"
     if isinstance(value, int) and not -(1 << 63) <= value < (1 << 63):
-        return str(value)
+        return float(value)
     if isinstance(value, list):
         return str(value)
     return value
+
+
+def is_oversized_integer(value) -> bool:
+    """Whether *value* is a Python int SQLite cannot store as an INTEGER."""
+    return isinstance(value, int) and not isinstance(value, bool) and not -(1 << 63) <= value < (1 << 63)
+
+
+def rounded_integer_warning(fields) -> str:
+    """The one warning a run prints for integers stored as REAL."""
+    names = ", ".join(sorted(fields)[:5]) + (", ..." if len(fields) > 5 else "")
+    return (
+        f"[yellow]   [!] Integers outside the 64-bit range were stored as floating-point "
+        f"numbers and may be rounded (fields: {names})[/]"
+    )
 
 
 # Above this, an epoch number is milliseconds rather than seconds (1973-03-03).
@@ -386,7 +419,7 @@ def open_maybe_compressed(
 
         try:
             with py7zr.SevenZipFile(p, "r", password=pwd_7z) as szf:
-                names = szf.getnames()
+                names = sevenzip_members(szf)
                 if not names:
                     raise ValueError(f"7-Zip archive '{p}' contains no files")
                 if len(names) > 1:
@@ -431,6 +464,14 @@ def open_maybe_compressed(
     if text_mode:
         return open(p, mode, encoding=encoding or "utf-8", errors=errors)
     return open(p, mode)
+
+
+def sevenzip_members(archive) -> list[str]:
+    """File members of an open 7-Zip archive, without directories or macOS metadata."""
+    return [
+        info.filename for info in archive.list()
+        if not info.is_directory and not info.filename.startswith("__MACOSX/")
+    ]
 
 
 def estimate_input_size(path: Path | str) -> int:
@@ -530,6 +571,18 @@ def sanitize_value_for_csv(value: Any) -> str:
 def sanitize_row_for_csv(row: dict[str, Any]) -> dict[str, str]:
     """Return a new dict with all values sanitized for CSV output."""
     return {k: sanitize_value_for_csv(v) for k, v in row.items()}
+
+
+def write_csv_header(writer: csv.DictWriter) -> None:
+    """Write *writer*'s header row with each column name sanitized for CSV.
+
+    Use this instead of ``writeheader()``. Column names come from the logs as
+    well: split fields (``Hashes``) turn value text into keys, and a ``-D``
+    database brings its own schema. A name such as ``+HYPERLINK(...)`` is a
+    formula in the header row just as it would be in a data cell. The
+    fieldnames themselves stay raw because rows are matched to them by key.
+    """
+    writer.writerow({name: sanitize_value_for_csv(name) for name in writer.fieldnames})
 
 
 def random_suffix(length: int = 4) -> str:

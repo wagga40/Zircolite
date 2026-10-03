@@ -15,10 +15,9 @@ Dependencies live in `pyproject.toml` and `pdm.lock` only; `uv sync` and
 
 Installing also compiles `zircolite/flatten_kernel.py` into
 `zircolite._flatten_native` (see `setup.py`) when a C compiler is available.
-Rerun `pdm install` after editing `flatten_kernel.py`: a kernel built from an
-older copy is detected and ignored, so the suite would quietly run the Python
-kernel instead. CI sets `ZIRCOLITE_REQUIRE_NATIVE=1`, which turns a failed
-compile into a failed install; set it locally to get the same guarantee.
+Rerun `pdm install` after editing `flatten_kernel.py`: stale builds fall back
+to Python. Set `ZIRCOLITE_REQUIRE_NATIVE=1` to fail installation if compilation
+fails, as CI does.
 
 ## Running the tests
 
@@ -34,7 +33,7 @@ pdm run pytest --cov=zircolite --cov-report=term-missing   # with coverage
 Markers: `slow`, `integration`, `requires_lxml`, `requires_sigma`,
 `requires_py7zr`.
 
-The suite must be green before you open a pull request; CI runs it on every
+The suite must pass before you open a pull request; CI runs it on every
 push and pull request across Linux, macOS and Windows.
 
 `.forgejo/workflows/` mirrors those workflows for a self-hosted Forgejo
@@ -44,36 +43,30 @@ Forgejo ignores `.github/workflows/` entirely whenever `.forgejo/` is present.
 
 ### Test fixtures are tracked
 
-`tests/fixtures/` holds real sample logs (EVTX, auditd, Sysmon for Linux,
-EVTXtract, XML, JSON) and they are committed. The end-to-end tests that read
-them assert the fixture exists rather than skipping, because a skipped test is
-not a passing one — and tests that quietly skipped are how several silent
-ingestion bugs survived in the past. The blanket `*.evtx` / `*.log` rules in
-`.gitignore` are for user data and are negated for this directory.
+`tests/fixtures/` contains tracked sample logs (EVTX, auditd, Sysmon for Linux,
+EVTXtract, XML, JSON). Tests must fail if a required fixture is missing.
+The directory is exempt from the `*.evtx` and `*.log` ignore rules for user data.
 
 ## Linting and types
 
 ```bash
 pdm run ruff check .          # must be clean; CI fails on any finding
-pdm run ruff check --fix .    # most findings fix themselves
+pdm run ruff check --fix .    # apply available automatic fixes
 pdm run python -m mypy zircolite   # must be clean too
 ```
 
-Both are clean and both block in CI. The type check names the package, not the
-tree, and that is not a gap: `zircolite.py` is a shim over `zircolite/cli.py`,
-so every line that ships is inside the package. Naming `zircolite.py` there as
-well would abort the run rather than widen it — the script shares its name with
-the package. Keep logic out of it; `tests/test_entry_point.py` enforces that.
+Lint and type checks block CI. Type-check the `zircolite` package; the
+same-named `zircolite.py` entry point must remain a shim over `zircolite/cli.py`.
+Including both in the mypy command causes a duplicate-module error.
+`tests/test_entry_point.py` enforces the shim's scope.
 
-The rule set and its exemptions live in
-`[tool.ruff.lint]` in `pyproject.toml`, and `ruff` is pinned as a dev
-dependency — left undeclared it ran from `PATH` against whatever rule set that
-build shipped, so a regression looked exactly like an upgrade.
+Ruff's rules and exemptions are configured in `[tool.ruff.lint]` in
+`pyproject.toml`; its version is resolved through the tracked development lock.
 
 If a rule is wrong for a specific line, silence that line with a reason
 (`# noqa: S608 - values are bound parameters`) rather than widening the global
-ignore list. `ruff format` is deliberately *not* enforced: running it over this
-codebase would rewrite most of it and bury every behavioural diff.
+ignore list. `ruff format` is not enforced; keep bulk formatting separate from
+behavior changes.
 
 ## Building the standalone binary
 
@@ -128,19 +121,15 @@ gate checks.
 
 ## What matters most in this codebase
 
-Zircolite is a detection tool, so **a rule that silently matches nothing is the
-worst possible failure**: it is indistinguishable from a clean estate. When you
-touch detection or ingestion, prefer failing loudly over failing quietly.
-
-Concretely:
+Detection and ingestion errors must be distinguishable from a completed run
+with no matches:
 
 - Never swallow an exception into an empty result. If a rule cannot run, record
   it (`ZircoliteCore._note_broken_rule`) so it reaches the run summary.
-- If a reader cannot finish a file, mark the run degraded. `--remove-events`
-  deletes source files, and it spares only those reported as failed.
-- The early event filter (`EventFilter` in `zircolite/rules.py`) may only narrow
-  what it can prove. Every uncertainty must fail open — a wrong bound drops
-  events at ingest, and the rule then reports nothing while looking healthy.
+- If a reader cannot finish a file, mark the run degraded, so the file is
+  reported as partial rather than as a clean run with fewer events.
+- The early event filter (`EventFilter` in `zircolite/rules.py`) must retain
+  events when a bound is uncertain, so it cannot discard potential detections.
 - Parse rule SQL with `zircolite/sqlscan.py`, never with a regex. Field names
   are backtick-quoted whenever they are not `^[a-zA-Z0-9_]*$` (every ECS name),
   and a regex also reads column names out of string literals.

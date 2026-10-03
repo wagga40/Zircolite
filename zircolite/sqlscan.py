@@ -317,6 +317,23 @@ def _typed_tokens(sql: str) -> list[tuple[str, str]]:
     return out
 
 
+@lru_cache(maxsize=128)
+def census_collations_supported(schema: str) -> bool:
+    """Whether Python's census bounds safely overestimate this table's equality.
+
+    Imported tables may use RTRIM or application collations. Their equality
+    cannot be inferred by folding case, so let SQLite evaluate every rule.
+    """
+    try:
+        tokens = _typed_tokens(schema)
+    except _Unsupported:
+        return False
+    return all(
+        _peek(tokens, i + 1)[1].upper() in ("BINARY", "NOCASE")
+        for i in range(len(tokens)) if _peek_word(tokens, i) == "COLLATE"
+    )
+
+
 def _peek(tokens: list[tuple[str, str]], pos: int) -> tuple[str, str]:
     return tokens[pos] if pos < len(tokens) else ("end", "")
 
@@ -431,6 +448,8 @@ def column_refs(sql: str) -> set[str]:
 # whole disjunction), and NOT surrenders.
 # ---------------------------------------------------------------------------
 
+_ASCII_LOWER = str.maketrans("ABCDEFGHIJKLMNOPQRSTUVWXYZ", "abcdefghijklmnopqrstuvwxyz")
+
 
 def _as_int(kind: str, text: str) -> int | None:
     """The integer a value token denotes, or None if it denotes none."""
@@ -540,7 +559,13 @@ class _FieldReader:
             if value is None:
                 value = right
             elif right is not None:
-                value &= right
+                if self.field == "channel":
+                    # SQLite NOCASE folds ASCII only. Keep the original literal
+                    # spelling while comparing bounds with the column's collation.
+                    folded = {item.translate(_ASCII_LOWER) for item in right}
+                    value = {item for item in value if item.translate(_ASCII_LOWER) in folded}
+                else:
+                    value &= right
         return value, pos
 
     def _or(self, tokens: list[tuple[str, str]], pos: int) -> tuple[set | None, int]:
@@ -563,6 +588,9 @@ class QueryScan:
     eventids: frozenset[int] | None
     columns: frozenset[str]
     regex_patterns: tuple[str, ...]
+    # Only a direct SELECT * can be skipped solely because its input is empty.
+    # An aggregate projection can still emit one row, including COUNT(*) = 0.
+    row_preserving: bool = False
 
 
 _UNSCANNABLE = QueryScan(None, None, frozenset(), ())
@@ -659,6 +687,13 @@ def scan_query(sql: str) -> QueryScan:
         eventids=bounds(_FieldReader("eventid", _as_int)),
         columns=_column_names(tokens),
         regex_patterns=_regex_patterns(tokens),
+        row_preserving=(
+            _peek_word(tokens, 0) == "SELECT"
+            and _peek(tokens, 1) == ("punct", "*")
+            and _peek_word(tokens, 2) == "FROM"
+            and _peek(tokens, 3)[1].lower() == "logs"
+            and _peek_word(tokens, 4) == "WHERE"
+        ),
     )
     _SCANS[sql] = scan
     return scan

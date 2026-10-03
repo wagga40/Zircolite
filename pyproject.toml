@@ -1,13 +1,12 @@
 [project]
 name = "Zircolite"
-version = "4.1.0"
+version = "4.2.0"
 description = "A standalone SIGMA-based detection tool for EVTX, Auditd, Sysmon for Linux, XML, CSV and JSON logs"
 authors = [
     {name = "wagga40", email = "6437862+wagga40@users.noreply.github.com"},
 ]
 dependencies = [
     "orjson>=3.9.15",
-    "xxhash>=3.0",
     "rich>=14.2.0",
     "rich-argparse>=1.7.2",
     "chardet>=5.0,<6",
@@ -27,6 +26,8 @@ dependencies = [
     "ijson>=3.5.1",
     "pyahocorasick>=2.3.1",
     "pyroaring>=1.1.0",
+    # Rule regexes run with a CPU-time limit (zircolite/core.py, REGEX_TIMEOUT_SECONDS)
+    "regex>=2024.11.6",
 ]
 requires-python = ">=3.10"
 readme = "README.md"

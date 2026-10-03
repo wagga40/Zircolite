@@ -90,12 +90,14 @@ from zircolite.console import literal
 from zircolite.correlations import TIMESTAMP_FORMATS
 
 # Input format registry
-from zircolite.formats import DEFAULT_EXTENSION
+from zircolite.formats import ALIAS_EXTENSIONS, DEFAULT_EXTENSION, EXTENSION_FALLBACKS
 from zircolite.performance import STAGE_LABELS, aggregate_stages, write_performance_report
 
 # Processing modes and context (from the dedicated processing module)
 from zircolite.processing import (
+    OutputPathConflict,
     ProcessingContext,
+    check_output_paths,
     create_extractor,
     expand_db_path,
     process_db_input,
@@ -109,6 +111,7 @@ from zircolite.shutdown import (
     is_shutdown_requested,
     request_shutdown,
 )
+from zircolite.utils import COMPRESSED_SUFFIXES
 
 ################################################################
 # NOTE: ProcessingContext and all process_* functions live in
@@ -119,6 +122,12 @@ from zircolite.shutdown import (
 ################################################################
 # ARGUMENT PARSING
 ################################################################
+# Environment variable read for the archive password when neither
+# --archive-password nor --ask-archive-password is given. Unlike argv, the
+# environment of a process is readable only by its owner (and root).
+ARCHIVE_PASSWORD_ENV = "ZIRCOLITE_ARCHIVE_PASSWORD"  # noqa: S105 -- a variable name, not a secret
+
+
 def parse_arguments() -> argparse.Namespace:
     """Parse command line arguments."""
     if _HAS_RICH_ARGPARSE:
@@ -134,7 +143,9 @@ def parse_arguments() -> argparse.Namespace:
     logs_input_args.add_argument("-f", "--fileext", help="File extension of the log files to process", type=str)
     logs_input_args.add_argument("-fp", "--file-pattern", help="Python Glob pattern to select files (only works with directories)", type=str)
     logs_input_args.add_argument("--no-recursion", help="Search for log files only in the specified directory (disable recursive search)", action="store_true")
-    logs_input_args.add_argument("--archive-password", help="Password for encrypted ZIP or 7-Zip archives", type=str, metavar="PASSWORD")
+    archive_password_args = logs_input_args.add_mutually_exclusive_group()
+    archive_password_args.add_argument("--archive-password", help=f"Password for encrypted ZIP or 7-Zip archives. Visible to other local users in the process list: prefer --ask-archive-password or the {ARCHIVE_PASSWORD_ENV} environment variable", type=str, metavar="PASSWORD")
+    archive_password_args.add_argument("--ask-archive-password", help="Prompt for the password of encrypted ZIP or 7-Zip archives without echoing it", action="store_true")
 
     # Events filtering options
     event_args = parser.add_argument_group('🔍 EVENTS FILTERING')
@@ -175,10 +186,8 @@ def parse_arguments() -> argparse.Namespace:
         "--csv",
         "--csv-output",
         help=(
-            "Output results in CSV format (empty fields included). "
-            "The header covers every column of the events table, so a rule returning "
-            "wider rows than the ones before it does not lose fields. Rejects more "
-            "than one ruleset."
+            "Output results in CSV format, one row per matched event with every result "
+            "field as a column (empty fields included). Rejects more than one ruleset."
         ),
         action="store_true",
     )
@@ -187,8 +196,7 @@ def parse_arguments() -> argparse.Namespace:
     output_formats_args.add_argument("--profile-rules", help="Time each rule execution and print a performance report at the end", action='store_true')
     output_formats_args.add_argument("-d", "--dbfile", "--db-file", help="Save all logs to a SQLite database file", type=str)
     output_formats_args.add_argument("-l", "--logfile", "--log-file", help=f"Log file name (default: {DEFAULTS['logfile']})", default=None, type=str)
-    output_formats_args.add_argument("--hashes", help="Add xxhash64 of the original log event to each event", action='store_true')
-    output_formats_args.add_argument("-L", "--limit", "--limit-results", help=f"Discard rules matching more events than this (alerts, for a correlation rule), per input database — so per file in the default mode, and across the whole corpus with --unified-db (default: {DEFAULTS['limit']}, i.e. no limit)", type=int, default=None)
+    output_formats_args.add_argument("-L", "--limit", "--limit-results", help=f"Discard rules matching more events than this (alerts, for a correlation rule), per input database: per file in per-file mode, across the whole corpus when the run uses one database (--unified-db, or auto mode choosing it) (default: {DEFAULTS['limit']}, i.e. no limit)", type=int, default=None)
 
     # Advanced configuration options
     config_formats_args = parser.add_argument_group('⚙️  ADVANCED CONFIGURATION')
@@ -197,13 +205,11 @@ def parse_arguments() -> argparse.Namespace:
     config_formats_args.add_argument("-q", "--quiet", help="Quiet mode: suppress banner, progress, and info messages. Only the summary panel and errors are shown.", action='store_true')
     config_formats_args.add_argument("--debug", help="Enable debug logging", action='store_true')
     config_formats_args.add_argument("-n", "--nolog", "--no-log", help="Don't create the log file or the detections output file (files requested explicitly with --template, --dbfile, --keepflat or --package are still written)", action='store_true')
-    config_formats_args.add_argument("-RE", "--remove-events", help="Remove input log files that were read successfully; files that failed to parse are kept (use with caution)", action='store_true')
     config_formats_args.add_argument("-U", "--update-rules", help="Update rulesets in the 'rules' directory", action='store_true')
     config_formats_args.add_argument("-v", "--version", help="Display Zircolite version", action='store_true')
-    config_formats_args.add_argument("--timefield", "--time-field", help="Specify time field name for time filtering (default: 'SystemTime', auto-detects if not found)", type=str, default=None)
+    config_formats_args.add_argument("--timefield", "--time-field", help="Field holding the event timestamp, after field mappings. Left unset it is auto-detected, falling back to 'SystemTime'; naming one pins it", type=str, default=None)
     config_formats_args.add_argument("--unified-db", "--all-in-one", help="Force unified database mode (all files in one DB, enables cross-file correlation)", action='store_true')
     config_formats_args.add_argument("--no-auto-mode", help="Disable automatic processing mode selection based on file analysis", action='store_true')
-    config_formats_args.add_argument("--no-auto-detect", help="Disable automatic log type and timestamp detection (use explicit format flags instead)", action='store_true')
     config_formats_args.add_argument("--strict", help="Strict EVTX parsing: stop on corrupted or malformed chunks instead of skipping them. Forces sequential processing (default: lenient, recovers as many events as possible)", action='store_true')
     config_formats_args.add_argument("--add-index", help="Create an index on the given column(s). Can be repeated or list multiple columns (e.g. --add-index Channel EventID).", action='append', nargs='+', metavar="COL", default=None)
     config_formats_args.add_argument("--remove-index", help="Drop the given index name(s) after creation. Can be repeated or list multiple (e.g. --remove-index idx_channel idx_eventid).", action='append', nargs='+', metavar="IDX", default=None)
@@ -246,6 +252,37 @@ def parse_arguments() -> argparse.Namespace:
     templating_formats_args.add_argument("--package-dir", help="Directory to save the ZircoGui/Mini GUI package", type=str, default=None)
 
     return parser.parse_args()
+
+
+def resolve_archive_password(
+    args: argparse.Namespace, logger: logging.Logger
+) -> None:
+    """Fill ``args.archive_password`` from the first channel that has one.
+
+    Order: ``--archive-password`` (kept for compatibility, with a warning,
+    since argv is world-readable through /proc and ps and lands in shell
+    history), then ``--ask-archive-password`` (an interactive prompt), then
+    the :data:`ARCHIVE_PASSWORD_ENV` environment variable. Records which
+    one was used in ``args.archive_unlock_channel``.
+    """
+    if getattr(args, 'archive_password', None) is not None:
+        args.archive_unlock_channel = "argv"
+        logger.warning(
+            "[!] --archive-password exposes the password to other local users "
+            "through the process list and keeps it in shell history. Prefer "
+            f"--ask-archive-password or the {ARCHIVE_PASSWORD_ENV} environment variable."
+        )
+        return
+    if getattr(args, 'ask_archive_password', False):
+        import getpass
+
+        args.archive_password = getpass.getpass("Archive password: ") or None
+        args.archive_unlock_channel = "prompt"
+        return
+    from_env = os.environ.get(ARCHIVE_PASSWORD_ENV)
+    if from_env:
+        args.archive_password = from_env
+        args.archive_unlock_channel = "env"
 
 
 ################################################################
@@ -303,15 +340,30 @@ def discover_files(
     log_path = Path(args.evtx)
     log_list: list[Path] = []
     if log_path.is_dir():
-        pattern = args.file_pattern or f"*.{args.fileext}"
         fn_glob = log_path.rglob if not args.no_recursion else log_path.glob
-        log_list = list(fn_glob(pattern))
-        if not log_list and not explicit_ext and not args.file_pattern:
+        if args.file_pattern or explicit_ext:
+            pattern = args.file_pattern or f"*.{args.fileext}"
+            log_list = [p for p in fn_glob(pattern) if p.is_file()]
+        else:
+            spec = format_from_args(args)
+            extensions = {f".{args.fileext}"}
+            extensions.update(
+                ext for ext in ALIAS_EXTENSIONS
+                if EXTENSION_FALLBACKS[ext].format_name == spec.name
+            )
+            suffixes = tuple(
+                ext + compression
+                for ext in extensions
+                for compression in ("", *COMPRESSED_SUFFIXES)
+            )
+            candidates = [p for p in fn_glob("*") if p.is_file()]
+            log_list = [p for p in candidates if p.name.lower().endswith(suffixes)]
             # The extension is only a guess until auto-detection has run, so an
             # empty result here usually means the directory holds another
             # format. Widen to every file so detection gets something to look
-            # at; the caller re-discovers with the detected extension after.
-            log_list = [p for p in fn_glob("*") if p.is_file()]
+            # at; the caller re-discovers with the detected format's suffixes.
+            if not log_list:
+                log_list = candidates
     elif log_path.is_file():
         log_list = [log_path]
     else:
@@ -332,10 +384,19 @@ def get_input_type(args: argparse.Namespace) -> str:
 _TIMEFIELD_SANITIZE_RE = re.compile(r"[^a-zA-Z0-9]")
 
 
+def _mapped_timestamp_field(
+    field: str, config: dict | None, *, raw: bool, path: str | None = None,
+) -> str:
+    """Map raw timestamp names while preserving conventional flattened names."""
+    mapped = (config or {}).get("mappings", {}).get(path or field) if path or raw else None
+    return mapped if mapped is not None else _TIMEFIELD_SANITIZE_RE.sub("", field)
+
+
 def _apply_detection_result(
     args: argparse.Namespace,
     detection: "DetectionResult",
     logger: logging.Logger,
+    field_mappings_config: dict | None = None,
 ) -> str:
     """
     Apply a DetectionResult to the args namespace and return the input_type.
@@ -357,11 +418,12 @@ def _apply_detection_result(
         setattr(args, spec.args_flag, True)
 
     # Update timefield if detection found a timestamp and user didn't override.
-    # The streaming processor strips non-alphanumeric characters from field
-    # names (e.g. "@timestamp" → "timestamp") when storing events in SQLite,
-    # so the timefield must be sanitized the same way to match the column name.
+    # Explicit mappings take precedence over the flattener's name sanitization.
     if detection.timestamp_field and not _is_explicit(args, "timefield", "SystemTime"):
-        args.timefield = _TIMEFIELD_SANITIZE_RE.sub("", detection.timestamp_field)
+        args.timefield = _mapped_timestamp_field(
+            detection.timestamp_field, field_mappings_config,
+            raw=detection.timestamp_field_is_raw, path=detection.timestamp_field_path,
+        )
 
     return input_type
 
@@ -389,12 +451,6 @@ def auto_detect_log_type(
     if _has_explicit_format_flag(args):
         input_type = get_input_type(args)
         logger.debug(f"Using explicit format flag: {input_type}")
-        return input_type
-
-    # If auto-detect is disabled, fall back to flag-based detection
-    if getattr(args, 'no_auto_detect', False):
-        input_type = get_input_type(args)
-        logger.debug(f"Auto-detect disabled, using default: {input_type}")
         return input_type
 
     # Load timestamp detection fields from config if available
@@ -437,7 +493,8 @@ def auto_detect_log_type(
     if detection.details:
         logger.debug(f"    Detection details: {detection.details}")
     if detection.timestamp_field:
-        logger.info(f"[+] Auto-detected timestamp field: [cyan]{detection.timestamp_field}[/]")
+        # The name can come from the log's own keys, so it is evidence.
+        logger.info(f"[+] Auto-detected timestamp field: [cyan]{literal(detection.timestamp_field)}[/]")
     if detection.suggested_pipeline:
         logger.debug(f"    Suggested pipeline: {detection.suggested_pipeline}")
 
@@ -448,7 +505,7 @@ def auto_detect_log_type(
         )
 
     # Apply detection result to args
-    input_type = _apply_detection_result(args, detection, logger)
+    input_type = _apply_detection_result(args, detection, logger, field_mappings_config)
 
     # If detection changed the format from default, update the file extension
     # for directory scanning (re-discover files if needed)
@@ -610,33 +667,6 @@ def handle_templating(
                 )
                 succeeded = False
     return succeeded
-
-
-def cleanup(
-    args: argparse.Namespace,
-    logger: logging.Logger,
-    log_list: list[Path] | None = None,
-    failed: set[str] | None = None,
-) -> None:
-    """Remove the original event files, as ``--remove-events`` asks.
-
-    Files whose ingestion failed are kept: their events are absent from the
-    results, so deleting them would destroy evidence nothing ever analysed.
-    """
-    if args.remove_events and log_list:
-        logger.info("[+] Cleaning")
-        failed = failed or set()
-        for evtx in log_list:
-            if str(evtx) in failed:
-                logger.warning(
-                    f"[yellow]   [!] Keeping {evtx}: it failed to process, so its "
-                    "events are not in the results[/]"
-                )
-                continue
-            try:
-                os.remove(evtx)
-            except OSError as e:
-                logger.error(f"[red]    [-] Cannot remove file {literal(e)}[/]")
 
 
 def collapse_results_by_rule(all_results: list[Any]) -> list[dict[str, Any]]:
@@ -893,16 +923,20 @@ def _warn_ignored_db_flags(
         ignored.append("--add-index")
     if getattr(args, 'remove_index', None):
         ignored.append("--remove-index")
-    if getattr(args, 'hashes', False):
-        ignored.append("--hashes")
     if getattr(args, 'keepflat', False):
         ignored.append("--keepflat")
     if getattr(args, 'dbfile', None):
         ignored.append("--dbfile")
     if getattr(args, 'strict', False):
         ignored.append("--strict")
+    # A password taken from the environment was not asked for on this run,
+    # so it is not reported as an ignored flag.
     if getattr(args, 'archive_password', None):
-        ignored.append("--archive-password")
+        channel = getattr(args, "archive_unlock_channel", "argv")
+        if channel == "argv":
+            ignored.append("--archive-password")
+        elif channel == "prompt":
+            ignored.append("--ask-archive-password")
     if getattr(args, 'no_event_filter', False):
         ignored.append("--no-event-filter")
     if getattr(args, 'logs_encoding', None):
@@ -936,6 +970,11 @@ def _warn_correlations_across_databases(count: int, databases: int, logger: logg
         )
 
 
+def _template_outputs(args: argparse.Namespace) -> list[str]:
+    """Every -T path, including the ones --timesketch and --navigator-output add."""
+    return [output for spec in args.templateOutput or () for output in spec]
+
+
 def _run_processing(
     ctx: ProcessingContext,
     args: argparse.Namespace,
@@ -967,6 +1006,7 @@ def _run_processing(
     if args.db_input:
         _warn_ignored_db_flags(args, logger)
         db_files = expand_db_path(Path(args.evtx), args, logger)
+        check_output_paths(_template_outputs(args), db_files, "Template output")
         _warn_correlations_across_databases(correlations, len(db_files), logger)
         ctx.parent_metrics.data["seconds"]["setup"] += time.perf_counter() - phase_setup_end
         zircolite_core, all_results = process_db_input(ctx, args, file_list=db_files)
@@ -990,7 +1030,7 @@ def _run_processing(
     log_list = file_list
 
     # Auto-detect log type
-    if not is_quiet() and not _has_explicit_format_flag(args) and not getattr(args, 'no_auto_detect', False):
+    if not is_quiet() and not _has_explicit_format_flag(args):
         with console.status("[bold cyan]Auto-detecting log type...", spinner="dots"):
             input_type = auto_detect_log_type(file_list, args, logger, field_mappings_config)
     else:
@@ -1008,9 +1048,10 @@ def _run_processing(
             if len(file_list) != old_count:
                 logger.info(
                     f"[+] Re-discovered [yellow]{len(file_list)}[/] file(s) "
-                    f"with extension '.{new_ext}'"
+                    f"for input format '{input_type}'"
                 )
 
+    check_output_paths(_template_outputs(args), file_list, "Template output")
     ctx.time_field = args.timefield
 
     # DB input mode (auto-detected SQLite file)
@@ -1241,6 +1282,7 @@ def _main(memory_tracker, start_time) -> None:
     # Resolve CLI arguments against the YAML configuration file, if any. This
     # also applies the built-in defaults, so it must run even without -Y.
     args = resolve_run_config(args, logger)
+    resolve_archive_password(args, logger)
 
     # Apply --timesketch shortcut
     if getattr(args, 'timesketch', False):
@@ -1288,7 +1330,6 @@ def _main(memory_tracker, start_time) -> None:
         args.evtx
         and not _is_explicit(args, "timefield", "SystemTime")
         and not _has_explicit_format_flag(args)
-        and not getattr(args, 'no_auto_detect', False)
         and Path(args.evtx).exists()
     ):
         try:
@@ -1316,8 +1357,9 @@ def _main(memory_tracker, start_time) -> None:
             args._early_detection = _detection
             args._early_detection_files = _early_files
             if _detection.timestamp_field:
-                args.timefield = _TIMEFIELD_SANITIZE_RE.sub(
-                    "", _detection.timestamp_field
+                args.timefield = _mapped_timestamp_field(
+                    _detection.timestamp_field, _fm,
+                    raw=_detection.timestamp_field_is_raw, path=_detection.timestamp_field_path,
                 )
 
     # Load rulesets (with spinner for visual feedback during pySigma conversion)
@@ -1568,7 +1610,6 @@ def _main(memory_tracker, start_time) -> None:
         limit=args.limit,
         csv_mode=args.csv,
         time_field=args.timefield,
-        hashes=args.hashes,
         db_location=":memory:",
         delimiter=args.csv_delimiter,
         rulesets=rulesets_manager.rulesets,
@@ -1623,6 +1664,10 @@ def _main(memory_tracker, start_time) -> None:
                 templating_ok = handle_templating(ctx, all_results, args)
             finally:
                 finalization_seconds += time.perf_counter() - finalization_start
+    except OutputPathConflict as exc:
+        processing_failed = True
+        print_error_panel("Invalid Output Path", literal(exc), "Write the output to a separate file.")
+        sys.exit(2)
     except StrictParseError as e:
         strict_error = str(e)
     except KeyboardInterrupt:
@@ -1632,21 +1677,6 @@ def _main(memory_tracker, start_time) -> None:
         raise
     finally:
         finalization_start = time.perf_counter()
-        try:
-            # An interrupted run stops at the next checkpoint and returns
-            # normally, so log_list still names every discovered file -- including
-            # the ones nothing opened. Deleting those would destroy evidence that
-            # never reached the results.
-            if is_shutdown_requested():
-                if args.remove_events and log_list:
-                    logger.warning(
-                        "[yellow]   [!] Keeping the input files: the run was "
-                        "interrupted, so not every event was analysed[/]"
-                    )
-            else:
-                cleanup(args, logger, log_list, failed=ctx.failed_files)
-        except Exception as e:
-            logger.debug(f"Cleanup: {e}")
         if zircolite_core is not None:
             try:
                 zircolite_core.close()
@@ -1654,7 +1684,7 @@ def _main(memory_tracker, start_time) -> None:
                 logger.debug(f"Core close: {e}")
         finalization_seconds += time.perf_counter() - finalization_start
         memory_tracker.stop()
-        status = "interrupted" if is_shutdown_requested() else "failed" if strict_error is not None or processing_failed or not templating_ok else "partial" if ctx.failed_files or any(record["status"] in ("partial", "failed", "running") for record in ctx.performance_files) else "complete"
+        status = "interrupted" if is_shutdown_requested() else "failed" if strict_error is not None or processing_failed or not templating_ok else "partial" if any(record["status"] in ("partial", "failed", "running") for record in ctx.performance_files) else "complete"
         stages = aggregate_stages([*ctx.performance_files, ctx.parent_metrics.data])
         stages["setup"] += setup_seconds
         stages["finalization"] += finalization_seconds

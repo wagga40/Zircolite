@@ -11,10 +11,18 @@ name: external_tests
 # see the same filesystem.
 #
 # Host requirements are listed in .forgejo/README.md.
+#
+# No pull_request trigger. A host-mode job runs as the runner user, on a host
+# that is not wiped between jobs and whose Docker daemon is root-equivalent, so
+# a pull request's code must never reach it: that would hand whoever opened the
+# PR the runner host, its registration file and the tokens of later push jobs.
+# Branches pushed to this repository already run it through `push`, which is
+# all a pre-flight mirror needs. A PR can add the trigger back in its own copy
+# of this file, so this is not the whole control; see "Pull requests and the
+# host runner" in .forgejo/README.md.
 
 on:
   push:
-  pull_request:
   workflow_dispatch:
 
 concurrency:
@@ -24,8 +32,15 @@ concurrency:
 jobs:
   external_tests:
     runs-on: self-hosted
+    # Guards against a pull_request trigger added back by mistake. A PR that
+    # edits this file can remove it as well, so it is not a boundary.
+    if: github.event_name != 'pull_request' && github.event_name != 'pull_request_target'
     steps:
       - uses: actions/checkout@v4
+        with:
+          # Nothing after checkout talks to git, so do not leave the automatic
+          # token in .git/config on a host that outlives the job.
+          persist-credentials: false
 
       # The harness itself only imports rich (yaml is imported lazily). Every
       # Zircolite dependency lives inside the image it builds, so installing the

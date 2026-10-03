@@ -29,7 +29,7 @@ import sys
 import tempfile
 import threading
 import time
-from contextlib import closing, contextmanager, nullcontext
+from contextlib import closing, contextmanager, nullcontext, suppress
 from copy import deepcopy
 from dataclasses import dataclass, field, fields
 from pathlib import Path
@@ -63,9 +63,11 @@ from .utils import (
     load_field_mappings,
     quit_on_error,
     random_suffix,
+    rounded_integer_warning,
     sanitize_row_for_csv,
     sanitize_value_for_csv,
     select_files,
+    write_csv_header,
 )
 
 if TYPE_CHECKING:
@@ -93,7 +95,6 @@ class ProcessingContext:
     limit: int
     csv_mode: bool
     time_field: str
-    hashes: bool
     db_location: str
     delimiter: str
     rulesets: list
@@ -126,9 +127,6 @@ class ProcessingContext:
     rule_prefilter: str = "auto"
     performance_files: list = field(default_factory=list)
     parent_metrics: FileMetrics = field(default_factory=FileMetrics, repr=False)
-    # Inputs that failed to ingest; --remove-events skips these
-    failed_files: set = field(default_factory=set)
-
     # Cached formatted time strings (computed in __post_init__)
     time_after_str: str = field(init=False, repr=False)
     time_before_str: str = field(init=False, repr=False)
@@ -158,7 +156,6 @@ def create_zircolite_core(
         time_after=ctx.time_after_str,
         time_before=ctx.time_before_str,
         time_field=ctx.time_field,
-        hashes=ctx.hashes,
         disable_progress=disable_progress,
         db_location=db_location or ctx.db_location,
         no_output=ctx.no_output if no_output is None else no_output,
@@ -188,7 +185,6 @@ def create_worker_core(ctx: ProcessingContext, worker_id: int) -> ZircoliteCore:
         time_after=ctx.time_after_str,
         time_before=ctx.time_before_str,
         time_field=ctx.time_field,
-        hashes=ctx.hashes,
         disable_progress=True,
         db_location=":memory:",
         no_output=True,
@@ -228,6 +224,35 @@ def create_extractor(
 # ============================================================================
 # HELPERS
 # ============================================================================
+
+class OutputPathConflict(ValueError):
+    """An output would replace an input selected for analysis."""
+
+
+def check_output_paths(outputs: list[str], files: list[Path], label: str) -> None:
+    """Refuse an output that names one of *files*, directly or through a link."""
+    sources = [Path(source) for source in files]
+    for name in outputs:
+        output = Path(name)
+        resolved = output.resolve()
+        output_exists = output.exists()
+        for source in sources:
+            same_file = resolved == source.resolve()
+            if not same_file and output_exists:
+                # Ingestion will report a source that disappeared.
+                with suppress(FileNotFoundError):
+                    same_file = output.samefile(source)
+            if same_file:
+                raise OutputPathConflict(
+                    f"{label} '{output}' refers to input '{source}'. "
+                    "Choose a separate output path."
+                )
+
+
+def _validate_output_path(ctx: ProcessingContext, files: list[Path]) -> None:
+    if not ctx.no_output:
+        check_output_paths([ctx.outfile], files, "Detections output")
+
 
 def _unpack_streaming_result(
     result: int | tuple[int, ...]
@@ -310,7 +335,7 @@ class _CsvResultSpool:
             with open(self.ctx.outfile, "w", encoding="utf-8", newline="") as fh:
                 writer = csv.DictWriter(fh, delimiter=self.ctx.delimiter, extrasaction="ignore",
                     fieldnames=["rule_title", "rule_description", "rule_level", "rule_count", *columns])
-                writer.writeheader()
+                write_csv_header(writer)
                 for row in self.rows:
                     writer.writerow(sanitize_row_for_csv(row))
         finally:
@@ -336,6 +361,7 @@ def process_unified_streaming(
     args: argparse.Namespace,
 ) -> tuple[Any, ...]:
     """Process all files into a single database using streaming mode."""
+    _validate_output_path(ctx, file_list)
     ctx.logger.info(
         f"[+] Loading all [yellow]{len(file_list)}[/] file(s) into a single unified database"
     )
@@ -392,7 +418,6 @@ def process_unified_streaming(
     )
     ctx.memory_tracker.sample()
 
-    ctx.failed_files |= zircolite_core.failed_files
     results = list(zircolite_core.full_results) if ctx.retain_results else summaries
     return zircolite_core, results
 
@@ -409,19 +434,22 @@ def perfile_db_paths(dbfile: str, file_list: list[Path]) -> list[Path]:
     Two inputs can share a basename (``one/events.json`` and
     ``two/events.json``), and those are disambiguated by position so the names
     stay the same from run to run: a re-run has to collide predictably rather
-    than quietly choose a different name.
+    than quietly choose a different name. Names are compared case-insensitively:
+    on macOS and Windows ``Log.json`` and ``log.json`` are the same file.
     """
     base = Path(dbfile)
     parent = base.parent
     paths: list[Path] = []
-    claimed: set[Path] = set()
+    claimed: set[str] = set()
     for index, log_file in enumerate(file_list):
         candidate = parent / f"{base.stem}_{Path(log_file).name}{base.suffix}"
-        if candidate in claimed:
+        suffix = index + 1
+        while candidate.name.casefold() in claimed:
             candidate = (
-                parent / f"{base.stem}_{index + 1}_{Path(log_file).name}{base.suffix}"
+                parent / f"{base.stem}_{suffix}_{Path(log_file).name}{base.suffix}"
             )
-        claimed.add(candidate)
+            suffix += 1
+        claimed.add(candidate.name.casefold())
         paths.append(candidate)
     return paths
 
@@ -434,6 +462,7 @@ def process_perfile_streaming(
     args: argparse.Namespace,
 ) -> tuple[Any, ...]:
     """Process each file separately using streaming mode."""
+    _validate_output_path(ctx, file_list)
     ctx.logger.info(
         f"[+] Processing [yellow]{len(file_list)}[/] file(s) separately in streaming mode"
     )
@@ -593,7 +622,6 @@ def process_perfile_streaming(
                 except OSError as exc:
                     ctx.logger.debug(f"Could not finalize JSON output: {exc}")
         finally:
-            ctx.failed_files |= zircolite_core.failed_files
             with ctx.parent_metrics.stage("finalization"):
                 zircolite_core.close()
                 if profiling_core is not None:
@@ -676,6 +704,7 @@ def process_db_input(
         db_files = [Path(f) for f in file_list]
     else:
         db_files = expand_db_path(Path(args.evtx), args, ctx.logger)
+    _validate_output_path(ctx, db_files)
     all_results: list = []
     first_file = True
     processed_any = False
@@ -702,6 +731,7 @@ def process_db_input(
                 ctx.performance_files.append(zircolite_core.metrics.data)
                 zircolite_core.load_db_in_memory(str(db_path))
             except (RuntimeError, sqlite3.Error) as e:
+                zircolite_core.metrics.data["status"] = "failed"
                 if file_list is None:
                     quit_on_error(f"[red]    [-] {e}[/]", ctx.logger)
                 ctx.logger.warning(
@@ -712,6 +742,7 @@ def process_db_input(
 
             # Warn and skip if the DB cannot be used (no connection, no 'logs' table)
             if zircolite_core.db_connection is None:
+                zircolite_core.metrics.data["status"] = "failed"
                 ctx.logger.warning(
                     f"[yellow]    [!] Could not open database '{literal(file_name)}'. Skipping.[/]"
                 )
@@ -722,11 +753,13 @@ def process_db_input(
                 _has_logs_table = _cur.fetchone() is not None
                 _cur.close()
             except Exception as e:
+                zircolite_core.metrics.data["status"] = "failed"
                 ctx.logger.warning(
                     f"[yellow]    [!] Cannot inspect database '{literal(file_name)}': {literal(e)}. Skipping.[/]"
                 )
                 continue
             if not _has_logs_table:
+                zircolite_core.metrics.data["status"] = "failed"
                 ctx.logger.warning(
                     f"[yellow]    [!] Database '{literal(file_name)}' has no 'logs' table. "
                     f"The file may be damaged (e.g. missing WAL journal). Skipping.[/]"
@@ -887,10 +920,12 @@ def process_single_file_worker(
         degraded = str(log_file) in core.failed_files
         core.failed_files.discard(str(log_file))
 
-        if event_count == 0:
-            metrics.data["status"] = "partial" if degraded else "complete"
+        # An empty but readable input still runs the rules, as it does outside
+        # parallel mode: an aggregate such as COUNT(*) = 0 can match nothing.
+        if event_count == 0 and degraded:
+            metrics.data["status"] = "partial"
             metrics.data["prefilter"].append({"requested": ctx.rule_prefilter, "reason": "no events"})
-            summary = {
+            return (0, {
                 "performance": metrics.data,
                 "name": file_name,
                 "path": str(log_file),
@@ -898,10 +933,8 @@ def process_single_file_worker(
                 "events": 0,
                 "filtered": filtered_count,
                 "time_filtered": time_filtered_count,
-            }
-            if degraded:
-                summary["error"] = "no event could be read (see the log for details)"
-            return (0, summary)
+                "error": "no event could be read (see the log for details)",
+            })
 
         core.load_ruleset_from_var(
             ruleset=ctx.rulesets, rule_filters=ctx.rule_filters
@@ -976,6 +1009,7 @@ def process_single_file_worker(
             # Workers log to a silent logger, so the warning the core emits at
             # the end of its run is discarded; carry it out for aggregation.
             "rules_in_error": dict(core.rules_in_error),
+            "rounded_integer_fields": sorted(core.rounded_integer_fields),
             "performance": core.metrics.data,
         }
         if degraded:
@@ -1154,7 +1188,7 @@ def _write_csv_results(
         writer = csv.DictWriter(
             f, delimiter=ctx.delimiter, fieldnames=fieldnames, extrasaction="ignore"
         )
-        writer.writeheader()
+        write_csv_header(writer)
         for result in all_results:
             title = result.get("title", "")
             description = sanitize_value_for_csv(result.get("description") or "")
@@ -1182,6 +1216,7 @@ def process_parallel_streaming(
     recommended_workers: int | None = None,
 ) -> tuple[Any, ...]:
     """Process files in parallel using memory-aware parallel processor."""
+    _validate_output_path(ctx, file_list)
 
     executor_kind = getattr(args, "executor", None) or "thread"
     parallel_config = ParallelConfig(
@@ -1361,9 +1396,8 @@ def process_parallel_streaming(
 
     ctx.parent_metrics.data["seconds"]["finalization"] += stats.shutdown_seconds
 
-    # Preserve sources when a worker dies before returning its summary.
+    # A worker that dies before returning its summary still gets a record.
     for path, error in stats.failed_files:
-        ctx.failed_files.add(path)
         errors.append((Path(path).name, error))
         missing_metrics = FileMetrics().data
         missing_metrics.update(sources=[str(path)], status="failed", error=str(error),
@@ -1375,8 +1409,6 @@ def process_parallel_streaming(
     for file_data in results_list:
         if isinstance(file_data, dict) and file_data.get("error"):
             errors.append((file_data.get("name", "unknown"), file_data["error"]))
-            if file_data.get("path"):
-                ctx.failed_files.add(file_data["path"])
 
     if errors:
         ctx.logger.error(f"[!] {len(errors)} file(s) failed to process:")
@@ -1386,9 +1418,13 @@ def process_parallel_streaming(
             ctx.logger.error(f"    \u2192 ... and {len(errors) - 5} more")
 
     rules_in_error: dict = {}
+    rounded_fields: set[str] = set()
     for file_data in results_list:
         if isinstance(file_data, dict):
             rules_in_error.update(file_data.get("rules_in_error") or {})
+            rounded_fields.update(file_data.get("rounded_integer_fields") or ())
+    if rounded_fields:
+        ctx.logger.warning(rounded_integer_warning(rounded_fields))
     if rules_in_error:
         names = list(rules_in_error)
         shown = ", ".join(names[:3]) + (" ..." if len(names) > 3 else "")

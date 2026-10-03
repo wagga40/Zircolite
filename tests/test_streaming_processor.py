@@ -2,26 +2,38 @@
 Tests for the StreamingEventProcessor class.
 """
 
+import csv
+import gzip
+import io
 import json
 import sqlite3
+import subprocess
 import sys
+from argparse import Namespace
+from contextlib import closing
 from pathlib import Path
 from typing import ClassVar
 from unittest.mock import MagicMock, patch
 
 import pytest
+import yaml
+from lxml import etree
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from zircolite import (
     EvtxExtractor,
     ExtractorConfig,
+    LogTypeDetector,
     ProcessingConfig,
     StreamingEventProcessor,
+    ZircoliteCore,
 )
+from zircolite.rules import EventFilter
 from zircolite.streaming import (
     _NON_ALNUM_RE,
     StrictParseError,
+    _EntityReferenceRewriter,
 )
 from zircolite.streaming import (
     _RESTRICTED_BUILTINS as STREAMING_BUILTINS,
@@ -41,7 +53,6 @@ class TestStreamingEventProcessorInit:
 
         assert processor.config_file == field_mappings_file
         assert processor.batch_size == ProcessingConfig().batch_size
-        assert processor.hashes is False
 
     def test_init_with_custom_batch_size(self, field_mappings_file, test_logger, default_args_config):
         """Test initialization with custom batch size."""
@@ -98,18 +109,6 @@ class TestStreamingEventProcessorInit:
         )
         assert (flat is not None) is kept
 
-    def test_init_with_hashes(self, field_mappings_file, test_logger, default_args_config):
-        """Test initialization with hash generation enabled."""
-        proc_config = ProcessingConfig(hashes=True)
-        processor = StreamingEventProcessor(
-            config_file=field_mappings_file,
-            args_config=default_args_config,
-            processing_config=proc_config,
-            logger=test_logger
-        )
-
-        assert processor.hashes is True
-
     def test_config_loaded(self, field_mappings_file, test_logger, default_args_config):
         """Test that configuration is properly loaded."""
         processor = StreamingEventProcessor(
@@ -157,21 +156,6 @@ class TestStreamingEventProcessorFlattening:
         # Should have discovered fields
         assert len(processor.discovered_fields) > 0
         assert len(processor.field_types) > 0
-
-    def test_flatten_with_hash(self, field_mappings_file, test_logger, default_args_config, sample_windows_event):
-        """Test flattening with hash generation."""
-        proc_config = ProcessingConfig(hashes=True)
-        processor = StreamingEventProcessor(
-            config_file=field_mappings_file,
-            args_config=default_args_config,
-            processing_config=proc_config,
-            logger=test_logger
-        )
-
-        raw_bytes = json.dumps(sample_windows_event).encode('utf-8')
-        flattened = processor._flatten_event(sample_windows_event, "test.evtx", raw_bytes)
-
-        assert "OriginalLogLinexxHash" in flattened
 
     def test_flatten_excludes_fields(self, field_mappings_file, test_logger, default_args_config):
         """Test that excluded fields are not included."""
@@ -291,10 +275,10 @@ class TestFlattenHotPathOptimizations:
         # The key is now remembered so repeat work is skipped.
         assert "EventID" in processor._seen_leaf_keys
 
-    def test_seen_key_repeat_large_int_still_stringified(
+    def test_seen_key_repeat_large_int_is_stored_as_real(
         self, field_mappings_file, test_logger, default_args_config
     ):
-        """A >int64 value on an already-seen key must still be stringified."""
+        """A >int64 value on an already-seen key still becomes a float."""
         processor = StreamingEventProcessor(
             config_file=field_mappings_file,
             args_config=default_args_config,
@@ -308,8 +292,9 @@ class TestFlattenHotPathOptimizations:
             {"Event": {"System": {"EventID": huge}}}, "t.evtx"
         )
         assert first["EventID"] == 1
-        assert second["EventID"] == str(huge)
-        assert isinstance(second["EventID"], str)
+        assert second["EventID"] == float(huge)
+        assert isinstance(second["EventID"], float)
+        assert processor.rounded_integer_fields == {"EventID"}
 
     def test_int64_min_remains_a_sqlite_integer(
         self, field_mappings_file, test_logger, default_args_config
@@ -388,6 +373,54 @@ class TestFlattenHotPathOptimizations:
         assert flat["MD5"] == "aaa"
         assert flat["SHA256"] == "bbb"
         assert flat["Hashes"] == "MD5=aaa,GARBAGE,SHA256=bbb"
+
+    # A split pair names its column from log content, and every export
+    # template writes column names out as JSON keys.
+    HOSTILE_HASHES = 'SHA1=abc,x":0}];alert(document.domain);[{"a=1'
+
+    @pytest.mark.parametrize("backend", ["python", "auto"])
+    def test_split_keys_are_sanitised_like_leaf_keys(
+        self, field_mappings_file, test_logger, default_args_config, backend
+    ):
+        processor = StreamingEventProcessor(
+            config_file=field_mappings_file,
+            args_config=default_args_config,
+            processing_config=ProcessingConfig(flatten_backend=backend),
+            logger=test_logger,
+        )
+        flat = processor._flatten_event(
+            {"Event": {"EventData": {"Hashes": self.HOSTILE_HASHES + ",=x,!!=y"}}},
+            "t.evtx",
+        )
+        assert flat["SHA1"] == "abc"
+        assert flat["x0alertdocumentdomaina"] == "1"
+        assert "" not in flat
+        assert all(_NON_ALNUM_RE.search(key) is None for key in flat)
+        assert all(_NON_ALNUM_RE.search(key) is None for key in processor.field_types)
+
+    @pytest.mark.parametrize("backend", ["python", "auto"])
+    @pytest.mark.parametrize("image_first", [True, False])
+    @pytest.mark.parametrize("spelling", ["Image", "image"])
+    def test_split_pair_cannot_replace_a_real_field(
+        self, field_mappings_file, test_logger, default_args_config,
+        backend, image_first, spelling,
+    ):
+        """A pair such as 'Image=benign.exe' inside Hashes must not replace the
+        event's real Image, or rules on the real process path would miss it."""
+        processor = StreamingEventProcessor(
+            config_file=field_mappings_file,
+            args_config=default_args_config,
+            processing_config=ProcessingConfig(flatten_backend=backend),
+            logger=test_logger,
+        )
+        image = ("Image", "C:\\evil.exe")
+        hashes = ("Hashes", f"MD5=aaa,{spelling}=C:\\benign.exe")
+        data = dict([image, hashes] if image_first else [hashes, image])
+        flat = processor._flatten_event({"Event": {"EventData": data}}, "t.evtx")
+
+        assert flat["Image"] == "C:\\evil.exe"
+        assert flat["MD5"] == "aaa"
+        assert [key for key in flat if key.lower() == "image"] == ["Image"]
 
     def test_event_filter_path_hint_reused_and_falls_back(
         self, field_mappings_file, test_logger, default_args_config
@@ -1482,7 +1515,6 @@ class TestStreamingTransformInitAndResolve:
             },
             "transform_categories": {"commandline": ["cmd_upper"]},
         }
-        import yaml
         config_path.write_text(yaml.dump(config_content))
         args = Namespace(transform_categories=["unknown_cat", "commandline"], evtx_input=True)
         processor = StreamingEventProcessor(
@@ -1831,7 +1863,6 @@ class TestStreamingEventFilter:
         self, field_mappings_file, test_logger, default_args_config, tmp_path
     ):
         """When event_filter is enabled, events not matching channel/eventID are skipped."""
-        from zircolite.rules import EventFilter
 
         ruleset = [
             {"channel": ["Microsoft-Windows-Sysmon/Operational"], "eventid": [1, 3]},
@@ -2287,9 +2318,9 @@ class TestStreamingHostileKeysAndCaseVariants:
     ):
         """A split-derived column name containing a double quote must not abort ingestion.
 
-        Top-level keys are sanitized during flattening, but keys produced by the
-        'split' feature (key=value parsing of field values, i.e. log content)
-        reach the DB layer unsanitized.
+        Keys produced by the 'split' feature (key=value parsing of field
+        values, i.e. log content) are sanitized like every other field name,
+        so the quote is dropped instead of reaching the DB layer.
         """
         processor = self._make_processor(field_mappings_file, test_logger, default_args_config)
         json_file = tmp_path / "events.json"
@@ -2304,9 +2335,37 @@ class TestStreamingHostileKeysAndCaseVariants:
 
         assert count == 1
         cursor = conn.cursor()
-        cursor.execute('SELECT "MD5", "bad""key" FROM logs')
+        cursor.execute('SELECT "MD5", "badkey" FROM logs')
         row = cursor.fetchone()
         assert row == ("abc", "x")
+        conn.close()
+
+    @pytest.mark.parametrize("pair", ["row_id=1", "row_id=9223372036854775807"])
+    def test_split_pair_cannot_write_row_id(
+        self, field_mappings_file, test_logger, default_args_config, tmp_path, pair
+    ):
+        """A 'row_id' pair must never reach the INTEGER PRIMARY KEY.
+
+        A duplicate id (UNIQUE) or 2**63-1 (AUTOINCREMENT exhausted) would fail
+        the batch and leave every other event of the file unanalysed.
+        """
+        processor = self._make_processor(field_mappings_file, test_logger, default_args_config)
+        json_file = tmp_path / "events.json"
+        events = [
+            {"EventID": 1, "Hashes": "MD5=aa"},
+            {"EventID": 1, "Hashes": pair},
+            {"EventID": 1, "Hashes": "MD5=bb"},
+        ]
+        json_file.write_text("".join(json.dumps(event) + "\n" for event in events))
+
+        conn = sqlite3.connect(":memory:")
+        processor.create_initial_table(conn)
+        count = processor.process_file_streaming(conn, str(json_file), input_type="json")
+
+        assert count == 3
+        assert conn.execute("SELECT row_id FROM logs ORDER BY row_id").fetchall() == [
+            (1,), (2,), (3,)
+        ]
         conn.close()
 
     def test_case_variant_columns_merge_values(
@@ -2965,7 +3024,6 @@ class TestMalformedInputIsolation:
         guard, so the TypeError abandoned every remaining event in the file.
         Filtering has to be genuinely active for this to exercise anything.
         """
-        from zircolite.rules import EventFilter
 
         # The bounds are read from the SQL, so a match-all query would disable
         # the filter and leave this test exercising nothing.
@@ -3016,11 +3074,9 @@ class TestMalformedInputIsolation:
 class TestIngestDegradation:
     """A file Zircolite could not read in full must be reported as such.
 
-    ``--remove-events`` deletes every source file that is absent from
-    ``failed_files``, and that set is fed from ``ingest_degraded``. A reader
-    that aborts without marking the run therefore reports a healthy event
-    count, exits 0, and deletes the only copy of a log nothing ever finished
-    analysing.
+    ``ingest_degraded`` feeds the "partial" status of the performance report
+    and the parallel-mode error list. A reader that aborts without marking the
+    run reports a healthy event count for a file nothing finished reading.
     """
 
     def _processor(self, field_mappings_file, default_args_config, test_logger):
@@ -3198,3 +3254,330 @@ class TestUnnamedEventData:
         from_json = next(iter(processor.stream_json_events(str(jsonl))))
 
         assert from_xml["Data"] == from_json["Data"] == self.JOINED
+
+
+# ---------------------------------------------------------------------------
+# CSV fields past Python's default size limit
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize("size", [131072, 131073, 1048576])
+@pytest.mark.parametrize("compressed", [False, True])
+def test_large_csv_fields_keep_following_records(tmp_path, field_mappings_file, size, compressed):
+    source = tmp_path / ("events.csv.gz" if compressed else "events.csv")
+    opener = gzip.open if compressed else open
+    value = "x" * (size - 5) + "\ntail"
+    with opener(source, "wt", encoding="utf-8", newline="") as handle:
+        csv.writer(handle).writerows([["Value"], [value], ["needle"]])
+    with closing(ZircoliteCore(field_mappings_file, ProcessingConfig(no_output=True))) as core:
+        assert core.run_streaming([source], "csv", Namespace(csv_input=True), disable_progress=True) == 2
+        assert core.execute_select_query("SELECT Value FROM logs ORDER BY row_id") == [
+            {"Value": value}, {"Value": "needle"},
+        ]
+        assert not core.failed_files
+
+
+def test_csv_detection_accepts_a_large_first_record():
+    # Use the classifier directly so its complete sample includes the large field.
+    detected = LogTypeDetector()._check_csv(
+        ["Value,Other,Third", "x" * 131073 + ",data,more"], ".log",
+    )
+    assert detected is not None
+    assert detected.input_type == "csv"
+
+
+# ---------------------------------------------------------------------------
+# Float columns compare numerically
+# ---------------------------------------------------------------------------
+
+
+ROOT = Path(__file__).resolve().parent.parent
+
+
+def run_case(tmp_path, events, query, config=None, options=()):
+    source = tmp_path / 'events.jsonl'
+    source.write_text(''.join(json.dumps(row) + '\n' for row in events))
+    rules = tmp_path / 'rules.json'
+    rules.write_text(json.dumps([{'title': 'test', 'rule': [query]}]))
+    mapping = tmp_path / 'mapping.json'
+    mapping.write_text(json.dumps(config or {}))
+    output = tmp_path / 'results.json'
+    completed = subprocess.run([
+        sys.executable, str(ROOT / 'zircolite.py'), '-e', str(source),
+        '-r', str(rules), '-c', str(mapping), '-o', str(output),
+        '-l', str(tmp_path / 'run.log'), '-j', '--quiet', *options,
+    ], cwd=tmp_path, capture_output=True, text=True, timeout=30)
+    assert completed.returncode == 0, completed.stdout + completed.stderr
+    return json.loads(output.read_text())
+
+
+def test_float_comparison_is_numeric(tmp_path):
+    control = run_case(tmp_path, [{'Duration': 0}, {'Duration': 10.5}, {'Duration': 2.5}],
+                       'SELECT * FROM logs WHERE Duration > 9')
+    assert control[0]['count'] == 1
+    actual = run_case(tmp_path, [{'Duration': 10.5}, {'Duration': 2.5}],
+                      'SELECT * FROM logs WHERE Duration > 9')
+    assert sum(rule['count'] for rule in actual) == 1
+    assert float(actual[0]['matches'][0]['Duration']) == 10.5
+
+
+@pytest.mark.parametrize('backend', ['python', 'auto'])
+@pytest.mark.parametrize('config', [{}, {'alias': {'Value': 'ValueCopy'}}])
+def test_float_first_column_preserves_later_large_integer(tmp_path, backend, config):
+    integer = 9007199254740993
+    result = run_case(tmp_path, [{'Value': 0.5}, {'Value': integer}],
+                      'SELECT * FROM logs WHERE Value > 1', config,
+                      ('--flatten-backend', backend))
+    assert result[0]['matches'][0]['Value'] == integer
+
+
+@pytest.mark.parametrize('backend', ['python', 'auto'])
+@pytest.mark.parametrize('kind', ['plain', 'alias', 'transform'])
+def test_float_storage_and_comparison_through_all_leaf_paths(tmp_path, backend, kind):
+    from argparse import Namespace
+
+    from zircolite import ProcessingConfig, StreamingEventProcessor, ZircoliteCore
+    config = {}
+    if kind == 'alias':
+        config['alias'] = {'Duration': 'DurationCopy'}
+    elif kind == 'transform':
+        config = {'transforms_enabled': True, 'transforms': {'Source': [{
+            'alias': True, 'alias_name': 'Duration', 'source_condition': ['json_input'],
+            'code': 'def transform(param):\n    return float(param)',
+        }]}}
+    mapping = tmp_path / 'mapping.json'
+    mapping.write_text(json.dumps(config))
+    core = ZircoliteCore(str(mapping), ProcessingConfig(no_output=True))
+    try:
+        processor = StreamingEventProcessor(str(mapping), Namespace(json_input=True),
+            ProcessingConfig(flatten_backend=backend))
+        processor.create_initial_table(core.db_connection)
+        key = 'Source' if kind == 'transform' else 'Duration'
+        rows = [processor._flatten_event({key: value}, 'source') for value in (10.5, 2.5)]
+        cursor = core.db_connection.cursor()
+        try:
+            processor._insert_batch(core.db_connection, cursor, rows)
+        finally:
+            cursor.close()
+        result = core.execute_select_query('SELECT Duration FROM logs WHERE Duration > 9')
+        assert result == [{'Duration': 10.5}]
+        assert core.execute_select_query('SELECT typeof(Duration) AS t FROM logs LIMIT 1') == [{'t': 'real'}]
+    finally:
+        core.close()
+
+
+# ---------------------------------------------------------------------------
+# XML annotations, CDATA and entity rewriting
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize("reader", ["xml", "evtxtract"])
+@pytest.mark.parametrize("annotation", ["<!-- export -->", "<?export source?>"])
+def test_annotations_between_events_preserve_remaining_records(
+    tmp_path, field_mappings_file, reader, annotation
+):
+    source = tmp_path / "events.xml"
+    source.write_text(
+        '<Event><System><EventID>1</EventID></System></Event>' + annotation
+        + '<Event><System><EventID>2</EventID></System></Event>'
+    )
+    processor = StreamingEventProcessor(field_mappings_file, Namespace(xml_input=True))
+    extractor = EvtxExtractor(ExtractorConfig(encoding="utf-8"))
+    events = list(getattr(processor, f"stream_{reader}_events")(str(source), extractor))
+    assert [event["EventID"] for event in events] == [1, 2]
+    assert not processor.ingest_degraded
+
+
+@pytest.mark.parametrize("reader", ["xml", "evtxtract"])
+def test_cdata_keeps_literal_entities_while_normal_text_decodes(
+    tmp_path, field_mappings_file, reader
+):
+    source = tmp_path / "events.xml"
+    source.write_text(
+        '<Event><EventData><Data Name="CommandLine">'
+        '<![CDATA[echo &amp; &gt;]]> &amp; &gt;'
+        '</Data></EventData></Event>'
+    )
+    processor = StreamingEventProcessor(field_mappings_file, Namespace(xml_input=True))
+    events = list(getattr(processor, f"stream_{reader}_events")(
+        str(source), EvtxExtractor(ExtractorConfig(encoding="utf-8"))
+    ))
+    assert events[0]["CommandLine"] == "echo &amp; &gt; & >"
+    assert not processor.ingest_degraded
+
+
+@pytest.mark.parametrize("codec", ["latin-1", "utf-16-le", "utf-16-be"])
+@pytest.mark.parametrize("chunk_size", [1, 2, 7, 17, 65536])
+def test_entity_rewriting_respects_markup_across_chunks(codec, chunk_size):
+    text = (
+        '<Event><!-- <![CDATA[ &amp; --><?export &gt;?>'
+        '<Data><![CDATA[a &amp; <!-- &gt;]]> &amp; &gt;</Data></Event>'
+    )
+    expected = (
+        '<Event><!-- <![CDATA[ &amp; --><?export &gt;?>'
+        '<Data><![CDATA[a &amp; <!-- &gt;]]> &#38; &#62;</Data></Event>'
+    )
+    rewriter = _EntityReferenceRewriter(codec)
+    source = io.BytesIO(text.encode(codec))
+    output = b""
+    while chunk := source.read(chunk_size):
+        output += rewriter.feed(chunk)
+    output += rewriter.flush()
+    assert output == expected.encode(codec)
+
+
+# ---------------------------------------------------------------------------
+# Time bounds and epoch zero
+# ---------------------------------------------------------------------------
+
+
+def write_json(path, value):
+    path.write_text(json.dumps(value))
+    return path
+
+
+@pytest.mark.parametrize('backend', ['python', 'auto'])
+def test_epoch_zero_obeys_after_bound(tmp_path, backend):
+    config = write_json(tmp_path / 'config.json', {})
+    processor = StreamingEventProcessor(str(config), Namespace(json_input=True),
+        ProcessingConfig(time_field='timestamp', time_after='2026-01-01T00:00:00', flatten_backend=backend))
+    assert processor._flatten_event({'timestamp': 1}, 'source') is None
+    assert processor._flatten_event({'timestamp': 0}, 'source') is None
+    assert processor._flatten_event({'timestamp': '2026-01-01T00:00:00Z'}, 'source') is not None
+
+
+# ---------------------------------------------------------------------------
+# XML comments and processing instructions
+# ---------------------------------------------------------------------------
+
+
+EVENT_NS = "http://schemas.microsoft.com/win/2004/08/events/event"
+
+
+ANNOTATIONS = ["<!-- exported event -->", "<?export source?>"]
+
+
+POSITIONS = [
+    "/Event",
+    "/Event/System",
+    "/Event/System/EventID",
+    "/Event/System/Provider",
+    "/Event/EventData",
+    "/Event/UserData",
+    "/Event/UserData/Payload",
+]
+
+
+EVENT_XML = """<Event>
+    <System><EventID>1</EventID><Provider Name="Example"/></System>
+    <EventData><Data Name="CommandLine">example.exe</Data></EventData>
+    <UserData><Payload><SubjectUserName>alice</SubjectUserName></Payload></UserData>
+</Event>"""
+
+
+@pytest.mark.parametrize("annotation", ANNOTATIONS, ids=["comment", "instruction"])
+@pytest.mark.parametrize("position", POSITIONS)
+def test_xml_annotations_preserve_event_fields(annotation, position):
+    root = etree.fromstring(EVENT_XML)
+    parent = root.xpath(position)[0]
+    parent.append(etree.fromstring(f"<wrapper>{annotation}</wrapper>")[0])
+
+    event = EvtxExtractor().xml_to_dict(root)
+
+    assert event == {
+        "Event": {
+            "#attributes": {"xmlns": EVENT_NS},
+            "System": {"EventID": 1, "Provider": {"#attributes": {"Name": "Example"}}},
+            "EventData": {"CommandLine": "example.exe"},
+            "UserData": {"SubjectUserName": "alice"},
+        }
+    }
+
+
+@pytest.mark.parametrize("annotation", ANNOTATIONS, ids=["comment", "instruction"])
+@pytest.mark.parametrize("split", [0, 1], ids=["before-text", "within-text"])
+@pytest.mark.parametrize(
+    ("field_xml", "value", "expected"),
+    [
+        (
+            "<System><EventID>{text}</EventID></System>",
+            "4688",
+            {"System": {"EventID": 4688}},
+        ),
+        (
+            '<System><EventID Qualifiers="0">{text}</EventID></System>',
+            "4688",
+            {"System": {"EventID": {"#attributes": {"Qualifiers": "0"}, "#text": 4688}}},
+        ),
+        (
+            "<System><Qualifiers>{text}</Qualifiers></System>",
+            "0016",
+            {"System": {"Qualifiers": "0016"}},
+        ),
+        (
+            '<EventData><Data Name="Image">{text}</Data></EventData>',
+            "cmd.exe",
+            {"EventData": {"Image": "cmd.exe"}},
+        ),
+        (
+            "<EventData><Data>{text}</Data></EventData>",
+            "0016",
+            {"EventData": {"Data": ["0016"]}},
+        ),
+        (
+            "<EventData><Image>{text}</Image></EventData>",
+            "cmd.exe",
+            {"EventData": {"Image": "cmd.exe"}},
+        ),
+        (
+            "<UserData><Payload><SubjectUserName>{text}</SubjectUserName></Payload></UserData>",
+            "alice",
+            {"UserData": {"SubjectUserName": "alice"}},
+        ),
+    ],
+    ids=["event-id", "event-id-attributes", "qualifiers", "named-data", "unnamed-data", "field", "userdata"],
+)
+def test_xml_annotations_preserve_complete_leaf_text(annotation, split, field_xml, value, expected):
+    text = value[:split] + annotation + value[split:]
+    root = etree.fromstring("<Event>" + field_xml.format(text=text) + "</Event>")
+
+    event = EvtxExtractor().xml_to_dict(root)
+
+    assert event == {"Event": {"#attributes": {"xmlns": EVENT_NS}, **expected}}
+
+
+@pytest.mark.parametrize("namespace", ["", f' xmlns="{EVENT_NS}"'])
+def test_streaming_keeps_annotated_events_without_degraded_ingestion(
+    tmp_path, field_mappings_file, default_args_config, test_logger, namespace
+):
+    source = tmp_path / "annotated.xml"
+    source.write_text(
+        f"""<Events><Event{namespace}>
+            <!-- event annotation --><?event source?>
+            <System><!-- system annotation --><?system source?>
+                <EventID>4<!-- split event id -->688</EventID>
+            </System>
+            <EventData><!-- data annotation --><?data source?>
+                <Data Name="CommandLine"><!-- before text -->example<?split text?>.exe</Data>
+            </EventData>
+            <UserData><!-- user data annotation --><?userdata source?>
+                <Payload><!-- payload annotation --><?payload source?>
+                    <SubjectUserName><?before text?>al<!-- split name -->ice</SubjectUserName>
+                </Payload>
+            </UserData>
+        </Event><Event{namespace}><System><EventID>2</EventID></System></Event></Events>""",
+        encoding="utf-8",
+    )
+    processor = StreamingEventProcessor(
+        config_file=field_mappings_file,
+        args_config=default_args_config,
+        logger=test_logger,
+    )
+    extractor = EvtxExtractor(ExtractorConfig(xml_logs=True), logger=test_logger)
+
+    events = list(processor.stream_xml_events(str(source), extractor))
+
+    assert [event["EventID"] for event in events] == [4688, 2]
+    assert events[0]["CommandLine"] == "example.exe"
+    assert events[0]["SubjectUserName"] == "alice"
+    assert not processor.ingest_degraded
