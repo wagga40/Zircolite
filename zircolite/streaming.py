@@ -456,21 +456,20 @@ class _SandboxModule:
     Handing a transform the real module hands it everything that module
     imported as well: ``re.enum.sys`` reaches ``sys.modules`` without a single
     underscore, so ``safer_getattr`` lets every hop through.
+
+    Each stand-in is the only instance of its own subclass, built by
+    :func:`_sandbox_module`, which carries the vetted names as class
+    attributes: transforms run per event, and a type-dict hit is cheaper than
+    a failed lookup followed by a Python-level ``__getattr__`` call.
     """
 
-    __slots__ = ("_attrs", "_name")
-
-    def __init__(self, name: str, attrs: dict[str, Any]):
-        object.__setattr__(self, "_name", name)
-        object.__setattr__(self, "_attrs", attrs)
+    __slots__ = ()
+    _name = ""
+    _names: tuple[str, ...] = ()
 
     def __getattr__(self, attr: str) -> Any:
-        try:
-            return self._attrs[attr]
-        except KeyError:
-            raise AttributeError(
-                f"{attr!r} is not available from {self._name!r} in transforms"
-            ) from None
+        # Only reached for a name the stand-in does not carry
+        raise AttributeError(f"{attr!r} is not available from {self._name!r} in transforms")
 
     def __setattr__(self, attr: str, value: Any) -> None:
         raise AttributeError(f"{self._name!r} is read-only in transforms")
@@ -479,16 +478,22 @@ class _SandboxModule:
         raise AttributeError(f"{self._name!r} is read-only in transforms")
 
     def __dir__(self) -> list[str]:
-        return sorted(self._attrs)
+        return sorted(self._names)
 
     def __repr__(self) -> str:
         return f"<transform module {self._name!r}>"
 
 
 def _sandbox_module(module: Any, names: Iterable[str]) -> _SandboxModule:
-    return _SandboxModule(
-        module.__name__, {name: getattr(module, name) for name in names if hasattr(module, name)}
-    )
+    attrs = {name: getattr(module, name) for name in names if hasattr(module, name)}
+    # Plain functions would bind to the stand-in as methods
+    namespace: dict[str, Any] = {
+        name: staticmethod(value) if isinstance(value, types.FunctionType) else value
+        for name, value in attrs.items()
+    }
+    namespace.update(__slots__=(), _name=module.__name__, _names=tuple(attrs))
+    stand_in: _SandboxModule = type(f"_Sandbox_{module.__name__}", (_SandboxModule,), namespace)()
+    return stand_in
 
 
 # The only modules a transform can see, whether by name or through ``import``.
