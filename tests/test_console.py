@@ -605,6 +605,19 @@ class TestConsoleLoggerHandling:
             h.close()
         logger.handlers.clear()
 
+    def test_unbalanced_markup_does_not_escape_a_log_call(self, tmp_path):
+        """A sink that misses literal() must not end the run with MarkupError."""
+        from zircolite.console import get_rich_logger
+        logger = get_rich_logger(name="test_markup_backstop", log_file=str(tmp_path / "m.log"))
+        try:
+            logger.info("[cyan]log[/]time[/]")
+            logger.warning("\x1b[2J[/][/]")
+            assert "log[/]time" in (tmp_path / "m.log").read_text(encoding="utf-8")
+        finally:
+            for h in logger.handlers:
+                h.close()
+            logger.handlers.clear()
+
 
 class TestAttackTacticExtraction:
     """attack.extract_attack_tactics normalises the tag spellings SIGMA uses."""

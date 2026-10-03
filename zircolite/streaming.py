@@ -9,6 +9,7 @@ This module contains the StreamingEventProcessor class for:
 """
 
 import base64
+import builtins as _py_builtins
 import codecs
 import contextlib
 import csv as csv_module
@@ -21,7 +22,8 @@ import os
 import re
 import shutil
 import tempfile
-from collections.abc import Callable, Generator
+import types
+from collections.abc import Callable, Generator, Iterable
 from functools import lru_cache, wraps
 from itertools import chain, islice
 from pathlib import Path
@@ -39,7 +41,7 @@ import orjson as json
 from evtx import PyEvtxParser
 from RestrictedPython import compile_restricted, limited_builtins, safe_builtins, utility_builtins
 from RestrictedPython.Eval import default_guarded_getiter
-from RestrictedPython.Guards import guarded_iter_unpack_sequence
+from RestrictedPython.Guards import guarded_iter_unpack_sequence, safer_getattr
 
 from .config import ProcessingConfig
 from .console import literal
@@ -53,6 +55,7 @@ from .jsonstream import iter_json_array
 from .shutdown import is_shutdown_requested
 from .utils import (
     _EXCLUDED_SENTINEL,
+    _NON_ALNUM_RE,
     COMPRESSED_SUFFIXES,
     load_field_mappings,
     open_maybe_compressed,
@@ -68,10 +71,6 @@ if TYPE_CHECKING:
 # ---------------------------------------------------------------------------
 # Module-level constants – built once, shared across all instances
 # ---------------------------------------------------------------------------
-
-# Pre-compiled regex for stripping non-alphanumeric characters
-_NON_ALNUM_RE = re.compile(r"[^a-zA-Z0-9]")
-
 
 @lru_cache(maxsize=1024)
 def _compile_transform(code: str):
@@ -451,11 +450,89 @@ class _TransformSpec(NamedTuple):
 _NOOP_TRANSFORM_CODE = "def transform(param):\n    return param"
 
 
+class _SandboxModule:
+    """Read-only stand-in for a module, exposing only a vetted set of names.
+
+    Handing a transform the real module hands it everything that module
+    imported as well: ``re.enum.sys`` reaches ``sys.modules`` without a single
+    underscore, so ``safer_getattr`` lets every hop through.
+
+    Each stand-in is the only instance of its own subclass, built by
+    :func:`_sandbox_module`, which carries the vetted names as class
+    attributes: transforms run per event, and a type-dict hit is cheaper than
+    a failed lookup followed by a Python-level ``__getattr__`` call.
+    """
+
+    __slots__ = ()
+    _name = ""
+    _names: tuple[str, ...] = ()
+
+    def __getattr__(self, attr: str) -> Any:
+        # Only reached for a name the stand-in does not carry
+        raise AttributeError(f"{attr!r} is not available from {self._name!r} in transforms")
+
+    def __setattr__(self, attr: str, value: Any) -> None:
+        raise AttributeError(f"{self._name!r} is read-only in transforms")
+
+    def __delattr__(self, attr: str) -> None:
+        raise AttributeError(f"{self._name!r} is read-only in transforms")
+
+    def __dir__(self) -> list[str]:
+        return sorted(self._names)
+
+    def __repr__(self) -> str:
+        return f"<transform module {self._name!r}>"
+
+
+def _sandbox_module(module: Any, names: Iterable[str]) -> _SandboxModule:
+    attrs = {name: getattr(module, name) for name in names if hasattr(module, name)}
+    # Plain functions would bind to the stand-in as methods
+    namespace: dict[str, Any] = {
+        name: staticmethod(value) if isinstance(value, types.FunctionType) else value
+        for name, value in attrs.items()
+    }
+    namespace.update(__slots__=(), _name=module.__name__, _names=tuple(attrs))
+    stand_in: _SandboxModule = type(f"_Sandbox_{module.__name__}", (_SandboxModule,), namespace)()
+    return stand_in
+
+
+# The only modules a transform can see, whether by name or through ``import``.
+_SANDBOX_MODULES: dict[str, _SandboxModule] = {
+    "re": _sandbox_module(re, (
+        "search", "match", "fullmatch", "findall", "finditer", "sub", "subn",
+        "split", "compile", "escape", "error",
+        "A", "ASCII", "I", "IGNORECASE", "M", "MULTILINE", "S", "DOTALL",
+        "X", "VERBOSE", "U", "UNICODE", "NOFLAG",
+    )),
+    "base64": _sandbox_module(base64, (
+        "b64encode", "b64decode", "standard_b64encode", "standard_b64decode",
+        "urlsafe_b64encode", "urlsafe_b64decode", "b32encode", "b32decode",
+        "b32hexencode", "b32hexdecode", "b16encode", "b16decode",
+        "a85encode", "a85decode", "b85encode", "b85decode",
+    )),
+    "math": _sandbox_module(math, (name for name in dir(math) if not name.startswith("_"))),
+    "chardet": _sandbox_module(chardet, ("detect", "detect_all")),
+}
+
+
+def _guarded_import(name, globals=None, locals=None, fromlist=(), level=0):
+    """``__import__`` for transforms: only the sandboxed modules, never the real ones."""
+    module = _SANDBOX_MODULES.get(name) if level == 0 else None
+    if module is None:
+        raise ImportError(f"import of {name!r} is not allowed in transforms")
+    return module
+
+
 def _build_restricted_builtins() -> dict:
     """Build RestrictedPython builtins dict once at module level."""
 
-    def _default_guarded_getitem(ob, index):
-        return ob[index]
+    def _guarded_getitem(ob, index):
+        item = ob[index]
+        # Defence in depth: no container a transform can reach should hold a
+        # module (``sys.modules['os']`` is the shape of every escape).
+        if isinstance(item, types.ModuleType):
+            raise TypeError("module objects are not available in transforms")
+        return item
 
     def _safe_write_(obj):
         """Allow writes to safe container types (dict, list, set) only."""
@@ -486,20 +563,41 @@ def _build_restricted_builtins() -> dict:
     builtins = {
         "__name__": "script",
         "_getiter_": default_guarded_getiter,
-        "_getattr_": getattr,
-        "_getitem_": _default_guarded_getitem,
+        "_getitem_": _guarded_getitem,
         "_write_": _safe_write_,
         "_inplacevar_": _inplacevar_,
-        "base64": base64,
-        "math": math,
-        "re": re,
-        "chardet": chardet,
         "_iter_unpack_sequence_": guarded_iter_unpack_sequence,
     }
     builtins.update(safe_builtins)
     builtins.update(limited_builtins)
     builtins.update(utility_builtins)
+    # utility_builtins hands out the real random module, which no transform
+    # needs and which is not part of the documented sandbox.
+    del builtins["random"], builtins["whrandom"]
+    # Pure functions RestrictedPython leaves out that the shipped transforms use.
+    for name in ("all", "any", "dict", "enumerate", "filter", "iter", "map",
+                 "max", "min", "next", "reversed", "sum"):
+        builtins.setdefault(name, getattr(_py_builtins, name))
+    # Last, so nothing above can put a real module or plain getattr back:
+    # utility_builtins carries the real ``math`` module.
+    builtins.update(_SANDBOX_MODULES)
+    builtins["_getattr_"] = safer_getattr
+    builtins["__import__"] = _guarded_import
     return builtins
+
+
+def _exec_transform(byte_code, builtins: dict) -> Any:
+    """Run compiled transform code and return its ``transform`` function, if any.
+
+    The builtins must go in as ``__builtins__``: handed to exec() as the globals
+    themselves, CPython adds the interpreter's real builtins module beside them,
+    and ``import os`` or ``open()`` resolve to the real thing. A fresh globals
+    dict per transform also keeps one transform's ``global`` writes out of the
+    next.
+    """
+    namespace: dict[str, Any] = {"__builtins__": builtins}
+    exec(byte_code, namespace)
+    return namespace.get("transform")
 
 
 # Shared builtins constant (identical for all StreamingEventProcessor
@@ -1318,9 +1416,7 @@ class StreamingEventProcessor:
             if byte_code is None:
                 byte_code = _compile_transform(code)
                 self.compiled_code_cache[code] = byte_code
-            transform_ns: dict[str, Any] = {}
-            exec(byte_code, self.RestrictedPython_BUILTINS, transform_ns)
-            func = transform_ns.get("transform")
+            func = _exec_transform(byte_code, self.RestrictedPython_BUILTINS)
             if func:
                 self._transform_func_cache[code] = func
             return func
@@ -1969,7 +2065,7 @@ class StreamingEventProcessor:
                     db_columns = self._db_columns
                     if col_lower not in db_columns:
                         self.logger.warning(
-                            f"[yellow]   [!] Could not add column '{col}' to the "
+                            f"[yellow]   [!] Could not add column '{literal(col)}' to the "
                             f"events table: {literal(exc)}[/]"
                         )
 

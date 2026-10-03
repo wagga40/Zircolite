@@ -24,6 +24,7 @@ from sqlite3 import Error
 from typing import TYPE_CHECKING, Any, Optional
 
 import orjson as json
+import regex as regex_engine
 from pyroaring import BitMap64
 from rich.console import Group
 from rich.live import Live
@@ -68,7 +69,7 @@ from .sqlscan import (
     scan_query,
 )
 from .streaming import StreamingEventProcessor, StrictParseError
-from .utils import rounded_integer_warning, sanitize_row_for_csv
+from .utils import rounded_integer_warning, sanitize_row_for_csv, write_csv_header
 
 # Translation table for stripping newline characters from CSV descriptions.
 _NEWLINE_TRANSLATE = str.maketrans("", "", "\n\r")
@@ -83,12 +84,52 @@ _DEPTH_LIMIT_RE = re.compile(r"expression tree is too large", re.IGNORECASE)
 # ---------------------------------------------------------------------------
 # LRU-cached regex compilation for the SQLite ``regexp`` UDF.
 # SIGMA rules reuse the same patterns across thousands of rows; caching the
-# compiled objects avoids redundant ``re.compile`` calls per row.
+# compiled objects avoids redundant compile calls per row.
+#
+# Rule patterns run on event fields an attacker writes (a command line, a
+# script block), so a backtracking pattern must not be able to stall the run.
+# The Invoke-Obfuscation VAR+ rules ship ``-f(?:.*\)){1,}.*"``: under ``re`` a
+# command line of ~30 ``)`` and no closing quote takes minutes, and each extra
+# ``)`` doubles it. The ``regex`` module accepts the same syntax as ``re`` and
+# takes a per-call CPU-time budget; matching a real event takes microseconds,
+# so the budget only ever stops a runaway, and that one value then counts as a
+# non-match rather than failing the rule for every event.
 # ---------------------------------------------------------------------------
+REGEX_TIMEOUT_SECONDS = 1.0
+
+
 @lru_cache(maxsize=512)
-def _compile_regex(pattern: str) -> re.Pattern:
-    """Return a compiled regex, cached for repeated use by the SQLite UDF."""
-    return re.compile(pattern)
+def _compile_regex(pattern: str) -> Any:
+    """Return a compiled ``regex`` pattern, cached for repeated use by the SQLite UDF."""
+    return regex_engine.compile(pattern)
+
+
+class _RegexTimeouts:
+    """Values the regexp UDF gave up on, counted per rule title.
+
+    Kept apart from ZircoliteCore on purpose: the UDF lives as long as the
+    connection the core owns, so a UDF closing over the core would make a
+    reference cycle, and a dropped core would keep its disk working directory
+    until a garbage collection that may never come.
+    """
+
+    __slots__ = ("counts", "current_rule", "logger")
+
+    def __init__(self, logger: logging.Logger) -> None:
+        self.counts: dict[str, int] = {}
+        self.current_rule: str | None = None
+        self.logger = logger
+
+    def note(self, pattern: str) -> None:
+        """Count one value; warn the first time a rule hits the limit."""
+        title = self.current_rule or f"regex {pattern[:80]!r}"
+        count = self.counts.get(title, 0) + 1
+        self.counts[title] = count
+        if count == 1:
+            self.logger.warning(
+                f"[yellow]   [!] Rule '{title}': regex exceeded {REGEX_TIMEOUT_SECONDS:g}s "
+                f"on an event, which was treated as not matching[/]"
+            )
 
 
 def _uncompilable_regex(query: str) -> str | None:
@@ -104,9 +145,12 @@ def _uncompilable_regex(query: str) -> str | None:
     here is a loop over an empty tuple.
     """
     for pattern in scan_query(query).regex_patterns:
+        # ``re`` stays the gate for what a rule may use, so moving the matcher
+        # to ``regex`` does not quietly start accepting PCRE-only syntax.
         try:
             re.compile(pattern)
-        except re.error as exc:
+            _compile_regex(pattern)
+        except (re.error, regex_engine.error) as exc:
             return f"invalid regex {pattern!r}: {exc}"
     return None
 
@@ -162,6 +206,7 @@ class ZircoliteCore:
         "_prefilter",
         "_prepared",
         "_profiling_data",
+        "_regex_timeouts",
         "_working_directory",
         "add_index",
         "archive_password",
@@ -219,6 +264,9 @@ class ZircoliteCore:
         self.db_connection = None
         self._working_directory = None
         self._prefilter: LiteralPrefilter | None = None
+        # Rule regexes that gave up on a value (see REGEX_TIMEOUT_SECONDS);
+        # the rule itself still ran on every other event
+        self._regex_timeouts = _RegexTimeouts(self.logger)
         self._disk_working = proc.working_db == "disk"
         self.sqlite_cache_mib = proc.sqlite_cache_mib
         self.flatten_backend = proc.flatten_backend
@@ -383,6 +431,8 @@ class ZircoliteCore:
             # Raw tuples; we build dicts with None filtered in execute_select_query
             conn.row_factory = None
 
+            timeouts = self._regex_timeouts  # not self: see _RegexTimeouts
+
             def udf_regex(x, y):
                 """User-defined function for regex matching in SQLite.
 
@@ -394,9 +444,16 @@ class ZircoliteCore:
                 if y is None:
                     return 0
                 # str(): a column whose first value was an int is typed
-                # INTEGER, and re.search would raise TypeError on it --
+                # INTEGER, and search() would raise TypeError on it --
                 # which SQLite reports as a failure of the whole rule.
-                return 1 if _compile_regex(x).search(str(y)) else 0
+                try:
+                    found = _compile_regex(x).search(str(y), timeout=REGEX_TIMEOUT_SECONDS)
+                except TimeoutError:
+                    # Raising would fail the whole statement, so one planted
+                    # event could silence the rule for every other event.
+                    timeouts.note(x)
+                    return 0
+                return 1 if found else 0
 
             conn.create_function('regexp', 2, udf_regex)  # Allows to use regex in SQLite
             return conn
@@ -738,6 +795,11 @@ class ZircoliteCore:
         self.rules_in_error[title] = str(error)
         self.logger.debug(f"Rule '{title}' could not be evaluated: {error}")
 
+    @property
+    def regex_timeouts(self) -> dict[str, int]:
+        """Values a rule regex gave up on (see REGEX_TIMEOUT_SECONDS), by rule title."""
+        return self._regex_timeouts.counts
+
     def execute_select_query(self, query: str, rule_title: str | None = None) -> list[dict[str, Any]]:
         """Return materialized rows for library callers; failed queries return []."""
         try:
@@ -757,6 +819,8 @@ class ZircoliteCore:
         if bad_regex is not None:
             self._note_broken_rule(rule_title, bad_regex)
             return []
+        # Read by the regexp UDF, which SQLite calls while rows are fetched
+        self._regex_timeouts.current_rule = rule_title
         normalized = self._prepared.normalized.get(query) if self._prepared is not None else None
         query = normalized if normalized is not None else normalize_rule_sql(query)
         # Syntax-highlighted SQL in debug mode
@@ -1156,7 +1220,7 @@ class ZircoliteCore:
                     extrasaction="ignore",
                 )
                 if not self._csv_header_written:
-                    csv_writer.writeheader()
+                    write_csv_header(csv_writer)
                     self._csv_header_written = True
             # Write matches to CSV - pre-compute common values
             title = rule_results["title"]
@@ -1459,6 +1523,13 @@ class ZircoliteCore:
                 self.logger.warning(
                     f"[yellow]   [!] {len(names)} rule(s) could not be evaluated and "
                     f"matched nothing: {shown} (use --debug for the SQL error)[/]"
+                )
+            if self.regex_timeouts:
+                total = sum(self.regex_timeouts.values())
+                self.logger.warning(
+                    f"[yellow]   [!] {total} event(s) exceeded the {REGEX_TIMEOUT_SECONDS:g}s "
+                    f"regex limit in {len(self.regex_timeouts)} rule(s) and were treated "
+                    f"as not matching[/]"
                 )
         finally:
             # Close output file handle if needed (always run, including on exception)

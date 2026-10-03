@@ -691,13 +691,19 @@ parallel:
 # These multipliers are informational; they are not configurable.
 """
 
-    target = Path(output_path)
-    if target.exists():
+    # Exclusive creation (O_CREAT|O_EXCL) makes the existence check and the
+    # open one atomic step, and it fails on a symlink -- dangling or not --
+    # instead of following it. A separate exists() check followed by
+    # open('w') would let someone who can write to the directory plant a
+    # symlink in between and redirect the write to a file of their choosing.
+    try:
+        f = open(output_path, 'x', encoding='utf-8')  # noqa: SIM115
+    except FileExistsError:
         raise FileExistsError(
             f"Refusing to overwrite existing file: {output_path}"
-        )
+        ) from None
 
-    with open(target, 'w', encoding='utf-8') as f:
+    with f:
         f.write(default_config)
 
     from .console import console, literal

@@ -648,75 +648,150 @@ class TestDisabledTransforms:
             assert "TestField_Result" not in first_event
 
 
-class TestRestrictedPythonSecurity:
-    """Tests for RestrictedPython security features.
+SANDBOX_ESCAPES = {
+    "import_os": "def transform(param):\n    import os\n    return os.getcwd()",
+    "import_subprocess": "def transform(param):\n    import subprocess\n    return 'imported'",
+    "from_import": "def transform(param):\n    from os import path\n    return 'imported'",
+    "dunder_import": "def transform(param):\n    return __import__('os').getcwd()",
+    "open": "def transform(param):\n    return open('/etc/hostname').read()",
+    "re_enum_sys": "def transform(param):\n    return re.enum.sys.modules['os'].getcwd()",
+    "re_enum_builtins": "def transform(param):\n    return re.enum.bltns.open('/etc/hostname').read()",
+    "imported_re_enum_sys": "def transform(param):\n    import re\n    return re.enum.sys.modules['os'].getcwd()",
+    "base64_re": "def transform(param):\n    return base64.re.search('t', param).group(0)",
+    "base64_binascii": "def transform(param):\n    return base64.binascii.hexlify(b'x').decode()",
+    "chardet_submodule": "def transform(param):\n    return str(chardet.charsetprober.logging.os.getcwd())",
+    "module_write": "def transform(param):\n    re.search = len\n    return 'patched'",
+    "random_module": "def transform(param):\n    return str(random.random())",
+    "whrandom_module": "def transform(param):\n    return str(whrandom.random())",
+}
 
-    Note: The current RestrictedPython configuration includes utility_builtins which
-    provides __import__, allowing arbitrary module imports. These tests document
-    current behavior and will be updated when security is hardened.
+
+class TestRestrictedPythonSecurity:
+    """Transform code from a config must not reach the host.
+
+    A transform that fails returns the original value, so each escape is
+    asserted twice: the value comes back unchanged and the code is recorded as
+    failed -- a transform that merely returned its input would pass the first.
+    RestrictedPython's ``safer_getattr`` yields None for a missing attribute,
+    so each chain ends in a call or subscript that fails on None.
     """
 
-    def test_import_os_currently_allowed(self, field_mappings_file_security, test_logger, args_config_json_input):
-        """Test current behavior: os module import is allowed (known limitation).
-
-        WARNING: This is a security limitation that should be addressed.
-        When utility_builtins is removed from the configuration, this test
-        should be updated to verify that os import is blocked.
-        """
-        processor = StreamingEventProcessor(
+    @pytest.fixture
+    def processor(self, field_mappings_file_security, test_logger, args_config_json_input):
+        return StreamingEventProcessor(
             config_file=field_mappings_file_security,
             args_config=args_config_json_input,
             logger=test_logger
         )
 
-        # Current behavior: import succeeds (this is a security limitation)
-        # This test documents the current behavior - transforms can access os module
-        result = processor._transform_value(
-            "def transform(param):\n    import os\n    return 'os_imported'",
-            "test"
+    @pytest.mark.parametrize("name", sorted(SANDBOX_ESCAPES))
+    def test_escape_is_blocked(self, processor, name):
+        code = SANDBOX_ESCAPES[name]
+        assert processor._transform_value(code, "test") == "test"
+        assert code in processor._failed_transforms
+
+    def test_sandbox_modules_stay_intact_after_write_attempt(self, processor):
+        processor._transform_value(SANDBOX_ESCAPES["module_write"], "test")
+        assert processor._transform_value(
+            "def transform(param):\n    return re.search('b+', param).group(0)", "abbbc"
+        ) == "bbb"
+
+    @pytest.mark.parametrize("module", ["re", "base64", "math", "chardet"])
+    def test_allowed_imports_work(self, processor, module):
+        code = f"def transform(param):\n    import {module}\n    return str({module} is not None)"
+        assert processor._transform_value(code, "test") == "True"
+        assert code not in processor._failed_transforms
+
+    def test_allowed_modules_keep_their_functions(self, processor):
+        code = (
+            "def transform(param):\n"
+            "    import re\n"
+            "    raw = base64.b64decode(param)\n"
+            "    enc = chardet.detect(raw).get('encoding')\n"
+            "    word = re.sub(r'\\s+', '_', raw.decode(enc), flags=re.IGNORECASE)\n"
+            "    return word + ':' + str(int(math.log2(8)))\n"
         )
-        # Currently this returns 'os_imported' because import is allowed
-        # When hardened, this should return 'test' (original value on error)
-        assert result in ["test", "os_imported"]  # Accept either behavior
+        assert processor._transform_value(code, "aGVsbG8gd29ybGQ=") == "hello_world:3"
 
-    def test_import_subprocess_currently_allowed(self, field_mappings_file_security, test_logger, args_config_json_input):
-        """Test current behavior: subprocess import is allowed (known limitation).
-
-        WARNING: This is a security limitation that should be addressed.
-        """
+    def test_module_level_code_runs_sandboxed_at_config_load(
+        self, tmp_path, test_logger, args_config_json_input
+    ):
+        """The load-time path: every applicable transform is exec'd while the config
+        loads, before any event is read, so a payload needs no matching event."""
+        marker = tmp_path / "pwned"
+        code = (
+            f"import os\nos.system('touch {marker}')\n"
+            "def transform(param):\n    return param"
+        )
+        config = {
+            "exclusions": [], "useless": [None, ""], "mappings": {}, "alias": {}, "split": {},
+            "transforms_enabled": True,
+            "transforms": {"CommandLine": [{
+                "info": "top-level payload", "type": "python", "code": code,
+                "alias": True, "alias_name": "CommandLine_x",
+                "source_condition": ["json_input"], "enabled": True,
+            }]},
+        }
+        config_file = tmp_path / "config.json"
+        config_file.write_text(json.dumps(config))
         processor = StreamingEventProcessor(
-            config_file=field_mappings_file_security,
-            args_config=args_config_json_input,
-            logger=test_logger
+            config_file=str(config_file), args_config=args_config_json_input, logger=test_logger
         )
+        assert not marker.exists()
+        assert code in processor._failed_transforms
 
-        # This test documents that subprocess import currently works
-        result = processor._transform_value(
-            "def transform(param):\n    import subprocess\n    return 'subprocess_imported'",
-            "test"
-        )
-        # Accept either behavior (for when security is hardened)
-        assert result in ["test", "subprocess_imported"]
+    def test_global_writes_do_not_leak_between_transforms(self, processor):
+        first = "counter = 41\ndef transform(param):\n    return str(counter)"
+        second = "def transform(param):\n    return str(counter)"
+        assert processor._transform_value(first, "x") == "41"
+        assert processor._transform_value(second, "x") == "x"
 
-    def test_file_operations_currently_allowed(self, field_mappings_file_security, test_logger, args_config_json_input):
-        """Test current behavior: file operations are allowed (known limitation).
+    def test_no_attribute_chain_reaches_the_host(self):
+        """Walk every attribute chain ``safer_getattr`` allows from the sandbox's
+        builtins; none may reach a module or an unguarded builtin."""
+        import builtins
+        import types
 
-        WARNING: This is a security limitation that should be addressed.
-        """
-        processor = StreamingEventProcessor(
-            config_file=field_mappings_file_security,
-            args_config=args_config_json_input,
-            logger=test_logger
-        )
+        from RestrictedPython.Utilities import _AttributeDelegator
 
-        # Test that open() currently works (this is a security concern)
-        # When hardened, this should fail and return original value
-        result = processor._transform_value(
-            "def transform(param):\n    return 'file_op_attempted'",
-            "test"
-        )
-        # This simpler test just verifies the transform system works
-        assert result == "file_op_attempted"
+        from zircolite.streaming import _RESTRICTED_BUILTINS
+
+        forbidden = {id(f) for f in (builtins.open, builtins.eval, builtins.exec,
+                                     builtins.compile, builtins.__import__, builtins.getattr,
+                                     builtins.vars, builtins.globals)}
+
+        def public_attrs(obj):
+            # RestrictedPython's ``string`` forwards lookups to the real module
+            # through __getattr__, so dir() on it would show none of them.
+            if isinstance(obj, _AttributeDelegator):
+                target = vars(obj)["_AttributeDelegator__mod"]
+                excluded = vars(obj)["_AttributeDelegator__excludes"]
+                return [(a, getattr(target, a)) for a in dir(target)
+                        if not a.startswith("_") and a not in excluded]
+            found = []
+            for attr in dir(obj):
+                if attr.startswith("_"):
+                    continue
+                try:
+                    found.append((attr, getattr(obj, attr)))
+                except Exception:
+                    continue
+            return found
+
+        frontier = [(name, obj) for name, obj in _RESTRICTED_BUILTINS.items()
+                    if not name.startswith("_")]
+        hits = []
+        for _ in range(4):
+            next_frontier = []
+            for path, obj in frontier:
+                if isinstance(obj, types.ModuleType) or id(obj) in forbidden:
+                    hits.append(path)
+                    continue
+                if isinstance(obj, (str, bytes, int, float, bool, type(None))):
+                    continue
+                next_frontier += [(f"{path}.{attr}", value) for attr, value in public_attrs(obj)]
+            frontier = next_frontier
+        assert hits == []
 
     def test_dunder_access_restricted(self, field_mappings_file_security, test_logger, args_config_json_input):
         """Test that dunder attribute access is restricted by RestrictedPython."""
@@ -791,10 +866,10 @@ class TestBuiltinFunctions:
         )
 
         result = processor._transform_value(
-            "def transform(param):\n    import chardet\n    return str(type(chardet.detect(b'hello')))",
+            "def transform(param):\n    import chardet\n    return str(isinstance(chardet.detect(b'hello'), dict))",
             "test"
         )
-        assert "dict" in result
+        assert result == "True"
 
     def test_string_methods_work(self, field_mappings_file_builtins, test_logger, args_config_json_input):
         """Test that string methods work in transforms."""
@@ -2198,3 +2273,49 @@ def test_non_alias_transform_runs_once(tmp_path, backend):
     # A nested leaf with the same flattened name is a working control.
     assert processor._flatten_event({'Event': {'Value': 'x'}}, 'source')['Value'] == 'x!'
     assert processor._flatten_event({'Value': 'x'}, 'source')['Value'] == 'x!'
+
+
+class TestTransformTesterSandbox:
+    """config/transform_tester.py is where a downloaded transform gets vetted, so
+    it must run the file in the engine's sandbox, not beside it."""
+
+    TESTER = Path(__file__).parent.parent / "config" / "transform_tester.py"
+
+    def _run(self, *args):
+        import subprocess
+        import sys
+
+        return subprocess.run(
+            [sys.executable, str(self.TESTER), *args],
+            capture_output=True, text=True, timeout=120,
+        )
+
+    def test_module_level_payload_does_not_run(self, tmp_path):
+        marker = tmp_path / "pwned"
+        evil = tmp_path / "evil.py"
+        evil.write_text(
+            f"import os\nos.system('touch {marker}')\n"
+            "def transform(param):\n    return param\n"
+        )
+        result = self._run(str(evil), "x")
+        assert result.returncode != 0
+        assert "not allowed" in result.stderr
+        assert not marker.exists()
+
+    def test_module_chain_escape_fails(self, tmp_path):
+        evil = tmp_path / "evil.py"
+        evil.write_text(
+            "def transform(param):\n"
+            "    return re.enum.sys.modules['os'].popen('echo escaped').read()\n"
+        )
+        result = self._run(str(evil), "x")
+        assert result.returncode != 0
+        assert "escaped" not in result.stdout
+
+    def test_shipped_transform_still_runs(self):
+        result = self._run(
+            str(TRANSFORMS_DIR / "commandline_amsibypass.py"),
+            "[Ref].Assembly.GetType('System.Management.Automation.AmsiUtils')",
+        )
+        assert result.returncode == 0, result.stderr
+        assert "AMSI" in result.stdout

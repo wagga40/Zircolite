@@ -26,6 +26,8 @@ dependencies = [
     "ijson>=3.5.1",
     "pyahocorasick>=2.3.1",
     "pyroaring>=1.1.0",
+    # Rule regexes run with a CPU-time limit (zircolite/core.py, REGEX_TIMEOUT_SECONDS)
+    "regex>=2024.11.6",
 ]
 requires-python = ">=3.10"
 readme = "README.md"

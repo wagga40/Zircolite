@@ -32,90 +32,31 @@ Transform File Format:
             return param.upper()
 
 Available in transforms:
-    - base64, re, chardet, math (modules)
+    - re, base64, math, chardet: read-only stand-ins exposing their public
+      functions only; `import re` (etc.) returns the same stand-in
     - dict/list/set writes: d[key] = value
     - augmented assignments: x += 1, s += "text"
     - all safe Python builtins (len, str, int, range, sorted, etc.)
-    - NOT available: file I/O, imports, exec, eval, os, sys, subprocess
+    - NOT available: file I/O, other imports, exec, eval, os, sys, subprocess
 """
 
 import argparse
-import base64
-import math
-import re
 import sys
 import time
 from pathlib import Path
 
-try:
-    import chardet
-except ImportError:
-    chardet = None
-    print("[!] chardet not installed -- transforms using chardet will fail", file=sys.stderr)
+# Test against the engine of the checkout this file ships with rather than a
+# copy of it, so the two sandboxes cannot drift apart.
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 try:
-    from RestrictedPython import (
-        compile_restricted,
-        limited_builtins,
-        safe_builtins,
-        utility_builtins,
-    )
-    from RestrictedPython.Eval import default_guarded_getiter
-    from RestrictedPython.Guards import guarded_iter_unpack_sequence
-except ImportError:
-    print("[!] RestrictedPython not installed. Run this from the project environment (pdm install, uv sync or poetry install)", file=sys.stderr)
+    from RestrictedPython import compile_restricted
+
+    from zircolite.streaming import _RESTRICTED_BUILTINS as BUILTINS
+    from zircolite.streaming import _exec_transform
+except ImportError as exc:
+    print(f"[!] {exc}. Run this from the project environment (pdm install, uv sync or poetry install)", file=sys.stderr)
     sys.exit(1)
-
-
-def _build_restricted_builtins() -> dict:
-    """Build the same RestrictedPython builtins as Zircolite's transform engine."""
-    def _default_guarded_getitem(ob, index):
-        return ob[index]
-
-    def _safe_write_(obj):
-        if isinstance(obj, (dict, list, set)):
-            return obj
-        raise TypeError(f"Write access to {type(obj).__name__} is not allowed")
-
-    _INPLACE_OPS = {
-        '+=': lambda x, y: x + y,
-        '-=': lambda x, y: x - y,
-        '*=': lambda x, y: x * y,
-        '/=': lambda x, y: x / y,
-        '//=': lambda x, y: x // y,
-        '%=': lambda x, y: x % y,
-        '**=': lambda x, y: x ** y,
-        '|=': lambda x, y: x | y,
-        '&=': lambda x, y: x & y,
-        '^=': lambda x, y: x ^ y,
-    }
-
-    def _inplacevar_(op, x, y):
-        fn = _INPLACE_OPS.get(op)
-        if fn is None:
-            raise TypeError(f"Unsupported in-place operator: {op}")
-        return fn(x, y)
-
-    builtins = {
-        '__name__': 'script',
-        '_getiter_': default_guarded_getiter,
-        '_getattr_': getattr,
-        '_getitem_': _default_guarded_getitem,
-        '_write_': _safe_write_,
-        '_inplacevar_': _inplacevar_,
-        'base64': base64,
-        'math': math,
-        're': re,
-        'chardet': chardet,
-        '_iter_unpack_sequence_': guarded_iter_unpack_sequence,
-    }
-    builtins.update(safe_builtins)
-    builtins.update(limited_builtins)
-    builtins.update(utility_builtins)
-    return builtins
-
-
-BUILTINS = _build_restricted_builtins()
 
 
 def compile_transform(source: str, filename: str = "<transform>"):
@@ -129,11 +70,7 @@ def compile_transform(source: str, filename: str = "<transform>"):
     if byte_code is None:
         raise SyntaxError("RestrictedPython compilation returned None")
 
-    namespace = {}
-    # Executing the transform is the point of this tool
-    exec(byte_code, BUILTINS, namespace)  # noqa: S102
-
-    func = namespace.get("transform")
+    func = _exec_transform(byte_code, BUILTINS)
     if func is None:
         raise ValueError(
             "No 'transform' function found. "
@@ -152,7 +89,7 @@ def run_transform(func, value: str, verbose: bool = False):
 
 def list_builtins():
     """Print available builtins and modules."""
-    print("=== Available Modules ===")
+    print("=== Available Modules (public functions only, no submodules) ===")
     print("  base64    - Base64 encoding/decoding")
     print("  re        - Regular expressions")
     print("  chardet   - Character encoding detection")
@@ -172,7 +109,7 @@ def list_builtins():
     print("  [x for x in ...]           (comprehensions)")
     print()
     print("=== NOT Available ===")
-    print("  import (arbitrary)          - only pre-loaded modules")
+    print("  import (arbitrary)          - only re, base64, math, chardet")
     print("  open, file I/O              - no filesystem access")
     print("  exec, eval, compile         - no dynamic code execution")
     print("  os, sys, subprocess         - no system access")

@@ -3774,6 +3774,21 @@ class TestEvidenceNamesPrintAsWritten:
 
         assert "[bold]x.evtx" in capsys.readouterr().out
 
+    def test_markup_in_an_auto_detected_timestamp_field(self, tmp_path):
+        """The timestamp field can be picked from the log's own keys, so a key
+        that closes a markup tag must be printed as written, not end the run
+        with MarkupError before any file is processed."""
+        events = tmp_path / "events.json"
+        events.write_text('{"log[/]time": "2024-01-01T10:00:00Z", "EventID": 1}\n')
+
+        with patch('sys.argv', ['zircolite.py', '-e', str(events),
+                                '-r', str(FIXTURES_DIR / "sample_ruleset.json"),
+                                '-o', str(tmp_path / "out.json"), *get_log_arg(tmp_path)]):
+            zircolite_script.main()
+
+        assert "Auto-detected timestamp field" in (tmp_path / "test.log").read_text(encoding="utf-8")
+        assert (tmp_path / "out.json").exists()
+
 
 @pytest.mark.requires_sigma
 @pytest.mark.skipif(__import__("sqlite3").sqlite_version_info < (3, 38), reason="correlation plans need SQLite 3.38")
@@ -4215,3 +4230,118 @@ def test_inferred_json_timestamp_ignores_unrelated_top_level_mapping(tmp_path, e
     flattened = processor._flatten_event(event, 'source')
     assert args.timefield == expected
     assert flattened[args.timefield] == '2026-01-01T00:00:00Z'
+
+
+class TestArchivePasswordChannels:
+    """The archive password can reach Zircolite without going through argv.
+
+    argv is readable by every local user through /proc/<pid>/cmdline and
+    ps, so --archive-password stays for compatibility but warns, and a
+    prompt and an environment variable are offered instead.
+    """
+
+    @staticmethod
+    def _args(**overrides):
+        values = {"archive_password": None, "ask_archive_password": False}
+        values.update(overrides)
+        return argparse.Namespace(**values)
+
+    @staticmethod
+    def _logger():
+        import logging
+        from unittest.mock import MagicMock
+        return MagicMock(spec=logging.Logger)
+
+    def test_argv_password_is_used_and_warned_about(self, monkeypatch):
+        monkeypatch.delenv(zircolite_script.ARCHIVE_PASSWORD_ENV, raising=False)
+        args, logger = self._args(archive_password="pw"), self._logger()
+
+        zircolite_script.resolve_archive_password(args, logger)
+
+        assert args.archive_password == "pw"
+        assert args.archive_unlock_channel == "argv"
+        assert "process list" in logger.warning.call_args[0][0]
+
+    def test_environment_variable_is_used_without_warning(self, monkeypatch):
+        monkeypatch.setenv(zircolite_script.ARCHIVE_PASSWORD_ENV, "from-env")
+        args, logger = self._args(), self._logger()
+
+        zircolite_script.resolve_archive_password(args, logger)
+
+        assert args.archive_password == "from-env"
+        assert args.archive_unlock_channel == "env"
+        assert not logger.warning.called
+
+    def test_prompt_is_used_and_beats_the_environment(self, monkeypatch):
+        import getpass
+
+        monkeypatch.setenv(zircolite_script.ARCHIVE_PASSWORD_ENV, "from-env")
+        prompts = []
+
+        def fake_getpass(prompt=""):
+            prompts.append(prompt)
+            return "typed"
+
+        monkeypatch.setattr(getpass, "getpass", fake_getpass)
+        args, logger = self._args(ask_archive_password=True), self._logger()
+
+        zircolite_script.resolve_archive_password(args, logger)
+
+        assert args.archive_password == "typed"
+        assert args.archive_unlock_channel == "prompt"
+        assert len(prompts) == 1
+        assert not logger.warning.called
+
+    def test_empty_prompt_answer_means_no_password(self, monkeypatch):
+        import getpass
+
+        monkeypatch.delenv(zircolite_script.ARCHIVE_PASSWORD_ENV, raising=False)
+        monkeypatch.setattr(getpass, "getpass", lambda prompt="": "")
+        args = self._args(ask_archive_password=True)
+
+        zircolite_script.resolve_archive_password(args, self._logger())
+
+        assert args.archive_password is None
+
+    def test_argv_beats_the_environment(self, monkeypatch):
+        monkeypatch.setenv(zircolite_script.ARCHIVE_PASSWORD_ENV, "from-env")
+        args = self._args(archive_password="pw")
+
+        zircolite_script.resolve_archive_password(args, self._logger())
+
+        assert args.archive_password == "pw"
+
+    def test_nothing_given_leaves_no_password(self, monkeypatch):
+        monkeypatch.delenv(zircolite_script.ARCHIVE_PASSWORD_ENV, raising=False)
+        args = self._args()
+
+        zircolite_script.resolve_archive_password(args, self._logger())
+
+        assert args.archive_password is None
+
+    def test_password_flag_and_prompt_flag_are_exclusive(self):
+        with pytest.raises(SystemExit), patch('sys.argv', [
+            'zircolite.py', '--archive-password', 'pw', '--ask-archive-password',
+        ]):
+            zircolite_script.parse_arguments()
+
+    def test_prompt_flag_parses(self):
+        with patch('sys.argv', ['zircolite.py', '--ask-archive-password']):
+            args = zircolite_script.parse_arguments()
+        assert args.ask_archive_password is True
+        assert args.archive_password is None
+
+    def test_db_input_does_not_blame_a_flag_for_an_environment_password(self):
+        logger = self._logger()
+        args = argparse.Namespace(
+            unified_db=False, no_auto_mode=False, no_parallel=False,
+            add_index=[], remove_index=[],
+            keepflat=False, dbfile=None, strict=False,
+            archive_password="from-env", archive_unlock_channel="env",
+            no_event_filter=False, logs_encoding=None,
+            after=None, before=None,
+        )
+
+        zircolite_script._warn_ignored_db_flags(args, logger)
+
+        assert not logger.warning.called

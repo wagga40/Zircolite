@@ -19,7 +19,8 @@ from pathlib import Path
 from typing import Any
 
 from rich.bar import Bar
-from rich.console import Console
+from rich.console import Console, ConsoleRenderable
+from rich.errors import MarkupError
 from rich.logging import RichHandler
 from rich.markup import escape
 from rich.panel import Panel
@@ -241,7 +242,7 @@ def get_rich_logger(name: str = "zircolite", debug: bool = False, log_file: str 
     logger.propagate = False
 
     # Rich console handler - hide level prefix for clean output
-    rich_handler = RichHandler(
+    rich_handler = _MarkupSafeRichHandler(
         console=console,
         show_path=False,
         show_time=False,
@@ -669,6 +670,23 @@ def literal(value: object) -> str:
     out of the log call, and a control character reaches the terminal.
     """
     return escape(_UNSAFE_CONTROL_CHARS.sub("", str(value)))
+
+
+class _MarkupSafeRichHandler(RichHandler):
+    """RichHandler that never lets a markup error escape a logging call.
+
+    Every known sink passes evidence-derived values through :func:`literal`.
+    This is the backstop for one that does not: RichHandler renders the
+    message outside any ``try``, so a stray ``[/]`` would otherwise raise out
+    of ``logger.info()`` and end the run. The line is shown as plain text
+    instead, with control characters removed.
+    """
+
+    def render_message(self, record: logging.LogRecord, message: str) -> ConsoleRenderable:
+        try:
+            return super().render_message(record, message)
+        except MarkupError:
+            return Text(_UNSAFE_CONTROL_CHARS.sub("", message))
 
 
 def make_file_link(path: str, display: str | None = None) -> str:

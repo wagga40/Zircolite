@@ -6,6 +6,7 @@ import json
 import logging
 import re
 import sys
+import zipfile
 from pathlib import Path
 from typing import ClassVar
 from unittest.mock import MagicMock, patch
@@ -1055,3 +1056,133 @@ class TestTemplatesSerialiseAnyMatch:
 
         assert rows[0][self.KEY] == "v"
         assert json.loads(rows[0]["group_keys"]) == {"Host": "h"}
+
+
+class TestZircoGuiRuleMetadataCannotBeShadowed:
+    """A log field must not replace the rule's own title, level, file or description.
+
+    Each Mini-GUI record is a JS object literal that lists the rule metadata
+    first and the matched event's fields after it. A field with the same name
+    (a JSON ``title``, or a ``-D`` database column) would be a duplicate key,
+    and in JavaScript the later, log-supplied value wins: an attacker could
+    relabel their own detection. Colliding fields are kept under a ``log_``
+    prefix instead.
+    """
+
+    TEMPLATE = Path(__file__).parent.parent / "templates" / "exportForZircoGui.tmpl"
+    RESERVED = ("Rule level", "title", "sigma_yml", "description")
+
+    def _execution_records(self, tmp_path, match):
+        from zircolite.config import TemplateConfig
+        from zircolite.templates import TemplateEngine
+
+        out = tmp_path / "data.js"
+        engine = TemplateEngine(
+            TemplateConfig(
+                template=[[str(self.TEMPLATE)]],
+                template_output=[[str(out)]],
+                time_field="SystemTime",
+            ),
+            logger=logging.getLogger("test"),
+        )
+        data = [{
+            "title": "Real Rule",
+            "rule_level": "high",
+            "sigmafile": "real.yml",
+            "description": "real description",
+            "tags": ["attack.execution"],
+            "matches": [match],
+        }]
+        assert engine.generate_from_template(str(self.TEMPLATE), str(out), data)
+        body = re.search(
+            r"var ExecutionData = \[(.*?)\n\];", out.read_text(), re.DOTALL
+        ).group(1)
+        # Keep duplicate keys visible: plain json.loads would silently keep the last one
+        return json.loads(f"[{body}]", object_pairs_hook=lambda pairs: pairs)
+
+    def test_log_fields_named_like_rule_metadata_do_not_override_it(self, tmp_path):
+        match = {"row_id": 1, "SystemTime": "2026-01-01T00:00:00Z"}
+        match.update({key: f"<img src=x onerror=alert('{key}')>" for key in self.RESERVED})
+
+        [record] = self._execution_records(tmp_path, match)
+
+        keys = [key for key, _ in record]
+        assert len(keys) == len(set(keys)), f"duplicate keys: {keys}"
+        values = dict(record)
+        assert values["title"] == "Real Rule"
+        assert values["Rule level"] == "high"
+        assert values["sigma_yml"] == "real.yml"
+        assert values["description"] == "real description"
+        # The log's values are kept, not dropped: they are evidence
+        for key in self.RESERVED:
+            assert values[f"log_{key}"] == f"<img src=x onerror=alert('{key}')>"
+        # Rule metadata stays first: the GUI puts select filters on columns 0-1
+        assert keys[:4] == ["Rule level", "title", "sigma_yml", "description"]
+
+    def test_ordinary_fields_keep_their_names(self, tmp_path):
+        [record] = self._execution_records(
+            tmp_path, {"row_id": 1, "CommandLine": "cmd", "Title": "window title"}
+        )
+
+        values = dict(record)
+        assert values["CommandLine"] == "cmd"
+        # Only exact names collide: JS keys are case-sensitive
+        assert values["Title"] == "window title"
+        assert values["title"] == "Real Rule"
+
+
+class TestZircoGuiBundleTreatsLogStringsAsText:
+    """The bundled Mini-GUI must treat log-derived strings as text, never as HTML.
+
+    Field names, field values and the rule title all reach the page from the
+    analysed logs. Concatenated into HTML strings for jQuery ``append`` (table
+    headers, select options), RowGroup (whose default label is appended as
+    HTML) or vis-timeline (with ``onclick`` allowed by its XSS filter), a
+    crafted event runs script in the analyst's browser. These checks read the
+    JavaScript shipped in ``gui/zircogui.zip``.
+    """
+
+    ZIP = Path(__file__).parent.parent / "gui" / "zircogui.zip"
+
+    @pytest.fixture(scope="class")
+    def gui_js(self):
+        with zipfile.ZipFile(self.ZIP) as zf:
+            return {
+                name: zf.read(f"zircogui/js/{name}").decode("utf-8")
+                for name in ("index.js", "functions.js")
+            }
+
+    def test_table_headers_are_built_as_text(self, gui_js):
+        index = gui_js["index.js"]
+        assert not re.search(r"""["']<th>["']\s*\+\s*item""", index)
+        assert index.count('$("<th>").text(item)') == 2  # header and footer
+
+    def test_select_options_are_built_as_text(self, gui_js):
+        functions = gui_js["functions.js"]
+        assert "<option value=" not in functions
+        assert "$('<option>').val(text).text(text)" in functions
+        assert functions.count("append(textOption(") == 3
+
+    def test_row_group_label_is_a_text_node(self, gui_js):
+        functions = gui_js["functions.js"]
+        assert "rowGroup: {dataSrc: 'title', startRender: textGroupLabel}" in functions
+        assert "document.createTextNode(String(group))" in functions
+
+    def test_timeline_items_are_dom_nodes_without_inline_handlers(self, gui_js):
+        index = gui_js["index.js"]
+        assert "onclick" not in index
+        assert 'document.createTextNode(event["title"] + " - EventID : " + event["EventID"]' in index
+        assert "content: itemContent," in index
+
+    def test_archive_carries_the_page_assets(self):
+        with zipfile.ZipFile(self.ZIP) as zf:
+            names = set(zf.namelist())
+            assert zf.testzip() is None
+        for asset in (
+            "zircogui/index.html",
+            "zircogui/vendor/jquery/jquery.min.js",
+            "zircogui/vendor/datatablesOrg/datatables.min.js",
+            "zircogui/vendor/vis-timeline/vis-timeline-graph2d.min.js",
+            "zircogui/js/mitre.js",
+        ):
+            assert asset in names

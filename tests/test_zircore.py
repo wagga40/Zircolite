@@ -5,7 +5,6 @@ Tests for the ZircoliteCore class.
 import csv
 import gc
 import json
-import re
 import sqlite3
 import sys
 from contextlib import closing
@@ -14,6 +13,7 @@ from typing import ClassVar
 from unittest.mock import patch
 
 import pytest
+import regex
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
@@ -1184,9 +1184,9 @@ class TestZircoliteCoreRegexSupport:
     """Tests for regex support in SQL queries."""
 
     def test_compile_regex_returns_pattern(self):
-        """_compile_regex should return a compiled re.Pattern."""
+        """_compile_regex should return a compiled ``regex`` pattern."""
         pat = _compile_regex(r'hello.*world')
-        assert isinstance(pat, re.Pattern)
+        assert isinstance(pat, regex.Pattern)
 
     def test_compile_regex_caches(self):
         """Repeated calls with the same pattern return the same object."""
@@ -1276,6 +1276,73 @@ class TestZircoliteCoreRegexSupport:
         zircore.execute_query("INSERT INTO test VALUES ('test')")
         results = zircore.execute_select_query("SELECT * FROM test WHERE v REGEXP '[invalid'")
         assert len(results) == 0
+        zircore.close()
+
+
+class TestRegexpTimeLimit:
+    """Rule regexes run on attacker-written values and must not stall the run."""
+
+    # The pattern and the crafted command line of the shipped
+    # "Invoke-Obfuscation VAR+ Launcher" rules: under stdlib re, the time
+    # doubles with every extra ')' and 40 of them take days.
+    VAR_PLUS = (
+        r'cmd.{0,5}(?:/c|/r)(?:\s|)\"set\s[a-zA-Z]{3,6}.*(?:\{\d\}){1,}'
+        r'\\\"\s+?\-f(?:.*\)){1,}.*\"'
+    )
+
+    def test_shipped_var_plus_pattern_finishes_on_crafted_command_line(
+        self, field_mappings_file, test_logger
+    ):
+        zircore = ZircoliteCore(config=field_mappings_file, logger=test_logger)
+        zircore.execute_query("CREATE TABLE logs (CommandLine TEXT)")
+        evil = 'cmd /c"set abc{0}\\" -f' + ")" * 40
+        real = 'cmd /c"set abc{0}\\" -f(x)"'
+        zircore.db_connection.executemany(
+            "INSERT INTO logs VALUES (?)", [(evil,), (real,)]
+        )
+        sql = "SELECT * FROM logs WHERE CommandLine REGEXP '" + self.VAR_PLUS.replace("'", "''") + "'"
+
+        results = zircore.execute_select_query(sql, rule_title="VAR+")
+
+        assert [r["CommandLine"] for r in results] == [real]
+        assert not zircore.rules_in_error
+        zircore.close()
+
+    def test_runaway_regex_gives_up_and_the_rule_still_matches_other_events(
+        self, field_mappings_file, test_logger, monkeypatch
+    ):
+        """A value that exhausts the budget is a non-match, not a failed rule."""
+        import zircolite.core as core_module
+
+        monkeypatch.setattr(core_module, "REGEX_TIMEOUT_SECONDS", 0.05)
+        zircore = ZircoliteCore(config=field_mappings_file, logger=test_logger)
+        zircore.execute_query("CREATE TABLE logs (v TEXT)")
+        # (?:a|aa)+$ is exponential in both re and regex: ~fib(80) steps here
+        zircore.db_connection.executemany(
+            "INSERT INTO logs VALUES (?)", [("a" * 80 + "b",), ("aaaa",)]
+        )
+
+        results = zircore.execute_select_query(
+            "SELECT * FROM logs WHERE v REGEXP '(?:a|aa)+$'", rule_title="Runaway Rule"
+        )
+
+        assert [r["v"] for r in results] == ["aaaa"]
+        assert zircore.regex_timeouts == {"Runaway Rule": 1}
+        assert not zircore.rules_in_error
+        zircore.close()
+
+    def test_matcher_accepts_no_syntax_that_re_rejects(self, field_mappings_file, test_logger):
+        r"""``regex`` understands \p{L}; rules may still only use what ``re`` does."""
+        zircore = ZircoliteCore(config=field_mappings_file, logger=test_logger)
+        zircore.execute_query("CREATE TABLE logs (v TEXT)")
+        zircore.execute_query("INSERT INTO logs VALUES ('evil')")
+
+        results = zircore.execute_select_query(
+            r"SELECT * FROM logs WHERE v REGEXP '\p{L}+'", rule_title="PCRE Rule"
+        )
+
+        assert results == []
+        assert "invalid regex" in zircore.rules_in_error["PCRE Rule"]
         zircore.close()
 
 

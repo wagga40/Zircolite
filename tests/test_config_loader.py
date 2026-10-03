@@ -479,6 +479,55 @@ class TestCreateDefaultConfigFile:
         # Should have expected structure
         assert "input" in config_dict or config_dict.get("input") is None
 
+    def test_refuses_existing_file(self, tmp_path):
+        """An existing file is left untouched."""
+        output_path = tmp_path / "existing.yaml"
+        output_path.write_text("keep me\n")
+
+        with pytest.raises(FileExistsError, match="Refusing to overwrite"):
+            create_default_config_file(str(output_path))
+
+        assert output_path.read_text() == "keep me\n"
+
+    @staticmethod
+    def _symlink_or_skip(link: Path, target: Path) -> None:
+        try:
+            link.symlink_to(target)
+        except (OSError, NotImplementedError):
+            pytest.skip("symlinks are not available here")
+
+    def test_refuses_dangling_symlink(self, tmp_path):
+        """A dangling symlink is not followed to create its target.
+
+        exists() reports a dangling link as absent, so a check-then-open
+        would create whatever file the link names.
+        """
+        target = tmp_path / "elsewhere" / "chosen_by_someone_else"
+        target.parent.mkdir()
+        link = tmp_path / "run.yaml"
+        self._symlink_or_skip(link, target)
+
+        with pytest.raises(FileExistsError):
+            create_default_config_file(str(link))
+
+        assert not target.exists()
+
+    def test_symlink_at_open_time_is_not_followed(self, tmp_path):
+        """A symlink present when the file is opened is refused, not followed.
+
+        This is the state a check-then-open race produces: the link is
+        swapped in after the check, so only the open itself can refuse it.
+        """
+        victim = tmp_path / "victim.txt"
+        victim.write_text("operator data\n")
+        link = tmp_path / "run.yaml"
+        self._symlink_or_skip(link, victim)
+
+        with pytest.raises(FileExistsError):
+            create_default_config_file(str(link))
+
+        assert victim.read_text() == "operator data\n"
+
 
 class TestConfigLoaderValidateExtended:
     """Additional validation tests for better coverage."""
