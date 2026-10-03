@@ -423,10 +423,11 @@ add `--no-auto-mode`. `--executor process` goes further: with several files it k
 run per-file and parallel even where auto-mode would have unified it. Two further settings
 exist only in the YAML file — `parallel.min_workers` and `parallel.adaptive`.
 
-`auto` runs files in separate Python processes when there are at least two, they average
-50 MiB or more, and CPU and RAM allow at least two process workers; otherwise it uses
-threads, as does `--no-auto-mode`. Processes speed up ingestion, which is Python-heavy,
-at the cost of startup time and one interpreter's memory per worker. The YAML key is
+`auto` runs files in separate Python processes when there are at least two, they hold
+32 MiB or more in total, and CPU and RAM allow at least two process workers; otherwise it
+uses threads, as does `--no-auto-mode`. Processes speed up both ingestion and rule
+matching, which are Python-heavy, at the cost of startup time and one interpreter's
+memory per worker. The YAML key is
 `parallel.executor`. `--no-parallel`, `--unified-db`, `--strict` and `--profile-rules`
 take precedence. Results are the same whichever executor runs them.
 

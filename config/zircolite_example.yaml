@@ -220,17 +220,19 @@ time_filter:
 parallel:
   # Set false to disable automatic parallel processing entirely
   enabled: true
-  # auto selects processes for parallel per-file inputs averaging >=50 MiB
-  # when CPU/RAM permit at least two workers; otherwise it selects threads.
+  # auto selects processes when the inputs hold 32 MiB or more in total and
+  # CPU/RAM permit at least two workers; otherwise it selects threads.
   # Explicit thread/process values override selection.
   executor: auto
 
   # Maximum number of workers. null = auto-detect, which takes the smallest of:
   #   - memory:    (available RAM x 0.85) / estimated memory per file
-  #   - CPU:       2x CPU cores, since the work is largely I/O bound
+  #   - CPU:       2x CPU cores
   #   - file count: at most 3x CPU cores, and never more than the file count
   # then applies a floor of half the CPU cores when memory is not the
   # constraint, and a hard ceiling of 32 to avoid context-switching overhead.
+  # Process workers also stop at the CPU count and at
+  # (available RAM x 0.85) / (128 MB + estimated memory per file).
   max_workers: null
 
   # Never drop below this many workers

@@ -238,7 +238,7 @@ def parse_arguments() -> argparse.Namespace:
     parallel_args = parser.add_argument_group('⚡ PARALLEL PROCESSING')
     parallel_args.add_argument("-P", "--no-parallel", help="Disable automatic parallel processing (parallel is enabled by default when beneficial)", action='store_true')
     parallel_args.add_argument("-w", "--parallel-workers", help="Maximum number of parallel workers (default: auto-detect based on CPU/memory)", type=int)
-    parallel_args.add_argument("--executor", choices=("auto", "thread", "process"), default=None, help="File worker executor (default: auto selects processes for large files when resources permit)")
+    parallel_args.add_argument("--executor", choices=("auto", "thread", "process"), default=None, help="File worker executor (default: auto selects processes for 32 MiB or more of input when CPU and memory allow two workers)")
     parallel_args.add_argument("--parallel-memory-limit", help=f"Memory usage threshold percentage before throttling (default: {DEFAULTS['parallel_memory_limit']:g})", type=float, default=None)
 
     # Templating and Mini GUI options
@@ -1065,6 +1065,7 @@ def _run_processing(
     # Auto-select processing mode
     use_parallel = False
     parallel_workers = 1
+    stats: dict[str, Any] = {}
 
     # Flags whose contract needs one file at a time. --strict has to abort the
     # whole run on a parse error, but a worker exception can only be logged and
@@ -1104,7 +1105,10 @@ def _run_processing(
                 )
 
     if not args.no_auto_mode and not args.unified_db:
-        recommended_mode, reason, stats = analyze_files_and_recommend_mode(file_list)
+        recommended_mode, reason, stats = analyze_files_and_recommend_mode(
+            file_list, getattr(args, "executor", "thread"),
+            auto_mode=True, max_workers=getattr(args, "parallel_workers", None),
+        )
         forced_workers = getattr(args, 'parallel_workers', None)
         print_mode_recommendation(
             recommended_mode, reason, stats,
@@ -1128,7 +1132,10 @@ def _run_processing(
         logger.info("")
     else:
         if not getattr(args, 'no_parallel', False) and not force_sequential and len(file_list) > 1:
-            _, _, stats = analyze_files_and_recommend_mode(file_list)
+            _, _, stats = analyze_files_and_recommend_mode(
+                file_list, getattr(args, "executor", "thread"),
+                auto_mode=False, max_workers=getattr(args, "parallel_workers", None),
+            )
             forced_workers = getattr(args, 'parallel_workers', None)
             if stats.get('parallel_recommended', False):
                 use_parallel = True
@@ -1157,16 +1164,8 @@ def _run_processing(
             and not args.unified_db and not args.no_parallel and not force_sequential):
         use_parallel = True
     if use_parallel:
-        import psutil
-
-        from zircolite.parallel import select_executor
-        from zircolite.utils import estimate_input_size
-
-        args.executor, executor_reason = select_executor(
-            getattr(args, "executor", "thread"), [estimate_input_size(path) for path in file_list],
-            psutil.virtual_memory().available / 1024**2, os.cpu_count() or 1,
-            auto_mode=not args.no_auto_mode, max_workers=getattr(args, "parallel_workers", None),
-        )
+        # The workload analysis sized its worker count for this executor.
+        args.executor, executor_reason = stats["executor"], stats["executor_reason"]
         logger.info(f"[+] Executor: {args.executor} ({executor_reason})")
     elif getattr(args, "executor", "thread") == "auto":
         args.executor = "thread"

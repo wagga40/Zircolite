@@ -194,9 +194,12 @@ also set. With multiple files, correlation rules select unified mode unless auto
 selection is disabled. The heuristics are
 documented in [Advanced → Automatic processing optimization](Advanced.md#automatic-processing-optimization).
 
-`--executor auto` is the CLI default. Parallel per-file workloads averaging at least
-50 MiB select separate interpreters when CPU and RAM permit at least two process
-workers; smaller workloads use threads. Explicit `thread` and `process` settings
+`--executor auto` is the CLI default. Parallel per-file workloads holding at least
+32 MiB of input in total select separate interpreters when CPU and RAM permit at least
+two process workers; smaller workloads use threads. Threads share one GIL, which every
+SQLite row step releases and takes back, so thread workers queue behind each other: on
+450 EVTX files of 16 MiB, twenty threads ran 2.4 times slower than one file at a time,
+and ten processes 3.9 times faster. Explicit `thread` and `process` settings
 remain available. Low-level `ParallelConfig` retains its thread default. Processes return summaries and temporary output paths instead
 of pickling large match lists. Workers share a shutdown event, and EVTX parser
 threads are divided across the file-worker CPU budget. ZIP/7z expanded sizes and

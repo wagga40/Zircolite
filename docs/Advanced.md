@@ -369,9 +369,12 @@ python3 zircolite.py --evtx logs/ --ruleset rules.json --parallel-memory-limit 8
 ### Parallel processing
 
 The default `--executor auto` selects processes for parallel per-file workloads
-averaging at least 50 MiB when CPU and RAM permit at least two process workers.
-Smaller workloads use threads. Explicit `--executor thread` and `--executor process`
-override selection; `--no-auto-mode` makes automatic executor selection use threads.
+holding at least 32 MiB of input in total when CPU and RAM permit at least two process
+workers. Smaller workloads use threads: below that size, the second or two each process
+spends loading the ruleset is not repaid. Explicit `--executor thread` and `--executor
+process` override selection; `--no-auto-mode` makes automatic executor selection use
+threads. Process workers stop at the CPU count and at one interpreter's memory each
+(128 MB plus the file's estimate), since every one of them holds the ruleset.
 Beyond picking a worker count, the parallel path:
 
 - **Schedules largest-first**, so big files start early and small ones fill the gaps at

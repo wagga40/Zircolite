@@ -7,7 +7,7 @@ This module provides memory-aware parallel file processing capabilities:
 - Graceful degradation when memory is low
 - LPT (Longest Processing Time) scheduling for better load balancing
 - Adaptive memory estimation with runtime calibration
-- Thread-based parallelism
+- Process workers, or threads on request
 """
 
 import logging
@@ -46,6 +46,8 @@ _RULE_PROGRESS_POLL_SECONDS = 0.1
 
 # Max length for file name in per-file progress bar (truncate with ellipsis)
 _FILE_PROGRESS_NAME_MAX_LEN = 40
+
+PROCESS_MIN_TOTAL_MIB = 32
 
 
 def _truncate_filename(name: str) -> str:
@@ -97,20 +99,27 @@ def _sigint_held_for_new_workers():
 
 def select_executor(requested, file_sizes, available_memory_mb, cpu_count, *,
                     auto_mode=True, max_workers=None):
-    """Resolve CLI auto selection without changing explicit/library choices."""
+    """Resolve CLI auto selection without changing explicit/library choices.
+
+    Every SQLite row step releases the GIL and has to take it back, so thread
+    workers queue behind each other: past about 32 MiB of input in total they
+    ran slower than one file at a time, whatever the file size. Below that,
+    the second or two each process spends loading the ruleset is not repaid.
+    """
     if requested != "auto":
         return requested, "explicit selection"
     if not auto_mode:
         return "thread", "automatic mode disabled"
-    average_mib = sum(file_sizes) / max(1, len(file_sizes)) / 1024**2
-    if len(file_sizes) < 2 or average_mib < 50:
-        return "thread", "files below the 50 MiB average process threshold"
-    process_mib = 64 + average_mib * memory_multiplier_for(average_mib)
+    if len(file_sizes) < 2:
+        return "thread", "single file"
+    if sum(file_sizes) < PROCESS_MIN_TOTAL_MIB * 1024**2:
+        return "thread", f"less than {PROCESS_MIN_TOTAL_MIB} MiB of input in total"
+    average_mib = sum(file_sizes) / len(file_sizes) / 1024**2
     workers = min(len(file_sizes), cpu_count,
-                  int(available_memory_mb * 0.85 / process_mib), max_workers or 32)
+                  int(available_memory_mb * 0.85 / process_worker_mb(average_mib)), max_workers or 32)
     if available_memory_mb < 1024 or workers < 2:
         return "thread", "insufficient resources for two process workers"
-    return "process", "large files with CPU and memory available for processes"
+    return "process", "CPU and memory available for process workers"
 
 
 def memory_multiplier_for(avg_file_size_mb: float) -> float:
@@ -127,6 +136,15 @@ def memory_multiplier_for(avg_file_size_mb: float) -> float:
     return 3.5
 
 
+def process_worker_mb(avg_file_size_mb: float) -> float:
+    """Peak RSS expected of one process worker.
+
+    An idle worker already holds an interpreter, the ruleset and SQLite:
+    100-135 MB with the merged Windows ruleset, measured on arm64 macOS.
+    """
+    return 128 + avg_file_size_mb * memory_multiplier_for(avg_file_size_mb)
+
+
 def calculate_optimal_workers(
     file_sizes: list[int],
     available_memory_mb: float,
@@ -135,6 +153,7 @@ def calculate_optimal_workers(
     min_workers: int = 1,
     max_workers: int | None = None,
     max_cap: int = 32,
+    executor: str = "thread",
 ) -> int:
     """
     Calculate optimal number of parallel workers.
@@ -150,6 +169,8 @@ def calculate_optimal_workers(
         min_workers: Minimum worker count floor.
         max_workers: If set, returned directly (after clamping to file count).
         max_cap: Hard ceiling to avoid context-switching overhead.
+        executor: ``"process"`` also caps the count at the CPU count and at
+            one interpreter's memory per worker.
 
     Returns:
         Optimal worker count (always >= 1).
@@ -184,6 +205,10 @@ def calculate_optimal_workers(
 
     optimal = max(min_workers, optimal)
     optimal = min(optimal, file_count, max_cap)
+    if executor == "process":
+        # Python-heavy workers gain nothing from exceeding the CPU count.
+        memory_workers = max(1, int(usable_memory_mb / process_worker_mb(avg_file_size_mb)))
+        optimal = min(optimal, cpu_count, memory_workers)
 
     return optimal
 
@@ -407,21 +432,14 @@ class MemoryAwareParallelProcessor:
             except OSError:
                 file_sizes.append(10 * 1024 * 1024)
 
-        workers = calculate_optimal_workers(
+        return calculate_optimal_workers(
             file_sizes=file_sizes,
             available_memory_mb=self.get_available_memory_mb(),
             cpu_count=os.cpu_count() or 4,
             min_workers=self.config.min_workers,
             max_workers=self.config.max_workers,
+            executor=self.config.executor,
         )
-        if self.config.executor == "process" and self.config.max_workers is None:
-            # Separate interpreters cost memory even for tiny inputs, and
-            # Python-heavy workers gain little from exceeding the CPU count.
-            avg_mb = sum(file_sizes) / max(1, len(file_sizes)) / (1024 * 1024)
-            per_worker_mb = 64 + avg_mb * memory_multiplier_for(avg_mb)
-            memory_workers = max(1, int(self.get_available_memory_mb() * 0.85 / per_worker_mb))
-            workers = min(workers, os.cpu_count() or 4, memory_workers)
-        return workers
 
     # ------------------------------------------------------------------
     # LPT scheduling

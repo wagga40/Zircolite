@@ -497,6 +497,29 @@ class TestAnalyzeFilesAndRecommendMode:
             mode, reason, stats = analyze_files_and_recommend_mode(files)
         assert stats['file_count'] == 3
 
+    @pytest.mark.parametrize("requested, auto_mode, executor, workers", [
+        ("auto", True, "process", 10),
+        ("auto", False, "thread", 12),
+        ("thread", True, "thread", 12),
+    ])
+    def test_the_pool_is_sized_for_the_executor_that_will_run(self, tmp_path, requested, auto_mode,
+                                                                executor, workers):
+        from unittest.mock import MagicMock, patch
+
+        from zircolite.utils import analyze_files_and_recommend_mode
+
+        files = [str(tmp_path / f"f_{i}.evtx") for i in range(12)]
+        memory = MagicMock(available=64 * 1024**3, total=128 * 1024**3)
+
+        with patch("zircolite.utils.psutil.virtual_memory", return_value=memory), \
+             patch("zircolite.utils.os.cpu_count", return_value=10), \
+             patch("zircolite.utils.estimate_input_size", return_value=16 * 1024**2):
+            _, _, stats = analyze_files_and_recommend_mode(files, requested, auto_mode=auto_mode)
+
+        assert stats["executor"] == executor
+        assert stats["executor_reason"]
+        assert stats["parallel_workers"] == workers
+
     def test_low_ram_rejection(self, tmp_path):
         """Cover line 415: very low RAM rejects parallel."""
         from unittest.mock import MagicMock, patch

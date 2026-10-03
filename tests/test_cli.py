@@ -450,19 +450,21 @@ class TestCLIOutputFormats:
 
         output_file = tmp_path / "result.csv"
 
-        def mock_analyze(files, logger=None):
+        def mock_analyze(files, *_, **__):
             stats = {
                 "parallel_recommended": True,
                 "parallel_workers": 2,
                 "parallel_reason": "test",
+                "executor": "thread",
+                "executor_reason": "test",
             }
             return ("per-file", "test", stats)
 
         analyze_calls = []
 
-        def tracking_analyze(files, logger=None):
+        def tracking_analyze(files, *args, **kwargs):
             analyze_calls.append(list(files))
-            return mock_analyze(files, logger)
+            return mock_analyze(files, *args, **kwargs)
 
         with patch.object(zircolite_script, 'analyze_files_and_recommend_mode', side_effect=tracking_analyze):
             with patch('sys.argv', ['zircolite.py', '-e', str(events_dir), '-r', str(ruleset_file), '-c', str(config_file), '-j', '--csv', '--csv-delimiter', ',', '-o', str(output_file), '--no-auto-mode', *get_log_arg(tmp_path)]):
@@ -2325,8 +2327,9 @@ class TestCLIUnifiedDatabase:
         output_file = tmp_path / "output.json"
         db_file = tmp_path / "out.db"
 
-        def fake_recommend(_file_list):
-            return ("per-file", "Multiple files", {"parallel_recommended": True, "parallel_workers": 2})
+        def fake_recommend(_file_list, *_, **__):
+            return ("per-file", "Multiple files", {"parallel_recommended": True, "parallel_workers": 2,
+                                                   "executor": "thread", "executor_reason": "test"})
 
         with patch.object(zircolite_script, "analyze_files_and_recommend_mode", side_effect=fake_recommend):
             with pytest.raises(SystemExit) as exc_info:
@@ -2334,6 +2337,34 @@ class TestCLIUnifiedDatabase:
                     zircolite_script.main()
         assert exc_info.value.code == 2
         assert not db_file.exists()
+
+    def test_the_run_uses_the_executor_the_workload_panel_was_sized_for(self, tmp_path):
+        events_dir = tmp_path / "events"
+        events_dir.mkdir()
+        for name in ("a", "b"):
+            (events_dir / f"{name}.json").write_text(
+                json.dumps({"Event": {"System": {"EventID": 1}, "EventData": {"CommandLine": name}}})
+            )
+        ruleset_file = tmp_path / "ruleset.json"
+        ruleset_file.write_text(NO_MATCH_RULESET)
+        requests = []
+        analyze = zircolite_script.analyze_files_and_recommend_mode
+
+        def fake_recommend(file_list, executor, *, auto_mode, max_workers):
+            requests.append((executor, auto_mode, max_workers))
+            _, reason, stats = analyze(file_list, executor, auto_mode=auto_mode, max_workers=max_workers)
+            return ("per-file", reason, {
+                **stats, "parallel_recommended": True, "parallel_workers": 2,
+                "executor": "thread", "executor_reason": "resolved by the analysis",
+            })
+
+        with patch.object(zircolite_script, "analyze_files_and_recommend_mode", side_effect=fake_recommend), \
+             patch("sys.argv", ["zircolite.py", "-e", str(events_dir), "-r", str(ruleset_file), "-j",
+                                "-o", str(tmp_path / "output.json"), "-w", "2", *get_log_arg(tmp_path)]):
+            zircolite_script.main()
+
+        assert requests == [("auto", True, 2)]
+        assert "Executor: thread (resolved by the analysis)" in (tmp_path / "test.log").read_text()
 
     def test_unified_db_vs_per_file_mode(self, tmp_path):
         """Test that unified mode produces different results than per-file mode."""

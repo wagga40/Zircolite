@@ -270,6 +270,18 @@ class TestConsolidatedWorkerCalc:
         assert 1 <= result <= 32
         assert result <= 10
 
+    def test_process_workers_stop_at_the_cpu_count(self):
+        sizes = [16 * 1024 * 1024] * 450
+        assert calculate_optimal_workers(sizes, 65536, 10) == 20
+        assert calculate_optimal_workers(sizes, 65536, 10, executor="process") == 10
+
+    def test_process_workers_budget_an_interpreter_each(self):
+        # Even a tiny input costs a whole interpreter holding the ruleset.
+        assert calculate_optimal_workers([1024] * 20, 1000, 10, executor="process") == 6
+
+    def test_an_explicit_count_is_not_capped_for_processes(self):
+        assert calculate_optimal_workers([1024] * 20, 1000, 10, max_workers=12, executor="process") == 12
+
     def test_never_exceeds_max_cap(self):
         result = calculate_optimal_workers(
             file_sizes=[100] * 100,

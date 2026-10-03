@@ -1220,8 +1220,8 @@ def process_parallel_streaming(
 
     executor_kind = getattr(args, "executor", None) or "thread"
     parallel_config = ParallelConfig(
-        # The CLI recommendation uses thread heuristics. Processes need their
-        # own interpreter-memory and CPU budget unless the user set a count.
+        # Processes re-measure free memory when the pool starts, since each
+        # one holds a whole interpreter, unless the user set a count.
         max_workers=getattr(args, "parallel_workers", None) or (
             recommended_workers if executor_kind == "thread" else None
         ),
