@@ -1331,6 +1331,31 @@ class TestRegexpTimeLimit:
         assert not zircore.rules_in_error
         zircore.close()
 
+    def test_timeout_warning_quotes_the_value_as_text(self, field_mappings_file, monkeypatch):
+        """The warning must let the analyst find the event, and its text is log content."""
+        import logging
+        from unittest.mock import MagicMock
+
+        import zircolite.core as core_module
+
+        monkeypatch.setattr(core_module, "REGEX_TIMEOUT_SECONDS", 0.05)
+        logger = MagicMock(spec=logging.Logger)
+        zircore = ZircoliteCore(config=field_mappings_file, logger=logger)
+        zircore.execute_query("CREATE TABLE logs (v TEXT)")
+        evil = "[/]" + "a" * 200 + "b"
+        zircore.db_connection.execute("INSERT INTO logs VALUES (?)", (evil,))
+
+        zircore.execute_select_query(
+            "SELECT * FROM logs WHERE v REGEXP '(?:a|aa)+$'", rule_title="Rule [bold]x"
+        )
+
+        warnings = [call.args[0] for call in logger.warning.call_args_list if "regex exceeded" in call.args[0]]
+        assert len(warnings) == 1
+        assert "\\[/]" + "a" * 77 + "..." in warnings[0]
+        assert "a" * 78 not in warnings[0]
+        assert "Rule \\[bold]x" in warnings[0]
+        zircore.close()
+
     def test_matcher_accepts_no_syntax_that_re_rejects(self, field_mappings_file, test_logger):
         r"""``regex`` understands \p{L}; rules may still only use what ``re`` does."""
         zircore = ZircoliteCore(config=field_mappings_file, logger=test_logger)

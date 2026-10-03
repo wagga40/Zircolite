@@ -505,7 +505,8 @@ same pattern is evaluated against every row.
   hours on a crafted command line. Matching uses the `regex` module, which accepts the
   same syntax as `re` and takes a time budget (`REGEX_TIMEOUT_SECONDS`, one second). A
   value that exceeds it counts as a non-match for that event only; a warning names the
-  rule and the run summary counts these events. Patterns are still validated with
+  rule and quotes the start of the value so the event can be found, and the run summary
+  counts these events. Patterns are still validated with
   `re`, so the matcher accepts no extra syntax.
 
 ### Typing and collation

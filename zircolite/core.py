@@ -96,6 +96,8 @@ _DEPTH_LIMIT_RE = re.compile(r"expression tree is too large", re.IGNORECASE)
 # non-match rather than failing the rule for every event.
 # ---------------------------------------------------------------------------
 REGEX_TIMEOUT_SECONDS = 1.0
+# How much of a timed-out value the warning quotes
+_TIMEOUT_EXCERPT_CHARS = 80
 
 
 @lru_cache(maxsize=512)
@@ -120,15 +122,24 @@ class _RegexTimeouts:
         self.current_rule: str | None = None
         self.logger = logger
 
-    def note(self, pattern: str) -> None:
-        """Count one value; warn the first time a rule hits the limit."""
+    def note(self, pattern: str, value: str) -> None:
+        """Count one value; warn the first time a rule hits the limit.
+
+        The warning quotes the start of the value, so the event can be found
+        in the logs: it is the one the rule did not get to judge.
+        """
         title = self.current_rule or f"regex {pattern[:80]!r}"
         count = self.counts.get(title, 0) + 1
         self.counts[title] = count
         if count == 1:
+            excerpt = value[:_TIMEOUT_EXCERPT_CHARS]
+            if len(value) > _TIMEOUT_EXCERPT_CHARS:
+                excerpt += "..."
+            # Titles and patterns carry brackets, and the value is log content
             self.logger.warning(
-                f"[yellow]   [!] Rule '{title}': regex exceeded {REGEX_TIMEOUT_SECONDS:g}s "
-                f"on an event, which was treated as not matching[/]"
+                f"[yellow]   [!] Rule '{literal(title)}': regex exceeded "
+                f"{REGEX_TIMEOUT_SECONDS:g}s on an event, which was treated as not "
+                f"matching. The value starts with {literal(repr(excerpt))}[/]"
             )
 
 
@@ -446,12 +457,13 @@ class ZircoliteCore:
                 # str(): a column whose first value was an int is typed
                 # INTEGER, and search() would raise TypeError on it --
                 # which SQLite reports as a failure of the whole rule.
+                value = str(y)
                 try:
-                    found = _compile_regex(x).search(str(y), timeout=REGEX_TIMEOUT_SECONDS)
+                    found = _compile_regex(x).search(value, timeout=REGEX_TIMEOUT_SECONDS)
                 except TimeoutError:
                     # Raising would fail the whole statement, so one planted
                     # event could silence the rule for every other event.
-                    timeouts.note(x)
+                    timeouts.note(x, value)
                     return 0
                 return 1 if found else 0
 
