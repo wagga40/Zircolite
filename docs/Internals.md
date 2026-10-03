@@ -67,6 +67,18 @@ outside SQLite's signed 64-bit range are stored as floating-point numbers and ma
 rounded, which is also what JSONL parsing produces; the run warns once and names the
 affected fields.
 
+SQLite column names are case-insensitive, so fields that differ only by case (`ProcessId`
+and `ProcessID`) share one column, named after the first spelling that database stored.
+Ingestion records each row whose event spelled such a field otherwise, one row per such
+event in two tables (`field_spellings` and `logs_spelling`), and every match and
+correlation evidence event is printed with its own spelling; CSV output has a column for
+each spelling. The run's time field is the exception: it is always printed under the name
+`--timefield` gives it, because the Timesketch template and the Mini-GUI look it up by
+that name. Per-file, unified and parallel runs therefore print an event the same way,
+whichever files share its database. A database saved with `--dbfile` keeps both tables,
+and `--db-input` uses them; rule SQL never reads them, and a query whose result has no
+`row_id` keeps the column names.
+
 XML entity rewriting leaves CDATA, comments and processing instructions intact. XML and
 EVTXtract readers skip comments and processing instructions between records.
 
@@ -250,6 +262,7 @@ All the logic lives in the `zircolite/` package. `zircolite.py` is a shim that c
 | `flatten_kernel.py` | Flattening kernel; the reference Python implementation, also compiled as `_flatten_native` |
 | `jsonstream.py` | Validating JSON-array reader with an optional C parser |
 | `results.py` | Temporary detection row storage and incremental JSON output |
+| `spellings.py` | Records the field spellings a column does not carry, and restores them on output |
 | `core.py` | `ZircoliteCore` — database management, indexes, rule execution, output |
 | `prefilter.py` | Literal prefilter: rows that may satisfy a rule's `LIKE` literals, handed to SQLite, which still runs the full rule |
 | `performance.py` | Stage timers, per-file metrics and the `--performance-json` report |
@@ -526,7 +539,8 @@ what matches, so it leaves the bound unread and the statement unplanned.
 
 In unified mode, initial column types come from the first values seen across the corpus.
 Per-file and parallel modes rebuild the table between files, so each input has its own
-schema.
+schema. Field spellings do not depend on the layout (see
+[Event processing pipeline](#event-processing-pipeline)).
 
 ### Indexes
 

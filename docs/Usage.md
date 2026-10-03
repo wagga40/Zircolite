@@ -572,6 +572,12 @@ With `--csv`, detections are written as one flat table with result fields plus
 is excluded. Correlation results include alert columns; nested values such as
 `group_keys`, `event_ids` and `evidence` are written as JSON text.
 
+Events keep their own field spellings, so fields that differ only by case get one
+column each: Sysmon's `ProcessId` and the Windows Filtering Platform's `ProcessID` are
+two columns, and each row fills the one its event used. Tools that treat headers
+case-insensitively rename or reject such duplicates; SQLite's `.import`, for one,
+renames them.
+
 Multi-file CSV runs defer writing until all result columns are known. Ordinary CLI runs
 spool rows to a temporary file; runs that also need full results for templates or
 packaging retain them in memory. JSON output can be written as each file completes.

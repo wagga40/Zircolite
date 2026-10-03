@@ -61,6 +61,7 @@ from .performance import FileMetrics, timed_stage
 from .prefilter import prepare_rules, rule_queries
 from .results import RowSpool, write_result_json
 from .shutdown import is_shutdown_requested
+from .spellings import FieldSpellings, drop_spellings
 from .sqlscan import (
     admitted_pairs,
     census_collations_supported,
@@ -218,6 +219,8 @@ class ZircoliteCore:
         "_prepared",
         "_profiling_data",
         "_regex_timeouts",
+        "_spellings",
+        "_spellings_read",
         "_working_directory",
         "add_index",
         "archive_password",
@@ -344,6 +347,9 @@ class ZircoliteCore:
         self.rounded_integer_fields: set[str] = set()
         # Lowercased logs columns; rebuilt on demand, dropped on any schema change
         self._logs_columns_lower: set[str] | None = None
+        # Field spellings the logs columns do not carry; read once the rows are in
+        self._spellings: FieldSpellings | None = None
+        self._spellings_read = False
         # Cache for escaped identifiers to avoid repeated string operations
         self._escape_cache: dict = {}
         # Reusable cursor to avoid creating new cursors for each query
@@ -353,6 +359,7 @@ class ZircoliteCore:
         """Close the database connection. Safe to call multiple times."""
         self._cursor = None
         self._logs_columns_lower = None
+        self._forget_spellings()
         conn = self.db_connection
         if conn is not None:
             conn.close()
@@ -497,6 +504,7 @@ class ZircoliteCore:
         self.logger.debug(f" CREATE : {create_table_stmt}")
         if not self.execute_query(create_table_stmt):
             raise RuntimeError("Unable to create database table")
+        self._forget_spellings()
 
     def reset_logs_table(self) -> None:
         """Drop the logs table so the next file starts from an empty schema.
@@ -518,10 +526,18 @@ class ZircoliteCore:
         conn = self.db_connection
         if conn is None:
             return
+        self._forget_spellings()
         try:
+            # One transaction: a record that outlived its rows would rename the
+            # next file's, which numbers its rows from one again.
+            if not conn.in_transaction:
+                conn.execute("BEGIN")
             conn.execute("DROP TABLE IF EXISTS logs")
-            conn.commit()
+            drop_spellings(conn)
+            conn.execute("COMMIT")
         except sqlite3.Error as exc:
+            with suppress(sqlite3.Error):
+                conn.execute("ROLLBACK")
             self.logger.debug(f"Could not reset the logs table between files: {exc}")
 
     def _log_source_census(self) -> dict[tuple, int] | None:
@@ -760,6 +776,17 @@ class ZircoliteCore:
             self._logs_columns_lower = {c.lower() for c in self._get_table_columns()}
         return self._logs_columns_lower
 
+    def _field_spellings(self) -> FieldSpellings | None:
+        """The rows whose events spelled a field otherwise than its column."""
+        if not self._spellings_read and self.db_connection is not None:
+            self._spellings = FieldSpellings.load(self.db_connection, self.time_field)
+            self._spellings_read = True
+        return self._spellings
+
+    def _forget_spellings(self) -> None:
+        self._spellings = None
+        self._spellings_read = False
+
     def _widen_logs_table(self, query: str, required: Sequence[str] = ()) -> bool:
         """Materialise the query's referenced-but-absent columns. True if widened.
 
@@ -870,10 +897,12 @@ class ZircoliteCore:
                     # turns a rule SQLite accepts into one reported as broken.
                     cursor.execute(query)
                 col_names = [d[0] for d in cursor.description]
+                spellings = self._field_spellings()
                 remaining = max_rows
                 while rows := cursor.fetchmany(256 if remaining is None else min(256, remaining)):
                     for row in rows:
-                        yield {k: v for k, v in zip(col_names, row, strict=True) if v is not None}
+                        event = {k: v for k, v in zip(col_names, row, strict=True) if v is not None}
+                        yield event if spellings is None else spellings.restore(event)
                     if remaining is not None:
                         remaining -= len(rows)
                         if remaining <= 0:
@@ -930,6 +959,7 @@ class ZircoliteCore:
         # the next execute_ruleset must re-read both
         self._auto_index_applied = False
         self._logs_columns_lower = None
+        self._forget_spellings()
 
     def escape_identifier(self, identifier: str) -> str:
         """Escape SQL identifiers like table or column names with caching."""
@@ -1149,6 +1179,11 @@ class ZircoliteCore:
         self._note_correlation_diagnostics(title, diagnostics)
         if not rows or (self.limit != -1 and len(rows) > self.limit):
             return {}
+        spellings = self._field_spellings()
+        if spellings is not None:
+            for row in rows:
+                for evidence in row.get("evidence") or ():
+                    evidence["event"] = spellings.restore(evidence["event"])
         alerts = alert_rows(rows, self.time_field or "SystemTime")
         matches: RowSpool | list[dict[str, Any]] = RowSpool() if stream_rows else []
         try:
@@ -1292,6 +1327,10 @@ class ZircoliteCore:
             self.logger.debug(f"Could not read the logs schema for the CSV header: {exc}")
             columns = []
         columns = [c for c in columns if c != "row_id"]
+        spellings = self._field_spellings()
+        if columns and spellings is not None:
+            # Rows keep their own spelling, so each spelling needs its own column.
+            columns = [name for column in columns for name in spellings.names_for(column)]
         if columns:
             return columns
         return list(rule_results["matches"][0].keys())
@@ -1804,6 +1843,7 @@ class ZircoliteCore:
             time_filtered_count) if return_filtered_count=True
         """
         self.logger.info("[+] Processing events (streaming mode)")
+        self._forget_spellings()
 
         json_array = json_array_requested(args_config) if args_config else False
 
