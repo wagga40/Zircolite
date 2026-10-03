@@ -34,6 +34,8 @@ AUTO_MIN_QUERIES = 32
 # candidates narrow its scan too little to repay handing them over. Measured
 # insensitive between 0.25 and 1.0 on the test corpus; a third of a partition still won.
 BROAD_FRACTION = 0.5
+# What a rule no row can match runs instead of its own SQL.
+NO_ROWS = "SELECT 1 WHERE 0"
 _UNSUPPORTED_WORDS = frozenset((
     "SELECT", "FROM", "WHERE", "JOIN", "UNION", "INTERSECT", "EXCEPT", "ORDER",
     "GROUP", "HAVING", "LIMIT", "OFFSET", "WINDOW", "CASE", "WHEN", "THEN",
@@ -494,15 +496,19 @@ class LiteralPrefilter:
         if candidates is None:
             self.unbounded_bypasses += 1
             return sql
-        head, body = plan.sql[:plan.where_start], plan.sql[plan.where_start:]
         if not candidates:
-            # Still compiled, so a broken rule reports its error, but never scanned.
+            # _runnable_plan already compiled this WHERE clause on this
+            # connection, and a plan that failed there was never indexed, so
+            # compiling it again finds no new error. Most rules have no
+            # candidates in most files, and that second compile was most of
+            # the rule phase on many small files.
             self.accelerated += 1
-            return f"{head} 0 AND ({body})"
+            return NO_ROWS
         if len(candidates) >= BROAD_FRACTION * self._partition_rows.get(plan.sql, self.total_rows):
             self.broad_bypasses += 1
             return sql
         self.accelerated += 1
+        head, body = plan.sql[:plan.where_start], plan.sql[plan.where_start:]
         # Row IDs are integers, so the JSON text needs no escaping. A literal keeps
         # rewrite() a plain statement; SQLite parses it once per execution.
         row_ids = orjson.dumps(list(candidates)).decode()

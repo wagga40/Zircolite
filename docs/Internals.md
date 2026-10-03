@@ -143,8 +143,9 @@ and bypasses a candidate set holding at least half the rows the rule's Channel/E
 bounds select (half the table for an unbounded rule). These limits bound indexing work;
 they are not a process memory ceiling. Candidates reach SQLite as
 `logs.row_id IN (SELECT value FROM json_each('[...]'))` in front of the original
-predicate, so the filter creates no tables; an empty candidate set becomes `0 AND (...)`,
-which still compiles the rule but scans nothing. JSON1 is required, and the filter stays
+predicate, so the filter creates no tables. A rule with an empty candidate set runs
+`SELECT 1 WHERE 0` instead: building the filter already compiled its WHERE clause on this
+database, and compiling it again would only repeat that check. JSON1 is required, and the filter stays
 off without it. Referenced fields are scanned together in batches of 256 rows. Immutable normalized SQL and
 literal plans are cached across files; schema validation and postings stay local
 to each database.

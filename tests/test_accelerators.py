@@ -427,6 +427,27 @@ def test_an_empty_candidate_set_skips_the_scan_but_not_the_errors():
             assert prefilter.rewrite(broken) == broken
 
 
+def test_a_rule_without_candidates_is_not_compiled_again(tmp_path):
+    native("ahocorasick")
+    native("pyroaring")
+    absent = "SELECT * FROM logs WHERE text LIKE '%absent-needle%'"
+    present = "SELECT * FROM logs WHERE text LIKE '%needle%'"
+    with closing(ZircoliteCore(CONFIG, ProcessingConfig(rule_prefilter="literal", no_output=True))) as core:
+        core.create_db("text TEXT")
+        core.insert_data_to_db([{"text": "needle"}, *[{"text": "quiet"} for _ in range(30)]])
+        core.ruleset = [{"id": str(i), "title": str(i), "level": "high", "rule": [query]}
+                        for i, query in enumerate((absent, present))]
+        statements = []
+        # SQLite traces statements that run, never EXPLAIN, so this sees only
+        # what detection executes, not the compile check that built the filter.
+        core.db_connection.set_trace_callback(statements.append)
+        core.execute_ruleset(str(tmp_path / "unused.json"), keep_results=True, disable_progress=True)
+        core.db_connection.set_trace_callback(None)
+        assert core.metrics.data["prefilter"][0]["applied_queries"] == 2
+        assert [result["count"] for result in core.full_results] == [1]
+    assert not [statement for statement in statements if "absent-needle" in statement]
+
+
 def test_without_json_each_the_filter_stays_off(event_database):
     class NoJson:
         def __init__(self, conn):
@@ -619,6 +640,8 @@ def test_core_prefilter_output_limits_errors_and_cleanup(tmp_path, limit):
         "SELECT * FROM logs WHERE text LIKE '%needle%' AND text LIKE 'x' ESCAPE 12",
         "SELECT count(*) AS count FROM logs WHERE text LIKE '%needle%'",
         "SELECT * FROM logs WHERE text LIKE '%needle%' AND text REGEXP '['",
+        "SELECT * FROM logs WHERE text LIKE '%absent-needle%' AND missing='x'",
+        "SELECT * FROM logs WHERE text LIKE '%absent-needle%' AND text REGEXP '['",
     ]
     for mode in ("off", "auto", "literal"):
         proc = ProcessingConfig(rule_prefilter=mode, limit=limit, no_output=True)
@@ -628,6 +651,8 @@ def test_core_prefilter_output_limits_errors_and_cleanup(tmp_path, limit):
             core.ruleset = [{"id": str(i), "title": str(i), "level": "high", "rule": [query]}
                             for i, query in enumerate(queries)]
             core.ruleset.append({"id": "dup", "title": "dup", "level": "high", "rule": [queries[0], queries[0]]})
+            core.ruleset.append({"id": "mixed", "title": "mixed", "level": "high",
+                                 "rule": ["SELECT * FROM logs WHERE text LIKE '%absent-needle%'", queries[0]]})
             core.execute_ruleset(str(tmp_path / "unused.json"), disable_progress=True)
             outcomes.append((core.full_results, set(core.rules_in_error)))
             assert core._prefilter is None
@@ -635,14 +660,15 @@ def test_core_prefilter_output_limits_errors_and_cleanup(tmp_path, limit):
     assert outcomes[0] == outcomes[1] == outcomes[2]
 
 
-def test_a_rewrite_that_sqlite_rejects_falls_back_to_the_original_query(tmp_path):
+@pytest.mark.parametrize("literal,expected", [("needle", [1]), ("absent-needle", [])])
+def test_a_rewrite_that_sqlite_rejects_falls_back_to_the_original_query(tmp_path, literal, expected):
     native("ahocorasick")
     native("pyroaring")
 
     def query(terms):
         # AND is never re-associated by the depth repair, so a chain this deep
         # can only run exactly as written.
-        return "SELECT * FROM logs WHERE text LIKE '%needle%'" + "".join(f" AND n != {i}" for i in range(terms))
+        return f"SELECT * FROM logs WHERE text LIKE '%{literal}%'" + "".join(f" AND n != {i}" for i in range(terms))
 
     outcomes = []
     for mode in ("off", "literal"):
@@ -662,7 +688,7 @@ def test_a_rewrite_that_sqlite_rejects_falls_back_to_the_original_query(tmp_path
             outcomes.append(([r["count"] for r in core.full_results], dict(core.rules_in_error)))
             if mode == "literal":
                 assert core.metrics.data["prefilter"][0]["applied_queries"] == 1
-    assert outcomes[0] == outcomes[1] == ([1], {})
+    assert outcomes[0] == outcomes[1] == (expected, {})
 
 
 @pytest.mark.parametrize("mode", ["sequential", "thread", "process", "unified"])
