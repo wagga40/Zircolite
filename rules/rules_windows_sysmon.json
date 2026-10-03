@@ -16721,6 +16721,46 @@
     "title": "Procdump Execution"
   },
   {
+    "author": "Liran Ravich, Swachchhanda Shrawan Poudel (Nextron Systems)",
+    "channel": [
+      "Microsoft-Windows-Sysmon/Operational"
+    ],
+    "description": "Detects the modification of the wsl.exe binary from its installed location.\nAttackers can replace the legitimate wsl.exe binary with a malicious payload in its place, which is then executed when the user runs WSL, acting as a proxy execution and defense evasion technique.\n",
+    "eventid": [
+      11
+    ],
+    "falsepositives": [
+      "Unlikely"
+    ],
+    "filename": "rules/windows/file/file_event/file_event_win_wsl_binary_modification.yml",
+    "id": "2f400434-01e1-416b-b52c-bb5bfbb9eb78",
+    "level": "medium",
+    "logsource": {
+      "category": "file_event",
+      "product": "windows",
+      "service": "sysmon"
+    },
+    "required_fields": [
+      "Channel",
+      "EventID",
+      "Image",
+      "TargetFilename"
+    ],
+    "result_type": "event",
+    "rule": [
+      "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=11 AND ((TargetFilename LIKE '%\\\\wsl.exe' ESCAPE '\\' AND ((TargetFilename LIKE '%:\\\\Program files\\\\wsl\\\\%' ESCAPE '\\' OR TargetFilename LIKE '%:\\\\Program files\\\\WindowsApps\\\\MicrosoftCorporationII.WindowsSubsystemForLinux\\_%' ESCAPE '\\') OR (TargetFilename LIKE '%:\\\\Users\\\\%' ESCAPE '\\' AND TargetFilename LIKE '%\\\\AppData\\\\Local\\\\Microsoft\\\\WindowsApps\\\\%' ESCAPE '\\'))) AND (NOT COALESCE(((Image LIKE 'C:\\\\Windows\\\\System32\\\\msiexec.exe' ESCAPE '\\' OR Image LIKE 'C:\\\\Windows\\\\SysWOW64\\\\msiexec.exe' ESCAPE '\\') OR (Image LIKE 'C:\\\\Windows\\\\System32\\\\svchost.exe' ESCAPE '\\' AND TargetFilename LIKE '%\\\\WindowsApps\\\\%' ESCAPE '\\')), 0))))"
+    ],
+    "schema_version": 2,
+    "source_table": "logs",
+    "status": "experimental",
+    "tags": [
+      "attack.stealth",
+      "attack.t1036.005",
+      "attack.t1218"
+    ],
+    "title": "Potential WSL Binary Modification from Installed Location"
+  },
+  {
     "author": "Norbert Ja\u015bniewicz (AlphaSOC)",
     "channel": [
       "Microsoft-Windows-Sysmon/Operational"
@@ -27859,6 +27899,45 @@
     "title": "ConvertTo-SecureString Cmdlet Usage Via CommandLine"
   },
   {
+    "author": "Diablo Research",
+    "channel": [
+      "Microsoft-Windows-Sysmon/Operational"
+    ],
+    "description": "Detects a process other than XBootMgr.exe spawned by XBootMgrSleep.exe.\nXBootMgrSleep.exe is a Microsoft-signed Windows Performance Toolkit binary that can execute an arbitrary executable after a delay.\n",
+    "eventid": [
+      1
+    ],
+    "falsepositives": [
+      "Custom Windows Performance Toolkit automation that intentionally launches another executable through XBootMgrSleep.exe"
+    ],
+    "filename": "rules/windows/process_creation/proc_creation_win_xbootmgrsleep_uncommon_child_process.yml",
+    "id": "74697c29-1b30-4e1f-a517-33574061821d",
+    "level": "medium",
+    "logsource": {
+      "category": "process_creation",
+      "product": "windows",
+      "service": "sysmon"
+    },
+    "required_fields": [
+      "Channel",
+      "EventID",
+      "Image",
+      "ParentImage"
+    ],
+    "result_type": "event",
+    "rule": [
+      "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=1 AND (ParentImage LIKE '%\\\\xbootmgrsleep.exe' ESCAPE '\\' AND (NOT COALESCE((Image LIKE 'C:\\\\Program Files (x86)\\\\Windows Kits\\\\10\\\\Windows Performance Toolkit\\\\xbootmgr.exe' ESCAPE '\\'), 0))))"
+    ],
+    "schema_version": 2,
+    "source_table": "logs",
+    "status": "experimental",
+    "tags": [
+      "attack.stealth",
+      "attack.t1202"
+    ],
+    "title": "Uncommon Child Process Spawned From XBootMgrSleep.EXE"
+  },
+  {
     "author": "@Kostastsale",
     "channel": [
       "Microsoft-Windows-Sysmon/Operational"
@@ -30266,6 +30345,49 @@
       "attack.stealth"
     ],
     "title": "Potential ShellDispatch.DLL Functionality Abuse"
+  },
+  {
+    "author": "Liran Ravich, Swachchhanda Shrawan Poudel (Nextron Systems)",
+    "channel": [
+      "Microsoft-Windows-Sysmon/Operational"
+    ],
+    "description": "Detects modifications to the Windows Subsystem for Linux (WSL) InstallLocation registry key.\nAttackers can modify this registry key to redirect the execution flow of legitimate WSL processes (wsl.exe or bash.exe) to a malicious payload, acting as a proxy execution and defense evasion technique.\n",
+    "eventid": [
+      13
+    ],
+    "falsepositives": [
+      "Unlikely"
+    ],
+    "filename": "rules/windows/registry/registry_set/registry_set_wsl_installlocation_registry_key_modification.yml",
+    "id": "83475063-b1c8-4774-9568-69bbda71a539",
+    "level": "medium",
+    "logsource": {
+      "category": "registry_set",
+      "product": "windows",
+      "service": "sysmon"
+    },
+    "required_fields": [
+      "Channel",
+      "Details",
+      "EventID",
+      "Image",
+      "TargetObject"
+    ],
+    "result_type": "event",
+    "rule": [
+      "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=13 AND (TargetObject LIKE '%\\\\Lxss\\\\MSI\\\\InstallLocation%' ESCAPE '\\' AND (NOT COALESCE((((Details LIKE 'C:\\\\Program Files\\\\WSL' ESCAPE '\\' OR Details LIKE '\\%ProgramFiles\\%\\\\WSL' ESCAPE '\\') OR (Details LIKE '%:\\\\Program Files\\\\WindowsApps\\\\MicrosoftCorporationII.WindowsSubsystemForLinux\\_%' ESCAPE '\\' OR Details LIKE '%\\\\AppData\\\\Local\\\\Microsoft\\\\WindowsApps%' ESCAPE '\\' OR Details LIKE '%\\%ProgramFiles\\%\\\\WindowsApps\\\\MicrosoftCorporationII.WindowsSubsystemForLinux\\_%' ESCAPE '\\')) OR (Image LIKE 'C:\\\\Windows\\\\System32\\\\msiexec.exe' ESCAPE '\\' OR Image LIKE 'C:\\\\Windows\\\\SysWOW64\\\\msiexec.exe' ESCAPE '\\')), 0))))"
+    ],
+    "schema_version": 2,
+    "source_table": "logs",
+    "status": "experimental",
+    "tags": [
+      "attack.stealth",
+      "attack.defense-impairment",
+      "attack.persistence",
+      "attack.t1112",
+      "attack.t1218"
+    ],
+    "title": "Potential WSL InstallLocation Registry Key Modification"
   },
   {
     "author": "Tobias Michalski (Nextron Systems)",
@@ -70581,6 +70703,46 @@
     "title": "HackTool - PPID Spoofing SelectMyParent Tool Execution"
   },
   {
+    "author": "Swachchhanda Shrawan Poudel (Nextron Systems)",
+    "channel": [
+      "Microsoft-Windows-Sysmon/Operational"
+    ],
+    "description": "Detects execution of masqueraded wsl.exe binary.\nAttackers can rename a malicious payload to wsl.exe to masquerade as the legitimate Windows Subsystem for Linux binary,\nbypassing detection based on image name alone and abusing user trust in the WSL process name.\n",
+    "eventid": [
+      1
+    ],
+    "falsepositives": [
+      "Unlikely"
+    ],
+    "filename": "rules/windows/process_creation/proc_creation_win_wsl_masquerading.yml",
+    "id": "530576ee-3b62-4bce-9a03-9aac6c61788a",
+    "level": "high",
+    "logsource": {
+      "category": "process_creation",
+      "product": "windows",
+      "service": "sysmon"
+    },
+    "required_fields": [
+      "Channel",
+      "EventID",
+      "Image",
+      "OriginalFileName"
+    ],
+    "result_type": "event",
+    "rule": [
+      "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=1 AND (Image LIKE '%\\\\wsl.exe' ESCAPE '\\' AND (NOT COALESCE((OriginalFileName='wsl.exe' OR OriginalFileName IS NULL), 0))))"
+    ],
+    "schema_version": 2,
+    "source_table": "logs",
+    "status": "experimental",
+    "tags": [
+      "attack.stealth",
+      "attack.t1036.005",
+      "attack.t1218"
+    ],
+    "title": "Suspicious WSL Binary Masquerading"
+  },
+  {
     "author": "Nasreddine Bencherchali (Nextron Systems)",
     "channel": [
       "Microsoft-Windows-Sysmon/Operational"
@@ -82078,6 +82240,46 @@
     "title": "Suspicious Regsvr32 Execution From Remote Share"
   },
   {
+    "author": "Swachchhanda Shrawan Poudel (Nextron Systems)",
+    "channel": [
+      "Microsoft-Windows-Sysmon/Operational"
+    ],
+    "description": "Detects C:\\Windows\\System32\\wsl.exe spawning a child wsl.exe process from outside the legitimate WSL install locations.\nWhen WSL or bash is invoked, the System32 stub (wsl.exe) looks up the InstallLocation registry key and executes the wsl.exe found there.\nAn attacker who modifies InstallLocation to a controlled path causes the stub to transparently proxy execution to a malicious payload,\nwhich then appears as a wsl.exe child of the legitimate System32 stub.\n",
+    "eventid": [
+      1
+    ],
+    "falsepositives": [
+      "Unlikely"
+    ],
+    "filename": "rules/windows/process_creation/proc_creation_win_wsl_binary_hijack_execution.yml",
+    "id": "88d306e9-8e2d-4025-9768-28757d2732db",
+    "level": "high",
+    "logsource": {
+      "category": "process_creation",
+      "product": "windows",
+      "service": "sysmon"
+    },
+    "required_fields": [
+      "Channel",
+      "EventID",
+      "Image",
+      "ParentImage"
+    ],
+    "result_type": "event",
+    "rule": [
+      "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=1 AND ((ParentImage LIKE 'C:\\\\Windows\\\\System32\\\\wsl.exe' ESCAPE '\\' AND Image LIKE '%\\\\wsl.exe' ESCAPE '\\') AND (NOT COALESCE(((Image LIKE 'C:\\\\Windows\\\\System32\\\\wsl.exe' ESCAPE '\\' OR Image LIKE 'C:\\\\Program Files\\\\WSL\\\\wsl.exe' ESCAPE '\\') OR (Image LIKE 'C:\\\\Windows\\\\WinSxS\\\\amd64\\_microsoft-windows-lxss-wsl\\_%' ESCAPE '\\' OR Image LIKE 'C:\\\\Windows\\\\WinSxS\\\\arm64\\_microsoft-windows-lxss-wsl\\_%' ESCAPE '\\' OR Image LIKE 'C:\\\\Program Files\\\\WindowsApps\\\\MicrosoftCorporationII.WindowsSubsystemForLinux%' ESCAPE '\\') OR (Image LIKE 'C:\\\\Users\\\\%' ESCAPE '\\' AND Image LIKE '%\\\\AppData\\\\Local\\\\Microsoft\\\\WindowsApps\\\\%' ESCAPE '\\')), 0))))"
+    ],
+    "schema_version": 2,
+    "source_table": "logs",
+    "status": "experimental",
+    "tags": [
+      "attack.stealth",
+      "attack.t1036.005",
+      "attack.t1218"
+    ],
+    "title": "Suspicious WSL Binary Hijack via Proxy Execution"
+  },
+  {
     "author": "Florian Roth (Nextron Systems)",
     "channel": [
       "Microsoft-Windows-Sysmon/Operational"
@@ -89410,12 +89612,12 @@
       "Microsoft-Windows-PowerShell/Operational",
       "PowerShellCore/Operational"
     ],
-    "description": "Detects PowerShell scripts that utilize native PowerShell Identity modules to request Kerberos tickets.\nThis behavior is typically seen during a Kerberos or silver ticket attack. A successful execution will output the SPNs for the endpoint in question.\n",
+    "description": "Detects PowerShell scripts that utilize native PowerShell Identity modules to request Kerberos tickets.\nThis behavior is typically seen during a Kerberoasting or silver ticket attack. A TGS request is issued by\nthe KerberosRequestorSecurityToken constructor, resulting tickets are cached in LSA and become\nextractable by other tools later on.\n",
     "eventid": [
       4104
     ],
     "falsepositives": [
-      "Unknown"
+      "Legitimate Kerberos authentication development and troubleshooting scripts"
     ],
     "filename": "rules/windows/powershell/powershell_script/posh_ps_request_kerberos_ticket.yml",
     "id": "a861d835-af37-4930-bcd6-5b178bfb54df",
@@ -89432,7 +89634,7 @@
     ],
     "result_type": "event",
     "rule": [
-      "SELECT * FROM logs WHERE (Channel='Microsoft-Windows-PowerShell/Operational' OR Channel='PowerShellCore/Operational') AND (EventID=4104 AND (ScriptBlockText LIKE '%System.IdentityModel.Tokens.KerberosRequestorSecurityToken%' ESCAPE '\\' AND ScriptBlockText LIKE '%.GetRequest()%' ESCAPE '\\'))"
+      "SELECT * FROM logs WHERE (Channel='Microsoft-Windows-PowerShell/Operational' OR Channel='PowerShellCore/Operational') AND (EventID=4104 AND ScriptBlockText LIKE '%System.IdentityModel.Tokens.KerberosRequestorSecurityToken%' ESCAPE '\\')"
     ],
     "schema_version": 2,
     "source_table": "logs",
@@ -96757,12 +96959,12 @@
     "channel": [
       "Microsoft-Windows-Sysmon/Operational"
     ],
-    "description": "Detects suspicious Kerberos ticket requests via command line using System.IdentityModel.Tokens.KerberosRequestorSecurityToken class.\nThreat actors may use command line interfaces to request Kerberos tickets for service accounts in order to\nperform offline password cracking attacks commonly known as Kerberoasting or other Kerberos ticket abuse\ntechniques like silver ticket attacks.\n",
+    "description": "Detects suspicious Kerberos ticket requests via command line using System.IdentityModel.Tokens.KerberosRequestorSecurityToken class.\nThreat actors may use command line interfaces to request Kerberos tickets for service accounts in order to\nperform offline password cracking attacks commonly known as Kerberoasting or other Kerberos ticket abuse\ntechniques like silver ticket attacks. Encoded commands will not surface the class name, so the ps_script\nrule covers that instead.\n",
     "eventid": [
       1
     ],
     "falsepositives": [
-      "Legitimate command line usage by administrators or security tools."
+      "Legitimate command line usage by administrators or security tools"
     ],
     "filename": "rules/windows/process_creation/proc_creation_win_powershell_kerberos_kerberos_ticket_request_via_cli.yml",
     "id": "caa9a802-8bd8-4b9e-a5cd-4d6221670219",
@@ -96781,7 +96983,7 @@
     ],
     "result_type": "event",
     "rule": [
-      "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=1 AND (((Image LIKE '%\\\\powershell.exe' ESCAPE '\\' OR Image LIKE '%\\\\pwsh.exe' ESCAPE '\\') OR (OriginalFileName='powershell.exe' OR OriginalFileName='pwsh.dll')) AND (CommandLine LIKE '%System.IdentityModel.Tokens.KerberosRequestorSecurityToken%' ESCAPE '\\' AND CommandLine LIKE '%.GetRequest()%' ESCAPE '\\')))"
+      "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=1 AND (((Image LIKE '%\\\\powershell.exe' ESCAPE '\\' OR Image LIKE '%\\\\pwsh.exe' ESCAPE '\\') OR (OriginalFileName='powershell.exe' OR OriginalFileName='pwsh.dll')) AND CommandLine LIKE '%System.IdentityModel.Tokens.KerberosRequestorSecurityToken%' ESCAPE '\\'))"
     ],
     "schema_version": 2,
     "source_table": "logs",
@@ -106997,7 +107199,7 @@
     ],
     "result_type": "event",
     "rule": [
-      "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=1 AND ((((CommandLine LIKE '% -create %' ESCAPE '\\' OR CommandLine LIKE '% /create %' ESCAPE '\\' OR CommandLine LIKE '% \u2013create %' ESCAPE '\\' OR CommandLine LIKE '% \u2014create %' ESCAPE '\\' OR CommandLine LIKE '% \u2015create %' ESCAPE '\\' OR CommandLine LIKE '% -delete %' ESCAPE '\\' OR CommandLine LIKE '% /delete %' ESCAPE '\\' OR CommandLine LIKE '% \u2013delete %' ESCAPE '\\' OR CommandLine LIKE '% \u2014delete %' ESCAPE '\\' OR CommandLine LIKE '% \u2015delete %' ESCAPE '\\' OR CommandLine LIKE '% -query %' ESCAPE '\\' OR CommandLine LIKE '% /query %' ESCAPE '\\' OR CommandLine LIKE '% \u2013query %' ESCAPE '\\' OR CommandLine LIKE '% \u2014query %' ESCAPE '\\' OR CommandLine LIKE '% \u2015query %' ESCAPE '\\' OR CommandLine LIKE '% -change %' ESCAPE '\\' OR CommandLine LIKE '% /change %' ESCAPE '\\' OR CommandLine LIKE '% \u2013change %' ESCAPE '\\' OR CommandLine LIKE '% \u2014change %' ESCAPE '\\' OR CommandLine LIKE '% \u2015change %' ESCAPE '\\' OR CommandLine LIKE '% -run %' ESCAPE '\\' OR CommandLine LIKE '% /run %' ESCAPE '\\' OR CommandLine LIKE '% \u2013run %' ESCAPE '\\' OR CommandLine LIKE '% \u2014run %' ESCAPE '\\' OR CommandLine LIKE '% \u2015run %' ESCAPE '\\' OR CommandLine LIKE '% -end %' ESCAPE '\\' OR CommandLine LIKE '% /end %' ESCAPE '\\' OR CommandLine LIKE '% \u2013end %' ESCAPE '\\' OR CommandLine LIKE '% \u2014end %' ESCAPE '\\' OR CommandLine LIKE '% \u2015end %' ESCAPE '\\') AND (CommandLine LIKE '% -tn %' ESCAPE '\\' OR CommandLine LIKE '% /tn %' ESCAPE '\\' OR CommandLine LIKE '% \u2013tn %' ESCAPE '\\' OR CommandLine LIKE '% \u2014tn %' ESCAPE '\\' OR CommandLine LIKE '% \u2015tn %' ESCAPE '\\' OR CommandLine LIKE '% -tr %' ESCAPE '\\' OR CommandLine LIKE '% /tr %' ESCAPE '\\' OR CommandLine LIKE '% \u2013tr %' ESCAPE '\\' OR CommandLine LIKE '% \u2014tr %' ESCAPE '\\' OR CommandLine LIKE '% \u2015tr %' ESCAPE '\\' OR CommandLine LIKE '% -sc %' ESCAPE '\\' OR CommandLine LIKE '% /sc %' ESCAPE '\\' OR CommandLine LIKE '% \u2013sc %' ESCAPE '\\' OR CommandLine LIKE '% \u2014sc %' ESCAPE '\\' OR CommandLine LIKE '% \u2015sc %' ESCAPE '\\' OR CommandLine LIKE '% -st %' ESCAPE '\\' OR CommandLine LIKE '% /st %' ESCAPE '\\' OR CommandLine LIKE '% \u2013st %' ESCAPE '\\' OR CommandLine LIKE '% \u2014st %' ESCAPE '\\' OR CommandLine LIKE '% \u2015st %' ESCAPE '\\' OR CommandLine LIKE '% -ru %' ESCAPE '\\' OR CommandLine LIKE '% /ru %' ESCAPE '\\' OR CommandLine LIKE '% \u2013ru %' ESCAPE '\\' OR CommandLine LIKE '% \u2014ru %' ESCAPE '\\' OR CommandLine LIKE '% \u2015ru %' ESCAPE '\\' OR CommandLine LIKE '% -fo %' ESCAPE '\\' OR CommandLine LIKE '% /fo %' ESCAPE '\\' OR CommandLine LIKE '% \u2013fo %' ESCAPE '\\' OR CommandLine LIKE '% \u2014fo %' ESCAPE '\\' OR CommandLine LIKE '% \u2015fo %' ESCAPE '\\')) AND (NOT COALESCE((CommandLine LIKE '%schtasks%' ESCAPE '\\'), 0))) OR (OriginalFileName='schtasks.exe' AND (NOT COALESCE((Image LIKE '%\\\\schtasks.exe' ESCAPE '\\'), 0)))))"
+      "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=1 AND ((((CommandLine LIKE '% -create %' ESCAPE '\\' OR CommandLine LIKE '% /create %' ESCAPE '\\' OR CommandLine LIKE '% \u2013create %' ESCAPE '\\' OR CommandLine LIKE '% \u2014create %' ESCAPE '\\' OR CommandLine LIKE '% \u2015create %' ESCAPE '\\' OR CommandLine LIKE '% -delete %' ESCAPE '\\' OR CommandLine LIKE '% /delete %' ESCAPE '\\' OR CommandLine LIKE '% \u2013delete %' ESCAPE '\\' OR CommandLine LIKE '% \u2014delete %' ESCAPE '\\' OR CommandLine LIKE '% \u2015delete %' ESCAPE '\\' OR CommandLine LIKE '% -query %' ESCAPE '\\' OR CommandLine LIKE '% /query %' ESCAPE '\\' OR CommandLine LIKE '% \u2013query %' ESCAPE '\\' OR CommandLine LIKE '% \u2014query %' ESCAPE '\\' OR CommandLine LIKE '% \u2015query %' ESCAPE '\\' OR CommandLine LIKE '% -change %' ESCAPE '\\' OR CommandLine LIKE '% /change %' ESCAPE '\\' OR CommandLine LIKE '% \u2013change %' ESCAPE '\\' OR CommandLine LIKE '% \u2014change %' ESCAPE '\\' OR CommandLine LIKE '% \u2015change %' ESCAPE '\\' OR CommandLine LIKE '% -run %' ESCAPE '\\' OR CommandLine LIKE '% /run %' ESCAPE '\\' OR CommandLine LIKE '% \u2013run %' ESCAPE '\\' OR CommandLine LIKE '% \u2014run %' ESCAPE '\\' OR CommandLine LIKE '% \u2015run %' ESCAPE '\\' OR CommandLine LIKE '% -end %' ESCAPE '\\' OR CommandLine LIKE '% /end %' ESCAPE '\\' OR CommandLine LIKE '% \u2013end %' ESCAPE '\\' OR CommandLine LIKE '% \u2014end %' ESCAPE '\\' OR CommandLine LIKE '% \u2015end %' ESCAPE '\\') AND (CommandLine LIKE '% -tn %' ESCAPE '\\' OR CommandLine LIKE '% /tn %' ESCAPE '\\' OR CommandLine LIKE '% \u2013tn %' ESCAPE '\\' OR CommandLine LIKE '% \u2014tn %' ESCAPE '\\' OR CommandLine LIKE '% \u2015tn %' ESCAPE '\\' OR CommandLine LIKE '% -tr %' ESCAPE '\\' OR CommandLine LIKE '% /tr %' ESCAPE '\\' OR CommandLine LIKE '% \u2013tr %' ESCAPE '\\' OR CommandLine LIKE '% \u2014tr %' ESCAPE '\\' OR CommandLine LIKE '% \u2015tr %' ESCAPE '\\' OR CommandLine LIKE '% -sc %' ESCAPE '\\' OR CommandLine LIKE '% /sc %' ESCAPE '\\' OR CommandLine LIKE '% \u2013sc %' ESCAPE '\\' OR CommandLine LIKE '% \u2014sc %' ESCAPE '\\' OR CommandLine LIKE '% \u2015sc %' ESCAPE '\\' OR CommandLine LIKE '% -st %' ESCAPE '\\' OR CommandLine LIKE '% /st %' ESCAPE '\\' OR CommandLine LIKE '% \u2013st %' ESCAPE '\\' OR CommandLine LIKE '% \u2014st %' ESCAPE '\\' OR CommandLine LIKE '% \u2015st %' ESCAPE '\\' OR CommandLine LIKE '% -ru %' ESCAPE '\\' OR CommandLine LIKE '% /ru %' ESCAPE '\\' OR CommandLine LIKE '% \u2013ru %' ESCAPE '\\' OR CommandLine LIKE '% \u2014ru %' ESCAPE '\\' OR CommandLine LIKE '% \u2015ru %' ESCAPE '\\' OR CommandLine LIKE '% -fo %' ESCAPE '\\' OR CommandLine LIKE '% /fo %' ESCAPE '\\' OR CommandLine LIKE '% \u2013fo %' ESCAPE '\\' OR CommandLine LIKE '% \u2014fo %' ESCAPE '\\' OR CommandLine LIKE '% \u2015fo %' ESCAPE '\\')) AND (NOT COALESCE((CommandLine LIKE '%schtasks%' ESCAPE '\\'), 0)) AND (NOT COALESCE((CommandLine LIKE '%openfiles%' ESCAPE '\\' AND CommandLine LIKE '% /query %' ESCAPE '\\' AND CommandLine LIKE '% /fo%' ESCAPE '\\'), 0))) OR (OriginalFileName='schtasks.exe' AND (NOT COALESCE((Image LIKE '%\\\\schtasks.exe' ESCAPE '\\'), 0)))))"
     ],
     "schema_version": 2,
     "source_table": "logs",
@@ -107128,6 +107330,49 @@
       "attack.t1202"
     ],
     "title": "Potentially Suspicious Office Document Executed From Trusted Location"
+  },
+  {
+    "author": "Swachchhanda Shrawan Poudel (Nextron Systems)",
+    "channel": [
+      "Microsoft-Windows-Sysmon/Operational"
+    ],
+    "description": "Detects the use of reg.exe or PowerShell to modify the WSL InstallLocation registry key via command-line arguments.\nLegitimate modifications to this key are performed exclusively by the Windows Installer (msiexec.exe) during WSL package installation or update.\nManual use of reg.exe or PowerShell to set this value strongly indicates an attempt to redirect WSL execution to a malicious binary.\n",
+    "eventid": [
+      1
+    ],
+    "falsepositives": [
+      "Unlikely"
+    ],
+    "filename": "rules/windows/process_creation/proc_creation_win_wsl_installlocation_modification_via_cmdline.yml",
+    "id": "f9f62824-de4e-40ca-afe7-8358f76a876d",
+    "level": "high",
+    "logsource": {
+      "category": "process_creation",
+      "product": "windows",
+      "service": "sysmon"
+    },
+    "required_fields": [
+      "Channel",
+      "CommandLine",
+      "EventID",
+      "Image",
+      "OriginalFileName"
+    ],
+    "result_type": "event",
+    "rule": [
+      "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=1 AND (((Image LIKE '%\\\\powershell.exe' ESCAPE '\\' OR Image LIKE '%\\\\pwsh.exe' ESCAPE '\\' OR Image LIKE '%\\\\reg.exe' ESCAPE '\\') OR (OriginalFileName='powershell.exe' OR OriginalFileName='pwsh.dll' OR OriginalFileName='reg.exe')) AND (CommandLine LIKE '% add %' ESCAPE '\\' OR CommandLine LIKE '%New-ItemProperty%' ESCAPE '\\' OR CommandLine LIKE '%Set-ItemProperty%' ESCAPE '\\' OR CommandLine LIKE '%sp %' ESCAPE '\\') AND (CommandLine LIKE '%\\\\Lxss\\\\MSI%' ESCAPE '\\' OR CommandLine LIKE '%/Lxss/MSI%' ESCAPE '\\') AND CommandLine LIKE '%InstallLocation%' ESCAPE '\\'))"
+    ],
+    "schema_version": 2,
+    "source_table": "logs",
+    "status": "experimental",
+    "tags": [
+      "attack.stealth",
+      "attack.defense-impairment",
+      "attack.persistence",
+      "attack.t1112",
+      "attack.t1218"
+    ],
+    "title": "Suspicious WSL InstallLocation Registry Key Modification Via CommandLine"
   },
   {
     "author": "Florian Roth (Nextron Systems)",
