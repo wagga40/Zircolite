@@ -661,6 +661,8 @@ SANDBOX_ESCAPES = {
     "base64_binascii": "def transform(param):\n    return base64.binascii.hexlify(b'x').decode()",
     "chardet_submodule": "def transform(param):\n    return str(chardet.charsetprober.logging.os.getcwd())",
     "module_write": "def transform(param):\n    re.search = len\n    return 'patched'",
+    "random_module": "def transform(param):\n    return str(random.random())",
+    "whrandom_module": "def transform(param):\n    return str(whrandom.random())",
 }
 
 
@@ -746,36 +748,48 @@ class TestRestrictedPythonSecurity:
 
     def test_no_attribute_chain_reaches_the_host(self):
         """Walk every attribute chain ``safer_getattr`` allows from the sandbox's
-        builtins; none may reach a module outside it or an unguarded builtin."""
+        builtins; none may reach a module or an unguarded builtin."""
         import builtins
         import types
+
+        from RestrictedPython.Utilities import _AttributeDelegator
 
         from zircolite.streaming import _RESTRICTED_BUILTINS
 
         forbidden = {id(f) for f in (builtins.open, builtins.eval, builtins.exec,
                                      builtins.compile, builtins.__import__, builtins.getattr,
                                      builtins.vars, builtins.globals)}
+
+        def public_attrs(obj):
+            # RestrictedPython's ``string`` forwards lookups to the real module
+            # through __getattr__, so dir() on it would show none of them.
+            if isinstance(obj, _AttributeDelegator):
+                target = vars(obj)["_AttributeDelegator__mod"]
+                excluded = vars(obj)["_AttributeDelegator__excludes"]
+                return [(a, getattr(target, a)) for a in dir(target)
+                        if not a.startswith("_") and a not in excluded]
+            found = []
+            for attr in dir(obj):
+                if attr.startswith("_"):
+                    continue
+                try:
+                    found.append((attr, getattr(obj, attr)))
+                except Exception:
+                    continue
+            return found
+
         frontier = [(name, obj) for name, obj in _RESTRICTED_BUILTINS.items()
                     if not name.startswith("_")]
         hits = []
         for _ in range(4):
             next_frontier = []
             for path, obj in frontier:
-                if isinstance(obj, types.ModuleType) and obj.__name__ not in ("math", "random"):
-                    hits.append(path)
-                    continue
-                if id(obj) in forbidden:
+                if isinstance(obj, types.ModuleType) or id(obj) in forbidden:
                     hits.append(path)
                     continue
                 if isinstance(obj, (str, bytes, int, float, bool, type(None))):
                     continue
-                for attr in dir(obj):
-                    if attr.startswith("_"):
-                        continue
-                    try:
-                        next_frontier.append((f"{path}.{attr}", getattr(obj, attr)))
-                    except Exception:
-                        continue
+                next_frontier += [(f"{path}.{attr}", value) for attr, value in public_attrs(obj)]
             frontier = next_frontier
         assert hits == []
 

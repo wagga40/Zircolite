@@ -2,7 +2,10 @@
 Tests for the EvtxExtractor class.
 """
 
+import random
+import re
 import sys
+import time
 from pathlib import Path
 
 import pytest
@@ -10,6 +13,7 @@ import pytest
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from zircolite import EvtxExtractor, ExtractorConfig
+from zircolite.extractor import _AUDITD_ATTR_RE
 
 
 class TestEvtxExtractorInit:
@@ -586,3 +590,44 @@ class TestAuditdEnrichedFields:
         assert event["arch"] == "c000003e"
         assert event["euid"] == "33"
         assert not any(k.endswith(("Raw", "Enriched")) for k in event)
+
+
+class TestAuditdAttributeParsingIsLinear:
+    """auditd key=value parsing stays linear in the line length.
+
+    Without its lookbehind, ``_AUDITD_ATTR_RE`` retries the key from every
+    character of a run of key characters that has no '=' after it, which is
+    quadratic: a forged 8 KB audit.log line costs about a second of CPU. The
+    lookbehind only skips starts that can never match, so the pairs found must
+    be exactly those the pattern without it finds.
+    """
+
+    UNANCHORED = re.compile(r"([\w\[\].]+)=(\"[^\"]*\"|'[^']*'|\S*)")
+    SAMPLE = Path(__file__).parent / "fixtures" / "audit_sample.log"
+
+    @staticmethod
+    def _pairs(pattern, line):
+        return [(m.span(), m.group(1), m.group(2)) for m in pattern.finditer(line)]
+
+    def test_same_pairs_on_the_sample_log(self):
+        lines = self.SAMPLE.read_text().splitlines()
+        assert lines
+        for line in lines:
+            assert self._pairs(_AUDITD_ATTR_RE, line) == self._pairs(self.UNANCHORED, line)
+
+    def test_same_pairs_on_generated_lines(self):
+        rng = random.Random(1)  # noqa: S311 -- reproducible test data
+        pieces = ["a", "b1", "_", ".", "[", "]", "=", "==", '"', "'", " ", "  ", "\t",
+                  "é", "-", ":", "(", ")", "msg=audit(1.2:3):", "key=", "x=\"a b\"", "y='c d'"]
+        for _ in range(20000):
+            line = "".join(rng.choice(pieces) for _ in range(rng.randint(0, 14)))
+            assert self._pairs(_AUDITD_ATTR_RE, line) == self._pairs(self.UNANCHORED, line), line
+
+    def test_long_run_without_equals_is_linear(self):
+        line = "type=SYSCALL msg=audit(1.1:1): " + "a" * 262144
+        started = time.process_time()
+        pairs = self._pairs(_AUDITD_ATTR_RE, line)
+        spent = time.process_time() - started
+        assert [p[1] for p in pairs] == ["type", "msg"]
+        # Quadratic matching needs about a second at 8 KB, so minutes at 256 KB.
+        assert spent < 1.0, f"{spent:.2f}s CPU on a {len(line)}-char line"

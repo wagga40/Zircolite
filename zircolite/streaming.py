@@ -566,8 +566,10 @@ def _build_restricted_builtins() -> dict:
     builtins.update(safe_builtins)
     builtins.update(limited_builtins)
     builtins.update(utility_builtins)
-    # Pure functions RestrictedPython leaves out that the shipped transforms
-    # use; before ``__builtins__`` was set they came from the real builtins.
+    # utility_builtins hands out the real random module, which no transform
+    # needs and which is not part of the documented sandbox.
+    del builtins["random"], builtins["whrandom"]
+    # Pure functions RestrictedPython leaves out that the shipped transforms use.
     for name in ("all", "any", "dict", "enumerate", "filter", "iter", "map",
                  "max", "min", "next", "reversed", "sum"):
         builtins.setdefault(name, getattr(_py_builtins, name))

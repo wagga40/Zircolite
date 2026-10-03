@@ -6,6 +6,7 @@ import json
 import logging
 import re
 import sys
+import zipfile
 from pathlib import Path
 from typing import ClassVar
 from unittest.mock import MagicMock, patch
@@ -1062,10 +1063,10 @@ class TestZircoGuiRuleMetadataCannotBeShadowed:
 
     Each Mini-GUI record is a JS object literal that lists the rule metadata
     first and the matched event's fields after it. A field with the same name
-    (a JSON ``title``, or a split pair such as ``Hashes=...,title=...``) became
-    a duplicate key, and the later, log-supplied value won: an attacker could
-    relabel their own detection, and the GUI rendered the value as the rule
-    title. Colliding fields are kept under a ``log_`` prefix instead.
+    (a JSON ``title``, or a ``-D`` database column) would be a duplicate key,
+    and in JavaScript the later, log-supplied value wins: an attacker could
+    relabel their own detection. Colliding fields are kept under a ``log_``
+    prefix instead.
     """
 
     TEMPLATE = Path(__file__).parent.parent / "templates" / "exportForZircoGui.tmpl"
@@ -1128,3 +1129,60 @@ class TestZircoGuiRuleMetadataCannotBeShadowed:
         # Only exact names collide: JS keys are case-sensitive
         assert values["Title"] == "window title"
         assert values["title"] == "Real Rule"
+
+
+class TestZircoGuiBundleTreatsLogStringsAsText:
+    """The bundled Mini-GUI must treat log-derived strings as text, never as HTML.
+
+    Field names, field values and the rule title all reach the page from the
+    analysed logs. Concatenated into HTML strings for jQuery ``append`` (table
+    headers, select options), RowGroup (whose default label is appended as
+    HTML) or vis-timeline (with ``onclick`` allowed by its XSS filter), a
+    crafted event runs script in the analyst's browser. These checks read the
+    JavaScript shipped in ``gui/zircogui.zip``.
+    """
+
+    ZIP = Path(__file__).parent.parent / "gui" / "zircogui.zip"
+
+    @pytest.fixture(scope="class")
+    def gui_js(self):
+        with zipfile.ZipFile(self.ZIP) as zf:
+            return {
+                name: zf.read(f"zircogui/js/{name}").decode("utf-8")
+                for name in ("index.js", "functions.js")
+            }
+
+    def test_table_headers_are_built_as_text(self, gui_js):
+        index = gui_js["index.js"]
+        assert not re.search(r"""["']<th>["']\s*\+\s*item""", index)
+        assert index.count('$("<th>").text(item)') == 2  # header and footer
+
+    def test_select_options_are_built_as_text(self, gui_js):
+        functions = gui_js["functions.js"]
+        assert "<option value=" not in functions
+        assert "$('<option>').val(text).text(text)" in functions
+        assert functions.count("append(textOption(") == 3
+
+    def test_row_group_label_is_a_text_node(self, gui_js):
+        functions = gui_js["functions.js"]
+        assert "rowGroup: {dataSrc: 'title', startRender: textGroupLabel}" in functions
+        assert "document.createTextNode(String(group))" in functions
+
+    def test_timeline_items_are_dom_nodes_without_inline_handlers(self, gui_js):
+        index = gui_js["index.js"]
+        assert "onclick" not in index
+        assert 'document.createTextNode(event["title"] + " - EventID : " + event["EventID"]' in index
+        assert "content: itemContent," in index
+
+    def test_archive_carries_the_page_assets(self):
+        with zipfile.ZipFile(self.ZIP) as zf:
+            names = set(zf.namelist())
+            assert zf.testzip() is None
+        for asset in (
+            "zircogui/index.html",
+            "zircogui/vendor/jquery/jquery.min.js",
+            "zircogui/vendor/datatablesOrg/datatables.min.js",
+            "zircogui/vendor/vis-timeline/vis-timeline-graph2d.min.js",
+            "zircogui/js/mitre.js",
+        ):
+            assert asset in names

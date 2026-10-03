@@ -3775,9 +3775,9 @@ class TestEvidenceNamesPrintAsWritten:
         assert "[bold]x.evtx" in capsys.readouterr().out
 
     def test_markup_in_an_auto_detected_timestamp_field(self, tmp_path):
-        """The timestamp field is picked from the log's own keys: one JSON line
-        whose key closes a tag ended the run with MarkupError before any file
-        was processed."""
+        """The timestamp field can be picked from the log's own keys, so a key
+        that closes a markup tag must be printed as written, not end the run
+        with MarkupError before any file is processed."""
         events = tmp_path / "events.json"
         events.write_text('{"log[/]time": "2024-01-01T10:00:00Z", "EventID": 1}\n')
 

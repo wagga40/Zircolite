@@ -1293,6 +1293,12 @@ split:
 The shipped configuration splits three fields this way: `Hash`, `Hashes` and
 `ConfigurationFileHash`.
 
+The derived names come from the log itself, so they are cleaned like any other field
+name: only ASCII letters and digits are kept (`row_id` becomes `rowid`), and a key left
+empty is dropped. A derived field never replaces a field the event already carries, in
+any letter case: `Hashes: MD5=x,Image=y` adds `MD5` but leaves the event's own `Image`
+alone.
+
 Splitting runs *after* transforms, so a transform that replaces a value rather than
 writing an alias changes what gets split.
 

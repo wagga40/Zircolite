@@ -1403,7 +1403,7 @@ class TestCsvHeaderIsSanitised:
         header = self._header(tmp_path, "--evtx", str(logs), "-j", "--no-auto-mode", *mode_flags)
 
         assert "MD5" in header
-        assert [h for h in header if h.startswith(self.FORMULA_PREFIXES + ("'",))] == []
+        assert [h for h in header if h.startswith((*self.FORMULA_PREFIXES, "'"))] == []
 
     def test_buffered_writer_sanitises_header_but_keeps_rows_aligned(self, dummy_ctx, tmp_path):
         """The retained-results path: the cell under the renamed header keeps its value."""

@@ -405,8 +405,8 @@ class TestFlattenHotPathOptimizations:
         self, field_mappings_file, test_logger, default_args_config,
         backend, image_first, spelling,
     ):
-        """'Hashes: MD5=x,Image=benign.exe' rewrote Image, so rules on the
-        real process path never saw it."""
+        """A pair such as 'Image=benign.exe' inside Hashes must not replace the
+        event's real Image, or rules on the real process path would miss it."""
         processor = StreamingEventProcessor(
             config_file=field_mappings_file,
             args_config=default_args_config,
@@ -2344,10 +2344,10 @@ class TestStreamingHostileKeysAndCaseVariants:
     def test_split_pair_cannot_write_row_id(
         self, field_mappings_file, test_logger, default_args_config, tmp_path, pair
     ):
-        """A 'row_id' pair used to be bound into the INTEGER PRIMARY KEY.
+        """A 'row_id' pair must never reach the INTEGER PRIMARY KEY.
 
-        A duplicate id (UNIQUE) or 2**63-1 (AUTOINCREMENT exhausted) failed
-        the batch, and every other event of the file went unanalysed.
+        A duplicate id (UNIQUE) or 2**63-1 (AUTOINCREMENT exhausted) would fail
+        the batch and leave every other event of the file unanalysed.
         """
         processor = self._make_processor(field_mappings_file, test_logger, default_args_config)
         json_file = tmp_path / "events.json"
