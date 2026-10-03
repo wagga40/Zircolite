@@ -642,6 +642,8 @@ def test_core_prefilter_output_limits_errors_and_cleanup(tmp_path, limit):
         "SELECT * FROM logs WHERE text LIKE '%needle%' AND text REGEXP '['",
         "SELECT * FROM logs WHERE text LIKE '%absent-needle%' AND missing='x'",
         "SELECT * FROM logs WHERE text LIKE '%absent-needle%' AND text REGEXP '['",
+        # Planned, so only the compile check that builds the filter can report it.
+        "SELECT * FROM logs WHERE text LIKE '%absent-needle%' AND text = = 'x'",
     ]
     for mode in ("off", "auto", "literal"):
         proc = ProcessingConfig(rule_prefilter=mode, limit=limit, no_output=True)

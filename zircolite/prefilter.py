@@ -499,9 +499,9 @@ class LiteralPrefilter:
         if not candidates:
             # _runnable_plan already compiled this WHERE clause on this
             # connection, and a plan that failed there was never indexed, so
-            # compiling it again finds no new error. Most rules have no
-            # candidates in most files, and that second compile was most of
-            # the rule phase on many small files.
+            # compiling it again would find no new error. Most rules have no
+            # candidates in most files: compiling each one again would be most
+            # of the rule phase on many small files.
             self.accelerated += 1
             return NO_ROWS
         if len(candidates) >= BROAD_FRACTION * self._partition_rows.get(plan.sql, self.total_rows):
