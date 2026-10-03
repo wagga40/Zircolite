@@ -476,8 +476,10 @@ class LiteralPrefilter:
     def _explain(self, plan):
         # Result columns cannot fail where the WHERE clause succeeds, and
         # compiling SELECT * costs one opcode per column of a wide table.
-        with closing(self.connection.execute("EXPLAIN SELECT 1 FROM logs WHERE" + plan.sql[plan.where_start:])) as cursor:  # noqa: S608 -- the rule's own WHERE clause
-            cursor.fetchall()
+        # execute() has already prepared the statement, which is where every
+        # error is raised. Reading the opcode listing would cost one GIL
+        # round trip per row, and parallel workers convoy on that.
+        self.connection.execute("EXPLAIN SELECT 1 FROM logs WHERE" + plan.sql[plan.where_start:]).close()  # noqa: S608 -- the rule's own WHERE clause
 
     def _rows_within_bounds(self, sql):
         """Rows the statement's Channel/EventID bounds select, per the census."""

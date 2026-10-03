@@ -447,6 +447,48 @@ def test_without_json_each_the_filter_stays_off(event_database):
         assert "json_each" in prefilter.reason
 
 
+def test_the_compile_check_never_reads_the_explain_listing(event_database):
+    # Each listed opcode is a GIL round trip: 450 files on 20 thread workers
+    # spent minutes per file there. Preparing the statement raises every error.
+    explained, reads = [], []
+
+    class Listing:
+        def __init__(self, cursor):
+            self.cursor = cursor
+
+        def __getattr__(self, name):
+            if name.startswith("fetch"):
+                reads.append(name)
+            return getattr(self.cursor, name)
+
+        def __iter__(self):
+            reads.append("__iter__")
+            return iter(self.cursor)
+
+    class Recording:
+        def __init__(self, conn):
+            self.conn = conn
+
+        def execute(self, sql, *args):
+            if not sql.startswith("EXPLAIN"):
+                return self.conn.execute(sql, *args)
+            explained.append(sql)
+            return Listing(self.conn.execute(sql, *args))
+
+        def __getattr__(self, name):
+            return getattr(self.conn, name)
+
+    factories = {"automaton_factory": ReferenceAutomaton, "bitmap_factory": set}
+    good = "SELECT * FROM logs WHERE text LIKE '%alpha%'"
+    # AND is never re-associated by the depth repair, so this cannot compile.
+    too_deep = "SELECT * FROM logs WHERE other LIKE '%alpha%'" + "".join(f" AND n != {i}" for i in range(1100))
+    with closing(LiteralPrefilter(Recording(event_database), [{"rule": [good, too_deep]}], **factories)) as prefilter:
+        assert normalize_rule_sql(good) in prefilter.plans
+        assert normalize_rule_sql(too_deep) not in prefilter.plans
+    assert len(explained) == 2
+    assert reads == []
+
+
 def test_broad_bypass_is_judged_against_the_rule_partition():
     factories = {"automaton_factory": ReferenceAutomaton, "bitmap_factory": set}
     with closing(sqlite3.connect(":memory:", isolation_level=None)) as conn:
