@@ -438,14 +438,14 @@ def test_a_rule_without_candidates_is_not_compiled_again(tmp_path):
         core.ruleset = [{"id": str(i), "title": str(i), "level": "high", "rule": [query]}
                         for i, query in enumerate((absent, present))]
         statements = []
-        # SQLite traces statements that run, never EXPLAIN, so this sees only
-        # what detection executes, not the compile check that built the filter.
         core.db_connection.set_trace_callback(statements.append)
         core.execute_ruleset(str(tmp_path / "unused.json"), keep_results=True, disable_progress=True)
         core.db_connection.set_trace_callback(None)
         assert core.metrics.data["prefilter"][0]["applied_queries"] == 2
         assert [result["count"] for result in core.full_results] == [1]
-    assert not [statement for statement in statements if "absent-needle" in statement]
+    # The EXPLAIN that built the filter is the one compile this rule needs.
+    assert not [statement for statement in statements
+                if "absent-needle" in statement and not statement.startswith("EXPLAIN")]
 
 
 def test_without_json_each_the_filter_stays_off(event_database):
@@ -655,15 +655,22 @@ def test_core_prefilter_output_limits_errors_and_cleanup(tmp_path, limit):
             core.ruleset.append({"id": "dup", "title": "dup", "level": "high", "rule": [queries[0], queries[0]]})
             core.ruleset.append({"id": "mixed", "title": "mixed", "level": "high",
                                  "rule": ["SELECT * FROM logs WHERE text LIKE '%absent-needle%'", queries[0]]})
-            core.execute_ruleset(str(tmp_path / "unused.json"), disable_progress=True)
+            core.ruleset.append({"id": "mixed-noisy", "title": "mixed-noisy", "level": "high",
+                                 "rule": ["SELECT * FROM logs WHERE text LIKE '%absent-needle%'", queries[1]]})
+            core.execute_ruleset(str(tmp_path / "unused.json"), keep_results=True, disable_progress=True)
             outcomes.append((core.full_results, set(core.rules_in_error)))
             assert core._prefilter is None
             assert not core.db_connection.execute("SELECT name FROM sqlite_temp_master").fetchall()
     assert outcomes[0] == outcomes[1] == outcomes[2]
+    # Equal outcomes would also hold if no mode applied --limit at all.
+    counts = {result["title"]: result["count"] for result in outcomes[0][0]}
+    assert counts.get("mixed-noisy") == (None if limit == 1 else 30)
 
 
+# With candidates, the deeper rewrite is rejected and the original query runs;
+# without any, the rule runs nothing at all.
 @pytest.mark.parametrize("literal,expected", [("needle", [1]), ("absent-needle", [])])
-def test_a_rewrite_that_sqlite_rejects_falls_back_to_the_original_query(tmp_path, literal, expected):
+def test_a_rule_at_the_depth_limit_keeps_its_result_under_the_filter(tmp_path, literal, expected):
     native("ahocorasick")
     native("pyroaring")
 
@@ -691,6 +698,33 @@ def test_a_rewrite_that_sqlite_rejects_falls_back_to_the_original_query(tmp_path
             if mode == "literal":
                 assert core.metrics.data["prefilter"][0]["applied_queries"] == 1
     assert outcomes[0] == outcomes[1] == (expected, {})
+
+
+def test_a_column_the_next_file_lacks_is_checked_again(tmp_path):
+    native("ahocorasick")
+    native("pyroaring")
+    rules = [{"id": "absent", "title": "absent", "level": "high",
+              "rule": ["SELECT * FROM logs WHERE text LIKE '%absent-needle%' AND extra = 'x'"]},
+             {"id": "present", "title": "present", "level": "high",
+              "rule": ["SELECT * FROM logs WHERE text LIKE '%needle%'"]}]
+    outcomes = []
+    for mode in ("off", "literal"):
+        files = []
+        with closing(ZircoliteCore(CONFIG, ProcessingConfig(rule_prefilter=mode, no_output=True))) as core:
+            for schema, row in (("text TEXT, extra TEXT", {"text": "needle", "extra": "x"}),
+                                ("text TEXT", {"text": "needle"})):
+                if files:
+                    core.reset_logs_table()
+                core.create_db(schema)
+                core.insert_data_to_db([row, *[{"text": "quiet"} for _ in range(30)]])
+                core.ruleset, core.full_results = rules, []
+                core.execute_ruleset(str(tmp_path / "unused.json"), keep_results=True, disable_progress=True)
+                columns = {column[1] for column in core.db_connection.execute("PRAGMA table_info(logs)")}
+                files.append(([r["count"] for r in core.full_results], dict(core.rules_in_error), "extra" in columns))
+        outcomes.append(files)
+    # The second file lacks extra, so its own compile check must keep the rule
+    # out of the filter: the ordinary path then adds the column, as with no filter.
+    assert outcomes[0] == outcomes[1] == [([1], {}, True), ([1], {}, True)]
 
 
 @pytest.mark.parametrize("mode", ["sequential", "thread", "process", "unified"])
