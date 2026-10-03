@@ -4100,7 +4100,7 @@ def test_expanded_discovery_respects_recursion_selection_and_exclusion(tmp_path,
         tmp_path, json_input=True, no_recursion=no_recursion, select=[['keep']], avoid=[['skip']],
     )
     found = discover_files(args, logging.getLogger(__name__))
-    assert {str(path.relative_to(tmp_path)) for path in found} == expected
+    assert {path.relative_to(tmp_path).as_posix() for path in found} == expected
 
 
 def test_discovery_keeps_content_detection_fallback_for_unrecognized_suffixes(tmp_path):

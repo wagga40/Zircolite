@@ -720,7 +720,7 @@ class TestRestrictedPythonSecurity:
         loads, before any event is read, so a payload needs no matching event."""
         marker = tmp_path / "pwned"
         code = (
-            f"import os\nos.system('touch {marker}')\n"
+            f"import os\nos.system({'touch ' + str(marker)!r})\n"
             "def transform(param):\n    return param"
         )
         config = {
@@ -2294,7 +2294,7 @@ class TestTransformTesterSandbox:
         marker = tmp_path / "pwned"
         evil = tmp_path / "evil.py"
         evil.write_text(
-            f"import os\nos.system('touch {marker}')\n"
+            f"import os\nos.system({'touch ' + str(marker)!r})\n"
             "def transform(param):\n    return param\n"
         )
         result = self._run(str(evil), "x")

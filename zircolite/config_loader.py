@@ -9,6 +9,7 @@ This module provides:
 """
 
 import logging
+import os
 from dataclasses import dataclass, field, fields
 from pathlib import Path
 from typing import Any
@@ -692,11 +693,16 @@ parallel:
 """
 
     # Exclusive creation (O_CREAT|O_EXCL) makes the existence check and the
-    # open one atomic step, and it fails on a symlink -- dangling or not --
-    # instead of following it. A separate exists() check followed by
+    # open one atomic step, and on POSIX it fails on a symlink -- dangling or
+    # not -- instead of following it. A separate exists() check followed by
     # open('w') would let someone who can write to the directory plant a
     # symlink in between and redirect the write to a file of their choosing.
+    # Windows' CREATE_NEW still follows a dangling symlink and creates its
+    # target, so a link already at the path is refused first; planting one
+    # there takes a privilege or Developer Mode on Windows.
     try:
+        if os.path.lexists(output_path):
+            raise FileExistsError(output_path)
         f = open(output_path, 'x', encoding='utf-8')  # noqa: SIM115
     except FileExistsError:
         raise FileExistsError(
