@@ -385,6 +385,15 @@
       Mark colour is the highest detection level:
       {#each LEVELS as level, rank (level)}<span class="swatch"><i style:background={`var(--sev-${rank})`}></i>{level}</span>{/each}
     </p>
+    <!-- Right after the canvas, so a mark clicked there is one tab away from its Explore button. -->
+    {#if pinned}
+      <p class="pinned" role="status">
+        {formatCount(pinned.n)} {pinned.n === 1 ? 'event' : 'events'} under {laneLabel(pinned.lane)}, highest level {levelName(pinned.lvl) ?? 'unknown'},
+        from {isoTime(pinned.first)} to {isoTime(pinned.last)} UTC. The drawer shows the earliest.
+        {#if pinned.n > 1 && pinned.lane}<button type="button" onclick={() => pinned && showAll(pinned)}>Show these {formatCount(pinned.n)} in Explore</button>
+        {:else if pinned.n > 1}Rules without a tactic have no search term, so Explore cannot list exactly these.{/if}
+      </p>
+    {/if}
     <div class="list" class:stale={pending && marks !== null} aria-busy={pending}>
       <button type="button" class="toggle" aria-expanded={listing} aria-controls="timeline-list" onclick={() => (listing = !listing)}>List the marks</button>
       {#if listing}
@@ -401,6 +410,7 @@
                       <button type="button" class="mark" onclick={() => pin(mark)}>
                         {isoTime(mark.first)} to {isoTime(mark.last)} UTC, {formatCount(mark.n)} {mark.n === 1 ? 'event' : 'events'}, highest level {levelName(mark.lvl) ?? 'unknown'}
                       </button>
+                      {#if mark.n > 1 && mark.lane}<button type="button" class="show" onclick={() => showAll(mark)}>Show in Explore</button>{/if}
                     </li>
                   {/each}
                 </ul>
@@ -411,14 +421,6 @@
         </div>
       {/if}
     </div>
-    {#if pinned}
-      <p class="pinned" role="status">
-        {formatCount(pinned.n)} {pinned.n === 1 ? 'event' : 'events'} under {laneLabel(pinned.lane)}, highest level {levelName(pinned.lvl) ?? 'unknown'},
-        from {isoTime(pinned.first)} to {isoTime(pinned.last)} UTC. The drawer shows the earliest.
-        {#if pinned.n > 1 && pinned.lane}<button type="button" onclick={() => pinned && showAll(pinned)}>Show these {formatCount(pinned.n)} in Explore</button>
-        {:else if pinned.n > 1}Rules without a tactic have no search term, so Explore cannot list exactly these.{/if}
-      </p>
-    {/if}
   {/if}
 </main>
 
@@ -444,6 +446,8 @@
   .toggle { min-height: 28px; background: none; border: 1px solid var(--rule); border-radius: var(--radius); padding: 3px 10px; cursor: pointer; }
   .list h2 { margin: 12px 0 4px; font-size: var(--t-13); font-weight: 600; }
   .list ul { margin: 0; padding: 0; list-style: none; }
-  .mark { display: block; width: 100%; min-height: 28px; text-align: left; background: none; border: 0; border-bottom: 1px solid var(--rule); padding: 3px 4px; cursor: pointer; font-variant-numeric: tabular-nums; }
+  .list li { display: flex; align-items: center; gap: 8px; border-bottom: 1px solid var(--rule); }
+  .mark { flex: 1; min-width: 0; min-height: 28px; text-align: left; background: none; border: 0; padding: 3px 4px; cursor: pointer; font-variant-numeric: tabular-nums; }
+  .show { flex: none; min-height: 24px; background: none; border: 1px solid var(--rule); border-radius: var(--radius); padding: 1px 8px; font-size: var(--t-12); cursor: pointer; }
   .failure { color: var(--danger); margin: 12px 16px; }
 </style>
