@@ -34,6 +34,8 @@ export interface Manifest {
   };
   tactics: string[];
   levels: string[];
+  // rules_matched counts distinct rule keys, as the run summary does; rules.parquet has one row
+  // per matched ruleset entry, so a rule's Sysmon and Generic variants are two rows sharing a key.
   totals: { events: number; parts: number; rules_matched: number; hits: number; alerts: number };
   columns: { name: string; key: string; type: 'BIGINT' | 'DOUBLE' | 'VARCHAR'; count: number }[];
   families: { channel: string | null; eventid: string | null; columns: string[] }[];

@@ -224,7 +224,11 @@ def write_events(connection: duckdb.DuckDBPyConnection, work: Path,
 
 
 def rule_rows(parts: list[PartRecord], rulesets: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    """One row per rule that matched anywhere in the run, its counts summed over parts."""
+    """One row per ruleset entry that matched anywhere in the run, its counts summed over parts.
+
+    Variants of one rule are separate entries with their own title and hits;
+    ``key`` groups them, as the run summary does.
+    """
     totals: dict[int, dict[str, int]] = {}
     for record in parts:
         for rule_idx, counts in record.rules.items():
@@ -357,10 +361,10 @@ def build_manifest(*, parts: list[PartRecord], columns: list[Column], run: RunIn
     }
 
 
-def _row_count(connection: duckdb.DuckDBPyConnection, table: Path) -> int:
-    row = connection.execute("SELECT count(*) FROM read_parquet(?)", [str(table)]).fetchone()
+def _count(connection: duckdb.DuckDBPyConnection, query: str, table: Path) -> int:
+    row = connection.execute(query, [str(table)]).fetchone()
     if row is None:
-        raise PackageError(f"duckdb returned no row count for {table.name}")
+        raise PackageError(f"duckdb returned no count for {table.name}")
     return int(row[0])
 
 
@@ -473,7 +477,10 @@ class PackageBuilder:
                 "hits": write_hits(connection, self.work, parts),
                 **write_alerts(connection, self.work, parts),
             }
-            totals = {name: _row_count(connection, tables[name]) for name in ("events", "rules", "hits", "alerts")}
+            totals = {name: _count(connection, "SELECT count(*) FROM read_parquet(?)", tables[name])
+                      for name in ("events", "hits", "alerts")}
+            # Counted like the run summary, which collapses a rule's variants into one.
+            totals["rules"] = _count(connection, "SELECT count(DISTINCT key) FROM read_parquet(?)", tables["rules"])
         except duckdb.Error as exc:
             raise PackageError(f"duckdb could not write the package data: {exc}") from exc
         finally:

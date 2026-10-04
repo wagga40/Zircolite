@@ -2,18 +2,21 @@
 
 import pickle
 from datetime import datetime, timezone
+from types import SimpleNamespace
 
 import orjson
 import pytest
 
 from tests.package_fixtures import make_logs, read_spool
 from zircolite import package_spool
+from zircolite.core import ZircoliteCore
 from zircolite.package_spool import (
     PackageError,
     PackageSpool,
     PartRecord,
     rule_index,
     rule_key,
+    rule_position,
     time_microseconds,
 )
 from zircolite.results import RowSpool
@@ -211,9 +214,36 @@ def alerts_of(record):
         return [orjson.loads(line) for line in handle]
 
 
+def result_of(rule):
+    """A result as the rule loop hands it to sinks."""
+    return ZircoliteCore._rule_result(SimpleNamespace(csv_mode=False), rule, count=1, matches=[])
+
+
 class TestRuleIndex:
-    def test_first_rule_wins_a_shared_key_and_title_stands_in_for_id(self):
-        assert rule_index(RULES) == {"r-1": 0, "Two": 1}
+    def test_each_entry_is_found_from_its_own_results(self):
+        rules = [*RULES, {"id": "r-2"}, {"id": "r-2", "title": None}, {"title": ""}]
+        index = rule_index(rules)
+
+        assert [rule_position(index, result_of(rule)) for rule in rules] == list(range(len(rules)))
+
+    def test_entries_sharing_an_id_are_told_apart_by_title(self):
+        # Merged rulesets ship a Sysmon and a Generic variant of one Sigma rule under one id.
+        index = rule_index(RULES)
+
+        assert rule_position(index, {"id": "r-1", "title": "One"}) == 0
+        assert rule_position(index, {"id": "r-1", "title": "Duplicate id"}) == 2
+        assert rule_position(index, {"id": "", "title": "Two"}) == 1
+
+    def test_an_exact_duplicate_goes_to_the_first_entry(self):
+        index = rule_index([{"id": "x", "title": "T"}, {"id": "x", "title": "T"}])
+
+        assert rule_position(index, {"id": "x", "title": "T"}) == 0
+
+    def test_a_title_no_entry_has_falls_back_to_the_key(self):
+        index = rule_index(RULES)
+
+        assert rule_position(index, {"id": "r-1", "title": "Renamed"}) == 0
+        assert rule_position(index, {"id": "r-9", "title": "One"}) is None
 
     def test_a_result_and_its_rule_share_a_key(self):
         assert rule_key({"id": "", "title": "Two"}) == rule_key(RULES[1]) == "Two"
@@ -229,6 +259,15 @@ class TestHits:
 
         assert hits_of(record) == [(0, 3, 4), (0, 3, 9)]
         assert record.rules[0] == {"count": 2, "linked": 2, "unlinked": 0, "alert_count": 0, "event_count": 0}
+
+    def test_a_variant_sharing_an_id_keeps_its_own_hits(self, hit_spool):
+        writer = hit_spool.open_part(0, ["x"])
+        writer.sink({"id": "r-1", "title": "Duplicate id", "count": 1, "matches": [{"row_id": 5}]})
+
+        record = writer.finish()
+
+        assert hits_of(record) == [(2, 0, 5)]
+        assert list(record.rules) == [2]
 
     def test_spooled_matches_are_read(self, hit_spool):
         matches = RowSpool()

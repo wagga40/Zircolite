@@ -53,8 +53,8 @@ def part(spool, number, rows, results=(), *, sources=None, unreadable=(), **opti
     return writer.finish()
 
 
-def build(spool, parts, failed=()):
-    return PackageBuilder(spool).build_data(parts=parts, rulesets=RULES, run=RUN, failed_sources=list(failed))
+def build(spool, parts, failed=(), rulesets=RULES):
+    return PackageBuilder(spool).build_data(parts=parts, rulesets=rulesets, run=RUN, failed_sources=list(failed))
 
 
 def table(data, name, tmp_path, sql="SELECT * FROM t"):
@@ -176,6 +176,41 @@ class TestDetections:
         _, links = table(data, "alert_events", tmp_path, "SELECT * FROM t")
         assert links == [(0, 1, 1), (0, 2, 2)]
         assert data.manifest["totals"] == {"events": 3, "parts": 2, "rules_matched": 2, "hits": 4, "alerts": 1}
+
+
+    def test_variants_sharing_an_id_keep_their_own_title_and_hits(self, spool, tmp_path):
+        # rules_windows_merged.json ships most rules twice under one id, as "- Sysmon" and "- Generic".
+        rulesets = [
+            {"id": "b-1", "title": "BOINC - Sysmon", "level": "medium", "filename": "boinc.yml"},
+            {"id": "b-1", "title": "BOINC - Generic", "level": "medium", "filename": "boinc.yml"},
+            {"id": "c-1", "title": "Other", "level": "low"},
+        ]
+        variants = PackageSpool(directory=spool.directory, time_field="SystemTime", rule_keys=rule_index(rulesets))
+        generic = {"id": "b-1", "title": "BOINC - Generic", "count": 1, "matches": [{"row_id": 2}]}
+        parts = [part(variants, 0, [{"A": "1"}, {"A": "2"}], results=[generic])]
+
+        data = build(variants, parts, rulesets=rulesets)
+
+        _, rules = table(data, "rules", tmp_path, "SELECT rule_idx, key, title, count FROM t")
+        assert rules == [(1, "b-1", "BOINC - Generic", 1)]
+        _, hits = table(data, "hits", tmp_path, "SELECT * FROM t")
+        assert hits == [(1, 2)]
+        assert data.manifest["totals"]["rules_matched"] == 1
+
+    def test_rules_matched_counts_each_key_once(self, spool, tmp_path):
+        rulesets = [{"id": "b-1", "title": "BOINC - Sysmon"}, {"id": "b-1", "title": "BOINC - Generic"},
+                    {"id": "c-1", "title": "Other"}]
+        variants = PackageSpool(directory=spool.directory, time_field="SystemTime", rule_keys=rule_index(rulesets))
+        results = [{"id": "b-1", "title": "BOINC - Sysmon", "count": 1, "matches": [{"row_id": 1}]},
+                   {"id": "b-1", "title": "BOINC - Generic", "count": 1, "matches": [{"row_id": 1}]},
+                   {"id": "c-1", "title": "Other", "count": 1, "matches": [{"row_id": 1}]}]
+
+        data = build(variants, [part(variants, 0, [{"A": "1"}], results=results)], rulesets=rulesets)
+
+        _, rules = table(data, "rules", tmp_path, "SELECT rule_idx, key, title FROM t ORDER BY rule_idx")
+        assert rules == [(0, "b-1", "BOINC - Sysmon"), (1, "b-1", "BOINC - Generic"), (2, "c-1", "Other")]
+        assert data.manifest["totals"]["rules_matched"] == 2
+        assert data.manifest["totals"]["hits"] == 3
 
 
 class TestManifest:

@@ -82,12 +82,35 @@ def rule_key(rule: dict[str, Any]) -> str:
     return str(rule.get("id") or rule.get("title") or "Unnamed Rule")
 
 
-def rule_index(rulesets: list[dict[str, Any]]) -> dict[str, int]:
-    """Each rule's position in the run's ruleset; the first rule wins a shared key."""
-    index: dict[str, int] = {}
+def rule_title(rule: dict[str, Any]) -> str | None:
+    """The title a rule's results carry: ``_rule_result`` copies it with this default."""
+    title = rule.get("title", "Unnamed Rule")
+    return None if title is None else str(title)
+
+
+RuleIndex = dict[str, dict[str | None, int]]
+
+
+def rule_index(rulesets: list[dict[str, Any]]) -> RuleIndex:
+    """Each ruleset entry's position, by rule key and then by title.
+
+    The merged rulesets ship most Sigma rules twice under one id, as their
+    "- Sysmon" and "- Generic" variants, and only the title tells the results
+    of one from the other. The first entry wins an exact duplicate.
+    """
+    index: RuleIndex = {}
     for position, rule in enumerate(rulesets):
-        index.setdefault(rule_key(rule), position)
+        index.setdefault(rule_key(rule), {}).setdefault(rule_title(rule), position)
     return index
+
+
+def rule_position(index: RuleIndex, result: dict[str, Any]) -> int | None:
+    """The ruleset entry ``result`` came from; by key alone when no entry has its title."""
+    titles = index.get(rule_key(result))
+    if not titles:
+        return None
+    position = titles.get(rule_title(result))
+    return next(iter(titles.values())) if position is None else position
 
 
 def _integer(value: Any) -> int:
@@ -162,7 +185,7 @@ class PackageSpool:
     directory: str
     time_field: str
     timestamp_format: str = "iso"
-    rule_keys: dict[str, int] = field(default_factory=dict)
+    rule_keys: RuleIndex = field(default_factory=dict)
     # Parallel workers are handed a path, not a position; this restores it.
     part_of: dict[str, int] = field(default_factory=dict)
 
@@ -311,10 +334,9 @@ class PartWriter:
         return first
 
     def _record_result(self, result: dict[str, Any]) -> None:
-        key = rule_key(result)
-        rule_idx = self.spool.rule_keys.get(key)
+        rule_idx = rule_position(self.spool.rule_keys, result)
         if rule_idx is None:
-            raise PackageError(f"a result names rule {key!r}, which the run did not load")
+            raise PackageError(f"a result names rule {rule_key(result)!r}, which the run did not load")
         counts = self.record.rules.setdefault(
             rule_idx, {"count": 0, "linked": 0, "unlinked": 0, "alert_count": 0, "event_count": 0})
         counts["count"] += _integer(result.get("count"))
