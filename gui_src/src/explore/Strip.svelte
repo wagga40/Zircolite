@@ -31,11 +31,13 @@
   let paint = $state(0);
   let ticket = 0;
 
+  // A selected range zooms the strip into it, so a busy week can be narrowed to minutes; its end is exclusive.
+  const span = $derived<[number, number] | null>(domain ? (view.t ? [view.t[0], view.t[1] - 1] : domain) : null);
   // Compared as text, so a resize that keeps the layout does not query again.
-  const binsKey = $derived(domain && width > 0 ? JSON.stringify(layout(domain, Math.max(12, Math.floor(width / 4)))) : null);
+  const binsKey = $derived(span && width > 0 ? JSON.stringify(layout(span, Math.max(12, Math.floor(width / 4)))) : null);
   const bins = $derived<Bins | null>(binsKey ? JSON.parse(binsKey) : null);
   const timeless = $derived(timelessCount(manifest));
-  const tip = $derived(series && hover !== null && !drag ? binSummary(series, hover, hover) : null);
+  const tip = $derived(series && hover !== null && hover < series.bins.count && !drag ? binSummary(series, hover, hover) : null);
   const announcement = $derived(series && cursor ? describe(binSummary(series, cursor.anchor, cursor.at)) : '');
 
   function describe(summary: ReturnType<typeof binSummary>): string {
@@ -75,7 +77,13 @@
       (rows) => {
         if (mine !== ticket) return;
         try {
-          series = stripSeries(request, rows);
+          const next = stripSeries(request, rows);
+          // Bin positions from the previous layout point at other times in this one.
+          if (series?.bins !== next.bins) {
+            cursor = null;
+            hover = null;
+          }
+          series = next;
           failure = null;
         } catch (error) {
           failure = error instanceof Error ? error.message : String(error);
@@ -89,14 +97,13 @@
 
   $effect(() => {
     void paint;
-    draw(canvas, width, series, view.t, drag, hover, cursor);
+    draw(canvas, width, series, drag, hover, cursor);
   });
 
   function draw(
     target: HTMLCanvasElement | undefined,
     w: number,
     s: Series | null,
-    range: [number, number] | null,
     dragging: { from: number; to: number } | null,
     hovered: number | null,
     keyed: { at: number; anchor: number } | null,
@@ -142,7 +149,8 @@
     }
     const span = b.width * b.count;
     const xOf = (t: number) => Math.min(w, Math.max(0, ((t - b.start) / span) * w));
-    const selected = dragging ? rangeOf(b, dragging.from, dragging.to) : keyed ? rangeOf(b, keyed.anchor, keyed.at) : range;
+    // A committed range is not drawn: the strip is zoomed to it.
+    const selected = dragging ? rangeOf(b, dragging.from, dragging.to) : keyed ? rangeOf(b, keyed.anchor, keyed.at) : null;
     if (selected) {
       const x0 = xOf(selected[0]);
       const x1 = xOf(selected[1]);
@@ -225,7 +233,7 @@
         aria-roledescription="time brush"
         style:height={`${HEIGHT}px`}
         tabindex="0"
-        aria-label="Event histogram. Drag, or use the arrow keys with Shift and press Enter, to select a time range. Escape clears it."
+        aria-label="Event histogram. Drag, or use the arrow keys with Shift and press Enter, to select a time range and zoom into it. Escape clears it."
         aria-describedby="strip-legend"
         {onpointerdown}
         {onpointermove}
@@ -247,6 +255,7 @@
       </span>
       {#if series}<span>Each bar is {formatWidth(series.bins.width)}</span>{/if}
       {#if timeless}<span>{formatCount(timeless)} events have no time and are not drawn</span>{/if}
+      {#if view.t}<span class="zoomed">Zoomed to the selected range. Remove its chip to see the whole package.</span>{/if}
       <span class="end">{series ? `${isoTime(series.bins.start + series.bins.width * series.bins.count, false)} UTC` : ''}</span>
     </div>
   {/if}
@@ -259,6 +268,7 @@
   .tip { position: absolute; top: 4px; transform: translateX(8px); max-width: 26rem; padding: 4px 8px; font-size: var(--t-12); background: var(--paper); border: 1px solid var(--rule); border-radius: var(--radius); pointer-events: none; white-space: nowrap; }
   .legend { display: flex; flex-wrap: wrap; gap: 4px 16px; font-size: var(--t-12); color: var(--ink-2); margin-top: 4px; }
   .legend .end { margin-left: auto; }
+  .zoomed { color: var(--signal); }
   .key { display: inline-flex; flex-wrap: wrap; gap: 4px 10px; align-items: center; }
   .swatch { display: inline-flex; align-items: center; gap: 4px; }
   .swatch i { display: inline-block; width: 8px; height: 8px; border-radius: 1px; }

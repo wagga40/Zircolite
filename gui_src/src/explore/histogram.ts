@@ -1,5 +1,6 @@
 import { LEVELS } from '../engine/levels';
 import type { Manifest } from '../engine/manifest';
+import { timePredicate } from '../state/where';
 
 const SECOND = 1000;
 const MINUTE = 60 * SECOND;
@@ -53,11 +54,17 @@ export interface Series {
   levels: Float64Array[];
 }
 
+/**
+ * Events per bin. The query covers exactly the layout's span: a strip zoomed
+ * into a range would otherwise count events outside it into bins it does not have.
+ */
 export function binsSql(bins: Bins, where: string): string {
+  const span = timePredicate([bins.start, bins.start + bins.width * bins.count]);
+  if (span === null) throw new Error(`the histogram layout ${JSON.stringify(bins)} is not in whole milliseconds`);
   const levels = LEVELS.map((_, rank) => `count(*) FILTER (WHERE _zl_lvl = ${rank})::DOUBLE AS l${rank}`).join(', ');
   return (
     `SELECT floor((epoch_ms(_zl_time) - ${bins.start}) / ${bins.width})::INTEGER AS b, count(*)::DOUBLE AS n, ${levels} ` +
-    `FROM events LEFT JOIN event_levels USING (_zl_uid) WHERE _zl_time IS NOT NULL AND (${where}) GROUP BY b ORDER BY b`
+    `FROM events LEFT JOIN event_levels USING (_zl_uid) WHERE ${span} AND (${where}) GROUP BY b ORDER BY b`
   );
 }
 
@@ -65,7 +72,7 @@ export function fill(rows: BinRow[], bins: Bins): Series {
   const n = new Float64Array(bins.count);
   const levels = LEVELS.map(() => new Float64Array(bins.count));
   for (const row of rows) {
-    // The layout spans every event's time, so a bin outside it means the
+    // The query is bounded to the layout, so a bin outside it means the
     // query and the layout disagree: drawing it anyway would misplace counts.
     if (!(row.b >= 0 && row.b < bins.count)) throw new Error(`histogram bin ${row.b} is outside 0..${bins.count - 1}`);
     n[row.b] = row.n;

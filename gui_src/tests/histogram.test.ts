@@ -26,6 +26,13 @@ describe('layout', () => {
   it('gives a single instant one bin', () => {
     expect(layout([SIX, SIX], 100)).toEqual({ start: SIX, width: 1000, count: 1 });
   });
+
+  it('a layout over a narrow range gives finer bins', () => {
+    const whole = layout([SIX, SIX + 2 * H], 240);
+    const zoomed = layout([SIX, SIX + 60_000 - 1], 240);
+    expect(zoomed).toEqual({ start: SIX, width: 1000, count: 60 });
+    expect(zoomed.width).toBeLessThan(whole.width);
+  });
 });
 
 describe('domainOf', () => {
@@ -61,6 +68,17 @@ describe('bins against DuckDB', () => {
     const series = fill((await db.rows(binsSql(bins, 'TRUE'))) as unknown as BinRow[], bins);
     expect(Array.from(series.n)).toEqual([3, 1, 1]);
     expect(binSummary(series, 1, 0)).toEqual({ range: [SIX, SIX + 2 * H], events: 4, levels: [1, 0, 1, 0, 1] });
+  });
+
+  it('bounds the query to the layout, so a zoomed strip never sees events outside it', async () => {
+    const zoomed = { start: SIX, width: 1000, count: 60 };
+    const rows = (await db.rows(binsSql(zoomed, 'TRUE'))) as unknown as BinRow[];
+    expect(rows.map((r) => [r.b, r.n])).toEqual([[0, 1], [30, 1]]);
+    expect(Array.from(fill(rows, zoomed).n).reduce((sum, n) => sum + n, 0)).toBe(2);
+    const uids = await db.rows(
+      `SELECT _zl_uid FROM events WHERE ${binsSql(zoomed, 'TRUE').split(' WHERE ')[1].split(' GROUP BY')[0]} ORDER BY _zl_uid`,
+    );
+    expect(uids.map((r) => r._zl_uid)).toEqual([1, 2]);
   });
 
   it('refuses a bin outside the layout', () => {
