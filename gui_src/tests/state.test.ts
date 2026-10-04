@@ -29,6 +29,26 @@ describe('hash', () => {
   });
 });
 
+describe('hash hardening', () => {
+  it('reads only canonical integers for t and uid', () => {
+    expect(decode('#/explore?t=~5')).toEqual(EMPTY);
+    expect(decode('#/explore?t=1e3~2e3')).toEqual(EMPTY);
+    expect(decode('#/explore?uid=0x10')).toEqual(EMPTY);
+    expect(decode('#/explore?uid=')).toEqual(EMPTY);
+    expect(decode('#/explore?uid=0').uid).toBe(0);
+  });
+
+  it('drops empty column names but keeps an empty list', () => {
+    expect(decode('#/explore?cols=a,,b').cols).toEqual(['a', 'b']);
+    expect(decode('#/explore?cols=').cols).toEqual([]);
+  });
+
+  it('replaces lone surrogates instead of throwing', () => {
+    const hash = encode({ ...EMPTY, q: 'a\uD800b', cols: ['x\uDC00'] });
+    expect(decode(hash)).toEqual({ ...EMPTY, q: 'a\uFFFDb', cols: ['x\uFFFD'] });
+  });
+});
+
 describe('where', () => {
   it('limits time to a half-open range', async () => {
     const from = Date.UTC(2021, 5, 3, 6, 0, 0);

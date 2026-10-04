@@ -20,5 +20,7 @@ export default defineConfig({
       cssFileName: 'app',
     },
   },
-  test: { environment: 'node', include: ['tests/**/*.test.ts'] },
+  // Tests run Svelte's browser build (client-env.ts picks the client transform), so effects and flushSync work.
+  resolve: process.env.VITEST ? { conditions: ['browser'] } : undefined,
+  test: { environment: './tests/client-env.ts', include: ['tests/**/*.test.ts'] },
 });

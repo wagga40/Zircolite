@@ -12,13 +12,19 @@ export interface ViewHash {
 export const EMPTY: ViewHash = { q: '', t: null, d: false, cols: null, uid: null, desc: false };
 
 const PREFIX = '#/explore';
+const INTEGER = /^-?\d+$/;
+
+// encodeURIComponent throws on a lone surrogate, which would break the hash-writing effect.
+function wellFormed(text: string): string {
+  return text.replace(/[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/g, '\uFFFD');
+}
 
 export function encode(state: ViewHash): string {
   const parts: string[] = [];
-  if (state.q) parts.push(`q=${encodeURIComponent(state.q)}`);
+  if (state.q) parts.push(`q=${encodeURIComponent(wellFormed(state.q))}`);
   if (state.t) parts.push(`t=${state.t[0]}~${state.t[1]}`);
   if (state.d) parts.push('d=1');
-  if (state.cols) parts.push(`cols=${state.cols.map(encodeURIComponent).join(',')}`);
+  if (state.cols) parts.push(`cols=${state.cols.map((c) => encodeURIComponent(wellFormed(c))).join(',')}`);
   if (state.uid !== null) parts.push(`uid=${state.uid}`);
   if (state.desc) parts.push('desc=1');
   return parts.length ? `${PREFIX}?${parts.join('&')}` : PREFIX;
@@ -36,15 +42,18 @@ export function decode(hash: string): ViewHash {
       if (key === 'q') {
         state.q = decodeURIComponent(raw);
       } else if (key === 't') {
-        const [start, end] = raw.split('~').map(Number);
-        if (Number.isSafeInteger(start) && Number.isSafeInteger(end) && start < end) state.t = [start, end];
+        const bounds = raw.split('~');
+        if (bounds.length === 2 && bounds.every((b) => INTEGER.test(b))) {
+          const [start, end] = bounds.map(Number);
+          if (Number.isSafeInteger(start) && Number.isSafeInteger(end) && start < end) state.t = [start, end];
+        }
       } else if (key === 'd') {
         state.d = raw === '1';
       } else if (key === 'cols') {
-        state.cols = raw === '' ? [] : raw.split(',').map(decodeURIComponent);
+        state.cols = raw === '' ? [] : raw.split(',').filter((c) => c !== '').map(decodeURIComponent);
       } else if (key === 'uid') {
         const uid = Number(raw);
-        if (Number.isSafeInteger(uid) && uid >= 0 && raw !== '') state.uid = uid;
+        if (INTEGER.test(raw) && Number.isSafeInteger(uid) && uid >= 0) state.uid = uid;
       } else if (key === 'desc') {
         state.desc = raw === '1';
       }
