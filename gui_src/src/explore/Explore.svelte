@@ -9,6 +9,7 @@
   import { view } from '../state/view.svelte';
   import { combineWhere, DETECTIONS_PREDICATE, timePredicate } from '../state/where';
   import { shownColumns } from './columns';
+  import DetailDrawer from './DetailDrawer.svelte';
   import FieldSidebar from './FieldSidebar.svelte';
   import ResultTable from './ResultTable.svelte';
   import Strip from './Strip.svelte';
@@ -42,6 +43,7 @@
     <section class="results" aria-label="Events">
       <ResultTable {db} {schema} {manifest} {where} {columns} />
     </section>
+    <DetailDrawer {db} {schema} {manifest} />
   </div>
 </main>
 

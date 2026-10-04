@@ -3,6 +3,7 @@
   import type { Manifest } from '../engine/manifest';
   import type { Schema } from '../engine/schema';
   import Explore from '../explore/Explore.svelte';
+  import { view } from '../state/view.svelte';
   import { typing } from './keys';
   import TopBar from './TopBar.svelte';
   import { ui } from './ui.svelte';
@@ -18,7 +19,7 @@
       ui.help = !ui.help;
     } else if (event.key === 'Escape' && ui.help && !document.querySelector('dialog[open]')) {
       ui.help = false;
-    } else if (event.key === 'Escape' && !ui.help && ui.fieldsOpen && !document.querySelector('dialog[open]')) {
+    } else if (event.key === 'Escape' && !ui.help && view.uid === null && ui.fieldsOpen && !document.querySelector('dialog[open]')) {
       ui.fieldsOpen = false;
       document.getElementById('fields-toggle')?.focus();
     }
