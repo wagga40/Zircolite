@@ -99,6 +99,19 @@ describe('bindHash', () => {
     stop();
   });
 
+  it('does not let a replace outlive a change that changed nothing', async () => {
+    const { view, stop } = setup('#/timeline?t=1~2');
+    view.replaceNext = true;
+    view.t = view.t;
+    flushSync();
+    await new Promise((resolve) => setTimeout(resolve, 5));
+    location.replace.mockClear();
+    view.q = 'x';
+    flushSync();
+    expect(location.replace).not.toHaveBeenCalled();
+    stop();
+  });
+
   it('ignores a hashchange that carries the current state', () => {
     const { view, stop } = setup('#/explore?cols=A');
     const kept = view.cols;

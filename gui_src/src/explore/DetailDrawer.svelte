@@ -9,6 +9,7 @@
   import { view } from '../state/view.svelte';
   import { copyText } from '../ui/clipboard';
   import { isoTime } from '../ui/format';
+  import { focusFallback } from '../ui/focus';
   import { pageTopLayer } from '../ui/layers';
   import {
     type Entry, familyFields, groupEntries, type Head, headSql, hostEntry, isCurrent, nearbyRange, type RuleRow, rulesSql, valuesSql,
@@ -58,13 +59,14 @@
   $effect(() => {
     const uid = view.uid;
     const mine = ++ticket;
-    if (uid !== null && opener === null && document.activeElement instanceof HTMLElement && !element?.contains(document.activeElement)) {
+    // The drawer is not tied to a view: it stays open across a route switch. A deep link or Back leaves focus on the body, which is no opener.
+    if (uid !== null && opener === null && document.activeElement instanceof HTMLElement && document.activeElement !== document.body && !element?.contains(document.activeElement)) {
       opener = document.activeElement;
     }
     // Closing keeps what is shown until the outro ends, so the drawer does not flash empty while it slides away.
     if (uid === null) {
       // Back closes the drawer as well as Escape does; either way focus goes back where it came from.
-      if (opener?.isConnected && (document.activeElement === document.body || element?.contains(document.activeElement))) opener.focus();
+      if (document.activeElement === document.body || element?.contains(document.activeElement)) focusFallback(opener)?.focus();
       opener = null;
       focused = false;
       return;
@@ -103,7 +105,7 @@
   }
 
   function close(): void {
-    const back = opener?.isConnected ? opener : document.getElementById('result-grid');
+    const back = focusFallback(opener);
     opener = null;
     view.uid = null;
     back?.focus();

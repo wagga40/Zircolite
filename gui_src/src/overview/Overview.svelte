@@ -8,7 +8,7 @@
 </script>
 
 <main class="stub" data-events={props.manifest.totals.events}>
-  <h1>Overview</h1>
+  <h1 tabindex="-1">Overview</h1>
   <p>This view is not built yet. Explore lists every event.</p>
 </main>
 

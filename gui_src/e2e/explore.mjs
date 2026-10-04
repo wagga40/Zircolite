@@ -151,6 +151,7 @@ async function scenario(page, steps) {
   await drawer.waitFor();
   await poll(page, async () => (await drawer.locator('dt').count()) > 0, 'the event fields');
   check(page.url().includes('uid='), 'the open event is not in the URL');
+  const uid = new URL(page.url()).hash.match(/uid=(\d+)/)[1];
   await page.keyboard.press('Escape');
   await drawer.waitFor({ state: 'detached' });
   steps.push('event view from the keyboard');
@@ -196,6 +197,17 @@ async function scenario(page, steps) {
   await page.getByRole('button', { name: /^Theme:/ }).click();
   check((await page.locator('html').getAttribute('data-theme')) === 'light', 'the theme button did not switch to light');
   steps.push('theme switch');
+
+  // A deep link opens the drawer with focus on the body: closing it must still land somewhere.
+  await page.goto('about:blank');
+  await page.goto(`${url}#/explore?uid=${uid}`);
+  await poll(page, async () => /ready|error/.test(await page.title()), 'the viewer', 240_000);
+  await drawer.waitFor();
+  await poll(page, async () => (await drawer.locator('dt').count()) > 0, 'the event fields');
+  await page.keyboard.press('Escape');
+  await drawer.waitFor({ state: 'detached' });
+  check((await page.evaluate(() => document.activeElement?.tagName)) !== 'BODY', 'closing a deep-linked event left focus on the body');
+  steps.push('focus after a deep-linked event closes');
 }
 
 let failed = false;

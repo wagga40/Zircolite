@@ -29,7 +29,7 @@ const HASH = /^#\/([a-z]+)(?:\?(.*))?$/;
 
 // encodeURIComponent throws on a lone surrogate, which would break the hash-writing effect.
 function wellFormed(text: string): string {
-  return text.replace(/[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/g, '�');
+  return text.replace(/[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/g, '\uFFFD');
 }
 
 export function encode(state: ViewHash): string {

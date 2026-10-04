@@ -8,8 +8,21 @@ export class View {
   cols = $state<string[] | null>(EMPTY.cols);
   uid = $state<number | null>(EMPTY.uid);
   desc = $state(EMPTY.desc);
-  /** Set before a change that should replace the current history entry: the timeline's pan and zoom. */
-  replaceNext = false;
+  #replaceNext = false;
+
+  /**
+   * Set before a change that should replace the current history entry: the
+   * timeline's pan and zoom. It lapses after the effects for that change have
+   * run, so a write that changes nothing cannot leave it set for the next one.
+   */
+  get replaceNext(): boolean {
+    return this.#replaceNext;
+  }
+
+  set replaceNext(value: boolean) {
+    this.#replaceNext = value;
+    if (value) setTimeout(() => { this.#replaceNext = false; }, 0);
+  }
 
   snapshot(): ViewHash {
     return { route: this.route, q: this.q, t: this.t, d: this.d, cols: this.cols, uid: this.uid, desc: this.desc };

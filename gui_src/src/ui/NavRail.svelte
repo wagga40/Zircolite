@@ -20,6 +20,7 @@
   @media (max-width: 720px) {
     .rail { flex-direction: row; overflow-x: auto; padding: 0 8px; border-right: 0; border-bottom: 1px solid var(--rule); }
     button { flex: none; }
+    button:focus-visible { outline-offset: -2px; }
     button[aria-current='page']::before { left: 12px; right: 12px; top: auto; bottom: 0; width: auto; height: 3px; }
   }
 </style>
