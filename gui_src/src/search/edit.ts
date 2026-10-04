@@ -43,10 +43,15 @@ export function quoteValue(value: string): string {
 
 const PLAIN_FIELD = /^[A-Za-z0-9_.@-]+$/;
 
+/** A field name as the parser must read it back: quoted when it would otherwise parse as something else. */
+function fieldToken(field: string): string {
+  const plain = PLAIN_FIELD.test(field) && !field.startsWith('-') && field !== 'OR' && field !== 'AND';
+  return plain && !findShortcut(field) ? field : quoteValue(field);
+}
+
 /** The query plus one exact field term: what the sidebar and the event view add. */
 export function appendTerm(input: string, field: string, value: string, negate: boolean): string {
-  const name = PLAIN_FIELD.test(field) && !findShortcut(field) ? field : quoteValue(field);
-  return appendRaw(input, `${negate ? '-' : ''}${name}:${quoteValue(value)}`);
+  return appendRaw(input, `${negate ? '-' : ''}${fieldToken(field)}:${quoteValue(value)}`);
 }
 
 /** The query plus a term that is already valid syntax, such as a shortcut. */
@@ -97,9 +102,9 @@ export function completionAt(input: string, caret: number): Completion | null {
 
 export function fieldSuggestions(prefix: string, schema: Schema, limit = 8): string[] {
   const wanted = asciiLower(prefix);
-  const names = [...SHORTCUTS.map((s) => s.name), ...schema.fields.map((f) => f.name)];
-  return names.filter((name) => {
+  const names = [...SHORTCUTS.map((s) => ({ name: s.name, text: s.name })), ...schema.fields.map((f) => ({ name: f.name, text: fieldToken(f.name) }))];
+  return names.filter(({ name }) => {
     const key = asciiLower(name);
     return key.startsWith(wanted) && key !== wanted;
-  }).slice(0, limit);
+  }).map(({ text }) => text).slice(0, limit);
 }

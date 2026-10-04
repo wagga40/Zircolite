@@ -18,10 +18,16 @@ export type Node =
       end: number;
     };
 
+const MAX_DEPTH = 64;
+
 export function parse(input: string): Node | null {
   const tokens = tokenize(input);
   if (tokens.length === 0) return null;
   let pos = 0;
+  let depth = 0;
+  const nest = (token: Token) => {
+    if (++depth > MAX_DEPTH) throw new SearchError('The search nests too deeply; remove some parentheses or negations', token.start, token.end);
+  };
   const peek = (): Token | undefined => tokens[pos];
   const next = (): Token | undefined => tokens[pos++];
   const ends = (token: Token | undefined) => !token || token.kind === 'or' || token.kind === 'rparen' || token.kind === 'and';
@@ -55,7 +61,9 @@ export function parse(input: string): Node | null {
     const token = peek();
     if (token?.kind === 'minus') {
       next();
+      nest(token);
       const item = unary();
+      depth--;
       return { kind: 'not', item, start: token.start, end: item.end };
     }
     return primary();
@@ -67,7 +75,9 @@ export function parse(input: string): Node | null {
     if (token.kind === 'lparen') {
       const after = peek();
       if (after?.kind === 'rparen') throw new SearchError('These parentheses are empty', token.start, after.end);
+      nest(token);
       const inner = orExpr();
+      depth--;
       const close = next();
       if (close?.kind !== 'rparen') throw new SearchError('This parenthesis is never closed', token.start, token.end);
       return { ...inner, start: token.start, end: close.end };

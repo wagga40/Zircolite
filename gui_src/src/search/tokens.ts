@@ -34,7 +34,8 @@ export function tokenize(input: string): Token[] {
       let text = '';
       i++;
       while (i < input.length && input[i] !== '"') {
-        if (input[i] === '\\' && i + 1 < input.length) {
+        // Only \" and \\ are escapes; any other backslash is a path separator.
+        if (input[i] === '\\' && (input[i + 1] === '"' || input[i + 1] === '\\')) {
           text += input[i + 1];
           i += 2;
         } else {
@@ -74,8 +75,17 @@ export function tokenize(input: string): Token[] {
       continue;
     }
     const start = i;
-    const stop = valueNext ? /[\s)]/ : /[\s()":]/;
-    while (i < input.length && !stop.test(input[i])) i++;
+    // A value may hold balanced parentheses, as in Image:*foo(1).exe.
+    let open = 0;
+    while (i < input.length) {
+      const ch = input[i];
+      if (valueNext) {
+        if (/\s/.test(ch) || (ch === ')' && open === 0)) break;
+        if (ch === '(') open++;
+        else if (ch === ')') open--;
+      } else if (/[\s()":]/.test(ch)) break;
+      i++;
+    }
     const text = input.slice(start, i);
     const keyword = !valueNext && (text === 'OR' || text === 'AND');
     tokens.push({ kind: keyword ? (text === 'OR' ? 'or' : 'and') : 'word', text, start, end: i });

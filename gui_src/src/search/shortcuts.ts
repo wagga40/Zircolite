@@ -10,7 +10,7 @@ export interface Shortcut {
 
 export const SHORTCUTS: readonly Shortcut[] = [
   { name: 'rule', description: 'Events a rule matched, by title or id. * matches any characters.', example: 'rule:*powershell*' },
-  { name: 'level', description: 'Events with a detection at this level. >=, >, <= and < compare levels.', example: 'level:>=high' },
+  { name: 'level', description: 'Events whose highest detection has this level. >=, >, <= and < compare levels.', example: 'level:>=high' },
   { name: 'tactic', description: 'Events detected under an ATT&CK tactic.', example: 'tactic:persistence' },
   { name: 'technique', description: 'Events detected under an ATT&CK technique, sub-techniques included.', example: 'technique:T1059' },
   { name: 'host', description: 'Events from a host, whichever field holds its name.', example: 'host:DC01', fields: ['Computer', 'ComputerName', 'Hostname', 'host'] },

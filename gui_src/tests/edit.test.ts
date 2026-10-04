@@ -14,6 +14,9 @@ describe('appendTerm', () => {
     ['powershell', 'Computer', 'DC01', true, 'powershell -Computer:"DC01"'],
     ['a OR b', 'EventID', '1', false, '(a OR b) EventID:"1"'],
     ['', 'level', 'error', false, '"level":"error"'],
+    ['', '-x', 'v', false, '"-x":"v"'],
+    ['', 'OR', 'v', false, '"OR":"v"'],
+    ['', 'AND', 'v', true, '-"AND":"v"'],
     ['', 'it\'s "odd"', 'x\\y', false, '"it\'s \\"odd\\"":"x\\\\y"'],
   ])('appends to %j', (query, field, value, negate, expected) => {
     expect(appendTerm(query, field, value, negate)).toBe(expected);
@@ -64,6 +67,12 @@ describe('completion', () => {
   it('completes values after a field', () => {
     expect(completionAt('Computer:DC', 11)).toEqual({ kind: 'value', field: 'Computer', prefix: 'DC', start: 9, end: 11 });
     expect(completionAt('Computer:', 9)).toEqual({ kind: 'value', field: 'Computer', prefix: '', start: 9, end: 9 });
+  });
+
+  it('suggests a field that shares a shortcut name quoted', () => {
+    const found = fieldSuggestions('lev', schema);
+    expect(found).toContain('level');
+    expect(found).toContain('"level"');
   });
 
   it('stays quiet after a space', () => {

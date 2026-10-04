@@ -43,6 +43,10 @@ function term(t: Term, schema: Schema): string {
   return fieldMatch(field, t);
 }
 
+function exactOnly(t: Term): void {
+  if (t.op !== '=') throw new SearchError(`${t.field}: matches exactly; only level compares with ${t.op}`, t.start, t.end);
+}
+
 function pattern(t: Term, contains: boolean): string {
   const escaped = likeEscape(t.value);
   const body = t.quoted ? escaped : escaped.replaceAll('*', '%');
@@ -83,19 +87,22 @@ function anyField(names: readonly string[], label: string) {
 
 const SHORTCUT_COMPILERS: Record<string, (t: Term, schema: Schema) => string> = {
   rule: (t) => {
+    exactOnly(t);
     const p = pattern(t, false);
     return `_zl_uid IN (${HIT_RULES} WHERE r.title ILIKE ${p} ESCAPE '\\' OR r.id ILIKE ${p} ESCAPE '\\')`;
   },
   level: (t) => {
     const rank = LEVELS.indexOf(t.value.toLowerCase() as (typeof LEVELS)[number]);
     if (rank < 0) throw new SearchError(`level is one of ${LEVELS.join(', ')}`, t.start, t.end);
-    return `_zl_uid IN (${HIT_RULES} WHERE r.level_rank ${t.op} ${rank})`;
+    return `_zl_uid IN (SELECT _zl_uid FROM event_levels WHERE _zl_lvl ${t.op} ${rank})`;
   },
   tactic: (t) => {
+    exactOnly(t);
     const name = t.value.toLowerCase().replaceAll('_', '-');
     return `_zl_uid IN (${HIT_RULES} WHERE list_contains(r.tactics, ${str(TACTIC_ALIASES[name] ?? name)}))`;
   },
   technique: (t) => {
+    exactOnly(t);
     const id = t.value.toUpperCase();
     if (!/^T\d{4}(\.\d{3})?$/.test(id)) throw new SearchError('A technique looks like T1234 or T1234.001', t.start, t.end);
     return `_zl_uid IN (SELECT h._zl_uid FROM hits h JOIN (SELECT rule_idx, unnest(techniques) AS t FROM rules) r ` +

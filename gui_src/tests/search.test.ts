@@ -3,7 +3,7 @@ import { LEVELS } from '../src/engine/levels';
 import { compile } from '../src/search/compile';
 import { parse } from '../src/search/parse';
 import { SHORTCUTS } from '../src/search/shortcuts';
-import { tokenize } from '../src/search/tokens';
+import { SearchError, tokenize } from '../src/search/tokens';
 import { type Fixture, openFixture, schema } from './fixture';
 
 let db: Fixture;
@@ -26,6 +26,17 @@ describe('tokenize', () => {
 
   it('keeps hyphens inside words', () => {
     expect(tokenize('a-b -c').map((t) => t.kind)).toEqual(['word', 'minus', 'word']);
+  });
+
+  it('keeps a lone backslash inside quotes', () => {
+    expect(tokenize('"C:\\Windows\\x"').map((t) => t.text)).toEqual(['C:\\Windows\\x']);
+    expect(tokenize('"a\\\\b \\"q\\""').map((t) => t.text)).toEqual(['a\\b "q"']);
+  });
+
+  it('keeps balanced parentheses inside an unquoted value', () => {
+    expect(tokenize('Image:*foo(1).exe').map((t) => t.text)).toEqual(['Image', ':', '*foo(1).exe']);
+    expect(tokenize('(Image:a OR Image:b)').map((t) => t.kind)).toEqual(
+      ['lparen', 'word', 'colon', 'word', 'or', 'word', 'colon', 'word', 'rparen']);
   });
 
   it('reports an unclosed quote where it starts', () => {
@@ -54,6 +65,15 @@ describe('parse', () => {
   it('returns null for an empty query', () => {
     expect(parse('   ')).toBeNull();
   });
+
+  it.each([['('.repeat(10000)], ['-('.repeat(10000)]])('refuses absurd nesting', (query) => {
+    expect(() => parse(query)).toThrowError(SearchError);
+    expect(() => parse(query)).toThrowError(/nests too deeply/);
+  });
+
+  it('accepts reasonable nesting', () => {
+    expect(parse(`${'('.repeat(60)}a${')'.repeat(60)}`)).not.toBeNull();
+  });
 });
 
 describe('compile against DuckDB', () => {
@@ -71,6 +91,11 @@ describe('compile against DuckDB', () => {
     ['"it\'s \\"odd\\"":x', [PS]],
     ['"level":error', [OFF]],
     ['level:>=high', [PS]],
+    ['level:<high', [A, CMD]],
+    ['EventID:462*', [A]],
+    ['Image:"C:\\Windows\\System32\\cmd.exe"', [CMD]],
+    ['-rule:*powershell*', [A, B, CMD, OFF, PROC]],
+    ['-host:ws02', [A, B, PROC]],
     ['level:informational', [A]],
     ['rule:*powershell*', [PS]],
     ['rule:r-logon', [A]],
@@ -108,8 +133,16 @@ describe('compile against DuckDB', () => {
     ['Computer:>5', /holds text/],
     ['level:severe', /informational, low, medium, high, critical/],
     ['technique:1059', /T1234/],
+    ['rule:>x', /only level compares/],
+    ['tactic:>=discovery', /only level compares/],
+    ['technique:>=T1059', /only level compares/],
   ])('explains %s', (query, message) => {
     expect(() => compile(parse(query), schema)).toThrowError(message);
+  });
+
+  it('locates an error on its term', () => {
+    expect(() => compile(parse('nosuch:1'), schema)).toThrowError(expect.objectContaining({ start: 0, end: 8 }));
+    expect(() => compile(parse('a EventID:>abc'), schema)).toThrowError(expect.objectContaining({ start: 2, end: 14 }));
   });
 
   it('every shortcut example compiles', () => {
