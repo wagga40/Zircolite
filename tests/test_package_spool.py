@@ -99,6 +99,18 @@ class TestEvents:
         assert "_zl_spelling" not in rows[0]
         assert orjson.loads(rows[1]["_zl_spelling"]) == ["ProcessID"]
 
+    def test_a_row_spelling_never_renames_the_time_field(self, spool):
+        # The time column always prints under its --timefield name.
+        connection = make_logs([{"ProcessId": "1", "SystemTime": "x"}] * 4)
+        record_spellings(connection.cursor(), 1, [(1, ("ProcessID", "systemtime")), (2, ("SYSTEMTIME",)),
+                                                  (3, ("ProcessID", "systemtime"))])
+        writer = spool.open_part(0, ["x"])
+
+        writer.export_events(connection)
+
+        rows = read_spool(writer.record.event_files)
+        assert [row.get("_zl_spelling") for row in rows] == [None, '["ProcessID"]', None, '["ProcessID"]']
+
 
 class TestTime:
     def test_time_is_read_as_the_time_filter_reads_it(self, spool):
@@ -179,6 +191,16 @@ class TestRefusals:
             writer.export_events(connection)
 
         assert writer.record.event_files == []
+
+    def test_an_unreadable_spelling_record_is_a_package_error(self, spool):
+        connection = make_logs([{"A": "x"}])
+        connection.execute("CREATE TABLE field_spellings (id INTEGER PRIMARY KEY, names TEXT NOT NULL UNIQUE)")
+        connection.execute("CREATE TABLE logs_spelling (row_id INTEGER PRIMARY KEY, spelling INTEGER NOT NULL)")
+        connection.execute("INSERT INTO field_spellings VALUES (1, 'not json')")
+        connection.execute("INSERT INTO logs_spelling VALUES (1, 1)")
+
+        with pytest.raises(PackageError, match="row 1"):
+            spool.open_part(0, ["x"]).export_events(connection)
 
     def test_a_write_failure_is_a_package_error_and_keeps_the_file_list(self, spool, monkeypatch):
         added = package_spool._SpoolFiles.add

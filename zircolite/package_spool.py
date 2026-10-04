@@ -424,6 +424,7 @@ class PartWriter:
         }
         part = self.record.part
         timestamp_format = self.spool.timestamp_format
+        spellings: dict[str, str | None] = {}
         spelled = _row_spellings(connection)
         cursor = connection.cursor()
         row_id: Any = None
@@ -458,7 +459,9 @@ class PartWriter:
                     while pending is not None and pending[0] < row_id:
                         pending = next(spelled, None)
                     if pending is not None and pending[0] == row_id:
-                        record["_zl_spelling"] = pending[1]
+                        spelling = _spelling_without(pending[1], time_key, spellings, row_id)
+                        if spelling is not None:
+                            record["_zl_spelling"] = spelling
                     family = (_text(row[channel_at]) if channel_at else None,
                               _text(row[eventid_at]) if eventid_at else None)
                     families.setdefault(family, set()).update(present)
@@ -479,6 +482,22 @@ class PartWriter:
             for (channel, eventid), indexes in families.items()
         ]
         self.record.time = time_stats
+
+
+def _spelling_without(text: str, time_key: str, cache: dict[str, str | None], row_id: int) -> str | None:
+    """A row's recorded spellings minus the time field's, or None when no other is left.
+
+    The time column always prints under its --timefield name, as in
+    detected_events.json, so a row's own spelling of it must not reach the viewer.
+    """
+    if text not in cache:
+        try:
+            names = orjson.loads(text)
+            kept = [name for name in names if ascii_lower(name) != time_key]
+        except (orjson.JSONDecodeError, TypeError, AttributeError) as exc:
+            raise PackageError(f"event row {row_id} has an unreadable spelling record {text!r}") from exc
+        cache[text] = text if len(kept) == len(names) else orjson.dumps(kept).decode() if kept else None
+    return cache[text]
 
 
 def _unreadable_row(connection: sqlite3.Connection, last_good: Any, exc: sqlite3.Error) -> PackageError:

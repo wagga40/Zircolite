@@ -15,6 +15,7 @@ from pathlib import Path
 import pytest
 import yaml
 
+from tests.package_fixtures import parquet_rows, read_package
 from zircolite import ProcessingConfig, ZircoliteCore
 from zircolite import core as core_module
 
@@ -174,6 +175,37 @@ def test_the_time_field_keeps_the_runs_name(tmp_path, layout):
     assert {event.get("timestamp") for event in matched_events(results)} == times
     lines = [json.loads(line) for line in timeline.read_text().splitlines() if line.strip()]
     assert {line["datetime"] for line in lines} == times
+
+
+def viewer_names(manifest, row):
+    """The names the package viewer shows a row's fields under: row, then part, then column."""
+    row_names = {name.lower(): name for name in json.loads(row["_zl_spelling"] or "[]")}
+    part_names = next(part["spellings"] for part in manifest["parts"] if part["part"] == row["_zl_part"])
+    return {row_names.get(column["key"]) or part_names.get(column["key"]) or column["name"]
+            for column in manifest["columns"] if row[column["name"]] is not None}
+
+
+def test_the_package_names_every_field_as_the_detections_do(tmp_path):
+    inputs = write_inputs(tmp_path / "inputs", {
+        "a.json": [{"CommandLine": "whoami a", "ProcessId": "0x1", "SystemTime": "2026-01-01T00:00:00Z"}],
+        "b.json": [{"CommandLine": "whoami b", "ProcessID": "0x2", "systemtime": "2026-01-01T00:01:00Z"},
+                   {"CommandLine": "whoami c", "ProcessId": "0x3", "systemtime": "2026-01-01T00:02:00Z"}],
+    })
+    packages = tmp_path / "packages"
+    packages.mkdir()
+
+    results = run(tmp_path, inputs, "--json-input", "--unified-db", "--timefield", "SystemTime",
+                  "--package", "--package-dir", str(packages))
+
+    (target,) = packages.glob("zircolite-package-*.zip")
+    manifest, files = read_package(target)
+    columns, rows = parquet_rows(files["events.parquet"], tmp_path, "SELECT * FROM t ORDER BY _zl_uid")
+    rows = [dict(zip(columns, row, strict=True)) for row in rows]
+    assert [(row["CommandLine"], row["_zl_spelling"]) for row in rows] == [
+        ("whoami a", None), ("whoami b", '["ProcessID"]'), ("whoami c", None)]
+    printed = {event["CommandLine"]: set(event) - {"row_id"} for event in matched_events(results)}
+    assert {row["CommandLine"]: viewer_names(manifest, row) for row in rows} == printed
+    assert all("SystemTime" in names for names in printed.values())
 
 
 def ingest(tmp_path, field_mappings_file, test_logger, events, **processing):
