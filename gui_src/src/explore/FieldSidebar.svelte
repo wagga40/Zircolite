@@ -43,7 +43,11 @@
     <input id="field-filter" type="search" placeholder="Filter fields" autocomplete="off" spellcheck="false" bind:value={text}
       bind:this={filterInput}
       onkeydown={(event) => {
-        if (event.key === 'Escape' && ui.fieldsOpen) close();
+        if (event.key === 'Escape' && ui.fieldsOpen) {
+          close();
+          event.preventDefault();
+          event.stopPropagation();
+        }
       }}
     />
   </div>

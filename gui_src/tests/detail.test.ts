@@ -1,4 +1,7 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { compile } from '../src/search/compile';
+import { appendRaw, quoteValue } from '../src/search/edit';
+import { parse } from '../src/search/parse';
 import type { Field } from '../src/engine/schema';
 import {
   type Entry, familyFields, groupEntries, headSql, hostEntry, nearbyRange, rulesSql, valuesSql,
@@ -70,5 +73,15 @@ describe('presenting it', () => {
     expect(hostEntry([entry('Image')])).toBeNull();
     expect(hostEntry([entry('Computer', '')])).toBeNull();
     expect(nearbyRange(1_000_000)).toEqual([700_000, 1_300_000]);
+  });
+});
+
+describe('filtering by a rule', () => {
+  it('keeps quotes and backslashes in a title literal', () => {
+    const title = 'Odd "quoted" \\ rule';
+    const sql = compile(parse(appendRaw('', `rule:${quoteValue(title)}`)), schema);
+    // The backslash is doubled for LIKE's ESCAPE '\\', so the title still matches itself literally.
+    expect(sql).toContain(`ILIKE 'Odd "quoted" \\\\ rule' ESCAPE`);
+    expect(sql).toMatch(/ILIKE/);
   });
 });

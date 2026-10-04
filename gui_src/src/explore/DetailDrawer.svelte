@@ -50,13 +50,13 @@
   $effect(() => {
     const uid = view.uid;
     const mine = ++ticket;
-    failure = null;
-    status = '';
+    // Closing keeps what is shown until the outro ends, so the drawer does not flash empty while it slides away.
     if (uid === null) {
-      loaded = null;
       focused = false;
       return;
     }
+    failure = null;
+    status = '';
     load(uid).then(
       (result) => {
         if (mine === ticket) loaded = result;
@@ -78,13 +78,20 @@
     }
   });
 
+  function settle(): void {
+    if (view.uid === null) {
+      loaded = null;
+      failure = null;
+    }
+  }
+
   function close(): void {
     view.uid = null;
     document.getElementById('result-grid')?.focus();
   }
 
   function onkeydown(event: KeyboardEvent): void {
-    if (event.key === 'Escape' && view.uid !== null && !ui.help && !event.defaultPrevented) {
+    if (event.key === 'Escape' && view.uid !== null && !ui.help && !event.defaultPrevented && !document.querySelector('dialog[open]')) {
       event.preventDefault();
       close();
     }
@@ -113,7 +120,7 @@
 <svelte:window {onkeydown} />
 
 {#if view.uid !== null}
-  <aside class="drawer" aria-label="Event details" transition:fly={{ x: 48, duration: reduced ? 0 : 120 }}>
+  <aside class="drawer" aria-label="Event details" transition:fly={{ x: 48, duration: reduced ? 0 : 120 }} onoutroend={settle}>
     <header>
       <div>
         <h2 tabindex="-1" bind:this={heading}>{title}</h2>
@@ -212,6 +219,10 @@
   .tools button { padding: 0 6px; font-size: var(--t-12); border-color: transparent; }
   .tools button:hover { border-color: var(--rule); }
   .json { margin: 14px 0 0; padding: 12px; background: var(--paper); border: 1px solid var(--rule); border-radius: var(--radius); font: 400 var(--t-13) / 1.45 var(--mono); white-space: pre-wrap; overflow-wrap: anywhere; }
+  @media (max-width: 720px) {
+    .entry { grid-template-columns: minmax(0, 1fr); gap: 2px; }
+    dt { font-size: var(--t-12); }
+  }
   @media (hover: none) {
     .tools { opacity: 1; }
   }
