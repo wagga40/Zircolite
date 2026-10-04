@@ -37,14 +37,19 @@ const SETUP = [
      (4294967298, 1, NULL, '["computer"]', 'Windows PowerShell', 400, 'ws02', NULL, 'C:\\Tools\\50_off.exe', NULL, NULL, 'error'),
      (4294967299, 1, TIMESTAMP '2021-06-03 08:00:00', NULL, 'Security', 4688, 'DC01', 'àéî', NULL, NULL, NULL, NULL)`,
   `CREATE TABLE rules (rule_idx INTEGER, key VARCHAR, id VARCHAR, title VARCHAR, level VARCHAR, level_rank TINYINT,
-     description VARCHAR, tactics VARCHAR[], techniques VARCHAR[])`,
+     description VARCHAR, tags VARCHAR[], falsepositives VARCHAR[], tactics VARCHAR[], techniques VARCHAR[],
+     sigmafile VARCHAR, result_type VARCHAR, alert_count BIGINT)`,
   `INSERT INTO rules VALUES
-     (0, 'r-enc', 'r-enc', 'Encoded PowerShell - Sysmon', 'high', 3, 'd', ['execution'], ['T1059.001']),
-     (1, 'r-logon', 'r-logon', 'Successful logon', 'informational', 0, 'd', ['initial-access'], ['T1078']),
-     (2, 'r-whoami', 'r-whoami', 'Whoami execution', 'medium', 2, 'd', ['discovery'], ['T1033']),
-     (3, 'r-crit', 'r-crit', 'Critical thing', 'critical', 4, 'd', ['persistence'], ['T1053'])`,
+     (0, 'r-enc', 'r-enc', 'Encoded PowerShell - Sysmon', 'high', 3, 'd', ['attack.execution'], ['Admins'], ['execution'], ['T1059.001'], 'a.yml', 'match', 0),
+     (1, 'r-logon', 'r-logon', 'Successful logon', 'informational', 0, 'd', [], [], ['initial-access'], ['T1078'], 'l.yml', 'match', 0),
+     (2, 'r-whoami', 'r-whoami', 'Whoami execution', 'medium', 2, 'd', [], [], ['discovery'], ['T1033'], 'w.yml', 'match', 0),
+     (3, 'r-crit', 'r-crit', 'Critical thing', 'critical', 4, 'd', [], [], ['persistence'], ['T1053'], 'c.yml', 'match', 0)`,
   'CREATE TABLE hits (rule_idx INTEGER, _zl_uid BIGINT)',
   'INSERT INTO hits VALUES (0, 4294967297), (1, 1), (2, 3), (3, 4294967297)',
+  `CREATE TABLE alerts (alert_idx INTEGER, rule_idx INTEGER, _zl_part INTEGER, alert_id VARCHAR, group_keys VARCHAR,
+     occurrence_time TIMESTAMP, window_start TIMESTAMP, window_end TIMESTAMP, metric_name VARCHAR, metric_value DOUBLE,
+     event_count BIGINT, child_alert_ids VARCHAR)`,
+  'CREATE TABLE alert_events (alert_idx INTEGER, _zl_uid BIGINT, ord INTEGER)',
   EVENT_LEVELS_SQL.replace('CREATE OR REPLACE TEMP TABLE', 'CREATE TABLE'),
   // Built the way zircolite/package.py write_text builds text.parquet.
   `CREATE TABLE fulltext AS SELECT _zl_uid, lower(concat_ws(chr(31), ${FIELDS.map((f) => `CAST(${ident(f.name)} AS VARCHAR)`).join(', ')})) AS _zl_text FROM events`,
@@ -61,10 +66,11 @@ function plain(value: unknown): unknown {
   return typeof value === 'bigint' ? Number(value) : value;
 }
 
-export async function openFixture(): Promise<Fixture> {
+export async function openFixture(extra: string[] = []): Promise<Fixture> {
   const instance = await DuckDBInstance.create(':memory:');
   const conn = await instance.connect();
   for (const statement of SETUP) await conn.run(statement);
+  for (const statement of extra) await conn.run(statement);
   const rows = async (sql: string) =>
     (await conn.runAndReadAll(sql)).getRowObjectsJS().map((row) =>
       Object.fromEntries(Object.entries(row).map(([k, v]) => [k, plain(v)])));
