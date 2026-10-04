@@ -2,7 +2,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type { Db } from '../src/engine/db';
 import { nameResolver } from '../src/engine/names';
 import type { Field } from '../src/engine/schema';
-import { csvCell, csvExport, csvLine, eventJson, jsonExport, prepareExport } from '../src/explore/export';
+import { csvCell, csvExport, csvLine, eventJson, ExportTooLarge, jsonExport, limitNote, prepareExport } from '../src/explore/export';
 import { idsSql } from '../src/explore/table';
 import { type Fixture, openFixture, schema } from './fixture';
 
@@ -96,6 +96,41 @@ describe('json', () => {
     expect(Object.keys(timeless)).toEqual(['Channel', 'EventID', 'computer', 'image', 'level']);
     expect(timeless).toEqual({ Channel: 'Windows PowerShell', EventID: 400, computer: 'ws02', image: 'C:\\Tools\\50_off.exe', level: 'error' });
     expect(JSON.parse(lines[0])).toEqual({ Channel: 'Security', EventID: 4624, Computer: 'DC01', TargetUserName: 'bob' });
+  });
+});
+
+describe('limits', () => {
+  const tooLarge = 'The export would exceed 400 MB, which the browser may not hold. Narrow the search or the time range first.';
+
+  it('a CSV export past its byte budget stops with a clear message', async () => {
+    await db.exec(idsSql('TRUE', false));
+    const count = await prepareExport(db);
+    const run = csvExport(db, [field('Computer')], count, () => {}, () => false, 2, 120);
+    await expect(run).rejects.toThrowError(tooLarge);
+    await expect(run).rejects.toBeInstanceOf(ExportTooLarge);
+  });
+
+  it('a JSON export past its byte budget stops with a clear message', async () => {
+    await db.exec(idsSql('TRUE', false));
+    const count = await prepareExport(db);
+    await expect(jsonExport(db, schema.fields, manifest, count, () => {}, () => false, 2, 200)).rejects.toThrowError(tooLarge);
+  });
+
+  it('a budget the export fits in changes nothing', async () => {
+    await db.exec(idsSql('TRUE', false));
+    const count = await prepareExport(db);
+    expect(await jsonExport(db, schema.fields, manifest, count, () => {}, () => false, 2, 100_000)).not.toBeNull();
+  });
+
+  it('caps JSON lower than CSV, each with its own message', () => {
+    expect(limitNote('csv', 500_000)).toBeNull();
+    expect(limitNote('json', 100_000)).toBeNull();
+    expect(limitNote('json', 100_001)).toBe(
+      'A JSON export holds at most 100,000 events and these results have 100,001. Narrow the search or the time range first, or export CSV, which holds up to 500,000.',
+    );
+    expect(limitNote('csv', 500_001)).toBe(
+      'An export holds at most 500,000 events and these results have 500,001. Narrow the search or the time range first.',
+    );
   });
 });
 

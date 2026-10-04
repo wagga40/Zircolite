@@ -7,7 +7,7 @@
   import { formatCount, isoTime, levelName } from '../ui/format';
   import { typing } from '../ui/keys';
   import { ui } from '../ui/ui.svelte';
-  import { csvExport, EXPORT_LIMIT, jsonExport, prepareExport } from './export';
+  import { csvExport, ExportTooLarge, jsonExport, limitNote, prepareExport } from './export';
   import { COUNT_SQL, ensureVisible, geometry, HEAD, idsSql, PAGE, pageSql, type PageRow, ROW } from './table';
 
   let { db, schema, manifest, where, columns }: { db: Db; schema: Schema; manifest: Manifest; where: string; columns: Field[] } = $props();
@@ -186,8 +186,9 @@
     cancel = false;
     try {
       const count = await prepareExport(db);
-      if (count > EXPORT_LIMIT) {
-        exportNote = `An export holds at most ${formatCount(EXPORT_LIMIT)} events and these results have ${formatCount(count)}. Narrow the search or the time range first.`;
+      const refused = limitNote(kind, count);
+      if (refused) {
+        exportNote = refused;
         return;
       }
       exporting = { done: 0, total: count };
@@ -200,7 +201,7 @@
       else if (kind === 'csv') download('zircolite-events.csv', parts, 'text/csv;charset=utf-8');
       else download('zircolite-events.ndjson', parts, 'application/x-ndjson');
     } catch (error) {
-      exportNote = `The export failed: ${message(error)}`;
+      exportNote = error instanceof ExportTooLarge ? error.message : `The export failed: ${message(error)}`;
     } finally {
       exporting = null;
     }
@@ -224,7 +225,7 @@
       <button type="button" disabled={busy || total === 0} onclick={() => runExport('csv')}
         title="The shown columns, one row per event. A cell starting with = + - or @ gets a leading ' so spreadsheets read it as text.">Export CSV</button>
       <button type="button" disabled={busy || total === 0} onclick={() => runExport('json')}
-        title="Every field of every event, one JSON object per line.">Export JSON</button>
+        title="Every field of every event, one JSON object per line, for up to 100,000 events.">Export JSON</button>
     {/if}
   </div>
   {#if exportNote}<p class="note" role="status">{exportNote}</p>{/if}
