@@ -1,7 +1,9 @@
 <script lang="ts">
   import type { Db } from '../engine/db';
+  import { isSuperseded } from '../engine/queries';
   import type { Field } from '../engine/schema';
   import { appendTerm } from '../search/edit';
+  import { run } from '../state/run.svelte';
   import { view } from '../state/view.svelte';
   import { formatCount } from '../ui/format';
   import { topValuesSql, valueLabel } from './sidebar';
@@ -21,11 +23,12 @@
   let ticket = 0;
 
   $effect(() => {
+    void run.generation;
     const sql = topValuesSql(field, where);
     const mine = ++ticket;
     failure = null;
     pending = true;
-    db.rows<Value>(sql).then(
+    db.rows<Value>(sql, { lane: `facet:${field.key}` }).then(
       (result) => {
         if (mine !== ticket) return;
         rows = result;
@@ -33,7 +36,7 @@
       },
       (error: unknown) => {
         if (mine !== ticket) return;
-        failure = error instanceof Error ? error.message : String(error);
+        failure = isSuperseded(error) ? null : error instanceof Error ? error.message : String(error);
         pending = false;
       },
     );

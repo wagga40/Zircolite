@@ -3,6 +3,8 @@
   import type { Db } from '../engine/db';
   import { LEVELS } from '../engine/levels';
   import type { Manifest } from '../engine/manifest';
+  import { isSuperseded } from '../engine/queries';
+  import { run } from '../state/run.svelte';
   import { view } from '../state/view.svelte';
   import { pageTopLayer } from '../ui/layers';
   import { formatCount, isoTime } from '../ui/format';
@@ -54,7 +56,7 @@
         if (live) domain = domainOf(rows[0]);
       },
       (error: unknown) => {
-        failure = error instanceof Error ? error.message : String(error);
+        if (!isSuperseded(error)) failure = error instanceof Error ? error.message : String(error);
       },
     );
     const repaint = () => paint++;
@@ -71,11 +73,12 @@
 
   // Each answer is drawn on the layout its own request was built for; an answer overtaken by a newer request is dropped.
   $effect(() => {
+    void run.generation;
     if (!bins) return;
     const request = stripRequest(bins, where);
     const mine = ++ticket;
     pending = true;
-    db.rows<BinRow>(request.sql).then(
+    db.rows<BinRow>(request.sql, { lane: 'strip' }).then(
       (rows) => {
         if (mine !== ticket) return;
         pending = false;
@@ -95,7 +98,7 @@
       (error: unknown) => {
         if (mine !== ticket) return;
         pending = false;
-        failure = error instanceof Error ? error.message : String(error);
+        failure = isSuperseded(error) ? null : error instanceof Error ? error.message : String(error);
       },
     );
   });

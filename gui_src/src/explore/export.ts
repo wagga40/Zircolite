@@ -43,8 +43,8 @@ type Reader = Pick<Db, 'rows' | 'exec'>;
 
 /** Freeze the results for one export, so changing the filters meanwhile cannot mix two lists; returns their count. */
 export async function prepareExport(db: Reader): Promise<number> {
-  await db.exec(SNAPSHOT_SQL);
-  const [row] = await db.rows<{ n: number }>('SELECT count(*)::DOUBLE AS n FROM export_ids', { cache: false });
+  await db.exec(SNAPSHOT_SQL, { lane: 'export' });
+  const [row] = await db.rows<{ n: number }>('SELECT count(*)::DOUBLE AS n FROM export_ids', { cache: false, lane: 'export' });
   return row.n;
 }
 
@@ -97,7 +97,7 @@ export async function csvExport(
   const parts: BlobPart[] = [head];
   for (let from = 0; from < total; from += batch) {
     if (cancelled()) return null;
-    const rows = await db.rows<PageRow>(pageSql(columns, from, from + batch, 'export_ids'), { cache: false });
+    const rows = await db.rows<PageRow>(pageSql(columns, from, from + batch, 'export_ids'), { cache: false, lane: 'export' });
     const part = rows.map((row) => csvLine([isoTime(row._zl_t), levelName(row._zl_lvl), ...columns.map((_, i) => row[`_zl_v${i}`] ?? null)], [false, false, ...columns.map((c) => c.type !== 'VARCHAR')])).join('');
     used = spend(used, part, budget);
     parts.push(part);
@@ -121,7 +121,7 @@ export async function jsonExport(
   const resolvers = new Map<string, (field: Field) => string>();
   for (let from = 0; from < total; from += batch) {
     if (cancelled()) return null;
-    const rows = await db.rows<PageRow>(pageSql(fields, from, from + batch, 'export_ids', true), { cache: false });
+    const rows = await db.rows<PageRow>(pageSql(fields, from, from + batch, 'export_ids', true), { cache: false, lane: 'export' });
     const part = rows
       .map((row) => {
         const key = `${row._zl_part}\u0000${row._zl_spelling ?? ''}`;

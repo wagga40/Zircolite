@@ -1,34 +1,25 @@
-import { Coordinator, wasmConnector } from '@uwdata/mosaic-core';
 import type { Engine } from './boot';
+import { type QueryOptions, QueryScheduler, type Sender } from './queries';
 import { EVENT_LEVELS_SQL } from './sql';
 
 export interface Db {
-  coordinator: Coordinator;
-  /**
-   * Rows as plain objects. Queries whose text does not change when their
-   * result does (pages of the view_ids temp table) must pass cache: false,
-   * or Mosaic answers them from its cache.
-   */
-  rows<T = Record<string, unknown>>(sql: string, options?: { cache?: boolean }): Promise<T[]>;
-  exec(sql: string): Promise<void>;
+  /** Rows as plain objects. Pass cache: false when the text stays the same but the data changed (pages of view_ids). */
+  rows<T = Record<string, unknown>>(sql: string, options?: QueryOptions): Promise<T[]>;
+  exec(sql: string, options?: { lane?: string }): Promise<void>;
+  /** Stop the queries of one lane, or all of them. */
+  cancel(lane?: string): void;
+  /** Make bytes readable to the engine under a file name, as the boot does for the tables. */
+  register(name: string, bytes: Uint8Array): Promise<void>;
 }
 
 export async function openDb(engine: Engine): Promise<Db> {
-  // Pre-aggregation indexes Mosaic's own query objects; the viewer's clients
-  // send SQL text, so it could only add work.
-  const coordinator = new Coordinator(wasmConnector({ duckdb: engine.db, connection: engine.conn }), {
-    logger: null,
-    preagg: { enabled: false },
-  });
+  // DuckDB-WASM's reader is typed against its own Arrow classes; the scheduler needs only toArray and toJSON.
+  const scheduler = new QueryScheduler(engine.conn as unknown as Sender);
   const db: Db = {
-    coordinator,
-    async rows<T>(sql: string, options?: { cache?: boolean }) {
-      const table = await coordinator.query(sql, { cache: options?.cache ?? true });
-      return table.toArray() as T[];
-    },
-    async exec(sql: string) {
-      await coordinator.exec(sql);
-    },
+    rows: (sql, options) => scheduler.rows(sql, options),
+    exec: (sql, options) => scheduler.exec(sql, options),
+    cancel: (lane) => scheduler.cancel(lane),
+    register: (name, bytes) => engine.db.registerFileBuffer(name, bytes),
   };
   await db.exec(EVENT_LEVELS_SQL);
   return db;

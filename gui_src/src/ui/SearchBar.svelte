@@ -1,5 +1,6 @@
 <script lang="ts">
   import type { Db } from '../engine/db';
+  import { isSuperseded } from '../engine/queries';
   import type { Schema } from '../engine/schema';
   import { formatRange } from '../explore/histogram';
   import { suggestValuesSql } from '../explore/sidebar';
@@ -22,6 +23,7 @@
   let active = $state(-1);
   let context: Completion | null = null;
   let lookup = 0;
+  let lookupTimer: ReturnType<typeof setTimeout> | undefined;
   let failure = $state<{ field: string; message: string } | null>(null);
 
   const items = $derived(chips(view.q));
@@ -56,6 +58,7 @@
   // Bumping the ticket also drops a lookup still in flight, so it cannot reopen the list.
   function closeOptions(): void {
     lookup += 1;
+    clearTimeout(lookupTimer);
     options = [];
     active = -1;
   }
@@ -68,7 +71,7 @@
     if (!error) view.q = draft.trim();
   }
 
-  async function suggest(): Promise<void> {
+  function suggest(): void {
     if (locked) return;
     const caret = input.selectionStart ?? draft.length;
     context = completionAt(draft, caret);
@@ -84,17 +87,23 @@
     const name = context.field;
     const field = schema.find(name);
     if (!field) return;
-    try {
-      const rows = await db.rows<{ v: string }>(suggestValuesSql(field, context.prefix));
-      if (ticket === lookup) {
-        options = rows.map((row) => row.v);
-        failure = null;
-      }
-    } catch (problem) {
-      if (ticket === lookup) {
-        failure = { field: name, message: `Could not look up values for ${field.name}: ${problem instanceof Error ? problem.message : String(problem)}` };
-      }
-    }
+    clearTimeout(lookupTimer);
+    const prefix = context.prefix;
+    lookupTimer = setTimeout(() => {
+      db.rows<{ v: string }>(suggestValuesSql(field, prefix), { lane: 'suggest' }).then(
+        (rows) => {
+          if (ticket === lookup) {
+            options = rows.map((row) => row.v);
+            failure = null;
+          }
+        },
+        (problem: unknown) => {
+          if (ticket === lookup && !isSuperseded(problem)) {
+            failure = { field: name, message: `Could not look up values for ${field.name}: ${problem instanceof Error ? problem.message : String(problem)}` };
+          }
+        },
+      );
+    }, 150);
   }
 
   function accept(option: string): void {

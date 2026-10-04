@@ -16,23 +16,17 @@
     "@duckdb/duckdb-wasm": "1.32.0",
     "@fontsource/atkinson-hyperlegible-mono": "5.3.0",
     "@fontsource/atkinson-hyperlegible-next": "5.3.0",
-    "@uwdata/mosaic-core": "0.32.0",
-    "@uwdata/mosaic-sql": "0.32.0",
     "svelte": "5.57.1"
   },
   "devDependencies": {
     "@duckdb/node-api": "1.4.3-r.3",
     "@sveltejs/vite-plugin-svelte": "7.3.1",
     "@tsconfig/svelte": "5.0.8",
+    "apache-arrow": "17.0.0",
     "playwright": "1.62.0",
     "svelte-check": "4.7.6",
     "typescript": "5.9.3",
     "vite": "8.3.2",
     "vitest": "5.0.3"
-  },
-  "overrides": {
-    "@uwdata/mosaic-core": {
-      "@duckdb/duckdb-wasm": "$@duckdb/duckdb-wasm"
-    }
   }
 }

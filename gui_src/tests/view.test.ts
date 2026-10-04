@@ -1,38 +1,8 @@
 import { flushSync } from 'svelte';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import type { MosaicClient } from '@uwdata/mosaic-core';
-import { filters, setDetections, setSearch, setTime, timeClients } from '../src/state/filters';
 import { EMPTY, encode } from '../src/state/hash';
 import { bindHash, View } from '../src/state/view.svelte';
 import { DETECTIONS_PREDICATE } from '../src/state/where';
-
-const texts = (client: unknown, noSkip?: boolean) =>
-  (filters.predicate(client as MosaicClient | null, noSkip) as unknown[]).map(String);
-
-describe('filters', () => {
-  afterEach(() => {
-    setSearch(null);
-    setTime(null);
-    setDetections(false);
-    timeClients.clear();
-  });
-
-  it('collects clauses and clears one with null', () => {
-    setSearch('a = 1');
-    setDetections(true);
-    expect(texts(null)).toEqual(['a = 1', DETECTIONS_PREDICATE]);
-    setSearch(null);
-    expect(texts(null)).toEqual([DETECTIONS_PREDICATE]);
-  });
-
-  it('leaves the time clause out for clients that draw the time axis', () => {
-    const client = {} as MosaicClient;
-    timeClients.add(client);
-    setTime('t = 1');
-    expect(texts(client, true)).toEqual([]);
-    expect(texts(null)).toEqual(['t = 1']);
-  });
-});
 
 describe('View.apply', () => {
   it('keeps the same array when an equal one is applied', () => {

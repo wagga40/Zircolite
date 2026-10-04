@@ -3,6 +3,7 @@
   import type { Db } from '../engine/db';
   import type { Manifest } from '../engine/manifest';
   import { nameResolver } from '../engine/names';
+  import { isSuperseded } from '../engine/queries';
   import type { Schema } from '../engine/schema';
   import { appendRaw, appendTerm, quoteValue } from '../search/edit';
   import { view } from '../state/view.svelte';
@@ -39,11 +40,11 @@
   const title = $derived(loaded ? [loaded.head._zl_channel ?? 'Event', loaded.head._zl_eventid ?? ''].join(' ').trim() : 'Event');
 
   async function load(uid: number): Promise<Loaded> {
-    const [head] = await db.rows<Head>(headSql(schema, uid));
+    const [head] = await db.rows<Head>(headSql(schema, uid), { lane: 'drawer' });
     if (!head) throw new Error('this package holds no event with that id; the link may come from another package');
     const fields = familyFields(manifest, schema, head._zl_channel, head._zl_eventid);
-    const [values] = await db.rows<Record<string, string | null>>(valuesSql(fields, uid));
-    const rules = await db.rows<RuleRow>(rulesSql(uid));
+    const [values] = await db.rows<Record<string, string | null>>(valuesSql(fields, uid), { lane: 'drawer' });
+    const rules = await db.rows<RuleRow>(rulesSql(uid), { lane: 'drawer' });
     const name = nameResolver(manifest, head._zl_part, head._zl_spelling);
     const entries = fields.flatMap((field, i) => {
       const value = values?.[`_zl_v${i}`];
@@ -69,7 +70,10 @@
       (error: unknown) => {
         if (mine === ticket) {
           loaded = null;
-          failure = error instanceof Error ? error.message : String(error);
+          // Only a stop supersedes the newest request: a newer event would have moved the ticket on.
+          failure = isSuperseded(error)
+            ? 'Stopped. Choose the event again to read it.'
+            : error instanceof Error ? error.message : String(error);
         }
       },
     );

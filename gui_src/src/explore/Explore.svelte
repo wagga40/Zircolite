@@ -5,7 +5,7 @@
   import { compile } from '../search/compile';
   import { type Node, parse } from '../search/parse';
   import { SearchError } from '../search/tokens';
-  import { setDetections, setSearch, setTime } from '../state/filters';
+  import { run } from '../state/run.svelte';
   import { view } from '../state/view.svelte';
   import { combineWhere, DETECTIONS_PREDICATE, timePredicate } from '../state/where';
   import { slowSearchNote } from '../ui/format';
@@ -32,14 +32,16 @@
   const search = $derived(compiled.sql);
   const slow = $derived(slowSearchNote(compiled.tree, manifest.totals.events));
   const time = $derived(timePredicate(view.t));
-  // The same three predicates go to the filters selection, for the views that will read it.
+  // The table, facets and drawer read every filter; the strip draws time itself.
   const where = $derived(combineWhere([search, time, view.d ? DETECTIONS_PREDICATE : null]));
   const stripWhere = $derived(combineWhere([search, view.d ? DETECTIONS_PREDICATE : null]));
   const columns = $derived(shownColumns(view.cols, schema));
 
-  $effect(() => setSearch(search));
-  $effect(() => setTime(time));
-  $effect(() => setDetections(view.d));
+  // A new question is not a stopped one.
+  $effect(() => {
+    void where;
+    run.stopped = false;
+  });
 </script>
 
 <main class="explore">

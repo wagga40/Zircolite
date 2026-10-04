@@ -1,41 +1,47 @@
-import { tableFromArrays, tableToIPC } from '@uwdata/flechette';
-import { Coordinator } from '@uwdata/mosaic-core';
 import { describe, expect, it } from 'vitest';
 import type { Engine } from '../src/engine/boot';
 import { openDb } from '../src/engine/db';
 import { EVENT_LEVELS_SQL } from '../src/engine/sql';
 
-/** An engine whose connection records every statement and answers with one Arrow row. */
 function fakeEngine() {
   const sent: string[] = [];
-  const bindings = {
-    async runQuery(_conn: number, sql: string) {
+  const registered: string[] = [];
+  const conn = {
+    async send(sql: string) {
       sent.push(sql);
-      return tableToIPC(tableFromArrays({ n: [7] }), { format: 'stream' }) as Uint8Array;
+      return (async function* () {
+        yield { toArray: () => [{ toJSON: () => ({ n: 7n }) }] };
+      })();
+    },
+    async cancelSent() {
+      return false;
     },
   };
-  const conn = { useUnsafe: (run: (b: typeof bindings, c: number) => Promise<void>) => run(bindings, 0) };
-  return { engine: { db: {}, conn } as unknown as Engine, sent };
+  const db = {
+    async registerFileBuffer(name: string) {
+      registered.push(name);
+    },
+  };
+  return { engine: { db, conn } as unknown as Engine, sent, registered };
 }
 
 describe('openDb', () => {
-  it('builds a coordinator and creates the event levels through the shared connection', async () => {
+  it('creates the event levels before anything else runs', async () => {
     const { engine, sent } = fakeEngine();
-    const db = await openDb(engine);
-
-    expect(db.coordinator).toBeInstanceOf(Coordinator);
+    await openDb(engine);
     expect(sent).toEqual([EVENT_LEVELS_SQL]);
   });
 
-  it('returns rows as plain objects and honours cache: false', async () => {
-    const { engine, sent } = fakeEngine();
+  it('returns plain rows, caches by text, and registers files', async () => {
+    const { engine, sent, registered } = fakeEngine();
     const db = await openDb(engine);
     sent.length = 0;
-
     expect(await db.rows('SELECT 7 AS n')).toEqual([{ n: 7 }]);
     await db.rows('SELECT 7 AS n');
     expect(sent).toEqual(['SELECT 7 AS n']);
     await db.rows('SELECT 7 AS n', { cache: false });
     expect(sent).toHaveLength(2);
+    await db.register('text.parquet', new Uint8Array([1]));
+    expect(registered).toEqual(['text.parquet']);
   });
 });

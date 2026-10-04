@@ -1,7 +1,9 @@
 <script lang="ts">
   import type { Db } from '../engine/db';
   import type { Manifest } from '../engine/manifest';
+  import { isSuperseded } from '../engine/queries';
   import type { Field, Schema } from '../engine/schema';
+  import { run, runAgain, stopAll } from '../state/run.svelte';
   import { view } from '../state/view.svelte';
   import { download } from '../ui/download';
   import { formatCount, isoTime, levelName } from '../ui/format';
@@ -68,14 +70,15 @@
 
   // Rebuild the result list whenever the filters or the order change.
   $effect(() => {
+    void run.generation;
     const sql = idsSql(where, view.desc);
     const mine = ++build;
     busy = true;
     failure = null;
     void (async () => {
       try {
-        await db.exec(sql);
-        const [counts] = await db.rows<{ n: number; d: number }>(COUNT_SQL, { cache: false });
+        await db.exec(sql, { lane: 'results' });
+        const [counts] = await db.rows<{ n: number; d: number }>(COUNT_SQL, { cache: false, lane: 'results' });
         if (mine !== build) return;
         failed.clear();
         pages = new Map();
@@ -97,14 +100,14 @@
         active = 0;
         follow = false;
         current = mine;
-        failure = message(error);
+        failure = isSuperseded(error) ? null : message(error);
         busy = false;
       }
     })();
   });
 
   // Load the pages the visible rows fall in, one request at a time: the
-  // coordinator runs queries in order, so a fast scroll that asked for every
+  // scheduler runs queries in order, so a fast scroll that asked for every
   // page it passed would keep the rows it stops on waiting behind them all.
   // A page requested while a newer list is being built would read that list,
   // so none is requested until it is ready.
@@ -119,7 +122,7 @@
     const done = () => {
       if (inflight === key) inflight = null;
     };
-    db.rows<PageRow>(pageSql(fields, page * PAGE, (page + 1) * PAGE), { cache: false }).then(
+    db.rows<PageRow>(pageSql(fields, page * PAGE, (page + 1) * PAGE), { cache: false, lane: 'page' }).then(
       (rows) => {
         if (mine === build && mine === current) {
           const next = new Map(pages);
@@ -134,8 +137,9 @@
       },
       (error: unknown) => {
         if (mine === build) {
+          // A stopped page request is not asked for again until Run again rebuilds the list.
           failed.add(key);
-          failure = message(error);
+          if (!isSuperseded(error)) failure = message(error);
         }
         done();
       },
@@ -219,7 +223,8 @@
       else if (kind === 'csv') download('zircolite-events.csv', parts, 'text/csv;charset=utf-8');
       else download('zircolite-events.ndjson', parts, 'application/x-ndjson');
     } catch (error) {
-      exportNote = error instanceof ExportTooLarge ? error.message : `The export failed: ${message(error)}`;
+      if (isSuperseded(error)) exportNote = 'Export stopped.';
+      else exportNote = error instanceof ExportTooLarge ? error.message : `The export failed: ${message(error)}`;
     } finally {
       exporting = null;
     }
@@ -231,9 +236,14 @@
 <div class="table">
   <div class="bar">
     <button type="button" id="fields-toggle" class="fields-toggle" aria-expanded={ui.fieldsOpen} aria-controls="field-sidebar" onclick={() => (ui.fieldsOpen = !ui.fieldsOpen)}>Fields</button>
-    <output id="result-count" data-count={busy ? '' : total} data-detected={busy ? '' : detected} data-build={current} data-busy={busy} aria-live="polite">
-      {#if busy && slow}<span class="slow">{slow}</span>{:else if busy}Searching{:else}{formatCount(total)} {total === 1 ? 'event' : 'events'}{#if detected}, {formatCount(detected)} with detections{/if}{/if}
-    </output>
+    {#if run.stopped && !busy}
+      <p class="note stopped" role="status">The search was stopped. <button type="button" onclick={runAgain}>Run again</button></p>
+    {:else}
+      <output id="result-count" data-count={busy ? '' : total} data-detected={busy ? '' : detected} data-build={current} data-busy={busy} aria-live="polite">
+        {#if busy && slow}<span class="slow">{slow}</span>{:else if busy}Searching{:else}{formatCount(total)} {total === 1 ? 'event' : 'events'}{#if detected}, {formatCount(detected)} with detections{/if}{/if}
+      </output>
+    {/if}
+    {#if busy}<button type="button" onclick={() => stopAll(db)}>Stop</button>{/if}
     <button type="button" class="toggle" aria-pressed={view.d} onclick={() => (view.d = !view.d)}>Detections only</button>
     <span class="grow"></span>
     {#if exporting}
@@ -320,6 +330,7 @@
   .slow { font-weight: 400; color: var(--ink-2); }
   .grow { flex: 1; }
   .progress { font-size: var(--t-13); color: var(--ink-2); }
+  .stopped { margin: 0; }
   .note { margin: 6px 16px; font-size: var(--t-13); color: var(--ink-2); }
   .failure { color: var(--danger); }
   .scroller { position: relative; flex: 1; min-height: 0; overflow: auto; outline-offset: -2px; }
