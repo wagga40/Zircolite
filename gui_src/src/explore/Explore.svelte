@@ -5,7 +5,6 @@
   import { compile } from '../search/compile';
   import { type Node, parse } from '../search/parse';
   import { SearchError } from '../search/tokens';
-  import { run } from '../state/run.svelte';
   import { view } from '../state/view.svelte';
   import { combineWhere, DETECTIONS_PREDICATE, timePredicate } from '../state/where';
   import { slowSearchNote } from '../ui/format';
@@ -37,11 +36,6 @@
   const stripWhere = $derived(combineWhere([search, view.d ? DETECTIONS_PREDICATE : null]));
   const columns = $derived(shownColumns(view.cols, schema));
 
-  // A new question is not a stopped one.
-  $effect(() => {
-    void where;
-    run.stopped = false;
-  });
 </script>
 
 <main class="explore">

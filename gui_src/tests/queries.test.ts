@@ -129,6 +129,56 @@ describe('QueryScheduler', () => {
     expect(await good).toEqual([{ ok: true }]);
   });
 
+  it("cancel('a') leaves another lane's running query alone", async () => {
+    const c = fakeConnection();
+    const s = new QueryScheduler(c.sender);
+    const b = s.rows('B', { lane: 'b' });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    s.cancel('a');
+    expect(c.cancels()).toBe(0);
+    await c.finish([{ n: 1 }]);
+    expect(await b).toEqual([{ n: 1 }]);
+  });
+
+  it('cancel() cancels the engine once, and the next queued query still runs', async () => {
+    const c = fakeConnection();
+    const s = new QueryScheduler(c.sender);
+    const a = s.rows('A', { lane: 'x' });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    s.cancel();
+    await expect(a).rejects.toSatisfy(isSuperseded);
+    expect(c.cancels()).toBe(1);
+    const next = s.rows('N');
+    await c.finish([{ n: 5 }]);
+    expect(await next).toEqual([{ n: 5 }]);
+    expect(c.sent).toEqual(['A', 'N']);
+  });
+
+  it('a cancelled query that the engine still finishes is never answered with rows', async () => {
+    const c = fakeConnection();
+    const lost: Sender = { send: c.sender.send, cancelSent: async () => false };
+    const s = new QueryScheduler(lost);
+    const old = s.rows('slow', { lane: 'table' });
+    const watched = expect(old).rejects.toSatisfy(isSuperseded);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    s.cancel('table');
+    await c.finish([{ n: 9 }]);
+    await watched;
+  });
+
+  it('does not cache a failed query', async () => {
+    const c = fakeConnection();
+    const s = new QueryScheduler(c.sender);
+    const bad = s.rows('Q');
+    const failed = expect(bad).rejects.toThrow('boom');
+    await c.fail(new Error('boom'));
+    await failed;
+    const again = s.rows('Q');
+    await c.finish([{ n: 1 }]);
+    expect(await again).toEqual([{ n: 1 }]);
+    expect(c.sent).toEqual(['Q', 'Q']);
+  });
+
   it('exec drains the statement and resolves without rows', async () => {
     const c = fakeConnection();
     const s = new QueryScheduler(c.sender);

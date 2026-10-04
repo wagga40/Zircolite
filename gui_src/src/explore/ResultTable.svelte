@@ -71,6 +71,8 @@
   // Rebuild the result list whenever the filters or the order change.
   $effect(() => {
     void run.generation;
+    // A new list is a new question; a stop belongs to the list it cancelled.
+    run.stopped = false;
     const sql = idsSql(where, view.desc);
     const mine = ++build;
     busy = true;

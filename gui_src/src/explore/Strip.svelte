@@ -32,6 +32,9 @@
   let cursor = $state<{ at: number; anchor: number } | null>(null);
   let paint = $state(0);
   let pending = $state(true);
+  // A stop leaves no answer: bars on screen would belong to an earlier filter.
+  let stopped = $state(false);
+  let domainTicket = 0;
   let ticket = 0;
 
   // A selected range zooms the strip into it, so a busy week can be narrowed to minutes; its end is exclusive.
@@ -49,23 +52,30 @@
     return `${formatRange(summary.range)} UTC: ${formatCount(summary.events)} events${detections}`;
   }
 
-  onMount(() => {
-    let live = true;
-    db.rows<{ lo: number | null; hi: number | null }>(DOMAIN_SQL).then(
+  // Read again on Run again, so a stop during the first read does not leave the strip without a time range.
+  $effect(() => {
+    void run.generation;
+    const mine = ++domainTicket;
+    stopped = false;
+    db.rows<{ lo: number | null; hi: number | null }>(DOMAIN_SQL, { lane: 'strip-domain' }).then(
       (rows) => {
-        if (live) domain = domainOf(rows[0]);
+        if (mine === domainTicket) domain = domainOf(rows[0]);
       },
       (error: unknown) => {
+        if (mine !== domainTicket) return;
         if (!isSuperseded(error)) failure = error instanceof Error ? error.message : String(error);
+        else if (run.stopped) stopped = true;
       },
     );
+  });
+
+  onMount(() => {
     const repaint = () => paint++;
     const observer = new MutationObserver(repaint);
     observer.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
     const scheme = matchMedia('(prefers-color-scheme: dark)');
     scheme.addEventListener('change', repaint);
     return () => {
-      live = false;
       observer.disconnect();
       scheme.removeEventListener('change', repaint);
     };
@@ -78,6 +88,7 @@
     const request = stripRequest(bins, where);
     const mine = ++ticket;
     pending = true;
+    stopped = false;
     db.rows<BinRow>(request.sql, { lane: 'strip' }).then(
       (rows) => {
         if (mine !== ticket) return;
@@ -99,6 +110,10 @@
         if (mine !== ticket) return;
         pending = false;
         failure = isSuperseded(error) ? null : error instanceof Error ? error.message : String(error);
+        if (isSuperseded(error) && run.stopped) {
+          series = null;
+          stopped = true;
+        }
       },
     );
   });
@@ -228,6 +243,8 @@
 <section class="strip" aria-label="Events over time">
   {#if failure}
     <p class="note failure" role="alert">The histogram could not be drawn: {failure}</p>
+  {:else if stopped}
+    <p class="note" role="status">Stopped.</p>
   {:else if domain === null}
     <p class="note">No event in this package has a time, so there is nothing to draw here. Every event is still listed below.</p>
   {:else}

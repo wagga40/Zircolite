@@ -3,7 +3,7 @@
   import { isSuperseded } from '../engine/queries';
   import type { Field } from '../engine/schema';
   import { appendTerm } from '../search/edit';
-  import { run } from '../state/run.svelte';
+  import { run, runAgain } from '../state/run.svelte';
   import { view } from '../state/view.svelte';
   import { formatCount } from '../ui/format';
   import { topValuesSql, valueLabel } from './sidebar';
@@ -20,6 +20,8 @@
   let rows = $state.raw<Value[] | null>(null);
   let failure = $state<string | null>(null);
   let pending = $state(true);
+  // A stop leaves no answer: the rows on screen would belong to an earlier filter.
+  let stopped = $state(false);
   let ticket = 0;
 
   $effect(() => {
@@ -27,6 +29,7 @@
     const sql = topValuesSql(field, where);
     const mine = ++ticket;
     failure = null;
+    stopped = false;
     pending = true;
     db.rows<Value>(sql, { lane: `facet:${field.key}` }).then(
       (result) => {
@@ -37,6 +40,10 @@
       (error: unknown) => {
         if (mine !== ticket) return;
         failure = isSuperseded(error) ? null : error instanceof Error ? error.message : String(error);
+        if (isSuperseded(error) && run.stopped) {
+          rows = null;
+          stopped = true;
+        }
         pending = false;
       },
     );
@@ -49,6 +56,8 @@
   <button type="button" class="column" aria-pressed={shown} onclick={ontoggle}>{shown ? 'Hide column' : 'Show as column'}</button>
   {#if failure}
     <p class="note failure" role="alert">The top values could not be counted: {failure}</p>
+  {:else if stopped}
+    <p class="note" role="status">Stopped. <button type="button" class="again" onclick={runAgain}>Run again</button></p>
   {:else if rows === null}
     <p class="note">Counting values</p>
   {:else if rows.length === 0}
@@ -82,6 +91,7 @@
   .column[aria-pressed='true'] { border-color: var(--signal); color: var(--signal); }
   .note { margin: 2px 0 6px; font-size: var(--t-12); color: var(--ink-2); }
   .failure { color: var(--danger); }
+  .again { background: none; border: 1px solid var(--rule); border-radius: var(--radius); padding: 1px 8px; min-height: 24px; font-size: var(--t-12); cursor: pointer; }
   ul { list-style: none; margin: 0; padding: 0; }
   li { position: relative; display: grid; grid-template-columns: minmax(0, 1fr) auto auto auto; gap: 4px; align-items: center; padding: 2px 0 4px; }
   .value { font: 400 var(--t-13) / 1.4 var(--mono); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

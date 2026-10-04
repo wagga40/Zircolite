@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { onDestroy } from 'svelte';
   import type { Db } from '../engine/db';
   import { isSuperseded } from '../engine/queries';
   import type { Schema } from '../engine/schema';
@@ -56,9 +57,13 @@
   });
 
   // Bumping the ticket also drops a lookup still in flight, so it cannot reopen the list.
+  onDestroy(() => clearTimeout(lookupTimer));
+
   function closeOptions(): void {
     lookup += 1;
     clearTimeout(lookupTimer);
+    // A lookup nobody wants must not hold the connection when a search is submitted.
+    db.cancel('suggest');
     options = [];
     active = -1;
   }
