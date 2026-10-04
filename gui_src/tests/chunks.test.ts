@@ -26,6 +26,12 @@ describe('ChunkStore', () => {
     expect(await store.take(file('a', 2, 6)).text()).toBe('abcdef');
   });
 
+  it('reports a chunk that is not base64 as the cause', () => {
+    const store = new ChunkStore();
+    store.add('a', 0, '***not base64***');
+    expect(() => store.take(file('a', 1, 3))).toThrow(/a: chunk 0 could not be decoded/);
+  });
+
   it('refuses a file with a chunk missing', () => {
     const store = new ChunkStore();
     store.add('a', 1, btoa('def'));

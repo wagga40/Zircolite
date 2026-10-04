@@ -14,6 +14,9 @@ export function decodeBase64(text: string): Bytes {
 /** Chunks as the package's scripts deliver them, reassembled per file. */
 export class ChunkStore {
   private readonly parts = new Map<string, Bytes[]>();
+  // A chunk script's callback cannot throw to the loader, so a bad chunk is
+  // remembered here and reported when its file is taken.
+  private readonly broken = new Map<string, Error>();
 
   add(name: string, sequence: number, text: string): void {
     let list = this.parts.get(name);
@@ -21,13 +24,23 @@ export class ChunkStore {
       list = [];
       this.parts.set(name, list);
     }
-    list[sequence] = decodeBase64(text);
+    try {
+      list[sequence] = decodeBase64(text);
+    } catch (error) {
+      if (!this.broken.has(name)) {
+        const reason = error instanceof Error ? error.message : String(error);
+        this.broken.set(name, new Error(`${name}: chunk ${sequence} could not be decoded (${reason})`));
+      }
+    }
   }
 
   /** The whole file, checked against the manifest; its chunks are released. */
   take(file: PackageFile, type = 'application/octet-stream'): Blob {
     const list = this.parts.get(file.name) ?? [];
+    const problem = this.broken.get(file.name);
     this.parts.delete(file.name);
+    this.broken.delete(file.name);
+    if (problem !== undefined) throw problem;
     for (let i = 0; i < file.chunks.length; i++) {
       if (list[i] === undefined) throw new Error(`${file.name}: chunk ${i} of ${file.chunks.length} did not load`);
     }

@@ -21,9 +21,28 @@ export async function bootEngine(manifest: Manifest, store: ChunkStore, step: (l
   // or WebKit, but it can read a data: URL.
   const wasmUrl = await blobToDataUrl(wasm);
   const workerUrl = URL.createObjectURL(store.take(find(manifest, 'duckdb-browser-eh.worker.js'), 'text/javascript'));
-  const db = new duckdb.AsyncDuckDB(new duckdb.VoidLogger(), new Worker(workerUrl));
-  await db.instantiate(wasmUrl);
-  URL.revokeObjectURL(workerUrl);
+  const worker = new Worker(workerUrl);
+  const db = new duckdb.AsyncDuckDB(new duckdb.VoidLogger(), worker);
+  // A worker that fails to start never answers, so instantiate() would wait
+  // forever; its error events must end the wait instead.
+  let fail: (reason: Error) => void = () => {};
+  const failed = new Promise<never>((_, reject) => {
+    fail = reject;
+  });
+  const onError = (event: ErrorEvent) => fail(new Error(`the query engine's worker failed to start${event.message ? `: ${event.message}` : ''}`));
+  const onMessageError = () => fail(new Error("the query engine's worker sent a message the page could not read"));
+  worker.addEventListener('error', onError);
+  worker.addEventListener('messageerror', onMessageError);
+  try {
+    await Promise.race([db.instantiate(wasmUrl), failed]);
+  } catch (error) {
+    worker.terminate();
+    throw error;
+  } finally {
+    worker.removeEventListener('error', onError);
+    worker.removeEventListener('messageerror', onMessageError);
+    URL.revokeObjectURL(workerUrl);
+  }
   step('Loading Parquet support');
   const conn = await db.connect();
   // DuckDB-WASM fetches Parquet support from extensions.duckdb.org. A data:
