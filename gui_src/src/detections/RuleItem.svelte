@@ -10,12 +10,12 @@
   let { db, schema, group, expanded, ontoggle }: { db: Db; schema: Schema; group: RuleGroup; expanded: boolean; ontoggle: () => void } = $props();
 
   const first = $derived(group.variants[0]);
-  const term = $derived(`rule:${quoteValue(group.key)}`);
+  const term = $derived(`rulekey:${quoteValue(group.key)}`);
 </script>
 
 <li class="rule">
-  <button type="button" class="row" aria-expanded={expanded} data-key={group.key} data-events={group.events} onclick={ontoggle}>
-    <span class="level"><i style:background={`var(--sev-${Math.max(0, group.rank)})`}></i>{levelLabel(group.rank)}</span>
+  <button type="button" class="row" aria-expanded={expanded} data-key={group.key} data-events={group.events} aria-label={`${levelLabel(group.rank)}: ${group.title}, ${formatCount(group.events)} ${group.events === 1 ? 'event' : 'events'}`} onclick={ontoggle}>
+    <span class="level"><i style:background={`var(--sev-${Math.max(0, group.rank)})`}></i><span class="word">{levelLabel(group.rank)}</span></span>
     <span class="title">{group.title}</span>
     <span class="tactics">{group.tactics.join(', ')}</span>
     <span class="variants">{group.variants.length > 1 ? `${group.variants.length} variants` : ''}</span>
@@ -71,8 +71,8 @@
   .actions { display: flex; gap: 8px; }
   .actions button { min-height: 28px; background: none; border: 1px solid var(--rule); border-radius: var(--radius); padding: 3px 10px; cursor: pointer; }
   @media (max-width: 720px) {
-    .row { grid-template-columns: 96px minmax(0, 1fr) 64px; }
-    .tactics, .variants { display: none; }
+    .row { grid-template-columns: 16px minmax(0, 1fr) 64px; }
+    .tactics, .variants, .word { display: none; }
     .title { white-space: normal; overflow-wrap: anywhere; }
     .details { padding-left: 16px; }
   }

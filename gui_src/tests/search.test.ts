@@ -195,3 +195,28 @@ describe('the full-text index', () => {
     expect(compile(parse('powershell'), schema, { textIndex: true })).toContain('FROM fulltext');
   });
 });
+
+describe('rulekey', () => {
+  let twins: Fixture;
+  beforeAll(async () => {
+    twins = await openFixture([
+      `INSERT INTO rules VALUES (4, 'R-LOGON', 'R-LOGON', 'Case twin', 'low', 1, 'd', [], [], [], [], 'x.yml', 'match', 0)`,
+      `INSERT INTO rules VALUES (5, 'r-*', 'r-*', 'Star key', 'low', 1, 'd', [], [], [], [], 'y.yml', 'match', 0)`,
+      'INSERT INTO hits VALUES (4, 2), (5, 3)',
+    ]);
+  });
+  afterAll(() => twins.close());
+  const keyed = (query: string) => twins.uids(compile(parse(query), schema));
+
+  it('matches one key exactly, ignoring case twins and wildcards', async () => {
+    expect(await keyed('rulekey:r-logon')).toEqual([A]);
+    expect(await keyed('rulekey:R-LOGON')).toEqual([B]);
+    expect(await keyed('rulekey:"r-*"')).toEqual([CMD]);
+    expect(await keyed('rulekey:r-*')).toEqual([CMD]);
+    expect(await keyed('rulekey:r-lo')).toEqual([]);
+  });
+
+  it('refuses a level comparison', () => {
+    expect(() => compile(parse('rulekey:>x'), schema)).toThrowError(/only level compares/);
+  });
+});

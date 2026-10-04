@@ -136,7 +136,7 @@
 
   function filterRule(rule: RuleRow): void {
     if (stale) return;
-    view.q = appendRaw(view.q, `rule:${quoteValue(rule.id ? rule.id : rule.title)}`);
+    view.q = appendRaw(view.q, `rulekey:${quoteValue(rule.key)}`);
   }
 </script>
 

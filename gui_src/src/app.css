@@ -120,6 +120,11 @@ body {
   outline-offset: 2px;
 }
 
+/* A heading focused by script after navigation: a ring for keyboard users only. */
+h1:focus:not(:focus-visible) {
+  outline: none;
+}
+
 button {
   font: inherit;
   color: inherit;

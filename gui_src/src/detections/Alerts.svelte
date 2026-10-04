@@ -15,6 +15,7 @@
   let open = $state<number | null>(null);
   let evidence = $state.raw<EvidenceRow[] | null>(null);
   let evidenceStopped = $state(false);
+  let evidenceFailure = $state<string | null>(null);
   let ticket = 0;
 
   $effect(() => {
@@ -39,11 +40,12 @@
     const mine = alert.alert_idx;
     evidence = null;
     evidenceStopped = false;
+    evidenceFailure = null;
     db.rows<EvidenceRow>(evidenceSql(mine, schema), { lane: 'evidence' }).then(
       (rows) => { if (open === mine) evidence = rows; },
       (error: unknown) => {
         if (open !== mine) return;
-        if (!isSuperseded(error)) failure = error instanceof Error ? error.message : String(error);
+        if (!isSuperseded(error)) evidenceFailure = error instanceof Error ? error.message : String(error);
         else if (run.stopped) evidenceStopped = true;
       },
     );
@@ -60,7 +62,7 @@
 </script>
 
 <section class="alerts" aria-label="Correlation alerts">
-  <h4>Alerts</h4>
+  <h3>Alerts</h3>
   <p class="note">Alerts are listed for the whole package; the filters do not apply to them.</p>
   {#if failure}
     <p class="note failure" role="alert">The alerts could not be read: {failure}. Reload the page if this repeats.</p>
@@ -83,11 +85,14 @@
           </button>
           {#if open === alert.alert_idx}
             <p class="note">Window {isoTime(alert.window_start, false)} to {isoTime(alert.window_end, false)} UTC</p>
-            {#if evidenceStopped}
+            {#if evidenceFailure}
+              <p class="note failure" role="alert">The evidence could not be read: {evidenceFailure}. Close the alert and open it again.</p>
+            {:else if evidenceStopped}
               <p class="note" role="status">Stopped. <button type="button" class="again" onclick={() => { runAgain(); load(alert); }}>Run again</button></p>
             {:else if evidence === null}
               <p class="note">Reading the evidence</p>
             {:else}
+              {#if alert.event_count > evidence.length}<p class="note">First {formatCount(evidence.length)} of {formatCount(alert.event_count)} events.</p>{/if}
               <ol class="evidence">
                 {#each evidence as row (row.ord)}
                   <li><button type="button" onclick={() => (view.uid = row._zl_uid)}>{isoTime(row._zl_t) || 'no time'} {row.host ?? ''} {row.eventid ? `event ${row.eventid}` : ''}</button></li>
@@ -103,7 +108,7 @@
 
 <style>
   .alerts { margin-top: 12px; }
-  h4 { margin: 0 0 4px; font-size: var(--t-13); color: var(--ink-2); }
+  h3 { margin: 0 0 4px; font-size: var(--t-13); color: var(--ink-2); }
   ul, ol { list-style: none; margin: 0; padding: 0; }
   .alert { display: grid; grid-template-columns: 160px minmax(0, 1fr) auto auto; gap: 12px; width: 100%; min-height: 32px; padding: 4px 8px; text-align: left; background: none; border: 0; border-bottom: 1px solid var(--rule); cursor: pointer; }
   .when, .metric, .n { font: 400 var(--t-13) / 1.4 var(--mono); }

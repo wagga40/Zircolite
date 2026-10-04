@@ -119,6 +119,10 @@ const SHORTCUT_COMPILERS: Record<string, (t: Term, schema: Schema) => string> = 
     const p = pattern(t, false);
     return `_zl_uid IN (${HIT_RULES} WHERE r.title ILIKE ${p} ESCAPE '\\' OR r.id ILIKE ${p} ESCAPE '\\')`;
   },
+  rulekey: (t) => {
+    exactOnly(t);
+    return `_zl_uid IN (${HIT_RULES} WHERE r.key = ${str(t.value)})`;
+  },
   level: (t) => {
     const rank = LEVELS.indexOf(t.value.toLowerCase() as (typeof LEVELS)[number]);
     if (rank < 0) throw new SearchError(`level is one of ${LEVELS.join(', ')}`, t.start, t.end);

@@ -3,6 +3,8 @@ import {
   alertsSql, evidenceSql, groupKeysText, groupRules, type KeyRow, keyRowsSql, levelLabel, type RuleRow,
   ruleRowsSql, type SectionRow, sectionRowsSql, sections, totalSql,
 } from '../src/detections/rules';
+import { compile } from '../src/search/compile';
+import { parse } from '../src/search/parse';
 import { type Fixture, openFixture, schema } from './fixture';
 
 // A Generic variant sharing r-enc's key and matching one more event, and a correlation rule with one alert.
@@ -96,5 +98,26 @@ describe('alerts', () => {
     expect(groupKeysText('{"TargetUserName":"bob","Computer":"DC01"}')).toBe('TargetUserName = bob, Computer = DC01');
     expect(groupKeysText('not json')).toBe('not json');
     expect(groupKeysText(null)).toBe('');
+  });
+});
+
+describe('exact rule key', () => {
+  it('lists exactly the events a row counts, where rule: matches every rule with that title', async () => {
+    const twins = await openFixture([
+      `INSERT INTO rules VALUES (4, 'Shared title', '', 'Shared title', 'medium', 2, 'd', [], [], [], [], 's.yml', 'match', 0)`,
+      `INSERT INTO rules VALUES (5, 'id-shared', 'id-shared', 'Shared title', 'medium', 2, 'd', [], [], [], [], 't.yml', 'match', 0)`,
+      'INSERT INTO hits VALUES (4, 1), (5, 2), (5, 3)',
+    ]);
+    try {
+      const rows = (await twins.rows(ruleRowsSql('TRUE'))) as unknown as RuleRow[];
+      const keys = (await twins.rows(keyRowsSql('TRUE'))) as unknown as KeyRow[];
+      const group = groupRules(rows, keys).find((g) => g.key === 'Shared title');
+      const exact = await twins.uids(compile(parse('rulekey:"Shared title"'), schema));
+      expect(group?.events).toBe(1);
+      expect(exact).toHaveLength(group?.events ?? -1);
+      expect(await twins.uids(compile(parse('rule:"Shared title"'), schema))).toHaveLength(3);
+    } finally {
+      twins.close();
+    }
   });
 });

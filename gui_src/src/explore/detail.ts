@@ -46,6 +46,7 @@ export function valuesSql(fields: Field[], uid: number): string {
 
 export interface RuleRow {
   rule_idx: number;
+  key: string;
   id: string | null;
   title: string;
   level: string;
@@ -56,7 +57,7 @@ export interface RuleRow {
 
 export function rulesSql(uid: number): string {
   return (
-    'SELECT r.rule_idx, r.id, r.title, r.level, r.level_rank, r.tactics, r.techniques FROM hits h ' +
+    'SELECT r.rule_idx, r.key, r.id, r.title, r.level, r.level_rank, r.tactics, r.techniques FROM hits h ' +
     `JOIN rules r ON r.rule_idx = h.rule_idx WHERE h._zl_uid = ${eventId(uid)} ORDER BY r.level_rank DESC, r.title, r.rule_idx`
   );
 }

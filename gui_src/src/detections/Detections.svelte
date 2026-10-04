@@ -48,8 +48,11 @@
       } catch (error) {
         if (mine !== ticket) return;
         pending = false;
-        if (!isSuperseded(error)) failure = error instanceof Error ? error.message : String(error);
-        else if (run.stopped) {
+        // The counts on screen would belong to an earlier filter.
+        if (!isSuperseded(error)) {
+          loaded = null;
+          failure = error instanceof Error ? error.message : String(error);
+        } else if (run.stopped) {
           loaded = null;
           stopped = true;
         }
@@ -77,6 +80,9 @@
       <button type="button" aria-pressed={showEmpty} onclick={() => (showEmpty = !showEmpty)}>{showEmpty ? 'Hide' : 'Show'} {formatCount(hidden)} {hidden === 1 ? 'rule' : 'rules'} without events here</button>
     {/if}
   </header>
+  {#if loaded && shown.length > 0}
+    <p class="note">An event matched by rules at several levels counts once in each level section, and once in the total above.</p>
+  {/if}
   {#if failure}
     <p class="note failure" role="alert">The detections could not be counted: {failure}. Change the search, or reload the page if this repeats.</p>
   {:else if stopped}
