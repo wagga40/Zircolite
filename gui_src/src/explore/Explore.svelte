@@ -40,7 +40,7 @@
   <div class="body">
     <FieldSidebar {db} {schema} {manifest} {where} {columns} />
     <section class="results" aria-label="Events">
-      <button type="button" class="fields-toggle" aria-expanded={ui.fieldsOpen} aria-controls="field-sidebar" onclick={() => (ui.fieldsOpen = !ui.fieldsOpen)}>Fields</button>
+      <button type="button" id="fields-toggle" class="fields-toggle" aria-expanded={ui.fieldsOpen} aria-controls="field-sidebar" onclick={() => (ui.fieldsOpen = !ui.fieldsOpen)}>Fields</button>
     </section>
   </div>
 </main>

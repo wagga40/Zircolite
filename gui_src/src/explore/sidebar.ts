@@ -20,6 +20,11 @@ export function topValuesSql(field: Field, where: string, limit = 10): string {
   );
 }
 
+/** How a value reads in the list and in button labels, so the two never differ. */
+export function valueLabel(value: string): string {
+  return value === '' ? 'empty text' : value;
+}
+
 /** A share as a whole percent that never rounds a few events to 0% or most of them to 100%. */
 export function percent(part: number, whole: number): string {
   if (whole <= 0 || part <= 0) return '0%';

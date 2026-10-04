@@ -16,6 +16,18 @@
   const shownKeys = $derived(new Set(columns.map((field) => field.key)));
   const list = $derived(filterFields(schema.fields, text, columns.map((field) => field.name)));
 
+  let filterInput = $state<HTMLInputElement | null>(null);
+
+  // Narrow screens show the panel as an overlay: put the keyboard inside it.
+  $effect(() => {
+    if (ui.fieldsOpen && window.matchMedia('(max-width: 720px)').matches) filterInput?.focus();
+  });
+
+  function close(): void {
+    ui.fieldsOpen = false;
+    document.getElementById('fields-toggle')?.focus();
+  }
+
   function toggle(field: Field): void {
     open = open.includes(field.key) ? open.filter((key) => key !== field.key) : [...open, field.key];
   }
@@ -23,9 +35,17 @@
 
 <aside id="field-sidebar" class="sidebar" class:open={ui.fieldsOpen} aria-label="Fields">
   <div class="head">
-    <h2>Fields</h2>
+    <div class="title">
+      <h2>Fields</h2>
+      <button type="button" class="close" onclick={close}>Close</button>
+    </div>
     <label class="visually-hidden" for="field-filter">Filter fields</label>
-    <input id="field-filter" type="search" placeholder="Filter fields" autocomplete="off" spellcheck="false" bind:value={text} />
+    <input id="field-filter" type="search" placeholder="Filter fields" autocomplete="off" spellcheck="false" bind:value={text}
+      bind:this={filterInput}
+      onkeydown={(event) => {
+        if (event.key === 'Escape' && ui.fieldsOpen) close();
+      }}
+    />
   </div>
   {#if list.length === 0}
     <p class="empty">No field name contains “{text}”.</p>
@@ -57,7 +77,9 @@
 <style>
   .sidebar { min-height: 0; overflow: auto; background: var(--panel); border-right: 1px solid var(--rule); padding: 0 12px 16px; }
   .head { position: sticky; top: 0; background: var(--panel); padding: 12px 0 8px; z-index: 1; }
-  h2 { font-size: var(--t-15); font-weight: 600; margin: 0 0 8px; }
+  .title { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
+  h2 { font-size: var(--t-15); font-weight: 600; margin: 0; }
+  .close { display: none; background: none; border: 1px solid var(--rule); border-radius: var(--radius); min-height: 24px; padding: 2px 10px; cursor: pointer; }
   input { width: 100%; font: 400 var(--t-13) / 1.4 var(--sans); color: var(--ink); background: var(--paper); border: 1px solid var(--rule); border-radius: var(--radius); padding: 5px 8px; }
   ul { list-style: none; margin: 0; padding: 0; }
   .field { display: flex; width: 100%; gap: 6px; align-items: baseline; background: none; border: 0; padding: 4px 2px; cursor: pointer; text-align: left; border-radius: var(--radius); }
@@ -71,5 +93,6 @@
   @media (max-width: 720px) {
     .sidebar { display: none; position: absolute; inset: 0 auto 0 0; width: min(320px, 85vw); z-index: 30; box-shadow: 4px 0 16px rgb(0 0 0 / 0.18); }
     .sidebar.open { display: block; }
+    .close { display: inline-block; }
   }
 </style>

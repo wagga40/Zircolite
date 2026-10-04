@@ -18,6 +18,9 @@
       ui.help = !ui.help;
     } else if (event.key === 'Escape' && ui.help && !document.querySelector('dialog[open]')) {
       ui.help = false;
+    } else if (event.key === 'Escape' && !ui.help && ui.fieldsOpen && !document.querySelector('dialog[open]')) {
+      ui.fieldsOpen = false;
+      document.getElementById('fields-toggle')?.focus();
     }
   }
 </script>

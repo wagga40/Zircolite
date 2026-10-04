@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { Schema } from '../src/engine/schema';
 import { defaultColumns, shownColumns, toggleColumn } from '../src/explore/columns';
-import { filterFields, percent, topValuesSql } from '../src/explore/sidebar';
+import { filterFields, percent, topValuesSql, valueLabel } from '../src/explore/sidebar';
 import { compile } from '../src/search/compile';
 import { appendTerm } from '../src/search/edit';
 import { parse } from '../src/search/parse';
@@ -33,6 +33,29 @@ describe('top values', () => {
 
   it('handles awkward field names', async () => {
     expect(await db.rows(topValuesSql(field(`it's "odd"`), 'TRUE'))).toEqual([{ v: 'x', n: 1, spellings: 1, total: 1 }]);
+  });
+
+  it('composes with a compiled search', async () => {
+    const where = compile(parse('-EventID:4688'), schema);
+    expect(await db.rows(topValuesSql(field('Computer'), where))).toEqual([
+      { v: 'WS02', n: 3, spellings: 2, total: 5 }, { v: 'DC01', n: 2, spellings: 1, total: 5 },
+    ]);
+    expect(await db.rows(topValuesSql(field('Computer'), 'FALSE'))).toEqual([]);
+  });
+
+  it('keeps empty text as a value of its own', async () => {
+    const own = await openFixture();
+    try {
+      await own.rows(`INSERT INTO events (_zl_uid, _zl_part, "Image") VALUES (99, 0, '')`);
+      const rows = await own.rows(topValuesSql(field('Image'), 'TRUE'));
+      expect(rows).toContainEqual({ v: '', n: 1, spellings: 1, total: 4 });
+    } finally {
+      own.close();
+    }
+  });
+
+  it('names empty text the way the list shows it', () => {
+    expect([valueLabel(''), valueLabel('DC01')]).toEqual(['empty text', 'DC01']);
   });
 
   it('returns nothing when no event has the field', async () => {
@@ -81,5 +104,4 @@ describe('columns', () => {
     expect(toggleColumn(['Channel', 'Computer'], 'computer')).toEqual(['Channel']);
     expect(toggleColumn(['Channel'], 'Image')).toEqual(['Channel', 'Image']);
   });
-
 });

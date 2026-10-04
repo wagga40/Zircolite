@@ -4,7 +4,7 @@
   import { appendTerm } from '../search/edit';
   import { view } from '../state/view.svelte';
   import { formatCount } from '../ui/format';
-  import { topValuesSql } from './sidebar';
+  import { topValuesSql, valueLabel } from './sidebar';
 
   let { db, field, where, shown, ontoggle }: { db: Db; field: Field; where: string; shown: boolean; ontoggle: () => void } = $props();
 
@@ -50,14 +50,14 @@
       {#each rows as row (row.v)}
         <li data-value={row.v} data-count={row.n}>
           <span class="value" class:empty={row.v === ''} title={row.v}>
-            {row.v === '' ? 'empty text' : row.v}{#if row.spellings > 1}<span
+            {valueLabel(row.v)}{#if row.spellings > 1}<span
                 class="cases"
                 title={`Also written in ${row.spellings - 1} other letter case${row.spellings > 2 ? 's' : ''}; the count and the filter include them.`}
               > any case</span>{/if}
           </span>
           <span class="n">{formatCount(row.n)}</span>
-          <button type="button" aria-label={`Filter for ${field.name} ${row.v}`} onclick={() => (view.q = appendTerm(view.q, field.name, row.v, false))}>+</button>
-          <button type="button" aria-label={`Filter out ${field.name} ${row.v}`} onclick={() => (view.q = appendTerm(view.q, field.name, row.v, true))}>−</button>
+          <button type="button" aria-label={`Filter for ${field.name} ${valueLabel(row.v)}`} onclick={() => (view.q = appendTerm(view.q, field.name, row.v, false))}>+</button>
+          <button type="button" aria-label={`Filter out ${field.name} ${valueLabel(row.v)}`} onclick={() => (view.q = appendTerm(view.q, field.name, row.v, true))}>−</button>
           <span class="bar" style:inline-size={`${(row.n / total) * 100}%`}></span>
         </li>
       {/each}
@@ -67,7 +67,7 @@
 
 <style>
   .facet { padding: 4px 0 10px 12px; }
-  .column { background: none; border: 1px solid var(--rule); border-radius: var(--radius); padding: 1px 8px; font-size: var(--t-12); cursor: pointer; margin-bottom: 6px; }
+  .column { background: none; border: 1px solid var(--rule); border-radius: var(--radius); padding: 1px 8px; min-height: 24px; font-size: var(--t-12); cursor: pointer; margin-bottom: 6px; }
   .column[aria-pressed='true'] { border-color: var(--signal); color: var(--signal); }
   .note { margin: 2px 0 6px; font-size: var(--t-12); color: var(--ink-2); }
   .failure { color: var(--danger); }
@@ -77,7 +77,7 @@
   .value.empty { color: var(--ink-2); font-style: italic; }
   .cases { font: 400 var(--t-12) / 1 var(--sans); color: var(--ink-2); }
   .n { font-size: var(--t-12); color: var(--ink-2); text-align: right; }
-  li button { background: none; border: 1px solid transparent; border-radius: var(--radius); width: 22px; height: 22px; padding: 0; cursor: pointer; color: var(--ink-2); }
+  li button { background: none; border: 1px solid transparent; border-radius: var(--radius); width: 24px; height: 24px; padding: 0; cursor: pointer; color: var(--ink-2); }
   li button:hover { border-color: var(--rule); color: var(--ink); }
   .bar { position: absolute; left: 0; bottom: 0; height: 2px; background: var(--strip); opacity: 0.6; }
 </style>
