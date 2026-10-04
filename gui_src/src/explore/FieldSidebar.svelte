@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { onMount } from 'svelte';
   import type { Db } from '../engine/db';
   import type { Manifest } from '../engine/manifest';
   import type { Field, Schema } from '../engine/schema';
@@ -22,6 +23,17 @@
   // Narrow screens show the panel as an overlay: put the keyboard inside it.
   $effect(() => {
     if (ui.fieldsOpen && window.matchMedia('(max-width: 720px)').matches) filterInput?.focus();
+  });
+
+  // Wide, the panel is part of the page and never a layer: leaving it flagged open would
+  // bring the sheet back the next time the screen narrows.
+  onMount(() => {
+    const narrow = window.matchMedia('(max-width: 720px)');
+    const widen = () => {
+      if (!narrow.matches) ui.fieldsOpen = false;
+    };
+    narrow.addEventListener('change', widen);
+    return () => narrow.removeEventListener('change', widen);
   });
 
   function close(): void {
@@ -99,7 +111,7 @@
   .empty { font-size: var(--t-13); color: var(--ink-2); }
   .visually-hidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
   @media (max-width: 720px) {
-    .sidebar { display: none; position: absolute; inset: 0 auto 0 0; width: min(320px, 85vw); z-index: 30; box-shadow: 4px 0 16px rgb(0 0 0 / 0.18); }
+    .sidebar { display: none; position: fixed; inset: 0 auto 0 0; width: min(320px, 85vw); z-index: 50; box-shadow: 4px 0 16px rgb(0 0 0 / 0.18); }
     .sidebar.open { display: block; }
     .close { display: inline-block; }
   }

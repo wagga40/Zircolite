@@ -209,6 +209,39 @@ async function scenario(page, steps) {
   check((await page.evaluate(() => document.activeElement?.tagName)) !== 'BODY', 'closing a deep-linked event left focus on the body');
   steps.push('focus after a deep-linked event closes');
 
+  // On a phone the Fields panel is a sheet and the exports are one menu; each is a layer one Escape closes.
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto('about:blank');
+  await page.goto(`${url}#/explore`);
+  await poll(page, async () => /ready|error/.test(await page.title()), 'the viewer', 240_000);
+  await results(page, { build: 0 });
+  const focused = (selector) => page.evaluate((s) => document.activeElement === document.querySelector(s), selector);
+  const sheet = page.locator('#field-sidebar');
+  check(!(await sheet.isVisible()), 'the Fields sheet is open before it was asked for');
+  await page.locator('#fields-toggle').click();
+  await sheet.waitFor({ state: 'visible' });
+  const sheetBox = await sheet.boundingBox();
+  check(sheetBox && sheetBox.x === 0 && sheetBox.y === 0 && sheetBox.height >= 840, 'the Fields sheet does not cover the full height');
+  await page.keyboard.press('Escape');
+  await sheet.waitFor({ state: 'hidden' });
+  check(await focused('#fields-toggle'), 'closing the Fields sheet did not return focus to its button');
+  check(!(await page.locator('.exports').isVisible()), 'the two export buttons show on a phone');
+  const summary = page.locator('.export-menu summary');
+  await summary.click();
+  const menuItem = page.locator('.export-menu .menu button').first();
+  await menuItem.waitFor({ state: 'visible' });
+  // The sheet under the menu must stay: one Escape, one layer.
+  await page.keyboard.press('Escape');
+  await menuItem.waitFor({ state: 'hidden' });
+  check(await focused('.export-menu summary'), 'closing the Export menu did not return focus to its summary');
+  const legend = await page.locator('#strip-legend').boundingBox();
+  const start = await page.locator('#strip-legend .start').boundingBox();
+  const end = await page.locator('#strip-legend .end').boundingBox();
+  const key = await page.locator('#strip-legend .key').boundingBox();
+  check(start && end && key && legend && Math.abs(start.y - end.y) < 4 && key.y > start.y + 4, 'the strip legend does not put its start and end labels above the key');
+  steps.push('phone: Fields sheet and Export menu close with one Escape each');
+  await page.setViewportSize({ width: 1440, height: 900 });
+
   // Overview must agree with Explore: its tiles with the detected count, its top rule with the events that rule lists.
   await page.goto('about:blank');
   await page.goto(`${url}#/overview`);

@@ -11,7 +11,7 @@
   import { formatCount, isoTime } from '../ui/format';
   import {
     barHeight, binAt, type BinRow, type Bins, binSummary, DOMAIN_SQL, domainOf, formatRange, formatWidth, layout, rangeOf,
-    type Series, stripRequest, stripSeries, timelessCount,
+    type Series, stripRequest, stripSeries,
   } from './histogram';
 
   // The page's filters minus the time range: the strip draws time itself.
@@ -43,7 +43,6 @@
   // Compared as text, so a resize that keeps the layout does not query again.
   const binsKey = $derived(span && width > 0 ? JSON.stringify(layout(span, Math.max(12, Math.floor(width / 4)))) : null);
   const bins = $derived<Bins | null>(binsKey ? JSON.parse(binsKey) : null);
-  const timeless = $derived(timelessCount(manifest));
   const tip = $derived(series && hover !== null && hover < series.bins.count && !drag ? binSummary(series, hover, hover) : null);
   const announcement = $derived(series && cursor ? describe(binSummary(series, cursor.anchor, cursor.at)) : '');
 
@@ -52,6 +51,18 @@
     const detections = found.length ? `; detections: ${found.reverse().join(', ')}` : '';
     return `${formatRange(summary.range)} UTC: ${formatCount(summary.events)} events${detections}`;
   }
+
+  // Counted under the filters: the package-wide figure would claim events the list does not hold.
+  // A failed count only hides the note; a wrong one would mislead.
+  let timelessHere = $state<number | null>(null);
+  $effect(() => {
+    void run.generation;
+    const sql = `SELECT count(*)::DOUBLE AS n FROM events WHERE _zl_time IS NULL AND (${where})`;
+    db.rows<{ n: number }>(sql, { lane: 'strip-timeless' }).then(
+      (rows) => (timelessHere = rows[0]?.n ?? 0),
+      () => (timelessHere = null),
+    );
+  });
 
   // Read again on Run again, so a stop during the first read does not leave the strip without a time range.
   $effect(() => {
@@ -282,15 +293,15 @@
         <div class="tip" style:left={`${Math.min(85, (hover / series.bins.count) * 100)}%`}>{describe(tip)}</div>
       {/if}
     </div>
-    <p class="visually-hidden" aria-live="polite">{announcement}</p>
+    <p class="visually-hidden" aria-live="polite">{announcement || (view.t ? `Selected ${formatRange(view.t)} UTC` : '')}</p>
     <div id="strip-legend" class="legend dims" aria-busy={pending}>
-      <span>{series ? `${isoTime(series.bins.start, false)} UTC` : 'Reading event times'}</span>
+      <span class="start">{series ? `${isoTime(series.bins.start, false)} UTC` : 'Reading event times'}</span>
       <span class="key">
         Events above the line, detections below it:
         {#each LEVELS as level, rank (level)}<span class="swatch"><i style:background={`var(--sev-${rank})`}></i>{level}</span>{/each}
       </span>
       {#if series}<span>Each bar is {formatWidth(series.bins.width)}</span>{/if}
-      {#if timeless}<span>{formatCount(timeless)} events have no time and are not drawn</span>{/if}
+      {#if timelessHere}<span>{formatCount(timelessHere)} of these events have no time and are not drawn</span>{/if}
       {#if view.t}<span class="zoomed">Zoomed to the selected range. Remove its chip to see the whole package.</span>{/if}
       <span class="end">{series ? `${isoTime(series.bins.start + series.bins.width * series.bins.count, false)} UTC` : ''}</span>
     </div>
@@ -304,6 +315,12 @@
   .tip { position: absolute; top: 4px; transform: translateX(8px); max-width: 26rem; padding: 4px 8px; font-size: var(--t-12); background: var(--paper); border: 1px solid var(--rule); border-radius: var(--radius); pointer-events: none; white-space: nowrap; }
   .legend { display: flex; flex-wrap: wrap; gap: 4px 16px; font-size: var(--t-12); color: var(--ink-2); margin-top: 4px; }
   .legend .end { margin-left: auto; }
+  @media (max-width: 720px) {
+    .legend .start { order: 1; }
+    .legend .end { order: 2; }
+    .legend .key { order: 3; width: 100%; }
+    .legend > span:not(.start):not(.end):not(.key) { order: 4; }
+  }
   .zoomed { color: var(--signal); }
   .key { display: inline-flex; flex-wrap: wrap; gap: 4px 10px; align-items: center; }
   .swatch { display: inline-flex; align-items: center; gap: 4px; }

@@ -8,6 +8,7 @@
   import { download } from '../ui/download';
   import { formatCount, isoTime, levelName } from '../ui/format';
   import { typing } from '../ui/keys';
+  import { pageTopLayer } from '../ui/layers';
   import { ui } from '../ui/ui.svelte';
   import { csvExport, ExportTooLarge, jsonExport, limitNote, prepareExport } from './export';
   import { COUNT_SQL, ensureVisible, geometry, HEAD, HEIGHT_CAP, idsSql, nextPage, PAGE, pageSql, type PageRow, ROW, wheelDelta, wheelPosition } from './table';
@@ -41,6 +42,8 @@
   let follow = $state(false);
   let exporting = $state<{ done: number; total: number } | null>(null);
   let exportNote = $state<string | null>(null);
+  let menuOpen = $state(false);
+  let menu = $state<HTMLDetailsElement>();
   // The key of the one page request in flight; its end lets the next page go.
   let inflight = $state<string | null>(null);
   // Plain counters: tickets for the newest request, never read by the template.
@@ -219,6 +222,16 @@
     else follow = true;
   }
 
+  // The menu is a layer of its own: Escape closes it and nothing beneath it.
+  function onmenukey(event: KeyboardEvent): void {
+    if (event.key !== 'Escape' || event.defaultPrevented || pageTopLayer() !== 'menu') return;
+    // The toggle event that feeds menuOpen is asynchronous, so a quick Escape would find it still false.
+    if (menu) menu.open = false;
+    menuOpen = false;
+    menu?.querySelector('summary')?.focus();
+    event.preventDefault();
+  }
+
   function onwindowkey(event: KeyboardEvent): void {
     if (event.metaKey || event.ctrlKey || event.altKey || typing(event)) return;
     if ((event.target as Element | null)?.closest?.('dialog')) return;
@@ -275,7 +288,7 @@
   }
 </script>
 
-<svelte:window onkeydown={onwindowkey} />
+<svelte:window onkeydown={(event) => { onmenukey(event); onwindowkey(event); }} />
 
 <div class="table">
   <div class="bar">
@@ -294,10 +307,19 @@
       <span class="progress" aria-live="polite">Exporting {formatCount(exporting.done)} of {formatCount(exporting.total)}</span>
       <button type="button" onclick={() => (cancel = true)}>Cancel export</button>
     {:else}
-      <button type="button" disabled={busy || total === 0} onclick={() => runExport('csv')}
-        title="The shown columns, one row per event. A cell starting with = + - or @ gets a leading ' so spreadsheets read it as text.">Export CSV</button>
-      <button type="button" disabled={busy || total === 0} onclick={() => runExport('json')}
-        title="Every field of every event, one JSON object per line, for up to 100,000 events.">Export JSON</button>
+      <span class="exports">
+        <button type="button" disabled={busy || total === 0} onclick={() => runExport('csv')}
+          title="The shown columns, one row per event. A cell starting with = + - or @ gets a leading ' so spreadsheets read it as text.">Export CSV</button>
+        <button type="button" disabled={busy || total === 0} onclick={() => runExport('json')}
+          title="Every field of every event, one JSON object per line, for up to 100,000 events.">Export JSON</button>
+      </span>
+      <details class="export-menu" bind:open={menuOpen} bind:this={menu}>
+        <summary>Export</summary>
+        <div class="menu">
+          <button type="button" disabled={busy || total === 0} onclick={() => { menuOpen = false; runExport('csv'); }}>CSV, the shown columns</button>
+          <button type="button" disabled={busy || total === 0} onclick={() => { menuOpen = false; runExport('json'); }}>JSON, every field</button>
+        </div>
+      </details>
     {/if}
   </div>
   {#if exportNote}<p class="note" role="status">{exportNote}</p>{/if}
@@ -396,7 +418,13 @@
   .level i { display: inline-block; width: 8px; height: 8px; border-radius: 1px; }
   .loading { color: var(--ink-2); }
   .empty { position: absolute; top: 56px; left: 16px; margin: 0; color: var(--ink-2); }
+  .exports { display: inline-flex; gap: 8px; }
+  .export-menu { display: none; position: relative; }
+  .export-menu summary { min-height: 28px; padding: 3px 10px; border: 1px solid var(--rule); border-radius: var(--radius); cursor: pointer; list-style: none; }
+  .export-menu .menu { position: absolute; right: 0; top: 100%; z-index: 10; display: grid; gap: 4px; margin-top: 4px; padding: 6px; background: var(--panel); border: 1px solid var(--rule); border-radius: var(--radius); white-space: nowrap; }
   @media (max-width: 720px) {
+    .exports { display: none; }
+    .export-menu { display: inline-block; }
     .fields-toggle { display: inline-block; }
   }
 </style>

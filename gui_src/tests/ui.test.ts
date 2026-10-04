@@ -75,11 +75,12 @@ describe('value suggestions', () => {
 });
 
 describe('Escape layers', () => {
-  const none = { dialog: false, help: false, drawer: false, fields: false };
+  const none = { dialog: false, help: false, menu: false, drawer: false, fields: false };
 
-  it('names the topmost open layer: dialog, help, drawer, then the Fields panel', () => {
-    expect(topLayer({ dialog: true, help: true, drawer: true, fields: true })).toBe('dialog');
+  it('names the topmost open layer: dialog, help, the Export menu, drawer, then the Fields panel', () => {
+    expect(topLayer({ dialog: true, help: true, menu: true, drawer: true, fields: true })).toBe('dialog');
     expect(topLayer({ ...none, help: true, drawer: true, fields: true })).toBe('help');
+    expect(topLayer({ ...none, menu: true, drawer: true, fields: true })).toBe('menu');
     expect(topLayer({ ...none, drawer: true, fields: true })).toBe('drawer');
     expect(topLayer({ ...none, fields: true })).toBe('fields');
   });
