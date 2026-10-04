@@ -8,7 +8,9 @@
     "check": "svelte-check --tsconfig ./tsconfig.json",
     "test": "vitest run",
     "smoke": "node e2e/smoke.mjs",
-    "shot": "node e2e/shot.mjs"
+    "shot": "node e2e/shot.mjs",
+    "e2e": "node e2e/explore.mjs",
+    "perf": "node e2e/perf.mjs"
   },
   "dependencies": {
     "@duckdb/duckdb-wasm": "1.32.0",
