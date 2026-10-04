@@ -16,7 +16,10 @@ CSP = ("default-src 'none'; script-src 'self' 'wasm-unsafe-eval' blob:; worker-s
        "connect-src blob: data:; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:")
 ENGINE = ["duckdb-eh.wasm.gz", "duckdb-browser-eh.worker.js", "parquet.duckdb_extension.wasm"]
 # Log text reaches the page; none of these may ever turn it into markup or code.
-SINKS = re.compile(r"\{@html|\.innerHTML|\.outerHTML|insertAdjacentHTML|document\.write|\beval\(|new Function\(")
+SINKS = re.compile(
+    r"\{@html|\.innerHTML|\.outerHTML|insertAdjacentHTML|document\.write|\beval\s*\(|\bFunction\s*\("
+    r"|\bset(?:Timeout|Interval)\(\s*['\"`]|(?i:srcdoc)|\[\s*['\"`](?:inner|outer)HTML['\"`]\s*\]")
+SCANNED = (".ts", ".svelte", ".js", ".mjs")
 
 
 def test_viewer_description_matches_the_build():
@@ -45,12 +48,32 @@ def test_page_forbids_network_and_inline_code(page):
 
 
 def test_viewer_source_never_turns_text_into_markup_or_code():
+    files = sorted(path for path in (SOURCE / "src").rglob("*") if path.suffix in SCANNED)
     offenders = [f"{path.relative_to(ROOT)}:{number}"
-                 for path in sorted((SOURCE / "src").rglob("*")) if path.suffix in (".ts", ".svelte")
+                 for path in files
                  for number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1)
                  if SINKS.search(line)]
 
-    assert offenders == []
+    assert files and offenders == []
+
+
+@pytest.mark.parametrize("line", [
+    "{@html text}", "node.innerHTML = text", "node.outerHTML = text", "node.insertAdjacentHTML('beforeend', text)",
+    "document.write(text)", "eval(text)", "eval (text)", "new Function(text)", "const f = Function('return 1');",
+    "setTimeout('run()', 10)", 'setInterval("run()", 10)', "setTimeout(`${text}`, 0)",
+    "<iframe srcdoc={text}></iframe>", "frame.srcdoc = text", "frame.srcDoc = text",
+    "node['innerHTML'] = text", 'node["outerHTML"] = text', "node[ `innerHTML` ] = text",
+])
+def test_the_guard_catches_each_sink(line):
+    assert SINKS.search(line)
+
+
+@pytest.mark.parametrize("line", [
+    "setTimeout(() => run(), 10)", "setInterval(tick, 1000)", "isFunction(value)", "typeof f === 'function'",
+    "node.textContent = text", "evaluate(query)", "retrieval(query)", "node['textContent'] = text",
+])
+def test_the_guard_lets_ordinary_code_through(line):
+    assert not SINKS.search(line)
 
 
 def test_bundled_parquet_extension_is_the_pinned_one():
