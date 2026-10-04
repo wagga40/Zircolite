@@ -13,12 +13,15 @@ ROOT = Path(__file__).parent.parent
 SOURCE = ROOT / "gui_src"
 BUILD = ROOT / "gui" / "viewer"
 CSP = ("default-src 'none'; script-src 'self' 'wasm-unsafe-eval' blob:; worker-src blob:; "
-       "connect-src blob: data:; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:")
+       "connect-src blob: data:; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; "
+       "font-src data:; base-uri 'none'; form-action 'none'")
 ENGINE = ["duckdb-eh.wasm.gz", "duckdb-browser-eh.worker.js", "parquet.duckdb_extension.wasm"]
 # Log text reaches the page; none of these may ever turn it into markup or code.
 SINKS = re.compile(
-    r"\{@html|\.innerHTML|\.outerHTML|insertAdjacentHTML|document\.write|\beval\s*\(|\bFunction\s*\("
-    r"|\bset(?:Timeout|Interval)\(\s*['\"`]|(?i:srcdoc)|\[\s*['\"`](?:inner|outer)HTML['\"`]\s*\]")
+    r"\{@html|\.innerHTML|\.outerHTML|\[\s*['\"`](?:inner|outer)HTML['\"`]\s*\]|insertAdjacentHTML"
+    r"|document\.write|\beval\s*\(|(?<![\w.])Function\s*\(|(?i:srcdoc)"
+    r"|set(?:Timeout|Interval)\s*\(\s*['\"`]"
+)
 SCANNED = (".ts", ".svelte", ".js", ".mjs")
 
 
@@ -60,7 +63,7 @@ def test_viewer_source_never_turns_text_into_markup_or_code():
 @pytest.mark.parametrize("line", [
     "{@html text}", "node.innerHTML = text", "node.outerHTML = text", "node.insertAdjacentHTML('beforeend', text)",
     "document.write(text)", "eval(text)", "eval (text)", "new Function(text)", "const f = Function('return 1');",
-    "setTimeout('run()', 10)", 'setInterval("run()", 10)', "setTimeout(`${text}`, 0)",
+    "setTimeout('run()', 10)", "setTimeout ('run()', 10)", 'setInterval("run()", 10)', "setTimeout(`${text}`, 0)",
     "<iframe srcdoc={text}></iframe>", "frame.srcdoc = text", "frame.srcDoc = text",
     "node['innerHTML'] = text", 'node["outerHTML"] = text', "node[ `innerHTML` ] = text",
 ])

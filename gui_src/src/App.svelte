@@ -121,11 +121,11 @@
   header { display: flex; align-items: baseline; gap: 16px; flex-wrap: wrap; }
   h1 { font-size: 20px; margin: 0; }
   h2 { font-size: 15px; margin: 0 0 8px; }
-  .phase, .meta { color: var(--muted); margin: 4px 0; }
+  .phase, .meta { color: var(--ink-2); margin: 4px 0; }
   .failure { color: var(--danger); border: 1px solid var(--danger); border-radius: 6px; padding: 8px 12px; }
-  .summary, .warnings { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 16px; margin-top: 16px; }
+  .summary, .warnings { background: var(--panel); border: 1px solid var(--rule); border-radius: 8px; padding: 16px; margin-top: 16px; }
   dl { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 12px; margin: 0 0 8px; }
-  dt { color: var(--muted); font-size: 12px; }
+  dt { color: var(--ink-2); font-size: 12px; }
   dd { margin: 0; font: 600 18px/1.3 var(--mono); }
   .wide { grid-column: 1 / -1; }
   .wide dd { font-size: 14px; }

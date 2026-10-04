@@ -52,6 +52,10 @@ export async function bootEngine(manifest: Manifest, store: ChunkStore, step: (l
   await conn.query(`SET custom_extension_repository = '${extension}#'`);
   await conn.query('LOAD parquet');
   await conn.query('SET parquet_metadata_cache = true');
+  // Parquet is loaded from the package; any other extension would be fetched
+  // from the repository set above and fail confusingly, so stop autoloading.
+  await conn.query('SET autoinstall_known_extensions = false');
+  await conn.query('SET autoload_known_extensions = false');
   step('Opening the data');
   for (const table of TABLES) {
     const file = find(manifest, `${table}.parquet`);
