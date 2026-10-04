@@ -14,6 +14,7 @@ import os
 import zipfile
 from dataclasses import dataclass
 from datetime import datetime, timezone
+from itertools import pairwise
 from pathlib import Path
 from typing import Any
 
@@ -471,9 +472,16 @@ class PackageBuilder:
         self.work = Path(spool.directory) / "build"
 
     def build_data(self, *, parts: list[PartRecord], rulesets: list[dict[str, Any]], run: RunInfo,
-                   failed_sources: list[str]) -> PackageData:
-        self.work.mkdir(parents=True, exist_ok=True)
+                   failed_sources: list[str], expected_events: int) -> PackageData:
+        """``expected_events`` is what the run ingested: a package holds every event or is not written."""
         parts = sorted(parts, key=lambda record: record.part)
+        for previous, record in pairwise(parts):
+            if previous.part == record.part:
+                raise PackageError(f"part {record.part} was spooled twice; each working database is one part")
+        spooled = sum(record.events for record in parts)
+        if spooled != expected_events:
+            raise PackageError(f"the spooled parts hold {spooled:,} events where the run ingested {expected_events:,}")
+        self.work.mkdir(parents=True, exist_ok=True)
         columns = merge_columns(parts, self.spool.time_field)
         connection = duckdb.connect(":memory:", config={**DUCKDB_SETTINGS, "temp_directory": str(self.work / "duckdb")})
         try:
@@ -504,6 +512,7 @@ class PackageBuilder:
         return PackageData(tables=tables, manifest=manifest)
 
     def build(self, *, viewer: Viewer, parts: list[PartRecord], rulesets: list[dict[str, Any]], run: RunInfo,
-              failed_sources: list[str], destination: Path) -> Path:
-        data = self.build_data(parts=parts, rulesets=rulesets, run=run, failed_sources=failed_sources)
+              failed_sources: list[str], expected_events: int, destination: Path) -> Path:
+        data = self.build_data(parts=parts, rulesets=rulesets, run=run, failed_sources=failed_sources,
+                               expected_events=expected_events)
         return write_package(viewer, data, destination, self.work)

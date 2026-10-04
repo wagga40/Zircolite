@@ -680,7 +680,7 @@ def _write_package(ctx: ProcessingContext, args: argparse.Namespace) -> bool:
     try:
         target = package.PackageBuilder(spool, logger=ctx.logger).build(
             viewer=package.find_viewer(), parts=ctx.package_parts, rulesets=ctx.rulesets, run=run,
-            failed_sources=failed, destination=destination)
+            failed_sources=failed, expected_events=ctx.total_events, destination=destination)
     except (PackageError, OSError) as exc:
         ctx.logger.error(f"[red]    [-] Cannot create the package: {literal(exc)}[/]")
         return False

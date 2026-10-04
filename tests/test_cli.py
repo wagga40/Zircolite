@@ -1425,6 +1425,22 @@ class TestCLIPackage:
         assert "1 input(s) failed to process and are not in this package" in manifest["warnings"]
         assert manifest["totals"]["events"] == 2 and manifest["totals"]["hits"] == 1
 
+    def test_a_package_missing_ingested_events_fails_the_run(self, tmp_path, monkeypatch):
+        from zircolite.package_spool import PartWriter
+
+        export = PartWriter.export_events
+
+        def loses_one(self, connection):
+            export(self, connection)
+            self.record.events -= 1
+
+        monkeypatch.setattr(PartWriter, "export_events", loses_one)
+        package_dir = self.run(tmp_path, expect_exit=1)
+
+        assert json.loads((tmp_path / "out.json").read_text(encoding="utf-8"))[0]["title"] == "Test Rule"
+        assert list(package_dir.iterdir()) == []
+        assert "1 events where the run ingested 2" in (tmp_path / "test.log").read_text(encoding="utf-8")
+
     def test_matches_are_not_held_in_memory_for_the_package(self, tmp_path, monkeypatch):
         seen = {}
         original = zircolite_script.ProcessingContext

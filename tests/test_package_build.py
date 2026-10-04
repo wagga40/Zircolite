@@ -53,8 +53,11 @@ def part(spool, number, rows, results=(), *, sources=None, unreadable=(), **opti
     return writer.finish()
 
 
-def build(spool, parts, failed=(), rulesets=RULES):
-    return PackageBuilder(spool).build_data(parts=parts, rulesets=rulesets, run=RUN, failed_sources=list(failed))
+def build(spool, parts, failed=(), rulesets=RULES, expected_events=None):
+    if expected_events is None:
+        expected_events = sum(record.events for record in parts)
+    return PackageBuilder(spool).build_data(parts=parts, rulesets=rulesets, run=RUN, failed_sources=list(failed),
+                                            expected_events=expected_events)
 
 
 def table(data, name, tmp_path, sql="SELECT * FROM t"):
@@ -136,6 +139,18 @@ class TestEvents:
             assert table(data, name, tmp_path, "SELECT count(*) FROM t")[1] == [(0,)]
         assert table(data, "events", tmp_path)[0] == ["_zl_uid", "_zl_part", "_zl_time", "_zl_spelling"]
         assert data.manifest["totals"] == {"events": 0, "parts": 0, "rules_matched": 0, "hits": 0, "alerts": 0}
+
+    def test_a_part_number_spooled_twice_is_refused(self, spool):
+        parts = [part(spool, 0, [{"A": "1"}]), part(spool, 1, [{"A": "2"}]), part(spool, 1, [{"A": "3"}])]
+
+        with pytest.raises(PackageError, match="part 1"):
+            build(spool, parts)
+
+    def test_a_package_that_misses_ingested_events_is_refused(self, spool):
+        parts = [part(spool, 0, [{"A": "1"}, {"A": "2"}])]
+
+        with pytest.raises(PackageError, match="2 events where the run ingested 3"):
+            build(spool, parts, expected_events=3)
 
     def test_too_many_events_for_a_browser_is_refused(self, spool, monkeypatch):
         monkeypatch.setattr(package, "EVENTS_PARQUET_LIMIT", 10)
@@ -364,7 +379,7 @@ class TestZip:
         builder = PackageBuilder(spool)
 
         target = builder.build(viewer=find_viewer(), parts=[part(spool, 0, [{"A": "1"}])], rulesets=RULES,
-                               run=RUN, failed_sources=[], destination=destination)
+                               run=RUN, failed_sources=[], expected_events=1, destination=destination)
 
         manifest, files = read_package(target)
         assert {"duckdb-eh.wasm.gz", "parquet.duckdb_extension.wasm", "events.parquet"} <= set(files)

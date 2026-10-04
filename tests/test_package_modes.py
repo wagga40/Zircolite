@@ -3,6 +3,7 @@
 import argparse
 import json
 import time
+from collections import Counter
 from pathlib import Path
 
 import pytest
@@ -87,21 +88,30 @@ def args(default_args_config):
 
 
 def content(ctx):
-    """Mode-independent view of what was spooled: events by file, hits by event."""
+    """Mode-independent view of what was spooled: events by file, hits by event, each counted.
+
+    Counted rather than collected, so an event spooled twice or a hit
+    recorded twice is a difference, as a lost one is.
+    """
     assert ctx.package_errors == []
-    events, hits = set(), set()
+    events, hits = Counter(), Counter()
     by_part = {}
     for record in ctx.package_parts:
         for row in read_spool(record.event_files):
             fields = {k: v for k, v in row.items() if not k.startswith("_zl_") and k != "originallogfile"}
             key = (Path(row["originallogfile"]).name, json.dumps(fields, sort_keys=True))
-            events.add(key)
+            events[key] += 1
             by_part[(record.part, row["_zl_rid"])] = key
         if record.hits_file:
             for line in Path(record.hits_file).read_text().splitlines():
                 rule_idx, part, rid = map(int, line.split(","))
-                hits.add((rule_idx, by_part[(part, rid)]))
+                hits[(rule_idx, by_part[(part, rid)])] += 1
+    assert sum(events.values()) == sum(record.events for record in ctx.package_parts) == ctx.total_events
     return events, hits
+
+
+def sources(ctx):
+    return {record.part: record.sources for record in ctx.package_parts}
 
 
 @pytest.fixture
@@ -109,20 +119,21 @@ def expected(corpus, tmp_path, test_logger, args):
     files, config = corpus
     ctx = context(tmp_path, config, test_logger)
     process_perfile_streaming(ctx, files, "json", None, args())
+    assert sources(ctx) == {index: [str(path)] for index, path in enumerate(files)}
     return content(ctx)
 
 
 def test_per_file_spools_every_event_and_hit(expected):
     events, hits = expected
-    assert len(events) == 4
-    assert {rule for rule, _ in hits} == {0, 1} and len(hits) == 3
+    assert len(events) == sum(events.values()) == 4
+    assert {rule for rule, _ in hits} == {0, 1} and len(hits) == sum(hits.values()) == 3
 
 
 def test_unified_matches_per_file(corpus, tmp_path, test_logger, expected, args):
     files, config = corpus
     ctx = context(tmp_path, config, test_logger)
     process_unified_streaming(ctx, files, "json", None, args())
-    assert [record.part for record in ctx.package_parts] == [0]
+    assert sources(ctx) == {0: [str(path) for path in files]}
     assert content(ctx) == expected
 
 
@@ -131,7 +142,7 @@ def test_parallel_matches_per_file(corpus, tmp_path, test_logger, expected, args
     files, config = corpus
     ctx = context(tmp_path, config, test_logger)
     process_parallel_streaming(ctx, files, "json", None, args(executor=executor), recommended_workers=2)
-    assert sorted(record.part for record in ctx.package_parts) == [0, 1, 2]
+    assert sources(ctx) == {index: [str(path)] for index, path in enumerate(files)}
     assert content(ctx) == expected
 
 
@@ -143,6 +154,7 @@ def test_database_input_matches_per_file(corpus, tmp_path, test_logger, expected
     databases = sorted((tmp_path / "dbs").glob("*.db"))
     ctx = context(tmp_path, config, test_logger)
     process_db_input(ctx, args(db_input=True), file_list=databases)
+    assert sources(ctx) == {index: [str(path)] for index, path in enumerate(databases)}
     assert content(ctx) == expected
 
 
