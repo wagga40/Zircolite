@@ -16,7 +16,7 @@
       document.getElementById('search-input')?.focus();
     } else if (event.key === '?') {
       ui.help = !ui.help;
-    } else if (event.key === 'Escape' && ui.help) {
+    } else if (event.key === 'Escape' && ui.help && !document.querySelector('dialog[open]')) {
       ui.help = false;
     }
   }

@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { suggestValuesSql } from '../src/explore/sidebar';
-import { formatCount, inputCount, isoTime, levelName } from '../src/ui/format';
+import { formatCount, inputCount, isoTime, levelName, timeRange } from '../src/ui/format';
 import { nextTheme } from '../src/ui/theme';
 import { type Fixture, openFixture, schema } from './fixture';
 
@@ -20,7 +20,18 @@ describe('format', () => {
 
   it('counts inputs, not parts', () => {
     const parts = [{ sources: ['a', 'b'] }, { sources: ['b', 'c'] }];
-    expect(inputCount({ parts } as never)).toBe(3);
+    expect(inputCount({ parts })).toBe(3);
+  });
+
+  it('words the time range in UTC from microseconds', () => {
+    const us = (ms: number) => ms * 1000;
+    const parts = [
+      { time: { min: us(Date.UTC(2021, 5, 3, 6, 0, 0)), max: us(Date.UTC(2021, 5, 3, 7, 0, 0)) } },
+      { time: { min: us(Date.UTC(2021, 5, 2, 23, 59, 59)), max: us(Date.UTC(2021, 5, 3, 8, 0, 0)) } },
+    ];
+    expect(timeRange(parts)).toBe('2021-06-02 23:59:59 to 2021-06-03 08:00:00 UTC');
+    expect(timeRange([{ time: { min: null, max: null } }])).toBe('No event has a time');
+    expect(timeRange([])).toBe('No event has a time');
   });
 });
 

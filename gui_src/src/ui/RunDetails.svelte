@@ -1,6 +1,6 @@
 <script lang="ts">
   import type { Manifest } from '../engine/manifest';
-  import { formatCount, inputCount, isoTime } from './format';
+  import { formatCount, inputCount, isoTime, timeRange } from './format';
 
   let { manifest }: { manifest: Manifest } = $props();
   let dialog: HTMLDialogElement;
@@ -9,13 +9,8 @@
     dialog.showModal();
   }
 
-  const range = $derived.by(() => {
-    const starts = manifest.parts.map((p) => p.time.min).filter((v): v is number => v !== null);
-    const ends = manifest.parts.map((p) => p.time.max).filter((v): v is number => v !== null);
-    return starts.length && ends.length
-      ? `${isoTime(Math.min(...starts) / 1000, false)} to ${isoTime(Math.max(...ends) / 1000, false)} UTC`
-      : 'No event has a time';
-  });
+  const range = $derived(timeRange(manifest.parts));
+  const made = $derived(Date.parse(manifest.created));
   const partial = $derived(manifest.parts.filter((p) => p.status === 'partial'));
 </script>
 
@@ -34,7 +29,7 @@
     <dt>Processing</dt><dd>{manifest.run.mode}, {manifest.run.executor}</dd>
     <dt>Time field</dt><dd>{manifest.run.time_field || 'none'}</dd>
     <dt>Event filtering</dt><dd>{manifest.run.event_filter}</dd>
-    <dt>Made by</dt><dd>Zircolite {manifest.zircolite} on {isoTime(Date.parse(manifest.created), false)} UTC</dd>
+    <dt>Made by</dt><dd>Zircolite {manifest.zircolite}{Number.isNaN(made) ? '' : ` on ${isoTime(made, false)} UTC`}</dd>
   </dl>
   {#if manifest.warnings.length}
     <h3>Warnings</h3>

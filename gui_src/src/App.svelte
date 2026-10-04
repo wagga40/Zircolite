@@ -31,7 +31,7 @@
     const m = received as Manifest | null;
     if (m === null) throw new Error('data/manifest.js did not describe a package');
     if (m.format !== PACKAGE_FORMAT) {
-      throw new Error(`This viewer reads package format ${PACKAGE_FORMAT}; this package is format ${m.format}.`);
+      throw new Error(`This viewer reads package format ${PACKAGE_FORMAT}; this package is format ${m.format}. Open it with the viewer of the Zircolite version that made it, or re-create the package with this version.`);
     }
     manifest = m;
     const scripts = m.files.flatMap((file) => file.chunks);
@@ -52,7 +52,7 @@
     engineEvents = counts.events;
     if (counts.events !== m.totals.events || counts.hits !== m.totals.hits) {
       throw new Error(
-        `The engine holds ${counts.events} events and ${counts.hits} hits; the package lists ${m.totals.events} and ${m.totals.hits}.`,
+        `The engine holds ${counts.events} events and ${counts.hits} hits; the package lists ${m.totals.events} and ${m.totals.hits}. The package is damaged or incomplete: extract the whole archive again, or re-create the package.`,
       );
     }
     schema = Schema.fromManifest(m);
