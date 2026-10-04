@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { LEVELS } from '../src/engine/levels';
 import { compile } from '../src/search/compile';
-import { parse } from '../src/search/parse';
+import { hasFullText, parse } from '../src/search/parse';
 import { SHORTCUTS } from '../src/search/shortcuts';
 import { SearchError, tokenize } from '../src/search/tokens';
 import { type Fixture, openFixture, schema } from './fixture';
@@ -69,6 +69,15 @@ describe('parse', () => {
   it.each([['('.repeat(10000)], ['-('.repeat(10000)]])('refuses absurd nesting', (query) => {
     expect(() => parse(query)).toThrowError(SearchError);
     expect(() => parse(query)).toThrowError(/nests too deeply/);
+  });
+
+  it('tells a search of every field from field searches', () => {
+    expect(hasFullText(null)).toBe(false);
+    expect(hasFullText(parse('EventID:1 -host:DC01'))).toBe(false);
+    expect(hasFullText(parse('"level":error'))).toBe(false);
+    expect(hasFullText(parse('mimikatz'))).toBe(true);
+    expect(hasFullText(parse('EventID:1 -powershell'))).toBe(true);
+    expect(hasFullText(parse('(Image:*cmd* OR "net user") EventID:1'))).toBe(true);
   });
 
   it('accepts reasonable nesting', () => {

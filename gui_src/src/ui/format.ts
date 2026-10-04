@@ -1,5 +1,6 @@
 import { LEVELS } from '../engine/levels';
 import type { Manifest } from '../engine/manifest';
+import { hasFullText, type Node } from '../search/parse';
 
 const COUNT = new Intl.NumberFormat('en-US');
 
@@ -29,4 +30,13 @@ export function timeRange(parts: { time: { min: number | null; max: number | nul
 /** Inputs, not parts: one unified database is a single part holding many files. */
 export function inputCount(manifest: { parts: Pick<Manifest['parts'][number], 'sources'>[] }): number {
   return new Set(manifest.parts.flatMap((part) => part.sources)).size;
+}
+
+/** Above this many events a search of every field takes long enough to say so. */
+export const SLOW_FULL_TEXT = 200_000;
+
+/** What to tell someone whose search reads every field of a large package, or null when it will be quick. */
+export function slowSearchNote(tree: Node | null, events: number): string | null {
+  if (events <= SLOW_FULL_TEXT || !hasFullText(tree)) return null;
+  return `Searching every field of ${formatCount(events)} events; this can take a minute. A field search such as CommandLine:*mimikatz* is much faster.`;
 }

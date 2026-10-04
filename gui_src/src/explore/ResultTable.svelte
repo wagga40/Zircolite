@@ -10,7 +10,15 @@
   import { csvExport, ExportTooLarge, jsonExport, limitNote, prepareExport } from './export';
   import { COUNT_SQL, ensureVisible, geometry, HEAD, idsSql, nextPage, PAGE, pageSql, type PageRow, ROW } from './table';
 
-  let { db, schema, manifest, where, columns }: { db: Db; schema: Schema; manifest: Manifest; where: string; columns: Field[] } = $props();
+  let { db, schema, manifest, where, columns, slow }: {
+    db: Db;
+    schema: Schema;
+    manifest: Manifest;
+    where: string;
+    columns: Field[];
+    /** Said in place of "Searching" when the search is known to take long. */
+    slow: string | null;
+  } = $props();
 
   const CACHED_PAGES = 40;
   const TIME_WIDTH = 224;
@@ -224,7 +232,7 @@
   <div class="bar">
     <button type="button" id="fields-toggle" class="fields-toggle" aria-expanded={ui.fieldsOpen} aria-controls="field-sidebar" onclick={() => (ui.fieldsOpen = !ui.fieldsOpen)}>Fields</button>
     <output id="result-count" data-count={busy ? '' : total} data-detected={busy ? '' : detected} data-build={current} data-busy={busy} aria-live="polite">
-      {#if busy}Searching{:else}{formatCount(total)} {total === 1 ? 'event' : 'events'}{#if detected}, {formatCount(detected)} with detections{/if}{/if}
+      {#if busy && slow}<span class="slow">{slow}</span>{:else if busy}Searching{:else}{formatCount(total)} {total === 1 ? 'event' : 'events'}{#if detected}, {formatCount(detected)} with detections{/if}{/if}
     </output>
     <button type="button" class="toggle" aria-pressed={view.d} onclick={() => (view.d = !view.d)}>Detections only</button>
     <span class="grow"></span>
@@ -309,6 +317,7 @@
   .toggle[aria-pressed='true'] { border-color: var(--signal); color: var(--signal); }
   .fields-toggle { display: none; }
   output { font-weight: 600; }
+  .slow { font-weight: 400; color: var(--ink-2); }
   .grow { flex: 1; }
   .progress { font-size: var(--t-13); color: var(--ink-2); }
   .note { margin: 6px 16px; font-size: var(--t-13); color: var(--ink-2); }

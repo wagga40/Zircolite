@@ -3,11 +3,12 @@
   import type { Manifest } from '../engine/manifest';
   import type { Schema } from '../engine/schema';
   import { compile } from '../search/compile';
-  import { parse } from '../search/parse';
+  import { type Node, parse } from '../search/parse';
   import { SearchError } from '../search/tokens';
   import { setDetections, setSearch, setTime } from '../state/filters';
   import { view } from '../state/view.svelte';
   import { combineWhere, DETECTIONS_PREDICATE, timePredicate } from '../state/where';
+  import { slowSearchNote } from '../ui/format';
   import { shownColumns } from './columns';
   import DetailDrawer from './DetailDrawer.svelte';
   import FieldSidebar from './FieldSidebar.svelte';
@@ -18,14 +19,18 @@
 
   // A query from a bookmark has not been validated: an invalid one shows its
   // error in the search bar and matches nothing, never everything.
-  const search = $derived.by(() => {
+  const compiled = $derived.by((): { tree: Node | null; sql: string | null } => {
+    if (!view.q) return { tree: null, sql: null };
     try {
-      return view.q ? compile(parse(view.q), schema) : null;
+      const tree = parse(view.q);
+      return { tree, sql: compile(tree, schema) };
     } catch (problem) {
-      if (problem instanceof SearchError) return 'FALSE';
+      if (problem instanceof SearchError) return { tree: null, sql: 'FALSE' };
       throw problem;
     }
   });
+  const search = $derived(compiled.sql);
+  const slow = $derived(slowSearchNote(compiled.tree, manifest.totals.events));
   const time = $derived(timePredicate(view.t));
   // The same three predicates go to the filters selection, for the views that will read it.
   const where = $derived(combineWhere([search, time, view.d ? DETECTIONS_PREDICATE : null]));
@@ -42,7 +47,7 @@
   <div class="body">
     <FieldSidebar {db} {schema} {manifest} {where} {columns} />
     <section class="results" aria-label="Events">
-      <ResultTable {db} {schema} {manifest} {where} {columns} />
+      <ResultTable {db} {schema} {manifest} {where} {columns} {slow} />
     </section>
     <DetailDrawer {db} {schema} {manifest} />
   </div>

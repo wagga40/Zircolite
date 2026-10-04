@@ -110,3 +110,17 @@ export function parse(input: string): Node | null {
   }
   return tree;
 }
+
+/** Whether any term searches every field, which reads every column of every event. */
+export function hasFullText(tree: Node | null): boolean {
+  if (tree === null) return false;
+  switch (tree.kind) {
+    case 'and':
+    case 'or':
+      return tree.items.some(hasFullText);
+    case 'not':
+      return hasFullText(tree.item);
+    case 'term':
+      return tree.field === null;
+  }
+}

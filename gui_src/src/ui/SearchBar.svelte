@@ -9,10 +9,11 @@
   import { SHORTCUTS, SYNTAX } from '../search/shortcuts';
   import { SearchError } from '../search/tokens';
   import { view } from '../state/view.svelte';
+  import { slowSearchNote } from './format';
   import { pageTopLayer } from './layers';
   import { ui } from './ui.svelte';
 
-  let { db, schema }: { db: Db; schema: Schema } = $props();
+  let { db, schema, events }: { db: Db; schema: Schema; events: number } = $props();
 
   let input: HTMLInputElement;
   let draft = $state('');
@@ -24,6 +25,14 @@
   let failure = $state<string | null>(null);
 
   const items = $derived(chips(view.q));
+  // Kept in view while the slow search is the committed one, so later waits have a reason beside them.
+  const slow = $derived.by(() => {
+    try {
+      return slowSearchNote(parse(view.q), events);
+    } catch {
+      return null;
+    }
+  });
   // The box cannot hold a line break, so such a query is shown but never edited through it.
   const locked = $derived(!editable(view.q));
 
@@ -184,6 +193,9 @@
       <button type="button" onclick={() => (view.q = '')}>Clear search</button>
     </p>
   {/if}
+  {#if slow && !error}
+    <p class="slow">{slow}</p>
+  {/if}
   {#if error}
     <p id="search-error" class="error" role="alert">{error.message} (at character {error.start + 1}).</p>
   {:else if failure}
@@ -234,7 +246,7 @@
   input { flex: 1; min-width: 0; font: 400 var(--t-15) / 1.4 var(--mono); color: var(--ink); background: var(--paper); border: 1px solid var(--rule); border-radius: var(--radius); padding: 7px 10px; }
   input[aria-invalid='true'] { border-color: var(--danger); }
   input[readonly] { background: var(--panel); border-style: dashed; }
-  .locked { margin: 6px 0 0; font-size: var(--t-13); color: var(--ink-2); }
+  .locked, .slow { margin: 6px 0 0; font-size: var(--t-13); color: var(--ink-2); }
   .locked button { margin-left: 6px; background: none; border: 1px solid var(--rule); border-radius: var(--radius); min-height: 24px; padding: 1px 8px; cursor: pointer; color: var(--ink); }
   .syntax { background: none; border: 1px solid var(--rule); border-radius: var(--radius); padding: 0 10px; cursor: pointer; color: var(--ink-2); }
   [role='listbox'] { position: absolute; top: 100%; left: 0; right: 0; z-index: 20; list-style: none; margin: 4px 0 0; padding: 4px; background: var(--panel); border: 1px solid var(--rule); border-radius: var(--radius); max-height: 18rem; overflow: auto; }

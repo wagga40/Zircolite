@@ -17,7 +17,7 @@
 
 <header class="top">
   <span class="brand">Zircolite</span>
-  <div class="slot"><SearchBar {db} {schema} /></div>
+  <div class="slot"><SearchBar {db} {schema} events={manifest.totals.events} /></div>
   <button type="button" onclick={() => details.open()}>
     Run details{#if warnings}<span class="badge"><span class="swatch" aria-hidden="true"></span>{warnings} {warnings === 1 ? 'warning' : 'warnings'}</span>{/if}
   </button>

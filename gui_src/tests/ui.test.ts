@@ -1,6 +1,7 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { suggestValuesSql } from '../src/explore/sidebar';
-import { formatCount, inputCount, isoTime, levelName, timeRange } from '../src/ui/format';
+import { parse } from '../src/search/parse';
+import { formatCount, inputCount, isoTime, levelName, slowSearchNote, timeRange } from '../src/ui/format';
 import { topLayer } from '../src/ui/layers';
 import { nextTheme } from '../src/ui/theme';
 import { type Fixture, openFixture, schema } from './fixture';
@@ -33,6 +34,20 @@ describe('format', () => {
     expect(timeRange(parts)).toBe('2021-06-02 23:59:59 to 2021-06-03 08:00:00 UTC');
     expect(timeRange([{ time: { min: null, max: null } }])).toBe('No event has a time');
     expect(timeRange([])).toBe('No event has a time');
+  });
+});
+
+describe('slow search note', () => {
+  it('warns about a search of every field on a large package', () => {
+    expect(slowSearchNote(parse('mimikatz'), 1_868_682)).toBe(
+      'Searching every field of 1,868,682 events; this can take a minute. A field search such as CommandLine:*mimikatz* is much faster.',
+    );
+  });
+
+  it('stays quiet for field searches and for packages of 200,000 events or fewer', () => {
+    expect(slowSearchNote(parse('CommandLine:*mimikatz*'), 1_868_682)).toBeNull();
+    expect(slowSearchNote(parse('mimikatz'), 200_000)).toBeNull();
+    expect(slowSearchNote(null, 1_868_682)).toBeNull();
   });
 });
 
