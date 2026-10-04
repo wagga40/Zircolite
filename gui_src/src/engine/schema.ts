@@ -12,15 +12,18 @@ export interface Field {
 
 export class Schema {
   readonly fields: Field[];
+  /** ATT&CK tactic short names as the rules table stores them, in ATT&CK's order. */
+  readonly tactics: string[];
   private readonly byKey: Map<string, Field>;
 
-  constructor(fields: Field[]) {
+  constructor(fields: Field[], tactics: string[] = []) {
     this.fields = fields;
+    this.tactics = tactics;
     this.byKey = new Map(fields.map((field) => [field.key, field]));
   }
 
   static fromManifest(manifest: Manifest): Schema {
-    return new Schema(manifest.columns.map((c) => ({ name: c.name, key: c.key, type: c.type, count: c.count })));
+    return new Schema(manifest.columns.map((c) => ({ name: c.name, key: c.key, type: c.type, count: c.count })), manifest.tactics);
   }
 
   find(name: string): Field | undefined {

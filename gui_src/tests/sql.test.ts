@@ -44,4 +44,9 @@ describe('Schema', () => {
     expect(schema.suggest('CommandLin')[0]).toBe('CommandLine');
     expect(schema.suggest('zzzzzzzz')).toEqual([]);
   });
+
+  it('carries the manifest\'s tactic list', () => {
+    const manifest = { columns: [{ name: 'A', key: 'a', type: 'VARCHAR', count: 1 }], tactics: ['execution', 'impact'] };
+    expect(Schema.fromManifest(manifest as never).tactics).toEqual(['execution', 'impact']);
+  });
 });

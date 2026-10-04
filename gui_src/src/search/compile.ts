@@ -73,6 +73,25 @@ function fullText(t: Term, schema: Schema): string {
   return `concat_ws(chr(31), ${all}) ILIKE ${pattern(t, true)} ESCAPE '\\'`;
 }
 
+/**
+ * The tactics a term names, from the package's list. A name the rules never
+ * carry would match nothing without a word of why, so it is refused instead.
+ */
+function tacticNames(t: Term, tactics: readonly string[]): string[] {
+  if (tactics.length === 0) throw new SearchError('This package lists no ATT&CK tactics', t.start, t.end);
+  const known = `tactics are: ${tactics.join(', ')}`;
+  const wanted = t.value.trim().toLowerCase().replace(/[\s_]+/g, '-');
+  if (!t.quoted && wanted.includes('*')) {
+    const pattern = new RegExp(`^${wanted.split('*').map((part) => part.replace(/[.+?^${}()|[\]\\]/g, '\\$&')).join('.*')}$`);
+    const found = tactics.filter((tactic) => pattern.test(tactic));
+    if (found.length === 0) throw new SearchError(`No tactic matches ${t.value}; ${known}`, t.start, t.end);
+    return found;
+  }
+  const name = TACTIC_ALIASES[wanted] ?? wanted;
+  if (!tactics.includes(name)) throw new SearchError(`No tactic named ${t.value}; ${known}`, t.start, t.end);
+  return [name];
+}
+
 function anyField(names: readonly string[], label: string) {
   return (t: Term, schema: Schema): string => {
     const found = new Map<string, Field>();
@@ -96,10 +115,11 @@ const SHORTCUT_COMPILERS: Record<string, (t: Term, schema: Schema) => string> = 
     if (rank < 0) throw new SearchError(`level is one of ${LEVELS.join(', ')}`, t.start, t.end);
     return `_zl_uid IN (SELECT _zl_uid FROM event_levels WHERE _zl_lvl ${t.op} ${rank})`;
   },
-  tactic: (t) => {
+  tactic: (t, schema) => {
     exactOnly(t);
-    const name = t.value.toLowerCase().replaceAll('_', '-');
-    return `_zl_uid IN (${HIT_RULES} WHERE list_contains(r.tactics, ${str(TACTIC_ALIASES[name] ?? name)}))`;
+    const names = tacticNames(t, schema.tactics);
+    const test = names.length === 1 ? `list_contains(r.tactics, ${str(names[0])})` : `list_has_any(r.tactics, [${names.map(str).join(', ')}])`;
+    return `_zl_uid IN (${HIT_RULES} WHERE ${test})`;
   },
   technique: (t) => {
     exactOnly(t);

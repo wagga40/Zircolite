@@ -101,6 +101,12 @@ describe('compile against DuckDB', () => {
     ['rule:r-logon', [A]],
     ['tactic:discovery', [CMD]],
     ['tactic:Initial_Access', [A]],
+    ['tactic:"Privilege Escalation"', []],
+    ['tactic:"Initial Access"', [A]],
+    ['tactic:Persistence', [PS]],
+    ['tactic:*access*', [A]],
+    ['tactic:*s*', [A, CMD, PS]],
+    ['tactic:defense-evasion', []],
     ['technique:T1059', [PS]],
     ['technique:t1033', [CMD]],
     ['host:WS02', [CMD, PS, OFF]],
@@ -135,6 +141,9 @@ describe('compile against DuckDB', () => {
     ['technique:1059', /T1234/],
     ['rule:>x', /only level compares/],
     ['tactic:>=discovery', /only level compares/],
+    ['tactic:persistance', /No tactic named persistance; tactics are: reconnaissance, resource-development, .*, impact$/],
+    ['tactic:*zzz*', /No tactic matches \*zzz\*; tactics are: reconnaissance, .*, impact$/],
+    ['tactic:"*access*"', /No tactic named \*access\*/],
     ['technique:>=T1059', /only level compares/],
   ])('explains %s', (query, message) => {
     expect(() => compile(parse(query), schema)).toThrowError(message);
@@ -143,6 +152,12 @@ describe('compile against DuckDB', () => {
   it('locates an error on its term', () => {
     expect(() => compile(parse('nosuch:1'), schema)).toThrowError(expect.objectContaining({ start: 0, end: 8 }));
     expect(() => compile(parse('a EventID:>abc'), schema)).toThrowError(expect.objectContaining({ start: 2, end: 14 }));
+  });
+
+  it('expands a tactic wildcard against the package\'s list', () => {
+    expect(compile(parse('tactic:*access*'), schema)).toContain(`list_has_any(r.tactics, ['initial-access', 'credential-access'])`);
+    expect(compile(parse('tactic:"Privilege Escalation"'), schema)).toContain(`list_contains(r.tactics, 'privilege-escalation')`);
+    expect(compile(parse('tactic:Defense_Evasion'), schema)).toContain(`list_contains(r.tactics, 'stealth')`);
   });
 
   it('every shortcut example compiles', () => {

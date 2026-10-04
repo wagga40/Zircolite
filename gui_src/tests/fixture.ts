@@ -14,7 +14,14 @@ export const FIELDS: Field[] = [
   { name: 'level', key: 'level', type: 'VARCHAR', count: 1 },
 ];
 
-export const schema = new Schema(FIELDS);
+/** ATT&CK tactic short names in Zircolite's order: zircolite/attack.py TACTIC_ORDER, as the manifest lists them. */
+export const TACTICS = [
+  'reconnaissance', 'resource-development', 'initial-access', 'execution', 'persistence', 'privilege-escalation',
+  'stealth', 'defense-impairment', 'credential-access', 'discovery', 'lateral-movement', 'collection',
+  'command-and-control', 'exfiltration', 'impact',
+];
+
+export const schema = new Schema(FIELDS, TACTICS);
 
 const SETUP = [
   `CREATE TABLE events (_zl_uid BIGINT, _zl_part INTEGER, _zl_time TIMESTAMP, _zl_spelling VARCHAR,
