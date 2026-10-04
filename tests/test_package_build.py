@@ -45,8 +45,8 @@ def spool_dir(spool):
     pathlib.Path(spool.directory).mkdir()
 
 
-def part(spool, number, rows, results=(), **options):
-    writer = spool.open_part(number, [f"file{number}.evtx"])
+def part(spool, number, rows, results=(), *, sources=None, unreadable=(), **options):
+    writer = spool.open_part(number, sources or [f"file{number}.evtx"], unreadable=unreadable)
     writer.export_events(make_logs(rows, **options))
     for result in results:
         writer.sink(result)
@@ -199,6 +199,21 @@ class TestManifest:
         assert "1 input(s) have no SystemTime field" in warnings
         assert "1 match(es) from custom SQL rules" in warnings
         assert "1 input(s) failed to process" in warnings
+
+    def test_inputs_read_in_part_mark_their_part_partial(self, spool):
+        parts = [
+            part(spool, 0, [{"A": "1"}]),
+            part(spool, 1, [{"A": "2"}], sources=["b.json", "c.json", "d.json", "e.json"],
+                 unreadable=["b.json", "c.json", "d.json", "e.json"]),
+        ]
+
+        manifest = build(spool, parts).manifest
+
+        assert [(p["status"], p["unreadable"]) for p in manifest["parts"]] == [
+            ("complete", []), ("partial", ["b.json", "c.json", "d.json", "e.json"])]
+        assert manifest["failed_sources"] == []
+        assert ("4 input(s) could be read only in part or not at all: b.json, c.json, d.json ..."
+                in manifest["warnings"])
 
     def test_merge_columns_ors_masks_and_sums_counts(self, spool):
         parts = [part(spool, 0, [{"N": 1}], types={"N": ""}), part(spool, 1, [{"n": "x"}, {"n": "y"}])]

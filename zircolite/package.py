@@ -295,6 +295,10 @@ def write_alerts(connection: duckdb.DuckDBPyConnection, work: Path, parts: list[
     return {"alerts": alerts, "alert_events": links}
 
 
+def _some(names: list[str]) -> str:
+    return ", ".join(names[:3]) + (" ..." if len(names) > 3 else "")
+
+
 def build_manifest(*, parts: list[PartRecord], columns: list[Column], run: RunInfo, time_field: str,
                    failed_sources: list[str], totals: dict[str, int]) -> dict[str, Any]:
     canonical = {column.key: column.name for column in columns}
@@ -307,13 +311,16 @@ def build_manifest(*, parts: list[PartRecord], columns: list[Column], run: RunIn
     timeless = [source for record in parts if record.events and record.time.get("column") is None
                 for source in record.sources]
     unlinked = sum(counts.get("unlinked", 0) for record in parts for counts in record.rules.values())
+    unreadable = [source for record in parts for source in record.unreadable]
     warnings = []
     if unparsed:
         warnings.append(f"{unparsed:,} event(s) have a {time_field} value that is not a time; "
                         "they are kept but have no place on the timeline")
     if timeless:
-        shown = ", ".join(timeless[:3]) + (" ..." if len(timeless) > 3 else "")
-        warnings.append(f"{len(timeless):,} input(s) have no {time_field} field, so their events have no time: {shown}")
+        warnings.append(f"{len(timeless):,} input(s) have no {time_field} field, so their events have no time: "
+                        f"{_some(timeless)}")
+    if unreadable:
+        warnings.append(f"{len(unreadable):,} input(s) could be read only in part or not at all: {_some(unreadable)}")
     if unlinked:
         warnings.append(f"{unlinked:,} match(es) from custom SQL rules carry no event id and are not linked to events")
     if failed_sources:
@@ -339,6 +346,7 @@ def build_manifest(*, parts: list[PartRecord], columns: list[Column], run: RunIn
         ],
         "parts": [
             {"part": record.part, "sources": record.sources, "events": record.events,
+             "status": "partial" if record.unreadable else "complete", "unreadable": record.unreadable,
              "spellings": {c["key"]: c["name"] for c in record.columns
                            if c["key"] != time_key and c["name"] != canonical.get(c["key"])},
              "time": record.time}

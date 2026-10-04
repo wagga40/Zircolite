@@ -354,7 +354,7 @@ class TestLifecycle:
         assert list(tmp_path.iterdir()) == []
 
     def test_spool_and_record_survive_pickling(self, hit_spool):
-        record = PartRecord(part=1, sources=["x"], rules={0: {"count": 1}})
+        record = PartRecord(part=1, sources=["x", "y"], unreadable=["y"], rules={0: {"count": 1}})
 
         assert pickle.loads(pickle.dumps(hit_spool)) == hit_spool  # noqa: S301 -- round-trips our own objects
         assert pickle.loads(pickle.dumps(record)) == record  # noqa: S301 -- round-trips our own objects

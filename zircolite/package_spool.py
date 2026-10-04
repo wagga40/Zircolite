@@ -13,7 +13,7 @@ import math
 import sqlite3
 import string
 import zlib
-from collections.abc import Generator
+from collections.abc import Generator, Iterable
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -137,6 +137,9 @@ class PartRecord:
 
     part: int
     sources: list[str]
+    # Sources the reader could read only in part or not at all: their events
+    # here are what survived, so the part is no complete copy of them.
+    unreadable: list[str] = field(default_factory=list)
     events: int = 0
     event_files: list[str] = field(default_factory=list)
     longest_line: int = 0
@@ -163,8 +166,8 @@ class PackageSpool:
     # Parallel workers are handed a path, not a position; this restores it.
     part_of: dict[str, int] = field(default_factory=dict)
 
-    def open_part(self, part: int, sources: list[str]) -> "PartWriter":
-        return PartWriter(self, part, sources)
+    def open_part(self, part: int, sources: list[str], *, unreadable: Iterable[str] = ()) -> "PartWriter":
+        return PartWriter(self, part, sources, unreadable)
 
 
 class _SpoolFiles:
@@ -237,11 +240,11 @@ def _row_spellings(connection: sqlite3.Connection) -> Generator[tuple[int, str],
 class PartWriter:
     """Spools one working database: its events now, its hits as rules report them."""
 
-    def __init__(self, spool: PackageSpool, part: int, sources: list[str]) -> None:
+    def __init__(self, spool: PackageSpool, part: int, sources: list[str], unreadable: Iterable[str] = ()) -> None:
         if not 0 <= part < PART_LIMIT:
             raise PackageError(f"part {part} is outside 0..{PART_LIMIT - 1}")
         self.spool = spool
-        self.record = PartRecord(part=part, sources=list(sources))
+        self.record = PartRecord(part=part, sources=list(sources), unreadable=list(unreadable))
         self._prefix = Path(spool.directory) / f"part-{part:07d}"
         self._hits: BinaryIO | None = None
         self._alerts: BinaryIO | None = None

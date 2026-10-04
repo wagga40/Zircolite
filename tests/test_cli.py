@@ -1263,12 +1263,20 @@ class TestCLIPackage:
     RULE: ClassVar[dict] = {"title": "Test Rule", "id": "test-001", "level": "high", "tags": ["attack.execution"],
             "rule": ["SELECT * FROM logs WHERE CommandLine LIKE '%powershell%'"]}
 
-    def run(self, tmp_path, *extra, events=None, rules=None, expect_exit=None):
-        events_file = tmp_path / "events.json"
-        events_file.write_text("\n".join(json.dumps(e) for e in (events or [
-            {"Event": {"System": {"EventID": 1, "Channel": "Security"}, "EventData": {"CommandLine": "powershell.exe"}}},
-            {"Event": {"System": {"EventID": 2, "Channel": "Other"}, "EventData": {"CommandLine": "cmd.exe"}}},
-        ])), encoding="utf-8")
+    EVENTS: ClassVar[list] = [
+        {"Event": {"System": {"EventID": 1, "Channel": "Security"}, "EventData": {"CommandLine": "powershell.exe"}}},
+        {"Event": {"System": {"EventID": 2, "Channel": "Other"}, "EventData": {"CommandLine": "cmd.exe"}}},
+    ]
+    LAYOUTS: ClassVar[dict] = {
+        "sequential": ["--no-parallel"],
+        "unified": ["--unified-db"],
+        "thread": ["--executor", "thread", "--parallel-workers", "2"],
+    }
+
+    def run(self, tmp_path, *extra, events=None, rules=None, expect_exit=None, inputs=None, input_format="-j"):
+        if inputs is None:
+            inputs = tmp_path / "events.json"
+            inputs.write_text("\n".join(json.dumps(e) for e in (events or self.EVENTS)), encoding="utf-8")
         ruleset_file = tmp_path / "ruleset.json"
         ruleset_file.write_text(json.dumps(rules if rules is not None else [self.RULE]), encoding="utf-8")
         config_file = tmp_path / "config.json"
@@ -1278,7 +1286,7 @@ class TestCLIPackage:
                          "Event.EventData.CommandLine": "CommandLine"}}), encoding="utf-8")
         package_dir = tmp_path / "pkg"
         package_dir.mkdir(exist_ok=True)
-        argv = ['zircolite.py', '-e', str(events_file), '-r', str(ruleset_file), '-c', str(config_file), '-j',
+        argv = ['zircolite.py', '-e', str(inputs), '-r', str(ruleset_file), '-c', str(config_file), input_format,
                 '-o', str(tmp_path / "out.json"), '--package', '--package-dir', str(package_dir),
                 *get_log_arg(tmp_path), *extra]
         original_cwd = os.getcwd()
@@ -1350,6 +1358,72 @@ class TestCLIPackage:
 
         assert json.loads((tmp_path / "out.json").read_text(encoding="utf-8"))[0]["title"] == "Test Rule"
         assert list(package_dir.iterdir()) == []
+
+    def two_inputs(self, tmp_path, second):
+        inputs = tmp_path / "inputs"
+        inputs.mkdir()
+        (inputs / "a.json").write_text(json.dumps(self.EVENTS[0]), encoding="utf-8")
+        (inputs / "b.json").write_text(second, encoding="utf-8")
+        return inputs
+
+    @pytest.mark.parametrize("layout", ["sequential", "unified", "thread"])
+    def test_an_input_read_in_part_is_marked_partial(self, tmp_path, read_package, layout):
+        inputs = self.two_inputs(tmp_path, json.dumps(self.EVENTS[1]) + "\n{not json\n")
+
+        package_dir = self.run(tmp_path, "--no-auto-mode", *self.LAYOUTS[layout], inputs=inputs)
+
+        (target,) = package_dir.glob("zircolite-package-*.zip")
+        manifest, _ = read_package(target)
+        parts = {tuple(Path(s).name for s in p["sources"]): (p["status"], [Path(s).name for s in p["unreadable"]])
+                 for p in manifest["parts"]}
+        if layout == "unified":
+            assert parts == {("a.json", "b.json"): ("partial", ["b.json"])}
+        else:
+            assert parts == {("a.json",): ("complete", []), ("b.json",): ("partial", ["b.json"])}
+        assert manifest["totals"]["events"] == 2
+        assert manifest["failed_sources"] == []
+        assert any(w.startswith("1 input(s) could be read only in part or not at all: ") and w.endswith("b.json")
+                   for w in manifest["warnings"])
+
+    def test_a_failed_worker_is_listed_as_a_failed_source(self, tmp_path, read_package, monkeypatch):
+        from zircolite.core import ZircoliteCore
+
+        streaming = ZircoliteCore.run_streaming
+
+        def dies_on_b(self, log_files, *args, **kwargs):
+            if Path(log_files[0]).name == "b.json":
+                raise RuntimeError("worker died")
+            return streaming(self, log_files, *args, **kwargs)
+
+        monkeypatch.setattr(ZircoliteCore, "run_streaming", dies_on_b)
+        inputs = self.two_inputs(tmp_path, json.dumps(self.EVENTS[1]))
+
+        package_dir = self.run(tmp_path, "--no-auto-mode", *self.LAYOUTS["thread"], inputs=inputs)
+
+        (target,) = package_dir.glob("zircolite-package-*.zip")
+        manifest, _ = read_package(target)
+        assert [Path(source).name for source in manifest["failed_sources"]] == ["b.json"]
+        assert "1 input(s) failed to process and are not in this package" in manifest["warnings"]
+        assert manifest["totals"]["events"] == 1
+
+    def test_an_unloadable_database_is_listed_as_a_failed_source(self, tmp_path, read_package):
+        databases = tmp_path / "dbs"
+        databases.mkdir()
+        connection = sqlite3.connect(databases / "good.db")
+        connection.execute("CREATE TABLE logs (row_id INTEGER PRIMARY KEY AUTOINCREMENT, "
+                           "CommandLine TEXT COLLATE NOCASE)")
+        connection.executemany("INSERT INTO logs (CommandLine) VALUES (?)", [("powershell.exe",), ("cmd.exe",)])
+        connection.commit()
+        connection.close()
+        (databases / "bad.db").write_bytes(b"not a database " * 300)
+
+        package_dir = self.run(tmp_path, inputs=databases, input_format="-D")
+
+        (target,) = package_dir.glob("zircolite-package-*.zip")
+        manifest, _ = read_package(target)
+        assert [Path(source).name for source in manifest["failed_sources"]] == ["bad.db"]
+        assert "1 input(s) failed to process and are not in this package" in manifest["warnings"]
+        assert manifest["totals"]["events"] == 2 and manifest["totals"]["hits"] == 1
 
     def test_matches_are_not_held_in_memory_for_the_package(self, tmp_path, monkeypatch):
         seen = {}

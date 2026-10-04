@@ -37,7 +37,16 @@ export interface Manifest {
   totals: { events: number; parts: number; rules_matched: number; hits: number; alerts: number };
   columns: { name: string; key: string; type: 'BIGINT' | 'DOUBLE' | 'VARCHAR'; count: number }[];
   families: { channel: string | null; eventid: string | null; columns: string[] }[];
-  parts: { part: number; sources: string[]; events: number; spellings: Record<string, string>; time: TimeStats }[];
+  parts: {
+    part: number;
+    sources: string[];
+    events: number;
+    // 'partial' when a source could be read only in part or not at all; those sources are in unreadable.
+    status: 'complete' | 'partial';
+    unreadable: string[];
+    spellings: Record<string, string>;
+    time: TimeStats;
+  }[];
   failed_sources: string[];
   warnings: string[];
   files: PackageFile[];

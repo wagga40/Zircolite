@@ -31,7 +31,7 @@ import sys
 import tempfile
 import threading
 import time
-from collections.abc import Callable
+from collections.abc import Callable, Collection
 from contextlib import closing, contextmanager, nullcontext, suppress
 from copy import deepcopy
 from dataclasses import dataclass, field, fields
@@ -287,15 +287,18 @@ def _fan_out(*sinks: Callable[[dict[str, Any]], None] | None) -> Callable[[dict[
 
 
 def _start_package_part(spool: PackageSpool | None, part: int, sources: list[str],
-                        connection: sqlite3.Connection | None) -> tuple[PartWriter | None, str | None]:
+                        connection: sqlite3.Connection | None,
+                        failed_files: Collection[str] = ()) -> tuple[PartWriter | None, str | None]:
     """Spool one working database's events; the writer then records its hits.
 
     Called after ingestion and before the rules run: the rules add all-NULL
-    columns and indexes the package must not carry.
+    columns and indexes the package must not carry. ``failed_files`` is the
+    core's record of inputs read only in part; a core reused across files
+    keeps every earlier file's entries, so only this part's sources count.
     """
     if spool is None:
         return None, None
-    writer = spool.open_part(part, sources)
+    writer = spool.open_part(part, sources, unreadable=[source for source in sources if source in failed_files])
     try:
         if connection is None:
             raise PackageError("the working database is not open")
@@ -458,7 +461,8 @@ def process_unified_streaming(
         ctx.memory_tracker.sample()
 
     package_part, error = _start_package_part(
-        _package_spool_for(ctx), 0, [str(f) for f in file_list], zircolite_core.db_connection)
+        _package_spool_for(ctx), 0, [str(f) for f in file_list], zircolite_core.db_connection,
+        zircolite_core.failed_files)
     _collect_package_part(ctx, None, error)
 
     zircolite_core.load_ruleset_from_var(
@@ -630,7 +634,8 @@ def process_perfile_streaming(
                     ctx.memory_tracker.sample()
 
                 package_part, error = _start_package_part(
-                    _package_spool_for(ctx), file_idx, [str(log_file)], zircolite_core.db_connection)
+                    _package_spool_for(ctx), file_idx, [str(log_file)], zircolite_core.db_connection,
+                    zircolite_core.failed_files)
                 _collect_package_part(ctx, None, error)
 
                 zircolite_core.load_ruleset_from_var(
@@ -856,7 +861,8 @@ def process_db_input(
                 ctx.logger.debug(f"Could not count events in '{file_name}': {e}")
 
             package_part, error = _start_package_part(
-                _package_spool_for(ctx), file_idx, [str(db_path)], zircolite_core.db_connection)
+                _package_spool_for(ctx), file_idx, [str(db_path)], zircolite_core.db_connection,
+                zircolite_core.failed_files)
             _collect_package_part(ctx, None, error)
 
             zircolite_core.load_ruleset_from_var(
@@ -1008,7 +1014,7 @@ def process_single_file_worker(
                 package_error = f"{log_file}: no package part was assigned to this file"
             else:
                 package_part, package_error = _start_package_part(
-                    ctx.package_spool, part, [str(log_file)], core.db_connection)
+                    ctx.package_spool, part, [str(log_file)], core.db_connection, core.failed_files)
 
         # The worker's logger is silent, so a file Zircolite could only read in
         # part is indistinguishable from a clean one unless it is reported here
@@ -1020,6 +1026,7 @@ def process_single_file_worker(
         if event_count == 0 and degraded:
             metrics.data["status"] = "partial"
             metrics.data["prefilter"].append({"requested": ctx.rule_prefilter, "reason": "no events"})
+            package_record, finish_error = _finish_package_part(package_part)
             return (0, {
                 "performance": metrics.data,
                 "name": file_name,
@@ -1029,8 +1036,8 @@ def process_single_file_worker(
                 "filtered": filtered_count,
                 "time_filtered": time_filtered_count,
                 "error": "no event could be read (see the log for details)",
-                "package_part": _finish_package_part(package_part)[0],
-                "package_error": package_error,
+                "package_part": package_record,
+                "package_error": package_error or finish_error,
             })
 
         core.load_ruleset_from_var(

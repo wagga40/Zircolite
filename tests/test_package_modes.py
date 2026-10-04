@@ -35,15 +35,30 @@ CONFIG = {"exclusions": [], "useless": [], "alias": {}, "split": {}, "transforms
                        "ProcessID": "ProcessID", "TargetUserName": "TargetUserName", "SystemTime": "SystemTime"}}
 
 
-@pytest.fixture
-def corpus(tmp_path):
-    root = tmp_path / "logs"
+def write_corpus(tmp_path, folder, texts):
+    root = tmp_path / folder
     root.mkdir()
-    for name, events in FILES.items():
-        (root / name).write_text("\n".join(json.dumps(event) for event in events), encoding="utf-8")
+    for name, text in texts.items():
+        (root / name).write_text(text, encoding="utf-8")
     config = tmp_path / "config.json"
     config.write_text(json.dumps(CONFIG), encoding="utf-8")
     return sorted(root.iterdir()), config
+
+
+@pytest.fixture
+def corpus(tmp_path):
+    return write_corpus(tmp_path, "logs", {
+        name: "\n".join(json.dumps(event) for event in events) for name, events in FILES.items()})
+
+
+@pytest.fixture
+def damaged(tmp_path):
+    """One clean input, one with a malformed line among good ones, one with nothing readable."""
+    return write_corpus(tmp_path, "damaged", {
+        "a.json": json.dumps(FILES["a.json"][0]),
+        "b.json": json.dumps(FILES["b.json"][0]) + "\n{not json\n" + json.dumps(FILES["c.json"][0]),
+        "c.json": "garbage\nmore garbage",
+    })
 
 
 def context(tmp_path, config, test_logger, *, dbfile=None):
@@ -129,6 +144,32 @@ def test_database_input_matches_per_file(corpus, tmp_path, test_logger, expected
     ctx = context(tmp_path, config, test_logger)
     process_db_input(ctx, args(db_input=True), file_list=databases)
     assert content(ctx) == expected
+
+
+def run_mode(mode, ctx, files, args):
+    if mode == "unified":
+        process_unified_streaming(ctx, files, "json", None, args())
+    elif mode == "per-file":
+        process_perfile_streaming(ctx, files, "json", None, args())
+    else:
+        process_parallel_streaming(ctx, files, "json", None, args(executor=mode), recommended_workers=2)
+
+
+@pytest.mark.parametrize("mode", ["per-file", "unified", "thread", "process"])
+def test_inputs_read_in_part_or_not_at_all_are_recorded_on_their_part(damaged, tmp_path, test_logger, args, mode):
+    files, config = damaged
+    ctx = context(tmp_path, config, test_logger)
+
+    run_mode(mode, ctx, files, args)
+
+    assert ctx.package_errors == []
+    a, b, c = (str(path) for path in files)
+    unreadable = {record.part: record.unreadable for record in ctx.package_parts}
+    if mode == "unified":
+        assert unreadable == {0: [b, c]}
+    else:
+        assert unreadable == {0: [], 1: [b], 2: [c]}
+    assert sum(record.events for record in ctx.package_parts) == ctx.total_events == 3
 
 
 def test_an_export_failure_is_recorded_and_the_rules_still_run(corpus, tmp_path, test_logger, monkeypatch, args):
