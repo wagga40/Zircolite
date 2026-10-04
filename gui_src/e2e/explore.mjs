@@ -234,6 +234,31 @@ async function scenario(page, steps) {
   await page.keyboard.press('Escape');
   await menuItem.waitFor({ state: 'hidden' });
   check(await focused('.export-menu summary'), 'closing the Export menu did not return focus to its summary');
+  // The menu is a light dismiss: tapping Fields closes it and opens the modal sheet, and one Escape closes the sheet.
+  await summary.click();
+  await menuItem.waitFor({ state: 'visible' });
+  await page.locator('#fields-toggle').click();
+  await sheet.waitFor({ state: 'visible' });
+  check(!(await menuItem.isVisible()), 'the Export menu stayed open beside the Fields sheet');
+  check(await page.evaluate(() => document.querySelector('#fields-toggle')?.closest('[inert]') !== null), 'the page behind the Fields sheet is not inert');
+  check(await page.evaluate(() => document.querySelector('#field-sidebar')?.closest('[inert]') === null), 'the Fields sheet itself is inert');
+  await page.keyboard.press('Escape');
+  await sheet.waitFor({ state: 'hidden' });
+  check(await focused('#fields-toggle'), 'closing the sheet over an open menu did not return focus to the Fields button');
+  check(await page.evaluate(() => document.querySelector('[inert]') === null), 'the page stayed inert after the sheet closed');
+  await page.locator('#fields-toggle').click();
+  await sheet.waitFor({ state: 'visible' });
+  await page.getByRole('button', { name: 'Close fields' }).click({ position: { x: 370, y: 400 } });
+  await sheet.waitFor({ state: 'hidden' });
+  check(await focused('#fields-toggle'), 'closing the sheet by its scrim did not return focus to the Fields button');
+  // Choosing an export keeps focus on the page rather than dropping it to the body.
+  await summary.click();
+  await menuItem.click();
+  await page.waitForTimeout(300);
+  check((await page.evaluate(() => document.activeElement?.tagName)) !== 'BODY', 'choosing an export from the menu left focus on the body');
+  await poll(page, async () => (await page.getByRole('button', { name: 'Cancel export' }).count()) === 0, 'the export to finish');
+  await page.waitForTimeout(300);
+  check((await page.evaluate(() => document.activeElement?.tagName)) !== 'BODY', 'a finished export left focus on the body');
   const legend = await page.locator('#strip-legend').boundingBox();
   const start = await page.locator('#strip-legend .start').boundingBox();
   const end = await page.locator('#strip-legend .end').boundingBox();

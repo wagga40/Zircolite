@@ -8,6 +8,7 @@
   import { download } from '../ui/download';
   import { formatCount, isoTime, levelName } from '../ui/format';
   import { typing } from '../ui/keys';
+  import { tick } from 'svelte';
   import { pageTopLayer } from '../ui/layers';
   import { ui } from '../ui/ui.svelte';
   import { csvExport, ExportTooLarge, jsonExport, limitNote, prepareExport } from './export';
@@ -44,6 +45,29 @@
   let exportNote = $state<string | null>(null);
   let menuOpen = $state(false);
   let menu = $state<HTMLDetailsElement>();
+  let cancelButton = $state<HTMLButtonElement>();
+  let csvButton = $state<HTMLButtonElement>();
+  let jsonButton = $state<HTMLButtonElement>();
+
+  // The menu is a light dismiss: it never stays open beside the sheet or the drawer.
+  function closeMenu(): void {
+    if (menu) menu.open = false;
+    menuOpen = false;
+  }
+
+  $effect(() => {
+    if (menuOpen && (view.uid !== null || ui.fieldsOpen)) closeMenu();
+  });
+
+  $effect(() => {
+    if (!menuOpen) return;
+    // An outside touch lands wherever the person tapped, so focus is not pulled back to the summary.
+    const outside = (event: PointerEvent) => {
+      if (!menu?.contains(event.target as Node)) closeMenu();
+    };
+    window.addEventListener('pointerdown', outside, true);
+    return () => window.removeEventListener('pointerdown', outside, true);
+  });
   // The key of the one page request in flight; its end lets the next page go.
   let inflight = $state<string | null>(null);
   // Plain counters: tickets for the newest request, never read by the template.
@@ -226,8 +250,7 @@
   function onmenukey(event: KeyboardEvent): void {
     if (event.key !== 'Escape' || event.defaultPrevented || pageTopLayer() !== 'menu') return;
     // The toggle event that feeds menuOpen is asynchronous, so a quick Escape would find it still false.
-    if (menu) menu.open = false;
-    menuOpen = false;
+    closeMenu();
     menu?.querySelector('summary')?.focus();
     event.preventDefault();
   }
@@ -263,6 +286,9 @@
     exporting = { done: 0, total: 0 };
     exportNote = null;
     cancel = false;
+    // The button or menu item just used is replaced by "Cancel export"; keep the keyboard on the page.
+    await tick();
+    cancelButton?.focus();
     try {
       const count = await prepareExport(db);
       const refused = limitNote(kind, count);
@@ -284,6 +310,14 @@
       else exportNote = error instanceof ExportTooLarge ? error.message : `The export failed: ${message(error)}`;
     } finally {
       exporting = null;
+      await tick();
+      const active = document.activeElement;
+      // Only restore focus that the export itself dropped; the person may have moved on.
+      if (!active || active === document.body) {
+        const narrowScreen = window.matchMedia('(max-width: 720px)').matches;
+        const target = narrowScreen ? menu?.querySelector('summary') : kind === 'csv' ? csvButton : jsonButton;
+        (target as HTMLElement | null | undefined)?.focus();
+      }
     }
   }
 </script>
@@ -305,15 +339,15 @@
     <span class="grow"></span>
     {#if exporting}
       <span class="progress" aria-live="polite">Exporting {formatCount(exporting.done)} of {formatCount(exporting.total)}</span>
-      <button type="button" onclick={() => (cancel = true)}>Cancel export</button>
+      <button type="button" bind:this={cancelButton} onclick={() => (cancel = true)}>Cancel export</button>
     {:else}
       <span class="exports">
-        <button type="button" disabled={busy || total === 0} onclick={() => runExport('csv')}
+        <button type="button" bind:this={csvButton} disabled={busy || total === 0} onclick={() => runExport('csv')}
           title="The shown columns, one row per event. A cell starting with = + - or @ gets a leading ' so spreadsheets read it as text.">Export CSV</button>
-        <button type="button" disabled={busy || total === 0} onclick={() => runExport('json')}
+        <button type="button" bind:this={jsonButton} disabled={busy || total === 0} onclick={() => runExport('json')}
           title="Every field of every event, one JSON object per line, for up to 100,000 events.">Export JSON</button>
       </span>
-      <details class="export-menu" bind:open={menuOpen} bind:this={menu}>
+      <details class="export-menu" bind:open={menuOpen} bind:this={menu} onfocusout={(event) => { if (event.relatedTarget && !menu?.contains(event.relatedTarget as Node)) closeMenu(); }}>
         <summary>Export</summary>
         <div class="menu">
           <button type="button" disabled={busy || total === 0} onclick={() => { menuOpen = false; runExport('csv'); }}>CSV, the shown columns</button>

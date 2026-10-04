@@ -44,6 +44,7 @@
   --sev-3: #c2531a;
   --sev-4: #a3134e;
   --danger: #a3134e;
+  --scrim: rgb(22 33 30 / 0.4);
   --sans: 'Atkinson Hyperlegible Next', system-ui, -apple-system, 'Segoe UI', sans-serif;
   --mono: 'Atkinson Hyperlegible Mono', ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
   --t-12: 12px;
@@ -72,6 +73,7 @@
     --sev-3: #f2834a;
     --sev-4: #f2568e;
     --danger: #f2568e;
+  --scrim: rgb(0 0 0 / 0.55);
   }
 }
 
@@ -90,6 +92,7 @@
   --sev-3: #f2834a;
   --sev-4: #f2568e;
   --danger: #f2568e;
+  --scrim: rgb(0 0 0 / 0.55);
 }
 
 @media (prefers-reduced-motion: reduce) {

@@ -14,7 +14,7 @@
   import { pageTopLayer } from './layers';
   import NavRail from './NavRail.svelte';
   import TopBar from './TopBar.svelte';
-  import { ui } from './ui.svelte';
+  import { closeFields, ui } from './ui.svelte';
 
   let { db, schema, manifest, detected }: { db: Db; schema: Schema; manifest: Manifest; detected: number | null } = $props();
 
@@ -38,8 +38,7 @@
       if (layer === 'help') {
         ui.help = false;
       } else if (layer === 'fields') {
-        ui.fieldsOpen = false;
-        document.getElementById('fields-toggle')?.focus();
+        void closeFields();
       } else {
         return;
       }

@@ -1,11 +1,11 @@
 <script lang="ts">
-  import { onMount } from 'svelte';
+  import { onDestroy, onMount } from 'svelte';
   import type { Db } from '../engine/db';
   import type { Manifest } from '../engine/manifest';
   import type { Field, Schema } from '../engine/schema';
   import { view } from '../state/view.svelte';
   import { pageTopLayer } from '../ui/layers';
-  import { ui } from '../ui/ui.svelte';
+  import { closeFields, ui } from '../ui/ui.svelte';
   import { toggleColumn } from './columns';
   import FacetValues from './FacetValues.svelte';
   import { filterFields, percent } from './sidebar';
@@ -36,17 +36,48 @@
     return () => narrow.removeEventListener('change', widen);
   });
 
-  function close(): void {
+  const close = closeFields;
+
+  // A sheet on a phone is modal: while it is open the rest of the page cannot be reached,
+  // by touch, by Tab or by a screen reader's virtual cursor.
+  let sidebar = $state<HTMLElement>();
+  let narrow = $state(false);
+  $effect(() => {
+    const query = window.matchMedia('(max-width: 720px)');
+    narrow = query.matches;
+    const sync = () => (narrow = query.matches);
+    query.addEventListener('change', sync);
+    return () => query.removeEventListener('change', sync);
+  });
+  $effect(() => {
+    if (!ui.fieldsOpen || !narrow || !sidebar) return;
+    const held: Element[] = [];
+    // Everything beside the sheet, and beside each of its ancestors, except the sheet and its scrim.
+    for (let node: Element | null = sidebar; node && node !== document.body; node = node.parentElement) {
+      for (const sibling of node.parentElement?.children ?? []) {
+        if (sibling === node || sibling.hasAttribute('inert') || sibling.hasAttribute('data-sheet')) continue;
+        if (sibling.tagName === 'SCRIPT' || sibling.tagName === 'STYLE') continue;
+        sibling.setAttribute('inert', '');
+        held.push(sibling);
+      }
+    }
+    return () => held.forEach((element) => element.removeAttribute('inert'));
+  });
+
+  // Leaving Explore must not leave a sheet flagged open, which would count as a layer on other views.
+  onDestroy(() => {
     ui.fieldsOpen = false;
-    document.getElementById('fields-toggle')?.focus();
-  }
+  });
 
   function toggle(field: Field): void {
     open = open.includes(field.key) ? open.filter((key) => key !== field.key) : [...open, field.key];
   }
 </script>
 
-<aside id="field-sidebar" class="sidebar" class:open={ui.fieldsOpen} aria-label="Fields">
+{#if ui.fieldsOpen && narrow}
+  <button type="button" class="scrim" data-sheet aria-label="Close fields" onclick={close}></button>
+{/if}
+<aside id="field-sidebar" class="sidebar" class:open={ui.fieldsOpen} aria-label="Fields" data-sheet bind:this={sidebar}>
   <div class="head">
     <div class="title">
       <h2>Fields</h2>
@@ -114,5 +145,6 @@
     .sidebar { display: none; position: fixed; inset: 0 auto 0 0; width: min(320px, 85vw); z-index: 50; box-shadow: 4px 0 16px rgb(0 0 0 / 0.18); }
     .sidebar.open { display: block; }
     .close { display: inline-block; }
+    .scrim { position: fixed; inset: 0; z-index: 45; padding: 0; border: 0; cursor: default; background: var(--scrim); }
   }
 </style>
