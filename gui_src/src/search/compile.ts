@@ -1,6 +1,7 @@
 import { LEVELS } from '../engine/levels';
 import type { Field, Schema } from '../engine/schema';
 import { ident, likeEscape, str } from '../engine/sql';
+import { textPredicate } from '../engine/textMatches';
 import type { Node } from './parse';
 import { findShortcut, SHORTCUTS } from './shortcuts';
 import { SearchError } from './tokens';
@@ -75,7 +76,7 @@ function fullText(t: Term, schema: Schema, options: CompileOptions): string {
   if (options.textIndex) {
     // The index holds each event's values lowercased and joined by chr(31), as the scan below joins them,
     // so a pattern matches there exactly when it matches here.
-    return `_zl_uid IN (SELECT _zl_uid FROM fulltext WHERE _zl_text LIKE lower(${pattern(t, true)}) ESCAPE '\\')`;
+    return textPredicate(`lower(${pattern(t, true)})`);
   }
   // chr(31) separates the fields, so a quoted phrase cannot match across two of them; an unquoted * still can.
   const all = schema.fields.map((field) => ident(field.name)).join(', ');

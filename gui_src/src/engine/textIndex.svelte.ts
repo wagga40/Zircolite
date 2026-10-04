@@ -3,12 +3,12 @@ import type { Db } from './db';
 import type { Manifest } from './manifest';
 import { isSuperseded } from './queries';
 import { str } from './sql';
+import { TEXT_FILE } from './textMatches';
 
 export type TextIndexStatus = 'absent' | 'loading' | 'ready' | 'failed';
 
 export const textIndex = $state<{ status: TextIndexStatus; error: string | null }>({ status: 'absent', error: null });
 
-const TEXT_FILE = 'text.parquet';
 const LANE = 'text-index';
 
 /**

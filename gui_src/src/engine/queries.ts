@@ -1,3 +1,5 @@
+import { TextMatches } from './textMatches';
+
 /** A query the page no longer wants: a newer one replaced it in its lane, or the page was stopped. */
 export class Superseded extends Error {
   constructor() {
@@ -63,9 +65,11 @@ export class QueryScheduler {
   private readonly queue: Job[] = [];
   private running: Job | null = null;
   private readonly cache = new Map<string, Record<string, unknown>[]>();
+  private readonly matches: TextMatches;
 
   constructor(conn: Sender) {
     this.conn = conn;
+    this.matches = new TextMatches((sql) => this.collect(sql));
   }
 
   rows<T = Record<string, unknown>>(sql: string, options: QueryOptions = {}): Promise<T[]> {
@@ -125,17 +129,8 @@ export class QueryScheduler {
     const job = this.queue.shift() as Job;
     this.running = job;
     try {
-      const reader = await this.conn.send(job.sql);
-      const out: Record<string, unknown>[] = [];
-      for await (const batch of reader) {
-        if (!job.rows) continue;
-        for (const row of batch.toArray()) {
-          const object = row.toJSON();
-          const clean: Record<string, unknown> = {};
-          for (const key of Object.keys(object)) clean[key] = plain(object[key], key);
-          out.push(clean);
-        }
-      }
+      const sql = await this.matches.prepare(job.sql, () => job.cancelled, () => new Superseded());
+      const out = await this.collect(sql, job.rows);
       if (job.cancelled) throw new Superseded();
       if (job.cache) this.remember(job.sql, out);
       job.resolve(out);
@@ -145,6 +140,21 @@ export class QueryScheduler {
       this.running = null;
       void this.pump();
     }
+  }
+
+  private async collect(sql: string, keep = true): Promise<Record<string, unknown>[]> {
+    const reader = await this.conn.send(sql);
+    const out: Record<string, unknown>[] = [];
+    for await (const batch of reader) {
+      if (!keep) continue;
+      for (const row of batch.toArray()) {
+        const object = row.toJSON();
+        const clean: Record<string, unknown> = {};
+        for (const key of Object.keys(object)) clean[key] = plain(object[key], key);
+        out.push(clean);
+      }
+    }
+    return out;
   }
 
   private remember(sql: string, rows: Record<string, unknown>[]): void {
