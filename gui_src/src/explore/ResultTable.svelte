@@ -146,10 +146,11 @@
   }
 
   function open(position: number): void {
-    const row = rowAt(position);
-    if (!row) return;
     active = position;
-    view.uid = row._zl_uid;
+    const row = rowAt(position);
+    if (row) view.uid = row._zl_uid;
+    // A row whose page is still loading opens as soon as it arrives, instead of the key press vanishing.
+    else follow = true;
   }
 
   function onwindowkey(event: KeyboardEvent): void {
