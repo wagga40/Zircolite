@@ -1,0 +1,111 @@
+import { LEVELS } from '../engine/levels';
+import type { Field, Schema } from '../engine/schema';
+import { ident, likeEscape, str } from '../engine/sql';
+import type { Node } from './parse';
+import { findShortcut, SHORTCUTS } from './shortcuts';
+import { SearchError } from './tokens';
+
+type Term = Extract<Node, { kind: 'term' }>;
+
+const NUMBER = /^-?\d+(\.\d+)?$/;
+const HIT_RULES = 'SELECT h._zl_uid FROM hits h JOIN rules r ON r.rule_idx = h.rule_idx';
+// Zircolite stores tactics hyphenated, and maps the retired Defense Evasion to Stealth.
+const TACTIC_ALIASES: Record<string, string> = { 'defense-evasion': 'stealth' };
+
+export function compile(tree: Node | null, schema: Schema): string {
+  return tree === null ? 'TRUE' : node(tree, schema);
+}
+
+function node(n: Node, schema: Schema): string {
+  switch (n.kind) {
+    case 'and':
+      return `(${n.items.map((item) => node(item, schema)).join(' AND ')})`;
+    case 'or':
+      return `(${n.items.map((item) => node(item, schema)).join(' OR ')})`;
+    case 'not':
+      // A missing field compares as NULL, and NOT NULL would drop the very
+      // events a negation is meant to keep.
+      return `NOT coalesce(${node(n.item, schema)}, FALSE)`;
+    case 'term':
+      return term(n, schema);
+  }
+}
+
+function term(t: Term, schema: Schema): string {
+  if (t.field === null) return fullText(t, schema);
+  const shortcut = t.fieldQuoted ? undefined : findShortcut(t.field);
+  if (shortcut) return SHORTCUT_COMPILERS[shortcut.name](t, schema);
+  const field = schema.find(t.field);
+  if (!field) {
+    const near = schema.suggest(t.field);
+    throw new SearchError(`No field named ${t.field}${near.length ? `; did you mean ${near.join(', ')}?` : ''}`, t.start, t.end);
+  }
+  return fieldMatch(field, t);
+}
+
+function pattern(t: Term, contains: boolean): string {
+  const escaped = likeEscape(t.value);
+  const body = t.quoted ? escaped : escaped.replaceAll('*', '%');
+  return str(contains ? `%${body}%` : body);
+}
+
+function fieldMatch(field: Field, t: Term): string {
+  const column = ident(field.name);
+  const numeric = field.type !== 'VARCHAR';
+  if (t.op !== '=') {
+    if (!numeric) throw new SearchError(`${t.op} compares numbers, and ${field.name} holds text`, t.start, t.end);
+    if (!NUMBER.test(t.value)) throw new SearchError(`${t.op} compares numbers; ${field.name} needs a number, not "${t.value}"`, t.start, t.end);
+    return `${column} ${t.op} ${t.value}`;
+  }
+  if (numeric && NUMBER.test(t.value)) return `${column} = ${t.value}`;
+  const text = numeric ? `CAST(${column} AS VARCHAR)` : column;
+  return `${text} ILIKE ${pattern(t, false)} ESCAPE '\\'`;
+}
+
+function fullText(t: Term, schema: Schema): string {
+  if (schema.fields.length === 0) return 'FALSE';
+  // chr(31) separates the fields, so a phrase cannot match across two of them.
+  const all = schema.fields.map((field) => ident(field.name)).join(', ');
+  return `concat_ws(chr(31), ${all}) ILIKE ${pattern(t, true)} ESCAPE '\\'`;
+}
+
+function anyField(names: readonly string[], label: string) {
+  return (t: Term, schema: Schema): string => {
+    const found = new Map<string, Field>();
+    for (const name of names) {
+      const field = schema.find(name);
+      if (field) found.set(field.key, field);
+    }
+    if (found.size === 0) throw new SearchError(`This package has no ${label} field (looked for ${names.join(', ')})`, t.start, t.end);
+    return `(${[...found.values()].map((field) => fieldMatch(field, t)).join(' OR ')})`;
+  };
+}
+
+const SHORTCUT_COMPILERS: Record<string, (t: Term, schema: Schema) => string> = {
+  rule: (t) => {
+    const p = pattern(t, false);
+    return `_zl_uid IN (${HIT_RULES} WHERE r.title ILIKE ${p} ESCAPE '\\' OR r.id ILIKE ${p} ESCAPE '\\')`;
+  },
+  level: (t) => {
+    const rank = LEVELS.indexOf(t.value.toLowerCase() as (typeof LEVELS)[number]);
+    if (rank < 0) throw new SearchError(`level is one of ${LEVELS.join(', ')}`, t.start, t.end);
+    return `_zl_uid IN (${HIT_RULES} WHERE r.level_rank ${t.op} ${rank})`;
+  },
+  tactic: (t) => {
+    const name = t.value.toLowerCase().replaceAll('_', '-');
+    return `_zl_uid IN (${HIT_RULES} WHERE list_contains(r.tactics, ${str(TACTIC_ALIASES[name] ?? name)}))`;
+  },
+  technique: (t) => {
+    const id = t.value.toUpperCase();
+    if (!/^T\d{4}(\.\d{3})?$/.test(id)) throw new SearchError('A technique looks like T1234 or T1234.001', t.start, t.end);
+    return `_zl_uid IN (SELECT h._zl_uid FROM hits h JOIN (SELECT rule_idx, unnest(techniques) AS t FROM rules) r ` +
+      `ON r.rule_idx = h.rule_idx WHERE r.t = ${str(id)} OR r.t LIKE ${str(`${id}.%`)})`;
+  },
+  host: anyField(SHORTCUTS.find((s) => s.name === 'host')?.fields ?? [], 'host'),
+  user: anyField(SHORTCUTS.find((s) => s.name === 'user')?.fields ?? [], 'user'),
+};
+
+// A shortcut listed for help but not compiled would fail only when typed.
+for (const shortcut of SHORTCUTS) {
+  if (!(shortcut.name in SHORTCUT_COMPILERS)) throw new Error(`shortcut ${shortcut.name} has no compiler`);
+}
