@@ -12,27 +12,31 @@ const HIT_RULES = 'SELECT h._zl_uid FROM hits h JOIN rules r ON r.rule_idx = h.r
 // Zircolite stores tactics hyphenated, and maps the retired Defense Evasion to Stealth.
 const TACTIC_ALIASES: Record<string, string> = { 'defense-evasion': 'stealth' };
 
-export function compile(tree: Node | null, schema: Schema): string {
-  return tree === null ? 'TRUE' : node(tree, schema);
+export interface CompileOptions {
+  textIndex?: boolean;
 }
 
-function node(n: Node, schema: Schema): string {
+export function compile(tree: Node | null, schema: Schema, options: CompileOptions = {}): string {
+  return tree === null ? 'TRUE' : node(tree, schema, options);
+}
+
+function node(n: Node, schema: Schema, options: CompileOptions): string {
   switch (n.kind) {
     case 'and':
-      return `(${n.items.map((item) => node(item, schema)).join(' AND ')})`;
+      return `(${n.items.map((item) => node(item, schema, options)).join(' AND ')})`;
     case 'or':
-      return `(${n.items.map((item) => node(item, schema)).join(' OR ')})`;
+      return `(${n.items.map((item) => node(item, schema, options)).join(' OR ')})`;
     case 'not':
       // A missing field compares as NULL, and NOT NULL would drop the very
       // events a negation is meant to keep.
-      return `NOT coalesce(${node(n.item, schema)}, FALSE)`;
+      return `NOT coalesce(${node(n.item, schema, options)}, FALSE)`;
     case 'term':
-      return term(n, schema);
+      return term(n, schema, options);
   }
 }
 
-function term(t: Term, schema: Schema): string {
-  if (t.field === null) return fullText(t, schema);
+function term(t: Term, schema: Schema, options: CompileOptions): string {
+  if (t.field === null) return fullText(t, schema, options);
   const shortcut = t.fieldQuoted ? undefined : findShortcut(t.field);
   if (shortcut) return SHORTCUT_COMPILERS[shortcut.name](t, schema);
   const field = schema.find(t.field);
@@ -66,9 +70,14 @@ function fieldMatch(field: Field, t: Term): string {
   return `${text} ILIKE ${pattern(t, false)} ESCAPE '\\'`;
 }
 
-function fullText(t: Term, schema: Schema): string {
+function fullText(t: Term, schema: Schema, options: CompileOptions): string {
   if (schema.fields.length === 0) return 'FALSE';
-  // chr(31) separates the fields, so a phrase cannot match across two of them.
+  if (options.textIndex) {
+    // The index holds each event's values lowercased and joined by chr(31), as the scan below joins them,
+    // so a pattern matches there exactly when it matches here.
+    return `_zl_uid IN (SELECT _zl_uid FROM fulltext WHERE _zl_text LIKE lower(${pattern(t, true)}) ESCAPE '\\')`;
+  }
+  // chr(31) separates the fields, so a quoted phrase cannot match across two of them; an unquoted * still can.
   const all = schema.fields.map((field) => ident(field.name)).join(', ');
   return `concat_ws(chr(31), ${all}) ILIKE ${pattern(t, true)} ESCAPE '\\'`;
 }

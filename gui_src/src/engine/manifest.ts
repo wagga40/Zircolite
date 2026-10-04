@@ -3,7 +3,7 @@ export const PACKAGE_FORMAT = 1;
 
 export interface PackageFile {
   name: string;
-  kind: 'engine' | 'data';
+  kind: 'engine' | 'data' | 'index';
   bytes: number;
   sha256: string;
   chunks: string[];

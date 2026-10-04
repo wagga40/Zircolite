@@ -1,0 +1,48 @@
+import { type ChunkStore, loadScripts } from './chunks';
+import type { Db } from './db';
+import type { Manifest } from './manifest';
+import { isSuperseded } from './queries';
+import { str } from './sql';
+
+export type TextIndexStatus = 'absent' | 'loading' | 'ready' | 'failed';
+
+export const textIndex = $state<{ status: TextIndexStatus; error: string | null }>({ status: 'absent', error: null });
+
+const TEXT_FILE = 'text.parquet';
+const LANE = 'text-index';
+
+/**
+ * Load the full-text index once the page is ready. Until it is, a bare-word
+ * search scans every column, slowly but correctly; once it is, the search
+ * recompiles onto it.
+ */
+export async function loadTextIndex(
+  manifest: Pick<Manifest, 'files'>,
+  store: Pick<ChunkStore, 'take'>,
+  db: Pick<Db, 'register' | 'exec'>,
+  load: (sources: string[], loaded: () => void) => Promise<void> = loadScripts,
+): Promise<void> {
+  const file = manifest.files.find((entry) => entry.kind === 'index' && entry.name === TEXT_FILE);
+  textIndex.error = null;
+  if (!file) {
+    textIndex.status = 'absent';
+    return;
+  }
+  textIndex.status = 'loading';
+  try {
+    await load(file.chunks, () => undefined);
+    await db.register(file.name, new Uint8Array(await store.take(file).arrayBuffer()));
+    const view = `CREATE OR REPLACE VIEW fulltext AS SELECT * FROM read_parquet(${str(file.name)})`;
+    try {
+      await db.exec(view, { lane: LANE });
+    } catch (error) {
+      // Stop cancels every lane; opening a view is instant, so once more beats leaving the index unused.
+      if (!isSuperseded(error)) throw error;
+      await db.exec(view, { lane: LANE });
+    }
+    textIndex.status = 'ready';
+  } catch (error) {
+    textIndex.status = 'failed';
+    textIndex.error = error instanceof Error ? error.message : String(error);
+  }
+}

@@ -11,6 +11,7 @@
   import { SHORTCUTS, SYNTAX } from '../search/shortcuts';
   import { SearchError } from '../search/tokens';
   import { view } from '../state/view.svelte';
+  import { textIndex } from '../engine/textIndex.svelte';
   import { slowSearchNote } from './format';
   import { pageTopLayer } from './layers';
   import { ui } from './ui.svelte';
@@ -31,7 +32,7 @@
   // Kept in view while the slow search is the committed one, so later waits have a reason beside them.
   const slow = $derived.by(() => {
     try {
-      return slowSearchNote(parse(view.q), events);
+      return slowSearchNote(parse(view.q), events, textIndex.status === 'ready');
     } catch {
       return null;
     }

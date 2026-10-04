@@ -5,6 +5,7 @@
   import { type Db, openDb } from './engine/db';
   import { type Manifest, PACKAGE_FORMAT } from './engine/manifest';
   import { Schema } from './engine/schema';
+  import { loadTextIndex, textIndex } from './engine/textIndex.svelte';
   import { bindHash, view } from './state/view.svelte';
   import Loading from './ui/Loading.svelte';
   import Shell from './ui/Shell.svelte';
@@ -35,7 +36,7 @@
       throw new Error(`This viewer reads package format ${PACKAGE_FORMAT}; this package is format ${m.format}. Open it with the viewer of the Zircolite version that made it, or re-create the package with this version.`);
     }
     manifest = m;
-    const scripts = m.files.flatMap((file) => file.chunks);
+    const scripts = m.files.filter((file) => file.kind !== 'index').flatMap((file) => file.chunks);
     total = scripts.length;
     phase = 'Loading the data';
     await loadScripts(scripts, () => {
@@ -62,6 +63,7 @@
     bindHash(view);
     db = opened;
     document.title = 'Zircolite — ready';
+    void loadTextIndex(m, store, opened);
   }
 
   onMount(() => {
@@ -77,4 +79,4 @@
 {:else}
   <Loading {phase} {loaded} {total} {failure} {manifest} />
 {/if}
-<output id="engine-check" hidden data-events={engineEvents ?? ''} data-expected={manifest?.totals.events ?? ''}></output>
+<output id="engine-check" hidden data-events={engineEvents ?? ''} data-expected={manifest?.totals.events ?? ''} data-text-index={textIndex.status}></output>

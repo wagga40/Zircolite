@@ -36,7 +36,8 @@ export function inputCount(manifest: { parts: Pick<Manifest['parts'][number], 's
 export const SLOW_FULL_TEXT = 200_000;
 
 /** What to tell someone whose search reads every field of a large package, or null when it will be quick. */
-export function slowSearchNote(tree: Node | null, events: number): string | null {
+export function slowSearchNote(tree: Node | null, events: number, indexed = false): string | null {
   if (events <= SLOW_FULL_TEXT || !hasFullText(tree)) return null;
+  if (indexed) return `Searching every field of ${formatCount(events)} events with the full-text index; this can take a few seconds.`;
   return `Searching every field of ${formatCount(events)} events; this can take a minute. A field search such as CommandLine:*mimikatz* is much faster.`;
 }

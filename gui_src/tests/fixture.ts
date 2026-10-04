@@ -1,5 +1,5 @@
 import { DuckDBInstance } from '@duckdb/node-api';
-import { EVENT_LEVELS_SQL } from '../src/engine/sql';
+import { EVENT_LEVELS_SQL, ident } from '../src/engine/sql';
 import { type Field, Schema } from '../src/engine/schema';
 
 /** Columns of the fixture's events table, as a package manifest would list them. */
@@ -46,6 +46,8 @@ const SETUP = [
   'CREATE TABLE hits (rule_idx INTEGER, _zl_uid BIGINT)',
   'INSERT INTO hits VALUES (0, 4294967297), (1, 1), (2, 3), (3, 4294967297)',
   EVENT_LEVELS_SQL.replace('CREATE OR REPLACE TEMP TABLE', 'CREATE TABLE'),
+  // Built the way zircolite/package.py write_text builds text.parquet.
+  `CREATE TABLE fulltext AS SELECT _zl_uid, lower(concat_ws(chr(31), ${FIELDS.map((f) => `CAST(${ident(f.name)} AS VARCHAR)`).join(', ')})) AS _zl_text FROM events`,
 ];
 
 export interface Fixture {

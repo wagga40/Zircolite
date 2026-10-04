@@ -7,6 +7,7 @@
   import { SearchError } from '../search/tokens';
   import { view } from '../state/view.svelte';
   import { combineWhere, DETECTIONS_PREDICATE, timePredicate } from '../state/where';
+  import { textIndex } from '../engine/textIndex.svelte';
   import { slowSearchNote } from '../ui/format';
   import { shownColumns } from './columns';
   import DetailDrawer from './DetailDrawer.svelte';
@@ -22,14 +23,14 @@
     if (!view.q) return { tree: null, sql: null };
     try {
       const tree = parse(view.q);
-      return { tree, sql: compile(tree, schema) };
+      return { tree, sql: compile(tree, schema, { textIndex: textIndex.status === 'ready' }) };
     } catch (problem) {
       if (problem instanceof SearchError) return { tree: null, sql: 'FALSE' };
       throw problem;
     }
   });
   const search = $derived(compiled.sql);
-  const slow = $derived(slowSearchNote(compiled.tree, manifest.totals.events));
+  const slow = $derived(slowSearchNote(compiled.tree, manifest.totals.events, textIndex.status === 'ready'));
   const time = $derived(timePredicate(view.t));
   // The table, facets and drawer read every filter; the strip draws time itself.
   const where = $derived(combineWhere([search, time, view.d ? DETECTIONS_PREDICATE : null]));
