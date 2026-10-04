@@ -10,7 +10,7 @@
   import { typing } from '../ui/keys';
   import { ui } from '../ui/ui.svelte';
   import { csvExport, ExportTooLarge, jsonExport, limitNote, prepareExport } from './export';
-  import { COUNT_SQL, ensureVisible, geometry, HEAD, HEIGHT_CAP, idsSql, nextPage, PAGE, pageSql, type PageRow, ROW, wheelScroll } from './table';
+  import { COUNT_SQL, ensureVisible, geometry, HEAD, HEIGHT_CAP, idsSql, nextPage, PAGE, pageSql, type PageRow, ROW, wheelDelta, wheelPosition } from './table';
 
   let { db, schema, manifest, where, columns, slow }: {
     db: Db;
@@ -46,8 +46,14 @@
   // Plain counters: tickets for the newest request, never read by the template.
   let build = 0;
   let cancel = false;
-  // A page that failed is not asked for again until the list is rebuilt, or each completion would retry it.
+  // Pages that errored: cleared when the set of visible pages changes (one retry each) and on every rebuild.
   const failed = new Set<string>();
+  // Pages a Stop cancelled: cleared only by a rebuild, which Run again triggers, so nothing re-requests after a stop.
+  const stoppedPages = new Set<string>();
+  // Whether the error on screen came from a page rather than a rebuild; a loaded page clears only its own kind.
+  let pageFailure = false;
+  // Unrounded wheel position, kept so 1 px trackpad deltas past the height cap are not rounded away.
+  let wheelAt: number | null = null;
 
   const viewport = $derived(Math.max(0, height - HEAD));
   const slice = $derived(geometry(total, viewport, scrollTop));
@@ -77,12 +83,14 @@
     const mine = ++build;
     busy = true;
     failure = null;
+    pageFailure = false;
     void (async () => {
       try {
         await db.exec(sql, { lane: 'results' });
         const [counts] = await db.rows<{ n: number; d: number }>(COUNT_SQL, { cache: false, lane: 'results' });
         if (mine !== build) return;
         failed.clear();
+        stoppedPages.clear();
         pages = new Map();
         total = counts.n;
         detected = counts.d;
@@ -96,6 +104,7 @@
         if (mine !== build) return;
         // Rows and counts of the previous filter must not stay on screen under the new one.
         failed.clear();
+        stoppedPages.clear();
         pages = new Map();
         total = 0;
         detected = 0;
@@ -103,14 +112,16 @@
         follow = false;
         current = mine;
         failure = isSuperseded(error) ? null : message(error);
+        pageFailure = false;
         busy = false;
       }
     })();
   });
 
-  // A page that failed is asked for again once the rows on screen move.
+  // A failed page is asked for again when the visible pages change, once per change; scrolling within them does not retry.
+  const visiblePages = $derived(slice.count === 0 ? '' : `${Math.floor(slice.first / PAGE)}-${Math.floor((slice.first + slice.count - 1) / PAGE)}`);
   $effect(() => {
-    void slice.first;
+    void visiblePages;
     failed.clear();
   });
 
@@ -121,7 +132,7 @@
   // so none is requested until it is ready.
   $effect(() => {
     if (inflight !== null || current === 0 || current !== build || total === 0) return;
-    const page = nextPage(slice, (p) => pages.has(pageKey(p)) || failed.has(pageKey(p)));
+    const page = nextPage(slice, (p) => pages.has(pageKey(p)) || failed.has(pageKey(p)) || stoppedPages.has(pageKey(p)));
     if (page === null) return;
     const fields = columns;
     const mine = current;
@@ -140,16 +151,24 @@
             next.delete(old);
           }
           pages = next;
+          if (pageFailure) {
+            failure = null;
+            pageFailure = false;
+          }
         }
         done();
       },
       (error: unknown) => {
         if (mine === build) {
-          // A stopped page request is not asked for again until Run again rebuilds the list.
-          failed.add(key);
           // A step waiting for that page cannot land.
           follow = false;
-          if (!isSuperseded(error)) failure = message(error);
+          if (isSuperseded(error)) {
+            stoppedPages.add(key);
+          } else {
+            failed.add(key);
+            failure = message(error);
+            pageFailure = true;
+          }
         }
         done();
       },
@@ -163,9 +182,9 @@
     const onwheel = (event: WheelEvent) => {
       if (event.ctrlKey || total * ROW <= HEIGHT_CAP) return;
       event.preventDefault();
-      const dy = event.deltaMode === 1 ? event.deltaY * ROW : event.deltaY;
       target.scrollLeft += event.deltaX;
-      target.scrollTop = wheelScroll(target.scrollTop, dy, total, viewport);
+      wheelAt = wheelPosition(wheelAt, target.scrollTop, wheelDelta(event, viewport), total, viewport);
+      target.scrollTop = Math.round(wheelAt);
     };
     target.addEventListener('wheel', onwheel, { passive: false });
     return () => target.removeEventListener('wheel', onwheel);

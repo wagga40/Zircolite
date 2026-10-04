@@ -116,3 +116,21 @@ export function wheelScroll(scrollTop: number, deltaY: number, total: number, vi
   const exact = Math.min(1, Math.max(0, scrollTop / range)) * span + deltaY / row;
   return Math.min(1, Math.max(0, exact / span)) * range;
 }
+
+/** A wheel event's vertical travel in pixels: lines count as rows, pages as the viewport. */
+export function wheelDelta(event: { deltaY: number; deltaMode: number }, viewport: number, row = ROW): number {
+  if (event.deltaMode === 1) return event.deltaY * row;
+  if (event.deltaMode === 2) return event.deltaY * viewport;
+  return event.deltaY;
+}
+
+/**
+ * The next unrounded scroll position of a wheel turn. A scrollTop holds whole
+ * pixels, and past the height cap a row is a few pixels, so a slow trackpad's
+ * 1 px deltas would round away one by one. The unrounded position is kept
+ * between turns and dropped when the real scrollTop moved by other means.
+ */
+export function wheelPosition(kept: number | null, scrollTop: number, deltaY: number, total: number, viewport: number): number {
+  const from = kept !== null && Math.abs(Math.round(kept) - scrollTop) < 1 ? kept : scrollTop;
+  return wheelScroll(from, deltaY, total, viewport);
+}

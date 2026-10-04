@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type { Field } from '../src/engine/schema';
-import { COUNT_SQL, ensureVisible, geometry, HEIGHT_CAP, idsSql, nextPage, PAGE, pageSql, ROW, wheelScroll } from '../src/explore/table';
+import { COUNT_SQL, ensureVisible, geometry, HEIGHT_CAP, idsSql, nextPage, PAGE, pageSql, ROW, wheelDelta, wheelPosition, wheelScroll } from '../src/explore/table';
 import { type Fixture, openFixture, schema } from './fixture';
 
 let db: Fixture;
@@ -108,5 +108,41 @@ describe('wheel past the height cap', () => {
     expect((top / (HEIGHT_CAP - 560)) * (total - 560 / ROW)).toBeCloseTo(3, 6);
     expect(wheelScroll(0, -ROW, total, 560)).toBe(0);
     expect(wheelScroll(HEIGHT_CAP - 560, ROW, total, 560)).toBe(HEIGHT_CAP - 560);
+  });
+});
+
+describe('wheel details', () => {
+  it('moves up below the cap', () => {
+    expect(wheelScroll(100, -40, 100, 280)).toBe(60);
+  });
+
+  it('clamps at the end of a real list', () => {
+    const total = 1_868_682;
+    expect(wheelScroll(HEIGHT_CAP - 560 - 1, 10 * ROW, total, 560)).toBe(HEIGHT_CAP - 560);
+    expect(wheelScroll(3, -10 * ROW, total, 560)).toBe(0);
+  });
+
+  it('reads lines as rows and pages as the viewport', () => {
+    expect(wheelDelta({ deltaY: 5, deltaMode: 0 }, 560)).toBe(5);
+    expect(wheelDelta({ deltaY: 3, deltaMode: 1 }, 560)).toBe(3 * ROW);
+    expect(wheelDelta({ deltaY: 1, deltaMode: 2 }, 560)).toBe(560);
+  });
+
+  it('does not round away twenty one-pixel deltas past the cap', () => {
+    const total = 1_868_682;
+    const viewport = 560;
+    let kept: number | null = null;
+    let scrollTop = 0;
+    for (let i = 0; i < 20; i++) {
+      kept = wheelPosition(kept, scrollTop, 1, total, viewport);
+      scrollTop = Math.round(kept);
+    }
+    const rows = (kept as number / (HEIGHT_CAP - viewport)) * (total - viewport / ROW);
+    expect(rows).toBeCloseTo(20 / ROW, 6);
+  });
+
+  it('starts again from the real position after another kind of scroll', () => {
+    const next = wheelPosition(1000.4, 5000, 0, 1_868_682, 560);
+    expect(next).toBe(5000);
   });
 });
