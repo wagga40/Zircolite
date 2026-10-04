@@ -162,7 +162,7 @@ def test_correlation_evidence_keeps_each_events_spelling(tmp_path):
 
 @pytest.mark.parametrize("layout", LAYOUTS)
 def test_the_time_field_keeps_the_runs_name(tmp_path, layout):
-    # Timesketch and the Mini-GUI read the time by the name --timefield gives it.
+    # Timesketch and the package viewer read the time by the name --timefield gives it.
     inputs = write_inputs(tmp_path / "inputs", {
         "a.json": [{"CommandLine": "whoami a", "timestamp": "2026-01-01T00:00:00Z"}],
         "b.json": [{"CommandLine": "whoami b", "Timestamp": "2026-01-01T00:01:00Z"}],

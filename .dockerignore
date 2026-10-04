@@ -52,5 +52,5 @@ flattened_events_*.json
 fields.json
 tmp-*
 zircolite.tar
-zircogui-output-*
+zircolite-package-*
 *.evtx

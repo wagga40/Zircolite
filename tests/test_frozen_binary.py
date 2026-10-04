@@ -665,13 +665,13 @@ class TestAssets:
         assert rendered.strip(), "the template rendered nothing"
         assert rendered == (source.cwd / "splunk.json").read_text(encoding="utf-8")
 
-    def test_package_contains_the_gui(self, runner, inputs):
+    def test_package_contains_the_viewer(self, runner, inputs):
         run = runner.binary(
             "-e", str(FIXTURES / "sample_bitsadmin.evtx"),
             "-r", str(inputs / "match_all.json"), "-o", "detected.json", "--package",
         )
 
-        packages = list(run.cwd.glob("zircogui-output-*.zip"))
+        packages = list(run.cwd.glob("zircolite-package-*.zip"))
         assert len(packages) == 1, f"expected one package, found {packages}"
         with zipfile.ZipFile(packages[0]) as package:
             assert "index.html" in package.namelist()

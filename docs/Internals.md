@@ -73,7 +73,7 @@ Ingestion records each row whose event spelled such a field otherwise, one row p
 event in two tables (`field_spellings` and `logs_spelling`), and every match and
 correlation evidence event is printed with its own spelling; CSV output has a column for
 each spelling. The run's time field is the exception: it is always printed under the name
-`--timefield` gives it, because the Timesketch template and the Mini-GUI look it up by
+`--timefield` gives it, because the Timesketch template and the package viewer look it up by
 that name. Per-file, unified and parallel runs therefore print an event the same way,
 whichever files share its database. A database saved with `--dbfile` keeps both tables,
 and `--db-input` uses them; rule SQL never reads them, and a query whose result has no
@@ -275,7 +275,7 @@ All the logic lives in the `zircolite/` package. `zircolite.py` is a shim that c
 | `parallel.py` | `MemoryAwareParallelProcessor` — worker scaling and memory throttling |
 | `sqlscan.py` | Quote-aware rule-SQL reader, and the OR-chain depth repair |
 | `run_config.py` | `SETTINGS` — one row per option: YAML key, default, merge rule |
-| `templates.py` | `TemplateEngine` (Jinja2 output), `ZircoliteGuiGenerator` (Mini-GUI) |
+| `templates.py` | `TemplateEngine` (Jinja2 output) |
 | `formats.py` | Input format registry: flag, YAML value, extension, encoding, reader |
 | `extractor.py` | `EvtxExtractor` — log line / XML element → event dict |
 | `config.py` | Dataclasses passed to the engine (`ProcessingConfig`, `ExtractorConfig`, …) |
@@ -308,10 +308,7 @@ Only a value already rooted at the shipped directory falls back, so
 `-r myrules/windows.json` keeps reporting itself missing instead of quietly loading
 `rules/windows.json`.
 
-Two paths deliberately do not follow that rule. `--package` reads the ZircoGui template
-and `gui/zircogui.zip` from the bundle only: the two have to come from the same build, and
-a copy of just one of them in the working directory would pair a new `data.js` with an old
-GUI. `-U` writes to the installed `rules/` — the directory a later run will actually read
+Two paths deliberately do not follow that rule. `--package` takes the viewer from `gui/viewer/` of Zircolite's own files, as one unit, never from the working directory. `-U` writes to the installed `rules/` — the directory a later run will actually read
 — and falls back to `./rules` only when that one cannot be written to.
 
 `bundled_asset` returns the first root that holds the file:

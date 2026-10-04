@@ -27,6 +27,7 @@ from unittest.mock import patch
 import pytest
 import yaml
 
+from tests.package_fixtures import parquet_rows
 from zircolite import DetectionResult, assets
 from zircolite import cli as zircolite_script
 from zircolite.cli import _apply_detection_result, discover_files
@@ -1257,98 +1258,112 @@ Alert: {{ elem.title }} ({{ elem.rule_level }})
 
 
 class TestCLIPackage:
-    """Tests for --package and --package-dir options."""
+    """--package writes a viewer package holding every event and every hit."""
 
-    def test_package_creates_zip_when_detections(self, tmp_path):
-        """Test that --package creates a zircogui-output-*.zip in cwd when there are detections."""
-        template_path = WORKSPACE_ROOT / "templates" / "exportForZircoGui.tmpl"
-        gui_zip_path = WORKSPACE_ROOT / "gui" / "zircogui.zip"
-        if not template_path.is_file() or not gui_zip_path.is_file():
-            pytest.skip("templates/exportForZircoGui.tmpl or gui/zircogui.zip not found (run task gui to build)")
+    RULE: ClassVar[dict] = {"title": "Test Rule", "id": "test-001", "level": "high", "tags": ["attack.execution"],
+            "rule": ["SELECT * FROM logs WHERE CommandLine LIKE '%powershell%'"]}
 
+    def run(self, tmp_path, *extra, events=None, rules=None, expect_exit=None):
         events_file = tmp_path / "events.json"
-        events_file.write_text(
-            '{"Event": {"System": {"EventID": 1}, "EventData": {"CommandLine": "powershell.exe"}}}'
-        )
+        events_file.write_text("\n".join(json.dumps(e) for e in (events or [
+            {"Event": {"System": {"EventID": 1, "Channel": "Security"}, "EventData": {"CommandLine": "powershell.exe"}}},
+            {"Event": {"System": {"EventID": 2, "Channel": "Other"}, "EventData": {"CommandLine": "cmd.exe"}}},
+        ])), encoding="utf-8")
         ruleset_file = tmp_path / "ruleset.json"
-        ruleset_file.write_text(json.dumps([{
-            "title": "Test Rule",
-            "id": "test-001",
-            "level": "high",
-            "tags": [],
-            "rule": ["SELECT * FROM logs WHERE CommandLine LIKE '%powershell%'"]
-        }]))
+        ruleset_file.write_text(json.dumps(rules if rules is not None else [self.RULE]), encoding="utf-8")
         config_file = tmp_path / "config.json"
         config_file.write_text(json.dumps({
-            "exclusions": [],
-            "useless": [],
-            "mappings": {
-                "Event.System.EventID": "EventID",
-                "Event.EventData.CommandLine": "CommandLine"
-            },
-            "alias": {},
-            "split": {},
-            "transforms_enabled": False,
-            "transforms": {}
-        }))
-
+            "exclusions": [], "useless": [], "alias": {}, "split": {}, "transforms_enabled": False, "transforms": {},
+            "mappings": {"Event.System.EventID": "EventID", "Event.System.Channel": "Channel",
+                         "Event.EventData.CommandLine": "CommandLine"}}), encoding="utf-8")
+        package_dir = tmp_path / "pkg"
+        package_dir.mkdir(exist_ok=True)
+        argv = ['zircolite.py', '-e', str(events_file), '-r', str(ruleset_file), '-c', str(config_file), '-j',
+                '-o', str(tmp_path / "out.json"), '--package', '--package-dir', str(package_dir),
+                *get_log_arg(tmp_path), *extra]
         original_cwd = os.getcwd()
+        os.chdir(tmp_path)
         try:
-            os.chdir(WORKSPACE_ROOT)
-            with patch('sys.argv', ['zircolite.py', '-e', str(events_file), '-r', str(ruleset_file), '-c', str(config_file), '-j', '-o', str(tmp_path / "out.json"), '--package', '-n', *get_log_arg(tmp_path)]):
-                zircolite_script.main()
-
-            zips = list(WORKSPACE_ROOT.glob("zircogui-output-*.zip"))
-            assert len(zips) >= 1, "Expected at least one zircogui-output-*.zip in workspace root"
+            with patch('sys.argv', argv):
+                if expect_exit is None:
+                    zircolite_script.main()
+                else:
+                    with pytest.raises(SystemExit) as excinfo:
+                        zircolite_script.main()
+                    assert excinfo.value.code == expect_exit
         finally:
             os.chdir(original_cwd)
+        return package_dir
 
-    def test_package_dir_used_when_provided(self, tmp_path):
-        """Test that --package-dir is used as the destination for the generated zip."""
-        template_path = WORKSPACE_ROOT / "templates" / "exportForZircoGui.tmpl"
-        gui_zip_path = WORKSPACE_ROOT / "gui" / "zircogui.zip"
-        if not template_path.is_file() or not gui_zip_path.is_file():
-            pytest.skip("templates/exportForZircoGui.tmpl or gui/zircogui.zip not found (run task gui to build)")
+    def test_package_holds_every_event_and_the_hits(self, tmp_path, read_package):
+        package_dir = self.run(tmp_path)
 
-        package_dir = tmp_path / "pkg_out"
-        package_dir.mkdir()
+        (target,) = package_dir.glob("zircolite-package-*.zip")
+        manifest, files = read_package(target)
+        assert manifest["totals"]["events"] == 2
+        assert manifest["totals"]["hits"] == 1 and manifest["totals"]["rules_matched"] == 1
+        _, rows = parquet_rows(files["events.parquet"], tmp_path, "SELECT CommandLine FROM t ORDER BY _zl_uid")
+        assert rows == [("powershell.exe",), ("cmd.exe",)]
+        assert not list(package_dir.glob("tmp-zircolite-package-*"))
 
-        events_file = tmp_path / "events.json"
-        events_file.write_text(
-            '{"Event": {"System": {"EventID": 1}, "EventData": {"CommandLine": "powershell.exe"}}}'
-        )
-        ruleset_file = tmp_path / "ruleset.json"
-        ruleset_file.write_text(json.dumps([{
-            "title": "Test Rule",
-            "id": "test-001",
-            "level": "high",
-            "tags": [],
-            "rule": ["SELECT * FROM logs WHERE CommandLine LIKE '%powershell%'"]
-        }]))
-        config_file = tmp_path / "config.json"
-        config_file.write_text(json.dumps({
-            "exclusions": [],
-            "useless": [],
-            "mappings": {
-                "Event.System.EventID": "EventID",
-                "Event.EventData.CommandLine": "CommandLine"
-            },
-            "alias": {},
-            "split": {},
-            "transforms_enabled": False,
-            "transforms": {}
-        }))
+    def test_package_written_without_detections(self, tmp_path, read_package):
+        package_dir = self.run(tmp_path, rules=[{**self.RULE, "rule": ["SELECT * FROM logs WHERE 0"]}])
 
-        original_cwd = os.getcwd()
-        try:
-            os.chdir(WORKSPACE_ROOT)
-            with patch('sys.argv', ['zircolite.py', '-e', str(events_file), '-r', str(ruleset_file), '-c', str(config_file), '-j', '-o', str(tmp_path / "out.json"), '--package', '--package-dir', str(package_dir), '-n', *get_log_arg(tmp_path)]):
-                zircolite_script.main()
+        (target,) = package_dir.glob("zircolite-package-*.zip")
+        manifest, _ = read_package(target)
+        assert manifest["totals"]["events"] == 2 and manifest["totals"]["hits"] == 0
 
-            zips = list(package_dir.glob("zircogui-output-*.zip"))
-            assert len(zips) >= 1, f"Expected at least one zircogui-output-*.zip in {package_dir}"
-        finally:
-            os.chdir(original_cwd)
+    def test_package_turns_the_event_filter_off(self, tmp_path, read_package):
+        security_only = {**self.RULE, "rule": ["SELECT * FROM logs WHERE Channel = 'Security' AND EventID = '1'"]}
+
+        package_dir = self.run(tmp_path, rules=[security_only])
+
+        (target,) = package_dir.glob("zircolite-package-*.zip")
+        assert read_package(target)[0]["totals"]["events"] == 2
+        assert "--package keeps every event" in (tmp_path / "test.log").read_text(encoding="utf-8")
+
+    def test_package_with_csv_links_hits(self, tmp_path, read_package):
+        package_dir = self.run(tmp_path, "--csv")
+
+        (target,) = package_dir.glob("zircolite-package-*.zip")
+        assert read_package(target)[0]["totals"]["hits"] == 1
+
+    def test_missing_viewer_exits_before_processing(self, tmp_path, monkeypatch):
+        from zircolite import package
+
+        def missing():
+            raise package.PackageError("the viewer is missing app.js")
+
+        monkeypatch.setattr(package, "find_viewer", missing)
+        self.run(tmp_path, expect_exit=1)
+
+        assert not (tmp_path / "out.json").exists()
+
+    def test_export_failure_exits_one_with_detections_written(self, tmp_path, monkeypatch):
+        from zircolite.package_spool import PackageError, PartWriter
+
+        def broken(self, connection):
+            raise PackageError("disk full")
+
+        monkeypatch.setattr(PartWriter, "export_events", broken)
+        package_dir = self.run(tmp_path, expect_exit=1)
+
+        assert json.loads((tmp_path / "out.json").read_text(encoding="utf-8"))[0]["title"] == "Test Rule"
+        assert list(package_dir.iterdir()) == []
+
+    def test_matches_are_not_held_in_memory_for_the_package(self, tmp_path, monkeypatch):
+        seen = {}
+        original = zircolite_script.ProcessingContext
+
+        def capture(**kwargs):
+            seen.update(kwargs)
+            return original(**kwargs)
+
+        monkeypatch.setattr(zircolite_script, "ProcessingContext", capture)
+        self.run(tmp_path)
+
+        assert seen["retain_results"] is False
+        assert seen["event_filter"] is None
 
 
 class TestCLINoLogOption:
@@ -3646,7 +3661,7 @@ class TestCLIContradictoryTransformFlags:
 
 
 class TestCLIPackageFailureIsReported:
-    """A Mini-GUI package the user asked for and did not get is a failed run."""
+    """A package the user asked for and did not get is a failed run."""
 
     def test_missing_package_dir_exits_non_zero(self, tmp_path):
         """--package-dir used to fall back to the current directory silently."""
@@ -3673,6 +3688,7 @@ class TestCLIPackageFailureIsReported:
                 with pytest.raises(SystemExit) as excinfo:
                     zircolite_script.main()
             assert excinfo.value.code != 0
+            assert not (tmp_path / "out.json").exists()
         finally:
             os.chdir(original_cwd)
 

@@ -640,7 +640,6 @@ do not overwrite each other.
 | `exportForELK.tmpl` | NDJSON | Elasticsearch / ELK |
 | `exportForZinc.tmpl` | Bulk JSON | OpenSearch/Elasticsearch bulk API — each record preceded by an `index` action line |
 | `exportForTimesketch.tmpl` | NDJSON | Timesketch; shortcut `--timesketch` |
-| `exportForZircoGui.tmpl` | JavaScript | Mini-GUI `data.js`, used by `--package` |
 | `exportNDJSON.tmpl` | NDJSON | Generic: rule metadata plus event fields |
 | `exportSummaryCSV.tmpl` | CSV | One row per rule, for triage |
 | `exportForSARIF.tmpl` | JSON | [SARIF](https://sarifweb.azurewebsites.net/), for CI pipelines |
@@ -670,43 +669,14 @@ output:
 > `exportForAttackNavigator.tmpl` and `exportForSARIF.tmpl`, become invalid when a second
 > document is concatenated onto the first.
 
-## Mini-GUI
+### Package viewer
 
-![](pics/gui.jpg)
-
-The Mini-GUI displays and searches results, entirely offline. It is built on
-[DataTables](https://datatables.net/) and the
-[SB Admin 2 theme](https://github.com/StartBootstrap/startbootstrap-sb-admin-2).
-
-```shell
-python3 zircolite.py --evtx sample.evtx --ruleset rules/rules_windows_merged.json \
-    --package --package-dir /path/to/output
-```
-
-`--package` produces `zircogui-output-<RAND>.zip` with `index.html` at its root. No package
-is created when there are no detections. `--package-dir` must name an existing directory.
-
-It needs `gui/zircogui.zip` from Zircolite's own files, never from the working directory.
-From source that is the repository's `gui/`. A
-[standalone binary](Usage.md#standalone-binaries) looks in the `gui/` beside the executable
-first and then in the copy under `_internal/`, so dropping an updated `gui/zircogui.zip`
-next to the executable overrides the built-in Mini-GUI. Removing it restores the bundled
-copy. Keep the complete binary package, including `_internal/`.
-
-To build it by hand instead, render `data.js` and drop it into the unpacked archive:
-
-```shell
-python3 zircolite.py --evtx sample.evtx --ruleset rules/rules_windows_merged.json \
-    --template templates/exportForZircoGui.tmpl --templateOutput data.js
-7z x gui/zircogui.zip
-mv data.js zircogui/
-```
-
-Then open `zircogui/index.html` — the shipped archive unpacks under that directory, unlike
-the one `--package` builds — and click a MITRE ATT&CK category or an alert level.
-
-> [!WARNING]
-> The Mini-GUI was not built to handle large datasets.
+`--package` (`-G`) writes `zircolite-package-<RAND>.zip` to `--package-dir`, or the working
+directory. Extract it and open `index.html` in a web browser: the page runs entirely offline and
+makes no network requests. The package holds **every** ingested event, not only the matches,
+with the detections linked to them, so `--package` turns log-source event filtering off and
+the zip should be shared like the logs themselves. Chromium-based browsers and Safari are the
+fastest on large packages; Firefox works but is slower.
 
 ## Other Tools
 

@@ -57,8 +57,8 @@ def test_the_entry_point_holds_no_logic():
 @pytest.mark.parametrize("parts", [
     ("config", "config.yaml"),
     ("rules", "rules_windows_merged.json"),
-    ("templates", "exportForZircoGui.tmpl"),
-    ("gui", "zircogui.zip"),
+    ("templates", "exportForSplunk.tmpl"),
+    ("gui", "viewer", "viewer.json"),
 ])
 def test_bundled_assets_resolve_from_another_directory(parts, tmp_path, monkeypatch):
     """The defaults are relative paths, so a run from elsewhere must still find them."""
@@ -91,15 +91,15 @@ def test_bundled_asset_prefers_the_copy_beside_the_binary(tmp_path, monkeypatch)
     unpacked = tmp_path / "unpacked"
     beside = tmp_path / "beside"
     for root in (unpacked, beside):
-        (root / "gui").mkdir(parents=True)
-        (root / "gui" / "zircogui.zip").write_bytes(b"")
+        (root / "gui" / "viewer").mkdir(parents=True)
+        (root / "gui" / "viewer" / "viewer.json").write_bytes(b"")
 
     monkeypatch.setattr(sys, "executable", str(beside / "Zircolite"))
     monkeypatch.setattr(sys, "_MEIPASS", str(unpacked), raising=False)
 
-    resolved = assets.bundled_asset("gui", "zircogui.zip")
+    resolved = assets.bundled_asset("gui", "viewer", "viewer.json")
 
-    assert resolved == beside / "gui" / "zircogui.zip"
+    assert resolved == beside / "gui" / "viewer" / "viewer.json"
 
 
 def test_bundled_asset_names_a_path_a_user_can_act_on_when_nothing_holds_the_file(tmp_path, monkeypatch):

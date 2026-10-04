@@ -75,7 +75,7 @@ tasks:
       - rm -f zircolite.log
       - rm -f fields.json
       - rm -f zircolite.tar
-      - rm -f zircogui-output-*
+      - rm -f zircolite-package-*.zip
 
   save:
     desc: Save the Docker image to an archive
