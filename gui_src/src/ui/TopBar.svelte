@@ -1,0 +1,37 @@
+<script lang="ts">
+  import type { Db } from '../engine/db';
+  import type { Manifest } from '../engine/manifest';
+  import type { Schema } from '../engine/schema';
+  import RunDetails from './RunDetails.svelte';
+  import SearchBar from './SearchBar.svelte';
+  import { applyTheme, loadTheme, nextTheme, type Theme } from './theme';
+
+  let { db, schema, manifest }: { db: Db; schema: Schema; manifest: Manifest } = $props();
+  let theme = $state<Theme>(loadTheme());
+  let details: RunDetails;
+  const warnings = $derived(manifest.warnings.length);
+  const LABEL: Record<Theme, string> = { system: 'Auto', light: 'Light', dark: 'Dark' };
+
+  $effect(() => applyTheme(theme));
+</script>
+
+<header class="top">
+  <span class="brand">Zircolite</span>
+  <SearchBar {db} {schema} />
+  <button type="button" onclick={() => details.open()}>
+    Run details{#if warnings}<span class="badge">{warnings} {warnings === 1 ? 'warning' : 'warnings'}</span>{/if}
+  </button>
+  <button type="button" aria-label={`Theme: ${LABEL[theme]}. Change theme`} onclick={() => (theme = nextTheme(theme))}>{LABEL[theme]}</button>
+</header>
+<RunDetails bind:this={details} {manifest} />
+
+<style>
+  .top { display: flex; align-items: flex-start; gap: 12px; padding: 10px 16px; background: var(--panel); border-bottom: 1px solid var(--rule); }
+  .brand { font-weight: 600; font-size: var(--t-18); padding-top: 4px; letter-spacing: 0.01em; }
+  button { background: none; border: 1px solid var(--rule); border-radius: var(--radius); padding: 6px 10px; cursor: pointer; white-space: nowrap; }
+  .badge { margin-left: 6px; color: var(--sev-3); }
+  @media (max-width: 720px) {
+    .top { flex-wrap: wrap; }
+    .brand { width: 100%; }
+  }
+</style>
