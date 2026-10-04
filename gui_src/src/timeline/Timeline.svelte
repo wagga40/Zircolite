@@ -2,6 +2,7 @@
   import { onMount, untrack } from 'svelte';
   import type { Db } from '../engine/db';
   import type { Manifest } from '../engine/manifest';
+  import { LEVELS } from '../engine/levels';
   import { isSuperseded } from '../engine/queries';
   import type { Schema } from '../engine/schema';
   import { appendRaw } from '../search/edit';
@@ -39,6 +40,22 @@
   // The range this view last wrote, so its own write does not move the window back.
   let written: string | null = null;
 
+  let listing = $state(false);
+  const LIST_CAP = 500;
+  // The marks in view by lane, for the list that stands in for the canvas on a keyboard or a screen reader.
+  const listed = $derived.by(() => {
+    const groups = laneList.flatMap((lane) => {
+      const inLane = placed.filter((mark) => mark.lane === lane).sort((a, b) => a.first - b.first);
+      return inLane.length ? [{ lane, marks: inLane, total: inLane.reduce((sum, mark) => sum + mark.n, 0) }] : [];
+    });
+    let room = LIST_CAP;
+    const shown = groups.map((group) => {
+      const marks = group.marks.slice(0, room);
+      room -= marks.length;
+      return { ...group, marks };
+    });
+    return { shown, count: placed.length };
+  });
   const filtered = $derived(query.whereWithoutTime !== 'TRUE');
   const placed = $derived<Placed[]>(marks && span && width > 0 ? place(marks.rows, marks, span, laneList, width) : []);
 
@@ -89,12 +106,12 @@
     };
   });
 
-  // Ctrl, ⌘ or Shift with the wheel zooms; a bare wheel scrolls the page, so the timeline never traps it.
+  // Ctrl or ⌘ with the wheel zooms; a bare wheel scrolls the page, so the timeline never traps it.
   $effect(() => {
     const target = canvas;
     if (!target) return;
     const onwheel = (event: WheelEvent) => {
-      if (!span || !extent || !(event.ctrlKey || event.metaKey || event.shiftKey)) return;
+      if (!span || !extent || !(event.ctrlKey || event.metaKey)) return;
       event.preventDefault();
       const rect = target.getBoundingClientRect();
       const step = Math.min(0.25, 0.05 + Math.abs(event.deltaY) / 600);
@@ -214,10 +231,7 @@
       click: (e) => {
         const rect = target.getBoundingClientRect();
         const mark = hit(placed, e.clientX - rect.left, e.clientY - rect.top);
-        if (mark) {
-          pinned = mark;
-          view.uid = mark.uid;
-        }
+        if (mark) pin(mark);
       },
       cancel: () => {
         span = start;
@@ -237,6 +251,11 @@
     else return;
     event.preventDefault();
     event.stopPropagation();
+  }
+
+  function pin(mark: Mark): void {
+    pinned = mark;
+    view.uid = mark.uid;
   }
 
   function showAll(mark: Mark): void {
@@ -302,7 +321,7 @@
       ctx.lineTo(x, bottom);
       ctx.stroke();
       // On a narrow canvas the gridlines stay but a label that would touch its neighbour is left out.
-      const label = formatTick(t, width);
+      const label = formatTick(t, width, s);
       const half = ctx.measureText(label).width / 2;
       if (x - half < labelEnd + 8 || x + half > w) continue;
       labelEnd = x + half;
@@ -362,6 +381,36 @@
         {onkeydown}
       ></canvas>
     </div>
+    <p class="key dims" aria-busy={pending}>
+      Mark colour is the highest detection level:
+      {#each LEVELS as level, rank (level)}<span class="swatch"><i style:background={`var(--sev-${rank})`}></i>{level}</span>{/each}
+    </p>
+    <div class="list" class:stale={pending && marks !== null} aria-busy={pending}>
+      <button type="button" class="toggle" aria-expanded={listing} aria-controls="timeline-list" onclick={() => (listing = !listing)}>List the marks</button>
+      {#if listing}
+        <div id="timeline-list">
+          {#if listed.count === 0}
+            <p class="note">No marks in this window.</p>
+          {:else}
+            {#each listed.shown as group (group.lane)}
+              {#if group.marks.length}
+                <h2>{laneLabel(group.lane)}, {formatCount(group.total)} {group.total === 1 ? 'detection' : 'detections'}</h2>
+                <ul>
+                  {#each group.marks as mark (`${mark.lane}:${mark.b}`)}
+                    <li>
+                      <button type="button" class="mark" onclick={() => pin(mark)}>
+                        {isoTime(mark.first)} to {isoTime(mark.last)} UTC, {formatCount(mark.n)} {mark.n === 1 ? 'event' : 'events'}, highest level {levelName(mark.lvl) ?? 'unknown'}
+                      </button>
+                    </li>
+                  {/each}
+                </ul>
+              {/if}
+            {/each}
+            {#if listed.count > LIST_CAP}<p class="note">First {LIST_CAP} of {formatCount(listed.count)} marks. Zoom in to list the rest.</p>{/if}
+          {/if}
+        </div>
+      {/if}
+    </div>
     {#if pinned}
       <p class="pinned" role="status">
         {formatCount(pinned.n)} {pinned.n === 1 ? 'event' : 'events'} under {laneLabel(pinned.lane)}, highest level {levelName(pinned.lvl) ?? 'unknown'},
@@ -388,5 +437,13 @@
   /* The open drawer covers the right 560px, and the pinned mark's note must stay clear of it. */
   @media (min-width: 1000px) { .pinned { max-width: calc(100% - 592px); } }
   .pinned { margin: 0 16px 16px; padding: 8px 12px; border-left: 3px solid var(--signal); background: var(--panel); font-size: var(--t-13); }
+  .key { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; margin: 0 16px 8px; font-size: var(--t-12); color: var(--ink-2); }
+  .swatch { display: inline-flex; align-items: center; gap: 4px; }
+  .swatch i { display: inline-block; width: 8px; height: 8px; border-radius: 50%; }
+  .list { margin: 0 16px 12px; font-size: var(--t-13); }
+  .toggle { min-height: 28px; background: none; border: 1px solid var(--rule); border-radius: var(--radius); padding: 3px 10px; cursor: pointer; }
+  .list h2 { margin: 12px 0 4px; font-size: var(--t-13); font-weight: 600; }
+  .list ul { margin: 0; padding: 0; list-style: none; }
+  .mark { display: block; width: 100%; min-height: 28px; text-align: left; background: none; border: 0; border-bottom: 1px solid var(--rule); padding: 3px 4px; cursor: pointer; font-variant-numeric: tabular-nums; }
   .failure { color: var(--danger); margin: 12px 16px; }
 </style>

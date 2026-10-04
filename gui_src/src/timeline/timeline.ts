@@ -1,4 +1,5 @@
 import { tacticLabel } from '../overview/overview';
+import { TIME_LIMIT } from '../state/hash';
 import { timePredicate } from '../state/where';
 
 export const LANE_H = 24;
@@ -18,7 +19,7 @@ const BUCKET_PX = 4;
 const MAX_GRIDLINES = 40;
 const DAY = 86_400_000;
 const YEAR = 365 * DAY;
-const TICKS = [1e3, 5e3, 15e3, 30e3, 60e3, 3e5, 9e5, 18e5, 36e5, 108e5, 216e5, DAY, 7 * DAY, 31 * DAY, 92 * DAY, YEAR, 10 * YEAR];
+const TICKS = [1e3, 5e3, 15e3, 30e3, 60e3, 3e5, 9e5, 18e5, 36e5, 108e5, 216e5, DAY, 7 * DAY, 31 * DAY, 92 * DAY, 183 * DAY, YEAR, 10 * YEAR];
 
 export interface Span {
   from: number;
@@ -31,16 +32,54 @@ export function tickStep(span: number): number {
   return Math.max(TICKS[TICKS.length - 1], Math.ceil(span / 10));
 }
 
+const DATE_RANGE = 8.64e15;
+
+function monthStart(index: number): number {
+  const date = new Date(0);
+  date.setUTCFullYear(Math.floor(index / 12), ((index % 12) + 12) % 12, 1);
+  return date.getTime();
+}
+
+/** Ticks on calendar boundaries once a step is a week or more; sub-day steps are already aligned to UTC. */
 export function ticks(span: Span): number[] {
   const step = tickStep(span.to - span.from);
   const out: number[] = [];
-  for (let t = Math.ceil(span.from / step) * step; t <= span.to && out.length < MAX_GRIDLINES; t += step) out.push(t);
+  const inRange = Math.abs(span.from) < DATE_RANGE && Math.abs(span.to) < DATE_RANGE;
+  if (step < 7 * DAY || !inRange) {
+    for (let t = Math.ceil(span.from / step) * step; t <= span.to && out.length < MAX_GRIDLINES; t += step) out.push(t);
+    return out;
+  }
+  if (step < 28 * DAY) {
+    // Weeks begin on Monday: the epoch day was a Thursday.
+    const day = Math.ceil(span.from / DAY) * DAY;
+    const weekday = (Math.floor(day / DAY) + 3) % 7;
+    for (let t = day + (((7 - weekday) % 7) + 7) % 7 * DAY; t <= span.to && out.length < MAX_GRIDLINES; t += 7 * DAY) out.push(t);
+    return out;
+  }
+  const months = step >= YEAR ? 12 * Math.max(1, Math.round(step / YEAR)) : step >= 183 * DAY ? 6 : step >= 92 * DAY ? 3 : 1;
+  const first = new Date(span.from);
+  let index = Math.floor((first.getUTCFullYear() * 12 + first.getUTCMonth()) / months) * months;
+  while (monthStart(index) < span.from) index += months;
+  for (; monthStart(index) <= span.to && out.length < MAX_GRIDLINES; index += months) out.push(monthStart(index));
   return out;
 }
 
-/** Axis labels in UTC, as every time in the viewer is. */
-export function formatTick(ms: number, span: number): string {
+/**
+ * Axis labels in UTC, as every time in the viewer is. Given the window being
+ * drawn, a label never leaves the year open: months and days carry it where
+ * the window could make it ambiguous.
+ */
+export function formatTick(ms: number, span: number, window?: Span): string {
   const iso = new Date(ms).toISOString();
+  if (window) {
+    const step = tickStep(span);
+    if (step >= YEAR) return iso.slice(0, 4);
+    if (step >= 28 * DAY) return iso.slice(0, 7);
+    const crosses = new Date(window.from).getUTCFullYear() !== new Date(window.to).getUTCFullYear();
+    if (step >= DAY) return crosses ? iso.slice(0, 10) : iso.slice(5, 10);
+    if (span >= DAY) return `${crosses ? iso.slice(0, 10) : iso.slice(5, 10)} ${iso.slice(11, 16)}`;
+    return iso.slice(11, step < 60_000 ? 19 : 16);
+  }
   if (span < 60_000) return iso.slice(11, 19);
   if (span < DAY) return iso.slice(11, 16);
   if (span < YEAR) return iso.slice(5, 10);
@@ -71,6 +110,8 @@ export function clamp(span: Span, extent: Span): Span {
   const hi = extent.to + width / 2;
   let from = Math.max(span.from, lo);
   if (from + width > hi) from = hi - width;
+  // The page's time range cannot hold a time past TIME_LIMIT, so the window stops there and always matches it.
+  from = Math.min(Math.max(from, -TIME_LIMIT), TIME_LIMIT - width);
   return { from, to: from + width };
 }
 

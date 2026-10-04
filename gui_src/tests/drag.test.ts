@@ -61,4 +61,13 @@ describe('drag', () => {
     target.dispatchEvent(pointer('pointerup', 40));
     expect(calls).toEqual(['move 20', 'cancel']);
   });
+
+  it('cancels when the pointer capture is lost', () => {
+    const { target, calls, start } = setup();
+    start(10);
+    target.dispatchEvent(pointer('pointermove', 30));
+    target.dispatchEvent(new Event('lostpointercapture'));
+    target.dispatchEvent(pointer('pointerup', 40));
+    expect(calls).toEqual(['move 20', 'cancel']);
+  });
 });

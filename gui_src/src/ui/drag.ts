@@ -42,11 +42,14 @@ export function drag(start: PointerEvent, target: HTMLElement, handlers: DragHan
     target.removeEventListener('pointermove', onMove);
     target.removeEventListener('pointerup', onUp);
     target.removeEventListener('pointercancel', onCancel);
+    target.removeEventListener('lostpointercapture', onCancel);
     window.removeEventListener('keydown', onKey, true);
     if (target.hasPointerCapture(start.pointerId)) target.releasePointerCapture(start.pointerId);
   }
   target.addEventListener('pointermove', onMove);
   target.addEventListener('pointerup', onUp);
   target.addEventListener('pointercancel', onCancel);
+  // Capture taken away mid-gesture (the element was removed, another capture began) ends it without a release.
+  target.addEventListener('lostpointercapture', onCancel);
   window.addEventListener('keydown', onKey, true);
 }

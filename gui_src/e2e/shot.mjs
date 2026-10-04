@@ -41,7 +41,14 @@ try {
     await page.locator('#result-grid').focus();
     await page.keyboard.press('Enter');
   }
-  await page.waitForTimeout(1500);
+  const marks = page.locator('#timeline-marks');
+  if (hash.startsWith('#/timeline')) {
+    while (!(await marks.getAttribute('data-count'))) {
+      if (Date.now() - started > 180_000) throw new Error('the timeline did not settle');
+      await page.waitForTimeout(100);
+    }
+  }
+  await page.waitForTimeout(hash.startsWith('#/timeline') ? 300 : 1500);
   await page.screenshot({ path: out });
   console.log(out);
 } finally {

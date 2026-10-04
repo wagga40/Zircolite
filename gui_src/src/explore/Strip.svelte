@@ -198,6 +198,8 @@
   }
 
   function onpointerdown(event: PointerEvent): void {
+    // The helper ignores other buttons, so state set before it would be left behind.
+    if (event.button !== 0) return;
     const bin = binOf(event);
     if (bin === null || !canvas || !series) return;
     const bins = series.bins;

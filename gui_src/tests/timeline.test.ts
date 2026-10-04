@@ -35,6 +35,47 @@ describe('axis', () => {
   });
 });
 
+describe('calendar ticks', () => {
+  const at = (iso: string) => Date.parse(iso);
+  const iso = (list: number[]) => list.map((t) => new Date(t).toISOString());
+
+  it('puts year ticks on 01-01', () => {
+    const list = iso(ticks({ from: at('2017-03-05T00:00:00Z'), to: at('2025-09-01T00:00:00Z') }));
+    expect(list.length).toBeGreaterThan(3);
+    for (const t of list) expect(t.slice(4)).toBe('-01-01T00:00:00.000Z');
+  });
+
+  it('puts month ticks on the 1st, quarters on months 0, 3, 6 and 9', () => {
+    const months = iso(ticks({ from: at('2021-01-20T00:00:00Z'), to: at('2021-06-10T00:00:00Z') }));
+    expect(months.map((t) => t.slice(0, 10))).toEqual(['2021-02-01', '2021-03-01', '2021-04-01', '2021-05-01', '2021-06-01']);
+    const quarters = iso(ticks({ from: at('2019-02-10T00:00:00Z'), to: at('2021-06-10T00:00:00Z') }));
+    for (const t of quarters) expect([1, 4, 7, 10]).toContain(Number(t.slice(5, 7)));
+    for (const t of quarters) expect(t.slice(8, 10)).toBe('01');
+  });
+
+  it('puts week ticks on Mondays', () => {
+    const list = ticks({ from: at('2021-06-02T05:00:00Z'), to: at('2021-08-10T00:00:00Z') });
+    expect(list.length).toBeGreaterThan(3);
+    for (const t of list) expect([new Date(t).getUTCDay(), t % 86_400_000]).toEqual([1, 0]);
+  });
+
+  it('keeps the year on a window across New Year', () => {
+    const window = { from: at('2020-12-20T00:00:00Z'), to: at('2021-01-20T00:00:00Z') };
+    const span = window.to - window.from;
+    expect(formatTick(at('2020-12-28T00:00:00Z'), span, window)).toBe('2020-12-28');
+    expect(formatTick(at('2021-01-04T00:00:00Z'), span, window)).toBe('2021-01-04');
+    const inside = { from: at('2021-03-01T00:00:00Z'), to: at('2021-03-31T00:00:00Z') };
+    expect(formatTick(at('2021-03-08T00:00:00Z'), inside.to - inside.from, inside)).toBe('03-08');
+    expect(formatTick(at('2021-02-01T00:00:00Z'), 150 * DAY, window)).toBe('2021-02');
+    expect(formatTick(at('2021-01-01T00:00:00Z'), 5000 * DAY, window)).toBe('2021');
+  });
+
+  it('never leaves the window past what the page can hold', () => {
+    const wide = pan({ from: 0, to: H }, 1e18, { from: 0, to: 1e18 });
+    expect(Math.abs(wide.to)).toBeLessThanOrEqual(8_640_000_000_000_000);
+  });
+});
+
 describe('zoom and pan', () => {
   const extent = { from: SIX, to: SIX + 2 * H };
 
