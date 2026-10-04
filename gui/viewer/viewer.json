@@ -1,0 +1,16 @@
+{
+  "data_format": 1,
+  "version": "0.1.0",
+  "duckdb_wasm": "1.32.0",
+  "copy": [
+    "index.html",
+    "app.js",
+    "app.css",
+    "THIRD_PARTY_NOTICES.txt"
+  ],
+  "wrap": [
+    "duckdb-eh.wasm.gz",
+    "duckdb-browser-eh.worker.js",
+    "parquet.duckdb_extension.wasm"
+  ]
+}

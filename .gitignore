@@ -38,6 +38,7 @@ tmp
 *.7z
 *.dmg
 *.gz
+!gui/viewer/duckdb-eh.wasm.gz
 *.iso
 *.jar
 *.rar
