@@ -29,6 +29,8 @@
   let raw = $state(false);
   let status = $state('');
   let heading = $state<HTMLHeadingElement>();
+  let element = $state<HTMLElement>();
+  let opener: HTMLElement | null = null;
   let ticket = 0;
   let focused = false;
   const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -56,8 +58,14 @@
   $effect(() => {
     const uid = view.uid;
     const mine = ++ticket;
+    if (uid !== null && opener === null && document.activeElement instanceof HTMLElement && !element?.contains(document.activeElement)) {
+      opener = document.activeElement;
+    }
     // Closing keeps what is shown until the outro ends, so the drawer does not flash empty while it slides away.
     if (uid === null) {
+      // Back closes the drawer as well as Escape does; either way focus goes back where it came from.
+      if (opener?.isConnected && (document.activeElement === document.body || element?.contains(document.activeElement))) opener.focus();
+      opener = null;
       focused = false;
       return;
     }
@@ -95,8 +103,10 @@
   }
 
   function close(): void {
+    const back = opener?.isConnected ? opener : document.getElementById('result-grid');
+    opener = null;
     view.uid = null;
-    document.getElementById('result-grid')?.focus();
+    back?.focus();
   }
 
   function onkeydown(event: KeyboardEvent): void {
@@ -131,7 +141,7 @@
 <svelte:window {onkeydown} />
 
 {#if view.uid !== null}
-  <aside class="drawer" aria-label="Event details" transition:fly={{ x: 48, duration: reduced ? 0 : 120 }} onoutroend={settle}>
+  <aside class="drawer" bind:this={element} aria-label="Event details" transition:fly={{ x: 48, duration: reduced ? 0 : 120 }} onoutroend={settle}>
     <header>
       <div class="dims" aria-busy={stale}>
         <h2 tabindex="-1" bind:this={heading}>{title}</h2>

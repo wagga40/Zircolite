@@ -63,7 +63,7 @@ function csvRecords(text) {
 
 async function scenario(page, steps) {
   const state = { build: 0 };
-  await page.goto(url);
+  await page.goto(`${url}#/explore`);
   await poll(page, async () => /ready|error/.test(await page.title()), 'the viewer', 240_000);
   check((await page.title()) === 'Zircolite — ready', `the viewer reports: ${await page.title()}`);
   const expected = Number(await page.locator('#engine-check').getAttribute('data-expected'));

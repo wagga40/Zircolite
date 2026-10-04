@@ -25,7 +25,7 @@ describe('View.apply', () => {
 
   it('round-trips through snapshot', () => {
     const view = new View();
-    const next = { q: 'x', t: [1, 2] as [number, number], d: true, cols: ['A'], uid: 7, desc: true };
+    const next = { route: 'timeline' as const, q: 'x', t: [1, 2] as [number, number], d: true, cols: ['A'], uid: 7, desc: true };
     view.apply(next);
     expect(view.snapshot()).toEqual(next);
   });
@@ -60,7 +60,7 @@ describe('bindHash', () => {
 
   it('replaces a non-canonical hash with the canonical one', () => {
     const { stop } = setup('');
-    expect(location.replace).toHaveBeenCalledWith('#/explore');
+    expect(location.replace).toHaveBeenCalledWith('#/overview');
     stop();
   });
 
@@ -68,7 +68,34 @@ describe('bindHash', () => {
     const { view, stop } = setup('#/explore');
     view.q = 'x';
     flushSync();
-    expect(location.hash).toBe(encode({ ...EMPTY, q: 'x' }));
+    expect(location.hash).toBe(encode({ ...EMPTY, route: 'explore', q: 'x' }));
+    stop();
+  });
+
+  it('pushes a new search and replaces a step to another event', () => {
+    const { view, stop } = setup('#/explore?uid=1');
+    location.replace.mockClear();
+    view.uid = 2;
+    flushSync();
+    expect(location.replace).toHaveBeenCalledWith(encode({ ...EMPTY, route: 'explore', uid: 2 }));
+    location.replace.mockClear();
+    view.q = 'x';
+    flushSync();
+    expect(location.replace).not.toHaveBeenCalled();
+    expect(location.hash).toBe(encode({ ...EMPTY, route: 'explore', q: 'x', uid: 2 }));
+    stop();
+  });
+
+  it('replaces when told to, once', () => {
+    const { view, stop } = setup('#/timeline');
+    location.replace.mockClear();
+    view.replaceNext = true;
+    view.t = [1, 2];
+    flushSync();
+    expect(location.replace).toHaveBeenCalledTimes(1);
+    view.t = [1, 3];
+    flushSync();
+    expect(location.replace).toHaveBeenCalledTimes(1);
     stop();
   });
 

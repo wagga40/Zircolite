@@ -1,4 +1,10 @@
+export type Route = 'overview' | 'detections' | 'explore' | 'timeline';
+
+/** The views, in the order the nav rail lists them. */
+export const ROUTES: readonly Route[] = ['overview', 'detections', 'explore', 'timeline'];
+
 export interface ViewHash {
+  route: Route;
   q: string;
   /** Epoch milliseconds, start inclusive, end exclusive. */
   t: [number, number] | null;
@@ -9,14 +15,21 @@ export interface ViewHash {
   desc: boolean;
 }
 
-export const EMPTY: ViewHash = { q: '', t: null, d: false, cols: null, uid: null, desc: false };
+export const EMPTY: ViewHash = { route: 'overview', q: '', t: null, d: false, cols: null, uid: null, desc: false };
 
-const PREFIX = '#/explore';
+/**
+ * JavaScript dates end at ±8.64e15 ms. The strip and the timeline lay bins
+ * out past a range's ends by up to a year, so a range from a link must stay
+ * that far inside, or drawing it throws and the page stops.
+ */
+export const TIME_LIMIT = 8_640_000_000_000_000 - 400 * 86_400_000;
+
 const INTEGER = /^-?\d+$/;
+const HASH = /^#\/([a-z]+)(?:\?(.*))?$/;
 
 // encodeURIComponent throws on a lone surrogate, which would break the hash-writing effect.
 function wellFormed(text: string): string {
-  return text.replace(/[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/g, '\uFFFD');
+  return text.replace(/[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/g, '�');
 }
 
 export function encode(state: ViewHash): string {
@@ -27,13 +40,17 @@ export function encode(state: ViewHash): string {
   if (state.cols) parts.push(`cols=${state.cols.map((c) => encodeURIComponent(wellFormed(c))).join(',')}`);
   if (state.uid !== null) parts.push(`uid=${state.uid}`);
   if (state.desc) parts.push('desc=1');
-  return parts.length ? `${PREFIX}?${parts.join('&')}` : PREFIX;
+  const path = `#/${state.route}`;
+  return parts.length ? `${path}?${parts.join('&')}` : path;
 }
 
 export function decode(hash: string): ViewHash {
   const state: ViewHash = { ...EMPTY };
-  const query = hash.startsWith(PREFIX) ? hash.slice(PREFIX.length).replace(/^\?/, '') : '';
-  for (const part of query.split('&')) {
+  const match = HASH.exec(hash);
+  if (!match) return state;
+  // A view this viewer does not have opens as the overview, with the link's filters kept.
+  if ((ROUTES as readonly string[]).includes(match[1])) state.route = match[1] as Route;
+  for (const part of (match[2] ?? '').split('&')) {
     const eq = part.indexOf('=');
     if (eq < 0) continue;
     const key = part.slice(0, eq);
@@ -45,7 +62,7 @@ export function decode(hash: string): ViewHash {
         const bounds = raw.split('~');
         if (bounds.length === 2 && bounds.every((b) => INTEGER.test(b))) {
           const [start, end] = bounds.map(Number);
-          if (Number.isSafeInteger(start) && Number.isSafeInteger(end) && start < end) state.t = [start, end];
+          if (Math.abs(start) <= TIME_LIMIT && Math.abs(end) <= TIME_LIMIT && start < end) state.t = [start, end];
         }
       } else if (key === 'd') {
         state.d = raw === '1';
@@ -62,4 +79,12 @@ export function decode(hash: string): ViewHash {
     }
   }
   return state;
+}
+
+/** Back steps through what a person asked and the views they visited, not through every event they read. */
+export function historyMode(previous: ViewHash, next: ViewHash): 'push' | 'replace' {
+  if (previous.route !== next.route || previous.q !== next.q || previous.d !== next.d) return 'push';
+  if (encode({ ...EMPTY, t: previous.t }) !== encode({ ...EMPTY, t: next.t })) return 'push';
+  if ((previous.uid === null) !== (next.uid === null)) return 'push';
+  return 'replace';
 }

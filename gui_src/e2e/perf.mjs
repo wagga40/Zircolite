@@ -46,7 +46,7 @@ try {
 
   const report = {};
   const started = performance.now();
-  await page.goto(pathToFileURL(path.resolve(directory, 'index.html')).href);
+  await page.goto(pathToFileURL(path.resolve(directory, 'index.html')).href + '#/explore');
   await poll(page, async () => /ready|error/.test(await page.title()));
   report.ready_ms = Math.round(performance.now() - started);
   report.title = await page.title();

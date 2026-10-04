@@ -1,5 +1,5 @@
 // Screenshots an unpacked package in Chromium for visual review.
-// Usage: npm run shot -- <unpacked dir> <out.png> [--width N] [--theme light|dark] [--hash '#/explore?...'] [--open-first]
+// Usage: npm run shot -- <unpacked dir> <out.png> [--width N] [--theme light|dark] [--hash '#/overview?...'] (default #/explore) [--open-first]
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { chromium } from 'playwright';
@@ -15,7 +15,7 @@ const option = (name, fallback) => {
 };
 const width = Number(option('--width', '1440'));
 const theme = option('--theme', 'light');
-const hash = option('--hash', '');
+const hash = option('--hash', '#/explore');
 const browser = await chromium.launch();
 try {
   const page = await browser.newPage({ viewport: { width, height: width < 600 ? 844 : 900 }, colorScheme: theme });
