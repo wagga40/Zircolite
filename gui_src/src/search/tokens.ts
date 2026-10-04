@@ -43,7 +43,16 @@ export function tokenize(input: string): Token[] {
           i++;
         }
       }
-      if (i >= input.length) throw new SearchError('This quote is never closed', start, input.length);
+      if (i >= input.length) {
+        const escapedEnd = /\\"$/.test(input.slice(start, input.length).trimEnd());
+        throw new SearchError(
+          escapedEnd
+            ? 'This quote is never closed: a backslash before a quote escapes it, so write \\\\ to end a value with a backslash'
+            : 'This quote is never closed',
+          start,
+          input.length,
+        );
+      }
       i++;
       tokens.push({ kind: 'quoted', text, start, end: i });
       valueNext = false;

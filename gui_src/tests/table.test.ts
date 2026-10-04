@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type { Field } from '../src/engine/schema';
-import { COUNT_SQL, ensureVisible, geometry, HEIGHT_CAP, idsSql, nextPage, PAGE, pageSql, ROW } from '../src/explore/table';
+import { COUNT_SQL, ensureVisible, geometry, HEIGHT_CAP, idsSql, nextPage, PAGE, pageSql, ROW, wheelScroll } from '../src/explore/table';
 import { type Fixture, openFixture, schema } from './fixture';
 
 let db: Fixture;
@@ -93,5 +93,20 @@ describe('nextPage', () => {
 
   it('asks for nothing when no row is visible', () => {
     expect(nextPage({ first: 0, count: 0 }, new Set())).toBeNull();
+  });
+});
+
+describe('wheel past the height cap', () => {
+  it('moves by pixels below the cap, as the browser would', () => {
+    expect(wheelScroll(100, 84, 100, 280)).toBe(184);
+  });
+
+  it('moves by the rows a notch would move below the cap, however long the list', () => {
+    const total = 1_868_682;
+    const top = wheelScroll(0, 3 * ROW, total, 560);
+    // Three rows down: the proportional position maps back to row 3.
+    expect((top / (HEIGHT_CAP - 560)) * (total - 560 / ROW)).toBeCloseTo(3, 6);
+    expect(wheelScroll(0, -ROW, total, 560)).toBe(0);
+    expect(wheelScroll(HEIGHT_CAP - 560, ROW, total, 560)).toBe(HEIGHT_CAP - 560);
   });
 });

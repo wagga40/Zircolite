@@ -29,6 +29,8 @@
   let failure = $state<string | null>(null);
   let raw = $state(false);
   let status = $state('');
+  // Stepping with j and k leaves focus in the table, so the new event is announced instead.
+  let spoken = $state('');
   let heading = $state<HTMLHeadingElement>();
   let element = $state<HTMLElement>();
   let opener: HTMLElement | null = null;
@@ -37,10 +39,15 @@
   const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
 
   // A drawer closing keeps its content for the slide; only a switch to another event makes it stale.
-  const stale = $derived(view.uid !== null && !isCurrent(loaded, view.uid));
+  // A failed load is not a pending one, so the header stays readable beside its error.
+  const stale = $derived(view.uid !== null && failure === null && !isCurrent(loaded, view.uid));
   const groups = $derived(loaded ? groupEntries(loaded.entries) : []);
   const host = $derived(loaded ? hostEntry(loaded.entries) : null);
-  const title = $derived(loaded ? [loaded.head._zl_channel ?? 'Event', loaded.head._zl_eventid ?? ''].join(' ').trim() : 'Event');
+  const title = $derived(loaded ? titleOf(loaded) : 'Event');
+
+  function titleOf(l: Loaded): string {
+    return [l.head._zl_channel ?? 'Event', l.head._zl_eventid ?? ''].join(' ').trim();
+  }
 
   async function load(uid: number): Promise<Loaded> {
     const [head] = await db.rows<Head>(headSql(schema, uid), { lane: 'drawer' });
@@ -75,7 +82,9 @@
     status = '';
     load(uid).then(
       (result) => {
-        if (mine === ticket) loaded = result;
+        if (mine !== ticket) return;
+        loaded = result;
+        if (focused) spoken = `${titleOf(result)}, ${result.head._zl_t === null ? 'no time' : `${isoTime(result.head._zl_t)} UTC`}`;
       },
       (error: unknown) => {
         if (mine === ticket) {
@@ -144,6 +153,7 @@
 
 {#if view.uid !== null}
   <aside class="drawer" bind:this={element} aria-label="Event details" transition:fly={{ x: 48, duration: reduced ? 0 : 120 }} onoutroend={settle}>
+    <p class="visually-hidden" aria-live="polite">{spoken}</p>
     <header>
       <div class="dims" aria-busy={stale}>
         <h2 tabindex="-1" bind:this={heading}>{title}</h2>
@@ -155,7 +165,7 @@
     </header>
 
     {#if failure}
-      <p class="note failure" role="alert">This event could not be read: {failure}</p>
+      <p class="note failure" role="alert">This event could not be read: {failure}. Choose it again, or reload the page if this repeats.</p>
     {:else if !loaded}
       <p class="note">Reading the event</p>
     {:else}
@@ -218,6 +228,7 @@
   .drawer { position: absolute; top: 0; right: 0; bottom: 0; z-index: 40; width: min(560px, 100%); overflow: auto; background: var(--panel); border-left: 1px solid var(--rule); box-shadow: -6px 0 18px rgb(0 0 0 / 0.14); padding: 0 18px 24px; }
   header { position: sticky; top: 0; z-index: 1; display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; padding: 14px 0 10px; background: var(--panel); border-bottom: 1px solid var(--rule); }
   h2 { margin: 0; font-size: var(--t-18); font-weight: 600; }
+  h2 { width: fit-content; }
   h2:focus { outline: none; }
   h2:focus-visible { outline: 2px solid var(--signal); outline-offset: 2px; }
   .sub { margin: 2px 0 0; font: 400 var(--t-13) / 1.4 var(--mono); color: var(--ink-2); }
@@ -242,9 +253,10 @@
   .value { flex: 1; min-width: 0; font: 400 var(--t-13) / 1.45 var(--mono); white-space: pre-wrap; overflow-wrap: anywhere; }
   .tools { display: inline-flex; gap: 2px; opacity: 0; }
   .entry:hover .tools, .entry:focus-within .tools { opacity: 1; }
-  .tools button { padding: 0 6px; font-size: var(--t-12); border-color: transparent; }
+  .tools button { min-width: 24px; min-height: 24px; padding: 0 6px; font-size: var(--t-12); border-color: transparent; }
   .tools button:hover { border-color: var(--rule); }
   .json { margin: 14px 0 0; padding: 12px; background: var(--paper); border: 1px solid var(--rule); border-radius: var(--radius); font: 400 var(--t-13) / 1.45 var(--mono); white-space: pre-wrap; overflow-wrap: anywhere; }
+  .visually-hidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
   @media (max-width: 720px) {
     .entry { grid-template-columns: minmax(0, 1fr); gap: 2px; }
     dt { font-size: var(--t-12); }

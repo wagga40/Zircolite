@@ -1,6 +1,7 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { str } from '../src/engine/sql';
 import { compile } from '../src/search/compile';
-import { appendRaw, appendTerm, chips, completionAt, editable, fieldSuggestions, lookupField, removeSpan, shownQuery } from '../src/search/edit';
+import { appendRaw, appendTerm, chips, completionAt, editable, fieldSuggestions, lookupField, quoteValue, removeSpan, shownQuery } from '../src/search/edit';
 import { parse } from '../src/search/parse';
 import { type Fixture, openFixture, schema } from './fixture';
 
@@ -106,5 +107,33 @@ describe('line breaks', () => {
     const query = 'Computer:"a\nb" EventID:1';
     const [chip] = chips(query);
     expect(removeSpan(query, chip.start, chip.end)).toBe('EventID:1');
+  });
+});
+
+describe('filtering by a rule', () => {
+  it('matches a rule whose title holds quotes and a backslash', async () => {
+    const title = 'Odd "quoted" \\ rule';
+    const fx = await openFixture([
+      `INSERT INTO rules VALUES (9, 'r-odd', '', ${str(title)}, 'low', 1, 'd', [], [], [], [], 'o.yml', 'match', 0)`,
+      'INSERT INTO hits VALUES (9, 2)',
+    ]);
+    try {
+      expect(await fx.uids(compile(parse(appendRaw('', `rule:${quoteValue(title)}`)), schema))).toEqual([2]);
+    } finally {
+      fx.close();
+    }
+  });
+
+  it('matches the same rule by its key', async () => {
+    const title = 'Odd "quoted" \\ rule';
+    const fx = await openFixture([
+      `INSERT INTO rules VALUES (9, ${str(title)}, '', ${str(title)}, 'low', 1, 'd', [], [], [], [], 'o.yml', 'match', 0)`,
+      'INSERT INTO hits VALUES (9, 2)',
+    ]);
+    try {
+      expect(await fx.uids(compile(parse(appendRaw('', `rulekey:${quoteValue(title)}`)), schema))).toEqual([2]);
+    } finally {
+      fx.close();
+    }
   });
 });

@@ -10,7 +10,7 @@
   import { typing } from '../ui/keys';
   import { ui } from '../ui/ui.svelte';
   import { csvExport, ExportTooLarge, jsonExport, limitNote, prepareExport } from './export';
-  import { COUNT_SQL, ensureVisible, geometry, HEAD, idsSql, nextPage, PAGE, pageSql, type PageRow, ROW } from './table';
+  import { COUNT_SQL, ensureVisible, geometry, HEAD, HEIGHT_CAP, idsSql, nextPage, PAGE, pageSql, type PageRow, ROW, wheelScroll } from './table';
 
   let { db, schema, manifest, where, columns, slow }: {
     db: Db;
@@ -108,6 +108,12 @@
     })();
   });
 
+  // A page that failed is asked for again once the rows on screen move.
+  $effect(() => {
+    void slice.first;
+    failed.clear();
+  });
+
   // Load the pages the visible rows fall in, one request at a time: the
   // scheduler runs queries in order, so a fast scroll that asked for every
   // page it passed would keep the rows it stops on waiting behind them all.
@@ -141,11 +147,28 @@
         if (mine === build) {
           // A stopped page request is not asked for again until Run again rebuilds the list.
           failed.add(key);
+          // A step waiting for that page cannot land.
+          follow = false;
           if (!isSuperseded(error)) failure = message(error);
         }
         done();
       },
     );
+  });
+
+  // Past the height cap one wheel notch would jump thousands of rows, so the scroll is stepped by rows.
+  $effect(() => {
+    const target = scroller;
+    if (!target) return;
+    const onwheel = (event: WheelEvent) => {
+      if (event.ctrlKey || total * ROW <= HEIGHT_CAP) return;
+      event.preventDefault();
+      const dy = event.deltaMode === 1 ? event.deltaY * ROW : event.deltaY;
+      target.scrollLeft += event.deltaX;
+      target.scrollTop = wheelScroll(target.scrollTop, dy, total, viewport);
+    };
+    target.addEventListener('wheel', onwheel, { passive: false });
+    return () => target.removeEventListener('wheel', onwheel);
   });
 
   // With the event view open, j and k carry it along to the next event once its row has loaded.
@@ -259,7 +282,7 @@
     {/if}
   </div>
   {#if exportNote}<p class="note" role="status">{exportNote}</p>{/if}
-  {#if failure}<p class="note failure" role="alert">The results could not be read: {failure}</p>{/if}
+  {#if failure}<p class="note failure" role="alert">The results could not be read: {failure}. Change the search, or reload the page if this repeats.</p>{/if}
 
   <div
     id="result-grid"

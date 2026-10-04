@@ -220,3 +220,10 @@ describe('rulekey', () => {
     expect(() => compile(parse('rulekey:>x'), schema)).toThrowError(/only level compares/);
   });
 });
+
+describe('an unclosed quote', () => {
+  it('explains how to end a value with a backslash', () => {
+    expect(() => tokenize('Image:"C:\\dir\\"')).toThrowError(/write \\\\ to end a value with a backslash/);
+    expect(() => tokenize('Image:"abc')).toThrowError(/^This quote is never closed$/);
+  });
+});

@@ -55,7 +55,7 @@
 <div class="facet">
   <button type="button" class="column" aria-pressed={shown} onclick={ontoggle}>{shown ? 'Hide column' : 'Show as column'}</button>
   {#if failure}
-    <p class="note failure" role="alert">The top values could not be counted: {failure}</p>
+    <p class="note failure" role="alert">The top values could not be counted: {failure}. Change the search, or reload the page if this repeats.</p>
   {:else if stopped}
     <p class="note" role="status">Stopped. <button type="button" class="again" onclick={runAgain}>Run again</button></p>
   {:else if rows === null}
@@ -72,7 +72,7 @@
               {valueLabel(row.v)}{#if row.spellings > 1}<span
                   class="cases"
                   title={`Also written in ${row.spellings - 1} other letter case${row.spellings > 2 ? 's' : ''}; the count and the filter include them.`}
-                > any case</span>{/if}
+                > any case<span class="visually-hidden"> (the count includes other letter cases)</span></span>{/if}
             </span>
             <span class="n">{formatCount(row.n)}</span>
             <button type="button" aria-label={`Filter for ${field.name} ${valueLabel(row.v)}`} onclick={() => (view.q = appendTerm(view.q, field.name, row.v, false))}>+</button>
@@ -97,6 +97,7 @@
   .value { font: 400 var(--t-13) / 1.4 var(--mono); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .value.empty { color: var(--ink-2); font-style: italic; }
   .cases { font: 400 var(--t-12) / 1 var(--sans); color: var(--ink-2); }
+  .visually-hidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
   .n { font-size: var(--t-12); color: var(--ink-2); text-align: right; }
   li button { background: none; border: 1px solid transparent; border-radius: var(--radius); width: 24px; height: 24px; padding: 0; cursor: pointer; color: var(--ink-2); }
   li button:hover { border-color: var(--rule); color: var(--ink); }

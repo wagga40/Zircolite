@@ -102,3 +102,17 @@ export function ensureVisible(position: number, scrollTop: number, total: number
   const exact = rowTop < 0 ? position : position + 1 - viewport / row;
   return Math.min(1, Math.max(0, exact / span)) * (cap - viewport);
 }
+
+/**
+ * Where a wheel turn leaves the list. Below the height cap it is the
+ * browser's own scrolling; past it, scroll positions map to rows
+ * proportionally, so a notch would jump thousands of rows. It moves the rows
+ * the notch would move below the cap instead.
+ */
+export function wheelScroll(scrollTop: number, deltaY: number, total: number, viewport: number, row = ROW, cap = HEIGHT_CAP): number {
+  if (total * row <= cap) return scrollTop + deltaY;
+  const range = cap - viewport;
+  const span = Math.max(1, total - viewport / row);
+  const exact = Math.min(1, Math.max(0, scrollTop / range)) * span + deltaY / row;
+  return Math.min(1, Math.max(0, exact / span)) * range;
+}

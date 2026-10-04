@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { onDestroy } from 'svelte';
+  import { onDestroy, tick } from 'svelte';
   import type { Db } from '../engine/db';
   import { isSuperseded } from '../engine/queries';
   import type { Schema } from '../engine/schema';
@@ -19,6 +19,7 @@
   let { db, schema, events }: { db: Db; schema: Schema; events: number } = $props();
 
   let input: HTMLInputElement;
+  let chipList = $state<HTMLUListElement>();
   let draft = $state('');
   let error = $state<SearchError | null>(null);
   let options = $state<string[]>([]);
@@ -54,6 +55,8 @@
   $effect(() => {
     draft = locked ? shownQuery(view.q) : view.q;
     error = view.q ? check(view.q) : null;
+    // A lookup failure belongs to the text it was typed in.
+    failure = null;
     if (locked) closeOptions();
   });
 
@@ -72,6 +75,14 @@
     active = -1;
   }
 
+  /** Remove a filter and keep the keyboard where it was: the next chip, or the search box when none is left. */
+  async function removeChip(index: number, remove: () => void): Promise<void> {
+    remove();
+    await tick();
+    const buttons = chipList ? [...chipList.querySelectorAll('button')] : [];
+    (buttons[Math.min(index, buttons.length - 1)] ?? input).focus();
+  }
+
   function submit(): void {
     if (locked) return;
     closeOptions();
@@ -86,7 +97,11 @@
     context = completionAt(draft, caret);
     // A failed lookup speaks only for its own field; once the caret is elsewhere the line is stale.
     if (failure && lookupField(context) !== failure.field) failure = null;
-    closeOptions();
+    // Value suggestions stay up while the next lookup runs, so typing a prefix does not make them flicker.
+    lookup += 1;
+    clearTimeout(lookupTimer);
+    active = -1;
+    if (!context || context.kind === 'field') options = [];
     const ticket = lookup;
     if (!context) return;
     if (context.kind === 'field') {
@@ -199,7 +214,7 @@
       {onkeyup}
       onblur={closeOptions}
     />
-    <button type="button" class="syntax" aria-expanded={ui.help} aria-controls="search-help" onclick={() => (ui.help = !ui.help)}>Syntax</button>
+    <button type="button" class="syntax" aria-expanded={ui.help} aria-controls={ui.help ? 'search-help' : undefined} onclick={() => (ui.help = !ui.help)}>Syntax</button>
     {#if options.length}
       <ul id="search-options" role="listbox" aria-label="Suggestions">
         {#each options as option, i (option)}
@@ -223,23 +238,23 @@
     <p class="error" role="alert">{failure.message}</p>
   {/if}
   {#if items.length || view.t || view.d}
-    <ul class="chips" aria-label="Active filters">
-      {#each items as chip (chip.start)}
+    <ul class="chips" aria-label="Active filters" bind:this={chipList}>
+      {#each items as chip, i (chip.start)}
         <li>
-          <span>{chip.negated ? 'not ' : ''}{chip.label}</span>
-          <button type="button" aria-label={`Remove ${chip.negated ? 'not ' : ''}${chip.label}`} onclick={() => (view.q = removeSpan(view.q, chip.start, chip.end))}>×</button>
+          <span>{chip.negated ? 'not ' : ''}{shownQuery(chip.label)}</span>
+          <button type="button" aria-label={`Remove ${chip.negated ? 'not ' : ''}${shownQuery(chip.label)}`} onclick={() => removeChip(i, () => (view.q = removeSpan(view.q, chip.start, chip.end)))}>×</button>
         </li>
       {/each}
       {#if view.t}
         <li>
           <span>{formatRange(view.t)} UTC</span>
-          <button type="button" aria-label="Remove the time range" onclick={() => (view.t = null)}>×</button>
+          <button type="button" aria-label="Remove the time range" onclick={() => removeChip(items.length, () => (view.t = null))}>×</button>
         </li>
       {/if}
       {#if view.d}
         <li>
           <span>Detections only</span>
-          <button type="button" aria-label="Show events without detections too" onclick={() => (view.d = false)}>×</button>
+          <button type="button" aria-label="Show events without detections too" onclick={() => removeChip(items.length + (view.t ? 1 : 0), () => (view.d = false))}>×</button>
         </li>
       {/if}
     </ul>
@@ -276,7 +291,7 @@
   .error { color: var(--danger); margin: 6px 0 0; font-size: var(--t-13); }
   .chips { display: flex; flex-wrap: wrap; gap: 6px; list-style: none; margin: 8px 0 0; padding: 0; }
   .chips li { max-width: 100%; display: inline-flex; align-items: center; gap: 4px; font: 400 var(--t-12) / 1.6 var(--mono); border: 1px solid var(--rule); border-radius: var(--radius); padding: 0 2px 0 8px; background: var(--paper); }
-  .chips button { background: none; border: 0; cursor: pointer; padding: 0 6px; color: var(--ink-2); }
+  .chips button { background: none; border: 0; cursor: pointer; padding: 0 6px; color: var(--ink-2); min-width: 24px; min-height: 24px; }
   .help { max-height: 70vh; overflow: auto; position: absolute; z-index: 15; top: 100%; right: 0; width: min(44rem, 100%); margin-top: 6px; padding: 12px 16px; background: var(--panel); border: 1px solid var(--rule); border-radius: var(--radius); font-size: var(--t-13); }
   .help table { border-collapse: collapse; width: 100%; margin-bottom: 10px; }
   .help th[scope='colgroup'] { text-align: left; font-weight: 600; padding: 8px 0 4px; }
