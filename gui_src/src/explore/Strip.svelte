@@ -6,6 +6,7 @@
   import { isSuperseded } from '../engine/queries';
   import { run, runAgain } from '../state/run.svelte';
   import { view } from '../state/view.svelte';
+  import { drag as gesture } from '../ui/drag';
   import { pageTopLayer } from '../ui/layers';
   import { formatCount, isoTime } from '../ui/format';
   import {
@@ -198,21 +199,31 @@
 
   function onpointerdown(event: PointerEvent): void {
     const bin = binOf(event);
-    if (bin === null || !canvas) return;
-    canvas.setPointerCapture(event.pointerId);
+    if (bin === null || !canvas || !series) return;
+    const bins = series.bins;
     cursor = null;
     drag = { from: bin, to: bin };
+    gesture(event, canvas, {
+      move: (_dx, e) => {
+        const at = binOf(e);
+        if (at !== null) drag = { from: bin, to: at };
+      },
+      end: (_dx, e) => {
+        view.t = rangeOf(bins, bin, binOf(e) ?? bin);
+        drag = null;
+      },
+      click: () => {
+        view.t = rangeOf(bins, bin, bin);
+        drag = null;
+      },
+      cancel: () => {
+        drag = null;
+      },
+    });
   }
 
   function onpointermove(event: PointerEvent): void {
-    const bin = binOf(event);
-    hover = bin;
-    if (drag && bin !== null) drag = { ...drag, to: bin };
-  }
-
-  function onpointerup(): void {
-    if (drag && series) view.t = rangeOf(series.bins, drag.from, drag.to);
-    drag = null;
+    hover = binOf(event);
   }
 
   function onkeydown(event: KeyboardEvent): void {
@@ -262,8 +273,6 @@
         aria-describedby="strip-legend"
         {onpointerdown}
         {onpointermove}
-        {onpointerup}
-        onpointercancel={() => (drag = null)}
         onpointerleave={() => (hover = null)}
         {onkeydown}
       ></canvas>
@@ -289,7 +298,7 @@
 <style>
   .strip { padding: 10px 16px 6px; background: var(--panel); border-bottom: 1px solid var(--rule); }
   .plot { position: relative; }
-  canvas { display: block; width: 100%; cursor: crosshair; touch-action: none; }
+  canvas { display: block; width: 100%; cursor: crosshair; touch-action: pan-y; }
   .tip { position: absolute; top: 4px; transform: translateX(8px); max-width: 26rem; padding: 4px 8px; font-size: var(--t-12); background: var(--paper); border: 1px solid var(--rule); border-radius: var(--radius); pointer-events: none; white-space: nowrap; }
   .legend { display: flex; flex-wrap: wrap; gap: 4px 16px; font-size: var(--t-12); color: var(--ink-2); margin-top: 4px; }
   .legend .end { margin-left: auto; }
