@@ -8,7 +8,7 @@
   import { view } from '../state/view.svelte';
   import { copyText } from '../ui/clipboard';
   import { isoTime } from '../ui/format';
-  import { ui } from '../ui/ui.svelte';
+  import { pageTopLayer } from '../ui/layers';
   import { type Entry, familyFields, groupEntries, type Head, headSql, hostEntry, nearbyRange, type RuleRow, rulesSql, valuesSql } from './detail';
   import { eventJson } from './export';
 
@@ -91,7 +91,7 @@
   }
 
   function onkeydown(event: KeyboardEvent): void {
-    if (event.key === 'Escape' && view.uid !== null && !ui.help && !event.defaultPrevented && !document.querySelector('dialog[open]')) {
+    if (event.key === 'Escape' && !event.defaultPrevented && pageTopLayer() === 'drawer') {
       event.preventDefault();
       close();
     }

@@ -9,6 +9,7 @@
   import { SHORTCUTS, SYNTAX } from '../search/shortcuts';
   import { SearchError } from '../search/tokens';
   import { view } from '../state/view.svelte';
+  import { pageTopLayer } from './layers';
   import { ui } from './ui.svelte';
 
   let { db, schema }: { db: Db; schema: Schema } = $props();
@@ -98,9 +99,14 @@
   }
 
   function onkeydown(event: KeyboardEvent): void {
+    if (event.key === 'Escape' && event.defaultPrevented) return;
     if (locked) {
-      if (event.key === 'Escape' && ui.help) ui.help = false;
-      else if (event.key === 'Enter') event.preventDefault();
+      if (event.key === 'Escape' && pageTopLayer() === 'help') {
+        ui.help = false;
+        event.preventDefault();
+      } else if (event.key === 'Enter') {
+        event.preventDefault();
+      }
       return;
     }
     if (options.length && (event.key === 'ArrowDown' || event.key === 'ArrowUp')) {
@@ -123,9 +129,12 @@
         draft = view.q;
         error = null;
         event.stopPropagation();
-      } else if (ui.help) {
+      } else if (pageTopLayer() === 'help') {
         ui.help = false;
+      } else {
+        return;
       }
+      event.preventDefault();
     }
   }
 

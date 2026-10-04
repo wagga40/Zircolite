@@ -147,6 +147,37 @@ async function scenario(page, steps) {
   await drawer.waitFor({ state: 'detached' });
   steps.push('event view from the keyboard');
 
+  // One Escape closes one layer, whether focus is on the page or in the search box.
+  const help = page.locator('#search-help');
+  const openDrawer = async () => {
+    await page.locator('#result-grid').focus();
+    await page.keyboard.press('Enter');
+    await poll(page, async () => (await drawer.locator('dt').count()) > 0, 'the event fields');
+  };
+  // A closing drawer stays in the page for its 120 ms slide, so wait that out before looking.
+  const drawerStayed = async (message) => {
+    await page.waitForTimeout(400);
+    check((await drawer.count()) === 1 && page.url().includes('uid='), message);
+  };
+  await openDrawer();
+  await page.keyboard.press('?');
+  await help.waitFor();
+  await page.keyboard.press('Escape');
+  await help.waitFor({ state: 'detached' });
+  await drawerStayed('one Escape closed both the help and the event view');
+  await page.keyboard.press('Escape');
+  await drawer.waitFor({ state: 'detached' });
+  await openDrawer();
+  await page.getByRole('button', { name: 'Syntax', exact: true }).click();
+  await help.waitFor();
+  await input.focus();
+  await input.press('Escape');
+  await help.waitFor({ state: 'detached' });
+  await drawerStayed('one Escape in the search box closed both the help and the event view');
+  await input.press('Escape');
+  await drawer.waitFor({ state: 'detached' });
+  steps.push('one Escape closes one layer');
+
   await page.locator('#result-grid').focus();
   await page.keyboard.press('End');
   const last = page.locator(`#result-grid [role=row][aria-rowindex="${expected + 1}"]`);

@@ -3,6 +3,7 @@
   import type { Manifest } from '../engine/manifest';
   import type { Field, Schema } from '../engine/schema';
   import { view } from '../state/view.svelte';
+  import { pageTopLayer } from '../ui/layers';
   import { ui } from '../ui/ui.svelte';
   import { toggleColumn } from './columns';
   import FacetValues from './FacetValues.svelte';
@@ -43,11 +44,14 @@
     <input id="field-filter" type="search" placeholder="Filter fields" autocomplete="off" spellcheck="false" bind:value={text}
       bind:this={filterInput}
       onkeydown={(event) => {
-        if (event.key === 'Escape' && ui.fieldsOpen) {
-          close();
-          event.preventDefault();
-          event.stopPropagation();
-        }
+        if (event.key !== 'Escape' || event.defaultPrevented) return;
+        // Help sits above the panel; the drawer is left to its own handler on the window.
+        const layer = pageTopLayer();
+        if (layer === 'help') ui.help = false;
+        else if (layer === 'fields') close();
+        else return;
+        event.preventDefault();
+        event.stopPropagation();
       }}
     />
   </div>

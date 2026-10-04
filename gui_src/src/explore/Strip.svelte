@@ -5,6 +5,7 @@
   import type { Manifest } from '../engine/manifest';
   import { filters, timeClients } from '../state/filters';
   import { view } from '../state/view.svelte';
+  import { pageTopLayer } from '../ui/layers';
   import { formatCount, isoTime } from '../ui/format';
   import {
     barHeight, binAt, binSummary, DOMAIN_SQL, domainOf, formatRange, formatWidth, layout, rangeOf,
@@ -188,7 +189,8 @@
     else if (event.key === 'Enter' && cursor) {
       view.t = rangeOf(series.bins, cursor.anchor, cursor.at);
       cursor = null;
-    } else if (event.key === 'Escape' && (cursor || view.t)) {
+    } else if (event.key === 'Escape' && !event.defaultPrevented && (cursor || view.t) && pageTopLayer() === null) {
+      // The strip's selection is the lowest layer: an open panel above it takes the Escape.
       if (cursor) cursor = null;
       else view.t = null;
     } else return;

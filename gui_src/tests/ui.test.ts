@@ -1,6 +1,7 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { suggestValuesSql } from '../src/explore/sidebar';
 import { formatCount, inputCount, isoTime, levelName, timeRange } from '../src/ui/format';
+import { topLayer } from '../src/ui/layers';
 import { nextTheme } from '../src/ui/theme';
 import { type Fixture, openFixture, schema } from './fixture';
 
@@ -49,5 +50,20 @@ describe('value suggestions', () => {
     expect(await db.rows(suggestValuesSql(computer!, 'd'))).toEqual([{ v: 'DC01' }]);
     expect(await db.rows(suggestValuesSql(image!, 'C:\\Tools\\50_'))).toEqual([{ v: 'C:\\Tools\\50_off.exe' }]);
     expect(await db.rows(suggestValuesSql(image!, 'C:\\Tools\\5%'))).toEqual([]);
+  });
+});
+
+describe('Escape layers', () => {
+  const none = { dialog: false, help: false, drawer: false, fields: false };
+
+  it('names the topmost open layer: dialog, help, drawer, then the Fields panel', () => {
+    expect(topLayer({ dialog: true, help: true, drawer: true, fields: true })).toBe('dialog');
+    expect(topLayer({ ...none, help: true, drawer: true, fields: true })).toBe('help');
+    expect(topLayer({ ...none, drawer: true, fields: true })).toBe('drawer');
+    expect(topLayer({ ...none, fields: true })).toBe('fields');
+  });
+
+  it('leaves Escape to the strip only when no layer is open', () => {
+    expect(topLayer(none)).toBeNull();
   });
 });
