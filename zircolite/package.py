@@ -163,8 +163,9 @@ class RunInfo:
     mode: str
     executor: str
     timestamp_format: str
-    after: str
-    before: str
+    # None when the run could not apply them: a saved database is read whole.
+    after: str | None
+    before: str | None
     limit: int
     rules_loaded: int
 
@@ -456,7 +457,7 @@ def write_package(viewer: Viewer, data: PackageData, destination: Path, work: Pa
         for table in DATA_TABLES:
             files.append(_wrap(archive, data.tables[table], f"{table}.parquet", "data", "data"))
         archive.writestr("README.txt", README_TEXT)
-        manifest = orjson.dumps({**data.manifest, "files": files})
+        manifest = orjson.dumps({**data.manifest, "viewer": viewer.version, "files": files})
         archive.writestr("data/manifest.js", b"__zircolite.manifest(" + manifest + b");\n")
     target = _fresh_name(destination)
     os.replace(temporary, target)

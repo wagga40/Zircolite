@@ -1406,7 +1406,7 @@ class TestCLIPackage:
         assert "1 input(s) failed to process and are not in this package" in manifest["warnings"]
         assert manifest["totals"]["events"] == 1
 
-    def test_an_unloadable_database_is_listed_as_a_failed_source(self, tmp_path, read_package):
+    def databases(self, tmp_path):
         databases = tmp_path / "dbs"
         databases.mkdir()
         connection = sqlite3.connect(databases / "good.db")
@@ -1415,6 +1415,10 @@ class TestCLIPackage:
         connection.executemany("INSERT INTO logs (CommandLine) VALUES (?)", [("powershell.exe",), ("cmd.exe",)])
         connection.commit()
         connection.close()
+        return databases
+
+    def test_an_unloadable_database_is_listed_as_a_failed_source(self, tmp_path, read_package):
+        databases = self.databases(tmp_path)
         (databases / "bad.db").write_bytes(b"not a database " * 300)
 
         package_dir = self.run(tmp_path, inputs=databases, input_format="-D")
@@ -1424,6 +1428,25 @@ class TestCLIPackage:
         assert [Path(source).name for source in manifest["failed_sources"]] == ["bad.db"]
         assert "1 input(s) failed to process and are not in this package" in manifest["warnings"]
         assert manifest["totals"]["events"] == 2 and manifest["totals"]["hits"] == 1
+
+    def test_database_input_records_the_time_range_as_not_applied(self, tmp_path, read_package):
+        # A saved database is read whole: --after and --before are ignored for it.
+        package_dir = self.run(tmp_path, "-A", "2030-01-01T00:00:00", inputs=self.databases(tmp_path),
+                               input_format="-D")
+
+        (target,) = package_dir.glob("zircolite-package-*.zip")
+        manifest, _ = read_package(target)
+        assert (manifest["run"]["after"], manifest["run"]["before"]) == (None, None)
+        assert manifest["run"]["mode"] == "database input"
+        assert manifest["totals"]["events"] == 2
+
+    def test_event_input_records_the_time_range(self, tmp_path, read_package):
+        package_dir = self.run(tmp_path, "-A", "2001-01-01T00:00:00")
+
+        (target,) = package_dir.glob("zircolite-package-*.zip")
+        manifest, _ = read_package(target)
+        assert manifest["run"]["after"] == "2001-01-01T00:00:00"
+        assert manifest["run"]["before"] == "9999-12-12T23:59:59"
 
     def test_a_package_missing_ingested_events_fails_the_run(self, tmp_path, monkeypatch):
         from zircolite.package_spool import PartWriter

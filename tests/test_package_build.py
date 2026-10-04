@@ -344,6 +344,7 @@ class TestZip:
             names = set(archive.namelist())
         assert {"index.html", "app.js", "README.txt", "data/manifest.js"} <= names
         assert manifest["totals"]["events"] == 2
+        assert manifest["viewer"] == "0.0.1"
 
     def test_chunk_size_keeps_base64_unpadded_until_the_end(self):
         assert CHUNK_BYTES % 3 == 0
@@ -384,3 +385,4 @@ class TestZip:
         manifest, files = read_package(target)
         assert {"duckdb-eh.wasm.gz", "parquet.duckdb_extension.wasm", "events.parquet"} <= set(files)
         assert manifest["totals"]["events"] == 1
+        assert manifest["viewer"] == find_viewer().version != ""

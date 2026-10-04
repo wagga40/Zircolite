@@ -667,10 +667,13 @@ def _write_package(ctx: ProcessingContext, args: argparse.Namespace) -> bool:
         mode = "per-file, parallel"
     else:
         mode = "per-file"
+    # Database input ignores --after and --before (_warn_ignored_db_flags says so).
+    applied = not args.db_input
     run = package.RunInfo(
         zircolite_version=__version__, mode=mode,
         executor=args.executor if ctx.workers_used > 1 else "sequential",
-        timestamp_format=spool.timestamp_format, after=ctx.time_after_str, before=ctx.time_before_str,
+        timestamp_format=spool.timestamp_format,
+        after=ctx.time_after_str if applied else None, before=ctx.time_before_str if applied else None,
         limit=ctx.limit, rules_loaded=len(ctx.rulesets or []),
     )
     failed = sorted({source for record in ctx.performance_files if record.get("status") == "failed"

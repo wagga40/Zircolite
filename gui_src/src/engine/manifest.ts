@@ -20,6 +20,8 @@ export interface TimeStats {
 export interface Manifest {
   format: number;
   zircolite: string;
+  // The version in the viewer.json of the viewer this package was written with.
+  viewer: string;
   created: string;
   run: {
     mode: string;
@@ -27,8 +29,9 @@ export interface Manifest {
     time_field: string;
     timestamp_format: string;
     event_filter: string;
-    after: string;
-    before: string;
+    // null when the run did not apply the time range: database input is read whole.
+    after: string | null;
+    before: string | null;
     limit: number;
     rules_loaded: number;
   };
