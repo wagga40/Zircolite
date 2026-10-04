@@ -324,7 +324,9 @@
   .head > div { font: 600 var(--t-12) / 32px var(--sans); color: var(--ink-2); }
   .sort { background: none; border: 0; padding: 0; font: inherit; color: inherit; cursor: pointer; }
   .rows-space { position: relative; }
-  .rows { position: absolute; inset: 0 0 auto 0; }
+  .rows { position: absolute; inset: 0 0 auto 0; transition: opacity var(--motion); }
+  /* Rows of the previous filter stay until the new list is ready. */
+  .scroller[aria-busy='true'] .rows { opacity: 0.5; }
   .time { color: var(--ink-2); }
   .row > .level { display: flex; align-items: center; gap: 6px; font-family: var(--sans); }
   .level i { display: inline-block; width: 8px; height: 8px; border-radius: 1px; }

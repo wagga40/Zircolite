@@ -9,12 +9,15 @@
   import { copyText } from '../ui/clipboard';
   import { isoTime } from '../ui/format';
   import { pageTopLayer } from '../ui/layers';
-  import { type Entry, familyFields, groupEntries, type Head, headSql, hostEntry, nearbyRange, type RuleRow, rulesSql, valuesSql } from './detail';
+  import {
+    type Entry, familyFields, groupEntries, type Head, headSql, hostEntry, isCurrent, nearbyRange, type RuleRow, rulesSql, valuesSql,
+  } from './detail';
   import { eventJson } from './export';
 
   let { db, schema, manifest }: { db: Db; schema: Schema; manifest: Manifest } = $props();
 
   interface Loaded {
+    uid: number;
     head: Head;
     entries: Entry[];
     rules: RuleRow[];
@@ -29,6 +32,8 @@
   let focused = false;
   const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
 
+  // A drawer closing keeps its content for the slide; only a switch to another event makes it stale.
+  const stale = $derived(view.uid !== null && !isCurrent(loaded, view.uid));
   const groups = $derived(loaded ? groupEntries(loaded.entries) : []);
   const host = $derived(loaded ? hostEntry(loaded.entries) : null);
   const title = $derived(loaded ? [loaded.head._zl_channel ?? 'Event', loaded.head._zl_eventid ?? ''].join(' ').trim() : 'Event');
@@ -44,7 +49,7 @@
       const value = values?.[`_zl_v${i}`];
       return value === null || value === undefined ? [] : [{ field, name: name(field), value }];
     });
-    return { head, entries, rules };
+    return { uid, head, entries, rules };
   }
 
   $effect(() => {
@@ -102,17 +107,19 @@
   }
 
   async function copy(text: string, what: string): Promise<void> {
+    if (stale) return;
     status = (await copyText(text)) ? `Copied ${what}.` : `Copying ${what} failed; select it and copy it with the keyboard.`;
   }
 
   function nearby(): void {
-    if (!loaded || !host || loaded.head._zl_t === null) return;
+    if (stale || !loaded || !host || loaded.head._zl_t === null) return;
     view.q = appendTerm('', host.field.name, host.value, false);
     view.t = nearbyRange(loaded.head._zl_t);
     view.d = false;
   }
 
   function filterRule(rule: RuleRow): void {
+    if (stale) return;
     view.q = appendRaw(view.q, `rule:${quoteValue(rule.id ? rule.id : rule.title)}`);
   }
 </script>
@@ -122,7 +129,7 @@
 {#if view.uid !== null}
   <aside class="drawer" aria-label="Event details" transition:fly={{ x: 48, duration: reduced ? 0 : 120 }} onoutroend={settle}>
     <header>
-      <div>
+      <div class="dims" aria-busy={stale}>
         <h2 tabindex="-1" bind:this={heading}>{title}</h2>
         <p class="sub">
           {#if loaded}{loaded.head._zl_t === null ? 'No time' : `${isoTime(loaded.head._zl_t)} UTC`}{/if}
@@ -136,55 +143,57 @@
     {:else if !loaded}
       <p class="note">Reading the event</p>
     {:else}
-      <div class="actions">
-        <button type="button" aria-pressed={raw} onclick={() => (raw = !raw)}>{raw ? 'Show fields' : 'Show JSON'}</button>
-        <button type="button" onclick={() => copy(json(true), 'the event as JSON')}>Copy JSON</button>
-        {#if host && loaded.head._zl_t !== null}
-          <button type="button" onclick={nearby}>Events on {host.value} within 5 minutes</button>
+      <div class="dims" aria-busy={stale}>
+        <div class="actions">
+          <button type="button" disabled={stale} aria-pressed={raw} onclick={() => (raw = !raw)}>{raw ? 'Show fields' : 'Show JSON'}</button>
+          <button type="button" disabled={stale} onclick={() => copy(json(true), 'the event as JSON')}>Copy JSON</button>
+          {#if host && loaded.head._zl_t !== null}
+            <button type="button" disabled={stale} onclick={nearby}>Events on {host.value} within 5 minutes</button>
+          {/if}
+        </div>
+        <p class="status" role="status">{status}</p>
+
+        {#if loaded.rules.length}
+          <section class="rules" aria-label="Detections">
+            <h3>Detections</h3>
+            <ul>
+              {#each loaded.rules as rule (rule.rule_idx)}
+                <li>
+                  <span class="sev"><i style:background={`var(--sev-${rule.level_rank})`}></i>{rule.level}</span>
+                  <span class="rule-title">{rule.title}</span>
+                  {#if rule.techniques?.length}<span class="techniques">{rule.techniques.join(', ')}</span>{/if}
+                  <button type="button" disabled={stale} onclick={() => filterRule(rule)}>Filter by this rule</button>
+                </li>
+              {/each}
+            </ul>
+          </section>
+        {/if}
+
+        {#if raw}
+          <pre class="json">{json(true)}</pre>
+        {:else}
+          {#each groups as group (group.name)}
+            <section class="group" aria-label={group.name}>
+              <h3>{group.name}</h3>
+              <dl>
+                {#each group.entries as entry (entry.field.key)}
+                  <div class="entry">
+                    <dt>{entry.name}</dt>
+                    <dd>
+                      <span class="value">{entry.value}</span>
+                      <span class="tools">
+                        <button type="button" disabled={stale} aria-label={`Filter for ${entry.name}`} onclick={() => (view.q = appendTerm(view.q, entry.field.name, entry.value, false))}>+</button>
+                        <button type="button" disabled={stale} aria-label={`Filter out ${entry.name}`} onclick={() => (view.q = appendTerm(view.q, entry.field.name, entry.value, true))}>−</button>
+                        <button type="button" disabled={stale} aria-label={`Copy ${entry.name}`} onclick={() => copy(entry.value, entry.name)}>Copy</button>
+                      </span>
+                    </dd>
+                  </div>
+                {/each}
+              </dl>
+            </section>
+          {/each}
         {/if}
       </div>
-      <p class="status" role="status">{status}</p>
-
-      {#if loaded.rules.length}
-        <section class="rules" aria-label="Detections">
-          <h3>Detections</h3>
-          <ul>
-            {#each loaded.rules as rule (rule.rule_idx)}
-              <li>
-                <span class="sev"><i style:background={`var(--sev-${rule.level_rank})`}></i>{rule.level}</span>
-                <span class="rule-title">{rule.title}</span>
-                {#if rule.techniques?.length}<span class="techniques">{rule.techniques.join(', ')}</span>{/if}
-                <button type="button" onclick={() => filterRule(rule)}>Filter by this rule</button>
-              </li>
-            {/each}
-          </ul>
-        </section>
-      {/if}
-
-      {#if raw}
-        <pre class="json">{json(true)}</pre>
-      {:else}
-        {#each groups as group (group.name)}
-          <section class="group" aria-label={group.name}>
-            <h3>{group.name}</h3>
-            <dl>
-              {#each group.entries as entry (entry.field.key)}
-                <div class="entry">
-                  <dt>{entry.name}</dt>
-                  <dd>
-                    <span class="value">{entry.value}</span>
-                    <span class="tools">
-                      <button type="button" aria-label={`Filter for ${entry.name}`} onclick={() => (view.q = appendTerm(view.q, entry.field.name, entry.value, false))}>+</button>
-                      <button type="button" aria-label={`Filter out ${entry.name}`} onclick={() => (view.q = appendTerm(view.q, entry.field.name, entry.value, true))}>−</button>
-                      <button type="button" aria-label={`Copy ${entry.name}`} onclick={() => copy(entry.value, entry.name)}>Copy</button>
-                    </span>
-                  </dd>
-                </div>
-              {/each}
-            </dl>
-          </section>
-        {/each}
-      {/if}
     {/if}
   </aside>
 {/if}
@@ -198,6 +207,7 @@
   .sub { margin: 2px 0 0; font: 400 var(--t-13) / 1.4 var(--mono); color: var(--ink-2); }
   h3 { font-size: var(--t-13); font-weight: 600; color: var(--ink-2); margin: 18px 0 6px; }
   button { background: none; border: 1px solid var(--rule); border-radius: var(--radius); padding: 3px 10px; cursor: pointer; }
+  button:disabled { cursor: default; }
   .actions { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 12px; }
   .status { min-height: 1.2em; margin: 6px 0 0; font-size: var(--t-12); color: var(--ink-2); }
   .note { margin: 14px 0; color: var(--ink-2); }

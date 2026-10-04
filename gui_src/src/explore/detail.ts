@@ -117,3 +117,12 @@ export function hostEntry(entries: Entry[]): Entry | null {
 export function nearbyRange(t: number, minutes = 5): [number, number] {
   return [t - minutes * 60_000, t + minutes * 60_000];
 }
+
+/**
+ * Whether what the drawer shows is the selected event. While the next one
+ * loads, the previous one's fields stay on screen, and acting on them would
+ * act on an event the table no longer highlights.
+ */
+export function isCurrent(loaded: { uid: number } | null, uid: number | null): boolean {
+  return loaded !== null && uid !== null && loaded.uid === uid;
+}

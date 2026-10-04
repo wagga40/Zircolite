@@ -29,6 +29,7 @@
   let hover = $state<number | null>(null);
   let cursor = $state<{ at: number; anchor: number } | null>(null);
   let paint = $state(0);
+  let pending = $state(true);
   let ticket = 0;
 
   // A selected range zooms the strip into it, so a busy week can be narrowed to minutes; its end is exclusive.
@@ -73,9 +74,11 @@
     if (!bins) return;
     const request = stripRequest(bins, where);
     const mine = ++ticket;
+    pending = true;
     db.rows<BinRow>(request.sql).then(
       (rows) => {
         if (mine !== ticket) return;
+        pending = false;
         try {
           const next = stripSeries(request, rows);
           // Bin positions from the previous layout point at other times in this one.
@@ -90,7 +93,9 @@
         }
       },
       (error: unknown) => {
-        if (mine === ticket) failure = error instanceof Error ? error.message : String(error);
+        if (mine !== ticket) return;
+        pending = false;
+        failure = error instanceof Error ? error.message : String(error);
       },
     );
   });
@@ -223,7 +228,7 @@
   {:else if domain === null}
     <p class="note">No event in this package has a time, so there is nothing to draw here. Every event is still listed below.</p>
   {:else}
-    <div class="plot" bind:clientWidth={width}>
+    <div class="plot dims" aria-busy={pending} bind:clientWidth={width}>
       <!-- svelte-ignore a11y_no_interactive_element_to_noninteractive_role -->
       <!-- A canvas has no native brush role; the key handler and live region make it operable. -->
       <canvas
@@ -247,7 +252,7 @@
       {/if}
     </div>
     <p class="visually-hidden" aria-live="polite">{announcement}</p>
-    <div id="strip-legend" class="legend">
+    <div id="strip-legend" class="legend dims" aria-busy={pending}>
       <span>{series ? `${isoTime(series.bins.start, false)} UTC` : 'Reading event times'}</span>
       <span class="key">
         Events above the line, detections below it:

@@ -17,18 +17,24 @@
 
   let rows = $state.raw<Value[] | null>(null);
   let failure = $state<string | null>(null);
+  let pending = $state(true);
   let ticket = 0;
 
   $effect(() => {
     const sql = topValuesSql(field, where);
     const mine = ++ticket;
     failure = null;
+    pending = true;
     db.rows<Value>(sql).then(
       (result) => {
-        if (mine === ticket) rows = result;
+        if (mine !== ticket) return;
+        rows = result;
+        pending = false;
       },
       (error: unknown) => {
-        if (mine === ticket) failure = error instanceof Error ? error.message : String(error);
+        if (mine !== ticket) return;
+        failure = error instanceof Error ? error.message : String(error);
+        pending = false;
       },
     );
   });
@@ -43,25 +49,27 @@
   {:else if rows === null}
     <p class="note">Counting values</p>
   {:else if rows.length === 0}
-    <p class="note">No event in the results has this field.</p>
+    <p class="note dims" aria-busy={pending}>No event in the results has this field.</p>
   {:else}
-    <p class="note">Top {rows.length} of {formatCount(total)} results with this field</p>
-    <ul>
-      {#each rows as row (row.v)}
-        <li data-value={row.v} data-count={row.n}>
-          <span class="value" class:empty={row.v === ''} title={row.v}>
-            {valueLabel(row.v)}{#if row.spellings > 1}<span
-                class="cases"
-                title={`Also written in ${row.spellings - 1} other letter case${row.spellings > 2 ? 's' : ''}; the count and the filter include them.`}
-              > any case</span>{/if}
-          </span>
-          <span class="n">{formatCount(row.n)}</span>
-          <button type="button" aria-label={`Filter for ${field.name} ${valueLabel(row.v)}`} onclick={() => (view.q = appendTerm(view.q, field.name, row.v, false))}>+</button>
-          <button type="button" aria-label={`Filter out ${field.name} ${valueLabel(row.v)}`} onclick={() => (view.q = appendTerm(view.q, field.name, row.v, true))}>−</button>
-          <span class="bar" style:inline-size={`${(row.n / total) * 100}%`}></span>
-        </li>
-      {/each}
-    </ul>
+    <div class="dims" aria-busy={pending}>
+      <p class="note">Top {rows.length} of {formatCount(total)} results with this field</p>
+      <ul>
+        {#each rows as row (row.v)}
+          <li data-value={row.v} data-count={row.n}>
+            <span class="value" class:empty={row.v === ''} title={row.v}>
+              {valueLabel(row.v)}{#if row.spellings > 1}<span
+                  class="cases"
+                  title={`Also written in ${row.spellings - 1} other letter case${row.spellings > 2 ? 's' : ''}; the count and the filter include them.`}
+                > any case</span>{/if}
+            </span>
+            <span class="n">{formatCount(row.n)}</span>
+            <button type="button" aria-label={`Filter for ${field.name} ${valueLabel(row.v)}`} onclick={() => (view.q = appendTerm(view.q, field.name, row.v, false))}>+</button>
+            <button type="button" aria-label={`Filter out ${field.name} ${valueLabel(row.v)}`} onclick={() => (view.q = appendTerm(view.q, field.name, row.v, true))}>−</button>
+            <span class="bar" style:inline-size={`${(row.n / total) * 100}%`}></span>
+          </li>
+        {/each}
+      </ul>
+    </div>
   {/if}
 </div>
 

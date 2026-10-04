@@ -4,7 +4,7 @@ import { appendRaw, quoteValue } from '../src/search/edit';
 import { parse } from '../src/search/parse';
 import type { Field } from '../src/engine/schema';
 import {
-  type Entry, familyFields, groupEntries, headSql, hostEntry, nearbyRange, rulesSql, valuesSql,
+  type Entry, familyFields, groupEntries, headSql, hostEntry, isCurrent, nearbyRange, rulesSql, valuesSql,
 } from '../src/explore/detail';
 import { type Fixture, openFixture, schema } from './fixture';
 
@@ -83,5 +83,14 @@ describe('filtering by a rule', () => {
     // The backslash is doubled for LIKE's ESCAPE '\\', so the title still matches itself literally.
     expect(sql).toContain(`ILIKE 'Odd "quoted" \\\\ rule' ESCAPE`);
     expect(sql).toMatch(/ILIKE/);
+  });
+});
+
+describe('switching events', () => {
+  it('shows an event as current only while it is the one selected', () => {
+    expect(isCurrent({ uid: 7 }, 7)).toBe(true);
+    expect(isCurrent({ uid: 7 }, 8)).toBe(false);
+    expect(isCurrent(null, 7)).toBe(false);
+    expect(isCurrent({ uid: 7 }, null)).toBe(false);
   });
 });

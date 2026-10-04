@@ -124,3 +124,12 @@ button {
   font: inherit;
   color: inherit;
 }
+
+/* A panel still showing the answer to an earlier request, while the current one runs. */
+.dims {
+  transition: opacity var(--motion);
+}
+
+.dims[aria-busy='true'] {
+  opacity: 0.5;
+}
