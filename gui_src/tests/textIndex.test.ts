@@ -45,6 +45,22 @@ describe('loadTextIndex', () => {
     expect(textIndex.error).toContain('could not be loaded');
   });
 
+  it('opens the view again after every Stop, not only the first', async () => {
+    const f = fakes();
+    let calls = 0;
+    const db = {
+      register: f.db.register,
+      async exec(sql: string) {
+        calls += 1;
+        if (calls <= 2) throw new Superseded();
+        f.statements.push(sql);
+      },
+    };
+    await loadTextIndex({ files: [FILE] }, f.store as never, db, f.load);
+    expect(textIndex.status).toBe('ready');
+    expect(f.statements).toHaveLength(1);
+  });
+
   it('opens the view again when a Stop cancelled it, instead of failing', async () => {
     const f = fakes();
     let calls = 0;

@@ -184,7 +184,7 @@ describe('compile against DuckDB', () => {
 
 describe('the full-text index', () => {
   it.each([
-    'powershell', '"100% it\'s"', '50_off', 'WS02', 'cmd*whoami', '"x\' OR 1=1"', 'DC01 -powershell', 'error', '"C:\\Tools"',
+    'powershell', '"100% it\'s"', '50_off', 'WS02', 'cmd*whoami', '"x\' OR 1=1"', 'DC01 -powershell', 'error', '"C:\\Tools"', 'ÀÉÎ',
   ])('the index finds exactly what the scan finds for %s', async (query) => {
     const tree = parse(query);
     expect(await db.uids(compile(tree, schema, { textIndex: true }))).toEqual(await db.uids(compile(tree, schema)));

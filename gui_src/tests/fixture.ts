@@ -35,7 +35,7 @@ const SETUP = [
      (4294967297, 1, TIMESTAMP '2021-06-03 07:00:00', NULL, 'Microsoft-Windows-Sysmon/Operational', 1, 'WS02', NULL,
         'C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe', 'powershell -enc SQBFAFgA 100% it''s', 'x', NULL),
      (4294967298, 1, NULL, '["computer"]', 'Windows PowerShell', 400, 'ws02', NULL, 'C:\\Tools\\50_off.exe', NULL, NULL, 'error'),
-     (4294967299, 1, TIMESTAMP '2021-06-03 08:00:00', NULL, 'Security', 4688, 'DC01', NULL, NULL, NULL, NULL, NULL)`,
+     (4294967299, 1, TIMESTAMP '2021-06-03 08:00:00', NULL, 'Security', 4688, 'DC01', 'àéî', NULL, NULL, NULL, NULL)`,
   `CREATE TABLE rules (rule_idx INTEGER, key VARCHAR, id VARCHAR, title VARCHAR, level VARCHAR, level_rank TINYINT,
      description VARCHAR, tactics VARCHAR[], techniques VARCHAR[])`,
   `INSERT INTO rules VALUES

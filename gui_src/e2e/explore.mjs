@@ -67,6 +67,8 @@ async function scenario(page, steps) {
   await poll(page, async () => /ready|error/.test(await page.title()), 'the viewer', 240_000);
   check((await page.title()) === 'Zircolite — ready', `the viewer reports: ${await page.title()}`);
   const expected = Number(await page.locator('#engine-check').getAttribute('data-expected'));
+  // A package with an index must end up using it; a silent failure would leave every bare word on the slow scan.
+  await poll(page, async () => (await page.locator('#engine-check').getAttribute('data-text-index')) === 'ready', 'the full-text index', 120_000);
   const chips = page.locator('ul[aria-label="Active filters"] li');
 
   let r = await results(page, state);
@@ -80,6 +82,12 @@ async function scenario(page, steps) {
   check((await chips.filter({ hasText: 'EventID: 4688' }).count()) === 1, 'the search has no chip');
   const miss = await search(page, state, '-EventID:4688');
   check(hit.count + miss.count === expected, `EventID:4688 (${hit.count}) and its negation (${miss.count}) do not add up to ${expected}`);
+  await search(page, state, '');
+  // A bare word runs through the index by now; it and its negation must still partition the events.
+  const word = await search(page, state, '4688');
+  const notWord = await search(page, state, '-4688');
+  check(word.count > 0, 'the bare word 4688 matched nothing through the index');
+  check(word.count + notWord.count === expected, `4688 (${word.count}) and its negation (${notWord.count}) do not add up to ${expected}`);
   await search(page, state, '');
   steps.push('search and negation partition the events');
 

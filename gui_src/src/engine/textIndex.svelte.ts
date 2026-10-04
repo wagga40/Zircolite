@@ -33,12 +33,15 @@ export async function loadTextIndex(
     await load(file.chunks, () => undefined);
     await db.register(file.name, new Uint8Array(await store.take(file).arrayBuffer()));
     const view = `CREATE OR REPLACE VIEW fulltext AS SELECT * FROM read_parquet(${str(file.name)})`;
-    try {
-      await db.exec(view, { lane: LANE });
-    } catch (error) {
-      // Stop cancels every lane; opening a view is instant, so once more beats leaving the index unused.
-      if (!isSuperseded(error)) throw error;
-      await db.exec(view, { lane: LANE });
+    for (;;) {
+      try {
+        await db.exec(view, { lane: LANE });
+        break;
+      } catch (error) {
+        // Stop cancels every lane; opening a view is instant, and each Stop cancels only what is in flight
+        // then, so trying again beats leaving the index unused.
+        if (!isSuperseded(error)) throw error;
+      }
     }
     textIndex.status = 'ready';
   } catch (error) {

@@ -44,10 +44,13 @@ describe('slow search note', () => {
     );
   });
 
-  it('stays quiet for field searches and for packages of 200,000 events or fewer', () => {
+  it('names the index when it is in use', () => {
     expect(slowSearchNote(parse('mimikatz'), 1_868_682, true)).toBe(
       'Searching every field of 1,868,682 events with the full-text index; this can take a few seconds.',
     );
+  });
+
+  it('stays quiet for field searches and for packages of 200,000 events or fewer', () => {
     expect(slowSearchNote(parse('CommandLine:*mimikatz*'), 1_868_682)).toBeNull();
     expect(slowSearchNote(parse('mimikatz'), 200_000)).toBeNull();
     expect(slowSearchNote(null, 1_868_682)).toBeNull();
