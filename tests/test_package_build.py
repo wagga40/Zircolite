@@ -404,10 +404,32 @@ class TestTextIndex:
         assert rows[1][1] == "ws02"
         assert rows[2][1] == "4624"
 
-    def test_is_left_out_with_a_warning_when_too_large(self, spool, monkeypatch):
+    def test_is_left_out_with_a_warning_when_too_large(self, spool, tmp_path, monkeypatch):
         monkeypatch.setattr(package, "TEXT_PARQUET_LIMIT", 1)
 
         data = build(spool, [part(spool, 0, [{"Computer": "a"}])])
 
         assert "text" not in data.tables
-        assert any(warning.startswith("Full-text search reads every field of every event") for warning in data.manifest["warnings"])
+        assert not (tmp_path / "spool" / "build" / "text.parquet").exists()
+        assert any(warning.startswith("Full-text search reads every field of every event")
+                   and "scans the events instead" in warning for warning in data.manifest["warnings"])
+        directory = fake_viewer(tmp_path)
+        viewer = Viewer(directory, "0.0.1", ("index.html", "app.js"), ("engine.wasm.gz",))
+        destination = tmp_path / "out"
+        destination.mkdir()
+        target = write_package(viewer, data, destination, tmp_path)
+        manifest, _ = read_package(target)
+        assert "text.parquet" not in [entry["name"] for entry in manifest["files"]]
+        with zipfile.ZipFile(target) as archive:
+            assert not [name for name in archive.namelist() if name.startswith("data/text.parquet")]
+
+    def test_an_oversized_events_file_fails_before_any_index_work(self, spool, monkeypatch):
+        monkeypatch.setattr(package, "EVENTS_PARQUET_LIMIT", 10)
+
+        def unexpected(*args, **kwargs):
+            raise AssertionError("the index was written")
+
+        monkeypatch.setattr(package, "write_text", unexpected)
+
+        with pytest.raises(PackageError, match="the events take"):
+            build(spool, [part(spool, 0, [{"Computer": "a"}])])

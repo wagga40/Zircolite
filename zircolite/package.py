@@ -51,7 +51,7 @@ DUCKDB_SETTINGS: dict[str, Any] = {
 }
 # The viewer holds the events file in WebAssembly memory, which stops at 4 GB.
 EVENTS_PARQUET_LIMIT = 1 << 30
-# The viewer holds the index beside the events in the same WASM memory.
+# Per file, like the events: the viewer reads the index into WASM memory too.
 TEXT_PARQUET_LIMIT = 1 << 30
 UID_FACTOR = 1 << UID_PART_SHIFT
 CHUNK_BYTES = 3 * 1024 * 1024  # a multiple of 3: base64 pads only the last chunk
@@ -513,6 +513,11 @@ class PackageBuilder:
                 "hits": write_hits(connection, self.work, parts),
                 **write_alerts(connection, self.work, parts),
             }
+            size = tables["events"].stat().st_size
+            if size > EVENTS_PARQUET_LIMIT:
+                raise PackageError(
+                    f"the events take {size / 2**20:,.0f} MiB, more than the {EVENTS_PARQUET_LIMIT // 2**20:,} MiB "
+                    "a browser can hold; narrow the run with --after/--before or -s")
             text = write_text(connection, self.work, tables["events"], columns)
             totals = {name: _count(connection, "SELECT count(*) FROM read_parquet(?)", tables[name])
                       for name in ("events", "hits", "alerts")}
@@ -525,17 +530,13 @@ class PackageBuilder:
         expected = sum(record.events for record in parts)
         if totals["events"] != expected:
             raise PackageError(f"the events table holds {totals['events']:,} events where the spool held {expected:,}")
-        size = tables["events"].stat().st_size
-        if size > EVENTS_PARQUET_LIMIT:
-            raise PackageError(
-                f"the events take {size / 2**20:,.0f} MiB, more than the {EVENTS_PARQUET_LIMIT // 2**20:,} MiB "
-                "a browser can hold; narrow the run with --after/--before or -s")
         notes: list[str] = []
         text_size = text.stat().st_size
         if text_size > TEXT_PARQUET_LIMIT:
             text.unlink()
             notes.append("Full-text search reads every field of every event: the full-text index "
-                         f"({text_size / 2**20:,.0f} MiB) is larger than a browser can hold beside the events")
+                         f"({text_size / 2**20:,.0f} MiB) is larger than a browser can hold, "
+                         "so a bare-word search scans the events instead")
         else:
             tables["text"] = text
         manifest = build_manifest(parts=parts, columns=columns, run=run, time_field=self.spool.time_field,
