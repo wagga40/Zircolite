@@ -4,7 +4,7 @@
   import { formatRange } from '../explore/histogram';
   import { suggestValuesSql } from '../explore/sidebar';
   import { compile } from '../search/compile';
-  import { chips, type Completion, completionAt, editable, fieldSuggestions, quoteValue, removeSpan, shownQuery } from '../search/edit';
+  import { chips, type Completion, completionAt, editable, fieldSuggestions, lookupField, quoteValue, removeSpan, shownQuery } from '../search/edit';
   import { parse } from '../search/parse';
   import { SHORTCUTS, SYNTAX } from '../search/shortcuts';
   import { SearchError } from '../search/tokens';
@@ -22,7 +22,7 @@
   let active = $state(-1);
   let context: Completion | null = null;
   let lookup = 0;
-  let failure = $state<string | null>(null);
+  let failure = $state<{ field: string; message: string } | null>(null);
 
   const items = $derived(chips(view.q));
   // Kept in view while the slow search is the committed one, so later waits have a reason beside them.
@@ -72,6 +72,8 @@
     if (locked) return;
     const caret = input.selectionStart ?? draft.length;
     context = completionAt(draft, caret);
+    // A failed lookup speaks only for its own field; once the caret is elsewhere the line is stale.
+    if (failure && lookupField(context) !== failure.field) failure = null;
     closeOptions();
     const ticket = lookup;
     if (!context) return;
@@ -79,7 +81,8 @@
       options = fieldSuggestions(context.prefix, schema);
       return;
     }
-    const field = schema.find(context.field);
+    const name = context.field;
+    const field = schema.find(name);
     if (!field) return;
     try {
       const rows = await db.rows<{ v: string }>(suggestValuesSql(field, context.prefix));
@@ -89,7 +92,7 @@
       }
     } catch (problem) {
       if (ticket === lookup) {
-        failure = `Could not look up values for ${field.name}: ${problem instanceof Error ? problem.message : String(problem)}`;
+        failure = { field: name, message: `Could not look up values for ${field.name}: ${problem instanceof Error ? problem.message : String(problem)}` };
       }
     }
   }
@@ -199,7 +202,7 @@
   {#if error}
     <p id="search-error" class="error" role="alert">{error.message} (at character {error.start + 1}).</p>
   {:else if failure}
-    <p class="error" role="alert">{failure}</p>
+    <p class="error" role="alert">{failure.message}</p>
   {/if}
   {#if items.length || view.t || view.d}
     <ul class="chips" aria-label="Active filters">

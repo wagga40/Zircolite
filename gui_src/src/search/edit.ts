@@ -114,6 +114,11 @@ export function completionAt(input: string, caret: number): Completion | null {
   return { kind: 'field', prefix: last.text, start: last.start, end: last.end };
 }
 
+/** The field whose values a completion looks up, or null when it completes something else. */
+export function lookupField(context: Completion | null): string | null {
+  return context?.kind === 'value' ? context.field : null;
+}
+
 export function fieldSuggestions(prefix: string, schema: Schema, limit = 8): string[] {
   const wanted = asciiLower(prefix);
   const names = [...SHORTCUTS.map((s) => ({ name: s.name, text: s.name })), ...schema.fields.map((f) => ({ name: f.name, text: fieldToken(f.name) }))];

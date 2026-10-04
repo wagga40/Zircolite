@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { compile } from '../src/search/compile';
-import { appendRaw, appendTerm, chips, completionAt, editable, fieldSuggestions, removeSpan, shownQuery } from '../src/search/edit';
+import { appendRaw, appendTerm, chips, completionAt, editable, fieldSuggestions, lookupField, removeSpan, shownQuery } from '../src/search/edit';
 import { parse } from '../src/search/parse';
 import { type Fixture, openFixture, schema } from './fixture';
 
@@ -73,6 +73,13 @@ describe('completion', () => {
     const found = fieldSuggestions('lev', schema);
     expect(found).toContain('level');
     expect(found).toContain('"level"');
+  });
+
+  it('names the field whose values a completion looks up, and nothing otherwise', () => {
+    expect(lookupField(completionAt('Computer:DC', 11))).toBe('Computer');
+    expect(lookupField(completionAt('Computer:DC Image:', 18))).toBe('Image');
+    expect(lookupField(completionAt('Comp', 4))).toBeNull();
+    expect(lookupField(completionAt('Computer:DC ', 12))).toBeNull();
   });
 
   it('stays quiet after a space', () => {
