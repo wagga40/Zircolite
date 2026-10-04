@@ -1,18 +1,26 @@
 """Stage two of a package: spooled parts become Parquet tables and a manifest."""
 
+import hashlib
+import json
+import zipfile
+
 import duckdb
 import pytest
 
-from tests.package_fixtures import make_logs, parquet_rows
+from tests.package_fixtures import make_logs, parquet_rows, read_package
 from zircolite import package
 from zircolite.package import (
+    CHUNK_BYTES,
     PACKAGE_FORMAT,
     PackageBuilder,
     RunInfo,
+    Viewer,
     check_duckdb,
+    find_viewer,
     merge_columns,
     sql_identifier,
     sql_string,
+    write_package,
 )
 from zircolite.package_spool import PackageError, PackageSpool, rule_index
 
@@ -198,3 +206,104 @@ class TestManifest:
         (column,) = merge_columns(parts, "SystemTime")
 
         assert (column.name, column.mask, column.count, column.sql_type) == ("N", 5, 3, "VARCHAR")
+
+
+def fake_viewer(tmp_path, *, data_format=1, drop=None):
+    directory = tmp_path / "gui" / "viewer"
+    directory.mkdir(parents=True)
+    copy, wrap = ["index.html", "app.js"], ["engine.wasm.gz"]
+    for name in copy + wrap:
+        if name != drop:
+            (directory / name).write_bytes(name.encode() * 3)
+    (directory / "viewer.json").write_text(json.dumps(
+        {"data_format": data_format, "version": "0.0.1", "copy": copy, "wrap": wrap}), encoding="utf-8")
+    return directory
+
+
+class TestFindViewer:
+    def test_the_shipped_viewer_is_complete(self):
+        viewer = find_viewer()
+
+        assert "index.html" in viewer.copy
+        assert viewer.wrap == ("duckdb-eh.wasm.gz", "duckdb-browser-eh.worker.js", "parquet.duckdb_extension.wasm")
+
+    def test_a_missing_file_is_refused(self, tmp_path, monkeypatch):
+        directory = fake_viewer(tmp_path, drop="app.js")
+        monkeypatch.setattr(package, "bundled_asset", lambda *parts: directory / parts[-1])
+
+        with pytest.raises(PackageError, match=r"app\.js"):
+            find_viewer()
+
+    def test_another_package_format_is_refused(self, tmp_path, monkeypatch):
+        directory = fake_viewer(tmp_path, data_format=99)
+        monkeypatch.setattr(package, "bundled_asset", lambda *parts: directory / parts[-1])
+
+        with pytest.raises(PackageError, match="format 99"):
+            find_viewer()
+
+
+class TestZip:
+    def data(self, spool):
+        return build(spool, [part(spool, 0, [{"Computer": "a"}, {"Computer": "b"}])])
+
+    def viewer(self, tmp_path):
+        directory = fake_viewer(tmp_path)
+        return Viewer(directory, "0.0.1", ("index.html", "app.js"), ("engine.wasm.gz",))
+
+    def test_every_file_reassembles_and_matches_its_digest(self, spool, tmp_path, monkeypatch):
+        monkeypatch.setattr(package, "CHUNK_BYTES", 6)
+        destination = tmp_path / "out"
+        destination.mkdir()
+
+        target = write_package(self.viewer(tmp_path), self.data(spool), destination, tmp_path)
+
+        manifest, files = read_package(target)
+        assert [entry["name"] for entry in manifest["files"]] == ["engine.wasm.gz", *(f"{t}.parquet" for t in package.DATA_TABLES)]
+        for entry in manifest["files"]:
+            assert hashlib.sha256(files[entry["name"]]).hexdigest() == entry["sha256"]
+            assert len(files[entry["name"]]) == entry["bytes"]
+        assert len(manifest["files"][0]["chunks"]) == 7  # 42 bytes in 6-byte chunks
+        with zipfile.ZipFile(target) as archive:
+            names = set(archive.namelist())
+        assert {"index.html", "app.js", "README.txt", "data/manifest.js"} <= names
+        assert manifest["totals"]["events"] == 2
+
+    def test_chunk_size_keeps_base64_unpadded_until_the_end(self):
+        assert CHUNK_BYTES % 3 == 0
+
+    def test_an_existing_package_is_never_overwritten(self, spool, tmp_path, monkeypatch):
+        destination = tmp_path / "out"
+        destination.mkdir()
+        (destination / "zircolite-package-AAAA.zip").write_bytes(b"keep")
+        suffixes = iter(["AAAA", "BBBB"])
+        monkeypatch.setattr(package, "random_suffix", lambda length=4: next(suffixes))
+
+        target = write_package(self.viewer(tmp_path), self.data(spool), destination, tmp_path)
+
+        assert target.name == "zircolite-package-BBBB.zip"
+        assert (destination / "zircolite-package-AAAA.zip").read_bytes() == b"keep"
+
+    def test_a_failed_write_leaves_no_package(self, spool, tmp_path, monkeypatch):
+        destination = tmp_path / "out"
+        destination.mkdir()
+
+        def broken(*args, **kwargs):
+            raise OSError("disk full")
+
+        monkeypatch.setattr(package, "_wrap", broken)
+        with pytest.raises(OSError):
+            write_package(self.viewer(tmp_path), self.data(spool), destination, tmp_path)
+
+        assert list(destination.iterdir()) == []
+
+    def test_build_writes_a_package_with_the_shipped_viewer(self, spool, tmp_path):
+        destination = tmp_path / "out"
+        destination.mkdir()
+        builder = PackageBuilder(spool)
+
+        target = builder.build(viewer=find_viewer(), parts=[part(spool, 0, [{"A": "1"}])], rulesets=RULES,
+                               run=RUN, failed_sources=[], destination=destination)
+
+        manifest, files = read_package(target)
+        assert {"duckdb-eh.wasm.gz", "parquet.duckdb_extension.wasm", "events.parquet"} <= set(files)
+        assert manifest["totals"]["events"] == 1

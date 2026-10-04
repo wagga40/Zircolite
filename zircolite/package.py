@@ -7,7 +7,11 @@ beside it but may not fetch files, so ``<script src>`` is the one way in that
 every browser allows.
 """
 
+import base64
+import hashlib
 import logging
+import os
+import zipfile
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
@@ -16,6 +20,7 @@ from typing import Any
 import duckdb
 import orjson
 
+from .assets import bundled_asset
 from .attack import TACTIC_ORDER, extract_attack_tactics, extract_attack_techniques
 from .config import RULE_LEVELS
 from .correlations import is_correlation_plan_rule
@@ -27,6 +32,7 @@ from .package_spool import (
     ascii_lower,
     rule_key,
 )
+from .utils import random_suffix
 
 PACKAGE_FORMAT = 1
 DATA_TABLES = ("events", "rules", "hits", "alerts", "alert_events")
@@ -45,6 +51,16 @@ DUCKDB_SETTINGS: dict[str, Any] = {
 # The viewer holds the events file in WebAssembly memory, which stops at 4 GB.
 EVENTS_PARQUET_LIMIT = 1 << 30
 UID_FACTOR = 1 << UID_PART_SHIFT
+CHUNK_BYTES = 3 * 1024 * 1024  # a multiple of 3: base64 pads only the last chunk
+README_TEXT = """Zircolite package
+=================
+
+Extract this archive, then open index.html in a web browser. Opening it from
+inside the archive does not work: the page loads the files beside it.
+
+Everything runs on this computer, and the page makes no network requests. The
+package holds every event of the run, so share it as you would the logs.
+"""
 
 EVENT_SPOOL_COLUMNS = {"_zl_part": "INTEGER", "_zl_rid": "BIGINT", "_zl_time": "BIGINT", "_zl_spelling": "VARCHAR"}
 EVENT_COLUMNS = {"_zl_uid": "BIGINT", "_zl_part": "INTEGER", "_zl_time": "TIMESTAMP", "_zl_spelling": "VARCHAR"}
@@ -340,6 +356,94 @@ def _row_count(connection: duckdb.DuckDBPyConnection, table: Path) -> int:
     return int(row[0])
 
 
+@dataclass(frozen=True)
+class Viewer:
+    directory: Path
+    version: str
+    copy: tuple[str, ...]
+    wrap: tuple[str, ...]
+
+
+def _file_names(value: Any, label: str, descriptor: Path) -> tuple[str, ...]:
+    if not isinstance(value, list) or not all(
+            isinstance(name, str) and name and name == Path(name).name and name not in (".", "..")
+            for name in value):
+        raise PackageError(f"{descriptor}: {label} must list plain file names")
+    return tuple(value)
+
+
+def find_viewer() -> Viewer:
+    """The packaged viewer, checked whole: a package built from half a viewer opens blank."""
+    descriptor = bundled_asset("gui", "viewer", "viewer.json")
+    try:
+        meta = orjson.loads(descriptor.read_bytes())
+    except (OSError, orjson.JSONDecodeError) as exc:
+        raise PackageError(f"cannot read the viewer description {descriptor}: {exc}") from exc
+    if not isinstance(meta, dict):
+        raise PackageError(f"{descriptor} is not a viewer description")
+    if meta.get("data_format") != PACKAGE_FORMAT:
+        raise PackageError(
+            f"{descriptor} reads package format {meta.get('data_format')!r}, but this Zircolite "
+            f"writes format {PACKAGE_FORMAT}; rebuild the viewer")
+    copy = _file_names(meta.get("copy"), "copy", descriptor)
+    wrap = _file_names(meta.get("wrap"), "wrap", descriptor)
+    if "index.html" not in copy:
+        raise PackageError(f"{descriptor} does not ship index.html")
+    missing = [name for name in (*copy, *wrap) if not (descriptor.parent / name).is_file()]
+    if missing:
+        raise PackageError(f"the viewer in {descriptor.parent} is missing {', '.join(missing)}")
+    return Viewer(descriptor.parent, str(meta.get("version", "")), copy, wrap)
+
+
+def _wrap(archive: zipfile.ZipFile, source: Path, name: str, folder: str, kind: str) -> dict[str, Any]:
+    """Write ``source`` into the archive as ``__zircolite.chunk`` scripts."""
+    digest = hashlib.sha256()
+    chunks: list[str] = []
+    size = 0
+    label = orjson.dumps(name)
+    with open(source, "rb") as handle:
+        while block := handle.read(CHUNK_BYTES):
+            entry = f"{folder}/{name}.{len(chunks):04d}.js"
+            with archive.open(entry, "w") as out:
+                out.write(b"__zircolite.chunk(" + label + b"," + str(len(chunks)).encode() + b',"')
+                out.write(base64.b64encode(block))
+                out.write(b'");\n')
+            chunks.append(entry)
+            digest.update(block)
+            size += len(block)
+    return {"name": name, "kind": kind, "bytes": size, "sha256": digest.hexdigest(), "chunks": chunks}
+
+
+def _fresh_name(directory: Path) -> Path:
+    while True:
+        candidate = directory / f"zircolite-package-{random_suffix(4)}.zip"
+        if not candidate.exists():
+            return candidate
+
+
+def write_package(viewer: Viewer, data: PackageData, destination: Path, work: Path) -> Path:
+    """Write the zip beside the spool, then move it into place under a fresh name.
+
+    The spool lives in the destination directory, so the move is a rename: a
+    failed write leaves no half package where the user looks for one.
+    """
+    temporary = work / "package.zip"
+    files: list[dict[str, Any]] = []
+    with zipfile.ZipFile(temporary, "w", compression=zipfile.ZIP_DEFLATED, compresslevel=6) as archive:
+        for name in viewer.copy:
+            archive.write(viewer.directory / name, name)
+        for name in viewer.wrap:
+            files.append(_wrap(archive, viewer.directory / name, name, "assets", "engine"))
+        for table in DATA_TABLES:
+            files.append(_wrap(archive, data.tables[table], f"{table}.parquet", "data", "data"))
+        archive.writestr("README.txt", README_TEXT)
+        manifest = orjson.dumps({**data.manifest, "files": files})
+        archive.writestr("data/manifest.js", b"__zircolite.manifest(" + manifest + b");\n")
+    target = _fresh_name(destination)
+    os.replace(temporary, target)
+    return target
+
+
 class PackageBuilder:
     """Turns the spooled parts of a run into Parquet tables and a manifest."""
 
@@ -377,3 +481,8 @@ class PackageBuilder:
         manifest = build_manifest(parts=parts, columns=columns, run=run, time_field=self.spool.time_field,
                                   failed_sources=failed_sources, totals=totals)
         return PackageData(tables=tables, manifest=manifest)
+
+    def build(self, *, viewer: Viewer, parts: list[PartRecord], rulesets: list[dict[str, Any]], run: RunInfo,
+              failed_sources: list[str], destination: Path) -> Path:
+        data = self.build_data(parts=parts, rulesets=rulesets, run=run, failed_sources=failed_sources)
+        return write_package(viewer, data, destination, self.work)
