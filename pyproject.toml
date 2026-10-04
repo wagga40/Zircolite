@@ -28,6 +28,7 @@ dependencies = [
     "pyroaring>=1.1.0",
     # Rule regexes run with a CPU-time limit (zircolite/core.py, REGEX_TIMEOUT_SECONDS)
     "regex>=2024.11.6",
+    "duckdb<2,>=1.5.6",
 ]
 requires-python = ">=3.10"
 readme = "README.md"

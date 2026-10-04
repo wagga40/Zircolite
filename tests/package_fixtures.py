@@ -74,7 +74,9 @@ def parquet_rows(data: bytes, tmp_path: Path, sql: str = "SELECT * FROM t") -> t
     target.write_bytes(data)
     connection = duckdb.connect(config={"autoinstall_known_extensions": False, "autoload_known_extensions": False})
     try:
-        connection.execute("CREATE VIEW t AS SELECT * FROM read_parquet(?)", [str(target)])
+        # A view cannot take a prepared parameter.
+        quoted = "'" + str(target).replace("'", "''") + "'"
+        connection.execute(f"CREATE VIEW t AS SELECT * FROM read_parquet({quoted})")
         cursor = connection.execute(sql)
         return [column[0] for column in cursor.description], cursor.fetchall()
     finally:
