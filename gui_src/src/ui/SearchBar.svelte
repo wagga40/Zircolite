@@ -56,9 +56,12 @@
     if (locked) closeOptions();
   });
 
-  // Bumping the ticket also drops a lookup still in flight, so it cannot reopen the list.
-  onDestroy(() => clearTimeout(lookupTimer));
+  onDestroy(() => {
+    clearTimeout(lookupTimer);
+    db.cancel('suggest');
+  });
 
+  // Bumping the ticket also drops a lookup still in flight, so it cannot reopen the list.
   function closeOptions(): void {
     lookup += 1;
     clearTimeout(lookupTimer);

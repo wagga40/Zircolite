@@ -4,7 +4,7 @@
   import { LEVELS } from '../engine/levels';
   import type { Manifest } from '../engine/manifest';
   import { isSuperseded } from '../engine/queries';
-  import { run } from '../state/run.svelte';
+  import { run, runAgain } from '../state/run.svelte';
   import { view } from '../state/view.svelte';
   import { pageTopLayer } from '../ui/layers';
   import { formatCount, isoTime } from '../ui/format';
@@ -244,7 +244,7 @@
   {#if failure}
     <p class="note failure" role="alert">The histogram could not be drawn: {failure}</p>
   {:else if stopped}
-    <p class="note" role="status">Stopped.</p>
+    <p class="note" role="status">Stopped. <button type="button" class="again" onclick={runAgain}>Run again</button></p>
   {:else if domain === null}
     <p class="note">No event in this package has a time, so there is nothing to draw here. Every event is still listed below.</p>
   {:else}
@@ -299,5 +299,6 @@
   .swatch i { display: inline-block; width: 8px; height: 8px; border-radius: 1px; }
   .note { margin: 4px 0; color: var(--ink-2); font-size: var(--t-13); }
   .failure { color: var(--danger); }
+  .again { background: none; border: 1px solid var(--rule); border-radius: var(--radius); padding: 1px 8px; min-height: 24px; font-size: var(--t-12); cursor: pointer; color: var(--ink); }
   .visually-hidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 </style>
