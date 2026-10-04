@@ -83,6 +83,19 @@ async function scenario(page, steps) {
   await search(page, state, '');
   steps.push('search and negation partition the events');
 
+  // A text input strips line breaks, so a query holding one must not be editable through it.
+  const input = page.locator('#search-input');
+  await page.goto(`${url}#/explore?q=${encodeURIComponent('Computer:"a\nb"')}`);
+  await results(page, state);
+  check(!(await input.isEditable()), 'the search box is editable while the search holds a line break');
+  check(await page.locator('#search-locked').isVisible(), 'no note says why the search box is read-only');
+  await chips.filter({ hasText: 'Computer:' }).getByRole('button').click();
+  r = await results(page, state);
+  check(await input.isEditable(), 'the search box stayed read-only after its last term was removed');
+  check((await input.inputValue()) === '' && !page.url().includes('q='), 'removing the only chip left a search behind');
+  check(r.count === expected, `removing the chip lists ${r.count} events, not ${expected}`);
+  steps.push('line breaks: read-only search, chip removal');
+
   const detectionsOnly = page.getByRole('button', { name: 'Detections only' });
   await detectionsOnly.click();
   r = await results(page, state);

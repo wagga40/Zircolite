@@ -4,7 +4,7 @@
   import { formatRange } from '../explore/histogram';
   import { suggestValuesSql } from '../explore/sidebar';
   import { compile } from '../search/compile';
-  import { chips, type Completion, completionAt, fieldSuggestions, quoteValue, removeSpan } from '../search/edit';
+  import { chips, type Completion, completionAt, editable, fieldSuggestions, quoteValue, removeSpan, shownQuery } from '../search/edit';
   import { parse } from '../search/parse';
   import { SHORTCUTS, SYNTAX } from '../search/shortcuts';
   import { SearchError } from '../search/tokens';
@@ -23,6 +23,8 @@
   let failure = $state<string | null>(null);
 
   const items = $derived(chips(view.q));
+  // The box cannot hold a line break, so such a query is shown but never edited through it.
+  const locked = $derived(!editable(view.q));
 
   function check(text: string): SearchError | null {
     try {
@@ -36,8 +38,9 @@
 
   // The committed query also changes from outside: the sidebar, the event view, Back.
   $effect(() => {
-    draft = view.q;
+    draft = locked ? shownQuery(view.q) : view.q;
     error = view.q ? check(view.q) : null;
+    if (locked) closeOptions();
   });
 
   // Bumping the ticket also drops a lookup still in flight, so it cannot reopen the list.
@@ -48,6 +51,7 @@
   }
 
   function submit(): void {
+    if (locked) return;
     closeOptions();
     failure = null;
     error = check(draft);
@@ -55,6 +59,7 @@
   }
 
   async function suggest(): Promise<void> {
+    if (locked) return;
     const caret = input.selectionStart ?? draft.length;
     context = completionAt(draft, caret);
     closeOptions();
@@ -93,6 +98,11 @@
   }
 
   function onkeydown(event: KeyboardEvent): void {
+    if (locked) {
+      if (event.key === 'Escape' && ui.help) ui.help = false;
+      else if (event.key === 'Enter') event.preventDefault();
+      return;
+    }
     if (options.length && (event.key === 'ArrowDown' || event.key === 'ArrowUp')) {
       event.preventDefault();
       const step = event.key === 'ArrowDown' ? 1 : -1;
@@ -141,8 +151,9 @@
       aria-expanded={options.length > 0}
       aria-controls={options.length ? 'search-options' : undefined}
       aria-activedescendant={active >= 0 ? `search-option-${active}` : undefined}
+      readonly={locked}
       aria-invalid={error ? 'true' : undefined}
-      aria-describedby={error ? 'search-error' : undefined}
+      aria-describedby={[error ? 'search-error' : '', locked ? 'search-locked' : ''].join(' ').trim() || undefined}
       oninput={suggest}
       onclick={suggest}
       {onkeydown}
@@ -158,6 +169,12 @@
       </ul>
     {/if}
   </div>
+  {#if locked}
+    <p id="search-locked" class="locked">
+      This search holds a value with line breaks, which the search box cannot edit. Remove terms with their ×, or clear the search.
+      <button type="button" onclick={() => (view.q = '')}>Clear search</button>
+    </p>
+  {/if}
   {#if error}
     <p id="search-error" class="error" role="alert">{error.message} (at character {error.start + 1}).</p>
   {:else if failure}
@@ -207,6 +224,9 @@
   .field { display: flex; gap: 6px; position: relative; }
   input { flex: 1; min-width: 0; font: 400 var(--t-15) / 1.4 var(--mono); color: var(--ink); background: var(--paper); border: 1px solid var(--rule); border-radius: var(--radius); padding: 7px 10px; }
   input[aria-invalid='true'] { border-color: var(--danger); }
+  input[readonly] { background: var(--panel); border-style: dashed; }
+  .locked { margin: 6px 0 0; font-size: var(--t-13); color: var(--ink-2); }
+  .locked button { margin-left: 6px; background: none; border: 1px solid var(--rule); border-radius: var(--radius); min-height: 24px; padding: 1px 8px; cursor: pointer; color: var(--ink); }
   .syntax { background: none; border: 1px solid var(--rule); border-radius: var(--radius); padding: 0 10px; cursor: pointer; color: var(--ink-2); }
   [role='listbox'] { position: absolute; top: 100%; left: 0; right: 0; z-index: 20; list-style: none; margin: 4px 0 0; padding: 4px; background: var(--panel); border: 1px solid var(--rule); border-radius: var(--radius); max-height: 18rem; overflow: auto; }
   [role='option'] { padding: 4px 8px; font: 400 var(--t-13) / 1.4 var(--mono); cursor: pointer; overflow-wrap: anywhere; }

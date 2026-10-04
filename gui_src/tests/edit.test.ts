@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { compile } from '../src/search/compile';
-import { appendRaw, appendTerm, chips, completionAt, fieldSuggestions, removeSpan } from '../src/search/edit';
+import { appendRaw, appendTerm, chips, completionAt, editable, fieldSuggestions, removeSpan, shownQuery } from '../src/search/edit';
 import { parse } from '../src/search/parse';
 import { type Fixture, openFixture, schema } from './fixture';
 
@@ -77,5 +77,27 @@ describe('completion', () => {
 
   it('stays quiet after a space', () => {
     expect(completionAt('Computer:DC01 ', 14)).toBeNull();
+  });
+});
+
+describe('line breaks', () => {
+  it('a query holding CR or LF is not editable in the search box', () => {
+    expect(editable('Computer:"DC01" powershell')).toBe(true);
+    expect(editable('')).toBe(true);
+    expect(editable('Computer:"a\nb"')).toBe(false);
+    expect(editable('Message:"a\rb"')).toBe(false);
+    expect(editable('Message:"a\r\nb" x')).toBe(false);
+  });
+
+  it('shows each line break as one mark', () => {
+    expect(shownQuery('a:"x\r\ny\nz\rw"')).toBe('a:"x⏎y⏎z⏎w"');
+    expect(shownQuery('a:"x\n\ny"')).toBe('a:"x⏎⏎y"');
+    expect(shownQuery('plain')).toBe('plain');
+  });
+
+  it('removing the chip of a value with line breaks leaves the rest exact', () => {
+    const query = 'Computer:"a\nb" EventID:1';
+    const [chip] = chips(query);
+    expect(removeSpan(query, chip.start, chip.end)).toBe('EventID:1');
   });
 });

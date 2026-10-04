@@ -37,6 +37,20 @@ export function removeSpan(input: string, start: number, end: number): string {
   return before && after ? `${before} ${after}` : `${before}${after}`;
 }
 
+/**
+ * Whether the search box can show this query and give it back unchanged. A
+ * text input strips CR and LF and a textarea turns CRLF into LF, so a query
+ * holding either would silently change on its next edit.
+ */
+export function editable(query: string): boolean {
+  return !/[\r\n]/.test(query);
+}
+
+/** A query as the read-only search box shows it: each line break as one mark, never submitted. */
+export function shownQuery(query: string): string {
+  return query.replace(/\r\n|\r|\n/g, '⏎');
+}
+
 export function quoteValue(value: string): string {
   return `"${value.replace(/["\\]/g, (c) => `\\${c}`)}"`;
 }
