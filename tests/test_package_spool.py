@@ -1,5 +1,6 @@
 """Stage one of a package: a working database's events copied to the spool."""
 
+import pickle
 from datetime import datetime, timezone
 
 import orjson
@@ -7,7 +8,15 @@ import pytest
 
 from tests.package_fixtures import make_logs, read_spool
 from zircolite import package_spool
-from zircolite.package_spool import PackageError, PackageSpool, time_microseconds
+from zircolite.package_spool import (
+    PackageError,
+    PackageSpool,
+    PartRecord,
+    rule_index,
+    rule_key,
+    time_microseconds,
+)
+from zircolite.results import RowSpool
 from zircolite.spellings import record_spellings
 
 
@@ -182,3 +191,128 @@ class TestRefusals:
             writer.export_events(make_logs([{"A": "x"}]))
 
         assert len(writer.record.event_files) == 1
+
+
+RULES = [{"id": "r-1", "title": "One"}, {"title": "Two"}, {"id": "r-1", "title": "Duplicate id"}]
+
+
+@pytest.fixture
+def hit_spool(tmp_path):
+    return PackageSpool(directory=str(tmp_path), time_field="SystemTime", rule_keys=rule_index(RULES))
+
+
+def hits_of(record):
+    with open(record.hits_file, encoding="utf-8") as handle:
+        return [tuple(int(v) for v in line.split(",")) for line in handle]
+
+
+def alerts_of(record):
+    with open(record.alerts_file, "rb") as handle:
+        return [orjson.loads(line) for line in handle]
+
+
+class TestRuleIndex:
+    def test_first_rule_wins_a_shared_key_and_title_stands_in_for_id(self):
+        assert rule_index(RULES) == {"r-1": 0, "Two": 1}
+
+    def test_a_result_and_its_rule_share_a_key(self):
+        assert rule_key({"id": "", "title": "Two"}) == rule_key(RULES[1]) == "Two"
+        assert rule_key({}) == "Unnamed Rule"
+
+
+class TestHits:
+    def test_hits_are_recorded_per_rule(self, hit_spool):
+        writer = hit_spool.open_part(3, ["x"])
+        writer.sink({"id": "r-1", "title": "One", "count": 2, "matches": [{"row_id": 4}, {"row_id": 9}]})
+
+        record = writer.finish()
+
+        assert hits_of(record) == [(0, 3, 4), (0, 3, 9)]
+        assert record.rules[0] == {"count": 2, "linked": 2, "unlinked": 0, "alert_count": 0, "event_count": 0}
+
+    def test_spooled_matches_are_read(self, hit_spool):
+        matches = RowSpool()
+        matches.append({"row_id": 7, "Computer": "a"})
+        writer = hit_spool.open_part(0, ["x"])
+        writer.sink({"title": "Two", "count": 1, "matches": matches})
+        matches.close()
+
+        assert hits_of(writer.finish()) == [(1, 0, 7)]
+
+    def test_a_match_without_a_row_id_is_unlinked(self, hit_spool):
+        writer = hit_spool.open_part(0, ["x"])
+        writer.sink({"title": "Two", "count": 1, "matches": [{"COUNT(*)": 12}]})
+
+        record = writer.finish()
+
+        assert record.hits_file is None
+        assert record.rules[1]["unlinked"] == 1
+
+    def test_csv_sanitised_rows_still_link(self, hit_spool):
+        writer = hit_spool.open_part(0, ["x"])
+        writer.sink({"title": "Two", "count": "1", "matches": [{"row_id": "7"}]})
+        writer.sink({"id": "r-1", "title": "One", "result_type": "correlation", "count": 1, "alert_count": 1,
+                     "event_count": 1, "matches": [{
+                         "alert_id": "a1", "event_ids": '["0:4"]',
+                         "evidence": '[{"event_id": "0:4", "source_table": "logs", "event": {}}]',
+                         "group_keys": '{"Host": "h"}', "occurrence_time": "1622700000.5"}]})
+
+        record = writer.finish()
+
+        assert sorted(hits_of(record)) == [(0, 0, 4), (1, 0, 7)]
+        assert alerts_of(record)[0]["occurrence_us"] == 1622700000500000
+
+    def test_rules_unknown_to_the_run_fail_at_finish(self, hit_spool):
+        writer = hit_spool.open_part(0, ["x"])
+        writer.sink({"title": "Never loaded", "count": 1, "matches": [{"row_id": 1}]})
+
+        with pytest.raises(PackageError, match="Never loaded"):
+            writer.finish()
+
+
+class TestCorrelations:
+    def alert(self, table="logs"):
+        return {"alert_id": "a1", "group_keys": {"Host": "h"}, "occurrence_time": 1622700000,
+                "window_start": 1622699000, "window_end": 1622700000, "metric_name": "event_count",
+                "metric_value": 2, "event_count": 2, "event_ids": ["0:4", "0:9"], "child_alert_ids": [],
+                "evidence": [{"event_id": "0:4", "source_table": table, "event": {}},
+                             {"event_id": "0:9", "source_table": table, "event": {}}]}
+
+    def test_an_alert_links_its_evidence(self, hit_spool):
+        writer = hit_spool.open_part(2, ["x"])
+        writer.sink({"id": "r-1", "title": "One", "result_type": "correlation", "count": 1,
+                     "alert_count": 1, "event_count": 2, "matches": [self.alert()]})
+
+        record = writer.finish()
+
+        assert hits_of(record) == [(0, 2, 4), (0, 2, 9)]
+        alert = alerts_of(record)[0]
+        assert alert["rids"] == [4, 9]
+        assert orjson.loads(alert["group_keys"]) == {"Host": "h"}
+        assert alert["occurrence_us"] == 1622700000000000
+        assert record.rules[0]["alert_count"] == 1 and record.rules[0]["event_count"] == 2
+
+    def test_evidence_from_another_table_fails(self, hit_spool):
+        writer = hit_spool.open_part(0, ["x"])
+        writer.sink({"id": "r-1", "title": "One", "result_type": "correlation", "count": 1,
+                     "matches": [self.alert(table="other")]})
+
+        with pytest.raises(PackageError, match="logs"):
+            writer.finish()
+
+
+class TestLifecycle:
+    def test_discard_removes_every_file(self, hit_spool, tmp_path):
+        writer = hit_spool.open_part(0, ["x"])
+        writer.export_events(make_logs([{"A": "1"}]))
+        writer.sink({"title": "Two", "count": 1, "matches": [{"row_id": 1}]})
+
+        writer.discard()
+
+        assert list(tmp_path.iterdir()) == []
+
+    def test_spool_and_record_survive_pickling(self, hit_spool):
+        record = PartRecord(part=1, sources=["x"], rules={0: {"count": 1}})
+
+        assert pickle.loads(pickle.dumps(hit_spool)) == hit_spool  # noqa: S301 -- round-trips our own objects
+        assert pickle.loads(pickle.dumps(record)) == record  # noqa: S301 -- round-trips our own objects

@@ -77,6 +77,57 @@ def time_microseconds(value: Any, timestamp_format: str) -> int | None:
     return microseconds if _FIRST_US <= microseconds <= _LAST_US else None
 
 
+def rule_key(rule: dict[str, Any]) -> str:
+    """What a rule and its results are matched on, as ``collapse_results_by_rule`` does."""
+    return str(rule.get("id") or rule.get("title") or "Unnamed Rule")
+
+
+def rule_index(rulesets: list[dict[str, Any]]) -> dict[str, int]:
+    """Each rule's position in the run's ruleset; the first rule wins a shared key."""
+    index: dict[str, int] = {}
+    for position, rule in enumerate(rulesets):
+        index.setdefault(rule_key(rule), position)
+    return index
+
+
+def _integer(value: Any) -> int:
+    if isinstance(value, int):
+        return int(value)
+    if isinstance(value, float) and math.isfinite(value):
+        return int(value)
+    if isinstance(value, str) and value.strip().lstrip("-").isdigit():
+        return int(value)
+    return 0
+
+
+def _float(value: Any) -> float | None:
+    try:
+        number = float(value)
+    except (TypeError, ValueError):
+        return None
+    return number if math.isfinite(number) else None
+
+
+def _row_id(value: Any) -> int | None:
+    """A match's row_id; ``--csv`` hands rows to sinks with every value as text."""
+    if isinstance(value, str) and value.isdigit():
+        value = int(value)
+    if type(value) is int and 0 <= value < ROW_ID_LIMIT:
+        return value
+    return None
+
+
+def _json_value(value: Any) -> Any:
+    """A list or object that ``--csv`` may already have turned into its JSON text."""
+    return orjson.loads(value) if isinstance(value, str) else value
+
+
+def _json_text(value: Any) -> str | None:
+    if value is None or isinstance(value, str):
+        return value
+    return orjson.dumps(value).decode()
+
+
 @dataclass
 class PartRecord:
     """What stage two needs to know about one spooled part.
@@ -192,6 +243,10 @@ class PartWriter:
         self.spool = spool
         self.record = PartRecord(part=part, sources=list(sources))
         self._prefix = Path(spool.directory) / f"part-{part:07d}"
+        self._hits: BinaryIO | None = None
+        self._alerts: BinaryIO | None = None
+        self._alert_seq = 0
+        self._error: str | None = None
 
     def export_events(self, connection: sqlite3.Connection) -> None:
         """Copy every row of ``logs`` to the spool, with what stage two needs to type it.
@@ -212,6 +267,104 @@ class PartWriter:
         finally:
             self.record.event_files = spool.paths
             self.record.longest_line = spool.longest
+
+    def sink(self, result: dict[str, Any]) -> None:
+        """Record which events ``result`` matched: a result sink for ``execute_ruleset``.
+
+        It never raises. An exception here would stop the rule loop and lose
+        the detections output with it, so ``finish`` reports the first failure.
+        """
+        if self._error is not None:
+            return
+        try:
+            self._record_result(result)
+        except (PackageError, OSError, ValueError, TypeError) as exc:
+            self._error = str(exc)
+
+    def finish(self) -> PartRecord:
+        self._close()
+        if self._error is not None:
+            raise PackageError(self._error)
+        return self.record
+
+    def discard(self) -> None:
+        self._close()
+        for path in [*self.record.event_files, self.record.hits_file, self.record.alerts_file]:
+            if path:
+                Path(path).unlink(missing_ok=True)
+
+    def _close(self) -> None:
+        for handle in (self._hits, self._alerts):
+            if handle is not None:
+                handle.close()
+        self._hits = self._alerts = None
+
+    def _record_result(self, result: dict[str, Any]) -> None:
+        key = rule_key(result)
+        rule_idx = self.spool.rule_keys.get(key)
+        if rule_idx is None:
+            raise PackageError(f"a result names rule {key!r}, which the run did not load")
+        counts = self.record.rules.setdefault(
+            rule_idx, {"count": 0, "linked": 0, "unlinked": 0, "alert_count": 0, "event_count": 0})
+        counts["count"] += _integer(result.get("count"))
+        if result.get("result_type") == "correlation":
+            counts["alert_count"] += _integer(result.get("alert_count"))
+            counts["event_count"] += _integer(result.get("event_count"))
+            for alert in result.get("matches") or ():
+                self._add_alert(rule_idx, alert)
+            return
+        for match in result.get("matches") or ():
+            row_id = _row_id(match.get("row_id"))
+            if row_id is None:
+                counts["unlinked"] += 1
+            else:
+                self._add_hit(rule_idx, row_id)
+                counts["linked"] += 1
+
+    def _add_hit(self, rule_idx: int, row_id: int) -> None:
+        if self._hits is None:
+            path = f"{self._prefix}.hits.csv"
+            self._hits = open(path, "wb")  # noqa: SIM115 -- closed by finish() or discard()
+            self.record.hits_file = path
+        self._hits.write(f"{rule_idx},{self.record.part},{row_id}\n".encode())
+
+    def _add_alert(self, rule_idx: int, alert: dict[str, Any]) -> None:
+        tables = {item.get("event_id"): item.get("source_table")
+                  for item in _json_value(alert.get("evidence")) or () if isinstance(item, dict)}
+        row_ids: list[int] = []
+        for identity in _json_value(alert.get("event_ids")) or ():
+            table = tables.get(identity)
+            if table != "logs":
+                raise PackageError(
+                    f"correlation alert {alert.get('alert_id')!r} cites event {identity!r} "
+                    f"from {table!r}; a package links events from logs only")
+            row_id = _row_id(str(identity).partition(":")[2])
+            if row_id is None:
+                raise PackageError(
+                    f"correlation alert {alert.get('alert_id')!r} cites an unreadable event id {identity!r}")
+            row_ids.append(row_id)
+            self._add_hit(rule_idx, row_id)
+        line = {
+            "rule_idx": rule_idx,
+            "part": self.record.part,
+            "seq": self._alert_seq,
+            "alert_id": _text(alert.get("alert_id")),
+            "group_keys": _json_text(alert.get("group_keys")),
+            "occurrence_us": time_microseconds(alert.get("occurrence_time"), "unix"),
+            "window_start_us": time_microseconds(alert.get("window_start"), "unix"),
+            "window_end_us": time_microseconds(alert.get("window_end"), "unix"),
+            "metric_name": _text(alert.get("metric_name")),
+            "metric_value": _float(alert.get("metric_value")),
+            "event_count": _integer(alert.get("event_count")),
+            "child_alert_ids": _json_text(alert.get("child_alert_ids")),
+            "rids": row_ids,
+        }
+        self._alert_seq += 1
+        if self._alerts is None:
+            path = f"{self._prefix}.alerts.ndjson"
+            self._alerts = open(path, "wb")  # noqa: SIM115 -- closed by finish() or discard()
+            self.record.alerts_file = path
+        self._alerts.write(orjson.dumps(line) + b"\n")
 
     def _copy_events(self, connection: sqlite3.Connection, spool: "_SpoolFiles") -> None:
         columns = [row[1] for row in connection.execute("PRAGMA table_info(logs)")]
