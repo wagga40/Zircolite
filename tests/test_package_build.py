@@ -335,7 +335,9 @@ class TestZip:
         target = write_package(self.viewer(tmp_path), self.data(spool), destination, tmp_path)
 
         manifest, files = read_package(target)
-        assert [entry["name"] for entry in manifest["files"]] == ["engine.wasm.gz", *(f"{t}.parquet" for t in package.DATA_TABLES)]
+        assert [entry["name"] for entry in manifest["files"]] == [
+            "engine.wasm.gz", *(f"{t}.parquet" for t in package.DATA_TABLES), "text.parquet"]
+        assert [entry["kind"] for entry in manifest["files"]][-1] == "index"
         for entry in manifest["files"]:
             assert hashlib.sha256(files[entry["name"]]).hexdigest() == entry["sha256"]
             assert len(files[entry["name"]]) == entry["bytes"]
@@ -386,3 +388,26 @@ class TestZip:
         assert {"duckdb-eh.wasm.gz", "parquet.duckdb_extension.wasm", "events.parquet"} <= set(files)
         assert manifest["totals"]["events"] == 1
         assert manifest["viewer"] == find_viewer().version != ""
+
+
+class TestTextIndex:
+    def test_holds_each_events_values_lowercased_in_event_order(self, spool, tmp_path):
+        parts = [part(spool, 0, [{"Computer": "DC01", "CommandLine": "PowerShell -Enc AAA"}, {"Computer": "ws02"}]),
+                 part(spool, 3, [{"EventID": 4624}])]
+
+        data = build(spool, parts)
+
+        _, rows = table(data, "text", tmp_path, "SELECT _zl_uid, _zl_text FROM t")
+        assert [row[0] for row in rows] == [1, 2, (3 << 32) + 1]
+        # chr(31) keeps a phrase from matching across two fields, as the viewer's scan does.
+        assert sorted(rows[0][1].split("\x1f")) == ["dc01", "powershell -enc aaa"]
+        assert rows[1][1] == "ws02"
+        assert rows[2][1] == "4624"
+
+    def test_is_left_out_with_a_warning_when_too_large(self, spool, monkeypatch):
+        monkeypatch.setattr(package, "TEXT_PARQUET_LIMIT", 1)
+
+        data = build(spool, [part(spool, 0, [{"Computer": "a"}])])
+
+        assert "text" not in data.tables
+        assert any(warning.startswith("Full-text search reads every field of every event") for warning in data.manifest["warnings"])

@@ -51,6 +51,8 @@ DUCKDB_SETTINGS: dict[str, Any] = {
 }
 # The viewer holds the events file in WebAssembly memory, which stops at 4 GB.
 EVENTS_PARQUET_LIMIT = 1 << 30
+# The viewer holds the index beside the events in the same WASM memory.
+TEXT_PARQUET_LIMIT = 1 << 30
 UID_FACTOR = 1 << UID_PART_SHIFT
 CHUNK_BYTES = 3 * 1024 * 1024  # a multiple of 3: base64 pads only the last chunk
 README_TEXT = """Zircolite package
@@ -225,6 +227,21 @@ def write_events(connection: duckdb.DuckDBPyConnection, work: Path,
     return _copy(connection, f"SELECT {projection} FROM {source}", target)  # noqa: S608 -- names and paths are quoted by sql_identifier/sql_string
 
 
+def write_text(connection: duckdb.DuckDBPyConnection, work: Path, events: Path, columns: list[Column]) -> Path:
+    """Each event's values, lowercased and joined by chr(31), for the viewer's full-text search.
+
+    Read in the browser, one column of text answers a bare-word search about
+    eight times faster than concatenating every column on the fly. The
+    separator keeps a quoted phrase from matching across two fields, as the
+    viewer's own scan does.
+    """
+    target = work / "text.parquet"
+    values = ", ".join(f"CAST({sql_identifier(column.name)} AS VARCHAR)" for column in columns)
+    text = f"lower(concat_ws(chr(31), {values}))" if values else "''"
+    query = f"SELECT _zl_uid, {text} AS _zl_text FROM read_parquet({sql_string(str(events))})"  # noqa: S608 -- names and paths are quoted by sql_identifier/sql_string
+    return _copy(connection, query, target)
+
+
 def rule_rows(parts: list[PartRecord], rulesets: list[dict[str, Any]]) -> list[dict[str, Any]]:
     """One row per ruleset entry that matched anywhere in the run, its counts summed over parts.
 
@@ -306,7 +323,8 @@ def _some(names: list[str]) -> str:
 
 
 def build_manifest(*, parts: list[PartRecord], columns: list[Column], run: RunInfo, time_field: str,
-                   failed_sources: list[str], totals: dict[str, int]) -> dict[str, Any]:
+                   failed_sources: list[str], totals: dict[str, int],
+                   extra_warnings: list[str] | None = None) -> dict[str, Any]:
     canonical = {column.key: column.name for column in columns}
     time_key = ascii_lower(time_field)
     families: dict[tuple[str | None, str | None], set[str]] = {}
@@ -337,6 +355,7 @@ def build_manifest(*, parts: list[PartRecord], columns: list[Column], run: RunIn
         warnings.append(f"{unlinked:,} match(es) from custom SQL rules carry no event id and are not linked to events")
     if failed_sources:
         warnings.append(f"{len(failed_sources):,} input(s) failed to process and are not in this package")
+    warnings.extend(extra_warnings or ())
     return {
         "format": PACKAGE_FORMAT,
         "zircolite": run.zircolite_version,
@@ -456,6 +475,8 @@ def write_package(viewer: Viewer, data: PackageData, destination: Path, work: Pa
             files.append(_wrap(archive, viewer.directory / name, name, "assets", "engine"))
         for table in DATA_TABLES:
             files.append(_wrap(archive, data.tables[table], f"{table}.parquet", "data", "data"))
+        if "text" in data.tables:
+            files.append(_wrap(archive, data.tables["text"], "text.parquet", "data", "index"))
         archive.writestr("README.txt", README_TEXT)
         manifest = orjson.dumps({**data.manifest, "viewer": viewer.version, "files": files})
         archive.writestr("data/manifest.js", b"__zircolite.manifest(" + manifest + b");\n")
@@ -492,6 +513,7 @@ class PackageBuilder:
                 "hits": write_hits(connection, self.work, parts),
                 **write_alerts(connection, self.work, parts),
             }
+            text = write_text(connection, self.work, tables["events"], columns)
             totals = {name: _count(connection, "SELECT count(*) FROM read_parquet(?)", tables[name])
                       for name in ("events", "hits", "alerts")}
             # Counted like the run summary, which collapses a rule's variants into one.
@@ -508,8 +530,16 @@ class PackageBuilder:
             raise PackageError(
                 f"the events take {size / 2**20:,.0f} MiB, more than the {EVENTS_PARQUET_LIMIT // 2**20:,} MiB "
                 "a browser can hold; narrow the run with --after/--before or -s")
+        notes: list[str] = []
+        text_size = text.stat().st_size
+        if text_size > TEXT_PARQUET_LIMIT:
+            text.unlink()
+            notes.append("Full-text search reads every field of every event: the full-text index "
+                         f"({text_size / 2**20:,.0f} MiB) is larger than a browser can hold beside the events")
+        else:
+            tables["text"] = text
         manifest = build_manifest(parts=parts, columns=columns, run=run, time_field=self.spool.time_field,
-                                  failed_sources=failed_sources, totals=totals)
+                                  failed_sources=failed_sources, totals=totals, extra_warnings=notes)
         return PackageData(tables=tables, manifest=manifest)
 
     def build(self, *, viewer: Viewer, parts: list[PartRecord], rulesets: list[dict[str, Any]], run: RunInfo,
