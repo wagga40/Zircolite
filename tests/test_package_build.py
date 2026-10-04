@@ -235,6 +235,18 @@ class TestManifest:
         assert "1 match(es) from custom SQL rules" in warnings
         assert "1 input(s) failed to process" in warnings
 
+    def test_events_without_a_time_are_warned_about_once(self, spool):
+        parts = [
+            part(spool, 0, [{"SystemTime": "2021-06-03T06:36:55Z"}, {"A": "x"}, {"A": "y"}]),
+            part(spool, 1, [{"A": "z"}]),
+        ]
+
+        warnings = build(spool, parts).manifest["warnings"]
+
+        assert "2 event(s) have no SystemTime value; they are kept but have no place on the timeline" in warnings
+        assert "1 input(s) have no SystemTime field, so their events have no time: file1.evtx" in warnings
+        assert len(warnings) == 2
+
     def test_inputs_read_in_part_mark_their_part_partial(self, spool):
         parts = [
             part(spool, 0, [{"A": "1"}]),

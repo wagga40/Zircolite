@@ -314,11 +314,17 @@ def build_manifest(*, parts: list[PartRecord], columns: list[Column], run: RunIn
     unparsed = sum(record.time.get("unparsed", 0) for record in parts)
     timeless = [source for record in parts if record.events and record.time.get("column") is None
                 for source in record.sources]
+    # A part without the time column counts every event as missing; it is
+    # reported once, as timeless, instead.
+    missing = sum(record.time.get("missing", 0) for record in parts if record.time.get("column") is not None)
     unlinked = sum(counts.get("unlinked", 0) for record in parts for counts in record.rules.values())
     unreadable = [source for record in parts for source in record.unreadable]
     warnings = []
     if unparsed:
         warnings.append(f"{unparsed:,} event(s) have a {time_field} value that is not a time; "
+                        "they are kept but have no place on the timeline")
+    if missing:
+        warnings.append(f"{missing:,} event(s) have no {time_field} value; "
                         "they are kept but have no place on the timeline")
     if timeless:
         warnings.append(f"{len(timeless):,} input(s) have no {time_field} field, so their events have no time: "
