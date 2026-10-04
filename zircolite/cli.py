@@ -87,9 +87,9 @@ from zircolite.assets import (
 from zircolite.config import RULE_LEVELS
 from zircolite.console import literal
 from zircolite.correlations import TIMESTAMP_FORMATS
-from zircolite.formats import ALIAS_EXTENSIONS, DEFAULT_EXTENSION, EXTENSION_FALLBACKS
 
 # Input format registry
+from zircolite.formats import ALIAS_EXTENSIONS, DEFAULT_EXTENSION, EXTENSION_FALLBACKS
 from zircolite.package_spool import PackageError, PackageSpool, rule_index
 from zircolite.performance import STAGE_LABELS, aggregate_stages, write_performance_report
 
