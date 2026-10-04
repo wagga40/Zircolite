@@ -8,7 +8,7 @@
   import { typing } from '../ui/keys';
   import { ui } from '../ui/ui.svelte';
   import { csvExport, ExportTooLarge, jsonExport, limitNote, prepareExport } from './export';
-  import { COUNT_SQL, ensureVisible, geometry, HEAD, idsSql, PAGE, pageSql, type PageRow, ROW } from './table';
+  import { COUNT_SQL, ensureVisible, geometry, HEAD, idsSql, nextPage, PAGE, pageSql, type PageRow, ROW } from './table';
 
   let { db, schema, manifest, where, columns }: { db: Db; schema: Schema; manifest: Manifest; where: string; columns: Field[] } = $props();
 
@@ -31,10 +31,13 @@
   let follow = $state(false);
   let exporting = $state<{ done: number; total: number } | null>(null);
   let exportNote = $state<string | null>(null);
+  // The key of the one page request in flight; its end lets the next page go.
+  let inflight = $state<string | null>(null);
   // Plain counters: tickets for the newest request, never read by the template.
   let build = 0;
   let cancel = false;
-  const requested = new Set<string>();
+  // A page that failed is not asked for again until the list is rebuilt, or each completion would retry it.
+  const failed = new Set<string>();
 
   const viewport = $derived(Math.max(0, height - HEAD));
   const slice = $derived(geometry(total, viewport, scrollTop));
@@ -66,7 +69,7 @@
         await db.exec(sql);
         const [counts] = await db.rows<{ n: number; d: number }>(COUNT_SQL, { cache: false });
         if (mine !== build) return;
-        requested.clear();
+        failed.clear();
         pages = new Map();
         total = counts.n;
         detected = counts.d;
@@ -79,7 +82,7 @@
       } catch (error) {
         if (mine !== build) return;
         // Rows and counts of the previous filter must not stay on screen under the new one.
-        requested.clear();
+        failed.clear();
         pages = new Map();
         total = 0;
         detected = 0;
@@ -92,36 +95,43 @@
     })();
   });
 
-  // Load the pages the visible rows fall in. A page requested while a newer
-  // list is being built would read that list, so none is requested until it is ready.
+  // Load the pages the visible rows fall in, one request at a time: the
+  // coordinator runs queries in order, so a fast scroll that asked for every
+  // page it passed would keep the rows it stops on waiting behind them all.
+  // A page requested while a newer list is being built would read that list,
+  // so none is requested until it is ready.
   $effect(() => {
-    if (current === 0 || current !== build || total === 0 || slice.count === 0) return;
+    if (inflight !== null || current === 0 || current !== build || total === 0) return;
+    const page = nextPage(slice, (p) => pages.has(pageKey(p)) || failed.has(pageKey(p)));
+    if (page === null) return;
     const fields = columns;
     const mine = current;
-    const firstPage = Math.floor(slice.first / PAGE);
-    const lastPage = Math.floor((slice.first + slice.count - 1) / PAGE);
-    for (let page = firstPage; page <= lastPage; page++) {
-      const key = pageKey(page);
-      if (requested.has(key)) continue;
-      requested.add(key);
-      db.rows<PageRow>(pageSql(fields, page * PAGE, (page + 1) * PAGE), { cache: false }).then(
-        (rows) => {
-          if (mine !== build || mine !== current) return;
+    const key = pageKey(page);
+    inflight = key;
+    const done = () => {
+      if (inflight === key) inflight = null;
+    };
+    db.rows<PageRow>(pageSql(fields, page * PAGE, (page + 1) * PAGE), { cache: false }).then(
+      (rows) => {
+        if (mine === build && mine === current) {
           const next = new Map(pages);
           next.set(key, rows);
           for (const old of next.keys()) {
             if (next.size <= CACHED_PAGES) break;
             next.delete(old);
-            requested.delete(old);
           }
           pages = next;
-        },
-        (error: unknown) => {
-          requested.delete(key);
-          if (mine === build) failure = message(error);
-        },
-      );
-    }
+        }
+        done();
+      },
+      (error: unknown) => {
+        if (mine === build) {
+          failed.add(key);
+          failure = message(error);
+        }
+        done();
+      },
+    );
   });
 
   // With the event view open, j and k carry it along to the next event once its row has loaded.

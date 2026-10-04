@@ -72,6 +72,21 @@ export function geometry(total: number, viewport: number, scrollTop: number, row
   return { height: cap, first, top: scrollTop - (exact - first) * row, count: Math.min(visible, total - first) };
 }
 
+/**
+ * The page to load next: the first one the visible rows need that has not
+ * loaded. One page is requested at a time, so a fast scroll leaves at most
+ * one stale request queued ahead of the rows it stops on.
+ */
+export function nextPage(slice: Pick<Slice, 'first' | 'count'>, loaded: Set<number> | ((page: number) => boolean), size = PAGE): number | null {
+  if (slice.count <= 0) return null;
+  const has = typeof loaded === 'function' ? loaded : (page: number) => loaded.has(page);
+  const last = Math.floor((slice.first + slice.count - 1) / size);
+  for (let page = Math.floor(slice.first / size); page <= last; page++) {
+    if (!has(page)) return page;
+  }
+  return null;
+}
+
 function progressOf(scrollTop: number, viewport: number, cap: number): number {
   const range = cap - viewport;
   return range > 0 ? Math.min(1, Math.max(0, scrollTop / range)) : 0;

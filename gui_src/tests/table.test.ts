@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type { Field } from '../src/engine/schema';
-import { COUNT_SQL, ensureVisible, geometry, HEIGHT_CAP, idsSql, pageSql, ROW } from '../src/explore/table';
+import { COUNT_SQL, ensureVisible, geometry, HEIGHT_CAP, idsSql, nextPage, PAGE, pageSql, ROW } from '../src/explore/table';
 import { type Fixture, openFixture, schema } from './fixture';
 
 let db: Fixture;
@@ -71,5 +71,27 @@ describe('geometry', () => {
       expect(position).toBeGreaterThanOrEqual(slice.first);
       expect(position).toBeLessThan(slice.first + slice.count);
     }
+  });
+});
+
+describe('nextPage', () => {
+  it('asks for the first page the visible rows need that has not loaded', () => {
+    expect(nextPage({ first: 0, count: 33 }, new Set())).toBe(0);
+    expect(nextPage({ first: PAGE - 10, count: 33 }, new Set([0]))).toBe(1);
+    expect(nextPage({ first: PAGE - 10, count: 33 }, new Set([1]))).toBe(0);
+    expect(nextPage({ first: PAGE - 10, count: 33 }, new Set([0, 1]))).toBeNull();
+  });
+
+  it('skips the pages scrolled past', () => {
+    expect(nextPage({ first: 1_000_000, count: 33 }, new Set([0, 1, 2]))).toBe(1_000_000 / PAGE);
+  });
+
+  it('takes a predicate and a page size', () => {
+    expect(nextPage({ first: 25, count: 10 }, (page) => page === 2, 10)).toBe(3);
+    expect(nextPage({ first: 25, count: 10 }, () => true, 10)).toBeNull();
+  });
+
+  it('asks for nothing when no row is visible', () => {
+    expect(nextPage({ first: 0, count: 0 }, new Set())).toBeNull();
   });
 });
