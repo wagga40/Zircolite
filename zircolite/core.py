@@ -201,6 +201,14 @@ class _QueryFailed(Exception):
     """The current query failed; discard any rows it already yielded."""
 
 
+def runnable_rules(ruleset: list[Any], rule_filters: list[str] | None) -> list[dict[str, Any]]:
+    """The rules a run executes: empty entries and those -R names by title are left out."""
+    rules = [rule for rule in ruleset if rule]
+    if rule_filters is not None:
+        rules = [rule for rule in rules if not any(rule_filter in rule.get("title", "") for rule_filter in rule_filters)]
+    return rules
+
+
 class ZircoliteCore:
     """Load data into database and apply detection rules."""
 
@@ -1226,9 +1234,7 @@ class ZircoliteCore:
         self, rule_filters: list[str] | None = None
     ) -> None:
         """Remove empty rules and filtered rules from the ruleset."""
-        self.ruleset = list(filter(None, self.ruleset))
-        if rule_filters is not None:
-            self.ruleset = [rule for rule in self.ruleset if not any(rule_filter in rule.get("title", "") for rule_filter in rule_filters)]
+        self.ruleset = runnable_rules(self.ruleset, rule_filters)
         self._prepared = prepare_rules(rule_queries(self.ruleset))
         self._has_correlation_plans = any(is_correlation_plan_rule(rule) for rule in self.ruleset)
 

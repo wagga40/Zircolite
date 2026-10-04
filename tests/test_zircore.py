@@ -2998,3 +2998,13 @@ def test_saved_database_matches_use_its_collation(tmp_path, field_mappings_file,
         core.execute_ruleset("unused", keep_results=True, show_table=False, disable_progress=True)
         assert len(core.full_results) == 1
         assert core.full_results[0]["count"] == 1
+
+
+class TestRunnableRules:
+    def test_empty_and_filtered_rules_do_not_run(self):
+        from zircolite.core import runnable_rules
+
+        rules = [None, {}, {"title": "Keep me"}, {"title": "Drop this one"}]
+
+        assert runnable_rules(rules, ["Drop"]) == [{"title": "Keep me"}]
+        assert runnable_rules(rules, None) == [{"title": "Keep me"}, {"title": "Drop this one"}]

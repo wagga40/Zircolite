@@ -4,14 +4,16 @@ import argparse
 import json
 import time
 from collections import Counter
+from contextlib import contextmanager
 from pathlib import Path
 
 import pytest
 
-from tests.package_fixtures import read_spool
+from tests.package_fixtures import make_logs, read_spool
 from zircolite.package_spool import PackageSpool, rule_index
 from zircolite.processing import (
     ProcessingContext,
+    _start_package_part,
     process_db_input,
     process_parallel_streaming,
     process_perfile_streaming,
@@ -62,14 +64,14 @@ def damaged(tmp_path):
     })
 
 
-def context(tmp_path, config, test_logger, *, dbfile=None):
+def context(tmp_path, config, test_logger, *, dbfile=None, limit=-1):
     spool_dir = tmp_path / f"spool-{time.perf_counter_ns()}"
     spool_dir.mkdir()
     return ProcessingContext(
         config=str(config), logger=test_logger, no_output=True,
         events_after=time.strptime("1970-01-01T00:00:00", "%Y-%m-%dT%H:%M:%S"),
         events_before=time.strptime("9999-12-12T23:59:59", "%Y-%m-%dT%H:%M:%S"),
-        limit=-1, csv_mode=False, time_field="SystemTime", db_location=":memory:", delimiter=";",
+        limit=limit, csv_mode=False, time_field="SystemTime", db_location=":memory:", delimiter=";",
         rulesets=RULES, rule_filters=None, outfile=str(tmp_path / "out.json"), ready_for_templating=False,
         package=True, dbfile=dbfile, keepflat=False, memory_tracker=MemoryTracker(logger=test_logger),
         retain_results=False,
@@ -198,3 +200,34 @@ def test_an_export_failure_is_recorded_and_the_rules_still_run(corpus, tmp_path,
     assert ctx.package_errors and "disk full" in ctx.package_errors[0]
     assert ctx.package_parts == []
     assert {result["title"] for result in results} == {"Encoded", "Any logon"}
+
+
+def test_spooling_a_part_is_timed_as_output(tmp_path):
+    stages = []
+
+    class Metrics:
+        @contextmanager
+        def stage(self, name):
+            stages.append(name)
+            yield
+
+    spool_dir = tmp_path / "spool"
+    spool_dir.mkdir()
+    spool = PackageSpool(directory=str(spool_dir), time_field="SystemTime", rule_keys=rule_index(RULES))
+
+    writer, error = _start_package_part(spool, 0, ["a.json"], make_logs([{"EventID": 1}]), metrics=Metrics())
+
+    assert error is None and writer is not None
+    assert stages == ["output"]
+    writer.discard()
+
+
+def test_limit_keeps_a_rule_over_it_out_of_the_package(corpus, tmp_path, test_logger, args):
+    files, config = corpus
+    ctx = context(tmp_path, config, test_logger, limit=1)
+
+    process_unified_streaming(ctx, files, "json", None, args())
+
+    _, hits = content(ctx)
+    # "Any logon" matches two events in the one database, more than --limit 1 allows.
+    assert {rule for rule, _ in hits} == {0}

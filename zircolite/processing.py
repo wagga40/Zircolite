@@ -288,13 +288,15 @@ def _fan_out(*sinks: Callable[[dict[str, Any]], None] | None) -> Callable[[dict[
 
 def _start_package_part(spool: PackageSpool | None, part: int, sources: list[str],
                         connection: sqlite3.Connection | None,
-                        failed_files: Collection[str] = ()) -> tuple[PartWriter | None, str | None]:
+                        failed_files: Collection[str] = (), metrics: Any = None) -> tuple[PartWriter | None, str | None]:
     """Spool one working database's events; the writer then records its hits.
 
     Called after ingestion and before the rules run: the rules add all-NULL
     columns and indexes the package must not carry. ``failed_files`` is the
     core's record of inputs read only in part; a core reused across files
     keeps every earlier file's entries, so only this part's sources count.
+    The spooling counts as output, so the performance report's stages still
+    add up to the run.
     """
     if spool is None:
         return None, None
@@ -302,7 +304,8 @@ def _start_package_part(spool: PackageSpool | None, part: int, sources: list[str
     try:
         if connection is None:
             raise PackageError("the working database is not open")
-        writer.export_events(connection)
+        with metrics.stage("output") if metrics is not None else nullcontext():
+            writer.export_events(connection)
     except (PackageError, OSError, sqlite3.Error) as exc:
         writer.discard()
         return None, f"{', '.join(sources)}: {exc}"
@@ -462,7 +465,7 @@ def process_unified_streaming(
 
     package_part, error = _start_package_part(
         _package_spool_for(ctx), 0, [str(f) for f in file_list], zircolite_core.db_connection,
-        zircolite_core.failed_files)
+        zircolite_core.failed_files, metrics=zircolite_core.metrics)
     _collect_package_part(ctx, None, error)
 
     zircolite_core.load_ruleset_from_var(
@@ -635,7 +638,7 @@ def process_perfile_streaming(
 
                 package_part, error = _start_package_part(
                     _package_spool_for(ctx), file_idx, [str(log_file)], zircolite_core.db_connection,
-                    zircolite_core.failed_files)
+                    zircolite_core.failed_files, metrics=zircolite_core.metrics)
                 _collect_package_part(ctx, None, error)
 
                 zircolite_core.load_ruleset_from_var(
@@ -862,7 +865,7 @@ def process_db_input(
 
             package_part, error = _start_package_part(
                 _package_spool_for(ctx), file_idx, [str(db_path)], zircolite_core.db_connection,
-                zircolite_core.failed_files)
+                zircolite_core.failed_files, metrics=zircolite_core.metrics)
             _collect_package_part(ctx, None, error)
 
             zircolite_core.load_ruleset_from_var(
@@ -1014,7 +1017,8 @@ def process_single_file_worker(
                 package_error = f"{log_file}: no package part was assigned to this file"
             else:
                 package_part, package_error = _start_package_part(
-                    ctx.package_spool, part, [str(log_file)], core.db_connection, core.failed_files)
+                    ctx.package_spool, part, [str(log_file)], core.db_connection, core.failed_files,
+                    metrics=core.metrics)
 
         # The worker's logger is silent, so a file Zircolite could only read in
         # part is indistinguishable from a clean one unless it is reported here

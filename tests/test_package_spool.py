@@ -248,6 +248,26 @@ class TestRuleIndex:
 
         assert [rule_position(index, result_of(rule)) for rule in rules] == list(range(len(rules)))
 
+    def test_entries_sharing_id_and_title_are_told_apart_by_level_and_file(self):
+        # Combining -r sysmon and -r generic gives 2,275 such pairs; each keeps its own level and Sigma file.
+        rules = [{"id": "x", "title": "T", "level": "high", "filename": "a.yml"},
+                 {"id": "x", "title": "T", "level": "low", "filename": "b.yml"}]
+        index = rule_index(rules)
+
+        assert [rule_position(index, result_of(rule)) for rule in rules] == [0, 1]
+        assert rule_position(index, {"id": "x", "title": "T", "rule_level": "medium", "sigmafile": "c.yml"}) == 0
+
+    def test_empty_entries_keep_every_later_position(self):
+        rules = [None, {}, {"id": "a", "title": "A"}]
+
+        assert rule_position(rule_index(rules), result_of(rules[2])) == 2
+
+    def test_a_rule_without_a_name_keys_as_the_run_summary_does(self):
+        # collapse_results_by_rule keys a result by `id or title`, so an empty title is the key ''.
+        assert rule_key({"title": ""}) == rule_key(result_of({"title": ""})) == ""
+        assert rule_key({"title": None}) == rule_key(result_of({"title": None})) == ""
+        assert rule_key({}) == rule_key(result_of({})) == "Unnamed Rule"
+
     def test_entries_sharing_an_id_are_told_apart_by_title(self):
         # Merged rulesets ship a Sysmon and a Generic variant of one Sigma rule under one id.
         index = rule_index(RULES)

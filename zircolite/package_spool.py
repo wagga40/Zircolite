@@ -78,8 +78,13 @@ def time_microseconds(value: Any, timestamp_format: str) -> int | None:
 
 
 def rule_key(rule: dict[str, Any]) -> str:
-    """What a rule and its results are matched on, as ``collapse_results_by_rule`` does."""
-    return str(rule.get("id") or rule.get("title") or "Unnamed Rule")
+    """What a rule and its results are matched on: the key ``collapse_results_by_rule`` gives the result.
+
+    A result carries ``title`` with the default ``_rule_result`` applies, so a
+    rule without one keys as "Unnamed Rule", and an empty title keys as ''.
+    """
+    title = rule.get("title", "Unnamed Rule")
+    return str(rule.get("id") or title or "")
 
 
 def rule_title(rule: dict[str, Any]) -> str | None:
@@ -88,29 +93,42 @@ def rule_title(rule: dict[str, Any]) -> str | None:
     return None if title is None else str(title)
 
 
-RuleIndex = dict[str, dict[str | None, int]]
+def _variant(level: Any, sigmafile: Any) -> tuple[str, str]:
+    return (str(level if level is not None else "unknown"), str(sigmafile or ""))
+
+
+RuleIndex = dict[str, dict[str | None, dict[tuple[str, str], int]]]
 
 
 def rule_index(rulesets: list[dict[str, Any]]) -> RuleIndex:
-    """Each ruleset entry's position, by rule key and then by title.
+    """Each ruleset entry's position, by rule key, title, then level and Sigma file.
 
     The merged rulesets ship most Sigma rules twice under one id, as their
-    "- Sysmon" and "- Generic" variants, and only the title tells the results
-    of one from the other. The first entry wins an exact duplicate.
+    "- Sysmon" and "- Generic" variants, and the title tells those apart.
+    Combined rulesets also repeat id and title with another level or file,
+    which only the result's ``rule_level`` and ``sigmafile`` tell apart. The
+    first entry wins an exact duplicate. Empty entries never run, so they are
+    skipped without shifting the positions after them.
     """
     index: RuleIndex = {}
     for position, rule in enumerate(rulesets):
-        index.setdefault(rule_key(rule), {}).setdefault(rule_title(rule), position)
+        if not rule:
+            continue
+        variants = index.setdefault(rule_key(rule), {}).setdefault(rule_title(rule), {})
+        variants.setdefault(_variant(rule.get("level", "unknown"), rule.get("filename", "")), position)
     return index
 
 
 def rule_position(index: RuleIndex, result: dict[str, Any]) -> int | None:
-    """The ruleset entry ``result`` came from; by key alone when no entry has its title."""
+    """The ruleset entry ``result`` came from, falling back to its title, then its key."""
     titles = index.get(rule_key(result))
     if not titles:
         return None
-    position = titles.get(rule_title(result))
-    return next(iter(titles.values())) if position is None else position
+    variants = titles.get(rule_title(result))
+    if variants is None:
+        variants = next(iter(titles.values()))
+    position = variants.get(_variant(result.get("rule_level", "unknown"), result.get("sigmafile", "")))
+    return next(iter(variants.values())) if position is None else position
 
 
 def _integer(value: Any) -> int:

@@ -650,6 +650,7 @@ def _prepare_package(args: argparse.Namespace, rulesets: list[Any], logger: logg
 def _write_package(ctx: ProcessingContext, args: argparse.Namespace) -> bool:
     """Build the package from the spooled parts. False if it was not written."""
     from zircolite import package
+    from zircolite.core import runnable_rules
 
     spool = ctx.package_spool
     if spool is None:
@@ -674,7 +675,7 @@ def _write_package(ctx: ProcessingContext, args: argparse.Namespace) -> bool:
         executor=args.executor if ctx.workers_used > 1 else "sequential",
         timestamp_format=spool.timestamp_format,
         after=ctx.time_after_str if applied else None, before=ctx.time_before_str if applied else None,
-        limit=ctx.limit, rules_loaded=len(ctx.rulesets or []),
+        limit=ctx.limit, rules_loaded=len(runnable_rules(ctx.rulesets or [], ctx.rule_filters)),
     )
     failed = sorted({source for record in ctx.performance_files if record.get("status") == "failed"
                      for source in record.get("sources") or ()})
