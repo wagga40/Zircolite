@@ -208,6 +208,20 @@ async function scenario(page, steps) {
   await drawer.waitFor({ state: 'detached' });
   check((await page.evaluate(() => document.activeElement?.tagName)) !== 'BODY', 'closing a deep-linked event left focus on the body');
   steps.push('focus after a deep-linked event closes');
+
+  // Overview must agree with Explore: its tiles with the detected count, its top rule with the events that rule lists.
+  await page.goto('about:blank');
+  await page.goto(`${url}#/overview`);
+  await poll(page, async () => /ready|error/.test(await page.title()), 'the viewer', 240_000);
+  const tiles = page.locator('#overview-tiles');
+  const total = Number(await poll(page, () => tiles.getAttribute('data-events'), 'the severity tiles'));
+  check(total === withDetections, `the overview tiles hold ${total} events; Explore lists ${withDetections} with detections`);
+  const rule = page.locator('#overview-rules button').first();
+  const ruleEvents = Number(await poll(page, () => rule.getAttribute('data-events'), 'the top rules'));
+  await rule.click();
+  const listed = await results(page, { build: 0 });
+  check(listed.count === ruleEvents, `the top rule counts ${ruleEvents} events; Explore lists ${listed.count}`);
+  steps.push('overview agrees with explore');
 }
 
 let failed = false;

@@ -48,8 +48,11 @@
       } catch (error) {
         if (mine !== tickets[name]) return;
         // Whatever is on screen belongs to an earlier filter, so it goes.
-        if (isSuperseded(error)) set({ data: null, pending: false, failure: null, stopped: run.stopped });
-        else set({ data: null, pending: false, failure: error instanceof Error ? error.message : String(error), stopped: false });
+        // A supersede that is not a stop means this request was replaced after its ticket was taken: say so instead of going blank.
+        if (isSuperseded(error)) {
+          if (run.stopped) set({ data: null, pending: false, failure: null, stopped: true });
+          else set({ data: null, pending: false, failure: 'the query was interrupted', stopped: false });
+        } else set({ data: null, pending: false, failure: error instanceof Error ? error.message : String(error), stopped: false });
       }
     })();
   }
@@ -74,6 +77,7 @@
   });
 
   const tileTotal = $derived(tileSlot.data ? tileSlot.data.reduce((sum, tile) => sum + tile.events, 0) : null);
+  const anyStopped = $derived([tileSlot, tacticSlot, ruleSlot, hostSlot, userSlot].some((slot) => slot.stopped));
   const filtered = $derived(query.where !== 'TRUE');
   const busy = $derived([tileSlot, tacticSlot, ruleSlot, hostSlot, userSlot].some((slot) => slot.pending));
 
@@ -97,7 +101,7 @@
   {#if slot.failure}
     <p class="note failure" role="alert">The {what} could not be counted: {slot.failure}. Change the search, or reload the page if this repeats.</p>
   {:else if slot.stopped}
-    <p class="note" role="status">Stopped. <button type="button" class="again" onclick={runAgain}>Run again</button></p>
+    <p class="note" role="status">Stopped.</p>
   {/if}
 {/snippet}
 
@@ -105,12 +109,13 @@
   <div class="page">
     <header>
       <h1 tabindex="-1">Overview</h1>
-      <output id="overview-summary">
-        {#if tileTotal !== null}{formatCount(tileTotal)} {tileTotal === 1 ? 'event' : 'events'} with detections{filtered ? ' under the current filters' : ''}{:else if tileSlot.stopped}Stopped{:else}Counting detections{/if}
+      <output id="overview-summary" class:stale={tileSlot.pending} aria-busy={tileSlot.pending}>
+        {#if tileTotal !== null && !tileSlot.pending}{formatCount(tileTotal)} {tileTotal === 1 ? 'event' : 'events'} with detections{filtered ? ' under the current filters' : ''}{:else if tileSlot.stopped}Stopped{:else}Counting detections{/if}
       </output>
+      {#if anyStopped}<button type="button" class="again" onclick={runAgain}>Run again</button>{/if}
     </header>
 
-    <section id="overview-tiles" class="tiles" class:stale={tileSlot.pending && tileSlot.data !== null} aria-label="Events by highest detection level" data-events={tileTotal ?? ''}>
+    <section id="overview-tiles" class="tiles" class:stale={tileSlot.pending && tileSlot.data !== null} aria-label="Events by highest detection level" data-events={tileSlot.pending ? '' : (tileTotal ?? '')}>
       {#each tileSlot.data ?? [] as tile (tile.rank)}
         <button type="button" class="tile" data-rank={tile.rank} data-events={tile.events}
           title={`Events whose highest detection is ${tile.level}`} onclick={() => explore(`level:${tile.level}`)}>
@@ -131,7 +136,7 @@
       <div class="cells" class:stale={tacticSlot.pending && tacticSlot.data !== null}>
         {#each tacticSlot.data ?? [] as cell (cell.tactic)}
           <button type="button" class="cell" class:none={cell.events === 0} data-tactic={cell.tactic}
-            style:background={cell.events ? `color-mix(in srgb, var(--signal) ${Math.round(8 + 40 * cell.share)}%, var(--panel))` : undefined}
+            style:background={cell.events ? `color-mix(in srgb, var(--signal) ${Math.round(12 + 40 * cell.share)}%, var(--panel))` : undefined}
             onclick={() => explore(`tactic:${cell.tactic}`)}>
             <span class="label">{cell.label}</span>
             <span class="count">{formatCount(cell.events)}</span>
@@ -200,8 +205,8 @@
   .name i, .list i { width: 8px; height: 8px; border-radius: 1px; flex: none; }
   .tile .count { font: 600 var(--t-22) / 1.1 var(--sans); font-variant-numeric: tabular-nums; }
   .unit, .rules { font-size: var(--t-13); color: var(--ink-2); }
-  .cells { display: grid; grid-template-columns: repeat(auto-fill, minmax(118px, 1fr)); gap: 1px; background: var(--rule); border: 1px solid var(--rule); min-height: 58px; }
-  .cell { display: grid; gap: 2px; min-height: 56px; padding: 8px; text-align: left; border: 0; background: var(--panel); cursor: pointer; }
+  .cells { display: grid; grid-template-columns: repeat(auto-fill, minmax(118px, 1fr)); background: var(--panel); border-top: 1px solid var(--rule); border-left: 1px solid var(--rule); min-height: 58px; }
+  .cell { display: grid; gap: 2px; min-height: 56px; padding: 8px; text-align: left; border: 0; border-right: 1px solid var(--rule); border-bottom: 1px solid var(--rule); background: var(--panel); cursor: pointer; }
   .cell .label { font-size: var(--t-12); }
   .cell .count { font: 600 var(--t-15) / 1.2 var(--sans); font-variant-numeric: tabular-nums; }
   .cell.none { color: var(--ink-2); }

@@ -51,9 +51,10 @@ export interface TacticCell {
 
 export function tacticLabel(tactic: string): string {
   const words = tactic.split('-').join(' ');
-  return words[0].toUpperCase() + words.slice(1);
+  return words.charAt(0).toUpperCase() + words.slice(1);
 }
 
+// The cells come from manifest.tactics, the list the rules' tactics are written from, so no counted tactic goes unlisted.
 export function tacticCells(tactics: string[], rows: { tactic: string; events: number }[]): TacticCell[] {
   const counts = new Map(rows.map((row) => [row.tactic, row.events]));
   const busiest = Math.max(0, ...rows.map((row) => row.events));
