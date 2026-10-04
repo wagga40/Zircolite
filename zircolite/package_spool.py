@@ -8,6 +8,7 @@ standard library and orjson: duckdb is loaded by stage two
 (``zircolite.package``), in the main process only.
 """
 
+import contextlib
 import math
 import sqlite3
 import string
@@ -154,6 +155,13 @@ class _SpoolFiles:
                 self._handle.close()
                 self._handle = None
 
+    def abandon(self) -> None:
+        """Close after a failure without raising, so the original error is the one reported."""
+        handle, self._handle = self._handle, None
+        if handle is not None:
+            with contextlib.suppress(OSError):
+                handle.close()
+
 
 def _text(value: Any) -> str | None:
     return None if value is None else str(value)
@@ -186,7 +194,26 @@ class PartWriter:
         self._prefix = Path(spool.directory) / f"part-{part:07d}"
 
     def export_events(self, connection: sqlite3.Connection) -> None:
-        """Copy every row of ``logs`` to the spool, with what stage two needs to type it."""
+        """Copy every row of ``logs`` to the spool, with what stage two needs to type it.
+
+        Whatever fails, ``record.event_files`` lists the files written so far,
+        so a discard can remove them.
+        """
+        spool = _SpoolFiles(self._prefix)
+        try:
+            self._copy_events(connection, spool)
+            spool.close()
+        except (sqlite3.Error, OSError) as exc:
+            spool.abandon()
+            raise PackageError(f"cannot spool the events of part {self.record.part}: {exc}") from exc
+        except BaseException:
+            spool.abandon()
+            raise
+        finally:
+            self.record.event_files = spool.paths
+            self.record.longest_line = spool.longest
+
+    def _copy_events(self, connection: sqlite3.Connection, spool: "_SpoolFiles") -> None:
         columns = [row[1] for row in connection.execute("PRAGMA table_info(logs)")]
         if not columns or columns[0] != "row_id":
             raise PackageError("the working database has no logs table keyed by row_id")
@@ -211,13 +238,19 @@ class PartWriter:
         }
         part = self.record.part
         timestamp_format = self.spool.timestamp_format
-        spool = _SpoolFiles(self._prefix)
         spelled = _row_spellings(connection)
-        pending = next(spelled, None)
+        cursor = connection.cursor()
         row_id: Any = None
-        cursor = connection.execute("SELECT * FROM logs ORDER BY row_id")
         try:
-            while rows := cursor.fetchmany(FETCH_ROWS):
+            pending = next(spelled, None)
+            cursor.execute("SELECT * FROM logs ORDER BY row_id")
+            while True:
+                try:
+                    rows = cursor.fetchmany(FETCH_ROWS)
+                except sqlite3.Error as exc:
+                    raise _unreadable_row(connection, row_id, exc) from exc
+                if not rows:
+                    break
                 for row in rows:
                     row_id = row[0]
                     if type(row_id) is not int or not 0 <= row_id < ROW_ID_LIMIT:
@@ -248,14 +281,9 @@ class PartWriter:
                     except orjson.JSONEncodeError as exc:
                         raise PackageError(f"event row {row_id} cannot be written: {exc}") from exc
                     self.record.events += 1
-        except sqlite3.Error as exc:
-            raise PackageError(f"cannot read the events after row {row_id!r}: {exc}") from exc
         finally:
             cursor.close()
             spelled.close()
-            spool.close()
-            self.record.event_files = spool.paths
-            self.record.longest_line = spool.longest
         self.record.columns = [
             {"name": names[i], "key": keys[i], "mask": masks[i], "count": counts[i]}
             for i in range(len(keys)) if counts[i]
@@ -265,6 +293,26 @@ class PartWriter:
             for (channel, eventid), indexes in families.items()
         ]
         self.record.time = time_stats
+
+
+def _unreadable_row(connection: sqlite3.Connection, last_good: Any, exc: sqlite3.Error) -> PackageError:
+    """Name the row a failed batch fetch choked on.
+
+    A batch fails as a whole, so the last row read says little; reading the
+    following rows one by one finds the real culprit.
+    """
+    start = last_good if type(last_good) is int else -1
+    try:
+        ids = [row_id for (row_id,) in connection.execute(
+            "SELECT row_id FROM logs WHERE row_id > ? ORDER BY row_id LIMIT ?", (start, FETCH_ROWS))]
+        for row_id in ids:
+            try:
+                connection.execute("SELECT * FROM logs WHERE row_id = ?", (row_id,)).fetchall()
+            except sqlite3.Error as single:
+                return PackageError(f"event row {row_id} cannot be read: {single}")
+    except sqlite3.Error:
+        pass
+    return PackageError(f"cannot read the events after row {last_good!r}: {exc}")
 
 
 def _event_time(row: tuple[Any, ...], at: int | None, timestamp_format: str,

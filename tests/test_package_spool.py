@@ -142,11 +142,43 @@ class TestRefusals:
         with pytest.raises(PackageError):
             spool.open_part(1 << 21, ["x"])
 
-    def test_undecodable_text_names_the_row(self, spool, monkeypatch):
-        # One row per fetch, so the failing fetch comes after row 1 was read.
-        monkeypatch.setattr(package_spool, "FETCH_ROWS", 1)
+    def test_undecodable_text_names_the_row(self, spool):
         connection = make_logs([{"A": "fine"}])
         connection.execute("INSERT INTO logs (A) VALUES (CAST(X'80' AS TEXT))")
 
-        with pytest.raises(PackageError, match="after row 1"):
+        with pytest.raises(PackageError, match="row 2"):
             spool.open_part(0, ["x"]).export_events(connection)
+
+    def test_the_failing_row_is_found_inside_a_larger_batch(self, spool):
+        connection = make_logs([{"A": str(i)} for i in range(10)])
+        connection.execute("INSERT INTO logs (A) VALUES (CAST(X'80' AS TEXT))")
+        connection.execute("INSERT INTO logs (A) VALUES ('after')")
+
+        with pytest.raises(PackageError, match="row 11"):
+            spool.open_part(0, ["x"]).export_events(connection)
+
+    def test_a_broken_spelling_table_is_a_package_error(self, spool):
+        connection = make_logs([{"A": "x"}])
+        connection.execute("CREATE TABLE logs_spelling (row_id INTEGER, spelling INTEGER)")
+        connection.execute("CREATE TABLE field_spellings (wrong TEXT)")
+        writer = spool.open_part(0, ["x"])
+
+        with pytest.raises(PackageError):
+            writer.export_events(connection)
+
+        assert writer.record.event_files == []
+
+    def test_a_write_failure_is_a_package_error_and_keeps_the_file_list(self, spool, monkeypatch):
+        added = package_spool._SpoolFiles.add
+
+        def failing(self, line):
+            added(self, line)
+            raise OSError("disk full")
+
+        monkeypatch.setattr(package_spool._SpoolFiles, "add", failing)
+        writer = spool.open_part(0, ["x"])
+
+        with pytest.raises(PackageError, match="disk full"):
+            writer.export_events(make_logs([{"A": "x"}]))
+
+        assert len(writer.record.event_files) == 1
