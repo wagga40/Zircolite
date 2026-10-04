@@ -301,6 +301,48 @@ class TestCorrelations:
             writer.finish()
 
 
+class _FailingHandle:
+    def __init__(self):
+        self.closed = False
+
+    def write(self, data):
+        return len(data)
+
+    def close(self):
+        self.closed = True
+        raise OSError("No space left on device")
+
+
+class TestCloseFailures:
+    def test_a_failing_close_is_a_package_error_and_closes_the_other_file(self, hit_spool):
+        writer = hit_spool.open_part(0, ["x"])
+        writer.sink({"title": "Two", "count": 1, "matches": [{"row_id": 1}]})
+        real_hits = writer._hits
+        failing = _FailingHandle()
+        writer._hits = failing
+        writer._alerts = other = open(writer.spool.directory + "/other", "wb")
+
+        with pytest.raises(PackageError, match="No space left") as raised:
+            writer.finish()
+
+        assert isinstance(raised.value.__cause__, OSError)
+        assert failing.closed and other.closed
+        assert writer._hits is None and writer._alerts is None
+        real_hits.close()
+
+    def test_discard_removes_every_file_when_a_close_fails(self, hit_spool, tmp_path):
+        writer = hit_spool.open_part(0, ["x"])
+        writer.export_events(make_logs([{"A": "1"}]))
+        writer.sink({"title": "Two", "count": 1, "matches": [{"row_id": 1}]})
+        real_hits = writer._hits
+        writer._hits = _FailingHandle()
+
+        writer.discard()
+        real_hits.close()
+
+        assert list(tmp_path.iterdir()) == []
+
+
 class TestLifecycle:
     def test_discard_removes_every_file(self, hit_spool, tmp_path):
         writer = hit_spool.open_part(0, ["x"])

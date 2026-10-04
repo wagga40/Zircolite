@@ -282,9 +282,11 @@ class PartWriter:
             self._error = str(exc)
 
     def finish(self) -> PartRecord:
-        self._close()
+        close_error = self._close()
         if self._error is not None:
-            raise PackageError(self._error)
+            raise PackageError(self._error) from close_error
+        if close_error is not None:
+            raise PackageError(f"cannot write the hits of part {self.record.part}: {close_error}") from close_error
         return self.record
 
     def discard(self) -> None:
@@ -293,11 +295,17 @@ class PartWriter:
             if path:
                 Path(path).unlink(missing_ok=True)
 
-    def _close(self) -> None:
+    def _close(self) -> OSError | None:
+        """Close both files whatever happens; a buffered write fails here when the disk is full."""
+        first: OSError | None = None
         for handle in (self._hits, self._alerts):
             if handle is not None:
-                handle.close()
+                try:
+                    handle.close()
+                except OSError as exc:
+                    first = first or exc
         self._hits = self._alerts = None
+        return first
 
     def _record_result(self, result: dict[str, Any]) -> None:
         key = rule_key(result)
