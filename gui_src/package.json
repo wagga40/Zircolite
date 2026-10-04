@@ -26,5 +26,10 @@
     "typescript": "5.9.3",
     "vite": "8.3.2",
     "vitest": "5.0.3"
+  },
+  "overrides": {
+    "@uwdata/mosaic-core": {
+      "@duckdb/duckdb-wasm": "$@duckdb/duckdb-wasm"
+    }
   }
 }

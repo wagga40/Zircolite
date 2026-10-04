@@ -13,15 +13,10 @@ export interface Db {
   exec(sql: string): Promise<void>;
 }
 
-type ConnectorOptions = NonNullable<Parameters<typeof wasmConnector>[0]>;
-
 export async function openDb(engine: Engine): Promise<Db> {
   // Pre-aggregation indexes Mosaic's own query objects; the viewer's clients
   // send SQL text, so it could only add work.
-  // Mosaic ships its own copy of duckdb-wasm, so TypeScript sees two unrelated
-  // classes with the same shape; the engine we hand over is the one it drives.
-  const options = { duckdb: engine.db, connection: engine.conn } as unknown as ConnectorOptions;
-  const coordinator = new Coordinator(wasmConnector(options), {
+  const coordinator = new Coordinator(wasmConnector({ duckdb: engine.db, connection: engine.conn }), {
     logger: null,
     preagg: { enabled: false },
   });
