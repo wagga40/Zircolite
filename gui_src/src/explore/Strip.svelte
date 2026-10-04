@@ -301,7 +301,8 @@
         {#each LEVELS as level, rank (level)}<span class="swatch"><i style:background={`var(--sev-${rank})`}></i>{level}</span>{/each}
       </span>
       {#if series}<span>Each bar is {formatWidth(series.bins.width)}</span>{/if}
-      {#if timelessHere}<span>{formatCount(timelessHere)} {timelessHere === 1 ? 'event' : 'events'} matching the filters {timelessHere === 1 ? 'has' : 'have'} no time and {timelessHere === 1 ? 'is' : 'are'} not drawn</span>{/if}
+      {#if timelessHere && view.t}<span>{formatCount(timelessHere)} {timelessHere === 1 ? 'event' : 'events'} matching the other filters {timelessHere === 1 ? 'has' : 'have'} no time, so the time range leaves {timelessHere === 1 ? 'it' : 'them'} out</span>
+      {:else if timelessHere}<span>{formatCount(timelessHere)} {timelessHere === 1 ? 'event' : 'events'} matching the filters {timelessHere === 1 ? 'has' : 'have'} no time and {timelessHere === 1 ? 'is' : 'are'} not drawn</span>{/if}
       {#if view.t}<span class="zoomed">Zoomed to the selected range. Remove its chip to see the whole package.</span>{/if}
       <span class="end">{series ? `${isoTime(series.bins.start + series.bins.width * series.bins.count, false)} UTC` : ''}</span>
     </div>
