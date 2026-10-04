@@ -17,6 +17,7 @@
   let total = $state(0);
   let failure = $state<string | null>(null);
   let engineEvents = $state<number | null>(null);
+  let detected = $state<number | null>(null);
 
   async function start(): Promise<void> {
     const store = new ChunkStore();
@@ -55,6 +56,8 @@
         `The engine holds ${counts.events} events and ${counts.hits} hits; the package lists ${m.totals.events} and ${m.totals.hits}. The package is damaged or incomplete: extract the whole archive again, or re-create the package.`,
       );
     }
+    const [withHits] = await opened.rows<{ n: number }>('SELECT count(*)::DOUBLE AS n FROM event_levels', { cache: false });
+    detected = withHits.n;
     schema = Schema.fromManifest(m);
     bindHash(view);
     db = opened;
@@ -70,7 +73,7 @@
 </script>
 
 {#if db && schema && manifest}
-  <Shell {db} {schema} {manifest} />
+  <Shell {db} {schema} {manifest} {detected} />
 {:else}
   <Loading {phase} {loaded} {total} {failure} {manifest} />
 {/if}

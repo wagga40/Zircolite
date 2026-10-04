@@ -21,14 +21,17 @@ export async function prepareExport(db: Reader): Promise<number> {
 // Log text is attacker-controlled: a cell starting with one of these runs as a formula in a spreadsheet.
 const FORMULA = /^[=+\-@\t\r]/;
 
-export function csvCell(value: string | null): string {
+const PLAIN_NUMBER = /^-?\d+(\.\d+)?([eE][+-]?\d+)?$/;
+
+/** A value from a numeric column that is plainly a number stays one: a negative is not a formula. */
+export function csvCell(value: string | null, numeric = false): string {
   if (value === null) return '';
-  const text = FORMULA.test(value) ? `'${value}` : value;
+  const text = FORMULA.test(value) && !(numeric && PLAIN_NUMBER.test(value)) ? `'${value}` : value;
   return /[",\r\n]/.test(text) ? `"${text.replaceAll('"', '""')}"` : text;
 }
 
-export function csvLine(values: (string | null)[]): string {
-  return `${values.map(csvCell).join(',')}\r\n`;
+export function csvLine(values: (string | null)[], numeric: boolean[] = []): string {
+  return `${values.map((value, i) => csvCell(value, numeric[i] ?? false)).join(',')}\r\n`;
 }
 
 const JSON_NUMBER = /^-?(0|[1-9]\d*)(\.\d+)?([eE][+-]?\d+)?$/;
@@ -58,11 +61,11 @@ export async function csvExport(
   batch = 10_000,
 ): Promise<BlobPart[] | null> {
   // The byte order mark makes Excel read the file as UTF-8.
-  const parts: BlobPart[] = [`﻿${csvLine(['Time (UTC)', 'Level', ...columns.map((c) => c.name)])}`];
+  const parts: BlobPart[] = [`\uFEFF${csvLine(['Time (UTC)', 'Level', ...columns.map((c) => c.name)])}`];
   for (let from = 0; from < total; from += batch) {
     if (cancelled()) return null;
     const rows = await db.rows<PageRow>(pageSql(columns, from, from + batch, 'export_ids'), { cache: false });
-    parts.push(rows.map((row) => csvLine([isoTime(row._zl_t), levelName(row._zl_lvl), ...columns.map((_, i) => row[`_zl_v${i}`] ?? null)])).join(''));
+    parts.push(rows.map((row) => csvLine([isoTime(row._zl_t), levelName(row._zl_lvl), ...columns.map((_, i) => row[`_zl_v${i}`] ?? null)], [false, false, ...columns.map((c) => c.type !== 'VARCHAR')])).join(''));
     progress(Math.min(total, from + batch));
   }
   return parts;

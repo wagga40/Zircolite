@@ -2,7 +2,7 @@
   import type { Manifest } from '../engine/manifest';
   import { formatCount, inputCount, isoTime, timeRange } from './format';
 
-  let { manifest }: { manifest: Manifest } = $props();
+  let { manifest, detected }: { manifest: Manifest; detected: number | null } = $props();
   let dialog: HTMLDialogElement;
 
   export function open(): void {
@@ -24,7 +24,8 @@
     <dt>Inputs</dt><dd>{formatCount(inputCount(manifest))}</dd>
     <dt>Time range</dt><dd>{range}</dd>
     <dt>Rules that matched</dt><dd>{formatCount(manifest.totals.rules_matched)} of {formatCount(manifest.run.rules_loaded)} loaded</dd>
-    <dt>Events matched</dt><dd>{formatCount(manifest.totals.hits)}</dd>
+    <dt>Rule matches</dt><dd>{formatCount(manifest.totals.hits)}</dd>
+    <dt>Events with detections</dt><dd>{detected === null ? 'Counting' : formatCount(detected)}</dd>
     <dt>Correlation alerts</dt><dd>{formatCount(manifest.totals.alerts)}</dd>
     <dt>Processing</dt><dd>{manifest.run.mode}, {manifest.run.executor}</dd>
     <dt>Time field</dt><dd>{manifest.run.time_field || 'none'}</dd>

@@ -71,12 +71,21 @@
         total = counts.n;
         detected = counts.d;
         active = 0;
+        follow = false;
         scrollTop = 0;
         if (scroller) scroller.scrollTop = 0;
         current = mine;
         busy = false;
       } catch (error) {
         if (mine !== build) return;
+        // Rows and counts of the previous filter must not stay on screen under the new one.
+        requested.clear();
+        pages = new Map();
+        total = 0;
+        detected = 0;
+        active = 0;
+        follow = false;
+        current = mine;
         failure = message(error);
         busy = false;
       }
@@ -145,6 +154,7 @@
 
   function onwindowkey(event: KeyboardEvent): void {
     if (event.metaKey || event.ctrlKey || event.altKey || typing(event)) return;
+    if ((event.target as Element | null)?.closest?.('dialog')) return;
     if (event.key === 'j') moveTo(active + 1);
     else if (event.key === 'k') moveTo(active - 1);
     else return;
@@ -152,6 +162,8 @@
   }
 
   function ongridkey(event: KeyboardEvent): void {
+    // Keys from the header's sort button keep their own meaning.
+    if (event.target !== scroller) return;
     const step = Math.max(1, Math.floor(viewport / ROW) - 1);
     if (event.key === 'ArrowDown') moveTo(active + 1);
     else if (event.key === 'ArrowUp') moveTo(active - 1);
@@ -166,6 +178,9 @@
   }
 
   async function runExport(kind: 'csv' | 'json'): Promise<void> {
+    if (exporting) return;
+    // Set before the first await, so a second click cannot start another export.
+    exporting = { done: 0, total: 0 };
     exportNote = null;
     cancel = false;
     try {

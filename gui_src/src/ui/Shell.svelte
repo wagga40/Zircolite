@@ -7,7 +7,7 @@
   import TopBar from './TopBar.svelte';
   import { ui } from './ui.svelte';
 
-  let { db, schema, manifest }: { db: Db; schema: Schema; manifest: Manifest } = $props();
+  let { db, schema, manifest, detected }: { db: Db; schema: Schema; manifest: Manifest; detected: number | null } = $props();
 
   function onkeydown(event: KeyboardEvent): void {
     if (event.metaKey || event.ctrlKey || event.altKey || typing(event)) return;
@@ -27,7 +27,7 @@
 
 <svelte:window {onkeydown} />
 <div class="shell">
-  <TopBar {db} {schema} {manifest} />
+  <TopBar {db} {schema} {manifest} {detected} />
   <Explore {db} {schema} {manifest} />
 </div>
 

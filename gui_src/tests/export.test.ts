@@ -31,6 +31,14 @@ describe('csv', () => {
     expect(csvCell(value)).toBe(expected);
   });
 
+  it('keeps numbers from numeric columns as numbers', () => {
+    expect(csvCell('-5', true)).toBe('-5');
+    expect(csvCell('-1.5e3', true)).toBe('-1.5e3');
+    expect(csvCell('-enc', false)).toBe("'-enc");
+    expect(csvCell('-x', true)).toBe("'-x");
+    expect(csvLine(['-5', '-5'], [true, false])).toBe("-5,'-5\r\n");
+  });
+
   it('ends lines with CRLF', () => {
     expect(csvLine(['a', null, 'b,c'])).toBe('a,,"b,c"\r\n');
   });

@@ -6,7 +6,7 @@
   import SearchBar from './SearchBar.svelte';
   import { applyTheme, loadTheme, nextTheme, type Theme } from './theme';
 
-  let { db, schema, manifest }: { db: Db; schema: Schema; manifest: Manifest } = $props();
+  let { db, schema, manifest, detected }: { db: Db; schema: Schema; manifest: Manifest; detected: number | null } = $props();
   let theme = $state<Theme>(loadTheme());
   let details: RunDetails;
   const warnings = $derived(manifest.warnings.length);
@@ -23,7 +23,7 @@
   </button>
   <button type="button" aria-label={`Theme: ${LABEL[theme]}. Change theme`} onclick={() => (theme = nextTheme(theme))}>{LABEL[theme]}</button>
 </header>
-<RunDetails bind:this={details} {manifest} />
+<RunDetails bind:this={details} {manifest} {detected} />
 
 <style>
   .top { display: flex; align-items: flex-start; gap: 12px; padding: 10px 16px; background: var(--panel); border-bottom: 1px solid var(--rule); }
