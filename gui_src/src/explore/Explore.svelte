@@ -27,8 +27,9 @@
     }
   });
   const time = $derived(timePredicate(view.t));
-  // The same three predicates go to Mosaic, so its charts and these queries agree.
+  // The same three predicates go to the filters selection, for the views that will read it.
   const where = $derived(combineWhere([search, time, view.d ? DETECTIONS_PREDICATE : null]));
+  const stripWhere = $derived(combineWhere([search, view.d ? DETECTIONS_PREDICATE : null]));
   const columns = $derived(shownColumns(view.cols, schema));
 
   $effect(() => setSearch(search));
@@ -37,7 +38,7 @@
 </script>
 
 <main class="explore">
-  <Strip {db} {manifest} />
+  <Strip {db} {manifest} where={stripWhere} />
   <div class="body">
     <FieldSidebar {db} {schema} {manifest} {where} {columns} />
     <section class="results" aria-label="Events">

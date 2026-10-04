@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import {
   barHeight, binAt, type BinRow, binsSql, binSummary, DOMAIN_SQL, domainOf, fill, formatRange, formatWidth,
-  layout, rangeOf, timelessCount,
+  layout, rangeOf, stripRequest, stripSeries, timelessCount,
 } from '../src/explore/histogram';
 import { compile } from '../src/search/compile';
 import { parse } from '../src/search/parse';
@@ -65,6 +65,30 @@ describe('bins against DuckDB', () => {
 
   it('refuses a bin outside the layout', () => {
     expect(() => fill([{ b: 3, n: 1, l0: 0, l1: 0, l2: 0, l3: 0, l4: 0 }], bins)).toThrowError(/outside/);
+  });
+});
+
+describe('strip requests', () => {
+  const hours = { start: SIX, width: H, count: 3 };
+  const minutes = { start: SIX, width: 60_000, count: 121 };
+
+  it('fills each result with the bins it was asked with, whichever answers last', async () => {
+    const coarse = stripRequest(hours, 'TRUE');
+    const fine = stripRequest(minutes, 'TRUE');
+    const fineRows = (await db.rows(fine.sql)) as unknown as BinRow[];
+    const coarseRows = (await db.rows(coarse.sql)) as unknown as BinRow[];
+    const a = stripSeries(coarse, coarseRows);
+    const b = stripSeries(fine, fineRows);
+    expect(a.bins).toBe(hours);
+    expect(Array.from(a.n)).toEqual([3, 1, 1]);
+    expect(b.bins).toBe(minutes);
+    expect([b.n[0], b.n[5], b.n[60], b.n[120]]).toEqual([2, 1, 1, 1]);
+  });
+
+  it('a result read against another request\'s bins is refused, never drawn', async () => {
+    const fine = stripRequest(minutes, 'TRUE');
+    const rows = (await db.rows(fine.sql)) as unknown as BinRow[];
+    expect(() => stripSeries(stripRequest(hours, 'TRUE'), rows)).toThrowError(/outside/);
   });
 });
 

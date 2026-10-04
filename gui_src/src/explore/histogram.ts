@@ -1,7 +1,5 @@
-import { MosaicClient, type Selection } from '@uwdata/mosaic-core';
 import { LEVELS } from '../engine/levels';
 import type { Manifest } from '../engine/manifest';
-import { combineWhere } from '../state/where';
 
 const SECOND = 1000;
 const MINUTE = 60 * SECOND;
@@ -126,34 +124,16 @@ export function timelessCount(manifest: Pick<Manifest, 'parts'>): number {
   return manifest.parts.reduce((sum, part) => sum + part.time.missing + part.time.unparsed, 0);
 }
 
-/** The strip's Mosaic client: re-queried whenever a filter other than its own time brush changes. */
-export class StripClient extends MosaicClient {
-  private readonly bins: () => Bins | null;
-  private readonly deliver: (series: Series) => void;
-  private readonly fail: (message: string) => void;
-  private issued: Bins | null = null;
+/** One histogram query and the layout it was built for, kept together so its answer is always drawn on that layout. */
+export interface StripRequest {
+  bins: Bins;
+  sql: string;
+}
 
-  constructor(filterBy: Selection, bins: () => Bins | null, deliver: (series: Series) => void, fail: (message: string) => void) {
-    super(filterBy);
-    this.bins = bins;
-    this.deliver = deliver;
-    this.fail = fail;
-  }
+export function stripRequest(bins: Bins, where: string): StripRequest {
+  return { bins, sql: binsSql(bins, where) };
+}
 
-  // Mosaic passes no filter at all when the strip's own brush was the last
-  // change, so the strip asks the selection itself, minus its own clause.
-  query(): string | null {
-    this.issued = this.bins();
-    return this.issued ? binsSql(this.issued, combineWhere(this.filterBy?.predicate(this, true))) : null;
-  }
-
-  queryResult(data: unknown): this {
-    if (this.issued) this.deliver(fill((data as { toArray(): BinRow[] }).toArray(), this.issued));
-    return this;
-  }
-
-  queryError(error: Error): this {
-    this.fail(error.message);
-    return this;
-  }
+export function stripSeries(request: StripRequest, rows: BinRow[]): Series {
+  return fill(rows, request.bins);
 }

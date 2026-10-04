@@ -3,16 +3,16 @@
   import type { Db } from '../engine/db';
   import { LEVELS } from '../engine/levels';
   import type { Manifest } from '../engine/manifest';
-  import { filters, timeClients } from '../state/filters';
   import { view } from '../state/view.svelte';
   import { pageTopLayer } from '../ui/layers';
   import { formatCount, isoTime } from '../ui/format';
   import {
-    barHeight, binAt, binSummary, DOMAIN_SQL, domainOf, formatRange, formatWidth, layout, rangeOf,
-    type Series, StripClient, timelessCount,
+    barHeight, binAt, type BinRow, type Bins, binSummary, DOMAIN_SQL, domainOf, formatRange, formatWidth, layout, rangeOf,
+    type Series, stripRequest, stripSeries, timelessCount,
   } from './histogram';
 
-  let { db, manifest }: { db: Db; manifest: Manifest } = $props();
+  // The page's filters minus the time range: the strip draws time itself.
+  let { db, manifest, where }: { db: Db; manifest: Manifest; where: string } = $props();
 
   const HEIGHT = 120;
   // Events rise above the line, detections hang below it on their own scale.
@@ -29,9 +29,11 @@
   let hover = $state<number | null>(null);
   let cursor = $state<{ at: number; anchor: number } | null>(null);
   let paint = $state(0);
-  let client: StripClient | null = null;
+  let ticket = 0;
 
-  const bins = $derived(domain && width > 0 ? layout(domain, Math.max(12, Math.floor(width / 4))) : null);
+  // Compared as text, so a resize that keeps the layout does not query again.
+  const binsKey = $derived(domain && width > 0 ? JSON.stringify(layout(domain, Math.max(12, Math.floor(width / 4)))) : null);
+  const bins = $derived<Bins | null>(binsKey ? JSON.parse(binsKey) : null);
   const timeless = $derived(timelessCount(manifest));
   const tip = $derived(series && hover !== null && !drag ? binSummary(series, hover, hover) : null);
   const announcement = $derived(series && cursor ? describe(binSummary(series, cursor.anchor, cursor.at)) : '');
@@ -46,12 +48,7 @@
     let live = true;
     db.rows<{ lo: number | null; hi: number | null }>(DOMAIN_SQL).then(
       (rows) => {
-        if (!live) return;
-        domain = domainOf(rows[0]);
-        if (domain === null) return;
-        client = new StripClient(filters, () => bins, (next) => (series = next), (message) => (failure = message));
-        timeClients.add(client);
-        db.coordinator.connect(client);
+        if (live) domain = domainOf(rows[0]);
       },
       (error: unknown) => {
         failure = error instanceof Error ? error.message : String(error);
@@ -66,15 +63,28 @@
       live = false;
       observer.disconnect();
       scheme.removeEventListener('change', repaint);
-      if (client) {
-        timeClients.delete(client);
-        client.destroy();
-      }
     };
   });
 
+  // Each answer is drawn on the layout its own request was built for; an answer overtaken by a newer request is dropped.
   $effect(() => {
-    if (bins && client) client.requestUpdate();
+    if (!bins) return;
+    const request = stripRequest(bins, where);
+    const mine = ++ticket;
+    db.rows<BinRow>(request.sql).then(
+      (rows) => {
+        if (mine !== ticket) return;
+        try {
+          series = stripSeries(request, rows);
+          failure = null;
+        } catch (error) {
+          failure = error instanceof Error ? error.message : String(error);
+        }
+      },
+      (error: unknown) => {
+        if (mine === ticket) failure = error instanceof Error ? error.message : String(error);
+      },
+    );
   });
 
   $effect(() => {
