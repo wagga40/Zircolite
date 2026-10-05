@@ -57,7 +57,7 @@
   <TopBar {db} {schema} {manifest} {detected} {query} />
   <div class="frame">
     <NavRail />
-    <div class="main">
+    <div class="main" class:drawer={view.uid !== null}>
       {#if view.route === 'overview'}
         <Overview {db} {schema} {manifest} {query} />
       {:else if view.route === 'detections'}
@@ -84,6 +84,10 @@
   .shell { display: grid; grid-template-rows: auto minmax(0, 1fr); height: 100vh; }
   .frame { display: grid; grid-template-columns: 96px minmax(0, 1fr); min-height: 0; }
   .main { position: relative; display: grid; min-height: 0; min-width: 0; }
+  /* Wide enough to read both: the drawer stands beside the view instead of over it. It is 560px wide here, so the view keeps the rest. */
+  @media (min-width: 1400px) {
+    .main.drawer { padding-right: 560px; }
+  }
   @media (max-width: 720px) {
     .frame { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr); }
   }

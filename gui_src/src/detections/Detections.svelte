@@ -1,6 +1,7 @@
 <script lang="ts">
   import type { Db } from '../engine/db';
   import type { Manifest } from '../engine/manifest';
+  import { levelInk } from '../engine/levels';
   import { isSuperseded } from '../engine/queries';
   import type { Schema } from '../engine/schema';
   import type { QueryState } from '../state/query.svelte';
@@ -97,7 +98,7 @@
   <div class="list" class:stale={pending && loaded !== null}>
     {#each shown as section (section.rank)}
       <section aria-label={levelLabel(section.rank)}>
-        <h2><i style:background={`var(--sev-${Math.max(0, section.rank)})`}></i>{levelLabel(section.rank)}: {formatCount(section.rules.length)} {section.rules.length === 1 ? 'rule' : 'rules'}, {formatCount(section.events)} {section.events === 1 ? 'event' : 'events'}</h2>
+        <h2><i style:background={levelInk(section.rank)}></i>{levelLabel(section.rank)}: {formatCount(section.rules.length)} {section.rules.length === 1 ? 'rule' : 'rules'}, {formatCount(section.events)} {section.events === 1 ? 'event' : 'events'}</h2>
         <ul>
           {#each section.rules as group (group.key)}
             <RuleItem {db} {schema} {group} expanded={expanded.includes(group.key)} ontoggle={() => toggle(group.key)} />

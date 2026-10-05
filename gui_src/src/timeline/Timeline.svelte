@@ -2,7 +2,7 @@
   import { onMount, untrack } from 'svelte';
   import type { Db } from '../engine/db';
   import type { Manifest } from '../engine/manifest';
-  import { LEVELS } from '../engine/levels';
+  import { LEVELS, levelInk, levelVar } from '../engine/levels';
   import { isSuperseded } from '../engine/queries';
   import type { Schema } from '../engine/schema';
   import { appendRaw } from '../search/edit';
@@ -352,7 +352,7 @@
     }
     // Overplotted on purpose: in a busy lane the pile of marks is the signal.
     for (const mark of shown) {
-      ctx.fillStyle = ink(`--sev-${Math.max(0, mark.lvl)}`);
+      ctx.fillStyle = ink(levelVar(mark.lvl));
       ctx.globalAlpha = 0.85;
       ctx.beginPath();
       ctx.arc(mark.x, mark.y, mark.r, 0, Math.PI * 2);
@@ -405,7 +405,8 @@
     </div>
     <p class="key dims" aria-busy={pending}>
       Mark colour is the highest detection level:
-      {#each LEVELS as level, rank (level)}<span class="swatch"><i style:background={`var(--sev-${rank})`}></i>{level}</span>{/each}
+      {#each LEVELS as level, rank (level)}<span class="swatch"><i style:background={levelInk(rank)}></i>{level}</span>{/each}
+      {#if marks?.rows.some((mark) => mark.lvl === -1)}<span class="swatch"><i style:background={levelInk(-1)}></i>unknown</span>{/if}
     </p>
     {#if timeless}
       <p class="key" id="timeline-timeless" data-count={timeless}>

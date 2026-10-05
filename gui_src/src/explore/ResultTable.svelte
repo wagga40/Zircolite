@@ -1,6 +1,7 @@
 <script lang="ts">
   import type { Db } from '../engine/db';
   import type { Manifest } from '../engine/manifest';
+  import { levelInk } from '../engine/levels';
   import { isSuperseded } from '../engine/queries';
   import type { Field, Schema } from '../engine/schema';
   import { run, runAgain, stopAll } from '../state/run.svelte';
@@ -403,7 +404,7 @@
             {#if row}
               <div role="gridcell" class="time">{isoTime(row._zl_t) || 'no time'}</div>
               <div role="gridcell" class="level">
-                {#if row._zl_lvl !== null}<i style:background={`var(--sev-${row._zl_lvl})`}></i>{levelName(row._zl_lvl)}{/if}
+                {#if row._zl_lvl !== null}<i style:background={levelInk(row._zl_lvl)}></i>{levelName(row._zl_lvl)}{/if}
               </div>
               {#each columns as field, i (field.key)}
                 <div role="gridcell" class:num={field.type !== 'VARCHAR'} title={row[`_zl_v${i}`] ?? ''}>{row[`_zl_v${i}`] ?? ''}</div>

@@ -17,7 +17,7 @@ describe('format', () => {
     expect(isoTime(null)).toBe('');
     expect(levelName(3)).toBe('high');
     expect(levelName(null)).toBeNull();
-    expect(levelName(-1)).toBeNull();
+    expect(levelName(-1)).toBe('unknown');
   });
 
   it('counts inputs, not parts', () => {

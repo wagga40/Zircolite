@@ -1,5 +1,6 @@
 <script lang="ts">
   import type { Db } from '../engine/db';
+  import { levelInk } from '../engine/levels';
   import type { Manifest } from '../engine/manifest';
   import type { Schema } from '../engine/schema';
   import { levelLabel } from '../detections/rules';
@@ -134,7 +135,6 @@
   }
 
   const matched = (p: Process) => `${levelLabel(p.lvl ?? 0)}, ${formatCount(p.hits)} ${p.hits === 1 ? 'rule' : 'rules'} matched`;
-  const ink = (lvl: number) => `var(--sev-${Math.max(0, lvl)})`;
 </script>
 
 <main class="processes">
@@ -195,7 +195,7 @@
             <span class="host">{row.process.host ?? ''}</span>
             <span class="time">{row.process.t === null ? 'No time' : isoTime(row.process.t, false)}</span>
             <span class="badge" title={row.process.lvl === null ? undefined : matched(row.process)} aria-label={row.process.lvl === null ? undefined : matched(row.process)}>
-              {#if row.process.lvl !== null}<i style:background={ink(row.process.lvl)}></i>{levelLabel(row.process.lvl)}, {formatCount(row.process.hits)}{/if}
+              {#if row.process.lvl !== null}<i style:background={levelInk(row.process.lvl)}></i>{levelLabel(row.process.lvl)}, {formatCount(row.process.hits)}{/if}
             </span>
           </div>
         {/each}

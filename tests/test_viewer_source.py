@@ -99,3 +99,15 @@ def test_viewer_notices_carry_the_attack_terms():
     notices = (ROOT / "gui" / "viewer" / "THIRD_PARTY_NOTICES.txt").read_text(encoding="utf-8")
     assert "MITRE ATT&CK" in notices
     assert "The MITRE Corporation" in notices
+
+
+def test_severity_inks_go_through_one_helper():
+    pattern = re.compile(r"--sev-\$\{")
+    offenders = [
+        f"{path.relative_to(ROOT)}:{n}"
+        for path in (ROOT / "gui_src" / "src").rglob("*")
+        if path.suffix in {".ts", ".svelte"} and path.name != "levels.ts"
+        for n, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1)
+        if pattern.search(line)
+    ]
+    assert offenders == [], "build severity inks with levelInk or levelVar, so an unknown level has one colour"

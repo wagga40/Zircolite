@@ -1,5 +1,6 @@
 <script lang="ts">
   import type { Db } from '../engine/db';
+  import { levelInk } from '../engine/levels';
   import type { Manifest } from '../engine/manifest';
   import type { Field, Schema } from '../engine/schema';
   import Strip from '../explore/Strip.svelte';
@@ -102,7 +103,7 @@
         <button type="button" class="tile" data-rank={tile.rank} data-events={tile.events}
           title={tile.rank < 0 ? 'Events detected only by rules whose level is none of Sigma\'s' : `Events whose highest detection is ${tile.level}`}
           onclick={() => explore(tile.term)}>
-          <span class="name"><i style:background={`var(--sev-${Math.max(0, tile.rank)})`}></i>{tile.label}</span>
+          <span class="name"><i style:background={levelInk(tile.rank)}></i>{tile.label}</span>
           <span class="count">{formatCount(tile.events)}</span>
           <span class="unit">{tile.events === 1 ? 'event' : 'events'}</span>
           <span class="rules">{formatCount(tile.rules)} {tile.rules === 1 ? 'rule' : 'rules'}</span>
@@ -136,7 +137,7 @@
         <ol class="list" id="overview-rules">
           {#each ruleSlot.data ?? [] as rule (rule.key)}
             <li><button type="button" data-key={rule.key} data-events={rule.events} onclick={() => explore(`rulekey:${quoteValue(rule.key)}`)}>
-              <i style:background={`var(--sev-${Math.max(0, rule.rank)})`}></i><span class="text">{rule.title}</span><span class="n">{formatCount(rule.events)}</span>
+              <i style:background={levelInk(rule.rank)}></i><span class="text">{rule.title}</span><span class="n">{formatCount(rule.events)}</span>
             </button></li>
           {/each}
         </ol>

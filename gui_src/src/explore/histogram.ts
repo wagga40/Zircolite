@@ -45,6 +45,7 @@ export interface BinRow {
   l2: number;
   l3: number;
   l4: number;
+  lu: number;
 }
 
 export interface Series {
@@ -52,6 +53,8 @@ export interface Series {
   n: Float64Array;
   /** levels[rank][bin]: events whose highest detection has that level. */
   levels: Float64Array[];
+  /** Events whose rule has no Sigma level (rank -1); the ranks above do not hold them. */
+  unknown: Float64Array;
 }
 
 /**
@@ -61,7 +64,7 @@ export interface Series {
 export function binsSql(bins: Bins, where: string): string {
   const span = timePredicate([bins.start, bins.start + bins.width * bins.count]);
   if (span === null) throw new Error(`the histogram layout ${JSON.stringify(bins)} is not in whole milliseconds`);
-  const levels = LEVELS.map((_, rank) => `count(*) FILTER (WHERE _zl_lvl = ${rank})::DOUBLE AS l${rank}`).join(', ');
+  const levels = [...LEVELS.map((_, rank) => `count(*) FILTER (WHERE _zl_lvl = ${rank})::DOUBLE AS l${rank}`), 'count(*) FILTER (WHERE _zl_lvl = -1)::DOUBLE AS lu'].join(', ');
   return (
     `SELECT floor((epoch_ms(_zl_time) - ${bins.start}) / ${bins.width})::INTEGER AS b, count(*)::DOUBLE AS n, ${levels} ` +
     `FROM events LEFT JOIN event_levels USING (_zl_uid) WHERE ${span} AND (${where}) GROUP BY b ORDER BY b`
@@ -71,6 +74,7 @@ export function binsSql(bins: Bins, where: string): string {
 export function fill(rows: BinRow[], bins: Bins): Series {
   const n = new Float64Array(bins.count);
   const levels = LEVELS.map(() => new Float64Array(bins.count));
+  const unknown = new Float64Array(bins.count);
   for (const row of rows) {
     // The query is bounded to the layout, so a bin outside it means the
     // query and the layout disagree: drawing it anyway would misplace counts.
@@ -79,8 +83,9 @@ export function fill(rows: BinRow[], bins: Bins): Series {
     levels.forEach((series, rank) => {
       series[row.b] = row[`l${rank}` as keyof BinRow];
     });
+    unknown[row.b] = row.lu;
   }
-  return { bins, n, levels };
+  return { bins, n, levels, unknown };
 }
 
 export function binAt(x: number, width: number, count: number): number {
@@ -92,18 +97,20 @@ export function rangeOf(bins: Bins, a: number, b: number): [number, number] {
   return [bins.start + Math.min(a, b) * bins.width, bins.start + (Math.max(a, b) + 1) * bins.width];
 }
 
-export function binSummary(series: Series, a: number, b: number): { range: [number, number]; events: number; levels: number[] } {
+export function binSummary(series: Series, a: number, b: number): { range: [number, number]; events: number; levels: number[]; unknown: number } {
   const from = Math.min(a, b);
   const to = Math.max(a, b);
   let events = 0;
   const levels = LEVELS.map(() => 0);
+  let unknown = 0;
   for (let i = from; i <= to; i++) {
     events += series.n[i];
     series.levels.forEach((counts, rank) => {
       levels[rank] += counts[i];
     });
+    unknown += series.unknown[i];
   }
-  return { range: rangeOf(series.bins, from, to), events, levels };
+  return { range: rangeOf(series.bins, from, to), events, levels, unknown };
 }
 
 /** Square-root height, so quiet bins stay visible beside a burst; non-zero never rounds away. */

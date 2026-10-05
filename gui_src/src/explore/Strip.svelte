@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import type { Db } from '../engine/db';
-  import { LEVELS } from '../engine/levels';
+  import { LEVELS, levelInk, levelVar } from '../engine/levels';
   import type { Manifest } from '../engine/manifest';
   import { isSuperseded } from '../engine/queries';
   import { run, runAgain } from '../state/run.svelte';
@@ -43,11 +43,15 @@
   // Compared as text, so a resize that keeps the layout does not query again.
   const binsKey = $derived(span && width > 0 ? JSON.stringify(layout(span, Math.max(12, Math.floor(width / 4)))) : null);
   const bins = $derived<Bins | null>(binsKey ? JSON.parse(binsKey) : null);
+  const hasUnknown = $derived(series ? series.unknown.some((count) => count > 0) : false);
   const tip = $derived(series && hover !== null && hover < series.bins.count && !drag ? binSummary(series, hover, hover) : null);
   const announcement = $derived(series && cursor ? describe(binSummary(series, cursor.anchor, cursor.at)) : '');
 
   function describe(summary: ReturnType<typeof binSummary>): string {
-    const found = LEVELS.flatMap((level, rank) => (summary.levels[rank] ? [`${formatCount(summary.levels[rank])} ${level}`] : []));
+    const found = [
+      ...LEVELS.flatMap((level, rank) => (summary.levels[rank] ? [`${formatCount(summary.levels[rank])} ${level}`] : [])),
+      ...(summary.unknown ? [`${formatCount(summary.unknown)} unknown level`] : []),
+    ];
     const detections = found.length ? `; detections: ${found.reverse().join(', ')}` : '';
     return `${formatRange(summary.range)} UTC: ${formatCount(summary.events)} events${detections}`;
   }
@@ -156,10 +160,12 @@
     ctx.fillStyle = ink('--rule');
     ctx.fillRect(0, MID, w, 1);
     if (!s) return;
-    const { bins: b, n, levels } = s;
+    const { bins: b, n } = s;
+    // Ascending by severity, with events of an unknown level first, so they are drawn last and farthest from the line.
+    const layers = [{ rank: -1, counts: s.unknown }, ...s.levels.map((counts, rank) => ({ rank, counts }))];
     const step = w / b.count;
     const bar = Math.max(1, step - (step >= 3 ? 1 : 0));
-    const totals = Array.from(n, (_, i) => levels.reduce((sum, counts) => sum + counts[i], 0));
+    const totals = Array.from(n, (_, i) => layers.reduce((sum, layer) => sum + layer.counts[i], 0));
     const maxN = n.reduce((m, v) => Math.max(m, v), 0);
     const maxD = totals.reduce((m, v) => Math.max(m, v), 0);
     ctx.fillStyle = ink('--strip');
@@ -173,11 +179,11 @@
       const h = barHeight(total, maxD, DOWN, 2);
       let y = MID + 2;
       // The most severe level sits nearest the line, where the eye lands first.
-      for (let rank = levels.length - 1; rank >= 0; rank--) {
-        const count = levels[rank][i];
+      for (let k = layers.length - 1; k >= 0; k--) {
+        const count = layers[k].counts[i];
         if (!count) continue;
         const segment = Math.max(2, (h * count) / total);
-        ctx.fillStyle = ink(`--sev-${rank}`);
+        ctx.fillStyle = ink(levelVar(layers[k].rank));
         ctx.fillRect(i * step, y, bar, segment);
         y += segment;
       }
@@ -298,7 +304,8 @@
       <span class="start">{series ? `${isoTime(series.bins.start, false)} UTC` : 'Reading event times'}</span>
       <span class="key">
         Events above the line, detections below it:
-        {#each LEVELS as level, rank (level)}<span class="swatch"><i style:background={`var(--sev-${rank})`}></i>{level}</span>{/each}
+        {#each LEVELS as level, rank (level)}<span class="swatch"><i style:background={levelInk(rank)}></i>{level}</span>{/each}
+        {#if hasUnknown}<span class="swatch"><i style:background={levelInk(-1)}></i>unknown</span>{/if}
       </span>
       {#if series}<span>Each bar is {formatWidth(series.bins.width)}</span>{/if}
       {#if timelessHere && view.t}<span>{formatCount(timelessHere)} {timelessHere === 1 ? 'event' : 'events'} matching the other filters {timelessHere === 1 ? 'has' : 'have'} no time, so the time range leaves {timelessHere === 1 ? 'it' : 'them'} out</span>

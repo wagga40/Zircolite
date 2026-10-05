@@ -2,6 +2,7 @@
   import { fly } from 'svelte/transition';
   import type { Db } from '../engine/db';
   import type { Manifest } from '../engine/manifest';
+  import { levelInk } from '../engine/levels';
   import { nameResolver } from '../engine/names';
   import { isSuperseded } from '../engine/queries';
   import type { Schema } from '../engine/schema';
@@ -198,7 +199,7 @@
             <ul>
               {#each loaded.rules as rule (rule.rule_idx)}
                 <li>
-                  <span class="sev"><i style:background={`var(--sev-${rule.level_rank})`}></i>{rule.level}</span>
+                  <span class="sev"><i style:background={levelInk(rule.level_rank)}></i>{rule.level}</span>
                   <span class="rule-title">{rule.title}</span>
                   {#if rule.techniques?.length}<span class="techniques">{rule.techniques.join(', ')}</span>{/if}
                   <button type="button" disabled={stale} onclick={() => filterRule(rule)}>Filter by this rule</button>

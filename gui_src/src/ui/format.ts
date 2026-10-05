@@ -15,8 +15,8 @@ export function isoTime(ms: number | null | undefined, withMs = true): string {
 }
 
 export function levelName(rank: number | null | undefined): string | null {
-  if (rank === null || rank === undefined || rank < 0) return null;
-  return LEVELS[rank] ?? null;
+  if (rank === null || rank === undefined) return null;
+  return LEVELS[rank] ?? 'unknown';
 }
 
 /** Part time stats are microseconds; the text is UTC. */

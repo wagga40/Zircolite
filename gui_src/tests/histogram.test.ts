@@ -53,9 +53,9 @@ describe('bins against DuckDB', () => {
   it('counts events and their highest detection level per bin, leaving timeless events out', async () => {
     expect(layout([SIX, SIX + 2 * H], 3)).toEqual(bins);
     expect(await db.rows(binsSql(bins, 'TRUE'))).toEqual([
-      { b: 0, n: 3, l0: 1, l1: 0, l2: 1, l3: 0, l4: 0 },
-      { b: 1, n: 1, l0: 0, l1: 0, l2: 0, l3: 0, l4: 1 },
-      { b: 2, n: 1, l0: 0, l1: 0, l2: 0, l3: 0, l4: 0 },
+      { b: 0, n: 3, l0: 1, l1: 0, l2: 1, l3: 0, l4: 0, lu: 0 },
+      { b: 1, n: 1, l0: 0, l1: 0, l2: 0, l3: 0, l4: 1, lu: 0 },
+      { b: 2, n: 1, l0: 0, l1: 0, l2: 0, l3: 0, l4: 0, lu: 0 },
     ]);
   });
 
@@ -67,7 +67,7 @@ describe('bins against DuckDB', () => {
   it('fills a series and sums a range of it', async () => {
     const series = fill((await db.rows(binsSql(bins, 'TRUE'))) as unknown as BinRow[], bins);
     expect(Array.from(series.n)).toEqual([3, 1, 1]);
-    expect(binSummary(series, 1, 0)).toEqual({ range: [SIX, SIX + 2 * H], events: 4, levels: [1, 0, 1, 0, 1] });
+    expect(binSummary(series, 1, 0)).toEqual({ range: [SIX, SIX + 2 * H], events: 4, levels: [1, 0, 1, 0, 1], unknown: 0 });
   });
 
   it('bounds the query to the layout, so a zoomed strip never sees events outside it', async () => {
@@ -82,7 +82,7 @@ describe('bins against DuckDB', () => {
   });
 
   it('refuses a bin outside the layout', () => {
-    expect(() => fill([{ b: 3, n: 1, l0: 0, l1: 0, l2: 0, l3: 0, l4: 0 }], bins)).toThrowError(/outside/);
+    expect(() => fill([{ b: 3, n: 1, l0: 0, l1: 0, l2: 0, l3: 0, l4: 0, lu: 0 }], bins)).toThrowError(/outside/);
   });
 });
 
@@ -133,5 +133,18 @@ describe('pixels and labels', () => {
   it('counts the events that have no time', () => {
     const parts = [{ time: { missing: 2, unparsed: 1 } }, { time: { missing: 0, unparsed: 0 } }];
     expect(timelessCount({ parts } as never)).toBe(3);
+  });
+});
+
+describe('events whose rule has no level', () => {
+  it('are carried beside the ranks, and summed with them', () => {
+    const bins = { start: SIX, width: H, count: 2 };
+    const series = fill([{ b: 0, n: 3, l0: 1, l1: 0, l2: 0, l3: 0, l4: 0, lu: 2 }, { b: 1, n: 1, l0: 0, l1: 0, l2: 0, l3: 0, l4: 0, lu: 1 }], bins);
+    expect(Array.from(series.unknown)).toEqual([2, 1]);
+    expect(binSummary(series, 0, 1).unknown).toBe(3);
+  });
+
+  it('are counted by the query', () => {
+    expect(binsSql({ start: SIX, width: H, count: 2 }, 'TRUE')).toContain('FILTER (WHERE _zl_lvl = -1)::DOUBLE AS lu');
   });
 });

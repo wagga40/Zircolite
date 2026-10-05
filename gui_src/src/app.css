@@ -43,6 +43,7 @@
   --sev-2: #9c7409;
   --sev-3: #c2531a;
   --sev-4: #a3134e;
+  --sev-unknown: var(--ink-2);
   --danger: #a3134e;
   --scrim: rgb(22 33 30 / 0.4);
   --sans: 'Atkinson Hyperlegible Next', system-ui, -apple-system, 'Segoe UI', sans-serif;
