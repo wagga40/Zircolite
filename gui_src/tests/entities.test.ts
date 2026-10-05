@@ -61,3 +61,31 @@ describe('entities', () => {
     expect((await rows(entityFields(kind('hosts'), schema), '', 'first')).map((r) => r.v)).toEqual(['DC01', 'WS02']);
   });
 });
+
+describe('awkward values', () => {
+  const HOSTS = ['a*b', 'q\\x"y', '50%_off', '', 'ÉCOLE', 'école'];
+  let awkward: Fixture;
+  beforeAll(async () => {
+    const values = HOSTS.map((h, i) => `(${100 + i}, 0, TIMESTAMP '2021-07-01 00:00:0${i}', '${h.replaceAll("'", "''")}')`).join(', ');
+    awkward = await openFixture([`INSERT INTO events (_zl_uid, _zl_part, _zl_time, "Computer") VALUES ${values}, (200, 0, NULL, 'ÉCOLE')`]);
+  });
+  afterAll(() => awkward.close());
+
+  const hostRows = async (filter = '') =>
+    (await awkward.rows(entitiesSql(entityFields(kind('hosts'), schema), 'TRUE', filter, 'events'))) as unknown as EntityRow[];
+
+  it('each count is exactly what its term lists', async () => {
+    const fields = entityFields(kind('hosts'), schema);
+    const found = await hostRows();
+    for (const row of found) {
+      const listed = await awkward.uids(compile(parse(entityTerm(fields, row.v)), schema));
+      expect(listed.length, JSON.stringify(row.v)).toBe(row.events);
+    }
+    // ÉCOLE and école are one value with two events beside the spelling-only ones.
+    expect(found.filter((r) => r.v.toLowerCase() === 'école')).toHaveLength(1);
+  });
+
+  it('a percent filter matches only values holding a percent sign', async () => {
+    expect((await hostRows('%')).map((r) => r.v)).toEqual(['50%_off']);
+  });
+});

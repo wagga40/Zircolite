@@ -44,6 +44,14 @@
   const total = $derived(rows[0]?.total ?? 0);
   const filtered = $derived(query.where !== 'TRUE');
 
+  const summary = $derived.by(() => {
+    if (list.slot.stopped) return 'Stopped';
+    if (list.slot.failure) return '';
+    if (list.slot.data === null) return `Counting ${kind.noun}`;
+    if (rows.length === 0) return applied ? `No ${kind.noun} contain "${applied}"` : `No ${kind.noun} among these events`;
+    return `${formatCount(total)} ${kind.noun}${filtered ? ' under the current filters' : ''}`;
+  });
+
   function explore(value: string): void {
     view.q = appendRaw(view.q, entityTerm(fields, value));
     view.route = 'explore';
@@ -53,7 +61,10 @@
 <main class="entities">
   <header>
     <h1 tabindex="-1">Entities</h1>
-    {#if list.slot.stopped}<button type="button" class="again" onclick={runAgain}>Run again</button>{/if}
+    {#if fields.length > 0}
+      <output class:stale={list.slot.pending && list.slot.data !== null} aria-busy={list.slot.pending}>{summary}</output>
+    {/if}
+    {#if fields.length > 0 && list.slot.stopped}<button type="button" class="again" onclick={runAgain}>Run again</button>{/if}
   </header>
   <div class="kinds" role="group" aria-label="Kind of entity">
     {#each ENTITY_KINDS as k (k.kind)}
@@ -136,5 +147,6 @@
   .num { text-align: right; font-variant-numeric: tabular-nums; }
   .time { font-family: var(--mono); white-space: nowrap; }
   .value { min-height: 24px; padding: 0; text-align: left; background: none; border: 0; color: var(--signal); font: 400 var(--t-13) / 1.4 var(--mono); cursor: pointer; overflow-wrap: anywhere; }
+  output { color: var(--ink-2); font-size: var(--t-13); }
   .stale { opacity: 0.5; }
 </style>
