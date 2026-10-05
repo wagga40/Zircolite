@@ -16,7 +16,7 @@
   import { ownScope } from '../ui/scope';
   import {
     bucketMs, EXTENT_SQL, formatTick, height, hit, LANE_GAP, LANE_H, laneLabel, lanes, type Mark, marksSql, padLeft,
-    PAD_R, PAD_T, pan, type Placed, place, showFilter, type Span, ticks, zoomAt,
+    PAD_R, PAD_T, pan, type Placed, place, showFilter, type Span, ticks, timelessSql, zoomAt,
   } from './timeline';
 
   let { db: page, schema, manifest, query }: { db: Db; schema: Schema; manifest: Manifest; query: QueryState } = $props();
@@ -71,6 +71,24 @@
     const pad = (e.to - e.from) * 0.02;
     return { from: e.from - pad, to: e.to + pad };
   }
+
+  // Hidden while it is counted or when the count fails: a note about another filter would mislead.
+  let timeless = $state<number | null>(null);
+  let timelessTicket = 0;
+  $effect(() => {
+    void run.generation;
+    const sql = timelessSql(query.whereWithoutTime);
+    const mine = ++timelessTicket;
+    timeless = null;
+    db.rows<{ n: number }>(sql, { lane: 'timeless' }).then(
+      (rows) => {
+        if (mine === timelessTicket) timeless = rows[0]?.n ?? 0;
+      },
+      () => {
+        if (mine === timelessTicket) timeless = null;
+      },
+    );
+  });
 
   // Read again on Run again, so a stop during the first read does not leave the view without a time range.
   $effect(() => {
@@ -360,7 +378,7 @@
       <button type="button" onclick={() => zoomBy(1.5)}>Zoom out</button>
       <button type="button" onclick={everything}>Show everything</button>
     </div>
-    <p class="note">Ctrl or ⌘ with the wheel zooms; drag to move. A mark holds the detections of one tactic within a few pixels of time{filtered ? ', under the current filters' : ''}.</p>
+    <p class="note">Ctrl or ⌘ with the wheel zooms; drag to move. A mark holds the events detected under one tactic within a few pixels of time{filtered ? ', under the current filters' : ''}.</p>
   </header>
   <output id="timeline-marks" hidden data-count={pending ? '' : placed.length}></output>
   {#if failure}
@@ -389,6 +407,11 @@
       Mark colour is the highest detection level:
       {#each LEVELS as level, rank (level)}<span class="swatch"><i style:background={`var(--sev-${rank})`}></i>{level}</span>{/each}
     </p>
+    {#if timeless}
+      <p class="key" id="timeline-timeless" data-count={timeless}>
+        {formatCount(timeless)} {timeless === 1 ? 'event' : 'events'} with detections matching the filters {timeless === 1 ? 'has' : 'have'} no time and {timeless === 1 ? 'is' : 'are'} not drawn.
+      </p>
+    {/if}
     <!-- Right after the canvas, so a mark clicked there is one tab away from its Explore button. -->
     {#if pinned}
       <p class="pinned" role="status">
@@ -407,7 +430,7 @@
           {:else}
             {#each listed.shown as group (group.lane)}
               {#if group.marks.length}
-                <h2>{laneLabel(group.lane)}, {formatCount(group.total)} {group.total === 1 ? 'detection' : 'detections'}</h2>
+                <h2>{laneLabel(group.lane)}, {formatCount(group.total)} {group.total === 1 ? 'event' : 'events'}</h2>
                 <ul>
                   {#each group.marks as mark (`${mark.lane}:${mark.b}`)}
                     <li>

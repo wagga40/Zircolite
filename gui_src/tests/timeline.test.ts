@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import {
   bucketMs, EXTENT_SQL, formatTick, hit, laneLabel, lanes, laneY, type Mark, marksSql, PAD_L, pan, place, showFilter, tickStep,
-  ticks, zoomAt,
+  ticks, timelessSql, zoomAt,
 } from '../src/timeline/timeline';
 import { compile } from '../src/search/compile';
 import { parse } from '../src/search/parse';
@@ -130,6 +130,26 @@ describe('marks against DuckDB', () => {
   it('applies the filters', async () => {
     const rows = await db.rows(marksSql({ from: SIX, to: SIX + 3 * H }, 3 * H, `"Channel" = 'Security'`));
     expect(rows.map((r) => [r.lane, r.n])).toEqual([['initial-access', 1]]);
+  });
+});
+
+describe('detections without a time', () => {
+  it('counts the events with detections the timeline cannot place, under the filters', async () => {
+    // Event 4294967298 has no time; give it a detection.
+    const timeless = await openFixture(['INSERT INTO hits VALUES (1, 4294967298)']);
+    try {
+      expect(await timeless.rows(timelessSql('TRUE'))).toEqual([{ n: 1 }]);
+      expect(await timeless.rows(timelessSql(compile(parse('Computer:WS02'), schema)))).toEqual([{ n: 1 }]);
+      expect(await timeless.rows(timelessSql(compile(parse('Computer:DC01'), schema)))).toEqual([{ n: 0 }]);
+      const marks = await timeless.rows(marksSql({ from: SIX - DAY, to: SIX + DAY }, H, 'TRUE'));
+      expect(marks.some((mark) => mark.uid === 4294967298)).toBe(false);
+    } finally {
+      timeless.close();
+    }
+  });
+
+  it('leaves out timeless events without a detection', async () => {
+    expect(await db.rows(timelessSql('TRUE'))).toEqual([{ n: 0 }]);
   });
 });
 

@@ -138,6 +138,11 @@ export const EXTENT_SQL =
   'SELECT epoch_ms(min(e._zl_time))::DOUBLE AS lo, epoch_ms(max(e._zl_time))::DOUBLE AS hi FROM events e ' +
   'WHERE e._zl_uid IN (SELECT _zl_uid FROM hits)';
 
+/** Events with detections under the filters that have no time: the timeline has nowhere to put them. */
+export function timelessSql(where: string): string {
+  return `SELECT count(*)::DOUBLE AS n FROM events WHERE _zl_time IS NULL AND _zl_uid IN (SELECT _zl_uid FROM hits) AND (${where})`;
+}
+
 export interface Mark {
   lane: string;
   b: number;
