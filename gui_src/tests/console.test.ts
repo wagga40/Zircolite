@@ -1,5 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { resultSql, runQuery, SqlRefused, TABLES_SQL, trimStatement } from '../src/sql/console';
+import { csvLine } from '../src/explore/export';
+import { columnWidths, LOGGING_SQL, numericType, resultSql, runQuery, SqlRefused, TABLES_SQL, trimStatement } from '../src/sql/console';
 import { type Fixture, openFixture } from './fixture';
 
 let db: Fixture;
@@ -23,14 +24,30 @@ describe('what the console runs', () => {
       'DELETE FROM events', 'SELECT 1; DROP TABLE events', 'SELECT 1) ; DROP TABLE events; SELECT * FROM (SELECT 1',
       'SELECT 1) ; CREATE TABLE zl_probe AS SELECT 42 AS x; SELECT * FROM (SELECT 1', 'CREATE TABLE zl_probe AS SELECT 42 AS x',
     ];
-    for (const text of texts) await expect(runQuery(send, text), text).rejects.toBeInstanceOf(SqlRefused);
+    for (const text of texts) await expect(runQuery(send, text), text).rejects.toBeInstanceOf(Error);
     expect(await events()).toBe(before);
     await expect(db.rows('SELECT * FROM zl_probe')).rejects.toThrow();
   });
 
-  it('says why a query did not run', async () => {
-    await expect(runQuery(send, 'DROP TABLE events')).rejects.toThrow(/^only one SELECT query runs here .*DuckDB says: /);
+  it('calls only a real refusal a refusal', async () => {
+    await expect(runQuery(send, 'DROP TABLE events')).rejects.toBeInstanceOf(SqlRefused);
+    await expect(runQuery(send, 'DROP TABLE events')).rejects.toThrow(/^only one SELECT query runs here/);
     await expect(runQuery(send, ' ; ')).rejects.toThrow('the query is empty');
+    const typo = await runQuery(send, 'SELECT * FROM evnts').catch((e: unknown) => e as Error);
+    expect(typo).toBeInstanceOf(Error);
+    expect(typo).not.toBeInstanceOf(SqlRefused);
+    expect((typo as Error).message).toMatch(/^Catalog Error/);
+    expect((typo as Error).message).not.toMatch(/LINE \d/);
+  });
+
+  it('switches off the logging a query turned on', async () => {
+    const logging = async () => String((await db.rows(LOGGING_SQL))[0].on);
+    await runQuery(send, "SELECT * FROM enable_logging(storage := 'memory')");
+    expect(await logging()).toBe('false');
+    await db.rows("SELECT * FROM enable_logging(storage := 'memory')");
+    expect(await logging()).toBe('true');
+    await runQuery(send, 'SELECT * FROM nothing_here').catch(() => {});
+    expect(await logging()).toBe('false');
   });
 });
 
@@ -65,5 +82,19 @@ describe('what the console shows', () => {
   it('lists the package tables and their columns', async () => {
     const tables = new Set((await db.rows(TABLES_SQL)).map((r) => r.t));
     for (const name of ['events', 'rules', 'hits', 'alerts', 'alert_events']) expect(tables.has(name), name).toBe(true);
+  });
+
+  it('counts only plain numbers as numeric, and sizes columns to their content', () => {
+    for (const type of ['BIGINT', 'DOUBLE', 'DECIMAL(18,3)', 'UHUGEINT']) expect(numericType(type), type).toBe(true);
+    for (const type of ['INTEGER[]', 'DOUBLE[]', 'VARCHAR', 'STRUCT(a INTEGER)']) expect(numericType(type), type).toBe(false);
+    const columns = [{ name: 'title', type: 'VARCHAR' }, { name: 'n', type: 'BIGINT' }, { name: 'x', type: 'VARCHAR' }];
+    expect(columnWidths(columns, [['Remote Thread Creation', '1', 'y'.repeat(200)], [null, '22', 'z']])).toEqual([24, 8, 60]);
+  });
+
+  it('keeps a negative number a number in the CSV, and guards a negative string', async () => {
+    const result = await runQuery(send, "SELECT -5 AS n, '-5' AS s");
+    const mask = result.columns.map((c) => numericType(c.type));
+    expect(mask).toEqual([true, false]);
+    expect(csvLine(result.rows[0], mask)).toBe("-5,'-5\r\n");
   });
 });
