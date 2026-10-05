@@ -113,6 +113,23 @@ def test_stdlib_array_parser_chunk_boundaries(monkeypatch):
     assert list(iter_json_array(io.BytesIO(json.dumps(value).encode()))) == [value[0], {}]
 
 
+@pytest.mark.parametrize("chunk_size", range(1, 16))
+@pytest.mark.parametrize("number", ["1.25", "-0.25", "1e3", "1E+3", "-1.25e-3"])
+def test_stdlib_array_parser_split_scalar_numbers(monkeypatch, chunk_size, number):
+    monkeypatch.setattr("zircolite.jsonstream.ijson", None)
+    monkeypatch.setattr("zircolite.jsonstream._CHUNK", chunk_size)
+    payload = ('[{"before":1},' + number + ',{"after":2}]').encode()
+    assert list(iter_json_array(io.BytesIO(payload))) == [{"before": 1}, {"after": 2}]
+
+
+@pytest.mark.parametrize("number", ["1.", "1e", "1e+", "1.e3", "1e-", "1.2.3"])
+def test_stdlib_array_parser_rejects_incomplete_scalar_numbers(monkeypatch, number):
+    monkeypatch.setattr("zircolite.jsonstream.ijson", None)
+    monkeypatch.setattr("zircolite.jsonstream._CHUNK", 2)
+    with pytest.raises(ValueError):
+        list(iter_json_array(io.BytesIO(('[' + number + ',{}]').encode())))
+
+
 def test_ijson_numeric_parity_when_installed():
     pytest.importorskip("ijson")
     assert list(iter_json_array(io.BytesIO(b'[{"n":18446744073709551615,"f":1.25}]'))) == [

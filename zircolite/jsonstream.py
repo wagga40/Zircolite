@@ -98,9 +98,15 @@ def _iter_stdlib(source):
                 if eof:
                     raise
             else:
-                # A scalar number may continue in the next chunk. Do not emit
-                # it until its delimiter has arrived.
-                if end < len(buffer) or eof:
+                # raw_decode accepts the integer prefix of "1." or "1e+"
+                # even though the fraction/exponent may arrive next read.
+                # Keep that prefix buffered until the number is complete.
+                partial_number = (
+                    isinstance(item, (int, float))
+                    and end < len(buffer)
+                    and buffer[end] in ".eE"
+                )
+                if eof or (end < len(buffer) and not partial_number):
                     buffer, state = buffer[end:], "comma"
                     if isinstance(item, dict):
                         yield item
