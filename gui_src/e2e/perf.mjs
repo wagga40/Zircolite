@@ -198,6 +198,19 @@ try {
   await page.locator('#search-input').press('Enter');
   await page.waitForTimeout(1000);
   report.leave_search_overview_ms = await timed(() => page.goto(`${base}#/overview`), filled('#overview-tiles', 'data-events'));
+  await page.close();
+
+  // A bookmark or Back with a bare word: the page opens on Overview before the index has loaded, and every
+  // query of the view needs the word. Timed from opening the page until the severity tiles are counted.
+  const fresh = await browser.newPage({ viewport: { width: 1440, height: 900 } });
+  const reopened = performance.now();
+  await fresh.goto(`${base}#/overview?q=powershell`);
+  await poll(fresh, async () => {
+    const value = await fresh.locator('#overview-tiles').getAttribute('data-events');
+    return value !== null && value !== '';
+  });
+  report.overview_reload_bare_word_ms = Math.round(performance.now() - reopened);
+  report.overview_reload_bare_word_events = Number(await fresh.locator('#overview-tiles').getAttribute('data-events'));
   console.log(JSON.stringify(report, null, 2));
 } finally {
   await browser.close();

@@ -158,6 +158,22 @@ async function scenario(page, open, steps, expectedText) {
   check(tiles === all.detected, `the overview tiles hold ${tiles} events; Explore says ${all.detected} have detections`);
   steps.push('overview tiles add up to the events with detections');
 
+  await nav(page, 'Overview');
+  const cells = page.locator('section.tactics button.cell');
+  await poll(page, async () => (await cells.count()) === manifest.tactics.length, 'the tactic cells');
+  const cell = page.locator('section.tactics button.cell:not(.none)').first();
+  if ((await cell.count()) > 0) {
+    const tactic = await cell.getAttribute('data-tactic');
+    const claimed = Number((await cell.locator('.count').textContent()).replace(/\D/g, ''));
+    await cell.click();
+    const byTactic = await reopened(page, state);
+    check(byTactic.count === claimed, `the ${tactic} cell counts ${claimed} events; Explore lists ${byTactic.count}`);
+    await search(page, state, '');
+    steps.push(`a tactic cell lists exactly its events (${tactic}, ${claimed})`);
+  } else {
+    steps.push('tactic cell skipped: no tactic has events in this package');
+  }
+
   await nav(page, 'Detections');
   const summary = page.locator('#detections-summary');
   const rules = await poll(page, () => number(summary, 'data-rules'), 'the detections');
