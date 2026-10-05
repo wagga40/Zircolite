@@ -140,12 +140,18 @@ try {
   // Stop on searches the engine really needs seconds for. Not a budget: it shows whether Stop reaches the
   // engine or only the page. A wildcard between letters of a long text field is the slowest scan of the
   // events; a bare word is the slowest scan of the full-text index. The index keeps each word's matches, so
-  // its reference run is the same word spelled as a pattern, which scans on its own.
+  // its reference and half-way runs spell the same word as other patterns, which scan on their own.
   const stopButton = page.getByRole('button', { name: 'Stop', exact: true });
   const stopped = page.locator('p.stopped');
   const cheap = 'EventID:4624';
   const stopReport = {};
-  for (const [name, query, reference = query] of [['wildcard', 'Message:*a*b*c*'], ['index', 'ntlm', '*ntlm*']]) {
+  // The wildcard's strip and count results are cached after the reference run, leaving the one scan the
+  // table needs, about a third of full_ms; the index builds its matches once, so half of full_ms is half the scan.
+  const cases = [
+    { name: 'wildcard', query: 'Message:*a*b*c*', halfOf: 0.15 },
+    { name: 'index', query: 'ntlm', reference: '*ntlm*', half: 'ntlm*', halfOf: 0.5 },
+  ];
+  for (const { name, query, reference = query, half = query, halfOf } of cases) {
     const entry = { query };
     stopReport[name] = entry;
     entry.full_ms = await search(reference);
@@ -156,24 +162,26 @@ try {
       entry.note = 'skipped: the search finished in under a second';
       continue;
     }
-    const begin = async () => {
-      await page.locator('#search-input').fill(query);
+    const begin = async (text, waitMs) => {
+      await page.locator('#search-input').fill(text);
       await page.locator('#search-input').press('Enter');
-      await page.waitForTimeout(200);
-      await stopButton.waitFor({ timeout: 5000 });
+      await page.waitForTimeout(waitMs);
+      await stopButton.waitFor({ timeout: 5000 }).catch((e) => { console.log(JSON.stringify({ name, text, waitMs, entry })); throw e; });
     };
-    await begin();
+    await begin(query, 200);
     const clicked = performance.now();
     await stopButton.click();
     await stopped.waitFor();
     entry.stop_ms = Math.round(performance.now() - clicked);
-    entry.cheap_after_stop_ms = await search(cheap);
-    // A cheap search that waits out most of the slow one means the engine was never interrupted.
-    entry.engine_interrupted = entry.cheap_after_stop_ms < entry.full_ms / 2;
+    // How long a cheap search waits after Stop: about full_ms means the engine kept running.
+    entry.next_query_after_stop_ms = await search(cheap);
     await search('');
-    await begin();
+    // Stopped halfway, so Run again has work already done to pick up.
+    await begin(half, Math.round(entry.full_ms * halfOf));
+    const clickedHalf = performance.now();
     await stopButton.click();
     await stopped.waitFor();
+    entry.stop_at_half_ms = Math.round(performance.now() - clickedHalf);
     entry.run_again_ms = await timed(() => stopped.getByRole('button', { name: 'Run again' }).click(), settled);
     entry.run_again_events = Number(await out.getAttribute('data-count'));
     if (entry.run_again_events !== entry.events) throw new Error(`Run again lists ${entry.run_again_events} events for ${query}; the search listed ${entry.events}`);
