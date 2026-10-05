@@ -140,18 +140,19 @@ try {
   // Stop on searches the engine really needs seconds for. Not a budget: it shows whether Stop reaches the
   // engine or only the page. A wildcard between letters of a long text field is the slowest scan of the
   // events; a bare word is the slowest scan of the full-text index. The index keeps each word's matches, so
-  // its reference and half-way runs spell the same word as other patterns, which scan on their own.
+  // its reference and midway runs spell the same word as other patterns, which scan on their own.
   const stopButton = page.getByRole('button', { name: 'Stop', exact: true });
   const stopped = page.locator('p.stopped');
   const cheap = 'EventID:4624';
   const stopReport = {};
   // The wildcard's strip and count results are cached after the reference run, leaving the one scan the
-  // table needs, about a third of full_ms; the index builds its matches once, so half of full_ms is half the scan.
+  // table needs, about a third of full_ms, and that scan restarts on Run again; the index builds its
+  // matches once, in slices, so stopping at half of full_ms leaves half the scan for Run again to resume.
   const cases = [
-    { name: 'wildcard', query: 'Message:*a*b*c*', halfOf: 0.15 },
-    { name: 'index', query: 'ntlm', reference: '*ntlm*', half: 'ntlm*', halfOf: 0.5 },
+    { name: 'wildcard', query: 'Message:*a*b*c*', midway: 0.15 },
+    { name: 'index', query: 'ntlm', reference: '*ntlm*', again: 'ntlm*', midway: 0.5 },
   ];
-  for (const { name, query, reference = query, half = query, halfOf } of cases) {
+  for (const { name, query, reference = query, again = query, midway } of cases) {
     const entry = { query };
     stopReport[name] = entry;
     entry.full_ms = await search(reference);
@@ -176,12 +177,13 @@ try {
     // How long a cheap search waits after Stop: about full_ms means the engine kept running.
     entry.next_query_after_stop_ms = await search(cheap);
     await search('');
-    // Stopped halfway, so Run again has work already done to pick up.
-    await begin(half, Math.round(entry.full_ms * halfOf));
-    const clickedHalf = performance.now();
+    // Stopped partway through its run, so Run again starts from a part-built state.
+    entry.midway = midway;
+    await begin(again, Math.round(entry.full_ms * midway));
+    const clickedMidway = performance.now();
     await stopButton.click();
     await stopped.waitFor();
-    entry.stop_at_half_ms = Math.round(performance.now() - clickedHalf);
+    entry.stop_midway_ms = Math.round(performance.now() - clickedMidway);
     entry.run_again_ms = await timed(() => stopped.getByRole('button', { name: 'Run again' }).click(), settled);
     entry.run_again_events = Number(await out.getAttribute('data-count'));
     if (entry.run_again_events !== entry.events) throw new Error(`Run again lists ${entry.run_again_events} events for ${query}; the search listed ${entry.events}`);
