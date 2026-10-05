@@ -76,7 +76,13 @@ describe('routes and history', () => {
   });
 
   it('opens an unknown view as the overview, keeping its filters', () => {
-    expect(decode('#/attack?q=x')).toEqual({ ...EMPTY, q: 'x' });
+    expect(decode('#/nowhere?q=x')).toEqual({ ...EMPTY, q: 'x' });
+  });
+
+  it('round-trips the Phase 4 views', () => {
+    for (const route of ['attack', 'entities', 'processes', 'sql'] as const) {
+      expect(decode(encode({ ...EMPTY, route, q: 'x' }))).toEqual({ ...EMPTY, route, q: 'x' });
+    }
   });
 
   it('refuses a time range past what dates can hold, with room for a year of bins', () => {

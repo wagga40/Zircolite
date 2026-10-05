@@ -1,15 +1,19 @@
 <script lang="ts">
+  import Attack from '../attack/Attack.svelte';
   import Detections from '../detections/Detections.svelte';
   import type { Db } from '../engine/db';
   import type { Manifest } from '../engine/manifest';
   import type { Schema } from '../engine/schema';
   import { textIndexFile } from '../engine/textIndex.svelte';
+  import Entities from '../entities/Entities.svelte';
   import DetailDrawer from '../explore/DetailDrawer.svelte';
   import Explore from '../explore/Explore.svelte';
   import Overview from '../overview/Overview.svelte';
+  import Processes from '../processes/Processes.svelte';
   import { QueryState } from '../state/query.svelte';
   import { run } from '../state/run.svelte';
   import { view } from '../state/view.svelte';
+  import Sql from '../sql/Sql.svelte';
   import Timeline from '../timeline/Timeline.svelte';
   import { typing } from './keys';
   import { pageTopLayer } from './layers';
@@ -60,6 +64,14 @@
         <Detections {db} {schema} {manifest} {query} />
       {:else if view.route === 'timeline'}
         <Timeline {db} {schema} {manifest} {query} />
+      {:else if view.route === 'attack'}
+        <Attack {db} {schema} {manifest} {query} />
+      {:else if view.route === 'entities'}
+        <Entities {db} {schema} {manifest} {query} />
+      {:else if view.route === 'processes'}
+        <Processes {db} {schema} {manifest} {query} />
+      {:else if view.route === 'sql'}
+        <Sql {db} {schema} {manifest} {query} />
       {:else}
         <Explore {db} {schema} {manifest} {query} />
       {/if}

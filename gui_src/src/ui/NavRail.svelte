@@ -2,10 +2,20 @@
   import { ROUTES, type Route } from '../state/hash';
   import { view } from '../state/view.svelte';
 
-  const LABELS: Record<Route, string> = { overview: 'Overview', detections: 'Detections', explore: 'Explore', timeline: 'Timeline' };
+  const LABELS: Record<Route, string> = {
+    overview: 'Overview', detections: 'Detections', explore: 'Explore', timeline: 'Timeline',
+    attack: 'ATT&CK', entities: 'Entities', processes: 'Processes', sql: 'SQL',
+  };
+  let rail = $state<HTMLElement>();
+
+  // On a phone the rail is a sideways row, and the current view could sit off screen.
+  $effect(() => {
+    void view.route;
+    rail?.querySelector('[aria-current="page"]')?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+  });
 </script>
 
-<nav class="rail" aria-label="Views">
+<nav class="rail" aria-label="Views" bind:this={rail}>
   {#each ROUTES as route (route)}
     <button type="button" aria-current={view.route === route ? 'page' : undefined} onclick={() => (view.route = route)}>{LABELS[route]}</button>
   {/each}

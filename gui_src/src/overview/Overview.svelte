@@ -1,8 +1,6 @@
 <script lang="ts">
-  import { untrack } from 'svelte';
   import type { Db } from '../engine/db';
   import type { Manifest } from '../engine/manifest';
-  import { isSuperseded } from '../engine/queries';
   import type { Field, Schema } from '../engine/schema';
   import Strip from '../explore/Strip.svelte';
   import { totalSql } from '../detections/rules';
@@ -12,6 +10,7 @@
   import { run, runAgain } from '../state/run.svelte';
   import { view } from '../state/view.svelte';
   import { formatCount } from '../ui/format';
+  import { Panel, type Slot } from '../ui/panel.svelte';
   import { ownScope } from '../ui/scope';
   import {
     entityField, type TacticCell, tacticCells, tacticsSql, type Tile, tileEventsSql, tileRulesSql, tiles, topRulesSql,
@@ -24,63 +23,38 @@
 
   interface TopRule { key: string; title: string; rank: number; events: number }
   interface TopValue { v: string; n: number; total: number }
-  interface Slot<T> {
-    data: T | null;
-    pending: boolean;
-    failure: string | null;
-    stopped: boolean;
-  }
-
-  const empty = <T,>(): Slot<T> => ({ data: null, pending: true, failure: null, stopped: false });
-
   const host = $derived(entityField('host', schema));
   const user = $derived(entityField('user', schema));
-  let tileSlot = $state.raw<Slot<{ tiles: Tile[]; total: number }>>(empty());
-  let tacticSlot = $state.raw<Slot<TacticCell[]>>(empty());
-  let ruleSlot = $state.raw<Slot<TopRule[]>>(empty());
-  let hostSlot = $state.raw<Slot<TopValue[]>>(empty());
-  let userSlot = $state.raw<Slot<TopValue[]>>(empty());
-  // One ticket per panel: a panel only accepts the answer to its own latest request.
-  const tickets = { tiles: 0, tactics: 0, rules: 0, hosts: 0, users: 0 };
-
-  function load<T>(name: keyof typeof tickets, get: () => Slot<T>, set: (slot: Slot<T>) => void, fetch: () => Promise<T>): void {
-    const mine = ++tickets[name];
-    set({ ...untrack(get), pending: true, failure: null, stopped: false });
-    void (async () => {
-      try {
-        const data = await fetch();
-        if (mine === tickets[name]) set({ data, pending: false, failure: null, stopped: false });
-      } catch (error) {
-        if (mine !== tickets[name]) return;
-        // Whatever is on screen belongs to an earlier filter, so it goes.
-        // A supersede that is not a stop means this request was replaced after its ticket was taken: say so instead of going blank.
-        if (isSuperseded(error)) {
-          if (run.stopped) set({ data: null, pending: false, failure: null, stopped: true });
-          else set({ data: null, pending: false, failure: 'the query was interrupted', stopped: false });
-        } else set({ data: null, pending: false, failure: error instanceof Error ? error.message : String(error), stopped: false });
-      }
-    })();
-  }
+  const tilePanel = new Panel<{ tiles: Tile[]; total: number }>();
+  const tacticPanel = new Panel<TacticCell[]>();
+  const rulePanel = new Panel<TopRule[]>();
+  const hostPanel = new Panel<TopValue[]>();
+  const userPanel = new Panel<TopValue[]>();
+  const tileSlot = $derived(tilePanel.slot);
+  const tacticSlot = $derived(tacticPanel.slot);
+  const ruleSlot = $derived(rulePanel.slot);
+  const hostSlot = $derived(hostPanel.slot);
+  const userSlot = $derived(userPanel.slot);
 
   $effect(() => {
     void run.generation;
     const where = query.where;
     const hostField = host;
     const userField = user;
-    load('tiles', () => tileSlot, (s) => (tileSlot = s), async () => {
+    tilePanel.load(async () => {
       const eventRows = await db.rows<{ rank: number; events: number }>(tileEventsSql(where), { lane: 'tiles' });
       const ruleRows = await db.rows<{ rank: number; rules: number }>(tileRulesSql(where), { lane: 'tiles' });
       // Counted as Detections and Explore count it, not added up from the tiles.
       const [total] = await db.rows<{ events: number }>(totalSql(where), { lane: 'tiles' });
       return { tiles: tiles(eventRows, ruleRows), total: total?.events ?? 0 };
     });
-    load('tactics', () => tacticSlot, (s) => (tacticSlot = s), async () =>
+    tacticPanel.load(async () =>
       tacticCells(manifest.tactics, await db.rows<{ tactic: string; events: number }>(tacticsSql(where), { lane: 'tactics' })));
-    load('rules', () => ruleSlot, (s) => (ruleSlot = s), () => db.rows<TopRule>(topRulesSql(where), { lane: 'rules' }));
+    rulePanel.load(() => db.rows<TopRule>(topRulesSql(where), { lane: 'rules' }));
     const top = (field: Field | undefined, kind: string): Promise<TopValue[]> =>
       field ? db.rows<TopValue>(topValuesSql(field, where, 8), { lane: `top-${kind}` }) : Promise.resolve([]);
-    load('hosts', () => hostSlot, (s) => (hostSlot = s), () => top(hostField, 'host'));
-    load('users', () => userSlot, (s) => (userSlot = s), () => top(userField, 'user'));
+    hostPanel.load(() => top(hostField, 'host'));
+    userPanel.load(() => top(userField, 'user'));
   });
 
   const tileTotal = $derived(tileSlot.data ? tileSlot.data.total : null);

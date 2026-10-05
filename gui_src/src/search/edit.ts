@@ -63,9 +63,14 @@ function fieldToken(field: string): string {
   return plain && !findShortcut(field) ? field : quoteValue(field);
 }
 
+/** One exact field term, as the sidebar, the event view and the views' clicks write it. */
+export function fieldTerm(field: string, value: string, negate = false): string {
+  return `${negate ? '-' : ''}${fieldToken(field)}:${quoteValue(value)}`;
+}
+
 /** The query plus one exact field term: what the sidebar and the event view add. */
 export function appendTerm(input: string, field: string, value: string, negate: boolean): string {
-  return appendRaw(input, `${negate ? '-' : ''}${fieldToken(field)}:${quoteValue(value)}`);
+  return appendRaw(input, fieldTerm(field, value, negate));
 }
 
 /** The query plus a term that is already valid syntax, such as a shortcut. */

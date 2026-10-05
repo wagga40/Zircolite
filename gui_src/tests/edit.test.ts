@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { str } from '../src/engine/sql';
 import { compile } from '../src/search/compile';
-import { appendRaw, appendTerm, chips, completionAt, editable, fieldSuggestions, lookupField, quoteValue, removeSpan, shownQuery } from '../src/search/edit';
+import { appendRaw, appendTerm, chips, completionAt, editable, fieldSuggestions, fieldTerm, lookupField, quoteValue, removeSpan, shownQuery } from '../src/search/edit';
 import { parse } from '../src/search/parse';
 import { type Fixture, openFixture, schema } from './fixture';
 
@@ -135,5 +135,13 @@ describe('filtering by a rule', () => {
     } finally {
       fx.close();
     }
+  });
+});
+
+describe('one exact field term', () => {
+  it('quotes the value and any field name the parser would misread', () => {
+    expect(fieldTerm('Computer', 'DC01')).toBe('Computer:"DC01"');
+    expect(fieldTerm('level', 'x')).toBe('"level":"x"');
+    expect(fieldTerm('Image', 'C:\\a "b"', true)).toBe('-Image:"C:\\\\a \\"b\\""');
   });
 });
