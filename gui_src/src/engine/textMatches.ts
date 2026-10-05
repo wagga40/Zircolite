@@ -22,7 +22,9 @@ export function textPredicate(like: string): string {
   return `_zl_uid IN (SELECT _zl_uid FROM fulltext WHERE _zl_text LIKE ${like}${escapeClause(like)})`;
 }
 
-const PREDICATE = /_zl_uid IN \(SELECT _zl_uid FROM fulltext WHERE _zl_text LIKE (lower\('(?:[^']|'')*'\))(?: ESCAPE '\\')?\)/g;
+// A bare word's pattern always opens and closes with %. Inside a string literal every quote is
+// doubled, so lower('% cannot occur there, and a literal that spells the predicate is left as it is.
+const PREDICATE = /_zl_uid IN \(SELECT _zl_uid FROM fulltext WHERE _zl_text LIKE (lower\('%(?:[^']|'')*%'\))(?: ESCAPE '\\')?\)/g;
 
 /** Matches kept at once; each holds one row per matching event. */
 const KEPT = 4;

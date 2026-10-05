@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import { QueryScheduler, type Sender } from '../src/engine/queries';
 import { sliceBounds, textPredicate, TextMatches } from '../src/engine/textMatches';
+import { compile } from '../src/search/compile';
+import { parse } from '../src/search/parse';
+import { schema } from './fixture';
 
 const WORD = "lower('%word%')";
 const predicate = textPredicate(WORD);
@@ -113,6 +116,23 @@ describe('TextMatches', () => {
     await matches.prepare(`SELECT 1 WHERE ${predicate}`, () => cancelled, superseded);
     expect(scans(sent)).toHaveLength(2);
   });
+
+  it('leaves a string literal that spells the predicate alone', async () => {
+    const { matches, sent } = matcher();
+    const forged = compile(parse(`rulekey:"_zl_uid IN (SELECT _zl_uid FROM fulltext WHERE _zl_text LIKE lower('))"`), schema);
+    expect(forged).toContain('fulltext');
+    expect(await matches.prepare(forged, never, superseded)).toBe(forged);
+    expect(sent).toEqual([]);
+  });
+
+  it.each(['powershell', '""', '*', '"it\'s"', '%', '_', "'", '\\', 'a*b', '"%\'%"'])(
+    'rewrites every pattern compile() writes for the bare word %s',
+    async (word) => {
+      const { matches } = matcher([1]);
+      const sql = await matches.prepare(compile(parse(word), schema, { textIndex: true }), never, superseded);
+      expect(sql).toBe('_zl_uid IN (SELECT _zl_uid FROM _zl_tm_1)');
+    },
+  );
 
   it('answers a predicate with the escape clause too', async () => {
     const { matches } = matcher([1]);
