@@ -9,6 +9,9 @@ describe('level inks', () => {
     expect(levelVar(-1)).toBe('--sev-unknown');
     expect(levelVar(5)).toBe('--sev-unknown');
     expect(levelVar(null)).toBe('--sev-unknown');
+    expect(levelVar(Number.NaN)).toBe('--sev-unknown');
+    expect(levelVar(2.5)).toBe('--sev-unknown');
+    expect(levelVar(-2)).toBe('--sev-unknown');
     expect(levelInk(3)).toBe('var(--sev-3)');
     expect(levelInk(-1)).toBe('var(--sev-unknown)');
   });

@@ -239,7 +239,7 @@
 {/if}
 
 <style>
-  .drawer { position: absolute; top: 0; right: 0; bottom: 0; z-index: 40; width: min(560px, 100%); overflow: auto; background: var(--panel); border-left: 1px solid var(--rule); box-shadow: -6px 0 18px rgb(0 0 0 / 0.14); padding: 0 18px 24px; }
+  .drawer { position: absolute; top: 0; right: 0; bottom: 0; z-index: 40; width: min(var(--drawer-w), 100%); overflow: auto; background: var(--panel); border-left: 1px solid var(--rule); box-shadow: -6px 0 18px rgb(0 0 0 / 0.14); padding: 0 18px 24px; }
   header { position: sticky; top: 0; z-index: 1; display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; padding: 14px 0 10px; background: var(--panel); border-bottom: 1px solid var(--rule); }
   h2 { margin: 0; width: fit-content; font-size: var(--t-18); font-weight: 600; }
   h2:focus { outline: none; }

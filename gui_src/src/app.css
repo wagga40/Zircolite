@@ -44,6 +44,8 @@
   --sev-3: #c2531a;
   --sev-4: #a3134e;
   --sev-unknown: var(--ink-2);
+  /* The event drawer's width: the drawer, the shell's reserved space and the timeline's note all read it. */
+  --drawer-w: 560px;
   --danger: #a3134e;
   --scrim: rgb(22 33 30 / 0.4);
   --sans: 'Atkinson Hyperlegible Next', system-ui, -apple-system, 'Segoe UI', sans-serif;

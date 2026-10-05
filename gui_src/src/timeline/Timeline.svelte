@@ -464,8 +464,8 @@
   .note { margin: 0; color: var(--ink-2); font-size: var(--t-13); }
   .pad { margin: 12px 16px; }
   .pinned button { display: block; margin-top: 8px; }
-  /* The open drawer covers the right 560px, and the pinned mark's note must stay clear of it. */
-  @media (min-width: 1000px) { .pinned { max-width: calc(100% - 592px); } }
+  /* Below 1400px the open drawer overlays the right of the view, and the pinned mark's note must stay clear of it; above, the shell already reserves that space. */
+  @media (min-width: 1000px) and (max-width: 1399.98px) { .pinned { max-width: calc(100% - var(--drawer-w) - 32px); } }
   .pinned { margin: 0 16px 16px; padding: 8px 12px; border-left: 3px solid var(--signal); background: var(--panel); font-size: var(--t-13); }
   .key { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; margin: 0 16px 8px; font-size: var(--t-12); color: var(--ink-2); }
   .swatch { display: inline-flex; align-items: center; gap: 4px; }

@@ -84,9 +84,9 @@
   .shell { display: grid; grid-template-rows: auto minmax(0, 1fr); height: 100vh; }
   .frame { display: grid; grid-template-columns: 96px minmax(0, 1fr); min-height: 0; }
   .main { position: relative; display: grid; min-height: 0; min-width: 0; }
-  /* Wide enough to read both: the drawer stands beside the view instead of over it. It is 560px wide here, so the view keeps the rest. */
+  /* Wide enough to read both: the drawer stands beside the view instead of over it. It is --drawer-w wide here, so the view keeps the rest. */
   @media (min-width: 1400px) {
-    .main.drawer { padding-right: 560px; }
+    .main.drawer { padding-right: var(--drawer-w); }
   }
   @media (max-width: 720px) {
     .frame { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr); }

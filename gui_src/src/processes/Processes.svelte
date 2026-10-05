@@ -134,7 +134,7 @@
     view.route = 'explore';
   }
 
-  const matched = (p: Process) => `${levelLabel(p.lvl ?? 0)}, ${formatCount(p.hits)} ${p.hits === 1 ? 'rule' : 'rules'} matched`;
+  const matched = (p: Process) => `${p.lvl === null ? '' : `${levelLabel(p.lvl)}, `}${formatCount(p.hits)} ${p.hits === 1 ? 'rule' : 'rules'} matched`;
 </script>
 
 <main class="processes">

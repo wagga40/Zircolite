@@ -3,6 +3,7 @@ import {
   barHeight, binAt, type BinRow, binsSql, binSummary, DOMAIN_SQL, domainOf, fill, formatRange, formatWidth,
   layout, rangeOf, stripRequest, stripSeries, timelessCount,
 } from '../src/explore/histogram';
+import { EVENT_LEVELS_SQL } from '../src/engine/sql';
 import { compile } from '../src/search/compile';
 import { parse } from '../src/search/parse';
 import { type Fixture, openFixture, schema } from './fixture';
@@ -146,5 +147,24 @@ describe('events whose rule has no level', () => {
 
   it('are counted by the query', () => {
     expect(binsSql({ start: SIX, width: H, count: 2 }, 'TRUE')).toContain('FILTER (WHERE _zl_lvl = -1)::DOUBLE AS lu');
+  });
+});
+
+describe('the strip against DuckDB with an unlevelled rule', () => {
+  it('counts every detected event in exactly one level, unknown included', async () => {
+    const fx = await openFixture();
+    try {
+      await fx.rows(`INSERT INTO rules VALUES (9, 'r-none', 'r-none', 'No level', NULL, -1, 'd', [], [], [], [], 'n.yml', 'match', 0)`);
+      await fx.rows('INSERT INTO hits VALUES (9, 2)');
+      await fx.rows('DROP TABLE event_levels');
+      await fx.rows(EVENT_LEVELS_SQL.replace('TEMP ', ''));
+      const rows = (await fx.rows(binsSql({ start: SIX, width: H, count: 3 }, 'TRUE'))) as unknown as BinRow[];
+      expect(rows[0].lu).toBe(1);
+      const detected = (await fx.rows('SELECT count(*)::DOUBLE AS n FROM events JOIN event_levels USING (_zl_uid) WHERE _zl_time IS NOT NULL'))[0].n;
+      const counted = rows.reduce((sum, r) => sum + r.l0 + r.l1 + r.l2 + r.l3 + r.l4 + r.lu, 0);
+      expect(counted).toBe(detected);
+    } finally {
+      fx.close();
+    }
   });
 });

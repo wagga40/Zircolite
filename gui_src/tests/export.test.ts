@@ -1,5 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type { Db } from '../src/engine/db';
+import { EVENT_LEVELS_SQL } from '../src/engine/sql';
 import { nameResolver } from '../src/engine/names';
 import type { Field } from '../src/engine/schema';
 import { csvCell, csvExport, csvLine, eventJson, ExportTooLarge, jsonExport, limitNote, prepareExport } from '../src/explore/export';
@@ -72,6 +73,24 @@ describe('csv', () => {
   it('stops when cancelled', async () => {
     await db.exec(idsSql('TRUE', false));
     expect(await csvExport(db, [], await prepareExport(db), () => {}, () => true)).toBeNull();
+  });
+});
+
+describe('csv of an unlevelled detection', () => {
+  it('names the level unknown', async () => {
+    const own = await openFixture();
+    try {
+      const reader = { rows: (sql: string) => own.rows(sql), exec: async (sql: string) => { await own.rows(sql); } } as unknown as Db;
+      await own.rows(`INSERT INTO rules VALUES (9, 'r-none', 'r-none', 'No level', NULL, -1, 'd', [], [], [], [], 'n.yml', 'match', 0)`);
+      await own.rows('INSERT INTO hits VALUES (9, 2)');
+      await own.rows('DROP TABLE event_levels');
+      await own.rows(EVENT_LEVELS_SQL.replace('TEMP ', ''));
+      await reader.exec(idsSql('TRUE', false));
+      const out = await text(await csvExport(reader, [field('EventID')], await prepareExport(reader), () => {}, () => false));
+      expect(out).toContain('2021-06-03 06:00:30.000,unknown,4634\r\n');
+    } finally {
+      own.close();
+    }
   });
 });
 

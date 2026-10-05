@@ -102,7 +102,7 @@ def test_viewer_notices_carry_the_attack_terms():
 
 
 def test_severity_inks_go_through_one_helper():
-    pattern = re.compile(r"--sev-\$\{")
+    pattern = re.compile(r"""--sev-['"`]?\s*(\$\{|\+)""")
     offenders = [
         f"{path.relative_to(ROOT)}:{n}"
         for path in (ROOT / "gui_src" / "src").rglob("*")
