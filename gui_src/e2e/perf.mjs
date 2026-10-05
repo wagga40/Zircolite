@@ -192,12 +192,14 @@ try {
   }
   report.stop = stopReport;
 
-  // Leaving Explore while a field scan runs, for an Overview without the search. The scan's table, strip
-  // and count each read every event (stop.wildcard.full_ms for all three); Overview must not wait for them.
+  // Leaving Explore while a field scan runs, for an Overview with a cheap search it has not answered before,
+  // so its queries go through the queue rather than the cache. The scan's table, strip and count each read
+  // every event (stop.wildcard.full_ms for all three); Overview must not wait for them.
   await page.locator('#search-input').fill('Message:*c*b*a*');
   await page.locator('#search-input').press('Enter');
   await page.waitForTimeout(1000);
-  report.leave_search_overview_ms = await timed(() => page.goto(`${base}#/overview`), filled('#overview-tiles', 'data-events'));
+  report.leave_search_overview_ms = await timed(() => page.goto(`${base}#/overview?q=EventID%3A4625`), filled('#overview-tiles', 'data-events'));
+  report.leave_search_overview_events = Number(await page.locator('#overview-tiles').getAttribute('data-events'));
   await page.close();
 
   // A bookmark or Back with a bare word: the page opens on Overview before the index has loaded, and every
