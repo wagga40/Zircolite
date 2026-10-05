@@ -94,7 +94,13 @@ export async function runQuery(rows: Rows, input: string): Promise<Result> {
     superseded = isSuperseded(error);
     throw error;
   } finally {
-    if (!superseded) await switchOffLogging(rows);
+    if (!superseded) {
+      try {
+        await switchOffLogging(rows);
+      } catch {
+        // A leftover logging flag matters less than the answer; the next run resets it.
+      }
+    }
   }
 }
 

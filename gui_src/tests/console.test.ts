@@ -29,6 +29,12 @@ describe('what the console runs', () => {
     await expect(db.rows('SELECT * FROM zl_probe')).rejects.toThrow();
   });
 
+  it('keeps the answer, or the error, when switching logging off fails', async () => {
+    const failing = (sql: string) => (sql === LOGGING_SQL ? Promise.reject(new Error('stopped')) : send(sql));
+    await expect(runQuery(failing, 'SELECT 1 AS a')).resolves.toHaveProperty('rows', [['1']]);
+    await expect(runQuery(failing, 'SELECT * FROM evnts')).rejects.toThrow(/^Catalog Error/);
+  });
+
   it('calls only a real refusal a refusal', async () => {
     await expect(runQuery(send, 'DROP TABLE events')).rejects.toBeInstanceOf(SqlRefused);
     await expect(runQuery(send, 'DROP TABLE events')).rejects.toThrow(/^only one SELECT query runs here/);

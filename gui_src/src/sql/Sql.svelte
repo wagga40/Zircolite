@@ -133,7 +133,7 @@
       </div>
       <div class="spacer" style:height={`${data.rows.length * ROW}px`} style:width={`${total}ch`}>
         {#each data.rows.slice(win.first, win.first + win.count) as row, i (win.first + i)}
-          <div class="row" role="row" aria-rowindex={win.first + i + 2} style:top={`${(win.first + i) * ROW}px`}>
+          <div class="row" role="row" aria-rowindex={win.first + i + 2} style:top={`${(win.first + i) * ROW}px`} style:width={`${total}ch`}>
             {#each row as cell, j (j)}<span role="cell" class:num={numeric[j]} class:null={cell === null} style:width={`${widths[j]}ch`} title={cell ?? 'NULL'} aria-label={cell === null ? 'null value' : undefined}>{cell ?? 'NULL'}</span>{/each}
           </div>
         {/each}
@@ -157,10 +157,10 @@
   .tables ul { list-style: none; margin: 0 0 6px; padding-left: 12px; }
   .insert { min-height: 24px; padding: 0; background: none; border: 0; color: var(--signal); font: 400 var(--t-12) / 1.4 var(--mono); cursor: pointer; text-align: left; }
   .count { color: var(--ink-2); font-size: var(--t-12); }
-  .grid { position: relative; overflow: auto; min-height: 200px; border-top: 1px solid var(--rule); }
+  .grid { font: 400 var(--t-13) / 28px var(--mono); position: relative; overflow: auto; min-height: 200px; border-top: 1px solid var(--rule); }
   .head { position: sticky; top: 0; z-index: 1; display: flex; height: 28px; background: var(--panel); border-bottom: 1px solid var(--rule); }
   .head span, .row span { flex: none; padding: 0 8px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; box-sizing: border-box; font: 400 var(--t-13) / 28px var(--mono); }
-  .head span { font-weight: 600; font-family: var(--sans); }
+  .head span { font-weight: 600; }
   .spacer { position: relative; }
   .row { position: absolute; left: 0; display: flex; height: 28px; border-bottom: 1px solid color-mix(in srgb, var(--rule) 50%, transparent); }
   .num { text-align: right; font-variant-numeric: tabular-nums; }
