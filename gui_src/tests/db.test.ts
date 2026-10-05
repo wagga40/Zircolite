@@ -146,3 +146,31 @@ describe('Db.scope', () => {
     await expect(page).rejects.toSatisfy(isSuperseded);
   });
 });
+
+describe('lane names inside a scope', () => {
+  it('cannot reach another scope with a colon', async () => {
+    const { db, c } = await heldDb();
+    const outer = db.scope('a');
+    const inner = db.scope('a').scope('b');
+    const running = db.rows('hold', { lane: 'other' });
+    const watched = expect(running).resolves.toBeDefined();
+    await tick();
+    const kept = outer.rows('SELECT 1', { lane: 'b:x' });
+    inner.dispose();
+    await c.finish();
+    await watched;
+    await c.finish([{ n: 1 }]);
+    expect(await kept).toEqual([{ n: 1 }]);
+  });
+
+  it('encodes the lane the same way for cancel', async () => {
+    const { db, c } = await heldDb();
+    const scope = db.scope('v');
+    const running = scope.rows('slow', { lane: 'x:y' });
+    const watched = expect(running).rejects.toSatisfy(isSuperseded);
+    await tick();
+    scope.cancel('x:y');
+    await watched;
+    expect(c.cancels()).toBe(1);
+  });
+});

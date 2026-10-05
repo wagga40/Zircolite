@@ -15,6 +15,8 @@
  * a minute per query on a large package. A query that needs the index waits
  * for the file, then opens the view itself, on the connection it already
  * holds; opened through the queue, the view would wait behind those queries.
+ * A page of the index that cannot be read fails the index the same way, and
+ * the search goes back to the scan.
  */
 import { escapeClause, str } from './sql';
 
@@ -100,6 +102,8 @@ export class TextMatches {
     const source = this.source;
     if (this.opened || source === null) return;
     await stop.until(source.registered);
+    // Given up while the file was on its way: the view can be opened by whoever asks next.
+    if (stop.cancelled()) throw stop.superseded();
     try {
       await this.run(TEXT_VIEW_SQL);
     } catch (error) {
@@ -121,7 +125,7 @@ export class TextMatches {
     } else {
       entry = { table: `_zl_tm_${++this.counter}`, done: 0, ready: false };
       this.entries.set(like, entry);
-      await this.evict(wanted);
+      await this.evict(wanted, stop);
     }
     const bounds = await this.sliceBounds(stop);
     while (entry.done <= bounds.length) {
@@ -129,7 +133,14 @@ export class TextMatches {
       const low = entry.done > 0 ? ` AND _zl_uid >= ${bounds[entry.done - 1]}` : '';
       const high = entry.done < bounds.length ? ` AND _zl_uid < ${bounds[entry.done]}` : '';
       const select = `SELECT _zl_uid FROM fulltext WHERE _zl_text LIKE ${like}${escapeClause(like)}${low}${high}`;
-      await this.run(entry.done === 0 ? `CREATE OR REPLACE TEMP TABLE ${entry.table} AS ${select}` : `INSERT INTO ${entry.table} ${select}`);
+      try {
+        await this.run(entry.done === 0 ? `CREATE OR REPLACE TEMP TABLE ${entry.table} AS ${select}` : `INSERT INTO ${entry.table} ${select}`);
+      } catch (error) {
+        if (stop.cancelled()) throw stop.superseded();
+        // The file registered and opened but a page of it cannot be read: the scan still can.
+        this.source?.failed(error);
+        throw error;
+      }
       entry.done += 1;
     }
     entry.ready = true;
@@ -137,6 +148,7 @@ export class TextMatches {
 
   private async sliceBounds(stop: Stop): Promise<number[]> {
     if (this.bounds) return this.bounds;
+    if (stop.cancelled()) throw stop.superseded();
     let bounds: number[] = [];
     try {
       const rows = await this.run(
@@ -154,7 +166,7 @@ export class TextMatches {
     return bounds;
   }
 
-  private async evict(wanted: Set<string>): Promise<void> {
+  private async evict(wanted: Set<string>, stop: Stop): Promise<void> {
     for (const [like, entry] of [...this.entries]) {
       if (this.entries.size <= KEPT) break;
       if (wanted.has(like)) continue;
@@ -162,6 +174,7 @@ export class TextMatches {
       this.undropped.push(entry.table);
     }
     for (const table of [...this.undropped]) {
+      if (stop.cancelled()) return;
       try {
         await this.run(`DROP TABLE IF EXISTS ${table}`);
         this.undropped.splice(this.undropped.indexOf(table), 1);

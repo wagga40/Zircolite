@@ -25,7 +25,7 @@ export interface ScopedDb extends Db {
   dispose(): void;
 }
 
-// A name holding the separator would put one scope's lanes under another's prefix.
+// A name holding the separator would put one scope's lanes, or one lane, under another scope's prefix.
 function segment(name: string): string {
   return name.replace(/[%:]/g, (c) => encodeURIComponent(c));
 }
@@ -35,11 +35,12 @@ function over(scheduler: QueryScheduler, register: Db['register'], prefix: strin
   let unnamed = 0;
   const live = () => !disposed && alive();
   // A query without a lane supersedes nothing, but inside a scope it still needs one for dispose to reach it.
-  const lane = (name: string | undefined) => (name !== undefined ? prefix + name : prefix ? `${prefix}#${++unnamed}` : undefined);
+  const lane = (name: string | undefined) =>
+    name !== undefined ? prefix + segment(name) : prefix ? `${prefix}#${++unnamed}` : undefined;
   return {
     rows: (sql, options = {}) => (live() ? scheduler.rows(sql, { ...options, lane: lane(options.lane) }) : Promise.reject(new Superseded())),
     exec: (sql, options = {}) => (live() ? scheduler.exec(sql, { lane: lane(options.lane) }) : Promise.reject(new Superseded())),
-    cancel: (name) => (name === undefined ? scheduler.cancel() : scheduler.cancel(prefix + name)),
+    cancel: (name) => (name === undefined ? scheduler.cancel() : scheduler.cancel(prefix + segment(name))),
     register,
     useTextIndex: (source) => scheduler.useTextIndex(source),
     scope: (name) => over(scheduler, register, `${prefix}${segment(name)}:`, live),

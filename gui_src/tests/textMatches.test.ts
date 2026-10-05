@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { isSuperseded, QueryScheduler, type Sender } from '../src/engine/queries';
+import { isSuperseded, QueryScheduler, type Sender, Superseded } from '../src/engine/queries';
 import { sliceBounds, type Stop, TEXT_VIEW_SQL, textPredicate, TextMatches } from '../src/engine/textMatches';
 import { compile } from '../src/search/compile';
 import { parse } from '../src/search/parse';
@@ -277,5 +277,63 @@ describe('QueryScheduler with the index', () => {
     await scheduler.rows(`SELECT 2 FROM events WHERE ${predicate}`, { lane: 'b' });
     expect(sent.filter((sql) => /^(CREATE|INSERT)/.test(sql))).toHaveLength(1);
     expect(sent[sent.length - 1]).toBe('SELECT 2 FROM events WHERE _zl_uid IN (SELECT _zl_uid FROM _zl_tm_1)');
+  });
+});
+
+/** A Stop whose supersede is the real one, so isSuperseded recognises it. */
+function fakeStop(cancelled: () => boolean): Stop {
+  return {
+    cancelled,
+    superseded: () => new Superseded(),
+    // Like the scheduler's: a cancel before the call rejects, one while it waits does not.
+    until: (p) => (cancelled() ? Promise.reject(new Superseded()) : p),
+  };
+}
+
+describe('after a cancel', () => {
+  it('sends no statement once the query is given up', async () => {
+    const sent: string[] = [];
+    let cancelled = false;
+    const matches = new TextMatches(async (sql) => {
+      sent.push(sql);
+      return sql.startsWith('SELECT min(') ? [{ first: 0 }, { first: 100 }] : [];
+    });
+    let release = () => {};
+    const registered = new Promise<void>((resolve) => (release = resolve));
+    matches.use({ registered, failed() {} });
+    const prepared = matches.prepare(textPredicate("lower('%a%')"), fakeStop(() => cancelled));
+    cancelled = true;
+    release();
+    await expect(prepared).rejects.toSatisfy(isSuperseded);
+    expect(sent).toEqual([]);
+  });
+});
+
+describe('an index that cannot be read', () => {
+  it('reports the failure, so the search falls back to the scan', async () => {
+    const failures: unknown[] = [];
+    const matches = new TextMatches(async (sql) => {
+      if (sql.startsWith('SELECT min(')) return [{ first: 0 }, { first: 100 }, { first: 200 }];
+      if (sql.includes('_zl_uid >= ')) throw new Error('IO Error: corrupt page');
+      return [];
+    });
+    matches.use({ registered: Promise.resolve(), failed: (error) => failures.push(error) });
+    await expect(matches.prepare(textPredicate("lower('%a%')"), fakeStop(() => false))).rejects.toThrow('corrupt page');
+    expect(failures).toHaveLength(1);
+  });
+
+  it('does not blame the file for a Stop', async () => {
+    const failures: unknown[] = [];
+    let cancelled = false;
+    const matches = new TextMatches(async (sql) => {
+      if (sql.includes('_zl_uid >= ')) {
+        cancelled = true;
+        throw new Error('INTERRUPT');
+      }
+      return sql.startsWith('SELECT min(') ? [{ first: 0 }, { first: 100 }, { first: 200 }] : [];
+    });
+    matches.use({ registered: Promise.resolve(), failed: (error) => failures.push(error) });
+    await expect(matches.prepare(textPredicate("lower('%a%')"), fakeStop(() => cancelled))).rejects.toSatisfy(isSuperseded);
+    expect(failures).toEqual([]);
   });
 });
