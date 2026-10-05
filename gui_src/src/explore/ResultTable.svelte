@@ -14,8 +14,10 @@
   import { csvExport, ExportTooLarge, jsonExport, limitNote, prepareExport } from './export';
   import { COUNT_SQL, ensureVisible, geometry, HEAD, HEIGHT_CAP, idsSql, nextPage, PAGE, pageSql, type PageRow, ROW, wheelDelta, wheelPosition } from './table';
 
-  let { db, schema, manifest, where, columns, slow }: {
+  let { db, exportDb, schema, manifest, where, columns, slow }: {
     db: Db;
+    /** Outlives the view, so an export finishes and downloads after the person moves to another view; Stop still ends it. */
+    exportDb: Db;
     schema: Schema;
     manifest: Manifest;
     where: string;
@@ -290,7 +292,7 @@
     await tick();
     cancelButton?.focus();
     try {
-      const count = await prepareExport(db);
+      const count = await prepareExport(exportDb);
       const refused = limitNote(kind, count);
       if (refused) {
         exportNote = refused;
@@ -300,8 +302,8 @@
       const progress = (done: number) => (exporting = { done, total: count });
       const parts =
         kind === 'csv'
-          ? await csvExport(db, columns, count, progress, () => cancel)
-          : await jsonExport(db, schema.fields, manifest, count, progress, () => cancel);
+          ? await csvExport(exportDb, columns, count, progress, () => cancel)
+          : await jsonExport(exportDb, schema.fields, manifest, count, progress, () => cancel);
       if (parts === null) exportNote = 'Export cancelled.';
       else if (kind === 'csv') download('zircolite-events.csv', parts, 'text/csv;charset=utf-8');
       else download('zircolite-events.ndjson', parts, 'application/x-ndjson');

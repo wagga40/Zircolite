@@ -23,7 +23,7 @@
   <div class="body">
     <FieldSidebar {db} {schema} {manifest} where={query.where} {columns} />
     <section class="results" aria-label="Events">
-      <ResultTable {db} {schema} {manifest} where={query.where} {columns} slow={query.slow} />
+      <ResultTable {db} exportDb={page} {schema} {manifest} where={query.where} {columns} slow={query.slow} />
     </section>
   </div>
 </main>
