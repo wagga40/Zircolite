@@ -3,6 +3,7 @@
   import type { Db } from '../engine/db';
   import type { Manifest } from '../engine/manifest';
   import type { Schema } from '../engine/schema';
+  import { textIndexFile } from '../engine/textIndex.svelte';
   import DetailDrawer from '../explore/DetailDrawer.svelte';
   import Explore from '../explore/Explore.svelte';
   import Overview from '../overview/Overview.svelte';
@@ -18,7 +19,7 @@
 
   let { db, schema, manifest, detected }: { db: Db; schema: Schema; manifest: Manifest; detected: number | null } = $props();
 
-  const query = $derived(new QueryState(schema, manifest.totals.events));
+  const query = $derived(new QueryState(schema, manifest.totals.events, textIndexFile(manifest) !== undefined));
 
   // A new question is not a stopped one.
   $effect(() => {

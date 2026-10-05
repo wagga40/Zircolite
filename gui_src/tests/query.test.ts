@@ -28,11 +28,19 @@ describe('QueryState', () => {
     expect(query.where).toBe('(FALSE)');
   });
 
-  it('moves bare words onto the index once it is ready', () => {
+  it('puts bare words on the index while it loads and once it is ready, and back on the scan when it fails', () => {
+    const query = new QueryState(schema, 6, true);
+    view.q = 'powershell';
+    for (const [status, indexed] of [['loading', true], ['ready', true], ['failed', false], ['absent', false]] as const) {
+      textIndex.status = status;
+      expect(query.where.includes('fulltext'), status).toBe(indexed);
+    }
+  });
+
+  it('never puts bare words on an index the package does not have', () => {
     const query = new QueryState(schema, 6);
     view.q = 'powershell';
-    expect(query.where).not.toContain('fulltext');
     textIndex.status = 'ready';
-    expect(query.where).toContain('fulltext');
+    expect(query.where).not.toContain('fulltext');
   });
 });

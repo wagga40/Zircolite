@@ -1,4 +1,4 @@
-import { TextMatches } from './textMatches';
+import { type Stop, TextMatches, type TextSource } from './textMatches';
 
 /** A query the page no longer wants: a newer one replaced it in its lane, or the page was stopped. */
 export class Superseded extends Error {
@@ -33,6 +33,8 @@ interface Job {
   rows: boolean;
   cache: boolean;
   cancelled: boolean;
+  /** Ends a wait the running job is in, such as for the full-text index to arrive. */
+  wake: (() => void) | null;
   resolve(rows: Record<string, unknown>[]): void;
   reject(error: unknown): void;
 }
@@ -96,6 +98,11 @@ export class QueryScheduler {
     this.drop(lane === undefined ? () => true : (job) => job.lane === lane);
   }
 
+  /** The full-text index is on its way; queries that read it wait for it. */
+  useTextIndex(source: TextSource): void {
+    this.matches.use(source);
+  }
+
   private supersede(lane: string | null): void {
     if (lane !== null) this.drop((job) => job.lane === lane);
   }
@@ -111,6 +118,7 @@ export class QueryScheduler {
     const running = this.running;
     if (running && !running.cancelled && match(running)) {
       running.cancelled = true;
+      running.wake?.();
       // The job is already marked and will reject as superseded whatever happens;
       // a failed cancel only means the engine finishes the query first.
       this.conn.cancelSent().catch(() => false);
@@ -119,7 +127,7 @@ export class QueryScheduler {
 
   private enqueue(sql: string, lane: string | null, rows: boolean, cache: boolean): Promise<Record<string, unknown>[]> {
     return new Promise((resolve, reject) => {
-      this.queue.push({ sql, lane, rows, cache, cancelled: false, resolve, reject });
+      this.queue.push({ sql, lane, rows, cache, cancelled: false, wake: null, resolve, reject });
       void this.pump();
     });
   }
@@ -129,7 +137,7 @@ export class QueryScheduler {
     const job = this.queue.shift() as Job;
     this.running = job;
     try {
-      const sql = await this.matches.prepare(job.sql, () => job.cancelled, () => new Superseded());
+      const sql = await this.matches.prepare(job.sql, this.stopOf(job));
       const out = await this.collect(sql, job.rows);
       if (job.cancelled) throw new Superseded();
       if (job.cache) this.remember(job.sql, out);
@@ -140,6 +148,31 @@ export class QueryScheduler {
       this.running = null;
       void this.pump();
     }
+  }
+
+  private stopOf(job: Job): Stop {
+    return {
+      cancelled: () => job.cancelled,
+      superseded: () => new Superseded(),
+      until: (promise) =>
+        new Promise((resolve, reject) => {
+          if (job.cancelled) {
+            reject(new Superseded());
+            return;
+          }
+          job.wake = () => reject(new Superseded());
+          promise.then(
+            (value) => {
+              job.wake = null;
+              resolve(value);
+            },
+            (error: unknown) => {
+              job.wake = null;
+              reject(error);
+            },
+          );
+        }),
+    };
   }
 
   private async collect(sql: string, keep = true): Promise<Record<string, unknown>[]> {

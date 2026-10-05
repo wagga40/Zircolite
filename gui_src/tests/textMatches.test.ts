@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { QueryScheduler, type Sender } from '../src/engine/queries';
-import { sliceBounds, textPredicate, TextMatches } from '../src/engine/textMatches';
+import { isSuperseded, QueryScheduler, type Sender } from '../src/engine/queries';
+import { sliceBounds, type Stop, TEXT_VIEW_SQL, textPredicate, TextMatches } from '../src/engine/textMatches';
 import { compile } from '../src/search/compile';
 import { parse } from '../src/search/parse';
 import { schema } from './fixture';
@@ -21,8 +21,11 @@ function matcher(firsts: number[] | Error = [1, 100, 200, 300]) {
   });
   return { matches, sent };
 }
-const never = () => false;
-const superseded = () => new Error('superseded');
+/** A Stop that gives the query up once `cancelled` says so. */
+function stopWhen(cancelled: () => boolean): Stop {
+  return { cancelled, superseded: () => new Error('superseded'), until: (promise) => promise };
+}
+const never = stopWhen(() => false);
 const scans = (sent: string[]) => sent.filter((sql) => /^(CREATE|INSERT)/.test(sql));
 
 describe('sliceBounds', () => {
@@ -40,13 +43,13 @@ describe('sliceBounds', () => {
 describe('TextMatches', () => {
   it('leaves a query without a full-text predicate alone', async () => {
     const { matches, sent } = matcher();
-    expect(await matches.prepare('SELECT 1 WHERE "a" ILIKE \'x\'', never, superseded)).toBe('SELECT 1 WHERE "a" ILIKE \'x\'');
+    expect(await matches.prepare('SELECT 1 WHERE "a" ILIKE \'x\'', never)).toBe('SELECT 1 WHERE "a" ILIKE \'x\'');
     expect(sent).toEqual([]);
   });
 
   it('answers the predicate from a table, in slices that cover every uid once', async () => {
     const { matches, sent } = matcher();
-    const sql = await matches.prepare(`SELECT count(*) FROM events WHERE (${predicate})`, never, superseded);
+    const sql = await matches.prepare(`SELECT count(*) FROM events WHERE (${predicate})`, never);
     expect(sql).toBe('SELECT count(*) FROM events WHERE (_zl_uid IN (SELECT _zl_uid FROM _zl_tm_1))');
     const found = scans(sent);
     expect(found).toHaveLength(4);
@@ -59,8 +62,8 @@ describe('TextMatches', () => {
 
   it('scans once for every query that asks for the same match', async () => {
     const { matches, sent } = matcher();
-    const first = await matches.prepare(`SELECT 1 WHERE ${predicate}`, never, superseded);
-    const second = await matches.prepare(`SELECT 2 FROM events WHERE x AND ${predicate} AND y`, never, superseded);
+    const first = await matches.prepare(`SELECT 1 WHERE ${predicate}`, never);
+    const second = await matches.prepare(`SELECT 2 FROM events WHERE x AND ${predicate} AND y`, never);
     expect(first).toContain('_zl_tm_1');
     expect(second).toBe('SELECT 2 FROM events WHERE x AND _zl_uid IN (SELECT _zl_uid FROM _zl_tm_1) AND y');
     expect(scans(sent)).toHaveLength(4);
@@ -69,7 +72,7 @@ describe('TextMatches', () => {
   it('keeps different words apart, even when one is quoted inside the other', async () => {
     const { matches } = matcher([1]);
     const odd = textPredicate("lower('%it''s%')");
-    const sql = await matches.prepare(`SELECT 1 WHERE ${predicate} OR ${odd}`, never, superseded);
+    const sql = await matches.prepare(`SELECT 1 WHERE ${predicate} OR ${odd}`, never);
     expect(sql).toBe('SELECT 1 WHERE _zl_uid IN (SELECT _zl_uid FROM _zl_tm_1) OR _zl_uid IN (SELECT _zl_uid FROM _zl_tm_2)');
   });
 
@@ -80,11 +83,11 @@ describe('TextMatches', () => {
       slices += 1;
       return slices > 3;
     };
-    await expect(matches.prepare(`SELECT 1 WHERE ${predicate}`, stopAfterThree, superseded)).rejects.toThrow('superseded');
+    await expect(matches.prepare(`SELECT 1 WHERE ${predicate}`, stopWhen(stopAfterThree))).rejects.toThrow('superseded');
     const done = scans(sent).length;
     expect(done).toBeGreaterThan(0);
     expect(done).toBeLessThan(4);
-    const sql = await matches.prepare(`SELECT 1 WHERE ${predicate}`, never, superseded);
+    const sql = await matches.prepare(`SELECT 1 WHERE ${predicate}`, never);
     expect(sql).toContain('_zl_tm_1');
     expect(scans(sent)).toHaveLength(4);
     expect(scans(sent).filter((statement) => statement.startsWith('CREATE'))).toHaveLength(1);
@@ -93,7 +96,7 @@ describe('TextMatches', () => {
   it('scans in one piece when the file has a single row group or no readable footer', async () => {
     for (const firsts of [[1], new Error('no such function')] as const) {
       const { matches, sent } = matcher(firsts as number[] | Error);
-      await matches.prepare(`SELECT 1 WHERE ${predicate}`, never, superseded);
+      await matches.prepare(`SELECT 1 WHERE ${predicate}`, never);
       expect(scans(sent)).toHaveLength(1);
       expect(scans(sent)[0]).not.toContain('_zl_uid <');
       expect(scans(sent)[0]).not.toContain('_zl_uid >=');
@@ -111,9 +114,9 @@ describe('TextMatches', () => {
       }
       return [];
     });
-    await expect(matches.prepare(`SELECT 1 WHERE ${predicate}`, () => cancelled, superseded)).rejects.toThrow('superseded');
+    await expect(matches.prepare(`SELECT 1 WHERE ${predicate}`, stopWhen(() => cancelled))).rejects.toThrow('superseded');
     cancelled = false;
-    await matches.prepare(`SELECT 1 WHERE ${predicate}`, () => cancelled, superseded);
+    await matches.prepare(`SELECT 1 WHERE ${predicate}`, stopWhen(() => cancelled));
     expect(scans(sent)).toHaveLength(2);
   });
 
@@ -121,7 +124,7 @@ describe('TextMatches', () => {
     const { matches, sent } = matcher();
     const forged = compile(parse(`rulekey:"_zl_uid IN (SELECT _zl_uid FROM fulltext WHERE _zl_text LIKE lower('))"`), schema);
     expect(forged).toContain('fulltext');
-    expect(await matches.prepare(forged, never, superseded)).toBe(forged);
+    expect(await matches.prepare(forged, never)).toBe(forged);
     expect(sent).toEqual([]);
   });
 
@@ -129,7 +132,7 @@ describe('TextMatches', () => {
     'rewrites every pattern compile() writes for the bare word %s',
     async (word) => {
       const { matches } = matcher([1]);
-      const sql = await matches.prepare(compile(parse(word), schema, { textIndex: true }), never, superseded);
+      const sql = await matches.prepare(compile(parse(word), schema, { textIndex: true }), never);
       expect(sql).toBe('_zl_uid IN (SELECT _zl_uid FROM _zl_tm_1)');
     },
   );
@@ -138,7 +141,7 @@ describe('TextMatches', () => {
     const { matches } = matcher([1]);
     const escaped = textPredicate("lower('%50\\_off%')");
     expect(escaped).toContain("ESCAPE '\\'");
-    const sql = await matches.prepare(`SELECT 1 WHERE ${escaped}`, never, superseded);
+    const sql = await matches.prepare(`SELECT 1 WHERE ${escaped}`, never);
     expect(sql).toBe('SELECT 1 WHERE _zl_uid IN (SELECT _zl_uid FROM _zl_tm_1)');
   });
 
@@ -151,9 +154,9 @@ describe('TextMatches', () => {
       if (sql.startsWith('DROP') && failDrops) throw new Error('query was canceled');
       return [];
     });
-    for (const word of ['a', 'b', 'c', 'd', 'e']) await matches.prepare(textPredicate(`lower('%${word}%')`), never, superseded);
+    for (const word of ['a', 'b', 'c', 'd', 'e']) await matches.prepare(textPredicate(`lower('%${word}%')`), never);
     failDrops = false;
-    await matches.prepare(textPredicate("lower('%f%')"), never, superseded);
+    await matches.prepare(textPredicate("lower('%f%')"), never);
     const drops = sent.filter((sql) => sql.startsWith('DROP'));
     expect(drops.filter((sql) => sql.endsWith('_zl_tm_1'))).toHaveLength(2);
     expect(drops.filter((sql) => sql.endsWith('_zl_tm_2'))).toHaveLength(1);
@@ -161,15 +164,101 @@ describe('TextMatches', () => {
 
   it('drops the oldest matches past four, never one the query in hand needs', async () => {
     const { matches, sent } = matcher([1]);
-    for (const word of ['a', 'b', 'c', 'd', 'e']) await matches.prepare(textPredicate(`lower('%${word}%')`), never, superseded);
+    for (const word of ['a', 'b', 'c', 'd', 'e']) await matches.prepare(textPredicate(`lower('%${word}%')`), never);
     expect(sent.filter((sql) => sql.startsWith('DROP TABLE'))).toEqual(['DROP TABLE IF EXISTS _zl_tm_1']);
     const many = ['f', 'g', 'h', 'i', 'j', 'k'].map((word) => textPredicate(`lower('%${word}%')`)).join(' AND ');
-    const sql = await matches.prepare(many, never, superseded);
+    const sql = await matches.prepare(many, never);
     expect(sql.match(/_zl_tm_\d+/g)).toHaveLength(6);
   });
 });
 
+describe('TextMatches while the index loads', () => {
+  function deferred() {
+    let resolve: () => void = () => {};
+    let reject: (error: unknown) => void = () => {};
+    const promise = new Promise<void>((yes, no) => {
+      resolve = yes;
+      reject = no;
+    });
+    return { promise, resolve, reject };
+  }
+
+  it('waits for the file, then opens the view once, before its first slice', async () => {
+    const { matches, sent } = matcher([1]);
+    const file = deferred();
+    matches.use({ registered: file.promise, failed: () => {} });
+    const first = matches.prepare(`SELECT 1 WHERE ${predicate}`, never);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(sent).toEqual([]);
+    file.resolve();
+    await first;
+    expect(sent[0]).toBe(TEXT_VIEW_SQL);
+    await matches.prepare(textPredicate("lower('%other%')"), never);
+    expect(sent.filter((sql) => sql === TEXT_VIEW_SQL)).toHaveLength(1);
+  });
+
+  it('rejects with the reason the file never came', async () => {
+    const { matches, sent } = matcher([1]);
+    matches.use({ registered: Promise.reject(new Error('data/text.parquet.0000.js could not be loaded')), failed: () => {} });
+    await expect(matches.prepare(`SELECT 1 WHERE ${predicate}`, never)).rejects.toThrow('could not be loaded');
+    expect(sent).toEqual([]);
+  });
+
+  it('reports a file the engine cannot open, and rejects with the engine error', async () => {
+    const reported: unknown[] = [];
+    const matches = new TextMatches(async (sql) => {
+      if (sql === TEXT_VIEW_SQL) throw new Error('Invalid Input Error: No magic bytes found at end of file');
+      return [];
+    });
+    matches.use({ registered: Promise.resolve(), failed: (error) => reported.push(error) });
+    await expect(matches.prepare(`SELECT 1 WHERE ${predicate}`, never)).rejects.toThrow('No magic bytes');
+    expect(reported).toHaveLength(1);
+  });
+
+  it('does not report a view a Stop interrupted, and opens it on the next query', async () => {
+    const reported: unknown[] = [];
+    let cancelled = false;
+    let opens = 0;
+    const matches = new TextMatches(async (sql) => {
+      if (sql === TEXT_VIEW_SQL && ++opens === 1) {
+        cancelled = true;
+        throw new Error('INTERRUPT Error: Interrupted!');
+      }
+      return sql.includes('parquet_metadata') ? [{ first: 1 }] : [];
+    });
+    matches.use({ registered: Promise.resolve(), failed: (error) => reported.push(error) });
+    await expect(matches.prepare(`SELECT 1 WHERE ${predicate}`, stopWhen(() => cancelled))).rejects.toThrow('superseded');
+    cancelled = false;
+    expect(await matches.prepare(`SELECT 1 WHERE ${predicate}`, never)).toContain('_zl_tm_1');
+    expect([opens, reported.length]).toEqual([2, 0]);
+  });
+});
+
 describe('QueryScheduler with the index', () => {
+  it('gives up a query that waits for the index when it is stopped, and runs the next one', async () => {
+    const sent: string[] = [];
+    const sender: Sender = {
+      async send(sql: string) {
+        sent.push(sql);
+        return (async function* () {
+          yield { toArray: () => [{ toJSON: () => ({ n: 1 }) }] };
+        })();
+      },
+      async cancelSent() {
+        return false;
+      },
+    };
+    const scheduler = new QueryScheduler(sender);
+    scheduler.useTextIndex({ registered: new Promise(() => {}), failed: () => {} });
+    const waiting = scheduler.rows(`SELECT count(*) FROM events WHERE ${predicate}`, { lane: 'table' });
+    const watched = expect(waiting).rejects.toSatisfy(isSuperseded);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    scheduler.cancel();
+    await watched;
+    expect(await scheduler.rows('SELECT 1 AS n', { lane: 'other' })).toEqual([{ n: 1 }]);
+    expect(sent).toEqual(['SELECT 1 AS n']);
+  });
+
   it('builds the matches before the query that reads them, and caches by the original text', async () => {
     const sent: string[] = [];
     const sender: Sender = {

@@ -61,9 +61,10 @@
     detected = withHits.n;
     schema = Schema.fromManifest(m);
     bindHash(view);
+    // Started before the views mount, so a bare word in the link reads the index from their first query.
+    void loadTextIndex(m, store, opened);
     db = opened;
     document.title = 'Zircolite — ready';
-    void loadTextIndex(m, store, opened);
   }
 
   onMount(() => {

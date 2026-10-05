@@ -135,7 +135,7 @@ async function correlationAlerts(page, state, steps) {
   steps.push(`correlation alert opens with its ${claimed} events of evidence`);
 }
 
-async function scenario(page, steps, expectedText) {
+async function scenario(page, open, steps, expectedText) {
   const state = { build: 0 };
   await page.goto(`${url}#/overview`);
   await poll(page, async () => /ready|error/.test(await page.title()), 'the viewer', 240_000);
@@ -174,6 +174,17 @@ async function scenario(page, steps, expectedText) {
   else steps.push('correlation alerts skipped: this package has none');
 
   if (manifest.files.some((file) => file.kind === 'index')) {
+    // A link opened before the index has loaded: the word goes onto the index from the first query.
+    const fresh = await open();
+    await fresh.goto(`${url}#/overview?q=${WORD}`);
+    await poll(fresh, async () => /ready|error/.test(await fresh.title()), 'the viewer', 240_000);
+    const linked = await poll(fresh, () => number(fresh.locator('#overview-tiles'), 'data-events'), 'the overview of a linked word');
+    await nav(fresh, 'Explore');
+    const listed = await reopened(fresh, { build: 0 });
+    check(linked === listed.detected, `a link to "${WORD}" counts ${linked} events with detections on Overview; Explore says ${listed.detected}`);
+    await fresh.close();
+    steps.push('a linked word reads the index from the first query');
+
     await nav(page, 'Explore');
     await reopened(page, state);
     await poll(page, async () => (await page.locator('#engine-check').getAttribute('data-text-index')) === 'ready', 'the full-text index', 240_000);
@@ -193,7 +204,7 @@ for (const [name, type] of [['chromium', chromium], ['firefox', firefox], ['webk
   const steps = [];
   const errors = [];
   const requests = [];
-  try {
+  const open = async () => {
     const page = await browser.newPage({ viewport: { width: 1440, height: 900 } });
     page.on('pageerror', (error) => errors.push(String(error)));
     page.on('console', (message) => {
@@ -202,7 +213,10 @@ for (const [name, type] of [['chromium', chromium], ['firefox', firefox], ['webk
     page.on('request', (request) => {
       if (!/^(file|data|blob):/.test(request.url())) requests.push(request.url());
     });
-    await scenario(page, steps, expectedText);
+    return page;
+  };
+  try {
+    await scenario(await open(), open, steps, expectedText);
     check(errors.length === 0, `the page reported errors: ${errors.join(' | ')}`);
     check(requests.length === 0, `the page made network requests: ${requests.join(' ')}`);
     console.log(JSON.stringify({ browser: name, ok: true, seconds: (Date.now() - started) / 1000, steps }));
