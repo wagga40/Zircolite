@@ -1,5 +1,6 @@
 // Times Explore's main interactions on a large package in Chromium, for the budgets in the
 // design spec. Usage: npm run perf -- <unpacked package dir>
+import fs from 'node:fs';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { chromium } from 'playwright';
@@ -8,6 +9,11 @@ const directory = process.argv[2];
 if (!directory) {
   console.error('usage: npm run perf -- <unpacked package directory>');
   process.exit(2);
+}
+
+function readManifest() {
+  const text = fs.readFileSync(path.join(directory, 'data/manifest.js'), 'utf8');
+  return JSON.parse(text.slice(text.indexOf('(') + 1, text.lastIndexOf(')')));
 }
 
 async function poll(page, read, timeout = 300_000) {
@@ -53,9 +59,37 @@ try {
   await settled();
   report.first_results_ms = Math.round(performance.now() - started);
   report.events = Number(await out.getAttribute('data-count'));
+  const manifest = readManifest();
+  const bytesOf = (name) => manifest.files.find((file) => file.name === name)?.bytes ?? null;
+  report.events_parquet_bytes = bytesOf('events.parquet');
+  report.text_parquet_bytes = bytesOf('text.parquet');
+
+  // 1.87M rows at 28 px is far past the height cap, so a wheel turn must move rows, not thousands of them.
+  // The position is the first rendered row plus how far the strip sits into the next one.
+  const where = () => page.evaluate(() => {
+    const scroller = document.querySelector('#result-grid');
+    const rows = scroller.querySelector('.rows');
+    const first = Math.min(...[...rows.children].map((row) => Number(row.getAttribute('aria-rowindex')) - 2));
+    const lift = Number(/translateY\(([-\d.]+)px\)/.exec(rows.style.transform)?.[1] ?? 0);
+    return first + (scroller.scrollTop - lift) / 28;
+  });
+  const wheel = (deltaY) => page.evaluate((delta) => {
+    document.querySelector('#result-grid').dispatchEvent(new WheelEvent('wheel', { deltaY: delta, deltaMode: 0, bubbles: true, cancelable: true }));
+  }, deltaY);
+  const wheelStart = await where();
+  await wheel(84);
+  await page.waitForTimeout(100);
+  const afterNotch = await where();
+  report.wheel_notch_rows = Math.round((afterNotch - wheelStart) * 100) / 100;
+  if (Math.abs(report.wheel_notch_rows - 3) > 1) throw new Error(`a 84 px wheel turn moved ${report.wheel_notch_rows} rows past the height cap, not about 3`);
+  for (let i = 0; i < 20; i++) await wheel(1);
+  await page.waitForTimeout(100);
+  report.wheel_slow_rows = Math.round(((await where()) - afterNotch) * 100) / 100;
+  // 20 px is 20/28 of a row; scrollTop holds whole pixels, which past the cap are 0.23 of a row each.
+  if (report.wheel_slow_rows < 0.4 || report.wheel_slow_rows > 1.05) throw new Error(`twenty 1 px wheel turns moved ${report.wheel_slow_rows} rows past the height cap, not about 0.71`);
+
   report.field_search_ms = await search('EventID:4624');
   report.negated_search_ms = await search('-EventID:4624');
-  report.full_text_ms = await search('powershell');
   report.clear_ms = await search('');
   report.detections_only_ms = await timed(() => page.getByRole('button', { name: 'Detections only' }).click(), settled);
   await page.getByRole('button', { name: 'Detections only' }).click();
@@ -70,6 +104,7 @@ try {
     await page.mouse.up();
   }, settled);
   report.brush_events = Number(await out.getAttribute('data-count'));
+  if (!report.brush_events) throw new Error('the brush selected no event, so its time measures nothing');
   await page.goBack();
   await settled();
   await page.locator('#result-grid').focus();
@@ -80,6 +115,71 @@ try {
   const last = page.locator(`#result-grid [role=row][aria-rowindex="${report.events + 1}"]`);
   report.end_of_list_ms = await timed(() => page.keyboard.press('End'), () =>
     poll(page, async () => (await last.count()) > 0 && (await last.locator('[role=gridcell]').first().textContent()) !== 'Loading'));
+
+  const nav = (name) => page.locator('nav[aria-label="Views"] button', { hasText: name }).click();
+  const filled = (selector, attribute) => () => poll(page, async () => {
+    const value = await page.locator(selector).getAttribute(attribute);
+    return value !== null && value !== '';
+  });
+  report.overview_ms = await timed(() => nav('Overview'), filled('#overview-tiles', 'data-events'));
+  report.detections_ms = await timed(() => nav('Detections'), filled('#detections-summary', 'data-rules'));
+  report.timeline_ms = await timed(() => nav('Timeline'), filled('#timeline-marks', 'data-count'));
+  await nav('Explore');
+  build = 0;
+  await settled();
+  const indexStarted = performance.now();
+  await poll(page, async () => (await page.locator('#engine-check').getAttribute('data-text-index')) === 'ready');
+  report.text_index_wait_ms = Math.round(performance.now() - indexStarted);
+  report.full_text_indexed_ms = await search('powershell');
+  await page.locator('#search-input').fill('mimikatz');
+  await page.locator('#search-input').press('Enter');
+  await page.waitForTimeout(300);
+  report.supersede_ms = await search('EventID:4624');
+  report.supersede_events = Number(await out.getAttribute('data-count'));
+
+  // Stop on searches the engine really needs seconds for. Not a budget: it shows whether Stop reaches the
+  // engine or only the page. A wildcard between letters of a long text field is the slowest scan of the
+  // events; a bare word is the slowest scan of the full-text index. The index keeps each word's matches, so
+  // its reference run is the same word spelled as a pattern, which scans on its own.
+  const stopButton = page.getByRole('button', { name: 'Stop', exact: true });
+  const stopped = page.locator('p.stopped');
+  const cheap = 'EventID:4624';
+  const stopReport = {};
+  for (const [name, query, reference = query] of [['wildcard', 'Message:*a*b*c*'], ['index', 'ntlm', '*ntlm*']]) {
+    const entry = { query };
+    stopReport[name] = entry;
+    entry.full_ms = await search(reference);
+    entry.events = Number(await out.getAttribute('data-count'));
+    if (!entry.events) throw new Error(`${reference} matched nothing, so Run again has no count to agree with`);
+    await search('');
+    if (entry.full_ms < 1000) {
+      entry.note = 'skipped: the search finished in under a second';
+      continue;
+    }
+    const begin = async () => {
+      await page.locator('#search-input').fill(query);
+      await page.locator('#search-input').press('Enter');
+      await page.waitForTimeout(200);
+      await stopButton.waitFor({ timeout: 5000 });
+    };
+    await begin();
+    const clicked = performance.now();
+    await stopButton.click();
+    await stopped.waitFor();
+    entry.stop_ms = Math.round(performance.now() - clicked);
+    entry.cheap_after_stop_ms = await search(cheap);
+    // A cheap search that waits out most of the slow one means the engine was never interrupted.
+    entry.engine_interrupted = entry.cheap_after_stop_ms < entry.full_ms / 2;
+    await search('');
+    await begin();
+    await stopButton.click();
+    await stopped.waitFor();
+    entry.run_again_ms = await timed(() => stopped.getByRole('button', { name: 'Run again' }).click(), settled);
+    entry.run_again_events = Number(await out.getAttribute('data-count'));
+    if (entry.run_again_events !== entry.events) throw new Error(`Run again lists ${entry.run_again_events} events for ${query}; the search listed ${entry.events}`);
+    await search('');
+  }
+  report.stop = stopReport;
   console.log(JSON.stringify(report, null, 2));
 } finally {
   await browser.close();

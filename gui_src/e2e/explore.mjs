@@ -14,6 +14,13 @@ if (!directory) {
 }
 const url = pathToFileURL(path.resolve(directory, 'index.html')).href;
 
+function readManifest() {
+  const text = fs.readFileSync(path.join(directory, 'data/manifest.js'), 'utf8');
+  return JSON.parse(text.slice(text.indexOf('(') + 1, text.lastIndexOf(')')));
+}
+
+const manifest = readManifest();
+
 function check(condition, message) {
   if (!condition) throw new Error(message);
 }
@@ -126,6 +133,18 @@ async function scenario(page, steps) {
   r = await results(page, state);
   check(r.count === expected, `Back left ${r.count} events listed, not ${expected}`);
   steps.push('brush and Back');
+
+  // Events without a parseable time cannot fall in any range, so the whole strip lists every other one.
+  const timeless = manifest.parts.reduce((sum, part) => sum + part.time.missing + part.time.unparsed, 0);
+  await page.mouse.move(box.x + 1, box.y + box.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(box.x + box.width - 1, box.y + box.height / 2, { steps: 8 });
+  await page.mouse.up();
+  r = await results(page, state);
+  check(r.count === expected - timeless, `brushing the whole strip lists ${r.count}; ${expected - timeless} events have a time`);
+  await page.goBack();
+  r = await results(page, state);
+  steps.push('whole-strip brush selects every timed event');
 
   await page.locator('#field-filter').fill('Computer');
   await page.locator('#field-sidebar button.field').filter({ has: page.locator('.name', { hasText: /^Computer$/ }) }).click();
