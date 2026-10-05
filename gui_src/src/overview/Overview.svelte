@@ -5,6 +5,7 @@
   import { isSuperseded } from '../engine/queries';
   import type { Field, Schema } from '../engine/schema';
   import Strip from '../explore/Strip.svelte';
+  import { totalSql } from '../detections/rules';
   import { topValuesSql } from '../explore/sidebar';
   import { appendRaw, appendTerm, quoteValue } from '../search/edit';
   import type { QueryState } from '../state/query.svelte';
@@ -34,7 +35,7 @@
 
   const host = $derived(entityField('host', schema));
   const user = $derived(entityField('user', schema));
-  let tileSlot = $state.raw<Slot<Tile[]>>(empty());
+  let tileSlot = $state.raw<Slot<{ tiles: Tile[]; total: number }>>(empty());
   let tacticSlot = $state.raw<Slot<TacticCell[]>>(empty());
   let ruleSlot = $state.raw<Slot<TopRule[]>>(empty());
   let hostSlot = $state.raw<Slot<TopValue[]>>(empty());
@@ -69,7 +70,9 @@
     load('tiles', () => tileSlot, (s) => (tileSlot = s), async () => {
       const eventRows = await db.rows<{ rank: number; events: number }>(tileEventsSql(where), { lane: 'tiles' });
       const ruleRows = await db.rows<{ rank: number; rules: number }>(tileRulesSql(where), { lane: 'tiles' });
-      return tiles(eventRows, ruleRows);
+      // Counted as Detections and Explore count it, not added up from the tiles.
+      const [total] = await db.rows<{ events: number }>(totalSql(where), { lane: 'tiles' });
+      return { tiles: tiles(eventRows, ruleRows), total: total?.events ?? 0 };
     });
     load('tactics', () => tacticSlot, (s) => (tacticSlot = s), async () =>
       tacticCells(manifest.tactics, await db.rows<{ tactic: string; events: number }>(tacticsSql(where), { lane: 'tactics' })));
@@ -80,7 +83,7 @@
     load('users', () => userSlot, (s) => (userSlot = s), () => top(userField, 'user'));
   });
 
-  const tileTotal = $derived(tileSlot.data ? tileSlot.data.reduce((sum, tile) => sum + tile.events, 0) : null);
+  const tileTotal = $derived(tileSlot.data ? tileSlot.data.total : null);
   const anyStopped = $derived([tileSlot, tacticSlot, ruleSlot, hostSlot, userSlot].some((slot) => slot.stopped));
   const filtered = $derived(query.where !== 'TRUE');
   const busy = $derived([tileSlot, tacticSlot, ruleSlot, hostSlot, userSlot].some((slot) => slot.pending));
@@ -120,10 +123,11 @@
     </header>
 
     <section id="overview-tiles" class="tiles" class:stale={tileSlot.pending && tileSlot.data !== null} aria-label="Events by highest detection level" data-events={tileSlot.pending ? '' : (tileTotal ?? '')}>
-      {#each tileSlot.data ?? [] as tile (tile.rank)}
+      {#each tileSlot.data?.tiles ?? [] as tile (tile.rank)}
         <button type="button" class="tile" data-rank={tile.rank} data-events={tile.events}
-          title={`Events whose highest detection is ${tile.level}`} onclick={() => explore(`level:${tile.level}`)}>
-          <span class="name"><i style:background={`var(--sev-${tile.rank})`}></i>{tile.level[0].toUpperCase() + tile.level.slice(1)}</span>
+          title={tile.rank < 0 ? 'Events detected only by rules whose level is none of Sigma\'s' : `Events whose highest detection is ${tile.level}`}
+          onclick={() => explore(tile.term)}>
+          <span class="name"><i style:background={`var(--sev-${Math.max(0, tile.rank)})`}></i>{tile.label}</span>
           <span class="count">{formatCount(tile.events)}</span>
           <span class="unit">{tile.events === 1 ? 'event' : 'events'}</span>
           <span class="rules">{formatCount(tile.rules)} {tile.rules === 1 ? 'rule' : 'rules'}</span>
@@ -201,7 +205,7 @@
   output { font-weight: 600; }
   .stale { opacity: 0.5; transition: opacity var(--motion); }
   h2 { margin: 0 0 8px; font-size: var(--t-15); }
-  .tiles { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); border: 1px solid var(--rule); background: var(--panel); min-height: 92px; }
+  .tiles { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); border: 1px solid var(--rule); background: var(--panel); min-height: 92px; }
   .tile { display: grid; gap: 2px; padding: 12px 14px; text-align: left; background: none; border: 0; border-right: 1px solid var(--rule); cursor: pointer; }
   .tile:last-child { border-right: 0; }
   .tile:hover { background: color-mix(in srgb, var(--signal) 6%, transparent); }
@@ -227,10 +231,11 @@
   .failure { color: var(--danger); }
   .again { min-height: 28px; background: none; border: 1px solid var(--rule); border-radius: var(--radius); padding: 3px 10px; cursor: pointer; }
   @media (max-width: 720px) {
-    .tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .tiles { grid-auto-flow: row; grid-template-columns: repeat(2, minmax(0, 1fr)); }
     .tile { border-bottom: 1px solid var(--rule); }
     .tile:nth-child(2n) { border-right: 0; }
-    .tile:last-child { grid-column: 1 / -1; border-bottom: 0; }
+    .tile:nth-last-child(-n + 2):nth-child(2n + 1), .tile:last-child { border-bottom: 0; }
+    .tile:last-child:nth-child(2n + 1) { grid-column: 1 / -1; }
     .columns { grid-template-columns: minmax(0, 1fr); }
   }
 </style>

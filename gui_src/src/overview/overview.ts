@@ -1,3 +1,4 @@
+import { levelLabel } from '../detections/rules';
 import { LEVELS } from '../engine/levels';
 import type { Field, Schema } from '../engine/schema';
 import { findShortcut } from '../search/shortcuts';
@@ -23,14 +24,25 @@ export function tileRulesSql(where: string): string {
 export interface Tile {
   rank: number;
   level: string;
+  label: string;
+  /** The search that lists exactly the tile's events. */
+  term: string;
   events: number;
   rules: number;
 }
 
+/**
+ * One tile per Sigma level, critical first, and an Unknown level tile when some events are detected
+ * only by rules whose level is none of Sigma's (rank -1): without it the tiles would not add up.
+ */
 export function tiles(events: { rank: number; events: number }[], rules: { rank: number; rules: number }[]): Tile[] {
   const byEvents = new Map(events.map((row) => [row.rank, row.events]));
   const byRules = new Map(rules.map((row) => [row.rank, row.rules]));
-  return LEVELS.map((level, rank) => ({ rank, level, events: byEvents.get(rank) ?? 0, rules: byRules.get(rank) ?? 0 })).reverse();
+  const tile = (rank: number, level: string, term: string): Tile =>
+    ({ rank, level, label: levelLabel(rank), term, events: byEvents.get(rank) ?? 0, rules: byRules.get(rank) ?? 0 });
+  const known = LEVELS.map((level, rank) => tile(rank, level, `level:${level}`)).reverse();
+  // Below informational there is only the unknown rank.
+  return byEvents.get(-1) ? [...known, tile(-1, 'unknown', 'level:<informational')] : known;
 }
 
 export function tacticsSql(where: string): string {
