@@ -41,7 +41,7 @@ export interface Column {
 
 /** The heat of a cell, as the Overview's tactic strip draws it; none for an empty one. */
 export function heatInk(share: number): string | undefined {
-  return share > 0 ? `color-mix(in srgb, var(--signal) ${Math.round(12 + 40 * share)}%, var(--panel))` : undefined;
+  return share > 0 ? `color-mix(in srgb, var(--signal) ${Math.round(16 + 40 * share)}%, var(--panel))` : undefined;
 }
 
 /**

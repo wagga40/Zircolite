@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { technique } from '../src/attack/catalog';
+import { CATALOG, technique } from '../src/attack/catalog';
 import {
   detectedTechniques, heatmap, heatmapSql, heatTerm, matrix, STORED_TECHNIQUES_SQL, techniqueCountsSql, unlisted,
 } from '../src/attack/attack';
@@ -10,11 +10,17 @@ import { type Fixture, openFixture, schema } from './fixture';
 
 // Two more rules: one tagged with the parent T1059 (on event 3, already under T1033), one with T1562.001,
 // which ATT&CK 19 revoked in favour of T1685 (on event 2, which nothing else detects).
+// A retired ID with no replacement; the unknown T9999 is in no catalogue at all.
+const RETIRED = CATALOG.deprecated.find((id) => !id.includes('.') && !CATALOG.revoked[id]) ?? '';
+
 const EXTRA = [
   `INSERT INTO rules VALUES
      (4, 'r-cmd', 'r-cmd', 'Command interpreter', 'low', 1, 'd', [], [], ['execution'], ['T1059'], 'x.yml', 'match', 0),
-     (5, 'r-old', 'r-old', 'Old impair defenses', 'medium', 2, 'd', [], [], ['stealth'], ['T1562.001'], 'o.yml', 'match', 0)`,
-  'INSERT INTO hits VALUES (4, 3), (5, 2)',
+     (5, 'r-old', 'r-old', 'Old impair defenses', 'medium', 2, 'd', [], [], ['stealth'], ['T1562.001'], 'o.yml', 'match', 0),
+     (6, 'r-ret', 'r-ret', 'Retired technique', 'low', 1, 'd', [], [], ['execution'], ['${RETIRED}'], 'p.yml', 'match', 0),
+     (7, 'r-unk', 'r-unk', 'Unknown technique', 'low', 1, 'd', [], [], ['execution'], ['T9999'], 'u.yml', 'match', 0),
+     (8, 'r-sub', 'r-sub', 'Old sub-technique', 'low', 1, 'd', [], [], ['stealth'], ['T1562.002'], 's.yml', 'match', 0)`,
+  'INSERT INTO hits VALUES (4, 3), (5, 2), (6, 1), (7, 3), (8, 3)',
   'CREATE OR REPLACE TABLE event_levels AS SELECT h._zl_uid, max(r.level_rank) AS _zl_lvl FROM hits h JOIN rules r ON r.rule_idx = h.rule_idx GROUP BY h._zl_uid',
 ];
 
@@ -37,6 +43,23 @@ describe('technique counts', () => {
   it('every technique count is exactly what technique: lists', async () => {
     for (const [id, events] of counts) {
       expect((await db.uids(compile(parse(`technique:${id}`), schema))).length, id).toBe(events);
+    }
+  });
+
+  it('a revoked parent counts the events of its stored sub-techniques, as technique: lists them', async () => {
+    // T1562.001 on event 2 and T1562.002 on event 3; T1562 itself is on no rule.
+    expect(counts.get('T1562')).toBe(2);
+    expect(await db.uids(compile(parse('technique:T1562'), schema))).toEqual([2, 3]);
+  });
+
+  it('under a filter, every technique count is what technique: lists within it', async () => {
+    const where = `"Computer" ILIKE 'DC01'`;
+    const filtered = new Map((await db.rows(techniqueCountsSql(where))).map((r) => [r.id as string, r.events as number]));
+    expect(filtered.size).toBeGreaterThan(0);
+    expect(filtered.size).toBeLessThan(counts.size);
+    for (const [id, events] of filtered) {
+      const uids = await db.uids(`(${compile(parse(`technique:${id}`), schema)}) AND (${where})`);
+      expect(uids.length, id).toBe(events);
     }
   });
 });
@@ -69,8 +92,11 @@ describe('tags the catalogue does not list', () => {
   it('lists them with their replacement, never drops them', async () => {
     const stored = (await db.rows(STORED_TECHNIQUES_SQL)).map((r) => r.id as string);
     expect(unlisted(stored, counts)).toEqual([
+      { id: RETIRED, events: 1, replacement: null, status: 'retired' },
       { id: 'T1562.001', events: 1, replacement: technique('T1685'), status: 'revoked' },
-    ]);
+      { id: 'T1562.002', events: 1, replacement: technique('T1685.001'), status: 'revoked' },
+      { id: 'T9999', events: 1, replacement: null, status: 'unknown' },
+    ].sort((a, b) => b.events - a.events || a.id.localeCompare(b.id)));
   });
 });
 

@@ -46,6 +46,7 @@
   const detected = $derived(counts ? detectedTechniques(counts) : null);
   const grid = $derived(heat.slot.data ? heatmap(heat.slot.data) : null);
   const filtered = $derived(query.where !== 'TRUE');
+  const nothing = $derived(counts !== null && mode === 'detected' && columns.every((c) => c.cells.length === 0));
   const anyStopped = $derived([techniques.slot, tactics.slot, heat.slot].some((slot) => slot.stopped));
   const pad = (hour: number) => String(hour).padStart(2, '0');
 
@@ -82,12 +83,14 @@
   </header>
   <p class="note">ATT&CK {CATALOG.version}. A technique under several tactics shows the same count in each; a technique counts its sub-techniques' events.</p>
 
-  <section id="attack-matrix" class="matrix" aria-label="ATT&CK matrix" class:stale={techniques.slot.pending && counts !== null}
+  <section id="attack-matrix" class="matrix" aria-label="ATT&CK matrix" class:stale={(techniques.slot.pending || tactics.slot.pending) && counts !== null}
+    aria-busy={techniques.slot.pending || tactics.slot.pending}
     data-techniques={techniques.slot.pending || detected === null ? '' : detected}>
-    <div class="columns">
+    {#if nothing}<p class="empty">No technique is detected under these filters.</p>{/if}
+    <div class="columns" class:hidden={nothing}>
       {#each columns as column (column.tactic)}
         <div class="column" role="group" aria-label={column.name}>
-          <button type="button" class="tactic" data-tactic={column.tactic} data-events={tactics.slot.data?.get(column.tactic) ?? 0}
+          <button type="button" class="tactic" data-tactic={column.tactic} data-events={tactics.slot.data ? (tactics.slot.data.get(column.tactic) ?? 0) : ''}
             title={`Events detected under ${column.name}`} onclick={() => explore(`tactic:${column.tactic}`)}>
             <span class="name">{column.name}</span>
             <span class="n">{tactics.slot.data ? formatCount(tactics.slot.data.get(column.tactic) ?? 0) : ''}</span>
@@ -121,13 +124,14 @@
               {/if}
             </div>
           {:else}
-            {#if counts}<p class="empty">None detected</p>{/if}
+            {#if counts && !nothing}<p class="empty">None detected</p>{/if}
           {/each}
         </div>
       {/each}
     </div>
   </section>
   {@render problem(techniques.slot, 'techniques')}
+  {@render problem(tactics.slot, 'tactic counts')}
 
   {#if others.length}
     <section class="others" aria-labelledby="others-title">
@@ -153,7 +157,7 @@
       <div class="grid-wrap" class:stale={heat.slot.pending}>
         <table class="heatmap">
           <thead>
-            <tr><td></td>{#each { length: 24 } as _, hour (hour)}<th scope="col">{hour % 3 === 0 ? pad(hour) : ''}</th>{/each}</tr>
+            <tr><td></td>{#each { length: 24 } as _, hour (hour)}<th scope="col">{#if hour % 3 === 0}{pad(hour)}<span class="sr">:00</span>{:else}<span class="sr">{pad(hour)}:00</span>{/if}</th>{/each}</tr>
           </thead>
           <tbody>
             {#each grid.cells as row, d (d)}
@@ -192,7 +196,7 @@
   .failure { color: var(--danger); }
   .stale { opacity: 0.5; }
   .matrix { overflow: auto; max-height: 70vh; margin-top: 12px; border-top: 1px solid var(--rule); border-left: 1px solid var(--rule); }
-  .columns { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(136px, 1fr); }
+  .columns { display: grid; align-items: start; grid-auto-flow: column; grid-auto-columns: minmax(136px, 1fr); }
   .column { border-right: 1px solid var(--rule); min-width: 0; }
   .tactic { display: grid; gap: 2px; width: 100%; min-height: 48px; padding: 8px; text-align: left; background: var(--panel); border: 0; border-bottom: 1px solid var(--rule); cursor: pointer; position: sticky; top: 0; }
   .tactic .name { font-size: var(--t-13); font-weight: 600; }
@@ -213,8 +217,11 @@
   .link { min-height: 24px; padding: 0; background: none; border: 0; color: var(--signal); font: 400 var(--t-13) / 1.4 var(--mono); cursor: pointer; text-decoration: underline; }
   .grid-wrap { overflow-x: auto; }
   .heatmap { border-collapse: separate; border-spacing: 2px; }
-  .heatmap th { font: 400 11px / 1.2 var(--mono); color: var(--ink-2); padding: 0 4px; text-align: left; white-space: nowrap; }
+  .heatmap th { position: relative; font: 400 11px / 1.2 var(--mono); color: var(--ink-2); padding: 0 4px; text-align: left; white-space: nowrap; }
   .heatmap td { padding: 0; }
   .hc { display: block; width: 24px; height: 24px; padding: 0; border: 1px solid var(--rule); border-radius: 2px; background: var(--panel); cursor: pointer; }
+  .hidden { display: none; }
+  .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+  @media (max-width: 720px) { .matrix { max-height: 55vh; } }
   .hc:disabled { cursor: default; }
 </style>
