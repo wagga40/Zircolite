@@ -1,6 +1,6 @@
 import { LEVELS } from '../engine/levels';
 import type { Field, Schema } from '../engine/schema';
-import { ident, likeEscape, str } from '../engine/sql';
+import { escapeClause, ident, likeEscape, str } from '../engine/sql';
 import { textPredicate } from '../engine/textMatches';
 import type { Node } from './parse';
 import { findShortcut, SHORTCUTS } from './shortcuts';
@@ -68,7 +68,8 @@ function fieldMatch(field: Field, t: Term): string {
   }
   if (numeric && NUMBER.test(t.value)) return `${column} = ${t.value}`;
   const text = numeric ? `CAST(${column} AS VARCHAR)` : column;
-  return `${text} ILIKE ${pattern(t, false)} ESCAPE '\\'`;
+  const literal = pattern(t, false);
+  return `${text} ILIKE ${literal}${escapeClause(literal)}`;
 }
 
 function fullText(t: Term, schema: Schema, options: CompileOptions): string {
@@ -80,7 +81,8 @@ function fullText(t: Term, schema: Schema, options: CompileOptions): string {
   }
   // chr(31) separates the fields, so a quoted phrase cannot match across two of them; an unquoted * still can.
   const all = schema.fields.map((field) => ident(field.name)).join(', ');
-  return `concat_ws(chr(31), ${all}) ILIKE ${pattern(t, true)} ESCAPE '\\'`;
+  const literal = pattern(t, true);
+  return `concat_ws(chr(31), ${all}) ILIKE ${literal}${escapeClause(literal)}`;
 }
 
 /**
@@ -118,7 +120,7 @@ const SHORTCUT_COMPILERS: Record<string, (t: Term, schema: Schema) => string> = 
   rule: (t) => {
     exactOnly(t);
     const p = pattern(t, false);
-    return `_zl_uid IN (${HIT_RULES} WHERE r.title ILIKE ${p} ESCAPE '\\' OR r.id ILIKE ${p} ESCAPE '\\')`;
+    return `_zl_uid IN (${HIT_RULES} WHERE r.title ILIKE ${p}${escapeClause(p)} OR r.id ILIKE ${p}${escapeClause(p)})`;
   },
   rulekey: (t) => {
     exactOnly(t);

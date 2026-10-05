@@ -194,6 +194,16 @@ describe('the full-text index', () => {
     expect(compile(parse('powershell'), schema)).not.toContain('fulltext');
     expect(compile(parse('powershell'), schema, { textIndex: true })).toContain('FROM fulltext');
   });
+
+  it('adds ESCAPE to a LIKE only when its pattern holds a backslash', () => {
+    for (const options of [{ textIndex: true }, {}]) {
+      expect(compile(parse('powershell'), schema, options)).not.toContain('ESCAPE');
+      expect(compile(parse('50_off'), schema, options)).toContain("ESCAPE '\\'");
+      expect(compile(parse('"C:\\Tools"'), schema, options)).toContain("ESCAPE '\\'");
+    }
+    expect(compile(parse('Image:*cmd.exe'), schema)).not.toContain('ESCAPE');
+    expect(compile(parse('Image:*50_off*'), schema)).toContain('ESCAPE');
+  });
 });
 
 describe('rulekey', () => {

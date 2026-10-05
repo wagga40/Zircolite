@@ -21,6 +21,16 @@ export function likeEscape(text: string): string {
   return text.replace(/[\\%_]/g, (c) => `\\${c}`);
 }
 
+/**
+ * The ESCAPE clause a LIKE needs, or nothing. DuckDB has no default escape
+ * character, so a pattern without a backslash means the same either way, and
+ * leaving the clause off keeps DuckDB on its fast contains() path; with it
+ * every row goes through the general matcher.
+ */
+export function escapeClause(literal: string): string {
+  return literal.includes('\\') ? " ESCAPE '\\'" : '';
+}
+
 /** Each event's highest detection level, read by the strip, the table and the drawer. */
 export const EVENT_LEVELS_SQL =
   'CREATE OR REPLACE TEMP TABLE event_levels AS SELECT h._zl_uid, max(r.level_rank) AS _zl_lvl ' +

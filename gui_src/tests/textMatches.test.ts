@@ -50,7 +50,8 @@ describe('TextMatches', () => {
     expect(found[0]).toMatch(/^CREATE OR REPLACE TEMP TABLE _zl_tm_1 AS .* AND _zl_uid < 100$/);
     expect(found[1]).toMatch(/^INSERT INTO _zl_tm_1 .* AND _zl_uid >= 100 AND _zl_uid < 200$/);
     expect(found[3]).toMatch(/AND _zl_uid >= 300$/);
-    expect(found.every((statement) => statement.includes("LIKE lower('%word%') ESCAPE '\\'"))).toBe(true);
+    expect(found.every((statement) => statement.includes("LIKE lower('%word%')"))).toBe(true);
+    expect(found.some((statement) => statement.includes('ESCAPE'))).toBe(false);
   });
 
   it('scans once for every query that asks for the same match', async () => {
@@ -111,6 +112,31 @@ describe('TextMatches', () => {
     cancelled = false;
     await matches.prepare(`SELECT 1 WHERE ${predicate}`, () => cancelled, superseded);
     expect(scans(sent)).toHaveLength(2);
+  });
+
+  it('answers a predicate with the escape clause too', async () => {
+    const { matches } = matcher([1]);
+    const escaped = textPredicate("lower('%50\\_off%')");
+    expect(escaped).toContain("ESCAPE '\\'");
+    const sql = await matches.prepare(`SELECT 1 WHERE ${escaped}`, never, superseded);
+    expect(sql).toBe('SELECT 1 WHERE _zl_uid IN (SELECT _zl_uid FROM _zl_tm_1)');
+  });
+
+  it('tries a DROP that failed again on the next eviction', async () => {
+    const sent: string[] = [];
+    let failDrops = true;
+    const matches = new TextMatches(async (sql) => {
+      sent.push(sql);
+      if (sql.includes('parquet_metadata')) return [{ first: 1 }];
+      if (sql.startsWith('DROP') && failDrops) throw new Error('query was canceled');
+      return [];
+    });
+    for (const word of ['a', 'b', 'c', 'd', 'e']) await matches.prepare(textPredicate(`lower('%${word}%')`), never, superseded);
+    failDrops = false;
+    await matches.prepare(textPredicate("lower('%f%')"), never, superseded);
+    const drops = sent.filter((sql) => sql.startsWith('DROP'));
+    expect(drops.filter((sql) => sql.endsWith('_zl_tm_1'))).toHaveLength(2);
+    expect(drops.filter((sql) => sql.endsWith('_zl_tm_2'))).toHaveLength(1);
   });
 
   it('drops the oldest matches past four, never one the query in hand needs', async () => {

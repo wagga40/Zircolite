@@ -1,9 +1,10 @@
 import type { Field } from '../engine/schema';
-import { asciiLower, ident, likeEscape, str } from '../engine/sql';
+import { asciiLower, escapeClause, ident, likeEscape, str } from '../engine/sql';
 
 export function suggestValuesSql(field: Field, prefix: string, limit = 8): string {
   const text = `CAST(${ident(field.name)} AS VARCHAR)`;
-  return `SELECT DISTINCT ${text} AS v FROM events WHERE ${text} ILIKE ${str(`${likeEscape(prefix)}%`)} ESCAPE '\\' ORDER BY v LIMIT ${limit}`;
+  const literal = str(`${likeEscape(prefix)}%`);
+  return `SELECT DISTINCT ${text} AS v FROM events WHERE ${text} ILIKE ${literal}${escapeClause(literal)} ORDER BY v LIMIT ${limit}`;
 }
 
 /**
