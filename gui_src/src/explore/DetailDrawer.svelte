@@ -6,6 +6,7 @@
   import { isSuperseded } from '../engine/queries';
   import type { Schema } from '../engine/schema';
   import { appendRaw, appendTerm, quoteValue } from '../search/edit';
+  import { run, runAgain } from '../state/run.svelte';
   import { view } from '../state/view.svelte';
   import { copyText } from '../ui/clipboard';
   import { isoTime } from '../ui/format';
@@ -27,6 +28,9 @@
 
   let loaded = $state.raw<Loaded | null>(null);
   let failure = $state<string | null>(null);
+  let stopped = $state(false);
+  // Choosing the open event again changes nothing, so a failed read is retried from its own button.
+  let attempt = $state(0);
   let raw = $state(false);
   let status = $state('');
   // Stepping with j and k leaves focus in the table, so the new event is announced instead.
@@ -40,7 +44,7 @@
 
   // A drawer closing keeps its content for the slide; only a switch to another event makes it stale.
   // A failed load is not a pending one, so the header stays readable beside its error.
-  const stale = $derived(view.uid !== null && failure === null && !isCurrent(loaded, view.uid));
+  const stale = $derived(view.uid !== null && failure === null && !stopped && !isCurrent(loaded, view.uid));
   const groups = $derived(loaded ? groupEntries(loaded.entries) : []);
   const host = $derived(loaded ? hostEntry(loaded.entries) : null);
   const title = $derived(loaded ? titleOf(loaded) : 'Event');
@@ -79,7 +83,11 @@
       spoken = '';
       return;
     }
+    // Read only while open: Run again pressed elsewhere must not move focus out of a closed drawer.
+    void run.generation;
+    void attempt;
     failure = null;
+    stopped = false;
     status = '';
     load(uid).then(
       (result) => {
@@ -88,20 +96,19 @@
         if (focused) spoken = `${titleOf(result)}, ${result.head._zl_t === null ? 'no time' : `${isoTime(result.head._zl_t)} UTC`}`;
       },
       (error: unknown) => {
-        if (mine === ticket) {
-          loaded = null;
-          // Only a stop supersedes the newest request: a newer event would have moved the ticket on.
-          failure = isSuperseded(error)
-            ? 'Stopped. Choose the event again to read it.'
-            : error instanceof Error ? error.message : String(error);
-        }
+        if (mine !== ticket) return;
+        loaded = null;
+        if (!isSuperseded(error)) failure = error instanceof Error ? error.message : String(error);
+        else if (run.stopped) stopped = true;
+        // A newer event would have moved the ticket on, so nothing else of the drawer's replaced this one.
+        else failure = 'the query was interrupted';
       },
     );
   });
 
   // Move focus into the drawer when it opens, not on every event shown in it.
   $effect(() => {
-    if ((loaded || failure) && heading && !focused) {
+    if ((loaded || failure || stopped) && heading && !focused) {
       focused = true;
       heading.focus();
     }
@@ -111,6 +118,7 @@
     if (view.uid === null) {
       loaded = null;
       failure = null;
+      stopped = false;
     }
   }
 
@@ -166,7 +174,11 @@
     </header>
 
     {#if failure}
-      <p class="note failure" role="alert">This event could not be read: {failure}. Choose it again, or reload the page if this repeats.</p>
+      <p class="note failure" role="alert">
+        This event could not be read: {failure}. <button type="button" onclick={() => attempt++}>Read it again</button> If this repeats, reload the page.
+      </p>
+    {:else if stopped}
+      <p class="note" role="status">Stopped. <button type="button" onclick={runAgain}>Run again</button></p>
     {:else if !loaded}
       <p class="note">Reading the event</p>
     {:else}
