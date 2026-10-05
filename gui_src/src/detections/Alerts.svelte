@@ -5,9 +5,14 @@
   import { run, runAgain } from '../state/run.svelte';
   import { view } from '../state/view.svelte';
   import { formatCount, isoTime } from '../ui/format';
+  import { ownScope } from '../ui/scope';
   import { type AlertRow, alertsSql, type EvidenceRow, evidenceSql, groupKeysText } from './rules';
 
-  let { db, schema, ruleIdx }: { db: Db; schema: Schema; ruleIdx: number[] } = $props();
+  let { db: parent, schema, ruleIdx }: { db: Db; schema: Schema; ruleIdx: number[] } = $props();
+  // Lanes of their own, so opening an alert of another rule does not supersede this one's evidence;
+  // collapsing the rule stops them. A rule's correlation entries do not change while it is listed.
+  // svelte-ignore state_referenced_locally
+  const db = ownScope(parent, `alerts-${ruleIdx.join('-')}`);
 
   let alerts = $state.raw<AlertRow[] | null>(null);
   let failure = $state<string | null>(null);
@@ -17,13 +22,14 @@
   let evidenceStopped = $state(false);
   let evidenceFailure = $state<string | null>(null);
   let ticket = 0;
+  let evidenceTicket = 0;
 
   $effect(() => {
     void run.generation;
     const mine = ++ticket;
     failure = null;
     stopped = false;
-    db.rows<AlertRow>(alertsSql(ruleIdx), { lane: `alerts:${ruleIdx.join(',')}` }).then(
+    db.rows<AlertRow>(alertsSql(ruleIdx), { lane: 'list' }).then(
       (rows) => { if (mine === ticket) alerts = rows; },
       (error: unknown) => {
         if (mine !== ticket) return;
@@ -31,22 +37,24 @@
         else if (run.stopped) {
           alerts = null;
           stopped = true;
-        }
+        } else failure = 'the query was interrupted';
       },
     );
   });
 
   function load(alert: AlertRow): void {
-    const mine = alert.alert_idx;
+    const mine = ++evidenceTicket;
     evidence = null;
     evidenceStopped = false;
     evidenceFailure = null;
-    db.rows<EvidenceRow>(evidenceSql(mine, schema), { lane: 'evidence' }).then(
-      (rows) => { if (open === mine) evidence = rows; },
+    db.rows<EvidenceRow>(evidenceSql(alert.alert_idx, schema), { lane: 'evidence' }).then(
+      (rows) => { if (mine === evidenceTicket) evidence = rows; },
       (error: unknown) => {
-        if (open !== mine) return;
+        if (mine !== evidenceTicket) return;
         if (!isSuperseded(error)) evidenceFailure = error instanceof Error ? error.message : String(error);
         else if (run.stopped) evidenceStopped = true;
+        // No newer request of this panel replaced it, so no answer is coming: say so rather than read forever.
+        else evidenceFailure = 'the query was interrupted';
       },
     );
   }
@@ -54,6 +62,8 @@
   function toggle(alert: AlertRow): void {
     if (open === alert.alert_idx) {
       open = null;
+      evidenceTicket += 1;
+      db.cancel('evidence');
       return;
     }
     open = alert.alert_idx;

@@ -102,40 +102,48 @@ const number = async (locator, attribute) => {
   return value === null || value === '' ? null : Number(value);
 };
 
-// Expands rules until one lists alerts, then opens an alert: its evidence list must hold the
-// events it counted, or say how many it cut off.
+// Expands rules until two list alerts (or every rule is tried), then opens an alert in each within one
+// task, so neither request has run when the other is made: each evidence list must hold the events
+// its alert counted, or say how many it cut off.
 async function correlationAlerts(page, state, steps) {
   await nav(page, 'Detections');
   await poll(page, () => number(page.locator('#detections-summary'), 'data-rules'), 'the detections');
   const rows = page.locator('button[data-key]');
-  const alerts = page.locator('section[aria-label="Correlation alerts"] button.alert');
   const total = await rows.count();
-  let found = false;
-  for (let i = 0; i < total && !found; i++) {
+  const listing = [];
+  for (let i = 0; i < total && listing.length < 2; i++) {
     const row = rows.nth(i);
+    const item = row.locator('xpath=..');
     await row.click();
-    const section = page.locator('section[aria-label="Correlation alerts"]');
+    const section = item.locator('section[aria-label="Correlation alerts"]');
     if ((await section.count()) === 0) {
       await row.click();
       continue;
     }
     await poll(page, async () => (await section.locator('p.note', { hasText: 'Reading the alerts' }).count()) === 0, 'the alerts');
-    if ((await alerts.count()) > 0) found = true;
+    if ((await section.locator('button.alert').count()) > 0) listing.push(item);
     else await row.click();
   }
-  check(found, `the package counts ${manifest.totals.alerts} alerts but no rule in Detections lists one`);
-  const alert = alerts.first();
-  const claimed = Number((await alert.locator('.n').textContent()).replace(/\D/g, ''));
-  await alert.click();
-  const items = page.locator('ol.evidence li');
-  await poll(page, async () => (await page.locator('p.note', { hasText: 'Reading the evidence' }).count()) === 0, 'the evidence');
-  const cut = page.locator('p.note', { hasText: /^First [\d,. ]+ of / });
-  if (claimed > 500) {
-    check((await cut.count()) === 1, `the alert counts ${claimed} events and its evidence does not say it was cut off`);
-  } else {
-    check((await items.count()) === claimed, `the alert counts ${claimed} events; its evidence lists ${await items.count()}`);
+  check(listing.length > 0, `the package counts ${manifest.totals.alerts} alerts but no rule in Detections lists one`);
+  const opened = [];
+  for (const item of listing) {
+    const alert = item.locator('button.alert').first();
+    opened.push({ item, claimed: Number((await alert.locator('.n').textContent()).replace(/\D/g, '')) });
   }
-  steps.push(`correlation alert opens with its ${claimed} events of evidence`);
+  await page.locator('button[data-key][aria-expanded="true"]').first().evaluate(() => {
+    for (const section of document.querySelectorAll('section[aria-label="Correlation alerts"]')) section.querySelector('button.alert')?.click();
+  });
+  await poll(page, async () => (await page.locator('p.note', { hasText: 'Reading the evidence' }).count()) === 0, 'the evidence', 15_000);
+  for (const { item, claimed } of opened) {
+    const items = item.locator('ol.evidence li');
+    const cut = item.locator('p.note', { hasText: /^First [\d,. ]+ of / });
+    if (claimed > 500) {
+      check((await cut.count()) === 1, `the alert counts ${claimed} events and its evidence does not say it was cut off`);
+    } else {
+      check((await items.count()) === claimed, `the alert counts ${claimed} events; its evidence lists ${await items.count()}`);
+    }
+  }
+  steps.push(`correlation alerts of ${opened.length} rules open at once, with ${opened.map((o) => o.claimed).join(' and ')} events of evidence`);
 }
 
 async function scenario(page, open, steps, expectedText) {
