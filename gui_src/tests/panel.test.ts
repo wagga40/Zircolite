@@ -53,6 +53,21 @@ describe('a panel', () => {
   });
 });
 
+describe('a stale request', () => {
+  it('is ignored when it fails after a newer one was made', async () => {
+    const panel = new Panel<string>();
+    const first = later<string>();
+    const second = later<string>();
+    panel.load(() => first.promise);
+    panel.load(() => second.promise);
+    second.resolve('new');
+    await settle();
+    first.reject(new Error('late'));
+    await settle();
+    expect(panel.slot).toEqual({ data: 'new', pending: false, failure: null, stopped: false });
+  });
+});
+
 describe('a failed slot', () => {
   it('says stopped after a Stop, interrupted otherwise', () => {
     run.stopped = true;

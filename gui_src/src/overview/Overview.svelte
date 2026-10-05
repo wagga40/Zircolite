@@ -41,6 +41,7 @@
     const where = query.where;
     const hostField = host;
     const userField = user;
+    const tactics = manifest.tactics;
     tilePanel.load(async () => {
       const eventRows = await db.rows<{ rank: number; events: number }>(tileEventsSql(where), { lane: 'tiles' });
       const ruleRows = await db.rows<{ rank: number; rules: number }>(tileRulesSql(where), { lane: 'tiles' });
@@ -49,7 +50,7 @@
       return { tiles: tiles(eventRows, ruleRows), total: total?.events ?? 0 };
     });
     tacticPanel.load(async () =>
-      tacticCells(manifest.tactics, await db.rows<{ tactic: string; events: number }>(tacticsSql(where), { lane: 'tactics' })));
+      tacticCells(tactics, await db.rows<{ tactic: string; events: number }>(tacticsSql(where), { lane: 'tactics' })));
     rulePanel.load(() => db.rows<TopRule>(topRulesSql(where), { lane: 'rules' }));
     const top = (field: Field | undefined, kind: string): Promise<TopValue[]> =>
       field ? db.rows<TopValue>(topValuesSql(field, where, 8), { lane: `top-${kind}` }) : Promise.resolve([]);
