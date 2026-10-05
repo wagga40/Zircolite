@@ -55,6 +55,10 @@ function notices() {
   });
   sections.push(`== DuckDB Parquet extension ${DUCKDB_VERSION} (MIT) ==\n\n` +
     `Downloaded from ${EXTENSION_URL}. It is part of DuckDB and shares the MIT licence of @duckdb/duckdb-wasm above.`);
+  const attack = JSON.parse(fs.readFileSync(path.join(root, 'src/attack/catalog.json'), 'utf8'));
+  sections.push(`== MITRE ATT&CK Enterprise ${attack.version} ==\n\n${attack.copyright}\n\n` +
+    'Technique and tactic names, and where each technique sits, are reproduced from MITRE ATT&CK.\n\n' +
+    fs.readFileSync(path.join(root, 'scripts/attack-terms.txt'), 'utf8').trim());
   return `Zircolite viewer: third-party notices\n\n${sections.join('\n\n')}\n`;
 }
 

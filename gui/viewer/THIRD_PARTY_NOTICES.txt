@@ -4049,3 +4049,25 @@ SOFTWARE.
 == DuckDB Parquet extension v1.4.3 (MIT) ==
 
 Downloaded from https://extensions.duckdb.org/v1.4.3/wasm_eh/parquet.duckdb_extension.wasm. It is part of DuckDB and shares the MIT licence of @duckdb/duckdb-wasm above.
+
+== MITRE ATT&CK Enterprise 19.2 ==
+
+Copyright 2015-2026, The MITRE Corporation. MITRE ATT&CK and ATT&CK are registered trademarks of The MITRE Corporation.
+
+Technique and tactic names, and where each technique sits, are reproduced from MITRE ATT&CK.
+
+MITRE ATT&CK Terms of Use, from https://attack.mitre.org/resources/legal-and-branding/terms-of-use/
+
+LICENSE
+
+The MITRE Corporation (MITRE) hereby grants you a non-exclusive, royalty-free license to use ATT&CK® for research, development, and commercial purposes. Any copy you make for such purposes is authorized provided that you reproduce MITRE's copyright designation and this license in any such copy.
+
+"© 2026 The MITRE Corporation. This work is reproduced and distributed with the permission of The MITRE Corporation."
+
+DISCLAIMERS
+
+MITRE does not claim ATT&CK enumerates all possibilities for the types of actions and behaviors documented as part of its adversary model and framework of techniques. Using the information contained within ATT&CK to address or cover full categories of techniques will not guarantee full defensive coverage as there may be undisclosed techniques or variations on existing techniques not documented by ATT&CK.
+
+ALL DOCUMENTS AND THE INFORMATION CONTAINED THEREIN ARE PROVIDED ON AN "AS IS" BASIS AND THE CONTRIBUTOR, THE ORGANIZATION HE/SHE REPRESENTS OR IS SPONSORED BY (IF ANY), THE MITRE CORPORATION, ITS BOARD OF TRUSTEES, OFFICERS, AGENTS, AND EMPLOYEES, DISCLAIM ALL WARRANTIES, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO ANY WARRANTY THAT THE USE OF THE INFORMATION THEREIN WILL NOT INFRINGE ANY RIGHTS OR ANY IMPLIED WARRANTIES OF MERCHANTABILITY OR FITNESS FOR A PARTICULAR PURPOSE.
+
+See our FAQ for more information on how to use and represent the ATT&CK name.

@@ -84,3 +84,18 @@ def test_bundled_parquet_extension_is_the_pinned_one():
                        (SOURCE / "scripts" / "finalize.mjs").read_text(encoding="utf-8")).group(1)
 
     assert hashlib.sha256((BUILD / "parquet.duckdb_extension.wasm").read_bytes()).hexdigest() == pinned
+
+
+def test_attack_catalogue_follows_zircolites_tactics():
+    from zircolite.attack import TACTIC_ORDER
+
+    catalogue = json.loads((ROOT / "gui_src" / "src" / "attack" / "catalog.json").read_text(encoding="utf-8"))
+    assert [t["shortname"] for t in catalogue["tactics"]] == list(TACTIC_ORDER)
+    active = {t["id"] for t in catalogue["techniques"]}
+    assert set(catalogue["revoked"].values()) <= active
+
+
+def test_viewer_notices_carry_the_attack_terms():
+    notices = (ROOT / "gui" / "viewer" / "THIRD_PARTY_NOTICES.txt").read_text(encoding="utf-8")
+    assert "MITRE ATT&CK" in notices
+    assert "The MITRE Corporation" in notices
