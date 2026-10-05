@@ -148,12 +148,12 @@ describe('compile against DuckDB', () => {
     ['Computer:>5', /holds text/],
     ['level:severe', /informational, low, medium, high, critical/],
     ['technique:1059', /T1234/],
-    ['rule:>x', /only level compares/],
-    ['tactic:>=discovery', /only level compares/],
+    ['rule:>x', /only level and hour compare/],
+    ['tactic:>=discovery', /only level and hour compare/],
     ['tactic:persistance', /No tactic named persistance; tactics are: reconnaissance, resource-development, .*, impact$/],
     ['tactic:*zzz*', /No tactic matches \*zzz\*; tactics are: reconnaissance, .*, impact$/],
     ['tactic:"*access*"', /No tactic named \*access\*/],
-    ['technique:>=T1059', /only level compares/],
+    ['technique:>=T1059', /only level and hour compare/],
   ])('explains %s', (query, message) => {
     expect(() => compile(parse(query), schema)).toThrowError(message);
   });
@@ -227,7 +227,7 @@ describe('rulekey', () => {
   });
 
   it('refuses a level comparison', () => {
-    expect(() => compile(parse('rulekey:>x'), schema)).toThrowError(/only level compares/);
+    expect(() => compile(parse('rulekey:>x'), schema)).toThrowError(/only level and hour compare/);
   });
 });
 
@@ -235,5 +235,27 @@ describe('an unclosed quote', () => {
   it('explains how to end a value with a backslash', () => {
     expect(() => tokenize('Image:"C:\\dir\\"')).toThrowError(/write \\\\ to end a value with a backslash/);
     expect(() => tokenize('Image:"abc')).toThrowError(/^This quote is never closed$/);
+  });
+});
+
+describe('weekday and hour', () => {
+  it('select by UTC weekday and hour, and keep events without a time out of a match', async () => {
+    // 2021-06-03 is a Thursday; every timed fixture event is on it.
+    expect(await db.uids(compile(parse('weekday:thu'), schema))).toEqual([1, 2, 3, 4294967297, 4294967299]);
+    expect(await db.uids(compile(parse('weekday:4'), schema))).toEqual([1, 2, 3, 4294967297, 4294967299]);
+    expect(await db.uids(compile(parse('weekday:monday'), schema))).toEqual([]);
+    expect(await db.uids(compile(parse('hour:>=7'), schema))).toEqual([4294967297, 4294967299]);
+    expect(await db.uids(compile(parse('hour:6'), schema))).toEqual([1, 2, 3]);
+  });
+
+  it('keeps events without a time when negated, like every field', async () => {
+    expect(await db.uids(compile(parse('-hour:6'), schema))).toEqual([4294967297, 4294967298, 4294967299]);
+  });
+
+  it('refuses what is not a weekday or an hour', () => {
+    expect(() => compile(parse('weekday:funday'), schema)).toThrow(/monday to sunday/);
+    expect(() => compile(parse('weekday:>=1'), schema)).toThrow(/matches exactly/);
+    expect(() => compile(parse('hour:24'), schema)).toThrow(/0 to 23/);
+    expect(() => compile(parse('hour:x'), schema)).toThrow(/0 to 23/);
   });
 });

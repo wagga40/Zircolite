@@ -49,7 +49,7 @@ function term(t: Term, schema: Schema, options: CompileOptions): string {
 }
 
 function exactOnly(t: Term): void {
-  if (t.op !== '=') throw new SearchError(`${t.field}: matches exactly; only level compares with ${t.op}`, t.start, t.end);
+  if (t.op !== '=') throw new SearchError(`${t.field}: matches exactly; only level and hour compare with ${t.op}`, t.start, t.end);
 }
 
 function pattern(t: Term, contains: boolean): string {
@@ -116,6 +116,15 @@ function anyField(names: readonly string[], label: string) {
   };
 }
 
+const WEEKDAY_NAMES = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];
+
+function weekdayNumber(value: string): number | null {
+  const text = value.trim().toLowerCase();
+  if (/^[1-7]$/.test(text)) return Number(text);
+  const i = WEEKDAY_NAMES.findIndex((name) => name === text || name.slice(0, 3) === text);
+  return i < 0 ? null : i + 1;
+}
+
 const SHORTCUT_COMPILERS: Record<string, (t: Term, schema: Schema) => string> = {
   rule: (t) => {
     exactOnly(t);
@@ -136,6 +145,16 @@ const SHORTCUT_COMPILERS: Record<string, (t: Term, schema: Schema) => string> = 
     const names = tacticNames(t, schema.tactics);
     const test = names.length === 1 ? `list_contains(r.tactics, ${str(names[0])})` : `list_has_any(r.tactics, [${names.map(str).join(', ')}])`;
     return `_zl_uid IN (${HIT_RULES} WHERE ${test})`;
+  },
+  weekday: (t) => {
+    exactOnly(t);
+    const day = weekdayNumber(t.value);
+    if (day === null) throw new SearchError('weekday is monday to sunday, mon to sun, or 1 (Monday) to 7 (Sunday)', t.start, t.end);
+    return `isodow(_zl_time) = ${day}`;
+  },
+  hour: (t) => {
+    if (!/^\d{1,2}$/.test(t.value) || Number(t.value) > 23) throw new SearchError('hour is a whole hour from 0 to 23, in UTC', t.start, t.end);
+    return `hour(_zl_time) ${t.op} ${Number(t.value)}`;
   },
   technique: (t) => {
     exactOnly(t);

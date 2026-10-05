@@ -14,6 +14,8 @@ export const SHORTCUTS: readonly Shortcut[] = [
   { name: 'level', description: 'Events whose highest detection has this level. >=, >, <= and < compare levels.', example: 'level:>=high' },
   { name: 'tactic', description: 'Events detected under an ATT&CK tactic, named as in privilege-escalation or "Privilege Escalation". * matches any characters.', example: 'tactic:persistence' },
   { name: 'technique', description: 'Events detected under an ATT&CK technique, sub-techniques included.', example: 'technique:T1059' },
+  { name: 'weekday', description: 'Events on a weekday, in UTC: monday or mon, or 1 (Monday) to 7 (Sunday).', example: 'weekday:sat' },
+  { name: 'hour', description: 'Events in an hour of the day, in UTC, 0 to 23. >=, >, <= and < compare hours.', example: 'hour:>=22' },
   { name: 'host', description: 'Events from a host, whichever field holds its name.', example: 'host:DC01', fields: ['Computer', 'ComputerName', 'Hostname', 'host'] },
   { name: 'user', description: 'Events naming an account, whichever field holds it.', example: 'user:administrator', fields: ['TargetUserName', 'SubjectUserName', 'User', 'UserName', 'AccountName'] },
 ];

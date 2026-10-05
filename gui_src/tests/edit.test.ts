@@ -62,7 +62,7 @@ describe('completion', () => {
   it('completes field names and shortcuts', () => {
     expect(completionAt('Comp', 4)).toEqual({ kind: 'field', prefix: 'Comp', start: 0, end: 4 });
     expect(fieldSuggestions('comp', schema)).toEqual(['Computer']);
-    expect(fieldSuggestions('ho', schema)).toEqual(['host']);
+    expect(fieldSuggestions('ho', schema)).toEqual(['hour', 'host']);
   });
 
   it('completes values after a field', () => {
