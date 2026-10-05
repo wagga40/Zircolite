@@ -174,3 +174,20 @@ describe('lane names inside a scope', () => {
     expect(c.cancels()).toBe(1);
   });
 });
+
+describe('named and unnamed lanes of one scope', () => {
+  it('a lane named like an unnamed one is cancelled on its own', async () => {
+    const { db, c } = await heldDb();
+    const scope = db.scope('v');
+    const running = scope.rows('hold', { lane: 'hold' });
+    await tick();
+    const named = scope.rows('N', { lane: '#1' });
+    const unnamed = scope.rows('U');
+    scope.cancel('#1');
+    await expect(named).rejects.toSatisfy(isSuperseded);
+    await c.finish();
+    await running;
+    await c.finish([{ n: 2 }]);
+    expect(await unnamed).toEqual([{ n: 2 }]);
+  });
+});

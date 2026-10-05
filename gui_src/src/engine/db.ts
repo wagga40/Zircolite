@@ -26,8 +26,9 @@ export interface ScopedDb extends Db {
 }
 
 // A name holding the separator would put one scope's lanes, or one lane, under another scope's prefix.
+// Encoding the # of the unnamed lanes (`prefix#n`) also keeps a named lane apart from them.
 function segment(name: string): string {
-  return name.replace(/[%:]/g, (c) => encodeURIComponent(c));
+  return name.replace(/[%:#]/g, (c) => encodeURIComponent(c));
 }
 
 function over(scheduler: QueryScheduler, register: Db['register'], prefix: string, alive: () => boolean): ScopedDb {

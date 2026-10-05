@@ -337,3 +337,23 @@ describe('an index that cannot be read', () => {
     expect(failures).toEqual([]);
   });
 });
+
+describe('guards after a cancel', () => {
+  it('looks up no slice bounds once the query is given up', async () => {
+    const { matches, sent } = matcher();
+    await expect(matches.prepare(`SELECT 1 WHERE ${predicate}`, stopWhen(() => true))).rejects.toThrow('superseded');
+    expect(sent).toEqual([]);
+  });
+
+  it('drops no table once the query is given up, and the next eviction drops them', async () => {
+    const { matches, sent } = matcher();
+    const like = (word: string) => textPredicate(`lower('%${word}%')`);
+    await matches.prepare(['a', 'b', 'c', 'd'].map(like).join(' AND '), never);
+    let cancelled = true;
+    await expect(matches.prepare(like('e'), stopWhen(() => cancelled))).rejects.toThrow('superseded');
+    expect(sent.some((sql) => sql.startsWith('DROP TABLE'))).toBe(false);
+    cancelled = false;
+    await matches.prepare(like('f'), never);
+    expect(sent.filter((sql) => sql.startsWith('DROP TABLE'))).toEqual(['DROP TABLE IF EXISTS _zl_tm_1', 'DROP TABLE IF EXISTS _zl_tm_2']);
+  });
+});
