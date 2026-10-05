@@ -97,7 +97,10 @@ export function buildForest(processes: Process[]): Process[] {
   for (const p of all) {
     if (!p.host || !p.pid || p.t === null) continue;
     const key = `${p.host.toLowerCase()}|${p.pid}`;
-    byPid.set(key, [...(byPid.get(key) ?? []), p]);
+    const starts = byPid.get(key);
+    // `all` is in start order, so each list is too.
+    if (starts) starts.push(p);
+    else byPid.set(key, [p]);
   }
   const above = (candidate: Process, p: Process) => {
     for (let a: Process | null = candidate; a; a = a.parent) if (a === p) return true;
@@ -108,7 +111,15 @@ export function buildForest(processes: Process[]): Process[] {
     if (p.parentGuid) parent = byGuid.get(p.parentGuid);
     else if (p.host && p.ppid && p.t !== null) {
       const starts = byPid.get(`${p.host.toLowerCase()}|${p.ppid}`) ?? [];
-      parent = [...starts].reverse().find((s) => s !== p && (s.t as number) <= (p.t as number));
+      // Binary search: a PID reused thousands of times must not cost a scan per child.
+      let lo = 0;
+      let hi = starts.length;
+      while (lo < hi) {
+        const mid = (lo + hi) >> 1;
+        if ((starts[mid].t as number) <= (p.t as number)) lo = mid + 1;
+        else hi = mid;
+      }
+      for (let i = lo - 1; i >= 0 && !parent; i--) if (starts[i] !== p) parent = starts[i];
     }
     // A loop in the data would hang every walk up the tree; the later link is dropped.
     if (parent && parent !== p && !above(parent, p)) {
@@ -163,4 +174,14 @@ export function withChildren(roots: Process[]): number[] {
 
 export function basename(path: string | null): string {
   return path ? (path.split(/[\\/]/).pop() ?? '') : '';
+}
+
+/**
+ * The row to keep active once `expanded` applies: the process itself while
+ * every ancestor is open, else the highest closed ancestor, which is still shown.
+ */
+export function visibleAncestor(process: Process, expanded: ReadonlySet<number>): Process {
+  let shown = process;
+  for (let a = process.parent; a; a = a.parent) if (!expanded.has(a.uid)) shown = a;
+  return shown;
 }

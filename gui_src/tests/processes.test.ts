@@ -2,7 +2,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { type Field, Schema } from '../src/engine/schema';
 import { ancestorsSql, creationPredicate, processCountSql, processRowsSql } from '../src/processes/processes';
 import {
-  basename, buildForest, pidText, type Process, type RawProcess, toProcess, visibleRows,
+  basename, buildForest, pidText, type Process, type RawProcess, toProcess, visibleAncestor, visibleRows,
 } from '../src/processes/tree';
 import { FIELDS, type Fixture, openFixture, TACTICS } from './fixture';
 
@@ -76,6 +76,26 @@ describe('the forest', () => {
     const rows = visibleRows(roots, new Set([root.uid]));
     expect(rows.map((r) => [r.depth, r.posinset, r.setsize])).toEqual([[0, 1, 1], [1, 1, 2], [1, 2, 2]]);
     expect(rows[0]).toMatchObject({ expandable: true, expanded: true });
+  });
+
+  it('links children of a PID started thousands of times without a scan each', () => {
+    const starts = Array.from({ length: 5000 }, (_, i) => proc({ pid: '500', t: i * 10 }));
+    const children = Array.from({ length: 5000 }, (_, i) => proc({ ppid: '500', t: i * 10 + 5 }));
+    const began = performance.now();
+    buildForest([...children, ...starts]);
+    expect(performance.now() - began).toBeLessThan(200);
+    expect(children[2500].parent).toBe(starts[2500]);
+    expect(children[0].parent).toBe(starts[0]);
+  });
+
+  it('moves an active row hidden by a collapse to its highest closed ancestor', () => {
+    const root = proc({ guid: '{r}', t: 0 });
+    const mid = proc({ guid: '{m}', parentGuid: '{r}', t: 1 });
+    const leaf = proc({ parentGuid: '{m}', t: 2 });
+    buildForest([root, mid, leaf]);
+    expect(visibleAncestor(leaf, new Set([root.uid, mid.uid]))).toBe(leaf);
+    expect(visibleAncestor(leaf, new Set([root.uid]))).toBe(mid);
+    expect(visibleAncestor(leaf, new Set())).toBe(root);
   });
 
   it('names an executable by its last path part, either slash', () => {
