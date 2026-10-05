@@ -4,12 +4,16 @@
   import type { Schema } from '../engine/schema';
   import type { QueryState } from '../state/query.svelte';
   import { view } from '../state/view.svelte';
+  import { ownScope } from '../ui/scope';
   import { shownColumns } from './columns';
   import FieldSidebar from './FieldSidebar.svelte';
   import ResultTable from './ResultTable.svelte';
   import Strip from './Strip.svelte';
 
-  let { db, schema, manifest, query }: { db: Db; schema: Schema; manifest: Manifest; query: QueryState } = $props();
+  let { db: page, schema, manifest, query }: { db: Db; schema: Schema; manifest: Manifest; query: QueryState } = $props();
+  // The view's scope lives as long as the view, on the page's one Db.
+  // svelte-ignore state_referenced_locally
+  const db = ownScope(page, 'explore');
 
   const columns = $derived(shownColumns(view.cols, schema));
 </script>

@@ -6,13 +6,17 @@
   import type { QueryState } from '../state/query.svelte';
   import { run, runAgain } from '../state/run.svelte';
   import { formatCount } from '../ui/format';
+  import { ownScope } from '../ui/scope';
   import RuleItem from './RuleItem.svelte';
   import {
     groupRules, type KeyRow, keyRowsSql, levelLabel, type RuleGroup, type RuleRow, ruleRowsSql, type SectionRow,
     sectionRowsSql, sections, totalSql,
   } from './rules';
 
-  let { db, schema, manifest, query }: { db: Db; schema: Schema; manifest: Manifest; query: QueryState } = $props();
+  let { db: page, schema, manifest, query }: { db: Db; schema: Schema; manifest: Manifest; query: QueryState } = $props();
+  // The view's scope lives as long as the view, on the page's one Db.
+  // svelte-ignore state_referenced_locally
+  const db = ownScope(page, 'detections');
 
   interface Loaded {
     groups: RuleGroup[];
@@ -38,10 +42,10 @@
     stopped = false;
     void (async () => {
       try {
-        const rows = await db.rows<RuleRow>(ruleRowsSql(where), { lane: 'detections' });
-        const keys = await db.rows<KeyRow>(keyRowsSql(where), { lane: 'detections' });
-        const sectionRows = await db.rows<SectionRow>(sectionRowsSql(where), { lane: 'detections' });
-        const [total] = await db.rows<{ events: number }>(totalSql(where), { lane: 'detections' });
+        const rows = await db.rows<RuleRow>(ruleRowsSql(where), { lane: 'counts' });
+        const keys = await db.rows<KeyRow>(keyRowsSql(where), { lane: 'counts' });
+        const sectionRows = await db.rows<SectionRow>(sectionRowsSql(where), { lane: 'counts' });
+        const [total] = await db.rows<{ events: number }>(totalSql(where), { lane: 'counts' });
         if (mine !== ticket) return;
         loaded = { groups: groupRules(rows, keys), sectionRows, events: total?.events ?? 0 };
         pending = false;

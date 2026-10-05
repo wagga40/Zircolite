@@ -13,12 +13,16 @@
   import { drag } from '../ui/drag';
   import { formatCount, isoTime, levelName } from '../ui/format';
   import { pageTopLayer } from '../ui/layers';
+  import { ownScope } from '../ui/scope';
   import {
     bucketMs, EXTENT_SQL, formatTick, height, hit, LANE_GAP, LANE_H, laneLabel, lanes, type Mark, marksSql, padLeft,
     PAD_R, PAD_T, pan, type Placed, place, showFilter, type Span, ticks, zoomAt,
   } from './timeline';
 
-  let { db, schema, manifest, query }: { db: Db; schema: Schema; manifest: Manifest; query: QueryState } = $props();
+  let { db: page, schema, manifest, query }: { db: Db; schema: Schema; manifest: Manifest; query: QueryState } = $props();
+  // The view's scope lives as long as the view, on the page's one Db.
+  // svelte-ignore state_referenced_locally
+  const db = ownScope(page, 'timeline');
 
   const laneList = $derived(lanes(manifest.tactics));
   const canvasHeight = $derived(height(laneList.length));
@@ -73,7 +77,7 @@
     void run.generation;
     const mine = ++extentTicket;
     stopped = false;
-    db.rows<{ lo: number | null; hi: number | null }>(EXTENT_SQL, { lane: 'timeline-extent' }).then(
+    db.rows<{ lo: number | null; hi: number | null }>(EXTENT_SQL, { lane: 'extent' }).then(
       (rows) => {
         if (mine !== extentTicket) return;
         const row = rows[0];
@@ -156,7 +160,7 @@
       failure = message(error);
       return;
     }
-    db.rows<Mark>(sql, { lane: 'timeline' }).then(
+    db.rows<Mark>(sql, { lane: 'marks' }).then(
       (rows) => {
         if (mine !== ticket) return;
         marks = { rows, from: Math.floor(frame.from), bucket };

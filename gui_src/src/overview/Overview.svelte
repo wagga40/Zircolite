@@ -11,11 +11,15 @@
   import { run, runAgain } from '../state/run.svelte';
   import { view } from '../state/view.svelte';
   import { formatCount } from '../ui/format';
+  import { ownScope } from '../ui/scope';
   import {
     entityField, type TacticCell, tacticCells, tacticsSql, type Tile, tileEventsSql, tileRulesSql, tiles, topRulesSql,
   } from './overview';
 
-  let { db, schema, manifest, query }: { db: Db; schema: Schema; manifest: Manifest; query: QueryState } = $props();
+  let { db: page, schema, manifest, query }: { db: Db; schema: Schema; manifest: Manifest; query: QueryState } = $props();
+  // The view's scope lives as long as the view, on the page's one Db.
+  // svelte-ignore state_referenced_locally
+  const db = ownScope(page, 'overview');
 
   interface TopRule { key: string; title: string; rank: number; events: number }
   interface TopValue { v: string; n: number; total: number }
@@ -63,15 +67,15 @@
     const hostField = host;
     const userField = user;
     load('tiles', () => tileSlot, (s) => (tileSlot = s), async () => {
-      const eventRows = await db.rows<{ rank: number; events: number }>(tileEventsSql(where), { lane: 'overview-tiles' });
-      const ruleRows = await db.rows<{ rank: number; rules: number }>(tileRulesSql(where), { lane: 'overview-tiles' });
+      const eventRows = await db.rows<{ rank: number; events: number }>(tileEventsSql(where), { lane: 'tiles' });
+      const ruleRows = await db.rows<{ rank: number; rules: number }>(tileRulesSql(where), { lane: 'tiles' });
       return tiles(eventRows, ruleRows);
     });
     load('tactics', () => tacticSlot, (s) => (tacticSlot = s), async () =>
-      tacticCells(manifest.tactics, await db.rows<{ tactic: string; events: number }>(tacticsSql(where), { lane: 'overview-tactics' })));
-    load('rules', () => ruleSlot, (s) => (ruleSlot = s), () => db.rows<TopRule>(topRulesSql(where), { lane: 'overview-rules' }));
+      tacticCells(manifest.tactics, await db.rows<{ tactic: string; events: number }>(tacticsSql(where), { lane: 'tactics' })));
+    load('rules', () => ruleSlot, (s) => (ruleSlot = s), () => db.rows<TopRule>(topRulesSql(where), { lane: 'rules' }));
     const top = (field: Field | undefined, kind: string): Promise<TopValue[]> =>
-      field ? db.rows<TopValue>(topValuesSql(field, where, 8), { lane: `overview-top:${kind}` }) : Promise.resolve([]);
+      field ? db.rows<TopValue>(topValuesSql(field, where, 8), { lane: `top-${kind}` }) : Promise.resolve([]);
     load('hosts', () => hostSlot, (s) => (hostSlot = s), () => top(hostField, 'host'));
     load('users', () => userSlot, (s) => (userSlot = s), () => top(userField, 'user'));
   });

@@ -52,7 +52,8 @@ try {
 
   const report = {};
   const started = performance.now();
-  await page.goto(pathToFileURL(path.resolve(directory, 'index.html')).href + '#/explore');
+  const base = pathToFileURL(path.resolve(directory, 'index.html')).href;
+  await page.goto(`${base}#/explore`);
   await poll(page, async () => /ready|error/.test(await page.title()));
   report.ready_ms = Math.round(performance.now() - started);
   report.title = await page.title();
@@ -190,6 +191,13 @@ try {
     await search('');
   }
   report.stop = stopReport;
+
+  // Leaving Explore while a field scan runs, for an Overview without the search. The scan's table, strip
+  // and count each read every event (stop.wildcard.full_ms for all three); Overview must not wait for them.
+  await page.locator('#search-input').fill('Message:*c*b*a*');
+  await page.locator('#search-input').press('Enter');
+  await page.waitForTimeout(1000);
+  report.leave_search_overview_ms = await timed(() => page.goto(`${base}#/overview`), filled('#overview-tiles', 'data-events'));
   console.log(JSON.stringify(report, null, 2));
 } finally {
   await browser.close();

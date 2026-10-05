@@ -1,56 +1,7 @@
 import { tableFromArrays } from 'apache-arrow';
 import { describe, expect, it } from 'vitest';
 import { isSuperseded, plain, QueryScheduler, type Sender } from '../src/engine/queries';
-
-type Row = Record<string, unknown>;
-
-/** A connection whose queries finish when the test says so, one at a time like DuckDB-WASM's. */
-function fakeConnection() {
-  const sent: string[] = [];
-  let running: { finish(rows?: Row[]): void; fail(error: Error): void } | null = null;
-  let cancels = 0;
-  const sender: Sender = {
-    send(sql: string) {
-      sent.push(sql);
-      return new Promise((resolve, reject) => {
-        running = {
-          finish(rows = []) {
-            running = null;
-            resolve((async function* () {
-              yield { toArray: () => rows.map((row) => ({ toJSON: () => row })) };
-            })());
-          },
-          fail(error) {
-            running = null;
-            reject(error);
-          },
-        };
-      });
-    },
-    async cancelSent() {
-      cancels += 1;
-      running?.fail(new Error('query was canceled'));
-      return true;
-    },
-  };
-  const tick = () => new Promise((resolve) => setTimeout(resolve, 0));
-  return {
-    sender,
-    sent,
-    cancels: () => cancels,
-    async finish(rows?: Row[]) {
-      await tick();
-      if (!running) throw new Error('no query is running');
-      running.finish(rows);
-      await tick();
-    },
-    async fail(error: Error) {
-      await tick();
-      running?.fail(error);
-      await tick();
-    },
-  };
-}
+import { fakeConnection } from './connection';
 
 describe('QueryScheduler', () => {
   it('runs one query at a time, in order', async () => {
@@ -152,6 +103,37 @@ describe('QueryScheduler', () => {
     await c.finish([{ n: 5 }]);
     expect(await next).toEqual([{ n: 5 }]);
     expect(c.sent).toEqual(['A', 'N']);
+  });
+
+  it('never sends a query cancelled before it reached the engine', async () => {
+    const c = fakeConnection();
+    const s = new QueryScheduler(c.sender);
+    const first = s.rows('A', { lane: 'table' });
+    const second = s.rows('B', { lane: 'table' });
+    await expect(first).rejects.toSatisfy(isSuperseded);
+    await c.finish([{ n: 2 }]);
+    expect(await second).toEqual([{ n: 2 }]);
+    expect(c.sent).toEqual(['B']);
+  });
+
+  it('cancelPrefix stops the queued and running queries of the lanes under it, and only those', async () => {
+    const c = fakeConnection();
+    const s = new QueryScheduler(c.sender);
+    const running = s.rows('A', { lane: 'explore:results' });
+    const watchedRunning = expect(running).rejects.toSatisfy(isSuperseded);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    const queued = s.rows('B', { lane: 'explore:strip' });
+    const other = s.rows('C', { lane: 'overview:tiles' });
+    const lookalike = s.rows('D', { lane: 'explorer:x' });
+    s.cancelPrefix('explore:');
+    await watchedRunning;
+    await expect(queued).rejects.toSatisfy(isSuperseded);
+    expect(c.cancels()).toBe(1);
+    await c.finish([{ n: 1 }]);
+    expect(await other).toEqual([{ n: 1 }]);
+    await c.finish([{ n: 2 }]);
+    expect(await lookalike).toEqual([{ n: 2 }]);
+    expect(c.sent).toEqual(['A', 'C', 'D']);
   });
 
   it('a cancelled query that the engine still finishes is never answered with rows', async () => {

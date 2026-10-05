@@ -23,6 +23,9 @@ function readManifest() {
 }
 
 const manifest = readManifest();
+// A wildcard between letters of the text field most events have: the general matcher, on nearly every event.
+const busiest = manifest.columns.filter((column) => column.type === 'VARCHAR').sort((a, b) => b.count - a.count)[0];
+const SLOW = `"${busiest.name.replaceAll('\\', '\\\\').replaceAll('"', '\\"')}":*a*e*i*`;
 
 function reassemble(name) {
   const file = manifest.files.find((entry) => entry.name === name);
@@ -169,6 +172,19 @@ async function scenario(page, open, steps, expectedText) {
   await page.goBack();
   await poll(page, async () => page.url().includes('#/explore'), 'one Back to leave the timeline');
   steps.push('timeline draws, zooms, and keeps its zoom out of the history');
+
+  // Leaving Explore while its search runs drops that search's queries, and Overview counts without them.
+  // On a small package every query takes milliseconds, so this checks the answer, not the wait;
+  // perf times the wait on a large one.
+  await nav(page, 'Explore');
+  await reopened(page, state);
+  const input = page.locator('#search-input');
+  await input.fill(SLOW);
+  await input.press('Enter');
+  await page.goto(`${url}#/overview`);
+  const after = await poll(page, () => number(page.locator('#overview-tiles'), 'data-events'), 'the overview after leaving a search');
+  check(after === tiles, `after leaving a search on Explore, the overview tiles hold ${after} events, not ${tiles}`);
+  steps.push('leaving a search midway leaves the overview counts whole');
 
   if (manifest.totals.alerts > 0) await correlationAlerts(page, state, steps);
   else steps.push('correlation alerts skipped: this package has none');

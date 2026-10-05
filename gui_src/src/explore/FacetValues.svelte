@@ -6,9 +6,13 @@
   import { run, runAgain } from '../state/run.svelte';
   import { view } from '../state/view.svelte';
   import { formatCount } from '../ui/format';
+  import { ownScope } from '../ui/scope';
   import { topValuesSql, valueLabel } from './sidebar';
 
-  let { db, field, where, shown, ontoggle }: { db: Db; field: Field; where: string; shown: boolean; ontoggle: () => void } = $props();
+  let { db: parent, field, where, shown, ontoggle }: { db: Db; field: Field; where: string; shown: boolean; ontoggle: () => void } = $props();
+  // Collapsing the field stops its count. Each field has its own component, so its first field is its only one.
+  // svelte-ignore state_referenced_locally
+  const db = ownScope(parent, `facet-${field.key}`);
 
   interface Value {
     v: string;
@@ -31,7 +35,7 @@
     failure = null;
     stopped = false;
     pending = true;
-    db.rows<Value>(sql, { lane: `facet:${field.key}` }).then(
+    db.rows<Value>(sql, { lane: 'values' }).then(
       (result) => {
         if (mine !== ticket) return;
         rows = result;

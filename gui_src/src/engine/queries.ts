@@ -98,6 +98,11 @@ export class QueryScheduler {
     this.drop(lane === undefined ? () => true : (job) => job.lane === lane);
   }
 
+  /** Stop the queued and running queries of every lane whose name starts with the prefix. */
+  cancelPrefix(prefix: string): void {
+    this.drop((job) => job.lane !== null && job.lane.startsWith(prefix));
+  }
+
   /** The full-text index is on its way; queries that read it wait for it. */
   useTextIndex(source: TextSource): void {
     this.matches.use(source);
@@ -138,6 +143,8 @@ export class QueryScheduler {
     this.running = job;
     try {
       const sql = await this.matches.prepare(job.sql, this.stopOf(job));
+      // A cancel that came before the statement was sent had nothing in the engine to stop.
+      if (job.cancelled) throw new Superseded();
       const out = await this.collect(sql, job.rows);
       if (job.cancelled) throw new Superseded();
       if (job.cache) this.remember(job.sql, out);
