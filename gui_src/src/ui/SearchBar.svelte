@@ -10,18 +10,19 @@
   import { parse } from '../search/parse';
   import { SHORTCUTS, SYNTAX } from '../search/shortcuts';
   import { SearchError } from '../search/tokens';
+  import type { QueryState } from '../state/query.svelte';
   import { view } from '../state/view.svelte';
-  import { textIndex } from '../engine/textIndex.svelte';
-  import { slowSearchNote } from './format';
   import { pageTopLayer } from './layers';
   import { ui } from './ui.svelte';
 
-  let { db, schema, events }: { db: Db; schema: Schema; events: number } = $props();
+  let { db, schema, query }: { db: Db; schema: Schema; query: QueryState } = $props();
 
   let input: HTMLInputElement;
   let chipList = $state<HTMLUListElement>();
   let draft = $state('');
-  let error = $state<SearchError | null>(null);
+  // A draft that was submitted but does not compile; the committed search's own error comes from the query state.
+  let draftError = $state<SearchError | null>(null);
+  const error = $derived(draftError ?? query.error);
   let options = $state<string[]>([]);
   let active = $state(-1);
   let context: Completion | null = null;
@@ -30,17 +31,10 @@
   let failure = $state<{ field: string; message: string } | null>(null);
 
   const items = $derived(chips(view.q));
-  // Kept in view while the slow search is the committed one, so later waits have a reason beside them.
-  const slow = $derived.by(() => {
-    try {
-      return slowSearchNote(parse(view.q), events, textIndex.status === 'ready');
-    } catch {
-      return null;
-    }
-  });
   // The box cannot hold a line break, so such a query is shown but never edited through it.
   const locked = $derived(!editable(view.q));
 
+  /** Whether a draft compiles, before it becomes the committed search. */
   function check(text: string): SearchError | null {
     try {
       compile(parse(text), schema);
@@ -54,7 +48,7 @@
   // The committed query also changes from outside: the sidebar, the event view, Back.
   $effect(() => {
     draft = locked ? shownQuery(view.q) : view.q;
-    error = view.q ? check(view.q) : null;
+    draftError = null;
     // A lookup failure belongs to the text it was typed in.
     failure = null;
     if (locked) closeOptions();
@@ -87,8 +81,8 @@
     if (locked) return;
     closeOptions();
     failure = null;
-    error = check(draft);
-    if (!error) view.q = draft.trim();
+    draftError = check(draft);
+    if (!draftError) view.q = draft.trim();
   }
 
   function suggest(): void {
@@ -136,7 +130,7 @@
     draft = draft.slice(0, context.start) + insert + draft.slice(context.end);
     const caret = context.start + insert.length;
     closeOptions();
-    error = null;
+    draftError = null;
     queueMicrotask(() => {
       input.focus();
       input.setSelectionRange(caret, caret);
@@ -172,7 +166,7 @@
         event.stopPropagation();
       } else if (draft !== view.q) {
         draft = view.q;
-        error = null;
+        draftError = null;
         event.stopPropagation();
       } else if (pageTopLayer() === 'help') {
         ui.help = false;
@@ -229,8 +223,8 @@
       <button type="button" onclick={() => (view.q = '')}>Clear search</button>
     </p>
   {/if}
-  {#if slow && !error}
-    <p class="slow">{slow}</p>
+  {#if query.slow && !error}
+    <p class="slow">{query.slow}</p>
   {/if}
   {#if error}
     <p id="search-error" class="error" role="alert">{error.message} (at character {error.start + 1}).</p>

@@ -28,6 +28,16 @@ describe('QueryState', () => {
     expect(query.where).toBe('(FALSE)');
   });
 
+  it('says why the committed search does not compile, for the search bar to show', () => {
+    const query = new QueryState(schema, 6);
+    expect(query.error).toBeNull();
+    view.q = 'Comptuer:x';
+    expect(query.error?.message).toContain('No field named Comptuer');
+    expect(query.error?.start).toBe(0);
+    view.q = 'Computer:x';
+    expect(query.error).toBeNull();
+  });
+
   it('puts bare words on the index while it loads and once it is ready, and back on the scan when it fails', () => {
     const query = new QueryState(schema, 6, true);
     view.q = 'powershell';

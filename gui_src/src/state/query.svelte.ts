@@ -18,16 +18,19 @@ export class QueryState {
 
   // A query from a bookmark has not been validated: an invalid one shows its
   // error in the search bar and matches nothing, never everything.
-  compiled = $derived.by((): { tree: Node | null; sql: string | null } => {
-    if (!view.q) return { tree: null, sql: null };
+  compiled = $derived.by((): { tree: Node | null; sql: string | null; error: SearchError | null } => {
+    if (!view.q) return { tree: null, sql: null, error: null };
     try {
       const tree = parse(view.q);
-      return { tree, sql: compile(tree, this.schema, { textIndex: this.onIndex }) };
+      return { tree, sql: compile(tree, this.schema, { textIndex: this.onIndex }), error: null };
     } catch (problem) {
-      if (problem instanceof SearchError) return { tree: null, sql: 'FALSE' };
+      if (problem instanceof SearchError) return { tree: null, sql: 'FALSE', error: problem };
       throw problem;
     }
   });
+
+  /** Why the committed search matches nothing, when it does not compile: the search bar shows it. */
+  error = $derived(this.compiled.error);
 
   /** Every filter: what the table, facets, Detections and Overview read. */
   where = $derived(combineWhere([this.compiled.sql, timePredicate(view.t), view.d ? DETECTIONS_PREDICATE : null]));

@@ -111,6 +111,21 @@ async function scenario(page, steps) {
   check(r.count === expected, `removing the chip lists ${r.count} events, not ${expected}`);
   steps.push('line breaks: read-only search, chip removal');
 
+  // A link's search that does not compile matches nothing and says why; a bad draft says why until Escape.
+  const searchError = page.locator('#search-error');
+  await page.goto(`${url}#/explore?q=${encodeURIComponent('Comptuer:x')}`);
+  r = await results(page, state);
+  check(r.count === 0, `a search on a field the package lacks lists ${r.count} events, not none`);
+  check(/No field named Comptuer/.test(await searchError.textContent()), 'a linked search that does not compile shows no error');
+  await search(page, state, '');
+  check((await searchError.count()) === 0, 'the error of a replaced search stayed');
+  await input.fill('EventID:<x');
+  await input.press('Enter');
+  check((await searchError.count()) === 1 && !page.url().includes('q='), 'a draft that does not compile was committed, or said nothing');
+  await input.press('Escape');
+  check((await searchError.count()) === 0 && (await input.inputValue()) === '', 'Escape kept the draft or its error');
+  steps.push('a search that does not compile says why');
+
   const detectionsOnly = page.getByRole('button', { name: 'Detections only' });
   await detectionsOnly.click();
   r = await results(page, state);

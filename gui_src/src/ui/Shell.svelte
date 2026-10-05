@@ -50,7 +50,7 @@
 
 <svelte:window {onkeydown} />
 <div class="shell">
-  <TopBar {db} {schema} {manifest} {detected} />
+  <TopBar {db} {schema} {manifest} {detected} {query} />
   <div class="frame">
     <NavRail />
     <div class="main">

@@ -2,11 +2,12 @@
   import type { Db } from '../engine/db';
   import type { Manifest } from '../engine/manifest';
   import type { Schema } from '../engine/schema';
+  import type { QueryState } from '../state/query.svelte';
   import RunDetails from './RunDetails.svelte';
   import SearchBar from './SearchBar.svelte';
   import { applyTheme, loadTheme, nextTheme, type Theme } from './theme';
 
-  let { db, schema, manifest, detected }: { db: Db; schema: Schema; manifest: Manifest; detected: number | null } = $props();
+  let { db, schema, manifest, detected, query }: { db: Db; schema: Schema; manifest: Manifest; detected: number | null; query: QueryState } = $props();
   let theme = $state<Theme>(loadTheme());
   let details: RunDetails;
   const warnings = $derived(manifest.warnings.length);
@@ -17,7 +18,7 @@
 
 <header class="top">
   <span class="brand">Zircolite</span>
-  <div class="slot"><SearchBar {db} {schema} events={manifest.totals.events} /></div>
+  <div class="slot"><SearchBar {db} {schema} {query} /></div>
   <button type="button" onclick={() => details.open()}>
     Run details{#if warnings}<span class="badge"><span class="swatch" aria-hidden="true"></span>{warnings} {warnings === 1 ? 'warning' : 'warnings'}</span>{/if}
   </button>
