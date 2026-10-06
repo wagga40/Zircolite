@@ -164,14 +164,18 @@
   {:else if tree.slot.stopped}
     <p class="note" role="status">Stopped.</p>
   {:else}
-    {#if tree.slot.data && tree.slot.data.starts > tree.slot.data.shown}
-      <p class="note">The filters keep {formatCount(tree.slot.data.starts)} process starts; the tree shows the first {formatCount(PROCESS_LIMIT)} by start time. Narrow the search or the time range to see the rest.</p>
-    {/if}
-    {#if tree.slot.data?.capped}
-      <p class="note">Ancestors stop at {formatCount(ANCESTOR_LIMIT)}; the nearest are shown. Narrow the search to see the rest.</p>
-    {/if}
-    {#if tree.slot.data?.context}<p class="note">Grey rows are ancestors outside the filters. A start links to the start its parent ProcessGuid names, or else to the latest earlier start of its parent PID on the same host.</p>{/if}
-    {#if !guidField}<p class="note">This package has no ProcessGuid field, so processes link by host, parent PID and start time.</p>{/if}
+    <!-- One grid row for every note, so the tree keeps the rest of the height however many there are. -->
+    <div class="notes">
+      {#if tree.slot.data && tree.slot.data.starts > tree.slot.data.shown}
+        <p class="note">The filters keep {formatCount(tree.slot.data.starts)} process starts; the tree shows the first {formatCount(PROCESS_LIMIT)} by start time. Narrow the search or the time range to see the rest.</p>
+      {/if}
+      {#if tree.slot.data?.capped}
+        <p class="note">Ancestors stop at {formatCount(ANCESTOR_LIMIT)}; the nearest are shown. Narrow the search to see the rest.</p>
+      {/if}
+      {#if tree.slot.data?.context}<p class="note">Grey rows are ancestors outside the filters. A start links to the start its parent ProcessGuid names, or else to the latest earlier start of its parent PID on the same host.</p>{/if}
+      {#if !guidField}<p class="note">This package has no ProcessGuid field, so processes link by host, parent PID and start time.</p>{/if}
+      {#if tree.slot.data && !tree.slot.pending && rows.length === 0}<p class="note">No process starts (Sysmon event 1 or Security event 4688) match the filters.</p>{/if}
+    </div>
     <!-- svelte-ignore a11y_no_noninteractive_tabindex -->
     <div id="process-tree" class="tree" role="tree" aria-label="Process starts" tabindex="0"
       aria-activedescendant={active === null ? undefined : `proc-${active}`}
@@ -200,13 +204,15 @@
             <span class="user">{row.process.user ?? ''}</span>
             <span class="host">{row.process.host ?? ''}</span>
             <span class="time">{row.process.t === null ? 'No time' : isoTime(row.process.t, false)}</span>
-            <span class="badge" title={row.process.lvl === null ? undefined : matched(row.process)} aria-label={row.process.lvl === null ? undefined : matched(row.process)}>
-              {#if row.process.lvl !== null}<i style:background={levelInk(row.process.lvl)}></i>{levelLabel(row.process.lvl)}, {formatCount(row.process.hits)}{/if}
+            <span class="badge" title={row.process.lvl === null ? undefined : matched(row.process)}>
+              {#if row.process.lvl !== null}
+                <i style:background={levelInk(row.process.lvl)}></i><span aria-hidden="true">{levelLabel(row.process.lvl)}, {formatCount(row.process.hits)}</span>
+                <span class="sr">{matched(row.process)}</span>
+              {/if}
             </span>
           </div>
         {/each}
       </div>
-      {#if tree.slot.data && rows.length === 0}<p class="note empty">No process starts (Sysmon event 1 or Security event 4688) match the filters.</p>{/if}
     </div>
   {/if}
 </main>
@@ -229,7 +235,7 @@
   .row.active { background: color-mix(in srgb, var(--signal) 14%, transparent); }
   .row.context { opacity: 0.55; }
   .name { display: flex; align-items: center; gap: 6px; min-width: 0; white-space: nowrap; overflow: hidden; }
-  .chev { flex: none; width: 16px; text-align: center; color: var(--ink-2); }
+  .chev { flex: none; display: inline-grid; place-items: center; width: 24px; height: 24px; color: var(--ink-2); cursor: pointer; }
   .image { font-family: var(--mono); }
   .by { flex: none; color: var(--ink-2); font-size: var(--t-12); }
   .cmd { font: 400 var(--t-12) / 1 var(--mono); color: var(--ink-2); overflow: hidden; text-overflow: ellipsis; }
@@ -238,7 +244,7 @@
   .time { font-family: var(--mono); white-space: nowrap; }
   .badge { display: inline-flex; align-items: center; gap: 4px; white-space: nowrap; }
   .badge i { width: 8px; height: 8px; border-radius: 1px; display: inline-block; }
-  .empty { padding: 12px; }
+  .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
   .stale { opacity: 0.5; }
   @media (max-width: 720px) {
     .processes { padding: 12px 12px 0; }

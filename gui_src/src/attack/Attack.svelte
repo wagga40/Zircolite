@@ -49,6 +49,11 @@
   const nothing = $derived(counts !== null && mode === 'detected' && columns.every((c) => c.cells.length === 0));
   const anyStopped = $derived([techniques.slot, tactics.slot, heat.slot].some((slot) => slot.stopped));
   const pad = (hour: number) => String(hour).padStart(2, '0');
+  const events = (n: number) => `${formatCount(n)} ${n === 1 ? 'event' : 'events'}`;
+  // A button's name is its text, and a bare count says nothing to a screen reader.
+  const tacticName = (column: { tactic: string; name: string }) =>
+    tactics.slot.data && !tactics.slot.pending ? `${column.name}, ${events(tactics.slot.data.get(column.tactic) ?? 0)}` : column.name;
+  const techniqueName = (cell: { id: string; name: string; events: number }) => `${cell.name}, ${cell.id}, ${events(cell.events)}`;
 
   function explore(term: string, detectionsOnly = false): void {
     view.q = appendRaw(view.q, term);
@@ -95,14 +100,14 @@
         <div class="column" role="group" aria-label={column.name}>
           <button type="button" class="tactic" data-tactic={column.tactic} disabled={tactics.slot.pending}
             data-events={tactics.slot.data && !tactics.slot.pending ? (tactics.slot.data.get(column.tactic) ?? 0) : ''}
-            title={`Events detected under ${column.name}`} onclick={() => explore(`tactic:${column.tactic}`)}>
+            title={`Events detected under ${column.name}`} aria-label={tacticName(column)} onclick={() => explore(`tactic:${column.tactic}`)}>
             <span class="name">{column.name}</span>
             <span class="n">{tactics.slot.data ? formatCount(tactics.slot.data.get(column.tactic) ?? 0) : ''}</span>
           </button>
           {#each column.cells as cell (cell.id)}
             <div class="cell" class:none={cell.events === 0} style:background={heatInk(cell.share)}>
               <button type="button" class="technique" data-technique={cell.id} data-events={techniques.slot.pending ? '' : cell.events}
-                disabled={techniques.slot.pending} onclick={() => explore(`technique:${cell.id}`)}>
+                disabled={techniques.slot.pending} aria-label={techniqueName(cell)} onclick={() => explore(`technique:${cell.id}`)}>
                 <span class="tname">{cell.name}</span>
                 <span class="id">{cell.id}</span>
                 <span class="n">{formatCount(cell.events)}</span>
@@ -116,7 +121,7 @@
                     {#each cell.subs as sub (sub.id)}
                       <li style:background={heatInk(sub.share)} class:none={sub.events === 0}>
                         <button type="button" class="technique" data-technique={sub.id} data-events={techniques.slot.pending ? '' : sub.events}
-                          disabled={techniques.slot.pending} onclick={() => explore(`technique:${sub.id}`)}>
+                          disabled={techniques.slot.pending} aria-label={techniqueName(sub)} onclick={() => explore(`technique:${sub.id}`)}>
                           <span class="tname">{sub.name}</span>
                           <span class="id">{sub.id}</span>
                           <span class="n">{formatCount(sub.events)}</span>
