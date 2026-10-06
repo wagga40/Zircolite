@@ -24,6 +24,7 @@
     "@sveltejs/vite-plugin-svelte": "7.3.1",
     "@tsconfig/svelte": "5.0.8",
     "apache-arrow": "17.0.0",
+    "fflate": "0.8.2",
     "playwright": "1.62.0",
     "svelte-check": "4.7.6",
     "typescript": "5.9.3",

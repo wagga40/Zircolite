@@ -6,7 +6,7 @@ import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import zlib from 'node:zlib';
+import { gzipSync } from 'fflate';
 
 const root = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 const out = path.resolve(root, '../gui/viewer');
@@ -64,7 +64,9 @@ function notices() {
 
 fs.copyFileSync(path.join(root, 'index.html'), path.join(out, 'index.html'));
 fs.copyFileSync(path.join(dist, 'duckdb-browser-eh.worker.js'), path.join(out, 'duckdb-browser-eh.worker.js'));
-fs.writeFileSync(path.join(out, 'duckdb-eh.wasm.gz'), zlib.gzipSync(fs.readFileSync(path.join(dist, 'duckdb-eh.wasm')), { level: 9 }));
+// fflate, not node:zlib: zlib's output differs between Node builds and CPU
+// architectures, and CI must rebuild these bytes exactly.
+fs.writeFileSync(path.join(out, 'duckdb-eh.wasm.gz'), gzipSync(fs.readFileSync(path.join(dist, 'duckdb-eh.wasm')), { level: 9, mtime: 0 }));
 fs.writeFileSync(path.join(out, 'parquet.duckdb_extension.wasm'), await parquetExtension());
 fs.writeFileSync(path.join(out, 'THIRD_PARTY_NOTICES.txt'), notices());
 fs.writeFileSync(path.join(out, 'viewer.json'), JSON.stringify({
