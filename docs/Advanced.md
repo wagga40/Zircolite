@@ -710,6 +710,9 @@ the keys are `package` and `package_dir`, under `output`.
 - **A package is whole or absent.** The zip is assembled in a `tmp-zircolite-package-*`
   directory inside the destination and moved into place once complete. If it cannot be
   written, the run says why and exits with status 1, after writing its detections output.
+  That directory holds the spooled events, the Parquet files and the zip at the same time,
+  so `--package-dir` needs several times the package's size free: for 1,868,682 EVTX events
+  it peaked at 867 MB, for a 175 MB package.
 - **The command line is not recorded.** The package keeps the settings that shape what it
   shows (processing mode, time field, time bounds, `--limit`, the number of rules loaded),
   never the command line, so an archive password cannot end up in it. A `--limit`, and time
