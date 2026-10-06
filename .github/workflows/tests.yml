@@ -44,6 +44,8 @@ jobs:
   # it byte for byte, then drives a real package in three browsers.
   viewer:
     runs-on: ubuntu-latest
+    # A browser that hangs on a package must fail the run, not hold the runner.
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
       # A pinned public corpus: the e2e scripts assert 4688 events, detections,
@@ -74,7 +76,10 @@ jobs:
           npm test
           npm run build
       - name: The committed viewer is what its sources build
-        run: git diff --exit-code gui/viewer
+        # intent-to-add makes a file the build newly emits show up in the diff too.
+        run: |
+          git add --intent-to-add gui/viewer
+          git diff --exit-code gui/viewer
       - name: Build a package
         run: |
           mkdir -p "$RUNNER_TEMP/package"
