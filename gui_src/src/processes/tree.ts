@@ -5,7 +5,6 @@ export interface RawProcess {
   sysmon: boolean;
   host: string | null;
   guid: string | null;
-  pguid: string | null;
   pid: string | null;
   ppid: string | null;
   newpid: string | null;
@@ -18,6 +17,8 @@ export interface RawProcess {
   subject: string | null;
   lvl: number | null;
   hits: number;
+  /** The start that created this one, resolved in SQL over every start in the package. */
+  _zl_parent: number | null;
   context: boolean;
 }
 
@@ -26,7 +27,7 @@ export interface Process {
   t: number | null;
   host: string | null;
   guid: string | null;
-  parentGuid: string | null;
+  parentUid: number | null;
   pid: string | null;
   ppid: string | null;
   image: string | null;
@@ -49,11 +50,6 @@ export function pidText(value: string | null): string | null {
   return text;
 }
 
-function guidText(value: string | null): string | null {
-  const text = value?.trim().toLowerCase() ?? '';
-  return text || null;
-}
-
 export function toProcess(raw: RawProcess): Process {
   // Security 4688: NewProcessId is the new process, ProcessId the one that started it.
   const security = !raw.sysmon;
@@ -61,8 +57,8 @@ export function toProcess(raw: RawProcess): Process {
     uid: raw._zl_uid,
     t: raw._zl_t,
     host: raw.host,
-    guid: guidText(raw.guid),
-    parentGuid: guidText(raw.pguid),
+    guid: raw.guid?.trim().toLowerCase() || null,
+    parentUid: raw._zl_parent,
     pid: pidText(security ? raw.newpid : raw.pid),
     ppid: pidText(security ? raw.pid : raw.ppid),
     image: security ? (raw.newimage ?? raw.image) : raw.image,
@@ -80,10 +76,9 @@ export function toProcess(raw: RawProcess): Process {
 const startOrder = (a: Process, b: Process) => (a.t ?? Infinity) - (b.t ?? Infinity) || a.uid - b.uid;
 
 /**
- * Processes linked to the start that created them, in start order. A parent
- * guid links exactly, so a child that names one is never linked any other
- * way. A child without one links to the latest earlier start of its parent
- * PID on the same host: PIDs come back after a process ends.
+ * Processes linked to the start that created them, in start order. SQL
+ * resolved each parent over every start in the package, so the rows shown
+ * never decide lineage; a start whose parent is not among them is a root.
  */
 export function buildForest(processes: Process[]): Process[] {
   const all = [...new Map(processes.map((p) => [p.uid, p])).values()].sort((a, b) => startOrder(a, b) || 0);
@@ -91,41 +86,27 @@ export function buildForest(processes: Process[]): Process[] {
     p.parent = null;
     p.children = [];
   }
-  const byGuid = new Map<string, Process>();
-  for (const p of all) if (p.guid && !byGuid.has(p.guid)) byGuid.set(p.guid, p);
-  const byPid = new Map<string, Process[]>();
-  for (const p of all) {
-    if (!p.host || !p.pid || p.t === null) continue;
-    const key = `${p.host.toLowerCase()}|${p.pid}`;
-    const starts = byPid.get(key);
-    // `all` is in start order, so each list is too.
-    if (starts) starts.push(p);
-    else byPid.set(key, [p]);
-  }
-  const above = (candidate: Process, p: Process) => {
-    for (let a: Process | null = candidate; a; a = a.parent) if (a === p) return true;
-    return false;
+  const byUid = new Map(all.map((p) => [p.uid, p]));
+  // The top of each linked tree so far, path-compressed: a link that would put a start under its own
+  // descendant closes a loop in the data, which would hang every walk up the tree. Each start is linked
+  // at most once, so it is the top of its tree when its turn comes.
+  const top = new Map(all.map((p) => [p, p]));
+  const find = (p: Process): Process => {
+    let root = p;
+    while (top.get(root) !== root) root = top.get(root) as Process;
+    for (let q = p; q !== root; ) {
+      const up = top.get(q) as Process;
+      top.set(q, root);
+      q = up;
+    }
+    return root;
   };
   for (const p of all) {
-    let parent: Process | undefined;
-    if (p.parentGuid) parent = byGuid.get(p.parentGuid);
-    else if (p.host && p.ppid && p.t !== null) {
-      const starts = byPid.get(`${p.host.toLowerCase()}|${p.ppid}`) ?? [];
-      // Binary search: a PID reused thousands of times must not cost a scan per child.
-      let lo = 0;
-      let hi = starts.length;
-      while (lo < hi) {
-        const mid = (lo + hi) >> 1;
-        if ((starts[mid].t as number) <= (p.t as number)) lo = mid + 1;
-        else hi = mid;
-      }
-      for (let i = lo - 1; i >= 0 && !parent; i--) if (starts[i] !== p) parent = starts[i];
-    }
-    // A loop in the data would hang every walk up the tree; the later link is dropped.
-    if (parent && parent !== p && !above(parent, p)) {
-      p.parent = parent;
-      parent.children.push(p);
-    }
+    const parent = p.parentUid === null ? undefined : byUid.get(p.parentUid);
+    if (!parent || find(parent) === p) continue;
+    p.parent = parent;
+    parent.children.push(p);
+    top.set(p, find(parent));
   }
   return all.filter((p) => p.parent === null);
 }

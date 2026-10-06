@@ -134,6 +134,8 @@
     view.route = 'explore';
   }
 
+  // A root's parent is not in the tree: never started in these logs, or past the ancestor limit.
+  const startedBy = (p: Process) => basename(p.parentImage) || (p.ppid === null ? '' : `PID ${p.ppid}`);
   const matched = (p: Process) => `${p.lvl === null ? '' : `${levelLabel(p.lvl)}, `}${formatCount(p.hits)} ${p.hits === 1 ? 'rule' : 'rules'} matched`;
 </script>
 
@@ -165,7 +167,7 @@
     {#if tree.slot.data && tree.slot.data.starts > tree.slot.data.shown}
       <p class="note">The filters keep {formatCount(tree.slot.data.starts)} process starts; the tree shows the first {formatCount(PROCESS_LIMIT)} by start time. Narrow the search or the time range to see the rest.</p>
     {/if}
-    {#if tree.slot.data?.context}<p class="note">Grey rows are ancestors outside the filters, found by ProcessGuid.</p>{/if}
+    {#if tree.slot.data?.context}<p class="note">Grey rows are ancestors outside the filters. A start links to the start its parent ProcessGuid names, or else to the latest earlier start of its parent PID on the same host.</p>{/if}
     {#if !guidField}<p class="note">This package has no ProcessGuid field, so processes link by host, parent PID and start time.</p>{/if}
     <!-- svelte-ignore a11y_no_noninteractive_tabindex -->
     <div id="process-tree" class="tree" role="tree" aria-label="Process starts" tabindex="0"
@@ -188,6 +190,7 @@
               <!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -->
               <span class="chev" aria-hidden="true" onclick={(e) => { e.stopPropagation(); active = row.process.uid; list?.focus(); if (row.expandable) setExpanded(row.process.uid, !row.expanded); }}>{row.expandable ? (row.expanded ? '▾' : '▸') : ''}</span>
               <span class="image">{basename(row.process.image) || 'unknown image'}</span>
+              {#if row.depth === 0 && startedBy(row.process)}<span class="by">started by {startedBy(row.process)}</span>{/if}
               {#if row.process.commandLine}<span class="cmd">{row.process.commandLine}</span>{/if}
             </span>
             <span class="pid">{row.process.pid ?? ''}</span>
@@ -225,6 +228,7 @@
   .name { display: flex; align-items: center; gap: 6px; min-width: 0; white-space: nowrap; overflow: hidden; }
   .chev { flex: none; width: 16px; text-align: center; color: var(--ink-2); }
   .image { font-family: var(--mono); }
+  .by { flex: none; color: var(--ink-2); font-size: var(--t-12); }
   .cmd { font: 400 var(--t-12) / 1 var(--mono); color: var(--ink-2); overflow: hidden; text-overflow: ellipsis; }
   .pid { font-variant-numeric: tabular-nums; text-align: right; }
   .user, .host { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
