@@ -86,8 +86,11 @@
   <section id="attack-matrix" class="matrix" aria-label="ATT&CK matrix" class:stale={(techniques.slot.pending || tactics.slot.pending) && counts !== null}
     aria-busy={techniques.slot.pending || tactics.slot.pending}
     data-techniques={techniques.slot.pending || detected === null ? '' : detected}>
-    {#if nothing}<p class="empty">No technique is detected under these filters.</p>{/if}
-    <div class="columns" class:hidden={nothing}>
+    <!-- Tactic counts can come from rules that name no technique, so the tactic headers stay. -->
+    {#if nothing}
+      <p class="empty">No technique ATT&CK {CATALOG.version} lists is detected{filtered ? ' under these filters' : ''}.{others.length ? ' Tags it does not list, and their events, are in the table below.' : ''}</p>
+    {/if}
+    <div class="columns">
       {#each columns as column (column.tactic)}
         <div class="column" role="group" aria-label={column.name}>
           <button type="button" class="tactic" data-tactic={column.tactic} data-events={tactics.slot.data ? (tactics.slot.data.get(column.tactic) ?? 0) : ''}
@@ -221,7 +224,6 @@
   .heatmap th { position: relative; font: 400 11px / 1.2 var(--mono); color: var(--ink-2); padding: 0 4px; text-align: left; white-space: nowrap; }
   .heatmap td { padding: 0; }
   .hc { display: block; width: 24px; height: 24px; padding: 0; border: 1px solid var(--rule); border-radius: 2px; background: var(--panel); cursor: pointer; }
-  .hidden { display: none; }
   .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
   @media (max-width: 720px) { .matrix { max-height: 55vh; } }
   .hc:disabled { cursor: default; }
