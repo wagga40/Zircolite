@@ -542,10 +542,12 @@ def make_checkout(root, executable="Zircolite"):
         f'[project]\nname = "Zircolite"\nversion = "{FAKE_VERSION}"\ndependencies = [\n'
         '    "rich>=14",\n]\n\n[tool.other]\nversion = "9.9.9"\n', encoding="utf-8")
     for directory, name in [("config", "config.yaml"), ("rules", "README.md"),
-                            ("templates", "exportForSplunk.tmpl"), ("gui", "zircogui.zip"),
+                            ("templates", "exportForSplunk.tmpl"), ("gui/viewer", "index.html"),
                             ("docs", "Usage.md"), ("pics", "Zircolite.png")]:
-        (root / directory).mkdir()
+        (root / directory).mkdir(parents=True)
         (root / directory / name).write_text(directory, encoding="utf-8")
+    for name in ("viewer.json", "THIRD_PARTY_NOTICES.txt"):
+        (root / "gui" / "viewer" / name).write_text(name, encoding="utf-8")
     publish_rules(root / "rules", {"sigmahq": ("DRL-1.1", {
         "rules_linux.json": "[]", "licenses/sigmahq.txt": "SigmaHQ rules: DRL 1.1 (test copy)"})})
     (root / "config" / "__pycache__").mkdir()
@@ -604,7 +606,8 @@ class TestPackageArchive:
         for expected in ["Zircolite", "_internal/base_library.zip", "config/config.yaml",
                          "rules/rules_linux.json", "rules/release-manifest.json",
                          "rules/licenses/sigmahq.txt", "templates/exportForSplunk.tmpl",
-                         "gui/zircogui.zip", "docs/Usage.md", "pics/Zircolite.png",
+                         "gui/viewer/index.html", "gui/viewer/viewer.json",
+                         "gui/viewer/THIRD_PARTY_NOTICES.txt", "docs/Usage.md", "pics/Zircolite.png",
                          "README.md", "LICENSE", "THIRD_PARTY_LICENSES"]:
             assert f"{top}/{expected}" in names, expected
         assert not [name for name in names if "__pycache__" in name]

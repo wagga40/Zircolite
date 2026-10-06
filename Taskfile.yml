@@ -75,7 +75,17 @@ tasks:
       - rm -f zircolite.log
       - rm -f fields.json
       - rm -f zircolite.tar
+      - rm -rf zircolite-package-* tmp-zircolite-package-*
       - rm -f zircolite-package-*.zip
+
+  gui-build:
+    desc: Build the package viewer from gui_src into gui/viewer (commit the result)
+    dir: gui_src
+    cmds:
+      - npm ci
+      - npm run check
+      - npm test
+      - npm run build
 
   save:
     desc: Save the Docker image to an archive

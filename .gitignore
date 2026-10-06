@@ -28,6 +28,9 @@ Temporary Items
 TODO
 detected_events.json
 zircolite-package-*.zip
+# Package viewer output; never commit event data.
+zircolite-package-*
+tmp-zircolite-package-*
 results
 tmp
 *.log

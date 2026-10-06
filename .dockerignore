@@ -20,7 +20,7 @@ htmlcov
 build
 dist
 *.egg-info
-gui_dev
+gui_src
 helpers
 tools
 *.so
@@ -53,4 +53,5 @@ fields.json
 tmp-*
 zircolite.tar
 zircolite-package-*
+tmp-zircolite-package-*
 *.evtx
