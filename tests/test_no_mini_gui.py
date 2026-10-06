@@ -3,8 +3,6 @@
 import re
 from pathlib import Path
 
-import pytest
-
 ROOT = Path(__file__).parent.parent
 
 # What ships or documents the product. The viewer's own sources and build are new and cannot mention the
@@ -23,7 +21,6 @@ def shipped_files():
             yield from (p for p in path.rglob("*") if p.is_file() and "superpowers" not in p.parts and p.suffix not in {".png", ".jpg", ".webp", ".gz", ".wasm", ".zip"})
 
 
-@pytest.mark.xfail(strict=True, reason="README, docs and CI move in Tasks 3–4")
 def test_nothing_shipped_mentions_the_mini_gui():
     found = []
     for path in shipped_files():

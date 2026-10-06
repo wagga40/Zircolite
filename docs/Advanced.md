@@ -530,6 +530,8 @@ Events dropped by `--after`/`--before` are counted separately, on their own `Tim
 row, because the two filters act at different stages.
 
 Disable the whole mechanism with `--no-event-filter`, or `enabled: false` in the config.
+`--package` turns it off as well, because a package holds every event of the run, and logs
+`Event filtering disabled: --package keeps every event`; see [Package viewer](#package-viewer).
 
 ## Keeping Data Used by Zircolite
 
@@ -669,14 +671,399 @@ output:
 > `exportForAttackNavigator.tmpl` and `exportForSARIF.tmpl`, become invalid when a second
 > document is concatenated onto the first.
 
-### Package viewer
+## Package viewer
 
-`--package` (`-G`) writes `zircolite-package-<RAND>.zip` to `--package-dir`, or the working
-directory. Extract it and open `index.html` in a web browser: the page runs entirely offline and
-makes no network requests. The package holds **every** ingested event, not only the matches,
-with the detections linked to them, so `--package` turns log-source event filtering off and
-the zip should be shared like the logs themselves. Chromium-based browsers and Safari are the
-fastest on large packages; Firefox works but is slower.
+A package is one zip file that holds every event Zircolite ingested during a run, not only
+the events a rule matched, together with the detections, the correlation alerts and a summary
+of the run. It opens in a web browser straight from disk: there is nothing to install and no
+server to run, and the page makes no network request, which its content security policy
+forbids. Whoever receives the zip can search the events, filter them and move between
+detections, hosts, accounts and processes offline.
+
+The viewer is tested in current versions of Chromium, Firefox and WebKit. On large packages,
+Chromium-based browsers and Safari answer faster than Firefox.
+
+![The Overview of a package](pics/viewer-overview.webp)
+
+### Making a package
+
+```shell
+python3 zircolite.py --evtx logs/ --ruleset rules/rules_windows_merged.json --package
+python3 zircolite.py --evtx logs/ --ruleset rules/rules_windows_merged.json \
+    --package --package-dir /cases/host1
+```
+
+`--package` (`-G`) writes `zircolite-package-<RAND>.zip` to the working directory, or to
+`--package-dir`, which must already exist. In a [YAML run configuration](Usage.md#yaml-configuration)
+the keys are `package` and `package_dir`, under `output`.
+
+- **Every event is kept.** [Early event filtering](#early-event-filtering) is turned off for
+  the run, and the log says so: `Event filtering disabled: --package keeps every event`.
+  The time filters (`--after`, `--before`) and the file filters still apply, and they are how
+  to make a smaller package.
+- **The package is written even when no rule matched.** The detections output and any
+  template output are written as usual beside it.
+- **Problems surface before the run.** Zircolite checks that `--package-dir` exists, that the
+  viewer in `gui/viewer/` is complete and that the installed duckdb has JSON and Parquet
+  support built in, before it reads a single log. Packages are built where logs are analysed,
+  often offline, so duckdb is never allowed to download that support.
+- **A package is whole or absent.** The zip is assembled in a `tmp-zircolite-package-*`
+  directory inside the destination and moved into place once complete. If it cannot be
+  written, the run says why and exits with status 1, after writing its detections output.
+- **The command line is not recorded.** The package keeps the settings that shape what it
+  shows (processing mode, time field, time bounds, `--limit`, the number of rules loaded),
+  never the command line, so an archive password cannot end up in it.
+
+The browser holds the events in WebAssembly memory, which stops at 4 GB. Zircolite therefore
+refuses to write a package whose events take more than 1 GiB as Parquet, with an error that
+gives their size and advises narrowing the run with `--after`/`--before` or `-s`. The
+full-text index that speeds up bare-word searches has its own 1 GiB limit: above it the
+package is written without the index, Run details lists a warning saying so, and a bare-word
+search scans every field instead, which takes longer.
+
+### Who should see a package
+
+A package holds every event of the run: account names, host names, command lines, IP
+addresses, file paths and whatever else the logs recorded. Treat it as you would the logs
+themselves. Share it only with people allowed to read them, and store it where you would store
+them. The `README.txt` inside the zip says the same.
+
+### Opening a package
+
+1. Extract the whole zip.
+2. Open `index.html` from the extracted folder in a web browser; double-clicking it usually
+   does.
+
+A browser cannot open the page from inside the zip, because the page loads the files beside
+it. If they are missing, it says to extract the whole archive.
+
+While it loads, the page shows how many events and inputs the package holds, then a progress
+bar while the data arrives and the query engine starts. Before showing anything, it checks
+that the engine holds exactly the events and rule matches the package lists; a damaged or
+partly extracted package is reported as such instead of shown incomplete, and so is data in
+a package format this viewer does not read.
+
+The top bar holds the search box, **Syntax** (the search help), **Run details** and the theme
+(Auto, Light or Dark). **Run details** shows the run summary: the events and inputs, the time
+range, the rules that matched out of those loaded, the rule matches, the events with
+detections, the correlation alerts, the processing mode, the time field, whether full-text
+search is indexed, the event filtering state, and the Zircolite version that made the package
+and when. Below come the run's warnings, such as events whose time could not be read (kept,
+but left off the timeline), inputs read only in part, inputs that failed, matches of custom
+SQL rules that name no event, and a missing full-text index. The button shows how many
+warnings there are.
+
+All times are UTC.
+
+The search, the time range and **Detections only** (events that at least one rule matched)
+apply to every view, except where a view says otherwise. They live in the page's address,
+with the current view, the table columns and the open event, so **Back** steps through an
+investigation and a bookmark reopens it. Each active filter is a chip under the search box;
+its × removes it.
+
+A search that reads every field of a large package can take a while. **Stop**, shown while
+Explore or the SQL console is busy, stops every query of the page. Each panel then says
+**Stopped**, and **Run again** runs them all again.
+
+Keys: `/` goes to the search box, `?` opens the search help, `Esc` closes what is on top,
+`j` and `k` move through the events in Explore, and `Enter` opens one.
+
+**The event drawer.** Clicking an event anywhere (a row in Explore, a mark on the timeline, a
+process, an alert's evidence) opens it in a drawer. At 1,400 px wide and above the drawer
+stands beside the view; on a narrower window it covers part of it. It lists the rules that
+matched the event, each with **Filter by this rule**, then the fields grouped as System, User,
+Process, Network, File and registry, and Other. Each value has + (filter for it), − (filter it
+out) and **Copy**. **Show JSON** and **Copy JSON** give the whole event, and **Events on
+_host_ within 5 minutes** replaces the search with that host and sets the time range to five
+minutes either side of the event.
+
+### The views
+
+The navigation rail switches between eight views.
+
+#### Overview
+
+- **Severity tiles**: the events whose highest detection is at each level, and how many rules
+  that covers. An **Unknown level** tile, in a colour of its own, appears when some events were
+  detected only by rules whose level is none of Sigma's. A tile opens Explore with
+  `level:<level>` (`level:<informational` for the unknown level).
+- **The histogram**: events above the line, detections below it, coloured by level. Drag across
+  it, or move with the arrow keys, hold Shift and press `Enter`, to select a time range: the
+  histogram zooms into it and every view follows. Clicking one bar selects its span; `Esc`
+  clears the range.
+- **ATT&CK tactics**: events with detections under each tactic. A cell opens Explore with
+  `tactic:`.
+- **Top rules**, **Top hosts** and **Top users**: the ten rules, and the eight hosts and
+  users, with the most events. The heading names the field the hosts and users come from.
+  Each entry opens Explore filtered to it.
+- **Run warnings**, and the event filtering state.
+
+#### Detections
+
+![The Detections view, dark theme](pics/viewer-detections.webp)
+
+The rules that matched, grouped by level from critical down, each with the events it matched
+under the current filters. Entries of one rule (one Sigma id, or one title when there is no
+id) are one row, counted once and placed at the highest level among them. An event matched by
+rules at several levels counts once in each level's section. **Show _N_ rules without events
+here** lists the matched rules the filters leave empty.
+
+A row opens to show the description, false positives, techniques, tags, rule id and each
+ruleset entry with its level, Sigma file and events. **Show events** opens Explore with
+`rulekey:`; **Add to search** adds the same term to the search and stays here.
+
+A correlation rule also lists its alerts, for the whole package: the filters do not apply to
+them. The first 200 are listed by time, each with its group keys, metric and event count. An
+alert opens to show its window and its evidence events (the first 500); clicking one opens it
+in the drawer.
+
+#### Explore
+
+Every event that matches the filters, in a table.
+
+- **The histogram** works as in Overview.
+- **Fields**: every field, with the share of the package's events that carry it, and a box to
+  find one by name. A field opens to show its ten most frequent values among the results, grouped
+  ignoring case, each with + and − to filter for it or leave it out, and **Show as column**.
+- **The table**: time, level (the event's highest detection) and six fields by default, or the
+  columns you chose. It is sorted by time; click the **Time (UTC)** header to reverse it.
+  Events without a time come last. Scrolling reaches every result, however many.
+- **Detections only** keeps the events at least one rule matched.
+- **Export CSV** writes the shown columns, one row per event, for up to 500,000 events, as
+  UTF-8 with a byte-order mark. A cell that starts with `=`, `+`, `-` or `@` gets a leading `'`
+  so spreadsheets read it as text. **Export JSON** writes every field of every event, one JSON
+  object per line, for up to 100,000 events. Either export stops if its text would pass
+  400 MB. An export takes the results as they were when you pressed it.
+
+#### Timeline
+
+Detections over time, one lane per ATT&CK tactic in the order of the attack, and a last lane
+for rules that name no tactic. A mark holds the events detected under one tactic within a few
+pixels of time, coloured by their highest level. `Ctrl` or `⌘` with the mouse wheel zooms,
+dragging moves; with the keyboard, the arrow keys move, `+` and `-` zoom and `0` shows
+everything. Once you stop moving, the window becomes the page's time range.
+
+Clicking a mark opens its earliest event and describes the mark. When the mark holds several
+events under a tactic, **Show these _N_ in Explore** lists exactly them. **List the marks**
+gives the same marks as text, the first 500 of them. Detections without a time cannot be
+placed; the view says how many there are.
+
+#### ATT&CK
+
+![The ATT&CK view](pics/viewer-attack.webp)
+
+The ATT&CK matrix: tactics as columns and techniques under them, shaded by events with
+detections. **Detected techniques** shows the techniques with detections, **Full matrix**
+every technique. A technique under several tactics shows the same count in each, and a
+technique counts the events of its sub-techniques, which open beneath it. A tactic or
+technique opens Explore with `tactic:` or `technique:`.
+
+Tags that the bundled catalogue does not list are not placed by guess or dropped: a table lists
+them, each with its replacement, **Retired** or **Unknown**, and its events. See
+[the ATT&CK catalogue](#the-attck-catalogue).
+
+**When detections happen (UTC)** is a weekday by hour heatmap of the events with detections.
+A cell opens Explore with `weekday:` and `hour:` for that hour, and turns on **Detections only**.
+
+#### Entities
+
+Hosts, users, IP addresses, processes, hashes and domains among the filtered events, read from
+these fields, whichever the package has as text:
+
+| Kind | Fields |
+|------|--------|
+| Hosts | `Computer`, `ComputerName`, `Hostname`, `host` |
+| Users | `TargetUserName`, `SubjectUserName`, `User`, `UserName`, `AccountName` |
+| IP addresses | `SourceIp`, `DestinationIp`, `IpAddress`, `SourceAddress`, `DestAddress`, `ClientAddress` |
+| Processes | `Image`, `NewProcessName`, `ParentImage`, `ProcessName` |
+| Hashes | `SHA256`, `SHA1`, `MD5`, `IMPHASH` |
+| Domains | `QueryName`, `DestinationHostname` |
+
+Values are grouped ignoring case, and an event counts once per value. Each row gives the events,
+the events with detections, and the first and last time seen; the table sorts by any of them.
+It shows 500 rows at most and says so; the **Filter values** box finds the others. A value
+opens Explore with the events that hold it in any of those fields.
+
+#### Processes
+
+![The Processes view, filtered to high and critical detections](pics/viewer-processes.webp)
+
+Process starts as a tree: Sysmon event 1, from Windows or Sysmon for Linux, and Security event
+4688, among the filtered events. Each row gives the image, the command line, the PID, the user,
+the host, the start time and the highest detection with the number of rules that matched.
+A process whose parent is not in the tree says what started it, by image or PID.
+
+- The tree shows the first 20,000 starts under the filters, earliest first, and says when
+  there are more.
+- The starts above them are added for context, in grey: up to 5,000 ancestors, nearest first,
+  with a note when that limit is reached. A search that keeps only `whoami.exe` still shows
+  the shell that started it.
+- A chain is followed up to 64 generations; when chains stop there, the view says how many.
+- A small tree opens whole and a large one at its roots; **Expand all** and **Collapse all**
+  change that. Arrow keys move and open, `Enter` opens the event.
+- **Events of this process** opens Explore with the process's `ProcessGuid`.
+
+How a start finds its parent is described in [how the process tree links](#how-the-process-tree-links).
+
+#### SQL
+
+A read-only console over the package's tables. `Ctrl` or `⌘` with `Enter` runs the query,
+**Tables** lists the tables and their columns, a click inserts a name, and **Export CSV**
+saves the rows shown. The console does not apply the page's filters. Its limits are in
+[the SQL console](#the-sql-console).
+
+### Search grammar
+
+The search box takes field terms, bare words and shortcuts. **Syntax** shows this help in the
+viewer, from the same tables the search uses.
+
+| Search | Meaning |
+|--------|---------|
+| `powershell` | Any field contains the word, in any case. |
+| `"net user"` | Any field contains the phrase. |
+| `EventID:4624` | A field equals a value, in any case. |
+| `Image:*\cmd.exe` | `*` matches any characters, outside quotes. |
+| `EventID:>4600` | Numeric fields compare with `>`, `>=`, `<` and `<=`. |
+| `-Channel:Security` | Leave matches out. Events without the field stay in. |
+| `a OR b` | Either term. Terms side by side must both match. |
+| `(a OR b) c` | Parentheses group terms. |
+| `"level":error` | Quote a field name to search a log field that shares a shortcut's name. |
+
+| Shortcut | Example | Matches |
+|----------|---------|---------|
+| `rule:` | `rule:*powershell*` | Events a rule matched, by title or id. `*` matches any characters. |
+| `rulekey:` | `rulekey:"Encoded PowerShell"` | Events of one rule as Detections groups them: its id, or its title when it has none. |
+| `level:` | `level:>=high` | Events whose highest detection has this level. `>=`, `>`, `<=` and `<` compare levels. |
+| `tactic:` | `tactic:persistence` | Events detected under an ATT&CK tactic, named as in `privilege-escalation` or `"Privilege Escalation"`. `*` matches any characters. |
+| `technique:` | `technique:T1059` | Events detected under an ATT&CK technique, sub-techniques included. |
+| `weekday:` | `weekday:sat` | Events on a weekday, in UTC: `monday` or `mon`, or `1` (Monday) to `7` (Sunday). |
+| `hour:` | `hour:>=22` | Events in an hour of the day, in UTC, 0 to 23. `>=`, `>`, `<=` and `<` compare hours. |
+| `host:` | `host:DC01` | Events from a host, whichever field holds its name: `Computer`, `ComputerName`, `Hostname` or `host`. |
+| `user:` | `user:administrator` | Events naming an account, whichever field holds it: `TargetUserName`, `SubjectUserName`, `User`, `UserName` or `AccountName`. |
+
+- **Field names** ignore case, and an unknown one is refused with the nearest names the
+  package has. A value may hold colons, so paths, times and IPv6 addresses need no quotes.
+- **Shortcuts win over fields of the same name.** To search a log field called `level`,
+  `rule` or `host`, quote its name: `"level":error`.
+- **Levels** run `informational`, `low`, `medium`, `high`, `critical`. Events detected only by
+  rules without a Sigma level match `level:<informational`.
+- **Tactics** must be ones the package lists; a name it does not know is refused with the
+  list. `tactic:defense-evasion` searches `stealth`.
+- **Negation is NULL-safe**: `-Channel:Security` keeps the events that have no `Channel` field
+  at all, as well as those whose channel is something else.
+- **Quotes**: inside quotes, `\"` is a quote and `\\` a backslash; any other backslash is
+  itself, so Windows paths are typed as they are. Outside quotes, `*` is a wildcard; inside,
+  it is a star.
+- **Bare words search every field.** Once the package's full-text index has loaded, in the
+  background after the page opens, they read the index; a search typed before that waits for
+  it. Without an index, or if it fails to load, a bare word scans every column of every event.
+  On a package of more than 200,000 events the search bar warns that this can take a while; a
+  field search such as `CommandLine:*mimikatz*` is much faster.
+- The search box suggests field names, and values of the field being typed.
+
+A search that does not parse is not applied: the search bar gives the reason and the
+character where the problem starts. One that reaches the page through a link and does not
+parse matches nothing, never everything.
+
+### The SQL console
+
+The SQL view runs one query at a time over five tables:
+
+| Table | One row per | Columns |
+|-------|-------------|---------|
+| `events` | event | `_zl_uid` (the event's id), `_zl_part`, `_zl_time` (the event's time as a UTC timestamp; NULL when it has none or it could not be read), `_zl_spelling`, then every field of the run |
+| `rules` | ruleset entry that matched | `rule_idx`, `key`, `id`, `title`, `level`, `level_rank`, `description`, `falsepositives`, `tags`, `tactics`, `techniques`, `sigmafile`, `result_type`, `count`, `linked`, `unlinked`, `alert_count`, `event_count` |
+| `hits` | rule and event it matched | `rule_idx`, `_zl_uid` |
+| `alerts` | correlation alert | `alert_idx`, `rule_idx`, `_zl_part`, `alert_id`, `group_keys`, `occurrence_time`, `window_start`, `window_end`, `metric_name`, `metric_value`, `event_count`, `child_alert_ids` |
+| `alert_events` | evidence event of an alert | `alert_idx`, `_zl_uid`, `ord` |
+
+Two examples, to run one at a time:
+
+```sql
+-- Hosts by events with detections
+SELECT Computer, count(*) AS events, count(h._zl_uid) AS detected
+FROM events e LEFT JOIN (SELECT DISTINCT _zl_uid FROM hits) h USING (_zl_uid)
+GROUP BY Computer ORDER BY detected DESC
+
+-- The events of rules about PowerShell, earliest first
+SELECT e._zl_time, r.title, e.Computer, e.CommandLine
+FROM hits h JOIN rules r USING (rule_idx) JOIN events e USING (_zl_uid)
+WHERE r.title ILIKE '%powershell%'
+ORDER BY e._zl_time
+```
+
+- **One query.** The text must be a single SELECT, including its `WITH`, `VALUES` and
+  FROM-first forms, or a `DESCRIBE` or `SHOW`. Anything else is refused: two statements,
+  `CREATE`, `INSERT`, `DROP`, `ATTACH`, `COPY`, `SET`, `PRAGMA`, `EXPLAIN`, and a `PIVOT`
+  without its `IN` list. A trailing semicolon is fine.
+- **Everything comes back as text**, so 64-bit integers stay exact.
+- **At most 10,000 rows are shown**; the console says when there are more, and a `WHERE` or a
+  `LIMIT` reaches the others. **Export CSV** saves the rows shown.
+- **The package's tables cannot change.** A SELECT can still call DuckDB's logging functions,
+  which change the logging of this browser session, never the tables; the console switches
+  logging back off after every query. Reloading the page restores everything.
+- The search, the time range and **Detections only** do not apply here; write them in SQL.
+  The text you type is kept while you visit other views, but not across a reload.
+
+### The ATT&CK catalogue
+
+The viewer names techniques and places them under tactics with a bundled catalogue of MITRE
+ATT&CK Enterprise, version 19.2. Sigma tags carry only IDs, and a rule lists its tactics and
+techniques separately, so the placement cannot come from the rules. MITRE's copyright notice
+and terms of use travel in every package, in `THIRD_PARTY_NOTICES.txt`.
+
+A tag the catalogue does not list as an active technique is shown apart, never dropped:
+
+- a **revoked** technique, with the technique that replaced it;
+- a **retired** one, which has no replacement;
+- an **unknown** one, which the catalogue does not name at all.
+
+To move to a newer ATT&CK release, download MITRE's Enterprise ATT&CK STIX bundle
+(`enterprise-attack-X.Y.json`) and, in `gui_src/`, run:
+
+```shell
+node scripts/attack-catalog.mjs enterprise-attack-X.Y.json
+```
+
+It writes `src/attack/catalog.json`. Then refresh `scripts/attack-terms.txt` by hand from
+MITRE's [terms of use](https://attack.mitre.org/resources/legal-and-branding/terms-of-use/):
+the build copies it into the notices. Rebuild the viewer and commit both.
+
+### How the process tree links
+
+Each process start is linked to its parent among every start in the package, not only those
+the filters keep, so a filter never changes who started what:
+
+1. **By ProcessGuid.** A start that names a `ParentProcessGuid` links to the start whose
+   `ProcessGuid` it is; a GUID logged twice names its first start. A start that names a parent
+   GUID is linked that way only: when no start carries the GUID, it is a root rather than a
+   guess.
+2. **Otherwise by PID.** The parent is the latest start of the parent PID on the same host, at
+   or before the child's start. PIDs come back after a process ends, so the latest earlier one
+   is the one that was running. The parent PID is `ParentProcessId` in Sysmon and `ProcessId`
+   in event 4688; hexadecimal PIDs are read as numbers, and hosts compare ignoring case.
+
+Ancestors outside the filters are drawn in grey. A start whose parent never started in these
+logs is a root, labelled with the parent's image or PID.
+
+### For developers
+
+- The viewer's sources are in `gui_src/`: Svelte, TypeScript and Vite over DuckDB-WASM. The
+  build in `gui/viewer/` is committed, and it is what `--package` copies into every package.
+  `task gui-build` runs `npm ci`, `npm run check`, `npm test` and `npm run build` there.
+  Commit `gui/viewer/` with any change to `gui_src/`.
+- CI rebuilds the viewer and fails when the result differs from the committed `gui/viewer/`
+  by a single byte or a new file.
+- The scripts in `gui_src/e2e/` drive an extracted package from `file://`, each taking its
+  directory: `npm run smoke -- <dir>` (it opens in Chromium, Firefox and WebKit, with the
+  events the manifest lists, no network request and no page error), `npm run e2e -- <dir>`
+  (cross-checks Explore in all three), `npm run views -- <dir>` (cross-checks every view and
+  full-text search in all three), `npm run perf -- <dir>` (times Explore in Chromium) and
+  `npm run shot -- <dir> <out.png>` (a screenshot). They need the Playwright browsers:
+  `npx playwright install chromium firefox webkit`. CI runs smoke, e2e and views on a package
+  built from EVTX-ATTACK-SAMPLES.
+- [Internals → Package pipeline](Internals.md#package-pipeline) describes how a package is
+  written and how the viewer reads it.
 
 ## Other Tools
 

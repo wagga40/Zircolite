@@ -282,22 +282,16 @@ for the setup, the caveats and how to reproduce it with `tools/tool-benchmark.py
 
 See the [documentation index](docs/README.md) for usage, configuration and internals.
 
-## Mini-GUI
+## Package viewer
 
-The Mini-GUI displays and searches results offline. Generate a package with `--package`
-and choose its output directory with `--package-dir`. See [Mini-GUI](docs/Advanced.md#mini-gui).
+`--package` writes one zip holding every event of the run, not only the matches, with the
+detections and correlation alerts linked to them. Extract it and open `index.html`: the viewer
+runs offline in a browser, with nothing to install and no network, and offers an overview,
+the detections, a searchable event table, a timeline, the ATT&CK matrix, entities, process
+trees and a read-only SQL console. Share a package as you would the logs it came from; see
+[Package viewer](docs/Advanced.md#package-viewer).
 
-### Detected Events by MITRE ATT&CK® Techniques and Criticality Levels
-
-![](pics/gui.webp)
-
-### Detected Events Timeline
-
-![](pics/gui-timeline.webp)
-
-### Detected Events by MITRE ATT&CK® Techniques Displayed on the Matrix 
-
-![](pics/gui-matrix.webp)
+![The package viewer's Overview](pics/viewer-overview.webp)
 
 ## Tutorials, References, and Related Projects
 

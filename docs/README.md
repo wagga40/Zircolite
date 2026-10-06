@@ -31,8 +31,8 @@ and [Usage → Basic Usage](Usage.md#basic-usage).
 | Page | Covers |
 |------|--------|
 | [Usage](Usage.md) | Installation, standalone binaries, running, every command-line option, input formats, rulesets, rule testing, configuration, Docker |
-| [Advanced](Advanced.md) | Field transforms, large datasets, parallel processing, event filtering, templating, the Mini-GUI |
-| [Internals](Internals.md) | Architecture, module map, SQLite behaviour, packaging and release builds, automatic SQL repairs |
+| [Advanced](Advanced.md) | Field transforms, large datasets, parallel processing, event filtering, templating, the package viewer |
+| [Internals](Internals.md) | Architecture, the package pipeline, module map, SQLite behaviour, packaging and release builds, automatic SQL repairs |
 | [Benchmark](Benchmark.md) | Zircolite, Hayabusa and Chainsaw on the same logs, and how to reproduce it |
 
 ## Task and Taskfile
@@ -51,6 +51,7 @@ the project root:
 | `task docker-push` | Push to Docker Hub, after a multi-arch build |
 | `task save` | Save the Docker image to an archive |
 | `task binary-build` | Build the standalone binary into `dist/Zircolite/` with PyInstaller, then run the binary tests against it |
+| `task gui-build` | Check, test and build the package viewer from `gui_src/` into `gui/viewer/`; commit the result |
 | `task get-version` | Print the version from `zircolite/__init__.py` |
 
 `Taskfile.yml` holds these production tasks. Development tasks — lint, format, tests —
