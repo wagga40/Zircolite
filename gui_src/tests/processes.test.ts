@@ -2,7 +2,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { type Field, Schema } from '../src/engine/schema';
 import { ancestorsSql, creationPredicate, keepAncestors, PROCESS_LIMIT, processCountSql, processRowsSql } from '../src/processes/processes';
 import {
-  basename, buildForest, pidText, type Process, type RawProcess, toProcess, visibleAncestor, visibleRows,
+  basename, buildForest, cutRoots, pidText, type Process, type RawProcess, toProcess, visibleAncestor, visibleRows,
 } from '../src/processes/tree';
 import { FIELDS, type Fixture, openFixture, TACTICS } from './fixture';
 
@@ -43,6 +43,19 @@ describe('users', () => {
 });
 
 describe('the forest', () => {
+  it('counts the roots whose resolved parent the tree does not reach, not those cut from a cycle', () => {
+    const shownParent = proc({ t: 0 });
+    const child = proc({ parentUid: shownParent.uid, t: 1 });
+    const stopped = proc({ parentUid: 424_242, t: 2 });
+    const a = proc({ t: 3 });
+    const b = proc({ parentUid: a.uid, t: 4 });
+    a.parentUid = b.uid;
+    const nothing = proc({ parentUid: null, t: 5 });
+    const all = [shownParent, child, stopped, a, b, nothing];
+    const roots = buildForest(all);
+    expect(cutRoots(roots, new Set(all.map((p) => p.uid)))).toBe(1);
+  });
+
   it('links each start under the parent SQL resolved for it, in start order', () => {
     const root = proc({ t: 0 });
     const late = proc({ parentUid: root.uid, t: 9 });

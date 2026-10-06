@@ -164,6 +164,15 @@ export function withChildren(roots: Process[]): number[] {
   return out;
 }
 
+/**
+ * Roots whose resolved parent is a start in the package that the tree does not
+ * show: the walk up stopped below it, at its depth or count bound. A root cut
+ * out of a cycle has its parent in the tree, so it is not counted.
+ */
+export function cutRoots(roots: Process[], shown: ReadonlySet<number>): number {
+  return roots.filter((p) => p.parentUid !== null && p.parentUid !== p.uid && !shown.has(p.parentUid)).length;
+}
+
 export function basename(path: string | null): string {
   return path ? (path.split(/[\\/]/).pop() ?? '') : '';
 }

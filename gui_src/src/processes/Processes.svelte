@@ -12,8 +12,8 @@
   import { Panel } from '../ui/panel.svelte';
   import { ownScope } from '../ui/scope';
   import { windowOf } from '../ui/virtual';
-  import { ANCESTOR_LIMIT, ancestorsSql, creationPredicate, keepAncestors, PROCESS_LIMIT, processCountSql, processRowsSql } from './processes';
-  import { basename, buildForest, type Process, type RawProcess, type Row, toProcess, visibleAncestor, visibleRows, withChildren } from './tree';
+  import { ANCESTOR_DEPTH, ANCESTOR_LIMIT, ancestorsSql, creationPredicate, keepAncestors, PROCESS_LIMIT, processCountSql, processRowsSql } from './processes';
+  import { basename, buildForest, cutRoots, type Process, type RawProcess, type Row, toProcess, visibleAncestor, visibleRows, withChildren } from './tree';
 
   let { db: page, schema, manifest, query }: { db: Db; schema: Schema; manifest: Manifest; query: QueryState } = $props();
   // svelte-ignore state_referenced_locally
@@ -22,7 +22,7 @@
   // The sticky column header sits in the scroller above the rows, so it covers this much of the viewport.
   const HEAD = 28;
 
-  interface Tree { roots: Process[]; starts: number; shown: number; context: number; capped: boolean; nodes: number }
+  interface Tree { roots: Process[]; starts: number; shown: number; context: number; capped: boolean; cut: number; nodes: number }
   const tree = new Panel<Tree>();
   const findable = $derived(creationPredicate(schema) !== null);
   const guidField = $derived(schema.find('ProcessGuid'));
@@ -42,8 +42,10 @@
       const rows = await db.rows<RawProcess>(processRowsSql(schema, where) as string, { lane: 'tree' });
       const ancestors = ancestorsSql(schema, where);
       const { rows: context, capped } = keepAncestors(ancestors ? await db.rows<RawProcess>(ancestors, { lane: 'tree' }) : []);
-      const roots = buildForest([...rows, ...context].map(toProcess));
-      return { roots, starts: count?.n ?? 0, shown: rows.length, context: context.length, capped, nodes: rows.length + context.length };
+      const all = [...rows, ...context];
+      const roots = buildForest(all.map(toProcess));
+      const cut = cutRoots(roots, new Set(all.map((r) => r._zl_uid)));
+      return { roots, starts: count?.n ?? 0, shown: rows.length, context: context.length, capped, cut, nodes: all.length };
     });
   });
 
@@ -134,7 +136,7 @@
     view.route = 'explore';
   }
 
-  // A root's parent is not in the tree: never started in these logs, or past the ancestor limit.
+  // A root's parent is not in the tree: never started in these logs, named by a guid no start carries, past the ancestor depth or count, or cut out of a cycle.
   const startedBy = (p: Process) => basename(p.parentImage) || (p.ppid === null ? '' : `PID ${p.ppid}`);
   const matched = (p: Process) => `${p.lvl === null ? '' : `${levelLabel(p.lvl)}, `}${formatCount(p.hits)} ${p.hits === 1 ? 'rule' : 'rules'} matched`;
 </script>
@@ -172,7 +174,10 @@
       {#if tree.slot.data?.capped}
         <p class="note">Ancestors stop at {formatCount(ANCESTOR_LIMIT)}; the nearest are shown. Narrow the search to see the rest.</p>
       {/if}
-      {#if tree.slot.data?.context}<p class="note">Grey rows are ancestors outside the filters. A start links to the start its parent ProcessGuid names, or else to the latest earlier start of its parent PID on the same host.</p>{/if}
+      {#if tree.slot.data?.cut && !tree.slot.data.capped}
+        <p class="note">{formatCount(tree.slot.data.cut)} {tree.slot.data.cut === 1 ? 'chain stops' : 'chains stop'} after {ANCESTOR_DEPTH} generations of ancestors: the oldest start shown has an earlier parent in the package that the tree does not reach.</p>
+      {/if}
+      {#if tree.slot.data?.context}<p class="note">Grey rows are ancestors outside the filters. A start links to the start its parent ProcessGuid names, or, when it names none, to the latest earlier start of its parent PID on the same host.</p>{/if}
       {#if !guidField}<p class="note">This package has no ProcessGuid field, so processes link by host, parent PID and start time.</p>{/if}
       {#if tree.slot.data && !tree.slot.pending && rows.length === 0}<p class="note">No process starts (Sysmon event 1 or Security event 4688) match the filters.</p>{/if}
     </div>

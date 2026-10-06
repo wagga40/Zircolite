@@ -5,7 +5,11 @@ import { ident, str } from '../engine/sql';
 export const PROCESS_LIMIT = 20_000;
 /** Ancestors added for context, beyond the starts the filters keep. */
 export const ANCESTOR_LIMIT = 5_000;
-/** Generations walked up from a kept start; it ends a cycle in the data, and no real chain is this deep. */
+/**
+ * Generations walked up from a kept start; it ends a cycle in the data. A
+ * process that relaunches itself makes real chains far deeper, so the tree
+ * says when a chain stops short of its first start.
+ */
 export const ANCESTOR_DEPTH = 64;
 
 // Each value the tree needs, by the field Zircolite's mappings give it.
