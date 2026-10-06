@@ -1058,7 +1058,7 @@ logs is a root, labelled with the parent's image or PID.
   `task gui-build` runs `npm ci`, `npm run check`, `npm test` and `npm run build` there.
   Commit `gui/viewer/` with any change to `gui_src/`.
 - CI rebuilds the viewer and fails when the result differs from the committed `gui/viewer/`
-  by a single byte or a new file.
+  by a single byte or a new file, including one that `.gitignore` matches.
 - The scripts in `gui_src/e2e/` drive an extracted package from `file://`, each taking its
   directory: `npm run smoke -- <dir>` (it opens in Chromium, Firefox and WebKit, with the
   events the manifest lists, no network request and no page error), `npm run e2e -- <dir>`

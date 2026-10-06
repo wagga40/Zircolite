@@ -88,10 +88,13 @@ jobs:
           npm test
           npm run build
       - name: The committed viewer is what its sources build
-        # intent-to-add makes a file the build newly emits show up in the diff too.
+        # intent-to-add makes a file the build newly emits show up in the diff too,
+        # but skips one .gitignore matches, which every clone would then miss.
         run: |
           git add --intent-to-add gui/viewer
           git diff --exit-code gui/viewer
+          git status --short --ignored -- gui/viewer
+          test -z "$(git ls-files --others --ignored --exclude-standard -- gui/viewer)"
       - name: Build a package
         run: |
           mkdir -p "$RUNNER_TEMP/package"
