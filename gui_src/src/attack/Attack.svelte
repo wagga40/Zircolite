@@ -93,15 +93,16 @@
     <div class="columns">
       {#each columns as column (column.tactic)}
         <div class="column" role="group" aria-label={column.name}>
-          <button type="button" class="tactic" data-tactic={column.tactic} data-events={tactics.slot.data ? (tactics.slot.data.get(column.tactic) ?? 0) : ''}
+          <button type="button" class="tactic" data-tactic={column.tactic} disabled={tactics.slot.pending}
+            data-events={tactics.slot.data && !tactics.slot.pending ? (tactics.slot.data.get(column.tactic) ?? 0) : ''}
             title={`Events detected under ${column.name}`} onclick={() => explore(`tactic:${column.tactic}`)}>
             <span class="name">{column.name}</span>
             <span class="n">{tactics.slot.data ? formatCount(tactics.slot.data.get(column.tactic) ?? 0) : ''}</span>
           </button>
           {#each column.cells as cell (cell.id)}
             <div class="cell" class:none={cell.events === 0} style:background={heatInk(cell.share)}>
-              <button type="button" class="technique" data-technique={cell.id} data-events={cell.events}
-                onclick={() => explore(`technique:${cell.id}`)}>
+              <button type="button" class="technique" data-technique={cell.id} data-events={techniques.slot.pending ? '' : cell.events}
+                disabled={techniques.slot.pending} onclick={() => explore(`technique:${cell.id}`)}>
                 <span class="tname">{cell.name}</span>
                 <span class="id">{cell.id}</span>
                 <span class="n">{formatCount(cell.events)}</span>
@@ -114,8 +115,8 @@
                   <ul class="subs">
                     {#each cell.subs as sub (sub.id)}
                       <li style:background={heatInk(sub.share)} class:none={sub.events === 0}>
-                        <button type="button" class="technique" data-technique={sub.id} data-events={sub.events}
-                          onclick={() => explore(`technique:${sub.id}`)}>
+                        <button type="button" class="technique" data-technique={sub.id} data-events={techniques.slot.pending ? '' : sub.events}
+                          disabled={techniques.slot.pending} onclick={() => explore(`technique:${sub.id}`)}>
                           <span class="tname">{sub.name}</span>
                           <span class="id">{sub.id}</span>
                           <span class="n">{formatCount(sub.events)}</span>
@@ -144,7 +145,8 @@
         <tbody>
           {#each others as other (other.id)}
             <tr>
-              <td><button type="button" class="link" data-technique={other.id} data-events={other.events} onclick={() => explore(`technique:${other.id}`)}>{other.id}</button></td>
+              <td><button type="button" class="link" data-technique={other.id} data-events={techniques.slot.pending ? '' : other.events}
+                disabled={techniques.slot.pending} onclick={() => explore(`technique:${other.id}`)}>{other.id}</button></td>
               <td>{other.replacement ? `${other.replacement.id} ${other.replacement.name}` : other.status === 'retired' ? 'Retired' : 'Unknown'}</td>
               <td class="num">{formatCount(other.events)}</td>
             </tr>
@@ -157,7 +159,7 @@
   <section class="heat" aria-labelledby="heat-title">
     <h2 id="heat-title">When detections happen (UTC)</h2>
     {#if grid}
-      <div class="grid-wrap" class:stale={heat.slot.pending}>
+      <div class="grid-wrap" class:stale={heat.slot.pending} aria-busy={heat.slot.pending}>
         <table class="heatmap">
           <thead>
             <tr><td></td>{#each { length: 24 } as _, hour (hour)}<th scope="col">{#if hour % 3 === 0}{pad(hour)}<span class="sr">:00</span>{:else}<span class="sr">{pad(hour)}:00</span>{/if}</th>{/each}</tr>
@@ -168,8 +170,8 @@
                 <th scope="row">{WEEKDAYS[d].slice(0, 3)}</th>
                 {#each row as cell (cell.hour)}
                   <td>
-                    <button type="button" class="hc" data-day={cell.day} data-hour={cell.hour} data-events={cell.events}
-                      disabled={cell.events === 0} style:background={heatInk(cell.share)}
+                    <button type="button" class="hc" data-day={cell.day} data-hour={cell.hour} data-events={heat.slot.pending ? '' : cell.events}
+                      disabled={cell.events === 0 || heat.slot.pending} style:background={heatInk(cell.share)}
                       aria-label={`${WEEKDAYS[d]} ${pad(cell.hour)}:00 UTC, ${formatCount(cell.events)} ${cell.events === 1 ? 'event' : 'events'}`}
                       title={`${WEEKDAYS[d]} ${pad(cell.hour)}:00 UTC: ${formatCount(cell.events)}`}
                       onclick={() => explore(heatTerm(cell.day, cell.hour), true)}></button>
@@ -226,5 +228,5 @@
   .hc { display: block; width: 24px; height: 24px; padding: 0; border: 1px solid var(--rule); border-radius: 2px; background: var(--panel); cursor: pointer; }
   .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
   @media (max-width: 720px) { .matrix { max-height: 55vh; } }
-  .hc:disabled { cursor: default; }
+  .hc:disabled, .tactic:disabled, .technique:disabled, .link:disabled { cursor: default; }
 </style>

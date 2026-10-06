@@ -196,7 +196,7 @@ async function phase4(page, state, steps, expectedStarts) {
     {
       what: 'a technique', expected: tagged.techniques,
       wait: async () => (await page.locator('#attack-matrix button[data-technique]').count()) > 0 || null,
-      pick: '#attack-matrix button[data-technique]:not([data-events="0"])',
+      pick: '#attack-matrix button[data-technique]:not([data-events="0"]):not([data-events=""])',
     },
     {
       what: 'a tactic', expected: tagged.tactics,
@@ -204,12 +204,12 @@ async function phase4(page, state, steps, expectedStarts) {
         const counts = await page.locator('#attack-matrix button[data-tactic]').evaluateAll((all) => all.map((b) => b.getAttribute('data-events')));
         return counts.length > 0 && counts.every((c) => c !== null && c !== '') || null;
       },
-      pick: '#attack-matrix button[data-tactic]:not([data-events="0"])',
+      pick: '#attack-matrix button[data-tactic]:not([data-events="0"]):not([data-events=""])',
     },
     {
       what: 'an hour of the heatmap', expected: manifest.totals.hits,
       wait: async () => (await page.locator('table.heatmap button[data-day]').count()) > 0 || null,
-      pick: 'table.heatmap button[data-day]:not([disabled])',
+      pick: 'table.heatmap button[data-day]:not([disabled]):not([data-events=""])',
     },
   ];
   for (const { what, expected, wait, pick } of checks) {
