@@ -1,5 +1,6 @@
 """Stage two of a package: spooled parts become Parquet tables and a manifest."""
 
+import dataclasses
 import hashlib
 import json
 import zipfile
@@ -53,10 +54,10 @@ def part(spool, number, rows, results=(), *, sources=None, unreadable=(), **opti
     return writer.finish()
 
 
-def build(spool, parts, failed=(), rulesets=RULES, expected_events=None):
+def build(spool, parts, failed=(), rulesets=RULES, expected_events=None, run=RUN):
     if expected_events is None:
         expected_events = sum(record.events for record in parts)
-    return PackageBuilder(spool).build_data(parts=parts, rulesets=rulesets, run=RUN, failed_sources=list(failed),
+    return PackageBuilder(spool).build_data(parts=parts, rulesets=rulesets, run=run, failed_sources=list(failed),
                                             expected_events=expected_events)
 
 
@@ -276,6 +277,36 @@ class TestManifest:
         assert manifest["failed_sources"] == []
         assert ("4 input(s) could be read only in part or not at all: b.json, c.json, d.json ..."
                 in manifest["warnings"])
+
+    def test_a_limit_says_which_rules_it_left_out(self, spool):
+        parts = [part(spool, 0, [{"SystemTime": "2021-06-03T06:36:55Z"}])]
+
+        warnings = build(spool, parts, run=dataclasses.replace(RUN, limit=5)).manifest["warnings"]
+
+        assert warnings == ["--limit 5: rules matching more than 5 events per database (alerts, for a correlation "
+                            "rule) are left out, as they are from the detections output"]
+
+    @pytest.mark.parametrize(("after", "before"), [
+        ("2021-06-01T00:00:00", "9999-12-12T23:59:59"),
+        ("1970-01-01T00:00:00", "2021-06-30T23:59:59"),
+        ("2021-06-01T00:00:00", "2021-06-30T23:59:59"),
+    ])
+    def test_time_bounds_say_which_events_were_read(self, spool, after, before):
+        parts = [part(spool, 0, [{"SystemTime": "2021-06-03T06:36:55Z"}])]
+
+        run = dataclasses.replace(RUN, after=after, before=before)
+        warnings = build(spool, parts, run=run).manifest["warnings"]
+
+        assert warnings == [f"--after/--before: only events from {after} to {before} were read; "
+                            "events without a readable time were kept"]
+
+    @pytest.mark.parametrize("bounds", [{}, {"after": None, "before": None}])
+    def test_a_run_that_was_not_narrowed_says_nothing_about_it(self, spool, bounds):
+        parts = [part(spool, 0, [{"SystemTime": "2021-06-03T06:36:55Z"}])]
+
+        warnings = build(spool, parts, run=dataclasses.replace(RUN, **bounds)).manifest["warnings"]
+
+        assert warnings == []
 
     def test_merge_columns_ors_masks_and_sums_counts(self, spool):
         parts = [part(spool, 0, [{"N": 1}], types={"N": ""}), part(spool, 1, [{"n": "x"}, {"n": "y"}])]

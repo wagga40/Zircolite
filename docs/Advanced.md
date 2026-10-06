@@ -712,7 +712,9 @@ the keys are `package` and `package_dir`, under `output`.
   written, the run says why and exits with status 1, after writing its detections output.
 - **The command line is not recorded.** The package keeps the settings that shape what it
   shows (processing mode, time field, time bounds, `--limit`, the number of rules loaded),
-  never the command line, so an archive password cannot end up in it.
+  never the command line, so an archive password cannot end up in it. A `--limit`, and time
+  bounds other than the defaults, are listed among the run warnings in Run details and on
+  Overview, so whoever opens the package knows which rules and events the run left out.
 
 The browser holds the events in WebAssembly memory, which stops at 4 GB. Zircolite therefore
 refuses to write a package whose events take more than 1 GiB as Parquet, with an error that
@@ -748,9 +750,10 @@ The top bar holds the search box, **Syntax** (the search help), **Run details** 
 range, the rules that matched out of those loaded, the rule matches, the events with
 detections, the correlation alerts, the processing mode, the time field, whether full-text
 search is indexed, the event filtering state, and the Zircolite version that made the package
-and when. Below come the run's warnings, such as events whose time could not be read (kept,
-but left off the timeline), inputs read only in part, inputs that failed, matches of custom
-SQL rules that name no event, and a missing full-text index. The button shows how many
+and when. Below come the run's warnings, such as a `--limit` and its effect, the time bounds
+of a run narrowed with `--after`/`--before`, events whose time could not be read (kept, but
+left off the timeline), inputs read only in part, inputs that failed, matches of custom SQL
+rules that name no event, and a missing full-text index. The button shows how many
 warnings there are.
 
 All times are UTC.

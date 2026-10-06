@@ -24,6 +24,7 @@ import orjson
 from .assets import bundled_asset
 from .attack import TACTIC_ORDER, extract_attack_tactics, extract_attack_techniques
 from .config import RULE_LEVELS
+from .config_loader import DEFAULT_AFTER, DEFAULT_BEFORE, DEFAULT_LIMIT
 from .correlations import is_correlation_plan_rule
 from .package_spool import (
     UID_PART_SHIFT,
@@ -340,6 +341,14 @@ def build_manifest(*, parts: list[PartRecord], columns: list[Column], run: RunIn
     unlinked = sum(counts.get("unlinked", 0) for record in parts for counts in record.rules.values())
     unreadable = [source for record in parts for source in record.unreadable]
     warnings = []
+    # Whoever opens the package may not have run Zircolite; without these, a narrowed run's
+    # detections read as complete.
+    if run.limit != DEFAULT_LIMIT:
+        warnings.append(f"--limit {run.limit:,}: rules matching more than {run.limit:,} events per database "
+                        "(alerts, for a correlation rule) are left out, as they are from the detections output")
+    if run.after is not None and run.before is not None and (run.after, run.before) != (DEFAULT_AFTER, DEFAULT_BEFORE):
+        warnings.append(f"--after/--before: only events from {run.after} to {run.before} were read; "
+                        "events without a readable time were kept")
     if unparsed:
         warnings.append(f"{unparsed:,} event(s) have a {time_field} value that is not a time; "
                         "they are kept but have no place on the timeline")
