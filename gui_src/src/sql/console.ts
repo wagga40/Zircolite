@@ -8,7 +8,7 @@ import { str } from '../engine/sql';
  * statement or anything but a SELECT is refused and a break-out cannot end the literal early.
  * A SELECT can still call DuckDB's logging and checkpoint table functions, which change this
  * session's logging and in-memory files, never the package's tables; runQuery switches logging
- * back off after each run.
+ * back off after each run, whether or not anyone still waits for the run.
  */
 
 /** Rows the console shows; past this, it says there are more. */
@@ -66,11 +66,14 @@ async function switchOffLogging(rows: Rows): Promise<void> {
   if (String(state?.on) === 'true') await rows('SELECT * FROM disable_logging()');
 }
 
-/** Describe and run one query through query(), then leave logging off. */
-export async function runQuery(rows: Rows, input: string): Promise<Result> {
+/**
+ * Describe and run one query through query(), then leave logging off. The reset goes through
+ * `reset`, which must reach the page's connection outside the console's own scope: a run stopped,
+ * superseded or left behind by its view may have switched logging on before it ended.
+ */
+export async function runQuery(rows: Rows, input: string, reset: Rows = rows): Promise<Result> {
   const text = trimStatement(input);
   if (!text) throw new SqlRefused('the query is empty');
-  let superseded = false;
   try {
     let described: Record<string, unknown>[];
     try {
@@ -90,16 +93,11 @@ export async function runQuery(rows: Rows, input: string): Promise<Result> {
       rows: raw.slice(0, SQL_ROW_LIMIT).map((row) => columns.map((_, i) => (row[`c${i}`] ?? null) as string | null)),
       more: raw.length > SQL_ROW_LIMIT,
     };
-  } catch (error) {
-    superseded = isSuperseded(error);
-    throw error;
   } finally {
-    if (!superseded) {
-      try {
-        await switchOffLogging(rows);
-      } catch {
-        // A leftover logging flag matters less than the answer; the next run resets it.
-      }
+    try {
+      await switchOffLogging(reset);
+    } catch {
+      // A leftover logging flag matters less than the answer; the next run resets it.
     }
   }
 }

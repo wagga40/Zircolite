@@ -39,7 +39,10 @@
     run.stopped = false;
     const text = sqlDraft.text;
     // Never cached: the same text is asked again on purpose, and the console's queries are the person's own.
-    result.load(() => runQuery((sql) => db.rows(sql, { lane: 'run', cache: false }), text));
+    // The logging reset runs on the page, outside this view's scope, so it still runs after a stop or once the
+    // view is gone; its own lane means it replaces nothing but an earlier reset.
+    result.load(() =>
+      runQuery((sql) => db.rows(sql, { lane: 'run', cache: false }), text, (sql) => page.rows(sql, { lane: 'sql-logging', cache: false })));
   }
 
   function onkeydown(event: KeyboardEvent): void {

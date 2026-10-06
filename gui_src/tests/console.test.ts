@@ -1,4 +1,5 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { Superseded } from '../src/engine/queries';
 import { csvLine } from '../src/explore/export';
 import { columnWidths, LOGGING_SQL, numericType, resultSql, runQuery, SqlRefused, TABLES_SQL, trimStatement } from '../src/sql/console';
 import { type Fixture, openFixture } from './fixture';
@@ -44,6 +45,35 @@ describe('what the console runs', () => {
     expect(typo).not.toBeInstanceOf(SqlRefused);
     expect((typo as Error).message).toMatch(/^Catalog Error/);
     expect((typo as Error).message).not.toMatch(/LINE \d/);
+  });
+
+  it('switches logging off through the page even when the run was superseded or its view is gone', async () => {
+    const logging = async () => String((await db.rows(LOGGING_SQL))[0].on);
+    // The console's scope: it answers until the result arrives, then the view goes and every call is refused.
+    let gone = false;
+    const scoped = async (sql: string) => {
+      if (gone) throw new Superseded();
+      const out = await send(sql);
+      if (sql.startsWith('SELECT CAST(c0')) {
+        gone = true;
+        throw new Superseded();
+      }
+      return out;
+    };
+    const reset: string[] = [];
+    const page = (sql: string) => {
+      reset.push(sql);
+      return send(sql);
+    };
+    await expect(runQuery(scoped, "SELECT * FROM enable_logging(storage := 'memory')", page)).rejects.toBeInstanceOf(Superseded);
+    expect(reset[0]).toBe(LOGGING_SQL);
+    expect(await logging()).toBe('false');
+  });
+
+  it('keeps the answer, or the error, when the page refuses the reset', async () => {
+    const refusing = () => Promise.reject(new Superseded());
+    await expect(runQuery(send, 'SELECT 1 AS a', refusing)).resolves.toHaveProperty('rows', [['1']]);
+    await expect(runQuery(send, 'SELECT * FROM evnts', refusing)).rejects.toThrow(/^Catalog Error/);
   });
 
   it('switches off the logging a query turned on', async () => {
