@@ -741,9 +741,13 @@ it. If they are missing, it says to extract the whole archive.
 
 While it loads, the page shows how many events and inputs the package holds, then a progress
 bar while the data arrives and the query engine starts. Before showing anything, it checks
-that the engine holds exactly the events and rule matches the package lists; a damaged or
-partly extracted package is reported as such instead of shown incomplete, and so is data in
-a package format this viewer does not read.
+that the engine's files and the tables arrived whole, every chunk present and decoding and
+each file at the size the manifest lists, and that the engine holds exactly the events and
+rule matches the package lists. A package with missing or truncated files is reported as such
+instead of shown incomplete, and so is data in a package format this viewer does not read.
+These checks are counts and sizes, not checksums: the viewer does not verify the SHA-256
+digests in the manifest, so a file altered without a change of size shows only if the query
+engine fails to read it.
 
 The top bar holds the search box, **Syntax** (the search help), **Run details** and the theme
 (Auto, Light or Dark). **Run details** shows the run summary: the events and inputs, the time
