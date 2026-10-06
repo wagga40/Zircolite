@@ -243,6 +243,37 @@ async function scenario(page, steps) {
   check((await page.evaluate(() => document.activeElement?.tagName)) !== 'BODY', 'closing a deep-linked event left focus on the body');
   steps.push('focus after a deep-linked event closes');
 
+  // The table sits past one button per field, so j and Enter must work from wherever a person lands on Explore.
+  const keysOpen = async (from) => {
+    await results(page, { build: 0 });
+    await page.keyboard.press('j');
+    check(await page.evaluate(() => document.querySelector('#result-grid')?.matches(':focus-visible') === true), `j ${from} moved to a row without showing it`);
+    await page.keyboard.press('Enter');
+    await drawer.waitFor({ timeout: 10_000 }).catch(() => {});
+    check(page.url().includes('uid='), `j then Enter ${from} opened no event`);
+    await poll(page, async () => (await drawer.locator('dt').count()) > 0, 'the event fields');
+  };
+  const inDrawer = () => page.evaluate(() => document.activeElement?.closest('[aria-label="Event details"]') != null);
+  await page.goto('about:blank');
+  await page.goto(`${url}#/explore`);
+  await poll(page, async () => /ready|error/.test(await page.title()), 'the viewer', 240_000);
+  await keysOpen('on a fresh load of Explore');
+  await poll(page, inDrawer, 'focus to move into the open event');
+  const firstOpened = page.url();
+  await page.keyboard.press('j');
+  await poll(page, async () => page.url() !== firstOpened, 'j to step the open event');
+  check(await inDrawer(), 'j pressed inside the open event pulled focus out of it');
+  await page.keyboard.press('Escape');
+  await drawer.waitFor({ state: 'detached' });
+  await page.goto('about:blank');
+  await page.goto(`${url}#/overview`);
+  await poll(page, async () => /ready|error/.test(await page.title()), 'the viewer', 240_000);
+  await page.locator('nav[aria-label="Views"]').getByRole('button', { name: 'Explore' }).click();
+  await keysOpen('after the rail\'s Explore button');
+  await page.keyboard.press('Escape');
+  await drawer.waitFor({ state: 'detached' });
+  steps.push('j and Enter open an event from a fresh load and from the rail');
+
   // On a phone the Fields panel is a sheet and the exports are one menu; each is a layer one Escape closes.
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto('about:blank');
@@ -314,6 +345,9 @@ async function scenario(page, steps) {
   const listed = await results(page, { build: 0 });
   check(listed.count === ruleEvents, `the top rule counts ${ruleEvents} events; Explore lists ${listed.count}`);
   steps.push('overview agrees with explore');
+  // The button pressed on Overview is gone with it, which leaves focus on the body.
+  await keysOpen('after choosing an Overview rule');
+  steps.push('j and Enter open an event after Overview');
 }
 
 let failed = false;

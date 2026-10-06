@@ -261,9 +261,12 @@
   function onwindowkey(event: KeyboardEvent): void {
     if (event.metaKey || event.ctrlKey || event.altKey || typing(event)) return;
     if ((event.target as Element | null)?.closest?.('dialog')) return;
-    if (event.key === 'j') moveTo(active + 1);
-    else if (event.key === 'k') moveTo(active - 1);
-    else return;
+    if (event.key !== 'j' && event.key !== 'k') return;
+    // The row mark shows and Enter opens a row only while the grid has focus, and the grid sits past
+    // one button per field. The open event keeps its focus, so stepping is read out where the person is.
+    const at = document.activeElement;
+    if (scroller && at !== scroller && !at?.closest('[aria-label="Event details"]')) scroller.focus({ preventScroll: true });
+    moveTo(event.key === 'j' ? active + 1 : active - 1);
     event.preventDefault();
   }
 
@@ -390,6 +393,8 @@
           {@const row = rowAt(position)}
           <!-- Rows are reached from the keyboard through the grid: arrow keys, j and k, then Enter. -->
           <!-- svelte-ignore a11y_click_events_have_key_events -->
+          <!-- Rows are the grid's aria-activedescendant targets: a tabindex would let a click focus a row, and the grid's keys would stop reaching it. -->
+          <!-- svelte-ignore a11y_interactive_supports_focus -->
           <div
             id={`row-${position}`}
             class="row"
