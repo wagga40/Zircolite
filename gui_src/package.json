@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "build": "vite build && node scripts/finalize.mjs",
-    "check": "svelte-check --tsconfig ./tsconfig.json",
+    "check": "svelte-check --tsconfig ./tsconfig.json --fail-on-warnings",
     "test": "vitest run",
     "smoke": "node e2e/smoke.mjs",
     "shot": "node e2e/shot.mjs",
