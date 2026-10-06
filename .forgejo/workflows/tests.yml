@@ -48,3 +48,57 @@ jobs:
       # tracked, so a missing one is a broken checkout and must fail too.
       - name: Run tests
         run: pdm run pytest
+
+  # The viewer ships prebuilt in gui/viewer. This job proves the sources build
+  # it byte for byte, then drives a real package in three browsers.
+  viewer:
+    runs-on: ubuntu-latest
+    container:
+      image: ghcr.io/catthehacker/ubuntu:act-24.04
+    steps:
+      - uses: actions/checkout@v4
+      # actions/checkout resolves `repository:` against this Forgejo instance,
+      # which does not hold the corpus, so it is fetched from GitHub by hand.
+      # A pinned public corpus: the e2e scripts assert 4688 events, detections,
+      # process starts and tactics, which no one-file fixture holds.
+      - name: Fetch the pinned corpus
+        run: |
+          git init -q EVTX-ATTACK-SAMPLES
+          git -C EVTX-ATTACK-SAMPLES fetch -q --depth 1 https://github.com/sbousseaden/EVTX-ATTACK-SAMPLES.git 4ceed2f4706daf601c212a8f91c113dd85349a2c
+          git -C EVTX-ATTACK-SAMPLES checkout -q FETCH_HEAD
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "26"
+          cache: npm
+          cache-dependency-path: gui_src/package-lock.json
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.14"
+      - name: Install pdm
+        run: python -m pip install --upgrade --quiet pip pdm
+      - name: Install dependencies
+        run: pdm install --dev
+      - name: Check, test and build the viewer
+        working-directory: gui_src
+        run: |
+          npm ci
+          npm run check
+          npm test
+          npm run build
+      - name: The committed viewer is what its sources build
+        run: git diff --exit-code gui/viewer
+      - name: Build a package
+        run: |
+          mkdir -p "$RUNNER_TEMP/package"
+          pdm run python zircolite.py --evtx EVTX-ATTACK-SAMPLES -r rules/rules_windows_merged.json \
+            --package --package-dir "$RUNNER_TEMP/package" -o "$RUNNER_TEMP/package/detections.json" -l "$RUNNER_TEMP/package/zircolite.log" -q
+          unzip -q "$RUNNER_TEMP"/package/zircolite-package-*.zip -d "$RUNNER_TEMP/package/unpacked"
+      - name: Install the browsers
+        working-directory: gui_src
+        run: npx playwright install --with-deps chromium firefox webkit
+      - name: Drive the package in Chromium, Firefox and WebKit
+        working-directory: gui_src
+        run: |
+          npm run smoke -- "$RUNNER_TEMP/package/unpacked"
+          npm run e2e -- "$RUNNER_TEMP/package/unpacked"
+          npm run views -- "$RUNNER_TEMP/package/unpacked"

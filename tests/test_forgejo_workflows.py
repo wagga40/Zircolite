@@ -40,6 +40,18 @@ LOAD_BEARING_COMMANDS = {
     "tests.yml": [
         "pdm install --dev",
         "pdm run pytest",
+        # The viewer job: build gui_src, prove the committed gui/viewer equals
+        # it, then drive a real package in the browsers.
+        "npm ci",
+        "npm run check",
+        "npm test",
+        "npm run build",
+        "git diff --exit-code gui/viewer",
+        '-l "$RUNNER_TEMP/package/zircolite.log" -q',
+        'npm run smoke -- "$RUNNER_TEMP/package/unpacked"',
+        'npm run e2e -- "$RUNNER_TEMP/package/unpacked"',
+        'npm run views -- "$RUNNER_TEMP/package/unpacked"',
+        "npx playwright install --with-deps chromium firefox webkit",
     ],
     "external_tests.yml": [
         "tests/external/run_external_tests.py --build --parallel 4",
@@ -65,6 +77,17 @@ REQUIRED_ARGUMENTS = {
     "build_pyinstaller.yml": [
         "rules/rules_windows_sysmon.json",
         "--package",
+        # --package must write a real package, not a Mini-GUI zip.
+        "zircolite-package-*.zip",
+        "data/manifest.js",
+    ],
+}
+
+# The older-distribution containers need a Docker socket, which Forgejo's job
+# containers do not get, so only GitHub runs the package there.
+GITHUB_ONLY_ARGUMENTS = {
+    "build_pyinstaller.yml": [
+        "-package.json\" --package --package-dir /detections",
     ],
 }
 
@@ -140,6 +163,16 @@ def test_the_mirror_runs_the_same_commands(name):
         assert argument in forgejo_script, (
             f"{argument!r} is in .github/workflows/{name} but not "
             f".forgejo/workflows/{name}; the mirror has drifted"
+        )
+
+
+@pytest.mark.parametrize("name", sorted(GITHUB_ONLY_ARGUMENTS))
+def test_older_distributions_run_the_package(name):
+    github_script = _run_script(GITHUB_WORKFLOWS / name)
+
+    for argument in GITHUB_ONLY_ARGUMENTS[name]:
+        assert argument in github_script, (
+            f"{argument!r} is no longer in .github/workflows/{name}"
         )
 
 

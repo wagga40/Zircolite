@@ -316,9 +316,19 @@ jobs:
           ./Zircolite -e ../tests/fixtures/sample_bitsadmin.evtx -r rules/rules_windows_sysmon.json -o "$RUNNER_TEMP/detections/runner.json"
           ./Zircolite -e ../tests/fixtures/sample_bitsadmin.evtx -r rules/rules_windows_sysmon.json -o "$RUNNER_TEMP/detections/package.json" --package
           shopt -s nullglob
-          zips=(zircogui-output-*.zip)
-          if [ "${#zips[@]}" -ne 1 ] || ! unzip -l "${zips[0]}" index.html > /dev/null; then
-            echo "--package did not write a Mini-GUI zip holding index.html: ${zips[*]}" >&2
+          zips=(zircolite-package-*.zip)
+          if [ "${#zips[@]}" -ne 1 ]; then
+            echo "--package wrote ${#zips[@]} packages: ${zips[*]}" >&2
+            exit 1
+          fi
+          for entry in index.html app.js data/manifest.js; do
+            if ! unzip -l "${zips[0]}" "$entry" > /dev/null; then
+              echo "${zips[0]} holds no $entry" >&2
+              exit 1
+            fi
+          done
+          if ! unzip -l "${zips[0]}" 'data/events.parquet.*.js' > /dev/null; then
+            echo "${zips[0]} holds no events" >&2
             exit 1
           fi
 
@@ -336,8 +346,21 @@ jobs:
               -v "$RUNNER_TEMP/detections:/detections" \
               "$image" \
               /opt/zircolite/Zircolite -e /fixtures/sample_bitsadmin.evtx -r /opt/zircolite/rules/rules_windows_sysmon.json -o "/detections/${image/:/-}.json"
+            docker run --rm -w /tmp \
+              -v "$PWD/$PKG:/opt/zircolite:ro" \
+              -v "$PWD/tests/fixtures:/fixtures:ro" \
+              -v "$RUNNER_TEMP/detections:/detections" \
+              "$image" \
+              /opt/zircolite/Zircolite -e /fixtures/sample_bitsadmin.evtx -r /opt/zircolite/rules/rules_windows_sysmon.json \
+                -o "/detections/${image/:/-}-package.json" --package --package-dir /detections
             echo "::endgroup::"
           done
+          shopt -s nullglob
+          packages=("$RUNNER_TEMP"/detections/zircolite-package-*.zip)
+          if [ "${#packages[@]}" -ne 3 ]; then
+            echo "expected one package per image, found ${#packages[@]}: ${packages[*]}" >&2
+            exit 1
+          fi
 
       # The expectation is the golden file the end-to-end tests pin, so a rule
       # update that regenerates it moves this check too.
@@ -380,12 +403,15 @@ jobs:
           ./Zircolite.exe -e ../tests/fixtures/sample_bitsadmin.evtx -r rules/rules_windows_sysmon.json -o ../runner.json
           ./Zircolite.exe -e ../tests/fixtures/sample_bitsadmin.evtx -r rules/rules_windows_sysmon.json -o ../package.json --package
 
-          $zips = @(Get-ChildItem zircogui-output-*.zip)
-          if ($zips.Count -ne 1) { throw "--package wrote $($zips.Count) Mini-GUI zips" }
+          $zips = @(Get-ChildItem zircolite-package-*.zip)
+          if ($zips.Count -ne 1) { throw "--package wrote $($zips.Count) packages" }
           Add-Type -AssemblyName System.IO.Compression.FileSystem
           $zip = [System.IO.Compression.ZipFile]::OpenRead($zips[0].FullName)
           try { $names = @($zip.Entries.FullName) } finally { $zip.Dispose() }
-          if ($names -notcontains 'index.html') { throw "$($zips[0].Name) holds no index.html" }
+          foreach ($entry in 'index.html', 'app.js', 'data/manifest.js') {
+            if ($names -notcontains $entry) { throw "$($zips[0].Name) holds no $entry" }
+          }
+          if (-not ($names -match '^data/events\.parquet\.\d+\.js$')) { throw "$($zips[0].Name) holds no events" }
 
           $expected = (Get-Content ../tests/golden/bitsadmin_sysmon.json -Raw | ConvertFrom-Json |
             ForEach-Object { '{0} x{1}' -f $_[0], $_[1] } | Sort-Object) -join '; '
