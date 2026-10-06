@@ -681,7 +681,7 @@ forbids. Whoever receives the zip can search the events, filter them and move be
 detections, hosts, accounts and processes offline.
 
 The viewer is tested in current versions of Chromium, Firefox and WebKit. On large packages,
-Chromium-based browsers and Safari answer faster than Firefox.
+Chromium-based browsers and Safari tend to answer faster than Firefox.
 
 ![The Overview of a package](pics/viewer-overview.webp)
 
@@ -830,8 +830,9 @@ Every event that matches the filters, in a table.
   Events without a time come last. Scrolling reaches every result, however many.
 - **Detections only** keeps the events at least one rule matched.
 - **Export CSV** writes the shown columns, one row per event, for up to 500,000 events, as
-  UTF-8 with a byte-order mark. A cell that starts with `=`, `+`, `-` or `@` gets a leading `'`
-  so spreadsheets read it as text. **Export JSON** writes every field of every event, one JSON
+  UTF-8 with a byte-order mark. A cell that could run as a formula, because it starts with `=`, `+`, `-`, `@`, a tab or a
+  carriage return, gets a leading `'` so spreadsheets read it as text; a plain number in a
+  numeric column is left as it is. **Export JSON** writes every field of every event, one JSON
   object per line, for up to 100,000 events. Either export stops if its text would pass
   400 MB. An export takes the results as they were when you pressed it.
 
@@ -907,7 +908,7 @@ How a start finds its parent is described in [how the process tree links](#how-t
 
 #### SQL
 
-A read-only console over the package's tables. `Ctrl` or `⌘` with `Enter` runs the query,
+A console for one SELECT at a time over the package's tables. `Ctrl` or `⌘` with `Enter` runs the query,
 **Tables** lists the tables and their columns, a click inserts a name, and **Export CSV**
 saves the rows shown. The console does not apply the page's filters. Its limits are in
 [the SQL console](#the-sql-console).
@@ -997,11 +998,12 @@ ORDER BY e._zl_time
   `CREATE`, `INSERT`, `DROP`, `ATTACH`, `COPY`, `SET`, `PRAGMA`, `EXPLAIN`, and a `PIVOT`
   without its `IN` list. A trailing semicolon is fine.
 - **Everything comes back as text**, so 64-bit integers stay exact.
-- **At most 10,000 rows are shown**; the console says when there are more, and a `WHERE` or a
-  `LIMIT` reaches the others. **Export CSV** saves the rows shown.
-- **The package's tables cannot change.** A SELECT can still call DuckDB's logging functions,
-  which change the logging of this browser session, never the tables; the console switches
-  logging back off after every query. Reloading the page restores everything.
+- **At most 10,000 rows are shown**; the console says when there are more. Narrow the query with a
+  `WHERE`, or aggregate, to see the rest. **Export CSV** saves the rows shown.
+- **The package's tables cannot change.** A SELECT can still call DuckDB's logging and
+  checkpoint functions, which change this browser session's logging and in-memory files, never
+  the tables. The console switches logging back off after each query when it can. Reloading the
+  page restores everything.
 - The search, the time range and **Detections only** do not apply here; write them in SQL.
   The text you type is kept while you visit other views, but not across a reload.
 
