@@ -1,3 +1,4 @@
+import { DETECTIONS_PREDICATE } from '../state/where';
 import { CATALOG, isActive, replacement, subTechniques, type Technique } from './catalog';
 
 function matched(where: string): string {
@@ -111,11 +112,14 @@ export function unlisted(stored: readonly string[], counts: ReadonlyMap<string, 
 
 export const WEEKDAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'] as const;
 
-/** Events with detections by UTC weekday (1 is Monday) and hour; events without a time cannot be placed. */
+/**
+ * Events with detections by UTC weekday (1 is Monday) and hour; events without a time cannot be placed.
+ * "With detections" is Detections only's own predicate, which a cell's click adds.
+ */
 export function heatmapSql(where: string): string {
   return (
     'SELECT isodow(_zl_time)::INTEGER AS day, hour(_zl_time)::INTEGER AS hour, count(*)::DOUBLE AS events FROM events ' +
-    `WHERE (${where}) AND _zl_uid IN (SELECT _zl_uid FROM event_levels) AND _zl_time IS NOT NULL GROUP BY ALL`
+    `WHERE (${where}) AND (${DETECTIONS_PREDICATE}) AND _zl_time IS NOT NULL GROUP BY ALL`
   );
 }
 

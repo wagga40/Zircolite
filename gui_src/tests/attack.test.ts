@@ -116,6 +116,11 @@ describe('the heatmap', () => {
     const term = compile(parse(heatTerm(4, 6)), schema);
     expect(await db.uids(`(${term}) AND (${DETECTIONS_PREDICATE})`)).toEqual([1, 2, 3]);
   });
+
+  it('counts events with detections as Detections only lists them', () => {
+    expect(heatmapSql('TRUE')).toContain(DETECTIONS_PREDICATE);
+    expect(heatmapSql('TRUE')).not.toContain('event_levels');
+  });
 });
 
 // Vitest runs from gui_src.
