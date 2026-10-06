@@ -125,6 +125,14 @@ try {
   report.overview_ms = await timed(() => nav('Overview'), filled('#overview-tiles', 'data-events'));
   report.detections_ms = await timed(() => nav('Detections'), filled('#detections-summary', 'data-rules'));
   report.timeline_ms = await timed(() => nav('Timeline'), filled('#timeline-marks', 'data-count'));
+  report.attack_ms = await timed(() => nav('ATT&CK'), filled('#attack-matrix', 'data-techniques'));
+  report.entities_ms = await timed(() => nav('Entities'), filled('#entities-table', 'data-rows'));
+  report.processes_ms = await timed(() => nav('Processes'), filled('#process-tree', 'data-starts'));
+  report.sql_count_ms = await timed(async () => {
+    await nav('SQL');
+    await page.locator('#sql-editor').fill('SELECT count(*) AS n FROM events');
+    await page.getByRole('button', { name: 'Run', exact: true }).click();
+  }, filled('#sql-result', 'data-rows'));
   await nav('Explore');
   build = 0;
   await settled();

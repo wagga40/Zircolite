@@ -31,7 +31,7 @@
   let extent = $state<Span | null | undefined>(undefined);
   let span = $state<Span | null>(null);
   let request = $state<{ span: Span; bucket: number } | null>(null);
-  let marks = $state.raw<{ rows: Mark[]; from: number; bucket: number } | null>(null);
+  let marks = $state.raw<{ rows: Mark[]; from: number; to: number; bucket: number } | null>(null);
   let pinned = $state<Mark | null>(null);
   let pending = $state(true);
   let failure = $state<string | null>(null);
@@ -181,7 +181,7 @@
     db.rows<Mark>(sql, { lane: 'marks' }).then(
       (rows) => {
         if (mine !== ticket) return;
-        marks = { rows, from: Math.floor(frame.from), bucket };
+        marks = { rows, from: Math.floor(frame.from), to: Math.ceil(frame.to), bucket };
         // A pinned count belongs to the marks it was read from.
         const kept = untrack(() => pinned);
         if (kept && !rows.some((m) => m.lane === kept.lane && m.uid === kept.uid && m.n === kept.n && m.first === kept.first && m.last === kept.last)) pinned = null;
@@ -380,7 +380,7 @@
     </div>
     <p class="note">Ctrl or ⌘ with the wheel zooms; drag to move. A mark holds the events detected under one tactic within a few pixels of time{filtered ? ', under the current filters' : ''}.</p>
   </header>
-  <output id="timeline-marks" hidden data-count={pending ? '' : placed.length}></output>
+  <output id="timeline-marks" hidden data-count={pending ? '' : placed.length} data-from={pending || !marks ? '' : marks.from} data-to={pending || !marks ? '' : marks.to}></output>
   {#if failure}
     <p class="note failure" role="alert">The timeline could not be drawn: {failure}. Change the search, or reload the page if this repeats.</p>
   {:else if stopped}
@@ -431,7 +431,7 @@
           {:else}
             {#each listed.shown as group (group.lane)}
               {#if group.marks.length}
-                <h2>{laneLabel(group.lane)}, {formatCount(group.total)} {group.total === 1 ? 'event' : 'events'}</h2>
+                <h2 data-lane={group.lane} data-events={group.total}>{laneLabel(group.lane)}, {formatCount(group.total)} {group.total === 1 ? 'event' : 'events'}</h2>
                 <ul>
                   {#each group.marks as mark (`${mark.lane}:${mark.b}`)}
                     <li>

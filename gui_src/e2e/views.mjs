@@ -37,22 +37,43 @@ function reassemble(name) {
   }));
 }
 
-/** How many events a scan of every field finds: the ground truth the index must agree with. */
-async function scanCount(word) {
+/** Writes the package's events.parquet to a temp directory and runs `fn(connection, file)` on it in node DuckDB. */
+async function withEvents(fn) {
   const file = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'zl-views-')), 'events.parquet');
   fs.writeFileSync(file, reassemble('events.parquet'));
   const instance = await DuckDBInstance.create(':memory:');
   const conn = await instance.connect();
   try {
-    const columns = manifest.columns.map((c) => `"${c.name.replaceAll('"', '""')}"`).join(', ');
-    const sql = `SELECT count(*)::DOUBLE AS n FROM read_parquet('${file.replaceAll("'", "''")}') ` +
-      `WHERE concat_ws(chr(31), ${columns}) ILIKE '%${word.replaceAll("'", "''")}%'`;
-    return Number((await conn.runAndReadAll(sql)).getRowObjectsJS()[0].n);
+    return await fn(conn, file);
   } finally {
     conn.closeSync();
     instance.closeSync();
     fs.rmSync(path.dirname(file), { recursive: true, force: true });
   }
+}
+
+/** How many events a scan of every field finds: the ground truth the index must agree with. */
+function scanCount(word) {
+  return withEvents(async (conn, file) => {
+    const columns = manifest.columns.map((c) => `"${c.name.replaceAll('"', '""')}"`).join(', ');
+    const sql = `SELECT count(*)::DOUBLE AS n FROM read_parquet('${file.replaceAll("'", "''")}') ` +
+      `WHERE concat_ws(chr(31), ${columns}) ILIKE '%${word.replaceAll("'", "''")}%'`;
+    return Number((await conn.runAndReadAll(sql)).getRowObjectsJS()[0].n);
+  });
+}
+
+/** Process starts in the package, counted on its own Parquet: what the tree must count with no filter. */
+async function processStarts() {
+  const names = new Map(manifest.columns.map((c) => [c.key, c.name]));
+  const channel = names.get('channel');
+  const eventid = names.get('eventid');
+  if (!channel || !eventid) return 0;
+  const c = `lower(CAST("${channel.replaceAll('"', '""')}" AS VARCHAR))`;
+  const e = `CAST("${eventid.replaceAll('"', '""')}" AS VARCHAR)`;
+  return withEvents(async (conn, file) => Number((await conn.runAndReadAll(
+    `SELECT count(*)::DOUBLE AS n FROM read_parquet('${file.replaceAll("'", "''")}') WHERE ` +
+    `(${c} IN ('microsoft-windows-sysmon/operational', 'linux-sysmon/operational') AND ${e} = '1') OR (${c} = 'security' AND ${e} = '4688')`,
+  )).getRowObjectsJS()[0].n));
 }
 
 function check(condition, message) {
@@ -146,7 +167,110 @@ async function correlationAlerts(page, state, steps) {
   steps.push(`correlation alerts of ${opened.length} rules open at once, with ${opened.map((o) => o.claimed).join(' and ')} events of evidence`);
 }
 
-async function scenario(page, open, steps, expectedText) {
+async function phase4(page, state, steps, expectedStarts) {
+  const fresh = (hash) => page.goto(`${url}#/${hash}`);
+  const clickAndCount = async (target, what) => {
+    const expected = Number(await target.getAttribute('data-events'));
+    await target.click();
+    const listed = await reopened(page, state);
+    check(listed.count === expected, `${what} counts ${expected}; Explore lists ${listed.count}`);
+  };
+
+  // ATT&CK: a technique, a tactic and an hour each list exactly their events.
+  for (const [selector, what] of [
+    ['#attack-matrix button[data-technique]:not([data-events="0"])', 'a technique'],
+    ['#attack-matrix button[data-tactic]:not([data-events="0"])', 'a tactic'],
+    ['button[data-day]:not([disabled])', 'an hour of the heatmap'],
+  ]) {
+    await fresh('attack');
+    await poll(page, () => number(page.locator('#attack-matrix'), 'data-techniques'), 'the ATT&CK matrix');
+    const target = page.locator(selector).first();
+    if ((await target.count()) === 0) {
+      steps.push(`ATT&CK: nothing to check for ${what}`);
+      continue;
+    }
+    await clickAndCount(target, what);
+  }
+  steps.push('ATT&CK techniques, tactics and hours list exactly their events');
+
+  // Entities: the first host and the first user list exactly their events.
+  for (const label of ['Hosts', 'Users']) {
+    await fresh('entities');
+    await page.getByRole('button', { name: label, exact: true }).click();
+    const table = page.locator('#entities-table');
+    if ((await table.count()) === 0) {
+      steps.push(`entities: this package has no field for ${label.toLowerCase()}`);
+      continue;
+    }
+    const rows = await poll(page, () => number(table, 'data-rows'), `the ${label.toLowerCase()}`);
+    if (!rows) continue;
+    await clickAndCount(page.locator('#entities-table button.value').first(), `the first of the ${label.toLowerCase()}`);
+  }
+  steps.push('entities list exactly their events');
+
+  // Processes: the tree counts every process start, and a start opens as its event.
+  await fresh('processes');
+  const tree = page.locator('#process-tree');
+  if ((await tree.count()) > 0) {
+    const starts = await poll(page, async () => {
+      const value = await tree.getAttribute('data-starts');
+      return value === null || value === '' ? null : Number(value);
+    }, 'the process tree');
+    check(starts === expectedStarts, `the tree counts ${starts} process starts; the package holds ${expectedStarts}`);
+    if (starts > 0) {
+      await page.locator('[role="treeitem"]').first().click();
+      const heading = page.locator('aside[aria-label="Event details"] h2');
+      // The heading reads "Event" until the event itself has been read.
+      const title = await poll(page, async () => {
+        const text = ((await heading.textContent()) ?? '').trim();
+        return text === 'Event' ? null : text;
+      }, 'the event to open');
+      check(/ (1|4688)$/.test(title), `a process start opens as "${title}"`);
+      await page.keyboard.press('Escape');
+    }
+  }
+  steps.push('the process tree counts every process start');
+
+  // SQL: it counts the events, and refuses to drop them.
+  await fresh('sql');
+  const editor = page.locator('#sql-editor');
+  const runSql = async (text) => {
+    await editor.fill(text);
+    await page.getByRole('button', { name: 'Run', exact: true }).click();
+  };
+  const firstCell = async () => {
+    await poll(page, () => number(page.locator('#sql-result'), 'data-rows'), 'the SQL result');
+    return Number(await page.locator('#sql-result [role="cell"]').first().textContent());
+  };
+  await runSql('SELECT count(*) AS n FROM events');
+  check((await firstCell()) === manifest.totals.events, 'the SQL console does not count the package\'s events');
+  await runSql('DROP TABLE events');
+  await page.locator('p[role="alert"]', { hasText: 'The query did not run' }).waitFor();
+  await runSql('SELECT count(*) AS n FROM events');
+  check((await firstCell()) === manifest.totals.events, 'the events changed after the console refused a DROP');
+  steps.push('the SQL console counts the events and refuses to change them');
+
+  // Timeline: a lane holds exactly the events of its tactic in the window drawn.
+  await fresh('timeline');
+  const marks = page.locator('#timeline-marks');
+  await poll(page, async () => ((await number(marks, 'data-count')) ?? 0) > 0, 'timeline marks');
+  const from = await number(marks, 'data-from');
+  const to = await number(marks, 'data-to');
+  await page.getByRole('button', { name: 'List the marks' }).click();
+  const lane = page.locator('h2[data-lane]:not([data-lane=""])').first();
+  if ((await lane.count()) > 0) {
+    const tactic = await lane.getAttribute('data-lane');
+    const events = Number(await lane.getAttribute('data-events'));
+    await page.goto(`${url}#/explore?q=${encodeURIComponent(`tactic:${tactic}`)}&t=${from}~${to}`);
+    const listed = await reopened(page, state);
+    check(listed.count === events, `the ${tactic} lane holds ${events} events; Explore lists ${listed.count} in its window`);
+  }
+  steps.push('a timeline lane holds exactly its tactic\'s events in the window');
+  await page.goto(`${url}#/explore`);
+  await reopened(page, state);
+}
+
+async function scenario(page, open, steps, expectedText, expectedStarts) {
   const state = { build: 0 };
   await page.goto(`${url}#/overview`);
   await poll(page, async () => /ready|error/.test(await page.title()), 'the viewer', 240_000);
@@ -210,6 +334,8 @@ async function scenario(page, open, steps, expectedText) {
   check(after === tiles, `after leaving a search on Explore, the overview tiles hold ${after} events, not ${tiles}`);
   steps.push('leaving a search midway leaves the overview counts whole');
 
+  await phase4(page, state, steps, expectedStarts);
+
   if (manifest.totals.alerts > 0) await correlationAlerts(page, state, steps);
   else steps.push('correlation alerts skipped: this package has none');
 
@@ -237,6 +363,7 @@ async function scenario(page, open, steps, expectedText) {
 }
 
 const expectedText = await scanCount(WORD);
+const expectedStarts = await processStarts();
 let failed = false;
 for (const [name, type] of [['chromium', chromium], ['firefox', firefox], ['webkit', webkit]]) {
   const browser = await type.launch();
@@ -256,7 +383,7 @@ for (const [name, type] of [['chromium', chromium], ['firefox', firefox], ['webk
     return page;
   };
   try {
-    await scenario(await open(), open, steps, expectedText);
+    await scenario(await open(), open, steps, expectedText, expectedStarts);
     check(errors.length === 0, `the page reported errors: ${errors.join(' | ')}`);
     check(requests.length === 0, `the page made network requests: ${requests.join(' ')}`);
     console.log(JSON.stringify({ browser: name, ok: true, seconds: (Date.now() - started) / 1000, steps }));
