@@ -84,7 +84,7 @@
 <main class="sql">
   <header>
     <h1 tabindex="-1">SQL</h1>
-    <p class="note">Read only: one SELECT at a time over events, rules, hits, alerts and alert_events.</p>
+    <p class="note">One SELECT at a time over events, rules, hits, alerts and alert_events. The package's tables cannot change.</p>
   </header>
   <div class="top">
     <div class="edit">

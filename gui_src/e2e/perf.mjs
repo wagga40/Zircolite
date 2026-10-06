@@ -1,5 +1,5 @@
-// Times Explore's main interactions on a large package in Chromium, for the budgets in the
-// design spec. Usage: npm run perf -- <unpacked package dir>
+// Times loading, Explore's main interactions, every view and full-text search on a large
+// package in Chromium, for the budgets in the design spec. Usage: npm run perf -- <unpacked package dir>
 import fs from 'node:fs';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';

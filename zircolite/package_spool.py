@@ -315,8 +315,9 @@ class PartWriter:
     def sink(self, result: dict[str, Any]) -> None:
         """Record which events ``result`` matched: a result sink for ``execute_ruleset``.
 
-        It never raises. An exception here would stop the rule loop and lose
-        the detections output with it, so ``finish`` reports the first failure.
+        A write or data failure is kept rather than raised: an exception here
+        would stop the rule loop and lose the detections output with it. After
+        the first one nothing more is recorded, and ``finish`` raises it.
         """
         if self._error is not None:
             return

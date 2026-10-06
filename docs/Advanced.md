@@ -781,8 +781,8 @@ stands beside the view; on a narrower window it covers part of it. It lists the 
 matched the event, each with **Filter by this rule**, then the fields grouped as System, User,
 Process, Network, File and registry, and Other. Each value has + (filter for it), − (filter it
 out) and **Copy**. **Show JSON** and **Copy JSON** give the whole event, and **Events on
-_host_ within 5 minutes** replaces the search with that host and sets the time range to five
-minutes either side of the event.
+_host_ within 5 minutes** replaces the search with that host, sets the time range to five
+minutes either side of the event and turns **Detections only** off.
 
 ### The views
 
@@ -1067,8 +1067,9 @@ logs is a root, labelled with the parent's image or PID.
   directory: `npm run smoke -- <dir>` (it opens in Chromium, Firefox and WebKit, with the
   events the manifest lists, no network request and no page error), `npm run e2e -- <dir>`
   (cross-checks Explore in all three), `npm run views -- <dir>` (cross-checks every view and
-  full-text search in all three), `npm run perf -- <dir>` (times Explore in Chromium) and
-  `npm run shot -- <dir> <out.png>` (a screenshot). They need the Playwright browsers:
+  full-text search in all three), `npm run perf -- <dir>` (times loading, Explore, every view
+  and full-text search in Chromium) and `npm run shot -- <dir> <out.png>` (a screenshot).
+  They need the Playwright browsers:
   `npx playwright install chromium firefox webkit`. CI runs smoke, e2e and views on a package
   built from EVTX-ATTACK-SAMPLES.
 - [Internals → Package pipeline](Internals.md#package-pipeline) describes how a package is

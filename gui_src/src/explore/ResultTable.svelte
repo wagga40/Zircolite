@@ -349,7 +349,7 @@
     {:else}
       <span class="exports">
         <button type="button" bind:this={csvButton} disabled={busy || total === 0} onclick={() => runExport('csv')}
-          title="The shown columns, one row per event. A cell starting with = + - or @ gets a leading ' so spreadsheets read it as text.">Export CSV</button>
+          title="The shown columns, one row per event. A cell starting with = + - @, a tab or a carriage return gets a leading ' so spreadsheets read it as text; a plain number in a numeric column stays as it is.">Export CSV</button>
         <button type="button" bind:this={jsonButton} disabled={busy || total === 0} onclick={() => runExport('json')}
           title="Every field of every event, one JSON object per line, for up to 100,000 events.">Export JSON</button>
       </span>

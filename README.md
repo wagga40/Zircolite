@@ -288,8 +288,8 @@ See the [documentation index](docs/README.md) for usage, configuration and inter
 detections and correlation alerts linked to them. Extract it and open `index.html`: the viewer
 runs offline in a browser, with nothing to install and no network, and offers an overview,
 the detections, a searchable event table, a timeline, the ATT&CK matrix, entities, process
-trees and a read-only SQL console. Share a package as you would the logs it came from; see
-[Package viewer](docs/Advanced.md#package-viewer).
+trees and an SQL console for one SELECT at a time over the package's tables. Share a package
+as you would the logs it came from; see [Package viewer](docs/Advanced.md#package-viewer).
 
 ![The package viewer's Overview](pics/viewer-overview.webp)
 

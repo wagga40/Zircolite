@@ -282,9 +282,10 @@ needs only the standard library and orjson. Each working database is one **part*
   never scans for them.
 - **Hits.** `PartWriter.sink` is the result sink `execute_ruleset` hands every rule's result
   to. Matches become `rule_idx,part,row_id` lines; correlation alerts become NDJSON, and their
-  evidence events count as hits of the correlation rule. The sink never raises, because an
-  exception there would stop the rule loop and lose the detections output; `finish` reports
-  the first failure instead.
+  evidence events count as hits of the correlation rule. The sink catches `PackageError`,
+  `OSError`, `ValueError` and `TypeError`, because an exception there would stop the rule loop
+  and lose the detections output: it keeps the first one, records nothing more, and `finish`
+  raises it, which fails the package. Any other exception propagates.
 - **Refusals.** A field whose name starts with the reserved `_zl_` prefix, or a `row_id`
   outside `0` to `2³² − 1`, fails the package, as does a correlation alert citing an event
   from a table other than `logs`.
