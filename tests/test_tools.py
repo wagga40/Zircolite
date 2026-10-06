@@ -723,6 +723,15 @@ class TestPackageRefusals:
         assert code == 1
         assert "not a onedir build" in err
 
+    @pytest.mark.parametrize("name", ["viewer.json", "THIRD_PARTY_NOTICES.txt"])
+    def test_a_viewer_without_its_notices_is_refused(self, release, checkout, name,
+                                                     monkeypatch, capsys):
+        (checkout / "gui" / "viewer" / name).unlink()
+        code, printed, err = package(release, checkout, "linux-x64", monkeypatch, capsys)
+        assert code == 1 and printed == ""
+        assert name in err
+        assert not list((checkout / "dist").glob("Zircolite-*"))
+
     @pytest.mark.skipif(os.name == "nt", reason="creating a symlink needs a privilege on Windows")
     @pytest.mark.parametrize("link", ["docs/Alias.md", "config/nested/config.yaml", "README.md"])
     def test_symlink_in_the_copied_sources_fails_a_posix_target(self, release, checkout, link,
@@ -819,7 +828,7 @@ class TestThirdPartyLicences:
 
     def test_every_runtime_dependency_has_a_section(self, release, notices):
         titles = {title.split(" ")[0].lower() for title in self.titles(release, notices)}
-        for name in ["rich", "pysigma", "orjson", "lxml", "py7zr", "requests", "pyroaring"]:
+        for name in ["rich", "pysigma", "orjson", "lxml", "py7zr", "requests", "pyroaring", "duckdb"]:
             assert name in titles, name
         # The project itself is under LICENSE, not in the third-party file.
         assert "zircolite" not in titles

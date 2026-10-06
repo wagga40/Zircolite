@@ -17,6 +17,9 @@ binaries = []
 # py7zr is only imported inside functions. The bytecode scan finds those
 # imports today; naming it keeps .7z support from depending on that.
 hiddenimports = ['py7zr']
+# zircolite/package.py writes the package's Parquet through duckdb; naming it keeps --package from
+# depending on the import scan, and its optional dataframe integrations stay out of the bundle.
+hiddenimports += ['duckdb']
 
 
 def _not_a_test_module(name):
@@ -80,7 +83,8 @@ a = Analysis(
     # follows that dead branch into setuptools._vendor. Nothing here runs it,
     # and bundling it would ship code no licence notice covers.
     excludes=['tkinter', '_tkinter', 'pytest', 'Cython', 'IPython',
-              'setuptools', '_distutils_hack', 'pkg_resources'],
+              'setuptools', '_distutils_hack', 'pkg_resources',
+              'pandas', 'numpy', 'pyarrow', 'polars'],
     noarchive=False,
     optimize=0,
 )

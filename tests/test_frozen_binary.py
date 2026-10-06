@@ -674,7 +674,18 @@ class TestAssets:
         packages = list(run.cwd.glob("zircolite-package-*.zip"))
         assert len(packages) == 1, f"expected one package, found {packages}"
         with zipfile.ZipFile(packages[0]) as package:
-            assert "index.html" in package.namelist()
+            names = package.namelist()
+            manifest = package.read("data/manifest.js").decode("utf-8")
+
+        for name in ("index.html", "app.js", "data/manifest.js"):
+            assert name in names
+        assert any(re.fullmatch(r"data/events\.parquet\.\d+\.js", name) for name in names)
+        wrapped = json.loads((WORKSPACE_ROOT / "gui" / "viewer" / "viewer.json").read_text(encoding="utf-8"))["wrap"]
+        for engine in wrapped:
+            assert any(re.fullmatch(rf"assets/{re.escape(engine)}\.\d+\.js", name) for name in names), engine
+        # sample_bitsadmin.evtx holds one event.
+        totals = json.loads(manifest[manifest.index("(") + 1:manifest.rindex(")")])["totals"]
+        assert totals["events"] == 1
 
     def test_rules_beside_the_executable_win_over_the_bundle(self, runner, dist, tmp_path):
         copy = copy_dist(dist, tmp_path / "dist")
