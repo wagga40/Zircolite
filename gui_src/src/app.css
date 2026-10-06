@@ -43,7 +43,8 @@
   --sev-2: #9c7409;
   --sev-3: #c2531a;
   --sev-4: #a3134e;
-  --sev-unknown: var(--ink-2);
+  /* A rule whose level is none of Sigma's: a hue no level uses, never mistaken for informational. */
+  --sev-unknown: #5a2f96;
   /* The event drawer's width: the drawer, the shell's reserved space and the timeline's note all read it. */
   --drawer-w: 560px;
   --danger: #a3134e;
@@ -75,6 +76,7 @@
     --sev-2: #e0b43f;
     --sev-3: #f2834a;
     --sev-4: #f2568e;
+    --sev-unknown: #8a5fc6;
     --danger: #f2568e;
   --scrim: rgb(0 0 0 / 0.55);
   }
@@ -94,6 +96,7 @@
   --sev-2: #e0b43f;
   --sev-3: #f2834a;
   --sev-4: #f2568e;
+  --sev-unknown: #8a5fc6;
   --danger: #f2568e;
   --scrim: rgb(0 0 0 / 0.55);
 }

@@ -1,5 +1,3 @@
-import { readFileSync } from 'node:fs';
-import { join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { CATALOG, technique } from '../src/attack/catalog';
 import {
@@ -8,6 +6,7 @@ import {
 import { compile } from '../src/search/compile';
 import { parse } from '../src/search/parse';
 import { DETECTIONS_PREDICATE } from '../src/state/where';
+import { channels, contrast, mix, STYLESHEET, tokens } from './contrast';
 import { type Fixture, openFixture, schema } from './fixture';
 
 // Two more rules: one tagged with the parent T1059 (on event 3, already under T1033), one with T1562.001,
@@ -122,31 +121,6 @@ describe('the heatmap', () => {
     expect(heatmapSql('TRUE')).not.toContain('event_levels');
   });
 });
-
-// Vitest runs from gui_src.
-const STYLESHEET = readFileSync(join(process.cwd(), 'src', 'app.css'), 'utf8');
-
-/** A theme's colour tokens, read from the stylesheet the page uses: the light root block, or the dark one. */
-function tokens(theme: 'light' | 'dark'): Record<string, string> {
-  const css = STYLESHEET;
-  const block = theme === 'light' ? /:root\s*\{([^}]*)\}/.exec(css) : /:root\[data-theme='dark'\]\s*\{([^}]*)\}/.exec(css);
-  return Object.fromEntries([...(block?.[1] ?? '').matchAll(/(--[\w-]+):\s*(#[0-9a-f]{6})/gi)].map((m) => [m[1], m[2]]));
-}
-
-const channels = (hex: string) => [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16));
-function luminance(rgb: number[]): number {
-  const [r, g, b] = rgb.map((c) => {
-    const v = c / 255;
-    return v <= 0.04045 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4;
-  });
-  return 0.2126 * r + 0.7152 * g + 0.0722 * b;
-}
-function contrast(a: number[], b: number[]): number {
-  const [hi, lo] = [luminance(a), luminance(b)].sort((x, y) => y - x);
-  return (hi + 0.05) / (lo + 0.05);
-}
-/** color-mix(in srgb, a p%, b): each channel mixed as written, then rounded as the browser stores it. */
-const mix = (a: string, b: string, p: number) => channels(a).map((c, i) => Math.round((c * p + channels(b)[i] * (100 - p)) / 100));
 
 describe('heat', () => {
   it('leaves an empty cell plain', () => {
