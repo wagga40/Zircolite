@@ -6,7 +6,7 @@ import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { gzipSync } from 'fflate';
+import { gzip } from 'pako';
 
 const root = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 const out = path.resolve(root, '../gui/viewer');
@@ -64,9 +64,9 @@ function notices() {
 
 fs.copyFileSync(path.join(root, 'index.html'), path.join(out, 'index.html'));
 fs.copyFileSync(path.join(dist, 'duckdb-browser-eh.worker.js'), path.join(out, 'duckdb-browser-eh.worker.js'));
-// fflate, not node:zlib: zlib's output differs between Node builds and CPU
-// architectures, and CI must rebuild these bytes exactly.
-fs.writeFileSync(path.join(out, 'duckdb-eh.wasm.gz'), gzipSync(fs.readFileSync(path.join(dist, 'duckdb-eh.wasm')), { level: 9, mtime: 0 }));
+// pako, not node:zlib: zlib's output differs across Node builds and CPUs, and CI
+// must rebuild these bytes exactly. A fixed time and OS keep the header the same too.
+fs.writeFileSync(path.join(out, 'duckdb-eh.wasm.gz'), gzip(fs.readFileSync(path.join(dist, 'duckdb-eh.wasm')), { level: 9, header: { time: 0, os: 255 } }));
 fs.writeFileSync(path.join(out, 'parquet.duckdb_extension.wasm'), await parquetExtension());
 fs.writeFileSync(path.join(out, 'THIRD_PARTY_NOTICES.txt'), notices());
 fs.writeFileSync(path.join(out, 'viewer.json'), JSON.stringify({
