@@ -12,7 +12,7 @@
   import { Panel } from '../ui/panel.svelte';
   import { ownScope } from '../ui/scope';
   import { windowOf } from '../ui/virtual';
-  import { ancestorsSql, creationPredicate, PROCESS_LIMIT, processCountSql, processRowsSql } from './processes';
+  import { ANCESTOR_LIMIT, ancestorsSql, creationPredicate, keepAncestors, PROCESS_LIMIT, processCountSql, processRowsSql } from './processes';
   import { basename, buildForest, type Process, type RawProcess, type Row, toProcess, visibleAncestor, visibleRows, withChildren } from './tree';
 
   let { db: page, schema, manifest, query }: { db: Db; schema: Schema; manifest: Manifest; query: QueryState } = $props();
@@ -22,7 +22,7 @@
   // The sticky column header sits in the scroller above the rows, so it covers this much of the viewport.
   const HEAD = 28;
 
-  interface Tree { roots: Process[]; starts: number; shown: number; context: number; nodes: number }
+  interface Tree { roots: Process[]; starts: number; shown: number; context: number; capped: boolean; nodes: number }
   const tree = new Panel<Tree>();
   const findable = $derived(creationPredicate(schema) !== null);
   const guidField = $derived(schema.find('ProcessGuid'));
@@ -41,9 +41,9 @@
       const [count] = await db.rows<{ n: number }>(processCountSql(schema, where) as string, { lane: 'tree' });
       const rows = await db.rows<RawProcess>(processRowsSql(schema, where) as string, { lane: 'tree' });
       const ancestors = ancestorsSql(schema, where);
-      const context = ancestors ? await db.rows<RawProcess>(ancestors, { lane: 'tree' }) : [];
+      const { rows: context, capped } = keepAncestors(ancestors ? await db.rows<RawProcess>(ancestors, { lane: 'tree' }) : []);
       const roots = buildForest([...rows, ...context].map(toProcess));
-      return { roots, starts: count?.n ?? 0, shown: rows.length, context: context.length, nodes: rows.length + context.length };
+      return { roots, starts: count?.n ?? 0, shown: rows.length, context: context.length, capped, nodes: rows.length + context.length };
     });
   });
 
@@ -166,6 +166,9 @@
   {:else}
     {#if tree.slot.data && tree.slot.data.starts > tree.slot.data.shown}
       <p class="note">The filters keep {formatCount(tree.slot.data.starts)} process starts; the tree shows the first {formatCount(PROCESS_LIMIT)} by start time. Narrow the search or the time range to see the rest.</p>
+    {/if}
+    {#if tree.slot.data?.capped}
+      <p class="note">Ancestors stop at {formatCount(ANCESTOR_LIMIT)}; the nearest are shown. Narrow the search to see the rest.</p>
     {/if}
     {#if tree.slot.data?.context}<p class="note">Grey rows are ancestors outside the filters. A start links to the start its parent ProcessGuid names, or else to the latest earlier start of its parent PID on the same host.</p>{/if}
     {#if !guidField}<p class="note">This package has no ProcessGuid field, so processes link by host, parent PID and start time.</p>{/if}

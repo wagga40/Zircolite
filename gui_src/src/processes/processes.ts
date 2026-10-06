@@ -128,9 +128,15 @@ export function ancestorsSql(schema: Schema, where: string, limit = PROCESS_LIMI
     '_zl_up(_zl_uid, _zl_depth) AS (SELECT k._zl_parent, 1 FROM _zl_link k JOIN m ON m._zl_uid = k._zl_uid ' +
     `UNION SELECT k._zl_parent, u._zl_depth + 1 FROM _zl_link k JOIN _zl_up u ON k._zl_uid = u._zl_uid WHERE u._zl_depth < ${ANCESTOR_DEPTH}), ` +
     'a AS (SELECT _zl_uid, min(_zl_depth) AS _zl_depth FROM _zl_up WHERE _zl_uid NOT IN (SELECT _zl_uid FROM m) GROUP BY _zl_uid ' +
-    `ORDER BY _zl_depth, _zl_uid LIMIT ${Math.max(1, Math.floor(ancestors))}) ` +
+    // One row past the limit tells the tree it stopped there.
+    `ORDER BY _zl_depth, _zl_uid LIMIT ${Math.max(1, Math.floor(ancestors)) + 1}) ` +
     `SELECT ${projection(schema)}, k._zl_parent, TRUE AS context FROM events e JOIN a ON a._zl_uid = e._zl_uid ` +
     'LEFT JOIN _zl_link k ON k._zl_uid = e._zl_uid LEFT JOIN event_levels l ON l._zl_uid = e._zl_uid ' +
     'ORDER BY a._zl_depth, e._zl_uid'
   );
+}
+
+/** The ancestors the tree shows: the nearest up to the limit, and whether more were cut off. */
+export function keepAncestors<T>(rows: T[], limit = ANCESTOR_LIMIT): { rows: T[]; capped: boolean } {
+  return rows.length > limit ? { rows: rows.slice(0, limit), capped: true } : { rows, capped: false };
 }

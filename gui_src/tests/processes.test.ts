@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { type Field, Schema } from '../src/engine/schema';
-import { ancestorsSql, creationPredicate, PROCESS_LIMIT, processCountSql, processRowsSql } from '../src/processes/processes';
+import { ancestorsSql, creationPredicate, keepAncestors, PROCESS_LIMIT, processCountSql, processRowsSql } from '../src/processes/processes';
 import {
   basename, buildForest, pidText, type Process, type RawProcess, toProcess, visibleAncestor, visibleRows,
 } from '../src/processes/tree';
@@ -273,8 +273,12 @@ describe('process lineage over every start', () => {
     expect([guidOnly.parent(103), guidOnly.parent(202), guidOnly.parent(1003)]).toEqual([null, null, 1002]);
   });
 
-  it('stops at the ancestor limit with the nearest kept', async () => {
-    const rows = await db.rows(ancestorsSql(wide, uids([1003]), PROCESS_LIMIT, 1) as string);
-    expect(rows.map((r) => r._zl_uid)).toEqual([1002]);
+  it('stops at the ancestor limit with the nearest kept, and knows it stopped', async () => {
+    const over = await db.rows(ancestorsSql(wide, uids([1003]), PROCESS_LIMIT, 1) as string);
+    expect(over.map((r) => r._zl_uid)).toEqual([1002, 1001]);
+    const cut = keepAncestors(over, 1);
+    expect([cut.rows.map((r) => r._zl_uid), cut.capped]).toEqual([[1002], true]);
+    const all = keepAncestors(await db.rows(ancestorsSql(wide, uids([1003]), PROCESS_LIMIT, 2) as string), 2);
+    expect([all.rows.map((r) => r._zl_uid), all.capped]).toEqual([[1002, 1001], false]);
   });
 });
