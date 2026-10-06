@@ -337,6 +337,8 @@ async function scenario(page, open, steps, expectedText, expectedStarts) {
     await search(page, state, '');
     steps.push(`a tactic cell lists exactly its events (${tactic}, ${claimed})`);
   } else {
+    // A skip is honest only when no detection carries a tactic; otherwise the cells lost their counts.
+    check(tagged.tactics === 0, `no tactic cell has events, but ${tagged.tactics} detections carry a tactic`);
     steps.push('tactic cell skipped: no tactic has events in this package');
   }
 
