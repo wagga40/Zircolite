@@ -48,7 +48,8 @@
   function onkeydown(event: KeyboardEvent): void {
     if (event.key === 'Enter' && (event.ctrlKey || event.metaKey)) {
       event.preventDefault();
-      execute();
+      // As the Run button: a run in progress is stopped with Stop, not replaced by a keystroke.
+      if (!result.slot.pending) execute();
     }
   }
 
@@ -111,7 +112,7 @@
           </details>
         {/each}
       {:else if tables.slot.stopped}
-        <p class="note" role="status">Stopped.</p>
+        <p class="note" role="status">Stopped. <button type="button" onclick={runAgain}>Run again</button></p>
       {:else if tables.slot.failure}
         <p class="note failure">The tables could not be listed: {tables.slot.failure}.</p>
       {/if}
