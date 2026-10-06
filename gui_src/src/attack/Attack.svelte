@@ -73,7 +73,7 @@
   <header>
     <h1 tabindex="-1">ATT&CK</h1>
     <output class:stale={techniques.slot.pending} aria-busy={techniques.slot.pending}>
-      {#if detected !== null && !techniques.slot.pending}{formatCount(detected)} {detected === 1 ? 'technique' : 'techniques'} detected{filtered ? ' under the current filters' : ''}{:else if techniques.slot.stopped}Stopped{:else}Counting techniques{/if}
+      {#if detected !== null && !techniques.slot.pending}{formatCount(detected)} {detected === 1 ? 'technique' : 'techniques'} detected{filtered ? ' under the current filters' : ''}{:else if techniques.slot.stopped}Stopped{:else if techniques.slot.failure}Techniques not counted{:else}Counting techniques{/if}
     </output>
     <span class="modes" role="group" aria-label="Techniques shown">
       <button type="button" aria-pressed={mode === 'detected'} onclick={() => (mode = 'detected')}>Detected techniques</button>
