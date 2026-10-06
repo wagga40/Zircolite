@@ -39,6 +39,8 @@
   let heading = $state<HTMLHeadingElement>();
   let element = $state<HTMLElement>();
   let opener: HTMLElement | null = null;
+  // Whether an event was open: only closing one returns focus, not the page loading with none.
+  let wasOpen = false;
   let ticket = 0;
   let focused = false;
   const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -78,12 +80,14 @@
     // Closing keeps what is shown until the outro ends, so the drawer does not flash empty while it slides away.
     if (uid === null) {
       // Back closes the drawer as well as Escape does; either way focus goes back where it came from.
-      if (document.activeElement === document.body || element?.contains(document.activeElement)) focusFallback(opener)?.focus();
+      if (wasOpen && (document.activeElement === document.body || element?.contains(document.activeElement))) focusFallback(opener)?.focus();
+      wasOpen = false;
       opener = null;
       focused = false;
       spoken = '';
       return;
     }
+    wasOpen = true;
     // Read only while open: Run again pressed elsewhere must not move focus out of a closed drawer.
     void run.generation;
     void attempt;
