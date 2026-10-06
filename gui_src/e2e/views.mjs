@@ -38,13 +38,15 @@ function reassemble(name) {
 }
 
 /** Writes the package's events.parquet to a temp directory and runs `fn(connection, file)` on it in node DuckDB. */
-async function withEvents(fn) {
-  const file = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'zl-views-')), 'events.parquet');
+async function withEvents(fn, extra = []) {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'zl-views-'));
+  const file = path.join(dir, 'events.parquet');
   fs.writeFileSync(file, reassemble('events.parquet'));
+  for (const name of extra) fs.writeFileSync(path.join(dir, name), reassemble(name));
   const instance = await DuckDBInstance.create(':memory:');
   const conn = await instance.connect();
   try {
-    return await fn(conn, file);
+    return await fn(conn, file, dir);
   } finally {
     conn.closeSync();
     instance.closeSync();
@@ -60,6 +62,18 @@ function scanCount(word) {
       `WHERE concat_ws(chr(31), ${columns}) ILIKE '%${word.replaceAll("'", "''")}%'`;
     return Number((await conn.runAndReadAll(sql)).getRowObjectsJS()[0].n);
   });
+}
+
+/** Hit events whose rule carries a tactic, and a technique: what the ATT&CK matrix must be able to show. */
+function taggedHits() {
+  return withEvents(async (conn, _file, dir) => {
+    const read = (name) => `read_parquet('${path.join(dir, name).replaceAll("'", "''")}')`;
+    const row = (await conn.runAndReadAll(
+      `SELECT count(*) FILTER (WHERE len(r.tactics) > 0)::DOUBLE AS tactics, count(*) FILTER (WHERE len(r.techniques) > 0)::DOUBLE AS techniques ` +
+      `FROM ${read('hits.parquet')} h JOIN ${read('rules.parquet')} r ON r.rule_idx = h.rule_idx`,
+    )).getRowObjectsJS()[0];
+    return { tactics: Number(row.tactics), techniques: Number(row.techniques) };
+  }, ['hits.parquet', 'rules.parquet']);
 }
 
 /** Process starts in the package, counted on its own Parquet: what the tree must count with no filter. */
@@ -168,7 +182,7 @@ async function correlationAlerts(page, state, steps) {
 }
 
 async function phase4(page, state, steps, expectedStarts) {
-  const fresh = (hash) => page.goto(`${url}#/${hash}`);
+  const route = (hash) => page.goto(`${url}#/${hash}`);
   const clickAndCount = async (target, what) => {
     const expected = Number(await target.getAttribute('data-events'));
     await target.click();
@@ -176,26 +190,46 @@ async function phase4(page, state, steps, expectedStarts) {
     check(listed.count === expected, `${what} counts ${expected}; Explore lists ${listed.count}`);
   };
 
-  // ATT&CK: a technique, a tactic and an hour each list exactly their events.
-  for (const [selector, what] of [
-    ['#attack-matrix button[data-technique]:not([data-events="0"])', 'a technique'],
-    ['#attack-matrix button[data-tactic]:not([data-events="0"])', 'a tactic'],
-    ['button[data-day]:not([disabled])', 'an hour of the heatmap'],
-  ]) {
-    await fresh('attack');
+  // ATT&CK: a technique, a tactic and an hour each list exactly their events. Each target is picked only
+  // once its own panel has answered, and a check may skip only when the package holds nothing for it.
+  const checks = [
+    {
+      what: 'a technique', expected: tagged.techniques,
+      wait: async () => (await page.locator('#attack-matrix button[data-technique]').count()) > 0 || null,
+      pick: '#attack-matrix button[data-technique]:not([data-events="0"])',
+    },
+    {
+      what: 'a tactic', expected: tagged.tactics,
+      wait: async () => {
+        const counts = await page.locator('#attack-matrix button[data-tactic]').evaluateAll((all) => all.map((b) => b.getAttribute('data-events')));
+        return counts.length > 0 && counts.every((c) => c !== null && c !== '') || null;
+      },
+      pick: '#attack-matrix button[data-tactic]:not([data-events="0"])',
+    },
+    {
+      what: 'an hour of the heatmap', expected: manifest.totals.hits,
+      wait: async () => (await page.locator('table.heatmap button[data-day]').count()) > 0 || null,
+      pick: 'table.heatmap button[data-day]:not([disabled])',
+    },
+  ];
+  for (const { what, expected, wait, pick } of checks) {
+    await route('attack');
     await poll(page, () => number(page.locator('#attack-matrix'), 'data-techniques'), 'the ATT&CK matrix');
-    const target = page.locator(selector).first();
+    // An empty package part never renders the panel, so the wait is only for a package that has something to show.
+    if (expected > 0) await poll(page, wait, `the panel for ${what}`);
+    const target = page.locator(pick).first();
     if ((await target.count()) === 0) {
+      check(expected === 0, `ATT&CK shows nothing to check for ${what}, but the package holds ${expected} matching detections`);
       steps.push(`ATT&CK: nothing to check for ${what}`);
       continue;
     }
     await clickAndCount(target, what);
   }
-  steps.push('ATT&CK techniques, tactics and hours list exactly their events');
+  steps.push('ATT&CK checks ran: each technique, tactic and hour listed exactly its events, or the package held none');
 
   // Entities: the first host and the first user list exactly their events.
   for (const label of ['Hosts', 'Users']) {
-    await fresh('entities');
+    await route('entities');
     await page.getByRole('button', { name: label, exact: true }).click();
     const table = page.locator('#entities-table');
     if ((await table.count()) === 0) {
@@ -203,13 +237,16 @@ async function phase4(page, state, steps, expectedStarts) {
       continue;
     }
     const rows = await poll(page, () => number(table, 'data-rows'), `the ${label.toLowerCase()}`);
-    if (!rows) continue;
+    if (!rows) {
+      steps.push(`entities: the ${label.toLowerCase()} table is empty`);
+      continue;
+    }
     await clickAndCount(page.locator('#entities-table button.value').first(), `the first of the ${label.toLowerCase()}`);
   }
   steps.push('entities list exactly their events');
 
   // Processes: the tree counts every process start, and a start opens as its event.
-  await fresh('processes');
+  await route('processes');
   const tree = page.locator('#process-tree');
   if ((await tree.count()) > 0) {
     const starts = await poll(page, async () => {
@@ -225,14 +262,14 @@ async function phase4(page, state, steps, expectedStarts) {
         const text = ((await heading.textContent()) ?? '').trim();
         return text === 'Event' ? null : text;
       }, 'the event to open');
-      check(/ (1|4688)$/.test(title), `a process start opens as "${title}"`);
+      check(/^(Microsoft-Windows-Sysmon\/Operational|Linux-Sysmon\/Operational) 1$|^Security 4688$/i.test(title), `a process start opens as "${title}"`);
       await page.keyboard.press('Escape');
     }
   }
   steps.push('the process tree counts every process start');
 
   // SQL: it counts the events, and refuses to drop them.
-  await fresh('sql');
+  await route('sql');
   const editor = page.locator('#sql-editor');
   const runSql = async (text) => {
     await editor.fill(text);
@@ -251,21 +288,26 @@ async function phase4(page, state, steps, expectedStarts) {
   steps.push('the SQL console counts the events and refuses to change them');
 
   // Timeline: a lane holds exactly the events of its tactic in the window drawn.
-  await fresh('timeline');
+  await route('timeline');
   const marks = page.locator('#timeline-marks');
   await poll(page, async () => ((await number(marks, 'data-count')) ?? 0) > 0, 'timeline marks');
   const from = await number(marks, 'data-from');
   const to = await number(marks, 'data-to');
+  check(from !== null && to !== null, 'the timeline marks do not report the window they were drawn for');
   await page.getByRole('button', { name: 'List the marks' }).click();
   const lane = page.locator('h2[data-lane]:not([data-lane=""])').first();
+  let laneChecked = false;
   if ((await lane.count()) > 0) {
     const tactic = await lane.getAttribute('data-lane');
     const events = Number(await lane.getAttribute('data-events'));
     await page.goto(`${url}#/explore?q=${encodeURIComponent(`tactic:${tactic}`)}&t=${from}~${to}`);
     const listed = await reopened(page, state);
     check(listed.count === events, `the ${tactic} lane holds ${events} events; Explore lists ${listed.count} in its window`);
+    laneChecked = true;
+  } else {
+    check(tagged.tactics === 0, `the timeline lists no named lane, but ${tagged.tactics} detections carry a tactic`);
   }
-  steps.push('a timeline lane holds exactly its tactic\'s events in the window');
+  steps.push(laneChecked ? 'a timeline lane holds exactly its tactic\'s events in the window' : 'timeline lane skipped: no named tactic');
   await page.goto(`${url}#/explore`);
   await reopened(page, state);
 }
@@ -364,6 +406,7 @@ async function scenario(page, open, steps, expectedText, expectedStarts) {
 
 const expectedText = await scanCount(WORD);
 const expectedStarts = await processStarts();
+const tagged = await taggedHits();
 let failed = false;
 for (const [name, type] of [['chromium', chromium], ['firefox', firefox], ['webkit', webkit]]) {
   const browser = await type.launch();
