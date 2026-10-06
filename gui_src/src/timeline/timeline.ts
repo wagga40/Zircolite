@@ -1,4 +1,4 @@
-import { tacticLabel } from '../overview/overview';
+import { tacticName } from '../attack/catalog';
 import { TIME_LIMIT } from '../state/hash';
 import { timePredicate } from '../state/where';
 
@@ -92,7 +92,7 @@ export function lanes(tactics: readonly string[]): string[] {
 }
 
 export function laneLabel(lane: string): string {
-  return lane ? tacticLabel(lane) : 'No tactic';
+  return lane ? tacticName(lane) : 'No tactic';
 }
 
 export function laneY(index: number): number {

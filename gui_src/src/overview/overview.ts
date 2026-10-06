@@ -1,3 +1,4 @@
+import { tacticName } from '../attack/catalog';
 import { levelLabel } from '../detections/rules';
 import { LEVELS } from '../engine/levels';
 import type { Field, Schema } from '../engine/schema';
@@ -61,18 +62,13 @@ export interface TacticCell {
   share: number;
 }
 
-export function tacticLabel(tactic: string): string {
-  const words = tactic.split('-').join(' ');
-  return words.charAt(0).toUpperCase() + words.slice(1);
-}
-
 // The cells come from manifest.tactics, the list the rules' tactics are written from, so no counted tactic goes unlisted.
 export function tacticCells(tactics: string[], rows: { tactic: string; events: number }[]): TacticCell[] {
   const counts = new Map(rows.map((row) => [row.tactic, row.events]));
   const busiest = Math.max(0, ...rows.map((row) => row.events));
   return tactics.map((tactic) => {
     const events = counts.get(tactic) ?? 0;
-    return { tactic, label: tacticLabel(tactic), events, share: busiest > 0 ? Math.sqrt(events / busiest) : 0 };
+    return { tactic, label: tacticName(tactic), events, share: busiest > 0 ? Math.sqrt(events / busiest) : 0 };
   });
 }
 

@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { tacticName } from '../attack/catalog';
   import type { Db } from '../engine/db';
   import { levelInk } from '../engine/levels';
   import type { Schema } from '../engine/schema';
@@ -18,7 +19,7 @@
   <button type="button" class="row" aria-expanded={expanded} data-key={group.key} data-events={group.events} aria-label={`${levelLabel(group.rank)}: ${group.title}, ${formatCount(group.events)} ${group.events === 1 ? 'event' : 'events'}`} onclick={ontoggle}>
     <span class="level"><i style:background={levelInk(group.rank)}></i><span class="word">{levelLabel(group.rank)}</span></span>
     <span class="title">{group.title}</span>
-    <span class="tactics">{group.tactics.join(', ')}</span>
+    <span class="tactics">{group.tactics.map(tacticName).join(', ')}</span>
     <span class="variants">{group.variants.length > 1 ? `${group.variants.length} variants` : ''}</span>
     <span class="n">{formatCount(group.events)}</span>
   </button>

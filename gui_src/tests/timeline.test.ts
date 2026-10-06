@@ -167,7 +167,7 @@ describe('canvas geometry', () => {
 
   it('names lanes, with one for rules without a tactic', () => {
     expect(lanes(['execution'])).toEqual(['execution', '']);
-    expect([laneLabel('initial-access'), laneLabel('')]).toEqual(['Initial access', 'No tactic']);
+    expect([laneLabel('initial-access'), laneLabel('command-and-control'), laneLabel('')]).toEqual(['Initial Access', 'Command and Control', 'No tactic']);
   });
 });
 

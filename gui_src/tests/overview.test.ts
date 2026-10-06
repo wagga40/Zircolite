@@ -2,7 +2,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { totalSql } from '../src/detections/rules';
 import { EVENT_LEVELS_SQL } from '../src/engine/sql';
 import {
-  entityField, tacticCells, tacticLabel, tacticsSql, tileEventsSql, tileRulesSql, tiles, topRulesSql,
+  entityField, tacticCells, tacticsSql, tileEventsSql, tileRulesSql, tiles, topRulesSql,
 } from '../src/overview/overview';
 import { compile } from '../src/search/compile';
 import { parse } from '../src/search/parse';
@@ -74,10 +74,9 @@ describe('tactics', () => {
     expect(cells.find((c) => c.tactic === 'impact')?.share).toBe(0);
   });
 
-  it('names tactics in sentence case', () => {
-    expect([tacticLabel('command-and-control'), tacticLabel('initial-access'), tacticLabel('stealth')]).toEqual([
-      'Command and control', 'Initial access', 'Stealth',
-    ]);
+  it('names tactics as the ATT&CK view does', () => {
+    const cells = tacticCells(['command-and-control', 'initial-access'], []);
+    expect(cells.map((c) => c.label)).toEqual(['Command and Control', 'Initial Access']);
   });
 });
 

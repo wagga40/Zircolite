@@ -1,8 +1,15 @@
 import { describe, expect, it } from 'vitest';
-import { CATALOG, isActive, parentId, replacement, subTechniques, technique } from '../src/attack/catalog';
+import { CATALOG, isActive, parentId, replacement, subTechniques, tacticName, technique } from '../src/attack/catalog';
 import { TACTICS } from './fixture';
 
 describe('the ATT&CK catalogue', () => {
+  it('names every tactic as ATT&CK does, one way for every view', () => {
+    expect(['command-and-control', 'initial-access', 'stealth'].map(tacticName)).toEqual(['Command and Control', 'Initial Access', 'Stealth']);
+    for (const short of TACTICS) expect(tacticName(short), short).toBe(CATALOG.tactics.find((t) => t.shortname === short)?.name);
+    // A tactic the catalogue lacks, such as the retired Defense Evasion, is still named readably.
+    expect(tacticName('defense-evasion')).toBe('Defense Evasion');
+  });
+
   it('is Enterprise ATT&CK 19.2, with its tactics in Zircolite\'s order', () => {
     expect(CATALOG.version).toBe('19.2');
     expect(CATALOG.tactics.map((t) => t.shortname)).toEqual(TACTICS);

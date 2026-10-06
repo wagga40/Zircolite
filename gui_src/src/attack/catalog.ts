@@ -28,6 +28,12 @@ export interface Catalog {
 export const CATALOG = data as Catalog;
 
 const ACTIVE = new Map(CATALOG.techniques.map((t) => [t.id, t]));
+const TACTIC_NAMES = new Map(CATALOG.tactics.map((t) => [t.shortname, t.name]));
+
+/** A tactic as ATT&CK names it, in every view; a short name the catalogue lacks is spelled out word by word. */
+export function tacticName(shortname: string): string {
+  return TACTIC_NAMES.get(shortname) ?? shortname.split('-').map((word) => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
+}
 
 export function technique(id: string): Technique | undefined {
   return ACTIVE.get(id);
