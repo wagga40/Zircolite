@@ -10,7 +10,7 @@
   import { formatCount, isoTime } from '../ui/format';
   import { Panel } from '../ui/panel.svelte';
   import { ownScope } from '../ui/scope';
-  import { ENTITY_KINDS, ENTITY_LIMIT, entitiesSql, entityFields, type EntityKind, type EntityOrder, type EntityRow, entityTerm } from './entities';
+  import { ENTITY_KINDS, ENTITY_LIMIT, entitiesSql, entityFields, type EntityKind, type EntityKindName, type EntityOrder, type EntityRow, entityTerm } from './entities';
 
   let { db: page, schema, manifest, query }: { db: Db; schema: Schema; manifest: Manifest; query: QueryState } = $props();
   // svelte-ignore state_referenced_locally
@@ -21,7 +21,7 @@
   let applied = $state('');
   let order = $state<EntityOrder>('events');
   const fields = $derived(entityFields(kind, schema));
-  const list = new Panel<EntityRow[]>();
+  const list = new Panel<{ kind: EntityKindName; rows: EntityRow[] }>();
 
   // Typing a filter asks once it pauses, not on every key.
   $effect(() => {
@@ -36,18 +36,21 @@
     const chosen = fields;
     const text = applied;
     const by = order;
+    const asked = kind.kind;
     if (chosen.length === 0) return;
-    list.load(() => db.rows<EntityRow>(entitiesSql(chosen, where, text, by), { lane: 'list' }));
+    list.load(async () => ({ kind: asked, rows: await db.rows<EntityRow>(entitiesSql(chosen, where, text, by), { lane: 'list' }) }));
   });
 
-  const rows = $derived(list.slot.data ?? []);
+  // Another kind's values never sit under this kind's header: after a switch the table waits empty.
+  const answer = $derived(list.slot.data?.kind === kind.kind ? list.slot.data : null);
+  const rows = $derived(answer?.rows ?? []);
   const total = $derived(rows[0]?.total ?? 0);
   const filtered = $derived(query.where !== 'TRUE');
 
   const summary = $derived.by(() => {
     if (list.slot.stopped) return 'Stopped';
     if (list.slot.failure) return '';
-    if (list.slot.data === null) return `Counting ${kind.noun}`;
+    if (answer === null) return `Counting ${kind.noun}`;
     if (rows.length === 0) return applied ? `No ${kind.noun} contain "${applied}"` : `No ${kind.noun} among these events`;
     return `${formatCount(total)} ${kind.noun}${filtered ? ' under the current filters' : ''}`;
   });
@@ -62,7 +65,7 @@
   <header>
     <h1 tabindex="-1">Entities</h1>
     {#if fields.length > 0}
-      <output class:stale={list.slot.pending && list.slot.data !== null} aria-busy={list.slot.pending}>{summary}</output>
+      <output class:stale={list.slot.pending && answer !== null} aria-busy={list.slot.pending}>{summary}</output>
     {/if}
     {#if fields.length > 0 && list.slot.stopped}<button type="button" class="again" onclick={runAgain}>Run again</button>{/if}
   </header>
@@ -96,8 +99,8 @@
         <p class="note">Showing {formatCount(rows.length)} of {formatCount(total)} values. Type in the filter to find the others.</p>
       {/if}
       <div class="wrap">
-        <table id="entities-table" data-kind={kind.kind} data-rows={list.slot.pending || list.slot.data === null ? '' : rows.length}
-          class:stale={list.slot.pending && list.slot.data !== null} aria-busy={list.slot.pending}>
+        <table id="entities-table" data-kind={kind.kind} data-rows={list.slot.pending || answer === null ? '' : rows.length}
+          class:stale={list.slot.pending && answer !== null} aria-busy={list.slot.pending}>
           <thead>
             <tr>
               <th scope="col">{kind.label}</th>
