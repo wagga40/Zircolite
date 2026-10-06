@@ -1,7 +1,9 @@
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { CATALOG, technique } from '../src/attack/catalog';
 import {
-  detectedTechniques, heatmap, heatmapSql, heatTerm, matrix, STORED_TECHNIQUES_SQL, techniqueCountsSql, unlisted,
+  detectedTechniques, heatInk, heatmap, heatmapSql, heatTerm, matrix, STORED_TECHNIQUES_SQL, techniqueCountsSql, unlisted,
 } from '../src/attack/attack';
 import { compile } from '../src/search/compile';
 import { parse } from '../src/search/parse';
@@ -113,5 +115,53 @@ describe('the heatmap', () => {
   it('a heatmap cell lists exactly its events', async () => {
     const term = compile(parse(heatTerm(4, 6)), schema);
     expect(await db.uids(`(${term}) AND (${DETECTIONS_PREDICATE})`)).toEqual([1, 2, 3]);
+  });
+});
+
+// Vitest runs from gui_src.
+const STYLESHEET = readFileSync(join(process.cwd(), 'src', 'app.css'), 'utf8');
+
+/** A theme's colour tokens, read from the stylesheet the page uses: the light root block, or the dark one. */
+function tokens(theme: 'light' | 'dark'): Record<string, string> {
+  const css = STYLESHEET;
+  const block = theme === 'light' ? /:root\s*\{([^}]*)\}/.exec(css) : /:root\[data-theme='dark'\]\s*\{([^}]*)\}/.exec(css);
+  return Object.fromEntries([...(block?.[1] ?? '').matchAll(/(--[\w-]+):\s*(#[0-9a-f]{6})/gi)].map((m) => [m[1], m[2]]));
+}
+
+const channels = (hex: string) => [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16));
+function luminance(rgb: number[]): number {
+  const [r, g, b] = rgb.map((c) => {
+    const v = c / 255;
+    return v <= 0.04045 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4;
+  });
+  return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+}
+function contrast(a: number[], b: number[]): number {
+  const [hi, lo] = [luminance(a), luminance(b)].sort((x, y) => y - x);
+  return (hi + 0.05) / (lo + 0.05);
+}
+/** color-mix(in srgb, a p%, b): each channel mixed as written, then rounded as the browser stores it. */
+const mix = (a: string, b: string, p: number) => channels(a).map((c, i) => Math.round((c * p + channels(b)[i] * (100 - p)) / 100));
+
+describe('heat', () => {
+  it('leaves an empty cell plain', () => {
+    expect(heatInk(0)).toBeUndefined();
+  });
+
+  it('keeps the ink at 4.5:1 or better on the hottest cell, in both themes', () => {
+    const percent = Number(/(\d+)%/.exec(heatInk(1) ?? '')?.[1]);
+    expect(percent).toBeGreaterThan(Number(/(\d+)%/.exec(heatInk(0.01) ?? '')?.[1]));
+    for (const theme of ['light', 'dark'] as const) {
+      const t = tokens(theme);
+      expect(Object.keys(t), theme).toEqual(expect.arrayContaining(['--ink', '--signal', '--panel']));
+      expect(contrast(channels(t['--ink']), mix(t['--signal'], t['--panel'], percent)), theme).toBeGreaterThanOrEqual(4.5);
+    }
+  });
+
+  it('defines the dark theme once for the system setting and once for the switch', () => {
+    const css = STYLESHEET;
+    const media = /:root:not\(\[data-theme='light'\]\)\s*\{([^}]*)\}/.exec(css)?.[1] ?? '';
+    const pairs = (text: string) => [...text.matchAll(/(--[\w-]+):\s*([^;]+);/g)].map((m) => `${m[1]}: ${m[2].trim()}`);
+    expect(pairs(media)).toEqual(pairs(/:root\[data-theme='dark'\]\s*\{([^}]*)\}/.exec(css)?.[1] ?? ''));
   });
 });

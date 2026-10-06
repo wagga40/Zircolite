@@ -205,11 +205,12 @@
   .cell.none, .subs li.none { color: var(--ink-2); }
   .technique { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 2px 6px; width: 100%; min-height: 40px; padding: 6px 8px; text-align: left; background: none; border: 0; cursor: pointer; color: inherit; }
   .tname { grid-column: 1; font-size: var(--t-12); overflow-wrap: anywhere; display: -webkit-box; -webkit-line-clamp: 3; line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
-  .id { grid-column: 1; font: 400 11px / 1.3 var(--mono); color: var(--ink-2); }
+  /* Text on a heated cell stays in --ink, which the fill is capped for; an empty cell is plain and quieter. */
+  .id { grid-column: 1; font: 400 11px / 1.3 var(--mono); }
   .technique .n { grid-column: 2; grid-row: 1 / span 2; align-self: center; font-size: var(--t-12); font-variant-numeric: tabular-nums; }
-  .subs-toggle { display: block; min-height: 24px; margin: 0 8px 6px; padding: 0; background: none; border: 0; color: var(--ink-2); font-size: var(--t-12); cursor: pointer; text-decoration: underline; }
+  .subs-toggle { display: block; min-height: 24px; margin: 0 8px 6px; padding: 0; background: none; border: 0; color: inherit; font-size: var(--t-12); cursor: pointer; text-decoration: underline; }
   .subs { list-style: none; margin: 0; padding: 0 0 4px 12px; }
-  .subs li { border-top: 1px solid color-mix(in srgb, var(--rule) 60%, transparent); }
+  .subs li { border-top: 1px solid color-mix(in srgb, var(--rule) 60%, transparent); background: var(--panel); }
   .empty { margin: 8px; color: var(--ink-2); font-size: var(--t-12); }
   .others table { border-collapse: collapse; font-size: var(--t-13); }
   .others th, .others td { text-align: left; padding: 4px 12px 4px 0; border-bottom: 1px solid var(--rule); }

@@ -39,9 +39,14 @@ export interface Column {
   cells: Cell[];
 }
 
-/** The heat of a cell, as the Overview's tactic strip draws it; none for an empty one. */
+/**
+ * The heat of a cell with events, for the ATT&CK matrix, its heatmap and the
+ * Overview's tactic strip; none for an empty one, which stays plain. The
+ * hottest fill, 46% signal, keeps --ink at 4.89:1 in the dark theme, where
+ * the signal is light, so text on a heated cell is written in --ink.
+ */
 export function heatInk(share: number): string | undefined {
-  return share > 0 ? `color-mix(in srgb, var(--signal) ${Math.round(16 + 40 * share)}%, var(--panel))` : undefined;
+  return share > 0 ? `color-mix(in srgb, var(--signal) ${Math.round(16 + 30 * Math.min(1, share))}%, var(--panel))` : undefined;
 }
 
 /**

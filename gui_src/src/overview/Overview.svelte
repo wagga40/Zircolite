@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { heatInk } from '../attack/attack';
   import type { Db } from '../engine/db';
   import { levelInk } from '../engine/levels';
   import type { Manifest } from '../engine/manifest';
@@ -120,7 +121,7 @@
       <div class="cells" class:stale={tacticSlot.pending && tacticSlot.data !== null}>
         {#each tacticSlot.data ?? [] as cell (cell.tactic)}
           <button type="button" class="cell" class:none={cell.events === 0} data-tactic={cell.tactic}
-            style:background={cell.events ? `color-mix(in srgb, var(--signal) ${Math.round(12 + 40 * cell.share)}%, var(--panel))` : undefined}
+            style:background={heatInk(cell.share)}
             onclick={() => explore(`tactic:${cell.tactic}`)}>
             <span class="label">{cell.label}</span>
             <span class="count">{formatCount(cell.events)}</span>
