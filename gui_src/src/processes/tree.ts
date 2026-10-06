@@ -15,6 +15,7 @@ export interface RawProcess {
   cmd: string | null;
   user: string | null;
   subject: string | null;
+  target: string | null;
   lvl: number | null;
   hits: number;
   /** The start that created this one, resolved in SQL over every start in the package. */
@@ -50,6 +51,16 @@ export function pidText(value: string | null): string | null {
   return text;
 }
 
+/**
+ * The account a Security 4688 process runs as. SubjectUserName is the account
+ * that started it; TargetUserName is the new process's own, or - when the
+ * event names none.
+ */
+function runsAs(target: string | null): string | null {
+  const text = target?.trim() ?? '';
+  return text && text !== '-' ? text : null;
+}
+
 export function toProcess(raw: RawProcess): Process {
   // Security 4688: NewProcessId is the new process, ProcessId the one that started it.
   const security = !raw.sysmon;
@@ -64,7 +75,7 @@ export function toProcess(raw: RawProcess): Process {
     image: security ? (raw.newimage ?? raw.image) : raw.image,
     parentImage: security ? raw.pname : raw.pimage,
     commandLine: raw.cmd,
-    user: security ? (raw.subject ?? raw.user) : (raw.user ?? raw.subject),
+    user: security ? (runsAs(raw.target) ?? raw.subject ?? raw.user) : (raw.user ?? raw.subject),
     lvl: raw.lvl,
     hits: raw.hits,
     context: raw.context,

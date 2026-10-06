@@ -22,6 +22,7 @@ const COLUMNS = {
   cmd: 'CommandLine',
   user: 'User',
   subject: 'SubjectUserName',
+  target: 'TargetUserName',
 } as const;
 
 /** Sysmon event 1 (Windows and Linux) and Security event 4688: the events that record a process start. */

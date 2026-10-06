@@ -24,6 +24,24 @@ describe('PIDs', () => {
   });
 });
 
+function raw(fields: Partial<RawProcess>): RawProcess {
+  return {
+    _zl_uid: 1, _zl_t: 0, sysmon: false, host: 'H', guid: null, pid: null, ppid: null, newpid: null, image: null, newimage: null,
+    pimage: null, pname: null, cmd: null, user: null, subject: null, target: null, lvl: null, hits: 0, _zl_parent: null, context: false,
+    ...fields,
+  };
+}
+
+describe('users', () => {
+  it('names the account a Security 4688 process runs as, not the one that started it', () => {
+    expect(toProcess(raw({ subject: 'admin', target: 'bob' })).user).toBe('bob');
+    // 4688 writes - when it names no account for the new process.
+    expect(toProcess(raw({ subject: 'admin', target: ' - ' })).user).toBe('admin');
+    expect(toProcess(raw({ subject: 'admin', target: null })).user).toBe('admin');
+    expect(toProcess(raw({ sysmon: true, user: 'CORP\\eve', subject: 'x', target: 'y' })).user).toBe('CORP\\eve');
+  });
+});
+
 describe('the forest', () => {
   it('links each start under the parent SQL resolved for it, in start order', () => {
     const root = proc({ t: 0 });
@@ -99,7 +117,8 @@ const EXTRA = [
   `UPDATE events SET "ProcessGuid" = '{BBBB}', "ParentProcessGuid" = '{AAAA}', "ProcessId" = '200', "ParentProcessId" = '100' WHERE _zl_uid = 4294967297`,
   `INSERT INTO events (_zl_uid, _zl_part, _zl_time, "Channel", "EventID", "Computer", "Image", "ProcessGuid", "ParentProcessGuid", "ProcessId", "ParentProcessId")
      VALUES (4294967300, 1, TIMESTAMP '2021-06-03 05:00:00', 'Microsoft-Windows-Sysmon/Operational', 1, 'WS02', 'C:\\Windows\\explorer.exe', '{PPPP}', '{ROOT}', '50', '4')`,
-  `UPDATE events SET "NewProcessId" = '0x1f4', "ProcessId" = '0x64', "NewProcessName" = 'C:\\Windows\\System32\\net.exe', "SubjectUserName" = 'àéî' WHERE _zl_uid = 4294967299`,
+  // The account that started net.exe is SYSTEM; TargetUserName, set by the base fixture, is the one it runs as.
+  `UPDATE events SET "NewProcessId" = '0x1f4', "ProcessId" = '0x64', "NewProcessName" = 'C:\\Windows\\System32\\net.exe', "SubjectUserName" = 'SYSTEM' WHERE _zl_uid = 4294967299`,
 ];
 
 describe('process starts in the package', () => {
