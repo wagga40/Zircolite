@@ -46,7 +46,6 @@ tmp
 *.iso
 *.jar
 *.rar
-*.tar
 
 # pycache
 __pycache__/
@@ -61,7 +60,6 @@ __pycache__/
 .venv/
 venv/
 .env
-*.log
 # pdm.lock and pyproject.toml are tracked: without them
 # `pdm install`, `poetry install` and `uv sync` all fail on a fresh clone.
 # pdm.lock is the lock CI and the Docker image install from; the others are local.
