@@ -294,6 +294,10 @@ tables. Share a package as you would the logs it came from; see
 
 ![The Zircolite Viewer's Overview](pics/viewer-overview.webp)
 
+![The Timeline: one lane per ATT&CK tactic, each mark coloured by its highest detection level](pics/viewer-timeline.webp)
+
+![The process tree, with the ancestors of the filtered starts in grey](pics/viewer-processes.webp)
+
 ## Tutorials, References, and Related Projects
 
 ### Tutorials
