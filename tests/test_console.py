@@ -670,7 +670,7 @@ class TestAttackTacticExtraction:
 
         That is how the v19 rename went unnoticed: rules tagged attack.stealth
         produced no tactic at all, so Navigator entries merged under a null
-        tactic and the Mini-GUI's lanes for them stayed empty.
+        tactic and the viewer's lanes for them stayed empty.
 
         Only SigmaHQ's rulesets are checked. The community ones carry their
         authors' misspellings (attack.defense_evesion, attack.11136.001), which

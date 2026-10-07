@@ -24,7 +24,7 @@ def asset_roots() -> list[Path]:
     # A PyInstaller build carries config/, rules/, templates/ and gui/ in the
     # directory the bootloader names (_internal/ in a onedir build), but the
     # release archive also ships them beside the binary, where a user can edit
-    # a rule or drop in a newer Mini-GUI. Prefer that copy, fall back to the
+    # a rule or drop in a newer viewer. Prefer that copy, fall back to the
     # bundle.
     roots: list[Path] = []
     frozen_root = getattr(sys, "_MEIPASS", None)

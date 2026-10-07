@@ -1,0 +1,34 @@
+{
+  "name": "zircolite-viewer",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "build": "vite build && node scripts/finalize.mjs",
+    "check": "svelte-check --tsconfig ./tsconfig.json --fail-on-warnings",
+    "test": "vitest run",
+    "smoke": "node e2e/smoke.mjs",
+    "shot": "node e2e/shot.mjs",
+    "e2e": "node e2e/explore.mjs",
+    "perf": "node e2e/perf.mjs",
+    "views": "node e2e/views.mjs"
+  },
+  "dependencies": {
+    "@duckdb/duckdb-wasm": "1.32.0",
+    "@fontsource/atkinson-hyperlegible-mono": "5.3.0",
+    "@fontsource/atkinson-hyperlegible-next": "5.3.0",
+    "svelte": "5.57.1"
+  },
+  "devDependencies": {
+    "@duckdb/node-api": "1.4.3-r.3",
+    "@sveltejs/vite-plugin-svelte": "7.3.1",
+    "@tsconfig/svelte": "5.0.8",
+    "apache-arrow": "17.0.0",
+    "pako": "2.1.0",
+    "playwright": "1.62.0",
+    "svelte-check": "4.7.6",
+    "typescript": "5.9.3",
+    "vite": "8.3.2",
+    "vitest": "5.0.3"
+  }
+}

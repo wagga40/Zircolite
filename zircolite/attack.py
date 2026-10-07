@@ -35,6 +35,27 @@ _TACTIC_ALIASES = {
     "impact": "impact",
 }
 
+# Enterprise ATT&CK's own column order, which the Zircolite Viewer's matrix and
+# timeline lanes follow. Stealth and Defense Impairment stand where v19 put
+# them, in the place Defense Evasion held.
+TACTIC_ORDER = (
+    "reconnaissance",
+    "resource-development",
+    "initial-access",
+    "execution",
+    "persistence",
+    "privilege-escalation",
+    "stealth",
+    "defense-impairment",
+    "credential-access",
+    "discovery",
+    "lateral-movement",
+    "collection",
+    "command-and-control",
+    "exfiltration",
+    "impact",
+)
+
 
 def extract_attack_techniques(tags: list) -> list:
     """Extract ATT&CK technique IDs from Sigma tags."""

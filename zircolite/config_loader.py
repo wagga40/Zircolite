@@ -556,7 +556,7 @@ output:
   # invalid when concatenated.
   template_append: false
 
-  # Create the Mini-GUI package
+  # Create a package for the offline viewer (every event plus the detections)
   package: false
   package_dir: ""  # Where to write it; empty means the working directory
 

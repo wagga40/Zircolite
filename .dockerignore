@@ -20,7 +20,7 @@ htmlcov
 build
 dist
 *.egg-info
-gui_dev
+gui/source
 helpers
 tools
 *.so
@@ -52,5 +52,6 @@ flattened_events_*.json
 fields.json
 tmp-*
 zircolite.tar
-zircogui-output-*
+zircolite-package-*
+tmp-zircolite-package-*
 *.evtx

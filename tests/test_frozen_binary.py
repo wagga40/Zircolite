@@ -402,6 +402,10 @@ class TestIdentityAndLayout:
         beside = [name for name in ("config", "rules", "templates", "gui") if (dist / name).exists()]
         assert not beside, f"ZIRCOLITE_BINARY must be the raw build, not a package: found {beside}"
 
+    def test_only_the_viewer_build_is_bundled(self, dist):
+        """gui/ also holds the viewer's sources and their node_modules, which must never ship."""
+        assert sorted(entry.name for entry in (dist / "_internal" / "gui").iterdir()) == ["viewer"]
+
     def test_no_build_tooling_is_bundled(self, dist):
         """The spec excludes these; a hook that aliased its way back would ship
         code that THIRD_PARTY_LICENSES has no notice for."""
@@ -665,16 +669,27 @@ class TestAssets:
         assert rendered.strip(), "the template rendered nothing"
         assert rendered == (source.cwd / "splunk.json").read_text(encoding="utf-8")
 
-    def test_package_contains_the_gui(self, runner, inputs):
+    def test_package_contains_the_viewer(self, runner, inputs):
         run = runner.binary(
             "-e", str(FIXTURES / "sample_bitsadmin.evtx"),
             "-r", str(inputs / "match_all.json"), "-o", "detected.json", "--package",
         )
 
-        packages = list(run.cwd.glob("zircogui-output-*.zip"))
+        packages = list(run.cwd.glob("zircolite-package-*.zip"))
         assert len(packages) == 1, f"expected one package, found {packages}"
         with zipfile.ZipFile(packages[0]) as package:
-            assert "index.html" in package.namelist()
+            names = package.namelist()
+            manifest = package.read("data/manifest.js").decode("utf-8")
+
+        for name in ("index.html", "app.js", "data/manifest.js"):
+            assert name in names
+        assert any(re.fullmatch(r"data/events\.parquet\.\d+\.js", name) for name in names)
+        wrapped = json.loads((WORKSPACE_ROOT / "gui" / "viewer" / "viewer.json").read_text(encoding="utf-8"))["wrap"]
+        for engine in wrapped:
+            assert any(re.fullmatch(rf"assets/{re.escape(engine)}\.\d+\.js", name) for name in names), engine
+        # sample_bitsadmin.evtx holds one event.
+        totals = json.loads(manifest[manifest.index("(") + 1:manifest.rindex(")")])["totals"]
+        assert totals["events"] == 1
 
     def test_rules_beside_the_executable_win_over_the_bundle(self, runner, dist, tmp_path):
         copy = copy_dist(dist, tmp_path / "dist")

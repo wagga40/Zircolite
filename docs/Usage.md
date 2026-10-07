@@ -137,7 +137,7 @@ Zircolite-<version>-<target>/
 ├── config/               field mappings and transforms
 ├── rules/                default rulesets
 ├── templates/            output templates
-├── gui/                  Mini-GUI archive
+├── gui/viewer/           the Zircolite Viewer, prebuilt
 ├── docs/  pics/  README.md
 ├── LICENSE
 └── THIRD_PARTY_LICENSES
@@ -460,7 +460,7 @@ could not run), `failed` or `interrupted`. In parallel mode its stage times — 
 in the summary panel — are summed across workers, so they can add up to more than the
 wall-clock duration. Memory is sampled, so a short peak can be missed.
 
-### Templating and Mini-GUI
+### Templating and the Zircolite Viewer
 
 | Option | Description |
 |--------|-------------|
@@ -469,8 +469,8 @@ wall-clock duration. Memory is sampled, so a short peak can be missed.
 | `--template-append` | Append to template output instead of overwriting |
 | `--timesketch` | Shortcut: Timesketch template → `timesketch-<RAND>.json` |
 | `--navigator-output` | Shortcut: ATT&CK Navigator layer → `navigator-<RAND>.json`, or a name you give |
-| `-G`, `--package` | Create a Mini-GUI package |
-| `--package-dir` | Directory for the Mini-GUI package; it must already exist |
+| `-G`, `--package` | Write a package: every event and detection, viewable offline in a browser |
+| `--package-dir` | Directory for the package; it must already exist (default: the working directory) |
 
 Both shortcuts use the template of that name from `templates/` in the working directory
 when there is one, and the shipped template otherwise. The same rule applies to `-c`
@@ -479,6 +479,10 @@ and `-r` defaults.
 > [!WARNING]
 > `--template-append` is only safe for templates whose output is a stream of independent
 > records. See [Append mode](Advanced.md#append-mode).
+
+A package holds every event of the run, so `--package` turns early event filtering off. See
+[Advanced → Zircolite Viewer](Advanced.md#zircolite-viewer) for what a package holds, how to open
+it and what the viewer does.
 
 ### YAML configuration
 
@@ -1048,9 +1052,10 @@ A correlation match is an **alert**, not an event:
 - The time field (`SystemTime`, or `--timefield`) is set to the moment the alert occurred,
   so timelines and Timesketch place it like an event. Times in the alert itself are Unix
   seconds.
-- CSV, the Mini-GUI and the Elasticsearch, Zinc and Timesketch templates write
-  `group_keys`, `event_ids` and `evidence` as JSON text; Splunk, NDJSON and SARIF keep them
-  nested.
+- CSV and the Elasticsearch, Zinc and Timesketch templates write `group_keys`,
+  `event_ids` and `evidence` as JSON text; Splunk, NDJSON and SARIF keep them nested. A
+  package keeps `group_keys` as JSON text in its `alerts` table and links each alert to its
+  evidence events through `alert_events`.
 
 #### Windows
 
@@ -1334,9 +1339,10 @@ event_filter:
   filter_all_sources: false
 ```
 
-Disable it with `--no-event-filter` or `enabled: false`. How the per-channel bounds are
-derived, when they do not apply, and why a Linux ruleset disables the filter entirely are
-covered in [Advanced → Early event filtering](Advanced.md#early-event-filtering).
+Disable it with `--no-event-filter` or `enabled: false`; `--package` disables it too. How
+the per-channel bounds are derived, when they do not apply, and why a Linux ruleset disables
+the filter entirely are covered in
+[Advanced → Early event filtering](Advanced.md#early-event-filtering).
 
 **`timestamp_detection`** controls the search described under
 [Timestamp detection](#timestamp-detection):

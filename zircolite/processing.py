@@ -14,6 +14,8 @@ Contents
     - ``process_unified_streaming`` / ``process_perfile_streaming``
     - ``process_parallel_streaming`` (threads or processes, per file)
     - ``process_db_input``
+- Package spooling: ``_start_package_part`` / ``_finish_package_part`` copy each
+  working database's events and hits for ``--package`` (``zircolite.package_spool``)
 """
 
 import argparse
@@ -29,6 +31,7 @@ import sys
 import tempfile
 import threading
 import time
+from collections.abc import Callable, Collection
 from contextlib import closing, contextmanager, nullcontext, suppress
 from copy import deepcopy
 from dataclasses import dataclass, field, fields
@@ -52,6 +55,7 @@ from .console import (
 from .core import ZircoliteCore
 from .extractor import EvtxExtractor
 from .formats import format_by_name
+from .package_spool import PackageError, PackageSpool, PartRecord, PartWriter
 from .parallel import MemoryAwareParallelProcessor, ParallelConfig
 from .performance import FileMetrics
 from .results import RowSpool, result_summary, write_result_json
@@ -125,6 +129,11 @@ class ProcessingContext:
     sqlite_cache_mib: int = 64
     flatten_backend: str = "auto"
     rule_prefilter: str = "auto"
+    # --package: where each working database's events and hits are spooled.
+    # Plain data, so it reaches process workers with the rest of the payload.
+    package_spool: PackageSpool | None = None
+    package_parts: list = field(default_factory=list, init=False)
+    package_errors: list = field(default_factory=list, init=False)
     performance_files: list = field(default_factory=list)
     parent_metrics: FileMetrics = field(default_factory=FileMetrics, repr=False)
     # Cached formatted time strings (computed in __post_init__)
@@ -263,6 +272,68 @@ def _unpack_streaming_result(
     return ((*result, 0, 0))[:3]  # type: ignore[return-value]
 
 
+def _fan_out(*sinks: Callable[[dict[str, Any]], None] | None) -> Callable[[dict[str, Any]], None] | None:
+    """One result sink that hands each result to every sink given."""
+    live = [sink for sink in sinks if sink is not None]
+    if not live:
+        return None
+    if len(live) == 1:
+        return live[0]
+
+    def deliver(result: dict[str, Any]) -> None:
+        for sink in live:
+            sink(result)
+    return deliver
+
+
+def _start_package_part(spool: PackageSpool | None, part: int, sources: list[str],
+                        connection: sqlite3.Connection | None,
+                        failed_files: Collection[str] = (), metrics: Any = None) -> tuple[PartWriter | None, str | None]:
+    """Spool one working database's events; the writer then records its hits.
+
+    Called after ingestion and before the rules run: the rules add all-NULL
+    columns and indexes the package must not carry. ``failed_files`` is the
+    core's record of inputs read only in part; a core reused across files
+    keeps every earlier file's entries, so only this part's sources count.
+    The spooling counts as output, so the performance report's stages still
+    add up to the run.
+    """
+    if spool is None:
+        return None, None
+    writer = spool.open_part(part, sources, unreadable=[source for source in sources if source in failed_files])
+    try:
+        if connection is None:
+            raise PackageError("the working database is not open")
+        with metrics.stage("output") if metrics is not None else nullcontext():
+            writer.export_events(connection)
+    except (PackageError, OSError, sqlite3.Error) as exc:
+        writer.discard()
+        return None, f"{', '.join(sources)}: {exc}"
+    return writer, None
+
+
+def _finish_package_part(writer: PartWriter | None) -> tuple[PartRecord | None, str | None]:
+    if writer is None:
+        return None, None
+    try:
+        return writer.finish(), None
+    except (PackageError, OSError) as exc:
+        writer.discard()
+        return None, f"{', '.join(writer.record.sources)}: {exc}"
+
+
+def _collect_package_part(ctx: "ProcessingContext", record: PartRecord | None, error: str | None) -> None:
+    if error is not None:
+        ctx.package_errors.append(error)
+    elif record is not None:
+        ctx.package_parts.append(record)
+
+
+def _package_spool_for(ctx: "ProcessingContext") -> PackageSpool | None:
+    """The spool, unless an earlier part already failed and the package is lost."""
+    return None if ctx.package_errors else ctx.package_spool
+
+
 class _ThreadSafeWriter:
     """Wraps a binary file handle with a lock for concurrent writes.
 
@@ -392,6 +463,11 @@ def process_unified_streaming(
         ctx.logger.info(f"[+] Saved unified database to: {make_file_link(ctx.dbfile)}")
         ctx.memory_tracker.sample()
 
+    package_part, error = _start_package_part(
+        _package_spool_for(ctx), 0, [str(f) for f in file_list], zircolite_core.db_connection,
+        zircolite_core.failed_files, metrics=zircolite_core.metrics)
+    _collect_package_part(ctx, None, error)
+
     zircolite_core.load_ruleset_from_var(
         ruleset=ctx.rulesets, rule_filters=ctx.rule_filters
     )
@@ -412,10 +488,12 @@ def process_unified_streaming(
         write_mode="w",
         keep_results=ctx.retain_results,
         stream_results=not ctx.retain_results,
-        result_sink=_summary_sink(summaries) if not ctx.retain_results else None,
+        result_sink=_fan_out(_summary_sink(summaries) if not ctx.retain_results else None,
+                             package_part.sink if package_part else None),
         last_ruleset=True,
         disable_progress=is_quiet(),
     )
+    _collect_package_part(ctx, *_finish_package_part(package_part))
     ctx.memory_tracker.sample()
 
     results = list(zircolite_core.full_results) if ctx.retain_results else summaries
@@ -558,6 +636,11 @@ def process_perfile_streaming(
                     )
                     ctx.memory_tracker.sample()
 
+                package_part, error = _start_package_part(
+                    _package_spool_for(ctx), file_idx, [str(log_file)], zircolite_core.db_connection,
+                    zircolite_core.failed_files, metrics=zircolite_core.metrics)
+                _collect_package_part(ctx, None, error)
+
                 zircolite_core.load_ruleset_from_var(
                     ruleset=ctx.rulesets, rule_filters=ctx.rule_filters
                 )
@@ -580,11 +663,14 @@ def process_perfile_streaming(
                     write_mode=write_mode,
                     keep_results=ctx.retain_results,
                     stream_results=not ctx.retain_results,
-                    result_sink=_summary_sink(file_results, csv_spool) if not ctx.retain_results else None,
+                    result_sink=_fan_out(
+                        _summary_sink(file_results, csv_spool) if not ctx.retain_results else None,
+                        package_part.sink if package_part else None),
                     last_ruleset=False,
                     source_label=file_name,
                     disable_progress=is_quiet(),
                 )
+                _collect_package_part(ctx, *_finish_package_part(package_part))
                 ctx.memory_tracker.sample()
 
                 if ctx.retain_results:
@@ -777,6 +863,11 @@ def process_db_input(
             except sqlite3.Error as e:
                 ctx.logger.debug(f"Could not count events in '{file_name}': {e}")
 
+            package_part, error = _start_package_part(
+                _package_spool_for(ctx), file_idx, [str(db_path)], zircolite_core.db_connection,
+                zircolite_core.failed_files, metrics=zircolite_core.metrics)
+            _collect_package_part(ctx, None, error)
+
             zircolite_core.load_ruleset_from_var(
                 ruleset=ctx.rulesets, rule_filters=ctx.rule_filters
             )
@@ -799,11 +890,14 @@ def process_db_input(
                 write_mode=write_mode,
                 keep_results=ctx.retain_results,
                 stream_results=not ctx.retain_results,
-                result_sink=_summary_sink(file_results, csv_spool) if not ctx.retain_results else None,
+                result_sink=_fan_out(
+                    _summary_sink(file_results, csv_spool) if not ctx.retain_results else None,
+                    package_part.sink if package_part else None),
                 last_ruleset=False,
                 source_label=file_name if len(db_files) > 1 else None,
                 disable_progress=is_quiet(),
             )
+            _collect_package_part(ctx, *_finish_package_part(package_part))
             ctx.memory_tracker.sample()
 
             if ctx.retain_results:
@@ -881,6 +975,7 @@ def process_single_file_worker(
     file_name = Path(log_file).name
     metrics = FileMetrics()
     metrics.data["sources"] = [str(log_file)]
+    package_part: PartWriter | None = None
     try:
         # Get or create thread-local ZircoliteCore
         if not hasattr(thread_local, "core"):
@@ -915,6 +1010,16 @@ def process_single_file_worker(
             total_filtered_count[0] += filtered_count
             total_filtered_count[1] += time_filtered_count
 
+        package_error = None
+        if ctx.package_spool is not None:
+            part = ctx.package_spool.part_of.get(str(log_file))
+            if part is None:
+                package_error = f"{log_file}: no package part was assigned to this file"
+            else:
+                package_part, package_error = _start_package_part(
+                    ctx.package_spool, part, [str(log_file)], core.db_connection, core.failed_files,
+                    metrics=core.metrics)
+
         # The worker's logger is silent, so a file Zircolite could only read in
         # part is indistinguishable from a clean one unless it is reported here
         degraded = str(log_file) in core.failed_files
@@ -925,6 +1030,7 @@ def process_single_file_worker(
         if event_count == 0 and degraded:
             metrics.data["status"] = "partial"
             metrics.data["prefilter"].append({"requested": ctx.rule_prefilter, "reason": "no events"})
+            package_record, finish_error = _finish_package_part(package_part)
             return (0, {
                 "performance": metrics.data,
                 "name": file_name,
@@ -934,6 +1040,8 @@ def process_single_file_worker(
                 "filtered": filtered_count,
                 "time_filtered": time_filtered_count,
                 "error": "no event could be read (see the log for details)",
+                "package_part": package_record,
+                "package_error": package_error or finish_error,
             })
 
         core.load_ruleset_from_var(
@@ -985,7 +1093,9 @@ def process_single_file_worker(
                 output.write(b"[")
             core.execute_ruleset(
                 ctx.outfile, write_mode="w", keep_results=not spool_output,
-                stream_results=spool_output, result_sink=receive if spool_output else None,
+                stream_results=spool_output,
+                result_sink=_fan_out(receive if spool_output else None,
+                                     package_part.sink if package_part else None),
                 last_ruleset=True, show_table=False, progress_callback=progress_callback,
             )
         finally:
@@ -995,6 +1105,7 @@ def process_single_file_worker(
                 output.close()
         if not spool_output:
             file_results = list(core.full_results)
+        package_record, finish_error = _finish_package_part(package_part)
         summary = {
             "name": file_name,
             "path": str(log_file),
@@ -1011,6 +1122,8 @@ def process_single_file_worker(
             "rules_in_error": dict(core.rules_in_error),
             "rounded_integer_fields": sorted(core.rounded_integer_fields),
             "performance": core.metrics.data,
+            "package_part": package_record,
+            "package_error": package_error or finish_error,
         }
         if degraded:
             metrics.data["status"] = "partial"
@@ -1021,6 +1134,8 @@ def process_single_file_worker(
 
     except Exception as e:
         metrics.data["status"] = "failed"
+        if package_part is not None:
+            package_part.discard()
         return (
             0,
             {
@@ -1235,6 +1350,13 @@ def process_parallel_streaming(
     if len(file_list) < 2:
         return process_perfile_streaming(ctx, file_list, input_type, extractor, args)
 
+    if ctx.package_spool is not None:
+        # Set before the payload is captured below: process workers get a copy.
+        ctx.package_spool.part_of = {str(path): index for index, path in enumerate(file_list)}
+        if len(ctx.package_spool.part_of) != len(file_list):
+            quit_on_error("[red]    [-] Two inputs resolve to the same path; a package needs one part per file[/]",
+                          ctx.logger)
+
     # Pre-parse field mappings once so workers skip redundant disk reads
     # Parsed once, then deep-copied per worker: _resolve_file_transforms
     # writes the loaded source back into the transform dicts, so sharing one
@@ -1279,6 +1401,7 @@ def process_parallel_streaming(
             return
         if file_data.get("performance"):
             ctx.performance_files.append(file_data["performance"])
+        _collect_package_part(ctx, file_data.get("package_part"), file_data.get("package_error"))
         if process_mode:
             total_filtered_count[0] += file_data.get("filtered", 0)
             total_filtered_count[1] += file_data.get("time_filtered", 0)

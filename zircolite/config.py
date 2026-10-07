@@ -127,7 +127,7 @@ class TemplateConfig:
     """
     Configuration for template engine operations.
 
-    Used by TemplateEngine and ZircoliteGuiGenerator.
+    Used by TemplateEngine.
     """
     template: list[list[str]] = field(default_factory=list)
     template_output: list[list[str]] = field(default_factory=list)
@@ -136,17 +136,3 @@ class TemplateConfig:
     # being overwritten. Useful for accumulating results across multiple runs
     # (e.g. cumulative NDJSON exports). See issue #132.
     append: bool = False
-
-
-@dataclass
-class GuiConfig:
-    """
-    Configuration for GUI generator.
-
-    Used by ZircoliteGuiGenerator.
-    """
-    # Path to the gui/zircogui.zip that gets unpacked, not the output
-    # directory -- that arrives separately as generate()'s second argument.
-    source_archive: str = ""
-    template_file: str = ""
-    time_field: str = ""

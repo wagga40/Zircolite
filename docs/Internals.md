@@ -73,7 +73,7 @@ Ingestion records each row whose event spelled such a field otherwise, one row p
 event in two tables (`field_spellings` and `logs_spelling`), and every match and
 correlation evidence event is printed with its own spelling; CSV output has a column for
 each spelling. The run's time field is the exception: it is always printed under the name
-`--timefield` gives it, because the Timesketch template and the Mini-GUI look it up by
+`--timefield` gives it, because the Timesketch template and the Zircolite Viewer look it up by
 that name. Per-file, unified and parallel runs therefore print an event the same way,
 whichever files share its database. A database saved with `--dbfile` keeps both tables,
 and `--db-input` uses them; rule SQL never reads them, and a query whose result has no
@@ -248,6 +248,183 @@ the census prune and lazy result spools remove. Reproduce comparisons with
 `--performance-json`. [Benchmark](Benchmark.md) compares the same run with Hayabusa and
 Chainsaw.
 
+## Package pipeline
+
+`--package` copies every ingested event out of the working databases, with the detections
+linked to them, and writes it as Parquet into a zip beside a prebuilt viewer. How to make and
+read a package is in [Advanced → Zircolite Viewer](Advanced.md#zircolite-viewer); this section is
+how it is built. It runs in two stages, so that only the main process ever loads duckdb:
+
+```mermaid
+flowchart LR
+    DB["Working database (one part)"] -->|"after ingestion, before the rules"| S1["Stage 1: spool"]
+    R["Rule execution"] -->|"result sink"| S1
+    S1 -->|"NDJSON, hits CSV"| S2["Stage 2: duckdb"]
+    S2 -->|"Parquet, manifest"| Z["zircolite-package-RAND.zip"]
+    V["gui/viewer/"] --> Z
+```
+
+### Stage 1: the spool
+
+`package_spool.py` runs wherever the working database lives, process workers included, and
+needs only the standard library and orjson. Each working database is one **part**.
+
+- **When.** `PartWriter.export_events` copies `logs` right after ingestion, where `--dbfile`
+  saves, and before the first rule runs: the rules add all-NULL columns, indexes and
+  statistics that the package must not carry.
+- **Events.** Rows are read in `row_id` order, 2,000 at a time, and written as gzip
+  NDJSON (level 1), a new file every 100,000 rows, under the package's temporary directory.
+  Each record adds `_zl_part`, `_zl_rid`, `_zl_time` (microseconds since the epoch, read by
+  `utils.parse_timestamp` as `--after` and `--before` read it, or by `--timestamp-format`) and,
+  when the row spelled a field unlike its column, `_zl_spelling`. Blobs become hex. The same
+  pass records each column's type mask and non-null count, the columns of each
+  `(Channel, EventID)` family, and the time field's range and unreadable values, so stage two
+  never scans for them.
+- **Hits.** `PartWriter.sink` is the result sink `execute_ruleset` hands every rule's result
+  to. Matches become `rule_idx,part,row_id` lines; correlation alerts become NDJSON, and their
+  evidence events count as hits of the correlation rule. The sink catches `PackageError`,
+  `OSError`, `ValueError` and `TypeError`, because an exception there would stop the rule loop
+  and lose the detections output: it keeps the first one, records nothing more, and `finish`
+  raises it, which fails the package. Any other exception propagates.
+- **Refusals.** A field whose name starts with the reserved `_zl_` prefix, or a `row_id`
+  outside `0` to `2³² − 1`, fails the package, as does a correlation alert citing an event
+  from a table other than `logs`.
+
+The `PartRecord` a part ends with is plain data, so a process worker returns it in its
+summary (`package_part`).
+
+### Export points
+
+Each processing mode spools at one place in `processing.py`, through `_start_package_part`:
+
+| Mode | Part number | Where |
+|------|-------------|-------|
+| Unified | 0, for every file | `process_unified_streaming` |
+| Per-file, sequential | the file's index | `process_perfile_streaming` |
+| Database input (`-D`) | the database's position in the list | `process_db_input` |
+| Parallel, threads or processes | the file's position in the file list, assigned before any worker starts (`PackageSpool.part_of`) | `process_single_file_worker` |
+
+A part that fails is recorded in `ctx.package_errors`. The run goes on and writes its
+detections; `_write_package` then reports the errors, writes no package, and the run exits
+with status 1.
+
+### Stage 2: Parquet
+
+`PackageBuilder.build_data`, in the main process, first checks that the parts hold exactly
+the events the run ingested, since a package holds every event or none. It then opens an
+in-memory duckdb with a 2 GB memory limit, one thread, insertion order kept, its spill
+directory in the package's temporary directory, and extension autoloading off.
+`check_duckdb` has already refused, before ingestion, a duckdb without JSON and Parquet
+built in.
+
+- **Events.** `read_json` over every spool file, in part order, goes through
+  `COPY … (FORMAT parquet, COMPRESSION zstd, ROW_GROUP_SIZE 20000)`. One thread and
+  20,000-row groups keep the writer near 1.6 GB at 386 EVTX columns, where 100,000-row
+  groups need 6 to 7 GB.
+- **Types.** A column of integers only is `BIGINT`, of reals only `DOUBLE`, anything else
+  `VARCHAR`, so no integer above 2⁵³ is rounded through a double.
+- **Names.** DuckDB folds ASCII case as SQLite does, so a column carries one name: the
+  spelling of the lowest-numbered part that has it, except the time field, which takes its
+  `--timefield` name. Other parts' spellings go into the manifest and per-row ones into
+  `_zl_spelling`, so the viewer prints a field as `detected_events.json` does.
+- **Limits.** `events.parquet` above `EVENTS_PARQUET_LIMIT` (1 GiB) is a `PackageError`
+  that advises `--after`/`--before` or `-s`: the browser holds that file in WebAssembly
+  memory, which stops at 4 GB. `text.parquet` above `TEXT_PARQUET_LIMIT` (also 1 GiB, per
+  file) is left out, with a manifest warning.
+
+### Event identity
+
+Every event is named `_zl_uid = part × 2³² + row_id`. With `row_id` below 2³² and fewer than
+2²¹ parts, a uid stays below 2⁵³, so JavaScript holds it exactly. `hits` and `alert_events`
+name events by uid.
+
+### Tables
+
+| File | Contents |
+|------|----------|
+| `events.parquet` | `_zl_uid`, `_zl_part`, `_zl_time` (`TIMESTAMP`, UTC), `_zl_spelling`, then every column of the run |
+| `rules.parquet` | One row per ruleset entry that matched: `key` (its id, or its title, as the run summary groups rules), title, level and `level_rank` (the index into Sigma's levels, −1 for none), tags, and the tactics and techniques `attack.py` reads from them, plus its counts |
+| `hits.parquet` | Distinct `(rule_idx, _zl_uid)` pairs, sorted |
+| `alerts.parquet` | One row per correlation alert: group keys as JSON text, occurrence and window times, metric, event count |
+| `alert_events.parquet` | `(alert_idx, _zl_uid, ord)`: each alert's evidence, in order |
+| `text.parquet` | `(_zl_uid, _zl_text)`: every value of the event, lowercased and joined by `chr(31)`, for full-text search |
+
+`data/manifest.js` carries the format and Zircolite versions, the creation time, the run
+settings (mode, executor, time field and format, event filter state, time bounds, `--limit`,
+rules loaded, never the command line, which may hold an archive password), the tactic order,
+the totals, every column with its type and non-null count, the families, the parts with their
+sources, spellings and time ranges, the failed inputs, the warnings, and every file with its
+size, SHA-256 and chunks.
+
+### Wrapping for `file://`
+
+A page opened from `file://` may run the scripts beside it but may not fetch files, so
+`write_package` turns every binary into scripts. Each 3 MiB of a file (a multiple of 3, so only
+the last chunk is padded) becomes `__zircolite.chunk("<name>", <seq>, "<base64>")`, streamed
+straight into the zip, and the manifest becomes `__zircolite.manifest({…})`:
+
+```
+index.html  app.js  app.css  README.txt  THIRD_PARTY_NOTICES.txt
+assets/duckdb-eh.wasm.gz.NNNN.js  assets/duckdb-browser-eh.worker.js.NNNN.js
+assets/parquet.duckdb_extension.wasm.NNNN.js
+data/manifest.js  data/{events,rules,hits,alerts,alert_events,text}.parquet.NNNN.js
+```
+
+`gui/viewer/viewer.json` says which viewer files are copied and which are wrapped, and the
+`data_format` the viewer reads, which must equal `PACKAGE_FORMAT` in `package.py`.
+`find_viewer` checks the whole viewer before any log is read. The zip is written in the
+temporary directory, which lives inside the destination, and moved into place with
+`os.replace` under a fresh name; `cli.main` removes the temporary directory whatever happens.
+
+### The viewer
+
+The sources are in `gui/source/` (Svelte 5, TypeScript, Vite); `gui/viewer/` is the committed
+build that `--package` copies, and the only part of `gui/` the binary, the release package and
+the Docker image carry.
+
+- **Boot** (`App.svelte`, `engine/boot.ts`). `manifest.js` loads first, so the summary shows
+  before the data. The chunk scripts follow, six at a time, and each file is checked against
+  the manifest's chunk count and size. The engine is gunzipped with `DecompressionStream` and
+  handed to DuckDB-WASM as a `data:` URL, because a worker started from a `file://` page
+  cannot fetch a `blob:` URL in Chromium or WebKit; the worker itself starts from a `blob:`
+  URL. Parquet support loads from the package through a `data:` extension repository ending
+  in `#`, after which extension autoloading is switched off. Each table is registered as a
+  buffer and opened as a view, and the engine's event and hit counts must equal the
+  manifest's. The page's content security policy allows no network connection.
+- **The query scheduler** (`engine/queries.ts`, `engine/db.ts`). The page has one
+  connection. `QueryScheduler` runs one query at a time through `conn.send()`, which
+  `cancelSent()` can interrupt. Each request names a **lane**, and a newer request in a lane
+  supersedes the one queued or running there; each view and panel works in its own scope of
+  lanes, cancelled when it goes away; **Stop** cancels every lane. Identical SQL is answered
+  from a cache of 256 results unless the caller opts out. SQL text is assembled only from
+  checked identifiers and escaped literals (`engine/sql.ts`).
+- **Full-text matches** (`engine/textIndex.svelte.ts`, `engine/textMatches.ts`).
+  `text.parquet` loads in the background once the page is ready. A bare word compiles to a
+  predicate over the index; before a query runs, the scheduler answers each distinct pattern
+  once into a temporary table of matching uids and rewrites the query to read it. The scan
+  runs in twelve slices along the file's row groups, so a Stop interrupts it between slices
+  and the next query resumes it; four tables are kept. Queries that need the index wait for
+  it; with no index, or one that fails to load, bare words compile to a scan of every column
+  instead.
+- **One `Panel` loader** (`ui/panel.svelte.ts`). The panels of Overview, ATT&CK, Entities,
+  Processes and SQL load through `Panel`: each request takes a ticket, only the latest answer
+  is shown, and a request that was stopped or failed leaves **Stopped** or its error, never
+  an answer to an earlier filter. Explore, Detections, the timeline and the drawer keep the
+  same rule with tickets of their own.
+- **Shared state** (`state/`). The search, time range, **Detections only**, columns, open
+  event and view live in the URL hash; `QueryState` compiles them into the one `WHERE` clause
+  the views read.
+- **The `query()` gate** (`sql/console.ts`). The console's text reaches DuckDB only as a
+  string literal passed to the `query()` table function, which parses it itself and accepts
+  exactly one SELECT, so a second statement or a break-out from the literal is a parse error.
+  The console describes the query first, then reads every column cast to `VARCHAR` under
+  positional names, 10,001 rows at most. After each run it switches DuckDB's logging back off
+  through the page's connection, outside the console's own scope, so the reset happens even
+  after a Stop.
+- **Text, never markup.** Log text renders as text. `tests/test_viewer_source.py` fails on
+  `{@html}`, `innerHTML`, `eval` and the other sinks that turn text into markup or code
+  anywhere in `gui/source/src`, and on a page without its content security policy.
+
 ## Module map
 
 All the logic lives in the `zircolite/` package. `zircolite.py` is a shim that calls
@@ -257,7 +434,7 @@ All the logic lives in the `zircolite/` package. `zircolite.py` is a shim that c
 |--------|----------|
 | `cli.py` | The whole command line: `parse_arguments`, `discover_files`, `main` |
 | `__main__.py` | Entry point for `python -m zircolite` |
-| `assets.py` | Resolution of the shipped `config/`, `rules/`, `templates/` and `gui/` |
+| `assets.py` | Resolution of the shipped `config/`, `rules/`, `templates/` and `gui/viewer/` |
 | `streaming.py` | `StreamingEventProcessor` — single-pass read, flatten, transform, insert |
 | `flatten_kernel.py` | Flattening kernel; the reference Python implementation, also compiled as `_flatten_native` |
 | `jsonstream.py` | Validating JSON-array reader with an optional C parser |
@@ -275,7 +452,9 @@ All the logic lives in the `zircolite/` package. `zircolite.py` is a shim that c
 | `parallel.py` | `MemoryAwareParallelProcessor` — worker scaling and memory throttling |
 | `sqlscan.py` | Quote-aware rule-SQL reader, and the OR-chain depth repair |
 | `run_config.py` | `SETTINGS` — one row per option: YAML key, default, merge rule |
-| `templates.py` | `TemplateEngine` (Jinja2 output), `ZircoliteGuiGenerator` (Mini-GUI) |
+| `templates.py` | `TemplateEngine` (Jinja2 output) |
+| `package_spool.py` | Stage one of `--package`: spools each working database's events, hits and alerts |
+| `package.py` | Stage two of `--package`: Parquet tables, the manifest and the viewer zip |
 | `formats.py` | Input format registry: flag, YAML value, extension, encoding, reader |
 | `extractor.py` | `EvtxExtractor` — log line / XML element → event dict |
 | `config.py` | Dataclasses passed to the engine (`ProcessingConfig`, `ExtractorConfig`, …) |
@@ -289,7 +468,7 @@ so a new format is a new row rather than an edit in each of them.
 
 ## Bundled asset resolution
 
-`assets.py` resolves shipped paths under `config/`, `rules/`, `templates/` and `gui/`
+`assets.py` resolves shipped paths under `config/`, `rules/`, `templates/` and `gui/viewer/`
 independently of the working directory. Both the CLI and configuration loader use it.
 
 For every value a user can override, a file of that name in the working directory wins and
@@ -308,10 +487,7 @@ Only a value already rooted at the shipped directory falls back, so
 `-r myrules/windows.json` keeps reporting itself missing instead of quietly loading
 `rules/windows.json`.
 
-Two paths deliberately do not follow that rule. `--package` reads the ZircoGui template
-and `gui/zircogui.zip` from the bundle only: the two have to come from the same build, and
-a copy of just one of them in the working directory would pair a new `data.js` with an old
-GUI. `-U` writes to the installed `rules/` — the directory a later run will actually read
+Two paths deliberately do not follow that rule. `--package` takes the viewer from `gui/viewer/` of Zircolite's own files, as one unit, never from the working directory. `-U` writes to the installed `rules/` — the directory a later run will actually read
 — and falls back to `./rules` only when that one cannot be written to.
 
 `bundled_asset` returns the first root that holds the file:
@@ -323,7 +499,7 @@ GUI. `-U` writes to the installed `rules/` — the directory a later run will ac
 | 3 | two levels up from `assets.py`: the repository root from source, `_internal/` again in a binary | always |
 
 The executable's own directory comes first so that the `config/`, `rules/`, `templates/`
-and `gui/` the release package ships beside the binary can be edited: an updated ruleset
+and `gui/viewer/` the release package ships beside the binary can be edited: an updated ruleset
 dropped there takes effect without a rebuild. The copy under `_internal/` is what lets a
 bare build — `dist/Zircolite/` straight out of PyInstaller, holding only the executable
 and `_internal/` — run on its own, and it is what the binary tests run against. When no
@@ -345,7 +521,7 @@ pdm run pyinstaller --noconfirm Zircolite.spec
 
 That writes `dist/Zircolite/`: the executable (`Zircolite`, or `Zircolite.exe`) and
 `_internal/`, which holds the Python runtime, the extension modules, the bytecode and a
-copy of `config/`, `rules/`, `templates/` and `gui/`. `tools/package-release.py` stages the
+copy of `config/`, `rules/`, `templates/` and `gui/viewer/`. `tools/package-release.py` stages the
 release from it, adding editable copies of those four directories beside the executable,
 `docs/`, `pics/`, `README.md`, `LICENSE` and a generated `THIRD_PARTY_LICENSES`, and
 archives the result as `dist/Zircolite-<version>-<target>.zip` for every target. The Linux

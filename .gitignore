@@ -27,6 +27,10 @@ Temporary Items
 
 TODO
 detected_events.json
+zircolite-package-*.zip
+# Zircolite Viewer packages; never commit event data.
+zircolite-package-*
+tmp-zircolite-package-*
 results
 tmp
 *.log
@@ -38,10 +42,10 @@ tmp
 *.7z
 *.dmg
 *.gz
+!gui/viewer/duckdb-eh.wasm.gz
 *.iso
 *.jar
 *.rar
-*.tar
 
 # pycache
 __pycache__/
@@ -56,7 +60,6 @@ __pycache__/
 .venv/
 venv/
 .env
-*.log
 # pdm.lock and pyproject.toml are tracked: without them
 # `pdm install`, `poetry install` and `uv sync` all fail on a fresh clone.
 # pdm.lock is the lock CI and the Docker image install from; the others are local.
@@ -84,6 +87,7 @@ CLAUDE.md
 .pytest_cache
 .ruff_cache
 docs/superpowers/
+.superpowers/
 reviews/
 
 coverage/

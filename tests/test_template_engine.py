@@ -1,22 +1,19 @@
 """
-Tests for the TemplateEngine and ZircoliteGuiGenerator classes.
+Tests for the TemplateEngine class.
 """
 
 import json
 import logging
-import re
 import sys
-import zipfile
 from pathlib import Path
 from typing import ClassVar
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 import pytest
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from zircolite import TemplateConfig, TemplateEngine
-from zircolite.templates import ZircoliteGuiGenerator
 
 
 class TestTemplateEngineInit:
@@ -578,133 +575,6 @@ class TestTemplateEngineExportFormats:
         assert '"rule_title":' in content
 
 
-# =============================================================================
-# ZircoliteGuiGenerator
-# =============================================================================
-
-class TestZircoliteGuiGenerator:
-    """Tests for ZircoliteGuiGenerator.generate() with mocks."""
-
-    def test_generate_directory_nonexistent_logs_error(self, sample_detection_results):
-        """A --package-dir that does not exist is an error, not a silent fallback."""
-        mock_logger = MagicMock()
-        gen = ZircoliteGuiGenerator(logger=mock_logger)
-        gen.source_archive = __file__  # exists but not a zip
-
-        assert gen.generate(sample_detection_results, directory="/nonexistent/path") is False
-
-        assert any(
-            "does not exist" in str(call) for call in mock_logger.error.call_args_list
-        )
-
-    def test_generate_rejects_a_package_dir_that_is_a_file(
-        self, sample_detection_results, tmp_path
-    ):
-        """os.path.exists() accepted a file, which then failed inside shutil.move."""
-        target = tmp_path / "not-a-directory"
-        target.write_text("", encoding="utf-8")
-        mock_logger = MagicMock()
-        gen = ZircoliteGuiGenerator(logger=mock_logger)
-
-        assert gen.generate(sample_detection_results, directory=str(target)) is False
-
-        assert any(
-            "is not a directory" in str(call) for call in mock_logger.error.call_args_list
-        )
-
-    def test_generate_names_the_template_when_it_produces_nothing(
-        self, sample_detection_results, tmp_path
-    ):
-        """The failure used to surface as a missing data-XXXX.js two lines later."""
-        (tmp_path / "pkg.zip").write_bytes(b"x")
-        mock_logger = MagicMock()
-        gen = ZircoliteGuiGenerator(logger=mock_logger)
-        gen.source_archive = str(tmp_path / "pkg.zip")
-        gen.templateFile = str(tmp_path / "broken.tmpl")
-        gen.tmpFile = str(tmp_path / "data.js")
-        gen.tmpDir = str(tmp_path / "tmp-zircogui-xyz")
-
-        with patch("zircolite.templates.shutil.unpack_archive"), \
-             patch.object(TemplateEngine, "generate_from_template", return_value=False), \
-             patch("zircolite.templates.shutil.move") as mock_move, \
-             patch("zircolite.templates.shutil.make_archive") as mock_archive:
-            assert gen.generate(sample_detection_results, directory="") is False
-
-        # A partial data.js must never reach the package
-        mock_move.assert_not_called()
-        mock_archive.assert_not_called()
-        assert any(
-            "broken.tmpl" in str(call) for call in mock_logger.error.call_args_list
-        )
-
-    def test_generate_exception_calls_finally_cleanup(self, test_logger, sample_detection_results, tmp_path):
-        """When unpack_archive raises, finally block still runs and cleans tmpDir."""
-        gen = ZircoliteGuiGenerator(logger=test_logger)
-        gen.source_archive = str(tmp_path / "package.zip")
-        gen.tmpDir = str(tmp_path / "tmp-zircogui-abc1")
-        Path(gen.tmpDir).mkdir(parents=True)
-
-        with patch("zircolite.templates.shutil.unpack_archive", side_effect=RuntimeError("bad archive")):
-            gen.generate(sample_detection_results, directory="")
-        assert not Path(gen.tmpDir).exists()
-
-    def test_generate_success_mocks(self, test_logger, sample_detection_results, tmp_path):
-        """Generate with mocked unpack, TemplateEngine, move and make_archive."""
-        (tmp_path / "pkg.zip").write_bytes(b"x")
-        gen = ZircoliteGuiGenerator(logger=test_logger)
-        gen.source_archive = str(tmp_path / "pkg.zip")
-        gen.templateFile = str(tmp_path / "tmpl.js")
-        gen.tmpFile = str(tmp_path / "data.js")
-        gen.outputFile = "zircogui-output"
-        gen.tmpDir = str(tmp_path / "tmp-zircogui-xyz")
-        Path(gen.templateFile).write_text("{{ data }}")
-
-        with patch("zircolite.templates.shutil.unpack_archive") as mock_unpack:
-            def mkdirs(archive, path, fmt):
-                Path(path).mkdir(parents=True)
-                (Path(path) / "zircogui").mkdir()
-            mock_unpack.side_effect = mkdirs
-            with patch("zircolite.templates.shutil.move"):
-                with patch("zircolite.templates.shutil.make_archive") as mock_make:
-                    gen.generate(sample_detection_results, directory="")
-                    mock_make.assert_called_once()
-        assert not Path(gen.tmpDir).exists()
-
-
-class TestGuiGeneratorHappyPath:
-    """ZircoliteGuiGenerator.generate() end-to-end: real zip produced with expected content."""
-
-    def test_generates_zip_with_data(self, test_logger, sample_detection_results, tmp_path):
-        import zipfile
-        gui_dir = tmp_path / "zircogui"
-        gui_dir.mkdir()
-        (gui_dir / "index.html").write_text("<html></html>")
-        package_zip = tmp_path / "package.zip"
-        with zipfile.ZipFile(package_zip, "w", zipfile.ZIP_DEFLATED) as zf:
-            for f in gui_dir.rglob("*"):
-                if f.is_file():
-                    zf.write(f, f.relative_to(gui_dir.parent))
-
-        template_file = tmp_path / "export.js.tmpl"
-        template_file.write_text("var data = {{ data | tojson }};")
-        out_dir = tmp_path / "output"
-        out_dir.mkdir()
-
-        gen = ZircoliteGuiGenerator(logger=test_logger)
-        gen.source_archive = str(package_zip)
-        gen.templateFile = str(template_file)
-        gen.outputFile = "zircogui-result"
-        gen.generate(sample_detection_results, directory=str(out_dir))
-
-        zip_path = out_dir / "zircogui-result.zip"
-        if not zip_path.exists():
-            zip_path = Path(gen.outputFile + ".zip")
-        assert zip_path.exists()
-        with zipfile.ZipFile(zip_path, "r") as zf:
-            names = zf.namelist()
-            assert "data.js" in names or any("data.js" in n for n in names)
-
-
 class TestTemplateEngineAttackNavigatorHelpers:
     """Tests for ATT&CK Navigator helpers used in templates (_extract_attack_techniques, collect_navigator_techniques)."""
 
@@ -896,113 +766,13 @@ class TestSummaryCsvTemplateIsParseableCsv:
         assert rows[1][4] == "A & B <tag> second line"
 
 
-class TestZircoGuiTacticBuckets:
-    """Every ATT&CK tactic the rulesets emit must reach a Mini-GUI lane.
-
-    The template used to test hardcoded underscored tag names
-    (``attack.privilege_escalation``) while the rulesets emit hyphenated ones,
-    so seven of the fifteen tactic lanes could never populate. Routing the test
-    through ``extract_attack_tactics`` makes ``zircolite.attack`` the only place
-    tag spellings are known.
-    """
-
-    TEMPLATE = Path(__file__).parent.parent / "templates" / "exportForZircoGui.tmpl"
-
-    # Mini-GUI array name -> the tactic shortnames that must land in it.
-    LANES: ClassVar[dict[str, list[str]]] = {
-        "Reconnaissance": ["reconnaissance"],
-        "ResourceDevelopment": ["resource-development"],
-        "InitialAccess": ["initial-access"],
-        "Execution": ["execution"],
-        "Persistence": ["persistence"],
-        "PrivilegeEscalation": ["privilege-escalation"],
-        # v19 retired Defense Evasion; this lane carries both successors.
-        "DefenseEvasion": ["stealth", "defense-impairment"],
-        "CredentialAccess": ["credential-access"],
-        "Discovery": ["discovery"],
-        "LateralMovement": ["lateral-movement"],
-        "Collection": ["collection"],
-        "CommandAndControl": ["command-and-control"],
-        "Exfiltration": ["exfiltration"],
-        "Impact": ["impact"],
-    }
-
-    def _render(self, tmp_path, data):
-        from zircolite.config import TemplateConfig
-        from zircolite.templates import TemplateEngine
-
-        out = tmp_path / "data.js"
-        engine = TemplateEngine(
-            TemplateConfig(
-                template=[[str(self.TEMPLATE)]],
-                template_output=[[str(out)]],
-                time_field="SystemTime",
-            ),
-            logger=logging.getLogger("test"),
-        )
-        assert engine.generate_from_template(str(self.TEMPLATE), str(out), data)
-        return out.read_text()
-
-    @staticmethod
-    def _detection(title, tags):
-        return {
-            "title": title,
-            "rule_level": "high",
-            "sigmafile": "",
-            "description": "d",
-            "tags": tags,
-            "matches": [{"row_id": 1, "SystemTime": "2026-01-01T00:00:00Z"}],
-        }
-
-    @staticmethod
-    def _titles_in(rendered, lane):
-        body = re.search(rf"var {lane}Data = \[(.*?)\n\];", rendered, re.DOTALL).group(1)
-        return re.findall(r'"title":"(.*?)"', body)
-
-    def test_every_tactic_lane_receives_its_detections(self, tmp_path):
-        shortname_to_tag = {
-            s: f"attack.{s}" for lane in self.LANES.values() for s in lane
-        }
-        data = [
-            self._detection(f"rule-{s}", [tag, "attack.t1059"])
-            for s, tag in shortname_to_tag.items()
-        ]
-
-        rendered = self._render(tmp_path, data)
-
-        for lane, shortnames in self.LANES.items():
-            assert sorted(self._titles_in(rendered, lane)) == sorted(
-                f"rule-{s}" for s in shortnames
-            ), f"{lane}Data did not receive its detections"
-
-    def test_legacy_tag_spellings_still_route(self, tmp_path):
-        data = [
-            self._detection("underscored", ["attack.privilege_escalation"]),
-            self._detection("retired", ["attack.defense-evasion"]),
-        ]
-
-        rendered = self._render(tmp_path, data)
-
-        assert self._titles_in(rendered, "PrivilegeEscalation") == ["underscored"]
-        assert self._titles_in(rendered, "DefenseEvasion") == ["retired"]
-
-    def test_a_rule_with_no_resolvable_tactic_lands_in_other(self, tmp_path):
-        """'Other' tested ``tags == []``, so a rule with only technique tags
-        fell out of every lane instead of into this one."""
-        data = [self._detection("orphan", ["attack.t1059.001", "cve.2024.1234"])]
-
-        rendered = self._render(tmp_path, data)
-
-        assert self._titles_in(rendered, "Other") == ["orphan"]
-
-
 class TestTemplatesSerialiseAnyMatch:
     """Every per-match template must emit valid JSON whatever the match holds.
 
     Keys were written between bare quotes, so a field name carrying a quote or
     backslash (split-derived names can) broke the document. Correlation alerts
     add nested values: targets that map one scalar per field (Elasticsearch,
-    Zinc, Timesketch, the Mini-GUI) receive them as JSON text.
+    Zinc, Timesketch) receive them as JSON text.
     """
 
     TEMPLATES = Path(__file__).parent.parent / "templates"
@@ -1049,140 +819,3 @@ class TestTemplatesSerialiseAnyMatch:
         else:
             assert json.loads(document["group_keys"]) == {"Host": "h"}
             assert json.loads(document["event_ids"]) == ["0:1", "0:2"]
-
-    def test_gui_rows_parse_and_show_nested_values_as_text(self, tmp_path):
-        rendered = self._render(tmp_path, "exportForZircoGui.tmpl")
-        rows = json.loads(re.search(r"var HighData = (\[.*?\n\]);", rendered, re.DOTALL).group(1))
-
-        assert rows[0][self.KEY] == "v"
-        assert json.loads(rows[0]["group_keys"]) == {"Host": "h"}
-
-
-class TestZircoGuiRuleMetadataCannotBeShadowed:
-    """A log field must not replace the rule's own title, level, file or description.
-
-    Each Mini-GUI record is a JS object literal that lists the rule metadata
-    first and the matched event's fields after it. A field with the same name
-    (a JSON ``title``, or a ``-D`` database column) would be a duplicate key,
-    and in JavaScript the later, log-supplied value wins: an attacker could
-    relabel their own detection. Colliding fields are kept under a ``log_``
-    prefix instead.
-    """
-
-    TEMPLATE = Path(__file__).parent.parent / "templates" / "exportForZircoGui.tmpl"
-    RESERVED = ("Rule level", "title", "sigma_yml", "description")
-
-    def _execution_records(self, tmp_path, match):
-        from zircolite.config import TemplateConfig
-        from zircolite.templates import TemplateEngine
-
-        out = tmp_path / "data.js"
-        engine = TemplateEngine(
-            TemplateConfig(
-                template=[[str(self.TEMPLATE)]],
-                template_output=[[str(out)]],
-                time_field="SystemTime",
-            ),
-            logger=logging.getLogger("test"),
-        )
-        data = [{
-            "title": "Real Rule",
-            "rule_level": "high",
-            "sigmafile": "real.yml",
-            "description": "real description",
-            "tags": ["attack.execution"],
-            "matches": [match],
-        }]
-        assert engine.generate_from_template(str(self.TEMPLATE), str(out), data)
-        body = re.search(
-            r"var ExecutionData = \[(.*?)\n\];", out.read_text(), re.DOTALL
-        ).group(1)
-        # Keep duplicate keys visible: plain json.loads would silently keep the last one
-        return json.loads(f"[{body}]", object_pairs_hook=lambda pairs: pairs)
-
-    def test_log_fields_named_like_rule_metadata_do_not_override_it(self, tmp_path):
-        match = {"row_id": 1, "SystemTime": "2026-01-01T00:00:00Z"}
-        match.update({key: f"<img src=x onerror=alert('{key}')>" for key in self.RESERVED})
-
-        [record] = self._execution_records(tmp_path, match)
-
-        keys = [key for key, _ in record]
-        assert len(keys) == len(set(keys)), f"duplicate keys: {keys}"
-        values = dict(record)
-        assert values["title"] == "Real Rule"
-        assert values["Rule level"] == "high"
-        assert values["sigma_yml"] == "real.yml"
-        assert values["description"] == "real description"
-        # The log's values are kept, not dropped: they are evidence
-        for key in self.RESERVED:
-            assert values[f"log_{key}"] == f"<img src=x onerror=alert('{key}')>"
-        # Rule metadata stays first: the GUI puts select filters on columns 0-1
-        assert keys[:4] == ["Rule level", "title", "sigma_yml", "description"]
-
-    def test_ordinary_fields_keep_their_names(self, tmp_path):
-        [record] = self._execution_records(
-            tmp_path, {"row_id": 1, "CommandLine": "cmd", "Title": "window title"}
-        )
-
-        values = dict(record)
-        assert values["CommandLine"] == "cmd"
-        # Only exact names collide: JS keys are case-sensitive
-        assert values["Title"] == "window title"
-        assert values["title"] == "Real Rule"
-
-
-class TestZircoGuiBundleTreatsLogStringsAsText:
-    """The bundled Mini-GUI must treat log-derived strings as text, never as HTML.
-
-    Field names, field values and the rule title all reach the page from the
-    analysed logs. Concatenated into HTML strings for jQuery ``append`` (table
-    headers, select options), RowGroup (whose default label is appended as
-    HTML) or vis-timeline (with ``onclick`` allowed by its XSS filter), a
-    crafted event runs script in the analyst's browser. These checks read the
-    JavaScript shipped in ``gui/zircogui.zip``.
-    """
-
-    ZIP = Path(__file__).parent.parent / "gui" / "zircogui.zip"
-
-    @pytest.fixture(scope="class")
-    def gui_js(self):
-        with zipfile.ZipFile(self.ZIP) as zf:
-            return {
-                name: zf.read(f"zircogui/js/{name}").decode("utf-8")
-                for name in ("index.js", "functions.js")
-            }
-
-    def test_table_headers_are_built_as_text(self, gui_js):
-        index = gui_js["index.js"]
-        assert not re.search(r"""["']<th>["']\s*\+\s*item""", index)
-        assert index.count('$("<th>").text(item)') == 2  # header and footer
-
-    def test_select_options_are_built_as_text(self, gui_js):
-        functions = gui_js["functions.js"]
-        assert "<option value=" not in functions
-        assert "$('<option>').val(text).text(text)" in functions
-        assert functions.count("append(textOption(") == 3
-
-    def test_row_group_label_is_a_text_node(self, gui_js):
-        functions = gui_js["functions.js"]
-        assert "rowGroup: {dataSrc: 'title', startRender: textGroupLabel}" in functions
-        assert "document.createTextNode(String(group))" in functions
-
-    def test_timeline_items_are_dom_nodes_without_inline_handlers(self, gui_js):
-        index = gui_js["index.js"]
-        assert "onclick" not in index
-        assert 'document.createTextNode(event["title"] + " - EventID : " + event["EventID"]' in index
-        assert "content: itemContent," in index
-
-    def test_archive_carries_the_page_assets(self):
-        with zipfile.ZipFile(self.ZIP) as zf:
-            names = set(zf.namelist())
-            assert zf.testzip() is None
-        for asset in (
-            "zircogui/index.html",
-            "zircogui/vendor/jquery/jquery.min.js",
-            "zircogui/vendor/datatablesOrg/datatables.min.js",
-            "zircogui/vendor/vis-timeline/vis-timeline-graph2d.min.js",
-            "zircogui/js/mitre.js",
-        ):
-            assert asset in names

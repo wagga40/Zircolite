@@ -39,3 +39,62 @@ jobs:
       # tracked, so a missing one is a broken checkout and must fail too.
       - name: Run tests
         run: pdm run pytest
+
+  # The viewer ships prebuilt in gui/viewer. This job proves the sources build
+  # it byte for byte, then drives a real package in three browsers.
+  viewer:
+    runs-on: ubuntu-latest
+    # A browser that hangs on a package must fail the run, not hold the runner.
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      # A pinned public corpus: the e2e scripts assert 4688 events, detections,
+      # process starts and tactics, which no one-file fixture holds.
+      - uses: actions/checkout@v4
+        with:
+          repository: sbousseaden/EVTX-ATTACK-SAMPLES
+          ref: 4ceed2f4706daf601c212a8f91c113dd85349a2c
+          path: EVTX-ATTACK-SAMPLES
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "26"
+          cache: npm
+          cache-dependency-path: gui/source/package-lock.json
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.14"
+      - uses: pdm-project/setup-pdm@v4
+        with:
+          python-version: "3.14"
+      - name: Install dependencies
+        run: pdm install --dev
+      - name: Check, test and build the viewer
+        working-directory: gui/source
+        run: |
+          npm ci
+          npm run check
+          npm test
+          npm run build
+      - name: The committed viewer is what its sources build
+        # intent-to-add makes a file the build newly emits show up in the diff too,
+        # but skips one .gitignore matches, which every clone would then miss.
+        run: |
+          git add --intent-to-add gui/viewer
+          git diff --exit-code gui/viewer
+          git status --short --ignored -- gui/viewer
+          test -z "$(git ls-files --others --ignored --exclude-standard -- gui/viewer)"
+      - name: Build a package
+        run: |
+          mkdir -p "$RUNNER_TEMP/package"
+          pdm run python zircolite.py --evtx EVTX-ATTACK-SAMPLES -r rules/rules_windows_merged.json \
+            --package --package-dir "$RUNNER_TEMP/package" -o "$RUNNER_TEMP/package/detections.json" -l "$RUNNER_TEMP/package/zircolite.log" -q
+          unzip -q "$RUNNER_TEMP"/package/zircolite-package-*.zip -d "$RUNNER_TEMP/package/unpacked"
+      - name: Install the browsers
+        working-directory: gui/source
+        run: npx playwright install --with-deps chromium firefox webkit
+      - name: Drive the package in Chromium, Firefox and WebKit
+        working-directory: gui/source
+        run: |
+          npm run smoke -- "$RUNNER_TEMP/package/unpacked"
+          npm run e2e -- "$RUNNER_TEMP/package/unpacked"
+          npm run views -- "$RUNNER_TEMP/package/unpacked"
