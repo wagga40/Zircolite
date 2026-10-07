@@ -137,7 +137,7 @@ Zircolite-<version>-<target>/
 ├── config/               field mappings and transforms
 ├── rules/                default rulesets
 ├── templates/            output templates
-├── gui/viewer/           the package viewer, prebuilt
+├── gui/viewer/           the Zircolite Viewer, prebuilt
 ├── docs/  pics/  README.md
 ├── LICENSE
 └── THIRD_PARTY_LICENSES
@@ -460,7 +460,7 @@ could not run), `failed` or `interrupted`. In parallel mode its stage times — 
 in the summary panel — are summed across workers, so they can add up to more than the
 wall-clock duration. Memory is sampled, so a short peak can be missed.
 
-### Templating and the package viewer
+### Templating and the Zircolite Viewer
 
 | Option | Description |
 |--------|-------------|
@@ -481,7 +481,7 @@ and `-r` defaults.
 > records. See [Append mode](Advanced.md#append-mode).
 
 A package holds every event of the run, so `--package` turns early event filtering off. See
-[Advanced → Package viewer](Advanced.md#package-viewer) for what a package holds, how to open
+[Advanced → Zircolite Viewer](Advanced.md#zircolite-viewer) for what a package holds, how to open
 it and what the viewer does.
 
 ### YAML configuration

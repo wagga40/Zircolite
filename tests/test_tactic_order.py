@@ -1,4 +1,4 @@
-"""The order the package viewer lays its tactic lanes and matrix columns out in."""
+"""The order the Zircolite Viewer lays its tactic lanes and matrix columns out in."""
 
 from zircolite.attack import _TACTIC_ALIASES, TACTIC_ORDER, extract_attack_tactics
 

@@ -73,7 +73,7 @@ Ingestion records each row whose event spelled such a field otherwise, one row p
 event in two tables (`field_spellings` and `logs_spelling`), and every match and
 correlation evidence event is printed with its own spelling; CSV output has a column for
 each spelling. The run's time field is the exception: it is always printed under the name
-`--timefield` gives it, because the Timesketch template and the package viewer look it up by
+`--timefield` gives it, because the Timesketch template and the Zircolite Viewer look it up by
 that name. Per-file, unified and parallel runs therefore print an event the same way,
 whichever files share its database. A database saved with `--dbfile` keeps both tables,
 and `--db-input` uses them; rule SQL never reads them, and a query whose result has no
@@ -252,7 +252,7 @@ Chainsaw.
 
 `--package` copies every ingested event out of the working databases, with the detections
 linked to them, and writes it as Parquet into a zip beside a prebuilt viewer. How to make and
-read a package is in [Advanced → Package viewer](Advanced.md#package-viewer); this section is
+read a package is in [Advanced → Zircolite Viewer](Advanced.md#zircolite-viewer); this section is
 how it is built. It runs in two stages, so that only the main process ever loads duckdb:
 
 ```mermaid

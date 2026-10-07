@@ -163,7 +163,7 @@ def test_correlation_evidence_keeps_each_events_spelling(tmp_path):
 
 @pytest.mark.parametrize("layout", LAYOUTS)
 def test_the_time_field_keeps_the_runs_name(tmp_path, layout):
-    # Timesketch and the package viewer read the time by the name --timefield gives it.
+    # Timesketch and the Zircolite Viewer read the time by the name --timefield gives it.
     inputs = write_inputs(tmp_path / "inputs", {
         "a.json": [{"CommandLine": "whoami a", "timestamp": "2026-01-01T00:00:00Z"}],
         "b.json": [{"CommandLine": "whoami b", "Timestamp": "2026-01-01T00:01:00Z"}],
@@ -178,7 +178,7 @@ def test_the_time_field_keeps_the_runs_name(tmp_path, layout):
 
 
 def viewer_names(manifest, row):
-    """The names the package viewer shows a row's fields under: row, then part, then column."""
+    """The names the Zircolite Viewer shows a row's fields under: row, then part, then column."""
     row_names = {name.lower(): name for name in json.loads(row["_zl_spelling"] or "[]")}
     part_names = next(part["spellings"] for part in manifest["parts"] if part["part"] == row["_zl_part"])
     return {row_names.get(column["key"]) or part_names.get(column["key"]) or column["name"]

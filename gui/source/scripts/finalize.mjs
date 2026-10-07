@@ -59,7 +59,7 @@ function notices() {
   sections.push(`== MITRE ATT&CK Enterprise ${attack.version} ==\n\n${attack.copyright}\n\n` +
     'Technique and tactic names, and where each technique sits, are reproduced from MITRE ATT&CK.\n\n' +
     fs.readFileSync(path.join(root, 'scripts/attack-terms.txt'), 'utf8').trim());
-  return `Zircolite viewer: third-party notices\n\n${sections.join('\n\n')}\n`;
+  return `Zircolite Viewer: third-party notices\n\n${sections.join('\n\n')}\n`;
 }
 
 fs.copyFileSync(path.join(root, 'index.html'), path.join(out, 'index.html'));

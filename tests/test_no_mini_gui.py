@@ -1,4 +1,4 @@
-"""The package viewer replaced the Mini-GUI; nothing Zircolite ships may still offer the old one."""
+"""The Zircolite Viewer replaced the Mini-GUI; nothing Zircolite ships may still offer the old one."""
 
 import re
 from pathlib import Path
@@ -29,4 +29,4 @@ def test_nothing_shipped_mentions_the_mini_gui():
         except UnicodeDecodeError:
             continue
         found += [f"{path.relative_to(ROOT)}:{n}" for n, line in enumerate(text.splitlines(), 1) if OLD.search(line)]
-    assert found == [], "the Mini-GUI was replaced by the package viewer; update these lines"
+    assert found == [], "the Mini-GUI was replaced by the Zircolite Viewer; update these lines"

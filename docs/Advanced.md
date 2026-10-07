@@ -531,7 +531,7 @@ row, because the two filters act at different stages.
 
 Disable the whole mechanism with `--no-event-filter`, or `enabled: false` in the config.
 `--package` turns it off as well, because a package holds every event of the run, and logs
-`Event filtering disabled: --package keeps every event`; see [Package viewer](#package-viewer).
+`Event filtering disabled: --package keeps every event`; see [Zircolite Viewer](#zircolite-viewer).
 
 ## Keeping Data Used by Zircolite
 
@@ -671,14 +671,14 @@ output:
 > `exportForAttackNavigator.tmpl` and `exportForSARIF.tmpl`, become invalid when a second
 > document is concatenated onto the first.
 
-## Package viewer
+## Zircolite Viewer
 
-A package is one zip file that holds every event Zircolite ingested during a run, not only
-the events a rule matched, together with the detections, the correlation alerts and a summary
-of the run. It opens in a web browser straight from disk: there is nothing to install and no
-server to run, and the page makes no network request, which its content security policy
-forbids. Whoever receives the zip can search the events, filter them and move between
-detections, hosts, accounts and processes offline.
+The Zircolite Viewer explores a package: one zip file that holds every event Zircolite
+ingested during a run, not only the events a rule matched, together with the detections, the
+correlation alerts and a summary of the run. It opens in a web browser straight from disk:
+there is nothing to install and no server to run, and the page makes no network request,
+which its content security policy forbids. Whoever receives the zip can search the events,
+filter them and move between detections, hosts, accounts and processes offline.
 
 The viewer is tested in current versions of Chromium, Firefox and WebKit. On large packages,
 Chromium-based browsers and Safari tend to answer faster than Firefox.

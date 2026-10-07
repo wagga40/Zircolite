@@ -1,4 +1,4 @@
-Zircolite viewer: third-party notices
+Zircolite Viewer: third-party notices
 
 == @duckdb/duckdb-wasm 1.32.0 (MIT) ==
 

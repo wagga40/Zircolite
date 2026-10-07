@@ -248,7 +248,7 @@ def parse_arguments() -> argparse.Namespace:
     templating_formats_args.add_argument("--template-append", help="Append to template output files instead of overwriting them. Useful for accumulating results across multiple runs (e.g. cumulative NDJSON exports). Note: not all templates produce append-safe output (single-document JSON layers will become invalid).", action='store_true', dest='template_append')
     templating_formats_args.add_argument("--timesketch", help="Shortcut: use Timesketch template and write to timesketch-<RAND>.json", action='store_true')
     templating_formats_args.add_argument("--navigator-output", help="Shortcut: generate ATT&CK Navigator layer JSON and write to navigator-<RAND>.json (or specify a custom filename)", type=str, metavar="OUTPUT_FILE", nargs='?', const="")
-    templating_formats_args.add_argument("-G", "--package", help="Create a package for the offline viewer: every event of the run plus the detections, in one zip opened with a web browser", action='store_true')
+    templating_formats_args.add_argument("-G", "--package", help="Create a package for the Zircolite Viewer: every event of the run plus the detections, in one zip opened offline with a web browser", action='store_true')
     templating_formats_args.add_argument("--package-dir", help="Existing directory to write the package to (default: the working directory)", type=str, default=None)
 
     return parser.parse_args()

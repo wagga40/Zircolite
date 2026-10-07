@@ -51,7 +51,7 @@ class FieldSpellings:
     """The names rows read back from ``logs`` are printed under.
 
     Each event keeps its own spelling, except the run's time field, which
-    always carries the name the run gives it: templates and the package viewer look
+    always carries the name the run gives it: templates and the Zircolite Viewer look
     the time up by that name.
     """
 

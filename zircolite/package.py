@@ -59,8 +59,9 @@ CHUNK_BYTES = 3 * 1024 * 1024  # a multiple of 3: base64 pads only the last chun
 README_TEXT = """Zircolite package
 =================
 
-Extract this archive, then open index.html in a web browser. Opening it from
-inside the archive does not work: the page loads the files beside it.
+Extract this archive, then open index.html in a web browser to start the
+Zircolite Viewer. Opening it from inside the archive does not work: the page
+loads the files beside it.
 
 Everything runs on this computer, and the page makes no network requests. The
 package holds every event of the run, so share it as you would the logs.

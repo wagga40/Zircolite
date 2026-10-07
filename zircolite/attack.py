@@ -35,7 +35,7 @@ _TACTIC_ALIASES = {
     "impact": "impact",
 }
 
-# Enterprise ATT&CK's own column order, which the package viewer's matrix and
+# Enterprise ATT&CK's own column order, which the Zircolite Viewer's matrix and
 # timeline lanes follow. Stealth and Defense Impairment stand where v19 put
 # them, in the place Defense Evasion held.
 TACTIC_ORDER = (

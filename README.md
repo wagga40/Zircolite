@@ -282,16 +282,17 @@ for the setup, the caveats and how to reproduce it with `tools/tool-benchmark.py
 
 See the [documentation index](docs/README.md) for usage, configuration and internals.
 
-## Package viewer
+## Zircolite Viewer
 
 `--package` writes one zip holding every event of the run, not only the matches, with the
-detections and correlation alerts linked to them. Extract it and open `index.html`: the viewer
-runs offline in a browser, with nothing to install and no network, and offers an overview,
-the detections, a searchable event table, a timeline, the ATT&CK matrix, entities, process
-trees and an SQL console for one SELECT at a time over the package's tables. Share a package
-as you would the logs it came from; see [Package viewer](docs/Advanced.md#package-viewer).
+detections and correlation alerts linked to them. Extract it and open `index.html`: the
+Zircolite Viewer runs offline in a browser, with nothing to install and no network, and
+offers an overview, the detections, a searchable event table, a timeline, the ATT&CK matrix,
+entities, process trees and an SQL console for one SELECT at a time over the package's
+tables. Share a package as you would the logs it came from; see
+[Zircolite Viewer](docs/Advanced.md#zircolite-viewer).
 
-![The package viewer's Overview](pics/viewer-overview.webp)
+![The Zircolite Viewer's Overview](pics/viewer-overview.webp)
 
 ## Tutorials, References, and Related Projects
 
