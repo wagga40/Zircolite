@@ -402,6 +402,10 @@ class TestIdentityAndLayout:
         beside = [name for name in ("config", "rules", "templates", "gui") if (dist / name).exists()]
         assert not beside, f"ZIRCOLITE_BINARY must be the raw build, not a package: found {beside}"
 
+    def test_only_the_viewer_build_is_bundled(self, dist):
+        """gui/ also holds the viewer's sources and their node_modules, which must never ship."""
+        assert sorted(entry.name for entry in (dist / "_internal" / "gui").iterdir()) == ["viewer"]
+
     def test_no_build_tooling_is_bundled(self, dist):
         """The spec excludes these; a hook that aliased its way back would ship
         code that THIRD_PARTY_LICENSES has no notice for."""

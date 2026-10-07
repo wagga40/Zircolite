@@ -1,5 +1,6 @@
 """The viewer's source and build: what Python packages, and what the page may do."""
 
+import ast
 import hashlib
 import json
 import re
@@ -93,6 +94,22 @@ def test_attack_catalogue_follows_zircolites_tactics():
     assert [t["shortname"] for t in catalogue["tactics"]] == list(TACTIC_ORDER)
     active = {t["id"] for t in catalogue["techniques"]}
     assert set(catalogue["revoked"].values()) <= active
+
+
+def test_only_the_viewer_build_ships_from_gui():
+    """gui/ holds the sources and their node_modules too; the binary and the image take the build alone."""
+    spec = ast.parse((ROOT / "Zircolite.spec").read_text(encoding="utf-8"))
+    datas = next(node.value for node in spec.body if isinstance(node, ast.Assign)
+                 and any(isinstance(target, ast.Name) and target.id == "datas" for target in node.targets))
+    bundled = [ast.literal_eval(element)[0] for element in datas.elts]
+    assert [source for source in bundled if source.split("/")[0] == "gui"] == ["gui/viewer"]
+
+    copied = [token.rstrip("/")
+              for line in (ROOT / "Dockerfile").read_text(encoding="utf-8").splitlines()
+              if line.startswith("COPY ")
+              for token in line.split()[1:-1] if not token.startswith("--")]
+    assert not [source for source in copied if re.search(r"(^|/)gui$", source)]
+    assert len([source for source in copied if source.endswith("gui/viewer")]) == 2
 
 
 def test_viewer_notices_carry_the_attack_terms():

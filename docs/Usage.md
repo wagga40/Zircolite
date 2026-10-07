@@ -137,7 +137,7 @@ Zircolite-<version>-<target>/
 ├── config/               field mappings and transforms
 ├── rules/                default rulesets
 ├── templates/            output templates
-├── gui/                  the package viewer, prebuilt
+├── gui/viewer/           the package viewer, prebuilt
 ├── docs/  pics/  README.md
 ├── LICENSE
 └── THIRD_PARTY_LICENSES

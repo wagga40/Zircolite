@@ -433,7 +433,7 @@ All the logic lives in the `zircolite/` package. `zircolite.py` is a shim that c
 |--------|----------|
 | `cli.py` | The whole command line: `parse_arguments`, `discover_files`, `main` |
 | `__main__.py` | Entry point for `python -m zircolite` |
-| `assets.py` | Resolution of the shipped `config/`, `rules/`, `templates/` and `gui/` |
+| `assets.py` | Resolution of the shipped `config/`, `rules/`, `templates/` and `gui/viewer/` |
 | `streaming.py` | `StreamingEventProcessor` — single-pass read, flatten, transform, insert |
 | `flatten_kernel.py` | Flattening kernel; the reference Python implementation, also compiled as `_flatten_native` |
 | `jsonstream.py` | Validating JSON-array reader with an optional C parser |
@@ -467,7 +467,7 @@ so a new format is a new row rather than an edit in each of them.
 
 ## Bundled asset resolution
 
-`assets.py` resolves shipped paths under `config/`, `rules/`, `templates/` and `gui/`
+`assets.py` resolves shipped paths under `config/`, `rules/`, `templates/` and `gui/viewer/`
 independently of the working directory. Both the CLI and configuration loader use it.
 
 For every value a user can override, a file of that name in the working directory wins and
@@ -498,7 +498,7 @@ Two paths deliberately do not follow that rule. `--package` takes the viewer fro
 | 3 | two levels up from `assets.py`: the repository root from source, `_internal/` again in a binary | always |
 
 The executable's own directory comes first so that the `config/`, `rules/`, `templates/`
-and `gui/` the release package ships beside the binary can be edited: an updated ruleset
+and `gui/viewer/` the release package ships beside the binary can be edited: an updated ruleset
 dropped there takes effect without a rebuild. The copy under `_internal/` is what lets a
 bare build — `dist/Zircolite/` straight out of PyInstaller, holding only the executable
 and `_internal/` — run on its own, and it is what the binary tests run against. When no
@@ -520,7 +520,7 @@ pdm run pyinstaller --noconfirm Zircolite.spec
 
 That writes `dist/Zircolite/`: the executable (`Zircolite`, or `Zircolite.exe`) and
 `_internal/`, which holds the Python runtime, the extension modules, the bytecode and a
-copy of `config/`, `rules/`, `templates/` and `gui/`. `tools/package-release.py` stages the
+copy of `config/`, `rules/`, `templates/` and `gui/viewer/`. `tools/package-release.py` stages the
 release from it, adding editable copies of those four directories beside the executable,
 `docs/`, `pics/`, `README.md`, `LICENSE` and a generated `THIRD_PARTY_LICENSES`, and
 archives the result as `dist/Zircolite-<version>-<target>.zip` for every target. The Linux

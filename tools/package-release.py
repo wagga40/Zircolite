@@ -55,8 +55,8 @@ RUNTIME_LIBRARIES_LICENCE = "python-runtime-libraries.txt"
 
 ONEDIR = "Zircolite"
 # Shipped outside the bundle so users can edit them; the binary prefers these
-# over its own copies.
-EDITABLE_ASSETS = ("config", "rules", "templates", "gui")
+# over its own copies. Only the viewer's build: gui/ also holds its sources.
+EDITABLE_ASSETS = ("config", "rules", "templates", "gui/viewer")
 VIEWER_FILES = ("viewer.json", "THIRD_PARTY_NOTICES.txt")
 DOCUMENTATION = ("docs", "pics")
 TOP_LEVEL_FILES = ("README.md", "LICENSE")

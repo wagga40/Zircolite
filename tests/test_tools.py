@@ -548,6 +548,10 @@ def make_checkout(root, executable="Zircolite"):
         (root / directory / name).write_text(directory, encoding="utf-8")
     for name in ("viewer.json", "THIRD_PARTY_NOTICES.txt"):
         (root / "gui" / "viewer" / name).write_text(name, encoding="utf-8")
+    # The viewer's sources sit beside its build in a checkout, node_modules and all.
+    (root / "gui" / "source" / "node_modules" / "vite").mkdir(parents=True)
+    (root / "gui" / "source" / "package.json").write_text("{}", encoding="utf-8")
+    (root / "gui" / "source" / "node_modules" / "vite" / "index.js").write_text("", encoding="utf-8")
     publish_rules(root / "rules", {"sigmahq": ("DRL-1.1", {
         "rules_linux.json": "[]", "licenses/sigmahq.txt": "SigmaHQ rules: DRL 1.1 (test copy)"})})
     (root / "config" / "__pycache__").mkdir()
@@ -611,6 +615,7 @@ class TestPackageArchive:
                          "README.md", "LICENSE", "THIRD_PARTY_LICENSES"]:
             assert f"{top}/{expected}" in names, expected
         assert not [name for name in names if "__pycache__" in name]
+        assert {name.split("/")[2] for name in names if name.startswith(f"{top}/gui/")} == {"viewer"}
 
     def test_executable_bit_survives(self, release, checkout, monkeypatch, capsys):
         # Checked in the archive itself: upload-artifact zips loose files, which drops the bit.

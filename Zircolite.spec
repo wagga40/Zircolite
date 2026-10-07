@@ -12,7 +12,8 @@ from PyInstaller.utils.hooks import collect_all, collect_submodules
 # kernel check below has to look at that tree and not at an installed copy.
 sys.path.insert(0, SPECPATH)
 
-datas = [('config', 'config'), ('gui', 'gui'), ('rules', 'rules'), ('templates', 'templates')]
+# gui/ also holds the viewer's sources and their node_modules; only the build ships.
+datas = [('config', 'config'), ('gui/viewer', 'gui/viewer'), ('rules', 'rules'), ('templates', 'templates')]
 binaries = []
 # py7zr is only imported inside functions. The bytecode scan finds those
 # imports today; naming it keeps .7z support from depending on that.
