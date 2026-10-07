@@ -20,7 +20,7 @@ htmlcov
 build
 dist
 *.egg-info
-gui_src
+gui/source
 helpers
 tools
 *.so

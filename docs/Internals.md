@@ -378,8 +378,9 @@ temporary directory, which lives inside the destination, and moved into place wi
 
 ### The viewer
 
-The sources are in `gui_src/` (Svelte 5, TypeScript, Vite); `gui/viewer/` is the committed
-build that `--package` copies.
+The sources are in `gui/source/` (Svelte 5, TypeScript, Vite); `gui/viewer/` is the committed
+build that `--package` copies, and the only part of `gui/` the binary, the release package and
+the Docker image carry.
 
 - **Boot** (`App.svelte`, `engine/boot.ts`). `manifest.js` loads first, so the summary shows
   before the data. The chunk scripts follow, six at a time, and each file is checked against
@@ -422,7 +423,7 @@ build that `--package` copies.
   after a Stop.
 - **Text, never markup.** Log text renders as text. `tests/test_viewer_source.py` fails on
   `{@html}`, `innerHTML`, `eval` and the other sinks that turn text into markup or code
-  anywhere in `gui_src/src`, and on a page without its content security policy.
+  anywhere in `gui/source/src`, and on a page without its content security policy.
 
 ## Module map
 

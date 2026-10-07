@@ -79,8 +79,8 @@ tasks:
       - rm -f zircolite-package-*.zip
 
   gui-build:
-    desc: Build the package viewer from gui_src into gui/viewer (commit the result)
-    dir: gui_src
+    desc: Build the package viewer from gui/source into gui/viewer (commit the result)
+    dir: gui/source
     cmds:
       - npm ci
       - npm run check

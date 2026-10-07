@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
-// Vitest runs from gui_src.
+// Vitest runs from gui/source.
 export const STYLESHEET = readFileSync(join(process.cwd(), 'src', 'app.css'), 'utf8');
 
 /** A theme's colour tokens, read from the stylesheet the page uses: the light root block, or the dark one. */

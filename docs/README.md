@@ -51,7 +51,7 @@ the project root:
 | `task docker-push` | Push to Docker Hub, after a multi-arch build |
 | `task save` | Save the Docker image to an archive |
 | `task binary-build` | Build the standalone binary into `dist/Zircolite/` with PyInstaller, then run the binary tests against it |
-| `task gui-build` | Check, test and build the package viewer from `gui_src/` into `gui/viewer/`; commit the result |
+| `task gui-build` | Check, test and build the package viewer from `gui/source/` into `gui/viewer/`; commit the result |
 | `task get-version` | Print the version from `zircolite/__init__.py` |
 
 `Taskfile.yml` holds these production tasks. Development tasks — lint, format, tests —

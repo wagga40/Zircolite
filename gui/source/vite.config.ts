@@ -8,7 +8,7 @@ export default defineConfig({
   plugins: [svelte()],
   define: { 'process.env.NODE_ENV': JSON.stringify('production') },
   build: {
-    outDir: '../gui/viewer',
+    outDir: '../viewer',
     emptyOutDir: true,
     target: 'es2022',
     sourcemap: false,

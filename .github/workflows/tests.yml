@@ -59,7 +59,7 @@ jobs:
         with:
           node-version: "26"
           cache: npm
-          cache-dependency-path: gui_src/package-lock.json
+          cache-dependency-path: gui/source/package-lock.json
       - uses: actions/setup-python@v5
         with:
           python-version: "3.14"
@@ -69,7 +69,7 @@ jobs:
       - name: Install dependencies
         run: pdm install --dev
       - name: Check, test and build the viewer
-        working-directory: gui_src
+        working-directory: gui/source
         run: |
           npm ci
           npm run check
@@ -90,10 +90,10 @@ jobs:
             --package --package-dir "$RUNNER_TEMP/package" -o "$RUNNER_TEMP/package/detections.json" -l "$RUNNER_TEMP/package/zircolite.log" -q
           unzip -q "$RUNNER_TEMP"/package/zircolite-package-*.zip -d "$RUNNER_TEMP/package/unpacked"
       - name: Install the browsers
-        working-directory: gui_src
+        working-directory: gui/source
         run: npx playwright install --with-deps chromium firefox webkit
       - name: Drive the package in Chromium, Firefox and WebKit
-        working-directory: gui_src
+        working-directory: gui/source
         run: |
           npm run smoke -- "$RUNNER_TEMP/package/unpacked"
           npm run e2e -- "$RUNNER_TEMP/package/unpacked"

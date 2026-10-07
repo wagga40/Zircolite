@@ -11,7 +11,7 @@ import pytest
 from zircolite.package import PACKAGE_FORMAT
 
 ROOT = Path(__file__).parent.parent
-SOURCE = ROOT / "gui_src"
+SOURCE = ROOT / "gui" / "source"
 BUILD = ROOT / "gui" / "viewer"
 CSP = ("default-src 'none'; script-src 'self' 'wasm-unsafe-eval' blob:; worker-src blob:; "
        "connect-src blob: data:; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; "
@@ -90,7 +90,7 @@ def test_bundled_parquet_extension_is_the_pinned_one():
 def test_attack_catalogue_follows_zircolites_tactics():
     from zircolite.attack import TACTIC_ORDER
 
-    catalogue = json.loads((ROOT / "gui_src" / "src" / "attack" / "catalog.json").read_text(encoding="utf-8"))
+    catalogue = json.loads((SOURCE / "src" / "attack" / "catalog.json").read_text(encoding="utf-8"))
     assert [t["shortname"] for t in catalogue["tactics"]] == list(TACTIC_ORDER)
     active = {t["id"] for t in catalogue["techniques"]}
     assert set(catalogue["revoked"].values()) <= active
@@ -122,7 +122,7 @@ def test_severity_inks_go_through_one_helper():
     pattern = re.compile(r"""--sev-['"`]?\s*(\$\{|\+)""")
     offenders = [
         f"{path.relative_to(ROOT)}:{n}"
-        for path in (ROOT / "gui_src" / "src").rglob("*")
+        for path in (SOURCE / "src").rglob("*")
         if path.suffix in {".ts", ".svelte"} and path.name != "levels.ts"
         for n, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1)
         if pattern.search(line)

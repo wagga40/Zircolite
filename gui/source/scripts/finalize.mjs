@@ -9,7 +9,7 @@ import { fileURLToPath } from 'node:url';
 import { gzip } from 'pako';
 
 const root = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
-const out = path.resolve(root, '../gui/viewer');
+const out = path.resolve(root, '../viewer');
 const dist = path.join(root, 'node_modules/@duckdb/duckdb-wasm/dist');
 const pkg = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'));
 

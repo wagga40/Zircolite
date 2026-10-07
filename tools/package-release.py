@@ -562,7 +562,7 @@ def stage(root: Path, version: str, target: str) -> Path:
     for name in VIEWER_FILES:
         if not (root / "gui" / "viewer" / name).is_file():
             raise PackagingError(f"{root / 'gui' / 'viewer' / name} does not exist; "
-                                 "rebuild the viewer (cd gui_src && npm run build)")
+                                 "rebuild the viewer (cd gui/source && npm run build)")
     # Only a Windows archive cannot hold a symlink, but refusing them for every
     # target lets the linux-x64 canary build catch one, rather than the Windows
     # legs of a release.

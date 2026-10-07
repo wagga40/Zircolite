@@ -1031,7 +1031,7 @@ A tag the catalogue does not list as an active technique is shown apart, never d
 - an **unknown** one, which the catalogue does not name at all.
 
 To move to a newer ATT&CK release, download MITRE's Enterprise ATT&CK STIX bundle
-(`enterprise-attack-X.Y.json`) and, in `gui_src/`, run:
+(`enterprise-attack-X.Y.json`) and, in `gui/source/`, run:
 
 ```shell
 node scripts/attack-catalog.mjs enterprise-attack-X.Y.json
@@ -1060,13 +1060,13 @@ logs is a root, labelled with the parent's image or PID.
 
 ### For developers
 
-- The viewer's sources are in `gui_src/`: Svelte, TypeScript and Vite over DuckDB-WASM. The
+- The viewer's sources are in `gui/source/`: Svelte, TypeScript and Vite over DuckDB-WASM. The
   build in `gui/viewer/` is committed, and it is what `--package` copies into every package.
   `task gui-build` runs `npm ci`, `npm run check`, `npm test` and `npm run build` there.
-  Commit `gui/viewer/` with any change to `gui_src/`.
+  Commit `gui/viewer/` with any change to `gui/source/`.
 - CI rebuilds the viewer and fails when the result differs from the committed `gui/viewer/`
   by a single byte or a new file, including one that `.gitignore` matches.
-- The scripts in `gui_src/e2e/` drive an extracted package from `file://`, each taking its
+- The scripts in `gui/source/e2e/` drive an extracted package from `file://`, each taking its
   directory: `npm run smoke -- <dir>` (it opens in Chromium, Firefox and WebKit, with the
   events the manifest lists, no network request and no page error), `npm run e2e -- <dir>`
   (cross-checks Explore in all three), `npm run views -- <dir>` (cross-checks every view and

@@ -40,7 +40,7 @@ LOAD_BEARING_COMMANDS = {
     "tests.yml": [
         "pdm install --dev",
         "pdm run pytest",
-        # The viewer job: build gui_src, prove the committed gui/viewer equals
+        # The viewer job: build gui/source, prove the committed gui/viewer equals
         # it, then drive a real package in the browsers.
         "npm ci",
         "npm run check",
