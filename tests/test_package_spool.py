@@ -383,14 +383,23 @@ class TestCorrelations:
 
 
 class _FailingHandle:
-    def __init__(self):
+    """A close that fails the way a full disk fails a buffered flush.
+
+    A real file object releases its descriptor even then, so the wrapped file
+    is closed before the error; Windows cannot unlink a file still held open.
+    """
+
+    def __init__(self, wrapped=None):
         self.closed = False
+        self._wrapped = wrapped
 
     def write(self, data):
         return len(data)
 
     def close(self):
         self.closed = True
+        if self._wrapped is not None:
+            self._wrapped.close()
         raise OSError("No space left on device")
 
 
@@ -415,11 +424,9 @@ class TestCloseFailures:
         writer = hit_spool.open_part(0, ["x"])
         writer.export_events(make_logs([{"A": "1"}]))
         writer.sink({"title": "Two", "count": 1, "matches": [{"row_id": 1}]})
-        real_hits = writer._hits
-        writer._hits = _FailingHandle()
+        writer._hits = _FailingHandle(writer._hits)
 
         writer.discard()
-        real_hits.close()
 
         assert list(tmp_path.iterdir()) == []
 
