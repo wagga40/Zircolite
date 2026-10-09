@@ -3358,6 +3358,75 @@ class TestCLIRegressionFixes:
         )
         assert resolved == "config/config.yaml"
 
+    SHADOW_WARNING = "from the working directory instead of the shipped"
+
+    def _run_transform_list(self, tmp_path, workdir, monkeypatch, *extra):
+        """Resolve --config from *workdir*; return the log text."""
+        monkeypatch.chdir(workdir)
+        log = tmp_path / "run.log"
+        with patch('sys.argv', ['zircolite.py', '--transform-list', '-l', str(log), *extra]), \
+                pytest.raises(SystemExit):
+            zircolite_script.main()
+        return log.read_text(encoding="utf-8") if log.exists() else ""
+
+    @staticmethod
+    def _local_config(workdir):
+        (workdir / "config").mkdir(parents=True)
+        local = workdir / "config" / "config.yaml"
+        local.write_text("mappings: {}\ntransforms: {}\n")
+        return local
+
+    def test_a_local_default_config_is_announced_as_written(self, tmp_path, monkeypatch):
+        """The CWD copy wins, but a planted config must not win silently, and a
+        directory name that looks like markup must be shown as it is."""
+        workdir = tmp_path / "[red]bundle[/]"
+        local = self._local_config(workdir)
+
+        from rich.text import Text
+
+        log = self._run_transform_list(tmp_path, workdir, monkeypatch)
+
+        [line] = [line for line in log.splitlines() if self.SHADOW_WARNING in line]
+        # The file log keeps the markup; render it as the console does.
+        assert str(local.resolve()) in Text.from_markup(line.split("WARNING", 1)[1]).plain
+
+    def test_naming_the_config_silences_the_warning(self, tmp_path, monkeypatch):
+        """`-c config/config.yaml` is the documented way to keep a local config;
+        the hint the warning gives has to actually silence it."""
+        workdir = tmp_path / "case"
+        self._local_config(workdir)
+
+        log = self._run_transform_list(tmp_path, workdir, monkeypatch, "-c", "config/config.yaml")
+
+        assert self.SHADOW_WARNING not in log
+
+    def test_the_shipped_config_is_not_announced(self, tmp_path, monkeypatch):
+        workdir = tmp_path / "elsewhere"
+        workdir.mkdir()
+
+        log = self._run_transform_list(tmp_path, workdir, monkeypatch)
+
+        assert self.SHADOW_WARNING not in log
+
+    @pytest.mark.parametrize("extra,announced", [((), True), (("-r", "rules/rules_windows_merged.json"), False)])
+    def test_a_local_default_ruleset_is_announced(self, tmp_path, monkeypatch, extra, announced):
+        """A planted rules/ hides detections just as a planted config changes mappings."""
+        workdir = tmp_path / "case"
+        (workdir / "rules").mkdir(parents=True)
+        (workdir / "rules" / "rules_windows_merged.json").write_text(json.dumps(
+            [{"title": "t", "level": "high", "rule": ["SELECT * FROM logs WHERE EventID=1"]}]))
+        events = workdir / "events.json"
+        events.write_text('{"EventID": 1}\n')
+        monkeypatch.chdir(workdir)
+        log = tmp_path / "run.log"
+        argv = ['zircolite.py', '-e', str(events), '-j', '-o', str(tmp_path / "out.json"),
+                '-l', str(log), *extra]
+
+        with patch('sys.argv', argv):
+            zircolite_script.main()
+
+        assert (self.SHADOW_WARNING in log.read_text(encoding="utf-8")) is announced
+
     def test_an_explicit_relative_ruleset_resolves_from_the_install(self, tmp_path, monkeypatch):
         """`-r rules/...` used to work only when the CWD was Zircolite's own."""
         _, config, events = self._fixture(tmp_path)

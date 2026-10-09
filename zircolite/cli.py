@@ -83,6 +83,7 @@ from zircolite.assets import (
     resolve_default_path,
     resolve_shipped_ruleset,
     resolve_shipped_template,
+    shipped_copy_shadowed_by,
 )
 from zircolite.config import RULE_LEVELS
 from zircolite.console import literal
@@ -200,7 +201,7 @@ def parse_arguments() -> argparse.Namespace:
 
     # Advanced configuration options
     config_formats_args = parser.add_argument_group('⚙️  ADVANCED CONFIGURATION')
-    config_formats_args.add_argument("-c", "--config", help="JSON or YAML file containing field mappings and exclusions", type=str, default="config/config.yaml")
+    config_formats_args.add_argument("-c", "--config", help="JSON or YAML file containing field mappings and exclusions", type=str, default="config/config.yaml", action=_StoreGiven)
     config_formats_args.add_argument("-LE", "--logs-encoding", help="Encoding of the source files, for the formats read as text: Sysmon for Linux, Auditd, EVTXtract and CSV (XML uses the encoding declared in the document, JSON is read as UTF-8)", type=str)
     config_formats_args.add_argument("-q", "--quiet", help="Quiet mode: suppress banner, progress, and info messages. Only the summary panel and errors are shown.", action='store_true')
     config_formats_args.add_argument("--debug", help="Enable debug logging", action='store_true')
@@ -306,6 +307,32 @@ def get_file_extension(args: argparse.Namespace) -> str:
 def _has_explicit_format_flag(args: argparse.Namespace) -> bool:
     """Check if the user has set an explicit format flag on the CLI."""
     return has_explicit_format(args)
+
+
+class _StoreGiven(argparse.Action):
+    """Store the value and note that it was typed, even when it equals the default."""
+
+    def __call__(self, parser, namespace, values, option_string=None):
+        setattr(namespace, self.dest, values)
+        setattr(namespace, f"_{self.dest}_given", True)
+
+
+def _announce_local_default(value: str, parts: tuple[str, ...], remedy: str, logger: logging.Logger) -> None:
+    """Warn when a default nobody asked for is taken from the working directory.
+
+    A relative default such as ``config/config.yaml`` resolves against the
+    working directory first. A copy there is usually a deliberate local
+    override, but one inside a directory the analyst was handed changes the
+    mappings, the rules or the output without any sign of it. Only defaults
+    are announced: naming the file on the command line says which one is meant.
+    """
+    shipped = shipped_copy_shadowed_by(value, *parts)
+    if shipped is not None:
+        logger.warning(
+            f"[yellow]   [!] Using {literal(Path(value).resolve())} from the working directory "
+            f"instead of the shipped {literal(shipped)} ({remedy} to choose explicitly and "
+            f"silence this)[/]"
+        )
 
 
 def _is_explicit(args: argparse.Namespace, dest: str, unset: Any = None) -> bool:
@@ -1323,6 +1350,8 @@ def _main(memory_tracker, start_time) -> None:
     # bundled one instead of reporting that it is missing.
     config_path = Path(args.config)
     if not config_path.is_absolute() and config_path.parent == Path("config"):
+        if not getattr(args, "_config_given", False):
+            _announce_local_default(args.config, ("config", config_path.name), "pass -c", logger)
         args.config = resolve_default_path(args.config, "config", config_path.name)
 
     if args.transform_list:
@@ -1341,6 +1370,8 @@ def _main(memory_tracker, start_time) -> None:
             args.template = []
         if args.templateOutput is None:
             args.templateOutput = []
+        _announce_local_default("templates/exportForTimesketch.tmpl",
+                                ("templates", "exportForTimesketch.tmpl"), "use -t/-T", logger)
         args.template.append([resolve_default_path(
             "templates/exportForTimesketch.tmpl", "templates", "exportForTimesketch.tmpl"
         )])
@@ -1354,6 +1385,8 @@ def _main(memory_tracker, start_time) -> None:
             args.template = []
         if args.templateOutput is None:
             args.templateOutput = []
+        _announce_local_default("templates/exportForAttackNavigator.tmpl",
+                                ("templates", "exportForAttackNavigator.tmpl"), "use -t/-T", logger)
         args.template.append([resolve_default_path(
             "templates/exportForAttackNavigator.tmpl", "templates", "exportForAttackNavigator.tmpl"
         )])
@@ -1364,6 +1397,8 @@ def _main(memory_tracker, start_time) -> None:
         flattened = [item for sublist in args.ruleset for item in sublist]
         args.ruleset = [resolve_shipped_ruleset(item) for item in flattened]
     else:
+        _announce_local_default("rules/rules_windows_merged.json",
+                                ("rules", "rules_windows_merged.json"), "pass -r", logger)
         args.ruleset = [
             resolve_default_path(
                 "rules/rules_windows_merged.json",

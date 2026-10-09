@@ -93,7 +93,8 @@ def resolve_default_path(value: str, *parts: str) -> str:
 
     Defaults such as ``config/config.yaml`` are relative, so they only resolve
     when Zircolite runs from its own directory. A file of the same name in the
-    working directory still wins, keeping local overrides working.
+    working directory still wins, keeping local overrides working;
+    :func:`shipped_copy_shadowed_by` tells the caller when that happened.
     """
     if Path(value).is_file():
         return value
@@ -112,6 +113,26 @@ def resolve_asset_path(value: str, *parts: str) -> str:
         return value
     bundled = bundled_path(*parts)
     return str(bundled) if bundled.exists() else value
+
+
+def shipped_copy_shadowed_by(value: str, *parts: str) -> Path | None:
+    """The shipped file or directory that a working-directory *value* hides.
+
+    :func:`resolve_default_path` and :func:`resolve_asset_path` let a relative
+    path that exists in the working directory win over the copy Zircolite
+    ships. That is how local overrides work, but a ``config/``, ``rules/`` or
+    ``templates/`` sitting in a directory the analyst was handed (a log bundle,
+    a case folder) wins the same way. Returns the shipped path when *value*
+    resolves to something other than it, ``None`` when the shipped copy is
+    what is used or there is none to compare with.
+    """
+    local = Path(value)
+    if local.is_absolute() or not local.exists():
+        return None
+    shipped = bundled_path(*parts)
+    if not shipped.exists() or local.resolve() == shipped.resolve():
+        return None
+    return shipped
 
 
 def _needs_fallback(value: str, directory: str) -> bool:
