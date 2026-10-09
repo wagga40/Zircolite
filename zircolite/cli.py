@@ -13,8 +13,10 @@ import logging
 import os
 import random
 import re
+import shutil
 import string
 import sys
+import tempfile
 import time
 from pathlib import Path
 from typing import Any
@@ -40,7 +42,6 @@ from zircolite import (
     ConfigLoader,
     DetectionResult,
     DetectionStats,
-    GuiConfig,
     # Log type detection
     LogTypeDetector,
     MemoryTracker,
@@ -52,7 +53,6 @@ from zircolite import (
     TemplateConfig,
     TemplateEngine,
     UnknownPipelineError,
-    ZircoliteGuiGenerator,
     __version__,
     analyze_files_and_recommend_mode,
     avoid_files,
@@ -80,7 +80,6 @@ from zircolite import (
 
 # Bundled asset resolution
 from zircolite.assets import (
-    bundled_asset,
     resolve_default_path,
     resolve_shipped_ruleset,
     resolve_shipped_template,
@@ -91,6 +90,7 @@ from zircolite.correlations import TIMESTAMP_FORMATS
 
 # Input format registry
 from zircolite.formats import ALIAS_EXTENSIONS, DEFAULT_EXTENSION, EXTENSION_FALLBACKS
+from zircolite.package_spool import PackageError, PackageSpool, rule_index
 from zircolite.performance import STAGE_LABELS, aggregate_stages, write_performance_report
 
 # Processing modes and context (from the dedicated processing module)
@@ -238,18 +238,18 @@ def parse_arguments() -> argparse.Namespace:
     parallel_args = parser.add_argument_group('⚡ PARALLEL PROCESSING')
     parallel_args.add_argument("-P", "--no-parallel", help="Disable automatic parallel processing (parallel is enabled by default when beneficial)", action='store_true')
     parallel_args.add_argument("-w", "--parallel-workers", help="Maximum number of parallel workers (default: auto-detect based on CPU/memory)", type=int)
-    parallel_args.add_argument("--executor", choices=("auto", "thread", "process"), default=None, help="File worker executor (default: auto selects processes for large files when resources permit)")
+    parallel_args.add_argument("--executor", choices=("auto", "thread", "process"), default=None, help="File worker executor (default: auto selects processes for 32 MiB or more of input when CPU and memory allow two workers)")
     parallel_args.add_argument("--parallel-memory-limit", help=f"Memory usage threshold percentage before throttling (default: {DEFAULTS['parallel_memory_limit']:g})", type=float, default=None)
 
-    # Templating and Mini GUI options
-    templating_formats_args = parser.add_argument_group('🎨 TEMPLATING AND MINI GUI')
+    # Templating and package options
+    templating_formats_args = parser.add_argument_group('🎨 TEMPLATING AND PACKAGE')
     templating_formats_args.add_argument("-t", "--template", help="Jinja2 template to use for output generation", type=str, action='append', nargs='+')
     templating_formats_args.add_argument("-T", "--templateOutput", "--template-output", help="Output file for Jinja2 template results", type=str, action='append', nargs='+')
     templating_formats_args.add_argument("--template-append", help="Append to template output files instead of overwriting them. Useful for accumulating results across multiple runs (e.g. cumulative NDJSON exports). Note: not all templates produce append-safe output (single-document JSON layers will become invalid).", action='store_true', dest='template_append')
     templating_formats_args.add_argument("--timesketch", help="Shortcut: use Timesketch template and write to timesketch-<RAND>.json", action='store_true')
     templating_formats_args.add_argument("--navigator-output", help="Shortcut: generate ATT&CK Navigator layer JSON and write to navigator-<RAND>.json (or specify a custom filename)", type=str, metavar="OUTPUT_FILE", nargs='?', const="")
-    templating_formats_args.add_argument("-G", "--package", help="Create a ZircoGui/Mini GUI package", action='store_true')
-    templating_formats_args.add_argument("--package-dir", help="Directory to save the ZircoGui/Mini GUI package", type=str, default=None)
+    templating_formats_args.add_argument("-G", "--package", help="Create a package for the Zircolite Viewer: every event of the run plus the detections, in one zip opened offline with a web browser", action='store_true')
+    templating_formats_args.add_argument("--package-dir", help="Existing directory to write the package to (default: the working directory)", type=str, default=None)
 
     return parser.parse_args()
 
@@ -618,6 +618,80 @@ def resolve_run_config(args, logger) -> argparse.Namespace:
 ################################################################
 # POST-PROCESSING
 ################################################################
+def _prepare_package(args: argparse.Namespace, rulesets: list[Any], logger: logging.Logger) -> PackageSpool:
+    """Check what --package needs before any file is read, then open its spool.
+
+    A missing viewer or a duckdb that cannot write Parquet used to surface
+    only after a long run; the package directory is where the spool lives, so
+    the final move into place is a rename on one filesystem.
+    """
+    target = Path(args.package_dir) if args.package_dir else Path(".")
+    if args.package_dir and not target.is_dir():
+        reason = "is not a directory" if target.exists() else "does not exist"
+        quit_on_error(f"[red]    [-] Cannot create the package: {literal(args.package_dir)} {reason}[/]", logger)
+    try:
+        from zircolite import package
+        package.check_duckdb()
+        package.find_viewer()
+    except (ImportError, PackageError) as exc:
+        quit_on_error(f"[red]    [-] Cannot create the package: {literal(exc)}[/]", logger)
+    try:
+        directory = Path(tempfile.mkdtemp(prefix="tmp-zircolite-package-", dir=target)).resolve()
+    except OSError as exc:
+        quit_on_error(f"[red]    [-] Cannot create the package: {literal(exc)}[/]", logger)
+    return PackageSpool(
+        directory=str(directory),
+        time_field=args.timefield or "",
+        timestamp_format=getattr(args, "timestamp_format", None) or "iso",
+        rule_keys=rule_index(rulesets),
+    )
+
+
+def _write_package(ctx: ProcessingContext, args: argparse.Namespace) -> bool:
+    """Build the package from the spooled parts. False if it was not written."""
+    from zircolite import package
+    from zircolite.core import runnable_rules
+
+    spool = ctx.package_spool
+    if spool is None:
+        ctx.logger.error("[red]    [-] Cannot create the package: no spool was prepared for this run[/]")
+        return False
+    if ctx.package_errors:
+        for error in ctx.package_errors[:5]:
+            ctx.logger.error(f"[red]    [-] Cannot create the package: {literal(error)}[/]")
+        return False
+    if args.db_input:
+        mode = "database input"
+    elif args.unified_db:
+        mode = "unified"
+    elif ctx.workers_used > 1:
+        mode = "per-file, parallel"
+    else:
+        mode = "per-file"
+    # Database input ignores --after and --before (_warn_ignored_db_flags says so).
+    applied = not args.db_input
+    run = package.RunInfo(
+        zircolite_version=__version__, mode=mode,
+        executor=args.executor if ctx.workers_used > 1 else "sequential",
+        timestamp_format=spool.timestamp_format,
+        after=ctx.time_after_str if applied else None, before=ctx.time_before_str if applied else None,
+        limit=ctx.limit, rules_loaded=len(runnable_rules(ctx.rulesets or [], ctx.rule_filters)),
+    )
+    failed = sorted({source for record in ctx.performance_files if record.get("status") == "failed"
+                     for source in record.get("sources") or ()})
+    destination = Path(args.package_dir) if args.package_dir else Path(".")
+    ctx.logger.info("[+] Building the package")
+    try:
+        target = package.PackageBuilder(spool, logger=ctx.logger).build(
+            viewer=package.find_viewer(), parts=ctx.package_parts, rulesets=ctx.rulesets, run=run,
+            failed_sources=failed, expected_events=ctx.total_events, destination=destination)
+    except (PackageError, OSError) as exc:
+        ctx.logger.error(f"[red]    [-] Cannot create the package: {literal(exc)}[/]")
+        return False
+    ctx.logger.info(f"[+] Package written to: {make_file_link(str(target))}")
+    return True
+
+
 def handle_templating(
     ctx: ProcessingContext,
     results: list[Any],
@@ -637,35 +711,8 @@ def handle_templating(
 
 
     if ctx.package:
-        if not results:
-            ctx.logger.info(
-                "[yellow]   [!] No detections: skipping GUI package creation[/]"
-            )
-        else:
-            # Deliberately not resolve_default_path: the template and the archive
-            # have to come from the same build, and a copy of only one of them in
-            # the working directory would pair a new data.js with an old GUI.
-            template_path = bundled_asset("templates", "exportForZircoGui.tmpl")
-            gui_zip_path = bundled_asset("gui", "zircogui.zip")
-            if template_path.is_file() and gui_zip_path.is_file():
-                gui_config = GuiConfig(
-                    source_archive=str(gui_zip_path),
-                    template_file=str(template_path),
-                    time_field=ctx.time_field
-                )
-                packager = ZircoliteGuiGenerator(gui_config, logger=ctx.logger)
-                # A package the user asked for and did not get is a failed run
-                succeeded = packager.generate(results, args.package_dir) and succeeded
-            else:
-                missing = []
-                if not template_path.is_file():
-                    missing.append(str(template_path))
-                if not gui_zip_path.is_file():
-                    missing.append(str(gui_zip_path))
-                ctx.logger.error(
-                    f"[red]    [-] Cannot create GUI package: missing file(s): {', '.join(missing)}[/]"
-                )
-                succeeded = False
+        # A package the user asked for and did not get is a failed run
+        succeeded = _write_package(ctx, args) and succeeded
     return succeeded
 
 
@@ -1053,6 +1100,9 @@ def _run_processing(
 
     check_output_paths(_template_outputs(args), file_list, "Template output")
     ctx.time_field = args.timefield
+    if ctx.package_spool is not None:
+        # Auto-detection may have chosen the time field after the spool was opened.
+        ctx.package_spool.time_field = ctx.time_field
 
     # DB input mode (auto-detected SQLite file)
     if args.db_input:
@@ -1065,6 +1115,7 @@ def _run_processing(
     # Auto-select processing mode
     use_parallel = False
     parallel_workers = 1
+    stats: dict[str, Any] = {}
 
     # Flags whose contract needs one file at a time. --strict has to abort the
     # whole run on a parse error, but a worker exception can only be logged and
@@ -1104,7 +1155,10 @@ def _run_processing(
                 )
 
     if not args.no_auto_mode and not args.unified_db:
-        recommended_mode, reason, stats = analyze_files_and_recommend_mode(file_list)
+        recommended_mode, reason, stats = analyze_files_and_recommend_mode(
+            file_list, getattr(args, "executor", "thread"),
+            auto_mode=True, max_workers=getattr(args, "parallel_workers", None),
+        )
         forced_workers = getattr(args, 'parallel_workers', None)
         print_mode_recommendation(
             recommended_mode, reason, stats,
@@ -1128,7 +1182,10 @@ def _run_processing(
         logger.info("")
     else:
         if not getattr(args, 'no_parallel', False) and not force_sequential and len(file_list) > 1:
-            _, _, stats = analyze_files_and_recommend_mode(file_list)
+            _, _, stats = analyze_files_and_recommend_mode(
+                file_list, getattr(args, "executor", "thread"),
+                auto_mode=False, max_workers=getattr(args, "parallel_workers", None),
+            )
             forced_workers = getattr(args, 'parallel_workers', None)
             if stats.get('parallel_recommended', False):
                 use_parallel = True
@@ -1157,16 +1214,8 @@ def _run_processing(
             and not args.unified_db and not args.no_parallel and not force_sequential):
         use_parallel = True
     if use_parallel:
-        import psutil
-
-        from zircolite.parallel import select_executor
-        from zircolite.utils import estimate_input_size
-
-        args.executor, executor_reason = select_executor(
-            getattr(args, "executor", "thread"), [estimate_input_size(path) for path in file_list],
-            psutil.virtual_memory().available / 1024**2, os.cpu_count() or 1,
-            auto_mode=not args.no_auto_mode, max_workers=getattr(args, "parallel_workers", None),
-        )
+        # The workload analysis sized its worker count for this executor.
+        args.executor, executor_reason = stats["executor"], stats["executor_reason"]
         logger.info(f"[+] Executor: {args.executor} ({executor_reason})")
     elif getattr(args, "executor", "thread") == "auto":
         args.executor = "thread"
@@ -1593,9 +1642,14 @@ def _main(memory_tracker, start_time) -> None:
         except (TypeError, ValueError, OSError) as exc:
             quit_on_error(f"Invalid --performance-json: {exc}", logger)
 
+    package_spool = _prepare_package(args, rulesets_manager.rulesets, logger) if args.package else None
+
     # Handle event filter configuration
     active_event_filter = None
-    if not getattr(args, 'no_event_filter', False):
+    if args.package:
+        # The filter drops events no rule can match; a package explores them all.
+        logger.info("[+] Event filtering disabled: --package keeps every event")
+    elif not getattr(args, 'no_event_filter', False):
         active_event_filter = rulesets_manager.event_filter
     else:
         logger.info("[+] Event filtering disabled (--no-event-filter)")
@@ -1627,12 +1681,13 @@ def _main(memory_tracker, start_time) -> None:
         remove_index=flatten_groups(getattr(args, 'remove_index', None)),
         auto_index_top_n=getattr(args, 'auto_index', 0),
         strict_evtx=getattr(args, 'strict', False),
-        retain_results=ready_for_templating or args.package,
+        retain_results=ready_for_templating,
         working_db=args.working_db,
         working_db_dir=args.working_db_dir,
         sqlite_cache_mib=args.sqlite_cache_mib,
         flatten_backend=args.flatten_backend,
         rule_prefilter=args.rule_prefilter,
+        package_spool=package_spool,
     )
 
     zircolite_core = None
@@ -1682,6 +1737,8 @@ def _main(memory_tracker, start_time) -> None:
                 zircolite_core.close()
             except Exception as e:
                 logger.debug(f"Core close: {e}")
+        if package_spool is not None:
+            shutil.rmtree(package_spool.directory, ignore_errors=True)
         finalization_seconds += time.perf_counter() - finalization_start
         memory_tracker.stop()
         status = "interrupted" if is_shutdown_requested() else "failed" if strict_error is not None or processing_failed or not templating_ok else "partial" if any(record["status"] in ("partial", "failed", "running") for record in ctx.performance_files) else "complete"

@@ -55,8 +55,9 @@ RUNTIME_LIBRARIES_LICENCE = "python-runtime-libraries.txt"
 
 ONEDIR = "Zircolite"
 # Shipped outside the bundle so users can edit them; the binary prefers these
-# over its own copies.
-EDITABLE_ASSETS = ("config", "rules", "templates", "gui")
+# over its own copies. Only the viewer's build: gui/ also holds its sources.
+EDITABLE_ASSETS = ("config", "rules", "templates", "gui/viewer")
+VIEWER_FILES = ("viewer.json", "THIRD_PARTY_NOTICES.txt")
 DOCUMENTATION = ("docs", "pics")
 TOP_LEVEL_FILES = ("README.md", "LICENSE")
 ASSET_CLUTTER = shutil.ignore_patterns("__pycache__", "*.pyc", ".DS_Store")
@@ -557,6 +558,11 @@ def stage(root: Path, version: str, target: str) -> Path:
     for name in TOP_LEVEL_FILES:
         if not (root / name).is_file():
             raise PackagingError(f"{root / name} does not exist")
+    # The viewer bundles third-party code, and a release must not ship it without that code's notices.
+    for name in VIEWER_FILES:
+        if not (root / "gui" / "viewer" / name).is_file():
+            raise PackagingError(f"{root / 'gui' / 'viewer' / name} does not exist; "
+                                 "rebuild the viewer (cd gui/source && npm run build)")
     # Only a Windows archive cannot hold a symlink, but refusing them for every
     # target lets the linux-x64 canary build catch one, rather than the Windows
     # legs of a release.

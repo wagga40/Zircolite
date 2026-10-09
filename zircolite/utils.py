@@ -814,14 +814,22 @@ def format_size(size: float) -> str:
 
 def analyze_files_and_recommend_mode(
     file_list: Sequence[Path | str],
+    executor: str = "thread",
+    *,
+    auto_mode: bool = True,
+    max_workers: int | None = None,
 ) -> tuple[str, str, dict[str, Any]]:
     """
     Analyze files and available RAM to recommend optimal processing settings.
+
+    ``executor``, ``auto_mode`` and ``max_workers`` are the run's requests;
+    the executor is resolved here so the worker count fits the pool that runs.
 
     Returns a tuple: (recommended_mode, reason, stats)
     - recommended_mode: 'unified' or 'per-file'
     - reason: Human-readable explanation
     - stats: Dictionary with analysis statistics including parallel recommendation
+      and the resolved ``executor`` / ``executor_reason``
 
     Heuristics for database mode:
     - Many small files (>10 files, avg <5MB) → unified mode (less overhead, cross-file correlation)
@@ -868,16 +876,22 @@ def analyze_files_and_recommend_mode(
     )
     from .parallel import (
         memory_multiplier_for,
+        select_executor,
     )
 
     # Estimate memory usage per file (dynamic multiplier based on file size)
     memory_multiplier = memory_multiplier_for(avg_size / (1024 * 1024))
     memory_per_file = avg_size * memory_multiplier
 
+    resolved_executor, executor_reason = select_executor(
+        executor, file_sizes, available_ram / (1024 * 1024), cpu_count,
+        auto_mode=auto_mode, max_workers=max_workers,
+    )
     optimal_workers = _calc_workers(
         file_sizes=file_sizes,
         available_memory_mb=available_ram / (1024 * 1024),
         cpu_count=cpu_count,
+        executor=resolved_executor,
     )
 
     # Parallel processing recommendation
@@ -923,6 +937,8 @@ def analyze_files_and_recommend_mode(
         "parallel_recommended": parallel_recommended,
         "parallel_reason": parallel_reason,
         "parallel_workers": parallel_workers,
+        "executor": resolved_executor,
+        "executor_reason": executor_reason,
         "memory_per_file": memory_per_file,
         "memory_per_file_fmt": format_size(int(memory_per_file)),
     }

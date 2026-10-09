@@ -179,9 +179,15 @@ def test_continuous_sampling_runs_only_for_a_report(corpus, tmp_path, monkeypatc
 
 @pytest.mark.parametrize("requested,average,count,ram,cpus,auto,maximum,expected", [
     ("auto", 50, 2, 4096, 2, True, None, "process"),
-    ("auto", 49, 2, 4096, 2, True, None, "thread"),
+    # Total input decides, not the average: process start-up only pays off
+    # once the job holds about 32 MiB.
+    ("auto", 16, 2, 4096, 2, True, None, "process"),
+    ("auto", 15, 2, 4096, 2, True, None, "thread"),
+    ("auto", 1, 40, 4096, 8, True, None, "process"),
     ("auto", 100, 1, 4096, 8, True, None, "thread"),
     ("auto", 100, 4, 512, 8, True, None, "thread"),
+    # Two interpreters at 128 MB plus 3.5x of a 100 MiB file each overrun 85% of 1 GiB.
+    ("auto", 100, 4, 1024, 8, True, None, "thread"),
     ("auto", 100, 4, 4096, 1, True, None, "thread"),
     ("auto", 100, 4, 4096, 8, False, None, "thread"),
     ("auto", 100, 4, 4096, 8, True, 1, "thread"),

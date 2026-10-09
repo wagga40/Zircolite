@@ -590,8 +590,9 @@ _CLEANUP_PATTERNS = [
     'zircolite*.log',
     # Temporary directories created by the extractor / rules updater / GUI
     'tmp-*',
-    # GUI output
-    'zircogui-output*',
+    # Package output
+    'zircolite-package-*',
+    'tmp-zircolite-package-*',
     # Other artifacts
     'fields.json',
 ]
@@ -674,6 +675,14 @@ def cleanup_test_artifacts():
 # =============================================================================
 # ProcessingContext Factory Fixture
 # =============================================================================
+
+@pytest.fixture
+def read_package():
+    """Reassemble a package zip: (manifest, {file name: bytes})."""
+    from tests.package_fixtures import read_package as reader
+
+    return reader
+
 
 @pytest.fixture
 def make_processing_context(field_mappings_file, test_logger, tmp_path):

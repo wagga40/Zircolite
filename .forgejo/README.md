@@ -15,6 +15,7 @@ The mirror runs on one x86_64 Linux runner:
 | `lint_python` | ubuntu-latest | same |
 | `tests` | {ubuntu, windows, macos} × {3.10, 3.14} | ubuntu × {3.10, 3.14} — 2 of 6 legs |
 | `external_tests` | ubuntu-latest | same, on the host label; push and manual runs only, no `pull_request` |
+| `tests` (`viewer` job) | ubuntu-latest | same, in the Ubuntu job container |
 | `build_pyinstaller` | linux x64/arm64, windows x64/arm64, macOS arm64; verify on clean runners and older distributions; release | linux x64 build, binary tests and package smoke in one job — 1 of 5 legs, no release |
 
 Windows, macOS and arm64 validation requires the GitHub matrix.
@@ -39,6 +40,16 @@ as it does on GitHub.
 image as GitHub to target glibc 2.28. `tests/test_forgejo_workflows.py` checks
 that the tags agree.
 
+**The `tests` workflow's `viewer` job fetches its corpus with `git fetch`, not
+`actions/checkout`.** `repository:` resolves against this Forgejo instance, which
+does not hold `sbousseaden/EVTX-ATTACK-SAMPLES`, so the job fetches the same
+pinned commit from github.com by hand. It also runs in the Ubuntu job
+container, like `tests`, and installs pdm with pip.
+`npx playwright install --with-deps` runs unchanged, because that container's
+user is root and can use apt. All three engines (Chromium, Firefox and WebKit)
+run; none is dropped. Every run downloads the browsers and their system
+libraries again, since nothing caches them between jobs here.
+
 **`external_tests` runs on the `self-hosted` (host) label, not in a container.**
 See the comment at the top of `external_tests.yml` — the harness computes its
 own bind-mount paths, so it only works where the Docker daemon and the job share
@@ -58,10 +69,12 @@ targets, verifies each archive on a separate clean runner and releases on a tag.
 Here the linux-x64 leg builds, runs the binary tests and packages exactly as
 GitHub does, then runs GitHub's verify smoke from the extracted archive at the
 end of the same job: `--version`, the golden detection over
-`sample_bitsadmin.evtx` and `--package`. That job still has the project's Python environment
+`sample_bitsadmin.evtx` and `--package`, which must write a real package
+(`index.html`, `app.js`, `data/manifest.js` and events chunks). That job still has the project's Python environment
 and pdm, so it is not the fresh runner GitHub's verify job is. Not mirrored:
 
-- the runs in `rockylinux:8`, `debian:11` and `ubuntu:20.04`, since job
+- the runs in `rockylinux:8`, `debian:11` and `ubuntu:20.04`, including their
+  `--package` runs that prove the bundled DuckDB loads on glibc 2.28, since job
   containers here get no Docker socket. The binary tests' glibc floor check,
   which reads every shipped ELF, does run.
 - the release job: no `SHA256SUMS`, no attestations and no draft release.

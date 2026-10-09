@@ -1,24 +1,19 @@
 """
-Template engine and GUI generator for Zircolite.
+Template engine for Zircolite.
 
 This module contains:
 - TemplateEngine: Jinja2 template rendering for output generation
-- ZircoliteGuiGenerator: Mini GUI package generator
 """
 
 import logging
-import os
-import shutil
-from pathlib import Path
 from typing import Any
 
 import orjson
 from jinja2 import Environment
 
 from .attack import extract_attack_tactics, extract_attack_techniques
-from .config import GuiConfig, TemplateConfig
+from .config import TemplateConfig
 from .console import literal
-from .utils import random_suffix
 
 _LEVEL_ORDER = {'unknown': -1, 'informational': 0, 'low': 1, 'medium': 2, 'high': 3, 'critical': 4}
 _LEVEL_COLOR = {
@@ -126,7 +121,7 @@ def flat_json(value: Any) -> Any:
 
     Elasticsearch maps every key of a nested object as a field of its own, so a
     correlation alert's evidence would add one field per event column and soon
-    exceed the index's field limit; the Mini-GUI shows each value as text.
+    exceed the index's field limit; a flat table shows each value as text.
     """
     if isinstance(value, (dict, list)):
         return orjson.dumps(value).decode()
@@ -137,14 +132,13 @@ def _make_jinja2_env() -> Environment:
     """Create a Jinja2 Environment with Zircolite-specific filters.
 
     Autoescaping stays off deliberately. Every template renders a machine
-    format -- JSON for Splunk, Elastic, Zinc and the Mini-GUI, NDJSON for
+    format -- JSON for Splunk, Elastic and Zinc, NDJSON for
     Timesketch, JSON for SARIF and ATT&CK Navigator, CSV for the summary --
     and HTML-escaping a command line inside a JSON string would corrupt it.
     Values are escaped for their real target instead: ``tojson`` for the JSON
     formats, ``csv_field`` for the CSV one.
 
-    A template that emits HTML would need `autoescape=True`; none ships, and
-    the Mini-GUI loads its data as JavaScript rather than interpolating it.
+    A template that emits HTML would need `autoescape=True`; none ships.
     """
     env = Environment(autoescape=False)  # noqa: S701 - see docstring
     env.filters['csv_field'] = csv_field
@@ -225,101 +219,3 @@ class TemplateEngine:
             ):
                 succeeded = False
         return succeeded
-
-
-class ZircoliteGuiGenerator:
-    """Generate the mini GUI."""
-
-    def __init__(
-        self,
-        gui_config: GuiConfig | None = None,
-        *,
-        logger: logging.Logger | None = None
-    ):
-        """
-        Initialize ZircoliteGuiGenerator.
-
-        Args:
-            gui_config: GUI configuration (uses defaults if None)
-            logger: Logger instance (creates default if None)
-        """
-        cfg = gui_config or GuiConfig()
-
-        self.logger = logger or logging.getLogger(__name__)
-        self.templateFile = cfg.template_file
-        self.tmpDir = f'tmp-zircogui-{random_suffix(4)}'
-        self.tmpFile = f'data-{random_suffix(4)}.js'
-        self.outputFile = f'zircogui-output-{random_suffix(4)}'
-        self.source_archive = cfg.source_archive
-        self.timeField = cfg.time_field
-
-    def generate(
-        self, data: list[dict[str, Any]], directory: str = ""
-    ) -> bool:
-        """Write the Mini-GUI package. False if it could not be written.
-
-        The caller folds this into the exit code: a package the user asked for
-        and did not get is a failed run, and it used to be reported only as a
-        line of log output on an otherwise successful exit.
-        """
-        # An empty value means the working directory. Path normalises the
-        # trailing separator that rstrip used to have to special-case, including
-        # on the filesystem root, where stripping it meant the working directory.
-        package_dir: Path | None = None
-        if directory:
-            candidate = Path(directory)
-            if not candidate.is_dir():
-                # Writing to the working directory instead would put the package
-                # somewhere the user did not ask for and would not think to look.
-                reason = "is not a directory" if candidate.exists() else "does not exist"
-                self.logger.error(
-                    f"[red]    [-] Cannot create GUI package: {literal(directory)} {reason}[/]"
-                )
-                return False
-            package_dir = candidate
-
-        try:
-            # Extract the GUI package
-            shutil.unpack_archive(self.source_archive, self.tmpDir, "zip")
-
-            # Generate data file
-            target_name = f"{self.outputFile}.zip"
-            target_display = str(package_dir / target_name) if package_dir else target_name
-            self.logger.info(f"[+] Generating ZircoGui package to: {literal(target_display)}")
-            tmpl_config = TemplateConfig(
-                template=[[self.templateFile]],
-                template_output=[[self.tmpFile]],
-                time_field=self.timeField
-            )
-            export_for_zircogui_tmpl = TemplateEngine(tmpl_config, logger=self.logger)
-            if not export_for_zircogui_tmpl.generate_from_template(
-                self.templateFile, self.tmpFile, data
-            ):
-                # Reported two lines down as a missing data-XXXX.js otherwise,
-                # which names neither the template nor what went wrong with it.
-                self.logger.error(
-                    "[red]    [-] Cannot create GUI package: "
-                    f"{literal(self.templateFile)} produced no data file[/]"
-                )
-                return False
-
-            # Move data file to package directory
-            shutil.move(self.tmpFile, os.path.join(self.tmpDir, "zircogui", "data.js"))
-
-            # Create zip archive
-            shutil.make_archive(self.outputFile, 'zip', f"{self.tmpDir}/zircogui")
-
-            # Move to final destination if specified
-            if package_dir:
-                shutil.move(target_name, package_dir / target_name)
-
-        except Exception as e:
-            self.logger.error(f"[red]    [-] {literal(e)}[/]")
-            return False
-        finally:
-            # Clean up temporary directory and any leftover data file
-            if os.path.exists(self.tmpDir):
-                shutil.rmtree(self.tmpDir)
-            if os.path.exists(self.tmpFile):
-                os.remove(self.tmpFile)
-        return True

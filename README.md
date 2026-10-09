@@ -282,22 +282,21 @@ for the setup, the caveats and how to reproduce it with `tools/tool-benchmark.py
 
 See the [documentation index](docs/README.md) for usage, configuration and internals.
 
-## Mini-GUI
+## Zircolite Viewer
 
-The Mini-GUI displays and searches results offline. Generate a package with `--package`
-and choose its output directory with `--package-dir`. See [Mini-GUI](docs/Advanced.md#mini-gui).
+`--package` writes one zip holding every event of the run, not only the matches, with the
+detections and correlation alerts linked to them. Extract it and open `index.html`: the
+Zircolite Viewer runs offline in a browser, with nothing to install and no network, and
+offers an overview, the detections, a searchable event table, a timeline, the ATT&CK matrix,
+entities, process trees and an SQL console for one SELECT at a time over the package's
+tables. Share a package as you would the logs it came from; see
+[Zircolite Viewer](docs/Advanced.md#zircolite-viewer).
 
-### Detected Events by MITRE ATT&CK® Techniques and Criticality Levels
+![The Zircolite Viewer's Overview](pics/viewer-overview.webp)
 
-![](pics/gui.webp)
+![The Timeline: one lane per ATT&CK tactic, each mark coloured by its highest detection level](pics/viewer-timeline.webp)
 
-### Detected Events Timeline
-
-![](pics/gui-timeline.webp)
-
-### Detected Events by MITRE ATT&CK® Techniques Displayed on the Matrix 
-
-![](pics/gui-matrix.webp)
+![The process tree, with the ancestors of the filtered starts in grey](pics/viewer-processes.webp)
 
 ## Tutorials, References, and Related Projects
 

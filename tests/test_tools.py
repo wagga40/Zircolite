@@ -542,10 +542,16 @@ def make_checkout(root, executable="Zircolite"):
         f'[project]\nname = "Zircolite"\nversion = "{FAKE_VERSION}"\ndependencies = [\n'
         '    "rich>=14",\n]\n\n[tool.other]\nversion = "9.9.9"\n', encoding="utf-8")
     for directory, name in [("config", "config.yaml"), ("rules", "README.md"),
-                            ("templates", "exportForSplunk.tmpl"), ("gui", "zircogui.zip"),
+                            ("templates", "exportForSplunk.tmpl"), ("gui/viewer", "index.html"),
                             ("docs", "Usage.md"), ("pics", "Zircolite.png")]:
-        (root / directory).mkdir()
+        (root / directory).mkdir(parents=True)
         (root / directory / name).write_text(directory, encoding="utf-8")
+    for name in ("viewer.json", "THIRD_PARTY_NOTICES.txt"):
+        (root / "gui" / "viewer" / name).write_text(name, encoding="utf-8")
+    # The viewer's sources sit beside its build in a checkout, node_modules and all.
+    (root / "gui" / "source" / "node_modules" / "vite").mkdir(parents=True)
+    (root / "gui" / "source" / "package.json").write_text("{}", encoding="utf-8")
+    (root / "gui" / "source" / "node_modules" / "vite" / "index.js").write_text("", encoding="utf-8")
     publish_rules(root / "rules", {"sigmahq": ("DRL-1.1", {
         "rules_linux.json": "[]", "licenses/sigmahq.txt": "SigmaHQ rules: DRL 1.1 (test copy)"})})
     (root / "config" / "__pycache__").mkdir()
@@ -604,10 +610,12 @@ class TestPackageArchive:
         for expected in ["Zircolite", "_internal/base_library.zip", "config/config.yaml",
                          "rules/rules_linux.json", "rules/release-manifest.json",
                          "rules/licenses/sigmahq.txt", "templates/exportForSplunk.tmpl",
-                         "gui/zircogui.zip", "docs/Usage.md", "pics/Zircolite.png",
+                         "gui/viewer/index.html", "gui/viewer/viewer.json",
+                         "gui/viewer/THIRD_PARTY_NOTICES.txt", "docs/Usage.md", "pics/Zircolite.png",
                          "README.md", "LICENSE", "THIRD_PARTY_LICENSES"]:
             assert f"{top}/{expected}" in names, expected
         assert not [name for name in names if "__pycache__" in name]
+        assert {name.split("/")[2] for name in names if name.startswith(f"{top}/gui/")} == {"viewer"}
 
     def test_executable_bit_survives(self, release, checkout, monkeypatch, capsys):
         # Checked in the archive itself: upload-artifact zips loose files, which drops the bit.
@@ -720,6 +728,15 @@ class TestPackageRefusals:
         assert code == 1
         assert "not a onedir build" in err
 
+    @pytest.mark.parametrize("name", ["viewer.json", "THIRD_PARTY_NOTICES.txt"])
+    def test_a_viewer_without_its_notices_is_refused(self, release, checkout, name,
+                                                     monkeypatch, capsys):
+        (checkout / "gui" / "viewer" / name).unlink()
+        code, printed, err = package(release, checkout, "linux-x64", monkeypatch, capsys)
+        assert code == 1 and printed == ""
+        assert name in err
+        assert not list((checkout / "dist").glob("Zircolite-*"))
+
     @pytest.mark.skipif(os.name == "nt", reason="creating a symlink needs a privilege on Windows")
     @pytest.mark.parametrize("link", ["docs/Alias.md", "config/nested/config.yaml", "README.md"])
     def test_symlink_in_the_copied_sources_fails_a_posix_target(self, release, checkout, link,
@@ -816,7 +833,7 @@ class TestThirdPartyLicences:
 
     def test_every_runtime_dependency_has_a_section(self, release, notices):
         titles = {title.split(" ")[0].lower() for title in self.titles(release, notices)}
-        for name in ["rich", "pysigma", "orjson", "lxml", "py7zr", "requests", "pyroaring"]:
+        for name in ["rich", "pysigma", "orjson", "lxml", "py7zr", "requests", "pyroaring", "duckdb"]:
             assert name in titles, name
         # The project itself is under LICENSE, not in the third-party file.
         assert "zircolite" not in titles

@@ -24,7 +24,7 @@ ZIRCOLITE_TARGET=macos-arm64 pdm run python tools/package-release.py
 
 - the onedir build: the executable (`Zircolite`, or `Zircolite.exe` on Windows) and
   `_internal/`;
-- editable copies of `config/`, `rules/`, `templates/` and `gui/`, which the binary uses
+- editable copies of `config/`, `rules/`, `templates/` and `gui/viewer/`, which the binary uses
   in preference to its bundled copies;
 - `docs/`, `pics/`, `README.md` and `LICENSE`;
 - a generated `THIRD_PARTY_LICENSES`.
@@ -63,7 +63,7 @@ The script fails, and writes nothing, when:
 
 - `dist/Zircolite/` or its executable is missing, or the build is not a onedir build
   (no `_internal/`);
-- anything it copies from the checkout (`config/`, `rules/`, `templates/`, `gui/`,
+- anything it copies from the checkout (`config/`, `rules/`, `templates/`, `gui/viewer/`,
   `docs/`, `pics/`, `README.md`, `LICENSE`) is or contains a symlink. Only a Windows
   archive cannot hold one, but the check runs for every target so that the linux-x64
   canary build catches it. Symlinks inside the onedir build are kept in the Linux and

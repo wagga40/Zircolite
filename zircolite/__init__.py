@@ -20,7 +20,7 @@ Modules:
 - shutdown: Graceful Ctrl+C handling
 - sqlscan: Quote-aware rule-SQL reader and OR-chain depth repair
 - streaming: StreamingEventProcessor for single-pass processing
-- templates: TemplateEngine and ZircoliteGuiGenerator for output generation
+- templates: TemplateEngine for output generation
 - utils: Utility functions and MemoryTracker
 - cli: The command line interface, reached through zircolite.py or `python -m`
 
@@ -34,7 +34,6 @@ import logging
 
 from .config import (
     ExtractorConfig,
-    GuiConfig,
     ProcessingConfig,
     RulesetConfig,
     TemplateConfig,
@@ -108,7 +107,7 @@ from .processing import (
 )
 from .rules import EventFilter, RulesetHandler, RulesUpdater, UnknownPipelineError
 from .streaming import StreamingEventProcessor, StrictParseError
-from .templates import TemplateEngine, ZircoliteGuiGenerator
+from .templates import TemplateEngine
 from .utils import (
     MemoryTracker,
     analyze_files_and_recommend_mode,
@@ -143,7 +142,6 @@ __all__ = [
     'EventFilter',
     'EvtxExtractor',
     'ExtractorConfig',
-    'GuiConfig',
     'InputConfig',
     # Input format registry
     'InputFormat',
@@ -172,7 +170,6 @@ __all__ = [
     'ZircoliteConfig',
     # Core classes
     'ZircoliteCore',
-    'ZircoliteGuiGenerator',
     'analyze_files_and_recommend_mode',
     'avoid_files',
     'build_attack_summary',

@@ -1,0 +1,149 @@
+/* Atkinson Hyperlegible is built to tell 0 from O and 1 from l and I: the
+   characters analysts misread in hashes, GUIDs and command lines. */
+@font-face {
+  font-family: 'Atkinson Hyperlegible Next';
+  font-style: normal;
+  font-weight: 400;
+  font-display: block;
+  src: url('../node_modules/@fontsource/atkinson-hyperlegible-next/files/atkinson-hyperlegible-next-latin-400-normal.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'Atkinson Hyperlegible Next';
+  font-style: normal;
+  font-weight: 600;
+  font-display: block;
+  src: url('../node_modules/@fontsource/atkinson-hyperlegible-next/files/atkinson-hyperlegible-next-latin-600-normal.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'Atkinson Hyperlegible Mono';
+  font-style: normal;
+  font-weight: 400;
+  font-display: block;
+  src: url('../node_modules/@fontsource/atkinson-hyperlegible-mono/files/atkinson-hyperlegible-mono-latin-400-normal.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'Atkinson Hyperlegible Mono';
+  font-style: normal;
+  font-weight: 600;
+  font-display: block;
+  src: url('../node_modules/@fontsource/atkinson-hyperlegible-mono/files/atkinson-hyperlegible-mono-latin-600-normal.woff2') format('woff2');
+}
+
+:root {
+  color-scheme: light;
+  --paper: #eef1ef;
+  --panel: #f8faf8;
+  --ink: #16211e;
+  --ink-2: #4a5955;
+  --rule: #cfd8d4;
+  --signal: #00697a;
+  --strip: #7c8b87;
+  --sev-0: #687b8a;
+  --sev-1: #24835a;
+  --sev-2: #9c7409;
+  --sev-3: #c2531a;
+  --sev-4: #a3134e;
+  /* A rule whose level is none of Sigma's: a hue no level uses, never mistaken for informational. */
+  --sev-unknown: #5a2f96;
+  /* The event drawer's width: the drawer, the shell's reserved space and the timeline's note all read it. */
+  --drawer-w: 560px;
+  --danger: #a3134e;
+  --scrim: rgb(22 33 30 / 0.4);
+  --sans: 'Atkinson Hyperlegible Next', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --mono: 'Atkinson Hyperlegible Mono', ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+  --t-12: 12px;
+  --t-13: 13px;
+  --t-15: 15px;
+  --t-18: 18px;
+  --t-22: 22px;
+  --row: 28px;
+  --radius: 4px;
+  --motion: 120ms;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+    color-scheme: dark;
+    --paper: #0e191c;
+    --panel: #13232a;
+    --ink: #e2ebe8;
+    --ink-2: #9daea9;
+    --rule: #26393f;
+    --signal: #53c2cf;
+    --strip: #5f7570;
+    --sev-0: #93a6b4;
+    --sev-1: #5ac38e;
+    --sev-2: #e0b43f;
+    --sev-3: #f2834a;
+    --sev-4: #f2568e;
+    --sev-unknown: #8a5fc6;
+    --danger: #f2568e;
+  --scrim: rgb(0 0 0 / 0.55);
+  }
+}
+
+:root[data-theme='dark'] {
+  color-scheme: dark;
+  --paper: #0e191c;
+  --panel: #13232a;
+  --ink: #e2ebe8;
+  --ink-2: #9daea9;
+  --rule: #26393f;
+  --signal: #53c2cf;
+  --strip: #5f7570;
+  --sev-0: #93a6b4;
+  --sev-1: #5ac38e;
+  --sev-2: #e0b43f;
+  --sev-3: #f2834a;
+  --sev-4: #f2568e;
+  --sev-unknown: #8a5fc6;
+  --danger: #f2568e;
+  --scrim: rgb(0 0 0 / 0.55);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --motion: 0ms;
+  }
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  background: var(--paper);
+  color: var(--ink);
+  font: 400 var(--t-15) / 1.45 var(--sans);
+  font-variant-numeric: tabular-nums;
+}
+
+:focus-visible {
+  outline: 2px solid var(--signal);
+  outline-offset: 2px;
+}
+
+/* A heading focused by script after navigation: a ring for keyboard users only. */
+h1:focus:not(:focus-visible) {
+  outline: none;
+}
+
+button {
+  font: inherit;
+  color: inherit;
+}
+
+/* A panel still showing the answer to an earlier request, while the current one runs. */
+.dims {
+  transition: opacity var(--motion);
+}
+
+.dims[aria-busy='true'] {
+  opacity: 0.5;
+}

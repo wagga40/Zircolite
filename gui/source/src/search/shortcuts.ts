@@ -1,0 +1,38 @@
+import { asciiLower } from '../engine/sql';
+
+export interface Shortcut {
+  name: string;
+  description: string;
+  example: string;
+  /** Log fields searched by host: and user:, the first ones present in the package. */
+  fields?: readonly string[];
+}
+
+export const SHORTCUTS: readonly Shortcut[] = [
+  { name: 'rule', description: 'Events a rule matched, by title or id. * matches any characters.', example: 'rule:*powershell*' },
+  { name: 'rulekey', description: 'Events of one rule as Detections groups them: its id, or its title when it has none.', example: 'rulekey:"Encoded PowerShell"' },
+  { name: 'level', description: 'Events whose highest detection has this level. >=, >, <= and < compare levels.', example: 'level:>=high' },
+  { name: 'tactic', description: 'Events detected under an ATT&CK tactic, named as in privilege-escalation or "Privilege Escalation". * matches any characters.', example: 'tactic:persistence' },
+  { name: 'technique', description: 'Events detected under an ATT&CK technique, sub-techniques included.', example: 'technique:T1059' },
+  { name: 'weekday', description: 'Events on a weekday, in UTC: monday or mon, or 1 (Monday) to 7 (Sunday).', example: 'weekday:sat' },
+  { name: 'hour', description: 'Events in an hour of the day, in UTC, 0 to 23. >=, >, <= and < compare hours.', example: 'hour:>=22' },
+  { name: 'host', description: 'Events from a host, whichever field holds its name.', example: 'host:DC01', fields: ['Computer', 'ComputerName', 'Hostname', 'host'] },
+  { name: 'user', description: 'Events naming an account, whichever field holds it.', example: 'user:administrator', fields: ['TargetUserName', 'SubjectUserName', 'User', 'UserName', 'AccountName'] },
+];
+
+export const SYNTAX: readonly { pattern: string; meaning: string }[] = [
+  { pattern: 'powershell', meaning: 'Any field contains the word, in any case.' },
+  { pattern: '"net user"', meaning: 'Any field contains the phrase.' },
+  { pattern: 'EventID:4624', meaning: 'A field equals a value, in any case.' },
+  { pattern: 'Image:*\\cmd.exe', meaning: '* matches any characters, outside quotes.' },
+  { pattern: 'EventID:>4600', meaning: 'Numeric fields compare with >, >=, < and <=.' },
+  { pattern: '-Channel:Security', meaning: 'Leave matches out. Events without the field stay in.' },
+  { pattern: 'a OR b', meaning: 'Either term. Terms side by side must both match.' },
+  { pattern: '(a OR b) c', meaning: 'Parentheses group terms.' },
+  { pattern: '"level":error', meaning: "Quote a field name to search a log field that shares a shortcut's name." },
+];
+
+export function findShortcut(name: string): Shortcut | undefined {
+  const key = asciiLower(name);
+  return SHORTCUTS.find((shortcut) => shortcut.name === key);
+}

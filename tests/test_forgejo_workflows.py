@@ -40,6 +40,22 @@ LOAD_BEARING_COMMANDS = {
     "tests.yml": [
         "pdm install --dev",
         "pdm run pytest",
+        # The viewer job: build gui/source, prove the committed gui/viewer equals
+        # it, then drive a real package in the browsers.
+        "npm ci",
+        "npm run check",
+        "npm test",
+        "npm run build",
+        # Without intent-to-add, a file the build newly emits is not in the diff.
+        "git add --intent-to-add gui/viewer",
+        "git diff --exit-code gui/viewer",
+        # intent-to-add skips a file .gitignore matches, which would then be missing from every clone.
+        'test -z "$(git ls-files --others --ignored --exclude-standard -- gui/viewer)"',
+        '-l "$RUNNER_TEMP/package/zircolite.log" -q',
+        'npm run smoke -- "$RUNNER_TEMP/package/unpacked"',
+        'npm run e2e -- "$RUNNER_TEMP/package/unpacked"',
+        'npm run views -- "$RUNNER_TEMP/package/unpacked"',
+        "npx playwright install --with-deps chromium firefox webkit",
     ],
     "external_tests.yml": [
         "tests/external/run_external_tests.py --build --parallel 4",
@@ -65,8 +81,24 @@ REQUIRED_ARGUMENTS = {
     "build_pyinstaller.yml": [
         "rules/rules_windows_sysmon.json",
         "--package",
+        # --package must write a real package, not a Mini-GUI zip.
+        "zircolite-package-*.zip",
+        "data/manifest.js",
     ],
 }
+
+# The older-distribution containers need a Docker socket, which Forgejo's job
+# containers do not get, so only GitHub runs the package there.
+GITHUB_ONLY_ARGUMENTS = {
+    "build_pyinstaller.yml": [
+        "-package.json\" --package --package-dir /detections",
+    ],
+}
+
+# The viewer job's e2e scripts assert this corpus's counts. GitHub pins it in a
+# checkout's `with: ref:` and Forgejo in a fetch command, so the command pins
+# above see only one side of a bump.
+VIEWER_CORPUS_COMMIT = "4ceed2f4706daf601c212a8f91c113dd85349a2c"
 
 # The Linux binaries' glibc floor comes from the manylinux image they are built
 # in, and its dated tag also fixes the uv inside it and so the Python the build
@@ -143,6 +175,16 @@ def test_the_mirror_runs_the_same_commands(name):
         )
 
 
+@pytest.mark.parametrize("name", sorted(GITHUB_ONLY_ARGUMENTS))
+def test_older_distributions_run_the_package(name):
+    github_script = _run_script(GITHUB_WORKFLOWS / name)
+
+    for argument in GITHUB_ONLY_ARGUMENTS[name]:
+        assert argument in github_script, (
+            f"{argument!r} is no longer in .github/workflows/{name}"
+        )
+
+
 @pytest.mark.parametrize("name", sorted(REQUIRED_ENVIRONMENT))
 def test_both_forges_require_the_compiled_kernel(name):
     for directory in (GITHUB_WORKFLOWS, FORGEJO_WORKFLOWS):
@@ -153,6 +195,14 @@ def test_both_forges_require_the_compiled_kernel(name):
                 f"{directory.parent.name}/workflows/{name} must set {key}={value} "
                 "at workflow level"
             )
+
+
+def test_both_forges_drive_the_viewer_on_the_same_corpus():
+    for directory in (GITHUB_WORKFLOWS, FORGEJO_WORKFLOWS):
+        assert VIEWER_CORPUS_COMMIT in (directory / "tests.yml").read_text(encoding="utf-8"), (
+            f"{directory.parent.name}/workflows/tests.yml no longer fetches the corpus at "
+            f"{VIEWER_CORPUS_COMMIT}; bump it on both forges and here together"
+        )
 
 
 def test_the_mirror_builds_in_the_same_linux_image():

@@ -32,7 +32,7 @@ COPY README.md setup.py zircolite.py ./
 COPY templates/ templates/
 COPY config/ config/
 COPY rules/ rules/
-COPY gui/ gui/
+COPY gui/viewer/ gui/viewer/
 COPY zircolite/ zircolite/
 
 # Installing the project compiles the flattening kernel beside its source; the
@@ -68,7 +68,7 @@ COPY --from=builder ${ZIRCOLITE_INSTALL_PREFIX}/zircolite/zircolite.py .
 COPY --from=builder ${ZIRCOLITE_INSTALL_PREFIX}/zircolite/config ./config
 COPY --from=builder ${ZIRCOLITE_INSTALL_PREFIX}/zircolite/rules ./rules
 COPY --from=builder ${ZIRCOLITE_INSTALL_PREFIX}/zircolite/templates ./templates
-COPY --from=builder ${ZIRCOLITE_INSTALL_PREFIX}/zircolite/gui ./gui
+COPY --from=builder ${ZIRCOLITE_INSTALL_PREFIX}/zircolite/gui/viewer ./gui/viewer
 
 # Validate the final runtime, after leaving the compiler/build environment behind.
 RUN python -c "from importlib.metadata import distributions; names = {d.metadata['Name'].lower() for d in distributions()}; assert not names & {'cython', 'setuptools', 'pdm', 'memray', 'pytest', 'ruff', 'mypy', 'pyinstaller'}, 'Build tools leaked into runtime'; from zircolite.streaming import select_flatten_kernel; select_flatten_kernel('cython')"

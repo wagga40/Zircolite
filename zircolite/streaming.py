@@ -53,6 +53,7 @@ from .formats import (
 )
 from .jsonstream import iter_json_array
 from .shutdown import is_shutdown_requested
+from .spellings import record_spellings
 from .utils import (
     _EXCLUDED_SENTINEL,
     _NON_ALNUM_RE,
@@ -690,6 +691,7 @@ class StreamingEventProcessor:
         # the next event since a file's schema is stable
         "_channel_path_hint",
         # DB column caching
+        "_column_spellings",
         "_db_columns",
         "_detected_time_field",
         "_event_filter_config_enabled",
@@ -722,6 +724,7 @@ class StreamingEventProcessor:
         # Field names that need alias/split/transform handling. Leaves whose
         # mapped or raw name is absent here take the ultra-fast leaf path.
         "_special_fields",
+        "_spelled_groups",
         "_time_after",
         "_time_before",
         # One-shot flag: warn once when --timefield value is absent from events
@@ -847,6 +850,10 @@ class StreamingEventProcessor:
         self._db_columns: set | None = (
             None  # Set of known columns in DB, None = needs refresh
         )
+        # Lower-cased column name -> the spelling the column was created with
+        self._column_spellings: dict[str, str] = {}
+        # (column spelling, batch spellings) for each column a batch spells otherwise
+        self._spelled_groups: tuple[tuple[str, tuple[str, ...]], ...] = ()
         self._last_insert_stmt: str | None = None  # Cached INSERT statement
         self._last_insert_columns: tuple | None = (
             None  # Columns used in cached statement (as tuple for comparison)
@@ -1988,7 +1995,8 @@ class StreamingEventProcessor:
         # Cache sorted columns – only re-sort when the column set changes.
         # Case-variant duplicates (e.g. EventID/eventid) are collapsed here
         # because SQLite identifiers are case-insensitive.
-        if all_columns_frozen != self._last_column_frozenset:
+        columns_changed = all_columns_frozen != self._last_column_frozenset
+        if columns_changed:
             all_columns = _dedupe_case_variant_columns(
                 all_columns_frozen, self.discovered_fields
             )
@@ -2001,6 +2009,9 @@ class StreamingEventProcessor:
         schema_changed = self._ensure_columns_exist_cached(
             db_connection, cursor, all_columns
         )
+        if columns_changed:
+            self._spelled_groups = self._spelling_groups(all_columns_frozen)
+        spelled = self._spelled_rows(batch)
 
         # Reuse INSERT statement if columns haven't changed
         if self._last_insert_columns == all_columns and not schema_changed:
@@ -2022,11 +2033,55 @@ class StreamingEventProcessor:
         try:
             db_connection.execute("BEGIN TRANSACTION")
             cursor.executemany(insert_stmt, rows)
+            if spelled:
+                # Appended rows take consecutive IDs, so the batch ends at the largest.
+                last_row_id = cursor.execute("SELECT max(row_id) FROM logs").fetchone()[0]
+                record_spellings(cursor, last_row_id - len(rows) + 1, spelled)
             db_connection.execute("COMMIT")
         except Exception as e:
             db_connection.execute("ROLLBACK")
             self.logger.debug(f"Batch insert error: {e}")
             raise
+
+    def _spelling_groups(self, columns: frozenset[str]) -> tuple[tuple[str, tuple[str, ...]], ...]:
+        """``(column spelling, batch spellings)`` for each column the batch spells otherwise."""
+        spellings = self._column_spellings
+        groups: dict[str, list[str]] = {}
+        for key in sorted(columns):
+            groups.setdefault(key.lower(), []).append(key)
+        return tuple(
+            (spellings[lower], tuple(keys)) for lower, keys in sorted(groups.items())
+            if lower in spellings and any(key != spellings[lower] for key in keys)
+        )
+
+    def _spelled_rows(self, batch: list[dict]) -> list[tuple[int, tuple[str, ...]]]:
+        """``(position, spellings)`` for events whose stored fields differ from their columns."""
+        groups = self._spelled_groups
+        if not groups:
+            return []
+        spelled = []
+        for position, event in enumerate(batch):
+            names = []
+            for column, keys in groups:
+                present = [key for key in keys if event.get(key) is not None]
+                if not present:
+                    continue
+                # An event carrying both spellings keeps the first value that is
+                # not null, as _build_rows does, and that key's spelling with it.
+                stored = present[0] if len(present) == 1 else next(key for key in event if key in present)
+                if stored != column:
+                    names.append(stored)
+            if names:
+                spelled.append((position, tuple(names)))
+        return spelled
+
+    def _read_columns(self, cursor) -> set:
+        """Refresh both column caches from the table itself."""
+        cursor.execute("PRAGMA table_info(logs)")
+        names = [row[1] for row in cursor.fetchall()]
+        self._column_spellings = {name.lower(): name for name in names}
+        self._db_columns = set(self._column_spellings)
+        return self._db_columns
 
     def _ensure_columns_exist_cached(
         self, db_connection, cursor, columns: tuple
@@ -2037,12 +2092,7 @@ class StreamingEventProcessor:
 
         Returns True if schema was modified, False otherwise.
         """
-        # Initialize cache if needed
-        if self._db_columns is None:
-            cursor.execute("PRAGMA table_info(logs)")
-            self._db_columns = {row[1].lower() for row in cursor.fetchall()}
-
-        db_columns = self._db_columns
+        db_columns = self._read_columns(cursor) if self._db_columns is None else self._db_columns
         schema_changed = False
         field_types = self.field_types
 
@@ -2055,14 +2105,13 @@ class StreamingEventProcessor:
                 try:
                     cursor.execute(f"ALTER TABLE logs ADD COLUMN {_quote_identifier(col)} {sql_type}")
                     db_columns.add(col_lower)
+                    self._column_spellings[col_lower] = col
                     schema_changed = True
                 except Exception as exc:
                     # Usually the column already exists; refresh from the real
                     # schema and check. If it truly is not there, the INSERT is
                     # about to fail on it, so say which column and why.
-                    cursor.execute("PRAGMA table_info(logs)")
-                    self._db_columns = {row[1].lower() for row in cursor.fetchall()}
-                    db_columns = self._db_columns
+                    db_columns = self._read_columns(cursor)
                     if col_lower not in db_columns:
                         self.logger.warning(
                             f"[yellow]   [!] Could not add column '{literal(col)}' to the "
@@ -2088,8 +2137,7 @@ class StreamingEventProcessor:
             db_connection.commit()
             # Refresh column cache from actual table state – handles both
             # freshly created tables and reused tables (DELETE FROM path).
-            cursor.execute("PRAGMA table_info(logs)")
-            self._db_columns = {row[1].lower() for row in cursor.fetchall()}
+            self._read_columns(cursor)
             self._last_insert_stmt = None
             self._last_insert_columns = None
             self._last_column_frozenset = frozenset()

@@ -57,8 +57,8 @@ def test_the_entry_point_holds_no_logic():
 @pytest.mark.parametrize("parts", [
     ("config", "config.yaml"),
     ("rules", "rules_windows_merged.json"),
-    ("templates", "exportForZircoGui.tmpl"),
-    ("gui", "zircogui.zip"),
+    ("templates", "exportForSplunk.tmpl"),
+    ("gui", "viewer", "viewer.json"),
 ])
 def test_bundled_assets_resolve_from_another_directory(parts, tmp_path, monkeypatch):
     """The defaults are relative paths, so a run from elsewhere must still find them."""
@@ -91,15 +91,15 @@ def test_bundled_asset_prefers_the_copy_beside_the_binary(tmp_path, monkeypatch)
     unpacked = tmp_path / "unpacked"
     beside = tmp_path / "beside"
     for root in (unpacked, beside):
-        (root / "gui").mkdir(parents=True)
-        (root / "gui" / "zircogui.zip").write_bytes(b"")
+        (root / "gui" / "viewer").mkdir(parents=True)
+        (root / "gui" / "viewer" / "viewer.json").write_bytes(b"")
 
     monkeypatch.setattr(sys, "executable", str(beside / "Zircolite"))
     monkeypatch.setattr(sys, "_MEIPASS", str(unpacked), raising=False)
 
-    resolved = assets.bundled_asset("gui", "zircogui.zip")
+    resolved = assets.bundled_asset("gui", "viewer", "viewer.json")
 
-    assert resolved == beside / "gui" / "zircogui.zip"
+    assert resolved == beside / "gui" / "viewer" / "viewer.json"
 
 
 def test_bundled_asset_names_a_path_a_user_can_act_on_when_nothing_holds_the_file(tmp_path, monkeypatch):
@@ -291,11 +291,12 @@ def _spec_bundled_directories() -> set[str]:
 
 
 def _asset_directories_the_code_asks_for() -> tuple[set[str], list[str]]:
-    """Top-level directories the package resolves through the asset helpers.
+    """Paths the package resolves through the asset helpers.
 
-    The ``bundled_*`` helpers take the directory first; the ``resolve_*`` ones
-    take the relative default first and the directory second. Forwarding calls
-    that pass ``*parts`` are skipped.
+    The ``bundled_*`` helpers take the path as parts, directory first, and every
+    literal leading part is kept, so ``bundled_asset("gui", "viewer", ...)`` asks
+    for ``gui/viewer/...``; the ``resolve_*`` ones take the relative default first
+    and the directory second. Forwarding calls that pass ``*parts`` are skipped.
 
     Every helper that accepts a directory must be listed here. One that is not
     resolves whatever it likes without the spec ever being consulted, which is
@@ -322,10 +323,16 @@ def _asset_directories_the_code_asks_for() -> tuple[set[str], list[str]]:
             argument = node.args[index]
             if isinstance(argument, ast.Starred):
                 continue
-            if isinstance(argument, ast.Constant) and isinstance(argument.value, str):
-                wanted.add(argument.value)
-            else:
+            if not (isinstance(argument, ast.Constant) and isinstance(argument.value, str)):
                 unreadable.append(f"{module.name}:{node.lineno}")
+                continue
+            parts = [argument.value]
+            if index == 0:
+                for following in node.args[1:]:
+                    if not (isinstance(following, ast.Constant) and isinstance(following.value, str)):
+                        break
+                    parts.append(following.value)
+            wanted.add("/".join(parts))
 
     return wanted, unreadable
 
@@ -342,7 +349,9 @@ def test_every_asset_the_code_asks_for_is_bundled():
     )
     assert wanted, "no asset helper call sites found, so the scan is broken, not clean"
 
-    missing = wanted - _spec_bundled_directories()
+    bundled = _spec_bundled_directories()
+    missing = {path for path in wanted
+               if not any(path == directory or path.startswith(f"{directory}/") for directory in bundled)}
 
     assert not missing, (
         f"Zircolite.spec does not bundle {sorted(missing)}; a PyInstaller build "
