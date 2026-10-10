@@ -25,7 +25,7 @@ FENCE = re.compile(r"^\s*(```|~~~)")
 HEADING = re.compile(r"^(#{1,6})\s+(.+?)\s*#*\s*$")
 EXPLICIT_ANCHOR = re.compile(r"<a\s+(?:id|name)=\"([^\"]+)\"")
 MD_LINK = re.compile(r"!?\[(?:[^\[\]]|\[[^\]]*\])*\]\(\s*<?([^)\s>]+)>?(?:\s+\"[^\"]*\")?\s*\)")
-HTML_SRC = re.compile(r"<(?:img|source|video)\b[^>]*\bsrc=\"([^\"]+)\"")
+HTML_SRC = re.compile(r"<(?:img|source|video)\b[^>]*\bsrc(?:set)?=\"([^\"]+)\"")
 INLINE_CODE = re.compile(r"`[^`]*`")
 
 

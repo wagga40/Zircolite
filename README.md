@@ -1,4 +1,9 @@
-# <p align="center">![](pics/zircolite_400.png)</p>
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="pics/zircolite_400_dark.png">
+    <img alt="Zircolite" src="pics/zircolite_400.png">
+  </picture>
+</p>
 
 ## Standalone Sigma-based detection for EVTX, Auditd, Sysmon for Linux, XML, CSV and JSON logs
 
