@@ -2,8 +2,9 @@
 
 Recorded results for Zircolite, [Hayabusa](https://github.com/Yamato-Security/hayabusa)
 and [Chainsaw](https://github.com/WithSecureLabs/chainsaw) on the same Windows logs and
-machine. Each tool used its defaults and its own rules, so the results compare those
-configurations. Tool and rule revisions are listed under [Setup](#setup).
+machine, recorded in September 2026. Each tool used its defaults and its own rules, so the
+results compare those configurations. Tool and rule revisions are listed under
+[Setup](#setup).
 
 ## Results
 
@@ -92,8 +93,8 @@ python3 zircolite.py -e TEST_CORPUS/ -r rules/rules_windows_merged.json -o zirco
 ```
 
 `-w` only stops Hayabusa asking which rules to load and keeps its defaults (every level,
-the `standard` output profile). `-q`, `-Q` and `-K` drop the banner, the error-log files
-and colour.
+the `standard` output profile). `-C` overwrites its output file, `-t jsonl` selects JSONL
+output, and `-q`, `-Q` and `-K` drop the banner, the error-log files and colour.
 
 ## Method
 
@@ -122,5 +123,25 @@ pdm run python tools/tool-benchmark.py --events /path/to/evtx \
 ```
 
 See [`tools/README.md`](https://github.com/wagga40/Zircolite/tree/master/tools) for every
-option. Historical Zircolite configuration comparisons, and how to measure its rule phase
-alone, are under [Internals → Measured results](Internals.md#measured-results).
+option.
+
+## Zircolite configurations
+
+How Zircolite's own settings compare, with `rules/rules_windows_merged.json` (4,319 rules)
+on the same machine, Python 3.14 and SQLite 3.53, with the compiled kernel. These came from
+a separate session from the comparison above, hence 11.0 s here against 11.6 s there. Every
+configuration reported the same detections as `--rule-prefilter off`.
+
+| Workload | Baseline (`c972b28`) | Measured |
+|---|---:|---:|
+| Single-channel corpus, auto (processes) | 42.0 s | 11.0 s |
+| Single-channel corpus, `--unified-db` | — | 22.8 s |
+| Single-channel corpus as database input (`-D`) | — | 11.7 s (51.8 s with the prefilter off) |
+| EVTX-ATTACK-SAMPLES, 278 files, auto (unified) | 7.0 s | 5.8 s |
+| EVTX-ATTACK-SAMPLES, 278 files, per-file | 473 s | 55.7 s |
+
+The single-channel corpus gains from the literal prefilter and process workers; the 278
+small multi-channel files show the per-rule costs of per-file runs, which census pruning
+and lazy result spools remove. Compare configurations or checkouts with
+`tools/throughput-benchmark.py`, and time the rule phase alone with `-D` and
+`--performance-json`.

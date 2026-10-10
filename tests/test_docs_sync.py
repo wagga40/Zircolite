@@ -171,7 +171,7 @@ class TestVersionHasOneSource:
 
     @pytest.mark.parametrize(
         "doc", ["docs/README.md", "README.md", "docs/Usage.md", "docs/Advanced.md",
-                "docs/Internals.md"]
+                "docs/Viewer.md", "docs/Internals.md"]
     )
     def test_docs_do_not_pin_the_version(self, doc):
         text = (WORKSPACE_ROOT / doc).read_text(encoding="utf-8")

