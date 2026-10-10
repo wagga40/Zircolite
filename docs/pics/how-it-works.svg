@@ -1,0 +1,273 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 432" width="960" height="432" role="img" aria-labelledby="t d">
+  <title id="t">How Zircolite works</title>
+  <desc id="d">Logs in EVTX, JSON, Auditd, Sysmon for Linux, CSV or XML are flattened into rows of an SQLite table called logs. A Sigma rule is converted to an SQL query that runs on that table; the matching row becomes a detection, written to detected_events.json, the terminal summary and the Zircolite Viewer.</desc>
+  <style>
+    :root {
+      --paper: #eef1ef;
+      --panel: #f8faf8;
+      --ink: #16211e;
+      --ink-2: #4a5955;
+      --rule: #cfd8d4;
+      --signal: #00697a;
+      --strip: #7c8b87;
+      --danger: #a3134e;
+      --sev-1: #24835a;
+      --sev-2: #9c7409;
+      --sev-3: #c2531a;
+      --sev-4: #a3134e;
+      --signal-tint: rgb(0 105 122 / 0.1);
+      --danger-tint: rgb(163 19 78 / 0.12);
+      --term: #16211e;
+      --term-ink: #e2ebe8;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --paper: #0e191c;
+        --panel: #13232a;
+        --ink: #e2ebe8;
+        --ink-2: #9daea9;
+        --rule: #26393f;
+        --signal: #53c2cf;
+        --strip: #5f7570;
+        --danger: #f2568e;
+        --sev-1: #5ac38e;
+        --sev-2: #e0b43f;
+        --sev-3: #f2834a;
+        --sev-4: #f2568e;
+        --signal-tint: rgb(83 194 207 / 0.14);
+        --danger-tint: rgb(242 86 142 / 0.18);
+        --term: #08100f;
+      }
+    }
+    text { fill: var(--ink); font: 13px ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+    .mono, .mono text { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+    .card { fill: var(--paper); stroke: var(--rule); }
+    .panel { fill: var(--panel); stroke: var(--rule); }
+    .ink2 { fill: var(--ink-2); }
+    .sig { fill: var(--signal); }
+    .bold { font-weight: 600; }
+    .step { font-weight: 600; }
+    .step .n { fill: var(--signal); }
+    .step .ink2 { font-weight: 400; }
+    .arrow { fill: none; stroke: var(--strip); stroke-width: 1.5; }
+    .head { fill: var(--strip); }
+    .chip { fill: var(--panel); stroke: var(--rule); }
+    .key { fill: var(--ink-2); }
+    .col { fill: var(--signal); font-weight: 600; }
+    .kw { fill: var(--signal); font-weight: 600; }
+    .line { stroke: var(--rule); }
+    .hit { fill: var(--danger-tint); }
+    .hit-strip { fill: var(--danger); }
+    .term { fill: var(--term); stroke: var(--rule); }
+    .bar { fill: var(--rule); }
+    .bar-t { fill: var(--term-ink); opacity: 0.55; }
+    .sev2 { fill: var(--sev-2); }
+    .sev1 { fill: var(--sev-1); }
+    .sev3 { fill: var(--sev-3); }
+    .sev4 { fill: var(--sev-4); }
+
+    .scene, .an { animation: 12s ease-in-out infinite; }
+    .scene { animation-name: scene; }
+    .chip1 { animation-name: chip1; }
+    .chip2 { animation-name: chip2; }
+    .chip3 { animation-name: chip3; }
+    .chip4 { animation-name: chip4; }
+    .chip5 { animation-name: chip5; }
+    .chip6 { animation-name: chip6; }
+    .gather { animation-name: gather; }
+    .event { animation-name: event; }
+    .toTable { animation-name: toTable; }
+    .table { animation-name: table; }
+    .row1 { animation-name: row1; }
+    .row2 { animation-name: row2; }
+    .row3 { animation-name: row3; }
+    .row4 { animation-name: row4; }
+    .sigma { animation-name: sigma; }
+    .toSql { animation-name: toSql; }
+    .sql { animation-name: sql; }
+    .query { animation-name: query; }
+    .match { animation-name: match; }
+    .fanout { animation-name: fanout; }
+    .out1 { animation-name: out1; }
+    .out2 { animation-name: out2; }
+    .out3 { animation-name: out3; }
+
+    @keyframes chip1 { 0%, 2.5% { opacity: 0; transform: translateX(-10px); } 5.83%, 100% { opacity: 1; transform: none; } }
+    @keyframes chip2 { 0%, 4.17% { opacity: 0; transform: translateX(-10px); } 7.5%, 100% { opacity: 1; transform: none; } }
+    @keyframes chip3 { 0%, 5.83% { opacity: 0; transform: translateX(-10px); } 9.17%, 100% { opacity: 1; transform: none; } }
+    @keyframes chip4 { 0%, 7.5% { opacity: 0; transform: translateX(-10px); } 10.83%, 100% { opacity: 1; transform: none; } }
+    @keyframes chip5 { 0%, 9.17% { opacity: 0; transform: translateX(-10px); } 12.5%, 100% { opacity: 1; transform: none; } }
+    @keyframes chip6 { 0%, 10.83% { opacity: 0; transform: translateX(-10px); } 14.17%, 100% { opacity: 1; transform: none; } }
+    @keyframes gather { 0%, 15% { opacity: 0; transform: translateX(-6px); } 18.33%, 100% { opacity: 1; transform: none; } }
+    @keyframes event { 0%, 17.5% { opacity: 0; transform: translateY(6px); } 21.67%, 100% { opacity: 1; transform: none; } }
+    @keyframes toTable { 0%, 23.33% { opacity: 0; transform: translateX(-6px); } 26.67%, 100% { opacity: 1; transform: none; } }
+    @keyframes table { 0%, 25% { opacity: 0; } 29.17%, 100% { opacity: 1; } }
+    @keyframes row1 { 0%, 28.33% { opacity: 0; transform: translateX(-12px); } 31.67%, 100% { opacity: 1; transform: none; } }
+    @keyframes row2 { 0%, 30.83% { opacity: 0; transform: translateX(-12px); } 34.17%, 100% { opacity: 1; transform: none; } }
+    @keyframes row3 { 0%, 33.33% { opacity: 0; transform: translateX(-12px); } 36.67%, 100% { opacity: 1; transform: none; } }
+    @keyframes row4 { 0%, 35.83% { opacity: 0; transform: translateX(-12px); } 39.17%, 100% { opacity: 1; transform: none; } }
+    @keyframes sigma { 0%, 41.67% { opacity: 0; transform: translateY(6px); } 45.83%, 100% { opacity: 1; transform: none; } }
+    @keyframes toSql { 0%, 47.5% { opacity: 0; transform: translateX(-6px); } 50.83%, 100% { opacity: 1; transform: none; } }
+    @keyframes sql { 0%, 50% { opacity: 0; transform: translateY(6px); } 54.17%, 100% { opacity: 1; transform: none; } }
+    @keyframes query { 0%, 55.83% { opacity: 0; transform: translateY(6px); } 59.17%, 100% { opacity: 1; transform: none; } }
+    @keyframes match { 0%, 58.33% { opacity: 0; } 63.33%, 100% { opacity: 1; } }
+    @keyframes fanout { 0%, 65% { opacity: 0; transform: translateX(-6px); } 68.33%, 100% { opacity: 1; transform: none; } }
+    @keyframes out1 { 0%, 67.5% { opacity: 0; transform: translateX(-8px); } 70.83%, 100% { opacity: 1; transform: none; } }
+    @keyframes out2 { 0%, 69.58% { opacity: 0; transform: translateX(-8px); } 72.92%, 100% { opacity: 1; transform: none; } }
+    @keyframes out3 { 0%, 71.67% { opacity: 0; transform: translateX(-8px); } 75%, 100% { opacity: 1; transform: none; } }
+    @keyframes scene { 0%, 96.67% { opacity: 1; } 100% { opacity: 0; } }
+
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after { animation: none !important; }
+    }
+  </style>
+
+  <rect class="card" x="0.5" y="0.5" width="959" height="431" rx="14"/>
+
+  <!-- stage labels -->
+  <text class="step" x="24" y="34"><tspan class="n">1</tspan>  Logs</text>
+  <text class="step" x="176" y="34"><tspan class="n">2</tspan>  Flatten → SQLite</text>
+  <text class="step" x="24" y="262"><tspan class="n">3</tspan>  Sigma → SQL</text>
+  <text class="step" x="792" y="34"><tspan class="n">4</tspan>  Detections</text>
+
+  <g class="scene">
+    <!-- 1. log formats -->
+    <g class="an chip1"><rect class="chip" x="24.5" y="48.5" width="128" height="26" rx="5"/><text x="88.5" y="66" text-anchor="middle">EVTX</text></g>
+    <g class="an chip2"><rect class="chip" x="24.5" y="79.5" width="128" height="26" rx="5"/><text x="88.5" y="97" text-anchor="middle">JSON</text></g>
+    <g class="an chip3"><rect class="chip" x="24.5" y="110.5" width="128" height="26" rx="5"/><text x="88.5" y="128" text-anchor="middle">Auditd</text></g>
+    <g class="an chip4"><rect class="chip" x="24.5" y="141.5" width="128" height="26" rx="5"/><text x="88.5" y="159" text-anchor="middle">Sysmon for Linux</text></g>
+    <g class="an chip5"><rect class="chip" x="24.5" y="172.5" width="128" height="26" rx="5"/><text x="88.5" y="190" text-anchor="middle">CSV</text></g>
+    <g class="an chip6"><rect class="chip" x="24.5" y="203.5" width="128" height="26" rx="5"/><text x="88.5" y="221" text-anchor="middle">XML</text></g>
+
+    <g class="an gather">
+      <path class="arrow" d="M153 61.5h9M153 92.5h9M153 123.5h9M153 154.5h9M153 185.5h9M153 216.5h9M162 61.5v155M162 139h7"/>
+      <path class="head" d="M175 139l-6-4v8z"/>
+    </g>
+
+    <!-- 2. one nested event, then the flat logs table -->
+    <g class="an event">
+      <rect class="panel" x="176.5" y="48.5" width="260" height="181" rx="6"/>
+      <text class="ink2" x="188" y="69">one event, nested</text>
+      <g class="mono">
+        <text class="key" x="188" y="93">Event</text>
+        <text class="key" x="203.6" y="111">System</text>
+        <text x="219.2" y="129"><tspan class="key">EventID:</tspan> 1</text>
+        <text class="key" x="203.6" y="147">EventData</text>
+        <text x="219.2" y="165"><tspan class="col">Image:</tspan> C:\…\bitsadmin.exe</text>
+        <text class="col" x="219.2" y="183">CommandLine:</text>
+        <text x="234.8" y="201">bitsadmin /transfer …</text>
+      </g>
+    </g>
+
+    <g class="an toTable">
+      <path class="arrow" d="M437 139h8"/>
+      <path class="head" d="M451 139l-6-4v8z"/>
+    </g>
+
+    <g class="an table">
+      <rect class="panel" x="452.5" y="48.5" width="312" height="181" rx="6"/>
+      <text x="464" y="69"><tspan class="mono bold">logs</tspan><tspan class="ink2">  SQLite table, one row per event</tspan></text>
+      <text class="mono col" x="464" y="97">Image</text>
+      <text class="mono col" x="600" y="97">CommandLine</text>
+      <path class="line" d="M453 104.5h311"/>
+    </g>
+    <g class="mono">
+      <g class="an row1">
+        <text x="464" y="123">…\explorer.exe</text>
+        <text x="600" y="123">explorer.exe</text>
+        <path class="line" d="M453 132.5h311"/>
+      </g>
+      <g class="an row2">
+        <rect class="hit an match" x="453" y="133" width="311" height="27"/>
+        <rect class="hit-strip an match" x="453" y="133" width="3" height="27"/>
+        <text x="464" y="151">…\bitsadmin.exe</text>
+        <text x="600" y="151">bitsadmin /transfer…</text>
+        <path class="line" d="M453 160.5h311"/>
+      </g>
+      <g class="an row3">
+        <text x="464" y="179">…\svchost.exe</text>
+        <text x="600" y="179">svchost -k netsvcs</text>
+        <path class="line" d="M453 188.5h311"/>
+      </g>
+      <g class="an row4">
+        <text x="464" y="207">…\powershell.exe</text>
+        <text x="600" y="207">powershell -nop …</text>
+      </g>
+    </g>
+
+    <!-- 3. a Sigma rule becomes SQL that runs on logs -->
+    <g class="an sigma">
+      <rect class="panel" x="24.5" y="274.5" width="412" height="138" rx="6"/>
+      <text class="ink2" x="36" y="295">Sigma rule (YAML)</text>
+      <g class="mono">
+        <text x="36" y="317"><tspan class="key">title:</tspan> File Download Via Bitsadmin</text>
+        <text class="key" x="36" y="334">detection:</text>
+        <text class="key" x="51.6" y="351">selection:</text>
+        <text x="67.2" y="368"><tspan class="col">Image</tspan><tspan class="key">|endswith:</tspan> '\bitsadmin.exe'</text>
+        <text x="67.2" y="385"><tspan class="col">CommandLine</tspan><tspan class="key">|contains:</tspan> '/transfer'</text>
+        <text x="51.6" y="402"><tspan class="key">condition:</tspan> selection</text>
+      </g>
+    </g>
+
+    <g class="an toSql">
+      <path class="arrow" d="M437 343.5h8"/>
+      <path class="head" d="M451 343.5l-6-4v8z"/>
+    </g>
+
+    <g class="an sql">
+      <rect class="panel" x="452.5" y="274.5" width="312" height="138" rx="6"/>
+      <text class="ink2" x="464" y="295">SQL</text>
+      <g class="mono">
+        <text x="464" y="336"><tspan class="kw">SELECT</tspan> * <tspan class="kw">FROM</tspan> logs</text>
+        <text x="464" y="356"><tspan class="kw">WHERE</tspan> Image <tspan class="kw">LIKE</tspan> '%\bitsadmin.exe'</text>
+        <text x="464" y="376"><tspan class="kw">AND</tspan> CommandLine <tspan class="kw">LIKE</tspan> '%/transfer%'</text>
+      </g>
+    </g>
+
+    <g class="an query">
+      <path class="arrow" d="M608.5 274v-38"/>
+      <path class="head" d="M608.5 230l-4 6h8z"/>
+      <text class="ink2" x="618" y="257">runs on logs</text>
+    </g>
+
+    <!-- 4. outputs -->
+    <g class="an fanout">
+      <path class="arrow" d="M765 146.5h12M777 83v248M777 83h7M777 207h7M777 331h7"/>
+      <path class="head" d="M790 83l-6-4v8zM790 207l-6-4v8zM790 331l-6-4v8z"/>
+    </g>
+
+    <g class="an out1">
+      <rect class="panel" x="792.5" y="48.5" width="147" height="70" rx="6"/>
+      <path class="panel" d="M846.5 58.5h28l12 12v38h-40z"/>
+      <path class="line" d="M874.5 58.5v12h12" fill="none"/>
+      <text class="mono sig bold" x="866.5" y="96" text-anchor="middle">{ }</text>
+      <text x="866" y="138" text-anchor="middle">detected_events.json</text>
+    </g>
+
+    <g class="an out2">
+      <rect class="term" x="792.5" y="172.5" width="147" height="70" rx="6"/>
+      <rect class="bar-t" x="804" y="184" width="58" height="5" rx="2"/>
+      <rect class="sev2" x="804" y="199" width="26" height="9" rx="2"/>
+      <rect class="bar-t" x="836" y="201" width="74" height="5" rx="2"/>
+      <rect class="bar-t" x="804" y="216" width="40" height="5" rx="2"/>
+      <rect class="bar-t" x="850" y="216" width="56" height="5" rx="2"/>
+      <rect class="bar-t" x="804" y="228" width="96" height="5" rx="2"/>
+      <text x="866" y="262" text-anchor="middle">terminal summary</text>
+    </g>
+
+    <g class="an out3">
+      <rect class="panel" x="792.5" y="296.5" width="147" height="70" rx="6"/>
+      <path class="line" d="M793 310.5h146M822.5 311v55"/>
+      <rect class="bar" x="798" y="317" width="18" height="4" rx="2"/>
+      <rect class="bar" x="798" y="327" width="18" height="4" rx="2"/>
+      <rect class="bar" x="798" y="337" width="18" height="4" rx="2"/>
+      <rect class="sev4" x="830" y="318" width="22" height="14" rx="2"/>
+      <rect class="sev3" x="856" y="318" width="22" height="14" rx="2"/>
+      <rect class="sev2" x="882" y="318" width="22" height="14" rx="2"/>
+      <rect class="sev1" x="908" y="318" width="22" height="14" rx="2"/>
+      <rect class="bar" x="830" y="340" width="100" height="5" rx="2"/>
+      <rect class="bar" x="830" y="351" width="72" height="5" rx="2"/>
+      <text x="866" y="386" text-anchor="middle">Zircolite Viewer</text>
+    </g>
+  </g>
+</svg>

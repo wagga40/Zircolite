@@ -19,6 +19,23 @@ Rerun `pdm install` after editing `flatten_kernel.py`: stale builds fall back
 to Python. Set `ZIRCOLITE_REQUIRE_NATIVE=1` to fail installation if compilation
 fails, as CI does.
 
+### Tasks
+
+[Task](https://taskfile.dev/) (go-task) runs the production tasks in `Taskfile.yml`
+from the project root. Development tasks live in a separate, uncommitted
+Taskfile; the commands below run without it.
+
+| Task | Does |
+|------|------|
+| `task --list` | List the tasks |
+| `task clean` | Remove default artifacts (`detected_events.json`, `flattened_events_*.json`, `tmp-*`, `zircolite.log`, …) |
+| `task update-rules` | Refresh `rules/` from [Zircolite-Rules-v2](https://github.com/wagga40/Zircolite-Rules-v2) with `-U` |
+| `task docker-build`, `task docker-build-multi-arch` | Build the Docker image, for one or both of linux/amd64 and linux/arm64 |
+| `task docker-push`, `task save` | Push the multi-arch image, or save it to an archive |
+| `task binary-build` | Build the standalone binary into `dist/Zircolite/` and run the binary tests |
+| `task gui-build` | Check, test and build the Zircolite Viewer into `gui/viewer/`; commit the result |
+| `task get-version` | Print the version from `zircolite/__init__.py` |
+
 ## Running the tests
 
 ```bash
@@ -115,9 +132,53 @@ repository and run it from there, so that nothing resolves against the checkout 
 accident.
 
 Windows ARM64 cannot install `pdm.lock` as it stands; `tools/install-win-arm64.py`
-assembles the environment there instead. See
-[Internals → Packaging](docs/Internals.md#packaging) for why, and for what each CI
-gate checks.
+assembles the environment there instead
+([Internals → Windows ARM64](docs/Internals.md#windows-arm64)). Why the build is
+onedir PyInstaller, and its platform floors, are in
+[Internals → Packaging](docs/Internals.md#packaging).
+
+### What the spec has to name
+
+PyInstaller only bundles what static import analysis finds, so `Zircolite.spec`
+names what is loaded dynamically. A missing entry fails silently in the binary.
+
+- **pySigma pipelines and backends**, discovered at run time by walking the
+  `sigma.pipelines` and `sigma.backends` namespace packages; the spec collects
+  their submodules, without tests.
+- **The flattening kernel**, which `streaming.py` loads through `importlib`. A
+  binary ships no `flatten_kernel.py` to check `SOURCE_SHA256` against, so the
+  spec runs that check at build time and, under `ZIRCOLITE_REQUIRE_NATIVE=1`,
+  refuses a missing or stale kernel.
+- **`evtx` and `ijson`**, collected whole, and **`py7zr`**, named so `.7z`
+  support never depends on the scan.
+
+UPX is off. `pytest`, `Cython`, `tkinter`, `IPython` and `setuptools` are
+excluded; the last because PyInstaller's `backports` alias would follow
+py7zr's and urllib3's `backports.zstd` import into `setuptools._vendor`.
+
+### CI gates
+
+`.github/workflows/build_pyinstaller.yml` builds, tests, verifies and releases:
+
+| Trigger | What runs |
+|---------|-----------|
+| A `v*` tag | All five targets, then the release |
+| A push to `master` or a pull request touching the spec, the package, the lock, `setup.py`, the shipped assets, fixtures, the binary tests, `tools/`, the packaged docs or the workflow | The `linux-x64` leg only, as a canary |
+| `workflow_dispatch` (`dry_run` by default) and a weekly schedule | All five targets |
+
+- **Build.** Each leg builds with the spec and runs `tests/test_frozen_binary.py`
+  and `tests/test_e2e_regression.py` against the raw `dist/Zircolite/`. On a
+  tag, `tools/package-release.py --check-tag` confirms that the tag,
+  `__version__`, `pyproject.toml` and the binary's `--version` agree.
+- **Verify.** A fresh runner with no Python setup extracts each archive and runs
+  `--version`, a detection over `tests/fixtures/sample_bitsadmin.evtx` that must
+  match the golden result, and `--package`. The Linux archives repeat the first
+  two in `rockylinux:8`, `debian:11` and `ubuntu:20.04`.
+- **Release.** Once every verify job passes, one job writes `SHA256SUMS`; on a
+  tag it attests the archives and creates a draft release, published by hand.
+- **Forgejo.** `.forgejo/workflows/build_pyinstaller.yml` mirrors the `linux-x64`
+  leg and its verify smoke; the distro containers and the release stay on
+  GitHub.
 
 ## What matters most in this codebase
 
@@ -181,8 +242,10 @@ Also, when changing behaviour:
 
 1. **Update the tests.** A regression test should fail before your fix and pass
    after it; if it passes both ways it is not testing the bug.
-2. **Update the docs.** `docs/Usage.md`, `docs/Advanced.md` and
-   `docs/Internals.md` are user-facing and are expected to match the code.
+2. **Update the docs.** `docs/Usage.md`, `docs/Advanced.md`, `docs/Viewer.md`
+   and `docs/Internals.md` are user-facing and are expected to match the code.
+   Give each fact one home and link to it from elsewhere;
+   `tests/test_docs_links.py` checks every link and anchor.
 
 ## Releasing
 
@@ -209,7 +272,7 @@ the workflow by hand: `dry_run` is on by default and stops after `SHA256SUMS`.
 
 ## Rules and licensing
 
-Code is LGPL-3.0-or-later; the SIGMA rules under `rules/` keep the licence of
+Code is LGPL-3.0-or-later; the Sigma rules under `rules/` keep the licence of
 their source (DRL 1.1, GPL 3.0 or CC0 1.0), named with its text in
 `rules/licenses/` and for every file in `rules/release-manifest.json`. Refresh
 them with `-U` rather than by hand: a release refuses files that manifest does

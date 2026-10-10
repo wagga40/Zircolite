@@ -1,0 +1,190 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 440" width="960" height="440" role="img" aria-labelledby="t d">
+  <title id="t">Per-file and unified database layouts</title>
+  <desc id="d">Per-file, the default: a.evtx, b.evtx and c.evtx each get their own SQLite database, filled by parallel workers, the rules run on each and the results merge into one output. Unified, with --unified-db: all three files share one database, so a correlation rule can link failed logons from a.evtx to a success in c.evtx and raise an alert.</desc>
+  <style>
+    :root {
+      --paper: #eef1ef;
+      --panel: #f8faf8;
+      --ink: #16211e;
+      --ink-2: #4a5955;
+      --rule: #cfd8d4;
+      --signal: #00697a;
+      --strip: #7c8b87;
+      --danger: #a3134e;
+      --sev-0: #687b8a;
+      --sev-unknown: #5a2f96;
+      --danger-tint: rgb(163 19 78 / 0.12);
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --paper: #0e191c;
+        --panel: #13232a;
+        --ink: #e2ebe8;
+        --ink-2: #9daea9;
+        --rule: #26393f;
+        --signal: #53c2cf;
+        --strip: #5f7570;
+        --danger: #f2568e;
+        --sev-0: #93a6b4;
+        --sev-unknown: #8a5fc6;
+        --danger-tint: rgb(242 86 142 / 0.18);
+      }
+    }
+    text { fill: var(--ink); font: 13px ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+    .mono, .mono text { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+    .card { fill: var(--paper); stroke: var(--rule); }
+    .panel { fill: var(--panel); stroke: var(--rule); }
+    .ink2 { fill: var(--ink-2); }
+    .step { font-weight: 600; }
+    .step .ink2 { font-weight: 400; }
+    .arrow { fill: none; stroke: var(--strip); stroke-width: 1.5; }
+    .head { fill: var(--strip); }
+    .db { fill: var(--panel); stroke: var(--strip); }
+    .db-top { fill: var(--paper); stroke: var(--strip); }
+    .divider { stroke: var(--rule); }
+    .fa { fill: var(--signal); }
+    .fb { fill: var(--sev-0); }
+    .fc { fill: var(--sev-unknown); }
+    .hit { fill: var(--danger-tint); }
+    .link { fill: none; stroke: var(--danger); stroke-width: 1.5; stroke-dasharray: 200; }
+    .link-head { fill: var(--danger); }
+    .alert { fill: var(--danger); }
+    .alert-text { fill: var(--danger); font-weight: 600; }
+
+    .scene, .an { animation: 11.5s ease-in-out infinite; }
+    .scene { animation-name: scene; }
+    .pf-files { animation-name: pf-files; }
+    .pf-workers { animation-name: pf-workers; }
+    .pf-dbs { animation-name: pf-dbs; }
+    .pf-rows { animation-name: pf-rows; }
+    .pf-rules { animation-name: pf-rules; }
+    .pf-merge { animation-name: pf-merge; }
+    .pf-out { animation-name: pf-out; }
+    .u-files { animation-name: u-files; }
+    .u-in { animation-name: u-in; }
+    .u-db { animation-name: u-db; }
+    .u-row1 { animation-name: u-row1; }
+    .u-row2 { animation-name: u-row2; }
+    .u-row3 { animation-name: u-row3; }
+    .u-row4 { animation-name: u-row4; }
+    .u-rule { animation-name: u-rule; }
+    .u-hits { animation-name: u-hits; }
+    .u-alert { animation-name: u-alert; }
+    .u-link { animation-name: u-link; }
+
+    @keyframes pf-files { 0%, 2.61% { opacity: 0; transform: translateX(-10px); } 6.52%, 100% { opacity: 1; transform: none; } }
+    @keyframes pf-workers { 0%, 7.83% { opacity: 0; transform: translateX(-8px); } 11.74%, 100% { opacity: 1; transform: none; } }
+    @keyframes pf-dbs { 0%, 11.3% { opacity: 0; transform: translateY(4px); } 15.22%, 100% { opacity: 1; transform: none; } }
+    @keyframes pf-rows { 0%, 14.78% { opacity: 0; } 18.26%, 100% { opacity: 1; } }
+    @keyframes pf-rules { 0%, 20% { opacity: 0; transform: translateX(-8px); } 23.91%, 100% { opacity: 1; transform: none; } }
+    @keyframes pf-merge { 0%, 25.22% { opacity: 0; transform: translateX(-6px); } 28.7%, 100% { opacity: 1; transform: none; } }
+    @keyframes pf-out { 0%, 27.83% { opacity: 0; transform: translateX(-8px); } 31.74%, 100% { opacity: 1; transform: none; } }
+    @keyframes u-files { 0%, 34.78% { opacity: 0; transform: translateX(-10px); } 38.7%, 100% { opacity: 1; transform: none; } }
+    @keyframes u-in { 0%, 39.13% { opacity: 0; transform: translateX(-8px); } 42.61%, 100% { opacity: 1; transform: none; } }
+    @keyframes u-db { 0%, 42.61% { opacity: 0; transform: translateY(4px); } 46.52%, 100% { opacity: 1; transform: none; } }
+    @keyframes u-row1 { 0%, 46.09% { opacity: 0; transform: translateX(-8px); } 49.13%, 100% { opacity: 1; transform: none; } }
+    @keyframes u-row2 { 0%, 47.83% { opacity: 0; transform: translateX(-8px); } 50.87%, 100% { opacity: 1; transform: none; } }
+    @keyframes u-row3 { 0%, 49.57% { opacity: 0; transform: translateX(-8px); } 52.61%, 100% { opacity: 1; transform: none; } }
+    @keyframes u-row4 { 0%, 51.3% { opacity: 0; transform: translateX(-8px); } 54.35%, 100% { opacity: 1; transform: none; } }
+    @keyframes u-rule { 0%, 56.52% { opacity: 0; transform: translateX(-8px); } 60.43%, 100% { opacity: 1; transform: none; } }
+    @keyframes u-hits { 0%, 61.74% { opacity: 0; } 66.09%, 100% { opacity: 1; } }
+    @keyframes u-alert { 0%, 68.7% { opacity: 0; transform: translateX(-8px); } 72.61%, 100% { opacity: 1; transform: none; } }
+    @keyframes u-link { 0%, 61.74% { stroke-dashoffset: 200; opacity: 0; } 62.17% { opacity: 1; } 66.96%, 100% { stroke-dashoffset: 0; opacity: 1; } }
+    @keyframes scene { 0%, 96.52% { opacity: 1; } 100% { opacity: 0; } }
+
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after { animation: none !important; }
+    }
+  </style>
+  <rect class="card" x="0.5" y="0.5" width="959" height="439" rx="14"/>
+
+  <!-- lane titles and caption stay put -->
+  <text class="step" x="24" y="34">Per-file <tspan class="ink2">(default): one database per file, workers side by side</tspan></text>
+  <path class="divider" d="M24 214.5h912"/>
+  <text class="step" x="24" y="244">Unified <tspan class="mono ink2">--unified-db</tspan><tspan class="ink2">: one database for every file</tspan></text>
+
+  <g class="scene">
+    <!-- per-file: three files, three workers, three databases, one merged output -->
+    <g class="an pf-files">
+      <rect class="panel" x="24.5" y="59" width="100" height="30" rx="5"/><rect class="fa" x="36" y="70" width="8" height="8" rx="1.5"/><text class="mono" x="52" y="78.5">a.evtx</text>
+      <rect class="panel" x="24.5" y="107" width="100" height="30" rx="5"/><rect class="fb" x="36" y="118" width="8" height="8" rx="1.5"/><text class="mono" x="52" y="126.5">b.evtx</text>
+      <rect class="panel" x="24.5" y="155" width="100" height="30" rx="5"/><rect class="fc" x="36" y="166" width="8" height="8" rx="1.5"/><text class="mono" x="52" y="174.5">c.evtx</text>
+    </g>
+    <g class="an pf-workers">
+      <path class="arrow" d="M125 74h101"/><path class="head" d="M232 74l-6-4v8z"/><text class="ink2" x="148" y="68">worker 1</text>
+      <path class="arrow" d="M125 122h101"/><path class="head" d="M232 122l-6-4v8z"/><text class="ink2" x="148" y="116">worker 2</text>
+      <path class="arrow" d="M125 170h101"/><path class="head" d="M232 170l-6-4v8z"/><text class="ink2" x="148" y="164">worker 3</text>
+    </g>
+    <g class="an pf-dbs">
+      <path class="db" d="M236.5 61v26a70 6 0 0 0 140 0v-26"/><ellipse class="db-top" cx="306.5" cy="61" rx="70" ry="6"/>
+      <path class="db" d="M236.5 109v26a70 6 0 0 0 140 0v-26"/><ellipse class="db-top" cx="306.5" cy="109" rx="70" ry="6"/>
+      <path class="db" d="M236.5 157v26a70 6 0 0 0 140 0v-26"/><ellipse class="db-top" cx="306.5" cy="157" rx="70" ry="6"/>
+    </g>
+    <g class="an pf-rows mono">
+      <text class="fa" x="306.5" y="84" text-anchor="middle">4625 4625</text>
+      <text class="fb" x="306.5" y="132" text-anchor="middle">4688</text>
+      <text class="fc" x="306.5" y="180" text-anchor="middle">4624</text>
+    </g>
+    <g class="an pf-rules">
+      <path class="arrow" d="M377 74h49"/><path class="head" d="M432 74l-6-4v8z"/><rect class="panel" x="436.5" y="60" width="104" height="28" rx="14"/><text x="488.5" y="78.5" text-anchor="middle">run rules</text>
+      <path class="arrow" d="M377 122h49"/><path class="head" d="M432 122l-6-4v8z"/><rect class="panel" x="436.5" y="108" width="104" height="28" rx="14"/><text x="488.5" y="126.5" text-anchor="middle">run rules</text>
+      <path class="arrow" d="M377 170h49"/><path class="head" d="M432 170l-6-4v8z"/><rect class="panel" x="436.5" y="156" width="104" height="28" rx="14"/><text x="488.5" y="174.5" text-anchor="middle">run rules</text>
+    </g>
+    <g class="an pf-merge">
+      <path class="arrow" d="M541 74h40M541 122h40M541 170h40M581 74v96M581 122h45"/><path class="head" d="M632 122l-6-4v8z"/>
+    </g>
+    <g class="an pf-out">
+      <rect class="panel" x="636.5" y="95" width="300" height="54" rx="6"/>
+      <text class="mono" x="652" y="118">detected_events.json</text>
+      <text class="ink2" x="652" y="137">detections from all three, merged</text>
+    </g>
+
+    <!-- unified: the same files land in one database, so a correlation can span them -->
+    <g class="an u-files">
+      <rect class="panel" x="24.5" y="263" width="100" height="30" rx="5"/><rect class="fa" x="36" y="274" width="8" height="8" rx="1.5"/><text class="mono" x="52" y="282.5">a.evtx</text>
+      <rect class="panel" x="24.5" y="311" width="100" height="30" rx="5"/><rect class="fb" x="36" y="322" width="8" height="8" rx="1.5"/><text class="mono" x="52" y="330.5">b.evtx</text>
+      <rect class="panel" x="24.5" y="359" width="100" height="30" rx="5"/><rect class="fc" x="36" y="370" width="8" height="8" rx="1.5"/><text class="mono" x="52" y="378.5">c.evtx</text>
+    </g>
+    <g class="an u-in">
+      <path class="arrow" d="M125 278h55M125 326h55M125 374h55M180 278v96M180 326h46"/><path class="head" d="M232 326l-6-4v8z"/>
+    </g>
+    <g class="an u-db">
+      <path class="db" d="M236.5 263v138a70 7 0 0 0 140 0v-138"/><ellipse class="db-top" cx="306.5" cy="263" rx="70" ry="7"/>
+    </g>
+    <g class="mono">
+      <g class="an u-row1">
+        <rect class="hit an u-hits" x="246" y="275" width="121" height="21" rx="3"/>
+        <text x="258" y="290"><tspan class="fa">a.evtx</tspan>  4625</text>
+      </g>
+      <g class="an u-row2">
+        <rect class="hit an u-hits" x="246" y="301" width="121" height="21" rx="3"/>
+        <text x="258" y="316"><tspan class="fa">a.evtx</tspan>  4625</text>
+      </g>
+      <g class="an u-row3">
+        <text x="258" y="342"><tspan class="fb">b.evtx</tspan>  4688</text>
+      </g>
+      <g class="an u-row4">
+        <rect class="hit an u-hits" x="246" y="353" width="121" height="21" rx="3"/>
+        <text x="258" y="368"><tspan class="fc">c.evtx</tspan>  4624</text>
+      </g>
+    </g>
+    <path class="link an u-link" d="M368 285.5h22v78h-22M368 311.5h22M390 326h40"/>
+    <path class="link-head an u-hits" d="M436 326l-6-4v8z"/>
+    <g class="an u-rule">
+      <rect class="panel" x="440.5" y="288" width="236" height="76" rx="6"/>
+      <text class="ink2" x="456" y="311">correlation rule</text>
+      <text x="456" y="331">failed logons, then a success</text>
+      <text x="456" y="350">for the same user</text>
+    </g>
+    <g class="an u-alert">
+      <path class="arrow" d="M677 326h49"/><path class="head" d="M732 326l-6-4v8z"/>
+      <rect class="panel" x="736.5" y="299" width="200" height="54" rx="6"/>
+      <rect class="alert" x="737" y="299.5" width="3" height="53"/>
+      <text class="alert-text" x="752" y="322">1 alert</text>
+      <text class="ink2" x="752" y="341">a.evtx + c.evtx</text>
+    </g>
+
+  </g>
+
+  <text class="ink2" x="480" y="428" text-anchor="middle">Auto mode picks the layout; correlation rules need unified.</text>
+</svg>

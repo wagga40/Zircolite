@@ -1,11 +1,8 @@
 # Internals
 
-Zircolite flattens events into SQLite and evaluates queries converted from Sigma rules.
-
-This page covers the architecture and the parts of the runtime whose behaviour is not
-obvious from the command line. For how to *use* any of it, see
-[Usage](Usage.md) and [Advanced](Advanced.md); for the dependency list, see
-[Usage → Dependencies](Usage.md#dependencies).
+Zircolite flattens events into SQLite and runs Sigma rules converted to SQL against them.
+This page covers how, and the behaviour the command line does not make obvious. For how to
+*use* any of it, see [Usage](Usage.md) and [Advanced](Advanced.md).
 
 ## Architecture
 
@@ -21,8 +18,7 @@ graph TD
     ZC -->|"Stream results"| OUT["Disk / console"]
 ```
 
-Reading, flattening and insertion happen in a single pass without intermediate event
-files. The database layout can be selected for the input workload.
+Reading, flattening and insertion happen in one pass, with no intermediate files.
 
 ## Event processing pipeline
 
@@ -42,140 +38,102 @@ flowchart TB
 
 | Stage | What it does | Example |
 |-------|--------------|---------|
-| **1. Filter** | Skip events whose Channel, or that channel's EventID bound, is claimed by no rule | Channel/EventID check |
+| **1. Filter** | Skip events whose Channel, or that channel's EventID set, no rule claims | Channel/EventID check |
 | **2. Flatten** | Nested → flat structure | `Event.System.Channel` → `Channel` |
 | **3. Mappings** | Rename fields | `Event.EventData.CommandLine` → `CommandLine` |
-| **4. Aliases** | Duplicate a field under a new name | `CommandLine` → `cmdline` |
+| **4. Aliases** | Copy a field under a new name | `CommandLine` → `cmdline` |
 | **5. Transforms** | Sandboxed Python over the value | Extract the filename from a path |
 | **6. Splits** | Parse key=value strings | `"a=1,b=2"` → `{a:1, b:2}` |
 
-Transforms run before splitting, so a transform that *replaces* a value (rather than
-writing an alias) changes what the split then parses. Splitting writes its derived fields
-directly, so aliases do not apply to them. Derived names go through the same
-alphanumeric cleaning as leaf names and are merged after the walk, only where the event
-has no field of that name in any case, so log content cannot overwrite a real field or
-`row_id`.
+Transforms run before splitting, so a transform that *replaces* a value changes what the
+split parses. Split fields are written directly (aliases do not apply to them), cleaned like
+any field name, and merged only where the event has no field of that name in any case, so
+log content cannot overwrite a real field or `row_id`.
 
-The early filter reads Channel and EventID from their configured source paths. It is
-turned off at startup when a mapping from another path, an alias or an active transform
-can write either column (see [Early event filtering](Advanced.md#early-event-filtering)).
+**Typing.** Columns are added as fields appear, and events are inserted in batches. A
+column takes its type from the first value it receives: `INTEGER`, `NUMERIC` for floats (so
+ranges compare numerically), or `TEXT`. Integers beyond SQLite's signed 64-bit range are
+stored as floats and may be rounded; the run warns once and names the fields.
 
-Database columns are added as new fields are discovered, and events are inserted in
-batches. A column takes its type from the first value it receives: `INTEGER` for integers,
-`NUMERIC` for floats, so ranges compare numerically, and `TEXT` otherwise. Integers
-outside SQLite's signed 64-bit range are stored as floating-point numbers and may be
-rounded, which is also what JSONL parsing produces; the run warns once and names the
-affected fields.
+**Spellings.** SQLite column names are case-insensitive, so `ProcessId` and `ProcessID`
+share one column, named after the first spelling stored. Ingestion records every event that
+spelled a field otherwise (tables `field_spellings` and `logs_spelling`), and output prints
+each event with its own spelling, so per-file, unified and parallel runs print an event the
+same way. The time field is the exception: it always prints under its `--timefield` name,
+which the Timesketch template and the Viewer look up. Rule SQL never reads those tables.
 
-SQLite column names are case-insensitive, so fields that differ only by case (`ProcessId`
-and `ProcessID`) share one column, named after the first spelling that database stored.
-Ingestion records each row whose event spelled such a field otherwise, one row per such
-event in two tables (`field_spellings` and `logs_spelling`), and every match and
-correlation evidence event is printed with its own spelling; CSV output has a column for
-each spelling. The run's time field is the exception: it is always printed under the name
-`--timefield` gives it, because the Timesketch template and the Zircolite Viewer look it up by
-that name. Per-file, unified and parallel runs therefore print an event the same way,
-whichever files share its database. A database saved with `--dbfile` keeps both tables,
-and `--db-input` uses them; rule SQL never reads them, and a query whose result has no
-`row_id` keeps the column names.
+**Readers.** JSON arrays are validated incrementally, accelerated by `ijson` when present.
+ZIP members stream from the archive; 7-Zip members spool to temporary files. CSV raises the
+field-size limit to the platform's maximum. XML and EVTXtract readers skip comments and
+processing instructions between records.
 
-XML entity rewriting leaves CDATA, comments and processing instructions intact. XML and
-EVTXtract readers skip comments and processing instructions between records.
+When a rule has several SQL statements, an event matched by more than one is kept once, by
+`row_id`, before `--limit` applies.
 
-JSON arrays are validated incrementally, including delimiters and the closing
-bracket. The optional `ijson` backend accelerates parsing; its numeric values are
-normalized to Python integers and floats before insertion. ZIP members stream from
-the archive, and 7-Zip members spool to automatically removed temporary files.
-Compressed file size never selects an unbounded full-load array path.
+### Event filter bounds
 
-CSV detection and ingestion raise the field-size limit to the largest the platform
-supports, well past Python's default of 131,072 characters.
+The [early event filter](Advanced.md#early-event-filtering) maps each channel the ruleset
+names to the EventIDs its rules can match. Those IDs are read from each rule's **SQL**, not
+its `eventid` metadata, which collects values from every detection group, negated filters
+included:
 
-Only transforms enabled for the selected source and CLI selection are compiled.
-Immutable bytecode is cached by source; function namespaces remain local to each
-processor. External transform source is cached by path, modification time and size.
+```yaml
+detection:
+    selection:
+        Channel: Security
+    filter:
+        EventID: 4624
+    condition: selection and not filter
+```
 
-CLI output uses a temporary row spool per matching rule, releasing it after the
-output and summary callbacks finish. Multi-file CSV runs spool rows until their
-complete header is known. Summaries retain counts and metadata, while templates,
-packaging and library callers requesting `keep_results` retain complete matches.
-`execute_ruleset` additionally accepts `result_sink` and `stream_results`; sinks must
-consume the temporary row iterator during the callback. Public `execute_rule` and
-`execute_select_query` return ordinary dictionaries and lists.
+That rule's metadata says `eventid: [4624]`, the one ID it excludes. A channel stays
+unbounded (every EventID kept) when a rule on it constrains `EventID` under a `NOT`, has an
+`OR` branch without an `EventID` constraint, constrains it in a form the scan cannot read
+(`BETWEEN`, `>`, `LIKE`), or does not mention it. A rule constraining EventIDs but no
+channel switches the filter to two global axes, each filtering only when every rule
+constrains it. A legacy correlation rule (backend 1) with no channel in its SQL turns the
+filter off for the run.
 
-When a rule has multiple SQL statements, an event matched by several of them is kept
-once, identified by its `row_id`, before `--limit` applies. Rows without a `row_id`, such
-as aggregate projections, are kept as they are.
+The filter reads its values from the raw event, before flattening. When an event carries
+several of the configured fields with different values, it keeps the event, since the
+flattener decides which value lands in the column.
 
 ## Rule execution
 
-Before the rules run, `execute_ruleset` reads the distinct `(Channel, EventID)` pairs of
-the logs table through `idx_channel_eventid`. A rule is skipped when every one of its
-statements is a direct `SELECT * FROM logs WHERE ...` with `sqlscan` bounds that miss
-all of those pairs, the same bounds
-`EventFilter` uses to drop events before ingestion. Channels are compared case-folded,
-text EventIDs as integers, and a missing column as NULL. A statement without bounds, a
-correlation rule, aggregate projection (which can emit a row over empty input), or a
-column holding values SQLite would coerce (numbers in `Channel`, BLOBs) always runs.
-Tables with collations other than BINARY or NOCASE also bypass census pruning, so
-imported databases retain their own comparison semantics. The saving is the statement preparation: about 0.3 ms per rule,
-paid for every rule on every file in per-file and parallel modes.
+**Census pruning.** Before the rules run, `execute_ruleset` reads the distinct
+`(Channel, EventID)` pairs present, through `idx_channel_eventid`. A rule is skipped when
+every statement is a plain `SELECT * FROM logs WHERE …` whose `sqlscan` bounds (the same
+the event filter uses) miss all of them. Statements without bounds, correlations, aggregate
+projections, columns holding values SQLite would coerce, and tables with unusual
+collations always run. The saving is statement preparation, about 0.3 ms per rule per file.
 
-A rule with a `correlation_plan` (SQLite backend 2) never runs its `rule` SQL. `core.py`
-hands the plan to the backend's `runtime.execute_plan`, which widens `logs` with the
-plan's `required_fields`, materialises each stage as an indexed TEMP table, runs the
-result and diagnostic queries, fetches the evidence rows by `row_id` and drops the TEMP
-tables. A progress handler checks for Ctrl+C every 10,000 SQLite instructions, and the
-stages are dropped again after an interruption. Plans are never repaired, scanned,
-prefiltered or used to pick indexes: the SQL scan cannot read their CTEs and window
-functions, and a plan scans `logs` in full anyway. A plan whose version or SQLite
-requirement this install cannot meet is reported when the ruleset loads and recorded as
-a rule error on every run.
+**Correlation plans.** A rule with a `correlation_plan` (SQLite backend 2) never runs its
+`rule` SQL. `core.py` hands the plan to the backend's `runtime.execute_plan`, which widens
+`logs` with the plan's `required_fields`, materialises each stage as an indexed TEMP table,
+runs the result and diagnostic queries, fetches the evidence by `row_id` and drops the
+tables. A progress handler checks for Ctrl+C every 10,000 SQLite instructions. Plans are
+never repaired, scanned, prefiltered or used to pick indexes. A plan this install cannot run
+(version, SQLite) is reported at load and recorded as a rule error.
 
-Automatic literal filtering requires at least 1,000 rows and 32 distinct eligible
-queries. It is built once per `execute_ruleset` call and discarded after its output
-callbacks finish. `literal` forces construction; `off` disables it. Aho–Corasick searches necessary literals in each
-field; Roaring bitmaps retain row IDs. Unknown predicates have an unbounded
-candidate set. AND intersects candidates, OR unions them, and NOT supplies no
-bound. Only simple `SELECT * FROM logs WHERE ...` statements qualify, and a pattern
-contributes its longest literal run when that run is three characters or more, or holds
-a non-ASCII character (emoji and homoglyph lists), which LIKE compares exactly. A rule
-too deep to prepare is indexed in the rebalanced form the rule loop retries it with
-(see [Automatic SQL repairs](#automatic-sql-repairs)). Unsupported
-queries, custom LIKE implementations, uncertain schemas, and negative IDs take
-the ordinary query path. A column exceeding an index budget becomes unbounded;
-completed indexes for other columns remain usable. NULL values contribute no
-positive LIKE candidates. Other non-text values remain candidates in a shared
-per-column bitmap so SQLite owns their conversion. REGEXP queries remain on the
-normal path as well. Candidate filtering never removes the original WHERE predicate.
+**Literal prefilter.** Most rules match with `LIKE` patterns. The prefilter reads the fields
+those patterns name once, finds which events contain each pattern's necessary literal
+(Aho–Corasick search, row IDs in Roaring bitmaps), and runs each query only over those
+candidate events. SQLite still evaluates the whole condition on every candidate, so
+detections are identical with the filter on or off.
 
-The filter limits construction to one million pattern characters and sixteen
-retained row IDs per event, at least two million (including shared uncertain IDs),
-and bypasses a candidate set holding at least half the rows the rule's Channel/EventID
-bounds select (half the table for an unbounded rule). These limits bound indexing work;
-they are not a process memory ceiling. Candidates reach SQLite as
-`logs.row_id IN (SELECT value FROM json_each('[...]'))` in front of the original
-predicate, so the filter creates no tables. A rule with an empty candidate set runs
-`SELECT 1 WHERE 0` instead: building the filter already compiled its WHERE clause on this
-database, and compiling it again would only repeat that check. JSON1 is required, and the filter stays
-off without it. Referenced fields are scanned together in batches of 256 rows. Immutable normalized SQL and
-literal plans are cached across files; schema validation and postings stay local
-to each database.
+- `auto` builds it for databases of 1,000 events or more and rulesets with 32 or more
+  eligible queries; `literal` forces it, `off` disables it.
+- Only plain `SELECT * FROM logs WHERE …` statements qualify. A pattern contributes its
+  longest literal run of three characters or more, or one holding a non-ASCII character.
+  AND intersects candidates, OR unions them, NOT gives no bound. `REGEXP` queries take the
+  normal path.
+- Candidates reach SQLite as `logs.row_id IN (SELECT value FROM json_each('[...]'))` ahead
+  of the original predicate. A rule with no candidates runs `SELECT 1 WHERE 0`. A candidate
+  set holding at least half the rows the rule's bounds select is bypassed.
+- Construction is capped (one million pattern characters, sixteen row IDs per event); a
+  column over budget becomes unbounded. It needs SQLite's JSON1, and stays off without it.
 
 ## Processing modes
-
-Working storage is independent of database layout and export. With
-`--working-db disk`, each core owns a temporary directory and a SQLite file;
-closing the core removes the database and its WAL sidecars. The page cache is
-configurable, query temporary storage can spill to disk, and mmap is disabled.
-Explicit library `db_location` paths remain caller-owned. Database export still
-uses SQLite backup, including when working storage is on disk.
-
-Flattening selects the compiled kernel once per processor when it is built from the
-current `flatten_kernel.py`, and otherwise runs the same source as Python.
-
-Every mode uses the same event pipeline. Per-file mode can run sequentially or across
-thread/process workers; unified mode uses one shared database.
 
 ```mermaid
 flowchart LR
@@ -189,71 +147,43 @@ flowchart LR
     end
 ```
 
-| Layout | Flag | Database | Enables |
-|--------|------|----------|---------|
-| Per-file | `--no-auto-mode` | One per file, reused | Parallel processing |
-| Unified | `--unified-db` | One for all files | Cross-file correlation rules |
+| Layout | Selected by | Database | Enables |
+|--------|-------------|----------|---------|
+| Per-file | Auto mode, or the default with `--no-auto-mode` | One per file, reused | Parallel processing |
+| Unified | Auto mode, or `--unified-db` | One for all files | Cross-file correlation rules |
 
-`analyze_files_and_recommend_mode` returns only `per-file` or `unified`. When the answer
-is per-file and there is more than one input, the same function separately recommends
-running those files across workers — one database per worker, which is why it is
-available in per-file mode and not with `--unified-db`. `--no-parallel` declines it;
-`--strict` and `--profile-rules` force it off, because a parse error and a per-rule timing
-both need one file at a time.
+`analyze_files_and_recommend_mode` returns only `per-file` or `unified`. For a per-file run
+of several inputs it separately recommends running them across workers, one database per
+worker, which is why parallelism exists only for per-file runs. `--strict` and
+`--profile-rules` turn it off, because a parse error and a per-rule timing both need one file
+at a time. The heuristics are in
+[Advanced → Automatic processing optimization](Advanced.md#automatic-processing-optimization).
 
-The layout choice is made from file count, file sizes, available RAM and CPU count.
-`--no-auto-mode` disables this choice and keeps per-file mode unless `--unified-db` is
-also set. With multiple files, correlation rules select unified mode unless automatic
-selection is disabled. The heuristics are
-documented in [Advanced → Automatic processing optimization](Advanced.md#automatic-processing-optimization).
+**Executors.** Threads share one GIL, which every SQLite row step releases and takes back,
+so thread workers queue behind each other: on 450 EVTX files of 16 MiB, twenty threads ran
+2.4 times slower than one file at a time, and ten processes 3.9 times faster. Hence
+`--executor auto` picks processes from 32 MiB of input. Processes return summaries and
+temporary output paths rather than pickling match lists, share a shutdown event, and split
+the EVTX parser threads across the CPU budget. Compressed sizes feed scheduling estimates
+only; runtime memory throttling still applies.
 
-`--executor auto` is the CLI default. Parallel per-file workloads holding at least
-32 MiB of input in total select separate interpreters when CPU and RAM permit at least
-two process workers; smaller workloads use threads. Threads share one GIL, which every
-SQLite row step releases and takes back, so thread workers queue behind each other: on
-450 EVTX files of 16 MiB, twenty threads ran 2.4 times slower than one file at a time,
-and ten processes 3.9 times faster. Explicit `thread` and `process` settings
-remain available. Low-level `ParallelConfig` retains its thread default. Processes return summaries and temporary output paths instead
-of pickling large match lists. Workers share a shutdown event, and EVTX parser
-threads are divided across the file-worker CPU budget. ZIP/7z expanded sizes and
-gzip/bzip2 estimates inform scheduling; estimates are advisory, with runtime memory
-throttling still applied. gzip sizes can wrap at 4 GiB, so compressed-size estimates
-cannot guarantee a fixed process memory ceiling.
+**Working storage.** With `--working-db disk`, each core owns a temporary directory and an
+SQLite file, removed with its WAL sidecars on close. `--dbfile` exports through SQLite's
+backup API either way.
 
-Performance records are owned by each core and returned as plain dictionaries
-from workers. Nested stage timers pause their parent, preventing index/output
-time from also counting as ingestion/detection. The CLI aggregates worker stage
-seconds separately from wall time and samples RSS in a background thread.
+**Kernel.** Flattening uses the compiled kernel when it was built from the current
+`flatten_kernel.py`, and otherwise runs the same source as Python.
 
-## Measured results
-
-Historical CLI measurements with `rules/rules_windows_merged.json` (4,319 rules) on a
-10-core arm64 Mac, Python 3.14 and SQLite 3.53, with compiled flattening. These describe
-the measured configurations, not every subsequent release. Every run reported the same
-detections as the same workload with `--rule-prefilter off`, compared as per-rule event
-multisets.
-
-| Workload | Baseline (`c972b28`) | Measured configuration |
-|---|---:|---:|
-| Test corpus, 4 EVTX / 452,554 events, auto (processes) | 42.0 s | 11.0 s |
-| Test corpus, `--unified-db` | — | 22.8 s |
-| Test corpus as database input (`-D`) | — | 11.7 s (51.8 s with the prefilter off) |
-| EVTX-ATTACK-SAMPLES, 278 files, auto (unified) | 7.0 s | 5.8 s |
-| EVTX-ATTACK-SAMPLES, 278 files, per-file | 473 s | 55.7 s |
-
-That corpus holds a single channel, so its gains come from the literal prefilter and process
-workers; the 278 small multi-channel files show the per-rule costs of per-file mode that
-the census prune and lazy result spools remove. Reproduce comparisons with
-`tools/throughput-benchmark.py`, and measure the rule phase alone with `-D` and
-`--performance-json`. [Benchmark](Benchmark.md) compares the same run with Hayabusa and
-Chainsaw.
+**Timers.** Nested stage timers pause their parent, so index and output time does not also
+count as ingestion or detection. Worker stage times are summed apart from wall time, and RSS
+is sampled in a background thread.
 
 ## Package pipeline
 
-`--package` copies every ingested event out of the working databases, with the detections
-linked to them, and writes it as Parquet into a zip beside a prebuilt viewer. How to make and
-read a package is in [Advanced → Zircolite Viewer](Advanced.md#zircolite-viewer); this section is
-how it is built. It runs in two stages, so that only the main process ever loads duckdb:
+`--package` copies every ingested event out of the working databases, links the detections
+to them, and writes Parquet into a zip beside a prebuilt viewer. How to use a package is on
+the [Zircolite Viewer](Viewer.md) page. It runs in two stages, so only the main process ever
+loads duckdb:
 
 ```mermaid
 flowchart LR
@@ -266,102 +196,67 @@ flowchart LR
 
 ### Stage 1: the spool
 
-`package_spool.py` runs wherever the working database lives, process workers included, and
-needs only the standard library and orjson. Each working database is one **part**.
+`package_spool.py` runs wherever a working database lives, process workers included, using
+only the standard library and orjson. Each working database is one **part**.
 
-- **When.** `PartWriter.export_events` copies `logs` right after ingestion, where `--dbfile`
-  saves, and before the first rule runs: the rules add all-NULL columns, indexes and
-  statistics that the package must not carry.
-- **Events.** Rows are read in `row_id` order, 2,000 at a time, and written as gzip
-  NDJSON (level 1), a new file every 100,000 rows, under the package's temporary directory.
-  Each record adds `_zl_part`, `_zl_rid`, `_zl_time` (microseconds since the epoch, read by
-  `utils.parse_timestamp` as `--after` and `--before` read it, or by `--timestamp-format`) and,
-  when the row spelled a field unlike its column, `_zl_spelling`. Blobs become hex. The same
-  pass records each column's type mask and non-null count, the columns of each
-  `(Channel, EventID)` family, and the time field's range and unreadable values, so stage two
-  never scans for them.
-- **Hits.** `PartWriter.sink` is the result sink `execute_ruleset` hands every rule's result
-  to. Matches become `rule_idx,part,row_id` lines; correlation alerts become NDJSON, and their
-  evidence events count as hits of the correlation rule. The sink catches `PackageError`,
-  `OSError`, `ValueError` and `TypeError`, because an exception there would stop the rule loop
-  and lose the detections output: it keeps the first one, records nothing more, and `finish`
-  raises it, which fails the package. Any other exception propagates.
-- **Refusals.** A field whose name starts with the reserved `_zl_` prefix, or a `row_id`
-  outside `0` to `2³² − 1`, fails the package, as does a correlation alert citing an event
-  from a table other than `logs`.
+- **Events.** `PartWriter.export_events` copies `logs` right after ingestion (where
+  `--dbfile` saves) and before the first rule, which adds columns, indexes and statistics
+  the package must not carry. Rows go out in `row_id` order as gzip NDJSON, a new file every
+  100,000 rows, each with `_zl_part`, `_zl_rid`, `_zl_time` (microseconds, parsed as
+  `--after`/`--before` parse it) and `_zl_spelling` where needed. The same pass records each
+  column's types and non-null count, the columns of each `(Channel, EventID)` family and the
+  time range, so stage two never scans for them.
+- **Hits.** `PartWriter.sink` is the result sink every rule's result passes through. Matches
+  become `rule_idx,part,row_id` lines; alerts become NDJSON, and their evidence events count
+  as hits of the correlation. The sink keeps the first `PackageError`, `OSError`,
+  `ValueError` or `TypeError` and fails the package with it at `finish`, so a package error
+  never stops the rule loop or loses the detections output.
+- **Refusals.** A field starting with the reserved `_zl_` prefix, a `row_id` outside
+  `0`…`2³² − 1`, or an alert citing a table other than `logs` fails the package.
 
-The `PartRecord` a part ends with is plain data, so a process worker returns it in its
-summary (`package_part`).
-
-### Export points
-
-Each processing mode spools at one place in `processing.py`, through `_start_package_part`:
-
-| Mode | Part number | Where |
-|------|-------------|-------|
-| Unified | 0, for every file | `process_unified_streaming` |
-| Per-file, sequential | the file's index | `process_perfile_streaming` |
-| Database input (`-D`) | the database's position in the list | `process_db_input` |
-| Parallel, threads or processes | the file's position in the file list, assigned before any worker starts (`PackageSpool.part_of`) | `process_single_file_worker` |
-
-A part that fails is recorded in `ctx.package_errors`. The run goes on and writes its
-detections; `_write_package` then reports the errors, writes no package, and the run exits
-with status 1.
+Each mode spools at one place in `processing.py`, through `_start_package_part`: part 0 for
+a unified run, the file's index for per-file and parallel runs (assigned before any worker
+starts), the database's position for `-D`. A failed part is recorded; the run still writes
+its detections, then reports the error, writes no package and exits `1`.
 
 ### Stage 2: Parquet
 
 `PackageBuilder.build_data`, in the main process, first checks that the parts hold exactly
-the events the run ingested, since a package holds every event or none. It then opens an
-in-memory duckdb with a 2 GB memory limit, one thread, insertion order kept, its spill
-directory in the package's temporary directory, and extension autoloading off.
-`check_duckdb` has already refused, before ingestion, a duckdb without JSON and Parquet
-built in.
+the events ingested. It then runs an in-memory duckdb (2 GB limit, one thread, insertion
+order kept, spill directory in the package's temporary directory, extension autoloading
+off); `check_duckdb` refused a duckdb without JSON and Parquet built in before ingestion.
 
-- **Events.** `read_json` over every spool file, in part order, goes through
-  `COPY … (FORMAT parquet, COMPRESSION zstd, ROW_GROUP_SIZE 20000)`. One thread and
-  20,000-row groups keep the writer near 1.6 GB at 386 EVTX columns, where 100,000-row
-  groups need 6 to 7 GB.
-- **Types.** A column of integers only is `BIGINT`, of reals only `DOUBLE`, anything else
-  `VARCHAR`, so no integer above 2⁵³ is rounded through a double.
-- **Names.** DuckDB folds ASCII case as SQLite does, so a column carries one name: the
-  spelling of the lowest-numbered part that has it, except the time field, which takes its
-  `--timefield` name. Other parts' spellings go into the manifest and per-row ones into
-  `_zl_spelling`, so the viewer prints a field as `detected_events.json` does.
-- **Limits.** `events.parquet` above `EVENTS_PARQUET_LIMIT` (1 GiB) is a `PackageError`
-  that advises `--after`/`--before` or `-s`: the browser holds that file in WebAssembly
-  memory, which stops at 4 GB. `text.parquet` above `TEXT_PARQUET_LIMIT` (also 1 GiB, per
-  file) is left out, with a manifest warning.
-
-### Event identity
-
-Every event is named `_zl_uid = part × 2³² + row_id`. With `row_id` below 2³² and fewer than
-2²¹ parts, a uid stays below 2⁵³, so JavaScript holds it exactly. `hits` and `alert_events`
-name events by uid.
-
-### Tables
+- **Events.** `read_json` over the spool, in part order, through
+  `COPY … (FORMAT parquet, COMPRESSION zstd, ROW_GROUP_SIZE 20000)`. One thread and 20,000-row
+  groups keep the writer near 1.6 GB at 386 columns, where 100,000-row groups need 6 to 7 GB.
+- **Types.** Integers only → `BIGINT`, reals only → `DOUBLE`, anything else `VARCHAR`, so no
+  integer above 2⁵³ goes through a double.
+- **Names.** A column takes the spelling of the lowest-numbered part that has it, except the
+  time field. Other spellings go into the manifest and `_zl_spelling`.
+- **Identity.** Every event is `_zl_uid = part × 2³² + row_id`, below 2⁵³ for fewer than 2²¹
+  parts, so JavaScript holds it exactly.
+- **Limits.** `events.parquet` above `EVENTS_PARQUET_LIMIT` (1 GiB) is an error, since the
+  browser holds it in 4 GB of WebAssembly memory. `text.parquet` above `TEXT_PARQUET_LIMIT`
+  (1 GiB) is left out, with a manifest warning.
 
 | File | Contents |
 |------|----------|
-| `events.parquet` | `_zl_uid`, `_zl_part`, `_zl_time` (`TIMESTAMP`, UTC), `_zl_spelling`, then every column of the run |
-| `rules.parquet` | One row per ruleset entry that matched: `key` (its id, or its title, as the run summary groups rules), title, level and `level_rank` (the index into Sigma's levels, −1 for none), tags, and the tactics and techniques `attack.py` reads from them, plus its counts |
+| `events.parquet` | `_zl_uid`, `_zl_part`, `_zl_time` (`TIMESTAMP`, UTC), `_zl_spelling`, then every column |
+| `rules.parquet` | One row per matched ruleset entry: `key`, title, level and `level_rank`, tags, tactics, techniques, counts |
 | `hits.parquet` | Distinct `(rule_idx, _zl_uid)` pairs, sorted |
-| `alerts.parquet` | One row per correlation alert: group keys as JSON text, occurrence and window times, metric, event count |
+| `alerts.parquet` | One row per correlation alert |
 | `alert_events.parquet` | `(alert_idx, _zl_uid, ord)`: each alert's evidence, in order |
-| `text.parquet` | `(_zl_uid, _zl_text)`: every value of the event, lowercased and joined by `chr(31)`, for full-text search |
+| `text.parquet` | `(_zl_uid, _zl_text)`: each event's values, lowercased and joined by `chr(31)`, for full-text search |
 
 `data/manifest.js` carries the format and Zircolite versions, the creation time, the run
-settings (mode, executor, time field and format, event filter state, time bounds, `--limit`,
-rules loaded, never the command line, which may hold an archive password), the tactic order,
-the totals, every column with its type and non-null count, the families, the parts with their
-sources, spellings and time ranges, the failed inputs, the warnings, and every file with its
-size, SHA-256 and chunks.
+settings (never the command line), the totals, every column with its type, the parts, the
+failed inputs, the warnings, and every file with its size, SHA-256 and chunks.
 
 ### Wrapping for `file://`
 
-A page opened from `file://` may run the scripts beside it but may not fetch files, so
-`write_package` turns every binary into scripts. Each 3 MiB of a file (a multiple of 3, so only
-the last chunk is padded) becomes `__zircolite.chunk("<name>", <seq>, "<base64>")`, streamed
-straight into the zip, and the manifest becomes `__zircolite.manifest({…})`:
+A page opened from `file://` may run the scripts beside it but not fetch files, so every
+binary becomes scripts: each 3 MiB chunk is `__zircolite.chunk("<name>", <seq>, "<base64>")`,
+streamed into the zip, and the manifest is `__zircolite.manifest({…})`.
 
 ```
 index.html  app.js  app.css  README.txt  THIRD_PARTY_NOTICES.txt
@@ -370,472 +265,287 @@ assets/parquet.duckdb_extension.wasm.NNNN.js
 data/manifest.js  data/{events,rules,hits,alerts,alert_events,text}.parquet.NNNN.js
 ```
 
-`gui/viewer/viewer.json` says which viewer files are copied and which are wrapped, and the
-`data_format` the viewer reads, which must equal `PACKAGE_FORMAT` in `package.py`.
-`find_viewer` checks the whole viewer before any log is read. The zip is written in the
-temporary directory, which lives inside the destination, and moved into place with
-`os.replace` under a fresh name; `cli.main` removes the temporary directory whatever happens.
+`gui/viewer/viewer.json` lists which viewer files are copied and which wrapped, and the
+`data_format` the viewer reads, which must equal `PACKAGE_FORMAT` in `package.py`. The zip
+is written in a temporary directory inside the destination and moved into place with
+`os.replace`.
 
 ### The viewer
 
-The sources are in `gui/source/` (Svelte 5, TypeScript, Vite); `gui/viewer/` is the committed
-build that `--package` copies, and the only part of `gui/` the binary, the release package and
-the Docker image carry.
+`gui/source/` holds the sources (Svelte 5, TypeScript, Vite); `gui/viewer/` is the committed
+build, and the only part of `gui/` that ships.
 
-- **Boot** (`App.svelte`, `engine/boot.ts`). `manifest.js` loads first, so the summary shows
-  before the data. The chunk scripts follow, six at a time, and each file is checked against
-  the manifest's chunk count and size. The engine is gunzipped with `DecompressionStream` and
-  handed to DuckDB-WASM as a `data:` URL, because a worker started from a `file://` page
-  cannot fetch a `blob:` URL in Chromium or WebKit; the worker itself starts from a `blob:`
-  URL. Parquet support loads from the package through a `data:` extension repository ending
-  in `#`, after which extension autoloading is switched off. Each table is registered as a
-  buffer and opened as a view, and the engine's event and hit counts must equal the
-  manifest's. The page's content security policy allows no network connection.
-- **The query scheduler** (`engine/queries.ts`, `engine/db.ts`). The page has one
-  connection. `QueryScheduler` runs one query at a time through `conn.send()`, which
-  `cancelSent()` can interrupt. Each request names a **lane**, and a newer request in a lane
-  supersedes the one queued or running there; each view and panel works in its own scope of
-  lanes, cancelled when it goes away; **Stop** cancels every lane. Identical SQL is answered
-  from a cache of 256 results unless the caller opts out. SQL text is assembled only from
-  checked identifiers and escaped literals (`engine/sql.ts`).
-- **Full-text matches** (`engine/textIndex.svelte.ts`, `engine/textMatches.ts`).
-  `text.parquet` loads in the background once the page is ready. A bare word compiles to a
-  predicate over the index; before a query runs, the scheduler answers each distinct pattern
-  once into a temporary table of matching uids and rewrites the query to read it. The scan
-  runs in twelve slices along the file's row groups, so a Stop interrupts it between slices
-  and the next query resumes it; four tables are kept. Queries that need the index wait for
-  it; with no index, or one that fails to load, bare words compile to a scan of every column
-  instead.
-- **One `Panel` loader** (`ui/panel.svelte.ts`). The panels of Overview, ATT&CK, Entities,
-  Processes and SQL load through `Panel`: each request takes a ticket, only the latest answer
-  is shown, and a request that was stopped or failed leaves **Stopped** or its error, never
-  an answer to an earlier filter. Explore, Detections, the timeline and the drawer keep the
-  same rule with tickets of their own.
-- **Shared state** (`state/`). The search, time range, **Detections only**, columns, open
-  event and view live in the URL hash; `QueryState` compiles them into the one `WHERE` clause
-  the views read.
-- **The `query()` gate** (`sql/console.ts`). The console's text reaches DuckDB only as a
-  string literal passed to the `query()` table function, which parses it itself and accepts
-  exactly one SELECT, so a second statement or a break-out from the literal is a parse error.
-  The console describes the query first, then reads every column cast to `VARCHAR` under
-  positional names, 10,001 rows at most. After each run it switches DuckDB's logging back off
-  through the page's connection, outside the console's own scope, so the reset happens even
-  after a Stop.
-- **Text, never markup.** Log text renders as text. `tests/test_viewer_source.py` fails on
-  `{@html}`, `innerHTML`, `eval` and the other sinks that turn text into markup or code
-  anywhere in `gui/source/src`, and on a page without its content security policy.
+- **Boot.** `manifest.js` loads first, so the summary shows before the data. Chunks follow,
+  six at a time, each file checked against the manifest's chunk count and size. The engine
+  is gunzipped and handed to DuckDB-WASM as a `data:` URL, because a worker started from
+  `file://` cannot fetch a `blob:` URL in Chromium or WebKit. Parquet support loads from the
+  package through a `data:` extension repository, then autoloading is switched off. The
+  engine's event and hit counts must equal the manifest's.
+- **Queries.** One connection; `QueryScheduler` runs one query at a time and can cancel it.
+  Each request names a **lane**, and a newer request supersedes the older one in its lane;
+  **Stop** cancels every lane. SQL is built only from checked identifiers and escaped
+  literals. Full-text matches are computed once per pattern into a temporary table, in
+  slices a Stop can interrupt.
+- **The console.** User SQL reaches DuckDB only as a string literal passed to the `query()`
+  table function, which accepts exactly one SELECT, so a second statement is a parse error.
+- **Text, never markup.** `tests/test_viewer_source.py` fails on `{@html}`, `innerHTML`,
+  `eval` and similar sinks anywhere in `gui/source/src`, and on a page without its content
+  security policy.
 
 ## Module map
 
 All the logic lives in the `zircolite/` package. `zircolite.py` is a shim that calls
-`zircolite/cli.py`; `python -m zircolite` goes through `__main__.py` and is equivalent.
+`zircolite/cli.py`; `python -m zircolite` goes through `__main__.py`.
 
 | Module | Contents |
 |--------|----------|
 | `cli.py` | The whole command line: `parse_arguments`, `discover_files`, `main` |
 | `__main__.py` | Entry point for `python -m zircolite` |
 | `assets.py` | Resolution of the shipped `config/`, `rules/`, `templates/` and `gui/viewer/` |
-| `streaming.py` | `StreamingEventProcessor` — single-pass read, flatten, transform, insert |
-| `flatten_kernel.py` | Flattening kernel; the reference Python implementation, also compiled as `_flatten_native` |
+| `streaming.py` | `StreamingEventProcessor`: single-pass read, flatten, transform, insert |
+| `flatten_kernel.py` | Flattening kernel; the Python reference, also compiled as `_flatten_native` |
 | `jsonstream.py` | Validating JSON-array reader with an optional C parser |
 | `results.py` | Temporary detection row storage and incremental JSON output |
-| `spellings.py` | Records the field spellings a column does not carry, and restores them on output |
-| `core.py` | `ZircoliteCore` — database management, indexes, rule execution, output |
-| `prefilter.py` | Literal prefilter: rows that may satisfy a rule's `LIKE` literals, handed to SQLite, which still runs the full rule |
+| `spellings.py` | Field spellings a column does not carry, recorded and restored on output |
+| `core.py` | `ZircoliteCore`: database management, indexes, rule execution, output |
+| `correlations.py` | Correlation plan checks, alert rows and diagnostics wording |
+| `prefilter.py` | Literal prefilter: candidate rows for a rule's `LIKE` literals |
 | `performance.py` | Stage timers, per-file metrics and the `--performance-json` report |
-| `detector.py` | `LogTypeDetector` — format, log source and timestamp-field detection |
+| `detector.py` | `LogTypeDetector`: format, log source and timestamp-field detection |
 | `processing.py` | Coordinates per-file, unified and parallel runs; aggregates results |
 | `utils.py` | Logging, `MemoryTracker`, compressed-input handling, mode heuristics |
 | `rules.py` | `RulesetHandler` (Sigma → Zircolite), `RulesUpdater`, `EventFilter` |
 | `console.py` | Rich output: theme, detection tables, ATT&CK panels, hyperlinks, reports |
 | `config_loader.py` | Loads and validates YAML run configurations; generates the template |
-| `parallel.py` | `MemoryAwareParallelProcessor` — worker scaling and memory throttling |
+| `parallel.py` | `MemoryAwareParallelProcessor`: worker scaling and memory throttling |
 | `sqlscan.py` | Quote-aware rule-SQL reader, and the OR-chain depth repair |
-| `run_config.py` | `SETTINGS` — one row per option: YAML key, default, merge rule |
+| `run_config.py` | `SETTINGS`: one row per option, with YAML key, default and merge rule |
 | `templates.py` | `TemplateEngine` (Jinja2 output) |
 | `package_spool.py` | Stage one of `--package`: spools each working database's events, hits and alerts |
 | `package.py` | Stage two of `--package`: Parquet tables, the manifest and the viewer zip |
 | `formats.py` | Input format registry: flag, YAML value, extension, encoding, reader |
-| `extractor.py` | `EvtxExtractor` — log line / XML element → event dict |
+| `extractor.py` | `EvtxExtractor`: log line or XML element → event dict |
 | `config.py` | Dataclasses passed to the engine (`ProcessingConfig`, `ExtractorConfig`, …) |
 | `attack.py` | MITRE ATT&CK technique and tactic IDs from Sigma tags |
 | `shutdown.py` | SIGINT handling, so `Ctrl+C` finishes the current batch and writes results |
-| `__init__.py` | The package's public re-export surface — and deliberately not `cli`, which would make `from zircolite import console` resolve to the submodule rather than the `Console` object |
+| `__init__.py` | The public re-exports — deliberately not `cli`, which would make `from zircolite import console` resolve to the submodule |
 
-`formats.py` is the single source of truth for input formats: the CLI, the YAML loader,
-the streaming dispatcher and the extractor factory all resolve through the same table,
-so a new format is a new row rather than an edit in each of them.
+`formats.py` is the single source of truth for input formats: the CLI, the YAML loader, the
+streaming dispatcher and the extractor factory all read the same table, so a new format is a
+new row.
+
+### Dependencies
+
+| Package | Purpose |
+|---------|---------|
+| `orjson` | Fast JSON parsing |
+| `ijson` | Incremental JSON-array parsing |
+| `pyahocorasick`, `pyroaring` | Literal prefilter |
+| `regex` | Rule `REGEXP` matching with a per-value time limit |
+| `rich`, `rich-argparse` | Terminal output and coloured help |
+| `RestrictedPython` | Sandbox for field transforms |
+| `requests` | Ruleset updates (`-U`) |
+| `pySigma` and backends | Native Sigma rule conversion |
+| `evtx` (pyevtx-rs) | EVTX parsing |
+| `jinja2` | Output templates |
+| `lxml` | XML input |
+| `chardet` | Encoding detection |
+| `psutil` | Memory tracking and parallel-processing heuristics |
+| `pyyaml` | YAML configuration |
+| `py7zr` | 7-Zip archives, imported only when a `.7z` is opened |
+| `duckdb` | Writing `--package` Parquet tables |
+
+`evtx` publishes wheels for Linux (x86_64, ARM64), macOS and Windows x64, and Zircolite
+cannot start without it.
 
 ## Bundled asset resolution
 
 `assets.py` resolves shipped paths under `config/`, `rules/`, `templates/` and `gui/viewer/`
-independently of the working directory. Both the CLI and configuration loader use it.
+independently of the working directory, for both the CLI and the configuration loader.
 
-For every value a user can override, a file of that name in the working directory wins and
-anything else falls through to `bundled_asset`. That covers
+For every value a user can override — `--config`, `--ruleset` (default or `rules/…`),
+`--template` and the templates behind `--timesketch` and `--navigator-output`, and the
+`rules` and `templates` of a `-Y` file — a file of that name in the working directory wins;
+anything else falls through to `bundled_asset`. Only a value already rooted at the shipped
+directory falls back, so `-r myrules/windows.json` still reports itself missing.
+`resolve_asset_path` tests for existence rather than for a file, because `--ruleset` also
+takes a directory of Sigma YAML.
 
-- `--config`, for any relative path under `config/`, not only the default
-- `--ruleset`, both the default and an explicit `-r rules/…`
-- `--template`, and the templates behind `--timesketch` and `--navigator-output`
-- the `rules` and `templates` entries of a `-Y` configuration file
-
-`resolve_default_path` tests for a file. `resolve_asset_path` tests for existence instead,
-and rulesets go through it because `--ruleset` also accepts a *directory* of native Sigma
-YAML, which the file test would reject.
-
-`shipped_copy_shadowed_by` answers whether a working-directory copy won over the shipped
-one. The CLI uses it to warn about the defaults the user did not name — the `-c` config, the
-default ruleset and the `--timesketch`/`--navigator-output` templates — since a copy of any of
-them inside a received directory changes mappings, detections or output silently. A value the
-user typed (`-c config/config.yaml`, `-r rules/…`, `-t`) is a deliberate choice and is not
-announced; `-c` records that with a custom argparse action because its default is also its
-most common explicit value.
-
-Only a value already rooted at the shipped directory falls back, so
-`-r myrules/windows.json` keeps reporting itself missing instead of quietly loading
-`rules/windows.json`.
-
-Two paths deliberately do not follow that rule. `--package` takes the viewer from `gui/viewer/` of Zircolite's own files, as one unit, never from the working directory. `-U` writes to the installed `rules/` — the directory a later run will actually read
-— and falls back to `./rules` only when that one cannot be written to.
+`shipped_copy_shadowed_by` tells whether a working-directory copy won over the shipped one;
+the CLI warns about it for the defaults the user did not name. `-c` records an explicit value
+with a custom argparse action, because its default is also its most common explicit value.
+`--package` always takes the viewer from Zircolite's own files, never the working directory.
 
 `bundled_asset` returns the first root that holds the file:
 
 | Order | Root | Applies to |
 |-------|------|-----------|
 | 1 | the directory holding the executable | frozen builds only |
-| 2 | `sys._MEIPASS`: the `_internal/` directory beside the executable, where PyInstaller puts `datas` | frozen builds only |
-| 3 | two levels up from `assets.py`: the repository root from source, `_internal/` again in a binary | always |
+| 2 | `sys._MEIPASS`: the `_internal/` beside the executable | frozen builds only |
+| 3 | two levels up from `assets.py`: the repository root, or `_internal/` in a binary | always |
 
-The executable's own directory comes first so that the `config/`, `rules/`, `templates/`
-and `gui/viewer/` the release package ships beside the binary can be edited: an updated ruleset
-dropped there takes effect without a rebuild. The copy under `_internal/` is what lets a
-bare build — `dist/Zircolite/` straight out of PyInstaller, holding only the executable
-and `_internal/` — run on its own, and it is what the binary tests run against. When no
-root holds the file, the first candidate is returned, so the error names a directory you
-can actually write to.
-
-`bundled_dir`, used by `-U`, excludes roots inside `sys._MEIPASS` after resolving paths.
-Updates go beside the executable, preserving `_internal/` as the bundled fallback.
-If that directory is unwritable, `RulesUpdater` uses `./rules` and logs a warning.
+The executable's directory comes first, so the editable copies a release ships beside the
+binary take effect without a rebuild; `_internal/` lets a bare PyInstaller build run on its
+own. When no root holds the file, the first candidate is returned, so the error names a
+directory you can write to. `bundled_dir`, used by `-U`, skips roots inside
+`sys._MEIPASS`, and `RulesUpdater` falls back to `./rules` when that one is read-only.
 
 ## Packaging
 
-The standalone binaries are PyInstaller builds in its *onedir* layout, made from
-`Zircolite.spec` in the repository root:
-
-```shell
-pdm run pyinstaller --noconfirm Zircolite.spec
-```
-
-That writes `dist/Zircolite/`: the executable (`Zircolite`, or `Zircolite.exe`) and
-`_internal/`, which holds the Python runtime, the extension modules, the bytecode and a
-copy of `config/`, `rules/`, `templates/` and `gui/viewer/`. `tools/package-release.py` stages the
-release from it, adding editable copies of those four directories beside the executable,
-`docs/`, `pics/`, `README.md`, `LICENSE` and a generated `THIRD_PARTY_LICENSES`, and
-archives the result as `dist/Zircolite-<version>-<target>.zip` for every target. The Linux
-and macOS archives record each entry as made on Unix, with its mode and, for the symlinks
-a macOS build keeps in `Python.framework`, its link target: `unzip` and Archive Utility
-restore both, so the executable comes out executable. Windows cannot extract a symlink
-from a zip, and a Windows build with one fails to package.
+The standalone binaries are PyInstaller *onedir* builds from `Zircolite.spec`.
+`tools/package-release.py` adds editable copies of `config/`, `rules/`, `templates/` and
+`gui/viewer/` beside the executable, plus `docs/`, `pics/`, `README.md`, `LICENSE` and a
+generated `THIRD_PARTY_LICENSES`, and zips it. Linux and macOS archives record Unix modes
+and symlinks, so `unzip` restores them. Building, testing and the CI gates are in
+[CONTRIBUTING.md](https://github.com/wagga40/Zircolite/blob/master/CONTRIBUTING.md#building-the-standalone-binary).
 
 ### Why onedir
 
-A onefile executable unpacks its whole runtime into a temporary directory on every start.
-In macOS measurements this took 2–4 s per run, against about 0.37 s for onedir or source.
-It also requires an executable temporary location. Onedir keeps the runtime beside the
-editable assets and avoids extraction on startup.
-
-The spec keeps PyInstaller's default `_internal/` contents directory. Flattening it into
-the executable's directory (`contents_directory='.'`) would put the `zircolite/` package
-directory next to the `Zircolite` executable, and the two collide on case-insensitive
-filesystems, the default on macOS and Windows.
-
-### What the spec has to name
-
-The spec explicitly includes dependencies that static import analysis may miss:
-
-- **pySigma pipelines and backends.** pySigma discovers them by walking the
-  `sigma.pipelines` and `sigma.backends` namespace packages at run time, so the spec
-  collects those submodules, excluding tests. Unknown pipeline names stop conversion
-  with exit code `2`.
-- **The flattening kernel.** `streaming.py` loads `zircolite._flatten_native` through
-  `importlib`. A binary ships no `flatten_kernel.py` either, so the run-time
-  `SOURCE_SHA256` staleness check has nothing to compare against; the spec runs that
-  check at build time instead and, under `ZIRCOLITE_REQUIRE_NATIVE=1`, refuses to build
-  from a missing or stale kernel. It checks the kernel beside the spec, so the project
-  must be installed in place (`pdm install`) before building.
-- **`evtx` and `ijson`**, collected whole with their data files and binaries.
-
-The spec also names `py7zr`. The scan does find it, because `detector.py` and `utils.py`
-import it inside functions, but naming it keeps `.7z` support from depending on that.
-
-UPX compression is off, and the test and build-only packages (`pytest`, `Cython`,
-`tkinter`, `IPython`) are excluded, as is `setuptools`: PyInstaller's `backports` alias
-follows the `backports.zstd` import that py7zr and urllib3 keep for Pythons older than
-3.14 into `setuptools._vendor`, which the binary never runs.
+A onefile executable unpacks its runtime into a temporary directory on every start: 2–4 s
+per run on macOS, against about 0.37 s for onedir or source, and it needs an executable
+temporary location. The spec keeps PyInstaller's `_internal/` directory: flattening it
+(`contents_directory='.'`) would put the `zircolite/` package beside the `Zircolite`
+executable, and the two collide on case-insensitive filesystems.
 
 ### Why PyInstaller
 
-The packaging choice was evaluated on macOS arm64 with Python 3.14 (Homebrew).
-The following historical measurements are medians; they are not current comparisons of
-the tools' latest releases. PBS means python-build-standalone.
+Evaluated on macOS arm64 with Python 3.14; historical medians, not a comparison of the
+tools' latest releases. PBS is python-build-standalone.
 
 | | PyInstaller onedir | Nuitka 4.2.1 standalone | PyApp + PBS |
 |---|---|---|---|
-| Parity with source | all pass | all pass with local loader patches; onefile also needed an asset-root patch | all pass |
-| `--version` start-up | 0.375 s, the same as source | **0.27 s** | 0.32 s, after a first run of 2–3 s that extracts ~180 MB into the user's home |
-| Run time against source | −4 % to +1 % | 5–18 % slower, +25–35 MiB RSS | 11–29 % faster, from the PBS interpreter rather than the launcher |
+| Parity with source | all pass | all pass, with local loader patches | all pass |
+| `--version` start-up | 0.375 s, as source | **0.27 s** | 0.32 s, after a first run of 2–3 s extracting ~180 MB into the home directory |
+| Run time against source | −4 % to +1 % | 5–18 % slower | 11–29 % faster, from the PBS interpreter |
 | Local build time | 17–30 s | 105–180 s | 81 s, plus a Rust toolchain |
-| Deployment constraints | explicit collection of dynamic imports | local patches needed for parity | persistent per-user install; Rust build toolchain; Windows `Ctrl+C` not validated |
 
-PyInstaller met the portable-directory requirement with shorter builds and no local
-loader patches. The main detection dependencies already run native code. PyApp's PBS
-interpreter improved runtime in this evaluation, but its persistent per-user installation
-did not meet that deployment requirement. Linux release builds use PBS; equivalent
-measurements for PyInstaller on PBS on macOS and Windows were not recorded here.
+PyInstaller met the portable-directory requirement with short builds and no patches;
+PyApp's persistent per-user install did not. Linux release builds use a PBS interpreter.
 
 ### Support floors
 
 | Target | Floor | What sets it |
 |--------|-------|--------------|
-| `linux-x64`, `linux-arm64` | glibc 2.28: RHEL 8, Debian 10, Ubuntu 20.04 | The build runs inside a `manylinux_2_28` container, on a PBS 3.14 installed by uv. A runner's own Python links against the runner's glibc — 2.39 on Ubuntu 24.04 — and the binary inherits it |
-| `macos-arm64` | macOS 15.0 | The `macos-15` runner, with `MACOSX_DEPLOYMENT_TARGET=15.0`. The wheels PDM selects there, orjson's among them, are built for macOS 15, and the older runners are being retired |
-| `windows-x64`, `windows-arm64` | Windows 10 | Python 3.14, which the binary carries, supports nothing older |
-
-The binary tests check the first two when `ZIRCOLITE_GLIBC_FLOOR` and
-`ZIRCOLITE_MACOS_FLOOR` are set, as CI sets them: the highest `GLIBC_` symbol version
-across every ELF file in the build and a non-executable stack for libpython on Linux, the
-`minos` of every Mach-O file on macOS.
+| `linux-x64`, `linux-arm64` | glibc 2.28: RHEL 8, Debian 10, Ubuntu 20.04 | The build runs in a `manylinux_2_28` container on a PBS Python; a runner's own Python would carry the runner's glibc |
+| `macos-arm64` | macOS 15.0 | The `macos-15` runner with `MACOSX_DEPLOYMENT_TARGET=15.0`; the wheels it selects target macOS 15 |
+| `windows-x64`, `windows-arm64` | Windows 10 | Python 3.14 supports nothing older |
 
 ### Windows ARM64
 
-`pdm.lock` cannot be installed on Windows ARM64 as it stands. `evtx` publishes neither a
-`win_arm64` wheel nor an sdist, and `jq`, which pySigma requires, does not build there.
-`tools/install-win-arm64.py` assembles the environment instead: it exports the locked
-development requirements without those two, installs them into a uv virtual environment
-with `--no-deps` so that `jq` is never resolved again, adds an `evtx` wheel the workflow
-builds with maturin from pyevtx-rs `0.12.1`, installs Zircolite editable so the kernel is
-compiled into the tree where the spec looks for it, and points PDM at that environment so
-the shared `pdm run` steps work unchanged. pySigma imports `jq` only inside its jq
-transformation, which Zircolite never uses.
-
-### CI gates
-
-`.github/workflows/build_pyinstaller.yml` builds, tests, verifies and releases:
-
-| Trigger | What runs |
-|---------|-----------|
-| A `v*` tag | All five targets, then the release |
-| A push to `master`, or a pull request, touching the spec, `zircolite.py`, the package, `pyproject.toml`, `pdm.lock`, `setup.py`, the shipped assets, the test fixtures and golden files, `tests/conftest.py`, `pytest.ini`, the binary tests, `tools/`, the packaged docs (`docs/`, `pics/`, `README.md`, `LICENSE`) or the workflow | The `linux-x64` leg only, as a canary |
-| `workflow_dispatch` (`dry_run`, true by default) and a weekly schedule | All five targets |
-
-**Build.** Each leg installs the project, builds with the spec, then runs
-
-```shell
-pdm run python -m pytest tests/test_frozen_binary.py tests/test_e2e_regression.py
-```
-
-with `ZIRCOLITE_BINARY` naming the built executable. `test_e2e_regression.py` then runs its
-format-parity, mode-equivalence and golden-detection cases through the binary instead of
-in process. `test_frozen_binary.py` compares the binary with `python -m zircolite` from the
-same environment: version and layout, the pipeline list and the SQL each pipeline
-produces, compressed and encrypted archives, both executors, assets and `--package` from a
-foreign working directory, transforms, the selected flattening kernel, platform floors and
-`Ctrl+C`. The raw `dist/Zircolite/` is tested, without the editable directories the
-release adds, so anything missing from `_internal/` fails here. On a tag,
-`tools/package-release.py --check-tag` confirms that the tag, `__version__`, the
-`pyproject.toml` version and the binary's `--version` all agree. The leg then packages its
-single archive and uploads it.
-
-**Verify.** One job per target downloads that archive onto a fresh runner that never sets
-up Python, PDM or the project (the image's own `python3` only compares the output with
-the golden file on Linux and macOS), extracts it, and from the package directory runs
-`--version`, a detection over `tests/fixtures/sample_bitsadmin.evtx` with
-`rules/rules_windows_sysmon.json` that must return exactly the golden result, and
-`--package`. The Linux targets repeat `--version` and the detection, but not `--package`,
-in `rockylinux:8`, `debian:11` and `ubuntu:20.04` containers, which have no Python at
-all.
-
-**Release.** Once every verify job passes on a tag, a dispatch or the weekly schedule,
-one job collects the archives and writes `SHA256SUMS`. On a tag it then attests the
-archives' build provenance and creates a *draft* GitHub release carrying them, or replaces
-the assets of the release if it already exists; publishing is done by hand. A dispatch
-that is not on a tag, a `dry_run` dispatch and the schedule stop after `SHA256SUMS`; the
-pull-request and master-push canaries never reach this job.
-
-**Forgejo pre-flight.** `.forgejo/workflows/build_pyinstaller.yml` mirrors the
-`linux-x64` leg for the self-hosted instance: the same container image and commands, then
-the verify smoke inside the same job. The distro containers and the release stay on
-GitHub, because Forgejo job containers get no Docker socket.
+`pdm.lock` cannot install on Windows ARM64: `evtx` publishes neither a `win_arm64` wheel nor
+an sdist, and `jq`, which pySigma requires, does not build there. `tools/install-win-arm64.py`
+exports the locked requirements without those two, installs them into a uv environment with
+`--no-deps`, adds an `evtx` wheel built with maturin from pyevtx-rs, installs Zircolite
+editable so the kernel compiles where the spec looks for it, and points PDM at that
+environment. pySigma imports `jq` only for a transformation Zircolite never uses.
 
 ## SQLite behaviour
 
 ### Pragmas
 
-Two pragmas apply to every database: `page_size` `4096` and `threads`
-`min(8, cpu_count)`. Two follow the working storage chosen with `--working-db`:
+Every database gets `page_size` `4096` and `threads` `min(8, cpu_count)`. The rest depend on
+where it lives:
 
-| Pragma | `memory` (default) | `disk` |
-|--------|--------------------|--------|
+| Pragma | In memory | On disk |
+|--------|-----------|---------|
 | `temp_store` | `MEMORY` | `FILE` |
 | `mmap_size` | `268435456` (256 MB) | `0` |
-
-The rest depend on where the database lives:
-
-| Pragma | In-memory | On disk |
-|--------|-----------|---------|
 | `journal_mode` | `MEMORY` | `WAL` |
 | `synchronous` | `OFF` | `NORMAL` |
-| `cache_size` | `-128000` (128 MB) | `--sqlite-cache-mib` × `-1024` (default 64 MiB: `-65536`) |
+| `cache_size` | `-128000` (128 MB) | `--sqlite-cache-mib` × `-1024` (default `-65536`) |
 | `locking_mode` | `EXCLUSIVE` | — |
 | `wal_autocheckpoint` | — | `10000` |
 
 ### The `regexp` function
 
-Sigma rules that match by regex need a `REGEXP` implementation, which SQLite does not
-ship. Zircolite registers one that compiles patterns through an LRU cache, since the
-same pattern is evaluated against every row.
+SQLite ships no `REGEXP`; Zircolite registers one, with compiled patterns in an LRU cache.
 
-- **Patterns are validated before the query runs.** Constructs unsupported by Python's
-  `re`, such as `\p{L}`, cause the rule to be recorded as broken.
-- **Values are coerced with `str()`.** This allows regex rules to query numeric values,
-  consistent with `LIKE` converting numbers to text.
-- **Each match has a time limit.** Rule values come from the logs, so whoever wrote
-  the events chooses the input to every rule regex. A backtracking pattern, such as
-  `-f(?:.*\)){1,}.*"` in the Invoke-Obfuscation VAR+ rules, would otherwise run for
-  hours on a crafted command line. Matching uses the `regex` module, which accepts the
-  same syntax as `re` and takes a time budget (`REGEX_TIMEOUT_SECONDS`, one second). A
-  value that exceeds it counts as a non-match for that event only; a warning names the
-  rule and quotes the start of the value so the event can be found, and the run summary
-  counts these events. Patterns are still validated with
-  `re`, so the matcher accepts no extra syntax.
+- **Patterns are validated first** with Python's `re`; unsupported constructs such as
+  `\p{L}` mark the rule as broken.
+- **Values are coerced with `str()`**, as `LIKE` converts numbers to text.
+- **Each match has a one-second budget** (`REGEX_TIMEOUT_SECONDS`). The logs choose the
+  input to every rule regex, and a backtracking pattern such as
+  `-f(?:.*\)){1,}.*"` (Invoke-Obfuscation VAR+) could run for hours on a crafted command
+  line. Matching uses the `regex` module; a value over budget is a non-match for that event,
+  with a warning naming the rule, and the summary counts these events.
 
 ### Typing and collation
 
-Columns use `INTEGER`, `NUMERIC` or `TEXT` with `COLLATE NOCASE`, which affects text
-comparison without changing numeric equality or ranges.
+Columns are `INTEGER`, `NUMERIC` or `TEXT` with `COLLATE NOCASE`, which changes text
+comparison but not numeric equality or ranges. A ruleset converted with the backend's
+`collate_nocase` option therefore compares exactly as the bare equality does, and the
+bounds, census and prefilter read an explicit `COLLATE NOCASE` on an equality as that
+equality. Any other collation leaves the statement unplanned.
 
-Because every column is already `NOCASE`, a ruleset converted with the backend's
-`collate_nocase` option (`Channel='Security' COLLATE NOCASE`) compares exactly as the bare
-equality does. The Channel/EventID bounds, the rule census and the literal prefilter read
-an explicit `COLLATE NOCASE` on an equality as that equality. Any other collation changes
-what matches, so it leaves the bound unread and the statement unplanned.
-
-In unified mode, initial column types come from the first values seen across the corpus.
-Per-file and parallel modes rebuild the table between files, so each input has its own
-schema. Field spellings do not depend on the layout (see
-[Event processing pipeline](#event-processing-pipeline)).
+In unified mode, column types come from the first values seen across the corpus. Per-file
+and parallel modes rebuild the table between files, so each input has its own schema.
 
 ### Indexes
 
-Which indexes exist, and how to change them, is covered in
-[Usage → Database indexes](Usage.md#database-indexes). What matters here is the ordering.
+The built-in indexes are `idx_eventid` and `idx_channel_eventid`, or `idx_channel` when the
+data has a Channel but no EventID ([Usage → Database indexes](Usage.md#database-indexes)).
+A lone Channel index leaves SQLite fetching every row of the channel to re-check the
+EventID, about 1.6 times the rule-phase time on a six-channel corpus; the composite's
+leading column still serves channel-only rules. `idx_eventid` stays for rules naming only
+an EventID. Each index is created only when its column exists: SQLite would otherwise read
+the quoted name as a string literal and index a constant.
 
-Auto-indexes are applied once the ruleset is loaded, and `ANALYZE logs` runs immediately
-after so the new indexes are covered. That analysis is not optional: rule widening (see
-below) can more than double the column count, and with no statistics SQLite prices a row
-by column count alone and starts abandoning selective indexes.
-
-The built-in pair is `idx_eventid` and the composite `idx_channel_eventid`. A lone
-`Channel` index prices a rule's channel test correctly and then leaves SQLite fetching
-every row of that channel to re-check the eventID — which on a corpus carrying six
-channels measured ~1.6× the rule-phase wall clock against the same detections. The
-composite's leading column still serves channel-only rules, so it replaces the single
-index rather than joining it. `idx_eventid` stays because a `(Channel, …)` index cannot
-serve a rule that names only an eventID, and many do.
-
-Both are created only when the column is actually present. SQLite would otherwise accept
-`CREATE INDEX ... ON logs ("eventid")` against a table without that column by reading the
-quoted name as a string literal, building an index over a constant: no error raised, and
-nothing able to use it.
+Auto-indexes are applied once the ruleset is loaded, followed by `ANALYZE logs`. That is not
+optional: widening (below) can more than double the column count, and without statistics
+SQLite prices rows by column count and starts abandoning selective indexes.
 
 ## Automatic SQL repairs
 
-When SQLite cannot prepare a rule, Zircolite attempts the applicable repairs below,
-each at most once. If the rule still cannot run, it is recorded as broken in the summary.
+When SQLite cannot prepare a rule, Zircolite tries each applicable repair once. A rule that
+still fails is reported at the end of the run (`--debug` shows the SQL error). Both repairs
+run only when SQLite raises the error, so a statement that compiles is never rewritten.
 
-**Missing columns.** SQLite resolves column names when it prepares a statement, so a
-rule naming one field the dataset never produced fails as a whole — losing the branches
-that reference fields it does have. The absent columns are added as `NULL`, which makes
-the rule evaluate exactly as it would against an event that simply lacks them. Rules
-whose fields are *all* absent are widened too, so `|exists: false` becomes `IS NULL` and
-matches every row.
+**Missing columns.** SQLite resolves column names at preparation, so a rule naming one field
+the data never produced fails as a whole. The absent columns are added as `NULL`, which
+evaluates the rule exactly as against events lacking those fields; `|exists: false` becomes
+`IS NULL`. A backend-2 ruleset's `required_fields` are added too, since a field used only
+inside a function call is invisible to the scan.
 
-A backend-2 ruleset lists each rule's fields in `required_fields`, and those are added
-along with the ones the scan reads: a field used only inside a function call — the second
-field of `|fieldref|contains`, inside `replace()` — is invisible to the scan.
+**Over-deep expressions.** Some rules list thousands of values, such as vulnerable driver
+hashes. The backend emits them as a left-deep `a OR b OR c …` chain whose depth equals the
+number of terms, past SQLite's `SQLITE_MAX_EXPR_DEPTH` (1000). Chains of eight terms or more
+are rebalanced into a tree of depth O(log n). Two properties keep this safe:
 
-Column names are read with `sqlscan.py`, not with a regex, for two reasons: the backend
-backtick-quotes every field name that is not `^[a-zA-Z0-9_]*$` — which is every ECS and
-Winlogbeat name (`event.code`, `@timestamp`, `Data[1]`) — and a name inside a string
-literal is not a column, so `CommandLine LIKE '%user=bob%'` must not invent a `user`.
-Nor is a name the statement binds with `AS`: a correlation's `HAVING event_count >= 3`
-compares its own aggregate, and a NULL `event_count` column in logs would shadow it
-through the subquery's `SELECT *`, silently emptying that rule and every later one using
-the alias.
+- **Only `OR` is re-associated, never `AND`.** The `AND` in `x BETWEEN a AND b` is syntax;
+  re-associating it compiles cleanly and returns the wrong rows. `OR` has the lowest
+  precedence, so splitting on it always preserves meaning.
+- **Anything unmodelled bails out**, leaving the statement untouched: comments, unterminated
+  quotes or `CASE`, unbalanced parentheses, no top-level `WHERE`, set operations, and any
+  parenthesised group holding a `SELECT`.
+
+The repairs chain: an over-deep statement fails while parsing, before column names resolve,
+so widening becomes reachable only after rebalancing. The `sigma` field in
+`detected_events.json` always reports the declared SQL, and `--save-ruleset` writes it as
+pySigma produced it. A repaired query can return the same events in another order.
 
 ### Reading a statement
 
-Four questions are asked of every rule statement: which channels it can match, which
-eventIDs, which columns it names, and which patterns it hands to `REGEXP`. All four need
-the same quote-aware lexer, and lexing is what reading a ruleset costs — roughly 100 ms
-per megabyte of SQL, against merged rulesets carrying several.
+Four questions are asked of every statement: which channels, which EventIDs, which columns,
+which `REGEXP` patterns. All need the same quote-aware lexer, and lexing is what reading a
+ruleset costs (about 100 ms per megabyte of SQL). `sqlscan.scan_query` lexes each statement
+once and caches the result by text; `column_refs`, `regex_literals`, `channel_constraints`
+and `eventid_constraints` are folds over it.
 
-`sqlscan.scan_query` lexes each statement once and caches the result by SQL text.
-`column_refs`, `regex_literals`, `channel_constraints` and `eventid_constraints` reuse it
-across files. Schema-dependent decisions, such as which columns are missing, stay in
-`core.py` and are not part of this cache.
-
-**Over-deep expressions.** The SQLite backend emits value lists as a left-deep chain
-(`a OR b OR c OR …`), whose parse-tree depth equals the number of terms. SQLite refuses
-anything past `SQLITE_MAX_EXPR_DEPTH` (1000 by default), so rules listing a few thousand
-hashes or filenames could not be prepared at all. Those chains are re-associated into a
-balanced tree, bringing the depth down to O(log n). Chains of fewer than eight terms are
-left alone.
-
-Two properties keep the rewrite safe:
-
-- **Only `OR` is re-associated, never `AND`.** The `AND` in `x BETWEEN a AND b` is syntax
-  rather than a boolean operator; re-associating it compiles cleanly and silently returns
-  the wrong rows. `OR` has the lowest precedence in SQL, so splitting on it and
-  re-associating the operands always preserves meaning.
-- **Anything unmodelled bails out**, returning the statement untouched: comments,
-  unterminated quotes or `CASE`, unbalanced parentheses, an empty `OR` operand, a
-  statement with no top-level `WHERE`, `UNION`/`INTERSECT`/`EXCEPT`, and any
-  parenthesised group holding a `SELECT`. That last one matters because a
-  subquery is not a boolean expression, so its `OR`s cannot be reassociated this way.
-
-Both repairs run only when SQLite itself raises the error, so a statement that already
-compiles is never rewritten. The depth repair is memoised like the statement scan above,
-because per-file and parallel modes run the same ruleset once per input file; widening
-cannot be, since it alters the live table. They also chain: an over-deep statement is
-rejected while parsing, before SQLite ever resolves column names, so widening only becomes
-reachable once the expression has been rebalanced.
-
-What this means for output is covered in
-[Usage → Rules with very large value lists](Usage.md#rules-with-very-large-value-lists).
-One further consequence: a repaired or re-planned query can return the same events in a
-different order, because a query driven by one index visits rows in a different order than
-one driven by another. Rules, counts and matched events are identical.
+The lexer, not a regex, finds column names because the backend backtick-quotes every name
+outside `^[a-zA-Z0-9_]*$` (every ECS name, such as `event.code` or `@timestamp`), because a
+name inside a string literal is not a column (`CommandLine LIKE '%user=bob%'` must not
+invent `user`), and because a name bound with `AS` is not one either: a NULL `event_count`
+column would otherwise shadow a correlation's `HAVING event_count >= 3`.
 
 ### Negated conditions on absent fields
 
-Sigma reads a condition on a field the event does not carry as false, so
-`selection and not filter` still matches when the filter names such a field. SQLite
-evaluates that comparison to `NULL`, and `NOT NULL` is `NULL`, so the row is dropped.
-For example, a Sysmon network event can lack `CommandLine` while matching the rule's
-selection and therefore pass a negated command-line filter.
+Sigma reads a condition on a missing field as false, so `selection and not filter` matches
+when the filter names a field the event lacks. SQLite evaluates that comparison to `NULL`,
+and `NOT NULL` is `NULL`, so the row would be dropped: a Sysmon network event without
+`CommandLine` would escape a negated command-line filter.
 
-Unlike the two repairs, this rewrite applies to every statement before it runs.
-`sqlscan.normalize_rule_sql` wraps the operand of each prefix `NOT` in
-`COALESCE((…), 0)`, turning that `NULL` back into the false Sigma means. The operand runs
-to the next `AND`/`OR` or closing parenthesis at its own depth, since `NOT` binds tighter
-than those and looser than every comparison. Nested negations are rewritten too, so what
-reaches a `COALESCE` is only `AND`/`OR` over comparisons, and reading its `NULL` as false
-is exactly Sigma's answer. `NOT LIKE`, `NOT IN` and `IS NOT NULL` compare rather than
-negate, and are left as written; so is a `NOT` whose operand holds a `BETWEEN` or `CASE`,
-whose own `AND` would end the operand too early. The same pass quotes identifiers, so a
-ruleset is still lexed once.
-
-The literal prefilter plans the rewritten form (a negation never narrows its candidates),
-and the Channel/EventID bounds read from it are unchanged.
+This rewrite applies to every statement before it runs. `sqlscan.normalize_rule_sql` wraps
+the operand of each prefix `NOT` in `COALESCE((…), 0)`, turning that `NULL` back into the
+false Sigma means. `NOT LIKE`, `NOT IN` and `IS NOT NULL` compare rather than negate and are
+left alone, as is a `NOT` over a `BETWEEN` or `CASE`. The prefilter plans the rewritten
+form, and the event filter bounds read from it are unchanged.

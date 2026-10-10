@@ -1,5 +1,6 @@
 * [Home](README.md)
 * [Usage](Usage.md)
-* [Advanced use](Advanced.md)
+* [Advanced](Advanced.md)
+* [Zircolite Viewer](Viewer.md)
 * [Internals](Internals.md)
 * [Benchmark](Benchmark.md)

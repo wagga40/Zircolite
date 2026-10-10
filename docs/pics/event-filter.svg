@@ -1,0 +1,203 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 384" width="960" height="384" role="img" aria-labelledby="t d">
+  <title id="t">The early event filter</title>
+  <desc id="d">The ruleset asks for Sysmon 1 and 3 and Security 4688 and 4624. Events from the stream pass a filter built from those pairs: matching ones are inserted into the logs table, the rest (System 7036, Application 1000, Sysmon 22, Security 4625) are dropped before insert and counted, so events no rule can match never reach SQLite.</desc>
+  <style>
+    :root {
+      --paper: #eef1ef;
+      --panel: #f8faf8;
+      --ink: #16211e;
+      --ink-2: #4a5955;
+      --rule: #cfd8d4;
+      --signal: #00697a;
+      --strip: #7c8b87;
+      --danger: #a3134e;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --paper: #0e191c;
+        --panel: #13232a;
+        --ink: #e2ebe8;
+        --ink-2: #9daea9;
+        --rule: #26393f;
+        --signal: #53c2cf;
+        --strip: #5f7570;
+        --danger: #f2568e;
+      }
+    }
+    text { fill: var(--ink); font: 13px ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+    .mono, .mono text { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+    .card { fill: var(--paper); stroke: var(--rule); }
+    .panel { fill: var(--panel); stroke: var(--rule); }
+    .ink2 { fill: var(--ink-2); }
+    .step { font-weight: 600; }
+    .step .ink2 { font-weight: 400; }
+    .head { fill: var(--strip); }
+    .chip { fill: var(--panel); stroke: var(--strip); }
+    .lane { fill: none; stroke: var(--strip); stroke-dasharray: 2 5; stroke-width: 2; stroke-linecap: round; }
+    .sieve { fill: none; stroke: var(--signal); stroke-width: 6; stroke-dasharray: 7 4; }
+    .feeds { fill: none; stroke: var(--strip); stroke-dasharray: 4 4; }
+    .bin { fill: none; stroke: var(--rule); stroke-dasharray: 5 4; }
+    .gone { opacity: 0.45; }
+    .count text { fill: var(--danger); font-size: 24px; font-weight: 600; }
+    .big { font-size: 15px; font-weight: 600; }
+
+    .scene, .an { animation: 10.5s ease-in-out infinite; }
+    .scene { animation-name: scene; }
+    .e1 { animation-name: e1; }
+    .e2 { animation-name: e2; }
+    .e3 { animation-name: e3; }
+    .e4 { animation-name: e4; }
+    .e5 { animation-name: e5; }
+    .e6 { animation-name: e6; }
+    .e7 { animation-name: e7; }
+    .e8 { animation-name: e8; }
+    .n0 { animation-name: n0; }
+    .n1 { animation-name: n1; }
+    .n2 { animation-name: n2; }
+    .n3 { animation-name: n3; }
+    .n4 { animation-name: n4; }
+    .r2 { animation-name: r2; }
+    .r4 { animation-name: r4; }
+    .r6 { animation-name: r6; }
+    .r8 { animation-name: r8; }
+
+    @keyframes e1 {
+      0%, 3.81% { opacity: 0; transform: translate(-440px, 48px); }
+      5.71% { opacity: 1; transform: translate(-440px, 48px); }
+      12.38%, 14.29% { opacity: 1; transform: translate(-212px, 48px); }
+      19.52%, 100% { opacity: 1; transform: none; }
+    }
+    @keyframes e2 {
+      0%, 10.95% { opacity: 0; transform: translate(-228px, -119px); }
+      12.86% { opacity: 1; transform: translate(-228px, -119px); }
+      19.52%, 21.43% { opacity: 1; transform: translate(0px, -119px); }
+      26.67%, 100% { opacity: 0.45; transform: none; }
+    }
+    @keyframes e3 {
+      0%, 18.1% { opacity: 0; transform: translate(-440px, 16px); }
+      20% { opacity: 1; transform: translate(-440px, 16px); }
+      26.67%, 28.57% { opacity: 1; transform: translate(-212px, 16px); }
+      33.81%, 100% { opacity: 1; transform: none; }
+    }
+    @keyframes e4 {
+      0%, 25.24% { opacity: 0; transform: translate(-228px, -151px); }
+      27.14% { opacity: 1; transform: translate(-228px, -151px); }
+      33.81%, 35.71% { opacity: 1; transform: translate(0px, -151px); }
+      40.95%, 100% { opacity: 0.45; transform: none; }
+    }
+    @keyframes e5 {
+      0%, 32.38% { opacity: 0; transform: translate(-440px, -16px); }
+      34.29% { opacity: 1; transform: translate(-440px, -16px); }
+      40.95%, 42.86% { opacity: 1; transform: translate(-212px, -16px); }
+      48.1%, 100% { opacity: 1; transform: none; }
+    }
+    @keyframes e6 {
+      0%, 39.52% { opacity: 0; transform: translate(-228px, -183px); }
+      41.43% { opacity: 1; transform: translate(-228px, -183px); }
+      48.1%, 50% { opacity: 1; transform: translate(0px, -183px); }
+      55.24%, 100% { opacity: 0.45; transform: none; }
+    }
+    @keyframes e7 {
+      0%, 46.67% { opacity: 0; transform: translate(-440px, -48px); }
+      48.57% { opacity: 1; transform: translate(-440px, -48px); }
+      55.24%, 57.14% { opacity: 1; transform: translate(-212px, -48px); }
+      62.38%, 100% { opacity: 1; transform: none; }
+    }
+    @keyframes e8 {
+      0%, 53.81% { opacity: 0; transform: translate(-228px, -215px); }
+      55.71% { opacity: 1; transform: translate(-228px, -215px); }
+      62.38%, 64.29% { opacity: 1; transform: translate(0px, -215px); }
+      69.52%, 100% { opacity: 0.45; transform: none; }
+    }
+    @keyframes n0 { 0%, 26.67% { opacity: 1; } 28.1%, 100% { opacity: 0; } }
+    @keyframes n1 { 0%, 26.67% { opacity: 0; } 28.1%, 40.95% { opacity: 1; } 42.38%, 100% { opacity: 0; } }
+    @keyframes n2 { 0%, 40.95% { opacity: 0; } 42.38%, 55.24% { opacity: 1; } 56.67%, 100% { opacity: 0; } }
+    @keyframes n3 { 0%, 55.24% { opacity: 0; } 56.67%, 69.52% { opacity: 1; } 70.95%, 100% { opacity: 0; } }
+    @keyframes n4 { 0%, 69.52% { opacity: 0; } 70.95%, 100% { opacity: 1; } }
+    @keyframes r2 { 0%, 24.76% { opacity: 0; } 28.57%, 100% { opacity: 1; } }
+    @keyframes r4 { 0%, 39.05% { opacity: 0; } 42.86%, 100% { opacity: 1; } }
+    @keyframes r6 { 0%, 53.33% { opacity: 0; } 57.14%, 100% { opacity: 1; } }
+    @keyframes r8 { 0%, 67.62% { opacity: 0; } 71.43%, 100% { opacity: 1; } }
+    @keyframes scene { 0%, 96.19% { opacity: 1; } 100% { opacity: 0; } }
+
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after { animation: none !important; }
+    }
+  </style>
+  <rect class="card" x="0.5" y="0.5" width="959" height="383" rx="14"/>
+
+  <text class="step" x="24" y="34">Rules need <tspan class="ink2">(Channel, EventID)</tspan></text>
+  <text class="step" x="236" y="34">Event stream</text>
+  <text class="step" x="660" y="34">Inserted into <tspan class="mono">logs</tspan></text>
+
+  <!-- the filter is built from the pairs the rules' SQL asks for -->
+  <rect class="panel" x="24.5" y="48.5" width="190" height="158" rx="6"/>
+  <text class="ink2" x="40" y="72">Channel</text><text class="ink2" x="140" y="72">EventID</text>
+  <g class="mono">
+    <text x="40" y="104">Sysmon</text><text x="140" y="104">1</text>
+    <text x="40" y="132">Sysmon</text><text x="140" y="132">3</text>
+    <text x="40" y="160">Security</text><text x="140" y="160">4688</text>
+    <text x="40" y="188">Security</text><text x="140" y="188">4624</text>
+  </g>
+  <path class="feeds" d="M215 76.5h336"/><path class="head" d="M557 76.5l-6-4v8z"/>
+  <text class="ink2" x="610" y="80" text-anchor="middle">event filter</text>
+  <path class="lane" d="M236 127h362M622 127h30M610 168v46"/>
+  <path class="head" d="M658 127l-6-4v8zM610 220l-4-6h8z"/>
+  <path class="sieve" d="M610 92v70"/>
+
+  <rect class="panel" x="660.5" y="48.5" width="276" height="158" rx="6"/>
+
+  <!-- dropped events: counted, never inserted -->
+  <rect class="bin" x="344.5" y="222.5" width="592" height="144" rx="6"/>
+  <text class="ink2" x="360" y="320">dropped</text>
+  <text class="ink2" x="360" y="338">before insert</text>
+  <text class="big" x="24" y="282">Events no rule can match</text>
+  <text class="big" x="24" y="302">never reach SQLite.</text>
+  <text class="ink2" x="24" y="330"><tspan class="mono">--no-event-filter</tspan> keeps them all</text>
+
+  <g class="scene">
+    <g class="count">
+      <text class="an n0" x="360" y="298" style="opacity: 0">0</text>
+      <text class="an n1" x="360" y="298" style="opacity: 0">1</text>
+      <text class="an n2" x="360" y="298" style="opacity: 0">2</text>
+      <text class="an n3" x="360" y="298" style="opacity: 0">3</text>
+      <text class="an n4" x="360" y="298">4</text>
+    </g>
+    <g class="an e1">
+      <rect class="chip" x="676.5" y="66.5" width="140" height="26" rx="5"/>
+      <text class="mono" x="688" y="83.5">Security 4624</text>
+    </g>
+    <g class="an e2 gone">
+      <rect class="chip" x="464.5" y="233.5" width="140" height="26" rx="5"/>
+      <text class="mono" x="476" y="250.5">System 7036</text>
+    </g>
+    <text class="an r2 ink2" x="620" y="250.5">no rule reads System</text>
+    <g class="an e3">
+      <rect class="chip" x="676.5" y="98.5" width="140" height="26" rx="5"/>
+      <text class="mono" x="688" y="115.5">Sysmon 1</text>
+    </g>
+    <g class="an e4 gone">
+      <rect class="chip" x="464.5" y="265.5" width="140" height="26" rx="5"/>
+      <text class="mono" x="476" y="282.5">Application 1000</text>
+    </g>
+    <text class="an r4 ink2" x="620" y="282.5">no rule reads Application</text>
+    <g class="an e5">
+      <rect class="chip" x="676.5" y="130.5" width="140" height="26" rx="5"/>
+      <text class="mono" x="688" y="147.5">Security 4688</text>
+    </g>
+    <g class="an e6 gone">
+      <rect class="chip" x="464.5" y="297.5" width="140" height="26" rx="5"/>
+      <text class="mono" x="476" y="314.5">Sysmon 22</text>
+    </g>
+    <text class="an r6 ink2" x="620" y="314.5">Sysmon rules need 1 or 3</text>
+    <g class="an e7">
+      <rect class="chip" x="676.5" y="162.5" width="140" height="26" rx="5"/>
+      <text class="mono" x="688" y="179.5">Sysmon 3</text>
+    </g>
+    <g class="an e8 gone">
+      <rect class="chip" x="464.5" y="329.5" width="140" height="26" rx="5"/>
+      <text class="mono" x="476" y="346.5">Security 4625</text>
+    </g>
+    <text class="an r8 ink2" x="620" y="346.5">Security rules need 4624 or 4688</text>
+  </g>
+</svg>

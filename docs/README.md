@@ -1,60 +1,56 @@
-# Zircolite Documentation
+# Zircolite
 
-**Zircolite** applies Sigma detection rules to log files using SQLite. It converts rules
-to SQL and flattens events into a database, held in memory by default.
+**Zircolite** runs Sigma detection rules over logs. It flattens events into an SQLite
+database, turns each rule into an SQL query, and reports the events that match.
 
-It reads MS Windows EVTX (binary, XML and JSONL), Auditd, Sysmon for Linux, EVTXtract,
-CSV, XML and JSON, including compressed and archived inputs. Formats are usually
-detected automatically.
+![How Zircolite works: logs are flattened into rows of an SQLite table, Sigma rules become SQL queries, and matching rows become detections](pics/how-it-works.svg)
+
+It reads Windows EVTX (binary, XML and JSON), Auditd, Sysmon for Linux, EVTXtract, CSV, XML
+and JSON, plain or compressed, and detects the format on its own.
 
 ## Quick start
 
+Download the [standalone binary](Usage.md#standalone-binaries) for your platform from the
+[releases](https://github.com/wagga40/Zircolite/releases), unzip it, and point it at your
+logs:
+
 ```shell
-pdm install    # or: uv sync / poetry install
-pdm run python3 zircolite.py --events <logs> --ruleset rules/rules_windows_merged.json
+./Zircolite --events <logs>
 ```
 
-Results are written to `detected_events.json`, with a detection table and summary panel on
-the terminal. `python3 -m zircolite …` is equivalent: installing puts the package in the
-environment, so it works from any directory once that environment is active (or through
-`pdm run`, `uv run` or `poetry run` from the project directory).
+Or run it from source:
 
-To run it without Python, download the standalone binary for your platform from the
-[releases](https://github.com/wagga40/Zircolite/releases) — see
-[Usage → Standalone binaries](Usage.md#standalone-binaries).
+```shell
+git clone https://github.com/wagga40/Zircolite.git && cd Zircolite
+pdm install                                        # or: uv sync / poetry install
+pdm run python3 zircolite.py --events <logs>
+```
 
-Start with [Usage → Requirements and Installation](Usage.md#requirements-and-installation)
-and [Usage → Basic Usage](Usage.md#basic-usage).
+Detections go to `detected_events.json`, with a detection table and a summary on the
+terminal. Add `--package` to explore every event in the [Zircolite Viewer](Viewer.md).
+[Docker](Usage.md#docker) works too.
+
+## Which ruleset?
+
+| Your logs | Ruleset |
+|-----------|---------|
+| Windows, with or without Sysmon | `rules/rules_windows_merged.json`, the default |
+| Windows, Sysmon only | `rules/rules_windows_sysmon.json` |
+| Linux: Auditd, Sysmon for Linux | `rules/rules_linux.json` |
+| Your own Sigma rules | The YAML file or directory |
+
+Pass it with `--ruleset`. See [Rulesets](Usage.md#rulesets--rules) for the others and for
+updates.
 
 ## Contents
 
 | Page | Covers |
 |------|--------|
-| [Usage](Usage.md) | Installation, standalone binaries, running, every command-line option, input formats, rulesets, rule testing, configuration, Docker |
-| [Advanced](Advanced.md) | Field transforms, large datasets, parallel processing, event filtering, templating, the Zircolite Viewer |
-| [Internals](Internals.md) | Architecture, the package pipeline, module map, SQLite behaviour, packaging and release builds, automatic SQL repairs |
-| [Benchmark](Benchmark.md) | Zircolite, Hayabusa and Chainsaw on the same logs, and how to reproduce it |
+| [Usage](Usage.md) | Installing, running, rulesets, input formats, output, configuration, troubleshooting, every option |
+| [Advanced](Advanced.md) | Field transforms, large datasets, filtering, templates |
+| [Zircolite Viewer](Viewer.md) | Packages and the offline browser viewer |
+| [Internals](Internals.md) | Architecture, rule execution, the package pipeline, SQLite behaviour, packaging |
+| [Benchmark](Benchmark.md) | Zircolite, Hayabusa and Chainsaw on the same logs |
 
-## Task and Taskfile
-
-The project uses [Task](https://taskfile.dev/) (go-task) for automation. Install it from
-[taskfile.dev](https://taskfile.dev/installation/) or your package manager, then run from
-the project root:
-
-| Task | Description |
-|------|-------------|
-| `task --list` | List all available tasks |
-| `task clean` | Remove default artifacts (`detected_events.json`, `flattened_events_*.json`, `tmp-*`, `zircolite.log`, …) |
-| `task update-rules` | Update `rules/` from [Zircolite-Rules-v2](https://github.com/wagga40/Zircolite-Rules-v2) with `-U`, overwriting what is there |
-| `task docker-build` | Build the Docker image |
-| `task docker-build-multi-arch` | Build for linux/amd64 and linux/arm64 |
-| `task docker-push` | Push to Docker Hub, after a multi-arch build |
-| `task save` | Save the Docker image to an archive |
-| `task binary-build` | Build the standalone binary into `dist/Zircolite/` with PyInstaller, then run the binary tests against it |
-| `task gui-build` | Check, test and build the Zircolite Viewer from `gui/source/` into `gui/viewer/`; commit the result |
-| `task get-version` | Print the version from `zircolite/__init__.py` |
-
-`Taskfile.yml` holds these production tasks. Development tasks — lint, format, tests —
-live in a separate Taskfile that is not committed; see
-[CONTRIBUTING.md](https://github.com/wagga40/Zircolite/blob/master/CONTRIBUTING.md) for
-running them directly.
+Contributing, building and releasing are covered in
+[CONTRIBUTING.md](https://github.com/wagga40/Zircolite/blob/master/CONTRIBUTING.md).

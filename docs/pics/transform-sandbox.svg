@@ -1,0 +1,194 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 392" width="960" height="392" role="img" aria-labelledby="t d">
+  <title id="t">How a transform runs</title>
+  <desc id="d">The transform file config/transforms/image_exename.py runs inside a RestrictedPython sandbox that offers only the re, base64, chardet and math modules. The value C:\Windows\System32\cmd.exe goes in and cmd.exe comes out. Attempts to call open, import os, open a network connection or write an object attribute are refused at the boundary. The sandbox limits what code can do but is not a hard security boundary, so use transforms you trust.</desc>
+  <style>
+    :root {
+      --paper: #eef1ef;
+      --panel: #f8faf8;
+      --ink: #16211e;
+      --ink-2: #4a5955;
+      --rule: #cfd8d4;
+      --signal: #00697a;
+      --strip: #7c8b87;
+      --danger: #a3134e;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --paper: #0e191c;
+        --panel: #13232a;
+        --ink: #e2ebe8;
+        --ink-2: #9daea9;
+        --rule: #26393f;
+        --signal: #53c2cf;
+        --strip: #5f7570;
+        --danger: #f2568e;
+      }
+    }
+    text { fill: var(--ink); font: 13px ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+    .mono, .mono text { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+    .card { fill: var(--paper); stroke: var(--rule); }
+    .panel { fill: var(--panel); stroke: var(--rule); }
+    .ink2 { fill: var(--ink-2); }
+    .bold { font-weight: 600; }
+    .step { font-weight: 600; }
+    .step .ink2 { font-weight: 400; }
+    .arrow { fill: none; stroke: var(--strip); stroke-width: 1.5; }
+    .head { fill: var(--strip); }
+    .sandbox { fill: none; stroke: var(--strip); stroke-width: 1.5; stroke-dasharray: 6 4; }
+    .kw { fill: var(--signal); font-weight: 600; }
+    .fn { font-weight: 600; }
+    .str { fill: var(--ink-2); }
+    .module { fill: var(--panel); stroke: var(--signal); }
+    .module-name { fill: var(--signal); }
+    .runbar { fill: var(--signal); opacity: 0; }
+    .x { fill: none; stroke: var(--danger); stroke-width: 2; stroke-linecap: round; }
+    .mark { stroke: var(--danger); stroke-width: 3; stroke-linecap: round; }
+    .why { fill: var(--danger); }
+
+    .scene, .an, .runbar { animation: 11s ease-in-out infinite; }
+    .scene { animation-name: scene; }
+    .runbar { animation-name: runbar; }
+    .value-in { animation-name: value-in; }
+    .enter { animation-name: enter; }
+    .value-out { animation-name: value-out; }
+    .try1 { animation-name: try1; }
+    .try2 { animation-name: try2; }
+    .try3 { animation-name: try3; }
+    .try4 { animation-name: try4; }
+    .no1 { animation-name: no1; }
+    .no2 { animation-name: no2; }
+    .no3 { animation-name: no3; }
+    .no4 { animation-name: no4; }
+
+    @keyframes value-in { 0%, 3.64% { opacity: 0; transform: translateX(-10px); } 7.73%, 100% { opacity: 1; transform: none; } }
+    @keyframes enter { 0%, 10% { opacity: 0; transform: translateX(-6px); } 13.18%, 100% { opacity: 1; transform: none; } }
+    @keyframes value-out { 0%, 27.27% { opacity: 0; transform: translateX(-10px); } 31.36%, 100% { opacity: 1; transform: none; } }
+    @keyframes runbar {
+      0%, 11.36% { opacity: 0; transform: none; }
+      12.73% { opacity: 0.16; transform: none; }
+      15% { transform: translateY(0px); }
+      16.36% { opacity: 0.16; transform: translateY(18px); }
+      18.64% { transform: translateY(18px); }
+      20% { opacity: 0.16; transform: translateY(36px); }
+      22.27% { transform: translateY(36px); }
+      23.64% { opacity: 0.16; transform: translateY(54px); }
+      26.36% { opacity: 0.16; transform: translateY(54px); }
+      28.64%, 100% { opacity: 0; transform: translateY(54px); }
+    }
+    @keyframes try1 {
+      0%, 36.36% { opacity: 0; transform: translateY(12px); }
+      39.09% { opacity: 1; transform: none; }
+      42.73% { opacity: 1; transform: translateY(-22px); }
+      46.36%, 100% { opacity: 1; transform: none; }
+    }
+    @keyframes no1 { 0%, 42.27% { opacity: 0; } 45%, 100% { opacity: 1; } }
+    @keyframes try2 {
+      0%, 43.64% { opacity: 0; transform: translateY(12px); }
+      46.36% { opacity: 1; transform: none; }
+      50% { opacity: 1; transform: translateY(-22px); }
+      53.64%, 100% { opacity: 1; transform: none; }
+    }
+    @keyframes no2 { 0%, 49.55% { opacity: 0; } 52.27%, 100% { opacity: 1; } }
+    @keyframes try3 {
+      0%, 50.91% { opacity: 0; transform: translateY(12px); }
+      53.64% { opacity: 1; transform: none; }
+      57.27% { opacity: 1; transform: translateY(-22px); }
+      60.91%, 100% { opacity: 1; transform: none; }
+    }
+    @keyframes no3 { 0%, 56.82% { opacity: 0; } 59.55%, 100% { opacity: 1; } }
+    @keyframes try4 {
+      0%, 58.18% { opacity: 0; transform: translateY(12px); }
+      60.91% { opacity: 1; transform: none; }
+      64.55% { opacity: 1; transform: translateY(-22px); }
+      68.18%, 100% { opacity: 1; transform: none; }
+    }
+    @keyframes no4 { 0%, 64.09% { opacity: 0; } 66.82%, 100% { opacity: 1; } }
+    @keyframes scene { 0%, 96.36% { opacity: 1; } 100% { opacity: 0; } }
+
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after { animation: none !important; }
+    }
+  </style>
+  <rect class="card" x="0.5" y="0.5" width="959" height="391" rx="14"/>
+
+  <!-- the boundary, the transform file inside it and the modules it may use -->
+  <rect class="sandbox" x="214.75" y="40.75" width="531.5" height="189.5" rx="10"/>
+  <text class="step" x="230" y="64">RestrictedPython sandbox</text>
+  <rect class="panel" x="230.5" y="76.5" width="500" height="110" rx="6"/>
+  <rect class="runbar" x="231" y="111" width="499" height="18"/>
+  <g class="mono">
+    <text class="ink2" x="244" y="98">config/transforms/image_exename.py</text>
+    <text x="244" y="124"><tspan class="kw">def</tspan> <tspan class="fn">transform</tspan>(param):</text>
+    <text x="275.2" y="142">parts = param.replace(<tspan class="str">'\\'</tspan>, <tspan class="str">'/'</tspan>).split(<tspan class="str">'/'</tspan>)</text>
+    <text x="275.2" y="160">name = parts[-1] <tspan class="kw">if</tspan> parts <tspan class="kw">else</tspan> <tspan class="str">''</tspan></text>
+    <text x="275.2" y="178"><tspan class="kw">return</tspan> name <tspan class="kw">if</tspan> name <tspan class="kw">and</tspan> name != param <tspan class="kw">else</tspan> <tspan class="str">''</tspan></text>
+  </g>
+  <text class="ink2" x="230" y="213">allowed modules</text>
+  <g class="mono">
+    <rect class="module" x="344.5" y="197.5" width="31.6" height="22" rx="11"/><text class="module-name" x="360.3" y="213" text-anchor="middle">re</text>
+    <rect class="module" x="384.1" y="197.5" width="62.8" height="22" rx="11"/><text class="module-name" x="415.5" y="213" text-anchor="middle">base64</text>
+    <rect class="module" x="454.9" y="197.5" width="70.6" height="22" rx="11"/><text class="module-name" x="490.2" y="213" text-anchor="middle">chardet</text>
+    <rect class="module" x="533.5" y="197.5" width="47.2" height="22" rx="11"/><text class="module-name" x="557.1" y="213" text-anchor="middle">math</text>
+  </g>
+
+  <g class="scene">
+    <!-- a value goes in, the result comes out -->
+    <g class="an value-in">
+      <rect class="panel" x="24.5" y="94.5" width="166" height="72" rx="6"/>
+      <text class="ink2" x="38" y="116">param</text>
+      <g class="mono"><text x="38" y="138">C:\Windows\</text><text x="38" y="156">System32\cmd.exe</text></g>
+    </g>
+    <g class="an enter">
+      <path class="arrow" d="M191 124.5h33"/><path class="head" d="M230 124.5l-6-4v8z"/>
+    </g>
+    <g class="an value-out">
+      <path class="arrow" d="M731 124.5h33"/><path class="head" d="M770 124.5l-6-4v8z"/>
+      <rect class="panel" x="770.5" y="94.5" width="166" height="72" rx="6"/>
+      <text class="ink2" x="784" y="116">returns</text>
+      <text class="mono bold" x="784" y="138">cmd.exe</text>
+      <text class="ink2" x="784" y="156">as <tspan class="mono">Image_ExeName</tspan></text>
+    </g>
+
+    <!-- attempts that bounce off the boundary -->
+    <text class="an no1 ink2" x="200" y="286" text-anchor="end">refused at the boundary</text>
+    <path class="mark an no1" d="M259.5 231h36"/>
+    <g class="an try1">
+      <rect class="panel" x="214.5" y="256.5" width="127" height="52" rx="6"/>
+      <text class="mono" x="238" y="278">open(path)</text>
+      <g class="an no1">
+        <path class="x" d="M223 269l8 8m0-8l-8 8"/>
+        <text class="why" x="238" y="297">no file access</text>
+      </g>
+    </g>
+    <path class="mark an no2" d="M394.5 231h36"/>
+    <g class="an try2">
+      <rect class="panel" x="349.5" y="256.5" width="127" height="52" rx="6"/>
+      <text class="mono" x="373" y="278">import os</text>
+      <g class="an no2">
+        <path class="x" d="M358 269l8 8m0-8l-8 8"/>
+        <text class="why" x="373" y="297">import refused</text>
+      </g>
+    </g>
+    <path class="mark an no3" d="M529.5 231h36"/>
+    <g class="an try3">
+      <rect class="panel" x="484.5" y="256.5" width="127" height="52" rx="6"/>
+      <text class="mono" x="508" y="278">urlopen(url)</text>
+      <g class="an no3">
+        <path class="x" d="M493 269l8 8m0-8l-8 8"/>
+        <text class="why" x="508" y="297">no network</text>
+      </g>
+    </g>
+    <path class="mark an no4" d="M664.5 231h36"/>
+    <g class="an try4">
+      <rect class="panel" x="619.5" y="256.5" width="127" height="52" rx="6"/>
+      <text class="mono" x="643" y="278">obj.attr = …</text>
+      <g class="an no4">
+        <path class="x" d="M628 269l8 8m0-8l-8 8"/>
+        <text class="why" x="643" y="297">write refused</text>
+      </g>
+    </g>
+  </g>
+
+  <text class="ink2" x="480" y="344" text-anchor="middle">The sandbox limits what transform code can do. It is not a hard security boundary: use transforms you trust.</text>
+  <text class="ink2" x="480" y="372" text-anchor="middle">Try one: <tspan class="mono">python config/transform_tester.py &lt;file&gt; "&lt;value&gt;"</tspan></text>
+</svg>

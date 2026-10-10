@@ -1,0 +1,149 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 440" width="960" height="440" role="img" aria-labelledby="t d">
+  <title id="t">A Zircolite run in the terminal</title>
+  <desc id="d">Recorded output of python3 zircolite.py on sample_bitsadmin.evtx with the merged Windows ruleset: 4515 rules load, the event filter and log type are set up, one event is processed, and the medium rule File Download Via Bitsadmin - Sysmon matches and is written to detected_events.json.</desc>
+  <style>
+    .term { fill: #0e191c; }
+    .bar { fill: #13232a; }
+    .edge { fill: none; stroke: #2c434a; }
+    .dot { fill: #3a5258; }
+    .title { fill: #9daea9; font: 13px ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+    text { fill: #e2ebe8; font: 13px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; white-space: pre; }
+    /* Rich styles: c cyan, b blue, m magenta, y yellow, g green, k black, d dim, s bold */
+    .c { fill: #53c2cf; }
+    .b { fill: #6f9ef0; }
+    .m { fill: #d77ee0; }
+    .y { fill: #e0b43f; }
+    .g { fill: #5ac38e; }
+    .k { fill: #0e191c; }
+    .d { fill: #8a9c97; }
+    .s { font-weight: 700; }
+    .by { fill: #e0b43f; }
+    .cursor { fill: #e2ebe8; }
+    .art path { fill: none; stroke-width: 1.1; }
+    .art.c path { stroke: #53c2cf; }
+    .art.b path { stroke: #6f9ef0; }
+    .art.m path { stroke: #d77ee0; }
+
+    .screen, .o, .typing, .cursor { animation: 12s linear infinite; }
+    .screen { animation-name: screen; }
+    .typing { animation-name: typing; }
+    .cursor { animation-name: cursor; opacity: 0; }
+    .banner { animation-name: banner; }
+    .rules { animation-name: rules; }
+    .filter { animation-name: filter; }
+    .detect { animation-name: detect; }
+    .events { animation-name: events; }
+    .exec { animation-name: exec; }
+    .table { animation-name: table; }
+    .summary { animation-name: summary; }
+    .output { animation-name: output; }
+
+    @keyframes typing {
+      0%, 4.17% { transform: translateX(-725.4px); animation-timing-function: steps(93, end); }
+      22.5%, 100% { transform: none; }
+    }
+    @keyframes screen { 0%, 96.5% { opacity: 1; } 100% { opacity: 0; } }
+    @keyframes cursor {
+      0%, 24.17% { opacity: 1; }
+      24.58%, 100% { opacity: 0; }
+    }
+    @keyframes banner { 0%, 25% { opacity: 0; } 27.08%, 100% { opacity: 1; } }
+    @keyframes rules { 0%, 30% { opacity: 0; } 32.08%, 100% { opacity: 1; } }
+    @keyframes filter { 0%, 33.33% { opacity: 0; } 35.42%, 100% { opacity: 1; } }
+    @keyframes detect { 0%, 37.5% { opacity: 0; } 39.58%, 100% { opacity: 1; } }
+    @keyframes events { 0%, 41.67% { opacity: 0; } 43.75%, 100% { opacity: 1; } }
+    @keyframes exec { 0%, 45.83% { opacity: 0; } 47.92%, 100% { opacity: 1; } }
+    @keyframes table { 0%, 53.33% { opacity: 0; } 55.42%, 100% { opacity: 1; } }
+    @keyframes summary { 0%, 62.5% { opacity: 0; } 64.58%, 100% { opacity: 1; } }
+    @keyframes output { 0%, 70.83% { opacity: 0; } 72.92%, 100% { opacity: 1; } }
+
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after { animation: none !important; }
+    }
+  </style>
+  <defs>
+    <clipPath id="screen"><rect x="21" y="31" width="918" height="408"/></clipPath>
+  </defs>
+
+  <rect class="term" x="0.5" y="0.5" width="959" height="439" rx="14"/>
+  <path class="bar" d="M14.5 0.5h931a14 14 0 0 1 14 14v16.5h-959v-16.5a14 14 0 0 1 14-14z"/>
+  <circle class="dot" cx="22" cy="16" r="5.5"/>
+  <circle class="dot" cx="40" cy="16" r="5.5"/>
+  <circle class="dot" cx="58" cy="16" r="5.5"/>
+  <text class="title" x="480" y="20.5" text-anchor="middle">zircolite</text>
+  <rect class="edge" x="0.5" y="0.5" width="959" height="439" rx="14"/>
+
+  <g class="screen">
+    <!-- prompt: the command types out behind a sliding cover -->
+    <text y="48"><tspan x="90" class="g s">$</tspan><tspan x="105.6" textLength="725.4">python3 zircolite.py --events sample_bitsadmin.evtx --ruleset rules/rules_windows_merged.json</tspan></text>
+    <g clip-path="url(#screen)">
+      <g class="typing">
+        <rect class="term" x="831" y="36" width="741" height="17"/>
+        <rect class="cursor" x="831" y="37" width="7.8" height="15"/>
+      </g>
+    </g>
+
+    <g class="o banner">
+      <!-- the banner art is drawn as cells: block glyphs leave seams in some browsers -->
+      <g class="art c">
+        <rect x="90" y="59.6" width="54.6" height="14.1"/><rect x="152.4" y="59.6" width="15.6" height="14.1"/><rect x="175.8" y="59.6" width="46.8" height="14.1"/><rect x="246" y="59.6" width="46.8" height="14.1"/><rect x="308.4" y="59.6" width="46.8" height="14.1"/><rect x="370.8" y="59.6" width="15.6" height="14.1"/><rect x="433.2" y="59.6" width="15.6" height="14.1"/><rect x="456.6" y="59.6" width="62.4" height="14.1"/><rect x="526.8" y="59.6" width="54.6" height="14.1"/>
+        <path d="M144.6 64.8L150.1 64.8L150.1 73.1M144.6 67.9L146.9 67.9L146.9 73.1M168 64.8L173.5 64.8L173.5 73.1M168 67.9L170.3 67.9L170.3 73.1M222.6 64.8L228.1 64.8L228.1 73.1M222.6 67.9L224.9 67.9L224.9 73.1M292.8 64.8L298.3 64.8L298.3 73.1M292.8 67.9L295.1 67.9L295.1 73.1M355.2 64.8L360.7 64.8L360.7 73.1M355.2 67.9L357.5 67.9L357.5 73.1M386.4 64.8L391.9 64.8L391.9 73.1M386.4 67.9L388.7 67.9L388.7 73.1M448.8 64.8L454.3 64.8L454.3 73.1M448.8 67.9L451.1 67.9L451.1 73.1M519 64.8L524.5 64.8L524.5 73.1M519 67.9L521.3 67.9L521.3 73.1M581.4 64.8L586.9 64.8L586.9 73.1M581.4 67.9L583.7 67.9L583.7 73.1"/>
+      </g>
+      <g class="art c">
+        <rect x="113.4" y="73.1" width="23.4" height="14.1"/><rect x="152.4" y="73.1" width="15.6" height="14.1"/><rect x="175.8" y="73.1" width="15.6" height="14.1"/><rect x="214.8" y="73.1" width="15.6" height="14.1"/><rect x="238.2" y="73.1" width="15.6" height="14.1"/><rect x="300.6" y="73.1" width="15.6" height="14.1"/><rect x="347.4" y="73.1" width="15.6" height="14.1"/><rect x="370.8" y="73.1" width="15.6" height="14.1"/><rect x="433.2" y="73.1" width="15.6" height="14.1"/><rect x="480" y="73.1" width="15.6" height="14.1"/><rect x="526.8" y="73.1" width="15.6" height="14.1"/>
+        <path d="M92.3 73.1L92.3 81.4L97.8 81.4M95.5 73.1L95.5 78.2L97.8 78.2M97.8 78.2L105.6 78.2M97.8 81.4L105.6 81.4M105.6 78.2L113.4 78.2M105.6 81.4L113.4 81.4M144.6 78.2L139.1 78.2L139.1 86.6M144.6 81.4L142.3 81.4L142.3 86.6M150.1 73.1L150.1 81.4L144.6 81.4M146.9 73.1L146.9 78.2L144.6 78.2M170.3 73.1L170.3 86.6M173.5 73.1L173.5 86.6M199.2 78.2L193.7 78.2L193.7 86.6M199.2 81.4L196.9 81.4L196.9 86.6M199.2 78.2L207 78.2M199.2 81.4L207 81.4M207 78.2L214.8 78.2M207 81.4L214.8 81.4M230.4 78.2L235.9 78.2L235.9 86.6M230.4 81.4L232.7 81.4L232.7 86.6M261.6 78.2L256.1 78.2L256.1 86.6M261.6 81.4L259.3 81.4L259.3 86.6M261.6 78.2L269.4 78.2M261.6 81.4L269.4 81.4M269.4 78.2L277.2 78.2M269.4 81.4L277.2 81.4M277.2 78.2L285 78.2M277.2 81.4L285 81.4M285 78.2L292.8 78.2M285 81.4L292.8 81.4M298.3 73.1L298.3 81.4L292.8 81.4M295.1 73.1L295.1 78.2L292.8 78.2M324 78.2L318.5 78.2L318.5 86.6M324 81.4L321.7 81.4L321.7 86.6M324 78.2L331.8 78.2M324 81.4L331.8 81.4M331.8 78.2L339.6 78.2M331.8 81.4L339.6 81.4M339.6 78.2L347.4 78.2M339.6 81.4L347.4 81.4M363 78.2L368.5 78.2L368.5 86.6M363 81.4L365.3 81.4L365.3 86.6M388.7 73.1L388.7 86.6M391.9 73.1L391.9 86.6M451.1 73.1L451.1 86.6M454.3 73.1L454.3 86.6M458.9 73.1L458.9 81.4L464.4 81.4M462.1 73.1L462.1 78.2L464.4 78.2M464.4 78.2L472.2 78.2M464.4 81.4L472.2 81.4M472.2 78.2L480 78.2M472.2 81.4L480 81.4M503.4 78.2L497.9 78.2L497.9 86.6M503.4 81.4L501.1 81.4L501.1 86.6M503.4 78.2L511.2 78.2M503.4 81.4L511.2 81.4M511.2 78.2L519 78.2M511.2 81.4L519 81.4M524.5 73.1L524.5 81.4L519 81.4M521.3 73.1L521.3 78.2L519 78.2M550.2 78.2L544.7 78.2L544.7 86.6M550.2 81.4L547.9 81.4L547.9 86.6M550.2 78.2L558 78.2M550.2 81.4L558 81.4M558 78.2L565.8 78.2M558 81.4L565.8 81.4M565.8 78.2L573.6 78.2M565.8 81.4L573.6 81.4M573.6 78.2L581.4 78.2M573.6 81.4L581.4 81.4M586.9 73.1L586.9 81.4L581.4 81.4M583.7 73.1L583.7 78.2L581.4 78.2"/>
+      </g>
+      <g class="art b">
+        <rect x="105.6" y="86.6" width="23.4" height="14.1"/><rect x="152.4" y="86.6" width="15.6" height="14.1"/><rect x="175.8" y="86.6" width="46.8" height="14.1"/><rect x="238.2" y="86.6" width="15.6" height="14.1"/><rect x="300.6" y="86.6" width="15.6" height="14.1"/><rect x="347.4" y="86.6" width="15.6" height="14.1"/><rect x="370.8" y="86.6" width="15.6" height="14.1"/><rect x="433.2" y="86.6" width="15.6" height="14.1"/><rect x="480" y="86.6" width="15.6" height="14.1"/><rect x="526.8" y="86.6" width="39" height="14.1"/>
+        <path d="M136.8 91.8L131.3 91.8L131.3 100.1M136.8 94.9L134.5 94.9L134.5 100.1M142.3 86.6L142.3 94.9L136.8 94.9M139.1 86.6L139.1 91.8L136.8 91.8M170.3 86.6L170.3 100.1M173.5 86.6L173.5 100.1M230.4 91.8L224.9 91.8L224.9 100.1M230.4 94.9L228.1 94.9L228.1 100.1M235.9 86.6L235.9 94.9L230.4 94.9M232.7 86.6L232.7 91.8L230.4 91.8M256.1 86.6L256.1 100.1M259.3 86.6L259.3 100.1M318.5 86.6L318.5 100.1M321.7 86.6L321.7 100.1M365.3 86.6L365.3 100.1M368.5 86.6L368.5 100.1M388.7 86.6L388.7 100.1M391.9 86.6L391.9 100.1M451.1 86.6L451.1 100.1M454.3 86.6L454.3 100.1M497.9 86.6L497.9 100.1M501.1 86.6L501.1 100.1M565.8 91.8L571.3 91.8L571.3 100.1M565.8 94.9L568.1 94.9L568.1 100.1"/>
+      </g>
+      <g class="art b">
+        <rect x="97.8" y="100.1" width="23.4" height="14.1"/><rect x="152.4" y="100.1" width="15.6" height="14.1"/><rect x="175.8" y="100.1" width="15.6" height="14.1"/><rect x="214.8" y="100.1" width="15.6" height="14.1"/><rect x="238.2" y="100.1" width="15.6" height="14.1"/><rect x="300.6" y="100.1" width="15.6" height="14.1"/><rect x="347.4" y="100.1" width="15.6" height="14.1"/><rect x="370.8" y="100.1" width="15.6" height="14.1"/><rect x="433.2" y="100.1" width="15.6" height="14.1"/><rect x="480" y="100.1" width="15.6" height="14.1"/><rect x="526.8" y="100.1" width="15.6" height="14.1"/>
+        <path d="M129 105.2L123.5 105.2L123.5 113.6M129 108.4L126.7 108.4L126.7 113.6M134.5 100.1L134.5 108.4L129 108.4M131.3 100.1L131.3 105.2L129 105.2M170.3 100.1L170.3 113.6M173.5 100.1L173.5 113.6M199.2 105.2L193.7 105.2L193.7 113.6M199.2 108.4L196.9 108.4L196.9 113.6M199.2 105.2L207 105.2M199.2 108.4L207 108.4M207 105.2L214.8 105.2M207 108.4L214.8 108.4M230.4 105.2L235.9 105.2L235.9 113.6M230.4 108.4L232.7 108.4L232.7 113.6M256.1 100.1L256.1 113.6M259.3 100.1L259.3 113.6M318.5 100.1L318.5 113.6M321.7 100.1L321.7 113.6M365.3 100.1L365.3 113.6M368.5 100.1L368.5 113.6M388.7 100.1L388.7 113.6M391.9 100.1L391.9 113.6M451.1 100.1L451.1 113.6M454.3 100.1L454.3 113.6M497.9 100.1L497.9 113.6M501.1 100.1L501.1 113.6M550.2 105.2L544.7 105.2L544.7 113.6M550.2 108.4L547.9 108.4L547.9 113.6M550.2 105.2L558 105.2M550.2 108.4L558 108.4M558 105.2L565.8 105.2M558 108.4L565.8 108.4M571.3 100.1L571.3 108.4L565.8 108.4M568.1 100.1L568.1 105.2L565.8 105.2"/>
+      </g>
+      <g class="art m">
+        <rect x="90" y="113.6" width="54.6" height="14.1"/><rect x="152.4" y="113.6" width="15.6" height="14.1"/><rect x="175.8" y="113.6" width="15.6" height="14.1"/><rect x="214.8" y="113.6" width="15.6" height="14.1"/><rect x="246" y="113.6" width="46.8" height="14.1"/><rect x="308.4" y="113.6" width="46.8" height="14.1"/><rect x="370.8" y="113.6" width="54.6" height="14.1"/><rect x="433.2" y="113.6" width="15.6" height="14.1"/><rect x="480" y="113.6" width="15.6" height="14.1"/><rect x="526.8" y="113.6" width="54.6" height="14.1"/>
+        <path d="M144.6 118.8L150.1 118.8L150.1 127.1M144.6 121.9L146.9 121.9L146.9 127.1M170.3 113.6L170.3 127.1M173.5 113.6L173.5 127.1M193.7 113.6L193.7 127.1M196.9 113.6L196.9 127.1M232.7 113.6L232.7 127.1M235.9 113.6L235.9 127.1M240.5 113.6L240.5 121.9L246 121.9M243.7 113.6L243.7 118.8L246 118.8M292.8 118.8L298.3 118.8L298.3 127.1M292.8 121.9L295.1 121.9L295.1 127.1M302.9 113.6L302.9 121.9L308.4 121.9M306.1 113.6L306.1 118.8L308.4 118.8M363 118.8L357.5 118.8L357.5 127.1M363 121.9L360.7 121.9L360.7 127.1M368.5 113.6L368.5 121.9L363 121.9M365.3 113.6L365.3 118.8L363 118.8M425.4 118.8L430.9 118.8L430.9 127.1M425.4 121.9L427.7 121.9L427.7 127.1M451.1 113.6L451.1 127.1M454.3 113.6L454.3 127.1M497.9 113.6L497.9 127.1M501.1 113.6L501.1 127.1M581.4 118.8L586.9 118.8L586.9 127.1M581.4 121.9L583.7 121.9L583.7 127.1"/>
+      </g>
+      <g class="art m">
+        
+        <path d="M92.3 127.1L92.3 135.4L97.8 135.4M95.5 127.1L95.5 132.2L97.8 132.2M97.8 132.2L105.6 132.2M97.8 135.4L105.6 135.4M105.6 132.2L113.4 132.2M105.6 135.4L113.4 135.4M113.4 132.2L121.2 132.2M113.4 135.4L121.2 135.4M121.2 132.2L129 132.2M121.2 135.4L129 135.4M129 132.2L136.8 132.2M129 135.4L136.8 135.4M136.8 132.2L144.6 132.2M136.8 135.4L144.6 135.4M150.1 127.1L150.1 135.4L144.6 135.4M146.9 127.1L146.9 132.2L144.6 132.2M154.7 127.1L154.7 135.4L160.2 135.4M157.9 127.1L157.9 132.2L160.2 132.2M160.2 132.2L168 132.2M160.2 135.4L168 135.4M173.5 127.1L173.5 135.4L168 135.4M170.3 127.1L170.3 132.2L168 132.2M178.1 127.1L178.1 135.4L183.6 135.4M181.3 127.1L181.3 132.2L183.6 132.2M183.6 132.2L191.4 132.2M183.6 135.4L191.4 135.4M196.9 127.1L196.9 135.4L191.4 135.4M193.7 127.1L193.7 132.2L191.4 132.2M217.1 127.1L217.1 135.4L222.6 135.4M220.3 127.1L220.3 132.2L222.6 132.2M222.6 132.2L230.4 132.2M222.6 135.4L230.4 135.4M235.9 127.1L235.9 135.4L230.4 135.4M232.7 127.1L232.7 132.2L230.4 132.2M248.3 127.1L248.3 135.4L253.8 135.4M251.5 127.1L251.5 132.2L253.8 132.2M253.8 132.2L261.6 132.2M253.8 135.4L261.6 135.4M261.6 132.2L269.4 132.2M261.6 135.4L269.4 135.4M269.4 132.2L277.2 132.2M269.4 135.4L277.2 135.4M277.2 132.2L285 132.2M277.2 135.4L285 135.4M285 132.2L292.8 132.2M285 135.4L292.8 135.4M298.3 127.1L298.3 135.4L292.8 135.4M295.1 127.1L295.1 132.2L292.8 132.2M310.7 127.1L310.7 135.4L316.2 135.4M313.9 127.1L313.9 132.2L316.2 132.2M316.2 132.2L324 132.2M316.2 135.4L324 135.4M324 132.2L331.8 132.2M324 135.4L331.8 135.4M331.8 132.2L339.6 132.2M331.8 135.4L339.6 135.4M339.6 132.2L347.4 132.2M339.6 135.4L347.4 135.4M347.4 132.2L355.2 132.2M347.4 135.4L355.2 135.4M360.7 127.1L360.7 135.4L355.2 135.4M357.5 127.1L357.5 132.2L355.2 132.2M373.1 127.1L373.1 135.4L378.6 135.4M376.3 127.1L376.3 132.2L378.6 132.2M378.6 132.2L386.4 132.2M378.6 135.4L386.4 135.4M386.4 132.2L394.2 132.2M386.4 135.4L394.2 135.4M394.2 132.2L402 132.2M394.2 135.4L402 135.4M402 132.2L409.8 132.2M402 135.4L409.8 135.4M409.8 132.2L417.6 132.2M409.8 135.4L417.6 135.4M417.6 132.2L425.4 132.2M417.6 135.4L425.4 135.4M430.9 127.1L430.9 135.4L425.4 135.4M427.7 127.1L427.7 132.2L425.4 132.2M435.5 127.1L435.5 135.4L441 135.4M438.7 127.1L438.7 132.2L441 132.2M441 132.2L448.8 132.2M441 135.4L448.8 135.4M454.3 127.1L454.3 135.4L448.8 135.4M451.1 127.1L451.1 132.2L448.8 132.2M482.3 127.1L482.3 135.4L487.8 135.4M485.5 127.1L485.5 132.2L487.8 132.2M487.8 132.2L495.6 132.2M487.8 135.4L495.6 135.4M501.1 127.1L501.1 135.4L495.6 135.4M497.9 127.1L497.9 132.2L495.6 132.2M529.1 127.1L529.1 135.4L534.6 135.4M532.3 127.1L532.3 132.2L534.6 132.2M534.6 132.2L542.4 132.2M534.6 135.4L542.4 135.4M542.4 132.2L550.2 132.2M542.4 135.4L550.2 135.4M550.2 132.2L558 132.2M550.2 135.4L558 135.4M558 132.2L565.8 132.2M558 135.4L565.8 135.4M565.8 132.2L573.6 132.2M565.8 135.4L573.6 135.4M573.6 132.2L581.4 132.2M573.6 135.4L581.4 135.4M586.9 127.1L586.9 135.4L581.4 135.4M583.7 127.1L583.7 132.2L581.4 132.2"/>
+      </g>
+      <text y="155"><tspan x="90" textLength="514.8" class="d">-= Standalone Sigma Detection tool for EVTX/Auditd/Sysmon Linux =-</tspan></text>
+    </g>
+    <g class="o rules">
+      <text y="177"><tspan x="90" class="s">[</tspan><tspan x="97.8">+</tspan><tspan x="105.6" class="s">]</tspan><tspan x="121.2" textLength="31.2" class="c s">4515</tspan><tspan x="160.2" textLength="93.6">rules loaded</tspan></text>
+    </g>
+    <g class="o filter">
+      <text y="193"><tspan x="90" class="s">[</tspan><tspan x="97.8">+</tspan><tspan x="105.6" class="s">]</tspan><tspan x="121.2" textLength="163.8">Event filter enabled:</tspan><tspan x="292.8" textLength="15.6" class="c s">36</tspan><tspan x="316.2" textLength="70.2">channels,</tspan><tspan x="394.2" textLength="15.6" class="c s">34</tspan><tspan x="417.6" textLength="117">EventID-bounded</tspan><tspan x="542.4" class="s">(</tspan><tspan x="550.2" textLength="23.4" class="c s">216</tspan><tspan x="581.4" textLength="163.8">channel/eventID pairs</tspan><tspan x="745.2" class="s">)</tspan></text>
+    </g>
+    <g class="o detect">
+      <text y="209"><tspan x="90" class="s">[</tspan><tspan x="97.8">+</tspan><tspan x="105.6" class="s">]</tspan><tspan x="121.2" textLength="179.4">Auto-detected log type:</tspan><tspan x="308.4" textLength="93.6" class="c">windows_evtx</tspan><tspan x="409.8" class="s">(</tspan><tspan x="417.6" textLength="31.2" class="y">evtx</tspan><tspan x="448.8" class="s">)</tspan><tspan x="464.4" textLength="101.4">- confidence:</tspan><tspan x="573.6" textLength="31.2" class="g">high</tspan></text>
+    </g>
+    <g class="o events">
+      <text y="225"><tspan x="90" class="s">[</tspan><tspan x="97.8">+</tspan><tspan x="105.6" class="s">]</tspan><tspan x="121.2" textLength="179.4">Total events processed:</tspan><tspan x="308.4" class="c s">1</tspan><tspan x="324" class="s">(</tspan><tspan x="331.8" class="c d s">0</tspan><tspan x="347.4" textLength="202.8" class="d">filtered out by log source</tspan><tspan x="550.2" class="s">)</tspan></text>
+    </g>
+    <g class="o exec">
+      <text y="241"><tspan x="90" class="s">[</tspan><tspan x="97.8">+</tspan><tspan x="105.6" class="s">]</tspan><tspan x="121.2" textLength="163.8">Executing ruleset for</tspan><tspan x="292.8" textLength="163.8" class="c">sample_bitsadmin.evtx</tspan><tspan x="464.4">-</tspan><tspan x="480" textLength="31.2" class="c s">4515</tspan><tspan x="519" textLength="39">rules</tspan></text>
+    </g>
+    <g class="o table">
+      <text y="261"><tspan x="90" textLength="780" lengthAdjust="spacingAndGlyphs" class="d">┏━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━━━━━━┓</tspan></text>
+      <text y="277"><tspan x="90" class="d">┃</tspan><tspan x="129" textLength="62.4" class="s">Severity</tspan><tspan x="222.6" class="d">┃</tspan><tspan x="238.2" textLength="31.2" class="s">Rule</tspan><tspan x="534.6" class="d">┃</tspan><tspan x="604.8" textLength="54.6" class="s">Matches</tspan><tspan x="667.2" class="d">┃</tspan><tspan x="682.8" textLength="46.8" class="s">ATT&amp;CK</tspan><tspan x="862.2" class="d">┃</tspan></text>
+      <text y="293"><tspan x="90" textLength="780" lengthAdjust="spacingAndGlyphs" class="d">┡━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━━━━━━┩</tspan></text>
+      <rect class="by" x="105.6" y="298" width="109.2" height="15"/>
+      <text y="309"><tspan x="90" class="d">│</tspan><tspan x="136.8" textLength="46.8" class="k s">MEDIUM</tspan><tspan x="222.6" class="d">│</tspan><tspan x="238.2" textLength="280.8">File Download Via Bitsadmin - Sysmon</tspan><tspan x="534.6" class="d">│</tspan><tspan x="651.6" class="m">1</tspan><tspan x="667.2" class="d">│</tspan><tspan x="682.8" textLength="171.6" class="d">T1197, T1036.003, T11…</tspan><tspan x="862.2" class="d">│</tspan></text>
+      <text y="325"><tspan x="90" textLength="780" lengthAdjust="spacingAndGlyphs" class="d">└────────────────┴───────────────────────────────────────┴────────────────┴────────────────────────┘</tspan></text>
+    </g>
+    <g class="o summary">
+      <text y="345"><tspan x="90" textLength="15.6" lengthAdjust="spacingAndGlyphs" class="c">╭─</tspan><tspan x="105.6" textLength="327.6" lengthAdjust="spacingAndGlyphs" class="c">──────────────────────────────────────────</tspan><tspan x="441" class="c s">✨</tspan><tspan x="464.4" textLength="54.6" class="c s">Summary</tspan><tspan x="526.8" textLength="327.6" lengthAdjust="spacingAndGlyphs" class="c">──────────────────────────────────────────</tspan><tspan x="854.4" textLength="15.6" lengthAdjust="spacingAndGlyphs" class="c">─╮</tspan></text>
+      <text y="361"><tspan x="90" class="c">│</tspan><tspan x="129" class="d">⏱</tspan><tspan x="152.4" textLength="62.4" class="d">Duration</tspan><tspan x="285" textLength="31.2" class="y s">1.4s</tspan><tspan x="862.2" class="c">│</tspan></text>
+      <text y="377"><tspan x="90" class="c">│</tspan><tspan x="129" class="d">🎯</tspan><tspan x="152.4" textLength="78" class="d">Detections</tspan><tspan x="285" textLength="39" class="y s">1 MED</tspan><tspan x="862.2" class="c">│</tspan></text>
+      <rect class="by" x="285" y="382" width="31.2" height="15"/>
+      <text y="393"><tspan x="90" class="c">│</tspan><tspan x="129" class="d">📋</tspan><tspan x="152.4" textLength="62.4" class="d">Top Hits</tspan><tspan x="292.8" textLength="23.4" class="k s">MED</tspan><tspan x="324" textLength="280.8" class="s">File Download Via Bitsadmin - Sysmon</tspan><tspan x="612.6" textLength="23.4" class="d s">(1)</tspan><tspan x="862.2" class="c">│</tspan></text>
+      <text y="409"><tspan x="90" textLength="780" lengthAdjust="spacingAndGlyphs" class="c">╰──────────────────────────────────────────────────────────────────────────────────────────────────╯</tspan></text>
+    </g>
+    <g class="o output">
+      <text y="427"><tspan x="121.2" class="g s">→</tspan><tspan x="136.8" textLength="54.6">Output:</tspan><tspan x="199.2" textLength="156" class="c">detected_events.json</tspan></text>
+    </g>
+  </g>
+</svg>

