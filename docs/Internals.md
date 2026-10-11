@@ -473,7 +473,10 @@ environment. pySigma imports `jq` only for a transformation Zircolite never uses
 
 ### Pragmas
 
-Every database gets `page_size` `4096` and `threads` `min(8, cpu_count)`. The rest depend on
+Every database gets `page_size` `65536` and `threads` `min(8, cpu_count)`. Windows events
+are wide, and with 4 KiB pages many of them spilled into overflow chains: on the T001 corpus
+the largest page size took peak memory from 7,086 to 6,343 MiB and wall time down 1.4%. A
+run of hundreds of tiny files pays about a millisecond per file for it. The rest depend on
 where it lives:
 
 | Pragma | In memory | On disk |

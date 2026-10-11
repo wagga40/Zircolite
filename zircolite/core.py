@@ -442,7 +442,7 @@ class ZircoliteCore:
             common_pragmas = [
                 ('temp_store', 'FILE' if self._disk_working else 'MEMORY'),
                 ('mmap_size', '0' if self._disk_working else '268435456'),
-                ('page_size', '4096'),
+                ('page_size', '65536'),
                 ('threads', str(sqlite_threads)),
             ]
 
