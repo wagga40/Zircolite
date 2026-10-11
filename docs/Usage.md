@@ -148,6 +148,10 @@ with Python, which runs the same code. Install the toolchain first:
 - Reinstall after editing `zircolite/flatten_kernel.py`: a kernel built from an older copy
   is detected and ignored.
 
+Each ruleset's SQL analysis is cached in the user's cache directory, which saves about two
+seconds per run and per worker. `ZIRCOLITE_CACHE_DIR` moves it and `ZIRCOLITE_NO_CACHE=1`
+turns it off ([Internals](Internals.md#rule-execution)).
+
 ## Basic usage
 
 ```shell

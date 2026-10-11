@@ -1456,6 +1456,8 @@ def _main(memory_tracker, start_time) -> None:
         timestamp_format=args.timestamp_format,
         min_level=args.min_level,
     )
+    from zircolite import analysis_cache
+    analysis_cache.enable()
     try:
         if not is_quiet():
             with console.status("[bold cyan]Loading and converting rulesets...", spinner="dots"):

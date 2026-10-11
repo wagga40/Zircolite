@@ -240,6 +240,23 @@ def test_row_building_binds_missing_fields_as_null_and_merges_case_variants():
     assert _build_rows(collided, ("EventID",), frozenset(("EventID", "eventid")), False) == [(4688,), (1,)]
 
 
+def test_case_variant_batches_match_a_key_by_key_merge():
+    from zircolite.streaming import _build_rows
+
+    def reference(event, canonical):
+        merged = {}
+        for key, value in event.items():
+            if key.lower() not in merged or merged[key.lower()] is None:
+                merged[key.lower()] = value
+        return tuple(merged.get(name.lower()) for name in canonical)
+
+    rng = random.Random(4624)  # noqa: S311 -- reproducible test inputs
+    spellings = ["ProcessId", "ProcessID", "processid", "Image", "IMAGE", "User"]
+    batch = [{name: rng.choice([None, "x", 7]) for name in spellings if rng.random() < 0.4} for _ in range(500)]
+    canonical = ("ProcessId", "Image", "User")
+    assert _build_rows(batch, canonical, frozenset(spellings), False) == [reference(event, canonical) for event in batch]
+
+
 def test_cython_ingestion_matches_python_with_transforms(tmp_path):
     native("zircolite._flatten_native")
     events = [
@@ -420,6 +437,88 @@ def test_equality_under_negation_does_not_restrict_candidates():
         with closing(LiteralPrefilter(conn, [{"rule": [query]} for query in queries])) as prefilter:
             for query in queries:
                 assert Counter(conn.execute(prefilter.rewrite(query))) == Counter(conn.execute(query))
+
+
+def test_a_regexp_keeps_the_bounds_of_its_and_siblings():
+    import re as stdlib_re
+
+    with closing(sqlite3.connect(":memory:")) as conn:
+        conn.create_function("regexp", 2, lambda pattern, value: value is not None
+                             and stdlib_re.search(pattern, str(value)) is not None)
+        conn.execute("CREATE TABLE logs(row_id INTEGER PRIMARY KEY, image TEXT, cmd TEXT)")
+        conn.executemany("INSERT INTO logs(image, cmd) VALUES (?, ?)",
+                         [("c:\\powershell.exe", "-enc AAAA"), ("c:\\powershell.exe", "-nop"),
+                          ("c:\\cmd.exe", "-enc AAAA")] + [("c:\\calc.exe", None)] * 30)
+        bounded = "SELECT * FROM logs WHERE image LIKE '%powershell%' AND cmd REGEXP '-enc [A-Z]+'"
+        alone = "SELECT * FROM logs WHERE cmd REGEXP '-enc'"
+        unbounded = "SELECT * FROM logs WHERE image LIKE '%powershell%' OR cmd REGEXP '-enc'"
+        row_pattern = "SELECT * FROM logs WHERE image LIKE '%powershell%' AND cmd REGEXP image"
+        with closing(LiteralPrefilter(conn, [{"rule": [q]} for q in (bounded, alone, unbounded, row_pattern)])) as prefilter:
+            assert prefilter.rewrite(bounded) != bounded
+            for query in (bounded, alone, unbounded):
+                assert Counter(conn.execute(prefilter.rewrite(query))) == Counter(conn.execute(query))
+            # A pattern read from a row could fail on a row the candidates skip.
+            assert prefilter.rewrite(row_pattern) == row_pattern
+            # A literal pattern bounds itself: every match contains "-enc".
+            assert prefilter.rewrite(alone) != alone and prefilter.rewrite(unbounded) != unbounded
+
+
+def test_regex_literals_are_necessary_for_every_match():
+    import re as stdlib_re
+
+    import regex
+
+    from zircolite.prefilter import _ASCII_FOLD, _regex_expression
+
+    rng = random.Random(152)  # noqa: S311 -- reproducible test inputs
+    chars = ["a", "b", "c", "k", "s", "i", "K", "S", "I", "\u212a", "\u017f", "\u0130", "\u00e9", "\u00c9",
+             "$", ".", "/", " ", "-", "1", "(", "["]
+    pieces = ["\\d", "\\s", "\\w", "\\b", ".", "[ab]", "[^k]", "(?:ab|ks)", "(?:s)", "^", "$"]
+
+    def atom():
+        if rng.random() < 0.6:
+            return regex.escape(rng.choice(chars))
+        return rng.choice(pieces)
+
+    def branch():
+        out = ""
+        for _ in range(rng.randint(1, 8)):
+            out += atom()
+            if rng.random() < 0.3:
+                out += rng.choice(["*", "+", "?", "{2}", "{0,2}", "{1,}", "+?", "*+"])
+        return out
+
+    bounded = checked = 0
+    for _ in range(3000):
+        pattern = ("(?i)" if rng.random() < 0.4 else "") + "|".join(branch() for _ in range(rng.randint(1, 3)))
+        try:
+            stdlib_re.compile(pattern)
+            compiled = regex.compile(pattern)
+        except (stdlib_re.error, regex.error):
+            continue
+        expression = _regex_expression("c", pattern)
+        if expression is None:
+            continue
+        bounded += 1
+        leaves = [expression[1][1]] if expression[0] == "literal" else [leaf[1][1] for leaf in expression[1]]
+        for _ in range(120):
+            value = "".join(rng.choice([*chars, "ab", "ks", "SK"]) for _ in range(rng.randint(0, 14)))
+            if compiled.search(value):
+                checked += 1
+                folded = value.translate(_ASCII_FOLD)
+                assert any(literal in folded for literal in leaves), (pattern, value, leaves)
+    assert bounded > 300 and checked > 800
+
+
+def test_shipped_regex_patterns_bound_without_errors():
+    from zircolite.prefilter import _regex_expression
+
+    patterns = {p for path in (ROOT / "rules").glob("rules_*.json")
+                for rule in json.loads(path.read_text(encoding="utf-8"))
+                for query in rule.get("rule", []) if isinstance(query, str)
+                for p in re.findall(r"REGEXP '((?:[^']|'')*)'", query)}
+    bounded = [p for p in patterns if _regex_expression("c", p.replace("''", "'")) is not None]
+    assert len(patterns) > 100 and len(bounded) > len(patterns) // 3
 
 
 def test_a_plan_without_a_bound_on_this_table_is_never_compiled(monkeypatch):

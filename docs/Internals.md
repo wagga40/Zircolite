@@ -50,7 +50,7 @@ split parses. Split fields are written directly (aliases do not apply to them), 
 any field name, and merged only where the event has no field of that name in any case, so
 log content cannot overwrite a real field or `row_id`.
 
-**Typing.** Columns are added as fields appear, and events are inserted in batches. A
+**Typing.** Columns are added as fields appear, and events are inserted in batches of 250. A
 column takes its type from the first value it receives: `INTEGER`, `NUMERIC` for floats (so
 ranges compare numerically), or `TEXT`. Integers beyond SQLite's signed 64-bit range are
 stored as floats and may be rounded; the run warns once and names the fields.
@@ -100,6 +100,17 @@ flattener decides which value lands in the column.
 
 ## Rule execution
 
+**Analysis cache.** Normalising, planning and scanning the statements of a 4,500-rule
+ruleset takes about two seconds, and every process worker used to pay it again. The
+command line keeps the results in the user's cache directory (`~/Library/Caches/Zircolite`,
+`%LOCALAPPDATA%\Zircolite\Cache` or `$XDG_CACHE_HOME/zircolite`), one file per ruleset,
+keyed by the statements, the Python version and a hash of the analysing code (in a binary,
+the executable). The ruleset is loaded, and workers start, from that file in tens of
+milliseconds; a plan stays JSON until the filter first asks for it. The file is validated
+line by line, and anything it would not have written is recomputed rather than trusted.
+`ZIRCOLITE_CACHE_DIR` moves the directory and `ZIRCOLITE_NO_CACHE=1` turns it off; library
+callers never write one.
+
 **Census pruning.** Before the rules run, `execute_ruleset` reads the distinct
 `(Channel, EventID)` pairs present, through `idx_channel_eventid`. A rule is skipped when
 every statement is a plain `SELECT * FROM logs WHERE …` whose `sqlscan` bounds (the same
@@ -125,8 +136,14 @@ detections are identical with the filter on or off.
   eligible queries; `literal` forces it, `off` disables it.
 - Only plain `SELECT * FROM logs WHERE …` statements qualify. A pattern contributes its
   longest literal run of three characters or more, or one holding a non-ASCII character.
-  AND intersects candidates, OR unions them, NOT gives no bound. `REGEXP` queries take the
-  normal path.
+  AND intersects candidates, OR unions them, NOT gives no bound.
+- A `REGEXP` pattern must be a SQL literal, which the rule's regex check has compiled before
+  any row is read. Its bound is the longest literal run every match must contain, read by a
+  scanner that knows escapes, classes, groups, quantifiers and top-level alternation, and
+  gives up on anything else (`\p{…}`, POSIX classes, verbose mode, flags other than
+  `i`, `m`, `s`). Under `(?i)` runs break at `i`, `k`, `s` and non-ASCII characters, which
+  the `regex` module also matches to U+0130, U+212A, U+017F and other cased letters. A
+  pattern without such a run bounds nothing, and leaves its AND siblings' bounds in place.
 - Positive string equality contributes a necessary substring on columns with TEXT
   affinity and BINARY/NOCASE collation. This can bound an entire `LIKE … OR field='…'`
   condition. Numeric affinity and schemas with other collations keep equality unbounded;
@@ -326,11 +343,13 @@ All the logic lives in the `zircolite/` package. `zircolite.py` is a shim that c
 | `core.py` | `ZircoliteCore`: database management, indexes, rule execution, output |
 | `correlations.py` | Correlation plan checks, alert rows and diagnostics wording |
 | `prefilter.py` | Literal prefilter: candidate rows for a rule's `LIKE` literals |
+| `analysis_cache.py` | Rule SQL analysis kept on disk between runs (see [Rule execution](#rule-execution)) |
+| `event_filter.py` | `EventFilter`, the early per-channel event filter, apart from pySigma |
 | `performance.py` | Stage timers, per-file metrics and the `--performance-json` report |
 | `detector.py` | `LogTypeDetector`: format, log source and timestamp-field detection |
 | `processing.py` | Coordinates per-file, unified and parallel runs; aggregates results |
 | `utils.py` | Logging, `MemoryTracker`, compressed-input handling, mode heuristics |
-| `rules.py` | `RulesetHandler` (Sigma → Zircolite), `RulesUpdater`, `EventFilter` |
+| `rules.py` | `RulesetHandler` (Sigma → Zircolite), `RulesUpdater` |
 | `console.py` | Rich output: theme, detection tables, ATT&CK panels, hyperlinks, reports |
 | `config_loader.py` | Loads and validates YAML run configurations; generates the template |
 | `parallel.py` | `MemoryAwareParallelProcessor`: worker scaling and memory throttling |
@@ -459,7 +478,10 @@ environment. pySigma imports `jq` only for a transformation Zircolite never uses
 
 ### Pragmas
 
-Every database gets `page_size` `4096` and `threads` `min(8, cpu_count)`. The rest depend on
+Every database gets `page_size` `65536` and `threads` `min(8, cpu_count)`. Windows events
+are wide, and with 4 KiB pages many of them spilled into overflow chains: on the T001 corpus
+the largest page size took peak memory from 7,086 to 6,343 MiB and wall time down 1.4%. A
+run of hundreds of tiny files pays about a millisecond per file for it. The rest depend on
 where it lives:
 
 | Pragma | In memory | On disk |
@@ -514,11 +536,12 @@ SQLite prices rows by column count and starts abandoning selective indexes.
 
 Keyword rules from pySigma's SQLite backend search a `_sigma_fulltext` column holding the
 backend's `source-values-v1` text: every decoded scalar of the source event, dictionaries in
-key order, one value per line. `fulltext.source_values` builds it in
-`StreamingEventProcessor._flatten_event` before the event is flattened, and only when a
-loaded rule or correlation plan carries `fulltext` requirements. Every value is then held
-twice: on the 142 MiB T001 Sysmon log, one keyword rule beside `rules_windows_merged.json`
-took a sequential run from 8.2 to 10.1 seconds and its peak memory from 256 to 353 MiB.
+key order, one value per line. `source_values`, compiled with the flattening
+kernel, builds it in `StreamingEventProcessor._flatten_event` before the event is flattened,
+and only when a loaded rule or correlation plan carries `fulltext` requirements. Every value
+is then held twice: on the 142 MiB T001 Sysmon log, one keyword rule beside
+`rules_windows_merged.json` takes a sequential run from 3.8 to 5.0 seconds and its peak
+memory from 245 to 324 MiB.
 
 The text cannot be rebuilt from the flattened columns, so it is never invented:
 

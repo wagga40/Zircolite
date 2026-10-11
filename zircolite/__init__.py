@@ -11,6 +11,7 @@ Modules:
 - console: Rich output -- theme, detection tables, ATT&CK panels, reports
 - core: ZircoliteCore class for database and rule execution
 - detector: LogTypeDetector for format, log source and timestamp detection
+- event_filter: EventFilter, the early per-channel event filter
 - extractor: EvtxExtractor for log format conversion
 - formats: The input-format registry every format switch reads from
 - parallel: Memory-aware parallel file processing
@@ -28,9 +29,14 @@ Modules:
 re-exporting it would put it inside the package's own import graph, and mypy
 then resolves `from zircolite import console` to the submodule rather than to
 the Console object defined in it -- ten errors that describe nothing real.
+
+`rules` and `templates` load on first use: they bring in pySigma, requests and
+Jinja2, which a process worker unpickling its context never needs.
 """
 
+import importlib
 import logging
+from typing import TYPE_CHECKING, Any
 
 from .config import (
     ExtractorConfig,
@@ -75,6 +81,7 @@ from .detector import (
     DetectionResult,
     LogTypeDetector,
 )
+from .event_filter import EventFilter
 from .extractor import EvtxExtractor
 from .formats import (
     DEFAULT_INPUT_FORMAT,
@@ -105,9 +112,7 @@ from .processing import (
     process_single_file_worker,
     process_unified_streaming,
 )
-from .rules import EventFilter, RulesetHandler, RulesUpdater, UnknownPipelineError
 from .streaming import StreamingEventProcessor, StrictParseError
-from .templates import TemplateEngine
 from .utils import (
     MemoryTracker,
     analyze_files_and_recommend_mode,
@@ -122,6 +127,27 @@ from .utils import (
     quit_on_error,
     select_files,
 )
+
+if TYPE_CHECKING:
+    from .rules import RulesetHandler, RulesUpdater, UnknownPipelineError
+    from .templates import TemplateEngine
+
+_LAZY_EXPORTS = {
+    "RulesetHandler": ".rules",
+    "RulesUpdater": ".rules",
+    "UnknownPipelineError": ".rules",
+    "TemplateEngine": ".templates",
+}
+
+
+def __getattr__(name: str) -> Any:
+    module = _LAZY_EXPORTS.get(name)
+    if module is None:
+        raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+    value = getattr(importlib.import_module(module, __name__), name)
+    globals()[name] = value
+    return value
+
 
 # Configure NullHandler for library-safe logging
 # This prevents "No handler found" warnings when the package is used as a library

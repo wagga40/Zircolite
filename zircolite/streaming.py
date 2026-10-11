@@ -51,7 +51,7 @@ from .formats import (
     format_by_name,
     format_from_args,
 )
-from .fulltext import FIELD, ensure_provenance, source_values
+from .fulltext import FIELD, ensure_provenance
 from .jsonstream import iter_json_array
 from .shutdown import is_shutdown_requested
 from .spellings import record_spellings
@@ -619,13 +619,18 @@ def _build_rows(batch, all_columns, all_columns_frozen, uniform):
         # (first non-None wins) and bind against the canonical column.
         canonical_lower = tuple(col.lower() for col in all_columns)
         rows = []
+        lower = str.lower
         for event in batch:
-            merged: dict[str, Any] = {}
-            for k, v in event.items():
-                kl = k.lower()
-                if kl not in merged or merged[kl] is None:
-                    merged[kl] = v
-            rows.append(tuple(merged.get(cl) for cl in canonical_lower))
+            # The variants usually sit in different events: fold the keys in C
+            # and merge key by key only for an event holding two spellings.
+            merged: dict[str, Any] = dict(zip(map(lower, event), event.values(), strict=True))
+            if len(merged) != len(event):
+                merged = {}
+                for k, v in event.items():
+                    kl = k.lower()
+                    if kl not in merged or merged[kl] is None:
+                        merged[kl] = v
+            rows.append(tuple(map(merged.get, canonical_lower)))
         return rows
     if uniform and len(all_columns) > 1:
         # Every event shares the first event's columns (a stable source).
@@ -723,6 +728,7 @@ class StreamingEventProcessor:
         # Leaf keys whose schema bookkeeping is already done (skip repeat work)
         "_seen_leaf_keys",
         "_skipped_records",
+        "_source_values",
         # Field names that need alias/split/transform handling. Leaves whose
         # mapped or raw name is absent here take the ultra-fast leaf path.
         "_special_fields",
@@ -813,6 +819,7 @@ class StreamingEventProcessor:
         if proc.flatten_backend == "auto" and self.flattening_info["selected"] == "python":
             self.flattening_info["reason"] = _load_native_kernel()[1]
         self._flatten_impl = kernel.flatten_event
+        self._source_values = kernel.source_values
         self.archive_password = proc.archive_password
         self.strict_evtx = proc.strict_evtx
         self.evtx_threads = proc.evtx_threads
@@ -1475,7 +1482,7 @@ class StreamingEventProcessor:
     def _flatten_event(self, event_dict: dict, filename: str) -> dict | None:
         # Keyword search reads the source values, before mapping, exclusions
         # and transforms change them.
-        text = source_values(event_dict) if self.fulltext_capture else None
+        text = self._source_values(event_dict) if self.fulltext_capture else None
         _join_unnamed_event_data(event_dict)
         flat = self._flatten_impl(self, event_dict, filename)
         if flat is not None and text is not None:

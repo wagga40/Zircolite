@@ -5,6 +5,7 @@ passes the original WHERE clause. None denotes the universe of rows, so an
 unknown predicate cannot accidentally narrow a rule.
 """
 
+import re
 import sqlite3
 import sys
 from collections import OrderedDict, defaultdict
@@ -41,7 +42,7 @@ NO_ROWS = "SELECT 1 WHERE 0"
 _UNSUPPORTED_WORDS = frozenset((
     "SELECT", "FROM", "WHERE", "JOIN", "UNION", "INTERSECT", "EXCEPT", "ORDER",
     "GROUP", "HAVING", "LIMIT", "OFFSET", "WINDOW", "CASE", "WHEN", "THEN",
-    "ELSE", "END", "BETWEEN", "OVER", "FILTER", "REGEXP", "GLOB", "MATCH",
+    "ELSE", "END", "BETWEEN", "OVER", "FILTER", "GLOB", "MATCH",
     # Always keywords, even where a column carries the same name.
     "CURRENT_TIMESTAMP", "CURRENT_DATE", "CURRENT_TIME",
 ))
@@ -74,6 +75,172 @@ def _selective(run):
     # Short ASCII runs cost more to index than they eliminate. Any non-ASCII
     # character is rare in logs, and LIKE compares it exactly.
     return len(run) >= 3 or not run.isascii()
+
+
+# Two-character escapes that match something other than themselves. Any other
+# letter or digit after a backslash starts syntax not modelled here.
+_REGEX_CLASS_ESCAPES = frozenset("dDwWsSbBAZtnrfv")
+# Under IGNORECASE the regex module also matches these letters to U+0130,
+# U+212A and U+017F, which ASCII folding of the value would not find.
+_UNICODE_CASED = frozenset("iksIKS")
+_QUANTIFIER_BRACE = re.compile(r"\{(\d*)(?:,(\d*))?\}")
+
+
+class _Unbounded(Exception):
+    """The pattern uses syntax this reader does not model."""
+
+
+def _regex_runs(pattern, start, stop):
+    """Literal runs every match of ``pattern[start:stop]`` must contain, or raise."""
+    runs, run = [], []
+    i = start
+    last_literal = False
+    while i < stop:
+        char = pattern[i]
+        if char == "\\":
+            if i + 1 >= stop:
+                raise _Unbounded("trailing escape")
+            nxt = pattern[i + 1]
+            i += 2
+            if nxt.isascii() and not nxt.isalnum():
+                run.append(nxt)
+                last_literal = True
+                continue
+            if nxt not in _REGEX_CLASS_ESCAPES:
+                raise _Unbounded("escape")
+            runs.append("".join(run))
+            run, last_literal = [], False
+            continue
+        if char == "[":
+            j = i + 1
+            if j < stop and pattern[j] == "^":
+                j += 1
+            if j < stop and pattern[j] == "]":
+                j += 1
+            while j < stop and pattern[j] != "]":
+                if pattern[j] == "[":
+                    raise _Unbounded("nested or POSIX class")
+                j += 2 if pattern[j] == "\\" else 1
+            if j >= stop:
+                raise _Unbounded("unterminated class")
+            i = j + 1
+            runs.append("".join(run))
+            run, last_literal = [], False
+            continue
+        if char == "(":
+            depth, j = 1, i + 1
+            while j < stop and depth:
+                if pattern[j] == "\\":
+                    j += 2
+                    continue
+                if pattern[j] == "[":
+                    # A class may hold parentheses; skip it whole.
+                    k = j + 1
+                    if k < stop and pattern[k] == "^":
+                        k += 1
+                    if k < stop and pattern[k] == "]":
+                        k += 1
+                    while k < stop and pattern[k] != "]":
+                        k += 2 if pattern[k] == "\\" else 1
+                    j = k + 1
+                    continue
+                depth += {"(": 1, ")": -1}.get(pattern[j], 0)
+                j += 1
+            if depth:
+                raise _Unbounded("unbalanced group")
+            i = j
+            runs.append("".join(run))
+            run, last_literal = [], False
+            continue
+        if char in "*+?{":
+            minimum = 1
+            if char == "{":
+                match = _QUANTIFIER_BRACE.match(pattern, i, stop)
+                if match is None:
+                    raise _Unbounded("brace")
+                minimum = int(match.group(1) or 0)
+                i = match.end()
+            else:
+                minimum = 0 if char in "*?" else 1
+                i += 1
+            if i < stop and pattern[i] in "?+":
+                i += 1
+            if last_literal and run:
+                kept = run[:-1] if minimum == 0 else run
+                runs.append("".join(kept))
+                run = []
+            last_literal = False
+            continue
+        if char in ".^$":
+            runs.append("".join(run))
+            run, last_literal = [], False
+            i += 1
+            continue
+        if char in ")|":
+            raise _Unbounded("stray")
+        run.append(char)
+        last_literal = True
+        i += 1
+    runs.append("".join(run))
+    return runs
+
+
+def _regex_branches(pattern):
+    """Split ``pattern`` at its top-level alternations, as (start, stop) pairs."""
+    branches, depth, start, i = [], 0, 0, 0
+    in_class = False
+    while i < len(pattern):
+        char = pattern[i]
+        if char == "\\":
+            i += 2
+            continue
+        if in_class:
+            in_class = char != "]"
+        elif char == "[":
+            in_class = True
+            if pattern[i + 1:i + 2] == "^":
+                i += 1
+            if pattern[i + 1:i + 2] == "]":
+                i += 1
+        elif char == "(":
+            depth += 1
+        elif char == ")":
+            depth -= 1
+        elif char == "|" and depth == 0:
+            branches.append((start, i))
+            start = i + 1
+        i += 1
+    branches.append((start, len(pattern)))
+    return branches
+
+
+def _regex_expression(column, pattern):
+    """A necessary-literal bound for ``column REGEXP pattern``, or None.
+
+    Conservative by construction: only syntax read here can contribute, and a
+    branch without a literal of its own leaves the whole pattern unbounded.
+    """
+    if "\x00" in pattern or len(pattern) > 4096:
+        return None
+    caseless = False
+    for flags in re.findall(r"\(\?([a-zA-Z]+)[:)]", pattern):
+        if set(flags) - set("ims"):
+            return None
+        caseless = caseless or "i" in flags
+    try:
+        leaves = []
+        for start, stop in _regex_branches(pattern):
+            runs = _regex_runs(pattern, start, stop)
+            if caseless:
+                runs = [part for run in runs
+                        for part in re.split(r"[iksIKS]|[^\x00-\x7f]", run)]
+            best = max(runs, key=lambda candidate: (_selective(candidate), len(candidate)))
+            if not _selective(best):
+                return None
+            leaves.append(("literal", (column, best.translate(_ASCII_FOLD))))
+    except _Unbounded:
+        return None
+    return _combine("or", leaves)
 
 
 def _posting_budget(rows):
@@ -163,6 +330,8 @@ class _Reader:
             # Keep affinity-dependent predicates distinct in the shared syntax
             # cache. Only a per-database binding can turn them into literals.
             return ("equality", (atom[0][1].translate(_ASCII_FOLD), value.translate(_ASCII_FOLD)))
+        if atom[1] == ("word", "REGEXP") and atom[2][0] == "literal" and len(atom) == 3:
+            return _regex_expression(atom[0][1].translate(_ASCII_FOLD), atom[2][1])
         if atom[1] != ("word", "LIKE") or atom[2][0] != "literal":
             return None
         if len(atom[2][1].encode("utf-8")) > 4096:
@@ -225,6 +394,11 @@ def _parse_literal_plan(sql):
                 return None
             if kind == "punct" and value in (";", "?", ":", "@", "$", "."):
                 return None
+            # A REGEXP bounds nothing, but its AND siblings still can. Its pattern
+            # must be a literal: _uncompilable_regex checks those before the rule
+            # runs, so the function cannot raise on a row the candidates skip.
+            if (kind, value) == ("word", "REGEXP") and body[i + 1:i + 2] != [] and body[i + 1][0] != "literal":
+                return None
             # JSON operators can raise on rows the candidate set would skip.
             if (kind, value) == ("punct", "-") and body[i + 1:i + 2] == [("punct", ">")]:
                 return None
@@ -245,10 +419,65 @@ def _parse_literal_plan(sql):
         return None
 
 
-@lru_cache(maxsize=16384)
+# Plans depend on the SQL text alone, so every file and worker shares them.
+_PLANS: dict[str, "LiteralPlan | None"] = {}
+# Plans read back from the analysis cache, still as JSON: most rules of a run
+# never reach the filter, so they are decoded when first asked for.
+_PENDING_PLANS: dict[str, bytes] = {}
+
+
 def _plan_for(sql):
-    """Plans depend on the SQL text alone, so every file and worker shares them."""
-    return _parse_literal_plan(sql.strip())
+    try:
+        return _PLANS[sql]
+    except KeyError:
+        pass
+    raw = _PENDING_PLANS.pop(sql, None)
+    plan = None
+    if raw is not None:
+        try:
+            plan = plan_from_json(orjson.loads(raw), sql)
+        except (ValueError, TypeError, KeyError, IndexError):
+            raw = None
+    if raw is None:
+        plan = _parse_literal_plan(sql.strip())
+    _PLANS[sql] = plan
+    return plan
+
+
+def plan_to_json(plan: "LiteralPlan", text: str) -> list[Any]:
+    """``plan`` as JSON, its SQL omitted when it is ``text`` itself."""
+    return [None if plan.sql == text else plan.sql, plan.where_start,
+            _expression_to_json(plan.expression), plan.max_literal_bytes]
+
+
+def plan_from_json(data: Any, text: str) -> "LiteralPlan":
+    """The inverse of ``plan_to_json``, refusing anything it would not write."""
+    sql, where_start, expression, longest = data
+    sql = text if sql is None else sql
+    if not isinstance(sql, str) or type(where_start) is not int or type(longest) is not int:
+        raise ValueError("bad plan")
+    if not 0 <= where_start <= len(sql):
+        raise ValueError("bad plan offset")
+    return LiteralPlan(sql, where_start, _expression_from_json(expression), longest)
+
+
+def _expression_to_json(expression: Any) -> Any:
+    kind, value = expression
+    if kind in ("literal", "equality"):
+        return [kind, list(value)]
+    return [kind, [_expression_to_json(node) for node in value]]
+
+
+def _expression_from_json(data: Any) -> Any:
+    kind, value = data
+    if kind in ("literal", "equality"):
+        column, literal = value
+        if not isinstance(column, str) or not isinstance(literal, str):
+            raise ValueError("bad leaf")
+        return (kind, (sys.intern(column), literal))
+    if kind not in ("and", "or") or not isinstance(value, list) or len(value) < 2:
+        raise ValueError("bad expression")
+    return (kind, tuple(_expression_from_json(node) for node in value))
 
 
 def _leaves(expression):
@@ -355,7 +584,8 @@ def prepare_rules(queries):
 
 def clear_prepared_rules():
     prepare_rules.cache_clear()
-    _plan_for.cache_clear()
+    _PLANS.clear()
+    _PENDING_PLANS.clear()
 
 
 class LiteralPrefilter:
@@ -497,28 +727,38 @@ class LiteralPrefilter:
                         cache = caches.get(column)
                         if cache is None:
                             continue
+                        # Nearly every value repeats one seen before: read the
+                        # cache inline and call into it only on a miss.
+                        lookup, touch = cache.values.get, cache.values.move_to_end
+                        uncertain = self.uncertain[column].add
+                        postings = self.postings
+                        added = 0
                         for row_id, value in zip(row_ids, values, strict=True):
                             if value is None:
                                 continue
                             if not isinstance(value, str):
-                                self.uncertain[column].add(row_id)
-                                added = 1
-                            else:
+                                uncertain(row_id)
+                                added += 1
+                                continue
+                            hit = lookup(value)
+                            if hit is None:
                                 matched = cache.matches(value)
-                                for literal in matched:
-                                    self.postings[column, literal].add(row_id)
-                                added = len(matched)
-                            count += added
-                            column_counts[column] += added
-                            if count > max_postings:
-                                self.skipped_columns[column] = "literal posting budget exceeded"
-                                del automata[column]
-                                del caches[column]
-                                del self.uncertain[column]
-                                for literal in patterns[column]:
-                                    del self.postings[column, literal]
-                                count -= column_counts.pop(column)
-                                break
+                            else:
+                                touch(value)
+                                matched = hit[0]
+                            for literal in matched:
+                                postings[column, literal].add(row_id)
+                            added += len(matched)
+                        count += added
+                        column_counts[column] += added
+                        if count > max_postings:
+                            self.skipped_columns[column] = "literal posting budget exceeded"
+                            del automata[column]
+                            del caches[column]
+                            del self.uncertain[column]
+                            for literal in patterns[column]:
+                                del self.postings[column, literal]
+                            count -= column_counts.pop(column)
                     if not automata:
                         break
         # Plans with no remaining necessary bound take the ordinary SQLite path.

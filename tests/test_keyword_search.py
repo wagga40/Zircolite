@@ -424,3 +424,27 @@ def test_captured_insert_before_table_creation_returns_false(field_mappings_file
         ).fetchone() is None
     finally:
         core.close()
+
+
+def test_native_capture_matches_the_reference():
+    import random
+
+    from zircolite import flatten_kernel
+    from zircolite.streaming import _load_native_kernel
+
+    native, reason = _load_native_kernel()
+    if native is None:
+        pytest.skip(f"native kernel unavailable: {reason}")
+    rng = random.Random(3)  # noqa: S311 -- reproducible test inputs
+
+    def node(depth):
+        kind = rng.random()
+        if depth > 3 or kind < 0.5:
+            return rng.choice(["x", "Needle", "", True, False, None, 7, -2.5, 10**30, "é\nk"])
+        if kind < 0.75:
+            return [node(depth + 1) for _ in range(rng.randint(0, 3))]
+        return {rng.choice(["a", "B", "_SIGMA_FULLTEXT", "z", "é"]) + str(i): node(depth + 1) for i in range(rng.randint(0, 4))}
+
+    for _ in range(500):
+        event = node(0)
+        assert native.source_values(event) == flatten_kernel.source_values(event)

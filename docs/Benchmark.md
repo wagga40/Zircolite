@@ -184,3 +184,31 @@ pdm run python tools/throughput-benchmark.py \
 
 The Sysmon row uses `--events 'samples/T001-04062021/Microsoft-Windows-Sysmon%4Operational.evtx'`
 and `--modes sequential`.
+
+## Startup, regex bounds, page size and batch size (October 2026)
+
+The same method as above, for the changes that followed: commit `1ec809a` against
+`d1dd080`, each with its own compiled kernel, a warm rule-analysis cache, and the 4,515-rule
+`rules_windows_merged.json`. Times are medians of three interleaved passes, ranges in
+brackets; every pass reported the same detections.
+
+| Corpus | Before | After | Peak RSS before / after | Matches |
+|---|---:|---:|---:|---:|
+| T001, 8 files (13.3 GiB) | 66.02 s (65.80–70.05) | 53.71 s (51.67–54.69) | 7,075 / 5,574 MiB | 264,200 |
+| T001 Sysmon file (142 MiB), sequential | 9.09 s (9.07–9.13) | 4.55 s (4.53–4.58) | 255 / 273 MiB | 13,905 |
+| HANCITOR, 4 files (478 MiB) | 11.35 s (11.16–11.40) | 8.10 s (8.00–8.11) | 1,276 / 1,196 MiB | 162,362 |
+| SOC subset, 7 files (108 MiB) | 6.19 s (6.15–6.27) | 3.29 s (3.20–3.31) | 876 / 862 MiB | 1,201 |
+| EVTX-ATTACK-SAMPLES, 278 files, per file | 13.48 s (12.83–14.18) | 11.38 s (11.26–11.53) | 729 / 758 MiB | 1,562 |
+
+Where the time went, per stage (CPU seconds summed over workers):
+
+- **Setup.** About 2.4 s became 0.1 s in every worker, now that the rule analysis comes from
+  disk and workers no longer import pySigma.
+- **Detection.** T001 went from 47.7 to 18.9 s, mostly because regular expressions now bound
+  their own candidates.
+- **Ingestion.** T001 went from 105.1 to 91.2 s, from smaller insert batches and C-side
+  folding of field-name case.
+- **Memory.** On T001, 64 KiB pages and the smaller batches take 1.5 GiB off the peak. The
+  small rises on the Sysmon log and the attack samples are the loaded rule analysis.
+
+The per-change measurements are in the commit messages of that range.

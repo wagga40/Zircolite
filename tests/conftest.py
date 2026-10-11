@@ -17,6 +17,15 @@ import yaml
 # Add parent directory to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
+# The command line caches rule analysis in the user's cache directory; tests,
+# and the CLI subprocesses they start, use one of their own.
+if "ZIRCOLITE_CACHE_DIR" not in os.environ:
+    import atexit
+    import tempfile
+
+    os.environ["ZIRCOLITE_CACHE_DIR"] = tempfile.mkdtemp(prefix="zircolite-test-cache-")
+    atexit.register(shutil.rmtree, os.environ["ZIRCOLITE_CACHE_DIR"], ignore_errors=True)
+
 import contextlib
 
 from zircolite import (
