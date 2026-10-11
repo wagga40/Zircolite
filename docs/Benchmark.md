@@ -2,7 +2,7 @@
 
 Recorded results for Zircolite, [Hayabusa](https://github.com/Yamato-Security/hayabusa)
 and [Chainsaw](https://github.com/WithSecureLabs/chainsaw) on the same Windows logs and
-machine, recorded in September 2026. Each tool used its defaults and its own rules, so the
+machine, recorded in October 2026. Each tool used its defaults and its own rules, so the
 results compare those configurations. Tool and rule revisions are listed under
 [Setup](#setup).
 
@@ -10,7 +10,7 @@ results compare those configurations. Tool and rule revisions are listed under
 
 One corpus contains a single channel; the other contains eleven. Both used the same
 machine, tool versions and rule checkouts. Times are medians of three timed passes after
-one warm-up pass, with the range in brackets.
+one warm-up pass, with the range in brackets; peak memory is the median of the three.
 
 ### Single-channel corpus
 
@@ -18,64 +18,66 @@ one warm-up pass, with the range in brackets.
 
 | Tool | Rules loaded | Wall time | Peak memory | Detections | Rules matched |
 |------|-------------:|----------:|------------:|-----------:|--------------:|
-| Zircolite | 4,319 | **11.6 s** (11.6–14.4) | 1,207 MiB | 149,069 | 88 |
-| Hayabusa 4.1.0 | 4,658 (2,293 after its channel filter) | 24.7 s (23.3–25.1) | 900 MiB | 589,409 | 132 |
-| Chainsaw 2.16.0 | 3,524 (388 could not be loaded) | 113.5 s (92.8–125.5) | 346 MiB | 40,843 | 86 |
-
-Chainsaw's times varied the most between passes; an earlier series on the same machine gave it 100.0 s
-(97.3–102.9).
+| Zircolite 4.5.0 | 4,523 | **7.8 s** (7.7–7.8) | 1,199 MiB | 162,362 | 108 |
+| Hayabusa 4.1.0 | 4,674 (2,301 after its channel filter) | 23.4 s (23.4–24.0) | 913 MiB | 589,405 | 132 |
+| Chainsaw 2.16.5 | 3,535 (388 could not be loaded) | 53.7 s (53.4–55.2) | 365 MiB | 41,186 | 89 |
 
 ### Multi-channel corpus
 
-8 EVTX files — seven forwarded-event logs and one Sysmon log — 13.3 GB, 1,720,377 events
+8 EVTX files — seven forwarded-event logs and one Sysmon log — 13.3 GB, 1,720,383 events
 once Zircolite's event filter has run, spread over eleven channels. Security carries 74% of
 them, then Windows PowerShell (184,183), PowerShell/Operational (172,759), Sysmon (67,371),
 WMI-Activity (13,228), TaskScheduler (7,017) and five more.
 
 | Tool | Rules loaded | Wall time | Peak memory | Detections | Rules matched |
 |------|-------------:|----------:|------------:|-----------:|--------------:|
-| Zircolite | 4,319 | **104.8 s** (102.8–106.3) | 8,103 MiB | 257,678 | 104 |
-| Hayabusa 4.1.0 | 4,658 (4,409 after its channel filter) | 518.8 s (515.6–520.0) | 1,599 MiB | 704,533 | 181 |
-| Chainsaw 2.16.0 | 3,524 | 206.3 s (197.4–215.3) | 338 MiB | 6,871 | 67 |
+| Zircolite 4.5.0 | 4,523 | **49.3 s** (48.9–51.5) | 6,942 MiB | 264,200 | 124 |
+| Hayabusa 4.1.0 | 4,674 (4,425 after its channel filter) | 519.5 s (512.4–527.6) | 1,568 MiB | 703,915 | 181 |
+| Chainsaw 2.16.5 | 3,535 | 197.8 s (193.4–211.3) | 354 MiB | 12,295 | 80 |
+
+The September 2026 recording gave Zircolite 4.0.0 11.6 s and 104.8 s, with 4,319 rules; the
+[October sections](#text-equality-bounds-and-schema-preflight-october-2026) below measure
+the changes in between. Chainsaw ran 2.16.0 then, at 113.5 s and 206.3 s.
 
 ## Reading the numbers
 
 - **Channel mix affects rule pruning and runtime.**
-  Hayabusa reports it directly: its channel filter keeps 2,293 of its 4,658 rules on the
-  single-channel corpus and 4,409 on the multi-channel one. Per event it goes from 55 µs to
-  302 µs between the two, while Zircolite goes from 26 µs to 61 µs and Chainsaw drops from
-  251 µs to 120 µs. These rates use the reported corpus counts; the multi-channel count
+  Hayabusa reports it directly: its channel filter keeps 2,301 of its 4,674 rules on the
+  single-channel corpus and 4,425 on the multi-channel one. Per event it goes from 52 µs to
+  302 µs between the two, while Zircolite goes from 17 µs to 29 µs and Chainsaw stays near
+  115–119 µs. These rates use the reported corpus counts; the multi-channel count
   is after Zircolite's event filter, not a measurement of each tool's parsed event count.
 - **The rule sets differ.** Each tool loads its own conversion of SigmaHQ, and Hayabusa
   adds 181 rules of its own. Hayabusa's own informational and "Sysmon Alert" rules
   (`Net Conn (Sysmon Alert)`, `DLL Loaded (Sysmon Alert)`, …) match most Sysmon events,
-  and account for most of its lead in detections. Of its 589,409 hits on the single-channel
-  corpus, 46,783 are informational, 92,205 low and 439,194 medium. Chainsaw loads only the
+  and account for most of its lead in detections. Of its 589,405 hits on the single-channel
+  corpus, 46,783 are informational, 92,205 low and 439,190 medium. Chainsaw loads only the
   rules its mapping file can express, and it reports far fewer hits on the multi-channel
-  corpus than on the Sysmon-only one — 6,871 against 40,843 — despite the larger input.
+  corpus than on the Sysmon-only one — 12,295 against 41,186 — despite the larger input.
   Detection totals therefore do not measure relative detection quality.
 - **Rules matched are counted by Sigma rule id.** Zircolite's merged ruleset carries some
   rules once per log source, under one id.
-- **Memory covers the whole process tree.** Zircolite picks its
-  worker count from the files and the free RAM — four on the small corpus, five on the
-  large one — and the figure is their sum. Hayabusa and Chainsaw run as one process with
-  several threads. Zircolite used the most memory in these runs. `--no-parallel` disables
-  its file workers, reducing concurrent databases at the cost of parallelism.
-- **Zircolite's time includes Python start-up and loading 7.6 MB of rule SQL.** On very
-  small inputs that fixed cost dominates; it is about a second, so roughly a tenth of the
-  small-corpus figure and about 1% of the large one.
+- **Memory covers the whole process tree.** Zircolite picks its worker count from the
+  files and the free RAM — four on both corpora here — and the figure is their sum. Its
+  peak on the multi-channel corpus varied between passes, from 5,544 to 6,967 MiB.
+  Hayabusa and Chainsaw run as one process with several threads. Zircolite used the most
+  memory in these runs. `--no-parallel` disables its file workers, reducing concurrent
+  databases at the cost of parallelism.
+- **Zircolite's time includes Python start-up and loading 9.4 MB of rule SQL.** On very
+  small inputs that fixed cost dominates: a 68 KiB EVTX file takes 0.74 s, about a tenth of
+  the small-corpus figure and under 2% of the large one.
 
 ## Setup
 
-Apple M1 Max (10 cores, 64 GB), macOS, Python 3.14 and SQLite 3.53 for Zircolite, with the
-compiled flattening kernel. Logs and outputs on the same internal SSD. Nothing else
-running.
+Apple M1 Max (10 cores, 64 GB), macOS, Python 3.14.8 and SQLite 3.53.4 for Zircolite
+(commit `bb173f6`), with the compiled flattening kernel. Logs and outputs on the same
+internal SSD. Nothing else running.
 
 | Tool | Rules |
 |------|-------|
-| Zircolite | `rules/rules_windows_merged.json`, the default ruleset, as shipped in `rules/` (SigmaHQ, 2026-09-13) |
-| Hayabusa 4.1.0 | The `rules/` directory of its release package, hayabusa-rules `fffbdd1` (2026-09-03) |
-| Chainsaw 2.16.0 | SigmaHQ `2e8fd89` (2026-09-15): `rules`, `rules-emerging-threats` and `rules-threat-hunting`, plus Chainsaw's own `rules/`, through `mappings/sigma-event-logs-all.yml` |
+| Zircolite 4.5.0 | `rules/rules_windows_merged.json`, the default ruleset, as shipped in `rules/` (SigmaHQ `8a48134`, 2026-10-06) |
+| Hayabusa 4.1.0 | hayabusa-rules `04af3d2` (2026-10-08), pulled into the `rules/` directory of its release package |
+| Chainsaw 2.16.5 | SigmaHQ `8a48134` (2026-10-06): `rules`, `rules-emerging-threats` and `rules-threat-hunting`, plus Chainsaw's own `rules/`, through `mappings/sigma-event-logs-all.yml` |
 
 The commands, as `tools/tool-benchmark.py` runs them:
 
@@ -128,9 +130,9 @@ option.
 ## Zircolite configurations
 
 How Zircolite's own settings compare, with `rules/rules_windows_merged.json` (4,319 rules)
-on the same machine, Python 3.14 and SQLite 3.53, with the compiled kernel. These came from
-a separate session from the comparison above, hence 11.0 s here against 11.6 s there. Every
-configuration reported the same detections as `--rule-prefilter off`.
+on the same machine, Python 3.14 and SQLite 3.53, with the compiled kernel. These date from
+September 2026, before the October changes below, so they are slower than the comparison
+above. Every configuration reported the same detections as `--rule-prefilter off`.
 
 | Workload | Baseline (`c972b28`) | Measured |
 |---|---:|---:|
