@@ -127,11 +127,27 @@ detections are identical with the filter on or off.
   longest literal run of three characters or more, or one holding a non-ASCII character.
   AND intersects candidates, OR unions them, NOT gives no bound. `REGEXP` queries take the
   normal path.
+- Positive string equality contributes a necessary substring on columns with TEXT
+  affinity and BINARY/NOCASE collation. This can bound an entire `LIKE … OR field='…'`
+  condition. Numeric affinity and schemas with other collations keep equality unbounded;
+  the check runs against each database, independently of the shared SQL syntax cache.
+- Before planning, missing fields declared by census-admitted backend rules are added as
+  NULL columns, so SQLite can prepare conditions on absent fields before candidates are
+  built. It only happens where candidates will be built (past the `auto` thresholds), and
+  all at once or not at all: a failure rolls the schema back. CSV output and rulesets
+  containing correlations or legacy rules without field metadata keep the ordinary per-rule
+  repair, preserving headers and column-limit behaviour. Fields named `rowid`, `oid`,
+  `_rowid_`, `true` or `false` also keep it: a column of that name would change what the
+  bare name means in SQL.
 - Candidates reach SQLite as `logs.row_id IN (SELECT value FROM json_each('[...]'))` ahead
   of the original predicate. A rule with no candidates runs `SELECT 1 WHERE 0`. A candidate
   set holding at least half the rows the rule's bounds select is bypassed.
 - Construction is capped (one million pattern characters, sixteen row IDs per event); a
   column over budget becomes unbounded. It needs SQLite's JSON1, and stays off without it.
+- Each field automaton caches up to 512 recently searched values of at most 1,024 characters,
+  including values with no matches. An 8 MiB accounted byte budget is divided among the
+  indexed fields. Caches are discarded after index construction and never cross databases
+  or rulesets; candidates and output still include every distinct event.
 
 ## Processing modes
 

@@ -2302,6 +2302,116 @@ class TestRulesThatSilentlyMatchedNothing:
         assert normalised["EventID"] == 1
 
 
+class TestSchemaPreflight:
+    """Missing backend fields are added before candidate planning, never in a way
+    that changes what a rule matches with the prefilter on or off."""
+
+    CONFIG = str(Path(__file__).resolve().parent.parent / "config/config.yaml")
+
+    @staticmethod
+    def rule(query, **metadata):
+        return {"id": query, "title": query, "level": "high", "rule": [query], **metadata}
+
+    def core(self, mode, **options):
+        return closing(ZircoliteCore(self.CONFIG, ProcessingConfig(rule_prefilter=mode, **options)))
+
+    @staticmethod
+    def columns(core):
+        return {column[1] for column in core.db_connection.execute("PRAGMA table_info(logs)")}
+
+    def run(self, core, tmp_path):
+        core.execute_ruleset(str(tmp_path / "unused.json"), keep_results=True,
+                             disable_progress=True, show_table=False)
+        return [result["count"] for result in core.full_results], set(core.rules_in_error)
+
+    @pytest.mark.parametrize("mode", ["off", "literal"])
+    def test_missing_fields_are_available_before_candidate_planning(self, tmp_path, mode):
+        query = "SELECT * FROM logs WHERE text LIKE '%needle%' OR absent LIKE '%missing%'"
+        with self.core(mode, no_output=True) as core:
+            core.create_db("text TEXT, EventID INTEGER")
+            core.insert_data_to_db([{"text": "needle", "EventID": 1}] + [{"text": "quiet", "EventID": 1}] * 20)
+            core.ruleset = [self.rule(query, required_fields=["text", "absent", "ABSENT"]),
+                            self.rule("SELECT * FROM logs WHERE EventID=2 AND unused LIKE '%needle%'",
+                                      required_fields=["unused"])]
+            assert self.run(core, tmp_path) == ([1], set())
+            if mode == "literal":
+                assert core.metrics.data["prefilter"][0]["applied_queries"] == 1
+            assert core.full_results[0]["matches"][0]["text"] == "needle"
+            columns = {name.lower() for name in self.columns(core)}
+            assert "absent" in columns and "unused" not in columns
+
+    @pytest.mark.parametrize("failure", ["column_limit", "legacy_limit", "invalid_name"])
+    def test_preflight_failure_preserves_lazy_repair_order(self, tmp_path, failure):
+        outcomes = []
+        for mode in ("off", "literal"):
+            with self.core(mode, no_output=True) as core:
+                core.create_db("text TEXT, a TEXT, b TEXT, c TEXT, d TEXT, e TEXT")
+                core.insert_data_to_db([{"text": "needle"}] + [{"text": "quiet"}] * 20)
+                if failure in ("column_limit", "legacy_limit"):
+                    core.db_connection.setlimit(sqlite3.SQLITE_LIMIT_COLUMN, 8)
+                    last = "last" if failure == "column_limit" else "second"
+                else:
+                    last = "bad\x00name"
+                # Preflight must not take the first rule's remaining column slot.
+                first_metadata = {} if failure == "legacy_limit" else {"required_fields": ["legacy"]}
+                core.ruleset = [self.rule("SELECT * FROM logs WHERE legacy IS NULL", **first_metadata),
+                                self.rule("SELECT * FROM logs WHERE second IS NULL",
+                                          required_fields=["second", last])]
+                outcomes.append(self.run(core, tmp_path))
+        assert outcomes[0] == outcomes[1]
+        assert outcomes[0][0][0] == 21
+
+    def test_preflight_does_not_change_csv_headers(self, tmp_path):
+        outputs = []
+        for mode in ("off", "literal"):
+            output = tmp_path / f"{mode}.csv"
+            with self.core(mode, csv_mode=True) as core:
+                core.create_db("text TEXT")
+                core.insert_data_to_db([{"text": "needle"}])
+                core.ruleset = [self.rule("SELECT * FROM logs WHERE text='needle'", required_fields=["text"]),
+                                self.rule("SELECT * FROM logs WHERE Other1 IS NULL AND Other2 IS NULL",
+                                          required_fields=["Other1", "Other2"])]
+                core.execute_ruleset(str(output), disable_progress=True, show_table=False)
+            outputs.append(output.read_bytes())
+        assert outputs[0] == outputs[1]
+
+    @pytest.mark.parametrize("name,matches", [
+        ("rowid", [1]), ("oid", [1]), ("_rowid_", [1]), ("true", [1]), ("TRUE", [1]), ("false", []),
+    ])
+    def test_preflight_does_not_shadow_builtin_names(self, tmp_path, name, matches):
+        """A column named rowid or true would replace what the bare name means."""
+        for mode in ("off", "literal"):
+            with self.core(mode, no_output=True) as core:
+                core.create_db("text TEXT")
+                core.insert_data_to_db([{"text": "needle"}])
+                core.ruleset = [self.rule(f"SELECT * FROM logs WHERE {name}=1", required_fields=[name])]
+                assert self.run(core, tmp_path) == (matches, set())
+                assert name not in self.columns(core)
+
+    @pytest.mark.parametrize("mode", ["off", "literal"])
+    def test_names_differing_beyond_ascii_case_are_distinct_columns(self, tmp_path, mode):
+        """SQLite folds only ASCII in identifiers, so "É" and "é" both need a column."""
+        with self.core(mode, no_output=True) as core:
+            core.create_db("text TEXT")
+            core.insert_data_to_db([{"text": "needle"}] * 2)
+            core.ruleset = [self.rule('SELECT * FROM logs WHERE "É" IS NULL AND "é" IS NULL',
+                                      required_fields=["É", "é"])]
+            assert self.run(core, tmp_path) == ([2], set())
+            assert {"É", "é"} <= self.columns(core)
+
+    @pytest.mark.parametrize("rows,queries,widened", [(21, 32, False), (1000, 31, False), (1000, 32, True)])
+    def test_automatic_mode_preflights_only_where_candidates_are_built(self, tmp_path, rows, queries, widened):
+        # The extra field is only declared, as for a |fieldref: the SQL alone
+        # never asks for it, so only the preflight adds it.
+        with self.core("auto", no_output=True) as core:
+            core.create_db("text TEXT")
+            core.insert_data_to_db([{"text": "quiet"}] * rows)
+            core.ruleset = [self.rule(f"SELECT * FROM logs WHERE text LIKE '%needle{i}%'",
+                                      required_fields=["text", "extra"]) for i in range(queries)]
+            self.run(core, tmp_path)
+            assert ("extra" in self.columns(core)) is widened
+
+
 class TestQueryPlannerStatistics:
     """Widening the table for a rule must not cost the planner its bearings.
 

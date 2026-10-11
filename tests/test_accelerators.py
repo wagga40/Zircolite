@@ -23,7 +23,7 @@ import yaml
 
 from zircolite import ProcessingConfig, ZircoliteCore
 from zircolite.config_loader import ConfigLoader
-from zircolite.prefilter import LiteralPrefilter, _plan_for, _posting_budget
+from zircolite.prefilter import LiteralPrefilter, _plan_for, _posting_budget, _ValueMatches
 from zircolite.sqlscan import normalize_rule_sql, quote_sql_identifiers
 from zircolite.streaming import StreamingEventProcessor, select_flatten_kernel
 from zircolite.utils import open_maybe_compressed, safe_load, safe_load_all
@@ -363,7 +363,135 @@ def test_rules_with_an_explicit_nocase_equality_are_still_planned():
              "AND NOT COALESCE((other='x' COLLATE NOCASE), 0))")
 
     plan = _plan_for(query)
-    assert plan is not None and plan.expression == ("literal", ("text", "alpha"))
+    # The equality stays unbound here: whether it bounds candidates depends on
+    # each database's column affinity and collation.
+    assert plan is not None and plan.expression == (
+        "and", (("equality", ("channel", "security")), ("literal", ("text", "alpha"))))
+
+
+@pytest.mark.parametrize("declaration", ["TEXT", "VARCHAR(255) COLLATE NOCASE", "CLOB COLLATE BINARY"])
+def test_text_equality_completes_an_or_bound(declaration):
+    with closing(sqlite3.connect(":memory:")) as conn:
+        conn.execute(f'CREATE TABLE logs(row_id INTEGER PRIMARY KEY, text TEXT, "Original Name" {declaration})')
+        conn.executemany('INSERT INTO logs(text, "Original Name") VALUES (?, ?)',
+                         [("needle", None), ("quiet", "program.exe"), ("quiet", "PROGRAM.EXE"),
+                          ("quiet", "é.exe"), ("quiet", b"program.exe")] + [("quiet", None)] * 30)
+        queries = [f'SELECT * FROM logs WHERE text LIKE \'%needle%\' OR "Original Name" = {literal}'
+                   for literal in ("'program.exe'", "'program.exe' COLLATE NOCASE", "'é.exe'", "'a_b%exe'")]
+        with closing(LiteralPrefilter(conn, [{"rule": [query]} for query in queries])) as prefilter:
+            for query in queries:
+                normalized = normalize_rule_sql(query)
+                rewritten = prefilter.rewrite(normalized)
+                assert rewritten != normalized
+                assert Counter(conn.execute(rewritten)) == Counter(conn.execute(query))
+
+
+@pytest.mark.parametrize("declaration,value,literal", [
+    ("NUMERIC", "001", "'001'"), ("INTEGER", 1, "'001'"), ("FLOATING POINT", 1, "'001'"),
+    ("BLOB", "needle", "'needle'"), ("TEXT COLLATE RTRIM", "needle", "'needle '"),
+    ("TEXT COLLATE custom", "needle", "'NEEDLE!'"),
+    ("TEXT", "a", "'a'"), ("TEXT", "", "''"),
+])
+def test_equality_binding_is_rechecked_for_each_database(declaration, value, literal):
+    query = f"SELECT * FROM logs WHERE text={literal} OR other LIKE '%absent%'"
+    # Plans are cached by SQL text alone. Bind one against a TEXT column first,
+    # then change affinity or collation under the same SQL: a stale bound would
+    # lose true matches.
+    for schema in ("TEXT", declaration):
+        with closing(sqlite3.connect(":memory:")) as conn:
+            conn.create_collation("custom", lambda a, b: (a.lower().rstrip("!") > b.lower().rstrip("!")) -
+                                  (a.lower().rstrip("!") < b.lower().rstrip("!")))
+            conn.execute(f"CREATE TABLE logs(row_id INTEGER PRIMARY KEY, text {schema}, other TEXT)")
+            conn.executemany("INSERT INTO logs(text, other) VALUES (?, ?)", [(value, "quiet")] + [(None, "quiet")] * 20)
+            with closing(LiteralPrefilter(conn, [{"rule": [query]}])) as prefilter:
+                assert Counter(conn.execute(prefilter.rewrite(query))) == Counter(conn.execute(query))
+                if schema == declaration:
+                    assert prefilter.rewrite(query) == query
+
+
+def test_equality_under_negation_does_not_restrict_candidates():
+    with closing(sqlite3.connect(":memory:")) as conn:
+        conn.execute("CREATE TABLE logs(row_id INTEGER PRIMARY KEY, text TEXT, other TEXT)")
+        conn.executemany("INSERT INTO logs(text, other) VALUES (?, ?)",
+                         [("alpha", None), ("beta", "needle"), (None, "needle"), ("alpha", "quiet")])
+        queries = ["SELECT * FROM logs WHERE NOT COALESCE((text='alpha'), 0) AND other LIKE '%needle%'",
+                   "SELECT * FROM logs WHERE NOT (text='alpha') OR other LIKE '%absent%'",
+                   "SELECT * FROM logs WHERE text='alpha' OR other IS NULL"]
+        with closing(LiteralPrefilter(conn, [{"rule": [query]} for query in queries])) as prefilter:
+            for query in queries:
+                assert Counter(conn.execute(prefilter.rewrite(query))) == Counter(conn.execute(query))
+
+
+def test_a_plan_without_a_bound_on_this_table_is_never_compiled(monkeypatch):
+    compiled = []
+    monkeypatch.setattr(LiteralPrefilter, "_explain", lambda self, plan: compiled.append(plan.sql))
+    with closing(sqlite3.connect(":memory:")) as conn:
+        conn.execute("CREATE TABLE logs(row_id INTEGER PRIMARY KEY, n INTEGER, text TEXT)")
+        conn.executemany("INSERT INTO logs(n, text) VALUES (?, ?)", [(1, "needle")] * 4)
+        queries = ["SELECT * FROM logs WHERE absent LIKE '%needle%'", "SELECT * FROM logs WHERE n='needle'",
+                   "SELECT * FROM logs WHERE text LIKE '%needle%'"]
+        with closing(LiteralPrefilter(conn, [{"rule": [query]} for query in queries])):
+            assert compiled == [queries[2]]
+
+
+@pytest.mark.parametrize("budget,expected_scans", [(8 * 1024 * 1024, 4), (1024, 1600), (0, 1600)])
+def test_repeated_field_values_reuse_matches_including_empty_results(budget, expected_scans):
+    import ahocorasick
+
+    scans = []
+
+    class CountingAutomaton:
+        def __init__(self):
+            self.inner = ahocorasick.Automaton()
+
+        def add_word(self, *args):
+            self.inner.add_word(*args)
+
+        def make_automaton(self):
+            self.inner.make_automaton()
+
+        def iter(self, value):
+            scans.append(value)
+            return self.inner.iter(value)
+
+    with closing(sqlite3.connect(":memory:")) as conn:
+        conn.execute("CREATE TABLE logs(row_id INTEGER PRIMARY KEY, text TEXT, other TEXT)")
+        conn.executemany("INSERT INTO logs(text, other) VALUES (?, ?)",
+                         [("needle needle", "quiet"), ("quiet", "needle needle")] * 400)
+        queries = ["SELECT * FROM logs WHERE text LIKE '%needle%'",
+                   "SELECT * FROM logs WHERE other LIKE '%quiet%'"]
+        with closing(LiteralPrefilter(conn, [{"rule": [q]} for q in queries], automaton_factory=CountingAutomaton,
+                                      max_cache_bytes=budget)) as prefilter:
+            assert len(scans) == expected_scans
+            assert len(prefilter.postings["text", "needle"]) == 400
+            assert len(prefilter.postings["other", "quiet"]) == 400
+        # A new ruleset must not reuse the old automaton's cached matches.
+        query = "SELECT * FROM logs WHERE text LIKE '%quiet%'"
+        with closing(LiteralPrefilter(conn, [{"rule": [query]}])) as prefilter:
+            assert len(prefilter.postings["text", "quiet"]) == 400
+
+
+def test_value_cache_bounds_entries_bytes_and_input_length():
+    import ahocorasick
+
+    automaton = ahocorasick.Automaton()
+    automaton.add_word("needle", "needle")
+    automaton.make_automaton()
+    cache = _ValueMatches(automaton, 16_384)
+    for i in range(600):
+        assert cache.matches(f"{i}needle🦆") == ("needle",)
+        assert cache.bytes <= 16_384
+    assert len(cache.values) < 512  # Bytes, not just entry count, constrain retention.
+    assert "0needle🦆" not in cache.values
+    large = "needle" * 200
+    assert cache.matches(large) == ("needle",)
+    assert large not in cache.values
+    roomy = _ValueMatches(automaton, 8 * 1024 * 1024)
+    for i in range(512):
+        assert roomy.matches(str(i)) == ()
+    roomy.matches("0")  # A hit keeps a hot entry when the next insertion evicts.
+    roomy.matches("new")
+    assert len(roomy.values) == 512 and "0" in roomy.values and "1" not in roomy.values
 
 
 def test_only_the_negation_wrapper_is_exempt_from_the_function_call_rule():
