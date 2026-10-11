@@ -125,8 +125,9 @@ detections are identical with the filter on or off.
   eligible queries; `literal` forces it, `off` disables it.
 - Only plain `SELECT * FROM logs WHERE …` statements qualify. A pattern contributes its
   longest literal run of three characters or more, or one holding a non-ASCII character.
-  AND intersects candidates, OR unions them, NOT gives no bound. `REGEXP` queries take the
-  normal path.
+  AND intersects candidates, OR unions them, NOT gives no bound. A `REGEXP` bounds nothing
+  itself but leaves its AND siblings' bounds in place; its pattern must be a literal, which
+  the rule's regex check has compiled before any row is read.
 - Positive string equality contributes a necessary substring on columns with TEXT
   affinity and BINARY/NOCASE collation. This can bound an entire `LIKE … OR field='…'`
   condition. Numeric affinity and schemas with other collations keep equality unbounded;

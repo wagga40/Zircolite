@@ -422,6 +422,29 @@ def test_equality_under_negation_does_not_restrict_candidates():
                 assert Counter(conn.execute(prefilter.rewrite(query))) == Counter(conn.execute(query))
 
 
+def test_a_regexp_keeps_the_bounds_of_its_and_siblings():
+    import re as stdlib_re
+
+    with closing(sqlite3.connect(":memory:")) as conn:
+        conn.create_function("regexp", 2, lambda pattern, value: value is not None
+                             and stdlib_re.search(pattern, str(value)) is not None)
+        conn.execute("CREATE TABLE logs(row_id INTEGER PRIMARY KEY, image TEXT, cmd TEXT)")
+        conn.executemany("INSERT INTO logs(image, cmd) VALUES (?, ?)",
+                         [("c:\\powershell.exe", "-enc AAAA"), ("c:\\powershell.exe", "-nop"),
+                          ("c:\\cmd.exe", "-enc AAAA")] + [("c:\\calc.exe", None)] * 30)
+        bounded = "SELECT * FROM logs WHERE image LIKE '%powershell%' AND cmd REGEXP '-enc [A-Z]+'"
+        alone = "SELECT * FROM logs WHERE cmd REGEXP '-enc'"
+        unbounded = "SELECT * FROM logs WHERE image LIKE '%powershell%' OR cmd REGEXP '-enc'"
+        row_pattern = "SELECT * FROM logs WHERE image LIKE '%powershell%' AND cmd REGEXP image"
+        with closing(LiteralPrefilter(conn, [{"rule": [q]} for q in (bounded, alone, unbounded, row_pattern)])) as prefilter:
+            assert prefilter.rewrite(bounded) != bounded
+            for query in (bounded, alone, unbounded):
+                assert Counter(conn.execute(prefilter.rewrite(query))) == Counter(conn.execute(query))
+            # A pattern read from a row could fail on a row the candidates skip.
+            assert prefilter.rewrite(row_pattern) == row_pattern
+            assert prefilter.rewrite(alone) == alone and prefilter.rewrite(unbounded) == unbounded
+
+
 def test_a_plan_without_a_bound_on_this_table_is_never_compiled(monkeypatch):
     compiled = []
     monkeypatch.setattr(LiteralPrefilter, "_explain", lambda self, plan: compiled.append(plan.sql))

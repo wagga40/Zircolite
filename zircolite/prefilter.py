@@ -41,7 +41,7 @@ NO_ROWS = "SELECT 1 WHERE 0"
 _UNSUPPORTED_WORDS = frozenset((
     "SELECT", "FROM", "WHERE", "JOIN", "UNION", "INTERSECT", "EXCEPT", "ORDER",
     "GROUP", "HAVING", "LIMIT", "OFFSET", "WINDOW", "CASE", "WHEN", "THEN",
-    "ELSE", "END", "BETWEEN", "OVER", "FILTER", "REGEXP", "GLOB", "MATCH",
+    "ELSE", "END", "BETWEEN", "OVER", "FILTER", "GLOB", "MATCH",
     # Always keywords, even where a column carries the same name.
     "CURRENT_TIMESTAMP", "CURRENT_DATE", "CURRENT_TIME",
 ))
@@ -224,6 +224,11 @@ def _parse_literal_plan(sql):
             if (kind, value) == ("word", "COLLATE") and body[i + 1:i + 2] != [("word", "NOCASE")]:
                 return None
             if kind == "punct" and value in (";", "?", ":", "@", "$", "."):
+                return None
+            # A REGEXP bounds nothing, but its AND siblings still can. Its pattern
+            # must be a literal: _uncompilable_regex checks those before the rule
+            # runs, so the function cannot raise on a row the candidates skip.
+            if (kind, value) == ("word", "REGEXP") and body[i + 1:i + 2] != [] and body[i + 1][0] != "literal":
                 return None
             # JSON operators can raise on rows the candidate set would skip.
             if (kind, value) == ("punct", "-") and body[i + 1:i + 2] == [("punct", ">")]:
