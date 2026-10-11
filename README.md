@@ -127,9 +127,9 @@ Median wall time on a 10-core Apple M1 Max, each tool at its defaults with its o
 
 | Tool | 4 Sysmon EVTX, 478 MB | 8 EVTX over 11 channels, 13.3 GB |
 |------|----------------------:|---------------------------------:|
-| **Zircolite** | **11.6 s** | **104.8 s** |
-| Hayabusa 4.1.0 | 24.7 s | 518.8 s |
-| Chainsaw 2.16.0 | 113.5 s | 206.3 s |
+| **Zircolite** | **7.8 s** | **49.3 s** |
+| Hayabusa 4.1.0 | 23.4 s | 519.5 s |
+| Chainsaw 2.16.5 | 53.7 s | 197.8 s |
 
 Zircolite uses more memory than the others, through its parallel workers (`--no-parallel`
 turns them off), and the rule sets differ, so detection counts do not compare. See
