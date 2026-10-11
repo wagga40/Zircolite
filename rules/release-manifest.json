@@ -2,31 +2,67 @@
   "aggregates": {
     "windows_all": {
       "artifacts": {
-        "provenance/windows_all.json": "535a83574fd3f4213a9a6f3195c875a8ff5915177528c71e14101ac6b4bf5818",
-        "rules_windows_all.json": "eb0e305d91d167574929b343f0ac745e042283d0d37fbc3d4b79d20fe1f0e79b"
+        "provenance/windows_all.json": "90efaa4dc11f51d2126978b9a80d3df64da83de497ef6a49efc48fc9ddeb4e56",
+        "rules_windows_all.json": "c0ed870b88a7ec68570354e7a657318f7e225b3686f1ced0a3814ac95bf05caf"
       },
       "inputs": {
+        "dragon": {
+          "artifacts": {
+            "rules_dragon_windows_merged.json": "5586583b2d9ac986481cf07aa4c0d6fbb0c151c72f650e244e4f5ff527f6f316"
+          },
+          "license": "MIT",
+          "repository": "frknaykc/Dragon-ThreatResearchHQ",
+          "revision": "47b5f65e6e65dc9ce1a4829242cf61ff6e12eb98",
+          "status": "current"
+        },
+        "hatchepsoute": {
+          "artifacts": {
+            "rules_hatchepsoute_windows_merged.json": "ca719377043443facbd13dd709fc7285d0e286aa5ce08ce0d2c1e9f15f31d90d"
+          },
+          "license": "Apache-2.0",
+          "repository": "Hatchepsoute/sigma-rules",
+          "revision": "c04c81bb42b926677d596991a4a50a8afd2c91db",
+          "status": "current"
+        },
         "hayabusa": {
           "artifacts": {
-            "rules_hayabusa_windows_native.json": "8caa4ebca274a9814f63e373b1898932db843acd82f5dd444c2622452d054b1b"
+            "rules_hayabusa_windows_native.json": "fe3590c322965ebe1318f50c2685eadee5f1b9d17b60ffdacdb9f14d674a2aca"
           },
           "license": "DRL-1.1",
           "repository": "Yamato-Security/hayabusa-rules",
-          "revision": "3d81fa79779a5af3fde92e37c4b6a0f9a4347d73",
+          "revision": "04af3d207cae784183e0e5e82c1132ee866bbd67",
           "status": "current"
         },
         "joesecurity": {
           "artifacts": {
-            "rules_joesecurity_windows_merged.json": "27711e100617e3fa7749f7db8651a3a9c33a3648631aebd4a084974626bb6e27"
+            "rules_joesecurity_windows_merged.json": "ddae4034d06e16e3fd7ea7ae56de6317afd8c9644456eb8f40559ea5ea63a14a"
           },
           "license": "GPL-3.0",
           "repository": "joesecurity/sigma-rules",
           "revision": "cb91be06c8c95ce63aa9aa5006a7835678136a96",
           "status": "current"
         },
+        "loldrivers": {
+          "artifacts": {
+            "rules_loldrivers_windows_sysmon.json": "31beb81270e06e2c1102f8964304b911a77c58476f327a50b9438149c09c4b79"
+          },
+          "license": "Apache-2.0",
+          "repository": "magicsword-io/LOLDrivers",
+          "revision": "9e8d6b30000dc88951597de5bcb9556daa2a07c1",
+          "status": "current"
+        },
+        "lolrmm": {
+          "artifacts": {
+            "rules_lolrmm_windows_merged.json": "5a047a62215a2a038ee129db609e82c02b8380b3920397ca0bce49057d848c08"
+          },
+          "license": "Apache-2.0",
+          "repository": "magicsword-io/LOLRMM",
+          "revision": "befa4a7f822a858f81aee9ea754af6ec4c34b76f",
+          "status": "current"
+        },
         "mbabinski": {
           "artifacts": {
-            "rules_mbabinski_windows_merged.json": "69cfa14ca549b0a4b580545fcbfa236bc1c85f0fed7cd9f6ff5959c44804bdb5"
+            "rules_mbabinski_windows_merged.json": "13b7404fde4871468094edd652dfcad7a6708c97cdec9c1d57ca3f061b0c2687"
           },
           "license": "GPL-3.0",
           "repository": "mbabinski/Sigma-Rules",
@@ -35,74 +71,163 @@
         },
         "mdecrevoisier": {
           "artifacts": {
-            "rules_mdecrevoisier_windows_merged.json": "4631c7e09b406562bfcd681158727b7a13ea034fdc02fa7369f0769268e07032"
+            "rules_mdecrevoisier_windows_merged.json": "1fbceb54598827c0b12e727d5df662049b28c9179e7a329459c750db2fa2e248"
           },
           "license": "CC0-1.0",
           "repository": "mdecrevoisier/SIGMA-detection-rules",
           "revision": "d61408af8769c74c96296b7ccc92d4bc3abb15af",
           "status": "current"
         },
+        "reversinglabs": {
+          "artifacts": {
+            "rules_reversinglabs_windows_merged.json": "caa8aee3df8f1d52005e02df0a8df5e9fb8a9398c51e0b94cf65f58d30a20796"
+          },
+          "license": "MIT",
+          "repository": "reversinglabs/reversinglabs-siem-rules",
+          "revision": "23fc452b527f2f8e08c26c6dffc0f734e750a2be",
+          "status": "current"
+        },
         "sigmahq": {
           "artifacts": {
-            "rules_windows_merged.json": "8ea9b07f5fd35f37f6bf5e2430010ff8bb9160c2d072039a66a95ff29aabc9eb"
+            "rules_windows_merged.json": "f5ac571eaedfe0f40536b41f205375e91ac01dea6deffb7268fd1e18288ea128"
           },
           "license": "DRL-1.1",
           "repository": "SigmaHQ/sigma",
-          "revision": "ca24243a6e3f94353a54176f83c4c3b7f579224a",
+          "revision": "8a4813404ea3074890e0cda9272d4d1a8b2941d6",
           "status": "current"
         },
         "tsale": {
           "artifacts": {
-            "rules_tsale_windows_merged.json": "ac8b7e8fb77963785e399c0fc4ec462a3465ae7ad310fec03b8386b73dc369bf"
+            "rules_tsale_windows_merged.json": "f8208acb83742ba4ebb362030c2561d527f9b8c17ab7b714a84790452693ce09"
           },
           "license": "GPL-3.0",
           "repository": "tsale/Sigma_rules",
           "revision": "f5190e6b6c5ba9e6729845f13ac916590e90b0d8",
           "status": "current"
+        },
+        "tyrian": {
+          "artifacts": {
+            "rules_tyrian_windows_merged.json": "50904ccedfd490064fd0d8f514d07177d91e9c9056d112bbb26d2ddb90aafbf8"
+          },
+          "license": "MIT",
+          "repository": "zshguy/tyrian-detection-pack",
+          "revision": "b2cea417bcbd1316ac571b29a5dc459ce387a7c2",
+          "status": "current"
+        },
+        "wrg11": {
+          "artifacts": {
+            "rules_wrg11_windows_merged.json": "9c83cd5b9330596454aff9bcd3eefa3722b3ecc253da152216270e56e26d9135"
+          },
+          "license": "MIT",
+          "repository": "WRG-11/wrg-sigma-rules",
+          "revision": "5d739770d559c9882bb293bab353f777b8923377",
+          "status": "current"
         }
       },
       "rule_counts": {
-        "rules_windows_all.json": 5784
+        "rules_windows_all.json": 7344
       },
       "status": "current"
     }
   },
   "schema_version": 1,
   "sources": {
-    "hayabusa": {
+    "dragon": {
       "artifacts": {
-        "experimental/rules_hayabusa_windows_native_correlation.json": "55cdc4d35a775e8f8aa424d29b5ae15c4437a2661ec0b3840b2e7ca570029d6b",
-        "licenses/hayabusa.txt": "d5f4c36a0528e01cfdd9e4fc60879201d3af49b41c520200643d321fe53da5f9",
-        "provenance/hayabusa.json": "d1705d9ca8281b4a1042674fd22b7e7d76a68eb20a4f5ae5ec11ead707baa2d2",
-        "rules_hayabusa_windows_native.json": "8caa4ebca274a9814f63e373b1898932db843acd82f5dd444c2622452d054b1b"
+        "licenses/dragon.txt": "a7cbd353d10a0d200d812d2df0a2e62788fca4561c7fd31ca54ebec7382312d1",
+        "provenance/dragon.json": "f5f4fe580a1e1e64a2a32562502ff017258f90b2d9b305c24437cbaaae5ec57a",
+        "rules_dragon_linux.json": "9e1218e721869d5c57ecb7c719c028b441bdb3cb1be09a4c0bda4fa3280eeb68",
+        "rules_dragon_windows_generic.json": "1c82f096a3e250ae8d5f59d4cb475669e52a78d153243a4580cd9c48ca910e95",
+        "rules_dragon_windows_merged.json": "5586583b2d9ac986481cf07aa4c0d6fbb0c151c72f650e244e4f5ff527f6f316",
+        "rules_dragon_windows_sysmon.json": "24b6d20b0c1c4ba10fb437e849c44b2686033da3463dbf4eefe914b7a81dfac5"
       },
-      "last_success": "2026-10-03T06:37:51+00:00",
-      "license": "DRL-1.1",
-      "repository": "Yamato-Security/hayabusa-rules",
-      "revision": "3d81fa79779a5af3fde92e37c4b6a0f9a4347d73",
+      "last_success": "2026-10-11T09:15:51+00:00",
+      "license": "MIT",
+      "repository": "frknaykc/Dragon-ThreatResearchHQ",
+      "revision": "47b5f65e6e65dc9ce1a4829242cf61ff6e12eb98",
       "rule_counts": {
-        "experimental/rules_hayabusa_windows_native_correlation.json": 3,
-        "rules_hayabusa_windows_native.json": 186
+        "rules_dragon_linux.json": 5,
+        "rules_dragon_windows_generic.json": 29,
+        "rules_dragon_windows_merged.json": 61,
+        "rules_dragon_windows_sysmon.json": 32
       },
       "status": "current",
       "tools": {
-        "pysigma": "1.5.1",
-        "pysigma-backend-sqlite": "2.0.0",
+        "pysigma": "2.0.0",
+        "pysigma-backend-sqlite": "2.1.0",
         "pysigma-pipeline-sysmon": "2.0.0",
         "pysigma-pipeline-windows": "2.0.0",
-        "python": "3.14.7",
+        "python": "3.14.8",
+        "sqlite": "3.45.1"
+      }
+    },
+    "hatchepsoute": {
+      "artifacts": {
+        "experimental/rules_hatchepsoute_windows_merged_correlation.json": "8bf380517a6c96c2f6babc1fac917eca4fdac038fff44b786322537661ff2afa",
+        "experimental/rules_hatchepsoute_windows_sysmon_correlation.json": "8bf380517a6c96c2f6babc1fac917eca4fdac038fff44b786322537661ff2afa",
+        "licenses/hatchepsoute.txt": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30",
+        "provenance/hatchepsoute.json": "43a925751fe17c01137825f50c299d17969970074c977ea5312d4ca4fdd2c0b0",
+        "rules_hatchepsoute_linux.json": "7a00cddba392ef18fde74e7e5373852e060b678d0b3e58b3b36ebdecdf4a719f",
+        "rules_hatchepsoute_windows_generic.json": "46b0c9fe59a59318abcfe73d88e36b9cfb2c0cc1e208195b0fe434460403f392",
+        "rules_hatchepsoute_windows_merged.json": "ca719377043443facbd13dd709fc7285d0e286aa5ce08ce0d2c1e9f15f31d90d",
+        "rules_hatchepsoute_windows_sysmon.json": "0329a8f917a27ce7a55f78a5efaabcc57726f13b2fa5d389223a3b69e9e60ffb"
+      },
+      "last_success": "2026-10-11T09:15:54+00:00",
+      "license": "Apache-2.0",
+      "repository": "Hatchepsoute/sigma-rules",
+      "revision": "c04c81bb42b926677d596991a4a50a8afd2c91db",
+      "rule_counts": {
+        "experimental/rules_hatchepsoute_windows_merged_correlation.json": 1,
+        "experimental/rules_hatchepsoute_windows_sysmon_correlation.json": 1,
+        "rules_hatchepsoute_linux.json": 45,
+        "rules_hatchepsoute_windows_generic.json": 73,
+        "rules_hatchepsoute_windows_merged.json": 162,
+        "rules_hatchepsoute_windows_sysmon.json": 97
+      },
+      "status": "current",
+      "tools": {
+        "pysigma": "2.0.0",
+        "pysigma-backend-sqlite": "2.1.0",
+        "pysigma-pipeline-sysmon": "2.0.0",
+        "pysigma-pipeline-windows": "2.0.0",
+        "python": "3.14.8",
+        "sqlite": "3.45.1"
+      }
+    },
+    "hayabusa": {
+      "artifacts": {
+        "experimental/rules_hayabusa_windows_native_correlation.json": "0bcec5b3066f6ac4ef6d946d6dc89f8fe0e59ace5920669251afe562a594dc36",
+        "licenses/hayabusa.txt": "d5f4c36a0528e01cfdd9e4fc60879201d3af49b41c520200643d321fe53da5f9",
+        "provenance/hayabusa.json": "b766e4613e55c73e03c6db2fd703249f026a23356c49072d8de9d4257eb8fe78",
+        "rules_hayabusa_windows_native.json": "fe3590c322965ebe1318f50c2685eadee5f1b9d17b60ffdacdb9f14d674a2aca"
+      },
+      "last_success": "2026-10-11T09:16:01+00:00",
+      "license": "DRL-1.1",
+      "repository": "Yamato-Security/hayabusa-rules",
+      "revision": "04af3d207cae784183e0e5e82c1132ee866bbd67",
+      "rule_counts": {
+        "experimental/rules_hayabusa_windows_native_correlation.json": 3,
+        "rules_hayabusa_windows_native.json": 188
+      },
+      "status": "current",
+      "tools": {
+        "pysigma": "2.0.0",
+        "pysigma-backend-sqlite": "2.1.0",
+        "pysigma-pipeline-sysmon": "2.0.0",
+        "pysigma-pipeline-windows": "2.0.0",
+        "python": "3.14.8",
         "sqlite": "3.45.1"
       }
     },
     "joesecurity": {
       "artifacts": {
         "licenses/joesecurity.txt": "589ed823e9a84c56feb95ac58e7cf384626b9cbf4fda2a907bc36e103de1bad2",
-        "provenance/joesecurity.json": "8cee6d2dd693bdfc88f56dbccd24f4bb0ba792c87ef6a3fa22e87efc1053f4da",
-        "rules_joesecurity_windows_generic.json": "65cc8c8f468aa1e3c1702c7fcd4bb6fe80e9c6fff201aa1bba9a5ea9581db58d",
-        "rules_joesecurity_windows_merged.json": "27711e100617e3fa7749f7db8651a3a9c33a3648631aebd4a084974626bb6e27",
-        "rules_joesecurity_windows_sysmon.json": "c5660773600fd11f93e370c0b496537e50be673931b91301352f3760cdf5b5d2"
+        "provenance/joesecurity.json": "e1ea065c15ebf45014bb4c11958239bad324b0b57be85373bd57d7fb8b2c6099",
+        "rules_joesecurity_windows_generic.json": "92c43370247abdae11e540d6cbc59bcc0e4c91a3887577a43dd00cdf05b51e98",
+        "rules_joesecurity_windows_merged.json": "ddae4034d06e16e3fd7ea7ae56de6317afd8c9644456eb8f40559ea5ea63a14a",
+        "rules_joesecurity_windows_sysmon.json": "51ac96e37d27274bc2f8832cc93861ba65155627dca4496e39d4b3e1136f258b"
       },
-      "last_success": "2026-10-03T06:37:55+00:00",
+      "last_success": "2026-10-11T09:16:04+00:00",
       "license": "GPL-3.0",
       "repository": "joesecurity/sigma-rules",
       "revision": "cb91be06c8c95ce63aa9aa5006a7835678136a96",
@@ -113,26 +238,76 @@
       },
       "status": "current",
       "tools": {
-        "pysigma": "1.5.1",
-        "pysigma-backend-sqlite": "2.0.0",
+        "pysigma": "2.0.0",
+        "pysigma-backend-sqlite": "2.1.0",
         "pysigma-pipeline-sysmon": "2.0.0",
         "pysigma-pipeline-windows": "2.0.0",
-        "python": "3.14.7",
+        "python": "3.14.8",
+        "sqlite": "3.45.1"
+      }
+    },
+    "loldrivers": {
+      "artifacts": {
+        "licenses/loldrivers.txt": "c71d239df91726fc519c6eb72d318ec65820627232b2f796219e87dcf35d0ab4",
+        "provenance/loldrivers.json": "b063279ca7286c02f90580a8d3122963d1c2fbe8c651bb8a3190fe15814cdff6",
+        "rules_loldrivers_windows_sysmon.json": "31beb81270e06e2c1102f8964304b911a77c58476f327a50b9438149c09c4b79"
+      },
+      "last_success": "2026-10-11T09:16:06+00:00",
+      "license": "Apache-2.0",
+      "repository": "magicsword-io/LOLDrivers",
+      "revision": "9e8d6b30000dc88951597de5bcb9556daa2a07c1",
+      "rule_counts": {
+        "rules_loldrivers_windows_sysmon.json": 6
+      },
+      "status": "current",
+      "tools": {
+        "pysigma": "2.0.0",
+        "pysigma-backend-sqlite": "2.1.0",
+        "pysigma-pipeline-sysmon": "2.0.0",
+        "pysigma-pipeline-windows": "2.0.0",
+        "python": "3.14.8",
+        "sqlite": "3.45.1"
+      }
+    },
+    "lolrmm": {
+      "artifacts": {
+        "licenses/lolrmm.txt": "43070e2d4e532684de521b885f385d0841030efa2b1a20bafb76133a5e1379c1",
+        "provenance/lolrmm.json": "38c348fbe6ec625eb4204c7ace233f8c547cb8ead2266930d662f87189d6d3f2",
+        "rules_lolrmm_windows_generic.json": "ffb3c22f1932e8cb5665bbf6da39a6aa32f146fd0c393a98751b4511b59faead",
+        "rules_lolrmm_windows_merged.json": "5a047a62215a2a038ee129db609e82c02b8380b3920397ca0bce49057d848c08",
+        "rules_lolrmm_windows_sysmon.json": "db862ef8e8fdfe6507ac51a3fb3237eb3bed25a119fec2d88c07143e8f1a8ffa"
+      },
+      "last_success": "2026-10-11T09:16:12+00:00",
+      "license": "Apache-2.0",
+      "repository": "magicsword-io/LOLRMM",
+      "revision": "befa4a7f822a858f81aee9ea754af6ec4c34b76f",
+      "rule_counts": {
+        "rules_lolrmm_windows_generic.json": 371,
+        "rules_lolrmm_windows_merged.json": 1098,
+        "rules_lolrmm_windows_sysmon.json": 727
+      },
+      "status": "current",
+      "tools": {
+        "pysigma": "2.0.0",
+        "pysigma-backend-sqlite": "2.1.0",
+        "pysigma-pipeline-sysmon": "2.0.0",
+        "pysigma-pipeline-windows": "2.0.0",
+        "python": "3.14.8",
         "sqlite": "3.45.1"
       }
     },
     "mbabinski": {
       "artifacts": {
-        "experimental/rules_mbabinski_windows_generic_correlation.json": "d90475f5be7f2ebbcd166bd582efb51b43c1e38208fda513a06dc70762611784",
-        "experimental/rules_mbabinski_windows_merged_correlation.json": "9842abc8a1afee9e98bb9741ae21d40439c321c3be1e641abce1eabfbfc26942",
-        "experimental/rules_mbabinski_windows_sysmon_correlation.json": "d47f00c9c3815c8c9289be675d081fceb2559844cab45561d555c2cbfa2e99f8",
+        "experimental/rules_mbabinski_windows_generic_correlation.json": "9ec19d9f6ffd4ae0d16d9bf1acbfa3626e3573c20404d8857f60d6d022eb59f7",
+        "experimental/rules_mbabinski_windows_merged_correlation.json": "877780b58670c96d2ed6e2c7ba48e69d954653baa1f44860432e0f686e3480af",
+        "experimental/rules_mbabinski_windows_sysmon_correlation.json": "fca8e88f5b3e372fd5f80d50c9c66e607dac2f1e92a186073a272310903c0be5",
         "licenses/mbabinski.txt": "3972dc9744f6499f0f9b2dbf76696f2ae7ad8af9b23dde66d6af86c9dfb36986",
-        "provenance/mbabinski.json": "da77396c13e104efe8e3abebeda1874032ab824c4ded2df073a30c7e35904c14",
-        "rules_mbabinski_windows_generic.json": "a125ffe00513ea9f77fc2f615cab68bc8951338e8497380e3fdfcea151655742",
-        "rules_mbabinski_windows_merged.json": "69cfa14ca549b0a4b580545fcbfa236bc1c85f0fed7cd9f6ff5959c44804bdb5",
-        "rules_mbabinski_windows_sysmon.json": "7045678904f50c4ef2abbaf2320ee9784a7a556df8e0bcb3feeeb4698a239616"
+        "provenance/mbabinski.json": "677589bb695888479cdbc60632a215c405a221dde572d2d9be058cd1dd66e24c",
+        "rules_mbabinski_windows_generic.json": "4e9bc752109ba446a9085d070146586d9e66b1ca2b8b230a3bf1ae36a6ebdf19",
+        "rules_mbabinski_windows_merged.json": "13b7404fde4871468094edd652dfcad7a6708c97cdec9c1d57ca3f061b0c2687",
+        "rules_mbabinski_windows_sysmon.json": "30ec461957ad6633a339acc9e8655942f51b850e92d4715995a63b4d1f34e6b5"
       },
-      "last_success": "2026-10-03T06:37:56+00:00",
+      "last_success": "2026-10-11T09:16:18+00:00",
       "license": "GPL-3.0",
       "repository": "mbabinski/Sigma-Rules",
       "revision": "9dea7a5c15cfd422ec320e7fabd93f0c3634181d",
@@ -146,26 +321,26 @@
       },
       "status": "current",
       "tools": {
-        "pysigma": "1.5.1",
-        "pysigma-backend-sqlite": "2.0.0",
+        "pysigma": "2.0.0",
+        "pysigma-backend-sqlite": "2.1.0",
         "pysigma-pipeline-sysmon": "2.0.0",
         "pysigma-pipeline-windows": "2.0.0",
-        "python": "3.14.7",
+        "python": "3.14.8",
         "sqlite": "3.45.1"
       }
     },
     "mdecrevoisier": {
       "artifacts": {
-        "experimental/rules_mdecrevoisier_windows_generic_correlation.json": "62afb366eca7d8eaf1ea7d7ee4c002c3b9ae588f23881b4a52e2fed310d1b852",
-        "experimental/rules_mdecrevoisier_windows_merged_correlation.json": "62afb366eca7d8eaf1ea7d7ee4c002c3b9ae588f23881b4a52e2fed310d1b852",
-        "experimental/rules_mdecrevoisier_windows_sysmon_correlation.json": "62afb366eca7d8eaf1ea7d7ee4c002c3b9ae588f23881b4a52e2fed310d1b852",
+        "experimental/rules_mdecrevoisier_windows_generic_correlation.json": "1aa8a98e608d28eea3fe050943f18e5e1373903daf3f7c68985f25a419ae65cc",
+        "experimental/rules_mdecrevoisier_windows_merged_correlation.json": "1aa8a98e608d28eea3fe050943f18e5e1373903daf3f7c68985f25a419ae65cc",
+        "experimental/rules_mdecrevoisier_windows_sysmon_correlation.json": "1aa8a98e608d28eea3fe050943f18e5e1373903daf3f7c68985f25a419ae65cc",
         "licenses/mdecrevoisier.txt": "a2010f343487d3f7618affe54f789f5487602331c0a8d03f49e9a7c547cf0499",
-        "provenance/mdecrevoisier.json": "39480ab918dad140bfd451af429b10d8ab2b4d18019f8201ffea44933bf9f033",
-        "rules_mdecrevoisier_windows_generic.json": "46ac1bc7cdf0fd6aa09ccf6355de767c376db2b0f1610d07d08641b2f8989508",
-        "rules_mdecrevoisier_windows_merged.json": "4631c7e09b406562bfcd681158727b7a13ea034fdc02fa7369f0769268e07032",
-        "rules_mdecrevoisier_windows_sysmon.json": "a3e4249c3cde16817eed1aeb8d64a744d9c5c57733fa2eeb96ef57c2cdd6be1f"
+        "provenance/mdecrevoisier.json": "f238602475cbe0d4d1682246bef798f00522cc1759b23e759273e4365dfc4344",
+        "rules_mdecrevoisier_windows_generic.json": "931dc0230cfcd5477e6fddbf5ba39ca0f6d4e145a53d0b60fa9e1c09b98093c7",
+        "rules_mdecrevoisier_windows_merged.json": "1fbceb54598827c0b12e727d5df662049b28c9179e7a329459c750db2fa2e248",
+        "rules_mdecrevoisier_windows_sysmon.json": "cb8b7c9e77f502c8bb4e075f4c35054c86173539930bd1e50ddf7093bddf4b5c"
       },
-      "last_success": "2026-10-03T06:37:58+00:00",
+      "last_success": "2026-10-11T09:16:20+00:00",
       "license": "CC0-1.0",
       "repository": "mdecrevoisier/SIGMA-detection-rules",
       "revision": "d61408af8769c74c96296b7ccc92d4bc3abb15af",
@@ -179,52 +354,79 @@
       },
       "status": "current",
       "tools": {
-        "pysigma": "1.5.1",
-        "pysigma-backend-sqlite": "2.0.0",
+        "pysigma": "2.0.0",
+        "pysigma-backend-sqlite": "2.1.0",
         "pysigma-pipeline-sysmon": "2.0.0",
         "pysigma-pipeline-windows": "2.0.0",
-        "python": "3.14.7",
+        "python": "3.14.8",
+        "sqlite": "3.45.1"
+      }
+    },
+    "reversinglabs": {
+      "artifacts": {
+        "licenses/reversinglabs.txt": "fc712c1de7dab79a854640c74eda8a93dcbbf6d8eb8d9a54c4a5ccbc532dd0c1",
+        "provenance/reversinglabs.json": "bd850de27aa5fa8ea6883f41f1b030cca059ac990acce5c70dc72f45d001d0ee",
+        "rules_reversinglabs_windows_generic.json": "d264045fe3134a6c33f0fa87e178defe6b9741752b740c88b5e063886d8abc84",
+        "rules_reversinglabs_windows_merged.json": "caa8aee3df8f1d52005e02df0a8df5e9fb8a9398c51e0b94cf65f58d30a20796",
+        "rules_reversinglabs_windows_sysmon.json": "82758485c9b2621a38e8f24136084af5141349bf9be64a9f5497a1b4e701f224"
+      },
+      "last_success": "2026-10-11T09:16:24+00:00",
+      "license": "MIT",
+      "repository": "reversinglabs/reversinglabs-siem-rules",
+      "revision": "23fc452b527f2f8e08c26c6dffc0f734e750a2be",
+      "rule_counts": {
+        "rules_reversinglabs_windows_generic.json": 6,
+        "rules_reversinglabs_windows_merged.json": 12,
+        "rules_reversinglabs_windows_sysmon.json": 7
+      },
+      "status": "current",
+      "tools": {
+        "pysigma": "2.0.0",
+        "pysigma-backend-sqlite": "2.1.0",
+        "pysigma-pipeline-sysmon": "2.0.0",
+        "pysigma-pipeline-windows": "2.0.0",
+        "python": "3.14.8",
         "sqlite": "3.45.1"
       }
     },
     "sigmahq": {
       "artifacts": {
         "licenses/sigmahq.txt": "4213ed7e21d9435b0aa0aa7d11016e6ab3e4664fa71738ff507306fadce79597",
-        "provenance/sigmahq.json": "c4b8aacbc14ba43059b6b562bebe24b734b05a6ee434254cc7ac0ec7c0c1acf6",
-        "rules_linux.json": "7b2e5b1210c26b12d401b27f3d8be79d7ef8fa8abb0671db364794a9486aa2ac",
-        "rules_windows_generic.json": "048ce279a8fdd082a3d17cfc27c3816d177a4542be072e8381fe502ee4cbdf3c",
-        "rules_windows_merged.json": "8ea9b07f5fd35f37f6bf5e2430010ff8bb9160c2d072039a66a95ff29aabc9eb",
-        "rules_windows_sysmon.json": "745c8c3091541f4fd9e65cb569a4f6a18681f99e3f580efed4f5ac6c56e65a11"
+        "provenance/sigmahq.json": "d20c01a8dcae384ef4c5dfc2078fccac1353383aec8ed45a917b27e22d5daee8",
+        "rules_linux.json": "12116f7a53e71a5c677d788cd934466c3609cd353df2163411c2980dacb380e2",
+        "rules_windows_generic.json": "84cc750a37518a8d6481759177dac65d7856a1ab2121c0342cd7e6d41e2d7878",
+        "rules_windows_merged.json": "f5ac571eaedfe0f40536b41f205375e91ac01dea6deffb7268fd1e18288ea128",
+        "rules_windows_sysmon.json": "bc5bf843a3f74021ead6c22528d3d10e19e93e91f2203f304e89fae4e1268369"
       },
-      "last_success": "2026-10-03T06:37:15+00:00",
+      "last_success": "2026-10-11T09:15:15+00:00",
       "license": "DRL-1.1",
       "repository": "SigmaHQ/sigma",
-      "revision": "ca24243a6e3f94353a54176f83c4c3b7f579224a",
+      "revision": "8a4813404ea3074890e0cda9272d4d1a8b2941d6",
       "rule_counts": {
         "rules_linux.json": 216,
-        "rules_windows_generic.json": 2275,
-        "rules_windows_merged.json": 4515,
-        "rules_windows_sysmon.json": 2826
+        "rules_windows_generic.json": 2282,
+        "rules_windows_merged.json": 4523,
+        "rules_windows_sysmon.json": 2833
       },
       "status": "current",
       "tools": {
-        "pysigma": "1.5.1",
-        "pysigma-backend-sqlite": "2.0.0",
+        "pysigma": "2.0.0",
+        "pysigma-backend-sqlite": "2.1.0",
         "pysigma-pipeline-sysmon": "2.0.0",
         "pysigma-pipeline-windows": "2.0.0",
-        "python": "3.14.7",
+        "python": "3.14.8",
         "sqlite": "3.45.1"
       }
     },
     "tsale": {
       "artifacts": {
         "licenses/tsale.txt": "3972dc9744f6499f0f9b2dbf76696f2ae7ad8af9b23dde66d6af86c9dfb36986",
-        "provenance/tsale.json": "bdaa253d208e63c317afeeb06903b2a38bd462660077c2ba8aa55f544264c56d",
-        "rules_tsale_windows_generic.json": "750fbbd564b744c98c8b255e4fa7d59dc1ade578d1ed92e04d2c8bbe92d9b305",
-        "rules_tsale_windows_merged.json": "ac8b7e8fb77963785e399c0fc4ec462a3465ae7ad310fec03b8386b73dc369bf",
-        "rules_tsale_windows_sysmon.json": "1f7e5eea57a2a2967262cb25bfc6ded7ece1caad4755a47e9f99d2882184c7cb"
+        "provenance/tsale.json": "1efdb1429f7b91f096b3ea9a1bea0a49b53a471ec44f02f5e08dd3e3f1f94eb3",
+        "rules_tsale_windows_generic.json": "9bf3668d73fd3f791b5ed00dd2f10ae777d57d3c98a308824b97d2e2f5902aac",
+        "rules_tsale_windows_merged.json": "f8208acb83742ba4ebb362030c2561d527f9b8c17ab7b714a84790452693ce09",
+        "rules_tsale_windows_sysmon.json": "24efe16c0de2f2e41abc91ce331795d5e09ca52a653b9162798a49078439da50"
       },
-      "last_success": "2026-10-03T06:38:01+00:00",
+      "last_success": "2026-10-11T09:16:24+00:00",
       "license": "GPL-3.0",
       "repository": "tsale/Sigma_rules",
       "revision": "f5190e6b6c5ba9e6729845f13ac916590e90b0d8",
@@ -235,11 +437,75 @@
       },
       "status": "current",
       "tools": {
-        "pysigma": "1.5.1",
-        "pysigma-backend-sqlite": "2.0.0",
+        "pysigma": "2.0.0",
+        "pysigma-backend-sqlite": "2.1.0",
         "pysigma-pipeline-sysmon": "2.0.0",
         "pysigma-pipeline-windows": "2.0.0",
-        "python": "3.14.7",
+        "python": "3.14.8",
+        "sqlite": "3.45.1"
+      }
+    },
+    "tyrian": {
+      "artifacts": {
+        "licenses/tyrian.txt": "440e050b15431621a0768e2be8f5a0e9c4eaca730989b31e3e45130a0043b85a",
+        "provenance/tyrian.json": "c0fda4ef040c0a9f172648df6e87476ae083331b5595d1c49ba98d3ae8a8c695",
+        "rules_tyrian_linux.json": "40c40193fbea17f4266c4c8c9b4f2ed2a428dd2c10df0bd55bc2fdaa311acd8e",
+        "rules_tyrian_windows_generic.json": "f6fa9885cb47bf4549d2b5b7303363d540aeed9a39f6fae8e1cc7faeef2545f7",
+        "rules_tyrian_windows_merged.json": "50904ccedfd490064fd0d8f514d07177d91e9c9056d112bbb26d2ddb90aafbf8",
+        "rules_tyrian_windows_sysmon.json": "af51226231dd8413b422f8bdb313137b6a253c136d9f0f3dd649300eef8e0724"
+      },
+      "last_success": "2026-10-11T09:16:26+00:00",
+      "license": "MIT",
+      "repository": "zshguy/tyrian-detection-pack",
+      "revision": "b2cea417bcbd1316ac571b29a5dc459ce387a7c2",
+      "rule_counts": {
+        "rules_tyrian_linux.json": 15,
+        "rules_tyrian_windows_generic.json": 57,
+        "rules_tyrian_windows_merged.json": 61,
+        "rules_tyrian_windows_sysmon.json": 58
+      },
+      "status": "current",
+      "tools": {
+        "pysigma": "2.0.0",
+        "pysigma-backend-sqlite": "2.1.0",
+        "pysigma-pipeline-sysmon": "2.0.0",
+        "pysigma-pipeline-windows": "2.0.0",
+        "python": "3.14.8",
+        "sqlite": "3.45.1"
+      }
+    },
+    "wrg11": {
+      "artifacts": {
+        "experimental/rules_wrg11_windows_generic_correlation.json": "38ac94aa0515aacb2ff1057308ecc9662f7cc88be06770b764d5a5aeff2a2a6d",
+        "experimental/rules_wrg11_windows_merged_correlation.json": "3365f72bdb994ad745d408de1e88116222b31f37a4802b080326682418ea3f35",
+        "experimental/rules_wrg11_windows_sysmon_correlation.json": "86f3216ec6d582a72497c66c76e93d9ae8b8d1620bb3dcf22e92776f444c945c",
+        "licenses/wrg11.txt": "2af072a300d0c32eac227a1649b34221128b2396c2e44f7571716ff45154c5a1",
+        "provenance/wrg11.json": "f64920f4ca95f71dc40c4fe96405306adccc5e32e943b2612dfb99b2c3f07e4d",
+        "rules_wrg11_linux.json": "2df0b6de838e90b92a053fd99cdf9febc23ccd8db99f382c7b361cfa62fd83b9",
+        "rules_wrg11_windows_generic.json": "dfd6d4e2d62a896cf04fc997b02e61a7b1e8cf58987a2c763de1f4a17639783a",
+        "rules_wrg11_windows_merged.json": "9c83cd5b9330596454aff9bcd3eefa3722b3ecc253da152216270e56e26d9135",
+        "rules_wrg11_windows_sysmon.json": "c66d4f9083e69b48e57bb062ff8ec0cd90fd78a7c0e1b501fb18b9b02a7d77e0"
+      },
+      "last_success": "2026-10-11T09:16:28+00:00",
+      "license": "MIT",
+      "repository": "WRG-11/wrg-sigma-rules",
+      "revision": "5d739770d559c9882bb293bab353f777b8923377",
+      "rule_counts": {
+        "experimental/rules_wrg11_windows_generic_correlation.json": 12,
+        "experimental/rules_wrg11_windows_merged_correlation.json": 24,
+        "experimental/rules_wrg11_windows_sysmon_correlation.json": 18,
+        "rules_wrg11_linux.json": 18,
+        "rules_wrg11_windows_generic.json": 67,
+        "rules_wrg11_windows_merged.json": 150,
+        "rules_wrg11_windows_sysmon.json": 91
+      },
+      "status": "current",
+      "tools": {
+        "pysigma": "2.0.0",
+        "pysigma-backend-sqlite": "2.1.0",
+        "pysigma-pipeline-sysmon": "2.0.0",
+        "pysigma-pipeline-windows": "2.0.0",
+        "python": "3.14.8",
         "sqlite": "3.45.1"
       }
     }

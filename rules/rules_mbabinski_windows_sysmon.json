@@ -15,6 +15,7 @@
     "filename": "2024_RedCanary_ThreatDetectionReport/threat_yellow_cockatoo_ps_susp_dotnet_methods.yml",
     "id": "016c4ee2-ca34-474b-bfdc-43e017a29b47",
     "level": "low",
+    "license": "GPL-3.0",
     "logsource": {
       "category": "ps_script",
       "product": "windows",
@@ -30,6 +31,7 @@
       "SELECT * FROM logs WHERE (Channel='Microsoft-Windows-PowerShell/Operational' OR Channel='PowerShellCore/Operational') AND (EventID=4104 AND (ScriptBlockText LIKE '%aescryptoserviceprovider%' ESCAPE '\\' OR ScriptBlockText LIKE '%frombase64string%' ESCAPE '\\' OR ScriptBlockText LIKE '%user32.dll%' ESCAPE '\\'))"
     ],
     "schema_version": 2,
+    "source": "mbabinski",
     "source_table": "logs",
     "status": "experimental",
     "tags": [
@@ -55,6 +57,7 @@
     "filename": "2024_RedCanary_ThreatDetectionReport/technique_obfuscation_base64_encoding.yml",
     "id": "027b8851-d448-4a3e-8f2e-698433ba81e3",
     "level": "low",
+    "license": "GPL-3.0",
     "logsource": {
       "category": "process_creation",
       "product": "windows",
@@ -71,6 +74,7 @@
       "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=1 AND ((Image LIKE '%\\\\cmd.exe' ESCAPE '\\' OR Image LIKE '%\\\\powershell.exe' ESCAPE '\\') AND CommandLine LIKE '%base64%' ESCAPE '\\'))"
     ],
     "schema_version": 2,
+    "source": "mbabinski",
     "source_table": "logs",
     "status": "experimental",
     "tags": [
@@ -94,6 +98,7 @@
     "filename": "2023_RedCanary_ThreatDetectionReport/technique_wmi_susp_lineage.yml",
     "id": "03fd0ccb-e246-451d-9923-f0698642a0ec",
     "level": "low",
+    "license": "GPL-3.0",
     "logsource": {
       "category": "process_creation",
       "product": "windows",
@@ -110,6 +115,7 @@
       "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=1 AND (ParentImage LIKE '%\\\\wmiprvse.exe' ESCAPE '\\' AND (Image LIKE '%\\\\rundll32.exe' ESCAPE '\\' OR Image LIKE '%\\\\msbuild.exe' ESCAPE '\\' OR Image LIKE '%\\\\powershell.exe' ESCAPE '\\' OR Image LIKE '%\\\\cmd.exe' ESCAPE '\\' OR Image LIKE '%\\\\mshta.exe' ESCAPE '\\')))"
     ],
     "schema_version": 2,
+    "source": "mbabinski",
     "source_table": "logs",
     "status": "experimental",
     "tags": [
@@ -133,6 +139,7 @@
     "filename": "2024_RedCanary_ThreatDetectionReport/technique_rundll32_dllregister_server_function.yml",
     "id": "06c7a5b8-24dc-482c-8203-c674a7e05c56",
     "level": "low",
+    "license": "GPL-3.0",
     "logsource": {
       "category": "process_creation",
       "product": "windows",
@@ -149,6 +156,7 @@
       "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=1 AND (Image LIKE '%\\\\rundll32.exe' ESCAPE '\\' AND CommandLine LIKE '%DllRegisterServer%' ESCAPE '\\'))"
     ],
     "schema_version": 2,
+    "source": "mbabinski",
     "source_table": "logs",
     "status": "experimental",
     "tags": [
@@ -173,6 +181,7 @@
     "filename": "2024_RedCanary_ThreatDetectionReport/threat_yellow_cockatoo_ps_startup_folder_persistence.yml",
     "id": "07fce851-4cab-4ea5-880c-daf9d18bb180",
     "level": "low",
+    "license": "GPL-3.0",
     "logsource": {
       "category": "file_event",
       "product": "windows",
@@ -189,6 +198,7 @@
       "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=11 AND ((Image LIKE '%\\\\powershell.exe' ESCAPE '\\' AND TargetFilename LIKE '%.lnk' ESCAPE '\\') AND TargetFilename LIKE '%start menu\\\\programs\\\\startup%' ESCAPE '\\'))"
     ],
     "schema_version": 2,
+    "source": "mbabinski",
     "source_table": "logs",
     "status": "experimental",
     "tags": [
@@ -214,6 +224,7 @@
     "filename": "2023_RedCanary_ThreatDetectionReport/threat_socgholish_whoami_output_to_file.yml",
     "id": "0886986b-47e9-41e8-87c7-41b202503b24",
     "level": "low",
+    "license": "GPL-3.0",
     "logsource": {
       "category": "process_creation",
       "product": "windows",
@@ -231,6 +242,7 @@
       "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=1 AND (ParentImage LIKE '%\\\\wscript.exe' ESCAPE '\\' AND Image LIKE '%\\\\cmd.exe' ESCAPE '\\' AND (CommandLine LIKE '%whoami -all >%' ESCAPE '\\' OR CommandLine LIKE '%whoami /all >%' ESCAPE '\\' OR CommandLine LIKE '%whoami \u2013all >%' ESCAPE '\\' OR CommandLine LIKE '%whoami \u2014all >%' ESCAPE '\\' OR CommandLine LIKE '%whoami \u2015all >%' ESCAPE '\\')))"
     ],
     "schema_version": 2,
+    "source": "mbabinski",
     "source_table": "logs",
     "status": "experimental",
     "tags": [
@@ -254,6 +266,7 @@
     "filename": "2023_RedCanary_ThreatDetectionReport/technique_ingress_tool_transfer_bitsadmin_download.yml",
     "id": "0a6b7cc5-f28e-4795-94bf-48112d89664b",
     "level": "low",
+    "license": "GPL-3.0",
     "logsource": {
       "category": "process_creation",
       "product": "windows",
@@ -270,6 +283,7 @@
       "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=1 AND (Image LIKE '%\\\\bitsadmin.exe' ESCAPE '\\' AND (CommandLine LIKE '%download%' ESCAPE '\\' OR CommandLine LIKE '%transfer%' ESCAPE '\\')))"
     ],
     "schema_version": 2,
+    "source": "mbabinski",
     "source_table": "logs",
     "status": "experimental",
     "tags": [
@@ -293,6 +307,7 @@
     "filename": "2024_RedCanary_ThreatDetectionReport/technique_wmi_office_product_parent.yml",
     "id": "0c2d39af-2c24-42c4-9bab-35e30ad2aeb8",
     "level": "low",
+    "license": "GPL-3.0",
     "logsource": {
       "category": "process_creation",
       "product": "windows",
@@ -309,6 +324,7 @@
       "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=1 AND ((ParentImage LIKE '%\\\\winword.exe' ESCAPE '\\' OR ParentImage LIKE '%\\\\excel.exe' ESCAPE '\\') AND Image LIKE '%\\\\wmic.exe' ESCAPE '\\'))"
     ],
     "schema_version": 2,
+    "source": "mbabinski",
     "source_table": "logs",
     "status": "experimental",
     "tags": [
@@ -333,6 +349,7 @@
     "filename": "2024_RedCanary_ThreatDetectionReport/technique_installer_packages_psf_powershell_execution.yml",
     "id": "0c5dcf6c-9b6a-4411-a410-9b9b2caaef75",
     "level": "low",
+    "license": "GPL-3.0",
     "logsource": {
       "category": "process_creation",
       "product": "windows",
@@ -348,6 +365,7 @@
       "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=1 AND (Image LIKE '%\\\\AI\\_STUBS\\\\AiStubX64Elevated.exe' ESCAPE '\\' OR Image LIKE '%\\\\AI\\_STUBS\\\\AiStubX86Elevated.exe' ESCAPE '\\' OR Image LIKE '%\\\\AI\\_STUBS\\\\AiStubX64.exe' ESCAPE '\\' OR Image LIKE '%\\\\AI\\_STUBS\\\\AiStubX86.exe' ESCAPE '\\'))"
     ],
     "schema_version": 2,
+    "source": "mbabinski",
     "source_table": "logs",
     "status": "experimental",
     "tags": [
@@ -374,6 +392,7 @@
     "filename": "2023_RedCanary_ThreatDetectionReport/threat_cobalt_strike_beacon_implant.yml",
     "id": "0da8f33f-2703-4a4e-92f8-a6090a31b1e1",
     "level": "low",
+    "license": "GPL-3.0",
     "logsource": {
       "category": "pipe_created",
       "product": "windows",
@@ -389,6 +408,7 @@
       "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND ((EventID=17 OR EventID=18) AND (PipeName LIKE '\\\\msagent\\_%' ESCAPE '\\' OR PipeName LIKE '\\\\interprocess\\_%' ESCAPE '\\' OR PipeName LIKE '\\\\lsarpc\\_%' ESCAPE '\\' OR PipeName LIKE '\\\\samr\\_%' ESCAPE '\\' OR PipeName LIKE '\\\\netlogon\\_%' ESCAPE '\\' OR PipeName LIKE '\\\\wkssvc\\_%' ESCAPE '\\' OR PipeName LIKE '\\\\srvsvc\\_%' ESCAPE '\\' OR PipeName LIKE '\\\\mojo\\_%' ESCAPE '\\' OR PipeName LIKE '\\\\postex\\_%' ESCAPE '\\' OR PipeName LIKE '\\\\status\\_%' ESCAPE '\\' OR PipeName LIKE '\\\\msse-%' ESCAPE '\\'))"
     ],
     "schema_version": 2,
+    "source": "mbabinski",
     "source_table": "logs",
     "status": "experimental",
     "tags": [
@@ -411,6 +431,7 @@
     "filename": "2024_RedCanary_ThreatDetectionReport/technique_rundll32_no_cmdline.yml",
     "id": "0fab2f9d-0c38-4392-802f-09e4f4fef0ed",
     "level": "low",
+    "license": "GPL-3.0",
     "logsource": {
       "category": "network_connection",
       "product": "windows",
@@ -427,6 +448,7 @@
       "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=3 AND (ParentImage LIKE '%\\\\rundll32.exe' ESCAPE '\\' AND ParentCommandLine IS NULL))"
     ],
     "schema_version": 2,
+    "source": "mbabinski",
     "source_table": "logs",
     "status": "experimental",
     "tags": [
@@ -451,6 +473,7 @@
     "filename": "2024_RedCanary_ThreatDetectionReport/threat_impacket_secretsdump_execution.yml",
     "id": "1337f1b5-8524-40f7-bf08-b0dec46cb764",
     "level": "low",
+    "license": "GPL-3.0",
     "logsource": {
       "category": "file_event",
       "product": "windows",
@@ -467,6 +490,7 @@
       "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=11 AND (Image LIKE '%\\\\svchost.exe' ESCAPE '\\' AND TargetFilename REGEXP '^.*:\\\\windows\\\\system32\\\\\\w{8}\\.tmp$'))"
     ],
     "schema_version": 2,
+    "source": "mbabinski",
     "source_table": "logs",
     "status": "experimental",
     "tags": [
@@ -493,6 +517,7 @@
     "filename": "2023_RedCanary_ThreatDetectionReport/technique_smb_win_admin_shares_impacket_svc_via_registry.yml",
     "id": "187ac7b5-f919-446b-93b3-cde8a6506d64",
     "level": "low",
+    "license": "GPL-3.0",
     "logsource": {
       "category": "registry_add",
       "product": "windows",
@@ -510,6 +535,7 @@
       "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=12 AND (Image LIKE '%\\\\services.exe' ESCAPE '\\' AND EventType='CreateKey' AND TargetObject LIKE 'HKLM\\\\System\\\\CurrentControlSet\\\\Services\\\\BTOBTO' ESCAPE '\\'))"
     ],
     "schema_version": 2,
+    "source": "mbabinski",
     "source_table": "logs",
     "status": "experimental",
     "tags": [
@@ -533,6 +559,7 @@
     "filename": "2023_RedCanary_ThreatDetectionReport/threat_cobalt_strike_beacon_getsystem_cmd_pattern.yml",
     "id": "187c05df-debd-40ed-a59e-1163703bb1de",
     "level": "low",
+    "license": "GPL-3.0",
     "logsource": {
       "category": "process_creation",
       "product": "windows",
@@ -549,6 +576,7 @@
       "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=1 AND (Image LIKE '%\\\\cmd.exe' ESCAPE '\\' AND CommandLine REGEXP '^.*echo\\s+[0-9a-f]{11}\\s+\\>\\;?\\s+\\\\\\\\\\.\\\\pipe\\\\[0-9a-f]{6}.*$'))"
     ],
     "schema_version": 2,
+    "source": "mbabinski",
     "source_table": "logs",
     "status": "experimental",
     "tags": [
@@ -571,6 +599,7 @@
     "filename": "2023_RedCanary_ThreatDetectionReport/threat_gootloader_cscript_msdos_shortnames.yml",
     "id": "1aa0b866-727e-480f-9694-6bd694e2855d",
     "level": "low",
+    "license": "GPL-3.0",
     "logsource": {
       "category": "process_creation",
       "product": "windows",
@@ -587,6 +616,7 @@
       "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=1 AND (Image LIKE '%\\\\cscript.exe' ESCAPE '\\' AND CommandLine LIKE '%~1.js%' ESCAPE '\\'))"
     ],
     "schema_version": 2,
+    "source": "mbabinski",
     "source_table": "logs",
     "status": "experimental",
     "tags": [
@@ -610,6 +640,7 @@
     "filename": "2023_RedCanary_ThreatDetectionReport/technique_lsass_memory_susp_lineage.yml",
     "id": "1afbb031-8721-45b3-b2ed-856515f68558",
     "level": "low",
+    "license": "GPL-3.0",
     "logsource": {
       "category": "process_creation",
       "product": "windows",
@@ -626,6 +657,7 @@
       "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=1 AND ((ParentImage LIKE '%\\\\lsass.exe' ESCAPE '\\' AND (Image LIKE '%\\\\cmd.exe' ESCAPE '\\' OR Image LIKE '%\\\\powershell.exe' ESCAPE '\\' OR Image LIKE '%\\\\regsvr32.exe' ESCAPE '\\' OR Image LIKE '%\\\\mstsc.exe' ESCAPE '\\' OR Image LIKE '%\\\\dllhost.exe' ESCAPE '\\')) OR ((ParentImage LIKE '%\\\\explorer.exe' ESCAPE '\\' OR ParentImage LIKE '%\\\\cmd.exe' ESCAPE '\\' OR ParentImage LIKE '%\\\\lsass.exe' ESCAPE '\\') AND Image LIKE '%\\\\lsass.exe' ESCAPE '\\')))"
     ],
     "schema_version": 2,
+    "source": "mbabinski",
     "source_table": "logs",
     "status": "experimental",
     "tags": [
@@ -649,6 +681,7 @@
     "filename": "2024_RedCanary_ThreatDetectionReport/threat_raspberry_robin_cmdline_netconn_no_params.yml",
     "id": "1b49c5af-3774-4364-9c49-827fd59417cb",
     "level": "low",
+    "license": "GPL-3.0",
     "logsource": {
       "category": "network_connection",
       "product": "windows",
@@ -665,6 +698,7 @@
       "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=3 AND ((Image LIKE '%\\\\regsvr32.exe' ESCAPE '\\' OR Image LIKE '%\\\\rundll32.exe' ESCAPE '\\' OR Image LIKE '%\\\\dllhost.exe' ESCAPE '\\') AND CommandLine IS NULL))"
     ],
     "schema_version": 2,
+    "source": "mbabinski",
     "source_table": "logs",
     "status": "experimental",
     "tags": [
@@ -687,6 +721,7 @@
     "filename": "2024_RedCanary_ThreatDetectionReport/technique_wmi_shadowcopy_deletion.yml",
     "id": "1c078d3c-749c-40ce-9400-c2dbad604764",
     "level": "low",
+    "license": "GPL-3.0",
     "logsource": {
       "category": "process_creation",
       "product": "windows",
@@ -703,6 +738,7 @@
       "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=1 AND (Image LIKE '%\\\\wmic.exe' ESCAPE '\\' AND (CommandLine LIKE '%shadowcopy%' ESCAPE '\\' OR CommandLine LIKE '%delete%' ESCAPE '\\')))"
     ],
     "schema_version": 2,
+    "source": "mbabinski",
     "source_table": "logs",
     "status": "experimental",
     "tags": [
@@ -728,6 +764,7 @@
     "filename": "2023_Impacket/atexec/win_file_creation_impacket_atexec.yml",
     "id": "22514cf3-83dd-4949-931e-69a6d6abe154",
     "level": "low",
+    "license": "GPL-3.0",
     "logsource": {
       "category": "file_event",
       "product": "windows",
@@ -744,6 +781,7 @@
       "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=11 AND (Image LIKE '%\\\\cmd.exe' ESCAPE '\\' AND TargetFilename REGEXP '^C:\\\\Windows\\\\Temp\\\\[A-Za-z]{8}\\.tmp$'))"
     ],
     "schema_version": 2,
+    "source": "mbabinski",
     "source_table": "logs",
     "status": "experimental",
     "tags": [
@@ -769,6 +807,7 @@
     "filename": "2023_RedCanary_ThreatDetectionReport/technique_rename_sys_utils_unusual_cmdlines.yml",
     "id": "23aafdd3-8476-49a0-8377-54d26bf7847f",
     "level": "low",
+    "license": "GPL-3.0",
     "logsource": {
       "category": "process_creation",
       "product": "windows",
@@ -785,6 +824,7 @@
       "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=1 AND ((CommandLine LIKE '%iex%' ESCAPE '\\' OR CommandLine LIKE '%invoke-expression%' ESCAPE '\\') AND (NOT COALESCE((Image LIKE '%\\\\powershell.exe' ESCAPE '\\'), 0))))"
     ],
     "schema_version": 2,
+    "source": "mbabinski",
     "source_table": "logs",
     "status": "experimental",
     "tags": [
@@ -808,6 +848,7 @@
     "filename": "2023_RedCanary_ThreatDetectionReport/threat_impacket_wmiexec_execution.yml",
     "id": "26d79902-98ac-43f8-b669-99486e2b5126",
     "level": "low",
+    "license": "GPL-3.0",
     "logsource": {
       "category": "process_creation",
       "product": "windows",
@@ -825,6 +866,7 @@
       "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=1 AND (ParentImage LIKE '%\\\\wmiprvse.exe' ESCAPE '\\' AND Image LIKE '%\\\\cmd.exe' ESCAPE '\\' AND CommandLine REGEXP '(?i)cmd.exe \\/Q \\/c .*\\\\\\\\127.0.0.1\\\\ADMIN\\$\\\\__[0-9]{1,10}\\.[0-9]{1,10} 2>&1'))"
     ],
     "schema_version": 2,
+    "source": "mbabinski",
     "source_table": "logs",
     "status": "experimental",
     "tags": [
@@ -847,6 +889,7 @@
     "filename": "2024_RedCanary_ThreatDetectionReport/threat_impacket_wmiexec_execution.yml",
     "id": "2968dbf6-77ee-4932-b42b-b453d3ac8915",
     "level": "low",
+    "license": "GPL-3.0",
     "logsource": {
       "category": "process_creation",
       "product": "windows",
@@ -864,6 +907,7 @@
       "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=1 AND (ParentImage LIKE '%\\\\wmiprvse.exe' ESCAPE '\\' AND Image LIKE '%\\\\cmd.exe' ESCAPE '\\' AND (CommandLine LIKE '%cmd.exe /Q /c %' ESCAPE '\\' OR CommandLine LIKE '% 1> \\\\%' ESCAPE '\\' OR CommandLine LIKE '% 2>&1%' ESCAPE '\\')))"
     ],
     "schema_version": 2,
+    "source": "mbabinski",
     "source_table": "logs",
     "status": "experimental",
     "tags": [
@@ -891,6 +935,7 @@
     "filename": "2023_RedCanary_ThreatDetectionReport/technique_rundll32_no_cmdline.yml",
     "id": "2a2bd094-ecd0-4b19-afb7-c2547b0bdf30",
     "level": "low",
+    "license": "GPL-3.0",
     "logsource": {
       "category": "process_creation",
       "product": "windows",
@@ -907,6 +952,7 @@
       "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=1 AND (ParentImage LIKE '%\\\\rundll32.exe' ESCAPE '\\' AND (ParentCommandLine='rundll32.exe' OR ParentCommandLine='rundll32' OR ParentCommandLine='' OR ParentCommandLine IS NULL)))"
     ],
     "schema_version": 2,
+    "source": "mbabinski",
     "source_table": "logs",
     "status": "experimental",
     "tags": [
@@ -930,6 +976,7 @@
     "filename": "2024_RedCanary_ThreatDetectionReport/technique_command_shell_bypass_security_controls.yml",
     "id": "2aaf3922-0a8b-4b7b-9c10-ea552bdff707",
     "level": "low",
+    "license": "GPL-3.0",
     "logsource": {
       "category": "process_creation",
       "product": "windows",
@@ -946,6 +993,7 @@
       "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=1 AND (Image LIKE '%\\\\cmd.exe' ESCAPE '\\' AND (CommandLine LIKE '%bypass%' ESCAPE '\\' OR CommandLine LIKE '%-exec%' ESCAPE '\\')))"
     ],
     "schema_version": 2,
+    "source": "mbabinski",
     "source_table": "logs",
     "status": "experimental",
     "tags": [
@@ -972,6 +1020,7 @@
     "filename": "2023_Impacket/smbclient/file_event_win_impacket_exe.yml",
     "id": "2ace112a-1717-4648-b0f8-51796f36c58e",
     "level": "low",
+    "license": "GPL-3.0",
     "logsource": {
       "category": "file_event",
       "product": "windows",
@@ -989,6 +1038,7 @@
       "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=11 AND (TargetFilename LIKE '%.exe' ESCAPE '\\' AND Image='System' AND User LIKE 'NT Authority\\\\Sytem' ESCAPE '\\'))"
     ],
     "schema_version": 2,
+    "source": "mbabinski",
     "source_table": "logs",
     "status": "experimental",
     "tags": [
@@ -1012,6 +1062,7 @@
     "filename": "2024_RedCanary_ThreatDetectionReport/threat_raspberry_robin_msiexec_download.yml",
     "id": "2b09f558-14dc-40ac-b962-66386b5785c1",
     "level": "low",
+    "license": "GPL-3.0",
     "logsource": {
       "category": "process_creation",
       "product": "windows",
@@ -1028,6 +1079,7 @@
       "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=1 AND (Image LIKE '%\\\\msiexec' ESCAPE '\\' AND (CommandLine LIKE '%http:%' ESCAPE '\\' OR CommandLine LIKE '%https:%' ESCAPE '\\') AND (CommandLine LIKE '%-q%' ESCAPE '\\' OR CommandLine LIKE '%/q%' ESCAPE '\\' OR CommandLine LIKE '%\u2013q%' ESCAPE '\\' OR CommandLine LIKE '%\u2014q%' ESCAPE '\\' OR CommandLine LIKE '%\u2015q%' ESCAPE '\\')))"
     ],
     "schema_version": 2,
+    "source": "mbabinski",
     "source_table": "logs",
     "status": "experimental",
     "tags": [
@@ -1052,6 +1104,7 @@
     "filename": "2023_RedCanary_ThreatDetectionReport/threat_bloodhound_common_cmd_actions.yml",
     "id": "2b7d1fff-74b3-496c-b8f9-3bd90ba102c5",
     "level": "low",
+    "license": "GPL-3.0",
     "logsource": {
       "category": "process_creation",
       "product": "windows",
@@ -1067,6 +1120,7 @@
       "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=1 AND (CommandLine LIKE '%-collectionmethod%' ESCAPE '\\' OR CommandLine LIKE '%invoke-bloodhound%' ESCAPE '\\' OR CommandLine LIKE '%get-bloodhounddata%' ESCAPE '\\'))"
     ],
     "schema_version": 2,
+    "source": "mbabinski",
     "source_table": "logs",
     "status": "experimental",
     "tags": [
@@ -1089,6 +1143,7 @@
     "filename": "2023_RedCanary_ThreatDetectionReport/threat_emotet_excel_regsvr32_execution.yml",
     "id": "2cbe546e-8c8a-41ab-80d4-aadd2961b3c7",
     "level": "low",
+    "license": "GPL-3.0",
     "logsource": {
       "category": "process_creation",
       "product": "windows",
@@ -1105,6 +1160,7 @@
       "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=1 AND (ParentImage LIKE '%\\\\excel.exe' ESCAPE '\\' AND Image LIKE '%\\\\regsvr32.exe' ESCAPE '\\'))"
     ],
     "schema_version": 2,
+    "source": "mbabinski",
     "source_table": "logs",
     "status": "experimental",
     "tags": [
@@ -1127,6 +1183,7 @@
     "filename": "2024_RedCanary_ThreatDetectionReport/technique_powershell_encoded_command.yml",
     "id": "2f0c5dcb-71aa-44d7-abc6-dac43f121138",
     "level": "low",
+    "license": "GPL-3.0",
     "logsource": {
       "category": "process_creation",
       "product": "windows",
@@ -1143,6 +1200,7 @@
       "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=1 AND (Image LIKE '%\\\\powershell.exe' ESCAPE '\\' AND (CommandLine LIKE '%-e %' ESCAPE '\\' OR CommandLine LIKE '%-en %' ESCAPE '\\' OR CommandLine LIKE '%-enc %' ESCAPE '\\' OR CommandLine LIKE '%-enco %' ESCAPE '\\')))"
     ],
     "schema_version": 2,
+    "source": "mbabinski",
     "source_table": "logs",
     "status": "experimental",
     "tags": [
@@ -1169,6 +1227,7 @@
     "filename": "2024_RedCanary_ThreatDetectionReport/threat_impacket_atexec_execution.yml",
     "id": "317bdc3b-f4a6-4664-b810-6dffb18fc7f5",
     "level": "low",
+    "license": "GPL-3.0",
     "logsource": {
       "category": "file_event",
       "product": "windows",
@@ -1186,6 +1245,7 @@
       "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=11 AND ((ParentImage LIKE '%\\\\svchost.exe' ESCAPE '\\' OR ParentImage LIKE '%\\\\taskeng.exe' ESCAPE '\\') AND (CommandLine LIKE '%cmd.exe%' ESCAPE '\\' AND CommandLine LIKE '%/c%' ESCAPE '\\' AND CommandLine LIKE '%windows\\\\temp%' ESCAPE '\\' AND CommandLine LIKE '% > %' ESCAPE '\\' AND CommandLine LIKE '%2>&1%' ESCAPE '\\') AND (TargetFilename LIKE '%windows\\\\temp%' ESCAPE '\\' AND TargetFilename LIKE '%.tmp%' ESCAPE '\\')))"
     ],
     "schema_version": 2,
+    "source": "mbabinski",
     "source_table": "logs",
     "status": "experimental",
     "tags": [
@@ -1211,6 +1271,7 @@
     "filename": "2023_RedCanary_ThreatDetectionReport/technique_wmi_shadow_copy_deletion.yml",
     "id": "31b52a76-ef7a-40dd-8bb1-9c1671f04d0a",
     "level": "low",
+    "license": "GPL-3.0",
     "logsource": {
       "category": "process_creation",
       "product": "windows",
@@ -1227,6 +1288,7 @@
       "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=1 AND (Image LIKE '%\\\\wmic.exe' ESCAPE '\\' AND (CommandLine LIKE '%shadowcopy%' ESCAPE '\\' AND CommandLine LIKE '%delete%' ESCAPE '\\')))"
     ],
     "schema_version": 2,
+    "source": "mbabinski",
     "source_table": "logs",
     "status": "experimental",
     "tags": [
@@ -1250,6 +1312,7 @@
     "filename": "2024_RedCanary_ThreatDetectionReport/technique_powershell_susp_cmdlets.yml",
     "id": "33a86fea-add2-42b3-bccb-96285c619933",
     "level": "low",
+    "license": "GPL-3.0",
     "logsource": {
       "category": "process_creation",
       "product": "windows",
@@ -1266,6 +1329,7 @@
       "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=1 AND (Image LIKE '%\\\\powershell.exe' ESCAPE '\\' AND (CommandLine LIKE '%-nop%' ESCAPE '\\' OR CommandLine LIKE '%-noni%' ESCAPE '\\' OR CommandLine LIKE '%-invoke-expression%' ESCAPE '\\' OR CommandLine LIKE '%iex%' ESCAPE '\\' OR CommandLine LIKE '%.downloadstring%' ESCAPE '\\' OR CommandLine LIKE '%downloadfile%' ESCAPE '\\')))"
     ],
     "schema_version": 2,
+    "source": "mbabinski",
     "source_table": "logs",
     "status": "experimental",
     "tags": [
@@ -1290,6 +1354,7 @@
     "filename": "2023_RedCanary_ThreatDetectionReport/technique_process_injection_powershell_injection.yml",
     "id": "3556964d-5ade-438c-bc68-58e0c64a70ec",
     "level": "low",
+    "license": "GPL-3.0",
     "logsource": {
       "category": "process_access",
       "product": "windows",
@@ -1305,6 +1370,7 @@
       "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=10 AND SourceImage LIKE '%\\\\powershell.exe' ESCAPE '\\')"
     ],
     "schema_version": 2,
+    "source": "mbabinski",
     "source_table": "logs",
     "status": "experimental",
     "tags": [
@@ -1328,6 +1394,7 @@
     "filename": "2024_RedCanary_ThreatDetectionReport/threat_socgholish_nltest_domain_trust_enum.yml",
     "id": "3ddc7df5-780a-442a-8d41-269f476ed24a",
     "level": "low",
+    "license": "GPL-3.0",
     "logsource": {
       "category": "process_creation",
       "product": "windows",
@@ -1344,6 +1411,7 @@
       "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=1 AND (Image LIKE '%\\\\nltest.exe' ESCAPE '\\' AND (CommandLine LIKE '%/domain\\_trusts%' ESCAPE '\\' OR CommandLine LIKE '%/all\\_trusts%' ESCAPE '\\')))"
     ],
     "schema_version": 2,
+    "source": "mbabinski",
     "source_table": "logs",
     "status": "experimental",
     "tags": [
@@ -1367,6 +1435,7 @@
     "filename": "2023_RedCanary_ThreatDetectionReport/threat_mimikatz_kirbi_file_creation.yml",
     "id": "3f5c1eae-a9ef-44a2-bd04-a8a0e3762ec3",
     "level": "low",
+    "license": "GPL-3.0",
     "logsource": {
       "category": "file_event",
       "product": "windows",
@@ -1382,6 +1451,7 @@
       "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=11 AND TargetFilename LIKE '%.kirbi' ESCAPE '\\')"
     ],
     "schema_version": 2,
+    "source": "mbabinski",
     "source_table": "logs",
     "status": "experimental",
     "tags": [
@@ -1404,6 +1474,7 @@
     "filename": "2023_RedCanary_ThreatDetectionReport/threat_cobalt_strike_uac_bypass_w_cliconfg.yml",
     "id": "405ec76f-7d77-464d-b28b-4f5d9131346b",
     "level": "low",
+    "license": "GPL-3.0",
     "logsource": {
       "category": "process_creation",
       "product": "windows",
@@ -1420,6 +1491,7 @@
       "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=1 AND (ParentImage LIKE '%\\\\rundll32.exe' ESCAPE '\\' AND Image LIKE '%\\\\cliconfg.exe' ESCAPE '\\'))"
     ],
     "schema_version": 2,
+    "source": "mbabinski",
     "source_table": "logs",
     "status": "experimental",
     "tags": [
@@ -1442,6 +1514,7 @@
     "filename": "2024_RedCanary_ThreatDetectionReport/technique_rename_system_utils_unusual_cmdline.yml",
     "id": "4108fe33-1d66-4111-a698-53b4ecc15dc4",
     "level": "low",
+    "license": "GPL-3.0",
     "logsource": {
       "category": "process_creation",
       "product": "windows",
@@ -1458,6 +1531,7 @@
       "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=1 AND ((CommandLine LIKE '%iex%' ESCAPE '\\' OR CommandLine LIKE '%invoke-expression%' ESCAPE '\\') AND (NOT COALESCE((Image LIKE '%\\\\powershell.exe' ESCAPE '\\'), 0))))"
     ],
     "schema_version": 2,
+    "source": "mbabinski",
     "source_table": "logs",
     "status": "experimental",
     "tags": [
@@ -1482,6 +1556,7 @@
     "filename": "2023_RedCanary_ThreatDetectionReport/technique_pwsh_base64_encoding.yml",
     "id": "4becc177-8fc7-40b4-aa12-ee55202bbe95",
     "level": "low",
+    "license": "GPL-3.0",
     "logsource": {
       "category": "process_creation",
       "product": "windows",
@@ -1498,6 +1573,7 @@
       "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=1 AND (Image LIKE '%\\\\powershell.exe' ESCAPE '\\' AND CommandLine LIKE '%base64%' ESCAPE '\\'))"
     ],
     "schema_version": 2,
+    "source": "mbabinski",
     "source_table": "logs",
     "status": "experimental",
     "tags": [
@@ -1521,6 +1597,7 @@
     "filename": "2023_WebDAV_SearchMS/file_event_win_webdav_tmpfile_creation.yml",
     "id": "4c55738d-72d8-490e-a2db-7969654e375f",
     "level": "low",
+    "license": "GPL-3.0",
     "logsource": {
       "category": "file_event",
       "product": "windows",
@@ -1536,6 +1613,7 @@
       "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=11 AND (TargetFilename LIKE '%AppData\\\\Local\\\\Temp\\\\TfsStore\\\\Tfs\\_DAV%' ESCAPE '\\' AND (TargetFilename LIKE '%.vbs' ESCAPE '\\' OR TargetFilename LIKE '%.ps1' ESCAPE '\\' OR TargetFilename LIKE '%.lnk' ESCAPE '\\' OR TargetFilename LIKE '%.zip' ESCAPE '\\' OR TargetFilename LIKE '%.ico' ESCAPE '\\' OR TargetFilename LIKE '%.bat' ESCAPE '\\' OR TargetFilename LIKE '%.js' ESCAPE '\\')))"
     ],
     "schema_version": 2,
+    "source": "mbabinski",
     "source_table": "logs",
     "status": "experimental",
     "tags": [
@@ -1560,6 +1638,7 @@
     "filename": "2023_RedCanary_ThreatDetectionReport/technique_wmi_reconnaissance.yml",
     "id": "4f2f005d-8755-4ff8-9086-179fc632a850",
     "level": "low",
+    "license": "GPL-3.0",
     "logsource": {
       "category": "process_creation",
       "product": "windows",
@@ -1576,6 +1655,7 @@
       "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=1 AND (Image LIKE '%\\\\wmic.exe' ESCAPE '\\' AND (CommandLine LIKE '%\\\\ldap%' ESCAPE '\\' OR CommandLine LIKE '%ntdomain%' ESCAPE '\\')))"
     ],
     "schema_version": 2,
+    "source": "mbabinski",
     "source_table": "logs",
     "status": "experimental",
     "tags": [
@@ -1599,6 +1679,7 @@
     "filename": "2024_RedCanary_ThreatDetectionReport/technique_rundll32_suspicious_lineage.yml",
     "id": "5025ecc7-1efd-41de-aee2-38f4b9d8d281",
     "level": "low",
+    "license": "GPL-3.0",
     "logsource": {
       "category": "process_creation",
       "product": "windows",
@@ -1615,6 +1696,7 @@
       "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=1 AND ((ParentImage LIKE '%\\\\winword.exe' ESCAPE '\\' OR ParentImage LIKE '%\\\\excel.exe' ESCAPE '\\' OR ParentImage LIKE '%\\\\msaccess.exe' ESCAPE '\\' OR ParentImage LIKE '%\\\\lsass.exe' ESCAPE '\\' OR ParentImage LIKE '%\\\\taskeng.exe' ESCAPE '\\' OR ParentImage LIKE '%\\\\winlogon.exe' ESCAPE '\\' OR ParentImage LIKE '%\\\\schtasks.exe' ESCAPE '\\' OR ParentImage LIKE '%\\\\regsvr32.exe' ESCAPE '\\' OR ParentImage LIKE '%\\\\wmiprvse.exe' ESCAPE '\\' OR ParentImage LIKE '%\\\\wsmprovhost.exe' ESCAPE '\\') AND Image LIKE '%\\\\rundll32.exe' ESCAPE '\\'))"
     ],
     "schema_version": 2,
+    "source": "mbabinski",
     "source_table": "logs",
     "status": "experimental",
     "tags": [
@@ -1639,6 +1721,7 @@
     "filename": "2023_RedCanary_ThreatDetectionReport/technique_smb_win_admin_shares_process_execution.yml",
     "id": "508ffe6a-8d07-4162-a000-fbf939a23b92",
     "level": "low",
+    "license": "GPL-3.0",
     "logsource": {
       "category": "process_creation",
       "product": "windows",
@@ -1654,6 +1737,7 @@
       "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=1 AND (CommandLine LIKE '%ADMIN$%' ESCAPE '\\' OR CommandLine LIKE '%IPC$%' ESCAPE '\\' OR CommandLine LIKE '%C$%' ESCAPE '\\'))"
     ],
     "schema_version": 2,
+    "source": "mbabinski",
     "source_table": "logs",
     "status": "experimental",
     "tags": [
@@ -1677,6 +1761,7 @@
     "filename": "2024_RedCanary_ThreatDetectionReport/technique_wmi_suspicious_commands.yml",
     "id": "5a6a9a1b-97d0-43d8-9dd7-3cdef056c3c3",
     "level": "low",
+    "license": "GPL-3.0",
     "logsource": {
       "category": "process_creation",
       "product": "windows",
@@ -1693,6 +1778,7 @@
       "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=1 AND (Image LIKE '%\\\\wmic.exe' ESCAPE '\\' AND (CommandLine LIKE '%create%' ESCAPE '\\' OR CommandLine LIKE '%node:%' ESCAPE '\\' OR CommandLine LIKE '%process%' ESCAPE '\\' OR CommandLine LIKE '%call%' ESCAPE '\\')))"
     ],
     "schema_version": 2,
+    "source": "mbabinski",
     "source_table": "logs",
     "status": "experimental",
     "tags": [
@@ -1716,6 +1802,7 @@
     "filename": "2023_RedCanary_ThreatDetectionReport/technique_ingress_tool_transfer_certutil_download.yml",
     "id": "5da5a0a0-e610-4d72-9562-339eafdef216",
     "level": "low",
+    "license": "GPL-3.0",
     "logsource": {
       "category": "process_creation",
       "product": "windows",
@@ -1732,6 +1819,7 @@
       "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=1 AND (Image LIKE '%\\\\certutil.exe' ESCAPE '\\' AND (CommandLine LIKE '%urlcache%' ESCAPE '\\' OR CommandLine LIKE '%split%' ESCAPE '\\')))"
     ],
     "schema_version": 2,
+    "source": "mbabinski",
     "source_table": "logs",
     "status": "experimental",
     "tags": [
@@ -1755,6 +1843,7 @@
     "filename": "2023_RedCanary_ThreatDetectionReport/threat_gootloader_appdata_js_execution.yml",
     "id": "5e284df6-3a2e-4ac1-8907-29fdc6b43757",
     "level": "low",
+    "license": "GPL-3.0",
     "logsource": {
       "category": "process_creation",
       "product": "windows",
@@ -1771,6 +1860,7 @@
       "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=1 AND (Image LIKE '%\\\\wscript.exe' ESCAPE '\\' AND CommandLine REGEXP '(?i)appdata\\\\.*\\.js'))"
     ],
     "schema_version": 2,
+    "source": "mbabinski",
     "source_table": "logs",
     "status": "experimental",
     "tags": [
@@ -1794,6 +1884,7 @@
     "filename": "2023_RedCanary_ThreatDetectionReport/threat_raspberry_robin_msiexec_execution.yml",
     "id": "60a7350b-38b0-4f44-b2e8-e7b284516bd0",
     "level": "low",
+    "license": "GPL-3.0",
     "logsource": {
       "category": "process_creation",
       "product": "windows",
@@ -1810,6 +1901,7 @@
       "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=1 AND (Image LIKE '%\\\\msiexec.exe' ESCAPE '\\' AND (CommandLine LIKE '%http:%' ESCAPE '\\' OR CommandLine LIKE '%https:%' ESCAPE '\\') AND (CommandLine LIKE '%-q%' ESCAPE '\\' OR CommandLine LIKE '%/q%' ESCAPE '\\' OR CommandLine LIKE '%\u2013q%' ESCAPE '\\' OR CommandLine LIKE '%\u2014q%' ESCAPE '\\' OR CommandLine LIKE '%\u2015q%' ESCAPE '\\')))"
     ],
     "schema_version": 2,
+    "source": "mbabinski",
     "source_table": "logs",
     "status": "experimental",
     "tags": [
@@ -1833,6 +1925,7 @@
     "filename": "2023_RedCanary_ThreatDetectionReport/technique_cmd_susp_process_ancestry.yml",
     "id": "60cb2beb-d2ba-4a47-ad68-e97576985c70",
     "level": "low",
+    "license": "GPL-3.0",
     "logsource": {
       "category": "process_creation",
       "product": "windows",
@@ -1850,6 +1943,7 @@
       "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=1 AND ((ParentImage LIKE '%\\\\w3wp.exe' ESCAPE '\\' OR ParentImage LIKE '%\\\\wmiprvse.exe' ESCAPE '\\') AND Image LIKE '%\\\\cmd.exe' ESCAPE '\\' AND (CommandLine LIKE '%http://%' ESCAPE '\\' OR CommandLine LIKE '%https://%' ESCAPE '\\' OR CommandLine LIKE '%echo%' ESCAPE '\\')))"
     ],
     "schema_version": 2,
+    "source": "mbabinski",
     "source_table": "logs",
     "status": "experimental",
     "tags": [
@@ -1873,6 +1967,7 @@
     "filename": "2023_RedCanary_ThreatDetectionReport/threat_gamarue_rundll32_dll_filename.yml",
     "id": "62989cd5-4d35-4ce8-a1fd-73673c25d0f4",
     "level": "low",
+    "license": "GPL-3.0",
     "logsource": {
       "category": "process_creation",
       "product": "windows",
@@ -1889,6 +1984,7 @@
       "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=1 AND (Image LIKE '%\\\\rundll32.exe' ESCAPE '\\' AND CommandLine REGEXP '\\S{10,70}\\.\\S{10,70},\\w{16}'))"
     ],
     "schema_version": 2,
+    "source": "mbabinski",
     "source_table": "logs",
     "status": "experimental",
     "tags": [
@@ -1912,6 +2008,7 @@
     "filename": "2023_RedCanary_ThreatDetectionReport/technique_wmi_office_products_spawning_wmic.yml",
     "id": "6335a2c2-5339-443a-b00c-ebffc9ffc321",
     "level": "low",
+    "license": "GPL-3.0",
     "logsource": {
       "category": "process_creation",
       "product": "windows",
@@ -1928,6 +2025,7 @@
       "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=1 AND ((ParentImage LIKE '%\\\\winword.exe' ESCAPE '\\' OR ParentImage LIKE '%\\\\excel.exe' ESCAPE '\\') AND (Image LIKE '%\\\\wmic.exe' ESCAPE '\\' OR Image LIKE '%\\\\wmiprvse.exe' ESCAPE '\\')))"
     ],
     "schema_version": 2,
+    "source": "mbabinski",
     "source_table": "logs",
     "status": "experimental",
     "tags": [
@@ -1951,6 +2049,7 @@
     "filename": "2024_RedCanary_ThreatDetectionReport/technique_command_shell_suspicious_ancestry.yml",
     "id": "64d04088-5ed5-4125-9219-4bbedec13e9f",
     "level": "low",
+    "license": "GPL-3.0",
     "logsource": {
       "category": "process_creation",
       "product": "windows",
@@ -1968,6 +2067,7 @@
       "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=1 AND (ParentImage LIKE '%\\\\cmd.exe' ESCAPE '\\' AND (ParentCommandLine LIKE '%http://%' ESCAPE '\\' OR ParentCommandLine LIKE '%https://%' ESCAPE '\\' OR ParentCommandLine LIKE '%echo%' ESCAPE '\\') AND Image LIKE '%\\\\powershell.exe' ESCAPE '\\'))"
     ],
     "schema_version": 2,
+    "source": "mbabinski",
     "source_table": "logs",
     "status": "experimental",
     "tags": [
@@ -1992,6 +2092,7 @@
     "filename": "2024_RedCanary_ThreatDetectionReport/threat_smashjacker_appinit_dll_installation.yml",
     "id": "65e7b868-ebe9-4e8a-b828-3bd2181bc407",
     "level": "low",
+    "license": "GPL-3.0",
     "logsource": {
       "category": "process_creation",
       "product": "windows",
@@ -2008,6 +2109,7 @@
       "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=1 AND (Image LIKE '%\\\\reg.exe' ESCAPE '\\' AND (CommandLine LIKE '%add%' ESCAPE '\\' AND CommandLine LIKE '%AppInit\\_DLLs%' ESCAPE '\\')))"
     ],
     "schema_version": 2,
+    "source": "mbabinski",
     "source_table": "logs",
     "status": "experimental",
     "tags": [
@@ -2033,6 +2135,7 @@
     "filename": "2024_RedCanary_ThreatDetectionReport/threat_gamarue_rundll32_cmdline.yml",
     "id": "66fa7a57-1c53-42e1-9e5c-e9a1f5e62784",
     "level": "low",
+    "license": "GPL-3.0",
     "logsource": {
       "category": "process_creation",
       "product": "windows",
@@ -2048,6 +2151,7 @@
       "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=1 AND CommandLine REGEXP '.*\\S{10,70}\\.\\S{10,70},\\w{16}')"
     ],
     "schema_version": 2,
+    "source": "mbabinski",
     "source_table": "logs",
     "status": "experimental",
     "tags": [
@@ -2072,6 +2176,7 @@
     "filename": "2023_RedCanary_ThreatDetectionReport/threat_impacket_smbexec_execution.yml",
     "id": "671651fd-62e1-48d7-b5e0-81b1746ec0dd",
     "level": "low",
+    "license": "GPL-3.0",
     "logsource": {
       "category": "process_creation",
       "product": "windows",
@@ -2089,6 +2194,7 @@
       "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=1 AND (ParentImage LIKE '%\\\\services.exe' ESCAPE '\\' AND Image LIKE '%\\\\cmd.exe' ESCAPE '\\' AND CommandLine REGEXP '(?i)cmd.exe \\/Q \\/c echo cd \\^> \\\\\\\\127.0.0.1\\\\[a-zA-Z]{1,}\\$\\\\__output 2\\^>\\^&1 > .* & '))"
     ],
     "schema_version": 2,
+    "source": "mbabinski",
     "source_table": "logs",
     "status": "experimental",
     "tags": [
@@ -2111,6 +2217,7 @@
     "filename": "2023_RedCanary_ThreatDetectionReport/technique_wmi_unusual_module_loads.yml",
     "id": "674d5957-41a2-47df-ad91-1833379632a6",
     "level": "low",
+    "license": "GPL-3.0",
     "logsource": {
       "category": "image_load",
       "product": "windows",
@@ -2127,6 +2234,7 @@
       "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=7 AND (Image LIKE '%\\\\wmic.exe' ESCAPE '\\' AND (ImageLoaded LIKE '%\\\\jscript.dll' ESCAPE '\\' OR ImageLoaded LIKE '%\\\\vbscript.dll' ESCAPE '\\')))"
     ],
     "schema_version": 2,
+    "source": "mbabinski",
     "source_table": "logs",
     "status": "experimental",
     "tags": [
@@ -2150,6 +2258,7 @@
     "filename": "2023_RedCanary_ThreatDetectionReport/technique_pwsh_susp_cmdlets.yml",
     "id": "68490f55-bf8d-489d-995a-5ceae34ce215",
     "level": "low",
+    "license": "GPL-3.0",
     "logsource": {
       "category": "process_creation",
       "product": "windows",
@@ -2166,6 +2275,7 @@
       "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=1 AND (Image LIKE '%\\\\powershell.exe' ESCAPE '\\' AND (CommandLine LIKE '%-nop%' ESCAPE '\\' OR CommandLine LIKE '%-noni%' ESCAPE '\\' OR CommandLine LIKE '%invoke-expression%' ESCAPE '\\' OR CommandLine LIKE '%iex%' ESCAPE '\\' OR CommandLine LIKE '%.downloadstring%' ESCAPE '\\' OR CommandLine LIKE '%downloadfile%' ESCAPE '\\')))"
     ],
     "schema_version": 2,
+    "source": "mbabinski",
     "source_table": "logs",
     "status": "experimental",
     "tags": [
@@ -2189,6 +2299,7 @@
     "filename": "2023_RedCanary_ThreatDetectionReport/threat_impacket_atexec_execution.yml",
     "id": "6b588393-f45f-484b-8233-56bbc657c63c",
     "level": "low",
+    "license": "GPL-3.0",
     "logsource": {
       "category": "process_creation",
       "product": "windows",
@@ -2205,6 +2316,7 @@
       "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=1 AND ((ParentImage LIKE '%\\\\svchost.exe' ESCAPE '\\' OR ParentImage LIKE '%\\\\taskeng.exe' ESCAPE '\\') AND (CommandLine LIKE '%cmd.exe%' ESCAPE '\\' AND CommandLine LIKE '%windows\\\\temp%' ESCAPE '\\' AND CommandLine LIKE '%2>&1%' ESCAPE '\\')))"
     ],
     "schema_version": 2,
+    "source": "mbabinski",
     "source_table": "logs",
     "status": "experimental",
     "tags": [
@@ -2227,6 +2339,7 @@
     "filename": "2024_RedCanary_ThreatDetectionReport/threat_socgholish_wscript_from_browser_with_netconn.yml",
     "id": "6d873a6b-2287-494a-a5c8-2dff432cfc09",
     "level": "low",
+    "license": "GPL-3.0",
     "logsource": {
       "category": "network_connection",
       "product": "windows",
@@ -2241,9 +2354,10 @@
     ],
     "result_type": "event",
     "rule": [
-      "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=3 AND (((ParentImage LIKE '%\\\\brave.exe' ESCAPE '\\' OR ParentImage LIKE '%\\\\chrome.exe' ESCAPE '\\' OR ParentImage LIKE '%\\\\msedge.exe' ESCAPE '\\' OR ParentImage LIKE '%\\\\opera.exe' ESCAPE '\\' OR ParentImage LIKE '%\\\\vivaldi.exe' ESCAPE '\\') AND Image LIKE '%\\\\wscript.exe' ESCAPE '\\') AND (NOT COALESCE((DestinationIp LIKE '127.%' ESCAPE '\\' OR DestinationIp LIKE '10.%' ESCAPE '\\' OR DestinationIp LIKE '172.16.%' ESCAPE '\\' OR DestinationIp LIKE '172.17.%' ESCAPE '\\' OR DestinationIp LIKE '172.18.%' ESCAPE '\\' OR DestinationIp LIKE '172.19.%' ESCAPE '\\' OR DestinationIp LIKE '172.20.%' ESCAPE '\\' OR DestinationIp LIKE '172.21.%' ESCAPE '\\' OR DestinationIp LIKE '172.22.%' ESCAPE '\\' OR DestinationIp LIKE '172.23.%' ESCAPE '\\' OR DestinationIp LIKE '172.24.%' ESCAPE '\\' OR DestinationIp LIKE '172.25.%' ESCAPE '\\' OR DestinationIp LIKE '172.26.%' ESCAPE '\\' OR DestinationIp LIKE '172.27.%' ESCAPE '\\' OR DestinationIp LIKE '172.28.%' ESCAPE '\\' OR DestinationIp LIKE '172.29.%' ESCAPE '\\' OR DestinationIp LIKE '172.30.%' ESCAPE '\\' OR DestinationIp LIKE '172.31.%' ESCAPE '\\' OR DestinationIp LIKE '192.168.%' ESCAPE '\\' OR DestinationIp LIKE '169.254.%' ESCAPE '\\' OR DestinationIp='::1' OR DestinationIp LIKE 'fe8%' ESCAPE '\\' OR DestinationIp LIKE 'fe9%' ESCAPE '\\' OR DestinationIp LIKE 'fea%' ESCAPE '\\' OR DestinationIp LIKE 'feb%' ESCAPE '\\' OR DestinationIp LIKE 'fc%' ESCAPE '\\' OR DestinationIp LIKE 'fd%' ESCAPE '\\'), 0))))"
+      "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=3 AND (((ParentImage LIKE '%\\\\brave.exe' ESCAPE '\\' OR ParentImage LIKE '%\\\\chrome.exe' ESCAPE '\\' OR ParentImage LIKE '%\\\\msedge.exe' ESCAPE '\\' OR ParentImage LIKE '%\\\\opera.exe' ESCAPE '\\' OR ParentImage LIKE '%\\\\vivaldi.exe' ESCAPE '\\') AND Image LIKE '%\\\\wscript.exe' ESCAPE '\\') AND (NOT COALESCE((DestinationIp LIKE '127.%' ESCAPE '\\' OR DestinationIp LIKE '10.%' ESCAPE '\\' OR DestinationIp LIKE '172.16.%' ESCAPE '\\' OR DestinationIp LIKE '172.17.%' ESCAPE '\\' OR DestinationIp LIKE '172.18.%' ESCAPE '\\' OR DestinationIp LIKE '172.19.%' ESCAPE '\\' OR DestinationIp LIKE '172.20.%' ESCAPE '\\' OR DestinationIp LIKE '172.21.%' ESCAPE '\\' OR DestinationIp LIKE '172.22.%' ESCAPE '\\' OR DestinationIp LIKE '172.23.%' ESCAPE '\\' OR DestinationIp LIKE '172.24.%' ESCAPE '\\' OR DestinationIp LIKE '172.25.%' ESCAPE '\\' OR DestinationIp LIKE '172.26.%' ESCAPE '\\' OR DestinationIp LIKE '172.27.%' ESCAPE '\\' OR DestinationIp LIKE '172.28.%' ESCAPE '\\' OR DestinationIp LIKE '172.29.%' ESCAPE '\\' OR DestinationIp LIKE '172.30.%' ESCAPE '\\' OR DestinationIp LIKE '172.31.%' ESCAPE '\\' OR DestinationIp LIKE '192.168.%' ESCAPE '\\' OR DestinationIp LIKE '169.254.%' ESCAPE '\\' OR DestinationIp='::1' OR DestinationIp LIKE 'fe8_:%' ESCAPE '\\' OR DestinationIp LIKE 'fe9_:%' ESCAPE '\\' OR DestinationIp LIKE 'fea_:%' ESCAPE '\\' OR DestinationIp LIKE 'feb_:%' ESCAPE '\\' OR DestinationIp LIKE 'fc__:%' ESCAPE '\\' OR DestinationIp LIKE 'fd__:%' ESCAPE '\\'), 0))))"
     ],
     "schema_version": 2,
+    "source": "mbabinski",
     "source_table": "logs",
     "status": "experimental",
     "tags": [
@@ -2267,6 +2381,7 @@
     "filename": "2024_RedCanary_ThreatDetectionReport/technique_rundll32_suspicious_export_functionalities.yml",
     "id": "705d6f7b-779f-41c5-9994-8b191094577b",
     "level": "low",
+    "license": "GPL-3.0",
     "logsource": {
       "category": "process_creation",
       "product": "windows",
@@ -2283,6 +2398,7 @@
       "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=1 AND (Image LIKE '%\\\\rundll32.exe' ESCAPE '\\' AND CommandLine LIKE '%comsvcs.dll%' ESCAPE '\\' AND (CommandLine LIKE '%MiniDump%' ESCAPE '\\' OR CommandLine LIKE '%#24%' ESCAPE '\\')))"
     ],
     "schema_version": 2,
+    "source": "mbabinski",
     "source_table": "logs",
     "status": "experimental",
     "tags": [
@@ -2309,6 +2425,7 @@
     "filename": "2023_RedCanary_ThreatDetectionReport/threat_adsearch_startup_folder_persistence.yml",
     "id": "739d97f7-96e3-4e96-aebb-574b4f19d034",
     "level": "low",
+    "license": "GPL-3.0",
     "logsource": {
       "category": "file_event",
       "product": "windows",
@@ -2325,6 +2442,7 @@
       "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=11 AND (Image LIKE '%\\\\cscript.exe' ESCAPE '\\' AND TargetFilename LIKE '%start menu\\\\programs\\\\startup%' ESCAPE '\\'))"
     ],
     "schema_version": 2,
+    "source": "mbabinski",
     "source_table": "logs",
     "status": "experimental",
     "tags": [
@@ -2348,6 +2466,7 @@
     "filename": "2023_RedCanary_ThreatDetectionReport/technique_wmi_susp_pwsh_cmdlets.yml",
     "id": "75b32717-173f-45d0-9447-be84f8bdcce5",
     "level": "low",
+    "license": "GPL-3.0",
     "logsource": {
       "category": "process_creation",
       "product": "windows",
@@ -2364,6 +2483,7 @@
       "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=1 AND (Image LIKE '%\\\\powershell.exe' ESCAPE '\\' AND (CommandLine LIKE '%invoke-wmimethod%' ESCAPE '\\' OR CommandLine LIKE '%invoke-cimmethod%' ESCAPE '\\' OR CommandLine LIKE '%get-wmiobject%' ESCAPE '\\' OR CommandLine LIKE '%get-ciminstance%' ESCAPE '\\' OR CommandLine LIKE '%wmiclass%' ESCAPE '\\')))"
     ],
     "schema_version": 2,
+    "source": "mbabinski",
     "source_table": "logs",
     "status": "experimental",
     "tags": [
@@ -2387,6 +2507,7 @@
     "filename": "2024_RedCanary_ThreatDetectionReport/technique_wmi_suspicious_process_lineage.yml",
     "id": "75e6bb57-d135-4308-b0ac-936e2d76d4d5",
     "level": "low",
+    "license": "GPL-3.0",
     "logsource": {
       "category": "process_creation",
       "product": "windows",
@@ -2403,6 +2524,7 @@
       "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=1 AND (ParentImage LIKE '%\\\\wmiprvse.exe' ESCAPE '\\' AND (Image LIKE '%\\\\rundll32.exe' ESCAPE '\\' OR Image LIKE '%\\\\msbuild.exe' ESCAPE '\\' OR Image LIKE '%\\\\powershell.exe' ESCAPE '\\' OR Image LIKE '%\\\\cmd.exe' ESCAPE '\\' OR Image LIKE '%\\\\mshta.exe' ESCAPE '\\')))"
     ],
     "schema_version": 2,
+    "source": "mbabinski",
     "source_table": "logs",
     "status": "experimental",
     "tags": [
@@ -2426,6 +2548,7 @@
     "filename": "2023_RedCanary_ThreatDetectionReport/technique_rundll32_inject_to_lsass.yml",
     "id": "7aa20f5c-6100-46c9-8885-427110e0c0e5",
     "level": "low",
+    "license": "GPL-3.0",
     "logsource": {
       "category": "process_access",
       "product": "windows",
@@ -2442,6 +2565,7 @@
       "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=10 AND (SourceImage LIKE '%\\\\rundll32.exe' ESCAPE '\\' AND TargetImage LIKE '%\\\\lsass.exe' ESCAPE '\\'))"
     ],
     "schema_version": 2,
+    "source": "mbabinski",
     "source_table": "logs",
     "status": "experimental",
     "tags": [
@@ -2465,6 +2589,7 @@
     "filename": "2023_RedCanary_ThreatDetectionReport/technique_smb_win_admin_shares_file_write.yml",
     "id": "7d5c80c9-c2a0-4eeb-9988-3d1ac170ffc0",
     "level": "low",
+    "license": "GPL-3.0",
     "logsource": {
       "category": "file_event",
       "product": "windows",
@@ -2480,6 +2605,7 @@
       "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=11 AND ((TargetFilename LIKE '%.exe' ESCAPE '\\' OR TargetFilename LIKE '%.dll' ESCAPE '\\' OR TargetFilename LIKE '%.bat' ESCAPE '\\') AND (TargetFilename LIKE '%ADMIN$%' ESCAPE '\\' OR TargetFilename LIKE '%IPC$%' ESCAPE '\\' OR TargetFilename LIKE '%C$%' ESCAPE '\\')))"
     ],
     "schema_version": 2,
+    "source": "mbabinski",
     "source_table": "logs",
     "status": "experimental",
     "tags": [
@@ -2503,6 +2629,7 @@
     "filename": "2023_RedCanary_ThreatDetectionReport/technique_cmd_svc_shell_command.yml",
     "id": "80f850be-12ea-4bb8-b000-6e485dc821f5",
     "level": "low",
+    "license": "GPL-3.0",
     "logsource": {
       "category": "process_creation",
       "product": "windows",
@@ -2520,6 +2647,7 @@
       "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=1 AND (ParentImage LIKE '%\\\\services.exe' ESCAPE '\\' AND Image LIKE '%\\\\cmd.exe' ESCAPE '\\' AND (CommandLine LIKE '%echo%' ESCAPE '\\' OR CommandLine LIKE '%-c%' ESCAPE '\\' OR CommandLine LIKE '%/c%' ESCAPE '\\' OR CommandLine LIKE '%\u2013c%' ESCAPE '\\' OR CommandLine LIKE '%\u2014c%' ESCAPE '\\' OR CommandLine LIKE '%\u2015c%' ESCAPE '\\')))"
     ],
     "schema_version": 2,
+    "source": "mbabinski",
     "source_table": "logs",
     "status": "experimental",
     "tags": [
@@ -2543,6 +2671,7 @@
     "filename": "2024_RedCanary_ThreatDetectionReport/threat_mimikatz_kirbi_file.yml",
     "id": "8132d811-8314-40bc-9bb0-4bcdc33605e9",
     "level": "low",
+    "license": "GPL-3.0",
     "logsource": {
       "category": "file_event",
       "product": "windows",
@@ -2558,6 +2687,7 @@
       "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=11 AND TargetFilename LIKE '%.kirbi' ESCAPE '\\')"
     ],
     "schema_version": 2,
+    "source": "mbabinski",
     "source_table": "logs",
     "status": "experimental",
     "tags": [
@@ -2583,6 +2713,7 @@
     "filename": "2024_RedCanary_ThreatDetectionReport/threat_smashjacker_web_browser_loading_extension.yml",
     "id": "81f18c2e-640e-411d-93c0-496bb713003c",
     "level": "low",
+    "license": "GPL-3.0",
     "logsource": {
       "category": "process_creation",
       "product": "windows",
@@ -2599,6 +2730,7 @@
       "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=1 AND ((Image LIKE '%\\\\chrome.exe' ESCAPE '\\' OR Image LIKE '%\\\\msedge.exe' ESCAPE '\\') AND CommandLine LIKE '%--load-extension%' ESCAPE '\\'))"
     ],
     "schema_version": 2,
+    "source": "mbabinski",
     "source_table": "logs",
     "status": "experimental",
     "tags": [
@@ -2622,6 +2754,7 @@
     "filename": "2023_RedCanary_ThreatDetectionReport/technique_pwsh_encoded_command_switch.yml",
     "id": "8446b07e-3088-403f-b93e-5a62d88e8dc5",
     "level": "low",
+    "license": "GPL-3.0",
     "logsource": {
       "category": "process_creation",
       "product": "windows",
@@ -2638,6 +2771,7 @@
       "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=1 AND (Image LIKE '%\\\\powershell.exe' ESCAPE '\\' AND CommandLine LIKE '%-e%' ESCAPE '\\'))"
     ],
     "schema_version": 2,
+    "source": "mbabinski",
     "source_table": "logs",
     "status": "experimental",
     "tags": [
@@ -2661,6 +2795,7 @@
     "filename": "2024_RedCanary_ThreatDetectionReport/threat_mimikatz_module_names.yml",
     "id": "8628d9d9-3a53-4d2e-b1cf-1d2e606cfd1d",
     "level": "low",
+    "license": "GPL-3.0",
     "logsource": {
       "category": "process_creation",
       "product": "windows",
@@ -2676,6 +2811,7 @@
       "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=1 AND (CommandLine LIKE '%sekurlsa::logonpasswords%' ESCAPE '\\' OR CommandLine LIKE '%lsadump::sam%' ESCAPE '\\' OR CommandLine LIKE '%sekurlsa::tickets%' ESCAPE '\\'))"
     ],
     "schema_version": 2,
+    "source": "mbabinski",
     "source_table": "logs",
     "status": "experimental",
     "tags": [
@@ -2700,6 +2836,7 @@
     "filename": "2023_RedCanary_ThreatDetectionReport/threat_yellow_cockatoo_startup_lnk_file.yml",
     "id": "874acb07-02f7-4c9f-8069-e0659c6d3fad",
     "level": "low",
+    "license": "GPL-3.0",
     "logsource": {
       "category": "file_event",
       "product": "windows",
@@ -2716,6 +2853,7 @@
       "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=11 AND (Image LIKE '%\\\\powershell.exe' ESCAPE '\\' AND TargetFilename LIKE '%start menu\\\\programs\\\\startup%' ESCAPE '\\' AND TargetFilename LIKE '%.lnk' ESCAPE '\\'))"
     ],
     "schema_version": 2,
+    "source": "mbabinski",
     "source_table": "logs",
     "status": "experimental",
     "tags": [
@@ -2740,6 +2878,7 @@
     "filename": "2024_RedCanary_ThreatDetectionReport/technique_os_cred_dumping_secretsdump_file_modification.yml",
     "id": "88de04f6-c443-40ec-a592-72c31a55810b",
     "level": "low",
+    "license": "GPL-3.0",
     "logsource": {
       "category": "image_load",
       "product": "windows",
@@ -2756,6 +2895,7 @@
       "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=7 AND (Image LIKE '%\\\\svchost.exe' ESCAPE '\\' AND ImageLoaded LIKE '%\\\\regsvc.dll' ESCAPE '\\'))"
     ],
     "schema_version": 2,
+    "source": "mbabinski",
     "source_table": "logs",
     "status": "experimental",
     "tags": [
@@ -2779,6 +2919,7 @@
     "filename": "2024_RedCanary_ThreatDetectionReport/technique_wmi_reconnaissance.yml",
     "id": "8a450075-e74f-4b19-9efa-b62a53f85bf8",
     "level": "low",
+    "license": "GPL-3.0",
     "logsource": {
       "category": "process_creation",
       "product": "windows",
@@ -2795,6 +2936,7 @@
       "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=1 AND (Image LIKE '%\\\\wmic.exe' ESCAPE '\\' AND (CommandLine LIKE '%\\\\ldap%' ESCAPE '\\' OR CommandLine LIKE '%ntdomain%' ESCAPE '\\')))"
     ],
     "schema_version": 2,
+    "source": "mbabinski",
     "source_table": "logs",
     "status": "experimental",
     "tags": [
@@ -2821,6 +2963,7 @@
     "filename": "2024_RedCanary_ThreatDetectionReport/technique_command_shell_from_schtask.yml",
     "id": "8b1a34e3-c4d6-4af6-9836-35a0da09b85b",
     "level": "low",
+    "license": "GPL-3.0",
     "logsource": {
       "category": "process_creation",
       "product": "windows",
@@ -2837,6 +2980,7 @@
       "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=1 AND ((Image LIKE '%\\\\schtasks.exe' ESCAPE '\\' AND CommandLine LIKE '%create%' ESCAPE '\\') AND (CommandLine LIKE '%cmd.exe /c%' ESCAPE '\\' OR CommandLine LIKE '%cmd /c%' ESCAPE '\\')))"
     ],
     "schema_version": 2,
+    "source": "mbabinski",
     "source_table": "logs",
     "status": "experimental",
     "tags": [
@@ -2862,6 +3006,7 @@
     "filename": "2025_ArcGIS_Server_SOE_Abuse/proc_creation_win_arcsoc_susp_child_process.yml",
     "id": "8e95e73e-ba02-4a87-b4d7-0929b8053038",
     "level": "low",
+    "license": "GPL-3.0",
     "logsource": {
       "category": "process_creation",
       "product": "windows",
@@ -2879,6 +3024,7 @@
       "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=1 AND ((ParentImage LIKE '%\\\\ArcSOC.exe' ESCAPE '\\' AND (Image LIKE '%\\\\rundll32.exe' ESCAPE '\\' OR Image LIKE '%\\\\regsvr32.exe' ESCAPE '\\' OR Image LIKE '%\\\\wscript.exe' ESCAPE '\\' OR Image LIKE '%\\\\cscript.exe' ESCAPE '\\' OR Image LIKE '%\\\\powershell.exe' ESCAPE '\\' OR Image LIKE '%\\\\cmd.exe' ESCAPE '\\' OR Image LIKE '%\\\\mshta.exe' ESCAPE '\\')) AND (NOT COALESCE(((Image LIKE '%\\\\cmd.exe' ESCAPE '\\' AND CommandLine='cmd.exe /c \"ver\"') OR Image LIKE '%\\\\werfault.exe' ESCAPE '\\' OR Image LIKE '%\\\\ESRIErrorReportWriter.exe' ESCAPE '\\'), 0))))"
     ],
     "schema_version": 2,
+    "source": "mbabinski",
     "source_table": "logs",
     "status": "experimental",
     "tags": [
@@ -2903,6 +3049,7 @@
     "filename": "2023_RedCanary_ThreatDetectionReport/threat_qbot_mounted_drive_execution.yml",
     "id": "949afe0b-2d45-4999-be9c-fe4808b8a68b",
     "level": "low",
+    "license": "GPL-3.0",
     "logsource": {
       "category": "process_creation",
       "product": "windows",
@@ -2920,6 +3067,7 @@
       "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=1 AND (ParentImage LIKE '%\\\\explorer.exe' ESCAPE '\\' AND (Image LIKE '%\\\\wscript.exe' ESCAPE '\\' OR Image LIKE '%\\\\cscript.exe' ESCAPE '\\') AND CommandLine REGEXP '[d-z]:\\\\[^\\\\]+\\.(?:js|vbs|wsf)'))"
     ],
     "schema_version": 2,
+    "source": "mbabinski",
     "source_table": "logs",
     "status": "experimental",
     "tags": [
@@ -2942,6 +3090,7 @@
     "filename": "2024_RedCanary_ThreatDetectionReport/technique_ingress_tools_transfer_certutil_download.yml",
     "id": "95d670e1-ce19-4269-b101-e12a1bce7c41",
     "level": "low",
+    "license": "GPL-3.0",
     "logsource": {
       "category": "process_creation",
       "product": "windows",
@@ -2958,6 +3107,7 @@
       "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=1 AND (Image LIKE '%\\\\certutil.exe' ESCAPE '\\' AND (CommandLine LIKE '%urlcache%' ESCAPE '\\' AND CommandLine LIKE '%split%' ESCAPE '\\')))"
     ],
     "schema_version": 2,
+    "source": "mbabinski",
     "source_table": "logs",
     "status": "experimental",
     "tags": [
@@ -2981,6 +3131,7 @@
     "filename": "2024_RedCanary_ThreatDetectionReport/technique_rename_system_utils_powershell_notepad.yml",
     "id": "a6d26b45-14ea-4ee0-901c-3aefc384d3c9",
     "level": "low",
+    "license": "GPL-3.0",
     "logsource": {
       "category": "process_creation",
       "product": "windows",
@@ -2997,6 +3148,7 @@
       "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=1 AND (Image LIKE '%\\\\notepad.exe' ESCAPE '\\' AND OriginalFileName='powershell.exe'))"
     ],
     "schema_version": 2,
+    "source": "mbabinski",
     "source_table": "logs",
     "status": "experimental",
     "tags": [
@@ -3021,6 +3173,7 @@
     "filename": "2023_RedCanary_ThreatDetectionReport/technique_cmd_schtasks_create_shell.yml",
     "id": "a916cc1b-7f0e-46b4-9c77-c80b1f2ba26b",
     "level": "low",
+    "license": "GPL-3.0",
     "logsource": {
       "category": "process_creation",
       "product": "windows",
@@ -3037,6 +3190,7 @@
       "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=1 AND (Image LIKE '%\\\\schtasks.exe' ESCAPE '\\' AND (CommandLine LIKE '%create%' ESCAPE '\\' OR CommandLine LIKE '%cmd%' ESCAPE '\\' OR CommandLine LIKE '%-c%' ESCAPE '\\' OR CommandLine LIKE '%/c%' ESCAPE '\\' OR CommandLine LIKE '%\u2013c%' ESCAPE '\\' OR CommandLine LIKE '%\u2014c%' ESCAPE '\\' OR CommandLine LIKE '%\u2015c%' ESCAPE '\\')))"
     ],
     "schema_version": 2,
+    "source": "mbabinski",
     "source_table": "logs",
     "status": "experimental",
     "tags": [
@@ -3060,6 +3214,7 @@
     "filename": "2024_RedCanary_ThreatDetectionReport/threat_socgholish_whoami_recon_file_output.yml",
     "id": "abcdf274-2fbd-4736-a16b-032fcac54eee",
     "level": "low",
+    "license": "GPL-3.0",
     "logsource": {
       "category": "process_creation",
       "product": "windows",
@@ -3077,6 +3232,7 @@
       "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=1 AND (ParentImage LIKE '%\\\\wscript.exe' ESCAPE '\\' AND Image LIKE '%\\\\cmd.exe' ESCAPE '\\' AND CommandLine LIKE '%whoami /all >>%' ESCAPE '\\'))"
     ],
     "schema_version": 2,
+    "source": "mbabinski",
     "source_table": "logs",
     "status": "experimental",
     "tags": [
@@ -3100,6 +3256,7 @@
     "filename": "2024_RedCanary_ThreatDetectionReport/technique_ingress_tools_transfer_bitsadmin_download.yml",
     "id": "b195646e-8455-4fa1-b78a-91bb92371152",
     "level": "low",
+    "license": "GPL-3.0",
     "logsource": {
       "category": "process_creation",
       "product": "windows",
@@ -3116,6 +3273,7 @@
       "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=1 AND (Image LIKE '%\\\\bitsadmin.exe' ESCAPE '\\' AND (CommandLine LIKE '%download%' ESCAPE '\\' OR CommandLine LIKE '%transfer%' ESCAPE '\\')))"
     ],
     "schema_version": 2,
+    "source": "mbabinski",
     "source_table": "logs",
     "status": "experimental",
     "tags": [
@@ -3139,6 +3297,7 @@
     "filename": "2023_RedCanary_ThreatDetectionReport/technique_lsass_memory_rundll32_minidump.yml",
     "id": "b1bab1c9-9dc4-499e-aa9e-5c1b707c21e1",
     "level": "low",
+    "license": "GPL-3.0",
     "logsource": {
       "category": "process_creation",
       "product": "windows",
@@ -3155,6 +3314,7 @@
       "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=1 AND (Image LIKE '%\\\\rundll32.exe' ESCAPE '\\' AND CommandLine LIKE '%MiniDump%' ESCAPE '\\'))"
     ],
     "schema_version": 2,
+    "source": "mbabinski",
     "source_table": "logs",
     "status": "experimental",
     "tags": [
@@ -3178,6 +3338,7 @@
     "filename": "2024_RedCanary_ThreatDetectionReport/technique_powershell_obfuscation_escape_chars.yml",
     "id": "b47fccc1-8407-4fca-ae31-ef49d0ae0410",
     "level": "low",
+    "license": "GPL-3.0",
     "logsource": {
       "category": "process_creation",
       "product": "windows",
@@ -3194,6 +3355,7 @@
       "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=1 AND (Image LIKE '%\\\\powershell.exe' ESCAPE '\\' AND CommandLine REGEXP '^([^^=%![(; ]*[\\^=%![(; ]){8,}[^^=%![(; ]*$'))"
     ],
     "schema_version": 2,
+    "source": "mbabinski",
     "source_table": "logs",
     "status": "experimental",
     "tags": [
@@ -3220,6 +3382,7 @@
     "filename": "2023_RedCanary_ThreatDetectionReport/threat_adsearch_reg_runkey_persistence_execution.yml",
     "id": "b50624c2-7867-4685-817e-88c72da264c7",
     "level": "low",
+    "license": "GPL-3.0",
     "logsource": {
       "category": "process_creation",
       "product": "windows",
@@ -3235,6 +3398,7 @@
       "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=1 AND (CommandLine LIKE '%reg%' ESCAPE '\\' AND CommandLine LIKE '%add%' ESCAPE '\\' AND CommandLine LIKE '%currentversion\\\\run%' ESCAPE '\\'))"
     ],
     "schema_version": 2,
+    "source": "mbabinski",
     "source_table": "logs",
     "status": "experimental",
     "tags": [
@@ -3258,6 +3422,7 @@
     "filename": "2024_RedCanary_ThreatDetectionReport/technique_command_shell_obfuscated_commands.yml",
     "id": "b58b6c4b-0f79-407e-b2ab-76de16a6cd79",
     "level": "low",
+    "license": "GPL-3.0",
     "logsource": {
       "category": "process_creation",
       "product": "windows",
@@ -3274,6 +3439,7 @@
       "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=1 AND (Image LIKE '%\\\\cmd.exe' ESCAPE '\\' AND CommandLine REGEXP '^([^^=%![(; ]*[\\^=%![(; ]){8,}[^^=%![(; ]*$'))"
     ],
     "schema_version": 2,
+    "source": "mbabinski",
     "source_table": "logs",
     "status": "experimental",
     "tags": [
@@ -3300,6 +3466,7 @@
     "filename": "2024_RedCanary_ThreatDetectionReport/technique_wmi_unusual_module_loads.yml",
     "id": "b62ec77f-8014-42be-9874-c155f9ce6fae",
     "level": "low",
+    "license": "GPL-3.0",
     "logsource": {
       "category": "image_load",
       "product": "windows",
@@ -3317,6 +3484,7 @@
       "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=7 AND (Image LIKE '%\\\\wmic.exe' ESCAPE '\\' AND CommandLine LIKE '%format:%' ESCAPE '\\' AND (ImageLoaded LIKE '%jscript.dll%' ESCAPE '\\' OR ImageLoaded LIKE '%vbscript.dll%' ESCAPE '\\')))"
     ],
     "schema_version": 2,
+    "source": "mbabinski",
     "source_table": "logs",
     "status": "experimental",
     "tags": [
@@ -3340,6 +3508,7 @@
     "filename": "2023_RedCanary_ThreatDetectionReport/technique_cmd_obfuscated_commands.yml",
     "id": "b6aed14c-95a2-4e03-9949-70bc73c08b64",
     "level": "low",
+    "license": "GPL-3.0",
     "logsource": {
       "category": "process_creation",
       "product": "windows",
@@ -3356,6 +3525,7 @@
       "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=1 AND (Image LIKE '%\\\\cmd.exe' ESCAPE '\\' AND CommandLine REGEXP '^([^^=%![(; ]*[\\^=%![(; ]){8,}[^^=%![(; ]*$'))"
     ],
     "schema_version": 2,
+    "source": "mbabinski",
     "source_table": "logs",
     "status": "experimental",
     "tags": [
@@ -3379,6 +3549,7 @@
     "filename": "2024_RedCanary_ThreatDetectionReport/technique_obfuscation_zipfile_spawning_javascript.yml",
     "id": "b99b32f3-aa61-495d-a6a1-2595e1551ba8",
     "level": "low",
+    "license": "GPL-3.0",
     "logsource": {
       "category": "network_connection",
       "product": "windows",
@@ -3395,6 +3566,7 @@
       "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=3 AND (Image LIKE '%\\\\wscript.exe' ESCAPE '\\' AND (CommandLine LIKE '%users%' ESCAPE '\\' AND CommandLine LIKE '%temp%' ESCAPE '\\' AND CommandLine LIKE '%.zip%' ESCAPE '\\' AND CommandLine LIKE '%.js%' ESCAPE '\\')))"
     ],
     "schema_version": 2,
+    "source": "mbabinski",
     "source_table": "logs",
     "status": "experimental",
     "tags": [
@@ -3418,6 +3590,7 @@
     "filename": "2023_RedCanary_ThreatDetectionReport/threat_qbot_rundll32_non_standard_file_proxy_execution.yml",
     "id": "bb1cfac0-eca2-4803-9acd-aa75f5b84ff4",
     "level": "low",
+    "license": "GPL-3.0",
     "logsource": {
       "category": "process_creation",
       "product": "windows",
@@ -3434,6 +3607,7 @@
       "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=1 AND (Image LIKE '%\\\\rundll32.exe' ESCAPE '\\' AND (NOT COALESCE((CommandLine LIKE '%.dll%' ESCAPE '\\' OR CommandLine LIKE '%.cpl%' ESCAPE '\\' OR CommandLine LIKE '%.ax%' ESCAPE '\\' OR CommandLine LIKE '%.ocx%' ESCAPE '\\' OR CommandLine LIKE '%.inf%' ESCAPE '\\'), 0))))"
     ],
     "schema_version": 2,
+    "source": "mbabinski",
     "source_table": "logs",
     "status": "experimental",
     "tags": [
@@ -3456,6 +3630,7 @@
     "filename": "2024_RedCanary_ThreatDetectionReport/threat_chromeloader_nwjs_runtime_installation_paths.yml",
     "id": "be3e4b3e-4076-4ae3-acb9-3713c651158b",
     "level": "low",
+    "license": "GPL-3.0",
     "logsource": {
       "category": "process_creation",
       "product": "windows",
@@ -3471,6 +3646,7 @@
       "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=1 AND (Image REGEXP '^.*:\\\\users\\\\.*\\\\appdata\\\\roaming\\\\.*$' AND (Image LIKE '%\\\\bloom\\\\bloom.exe' ESCAPE '\\' OR Image LIKE '%\\\\cash/\\\\cash.exe' ESCAPE '\\' OR Image LIKE '%\\\\diet\\\\diet.exe' ESCAPE '\\' OR Image LIKE '%\\\\editor\\\\editor.exe' ESCAPE '\\' OR Image LIKE '%\\\\healthy\\\\healthy.exe' ESCAPE '\\' OR Image LIKE '%\\\\leading\\\\leading.exe' ESCAPE '\\' OR Image LIKE '%\\\\movies\\\\movies.exe' ESCAPE '\\' OR Image LIKE '%\\\\music\\\\music.exe' ESCAPE '\\' OR Image LIKE '%\\\\prime\\\\prime.exe' ESCAPE '\\' OR Image LIKE '%\\\\player\\\\player.exe' ESCAPE '\\' OR Image LIKE '%\\\\tone\\\\tone.exe' ESCAPE '\\' OR Image LIKE '%\\\\videos\\\\videos.exe' ESCAPE '\\' OR Image LIKE '%\\\\copy\\\\nw.exe' ESCAPE '\\' OR Image LIKE '%\\\\coreelevate\\\\nw.exe' ESCAPE '\\' OR Image LIKE '%\\\\debuggerstepperboundaryattribute\\\\nw.exe' ESCAPE '\\')))"
     ],
     "schema_version": 2,
+    "source": "mbabinski",
     "source_table": "logs",
     "status": "experimental",
     "tags": [
@@ -3494,6 +3670,7 @@
     "filename": "2023_RedCanary_ThreatDetectionReport/technique_motw_bypass_iso_write_susp_folder.yml",
     "id": "bedf5cac-6332-4463-98ab-818f9e31234c",
     "level": "low",
+    "license": "GPL-3.0",
     "logsource": {
       "category": "file_event",
       "product": "windows",
@@ -3509,6 +3686,7 @@
       "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=11 AND (TargetFilename LIKE '%.iso' ESCAPE '\\' AND ((TargetFilename LIKE '%Users%' ESCAPE '\\' AND TargetFilename LIKE '%Downloads%' ESCAPE '\\') OR TargetFilename LIKE '%appdata%' ESCAPE '\\')))"
     ],
     "schema_version": 2,
+    "source": "mbabinski",
     "source_table": "logs",
     "status": "experimental",
     "tags": [
@@ -3532,6 +3710,7 @@
     "filename": "2024_RedCanary_ThreatDetectionReport/threat_impacket_smbexec_execution.yml",
     "id": "c250b516-78d8-4664-8b86-8f3c9c0b53c8",
     "level": "low",
+    "license": "GPL-3.0",
     "logsource": {
       "category": "process_creation",
       "product": "windows",
@@ -3549,6 +3728,7 @@
       "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=1 AND (ParentImage LIKE '%\\\\services.exe' ESCAPE '\\' AND Image LIKE '%\\\\cmd.exe' ESCAPE '\\' AND (CommandLine LIKE '%/Q%' ESCAPE '\\' OR CommandLine LIKE '%/c%' ESCAPE '\\' OR CommandLine LIKE '%echo%' ESCAPE '\\' OR CommandLine LIKE '%^> %' ESCAPE '\\' OR CommandLine LIKE '% 2^>^&1 > %' ESCAPE '\\')))"
     ],
     "schema_version": 2,
+    "source": "mbabinski",
     "source_table": "logs",
     "status": "experimental",
     "tags": [
@@ -3577,6 +3757,7 @@
     "filename": "2023_RedCanary_ThreatDetectionReport/technique_cmd_explorer_start_exit_cmd.yml",
     "id": "c4e301d9-9f2d-4a81-9c98-60596edb55a3",
     "level": "low",
+    "license": "GPL-3.0",
     "logsource": {
       "category": "process_creation",
       "product": "windows",
@@ -3594,6 +3775,7 @@
       "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=1 AND (ParentImage LIKE '%\\\\explorer.exe' ESCAPE '\\' AND Image LIKE '%\\\\cmd.exe' ESCAPE '\\' AND (CommandLine LIKE '%start%' ESCAPE '\\' AND CommandLine LIKE '%exit%' ESCAPE '\\')))"
     ],
     "schema_version": 2,
+    "source": "mbabinski",
     "source_table": "logs",
     "status": "experimental",
     "tags": [
@@ -3617,6 +3799,7 @@
     "filename": "2023_RedCanary_ThreatDetectionReport/threat_plugx_wsc_proxy_dll_search_order_hijacking.yml",
     "id": "c518ac74-2e2b-4197-84d7-ea5118c557eb",
     "level": "low",
+    "license": "GPL-3.0",
     "logsource": {
       "category": "process_creation",
       "product": "windows",
@@ -3632,6 +3815,7 @@
       "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=1 AND (Image LIKE '%\\\\wsc\\_proxy.exe' ESCAPE '\\' AND (NOT COALESCE((Image LIKE '%\\\\program files\\\\%' ESCAPE '\\'), 0))))"
     ],
     "schema_version": 2,
+    "source": "mbabinski",
     "source_table": "logs",
     "status": "experimental",
     "tags": [
@@ -3654,6 +3838,7 @@
     "filename": "2023_RedCanary_ThreatDetectionReport/technique_lsass_memory_lsass_access.yml",
     "id": "c62c85ad-bbe7-4937-b77a-2cc984a1449d",
     "level": "low",
+    "license": "GPL-3.0",
     "logsource": {
       "category": "process_access",
       "product": "windows",
@@ -3670,6 +3855,7 @@
       "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=10 AND ((SourceImage LIKE '%\\\\powershell.exe' ESCAPE '\\' OR SourceImage LIKE '%\\\\taskmgr.exe' ESCAPE '\\' OR SourceImage LIKE '%\\\\rundll32.exe' ESCAPE '\\' OR SourceImage LIKE '%\\\\procdump.exe' ESCAPE '\\' OR SourceImage LIKE '%\\\\procexp.exe' ESCAPE '\\') AND TargetImage LIKE '%\\\\lsass.exe' ESCAPE '\\'))"
     ],
     "schema_version": 2,
+    "source": "mbabinski",
     "source_table": "logs",
     "status": "experimental",
     "tags": [
@@ -3693,6 +3879,7 @@
     "filename": "2023_RedCanary_ThreatDetectionReport/technique_lsass_memory_lsass_non_sytem.yml",
     "id": "c6624640-de9d-4933-a3dd-261cdeafdd18",
     "level": "low",
+    "license": "GPL-3.0",
     "logsource": {
       "product": "windows",
       "service": "security"
@@ -3708,6 +3895,7 @@
       "SELECT * FROM logs WHERE Channel='Security' AND ((EventID=4688 AND NewProcessName LIKE '%\\\\lsass.exe' ESCAPE '\\') AND (NOT COALESCE((SubjectUserSid='S-1-5-18'), 0)))"
     ],
     "schema_version": 2,
+    "source": "mbabinski",
     "source_table": "logs",
     "status": "experimental",
     "tags": [
@@ -3731,6 +3919,7 @@
     "filename": "2024_RedCanary_ThreatDetectionReport/technique_rundll32_injection_to_lsass.yml",
     "id": "c6a45ac1-b909-423b-907b-a9bfde31ab9c",
     "level": "low",
+    "license": "GPL-3.0",
     "logsource": {
       "category": "process_access",
       "product": "windows",
@@ -3747,6 +3936,7 @@
       "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=10 AND (SourceImage LIKE '%\\\\rundll32.exe' ESCAPE '\\' AND TargetImage LIKE '%\\\\lsass.exe' ESCAPE '\\'))"
     ],
     "schema_version": 2,
+    "source": "mbabinski",
     "source_table": "logs",
     "status": "experimental",
     "tags": [
@@ -3772,6 +3962,7 @@
     "filename": "2024_RedCanary_ThreatDetectionReport/technique_installer_packages_non_ms_publisher_id.yml",
     "id": "ca15c3dc-243f-432d-868b-c7694027be21",
     "level": "low",
+    "license": "GPL-3.0",
     "logsource": {
       "category": "process_creation",
       "product": "windows",
@@ -3787,6 +3978,7 @@
       "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=1 AND ((Image LIKE '%C:\\\\Program Files\\\\WindowsApps%' ESCAPE '\\' OR Image LIKE '%C:\\\\Program Files (x86)\\\\WindowsApps%' ESCAPE '\\') AND (NOT COALESCE((Image LIKE '%8wekyb3d8bbwe%' ESCAPE '\\' OR Image LIKE '%cw5n1h2txyewy%' ESCAPE '\\'), 0))))"
     ],
     "schema_version": 2,
+    "source": "mbabinski",
     "source_table": "logs",
     "status": "experimental",
     "tags": [
@@ -3812,6 +4004,7 @@
     "filename": "2023_RedCanary_ThreatDetectionReport/threat_mimikatz_module_names_in_cmdline.yml",
     "id": "ca5d91c2-3411-4085-a003-d7df8ce60244",
     "level": "low",
+    "license": "GPL-3.0",
     "logsource": {
       "category": "process_creation",
       "product": "windows",
@@ -3827,6 +4020,7 @@
       "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=1 AND (CommandLine LIKE '%sekurlsa::logonpasswords%' ESCAPE '\\' OR CommandLine LIKE '%lsadump::sam%' ESCAPE '\\' OR CommandLine LIKE '%sekurlsa::minidump%' ESCAPE '\\'))"
     ],
     "schema_version": 2,
+    "source": "mbabinski",
     "source_table": "logs",
     "status": "experimental",
     "tags": [
@@ -3849,6 +4043,7 @@
     "filename": "2023_RedCanary_ThreatDetectionReport/threat_socgholish_nltest_domain_trust_enumeration.yml",
     "id": "cdd824c2-ebda-404e-ad62-b2acf251976a",
     "level": "low",
+    "license": "GPL-3.0",
     "logsource": {
       "category": "process_creation",
       "product": "windows",
@@ -3865,6 +4060,7 @@
       "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=1 AND (Image LIKE '%\\\\nltest.exe' ESCAPE '\\' AND (CommandLine LIKE '%-domain\\_trusts%' ESCAPE '\\' OR CommandLine LIKE '%/domain\\_trusts%' ESCAPE '\\' OR CommandLine LIKE '%\u2013domain\\_trusts%' ESCAPE '\\' OR CommandLine LIKE '%\u2014domain\\_trusts%' ESCAPE '\\' OR CommandLine LIKE '%\u2015domain\\_trusts%' ESCAPE '\\' OR CommandLine LIKE '%-all\\_trusts%' ESCAPE '\\' OR CommandLine LIKE '%/all\\_trusts%' ESCAPE '\\' OR CommandLine LIKE '%\u2013all\\_trusts%' ESCAPE '\\' OR CommandLine LIKE '%\u2014all\\_trusts%' ESCAPE '\\' OR CommandLine LIKE '%\u2015all\\_trusts%' ESCAPE '\\')))"
     ],
     "schema_version": 2,
+    "source": "mbabinski",
     "source_table": "logs",
     "status": "experimental",
     "tags": [
@@ -3888,6 +4084,7 @@
     "filename": "2024_RedCanary_ThreatDetectionReport/technique_command_shell_from_service_ctrl_mgr.yml",
     "id": "cdf9f0ba-857a-4f91-9f30-724ade93b797",
     "level": "low",
+    "license": "GPL-3.0",
     "logsource": {
       "category": "process_creation",
       "product": "windows",
@@ -3905,6 +4102,7 @@
       "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=1 AND (ParentImage LIKE '%\\\\services.exe' ESCAPE '\\' AND Image LIKE '%\\\\cmd.exe' ESCAPE '\\' AND (CommandLine LIKE '%echo%' ESCAPE '\\' OR CommandLine LIKE '%/c%' ESCAPE '\\')))"
     ],
     "schema_version": 2,
+    "source": "mbabinski",
     "source_table": "logs",
     "status": "experimental",
     "tags": [
@@ -3931,6 +4129,7 @@
     "filename": "2023_RedCanary_ThreatDetectionReport/technique_rundll32_susp_lineage.yml",
     "id": "d4ae7bf0-8325-4a1f-9d72-0da717d9d757",
     "level": "low",
+    "license": "GPL-3.0",
     "logsource": {
       "category": "process_creation",
       "product": "windows",
@@ -3947,6 +4146,7 @@
       "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=1 AND (Image LIKE '%\\\\rundll32.exe' ESCAPE '\\' AND (ParentImage LIKE '%\\\\winword.exe' ESCAPE '\\' OR ParentImage LIKE '%\\\\excel.exe' ESCAPE '\\' OR ParentImage LIKE '%\\\\msaccess.exe' ESCAPE '\\' OR ParentImage LIKE '%\\\\lsass.exe' ESCAPE '\\' OR ParentImage LIKE '%\\\\taskeng.exe' ESCAPE '\\' OR ParentImage LIKE '%\\\\winlogon.exe' ESCAPE '\\' OR ParentImage LIKE '%\\\\schtasks.exe' ESCAPE '\\' OR ParentImage LIKE '%\\\\regsvr32.exe' ESCAPE '\\' OR ParentImage LIKE '%\\\\wmiprvse.exe' ESCAPE '\\' OR ParentImage LIKE '%\\\\wsmprovhost.exe' ESCAPE '\\')))"
     ],
     "schema_version": 2,
+    "source": "mbabinski",
     "source_table": "logs",
     "status": "experimental",
     "tags": [
@@ -3970,6 +4170,7 @@
     "filename": "2024_RedCanary_ThreatDetectionReport/technique_ingress_tools_transfer_certreq_download.yml",
     "id": "da4eca65-03c5-497a-a8f0-d4b0534a5c53",
     "level": "low",
+    "license": "GPL-3.0",
     "logsource": {
       "category": "process_creation",
       "product": "windows",
@@ -3986,6 +4187,7 @@
       "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=1 AND (Image LIKE '%\\\\certreq.exe' ESCAPE '\\' AND (CommandLine LIKE '%-post%' ESCAPE '\\' OR CommandLine LIKE '%-config%' ESCAPE '\\' OR CommandLine LIKE '%http%' ESCAPE '\\' OR CommandLine LIKE '%get%' ESCAPE '\\')))"
     ],
     "schema_version": 2,
+    "source": "mbabinski",
     "source_table": "logs",
     "status": "experimental",
     "tags": [
@@ -4009,6 +4211,7 @@
     "filename": "2024_RedCanary_ThreatDetectionReport/technique_powershell_base64_encoding.yml",
     "id": "df33cc09-ea03-4681-bd6c-b8dba7328a84",
     "level": "low",
+    "license": "GPL-3.0",
     "logsource": {
       "category": "process_creation",
       "product": "windows",
@@ -4025,6 +4228,7 @@
       "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=1 AND (Image LIKE '%\\\\powershell.exe' ESCAPE '\\' AND CommandLine LIKE '%base64%' ESCAPE '\\'))"
     ],
     "schema_version": 2,
+    "source": "mbabinski",
     "source_table": "logs",
     "status": "experimental",
     "tags": [
@@ -4051,6 +4255,7 @@
     "filename": "2023_RedCanary_ThreatDetectionReport/technique_pwsh_obfuscated_commands.yml",
     "id": "df39fa21-d6b5-490e-85ef-d9b379707ac8",
     "level": "low",
+    "license": "GPL-3.0",
     "logsource": {
       "category": "process_creation",
       "product": "windows",
@@ -4067,6 +4272,7 @@
       "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=1 AND (Image LIKE '%\\\\powershell.exe' ESCAPE '\\' AND CommandLine REGEXP '^([^^=%![(; ]*[\\^=%![(; ]){8,}[^^=%![(; ]*$'))"
     ],
     "schema_version": 2,
+    "source": "mbabinski",
     "source_table": "logs",
     "status": "experimental",
     "tags": [
@@ -4090,6 +4296,7 @@
     "filename": "2024_RedCanary_ThreatDetectionReport/technique_wmi_suspicious_powershell_cmdlets.yml",
     "id": "e29d3301-3b64-4305-9e91-8aabfbef2015",
     "level": "low",
+    "license": "GPL-3.0",
     "logsource": {
       "category": "process_creation",
       "product": "windows",
@@ -4106,6 +4313,7 @@
       "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=1 AND (Image LIKE '%\\\\powershell.exe' ESCAPE '\\' AND (CommandLine LIKE '%invoke-wmimethod%' ESCAPE '\\' OR CommandLine LIKE '%invoke-cimmethod%' ESCAPE '\\' OR CommandLine LIKE '%get-wmiobject%' ESCAPE '\\' OR CommandLine LIKE '%get-ciminstance%' ESCAPE '\\' OR CommandLine LIKE '%wmiclass%' ESCAPE '\\')))"
     ],
     "schema_version": 2,
+    "source": "mbabinski",
     "source_table": "logs",
     "status": "experimental",
     "tags": [
@@ -4132,6 +4340,7 @@
     "filename": "2023_RedCanary_ThreatDetectionReport/threat_yellow_cockatoo_susp_dotnet_methods.yml",
     "id": "e2c6d4c8-2e14-47a8-b22c-e4c9e7e65d0e",
     "level": "low",
+    "license": "GPL-3.0",
     "logsource": {
       "category": "ps_script",
       "product": "windows",
@@ -4147,6 +4356,7 @@
       "SELECT * FROM logs WHERE (Channel='Microsoft-Windows-PowerShell/Operational' OR Channel='PowerShellCore/Operational') AND (EventID=4104 AND (ScriptBlockText LIKE '%aescryptoserviceprovider%' ESCAPE '\\' OR ScriptBlockText LIKE '%frombase64string%' ESCAPE '\\' OR ScriptBlockText LIKE '%user32.dll%' ESCAPE '\\'))"
     ],
     "schema_version": 2,
+    "source": "mbabinski",
     "source_table": "logs",
     "status": "experimental",
     "tags": [
@@ -4171,6 +4381,7 @@
     "filename": "2024_RedCanary_ThreatDetectionReport/threat_qbot_mounted_drive_script_execution.yml",
     "id": "e69d709f-097f-4798-bf9a-aa600fc3249f",
     "level": "low",
+    "license": "GPL-3.0",
     "logsource": {
       "category": "process_creation",
       "product": "windows",
@@ -4188,6 +4399,7 @@
       "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=1 AND (ParentImage LIKE '%\\\\explorer.exe' ESCAPE '\\' AND (Image LIKE '%\\\\cscript.exe' ESCAPE '\\' OR Image LIKE '%\\\\wscript.exe' ESCAPE '\\') AND CommandLine REGEXP '[d-z]:\\.*[js|vbs|wsf]$'))"
     ],
     "schema_version": 2,
+    "source": "mbabinski",
     "source_table": "logs",
     "status": "experimental",
     "tags": [
@@ -4213,6 +4425,7 @@
     "filename": "2023_RedCanary_ThreatDetectionReport/technique_cmd_bypassing_controls.yml",
     "id": "e76af6c9-1c66-4ed7-9a36-b2f905e2e78c",
     "level": "low",
+    "license": "GPL-3.0",
     "logsource": {
       "category": "process_creation",
       "product": "windows",
@@ -4229,6 +4442,7 @@
       "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=1 AND (Image LIKE '%\\\\cmd.exe' ESCAPE '\\' AND (CommandLine LIKE '%bypass%' ESCAPE '\\' OR CommandLine LIKE '%-exec%' ESCAPE '\\')))"
     ],
     "schema_version": 2,
+    "source": "mbabinski",
     "source_table": "logs",
     "status": "experimental",
     "tags": [
@@ -4252,6 +4466,7 @@
     "filename": "2025_ArcGIS_Server_SOE_Abuse/file_event_win_arcsoc_creating_susp_files.yml",
     "id": "e890acee-d488-420e-8f20-d9b19b3c3d43",
     "level": "low",
+    "license": "GPL-3.0",
     "logsource": {
       "category": "file_event",
       "product": "windows",
@@ -4268,6 +4483,7 @@
       "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=11 AND (Image LIKE '%\\\\ArcSOC.exe' ESCAPE '\\' AND (TargetFilename LIKE '%.exe' ESCAPE '\\' OR TargetFilename LIKE '%.dll' ESCAPE '\\' OR TargetFilename LIKE '%.ps1' ESCAPE '\\' OR TargetFilename LIKE '%.py' ESCAPE '\\' OR TargetFilename LIKE '%.vbs' ESCAPE '\\' OR TargetFilename LIKE '%.hta' ESCAPE '\\' OR TargetFilename LIKE '%.cmd' ESCAPE '\\' OR TargetFilename LIKE '%.bat' ESCAPE '\\' OR TargetFilename LIKE '%.wsf' ESCAPE '\\' OR TargetFilename LIKE '%.js' ESCAPE '\\' OR TargetFilename LIKE '%.ahk' ESCAPE '\\' OR TargetFilename LIKE '%.au3' ESCAPE '\\' OR TargetFilename LIKE '%.aspx' ESCAPE '\\')))"
     ],
     "schema_version": 2,
+    "source": "mbabinski",
     "source_table": "logs",
     "status": "experimental",
     "tags": [
@@ -4295,6 +4511,7 @@
     "filename": "2023_RedCanary_ThreatDetectionReport/technique_rename_sys_utils_unexpected_internal_name.yml",
     "id": "e930ba8f-388a-4436-8326-4ffb1c52b111",
     "level": "low",
+    "license": "GPL-3.0",
     "logsource": {
       "category": "process_creation",
       "product": "windows",
@@ -4311,6 +4528,7 @@
       "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=1 AND (Image LIKE '%\\\\notepad.exe' ESCAPE '\\' AND OriginalFileName='PowerShell.EXE'))"
     ],
     "schema_version": 2,
+    "source": "mbabinski",
     "source_table": "logs",
     "status": "experimental",
     "tags": [
@@ -4338,6 +4556,7 @@
     "filename": "2023_Impacket/atexec/win_schtasks_impacket_atexec.yml",
     "id": "eb2713cd-6e7d-4813-81d0-ced79de4c7da",
     "level": "low",
+    "license": "GPL-3.0",
     "logsource": {
       "product": "windows",
       "service": "taskscheduler"
@@ -4352,6 +4571,7 @@
       "SELECT * FROM logs WHERE Channel='Microsoft-Windows-TaskScheduler/Operational' AND ((EventID=106 AND Message REGEXP '^.*registered\\sTask\\sScheduler\\stask\\s\\\"\\\\[A-Za-z]{8}\\\"$') OR (EventID=129 AND Message REGEXP '^.*Task\\sScheduler\\slaunch\\stask\\s\\\"\\\\[A-Za-z]{8}\\\"\\s,\\sinstance\\s\\\"cmd\\.exe\\\".*$') OR (EventID=200 AND Message REGEXP '^.*Task\\sScheduler\\slaunched\\saction\\s\\\"cmd\\.exe\\\"\\sin\\sinstance\\s\\\"\\{.*\\}\\\"\\sof\\stask\\s\"\\\\[A-Za-z]{8}\\\"\\.$') OR (EventID=141 AND Message REGEXP '^.*deleted\\sTask\\sScheduler\\stask\\s\"\\\\[A-Za-z]{8}\\\"$') OR (EventID=201 AND Message REGEXP '^Task\\sScheduler\\ssuccessfully\\scompleted\\stask\\s\"\\\\[A-Za-z]{8}\\\".*action\\s\\\"cmd\\.exe\\\"\\swith\\sreturn\\scode\\s\\d\\.$'))"
     ],
     "schema_version": 2,
+    "source": "mbabinski",
     "source_table": "logs",
     "status": "experimental",
     "tags": [
@@ -4377,6 +4597,7 @@
     "filename": "2024_RedCanary_ThreatDetectionReport/technique_command_shell_from_explorer.yml",
     "id": "ebb4eaad-9909-4785-a038-97bdee8aa5ae",
     "level": "low",
+    "license": "GPL-3.0",
     "logsource": {
       "category": "process_creation",
       "product": "windows",
@@ -4394,6 +4615,7 @@
       "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=1 AND (ParentImage LIKE '%\\\\explorer.exe' ESCAPE '\\' AND Image LIKE '%\\\\cmd.exe' ESCAPE '\\' AND (CommandLine LIKE '%start%' ESCAPE '\\' AND CommandLine LIKE '%exit%' ESCAPE '\\')))"
     ],
     "schema_version": 2,
+    "source": "mbabinski",
     "source_table": "logs",
     "status": "experimental",
     "tags": [
@@ -4419,6 +4641,7 @@
     "filename": "2023_RedCanary_ThreatDetectionReport/technique_process_injection_susp_net_conn.yml",
     "id": "f3b0b17c-0e4b-45e5-b88e-521d2c3f6ae1",
     "level": "low",
+    "license": "GPL-3.0",
     "logsource": {
       "category": "network_connection",
       "product": "windows",
@@ -4434,6 +4657,7 @@
       "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=3 AND Image LIKE '%\\\\notepad.exe' ESCAPE '\\')"
     ],
     "schema_version": 2,
+    "source": "mbabinski",
     "source_table": "logs",
     "status": "experimental",
     "tags": [
@@ -4457,6 +4681,7 @@
     "filename": "2023_RedCanary_ThreatDetectionReport/technique_rundll32_app_bypass_dllregisterserver.yml",
     "id": "f6d0c39a-96fe-45c5-b3c8-7dbea2a3f34c",
     "level": "low",
+    "license": "GPL-3.0",
     "logsource": {
       "category": "process_creation",
       "product": "windows",
@@ -4473,6 +4698,7 @@
       "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=1 AND (Image LIKE '%\\\\rundll32.exe' ESCAPE '\\' AND CommandLine LIKE '%DllRegisterServer%' ESCAPE '\\'))"
     ],
     "schema_version": 2,
+    "source": "mbabinski",
     "source_table": "logs",
     "status": "experimental",
     "tags": [
@@ -4496,6 +4722,7 @@
     "filename": "2023_RedCanary_ThreatDetectionReport/technique_process_injection_process_sans_cmdline.yml",
     "id": "fbc13e37-c601-4935-aa4f-3eaaa9976003",
     "level": "low",
+    "license": "GPL-3.0",
     "logsource": {
       "category": "process_creation",
       "product": "windows",
@@ -4512,6 +4739,7 @@
       "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=1 AND ((Image LIKE '%\\\\backgroundtaskhost.exe' ESCAPE '\\' OR Image LIKE '%\\\\svchost.exe' ESCAPE '\\' OR Image LIKE '%\\\\dllhost.exe' ESCAPE '\\' OR Image LIKE '%\\\\werfault.exe' ESCAPE '\\' OR Image LIKE '%\\\\searchprotocolhost.exe' ESCAPE '\\' OR Image LIKE '%\\\\wuauclt.exe' ESCAPE '\\' OR Image LIKE '%\\\\spoolsv.exe' ESCAPE '\\' OR Image LIKE '%\\\\rundll32.exe' ESCAPE '\\' OR Image LIKE '%\\\\regasm.exe' ESCAPE '\\' OR Image LIKE '%\\\\regsvcs.exe' ESCAPE '\\') AND (CommandLine REGEXP '^(backgroundtaskhost|svchost|dllhost|werfault|searchprotocolhost|wuauclt|spoolsv|rundll32|regasm|regsvcs)(\\.exe){0,}(\\s|\")*$' OR (CommandLine IS NULL OR CommandLine=''))))"
     ],
     "schema_version": 2,
+    "source": "mbabinski",
     "source_table": "logs",
     "status": "experimental",
     "tags": [
@@ -4535,6 +4763,7 @@
     "filename": "2023_RedCanary_ThreatDetectionReport/technique_wmi_susp_commands.yml",
     "id": "fd4852d8-3464-4639-acc5-f9cf9553a396",
     "level": "low",
+    "license": "GPL-3.0",
     "logsource": {
       "category": "process_creation",
       "product": "windows",
@@ -4551,6 +4780,7 @@
       "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=1 AND (Image LIKE '%\\\\wmic.exe' ESCAPE '\\' AND (CommandLine LIKE '%create%' ESCAPE '\\' OR CommandLine LIKE '%node:%' ESCAPE '\\' OR CommandLine LIKE '%process%' ESCAPE '\\' OR CommandLine LIKE '%call%' ESCAPE '\\')))"
     ],
     "schema_version": 2,
+    "source": "mbabinski",
     "source_table": "logs",
     "status": "experimental",
     "tags": [
@@ -4574,6 +4804,7 @@
     "filename": "2022_HTMLSmuggling/3_win_security_iso_mount.yml",
     "id": "0248a7bc-8a9a-4cd8-a57e-3ae8e073a073",
     "level": "medium",
+    "license": "GPL-3.0",
     "logsource": {
       "product": "windows",
       "service": "security"
@@ -4590,6 +4821,7 @@
       "SELECT * FROM logs WHERE Channel='Security' AND ((EventID=4663 AND ObjectServer='Security' AND ObjectType='File' AND ObjectName LIKE '\\\\Device\\\\CdRom%' ESCAPE '\\') AND (NOT COALESCE((ObjectName LIKE '\\\\Device\\\\CdRom0\\\\setup.exe' ESCAPE '\\'), 0)))"
     ],
     "schema_version": 2,
+    "source": "mbabinski",
     "source_table": "logs",
     "status": "experimental",
     "tags": [
@@ -4613,6 +4845,7 @@
     "filename": "2022_RenameSystemUtilities/proc_creation_susp_rcedit_execution.yml",
     "id": "0c92f2e6-f08f-4b73-9216-ecb0ca634689",
     "level": "medium",
+    "license": "GPL-3.0",
     "logsource": {
       "category": "process_creation",
       "product": "windows",
@@ -4629,6 +4862,7 @@
       "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=1 AND (((Image LIKE '%\\\\rcedit-x64.exe' ESCAPE '\\' OR Image LIKE '%\\\\rcedit-x86.exe' ESCAPE '\\') AND CommandLine LIKE '%--set-resource-string%' ESCAPE '\\') AND (CommandLine LIKE '%OriginalFileName%' ESCAPE '\\' OR CommandLine LIKE '%CompanyName%' ESCAPE '\\' OR CommandLine LIKE '%FileDescription%' ESCAPE '\\' OR CommandLine LIKE '%ProductName%' ESCAPE '\\' OR CommandLine LIKE '%ProductVersion%' ESCAPE '\\' OR CommandLine LIKE '%LegalCopyright%' ESCAPE '\\')))"
     ],
     "schema_version": 2,
+    "source": "mbabinski",
     "source_table": "logs",
     "status": "experimental",
     "tags": [
@@ -4655,6 +4889,7 @@
     "filename": "2023_DarkGate/file_event_win_malware_darkgate_autoit3.yml",
     "id": "1a433e1d-03d2-47a6-8063-ece992cf4e73",
     "level": "medium",
+    "license": "GPL-3.0",
     "logsource": {
       "category": "file_event",
       "product": "windows",
@@ -4671,6 +4906,7 @@
       "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=11 AND ((Image LIKE '%\\\\curl.exe' ESCAPE '\\' OR Image LIKE '%\\\\KeyScramblerLogon.exe' ESCAPE '\\' OR Image LIKE '%\\\\Autoit3.exe' ESCAPE '\\' OR Image LIKE '%\\\\wmprph.exe' ESCAPE '\\' OR Image LIKE '%\\\\ExtExport.exe' ESCAPE '\\') AND TargetFilename LIKE '%\\\\Autoit3.exe' ESCAPE '\\'))"
     ],
     "schema_version": 2,
+    "source": "mbabinski",
     "source_table": "logs",
     "status": "experimental",
     "tags": [
@@ -4696,6 +4932,7 @@
     "filename": "2022_RedCanary_ThreatDetectionReport/wmi_recon_activity.yml",
     "id": "21a5815b-5db5-4e13-99e4-052ae6bbcdc1",
     "level": "medium",
+    "license": "GPL-3.0",
     "logsource": {
       "category": "process_creation",
       "product": "windows",
@@ -4712,6 +4949,7 @@
       "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=1 AND (Image LIKE '%\\\\wmic.exe' ESCAPE '\\' AND (CommandLine LIKE '%\\\\ldap%' ESCAPE '\\' OR CommandLine LIKE '%ntdomain%' ESCAPE '\\' OR CommandLine LIKE '%antivirusproduct%' ESCAPE '\\' OR CommandLine LIKE '%useraccount get%' ESCAPE '\\')))"
     ],
     "schema_version": 2,
+    "source": "mbabinski",
     "source_table": "logs",
     "status": "experimental",
     "tags": [
@@ -4735,6 +4973,7 @@
     "filename": "2022_RedCanary_ThreatDetectionReport/lsass_process_access_injection.yml",
     "id": "23fac7e9-3c44-4b76-891b-72c4d44e1964",
     "level": "medium",
+    "license": "GPL-3.0",
     "logsource": {
       "category": "process_access",
       "product": "windows",
@@ -4751,6 +4990,7 @@
       "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=10 AND ((SourceImage LIKE '%\\\\powershell.exe' ESCAPE '\\' OR SourceImage LIKE '%\\\\taskmgr.exe' ESCAPE '\\' OR SourceImage LIKE '%\\\\rundll32.exe' ESCAPE '\\' OR SourceImage LIKE '%\\\\procdump.exe' ESCAPE '\\' OR SourceImage LIKE '%\\\\procexp.exe' ESCAPE '\\') AND TargetImage LIKE '%\\\\lsass.exe' ESCAPE '\\'))"
     ],
     "schema_version": 2,
+    "source": "mbabinski",
     "source_table": "logs",
     "status": "experimental",
     "tags": [
@@ -4774,6 +5014,7 @@
     "filename": "2023_External_RemoteSvc_Logons/win_security_successful_external_remote_svc_login.yml",
     "id": "259a9cdf-c4dd-4fa2-b243-2269e5ab18a2",
     "level": "medium",
+    "license": "GPL-3.0",
     "logsource": {
       "product": "windows",
       "service": "security"
@@ -4790,6 +5031,7 @@
       "SELECT * FROM logs WHERE Channel='Security' AND ((EventID=4624 AND (LogonType=3 OR LogonType=10)) AND (NOT COALESCE((SubjectUserName='-'), 0)) AND (NOT COALESCE((IpAddress LIKE '10.%' ESCAPE '\\' OR IpAddress LIKE '172.16.%' ESCAPE '\\' OR IpAddress LIKE '172.17.%' ESCAPE '\\' OR IpAddress LIKE '172.18.%' ESCAPE '\\' OR IpAddress LIKE '172.19.%' ESCAPE '\\' OR IpAddress LIKE '172.20.%' ESCAPE '\\' OR IpAddress LIKE '172.21.%' ESCAPE '\\' OR IpAddress LIKE '172.22.%' ESCAPE '\\' OR IpAddress LIKE '172.23.%' ESCAPE '\\' OR IpAddress LIKE '172.24.%' ESCAPE '\\' OR IpAddress LIKE '172.25.%' ESCAPE '\\' OR IpAddress LIKE '172.26.%' ESCAPE '\\' OR IpAddress LIKE '172.27.%' ESCAPE '\\' OR IpAddress LIKE '172.28.%' ESCAPE '\\' OR IpAddress LIKE '172.29.%' ESCAPE '\\' OR IpAddress LIKE '172.30.%' ESCAPE '\\' OR IpAddress LIKE '172.31.%' ESCAPE '\\' OR IpAddress LIKE '192.168.%' ESCAPE '\\' OR IpAddress LIKE '224.%' ESCAPE '\\' OR IpAddress LIKE '225.%' ESCAPE '\\' OR IpAddress LIKE '226.%' ESCAPE '\\' OR IpAddress LIKE '227.%' ESCAPE '\\' OR IpAddress LIKE '228.%' ESCAPE '\\' OR IpAddress LIKE '229.%' ESCAPE '\\' OR IpAddress LIKE '230.%' ESCAPE '\\' OR IpAddress LIKE '231.%' ESCAPE '\\' OR IpAddress LIKE '232.%' ESCAPE '\\' OR IpAddress LIKE '233.%' ESCAPE '\\' OR IpAddress LIKE '234.%' ESCAPE '\\' OR IpAddress LIKE '235.%' ESCAPE '\\' OR IpAddress LIKE '236.%' ESCAPE '\\' OR IpAddress LIKE '237.%' ESCAPE '\\' OR IpAddress LIKE '238.%' ESCAPE '\\' OR IpAddress LIKE '239.%' ESCAPE '\\' OR IpAddress LIKE '127.%' ESCAPE '\\'), 0)))"
     ],
     "schema_version": 2,
+    "source": "mbabinski",
     "source_table": "logs",
     "status": "experimental",
     "tags": [
@@ -4816,6 +5058,7 @@
     "filename": "2022_HTMLSmuggling/1_win_zipfile_drop.yml",
     "id": "2e88fc48-1d6c-425d-beb8-fa58047d41dd",
     "level": "medium",
+    "license": "GPL-3.0",
     "logsource": {
       "category": "create_stream_hash",
       "product": "windows",
@@ -4833,6 +5076,7 @@
       "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=15 AND ((Image LIKE '%\\\\chrome.exe' ESCAPE '\\' OR Image LIKE '%\\\\brave.exe' ESCAPE '\\' OR Image LIKE '%\\\\firefox.exe' ESCAPE '\\' OR Image LIKE '%\\\\iexplore.exe' ESCAPE '\\' OR Image LIKE '%\\\\msedge.exe' ESCAPE '\\' OR Image LIKE '%\\\\MicrosoftEdgeCP.exe' ESCAPE '\\') AND Contents LIKE '%[ZoneTransfer]  ZoneId=3%' ESCAPE '\\' AND (TargetFilename LIKE '%.zip%' ESCAPE '\\' OR TargetFilename LIKE '%.rar%' ESCAPE '\\' OR TargetFilename LIKE '%.7z%' ESCAPE '\\')))"
     ],
     "schema_version": 2,
+    "source": "mbabinski",
     "source_table": "logs",
     "status": "experimental",
     "tags": [
@@ -4859,6 +5103,7 @@
     "filename": "2023_RedCanary_ThreatDetectionReport/threat_socgholish_homoglyph_cyrillic_lookalikes.yml",
     "id": "32e280f1-8ad4-46ef-9e80-910657611fbc",
     "level": "medium",
+    "license": "GPL-3.0",
     "logsource": {
       "category": "process_creation",
       "product": "windows",
@@ -4874,6 +5119,7 @@
       "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=1 AND (CommandLine LIKE '%\u0410%' ESCAPE '\\' OR CommandLine LIKE '%\u0430%' ESCAPE '\\' OR CommandLine LIKE '%\u0412%' ESCAPE '\\' OR CommandLine LIKE '%\u0415%' ESCAPE '\\' OR CommandLine LIKE '%\u0435%' ESCAPE '\\' OR CommandLine LIKE '%\u041a%' ESCAPE '\\' OR CommandLine LIKE '%\u041c%' ESCAPE '\\' OR CommandLine LIKE '%\u041d%' ESCAPE '\\' OR CommandLine LIKE '%\u041e%' ESCAPE '\\' OR CommandLine LIKE '%\u043e%' ESCAPE '\\' OR CommandLine LIKE '%\u0420%' ESCAPE '\\' OR CommandLine LIKE '%\u0440%' ESCAPE '\\' OR CommandLine LIKE '%\u0421%' ESCAPE '\\' OR CommandLine LIKE '%\u0441%' ESCAPE '\\' OR CommandLine LIKE '%\u0422%' ESCAPE '\\' OR CommandLine LIKE '%\u0425%' ESCAPE '\\' OR CommandLine LIKE '%\u0445%' ESCAPE '\\' OR CommandLine LIKE '%\u0405%' ESCAPE '\\' OR CommandLine LIKE '%\u0455%' ESCAPE '\\' OR CommandLine LIKE '%\u0406%' ESCAPE '\\' OR CommandLine LIKE '%\u0456%' ESCAPE '\\' OR CommandLine LIKE '%\u0408%' ESCAPE '\\' OR CommandLine LIKE '%\u0458%' ESCAPE '\\' OR CommandLine LIKE '%\u04ae%' ESCAPE '\\' OR CommandLine LIKE '%\u04bb%' ESCAPE '\\' OR CommandLine LIKE '%\u04c0%' ESCAPE '\\' OR CommandLine LIKE '%\u04cf%' ESCAPE '\\' OR CommandLine LIKE '%\u0501%' ESCAPE '\\' OR CommandLine LIKE '%\u050c%' ESCAPE '\\' OR CommandLine LIKE '%\u051a%' ESCAPE '\\' OR CommandLine LIKE '%\u051b%' ESCAPE '\\' OR CommandLine LIKE '%\u051c%' ESCAPE '\\' OR CommandLine LIKE '%\u051d%' ESCAPE '\\' OR CommandLine LIKE '%\u0391%' ESCAPE '\\' OR CommandLine LIKE '%\u0392%' ESCAPE '\\' OR CommandLine LIKE '%\u0395%' ESCAPE '\\' OR CommandLine LIKE '%\u0396%' ESCAPE '\\' OR CommandLine LIKE '%\u0397%' ESCAPE '\\' OR CommandLine LIKE '%\u0399%' ESCAPE '\\' OR CommandLine LIKE '%\u039a%' ESCAPE '\\' OR CommandLine LIKE '%\u039c%' ESCAPE '\\' OR CommandLine LIKE '%\u039d%' ESCAPE '\\' OR CommandLine LIKE '%\u039f%' ESCAPE '\\' OR CommandLine LIKE '%\u03bf%' ESCAPE '\\' OR CommandLine LIKE '%\u03a1%' ESCAPE '\\' OR CommandLine LIKE '%\u03a4%' ESCAPE '\\' OR CommandLine LIKE '%\u03a5%' ESCAPE '\\' OR CommandLine LIKE '%\u03a7%' ESCAPE '\\'))"
     ],
     "schema_version": 2,
+    "source": "mbabinski",
     "source_table": "logs",
     "status": "experimental",
     "tags": [
@@ -4899,6 +5145,7 @@
     "filename": "2022_RedCanary_ThreatDetectionReport/rundll32_app_bypass_dllregisterserver.yml",
     "id": "361f2190-4857-4505-aaf9-588013b390f1",
     "level": "medium",
+    "license": "GPL-3.0",
     "logsource": {
       "category": "process_creation",
       "product": "windows",
@@ -4915,6 +5162,7 @@
       "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=1 AND (Image LIKE '%\\\\rundll32.exe' ESCAPE '\\' AND CommandLine LIKE '%DllRegisterServer%' ESCAPE '\\'))"
     ],
     "schema_version": 2,
+    "source": "mbabinski",
     "source_table": "logs",
     "status": "experimental",
     "tags": [
@@ -4941,6 +5189,7 @@
     "filename": "2024_Cicada3301_Ransomware/proc_creation_win_iisreset_stop.yml",
     "id": "3a56827c-353e-4e86-b429-674abae37f32",
     "level": "medium",
+    "license": "GPL-3.0",
     "logsource": {
       "category": "process_creation",
       "product": "windows",
@@ -4958,6 +5207,7 @@
       "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=1 AND ((Image LIKE '%\\\\iisreset.exe' ESCAPE '\\' OR OriginalFileName='iisreset.exe.mui') AND CommandLine LIKE '%/stop%' ESCAPE '\\'))"
     ],
     "schema_version": 2,
+    "source": "mbabinski",
     "source_table": "logs",
     "status": "experimental",
     "tags": [
@@ -4984,6 +5234,7 @@
     "filename": "2022_RedCanary_ThreatDetectionReport/rundll32_without_commandline.yml",
     "id": "48bd57e9-1b2b-4be9-a2aa-5fccbe86b136",
     "level": "medium",
+    "license": "GPL-3.0",
     "logsource": {
       "category": "process_creation",
       "product": "windows",
@@ -5000,6 +5251,7 @@
       "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=1 AND ((ParentCommandLine='rundll32.exe' OR ParentCommandLine='rundll32' OR ParentCommandLine IS NULL) AND ParentImage LIKE '%\\\\rundll32.exe' ESCAPE '\\'))"
     ],
     "schema_version": 2,
+    "source": "mbabinski",
     "source_table": "logs",
     "status": "experimental",
     "tags": [
@@ -5024,6 +5276,7 @@
     "filename": "2022_RedCanary_ThreatDetectionReport/schtasks_network_connections.yml",
     "id": "4a224230-746d-436b-b569-59f2d6809d6b",
     "level": "medium",
+    "license": "GPL-3.0",
     "logsource": {
       "category": "process_creation",
       "product": "windows",
@@ -5040,6 +5293,7 @@
       "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=1 AND (Image LIKE '%\\\\schtasks.exe' ESCAPE '\\' AND (CommandLine LIKE '%-create%' ESCAPE '\\' OR CommandLine LIKE '%/create%' ESCAPE '\\' OR CommandLine LIKE '%\u2013create%' ESCAPE '\\' OR CommandLine LIKE '%\u2014create%' ESCAPE '\\' OR CommandLine LIKE '%\u2015create%' ESCAPE '\\') AND (CommandLine LIKE '%https://%' ESCAPE '\\' OR CommandLine LIKE '%http://%' ESCAPE '\\' OR CommandLine LIKE '%ftp://%' ESCAPE '\\')))"
     ],
     "schema_version": 2,
+    "source": "mbabinski",
     "source_table": "logs",
     "status": "experimental",
     "tags": [
@@ -5065,6 +5319,7 @@
     "filename": "2022_RedCanary_ThreatDetectionReport/lsass_susp_parent_child_relationships.yml",
     "id": "67ba1ddd-4510-42d5-aa78-83bed66bd684",
     "level": "medium",
+    "license": "GPL-3.0",
     "logsource": {
       "category": "process_creation",
       "product": "windows",
@@ -5081,6 +5336,7 @@
       "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=1 AND (((Image LIKE '%\\\\cmd.exe' ESCAPE '\\' OR Image LIKE '%\\\\powershell.exe' ESCAPE '\\' OR Image LIKE '%\\\\regsvr32.exe' ESCAPE '\\' OR Image LIKE '%\\\\mstsc.exe' ESCAPE '\\' OR Image LIKE '%\\\\dllhost.exe' ESCAPE '\\') AND ParentImage LIKE '%\\\\lsass.exe''' ESCAPE '\\') OR (Image LIKE '%\\\\lsass.exe' ESCAPE '\\' AND (ParentImage LIKE '%\\\\explorer.exe' ESCAPE '\\' OR ParentImage LIKE '%\\\\cmd.exe' ESCAPE '\\' OR ParentImage LIKE '%\\\\lsass.exe' ESCAPE '\\'))))"
     ],
     "schema_version": 2,
+    "source": "mbabinski",
     "source_table": "logs",
     "status": "experimental",
     "tags": [
@@ -5104,6 +5360,7 @@
     "filename": "2022_RedCanary_ThreatDetectionReport/wmic_shadow_copy_deletion.yml",
     "id": "68483dc1-6bce-44ba-821b-59f3a0ba3bd8",
     "level": "medium",
+    "license": "GPL-3.0",
     "logsource": {
       "category": "process_creation",
       "product": "windows",
@@ -5120,6 +5377,7 @@
       "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=1 AND (Image LIKE '%\\\\wmic.exe' ESCAPE '\\' AND (CommandLine LIKE '%shadowcopy%' ESCAPE '\\' AND CommandLine LIKE '%delete%' ESCAPE '\\')))"
     ],
     "schema_version": 2,
+    "source": "mbabinski",
     "source_table": "logs",
     "status": "experimental",
     "tags": [
@@ -5143,6 +5401,7 @@
     "filename": "2024_Cicada3301_Ransomware/file_creation_win_cicada_psexec.yml",
     "id": "76cdd984-4b2b-465d-908f-d55ead0cdc9e",
     "level": "medium",
+    "license": "GPL-3.0",
     "logsource": {
       "category": "file_event",
       "product": "windows",
@@ -5158,6 +5417,7 @@
       "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=11 AND ((TargetFilename LIKE '%psexec%' ESCAPE '\\' AND TargetFilename LIKE 'C:\\\\Users\\\\Public%' ESCAPE '\\') AND (NOT COALESCE((TargetFilename LIKE '%\\\\psexec.exe' ESCAPE '\\'), 0))))"
     ],
     "schema_version": 2,
+    "source": "mbabinski",
     "source_table": "logs",
     "status": "experimental",
     "tags": [
@@ -5185,6 +5445,7 @@
     "filename": "2022_RedCanary_ThreatDetectionReport/wmi_susp_process_lineage.yml",
     "id": "9c3367de-94fd-4a46-bc9f-d2943bd32025",
     "level": "medium",
+    "license": "GPL-3.0",
     "logsource": {
       "category": "process_creation",
       "product": "windows",
@@ -5201,6 +5462,7 @@
       "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=1 AND (ParentImage LIKE '%\\\\wmiprvse.exe' ESCAPE '\\' AND (Image LIKE '%\\\\rundll32.exe' ESCAPE '\\' OR Image LIKE '%\\\\msbuild.exe' ESCAPE '\\' OR Image LIKE '%\\\\powershell.exe' ESCAPE '\\' OR Image LIKE '%\\\\cmd.exe' ESCAPE '\\' OR Image LIKE '%\\\\mshta.exe' ESCAPE '\\')))"
     ],
     "schema_version": 2,
+    "source": "mbabinski",
     "source_table": "logs",
     "status": "experimental",
     "tags": [
@@ -5224,6 +5486,7 @@
     "filename": "2022_RedCanary_ThreatDetectionReport/rundll32_susp_process_ancestry.yml",
     "id": "a01588a5-b68d-4d55-ab49-76d25c557ed4",
     "level": "medium",
+    "license": "GPL-3.0",
     "logsource": {
       "category": "process_creation",
       "product": "windows",
@@ -5240,6 +5503,7 @@
       "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=1 AND (Image LIKE '%\\\\rundll32.exe' ESCAPE '\\' AND (ParentImage LIKE '%\\\\winword.exe' ESCAPE '\\' OR ParentImage LIKE '%\\\\excel.exe' ESCAPE '\\' OR ParentImage LIKE '%\\\\msaccess.exe' ESCAPE '\\' OR ParentImage LIKE '%\\\\lsass.exe' ESCAPE '\\' OR ParentImage LIKE '%\\\\taskeng.exe' ESCAPE '\\' OR ParentImage LIKE '%\\\\winlogon.exe' ESCAPE '\\' OR ParentImage LIKE '%\\\\schtasks.exe' ESCAPE '\\' OR ParentImage LIKE '%\\\\regsvr32.exe' ESCAPE '\\' OR ParentImage LIKE '%\\\\wmiprvse.exe' ESCAPE '\\' OR ParentImage LIKE '%\\\\wsmprovhost.exe' ESCAPE '\\')))"
     ],
     "schema_version": 2,
+    "source": "mbabinski",
     "source_table": "logs",
     "status": "experimental",
     "tags": [
@@ -5264,6 +5528,7 @@
     "filename": "2023_Impacket/psexec/win_file_creation_impacket_psexec.yml",
     "id": "b0ceadcb-ebc8-455e-9541-19d90ad4502c",
     "level": "medium",
+    "license": "GPL-3.0",
     "logsource": {
       "category": "file_event",
       "product": "windows",
@@ -5280,6 +5545,7 @@
       "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=11 AND (Image LIKE '%system' ESCAPE '\\' AND TargetFilename REGEXP '^C:\\\\Windows\\\\[A-Za-z]{8}\\.exe$'))"
     ],
     "schema_version": 2,
+    "source": "mbabinski",
     "source_table": "logs",
     "status": "experimental",
     "tags": [
@@ -5305,6 +5571,7 @@
     "filename": "2022_RedCanary_ThreatDetectionReport/wmic_susp_commands.yml",
     "id": "b772987f-ca62-4c24-ab78-a93ebb561d96",
     "level": "medium",
+    "license": "GPL-3.0",
     "logsource": {
       "category": "process_creation",
       "product": "windows",
@@ -5321,6 +5588,7 @@
       "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=1 AND (Image LIKE '%\\\\wmic.exe' ESCAPE '\\' AND (CommandLine LIKE '%create%' ESCAPE '\\' OR CommandLine LIKE '%node:%' ESCAPE '\\' OR CommandLine LIKE '%process%' ESCAPE '\\' OR CommandLine LIKE '%call%' ESCAPE '\\')))"
     ],
     "schema_version": 2,
+    "source": "mbabinski",
     "source_table": "logs",
     "status": "experimental",
     "tags": [
@@ -5344,6 +5612,7 @@
     "filename": "2023_Impacket/atexec/win_registry_events_impacket_atexec.yml",
     "id": "be577827-db17-4786-b00a-347c93973662",
     "level": "medium",
+    "license": "GPL-3.0",
     "logsource": {
       "category": "registry_add",
       "product": "windows",
@@ -5361,6 +5630,7 @@
       "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=12 AND (EventType='CreateKey' AND Image LIKE '%\\\\svchost.exe' ESCAPE '\\' AND TargetObject REGEXP '^HKLM\\\\SOFTWARE\\\\Microsoft\\\\Windows\\ NT\\\\CurrentVersion\\\\Schedule\\\\TaskCache\\\\Tree\\\\[A-Za-z]{8}$'))"
     ],
     "schema_version": 2,
+    "source": "mbabinski",
     "source_table": "logs",
     "status": "experimental",
     "tags": [
@@ -5386,6 +5656,7 @@
     "filename": "2022_RedCanary_ThreatDetectionReport/powershell_susp_wmi_cmdlets.yml",
     "id": "c920d5b8-0e50-40ef-8f1a-5eb27399f455",
     "level": "medium",
+    "license": "GPL-3.0",
     "logsource": {
       "category": "process_creation",
       "product": "windows",
@@ -5402,6 +5673,7 @@
       "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=1 AND (Image LIKE '%\\\\powershell.exe' ESCAPE '\\' AND (CommandLine LIKE '%invoke-wmimethod%' ESCAPE '\\' OR CommandLine LIKE '%invoke-cimmethod%' ESCAPE '\\' OR CommandLine LIKE '%get-wmiobject%' ESCAPE '\\' OR CommandLine LIKE '%getciminstance%' ESCAPE '\\' OR CommandLine LIKE '%wmiclass%' ESCAPE '\\')))"
     ],
     "schema_version": 2,
+    "source": "mbabinski",
     "source_table": "logs",
     "status": "experimental",
     "tags": [
@@ -5427,6 +5699,7 @@
     "filename": "2022_RedCanary_ThreatDetectionReport/schtasks_susp_behavior.yml",
     "id": "ccb39be9-ba55-4553-9614-a94e98e58626",
     "level": "medium",
+    "license": "GPL-3.0",
     "logsource": {
       "category": "process_creation",
       "product": "windows",
@@ -5443,6 +5716,7 @@
       "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=1 AND (Image LIKE '%\\\\schtasks.exe' ESCAPE '\\' AND (CommandLine LIKE '%cmd.exe%' ESCAPE '\\' OR CommandLine LIKE '%powershell.exe%' ESCAPE '\\' OR CommandLine LIKE '%regsvr32.exe%' ESCAPE '\\' OR CommandLine LIKE '%rundll32.exe%' ESCAPE '\\' OR CommandLine LIKE '%mshta.exe%' ESCAPE '\\') AND (CommandLine LIKE '%-create%' ESCAPE '\\' OR CommandLine LIKE '%/create%' ESCAPE '\\' OR CommandLine LIKE '%\u2013create%' ESCAPE '\\' OR CommandLine LIKE '%\u2014create%' ESCAPE '\\' OR CommandLine LIKE '%\u2015create%' ESCAPE '\\')))"
     ],
     "schema_version": 2,
+    "source": "mbabinski",
     "source_table": "logs",
     "status": "experimental",
     "tags": [
@@ -5468,6 +5742,7 @@
     "filename": "2024_Cicada3301_Ransomware/proc_creation_win_hyperv_stopvm.yml",
     "id": "d42df972-2f45-44b0-8566-3de71b9ed3e9",
     "level": "medium",
+    "license": "GPL-3.0",
     "logsource": {
       "category": "process_creation",
       "product": "windows",
@@ -5485,6 +5760,7 @@
       "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=1 AND ((Image LIKE '%\\\\powershell.exe' ESCAPE '\\' OR OriginalFileName='powershell.exe') AND (CommandLine LIKE '%Get-VM%' ESCAPE '\\' AND CommandLine LIKE '%Stop-VM%' ESCAPE '\\' AND CommandLine LIKE '%-Force%' ESCAPE '\\')))"
     ],
     "schema_version": 2,
+    "source": "mbabinski",
     "source_table": "logs",
     "status": "experimental",
     "tags": [
@@ -5511,6 +5787,7 @@
     "filename": "2022_RedCanary_ThreatDetectionReport/rundll32_susp_export_functionality.yml",
     "id": "e7cff8e3-89ae-47bd-841f-833e0a647f72",
     "level": "medium",
+    "license": "GPL-3.0",
     "logsource": {
       "category": "process_creation",
       "product": "windows",
@@ -5527,6 +5804,7 @@
       "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=1 AND (Image LIKE '%\\\\rundll32.exe' ESCAPE '\\' AND (CommandLine LIKE '%minidump%' ESCAPE '\\' OR CommandLine LIKE '%startw%' ESCAPE '\\')))"
     ],
     "schema_version": 2,
+    "source": "mbabinski",
     "source_table": "logs",
     "status": "experimental",
     "tags": [
@@ -5551,6 +5829,7 @@
     "filename": "2022_RedCanary_ThreatDetectionReport/schtasks_create_shell.yml",
     "id": "eb9d10be-1ece-4241-bc76-d51eadcaf42b",
     "level": "medium",
+    "license": "GPL-3.0",
     "logsource": {
       "category": "process_creation",
       "product": "windows",
@@ -5567,6 +5846,7 @@
       "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=1 AND (Image LIKE '%\\\\schtasks.exe' ESCAPE '\\' AND CommandLine LIKE '%create%' ESCAPE '\\' AND ((CommandLine LIKE '%-c%' ESCAPE '\\' OR CommandLine LIKE '%/c%' ESCAPE '\\' OR CommandLine LIKE '%\u2013c%' ESCAPE '\\' OR CommandLine LIKE '%\u2014c%' ESCAPE '\\' OR CommandLine LIKE '%\u2015c%' ESCAPE '\\') AND (CommandLine LIKE '%cmd%' ESCAPE '\\'))))"
     ],
     "schema_version": 2,
+    "source": "mbabinski",
     "source_table": "logs",
     "status": "experimental",
     "tags": [
@@ -5592,6 +5872,7 @@
     "filename": "2022_HTMLSmuggling/2_win_susp_file_extraction.yml",
     "id": "f853978d-343e-4879-ab56-dfe07f1f2f0b",
     "level": "medium",
+    "license": "GPL-3.0",
     "logsource": {
       "category": "file_event",
       "product": "windows",
@@ -5608,6 +5889,7 @@
       "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=11 AND ((Image LIKE '%\\\\explorer.exe' ESCAPE '\\' OR Image LIKE '%\\\\WinRAR.exe' ESCAPE '\\') AND (TargetFilename LIKE '%.iso' ESCAPE '\\' OR TargetFilename LIKE '%.vhd' ESCAPE '\\' OR TargetFilename LIKE '%.img' ESCAPE '\\' OR TargetFilename LIKE '%.lnk' ESCAPE '\\')))"
     ],
     "schema_version": 2,
+    "source": "mbabinski",
     "source_table": "logs",
     "status": "experimental",
     "tags": [
@@ -5636,6 +5918,7 @@
     "filename": "2023_Impacket/psexec/win_pipe_created_remcom_impacket_psexec.yml",
     "id": "019a9cea-6b05-4ea3-9aa2-f8ff6f9e92d5",
     "level": "high",
+    "license": "GPL-3.0",
     "logsource": {
       "category": "pipe_created",
       "product": "windows",
@@ -5652,6 +5935,7 @@
       "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND ((EventID=17 OR EventID=18) AND (Image REGEXP '^c:\\\\Windows\\\\[A-Za-z]{8}\\.exe$' AND PipeName LIKE '\\\\RemCom\\_%' ESCAPE '\\'))"
     ],
     "schema_version": 2,
+    "source": "mbabinski",
     "source_table": "logs",
     "status": "experimental",
     "tags": [
@@ -5677,6 +5961,7 @@
     "filename": "2022_RenameSystemUtilities/proc_creation_non_exe_demo.yml",
     "id": "02dc3892-2fd0-4dd5-b2d7-62052a837abe",
     "level": "high",
+    "license": "GPL-3.0",
     "logsource": {
       "category": "process_creation",
       "product": "windows",
@@ -5692,6 +5977,7 @@
       "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=1 AND (NOT COALESCE((Image LIKE '%.exe' ESCAPE '\\'), 0)))"
     ],
     "schema_version": 2,
+    "source": "mbabinski",
     "source_table": "logs",
     "status": "experimental",
     "tags": [
@@ -5717,6 +6003,7 @@
     "filename": "2022_RedCanary_ThreatDetectionReport/svchost_wout_normal_parameters.yml",
     "id": "036c727d-0263-4733-ad60-d5f48dc72144",
     "level": "high",
+    "license": "GPL-3.0",
     "logsource": {
       "category": "process_creation",
       "product": "windows",
@@ -5733,6 +6020,7 @@
       "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=1 AND (Image LIKE '%\\\\svchost.exe' ESCAPE '\\' AND (NOT COALESCE((CommandLine LIKE '%-k%' ESCAPE '\\'), 0))))"
     ],
     "schema_version": 2,
+    "source": "mbabinski",
     "source_table": "logs",
     "status": "experimental",
     "tags": [
@@ -5757,6 +6045,7 @@
     "filename": "2022_RenameSystemUtilities/file_creation_exe_in_temp_directories_4663.yml",
     "id": "069aacee-0176-4bdd-8c8b-09e958b88b70",
     "level": "high",
+    "license": "GPL-3.0",
     "logsource": {
       "product": "windows",
       "service": "security"
@@ -5773,6 +6062,7 @@
       "SELECT * FROM logs WHERE Channel='Security' AND (EventID=4663 AND ObjectType='File' AND AccessList LIKE '\\%\\%4417' ESCAPE '\\' AND ObjectName LIKE '%.exe' ESCAPE '\\' AND (ObjectName LIKE '%temp%' ESCAPE '\\' OR ObjectName LIKE '%tmp%' ESCAPE '\\'))"
     ],
     "schema_version": 2,
+    "source": "mbabinski",
     "source_table": "logs",
     "status": "experimental",
     "tags": [
@@ -5797,6 +6087,7 @@
     "filename": "2022_ViceSociety_Ransomware/win_susp_net_user_creation_vsociety.yml",
     "id": "0ce1911b-5038-4ee7-8925-013d808c6c7f",
     "level": "high",
+    "license": "GPL-3.0",
     "logsource": {
       "category": "process_creation",
       "product": "windows",
@@ -5813,6 +6104,7 @@
       "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=1 AND (Image LIKE '%\\\\net.exe' ESCAPE '\\' AND (CommandLine LIKE '%user%' ESCAPE '\\' OR CommandLine LIKE '%add%' ESCAPE '\\' OR CommandLine LIKE '%adm%' ESCAPE '\\')))"
     ],
     "schema_version": 2,
+    "source": "mbabinski",
     "source_table": "logs",
     "status": "experimental",
     "tags": [
@@ -5840,6 +6132,7 @@
     "filename": "2022_Gootloader/registry_key_creation_gootloader.yml",
     "id": "10ad1627-1a0a-4323-b3da-3a9394b9535a",
     "level": "high",
+    "license": "GPL-3.0",
     "logsource": {
       "category": "registry_add",
       "product": "windows",
@@ -5857,6 +6150,7 @@
       "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=12 AND (EventType='CreateKey' AND (TargetObject LIKE '%SOFTWARE\\\\Microsoft\\\\Phone\\\\%' ESCAPE '\\' OR TargetObject LIKE '%SOFTWARE\\\\Microsoft\\\\Personalization\\\\%' ESCAPE '\\') AND TargetObject LIKE '%0' ESCAPE '\\' AND Image LIKE '%\\\\wscript.exe' ESCAPE '\\'))"
     ],
     "schema_version": 2,
+    "source": "mbabinski",
     "source_table": "logs",
     "status": "experimental",
     "tags": [
@@ -5881,6 +6175,7 @@
     "filename": "2023_WebDAV_SearchMS/proc_creation_win_webdav_lnk_execution.yml",
     "id": "1412aa78-a24c-4abd-83df-767dfb2c5bbe",
     "level": "high",
+    "license": "GPL-3.0",
     "logsource": {
       "category": "process_creation",
       "product": "windows",
@@ -5898,6 +6193,7 @@
       "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=1 AND ((ParentImage LIKE '%\\\\explorer.exe' ESCAPE '\\' AND (Image LIKE '%\\\\wscript.exe' ESCAPE '\\' OR Image LIKE '%\\\\cscript.exe' ESCAPE '\\' OR Image LIKE '%\\\\cmd.exe' ESCAPE '\\')) AND CommandLine LIKE '%\\\\DavWWWRoot\\\\%' ESCAPE '\\'))"
     ],
     "schema_version": 2,
+    "source": "mbabinski",
     "source_table": "logs",
     "status": "experimental",
     "tags": [
@@ -5922,6 +6218,7 @@
     "filename": "2022_RedCanary_ThreatDetectionReport/cmd_susp_process_ancestry.yml",
     "id": "157c153a-97d1-43e4-bc25-5461f52c935d",
     "level": "high",
+    "license": "GPL-3.0",
     "logsource": {
       "category": "process_creation",
       "product": "windows",
@@ -5939,6 +6236,7 @@
       "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=1 AND ((Image LIKE '%\\\\cmd.exe' ESCAPE '\\' AND (ParentImage LIKE '%\\\\w3wp.exe' ESCAPE '\\' OR ParentImage LIKE '%\\\\wmiprvse.exe' ESCAPE '\\')) AND ((CommandLine LIKE '%http://%' ESCAPE '\\' OR CommandLine LIKE '%https://%' ESCAPE '\\' OR CommandLine LIKE '%echo%' ESCAPE '\\') OR (CommandLine LIKE '%/c%' ESCAPE '\\' AND CommandLine LIKE '%powershell.exe%' ESCAPE '\\'))))"
     ],
     "schema_version": 2,
+    "source": "mbabinski",
     "source_table": "logs",
     "status": "experimental",
     "tags": [
@@ -5964,6 +6262,7 @@
     "filename": "2022_RedCanary_ThreatDetectionReport/cmd_bypassing_security_controls.yml",
     "id": "188b256a-4344-47fb-88ed-6343b37c4999",
     "level": "high",
+    "license": "GPL-3.0",
     "logsource": {
       "category": "process_creation",
       "product": "windows",
@@ -5980,6 +6279,7 @@
       "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=1 AND (Image LIKE '%\\\\cmd.exe' ESCAPE '\\' AND (CommandLine LIKE '%bypass%' ESCAPE '\\' OR CommandLine LIKE '%-exec%' ESCAPE '\\' OR CommandLine LIKE '%/exec%' ESCAPE '\\' OR CommandLine LIKE '%\u2013exec%' ESCAPE '\\' OR CommandLine LIKE '%\u2014exec%' ESCAPE '\\' OR CommandLine LIKE '%\u2015exec%' ESCAPE '\\')))"
     ],
     "schema_version": 2,
+    "source": "mbabinski",
     "source_table": "logs",
     "status": "experimental",
     "tags": [
@@ -6003,6 +6303,7 @@
     "filename": "2022_RedCanary_ThreatDetectionReport/cmd_powershell_base64.yml",
     "id": "1b5f1187-7010-4f58-b6a3-2b762d594b90",
     "level": "high",
+    "license": "GPL-3.0",
     "logsource": {
       "category": "process_creation",
       "product": "windows",
@@ -6019,6 +6320,7 @@
       "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=1 AND ((Image LIKE '%\\\\powershell.exe' ESCAPE '\\' OR Image LIKE '%\\\\cmd.exe' ESCAPE '\\') AND CommandLine LIKE '%base64%' ESCAPE '\\'))"
     ],
     "schema_version": 2,
+    "source": "mbabinski",
     "source_table": "logs",
     "status": "experimental",
     "tags": [
@@ -6044,6 +6346,7 @@
     "filename": "2022_RedCanary_ThreatDetectionReport/notepad_internal_name_mismatch.yml",
     "id": "1b7bc524-7d66-4902-9524-0e22e5cbe667",
     "level": "high",
+    "license": "GPL-3.0",
     "logsource": {
       "category": "process_creation",
       "product": "windows",
@@ -6060,6 +6363,7 @@
       "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=1 AND ((CommandLine LIKE '%iex%' ESCAPE '\\' OR CommandLine LIKE '%invoke-expression%' ESCAPE '\\') AND (NOT COALESCE((Image LIKE '%\\\\powershell.exe' ESCAPE '\\'), 0))))"
     ],
     "schema_version": 2,
+    "source": "mbabinski",
     "source_table": "logs",
     "status": "experimental",
     "tags": [
@@ -6083,6 +6387,7 @@
     "filename": "2022_RedCanary_ThreatDetectionReport/powershell_base64.yml",
     "id": "1d3025d2-f965-42e2-8256-adaa1054613d",
     "level": "high",
+    "license": "GPL-3.0",
     "logsource": {
       "category": "process_creation",
       "product": "windows",
@@ -6099,6 +6404,7 @@
       "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=1 AND (CommandLine LIKE '%base64%' ESCAPE '\\' AND Image LIKE '%\\\\powershell.exe' ESCAPE '\\'))"
     ],
     "schema_version": 2,
+    "source": "mbabinski",
     "source_table": "logs",
     "status": "experimental",
     "tags": [
@@ -6124,6 +6430,7 @@
     "filename": "2022_BlackCat_Ransomware/win_susp_process_fsutil_allowing_connections.yml",
     "id": "27e58290-85bf-4bd4-8eab-1c493139b659",
     "level": "high",
+    "license": "GPL-3.0",
     "logsource": {
       "category": "process_creation",
       "product": "windows",
@@ -6140,6 +6447,7 @@
       "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=1 AND (Image LIKE '%\\\\fsutil.exe' ESCAPE '\\' AND (CommandLine LIKE '%behavior%' ESCAPE '\\' AND CommandLine LIKE '%set%' ESCAPE '\\' AND CommandLine LIKE '%SymlinkEvaluation%' ESCAPE '\\') AND CommandLine REGEXP '^.*(R|L)2(R|L):1.*$'))"
     ],
     "schema_version": 2,
+    "source": "mbabinski",
     "source_table": "logs",
     "status": "experimental",
     "tags": [
@@ -6163,6 +6471,7 @@
     "filename": "2022_HTMLSmuggling/4_win_process_creation_ext_drive.yml",
     "id": "2a054382-98a1-4d96-b966-ded8e5aa3a65",
     "level": "high",
+    "license": "GPL-3.0",
     "logsource": {
       "category": "process_creation",
       "product": "windows",
@@ -6180,6 +6489,7 @@
       "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=1 AND (ParentImage LIKE '%\\\\explorer.exe' ESCAPE '\\' AND ((NOT COALESCE((CurrentDirectory LIKE 'C:%' ESCAPE '\\'), 0)) OR (NOT COALESCE((Image LIKE 'C:%' ESCAPE '\\'), 0)))))"
     ],
     "schema_version": 2,
+    "source": "mbabinski",
     "source_table": "logs",
     "status": "experimental",
     "tags": [
@@ -6207,6 +6517,7 @@
     "filename": "2022_HTMLSmuggling/4_win_process_creation_ext_drive_old.yml",
     "id": "2a054382-98a1-4d96-b966-ded8e5aa3a65",
     "level": "high",
+    "license": "GPL-3.0",
     "logsource": {
       "category": "process_creation",
       "product": "windows",
@@ -6224,6 +6535,7 @@
       "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=1 AND (ParentImage LIKE '%\\\\explorer.exe' ESCAPE '\\' AND ((NOT COALESCE((Image LIKE 'C:%' ESCAPE '\\'), 0)) OR ((Image LIKE '%\\\\cmd.exe' ESCAPE '\\' OR Image LIKE '%\\\\powershell.exe' ESCAPE '\\' OR Image LIKE '%\\\\wscript.exe' ESCAPE '\\') AND (NOT COALESCE((CurrentDirectory LIKE 'C:%' ESCAPE '\\'), 0))))))"
     ],
     "schema_version": 2,
+    "source": "mbabinski",
     "source_table": "logs",
     "status": "experimental",
     "tags": [
@@ -6251,6 +6563,7 @@
     "filename": "2022_RedCanary_ThreatDetectionReport/powershell_disable_defender_components.yml",
     "id": "32cfafc8-fbdc-43e0-a2cd-11b99630d270",
     "level": "high",
+    "license": "GPL-3.0",
     "logsource": {
       "category": "process_creation",
       "product": "windows",
@@ -6267,6 +6580,7 @@
       "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=1 AND ((CommandLine LIKE '%Set-MpPreference%' ESCAPE '\\' AND Image LIKE '%\\\\powershell.exe' ESCAPE '\\') AND (CommandLine LIKE '%disablerealtimemonitoring%' ESCAPE '\\' OR CommandLine LIKE '%disableioavprotection%' ESCAPE '\\' OR CommandLine LIKE '%disablebehaviormonitoring%' ESCAPE '\\' OR CommandLine LIKE '%disableintrusionpreventionsystem%' ESCAPE '\\' OR CommandLine LIKE '%exclusionprocess%' ESCAPE '\\' OR CommandLine LIKE '%disablescriptscanning%' ESCAPE '\\')))"
     ],
     "schema_version": 2,
+    "source": "mbabinski",
     "source_table": "logs",
     "status": "experimental",
     "tags": [
@@ -6292,6 +6606,7 @@
     "filename": "2022_RedCanary_ThreatDetectionReport/shrpubw_execution_from_unexpected_path.yml",
     "id": "3b9fc5ea-6288-4c03-882a-af00df4f5b32",
     "level": "high",
+    "license": "GPL-3.0",
     "logsource": {
       "category": "process_creation",
       "product": "windows",
@@ -6307,6 +6622,7 @@
       "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=1 AND (Image LIKE '%\\\\shrpubw.exe' ESCAPE '\\' AND (NOT COALESCE((Image LIKE '%windows\\\\system32\\\\shrpubw.exe%' ESCAPE '\\' OR Image LIKE '%windows\\\\winsxs%' ESCAPE '\\'), 0))))"
     ],
     "schema_version": 2,
+    "source": "mbabinski",
     "source_table": "logs",
     "status": "experimental",
     "tags": [
@@ -6331,6 +6647,7 @@
     "filename": "2022_ChromeLoader/chrome_loadextension_chromeloader.yml",
     "id": "4007bc45-1727-405d-a7bc-4b3d441bf08f",
     "level": "high",
+    "license": "GPL-3.0",
     "logsource": {
       "category": "process_creation",
       "product": "windows",
@@ -6348,6 +6665,7 @@
       "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=1 AND (ParentImage LIKE '%\\\\powershell.exe' ESCAPE '\\' AND Image LIKE '%\\\\chrome.exe' ESCAPE '\\' AND (CommandLine LIKE '%appdata\\\\local%' ESCAPE '\\' AND CommandLine LIKE '%load-extension%' ESCAPE '\\')))"
     ],
     "schema_version": 2,
+    "source": "mbabinski",
     "source_table": "logs",
     "status": "experimental",
     "tags": [
@@ -6371,6 +6689,7 @@
     "filename": "2023_OneNote_Malware/dns_query_double_extension.yml",
     "id": "42f77908-d267-41ee-bf58-623f5d101d91",
     "level": "high",
+    "license": "GPL-3.0",
     "logsource": {
       "category": "dns_query",
       "product": "windows",
@@ -6386,6 +6705,7 @@
       "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=22 AND Image REGEXP '^.*\\\\[a-zA-Z0-9]*\\.[a-zA-Z0-9]*\\.[a-zA-Z0-9]*$')"
     ],
     "schema_version": 2,
+    "source": "mbabinski",
     "source_table": "logs",
     "status": "experimental",
     "tags": [
@@ -6413,6 +6733,7 @@
     "filename": "2022_RenameSystemUtilities/file_creation_exe_extension.yml",
     "id": "47d68f87-d0f0-4386-8362-d62b7135a494",
     "level": "high",
+    "license": "GPL-3.0",
     "logsource": {
       "category": "file_event",
       "product": "windows",
@@ -6429,6 +6750,7 @@
       "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=11 AND ((Image LIKE '%\\\\cmd.exe' ESCAPE '\\' OR Image LIKE '%\\\\powershell.exe' ESCAPE '\\' OR Image LIKE '%\\\\powershell\\_ise.exe' ESCAPE '\\' OR Image LIKE '%\\\\wscript.exe' ESCAPE '\\' OR Image LIKE '%\\\\python.exe' ESCAPE '\\' OR Image LIKE '%\\\\pythonw.exe' ESCAPE '\\') AND TargetFilename LIKE '%.exe' ESCAPE '\\'))"
     ],
     "schema_version": 2,
+    "source": "mbabinski",
     "source_table": "logs",
     "status": "experimental",
     "tags": [
@@ -6453,6 +6775,7 @@
     "filename": "2022_BlackCat_Ransomware/win_susp_reg_set_maxmpxct_sysmon.yml",
     "id": "4bd730d9-37d6-4a87-b392-ffb9ab52bf21",
     "level": "high",
+    "license": "GPL-3.0",
     "logsource": {
       "category": "registry_set",
       "product": "windows",
@@ -6470,6 +6793,7 @@
       "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=13 AND (EventType='SetValue' AND TargetObject LIKE 'HKLM\\\\System\\\\CurrentControlSet\\\\Services\\\\LanmanServer\\\\Parameters\\\\MaxMpxCt' ESCAPE '\\' AND Details='DWORD (0x0000ffff)'))"
     ],
     "schema_version": 2,
+    "source": "mbabinski",
     "source_table": "logs",
     "status": "experimental",
     "tags": [
@@ -6495,6 +6819,7 @@
     "filename": "2022_Hive_Ransomware/win_susp_wevtutil_hive.yml",
     "id": "4d71069b-dda7-4df7-b835-1f23dd212615",
     "level": "high",
+    "license": "GPL-3.0",
     "logsource": {
       "category": "process_creation",
       "product": "windows",
@@ -6511,6 +6836,7 @@
       "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=1 AND (Image LIKE '%\\\\wevtutil.exe' ESCAPE '\\' AND ((CommandLine LIKE '% cl %' ESCAPE '\\' OR CommandLine LIKE '%clear-log%' ESCAPE '\\') OR ((CommandLine LIKE '% sl %' ESCAPE '\\' OR CommandLine LIKE '%set-log%' ESCAPE '\\') AND (CommandLine LIKE '%-e:false%' ESCAPE '\\' OR CommandLine LIKE '%/e:false%' ESCAPE '\\' OR CommandLine LIKE '%\u2013e:false%' ESCAPE '\\' OR CommandLine LIKE '%\u2014e:false%' ESCAPE '\\' OR CommandLine LIKE '%\u2015e:false%' ESCAPE '\\' OR CommandLine LIKE '%-ms:%' ESCAPE '\\' OR CommandLine LIKE '%/ms:%' ESCAPE '\\' OR CommandLine LIKE '%\u2013ms:%' ESCAPE '\\' OR CommandLine LIKE '%\u2014ms:%' ESCAPE '\\' OR CommandLine LIKE '%\u2015ms:%' ESCAPE '\\')))))"
     ],
     "schema_version": 2,
+    "source": "mbabinski",
     "source_table": "logs",
     "status": "experimental",
     "tags": [
@@ -6535,6 +6861,7 @@
     "filename": "2022_Solarmarker/win_susp_file_ext_reg_key.yml",
     "id": "57c4dca5-51cd-4cff-b835-d7eebe8e92f6",
     "level": "high",
+    "license": "GPL-3.0",
     "logsource": {
       "category": "registry_set",
       "product": "windows",
@@ -6553,6 +6880,7 @@
       "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=13 AND (Image LIKE '%\\\\powershell.exe' ESCAPE '\\' AND EventType='SetValue' AND TargetObject REGEXP '^.*\\\\.([a-zA-Z]){13,18}$' AND Detail REGEXP '^.*([a-z]){18,22}$'))"
     ],
     "schema_version": 2,
+    "source": "mbabinski",
     "source_table": "logs",
     "status": "experimental",
     "tags": [
@@ -6576,6 +6904,7 @@
     "filename": "2022_RedCanary_ThreatDetectionReport/powershell_encoded_flag.yml",
     "id": "5c0fcaac-e5e9-44a3-811f-b43b7709c339",
     "level": "high",
+    "license": "GPL-3.0",
     "logsource": {
       "category": "process_creation",
       "product": "windows",
@@ -6592,6 +6921,7 @@
       "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=1 AND ((CommandLine LIKE '%-ec%' ESCAPE '\\' OR CommandLine LIKE '%/ec%' ESCAPE '\\' OR CommandLine LIKE '%\u2013ec%' ESCAPE '\\' OR CommandLine LIKE '%\u2014ec%' ESCAPE '\\' OR CommandLine LIKE '%\u2015ec%' ESCAPE '\\' OR CommandLine LIKE '%-en%' ESCAPE '\\' OR CommandLine LIKE '%/en%' ESCAPE '\\' OR CommandLine LIKE '%\u2013en%' ESCAPE '\\' OR CommandLine LIKE '%\u2014en%' ESCAPE '\\' OR CommandLine LIKE '%\u2015en%' ESCAPE '\\' OR CommandLine LIKE '%-enc%' ESCAPE '\\' OR CommandLine LIKE '%/enc%' ESCAPE '\\' OR CommandLine LIKE '%\u2013enc%' ESCAPE '\\' OR CommandLine LIKE '%\u2014enc%' ESCAPE '\\' OR CommandLine LIKE '%\u2015enc%' ESCAPE '\\' OR CommandLine LIKE '%-enco%' ESCAPE '\\' OR CommandLine LIKE '%/enco%' ESCAPE '\\' OR CommandLine LIKE '%\u2013enco%' ESCAPE '\\' OR CommandLine LIKE '%\u2014enco%' ESCAPE '\\' OR CommandLine LIKE '%\u2015enco%' ESCAPE '\\') AND Image LIKE '%\\\\powershell.exe' ESCAPE '\\'))"
     ],
     "schema_version": 2,
+    "source": "mbabinski",
     "source_table": "logs",
     "status": "experimental",
     "tags": [
@@ -6617,6 +6947,7 @@
     "filename": "2023_OneNote_Malware/net_connection_win_double_extension.yml",
     "id": "5deb364c-12e2-4abc-936f-28139aba68a9",
     "level": "high",
+    "license": "GPL-3.0",
     "logsource": {
       "category": "network_connection",
       "product": "windows",
@@ -6632,6 +6963,7 @@
       "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=3 AND Image REGEXP '^.*\\\\[a-zA-Z0-9]*\\.[a-zA-Z0-9]*\\.[a-zA-Z0-9]*$')"
     ],
     "schema_version": 2,
+    "source": "mbabinski",
     "source_table": "logs",
     "status": "experimental",
     "tags": [
@@ -6659,6 +6991,7 @@
     "filename": "2023_OneNote_Malware/create_stream_hash_double_extension.yml",
     "id": "60dbde0d-57dc-40e4-a95c-3488f319f216",
     "level": "high",
+    "license": "GPL-3.0",
     "logsource": {
       "category": "create_stream_hash",
       "product": "windows",
@@ -6674,6 +7007,7 @@
       "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=15 AND Image REGEXP '^.*\\\\[a-zA-Z0-9]*\\.[a-zA-Z0-9]*\\.[a-zA-Z0-9]*$')"
     ],
     "schema_version": 2,
+    "source": "mbabinski",
     "source_table": "logs",
     "status": "experimental",
     "tags": [
@@ -6701,6 +7035,7 @@
     "filename": "2022_BlackCat_Ransomware/win_susp_process_blackcat_exfiltration.yml",
     "id": "613624be-dabf-4562-b49b-c2fd45773556",
     "level": "high",
+    "license": "GPL-3.0",
     "logsource": {
       "category": "process_creation",
       "product": "windows",
@@ -6716,6 +7051,7 @@
       "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=1 AND ((CommandLine LIKE '%copy%' ESCAPE '\\' AND CommandLine LIKE '%--max-age%' ESCAPE '\\' AND CommandLine LIKE '%--ignore-existing%' ESCAPE '\\' AND CommandLine LIKE '%--multi-thread-streams%' ESCAPE '\\' AND CommandLine LIKE '%--transfers%' ESCAPE '\\') AND (CommandLine LIKE '%ftp%' ESCAPE '\\' OR CommandLine LIKE '%ssh%' ESCAPE '\\' OR CommandLine LIKE '%-q%' ESCAPE '\\')))"
     ],
     "schema_version": 2,
+    "source": "mbabinski",
     "source_table": "logs",
     "status": "experimental",
     "tags": [
@@ -6740,6 +7076,7 @@
     "filename": "2022_QakBot/win_qakbot_susp_schtasks_process_trellix.yml",
     "id": "6470cbb3-a339-40dd-8d0e-250013b86828",
     "level": "high",
+    "license": "GPL-3.0",
     "logsource": {
       "category": "process_creation",
       "product": "windows",
@@ -6757,6 +7094,7 @@
       "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=1 AND (ParentImage LIKE '%\\\\explorer.exe' ESCAPE '\\' AND Image LIKE '%\\\\schtasks.exe' ESCAPE '\\' AND (CommandLine LIKE '%-create%' ESCAPE '\\' OR CommandLine LIKE '%/create%' ESCAPE '\\' OR CommandLine LIKE '%\u2013create%' ESCAPE '\\' OR CommandLine LIKE '%\u2014create%' ESCAPE '\\' OR CommandLine LIKE '%\u2015create%' ESCAPE '\\' OR CommandLine LIKE '%-ru%' ESCAPE '\\' OR CommandLine LIKE '%/ru%' ESCAPE '\\' OR CommandLine LIKE '%\u2013ru%' ESCAPE '\\' OR CommandLine LIKE '%\u2014ru%' ESCAPE '\\' OR CommandLine LIKE '%\u2015ru%' ESCAPE '\\' OR CommandLine LIKE '%-sc once%' ESCAPE '\\' OR CommandLine LIKE '%/sc once%' ESCAPE '\\' OR CommandLine LIKE '%\u2013sc once%' ESCAPE '\\' OR CommandLine LIKE '%\u2014sc once%' ESCAPE '\\' OR CommandLine LIKE '%\u2015sc once%' ESCAPE '\\' OR CommandLine LIKE '%powershell%' ESCAPE '\\')))"
     ],
     "schema_version": 2,
+    "source": "mbabinski",
     "source_table": "logs",
     "status": "experimental",
     "tags": [
@@ -6781,6 +7119,7 @@
     "filename": "2022_RedCanary_ThreatDetectionReport/notepad_network_connection.yml",
     "id": "6abd63f2-a8cc-40bc-b13b-7c60fa20b265",
     "level": "high",
+    "license": "GPL-3.0",
     "logsource": {
       "category": "network_connection",
       "product": "windows",
@@ -6796,6 +7135,7 @@
       "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=3 AND Image LIKE '%\\\\notepad.exe' ESCAPE '\\')"
     ],
     "schema_version": 2,
+    "source": "mbabinski",
     "source_table": "logs",
     "status": "experimental",
     "tags": [
@@ -6819,6 +7159,7 @@
     "filename": "2022_QakBot/win_qakbot_susp_calc_process_trellix.yml",
     "id": "76c86421-c373-4cac-9510-66455bc5fcd5",
     "level": "high",
+    "license": "GPL-3.0",
     "logsource": {
       "category": "process_creation",
       "product": "windows",
@@ -6835,6 +7176,7 @@
       "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=1 AND (ParentImage LIKE '%\\\\calc.exe' ESCAPE '\\' AND (Image LIKE '%\\\\regsvr32.exe' ESCAPE '\\' OR Image LIKE '%\\\\rundll32.exe' ESCAPE '\\')))"
     ],
     "schema_version": 2,
+    "source": "mbabinski",
     "source_table": "logs",
     "status": "experimental",
     "tags": [
@@ -6858,6 +7200,7 @@
     "filename": "2022_BlackCat_Ransomware/win_susp_process_blackcat_execution_getuuid.yml",
     "id": "76fe5991-2bff-4ae2-adcf-28a95788027f",
     "level": "high",
+    "license": "GPL-3.0",
     "logsource": {
       "category": "process_creation",
       "product": "windows",
@@ -6874,6 +7217,7 @@
       "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=1 AND (ParentCommandLine LIKE '%--access-token%' ESCAPE '\\' AND CommandLine LIKE '%get uuid%' ESCAPE '\\'))"
     ],
     "schema_version": 2,
+    "source": "mbabinski",
     "source_table": "logs",
     "status": "experimental",
     "tags": [
@@ -6898,6 +7242,7 @@
     "filename": "2024_Cicada3301_Ransomware/proc_creation_win_cicada3301_execution.yml",
     "id": "79495647-d84d-4804-9a52-5263cfdf2c63",
     "level": "high",
+    "license": "GPL-3.0",
     "logsource": {
       "category": "process_creation",
       "product": "windows",
@@ -6915,6 +7260,7 @@
       "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=1 AND (((Image LIKE '%\\\\psexec0.exe' ESCAPE '\\' OR OriginalFileName='psexec.c') AND (CommandLine LIKE '%--key%' ESCAPE '\\' OR CommandLine LIKE '%--path%' ESCAPE '\\' OR CommandLine LIKE '%-p %' ESCAPE '\\' OR CommandLine LIKE '%-s %' ESCAPE '\\' OR CommandLine LIKE '%--no\\_local%' ESCAPE '\\' OR CommandLine LIKE '%--no\\_net%' ESCAPE '\\' OR CommandLine LIKE '%--no\\_impl%' ESCAPE '\\' OR CommandLine LIKE '%--no\\_notes%' ESCAPE '\\')) AND (NOT COALESCE((Image LIKE '%\\\\psexec.exe' ESCAPE '\\'), 0))))"
     ],
     "schema_version": 2,
+    "source": "mbabinski",
     "source_table": "logs",
     "status": "experimental",
     "tags": [
@@ -6940,6 +7286,7 @@
     "filename": "2022_ChromeLoader/cmd_external_drive_batch_script_execution_chromeloader.yml",
     "id": "79cd4f76-2df9-42e1-a957-34fb7ee5a3cc",
     "level": "high",
+    "license": "GPL-3.0",
     "logsource": {
       "category": "process_creation",
       "product": "windows",
@@ -6958,6 +7305,7 @@
       "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=1 AND (((ParentImage LIKE '%\\\\powershell.exe' ESCAPE '\\' OR ParentImage LIKE '%\\\\cmd.exe' ESCAPE '\\') AND (ParentCommandLine LIKE '%-c%' ESCAPE '\\' OR ParentCommandLine LIKE '%/c%' ESCAPE '\\' OR ParentCommandLine LIKE '%\u2013c%' ESCAPE '\\' OR ParentCommandLine LIKE '%\u2014c%' ESCAPE '\\' OR ParentCommandLine LIKE '%\u2015c%' ESCAPE '\\') AND ParentCommandLine REGEXP '^.*[D-Z]:\\\\.*\\.(bat|cmdline).*$') AND Image LIKE '%\\\\tar.exe' ESCAPE '\\' AND (CommandLine LIKE '%-xvf%' ESCAPE '\\' OR CommandLine LIKE '%-xfv%' ESCAPE '\\' OR CommandLine LIKE '%-vxf%' ESCAPE '\\' OR CommandLine LIKE '%-vfx%' ESCAPE '\\' OR CommandLine LIKE '%-fxv%' ESCAPE '\\' OR CommandLine LIKE '%-fvx%' ESCAPE '\\') AND CommandLine LIKE '%appdata\\\\%' ESCAPE '\\'))"
     ],
     "schema_version": 2,
+    "source": "mbabinski",
     "source_table": "logs",
     "status": "experimental",
     "tags": [
@@ -6982,6 +7330,7 @@
     "filename": "2022_QakBot/win_qakbot_dropped_file_creation_4663.yml",
     "id": "7daae1fd-b462-4628-a87e-5f639351b783",
     "level": "high",
+    "license": "GPL-3.0",
     "logsource": {
       "product": "windows",
       "service": "security"
@@ -6998,6 +7347,7 @@
       "SELECT * FROM logs WHERE Channel='Security' AND (EventID=4663 AND ObjectType='File' AND AccessList LIKE '\\%\\%4417' ESCAPE '\\' AND (ObjectName LIKE '%.html' ESCAPE '\\' OR ObjectName LIKE '%.zip' ESCAPE '\\' OR ObjectName LIKE '%.iso' ESCAPE '\\' OR ObjectName LIKE '%.lnk' ESCAPE '\\') AND ObjectName REGEXP '.*TXRTN_[0-9]{7}\\..*')"
     ],
     "schema_version": 2,
+    "source": "mbabinski",
     "source_table": "logs",
     "status": "experimental",
     "tags": [
@@ -7024,6 +7374,7 @@
     "filename": "2022_BlackCat_Ransomware/win_susp_process_exec_in_perflogs_path.yml",
     "id": "82469ee5-ccf3-4669-9be6-31830f7ef3d7",
     "level": "high",
+    "license": "GPL-3.0",
     "logsource": {
       "category": "process_creation",
       "product": "windows",
@@ -7039,6 +7390,7 @@
       "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=1 AND (ParentImage LIKE '%perflogs%' ESCAPE '\\' AND ParentImage REGEXP '^.*\\\\[a-z]{3}\\.exe'))"
     ],
     "schema_version": 2,
+    "source": "mbabinski",
     "source_table": "logs",
     "status": "experimental",
     "tags": [
@@ -7062,6 +7414,7 @@
     "filename": "2022_ViceSociety_Ransomware/win_exe_deployment_from_remote_share_vsociety.yml",
     "id": "85f915d8-7cbc-4bd5-b1cc-03c7f3188c19",
     "level": "high",
+    "license": "GPL-3.0",
     "logsource": {
       "category": "process_creation",
       "product": "windows",
@@ -7078,6 +7431,7 @@
       "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=1 AND (Image LIKE '%\\\\cmd.exe' ESCAPE '\\' AND (CommandLine LIKE '%-c%' ESCAPE '\\' OR CommandLine LIKE '%/c%' ESCAPE '\\' OR CommandLine LIKE '%\u2013c%' ESCAPE '\\' OR CommandLine LIKE '%\u2014c%' ESCAPE '\\' OR CommandLine LIKE '%\u2015c%' ESCAPE '\\') AND (CommandLine LIKE '%copy%' ESCAPE '\\' AND CommandLine LIKE '%exe%' ESCAPE '\\' AND CommandLine LIKE '%c$%' ESCAPE '\\' AND CommandLine LIKE '%\\\\\\\\%' ESCAPE '\\') AND (CommandLine LIKE '%temp%' ESCAPE '\\' OR CommandLine LIKE '%tmp%' ESCAPE '\\') AND CommandLine REGEXP '.*(?:[0-9]{1,3}\\.){3}[0-9]{1,3}.*'))"
     ],
     "schema_version": 2,
+    "source": "mbabinski",
     "source_table": "logs",
     "status": "experimental",
     "tags": [
@@ -7103,6 +7457,7 @@
     "filename": "2022_QakBot/win_qakbot_dropped_file_creation_sysmon.yml",
     "id": "8e401ffe-ca9b-4bb2-87aa-8e285811d43f",
     "level": "high",
+    "license": "GPL-3.0",
     "logsource": {
       "category": "file_event",
       "product": "windows",
@@ -7118,6 +7473,7 @@
       "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=11 AND ((TargetFilename LIKE '%.html' ESCAPE '\\' OR TargetFilename LIKE '%.zip' ESCAPE '\\' OR TargetFilename LIKE '%.iso' ESCAPE '\\' OR TargetFilename LIKE '%.lnk' ESCAPE '\\') AND TargetFilename REGEXP '.*TXRTN_[0-9]{7}\\..*'))"
     ],
     "schema_version": 2,
+    "source": "mbabinski",
     "source_table": "logs",
     "status": "experimental",
     "tags": [
@@ -7144,6 +7500,7 @@
     "filename": "2022_RedCanary_ThreatDetectionReport/powershell_process_injection.yml",
     "id": "95d5a93d-b755-4443-87d2-48125a4172ac",
     "level": "high",
+    "license": "GPL-3.0",
     "logsource": {
       "category": "process_access",
       "product": "windows",
@@ -7159,6 +7516,7 @@
       "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=10 AND SourceImage LIKE '%\\\\powershell.exe' ESCAPE '\\')"
     ],
     "schema_version": 2,
+    "source": "mbabinski",
     "source_table": "logs",
     "status": "experimental",
     "tags": [
@@ -7182,6 +7540,7 @@
     "filename": "2023_OneNote_Malware/file_event_double_extension.yml",
     "id": "96eba19d-a7ac-494b-8901-112dfc0afa6a",
     "level": "high",
+    "license": "GPL-3.0",
     "logsource": {
       "category": "network_connection",
       "product": "windows",
@@ -7197,6 +7556,7 @@
       "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=3 AND Image REGEXP '^.*\\\\[a-zA-Z0-9]*\\.[a-zA-Z0-9]*\\.[a-zA-Z0-9]*$')"
     ],
     "schema_version": 2,
+    "source": "mbabinski",
     "source_table": "logs",
     "status": "experimental",
     "tags": [
@@ -7224,6 +7584,7 @@
     "filename": "2022_Hive_Ransomware/win_bcd_registry_modification_hive.yml",
     "id": "99a9fbb6-62bf-4cb7-8406-a363bc14cbf3",
     "level": "high",
+    "license": "GPL-3.0",
     "logsource": {
       "category": "registry_set",
       "product": "windows",
@@ -7240,6 +7601,7 @@
       "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=13 AND ((EventType='SetValue' AND TargetObject LIKE '%elements%' ESCAPE '\\') AND (TargetObject LIKE '%16000009%' ESCAPE '\\' OR TargetObject LIKE '%250000e0%' ESCAPE '\\')))"
     ],
     "schema_version": 2,
+    "source": "mbabinski",
     "source_table": "logs",
     "status": "experimental",
     "tags": [
@@ -7264,6 +7626,7 @@
     "filename": "2022_Solarmarker/win_susp_solarmarker_file_creation.yml",
     "id": "9b3d414e-a215-4262-b502-484b6b24b7d6",
     "level": "high",
+    "license": "GPL-3.0",
     "logsource": {
       "category": "file_event",
       "product": "windows",
@@ -7279,6 +7642,7 @@
       "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=11 AND (((TargetFilename LIKE '%\\\\appdata\\\\%' ESCAPE '\\' AND TargetFilename LIKE '%\\\\temp\\\\%' ESCAPE '\\') AND TargetFilename REGEXP '(?i)^.*\\\\\\w{24}\\.ps1$') OR ((TargetFilename LIKE '%\\\\appdata\\\\%' ESCAPE '\\' AND TargetFilename LIKE '%\\\\microsoft\\\\%' ESCAPE '\\') AND TargetFilename REGEXP '(?i)^.*\\\\\\w{4}\\\\\\w{8}\\.cmd$') OR ((TargetFilename LIKE '%\\\\appdata\\\\%' ESCAPE '\\' AND TargetFilename LIKE '%\\\\microsoft\\\\%' ESCAPE '\\') AND TargetFilename REGEXP '^.*\\\\\\w{4}\\\\\\w{52}$') OR ((TargetFilename LIKE '%AppData\\\\Roaming\\\\Microsoft\\\\Windows\\\\Start Menu\\\\Programs\\\\Startup%' ESCAPE '\\' OR TargetFilename LIKE '%C:\\\\ProgramData\\\\Microsoft\\\\Windows\\\\Start Menu\\\\Programs\\\\StartUp%' ESCAPE '\\') AND TargetFilename REGEXP '(?i)^.*\\\\([0-9a-fA-F]){29}\\.lnk$')))"
     ],
     "schema_version": 2,
+    "source": "mbabinski",
     "source_table": "logs",
     "status": "experimental",
     "tags": [
@@ -7306,6 +7670,7 @@
     "filename": "2022_BlackCat_Ransomware/win_susp_reg_added_maxmpxct_sysmon.yml",
     "id": "9c5df39b-0fe2-450b-bc90-a1b748dca8af",
     "level": "high",
+    "license": "GPL-3.0",
     "logsource": {
       "category": "registry_add",
       "product": "windows",
@@ -7322,6 +7687,7 @@
       "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=12 AND (EventType='CreateKey' AND TargetObject LIKE 'SYSTEM\\\\CurrentControlSet\\\\Services\\\\LanmanServer\\\\Parameters' ESCAPE '\\'))"
     ],
     "schema_version": 2,
+    "source": "mbabinski",
     "source_table": "logs",
     "status": "experimental",
     "tags": [
@@ -7347,6 +7713,7 @@
     "filename": "2022_RedCanary_ThreatDetectionReport/notpowershell_unusual_commandline.yml",
     "id": "9c644369-a7c5-4166-a702-930efd9b5579",
     "level": "high",
+    "license": "GPL-3.0",
     "logsource": {
       "category": "process_creation",
       "product": "windows",
@@ -7363,6 +7730,7 @@
       "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=1 AND ((CommandLine LIKE '%iex%' ESCAPE '\\' OR CommandLine LIKE '%invoke-expression%' ESCAPE '\\') AND (NOT COALESCE((Image LIKE '%\\\\powershell.exe' ESCAPE '\\'), 0))))"
     ],
     "schema_version": 2,
+    "source": "mbabinski",
     "source_table": "logs",
     "status": "experimental",
     "tags": [
@@ -7387,6 +7755,7 @@
     "filename": "2022_ViceSociety_Ransomware/pwsh_ms_defender_tampering_vsociety.yml",
     "id": "9e50b0e6-464b-4eb3-858c-690d2d51e812",
     "level": "high",
+    "license": "GPL-3.0",
     "logsource": {
       "category": "ps_script",
       "product": "windows",
@@ -7402,6 +7771,7 @@
       "SELECT * FROM logs WHERE (Channel='Microsoft-Windows-PowerShell/Operational' OR Channel='PowerShellCore/Operational') AND (EventID=4104 AND ((ScriptBlockText LIKE '%Set-MpPreference%' ESCAPE '\\' AND ScriptBlockText LIKE '%-DisableRealtimeMonitoring%' ESCAPE '\\') AND (NOT COALESCE((ScriptBlockText REGEXP '.*Set-MpPreference.*Disable.*\\s(\\$false|0).*'), 0))))"
     ],
     "schema_version": 2,
+    "source": "mbabinski",
     "source_table": "logs",
     "status": "experimental",
     "tags": [
@@ -7426,6 +7796,7 @@
     "filename": "2022_BlackCat_Ransomware/win_susp_process_maxmpxct_reg_mod.yml",
     "id": "9fc5784b-50ab-4f0e-8044-5e15990d48a1",
     "level": "high",
+    "license": "GPL-3.0",
     "logsource": {
       "category": "process_creation",
       "product": "windows",
@@ -7441,6 +7812,7 @@
       "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=1 AND (CommandLine LIKE '%LanmanServer%' ESCAPE '\\' AND CommandLine LIKE '%parameters%' ESCAPE '\\' AND CommandLine LIKE '%MaxMpxCt%' ESCAPE '\\' AND CommandLine LIKE '%65535%' ESCAPE '\\'))"
     ],
     "schema_version": 2,
+    "source": "mbabinski",
     "source_table": "logs",
     "status": "experimental",
     "tags": [
@@ -7466,6 +7838,7 @@
     "filename": "2022_RedCanary_ThreatDetectionReport/powershell_renamed.yml",
     "id": "a01d910a-d31d-4d1f-98ce-3dedd301a605",
     "level": "high",
+    "license": "GPL-3.0",
     "logsource": {
       "category": "process_creation",
       "product": "windows",
@@ -7483,6 +7856,7 @@
       "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=1 AND ((Description LIKE 'Windows Powershell%' ESCAPE '\\' OR Description LIKE 'pwsh%' ESCAPE '\\') AND Image LIKE '%\\\\notepad.exe' ESCAPE '\\' AND OriginalFileName='powershell.exe'))"
     ],
     "schema_version": 2,
+    "source": "mbabinski",
     "source_table": "logs",
     "status": "experimental",
     "tags": [
@@ -7507,6 +7881,7 @@
     "filename": "2022_RedCanary_ThreatDetectionReport/cmd_obfuscated_commands.yml",
     "id": "a30afe67-bde7-450f-a143-96a1a86d26d9",
     "level": "high",
+    "license": "GPL-3.0",
     "logsource": {
       "category": "process_creation",
       "product": "windows",
@@ -7523,6 +7898,7 @@
       "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=1 AND (Image LIKE '%\\\\cmd.exe' ESCAPE '\\' AND CommandLine REGEXP '^([^^=%![(; ]*[\\^=%![(; ]){8,}[^^=%![(; ]*$'))"
     ],
     "schema_version": 2,
+    "source": "mbabinski",
     "source_table": "logs",
     "status": "experimental",
     "tags": [
@@ -7548,6 +7924,7 @@
     "filename": "2023_OneNote_Malware/win_proc_right_to_left_override.yml",
     "id": "ad691d92-15f2-4181-9aa4-723c74f9ddc3",
     "level": "high",
+    "license": "GPL-3.0",
     "logsource": {
       "category": "process_creation",
       "product": "windows",
@@ -7563,6 +7940,7 @@
       "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=1 AND CommandLine REGEXP '^.*\u202e.*$')"
     ],
     "schema_version": 2,
+    "source": "mbabinski",
     "source_table": "logs",
     "status": "experimental",
     "tags": [
@@ -7587,6 +7965,7 @@
     "filename": "2022_RedCanary_ThreatDetectionReport/powershell_susp_cmdlets.yml",
     "id": "b3dfac86-1056-4b6b-9c67-db4a10a9e812",
     "level": "high",
+    "license": "GPL-3.0",
     "logsource": {
       "category": "process_creation",
       "product": "windows",
@@ -7603,6 +7982,7 @@
       "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=1 AND (Image LIKE '%\\\\powershell.exe' ESCAPE '\\' AND (CommandLine LIKE '%-nop%' ESCAPE '\\' OR CommandLine LIKE '%/nop%' ESCAPE '\\' OR CommandLine LIKE '%\u2013nop%' ESCAPE '\\' OR CommandLine LIKE '%\u2014nop%' ESCAPE '\\' OR CommandLine LIKE '%\u2015nop%' ESCAPE '\\' OR CommandLine LIKE '%-noni%' ESCAPE '\\' OR CommandLine LIKE '%/noni%' ESCAPE '\\' OR CommandLine LIKE '%\u2013noni%' ESCAPE '\\' OR CommandLine LIKE '%\u2014noni%' ESCAPE '\\' OR CommandLine LIKE '%\u2015noni%' ESCAPE '\\' OR CommandLine LIKE '%invoke-expression%' ESCAPE '\\' OR CommandLine LIKE '%iex%' ESCAPE '\\' OR CommandLine LIKE '%downloadstring%' ESCAPE '\\' OR CommandLine LIKE '%downloadfile%' ESCAPE '\\' OR CommandLine LIKE '%downloadata%' ESCAPE '\\')))"
     ],
     "schema_version": 2,
+    "source": "mbabinski",
     "source_table": "logs",
     "status": "experimental",
     "tags": [
@@ -7627,6 +8007,7 @@
     "filename": "2022_QakBot/win_qakbot_susp_calc_dll_load_trellix.yml",
     "id": "b47b9cc3-6f9a-4a58-a669-5e5e126514b1",
     "level": "high",
+    "license": "GPL-3.0",
     "logsource": {
       "category": "process_creation",
       "product": "windows",
@@ -7643,6 +8024,7 @@
       "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=1 AND (Image LIKE '%\\\\calc.exe' ESCAPE '\\' AND (NOT COALESCE((ImageLoaded LIKE 'C:\\\\Windows\\\\System32%' ESCAPE '\\' OR ImageLoaded LIKE 'C:\\\\Windows\\\\SysWOW64%' ESCAPE '\\'), 0))))"
     ],
     "schema_version": 2,
+    "source": "mbabinski",
     "source_table": "logs",
     "status": "experimental",
     "tags": [
@@ -7666,6 +8048,7 @@
     "filename": "2022_RedCanary_ThreatDetectionReport/certutil_mal_download.yml",
     "id": "b7bfe106-4c22-4ced-82da-b12c39bef679",
     "level": "high",
+    "license": "GPL-3.0",
     "logsource": {
       "category": "process_creation",
       "product": "windows",
@@ -7682,6 +8065,7 @@
       "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=1 AND (Image LIKE '%\\\\certutil.exe' ESCAPE '\\' AND (CommandLine LIKE '%urlcache%' ESCAPE '\\' AND CommandLine LIKE '%split%' ESCAPE '\\')))"
     ],
     "schema_version": 2,
+    "source": "mbabinski",
     "source_table": "logs",
     "status": "experimental",
     "tags": [
@@ -7705,6 +8089,7 @@
     "filename": "2022_ViceSociety_Ransomware/win_encrypted_extension_file_creation_vsociety.yml",
     "id": "ba85a1ba-a194-4f03-9064-0c53da092698",
     "level": "high",
+    "license": "GPL-3.0",
     "logsource": {
       "category": "file_event",
       "product": "windows",
@@ -7720,6 +8105,7 @@
       "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=11 AND (TargetFilename LIKE '%.locked' ESCAPE '\\' OR TargetFilename LIKE '%.vs0ciety' ESCAPE '\\' OR TargetFilename LIKE '%.v-society' ESCAPE '\\'))"
     ],
     "schema_version": 2,
+    "source": "mbabinski",
     "source_table": "logs",
     "status": "experimental",
     "tags": [
@@ -7743,6 +8129,7 @@
     "filename": "2022_RedCanary_ThreatDetectionReport/powershell_modify_defender_components.yml",
     "id": "bb193057-4917-427f-887c-1d2615394935",
     "level": "high",
+    "license": "GPL-3.0",
     "logsource": {
       "category": "process_creation",
       "product": "windows",
@@ -7759,6 +8146,7 @@
       "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=1 AND ((Image LIKE '%\\\\powershell.exe' ESCAPE '\\' AND CommandLine LIKE '%Add-MpPreference%' ESCAPE '\\') AND (CommandLine LIKE '%dll%' ESCAPE '\\' OR CommandLine LIKE '%vbs%' ESCAPE '\\' OR CommandLine LIKE '%zip%' ESCAPE '\\' OR CommandLine LIKE '%.bat%' ESCAPE '\\' OR CommandLine LIKE '%iso%' ESCAPE '\\')))"
     ],
     "schema_version": 2,
+    "source": "mbabinski",
     "source_table": "logs",
     "status": "experimental",
     "tags": [
@@ -7784,6 +8172,7 @@
     "filename": "2022_RedCanary_ThreatDetectionReport/powershell_high_count_susp_chars.yml",
     "id": "bb1e6157-bc60-41fc-a395-513ed538fabe",
     "level": "high",
+    "license": "GPL-3.0",
     "logsource": {
       "category": "process_creation",
       "product": "windows",
@@ -7800,6 +8189,7 @@
       "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=1 AND (Image LIKE '%\\\\powershell.exe' ESCAPE '\\' AND CommandLine REGEXP '^([^^+$%]*[\\^+$%]){5,}[^^+$%]*$'))"
     ],
     "schema_version": 2,
+    "source": "mbabinski",
     "source_table": "logs",
     "status": "experimental",
     "tags": [
@@ -7825,6 +8215,7 @@
     "filename": "2022_RedCanary_ThreatDetectionReport/bitsadmin_mal_download.yml",
     "id": "c7568c9e-f6c6-4cb7-a3c0-da356aef51d8",
     "level": "high",
+    "license": "GPL-3.0",
     "logsource": {
       "category": "process_creation",
       "product": "windows",
@@ -7841,6 +8232,7 @@
       "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=1 AND (Image LIKE '%\\\\bitsadmin.exe' ESCAPE '\\' AND (CommandLine LIKE '%download%' ESCAPE '\\' OR CommandLine LIKE '%transfer%' ESCAPE '\\')))"
     ],
     "schema_version": 2,
+    "source": "mbabinski",
     "source_table": "logs",
     "status": "experimental",
     "tags": [
@@ -7864,6 +8256,7 @@
     "filename": "2022_Solarmarker/win_victim_id_file_creation.yml",
     "id": "c7e8e46c-10f2-45e6-936d-8651522223d1",
     "level": "high",
+    "license": "GPL-3.0",
     "logsource": {
       "category": "file_event",
       "product": "windows",
@@ -7879,6 +8272,7 @@
       "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=11 AND ((TargetFilename LIKE '%\\\\AppData\\\\Roaming\\\\%' ESCAPE '\\' AND TargetFilename REGEXP '^.{120,}$' AND TargetFilename LIKE '%=' ESCAPE '\\') OR TargetFilename LIKE '%\\\\AppData\\\\Roaming\\\\solarmarker.dat' ESCAPE '\\'))"
     ],
     "schema_version": 2,
+    "source": "mbabinski",
     "source_table": "logs",
     "status": "experimental",
     "tags": [
@@ -7902,6 +8296,7 @@
     "filename": "2023_OneNote_Malware/win_proc_creation_regasm_process_injection.yml",
     "id": "c94e87b8-7529-4582-9572-96cd61f7464c",
     "level": "high",
+    "license": "GPL-3.0",
     "logsource": {
       "category": "process_creation",
       "product": "windows",
@@ -7920,6 +8315,7 @@
       "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=1 AND ((ParentImage LIKE '%\\\\RegAsm.exe' ESCAPE '\\' AND (ParentCommandLine LIKE '%RegAsm.exe' ESCAPE '\\' OR ParentCommandLine LIKE '%RegAsm.exe\"' ESCAPE '\\')) OR (Image LIKE '%\\\\RegAsm.exe' ESCAPE '\\' AND (CommandLine LIKE '%RegAsm.exe' ESCAPE '\\' OR CommandLine LIKE '%RegAsm.exe\"' ESCAPE '\\'))))"
     ],
     "schema_version": 2,
+    "source": "mbabinski",
     "source_table": "logs",
     "status": "experimental",
     "tags": [
@@ -7944,6 +8340,7 @@
     "filename": "2022_Gootloader/wscript_execution_in_appdata_gootloader.yml",
     "id": "c9677b37-50f0-44d3-b8f8-24b5b5eed570",
     "level": "high",
+    "license": "GPL-3.0",
     "logsource": {
       "category": "process_creation",
       "product": "windows",
@@ -7960,6 +8357,7 @@
       "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=1 AND (Image LIKE '%\\\\wscript.exe' ESCAPE '\\' AND (CommandLine LIKE '%\\\\appdata\\\\%' ESCAPE '\\' AND CommandLine LIKE '%agreement%' ESCAPE '\\') AND CommandLine LIKE '%.js' ESCAPE '\\'))"
     ],
     "schema_version": 2,
+    "source": "mbabinski",
     "source_table": "logs",
     "status": "experimental",
     "tags": [
@@ -7984,6 +8382,7 @@
     "filename": "2022_ViceSociety_Ransomware/win_susp_reg_defender_tampering_vsociety.yml",
     "id": "ca11521c-5d9c-484f-b83a-14aa12df1201",
     "level": "high",
+    "license": "GPL-3.0",
     "logsource": {
       "category": "process_creation",
       "product": "windows",
@@ -8000,6 +8399,7 @@
       "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=1 AND (Image LIKE '%\\\\reg.exe' ESCAPE '\\' AND ((CommandLine LIKE '%delete%' ESCAPE '\\' AND CommandLine LIKE '%\\\\Software\\\\Policies\\\\Microsoft\\\\Windows Defender%' ESCAPE '\\') OR (((CommandLine LIKE '%add%' ESCAPE '\\') AND (CommandLine LIKE '%-d%' ESCAPE '\\' OR CommandLine LIKE '%/d%' ESCAPE '\\' OR CommandLine LIKE '%\u2013d%' ESCAPE '\\' OR CommandLine LIKE '%\u2014d%' ESCAPE '\\' OR CommandLine LIKE '%\u2015d%' ESCAPE '\\') AND (CommandLine LIKE '%1%' ESCAPE '\\')) AND (CommandLine LIKE '%DisableAntiSpyware%' ESCAPE '\\' OR CommandLine LIKE '%DisableAntiSpywareRealtimeProtection%' ESCAPE '\\' OR CommandLine LIKE '%DisableAntiVirus%' ESCAPE '\\' OR CommandLine LIKE '%DisableBehaviorMonitoring%' ESCAPE '\\' OR CommandLine LIKE '%DisableIOAVProtection%' ESCAPE '\\' OR CommandLine LIKE '%DisableOnAccessProtection%' ESCAPE '\\' OR CommandLine LIKE '%DisableRealtimeMonitoring%' ESCAPE '\\' OR CommandLine LIKE '%DisableRoutinelyTakingAction%' ESCAPE '\\' OR CommandLine LIKE '%DisableScanOnRealtimeEnable%' ESCAPE '\\' OR CommandLine LIKE '%DisableEnhancedNotifications%' ESCAPE '\\' OR CommandLine LIKE '%DisableBlockAtFirstSeen%' ESCAPE '\\' OR CommandLine LIKE '%DisableConfig%' ESCAPE '\\' OR CommandLine LIKE '%DisablePrivacyMode%' ESCAPE '\\' OR CommandLine LIKE '%DisableScriptScanning%' ESCAPE '\\' OR CommandLine LIKE '%DisableIntrusionPreventionSystem%' ESCAPE '\\')) OR (((CommandLine LIKE '%add%' ESCAPE '\\') AND (CommandLine LIKE '%-d%' ESCAPE '\\' OR CommandLine LIKE '%/d%' ESCAPE '\\' OR CommandLine LIKE '%\u2013d%' ESCAPE '\\' OR CommandLine LIKE '%\u2014d%' ESCAPE '\\' OR CommandLine LIKE '%\u2015d%' ESCAPE '\\') AND (CommandLine LIKE '%0%' ESCAPE '\\')) AND (CommandLine LIKE '%MpEnablePus%' ESCAPE '\\' OR CommandLine LIKE '%SpynetReporting%' ESCAPE '\\')) OR ((CommandLine LIKE '%add%' ESCAPE '\\') AND (CommandLine LIKE '%-d%' ESCAPE '\\' OR CommandLine LIKE '%/d%' ESCAPE '\\' OR CommandLine LIKE '%\u2013d%' ESCAPE '\\' OR CommandLine LIKE '%\u2014d%' ESCAPE '\\' OR CommandLine LIKE '%\u2015d%' ESCAPE '\\') AND (CommandLine LIKE '%2%' ESCAPE '\\') AND (CommandLine LIKE '%SubmitSamplesConsent%' ESCAPE '\\')))))"
     ],
     "schema_version": 2,
+    "source": "mbabinski",
     "source_table": "logs",
     "status": "experimental",
     "tags": [
@@ -8024,6 +8424,7 @@
     "filename": "2023_Impacket/atexec/win_proc_creation_impacket_atexec.yml",
     "id": "ceccdcd7-ab57-407c-bd8f-78b2427eb283",
     "level": "high",
+    "license": "GPL-3.0",
     "logsource": {
       "product": "windows",
       "service": "security"
@@ -8039,6 +8440,7 @@
       "SELECT * FROM logs WHERE Channel='Security' AND (EventID=4688 AND NewProcessName LIKE '%\\\\cmd.exe' ESCAPE '\\' AND ((CommandLine LIKE '%cmd.exe%' ESCAPE '\\') AND (CommandLine LIKE '%-c%' ESCAPE '\\' OR CommandLine LIKE '%/c%' ESCAPE '\\' OR CommandLine LIKE '%\u2013c%' ESCAPE '\\' OR CommandLine LIKE '%\u2014c%' ESCAPE '\\' OR CommandLine LIKE '%\u2015c%' ESCAPE '\\') AND (CommandLine LIKE '%2>&1%' ESCAPE '\\')) AND CommandLine REGEXP '^.*Temp\\\\[A-Za-z]{8}\\.tmp.*$')"
     ],
     "schema_version": 2,
+    "source": "mbabinski",
     "source_table": "logs",
     "status": "experimental",
     "tags": [
@@ -8064,6 +8466,7 @@
     "filename": "2023_OneNote_Malware/win_proc_creation_double_extension.yml",
     "id": "dd980d89-f015-4d55-b762-ef200843308c",
     "level": "high",
+    "license": "GPL-3.0",
     "logsource": {
       "category": "process_creation",
       "product": "windows",
@@ -8080,6 +8483,7 @@
       "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=1 AND (ParentImage REGEXP '^.*\\\\[a-zA-Z0-9]*\\.[a-zA-Z0-9]*\\.[a-zA-Z0-9]*$' OR Image REGEXP '^.*\\\\[a-zA-Z0-9]*\\.[a-zA-Z0-9]*\\.[a-zA-Z0-9]*$'))"
     ],
     "schema_version": 2,
+    "source": "mbabinski",
     "source_table": "logs",
     "status": "experimental",
     "tags": [
@@ -8104,6 +8508,7 @@
     "filename": "2022_QakBot/win_qakbot_susp_process_injection_to_explorer.yml",
     "id": "ddef6008-8465-4ce6-b2ec-4e8ffef62a9a",
     "level": "high",
+    "license": "GPL-3.0",
     "logsource": {
       "category": "process_creation",
       "product": "windows",
@@ -8120,6 +8525,7 @@
       "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=1 AND (ParentImage LIKE '%\\\\regsvr32.exe' ESCAPE '\\' AND Image LIKE '%\\\\explorer.exe' ESCAPE '\\'))"
     ],
     "schema_version": 2,
+    "source": "mbabinski",
     "source_table": "logs",
     "status": "experimental",
     "tags": [
@@ -8143,6 +8549,7 @@
     "filename": "2022_BlackCat_Ransomware/win_susp_process_blackcat_execution.yml",
     "id": "df69c374-327e-4146-acff-4a961bb1b755",
     "level": "high",
+    "license": "GPL-3.0",
     "logsource": {
       "category": "process_creation",
       "product": "windows",
@@ -8158,6 +8565,7 @@
       "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=1 AND (CommandLine LIKE '%--access-token%' ESCAPE '\\' AND CommandLine REGEXP '^.*\\s{1}[a-zA-Z0-9]{64}\\s{1}.*$'))"
     ],
     "schema_version": 2,
+    "source": "mbabinski",
     "source_table": "logs",
     "status": "experimental",
     "tags": [
@@ -8182,6 +8590,7 @@
     "filename": "2022_RedCanary_ThreatDetectionReport/process_execution_without_commandline.yml",
     "id": "e0a2f82f-d11d-4ea7-af7e-a8f760b07c04",
     "level": "high",
+    "license": "GPL-3.0",
     "logsource": {
       "category": "process_creation",
       "product": "windows",
@@ -8198,6 +8607,7 @@
       "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=1 AND ((Image LIKE '%\\\\backgroundtaskhost.exe' ESCAPE '\\' OR Image LIKE '%\\\\svchost.exe' ESCAPE '\\' OR Image LIKE '%\\\\dllhost.exe' ESCAPE '\\' OR Image LIKE '%\\\\werfault.exe' ESCAPE '\\' OR Image LIKE '%\\\\searchprotocolhost.exe' ESCAPE '\\' OR Image LIKE '%\\\\wuauclt.exe' ESCAPE '\\' OR Image LIKE '%\\\\spoolsv.exe' ESCAPE '\\' OR Image LIKE '%\\\\rundll32.exe' ESCAPE '\\' OR Image LIKE '%\\\\regasm.exe' ESCAPE '\\' OR Image LIKE '%\\\\regsvr32.exe' ESCAPE '\\' OR Image LIKE '%\\\\regsvcs.exe' ESCAPE '\\') AND CommandLine REGEXP '^.*\\.exe(\\s|\")*$'))"
     ],
     "schema_version": 2,
+    "source": "mbabinski",
     "source_table": "logs",
     "status": "experimental",
     "tags": [
@@ -8221,6 +8631,7 @@
     "filename": "2022_Hive_Ransomware/win_susp_bcdedit_hive.yml",
     "id": "e28f76ad-bdd9-4e56-bd09-ce8b9b853b7f",
     "level": "high",
+    "license": "GPL-3.0",
     "logsource": {
       "category": "process_creation",
       "product": "windows",
@@ -8237,6 +8648,7 @@
       "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=1 AND ((Image LIKE '%\\\\bcdedit.exe' ESCAPE '\\' AND (CommandLine LIKE '%-set%' ESCAPE '\\' OR CommandLine LIKE '%/set%' ESCAPE '\\' OR CommandLine LIKE '%\u2013set%' ESCAPE '\\' OR CommandLine LIKE '%\u2014set%' ESCAPE '\\' OR CommandLine LIKE '%\u2015set%' ESCAPE '\\')) AND ((CommandLine LIKE '%bootstatuspolicy%' ESCAPE '\\' AND CommandLine REGEXP 'ignore[a-zA-Z]*failures') OR (CommandLine LIKE '%recoveryenabled%' ESCAPE '\\' AND CommandLine LIKE '%no%' ESCAPE '\\'))))"
     ],
     "schema_version": 2,
+    "source": "mbabinski",
     "source_table": "logs",
     "status": "experimental",
     "tags": [
@@ -8261,6 +8673,7 @@
     "filename": "2022_ViceSociety_Ransomware/win_ntdsutil_credential_theft_vsociety.yml",
     "id": "e6be4f3d-9ef7-49ff-a18e-633ae489b3e4",
     "level": "high",
+    "license": "GPL-3.0",
     "logsource": {
       "category": "process_creation",
       "product": "windows",
@@ -8277,6 +8690,7 @@
       "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=1 AND (Image LIKE '%\\\\ntdsutil.exe' ESCAPE '\\' AND (CommandLine LIKE '%create%' ESCAPE '\\' OR CommandLine LIKE '%full%' ESCAPE '\\')))"
     ],
     "schema_version": 2,
+    "source": "mbabinski",
     "source_table": "logs",
     "status": "experimental",
     "tags": [
@@ -8301,6 +8715,7 @@
     "filename": "2022_QakBot/win_qakbot_susp_cmdline_from_injected_process.yml",
     "id": "ebda47a5-173e-493d-93a6-d7123076ee11",
     "level": "high",
+    "license": "GPL-3.0",
     "logsource": {
       "category": "process_creation",
       "product": "windows",
@@ -8317,6 +8732,7 @@
       "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=1 AND ((Image LIKE '%\\\\explorer.exe' ESCAPE '\\' OR Image LIKE '%\\\\wermgr.exe' ESCAPE '\\') AND (CommandLine LIKE '%whoami -all%' ESCAPE '\\' OR CommandLine LIKE '%whoami /all%' ESCAPE '\\' OR CommandLine LIKE '%whoami \u2013all%' ESCAPE '\\' OR CommandLine LIKE '%whoami \u2014all%' ESCAPE '\\' OR CommandLine LIKE '%whoami \u2015all%' ESCAPE '\\' OR CommandLine LIKE '%arp -a%' ESCAPE '\\' OR CommandLine LIKE '%arp /a%' ESCAPE '\\' OR CommandLine LIKE '%arp \u2013a%' ESCAPE '\\' OR CommandLine LIKE '%arp \u2014a%' ESCAPE '\\' OR CommandLine LIKE '%arp \u2015a%' ESCAPE '\\' OR CommandLine LIKE '%ipconfig -all%' ESCAPE '\\' OR CommandLine LIKE '%ipconfig /all%' ESCAPE '\\' OR CommandLine LIKE '%ipconfig \u2013all%' ESCAPE '\\' OR CommandLine LIKE '%ipconfig \u2014all%' ESCAPE '\\' OR CommandLine LIKE '%ipconfig \u2015all%' ESCAPE '\\' OR CommandLine LIKE '%net view -all%' ESCAPE '\\' OR CommandLine LIKE '%net view /all%' ESCAPE '\\' OR CommandLine LIKE '%net view \u2013all%' ESCAPE '\\' OR CommandLine LIKE '%net view \u2014all%' ESCAPE '\\' OR CommandLine LIKE '%net view \u2015all%' ESCAPE '\\' OR CommandLine LIKE '%cmd -c set%' ESCAPE '\\' OR CommandLine LIKE '%cmd /c set%' ESCAPE '\\' OR CommandLine LIKE '%cmd \u2013c set%' ESCAPE '\\' OR CommandLine LIKE '%cmd \u2014c set%' ESCAPE '\\' OR CommandLine LIKE '%cmd \u2015c set%' ESCAPE '\\' OR CommandLine LIKE '%nslookup -querytype=ALL -timeout=10 \\_ldap.\\_tcp.dc.\\_msdcs%' ESCAPE '\\' OR CommandLine LIKE '%nslookup -querytype=ALL /timeout=10 \\_ldap.\\_tcp.dc.\\_msdcs%' ESCAPE '\\' OR CommandLine LIKE '%nslookup -querytype=ALL \u2013timeout=10 \\_ldap.\\_tcp.dc.\\_msdcs%' ESCAPE '\\' OR CommandLine LIKE '%nslookup -querytype=ALL \u2014timeout=10 \\_ldap.\\_tcp.dc.\\_msdcs%' ESCAPE '\\' OR CommandLine LIKE '%nslookup -querytype=ALL \u2015timeout=10 \\_ldap.\\_tcp.dc.\\_msdcs%' ESCAPE '\\' OR CommandLine LIKE '%nslookup /querytype=ALL -timeout=10 \\_ldap.\\_tcp.dc.\\_msdcs%' ESCAPE '\\' OR CommandLine LIKE '%nslookup /querytype=ALL /timeout=10 \\_ldap.\\_tcp.dc.\\_msdcs%' ESCAPE '\\' OR CommandLine LIKE '%nslookup /querytype=ALL \u2013timeout=10 \\_ldap.\\_tcp.dc.\\_msdcs%' ESCAPE '\\' OR CommandLine LIKE '%nslookup /querytype=ALL \u2014timeout=10 \\_ldap.\\_tcp.dc.\\_msdcs%' ESCAPE '\\' OR CommandLine LIKE '%nslookup /querytype=ALL \u2015timeout=10 \\_ldap.\\_tcp.dc.\\_msdcs%' ESCAPE '\\' OR CommandLine LIKE '%nslookup \u2013querytype=ALL -timeout=10 \\_ldap.\\_tcp.dc.\\_msdcs%' ESCAPE '\\' OR CommandLine LIKE '%nslookup \u2013querytype=ALL /timeout=10 \\_ldap.\\_tcp.dc.\\_msdcs%' ESCAPE '\\' OR CommandLine LIKE '%nslookup \u2013querytype=ALL \u2013timeout=10 \\_ldap.\\_tcp.dc.\\_msdcs%' ESCAPE '\\' OR CommandLine LIKE '%nslookup \u2013querytype=ALL \u2014timeout=10 \\_ldap.\\_tcp.dc.\\_msdcs%' ESCAPE '\\' OR CommandLine LIKE '%nslookup \u2013querytype=ALL \u2015timeout=10 \\_ldap.\\_tcp.dc.\\_msdcs%' ESCAPE '\\' OR CommandLine LIKE '%nslookup \u2014querytype=ALL -timeout=10 \\_ldap.\\_tcp.dc.\\_msdcs%' ESCAPE '\\' OR CommandLine LIKE '%nslookup \u2014querytype=ALL /timeout=10 \\_ldap.\\_tcp.dc.\\_msdcs%' ESCAPE '\\' OR CommandLine LIKE '%nslookup \u2014querytype=ALL \u2013timeout=10 \\_ldap.\\_tcp.dc.\\_msdcs%' ESCAPE '\\' OR CommandLine LIKE '%nslookup \u2014querytype=ALL \u2014timeout=10 \\_ldap.\\_tcp.dc.\\_msdcs%' ESCAPE '\\' OR CommandLine LIKE '%nslookup \u2014querytype=ALL \u2015timeout=10 \\_ldap.\\_tcp.dc.\\_msdcs%' ESCAPE '\\' OR CommandLine LIKE '%nslookup \u2015querytype=ALL -timeout=10 \\_ldap.\\_tcp.dc.\\_msdcs%' ESCAPE '\\' OR CommandLine LIKE '%nslookup \u2015querytype=ALL /timeout=10 \\_ldap.\\_tcp.dc.\\_msdcs%' ESCAPE '\\' OR CommandLine LIKE '%nslookup \u2015querytype=ALL \u2013timeout=10 \\_ldap.\\_tcp.dc.\\_msdcs%' ESCAPE '\\' OR CommandLine LIKE '%nslookup \u2015querytype=ALL \u2014timeout=10 \\_ldap.\\_tcp.dc.\\_msdcs%' ESCAPE '\\' OR CommandLine LIKE '%nslookup \u2015querytype=ALL \u2015timeout=10 \\_ldap.\\_tcp.dc.\\_msdcs%' ESCAPE '\\' OR CommandLine LIKE '%nltest -domain\\_trusts -all\\_trusts%' ESCAPE '\\' OR CommandLine LIKE '%nltest -domain\\_trusts /all\\_trusts%' ESCAPE '\\' OR CommandLine LIKE '%nltest -domain\\_trusts \u2013all\\_trusts%' ESCAPE '\\' OR CommandLine LIKE '%nltest -domain\\_trusts \u2014all\\_trusts%' ESCAPE '\\' OR CommandLine LIKE '%nltest -domain\\_trusts \u2015all\\_trusts%' ESCAPE '\\' OR CommandLine LIKE '%nltest /domain\\_trusts -all\\_trusts%' ESCAPE '\\' OR CommandLine LIKE '%nltest /domain\\_trusts /all\\_trusts%' ESCAPE '\\' OR CommandLine LIKE '%nltest /domain\\_trusts \u2013all\\_trusts%' ESCAPE '\\' OR CommandLine LIKE '%nltest /domain\\_trusts \u2014all\\_trusts%' ESCAPE '\\' OR CommandLine LIKE '%nltest /domain\\_trusts \u2015all\\_trusts%' ESCAPE '\\' OR CommandLine LIKE '%nltest \u2013domain\\_trusts -all\\_trusts%' ESCAPE '\\' OR CommandLine LIKE '%nltest \u2013domain\\_trusts /all\\_trusts%' ESCAPE '\\' OR CommandLine LIKE '%nltest \u2013domain\\_trusts \u2013all\\_trusts%' ESCAPE '\\' OR CommandLine LIKE '%nltest \u2013domain\\_trusts \u2014all\\_trusts%' ESCAPE '\\' OR CommandLine LIKE '%nltest \u2013domain\\_trusts \u2015all\\_trusts%' ESCAPE '\\' OR CommandLine LIKE '%nltest \u2014domain\\_trusts -all\\_trusts%' ESCAPE '\\' OR CommandLine LIKE '%nltest \u2014domain\\_trusts /all\\_trusts%' ESCAPE '\\' OR CommandLine LIKE '%nltest \u2014domain\\_trusts \u2013all\\_trusts%' ESCAPE '\\' OR CommandLine LIKE '%nltest \u2014domain\\_trusts \u2014all\\_trusts%' ESCAPE '\\' OR CommandLine LIKE '%nltest \u2014domain\\_trusts \u2015all\\_trusts%' ESCAPE '\\' OR CommandLine LIKE '%nltest \u2015domain\\_trusts -all\\_trusts%' ESCAPE '\\' OR CommandLine LIKE '%nltest \u2015domain\\_trusts /all\\_trusts%' ESCAPE '\\' OR CommandLine LIKE '%nltest \u2015domain\\_trusts \u2013all\\_trusts%' ESCAPE '\\' OR CommandLine LIKE '%nltest \u2015domain\\_trusts \u2014all\\_trusts%' ESCAPE '\\' OR CommandLine LIKE '%nltest \u2015domain\\_trusts \u2015all\\_trusts%' ESCAPE '\\' OR CommandLine LIKE '%net share%' ESCAPE '\\' OR CommandLine LIKE '%netstat -nao%' ESCAPE '\\' OR CommandLine LIKE '%netstat /nao%' ESCAPE '\\' OR CommandLine LIKE '%netstat \u2013nao%' ESCAPE '\\' OR CommandLine LIKE '%netstat \u2014nao%' ESCAPE '\\' OR CommandLine LIKE '%netstat \u2015nao%' ESCAPE '\\' OR CommandLine LIKE '%net localgroup%' ESCAPE '\\' OR CommandLine LIKE '%qwinsta%' ESCAPE '\\')))"
     ],
     "schema_version": 2,
+    "source": "mbabinski",
     "source_table": "logs",
     "status": "experimental",
     "tags": [
@@ -8340,6 +8756,7 @@
     "filename": "2023_DarkGate/proc_creation_win_malware_darkgate_autoit3_from_appdata.yml",
     "id": "f8e9aa1c-14f2-4dbd-aa59-b98968ed650d",
     "level": "high",
+    "license": "GPL-3.0",
     "logsource": {
       "category": "process_creation",
       "product": "windows",
@@ -8357,6 +8774,7 @@
       "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=1 AND (((Image LIKE '%\\\\Autoit3.exe' ESCAPE '\\' OR OriginalFileName='AutoIt3.exe') AND (ParentImage LIKE '%\\\\cmd.exe' ESCAPE '\\' OR ParentImage LIKE '%\\\\KeyScramblerLogon.exe' ESCAPE '\\' OR ParentImage LIKE '%\\\\msiexec.exe' ESCAPE '\\')) AND (NOT COALESCE((Image LIKE 'C:\\\\Program Files (x86)\\\\AutoIt3\\\\AutoIt3.exe' ESCAPE '\\'), 0))))"
     ],
     "schema_version": 2,
+    "source": "mbabinski",
     "source_table": "logs",
     "status": "experimental",
     "tags": [

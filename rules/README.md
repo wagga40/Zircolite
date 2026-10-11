@@ -29,7 +29,7 @@ Each ruleset carries every level, from informational to critical. `--min-level m
 
 - the SigmaHQ rulesets above;
 - `rules_windows_all.json` — the Windows detections of SigmaHQ and every community source, combined and deduplicated;
-- community rulesets kept apart from them, one file per source and profile: Hayabusa (`rules_hayabusa_*`, DRL 1.1), Joe Security (`rules_joesecurity_*`, GPL 3.0), Micah Babinski (`rules_mbabinski_*`, GPL 3.0), mdecrevoisier (`rules_mdecrevoisier_*`, CC0 1.0) and tsale (`rules_tsale_*`, GPL 3.0);
+- community rulesets kept apart from them, one file per source and profile: Dragon (`rules_dragon_*`, MIT), Hatchepsoute (`rules_hatchepsoute_*`, Apache 2.0), Hayabusa (`rules_hayabusa_*`, DRL 1.1), Joe Security (`rules_joesecurity_*`, GPL 3.0), LOLDrivers (`rules_loldrivers_*`, Apache 2.0), LOLRMM (`rules_lolrmm_*`, Apache 2.0), Micah Babinski (`rules_mbabinski_*`, GPL 3.0), mdecrevoisier (`rules_mdecrevoisier_*`, CC0 1.0), ReversingLabs (`rules_reversinglabs_*`, MIT), tsale (`rules_tsale_*`, GPL 3.0), Tyrian (`rules_tyrian_*`, MIT) and WRG-11 (`rules_wrg11_*`, MIT);
 - `experimental/` — Sigma correlation rulesets, run with `-r rules/experimental/<file>.json`;
 - `licenses/` — the licence text of every source;
 - `release-manifest.json` — the source, licence, revision and SHA-256 of every file above.

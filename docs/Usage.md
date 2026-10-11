@@ -226,7 +226,7 @@ ships ready-made ones, as do the release archives and the Docker image;
 | `rules_windows_generic.json` | Windows logs without Sysmon (Security, System, …) |
 | `rules_linux.json` | Auditd and Sysmon for Linux |
 | `rules_windows_all.json` | SigmaHQ and every community source combined, without duplicates |
-| `rules_<source>_*.json` | One community source: Hayabusa, Joe Security, Micah Babinski, mdecrevoisier or tsale |
+| `rules_<source>_*.json` | One community source: Dragon, Hatchepsoute, Hayabusa, Joe Security, LOLDrivers, LOLRMM, Micah Babinski, mdecrevoisier, ReversingLabs, tsale, Tyrian or WRG-11 |
 | `experimental/*.json` | [Correlation rules](#sigma-correlation-rules) |
 
 Rulesets carry every level; `--min-level medium` (or `high`, …) loads only the rules at

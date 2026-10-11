@@ -12,6 +12,7 @@
     "filename": "rules/checkprivilegeofcmdviawhoami.yml",
     "id": "f0257f5b-dcd9-5107-babe-81067309b9b1",
     "level": "low",
+    "license": "GPL-3.0",
     "logsource": {
       "category": "process_creation",
       "product": "windows",
@@ -27,6 +28,7 @@
       "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=1 AND CommandLine LIKE '%whoami /groups | find%12288%' ESCAPE '\\')"
     ],
     "schema_version": 2,
+    "source": "joesecurity",
     "source_table": "logs",
     "status": "experimental",
     "tags": [],
@@ -45,6 +47,7 @@
     "filename": "rules/checkprivilegeofcmdviawhoami.yml",
     "id": "f0257f5b-dcd9-5107-babe-81067309b9b1",
     "level": "low",
+    "license": "GPL-3.0",
     "logsource": {
       "product": "windows",
       "service": "security"
@@ -59,6 +62,7 @@
       "SELECT * FROM logs WHERE Channel='Security' AND (EventID=4688 AND CommandLine LIKE '%whoami /groups | find%12288%' ESCAPE '\\')"
     ],
     "schema_version": 2,
+    "source": "joesecurity",
     "source_table": "logs",
     "status": "experimental",
     "tags": [],
@@ -77,6 +81,7 @@
     "filename": "rules/dotnetcompilercompilesfilefromsuspiciouslocation.yml",
     "id": "33f0e461-2e39-52dc-823e-309d87e1f751",
     "level": "high",
+    "license": "GPL-3.0",
     "logsource": {
       "category": "process_creation",
       "product": "windows",
@@ -92,6 +97,7 @@
       "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=1 AND CommandLine LIKE '%\\\\windows\\\\microsoft.net\\\\framework%\\\\csc.exe%/noconfig /fullpaths%\\\\appdata\\\\local\\\\temp%' ESCAPE '\\')"
     ],
     "schema_version": 2,
+    "source": "joesecurity",
     "source_table": "logs",
     "status": "experimental",
     "tags": [],
@@ -110,6 +116,7 @@
     "filename": "rules/dotnetcompilercompilesfilefromsuspiciouslocation.yml",
     "id": "33f0e461-2e39-52dc-823e-309d87e1f751",
     "level": "high",
+    "license": "GPL-3.0",
     "logsource": {
       "product": "windows",
       "service": "security"
@@ -124,6 +131,7 @@
       "SELECT * FROM logs WHERE Channel='Security' AND (EventID=4688 AND CommandLine LIKE '%\\\\windows\\\\microsoft.net\\\\framework%\\\\csc.exe%/noconfig /fullpaths%\\\\appdata\\\\local\\\\temp%' ESCAPE '\\')"
     ],
     "schema_version": 2,
+    "source": "joesecurity",
     "source_table": "logs",
     "status": "experimental",
     "tags": [],
@@ -142,6 +150,7 @@
     "filename": "rules/powershellloadassemblyfromregistry.yml",
     "id": "0147beb3-c966-5304-a33d-e19fdc42e488",
     "level": "critical",
+    "license": "GPL-3.0",
     "logsource": {
       "category": "process_creation",
       "product": "windows",
@@ -157,6 +166,7 @@
       "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=1 AND (CommandLine LIKE '%[Reflection.Assembly]::Load((ItemProperty %/Software%' ESCAPE '\\' OR CommandLine LIKE '%[system.threading.thread]::getdomain().load((itemproperty hk%' ESCAPE '\\'))"
     ],
     "schema_version": 2,
+    "source": "joesecurity",
     "source_table": "logs",
     "status": "experimental",
     "tags": [],
@@ -175,6 +185,7 @@
     "filename": "rules/powershellloadassemblyfromregistry.yml",
     "id": "0147beb3-c966-5304-a33d-e19fdc42e488",
     "level": "critical",
+    "license": "GPL-3.0",
     "logsource": {
       "product": "windows",
       "service": "security"
@@ -189,6 +200,7 @@
       "SELECT * FROM logs WHERE Channel='Security' AND (EventID=4688 AND (CommandLine LIKE '%[Reflection.Assembly]::Load((ItemProperty %/Software%' ESCAPE '\\' OR CommandLine LIKE '%[system.threading.thread]::getdomain().load((itemproperty hk%' ESCAPE '\\'))"
     ],
     "schema_version": 2,
+    "source": "joesecurity",
     "source_table": "logs",
     "status": "experimental",
     "tags": [],
@@ -207,6 +219,7 @@
     "filename": "rules/icediddownloader.yml",
     "id": "03483f08-4ee4-5080-8158-ca1d87ef1e51",
     "level": "critical",
+    "license": "GPL-3.0",
     "logsource": {
       "category": "process_creation",
       "product": "windows",
@@ -222,6 +235,7 @@
       "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=1 AND CommandLine LIKE '%\\\\programdata\\\\1.exe /urlcache /f http%.php_%.cab c:\\\\programdata\\\\1.tmp%' ESCAPE '\\')"
     ],
     "schema_version": 2,
+    "source": "joesecurity",
     "source_table": "logs",
     "status": "experimental",
     "tags": [],
@@ -240,6 +254,7 @@
     "filename": "rules/icediddownloader.yml",
     "id": "03483f08-4ee4-5080-8158-ca1d87ef1e51",
     "level": "critical",
+    "license": "GPL-3.0",
     "logsource": {
       "product": "windows",
       "service": "security"
@@ -254,6 +269,7 @@
       "SELECT * FROM logs WHERE Channel='Security' AND (EventID=4688 AND CommandLine LIKE '%\\\\programdata\\\\1.exe /urlcache /f http%.php_%.cab c:\\\\programdata\\\\1.tmp%' ESCAPE '\\')"
     ],
     "schema_version": 2,
+    "source": "joesecurity",
     "source_table": "logs",
     "status": "experimental",
     "tags": [],
@@ -272,6 +288,7 @@
     "filename": "rules/nanocore.yml",
     "id": "04d1b819-919b-5d38-844c-b4786388f2f4",
     "level": "critical",
+    "license": "GPL-3.0",
     "logsource": {
       "product": "windows",
       "service": "sysmon"
@@ -286,6 +303,7 @@
       "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=11 AND TargetFilename LIKE '%\\\\AppData\\\\Roaming\\\\%-%-%-%-%\\\\run.dat%' ESCAPE '\\')"
     ],
     "schema_version": 2,
+    "source": "joesecurity",
     "source_table": "logs",
     "status": "experimental",
     "tags": [],
@@ -304,6 +322,7 @@
     "filename": "rules/officeproductdropsscriptatsuspiciouslocation.yml",
     "id": "055d3830-cb19-5cdf-a993-ab3ec80505f6",
     "level": "critical",
+    "license": "GPL-3.0",
     "logsource": {
       "product": "windows",
       "service": "sysmon"
@@ -319,6 +338,7 @@
       "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND ((EventID=11 AND (Image LIKE '%\\\\Microsoft Office%\\\\Office%\\\\WINWORD.EXE%' ESCAPE '\\' OR Image LIKE '%\\\\Microsoft Office%\\\\Office%\\\\EXCEL.EXE%' ESCAPE '\\') AND (TargetFilename LIKE '%\\\\AppData\\\\Roaming\\\\%.vbs%' ESCAPE '\\' OR TargetFilename LIKE '%\\\\AppData\\\\Roaming\\\\%.js%' ESCAPE '\\' OR TargetFilename LIKE '%\\\\AppData\\\\Roaming\\\\%.jse%' ESCAPE '\\' OR TargetFilename LIKE '%\\\\AppData\\\\Roaming\\\\%.bat%' ESCAPE '\\' OR TargetFilename LIKE '%\\\\AppData\\\\Roaming\\\\%.url%' ESCAPE '\\' OR TargetFilename LIKE '%\\\\AppData\\\\Roaming\\\\%.cmd%' ESCAPE '\\' OR TargetFilename LIKE '%\\\\AppData\\\\Roaming\\\\%.hta%' ESCAPE '\\' OR TargetFilename LIKE '%\\\\AppData\\\\Roaming\\\\%.ps1%' ESCAPE '\\' OR TargetFilename LIKE '%\\\\AppData\\\\Local\\\\Temp\\\\%.vbs%' ESCAPE '\\' OR TargetFilename LIKE '%\\\\AppData\\\\Local\\\\Temp\\\\%.js%' ESCAPE '\\' OR TargetFilename LIKE '%\\\\AppData\\\\Local\\\\Temp\\\\%.jse%' ESCAPE '\\' OR TargetFilename LIKE '%\\\\AppData\\\\Local\\\\Temp\\\\%.bat%' ESCAPE '\\' OR TargetFilename LIKE '%\\\\AppData\\\\Local\\\\Temp\\\\%.url%' ESCAPE '\\' OR TargetFilename LIKE '%\\\\AppData\\\\Local\\\\Temp\\\\%.cmd%' ESCAPE '\\' OR TargetFilename LIKE '%\\\\AppData\\\\Local\\\\Temp\\\\%.hta%' ESCAPE '\\' OR TargetFilename LIKE '%\\\\AppData\\\\Local\\\\Temp\\\\%.ps1%' ESCAPE '\\')) AND (NOT COALESCE((EventID=11 AND (Image LIKE '%\\\\Microsoft Office%\\\\Office%\\\\WINWORD.EXE%' ESCAPE '\\' OR Image LIKE '%\\\\Microsoft Office%\\\\Office%\\\\EXCEL.EXE%' ESCAPE '\\') AND TargetFilename LIKE '%\\\\AppData\\\\Roaming\\\\Microsoft\\\\Office\\\\Recent\\\\%.url%' ESCAPE '\\'), 0)))"
     ],
     "schema_version": 2,
+    "source": "joesecurity",
     "source_table": "logs",
     "status": "experimental",
     "tags": [],
@@ -337,6 +357,7 @@
     "filename": "rules/medusalocker.yml",
     "id": "07f5619d-9387-5b84-b667-f69b2eb39a0e",
     "level": "critical",
+    "license": "GPL-3.0",
     "logsource": {
       "category": "registry_event",
       "product": "windows",
@@ -352,6 +373,7 @@
       "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND ((EventID=12 OR EventID=13 OR EventID=14) AND (EventID=13 AND TargetObject LIKE '%\\\\Software\\\\MDSLK%Self%' ESCAPE '\\'))"
     ],
     "schema_version": 2,
+    "source": "joesecurity",
     "source_table": "logs",
     "status": "experimental",
     "tags": [],
@@ -368,6 +390,7 @@
     "filename": "rules/medusalocker.yml",
     "id": "07f5619d-9387-5b84-b667-f69b2eb39a0e",
     "level": "critical",
+    "license": "GPL-3.0",
     "logsource": {
       "product": "windows",
       "service": "security"
@@ -383,6 +406,7 @@
       "SELECT * FROM logs WHERE Channel='Security' AND ((EventID=4657 AND (OperationType='New registry value created' OR OperationType='Existing registry value modified')) AND (EventID=13 AND TargetObject LIKE '%\\\\Software\\\\MDSLK%Self%' ESCAPE '\\'))"
     ],
     "schema_version": 2,
+    "source": "joesecurity",
     "source_table": "logs",
     "status": "experimental",
     "tags": [],
@@ -401,6 +425,7 @@
     "filename": "rules/applockerbypassviaregsvr32.yml",
     "id": "0dcb8937-4766-573e-b989-9b381da3379f",
     "level": "critical",
+    "license": "GPL-3.0",
     "logsource": {
       "category": "process_creation",
       "product": "windows",
@@ -416,6 +441,7 @@
       "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=1 AND CommandLine LIKE '%regsvr32%/s /u /n /i:http%scrobj%' ESCAPE '\\')"
     ],
     "schema_version": 2,
+    "source": "joesecurity",
     "source_table": "logs",
     "status": "experimental",
     "tags": [],
@@ -434,6 +460,7 @@
     "filename": "rules/applockerbypassviaregsvr32.yml",
     "id": "0dcb8937-4766-573e-b989-9b381da3379f",
     "level": "critical",
+    "license": "GPL-3.0",
     "logsource": {
       "product": "windows",
       "service": "security"
@@ -448,6 +475,7 @@
       "SELECT * FROM logs WHERE Channel='Security' AND (EventID=4688 AND CommandLine LIKE '%regsvr32%/s /u /n /i:http%scrobj%' ESCAPE '\\')"
     ],
     "schema_version": 2,
+    "source": "joesecurity",
     "source_table": "logs",
     "status": "experimental",
     "tags": [],
@@ -466,6 +494,7 @@
     "filename": "rules/xmrig.yml",
     "id": "0e874440-12fa-5457-86e5-f6b7c7ff76bf",
     "level": "critical",
+    "license": "GPL-3.0",
     "logsource": {
       "category": "process_creation",
       "product": "windows",
@@ -481,6 +510,7 @@
       "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=1 AND (CommandLine LIKE '%-algo=% -o %miner% -u%' ESCAPE '\\' OR CommandLine LIKE '%cryptonight --url=xmr.%' ESCAPE '\\' OR CommandLine LIKE '%stratum+tcp://%' ESCAPE '\\' OR CommandLine LIKE '%--algo=cn%-o % -u %' ESCAPE '\\' OR CommandLine LIKE '%--coin=monero --%' ESCAPE '\\' OR CommandLine LIKE '%-o pool.%--nicehash%' ESCAPE '\\' OR CommandLine LIKE '%--pool stratum:%' ESCAPE '\\' OR CommandLine LIKE '%--background --donate-level 1 --nicehash%' ESCAPE '\\' OR CommandLine LIKE '%-o % -u % -p w=a -k -a%' ESCAPE '\\' OR CommandLine LIKE '% -u % -p x --max-cpu-usage%' ESCAPE '\\' OR CommandLine LIKE '%--donate-level=%--max-cpu-usage=%' ESCAPE '\\' OR CommandLine LIKE '%-p stratum1+ssl://% -r --response-timeout%' ESCAPE '\\' OR CommandLine LIKE '%-o % --cpu-max-threads-hint%' ESCAPE '\\' OR CommandLine LIKE '%--donate-level % -o pool.%' ESCAPE '\\' OR CommandLine LIKE '%--cpu-memory-pool=%--donate-level=%' ESCAPE '\\' OR CommandLine LIKE '%--pool=stratum:%--cinit-max-gpu=%' ESCAPE '\\' OR CommandLine LIKE '%-o xmr.% -u % -p%' ESCAPE '\\' OR CommandLine LIKE '%-epool % -ewal % -worker%' ESCAPE '\\' OR CommandLine LIKE '%-o % -u % --donate-level=%' ESCAPE '\\' OR CommandLine LIKE '%--cinit-find-e --pool=stratums://%' ESCAPE '\\' OR CommandLine LIKE '%-o % -u % -p x %' ESCAPE '\\' OR CommandLine LIKE '%pool.minexmr.%-max-threads-%' ESCAPE '\\' OR CommandLine LIKE '%--cinit-find-%.nanopool.%' ESCAPE '\\' OR CommandLine LIKE '%--cinit-find-%--url=%' ESCAPE '\\' OR CommandLine LIKE '%--url pool% --donate-level%' ESCAPE '\\' OR CommandLine LIKE '%--user %--donate-level%' ESCAPE '\\' OR CommandLine LIKE '%-p w=Rig -a cn-heavy/xhv -k -o%' ESCAPE '\\' OR CommandLine LIKE '%-o % -u % --tls%' ESCAPE '\\' OR CommandLine LIKE '%--user%--server%--algo%' ESCAPE '\\'))"
     ],
     "schema_version": 2,
+    "source": "joesecurity",
     "source_table": "logs",
     "status": "experimental",
     "tags": [],
@@ -499,6 +529,7 @@
     "filename": "rules/xmrig.yml",
     "id": "0e874440-12fa-5457-86e5-f6b7c7ff76bf",
     "level": "critical",
+    "license": "GPL-3.0",
     "logsource": {
       "product": "windows",
       "service": "security"
@@ -513,6 +544,7 @@
       "SELECT * FROM logs WHERE Channel='Security' AND (EventID=4688 AND (CommandLine LIKE '%-algo=% -o %miner% -u%' ESCAPE '\\' OR CommandLine LIKE '%cryptonight --url=xmr.%' ESCAPE '\\' OR CommandLine LIKE '%stratum+tcp://%' ESCAPE '\\' OR CommandLine LIKE '%--algo=cn%-o % -u %' ESCAPE '\\' OR CommandLine LIKE '%--coin=monero --%' ESCAPE '\\' OR CommandLine LIKE '%-o pool.%--nicehash%' ESCAPE '\\' OR CommandLine LIKE '%--pool stratum:%' ESCAPE '\\' OR CommandLine LIKE '%--background --donate-level 1 --nicehash%' ESCAPE '\\' OR CommandLine LIKE '%-o % -u % -p w=a -k -a%' ESCAPE '\\' OR CommandLine LIKE '% -u % -p x --max-cpu-usage%' ESCAPE '\\' OR CommandLine LIKE '%--donate-level=%--max-cpu-usage=%' ESCAPE '\\' OR CommandLine LIKE '%-p stratum1+ssl://% -r --response-timeout%' ESCAPE '\\' OR CommandLine LIKE '%-o % --cpu-max-threads-hint%' ESCAPE '\\' OR CommandLine LIKE '%--donate-level % -o pool.%' ESCAPE '\\' OR CommandLine LIKE '%--cpu-memory-pool=%--donate-level=%' ESCAPE '\\' OR CommandLine LIKE '%--pool=stratum:%--cinit-max-gpu=%' ESCAPE '\\' OR CommandLine LIKE '%-o xmr.% -u % -p%' ESCAPE '\\' OR CommandLine LIKE '%-epool % -ewal % -worker%' ESCAPE '\\' OR CommandLine LIKE '%-o % -u % --donate-level=%' ESCAPE '\\' OR CommandLine LIKE '%--cinit-find-e --pool=stratums://%' ESCAPE '\\' OR CommandLine LIKE '%-o % -u % -p x %' ESCAPE '\\' OR CommandLine LIKE '%pool.minexmr.%-max-threads-%' ESCAPE '\\' OR CommandLine LIKE '%--cinit-find-%.nanopool.%' ESCAPE '\\' OR CommandLine LIKE '%--cinit-find-%--url=%' ESCAPE '\\' OR CommandLine LIKE '%--url pool% --donate-level%' ESCAPE '\\' OR CommandLine LIKE '%--user %--donate-level%' ESCAPE '\\' OR CommandLine LIKE '%-p w=Rig -a cn-heavy/xhv -k -o%' ESCAPE '\\' OR CommandLine LIKE '%-o % -u % --tls%' ESCAPE '\\' OR CommandLine LIKE '%--user%--server%--algo%' ESCAPE '\\'))"
     ],
     "schema_version": 2,
+    "source": "joesecurity",
     "source_table": "logs",
     "status": "experimental",
     "tags": [],
@@ -531,6 +563,7 @@
     "filename": "rules/schedulevbsfromappdata.yml",
     "id": "0ef759f2-f599-5582-a263-9dea8e7e03d6",
     "level": "critical",
+    "license": "GPL-3.0",
     "logsource": {
       "category": "process_creation",
       "product": "windows",
@@ -546,6 +579,7 @@
       "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=1 AND (CommandLine LIKE '%\\\\schtasks.exe% /create %wscript /E:vbscript %\\\\AppData\\\\Roaming\\\\%' ESCAPE '\\' OR CommandLine LIKE '%schtasks /create %\\\\appdata\\\\roaming\\\\%.vbs%' ESCAPE '\\' OR CommandLine LIKE '%schtasks /create %\\\\appdata\\\\roaming\\\\%.js%' ESCAPE '\\'))"
     ],
     "schema_version": 2,
+    "source": "joesecurity",
     "source_table": "logs",
     "status": "experimental",
     "tags": [],
@@ -564,6 +598,7 @@
     "filename": "rules/schedulevbsfromappdata.yml",
     "id": "0ef759f2-f599-5582-a263-9dea8e7e03d6",
     "level": "critical",
+    "license": "GPL-3.0",
     "logsource": {
       "product": "windows",
       "service": "security"
@@ -578,6 +613,7 @@
       "SELECT * FROM logs WHERE Channel='Security' AND (EventID=4688 AND (CommandLine LIKE '%\\\\schtasks.exe% /create %wscript /E:vbscript %\\\\AppData\\\\Roaming\\\\%' ESCAPE '\\' OR CommandLine LIKE '%schtasks /create %\\\\appdata\\\\roaming\\\\%.vbs%' ESCAPE '\\' OR CommandLine LIKE '%schtasks /create %\\\\appdata\\\\roaming\\\\%.js%' ESCAPE '\\'))"
     ],
     "schema_version": 2,
+    "source": "joesecurity",
     "source_table": "logs",
     "status": "experimental",
     "tags": [],
@@ -596,6 +632,7 @@
     "filename": "rules/registerjarinrunkey.yml",
     "id": "130e9a08-a279-5deb-bad2-1f71b6b747ef",
     "level": "critical",
+    "license": "GPL-3.0",
     "logsource": {
       "category": "process_creation",
       "product": "windows",
@@ -611,6 +648,7 @@
       "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=1 AND (CommandLine LIKE '%reg add %\\\\Software\\\\Microsoft\\\\Windows\\\\CurrentVersion\\\\Run /v %\\\\AppData\\\\Roaming\\\\%.jar%' ESCAPE '\\' OR CommandLine LIKE '%reg add %\\\\software\\\\microsoft\\\\windows\\\\currentversion\\\\run /v %javaw.exe -jar%' ESCAPE '\\'))"
     ],
     "schema_version": 2,
+    "source": "joesecurity",
     "source_table": "logs",
     "status": "experimental",
     "tags": [],
@@ -629,6 +667,7 @@
     "filename": "rules/registerjarinrunkey.yml",
     "id": "130e9a08-a279-5deb-bad2-1f71b6b747ef",
     "level": "critical",
+    "license": "GPL-3.0",
     "logsource": {
       "product": "windows",
       "service": "security"
@@ -643,6 +682,7 @@
       "SELECT * FROM logs WHERE Channel='Security' AND (EventID=4688 AND (CommandLine LIKE '%reg add %\\\\Software\\\\Microsoft\\\\Windows\\\\CurrentVersion\\\\Run /v %\\\\AppData\\\\Roaming\\\\%.jar%' ESCAPE '\\' OR CommandLine LIKE '%reg add %\\\\software\\\\microsoft\\\\windows\\\\currentversion\\\\run /v %javaw.exe -jar%' ESCAPE '\\'))"
     ],
     "schema_version": 2,
+    "source": "joesecurity",
     "source_table": "logs",
     "status": "experimental",
     "tags": [],
@@ -661,6 +701,7 @@
     "filename": "rules/quasar.yml",
     "id": "132d517e-9496-5107-90f5-659d8f460c84",
     "level": "critical",
+    "license": "GPL-3.0",
     "logsource": {
       "category": "process_creation",
       "product": "windows",
@@ -676,6 +717,7 @@
       "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=1 AND CommandLine LIKE '%schtasks%quasar client%' ESCAPE '\\')"
     ],
     "schema_version": 2,
+    "source": "joesecurity",
     "source_table": "logs",
     "status": "experimental",
     "tags": [],
@@ -694,6 +736,7 @@
     "filename": "rules/quasar.yml",
     "id": "132d517e-9496-5107-90f5-659d8f460c84",
     "level": "critical",
+    "license": "GPL-3.0",
     "logsource": {
       "product": "windows",
       "service": "security"
@@ -708,6 +751,7 @@
       "SELECT * FROM logs WHERE Channel='Security' AND (EventID=4688 AND CommandLine LIKE '%schtasks%quasar client%' ESCAPE '\\')"
     ],
     "schema_version": 2,
+    "source": "joesecurity",
     "source_table": "logs",
     "status": "experimental",
     "tags": [],
@@ -726,6 +770,7 @@
     "filename": "rules/powershelllaunchwmicviaclass.yml",
     "id": "13a6f429-4894-5961-8497-32c0b07db712",
     "level": "critical",
+    "license": "GPL-3.0",
     "logsource": {
       "category": "process_creation",
       "product": "windows",
@@ -741,6 +786,7 @@
       "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=1 AND CommandLine LIKE '%powershell%[wmiclass]%' ESCAPE '\\')"
     ],
     "schema_version": 2,
+    "source": "joesecurity",
     "source_table": "logs",
     "status": "experimental",
     "tags": [],
@@ -759,6 +805,7 @@
     "filename": "rules/powershelllaunchwmicviaclass.yml",
     "id": "13a6f429-4894-5961-8497-32c0b07db712",
     "level": "critical",
+    "license": "GPL-3.0",
     "logsource": {
       "product": "windows",
       "service": "security"
@@ -773,6 +820,7 @@
       "SELECT * FROM logs WHERE Channel='Security' AND (EventID=4688 AND CommandLine LIKE '%powershell%[wmiclass]%' ESCAPE '\\')"
     ],
     "schema_version": 2,
+    "source": "joesecurity",
     "source_table": "logs",
     "status": "experimental",
     "tags": [],
@@ -791,6 +839,7 @@
     "filename": "rules/wmiclaunchscriptfromxslfile.yml",
     "id": "13c1f1bf-e39d-59cd-8385-26923b98eac4",
     "level": "critical",
+    "license": "GPL-3.0",
     "logsource": {
       "category": "process_creation",
       "product": "windows",
@@ -806,6 +855,7 @@
       "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=1 AND (CommandLine LIKE '%wmic process list /format:%.xsl%' ESCAPE '\\' OR CommandLine LIKE '%wmic os get /format:%.xsl%' ESCAPE '\\'))"
     ],
     "schema_version": 2,
+    "source": "joesecurity",
     "source_table": "logs",
     "status": "experimental",
     "tags": [],
@@ -824,6 +874,7 @@
     "filename": "rules/wmiclaunchscriptfromxslfile.yml",
     "id": "13c1f1bf-e39d-59cd-8385-26923b98eac4",
     "level": "critical",
+    "license": "GPL-3.0",
     "logsource": {
       "product": "windows",
       "service": "security"
@@ -838,6 +889,7 @@
       "SELECT * FROM logs WHERE Channel='Security' AND (EventID=4688 AND (CommandLine LIKE '%wmic process list /format:%.xsl%' ESCAPE '\\' OR CommandLine LIKE '%wmic os get /format:%.xsl%' ESCAPE '\\'))"
     ],
     "schema_version": 2,
+    "source": "joesecurity",
     "source_table": "logs",
     "status": "experimental",
     "tags": [],
@@ -856,6 +908,7 @@
     "filename": "rules/hidecopyanddeleteitself.yml",
     "id": "13e9b727-6687-51c5-a721-ed0fddd4d3c4",
     "level": "critical",
+    "license": "GPL-3.0",
     "logsource": {
       "category": "process_creation",
       "product": "windows",
@@ -871,6 +924,7 @@
       "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=1 AND CommandLine LIKE '%attrib +s +h %timeout /t %del /f /q%' ESCAPE '\\')"
     ],
     "schema_version": 2,
+    "source": "joesecurity",
     "source_table": "logs",
     "status": "experimental",
     "tags": [],
@@ -889,6 +943,7 @@
     "filename": "rules/hidecopyanddeleteitself.yml",
     "id": "13e9b727-6687-51c5-a721-ed0fddd4d3c4",
     "level": "critical",
+    "license": "GPL-3.0",
     "logsource": {
       "product": "windows",
       "service": "security"
@@ -903,6 +958,7 @@
       "SELECT * FROM logs WHERE Channel='Security' AND (EventID=4688 AND CommandLine LIKE '%attrib +s +h %timeout /t %del /f /q%' ESCAPE '\\')"
     ],
     "schema_version": 2,
+    "source": "joesecurity",
     "source_table": "logs",
     "status": "experimental",
     "tags": [],
@@ -921,6 +977,7 @@
     "filename": "rules/executedllwithtxtextensionfromtemplocation.yml",
     "id": "149d4a13-e240-5244-a15e-61ee283f5c36",
     "level": "critical",
+    "license": "GPL-3.0",
     "logsource": {
       "category": "process_creation",
       "product": "windows",
@@ -936,6 +993,7 @@
       "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=1 AND CommandLine LIKE '%rundll32%\\\\appdata\\\\local\\\\temp\\\\%.txt%' ESCAPE '\\')"
     ],
     "schema_version": 2,
+    "source": "joesecurity",
     "source_table": "logs",
     "status": "experimental",
     "tags": [],
@@ -954,6 +1012,7 @@
     "filename": "rules/executedllwithtxtextensionfromtemplocation.yml",
     "id": "149d4a13-e240-5244-a15e-61ee283f5c36",
     "level": "critical",
+    "license": "GPL-3.0",
     "logsource": {
       "product": "windows",
       "service": "security"
@@ -968,6 +1027,7 @@
       "SELECT * FROM logs WHERE Channel='Security' AND (EventID=4688 AND CommandLine LIKE '%rundll32%\\\\appdata\\\\local\\\\temp\\\\%.txt%' ESCAPE '\\')"
     ],
     "schema_version": 2,
+    "source": "joesecurity",
     "source_table": "logs",
     "status": "experimental",
     "tags": [],
@@ -986,6 +1046,7 @@
     "filename": "rules/copyfiletostartupviapowershell.yml",
     "id": "15884a58-2c74-5542-a0ae-98e93f2220fd",
     "level": "critical",
+    "license": "GPL-3.0",
     "logsource": {
       "category": "process_creation",
       "product": "windows",
@@ -1001,6 +1062,7 @@
       "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=1 AND CommandLine LIKE '%copy-item %\\\\roaming\\\\microsoft\\\\windows\\\\start menu\\\\programs\\\\startup%' ESCAPE '\\')"
     ],
     "schema_version": 2,
+    "source": "joesecurity",
     "source_table": "logs",
     "status": "experimental",
     "tags": [],
@@ -1019,6 +1081,7 @@
     "filename": "rules/copyfiletostartupviapowershell.yml",
     "id": "15884a58-2c74-5542-a0ae-98e93f2220fd",
     "level": "critical",
+    "license": "GPL-3.0",
     "logsource": {
       "product": "windows",
       "service": "security"
@@ -1033,6 +1096,7 @@
       "SELECT * FROM logs WHERE Channel='Security' AND (EventID=4688 AND CommandLine LIKE '%copy-item %\\\\roaming\\\\microsoft\\\\windows\\\\start menu\\\\programs\\\\startup%' ESCAPE '\\')"
     ],
     "schema_version": 2,
+    "source": "joesecurity",
     "source_table": "logs",
     "status": "experimental",
     "tags": [],
@@ -1051,6 +1115,7 @@
     "filename": "rules/vjw0rm.yml",
     "id": "17e28344-dec3-5a7e-83c0-acd0bb628d0f",
     "level": "critical",
+    "license": "GPL-3.0",
     "logsource": {
       "category": "registry_event",
       "product": "windows",
@@ -1066,6 +1131,7 @@
       "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND ((EventID=12 OR EventID=13 OR EventID=14) AND (EventID=13 AND TargetObject LIKE '%HKEY\\_CURRENT\\_USER\\\\vjw0rm%' ESCAPE '\\'))"
     ],
     "schema_version": 2,
+    "source": "joesecurity",
     "source_table": "logs",
     "status": "experimental",
     "tags": [],
@@ -1082,6 +1148,7 @@
     "filename": "rules/vjw0rm.yml",
     "id": "17e28344-dec3-5a7e-83c0-acd0bb628d0f",
     "level": "critical",
+    "license": "GPL-3.0",
     "logsource": {
       "product": "windows",
       "service": "security"
@@ -1097,6 +1164,7 @@
       "SELECT * FROM logs WHERE Channel='Security' AND ((EventID=4657 AND (OperationType='New registry value created' OR OperationType='Existing registry value modified')) AND (EventID=13 AND TargetObject LIKE '%HKEY\\_CURRENT\\_USER\\\\vjw0rm%' ESCAPE '\\'))"
     ],
     "schema_version": 2,
+    "source": "joesecurity",
     "source_table": "logs",
     "status": "experimental",
     "tags": [],
@@ -1115,6 +1183,7 @@
     "filename": "rules/schedulebinaryfromdotnetdirectory.yml",
     "id": "1a444da3-73a1-59db-b643-d03e938d1efe",
     "level": "critical",
+    "license": "GPL-3.0",
     "logsource": {
       "category": "process_creation",
       "product": "windows",
@@ -1130,6 +1199,7 @@
       "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=1 AND CommandLine LIKE '%schtasks /create%:\\\\windows\\\\microsoft.net%' ESCAPE '\\')"
     ],
     "schema_version": 2,
+    "source": "joesecurity",
     "source_table": "logs",
     "status": "experimental",
     "tags": [],
@@ -1148,6 +1218,7 @@
     "filename": "rules/schedulebinaryfromdotnetdirectory.yml",
     "id": "1a444da3-73a1-59db-b643-d03e938d1efe",
     "level": "critical",
+    "license": "GPL-3.0",
     "logsource": {
       "product": "windows",
       "service": "security"
@@ -1162,6 +1233,7 @@
       "SELECT * FROM logs WHERE Channel='Security' AND (EventID=4688 AND CommandLine LIKE '%schtasks /create%:\\\\windows\\\\microsoft.net%' ESCAPE '\\')"
     ],
     "schema_version": 2,
+    "source": "joesecurity",
     "source_table": "logs",
     "status": "experimental",
     "tags": [],
@@ -1180,6 +1252,7 @@
     "filename": "rules/onenotedropssuspiciousfile.yml",
     "id": "1accd2cf-a91d-57f0-a143-f90723d413ad",
     "level": "critical",
+    "license": "GPL-3.0",
     "logsource": {
       "product": "windows",
       "service": "sysmon"
@@ -1195,6 +1268,7 @@
       "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=11 AND (Image LIKE '%\\\\microsoft office\\\\root\\\\office%\\\\onenote.exe' ESCAPE '\\' OR Image LIKE '%\\\\microsoft office\\\\office%\\\\onenote.exe' ESCAPE '\\') AND (TargetFilename LIKE '%\\\\exported%\\\\%.hta' ESCAPE '\\' OR TargetFilename LIKE '%\\\\exported%\\\\%.lnk' ESCAPE '\\' OR TargetFilename LIKE '%\\\\exported%\\\\%.vbs' ESCAPE '\\' OR TargetFilename LIKE '%\\\\exported%\\\\%.js' ESCAPE '\\' OR TargetFilename LIKE '%\\\\exported%\\\\%.bat' ESCAPE '\\' OR TargetFilename LIKE '%\\\\onenoteofflinecache\\_files\\\\%.hta' ESCAPE '\\' OR TargetFilename LIKE '%\\\\onenoteofflinecache\\_files\\\\%.vbs' ESCAPE '\\' OR TargetFilename LIKE '%\\\\onenoteofflinecache\\_files\\\\%.js' ESCAPE '\\' OR TargetFilename LIKE '%\\\\onenoteofflinecache\\_files\\\\%.bat' ESCAPE '\\'))"
     ],
     "schema_version": 2,
+    "source": "joesecurity",
     "source_table": "logs",
     "status": "experimental",
     "tags": [],
@@ -1213,6 +1287,7 @@
     "filename": "rules/uninstallmrt.yml",
     "id": "1b603739-0708-5fae-b5ba-3729fe8ea91f",
     "level": "critical",
+    "license": "GPL-3.0",
     "logsource": {
       "category": "process_creation",
       "product": "windows",
@@ -1228,6 +1303,7 @@
       "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=1 AND CommandLine LIKE '%wusa /uninstall /kb:890830 /quiet' ESCAPE '\\')"
     ],
     "schema_version": 2,
+    "source": "joesecurity",
     "source_table": "logs",
     "status": "experimental",
     "tags": [],
@@ -1246,6 +1322,7 @@
     "filename": "rules/uninstallmrt.yml",
     "id": "1b603739-0708-5fae-b5ba-3729fe8ea91f",
     "level": "critical",
+    "license": "GPL-3.0",
     "logsource": {
       "product": "windows",
       "service": "security"
@@ -1260,6 +1337,7 @@
       "SELECT * FROM logs WHERE Channel='Security' AND (EventID=4688 AND CommandLine LIKE '%wusa /uninstall /kb:890830 /quiet' ESCAPE '\\')"
     ],
     "schema_version": 2,
+    "source": "joesecurity",
     "source_table": "logs",
     "status": "experimental",
     "tags": [],
@@ -1278,6 +1356,7 @@
     "filename": "rules/get2downloader.yml",
     "id": "1ba242f8-5e3d-5247-9c76-3defda5ab44d",
     "level": "critical",
+    "license": "GPL-3.0",
     "logsource": {
       "product": "windows",
       "service": "sysmon"
@@ -1293,6 +1372,7 @@
       "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=11 AND (Image LIKE '%\\\\Microsoft Office\\\\Office%' ESCAPE '\\' OR Image LIKE '%\\\\Microsoft Office\\\\root\\\\Office%' ESCAPE '\\') AND TargetFilename LIKE '%Temp\\\\oleObject1.bin' ESCAPE '\\')"
     ],
     "schema_version": 2,
+    "source": "joesecurity",
     "source_table": "logs",
     "status": "experimental",
     "tags": [],
@@ -1311,6 +1391,7 @@
     "filename": "rules/powershelldownloadpayloadfromhardcodedc2list.yml",
     "id": "1c5b159f-f440-57e3-9fe9-0cffc362402e",
     "level": "critical",
+    "license": "GPL-3.0",
     "logsource": {
       "category": "process_creation",
       "product": "windows",
@@ -1326,6 +1407,7 @@
       "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=1 AND CommandLine LIKE '%powershell%Foreach%(%http%http%' ESCAPE '\\')"
     ],
     "schema_version": 2,
+    "source": "joesecurity",
     "source_table": "logs",
     "status": "experimental",
     "tags": [],
@@ -1344,6 +1426,7 @@
     "filename": "rules/powershelldownloadpayloadfromhardcodedc2list.yml",
     "id": "1c5b159f-f440-57e3-9fe9-0cffc362402e",
     "level": "critical",
+    "license": "GPL-3.0",
     "logsource": {
       "product": "windows",
       "service": "security"
@@ -1358,6 +1441,7 @@
       "SELECT * FROM logs WHERE Channel='Security' AND (EventID=4688 AND CommandLine LIKE '%powershell%Foreach%(%http%http%' ESCAPE '\\')"
     ],
     "schema_version": 2,
+    "source": "joesecurity",
     "source_table": "logs",
     "status": "experimental",
     "tags": [],
@@ -1376,6 +1460,7 @@
     "filename": "rules/msbuildlaunchedbyscr.yml",
     "id": "1ffd4a89-f55b-5abd-a378-ee911b4af103",
     "level": "critical",
+    "license": "GPL-3.0",
     "logsource": {
       "category": "process_creation",
       "product": "windows",
@@ -1392,6 +1477,7 @@
       "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=1 AND (ParentCommandLine LIKE '%\\\\%.scr%' ESCAPE '\\' AND CommandLine LIKE '-''%\\\\Microsoft.NET\\\\%\\\\MSBuild.exe%''' ESCAPE '\\'))"
     ],
     "schema_version": 2,
+    "source": "joesecurity",
     "source_table": "logs",
     "status": "experimental",
     "tags": [],
@@ -1410,6 +1496,7 @@
     "filename": "rules/msbuildlaunchedbyscr.yml",
     "id": "1ffd4a89-f55b-5abd-a378-ee911b4af103",
     "level": "critical",
+    "license": "GPL-3.0",
     "logsource": {
       "product": "windows",
       "service": "security"
@@ -1425,6 +1512,7 @@
       "SELECT * FROM logs WHERE Channel='Security' AND (EventID=4688 AND (ParentCommandLine LIKE '%\\\\%.scr%' ESCAPE '\\' AND CommandLine LIKE '-''%\\\\Microsoft.NET\\\\%\\\\MSBuild.exe%''' ESCAPE '\\'))"
     ],
     "schema_version": 2,
+    "source": "joesecurity",
     "source_table": "logs",
     "status": "experimental",
     "tags": [],
@@ -1443,6 +1531,7 @@
     "filename": "rules/powershelldecryptandexecutebase64data.yml",
     "id": "20dffe67-6469-5089-a8b7-5c3426448871",
     "level": "critical",
+    "license": "GPL-3.0",
     "logsource": {
       "category": "process_creation",
       "product": "windows",
@@ -1458,6 +1547,7 @@
       "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=1 AND (CommandLine LIKE '%\\\\powershell.exe% $% = [string][System.Text.Encoding]::ASCII.GetString([System.Convert]::FromBase64String(%;iex $%' ESCAPE '\\' OR CommandLine LIKE '%FromBase64String(%;IEX (%' ESCAPE '\\' OR CommandLine LIKE '%frombase64string(%start-process $%' ESCAPE '\\' OR CommandLine LIKE '%iex ([system.text.encoding]::ascii.getstring([system.convert]::frombase64string(%' ESCAPE '\\' OR CommandLine LIKE '%invoke-expression $(new-object io.streamreader ($(new-object io.compression.deflatestream ($(new-object io.memorystream (,$([convert]::frombase64string(%' ESCAPE '\\' OR CommandLine LIKE '%:frombase64string(%iex $%' ESCAPE '\\' OR CommandLine LIKE '%.processstartinfo%::frombase64string%' ESCAPE '\\'))"
     ],
     "schema_version": 2,
+    "source": "joesecurity",
     "source_table": "logs",
     "status": "experimental",
     "tags": [],
@@ -1476,6 +1566,7 @@
     "filename": "rules/powershelldecryptandexecutebase64data.yml",
     "id": "20dffe67-6469-5089-a8b7-5c3426448871",
     "level": "critical",
+    "license": "GPL-3.0",
     "logsource": {
       "product": "windows",
       "service": "security"
@@ -1490,6 +1581,7 @@
       "SELECT * FROM logs WHERE Channel='Security' AND (EventID=4688 AND (CommandLine LIKE '%\\\\powershell.exe% $% = [string][System.Text.Encoding]::ASCII.GetString([System.Convert]::FromBase64String(%;iex $%' ESCAPE '\\' OR CommandLine LIKE '%FromBase64String(%;IEX (%' ESCAPE '\\' OR CommandLine LIKE '%frombase64string(%start-process $%' ESCAPE '\\' OR CommandLine LIKE '%iex ([system.text.encoding]::ascii.getstring([system.convert]::frombase64string(%' ESCAPE '\\' OR CommandLine LIKE '%invoke-expression $(new-object io.streamreader ($(new-object io.compression.deflatestream ($(new-object io.memorystream (,$([convert]::frombase64string(%' ESCAPE '\\' OR CommandLine LIKE '%:frombase64string(%iex $%' ESCAPE '\\' OR CommandLine LIKE '%.processstartinfo%::frombase64string%' ESCAPE '\\'))"
     ],
     "schema_version": 2,
+    "source": "joesecurity",
     "source_table": "logs",
     "status": "experimental",
     "tags": [],
@@ -1508,6 +1600,7 @@
     "filename": "rules/msiexecdownloadandexecute.yml",
     "id": "21c6861b-4319-5f14-abff-66adf5bc82f3",
     "level": "critical",
+    "license": "GPL-3.0",
     "logsource": {
       "category": "process_creation",
       "product": "windows",
@@ -1523,6 +1616,7 @@
       "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=1 AND (CommandLine LIKE '%msiexec%/i http% /q OnLoad=%' ESCAPE '\\' OR CommandLine LIKE '%m^sie^xec /ih^tt^p%>%' ESCAPE '\\' OR CommandLine LIKE '%m^s^ie^xec /ih^tt^p^%' ESCAPE '\\' OR CommandLine LIKE '%msiexec /q/ihttp%' ESCAPE '\\' OR CommandLine LIKE '%msiexec /i http% /qn%' ESCAPE '\\'))"
     ],
     "schema_version": 2,
+    "source": "joesecurity",
     "source_table": "logs",
     "status": "experimental",
     "tags": [],
@@ -1541,6 +1635,7 @@
     "filename": "rules/msiexecdownloadandexecute.yml",
     "id": "21c6861b-4319-5f14-abff-66adf5bc82f3",
     "level": "critical",
+    "license": "GPL-3.0",
     "logsource": {
       "product": "windows",
       "service": "security"
@@ -1555,6 +1650,7 @@
       "SELECT * FROM logs WHERE Channel='Security' AND (EventID=4688 AND (CommandLine LIKE '%msiexec%/i http% /q OnLoad=%' ESCAPE '\\' OR CommandLine LIKE '%m^sie^xec /ih^tt^p%>%' ESCAPE '\\' OR CommandLine LIKE '%m^s^ie^xec /ih^tt^p^%' ESCAPE '\\' OR CommandLine LIKE '%msiexec /q/ihttp%' ESCAPE '\\' OR CommandLine LIKE '%msiexec /i http% /qn%' ESCAPE '\\'))"
     ],
     "schema_version": 2,
+    "source": "joesecurity",
     "source_table": "logs",
     "status": "experimental",
     "tags": [],
@@ -1573,6 +1669,7 @@
     "filename": "rules/setcustomuseragentanddownloadfileviapowershell.yml",
     "id": "23fe8a18-3b1e-5edc-af62-06184b86c231",
     "level": "critical",
+    "license": "GPL-3.0",
     "logsource": {
       "category": "process_creation",
       "product": "windows",
@@ -1588,6 +1685,7 @@
       "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=1 AND CommandLine LIKE '%user-agent%.downloadfile(%' ESCAPE '\\')"
     ],
     "schema_version": 2,
+    "source": "joesecurity",
     "source_table": "logs",
     "status": "experimental",
     "tags": [],
@@ -1606,6 +1704,7 @@
     "filename": "rules/setcustomuseragentanddownloadfileviapowershell.yml",
     "id": "23fe8a18-3b1e-5edc-af62-06184b86c231",
     "level": "critical",
+    "license": "GPL-3.0",
     "logsource": {
       "product": "windows",
       "service": "security"
@@ -1620,6 +1719,7 @@
       "SELECT * FROM logs WHERE Channel='Security' AND (EventID=4688 AND CommandLine LIKE '%user-agent%.downloadfile(%' ESCAPE '\\')"
     ],
     "schema_version": 2,
+    "source": "joesecurity",
     "source_table": "logs",
     "status": "experimental",
     "tags": [],
@@ -1638,6 +1738,7 @@
     "filename": "rules/powershelladdingsuspiciouspathtoexclusionlist.yml",
     "id": "24a71c5d-ae45-5d1e-860d-817dccdd5532",
     "level": "critical",
+    "license": "GPL-3.0",
     "logsource": {
       "category": "process_creation",
       "product": "windows",
@@ -1653,6 +1754,7 @@
       "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=1 AND (CommandLine LIKE '%powershell%add-mppreference -exclusionpath c:\\\\programdata%' ESCAPE '\\' OR CommandLine LIKE '%add-mppreference -exclusionpath%\\\\appdata\\\\roaming\\\\microsoft\\\\windows\\\\start menu\\\\programs\\\\startup%' ESCAPE '\\'))"
     ],
     "schema_version": 2,
+    "source": "joesecurity",
     "source_table": "logs",
     "status": "experimental",
     "tags": [],
@@ -1671,6 +1773,7 @@
     "filename": "rules/powershelladdingsuspiciouspathtoexclusionlist.yml",
     "id": "24a71c5d-ae45-5d1e-860d-817dccdd5532",
     "level": "critical",
+    "license": "GPL-3.0",
     "logsource": {
       "product": "windows",
       "service": "security"
@@ -1685,6 +1788,7 @@
       "SELECT * FROM logs WHERE Channel='Security' AND (EventID=4688 AND (CommandLine LIKE '%powershell%add-mppreference -exclusionpath c:\\\\programdata%' ESCAPE '\\' OR CommandLine LIKE '%add-mppreference -exclusionpath%\\\\appdata\\\\roaming\\\\microsoft\\\\windows\\\\start menu\\\\programs\\\\startup%' ESCAPE '\\'))"
     ],
     "schema_version": 2,
+    "source": "joesecurity",
     "source_table": "logs",
     "status": "experimental",
     "tags": [],
@@ -1703,6 +1807,7 @@
     "filename": "rules/renamesystemprocessandcopytosuspiciouslocation.yml",
     "id": "27fc5c04-93cc-5038-8c5c-00fd3deb3ce2",
     "level": "critical",
+    "license": "GPL-3.0",
     "logsource": {
       "category": "process_creation",
       "product": "windows",
@@ -1718,6 +1823,7 @@
       "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=1 AND (CommandLine LIKE '%/c copy /z c:\\\\windows\\\\syswow64\\\\windowspowershell\\\\v1.0\\\\powershell.exe c:\\\\users%' ESCAPE '\\' OR CommandLine LIKE '%/c copy /z c:\\\\windows\\\\syswow64\\\\bitsadmin.exe c:\\\\users%' ESCAPE '\\'))"
     ],
     "schema_version": 2,
+    "source": "joesecurity",
     "source_table": "logs",
     "status": "experimental",
     "tags": [],
@@ -1736,6 +1842,7 @@
     "filename": "rules/renamesystemprocessandcopytosuspiciouslocation.yml",
     "id": "27fc5c04-93cc-5038-8c5c-00fd3deb3ce2",
     "level": "critical",
+    "license": "GPL-3.0",
     "logsource": {
       "product": "windows",
       "service": "security"
@@ -1750,6 +1857,7 @@
       "SELECT * FROM logs WHERE Channel='Security' AND (EventID=4688 AND (CommandLine LIKE '%/c copy /z c:\\\\windows\\\\syswow64\\\\windowspowershell\\\\v1.0\\\\powershell.exe c:\\\\users%' ESCAPE '\\' OR CommandLine LIKE '%/c copy /z c:\\\\windows\\\\syswow64\\\\bitsadmin.exe c:\\\\users%' ESCAPE '\\'))"
     ],
     "schema_version": 2,
+    "source": "joesecurity",
     "source_table": "logs",
     "status": "experimental",
     "tags": [],
@@ -1768,6 +1876,7 @@
     "filename": "rules/runtempfileviaregsvr32.yml",
     "id": "32190d3d-5681-5721-9aad-13e2255183fa",
     "level": "critical",
+    "license": "GPL-3.0",
     "logsource": {
       "category": "process_creation",
       "product": "windows",
@@ -1783,6 +1892,7 @@
       "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=1 AND CommandLine LIKE '%regsvr32%\\\\%.tmp%' ESCAPE '\\')"
     ],
     "schema_version": 2,
+    "source": "joesecurity",
     "source_table": "logs",
     "status": "experimental",
     "tags": [],
@@ -1801,6 +1911,7 @@
     "filename": "rules/runtempfileviaregsvr32.yml",
     "id": "32190d3d-5681-5721-9aad-13e2255183fa",
     "level": "critical",
+    "license": "GPL-3.0",
     "logsource": {
       "product": "windows",
       "service": "security"
@@ -1815,6 +1926,7 @@
       "SELECT * FROM logs WHERE Channel='Security' AND (EventID=4688 AND CommandLine LIKE '%regsvr32%\\\\%.tmp%' ESCAPE '\\')"
     ],
     "schema_version": 2,
+    "source": "joesecurity",
     "source_table": "logs",
     "status": "experimental",
     "tags": [],
@@ -1833,6 +1945,7 @@
     "filename": "rules/mshtadownloadpastebin.yml",
     "id": "37c20677-35e2-57cc-ba87-920294d8abe8",
     "level": "critical",
+    "license": "GPL-3.0",
     "logsource": {
       "category": "process_creation",
       "product": "windows",
@@ -1848,6 +1961,7 @@
       "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=1 AND (CommandLine LIKE '%\\\\mshta.exe%pastebin.com\\\\%' ESCAPE '\\' OR CommandLine LIKE '%mshta.exe%pastebin.com\\\\raw%' ESCAPE '\\'))"
     ],
     "schema_version": 2,
+    "source": "joesecurity",
     "source_table": "logs",
     "status": "experimental",
     "tags": [],
@@ -1866,6 +1980,7 @@
     "filename": "rules/mshtadownloadpastebin.yml",
     "id": "37c20677-35e2-57cc-ba87-920294d8abe8",
     "level": "critical",
+    "license": "GPL-3.0",
     "logsource": {
       "product": "windows",
       "service": "security"
@@ -1880,6 +1995,7 @@
       "SELECT * FROM logs WHERE Channel='Security' AND (EventID=4688 AND (CommandLine LIKE '%\\\\mshta.exe%pastebin.com\\\\%' ESCAPE '\\' OR CommandLine LIKE '%mshta.exe%pastebin.com\\\\raw%' ESCAPE '\\'))"
     ],
     "schema_version": 2,
+    "source": "joesecurity",
     "source_table": "logs",
     "status": "experimental",
     "tags": [],
@@ -1898,6 +2014,7 @@
     "filename": "rules/darkgate.yml",
     "id": "3956b5cd-df30-5150-93b9-9dc367014086",
     "level": "critical",
+    "license": "GPL-3.0",
     "logsource": {
       "category": "process_creation",
       "product": "windows",
@@ -1913,6 +2030,7 @@
       "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=1 AND (CommandLine LIKE '%copy c:\\\\windows\\\\system32\\\\curl.exe %user-agent: curl% -o autoit3.exe%' ESCAPE '\\' OR CommandLine LIKE '%curl -o autoit3.exe http% & curl -o %.au3 http%' ESCAPE '\\' OR CommandLine LIKE '%Invoke-WebRequest -Uri %-OutFile ''AutoIt3.exe'' %Invoke-WebRequest -Uri %-OutFile ''%.au3''%' ESCAPE '\\'))"
     ],
     "schema_version": 2,
+    "source": "joesecurity",
     "source_table": "logs",
     "status": "experimental",
     "tags": [],
@@ -1931,6 +2049,7 @@
     "filename": "rules/darkgate.yml",
     "id": "3956b5cd-df30-5150-93b9-9dc367014086",
     "level": "critical",
+    "license": "GPL-3.0",
     "logsource": {
       "product": "windows",
       "service": "security"
@@ -1945,6 +2064,7 @@
       "SELECT * FROM logs WHERE Channel='Security' AND (EventID=4688 AND (CommandLine LIKE '%copy c:\\\\windows\\\\system32\\\\curl.exe %user-agent: curl% -o autoit3.exe%' ESCAPE '\\' OR CommandLine LIKE '%curl -o autoit3.exe http% & curl -o %.au3 http%' ESCAPE '\\' OR CommandLine LIKE '%Invoke-WebRequest -Uri %-OutFile ''AutoIt3.exe'' %Invoke-WebRequest -Uri %-OutFile ''%.au3''%' ESCAPE '\\'))"
     ],
     "schema_version": 2,
+    "source": "joesecurity",
     "source_table": "logs",
     "status": "experimental",
     "tags": [],
@@ -1963,6 +2083,7 @@
     "filename": "rules/officeproductdropsexecutableatsuspiciouslocation.yml",
     "id": "3bfc6497-e3b5-5b7f-a299-cc474989f359",
     "level": "critical",
+    "license": "GPL-3.0",
     "logsource": {
       "product": "windows",
       "service": "sysmon"
@@ -1978,6 +2099,7 @@
       "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=11 AND (Image LIKE '%\\\\Microsoft Office%\\\\Office%\\\\WINWORD.EXE%' ESCAPE '\\' OR Image LIKE '%\\\\Microsoft Office%\\\\Office%\\\\EXCEL.EXE%' ESCAPE '\\') AND (TargetFilename LIKE '%\\\\Documents\\\\%.exe%' ESCAPE '\\' OR TargetFilename LIKE '%\\\\Documents\\\\%.dll%' ESCAPE '\\' OR TargetFilename LIKE '%\\\\Documents\\\\%.scr%' ESCAPE '\\'))"
     ],
     "schema_version": 2,
+    "source": "joesecurity",
     "source_table": "logs",
     "status": "experimental",
     "tags": [],
@@ -1996,6 +2118,7 @@
     "filename": "rules/stealgooglechromelogindata.yml",
     "id": "3cea0847-0bdb-57ca-a43e-3879f8cd1fa6",
     "level": "critical",
+    "license": "GPL-3.0",
     "logsource": {
       "category": "process_creation",
       "product": "windows",
@@ -2011,6 +2134,7 @@
       "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=1 AND CommandLine LIKE '%/c copy%\\\\appdata\\\\local\\\\google\\\\chrome\\\\user data\\\\default\\\\login data%\\\\appdata\\\\local\\\\temp\\\\db1%' ESCAPE '\\')"
     ],
     "schema_version": 2,
+    "source": "joesecurity",
     "source_table": "logs",
     "status": "experimental",
     "tags": [],
@@ -2029,6 +2153,7 @@
     "filename": "rules/stealgooglechromelogindata.yml",
     "id": "3cea0847-0bdb-57ca-a43e-3879f8cd1fa6",
     "level": "critical",
+    "license": "GPL-3.0",
     "logsource": {
       "product": "windows",
       "service": "security"
@@ -2043,6 +2168,7 @@
       "SELECT * FROM logs WHERE Channel='Security' AND (EventID=4688 AND CommandLine LIKE '%/c copy%\\\\appdata\\\\local\\\\google\\\\chrome\\\\user data\\\\default\\\\login data%\\\\appdata\\\\local\\\\temp\\\\db1%' ESCAPE '\\')"
     ],
     "schema_version": 2,
+    "source": "joesecurity",
     "source_table": "logs",
     "status": "experimental",
     "tags": [],
@@ -2061,6 +2187,7 @@
     "filename": "rules/addfilefromsuspiciouslocationtoautostartregistry.yml",
     "id": "3db330c2-75af-50b7-9176-de40d8023321",
     "level": "critical",
+    "license": "GPL-3.0",
     "logsource": {
       "category": "process_creation",
       "product": "windows",
@@ -2076,6 +2203,7 @@
       "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=1 AND (CommandLine LIKE '%reg add %\\\\windows\\\\currentversion\\\\run /f /v %\\\\appdata\\\\roaming%' ESCAPE '\\' OR CommandLine LIKE '%reg add %\\\\windows\\\\currentversion\\\\run /v %\\\\appdata\\\\local%' ESCAPE '\\' OR CommandLine LIKE '%reg add %\\\\software\\\\microsoft\\\\windows nt\\\\currentversion\\\\windows%/v load%appdata\\\\roaming%' ESCAPE '\\'))"
     ],
     "schema_version": 2,
+    "source": "joesecurity",
     "source_table": "logs",
     "status": "experimental",
     "tags": [],
@@ -2094,6 +2222,7 @@
     "filename": "rules/addfilefromsuspiciouslocationtoautostartregistry.yml",
     "id": "3db330c2-75af-50b7-9176-de40d8023321",
     "level": "critical",
+    "license": "GPL-3.0",
     "logsource": {
       "product": "windows",
       "service": "security"
@@ -2108,6 +2237,7 @@
       "SELECT * FROM logs WHERE Channel='Security' AND (EventID=4688 AND (CommandLine LIKE '%reg add %\\\\windows\\\\currentversion\\\\run /f /v %\\\\appdata\\\\roaming%' ESCAPE '\\' OR CommandLine LIKE '%reg add %\\\\windows\\\\currentversion\\\\run /v %\\\\appdata\\\\local%' ESCAPE '\\' OR CommandLine LIKE '%reg add %\\\\software\\\\microsoft\\\\windows nt\\\\currentversion\\\\windows%/v load%appdata\\\\roaming%' ESCAPE '\\'))"
     ],
     "schema_version": 2,
+    "source": "joesecurity",
     "source_table": "logs",
     "status": "experimental",
     "tags": [],
@@ -2126,6 +2256,7 @@
     "filename": "rules/bitsadmindownloadandexecute.yml",
     "id": "42d80c62-6fd6-5383-b5aa-f7f8ed301f0e",
     "level": "critical",
+    "license": "GPL-3.0",
     "logsource": {
       "category": "process_creation",
       "product": "windows",
@@ -2141,6 +2272,7 @@
       "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=1 AND (CommandLine LIKE '%bitsadmin /transfer%http%start \\%APPDATA\\%%' ESCAPE '\\' OR CommandLine LIKE '%/transfer%http%.dll&& rundll32%' ESCAPE '\\' OR CommandLine LIKE '%powershell%start-bitstransfer%start-process%' ESCAPE '\\' OR CommandLine LIKE '%bitsadmin /transfer%|iex%' ESCAPE '\\'))"
     ],
     "schema_version": 2,
+    "source": "joesecurity",
     "source_table": "logs",
     "status": "experimental",
     "tags": [],
@@ -2159,6 +2291,7 @@
     "filename": "rules/bitsadmindownloadandexecute.yml",
     "id": "42d80c62-6fd6-5383-b5aa-f7f8ed301f0e",
     "level": "critical",
+    "license": "GPL-3.0",
     "logsource": {
       "product": "windows",
       "service": "security"
@@ -2173,6 +2306,7 @@
       "SELECT * FROM logs WHERE Channel='Security' AND (EventID=4688 AND (CommandLine LIKE '%bitsadmin /transfer%http%start \\%APPDATA\\%%' ESCAPE '\\' OR CommandLine LIKE '%/transfer%http%.dll&& rundll32%' ESCAPE '\\' OR CommandLine LIKE '%powershell%start-bitstransfer%start-process%' ESCAPE '\\' OR CommandLine LIKE '%bitsadmin /transfer%|iex%' ESCAPE '\\'))"
     ],
     "schema_version": 2,
+    "source": "joesecurity",
     "source_table": "logs",
     "status": "experimental",
     "tags": [],
@@ -2191,6 +2325,7 @@
     "filename": "rules/schedulesystemprocess.yml",
     "id": "4380995d-683c-5d9e-8b5a-f4d6c80bc746",
     "level": "critical",
+    "license": "GPL-3.0",
     "logsource": {
       "category": "process_creation",
       "product": "windows",
@@ -2206,6 +2341,7 @@
       "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=1 AND (CommandLine LIKE '%schtasks /create%svchost%' ESCAPE '\\' OR CommandLine LIKE '%schtasks /create%rundll32%' ESCAPE '\\' OR CommandLine LIKE '%schtasks /create%powershell%' ESCAPE '\\' OR CommandLine LIKE '%schtasks /create%regsvr32%' ESCAPE '\\' OR CommandLine LIKE '%schtasks /create%spoolsv%' ESCAPE '\\' OR CommandLine LIKE '%schtasks /create%lsass%' ESCAPE '\\' OR CommandLine LIKE '%schtasks /create%smss%' ESCAPE '\\' OR CommandLine LIKE '%schtasks /create%csrss%' ESCAPE '\\' OR CommandLine LIKE '%schtasks /create%conhost%' ESCAPE '\\' OR CommandLine LIKE '%schtasks /create%wininit%' ESCAPE '\\' OR CommandLine LIKE '%schtasks /create%winlogon%' ESCAPE '\\' OR CommandLine LIKE '%schtasks /create%taskhost%' ESCAPE '\\' OR CommandLine LIKE '%schtasks /create%Taskmgr%' ESCAPE '\\' OR CommandLine LIKE '%schtasks /create%RuntimeBroker%' ESCAPE '\\' OR CommandLine LIKE '%schtasks /create%smartscreen%' ESCAPE '\\' OR CommandLine LIKE '%schtasks /create%dllhost%' ESCAPE '\\' OR CommandLine LIKE '%schtasks% /create%svchost%' ESCAPE '\\' OR CommandLine LIKE '%schtasks% /create%rundll32%' ESCAPE '\\' OR CommandLine LIKE '%schtasks% /create%powershell%' ESCAPE '\\' OR CommandLine LIKE '%schtasks% /create%regsvr32%' ESCAPE '\\' OR CommandLine LIKE '%schtasks% /create%spoolsv%' ESCAPE '\\' OR CommandLine LIKE '%schtasks% /create%lsass%' ESCAPE '\\' OR CommandLine LIKE '%schtasks% /create%smss%' ESCAPE '\\' OR CommandLine LIKE '%schtasks% /create%csrss%' ESCAPE '\\' OR CommandLine LIKE '%schtasks% /create%conhost%' ESCAPE '\\' OR CommandLine LIKE '%schtasks% /create%wininit%' ESCAPE '\\' OR CommandLine LIKE '%schtasks% /create%winlogon%' ESCAPE '\\' OR CommandLine LIKE '%schtasks% /create%taskhost%' ESCAPE '\\' OR CommandLine LIKE '%schtasks% /create%Taskmgr%' ESCAPE '\\' OR CommandLine LIKE '%schtasks% /create%RuntimeBroker%' ESCAPE '\\' OR CommandLine LIKE '%schtasks% /create%smartscreen%' ESCAPE '\\' OR CommandLine LIKE '%schtasks% /create%dllhost%' ESCAPE '\\'))"
     ],
     "schema_version": 2,
+    "source": "joesecurity",
     "source_table": "logs",
     "status": "experimental",
     "tags": [],
@@ -2224,6 +2360,7 @@
     "filename": "rules/schedulesystemprocess.yml",
     "id": "4380995d-683c-5d9e-8b5a-f4d6c80bc746",
     "level": "critical",
+    "license": "GPL-3.0",
     "logsource": {
       "product": "windows",
       "service": "security"
@@ -2238,6 +2375,7 @@
       "SELECT * FROM logs WHERE Channel='Security' AND (EventID=4688 AND (CommandLine LIKE '%schtasks /create%svchost%' ESCAPE '\\' OR CommandLine LIKE '%schtasks /create%rundll32%' ESCAPE '\\' OR CommandLine LIKE '%schtasks /create%powershell%' ESCAPE '\\' OR CommandLine LIKE '%schtasks /create%regsvr32%' ESCAPE '\\' OR CommandLine LIKE '%schtasks /create%spoolsv%' ESCAPE '\\' OR CommandLine LIKE '%schtasks /create%lsass%' ESCAPE '\\' OR CommandLine LIKE '%schtasks /create%smss%' ESCAPE '\\' OR CommandLine LIKE '%schtasks /create%csrss%' ESCAPE '\\' OR CommandLine LIKE '%schtasks /create%conhost%' ESCAPE '\\' OR CommandLine LIKE '%schtasks /create%wininit%' ESCAPE '\\' OR CommandLine LIKE '%schtasks /create%winlogon%' ESCAPE '\\' OR CommandLine LIKE '%schtasks /create%taskhost%' ESCAPE '\\' OR CommandLine LIKE '%schtasks /create%Taskmgr%' ESCAPE '\\' OR CommandLine LIKE '%schtasks /create%RuntimeBroker%' ESCAPE '\\' OR CommandLine LIKE '%schtasks /create%smartscreen%' ESCAPE '\\' OR CommandLine LIKE '%schtasks /create%dllhost%' ESCAPE '\\' OR CommandLine LIKE '%schtasks% /create%svchost%' ESCAPE '\\' OR CommandLine LIKE '%schtasks% /create%rundll32%' ESCAPE '\\' OR CommandLine LIKE '%schtasks% /create%powershell%' ESCAPE '\\' OR CommandLine LIKE '%schtasks% /create%regsvr32%' ESCAPE '\\' OR CommandLine LIKE '%schtasks% /create%spoolsv%' ESCAPE '\\' OR CommandLine LIKE '%schtasks% /create%lsass%' ESCAPE '\\' OR CommandLine LIKE '%schtasks% /create%smss%' ESCAPE '\\' OR CommandLine LIKE '%schtasks% /create%csrss%' ESCAPE '\\' OR CommandLine LIKE '%schtasks% /create%conhost%' ESCAPE '\\' OR CommandLine LIKE '%schtasks% /create%wininit%' ESCAPE '\\' OR CommandLine LIKE '%schtasks% /create%winlogon%' ESCAPE '\\' OR CommandLine LIKE '%schtasks% /create%taskhost%' ESCAPE '\\' OR CommandLine LIKE '%schtasks% /create%Taskmgr%' ESCAPE '\\' OR CommandLine LIKE '%schtasks% /create%RuntimeBroker%' ESCAPE '\\' OR CommandLine LIKE '%schtasks% /create%smartscreen%' ESCAPE '\\' OR CommandLine LIKE '%schtasks% /create%dllhost%' ESCAPE '\\'))"
     ],
     "schema_version": 2,
+    "source": "joesecurity",
     "source_table": "logs",
     "status": "experimental",
     "tags": [],
@@ -2256,6 +2394,7 @@
     "filename": "rules/powershelldownloadfilefrombase64url.yml",
     "id": "4395dee1-2671-5b6c-ae2c-518f6d2f3769",
     "level": "critical",
+    "license": "GPL-3.0",
     "logsource": {
       "category": "process_creation",
       "product": "windows",
@@ -2271,6 +2410,7 @@
       "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=1 AND CommandLine LIKE '%.downloadfile([system.text.encoding]::ascii.getstring([system.convert]::frombase64string(%' ESCAPE '\\')"
     ],
     "schema_version": 2,
+    "source": "joesecurity",
     "source_table": "logs",
     "status": "experimental",
     "tags": [],
@@ -2289,6 +2429,7 @@
     "filename": "rules/powershelldownloadfilefrombase64url.yml",
     "id": "4395dee1-2671-5b6c-ae2c-518f6d2f3769",
     "level": "critical",
+    "license": "GPL-3.0",
     "logsource": {
       "product": "windows",
       "service": "security"
@@ -2303,6 +2444,7 @@
       "SELECT * FROM logs WHERE Channel='Security' AND (EventID=4688 AND CommandLine LIKE '%.downloadfile([system.text.encoding]::ascii.getstring([system.convert]::frombase64string(%' ESCAPE '\\')"
     ],
     "schema_version": 2,
+    "source": "joesecurity",
     "source_table": "logs",
     "status": "experimental",
     "tags": [],
@@ -2321,6 +2463,7 @@
     "filename": "rules/accesspayloadvianslookuptxtrecord.yml",
     "id": "443ac4b5-71d7-57d2-9aa1-12b70cf7930f",
     "level": "critical",
+    "license": "GPL-3.0",
     "logsource": {
       "category": "process_creation",
       "product": "windows",
@@ -2336,6 +2479,7 @@
       "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=1 AND CommandLine LIKE '%nslookup -type=txt % | findstr%' ESCAPE '\\')"
     ],
     "schema_version": 2,
+    "source": "joesecurity",
     "source_table": "logs",
     "status": "experimental",
     "tags": [],
@@ -2354,6 +2498,7 @@
     "filename": "rules/accesspayloadvianslookuptxtrecord.yml",
     "id": "443ac4b5-71d7-57d2-9aa1-12b70cf7930f",
     "level": "critical",
+    "license": "GPL-3.0",
     "logsource": {
       "product": "windows",
       "service": "security"
@@ -2368,6 +2513,7 @@
       "SELECT * FROM logs WHERE Channel='Security' AND (EventID=4688 AND CommandLine LIKE '%nslookup -type=txt % | findstr%' ESCAPE '\\')"
     ],
     "schema_version": 2,
+    "source": "joesecurity",
     "source_table": "logs",
     "status": "experimental",
     "tags": [],
@@ -2386,6 +2532,7 @@
     "filename": "rules/registerwscriptinrunkey.yml",
     "id": "4611795f-466b-5695-bfa5-015b91c6bd9e",
     "level": "critical",
+    "license": "GPL-3.0",
     "logsource": {
       "product": "windows",
       "service": "sysmon"
@@ -2401,6 +2548,7 @@
       "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=13 AND TargetObject LIKE '%\\\\Microsoft\\\\Windows\\\\CurrentVersion\\\\Run%' ESCAPE '\\' AND Details LIKE '%wscript.exe %' ESCAPE '\\')"
     ],
     "schema_version": 2,
+    "source": "joesecurity",
     "source_table": "logs",
     "status": "experimental",
     "tags": [],
@@ -2419,6 +2567,7 @@
     "filename": "rules/rundll32launchmshtaandrunscriptfrominternet.yml",
     "id": "499930b7-5341-5604-ab24-ab87a6151d1c",
     "level": "critical",
+    "license": "GPL-3.0",
     "logsource": {
       "category": "process_creation",
       "product": "windows",
@@ -2434,6 +2583,7 @@
       "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=1 AND CommandLine LIKE '%rundll32%mshta%script:http%' ESCAPE '\\')"
     ],
     "schema_version": 2,
+    "source": "joesecurity",
     "source_table": "logs",
     "status": "experimental",
     "tags": [],
@@ -2452,6 +2602,7 @@
     "filename": "rules/rundll32launchmshtaandrunscriptfrominternet.yml",
     "id": "499930b7-5341-5604-ab24-ab87a6151d1c",
     "level": "critical",
+    "license": "GPL-3.0",
     "logsource": {
       "product": "windows",
       "service": "security"
@@ -2466,6 +2617,7 @@
       "SELECT * FROM logs WHERE Channel='Security' AND (EventID=4688 AND CommandLine LIKE '%rundll32%mshta%script:http%' ESCAPE '\\')"
     ],
     "schema_version": 2,
+    "source": "joesecurity",
     "source_table": "logs",
     "status": "experimental",
     "tags": [],
@@ -2484,6 +2636,7 @@
     "filename": "rules/eqnedt32connectingtointernet.yml",
     "id": "4d4c9868-3432-5950-b3e0-aed9defd1362",
     "level": "critical",
+    "license": "GPL-3.0",
     "logsource": {
       "product": "windows",
       "service": "sysmon"
@@ -2499,6 +2652,7 @@
       "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=3 AND DestinationPort='80' AND Image LIKE '%\\\\EQUATION\\\\EQNEDT32.EXE%' ESCAPE '\\')"
     ],
     "schema_version": 2,
+    "source": "joesecurity",
     "source_table": "logs",
     "status": "experimental",
     "tags": [],
@@ -2517,6 +2671,7 @@
     "filename": "rules/limerat.yml",
     "id": "5018eca6-4c51-5796-8f53-6c2258f2e5e5",
     "level": "critical",
+    "license": "GPL-3.0",
     "logsource": {
       "category": "process_creation",
       "product": "windows",
@@ -2532,6 +2687,7 @@
       "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=1 AND CommandLine LIKE '%schtasks%limerat%' ESCAPE '\\')"
     ],
     "schema_version": 2,
+    "source": "joesecurity",
     "source_table": "logs",
     "status": "experimental",
     "tags": [],
@@ -2550,6 +2706,7 @@
     "filename": "rules/limerat.yml",
     "id": "5018eca6-4c51-5796-8f53-6c2258f2e5e5",
     "level": "critical",
+    "license": "GPL-3.0",
     "logsource": {
       "product": "windows",
       "service": "security"
@@ -2564,6 +2721,7 @@
       "SELECT * FROM logs WHERE Channel='Security' AND (EventID=4688 AND CommandLine LIKE '%schtasks%limerat%' ESCAPE '\\')"
     ],
     "schema_version": 2,
+    "source": "joesecurity",
     "source_table": "logs",
     "status": "experimental",
     "tags": [],
@@ -2582,6 +2740,7 @@
     "filename": "rules/rundll32rundllfrominternet.yml",
     "id": "51fc25e9-838b-5dea-a88f-aa365a7ae144",
     "level": "critical",
+    "license": "GPL-3.0",
     "logsource": {
       "category": "process_creation",
       "product": "windows",
@@ -2597,6 +2756,7 @@
       "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=1 AND CommandLine LIKE '%rundll32%http%' ESCAPE '\\')"
     ],
     "schema_version": 2,
+    "source": "joesecurity",
     "source_table": "logs",
     "status": "experimental",
     "tags": [],
@@ -2615,6 +2775,7 @@
     "filename": "rules/rundll32rundllfrominternet.yml",
     "id": "51fc25e9-838b-5dea-a88f-aa365a7ae144",
     "level": "critical",
+    "license": "GPL-3.0",
     "logsource": {
       "product": "windows",
       "service": "security"
@@ -2629,6 +2790,7 @@
       "SELECT * FROM logs WHERE Channel='Security' AND (EventID=4688 AND CommandLine LIKE '%rundll32%http%' ESCAPE '\\')"
     ],
     "schema_version": 2,
+    "source": "joesecurity",
     "source_table": "logs",
     "status": "experimental",
     "tags": [],
@@ -2647,6 +2809,7 @@
     "filename": "rules/powershellloadassemblyfrominternet.yml",
     "id": "52c12067-3270-5bb7-9954-fdaeb7f6749d",
     "level": "critical",
+    "license": "GPL-3.0",
     "logsource": {
       "category": "process_creation",
       "product": "windows",
@@ -2662,6 +2825,7 @@
       "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=1 AND CommandLine LIKE '%powershell%[reflection.assembly]::load((new-object net.webclient).downloaddata(%' ESCAPE '\\')"
     ],
     "schema_version": 2,
+    "source": "joesecurity",
     "source_table": "logs",
     "status": "experimental",
     "tags": [],
@@ -2680,6 +2844,7 @@
     "filename": "rules/powershellloadassemblyfrominternet.yml",
     "id": "52c12067-3270-5bb7-9954-fdaeb7f6749d",
     "level": "critical",
+    "license": "GPL-3.0",
     "logsource": {
       "product": "windows",
       "service": "security"
@@ -2694,6 +2859,7 @@
       "SELECT * FROM logs WHERE Channel='Security' AND (EventID=4688 AND CommandLine LIKE '%powershell%[reflection.assembly]::load((new-object net.webclient).downloaddata(%' ESCAPE '\\')"
     ],
     "schema_version": 2,
+    "source": "joesecurity",
     "source_table": "logs",
     "status": "experimental",
     "tags": [],
@@ -2712,6 +2878,7 @@
     "filename": "rules/deleteshadowcopyviawmic.yml",
     "id": "53d3371a-681e-5207-9aee-e9d9ea5ae6c1",
     "level": "critical",
+    "license": "GPL-3.0",
     "logsource": {
       "category": "process_creation",
       "product": "windows",
@@ -2727,6 +2894,7 @@
       "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=1 AND CommandLine LIKE '%wmic%shadowcopy delete%' ESCAPE '\\')"
     ],
     "schema_version": 2,
+    "source": "joesecurity",
     "source_table": "logs",
     "status": "experimental",
     "tags": [],
@@ -2745,6 +2913,7 @@
     "filename": "rules/deleteshadowcopyviawmic.yml",
     "id": "53d3371a-681e-5207-9aee-e9d9ea5ae6c1",
     "level": "critical",
+    "license": "GPL-3.0",
     "logsource": {
       "product": "windows",
       "service": "security"
@@ -2759,6 +2928,7 @@
       "SELECT * FROM logs WHERE Channel='Security' AND (EventID=4688 AND CommandLine LIKE '%wmic%shadowcopy delete%' ESCAPE '\\')"
     ],
     "schema_version": 2,
+    "source": "joesecurity",
     "source_table": "logs",
     "status": "experimental",
     "tags": [],
@@ -2777,6 +2947,7 @@
     "filename": "rules/rmsremoteadmin.yml",
     "id": "5441b9b9-e4bc-5ccf-bf6b-169b0d514785",
     "level": "critical",
+    "license": "GPL-3.0",
     "logsource": {
       "category": "process_creation",
       "product": "windows",
@@ -2792,6 +2963,7 @@
       "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=1 AND CommandLine LIKE '%hkcu\\\\software\\\\tektonit\\\\remote manipulator system\\\\host%' ESCAPE '\\')"
     ],
     "schema_version": 2,
+    "source": "joesecurity",
     "source_table": "logs",
     "status": "experimental",
     "tags": [],
@@ -2810,6 +2982,7 @@
     "filename": "rules/rmsremoteadmin.yml",
     "id": "5441b9b9-e4bc-5ccf-bf6b-169b0d514785",
     "level": "critical",
+    "license": "GPL-3.0",
     "logsource": {
       "product": "windows",
       "service": "security"
@@ -2824,6 +2997,7 @@
       "SELECT * FROM logs WHERE Channel='Security' AND (EventID=4688 AND CommandLine LIKE '%hkcu\\\\software\\\\tektonit\\\\remote manipulator system\\\\host%' ESCAPE '\\')"
     ],
     "schema_version": 2,
+    "source": "joesecurity",
     "source_table": "logs",
     "status": "experimental",
     "tags": [],
@@ -2842,6 +3016,7 @@
     "filename": "rules/antivm.yml",
     "id": "566aee94-3f49-536b-90f3-3f809c0ff871",
     "level": "critical",
+    "license": "GPL-3.0",
     "logsource": {
       "category": "process_creation",
       "product": "windows",
@@ -2857,6 +3032,7 @@
       "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=1 AND CommandLine LIKE '%IlZpcnR1YWxCb3h8Vk13YXJlfEtWTXxIVk0i%' ESCAPE '\\')"
     ],
     "schema_version": 2,
+    "source": "joesecurity",
     "source_table": "logs",
     "status": "experimental",
     "tags": [],
@@ -2875,6 +3051,7 @@
     "filename": "rules/antivm.yml",
     "id": "566aee94-3f49-536b-90f3-3f809c0ff871",
     "level": "critical",
+    "license": "GPL-3.0",
     "logsource": {
       "product": "windows",
       "service": "security"
@@ -2889,6 +3066,7 @@
       "SELECT * FROM logs WHERE Channel='Security' AND (EventID=4688 AND CommandLine LIKE '%IlZpcnR1YWxCb3h8Vk13YXJlfEtWTXxIVk0i%' ESCAPE '\\')"
     ],
     "schema_version": 2,
+    "source": "joesecurity",
     "source_table": "logs",
     "status": "experimental",
     "tags": [],
@@ -2907,6 +3085,7 @@
     "filename": "rules/searchforsntivirusprocess.yml",
     "id": "570e6357-a040-52e8-a845-4a4209ba994a",
     "level": "critical",
+    "license": "GPL-3.0",
     "logsource": {
       "category": "process_creation",
       "product": "windows",
@@ -2922,6 +3101,7 @@
       "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=1 AND (CommandLine LIKE 'findstr%avastui%' ESCAPE '\\' OR CommandLine LIKE 'findstr%avgui%' ESCAPE '\\' OR CommandLine LIKE 'findstr%nswscsvc%' ESCAPE '\\' OR CommandLine LIKE 'findstr%sophoshealth%' ESCAPE '\\'))"
     ],
     "schema_version": 2,
+    "source": "joesecurity",
     "source_table": "logs",
     "status": "experimental",
     "tags": [],
@@ -2940,6 +3120,7 @@
     "filename": "rules/searchforsntivirusprocess.yml",
     "id": "570e6357-a040-52e8-a845-4a4209ba994a",
     "level": "critical",
+    "license": "GPL-3.0",
     "logsource": {
       "product": "windows",
       "service": "security"
@@ -2954,6 +3135,7 @@
       "SELECT * FROM logs WHERE Channel='Security' AND (EventID=4688 AND (CommandLine LIKE 'findstr%avastui%' ESCAPE '\\' OR CommandLine LIKE 'findstr%avgui%' ESCAPE '\\' OR CommandLine LIKE 'findstr%nswscsvc%' ESCAPE '\\' OR CommandLine LIKE 'findstr%sophoshealth%' ESCAPE '\\'))"
     ],
     "schema_version": 2,
+    "source": "joesecurity",
     "source_table": "logs",
     "status": "experimental",
     "tags": [],
@@ -2972,6 +3154,7 @@
     "filename": "rules/decodedllviacertutil.yml",
     "id": "577de491-d209-5afa-b551-5aeaa39fbd63",
     "level": "critical",
+    "license": "GPL-3.0",
     "logsource": {
       "category": "process_creation",
       "product": "windows",
@@ -2987,6 +3170,7 @@
       "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=1 AND CommandLine LIKE '%certutil%-decodehex%.dll%' ESCAPE '\\')"
     ],
     "schema_version": 2,
+    "source": "joesecurity",
     "source_table": "logs",
     "status": "experimental",
     "tags": [],
@@ -3005,6 +3189,7 @@
     "filename": "rules/decodedllviacertutil.yml",
     "id": "577de491-d209-5afa-b551-5aeaa39fbd63",
     "level": "critical",
+    "license": "GPL-3.0",
     "logsource": {
       "product": "windows",
       "service": "security"
@@ -3019,6 +3204,7 @@
       "SELECT * FROM logs WHERE Channel='Security' AND (EventID=4688 AND CommandLine LIKE '%certutil%-decodehex%.dll%' ESCAPE '\\')"
     ],
     "schema_version": 2,
+    "source": "joesecurity",
     "source_table": "logs",
     "status": "experimental",
     "tags": [],
@@ -3037,6 +3223,7 @@
     "filename": "rules/wmicdownloadviamsiexec.yml",
     "id": "5a3381dc-ad47-59b3-82fc-d56ba74bb657",
     "level": "critical",
+    "license": "GPL-3.0",
     "logsource": {
       "category": "process_creation",
       "product": "windows",
@@ -3052,6 +3239,7 @@
       "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=1 AND CommandLine LIKE '%wmic process call create %msiexec %http%' ESCAPE '\\')"
     ],
     "schema_version": 2,
+    "source": "joesecurity",
     "source_table": "logs",
     "status": "experimental",
     "tags": [],
@@ -3070,6 +3258,7 @@
     "filename": "rules/wmicdownloadviamsiexec.yml",
     "id": "5a3381dc-ad47-59b3-82fc-d56ba74bb657",
     "level": "critical",
+    "license": "GPL-3.0",
     "logsource": {
       "product": "windows",
       "service": "security"
@@ -3084,6 +3273,7 @@
       "SELECT * FROM logs WHERE Channel='Security' AND (EventID=4688 AND CommandLine LIKE '%wmic process call create %msiexec %http%' ESCAPE '\\')"
     ],
     "schema_version": 2,
+    "source": "joesecurity",
     "source_table": "logs",
     "status": "experimental",
     "tags": [],
@@ -3102,6 +3292,7 @@
     "filename": "rules/killmultipleprocess.yml",
     "id": "5bc86849-8703-5f16-9069-57ad1a111b81",
     "level": "critical",
+    "license": "GPL-3.0",
     "logsource": {
       "category": "process_creation",
       "product": "windows",
@@ -3117,6 +3308,7 @@
       "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=1 AND CommandLine LIKE '%cmd%taskkill /f%& taskkill /f%& taskkill /f%& taskkill /f%& taskkill /f%& taskkill /f%& taskkill /f%' ESCAPE '\\')"
     ],
     "schema_version": 2,
+    "source": "joesecurity",
     "source_table": "logs",
     "status": "experimental",
     "tags": [],
@@ -3135,6 +3327,7 @@
     "filename": "rules/killmultipleprocess.yml",
     "id": "5bc86849-8703-5f16-9069-57ad1a111b81",
     "level": "critical",
+    "license": "GPL-3.0",
     "logsource": {
       "product": "windows",
       "service": "security"
@@ -3149,6 +3342,7 @@
       "SELECT * FROM logs WHERE Channel='Security' AND (EventID=4688 AND CommandLine LIKE '%cmd%taskkill /f%& taskkill /f%& taskkill /f%& taskkill /f%& taskkill /f%& taskkill /f%& taskkill /f%' ESCAPE '\\')"
     ],
     "schema_version": 2,
+    "source": "joesecurity",
     "source_table": "logs",
     "status": "experimental",
     "tags": [],
@@ -3167,6 +3361,7 @@
     "filename": "rules/powershelllaunchwscript.yml",
     "id": "5f506bee-ee66-58d8-a23f-ebf3744383da",
     "level": "critical",
+    "license": "GPL-3.0",
     "logsource": {
       "category": "process_creation",
       "product": "windows",
@@ -3182,6 +3377,7 @@
       "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=1 AND CommandLine LIKE '%powershell%wscript.shell%.run(%wscript.exe /e:%' ESCAPE '\\')"
     ],
     "schema_version": 2,
+    "source": "joesecurity",
     "source_table": "logs",
     "status": "experimental",
     "tags": [],
@@ -3200,6 +3396,7 @@
     "filename": "rules/powershelllaunchwscript.yml",
     "id": "5f506bee-ee66-58d8-a23f-ebf3744383da",
     "level": "critical",
+    "license": "GPL-3.0",
     "logsource": {
       "product": "windows",
       "service": "security"
@@ -3214,6 +3411,7 @@
       "SELECT * FROM logs WHERE Channel='Security' AND (EventID=4688 AND CommandLine LIKE '%powershell%wscript.shell%.run(%wscript.exe /e:%' ESCAPE '\\')"
     ],
     "schema_version": 2,
+    "source": "joesecurity",
     "source_table": "logs",
     "status": "experimental",
     "tags": [],
@@ -3232,6 +3430,7 @@
     "filename": "rules/powershellregistryexecutionviawmic.yml",
     "id": "5f79213f-fd05-50f4-ba32-e7a0b38b3b12",
     "level": "critical",
+    "license": "GPL-3.0",
     "logsource": {
       "category": "process_creation",
       "product": "windows",
@@ -3247,6 +3446,7 @@
       "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=1 AND CommandLine LIKE '%wmic%output:clipboard process call create%powershell%' ESCAPE '\\')"
     ],
     "schema_version": 2,
+    "source": "joesecurity",
     "source_table": "logs",
     "status": "experimental",
     "tags": [],
@@ -3265,6 +3465,7 @@
     "filename": "rules/powershellregistryexecutionviawmic.yml",
     "id": "5f79213f-fd05-50f4-ba32-e7a0b38b3b12",
     "level": "critical",
+    "license": "GPL-3.0",
     "logsource": {
       "product": "windows",
       "service": "security"
@@ -3279,6 +3480,7 @@
       "SELECT * FROM logs WHERE Channel='Security' AND (EventID=4688 AND CommandLine LIKE '%wmic%output:clipboard process call create%powershell%' ESCAPE '\\')"
     ],
     "schema_version": 2,
+    "source": "joesecurity",
     "source_table": "logs",
     "status": "experimental",
     "tags": [],
@@ -3297,6 +3499,7 @@
     "filename": "rules/capturewifipassword.yml",
     "id": "60a35653-b55a-5c4e-9c6a-bd9339a2e769",
     "level": "critical",
+    "license": "GPL-3.0",
     "logsource": {
       "category": "process_creation",
       "product": "windows",
@@ -3312,6 +3515,7 @@
       "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=1 AND (CommandLine LIKE '%netsh% wlan show profile%' ESCAPE '\\' OR CommandLine LIKE '%netsh wlan show profile%' ESCAPE '\\' OR CommandLine LIKE '%netsh wlan export profile key=clear folder=%' ESCAPE '\\'))"
     ],
     "schema_version": 2,
+    "source": "joesecurity",
     "source_table": "logs",
     "status": "experimental",
     "tags": [],
@@ -3330,6 +3534,7 @@
     "filename": "rules/capturewifipassword.yml",
     "id": "60a35653-b55a-5c4e-9c6a-bd9339a2e769",
     "level": "critical",
+    "license": "GPL-3.0",
     "logsource": {
       "product": "windows",
       "service": "security"
@@ -3344,6 +3549,7 @@
       "SELECT * FROM logs WHERE Channel='Security' AND (EventID=4688 AND (CommandLine LIKE '%netsh% wlan show profile%' ESCAPE '\\' OR CommandLine LIKE '%netsh wlan show profile%' ESCAPE '\\' OR CommandLine LIKE '%netsh wlan export profile key=clear folder=%' ESCAPE '\\'))"
     ],
     "schema_version": 2,
+    "source": "joesecurity",
     "source_table": "logs",
     "status": "experimental",
     "tags": [],
@@ -3362,6 +3568,7 @@
     "filename": "rules/schedulecertutilwindowsbinary.yml",
     "id": "611d49f3-a2c9-5d48-a0af-03a3e0e348ea",
     "level": "critical",
+    "license": "GPL-3.0",
     "logsource": {
       "category": "process_creation",
       "product": "windows",
@@ -3377,6 +3584,7 @@
       "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=1 AND CommandLine LIKE '%schtasks /create % certutil%' ESCAPE '\\')"
     ],
     "schema_version": 2,
+    "source": "joesecurity",
     "source_table": "logs",
     "status": "experimental",
     "tags": [],
@@ -3395,6 +3603,7 @@
     "filename": "rules/schedulecertutilwindowsbinary.yml",
     "id": "611d49f3-a2c9-5d48-a0af-03a3e0e348ea",
     "level": "critical",
+    "license": "GPL-3.0",
     "logsource": {
       "product": "windows",
       "service": "security"
@@ -3409,6 +3618,7 @@
       "SELECT * FROM logs WHERE Channel='Security' AND (EventID=4688 AND CommandLine LIKE '%schtasks /create % certutil%' ESCAPE '\\')"
     ],
     "schema_version": 2,
+    "source": "joesecurity",
     "source_table": "logs",
     "status": "experimental",
     "tags": [],
@@ -3427,6 +3637,7 @@
     "filename": "rules/powershelldropsnetsupportratclient.yml",
     "id": "61cfd5e3-5976-504c-80df-5223c7bf9905",
     "level": "critical",
+    "license": "GPL-3.0",
     "logsource": {
       "product": "windows",
       "service": "sysmon"
@@ -3442,6 +3653,7 @@
       "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=11 AND Image LIKE '%\\\\powershell.exe%' ESCAPE '\\' AND TargetFilename LIKE '%\\\\AppData\\\\Roaming\\\\%\\\\NSM.lic%' ESCAPE '\\')"
     ],
     "schema_version": 2,
+    "source": "joesecurity",
     "source_table": "logs",
     "status": "experimental",
     "tags": [],
@@ -3460,6 +3672,7 @@
     "filename": "rules/disablepoweroptions.yml",
     "id": "63e69e1a-e6f7-5571-997b-16ed0ead5322",
     "level": "critical",
+    "license": "GPL-3.0",
     "logsource": {
       "category": "process_creation",
       "product": "windows",
@@ -3475,6 +3688,7 @@
       "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=1 AND (CommandLine LIKE '%powercfg.exe /x -monitor-timeout-ac 0' ESCAPE '\\' OR CommandLine LIKE '%powercfg.exe /x -monitor-timeout-dc 0' ESCAPE '\\' OR CommandLine LIKE '%powercfg.exe /x -disk-timeout-ac 0' ESCAPE '\\' OR CommandLine LIKE '%powercfg.exe /x -disk-timeout-dc 0' ESCAPE '\\' OR CommandLine LIKE '%powercfg.exe /x -standby-timeout-ac 0' ESCAPE '\\' OR CommandLine LIKE '%powercfg.exe /x -standby-timeout-dc 0' ESCAPE '\\' OR CommandLine LIKE '%powercfg.exe /x -hibernate-timeout-ac 0' ESCAPE '\\' OR CommandLine LIKE '%powercfg.exe /x -hibernate-timeout-dc 0' ESCAPE '\\'))"
     ],
     "schema_version": 2,
+    "source": "joesecurity",
     "source_table": "logs",
     "status": "experimental",
     "tags": [],
@@ -3493,6 +3707,7 @@
     "filename": "rules/disablepoweroptions.yml",
     "id": "63e69e1a-e6f7-5571-997b-16ed0ead5322",
     "level": "critical",
+    "license": "GPL-3.0",
     "logsource": {
       "product": "windows",
       "service": "security"
@@ -3507,6 +3722,7 @@
       "SELECT * FROM logs WHERE Channel='Security' AND (EventID=4688 AND (CommandLine LIKE '%powercfg.exe /x -monitor-timeout-ac 0' ESCAPE '\\' OR CommandLine LIKE '%powercfg.exe /x -monitor-timeout-dc 0' ESCAPE '\\' OR CommandLine LIKE '%powercfg.exe /x -disk-timeout-ac 0' ESCAPE '\\' OR CommandLine LIKE '%powercfg.exe /x -disk-timeout-dc 0' ESCAPE '\\' OR CommandLine LIKE '%powercfg.exe /x -standby-timeout-ac 0' ESCAPE '\\' OR CommandLine LIKE '%powercfg.exe /x -standby-timeout-dc 0' ESCAPE '\\' OR CommandLine LIKE '%powercfg.exe /x -hibernate-timeout-ac 0' ESCAPE '\\' OR CommandLine LIKE '%powercfg.exe /x -hibernate-timeout-dc 0' ESCAPE '\\'))"
     ],
     "schema_version": 2,
+    "source": "joesecurity",
     "source_table": "logs",
     "status": "experimental",
     "tags": [],
@@ -3525,6 +3741,7 @@
     "filename": "rules/Shedulepowershellwithencodedcommandparameter.yml",
     "id": "688d199a-32a0-54ae-b7a5-04f21379e9fe",
     "level": "critical",
+    "license": "GPL-3.0",
     "logsource": {
       "category": "process_creation",
       "product": "windows",
@@ -3540,6 +3757,7 @@
       "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=1 AND CommandLine LIKE '%schtasks%powershell -ep bypass -e %' ESCAPE '\\')"
     ],
     "schema_version": 2,
+    "source": "joesecurity",
     "source_table": "logs",
     "status": "experimental",
     "tags": [],
@@ -3558,6 +3776,7 @@
     "filename": "rules/Shedulepowershellwithencodedcommandparameter.yml",
     "id": "688d199a-32a0-54ae-b7a5-04f21379e9fe",
     "level": "critical",
+    "license": "GPL-3.0",
     "logsource": {
       "product": "windows",
       "service": "security"
@@ -3572,6 +3791,7 @@
       "SELECT * FROM logs WHERE Channel='Security' AND (EventID=4688 AND CommandLine LIKE '%schtasks%powershell -ep bypass -e %' ESCAPE '\\')"
     ],
     "schema_version": 2,
+    "source": "joesecurity",
     "source_table": "logs",
     "status": "experimental",
     "tags": [],
@@ -3590,6 +3810,7 @@
     "filename": "rules/exelaunchedbyreflectiveloaderdll.yml",
     "id": "6bf5114b-1a8b-52e8-a84c-05c5ec984870",
     "level": "critical",
+    "license": "GPL-3.0",
     "logsource": {
       "category": "process_creation",
       "product": "windows",
@@ -3606,6 +3827,7 @@
       "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=1 AND (ParentCommandLine LIKE '%rundll32.exe C:\\\\%.dll,ReflectiveLoader%' ESCAPE '\\' AND CommandLine LIKE '-''%\\\\%.exe%''' ESCAPE '\\'))"
     ],
     "schema_version": 2,
+    "source": "joesecurity",
     "source_table": "logs",
     "status": "experimental",
     "tags": [],
@@ -3624,6 +3846,7 @@
     "filename": "rules/exelaunchedbyreflectiveloaderdll.yml",
     "id": "6bf5114b-1a8b-52e8-a84c-05c5ec984870",
     "level": "critical",
+    "license": "GPL-3.0",
     "logsource": {
       "product": "windows",
       "service": "security"
@@ -3639,6 +3862,7 @@
       "SELECT * FROM logs WHERE Channel='Security' AND (EventID=4688 AND (ParentCommandLine LIKE '%rundll32.exe C:\\\\%.dll,ReflectiveLoader%' ESCAPE '\\' AND CommandLine LIKE '-''%\\\\%.exe%''' ESCAPE '\\'))"
     ],
     "schema_version": 2,
+    "source": "joesecurity",
     "source_table": "logs",
     "status": "experimental",
     "tags": [],
@@ -3657,6 +3881,7 @@
     "filename": "rules/fodhelperuacbypass.yml",
     "id": "6ca319e5-7680-527f-939b-adeb6e1b3867",
     "level": "critical",
+    "license": "GPL-3.0",
     "logsource": {
       "category": "process_creation",
       "product": "windows",
@@ -3672,6 +3897,7 @@
       "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=1 AND CommandLine LIKE '%reg add%hkcu\\\\software\\\\classes\\\\ms-settings\\\\shell\\\\open\\\\command%' ESCAPE '\\')"
     ],
     "schema_version": 2,
+    "source": "joesecurity",
     "source_table": "logs",
     "status": "experimental",
     "tags": [],
@@ -3690,6 +3916,7 @@
     "filename": "rules/fodhelperuacbypass.yml",
     "id": "6ca319e5-7680-527f-939b-adeb6e1b3867",
     "level": "critical",
+    "license": "GPL-3.0",
     "logsource": {
       "product": "windows",
       "service": "security"
@@ -3704,6 +3931,7 @@
       "SELECT * FROM logs WHERE Channel='Security' AND (EventID=4688 AND CommandLine LIKE '%reg add%hkcu\\\\software\\\\classes\\\\ms-settings\\\\shell\\\\open\\\\command%' ESCAPE '\\')"
     ],
     "schema_version": 2,
+    "source": "joesecurity",
     "source_table": "logs",
     "status": "experimental",
     "tags": [],
@@ -3722,6 +3950,7 @@
     "filename": "rules/geofencedru.yml",
     "id": "7021a0a3-a264-53fc-9d6f-5f8a1d6cf331",
     "level": "critical",
+    "license": "GPL-3.0",
     "logsource": {
       "category": "process_creation",
       "product": "windows",
@@ -3737,6 +3966,7 @@
       "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=1 AND CommandLine LIKE '%R2V0LVVJQ3VsdHVyZSkuTmFtZSAtbWF0Y2ggIkNOfFJPfFJVfFVBfEJZI%' ESCAPE '\\')"
     ],
     "schema_version": 2,
+    "source": "joesecurity",
     "source_table": "logs",
     "status": "experimental",
     "tags": [],
@@ -3755,6 +3985,7 @@
     "filename": "rules/geofencedru.yml",
     "id": "7021a0a3-a264-53fc-9d6f-5f8a1d6cf331",
     "level": "critical",
+    "license": "GPL-3.0",
     "logsource": {
       "product": "windows",
       "service": "security"
@@ -3769,6 +4000,7 @@
       "SELECT * FROM logs WHERE Channel='Security' AND (EventID=4688 AND CommandLine LIKE '%R2V0LVVJQ3VsdHVyZSkuTmFtZSAtbWF0Y2ggIkNOfFJPfFJVfFVBfEJZI%' ESCAPE '\\')"
     ],
     "schema_version": 2,
+    "source": "joesecurity",
     "source_table": "logs",
     "status": "experimental",
     "tags": [],
@@ -3787,6 +4019,7 @@
     "filename": "rules/executescriptletviaregsvr32.yml",
     "id": "790477b6-68ec-5591-af38-f02eda34dd0c",
     "level": "critical",
+    "license": "GPL-3.0",
     "logsource": {
       "category": "process_creation",
       "product": "windows",
@@ -3802,6 +4035,7 @@
       "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=1 AND CommandLine LIKE '%\\\\system32\\\\regsvr32.EXE /s /n /u /i:%\\\\AppData\\\\Roaming\\\\% scrobj%' ESCAPE '\\')"
     ],
     "schema_version": 2,
+    "source": "joesecurity",
     "source_table": "logs",
     "status": "experimental",
     "tags": [],
@@ -3820,6 +4054,7 @@
     "filename": "rules/executescriptletviaregsvr32.yml",
     "id": "790477b6-68ec-5591-af38-f02eda34dd0c",
     "level": "critical",
+    "license": "GPL-3.0",
     "logsource": {
       "product": "windows",
       "service": "security"
@@ -3834,6 +4069,7 @@
       "SELECT * FROM logs WHERE Channel='Security' AND (EventID=4688 AND CommandLine LIKE '%\\\\system32\\\\regsvr32.EXE /s /n /u /i:%\\\\AppData\\\\Roaming\\\\% scrobj%' ESCAPE '\\')"
     ],
     "schema_version": 2,
+    "source": "joesecurity",
     "source_table": "logs",
     "status": "experimental",
     "tags": [],
@@ -3852,6 +4088,7 @@
     "filename": "rules/sodinokibi.yml",
     "id": "795712d2-a4ea-59a7-851c-166d0533f299",
     "level": "critical",
+    "license": "GPL-3.0",
     "logsource": {
       "category": "registry_event",
       "product": "windows",
@@ -3867,6 +4104,7 @@
       "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND ((EventID=12 OR EventID=13 OR EventID=14) AND (EventID=13 AND TargetObject LIKE '%recfg%rnd\\_ext%' ESCAPE '\\'))"
     ],
     "schema_version": 2,
+    "source": "joesecurity",
     "source_table": "logs",
     "status": "experimental",
     "tags": [],
@@ -3883,6 +4121,7 @@
     "filename": "rules/sodinokibi.yml",
     "id": "795712d2-a4ea-59a7-851c-166d0533f299",
     "level": "critical",
+    "license": "GPL-3.0",
     "logsource": {
       "product": "windows",
       "service": "security"
@@ -3898,6 +4137,7 @@
       "SELECT * FROM logs WHERE Channel='Security' AND ((EventID=4657 AND (OperationType='New registry value created' OR OperationType='Existing registry value modified')) AND (EventID=13 AND TargetObject LIKE '%recfg%rnd\\_ext%' ESCAPE '\\'))"
     ],
     "schema_version": 2,
+    "source": "joesecurity",
     "source_table": "logs",
     "status": "experimental",
     "tags": [],
@@ -3916,6 +4156,7 @@
     "filename": "rules/wmiclaunchpowershellandexecuteencryptedscript.yml",
     "id": "795b9302-fe29-5cb8-86fd-476c6eca4d67",
     "level": "critical",
+    "license": "GPL-3.0",
     "logsource": {
       "category": "process_creation",
       "product": "windows",
@@ -3931,6 +4172,7 @@
       "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=1 AND CommandLine LIKE '%wmic%powershell%bypass%frombase64string(%decompress%' ESCAPE '\\')"
     ],
     "schema_version": 2,
+    "source": "joesecurity",
     "source_table": "logs",
     "status": "experimental",
     "tags": [],
@@ -3949,6 +4191,7 @@
     "filename": "rules/wmiclaunchpowershellandexecuteencryptedscript.yml",
     "id": "795b9302-fe29-5cb8-86fd-476c6eca4d67",
     "level": "critical",
+    "license": "GPL-3.0",
     "logsource": {
       "product": "windows",
       "service": "security"
@@ -3963,6 +4206,7 @@
       "SELECT * FROM logs WHERE Channel='Security' AND (EventID=4688 AND CommandLine LIKE '%wmic%powershell%bypass%frombase64string(%decompress%' ESCAPE '\\')"
     ],
     "schema_version": 2,
+    "source": "joesecurity",
     "source_table": "logs",
     "status": "experimental",
     "tags": [],
@@ -3981,6 +4225,7 @@
     "filename": "rules/renamedmshtalaunchinghtml.yml",
     "id": "7c6f4e61-3c46-5755-b385-8c29d5117a33",
     "level": "critical",
+    "license": "GPL-3.0",
     "logsource": {
       "category": "process_creation",
       "product": "windows",
@@ -3996,6 +4241,7 @@
       "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=1 AND CommandLine LIKE '%\\\\public\\\\%.com %\\\\%.html%' ESCAPE '\\')"
     ],
     "schema_version": 2,
+    "source": "joesecurity",
     "source_table": "logs",
     "status": "experimental",
     "tags": [],
@@ -4014,6 +4260,7 @@
     "filename": "rules/renamedmshtalaunchinghtml.yml",
     "id": "7c6f4e61-3c46-5755-b385-8c29d5117a33",
     "level": "critical",
+    "license": "GPL-3.0",
     "logsource": {
       "product": "windows",
       "service": "security"
@@ -4028,6 +4275,7 @@
       "SELECT * FROM logs WHERE Channel='Security' AND (EventID=4688 AND CommandLine LIKE '%\\\\public\\\\%.com %\\\\%.html%' ESCAPE '\\')"
     ],
     "schema_version": 2,
+    "source": "joesecurity",
     "source_table": "logs",
     "status": "experimental",
     "tags": [],
@@ -4046,6 +4294,7 @@
     "filename": "rules/stopeventlog.yml",
     "id": "822fd3cd-d895-5ed7-967e-a3d1eed2e73b",
     "level": "critical",
+    "license": "GPL-3.0",
     "logsource": {
       "category": "process_creation",
       "product": "windows",
@@ -4061,6 +4310,7 @@
       "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=1 AND CommandLine LIKE '%sc.exe stop eventlog' ESCAPE '\\')"
     ],
     "schema_version": 2,
+    "source": "joesecurity",
     "source_table": "logs",
     "status": "experimental",
     "tags": [],
@@ -4079,6 +4329,7 @@
     "filename": "rules/stopeventlog.yml",
     "id": "822fd3cd-d895-5ed7-967e-a3d1eed2e73b",
     "level": "critical",
+    "license": "GPL-3.0",
     "logsource": {
       "product": "windows",
       "service": "security"
@@ -4093,6 +4344,7 @@
       "SELECT * FROM logs WHERE Channel='Security' AND (EventID=4688 AND CommandLine LIKE '%sc.exe stop eventlog' ESCAPE '\\')"
     ],
     "schema_version": 2,
+    "source": "joesecurity",
     "source_table": "logs",
     "status": "experimental",
     "tags": [],
@@ -4111,6 +4363,7 @@
     "filename": "rules/checkexternalipviapowershell.yml",
     "id": "84183c06-e41c-552b-814a-6f4f8cdbe78b",
     "level": "critical",
+    "license": "GPL-3.0",
     "logsource": {
       "category": "process_creation",
       "product": "windows",
@@ -4126,6 +4379,7 @@
       "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=1 AND (CommandLine LIKE '%powershell%api.ipify.org%' ESCAPE '\\' OR CommandLine LIKE '%invoke-webrequest -uri https://iplogger%' ESCAPE '\\'))"
     ],
     "schema_version": 2,
+    "source": "joesecurity",
     "source_table": "logs",
     "status": "experimental",
     "tags": [],
@@ -4144,6 +4398,7 @@
     "filename": "rules/checkexternalipviapowershell.yml",
     "id": "84183c06-e41c-552b-814a-6f4f8cdbe78b",
     "level": "critical",
+    "license": "GPL-3.0",
     "logsource": {
       "product": "windows",
       "service": "security"
@@ -4158,6 +4413,7 @@
       "SELECT * FROM logs WHERE Channel='Security' AND (EventID=4688 AND (CommandLine LIKE '%powershell%api.ipify.org%' ESCAPE '\\' OR CommandLine LIKE '%invoke-webrequest -uri https://iplogger%' ESCAPE '\\'))"
     ],
     "schema_version": 2,
+    "source": "joesecurity",
     "source_table": "logs",
     "status": "experimental",
     "tags": [],
@@ -4176,6 +4432,7 @@
     "filename": "rules/msbuildexecutesuspicoustask.yml",
     "id": "85bafc73-8a12-5626-8d39-7badbd74c4c5",
     "level": "critical",
+    "license": "GPL-3.0",
     "logsource": {
       "category": "process_creation",
       "product": "windows",
@@ -4191,6 +4448,7 @@
       "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=1 AND CommandLine LIKE '%\\\\windows\\\\microsoft.net\\\\framework\\\\v%%msbuild.exe%\\\\appdata\\\\local\\\\temp\\\\%.xml%' ESCAPE '\\')"
     ],
     "schema_version": 2,
+    "source": "joesecurity",
     "source_table": "logs",
     "status": "experimental",
     "tags": [],
@@ -4209,6 +4467,7 @@
     "filename": "rules/msbuildexecutesuspicoustask.yml",
     "id": "85bafc73-8a12-5626-8d39-7badbd74c4c5",
     "level": "critical",
+    "license": "GPL-3.0",
     "logsource": {
       "product": "windows",
       "service": "security"
@@ -4223,6 +4482,7 @@
       "SELECT * FROM logs WHERE Channel='Security' AND (EventID=4688 AND CommandLine LIKE '%\\\\windows\\\\microsoft.net\\\\framework\\\\v%%msbuild.exe%\\\\appdata\\\\local\\\\temp\\\\%.xml%' ESCAPE '\\')"
     ],
     "schema_version": 2,
+    "source": "joesecurity",
     "source_table": "logs",
     "status": "experimental",
     "tags": [],
@@ -4241,6 +4501,7 @@
     "filename": "rules/schedulescriptastask.yml",
     "id": "88055be6-51e0-5120-bbb9-aaeb06c3d1c6",
     "level": "critical",
+    "license": "GPL-3.0",
     "logsource": {
       "category": "process_creation",
       "product": "windows",
@@ -4256,6 +4517,7 @@
       "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=1 AND CommandLine LIKE '%schtasks /f /create %/e:vbscript%' ESCAPE '\\')"
     ],
     "schema_version": 2,
+    "source": "joesecurity",
     "source_table": "logs",
     "status": "experimental",
     "tags": [],
@@ -4274,6 +4536,7 @@
     "filename": "rules/schedulescriptastask.yml",
     "id": "88055be6-51e0-5120-bbb9-aaeb06c3d1c6",
     "level": "critical",
+    "license": "GPL-3.0",
     "logsource": {
       "product": "windows",
       "service": "security"
@@ -4288,6 +4551,7 @@
       "SELECT * FROM logs WHERE Channel='Security' AND (EventID=4688 AND CommandLine LIKE '%schtasks /f /create %/e:vbscript%' ESCAPE '\\')"
     ],
     "schema_version": 2,
+    "source": "joesecurity",
     "source_table": "logs",
     "status": "experimental",
     "tags": [],
@@ -4306,6 +4570,7 @@
     "filename": "rules/powershellruncodefromregistry.yml",
     "id": "9140c806-0043-5d87-b857-2440396a432c",
     "level": "critical",
+    "license": "GPL-3.0",
     "logsource": {
       "category": "process_creation",
       "product": "windows",
@@ -4321,6 +4586,7 @@
       "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=1 AND (CommandLine LIKE '%powershell%iex(get-itemproperty hkcu%' ESCAPE '\\' OR CommandLine LIKE '%powershell%iex(get-itemproperty khlm%' ESCAPE '\\' OR CommandLine LIKE '%powershell%iex%::ascii.getstring(( gp%hkcu:%' ESCAPE '\\'))"
     ],
     "schema_version": 2,
+    "source": "joesecurity",
     "source_table": "logs",
     "status": "experimental",
     "tags": [],
@@ -4339,6 +4605,7 @@
     "filename": "rules/powershellruncodefromregistry.yml",
     "id": "9140c806-0043-5d87-b857-2440396a432c",
     "level": "critical",
+    "license": "GPL-3.0",
     "logsource": {
       "product": "windows",
       "service": "security"
@@ -4353,6 +4620,7 @@
       "SELECT * FROM logs WHERE Channel='Security' AND (EventID=4688 AND (CommandLine LIKE '%powershell%iex(get-itemproperty hkcu%' ESCAPE '\\' OR CommandLine LIKE '%powershell%iex(get-itemproperty khlm%' ESCAPE '\\' OR CommandLine LIKE '%powershell%iex%::ascii.getstring(( gp%hkcu:%' ESCAPE '\\'))"
     ],
     "schema_version": 2,
+    "source": "joesecurity",
     "source_table": "logs",
     "status": "experimental",
     "tags": [],
@@ -4371,6 +4639,7 @@
     "filename": "rules/powershelllaunchedbywinword.yml",
     "id": "9228335b-b0ca-57a5-a40a-03940c9088b5",
     "level": "critical",
+    "license": "GPL-3.0",
     "logsource": {
       "category": "process_creation",
       "product": "windows",
@@ -4387,6 +4656,7 @@
       "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=1 AND (ParentImage LIKE '%\\\\Program Files\\\\Microsoft Office%.EXE' ESCAPE '\\' AND CommandLine LIKE '-''%\\\\powershell.exe% -enco %''' ESCAPE '\\'))"
     ],
     "schema_version": 2,
+    "source": "joesecurity",
     "source_table": "logs",
     "status": "experimental",
     "tags": [],
@@ -4405,6 +4675,7 @@
     "filename": "rules/powershelllaunchedbywinword.yml",
     "id": "9228335b-b0ca-57a5-a40a-03940c9088b5",
     "level": "critical",
+    "license": "GPL-3.0",
     "logsource": {
       "product": "windows",
       "service": "security"
@@ -4420,6 +4691,7 @@
       "SELECT * FROM logs WHERE Channel='Security' AND (EventID=4688 AND (ParentProcessName LIKE '%\\\\Program Files\\\\Microsoft Office%.EXE' ESCAPE '\\' AND CommandLine LIKE '-''%\\\\powershell.exe% -enco %''' ESCAPE '\\'))"
     ],
     "schema_version": 2,
+    "source": "joesecurity",
     "source_table": "logs",
     "status": "experimental",
     "tags": [],
@@ -4439,6 +4711,7 @@
     "filename": "rules/remcos.yml",
     "id": "93502007-fda1-561d-9565-69c1c569f8e5",
     "level": "critical",
+    "license": "GPL-3.0",
     "logsource": {
       "product": "windows",
       "service": "sysmon"
@@ -4454,6 +4727,7 @@
       "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND ((EventID=11 AND (TargetFilename LIKE '%\\\\AppData\\\\Roaming\\\\remcos\\\\logs%.dat%' ESCAPE '\\' OR TargetFilename LIKE '%\\\\ProgramData\\\\remcos\\\\logs.dat%' ESCAPE '\\')) OR (EventID=13 AND (TargetObject LIKE '%\\\\Software\\\\Remcos%exepath%' ESCAPE '\\' OR TargetObject LIKE '%\\\\Software\\\\Rmc-%exepath%' ESCAPE '\\' OR TargetObject LIKE '%\\\\microsoft\\\\windows\\\\currentversion\\\\run%remcos%' ESCAPE '\\')))"
     ],
     "schema_version": 2,
+    "source": "joesecurity",
     "source_table": "logs",
     "status": "experimental",
     "tags": [],
@@ -4472,6 +4746,7 @@
     "filename": "rules/powershelldelayedexecutionviapingcommand.yml",
     "id": "986cceff-dcc5-52a7-9edd-8e27a608c389",
     "level": "critical",
+    "license": "GPL-3.0",
     "logsource": {
       "category": "process_creation",
       "product": "windows",
@@ -4487,6 +4762,7 @@
       "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=1 AND CommandLine LIKE '%ping -n % & powershell.exe -executionpolicy bypass -noninteractive -windowstyle hidden%' ESCAPE '\\')"
     ],
     "schema_version": 2,
+    "source": "joesecurity",
     "source_table": "logs",
     "status": "experimental",
     "tags": [],
@@ -4505,6 +4781,7 @@
     "filename": "rules/powershelldelayedexecutionviapingcommand.yml",
     "id": "986cceff-dcc5-52a7-9edd-8e27a608c389",
     "level": "critical",
+    "license": "GPL-3.0",
     "logsource": {
       "product": "windows",
       "service": "security"
@@ -4519,6 +4796,7 @@
       "SELECT * FROM logs WHERE Channel='Security' AND (EventID=4688 AND CommandLine LIKE '%ping -n % & powershell.exe -executionpolicy bypass -noninteractive -windowstyle hidden%' ESCAPE '\\')"
     ],
     "schema_version": 2,
+    "source": "joesecurity",
     "source_table": "logs",
     "status": "experimental",
     "tags": [],
@@ -4537,6 +4815,7 @@
     "filename": "rules/registerdllatautostartlocationviaregsvr32.yml",
     "id": "9a36f9ab-2444-5f55-be78-fdbb5d9b2542",
     "level": "critical",
+    "license": "GPL-3.0",
     "logsource": {
       "category": "process_creation",
       "product": "windows",
@@ -4552,6 +4831,7 @@
       "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=1 AND CommandLine LIKE '%reg add%\\\\Microsoft\\\\Windows\\\\CurrentVersion\\\\Run%\\\\system32\\\\regsvr32%' ESCAPE '\\')"
     ],
     "schema_version": 2,
+    "source": "joesecurity",
     "source_table": "logs",
     "status": "experimental",
     "tags": [],
@@ -4570,6 +4850,7 @@
     "filename": "rules/registerdllatautostartlocationviaregsvr32.yml",
     "id": "9a36f9ab-2444-5f55-be78-fdbb5d9b2542",
     "level": "critical",
+    "license": "GPL-3.0",
     "logsource": {
       "product": "windows",
       "service": "security"
@@ -4584,6 +4865,7 @@
       "SELECT * FROM logs WHERE Channel='Security' AND (EventID=4688 AND CommandLine LIKE '%reg add%\\\\Microsoft\\\\Windows\\\\CurrentVersion\\\\Run%\\\\system32\\\\regsvr32%' ESCAPE '\\')"
     ],
     "schema_version": 2,
+    "source": "joesecurity",
     "source_table": "logs",
     "status": "experimental",
     "tags": [],
@@ -4602,6 +4884,7 @@
     "filename": "rules/dropsfakesystemfileatsystemrootdrive.yml",
     "id": "9afa30a2-7471-554e-b67f-753bafc87936",
     "level": "critical",
+    "license": "GPL-3.0",
     "logsource": {
       "product": "windows",
       "service": "sysmon"
@@ -4616,6 +4899,7 @@
       "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=11 AND (TargetFilename LIKE 'c:\\\\svchost.exe' ESCAPE '\\' OR TargetFilename LIKE 'c:\\\\rundll32.exe' ESCAPE '\\' OR TargetFilename LIKE 'c:\\\\powershell.exe' ESCAPE '\\' OR TargetFilename LIKE 'c:\\\\regsvr32.exe' ESCAPE '\\' OR TargetFilename LIKE 'c:\\\\spoolsv.exe' ESCAPE '\\' OR TargetFilename LIKE 'c:\\\\lsass.exe' ESCAPE '\\' OR TargetFilename LIKE 'c:\\\\smss.exe' ESCAPE '\\' OR TargetFilename LIKE 'c:\\\\csrss.exe' ESCAPE '\\' OR TargetFilename LIKE 'c:\\\\conhost.exe' ESCAPE '\\' OR TargetFilename LIKE 'c:\\\\wininit.exe' ESCAPE '\\' OR TargetFilename LIKE 'c:\\\\winlogon.exe' ESCAPE '\\' OR TargetFilename LIKE 'c:\\\\taskhost.exe' ESCAPE '\\' OR TargetFilename LIKE 'c:\\\\taskmgr.exe' ESCAPE '\\' OR TargetFilename LIKE 'c:\\\\runtimebroker.exe' ESCAPE '\\' OR TargetFilename LIKE 'c:\\\\smartscreen.exe' ESCAPE '\\' OR TargetFilename LIKE 'c:\\\\dllhost.exe' ESCAPE '\\' OR TargetFilename LIKE 'c:\\\\services.exe' ESCAPE '\\'))"
     ],
     "schema_version": 2,
+    "source": "joesecurity",
     "source_table": "logs",
     "status": "experimental",
     "tags": [],
@@ -4634,6 +4918,7 @@
     "filename": "rules/dropsadllwithwllextensiontothestartup.yml",
     "id": "9e1b247d-28f5-5d9a-9b3c-dd28f518d08a",
     "level": "critical",
+    "license": "GPL-3.0",
     "logsource": {
       "product": "windows",
       "service": "sysmon"
@@ -4648,6 +4933,7 @@
       "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=11 AND TargetFilename LIKE '%\\\\appdata\\\\roaming\\\\microsoft\\\\%\\\\startup\\\\%.wll%' ESCAPE '\\')"
     ],
     "schema_version": 2,
+    "source": "joesecurity",
     "source_table": "logs",
     "status": "experimental",
     "tags": [],
@@ -4666,6 +4952,7 @@
     "filename": "rules/powershelladdexclusionpathextensionandprocess.yml",
     "id": "a3f58460-c59c-555f-82e1-ff603b7d34c8",
     "level": "critical",
+    "license": "GPL-3.0",
     "logsource": {
       "category": "process_creation",
       "product": "windows",
@@ -4681,6 +4968,7 @@
       "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=1 AND CommandLine LIKE '%add-mppreference -exclusionpath%-exclusionextension%-exclusionprocess%' ESCAPE '\\')"
     ],
     "schema_version": 2,
+    "source": "joesecurity",
     "source_table": "logs",
     "status": "experimental",
     "tags": [],
@@ -4699,6 +4987,7 @@
     "filename": "rules/powershelladdexclusionpathextensionandprocess.yml",
     "id": "a3f58460-c59c-555f-82e1-ff603b7d34c8",
     "level": "critical",
+    "license": "GPL-3.0",
     "logsource": {
       "product": "windows",
       "service": "security"
@@ -4713,6 +5002,7 @@
       "SELECT * FROM logs WHERE Channel='Security' AND (EventID=4688 AND CommandLine LIKE '%add-mppreference -exclusionpath%-exclusionextension%-exclusionprocess%' ESCAPE '\\')"
     ],
     "schema_version": 2,
+    "source": "joesecurity",
     "source_table": "logs",
     "status": "experimental",
     "tags": [],
@@ -4731,6 +5021,7 @@
     "filename": "rules/powershelldownloadandexecutefile.yml",
     "id": "a785d852-926d-5601-8165-4df10064b1ed",
     "level": "critical",
+    "license": "GPL-3.0",
     "logsource": {
       "category": "process_creation",
       "product": "windows",
@@ -4746,6 +5037,7 @@
       "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=1 AND (CommandLine LIKE '%\\\\powershell%DownloadFile((%),$%))%start-process $%' ESCAPE '\\' OR CommandLine LIKE '%.downloadfile%start-process%' ESCAPE '\\' OR CommandLine LIKE '%invoke-expression(new-object net.webclient%.invoke%' ESCAPE '\\' OR CommandLine LIKE '%powershell iwr http%start-process%' ESCAPE '\\'))"
     ],
     "schema_version": 2,
+    "source": "joesecurity",
     "source_table": "logs",
     "status": "experimental",
     "tags": [],
@@ -4764,6 +5056,7 @@
     "filename": "rules/powershelldownloadandexecutefile.yml",
     "id": "a785d852-926d-5601-8165-4df10064b1ed",
     "level": "critical",
+    "license": "GPL-3.0",
     "logsource": {
       "product": "windows",
       "service": "security"
@@ -4778,6 +5071,7 @@
       "SELECT * FROM logs WHERE Channel='Security' AND (EventID=4688 AND (CommandLine LIKE '%\\\\powershell%DownloadFile((%),$%))%start-process $%' ESCAPE '\\' OR CommandLine LIKE '%.downloadfile%start-process%' ESCAPE '\\' OR CommandLine LIKE '%invoke-expression(new-object net.webclient%.invoke%' ESCAPE '\\' OR CommandLine LIKE '%powershell iwr http%start-process%' ESCAPE '\\'))"
     ],
     "schema_version": 2,
+    "source": "joesecurity",
     "source_table": "logs",
     "status": "experimental",
     "tags": [],
@@ -4796,6 +5090,7 @@
     "filename": "rules/wmiclaunchmsiexec.yml",
     "id": "a7d1acfe-f0ba-563a-83d2-078f35a26c30",
     "level": "critical",
+    "license": "GPL-3.0",
     "logsource": {
       "category": "process_creation",
       "product": "windows",
@@ -4811,6 +5106,7 @@
       "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=1 AND CommandLine LIKE '%wmic process call create %msiexec /i http% /q%' ESCAPE '\\')"
     ],
     "schema_version": 2,
+    "source": "joesecurity",
     "source_table": "logs",
     "status": "experimental",
     "tags": [],
@@ -4829,6 +5125,7 @@
     "filename": "rules/wmiclaunchmsiexec.yml",
     "id": "a7d1acfe-f0ba-563a-83d2-078f35a26c30",
     "level": "critical",
+    "license": "GPL-3.0",
     "logsource": {
       "product": "windows",
       "service": "security"
@@ -4843,6 +5140,7 @@
       "SELECT * FROM logs WHERE Channel='Security' AND (EventID=4688 AND CommandLine LIKE '%wmic process call create %msiexec /i http% /q%' ESCAPE '\\')"
     ],
     "schema_version": 2,
+    "source": "joesecurity",
     "source_table": "logs",
     "status": "experimental",
     "tags": [],
@@ -4861,6 +5159,7 @@
     "filename": "rules/powershellexecutecodefromregistry.yml",
     "id": "a83f68dd-3626-516b-95d7-e1e3be4a4474",
     "level": "critical",
+    "license": "GPL-3.0",
     "logsource": {
       "category": "process_creation",
       "product": "windows",
@@ -4876,6 +5175,7 @@
       "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=1 AND CommandLine LIKE '%(gp hkcu:\\\\software).%)|iex%' ESCAPE '\\')"
     ],
     "schema_version": 2,
+    "source": "joesecurity",
     "source_table": "logs",
     "status": "experimental",
     "tags": [],
@@ -4894,6 +5194,7 @@
     "filename": "rules/powershellexecutecodefromregistry.yml",
     "id": "a83f68dd-3626-516b-95d7-e1e3be4a4474",
     "level": "critical",
+    "license": "GPL-3.0",
     "logsource": {
       "product": "windows",
       "service": "security"
@@ -4908,6 +5209,7 @@
       "SELECT * FROM logs WHERE Channel='Security' AND (EventID=4688 AND CommandLine LIKE '%(gp hkcu:\\\\software).%)|iex%' ESCAPE '\\')"
     ],
     "schema_version": 2,
+    "source": "joesecurity",
     "source_table": "logs",
     "status": "experimental",
     "tags": [],
@@ -4926,6 +5228,7 @@
     "filename": "rules/copyitselftosuspiciouslocationviatypecommand.yml",
     "id": "ab4aaa7d-b314-5bbf-9421-203b425cbe4e",
     "level": "critical",
+    "license": "GPL-3.0",
     "logsource": {
       "category": "process_creation",
       "product": "windows",
@@ -4941,6 +5244,7 @@
       "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=1 AND CommandLine LIKE '%cmd%type%>%\\\\AppData%' ESCAPE '\\')"
     ],
     "schema_version": 2,
+    "source": "joesecurity",
     "source_table": "logs",
     "status": "experimental",
     "tags": [],
@@ -4959,6 +5263,7 @@
     "filename": "rules/copyitselftosuspiciouslocationviatypecommand.yml",
     "id": "ab4aaa7d-b314-5bbf-9421-203b425cbe4e",
     "level": "critical",
+    "license": "GPL-3.0",
     "logsource": {
       "product": "windows",
       "service": "security"
@@ -4973,6 +5278,7 @@
       "SELECT * FROM logs WHERE Channel='Security' AND (EventID=4688 AND CommandLine LIKE '%cmd%type%>%\\\\AppData%' ESCAPE '\\')"
     ],
     "schema_version": 2,
+    "source": "joesecurity",
     "source_table": "logs",
     "status": "experimental",
     "tags": [],
@@ -4991,6 +5297,7 @@
     "filename": "rules/stopmultipleservices.yml",
     "id": "b0e4df56-4dce-571e-8241-e2ea21f0f001",
     "level": "critical",
+    "license": "GPL-3.0",
     "logsource": {
       "category": "process_creation",
       "product": "windows",
@@ -5006,6 +5313,7 @@
       "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=1 AND (CommandLine LIKE '%cmd%net stop%& net stop%& net stop%& net stop%& net stop%& net stop%& net stop%' ESCAPE '\\' OR CommandLine LIKE '%sc stop %sc stop %sc stop %sc stop %' ESCAPE '\\'))"
     ],
     "schema_version": 2,
+    "source": "joesecurity",
     "source_table": "logs",
     "status": "experimental",
     "tags": [],
@@ -5024,6 +5332,7 @@
     "filename": "rules/stopmultipleservices.yml",
     "id": "b0e4df56-4dce-571e-8241-e2ea21f0f001",
     "level": "critical",
+    "license": "GPL-3.0",
     "logsource": {
       "product": "windows",
       "service": "security"
@@ -5038,6 +5347,7 @@
       "SELECT * FROM logs WHERE Channel='Security' AND (EventID=4688 AND (CommandLine LIKE '%cmd%net stop%& net stop%& net stop%& net stop%& net stop%& net stop%& net stop%' ESCAPE '\\' OR CommandLine LIKE '%sc stop %sc stop %sc stop %sc stop %' ESCAPE '\\'))"
     ],
     "schema_version": 2,
+    "source": "joesecurity",
     "source_table": "logs",
     "status": "experimental",
     "tags": [],
@@ -5056,6 +5366,7 @@
     "filename": "rules/executescriptletfrominternetviaregsvr32.yml",
     "id": "b6de6f34-7289-5ddc-acc3-0947aa98ea9e",
     "level": "critical",
+    "license": "GPL-3.0",
     "logsource": {
       "category": "process_creation",
       "product": "windows",
@@ -5071,6 +5382,7 @@
       "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=1 AND CommandLine LIKE '%regsvr32%http%scrobj%' ESCAPE '\\')"
     ],
     "schema_version": 2,
+    "source": "joesecurity",
     "source_table": "logs",
     "status": "experimental",
     "tags": [],
@@ -5089,6 +5401,7 @@
     "filename": "rules/executescriptletfrominternetviaregsvr32.yml",
     "id": "b6de6f34-7289-5ddc-acc3-0947aa98ea9e",
     "level": "critical",
+    "license": "GPL-3.0",
     "logsource": {
       "product": "windows",
       "service": "security"
@@ -5103,6 +5416,7 @@
       "SELECT * FROM logs WHERE Channel='Security' AND (EventID=4688 AND CommandLine LIKE '%regsvr32%http%scrobj%' ESCAPE '\\')"
     ],
     "schema_version": 2,
+    "source": "joesecurity",
     "source_table": "logs",
     "status": "experimental",
     "tags": [],
@@ -5121,6 +5435,7 @@
     "filename": "rules/pastesharingurlinreverseorder.yml",
     "id": "b7a57577-dde3-5f74-b371-fed85cf1b17f",
     "level": "critical",
+    "license": "GPL-3.0",
     "logsource": {
       "category": "process_creation",
       "product": "windows",
@@ -5136,6 +5451,7 @@
       "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=1 AND (CommandLine LIKE '%moc.nibetsap//:sptth%' ESCAPE '\\' OR CommandLine LIKE '%moc.nibetsah//:sptth%' ESCAPE '\\' OR CommandLine LIKE '%moc.buhtig.tsig//:sptth%' ESCAPE '\\' OR CommandLine LIKE '%ten.nibetavirp//:sptth%' ESCAPE '\\' OR CommandLine LIKE '%ten.nib0//:sptth%' ESCAPE '\\' OR CommandLine LIKE '%gro.etsapd//:sptth%' ESCAPE '\\' OR CommandLine LIKE '%ti.etsaptusj//:sptth%' ESCAPE '\\' OR CommandLine LIKE '%moc.nibtsohg//:sptth%' ESCAPE '\\' OR CommandLine LIKE '%ee.etsap//:sptth%' ESCAPE '\\' OR CommandLine LIKE '%oc.yrtner//:sptth%' ESCAPE '\\'))"
     ],
     "schema_version": 2,
+    "source": "joesecurity",
     "source_table": "logs",
     "status": "experimental",
     "tags": [],
@@ -5154,6 +5470,7 @@
     "filename": "rules/pastesharingurlinreverseorder.yml",
     "id": "b7a57577-dde3-5f74-b371-fed85cf1b17f",
     "level": "critical",
+    "license": "GPL-3.0",
     "logsource": {
       "product": "windows",
       "service": "security"
@@ -5168,6 +5485,7 @@
       "SELECT * FROM logs WHERE Channel='Security' AND (EventID=4688 AND (CommandLine LIKE '%moc.nibetsap//:sptth%' ESCAPE '\\' OR CommandLine LIKE '%moc.nibetsah//:sptth%' ESCAPE '\\' OR CommandLine LIKE '%moc.buhtig.tsig//:sptth%' ESCAPE '\\' OR CommandLine LIKE '%ten.nibetavirp//:sptth%' ESCAPE '\\' OR CommandLine LIKE '%ten.nib0//:sptth%' ESCAPE '\\' OR CommandLine LIKE '%gro.etsapd//:sptth%' ESCAPE '\\' OR CommandLine LIKE '%ti.etsaptusj//:sptth%' ESCAPE '\\' OR CommandLine LIKE '%moc.nibtsohg//:sptth%' ESCAPE '\\' OR CommandLine LIKE '%ee.etsap//:sptth%' ESCAPE '\\' OR CommandLine LIKE '%oc.yrtner//:sptth%' ESCAPE '\\'))"
     ],
     "schema_version": 2,
+    "source": "joesecurity",
     "source_table": "logs",
     "status": "experimental",
     "tags": [],
@@ -5186,6 +5504,7 @@
     "filename": "rules/dropsscriptatstartuplocation.yml",
     "id": "b9690cc2-d180-559d-a2c5-a7bad4081753",
     "level": "critical",
+    "license": "GPL-3.0",
     "logsource": {
       "product": "windows",
       "service": "sysmon"
@@ -5200,6 +5519,7 @@
       "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=11 AND (TargetFilename LIKE '%\\\\AppData\\\\Roaming\\\\Microsoft\\\\Windows\\\\Start Menu\\\\Programs\\\\Startup\\\\%.vbs%' ESCAPE '\\' OR TargetFilename LIKE '%\\\\AppData\\\\Roaming\\\\Microsoft\\\\Windows\\\\Start Menu\\\\Programs\\\\Startup\\\\%.js%' ESCAPE '\\' OR TargetFilename LIKE '%\\\\AppData\\\\Roaming\\\\Microsoft\\\\Windows\\\\Start Menu\\\\Programs\\\\Startup\\\\%.jse%' ESCAPE '\\' OR TargetFilename LIKE '%\\\\AppData\\\\Roaming\\\\Microsoft\\\\Windows\\\\Start Menu\\\\Programs\\\\Startup\\\\%.bat%' ESCAPE '\\' OR TargetFilename LIKE '%\\\\AppData\\\\Roaming\\\\Microsoft\\\\Windows\\\\Start Menu\\\\Programs\\\\Startup\\\\%.url%' ESCAPE '\\' OR TargetFilename LIKE '%\\\\AppData\\\\Roaming\\\\Microsoft\\\\Windows\\\\Start Menu\\\\Programs\\\\Startup\\\\%.cmd%' ESCAPE '\\' OR TargetFilename LIKE '%\\\\AppData\\\\Roaming\\\\Microsoft\\\\Windows\\\\Start Menu\\\\Programs\\\\Startup\\\\%.hta%' ESCAPE '\\' OR TargetFilename LIKE '%\\\\AppData\\\\Roaming\\\\Microsoft\\\\Windows\\\\Start Menu\\\\Programs\\\\Startup\\\\%.ps1%' ESCAPE '\\' OR TargetFilename LIKE '%\\\\AppData\\\\Roaming\\\\Microsoft\\\\Windows\\\\Start Menu\\\\Programs\\\\Startup\\\\%.wsf%' ESCAPE '\\'))"
     ],
     "schema_version": 2,
+    "source": "joesecurity",
     "source_table": "logs",
     "status": "experimental",
     "tags": [],
@@ -5218,6 +5538,7 @@
     "filename": "rules/powershelldownloadandloadassembly.yml",
     "id": "ba478421-ca4e-5100-8302-a5581bf4fc4c",
     "level": "critical",
+    "license": "GPL-3.0",
     "logsource": {
       "category": "process_creation",
       "product": "windows",
@@ -5233,6 +5554,7 @@
       "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=1 AND (CommandLine LIKE '%powershell%Downloadstring(%.Load([Convert]::Frombase64String(%' ESCAPE '\\' OR CommandLine LIKE '%).downloadstring(%[reflection.assembly]::load($%' ESCAPE '\\' OR CommandLine LIKE '%invoke-webrequest%[system.reflection.assembly]::loadfile($%' ESCAPE '\\' OR CommandLine LIKE '%.downloaddata($%[system.reflection.assembly]::load($%' ESCAPE '\\'))"
     ],
     "schema_version": 2,
+    "source": "joesecurity",
     "source_table": "logs",
     "status": "experimental",
     "tags": [],
@@ -5251,6 +5573,7 @@
     "filename": "rules/powershelldownloadandloadassembly.yml",
     "id": "ba478421-ca4e-5100-8302-a5581bf4fc4c",
     "level": "critical",
+    "license": "GPL-3.0",
     "logsource": {
       "product": "windows",
       "service": "security"
@@ -5265,6 +5588,7 @@
       "SELECT * FROM logs WHERE Channel='Security' AND (EventID=4688 AND (CommandLine LIKE '%powershell%Downloadstring(%.Load([Convert]::Frombase64String(%' ESCAPE '\\' OR CommandLine LIKE '%).downloadstring(%[reflection.assembly]::load($%' ESCAPE '\\' OR CommandLine LIKE '%invoke-webrequest%[system.reflection.assembly]::loadfile($%' ESCAPE '\\' OR CommandLine LIKE '%.downloaddata($%[system.reflection.assembly]::load($%' ESCAPE '\\'))"
     ],
     "schema_version": 2,
+    "source": "joesecurity",
     "source_table": "logs",
     "status": "experimental",
     "tags": [],
@@ -5283,6 +5607,7 @@
     "filename": "rules/powershelldownloadandexecuteiex.yml",
     "id": "bb43958d-85bc-506b-a45a-4ec05a065be1",
     "level": "critical",
+    "license": "GPL-3.0",
     "logsource": {
       "category": "process_creation",
       "product": "windows",
@@ -5298,6 +5623,7 @@
       "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=1 AND (CommandLine LIKE '%\\\\powershell.exe% iex %((New-Object Net.WebClient).DownloadString(%' ESCAPE '\\' OR CommandLine LIKE '%powershell%[string][char[]]@(0x%Set-Alias%Net.WebClient%.DownloadString(%' ESCAPE '\\' OR CommandLine LIKE '%powershell%iex (new-object system.net.webclient).downloadstring%' ESCAPE '\\' OR CommandLine LIKE '%iex ( [string][system.text.encoding]::ascii.getstring([system.convert]::frombase64string( ((new-object net.webclient).downloadstring(%' ESCAPE '\\' OR CommandLine LIKE '%powershell%.DownloadFile([System.Text.Encoding]::ASCII.GetString([System.Convert]::FromBase64String(%>&%' ESCAPE '\\' OR CommandLine LIKE '%iex (new-object net.webclient).downloadstring(%' ESCAPE '\\' OR CommandLine LIKE '%powershell -command iex (%downloadstring%' ESCAPE '\\' OR CommandLine LIKE '%iex (new-object net.webclient).downloadfile(%' ESCAPE '\\' OR CommandLine LIKE '%powershell%-command%iex(%http%' ESCAPE '\\' OR CommandLine LIKE '%-command iex (new-object%downloadstring%' ESCAPE '\\' OR CommandLine LIKE '%$path%iex(%.web%-replace%' ESCAPE '\\' OR CommandLine LIKE '%iex ((new-object system.net.webclient).downloadstring(%' ESCAPE '\\' OR CommandLine LIKE '%powershell%.webclient)%iex%' ESCAPE '\\' OR CommandLine LIKE '%iex(new-object net.webclient).downloadstring(%' ESCAPE '\\' OR CommandLine LIKE '%iex ((new-object net.webclient).downloadstring(%' ESCAPE '\\' OR CommandLine LIKE '%http%.replace(%iex%' ESCAPE '\\'))"
     ],
     "schema_version": 2,
+    "source": "joesecurity",
     "source_table": "logs",
     "status": "experimental",
     "tags": [],
@@ -5316,6 +5642,7 @@
     "filename": "rules/powershelldownloadandexecuteiex.yml",
     "id": "bb43958d-85bc-506b-a45a-4ec05a065be1",
     "level": "critical",
+    "license": "GPL-3.0",
     "logsource": {
       "product": "windows",
       "service": "security"
@@ -5330,6 +5657,7 @@
       "SELECT * FROM logs WHERE Channel='Security' AND (EventID=4688 AND (CommandLine LIKE '%\\\\powershell.exe% iex %((New-Object Net.WebClient).DownloadString(%' ESCAPE '\\' OR CommandLine LIKE '%powershell%[string][char[]]@(0x%Set-Alias%Net.WebClient%.DownloadString(%' ESCAPE '\\' OR CommandLine LIKE '%powershell%iex (new-object system.net.webclient).downloadstring%' ESCAPE '\\' OR CommandLine LIKE '%iex ( [string][system.text.encoding]::ascii.getstring([system.convert]::frombase64string( ((new-object net.webclient).downloadstring(%' ESCAPE '\\' OR CommandLine LIKE '%powershell%.DownloadFile([System.Text.Encoding]::ASCII.GetString([System.Convert]::FromBase64String(%>&%' ESCAPE '\\' OR CommandLine LIKE '%iex (new-object net.webclient).downloadstring(%' ESCAPE '\\' OR CommandLine LIKE '%powershell -command iex (%downloadstring%' ESCAPE '\\' OR CommandLine LIKE '%iex (new-object net.webclient).downloadfile(%' ESCAPE '\\' OR CommandLine LIKE '%powershell%-command%iex(%http%' ESCAPE '\\' OR CommandLine LIKE '%-command iex (new-object%downloadstring%' ESCAPE '\\' OR CommandLine LIKE '%$path%iex(%.web%-replace%' ESCAPE '\\' OR CommandLine LIKE '%iex ((new-object system.net.webclient).downloadstring(%' ESCAPE '\\' OR CommandLine LIKE '%powershell%.webclient)%iex%' ESCAPE '\\' OR CommandLine LIKE '%iex(new-object net.webclient).downloadstring(%' ESCAPE '\\' OR CommandLine LIKE '%iex ((new-object net.webclient).downloadstring(%' ESCAPE '\\' OR CommandLine LIKE '%http%.replace(%iex%' ESCAPE '\\'))"
     ],
     "schema_version": 2,
+    "source": "joesecurity",
     "source_table": "logs",
     "status": "experimental",
     "tags": [],
@@ -5348,6 +5676,7 @@
     "filename": "rules/credwizutildroppedbymshtafordllsideloading.yml",
     "id": "bf28ff48-9b85-585a-bfa2-3f708ee3af8d",
     "level": "critical",
+    "license": "GPL-3.0",
     "logsource": {
       "product": "windows",
       "service": "sysmon"
@@ -5363,6 +5692,7 @@
       "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=11 AND Image LIKE '%\\\\mshta.exe%' ESCAPE '\\' AND TargetFilename LIKE '%\\\\credwiz.exe%' ESCAPE '\\')"
     ],
     "schema_version": 2,
+    "source": "joesecurity",
     "source_table": "logs",
     "status": "experimental",
     "tags": [],
@@ -5381,6 +5711,7 @@
     "filename": "rules/deleteshadowcopyviapowershell.yml",
     "id": "c209b4f8-3bb0-5183-b5a6-0fc7922f8a2d",
     "level": "critical",
+    "license": "GPL-3.0",
     "logsource": {
       "category": "process_creation",
       "product": "windows",
@@ -5396,6 +5727,7 @@
       "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=1 AND CommandLine LIKE '%powershell%RwBlAHQALQBXAG0AaQBPAGIAagBlAGMAdAAgAFcAaQBuADMAMgBfAFMAaABhAGQAbwB3AGMAbwBwAHkAIAB8ACAARgBvAHIARQBhAGMAaAAtAE8AYgBqAGUAYwB0ACAAewAkAF8ALgBEAGUAbABlAHQAZQAoACkAOwB9AA==%' ESCAPE '\\')"
     ],
     "schema_version": 2,
+    "source": "joesecurity",
     "source_table": "logs",
     "status": "experimental",
     "tags": [],
@@ -5414,6 +5746,7 @@
     "filename": "rules/deleteshadowcopyviapowershell.yml",
     "id": "c209b4f8-3bb0-5183-b5a6-0fc7922f8a2d",
     "level": "critical",
+    "license": "GPL-3.0",
     "logsource": {
       "product": "windows",
       "service": "security"
@@ -5428,6 +5761,7 @@
       "SELECT * FROM logs WHERE Channel='Security' AND (EventID=4688 AND CommandLine LIKE '%powershell%RwBlAHQALQBXAG0AaQBPAGIAagBlAGMAdAAgAFcAaQBuADMAMgBfAFMAaABhAGQAbwB3AGMAbwBwAHkAIAB8ACAARgBvAHIARQBhAGMAaAAtAE8AYgBqAGUAYwB0ACAAewAkAF8ALgBEAGUAbABlAHQAZQAoACkAOwB9AA==%' ESCAPE '\\')"
     ],
     "schema_version": 2,
+    "source": "joesecurity",
     "source_table": "logs",
     "status": "experimental",
     "tags": [],
@@ -5446,6 +5780,7 @@
     "filename": "rules/reflectiveloader.yml",
     "id": "c39443f6-fb93-5439-b95b-ac68f49fdbad",
     "level": "critical",
+    "license": "GPL-3.0",
     "logsource": {
       "category": "process_creation",
       "product": "windows",
@@ -5461,6 +5796,7 @@
       "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=1 AND CommandLine LIKE '-''%.dll,\\_reflectiveloader%'' -''%.dll,reflectiveloader%''' ESCAPE '\\')"
     ],
     "schema_version": 2,
+    "source": "joesecurity",
     "source_table": "logs",
     "status": "experimental",
     "tags": [],
@@ -5479,6 +5815,7 @@
     "filename": "rules/reflectiveloader.yml",
     "id": "c39443f6-fb93-5439-b95b-ac68f49fdbad",
     "level": "critical",
+    "license": "GPL-3.0",
     "logsource": {
       "product": "windows",
       "service": "security"
@@ -5493,6 +5830,7 @@
       "SELECT * FROM logs WHERE Channel='Security' AND (EventID=4688 AND CommandLine LIKE '-''%.dll,\\_reflectiveloader%'' -''%.dll,reflectiveloader%''' ESCAPE '\\')"
     ],
     "schema_version": 2,
+    "source": "joesecurity",
     "source_table": "logs",
     "status": "experimental",
     "tags": [],
@@ -5511,6 +5849,7 @@
     "filename": "rules/scheduleregsvrwindowsbinary.yml",
     "id": "c6eaeb20-3a71-5446-8c5a-ffbc97a62741",
     "level": "critical",
+    "license": "GPL-3.0",
     "logsource": {
       "category": "process_creation",
       "product": "windows",
@@ -5526,6 +5865,7 @@
       "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=1 AND CommandLine LIKE '%schtasks%/create%regsvr32%' ESCAPE '\\')"
     ],
     "schema_version": 2,
+    "source": "joesecurity",
     "source_table": "logs",
     "status": "experimental",
     "tags": [],
@@ -5544,6 +5884,7 @@
     "filename": "rules/scheduleregsvrwindowsbinary.yml",
     "id": "c6eaeb20-3a71-5446-8c5a-ffbc97a62741",
     "level": "critical",
+    "license": "GPL-3.0",
     "logsource": {
       "product": "windows",
       "service": "security"
@@ -5558,6 +5899,7 @@
       "SELECT * FROM logs WHERE Channel='Security' AND (EventID=4688 AND CommandLine LIKE '%schtasks%/create%regsvr32%' ESCAPE '\\')"
     ],
     "schema_version": 2,
+    "source": "joesecurity",
     "source_table": "logs",
     "status": "experimental",
     "tags": [],
@@ -5576,6 +5918,7 @@
     "filename": "rules/winworddropsscriptInstartup.yml",
     "id": "cc22ca93-9220-574e-9311-ec3a561697e3",
     "level": "critical",
+    "license": "GPL-3.0",
     "logsource": {
       "product": "windows",
       "service": "sysmon"
@@ -5591,6 +5934,7 @@
       "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=11 AND Image LIKE '%\\\\Microsoft Office\\\\Office%\\\\WINWORD.EXE%' ESCAPE '\\' AND (TargetFilename LIKE '%\\\\AppData\\\\Roaming\\\\Microsoft\\\\%\\\\STARTUP\\\\%.vbs%' ESCAPE '\\' OR TargetFilename LIKE '%\\\\AppData\\\\Roaming\\\\Microsoft\\\\%\\\\STARTUP\\\\%.js%' ESCAPE '\\' OR TargetFilename LIKE '%\\\\AppData\\\\Roaming\\\\Microsoft\\\\%\\\\STARTUP\\\\%.bat%' ESCAPE '\\' OR TargetFilename LIKE '%\\\\AppData\\\\Roaming\\\\Microsoft\\\\%\\\\STARTUP\\\\%.url%' ESCAPE '\\' OR TargetFilename LIKE '%\\\\AppData\\\\Roaming\\\\Microsoft\\\\%\\\\STARTUP\\\\%.cmd%' ESCAPE '\\' OR TargetFilename LIKE '%\\\\AppData\\\\Roaming\\\\Microsoft\\\\%\\\\STARTUP\\\\%.hta%' ESCAPE '\\' OR TargetFilename LIKE '%\\\\AppData\\\\Roaming\\\\Microsoft\\\\%\\\\STARTUP\\\\%.ps1%' ESCAPE '\\'))"
     ],
     "schema_version": 2,
+    "source": "joesecurity",
     "source_table": "logs",
     "status": "experimental",
     "tags": [],
@@ -5609,6 +5953,7 @@
     "filename": "rules/getantivirusdetailsviawmicquery.yml",
     "id": "cc512824-364a-5654-b192-b576901911d5",
     "level": "critical",
+    "license": "GPL-3.0",
     "logsource": {
       "category": "process_creation",
       "product": "windows",
@@ -5624,6 +5969,7 @@
       "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=1 AND CommandLine LIKE '-''%wmic % path antivirusproduct get displayname%''' ESCAPE '\\')"
     ],
     "schema_version": 2,
+    "source": "joesecurity",
     "source_table": "logs",
     "status": "experimental",
     "tags": [],
@@ -5642,6 +5988,7 @@
     "filename": "rules/getantivirusdetailsviawmicquery.yml",
     "id": "cc512824-364a-5654-b192-b576901911d5",
     "level": "critical",
+    "license": "GPL-3.0",
     "logsource": {
       "product": "windows",
       "service": "security"
@@ -5656,6 +6003,7 @@
       "SELECT * FROM logs WHERE Channel='Security' AND (EventID=4688 AND CommandLine LIKE '-''%wmic % path antivirusproduct get displayname%''' ESCAPE '\\')"
     ],
     "schema_version": 2,
+    "source": "joesecurity",
     "source_table": "logs",
     "status": "experimental",
     "tags": [],
@@ -5674,6 +6022,7 @@
     "filename": "rules/runcertutilfromsuspiciouslocation.yml",
     "id": "cc5d0ea8-9b37-5082-ba0a-6d308cefb444",
     "level": "critical",
+    "license": "GPL-3.0",
     "logsource": {
       "category": "process_creation",
       "product": "windows",
@@ -5689,6 +6038,7 @@
       "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=1 AND (CommandLine LIKE '%c:\\\\programdata\\\\curl.com /urlcache /f http%' ESCAPE '\\' OR CommandLine LIKE '%programdata\\\\%.exe -urlcache -f -split http%' ESCAPE '\\'))"
     ],
     "schema_version": 2,
+    "source": "joesecurity",
     "source_table": "logs",
     "status": "experimental",
     "tags": [],
@@ -5707,6 +6057,7 @@
     "filename": "rules/runcertutilfromsuspiciouslocation.yml",
     "id": "cc5d0ea8-9b37-5082-ba0a-6d308cefb444",
     "level": "critical",
+    "license": "GPL-3.0",
     "logsource": {
       "product": "windows",
       "service": "security"
@@ -5721,6 +6072,7 @@
       "SELECT * FROM logs WHERE Channel='Security' AND (EventID=4688 AND (CommandLine LIKE '%c:\\\\programdata\\\\curl.com /urlcache /f http%' ESCAPE '\\' OR CommandLine LIKE '%programdata\\\\%.exe -urlcache -f -split http%' ESCAPE '\\'))"
     ],
     "schema_version": 2,
+    "source": "joesecurity",
     "source_table": "logs",
     "status": "experimental",
     "tags": [],
@@ -5739,6 +6091,7 @@
     "filename": "rules/schedulescriptfrominternetviamshta.yml",
     "id": "cf16979d-d1b3-5747-b993-08572749bcba",
     "level": "critical",
+    "license": "GPL-3.0",
     "logsource": {
       "category": "process_creation",
       "product": "windows",
@@ -5754,6 +6107,7 @@
       "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=1 AND CommandLine LIKE '%schtasks%/create%mshta%http%' ESCAPE '\\')"
     ],
     "schema_version": 2,
+    "source": "joesecurity",
     "source_table": "logs",
     "status": "experimental",
     "tags": [],
@@ -5772,6 +6126,7 @@
     "filename": "rules/schedulescriptfrominternetviamshta.yml",
     "id": "cf16979d-d1b3-5747-b993-08572749bcba",
     "level": "critical",
+    "license": "GPL-3.0",
     "logsource": {
       "product": "windows",
       "service": "security"
@@ -5786,6 +6141,7 @@
       "SELECT * FROM logs WHERE Channel='Security' AND (EventID=4688 AND CommandLine LIKE '%schtasks%/create%mshta%http%' ESCAPE '\\')"
     ],
     "schema_version": 2,
+    "source": "joesecurity",
     "source_table": "logs",
     "status": "experimental",
     "tags": [],
@@ -5804,6 +6160,7 @@
     "filename": "rules/wmiclaunchregsvr32.yml",
     "id": "d033513f-2597-5016-969c-db1254bad82e",
     "level": "critical",
+    "license": "GPL-3.0",
     "logsource": {
       "category": "process_creation",
       "product": "windows",
@@ -5819,6 +6176,7 @@
       "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=1 AND CommandLine LIKE '%wmic%process call create %regsvr32%' ESCAPE '\\')"
     ],
     "schema_version": 2,
+    "source": "joesecurity",
     "source_table": "logs",
     "status": "experimental",
     "tags": [],
@@ -5837,6 +6195,7 @@
     "filename": "rules/wmiclaunchregsvr32.yml",
     "id": "d033513f-2597-5016-969c-db1254bad82e",
     "level": "critical",
+    "license": "GPL-3.0",
     "logsource": {
       "product": "windows",
       "service": "security"
@@ -5851,6 +6210,7 @@
       "SELECT * FROM logs WHERE Channel='Security' AND (EventID=4688 AND CommandLine LIKE '%wmic%process call create %regsvr32%' ESCAPE '\\')"
     ],
     "schema_version": 2,
+    "source": "joesecurity",
     "source_table": "logs",
     "status": "experimental",
     "tags": [],
@@ -5869,6 +6229,7 @@
     "filename": "rules/executescriptwithspoofedextension.yml",
     "id": "d37256c1-7263-59ad-87af-83c96d26d757",
     "level": "critical",
+    "license": "GPL-3.0",
     "logsource": {
       "category": "process_creation",
       "product": "windows",
@@ -5884,6 +6245,7 @@
       "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=1 AND (CommandLine LIKE '%/e:jscript%\\\\%.txt%' ESCAPE '\\' OR CommandLine LIKE '%/e:jscript%\\\\%.pdf%' ESCAPE '\\' OR CommandLine LIKE '%/e:jscript%\\\\%.htm%' ESCAPE '\\' OR CommandLine LIKE '%/e:jscript%\\\\%.png%' ESCAPE '\\' OR CommandLine LIKE '%/e:jscript%\\\\%.jpeg%' ESCAPE '\\' OR CommandLine LIKE '%/e:jscript%\\\\%.jpg%' ESCAPE '\\'))"
     ],
     "schema_version": 2,
+    "source": "joesecurity",
     "source_table": "logs",
     "status": "experimental",
     "tags": [],
@@ -5902,6 +6264,7 @@
     "filename": "rules/executescriptwithspoofedextension.yml",
     "id": "d37256c1-7263-59ad-87af-83c96d26d757",
     "level": "critical",
+    "license": "GPL-3.0",
     "logsource": {
       "product": "windows",
       "service": "security"
@@ -5916,6 +6279,7 @@
       "SELECT * FROM logs WHERE Channel='Security' AND (EventID=4688 AND (CommandLine LIKE '%/e:jscript%\\\\%.txt%' ESCAPE '\\' OR CommandLine LIKE '%/e:jscript%\\\\%.pdf%' ESCAPE '\\' OR CommandLine LIKE '%/e:jscript%\\\\%.htm%' ESCAPE '\\' OR CommandLine LIKE '%/e:jscript%\\\\%.png%' ESCAPE '\\' OR CommandLine LIKE '%/e:jscript%\\\\%.jpeg%' ESCAPE '\\' OR CommandLine LIKE '%/e:jscript%\\\\%.jpg%' ESCAPE '\\'))"
     ],
     "schema_version": 2,
+    "source": "joesecurity",
     "source_table": "logs",
     "status": "experimental",
     "tags": [],
@@ -5934,6 +6298,7 @@
     "filename": "rules/scheduletempfileastaskfromtemplocation.yml",
     "id": "d45a40d7-8d69-5e2e-a5ca-0fa7df93588a",
     "level": "critical",
+    "license": "GPL-3.0",
     "logsource": {
       "category": "process_creation",
       "product": "windows",
@@ -5949,6 +6314,7 @@
       "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=1 AND CommandLine LIKE '%schtasks%/create%/xml%\\\\temp\\\\%.tmp%' ESCAPE '\\')"
     ],
     "schema_version": 2,
+    "source": "joesecurity",
     "source_table": "logs",
     "status": "experimental",
     "tags": [],
@@ -5967,6 +6333,7 @@
     "filename": "rules/scheduletempfileastaskfromtemplocation.yml",
     "id": "d45a40d7-8d69-5e2e-a5ca-0fa7df93588a",
     "level": "critical",
+    "license": "GPL-3.0",
     "logsource": {
       "product": "windows",
       "service": "security"
@@ -5981,6 +6348,7 @@
       "SELECT * FROM logs WHERE Channel='Security' AND (EventID=4688 AND CommandLine LIKE '%schtasks%/create%/xml%\\\\temp\\\\%.tmp%' ESCAPE '\\')"
     ],
     "schema_version": 2,
+    "source": "joesecurity",
     "source_table": "logs",
     "status": "experimental",
     "tags": [],
@@ -5999,6 +6367,7 @@
     "filename": "rules/regasmconnectstosmtpport.yml",
     "id": "d9c032f4-3af4-5015-86e6-7e5680f93a68",
     "level": "critical",
+    "license": "GPL-3.0",
     "logsource": {
       "product": "windows",
       "service": "sysmon"
@@ -6014,6 +6383,7 @@
       "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=3 AND DestinationPort='587' AND Image LIKE '%\\\\Microsoft.NET\\\\%RegAsm.exe%' ESCAPE '\\')"
     ],
     "schema_version": 2,
+    "source": "joesecurity",
     "source_table": "logs",
     "status": "experimental",
     "tags": [],
@@ -6032,6 +6402,7 @@
     "filename": "rules/powershelliexdownloadinbase64.yml",
     "id": "dd176f6c-f4a8-55b3-8047-56b481b7c4cc",
     "level": "critical",
+    "license": "GPL-3.0",
     "logsource": {
       "category": "process_creation",
       "product": "windows",
@@ -6047,6 +6418,7 @@
       "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=1 AND CommandLine LIKE '%powershell%SUVYKChuZXctb2JqZWN0IG5ldC53ZWJjbGllbnQpLmRvd25sb2Fkc3RyaW5nK%' ESCAPE '\\')"
     ],
     "schema_version": 2,
+    "source": "joesecurity",
     "source_table": "logs",
     "status": "experimental",
     "tags": [],
@@ -6065,6 +6437,7 @@
     "filename": "rules/powershelliexdownloadinbase64.yml",
     "id": "dd176f6c-f4a8-55b3-8047-56b481b7c4cc",
     "level": "critical",
+    "license": "GPL-3.0",
     "logsource": {
       "product": "windows",
       "service": "security"
@@ -6079,6 +6452,7 @@
       "SELECT * FROM logs WHERE Channel='Security' AND (EventID=4688 AND CommandLine LIKE '%powershell%SUVYKChuZXctb2JqZWN0IG5ldC53ZWJjbGllbnQpLmRvd25sb2Fkc3RyaW5nK%' ESCAPE '\\')"
     ],
     "schema_version": 2,
+    "source": "joesecurity",
     "source_table": "logs",
     "status": "experimental",
     "tags": [],
@@ -6097,6 +6471,7 @@
     "filename": "rules/setautostartkeyvianewitempropertycmdlet.yml",
     "id": "e3341cc3-a85e-56b2-94f0-da5185927374",
     "level": "critical",
+    "license": "GPL-3.0",
     "logsource": {
       "category": "process_creation",
       "product": "windows",
@@ -6112,6 +6487,7 @@
       "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=1 AND CommandLine LIKE '%new-itemproperty -path %\\\\software\\\\microsoft\\\\windows\\\\currentversion\\\\run%' ESCAPE '\\')"
     ],
     "schema_version": 2,
+    "source": "joesecurity",
     "source_table": "logs",
     "status": "experimental",
     "tags": [],
@@ -6130,6 +6506,7 @@
     "filename": "rules/setautostartkeyvianewitempropertycmdlet.yml",
     "id": "e3341cc3-a85e-56b2-94f0-da5185927374",
     "level": "critical",
+    "license": "GPL-3.0",
     "logsource": {
       "product": "windows",
       "service": "security"
@@ -6144,6 +6521,7 @@
       "SELECT * FROM logs WHERE Channel='Security' AND (EventID=4688 AND CommandLine LIKE '%new-itemproperty -path %\\\\software\\\\microsoft\\\\windows\\\\currentversion\\\\run%' ESCAPE '\\')"
     ],
     "schema_version": 2,
+    "source": "joesecurity",
     "source_table": "logs",
     "status": "experimental",
     "tags": [],
@@ -6162,6 +6540,7 @@
     "filename": "rules/powershellcreatelnkinstartup.yml",
     "id": "e9cff7a1-1b88-5662-830e-a5c57d62a605",
     "level": "critical",
+    "license": "GPL-3.0",
     "logsource": {
       "category": "process_creation",
       "product": "windows",
@@ -6177,6 +6556,7 @@
       "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=1 AND CommandLine LIKE '%powershell%.createshortcut(%\\\\appdata\\\\roaming\\\\microsoft\\\\windows\\\\start menu\\\\programs\\\\startup%' ESCAPE '\\')"
     ],
     "schema_version": 2,
+    "source": "joesecurity",
     "source_table": "logs",
     "status": "experimental",
     "tags": [],
@@ -6195,6 +6575,7 @@
     "filename": "rules/powershellcreatelnkinstartup.yml",
     "id": "e9cff7a1-1b88-5662-830e-a5c57d62a605",
     "level": "critical",
+    "license": "GPL-3.0",
     "logsource": {
       "product": "windows",
       "service": "security"
@@ -6209,6 +6590,7 @@
       "SELECT * FROM logs WHERE Channel='Security' AND (EventID=4688 AND CommandLine LIKE '%powershell%.createshortcut(%\\\\appdata\\\\roaming\\\\microsoft\\\\windows\\\\start menu\\\\programs\\\\startup%' ESCAPE '\\')"
     ],
     "schema_version": 2,
+    "source": "joesecurity",
     "source_table": "logs",
     "status": "experimental",
     "tags": [],
@@ -6227,6 +6609,7 @@
     "filename": "rules/decodestringsfromlnkviafindstr.yml",
     "id": "e9f35d22-e746-5ebd-a1a9-190a107e911e",
     "level": "critical",
+    "license": "GPL-3.0",
     "logsource": {
       "category": "process_creation",
       "product": "windows",
@@ -6242,6 +6625,7 @@
       "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=1 AND CommandLine LIKE '%findstr /b /i %.lnk%' ESCAPE '\\')"
     ],
     "schema_version": 2,
+    "source": "joesecurity",
     "source_table": "logs",
     "status": "experimental",
     "tags": [],
@@ -6260,6 +6644,7 @@
     "filename": "rules/decodestringsfromlnkviafindstr.yml",
     "id": "e9f35d22-e746-5ebd-a1a9-190a107e911e",
     "level": "critical",
+    "license": "GPL-3.0",
     "logsource": {
       "product": "windows",
       "service": "security"
@@ -6274,6 +6659,7 @@
       "SELECT * FROM logs WHERE Channel='Security' AND (EventID=4688 AND CommandLine LIKE '%findstr /b /i %.lnk%' ESCAPE '\\')"
     ],
     "schema_version": 2,
+    "source": "joesecurity",
     "source_table": "logs",
     "status": "experimental",
     "tags": [],
@@ -6292,6 +6678,7 @@
     "filename": "rules/msbuildconnectstosmtpport.yml",
     "id": "ebbfcc4f-4d79-5221-82c8-16433fdbe590",
     "level": "critical",
+    "license": "GPL-3.0",
     "logsource": {
       "product": "windows",
       "service": "sysmon"
@@ -6307,6 +6694,7 @@
       "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=3 AND DestinationPort='587' AND Image LIKE '%\\\\Microsoft.NET\\\\%MSBuild.exe%' ESCAPE '\\')"
     ],
     "schema_version": 2,
+    "source": "joesecurity",
     "source_table": "logs",
     "status": "experimental",
     "tags": [],
@@ -6325,6 +6713,7 @@
     "filename": "rules/filedroppedbyeqnedt32exe.yml",
     "id": "ee3901f2-6166-5cc6-b357-5cee1bdbb588",
     "level": "critical",
+    "license": "GPL-3.0",
     "logsource": {
       "product": "windows",
       "service": "sysmon"
@@ -6340,6 +6729,7 @@
       "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=11 AND Image LIKE '%\\\\EQUATION\\\\EQNEDT32.EXE%' ESCAPE '\\' AND (TargetFilename LIKE '%\\\\%.exe%' ESCAPE '\\' OR TargetFilename LIKE '%\\\\%.dll%' ESCAPE '\\' OR TargetFilename LIKE '%\\\\%.vbs%' ESCAPE '\\' OR TargetFilename LIKE '%\\\\%.js%' ESCAPE '\\' OR TargetFilename LIKE '%\\\\%.hta%' ESCAPE '\\' OR TargetFilename LIKE '%\\\\%.bat%' ESCAPE '\\'))"
     ],
     "schema_version": 2,
+    "source": "joesecurity",
     "source_table": "logs",
     "status": "experimental",
     "tags": [],
@@ -6358,6 +6748,7 @@
     "filename": "rules/ryuk.yml",
     "id": "f0d8f3a1-560f-5261-a8ec-988d820a63b0",
     "level": "critical",
+    "license": "GPL-3.0",
     "logsource": {
       "product": "windows",
       "service": "sysmon"
@@ -6372,6 +6763,7 @@
       "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=3 AND DestinationPort='7')"
     ],
     "schema_version": 2,
+    "source": "joesecurity",
     "source_table": "logs",
     "status": "experimental",
     "tags": [],
@@ -6390,6 +6782,7 @@
     "filename": "rules/wscriptlaunchedbypowershell.yml",
     "id": "f57f1bb1-c9f2-5fa4-9a9d-c2585baa7154",
     "level": "critical",
+    "license": "GPL-3.0",
     "logsource": {
       "category": "process_creation",
       "product": "windows",
@@ -6406,6 +6799,7 @@
       "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=1 AND (ParentCommandLine LIKE '%\\\\powershell.exe%' ESCAPE '\\' AND CommandLine LIKE '-''%\\\\WScript.exe%\\\\appdata\\\\roaming\\\\microsoft\\\\word\\\\startup\\\\%''' ESCAPE '\\'))"
     ],
     "schema_version": 2,
+    "source": "joesecurity",
     "source_table": "logs",
     "status": "experimental",
     "tags": [],
@@ -6424,6 +6818,7 @@
     "filename": "rules/wscriptlaunchedbypowershell.yml",
     "id": "f57f1bb1-c9f2-5fa4-9a9d-c2585baa7154",
     "level": "critical",
+    "license": "GPL-3.0",
     "logsource": {
       "product": "windows",
       "service": "security"
@@ -6439,6 +6834,7 @@
       "SELECT * FROM logs WHERE Channel='Security' AND (EventID=4688 AND (ParentCommandLine LIKE '%\\\\powershell.exe%' ESCAPE '\\' AND CommandLine LIKE '-''%\\\\WScript.exe%\\\\appdata\\\\roaming\\\\microsoft\\\\word\\\\startup\\\\%''' ESCAPE '\\'))"
     ],
     "schema_version": 2,
+    "source": "joesecurity",
     "source_table": "logs",
     "status": "experimental",
     "tags": [],
@@ -6457,6 +6853,7 @@
     "filename": "rules/powershelldownloadfileandshellexecute.yml",
     "id": "f970618e-70d8-5b19-9a77-65ebbf5a1be8",
     "level": "critical",
+    "license": "GPL-3.0",
     "logsource": {
       "category": "process_creation",
       "product": "windows",
@@ -6472,6 +6869,7 @@
       "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=1 AND CommandLine LIKE '-''%powershell%downloadfile%shellexecute%''' ESCAPE '\\')"
     ],
     "schema_version": 2,
+    "source": "joesecurity",
     "source_table": "logs",
     "status": "experimental",
     "tags": [],
@@ -6490,6 +6888,7 @@
     "filename": "rules/powershelldownloadfileandshellexecute.yml",
     "id": "f970618e-70d8-5b19-9a77-65ebbf5a1be8",
     "level": "critical",
+    "license": "GPL-3.0",
     "logsource": {
       "product": "windows",
       "service": "security"
@@ -6504,6 +6903,7 @@
       "SELECT * FROM logs WHERE Channel='Security' AND (EventID=4688 AND CommandLine LIKE '-''%powershell%downloadfile%shellexecute%''' ESCAPE '\\')"
     ],
     "schema_version": 2,
+    "source": "joesecurity",
     "source_table": "logs",
     "status": "experimental",
     "tags": [],
@@ -6522,6 +6922,7 @@
     "filename": "rules/netwire.yml",
     "id": "f9a3e97f-46c2-5d38-b5fd-81370ae929ca",
     "level": "critical",
+    "license": "GPL-3.0",
     "logsource": {
       "product": "windows",
       "service": "sysmon"
@@ -6537,6 +6938,7 @@
       "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND ((EventID=13 AND TargetObject LIKE '%\\\\Microsoft\\\\Windows\\\\CurrentVersion\\\\Run%NetWire%' ESCAPE '\\' AND Details LIKE '%\\\\AppData\\\\Roaming\\\\%' ESCAPE '\\') OR (EventID=13 AND TargetObject LIKE '%HKEY\\_CURRENT\\_USER\\\\Software\\\\NetWire%HostId%' ESCAPE '\\'))"
     ],
     "schema_version": 2,
+    "source": "joesecurity",
     "source_table": "logs",
     "status": "experimental",
     "tags": [],

@@ -1,0 +1,183 @@
+[
+  {
+    "author": "Dragon-ThreatResearchHQ",
+    "channel": [],
+    "description": "Detects OpenSSH daemon (sshd) spawning interactive shells or command interpreters without a corresponding authenticated PAM session, indicating exploitation of the RegreSSHion signal race condition (CVE-2024-6387).",
+    "eventid": [],
+    "falsepositives": [
+      "Normal interactive SSH logins if auditd/sysmon does not distinguish privilege separation child processes."
+    ],
+    "filename": "Detection-Rules/Sigma/Linux/lnx_sshd_regresshion_cve_2024_6387_unauth_child.yml",
+    "id": "e4719024-81bd-4221-a477-905e492fa619",
+    "level": "high",
+    "license": "MIT",
+    "logsource": {
+      "category": "process_creation",
+      "product": "linux"
+    },
+    "required_fields": [
+      "Image",
+      "ParentImage"
+    ],
+    "result_type": "event",
+    "rule": [
+      "SELECT * FROM logs WHERE ParentImage LIKE '%/sshd' ESCAPE '\\' AND (Image LIKE '%/sh' ESCAPE '\\' OR Image LIKE '%/bash' ESCAPE '\\' OR Image LIKE '%/dash' ESCAPE '\\' OR Image LIKE '%/zsh' ESCAPE '\\' OR Image LIKE '%/python' ESCAPE '\\' OR Image LIKE '%/python3' ESCAPE '\\' OR Image LIKE '%/perl' ESCAPE '\\')"
+    ],
+    "schema_version": 2,
+    "source": "dragon",
+    "source_table": "logs",
+    "status": "experimental",
+    "tags": [
+      "attack.initial_access",
+      "attack.t1190",
+      "attack.privilege_escalation",
+      "attack.t1068",
+      "attack.execution",
+      "attack.t1059.004"
+    ],
+    "title": "Pre-Auth sshd Spawning Shell (RegreSSHion CVE-2024-6387)"
+  },
+  {
+    "author": "Dragon Threat Research HQ",
+    "channel": [],
+    "description": "Detects command-line execution or script invocation writing zero or random data directly to raw disk block devices (/dev/sd*, /dev/nvme*, /dev/mtd*) characteristic of destructive Linux wipers deployed by Russian state-sponsored actor Sandworm (APT44) such as AcidRain and AcidPour.",
+    "eventid": [],
+    "falsepositives": [
+      "Authorized storage decommissioning or disk re-imaging by datacenter technicians"
+    ],
+    "filename": "Detection-Rules/Sigma/Linux/lnx_sandworm_caddywiper_disk_destruction.yml",
+    "id": "3c4d5e6f-7a8b-9c0d-1e2f-34567890abcd",
+    "level": "critical",
+    "license": "MIT",
+    "logsource": {
+      "category": "process_creation",
+      "product": "linux"
+    },
+    "required_fields": [
+      "CommandLine",
+      "Image"
+    ],
+    "result_type": "event",
+    "rule": [
+      "SELECT * FROM logs WHERE (Image LIKE '%/dd' ESCAPE '\\' OR Image LIKE '%/shred' ESCAPE '\\' OR Image LIKE '%/wipe' ESCAPE '\\') AND (CommandLine LIKE '%of=/dev/sd%' ESCAPE '\\' OR CommandLine LIKE '%of=/dev/nvme%' ESCAPE '\\' OR CommandLine LIKE '%of=/dev/mtd%' ESCAPE '\\' OR CommandLine LIKE '%of=/dev/mmcblk%' ESCAPE '\\' OR CommandLine LIKE '%/dev/urandom%' ESCAPE '\\' OR CommandLine LIKE '%/dev/zero%' ESCAPE '\\')"
+    ],
+    "schema_version": 2,
+    "source": "dragon",
+    "source_table": "logs",
+    "status": "stable",
+    "tags": [
+      "attack.impact",
+      "attack.t1561.002",
+      "attack.t1485",
+      "threat.sandworm"
+    ],
+    "title": "Suspicious Direct Block Device Overwrite or MTD Flash Destruction (Sandworm Wiper TTP)"
+  },
+  {
+    "author": "Dragon Threat Intelligence",
+    "channel": [],
+    "description": "Detects Python process executing encoded or uncompressed commands inside Ivanti SQL/web directories, characteristic of WIREFIRE web shells.",
+    "eventid": [],
+    "falsepositives": [
+      "None on standard Ivanti Connect Secure appliances"
+    ],
+    "filename": "Detection-Rules/Sigma/Linux/lnx_ivanti_unc5221_wirefire_execution.yml",
+    "id": "a748b930-3127-4a3b-c367-584930217685",
+    "level": "critical",
+    "license": "MIT",
+    "logsource": {
+      "category": "process_creation",
+      "product": "linux"
+    },
+    "required_fields": [
+      "CommandLine"
+    ],
+    "result_type": "event",
+    "rule": [
+      "SELECT * FROM logs WHERE (CommandLine LIKE '%/home/etc/sql/d\\_admin.py%' ESCAPE '\\' OR CommandLine LIKE '%/home/webserver/htdocs/dana-na/%' ESCAPE '\\') OR (CommandLine LIKE '%zlib.decompress%' ESCAPE '\\' OR CommandLine LIKE '%base64.b64decode%' ESCAPE '\\' OR CommandLine LIKE '%exec(%' ESCAPE '\\')"
+    ],
+    "schema_version": 2,
+    "source": "dragon",
+    "source_table": "logs",
+    "status": "experimental",
+    "tags": [
+      "attack.persistence",
+      "attack.t1505.003",
+      "attack.execution",
+      "attack.t1059.006"
+    ],
+    "title": "WIREFIRE Web Shell Execution on Linux Appliance (UNC5221)"
+  },
+  {
+    "author": "Dragon Threat Intelligence",
+    "channel": [],
+    "description": "Detects command injection artifacts executed by device telemetry cron tasks on PAN-OS Linux systems.",
+    "eventid": [],
+    "falsepositives": [
+      "None known on standard PAN-OS systems"
+    ],
+    "filename": "Detection-Rules/Sigma/Linux/lnx_panos_cve_2024_3400_device_telemetry_exploit.yml",
+    "id": "d415e607-0894-4d0e-f034-251607984352",
+    "level": "critical",
+    "license": "MIT",
+    "logsource": {
+      "category": "process_creation",
+      "product": "linux"
+    },
+    "required_fields": [
+      "CommandLine"
+    ],
+    "result_type": "event",
+    "rule": [
+      "SELECT * FROM logs WHERE CommandLine LIKE '%/opt/panlogs/tmp/device\\_telemetry/minute/%' ESCAPE '\\' OR CommandLine LIKE '%curl${IFS}%' ESCAPE '\\' OR CommandLine LIKE '%running-config.xml%' ESCAPE '\\' OR CommandLine LIKE '%system.pth%' ESCAPE '\\'"
+    ],
+    "schema_version": 2,
+    "source": "dragon",
+    "source_table": "logs",
+    "status": "experimental",
+    "tags": [
+      "attack.initial_access",
+      "attack.t1190",
+      "attack.execution",
+      "attack.t1059.004"
+    ],
+    "title": "PAN-OS Device Telemetry Arbitrary Command Execution (CVE-2024-3400)"
+  },
+  {
+    "author": "Dragon Threat Research HQ",
+    "channel": [],
+    "description": "Detects sshd directly spawning an unauthenticated interactive shell or command execution utility without a standard PAM session, characteristic of the XZ Utils upstream IFUNC backdoor (CVE-2024-3094) triggering arbitrary root execution.",
+    "eventid": [],
+    "falsepositives": [
+      "Custom restricted SSH command triggers (e.g., git-shell, rsync over ssh)"
+    ],
+    "filename": "Detection-Rules/Sigma/Linux/lnx_sshd_suspicious_child_process_cve_2024_3094.yml",
+    "id": "f1a2e345-7890-4123-b456-c7d8e9f01234",
+    "level": "critical",
+    "license": "MIT",
+    "logsource": {
+      "category": "process_creation",
+      "product": "linux"
+    },
+    "required_fields": [
+      "CommandLine",
+      "Image",
+      "ParentImage"
+    ],
+    "result_type": "event",
+    "rule": [
+      "SELECT * FROM logs WHERE ParentImage LIKE '%/sshd' ESCAPE '\\' AND (Image LIKE '%/sh' ESCAPE '\\' OR Image LIKE '%/bash' ESCAPE '\\' OR Image LIKE '%/dash' ESCAPE '\\' OR Image LIKE '%/busybox' ESCAPE '\\') AND (CommandLine LIKE '%system(%' ESCAPE '\\' OR CommandLine LIKE '%eval%' ESCAPE '\\' OR CommandLine LIKE '%base64 -d%' ESCAPE '\\')"
+    ],
+    "schema_version": 2,
+    "source": "dragon",
+    "source_table": "logs",
+    "status": "stable",
+    "tags": [
+      "attack.execution",
+      "attack.t1059.004",
+      "attack.initial_access",
+      "attack.t1195.001"
+    ],
+    "title": "Suspicious OpenSSH Daemon Child Process Execution (CVE-2024-3094 Artifact)"
+  }
+]
