@@ -7,7 +7,7 @@
 
 ## Standalone Sigma-based detection for EVTX, Auditd, Sysmon for Linux, XML, CSV and JSON logs
 
-[![python](https://img.shields.io/badge/python-3.10--3.14-blue)](https://www.python.org/)
+[![python](https://img.shields.io/badge/python-3.11--3.14-blue)](https://www.python.org/)
 ![version](https://img.shields.io/badge/Architecture-64bit-red)
 
 **Zircolite** runs [Sigma](https://github.com/SigmaHQ/sigma) rules over your logs. It
@@ -37,7 +37,7 @@ offline, in one command.
 |-------|-----|
 | **Standalone binary**, nothing to install | Download the zip for your platform from the [releases](https://github.com/wagga40/Zircolite/releases): Linux x64 and ARM64, macOS Apple silicon, Windows x64 and ARM64 |
 | **Docker** | `docker pull wagga40/zircolite:latest` |
-| **From source**, Python 3.10+ | `git clone https://github.com/wagga40/Zircolite.git && cd Zircolite && pdm install` (or `uv sync`, `poetry install`) |
+| **From source**, Python 3.11+ | `git clone https://github.com/wagga40/Zircolite.git && cd Zircolite && pdm install` (or `uv sync`) |
 
 Source installs compile a native flattening kernel and need a C compiler for it; without
 one they fall back to a slower Python kernel. See

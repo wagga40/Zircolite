@@ -15,7 +15,7 @@ import re
 import shutil
 import sys
 from collections.abc import Sequence
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -577,13 +577,13 @@ class RulesUpdater:
     def _built(timestamp: object, now: datetime | None = None) -> str:
         """When a ruleset was built: its age first, since that is what matters."""
         try:
-            built = datetime.fromisoformat(str(timestamp).replace("Z", "+00:00"))
+            built = datetime.fromisoformat(str(timestamp))
         except ValueError:
             return literal(timestamp) if timestamp else "at an unknown date"
         if built.tzinfo is None:
-            built = built.replace(tzinfo=timezone.utc)
-        built = built.astimezone(timezone.utc)
-        seconds = max(0, int(((now or datetime.now(timezone.utc)) - built).total_seconds()))
+            built = built.replace(tzinfo=UTC)
+        built = built.astimezone(UTC)
+        seconds = max(0, int(((now or datetime.now(UTC)) - built).total_seconds()))
         age = "less than a minute ago"
         for unit, size in (("day", 86400), ("hour", 3600), ("minute", 60)):
             if seconds >= size:

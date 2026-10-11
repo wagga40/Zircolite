@@ -7,7 +7,7 @@ runner directly to test the version under development.
 ## Requirements
 
 - Docker
-- Python 3.10+ with project dependencies (e.g. `pdm install`), for the runner script
+- Python 3.11+ with project dependencies (e.g. `pdm install`), for the runner script
 
 ## Running the tests
 

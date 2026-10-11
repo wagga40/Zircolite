@@ -17,6 +17,8 @@ import requests
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
+from datetime import UTC
+
 from zircolite import ProcessingConfig, ZircoliteCore
 from zircolite.config import RulesetConfig
 from zircolite.rules import RulesetHandler, RulesUpdateError, RulesUpdater, UnknownPipelineError
@@ -1249,9 +1251,9 @@ class TestRulesUpdater:
         (None, "at an unknown date"),
     ])
     def test_build_times_read_as_an_age(self, timestamp, expected):
-        from datetime import datetime, timezone
+        from datetime import datetime
 
-        now = datetime(2026, 9, 26, 19, 6, 30, tzinfo=timezone.utc)
+        now = datetime(2026, 9, 26, 19, 6, 30, tzinfo=UTC)
 
         assert RulesUpdater._built(timestamp, now) == expected
 

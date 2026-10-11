@@ -354,14 +354,7 @@ class LiteralPrefilter:
             self.reason = "negative event IDs"
             return
         known = {name.translate(_ASCII_FOLD): name for _, name, *_ in columns}
-        like_limit = 50000
-        if hasattr(conn, "getlimit"):
-            like_limit = conn.getlimit(getattr(sqlite3, "SQLITE_LIMIT_LIKE_PATTERN_LENGTH", 8))
-        else:
-            with closing(conn.execute("PRAGMA compile_options")) as cursor:
-                for (option,) in cursor:
-                    if option.startswith("MAX_LIKE_PATTERN_LENGTH="):
-                        like_limit = int(option.split("=", 1)[1])
+        like_limit = conn.getlimit(sqlite3.SQLITE_LIMIT_LIKE_PATTERN_LENGTH)
         patterns = defaultdict(set)
         queries = rule_queries(rules)
         normalized = (self.prepared or prepare_rules(queries)).normalized

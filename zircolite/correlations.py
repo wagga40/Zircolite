@@ -9,7 +9,7 @@ and the events behind it -- not an event from ``logs``.
 
 import re
 import sqlite3
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 PLAN_VERSION = 2
@@ -86,7 +86,7 @@ def plan_problem(plan: Any) -> str | None:
 def occurrence_iso(seconds: float) -> str | None:
     """Unix seconds as ISO 8601 UTC with milliseconds, or None past datetime's range."""
     try:
-        moment = datetime.fromtimestamp(seconds, timezone.utc)
+        moment = datetime.fromtimestamp(seconds, UTC)
     except (OverflowError, OSError, ValueError):
         return None
     return moment.strftime("%Y-%m-%dT%H:%M:%S.") + f"{moment.microsecond // 1000:03d}Z"

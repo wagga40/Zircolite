@@ -22,7 +22,7 @@ import threading
 from collections import deque
 from collections.abc import Sequence
 from contextlib import contextmanager
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import (
     Any,
@@ -111,7 +111,7 @@ def parse_timestamp(value: Any) -> datetime | None:
     if isinstance(value, (int, float)):
         seconds = value / 1000 if abs(value) >= _EPOCH_MS_THRESHOLD else value
         try:
-            return datetime.fromtimestamp(seconds, timezone.utc)
+            return datetime.fromtimestamp(seconds, UTC)
         except (OverflowError, OSError, ValueError):
             return None
 
@@ -130,8 +130,8 @@ def parse_timestamp(value: Any) -> datetime | None:
         text = text[:-1] + "+00:00"
     if len(text) > 10 and text[10] == " ":
         text = text[:10] + "T" + text[11:]
-    # Python 3.10's fromisoformat accepts only 3 or 6 fractional digits; Windows
-    # writes 7
+    # Six fractional digits: Windows writes seven, and fromisoformat rejects a
+    # dot with no digits after it
     dot = text.find(".")
     if dot != -1:
         end = dot + 1
@@ -144,8 +144,8 @@ def parse_timestamp(value: Any) -> datetime | None:
     except ValueError:
         return None
     if parsed.tzinfo is None:
-        return parsed.replace(tzinfo=timezone.utc)
-    return parsed.astimezone(timezone.utc)
+        return parsed.replace(tzinfo=UTC)
+    return parsed.astimezone(UTC)
 
 
 def load_field_mappings(

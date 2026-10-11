@@ -13,7 +13,7 @@ The mirror runs on one x86_64 Linux runner:
 | Workflow | GitHub | Forgejo |
 |---|---|---|
 | `lint_python` | ubuntu-latest | same |
-| `tests` | {ubuntu, windows, macos} × {3.10, 3.14} | ubuntu × {3.10, 3.14} — 2 of 6 legs |
+| `tests` | {ubuntu, windows, macos} × {3.11, 3.14} | ubuntu × {3.11, 3.14} — 2 of 6 legs |
 | `external_tests` | ubuntu-latest | same, on the host label; push and manual runs only, no `pull_request` |
 | `tests` (`viewer` job) | ubuntu-latest | same, in the Ubuntu job container |
 | `build_pyinstaller` | linux x64/arm64, windows x64/arm64, macOS arm64; verify on clean runners and older distributions; release | linux x64 build, binary tests and package smoke in one job — 1 of 5 legs, no release |

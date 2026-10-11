@@ -15,10 +15,10 @@ dependencies = [
     "jinja2>=2.11.3",
     "evtx>=0.6.2",
     "lxml>=4.9",
-    "pysigma>=1.5.1,<2",
+    "pysigma>=2.0.0,<3",
     "pysigma-pipeline-sysmon>=2.0.0",
     "pysigma-pipeline-windows>=2.0.0",
-    "pysigma-backend-sqlite>=2.0.0,<3",
+    "pysigma-backend-sqlite>=2.1.0,<3",
     "pyyaml>=6.0",
     "psutil>=5.9.0",
     "urllib3>=2.6.3",
@@ -30,7 +30,7 @@ dependencies = [
     "regex>=2024.11.6",
     "duckdb<2,>=1.5.6",
 ]
-requires-python = ">=3.10"
+requires-python = ">=3.11"
 readme = "README.md"
 license = "LGPL-3.0-or-later"
 
@@ -58,7 +58,7 @@ script = "setup.py"
 # RestrictedPython and PyInstaller both cap theirs below 3.16. PDM locks per
 # interpreter and uv ignores those caps, so requires-python itself stays open.
 [tool.poetry.dependencies]
-python = ">=3.10,<3.16"
+python = ">=3.11,<3.16"
 
 # uv reuses an editable build until one of these changes; without the kernel in
 # the list, `uv sync` would keep a kernel older than its source.
@@ -69,12 +69,14 @@ exclude-newer = "3 days"
 # Released in step with Zircolite by the same maintainer: holding it back only
 # holds a release back from the backend it was built against.
 exclude-newer-package = { pysigma-backend-sqlite = false }
+# See [tool.pdm.resolution.overrides].
+override-dependencies = ["pysigma>=2.0.0,<3"]
 
 [tool.ruff]
 # Without an explicit config ruff lints against whatever its current default
 # happens to be, so the result changed with the installed version and nobody
 # could tell a regression from an upgrade. Pin it.
-target-version = "py310"
+target-version = "py311"
 line-length = 100
 # Transform snippets are not modules: they are compiled by RestrictedPython
 # with `re`, `base64`, `chardet` and `math` injected into the sandbox, so a
@@ -91,7 +93,7 @@ extend-exclude = ["config/transforms", "tests/fixtures/transforms_pre_redos"]
 select = [
     "E", "W", "F",   # pycodestyle + pyflakes: real errors
     "I",             # import ordering
-    "UP",            # pyupgrade -- the floor is 3.10, so modern syntax applies
+    "UP",            # pyupgrade -- the floor is 3.11, so modern syntax applies
     "B",             # bugbear
     "SIM",           # simplifications
     "RUF",           # ruff-specific
@@ -130,12 +132,21 @@ ignore = [
 ]
 
 [tool.mypy]
+python_version = "3.11"
 ignore_missing_imports = true
 check_untyped_defs = true
 
 [[tool.mypy.overrides]]
 module = "tests.*"
 ignore_errors = true
+
+# The Windows and Sysmon pipeline releases still declare pysigma<2 but work
+# unchanged on pySigma 2, which pysigma-backend-sqlite 2.1 requires. Remove once
+# these are released (Poetry has no override, so it cannot resolve until then):
+# https://github.com/SigmaHQ/pySigma-pipeline-windows/pull/15
+# https://github.com/SigmaHQ/pySigma-pipeline-sysmon/pull/15
+[tool.pdm.resolution.overrides]
+pysigma = ">=2.0.0,<3"
 
 [dependency-groups]
 dev = [

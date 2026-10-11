@@ -15,8 +15,7 @@ down, including what the built binary reports.
 
 It needs the standard library, plus `packaging` to evaluate environment
 markers while it gathers the licences. PyInstaller depends on `packaging`, so
-any environment that can build the binary has it. Versions are read with
-regexes rather than tomllib, which Python 3.10 lacks.
+any environment that can build the binary has it.
 """
 
 from __future__ import annotations
@@ -34,6 +33,7 @@ import sys
 import sysconfig
 import tempfile
 import time
+import tomllib
 import zipfile
 from collections.abc import Callable, Iterator
 from pathlib import Path, PurePosixPath
@@ -103,16 +103,18 @@ def package_version(root: Path) -> str:
 
 
 def pyproject_version(root: Path) -> str:
-    """The [project] version. A regex, because tomllib only arrived in 3.11."""
+    """The [project] version."""
     source = root / "pyproject.toml"
-    table = re.search(r"^\[project\][ \t]*$(.*?)(?=^\[|\Z)",
-                      source.read_text(encoding="utf-8"), re.MULTILINE | re.DOTALL)
-    if not table:
+    try:
+        project = tomllib.loads(source.read_text(encoding="utf-8")).get("project")
+    except tomllib.TOMLDecodeError as exc:
+        raise PackagingError(f"{source} is not valid TOML: {exc}") from exc
+    if not isinstance(project, dict):
         raise PackagingError(f"no [project] table in {source}")
-    match = re.search(r"""^version\s*=\s*["']([^"']+)["']""", table.group(1), re.MULTILINE)
-    if not match:
+    version = project.get("version")
+    if not isinstance(version, str):
         raise PackagingError(f"no version in the [project] table of {source}")
-    return match.group(1)
+    return version
 
 
 def version_from_output(output: str) -> str:

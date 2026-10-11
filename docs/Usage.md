@@ -8,7 +8,7 @@ Zircolite runs on Linux, macOS and Windows. Pick one way to run it:
 |-------|-------|------------|
 | [Standalone binary](#standalone-binaries) | Nothing | Unzip, then run `./Zircolite` |
 | [Docker](#docker) | Docker | `docker pull wagga40/zircolite` |
-| [From source](#from-source) | Python 3.10+ and, ideally, a C compiler | `pdm install`, `uv sync` or `poetry install` |
+| [From source](#from-source) | Python 3.11+ and, ideally, a C compiler | `pdm install` or `uv sync` |
 
 The examples in this documentation run `python3 zircolite.py`. With a binary, use the path
 to the executable instead.
@@ -105,6 +105,10 @@ declares the dependencies and `pdm.lock` is the tracked lock file.
 | [PDM](https://pdm-project.org/latest/) | `pdm install` | `pdm run python3 zircolite.py …` |
 | [Poetry](https://python-poetry.org) 2.2+ | `poetry install` | `poetry run python3 zircolite.py …` |
 | [uv](https://docs.astral.sh/uv/) | `uv sync` | `uv run python3 zircolite.py …` |
+
+Poetry cannot resolve the dependencies for now: the Windows and Sysmon pySigma pipelines
+still declare `pysigma<2`, which the SQLite backend outgrew, and Poetry has no way to
+override a dependency's requirement. PDM and uv apply the override in `pyproject.toml`.
 
 ```shell
 git clone https://github.com/wagga40/Zircolite.git
