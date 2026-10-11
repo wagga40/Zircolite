@@ -22,7 +22,7 @@ Or run it from source:
 
 ```shell
 git clone https://github.com/wagga40/Zircolite.git && cd Zircolite
-pdm install                                        # or: uv sync / poetry install
+pdm install                                        # or: uv sync
 pdm run python3 zircolite.py --events <logs>
 ```
 

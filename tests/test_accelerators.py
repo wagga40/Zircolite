@@ -12,6 +12,7 @@ import re
 import sqlite3
 import subprocess
 import sys
+import tomllib
 from collections import Counter
 from contextlib import closing
 from copy import deepcopy
@@ -56,7 +57,6 @@ def test_runtime_dependencies_exclude_developer_tools():
 def test_every_supported_installer_compiles_the_kernel():
     # A hook that goes missing costs no correctness -- the Python kernel takes
     # over -- only the speed, so nothing else would notice.
-    tomllib = pytest.importorskip("tomllib")
     project = tomllib.loads((ROOT / "pyproject.toml").read_text(encoding="utf-8"))
     assert project["build-system"]["build-backend"] == "setuptools.build_meta"
     assert {"setuptools", "cython"} <= _requirement_names(project["build-system"]["requires"])
@@ -617,8 +617,6 @@ def test_literal_ids_above_32_bits_and_quoted_columns(event_database):
 
 
 def test_prefilter_preserves_runtime_pattern_errors(event_database):
-    if not hasattr(event_database, "setlimit"):
-        pytest.skip("sqlite3 runtime limits require Python 3.11+")
     event_database.setlimit(sqlite3.SQLITE_LIMIT_LIKE_PATTERN_LENGTH, 4)
     query = "SELECT * FROM logs WHERE text LIKE '%alpha%'"
     with closing(LiteralPrefilter(event_database, [{"rule": [query]}],

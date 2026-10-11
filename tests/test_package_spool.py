@@ -1,7 +1,7 @@
 """Stage one of a package: a working database's events copied to the spool."""
 
 import pickle
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from types import SimpleNamespace
 
 import orjson
@@ -24,7 +24,7 @@ from zircolite.spellings import record_spellings
 
 
 def us(text: str) -> int:
-    moment = datetime.fromisoformat(text).replace(tzinfo=timezone.utc)
+    moment = datetime.fromisoformat(text).replace(tzinfo=UTC)
     return int(moment.timestamp()) * 1_000_000 + moment.microsecond
 
 

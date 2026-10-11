@@ -440,7 +440,7 @@ def _write_markdown_file(
     passed = sum(1 for r in results if r.status == "pass")
     failed = sum(1 for r in results if r.status == "fail")
     skipped = sum(1 for r in results if r.status == "skip")
-    ts = datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
+    ts = datetime.datetime.now(datetime.UTC).strftime("%Y-%m-%d %H:%M:%S UTC")
 
     L: list[str] = []
 
@@ -551,7 +551,7 @@ def _write_results_file(
         })
 
     summary = {
-        "timestamp": datetime.datetime.now(datetime.timezone.utc).isoformat(),
+        "timestamp": datetime.datetime.now(datetime.UTC).isoformat(),
         "image": image_tag,
         "total": len(results),
         "passed": passed,

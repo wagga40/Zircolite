@@ -15,7 +15,7 @@ import string
 import zlib
 from collections.abc import Generator, Iterable
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any, BinaryIO
 
@@ -37,10 +37,10 @@ TYPE_BITS: dict[type, int] = {int: 1, float: 2, str: 4, bytes: 8}
 TIMESTAMP_SCALES = {"unix": 1_000_000, "unix_ms": 1_000, "unix_us": 1}
 
 _ASCII_LOWER = str.maketrans(string.ascii_uppercase, string.ascii_lowercase)
-_EPOCH = datetime(1970, 1, 1, tzinfo=timezone.utc)
+_EPOCH = datetime(1970, 1, 1, tzinfo=UTC)
 _MICROSECOND = timedelta(microseconds=1)
-_FIRST_US = (datetime(1, 1, 1, tzinfo=timezone.utc) - _EPOCH) // _MICROSECOND
-_LAST_US = (datetime(9999, 12, 31, 23, 59, 59, 999999, tzinfo=timezone.utc) - _EPOCH) // _MICROSECOND
+_FIRST_US = (datetime(1, 1, 1, tzinfo=UTC) - _EPOCH) // _MICROSECOND
+_LAST_US = (datetime(9999, 12, 31, 23, 59, 59, 999999, tzinfo=UTC) - _EPOCH) // _MICROSECOND
 
 
 class PackageError(Exception):

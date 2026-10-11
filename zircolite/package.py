@@ -13,7 +13,7 @@ import logging
 import os
 import zipfile
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from itertools import pairwise
 from pathlib import Path
 from typing import Any
@@ -369,7 +369,7 @@ def build_manifest(*, parts: list[PartRecord], columns: list[Column], run: RunIn
     return {
         "format": PACKAGE_FORMAT,
         "zircolite": run.zircolite_version,
-        "created": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "created": datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ"),
         "run": {
             "mode": run.mode, "executor": run.executor, "time_field": time_field,
             "timestamp_format": run.timestamp_format, "event_filter": "off: --package keeps every event",

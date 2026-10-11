@@ -155,7 +155,7 @@ def iter_tokens(sql: str) -> Iterator[tuple[str, int, int]]:
 def quote_sql_identifiers(sql: str) -> str:
     """Prevent SQLite from interpreting missing double-quoted names as strings.
 
-    Also works on Python 3.10/3.11, which cannot disable DQS via setconfig.
+    Also works on Python 3.11, which cannot disable DQS via setconfig.
     String literals and comments are preserved byte for byte.
     """
     try:
@@ -843,10 +843,9 @@ def rebalance_sql(sql: str) -> str:
     (``a OR b OR c OR ...``), whose parse-tree depth equals the number of terms.
     SQLite refuses anything past ``SQLITE_MAX_EXPR_DEPTH`` (1000 by default), so
     a rule listing a few thousand hashes never runs at all. The limit cannot be
-    raised from Python: ``sqlite3_limit`` clamps to the compile-time bound, and
-    ``Connection.setlimit`` only exists on Python 3.11+. Re-emitting the same
-    terms as a balanced binary tree brings the depth down to O(log n) without
-    touching the meaning of the expression.
+    raised from Python: ``sqlite3_limit`` clamps to the compile-time bound.
+    Re-emitting the same terms as a balanced binary tree brings the depth down
+    to O(log n) without touching the meaning of the expression.
 
     Returns ``sql`` unchanged whenever the statement's shape is not one this can
     rewrite safely. Emitting subtly wrong SQL would be far worse than leaving a
