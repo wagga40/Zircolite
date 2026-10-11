@@ -145,3 +145,42 @@ small multi-channel files show the per-rule costs of per-file runs, which census
 and lazy result spools remove. Compare configurations or checkouts with
 `tools/throughput-benchmark.py`, and time the rule phase alone with `-D` and
 `--performance-json`.
+
+## Text equality bounds and schema preflight (October 2026)
+
+This compares the [candidate filter](Internals.md#rule-execution) before and after it learned
+to bound text equality and to add missing rule fields before planning: commit `037144a`
+against the next one, with the 4,515-rule `rules_windows_merged.json` (SHA-256
+`8ea9b07f5fd35f37f6bf5e2430010ff8bb9160c2d072039a66a95ff29aabc9eb`). Both ran in the same
+environment: Python 3.14.8, SQLite 3.53.4, compiled flattening kernel, macOS on Apple
+Silicon (10 cores, 64 GiB). Times are medians of three interleaved passes, ranges in
+brackets; memory is the peak of the whole process tree. Multi-file runs use four process
+workers with automatic mode selection off. Every pass reported the same detections, down to
+each event's fields.
+
+| Corpus | Before | After | Peak RSS before / after | Matches |
+|---|---:|---:|---:|---:|
+| T001, 8 files (13.3 GiB) | 118.59 s (117.47–127.37) | 67.96 s (66.00–68.52) | 7,071 / 7,065 MiB | 264,200 |
+| T001 Sysmon file (142 MiB), sequential | 27.58 s (27.57–27.65) | 8.83 s (8.77–8.95) | 251 / 254 MiB | 13,905 |
+| HANCITOR, 4 files (478 MiB) | 11.90 s (11.78–11.94) | 11.17 s (11.04–11.27) | 1,252 / 1,275 MiB | 162,362 |
+| EVTX-ATTACK-SAMPLES, 278 files, per file | 12.10 s (11.95–12.46) | 12.10 s (12.04–12.14) | 730 / 735 MiB | 1,562 |
+
+Most of the gain is in rules such as `Image LIKE '%\cmd.exe' OR OriginalFileName='Cmd.Exe'`:
+the equality used to leave the whole condition unbounded. On the Sysmon file, 1,943 queries
+get candidates instead of 1,284, and the detection stage falls from 22.40 to 3.79 seconds.
+Over T001 the four workers spend 48.0 seconds in detection instead of 208.6, and 50.0 in
+building candidates instead of 41.5, since more columns are indexed. Ingestion, at 108
+seconds, is now the larger cost. The attack samples are below the filter's 1,000-event
+threshold, so nothing changes for them; HANCITOR has a single channel and few such rules.
+
+Reproduce a row against a checkout of the earlier commit (copy the compiled kernel into it):
+
+```shell
+pdm run python tools/throughput-benchmark.py \
+  --events samples/T001-04062021 --ruleset rules/rules_windows_merged.json \
+  --variants baseline current --baseline-root /path/to/037144a \
+  --modes process --workers 4 --passes 3
+```
+
+The Sysmon row uses `--events 'samples/T001-04062021/Microsoft-Windows-Sysmon%4Operational.evtx'`
+and `--modes sequential`.

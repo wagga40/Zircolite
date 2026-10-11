@@ -58,11 +58,12 @@ from .correlations import (
 )
 from .formats import json_array_requested
 from .performance import FileMetrics, timed_stage
-from .prefilter import prepare_rules, rule_queries
+from .prefilter import AUTO_MIN_QUERIES, AUTO_MIN_ROWS, prepare_rules, rule_queries
 from .results import RowSpool, write_result_json
 from .shutdown import is_shutdown_requested
 from .spellings import FieldSpellings, drop_spellings
 from .sqlscan import (
+    _ASCII_LOWER,
     admitted_pairs,
     census_collations_supported,
     normalize_rule_sql,
@@ -779,9 +780,13 @@ class ZircoliteCore:
         return scan_query(query).columns
 
     def _logs_columns(self) -> set[str]:
-        """Lowercased column names of the logs table, cached between rules."""
+        """Column names of the logs table, cached between rules.
+
+        Folded like SQLite folds identifiers, ASCII only: "É" and "é" are two
+        columns.
+        """
         if self._logs_columns_lower is None:
-            self._logs_columns_lower = {c.lower() for c in self._get_table_columns()}
+            self._logs_columns_lower = {c.translate(_ASCII_LOWER) for c in self._get_table_columns()}
         return self._logs_columns_lower
 
     def _field_spellings(self) -> FieldSpellings | None:
@@ -812,8 +817,12 @@ class ZircoliteCore:
         field of a ``|fieldref|contains``, so both sources are used.
         """
         columns = self._logs_columns()
-        names = dict.fromkeys([*sorted(self._query_columns(query)), *required])
-        missing = [c for c in names if c.lower() not in columns]
+        names: dict[str, str] = {}
+        for name in (*sorted(self._query_columns(query)), *required):
+            # SQL and backend metadata can spell the same absent field with
+            # different case. SQLite accepts only one of those columns.
+            names.setdefault(name.translate(_ASCII_LOWER), name)
+        missing = [name for key, name in names.items() if key not in columns]
         if not missing:
             return False
         cursor = self._get_cursor()
@@ -828,8 +837,71 @@ class ZircoliteCore:
                 self.logger.debug(f"Could not add column {name}: {exc}")
                 self._logs_columns_lower = None
                 return False
-            columns.add(name.lower())
+            columns.add(name.translate(_ASCII_LOWER))
         return True
+
+    def _preflight_rule_fields(
+        self, rules: Sequence[dict[str, Any]], census: dict[tuple, int] | None
+    ) -> None:
+        """Expose backend-declared missing fields before compiling candidates.
+
+        All-or-nothing: exhausting SQLite's column limit here must not take
+        slots away from earlier rules that still need the lazy repair path.
+        CSV headers observe the schema at the first match; correlation plans
+        manage their own fields through the backend runtime. Both retain the
+        ordinary repair order.
+        """
+        conn = self.db_connection
+        if conn is None or self.csv_mode:
+            return
+        if self.rule_prefilter == "auto":
+            # Below the automatic thresholds no candidates are built, so the
+            # rules keep the ordinary repair path.
+            if len(rule_queries(rules)) < AUTO_MIN_QUERIES:
+                return
+            if census is not None:
+                rows = sum(census.values())
+            else:
+                with closing(conn.execute("SELECT count(*) FROM logs")) as cursor:
+                    rows = cursor.fetchone()[0]
+            if rows < AUTO_MIN_ROWS:
+                return
+        missing: dict[str, str] = {}
+        columns = self._logs_columns()
+        for rule in rules:
+            if rule.get("correlation_plan") is not None:
+                return
+            required = rule.get("required_fields")
+            if not isinstance(required, (list, tuple)):
+                # A legacy rule may need the remaining column slots first.
+                # Without complete metadata keep the original repair order.
+                return
+            for name in required:
+                if not isinstance(name, str):
+                    continue
+                key = name.translate(_ASCII_LOWER)
+                if key not in columns:
+                    # Bare, these names already mean SQLite's implicit row ID
+                    # or a boolean. A column of the same name would change
+                    # what a query that runs today compares.
+                    if key in {"rowid", "oid", "_rowid_", "true", "false"}:
+                        return
+                    missing.setdefault(key, name)
+        if not missing:
+            return
+        try:
+            conn.execute("SAVEPOINT zircolite_schema_preflight")
+            try:
+                if not self._widen_logs_table("", tuple(missing.values())):
+                    conn.execute("ROLLBACK TO zircolite_schema_preflight")
+            finally:
+                conn.execute("RELEASE zircolite_schema_preflight")
+        except sqlite3.Error as exc:
+            self.logger.debug(f"Schema preflight bypassed: {exc}")
+        finally:
+            # A failed ALTER may have been rolled back, and the connection is
+            # reused for the next file with a different schema.
+            self._logs_columns_lower = None
 
     def _note_broken_rule(
         self, rule_title: str | None, error: Exception | str
@@ -1443,8 +1515,10 @@ class ZircoliteCore:
                 from .prefilter import LiteralPrefilter
 
                 with self.metrics.stage("prefilter"):
+                    admitted_rules = [rule for rule, run in zip(self.ruleset, may_run, strict=True) if run]
+                    self._preflight_rule_fields(admitted_rules, census)
                     self._prefilter = LiteralPrefilter(
-                        self.db_connection, [rule for rule, run in zip(self.ruleset, may_run, strict=True) if run],
+                        self.db_connection, admitted_rules,
                         automatic=self.rule_prefilter == "auto", prepared=self._prepared, census=census,
                     )
                 self.logger.debug(

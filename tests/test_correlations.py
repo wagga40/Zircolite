@@ -94,6 +94,28 @@ def temp_tables(core):
 
 @pytest.mark.requires_sigma
 @needs_json_sqlite
+def test_prefilter_preserves_correlation_repair_order_at_column_limit(tmp_path, make_core):
+    selection = base()
+    selection["detection"] = {"s": {"Absent|exists": False}, "condition": "s"}
+    rules = convert(tmp_path, [selection, correlation()])
+    ordinary = {"title": "ordinary", "id": "ordinary", "level": "high",
+                "rule": ["SELECT * FROM logs WHERE Other1 IS NULL AND Other2 IS NULL"],
+                "required_fields": ["Other1", "Other2"]}
+    outcomes = []
+    for mode in ("off", "literal"):
+        core = make_core([event(0), event(1)], rule_prefilter=mode)
+        for i in range(24):
+            core.db_connection.execute(f"ALTER TABLE logs ADD COLUMN f{i} TEXT")
+        core.db_connection.setlimit(sqlite3.SQLITE_LIMIT_COLUMN, 32)
+        core.ruleset = [*rules, ordinary]
+        core.execute_ruleset(str(tmp_path / "unused.json"), keep_results=True,
+                             disable_progress=True, show_table=False)
+        outcomes.append(([(r["title"], r["count"]) for r in core.full_results], set(core.rules_in_error)))
+    assert outcomes[0] == outcomes[1] == ([("burst", 1)], {"ordinary"})
+
+
+@pytest.mark.requires_sigma
+@needs_json_sqlite
 class TestCorrelationPlansRun:
     def test_event_count_reports_an_alert_with_its_evidence(self, tmp_path, make_core):
         rules = convert(tmp_path, [base(), correlation()])

@@ -1,4 +1,4 @@
-"""Conservative literal candidates for SQLite's built-in LIKE operator.
+"""Conservative literal candidates for SQLite LIKE and text equality.
 
 This is an accelerator, never an evaluator. Every returned candidate still
 passes the original WHERE clause. None denotes the universe of rows, so an
@@ -6,9 +6,10 @@ unknown predicate cannot accidentally narrow a rule.
 """
 
 import sqlite3
-from collections import defaultdict
+import sys
+from collections import OrderedDict, defaultdict
 from contextlib import closing
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from functools import lru_cache
 from typing import Any
 
@@ -21,6 +22,7 @@ from .sqlscan import (
     _unquote,
     _Unsupported,
     admitted_pairs,
+    census_collations_supported,
     iter_tokens,
     normalize_rule_sql,
     rebalance_sql,
@@ -152,6 +154,15 @@ class _Reader:
             raise _Unsupported("complex LIKE")
         if len(atom) not in (3, 5) or atom[0][0] not in ("word", "name"):
             return None
+        if atom[1] == ("punct", "=") and atom[2][0] == "literal":
+            if len(atom) == 5 and atom[3:] != [("word", "COLLATE"), ("word", "NOCASE")]:
+                return None
+            value = atom[2][1]
+            if "\x00" in value or len(value) > 4096 or not _selective(value):
+                return None
+            # Keep affinity-dependent predicates distinct in the shared syntax
+            # cache. Only a per-database binding can turn them into literals.
+            return ("equality", (atom[0][1].translate(_ASCII_FOLD), value.translate(_ASCII_FOLD)))
         if atom[1] != ("word", "LIKE") or atom[2][0] != "literal":
             return None
         if len(atom[2][1].encode("utf-8")) > 4096:
@@ -248,6 +259,56 @@ def _leaves(expression):
             yield from _leaves(node)
 
 
+def _bind_equalities(expression: Any, text_columns: set[str]) -> Any:
+    """Use equality's necessary substring only where SQLite compares text.
+
+    Numeric affinity can equate '001' with 1. Unsupported equality therefore
+    means universe, including in OR branches, rather than an empty posting.
+    """
+    kind, value = expression
+    if kind == "literal":
+        return expression
+    if kind == "equality":
+        return ("literal", value) if value[0] in text_columns else None
+    return _combine(kind, tuple(_bind_equalities(node, text_columns) for node in value))
+
+
+def _bind_plan(plan: LiteralPlan, text_columns: set[str], known: dict[str, str]) -> LiteralPlan | None:
+    """``plan`` bound to this table, or None if no column here can bound it."""
+    expression = _bind_equalities(plan.expression, text_columns)
+    if expression is None or any(column not in known for column, _ in _leaves(expression)):
+        return None
+    return replace(plan, expression=expression)
+
+
+class _ValueMatches:
+    """One automaton's LRU; byte shares sum to the build's total cache budget."""
+
+    def __init__(self, automaton: Any, max_bytes: int) -> None:
+        self.automaton = automaton
+        self.max_bytes = max_bytes
+        self.bytes = 0
+        self.values: OrderedDict[str, tuple[tuple[str, ...], int]] = OrderedDict()
+
+    def matches(self, value: str) -> tuple[str, ...]:
+        cacheable = len(value) <= 1024 and self.max_bytes > 0
+        if cacheable and value in self.values:
+            self.values.move_to_end(value)
+            return self.values[value][0]
+        matched = tuple({literal for _, literal in self.automaton.iter(value.translate(_ASCII_FOLD))})
+        if cacheable:
+            # Literal strings already belong to the automaton. Count the value,
+            # references and a conservative allowance for dict/LRU bookkeeping.
+            size = sys.getsizeof(value) + sys.getsizeof(matched) + 256
+            if size <= self.max_bytes:
+                while self.values and (len(self.values) >= 512 or self.bytes + size > self.max_bytes):
+                    _, (_, removed) = self.values.popitem(last=False)
+                    self.bytes -= removed
+                self.values[value] = (matched, size)
+                self.bytes += size
+        return matched
+
+
 def _evaluate(expression, postings, uncertain=None):
     if expression[0] == "literal":
         found = postings.get(expression[1])
@@ -301,7 +362,8 @@ class LiteralPrefilter:
     """One bounded candidate index for one ruleset execution over stable logs."""
 
     def __init__(self, connection, rules, *, automatic=False, automaton_factory=None, bitmap_factory=None,
-                 max_postings=None, max_pattern_chars=1_000_000, prepared=None, census=None):
+                 max_postings=None, max_pattern_chars=1_000_000, prepared=None, census=None,
+                 max_cache_bytes=8 * 1024 * 1024):
         self.connection = connection
         self.plans: dict[str, LiteralPlan] = {}
         self.postings: dict[tuple[str, str], Any] = {}
@@ -322,14 +384,14 @@ class LiteralPrefilter:
             if automatic and len(rule_queries(rules)) < AUTO_MIN_QUERIES:
                 self.reason = "too few queries for automatic filtering"
                 return
-            self._build(rules, max_postings, max_pattern_chars, automatic)
+            self._build(rules, max_postings, max_pattern_chars, automatic, max_cache_bytes)
         except (sqlite3.Error, ValueError, TypeError, OverflowError, MemoryError, RecursionError) as exc:
             self.reason = str(exc)
             self.plans.clear()
             self.postings.clear()
             self.uncertain.clear()
 
-    def _build(self, rules, max_postings, max_pattern_chars, automatic):
+    def _build(self, rules, max_postings, max_pattern_chars, automatic, max_cache_bytes):
         conn = self.connection
         with closing(conn.execute("PRAGMA table_info(logs)")) as cursor:
             columns = cursor.fetchall()
@@ -354,6 +416,17 @@ class LiteralPrefilter:
             self.reason = "negative event IDs"
             return
         known = {name.translate(_ASCII_FOLD): name for _, name, *_ in columns}
+        # PRAGMA table_info exposes declared types but not collations. Fail
+        # closed for the whole table if an imported schema has RTRIM/custom
+        # collation, while LIKE bounds remain available independently.
+        text_columns = set()
+        with closing(conn.execute("SELECT sql FROM sqlite_master WHERE type='table' AND name='logs'")) as cursor:
+            schema = cursor.fetchone()
+        if schema and schema[0] and census_collations_supported(schema[0]):
+            text_columns = {
+                name.translate(_ASCII_FOLD) for _, name, typ, *_ in columns
+                if "INT" not in typ.upper() and any(part in typ.upper() for part in ("CHAR", "CLOB", "TEXT"))
+            }
         like_limit = conn.getlimit(sqlite3.SQLITE_LIMIT_LIKE_PATTERN_LENGTH)
         patterns = defaultdict(set)
         queries = rule_queries(rules)
@@ -363,12 +436,20 @@ class LiteralPrefilter:
             plan = _plan_for(text)
             if plan is None or plan.sql in self.plans or plan.max_literal_bytes > like_limit:
                 continue
+            # Binding is cheap and compiling the WHERE clause is not, so a plan
+            # with nothing to bound it on this table never reaches SQLite.
+            bound = _bind_plan(plan, text_columns, known)
+            if bound is None:
+                continue
+            runnable = self._runnable_plan(plan, text)
+            if runnable is None:
+                continue
+            if runnable is not plan:
+                bound = _bind_plan(runnable, text_columns, known)
+                if bound is None:
+                    continue
+            plan = bound
             leaves = set(_leaves(plan.expression))
-            if any(column not in known for column, _ in leaves):
-                continue
-            plan = self._runnable_plan(plan, text)
-            if plan is None:
-                continue
             self.plans[plan.sql] = plan
             self._partition_rows[plan.sql] = self._rows_within_bounds(plan.sql)
             for column, literal in leaves:
@@ -399,6 +480,8 @@ class LiteralPrefilter:
             automata[column] = automaton
             self.uncertain[column] = self.bitmap_factory()
         selected = tuple(automata)
+        caches = {column: _ValueMatches(automaton, max_cache_bytes // len(selected))
+                  for column, automaton in automata.items()}
         quoted = ', '.join('"' + known[column].replace('"', '""') + '"' for column in selected)
         if selected:
             with closing(conn.execute(f"SELECT row_id, {quoted} FROM logs")) as cursor:  # noqa: S608
@@ -411,8 +494,8 @@ class LiteralPrefilter:
                     column_values = iter(zip(*rows, strict=True))
                     row_ids = next(column_values)
                     for column, values in zip(selected, column_values, strict=True):
-                        automaton = automata.get(column)
-                        if automaton is None:
+                        cache = caches.get(column)
+                        if cache is None:
                             continue
                         for row_id, value in zip(row_ids, values, strict=True):
                             if value is None:
@@ -421,7 +504,7 @@ class LiteralPrefilter:
                                 self.uncertain[column].add(row_id)
                                 added = 1
                             else:
-                                matched = {literal for _, literal in automaton.iter(value.translate(_ASCII_FOLD))}
+                                matched = cache.matches(value)
                                 for literal in matched:
                                     self.postings[column, literal].add(row_id)
                                 added = len(matched)
@@ -430,6 +513,7 @@ class LiteralPrefilter:
                             if count > max_postings:
                                 self.skipped_columns[column] = "literal posting budget exceeded"
                                 del automata[column]
+                                del caches[column]
                                 del self.uncertain[column]
                                 for literal in patterns[column]:
                                     del self.postings[column, literal]
