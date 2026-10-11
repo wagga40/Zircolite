@@ -536,11 +536,12 @@ SQLite prices rows by column count and starts abandoning selective indexes.
 
 Keyword rules from pySigma's SQLite backend search a `_sigma_fulltext` column holding the
 backend's `source-values-v1` text: every decoded scalar of the source event, dictionaries in
-key order, one value per line. `fulltext.source_values` builds it in
-`StreamingEventProcessor._flatten_event` before the event is flattened, and only when a
-loaded rule or correlation plan carries `fulltext` requirements. Every value is then held
-twice: on the 142 MiB T001 Sysmon log, one keyword rule beside `rules_windows_merged.json`
-took a sequential run from 8.2 to 10.1 seconds and its peak memory from 256 to 353 MiB.
+key order, one value per line. `source_values`, compiled with the flattening
+kernel, builds it in `StreamingEventProcessor._flatten_event` before the event is flattened,
+and only when a loaded rule or correlation plan carries `fulltext` requirements. Every value
+is then held twice: on the 142 MiB T001 Sysmon log, one keyword rule beside
+`rules_windows_merged.json` takes a sequential run from 3.8 to 5.0 seconds and its peak
+memory from 245 to 324 MiB.
 
 The text cannot be rebuilt from the flattened columns, so it is never invented:
 

@@ -255,3 +255,27 @@ def flatten_event(self, event_dict: dict, filename: str) -> dict | None:
                     return None
 
     return json_line
+
+
+def source_values(event: Any) -> str:
+    """Keyword search text: every decoded scalar, keys in order, one per line.
+
+    The backend's ``source-values-v1`` representation, built before mapping or
+    flattening. Iterative, and indifferent to key names: what an event contains
+    must never be a reason to drop it.
+    """
+    values: list[str] = []
+    stack: list[Any] = [event]
+    while stack:
+        node = stack.pop()
+        if isinstance(node, dict):
+            stack.extend(node[key] for key in sorted(node, reverse=True))
+        elif isinstance(node, (list, tuple)):
+            stack.extend(reversed(node))
+        elif isinstance(node, str):
+            values.append(node)
+        elif isinstance(node, bool):
+            values.append("true" if node else "false")
+        elif node is not None and isinstance(node, (int, float)):
+            values.append(str(node))
+    return "\n".join(values)

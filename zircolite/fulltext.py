@@ -3,32 +3,13 @@
 import sqlite3
 from typing import Any
 
+from .flatten_kernel import source_values
+
 FIELD = "_sigma_fulltext"
 PROVENANCE = "_zircolite_fulltext"
 REPRESENTATION = "source-values-v1"
 
-
-def source_values(event: Any) -> str:
-    """Serialize decoded scalar leaves before metadata, mapping or flattening.
-
-    Iterative, and indifferent to key names: what an event contains must never
-    be a reason to drop it.
-    """
-    values: list[str] = []
-    stack: list[Any] = [event]
-    while stack:
-        node = stack.pop()
-        if isinstance(node, dict):
-            stack.extend(node[key] for key in sorted(node, reverse=True))
-        elif isinstance(node, (list, tuple)):
-            stack.extend(reversed(node))
-        elif isinstance(node, str):
-            values.append(node)
-        elif isinstance(node, bool):
-            values.append("true" if node else "false")
-        elif node is not None and isinstance(node, (int, float)):
-            values.append(str(node))
-    return "\n".join(values)
+__all__ = ["FIELD", "PROVENANCE", "REPRESENTATION", "source_values"]
 
 
 def _provenance_exists(connection: sqlite3.Connection) -> bool:
