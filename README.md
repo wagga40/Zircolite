@@ -33,11 +33,34 @@ offline, in one command.
 
 ## Install
 
-| Route | How |
-|-------|-----|
-| **Standalone binary**, nothing to install | Download the zip for your platform from the [releases](https://github.com/wagga40/Zircolite/releases): Linux x64 and ARM64, macOS Apple silicon, Windows x64 and ARM64 |
-| **Docker** | `docker pull wagga40/zircolite:latest` |
-| **From source**, Python 3.11+ | `git clone https://github.com/wagga40/Zircolite.git && cd Zircolite && pdm install` (or `uv sync`) |
+**Standalone binary**, nothing to install: download the zip for your platform from the
+[releases](https://github.com/wagga40/Zircolite/releases) (Linux x64 and ARM64, macOS Apple
+silicon, Windows x64 and ARM64).
+
+**Docker**:
+
+```shell
+docker pull wagga40/zircolite:latest
+```
+
+**From source** with [PDM](https://pdm-project.org/latest/), Python 3.11 to 3.14:
+
+```shell
+git clone https://github.com/wagga40/Zircolite.git
+cd Zircolite
+pdm use -f 3.14
+pdm install
+```
+
+`pdm use` keeps PDM away from Python 3.15 and free-threaded builds, which are
+[not supported yet](docs/Usage.md#from-source). Any of 3.11 to 3.13 works as well;
+`pdm python install 3.14` adds a 3.14 if there is none. With [uv](https://docs.astral.sh/uv/):
+
+```shell
+git clone https://github.com/wagga40/Zircolite.git
+cd Zircolite
+uv sync --python 3.14+gil
+```
 
 Source installs compile a native flattening kernel and need a C compiler for it; without
 one they fall back to a slower Python kernel. See

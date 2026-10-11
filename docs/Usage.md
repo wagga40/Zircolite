@@ -8,7 +8,7 @@ Zircolite runs on Linux, macOS and Windows. Pick one way to run it:
 |-------|-------|------------|
 | [Standalone binary](#standalone-binaries) | Nothing | Unzip, then run `./Zircolite` |
 | [Docker](#docker) | Docker | `docker pull wagga40/zircolite` |
-| [From source](#from-source) | Python 3.11+ and, ideally, a C compiler | `pdm install` or `uv sync` |
+| [From source](#from-source) | Python 3.11 to 3.14 and, ideally, a C compiler | `pdm install` or `uv sync` |
 
 The examples in this documentation run `python3 zircolite.py`. With a binary, use the path
 to the executable instead.
@@ -121,6 +121,24 @@ Each tool manages its own virtual environment: activate it, or prefix commands a
 table. All three install the `dev` group (tests, linters, PyInstaller); `pdm install --prod`,
 `uv sync --no-dev` or `poetry install --without dev` leave it out. Once the environment is
 active, `python3 -m zircolite` works from any directory.
+
+Python 3.15 and free-threaded builds such as `python3.14t` are not supported yet: duckdb
+and google-re2 publish no wheels for them, so the install compiles them from source.
+duckdb's build runs for minutes without output, and google-re2's fails without the abseil
+headers. Left to choose, PDM and uv can pick either kind, so name the interpreter. To PDM,
+`3.14` means the standard build; `pdm python install 3.14` adds one if there is none:
+
+```shell
+pdm use -f 3.14
+pdm install
+```
+
+To uv, a plain `3.14` also matches `3.14t`; `+gil` excludes it, and uv downloads a 3.14 if
+there is none:
+
+```shell
+uv sync --python 3.14+gil
+```
 
 Windows ARM64 has no `evtx` package on PyPI; see
 [Internals → Windows ARM64](Internals.md#windows-arm64), or use a binary.
