@@ -57,6 +57,14 @@ from .correlations import (
     plan_problem,
 )
 from .formats import json_array_requested
+from .fulltext import (
+    FIELD,
+    clean,
+    ensure_provenance,
+    require_provenance,
+    reset_provenance,
+    source_values,
+)
 from .performance import FileMetrics, timed_stage
 from .prefilter import AUTO_MIN_QUERIES, AUTO_MIN_ROWS, prepare_rules, rule_queries
 from .results import RowSpool, write_result_json
@@ -222,6 +230,8 @@ class ZircoliteCore:
         "_cursor",
         "_disk_working",
         "_escape_cache",
+        "_fulltext_revision",
+        "_fulltext_validated",
         "_has_correlation_plans",
         "_logs_columns_lower",
         "_prefilter",
@@ -245,6 +255,7 @@ class ZircoliteCore:
         "first_json_output",
         "flatten_backend",
         "full_results",
+        "fulltext_capture",
         "limit",
         "logger",
         "metrics",
@@ -293,6 +304,9 @@ class ZircoliteCore:
         self._disk_working = proc.working_db == "disk"
         self.sqlite_cache_mib = proc.sqlite_cache_mib
         self.flatten_backend = proc.flatten_backend
+        self.fulltext_capture = proc.fulltext_capture
+        self._fulltext_revision = 0
+        self._fulltext_validated: set[tuple] = set()
         self.rule_prefilter = proc.rule_prefilter
         if self.flatten_backend == "cython":
             from .streaming import select_flatten_kernel
@@ -504,8 +518,11 @@ class ZircoliteCore:
 
     def create_db(self, field_stmt: str) -> None:
         """Create the database table with the specified field statement."""
-        cleaned_field_stmt = field_stmt.strip()
-        cleaned_field_stmt = cleaned_field_stmt.removesuffix(',')
+        cleaned_field_stmt = field_stmt.strip().removesuffix(',')
+        if self.fulltext_capture:
+            if re.search(r'(?i)(?<![A-Za-z0-9_])(?:"_sigma_fulltext"|`_sigma_fulltext`|\[_sigma_fulltext\]|_sigma_fulltext)(?![A-Za-z0-9_])', cleaned_field_stmt):
+                raise ValueError(f"Schema uses reserved keyword-search name {FIELD}")
+            cleaned_field_stmt = ', '.join(filter(None, (cleaned_field_stmt, '"_sigma_fulltext" TEXT')))
         if cleaned_field_stmt:
             create_table_stmt = f"CREATE TABLE logs ( row_id INTEGER PRIMARY KEY AUTOINCREMENT, {cleaned_field_stmt} );"
         else:
@@ -532,6 +549,8 @@ class ZircoliteCore:
         self._cursor = None
         self._logs_columns_lower = None
         self._auto_index_applied = False
+        self._fulltext_revision += 1
+        self._fulltext_validated.clear()
         conn = self.db_connection
         if conn is None:
             return
@@ -541,6 +560,8 @@ class ZircoliteCore:
             # next file's, which numbers its rows from one again.
             if not conn.in_transaction:
                 conn.execute("BEGIN")
+            if self.fulltext_capture:
+                reset_provenance(conn)
             conn.execute("DROP TABLE IF EXISTS logs")
             drop_spellings(conn)
             conn.execute("COMMIT")
@@ -631,7 +652,7 @@ class ZircoliteCore:
                 if isinstance(sql_query, str):
                     referenced |= scan_query(sql_query).columns
             for candidate in referenced:
-                if candidate.lower() in already_indexed_lower:
+                if candidate.lower() == FIELD or candidate.lower() in already_indexed_lower:
                     continue
                 actual = columns_by_lower.get(candidate.lower())
                 if actual is None:
@@ -819,9 +840,14 @@ class ZircoliteCore:
         columns = self._logs_columns()
         names: dict[str, str] = {}
         for name in (*sorted(self._query_columns(query)), *required):
+            key = name.translate(_ASCII_LOWER)
+            # Keyword text cannot be made up after ingestion: as a NULL column
+            # it would let a keyword rule run and match nothing.
+            if key == FIELD:
+                continue
             # SQL and backend metadata can spell the same absent field with
             # different case. SQLite accepts only one of those columns.
-            names.setdefault(name.translate(_ASCII_LOWER), name)
+            names.setdefault(key, name)
         missing = [name for key, name in names.items() if key not in columns]
         if not missing:
             return False
@@ -876,11 +902,18 @@ class ZircoliteCore:
                 # A legacy rule may need the remaining column slots first.
                 # Without complete metadata keep the original repair order.
                 return
+            if rule.get("fulltext"):
+                # The backend checks the searchable text before any other
+                # field is added. A rule without it is reported when it runs.
+                try:
+                    self._validate_fulltext(rule["fulltext"])
+                except (ValueError, sqlite3.Error):
+                    continue
             for name in required:
                 if not isinstance(name, str):
                     continue
                 key = name.translate(_ASCII_LOWER)
-                if key not in columns:
+                if key not in columns and key != FIELD:
                     # Bare, these names already mean SQLite's implicit row ID
                     # or a boolean. A column of the same name would change
                     # what a query that runs today compares.
@@ -977,11 +1010,15 @@ class ZircoliteCore:
                     # turns a rule SQLite accepts into one reported as broken.
                     cursor.execute(query)
                 col_names = [d[0] for d in cursor.description]
+                # The searchable text is private to keyword rules.
+                private = next((name for name in col_names if name.translate(_ASCII_LOWER) == FIELD), None)
                 spellings = self._field_spellings()
                 remaining = max_rows
                 while rows := cursor.fetchmany(256 if remaining is None else min(256, remaining)):
                     for row in rows:
                         event = {k: v for k, v in zip(col_names, row, strict=True) if v is not None}
+                        if private is not None:
+                            event.pop(private, None)
                         yield event if spellings is None else spellings.restore(event)
                     if remaining is not None:
                         remaining -= len(rows)
@@ -1040,6 +1077,8 @@ class ZircoliteCore:
         self._auto_index_applied = False
         self._logs_columns_lower = None
         self._forget_spellings()
+        self._fulltext_revision += 1
+        self._fulltext_validated.clear()
 
     def escape_identifier(self, identifier: str) -> str:
         """Escape SQL identifiers like table or column names with caching."""
@@ -1074,8 +1113,18 @@ class ZircoliteCore:
         if conn is None:
             return False
 
+        if self.fulltext_capture:
+            batch = [dict(row, **{FIELD: source_values(row)}) for row in batch]
+            try:
+                ensure_provenance(conn)
+            except sqlite3.Error as exc:
+                self.logger.debug(f"    [-] {exc}")
+                return False
+
+        transaction_started = False
         try:
             conn.execute('BEGIN TRANSACTION')
+            transaction_started = True
 
             # Group rows by their column signatures
             batches_by_columns: dict[tuple[str, ...], list[dict[str, Any]]] = {}
@@ -1110,9 +1159,12 @@ class ZircoliteCore:
                 conn.executemany(insert_stmt, values_list)
 
             conn.execute('COMMIT')
+            self._fulltext_revision += 1
+            self._fulltext_validated.clear()
             return True
         except Exception as e:
-            conn.execute('ROLLBACK')
+            if transaction_started:
+                conn.execute('ROLLBACK')
             self.logger.debug(f"    [-] {e}")
             return False
 
@@ -1133,6 +1185,20 @@ class ZircoliteCore:
             on_disk_db.execute("PRAGMA journal_mode = DELETE")
         finally:
             on_disk_db.close()
+
+    def _validate_fulltext(self, requirements: Any) -> None:
+        if self.db_connection is None:
+            raise ValueError("Keyword search has no database; re-ingest events")
+        from sigma.backends.sqlite import runtime
+
+        # The backend owns requirement shape and TEXT coverage validation.
+        # The revision cache avoids scanning all rows for every keyword rule.
+        key = (self._fulltext_revision, repr(requirements))
+        if key in self._fulltext_validated:
+            return
+        runtime.validate_fulltext(self.db_connection, requirements)
+        require_provenance(self.db_connection, requirements)
+        self._fulltext_validated.add(key)
 
     def execute_rule(self, rule: dict[str, Any]) -> dict[str, Any]:
         return self._execute_rule(rule)
@@ -1157,6 +1223,12 @@ class ZircoliteCore:
         seen_ids = BitMap64() if len(sigma_queries) > 1 else None
         rule_title = rule.get("title", "Unnamed Rule")
         required = [field for field in rule.get("required_fields") or () if isinstance(field, str)]
+        if rule.get("schema_version") == 3:
+            try:
+                self._validate_fulltext(rule.get("fulltext"))
+            except (ValueError, sqlite3.Error) as exc:
+                self._note_broken_rule(rule_title, exc)
+                return {}
         try:
             for sql_query in sigma_queries:
                 checkpoint = filtered_rows.checkpoint() if isinstance(filtered_rows, RowSpool) else len(filtered_rows)
@@ -1237,8 +1309,10 @@ class ZircoliteCore:
         # lets Ctrl+C stop it instead of waiting for the next rule.
         conn.set_progress_handler(is_shutdown_requested, 10_000)
         try:
+            preflight = {"fulltext_preflight": self._validate_fulltext} if plan.get("version") == 3 else {}
             rows, diagnostics = execute_plan(
-                conn, plan, limit=None if self.limit == -1 else self.limit, include_events=True
+                conn, plan, limit=None if self.limit == -1 else self.limit,
+                include_events=True, **preflight,
             )
         except sqlite3.Error as exc:
             if not is_shutdown_requested():
@@ -1268,7 +1342,8 @@ class ZircoliteCore:
         matches: RowSpool | list[dict[str, Any]] = RowSpool() if stream_rows else []
         try:
             for alert in alerts:
-                matches.append(sanitize_row_for_csv(alert) if self.csv_mode else alert)
+                safe_alert = clean(alert)
+                matches.append(sanitize_row_for_csv(safe_alert) if self.csv_mode else safe_alert)
         except BaseException:
             if isinstance(matches, RowSpool):
                 matches.close()
@@ -1309,6 +1384,8 @@ class ZircoliteCore:
         self.ruleset = runnable_rules(self.ruleset, rule_filters)
         self._prepared = prepare_rules(rule_queries(self.ruleset))
         self._has_correlation_plans = any(is_correlation_plan_rule(rule) for rule in self.ruleset)
+        if any(rule.get("fulltext") for rule in self.ruleset):
+            self.fulltext_capture = True
 
     @timed_stage("output")
     def _write_result_to_output(
@@ -1404,7 +1481,7 @@ class ZircoliteCore:
         except sqlite3.Error as exc:
             self.logger.debug(f"Could not read the logs schema for the CSV header: {exc}")
             columns = []
-        columns = [c for c in columns if c != "row_id"]
+        columns = [c for c in columns if c != "row_id" and c.translate(_ASCII_LOWER) != FIELD]
         spellings = self._field_spellings()
         if columns and spellings is not None:
             # Rows keep their own spelling, so each spelling needs its own column.
@@ -1938,6 +2015,7 @@ class ZircoliteCore:
             batch_size=self.batch_size,
             evtx_threads=self.evtx_threads,
             flatten_backend=self.flatten_backend,
+            fulltext_capture=self.fulltext_capture,
         )
         processor = StreamingEventProcessor(
             config_file=self.config,
@@ -1954,6 +2032,10 @@ class ZircoliteCore:
             + (f" ({processor.flattening_info['reason']})" if processor.flattening_info.get("reason") else "")
         )
 
+        # A failed or interrupted stream may have committed earlier batches.
+        # Invalidate before ingestion so even that partial content is rechecked.
+        self._fulltext_revision += 1
+        self._fulltext_validated.clear()
         # Create initial table structure
         self.logger.info("[+] Creating dynamic model")
         processor.create_initial_table(self.db_connection)

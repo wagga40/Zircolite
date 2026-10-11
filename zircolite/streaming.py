@@ -51,6 +51,7 @@ from .formats import (
     format_by_name,
     format_from_args,
 )
+from .fulltext import FIELD, ensure_provenance, source_values
 from .jsonstream import iter_json_array
 from .shutdown import is_shutdown_requested
 from .spellings import record_spellings
@@ -714,6 +715,7 @@ class StreamingEventProcessor:
         "_last_insert_columns",
         "_last_insert_stmt",
         "_last_sorted_columns",
+        "_reserved_field_seen",
         # Path resolution cache – maps (raw_field_name, last_part) to resolved
         # (raw_name, mapped_key) or _EXCLUDED_SENTINEL; avoids repeated
         # exclusion/mapping lookups per leaf
@@ -755,6 +757,7 @@ class StreamingEventProcessor:
         "field_split_list",
         "field_types",
         "flattening_info",
+        "fulltext_capture",
         "logger",
         "rounded_integer_fields",
         # EVTX parsing strictness
@@ -797,6 +800,8 @@ class StreamingEventProcessor:
         self.logger = logger or logging.getLogger(__name__)
         self.config_file = config_file
         self.time_field = proc.time_field
+        self.fulltext_capture = proc.fulltext_capture
+        self._reserved_field_seen = False
         self.args_config = args_config
         self.batch_size = proc.batch_size
         kernel = select_flatten_kernel(proc.flatten_backend)
@@ -889,6 +894,12 @@ class StreamingEventProcessor:
 
         # Load field mappings config (includes event_filter and timestamp_detection)
         self._load_config(_raw_config=_raw_config)
+        if self.fulltext_capture:
+            configured = [*self.field_mappings.values(), *self.aliases.values()]
+            configured += [spec.alias_name for specs in self._transforms_baked.values()
+                           for spec in specs if spec.alias_name]
+            if any(isinstance(name, str) and name.lower() == FIELD for name in configured):
+                raise ValueError(f"Mapping or alias uses reserved keyword-search name {FIELD}")
 
         # Recompute after config load: event_filter.enabled can disable filtering
         self._filtering_enabled = (
@@ -1462,8 +1473,30 @@ class StreamingEventProcessor:
             return param
 
     def _flatten_event(self, event_dict: dict, filename: str) -> dict | None:
+        # Keyword search reads the source values, before mapping, exclusions
+        # and transforms change them.
+        text = source_values(event_dict) if self.fulltext_capture else None
         _join_unnamed_event_data(event_dict)
-        return self._flatten_impl(self, event_dict, filename)
+        flat = self._flatten_impl(self, event_dict, filename)
+        if flat is not None and text is not None:
+            reserved = [key for key in flat if key.lower() == FIELD]
+            if reserved:
+                # Refusing the event would let anyone who controls a field name
+                # hide it from every rule. Its value is in the text already.
+                for key in reserved:
+                    del flat[key]
+                    if key != FIELD:
+                        self.field_types.pop(key, None)
+                if not self._reserved_field_seen:
+                    self._reserved_field_seen = True
+                    self.logger.warning(
+                        f"[yellow]   [!] Events in {literal(filename)} carry a field named {FIELD}: "
+                        "only keyword rules read its value[/]"
+                    )
+            flat[FIELD] = text
+            self.discovered_fields[FIELD] = FIELD
+            self.field_types[FIELD] = "TEXT"
+        return flat
 
     def stream_evtx_events(self, evtx_file: str) -> Generator[dict, None, None]:
         """Stream and flatten events from an EVTX file (supports .evtx inside .gz/.bz2/.zip/.7z)."""
@@ -1917,7 +1950,8 @@ class StreamingEventProcessor:
                 # In parallel mode the shared handle's lock covers exactly one
                 # write() call, so each event must be emitted in a single write.
                 if keepflat_file is not None:
-                    keepflat_file.write(json.dumps(event) + b"\n")
+                    exported = {k: v for k, v in event.items() if k != FIELD} if self.fulltext_capture else event
+                    keepflat_file.write(json.dumps(exported) + b"\n")
 
                 if len(batch) >= batch_size:
                     insert_batch(db_connection, cursor, batch)
@@ -2134,6 +2168,8 @@ class StreamingEventProcessor:
                     row_id INTEGER PRIMARY KEY AUTOINCREMENT
                 )
             """)
+            if self.fulltext_capture:
+                ensure_provenance(db_connection)
             db_connection.commit()
             # Refresh column cache from actual table state – handles both
             # freshly created tables and reused tables (DELETE FROM path).

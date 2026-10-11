@@ -50,6 +50,13 @@ class TestEvents:
         assert "computer" not in rows[2]
         assert record.events == 3
 
+    def test_keyword_search_text_stays_out_of_the_package(self, spool):
+        record = export(spool, [{"Computer": "a", "_sigma_fulltext": "a\nsecret"}])
+
+        rows = read_spool(record.event_files)
+        assert rows[0]["computer"] == "a" and "_sigma_fulltext" not in rows[0]
+        assert "_sigma_fulltext" not in {column["key"] for column in record.columns}
+
     def test_census_types_and_counts_each_column(self, spool):
         record = export(spool, [{"Num": 6, "Real": 1.5}, {"Num": "six", "Real": 2.5}],
                         types={"Num": "", "Real": ""})

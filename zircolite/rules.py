@@ -46,13 +46,13 @@ from .config import RULE_LEVELS, RulesetConfig
 # Rich console for styled output
 from .console import console, is_quiet, literal, make_file_link
 from .correlations import is_correlation_plan_rule, plan_problem
+from .fulltext import FIELD as FULLTEXT_FIELD
 from .sqlscan import channel_constraints, eventid_constraints
 from .utils import random_suffix, safe_load_all
 
-# Newest Zircolite ruleset format this version reads. Version 2 (pySigma's
-# SQLite backend 2) adds required_fields, result_type and correlation plans;
-# rulesets without a schema_version are version 1.
-RULESET_SCHEMA_VERSION = 2
+# Version 2 adds required_fields, result_type and correlation plans; version 3
+# marks rules that need captured source-value text. Unversioned rules are v1.
+RULESET_SCHEMA_VERSION = 3
 
 
 def _level_rank(rule: dict[str, Any]) -> int:
@@ -88,7 +88,16 @@ def ruleset_format_problem(rules: list[dict[str, Any]]) -> str | None:
                 f"rule {title!r} uses ruleset schema version {version}, and this "
                 f"Zircolite reads up to version {RULESET_SCHEMA_VERSION}: update Zircolite"
             )
+        fulltext = rule.get("fulltext")
+        if version == 3 and (not isinstance(fulltext, list) or not fulltext):
+            return f"rule {title!r} lacks fulltext requirements for schema version 3"
+        if version < 3 and fulltext:
+            return f"rule {title!r} has fulltext requirements but uses schema version {version}"
         is_correlation = rule.get("correlation") or rule.get("result_type") == "correlation"
+        if version == 3 and is_correlation and is_correlation_plan_rule(rule):
+            plan = rule["correlation_plan"]
+            if not isinstance(plan, dict) or plan.get("version") != 3 or plan.get("fulltext") != fulltext:
+                return f"correlation rule {title!r} has inconsistent fulltext requirements"
         if version >= 2 and is_correlation and not is_correlation_plan_rule(rule):
             # Run as plain SQL, its alert rows would be reported as events.
             return f"correlation rule {title!r} has no correlation_plan"
@@ -972,6 +981,12 @@ class RulesetHandler:
             merged["rule"] = [
                 query for entry in converted for query in entry.get("rule", [])
             ]
+            fulltext = {(item["table"], item["field"], item["representation"])
+                        for entry in converted for item in entry.get("fulltext", [])}
+            if fulltext:
+                merged["fulltext"] = [dict(table=table, field=name, representation=representation)
+                                      for table, name, representation in sorted(fulltext)]
+                merged["schema_version"] = 3
             if any("required_fields" in entry for entry in converted):
                 merged["required_fields"] = sorted({
                     field for entry in converted for field in entry.get("required_fields", [])
@@ -1027,7 +1042,7 @@ class RulesetHandler:
         # names events by it.
         backend = sqlite.sqliteBackend(
             combined_pipeline, timestamp_field=self.time_field, event_id_field="row_id",
-            timestamp_format=self.timestamp_format,
+            timestamp_format=self.timestamp_format, fulltext_field=FULLTEXT_FIELD,
         )
         backend.init_processing_pipeline("zircolite")
         return backend

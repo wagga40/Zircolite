@@ -295,7 +295,7 @@ PLAN_RULE = {
 
 class TestRulesetFormat:
     def test_a_newer_schema_is_refused(self):
-        problem = ruleset_format_problem([{"title": "t", "schema_version": 3, "rule": ["SELECT 1"]}])
+        problem = ruleset_format_problem([{"title": "t", "schema_version": 4, "rule": ["SELECT 1"]}])
 
         assert "update Zircolite" in problem
 
