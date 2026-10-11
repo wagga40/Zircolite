@@ -10,13 +10,9 @@
   <link rel="stylesheet" href="//cdn.jsdelivr.net/npm/docsify@5/dist/themes/addons/vue.min.css">
   <link rel="stylesheet" href="//cdn.jsdelivr.net/npm/docsify@5/dist/themes/addons/core-dark.min.css" media="(prefers-color-scheme: dark)">
   <style>
-    /* The explainer diagrams are drawn at 960px; squeezed into the prose column their text
-       becomes unreadable, so let them overflow it, centred, when the window has room. */
-    .markdown-section p:has(> img[src$=".svg"]:only-child) {
-      width: max(100%, min(960px, calc(100vw - var(--sidebar-width) - 4rem)));
-      max-width: none;
-      margin-left: 50%;
-      transform: translateX(-50%);
+    /* Keep prose and the 960px explainer diagrams in the same responsive column. */
+    :root {
+      --content-max-width: 960px;
     }
   </style>
 </head>
