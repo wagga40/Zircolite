@@ -40,6 +40,7 @@ from sigma.exceptions import SigmaRuleLocation, SigmaRuleNotFoundError
 from sigma.plugins import InstalledSigmaPlugins
 from sigma.processing.resolver import ProcessingPipelineResolver
 
+from . import analysis_cache
 from .assets import bundled_dir
 from .config import RULE_LEVELS, RulesetConfig
 
@@ -522,6 +523,7 @@ class RulesetHandler:
             self.logger.info(f"[+] {len(self.rulesets)} rules loaded")
             self._report_unrunnable_plans()
 
+            analysis_cache.warm(self.rulesets)
             self.event_filter = EventFilter(self.rulesets, logger=self.logger)
             if any(is_correlation_plan_rule(rule) for rule in self.rulesets):
                 self.logger.info(

@@ -100,6 +100,17 @@ flattener decides which value lands in the column.
 
 ## Rule execution
 
+**Analysis cache.** Normalising, planning and scanning the statements of a 4,500-rule
+ruleset takes about two seconds, and every process worker used to pay it again. The
+command line keeps the results in the user's cache directory (`~/Library/Caches/Zircolite`,
+`%LOCALAPPDATA%\Zircolite\Cache` or `$XDG_CACHE_HOME/zircolite`), one file per ruleset,
+keyed by the statements, the Python version and a hash of the analysing code (in a binary,
+the executable). The ruleset is loaded, and workers start, from that file in tens of
+milliseconds; a plan stays JSON until the filter first asks for it. The file is validated
+line by line, and anything it would not have written is recomputed rather than trusted.
+`ZIRCOLITE_CACHE_DIR` moves the directory and `ZIRCOLITE_NO_CACHE=1` turns it off; library
+callers never write one.
+
 **Census pruning.** Before the rules run, `execute_ruleset` reads the distinct
 `(Channel, EventID)` pairs present, through `idx_channel_eventid`. A rule is skipped when
 every statement is a plain `SELECT * FROM logs WHERE …` whose `sqlscan` bounds (the same
@@ -327,11 +338,13 @@ All the logic lives in the `zircolite/` package. `zircolite.py` is a shim that c
 | `core.py` | `ZircoliteCore`: database management, indexes, rule execution, output |
 | `correlations.py` | Correlation plan checks, alert rows and diagnostics wording |
 | `prefilter.py` | Literal prefilter: candidate rows for a rule's `LIKE` literals |
+| `analysis_cache.py` | Rule SQL analysis kept on disk between runs (see [Rule execution](#rule-execution)) |
+| `event_filter.py` | `EventFilter`, the early per-channel event filter, apart from pySigma |
 | `performance.py` | Stage timers, per-file metrics and the `--performance-json` report |
 | `detector.py` | `LogTypeDetector`: format, log source and timestamp-field detection |
 | `processing.py` | Coordinates per-file, unified and parallel runs; aggregates results |
 | `utils.py` | Logging, `MemoryTracker`, compressed-input handling, mode heuristics |
-| `rules.py` | `RulesetHandler` (Sigma → Zircolite), `RulesUpdater`, `EventFilter` |
+| `rules.py` | `RulesetHandler` (Sigma → Zircolite), `RulesUpdater` |
 | `console.py` | Rich output: theme, detection tables, ATT&CK panels, hyperlinks, reports |
 | `config_loader.py` | Loads and validates YAML run configurations; generates the template |
 | `parallel.py` | `MemoryAwareParallelProcessor`: worker scaling and memory throttling |

@@ -250,10 +250,65 @@ def _parse_literal_plan(sql):
         return None
 
 
-@lru_cache(maxsize=16384)
+# Plans depend on the SQL text alone, so every file and worker shares them.
+_PLANS: dict[str, "LiteralPlan | None"] = {}
+# Plans read back from the analysis cache, still as JSON: most rules of a run
+# never reach the filter, so they are decoded when first asked for.
+_PENDING_PLANS: dict[str, bytes] = {}
+
+
 def _plan_for(sql):
-    """Plans depend on the SQL text alone, so every file and worker shares them."""
-    return _parse_literal_plan(sql.strip())
+    try:
+        return _PLANS[sql]
+    except KeyError:
+        pass
+    raw = _PENDING_PLANS.pop(sql, None)
+    plan = None
+    if raw is not None:
+        try:
+            plan = plan_from_json(orjson.loads(raw), sql)
+        except (ValueError, TypeError, KeyError, IndexError):
+            raw = None
+    if raw is None:
+        plan = _parse_literal_plan(sql.strip())
+    _PLANS[sql] = plan
+    return plan
+
+
+def plan_to_json(plan: "LiteralPlan", text: str) -> list[Any]:
+    """``plan`` as JSON, its SQL omitted when it is ``text`` itself."""
+    return [None if plan.sql == text else plan.sql, plan.where_start,
+            _expression_to_json(plan.expression), plan.max_literal_bytes]
+
+
+def plan_from_json(data: Any, text: str) -> "LiteralPlan":
+    """The inverse of ``plan_to_json``, refusing anything it would not write."""
+    sql, where_start, expression, longest = data
+    sql = text if sql is None else sql
+    if not isinstance(sql, str) or type(where_start) is not int or type(longest) is not int:
+        raise ValueError("bad plan")
+    if not 0 <= where_start <= len(sql):
+        raise ValueError("bad plan offset")
+    return LiteralPlan(sql, where_start, _expression_from_json(expression), longest)
+
+
+def _expression_to_json(expression: Any) -> Any:
+    kind, value = expression
+    if kind in ("literal", "equality"):
+        return [kind, list(value)]
+    return [kind, [_expression_to_json(node) for node in value]]
+
+
+def _expression_from_json(data: Any) -> Any:
+    kind, value = data
+    if kind in ("literal", "equality"):
+        column, literal = value
+        if not isinstance(column, str) or not isinstance(literal, str):
+            raise ValueError("bad leaf")
+        return (kind, (sys.intern(column), literal))
+    if kind not in ("and", "or") or not isinstance(value, list) or len(value) < 2:
+        raise ValueError("bad expression")
+    return (kind, tuple(_expression_from_json(node) for node in value))
 
 
 def _leaves(expression):
@@ -360,7 +415,8 @@ def prepare_rules(queries):
 
 def clear_prepared_rules():
     prepare_rules.cache_clear()
-    _plan_for.cache_clear()
+    _PLANS.clear()
+    _PENDING_PLANS.clear()
 
 
 class LiteralPrefilter:

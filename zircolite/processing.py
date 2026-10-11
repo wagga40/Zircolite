@@ -1179,6 +1179,8 @@ def _initialize_process_worker(payload, args, input_type, raw_config, spool_dir,
     set_worker_shutdown_event(cancel_event)
     logger = create_silent_logger("zircolite_process")
     ctx = ProcessingContext(**payload, logger=logger, memory_tracker=MemoryTracker(logger=logger))
+    from . import analysis_cache
+    analysis_cache.warm(ctx.rulesets)
     local = threading.local()
     state = dict(ctx=ctx, args=args, input_type=input_type,
         extractor=create_extractor(args, logger, input_type), raw_config=raw_config,

@@ -285,18 +285,28 @@ def null_safe_negation(sql: str) -> str:
     return _apply_edits(sql, _negation_edits(sql, tokens))
 
 
-@lru_cache(maxsize=1024)
+# Keyed by statement text like _SCANS below, and unbounded for the same reason:
+# a ruleset holds thousands of statements, and an LRU smaller than that would
+# normalise each of them again on every pass.
+_NORMALIZED: dict[str, str] = {}
+
+
 def normalize_rule_sql(sql: str) -> str:
     """The text a rule statement is run, planned and repaired as.
 
     Double-quoted names become backtick-quoted (see ``quote_sql_identifiers``)
     and negation becomes null-safe (see ``null_safe_negation``), from one lex.
     """
-    try:
-        tokens = _significant(sql, iter_tokens(sql))
-    except _Unsupported:
-        return sql
-    return _apply_edits(sql, _negation_edits(sql, tokens) + _identifier_edits(sql, tokens))
+    cached = _NORMALIZED.get(sql)
+    if cached is None:
+        try:
+            tokens = _significant(sql, iter_tokens(sql))
+        except _Unsupported:
+            cached = sql
+        else:
+            cached = _apply_edits(sql, _negation_edits(sql, tokens) + _identifier_edits(sql, tokens))
+        _NORMALIZED[sql] = cached
+    return cached
 
 
 def _typed_tokens(sql: str) -> list[tuple[str, str]]:
@@ -700,8 +710,9 @@ def scan_query(sql: str) -> QueryScan:
 
 
 def clear_scan_cache() -> None:
-    """Drop every memoised scan. For tests and long-lived library callers."""
+    """Drop every memoised scan and normalisation. For tests and long-lived library callers."""
     _SCANS.clear()
+    _NORMALIZED.clear()
 
 
 def _constraints(queries: list[str], field: str) -> set | None:
