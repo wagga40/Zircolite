@@ -1,0 +1,1834 @@
+[
+  {
+    "author": "Adama ASSIONGBON (SOC & CTI Consultant), https://linkedin.com/in/adama-assiongbon-9029893a",
+    "channel": [],
+    "description": "Detects Linux process termination and core-dump indicators used only as a supporting event for CVE-2026-39113 correlation. This event alone is low confidence and must not be interpreted as evidence of SQLite exploitation. It should be correlated with a suspicious SQLAR decompression request from the same host and process.\nD\u00e9tecte des indicateurs Linux de terminaison de processus et de core dump utilis\u00e9s uniquement comme \u00e9v\u00e9nement de support pour la corr\u00e9lation CVE-2026-39113. Cet \u00e9v\u00e9nement seul est de faible confiance et ne doit pas \u00eatre interpr\u00e9t\u00e9 comme une preuve d'exploitation de SQLite. Il doit \u00eatre corr\u00e9l\u00e9 avec une requ\u00eate suspecte de d\u00e9compression SQLAR provenant du m\u00eame h\u00f4te et du m\u00eame processus.\n",
+    "eventid": [],
+    "falsepositives": [
+      "Ordinary application crashes unrelated to SQLite",
+      "Software defects causing SIGSEGV or SIGABRT",
+      "Authorized fuzzing and memory-safety testing"
+    ],
+    "filename": "CVE-2026-39113_SQLite_SQLAR/rules/linux_sqlite_sqlar_crash_correlation_cve_2026_39113_strict.yml",
+    "id": "f2fff6fa-31d4-44f8-a38c-8db958e5de07",
+    "level": "low",
+    "license": "Apache-2.0",
+    "logsource": {
+      "product": "linux",
+      "service": "syslog"
+    },
+    "required_fields": [
+      "Message"
+    ],
+    "result_type": "event",
+    "rule": [
+      "SELECT * FROM logs WHERE Message LIKE '%SIGSEGV%' ESCAPE '\\' OR Message LIKE '%SIGABRT%' ESCAPE '\\' OR Message LIKE '%segmentation fault%' ESCAPE '\\' OR Message LIKE '%segfault%' ESCAPE '\\' OR Message LIKE '%status=11/SEGV%' ESCAPE '\\' OR Message LIKE '%status=6/ABRT%' ESCAPE '\\' OR Message LIKE '%core dumped%' ESCAPE '\\' OR Message LIKE '%dumped core%' ESCAPE '\\' OR Message LIKE '%Failed with result ''core-dump''%' ESCAPE '\\' OR Message LIKE '%heap-buffer-overflow%' ESCAPE '\\'"
+    ],
+    "schema_version": 2,
+    "source": "hatchepsoute",
+    "source_table": "logs",
+    "status": "experimental",
+    "tags": [
+      "attack.impact",
+      "attack.t1499.004"
+    ],
+    "title": "Linux Process Crash Signal for CVE-2026-39113 Correlation"
+  },
+  {
+    "author": "Adama ASSIONGBON (SOC & CTI Consultant), https://linkedin.com/in/adama-assiongbon-9029893a",
+    "channel": [],
+    "description": "Detects execution or compilation artifacts containing multiple public GhostLock CVE-2026-43499 exploit-chain indicators. SOC L1 should verify the source, affected host, user, process or request fields, timing, and related activity.\nD\u00e9tecte l'ex\u00e9cution ou la compilation d'artefacts contenant le nom GhostLock ou plusieurs indicateurs techniques de la cha\u00eene d'exploitation publique de CVE-2026-43499. Le SOC L1 doit v\u00e9rifier la source, l\u2019h\u00f4te affect\u00e9, l\u2019utilisateur, les champs de processus ou de requ\u00eate, la chronologie et les activit\u00e9s associ\u00e9es.\n",
+    "eventid": [],
+    "falsepositives": [
+      "Authorized kernel vulnerability research using public GhostLock artifacts outside approved lab paths",
+      "Internal security validation retaining the CVE or GhostLock name in build commands"
+    ],
+    "filename": "CVE-2026-43499_Linux_GhostLock/rules/linux_ghostlock_scanner_harness_cve_2026_43499_broad.yml",
+    "id": "4c0f8d1c-1aa9-43dc-9050-4af7ef0d6434",
+    "level": "medium",
+    "license": "Apache-2.0",
+    "logsource": {
+      "category": "process_creation",
+      "product": "linux"
+    },
+    "required_fields": [
+      "CommandLine",
+      "CurrentDirectory",
+      "Image"
+    ],
+    "result_type": "event",
+    "rule": [
+      "SELECT * FROM logs WHERE ((CommandLine LIKE '%CVE-2026-43499%' ESCAPE '\\' OR CommandLine LIKE '%cve\\_2026\\_43499%' ESCAPE '\\' OR CommandLine LIKE '%GhostLock%' ESCAPE '\\' OR CommandLine LIKE '%ghostlock%' ESCAPE '\\' OR CommandLine LIKE '%CyberMeowfia%' ESCAPE '\\') OR ((Image LIKE '%/cc' ESCAPE '\\' OR Image LIKE '%/gcc' ESCAPE '\\' OR Image LIKE '%/clang' ESCAPE '\\' OR Image LIKE '%/make' ESCAPE '\\' OR Image LIKE '%/go' ESCAPE '\\' OR Image LIKE '%/python' ESCAPE '\\' OR Image LIKE '%/python3' ESCAPE '\\' OR Image LIKE '%/sh' ESCAPE '\\' OR Image LIKE '%/bash' ESCAPE '\\') AND (CommandLine LIKE '%FUTEX\\_WAIT\\_REQUEUE\\_PI%' ESCAPE '\\' OR CommandLine LIKE '%FUTEX\\_CMP\\_REQUEUE\\_PI%' ESCAPE '\\' OR CommandLine LIKE '%FUTEX\\_REQUEUE\\_PI%' ESCAPE '\\' OR CommandLine LIKE '%rt\\_mutex\\_start\\_proxy\\_lock%' ESCAPE '\\') AND (CommandLine LIKE '%PR\\_SET\\_MM\\_MAP%' ESCAPE '\\' OR CommandLine LIKE '%sched\\_setattr%' ESCAPE '\\' OR CommandLine LIKE '%inet6\\_protos%' ESCAPE '\\' OR CommandLine LIKE '%core\\_pattern%' ESCAPE '\\' OR CommandLine LIKE '%remove\\_waiter%' ESCAPE '\\'))) AND (NOT COALESCE((CurrentDirectory LIKE '/opt/security-lab/%' ESCAPE '\\' OR CurrentDirectory LIKE '/srv/security-research/%' ESCAPE '\\' OR CurrentDirectory LIKE '/var/lib/ci/kernel-tests/%' ESCAPE '\\'), 0))"
+    ],
+    "schema_version": 2,
+    "source": "hatchepsoute",
+    "source_table": "logs",
+    "status": "experimental",
+    "tags": [
+      "attack.privilege-escalation",
+      "attack.t1068",
+      "cve.2026-43499"
+    ],
+    "title": "Potential GhostLock Exploit Tooling Execution - BROAD"
+  },
+  {
+    "author": "Adama ASSIONGBON (SOC & CTI Consultant), https://linkedin.com/in/adama-assiongbon-9029893a",
+    "channel": [],
+    "description": "Detects smb.conf enabling wins support and a wins hook, exposing the host to CVE-2025-10230 unauthenticated RCE. SUPPORT rule. SOC L1 should verify the source, affected host, user, process or request fields, timing, and related activity.\nD\u00e9tecte smb.conf activant wins support et wins hook, exposant l'h\u00f4te \u00e0 CVE-2025-10230 (RCE non authentifi\u00e9e). R\u00e8gle SUPPORT : d\u00e9tecte l'\u00e9tat de configuration vuln\u00e9rable, pas l'exploitation active. NOTE D\u00c9PLOIEMENT : n\u00e9cessite un agent de surveillance de contenu de fichier (Wazuh FIM avec diff de contenu, OSSEC ou pipeline d'audit de configuration). V\u00e9rifier la disponibilit\u00e9 du champ FileContent avant d\u00e9ploiement. Le SOC L1 doit v\u00e9rifier la source, l\u2019h\u00f4te affect\u00e9, l\u2019utilisateur, les champs de processus ou de requ\u00eate, la chronologie et les activit\u00e9s associ\u00e9es.\n",
+    "eventid": [],
+    "falsepositives": [
+      "Configuration changes during authorized maintenance or testing (verify with change ticket)",
+      "WINS hook legitimately set in a controlled environment for specific network reasons",
+      "Second-pass challenge fix (2026-06-22): selection_smb_conf elargie de endswith:smb.conf vers contains:/etc/samba/ + endswith:.conf pour couvrir les fichiers inclus via directive 'include =' (conf.d/*.conf). FP additionnels possibles; verifier FileContent wins_support et wins_hook."
+    ],
+    "filename": "CVE-2025-10230_samba/rules/samba_wins_hook_enabled_support.yml",
+    "id": "4c1d2f6e-7b8e-4f2b-b7d9-1a2b3c4d5e6f",
+    "level": "medium",
+    "license": "Apache-2.0",
+    "logsource": {
+      "category": "file_event",
+      "product": "linux"
+    },
+    "required_fields": [
+      "FileContent",
+      "TargetFilename"
+    ],
+    "result_type": "event",
+    "rule": [
+      "SELECT * FROM logs WHERE ((TargetFilename LIKE '%/etc/samba/%' ESCAPE '\\' OR TargetFilename LIKE '%/usr/local/samba/etc/%' ESCAPE '\\' OR TargetFilename LIKE '%/usr/local/etc/samba/%' ESCAPE '\\' OR TargetFilename LIKE '%/var/lib/samba/%' ESCAPE '\\') AND TargetFilename LIKE '%.conf' ESCAPE '\\') AND (FileContent LIKE '%wins support = yes%' ESCAPE '\\' OR FileContent LIKE '%wins support=yes%' ESCAPE '\\' OR FileContent LIKE '%wins support =yes%' ESCAPE '\\' OR FileContent LIKE '%wins support= yes%' ESCAPE '\\' OR FileContent LIKE '%WINS SUPPORT = YES%' ESCAPE '\\' OR FileContent LIKE '%WINS SUPPORT=YES%' ESCAPE '\\') AND (FileContent LIKE '%wins hook =%' ESCAPE '\\' OR FileContent LIKE '%wins hook=%' ESCAPE '\\' OR FileContent LIKE '%WINS HOOK =%' ESCAPE '\\' OR FileContent LIKE '%WINS HOOK=%' ESCAPE '\\')"
+    ],
+    "schema_version": 2,
+    "source": "hatchepsoute",
+    "source_table": "logs",
+    "status": "experimental",
+    "tags": [
+      "attack.initial-access",
+      "attack.t1190",
+      "cve.2025-10230"
+    ],
+    "title": "Samba WINS hook enabled in configuration (CVE-2025-10230 exposure)"
+  },
+  {
+    "author": "Adama ASSIONGBON (SOC & CTI Consultant), https://linkedin.com/in/adama-assiongbon-9029893a",
+    "channel": [],
+    "description": "Detects suspicious shell or interpreter spawning download/exec tools on BeyondTrust appliances, indicating CVE-2026-1731 post-exploitation. SOC L1 should verify the source, affected host, user, process or request fields, timing, and related activity.\nD\u00e9tecte un shell ou interpr\u00e9teur lan\u00e7ant des outils de t\u00e9l\u00e9chargement/ex\u00e9cution sur les appliances BeyondTrust. Indicateur d'exploitation r\u00e9ussie de CVE-2026-1731. R\u00e8gle BROAD. Le SOC L1 doit v\u00e9rifier la source, l\u2019h\u00f4te affect\u00e9, l\u2019utilisateur, les champs de processus ou de requ\u00eate, la chronologie et les activit\u00e9s associ\u00e9es.\n",
+    "eventid": [],
+    "falsepositives": [
+      "Vendor maintenance sessions",
+      "Legitimate administrative troubleshooting"
+    ],
+    "filename": "CVE-2026-1731_BeyondTrust_RCE/rules/host/cve_2026_1731_beyondtrust_linux_suspicious_shell_tooling_broad.yml",
+    "id": "50ac5b86-0f83-11f1-97d8-97299b568041",
+    "level": "medium",
+    "license": "Apache-2.0",
+    "logsource": {
+      "category": "process_creation",
+      "product": "linux"
+    },
+    "required_fields": [
+      "CommandLine",
+      "Image"
+    ],
+    "result_type": "event",
+    "rule": [
+      "SELECT * FROM logs WHERE (Image LIKE '%/sh' ESCAPE '\\' OR Image LIKE '%/bash' ESCAPE '\\' OR Image LIKE '%/dash' ESCAPE '\\' OR Image LIKE '%/ksh' ESCAPE '\\' OR Image LIKE '%/zsh' ESCAPE '\\' OR Image LIKE '%/csh' ESCAPE '\\' OR Image LIKE '%/tcsh' ESCAPE '\\' OR Image LIKE '%/python' ESCAPE '\\' OR Image LIKE '%/python2' ESCAPE '\\' OR Image LIKE '%/python3' ESCAPE '\\' OR Image LIKE '%/perl' ESCAPE '\\' OR Image LIKE '%/perl5' ESCAPE '\\' OR Image LIKE '%/ruby' ESCAPE '\\' OR Image LIKE '%/node' ESCAPE '\\' OR Image LIKE '%/nodejs' ESCAPE '\\' OR Image LIKE '%/busybox' ESCAPE '\\') AND (CommandLine LIKE '%curl %' ESCAPE '\\' OR CommandLine LIKE '%wget %' ESCAPE '\\' OR CommandLine LIKE '%python -c%' ESCAPE '\\' OR CommandLine LIKE '%python3 -c%' ESCAPE '\\' OR CommandLine LIKE '%python2 -c%' ESCAPE '\\' OR CommandLine LIKE '%perl -e%' ESCAPE '\\' OR CommandLine LIKE '%ruby -e%' ESCAPE '\\' OR CommandLine LIKE '%node -e%' ESCAPE '\\' OR CommandLine LIKE '%/dev/tcp/%' ESCAPE '\\' OR CommandLine LIKE '%/dev/udp/%' ESCAPE '\\' OR CommandLine LIKE '%nohup %' ESCAPE '\\' OR CommandLine LIKE '%| bash%' ESCAPE '\\' OR CommandLine LIKE '%| sh%' ESCAPE '\\' OR CommandLine LIKE '%base64 -d%' ESCAPE '\\' OR CommandLine LIKE '%base64 --decode%' ESCAPE '\\' OR CommandLine LIKE '%busybox sh%' ESCAPE '\\' OR CommandLine LIKE '%busybox ash%' ESCAPE '\\')"
+    ],
+    "schema_version": 2,
+    "source": "hatchepsoute",
+    "source_table": "logs",
+    "status": "experimental",
+    "tags": [
+      "attack.execution",
+      "attack.t1059",
+      "attack.command-and-control",
+      "attack.t1105",
+      "cve.2026-1731"
+    ],
+    "title": "BeyondTrust suspicious shell and download tool execution on appliance (CVE-2026-1731)"
+  },
+  {
+    "author": "Adama ASSIONGBON (SOC & CTI Consultant), https://linkedin.com/in/adama-assiongbon-9029893a",
+    "channel": [],
+    "description": "Detects a browser or desktop launcher starting Konsole with a telnet, rlogin, or ssh URL, a suspicious precursor to CVE-2025-49091 exploitation. SOC L1 should verify the source, affected host, user, process or request fields, timing, and related activity.\nD\u00e9tecte le lancement de Konsole par un navigateur ou un lanceur de bureau avec une URL telnet, rlogin ou ssh, pr\u00e9curseur suspect de l\u2019exploitation de CVE-2025-49091. Le SOC L1 doit v\u00e9rifier la source, l\u2019h\u00f4te affect\u00e9, l\u2019utilisateur, les champs de processus ou de requ\u00eate, la chronologie et les activit\u00e9s associ\u00e9es.\n",
+    "eventid": [],
+    "falsepositives": [
+      "Authorized users opening SSH links from a trusted internal documentation portal",
+      "Desktop integration tests that intentionally exercise URL handlers"
+    ],
+    "filename": "CVE-2025-49091_KDE_Konsole_RCE/rules/linux_konsole_url_scheme_cve_2025_49091_broad.yml",
+    "id": "6c8d1f3a-2b74-4c90-9e31-7a5d4f8b2c16",
+    "level": "medium",
+    "license": "Apache-2.0",
+    "logsource": {
+      "category": "process_creation",
+      "product": "linux"
+    },
+    "required_fields": [
+      "CommandLine",
+      "Image",
+      "ParentImage"
+    ],
+    "result_type": "event",
+    "rule": [
+      "SELECT * FROM logs WHERE (Image LIKE '%/konsole' ESCAPE '\\' OR Image LIKE '%/konsole.exe' ESCAPE '\\') AND CommandLine REGEXP '(?i)(telnet|rlogin|ssh)(?::|%3a)(?://|%2f%2f)' AND ((ParentImage LIKE '%/firefox' ESCAPE '\\' OR ParentImage LIKE '%/firefox-bin' ESCAPE '\\' OR ParentImage LIKE '%/chrome' ESCAPE '\\' OR ParentImage LIKE '%/google-chrome' ESCAPE '\\' OR ParentImage LIKE '%/chromium' ESCAPE '\\' OR ParentImage LIKE '%/chromium-browser' ESCAPE '\\' OR ParentImage LIKE '%/xdg-open' ESCAPE '\\' OR ParentImage LIKE '%/kioclient5' ESCAPE '\\' OR ParentImage LIKE '%/kioclient' ESCAPE '\\' OR ParentImage LIKE '%/kde-open' ESCAPE '\\' OR ParentImage LIKE '%/kde-open5' ESCAPE '\\' OR ParentImage LIKE '%/kde-open6' ESCAPE '\\' OR ParentImage LIKE '%/xdg-desktop-portal' ESCAPE '\\' OR ParentImage LIKE '%/kdeinit' ESCAPE '\\' OR ParentImage LIKE '%/kdeinit5' ESCAPE '\\' OR ParentImage LIKE '%/kdeinit6' ESCAPE '\\' OR ParentImage LIKE '%/plasmashell' ESCAPE '\\') OR (ParentImage LIKE '%/gajim' ESCAPE '\\' OR ParentImage LIKE '%/gajim.py' ESCAPE '\\'))"
+    ],
+    "schema_version": 2,
+    "source": "hatchepsoute",
+    "source_table": "logs",
+    "status": "experimental",
+    "tags": [
+      "attack.initial-access",
+      "attack.execution",
+      "attack.t1204.001",
+      "attack.t1059.004",
+      "cve.2025-49091"
+    ],
+    "title": "Potential Konsole URL Scheme Abuse (CVE-2025-49091) - BROAD"
+  },
+  {
+    "author": "Adama ASSIONGBON (SOC & CTI Consultant), https://linkedin.com/in/adama-assiongbon-9029893a",
+    "channel": [],
+    "description": "Detects frpc or frps execution on Linux, post-exploitation C2 tunneling tool abused in Sliver campaign. SOC L1 should verify the source, affected host, user, process or request fields, timing, and related activity.\nD\u00e9tecte l'ex\u00e9cution du binaire FRP (Fast Reverse Proxy) client (frpc) ou serveur (frps) sur Linux. FRP est un outil l\u00e9gitime open-source fr\u00e9quemment abus\u00e9 en post-exploitation pour le tunneling C2 et le contournement de firewall. La d\u00e9tection bas\u00e9e sur l'image \u00e9vite les faux positifs de sous-cha\u00eene (xfrpc, ifrpc). frps est aussi suspect sur un h\u00f4te compromis. Le filtre filter_authorized_vpn exclut les chemins d'installation l\u00e9gitimes connus. ANGLE MORT : si frpc est renomm\u00e9 ou ex\u00e9cut\u00e9 depuis un chemin personnalis\u00e9 non couvert par filter_authorized_vpn, la r\u00e8gle d\u00e9clenche (FP l\u00e9gitime possible). Le SOC L1 doit v\u00e9rifier la source, l\u2019h\u00f4te affect\u00e9, l\u2019utilisateur, les champs de processus ou de requ\u00eate, la chronologie et les activit\u00e9s associ\u00e9es.\n",
+    "eventid": [],
+    "falsepositives": [
+      "Authorized remote maintenance using FRP in enterprise VPN infrastructure (filter by Image path via filter_authorized_vpn)",
+      "DevOps tunneling for SSH forwarding in approved CI/CD pipelines",
+      "Corporate remote access solutions built on FRP (add install path to filter_authorized_vpn)",
+      "Older FRP builds using .ini config format on authorized hosts (new branch may trigger)",
+      "selection_frp_from_tmp: legitimate test or staging scripts using FRP from temp paths (verify Image hash and owner)",
+      "Second-pass challenge fix (2026-06-22): ajout de selection_frp_cli_yaml / selection_frps_cli_yaml pour couvrir FRP >= 0.56 avec config .yaml. FP additionnels si .yaml apparait dans une CLI legitime avec 'frpc' en sous-chaine."
+    ],
+    "filename": "FortiWeb-Sliver-Campaign/rules/lnx_frp_reverse_proxy_activity.yml",
+    "id": "7d12a3b4-e9c8-4f51-b8d2-3a1b4c5d6e7f",
+    "level": "medium",
+    "license": "Apache-2.0",
+    "logsource": {
+      "category": "process_creation",
+      "product": "linux"
+    },
+    "required_fields": [
+      "CommandLine",
+      "Image"
+    ],
+    "result_type": "event",
+    "rule": [
+      "SELECT * FROM logs WHERE ((Image LIKE '%/frpc' ESCAPE '\\' OR Image LIKE '%/frps' ESCAPE '\\') OR (CommandLine LIKE '%frpc%' ESCAPE '\\' AND CommandLine LIKE '%.toml%' ESCAPE '\\') OR (CommandLine LIKE '%frps%' ESCAPE '\\' AND CommandLine LIKE '%.toml%' ESCAPE '\\') OR (CommandLine LIKE '%frpc%' ESCAPE '\\' AND CommandLine LIKE '%.ini%' ESCAPE '\\') OR (CommandLine LIKE '%frps%' ESCAPE '\\' AND CommandLine LIKE '%.ini%' ESCAPE '\\') OR (CommandLine LIKE '%frpc%' ESCAPE '\\' AND CommandLine LIKE '%.yaml%' ESCAPE '\\') OR (CommandLine LIKE '%frps%' ESCAPE '\\' AND CommandLine LIKE '%.yaml%' ESCAPE '\\') OR ((Image LIKE '%/tmp/%' ESCAPE '\\' OR Image LIKE '%/dev/shm/%' ESCAPE '\\' OR Image LIKE '%/var/tmp/%' ESCAPE '\\') AND (CommandLine LIKE '%server\\_addr%' ESCAPE '\\' OR CommandLine LIKE '%server\\_port%' ESCAPE '\\' OR CommandLine LIKE '%remote\\_port%' ESCAPE '\\'))) AND (NOT COALESCE((Image LIKE '/etc/frp/%' ESCAPE '\\' OR Image LIKE '/usr/local/etc/frp/%' ESCAPE '\\' OR Image LIKE '/opt/frp/%' ESCAPE '\\'), 0))"
+    ],
+    "schema_version": 2,
+    "source": "hatchepsoute",
+    "source_table": "logs",
+    "status": "experimental",
+    "tags": [
+      "attack.t1572",
+      "attack.command-and-control"
+    ],
+    "title": "Fast reverse proxy (FRP) client or server execution on Linux"
+  },
+  {
+    "author": "Adama ASSIONGBON (SOC & CTI Consultant), https://linkedin.com/in/adama-assiongbon-9029893a",
+    "channel": [],
+    "description": "Detects local compilation or execution of libssh2 CVE-2026-55200 exploit probes, including public C PoC staging patterns. SOC L1 should verify the source, affected host, user, process or request fields, timing, and related activity.\nDetecte la compilation ou l execution locale d outillage CVE-2026-55200 contre libssh2. Le challenge du PoC 0xBlackash montre qu une fois compile et renomme, le binaire peut ne garder aucun argument CVE visible. Cette regle BROAD couvre donc les artefacts de staging observables : noms de fichiers CVE, constantes du code C, compilation avec pthread/socket server, longueur 0xffffffff/4294967295 et bannieres SSH malveillantes lorsque ces chaines apparaissent dans les commandes de build, grep, strings, tests ou harness. Les shells generiques sont exclus du scope BROAD afin d eviter de doublonner ou bruiter les alertes post-exploitation. Le SOC L1 doit v\u00e9rifier la source, l\u2019h\u00f4te affect\u00e9, l\u2019utilisateur, les champs de processus ou de requ\u00eate, la chronologie et les activit\u00e9s associ\u00e9es.\n",
+    "eventid": [],
+    "falsepositives": [
+      "Authorized vulnerability validation in a controlled lab",
+      "Security research compiling or running public CVE probes",
+      "CI jobs that execute regression tests for patched libssh2 builds",
+      "Developers compiling unrelated pthread C socket servers when command line captures source snippets with matching SSH/libssh2 strings"
+    ],
+    "filename": "CVE-2026-55200_libssh2_OOB_Write/rules/linux_libssh2_cve_2026_55200_exploit_tooling_broad.yml",
+    "id": "7f0e7f2c-823e-4e15-a4a4-7d54d020f36e",
+    "level": "medium",
+    "license": "Apache-2.0",
+    "logsource": {
+      "category": "process_creation",
+      "product": "linux"
+    },
+    "required_fields": [
+      "CommandLine",
+      "Image"
+    ],
+    "result_type": "event",
+    "rule": [
+      "SELECT * FROM logs WHERE (Image LIKE '%/python' ESCAPE '\\' OR Image LIKE '%/python2' ESCAPE '\\' OR Image LIKE '%/python3' ESCAPE '\\' OR Image LIKE '%/python3.10' ESCAPE '\\' OR Image LIKE '%/python3.11' ESCAPE '\\' OR Image LIKE '%/python3.12' ESCAPE '\\' OR Image LIKE '%/python3.13' ESCAPE '\\' OR Image LIKE '%/pypy' ESCAPE '\\' OR Image LIKE '%/pypy3' ESCAPE '\\' OR Image LIKE '%/gcc' ESCAPE '\\' OR Image LIKE '%/clang' ESCAPE '\\' OR Image LIKE '%/cc' ESCAPE '\\' OR Image LIKE '%/make' ESCAPE '\\' OR Image LIKE '%/cmake' ESCAPE '\\' OR Image LIKE '%/grep' ESCAPE '\\' OR Image LIKE '%/egrep' ESCAPE '\\' OR Image LIKE '%/strings' ESCAPE '\\' OR Image LIKE '%/objdump' ESCAPE '\\' OR Image LIKE '%/readelf' ESCAPE '\\') AND ((CommandLine LIKE '%CVE-2026-55200%' ESCAPE '\\' OR CommandLine LIKE '%cve\\_2026\\_55200%' ESCAPE '\\' OR CommandLine LIKE '%libssh2-cve-2026-55200%' ESCAPE '\\' OR CommandLine LIKE '%CVE-2026-55200.c%' ESCAPE '\\' OR CommandLine LIKE '%libpwn\\_cve\\_2026\\_55200\\_server.py%' ESCAPE '\\' OR CommandLine LIKE '%libpwn\\_local\\_rce\\_exploit.py%' ESCAPE '\\' OR CommandLine LIKE '%libpwn\\_local\\_rce\\_harness%' ESCAPE '\\' OR CommandLine LIKE '%cve\\_2026\\_55200\\_probe%' ESCAPE '\\') OR (CommandLine LIKE '%0xBlackash%' ESCAPE '\\' OR CommandLine LIKE '%SSH-2.0-0xBlackash-Malicious%' ESCAPE '\\' OR CommandLine LIKE '%MALICIOUS\\_PACKET\\_LENGTH%' ESCAPE '\\' OR CommandLine LIKE '%packet\\_length = 0x\\%X%' ESCAPE '\\' OR CommandLine LIKE '%Reliable PoC%' ESCAPE '\\' OR CommandLine LIKE '%OOB write should trigger now%' ESCAPE '\\' OR CommandLine LIKE '%fake SSH\\_MSG\\_KEXINIT%' ESCAPE '\\') OR (CommandLine LIKE '%gcc%' ESCAPE '\\' AND CommandLine LIKE '%-pthread%' ESCAPE '\\' AND CommandLine LIKE '%CVE-2026-55200.c%' ESCAPE '\\') OR ((CommandLine LIKE '%-pthread%' ESCAPE '\\' AND CommandLine LIKE '%-o%' ESCAPE '\\' AND CommandLine LIKE '%.c%' ESCAPE '\\') AND ((CommandLine LIKE '%socket(AF\\_INET%' ESCAPE '\\' OR CommandLine LIKE '%SO\\_REUSEADDR%' ESCAPE '\\' OR CommandLine LIKE '%pthread\\_create%' ESCAPE '\\' OR CommandLine LIKE '%inet\\_ntoa%' ESCAPE '\\' OR CommandLine LIKE '%htons(port)%' ESCAPE '\\') OR (CommandLine LIKE '%packet\\_length=0xffffffff%' ESCAPE '\\' OR CommandLine LIKE '%packet-length 0xffffffff%' ESCAPE '\\' OR CommandLine LIKE '%packet-length=0xffffffff%' ESCAPE '\\' OR CommandLine LIKE '%--packet-length 0xffffffff%' ESCAPE '\\' OR CommandLine LIKE '%--packet-length=0xffffffff%' ESCAPE '\\' OR CommandLine LIKE '%--packet-length 4294967295%' ESCAPE '\\' OR CommandLine LIKE '%--packet-length=4294967295%' ESCAPE '\\' OR CommandLine LIKE '%packet\\_length=4294967295%' ESCAPE '\\' OR CommandLine LIKE '%0xffffffff%' ESCAPE '\\' OR CommandLine LIKE '%0xFFFFFFFF%' ESCAPE '\\' OR CommandLine LIKE '%0xFFFFFFFFU%' ESCAPE '\\' OR CommandLine LIKE '%4294967295%' ESCAPE '\\' OR CommandLine LIKE '%LIBSSH2\\_PACKET\\_MAXPAYLOAD%' ESCAPE '\\' OR CommandLine LIKE '%ssh2\\_transport\\_read%' ESCAPE '\\' OR CommandLine LIKE '%chacha20-poly1305@openssh.com%' ESCAPE '\\') OR (CommandLine LIKE '%libssh2%' ESCAPE '\\' OR CommandLine LIKE '%ssh2\\_transport\\_read%' ESCAPE '\\' OR CommandLine LIKE '%chacha20-poly1305@openssh.com%' ESCAPE '\\' OR CommandLine LIKE '%curve25519-sha256%' ESCAPE '\\' OR CommandLine LIKE '%LIBSSH2\\_PACKET\\_MAXPAYLOAD%' ESCAPE '\\' OR CommandLine LIKE '%SSH\\_MSG\\_KEXINIT%' ESCAPE '\\' OR CommandLine LIKE '%kexinit%' ESCAPE '\\' OR CommandLine LIKE '%SSH-2.0-%' ESCAPE '\\'))) OR ((CommandLine LIKE '%packet\\_length=0xffffffff%' ESCAPE '\\' OR CommandLine LIKE '%packet-length 0xffffffff%' ESCAPE '\\' OR CommandLine LIKE '%packet-length=0xffffffff%' ESCAPE '\\' OR CommandLine LIKE '%--packet-length 0xffffffff%' ESCAPE '\\' OR CommandLine LIKE '%--packet-length=0xffffffff%' ESCAPE '\\' OR CommandLine LIKE '%--packet-length 4294967295%' ESCAPE '\\' OR CommandLine LIKE '%--packet-length=4294967295%' ESCAPE '\\' OR CommandLine LIKE '%packet\\_length=4294967295%' ESCAPE '\\' OR CommandLine LIKE '%0xffffffff%' ESCAPE '\\' OR CommandLine LIKE '%0xFFFFFFFF%' ESCAPE '\\' OR CommandLine LIKE '%0xFFFFFFFFU%' ESCAPE '\\' OR CommandLine LIKE '%4294967295%' ESCAPE '\\' OR CommandLine LIKE '%LIBSSH2\\_PACKET\\_MAXPAYLOAD%' ESCAPE '\\' OR CommandLine LIKE '%ssh2\\_transport\\_read%' ESCAPE '\\' OR CommandLine LIKE '%chacha20-poly1305@openssh.com%' ESCAPE '\\') AND (CommandLine LIKE '%--self-test%' ESCAPE '\\' OR CommandLine LIKE '%--loopback-test%' ESCAPE '\\' OR CommandLine LIKE '%--serve%' ESCAPE '\\' OR CommandLine LIKE '%--listen-port 2222%' ESCAPE '\\' OR CommandLine LIKE '%--listen-port=2222%' ESCAPE '\\' OR CommandLine LIKE '% 2222%' ESCAPE '\\' OR CommandLine LIKE '%--body-len%' ESCAPE '\\' OR CommandLine LIKE '%--body-len=%' ESCAPE '\\' OR CommandLine LIKE '%--filler-len%' ESCAPE '\\' OR CommandLine LIKE '%--filler-len=%' ESCAPE '\\' OR CommandLine LIKE '%--mac-len%' ESCAPE '\\' OR CommandLine LIKE '%--auth-len%' ESCAPE '\\')) OR ((CommandLine LIKE '%packet\\_length=0xffffffff%' ESCAPE '\\' OR CommandLine LIKE '%packet-length 0xffffffff%' ESCAPE '\\' OR CommandLine LIKE '%packet-length=0xffffffff%' ESCAPE '\\' OR CommandLine LIKE '%--packet-length 0xffffffff%' ESCAPE '\\' OR CommandLine LIKE '%--packet-length=0xffffffff%' ESCAPE '\\' OR CommandLine LIKE '%--packet-length 4294967295%' ESCAPE '\\' OR CommandLine LIKE '%--packet-length=4294967295%' ESCAPE '\\' OR CommandLine LIKE '%packet\\_length=4294967295%' ESCAPE '\\' OR CommandLine LIKE '%0xffffffff%' ESCAPE '\\' OR CommandLine LIKE '%0xFFFFFFFF%' ESCAPE '\\' OR CommandLine LIKE '%0xFFFFFFFFU%' ESCAPE '\\' OR CommandLine LIKE '%4294967295%' ESCAPE '\\' OR CommandLine LIKE '%LIBSSH2\\_PACKET\\_MAXPAYLOAD%' ESCAPE '\\' OR CommandLine LIKE '%ssh2\\_transport\\_read%' ESCAPE '\\' OR CommandLine LIKE '%chacha20-poly1305@openssh.com%' ESCAPE '\\') AND (CommandLine LIKE '%libssh2%' ESCAPE '\\' OR CommandLine LIKE '%ssh2\\_transport\\_read%' ESCAPE '\\' OR CommandLine LIKE '%chacha20-poly1305@openssh.com%' ESCAPE '\\' OR CommandLine LIKE '%curve25519-sha256%' ESCAPE '\\' OR CommandLine LIKE '%LIBSSH2\\_PACKET\\_MAXPAYLOAD%' ESCAPE '\\' OR CommandLine LIKE '%SSH\\_MSG\\_KEXINIT%' ESCAPE '\\' OR CommandLine LIKE '%kexinit%' ESCAPE '\\' OR CommandLine LIKE '%SSH-2.0-%' ESCAPE '\\'))) AND (NOT COALESCE((CommandLine LIKE '%/authorized-lab/%' ESCAPE '\\' OR CommandLine LIKE '%/security-validation/%' ESCAPE '\\' OR CommandLine LIKE '%/purple-team/%' ESCAPE '\\' OR CommandLine LIKE '%/ci/libssh2-regression/%' ESCAPE '\\'), 0))"
+    ],
+    "schema_version": 2,
+    "source": "hatchepsoute",
+    "source_table": "logs",
+    "status": "experimental",
+    "tags": [
+      "attack.resource-development",
+      "attack.execution",
+      "attack.discovery",
+      "attack.t1587.004",
+      "attack.t1059",
+      "attack.t1082",
+      "cve.2026-55200"
+    ],
+    "title": "Potential libssh2 CVE-2026-55200 Exploit Tooling Or Probe Execution - BROAD"
+  },
+  {
+    "author": "Adama ASSIONGBON (SOC & CTI Consultant), https://linkedin.com/in/adama-assiongbon-9029893a",
+    "channel": [],
+    "description": "Detects PoC keyword indicators, unprivileged user-namespace priming, splice/page-cache manipulation targeting sensitive files, or interpreter-spawned SUID child processes consistent with CVE-2026-43503 (DirtyClone) exploitation. Wider hunting coverage than the STRICT chain rule, intended for triage rather than direct high-confidence alerting. SOC L1 should verify the source, affected host, user, process or request fields, timing, and related activity.\nLa r\u00e8gle signale un comportement potentiellement suspect. Le SOC L1 doit v\u00e9rifier la source, l\u2019h\u00f4te affect\u00e9, l\u2019utilisateur, les champs de processus ou de requ\u00eate, la chronologie et les activit\u00e9s associ\u00e9es.\n",
+    "eventid": [],
+    "falsepositives": [
+      "Security research or authorized red team testing of CVE-2026-43503",
+      "Unprivileged user-namespace creation by browsers (Chrome/Firefox sandboxing) or container runtimes (Docker, Podman, runc, bubblewrap) - partially filtered via filter_legit_sandboxing, tune per environment",
+      "Administrative scripts touching /etc/passwd, /etc/shadow or SUID binaries from temporary paths",
+      "Container security testing or Kubernetes node hardening validation",
+      "Interpreter spawning sudo/su for a routine system management command - covered by filter_legit_admin, add site-specific tooling as needed"
+    ],
+    "filename": "CVE-2026-43503_DirtyClone/rules/linux_dirtyclone_activity_cve_2026_43503_broad.yml",
+    "id": "bbf699ba-8d38-4cfe-907a-45063e7eea32",
+    "level": "medium",
+    "license": "Apache-2.0",
+    "logsource": {
+      "category": "process_creation",
+      "product": "linux"
+    },
+    "required_fields": [
+      "CommandLine",
+      "Image",
+      "ParentImage"
+    ],
+    "result_type": "event",
+    "rule": [
+      "SELECT * FROM logs WHERE ((CommandLine LIKE '%\\_\\_pskb\\_copy\\_fclone%' ESCAPE '\\' OR CommandLine LIKE '%UDP\\_ENCAP\\_ESPINUDP%' ESCAPE '\\' OR CommandLine LIKE '%ESPINUDP%' ESCAPE '\\' OR CommandLine LIKE '%AES\\_set\\_decrypt\\_key%' ESCAPE '\\' OR CommandLine LIKE '%UDP\\_CORK%' ESCAPE '\\' OR CommandLine LIKE '%dirtyclone%' ESCAPE '\\' OR CommandLine LIKE '%DirtyClone%' ESCAPE '\\' OR CommandLine LIKE '%CVE-2026-43503%' ESCAPE '\\' OR CommandLine LIKE '%cve\\_2026\\_43503%' ESCAPE '\\') OR (((Image LIKE '%/python' ESCAPE '\\' OR Image LIKE '%/python2' ESCAPE '\\' OR Image LIKE '%/python3' ESCAPE '\\' OR Image LIKE '%/perl' ESCAPE '\\' OR Image LIKE '%/ruby' ESCAPE '\\' OR Image LIKE '%/sh' ESCAPE '\\' OR Image LIKE '%/bash' ESCAPE '\\') AND (CommandLine LIKE '%/tmp/%' ESCAPE '\\' OR CommandLine LIKE '%/var/tmp/%' ESCAPE '\\' OR CommandLine LIKE '%/dev/shm/%' ESCAPE '\\' OR CommandLine LIKE '%/run/user/%' ESCAPE '\\')) AND (CommandLine LIKE '%/etc/passwd%' ESCAPE '\\' OR CommandLine LIKE '%/etc/shadow%' ESCAPE '\\' OR CommandLine LIKE '%/etc/sudoers%' ESCAPE '\\' OR CommandLine LIKE '%/usr/bin/su%' ESCAPE '\\' OR CommandLine LIKE '%/bin/su%' ESCAPE '\\' OR CommandLine LIKE '%/usr/bin/sudo%' ESCAPE '\\' OR CommandLine LIKE '%/usr/bin/pkexec%' ESCAPE '\\')) OR ((CommandLine LIKE '%splice%' ESCAPE '\\' OR CommandLine LIKE '%sendfile%' ESCAPE '\\' OR CommandLine LIKE '%page cache%' ESCAPE '\\' OR CommandLine LIKE '%drop\\_caches%' ESCAPE '\\' OR CommandLine LIKE '%posix\\_fadvise%' ESCAPE '\\' OR CommandLine LIKE '%POSIX\\_FADV\\_DONTNEED%' ESCAPE '\\') AND (CommandLine LIKE '%/etc/passwd%' ESCAPE '\\' OR CommandLine LIKE '%/etc/shadow%' ESCAPE '\\' OR CommandLine LIKE '%/etc/sudoers%' ESCAPE '\\' OR CommandLine LIKE '%/usr/bin/su%' ESCAPE '\\' OR CommandLine LIKE '%/bin/su%' ESCAPE '\\' OR CommandLine LIKE '%/usr/bin/sudo%' ESCAPE '\\' OR CommandLine LIKE '%/usr/bin/pkexec%' ESCAPE '\\')) OR ((CommandLine LIKE '%/proc/self/setgroups%' ESCAPE '\\' OR CommandLine LIKE '%/proc/self/uid\\_map%' ESCAPE '\\' OR CommandLine LIKE '%/proc/self/gid\\_map%' ESCAPE '\\') AND (NOT COALESCE(((Image LIKE '%/chrome' ESCAPE '\\' OR Image LIKE '%/chromium' ESCAPE '\\' OR Image LIKE '%/chromium-browser' ESCAPE '\\' OR Image LIKE '%/firefox' ESCAPE '\\' OR Image LIKE '%/docker' ESCAPE '\\' OR Image LIKE '%/dockerd' ESCAPE '\\' OR Image LIKE '%/containerd' ESCAPE '\\' OR Image LIKE '%/containerd-shim' ESCAPE '\\' OR Image LIKE '%/runc' ESCAPE '\\' OR Image LIKE '%/crun' ESCAPE '\\' OR Image LIKE '%/bwrap' ESCAPE '\\' OR Image LIKE '%/systemd-nspawn' ESCAPE '\\' OR Image LIKE '%/podman' ESCAPE '\\' OR Image LIKE '%/firejail' ESCAPE '\\' OR Image LIKE '%/flatpak' ESCAPE '\\' OR Image LIKE '%/snap' ESCAPE '\\' OR Image LIKE '%/distrobox' ESCAPE '\\' OR Image LIKE '%/distrobox-enter' ESCAPE '\\' OR Image LIKE '%/toolbox' ESCAPE '\\' OR Image LIKE '%/code' ESCAPE '\\' OR Image LIKE '%/code-insiders' ESCAPE '\\' OR Image LIKE '%/slack' ESCAPE '\\' OR Image LIKE '%/discord' ESCAPE '\\' OR Image LIKE '%/electron' ESCAPE '\\') AND (ParentImage LIKE '%/chrome' ESCAPE '\\' OR ParentImage LIKE '%/chromium' ESCAPE '\\' OR ParentImage LIKE '%/firefox' ESCAPE '\\' OR ParentImage LIKE '%/dockerd' ESCAPE '\\' OR ParentImage LIKE '%/containerd' ESCAPE '\\' OR ParentImage LIKE '%/code' ESCAPE '\\' OR ParentImage LIKE '%/slack' ESCAPE '\\' OR ParentImage LIKE '%/discord' ESCAPE '\\')), 0))) OR ((ParentImage LIKE '%/python3' ESCAPE '\\' OR ParentImage LIKE '%/python3.9' ESCAPE '\\' OR ParentImage LIKE '%/python3.10' ESCAPE '\\' OR ParentImage LIKE '%/python3.11' ESCAPE '\\' OR ParentImage LIKE '%/python3.12' ESCAPE '\\' OR ParentImage LIKE '%/python' ESCAPE '\\' OR ParentImage LIKE '%/perl' ESCAPE '\\' OR ParentImage LIKE '%/ruby' ESCAPE '\\' OR ParentImage LIKE '%/sh' ESCAPE '\\' OR ParentImage LIKE '%/bash' ESCAPE '\\') AND (Image LIKE '%/su' ESCAPE '\\' OR Image LIKE '%/sudo' ESCAPE '\\' OR Image LIKE '%/pkexec' ESCAPE '\\' OR Image LIKE '%/newgrp' ESCAPE '\\' OR Image LIKE '%/passwd' ESCAPE '\\' OR Image LIKE '%/gpasswd' ESCAPE '\\')) OR ((CommandLine LIKE '%/proc/1/root%' ESCAPE '\\' OR CommandLine LIKE '%/host/%' ESCAPE '\\' OR CommandLine LIKE '%/var/lib/kubelet/%' ESCAPE '\\' OR CommandLine LIKE '%/var/run/secrets/kubernetes.io/%' ESCAPE '\\' OR CommandLine LIKE '%kubectl exec%' ESCAPE '\\' OR CommandLine LIKE '%docker exec%' ESCAPE '\\' OR CommandLine LIKE '%podman exec%' ESCAPE '\\' OR CommandLine LIKE '%crictl exec%' ESCAPE '\\' OR CommandLine LIKE '%nsenter%' ESCAPE '\\') AND (CommandLine LIKE '%\\_\\_pskb\\_copy\\_fclone%' ESCAPE '\\' OR CommandLine LIKE '%UDP\\_ENCAP\\_ESPINUDP%' ESCAPE '\\' OR CommandLine LIKE '%ESPINUDP%' ESCAPE '\\' OR CommandLine LIKE '%AES\\_set\\_decrypt\\_key%' ESCAPE '\\' OR CommandLine LIKE '%UDP\\_CORK%' ESCAPE '\\' OR CommandLine LIKE '%dirtyclone%' ESCAPE '\\' OR CommandLine LIKE '%DirtyClone%' ESCAPE '\\' OR CommandLine LIKE '%CVE-2026-43503%' ESCAPE '\\' OR CommandLine LIKE '%cve\\_2026\\_43503%' ESCAPE '\\'))) AND (NOT COALESCE((CommandLine LIKE '%apt %' ESCAPE '\\' OR CommandLine LIKE '%apt-get %' ESCAPE '\\' OR CommandLine LIKE '%dnf %' ESCAPE '\\' OR CommandLine LIKE '%yum %' ESCAPE '\\' OR CommandLine LIKE '%zypper %' ESCAPE '\\' OR CommandLine LIKE '%pip %' ESCAPE '\\' OR CommandLine LIKE '%pip3 %' ESCAPE '\\' OR CommandLine LIKE '%ansible%' ESCAPE '\\' OR CommandLine LIKE '%puppet%' ESCAPE '\\' OR CommandLine LIKE '%chef%' ESCAPE '\\' OR CommandLine LIKE '%salt-call%' ESCAPE '\\' OR CommandLine LIKE '%systemctl %' ESCAPE '\\' OR CommandLine LIKE '%service %' ESCAPE '\\' OR CommandLine LIKE '%journalctl%' ESCAPE '\\' OR CommandLine LIKE '%useradd%' ESCAPE '\\' OR CommandLine LIKE '%usermod%' ESCAPE '\\' OR CommandLine LIKE '%groupadd%' ESCAPE '\\' OR CommandLine LIKE '%visudo%' ESCAPE '\\'), 0))"
+    ],
+    "schema_version": 2,
+    "source": "hatchepsoute",
+    "source_table": "logs",
+    "status": "experimental",
+    "tags": [
+      "attack.privilege-escalation",
+      "attack.execution",
+      "attack.t1068",
+      "attack.t1548.001",
+      "attack.t1059.006",
+      "cve.2026-43503"
+    ],
+    "title": "Linux LPE DirtyClone Page Cache Corruption Suspicious Activity - BROAD"
+  },
+  {
+    "author": "Adama ASSIONGBON (SOC & CTI Consultant), https://linkedin.com/in/adama-assiongbon-9029893a",
+    "channel": [],
+    "description": "Detects suspicious post-exploitation command execution spawned by telnetd, consistent with CVE-2026-24061 exploitation. SOC L1 should verify the source, affected host, user, process or request fields, timing, and related activity.\nD\u00e9tecte des ex\u00e9cutions suspectes post-exploitation spawned par telnetd, coh\u00e9rent avec l'exploitation de CVE-2026-24061. Le SOC L1 doit v\u00e9rifier la source, l\u2019h\u00f4te affect\u00e9, l\u2019utilisateur, les champs de processus ou de requ\u00eate, la chronologie et les activit\u00e9s associ\u00e9es.\n",
+    "eventid": [],
+    "falsepositives": [
+      "Very rare legacy troubleshooting via telnet involving scripted command execution",
+      "Custom automation over telnet (should be audited and justified)",
+      "Second-pass challenge fix (2026-06-22): python3.13+, pypy/pypy3 ajoutes a selection_post_tools. Note auditd: si seul execve() est audite, execveat() peut contourner; configurer auditd avec -S execve,execveat."
+    ],
+    "filename": "CVE-2026-24061_Bypass_Telnetd/rules/process_creation_linux_telnet_cve_2026_24061_broad.yml",
+    "id": "e890504e-fb31-11f0-b5a9-d7725fe06d27",
+    "level": "medium",
+    "license": "Apache-2.0",
+    "logsource": {
+      "category": "process_creation",
+      "product": "linux"
+    },
+    "required_fields": [
+      "CommandLine",
+      "Image",
+      "ParentImage"
+    ],
+    "result_type": "event",
+    "rule": [
+      "SELECT * FROM logs WHERE (ParentImage LIKE '%/in.telnetd' ESCAPE '\\' OR ParentImage LIKE '%/telnetd' ESCAPE '\\') AND ((CommandLine LIKE '%http://%' ESCAPE '\\' OR CommandLine LIKE '%https://%' ESCAPE '\\' OR CommandLine LIKE '%/dev/tcp/%' ESCAPE '\\' OR CommandLine LIKE '%/dev/udp/%' ESCAPE '\\' OR CommandLine LIKE '%nc -e%' ESCAPE '\\' OR CommandLine LIKE '%ncat -e%' ESCAPE '\\' OR CommandLine LIKE '%bash -i%' ESCAPE '\\' OR CommandLine LIKE '%sh -i%' ESCAPE '\\' OR CommandLine LIKE '%ash -i%' ESCAPE '\\' OR CommandLine LIKE '%dash -i%' ESCAPE '\\' OR CommandLine LIKE '%pwsh -c%' ESCAPE '\\' OR CommandLine LIKE '%python -c%' ESCAPE '\\' OR CommandLine LIKE '%python2 -c%' ESCAPE '\\' OR CommandLine LIKE '%python3 -c%' ESCAPE '\\' OR CommandLine LIKE '%perl -e%' ESCAPE '\\' OR CommandLine LIKE '%ruby -e%' ESCAPE '\\' OR CommandLine LIKE '%lua -e%' ESCAPE '\\' OR CommandLine LIKE '%lua5 -e%' ESCAPE '\\' OR CommandLine LIKE '%busybox sh%' ESCAPE '\\' OR CommandLine LIKE '%busybox ash%' ESCAPE '\\' OR CommandLine LIKE '%busybox nc%' ESCAPE '\\' OR CommandLine LIKE '%base64 -d%' ESCAPE '\\' OR CommandLine LIKE '%base64 --decode%' ESCAPE '\\' OR CommandLine LIKE '%|sh %' ESCAPE '\\' OR CommandLine LIKE '%|bash %' ESCAPE '\\' OR CommandLine LIKE '%|ash %' ESCAPE '\\' OR CommandLine LIKE '%| sh %' ESCAPE '\\' OR CommandLine LIKE '%| bash %' ESCAPE '\\' OR CommandLine LIKE '%| ash %' ESCAPE '\\') OR (Image LIKE '%/curl' ESCAPE '\\' OR Image LIKE '%/wget' ESCAPE '\\' OR Image LIKE '%/fetch' ESCAPE '\\' OR Image LIKE '%/nc' ESCAPE '\\' OR Image LIKE '%/ncat' ESCAPE '\\' OR Image LIKE '%/socat' ESCAPE '\\' OR Image LIKE '%/python' ESCAPE '\\' OR Image LIKE '%/python2' ESCAPE '\\' OR Image LIKE '%/python3' ESCAPE '\\' OR Image LIKE '%/python3.10' ESCAPE '\\' OR Image LIKE '%/python3.11' ESCAPE '\\' OR Image LIKE '%/python3.12' ESCAPE '\\' OR Image LIKE '%/python3.13' ESCAPE '\\' OR Image LIKE '%/python3.14' ESCAPE '\\' OR Image LIKE '%/pypy' ESCAPE '\\' OR Image LIKE '%/pypy3' ESCAPE '\\' OR Image LIKE '%/perl' ESCAPE '\\' OR Image LIKE '%/perl5' ESCAPE '\\' OR Image LIKE '%/ruby' ESCAPE '\\' OR Image LIKE '%/lua' ESCAPE '\\' OR Image LIKE '%/lua5.3' ESCAPE '\\' OR Image LIKE '%/lua5.4' ESCAPE '\\' OR Image LIKE '%/awk' ESCAPE '\\' OR Image LIKE '%/gawk' ESCAPE '\\' OR Image LIKE '%/mawk' ESCAPE '\\' OR Image LIKE '%/busybox' ESCAPE '\\' OR Image LIKE '%/nmap' ESCAPE '\\' OR Image LIKE '%/openssl' ESCAPE '\\' OR Image LIKE '%/tftp' ESCAPE '\\'))"
+    ],
+    "schema_version": 2,
+    "source": "hatchepsoute",
+    "source_table": "logs",
+    "status": "experimental",
+    "tags": [
+      "attack.initial-access",
+      "attack.execution",
+      "attack.t1059",
+      "attack.t1190",
+      "cve.2026-24061"
+    ],
+    "title": "Telnet-based suspicious command execution indicative of exploitation (CVE-2026-24061)"
+  },
+  {
+    "author": "Adama ASSIONGBON (SOC & CTI Consultant), https://linkedin.com/in/adama-assiongbon-9029893a",
+    "channel": [],
+    "description": "Detects AF_ALG/authencesn kernel crypto API abuse, SUID binary access patterns, or interpreter-spawned SUID child processes consistent with CVE-2026-31431 Copy Fail LPE. BROAD. SOC L1 should verify the source, affected host, user, process or request fields, timing, and related activity.\nD\u00e9tecte des activit\u00e9s suspectes AF_ALG/authencesn ou acc\u00e8s aux binaires SUID potentiellement li\u00e9s \u00e0 CVE-2026-31431 (Copy Fail LPE). Inclut les PoC, sockets AF_ALG, manipulations splice/page-cache, acc\u00e8s \u00e0 /etc/passwd. sendfile() inclus comme alternative \u00e0 splice() dans certaines variantes de l'exploit. R\u00e8gle BROAD. Le SOC L1 doit v\u00e9rifier la source, l\u2019h\u00f4te affect\u00e9, l\u2019utilisateur, les champs de processus ou de requ\u00eate, la chronologie et les activit\u00e9s associ\u00e9es.\n",
+    "eventid": [],
+    "falsepositives": [
+      "Security research or authorized red team testing",
+      "Kernel crypto API testing using AF_ALG/authencesn",
+      "Administrative scripts touching /etc/passwd or SUID binaries from temporary paths",
+      "Container security testing or Kubernetes node hardening validation",
+      "Interpreter spawning sudo/su with a system management command - covered by expanded filter_legit_admin (systemctl, useradd, pip, etc.); add custom entries for site-specific tooling"
+    ],
+    "filename": "CVE-2026-31431_Copy_Fail/rules/linux_lpe_copy_fail_af_alg_activity_cve_2026_31431_broad.yml",
+    "id": "eced134a-480a-11f1-9150-5f4e9f284cb4",
+    "level": "medium",
+    "license": "Apache-2.0",
+    "logsource": {
+      "category": "process_creation",
+      "product": "linux"
+    },
+    "required_fields": [
+      "CommandLine",
+      "Image",
+      "ParentImage"
+    ],
+    "result_type": "event",
+    "rule": [
+      "SELECT * FROM logs WHERE ((CommandLine LIKE '%AF\\_ALG%' ESCAPE '\\' OR CommandLine LIKE '%authencesn%' ESCAPE '\\' OR CommandLine LIKE '%hmac(sha256)%' ESCAPE '\\' OR CommandLine LIKE '%cbc(aes)%' ESCAPE '\\' OR CommandLine LIKE '%ALG\\_SET\\_AEAD\\_ASSOCLEN%' ESCAPE '\\' OR CommandLine LIKE '%ALG\\_SET\\_OP%' ESCAPE '\\' OR CommandLine LIKE '%socket.AF\\_ALG%' ESCAPE '\\' OR CommandLine LIKE '%copy\\_fail%' ESCAPE '\\' OR CommandLine LIKE '%CVE-2026-31431%' ESCAPE '\\' OR CommandLine LIKE '%cve\\_2026\\_31431%' ESCAPE '\\') OR (((Image LIKE '%/python' ESCAPE '\\' OR Image LIKE '%/python2' ESCAPE '\\' OR Image LIKE '%/python3' ESCAPE '\\' OR Image LIKE '%/perl' ESCAPE '\\' OR Image LIKE '%/ruby' ESCAPE '\\' OR Image LIKE '%/sh' ESCAPE '\\' OR Image LIKE '%/bash' ESCAPE '\\') AND (CommandLine LIKE '%/tmp/%' ESCAPE '\\' OR CommandLine LIKE '%/var/tmp/%' ESCAPE '\\' OR CommandLine LIKE '%/dev/shm/%' ESCAPE '\\' OR CommandLine LIKE '%/run/user/%' ESCAPE '\\')) AND (CommandLine LIKE '%/etc/passwd%' ESCAPE '\\' OR CommandLine LIKE '%/usr/bin/su%' ESCAPE '\\' OR CommandLine LIKE '%/bin/su%' ESCAPE '\\' OR CommandLine LIKE '%/usr/bin/sudo%' ESCAPE '\\' OR CommandLine LIKE '%/usr/bin/passwd%' ESCAPE '\\' OR CommandLine LIKE '%/usr/bin/pkexec%' ESCAPE '\\' OR CommandLine LIKE '%/usr/bin/newgrp%' ESCAPE '\\' OR CommandLine LIKE '%/usr/bin/gpasswd%' ESCAPE '\\' OR CommandLine LIKE '%/usr/bin/chsh%' ESCAPE '\\' OR CommandLine LIKE '%/usr/bin/chfn%' ESCAPE '\\')) OR ((CommandLine LIKE '%splice%' ESCAPE '\\' OR CommandLine LIKE '%os.splice%' ESCAPE '\\' OR CommandLine LIKE '%page cache%' ESCAPE '\\' OR CommandLine LIKE '%drop\\_caches%' ESCAPE '\\' OR CommandLine LIKE '%posix\\_fadvise%' ESCAPE '\\' OR CommandLine LIKE '%POSIX\\_FADV\\_DONTNEED%' ESCAPE '\\' OR CommandLine LIKE '%sendfile%' ESCAPE '\\') AND (CommandLine LIKE '%/etc/passwd%' ESCAPE '\\' OR CommandLine LIKE '%/usr/bin/su%' ESCAPE '\\' OR CommandLine LIKE '%/bin/su%' ESCAPE '\\' OR CommandLine LIKE '%/usr/bin/sudo%' ESCAPE '\\' OR CommandLine LIKE '%/usr/bin/passwd%' ESCAPE '\\' OR CommandLine LIKE '%/usr/bin/pkexec%' ESCAPE '\\' OR CommandLine LIKE '%/usr/bin/newgrp%' ESCAPE '\\' OR CommandLine LIKE '%/usr/bin/gpasswd%' ESCAPE '\\' OR CommandLine LIKE '%/usr/bin/chsh%' ESCAPE '\\' OR CommandLine LIKE '%/usr/bin/chfn%' ESCAPE '\\')) OR ((CommandLine LIKE '%/proc/1/root%' ESCAPE '\\' OR CommandLine LIKE '%/host/%' ESCAPE '\\' OR CommandLine LIKE '%/var/lib/kubelet/%' ESCAPE '\\' OR CommandLine LIKE '%/var/run/secrets/kubernetes.io/%' ESCAPE '\\' OR CommandLine LIKE '%kubectl exec%' ESCAPE '\\' OR CommandLine LIKE '%nsenter%' ESCAPE '\\') AND (CommandLine LIKE '%AF\\_ALG%' ESCAPE '\\' OR CommandLine LIKE '%authencesn%' ESCAPE '\\' OR CommandLine LIKE '%hmac(sha256)%' ESCAPE '\\' OR CommandLine LIKE '%cbc(aes)%' ESCAPE '\\' OR CommandLine LIKE '%ALG\\_SET\\_AEAD\\_ASSOCLEN%' ESCAPE '\\' OR CommandLine LIKE '%ALG\\_SET\\_OP%' ESCAPE '\\' OR CommandLine LIKE '%socket.AF\\_ALG%' ESCAPE '\\' OR CommandLine LIKE '%copy\\_fail%' ESCAPE '\\' OR CommandLine LIKE '%CVE-2026-31431%' ESCAPE '\\' OR CommandLine LIKE '%cve\\_2026\\_31431%' ESCAPE '\\')) OR ((Image LIKE '%/tmp/%' ESCAPE '\\' OR Image LIKE '%/var/tmp/%' ESCAPE '\\' OR Image LIKE '%/dev/shm/%' ESCAPE '\\' OR Image LIKE '%/run/user/%' ESCAPE '\\') AND (CommandLine LIKE '%/etc/passwd%' ESCAPE '\\' OR CommandLine LIKE '%/usr/bin/su%' ESCAPE '\\' OR CommandLine LIKE '%/bin/su%' ESCAPE '\\' OR CommandLine LIKE '%/usr/bin/sudo%' ESCAPE '\\' OR CommandLine LIKE '%/usr/bin/passwd%' ESCAPE '\\' OR CommandLine LIKE '%/usr/bin/pkexec%' ESCAPE '\\' OR CommandLine LIKE '%/usr/bin/newgrp%' ESCAPE '\\' OR CommandLine LIKE '%/usr/bin/gpasswd%' ESCAPE '\\' OR CommandLine LIKE '%/usr/bin/chsh%' ESCAPE '\\' OR CommandLine LIKE '%/usr/bin/chfn%' ESCAPE '\\')) OR ((ParentImage LIKE '%/python3' ESCAPE '\\' OR ParentImage LIKE '%/python3.9' ESCAPE '\\' OR ParentImage LIKE '%/python3.10' ESCAPE '\\' OR ParentImage LIKE '%/python3.11' ESCAPE '\\' OR ParentImage LIKE '%/python3.12' ESCAPE '\\' OR ParentImage LIKE '%/python' ESCAPE '\\' OR ParentImage LIKE '%/perl' ESCAPE '\\' OR ParentImage LIKE '%/ruby' ESCAPE '\\' OR ParentImage LIKE '%/sh' ESCAPE '\\' OR ParentImage LIKE '%/bash' ESCAPE '\\') AND (Image LIKE '%/su' ESCAPE '\\' OR Image LIKE '%/sudo' ESCAPE '\\' OR Image LIKE '%/pkexec' ESCAPE '\\' OR Image LIKE '%/newgrp' ESCAPE '\\' OR Image LIKE '%/passwd' ESCAPE '\\' OR Image LIKE '%/gpasswd' ESCAPE '\\' OR Image LIKE '%/chsh' ESCAPE '\\' OR Image LIKE '%/chfn' ESCAPE '\\'))) AND (NOT COALESCE((CommandLine LIKE '%apt %' ESCAPE '\\' OR CommandLine LIKE '%apt-get %' ESCAPE '\\' OR CommandLine LIKE '%dnf %' ESCAPE '\\' OR CommandLine LIKE '%yum %' ESCAPE '\\' OR CommandLine LIKE '%zypper %' ESCAPE '\\' OR CommandLine LIKE '%pip %' ESCAPE '\\' OR CommandLine LIKE '%pip3 %' ESCAPE '\\' OR CommandLine LIKE '%ansible%' ESCAPE '\\' OR CommandLine LIKE '%puppet%' ESCAPE '\\' OR CommandLine LIKE '%chef%' ESCAPE '\\' OR CommandLine LIKE '%salt-call%' ESCAPE '\\' OR CommandLine LIKE '%systemctl %' ESCAPE '\\' OR CommandLine LIKE '%service %' ESCAPE '\\' OR CommandLine LIKE '%journalctl%' ESCAPE '\\' OR CommandLine LIKE '%useradd%' ESCAPE '\\' OR CommandLine LIKE '%usermod%' ESCAPE '\\' OR CommandLine LIKE '%groupadd%' ESCAPE '\\' OR CommandLine LIKE '%visudo%' ESCAPE '\\' OR CommandLine LIKE '%python3 %' ESCAPE '\\' OR CommandLine LIKE '%python %' ESCAPE '\\' OR CommandLine LIKE '%perl %' ESCAPE '\\' OR CommandLine LIKE '%ruby %' ESCAPE '\\'), 0))"
+    ],
+    "schema_version": 2,
+    "source": "hatchepsoute",
+    "source_table": "logs",
+    "status": "experimental",
+    "tags": [
+      "attack.privilege-escalation",
+      "attack.execution",
+      "attack.t1068",
+      "attack.t1548.001",
+      "attack.t1059.006",
+      "cve.2026-31431"
+    ],
+    "title": "Linux LPE via Copy Fail AF_ALG / authencesn suspicious activity (CVE-2026-31431)"
+  },
+  {
+    "author": "Adama ASSIONGBON (SOC & CTI Consultant), https://linkedin.com/in/adama-assiongbon-9029893a",
+    "channel": [],
+    "description": "High-confidence CVE-2026-31431 Copy Fail LPE chain: interpreter process running from a temporary path spawns a SUID binary (su, sudo, pkexec), or a compiled binary from a temporary path invokes a SUID binary after a privilege transition signal. Previous condition required all kernel API names (AF_ALG, splice) simultaneously in a single CommandLine, which is structurally unreachable. Fixed to use observable parent-child process relationships instead. SOC L1 should verify the source, affected host, user, process or request fields, timing, and related activity.\nD\u00e9tecte la cha\u00eene d'exploitation haute confiance de CVE-2026-31431 (Copy Fail LPE) via les relations parent-enfant observables : un interpr\u00e9teur lanc\u00e9 depuis un r\u00e9pertoire temporaire spawne un binaire SUID, ou un binaire compil\u00e9 depuis /tmp invoque un binaire SUID avec transition de privil\u00e8ges. La condition pr\u00e9c\u00e9dente exigeait AF_ALG + splice + /etc/passwd dans la m\u00eame CommandLine - structurellement impossible. Corrig\u00e9. Le SOC L1 doit v\u00e9rifier la source, l\u2019h\u00f4te affect\u00e9, l\u2019utilisateur, les champs de processus ou de requ\u00eate, la chronologie et les activit\u00e9s associ\u00e9es.\n",
+    "eventid": [],
+    "falsepositives": [
+      "Authorized exploit validation in lab environments - suppress by source user or window in SIEM",
+      "Red team activity testing CVE-2026-31431 - use scheduled suppression windows",
+      "Kernel crypto API research involving AF_ALG/authencesn and SUID test binaries from /tmp",
+      {
+        "Branch 2 (compiled)": "legitimate sysadmin scripts staged in /tmp invoking sudo/su - verify Image hash and User against change management records"
+      },
+      "2026-06-25 fix: replaced structurally unreachable AF_ALG+splice+/etc/passwd multi-AND condition with observable parent-child process relationship"
+    ],
+    "filename": "CVE-2026-31431_Copy_Fail/rules/linux_lpe_copy_fail_af_alg_pagecache_chain_cve_2026_31431_strict.yml",
+    "id": "2aa12862-480a-11f1-88ec-3f9463be9c19",
+    "level": "high",
+    "license": "Apache-2.0",
+    "logsource": {
+      "category": "process_creation",
+      "product": "linux"
+    },
+    "required_fields": [
+      "CommandLine",
+      "Image",
+      "ParentCommandLine",
+      "ParentImage"
+    ],
+    "result_type": "event",
+    "rule": [
+      "SELECT * FROM logs WHERE (((ParentImage LIKE '%/python3' ESCAPE '\\' OR ParentImage LIKE '%/python3.9' ESCAPE '\\' OR ParentImage LIKE '%/python3.10' ESCAPE '\\' OR ParentImage LIKE '%/python3.11' ESCAPE '\\' OR ParentImage LIKE '%/python3.12' ESCAPE '\\' OR ParentImage LIKE '%/python' ESCAPE '\\' OR ParentImage LIKE '%/perl' ESCAPE '\\' OR ParentImage LIKE '%/ruby' ESCAPE '\\' OR ParentImage LIKE '%/bash' ESCAPE '\\' OR ParentImage LIKE '%/sh' ESCAPE '\\') AND (ParentCommandLine LIKE '%/tmp/%' ESCAPE '\\' OR ParentCommandLine LIKE '%/var/tmp/%' ESCAPE '\\' OR ParentCommandLine LIKE '%/dev/shm/%' ESCAPE '\\' OR ParentCommandLine LIKE '%/run/user/%' ESCAPE '\\' OR ParentCommandLine LIKE '%copy\\_fail%' ESCAPE '\\' OR ParentCommandLine LIKE '%CVE-2026-31431%' ESCAPE '\\' OR ParentCommandLine LIKE '%cve\\_2026\\_31431%' ESCAPE '\\')) AND (Image LIKE '%/su' ESCAPE '\\' OR Image LIKE '%/sudo' ESCAPE '\\' OR Image LIKE '%/pkexec' ESCAPE '\\' OR Image LIKE '%/passwd' ESCAPE '\\' OR Image LIKE '%/newgrp' ESCAPE '\\' OR Image LIKE '%/gpasswd' ESCAPE '\\')) OR ((Image LIKE '%/tmp/%' ESCAPE '\\' OR Image LIKE '%/var/tmp/%' ESCAPE '\\' OR Image LIKE '%/dev/shm/%' ESCAPE '\\' OR Image LIKE '%/run/user/%' ESCAPE '\\') AND (CommandLine LIKE '%/usr/bin/su%' ESCAPE '\\' OR CommandLine LIKE '%/bin/su%' ESCAPE '\\' OR CommandLine LIKE '%/usr/bin/sudo%' ESCAPE '\\' OR CommandLine LIKE '%/usr/bin/passwd%' ESCAPE '\\' OR CommandLine LIKE '%/usr/bin/pkexec%' ESCAPE '\\' OR CommandLine LIKE '%/usr/bin/newgrp%' ESCAPE '\\' OR CommandLine LIKE '%/usr/bin/gpasswd%' ESCAPE '\\' OR CommandLine LIKE '%/etc/passwd%' ESCAPE '\\') AND (CommandLine LIKE '%su %' ESCAPE '\\' OR CommandLine LIKE '%/bin/su%' ESCAPE '\\' OR CommandLine LIKE '%/usr/bin/su%' ESCAPE '\\' OR CommandLine LIKE '%sudo %' ESCAPE '\\' OR CommandLine LIKE '%pkexec%' ESCAPE '\\' OR CommandLine LIKE '%uid=0%' ESCAPE '\\'))"
+    ],
+    "schema_version": 2,
+    "source": "hatchepsoute",
+    "source_table": "logs",
+    "status": "experimental",
+    "tags": [
+      "attack.privilege-escalation",
+      "attack.execution",
+      "attack.t1068",
+      "attack.t1548.001",
+      "attack.t1059.006",
+      "cve.2026-31431"
+    ],
+    "title": "Linux LPE Copy Fail AF_ALG page cache corruption exploitation chain (CVE-2026-31431)"
+  },
+  {
+    "author": "Adama ASSIONGBON (SOC & CTI Consultant), https://linkedin.com/in/adama-assiongbon-9029893a",
+    "channel": [],
+    "description": "Detects suspicious child process execution (shell, interpreter, network tool) spawned under the Ivanti Connect Secure web process context, consistent with post-exploitation following CVE-2025-22457 stack overflow RCE (CVSS 9.0, exploited by UNC5221). SOC L1 should verify the source, affected host, user, process or request fields, timing, and related activity.\nD\u00e9tecte l'ex\u00e9cution de processus enfants suspects (shell, interpr\u00e9teur, outil r\u00e9seau) lanc\u00e9s depuis le contexte du processus web Ivanti Connect Secure, caract\u00e9ristique d'une post-exploitation suite \u00e0 CVE-2025-22457 (stack overflow RCE pr\u00e9-auth, CVSS 9.0, exploit\u00e9 par UNC5221/APT chinois). Le SOC L1 doit v\u00e9rifier la source, l\u2019h\u00f4te affect\u00e9, l\u2019utilisateur, les champs de processus ou de requ\u00eate, la chronologie et les activit\u00e9s associ\u00e9es.\n",
+    "eventid": [],
+    "falsepositives": [
+      "Ivanti maintenance scripts that invoke shell interpreters (tune filter_main_legitimate_pulse with exact ParentCommandLine paths)",
+      "Automated backup or monitoring processes under the Ivanti service user context"
+    ],
+    "filename": "CVE-2025-22457_Ivanti_Connect_Secure_RCE/rules/lnx_ivanti_connect_secure_webshell_process_cve_2025_22457_strict.yml",
+    "id": "2c5cc929-389d-4041-ae68-7c07ffe0df8c",
+    "level": "high",
+    "license": "Apache-2.0",
+    "logsource": {
+      "category": "process_creation",
+      "product": "linux"
+    },
+    "required_fields": [
+      "CommandLine",
+      "Image",
+      "ParentCommandLine",
+      "ParentImage"
+    ],
+    "result_type": "event",
+    "rule": [
+      "SELECT * FROM logs WHERE ((ParentImage LIKE '%/home/bin/web' ESCAPE '\\' OR ParentImage LIKE '%/home/bin/dsmc' ESCAPE '\\' OR ParentImage LIKE '%/home/bin/dsagent' ESCAPE '\\' OR ParentImage LIKE '%/home/bin/dsserver' ESCAPE '\\') OR (ParentImage LIKE '%/opt/pulsesecure/%' ESCAPE '\\' OR ParentImage LIKE '%/opt/ivanti/%' ESCAPE '\\')) AND ((Image LIKE '%/sh' ESCAPE '\\' OR Image LIKE '%/bash' ESCAPE '\\' OR Image LIKE '%/dash' ESCAPE '\\' OR Image LIKE '%/ash' ESCAPE '\\' OR Image LIKE '%/ksh' ESCAPE '\\' OR Image LIKE '%/zsh' ESCAPE '\\' OR Image LIKE '%/perl' ESCAPE '\\' OR Image LIKE '%/perl5' ESCAPE '\\' OR Image LIKE '%/python' ESCAPE '\\' OR Image LIKE '%/python3' ESCAPE '\\' OR Image LIKE '%/python2' ESCAPE '\\' OR Image LIKE '%/python2.7' ESCAPE '\\' OR Image LIKE '%/python3.9' ESCAPE '\\' OR Image LIKE '%/python3.10' ESCAPE '\\' OR Image LIKE '%/python3.11' ESCAPE '\\' OR Image LIKE '%/ruby' ESCAPE '\\' OR Image LIKE '%/busybox' ESCAPE '\\') OR (Image LIKE '%/curl' ESCAPE '\\' OR Image LIKE '%/wget' ESCAPE '\\' OR Image LIKE '%/nc' ESCAPE '\\' OR Image LIKE '%/ncat' ESCAPE '\\' OR Image LIKE '%/netcat' ESCAPE '\\' OR Image LIKE '%/socat' ESCAPE '\\' OR Image LIKE '%/nmap' ESCAPE '\\' OR Image LIKE '%/scp' ESCAPE '\\' OR Image LIKE '%/sftp' ESCAPE '\\' OR Image LIKE '%/ftp' ESCAPE '\\' OR Image LIKE '%/telnet' ESCAPE '\\' OR Image LIKE '%/openssl' ESCAPE '\\' OR Image LIKE '%/chmod' ESCAPE '\\' OR Image LIKE '%/chown' ESCAPE '\\') OR (CommandLine LIKE '%wget %' ESCAPE '\\' OR CommandLine LIKE '%curl %' ESCAPE '\\' OR CommandLine LIKE '%/tmp/%' ESCAPE '\\' OR CommandLine LIKE '%/dev/shm%' ESCAPE '\\' OR CommandLine LIKE '%/dev/tcp/%' ESCAPE '\\' OR CommandLine LIKE '%http://%' ESCAPE '\\' OR CommandLine LIKE '%https://%' ESCAPE '\\' OR CommandLine LIKE '%base64 %' ESCAPE '\\' OR CommandLine LIKE '%base64 -d%' ESCAPE '\\' OR CommandLine LIKE '%bash -i%' ESCAPE '\\' OR CommandLine LIKE '%bash -c%' ESCAPE '\\' OR CommandLine LIKE '%sh -i%' ESCAPE '\\' OR CommandLine LIKE '%sh -c%' ESCAPE '\\' OR CommandLine LIKE '%nc -%' ESCAPE '\\' OR CommandLine LIKE '%python -c%' ESCAPE '\\' OR CommandLine LIKE '%python -m%' ESCAPE '\\' OR CommandLine LIKE '%perl -e%' ESCAPE '\\' OR CommandLine LIKE '%openssl s\\_client%' ESCAPE '\\' OR CommandLine LIKE '%mkfifo%' ESCAPE '\\' OR CommandLine LIKE '%nohup %' ESCAPE '\\' OR CommandLine LIKE '%chmod +x%' ESCAPE '\\' OR CommandLine LIKE '%>& /dev/%' ESCAPE '\\' OR CommandLine LIKE '%0>&1%' ESCAPE '\\' OR CommandLine LIKE '%/tmp/.i%' ESCAPE '\\' OR CommandLine LIKE '%/tmp/.p%' ESCAPE '\\' OR CommandLine LIKE '%/tmp/.m%' ESCAPE '\\' OR CommandLine LIKE '%/tmp/.w%' ESCAPE '\\' OR CommandLine LIKE '%/tmp/.s%' ESCAPE '\\')) AND (NOT COALESCE((ParentCommandLine LIKE '%dsmc%' ESCAPE '\\' OR ParentCommandLine LIKE '%/opt/pulse/bin%' ESCAPE '\\' OR ParentCommandLine LIKE '%health-check%' ESCAPE '\\'), 0))"
+    ],
+    "schema_version": 2,
+    "source": "hatchepsoute",
+    "source_table": "logs",
+    "status": "experimental",
+    "tags": [
+      "attack.initial-access",
+      "attack.execution",
+      "attack.persistence",
+      "attack.command-and-control",
+      "attack.t1190",
+      "attack.t1059.004",
+      "attack.t1105",
+      "attack.t1505.003",
+      "cve.2025-22457"
+    ],
+    "title": "Ivanti Connect Secure post-exploit process execution after stack overflow RCE (CVE-2025-22457) - STRICT"
+  },
+  {
+    "author": "Adama ASSIONGBON (SOC & CTI Consultant), https://linkedin.com/in/adama-assiongbon-9029893a",
+    "channel": [],
+    "description": "Detects Konsole spawning a shell or interpreter with a user-writable script or command argument, indicating likely exploitation of CVE-2025-49091. SOC L1 should verify the source, affected host, user, process or request fields, timing, and related activity.\nD\u00e9tecte Konsole lan\u00e7ant un shell ou un interpr\u00e9teur avec un script ou argument situ\u00e9 dans un emplacement contr\u00f4l\u00e9 par l\u2019utilisateur, signalant probablement le repli vuln\u00e9rable de CVE-2025-49091. Le SOC L1 doit v\u00e9rifier la source, l\u2019h\u00f4te affect\u00e9, l\u2019utilisateur, les champs de processus ou de requ\u00eate, la chronologie et les activit\u00e9s associ\u00e9es.\n",
+    "eventid": [],
+    "falsepositives": [
+      "Authorized security testing using a disposable lab profile",
+      "Developer or administrator testing of scripts from a temporary directory"
+    ],
+    "filename": "CVE-2025-49091_KDE_Konsole_RCE/rules/linux_konsole_shell_fallback_cve_2025_49091_strict.yml",
+    "id": "2e7b9a41-6d53-4f88-bc20-1a4e7d9f3052",
+    "level": "high",
+    "license": "Apache-2.0",
+    "logsource": {
+      "category": "process_creation",
+      "product": "linux"
+    },
+    "required_fields": [
+      "CommandLine",
+      "Image",
+      "ParentCommandLine",
+      "ParentImage"
+    ],
+    "result_type": "event",
+    "rule": [
+      "SELECT * FROM logs WHERE ParentImage LIKE '%/konsole' ESCAPE '\\' AND (CommandLine LIKE '%/Downloads/%' ESCAPE '\\' OR CommandLine LIKE '%/downloads/%' ESCAPE '\\' OR CommandLine LIKE '%/.cache/%' ESCAPE '\\' OR CommandLine LIKE '%/tmp/%' ESCAPE '\\' OR CommandLine LIKE '%/var/tmp/%' ESCAPE '\\' OR CommandLine LIKE '%/dev/shm/%' ESCAPE '\\' OR CommandLine LIKE '%/proc/self/cwd/%' ESCAPE '\\') AND ((Image LIKE '%/bash' ESCAPE '\\' OR Image LIKE '%/sh' ESCAPE '\\' OR Image LIKE '%/dash' ESCAPE '\\' OR Image LIKE '%/zsh' ESCAPE '\\' OR Image LIKE '%/fish' ESCAPE '\\' OR Image LIKE '%/python' ESCAPE '\\' OR Image LIKE '%/python3' ESCAPE '\\' OR Image LIKE '%/perl' ESCAPE '\\' OR Image LIKE '%/ruby' ESCAPE '\\') OR (Image LIKE '%/Downloads/%' ESCAPE '\\' OR Image LIKE '%/downloads/%' ESCAPE '\\' OR Image LIKE '%/.cache/%' ESCAPE '\\' OR Image LIKE '%/tmp/%' ESCAPE '\\' OR Image LIKE '%/var/tmp/%' ESCAPE '\\' OR Image LIKE '%/dev/shm/%' ESCAPE '\\' OR Image LIKE '%/proc/self/cwd/%' ESCAPE '\\')) AND (ParentCommandLine REGEXP '(?i)(telnet|rlogin|ssh)(?::|%3a)(?://|%2f%2f)' OR ParentCommandLine REGEXP '(?i)(^|\\s)(-e|--execute)\\s+(telnet|rlogin|ssh)(\\s|$)')"
+    ],
+    "schema_version": 2,
+    "source": "hatchepsoute",
+    "source_table": "logs",
+    "status": "experimental",
+    "tags": [
+      "attack.execution",
+      "attack.t1059",
+      "attack.t1059.004",
+      "attack.t1204.001",
+      "cve.2025-49091"
+    ],
+    "title": "High Confidence Konsole Shell Fallback Execution (CVE-2025-49091) - STRICT"
+  },
+  {
+    "author": "Adama ASSIONGBON (SOC & CTI Consultant), https://linkedin.com/in/adama-assiongbon-9029893a",
+    "channel": [],
+    "description": "Detects a suspicious non-sshd process listening on SSH test ports from user or temporary paths, consistent with renamed libssh2 CVE-2026-55200 PoC servers. SOC L1 should verify the source, affected host, user, process or request fields, timing, and related activity.\nDetecte un serveur SSH de test suspect en ecoute, typique du PoC C 0xBlackash une fois compile et renomme. Le PoC ecoute par defaut sur TCP/2222, accepte des clients libssh2 vulnerables et envoie un paquet SSH malforme avec packet_length 0xffffffff. Cette regle couvre l angle mort ou la creation de processus ne contient plus aucun mot-cle CVE apres renommage du binaire. Le SOC L1 doit v\u00e9rifier la source, l\u2019h\u00f4te affect\u00e9, l\u2019utilisateur, les champs de processus ou de requ\u00eate, la chronologie et les activit\u00e9s associ\u00e9es.\n",
+    "eventid": [],
+    "falsepositives": [
+      "Authorized SSH honeypots or lab servers listening on high SSH test ports",
+      "Developer test SSH servers under home directories",
+      "Containerized SSH test fixtures running outside standard daemon paths"
+    ],
+    "filename": "CVE-2026-55200_libssh2_OOB_Write/rules/linux_libssh2_cve_2026_55200_malicious_ssh_server_listen_strict.yml",
+    "id": "43190171-af97-41ff-a9fd-ff2e89c445d6",
+    "level": "high",
+    "license": "Apache-2.0",
+    "logsource": {
+      "category": "network_connection",
+      "product": "linux"
+    },
+    "required_fields": [
+      "Action",
+      "CommandLine",
+      "DestinationPort",
+      "Image",
+      "Protocol"
+    ],
+    "result_type": "event",
+    "rule": [
+      "SELECT * FROM logs WHERE ((DestinationPort=2222 OR DestinationPort=2022 OR DestinationPort=2200 OR DestinationPort=8022) AND Protocol LIKE '%tcp%' ESCAPE '\\') AND (`Action` LIKE '%listen%' ESCAPE '\\' OR `Action` LIKE '%listening%' ESCAPE '\\' OR `Action` LIKE '%bound%' ESCAPE '\\' OR `Action` LIKE '%accept%' ESCAPE '\\') AND ((Image LIKE '%/tmp/%' ESCAPE '\\' OR Image LIKE '%/var/tmp/%' ESCAPE '\\' OR Image LIKE '%/dev/shm/%' ESCAPE '\\' OR Image LIKE '%/home/%' ESCAPE '\\' OR Image LIKE '%/root/%' ESCAPE '\\' OR Image LIKE '%/opt/%' ESCAPE '\\') OR (CommandLine LIKE '%CVE-2026-55200%' ESCAPE '\\' OR CommandLine LIKE '%0xBlackash%' ESCAPE '\\' OR CommandLine LIKE '%malicious%' ESCAPE '\\' OR CommandLine LIKE '%poc%' ESCAPE '\\' OR CommandLine LIKE '% 2222%' ESCAPE '\\' OR CommandLine LIKE '% 2022%' ESCAPE '\\' OR CommandLine LIKE '% 2200%' ESCAPE '\\' OR CommandLine LIKE '% 8022%' ESCAPE '\\')) AND (NOT COALESCE((Image LIKE '%/sshd' ESCAPE '\\' OR Image LIKE '%/dropbear' ESCAPE '\\' OR Image LIKE '%/dropbearmulti' ESCAPE '\\'), 0)) AND (NOT COALESCE(((Image LIKE '%/authorized-lab/%' ESCAPE '\\' OR Image LIKE '%/security-validation/%' ESCAPE '\\' OR Image LIKE '%/purple-team/%' ESCAPE '\\') AND (CommandLine LIKE '%/authorized-lab/%' ESCAPE '\\' OR CommandLine LIKE '%/security-validation/%' ESCAPE '\\' OR CommandLine LIKE '%/purple-team/%' ESCAPE '\\')), 0))"
+    ],
+    "schema_version": 2,
+    "source": "hatchepsoute",
+    "source_table": "logs",
+    "status": "experimental",
+    "tags": [
+      "attack.resource-development",
+      "attack.command-and-control",
+      "attack.t1587.004",
+      "attack.t1105",
+      "cve.2026-55200"
+    ],
+    "title": "Suspicious Malicious SSH PoC Server Listening For libssh2 CVE-2026-55200 - STRICT"
+  },
+  {
+    "author": "Adama ASSIONGBON (SOC & CTI Consultant), https://linkedin.com/in/adama-assiongbon-9029893a",
+    "channel": [],
+    "description": "Detects suspicious shell, discovery, download, or secret access commands spawned by a Langflow Python process, consistent with successful CVE-2026-9198 exploitation. SOC L1 should verify the source, affected host, user, process or request fields, timing, and related activity.\nDetecte l'execution de processus suspects lances par le runtime Python/Langflow, coherente avec une exploitation reussie de CVE-2026-9198. Cette regle couvre le cas ou le corps HTTP n'est pas journalise ou ou le payload Python est obfusque (encodage base64 imbrique, concatenation de chaines, alias d'import) au point d'echapper a la detection par mots-cles sur le corps de la requete web. Comme l'exploitation reussie doit in fine demarrer un processus reel sur l'hote pour avoir un effet, cette couche telemetrie process ferme l'angle mort de l'obfuscation de la couche web. Le SOC L1 doit v\u00e9rifier la source, l\u2019h\u00f4te affect\u00e9, l\u2019utilisateur, les champs de processus ou de requ\u00eate, la chronologie et les activit\u00e9s associ\u00e9es.\n",
+    "eventid": [],
+    "falsepositives": [
+      "Authorized Langflow administrator running troubleshooting commands from the same service account",
+      "CI or regression test jobs that intentionally execute Langflow components in an isolated lab",
+      "Package installation or health checks if process lineage is collapsed by the telemetry source"
+    ],
+    "filename": "CVE-2026-9198_Langflow_AutoLogin_RCE/rules/linux_langflow_child_process_execution_cve_2026_9198_strict.yml",
+    "id": "56652eed-81a4-4a47-bd93-e906ce5440c7",
+    "level": "high",
+    "license": "Apache-2.0",
+    "logsource": {
+      "category": "process_creation",
+      "product": "linux"
+    },
+    "required_fields": [
+      "CommandLine",
+      "ContainerName",
+      "CurrentDirectory",
+      "Image",
+      "KubernetesPodName",
+      "ParentCommandLine",
+      "ParentImage"
+    ],
+    "result_type": "event",
+    "rule": [
+      "SELECT * FROM logs WHERE ((ParentImage LIKE '%/langflow%' ESCAPE '\\' OR ParentImage LIKE '%/python%' ESCAPE '\\' OR ParentImage LIKE '%/python3%' ESCAPE '\\' OR ParentImage LIKE '%/uvicorn%' ESCAPE '\\' OR ParentImage LIKE '%/gunicorn%' ESCAPE '\\' OR ParentImage LIKE '%/hypercorn%' ESCAPE '\\') AND ((ParentCommandLine LIKE '%langflow%' ESCAPE '\\' OR ParentCommandLine LIKE '%uvicorn langflow%' ESCAPE '\\' OR ParentCommandLine LIKE '%gunicorn langflow%' ESCAPE '\\' OR ParentCommandLine LIKE '%hypercorn langflow%' ESCAPE '\\' OR ParentCommandLine LIKE '%langflow run%' ESCAPE '\\' OR ParentCommandLine LIKE '%langflow --host%' ESCAPE '\\' OR ParentCommandLine LIKE '%python -m langflow%' ESCAPE '\\' OR ParentCommandLine LIKE '%python3 -m langflow%' ESCAPE '\\') OR (CurrentDirectory LIKE '%/langflow%' ESCAPE '\\' OR CurrentDirectory LIKE '%/app/langflow%' ESCAPE '\\' OR CurrentDirectory LIKE '%/opt/langflow%' ESCAPE '\\') OR ContainerName LIKE '%langflow%' ESCAPE '\\' OR KubernetesPodName LIKE '%langflow%' ESCAPE '\\')) AND (((Image LIKE '%/sh' ESCAPE '\\' OR Image LIKE '%/bash' ESCAPE '\\' OR Image LIKE '%/dash' ESCAPE '\\' OR Image LIKE '%/zsh' ESCAPE '\\' OR Image LIKE '%/python' ESCAPE '\\' OR Image LIKE '%/python3' ESCAPE '\\' OR Image LIKE '%/perl' ESCAPE '\\' OR Image LIKE '%/ruby' ESCAPE '\\' OR Image LIKE '%/curl' ESCAPE '\\' OR Image LIKE '%/wget' ESCAPE '\\' OR Image LIKE '%/nc' ESCAPE '\\' OR Image LIKE '%/ncat' ESCAPE '\\' OR Image LIKE '%/socat' ESCAPE '\\' OR Image LIKE '%/busybox' ESCAPE '\\' OR Image LIKE '%/id' ESCAPE '\\' OR Image LIKE '%/whoami' ESCAPE '\\' OR Image LIKE '%/uname' ESCAPE '\\' OR Image LIKE '%/env' ESCAPE '\\' OR Image LIKE '%/printenv' ESCAPE '\\' OR Image LIKE '%/cat' ESCAPE '\\') AND ((CommandLine LIKE '% id%' ESCAPE '\\' OR CommandLine LIKE '%id &&%' ESCAPE '\\' OR CommandLine LIKE '% id;%' ESCAPE '\\' OR CommandLine LIKE '%/usr/bin/id%' ESCAPE '\\' OR CommandLine LIKE '%whoami%' ESCAPE '\\' OR CommandLine LIKE '%uname -a%' ESCAPE '\\' OR CommandLine LIKE '%printenv%' ESCAPE '\\' OR CommandLine LIKE '% env%' ESCAPE '\\' OR CommandLine LIKE '%/proc/self/environ%' ESCAPE '\\' OR CommandLine LIKE '%.env%' ESCAPE '\\' OR CommandLine LIKE '%/var/run/secrets%' ESCAPE '\\' OR CommandLine LIKE '%OPENAI\\_API\\_KEY%' ESCAPE '\\' OR CommandLine LIKE '%ANTHROPIC\\_API\\_KEY%' ESCAPE '\\' OR CommandLine LIKE '%AZURE\\_OPENAI%' ESCAPE '\\' OR CommandLine LIKE '%DATABASE\\_URL%' ESCAPE '\\' OR CommandLine LIKE '%curl http%' ESCAPE '\\' OR CommandLine LIKE '%curl -k%' ESCAPE '\\' OR CommandLine LIKE '%wget http%' ESCAPE '\\' OR CommandLine LIKE '%nc -e%' ESCAPE '\\' OR CommandLine LIKE '%ncat -e%' ESCAPE '\\' OR CommandLine LIKE '%socat %' ESCAPE '\\' OR CommandLine LIKE '%bash -i%' ESCAPE '\\' OR CommandLine LIKE '%/dev/tcp/%' ESCAPE '\\') OR ((CommandLine LIKE '% -c %' ESCAPE '\\' AND CommandLine LIKE '%import%' ESCAPE '\\') AND (CommandLine LIKE '%\\_\\_import\\_\\_%' ESCAPE '\\' OR CommandLine LIKE '%importlib%' ESCAPE '\\' OR CommandLine LIKE '%os.environ%' ESCAPE '\\' OR CommandLine LIKE '%subprocess%' ESCAPE '\\' OR CommandLine LIKE '%os.popen%' ESCAPE '\\' OR CommandLine LIKE '%os.system%' ESCAPE '\\' OR CommandLine LIKE '%pty.spawn%' ESCAPE '\\' OR CommandLine LIKE '%socket%' ESCAPE '\\' OR CommandLine LIKE '%base64%' ESCAPE '\\' OR CommandLine LIKE '%b64decode%' ESCAPE '\\')))) OR (Image LIKE '%/tmp/%' ESCAPE '\\' OR Image LIKE '%/dev/shm/%' ESCAPE '\\' OR Image LIKE '%/var/tmp/%' ESCAPE '\\' OR Image LIKE '%/home/%' ESCAPE '\\')) AND (NOT COALESCE(((CommandLine LIKE '%pip install%' ESCAPE '\\' OR CommandLine LIKE '%poetry install%' ESCAPE '\\' OR CommandLine LIKE '%uv pip install%' ESCAPE '\\') OR (CommandLine LIKE '%langflow health%' ESCAPE '\\' OR CommandLine LIKE '%langflow --version%' ESCAPE '\\') OR (Image LIKE '%/venv/%' ESCAPE '\\' OR Image LIKE '%/.venv/%' ESCAPE '\\' OR Image LIKE '%/site-packages/%' ESCAPE '\\')), 0))"
+    ],
+    "schema_version": 2,
+    "source": "hatchepsoute",
+    "source_table": "logs",
+    "status": "experimental",
+    "tags": [
+      "attack.execution",
+      "attack.discovery",
+      "attack.credential-access",
+      "attack.command-and-control",
+      "attack.t1059",
+      "attack.t1059.004",
+      "attack.t1059.006",
+      "attack.t1082",
+      "attack.t1552",
+      "cve.2026-9198"
+    ],
+    "title": "Langflow Server Spawns Suspicious Child Process After Code Validation - STRICT"
+  },
+  {
+    "author": "Adama ASSIONGBON (SOC & CTI Consultant), https://linkedin.com/in/adama-assiongbon-9029893a",
+    "channel": [],
+    "description": "Detects a PHP or web server runtime spawning a shell with reconnaissance, download, interpreter, or public-PoC command markers. This is a high-confidence post-exploitation signal that can follow CVE-2025-0366, but it is not sufficient by itself to attribute the activity to that CVE. SOC L1 should correlate the process with web requests, the hosting account, the working directory, and file changes.\nD\u00e9tecte un moteur PHP ou un serveur web qui lance un shell avec des marqueurs de reconnaissance, de t\u00e9l\u00e9chargement, d'interpr\u00e9teur ou du PoC public. Il s'agit d'un signal post-exploitation \u00e0 haute confiance qui peut suivre CVE-2025-0366, mais il ne suffit pas \u00e0 attribuer l'activit\u00e9 \u00e0 cette CVE. Le SOC L1 doit corr\u00e9ler le processus avec les requ\u00eates web, le compte d'h\u00e9bergement, le r\u00e9pertoire courant et les modifications de fichiers.\n",
+    "eventid": [],
+    "falsepositives": [
+      "An explicitly approved web application maintenance script that invokes a shell and is allowlisted by host and account",
+      "Authorized penetration testing in a dedicated lab"
+    ],
+    "filename": "CVE-2025-0366_WordPress_JupiterX_Core_RCE/rules/linux_web_runtime_shell_execution_cve_2025_0366_strict.yml",
+    "id": "5b9c1fd2-2e80-4f70-9a67-2f43c9b6d812",
+    "level": "high",
+    "license": "Apache-2.0",
+    "logsource": {
+      "category": "process_creation",
+      "product": "linux"
+    },
+    "required_fields": [
+      "CommandLine",
+      "Image",
+      "ParentImage"
+    ],
+    "result_type": "event",
+    "rule": [
+      "SELECT * FROM logs WHERE (ParentImage LIKE '%/php-fpm' ESCAPE '\\' OR ParentImage LIKE '%/php-fpm8.1' ESCAPE '\\' OR ParentImage LIKE '%/php-fpm8.2' ESCAPE '\\' OR ParentImage LIKE '%/php-fpm8.3' ESCAPE '\\' OR ParentImage LIKE '%/apache2' ESCAPE '\\' OR ParentImage LIKE '%/httpd' ESCAPE '\\') AND (Image LIKE '%/sh' ESCAPE '\\' OR Image LIKE '%/bash' ESCAPE '\\' OR Image LIKE '%/dash' ESCAPE '\\' OR Image LIKE '%/zsh' ESCAPE '\\') AND (CommandLine LIKE '% id%' ESCAPE '\\' OR CommandLine LIKE '%whoami%' ESCAPE '\\' OR CommandLine LIKE '%uname%' ESCAPE '\\' OR CommandLine LIKE '%ls -%' ESCAPE '\\' OR CommandLine LIKE '%curl %' ESCAPE '\\' OR CommandLine LIKE '%wget %' ESCAPE '\\' OR CommandLine LIKE '%python%' ESCAPE '\\' OR CommandLine LIKE '%perl%' ESCAPE '\\' OR CommandLine LIKE '%base64%' ESCAPE '\\' OR CommandLine LIKE '%stealthcopter\\_reflection\\_test%' ESCAPE '\\')"
+    ],
+    "schema_version": 2,
+    "source": "hatchepsoute",
+    "source_table": "logs",
+    "status": "experimental",
+    "tags": [
+      "attack.execution",
+      "attack.t1059",
+      "attack.t1059.004",
+      "attack.t1505.003",
+      "cve.2025-0366"
+    ],
+    "title": "Web Runtime Shell Execution Consistent With Jupiter X Core RCE - STRICT"
+  },
+  {
+    "author": "Adama ASSIONGBON (SOC & CTI Consultant), https://linkedin.com/in/adama-assiongbon-9029893a",
+    "channel": [],
+    "description": "Detects a shell or discovery process spawned by a Ruby/Puma/Passenger Rails worker, consistent with the CVE-2026-66066 KindaRails2Shell RCE stage where a forged Active Storage variation dispatches Kernel#spawn. SOC L1 should verify the source, affected host, user, process or request fields, timing, and related activity.\nDetecte un processus shell ou de reconnaissance lance par un worker Ruby/Puma/Passenger, coherent avec le stade RCE de CVE-2026-66066 (KindaRails2Shell). Une fois secret_key_base recupere par lecture de fichier arbitraire, l'attaquant forge une variation Active Storage JSON signee de la forme {\"send\":[\"spawn\",\"/bin/sh\",\"-c\",\"id\"]}. Cette variation atteint Chainable#apply qui invoque builder.public_send(name, *argument) : le nom de methode \"send\" declenche Kernel#spawn, qui cree un veritable processus enfant au niveau du systeme d'exploitation. Ce stade RCE ne fonctionne que si l'application est configuree avec config.active_support.message_serializer = :json ; voir README_ANGLES_MORTS.md pour les limites de cette couverture. Le SOC L1 doit v\u00e9rifier la source, l\u2019h\u00f4te affect\u00e9, l\u2019utilisateur, les champs de processus ou de requ\u00eate, la chronologie et les activit\u00e9s associ\u00e9es.\n",
+    "eventid": [],
+    "falsepositives": [
+      "Authorized administrator running troubleshooting commands under the same Rails service account",
+      "Deployment or CI jobs that legitimately execute shell tools from the Rails worker during provisioning, already partly filtered"
+    ],
+    "filename": "CVE-2026-66066_Rails_ActiveStorage_KindaRails2Shell/rules/linux_rails_puma_child_process_activestorage_cve_2026_66066_strict.yml",
+    "id": "6fb4dfe1-5b20-4556-9c5e-2a6d157c8959",
+    "level": "high",
+    "license": "Apache-2.0",
+    "logsource": {
+      "category": "process_creation",
+      "product": "linux"
+    },
+    "required_fields": [
+      "CommandLine",
+      "ContainerName",
+      "Image",
+      "KubernetesPodName",
+      "ParentCommandLine",
+      "ParentImage"
+    ],
+    "result_type": "event",
+    "rule": [
+      "SELECT * FROM logs WHERE ((ParentImage LIKE '%/ruby' ESCAPE '\\' OR ParentImage LIKE '%/puma' ESCAPE '\\' OR ParentImage LIKE '%/bundle' ESCAPE '\\') AND ((ParentCommandLine LIKE '%puma%' ESCAPE '\\' OR ParentCommandLine LIKE '%rails server%' ESCAPE '\\' OR ParentCommandLine LIKE '%bin/rails%' ESCAPE '\\' OR ParentCommandLine LIKE '%config.ru%' ESCAPE '\\' OR ParentCommandLine LIKE '%passenger%' ESCAPE '\\') OR ContainerName LIKE '%rails%' ESCAPE '\\' OR KubernetesPodName LIKE '%rails%' ESCAPE '\\')) AND (((Image LIKE '%/sh' ESCAPE '\\' OR Image LIKE '%/bash' ESCAPE '\\' OR Image LIKE '%/dash' ESCAPE '\\' OR Image LIKE '%/zsh' ESCAPE '\\' OR Image LIKE '%/python' ESCAPE '\\' OR Image LIKE '%/python3' ESCAPE '\\' OR Image LIKE '%/perl' ESCAPE '\\' OR Image LIKE '%/curl' ESCAPE '\\' OR Image LIKE '%/wget' ESCAPE '\\' OR Image LIKE '%/nc' ESCAPE '\\' OR Image LIKE '%/ncat' ESCAPE '\\' OR Image LIKE '%/socat' ESCAPE '\\' OR Image LIKE '%/busybox' ESCAPE '\\' OR Image LIKE '%/id' ESCAPE '\\' OR Image LIKE '%/whoami' ESCAPE '\\' OR Image LIKE '%/uname' ESCAPE '\\' OR Image LIKE '%/env' ESCAPE '\\' OR Image LIKE '%/printenv' ESCAPE '\\' OR Image LIKE '%/cat' ESCAPE '\\') AND (CommandLine LIKE '% id%' ESCAPE '\\' OR CommandLine LIKE '%id &&%' ESCAPE '\\' OR CommandLine LIKE '% id;%' ESCAPE '\\' OR CommandLine LIKE '%/usr/bin/id%' ESCAPE '\\' OR CommandLine LIKE '%whoami%' ESCAPE '\\' OR CommandLine LIKE '%uname -a%' ESCAPE '\\' OR CommandLine LIKE '%printenv%' ESCAPE '\\' OR CommandLine LIKE '% env%' ESCAPE '\\' OR CommandLine LIKE '%/proc/self/environ%' ESCAPE '\\' OR CommandLine LIKE '%curl http%' ESCAPE '\\' OR CommandLine LIKE '%curl -k%' ESCAPE '\\' OR CommandLine LIKE '%wget http%' ESCAPE '\\' OR CommandLine LIKE '%nc -e%' ESCAPE '\\' OR CommandLine LIKE '%ncat -e%' ESCAPE '\\' OR CommandLine LIKE '%socat %' ESCAPE '\\' OR CommandLine LIKE '%bash -i%' ESCAPE '\\' OR CommandLine LIKE '%/dev/tcp/%' ESCAPE '\\')) OR (Image LIKE '%/tmp/%' ESCAPE '\\' OR Image LIKE '%/dev/shm/%' ESCAPE '\\' OR Image LIKE '%/var/tmp/%' ESCAPE '\\')) AND (NOT COALESCE(((CommandLine LIKE '%assets:precompile%' ESCAPE '\\' OR CommandLine LIKE '%bundle exec rake%' ESCAPE '\\' OR CommandLine LIKE '%bundle install%' ESCAPE '\\') OR (CommandLine LIKE '%rails runner%' ESCAPE '\\' OR CommandLine LIKE '%rails db:%' ESCAPE '\\')), 0))"
+    ],
+    "schema_version": 2,
+    "source": "hatchepsoute",
+    "source_table": "logs",
+    "status": "experimental",
+    "tags": [
+      "attack.execution",
+      "attack.discovery",
+      "attack.t1059",
+      "attack.t1059.004",
+      "attack.t1082",
+      "cve.2026-66066"
+    ],
+    "title": "Ruby Rails Worker Spawns Suspicious Child Process After Active Storage Representation Request - STRICT"
+  },
+  {
+    "author": "Adama ASSIONGBON (SOC & CTI Consultant), https://linkedin.com/in/adama-assiongbon-9029893a",
+    "channel": [],
+    "description": "Detects suspicious shell, discovery, download, or secret access commands spawned by a Langflow Python process, consistent with successful CVE-2026-33017 exploitation. SOC L1 should verify the source, affected host, user, process or request fields, timing, and related activity.\nDetecte l'execution de processus suspects lances par le runtime Python/Langflow apres construction d'un flow. Cette regle couvre le cas ou le corps HTTP n'est pas journalise mais ou l'exploitation provoque un shell, une reconnaissance systeme, une lecture de secrets, un child Python -c ou un callback reseau depuis le serveur Langflow. Le SOC L1 doit v\u00e9rifier la source, l\u2019h\u00f4te affect\u00e9, l\u2019utilisateur, les champs de processus ou de requ\u00eate, la chronologie et les activit\u00e9s associ\u00e9es.\n",
+    "eventid": [],
+    "falsepositives": [
+      "Authorized Langflow administrator running troubleshooting commands from the same service account",
+      "CI or regression test jobs that intentionally execute Langflow components in an isolated lab",
+      "Package installation or health checks if process lineage is collapsed by the telemetry source"
+    ],
+    "filename": "CVE-2026-33017_Langflow_RCE/rules/linux_langflow_child_process_rce_cve_2026_33017_strict.yml",
+    "id": "8b1e6292-dc78-49ad-a1c2-6939f41d6b41",
+    "level": "high",
+    "license": "Apache-2.0",
+    "logsource": {
+      "category": "process_creation",
+      "product": "linux"
+    },
+    "required_fields": [
+      "CommandLine",
+      "ContainerName",
+      "CurrentDirectory",
+      "Image",
+      "KubernetesPodName",
+      "ParentCommandLine",
+      "ParentImage"
+    ],
+    "result_type": "event",
+    "rule": [
+      "SELECT * FROM logs WHERE ((ParentImage LIKE '%/langflow%' ESCAPE '\\' OR ParentImage LIKE '%/python%' ESCAPE '\\' OR ParentImage LIKE '%/python3%' ESCAPE '\\' OR ParentImage LIKE '%/uvicorn%' ESCAPE '\\' OR ParentImage LIKE '%/gunicorn%' ESCAPE '\\' OR ParentImage LIKE '%/hypercorn%' ESCAPE '\\') AND ((ParentCommandLine LIKE '%langflow%' ESCAPE '\\' OR ParentCommandLine LIKE '%uvicorn langflow%' ESCAPE '\\' OR ParentCommandLine LIKE '%gunicorn langflow%' ESCAPE '\\' OR ParentCommandLine LIKE '%hypercorn langflow%' ESCAPE '\\' OR ParentCommandLine LIKE '%langflow run%' ESCAPE '\\' OR ParentCommandLine LIKE '%langflow --host%' ESCAPE '\\' OR ParentCommandLine LIKE '%python -m langflow%' ESCAPE '\\' OR ParentCommandLine LIKE '%python3 -m langflow%' ESCAPE '\\') OR (CurrentDirectory LIKE '%/langflow%' ESCAPE '\\' OR CurrentDirectory LIKE '%/app/langflow%' ESCAPE '\\' OR CurrentDirectory LIKE '%/opt/langflow%' ESCAPE '\\') OR ContainerName LIKE '%langflow%' ESCAPE '\\' OR KubernetesPodName LIKE '%langflow%' ESCAPE '\\')) AND (Image LIKE '%/sh' ESCAPE '\\' OR Image LIKE '%/bash' ESCAPE '\\' OR Image LIKE '%/dash' ESCAPE '\\' OR Image LIKE '%/zsh' ESCAPE '\\' OR Image LIKE '%/python' ESCAPE '\\' OR Image LIKE '%/python3' ESCAPE '\\' OR Image LIKE '%/perl' ESCAPE '\\' OR Image LIKE '%/ruby' ESCAPE '\\' OR Image LIKE '%/curl' ESCAPE '\\' OR Image LIKE '%/wget' ESCAPE '\\' OR Image LIKE '%/nc' ESCAPE '\\' OR Image LIKE '%/ncat' ESCAPE '\\' OR Image LIKE '%/socat' ESCAPE '\\' OR Image LIKE '%/busybox' ESCAPE '\\' OR Image LIKE '%/id' ESCAPE '\\' OR Image LIKE '%/whoami' ESCAPE '\\' OR Image LIKE '%/uname' ESCAPE '\\' OR Image LIKE '%/env' ESCAPE '\\' OR Image LIKE '%/printenv' ESCAPE '\\' OR Image LIKE '%/cat' ESCAPE '\\' OR Image LIKE '%/grep' ESCAPE '\\') AND ((CommandLine LIKE '% id%' ESCAPE '\\' OR CommandLine LIKE '%id &&%' ESCAPE '\\' OR CommandLine LIKE '% id;%' ESCAPE '\\' OR CommandLine LIKE '%/usr/bin/id%' ESCAPE '\\' OR CommandLine LIKE '%whoami%' ESCAPE '\\' OR CommandLine LIKE '%uname -a%' ESCAPE '\\' OR CommandLine LIKE '%printenv%' ESCAPE '\\' OR CommandLine LIKE '% env%' ESCAPE '\\' OR CommandLine LIKE '%/proc/self/environ%' ESCAPE '\\' OR CommandLine LIKE '%/tmp/rce-proof%' ESCAPE '\\' OR CommandLine LIKE '%.env%' ESCAPE '\\' OR CommandLine LIKE '%/var/run/secrets%' ESCAPE '\\' OR CommandLine LIKE '%OPENAI\\_API\\_KEY%' ESCAPE '\\' OR CommandLine LIKE '%ANTHROPIC\\_API\\_KEY%' ESCAPE '\\' OR CommandLine LIKE '%AZURE\\_OPENAI%' ESCAPE '\\' OR CommandLine LIKE '%DATABASE\\_URL%' ESCAPE '\\' OR CommandLine LIKE '%curl http%' ESCAPE '\\' OR CommandLine LIKE '%curl -k%' ESCAPE '\\' OR CommandLine LIKE '%wget http%' ESCAPE '\\' OR CommandLine LIKE '%nc -e%' ESCAPE '\\' OR CommandLine LIKE '%ncat -e%' ESCAPE '\\' OR CommandLine LIKE '%socat %' ESCAPE '\\' OR CommandLine LIKE '%bash -i%' ESCAPE '\\' OR CommandLine LIKE '%/dev/tcp/%' ESCAPE '\\') OR ((CommandLine LIKE '% -c %' ESCAPE '\\' AND CommandLine LIKE '%import%' ESCAPE '\\') AND (CommandLine LIKE '%\\_\\_import\\_\\_%' ESCAPE '\\' OR CommandLine LIKE '%importlib%' ESCAPE '\\' OR CommandLine LIKE '%os.environ%' ESCAPE '\\' OR CommandLine LIKE '%subprocess%' ESCAPE '\\' OR CommandLine LIKE '%os.popen%' ESCAPE '\\' OR CommandLine LIKE '%os.system%' ESCAPE '\\' OR CommandLine LIKE '%socket%' ESCAPE '\\' OR CommandLine LIKE '%base64%' ESCAPE '\\' OR CommandLine LIKE '%b64decode%' ESCAPE '\\' OR CommandLine LIKE '%requests.get%' ESCAPE '\\' OR CommandLine LIKE '%urllib.request%' ESCAPE '\\'))) AND (NOT COALESCE(((CommandLine LIKE '%pip install%' ESCAPE '\\' OR CommandLine LIKE '%poetry install%' ESCAPE '\\' OR CommandLine LIKE '%uv pip install%' ESCAPE '\\') OR (CommandLine LIKE '%langflow health%' ESCAPE '\\' OR CommandLine LIKE '%langflow --version%' ESCAPE '\\')), 0))"
+    ],
+    "schema_version": 2,
+    "source": "hatchepsoute",
+    "source_table": "logs",
+    "status": "experimental",
+    "tags": [
+      "attack.execution",
+      "attack.discovery",
+      "attack.command-and-control",
+      "attack.t1059",
+      "attack.t1059.004",
+      "attack.t1059.006",
+      "attack.t1082",
+      "attack.t1105",
+      "cve.2026-33017"
+    ],
+    "title": "Langflow Server Spawns Suspicious Child Process After Flow Build - STRICT"
+  },
+  {
+    "author": "Adama ASSIONGBON (SOC & CTI Consultant), https://linkedin.com/in/adama-assiongbon-9029893a",
+    "channel": [],
+    "description": "Detects a non-CUPS process binding to TCP 515 (LPD), indicating microsocks masquerade (Sliver campaign). SOC L1 should verify the source, affected host, user, process or request fields, timing, and related activity.\nR\u00e8gle : d\u00e9tecte un processus non-CUPS qui \u00e9tablit une connexion ou \u00e9coute sur le port TCP 515 (LPD/Line Printer Daemon). Dans la campagne FortiWeb Sliver, les attaquants d\u00e9ploient microsocks renomm\u00e9 en 'cups-lpd' pour se faire passer pour le daemon d'impression CUPS et exposer un tunnel d'acc\u00e8s distant. ANGLE MORT : la logsource network_connection (Sysmon EventID 3) logue les connexions initi\u00e9es (Initiated=true) ET les connexions entrantes accept\u00e9es (Initiated=false). Pour d\u00e9tecter un listener sur port 515, il faut chercher des \u00e9v\u00e9nements o\u00f9 le processus LOCAL re\u00e7oit des connexions (Initiated=false, DestinationPort=515) ou surveiller le port source (SourcePort=515 pour les r\u00e9ponses). La r\u00e8gle couvre les deux sc\u00e9narios via le filtre Image. Le SOC L1 doit v\u00e9rifier la source, l\u2019h\u00f4te affect\u00e9, l\u2019utilisateur, les champs de processus ou de requ\u00eate, la chronologie et les activit\u00e9s associ\u00e9es.\n",
+    "eventid": [],
+    "falsepositives": [
+      "Legacy printing servers exposing LPD without CUPS (rare)",
+      "Custom embedded systems explicitly running LPD services"
+    ],
+    "filename": "FortiWeb-Sliver-Campaign/rules/lnx_lpd_listener_printer_service_masquerade.yml",
+    "id": "8f3c2e91-7b6a-4e77-9cfa-2a1e9d4cbe12",
+    "level": "high",
+    "license": "Apache-2.0",
+    "logsource": {
+      "category": "network_connection",
+      "product": "linux"
+    },
+    "required_fields": [
+      "DestinationPort",
+      "Image",
+      "SourcePort"
+    ],
+    "result_type": "event",
+    "rule": [
+      "SELECT * FROM logs WHERE (DestinationPort=515 OR SourcePort=515) AND (NOT COALESCE((Image LIKE '%cupsd%' ESCAPE '\\' OR Image LIKE '%lpd%' ESCAPE '\\' OR Image LIKE '%cups-browsed%' ESCAPE '\\'), 0))"
+    ],
+    "schema_version": 2,
+    "source": "hatchepsoute",
+    "source_table": "logs",
+    "status": "experimental",
+    "tags": [
+      "attack.t1090",
+      "attack.t1090.001",
+      "attack.command-and-control"
+    ],
+    "title": "Suspicious network listener on TCP 515 (LPD masquerade, non-CUPS)"
+  },
+  {
+    "author": "Adama ASSIONGBON (SOC & CTI Consultant), https://linkedin.com/in/adama-assiongbon-9029893a",
+    "channel": [],
+    "description": "Detects appliance-side log tampering, persistence or shell spawning behavior associated with UNC3886-style post-exploitation. High-risk children (python3, nc, socat) spawned from service daemons fire without a CLI requirement. Shell and download tools require a suspicious CLI indicator. SOC L1 should verify the source, affected host, user, process or request fields, timing, and related activity.\nD\u00e9tecte des signaux post-compromission \u00e0 forte confiance sur une appliance ou un h\u00f4te Linux de type r\u00e9seau : d\u00e9sactivation des logs, modification de la persistance, shelling ou d\u00e9marrage d'un interpr\u00e9teur Python depuis un processus de service. Python3, nc et socat d\u00e9clenchent sans condition sur le CommandLine car leur spawn depuis un d\u00e9mon de service est intrins\u00e8quement suspect (VirtualPie, REPTILE). Les shells et outils de download n\u00e9cessitent un indicateur CLI. Le SOC L1 doit v\u00e9rifier la source, l\u2019h\u00f4te affect\u00e9, l\u2019utilisateur, les champs de processus ou de requ\u00eate, la chronologie et les activit\u00e9s associ\u00e9es.\n",
+    "eventid": [],
+    "falsepositives": [
+      "Authorized upgrade or maintenance jobs on network appliances during change windows",
+      "Vendor support scripts executed via SSH by authorized administrators",
+      "Legitimate Python automation or monitoring scripts launched by service accounts from service daemons",
+      "cron-initiated backup jobs that write to or rotate log files in /var/log",
+      "VMware vSphere automation frameworks using python3 via hostd context"
+    ],
+    "filename": "UNC3886_Network_Virtualization_Campaign/rules/unc3886_appliance_log_tamper_strict.yml",
+    "id": "920ac17c-7dea-49f1-aed3-a9a57fe1d89c",
+    "level": "high",
+    "license": "Apache-2.0",
+    "logsource": {
+      "category": "process_creation",
+      "product": "linux"
+    },
+    "required_fields": [
+      "CommandLine",
+      "Image",
+      "ParentImage"
+    ],
+    "result_type": "event",
+    "rule": [
+      "SELECT * FROM logs WHERE (ParentImage LIKE '%/sshd' ESCAPE '\\' OR ParentImage LIKE '%/systemd' ESCAPE '\\' OR ParentImage LIKE '%/init' ESCAPE '\\' OR ParentImage LIKE '%/nginx' ESCAPE '\\' OR ParentImage LIKE '%/httpd' ESCAPE '\\' OR ParentImage LIKE '%/apache2' ESCAPE '\\' OR ParentImage LIKE '%/junosd' ESCAPE '\\' OR ParentImage LIKE '%/mgd' ESCAPE '\\' OR ParentImage LIKE '%/dcd' ESCAPE '\\' OR ParentImage LIKE '%/httpsd' ESCAPE '\\' OR ParentImage LIKE '%/sslvpnd' ESCAPE '\\' OR ParentImage LIKE '%/hostd' ESCAPE '\\' OR ParentImage LIKE '%/vpxa' ESCAPE '\\' OR ParentImage LIKE '%/vmware-hostd' ESCAPE '\\' OR ParentImage LIKE '%/rhttpproxy' ESCAPE '\\' OR ParentImage LIKE '%/sfcbd' ESCAPE '\\' OR ParentImage LIKE '%/jsvc' ESCAPE '\\' OR ParentImage LIKE '%/vmsyslogd' ESCAPE '\\') AND ((Image LIKE '%/python3' ESCAPE '\\' OR Image LIKE '%/python3.9' ESCAPE '\\' OR Image LIKE '%/python3.10' ESCAPE '\\' OR Image LIKE '%/python3.11' ESCAPE '\\' OR Image LIKE '%/python3.12' ESCAPE '\\' OR Image LIKE '%/python2' ESCAPE '\\' OR Image LIKE '%/python' ESCAPE '\\' OR Image LIKE '%/perl' ESCAPE '\\' OR Image LIKE '%/nc' ESCAPE '\\' OR Image LIKE '%/ncat' ESCAPE '\\' OR Image LIKE '%/socat' ESCAPE '\\') OR ((Image LIKE '%/sh' ESCAPE '\\' OR Image LIKE '%/bash' ESCAPE '\\' OR Image LIKE '%/dash' ESCAPE '\\' OR Image LIKE '%/ksh' ESCAPE '\\' OR Image LIKE '%/busybox' ESCAPE '\\' OR Image LIKE '%/wget' ESCAPE '\\' OR Image LIKE '%/curl' ESCAPE '\\' OR Image LIKE '%/logger' ESCAPE '\\') AND (CommandLine LIKE '%rm -rf /var/log%' ESCAPE '\\' OR CommandLine LIKE '%truncate -s%' ESCAPE '\\' OR CommandLine LIKE '%shred -%' ESCAPE '\\' OR CommandLine LIKE '%dd if=/dev/null%' ESCAPE '\\' OR CommandLine LIKE '%killall syslogd%' ESCAPE '\\' OR CommandLine LIKE '%systemctl stop rsyslog%' ESCAPE '\\' OR CommandLine LIKE '%systemctl stop syslog%' ESCAPE '\\' OR CommandLine LIKE '%systemctl disable rsyslog%' ESCAPE '\\' OR CommandLine LIKE '%echo 0 > /proc/sys/kernel/printk%' ESCAPE '\\' OR CommandLine LIKE '%touch /etc/rc.local%' ESCAPE '\\' OR CommandLine LIKE '%crontab %' ESCAPE '\\' OR CommandLine LIKE '%chmod 4755%' ESCAPE '\\' OR CommandLine LIKE '%setenforce 0%' ESCAPE '\\' OR CommandLine LIKE '%insmod %' ESCAPE '\\' OR CommandLine LIKE '%modprobe %' ESCAPE '\\' OR CommandLine LIKE '%wget %' ESCAPE '\\' OR CommandLine LIKE '%curl %' ESCAPE '\\' OR CommandLine LIKE '%/tmp/%' ESCAPE '\\' OR CommandLine LIKE '%/dev/shm/%' ESCAPE '\\' OR CommandLine LIKE '%nohup %' ESCAPE '\\' OR CommandLine LIKE '%| base64 -d%' ESCAPE '\\' OR CommandLine LIKE '%base64 -d |%' ESCAPE '\\' OR CommandLine LIKE '%| bash%' ESCAPE '\\' OR CommandLine LIKE '%| sh%' ESCAPE '\\' OR CommandLine LIKE '%bash -c \"$(echo%' ESCAPE '\\' OR CommandLine LIKE '%sh -c \"$(echo%' ESCAPE '\\'))) AND (NOT COALESCE((CommandLine LIKE '%backup%' ESCAPE '\\' OR CommandLine LIKE '%upgrade%' ESCAPE '\\' OR CommandLine LIKE '%maintenance%' ESCAPE '\\' OR CommandLine LIKE '%patch%' ESCAPE '\\'), 0))"
+    ],
+    "schema_version": 2,
+    "source": "hatchepsoute",
+    "source_table": "logs",
+    "status": "experimental",
+    "tags": [
+      "attack.execution",
+      "attack.persistence",
+      "attack.t1059",
+      "attack.t1059.004",
+      "attack.t1070.004",
+      "attack.t1543.002"
+    ],
+    "title": "Appliance log tampering or suspicious shelling associated with UNC3886 - STRICT"
+  },
+  {
+    "author": "Adama ASSIONGBON (SOC & CTI Consultant), https://linkedin.com/in/adama-assiongbon-9029893a",
+    "channel": [],
+    "description": "Detects high-confidence Linux kernel memory faults in the rtmutex proxy-lock rollback path associated with GhostLock CVE-2026-43499 exploitation attempts. SOC L1 should verify the source, affected host, user, process or request fields, timing, and related activity.\nD\u00e9tecte une faute m\u00e9moire du noyau associ\u00e9e au chemin de rollback proxy-lock rtmutex et au contexte futex PI caract\u00e9ristique des tentatives d'exploitation GhostLock. Le SOC L1 doit v\u00e9rifier la source, l\u2019h\u00f4te affect\u00e9, l\u2019utilisateur, les champs de processus ou de requ\u00eate, la chronologie et les activit\u00e9s associ\u00e9es.\n",
+    "eventid": [],
+    "falsepositives": [
+      "Authorized kernel fault-injection or regression testing of the rtmutex futex PI rollback path",
+      "A different rtmutex defect producing the same proxy-lock rollback stack trace"
+    ],
+    "filename": "CVE-2026-43499_Linux_GhostLock/rules/linux_ghostlock_rtmutex_kernel_crash_cve_2026_43499_strict.yml",
+    "id": "9afc2fc3-8f65-44b4-a4f4-24e5014a7bc0",
+    "level": "high",
+    "license": "Apache-2.0",
+    "logsource": {
+      "product": "linux",
+      "service": "kernel"
+    },
+    "required_fields": [
+      "Message"
+    ],
+    "result_type": "event",
+    "rule": [
+      "SELECT * FROM logs WHERE (Message LIKE '%KASAN: use-after-free%' ESCAPE '\\' OR Message LIKE '%KASAN: slab-use-after-free%' ESCAPE '\\' OR Message LIKE '%BUG: unable to handle kernel%' ESCAPE '\\' OR Message LIKE '%kernel BUG at%' ESCAPE '\\' OR Message LIKE '%general protection fault%' ESCAPE '\\' OR Message LIKE '%Oops:%' ESCAPE '\\' OR Message LIKE '%Kernel panic%' ESCAPE '\\') AND (Message LIKE '%remove\\_waiter%' ESCAPE '\\' OR Message LIKE '%rt\\_mutex\\_start\\_proxy\\_lock%' ESCAPE '\\' OR Message LIKE '%\\_\\_rt\\_mutex\\_start\\_proxy\\_lock%' ESCAPE '\\' OR Message LIKE '%rt\\_mutex\\_adjust\\_prio\\_chain%' ESCAPE '\\') AND (Message LIKE '%futex\\_requeue%' ESCAPE '\\' OR Message LIKE '%futex\\_wait\\_requeue\\_pi%' ESCAPE '\\' OR Message LIKE '%futex\\_cmp\\_requeue\\_pi%' ESCAPE '\\' OR Message LIKE '%FUTEX\\_WAIT\\_REQUEUE\\_PI%' ESCAPE '\\' OR Message LIKE '%FUTEX\\_CMP\\_REQUEUE\\_PI%' ESCAPE '\\')"
+    ],
+    "schema_version": 2,
+    "source": "hatchepsoute",
+    "source_table": "logs",
+    "status": "experimental",
+    "tags": [
+      "attack.privilege-escalation",
+      "attack.t1068",
+      "cve.2026-43499"
+    ],
+    "title": "GhostLock rtmutex Kernel Fault Indicators - STRICT"
+  },
+  {
+    "author": "Adama ASSIONGBON (SOC & CTI Consultant), https://linkedin.com/in/adama-assiongbon-9029893a",
+    "channel": [],
+    "description": "Detects a web server or PHP runtime writing a PHP-executable file into the Sudan Payment Gateway receipt directory under WordPress uploads. This is a high-confidence post-upload signal consistent with successful CVE-2024-50494 exploitation, but it does not by itself prove that the file was requested or that commands ran. SOC L1 should preserve the file, verify its content and writer process, identify the matching upload request, and check for later HTTP access or child processes.\nD\u00e9tecte l\u2019\u00e9criture par un serveur web ou un environnement d\u2019ex\u00e9cution PHP d\u2019un fichier ex\u00e9cutable par PHP dans le r\u00e9pertoire des re\u00e7us Sudan Payment Gateway sous les uploads WordPress. Il s\u2019agit d\u2019un signal post-upload de haute confiance coh\u00e9rent avec une exploitation r\u00e9ussie de CVE-2024-50494, mais il ne prouve pas \u00e0 lui seul que le fichier a \u00e9t\u00e9 appel\u00e9 ni que des commandes ont \u00e9t\u00e9 ex\u00e9cut\u00e9es. Le SOC L1 doit pr\u00e9server le fichier, v\u00e9rifier son contenu et le processus qui l\u2019a \u00e9crit, identifier la requ\u00eate d\u2019upload correspondante et rechercher un acc\u00e8s HTTP ou des processus enfants ult\u00e9rieurs.\n",
+    "eventid": [],
+    "falsepositives": [
+      "Authorized security testing in a dedicated lab, confirm the test window and preserve the generated fixture",
+      "None expected from normal plugin operation because legitimate payment receipts should use JPG, JPEG, PNG, or GIF extensions"
+    ],
+    "filename": "CVE-2024-50494_WordPress_Sudan_Payment_Gateway_File_Upload/rules/linux_wordpress_sudan_receipt_executable_file_write_cve_2024_50494_strict.yml",
+    "id": "a9b8c7d6-5e4f-4a3b-9c2d-f20450494002",
+    "level": "high",
+    "license": "Apache-2.0",
+    "logsource": {
+      "category": "file_event",
+      "product": "linux"
+    },
+    "required_fields": [
+      "Image",
+      "TargetFilename"
+    ],
+    "result_type": "event",
+    "rule": [
+      "SELECT * FROM logs WHERE ((Image LIKE '%/php' ESCAPE '\\' OR Image LIKE '%/php-cgi' ESCAPE '\\' OR Image LIKE '%/lsphp' ESCAPE '\\' OR Image LIKE '%/apache2' ESCAPE '\\' OR Image LIKE '%/httpd' ESCAPE '\\' OR Image LIKE '%/nginx' ESCAPE '\\') OR Image LIKE '%/php-fpm%' ESCAPE '\\') AND TargetFilename REGEXP '(?i)[/\\\\]wp-content[/\\\\]uploads[/\\\\]sudan-payment-receipts[/\\\\][^/\\\\]+\\.(php[0-9]?|phtml|pht|phar|phps)$'"
+    ],
+    "schema_version": 2,
+    "source": "hatchepsoute",
+    "source_table": "logs",
+    "status": "experimental",
+    "tags": [
+      "attack.persistence",
+      "attack.t1505.003",
+      "attack.initial-access",
+      "attack.t1190",
+      "cve.2024-50494"
+    ],
+    "title": "WordPress Sudan Payment Receipt Executable File Write - Linux - STRICT"
+  },
+  {
+    "author": "Adama ASSIONGBON (SOC & CTI Consultant), https://linkedin.com/in/adama-assiongbon-9029893a",
+    "channel": [],
+    "description": "Detects systemd service file creation matching Sliver persistence pattern from FortiWeb campaign. SOC L1 should verify the source, affected host, user, process or request fields, timing, and related activity.\nD\u00e9tecte la cr\u00e9ation d'un fichier de service systemd correspondant au pattern de persistence Sliver observ\u00e9 dans la campagne FortiWeb : description de service \"Updater Service\", ExecStart pointant vers le binaire implant\u00e9, et Restart=on-failure pour la r\u00e9silience. Le champ FileContent n'est pas standard Sigma : il n\u00e9cessite un pipeline d'ingestion avec logging du contenu de fichier. ANGLE MORT : si FileContent n'est pas disponible, seule selection_filename_campaign d\u00e9clenche (noms syst\u00e8me-updater/cups-lpd), pas selection_filename_systemd qui couvre tous les services. Le SOC L1 doit v\u00e9rifier la source, l\u2019h\u00f4te affect\u00e9, l\u2019utilisateur, les champs de processus ou de requ\u00eate, la chronologie et les activit\u00e9s associ\u00e9es.\n",
+    "eventid": [],
+    "falsepositives": [
+      "Custom administrator services named system-updater or cups-lpd with systemd (no known legitimate case)",
+      "selection_filename_systemd alone will fire on every package-manager service install; pair with selection_content_indicators or correlate with the writing process (non-package-manager parent)",
+      "FileContent block requires pipeline-level file content indexing; if absent, only selection_filename_campaign fires, which is campaign-specific and highly reliable"
+    ],
+    "filename": "FortiWeb-Sliver-Campaign/rules/persist_lnx_sliver_systemd_service.yml",
+    "id": "a9f2b4c1-8d3e-45f6-92a7-12b345c6d789",
+    "level": "high",
+    "license": "Apache-2.0",
+    "logsource": {
+      "category": "file_event",
+      "product": "linux"
+    },
+    "required_fields": [
+      "FileContent",
+      "TargetFilename"
+    ],
+    "result_type": "event",
+    "rule": [
+      "SELECT * FROM logs WHERE ((TargetFilename LIKE '%system-updater%' ESCAPE '\\' OR TargetFilename LIKE '%cups-lpd%' ESCAPE '\\') AND TargetFilename LIKE '%.service' ESCAPE '\\') OR (((TargetFilename LIKE '%/etc/systemd/system/%' ESCAPE '\\' OR TargetFilename LIKE '%/lib/systemd/system/%' ESCAPE '\\' OR TargetFilename LIKE '%/usr/lib/systemd/system/%' ESCAPE '\\') AND TargetFilename LIKE '%.service' ESCAPE '\\') AND (FileContent LIKE '%Description=Updater Service%' ESCAPE '\\' AND FileContent LIKE '%ExecStart=%' ESCAPE '\\' AND FileContent LIKE '%Restart=on-failure%' ESCAPE '\\'))"
+    ],
+    "schema_version": 2,
+    "source": "hatchepsoute",
+    "source_table": "logs",
+    "status": "experimental",
+    "tags": [
+      "attack.persistence",
+      "attack.t1543.002"
+    ],
+    "title": "Suspicious systemd service creation for Sliver persistence"
+  },
+  {
+    "author": "Adama ASSIONGBON (SOC & CTI Consultant), https://linkedin.com/in/adama-assiongbon-9029893a",
+    "channel": [],
+    "description": "Detects a web or PHP runtime writing an executable PHP file into a WordPress uploads directory, a strong post-upload indicator for CVE-2026-15748. Correlate with a later HTTP access or PHP execution event. SOC L1 should verify the source, affected host, user, process or request fields, timing, and related activity.\nD\u00e9tecte l\u2019\u00e9criture par le serveur web ou PHP d\u2019un fichier ex\u00e9cutable dans uploads WordPress. Corr\u00e9ler avec un acc\u00e8s HTTP ou une ex\u00e9cution PHP ult\u00e9rieure. Le SOC L1 doit v\u00e9rifier la source, l\u2019h\u00f4te affect\u00e9, l\u2019utilisateur, les champs de processus ou de requ\u00eate, la chronologie et les activit\u00e9s associ\u00e9es.\n",
+    "eventid": [],
+    "falsepositives": [
+      "Authorized PHP maintenance scripts stored in uploads",
+      "Security testing in a dedicated lab"
+    ],
+    "filename": "CVE-2026-15748_WordPress_Forminator_RCE/rules/linux_forminator_php_upload_execution_cve_2026_15748_strict.yml",
+    "id": "b4d3d2bf-4c3a-4fb1-a4c7-7ed48bf99f3d",
+    "level": "high",
+    "license": "Apache-2.0",
+    "logsource": {
+      "category": "file_event",
+      "product": "linux"
+    },
+    "required_fields": [
+      "Image",
+      "TargetFilename"
+    ],
+    "result_type": "event",
+    "rule": [
+      "SELECT * FROM logs WHERE (Image LIKE '%php' ESCAPE '\\' OR Image LIKE '%php-fpm' ESCAPE '\\' OR Image LIKE '%php-fpm8.1' ESCAPE '\\' OR Image LIKE '%php-fpm8.2' ESCAPE '\\' OR Image LIKE '%php-fpm8.3' ESCAPE '\\' OR Image LIKE '%apache2' ESCAPE '\\' OR Image LIKE '%httpd' ESCAPE '\\' OR Image LIKE '%nginx' ESCAPE '\\') AND TargetFilename LIKE '%/wp-content/uploads/%' ESCAPE '\\' AND (TargetFilename LIKE '%.php' ESCAPE '\\' OR TargetFilename LIKE '%.phtml' ESCAPE '\\' OR TargetFilename LIKE '%.php5' ESCAPE '\\' OR TargetFilename LIKE '%.phar' ESCAPE '\\')"
+    ],
+    "schema_version": 2,
+    "source": "hatchepsoute",
+    "source_table": "logs",
+    "status": "experimental",
+    "tags": [
+      "attack.execution",
+      "attack.persistence",
+      "attack.t1505.003",
+      "cve.2026-15748"
+    ],
+    "title": "Forminator Uploaded PHP File Written to WordPress Uploads - STRICT"
+  },
+  {
+    "author": "Adama ASSIONGBON (SOC & CTI Consultant), https://linkedin.com/in/adama-assiongbon-9029893a",
+    "channel": [],
+    "description": "Detects a temporary-path Linux process spawning a SUID binary, consistent with CVE-2026-46331 local privilege escalation. SOC L1 should verify the source, affected host, user, process or request fields, timing, and related activity.\nD\u00e9tecte un processus Linux lanc\u00e9 depuis un r\u00e9pertoire temporaire qui spawne un binaire SUID. Ce signal correspond \u00e0 la phase d'\u00e9l\u00e9vation de privil\u00e8ges locale observ\u00e9e dans le PoC public de CVE-2026-46331. La r\u00e8gle vise la sortie d'exploitation observable, pas le primitive noyau elle-m\u00eame. Le SOC L1 doit v\u00e9rifier la source, l\u2019h\u00f4te affect\u00e9, l\u2019utilisateur, les champs de processus ou de requ\u00eate, la chronologie et les activit\u00e9s associ\u00e9es.\n",
+    "eventid": [],
+    "falsepositives": [
+      "Authorized exploit validation in a lab or staging environment",
+      "Rare sysadmin scripts staged in /tmp or /dev/shm that invoke su or sudo",
+      "Red team exercises with documented change control"
+    ],
+    "filename": "CVE-2026-46331_Linux_Tc_Act_Pedit_LPE/rules/linux_tc_act_pedit_suid_spawn_strict_cve_2026_46331.yml",
+    "id": "bf467fe0-d420-4b28-af37-bc834785ec2e",
+    "level": "high",
+    "license": "Apache-2.0",
+    "logsource": {
+      "category": "process_creation",
+      "product": "linux"
+    },
+    "required_fields": [
+      "Image",
+      "ParentCommandLine",
+      "ParentImage"
+    ],
+    "result_type": "event",
+    "rule": [
+      "SELECT * FROM logs WHERE ((ParentImage LIKE '%/tmp/%' ESCAPE '\\' OR ParentImage LIKE '%/var/tmp/%' ESCAPE '\\' OR ParentImage LIKE '%/dev/shm/%' ESCAPE '\\' OR ParentImage LIKE '%/run/user/%' ESCAPE '\\') AND (Image LIKE '%/su' ESCAPE '\\' OR Image LIKE '%/sudo' ESCAPE '\\' OR Image LIKE '%/pkexec' ESCAPE '\\' OR Image LIKE '%/passwd' ESCAPE '\\' OR Image LIKE '%/newgrp' ESCAPE '\\' OR Image LIKE '%/gpasswd' ESCAPE '\\' OR Image LIKE '%/chsh' ESCAPE '\\' OR Image LIKE '%/chfn' ESCAPE '\\')) OR (((ParentImage LIKE '%/python' ESCAPE '\\' OR ParentImage LIKE '%/python2' ESCAPE '\\' OR ParentImage LIKE '%/python3' ESCAPE '\\' OR ParentImage LIKE '%/perl' ESCAPE '\\' OR ParentImage LIKE '%/ruby' ESCAPE '\\' OR ParentImage LIKE '%/sh' ESCAPE '\\' OR ParentImage LIKE '%/bash' ESCAPE '\\') AND (ParentCommandLine LIKE '%/tmp/%' ESCAPE '\\' OR ParentCommandLine LIKE '%/var/tmp/%' ESCAPE '\\' OR ParentCommandLine LIKE '%/dev/shm/%' ESCAPE '\\' OR ParentCommandLine LIKE '%/run/user/%' ESCAPE '\\' OR ParentCommandLine LIKE '%CVE-2026-46331%' ESCAPE '\\' OR ParentCommandLine LIKE '%cve\\_2026\\_46331%' ESCAPE '\\' OR ParentCommandLine LIKE '%copy\\_fail%' ESCAPE '\\' OR ParentCommandLine LIKE '%act\\_pedit%' ESCAPE '\\' OR ParentCommandLine LIKE '%pedit%' ESCAPE '\\' OR ParentCommandLine LIKE '%tc %' ESCAPE '\\' OR ParentCommandLine LIKE '%unshare%' ESCAPE '\\' OR ParentCommandLine LIKE '%CLONE\\_NEWUSER%' ESCAPE '\\' OR ParentCommandLine LIKE '%CLONE\\_NEWNET%' ESCAPE '\\')) AND (Image LIKE '%/su' ESCAPE '\\' OR Image LIKE '%/sudo' ESCAPE '\\' OR Image LIKE '%/pkexec' ESCAPE '\\' OR Image LIKE '%/passwd' ESCAPE '\\' OR Image LIKE '%/newgrp' ESCAPE '\\' OR Image LIKE '%/gpasswd' ESCAPE '\\' OR Image LIKE '%/chsh' ESCAPE '\\' OR Image LIKE '%/chfn' ESCAPE '\\'))"
+    ],
+    "schema_version": 2,
+    "source": "hatchepsoute",
+    "source_table": "logs",
+    "status": "experimental",
+    "tags": [
+      "attack.privilege-escalation",
+      "attack.execution",
+      "attack.t1068",
+      "attack.t1548.001"
+    ],
+    "title": "Linux temp-staged exploit spawning SUID binary (CVE-2026-46331)"
+  },
+  {
+    "author": "Adama ASSIONGBON (SOC & CTI Consultant), https://linkedin.com/in/adama-assiongbon-9029893a",
+    "channel": [],
+    "description": "Detects suspicious shell, interpreter, or network tooling spawned by SSH/SFTP clients consistent with libssh2 CVE-2026-55200 post-exploitation. SOC L1 should verify the source, affected host, user, process or request fields, timing, and related activity.\nD\u00e9tecte un comportement post-exploitation haute confiance lorsqu'un client ou outil utilisant SSH/SFTP lance un shell, interpr\u00e9teur ou outil r\u00e9seau suspect. Cette logique cible l'impact observable de CVE-2026-55200, car le champ packet_length malform\u00e9 est chiffr\u00e9 dans le flux SSH. Le SOC L1 doit v\u00e9rifier la source, l\u2019h\u00f4te affect\u00e9, l\u2019utilisateur, les champs de processus ou de requ\u00eate, la chronologie et les activit\u00e9s associ\u00e9es.\n",
+    "eventid": [],
+    "falsepositives": [
+      "Custom SSH/SFTP automation that intentionally launches local helper scripts",
+      "Backup or synchronization jobs using SSH transports and shell wrappers",
+      "Authorized exploitation testing against patched libssh2 clients",
+      "Git hooks or transfer wrappers that intentionally execute shell helpers over SSH"
+    ],
+    "filename": "CVE-2026-55200_libssh2_OOB_Write/rules/linux_libssh2_cve_2026_55200_post_exploitation_strict.yml",
+    "id": "c08ee8f5-cd2d-4f16-8f6b-40d777a27c1d",
+    "level": "high",
+    "license": "Apache-2.0",
+    "logsource": {
+      "category": "process_creation",
+      "product": "linux"
+    },
+    "required_fields": [
+      "CommandLine",
+      "Image",
+      "ParentCommandLine",
+      "ParentImage"
+    ],
+    "result_type": "event",
+    "rule": [
+      "SELECT * FROM logs WHERE ((ParentImage LIKE '%/sftp' ESCAPE '\\' OR ParentImage LIKE '%/scp' ESCAPE '\\' OR ParentImage LIKE '%/ssh2' ESCAPE '\\' OR ParentImage LIKE '%/sshfs' ESCAPE '\\' OR ParentImage LIKE '%/git-remote-ssh' ESCAPE '\\' OR ParentImage LIKE '%/libssh2\\_client' ESCAPE '\\' OR ParentImage LIKE '%/ssh2\\_exec' ESCAPE '\\' OR ParentImage LIKE '%/ssh2\\_agent' ESCAPE '\\') OR ((ParentImage LIKE '%/curl' ESCAPE '\\' OR ParentImage LIKE '%/git' ESCAPE '\\' OR ParentImage LIKE '%/rsync' ESCAPE '\\' OR ParentImage LIKE '%/rclone' ESCAPE '\\' OR ParentImage LIKE '%/lftp' ESCAPE '\\' OR ParentImage LIKE '%/aria2c' ESCAPE '\\') AND ((ParentCommandLine LIKE '%sftp://%' ESCAPE '\\' OR ParentCommandLine LIKE '%ssh://%' ESCAPE '\\' OR ParentCommandLine LIKE '%scp://%' ESCAPE '\\' OR ParentCommandLine LIKE '%git@%' ESCAPE '\\' OR ParentCommandLine LIKE '%GIT\\_SSH%' ESCAPE '\\' OR ParentCommandLine LIKE '%:2222%' ESCAPE '\\' OR ParentCommandLine LIKE '% -P 2222%' ESCAPE '\\' OR ParentCommandLine LIKE '% -p 2222%' ESCAPE '\\') OR (ParentCommandLine LIKE '%libssh2%' ESCAPE '\\' OR ParentCommandLine LIKE '%chacha20-poly1305@openssh.com%' ESCAPE '\\' OR ParentCommandLine LIKE '%curve25519-sha256%' ESCAPE '\\'))) OR (ParentCommandLine LIKE '%libssh2%' ESCAPE '\\' OR ParentCommandLine LIKE '%chacha20-poly1305@openssh.com%' ESCAPE '\\' OR ParentCommandLine LIKE '%curve25519-sha256%' ESCAPE '\\')) AND ((Image LIKE '%/sh' ESCAPE '\\' OR Image LIKE '%/bash' ESCAPE '\\' OR Image LIKE '%/dash' ESCAPE '\\' OR Image LIKE '%/ash' ESCAPE '\\' OR Image LIKE '%/zsh' ESCAPE '\\' OR Image LIKE '%/ksh' ESCAPE '\\' OR Image LIKE '%/python' ESCAPE '\\' OR Image LIKE '%/python2' ESCAPE '\\' OR Image LIKE '%/python3' ESCAPE '\\' OR Image LIKE '%/perl' ESCAPE '\\' OR Image LIKE '%/ruby' ESCAPE '\\' OR Image LIKE '%/lua' ESCAPE '\\' OR Image LIKE '%/node' ESCAPE '\\' OR Image LIKE '%/nodejs' ESCAPE '\\' OR Image LIKE '%/php' ESCAPE '\\' OR Image LIKE '%/pwsh' ESCAPE '\\') OR (Image LIKE '%/curl' ESCAPE '\\' OR Image LIKE '%/wget' ESCAPE '\\' OR Image LIKE '%/fetch' ESCAPE '\\' OR Image LIKE '%/nc' ESCAPE '\\' OR Image LIKE '%/ncat' ESCAPE '\\' OR Image LIKE '%/netcat' ESCAPE '\\' OR Image LIKE '%/socat' ESCAPE '\\' OR Image LIKE '%/openssl' ESCAPE '\\' OR Image LIKE '%/busybox' ESCAPE '\\' OR Image LIKE '%/chmod' ESCAPE '\\' OR Image LIKE '%/chown' ESCAPE '\\') OR (Image LIKE '%/tmp/%' ESCAPE '\\' OR Image LIKE '%/var/tmp/%' ESCAPE '\\' OR Image LIKE '%/dev/shm/%' ESCAPE '\\' OR Image LIKE '%/run/user/%' ESCAPE '\\')) AND (CommandLine LIKE '% -c %' ESCAPE '\\' OR CommandLine LIKE '% -i%' ESCAPE '\\' OR CommandLine LIKE '%/dev/tcp/%' ESCAPE '\\' OR CommandLine LIKE '%/dev/udp/%' ESCAPE '\\' OR CommandLine LIKE '%bash -i%' ESCAPE '\\' OR CommandLine LIKE '%sh -i%' ESCAPE '\\' OR CommandLine LIKE '%nc -e%' ESCAPE '\\' OR CommandLine LIKE '%ncat -e%' ESCAPE '\\' OR CommandLine LIKE '%socat %' ESCAPE '\\' OR CommandLine LIKE '%curl %' ESCAPE '\\' OR CommandLine LIKE '%wget %' ESCAPE '\\' OR CommandLine LIKE '%chmod +x%' ESCAPE '\\' OR CommandLine LIKE '%base64 -d%' ESCAPE '\\' OR CommandLine LIKE '%base64 --decode%' ESCAPE '\\' OR CommandLine LIKE '%/tmp/%' ESCAPE '\\' OR CommandLine LIKE '%/var/tmp/%' ESCAPE '\\' OR CommandLine LIKE '%/dev/shm/%' ESCAPE '\\' OR CommandLine LIKE '%>/tmp/%' ESCAPE '\\' OR CommandLine LIKE '% 2>&1%' ESCAPE '\\' OR CommandLine LIKE '%0>&1%' ESCAPE '\\') AND (NOT COALESCE(((ParentCommandLine LIKE '%rclone sync%' ESCAPE '\\' OR ParentCommandLine LIKE '%rsync --daemon%' ESCAPE '\\' OR ParentCommandLine LIKE '%rsync -a%' ESCAPE '\\' OR ParentCommandLine LIKE '%rsync --archive%' ESCAPE '\\' OR ParentCommandLine LIKE '%backup%' ESCAPE '\\' OR ParentCommandLine LIKE '%healthcheck%' ESCAPE '\\' OR ParentCommandLine LIKE '%monitoring%' ESCAPE '\\' OR ParentCommandLine LIKE '%git submodule%' ESCAPE '\\' OR ParentCommandLine LIKE '%git clone%' ESCAPE '\\' OR ParentCommandLine LIKE '%git fetch%' ESCAPE '\\' OR ParentCommandLine LIKE '%git pull%' ESCAPE '\\') OR (CommandLine LIKE '%/usr/lib/git-core/%' ESCAPE '\\' OR CommandLine LIKE '%/usr/share/git-core/%' ESCAPE '\\' OR CommandLine LIKE '%ssh-agent%' ESCAPE '\\' OR CommandLine LIKE '%known\\_hosts%' ESCAPE '\\')), 0))"
+    ],
+    "schema_version": 2,
+    "source": "hatchepsoute",
+    "source_table": "logs",
+    "status": "experimental",
+    "tags": [
+      "attack.initial-access",
+      "attack.execution",
+      "attack.command-and-control",
+      "attack.t1190",
+      "attack.t1059",
+      "attack.t1059.004",
+      "attack.t1105",
+      "cve.2026-55200"
+    ],
+    "title": "High Confidence libssh2 Client Post-Exploitation Child Process - STRICT"
+  },
+  {
+    "author": "Adama ASSIONGBON (SOC & CTI Consultant), https://linkedin.com/in/adama-assiongbon-9029893a",
+    "channel": [],
+    "description": "Detects cups-lpd binary executed with microsocks SOCKS5 arguments (FortiWeb Sliver campaign masquerade). SOC L1 should verify the source, affected host, user, process or request fields, timing, and related activity.\nD\u00e9tecte l'ex\u00e9cution d'un binaire nomm\u00e9 cups-lpd avec des arguments de proxy SOCKS5 caract\u00e9ristiques de microsocks. Dans la campagne FortiWeb Sliver, les attaquants renomment microsocks en cups-lpd pour se faire passer pour le daemon d'impression CUPS, puis l'invoquent sur TCP 515 avec les flags microsocks-sp\u00e9cifiques (-p pour port, -1 pour connexions uniques, -w pour les threads workers). ANGLE MORT : si le port est chang\u00e9 (-p 8080) ou si les flags sont omis, certaines s\u00e9lections ne d\u00e9clenchent pas. Mais selection_image (Image|endswith: '/cups-lpd') reste actif. Le SOC L1 doit v\u00e9rifier la source, l\u2019h\u00f4te affect\u00e9, l\u2019utilisateur, les champs de processus ou de requ\u00eate, la chronologie et les activit\u00e9s associ\u00e9es.\n",
+    "eventid": [],
+    "falsepositives": [
+      "Rare legacy printing systems invoking cups-lpd with similar arguments (no known case)",
+      "Second-pass challenge fix (2026-06-22): ajout de selection_renamed_from_tmp pour couvrir microsocks renomme (autre que cups-lpd) execute depuis /tmp ou /dev/shm. FP possibles sur des outils reseau legitimes en /tmp avec -p <port> ou -1/-w; verifier Image hash et utilisateur parent."
+    ],
+    "filename": "FortiWeb-Sliver-Campaign/rules/proc_lnx_microsocks_lpd_masquerade.yml",
+    "id": "c3e7f5a8-1b2d-4f9c-88a0-9d1e2f3a4b5c",
+    "level": "high",
+    "license": "Apache-2.0",
+    "logsource": {
+      "category": "process_creation",
+      "product": "linux"
+    },
+    "required_fields": [
+      "CommandLine",
+      "Image"
+    ],
+    "result_type": "event",
+    "rule": [
+      "SELECT * FROM logs WHERE (Image LIKE '%/cups-lpd' ESCAPE '\\' AND (CommandLine REGEXP '-p\\s*515' OR CommandLine LIKE '% -1%' ESCAPE '\\' OR CommandLine LIKE '% -w%' ESCAPE '\\')) OR ((Image LIKE '%/tmp/%' ESCAPE '\\' OR Image LIKE '%/dev/shm/%' ESCAPE '\\' OR Image LIKE '%/var/tmp/%' ESCAPE '\\' OR Image LIKE '%/run/user/%' ESCAPE '\\') AND (CommandLine REGEXP '-p\\s*515' OR (CommandLine LIKE '% -1%' ESCAPE '\\' AND CommandLine LIKE '% -w%' ESCAPE '\\')))"
+    ],
+    "schema_version": 2,
+    "source": "hatchepsoute",
+    "source_table": "logs",
+    "status": "experimental",
+    "tags": [
+      "attack.t1090",
+      "attack.t1090.001",
+      "attack.command-and-control"
+    ],
+    "title": "Execution of masqueraded SOCKS5 proxy (microsocks as cups-lpd)"
+  },
+  {
+    "author": "Adama ASSIONGBON (SOC & CTI Consultant), https://linkedin.com/in/adama-assiongbon-9029893a",
+    "channel": [],
+    "description": "Detects CVE-2026-20253 post-exploitation: Splunk process (splunkd/python) spawning a shell or network tool outside the Splunk directory tree. STRICT. SOC L1 should verify the source, affected host, user, process or request fields, timing, and related activity.\nD\u00e9tecte l'exploitation r\u00e9ussie de CVE-2026-20253 via des processus enfants inattendus cr\u00e9\u00e9s par les processus Splunk (splunkd, python, python3) sur Linux. Un exploit r\u00e9ussi \u00e9crase un script interne Splunk puis d\u00e9clenche son ex\u00e9cution. Le processus r\u00e9sultant tourne sous l'utilisateur splunk et spawne typiquement un shell inverse ou un chargeur. R\u00e8gle STRICT : si elle se d\u00e9clenche, consid\u00e9rer le serveur Splunk comme enti\u00e8rement compromis et l'isoler imm\u00e9diatement. Le SOC L1 doit v\u00e9rifier la source, l\u2019h\u00f4te affect\u00e9, l\u2019utilisateur, les champs de processus ou de requ\u00eate, la chronologie et les activit\u00e9s associ\u00e9es.\n",
+    "eventid": [],
+    "falsepositives": [
+      "Splunk scripted inputs or modular inputs invoking a system shell with a Splunk script path in CommandLine - filtered by filter_main_splunk_scripted_input; if a custom scripted input fires, add its CommandLine path pattern to that filter",
+      "Custom Splunk apps executing Python or Bash from non-standard paths - add app-specific paths to the filter",
+      "Authorized administrator executing an interactive shell via Splunk's search head Shell command - validate User and SessionId against authorized admin accounts"
+    ],
+    "filename": "CVE-2026-20253_Splunk_Enterprise_RCE/rules/lnx_splunk_unexpected_child_process_cve_2026_20253_strict.yml",
+    "id": "ca59da94-103c-465f-8f7f-d6842a9101eb",
+    "level": "high",
+    "license": "Apache-2.0",
+    "logsource": {
+      "category": "process_creation",
+      "product": "linux"
+    },
+    "required_fields": [
+      "CommandLine",
+      "Image",
+      "ParentImage"
+    ],
+    "result_type": "event",
+    "rule": [
+      "SELECT * FROM logs WHERE (ParentImage LIKE '%/opt/splunk/bin/splunkd%' ESCAPE '\\' OR ParentImage LIKE '%/opt/splunk/bin/python%' ESCAPE '\\' OR ParentImage LIKE '%/opt/splunk/bin/python3%' ESCAPE '\\' OR ParentImage LIKE '%splunk-launch.sh%' ESCAPE '\\') AND (Image LIKE '%/bash' ESCAPE '\\' OR Image LIKE '%/sh' ESCAPE '\\' OR Image LIKE '%/dash' ESCAPE '\\' OR Image LIKE '%/zsh' ESCAPE '\\' OR Image LIKE '%/ksh' ESCAPE '\\' OR Image LIKE '%/python' ESCAPE '\\' OR Image LIKE '%/python3' ESCAPE '\\' OR Image LIKE '%/perl' ESCAPE '\\' OR Image LIKE '%/ruby' ESCAPE '\\' OR Image LIKE '%/nc' ESCAPE '\\' OR Image LIKE '%/ncat' ESCAPE '\\' OR Image LIKE '%/netcat' ESCAPE '\\' OR Image LIKE '%/curl' ESCAPE '\\' OR Image LIKE '%/wget' ESCAPE '\\' OR Image LIKE '%/socat' ESCAPE '\\') AND (NOT COALESCE(((Image LIKE '/opt/splunk/bin/%' ESCAPE '\\' OR Image LIKE '/opt/splunk/etc/apps/%' ESCAPE '\\' OR Image LIKE '/opt/splunk/lib/%' ESCAPE '\\') OR (CommandLine LIKE '%/opt/splunk/etc/apps/%' ESCAPE '\\' OR CommandLine LIKE '%/opt/splunk/bin/%' ESCAPE '\\' OR CommandLine LIKE '%/opt/splunk/lib/%' ESCAPE '\\')), 0))"
+    ],
+    "schema_version": 2,
+    "source": "hatchepsoute",
+    "source_table": "logs",
+    "status": "experimental",
+    "tags": [
+      "attack.initial-access",
+      "attack.t1190",
+      "attack.execution",
+      "attack.t1059.004",
+      "attack.persistence",
+      "attack.t1505.003",
+      "attack.t1105",
+      "cve.2026-20253"
+    ],
+    "title": "Splunk Enterprise Post-Exploitation - Unexpected Child Process (CVE-2026-20253) - STRICT"
+  },
+  {
+    "author": "Adama ASSIONGBON (SOC & CTI Consultant), https://linkedin.com/in/adama-assiongbon-9029893a",
+    "channel": [],
+    "description": "Detects the high-confidence CVE-2026-43503 (DirtyClone) exploitation chain: an iptables/ip6tables TEE target combined with an XFRM ESP-in-UDP state configuration, or an interpreter/compiled binary running from a user-writable temp path that spawns a SUID privilege-transition binary (su, sudo, pkexec) after page cache corruption. SOC L1 should verify the source, affected host, user, process or request fields, timing, and related activity.\nLa r\u00e8gle signale un comportement potentiellement suspect. Le SOC L1 doit v\u00e9rifier la source, l\u2019h\u00f4te affect\u00e9, l\u2019utilisateur, les champs de processus ou de requ\u00eate, la chronologie et les activit\u00e9s associ\u00e9es.\n",
+    "eventid": [],
+    "falsepositives": [
+      "Authorized exploit validation or red team activity testing CVE-2026-43503 in a lab environment",
+      "Legitimate IPsec/L2TP VPN configuration by strongSwan/Libreswan/xl2tpd (filtered via filter_main_legitimate_ipsec_vpn, tune the parent process list per distribution)",
+      "Network debugging using the netfilter TEE target for legitimate traffic mirroring (rare, verify context manually)",
+      "Sysadmin scripts staged in a temp path invoking sudo/su - verify Image hash and User against change management records"
+    ],
+    "filename": "CVE-2026-43503_DirtyClone/rules/linux_dirtyclone_tee_espinudp_suid_chain_cve_2026_43503_strict.yml",
+    "id": "d6018715-e42e-430f-9253-6c59104a00bd",
+    "level": "high",
+    "license": "Apache-2.0",
+    "logsource": {
+      "category": "process_creation",
+      "product": "linux"
+    },
+    "required_fields": [
+      "CommandLine",
+      "Image",
+      "ParentCommandLine",
+      "ParentImage"
+    ],
+    "result_type": "event",
+    "rule": [
+      "SELECT * FROM logs WHERE ((Image LIKE '%/iptables' ESCAPE '\\' OR Image LIKE '%/ip6tables' ESCAPE '\\' OR Image LIKE '%/xtables-nft-multi' ESCAPE '\\' OR Image LIKE '%/busybox' ESCAPE '\\') AND (CommandLine LIKE '%-j TEE%' ESCAPE '\\' OR CommandLine LIKE '%--jump TEE%' ESCAPE '\\' OR CommandLine LIKE '%TEE --gateway%' ESCAPE '\\' OR CommandLine LIKE '%tee --gateway%' ESCAPE '\\')) OR (((Image LIKE '%/ip' ESCAPE '\\' OR Image LIKE '%/busybox' ESCAPE '\\') AND (CommandLine LIKE '%xfrm%' ESCAPE '\\' AND CommandLine LIKE '%state%' ESCAPE '\\')) AND (CommandLine LIKE '%proto esp%' ESCAPE '\\' OR CommandLine LIKE '%encap espinudp%' ESCAPE '\\' OR CommandLine LIKE '%UDP\\_ENCAP\\_ESPINUDP%' ESCAPE '\\') AND (NOT COALESCE((ParentImage LIKE '%/charon' ESCAPE '\\' OR ParentImage LIKE '%/ipsec' ESCAPE '\\' OR ParentImage LIKE '%/xl2tpd' ESCAPE '\\' OR ParentImage LIKE '%/strongswan' ESCAPE '\\' OR ParentImage LIKE '%/pluto' ESCAPE '\\'), 0))) OR (((ParentImage LIKE '%/python3' ESCAPE '\\' OR ParentImage LIKE '%/python3.9' ESCAPE '\\' OR ParentImage LIKE '%/python3.10' ESCAPE '\\' OR ParentImage LIKE '%/python3.11' ESCAPE '\\' OR ParentImage LIKE '%/python3.12' ESCAPE '\\' OR ParentImage LIKE '%/python' ESCAPE '\\' OR ParentImage LIKE '%/perl' ESCAPE '\\' OR ParentImage LIKE '%/bash' ESCAPE '\\' OR ParentImage LIKE '%/sh' ESCAPE '\\') AND (ParentCommandLine LIKE '%/tmp/%' ESCAPE '\\' OR ParentCommandLine LIKE '%/var/tmp/%' ESCAPE '\\' OR ParentCommandLine LIKE '%/dev/shm/%' ESCAPE '\\' OR ParentCommandLine LIKE '%/run/user/%' ESCAPE '\\' OR ParentCommandLine LIKE '%dirtyclone%' ESCAPE '\\' OR ParentCommandLine LIKE '%DirtyClone%' ESCAPE '\\' OR ParentCommandLine LIKE '%CVE-2026-43503%' ESCAPE '\\' OR ParentCommandLine LIKE '%cve\\_2026\\_43503%' ESCAPE '\\')) AND (Image LIKE '%/su' ESCAPE '\\' OR Image LIKE '%/sudo' ESCAPE '\\' OR Image LIKE '%/pkexec' ESCAPE '\\' OR Image LIKE '%/passwd' ESCAPE '\\' OR Image LIKE '%/newgrp' ESCAPE '\\' OR Image LIKE '%/gpasswd' ESCAPE '\\')) OR ((Image LIKE '%/tmp/%' ESCAPE '\\' OR Image LIKE '%/var/tmp/%' ESCAPE '\\' OR Image LIKE '%/dev/shm/%' ESCAPE '\\' OR Image LIKE '%/run/user/%' ESCAPE '\\') AND (CommandLine LIKE '%/usr/bin/su%' ESCAPE '\\' OR CommandLine LIKE '%/bin/su%' ESCAPE '\\' OR CommandLine LIKE '%/usr/bin/sudo%' ESCAPE '\\' OR CommandLine LIKE '%/usr/bin/passwd%' ESCAPE '\\' OR CommandLine LIKE '%/usr/bin/pkexec%' ESCAPE '\\' OR CommandLine LIKE '%/etc/passwd%' ESCAPE '\\'))"
+    ],
+    "schema_version": 2,
+    "source": "hatchepsoute",
+    "source_table": "logs",
+    "status": "experimental",
+    "tags": [
+      "attack.privilege-escalation",
+      "attack.execution",
+      "attack.t1068",
+      "attack.t1548.001",
+      "attack.t1059.006",
+      "cve.2026-43503"
+    ],
+    "title": "Linux LPE DirtyClone Netfilter TEE / XFRM ESP-in-UDP Exploitation Chain - STRICT"
+  },
+  {
+    "author": "Adama ASSIONGBON (SOC & CTI Consultant), https://linkedin.com/in/adama-assiongbon-9029893a",
+    "channel": [],
+    "description": "Detects the Adobe Campaign nlserver web module starting a command shell, script interpreter, delayed-execution utility, or an executable from a temporary directory on Linux. This high-confidence behavior may indicate code execution through a Campaign vulnerability or unauthorized server-side activity, but it does not identify a specific CVE by itself. SOC L1 should verify the complete parent and child command lines, the Campaign build, the initiating request, and whether an approved maintenance action explains the process.\nD\u00e9tecte le module web nlserver d'Adobe Campaign lan\u00e7ant un interpr\u00e9teur de commandes, un interpr\u00e9teur de scripts, un utilitaire d'ex\u00e9cution diff\u00e9r\u00e9e ou un ex\u00e9cutable depuis un r\u00e9pertoire temporaire sous Linux. Ce comportement \u00e0 haute confiance peut indiquer une ex\u00e9cution de code via une vuln\u00e9rabilit\u00e9 de Campaign ou une activit\u00e9 non autoris\u00e9e c\u00f4t\u00e9 serveur, mais il n'identifie pas \u00e0 lui seul une CVE pr\u00e9cise. Le SOC L1 doit v\u00e9rifier les lignes de commande compl\u00e8tes du parent et de l'enfant, le build de Campaign, la requ\u00eate \u00e0 l'origine de l'activit\u00e9 et si une op\u00e9ration de maintenance approuv\u00e9e explique le processus.\n",
+    "eventid": [],
+    "falsepositives": [
+      "Approved custom Adobe Campaign web extensions that intentionally launch a listed interpreter, delayed-execution utility, or an executable from a temporary directory",
+      "Documented troubleshooting or maintenance performed directly through the Campaign web module"
+    ],
+    "filename": "Adobe_Campaign_Classic/rules/linux_adobe_campaign_web_suspicious_child_process_strict.yml",
+    "id": "d8c7f4a1-2576-4c09-a5bd-2e931ff72642",
+    "level": "high",
+    "license": "Apache-2.0",
+    "logsource": {
+      "category": "process_creation",
+      "product": "linux"
+    },
+    "required_fields": [
+      "CommandLine",
+      "Image",
+      "ParentCommandLine",
+      "ParentImage"
+    ],
+    "result_type": "event",
+    "rule": [
+      "SELECT * FROM logs WHERE ParentImage LIKE '%/nlserver' ESCAPE '\\' AND ((ParentCommandLine LIKE '% web %' ESCAPE '\\' OR ParentCommandLine LIKE '% web@%' ESCAPE '\\') OR ParentCommandLine LIKE '% web' ESCAPE '\\') AND ((Image LIKE '%/sh' ESCAPE '\\' OR Image LIKE '%/bash' ESCAPE '\\' OR Image LIKE '%/dash' ESCAPE '\\' OR Image LIKE '%/ksh' ESCAPE '\\' OR Image LIKE '%/zsh' ESCAPE '\\' OR Image LIKE '%/python' ESCAPE '\\' OR Image LIKE '%/python3' ESCAPE '\\' OR Image LIKE '%/perl' ESCAPE '\\' OR Image LIKE '%/ruby' ESCAPE '\\' OR Image LIKE '%/php' ESCAPE '\\' OR Image LIKE '%/php-cgi' ESCAPE '\\' OR Image LIKE '%/node' ESCAPE '\\' OR Image LIKE '%/nodejs' ESCAPE '\\' OR Image LIKE '%/lua' ESCAPE '\\' OR Image LIKE '%/awk' ESCAPE '\\' OR Image LIKE '%/find' ESCAPE '\\' OR Image LIKE '%/env' ESCAPE '\\' OR Image LIKE '%/systemd-run' ESCAPE '\\' OR Image LIKE '%/at' ESCAPE '\\' OR Image LIKE '%/crontab' ESCAPE '\\' OR Image LIKE '%/nohup' ESCAPE '\\' OR Image LIKE '%/setsid' ESCAPE '\\') OR (CommandLine LIKE '%/dev/tcp/%' ESCAPE '\\' OR CommandLine LIKE '%base64 -d%' ESCAPE '\\' OR CommandLine LIKE '%base64 --decode%' ESCAPE '\\' OR CommandLine LIKE '%chmod +x%' ESCAPE '\\') OR ((Image LIKE '%/curl' ESCAPE '\\' OR Image LIKE '%/wget' ESCAPE '\\' OR Image LIKE '%/nc' ESCAPE '\\' OR Image LIKE '%/ncat' ESCAPE '\\' OR Image LIKE '%/socat' ESCAPE '\\' OR Image LIKE '%/ssh' ESCAPE '\\' OR Image LIKE '%/busybox' ESCAPE '\\') AND (CommandLine LIKE '%curl http%' ESCAPE '\\' OR CommandLine LIKE '%wget http%' ESCAPE '\\' OR CommandLine LIKE '%http://%' ESCAPE '\\' OR CommandLine LIKE '%https://%' ESCAPE '\\')) OR (Image LIKE '%/tmp/%' ESCAPE '\\' OR Image LIKE '%/var/tmp/%' ESCAPE '\\' OR Image LIKE '%/dev/shm/%' ESCAPE '\\' OR Image LIKE '%/run/user/%' ESCAPE '\\'))"
+    ],
+    "schema_version": 2,
+    "source": "hatchepsoute",
+    "source_table": "logs",
+    "status": "experimental",
+    "tags": [
+      "attack.execution",
+      "attack.t1059",
+      "attack.t1053",
+      "attack.command-and-control",
+      "attack.t1105"
+    ],
+    "title": "Adobe Campaign web module suspicious child process on Linux - STRICT"
+  },
+  {
+    "author": "Adama ASSIONGBON (SOC & CTI Consultant), https://linkedin.com/in/adama-assiongbon-9029893a",
+    "channel": [],
+    "description": "Detects a suspicious shell, discovery, download, or scripting process spawned by the Tomcat Java process, consistent with CVE-2026-34486 Tribes EncryptInterceptor fail-open deserialization RCE. SOC L1 should verify the source, affected host, user, process or request fields, timing, and related activity.\nDetecte un processus shell, de reconnaissance, de telechargement ou de script suspect lance par le processus Java de Tomcat, coherent avec l'exploitation de CVE-2026-34486. La regression sur EncryptInterceptor fait qu'un message Tribes dont le dechiffrement echoue est quand meme transmis a la deserialisation Java au lieu d'etre rejete, ce qui permet a un attaquant non authentifie d'atteindre ObjectInputStream.readObject() sur le port 4000 par defaut avec une chaine de gadgets comme CommonsCollections6. La chaine de gadgets classique invoque Runtime.exec(), ce qui cree un processus enfant reel observable au niveau OS, meme si le trafic reseau Tribes est chiffre et donc peu inspecte par la plupart des WAF/IDS. Le SOC L1 doit v\u00e9rifier la source, l\u2019h\u00f4te affect\u00e9, l\u2019utilisateur, les champs de processus ou de requ\u00eate, la chronologie et les activit\u00e9s associ\u00e9es.\n",
+    "eventid": [],
+    "falsepositives": [
+      "Authorized Tomcat administrator running troubleshooting commands under the same service account",
+      "Startup or provisioning scripts that legitimately invoke shell tools from the Tomcat process during container initialization"
+    ],
+    "filename": "CVE-2026-34486_Apache_Tomcat_Tribes_RCE/rules/linux_tomcat_tribes_child_process_deserialization_cve_2026_34486_strict.yml",
+    "id": "da4c6968-45ec-49ce-8798-bef0b8087197",
+    "level": "high",
+    "license": "Apache-2.0",
+    "logsource": {
+      "category": "process_creation",
+      "product": "linux"
+    },
+    "required_fields": [
+      "CommandLine",
+      "ContainerName",
+      "CurrentDirectory",
+      "Image",
+      "KubernetesPodName",
+      "ParentCommandLine",
+      "ParentImage"
+    ],
+    "result_type": "event",
+    "rule": [
+      "SELECT * FROM logs WHERE ((ParentImage LIKE '%/java' ESCAPE '\\' OR ParentImage LIKE '%/javaw' ESCAPE '\\') AND ((ParentCommandLine LIKE '%org.apache.catalina.startup.Bootstrap%' ESCAPE '\\' OR ParentCommandLine LIKE '%catalina.base%' ESCAPE '\\' OR ParentCommandLine LIKE '%catalina.home%' ESCAPE '\\' OR ParentCommandLine LIKE '%CATALINA\\_BASE%' ESCAPE '\\' OR ParentCommandLine LIKE '%CATALINA\\_HOME%' ESCAPE '\\' OR ParentCommandLine LIKE '%tomcat%' ESCAPE '\\') OR (CurrentDirectory LIKE '%/tomcat%' ESCAPE '\\' OR CurrentDirectory LIKE '%/catalina%' ESCAPE '\\') OR ContainerName LIKE '%tomcat%' ESCAPE '\\' OR KubernetesPodName LIKE '%tomcat%' ESCAPE '\\')) AND (((Image LIKE '%/sh' ESCAPE '\\' OR Image LIKE '%/bash' ESCAPE '\\' OR Image LIKE '%/dash' ESCAPE '\\' OR Image LIKE '%/zsh' ESCAPE '\\' OR Image LIKE '%/python' ESCAPE '\\' OR Image LIKE '%/python3' ESCAPE '\\' OR Image LIKE '%/perl' ESCAPE '\\' OR Image LIKE '%/ruby' ESCAPE '\\' OR Image LIKE '%/curl' ESCAPE '\\' OR Image LIKE '%/wget' ESCAPE '\\' OR Image LIKE '%/nc' ESCAPE '\\' OR Image LIKE '%/ncat' ESCAPE '\\' OR Image LIKE '%/socat' ESCAPE '\\' OR Image LIKE '%/busybox' ESCAPE '\\' OR Image LIKE '%/id' ESCAPE '\\' OR Image LIKE '%/whoami' ESCAPE '\\' OR Image LIKE '%/uname' ESCAPE '\\' OR Image LIKE '%/touch' ESCAPE '\\' OR Image LIKE '%/env' ESCAPE '\\' OR Image LIKE '%/printenv' ESCAPE '\\') AND ((CommandLine LIKE '% id%' ESCAPE '\\' OR CommandLine LIKE '%id &&%' ESCAPE '\\' OR CommandLine LIKE '% id;%' ESCAPE '\\' OR CommandLine LIKE '%/usr/bin/id%' ESCAPE '\\' OR CommandLine LIKE '%whoami%' ESCAPE '\\' OR CommandLine LIKE '%uname -a%' ESCAPE '\\' OR CommandLine LIKE '%printenv%' ESCAPE '\\' OR CommandLine LIKE '% env%' ESCAPE '\\' OR CommandLine LIKE '%/proc/self/environ%' ESCAPE '\\' OR CommandLine LIKE '%curl http%' ESCAPE '\\' OR CommandLine LIKE '%curl -k%' ESCAPE '\\' OR CommandLine LIKE '%wget http%' ESCAPE '\\' OR CommandLine LIKE '%nc -e%' ESCAPE '\\' OR CommandLine LIKE '%ncat -e%' ESCAPE '\\' OR CommandLine LIKE '%socat %' ESCAPE '\\' OR CommandLine LIKE '%bash -i%' ESCAPE '\\' OR CommandLine LIKE '%/dev/tcp/%' ESCAPE '\\' OR CommandLine LIKE '%touch /tmp/%' ESCAPE '\\' OR CommandLine LIKE '%base64 -d%' ESCAPE '\\' OR CommandLine LIKE '%base64 --decode%' ESCAPE '\\') OR (CommandLine LIKE '%python -c%' ESCAPE '\\' OR CommandLine LIKE '%python3 -c%' ESCAPE '\\' OR CommandLine LIKE '%perl -e%' ESCAPE '\\' OR CommandLine LIKE '%ruby -e%' ESCAPE '\\'))) OR (Image LIKE '%/tmp/%' ESCAPE '\\' OR Image LIKE '%/dev/shm/%' ESCAPE '\\' OR Image LIKE '%/var/tmp/%' ESCAPE '\\')) AND (NOT COALESCE(((CommandLine LIKE '%catalina.sh%' ESCAPE '\\' OR CommandLine LIKE '%setenv.sh%' ESCAPE '\\' OR CommandLine LIKE '%digest.sh%' ESCAPE '\\') OR (CommandLine LIKE '%apt-get%' ESCAPE '\\' OR CommandLine LIKE '%yum install%' ESCAPE '\\' OR CommandLine LIKE '%dpkg -%' ESCAPE '\\')), 0))"
+    ],
+    "schema_version": 2,
+    "source": "hatchepsoute",
+    "source_table": "logs",
+    "status": "experimental",
+    "tags": [
+      "attack.execution",
+      "attack.discovery",
+      "attack.command-and-control",
+      "attack.t1059",
+      "attack.t1059.004",
+      "attack.t1082",
+      "cve.2026-34486"
+    ],
+    "title": "Apache Tomcat Tribes Spawns Suspicious Child Process After Deserialization - STRICT"
+  },
+  {
+    "author": "Adama ASSIONGBON (SOC & CTI Consultant), https://linkedin.com/in/adama-assiongbon-9029893a",
+    "channel": [],
+    "description": "Detects PHP-family file creation in common Joomla web-exposed or writable directories by web server or PHP runtime processes, covering CVE-2026-48909 cases where the exploit writes a webshell but no command has been executed yet. SOC L1 should verify the source, affected host, user, process or request fields, timing, and related activity.\nD\u00e9tecte la cr\u00e9ation de fichiers PHP dans des r\u00e9pertoires Joomla expos\u00e9s ou inscriptibles par un processus web/PHP. Cette r\u00e8gle couvre l'angle mort o\u00f9 CVE-2026-48909 \u00e9crit un webshell mais ne d\u00e9clenche pas encore d'ex\u00e9cution de commande observable. Le SOC L1 doit v\u00e9rifier la source, l\u2019h\u00f4te affect\u00e9, l\u2019utilisateur, les champs de processus ou de requ\u00eate, la chronologie et les activit\u00e9s associ\u00e9es.\n",
+    "eventid": [],
+    "falsepositives": [
+      "Legitimate Joomla extension updates writing PHP files into templates, modules, plugins or cache paths",
+      "Custom deployment workflows executed through PHP runtime processes",
+      "Tune known deployment windows, service accounts and allowed extension paths"
+    ],
+    "filename": "CVE-2026-48909_Joomla_SP_LMS_RCE/rules/lnx_joomla_php_webshell_file_write_cve_2026_48909.yml",
+    "id": "f89bc77f-3fd9-4c09-9844-489092026003",
+    "level": "high",
+    "license": "Apache-2.0",
+    "logsource": {
+      "category": "file_event",
+      "product": "linux"
+    },
+    "required_fields": [
+      "Image",
+      "ParentImage",
+      "TargetFilename"
+    ],
+    "result_type": "event",
+    "rule": [
+      "SELECT * FROM logs WHERE ((TargetFilename LIKE '%.php' ESCAPE '\\' OR TargetFilename LIKE '%.phtml' ESCAPE '\\' OR TargetFilename LIKE '%.php3' ESCAPE '\\' OR TargetFilename LIKE '%.php4' ESCAPE '\\' OR TargetFilename LIKE '%.php5' ESCAPE '\\' OR TargetFilename LIKE '%.php7' ESCAPE '\\' OR TargetFilename LIKE '%.php8' ESCAPE '\\' OR TargetFilename LIKE '%.pht' ESCAPE '\\' OR TargetFilename LIKE '%.phar' ESCAPE '\\' OR TargetFilename LIKE '%.inc' ESCAPE '\\' OR TargetFilename LIKE '%.PHP' ESCAPE '\\' OR TargetFilename LIKE '%.PHTML' ESCAPE '\\' OR TargetFilename LIKE '%.PhP' ESCAPE '\\') OR (TargetFilename LIKE '%.jpg.php%' ESCAPE '\\' OR TargetFilename LIKE '%.png.php%' ESCAPE '\\' OR TargetFilename LIKE '%.gif.php%' ESCAPE '\\' OR TargetFilename LIKE '%.jpeg.php%' ESCAPE '\\' OR TargetFilename LIKE '%.txt.php%' ESCAPE '\\' OR TargetFilename LIKE '%.ico.php%' ESCAPE '\\')) AND (TargetFilename LIKE '%/var/www/html/%' ESCAPE '\\' OR TargetFilename LIKE '%/var/www/vhosts/%' ESCAPE '\\' OR TargetFilename LIKE '%/public\\_html/%' ESCAPE '\\' OR TargetFilename LIKE '%/httpdocs/%' ESCAPE '\\' OR TargetFilename LIKE '%/htdocs/%' ESCAPE '\\' OR TargetFilename LIKE '%/srv/www/%' ESCAPE '\\' OR TargetFilename LIKE '%/usr/share/nginx/html/%' ESCAPE '\\' OR TargetFilename LIKE '%/usr/share/apache2/%' ESCAPE '\\') AND (TargetFilename LIKE '%/tmp/%' ESCAPE '\\' OR TargetFilename LIKE '%/cache/%' ESCAPE '\\' OR TargetFilename LIKE '%/administrator/cache/%' ESCAPE '\\' OR TargetFilename LIKE '%/images/%' ESCAPE '\\' OR TargetFilename LIKE '%/media/%' ESCAPE '\\' OR TargetFilename LIKE '%/templates/%' ESCAPE '\\' OR TargetFilename LIKE '%/modules/%' ESCAPE '\\' OR TargetFilename LIKE '%/plugins/%' ESCAPE '\\' OR TargetFilename LIKE '%/components/%' ESCAPE '\\' OR TargetFilename LIKE '%/layouts/%' ESCAPE '\\') AND ((Image LIKE '%/apache2' ESCAPE '\\' OR Image LIKE '%/apache2-prefork' ESCAPE '\\' OR Image LIKE '%/apache2-worker' ESCAPE '\\' OR Image LIKE '%/httpd' ESCAPE '\\' OR Image LIKE '%/httpd.worker' ESCAPE '\\' OR Image LIKE '%/httpd.event' ESCAPE '\\' OR Image LIKE '%/nginx' ESCAPE '\\' OR Image LIKE '%/php' ESCAPE '\\' OR Image LIKE '%/php-cgi' ESCAPE '\\' OR Image LIKE '%/lsphp' ESCAPE '\\') OR (Image LIKE '%/php-fpm%' ESCAPE '\\' OR Image LIKE '%/php7.%' ESCAPE '\\' OR Image LIKE '%/php8.%' ESCAPE '\\' OR Image LIKE '%/php-cgi%' ESCAPE '\\' OR Image LIKE '%/lsphp%' ESCAPE '\\') OR (ParentImage LIKE '%/apache2' ESCAPE '\\' OR ParentImage LIKE '%/httpd' ESCAPE '\\' OR ParentImage LIKE '%/nginx' ESCAPE '\\' OR ParentImage LIKE '%/php' ESCAPE '\\' OR ParentImage LIKE '%/php-cgi' ESCAPE '\\' OR ParentImage LIKE '%/lsphp' ESCAPE '\\') OR (ParentImage LIKE '%/php-fpm%' ESCAPE '\\' OR ParentImage LIKE '%/php7.%' ESCAPE '\\' OR ParentImage LIKE '%/php8.%' ESCAPE '\\' OR ParentImage LIKE '%/php-cgi%' ESCAPE '\\' OR ParentImage LIKE '%/lsphp%' ESCAPE '\\')) AND (NOT COALESCE((Image LIKE '%/composer' ESCAPE '\\' OR Image LIKE '%/rsync' ESCAPE '\\' OR Image LIKE '%/tar' ESCAPE '\\' OR Image LIKE '%/unzip' ESCAPE '\\' OR Image LIKE '%/git' ESCAPE '\\'), 0))"
+    ],
+    "schema_version": 2,
+    "source": "hatchepsoute",
+    "source_table": "logs",
+    "status": "experimental",
+    "tags": [
+      "attack.persistence",
+      "attack.t1505.003",
+      "attack.execution",
+      "attack.t1059.006",
+      "cve.2026-48909"
+    ],
+    "title": "Joomla PHP Webshell File Write After SP LMS Exploitation (CVE-2026-48909)"
+  },
+  {
+    "author": "Adama ASSIONGBON (SOC & CTI Consultant), https://linkedin.com/in/adama-assiongbon-9029893a",
+    "channel": [],
+    "description": "Detects web server or PHP runtime processes on Linux spawning shells or common post-exploitation tools, consistent with command execution through the plugin webshell dropped after CVE-2026-63030 / CVE-2026-60137 (wp2shell) exploitation. Confirmation signal on a different surface than the web-layer rule, independent of WAF body-inspection depth. SOC L1 should verify the source, affected host, user, process or request fields, timing, and related activity.\nD\u00e9tecte un processus web ou PHP sous Linux qui lance un shell ou un outil de post-exploitation, coh\u00e9rent avec l'ex\u00e9cution de commande via le webshell plugin d\u00e9pos\u00e9 apr\u00e8s exploitation de CVE-2026-63030 / CVE-2026-60137 (wp2shell). Signal de confirmation sur une couche diff\u00e9rente de la r\u00e8gle web, utile quand le WAF n'inspecte pas le corps des requ\u00eates POST. Le SOC L1 doit v\u00e9rifier la source, l\u2019h\u00f4te affect\u00e9, l\u2019utilisateur, les champs de processus ou de requ\u00eate, la chronologie et les activit\u00e9s associ\u00e9es.\n",
+    "eventid": [],
+    "falsepositives": [
+      "Hosting control panels or maintenance jobs invoked through web administration interfaces",
+      "Legitimate WordPress plugins or themes that intentionally shell out to system utilities (rare, validate against known baselines)",
+      "Backup or staging tools that spawn shell commands from a PHP-FPM worker"
+    ],
+    "filename": "CVE-2026-63030_wordpress_wp2shell_RCE/rules/linux_webserver_shell_spawn_post_wp2shell_cve_2026_63030_strict.yml",
+    "id": "1142bb3f-7113-439d-a08f-435bddad23f6",
+    "level": "critical",
+    "license": "Apache-2.0",
+    "logsource": {
+      "category": "process_creation",
+      "product": "linux"
+    },
+    "required_fields": [
+      "CommandLine",
+      "CurrentDirectory",
+      "Image",
+      "ParentCommandLine",
+      "ParentImage",
+      "User"
+    ],
+    "result_type": "event",
+    "rule": [
+      "SELECT * FROM logs WHERE ((((ParentImage LIKE '%/apache2' ESCAPE '\\' OR ParentImage LIKE '%/apache2-prefork' ESCAPE '\\' OR ParentImage LIKE '%/apache2-worker' ESCAPE '\\' OR ParentImage LIKE '%/httpd' ESCAPE '\\' OR ParentImage LIKE '%/httpd.worker' ESCAPE '\\' OR ParentImage LIKE '%/httpd.event' ESCAPE '\\' OR ParentImage LIKE '%/nginx' ESCAPE '\\' OR ParentImage LIKE '%/php' ESCAPE '\\' OR ParentImage LIKE '%/php-cgi' ESCAPE '\\' OR ParentImage LIKE '%/lsphp' ESCAPE '\\') OR (ParentImage LIKE '%/php-fpm%' ESCAPE '\\' OR ParentImage LIKE '%/php7.%' ESCAPE '\\' OR ParentImage LIKE '%/php8.%' ESCAPE '\\' OR ParentImage LIKE '%/php-cgi%' ESCAPE '\\' OR ParentImage LIKE '%/lsphp%' ESCAPE '\\') OR (ParentCommandLine LIKE '%php-fpm%' ESCAPE '\\' OR ParentCommandLine LIKE '%php-cgi%' ESCAPE '\\' OR ParentCommandLine LIKE '%lsphp%' ESCAPE '\\' OR ParentCommandLine LIKE '%pool www%' ESCAPE '\\')) AND ((Image LIKE '%/sh' ESCAPE '\\' OR Image LIKE '%/bash' ESCAPE '\\' OR Image LIKE '%/dash' ESCAPE '\\' OR Image LIKE '%/zsh' ESCAPE '\\' OR Image LIKE '%/id' ESCAPE '\\' OR Image LIKE '%/whoami' ESCAPE '\\' OR Image LIKE '%/uname' ESCAPE '\\' OR Image LIKE '%/curl' ESCAPE '\\' OR Image LIKE '%/wget' ESCAPE '\\' OR Image LIKE '%/nc' ESCAPE '\\' OR Image LIKE '%/ncat' ESCAPE '\\' OR Image LIKE '%/netcat' ESCAPE '\\' OR Image LIKE '%/socat' ESCAPE '\\' OR Image LIKE '%/python' ESCAPE '\\' OR Image LIKE '%/python3' ESCAPE '\\' OR Image LIKE '%/perl' ESCAPE '\\' OR Image LIKE '%/busybox' ESCAPE '\\' OR Image LIKE '%/base64' ESCAPE '\\' OR Image LIKE '%/chmod' ESCAPE '\\') OR (CommandLine LIKE '%bash -c%' ESCAPE '\\' OR CommandLine LIKE '%sh -c%' ESCAPE '\\' OR CommandLine LIKE '%curl %' ESCAPE '\\' OR CommandLine LIKE '%wget %' ESCAPE '\\' OR CommandLine LIKE '%nc -%' ESCAPE '\\' OR CommandLine LIKE '%ncat %' ESCAPE '\\' OR CommandLine LIKE '%python -c%' ESCAPE '\\' OR CommandLine LIKE '%python3 -c%' ESCAPE '\\' OR CommandLine LIKE '%perl -e%' ESCAPE '\\' OR CommandLine LIKE '%/dev/tcp/%' ESCAPE '\\' OR CommandLine LIKE '%0>&1%' ESCAPE '\\' OR CommandLine LIKE '%2>&1%' ESCAPE '\\' OR CommandLine LIKE '%mkfifo%' ESCAPE '\\' OR CommandLine LIKE '%base64 -d%' ESCAPE '\\' OR CommandLine LIKE '%base64 --decode%' ESCAPE '\\' OR CommandLine LIKE '%chmod +x%' ESCAPE '\\') OR (Image LIKE '%/wp-content/uploads/%' ESCAPE '\\' OR Image LIKE '%/wp-content/plugins/%' ESCAPE '\\' OR Image LIKE '%/tmp/%' ESCAPE '\\' OR Image LIKE '%/dev/shm/%' ESCAPE '\\' OR Image LIKE '%/var/tmp/%' ESCAPE '\\'))) OR ((User LIKE '%www-data%' ESCAPE '\\' OR User LIKE '%apache%' ESCAPE '\\' OR User LIKE '%nginx%' ESCAPE '\\' OR User LIKE '%httpd%' ESCAPE '\\' OR User LIKE '%nobody%' ESCAPE '\\') AND ((CommandLine LIKE '%bash -c%' ESCAPE '\\' OR CommandLine LIKE '%sh -c%' ESCAPE '\\' OR CommandLine LIKE '%curl %' ESCAPE '\\' OR CommandLine LIKE '%wget %' ESCAPE '\\' OR CommandLine LIKE '%nc -%' ESCAPE '\\' OR CommandLine LIKE '%ncat %' ESCAPE '\\' OR CommandLine LIKE '%python -c%' ESCAPE '\\' OR CommandLine LIKE '%python3 -c%' ESCAPE '\\' OR CommandLine LIKE '%perl -e%' ESCAPE '\\' OR CommandLine LIKE '%/dev/tcp/%' ESCAPE '\\' OR CommandLine LIKE '%0>&1%' ESCAPE '\\' OR CommandLine LIKE '%2>&1%' ESCAPE '\\' OR CommandLine LIKE '%mkfifo%' ESCAPE '\\' OR CommandLine LIKE '%base64 -d%' ESCAPE '\\' OR CommandLine LIKE '%base64 --decode%' ESCAPE '\\' OR CommandLine LIKE '%chmod +x%' ESCAPE '\\') OR (Image LIKE '%/wp-content/uploads/%' ESCAPE '\\' OR Image LIKE '%/wp-content/plugins/%' ESCAPE '\\' OR Image LIKE '%/tmp/%' ESCAPE '\\' OR Image LIKE '%/dev/shm/%' ESCAPE '\\' OR Image LIKE '%/var/tmp/%' ESCAPE '\\'))) OR ((User LIKE '%www-data%' ESCAPE '\\' OR User LIKE '%apache%' ESCAPE '\\' OR User LIKE '%nginx%' ESCAPE '\\' OR User LIKE '%httpd%' ESCAPE '\\' OR User LIKE '%nobody%' ESCAPE '\\') AND (Image LIKE '%/sh' ESCAPE '\\' OR Image LIKE '%/bash' ESCAPE '\\' OR Image LIKE '%/dash' ESCAPE '\\' OR Image LIKE '%/zsh' ESCAPE '\\' OR Image LIKE '%/id' ESCAPE '\\' OR Image LIKE '%/whoami' ESCAPE '\\' OR Image LIKE '%/uname' ESCAPE '\\' OR Image LIKE '%/curl' ESCAPE '\\' OR Image LIKE '%/wget' ESCAPE '\\' OR Image LIKE '%/nc' ESCAPE '\\' OR Image LIKE '%/ncat' ESCAPE '\\' OR Image LIKE '%/netcat' ESCAPE '\\' OR Image LIKE '%/socat' ESCAPE '\\' OR Image LIKE '%/python' ESCAPE '\\' OR Image LIKE '%/python3' ESCAPE '\\' OR Image LIKE '%/perl' ESCAPE '\\' OR Image LIKE '%/busybox' ESCAPE '\\' OR Image LIKE '%/base64' ESCAPE '\\' OR Image LIKE '%/chmod' ESCAPE '\\') AND (CurrentDirectory LIKE '%/wp-content/%' ESCAPE '\\' OR CurrentDirectory LIKE '%/wp-admin/%' ESCAPE '\\' OR CurrentDirectory LIKE '%/wp-includes/%' ESCAPE '\\'))) AND (NOT COALESCE((CommandLine LIKE '%logrotate%' ESCAPE '\\' OR CommandLine LIKE '%certbot%' ESCAPE '\\' OR CommandLine LIKE '%apachectl%' ESCAPE '\\' OR CommandLine LIKE '%nginx -t%' ESCAPE '\\' OR CommandLine LIKE '%php-fpm -t%' ESCAPE '\\' OR CommandLine LIKE '%service php%' ESCAPE '\\' OR CommandLine LIKE '%systemctl reload%' ESCAPE '\\' OR CommandLine LIKE '%wp-cron.php%' ESCAPE '\\'), 0))"
+    ],
+    "schema_version": 2,
+    "source": "hatchepsoute",
+    "source_table": "logs",
+    "status": "experimental",
+    "tags": [
+      "attack.execution",
+      "attack.t1059.004",
+      "attack.persistence",
+      "attack.t1505.003",
+      "attack.command-and-control",
+      "attack.t1105",
+      "cve.2026-63030",
+      "cve.2026-60137"
+    ],
+    "title": "Web server or PHP process spawning shell after WordPress wp2shell RCE chain - Linux - STRICT"
+  },
+  {
+    "author": "Adama ASSIONGBON (SOC & CTI Consultant), https://linkedin.com/in/adama-assiongbon-9029893a",
+    "channel": [],
+    "description": "Alerts when a file with a .babyk or .babuk extension is created under an ESXi datastore path beginning with /vmfs/volumes/. This is a critical file-encryption impact signal associated with Babuk-derived ransomware activity reported after vCenter compromise, but the extension alone does not prove that file contents were encrypted. SOC L1 should identify the creating process and user, inspect simultaneous datastore changes and virtual-machine availability, exclude an approved canary test, and immediately escalate unexplained activity for ransomware response.\nD\u00e9clenche une alerte lorsqu\u2019un fichier portant l\u2019extension .babyk ou .babuk est cr\u00e9\u00e9 dans un chemin de datastore ESXi commen\u00e7ant par /vmfs/volumes/. Il s\u2019agit d\u2019un signal critique d\u2019impact li\u00e9 au chiffrement de fichiers et associ\u00e9 \u00e0 une activit\u00e9 de ran\u00e7ongiciel d\u00e9riv\u00e9e de Babuk signal\u00e9e apr\u00e8s une compromission de vCenter, mais l\u2019extension seule ne prouve pas que le contenu du fichier a \u00e9t\u00e9 chiffr\u00e9. Le SOC L1 doit identifier le processus et l\u2019utilisateur \u00e0 l\u2019origine de la cr\u00e9ation, examiner les modifications simultan\u00e9es du datastore et la disponibilit\u00e9 des machines virtuelles, exclure un test canari approuv\u00e9 et escalader imm\u00e9diatement toute activit\u00e9 inexpliqu\u00e9e pour d\u00e9clencher la r\u00e9ponse au ran\u00e7ongiciel.\n",
+    "eventid": [],
+    "falsepositives": [
+      "Authorized malware-response validation creating a harmless canary file with a Babuk-associated extension in an isolated datastore"
+    ],
+    "filename": "CVE-2026-59310_VMware_vCenter_RCE/rules/linux_esxi_babuk_datastore_encryption_cve_2026_59310_strict.yml",
+    "id": "13d5b7a2-b25b-45d9-a963-5bc463790fe8",
+    "level": "critical",
+    "license": "Apache-2.0",
+    "logsource": {
+      "category": "file_event",
+      "product": "linux"
+    },
+    "required_fields": [
+      "FilePath",
+      "TargetFilename",
+      "file.path"
+    ],
+    "result_type": "event",
+    "rule": [
+      "SELECT * FROM logs WHERE (TargetFilename LIKE '/vmfs/volumes/%' ESCAPE '\\' OR FilePath LIKE '/vmfs/volumes/%' ESCAPE '\\' OR `file.path` LIKE '/vmfs/volumes/%' ESCAPE '\\') AND ((TargetFilename LIKE '%.babyk' ESCAPE '\\' OR TargetFilename LIKE '%.babuk' ESCAPE '\\' OR TargetFilename LIKE '%.BABYK' ESCAPE '\\' OR TargetFilename LIKE '%.BABUK' ESCAPE '\\') OR (FilePath LIKE '%.babyk' ESCAPE '\\' OR FilePath LIKE '%.babuk' ESCAPE '\\' OR FilePath LIKE '%.BABYK' ESCAPE '\\' OR FilePath LIKE '%.BABUK' ESCAPE '\\') OR (`file.path` LIKE '%.babyk' ESCAPE '\\' OR `file.path` LIKE '%.babuk' ESCAPE '\\' OR `file.path` LIKE '%.BABYK' ESCAPE '\\' OR `file.path` LIKE '%.BABUK' ESCAPE '\\'))"
+    ],
+    "schema_version": 2,
+    "source": "hatchepsoute",
+    "source_table": "logs",
+    "status": "experimental",
+    "tags": [
+      "attack.impact",
+      "attack.t1486",
+      "cve.2026-59310"
+    ],
+    "title": "Babuk-Derived ESXi Datastore Encryption After vCenter Compromise - STRICT"
+  },
+  {
+    "author": "Adama ASSIONGBON (SOC & CTI Consultant), https://linkedin.com/in/adama-assiongbon-9029893a",
+    "channel": [],
+    "description": "Detects web server or PHP runtime processes spawning shells or command-line tools, consistent with command execution through a PHP webshell dropped after CVE-2026-48909 exploitation. SOC L1 should verify the source, affected host, user, process or request fields, timing, and related activity.\nD\u00e9tecte un processus web/PHP qui lance un shell ou un outil syst\u00e8me apr\u00e8s exploitation potentielle de CVE-2026-48909. Cette r\u00e8gle sert de confirmation post-exploitation et compl\u00e8te la r\u00e8gle web sans multiplier les alertes sur la m\u00eame vuln\u00e9rabilit\u00e9. Les variantes php-fpm versionn\u00e9es et les commandes de staging courantes sont couvertes. Le SOC L1 doit v\u00e9rifier la source, l\u2019h\u00f4te affect\u00e9, l\u2019utilisateur, les champs de processus ou de requ\u00eate, la chronologie et les activit\u00e9s associ\u00e9es.\n",
+    "eventid": [],
+    "falsepositives": [
+      "Hosting control panels or maintenance jobs invoked through web administration interfaces",
+      "Legitimate application code that shells out to system utilities, validate against known baselines",
+      "Tune by Joomla vhost path, service user and parent command line where available"
+    ],
+    "filename": "CVE-2026-48909_Joomla_SP_LMS_RCE/rules/lnx_webserver_php_shell_command_execution_cve_2026_48909.yml",
+    "id": "14a9a05f-7261-4de8-9d26-489092026004",
+    "level": "critical",
+    "license": "Apache-2.0",
+    "logsource": {
+      "category": "process_creation",
+      "product": "linux"
+    },
+    "required_fields": [
+      "CommandLine",
+      "Image",
+      "ParentCommandLine",
+      "ParentImage",
+      "User"
+    ],
+    "result_type": "event",
+    "rule": [
+      "SELECT * FROM logs WHERE ((((ParentImage LIKE '%/apache2' ESCAPE '\\' OR ParentImage LIKE '%/apache2-prefork' ESCAPE '\\' OR ParentImage LIKE '%/apache2-worker' ESCAPE '\\' OR ParentImage LIKE '%/httpd' ESCAPE '\\' OR ParentImage LIKE '%/httpd.worker' ESCAPE '\\' OR ParentImage LIKE '%/httpd.event' ESCAPE '\\' OR ParentImage LIKE '%/nginx' ESCAPE '\\' OR ParentImage LIKE '%/php' ESCAPE '\\' OR ParentImage LIKE '%/php-cgi' ESCAPE '\\' OR ParentImage LIKE '%/lsphp' ESCAPE '\\') OR (ParentImage LIKE '%/php-fpm%' ESCAPE '\\' OR ParentImage LIKE '%/php7.%' ESCAPE '\\' OR ParentImage LIKE '%/php8.%' ESCAPE '\\' OR ParentImage LIKE '%/php-cgi%' ESCAPE '\\' OR ParentImage LIKE '%/lsphp%' ESCAPE '\\') OR (ParentCommandLine LIKE '%php-fpm%' ESCAPE '\\' OR ParentCommandLine LIKE '%php-cgi%' ESCAPE '\\' OR ParentCommandLine LIKE '%lsphp%' ESCAPE '\\' OR ParentCommandLine LIKE '%pool www%' ESCAPE '\\')) AND ((Image LIKE '%/sh' ESCAPE '\\' OR Image LIKE '%/bash' ESCAPE '\\' OR Image LIKE '%/dash' ESCAPE '\\' OR Image LIKE '%/zsh' ESCAPE '\\' OR Image LIKE '%/id' ESCAPE '\\' OR Image LIKE '%/whoami' ESCAPE '\\' OR Image LIKE '%/uname' ESCAPE '\\' OR Image LIKE '%/curl' ESCAPE '\\' OR Image LIKE '%/wget' ESCAPE '\\' OR Image LIKE '%/nc' ESCAPE '\\' OR Image LIKE '%/ncat' ESCAPE '\\' OR Image LIKE '%/netcat' ESCAPE '\\' OR Image LIKE '%/socat' ESCAPE '\\' OR Image LIKE '%/python' ESCAPE '\\' OR Image LIKE '%/python3' ESCAPE '\\' OR Image LIKE '%/perl' ESCAPE '\\' OR Image LIKE '%/php' ESCAPE '\\' OR Image LIKE '%/busybox' ESCAPE '\\' OR Image LIKE '%/base64' ESCAPE '\\' OR Image LIKE '%/chmod' ESCAPE '\\' OR Image LIKE '%/chown' ESCAPE '\\' OR Image LIKE '%/cp' ESCAPE '\\' OR Image LIKE '%/tee' ESCAPE '\\' OR Image LIKE '%/timeout' ESCAPE '\\' OR Image LIKE '%/openssl' ESCAPE '\\') OR (CommandLine LIKE '%bash -c%' ESCAPE '\\' OR CommandLine LIKE '%sh -c%' ESCAPE '\\' OR CommandLine LIKE '%curl %' ESCAPE '\\' OR CommandLine LIKE '%wget %' ESCAPE '\\' OR CommandLine LIKE '%nc -%' ESCAPE '\\' OR CommandLine LIKE '%ncat %' ESCAPE '\\' OR CommandLine LIKE '%python -c%' ESCAPE '\\' OR CommandLine LIKE '%python3 -c%' ESCAPE '\\' OR CommandLine LIKE '%perl -e%' ESCAPE '\\' OR CommandLine LIKE '%php -r%' ESCAPE '\\' OR CommandLine LIKE '%/dev/tcp/%' ESCAPE '\\' OR CommandLine LIKE '%0>&1%' ESCAPE '\\' OR CommandLine LIKE '%2>&1%' ESCAPE '\\' OR CommandLine LIKE '%mkfifo%' ESCAPE '\\' OR CommandLine LIKE '%base64 -d%' ESCAPE '\\' OR CommandLine LIKE '%base64 --decode%' ESCAPE '\\' OR CommandLine LIKE '%chmod +x%' ESCAPE '\\' OR CommandLine LIKE '%openssl s\\_client%' ESCAPE '\\' OR CommandLine LIKE '%curl -fsSL%' ESCAPE '\\' OR CommandLine LIKE '%wget -qO%' ESCAPE '\\'))) OR ((User LIKE '%www-data%' ESCAPE '\\' OR User LIKE '%apache%' ESCAPE '\\' OR User LIKE '%nginx%' ESCAPE '\\' OR User LIKE '%httpd%' ESCAPE '\\' OR User LIKE '%lsadm%' ESCAPE '\\' OR User LIKE '%nobody%' ESCAPE '\\') AND (CommandLine LIKE '%bash -c%' ESCAPE '\\' OR CommandLine LIKE '%sh -c%' ESCAPE '\\' OR CommandLine LIKE '%curl %' ESCAPE '\\' OR CommandLine LIKE '%wget %' ESCAPE '\\' OR CommandLine LIKE '%nc -%' ESCAPE '\\' OR CommandLine LIKE '%ncat %' ESCAPE '\\' OR CommandLine LIKE '%python -c%' ESCAPE '\\' OR CommandLine LIKE '%python3 -c%' ESCAPE '\\' OR CommandLine LIKE '%perl -e%' ESCAPE '\\' OR CommandLine LIKE '%php -r%' ESCAPE '\\' OR CommandLine LIKE '%/dev/tcp/%' ESCAPE '\\' OR CommandLine LIKE '%0>&1%' ESCAPE '\\' OR CommandLine LIKE '%2>&1%' ESCAPE '\\' OR CommandLine LIKE '%mkfifo%' ESCAPE '\\' OR CommandLine LIKE '%base64 -d%' ESCAPE '\\' OR CommandLine LIKE '%base64 --decode%' ESCAPE '\\' OR CommandLine LIKE '%chmod +x%' ESCAPE '\\' OR CommandLine LIKE '%openssl s\\_client%' ESCAPE '\\' OR CommandLine LIKE '%curl -fsSL%' ESCAPE '\\' OR CommandLine LIKE '%wget -qO%' ESCAPE '\\')) OR ((User LIKE '%www-data%' ESCAPE '\\' OR User LIKE '%apache%' ESCAPE '\\' OR User LIKE '%nginx%' ESCAPE '\\' OR User LIKE '%httpd%' ESCAPE '\\' OR User LIKE '%lsadm%' ESCAPE '\\' OR User LIKE '%nobody%' ESCAPE '\\') AND (Image LIKE '%/sh' ESCAPE '\\' OR Image LIKE '%/bash' ESCAPE '\\' OR Image LIKE '%/dash' ESCAPE '\\' OR Image LIKE '%/zsh' ESCAPE '\\' OR Image LIKE '%/id' ESCAPE '\\' OR Image LIKE '%/whoami' ESCAPE '\\' OR Image LIKE '%/uname' ESCAPE '\\' OR Image LIKE '%/curl' ESCAPE '\\' OR Image LIKE '%/wget' ESCAPE '\\' OR Image LIKE '%/nc' ESCAPE '\\' OR Image LIKE '%/ncat' ESCAPE '\\' OR Image LIKE '%/netcat' ESCAPE '\\' OR Image LIKE '%/socat' ESCAPE '\\' OR Image LIKE '%/python' ESCAPE '\\' OR Image LIKE '%/python3' ESCAPE '\\' OR Image LIKE '%/perl' ESCAPE '\\' OR Image LIKE '%/php' ESCAPE '\\' OR Image LIKE '%/busybox' ESCAPE '\\' OR Image LIKE '%/base64' ESCAPE '\\' OR Image LIKE '%/chmod' ESCAPE '\\' OR Image LIKE '%/chown' ESCAPE '\\' OR Image LIKE '%/cp' ESCAPE '\\' OR Image LIKE '%/tee' ESCAPE '\\' OR Image LIKE '%/timeout' ESCAPE '\\' OR Image LIKE '%/openssl' ESCAPE '\\') AND (CommandLine LIKE '%/tmp/%' ESCAPE '\\' OR CommandLine LIKE '%/cache/%' ESCAPE '\\' OR CommandLine LIKE '%/images/%' ESCAPE '\\' OR CommandLine LIKE '%/media/%' ESCAPE '\\' OR CommandLine LIKE '%/templates/%' ESCAPE '\\' OR CommandLine LIKE '%/modules/%' ESCAPE '\\' OR CommandLine LIKE '%/plugins/%' ESCAPE '\\' OR CommandLine LIKE '%/components/%' ESCAPE '\\'))) AND (NOT COALESCE((CommandLine LIKE '%logrotate%' ESCAPE '\\' OR CommandLine LIKE '%certbot%' ESCAPE '\\' OR CommandLine LIKE '%apachectl%' ESCAPE '\\' OR CommandLine LIKE '%nginx -t%' ESCAPE '\\' OR CommandLine LIKE '%php-fpm -t%' ESCAPE '\\' OR CommandLine LIKE '%service php%' ESCAPE '\\' OR CommandLine LIKE '%systemctl reload%' ESCAPE '\\'), 0))"
+    ],
+    "schema_version": 2,
+    "source": "hatchepsoute",
+    "source_table": "logs",
+    "status": "experimental",
+    "tags": [
+      "attack.execution",
+      "attack.t1059.004",
+      "attack.t1059.006",
+      "attack.command-and-control",
+      "attack.t1105",
+      "attack.persistence",
+      "attack.t1505.003",
+      "cve.2026-48909"
+    ],
+    "title": "Web Server PHP Process Spawning Shell After Joomla SP LMS Exploitation (CVE-2026-48909)"
+  },
+  {
+    "author": "Adama ASSIONGBON (SOC & CTI Consultant), https://linkedin.com/in/adama-assiongbon-9029893a",
+    "channel": [],
+    "description": "Detects the Ghostscript binary (gs) spawned as a child of a web server or PHP runtime process on Linux, consistent with ImageMagick's delegate mechanism processing a file that Imagick identified as PostScript content, the trigger condition for CVE-2026-65640. The attacker does not control which binary gets invoked, that is determined by the server's ImageMagick delegates.xml configuration, typically hardcoded to \"gs\", so this signal is not evadable by renaming an attacker-controlled implant the way a dropped webshell can be. Confirmation signal on a different surface than the web-layer rule, independent of whether the log pipeline captures the upload request body. SOC L1 should verify the source, affected host, user, process or request fields, timing, and related activity.\nDetecte le binaire Ghostscript (gs) lance en tant qu'enfant d'un processus serveur web ou runtime PHP sous Linux, coh\u00e9rent avec le mecanisme de delegation d'ImageMagick traitant un fichier qu'Imagick a identifie comme du contenu PostScript, la condition declenchante de CVE-2026-65640. L'attaquant ne controle pas quel binaire est invoque, cela depend de la configuration delegates.xml d'ImageMagick sur le serveur, generalement fixee sur \"gs\" : ce signal n'est donc pas evasible en renommant un implant controle par l'attaquant, contrairement a un webshell depose. Signal de confirmation sur une couche differente de la regle web, utile que le pipeline de logs capture ou non le corps de la requete d'upload. Le SOC L1 doit v\u00e9rifier la source, l\u2019h\u00f4te affect\u00e9, l\u2019utilisateur, les champs de processus ou de requ\u00eate, la chronologie et les activit\u00e9s associ\u00e9es.\n",
+    "eventid": [],
+    "falsepositives": [
+      "Sites that intentionally use Imagick with the Ghostscript delegate to process legitimate EPS, PDF or PostScript uploads (print-ready design workflows, PDF thumbnail generation plugins). This cannot be distinguished from exploitation by command line alone, since the delegate invocation uses the same configured command template regardless of whether the input content is malicious or benign; if this workflow is expected in the environment, scope or suppress this rule at the SIEM level for the specific hosts running it rather than adding an ineffective content-based filter, or consider disabling the Ghostscript delegate if the feature is not actually needed",
+      "Manual administrative use of Ghostscript from a web-triggered maintenance script (rare, validate against known baselines)"
+    ],
+    "filename": "CVE-2026-65640_WordPress_Imagick_Ghostscript_RCE/rules/linux_ghostscript_spawn_via_imagick_delegate_cve_2026_65640_strict.yml",
+    "id": "37dbb2fa-b95a-4322-bcc0-3c14fbc3e412",
+    "level": "critical",
+    "license": "Apache-2.0",
+    "logsource": {
+      "category": "process_creation",
+      "product": "linux"
+    },
+    "required_fields": [
+      "Image",
+      "ParentCommandLine",
+      "ParentImage"
+    ],
+    "result_type": "event",
+    "rule": [
+      "SELECT * FROM logs WHERE ((ParentImage LIKE '%/apache2' ESCAPE '\\' OR ParentImage LIKE '%/apache2-prefork' ESCAPE '\\' OR ParentImage LIKE '%/apache2-worker' ESCAPE '\\' OR ParentImage LIKE '%/httpd' ESCAPE '\\' OR ParentImage LIKE '%/httpd.worker' ESCAPE '\\' OR ParentImage LIKE '%/httpd.event' ESCAPE '\\' OR ParentImage LIKE '%/nginx' ESCAPE '\\' OR ParentImage LIKE '%/php' ESCAPE '\\' OR ParentImage LIKE '%/php-cgi' ESCAPE '\\' OR ParentImage LIKE '%/lsphp' ESCAPE '\\') OR (ParentImage LIKE '%/php-fpm%' ESCAPE '\\' OR ParentImage LIKE '%/php7.%' ESCAPE '\\' OR ParentImage LIKE '%/php8.%' ESCAPE '\\' OR ParentImage LIKE '%/php-cgi%' ESCAPE '\\' OR ParentImage LIKE '%/lsphp%' ESCAPE '\\') OR (ParentCommandLine LIKE '%php-fpm%' ESCAPE '\\' OR ParentCommandLine LIKE '%php-cgi%' ESCAPE '\\' OR ParentCommandLine LIKE '%lsphp%' ESCAPE '\\' OR ParentCommandLine LIKE '%pool www%' ESCAPE '\\')) AND (Image LIKE '%/gs' ESCAPE '\\' OR Image LIKE '%/gsc' ESCAPE '\\' OR Image LIKE '%/gsx' ESCAPE '\\')"
+    ],
+    "schema_version": 2,
+    "source": "hatchepsoute",
+    "source_table": "logs",
+    "status": "experimental",
+    "tags": [
+      "attack.execution",
+      "attack.t1190",
+      "cve.2026-65640"
+    ],
+    "title": "Ghostscript Spawned By Web/PHP Process Via Imagick Delegate (CVE-2026-65640) - Linux - STRICT"
+  },
+  {
+    "author": "Adama ASSIONGBON (SOC & CTI Consultant), https://linkedin.com/in/adama-assiongbon-9029893a",
+    "channel": [],
+    "description": "Detects /login spawned by telnetd with -f flag (forced login without authentication), indicating CVE-2026-24061 auth bypass. STRICT. SOC L1 should verify the source, affected host, user, process or request fields, timing, and related activity.\nD\u00e9tecte le processus /login spawned par telnetd avec le flag -f (connexion forc\u00e9e sans authentification), indiquant un bypass d'authentification via CVE-2026-24061. Le flag -f n'est jamais l\u00e9gitime dans une session telnet standard ; toute occurrence doit \u00eatre investigu\u00e9e. R\u00e8gle STRICT. Le SOC L1 doit v\u00e9rifier la source, l\u2019h\u00f4te affect\u00e9, l\u2019utilisateur, les champs de processus ou de requ\u00eate, la chronologie et les activit\u00e9s associ\u00e9es.\n",
+    "eventid": [],
+    "falsepositives": [
+      "Legitimate telnet usage with forced login flag (highly uncommon / legacy systems only)",
+      "PAM testing or diagnostic tools that invoke /login -f <user> in lab environments"
+    ],
+    "filename": "CVE-2026-24061_Bypass_Telnetd/rules/remote_authentication_bypass_telnetd_cve_2026_24061.yml",
+    "id": "4f5f55b4-fa4b-11f0-a5c4-9760980e253b",
+    "level": "critical",
+    "license": "Apache-2.0",
+    "logsource": {
+      "category": "process_creation",
+      "product": "linux"
+    },
+    "required_fields": [
+      "CommandLine",
+      "Image",
+      "ParentImage"
+    ],
+    "result_type": "event",
+    "rule": [
+      "SELECT * FROM logs WHERE (ParentImage LIKE '%/in.telnetd' ESCAPE '\\' OR ParentImage LIKE '%/telnetd' ESCAPE '\\') AND Image LIKE '%/login' ESCAPE '\\' AND CommandLine REGEXP '(?:^|[\\s;|])-f(?:\\s|$|[^-])'"
+    ],
+    "schema_version": 2,
+    "source": "hatchepsoute",
+    "source_table": "logs",
+    "status": "experimental",
+    "tags": [
+      "attack.initial-access",
+      "attack.execution",
+      "attack.t1190",
+      "cve.2026-24061"
+    ],
+    "title": "Remote authentication bypass via telnetd login flag (CVE-2026-24061)"
+  },
+  {
+    "author": "Adama ASSIONGBON (SOC & CTI Consultant), https://linkedin.com/in/adama-assiongbon-9029893a",
+    "channel": [],
+    "description": "Detects Sliver implant deployment: system-updater or cups-lpd binary creation in hidden directories (FortiWeb campaign). SOC L1 should verify the source, affected host, user, process or request fields, timing, and related activity.\nD\u00e9tecte la cr\u00e9ation du binaire system-updater ou cups-lpd dans des r\u00e9pertoires cach\u00e9s sp\u00e9cifiques \u00e0 la campagne FortiWeb Sliver, ou la cr\u00e9ation de fichiers dans des r\u00e9pertoires temporaires cach\u00e9s g\u00e9n\u00e9riques. Correspond au pattern de d\u00e9ploiement d'artefact post-exploitation de la campagne. Le SOC L1 doit v\u00e9rifier la source, l\u2019h\u00f4te affect\u00e9, l\u2019utilisateur, les champs de processus ou de requ\u00eate, la chronologie et les activit\u00e9s associ\u00e9es.\n",
+    "eventid": [],
+    "falsepositives": [
+      "Legitimate system update processes writing to campaign-specific paths (no known case)",
+      {
+        "selection_extended_paths": "package managers or configuration management tools (Ansible, Chef) writing hidden files under /usr/local/bin or /root/.config; verify the writing process (Image) against known admin tools"
+      }
+    ],
+    "filename": "FortiWeb-Sliver-Campaign/rules/lnx_sliver_implant_deployment.yml",
+    "id": "5b8c3a2d-7f1e-4e32-b1d9-64f9c8a1e3f2",
+    "level": "critical",
+    "license": "Apache-2.0",
+    "logsource": {
+      "category": "file_event",
+      "product": "linux"
+    },
+    "required_fields": [
+      "TargetFilename"
+    ],
+    "result_type": "event",
+    "rule": [
+      "SELECT * FROM logs WHERE (TargetFilename LIKE '%/.root/system-updater' ESCAPE '\\' OR TargetFilename LIKE '%/app/web/system-updater' ESCAPE '\\' OR TargetFilename LIKE '%/.root/cups-lpd' ESCAPE '\\') OR (TargetFilename LIKE '%/bin/.root/%' ESCAPE '\\' OR TargetFilename LIKE '%/var/tmp/.%' ESCAPE '\\' OR TargetFilename LIKE '%/dev/shm/.%' ESCAPE '\\') OR (TargetFilename LIKE '%/usr/local/bin/.%' ESCAPE '\\' OR TargetFilename LIKE '%/usr/share/.%' ESCAPE '\\' OR TargetFilename LIKE '%/root/.config/%' ESCAPE '\\' OR TargetFilename LIKE '%/root/.cache/%' ESCAPE '\\' OR TargetFilename LIKE '%/home/nobody/%' ESCAPE '\\' OR TargetFilename LIKE '%/var/lib/.%' ESCAPE '\\')"
+    ],
+    "schema_version": 2,
+    "source": "hatchepsoute",
+    "source_table": "logs",
+    "status": "experimental",
+    "tags": [
+      "attack.persistence",
+      "attack.t1036",
+      "attack.t1036.005",
+      "attack.execution"
+    ],
+    "title": "Possible Sliver implant deployment on FortiWeb or Linux host"
+  },
+  {
+    "author": "Adama ASSIONGBON (SOC & CTI Consultant), https://linkedin.com/in/adama-assiongbon-9029893a",
+    "channel": [],
+    "description": "Detects PHP file creation in web-accessible directories by shells or interpreters on BeyondTrust appliances (CVE-2026-1731 webshell). STRICT. SOC L1 should verify the source, affected host, user, process or request fields, timing, and related activity.\nD\u00e9tecte la cr\u00e9ation de fichiers PHP dans les r\u00e9pertoires accessibles via le web par des shells ou interpr\u00e9teurs sur les appliances BeyondTrust. Indicateur de d\u00e9ploiement de webshell post-exploitation (CVE-2026-1731). R\u00e8gle STRICT. Le SOC L1 doit v\u00e9rifier la source, l\u2019h\u00f4te affect\u00e9, l\u2019utilisateur, les champs de processus ou de requ\u00eate, la chronologie et les activit\u00e9s associ\u00e9es.\n",
+    "eventid": [],
+    "falsepositives": [
+      "Custom deployment scripts invoking bash/python to write PHP files during legitimate updates",
+      "Verify Image and TargetFilename to confirm, a shell writing PHP to a web root is unusual",
+      "BeyondTrust appliance maintenance should not involve direct PHP file creation via shell",
+      {
+        "Third-pass fix": "/cp removed from filter_legit_creators - /cp can be used as a webshell staging technique (cp /tmp/shell.php /var/www/html/)"
+      }
+    ],
+    "filename": "CVE-2026-1731_BeyondTrust_RCE/rules/host/cve_2026_1731_beyondtrust_linux_webshell_php_create_strict.yml",
+    "id": "6130db3a-0f83-11f1-9751-27e84692dac7",
+    "level": "critical",
+    "license": "Apache-2.0",
+    "logsource": {
+      "category": "file_event",
+      "product": "linux"
+    },
+    "required_fields": [
+      "Image",
+      "TargetFilename"
+    ],
+    "result_type": "event",
+    "rule": [
+      "SELECT * FROM logs WHERE TargetFilename LIKE '%.php' ESCAPE '\\' AND (TargetFilename LIKE '%/var/www/%' ESCAPE '\\' OR TargetFilename LIKE '%/srv/www/%' ESCAPE '\\' OR TargetFilename LIKE '%/usr/share/nginx/html/%' ESCAPE '\\' OR TargetFilename LIKE '%/usr/share/apache2/%' ESCAPE '\\') AND (Image LIKE '%/sh' ESCAPE '\\' OR Image LIKE '%/bash' ESCAPE '\\' OR Image LIKE '%/dash' ESCAPE '\\' OR Image LIKE '%/ksh' ESCAPE '\\' OR Image LIKE '%/python' ESCAPE '\\' OR Image LIKE '%/python3' ESCAPE '\\' OR Image LIKE '%/perl' ESCAPE '\\' OR Image LIKE '%/curl' ESCAPE '\\' OR Image LIKE '%/wget' ESCAPE '\\' OR Image LIKE '%/nc' ESCAPE '\\') AND (NOT COALESCE(((Image LIKE '%/apache2' ESCAPE '\\' OR Image LIKE '%/httpd' ESCAPE '\\' OR Image LIKE '%/nginx' ESCAPE '\\' OR Image LIKE '%/php' ESCAPE '\\' OR Image LIKE '%/php8' ESCAPE '\\' OR Image LIKE '%/php7' ESCAPE '\\' OR Image LIKE '%/rsync' ESCAPE '\\' OR Image LIKE '%/tar' ESCAPE '\\' OR Image LIKE '%/unzip' ESCAPE '\\') OR (Image LIKE '%/composer%' ESCAPE '\\' OR Image LIKE '%/npm%' ESCAPE '\\' OR Image LIKE '%/pip%' ESCAPE '\\' OR Image LIKE '%/dpkg%' ESCAPE '\\' OR Image LIKE '%/rpm%' ESCAPE '\\' OR Image LIKE '%/yum%' ESCAPE '\\' OR Image LIKE '%/apt%' ESCAPE '\\')), 0))"
+    ],
+    "schema_version": 2,
+    "source": "hatchepsoute",
+    "source_table": "logs",
+    "status": "test",
+    "tags": [
+      "attack.persistence",
+      "attack.t1505.003",
+      "cve.2026-1731"
+    ],
+    "title": "BeyondTrust webshell PHP file creation on appliance by unexpected process (CVE-2026-1731)"
+  },
+  {
+    "author": "Adama ASSIONGBON (SOC & CTI Consultant), https://linkedin.com/in/adama-assiongbon-9029893a",
+    "channel": [],
+    "description": "Alerts on either a syslog service spawning a shell, transfer utility, or interpreter with suspicious download, temporary-path, execution, or tunnel arguments, or a root process establishing reverse SSH tooling or persistence from a suspicious context. These patterns are consistent with CVE-2026-59310 post-exploitation and indicate probable unauthorized execution or persistent access, but approved syslog hooks or support tunnels can match. SOC L1 should verify the root identity, parent process, full command line, and executable path, then correlate with external SSH connections, new services or scheduled tasks, and recent vCenter exploitation indicators.\nD\u00e9clenche une alerte lorsqu\u2019un service syslog lance un shell, un outil de transfert ou un interpr\u00e9teur avec des arguments suspects de t\u00e9l\u00e9chargement, de chemin temporaire, d\u2019ex\u00e9cution ou de tunnel, ou lorsqu\u2019un processus root \u00e9tablit un outil de reverse SSH ou une persistance depuis un contexte suspect. Ces sch\u00e9mas sont compatibles avec une post-exploitation de la CVE-2026-59310 et indiquent une ex\u00e9cution non autoris\u00e9e ou un acc\u00e8s persistant probables, mais des traitements syslog ou des tunnels de support approuv\u00e9s peuvent correspondre. Le SOC L1 doit v\u00e9rifier l\u2019identit\u00e9 root, le processus parent, la ligne de commande compl\u00e8te et le chemin de l\u2019ex\u00e9cutable, puis corr\u00e9ler avec les connexions SSH externes, les nouveaux services ou t\u00e2ches planifi\u00e9es et les indicateurs r\u00e9cents d\u2019exploitation de vCenter.\n",
+    "eventid": [],
+    "falsepositives": [
+      "An explicitly approved syslog processing hook with a documented transfer operation",
+      "Authorized incident-response tooling or a time-bounded VMware support reverse tunnel"
+    ],
+    "filename": "CVE-2026-59310_VMware_vCenter_RCE/rules/linux_vcenter_post_exploitation_process_cve_2026_59310_strict.yml",
+    "id": "7be42169-9385-4c2a-8d1c-6b75f70120d4",
+    "level": "critical",
+    "license": "Apache-2.0",
+    "logsource": {
+      "category": "process_creation",
+      "product": "linux"
+    },
+    "required_fields": [
+      "CommandLine",
+      "EffectiveUserId",
+      "Image",
+      "ParentCommandLine",
+      "ParentImage",
+      "ParentProcessName",
+      "User",
+      "UserId"
+    ],
+    "result_type": "event",
+    "rule": [
+      "SELECT * FROM logs WHERE (((ParentImage LIKE '%/rsyslogd' ESCAPE '\\' OR ParentImage LIKE '%/syslog-ng' ESCAPE '\\' OR ParentImage LIKE '%/vmsyslogd' ESCAPE '\\' OR ParentImage LIKE '%/vmware-syslog' ESCAPE '\\') OR (ParentProcessName LIKE '%rsyslogd' ESCAPE '\\' OR ParentProcessName LIKE '%syslog-ng' ESCAPE '\\' OR ParentProcessName LIKE '%vmsyslogd' ESCAPE '\\' OR ParentProcessName LIKE '%vmware-syslog' ESCAPE '\\') OR (ParentCommandLine LIKE '%rsyslogd%' ESCAPE '\\' OR ParentCommandLine LIKE '%syslog-ng%' ESCAPE '\\' OR ParentCommandLine LIKE '%vmsyslogd%' ESCAPE '\\' OR ParentCommandLine LIKE '%vmware-syslog%' ESCAPE '\\')) AND (Image LIKE '%/sh' ESCAPE '\\' OR Image LIKE '%/bash' ESCAPE '\\' OR Image LIKE '%/dash' ESCAPE '\\' OR Image LIKE '%/busybox' ESCAPE '\\' OR Image LIKE '%/python' ESCAPE '\\' OR Image LIKE '%/python3' ESCAPE '\\' OR Image LIKE '%/perl' ESCAPE '\\' OR Image LIKE '%/ruby' ESCAPE '\\' OR Image LIKE '%/node' ESCAPE '\\' OR Image LIKE '%/curl' ESCAPE '\\' OR Image LIKE '%/wget' ESCAPE '\\' OR Image LIKE '%/scp' ESCAPE '\\' OR Image LIKE '%/sftp' ESCAPE '\\' OR Image LIKE '%/nc' ESCAPE '\\' OR Image LIKE '%/ncat' ESCAPE '\\' OR Image LIKE '%/socat' ESCAPE '\\' OR Image LIKE '%/reverse\\_ssh' ESCAPE '\\') AND (CommandLine LIKE '%http://%' ESCAPE '\\' OR CommandLine LIKE '%https://%' ESCAPE '\\' OR CommandLine LIKE '%/tmp/%' ESCAPE '\\' OR CommandLine LIKE '%/var/tmp/%' ESCAPE '\\' OR CommandLine LIKE '%/dev/shm/%' ESCAPE '\\' OR CommandLine LIKE '%reverse\\_ssh%' ESCAPE '\\' OR CommandLine LIKE '%chmod +x%' ESCAPE '\\' OR CommandLine LIKE '%| sh%' ESCAPE '\\' OR CommandLine LIKE '%| bash%' ESCAPE '\\' OR CommandLine LIKE '%base64 -d%' ESCAPE '\\' OR CommandLine LIKE '% -e /bin/%' ESCAPE '\\' OR CommandLine LIKE '% -R %' ESCAPE '\\')) OR ((User='root' OR UserId=0 OR EffectiveUserId=0) AND ((((Image LIKE '%/reverse\\_ssh' ESCAPE '\\' OR Image LIKE '%/reverse-ssh' ESCAPE '\\' OR Image LIKE '%/reverse-sshx64' ESCAPE '\\') OR (CommandLine LIKE '%reverse\\_ssh%' ESCAPE '\\' OR CommandLine LIKE '%reverse-ssh%' ESCAPE '\\')) AND ((Image LIKE '/tmp/%' ESCAPE '\\' OR Image LIKE '/var/tmp/%' ESCAPE '\\' OR Image LIKE '/dev/shm/%' ESCAPE '\\' OR Image LIKE '/run/user/%' ESCAPE '\\') OR (ParentImage LIKE '%/rsyslogd' ESCAPE '\\' OR ParentImage LIKE '%/syslog-ng' ESCAPE '\\' OR ParentImage LIKE '%/vmsyslogd' ESCAPE '\\' OR ParentImage LIKE '%/vmware-syslog' ESCAPE '\\'))) OR ((Image LIKE '%/ssh' ESCAPE '\\' OR Image LIKE '%/autossh' ESCAPE '\\' OR Image LIKE '%/dropbear' ESCAPE '\\') AND (CommandLine LIKE '% -R %' ESCAPE '\\' OR CommandLine LIKE '% -L 0.0.0.0:%' ESCAPE '\\' OR CommandLine LIKE '%ExitOnForwardFailure=yes%' ESCAPE '\\') AND (CommandLine LIKE '%/etc/systemd/system/%' ESCAPE '\\' OR CommandLine LIKE '%/etc/cron.d/%' ESCAPE '\\' OR CommandLine LIKE '%crontab %' ESCAPE '\\' OR CommandLine LIKE '%@reboot%' ESCAPE '\\' OR CommandLine LIKE '%systemctl enable%' ESCAPE '\\'))))"
+    ],
+    "schema_version": 2,
+    "source": "hatchepsoute",
+    "source_table": "logs",
+    "status": "experimental",
+    "tags": [
+      "attack.initial-access",
+      "attack.t1190",
+      "attack.execution",
+      "attack.t1059.004",
+      "attack.persistence",
+      "attack.command-and-control",
+      "attack.t1090",
+      "attack.t1105",
+      "attack.t1543.002",
+      "cve.2026-59310"
+    ],
+    "title": "vCenter Syslog or Reverse SSH Post-Exploitation Process - STRICT"
+  },
+  {
+    "author": "Adama ASSIONGBON (SOC & CTI Consultant), https://linkedin.com/in/adama-assiongbon-9029893a",
+    "channel": [],
+    "description": "Detects shells or network tools spawned by HPE OneView Java process, indicating CVE-2025-37164 exploitation. SOC L1 should verify the source, affected host, user, process or request fields, timing, and related activity.\nR\u00e8gle STRICT : d\u00e9tecte l'ex\u00e9cution de shells ou d'utilitaires r\u00e9seau lanc\u00e9s par le processus Java d'HPE OneView, indiquant une exploitation r\u00e9ussie de CVE-2025-37164 (RCE non authentifi\u00e9 critique sur l'API REST ID Pools). Un processus Java dans le chemin d'installation OneView qui lance un shell ou un outil r\u00e9seau n'a aucune explication l\u00e9gitime en production. Traiter comme une exploitation confirm\u00e9e, isoler l'h\u00f4te et r\u00e9voquer tous les credentials accessibles depuis l'instance OneView. ANGLE MORT : les scripts de maintenance OneView qui invoquent des gestionnaires de paquets (apt-get, yum, dnf) via Java sont filtr\u00e9s. Si un attaquant encha\u00eene un gestionnaire de paquets l\u00e9gitime pour ex\u00e9cuter des commandes (ex: yum --downloadonly + exec), cela pourrait contourner le filtre. Surveiller les args inhabituels pass\u00e9s aux outils filtr\u00e9s. Le SOC L1 doit v\u00e9rifier la source, l\u2019h\u00f4te affect\u00e9, l\u2019utilisateur, les champs de processus ou de requ\u00eate, la chronologie et les activit\u00e9s associ\u00e9es.\n",
+    "eventid": [],
+    "falsepositives": [
+      "Legitimate system maintenance if package managers are invoked from OneView context (rare, filtered with install/upgrade argument)",
+      "Authorized troubleshooting via OneView maintenance scripts with a documented change ticket",
+      {
+        "Third-pass fix": "filter_legitimate resharped to require package manager + install argument together to prevent bypass via name-only match"
+      }
+    ],
+    "filename": "CVE-2025-37164_HPE_OneView/rules/proc_creation_hpe_oneview_cve_2025_37164_shell_exec_strict.yml",
+    "id": "810bc172-ef99-11f0-a9a0-4380c7f12d83",
+    "level": "critical",
+    "license": "Apache-2.0",
+    "logsource": {
+      "category": "process_creation",
+      "product": "linux"
+    },
+    "required_fields": [
+      "CommandLine",
+      "Image",
+      "ParentCommandLine",
+      "ParentImage"
+    ],
+    "result_type": "event",
+    "rule": [
+      "SELECT * FROM logs WHERE ParentImage LIKE '%/java' ESCAPE '\\' AND (ParentCommandLine LIKE '%/opt/hp/oneview%' ESCAPE '\\' OR ParentCommandLine LIKE '%/opt/hpe/oneview%' ESCAPE '\\') AND ((Image LIKE '%/sh' ESCAPE '\\' OR Image LIKE '%/bash' ESCAPE '\\' OR Image LIKE '%/dash' ESCAPE '\\' OR Image LIKE '%/ksh' ESCAPE '\\' OR Image LIKE '%/zsh' ESCAPE '\\') OR (Image LIKE '%/curl' ESCAPE '\\' OR Image LIKE '%/wget' ESCAPE '\\' OR Image LIKE '%/nc' ESCAPE '\\' OR Image LIKE '%/ncat' ESCAPE '\\' OR Image LIKE '%/socat' ESCAPE '\\' OR Image LIKE '%/python' ESCAPE '\\' OR Image LIKE '%/python3' ESCAPE '\\' OR Image LIKE '%/perl' ESCAPE '\\' OR Image LIKE '%/php' ESCAPE '\\')) AND (NOT COALESCE(((CommandLine LIKE '%apt-get%' ESCAPE '\\' AND CommandLine LIKE '%install%' ESCAPE '\\') OR (CommandLine LIKE '%yum%' ESCAPE '\\' AND CommandLine LIKE '%install%' ESCAPE '\\') OR (CommandLine LIKE '%dnf%' ESCAPE '\\' AND CommandLine LIKE '%install%' ESCAPE '\\') OR (CommandLine LIKE '%zypper%' ESCAPE '\\' AND CommandLine LIKE '%install%' ESCAPE '\\') OR (CommandLine LIKE '%rpm%' ESCAPE '\\' AND CommandLine LIKE '%-i%' ESCAPE '\\')), 0))"
+    ],
+    "schema_version": 2,
+    "source": "hatchepsoute",
+    "source_table": "logs",
+    "status": "experimental",
+    "tags": [
+      "attack.initial-access",
+      "attack.execution",
+      "attack.privilege-escalation",
+      "attack.t1190",
+      "attack.t1059",
+      "attack.t1059.004",
+      "cve.2025-37164"
+    ],
+    "title": "HPE OneView web service spawning shell or network utility (CVE-2025-37164)"
+  },
+  {
+    "author": "Adama ASSIONGBON (SOC & CTI Consultant), https://linkedin.com/in/adama-assiongbon-9029893a",
+    "channel": [],
+    "description": "Samba daemon (smbd/nmbd) spawning shell or interpreter on Linux, indicating CVE-2025-10230 WINS hook RCE. STRICT. SOC L1 should verify the source, affected host, user, process or request fields, timing, and related activity.\nD\u00e9tecte un d\u00e9mon Samba (smbd/nmbd) spawning un shell ou interpr\u00e9teur sur Linux. Comportement anormal sur un AD DC - indique une exploitation de CVE-2025-10230 (injection dans le param\u00e8tre wins hook). R\u00e8gle STRICT : isoler imm\u00e9diatement en cas d'alerte. Le SOC L1 doit v\u00e9rifier la source, l\u2019h\u00f4te affect\u00e9, l\u2019utilisateur, les champs de processus ou de requ\u00eate, la chronologie et les activit\u00e9s associ\u00e9es.\n",
+    "eventid": [],
+    "falsepositives": [
+      "Extremely rare administrative hooks explicitly documented and approved by the AD team"
+    ],
+    "filename": "CVE-2025-10230_samba/rules/samba_spawns_shell_cve_2025_10230_strict.yml",
+    "id": "9a8f1c42-1b2d-4a7d-9d8e-f1a2b3c4d5e6",
+    "level": "critical",
+    "license": "Apache-2.0",
+    "logsource": {
+      "category": "process_creation",
+      "product": "linux"
+    },
+    "required_fields": [
+      "Image",
+      "ParentImage"
+    ],
+    "result_type": "event",
+    "rule": [
+      "SELECT * FROM logs WHERE (ParentImage LIKE '%/smbd' ESCAPE '\\' OR ParentImage LIKE '%/samba' ESCAPE '\\' OR ParentImage LIKE '%/nmbd' ESCAPE '\\' OR ParentImage LIKE '%/samba-ad-dc' ESCAPE '\\' OR ParentImage LIKE '%/samba\\_dnsupdate' ESCAPE '\\') AND ((Image LIKE '%/sh' ESCAPE '\\' OR Image LIKE '%/bash' ESCAPE '\\' OR Image LIKE '%/dash' ESCAPE '\\' OR Image LIKE '%/ash' ESCAPE '\\' OR Image LIKE '%/zsh' ESCAPE '\\' OR Image LIKE '%/ksh' ESCAPE '\\' OR Image LIKE '%/ksh93' ESCAPE '\\' OR Image LIKE '%/tcsh' ESCAPE '\\' OR Image LIKE '%/csh' ESCAPE '\\' OR Image LIKE '%/fish' ESCAPE '\\' OR Image LIKE '%/pwsh' ESCAPE '\\' OR Image LIKE '%/python' ESCAPE '\\' OR Image LIKE '%/python2' ESCAPE '\\' OR Image LIKE '%/python3' ESCAPE '\\' OR Image LIKE '%/python3.10' ESCAPE '\\' OR Image LIKE '%/python3.11' ESCAPE '\\' OR Image LIKE '%/python3.12' ESCAPE '\\' OR Image LIKE '%/perl' ESCAPE '\\' OR Image LIKE '%/perl5' ESCAPE '\\' OR Image LIKE '%/ruby' ESCAPE '\\' OR Image LIKE '%/nc' ESCAPE '\\' OR Image LIKE '%/ncat' ESCAPE '\\' OR Image LIKE '%/netcat' ESCAPE '\\' OR Image LIKE '%/busybox' ESCAPE '\\' OR Image LIKE '%/awk' ESCAPE '\\' OR Image LIKE '%/gawk' ESCAPE '\\' OR Image LIKE '%/nawk' ESCAPE '\\' OR Image LIKE '%/mawk' ESCAPE '\\' OR Image LIKE '%/lua' ESCAPE '\\' OR Image LIKE '%/lua5.1' ESCAPE '\\' OR Image LIKE '%/lua5.2' ESCAPE '\\' OR Image LIKE '%/lua5.3' ESCAPE '\\' OR Image LIKE '%/lua5.4' ESCAPE '\\' OR Image LIKE '%/node' ESCAPE '\\' OR Image LIKE '%/nodejs' ESCAPE '\\' OR Image LIKE '%/socat' ESCAPE '\\' OR Image LIKE '%/tclsh' ESCAPE '\\' OR Image LIKE '%/tclsh8.5' ESCAPE '\\' OR Image LIKE '%/tclsh8.6' ESCAPE '\\' OR Image LIKE '%/wish' ESCAPE '\\' OR Image LIKE '%/curl' ESCAPE '\\' OR Image LIKE '%/wget' ESCAPE '\\' OR Image LIKE '%/openssl' ESCAPE '\\') OR (Image LIKE '%/tmp/%' ESCAPE '\\' OR Image LIKE '%/dev/shm/%' ESCAPE '\\' OR Image LIKE '%/var/tmp/%' ESCAPE '\\' OR Image LIKE '%/run/user/%' ESCAPE '\\'))"
+    ],
+    "schema_version": 2,
+    "source": "hatchepsoute",
+    "source_table": "logs",
+    "status": "experimental",
+    "tags": [
+      "attack.initial-access",
+      "attack.execution",
+      "attack.t1190",
+      "attack.t1059",
+      "attack.t1059.004",
+      "cve.2025-10230"
+    ],
+    "title": "Samba daemon spawning shell interpreter (CVE-2025-10230 RCE)"
+  },
+  {
+    "author": "Adama ASSIONGBON (SOC & CTI Consultant), https://linkedin.com/in/adama-assiongbon-9029893a",
+    "channel": [],
+    "description": "Detects a write to a sensitive credential file (/etc/passwd, /etc/shadow, /etc/group, /etc/gshadow, /etc/sudoers) by a process other than a known password/user management tool, consistent with the confirmed-impact stage of CVE-2026-43503 (DirtyClone) page cache corruption, where the kernel bug allows writing to a file opened read-only. SOC L1 should verify the source, affected host, user, process or request fields, timing, and related activity.\nLa r\u00e8gle signale un comportement potentiellement suspect. Le SOC L1 doit v\u00e9rifier la source, l\u2019h\u00f4te affect\u00e9, l\u2019utilisateur, les champs de processus ou de requ\u00eate, la chronologie et les activit\u00e9s associ\u00e9es.\n",
+    "eventid": [],
+    "falsepositives": [
+      "Distribution or vendor tools not on the allowlist that legitimately manage local accounts (authconfig, realm, sssd tools, cloud-init) - tune per distribution",
+      "Configuration management agents (Ansible, Puppet, Chef, Salt) applying user/group state directly instead of through allowlisted tools - verify the underlying module and add its interpreter/module path if confirmed legitimate",
+      "Package manager post-install scripts (dpkg, rpm) modifying /etc/group during package installation",
+      "Immutable or non-FHS distributions (NixOS, Snap-confined tools, Flatpak) where the legitimate passwd/useradd binary lives at a non-standard absolute path (e.g. /nix/store/<hash>-shadow-<ver>/bin/passwd) - this WILL alert by design since the allowlist uses fixed absolute paths, add the site-specific store paths after verification rather than switching to a name-only match",
+      "Emergency manual edits to a sensitive file by root using a text editor (vi, vim, nano) during incident recovery or misconfiguration repair - intentionally NOT allowlisted, since allowlisting any general-purpose editor would let an attacker use that same editor to defeat this rule entirely; triage these as a manual, expected, low-frequency FP instead"
+    ],
+    "filename": "CVE-2026-43503_DirtyClone/rules/linux_dirtyclone_sensitive_file_corruption_cve_2026_43503_strict.yml",
+    "id": "b72f67cc-f910-45f6-a61d-35d4c61b5050",
+    "level": "critical",
+    "license": "Apache-2.0",
+    "logsource": {
+      "category": "file_event",
+      "product": "linux"
+    },
+    "required_fields": [
+      "Image",
+      "TargetFilename"
+    ],
+    "result_type": "event",
+    "rule": [
+      "SELECT * FROM logs WHERE ((TargetFilename='/etc/passwd' OR TargetFilename='/etc/shadow' OR TargetFilename='/etc/gshadow' OR TargetFilename='/etc/group' OR TargetFilename='/etc/sudoers') OR TargetFilename LIKE '/etc/sudoers.d/%' ESCAPE '\\') AND (NOT COALESCE((Image='/usr/bin/passwd' OR Image='/usr/bin/chpasswd' OR Image='/usr/sbin/chpasswd' OR Image='/usr/bin/vipw' OR Image='/usr/sbin/vipw' OR Image='/usr/bin/vigr' OR Image='/usr/sbin/vigr' OR Image='/usr/sbin/useradd' OR Image='/usr/sbin/userdel' OR Image='/usr/sbin/usermod' OR Image='/usr/sbin/groupadd' OR Image='/usr/sbin/groupdel' OR Image='/usr/sbin/groupmod' OR Image='/usr/sbin/visudo' OR Image='/usr/bin/visudo' OR Image='/usr/lib/systemd/systemd-sysusers' OR Image='/usr/bin/systemd-sysusers' OR Image='/usr/sbin/pwconv' OR Image='/usr/sbin/pwunconv' OR Image='/usr/sbin/grpconv' OR Image='/usr/sbin/grpunconv' OR Image='/usr/sbin/newusers' OR Image='/usr/bin/gpasswd' OR Image='/usr/bin/chsh' OR Image='/usr/bin/chfn'), 0))"
+    ],
+    "schema_version": 2,
+    "source": "hatchepsoute",
+    "source_table": "logs",
+    "status": "experimental",
+    "tags": [
+      "attack.privilege-escalation",
+      "attack.persistence",
+      "attack.t1068",
+      "attack.t1136",
+      "cve.2026-43503"
+    ],
+    "title": "Sensitive Credential File Modified By Unexpected Process (DirtyClone Page Cache Corruption) - STRICT"
+  },
+  {
+    "author": "Adama ASSIONGBON (SOC & CTI Consultant), https://linkedin.com/in/adama-assiongbon-9029893a",
+    "channel": [],
+    "description": "Detects a Linux web server or PHP-FPM worker process spawning a network shell tool or a shell/interpreter with reverse shell command-line indicators, consistent with successful remote code execution following CVE-2026-58025 MediaWiki deserialization exploitation. SOC L1 should verify the source, affected host, user, process or request fields, timing, and related activity.\nLa r\u00e8gle signale un comportement potentiellement suspect. Le SOC L1 doit v\u00e9rifier la source, l\u2019h\u00f4te affect\u00e9, l\u2019utilisateur, les champs de processus ou de requ\u00eate, la chronologie et les activit\u00e9s associ\u00e9es.\n",
+    "eventid": [],
+    "falsepositives": [
+      "Authorized security testing in an isolated lab",
+      "EDR or vulnerability scanner agents that legitimately probe web worker processes",
+      "rsync using -e /bin/sh as its remote-shell command, filtered via filter_child_rsync_remote_shell when Image is rsync itself"
+    ],
+    "filename": "CVE-2026-58025_MediaWiki_Deserialization_RCE/rules/linux_webserver_shell_spawn_post_mediawiki_deserialization_cve_2026_58025_strict.yml",
+    "id": "dfa53baa-ba3e-47ef-9332-143c58af96bb",
+    "level": "critical",
+    "license": "Apache-2.0",
+    "logsource": {
+      "category": "process_creation",
+      "product": "linux"
+    },
+    "required_fields": [
+      "CommandLine",
+      "Image",
+      "ParentImage"
+    ],
+    "result_type": "event",
+    "rule": [
+      "SELECT * FROM logs WHERE (ParentImage LIKE '%/php-fpm' ESCAPE '\\' OR ParentImage LIKE '%/php-fpm7.4' ESCAPE '\\' OR ParentImage LIKE '%/php-fpm8.0' ESCAPE '\\' OR ParentImage LIKE '%/php-fpm8.1' ESCAPE '\\' OR ParentImage LIKE '%/php-fpm8.2' ESCAPE '\\' OR ParentImage LIKE '%/php-fpm8.3' ESCAPE '\\' OR ParentImage LIKE '%/php-cgi' ESCAPE '\\' OR ParentImage LIKE '%/apache2' ESCAPE '\\' OR ParentImage LIKE '%/httpd' ESCAPE '\\' OR ParentImage LIKE '%/nginx' ESCAPE '\\') AND ((Image LIKE '%/nc' ESCAPE '\\' OR Image LIKE '%/nc.traditional' ESCAPE '\\' OR Image LIKE '%/ncat' ESCAPE '\\' OR Image LIKE '%/socat' ESCAPE '\\' OR Image LIKE '%/telnet' ESCAPE '\\') OR ((Image LIKE '%/sh' ESCAPE '\\' OR Image LIKE '%/bash' ESCAPE '\\' OR Image LIKE '%/dash' ESCAPE '\\' OR Image LIKE '%/busybox' ESCAPE '\\') AND ((CommandLine LIKE '%/dev/tcp/%' ESCAPE '\\' OR CommandLine LIKE '%base64 -d%' ESCAPE '\\' OR CommandLine LIKE '%base64 --decode%' ESCAPE '\\' OR CommandLine LIKE '%exec(''/bin/sh'')%' ESCAPE '\\' OR CommandLine LIKE '%exec(\"/bin/sh\")%' ESCAPE '\\' OR CommandLine LIKE '%mkfifo%' ESCAPE '\\') OR (CommandLine LIKE '%curl %' ESCAPE '\\' AND CommandLine LIKE '%|%' ESCAPE '\\') OR (CommandLine LIKE '%wget %' ESCAPE '\\' AND CommandLine LIKE '%|%' ESCAPE '\\'))) OR ((Image LIKE '%/python3' ESCAPE '\\' OR Image LIKE '%/python' ESCAPE '\\' OR Image LIKE '%/perl' ESCAPE '\\') AND (CommandLine LIKE '%socket.socket%' ESCAPE '\\' OR CommandLine LIKE '%pty.spawn%' ESCAPE '\\' OR CommandLine LIKE '%/bin/sh%' ESCAPE '\\' OR CommandLine LIKE '%/bin/bash%' ESCAPE '\\')) OR (Image LIKE '%/env' ESCAPE '\\' AND (CommandLine LIKE '%/dev/tcp/%' ESCAPE '\\' OR CommandLine LIKE '%nc %' ESCAPE '\\' OR CommandLine LIKE '%ncat %' ESCAPE '\\' OR CommandLine LIKE '%socat %' ESCAPE '\\' OR CommandLine LIKE '%/bin/sh%' ESCAPE '\\' OR CommandLine LIKE '%/bin/bash%' ESCAPE '\\')) OR ((CommandLine REGEXP '(^|\\s)-e\\s?/bin/sh(\\s|$)' OR CommandLine REGEXP '(^|\\s)-e\\s?/bin/bash(\\s|$)' OR CommandLine REGEXP 'EXEC:/bin/sh(\\s|$|,|\\))' OR CommandLine REGEXP 'EXEC:/bin/bash(\\s|$|,|\\))' OR CommandLine REGEXP 'EXEC:''/bin/sh''' OR CommandLine REGEXP 'EXEC:''/bin/bash''') AND (NOT COALESCE((Image LIKE '%/rsync' ESCAPE '\\'), 0))))"
+    ],
+    "schema_version": 2,
+    "source": "hatchepsoute",
+    "source_table": "logs",
+    "status": "experimental",
+    "tags": [
+      "attack.execution",
+      "attack.command-and-control",
+      "attack.t1059",
+      "attack.t1059.004"
+    ],
+    "title": "Web Server Or PHP-FPM Process Spawning Reverse Shell After MediaWiki Import - STRICT"
+  },
+  {
+    "author": "Adama ASSIONGBON (SOC & CTI Consultant), https://linkedin.com/in/adama-assiongbon-9029893a",
+    "channel": [],
+    "description": "Detects the exact sudo indicator published by Cisco for CVE-2026-20316 exploitation, the low-privilege www account invoking package_info.pl as root against license.tmp on a Secure Firewall Management Center appliance. SOC L1 should verify the source, affected host, user, process or request fields, timing, and related activity.\nDetecte l'indicateur sudo exact publie par Cisco pour l'exploitation de CVE-2026-20316 : le compte bas-privilege www qui invoque package_info.pl en tant que root avec /var/tmp/license.tmp sur une appliance Secure Firewall Management Center. Cisco presente cette combinaison directement comme un indicateur de compromission dans son avis officiel : sa presence dans /var/log/messages ne correspond a aucun usage legitime documente. Le SOC L1 doit v\u00e9rifier la source, l\u2019h\u00f4te affect\u00e9, l\u2019utilisateur, les champs de processus ou de requ\u00eate, la chronologie et les activit\u00e9s associ\u00e9es.\n",
+    "eventid": [],
+    "falsepositives": [
+      "None documented by Cisco; this exact command and account combination is presented in the vendor advisory as a compromise indicator rather than a normal administrative operation"
+    ],
+    "filename": "CVE-2026-20316_Cisco_FMC_Static_Credential/rules/linux_cisco_fmc_package_info_license_sudo_cve_2026_20316_strict.yml",
+    "id": "e08fa1ca-f980-4ac0-8fd4-2faad9e7ff10",
+    "level": "critical",
+    "license": "Apache-2.0",
+    "logsource": {
+      "category": "process_creation",
+      "product": "linux"
+    },
+    "required_fields": [
+      "CommandLine",
+      "Message",
+      "full_log",
+      "message"
+    ],
+    "result_type": "event",
+    "rule": [
+      "SELECT * FROM logs WHERE (CommandLine LIKE '%package\\_info.pl%' ESCAPE '\\' AND CommandLine LIKE '%license.tmp%' ESCAPE '\\') OR (Message LIKE '%package\\_info.pl%' ESCAPE '\\' AND Message LIKE '%license.tmp%' ESCAPE '\\' AND Message LIKE '%USER=root%' ESCAPE '\\') OR (message LIKE '%package\\_info.pl%' ESCAPE '\\' AND message LIKE '%license.tmp%' ESCAPE '\\' AND message LIKE '%USER=root%' ESCAPE '\\') OR (full_log LIKE '%package\\_info.pl%' ESCAPE '\\' AND full_log LIKE '%license.tmp%' ESCAPE '\\' AND full_log LIKE '%USER=root%' ESCAPE '\\')"
+    ],
+    "schema_version": 2,
+    "source": "hatchepsoute",
+    "source_table": "logs",
+    "status": "experimental",
+    "tags": [
+      "attack.initial-access",
+      "attack.privilege-escalation",
+      "attack.t1078",
+      "attack.t1548",
+      "cve.2026-20316"
+    ],
+    "title": "Cisco FMC package_info.pl Root Execution Via license.tmp - STRICT"
+  }
+]

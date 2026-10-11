@@ -1,0 +1,245 @@
+[
+  {
+    "author": "Aaron Hoffmann",
+    "channel": [
+      "Security"
+    ],
+    "description": "Detects the use of Rufus, a utility used to create bootable USB drives. The threat actor Black Basta has been known to use a droper that mimics the legitimate Rufus software.",
+    "eventid": [
+      4688
+    ],
+    "falsepositives": [
+      "Legitimate administrative activities"
+    ],
+    "filename": "Ransomware/BlackBasta/Sigma/proc_creation_win_blackbasta_rufus.yml",
+    "id": "448ce579-2279-41e0-ab63-e84169b6e918",
+    "level": "low",
+    "license": "MIT",
+    "logsource": {
+      "product": "windows",
+      "service": "security"
+    },
+    "required_fields": [
+      "Channel",
+      "EventID",
+      "FileName",
+      "Process"
+    ],
+    "result_type": "event",
+    "rule": [
+      "SELECT * FROM logs WHERE Channel='Security' AND (EventID=4688 AND (FileName LIKE '%rufus-%' ESCAPE '\\' AND Process LIKE '%rufus-%' ESCAPE '\\'))"
+    ],
+    "schema_version": 2,
+    "source": "reversinglabs",
+    "source_table": "logs",
+    "status": "experimental",
+    "tags": [
+      "attack.defense_evasion",
+      "attack.t1036"
+    ],
+    "title": "Rufus Bootable USB Utility"
+  },
+  {
+    "author": "Aaron Hoffmann",
+    "channel": [
+      "Security"
+    ],
+    "description": "Detects the use of AdFind and 7zip executables from Temp folders. QuantumLocker is known to use these tools during reconnaissance.",
+    "eventid": [
+      4688
+    ],
+    "falsepositives": [
+      "Legitimate administrative activities"
+    ],
+    "filename": "Ransomware/QuantumLocker/Sigma/proc_creation_win_quantumlocker_recon.yml",
+    "id": "edd59977-7cac-4b5b-abd0-ac96031d23eb",
+    "level": "low",
+    "license": "MIT",
+    "logsource": {
+      "product": "windows",
+      "service": "security"
+    },
+    "required_fields": [
+      "Channel",
+      "EventID",
+      "NewProcessName"
+    ],
+    "result_type": "event",
+    "rule": [
+      "SELECT * FROM logs WHERE Channel='Security' AND (EventID=4688 AND (NewProcessName LIKE '%\\\\Temp\\\\AdFind.exe' ESCAPE '\\' OR NewProcessName LIKE '%\\\\Temp\\\\7.exe' ESCAPE '\\'))"
+    ],
+    "schema_version": 2,
+    "source": "reversinglabs",
+    "source_table": "logs",
+    "status": "experimental",
+    "tags": [
+      "attack.discovery",
+      "attack.t1018"
+    ],
+    "title": "QuantumLocker reconnaissance tool processes"
+  },
+  {
+    "author": "Aaron Hoffmann",
+    "channel": [
+      "Application"
+    ],
+    "description": "Detects when an ISO is mounted via the VHDMP event channel",
+    "eventid": [
+      12
+    ],
+    "falsepositives": [
+      "Legitimate software installation"
+    ],
+    "filename": "Ransomware/QuantumLocker/Sigma/win_vhdmp_iso_mounted.yml",
+    "id": "8936fc60-4de5-47d1-a9b6-3f6f46533b47",
+    "level": "medium",
+    "license": "MIT",
+    "logsource": {
+      "product": "windows",
+      "service": "application"
+    },
+    "required_fields": [
+      "Channel",
+      "EventID",
+      "Provider_Name"
+    ],
+    "result_type": "event",
+    "rule": [
+      "SELECT * FROM logs WHERE Channel='Application' AND (Provider_Name='VHDMP' AND EventID=12)"
+    ],
+    "schema_version": 2,
+    "source": "reversinglabs",
+    "source_table": "logs",
+    "status": "experimental",
+    "tags": [
+      "attack.impact",
+      "attack.t1486"
+    ],
+    "title": "ISO file mounted (VHDMP)"
+  },
+  {
+    "author": "Aaron Hoffmann",
+    "channel": [
+      "Security"
+    ],
+    "description": "Detects setting the desktop wallpaper registry key to the Black Basta ransom note",
+    "eventid": [
+      4657
+    ],
+    "falsepositives": [
+      "Unknown"
+    ],
+    "filename": "Ransomware/BlackBasta/Sigma/registry_set_blackbasta_wallpaper.yml",
+    "id": "12ec3551-4aab-4293-bab0-2e3076480591",
+    "level": "high",
+    "license": "MIT",
+    "logsource": {
+      "product": "windows",
+      "service": "security"
+    },
+    "required_fields": [
+      "Channel",
+      "EventID",
+      "EventType",
+      "NewValue",
+      "OperationType",
+      "TargetObject"
+    ],
+    "result_type": "event",
+    "rule": [
+      "SELECT * FROM logs WHERE Channel='Security' AND ((EventID=4657 AND OperationType='Existing registry value modified') AND (EventType='SetValue' AND TargetObject LIKE '%\\\\Control Panel\\\\Desktop%' ESCAPE '\\' AND NewValue LIKE '%dlaksjdoiwq.jpg%' ESCAPE '\\'))"
+    ],
+    "schema_version": 2,
+    "source": "reversinglabs",
+    "source_table": "logs",
+    "status": "experimental",
+    "tags": [
+      "attack.impact",
+      "attack.t1491"
+    ],
+    "title": "Set Black Basta Wallpaper Registry Key"
+  },
+  {
+    "author": "Aaron Hoffmann",
+    "channel": [
+      "Security"
+    ],
+    "description": "Detects setting the value for the registry key made by Black Basta ransomware that associates an icon with the .basta extension (V1) or the generated 9-character alphanumeric extension (V2) for encrypted files",
+    "eventid": [
+      4657
+    ],
+    "falsepositives": [
+      "Unknown"
+    ],
+    "filename": "Ransomware/BlackBasta/Sigma/registry_set_blackbasta_default_icon.yml",
+    "id": "bed401d0-0cf6-4628-9f13-80a4c6d7b6e6",
+    "level": "high",
+    "license": "MIT",
+    "logsource": {
+      "product": "windows",
+      "service": "security"
+    },
+    "required_fields": [
+      "Channel",
+      "EventID",
+      "EventType",
+      "NewValue",
+      "OperationType",
+      "TargetObject"
+    ],
+    "result_type": "event",
+    "rule": [
+      "SELECT * FROM logs WHERE Channel='Security' AND ((EventID=4657 AND OperationType='Existing registry value modified') AND (EventType='SetValue' AND TargetObject LIKE '%\\\\SOFTWARE\\\\Classes\\\\%' ESCAPE '\\' AND TargetObject LIKE '%DefaultIcon' ESCAPE '\\' AND NewValue LIKE '\\%\\\\AppData\\\\Local\\\\Temp\\\\fkdjsadasd.ico' ESCAPE '\\'))"
+    ],
+    "schema_version": 2,
+    "source": "reversinglabs",
+    "source_table": "logs",
+    "status": "experimental",
+    "tags": [
+      "attack.execution",
+      "attack.t1112"
+    ],
+    "title": "Set Black Basta Default Icon Registry Key"
+  },
+  {
+    "author": "Aaron Hoffmann",
+    "channel": [
+      "Security"
+    ],
+    "description": "Detects adding the registry key made by QuantumLocker that associates the .quantum file extension",
+    "eventid": [
+      4657
+    ],
+    "falsepositives": [
+      "Unknown"
+    ],
+    "filename": "Ransomware/QuantumLocker/Sigma/registry_set_quantumlocker_extension.yml",
+    "id": "eb00c536-6416-4237-9dbe-f25c21c8ba36",
+    "level": "high",
+    "license": "MIT",
+    "logsource": {
+      "product": "windows",
+      "service": "security"
+    },
+    "required_fields": [
+      "Channel",
+      "EventID",
+      "EventType",
+      "OperationType",
+      "TargetObject"
+    ],
+    "result_type": "event",
+    "rule": [
+      "SELECT * FROM logs WHERE Channel='Security' AND ((EventID=4657 AND OperationType='New registry value created') AND (EventType='CreateKey' AND TargetObject LIKE '%\\\\SOFTWARE\\\\Classes\\\\.quantum%' ESCAPE '\\'))"
+    ],
+    "schema_version": 2,
+    "source": "reversinglabs",
+    "source_table": "logs",
+    "status": "experimental",
+    "tags": [
+      "attack.execution",
+      "attack.t1112"
+    ],
+    "title": "Set QuantumLocker file extension registry key"
+  }
+]

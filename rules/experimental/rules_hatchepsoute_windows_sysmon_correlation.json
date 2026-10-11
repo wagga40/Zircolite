@@ -1,0 +1,176 @@
+[
+  {
+    "author": "ASSIONGBON Adama SOC & CTI Consultant | https://www.linkedin.com/in/adama-assiongbon-9029893a/",
+    "channel": [],
+    "correlation": true,
+    "correlation_plan": {
+      "cleanup": [
+        "sigma_fae82ee11e1f_n0_alerts",
+        "sigma_fae82ee11e1f_n0_merged",
+        "sigma_fae82ee11e1f_n0_windows",
+        "sigma_fae82ee11e1f_n0_combined",
+        "sigma_fae82ee11e1f_n0_t0_qualified",
+        "sigma_fae82ee11e1f_n0_t0_measured",
+        "sigma_fae82ee11e1f_n0_t0_anchors",
+        "sigma_fae82ee11e1f_n0_events",
+        "sigma_fae82ee11e1f_n0_matches",
+        "sigma_fae82ee11e1f_n0_input",
+        "sigma_fae82ee11e1f_horizon",
+        "sigma_fae82ee11e1f_raw0"
+      ],
+      "diagnostics": "SELECT 'invalid_timestamp' AS reason, COUNT(*) AS count FROM sigma_fae82ee11e1f_raw0 WHERE ts IS NULL AND (b0) UNION ALL SELECT 'missing_group_key' AS reason, COUNT(DISTINCT eid) AS count FROM sigma_fae82ee11e1f_n0_input WHERE g0 IS NULL OR g1 IS NULL OR g2 IS NULL",
+      "event_id_field": "row_id",
+      "prepare": [
+        {
+          "indexes": [
+            [
+              "eid"
+            ],
+            [
+              "ts"
+            ]
+          ],
+          "name": "sigma_fae82ee11e1f_raw0",
+          "select": "SELECT CAST(`row_id` AS TEXT) AS rid, '0:' || CAST(`row_id` AS TEXT) AS eid, ROUND((julianday(SystemTime) - 2440587.5) * 86400000) / 1000.0 AS ts, json_object('f0', CASE WHEN typeof(`Computer`)='real' AND abs(`Computer`) > 1.7976931348623157e308 THEN NULL ELSE `Computer` END, 'f1', CASE WHEN typeof(`SourceImage`)='real' AND abs(`SourceImage`) > 1.7976931348623157e308 THEN NULL ELSE `SourceImage` END, 'f2', CASE WHEN typeof(`SourceProcessId`)='real' AND abs(`SourceProcessId`) > 1.7976931348623157e308 THEN NULL ELSE `SourceProcessId` END, 'f3', CASE WHEN typeof(`TargetImage`)='real' AND abs(`TargetImage`) > 1.7976931348623157e308 THEN NULL ELSE `TargetImage` END) AS payload, COALESCE(((Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=10 AND ((TargetImage LIKE '%\\\\MsMpEng.exe' ESCAPE '\\' OR TargetImage LIKE '%\\\\MsSense.exe' ESCAPE '\\' OR TargetImage LIKE '%\\\\SecurityHealthService.exe' ESCAPE '\\' OR TargetImage LIKE '%\\\\CSFalconService.exe' ESCAPE '\\' OR TargetImage LIKE '%\\\\CSFalconContainer.exe' ESCAPE '\\' OR TargetImage LIKE '%\\\\SentinelAgent.exe' ESCAPE '\\' OR TargetImage LIKE '%\\\\SentinelServiceHost.exe' ESCAPE '\\' OR TargetImage LIKE '%\\\\SentinelStaticEngine.exe' ESCAPE '\\' OR TargetImage LIKE '%\\\\ekrn.exe' ESCAPE '\\' OR TargetImage LIKE '%\\\\egui.exe' ESCAPE '\\' OR TargetImage LIKE '%\\\\bdservicehost.exe' ESCAPE '\\' OR TargetImage LIKE '%\\\\bdagent.exe' ESCAPE '\\' OR TargetImage LIKE '%\\\\bdredline.exe' ESCAPE '\\' OR TargetImage LIKE '%\\\\avp.exe' ESCAPE '\\' OR TargetImage LIKE '%\\\\kavfs.exe' ESCAPE '\\' OR TargetImage LIKE '%\\\\klnagent.exe' ESCAPE '\\' OR TargetImage LIKE '%\\\\mcshield.exe' ESCAPE '\\' OR TargetImage LIKE '%\\\\masvc.exe' ESCAPE '\\' OR TargetImage LIKE '%\\\\xagt.exe' ESCAPE '\\' OR TargetImage LIKE '%\\\\PccNTMon.exe' ESCAPE '\\' OR TargetImage LIKE '%\\\\coreServiceShell.exe' ESCAPE '\\' OR TargetImage LIKE '%\\\\ds\\_agent.exe' ESCAPE '\\' OR TargetImage LIKE '%\\\\cb.exe' ESCAPE '\\' OR TargetImage LIKE '%\\\\RepMgr.exe' ESCAPE '\\' OR TargetImage LIKE '%\\\\CylanceSvc.exe' ESCAPE '\\' OR TargetImage LIKE '%\\\\MBAMService.exe' ESCAPE '\\' OR TargetImage LIKE '%\\\\cybereason.exe' ESCAPE '\\' OR TargetImage LIKE '%\\\\cortexService.exe' ESCAPE '\\' OR TargetImage LIKE '%\\\\Traps.exe' ESCAPE '\\' OR TargetImage LIKE '%\\\\fortiedr.exe' ESCAPE '\\' OR TargetImage LIKE '%\\\\SophosFS.exe' ESCAPE '\\' OR TargetImage LIKE '%\\\\SAVService.exe' ESCAPE '\\' OR TargetImage LIKE '%\\\\HuntressAgent.exe' ESCAPE '\\' OR TargetImage LIKE '%\\\\elastic-agent.exe' ESCAPE '\\' OR TargetImage LIKE '%\\\\ccSvcHst.exe' ESCAPE '\\' OR TargetImage LIKE '%\\\\SepMasterService.exe' ESCAPE '\\' OR TargetImage LIKE '%\\\\WRSA.exe' ESCAPE '\\' OR TargetImage LIKE '%\\\\TaniumClient.exe' ESCAPE '\\' OR TargetImage LIKE '%\\\\Sysmon.exe' ESCAPE '\\' OR TargetImage LIKE '%\\\\Sysmon64.exe' ESCAPE '\\') AND (NOT COALESCE((SourceImage LIKE '%\\\\services.exe' ESCAPE '\\' OR SourceImage LIKE '%\\\\svchost.exe' ESCAPE '\\' OR SourceImage LIKE '%\\\\lsass.exe' ESCAPE '\\' OR SourceImage LIKE '%\\\\MsMpEng.exe' ESCAPE '\\' OR SourceImage LIKE '%\\\\CSFalconService.exe' ESCAPE '\\' OR SourceImage LIKE '%\\\\SentinelAgent.exe' ESCAPE '\\' OR SourceImage LIKE '%\\\\taskmgr.exe' ESCAPE '\\' OR SourceImage LIKE '%\\\\msiexec.exe' ESCAPE '\\' OR SourceImage LIKE '%\\\\TrustedInstaller.exe' ESCAPE '\\' OR SourceImage LIKE '%\\\\wuauclt.exe' ESCAPE '\\' OR SourceImage LIKE '%\\\\UsoClient.exe' ESCAPE '\\' OR SourceImage LIKE '%\\\\SearchIndexer.exe' ESCAPE '\\'), 0)))))), 0) AS b0 FROM logs"
+        },
+        {
+          "indexes": [],
+          "name": "sigma_fae82ee11e1f_horizon",
+          "select": "SELECT (SELECT MAX(ts) FROM (SELECT ts FROM sigma_fae82ee11e1f_raw0)) AS ts"
+        },
+        {
+          "indexes": [],
+          "name": "sigma_fae82ee11e1f_n0_input",
+          "select": "SELECT s.*, 0 AS slot, CASE WHEN typeof(json_extract(s.payload, '$.f1'))='text' THEN lower(json_extract(s.payload, '$.f1')) ELSE json_extract(s.payload, '$.f1') END AS g0, CASE WHEN typeof(json_extract(s.payload, '$.f2'))='text' THEN lower(json_extract(s.payload, '$.f2')) ELSE json_extract(s.payload, '$.f2') END AS g1, CASE WHEN typeof(json_extract(s.payload, '$.f0'))='text' THEN lower(json_extract(s.payload, '$.f0')) ELSE json_extract(s.payload, '$.f0') END AS g2, json_extract(s.payload, '$.f3') AS v FROM (SELECT 'e:' || eid AS eid, ts, payload, json_array(eid) AS evidence, '[]' AS children FROM sigma_fae82ee11e1f_raw0 WHERE b0) s"
+        },
+        {
+          "indexes": [
+            [
+              "g0",
+              "g1",
+              "g2",
+              "ts"
+            ],
+            [
+              "g0",
+              "g1",
+              "g2",
+              "slot",
+              "ts"
+            ],
+            [
+              "eid"
+            ]
+          ],
+          "name": "sigma_fae82ee11e1f_n0_matches",
+          "select": "SELECT DISTINCT * FROM sigma_fae82ee11e1f_n0_input WHERE ts IS NOT NULL AND eid IS NOT NULL AND g0 IS NOT NULL AND g1 IS NOT NULL AND g2 IS NOT NULL"
+        },
+        {
+          "indexes": [
+            [
+              "g0",
+              "g1",
+              "g2",
+              "ts"
+            ]
+          ],
+          "name": "sigma_fae82ee11e1f_n0_events",
+          "select": "SELECT DISTINCT eid, ts, g0, g1, g2, v FROM sigma_fae82ee11e1f_n0_matches"
+        },
+        {
+          "indexes": [
+            [
+              "g0",
+              "g1",
+              "g2",
+              "end"
+            ]
+          ],
+          "name": "sigma_fae82ee11e1f_n0_t0_anchors",
+          "select": "SELECT DISTINCT ts - 60 AS start, ts AS end, g0, g1, g2 FROM sigma_fae82ee11e1f_n0_matches"
+        },
+        {
+          "indexes": [],
+          "name": "sigma_fae82ee11e1f_n0_t0_measured",
+          "select": "SELECT a.*, (SELECT COUNT(DISTINCT m.v COLLATE NOCASE) FROM sigma_fae82ee11e1f_n0_events m WHERE m.g0 = a.g0 AND m.g1 = a.g1 AND m.g2 = a.g2 AND m.ts BETWEEN a.start AND a.end) AS metric FROM sigma_fae82ee11e1f_n0_t0_anchors a WHERE 1"
+        },
+        {
+          "indexes": [],
+          "name": "sigma_fae82ee11e1f_n0_t0_qualified",
+          "select": "SELECT * FROM sigma_fae82ee11e1f_n0_t0_measured WHERE metric >= 8"
+        },
+        {
+          "indexes": [],
+          "name": "sigma_fae82ee11e1f_n0_combined",
+          "select": "SELECT a.start, a.end, g0, g1, g2, a.metric, (SELECT json_group_array(DISTINCT e.value) FROM sigma_fae82ee11e1f_n0_matches m, json_each(m.evidence) e WHERE m.g0 = a.g0 AND m.g1 = a.g1 AND m.g2 = a.g2 AND m.ts BETWEEN a.start AND a.end) AS evidence, (SELECT json_group_array(DISTINCT c.value) FROM sigma_fae82ee11e1f_n0_matches m, json_each(m.children) c WHERE m.g0 = a.g0 AND m.g1 = a.g1 AND m.g2 = a.g2 AND m.ts BETWEEN a.start AND a.end) AS children FROM sigma_fae82ee11e1f_n0_t0_qualified a"
+        },
+        {
+          "indexes": [],
+          "name": "sigma_fae82ee11e1f_n0_windows",
+          "select": "SELECT start, end, g0, g1, g2, MAX(metric) AS metric FROM sigma_fae82ee11e1f_n0_combined GROUP BY start, end, g0, g1, g2"
+        },
+        {
+          "indexes": [],
+          "name": "sigma_fae82ee11e1f_n0_merged",
+          "select": "SELECT a.*, (SELECT json_group_array(value) FROM (SELECT DISTINCT e.value FROM sigma_fae82ee11e1f_n0_combined c, json_each(c.evidence) e WHERE c.g0 = a.g0 AND c.g1 = a.g1 AND c.g2 = a.g2 AND c.start=a.start AND c.end=a.end ORDER BY e.value)) AS evidence, (SELECT json_group_array(value) FROM (SELECT DISTINCT e.value FROM sigma_fae82ee11e1f_n0_combined c, json_each(c.children) e WHERE c.g0 = a.g0 AND c.g1 = a.g1 AND c.g2 = a.g2 AND c.start=a.start AND c.end=a.end ORDER BY e.value)) AS children FROM sigma_fae82ee11e1f_n0_windows a"
+        },
+        {
+          "indexes": [
+            [
+              "end"
+            ],
+            [
+              "alert_id"
+            ]
+          ],
+          "name": "sigma_fae82ee11e1f_n0_alerts",
+          "select": "SELECT 'sigma_alert_fae82ee11e1f9d5f:' || ROW_NUMBER() OVER (ORDER BY g0, g1, g2, end, start, metric, evidence) AS alert_id, start, end, json_object('SourceImage', `g0`, 'SourceProcessId', `g1`, 'Computer', `g2`) AS group_keys, metric, evidence, children, json_object('f1', `g0`, 'f2', `g1`, 'f0', `g2`) AS payload FROM sigma_fae82ee11e1f_n0_merged"
+        }
+      ],
+      "query": "SELECT alert_id, group_keys, end AS occurrence_time, start AS window_start, end AS window_end, 'value_count' AS metric_name, metric AS metric_value, json_array_length(evidence) AS event_count, evidence AS event_ids, children AS child_alert_ids FROM sigma_fae82ee11e1f_n0_alerts ORDER BY occurrence_time, alert_id",
+      "required_fields": {
+        "logs": [
+          "Channel",
+          "Computer",
+          "EventID",
+          "SourceImage",
+          "SourceProcessId",
+          "SystemTime",
+          "TargetImage",
+          "row_id"
+        ]
+      },
+      "source_tables": {
+        "0": "logs"
+      },
+      "sqlite_min_version": "3.38.0",
+      "version": 2
+    },
+    "description": "Behavioral correlation that fires when a single source process accesses many distinct security/EDR product processes within a short window - the core behavior of an EDR killer such as TheGentlemen's GentleKiller, which terminates 400+ security processes across ~48 vendors in a loop. This detection is resilient to tool renaming, repacking and new BYOVD drivers because it keys on the killing behavior, not on file artifacts. Pair it with the BYOVD driver-load BROAD rule and the GentlemenCollection STRICT rule for full-confidence attribution. THRESHOLD CALIBRATION: the default threshold of 8 assumes a reasonably instrumented endpoint. If your environment only runs 3-4 security tools, the threshold may never be reached even during an active attack. Set the threshold to 50-75% of the number of distinct security processes running in your environment. Conversely, lower it to 4-5 for minimal stacks. BLIND SPOT: if GentleKiller injects into a legitimate process (process hollowing), SourceImage will show the host process (e.g. explorer.exe). The correlation still fires correctly but analysts must check SourceProcessId to identify the actual malicious thread rather than dismissing the alert based on the legitimate SourceImage name. SOC L1 should verify the source, affected host, user, process or request fields, timing, and related activity.\nLa r\u00e8gle signale un comportement potentiellement suspect. Le SOC L1 doit v\u00e9rifier la source, l\u2019h\u00f4te affect\u00e9, l\u2019utilisateur, les champs de processus ou de requ\u00eate, la chronologie et les activit\u00e9s associ\u00e9es.\n",
+    "eventid": [],
+    "falsepositives": [],
+    "filename": "TheGentlemen_Ransomware_EDRKiller/rules/win_gentlemen_mass_security_process_termination_correlation.yml",
+    "id": "d4b8f2a1-6c95-4e3d-9f08-2a7e1b5c8d63",
+    "level": "high",
+    "license": "Apache-2.0",
+    "required_fields": [
+      "Channel",
+      "Computer",
+      "EventID",
+      "SourceImage",
+      "SourceProcessId",
+      "SystemTime",
+      "TargetImage",
+      "row_id"
+    ],
+    "result_type": "correlation",
+    "rule": [
+      "WITH sigma_fae82ee11e1f_raw0 AS (SELECT CAST(`row_id` AS TEXT) AS rid, '0:' || CAST(`row_id` AS TEXT) AS eid, ROUND((julianday(SystemTime) - 2440587.5) * 86400000) / 1000.0 AS ts, json_object('f0', CASE WHEN typeof(`Computer`)='real' AND abs(`Computer`) > 1.7976931348623157e308 THEN NULL ELSE `Computer` END, 'f1', CASE WHEN typeof(`SourceImage`)='real' AND abs(`SourceImage`) > 1.7976931348623157e308 THEN NULL ELSE `SourceImage` END, 'f2', CASE WHEN typeof(`SourceProcessId`)='real' AND abs(`SourceProcessId`) > 1.7976931348623157e308 THEN NULL ELSE `SourceProcessId` END, 'f3', CASE WHEN typeof(`TargetImage`)='real' AND abs(`TargetImage`) > 1.7976931348623157e308 THEN NULL ELSE `TargetImage` END) AS payload, COALESCE(((Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=10 AND ((TargetImage LIKE '%\\\\MsMpEng.exe' ESCAPE '\\' OR TargetImage LIKE '%\\\\MsSense.exe' ESCAPE '\\' OR TargetImage LIKE '%\\\\SecurityHealthService.exe' ESCAPE '\\' OR TargetImage LIKE '%\\\\CSFalconService.exe' ESCAPE '\\' OR TargetImage LIKE '%\\\\CSFalconContainer.exe' ESCAPE '\\' OR TargetImage LIKE '%\\\\SentinelAgent.exe' ESCAPE '\\' OR TargetImage LIKE '%\\\\SentinelServiceHost.exe' ESCAPE '\\' OR TargetImage LIKE '%\\\\SentinelStaticEngine.exe' ESCAPE '\\' OR TargetImage LIKE '%\\\\ekrn.exe' ESCAPE '\\' OR TargetImage LIKE '%\\\\egui.exe' ESCAPE '\\' OR TargetImage LIKE '%\\\\bdservicehost.exe' ESCAPE '\\' OR TargetImage LIKE '%\\\\bdagent.exe' ESCAPE '\\' OR TargetImage LIKE '%\\\\bdredline.exe' ESCAPE '\\' OR TargetImage LIKE '%\\\\avp.exe' ESCAPE '\\' OR TargetImage LIKE '%\\\\kavfs.exe' ESCAPE '\\' OR TargetImage LIKE '%\\\\klnagent.exe' ESCAPE '\\' OR TargetImage LIKE '%\\\\mcshield.exe' ESCAPE '\\' OR TargetImage LIKE '%\\\\masvc.exe' ESCAPE '\\' OR TargetImage LIKE '%\\\\xagt.exe' ESCAPE '\\' OR TargetImage LIKE '%\\\\PccNTMon.exe' ESCAPE '\\' OR TargetImage LIKE '%\\\\coreServiceShell.exe' ESCAPE '\\' OR TargetImage LIKE '%\\\\ds\\_agent.exe' ESCAPE '\\' OR TargetImage LIKE '%\\\\cb.exe' ESCAPE '\\' OR TargetImage LIKE '%\\\\RepMgr.exe' ESCAPE '\\' OR TargetImage LIKE '%\\\\CylanceSvc.exe' ESCAPE '\\' OR TargetImage LIKE '%\\\\MBAMService.exe' ESCAPE '\\' OR TargetImage LIKE '%\\\\cybereason.exe' ESCAPE '\\' OR TargetImage LIKE '%\\\\cortexService.exe' ESCAPE '\\' OR TargetImage LIKE '%\\\\Traps.exe' ESCAPE '\\' OR TargetImage LIKE '%\\\\fortiedr.exe' ESCAPE '\\' OR TargetImage LIKE '%\\\\SophosFS.exe' ESCAPE '\\' OR TargetImage LIKE '%\\\\SAVService.exe' ESCAPE '\\' OR TargetImage LIKE '%\\\\HuntressAgent.exe' ESCAPE '\\' OR TargetImage LIKE '%\\\\elastic-agent.exe' ESCAPE '\\' OR TargetImage LIKE '%\\\\ccSvcHst.exe' ESCAPE '\\' OR TargetImage LIKE '%\\\\SepMasterService.exe' ESCAPE '\\' OR TargetImage LIKE '%\\\\WRSA.exe' ESCAPE '\\' OR TargetImage LIKE '%\\\\TaniumClient.exe' ESCAPE '\\' OR TargetImage LIKE '%\\\\Sysmon.exe' ESCAPE '\\' OR TargetImage LIKE '%\\\\Sysmon64.exe' ESCAPE '\\') AND (NOT COALESCE((SourceImage LIKE '%\\\\services.exe' ESCAPE '\\' OR SourceImage LIKE '%\\\\svchost.exe' ESCAPE '\\' OR SourceImage LIKE '%\\\\lsass.exe' ESCAPE '\\' OR SourceImage LIKE '%\\\\MsMpEng.exe' ESCAPE '\\' OR SourceImage LIKE '%\\\\CSFalconService.exe' ESCAPE '\\' OR SourceImage LIKE '%\\\\SentinelAgent.exe' ESCAPE '\\' OR SourceImage LIKE '%\\\\taskmgr.exe' ESCAPE '\\' OR SourceImage LIKE '%\\\\msiexec.exe' ESCAPE '\\' OR SourceImage LIKE '%\\\\TrustedInstaller.exe' ESCAPE '\\' OR SourceImage LIKE '%\\\\wuauclt.exe' ESCAPE '\\' OR SourceImage LIKE '%\\\\UsoClient.exe' ESCAPE '\\' OR SourceImage LIKE '%\\\\SearchIndexer.exe' ESCAPE '\\'), 0)))))), 0) AS b0 FROM logs), sigma_fae82ee11e1f_horizon AS (SELECT (SELECT MAX(ts) FROM (SELECT ts FROM sigma_fae82ee11e1f_raw0)) AS ts), sigma_fae82ee11e1f_n0_input AS (SELECT s.*, 0 AS slot, CASE WHEN typeof(json_extract(s.payload, '$.f1'))='text' THEN lower(json_extract(s.payload, '$.f1')) ELSE json_extract(s.payload, '$.f1') END AS g0, CASE WHEN typeof(json_extract(s.payload, '$.f2'))='text' THEN lower(json_extract(s.payload, '$.f2')) ELSE json_extract(s.payload, '$.f2') END AS g1, CASE WHEN typeof(json_extract(s.payload, '$.f0'))='text' THEN lower(json_extract(s.payload, '$.f0')) ELSE json_extract(s.payload, '$.f0') END AS g2, json_extract(s.payload, '$.f3') AS v FROM (SELECT 'e:' || eid AS eid, ts, payload, json_array(eid) AS evidence, '[]' AS children FROM sigma_fae82ee11e1f_raw0 WHERE b0) s), sigma_fae82ee11e1f_n0_matches AS (SELECT DISTINCT * FROM sigma_fae82ee11e1f_n0_input WHERE ts IS NOT NULL AND eid IS NOT NULL AND g0 IS NOT NULL AND g1 IS NOT NULL AND g2 IS NOT NULL), sigma_fae82ee11e1f_n0_events AS (SELECT DISTINCT eid, ts, g0, g1, g2, v FROM sigma_fae82ee11e1f_n0_matches), sigma_fae82ee11e1f_n0_t0_anchors AS (SELECT DISTINCT ts - 60 AS start, ts AS end, g0, g1, g2 FROM sigma_fae82ee11e1f_n0_matches), sigma_fae82ee11e1f_n0_t0_measured AS (SELECT a.*, (SELECT COUNT(DISTINCT m.v COLLATE NOCASE) FROM sigma_fae82ee11e1f_n0_events m WHERE m.g0 = a.g0 AND m.g1 = a.g1 AND m.g2 = a.g2 AND m.ts BETWEEN a.start AND a.end) AS metric FROM sigma_fae82ee11e1f_n0_t0_anchors a WHERE 1), sigma_fae82ee11e1f_n0_t0_qualified AS (SELECT * FROM sigma_fae82ee11e1f_n0_t0_measured WHERE metric >= 8), sigma_fae82ee11e1f_n0_combined AS (SELECT a.start, a.end, g0, g1, g2, a.metric, (SELECT json_group_array(DISTINCT e.value) FROM sigma_fae82ee11e1f_n0_matches m, json_each(m.evidence) e WHERE m.g0 = a.g0 AND m.g1 = a.g1 AND m.g2 = a.g2 AND m.ts BETWEEN a.start AND a.end) AS evidence, (SELECT json_group_array(DISTINCT c.value) FROM sigma_fae82ee11e1f_n0_matches m, json_each(m.children) c WHERE m.g0 = a.g0 AND m.g1 = a.g1 AND m.g2 = a.g2 AND m.ts BETWEEN a.start AND a.end) AS children FROM sigma_fae82ee11e1f_n0_t0_qualified a), sigma_fae82ee11e1f_n0_windows AS (SELECT start, end, g0, g1, g2, MAX(metric) AS metric FROM sigma_fae82ee11e1f_n0_combined GROUP BY start, end, g0, g1, g2), sigma_fae82ee11e1f_n0_merged AS (SELECT a.*, (SELECT json_group_array(value) FROM (SELECT DISTINCT e.value FROM sigma_fae82ee11e1f_n0_combined c, json_each(c.evidence) e WHERE c.g0 = a.g0 AND c.g1 = a.g1 AND c.g2 = a.g2 AND c.start=a.start AND c.end=a.end ORDER BY e.value)) AS evidence, (SELECT json_group_array(value) FROM (SELECT DISTINCT e.value FROM sigma_fae82ee11e1f_n0_combined c, json_each(c.children) e WHERE c.g0 = a.g0 AND c.g1 = a.g1 AND c.g2 = a.g2 AND c.start=a.start AND c.end=a.end ORDER BY e.value)) AS children FROM sigma_fae82ee11e1f_n0_windows a), sigma_fae82ee11e1f_n0_alerts AS (SELECT 'sigma_alert_fae82ee11e1f9d5f:' || ROW_NUMBER() OVER (ORDER BY g0, g1, g2, end, start, metric, evidence) AS alert_id, start, end, json_object('SourceImage', `g0`, 'SourceProcessId', `g1`, 'Computer', `g2`) AS group_keys, metric, evidence, children, json_object('f1', `g0`, 'f2', `g1`, 'f0', `g2`) AS payload FROM sigma_fae82ee11e1f_n0_merged) SELECT alert_id, group_keys, end AS occurrence_time, start AS window_start, end AS window_end, 'value_count' AS metric_name, metric AS metric_value, json_array_length(evidence) AS event_count, evidence AS event_ids, children AS child_alert_ids FROM sigma_fae82ee11e1f_n0_alerts ORDER BY occurrence_time, alert_id"
+    ],
+    "schema_version": 2,
+    "source": "hatchepsoute",
+    "status": "experimental",
+    "tags": [],
+    "title": "TheGentlemen ransomware - Mass security process termination by single process (EDR killer behavior)"
+  }
+]

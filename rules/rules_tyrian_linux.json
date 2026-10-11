@@ -1,0 +1,539 @@
+[
+  {
+    "author": "Tyrian",
+    "channel": [],
+    "description": "Detects a rapid sequence of situational-awareness commands from one host. No single one of these is suspicious, which is the point: the signal is the burst. A human landing on an unfamiliar box runs five of them in under a minute, while a legitimate user runs one, occasionally, with a reason.\n",
+    "eventid": [],
+    "falsepositives": [
+      "Administrators troubleshooting, who legitimately run exactly this sequence",
+      "Monitoring and inventory agents, if they run under a login auid"
+    ],
+    "filename": "rules/discovery/linux-host-enumeration-burst.yml",
+    "id": "044d9564-0a89-5d8e-a1f2-dce53a269616",
+    "level": "medium",
+    "license": "MIT",
+    "logsource": {
+      "product": "linux",
+      "service": "auditd"
+    },
+    "required_fields": [
+      "AuditKey",
+      "Image"
+    ],
+    "result_type": "event",
+    "rule": [
+      "SELECT * FROM logs WHERE AuditKey LIKE 'tyrian\\_exec' ESCAPE '\\' AND (Image LIKE '%/whoami' ESCAPE '\\' OR Image LIKE '%/id' ESCAPE '\\' OR Image LIKE '%/uname' ESCAPE '\\' OR Image LIKE '%/hostname' ESCAPE '\\' OR Image LIKE '%/lastlog' ESCAPE '\\' OR Image LIKE '%/last' ESCAPE '\\' OR Image LIKE '%/w' ESCAPE '\\' OR Image LIKE '%/netstat' ESCAPE '\\' OR Image LIKE '%/ss' ESCAPE '\\' OR Image LIKE '%/lsof' ESCAPE '\\' OR Image LIKE '%/crontab' ESCAPE '\\')"
+    ],
+    "schema_version": 2,
+    "source": "tyrian",
+    "source_table": "logs",
+    "status": "experimental",
+    "tags": [
+      "attack.discovery",
+      "attack.t1082",
+      "attack.t1087.001"
+    ],
+    "title": "Linux Host Enumeration Burst"
+  },
+  {
+    "author": "Tyrian",
+    "channel": [],
+    "description": "Detects insmod/modprobe execution and the init_module syscall. A loadable kernel module runs in ring 0, which puts it beyond the reach of every userland control on the host, including the audit daemon that reported it. Module loads are rare and predictable outside of driver updates, so the baseline is small enough to review by hand.\n",
+    "eventid": [],
+    "falsepositives": [
+      "Driver and kernel package updates",
+      "Hardware hotplug loading a module on demand",
+      "Container runtimes loading overlay or netfilter modules at start"
+    ],
+    "filename": "rules/persistence/linux-kernel-module-load.yml",
+    "id": "2d6278f1-4a07-5ab9-b58b-a408ff36afca",
+    "level": "medium",
+    "license": "MIT",
+    "logsource": {
+      "product": "linux",
+      "service": "auditd"
+    },
+    "required_fields": [
+      "AuditKey"
+    ],
+    "result_type": "event",
+    "rule": [
+      "SELECT * FROM logs WHERE AuditKey LIKE 'tyrian\\_modules' ESCAPE '\\'"
+    ],
+    "schema_version": 2,
+    "source": "tyrian",
+    "source_table": "logs",
+    "status": "experimental",
+    "tags": [
+      "attack.persistence",
+      "attack.privilege_escalation",
+      "attack.t1547.006"
+    ],
+    "title": "Linux Kernel Module Loaded"
+  },
+  {
+    "author": "Tyrian",
+    "channel": [],
+    "description": "Detects the curl-pipe-bash install pattern, where a script is fetched over the network and executed without ever touching disk under a name anyone reviewed. Legitimate installers do this too, which is exactly why attackers can hide in it, so treat a hit as \"what was the URL\" rather than as a verdict.\n",
+    "eventid": [],
+    "falsepositives": [
+      "Genuine vendor install scripts (rustup, nvm, docker convenience script)",
+      "Configuration management bootstrapping a node"
+    ],
+    "filename": "rules/execution/linux-download-pipe-to-shell.yml",
+    "id": "fecea633-792e-53ba-bb07-f7f69b1e6974",
+    "level": "medium",
+    "license": "MIT",
+    "logsource": {
+      "product": "linux",
+      "service": "auditd"
+    },
+    "required_fields": [
+      "AuditKey",
+      "ExecveA2"
+    ],
+    "result_type": "event",
+    "rule": [
+      "SELECT * FROM logs WHERE AuditKey LIKE 'tyrian\\_exec' ESCAPE '\\' AND ExecveA2 REGEXP '(curl|wget)[^|]*\\|\\s*(sudo\\s+)?(ba|z|k)?sh'"
+    ],
+    "schema_version": 2,
+    "source": "tyrian",
+    "source_table": "logs",
+    "status": "experimental",
+    "tags": [
+      "attack.execution",
+      "attack.command_and_control",
+      "attack.t1059.004",
+      "attack.t1105"
+    ],
+    "title": "Linux Remote Payload Piped Directly Into a Shell"
+  },
+  {
+    "author": "Tyrian",
+    "channel": [],
+    "description": "Detects reads or writes of /etc/shadow and /etc/gshadow by an interactive login. The audit rule that feeds this is already filtered to auid>=1000, so normal authentication by daemons (which run with auid unset) does not reach it. A hit is someone at a keyboard reading the hashes.\n",
+    "eventid": [],
+    "falsepositives": [
+      "An administrator running passwd, chage or usermod interactively",
+      "Backup and configuration-audit tooling running under a human account"
+    ],
+    "filename": "rules/credential-access/linux-shadow-file-access.yml",
+    "id": "0da32f44-d662-521a-b8f4-7edb658754d2",
+    "level": "high",
+    "license": "MIT",
+    "logsource": {
+      "product": "linux",
+      "service": "auditd"
+    },
+    "required_fields": [
+      "AuditKey"
+    ],
+    "result_type": "event",
+    "rule": [
+      "SELECT * FROM logs WHERE AuditKey LIKE 'tyrian\\_shadow' ESCAPE '\\'"
+    ],
+    "schema_version": 2,
+    "source": "tyrian",
+    "source_table": "logs",
+    "status": "experimental",
+    "tags": [
+      "attack.credential_access",
+      "attack.t1003.008"
+    ],
+    "title": "Linux Password Hash File Accessed by a User"
+  },
+  {
+    "author": "Tyrian",
+    "channel": [],
+    "description": "Detects binaries executed out of /tmp, /var/tmp or /dev/shm. Packages install to /usr and /opt, so sustained execution from a scratch directory is either a careless admin or a payload that landed where any user can write. /dev/shm is the strongest of the three: it is memory-backed and leaves no disk artefact.\n",
+    "eventid": [],
+    "falsepositives": [
+      "Package build systems and CI runners that compile and run out of /tmp",
+      "Some installers unpack a helper binary to /tmp and execute it once"
+    ],
+    "filename": "rules/defense-evasion/linux-execution-from-world-writable.yml",
+    "id": "0fb22aaf-ab35-5f61-a4cd-2314fc633480",
+    "level": "high",
+    "license": "MIT",
+    "logsource": {
+      "product": "linux",
+      "service": "auditd"
+    },
+    "required_fields": [
+      "AuditKey",
+      "Image"
+    ],
+    "result_type": "event",
+    "rule": [
+      "SELECT * FROM logs WHERE AuditKey LIKE 'tyrian\\_exec' ESCAPE '\\' AND (Image LIKE '/tmp/%' ESCAPE '\\' OR Image LIKE '/var/tmp/%' ESCAPE '\\' OR Image LIKE '/dev/shm/%' ESCAPE '\\')"
+    ],
+    "schema_version": 2,
+    "source": "tyrian",
+    "source_table": "logs",
+    "status": "experimental",
+    "tags": [
+      "attack.defense_evasion",
+      "attack.execution",
+      "attack.t1036.005"
+    ],
+    "title": "Linux Execution From a World-Writable Directory"
+  },
+  {
+    "author": "Tyrian",
+    "channel": [],
+    "description": "Detects useradd/adduser execution and usermod adding an account to sudo, wheel, admin or root. Creating a second administrator is how an operator converts a stolen session into an account of their own, one that survives the original credential being reset.\n",
+    "eventid": [],
+    "falsepositives": [
+      "Provisioning and configuration management creating service accounts",
+      "Genuine administrator onboarding"
+    ],
+    "filename": "rules/persistence/linux-account-manipulation.yml",
+    "id": "21304832-fb20-557e-8fbe-6e2addd36cb2",
+    "level": "high",
+    "license": "MIT",
+    "logsource": {
+      "product": "linux",
+      "service": "auditd"
+    },
+    "required_fields": [
+      "AuditKey",
+      "ExecveA2",
+      "Image"
+    ],
+    "result_type": "event",
+    "rule": [
+      "SELECT * FROM logs WHERE (AuditKey LIKE 'tyrian\\_exec' ESCAPE '\\' AND (Image LIKE '%/useradd' ESCAPE '\\' OR Image LIKE '%/adduser' ESCAPE '\\')) OR (AuditKey LIKE 'tyrian\\_exec' ESCAPE '\\' AND (Image LIKE '%/usermod' ESCAPE '\\' OR Image LIKE '%/gpasswd' ESCAPE '\\') AND (ExecveA2 LIKE '%sudo%' ESCAPE '\\' OR ExecveA2 LIKE '%wheel%' ESCAPE '\\' OR ExecveA2 LIKE '%admin%' ESCAPE '\\' OR ExecveA2 LIKE '%root%' ESCAPE '\\')) OR AuditKey LIKE 'tyrian\\_passwd' ESCAPE '\\'"
+    ],
+    "schema_version": 2,
+    "source": "tyrian",
+    "source_table": "logs",
+    "status": "experimental",
+    "tags": [
+      "attack.persistence",
+      "attack.privilege_escalation",
+      "attack.t1136.001",
+      "attack.t1098"
+    ],
+    "title": "Linux Account Created or Added to a Privileged Group"
+  },
+  {
+    "author": "Tyrian",
+    "channel": [],
+    "description": "Detects writes to an authorized_keys file. Appending a public key is the quietest durable backdoor on Linux: it survives reboots and password rotation, needs no malware on disk, and looks like ordinary administration in every log except this one. Pair a hit with \"who owns that key\".\n",
+    "eventid": [],
+    "falsepositives": [
+      "Configuration management (Ansible, Puppet, cloud-init) distributing keys",
+      "Genuine onboarding of a new administrator"
+    ],
+    "filename": "rules/persistence/linux-ssh-authorized-keys-write.yml",
+    "id": "3d2308ab-d493-5a67-b5d4-cb78465e433a",
+    "level": "high",
+    "license": "MIT",
+    "logsource": {
+      "product": "linux",
+      "service": "auditd"
+    },
+    "required_fields": [
+      "AuditKey",
+      "TargetFilename"
+    ],
+    "result_type": "event",
+    "rule": [
+      "SELECT * FROM logs WHERE AuditKey LIKE 'tyrian\\_ssh\\_keys%' ESCAPE '\\' AND TargetFilename LIKE '%authorized\\_keys%' ESCAPE '\\'"
+    ],
+    "schema_version": 2,
+    "source": "tyrian",
+    "source_table": "logs",
+    "status": "experimental",
+    "tags": [
+      "attack.persistence",
+      "attack.t1098.004"
+    ],
+    "title": "Linux SSH authorized_keys Modified"
+  },
+  {
+    "author": "Tyrian",
+    "channel": [],
+    "description": "Detects unlink or rename of files under /var/log by an interactive user. The feeding audit rule watches deletion syscalls specifically rather than writes, because a write watch on /var/log fires on every log line and is unusable. An attacker clearing tracks removes or truncates; both show up here.\n",
+    "eventid": [],
+    "falsepositives": [
+      "An administrator manually clearing disk space",
+      "logrotate run by hand under a user account rather than by its timer"
+    ],
+    "filename": "rules/defense-evasion/linux-log-deletion.yml",
+    "id": "5d937203-dbbf-5330-8e6b-c81c8deb50ec",
+    "level": "high",
+    "license": "MIT",
+    "logsource": {
+      "product": "linux",
+      "service": "auditd"
+    },
+    "required_fields": [
+      "AuditKey"
+    ],
+    "result_type": "event",
+    "rule": [
+      "SELECT * FROM logs WHERE AuditKey LIKE 'tyrian\\_logdel' ESCAPE '\\'"
+    ],
+    "schema_version": 2,
+    "source": "tyrian",
+    "source_table": "logs",
+    "status": "experimental",
+    "tags": [
+      "attack.defense_evasion",
+      "attack.t1070.002"
+    ],
+    "title": "Linux Log Files Deleted From /var/log"
+  },
+  {
+    "author": "Tyrian",
+    "channel": [],
+    "description": "Detects writes to the system cron surfaces: /etc/crontab, the cron.d and cron.<interval> drop-in directories, and the per-user spool. Cron remains the most common Linux persistence mechanism because it is present everywhere and needs no privileges beyond the user's own crontab.\n",
+    "eventid": [],
+    "falsepositives": [
+      "Package installs that drop a cron.d file (logrotate, certbot, backup agents)",
+      "Configuration management managing scheduled jobs"
+    ],
+    "filename": "rules/persistence/linux-cron-persistence.yml",
+    "id": "6b26ebd4-99d7-5e79-a712-1f416ce8c4f9",
+    "level": "high",
+    "license": "MIT",
+    "logsource": {
+      "product": "linux",
+      "service": "auditd"
+    },
+    "required_fields": [
+      "AuditKey"
+    ],
+    "result_type": "event",
+    "rule": [
+      "SELECT * FROM logs WHERE AuditKey LIKE 'tyrian\\_cron' ESCAPE '\\'"
+    ],
+    "schema_version": 2,
+    "source": "tyrian",
+    "source_table": "logs",
+    "status": "experimental",
+    "tags": [
+      "attack.persistence",
+      "attack.execution",
+      "attack.t1053.003"
+    ],
+    "title": "Linux Scheduled Task Persistence via cron"
+  },
+  {
+    "author": "Tyrian",
+    "channel": [],
+    "description": "Detects changes to /etc/sudoers or a drop-in under /etc/sudoers.d. A single NOPASSWD ALL line converts a foothold into permanent root that survives reboots and looks legitimate to anyone not diffing the file. This is a small, high-value surface: alert on every change and reconcile against your change record.\n",
+    "eventid": [],
+    "falsepositives": [
+      "Configuration management distributing sudo policy",
+      "Package installs that drop a sudoers.d file"
+    ],
+    "filename": "rules/privilege-escalation/linux-sudoers-modification.yml",
+    "id": "6ba98efb-6dda-5591-bca6-5bfa0028a09c",
+    "level": "high",
+    "license": "MIT",
+    "logsource": {
+      "product": "linux",
+      "service": "auditd"
+    },
+    "required_fields": [
+      "AuditKey"
+    ],
+    "result_type": "event",
+    "rule": [
+      "SELECT * FROM logs WHERE AuditKey LIKE 'tyrian\\_sudoers' ESCAPE '\\'"
+    ],
+    "schema_version": 2,
+    "source": "tyrian",
+    "source_table": "logs",
+    "status": "experimental",
+    "tags": [
+      "attack.privilege_escalation",
+      "attack.persistence",
+      "attack.t1548.003"
+    ],
+    "title": "Linux sudoers Policy Modified"
+  },
+  {
+    "author": "Tyrian",
+    "channel": [],
+    "description": "Detects writes to systemd unit directories. A unit file gives an attacker root-level execution on every boot with automatic restart, supervised by init itself, which is why it has largely replaced rc.local and init scripts as the Linux persistence of choice.\n",
+    "eventid": [],
+    "falsepositives": [
+      "Package installation and updates, which legitimately write unit files",
+      "Configuration management deploying services"
+    ],
+    "filename": "rules/persistence/linux-systemd-service-persistence.yml",
+    "id": "a2ce02b0-4a61-574d-9cfc-9c6d52daba76",
+    "level": "high",
+    "license": "MIT",
+    "logsource": {
+      "product": "linux",
+      "service": "auditd"
+    },
+    "required_fields": [
+      "AuditKey"
+    ],
+    "result_type": "event",
+    "rule": [
+      "SELECT * FROM logs WHERE AuditKey LIKE 'tyrian\\_systemd' ESCAPE '\\'"
+    ],
+    "schema_version": 2,
+    "source": "tyrian",
+    "source_table": "logs",
+    "status": "experimental",
+    "tags": [
+      "attack.persistence",
+      "attack.privilege_escalation",
+      "attack.t1543.002"
+    ],
+    "title": "Linux systemd Unit Created or Modified"
+  },
+  {
+    "author": "Tyrian",
+    "channel": [],
+    "description": "Detects the standard routes out of a container onto its host: nsenter against PID 1's namespaces, a container started with --privileged, and any process handling the Docker socket. A mounted docker.sock is a full host takeover primitive, because whoever can talk to it can start a privileged container.\n",
+    "eventid": [],
+    "falsepositives": [
+      "CI runners and build tooling that legitimately need privileged containers",
+      "Monitoring agents that read the Docker socket by design"
+    ],
+    "filename": "rules/privilege-escalation/linux-container-escape.yml",
+    "id": "2a55340f-34b2-553f-a630-035c1271c42d",
+    "level": "critical",
+    "license": "MIT",
+    "logsource": {
+      "product": "linux",
+      "service": "auditd"
+    },
+    "required_fields": [
+      "AuditKey",
+      "ExecveA1",
+      "ExecveA2",
+      "Image"
+    ],
+    "result_type": "event",
+    "rule": [
+      "SELECT * FROM logs WHERE (AuditKey LIKE 'tyrian\\_exec' ESCAPE '\\' AND Image LIKE '%/nsenter' ESCAPE '\\' AND ExecveA1 LIKE '%--target%' ESCAPE '\\') OR (AuditKey LIKE 'tyrian\\_exec' ESCAPE '\\' AND ExecveA2 LIKE '%docker.sock%' ESCAPE '\\') OR (AuditKey LIKE 'tyrian\\_exec' ESCAPE '\\' AND (Image LIKE '%/docker' ESCAPE '\\' OR Image LIKE '%/podman' ESCAPE '\\') AND ExecveA2 LIKE '%--privileged%' ESCAPE '\\')"
+    ],
+    "schema_version": 2,
+    "source": "tyrian",
+    "source_table": "logs",
+    "status": "experimental",
+    "tags": [
+      "attack.privilege_escalation",
+      "attack.t1611"
+    ],
+    "title": "Linux Container Escape Attempt"
+  },
+  {
+    "author": "Tyrian",
+    "channel": [],
+    "description": "Detects the three reverse shells that show up in almost every Linux intrusion: bash writing to /dev/tcp, netcat with command execution, and a Python one-liner that spawns a pty over a socket. auditd records argv split across EXECVE a0..aN, so the payload lands in a2 when the shell is invoked as `sh -c '<payload>'`.\n",
+    "eventid": [],
+    "falsepositives": [
+      "Administrators using netcat for legitimate port checks (rarely with -e)",
+      "Monitoring scripts that health-check TCP ports through /dev/tcp"
+    ],
+    "filename": "rules/execution/linux-reverse-shell.yml",
+    "id": "a76ceef8-90f1-515b-a049-d6f89d73df24",
+    "level": "critical",
+    "license": "MIT",
+    "logsource": {
+      "product": "linux",
+      "service": "auditd"
+    },
+    "required_fields": [
+      "AuditKey",
+      "ExecveA1",
+      "ExecveA2",
+      "Image"
+    ],
+    "result_type": "event",
+    "rule": [
+      "SELECT * FROM logs WHERE (AuditKey LIKE 'tyrian\\_exec' ESCAPE '\\' AND ExecveA2 LIKE '%/dev/tcp/%' ESCAPE '\\') OR (AuditKey LIKE 'tyrian\\_exec' ESCAPE '\\' AND (Image LIKE '%/nc' ESCAPE '\\' OR Image LIKE '%/ncat' ESCAPE '\\' OR Image LIKE '%/netcat' ESCAPE '\\' OR Image LIKE '%/nc.openbsd' ESCAPE '\\' OR Image LIKE '%/nc.traditional' ESCAPE '\\') AND ExecveA1 LIKE '%-e%' ESCAPE '\\') OR (AuditKey LIKE 'tyrian\\_exec' ESCAPE '\\' AND (ExecveA2 LIKE '%socket%' ESCAPE '\\' AND ExecveA2 LIKE '%pty.spawn%' ESCAPE '\\'))"
+    ],
+    "schema_version": 2,
+    "source": "tyrian",
+    "source_table": "logs",
+    "status": "experimental",
+    "tags": [
+      "attack.execution",
+      "attack.t1059.004"
+    ],
+    "title": "Linux Reverse Shell Execution"
+  },
+  {
+    "author": "Tyrian",
+    "channel": [],
+    "description": "Detects writes to /etc/ld.so.preload or the ld.so.conf.d directory. A library listed in ld.so.preload is loaded into every dynamically linked process on the host, which is how most Linux userland rootkits hook libc and hide their own files and connections. This file does not exist on a stock system, so its creation is close to a binary indicator.\n",
+    "eventid": [],
+    "falsepositives": [
+      "A small number of commercial agents legitimately preload a library",
+      "Package installs adding a path under ld.so.conf.d"
+    ],
+    "filename": "rules/persistence/linux-ld-preload-hijack.yml",
+    "id": "bd3b962a-26a8-5cbe-ae16-e866b6acea87",
+    "level": "critical",
+    "license": "MIT",
+    "logsource": {
+      "product": "linux",
+      "service": "auditd"
+    },
+    "required_fields": [
+      "AuditKey"
+    ],
+    "result_type": "event",
+    "rule": [
+      "SELECT * FROM logs WHERE AuditKey LIKE 'tyrian\\_ldpreload' ESCAPE '\\'"
+    ],
+    "schema_version": 2,
+    "source": "tyrian",
+    "source_table": "logs",
+    "status": "experimental",
+    "tags": [
+      "attack.persistence",
+      "attack.privilege_escalation",
+      "attack.defense_evasion",
+      "attack.t1574.006"
+    ],
+    "title": "Linux Shared Library Hijack via ld.so.preload"
+  },
+  {
+    "author": "Tyrian",
+    "channel": [],
+    "description": "Detects execution of auditctl or auditd and changes to /etc/audit. Disabling the audit daemon is the natural first move for an attacker who realises they are being recorded, and it blinds every other Linux rule in this pack. Treat a stop or ruleset flush that you cannot tie to a change ticket as an incident.\n",
+    "eventid": [],
+    "falsepositives": [
+      "Legitimate audit policy deployment by configuration management",
+      "Patching that restarts auditd"
+    ],
+    "filename": "rules/defense-evasion/linux-auditd-tampering.yml",
+    "id": "e75e78ff-05cb-5e10-b723-a1d964844370",
+    "level": "critical",
+    "license": "MIT",
+    "logsource": {
+      "product": "linux",
+      "service": "auditd"
+    },
+    "required_fields": [
+      "AuditKey",
+      "ExecveA2",
+      "Image"
+    ],
+    "result_type": "event",
+    "rule": [
+      "SELECT * FROM logs WHERE AuditKey LIKE 'tyrian\\_auditcfg' ESCAPE '\\' OR (AuditKey LIKE 'tyrian\\_exec' ESCAPE '\\' AND (Image LIKE '%/systemctl' ESCAPE '\\' OR Image LIKE '%/service' ESCAPE '\\') AND ExecveA2 LIKE '%audit%' ESCAPE '\\')"
+    ],
+    "schema_version": 2,
+    "source": "tyrian",
+    "source_table": "logs",
+    "status": "experimental",
+    "tags": [
+      "attack.defense_evasion",
+      "attack.t1562.001"
+    ],
+    "title": "Linux Audit Subsystem Tampered With"
+  }
+]

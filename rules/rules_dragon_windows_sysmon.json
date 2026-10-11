@@ -1,0 +1,1365 @@
+[
+  {
+    "author": "Dragon-ThreatResearchHQ",
+    "channel": [
+      "Microsoft-Windows-Sysmon/Operational"
+    ],
+    "description": "Detects command-line or script-driven WMI queries targeting root\\SecurityCenter2 to enumerate installed antivirus products, characteristic of Kimsuky ReconShark.",
+    "eventid": [
+      1
+    ],
+    "falsepositives": [
+      "Legitimate IT management auditing scripts (e.g. SCCM/Tanium/Intune inventory queries)."
+    ],
+    "filename": "Detection-Rules/Sigma/Windows/Process-Creation/proc_creation_win_kimsuky_wmi_security_center.yml",
+    "id": "f1849102-39fe-48aa-b921-957e492fa619",
+    "level": "medium",
+    "license": "MIT",
+    "logsource": {
+      "category": "process_creation",
+      "product": "windows",
+      "service": "sysmon"
+    },
+    "required_fields": [
+      "Channel",
+      "CommandLine",
+      "EventID"
+    ],
+    "result_type": "event",
+    "rule": [
+      "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=1 AND (CommandLine LIKE '%SecurityCenter2%' ESCAPE '\\' AND CommandLine LIKE '%AntiVirusProduct%' ESCAPE '\\'))"
+    ],
+    "schema_version": 2,
+    "source": "dragon",
+    "source_table": "logs",
+    "status": "experimental",
+    "tags": [
+      "attack.discovery",
+      "attack.t1518.001",
+      "attack.execution",
+      "attack.t1047"
+    ],
+    "title": "Suspicious WMI SecurityCenter Query (Kimsuky ReconShark)"
+  },
+  {
+    "author": "Dragon Threat Research HQ",
+    "channel": [
+      "Microsoft-Windows-Sysmon/Operational"
+    ],
+    "description": "Detects rundll32.exe executing a dynamic-link library located in user-writable paths (AppData, Temp, Public) via ordinal export call (e.g.",
+    "eventid": [
+      1
+    ],
+    "falsepositives": [
+      "Custom in-house or legacy business applications installed in user space calling ordinals (rare)"
+    ],
+    "filename": "Detection-Rules/Sigma/Windows/Process-Creation/proc_creation_win_latrodectus_rundll32_temp_ordinal.yml",
+    "id": "1a2b3c4d-5e6f-7a8b-9c0d-ef0123456789",
+    "level": "high",
+    "license": "MIT",
+    "logsource": {
+      "category": "process_creation",
+      "product": "windows",
+      "service": "sysmon"
+    },
+    "required_fields": [
+      "Channel",
+      "CommandLine",
+      "EventID",
+      "Image"
+    ],
+    "result_type": "event",
+    "rule": [
+      "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=1 AND (Image LIKE '%\\\\rundll32.exe' ESCAPE '\\' AND (CommandLine LIKE '%\\\\AppData\\\\Local\\\\%' ESCAPE '\\' OR CommandLine LIKE '%\\\\AppData\\\\Roaming\\\\%' ESCAPE '\\' OR CommandLine LIKE '%C:\\\\Users\\\\Public\\\\%' ESCAPE '\\' OR CommandLine LIKE '%\\\\Temp\\\\%' ESCAPE '\\') AND (CommandLine LIKE '%.dll%' ESCAPE '\\' AND CommandLine LIKE '%#1%' ESCAPE '\\')))"
+    ],
+    "schema_version": 2,
+    "source": "dragon",
+    "source_table": "logs",
+    "status": "stable",
+    "tags": [
+      "attack.execution",
+      "attack.t1218.011",
+      "threat.latrodectus"
+    ],
+    "title": "Rundll32 Execution from User Writable Directories with Ordinal (Latrodectus Pattern)"
+  },
+  {
+    "author": "Dragon-ThreatResearchHQ",
+    "channel": [
+      "Microsoft-Windows-Sysmon/Operational"
+    ],
+    "description": "Detects command line executions or pipe references matching FamousSparrow's SparroWocky backdoor utilizing \\\\.\\pipe\\ccpipe for process I/O redirection.",
+    "eventid": [
+      1
+    ],
+    "falsepositives": [
+      "Highly unlikely unless software explicitly uses identical custom pipe name"
+    ],
+    "filename": "Detection-Rules/Sigma/Windows/Process-Creation/proc_creation_win_famoussparrow_sparrowocky_pipe.yml",
+    "id": "1a9f82b4-52d1-419b-a012-781920fcb128",
+    "level": "high",
+    "license": "MIT",
+    "logsource": {
+      "category": "process_creation",
+      "product": "windows",
+      "service": "sysmon"
+    },
+    "required_fields": [
+      "Channel",
+      "CommandLine",
+      "EventID"
+    ],
+    "result_type": "event",
+    "rule": [
+      "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=1 AND (CommandLine LIKE '%ccpipe%' ESCAPE '\\' OR CommandLine LIKE '%\\\\pipe\\\\ccpipe%' ESCAPE '\\'))"
+    ],
+    "schema_version": 2,
+    "source": "dragon",
+    "source_table": "logs",
+    "status": "experimental",
+    "tags": [
+      "attack.execution",
+      "attack.defense_evasion",
+      "attack.t1059.003"
+    ],
+    "title": "FamousSparrow SparroWocky Named Pipe Activity"
+  },
+  {
+    "author": "Dragon Threat Research HQ",
+    "channel": [
+      "Microsoft-Windows-Sysmon/Operational"
+    ],
+    "description": "Detects command-line execution or network activity involving default Havoc C2 port 40056, or execution of binaries named demon.x64 or demon.bin.",
+    "eventid": [
+      1
+    ],
+    "falsepositives": [
+      "Legitimate penetration testing exercises utilizing Havoc C2"
+    ],
+    "filename": "Detection-Rules/Sigma/Windows/Process-Creation/proc_creation_win_havoc_demon_indirect_syscalls.yml",
+    "id": "2d3e4f5a-6b7c-8d9e-0f1a-bc2345678901",
+    "level": "high",
+    "license": "MIT",
+    "logsource": {
+      "category": "process_creation",
+      "product": "windows",
+      "service": "sysmon"
+    },
+    "required_fields": [
+      "Channel",
+      "CommandLine",
+      "EventID"
+    ],
+    "result_type": "event",
+    "rule": [
+      "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=1 AND (CommandLine LIKE '%demon.x64%' ESCAPE '\\' OR CommandLine LIKE '%demon.bin%' ESCAPE '\\' OR CommandLine LIKE '%:40056%' ESCAPE '\\'))"
+    ],
+    "schema_version": 2,
+    "source": "dragon",
+    "source_table": "logs",
+    "status": "stable",
+    "tags": [
+      "attack.command_and_control",
+      "attack.defense_evasion",
+      "tool.havoc"
+    ],
+    "title": "Suspicious Havoc C2 Teamserver Operator or Demon Activity"
+  },
+  {
+    "author": "Dragon-ThreatResearchHQ",
+    "channel": [
+      "Microsoft-Windows-Sysmon/Operational"
+    ],
+    "description": "Detects service creation or command execution referencing Head Mare's PhantomGraph modules SysExcSvc and SysReadSvc or TrueConf installer tampering.",
+    "eventid": [
+      1
+    ],
+    "falsepositives": [
+      "None known"
+    ],
+    "filename": "Detection-Rules/Sigma/Windows/Process-Creation/proc_creation_win_headmare_phantomgraph_services.yml",
+    "id": "3c8e7192-5b8d-4b8a-a438-6619a924cd01",
+    "level": "high",
+    "license": "MIT",
+    "logsource": {
+      "category": "process_creation",
+      "product": "windows",
+      "service": "sysmon"
+    },
+    "required_fields": [
+      "Channel",
+      "CommandLine",
+      "EventID"
+    ],
+    "result_type": "event",
+    "rule": [
+      "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=1 AND ((CommandLine LIKE '%SysExcSvc%' ESCAPE '\\' OR CommandLine LIKE '%SysReadSvc%' ESCAPE '\\' OR CommandLine LIKE '%graphi-refresh.dat%' ESCAPE '\\' OR CommandLine LIKE '%0340F119-A598-4ed9-B0AC-6F6A12D3E755%' ESCAPE '\\') OR (CommandLine LIKE '%cmd\\_cmd\\_%' ESCAPE '\\' AND CommandLine LIKE '%.bat' ESCAPE '\\')))"
+    ],
+    "schema_version": 2,
+    "source": "dragon",
+    "source_table": "logs",
+    "status": "experimental",
+    "tags": [
+      "attack.persistence",
+      "attack.command_and_control",
+      "attack.t1543.003",
+      "attack.t1102.002"
+    ],
+    "title": "Head Mare PhantomGraph Service Installation & Execution"
+  },
+  {
+    "author": "Dragon Threat Research HQ",
+    "channel": [
+      "Microsoft-Windows-Sysmon/Operational"
+    ],
+    "description": "Detects process or file events involving default named pipe patterns created by the BishopFox Sliver C2 implant (e.g. sliver-* or bp_*).",
+    "eventid": [
+      17,
+      18
+    ],
+    "falsepositives": [
+      "Unlikely in production environments unless legitimate red team operations are underway"
+    ],
+    "filename": "Detection-Rules/Sigma/Windows/Process-Creation/proc_creation_win_sliver_c2_named_pipes.yml",
+    "id": "48d1c720-30be-4a11-a8d2-43bb221199c0",
+    "level": "high",
+    "license": "MIT",
+    "logsource": {
+      "category": "pipe_created",
+      "product": "windows",
+      "service": "sysmon"
+    },
+    "required_fields": [
+      "Channel",
+      "EventID",
+      "PipeName"
+    ],
+    "result_type": "event",
+    "rule": [
+      "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND ((EventID=17 OR EventID=18) AND (PipeName LIKE '%\\\\sliver-%' ESCAPE '\\' OR PipeName LIKE '%\\\\bp\\_%' ESCAPE '\\'))"
+    ],
+    "schema_version": 2,
+    "source": "dragon",
+    "source_table": "logs",
+    "status": "stable",
+    "tags": [
+      "attack.defense_evasion",
+      "attack.command_and_control",
+      "attack.t1055",
+      "tool.sliver"
+    ],
+    "title": "BishopFox Sliver C2 Default Named Pipe Activity"
+  },
+  {
+    "author": "Dragon-ThreatResearchHQ",
+    "channel": [
+      "Microsoft-Windows-Sysmon/Operational"
+    ],
+    "description": "Detects Node.js processes spawned from hidden .cache directories or executing trojanized npm packages (colorized_terminal, pretty-log), characteristic of Mirage Kitten NodeRabbit infections.",
+    "eventid": [
+      1
+    ],
+    "falsepositives": [
+      "Highly uncommon legitimate build tools using identical temporary hash folders"
+    ],
+    "filename": "Detection-Rules/Sigma/Windows/Process-Creation/proc_creation_win_miragekitten_noderabbit.yml",
+    "id": "4e7192a5-d812-421b-8531-1829da48b110",
+    "level": "high",
+    "license": "MIT",
+    "logsource": {
+      "category": "process_creation",
+      "product": "windows",
+      "service": "sysmon"
+    },
+    "required_fields": [
+      "Channel",
+      "CommandLine",
+      "EventID",
+      "Image"
+    ],
+    "result_type": "event",
+    "rule": [
+      "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=1 AND ((Image LIKE '%\\\\node.exe' ESCAPE '\\' OR Image LIKE '%\\\\node' ESCAPE '\\') AND (CommandLine LIKE '%.cache%' ESCAPE '\\' OR CommandLine LIKE '%colorized\\_terminal%' ESCAPE '\\' OR CommandLine LIKE '%pretty-log%' ESCAPE '\\' OR CommandLine LIKE '%320697f1%' ESCAPE '\\')))"
+    ],
+    "schema_version": 2,
+    "source": "dragon",
+    "source_table": "logs",
+    "status": "experimental",
+    "tags": [
+      "attack.execution",
+      "attack.defense_evasion",
+      "attack.t1059.007",
+      "attack.t1195.001"
+    ],
+    "title": "Mirage Kitten NodeRabbit RAT Process Execution"
+  },
+  {
+    "author": "Dragon-ThreatResearchHQ",
+    "channel": [
+      "Microsoft-Windows-Sysmon/Operational"
+    ],
+    "description": "Detects process executions or file operations matching Lyceum's HOLLOWGRAPH backdoor manipulating logAzure.txt or connecting to cloudlanecdn infrastructure.",
+    "eventid": [
+      1
+    ],
+    "falsepositives": [
+      "Administrative scripts referencing exact logAzure string (rare)"
+    ],
+    "filename": "Detection-Rules/Sigma/Windows/Process-Creation/proc_creation_win_lyceum_hollowgraph_artifacts.yml",
+    "id": "5e91da21-f09b-449e-b873-1996c5678129",
+    "level": "high",
+    "license": "MIT",
+    "logsource": {
+      "category": "process_creation",
+      "product": "windows",
+      "service": "sysmon"
+    },
+    "required_fields": [
+      "Channel",
+      "CommandLine",
+      "EventID"
+    ],
+    "result_type": "event",
+    "rule": [
+      "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=1 AND (CommandLine LIKE '%logAzure.txt%' ESCAPE '\\' OR CommandLine LIKE '%cloudlanecdn.com%' ESCAPE '\\' OR CommandLine LIKE '%\\_;;\\_%' ESCAPE '\\'))"
+    ],
+    "schema_version": 2,
+    "source": "dragon",
+    "source_table": "logs",
+    "status": "experimental",
+    "tags": [
+      "attack.command_and_control",
+      "attack.exfiltration",
+      "attack.t1102.002",
+      "attack.t1071.004"
+    ],
+    "title": "Lyceum HOLLOWGRAPH Execution & Configuration Artifacts"
+  },
+  {
+    "author": "Dragon-ThreatResearchHQ",
+    "channel": [
+      "Microsoft-Windows-Sysmon/Operational"
+    ],
+    "description": "Detects command-line parameters or process execution referencing default Mythic Apollo named pipes and mesh communication endpoints.",
+    "eventid": [
+      1
+    ],
+    "falsepositives": [
+      "Unlikely outside of authorized red team or adversary emulation engagements."
+    ],
+    "filename": "Detection-Rules/Sigma/Windows/Process-Creation/proc_creation_win_mythic_apollo_named_pipe.yml",
+    "id": "61fa3829-0bc9-47aa-a631-289cf0012ba4",
+    "level": "high",
+    "license": "MIT",
+    "logsource": {
+      "category": "process_creation",
+      "product": "windows",
+      "service": "sysmon"
+    },
+    "required_fields": [
+      "Channel",
+      "CommandLine",
+      "EventID"
+    ],
+    "result_type": "event",
+    "rule": [
+      "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=1 AND (CommandLine LIKE '%apollo\\_smb%' ESCAPE '\\' OR CommandLine LIKE '%mythic\\_mesh%' ESCAPE '\\' OR CommandLine LIKE '%\\\\pipe\\\\apollo%' ESCAPE '\\'))"
+    ],
+    "schema_version": 2,
+    "source": "dragon",
+    "source_table": "logs",
+    "status": "experimental",
+    "tags": [
+      "attack.command_and_control",
+      "attack.t1572",
+      "attack.lateral_movement",
+      "attack.t1021.002"
+    ],
+    "title": "Mythic Apollo Named Pipe or Mesh Activity"
+  },
+  {
+    "author": "Dragon-ThreatResearchHQ",
+    "channel": [
+      "Microsoft-Windows-Sysmon/Operational"
+    ],
+    "description": "Detects command-line executions or script invocations by PowerShell or WScript communicating with ephemeral tunneling domains (trycloudflare.com, devtunnels.ms, loophole.site, workers.dev), characteristic of Gamaredon (Shuckworm) operations.",
+    "eventid": [
+      1
+    ],
+    "falsepositives": [
+      "Rare administrative testing of Cloudflare workers via PowerShell"
+    ],
+    "filename": "Detection-Rules/Sigma/Windows/Process-Creation/proc_creation_win_gamaredon_tunnel_worker_c2.yml",
+    "id": "7b21849a-5812-4c8a-9214-99182a5c9f12",
+    "level": "high",
+    "license": "MIT",
+    "logsource": {
+      "category": "process_creation",
+      "product": "windows",
+      "service": "sysmon"
+    },
+    "required_fields": [
+      "Channel",
+      "CommandLine",
+      "EventID",
+      "Image"
+    ],
+    "result_type": "event",
+    "rule": [
+      "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=1 AND ((Image LIKE '%\\\\powershell.exe' ESCAPE '\\' OR Image LIKE '%\\\\wscript.exe' ESCAPE '\\' OR Image LIKE '%\\\\cscript.exe' ESCAPE '\\') AND (CommandLine LIKE '%.trycloudflare.com%' ESCAPE '\\' OR CommandLine LIKE '%.workers.dev%' ESCAPE '\\' OR CommandLine LIKE '%.loophole.site%' ESCAPE '\\' OR CommandLine LIKE '%api.telegra.ph%' ESCAPE '\\')))"
+    ],
+    "schema_version": 2,
+    "source": "dragon",
+    "source_table": "logs",
+    "status": "experimental",
+    "tags": [
+      "attack.command_and_control",
+      "attack.t1572",
+      "attack.t1102.002"
+    ],
+    "title": "Gamaredon Ephemeral Tunnel & Worker C2 Communication"
+  },
+  {
+    "author": "Dragon Threat Research HQ",
+    "channel": [
+      "Microsoft-Windows-Sysmon/Operational"
+    ],
+    "description": "Detects PowerShell executions initiated directly from the Windows Run dialog (explorer.exe as parent) utilizing base64 encoding, hidden window styles, or download strings characteristic of the ClickFix (Fake CAPTCHA / Browser Update) social engineering delivery technique used by Vidar, Lumma, and other stealers.",
+    "eventid": [
+      1
+    ],
+    "falsepositives": [
+      "Highly anomalous for standard enterprise users to paste hidden PowerShell download strings into the Windows Run box."
+    ],
+    "filename": "Detection-Rules/Sigma/Windows/Process-Creation/proc_creation_win_clickfix_powershell_execution.yml",
+    "id": "7b8a1c90-410e-48a2-9d3e-908712345678",
+    "level": "high",
+    "license": "MIT",
+    "logsource": {
+      "category": "process_creation",
+      "product": "windows",
+      "service": "sysmon"
+    },
+    "required_fields": [
+      "Channel",
+      "CommandLine",
+      "EventID",
+      "Image",
+      "ParentImage"
+    ],
+    "result_type": "event",
+    "rule": [
+      "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=1 AND (ParentImage LIKE '%\\\\explorer.exe' ESCAPE '\\' AND ((Image LIKE '%\\\\powershell.exe' ESCAPE '\\' OR Image LIKE '%\\\\pwsh.exe' ESCAPE '\\') AND CommandLine LIKE '%-windowstyle hidden%' ESCAPE '\\' AND (CommandLine LIKE '%iex%' ESCAPE '\\' OR CommandLine LIKE '%Invoke-Expression%' ESCAPE '\\' OR CommandLine LIKE '%DownloadString%' ESCAPE '\\' OR CommandLine LIKE '%FromBase64String%' ESCAPE '\\' OR CommandLine LIKE '%mshta%' ESCAPE '\\'))))"
+    ],
+    "schema_version": 2,
+    "source": "dragon",
+    "source_table": "logs",
+    "status": "stable",
+    "tags": [
+      "attack.execution",
+      "attack.t1059.001",
+      "attack.initial_access",
+      "attack.t1204.002"
+    ],
+    "title": "Suspicious PowerShell Execution via ClickFix / Run Dialog Prompt"
+  },
+  {
+    "author": "Dragon-ThreatResearchHQ",
+    "channel": [
+      "Microsoft-Windows-Sysmon/Operational"
+    ],
+    "description": "Detects command line executions or proxy invocations exposing internal RDP (port 3389) via Microsoft Dev Tunnels (*.devtunnels.ms), observed in NightEagle APT operations.",
+    "eventid": [
+      1
+    ],
+    "falsepositives": [
+      "Legitimate software developers actively tunneling local RDP (rare in enterprise servers)"
+    ],
+    "filename": "Detection-Rules/Sigma/Windows/Process-Creation/proc_creation_win_nighteagle_devtunnels_rdp.yml",
+    "id": "8b1f2371-d820-435b-8fa2-3715ec20bb91",
+    "level": "high",
+    "license": "MIT",
+    "logsource": {
+      "category": "process_creation",
+      "product": "windows",
+      "service": "sysmon"
+    },
+    "required_fields": [
+      "Channel",
+      "CommandLine",
+      "EventID"
+    ],
+    "result_type": "event",
+    "rule": [
+      "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=1 AND ((CommandLine LIKE '%devtunnels.ms%' ESCAPE '\\' OR CommandLine LIKE '%devtunnel%' ESCAPE '\\') AND (CommandLine LIKE '%3389%' ESCAPE '\\' OR CommandLine LIKE '%host -p 3389%' ESCAPE '\\')))"
+    ],
+    "schema_version": 2,
+    "source": "dragon",
+    "source_table": "logs",
+    "status": "experimental",
+    "tags": [
+      "attack.command_and_control",
+      "attack.lateral_movement",
+      "attack.t1572",
+      "attack.t1021.001"
+    ],
+    "title": "Microsoft Dev Tunnels RDP Exfiltration"
+  },
+  {
+    "author": "Dragon Threat Research HQ",
+    "channel": [
+      "Microsoft-Windows-Sysmon/Operational"
+    ],
+    "description": "Detects the creation or loading of known vulnerable signed drivers (e.g., Process Explorer procexp.sys, Process Hacker kprocesshacker.sys, or Gigabyte gdrv.sys) used in Bring-Your-Own-Vulnerable-Driver (BYOVD) attacks to forcefully terminate security sensors from kernel space, a prominent technique utilized by Scattered Spider and ransomware syndicates.",
+    "eventid": [
+      6
+    ],
+    "falsepositives": [
+      "Authorized use of Sysinternals Process Explorer by system administrators for diagnostic performance tracing"
+    ],
+    "filename": "Detection-Rules/Sigma/Windows/Process-Creation/proc_creation_win_byovd_edr_killer_driver_load.yml",
+    "id": "8d7c6b5a-4e3f-2a1b-0c9d-ef8901234567",
+    "level": "high",
+    "license": "MIT",
+    "logsource": {
+      "category": "driver_load",
+      "product": "windows",
+      "service": "sysmon"
+    },
+    "required_fields": [
+      "Channel",
+      "EventID",
+      "ImageLoaded"
+    ],
+    "result_type": "event",
+    "rule": [
+      "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=6 AND (ImageLoaded LIKE '%\\\\procexp.sys' ESCAPE '\\' OR ImageLoaded LIKE '%\\\\kprocesshacker.sys' ESCAPE '\\' OR ImageLoaded LIKE '%\\\\gdrv.sys' ESCAPE '\\' OR ImageLoaded LIKE '%\\\\mhyprot2.sys' ESCAPE '\\' OR ImageLoaded LIKE '%\\\\dbutil\\_2\\_3.sys' ESCAPE '\\'))"
+    ],
+    "schema_version": 2,
+    "source": "dragon",
+    "source_table": "logs",
+    "status": "stable",
+    "tags": [
+      "attack.defense_evasion",
+      "attack.privilege_escalation",
+      "attack.t1068",
+      "attack.t1562.001",
+      "threat.scattered_spider"
+    ],
+    "title": "Vulnerable Kernel Driver Registration for EDR Termination (BYOVD / AuKill)"
+  },
+  {
+    "author": "Dragon-ThreatResearchHQ",
+    "channel": [
+      "Microsoft-Windows-Sysmon/Operational"
+    ],
+    "description": "Detects command execution invoking native Windows OpenSSH ssh.exe to create a reverse tunnel to an external host with strict host key checking disabled, characteristic of Tortoiseshell (Imperial Kitten) persistence.",
+    "eventid": [
+      1
+    ],
+    "falsepositives": [
+      "Highly specialized administrative or developer tunnels (rarely bypassing strict host keys under systemprofile)"
+    ],
+    "filename": "Detection-Rules/Sigma/Windows/Process-Creation/proc_creation_win_tortoiseshell_reverse_ssh.yml",
+    "id": "9a781b2e-f412-421b-8012-91f1a5b8214f",
+    "level": "high",
+    "license": "MIT",
+    "logsource": {
+      "category": "process_creation",
+      "product": "windows",
+      "service": "sysmon"
+    },
+    "required_fields": [
+      "Channel",
+      "CommandLine",
+      "EventID",
+      "Image"
+    ],
+    "result_type": "event",
+    "rule": [
+      "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=1 AND (Image LIKE '%\\\\ssh.exe' ESCAPE '\\' AND (CommandLine LIKE '%-R %' ESCAPE '\\' AND CommandLine LIKE '%StrictHostKeyChecking=no%' ESCAPE '\\' AND CommandLine LIKE '%UserKnownHostsFile=/dev/null%' ESCAPE '\\')))"
+    ],
+    "schema_version": 2,
+    "source": "dragon",
+    "source_table": "logs",
+    "status": "experimental",
+    "tags": [
+      "attack.command_and_control",
+      "attack.defense_evasion",
+      "attack.t1572"
+    ],
+    "title": "Tortoiseshell OpenSSH Reverse Tunnel Execution"
+  },
+  {
+    "author": "Dragon Threat Research HQ",
+    "channel": [
+      "Microsoft-Windows-Sysmon/Operational"
+    ],
+    "description": "Detects command-line execution of vssadmin, wmic, wbadmin, or PowerShell commands commonly utilized by ransomware families (such as Akira, LockBit, Black Basta) to inhibit system recovery by destroying volume shadow copies.",
+    "eventid": [
+      1
+    ],
+    "falsepositives": [
+      "Legitimate enterprise backup administration scripts (rare without scheduled automation accounts)"
+    ],
+    "filename": "Detection-Rules/Sigma/Windows/Process-Creation/proc_creation_win_ransomware_shadow_copy_deletion.yml",
+    "id": "9a781df0-20f8-410c-99d9-f5efc31c0a01",
+    "level": "high",
+    "license": "MIT",
+    "logsource": {
+      "category": "process_creation",
+      "product": "windows",
+      "service": "sysmon"
+    },
+    "required_fields": [
+      "Channel",
+      "CommandLine",
+      "EventID",
+      "Image"
+    ],
+    "result_type": "event",
+    "rule": [
+      "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=1 AND ((Image LIKE '%\\\\vssadmin.exe' ESCAPE '\\' AND (CommandLine LIKE '%delete%' ESCAPE '\\' AND CommandLine LIKE '%shadows%' ESCAPE '\\')) OR (Image LIKE '%\\\\wmic.exe' ESCAPE '\\' AND (CommandLine LIKE '%shadowcopy%' ESCAPE '\\' AND CommandLine LIKE '%delete%' ESCAPE '\\')) OR (Image LIKE '%\\\\wbadmin.exe' ESCAPE '\\' AND (CommandLine LIKE '%delete%' ESCAPE '\\' AND CommandLine LIKE '%catalog%' ESCAPE '\\')) OR ((Image LIKE '%\\\\powershell.exe' ESCAPE '\\' OR Image LIKE '%\\\\pwsh.exe' ESCAPE '\\') AND (CommandLine LIKE '%Win32\\_ShadowCopy%' ESCAPE '\\' AND CommandLine LIKE '%Delete%' ESCAPE '\\'))))"
+    ],
+    "schema_version": 2,
+    "source": "dragon",
+    "source_table": "logs",
+    "status": "stable",
+    "tags": [
+      "attack.impact",
+      "attack.t1490",
+      "attack.defense_evasion"
+    ],
+    "title": "Volume Shadow Copy Deletion via Common Ransomware Utilities"
+  },
+  {
+    "author": "Dragon Threat Intelligence",
+    "channel": [
+      "Microsoft-Windows-Sysmon/Operational"
+    ],
+    "description": "Detects execution of legitimate or renamed AutoIt interpreters from user-writable directories, characteristic of DarkGate multi-stage loader payloads.",
+    "eventid": [
+      1
+    ],
+    "falsepositives": [
+      "Custom developer or sysadmin automation scripts running AutoIt in user directories"
+    ],
+    "filename": "Detection-Rules/Sigma/Windows/Process-Creation/proc_creation_win_darkgate_autoit_anomaly.yml",
+    "id": "b293c485-8672-4bfc-de12-039485762130",
+    "level": "high",
+    "license": "MIT",
+    "logsource": {
+      "category": "process_creation",
+      "product": "windows",
+      "service": "sysmon"
+    },
+    "required_fields": [
+      "Channel",
+      "CommandLine",
+      "EventID",
+      "Image",
+      "OriginalFileName"
+    ],
+    "result_type": "event",
+    "rule": [
+      "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=1 AND (((Image LIKE '%\\\\autoit3.exe' ESCAPE '\\' OR Image LIKE '%\\\\autoit.exe' ESCAPE '\\' OR Image LIKE '%\\\\autoit3\\_x64.exe' ESCAPE '\\') OR OriginalFileName='AutoIt3.exe') AND (CommandLine LIKE '%\\\\AppData\\\\Local\\\\Temp\\\\%' ESCAPE '\\' OR CommandLine LIKE '%\\\\AppData\\\\Roaming\\\\%' ESCAPE '\\' OR CommandLine LIKE '%\\\\ProgramData\\\\%' ESCAPE '\\' OR CommandLine LIKE '%C:\\\\Users\\\\Public\\\\%' ESCAPE '\\')))"
+    ],
+    "schema_version": 2,
+    "source": "dragon",
+    "source_table": "logs",
+    "status": "experimental",
+    "tags": [
+      "attack.execution",
+      "attack.t1059",
+      "attack.defense_evasion",
+      "attack.t1036.005"
+    ],
+    "title": "DarkGate AutoIt Execution from Suspicious User Path"
+  },
+  {
+    "author": "Dragon-ThreatResearchHQ",
+    "channel": [
+      "Microsoft-Windows-Sysmon/Operational"
+    ],
+    "description": "Detects wscript.exe or cscript.exe spawning PowerShell with hidden or bypass parameters, a classic execution pattern of GootLoader stages.",
+    "eventid": [
+      1
+    ],
+    "falsepositives": [
+      "Rare legacy administrative scripts invoking PowerShell via VBScript/JScript."
+    ],
+    "filename": "Detection-Rules/Sigma/Windows/Process-Creation/proc_creation_win_gootloader_wscript_powershell.yml",
+    "id": "b71d4590-34fa-48ef-910a-319ef4788c0a",
+    "level": "high",
+    "license": "MIT",
+    "logsource": {
+      "category": "process_creation",
+      "product": "windows",
+      "service": "sysmon"
+    },
+    "required_fields": [
+      "Channel",
+      "CommandLine",
+      "EventID",
+      "Image",
+      "ParentImage"
+    ],
+    "result_type": "event",
+    "rule": [
+      "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=1 AND ((ParentImage LIKE '%\\\\wscript.exe' ESCAPE '\\' OR ParentImage LIKE '%\\\\cscript.exe' ESCAPE '\\') AND (Image LIKE '%\\\\powershell.exe' ESCAPE '\\' OR Image LIKE '%\\\\pwsh.exe' ESCAPE '\\') AND (CommandLine LIKE '%-ExecutionPolicy Bypass%' ESCAPE '\\' OR CommandLine LIKE '%-WindowStyle Hidden%' ESCAPE '\\' OR CommandLine LIKE '%-enc%' ESCAPE '\\' OR CommandLine LIKE '%-EncodedCommand%' ESCAPE '\\' OR CommandLine LIKE '%-w hidden%' ESCAPE '\\')))"
+    ],
+    "schema_version": 2,
+    "source": "dragon",
+    "source_table": "logs",
+    "status": "experimental",
+    "tags": [
+      "attack.execution",
+      "attack.t1059.005",
+      "attack.t1059.001",
+      "attack.defense_evasion",
+      "attack.t1027"
+    ],
+    "title": "WScript Spawning Obfuscated PowerShell (GootLoader)"
+  },
+  {
+    "author": "Dragon-ThreatResearchHQ",
+    "channel": [
+      "Microsoft-Windows-Sysmon/Operational"
+    ],
+    "description": "Detects process execution patterns, service installations, and command-line parameters associated with the HoneyMyte / RedDelta CoolClient backdoor and its kernel-mode rootkit driver msagent.sys.",
+    "eventid": [
+      1
+    ],
+    "falsepositives": [
+      "Legitimate Sangfor administrative software installations (very rare with defender.exe masquerading)"
+    ],
+    "filename": "Detection-Rules/Sigma/Windows/Process-Creation/proc_creation_win_honeymyte_coolclient_rootkit.yml",
+    "id": "c4a2e587-5c8e-4a69-8f92-74895696142e",
+    "level": "high",
+    "license": "MIT",
+    "logsource": {
+      "category": "process_creation",
+      "product": "windows",
+      "service": "sysmon"
+    },
+    "required_fields": [
+      "Channel",
+      "CommandLine",
+      "EventID",
+      "Image"
+    ],
+    "result_type": "event",
+    "rule": [
+      "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=1 AND (((CommandLine LIKE '%install%' ESCAPE '\\' OR CommandLine LIKE '%work%' ESCAPE '\\' OR CommandLine LIKE '%passuac%' ESCAPE '\\') AND (Image LIKE '%\\\\Sang.exe' ESCAPE '\\' OR Image LIKE '%\\\\defender.exe' ESCAPE '\\')) OR (CommandLine LIKE '%sc start media\\_updaten%' ESCAPE '\\' OR CommandLine LIKE '%sc create media\\_updaten%' ESCAPE '\\' OR CommandLine LIKE '%sc create msagent%' ESCAPE '\\' OR CommandLine LIKE '%sc start msagent%' ESCAPE '\\') OR CommandLine LIKE '%Microsoft\\\\Windows Defender%' ESCAPE '\\'))"
+    ],
+    "schema_version": 2,
+    "source": "dragon",
+    "source_table": "logs",
+    "status": "experimental",
+    "tags": [
+      "attack.defense_evasion",
+      "attack.persistence",
+      "attack.privilege_escalation",
+      "attack.t1574.002",
+      "attack.t1543.003",
+      "attack.t1014"
+    ],
+    "title": "HoneyMyte CoolClient Backdoor Execution & Rootkit Persistence"
+  },
+  {
+    "author": "Dragon-ThreatResearchHQ",
+    "channel": [
+      "Microsoft-Windows-Sysmon/Operational"
+    ],
+    "description": "Detects suspicious child process creation by the IIS worker process w3wp.exe, characteristic of server-side backdoors like Turla LunarWeb executing arbitrary commands.",
+    "eventid": [
+      1
+    ],
+    "falsepositives": [
+      "Legitimate administration scripts or poorly designed web applications executing administrative tools (should be baselined and excluded)."
+    ],
+    "filename": "Detection-Rules/Sigma/Windows/Process-Creation/proc_creation_win_turla_lunar_w3wp_execution.yml",
+    "id": "c8b02419-7e3f-4221-a5bf-85f7560da423",
+    "level": "high",
+    "license": "MIT",
+    "logsource": {
+      "category": "process_creation",
+      "product": "windows",
+      "service": "sysmon"
+    },
+    "required_fields": [
+      "Channel",
+      "EventID",
+      "Image",
+      "ParentImage"
+    ],
+    "result_type": "event",
+    "rule": [
+      "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=1 AND (ParentImage LIKE '%\\\\w3wp.exe' ESCAPE '\\' AND (Image LIKE '%\\\\cmd.exe' ESCAPE '\\' OR Image LIKE '%\\\\powershell.exe' ESCAPE '\\' OR Image LIKE '%\\\\pwsh.exe' ESCAPE '\\' OR Image LIKE '%\\\\whoami.exe' ESCAPE '\\' OR Image LIKE '%\\\\net.exe' ESCAPE '\\' OR Image LIKE '%\\\\net1.exe' ESCAPE '\\' OR Image LIKE '%\\\\nltest.exe' ESCAPE '\\' OR Image LIKE '%\\\\quser.exe' ESCAPE '\\')))"
+    ],
+    "schema_version": 2,
+    "source": "dragon",
+    "source_table": "logs",
+    "status": "experimental",
+    "tags": [
+      "attack.persistence",
+      "attack.t1505.004",
+      "attack.execution",
+      "attack.t1059.003"
+    ],
+    "title": "IIS w3wp Suspicious Process Spawn (Turla LunarWeb)"
+  },
+  {
+    "author": "Dragon-ThreatResearchHQ",
+    "channel": [
+      "Microsoft-Windows-Sysmon/Operational"
+    ],
+    "description": "Detects the use of manage-bde.exe to aggressively encrypt local disk volumes and write keys to temporary paths, characteristic of Iranian threat clusters (APT35 / Fox Kitten / Pioneer Kitten) conducting ransomware operations.",
+    "eventid": [
+      1
+    ],
+    "falsepositives": [
+      "Legitimate enterprise deployment scripts rolling out BitLocker (typically driven by SCCM/Intune and not dumping keys to user-accessible temp files)."
+    ],
+    "filename": "Detection-Rules/Sigma/Windows/Process-Creation/proc_creation_win_charming_kitten_manage_bde_weaponization.yml",
+    "id": "d9219e84-4821-4f9e-8cb1-857e492fa619",
+    "level": "high",
+    "license": "MIT",
+    "logsource": {
+      "category": "process_creation",
+      "product": "windows",
+      "service": "sysmon"
+    },
+    "required_fields": [
+      "Channel",
+      "CommandLine",
+      "EventID",
+      "Image"
+    ],
+    "result_type": "event",
+    "rule": [
+      "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=1 AND ((Image LIKE '%\\\\manage-bde.exe' ESCAPE '\\' AND CommandLine LIKE '%-on%' ESCAPE '\\' AND (CommandLine LIKE '%-rp%' ESCAPE '\\' OR CommandLine LIKE '%-sk%' ESCAPE '\\' OR CommandLine LIKE '%-rk%' ESCAPE '\\')) AND (CommandLine LIKE '%\\\\Temp\\\\%' ESCAPE '\\' OR CommandLine LIKE '%\\\\Users\\\\Public\\\\%' ESCAPE '\\' OR CommandLine LIKE '%\\\\ProgramData\\\\%' ESCAPE '\\')))"
+    ],
+    "schema_version": 2,
+    "source": "dragon",
+    "source_table": "logs",
+    "status": "experimental",
+    "tags": [
+      "attack.impact",
+      "attack.t1486",
+      "attack.execution",
+      "attack.t1059.003"
+    ],
+    "title": "Suspicious BitLocker Weaponization via manage-bde (Fox Kitten / APT35)"
+  },
+  {
+    "author": "Dragon Threat Intelligence",
+    "channel": [
+      "Microsoft-Windows-Sysmon/Operational"
+    ],
+    "description": "Detects Stealc infostealer self-deletion commands spawned via cmd.exe utilizing the timeout command to delete its payload from temporary directories.",
+    "eventid": [
+      1
+    ],
+    "falsepositives": [
+      "Rare third-party custom uninstallation scripts"
+    ],
+    "filename": "Detection-Rules/Sigma/Windows/Process-Creation/proc_creation_win_stealc_self_delete.yml",
+    "id": "e4b29c18-7d43-4c91-9128-48b9f10a8c42",
+    "level": "high",
+    "license": "MIT",
+    "logsource": {
+      "category": "process_creation",
+      "product": "windows",
+      "service": "sysmon"
+    },
+    "required_fields": [
+      "Channel",
+      "CommandLine",
+      "EventID",
+      "Image",
+      "ParentImage"
+    ],
+    "result_type": "event",
+    "rule": [
+      "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=1 AND ((Image LIKE '%\\\\cmd.exe' ESCAPE '\\' AND (CommandLine LIKE '%timeout%' ESCAPE '\\' AND CommandLine LIKE '%/t%' ESCAPE '\\' AND CommandLine LIKE '%del%' ESCAPE '\\' AND CommandLine LIKE '%/f%' ESCAPE '\\' AND CommandLine LIKE '%/q%' ESCAPE '\\')) AND (ParentImage LIKE '%\\\\AppData\\\\Local\\\\Temp\\\\%' ESCAPE '\\' OR ParentImage LIKE '%\\\\AppData\\\\Roaming\\\\%' ESCAPE '\\')))"
+    ],
+    "schema_version": 2,
+    "source": "dragon",
+    "source_table": "logs",
+    "status": "experimental",
+    "tags": [
+      "attack.defense_evasion",
+      "attack.t1070.004"
+    ],
+    "title": "Stealc Infostealer Self Deletion via Timeout"
+  },
+  {
+    "author": "Dragon-ThreatResearchHQ",
+    "channel": [
+      "Microsoft-Windows-Sysmon/Operational"
+    ],
+    "description": "Detects processes spawned directly from the Active Directory SYSVOL share or executing known PAYLOAD ransomware artifacts (killer.exe, kill.exe, README-payload.txt).",
+    "eventid": [
+      1
+    ],
+    "falsepositives": [
+      "Legitimate administrative startup scripts published in SYSVOL (verify parent process and signature)"
+    ],
+    "filename": "Detection-Rules/Sigma/Windows/Process-Creation/proc_creation_win_gpo_immediate_task_payload_ransomware.yml",
+    "id": "e8a12904-712c-4c12-912a-385012dc8f91",
+    "level": "high",
+    "license": "MIT",
+    "logsource": {
+      "category": "process_creation",
+      "product": "windows",
+      "service": "sysmon"
+    },
+    "required_fields": [
+      "Channel",
+      "CommandLine",
+      "EventID"
+    ],
+    "result_type": "event",
+    "rule": [
+      "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=1 AND ((CommandLine LIKE '%\\\\SYSVOL\\\\%' ESCAPE '\\' AND (CommandLine LIKE '%.exe' ESCAPE '\\' OR CommandLine LIKE '%.bat' ESCAPE '\\')) OR (CommandLine LIKE '%killer.exe%' ESCAPE '\\' OR CommandLine LIKE '%kill.exe%' ESCAPE '\\' OR CommandLine LIKE '%README-payload.txt%' ESCAPE '\\')))"
+    ],
+    "schema_version": 2,
+    "source": "dragon",
+    "source_table": "logs",
+    "status": "experimental",
+    "tags": [
+      "attack.execution",
+      "attack.lateral_movement",
+      "attack.t1053.005",
+      "attack.t1484.001"
+    ],
+    "title": "Process Execution from SYSVOL via GPO Task"
+  },
+  {
+    "author": "Dragon Threat Intelligence",
+    "channel": [
+      "Microsoft-Windows-Sysmon/Operational"
+    ],
+    "description": "Detects command shells or network utilities spawned by WerFault or wermgr, characteristic of Pikabot process hollowing payloads.",
+    "eventid": [
+      1
+    ],
+    "falsepositives": [
+      "None observed in default enterprise baselines"
+    ],
+    "filename": "Detection-Rules/Sigma/Windows/Process-Creation/proc_creation_win_pikabot_werfault_injection.yml",
+    "id": "f637a829-2016-4f2a-b256-473829106574",
+    "level": "high",
+    "license": "MIT",
+    "logsource": {
+      "category": "process_creation",
+      "product": "windows",
+      "service": "sysmon"
+    },
+    "required_fields": [
+      "Channel",
+      "EventID",
+      "Image",
+      "ParentImage"
+    ],
+    "result_type": "event",
+    "rule": [
+      "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=1 AND ((ParentImage LIKE '%\\\\WerFault.exe' ESCAPE '\\' OR ParentImage LIKE '%\\\\wermgr.exe' ESCAPE '\\' OR ParentImage LIKE '%\\\\SearchProtocolHost.exe' ESCAPE '\\') AND (Image LIKE '%\\\\cmd.exe' ESCAPE '\\' OR Image LIKE '%\\\\powershell.exe' ESCAPE '\\' OR Image LIKE '%\\\\pwsh.exe' ESCAPE '\\' OR Image LIKE '%\\\\rundll32.exe' ESCAPE '\\' OR Image LIKE '%\\\\regsvr32.exe' ESCAPE '\\')))"
+    ],
+    "schema_version": 2,
+    "source": "dragon",
+    "source_table": "logs",
+    "status": "experimental",
+    "tags": [
+      "attack.defense_evasion",
+      "attack.t1055.012",
+      "attack.execution",
+      "attack.t1059.003"
+    ],
+    "title": "Anomalous Child Process Spawned by WerFault (Pikabot Injection)"
+  },
+  {
+    "author": "Dragon Threat Intelligence",
+    "channel": [
+      "Microsoft-Windows-Sysmon/Operational"
+    ],
+    "description": "Detects command shells or network download utilities spawned by Node.js, characteristic of Lazarus Contagious Interview npm build hook exploitation.",
+    "eventid": [
+      1
+    ],
+    "falsepositives": [
+      "Custom developer build scripts downloading external dependencies (tune command-line exclusions as needed)"
+    ],
+    "filename": "Detection-Rules/Sigma/Windows/Process-Creation/proc_creation_win_lazarus_contagious_interview_npm_spawn.yml",
+    "id": "f981a240-bc84-4822-a982-f716298db3e1",
+    "level": "high",
+    "license": "MIT",
+    "logsource": {
+      "category": "process_creation",
+      "product": "windows",
+      "service": "sysmon"
+    },
+    "required_fields": [
+      "Channel",
+      "CommandLine",
+      "EventID",
+      "Image",
+      "ParentImage"
+    ],
+    "result_type": "event",
+    "rule": [
+      "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=1 AND (ParentImage LIKE '%\\\\node.exe' ESCAPE '\\' AND (Image LIKE '%\\\\cmd.exe' ESCAPE '\\' OR Image LIKE '%\\\\powershell.exe' ESCAPE '\\' OR Image LIKE '%\\\\pwsh.exe' ESCAPE '\\' OR Image LIKE '%\\\\curl.exe' ESCAPE '\\' OR Image LIKE '%\\\\wget.exe' ESCAPE '\\' OR Image LIKE '%\\\\certutil.exe' ESCAPE '\\' OR Image LIKE '%\\\\rundll32.exe' ESCAPE '\\') AND (CommandLine LIKE '%http:%' ESCAPE '\\' OR CommandLine LIKE '%https:%' ESCAPE '\\' OR CommandLine LIKE '%-enc%' ESCAPE '\\' OR CommandLine LIKE '%IEX%' ESCAPE '\\' OR CommandLine LIKE '%Invoke-WebRequest%' ESCAPE '\\' OR CommandLine LIKE '%irm%' ESCAPE '\\')))"
+    ],
+    "schema_version": 2,
+    "source": "dragon",
+    "source_table": "logs",
+    "status": "experimental",
+    "tags": [
+      "attack.execution",
+      "attack.t1059.007",
+      "attack.initial_access",
+      "attack.t1195.001"
+    ],
+    "title": "Suspicious Child Process Spawned by Node.js (Contagious Interview)"
+  },
+  {
+    "author": "Dragon Threat Research HQ",
+    "channel": [
+      "Microsoft-Windows-Sysmon/Operational"
+    ],
+    "description": "Detects modification of the Windows Boot Configuration Data (BCD) using bcdedit.exe to force the system to reboot into Safe Mode with Networking, a prominent defense evasion tactic deployed by Qilin (Agenda) ransomware to bypass endpoint security agents.",
+    "eventid": [
+      1
+    ],
+    "falsepositives": [
+      "Legitimate IT support personnel troubleshooting boot or hardware issues in an enterprise environment"
+    ],
+    "filename": "Detection-Rules/Sigma/Windows/Process-Creation/proc_creation_win_qilin_safeboot_modification.yml",
+    "id": "5e6f7a8b-9c0d-4e1f-8234-567890abcdef",
+    "level": "critical",
+    "license": "MIT",
+    "logsource": {
+      "category": "process_creation",
+      "product": "windows",
+      "service": "sysmon"
+    },
+    "required_fields": [
+      "Channel",
+      "CommandLine",
+      "EventID",
+      "Image"
+    ],
+    "result_type": "event",
+    "rule": [
+      "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=1 AND (Image LIKE '%\\\\bcdedit.exe' ESCAPE '\\' AND CommandLine LIKE '%safeboot%' ESCAPE '\\'))"
+    ],
+    "schema_version": 2,
+    "source": "dragon",
+    "source_table": "logs",
+    "status": "stable",
+    "tags": [
+      "attack.defense_evasion",
+      "attack.t1562.009",
+      "threat.qilin"
+    ],
+    "title": "Windows Boot Configuration SafeBoot Tampering (Qilin Ransomware TTP)"
+  },
+  {
+    "author": "Dragon Threat Research HQ",
+    "channel": [
+      "Microsoft-Windows-Sysmon/Operational"
+    ],
+    "description": "Detects the creation or connection to default named pipes matching the pattern \\b-pipe-* created by the Brute Ratel C4 Badger implant for internal peer-to-peer lateral communication.",
+    "eventid": [
+      17,
+      18
+    ],
+    "falsepositives": [
+      "Extremely rare in enterprise production environments outside of authorized red team adversary simulations"
+    ],
+    "filename": "Detection-Rules/Sigma/Windows/Process-Creation/proc_creation_win_bruteratel_badger_named_pipe.yml",
+    "id": "9e0f1a2b-3c4d-5e6f-7a8b-9012345678cd",
+    "level": "critical",
+    "license": "MIT",
+    "logsource": {
+      "category": "pipe_created",
+      "product": "windows",
+      "service": "sysmon"
+    },
+    "required_fields": [
+      "Channel",
+      "EventID",
+      "PipeName"
+    ],
+    "result_type": "event",
+    "rule": [
+      "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND ((EventID=17 OR EventID=18) AND (PipeName LIKE '%\\\\b-pipe-%' ESCAPE '\\' OR PipeName LIKE '%\\\\b-pipe%' ESCAPE '\\'))"
+    ],
+    "schema_version": 2,
+    "source": "dragon",
+    "source_table": "logs",
+    "status": "stable",
+    "tags": [
+      "attack.lateral_movement",
+      "attack.command_and_control",
+      "attack.t1021.002",
+      "tool.brute_ratel"
+    ],
+    "title": "Brute Ratel C4 Default Badger Named Pipe Activity"
+  },
+  {
+    "author": "Dragon Threat Intelligence",
+    "channel": [
+      "Microsoft-Windows-Sysmon/Operational"
+    ],
+    "description": "Detects RansomHub ransomware execution attempting to configure Windows Safe Mode or passing characteristic command-line passcode parameters.",
+    "eventid": [
+      1
+    ],
+    "falsepositives": [
+      "Legitimate administrative disaster recovery drills configuring SafeBoot"
+    ],
+    "filename": "Detection-Rules/Sigma/Windows/Process-Creation/proc_creation_win_ransomhub_safeboot_execution.yml",
+    "id": "a192b384-7561-4aeb-cd01-928374651029",
+    "level": "critical",
+    "license": "MIT",
+    "logsource": {
+      "category": "process_creation",
+      "product": "windows",
+      "service": "sysmon"
+    },
+    "required_fields": [
+      "Channel",
+      "CommandLine",
+      "EventID",
+      "Image"
+    ],
+    "result_type": "event",
+    "rule": [
+      "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=1 AND ((CommandLine LIKE '%-p %' ESCAPE '\\' AND (CommandLine LIKE '%-safe%' ESCAPE '\\' OR CommandLine LIKE '%-network%' ESCAPE '\\' OR CommandLine LIKE '%-path%' ESCAPE '\\')) OR (Image LIKE '%\\\\bcdedit.exe' ESCAPE '\\' AND (CommandLine LIKE '%safeboot%' ESCAPE '\\' AND CommandLine LIKE '%network%' ESCAPE '\\'))))"
+    ],
+    "schema_version": 2,
+    "source": "dragon",
+    "source_table": "logs",
+    "status": "experimental",
+    "tags": [
+      "attack.impact",
+      "attack.t1486",
+      "attack.defense_evasion",
+      "attack.t1562.009"
+    ],
+    "title": "RansomHub Ransomware Execution with SafeBoot Parameter"
+  },
+  {
+    "author": "Dragon Threat Intelligence",
+    "channel": [
+      "Microsoft-Windows-Sysmon/Operational"
+    ],
+    "description": "Detects command shells or scripting interpreters spawned by the Windows Print Spooler service, characteristic of APT28 GooseEgg privilege escalation.",
+    "eventid": [
+      1
+    ],
+    "falsepositives": [
+      "Legitimate third-party printer drivers that execute shell scripts during installation (rare)"
+    ],
+    "filename": "Detection-Rules/Sigma/Windows/Process-Creation/proc_creation_win_apt28_gooseegg_spoolsv_child.yml",
+    "id": "c304d596-9783-4cfd-ef23-140596873241",
+    "level": "critical",
+    "license": "MIT",
+    "logsource": {
+      "category": "process_creation",
+      "product": "windows",
+      "service": "sysmon"
+    },
+    "required_fields": [
+      "Channel",
+      "EventID",
+      "Image",
+      "ParentImage"
+    ],
+    "result_type": "event",
+    "rule": [
+      "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=1 AND (ParentImage LIKE '%\\\\spoolsv.exe' ESCAPE '\\' AND (Image LIKE '%\\\\cmd.exe' ESCAPE '\\' OR Image LIKE '%\\\\powershell.exe' ESCAPE '\\' OR Image LIKE '%\\\\pwsh.exe' ESCAPE '\\' OR Image LIKE '%\\\\cscript.exe' ESCAPE '\\' OR Image LIKE '%\\\\wscript.exe' ESCAPE '\\' OR Image LIKE '%\\\\rundll32.exe' ESCAPE '\\')))"
+    ],
+    "schema_version": 2,
+    "source": "dragon",
+    "source_table": "logs",
+    "status": "experimental",
+    "tags": [
+      "attack.privilege_escalation",
+      "attack.t1068",
+      "attack.execution",
+      "attack.t1059.003"
+    ],
+    "title": "Suspicious Print Spooler Child Process (APT28 GooseEgg)"
+  },
+  {
+    "author": "Dragon Threat Research HQ",
+    "channel": [
+      "Microsoft-Windows-Sysmon/Operational"
+    ],
+    "description": "Detects the execution of ntdsutil.exe with arguments configuring Install-From-Media (IFM) snapshots to harvest the Active Directory ntds.dit database and SYSTEM registry hive, a primary credential theft technique used by Volt Typhoon.",
+    "eventid": [
+      1
+    ],
+    "falsepositives": [
+      "Domain Controller promotion backup staging by authorized domain administrators during planned maintenance"
+    ],
+    "filename": "Detection-Rules/Sigma/Windows/Process-Creation/proc_creation_win_living_off_the_land_ntdsutil_dump.yml",
+    "id": "c4e532a1-638e-49b2-b13c-7bb10e3408a2",
+    "level": "critical",
+    "license": "MIT",
+    "logsource": {
+      "category": "process_creation",
+      "product": "windows",
+      "service": "sysmon"
+    },
+    "required_fields": [
+      "Channel",
+      "CommandLine",
+      "EventID",
+      "Image"
+    ],
+    "result_type": "event",
+    "rule": [
+      "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=1 AND (Image LIKE '%\\\\ntdsutil.exe' ESCAPE '\\' AND (CommandLine LIKE '%ifm%' ESCAPE '\\' AND CommandLine LIKE '%create%' ESCAPE '\\')))"
+    ],
+    "schema_version": 2,
+    "source": "dragon",
+    "source_table": "logs",
+    "status": "stable",
+    "tags": [
+      "attack.credential_access",
+      "attack.t1003.003",
+      "threat.volt_typhoon"
+    ],
+    "title": "Active Directory Database Extraction via Ntdsutil IFM (Volt Typhoon TTP)"
+  },
+  {
+    "author": "Dragon Threat Intelligence",
+    "channel": [
+      "Microsoft-Windows-Sysmon/Operational"
+    ],
+    "description": "Detects AuKill BYOVD driver loader or process terminating major EDR agents associated with Black Basta ransomware operations.",
+    "eventid": [
+      1
+    ],
+    "falsepositives": [
+      "Rare diagnostic utilities"
+    ],
+    "filename": "Detection-Rules/Sigma/Windows/Process-Creation/proc_creation_win_blackbasta_aukill_edr_killer.yml",
+    "id": "e526f718-1905-4e1f-a145-362718095463",
+    "level": "critical",
+    "license": "MIT",
+    "logsource": {
+      "category": "process_creation",
+      "product": "windows",
+      "service": "sysmon"
+    },
+    "required_fields": [
+      "Channel",
+      "CommandLine",
+      "EventID"
+    ],
+    "result_type": "event",
+    "rule": [
+      "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=1 AND (CommandLine LIKE '%procexp.sys%' ESCAPE '\\' OR CommandLine LIKE '%fkdjsartywq.jpg%' ESCAPE '\\' OR CommandLine LIKE '%bootstatuspolicy ignoreallfailures%' ESCAPE '\\'))"
+    ],
+    "schema_version": 2,
+    "source": "dragon",
+    "source_table": "logs",
+    "status": "experimental",
+    "tags": [
+      "attack.defense_evasion",
+      "attack.t1562.001"
+    ],
+    "title": "Black Basta AuKill BYOVD Process Termination"
+  },
+  {
+    "author": "Dragon-ThreatResearchHQ",
+    "channel": [
+      "Microsoft-Windows-Sysmon/Operational"
+    ],
+    "description": "Detects process executions or commands related to The Gentlemen RaaS, including masqueraded Rclone (avastrclone.exe) and VCENTER.ps1 automation.",
+    "eventid": [
+      1
+    ],
+    "falsepositives": [
+      "None"
+    ],
+    "filename": "Detection-Rules/Sigma/Windows/Process-Creation/proc_creation_win_gentlemen_hastalamuerte_avastrclone.yml",
+    "id": "f91287c4-42b1-419a-9e12-817290bc5e31",
+    "level": "critical",
+    "license": "MIT",
+    "logsource": {
+      "category": "process_creation",
+      "product": "windows",
+      "service": "sysmon"
+    },
+    "required_fields": [
+      "Channel",
+      "CommandLine",
+      "EventID",
+      "Image"
+    ],
+    "result_type": "event",
+    "rule": [
+      "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=1 AND (Image LIKE '%\\\\avastrclone.exe' ESCAPE '\\' OR (CommandLine LIKE '%VCENTER.ps1%' ESCAPE '\\' OR CommandLine LIKE '%avastrclone%' ESCAPE '\\' OR CommandLine LIKE '%hastalamuerte%' ESCAPE '\\')))"
+    ],
+    "schema_version": 2,
+    "source": "dragon",
+    "source_table": "logs",
+    "status": "experimental",
+    "tags": [
+      "attack.impact",
+      "attack.exfiltration",
+      "attack.defense_evasion",
+      "attack.t1486",
+      "attack.t1567.002"
+    ],
+    "title": "The Gentlemen HastaLaMuerte Tool Execution"
+  },
+  {
+    "author": "Dragon-ThreatResearchHQ",
+    "channel": [
+      "Microsoft-Windows-Sysmon/Operational"
+    ],
+    "description": "Detects command-line execution patterns associated with Play Ransomware (Playcrypt), including the specific combination of password switches and target share parameters.",
+    "eventid": [
+      1
+    ],
+    "falsepositives": [
+      "Highly unlikely in production environments given the specific flag combination."
+    ],
+    "filename": "Detection-Rules/Sigma/Windows/Process-Creation/proc_creation_win_play_ransomware_execution.yml",
+    "id": "fa871b69-80cd-498c-905e-8e547fa918b2",
+    "level": "critical",
+    "license": "MIT",
+    "logsource": {
+      "category": "process_creation",
+      "product": "windows",
+      "service": "sysmon"
+    },
+    "required_fields": [
+      "Channel",
+      "CommandLine",
+      "EventID"
+    ],
+    "result_type": "event",
+    "rule": [
+      "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=1 AND ((CommandLine LIKE '%-pass%' ESCAPE '\\' AND (CommandLine LIKE '%-share%' ESCAPE '\\' OR CommandLine LIKE '%-path%' ESCAPE '\\')) OR CommandLine LIKE '%.play%' ESCAPE '\\'))"
+    ],
+    "schema_version": 2,
+    "source": "dragon",
+    "source_table": "logs",
+    "status": "experimental",
+    "tags": [
+      "attack.impact",
+      "attack.t1486",
+      "attack.execution",
+      "attack.t1059.003"
+    ],
+    "title": "Play Ransomware Execution Parameters"
+  }
+]

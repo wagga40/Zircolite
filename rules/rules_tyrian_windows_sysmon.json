@@ -1,0 +1,2296 @@
+[
+  {
+    "author": "Tyrian",
+    "channel": [
+      "Microsoft-Windows-Sysmon/Operational"
+    ],
+    "description": "Detects bitsadmin or the PowerShell BITS cmdlets being used to move a file. The Background Intelligent Transfer Service is a signed Windows component that downloads on behalf of a caller, so the traffic comes from a trusted process, the job survives reboots, and the transfer continues after the calling process exits. That combination is why it is a durable download and persistence primitive.\n",
+    "eventid": [],
+    "falsepositives": [
+      "Windows Update and other Microsoft components use BITS internally, though rarely through bitsadmin.exe on the command line",
+      "Some software updaters"
+    ],
+    "filename": "rules/command-and-control/bitsadmin-transfer-job.yml",
+    "id": "156f7987-2196-5f13-bf1a-cabaf7cb3f89",
+    "level": "medium",
+    "license": "MIT",
+    "logsource": {
+      "product": "windows",
+      "service": "sysmon"
+    },
+    "required_fields": [
+      "Channel",
+      "CommandLine",
+      "Image"
+    ],
+    "result_type": "event",
+    "rule": [
+      "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND ((Image LIKE '%\\\\bitsadmin.exe' ESCAPE '\\' AND (CommandLine LIKE '%/transfer%' ESCAPE '\\' OR CommandLine LIKE '%/addfile%' ESCAPE '\\' OR CommandLine LIKE '%/setnotifycmdline%' ESCAPE '\\')) OR (CommandLine LIKE '%Start-BitsTransfer%' ESCAPE '\\' AND CommandLine LIKE '%-Source%' ESCAPE '\\'))"
+    ],
+    "schema_version": 2,
+    "source": "tyrian",
+    "source_table": "logs",
+    "status": "experimental",
+    "tags": [
+      "attack.command_and_control",
+      "attack.defense_evasion",
+      "attack.persistence",
+      "attack.t1197",
+      "attack.t1105"
+    ],
+    "title": "File Transfer via BITS"
+  },
+  {
+    "author": "Tyrian",
+    "channel": [
+      "Microsoft-Windows-Sysmon/Operational"
+    ],
+    "description": "Detects the burst of net, nltest and whoami calls typical of a freshly landed operator orienting inside a domain. Individually benign, so this is written as a threshold rule rather than a single-event alert.\n",
+    "eventid": [],
+    "falsepositives": [
+      "Administrators troubleshooting, and inventory scripts"
+    ],
+    "filename": "rules/discovery/domain-recon-net-commands.yml",
+    "id": "2e691c10-dc39-53ca-a273-4223aa8dd6d0",
+    "level": "medium",
+    "license": "MIT",
+    "logsource": {
+      "product": "windows",
+      "service": "sysmon"
+    },
+    "required_fields": [
+      "Channel",
+      "CommandLine"
+    ],
+    "result_type": "event",
+    "rule": [
+      "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (CommandLine LIKE '%net group \"domain admins\"%' ESCAPE '\\' OR CommandLine LIKE '%net localgroup administrators%' ESCAPE '\\' OR CommandLine LIKE '%nltest /domain\\_trusts%' ESCAPE '\\' OR CommandLine LIKE '%nltest /dclist%' ESCAPE '\\' OR CommandLine LIKE '%whoami /groups%' ESCAPE '\\' OR CommandLine LIKE '%net user /domain%' ESCAPE '\\')"
+    ],
+    "schema_version": 2,
+    "source": "tyrian",
+    "source_table": "logs",
+    "status": "experimental",
+    "tags": [
+      "attack.discovery",
+      "attack.t1482",
+      "attack.t1087.002"
+    ],
+    "title": "Domain Reconnaissance via Built-in Utilities"
+  },
+  {
+    "author": "Tyrian",
+    "channel": [
+      "Microsoft-Windows-Sysmon/Operational"
+    ],
+    "description": "Detects fDenyTSConnections being set to 0, which turns on inbound RDP. Intruders flip it to open an interactive path to a host they already control through another channel. Sysmon Event ID 13.\n",
+    "eventid": [],
+    "falsepositives": [
+      "Deliberate RDP enablement by admins or GPO; correlate with a change ticket"
+    ],
+    "filename": "rules/lateral-movement/rdp-enabled-via-registry.yml",
+    "id": "86ab8c68-9f48-52d1-b06e-1947186aea35",
+    "level": "medium",
+    "license": "MIT",
+    "logsource": {
+      "product": "windows",
+      "service": "sysmon"
+    },
+    "required_fields": [
+      "Channel",
+      "Details",
+      "TargetObject"
+    ],
+    "result_type": "event",
+    "rule": [
+      "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (TargetObject LIKE '%\\\\Control\\\\Terminal Server\\\\fDenyTSConnections' ESCAPE '\\' AND Details='DWORD (0x00000000)')"
+    ],
+    "schema_version": 2,
+    "source": "tyrian",
+    "source_table": "logs",
+    "status": "experimental",
+    "tags": [
+      "attack.lateral_movement",
+      "attack.defense_evasion",
+      "attack.t1021.001",
+      "attack.t1112"
+    ],
+    "title": "Remote Desktop Enabled via Registry"
+  },
+  {
+    "author": "Tyrian",
+    "channel": [
+      "Security"
+    ],
+    "description": "Detects a type 9 NewCredentials logon through seclogo, which is what runas /netonly produces and what Mimikatz sekurlsa::pth and similar token-making tools produce when they spawn a process with injected credentials. Event ID 4624.\n",
+    "eventid": [
+      4624
+    ],
+    "falsepositives": [
+      "Administrators using runas /netonly for cross-domain tooling; allowlist by SubjectUserName"
+    ],
+    "filename": "rules/privilege-escalation/new-credentials-logon-type-9.yml",
+    "id": "8db86775-c2ea-55aa-bb6e-f7f91d454c31",
+    "level": "medium",
+    "license": "MIT",
+    "logsource": {
+      "product": "windows",
+      "service": "security"
+    },
+    "required_fields": [
+      "Channel",
+      "EventID",
+      "LogonProcessName",
+      "LogonType"
+    ],
+    "result_type": "event",
+    "rule": [
+      "SELECT * FROM logs WHERE Channel='Security' AND (EventID=4624 AND LogonType=9 AND LogonProcessName='seclogo')"
+    ],
+    "schema_version": 2,
+    "source": "tyrian",
+    "source_table": "logs",
+    "status": "experimental",
+    "tags": [
+      "attack.privilege_escalation",
+      "attack.defense_evasion",
+      "attack.t1134.001",
+      "attack.t1550.002"
+    ],
+    "title": "Logon With New Credentials (Logon Type 9)"
+  },
+  {
+    "author": "Tyrian",
+    "channel": [
+      "Microsoft-Windows-Sysmon/Operational"
+    ],
+    "description": "Detects command-line archive tools compressing user or share directories, which is how data is staged before it leaves. Pair with an egress rule to turn this into a high-confidence exfiltration signal.\n",
+    "eventid": [],
+    "falsepositives": [
+      "Users legitimately archiving their own work"
+    ],
+    "filename": "rules/exfiltration/archive-staging-for-exfil.yml",
+    "id": "9029fb28-542e-538d-9544-02d26bd33a53",
+    "level": "medium",
+    "license": "MIT",
+    "logsource": {
+      "product": "windows",
+      "service": "sysmon"
+    },
+    "required_fields": [
+      "Channel",
+      "CommandLine",
+      "Image"
+    ],
+    "result_type": "event",
+    "rule": [
+      "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (((Image LIKE '%\\\\7z.exe' ESCAPE '\\' OR Image LIKE '%\\\\rar.exe' ESCAPE '\\' OR Image LIKE '%\\\\winrar.exe' ESCAPE '\\') AND (CommandLine LIKE '% a %' ESCAPE '\\' OR CommandLine LIKE '% -hp%' ESCAPE '\\')) AND (CommandLine LIKE '%\\\\Users\\\\%' ESCAPE '\\' OR CommandLine LIKE '%\\\\Documents%' ESCAPE '\\' OR CommandLine LIKE '%\\\\Desktop%' ESCAPE '\\' OR CommandLine LIKE '%\\\\Shares%' ESCAPE '\\'))"
+    ],
+    "schema_version": 2,
+    "source": "tyrian",
+    "source_table": "logs",
+    "status": "experimental",
+    "tags": [
+      "attack.collection",
+      "attack.exfiltration",
+      "attack.t1560.001"
+    ],
+    "title": "Bulk Archive Creation Consistent With Collection Staging"
+  },
+  {
+    "author": "Tyrian",
+    "channel": [
+      "Microsoft-Windows-Sysmon/Operational"
+    ],
+    "description": "Detects repeated DNS queries with unusually long labels against a single parent domain, the signature of data smuggled inside DNS. Expect tuning: CDNs and endpoint security products legitimately emit long names.\n",
+    "eventid": [
+      22
+    ],
+    "falsepositives": [
+      "CDN, antivirus reputation lookups and some cloud telemetry"
+    ],
+    "filename": "rules/command-and-control/dns-tunneling-long-query.yml",
+    "id": "bf1f025e-b893-5050-a105-c53f6110a8a6",
+    "level": "medium",
+    "license": "MIT",
+    "logsource": {
+      "product": "windows",
+      "service": "sysmon"
+    },
+    "required_fields": [
+      "Channel",
+      "EventID",
+      "QueryName"
+    ],
+    "result_type": "event",
+    "rule": [
+      "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=22 AND QueryName REGEXP '^[A-Za-z0-9+/=_-]{40,}\\.')"
+    ],
+    "schema_version": 2,
+    "source": "tyrian",
+    "source_table": "logs",
+    "status": "experimental",
+    "tags": [
+      "attack.command_and_control",
+      "attack.exfiltration",
+      "attack.t1071.004"
+    ],
+    "title": "Possible DNS Tunneling via Abnormally Long Queries"
+  },
+  {
+    "author": "Tyrian",
+    "channel": [
+      "Microsoft-Windows-Sysmon/Operational"
+    ],
+    "description": "Detects child processes of the WinRM host, which is how Enter-PSSession and Invoke-Command land code on a remote machine. Expect noise wherever fleets are managed with PSRemoting; pair this with an allowlist of admin source hosts.\n",
+    "eventid": [],
+    "falsepositives": [
+      "Configuration management and routine remote administration"
+    ],
+    "filename": "rules/lateral-movement/winrm-remoting-child-process.yml",
+    "id": "da29ee20-8865-5f54-92b5-280b17595b85",
+    "level": "medium",
+    "license": "MIT",
+    "logsource": {
+      "product": "windows",
+      "service": "sysmon"
+    },
+    "required_fields": [
+      "Channel",
+      "ParentImage"
+    ],
+    "result_type": "event",
+    "rule": [
+      "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND ParentImage LIKE '%\\\\wsmprovhost.exe' ESCAPE '\\'"
+    ],
+    "schema_version": 2,
+    "source": "tyrian",
+    "source_table": "logs",
+    "status": "experimental",
+    "tags": [
+      "attack.lateral_movement",
+      "attack.t1021.006"
+    ],
+    "title": "Remote Code Execution via WinRM and PowerShell Remoting"
+  },
+  {
+    "author": "Tyrian",
+    "channel": [
+      "Microsoft-Windows-Sysmon/Operational"
+    ],
+    "description": "Detects writes to the Run and RunOnce keys, the most common persistence location on Windows. Alert value comes from what is written, so review the target value rather than the key itself.\n",
+    "eventid": [],
+    "falsepositives": [
+      "Software installers legitimately register autostart entries"
+    ],
+    "filename": "rules/persistence/registry-run-key-write.yml",
+    "id": "ede060f5-8a72-56f1-9084-c4fb393fc868",
+    "level": "medium",
+    "license": "MIT",
+    "logsource": {
+      "product": "windows",
+      "service": "sysmon"
+    },
+    "required_fields": [
+      "Channel",
+      "TargetObject"
+    ],
+    "result_type": "event",
+    "rule": [
+      "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (TargetObject LIKE '%\\\\CurrentVersion\\\\Run\\\\%' ESCAPE '\\' OR TargetObject LIKE '%\\\\CurrentVersion\\\\RunOnce\\\\%' ESCAPE '\\' OR TargetObject LIKE '%\\\\CurrentVersion\\\\Policies\\\\Explorer\\\\Run\\\\%' ESCAPE '\\')"
+    ],
+    "schema_version": 2,
+    "source": "tyrian",
+    "source_table": "logs",
+    "status": "stable",
+    "tags": [
+      "attack.persistence",
+      "attack.t1547.001"
+    ],
+    "title": "Autorun Persistence via Registry Run Key"
+  },
+  {
+    "author": "Tyrian",
+    "channel": [
+      "Security"
+    ],
+    "description": "Detects potential Pass-the-Hash by flagging NTLM network logons (Event ID 4624, Logon Type 3) for interactive-style accounts. Noisy on its own (legacy NTLM apps); correlate with a preceding LSASS-access alert for high confidence.\n",
+    "eventid": [
+      4624
+    ],
+    "falsepositives": [
+      "Legacy applications and services that still use NTLM; run as a hunt or correlate"
+    ],
+    "filename": "rules/lateral-movement/pass-the-hash-ntlm.yml",
+    "id": "efee1a1d-e83f-50c0-8721-7be6fb784f56",
+    "level": "medium",
+    "license": "MIT",
+    "logsource": {
+      "product": "windows",
+      "service": "security"
+    },
+    "required_fields": [
+      "AuthenticationPackageName",
+      "Channel",
+      "EventID",
+      "LogonProcessName",
+      "LogonType",
+      "TargetUserName"
+    ],
+    "result_type": "event",
+    "rule": [
+      "SELECT * FROM logs WHERE Channel='Security' AND ((EventID=4624 AND LogonType=3 AND AuthenticationPackageName='NTLM' AND LogonProcessName='NtLmSsp') AND (NOT COALESCE((TargetUserName='ANONYMOUS LOGON'), 0)) AND (NOT COALESCE((TargetUserName LIKE '%$' ESCAPE '\\'), 0)))"
+    ],
+    "schema_version": 2,
+    "source": "tyrian",
+    "source_table": "logs",
+    "status": "experimental",
+    "tags": [
+      "attack.lateral_movement",
+      "attack.t1550.002"
+    ],
+    "title": "Pass-the-Hash via NTLM Network Logon"
+  },
+  {
+    "author": "Tyrian",
+    "channel": [
+      "Microsoft-Windows-Sysmon/Operational"
+    ],
+    "description": "Detects the reliable ransomware precursor of deleting volume shadow copies to prevent rollback. Legitimate software almost never does this; ransomware almost always does, just before mass encryption (T1486 via T1490).\n",
+    "eventid": [
+      1
+    ],
+    "falsepositives": [
+      "Rare backup/maintenance scripts; alert and verify rather than suppress"
+    ],
+    "filename": "rules/impact/ransomware-shadowcopy-deletion.yml",
+    "id": "025299bf-ff29-56e6-8bf2-7f3e8c6e400a",
+    "level": "high",
+    "license": "MIT",
+    "logsource": {
+      "category": "process_creation",
+      "product": "windows",
+      "service": "sysmon"
+    },
+    "required_fields": [
+      "Channel",
+      "CommandLine",
+      "EventID",
+      "Image"
+    ],
+    "result_type": "event",
+    "rule": [
+      "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=1 AND ((Image LIKE '%\\\\vssadmin.exe' ESCAPE '\\' AND (CommandLine LIKE '%delete%' ESCAPE '\\' AND CommandLine LIKE '%shadows%' ESCAPE '\\')) OR (Image LIKE '%\\\\wmic.exe' ESCAPE '\\' AND CommandLine LIKE '%shadowcopy delete%' ESCAPE '\\') OR (CommandLine LIKE '%Get-WmiObject%' ESCAPE '\\' AND CommandLine LIKE '%Win32\\_ShadowCopy%' ESCAPE '\\' AND CommandLine LIKE '%Delete%' ESCAPE '\\')))"
+    ],
+    "schema_version": 2,
+    "source": "tyrian",
+    "source_table": "logs",
+    "status": "stable",
+    "tags": [
+      "attack.impact",
+      "attack.t1486",
+      "attack.t1490"
+    ],
+    "title": "Shadow Copy Deletion via VSSAdmin or WMIC"
+  },
+  {
+    "author": "Tyrian",
+    "channel": [
+      "Microsoft-Windows-Sysmon/Operational"
+    ],
+    "description": "Detects a process other than the browser itself naming a browser's saved password or cookie store (Chromium Login Data, Cookies, Local State; Firefox key4.db, logins.json) on its command line. Infostealers and hands-on operators copy these files out before decrypting them offline.\n",
+    "eventid": [],
+    "falsepositives": [
+      "Browser profile backup and migration tools"
+    ],
+    "filename": "rules/credential-access/browser-credential-store-access.yml",
+    "id": "0296dbb7-c093-53d3-9b7d-6104562a521b",
+    "level": "high",
+    "license": "MIT",
+    "logsource": {
+      "product": "windows",
+      "service": "sysmon"
+    },
+    "required_fields": [
+      "Channel",
+      "CommandLine",
+      "Image"
+    ],
+    "result_type": "event",
+    "rule": [
+      "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND ((CommandLine LIKE '%\\\\User Data\\\\Default\\\\Login Data%' ESCAPE '\\' OR CommandLine LIKE '%\\\\User Data\\\\Default\\\\Network\\\\Cookies%' ESCAPE '\\' OR CommandLine LIKE '%\\\\User Data\\\\Local State%' ESCAPE '\\' OR CommandLine LIKE '%\\\\key4.db%' ESCAPE '\\' OR CommandLine LIKE '%\\\\logins.json%' ESCAPE '\\') AND (NOT COALESCE((Image LIKE '%\\\\chrome.exe' ESCAPE '\\' OR Image LIKE '%\\\\msedge.exe' ESCAPE '\\' OR Image LIKE '%\\\\firefox.exe' ESCAPE '\\' OR Image LIKE '%\\\\brave.exe' ESCAPE '\\' OR Image LIKE '%\\\\opera.exe' ESCAPE '\\'), 0)))"
+    ],
+    "schema_version": 2,
+    "source": "tyrian",
+    "source_table": "logs",
+    "status": "experimental",
+    "tags": [
+      "attack.credential_access",
+      "attack.t1555.003"
+    ],
+    "title": "Browser Credential Store Accessed From the Command Line"
+  },
+  {
+    "author": "Tyrian",
+    "channel": [
+      "System"
+    ],
+    "description": "Detects a new service whose binary lives in a user-writable directory or is launched through an interpreter. Services are a durable, SYSTEM-level foothold and legitimate ones almost never run out of temp.\n",
+    "eventid": [
+      7045
+    ],
+    "falsepositives": [
+      "Some software installs services from ProgramData; allowlist by publisher"
+    ],
+    "filename": "rules/persistence/service-creation-suspicious-path.yml",
+    "id": "0a17fcde-8779-5c41-8e6e-4b26725e2457",
+    "level": "high",
+    "license": "MIT",
+    "logsource": {
+      "product": "windows",
+      "service": "system"
+    },
+    "required_fields": [
+      "Channel",
+      "EventID",
+      "ServiceFileName"
+    ],
+    "result_type": "event",
+    "rule": [
+      "SELECT * FROM logs WHERE Channel='System' AND (EventID=7045 AND (ServiceFileName LIKE '%\\\\Temp\\\\%' ESCAPE '\\' OR ServiceFileName LIKE '%\\\\Users\\\\Public\\\\%' ESCAPE '\\' OR ServiceFileName LIKE '%\\\\AppData\\\\%' ESCAPE '\\' OR ServiceFileName LIKE '%\\\\ProgramData\\\\%' ESCAPE '\\' OR ServiceFileName LIKE '%powershell%' ESCAPE '\\' OR ServiceFileName LIKE '%cmd.exe /c%' ESCAPE '\\' OR ServiceFileName LIKE '%rundll32%' ESCAPE '\\'))"
+    ],
+    "schema_version": 2,
+    "source": "tyrian",
+    "source_table": "logs",
+    "status": "stable",
+    "tags": [
+      "attack.persistence",
+      "attack.privilege_escalation",
+      "attack.t1543.003"
+    ],
+    "title": "Service Installed From a Suspicious Path"
+  },
+  {
+    "author": "Tyrian",
+    "channel": [
+      "Security"
+    ],
+    "description": "Detects Kerberos AS-REQ activity for accounts that have pre-authentication disabled. The KDC hands back an AS-REP encrypted with a key derived from the account password, which is then cracked offline. Deliberate use of DONT_REQ_PREAUTH is rare, so volume here is usually roasting.\n",
+    "eventid": [
+      4768
+    ],
+    "falsepositives": [
+      "Legacy UNIX or appliance accounts intentionally configured without pre-auth"
+    ],
+    "filename": "rules/credential-access/asrep-roasting-no-preauth.yml",
+    "id": "115f7c66-8a63-529d-9a6a-0a686193c09b",
+    "level": "high",
+    "license": "MIT",
+    "logsource": {
+      "product": "windows",
+      "service": "security"
+    },
+    "required_fields": [
+      "Channel",
+      "EventID",
+      "TargetUserName",
+      "TicketEncryptionType",
+      "TicketOptions"
+    ],
+    "result_type": "event",
+    "rule": [
+      "SELECT * FROM logs WHERE Channel='Security' AND ((EventID=4768 AND TicketOptions='0x40810010' AND (TicketEncryptionType='0x17' OR TicketEncryptionType='0x18')) AND (NOT COALESCE((TargetUserName LIKE '%$' ESCAPE '\\'), 0)))"
+    ],
+    "schema_version": 2,
+    "source": "tyrian",
+    "source_table": "logs",
+    "status": "stable",
+    "tags": [
+      "attack.credential_access",
+      "attack.t1558.004"
+    ],
+    "title": "AS-REP Roasting via Accounts Without Kerberos Pre-Authentication"
+  },
+  {
+    "author": "Tyrian",
+    "channel": [
+      "Security"
+    ],
+    "description": "Detects delegation being turned on for a user or computer account, via a write to userAccountControl's TRUSTED_FOR_DELEGATION flag or to msDS-AllowedToDelegateTo. A host trusted for unconstrained delegation caches the TGT of every account that authenticates to it, so an attacker who gains it and then coerces a domain controller to connect walks away with the DC's ticket.\n",
+    "eventid": [
+      5136
+    ],
+    "falsepositives": [
+      "Legitimate service deployments that require delegation, which should be documented"
+    ],
+    "filename": "rules/privilege-escalation/unconstrained-delegation-enabled.yml",
+    "id": "3146bbb3-9dbd-5a04-8bb9-ce97fb2cfbac",
+    "level": "high",
+    "license": "MIT",
+    "logsource": {
+      "product": "windows",
+      "service": "security"
+    },
+    "required_fields": [
+      "AttributeLDAPDisplayName",
+      "AttributeValue",
+      "Channel",
+      "EventID"
+    ],
+    "result_type": "event",
+    "rule": [
+      "SELECT * FROM logs WHERE Channel='Security' AND ((EventID=5136 AND AttributeLDAPDisplayName='msDS-AllowedToDelegateTo') OR (EventID=5136 AND AttributeLDAPDisplayName='userAccountControl' AND (AttributeValue LIKE '%524288%' ESCAPE '\\' OR AttributeValue LIKE '%16777216%' ESCAPE '\\')))"
+    ],
+    "schema_version": 2,
+    "source": "tyrian",
+    "source_table": "logs",
+    "status": "experimental",
+    "tags": [
+      "attack.privilege_escalation",
+      "attack.persistence",
+      "attack.t1098",
+      "attack.t1550.003"
+    ],
+    "title": "Unconstrained or Constrained Delegation Enabled on an Account"
+  },
+  {
+    "author": "Tyrian",
+    "channel": [
+      "Security"
+    ],
+    "description": "Detects modification of a groupPolicyContainer object or a write into the SYSVOL Policies share. A GPO is a distribution channel to every machine it links to, so editing one that applies broadly turns a single compromised account into code execution across the estate, delivered by the domain's own tooling.\n",
+    "eventid": [
+      5136,
+      5145
+    ],
+    "falsepositives": [
+      "Routine policy administration, which is why this needs to be reconciled against change records",
+      "Backup and GPO reporting tooling touching SYSVOL"
+    ],
+    "filename": "rules/privilege-escalation/group-policy-object-modified.yml",
+    "id": "3d488537-0e7f-5c11-aa63-6559b740781c",
+    "level": "high",
+    "license": "MIT",
+    "logsource": {
+      "product": "windows",
+      "service": "security"
+    },
+    "required_fields": [
+      "Channel",
+      "EventID",
+      "ObjectClass",
+      "RelativeTargetName",
+      "ShareName"
+    ],
+    "result_type": "event",
+    "rule": [
+      "SELECT * FROM logs WHERE Channel='Security' AND ((EventID=5136 AND ObjectClass='groupPolicyContainer') OR (EventID=5145 AND ShareName LIKE '%SYSVOL%' ESCAPE '\\' AND RelativeTargetName LIKE '%Policies%' ESCAPE '\\'))"
+    ],
+    "schema_version": 2,
+    "source": "tyrian",
+    "source_table": "logs",
+    "status": "experimental",
+    "tags": [
+      "attack.privilege_escalation",
+      "attack.defense_evasion",
+      "attack.t1484.001"
+    ],
+    "title": "Group Policy Object Modified"
+  },
+  {
+    "author": "Tyrian",
+    "channel": [
+      "Microsoft-Windows-Sysmon/Operational"
+    ],
+    "description": "Detects a thread created in a process the caller does not own, with the start address resolving into a module associated with injection or into no module at all. Injecting into a signed, expected process is how an implant inherits its network reputation and survives its own dropper exiting.\n",
+    "eventid": [
+      8
+    ],
+    "falsepositives": [
+      "Endpoint security products, which legitimately inject to hook userland APIs",
+      "Application compatibility shims and some installers"
+    ],
+    "filename": "rules/defense-evasion/process-injection-createremotethread.yml",
+    "id": "455eee3a-3bb3-55e0-977e-e300d525fa49",
+    "level": "high",
+    "license": "MIT",
+    "logsource": {
+      "product": "windows",
+      "service": "sysmon"
+    },
+    "required_fields": [
+      "Channel",
+      "EventID",
+      "SourceImage",
+      "TargetImage"
+    ],
+    "result_type": "event",
+    "rule": [
+      "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=8 AND (TargetImage LIKE '%\\\\lsass.exe' ESCAPE '\\' OR TargetImage LIKE '%\\\\explorer.exe' ESCAPE '\\' OR TargetImage LIKE '%\\\\svchost.exe' ESCAPE '\\' OR TargetImage LIKE '%\\\\winlogon.exe' ESCAPE '\\' OR TargetImage LIKE '%\\\\notepad.exe' ESCAPE '\\' OR TargetImage LIKE '%\\\\rundll32.exe' ESCAPE '\\') AND (NOT COALESCE((SourceImage LIKE '%\\\\csrss.exe' ESCAPE '\\' OR SourceImage LIKE '%\\\\wininit.exe' ESCAPE '\\' OR SourceImage LIKE '%\\\\services.exe' ESCAPE '\\' OR SourceImage LIKE '%\\\\MsMpEng.exe' ESCAPE '\\'), 0)))"
+    ],
+    "schema_version": 2,
+    "source": "tyrian",
+    "source_table": "logs",
+    "status": "experimental",
+    "tags": [
+      "attack.defense_evasion",
+      "attack.privilege_escalation",
+      "attack.t1055",
+      "attack.t1055.003"
+    ],
+    "title": "Remote Thread Created in Another Process"
+  },
+  {
+    "author": "Tyrian",
+    "channel": [
+      "Microsoft-Windows-Sysmon/Operational"
+    ],
+    "description": "Detects tscon.exe connecting a session to another destination. Run as SYSTEM it takes over another user's disconnected RDP session without their password.\n",
+    "eventid": [],
+    "falsepositives": [
+      "Helpdesk tooling reconnecting sessions; rare"
+    ],
+    "filename": "rules/lateral-movement/rdp-session-hijack-tscon.yml",
+    "id": "4eb1a6ec-d6c3-5411-9d1f-5d63c2d55de8",
+    "level": "high",
+    "license": "MIT",
+    "logsource": {
+      "product": "windows",
+      "service": "sysmon"
+    },
+    "required_fields": [
+      "Channel",
+      "CommandLine",
+      "Image"
+    ],
+    "result_type": "event",
+    "rule": [
+      "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (Image LIKE '%\\\\tscon.exe' ESCAPE '\\' AND CommandLine LIKE '%/dest:%' ESCAPE '\\')"
+    ],
+    "schema_version": 2,
+    "source": "tyrian",
+    "source_table": "logs",
+    "status": "experimental",
+    "tags": [
+      "attack.lateral_movement",
+      "attack.t1563.002"
+    ],
+    "title": "RDP Session Hijack via tscon"
+  },
+  {
+    "author": "Tyrian",
+    "channel": [
+      "Microsoft-Windows-Sysmon/Operational"
+    ],
+    "description": "Detects the in-memory download-and-execute patterns used to stage a payload without writing it to disk, covering both the WebClient and Invoke-WebRequest forms alongside an execution primitive.\n",
+    "eventid": [],
+    "falsepositives": [
+      "Package bootstrap scripts, which should originate from known hosts"
+    ],
+    "filename": "rules/execution/powershell-download-cradle.yml",
+    "id": "5e1e076e-5fb4-58c6-ad90-3219b3472014",
+    "level": "high",
+    "license": "MIT",
+    "logsource": {
+      "product": "windows",
+      "service": "sysmon"
+    },
+    "required_fields": [
+      "Channel",
+      "CommandLine",
+      "Image"
+    ],
+    "result_type": "event",
+    "rule": [
+      "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND ((Image LIKE '%\\\\powershell.exe' ESCAPE '\\' OR Image LIKE '%\\\\pwsh.exe' ESCAPE '\\') AND (CommandLine LIKE '%DownloadString%' ESCAPE '\\' OR CommandLine LIKE '%DownloadFile%' ESCAPE '\\' OR CommandLine LIKE '%Invoke-WebRequest%' ESCAPE '\\' OR CommandLine LIKE '%Net.WebClient%' ESCAPE '\\' OR CommandLine LIKE '%iwr %' ESCAPE '\\' OR CommandLine LIKE '%curl %' ESCAPE '\\') AND (CommandLine LIKE '%IEX%' ESCAPE '\\' OR CommandLine LIKE '%Invoke-Expression%' ESCAPE '\\' OR CommandLine LIKE '%iex(%' ESCAPE '\\' OR CommandLine LIKE '%| iex%' ESCAPE '\\'))"
+    ],
+    "schema_version": 2,
+    "source": "tyrian",
+    "source_table": "logs",
+    "status": "stable",
+    "tags": [
+      "attack.execution",
+      "attack.command_and_control",
+      "attack.t1059.001"
+    ],
+    "title": "PowerShell Download Cradle"
+  },
+  {
+    "author": "Tyrian",
+    "channel": [
+      "System"
+    ],
+    "description": "Detects PsExec / smbexec style lateral movement by flagging service installs (Event ID 7045) with random service names or image paths in admin shares and temp.\n",
+    "eventid": [
+      7045
+    ],
+    "falsepositives": [
+      "Some legitimate management tools install transient services; baseline yours"
+    ],
+    "filename": "rules/lateral-movement/psexec-service-creation.yml",
+    "id": "6850165e-dce9-5dcc-8a27-571900c0596a",
+    "level": "high",
+    "license": "MIT",
+    "logsource": {
+      "product": "windows",
+      "service": "system"
+    },
+    "required_fields": [
+      "Channel",
+      "EventID",
+      "ImagePath",
+      "ServiceName"
+    ],
+    "result_type": "event",
+    "rule": [
+      "SELECT * FROM logs WHERE Channel='System' AND (EventID=7045 AND (ServiceName REGEXP '^[A-Za-z0-9]{8}$' OR (ImagePath LIKE '%\\\\ADMIN$\\\\%' ESCAPE '\\' OR ImagePath LIKE '%\\\\PSEXESVC%' ESCAPE '\\' OR ImagePath LIKE '%\\\\Windows\\\\Temp\\\\%' ESCAPE '\\' OR ImagePath LIKE '%-s cmd%' ESCAPE '\\')))"
+    ],
+    "schema_version": 2,
+    "source": "tyrian",
+    "source_table": "logs",
+    "status": "stable",
+    "tags": [
+      "attack.lateral_movement",
+      "attack.t1021.002"
+    ],
+    "title": "PsExec-style Remote Service Installation"
+  },
+  {
+    "author": "Tyrian",
+    "channel": [
+      "Security"
+    ],
+    "description": "Detects a certificate request whose requester is a computer account. Coercing a domain controller to authenticate to the AD CS web enrollment endpoint over NTLM and relaying it (ESC8) produces exactly this: the CA sees the DC's machine account enrolling, usually against a user or DC template. Machine accounts do enroll legitimately, so pair this with the template name before escalating.\n",
+    "eventid": [
+      4886,
+      4887
+    ],
+    "falsepositives": [
+      "Autoenrollment issuing domain controller certificates during normal operation",
+      "Machine certificate renewal"
+    ],
+    "filename": "rules/credential-access/adcs-machine-account-user-certificate.yml",
+    "id": "69506fc5-bfa0-5589-8246-8b669e43ea50",
+    "level": "high",
+    "license": "MIT",
+    "logsource": {
+      "product": "windows",
+      "service": "security"
+    },
+    "required_fields": [
+      "Attributes",
+      "Channel",
+      "EventID",
+      "Requester"
+    ],
+    "result_type": "event",
+    "rule": [
+      "SELECT * FROM logs WHERE Channel='Security' AND (((EventID=4886 OR EventID=4887) AND Requester LIKE '%$' ESCAPE '\\') AND (Attributes LIKE '%CertificateTemplate:User%' ESCAPE '\\' OR Attributes LIKE '%CertificateTemplate:DomainController%' ESCAPE '\\' OR Attributes LIKE '%CertificateTemplate:KerberosAuthentication%' ESCAPE '\\'))"
+    ],
+    "schema_version": 2,
+    "source": "tyrian",
+    "source_table": "logs",
+    "status": "experimental",
+    "tags": [
+      "attack.credential_access",
+      "attack.privilege_escalation",
+      "attack.t1649",
+      "attack.t1557.001"
+    ],
+    "title": "ADCS Certificate Issued to a Machine Account on a User Template"
+  },
+  {
+    "author": "Tyrian",
+    "channel": [
+      "Microsoft-Windows-Sysmon/Operational"
+    ],
+    "description": "Detects rundll32 executing a DLL from a user-writable directory, running JavaScript through its scriptlet handler, or launching with no arguments at all. rundll32 is signed by Microsoft and present everywhere, so an implant that lives inside it inherits a trusted image name. A no-argument rundll32 is a particularly reliable tell, since it does nothing useful and is a common injection host.\n",
+    "eventid": [],
+    "falsepositives": [
+      "Installers and updaters that invoke a DLL export from a temp directory",
+      "Legitimate ShellExec_RunDLL use by shell extensions"
+    ],
+    "filename": "rules/defense-evasion/rundll32-suspicious-invocation.yml",
+    "id": "6b002867-a210-5665-8c0e-520c491095cd",
+    "level": "high",
+    "license": "MIT",
+    "logsource": {
+      "product": "windows",
+      "service": "sysmon"
+    },
+    "required_fields": [
+      "Channel",
+      "CommandLine",
+      "Image"
+    ],
+    "result_type": "event",
+    "rule": [
+      "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND ((Image LIKE '%\\\\rundll32.exe' ESCAPE '\\' AND (CommandLine LIKE '%\\\\Users\\\\Public\\\\%' ESCAPE '\\' OR CommandLine LIKE '%\\\\AppData\\\\Local\\\\Temp\\\\%' ESCAPE '\\' OR CommandLine LIKE '%\\\\Windows\\\\Temp\\\\%' ESCAPE '\\' OR CommandLine LIKE '%\\\\ProgramData\\\\%' ESCAPE '\\' OR CommandLine LIKE '%C:\\\\Users\\\\%' ESCAPE '\\')) OR (Image LIKE '%\\\\rundll32.exe' ESCAPE '\\' AND (CommandLine LIKE '%javascript:%' ESCAPE '\\' OR CommandLine LIKE '%vbscript:%' ESCAPE '\\' OR CommandLine LIKE '%mshtml,RunHTMLApplication%' ESCAPE '\\' OR CommandLine LIKE '%url.dll,OpenURL%' ESCAPE '\\' OR CommandLine LIKE '%shell32.dll,ShellExec\\_RunDLL%' ESCAPE '\\')))"
+    ],
+    "schema_version": 2,
+    "source": "tyrian",
+    "source_table": "logs",
+    "status": "experimental",
+    "tags": [
+      "attack.defense_evasion",
+      "attack.execution",
+      "attack.t1218.011"
+    ],
+    "title": "rundll32 Loading a Payload From a Suspicious Location"
+  },
+  {
+    "author": "Tyrian",
+    "channel": [
+      "Microsoft-Windows-Sysmon/Operational"
+    ],
+    "description": "Detects named pipes matching Cobalt Strike's default naming for SMB beacons and post-exploitation jobs (msagent_, postex_, status_, and the MSSE- pattern). Operators can and do change these in a malleable profile, so this catches unmodified tooling rather than a tuned engagement. It stays worth having because unmodified tooling is what commodity intrusions actually run.\n",
+    "eventid": [
+      17,
+      18
+    ],
+    "falsepositives": [
+      "Chromium-based browsers create \\mojo_ pipes constantly; drop that value unless you have baselined it"
+    ],
+    "filename": "rules/command-and-control/cobalt-strike-named-pipe.yml",
+    "id": "72d94227-55fd-5b8d-a949-ce923d0d3fc3",
+    "level": "high",
+    "license": "MIT",
+    "logsource": {
+      "product": "windows",
+      "service": "sysmon"
+    },
+    "required_fields": [
+      "Channel",
+      "EventID",
+      "PipeName"
+    ],
+    "result_type": "event",
+    "rule": [
+      "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND ((EventID=17 OR EventID=18) AND (PipeName LIKE '\\\\msagent\\_%' ESCAPE '\\' OR PipeName LIKE '\\\\postex\\_%' ESCAPE '\\' OR PipeName LIKE '\\\\postex\\_ssh\\_%' ESCAPE '\\' OR PipeName LIKE '\\\\status\\_%' ESCAPE '\\' OR PipeName LIKE '\\\\MSSE-%' ESCAPE '\\' OR PipeName LIKE '\\\\mojo\\_%' ESCAPE '\\' OR PipeName LIKE '\\\\netsvc\\_%' ESCAPE '\\'))"
+    ],
+    "schema_version": 2,
+    "source": "tyrian",
+    "source_table": "logs",
+    "status": "experimental",
+    "tags": [
+      "attack.command_and_control",
+      "attack.defense_evasion",
+      "attack.t1055",
+      "attack.t1071"
+    ],
+    "title": "Cobalt Strike Default Named Pipe"
+  },
+  {
+    "author": "Tyrian",
+    "channel": [
+      "Microsoft-Windows-Sysmon/Operational"
+    ],
+    "description": "Detects credential dumping by flagging process handle access to lsass.exe with read rights (Sysmon Event ID 10), excluding known security products. Tool-agnostic: catches Mimikatz, procdump, comsvcs, and custom loaders alike.\n",
+    "eventid": [
+      10
+    ],
+    "falsepositives": [
+      "Your EDR/AV legitimately reading LSASS; add its image to filter_known"
+    ],
+    "filename": "rules/credential-access/lsass-handle-access.yml",
+    "id": "8a5bacb8-dbda-5262-9650-51c5cf6d3fe0",
+    "level": "high",
+    "license": "MIT",
+    "logsource": {
+      "category": "process_access",
+      "product": "windows",
+      "service": "sysmon"
+    },
+    "required_fields": [
+      "Channel",
+      "EventID",
+      "GrantedAccess",
+      "SourceImage",
+      "TargetImage"
+    ],
+    "result_type": "event",
+    "rule": [
+      "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=10 AND ((TargetImage LIKE '%\\\\lsass.exe' ESCAPE '\\' AND (GrantedAccess='0x1010' OR GrantedAccess='0x1410' OR GrantedAccess='0x143a' OR GrantedAccess='0x1438')) AND (NOT COALESCE((SourceImage LIKE '%\\\\MsMpEng.exe' ESCAPE '\\' OR SourceImage LIKE '%\\\\wmiprvse.exe' ESCAPE '\\'), 0))))"
+    ],
+    "schema_version": 2,
+    "source": "tyrian",
+    "source_table": "logs",
+    "status": "stable",
+    "tags": [
+      "attack.credential_access",
+      "attack.t1003.001"
+    ],
+    "title": "LSASS Memory Access with Read Rights"
+  },
+  {
+    "author": "Tyrian",
+    "channel": [
+      "Microsoft-Windows-Sysmon/Operational"
+    ],
+    "description": "Detects creation of WMI event filters, consumers and bindings, a fileless persistence mechanism that survives reboot and is invisible to autoruns inspection of the usual locations.\n",
+    "eventid": [
+      19,
+      20,
+      21
+    ],
+    "falsepositives": [
+      "A few management products register permanent consumers; enumerate them once"
+    ],
+    "filename": "rules/persistence/wmi-event-subscription.yml",
+    "id": "8dfbb017-7465-56db-b538-2805dc58014a",
+    "level": "high",
+    "license": "MIT",
+    "logsource": {
+      "product": "windows",
+      "service": "sysmon"
+    },
+    "required_fields": [
+      "Channel",
+      "EventID"
+    ],
+    "result_type": "event",
+    "rule": [
+      "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=19 OR EventID=20 OR EventID=21)"
+    ],
+    "schema_version": 2,
+    "source": "tyrian",
+    "source_table": "logs",
+    "status": "stable",
+    "tags": [
+      "attack.persistence",
+      "attack.privilege_escalation",
+      "attack.t1546.003"
+    ],
+    "title": "WMI Event Subscription Persistence"
+  },
+  {
+    "author": "Tyrian",
+    "channel": [
+      "Microsoft-Windows-Sysmon/Operational"
+    ],
+    "description": "Detects rclone, megacmd and similar utilities being driven from the command line to copy data to cloud storage. Ransomware crews reach for rclone specifically because it is a legitimate, signed, cross-platform binary whose traffic is TLS to a mainstream provider, which defeats both signature matching and egress rules written around \"unknown destinations\". Pair with the archive-staging rule: stage then upload is the whole double-extortion pattern.\n",
+    "eventid": [],
+    "falsepositives": [
+      "Backup workflows that genuinely use rclone or WinSCP, which should be inventoried"
+    ],
+    "filename": "rules/exfiltration/exfiltration-to-cloud-storage.yml",
+    "id": "93b80bbd-ffd7-5c82-a92c-b881f51e2e5a",
+    "level": "high",
+    "license": "MIT",
+    "logsource": {
+      "product": "windows",
+      "service": "sysmon"
+    },
+    "required_fields": [
+      "Channel",
+      "CommandLine",
+      "Image",
+      "OriginalFileName"
+    ],
+    "result_type": "event",
+    "rule": [
+      "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (((Image LIKE '%\\\\rclone.exe' ESCAPE '\\' OR Image LIKE '%\\\\megacmd.exe' ESCAPE '\\' OR Image LIKE '%\\\\MEGAclient.exe' ESCAPE '\\' OR Image LIKE '%\\\\winscp.com' ESCAPE '\\' OR Image LIKE '%\\\\winscp.exe' ESCAPE '\\') AND (CommandLine LIKE '%copy%' ESCAPE '\\' OR CommandLine LIKE '%sync%' ESCAPE '\\' OR CommandLine LIKE '%move%' ESCAPE '\\' OR CommandLine LIKE '%put%' ESCAPE '\\')) OR OriginalFileName='rclone.exe')"
+    ],
+    "schema_version": 2,
+    "source": "tyrian",
+    "source_table": "logs",
+    "status": "experimental",
+    "tags": [
+      "attack.exfiltration",
+      "attack.t1567.002"
+    ],
+    "title": "Bulk Upload to Cloud Storage via Command-Line Tooling"
+  },
+  {
+    "author": "Tyrian",
+    "channel": [
+      "Microsoft-Windows-Sysmon/Operational"
+    ],
+    "description": "Detects mshta.exe running content from a URL or an inline script handler. mshta is signed by Microsoft and frequently allowlisted, which is exactly why it is used to run HTA and JScript payloads.\n",
+    "eventid": [],
+    "falsepositives": [
+      "A small number of legacy line-of-business apps still ship HTA front-ends"
+    ],
+    "filename": "rules/execution/mshta-remote-payload.yml",
+    "id": "a061123e-949c-5341-8dc6-4e66b15c2611",
+    "level": "high",
+    "license": "MIT",
+    "logsource": {
+      "product": "windows",
+      "service": "sysmon"
+    },
+    "required_fields": [
+      "Channel",
+      "CommandLine",
+      "Image"
+    ],
+    "result_type": "event",
+    "rule": [
+      "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (Image LIKE '%\\\\mshta.exe' ESCAPE '\\' AND (CommandLine LIKE '%http://%' ESCAPE '\\' OR CommandLine LIKE '%https://%' ESCAPE '\\' OR CommandLine LIKE '%javascript:%' ESCAPE '\\' OR CommandLine LIKE '%vbscript:%' ESCAPE '\\' OR CommandLine LIKE '%.hta%' ESCAPE '\\'))"
+    ],
+    "schema_version": 2,
+    "source": "tyrian",
+    "source_table": "logs",
+    "status": "stable",
+    "tags": [
+      "attack.defense_evasion",
+      "attack.execution",
+      "attack.t1218.005"
+    ],
+    "title": "mshta Executing a Remote or Script Payload"
+  },
+  {
+    "author": "Tyrian",
+    "channel": [
+      "Security"
+    ],
+    "description": "Detects membership changes to high-value groups. Adding an account to Domain Admins or the local Administrators group is both a common attacker objective and a rare, auditable administrative act.\n",
+    "eventid": [
+      4728,
+      4732,
+      4756
+    ],
+    "falsepositives": [
+      "Routine onboarding, which should still be reviewed"
+    ],
+    "filename": "rules/persistence/new-local-admin-account.yml",
+    "id": "ab3f101b-9214-5404-81e3-ff10a4d3e850",
+    "level": "high",
+    "license": "MIT",
+    "logsource": {
+      "product": "windows",
+      "service": "security"
+    },
+    "required_fields": [
+      "Channel",
+      "EventID"
+    ],
+    "result_type": "event",
+    "rule": [
+      "SELECT * FROM logs WHERE Channel='Security' AND (EventID=4728 OR EventID=4732 OR EventID=4756)"
+    ],
+    "schema_version": 2,
+    "source": "tyrian",
+    "source_table": "logs",
+    "status": "stable",
+    "tags": [
+      "attack.persistence",
+      "attack.privilege_escalation",
+      "attack.t1098"
+    ],
+    "title": "Account Added to a Privileged Local or Domain Group"
+  },
+  {
+    "author": "Tyrian",
+    "channel": [
+      "Microsoft-Windows-Sysmon/Operational"
+    ],
+    "description": "Detects PowerShell invoked with a base64 encoded command, which is how most loaders and post-exploitation frameworks hide their payload from casual command-line review.\n",
+    "eventid": [],
+    "falsepositives": [
+      "Some management suites wrap scripts in encoded commands; allowlist by parent"
+    ],
+    "filename": "rules/execution/powershell-encoded-command.yml",
+    "id": "b154f249-2470-5bba-a83a-31fdb73e2026",
+    "level": "high",
+    "license": "MIT",
+    "logsource": {
+      "product": "windows",
+      "service": "sysmon"
+    },
+    "required_fields": [
+      "Channel",
+      "CommandLine",
+      "Image"
+    ],
+    "result_type": "event",
+    "rule": [
+      "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND ((Image LIKE '%\\\\powershell.exe' ESCAPE '\\' OR Image LIKE '%\\\\pwsh.exe' ESCAPE '\\') AND (CommandLine LIKE '% -e %' ESCAPE '\\' OR CommandLine LIKE '% /e %' ESCAPE '\\' OR CommandLine LIKE '% \u2013e %' ESCAPE '\\' OR CommandLine LIKE '% \u2014e %' ESCAPE '\\' OR CommandLine LIKE '% \u2015e %' ESCAPE '\\' OR CommandLine LIKE '% -ec %' ESCAPE '\\' OR CommandLine LIKE '% /ec %' ESCAPE '\\' OR CommandLine LIKE '% \u2013ec %' ESCAPE '\\' OR CommandLine LIKE '% \u2014ec %' ESCAPE '\\' OR CommandLine LIKE '% \u2015ec %' ESCAPE '\\' OR CommandLine LIKE '% -en%' ESCAPE '\\' OR CommandLine LIKE '% /en%' ESCAPE '\\' OR CommandLine LIKE '% \u2013en%' ESCAPE '\\' OR CommandLine LIKE '% \u2014en%' ESCAPE '\\' OR CommandLine LIKE '% \u2015en%' ESCAPE '\\'))"
+    ],
+    "schema_version": 2,
+    "source": "tyrian",
+    "source_table": "logs",
+    "status": "stable",
+    "tags": [
+      "attack.execution",
+      "attack.defense_evasion",
+      "attack.t1059.001"
+    ],
+    "title": "PowerShell Encoded Command Execution"
+  },
+  {
+    "author": "Tyrian",
+    "channel": [
+      "Microsoft-Windows-Sysmon/Operational"
+    ],
+    "description": "Detects processes spawned by the WMI provider host, which is how wmic /node and Invoke-WmiMethod execute code on a remote machine. Legitimate WMI rarely spawns script interpreters or download utilities.\n",
+    "eventid": [],
+    "falsepositives": [
+      "Monitoring and inventory agents that act on hosts over WMI"
+    ],
+    "filename": "rules/lateral-movement/wmi-remote-process-creation.yml",
+    "id": "b6fcbdbb-9c5e-516f-8065-94aa4ad4a049",
+    "level": "high",
+    "license": "MIT",
+    "logsource": {
+      "product": "windows",
+      "service": "sysmon"
+    },
+    "required_fields": [
+      "Channel",
+      "Image",
+      "ParentImage"
+    ],
+    "result_type": "event",
+    "rule": [
+      "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (ParentImage LIKE '%\\\\WmiPrvSE.exe' ESCAPE '\\' AND (Image LIKE '%\\\\powershell.exe' ESCAPE '\\' OR Image LIKE '%\\\\pwsh.exe' ESCAPE '\\' OR Image LIKE '%\\\\cmd.exe' ESCAPE '\\' OR Image LIKE '%\\\\mshta.exe' ESCAPE '\\' OR Image LIKE '%\\\\rundll32.exe' ESCAPE '\\' OR Image LIKE '%\\\\regsvr32.exe' ESCAPE '\\' OR Image LIKE '%\\\\certutil.exe' ESCAPE '\\'))"
+    ],
+    "schema_version": 2,
+    "source": "tyrian",
+    "source_table": "logs",
+    "status": "stable",
+    "tags": [
+      "attack.lateral_movement",
+      "attack.execution",
+      "attack.t1047"
+    ],
+    "title": "Remote Process Creation via WMI"
+  },
+  {
+    "author": "Tyrian",
+    "channel": [
+      "Security"
+    ],
+    "description": "Detects file writes to the hidden administrative shares, which is the staging half of PsExec-style lateral movement: drop the payload over SMB, then start it as a service on the target.\n",
+    "eventid": [
+      5145
+    ],
+    "falsepositives": [
+      "Backup, imaging and software-deployment tooling that uses admin shares"
+    ],
+    "filename": "rules/lateral-movement/smb-admin-share-write.yml",
+    "id": "bf980a51-2337-5dc3-ad80-6e3db6f38279",
+    "level": "high",
+    "license": "MIT",
+    "logsource": {
+      "product": "windows",
+      "service": "security"
+    },
+    "required_fields": [
+      "Channel",
+      "EventID",
+      "ObjectName",
+      "SubjectUserName"
+    ],
+    "result_type": "event",
+    "rule": [
+      "SELECT * FROM logs WHERE Channel='Security' AND ((EventID=5145 AND (ObjectName LIKE '%ADMIN$%' ESCAPE '\\' OR ObjectName LIKE '%C$%' ESCAPE '\\')) AND (NOT COALESCE((SubjectUserName LIKE '%$' ESCAPE '\\'), 0)))"
+    ],
+    "schema_version": 2,
+    "source": "tyrian",
+    "source_table": "logs",
+    "status": "stable",
+    "tags": [
+      "attack.lateral_movement",
+      "attack.t1021.002"
+    ],
+    "title": "Write to an Administrative Share"
+  },
+  {
+    "author": "Tyrian",
+    "channel": [
+      "Security"
+    ],
+    "description": "Detects Kerberoasting by flagging RC4-encrypted (etype 0x17) TGS requests for user-account SPNs. Roasting tools force RC4 because it cracks far faster than AES.\n",
+    "eventid": [
+      4769
+    ],
+    "falsepositives": [
+      "Legacy applications or hosts that still negotiate RC4 Kerberos"
+    ],
+    "filename": "rules/credential-access/kerberoasting-rc4-tgs.yml",
+    "id": "c9c49676-f703-5462-ab22-95414958f583",
+    "level": "high",
+    "license": "MIT",
+    "logsource": {
+      "product": "windows",
+      "service": "security"
+    },
+    "required_fields": [
+      "Channel",
+      "EventID",
+      "ServiceName",
+      "TicketEncryptionType",
+      "TicketOptions"
+    ],
+    "result_type": "event",
+    "rule": [
+      "SELECT * FROM logs WHERE Channel='Security' AND ((EventID=4769 AND TicketEncryptionType='0x17' AND TicketOptions='0x40810000') AND (NOT COALESCE((ServiceName LIKE '%$' ESCAPE '\\'), 0)) AND (NOT COALESCE((ServiceName='krbtgt'), 0)))"
+    ],
+    "schema_version": 2,
+    "source": "tyrian",
+    "source_table": "logs",
+    "status": "stable",
+    "tags": [
+      "attack.credential_access",
+      "attack.t1558.003"
+    ],
+    "title": "Kerberoasting via RC4 Service Ticket Request"
+  },
+  {
+    "author": "Tyrian",
+    "channel": [
+      "Microsoft-Windows-Sysmon/Operational"
+    ],
+    "description": "Detects Sysmon's ProcessTampering event, raised when a process image on disk no longer matches what is mapped in memory. That mismatch is the defining artefact of process hollowing, herpaderping and doppelganging, where a legitimate binary is started suspended and its image replaced before execution resumes. Very few legitimate programs produce it.\n",
+    "eventid": [
+      25
+    ],
+    "falsepositives": [
+      "Packed or self-modifying legitimate software, including some installers and anti-tamper game clients"
+    ],
+    "filename": "rules/defense-evasion/process-image-tampering-hollowing.yml",
+    "id": "ca83670d-a03a-59d2-9a7c-4db7307fd26b",
+    "level": "high",
+    "license": "MIT",
+    "logsource": {
+      "product": "windows",
+      "service": "sysmon"
+    },
+    "required_fields": [
+      "Channel",
+      "EventID"
+    ],
+    "result_type": "event",
+    "rule": [
+      "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND EventID=25"
+    ],
+    "schema_version": 2,
+    "source": "tyrian",
+    "source_table": "logs",
+    "status": "experimental",
+    "tags": [
+      "attack.defense_evasion",
+      "attack.privilege_escalation",
+      "attack.t1055.012"
+    ],
+    "title": "Process Image Tampering (Hollowing or Herpaderping)"
+  },
+  {
+    "author": "Tyrian",
+    "channel": [
+      "Microsoft-Windows-Sysmon/Operational"
+    ],
+    "description": "Detects an IIS, Apache, nginx, PHP or Tomcat worker starting a command interpreter or recon utility. That is what exploitation of a public-facing application (and a web shell in use afterwards) looks like from the host.\n",
+    "eventid": [],
+    "falsepositives": [
+      "Web applications that legitimately shell out (report generators, legacy CGI); allowlist by ParentCommandLine"
+    ],
+    "filename": "rules/initial-access/web-server-spawns-shell.yml",
+    "id": "ce34a2e8-76c5-5c4a-9caa-ac5485d24961",
+    "level": "high",
+    "license": "MIT",
+    "logsource": {
+      "product": "windows",
+      "service": "sysmon"
+    },
+    "required_fields": [
+      "Channel",
+      "Image",
+      "ParentImage"
+    ],
+    "result_type": "event",
+    "rule": [
+      "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND ((ParentImage LIKE '%\\\\w3wp.exe' ESCAPE '\\' OR ParentImage LIKE '%\\\\httpd.exe' ESCAPE '\\' OR ParentImage LIKE '%\\\\nginx.exe' ESCAPE '\\' OR ParentImage LIKE '%\\\\php-cgi.exe' ESCAPE '\\' OR ParentImage LIKE '%\\\\tomcat.exe' ESCAPE '\\' OR ParentImage LIKE '%\\\\tomcat8.exe' ESCAPE '\\' OR ParentImage LIKE '%\\\\tomcat9.exe' ESCAPE '\\' OR ParentImage LIKE '%\\\\tomcat10.exe' ESCAPE '\\') AND (Image LIKE '%\\\\cmd.exe' ESCAPE '\\' OR Image LIKE '%\\\\powershell.exe' ESCAPE '\\' OR Image LIKE '%\\\\pwsh.exe' ESCAPE '\\' OR Image LIKE '%\\\\whoami.exe' ESCAPE '\\' OR Image LIKE '%\\\\net.exe' ESCAPE '\\' OR Image LIKE '%\\\\net1.exe' ESCAPE '\\' OR Image LIKE '%\\\\certutil.exe' ESCAPE '\\' OR Image LIKE '%\\\\bitsadmin.exe' ESCAPE '\\' OR Image LIKE '%\\\\rundll32.exe' ESCAPE '\\' OR Image LIKE '%\\\\cscript.exe' ESCAPE '\\' OR Image LIKE '%\\\\wscript.exe' ESCAPE '\\' OR Image LIKE '%\\\\mshta.exe' ESCAPE '\\'))"
+    ],
+    "schema_version": 2,
+    "source": "tyrian",
+    "source_table": "logs",
+    "status": "experimental",
+    "tags": [
+      "attack.initial_access",
+      "attack.persistence",
+      "attack.t1190",
+      "attack.t1505.003"
+    ],
+    "title": "Web Server Process Spawns a Shell or Recon Tool"
+  },
+  {
+    "author": "Tyrian",
+    "channel": [
+      "Microsoft-Windows-Sysmon/Operational"
+    ],
+    "description": "Detects wscript, cscript or mshta running a script straight out of a just-opened archive (Explorer's Temp1_ folders, 7-Zip and WinRAR temp directories) or the Downloads folder. Zipped JavaScript and HTA attachments are one of the most common first-stage loaders.\n",
+    "eventid": [],
+    "falsepositives": [
+      "Admins running vendor scripts they downloaded; rare on user endpoints"
+    ],
+    "filename": "rules/initial-access/script-from-archive-or-downloads.yml",
+    "id": "cf53a12f-aaa2-53e9-8be1-bbb44e114a3a",
+    "level": "high",
+    "license": "MIT",
+    "logsource": {
+      "product": "windows",
+      "service": "sysmon"
+    },
+    "required_fields": [
+      "Channel",
+      "CommandLine",
+      "Image"
+    ],
+    "result_type": "event",
+    "rule": [
+      "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND ((Image LIKE '%\\\\wscript.exe' ESCAPE '\\' OR Image LIKE '%\\\\cscript.exe' ESCAPE '\\' OR Image LIKE '%\\\\mshta.exe' ESCAPE '\\') AND (CommandLine LIKE '%\\\\AppData\\\\Local\\\\Temp\\\\Temp1\\_%' ESCAPE '\\' OR CommandLine LIKE '%\\\\AppData\\\\Local\\\\Temp\\\\7z%' ESCAPE '\\' OR CommandLine LIKE '%\\\\AppData\\\\Local\\\\Temp\\\\Rar$%' ESCAPE '\\' OR CommandLine LIKE '%\\\\Downloads\\\\%' ESCAPE '\\'))"
+    ],
+    "schema_version": 2,
+    "source": "tyrian",
+    "source_table": "logs",
+    "status": "experimental",
+    "tags": [
+      "attack.initial_access",
+      "attack.execution",
+      "attack.t1566.001",
+      "attack.t1204.002"
+    ],
+    "title": "Script Host Runs a Script From an Archive or Downloads Folder"
+  },
+  {
+    "author": "Tyrian",
+    "channel": [
+      "Microsoft-Windows-Sysmon/Operational"
+    ],
+    "description": "Detects likely persistence via scheduled tasks by flagging schtasks.exe / at.exe /create where the task action points at a script host, encoded command, or a user-writable path. Task creation is common; the action is what makes it malicious.\n",
+    "eventid": [
+      1
+    ],
+    "falsepositives": [
+      "Legitimate software installers creating tasks; baseline and exclude signed tools"
+    ],
+    "filename": "rules/persistence/suspicious-scheduled-task.yml",
+    "id": "df789d52-9e75-5539-8a22-373fe5495b65",
+    "level": "high",
+    "license": "MIT",
+    "logsource": {
+      "category": "process_creation",
+      "product": "windows",
+      "service": "sysmon"
+    },
+    "required_fields": [
+      "Channel",
+      "CommandLine",
+      "EventID",
+      "Image"
+    ],
+    "result_type": "event",
+    "rule": [
+      "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=1 AND (((Image LIKE '%\\\\schtasks.exe' ESCAPE '\\' OR Image LIKE '%\\\\at.exe' ESCAPE '\\') AND CommandLine LIKE '%/create%' ESCAPE '\\') AND (CommandLine LIKE '%powershell%' ESCAPE '\\' OR CommandLine LIKE '%-enc%' ESCAPE '\\' OR CommandLine LIKE '%AppData%' ESCAPE '\\' OR CommandLine LIKE '%\\\\Temp\\\\%' ESCAPE '\\' OR CommandLine LIKE '%rundll32%' ESCAPE '\\' OR CommandLine LIKE '%mshta%' ESCAPE '\\' OR CommandLine LIKE '%DownloadString%' ESCAPE '\\')))"
+    ],
+    "schema_version": 2,
+    "source": "tyrian",
+    "source_table": "logs",
+    "status": "stable",
+    "tags": [
+      "attack.persistence",
+      "attack.execution",
+      "attack.t1053.005"
+    ],
+    "title": "Suspicious Scheduled Task Creation"
+  },
+  {
+    "author": "Tyrian",
+    "channel": [
+      "Microsoft-Windows-Sysmon/Operational"
+    ],
+    "description": "Detects certutil fetching remote content or decoding base64 payloads. It is a signed Microsoft binary present everywhere, which makes it a favourite substitute for curl on locked-down hosts.\n",
+    "eventid": [],
+    "falsepositives": [
+      "Certificate maintenance scripts, which rarely use urlcache"
+    ],
+    "filename": "rules/execution/certutil-download.yml",
+    "id": "ed34bddb-6524-5533-b0bb-0e1ca39461e7",
+    "level": "high",
+    "license": "MIT",
+    "logsource": {
+      "product": "windows",
+      "service": "sysmon"
+    },
+    "required_fields": [
+      "Channel",
+      "CommandLine",
+      "Image"
+    ],
+    "result_type": "event",
+    "rule": [
+      "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (Image LIKE '%\\\\certutil.exe' ESCAPE '\\' AND (CommandLine LIKE '%urlcache%' ESCAPE '\\' OR CommandLine LIKE '%verifyctl%' ESCAPE '\\' OR CommandLine LIKE '%decode%' ESCAPE '\\' OR CommandLine LIKE '%-f http%' ESCAPE '\\'))"
+    ],
+    "schema_version": 2,
+    "source": "tyrian",
+    "source_table": "logs",
+    "status": "stable",
+    "tags": [
+      "attack.command_and_control",
+      "attack.defense_evasion",
+      "attack.t1105"
+    ],
+    "title": "certutil Used as a Downloader"
+  },
+  {
+    "author": "Tyrian",
+    "channel": [
+      "Microsoft-Windows-Sysmon/Operational"
+    ],
+    "description": "Detects the process lineage created by malicious document macros: an Office app (Word, Excel, PowerPoint, Outlook) spawning a script host (PowerShell, cmd, wscript, mshta, rundll32). Reliable initial-access signal for phishing.\n",
+    "eventid": [
+      1
+    ],
+    "falsepositives": [
+      "Rare legitimate Office add-ins; baseline and exclude specific signed tools"
+    ],
+    "filename": "rules/initial-access/office-spawns-script-host.yml",
+    "id": "ee3645d5-f50c-5aa0-a9c0-e8a68ef15264",
+    "level": "high",
+    "license": "MIT",
+    "logsource": {
+      "category": "process_creation",
+      "product": "windows",
+      "service": "sysmon"
+    },
+    "required_fields": [
+      "Channel",
+      "EventID",
+      "Image",
+      "ParentImage"
+    ],
+    "result_type": "event",
+    "rule": [
+      "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=1 AND ((ParentImage LIKE '%\\\\winword.exe' ESCAPE '\\' OR ParentImage LIKE '%\\\\excel.exe' ESCAPE '\\' OR ParentImage LIKE '%\\\\powerpnt.exe' ESCAPE '\\' OR ParentImage LIKE '%\\\\outlook.exe' ESCAPE '\\') AND (Image LIKE '%\\\\powershell.exe' ESCAPE '\\' OR Image LIKE '%\\\\cmd.exe' ESCAPE '\\' OR Image LIKE '%\\\\wscript.exe' ESCAPE '\\' OR Image LIKE '%\\\\cscript.exe' ESCAPE '\\' OR Image LIKE '%\\\\mshta.exe' ESCAPE '\\' OR Image LIKE '%\\\\rundll32.exe' ESCAPE '\\')))"
+    ],
+    "schema_version": 2,
+    "source": "tyrian",
+    "source_table": "logs",
+    "status": "stable",
+    "tags": [
+      "attack.initial_access",
+      "attack.t1566.001",
+      "attack.execution",
+      "attack.t1059"
+    ],
+    "title": "Office Application Spawns a Script Interpreter"
+  },
+  {
+    "author": "Tyrian",
+    "channel": [
+      "Microsoft-Windows-Sysmon/Operational"
+    ],
+    "description": "Detects the command-line shapes produced by SharpHound and equivalent collectors. Mass AD enumeration is the reconnaissance step that precedes nearly every modern domain compromise.\n",
+    "eventid": [],
+    "falsepositives": [
+      "Authorised assessments; correlate with your engagement calendar"
+    ],
+    "filename": "rules/discovery/bloodhound-sharphound-collection.yml",
+    "id": "f66defe9-0222-5dd3-9ac3-63697cf792d6",
+    "level": "high",
+    "license": "MIT",
+    "logsource": {
+      "product": "windows",
+      "service": "sysmon"
+    },
+    "required_fields": [
+      "Channel",
+      "CommandLine"
+    ],
+    "result_type": "event",
+    "rule": [
+      "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (CommandLine LIKE '%sharphound%' ESCAPE '\\' OR CommandLine LIKE '%-c all%' ESCAPE '\\' OR CommandLine LIKE '%--collectionmethod%' ESCAPE '\\' OR CommandLine LIKE '%Invoke-BloodHound%' ESCAPE '\\' OR CommandLine LIKE '%bloodhound.py%' ESCAPE '\\')"
+    ],
+    "schema_version": 2,
+    "source": "tyrian",
+    "source_table": "logs",
+    "status": "stable",
+    "tags": [
+      "attack.discovery",
+      "attack.t1087.002"
+    ],
+    "title": "Active Directory Collection Consistent With SharpHound"
+  },
+  {
+    "author": "Tyrian",
+    "channel": [
+      "Microsoft-Windows-Sysmon/Operational"
+    ],
+    "description": "Detects code launched through DCOM application objects such as MMC20.Application or ShellWindows, a quieter alternative to PsExec that leaves no service-creation artifact behind.\n",
+    "eventid": [],
+    "falsepositives": [
+      "Administrators launching management consoles interactively"
+    ],
+    "filename": "rules/lateral-movement/dcom-lateral-execution.yml",
+    "id": "fd0c82fa-a8c4-58df-a597-c806aac2af3c",
+    "level": "high",
+    "license": "MIT",
+    "logsource": {
+      "product": "windows",
+      "service": "sysmon"
+    },
+    "required_fields": [
+      "Channel",
+      "Image",
+      "ParentCommandLine",
+      "ParentImage"
+    ],
+    "result_type": "event",
+    "rule": [
+      "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND ((ParentImage LIKE '%\\\\mmc.exe' ESCAPE '\\' OR ParentImage LIKE '%\\\\dllhost.exe' ESCAPE '\\') AND (Image LIKE '%\\\\cmd.exe' ESCAPE '\\' OR Image LIKE '%\\\\powershell.exe' ESCAPE '\\' OR Image LIKE '%\\\\mshta.exe' ESCAPE '\\') AND (ParentCommandLine LIKE '%-Embedding%' ESCAPE '\\' OR ParentCommandLine LIKE '%MMC20%' ESCAPE '\\'))"
+    ],
+    "schema_version": 2,
+    "source": "tyrian",
+    "source_table": "logs",
+    "status": "stable",
+    "tags": [
+      "attack.lateral_movement",
+      "attack.t1021.003"
+    ],
+    "title": "Lateral Execution via DCOM Object"
+  },
+  {
+    "author": "Tyrian",
+    "channel": [
+      "Microsoft-Windows-Sysmon/Operational"
+    ],
+    "description": "Detects the two common ways the Active Directory database leaves a domain controller: an ntdsutil IFM media creation, or a copy of NTDS.dit out of a volume shadow copy. Either yields every domain hash for offline cracking.\n",
+    "eventid": [],
+    "falsepositives": [
+      "Documented disaster-recovery or forensic acquisition"
+    ],
+    "filename": "rules/credential-access/ntds-dit-extraction.yml",
+    "id": "022ba792-50d4-5a03-862d-e90018246748",
+    "level": "critical",
+    "license": "MIT",
+    "logsource": {
+      "product": "windows",
+      "service": "sysmon"
+    },
+    "required_fields": [
+      "Channel",
+      "CommandLine",
+      "Image"
+    ],
+    "result_type": "event",
+    "rule": [
+      "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND ((Image LIKE '%\\\\ntdsutil.exe' ESCAPE '\\' AND (CommandLine LIKE '%create%' ESCAPE '\\' AND CommandLine LIKE '%ifm%' ESCAPE '\\')) OR CommandLine LIKE '%ntds.dit%' ESCAPE '\\')"
+    ],
+    "schema_version": 2,
+    "source": "tyrian",
+    "source_table": "logs",
+    "status": "stable",
+    "tags": [
+      "attack.credential_access",
+      "attack.t1003.003"
+    ],
+    "title": "NTDS.dit Extraction via ntdsutil or Shadow Copy"
+  },
+  {
+    "author": "Tyrian",
+    "channel": [
+      "Microsoft-Windows-Sysmon/Operational"
+    ],
+    "description": "Detects bulk service stops targeting databases, mail and backup agents. Ransomware does this to unlock files held open by those services so they can be encrypted too.\n",
+    "eventid": [],
+    "falsepositives": [
+      "Patch windows and maintenance scripts"
+    ],
+    "filename": "rules/impact/service-stop-before-encryption.yml",
+    "id": "0d2e8b67-0dfe-54b2-a883-97174b3d40f8",
+    "level": "critical",
+    "license": "MIT",
+    "logsource": {
+      "product": "windows",
+      "service": "sysmon"
+    },
+    "required_fields": [
+      "Channel",
+      "CommandLine"
+    ],
+    "result_type": "event",
+    "rule": [
+      "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND ((CommandLine LIKE '%net stop %' ESCAPE '\\' OR CommandLine LIKE '%sc stop %' ESCAPE '\\' OR CommandLine LIKE '%Stop-Service%' ESCAPE '\\') AND (CommandLine LIKE '%sql%' ESCAPE '\\' OR CommandLine LIKE '%veeam%' ESCAPE '\\' OR CommandLine LIKE '%backup%' ESCAPE '\\' OR CommandLine LIKE '%exchange%' ESCAPE '\\' OR CommandLine LIKE '%vss%' ESCAPE '\\' OR CommandLine LIKE '%msexchange%' ESCAPE '\\'))"
+    ],
+    "schema_version": 2,
+    "source": "tyrian",
+    "source_table": "logs",
+    "status": "stable",
+    "tags": [
+      "attack.impact",
+      "attack.t1489"
+    ],
+    "title": "Database and Backup Services Stopped En Masse"
+  },
+  {
+    "author": "Tyrian",
+    "channel": [
+      "Security"
+    ],
+    "description": "Detects a write to msDS-AllowedToActOnBehalfOfOtherIdentity. Whoever controls that attribute on a computer object can tell it to accept S4U requests from an account they own, then impersonate any user to that machine, including a domain administrator. Because a standard user can create computer accounts by default (ms-DS-MachineAccountQuota), RBCD is a routine path from \"write access to one object\" to \"local system on it\".\n",
+    "eventid": [
+      5136
+    ],
+    "falsepositives": [
+      "Genuine delegation design changes, which should be rare and change-controlled"
+    ],
+    "filename": "rules/privilege-escalation/resource-based-constrained-delegation-write.yml",
+    "id": "1b694c37-1295-5189-93d0-4622f9aaf736",
+    "level": "critical",
+    "license": "MIT",
+    "logsource": {
+      "product": "windows",
+      "service": "security"
+    },
+    "required_fields": [
+      "AttributeLDAPDisplayName",
+      "Channel",
+      "EventID"
+    ],
+    "result_type": "event",
+    "rule": [
+      "SELECT * FROM logs WHERE Channel='Security' AND (EventID=5136 AND AttributeLDAPDisplayName='msDS-AllowedToActOnBehalfOfOtherIdentity')"
+    ],
+    "schema_version": 2,
+    "source": "tyrian",
+    "source_table": "logs",
+    "status": "experimental",
+    "tags": [
+      "attack.privilege_escalation",
+      "attack.persistence",
+      "attack.t1098",
+      "attack.t1134.001"
+    ],
+    "title": "Resource-Based Constrained Delegation Configured on an Object"
+  },
+  {
+    "author": "Tyrian",
+    "channel": [
+      "Security"
+    ],
+    "description": "Detects a password reset or attribute change on the krbtgt account. Its hash signs every Kerberos ticket in the domain, so it is both the key an attacker needs for a Golden Ticket and the key a defender rotates (twice) to invalidate one. Either way, an unexpected change here is one of the highest-signal events Active Directory produces.\n",
+    "eventid": [
+      4723,
+      4724,
+      4738
+    ],
+    "falsepositives": [
+      "A planned krbtgt rotation, which should be a known, scheduled activity"
+    ],
+    "filename": "rules/credential-access/krbtgt-account-modified.yml",
+    "id": "2a7e0887-c0e4-58a6-bc2f-1332e980c981",
+    "level": "critical",
+    "license": "MIT",
+    "logsource": {
+      "product": "windows",
+      "service": "security"
+    },
+    "required_fields": [
+      "Channel",
+      "EventID",
+      "TargetUserName"
+    ],
+    "result_type": "event",
+    "rule": [
+      "SELECT * FROM logs WHERE Channel='Security' AND ((EventID=4723 OR EventID=4724 OR EventID=4738) AND TargetUserName LIKE 'krbtgt%' ESCAPE '\\')"
+    ],
+    "schema_version": 2,
+    "source": "tyrian",
+    "source_table": "logs",
+    "status": "experimental",
+    "tags": [
+      "attack.credential_access",
+      "attack.impact",
+      "attack.t1558.001"
+    ],
+    "title": "krbtgt Account Password Reset or Modified"
+  },
+  {
+    "author": "Tyrian",
+    "channel": [
+      "Microsoft-Windows-Sysmon/Operational"
+    ],
+    "description": "Detects loading of drivers repeatedly abused to get kernel-level code execution from an administrator context. Bring-your-own-vulnerable-driver is the standard way ransomware crews disable endpoint protection: the driver is signed and legitimate, so it loads cleanly, and the vulnerability inside it is used to kill protected processes. Keep this list current against the Microsoft vulnerable driver blocklist and LOLDrivers.\n",
+    "eventid": [
+      6
+    ],
+    "falsepositives": [
+      "Genuine use of the parent software (MSI Afterburner, Dell or Gigabyte utilities, Process Explorer). Legitimate presence does not make the driver safe to leave loaded"
+    ],
+    "filename": "rules/privilege-escalation/vulnerable-driver-loaded-byovd.yml",
+    "id": "2f9c8852-6615-5665-a938-0fe353adc177",
+    "level": "critical",
+    "license": "MIT",
+    "logsource": {
+      "product": "windows",
+      "service": "sysmon"
+    },
+    "required_fields": [
+      "Channel",
+      "EventID",
+      "ImageLoaded"
+    ],
+    "result_type": "event",
+    "rule": [
+      "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=6 AND (ImageLoaded LIKE '%\\\\iqvw64e.sys' ESCAPE '\\' OR ImageLoaded LIKE '%\\\\RTCore64.sys' ESCAPE '\\' OR ImageLoaded LIKE '%\\\\gdrv.sys' ESCAPE '\\' OR ImageLoaded LIKE '%\\\\dbutil\\_2\\_3.sys' ESCAPE '\\' OR ImageLoaded LIKE '%\\\\DBUtilDrv2.sys' ESCAPE '\\' OR ImageLoaded LIKE '%\\\\procexp152.sys' ESCAPE '\\' OR ImageLoaded LIKE '%\\\\truesight.sys' ESCAPE '\\' OR ImageLoaded LIKE '%\\\\viragt64.sys' ESCAPE '\\' OR ImageLoaded LIKE '%\\\\aswArPot.sys' ESCAPE '\\' OR ImageLoaded LIKE '%\\\\mhyprot2.sys' ESCAPE '\\'))"
+    ],
+    "schema_version": 2,
+    "source": "tyrian",
+    "source_table": "logs",
+    "status": "experimental",
+    "tags": [
+      "attack.privilege_escalation",
+      "attack.defense_evasion",
+      "attack.t1068",
+      "attack.t1562.001"
+    ],
+    "title": "Known Vulnerable Driver Loaded (BYOVD)"
+  },
+  {
+    "author": "Tyrian",
+    "channel": [
+      "Microsoft-Windows-PowerShell/Operational",
+      "PowerShellCore/Operational"
+    ],
+    "description": "Detects the well-known reflection patterns used to neuter the Antimalware Scan Interface before running a payload. Matches script block content, so script block logging must be enabled.\n",
+    "eventid": [],
+    "falsepositives": [
+      "Security research and detection engineering on the host itself"
+    ],
+    "filename": "rules/defense-evasion/powershell-amsi-bypass.yml",
+    "id": "37cfb04b-0bb2-5f80-8f82-0c9693db7b79",
+    "level": "critical",
+    "license": "MIT",
+    "logsource": {
+      "product": "windows",
+      "service": "powershell"
+    },
+    "required_fields": [
+      "Channel",
+      "ScriptBlockText"
+    ],
+    "result_type": "event",
+    "rule": [
+      "SELECT * FROM logs WHERE (Channel='Microsoft-Windows-PowerShell/Operational' OR Channel='PowerShellCore/Operational') AND (ScriptBlockText LIKE '%amsiInitFailed%' ESCAPE '\\' OR ScriptBlockText LIKE '%AmsiUtils%' ESCAPE '\\' OR ScriptBlockText LIKE '%AmsiScanBuffer%' ESCAPE '\\' OR ScriptBlockText LIKE '%System.Management.Automation.AmsiUtils%' ESCAPE '\\')"
+    ],
+    "schema_version": 2,
+    "source": "tyrian",
+    "source_table": "logs",
+    "status": "stable",
+    "tags": [
+      "attack.defense_evasion",
+      "attack.t1562.001"
+    ],
+    "title": "AMSI Bypass Attempt in PowerShell"
+  },
+  {
+    "author": "Tyrian",
+    "channel": [
+      "Microsoft-Windows-Sysmon/Operational"
+    ],
+    "description": "Detects real-time protection or scanning being turned off through PowerShell or the registry, which is a routine precursor to dropping tooling that would otherwise be quarantined.\n",
+    "eventid": [],
+    "falsepositives": [
+      "Deliberate exclusions during software installation, which should be approved"
+    ],
+    "filename": "rules/defense-evasion/defender-disabled.yml",
+    "id": "4b700068-4d19-5e67-8d4b-04bc3de8c1b7",
+    "level": "critical",
+    "license": "MIT",
+    "logsource": {
+      "product": "windows",
+      "service": "sysmon"
+    },
+    "required_fields": [
+      "Channel",
+      "CommandLine"
+    ],
+    "result_type": "event",
+    "rule": [
+      "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (CommandLine LIKE '%Set-MpPreference -DisableRealtimeMonitoring $true%' ESCAPE '\\' OR CommandLine LIKE '%DisableRealtimeMonitoring 1%' ESCAPE '\\' OR CommandLine LIKE '%Add-MpPreference -ExclusionPath%' ESCAPE '\\' OR CommandLine LIKE '%DisableAntiSpyware%' ESCAPE '\\')"
+    ],
+    "schema_version": 2,
+    "source": "tyrian",
+    "source_table": "logs",
+    "status": "stable",
+    "tags": [
+      "attack.defense_evasion",
+      "attack.t1562.001"
+    ],
+    "title": "Microsoft Defender Protection Disabled"
+  },
+  {
+    "author": "Tyrian",
+    "channel": [
+      "Security"
+    ],
+    "description": "Detects use of the directory replication extended rights, which let a caller ask a DC for password hashes without ever touching NTDS.dit. Only domain controllers should legitimately replicate, so this keys on caller identity.\n",
+    "eventid": [
+      4662
+    ],
+    "falsepositives": [
+      "Azure AD Connect / MSOL sync accounts, which should be allowlisted by name",
+      "Genuine DC promotion, which is rare and change-controlled"
+    ],
+    "filename": "rules/credential-access/dcsync-replication-rights.yml",
+    "id": "71fcbc7a-c98f-5a52-ad60-3707ea75d10a",
+    "level": "critical",
+    "license": "MIT",
+    "logsource": {
+      "product": "windows",
+      "service": "security"
+    },
+    "required_fields": [
+      "Channel",
+      "EventID",
+      "Properties",
+      "SubjectUserName"
+    ],
+    "result_type": "event",
+    "rule": [
+      "SELECT * FROM logs WHERE Channel='Security' AND ((EventID=4662 AND (Properties LIKE '%1131f6aa-9c07-11d1-f79f-00c04fc2dcd2%' ESCAPE '\\' OR Properties LIKE '%1131f6ad-9c07-11d1-f79f-00c04fc2dcd2%' ESCAPE '\\' OR Properties LIKE '%89e95b76-444d-4c62-991a-0facbeda640c%' ESCAPE '\\')) AND (NOT COALESCE((SubjectUserName LIKE '%$' ESCAPE '\\'), 0)))"
+    ],
+    "schema_version": 2,
+    "source": "tyrian",
+    "source_table": "logs",
+    "status": "stable",
+    "tags": [
+      "attack.credential_access",
+      "attack.t1003.006"
+    ],
+    "title": "DCSync Directory Replication From a Non-Domain-Controller"
+  },
+  {
+    "author": "Tyrian",
+    "channel": [
+      "Microsoft-Windows-Sysmon/Operational"
+    ],
+    "description": "Detects reg.exe saving the SAM, SYSTEM or SECURITY hives to disk. Together those give local account hashes plus the boot key needed to decrypt them, and it is a standard first move after landing on a host.\n",
+    "eventid": [],
+    "falsepositives": [
+      "Backup tooling that exports hives, which should run from a known path"
+    ],
+    "filename": "rules/credential-access/sam-hive-dump.yml",
+    "id": "7c908dcc-95a2-5fe0-90fc-ab20f0cc5a5f",
+    "level": "critical",
+    "license": "MIT",
+    "logsource": {
+      "product": "windows",
+      "service": "sysmon"
+    },
+    "required_fields": [
+      "Channel",
+      "CommandLine",
+      "Image"
+    ],
+    "result_type": "event",
+    "rule": [
+      "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND ((Image LIKE '%\\\\reg.exe' ESCAPE '\\' AND CommandLine LIKE '%save%' ESCAPE '\\') AND (CommandLine LIKE '%hklm\\\\sam%' ESCAPE '\\' OR CommandLine LIKE '%hklm\\\\system%' ESCAPE '\\' OR CommandLine LIKE '%hklm\\\\security%' ESCAPE '\\'))"
+    ],
+    "schema_version": 2,
+    "source": "tyrian",
+    "source_table": "logs",
+    "status": "stable",
+    "tags": [
+      "attack.credential_access",
+      "attack.t1003.002"
+    ],
+    "title": "SAM and SYSTEM Registry Hive Dump"
+  },
+  {
+    "author": "Tyrian",
+    "channel": [
+      "Microsoft-Windows-Sysmon/Operational"
+    ],
+    "description": "Detects the Squiblydoo pattern where regsvr32 loads a remote scriptlet with /i and scrobj.dll, executing code through a signed binary and bypassing application allowlisting.\n",
+    "eventid": [],
+    "falsepositives": [
+      "Rare; legitimate COM registration does not fetch remote scriptlets"
+    ],
+    "filename": "rules/execution/regsvr32-scriptlet-squiblydoo.yml",
+    "id": "7e884c0e-2b4b-5b38-84e6-e39444b3ec1a",
+    "level": "critical",
+    "license": "MIT",
+    "logsource": {
+      "product": "windows",
+      "service": "sysmon"
+    },
+    "required_fields": [
+      "Channel",
+      "CommandLine",
+      "Image"
+    ],
+    "result_type": "event",
+    "rule": [
+      "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (Image LIKE '%\\\\regsvr32.exe' ESCAPE '\\' AND (CommandLine LIKE '%scrobj%' ESCAPE '\\' OR CommandLine LIKE '%/i:http%' ESCAPE '\\' OR CommandLine LIKE '%.sct%' ESCAPE '\\'))"
+    ],
+    "schema_version": 2,
+    "source": "tyrian",
+    "source_table": "logs",
+    "status": "stable",
+    "tags": [
+      "attack.defense_evasion",
+      "attack.t1218.010"
+    ],
+    "title": "regsvr32 Scriptlet Execution (Squiblydoo)"
+  },
+  {
+    "author": "Tyrian",
+    "channel": [
+      "Microsoft-Windows-Sysmon/Operational"
+    ],
+    "description": "Detects the command lines of the common Kerberos ticket forging tools: Mimikatz kerberos::golden (golden with /krbtgt, silver with /service), Rubeus golden and silver, and Impacket ticketer. A forged ticket leaves little on the domain controller, so the forging step is the best place to catch it.\n",
+    "eventid": [],
+    "falsepositives": [
+      "Authorised red team activity"
+    ],
+    "filename": "rules/credential-access/forged-kerberos-ticket-tooling.yml",
+    "id": "82315e84-ff12-5036-b941-8b4cf8888412",
+    "level": "critical",
+    "license": "MIT",
+    "logsource": {
+      "product": "windows",
+      "service": "sysmon"
+    },
+    "required_fields": [
+      "Channel",
+      "CommandLine"
+    ],
+    "result_type": "event",
+    "rule": [
+      "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (CommandLine LIKE '%kerberos::golden%' ESCAPE '\\' OR CommandLine LIKE '% golden /aes256:%' ESCAPE '\\' OR CommandLine LIKE '% golden /rc4:%' ESCAPE '\\' OR CommandLine LIKE '% silver /service:%' ESCAPE '\\' OR CommandLine LIKE '%ticketer.py%' ESCAPE '\\' OR CommandLine LIKE '% /krbtgt:%' ESCAPE '\\')"
+    ],
+    "schema_version": 2,
+    "source": "tyrian",
+    "source_table": "logs",
+    "status": "experimental",
+    "tags": [
+      "attack.credential_access",
+      "attack.t1558.001",
+      "attack.t1558.002"
+    ],
+    "title": "Golden or Silver Ticket Forging Tool Invoked"
+  },
+  {
+    "author": "Tyrian",
+    "channel": [
+      "Security"
+    ],
+    "description": "Detects a change to the AdminSDHolder object. Its ACL is stamped onto every protected group member (Domain Admins, Enterprise Admins and friends) by the SDProp task roughly every hour, so an entry added here becomes an entry on every privileged account, and re-appears after a defender removes it. It is the closest thing Active Directory has to a self-healing backdoor.\n",
+    "eventid": [
+      4662,
+      5136
+    ],
+    "falsepositives": [
+      "Deliberate tiering or delegation work by an identity team, which should be change-controlled"
+    ],
+    "filename": "rules/persistence/adminsdholder-acl-modification.yml",
+    "id": "90c6c42c-238f-55e6-809f-d03f2df2bb9b",
+    "level": "critical",
+    "license": "MIT",
+    "logsource": {
+      "product": "windows",
+      "service": "security"
+    },
+    "required_fields": [
+      "Channel",
+      "EventID",
+      "ObjectDN"
+    ],
+    "result_type": "event",
+    "rule": [
+      "SELECT * FROM logs WHERE Channel='Security' AND ((EventID=5136 OR EventID=4662) AND ObjectDN LIKE '%CN=AdminSDHolder%' ESCAPE '\\')"
+    ],
+    "schema_version": 2,
+    "source": "tyrian",
+    "source_table": "logs",
+    "status": "experimental",
+    "tags": [
+      "attack.persistence",
+      "attack.privilege_escalation",
+      "attack.t1098",
+      "attack.t1222.001"
+    ],
+    "title": "AdminSDHolder Container Modified"
+  },
+  {
+    "author": "Tyrian",
+    "channel": [
+      "Security"
+    ],
+    "description": "Detects a write to the msDS-KeyCredentialLink attribute of a user or computer object. Adding a key credential registers an attacker-controlled certificate for Kerberos PKINIT, giving them a way to authenticate as that principal and recover its NTLM hash without ever changing a password. Almost nothing writes this attribute outside Windows Hello for Business enrollment.\n",
+    "eventid": [
+      5136
+    ],
+    "falsepositives": [
+      "Windows Hello for Business enrollment, which legitimately populates this attribute",
+      "Azure AD / Entra hybrid join writing key credentials"
+    ],
+    "filename": "rules/credential-access/shadow-credentials-key-credential-link.yml",
+    "id": "931209be-1611-52a4-bbff-610984530a90",
+    "level": "critical",
+    "license": "MIT",
+    "logsource": {
+      "product": "windows",
+      "service": "security"
+    },
+    "required_fields": [
+      "AttributeLDAPDisplayName",
+      "Channel",
+      "EventID"
+    ],
+    "result_type": "event",
+    "rule": [
+      "SELECT * FROM logs WHERE Channel='Security' AND (EventID=5136 AND AttributeLDAPDisplayName='msDS-KeyCredentialLink')"
+    ],
+    "schema_version": 2,
+    "source": "tyrian",
+    "source_table": "logs",
+    "status": "experimental",
+    "tags": [
+      "attack.credential_access",
+      "attack.persistence",
+      "attack.privilege_escalation",
+      "attack.t1556",
+      "attack.t1098"
+    ],
+    "title": "Shadow Credentials Added via msDS-KeyCredentialLink"
+  },
+  {
+    "author": "Tyrian",
+    "channel": [
+      "Microsoft-Windows-Sysmon/Operational"
+    ],
+    "description": "Detects the registry change that forces Windows to keep cleartext credentials in LSASS memory again. Attackers set this, wait for users to re-authenticate, then dump. The write itself is the early warning, well before the dump.\n",
+    "eventid": [],
+    "falsepositives": [
+      "Legacy applications that genuinely require WDigest, which should be documented"
+    ],
+    "filename": "rules/credential-access/wdigest-cleartext-enabled.yml",
+    "id": "b016831c-c0b3-524c-a58a-8a22552a9f79",
+    "level": "critical",
+    "license": "MIT",
+    "logsource": {
+      "product": "windows",
+      "service": "sysmon"
+    },
+    "required_fields": [
+      "Channel",
+      "Details",
+      "TargetObject"
+    ],
+    "result_type": "event",
+    "rule": [
+      "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (TargetObject LIKE '%\\\\WDigest\\\\UseLogonCredential' ESCAPE '\\' AND Details='DWORD (0x00000001)')"
+    ],
+    "schema_version": 2,
+    "source": "tyrian",
+    "source_table": "logs",
+    "status": "stable",
+    "tags": [
+      "attack.credential_access",
+      "attack.defense_evasion",
+      "attack.t1112"
+    ],
+    "title": "WDigest UseLogonCredential Enabled (Cleartext Credential Staging)"
+  },
+  {
+    "author": "Tyrian",
+    "channel": [
+      "Security"
+    ],
+    "description": "Detects a certificate request that carries a caller-supplied Subject Alternative Name (ESC1). If a template allows the enrollee to specify the SAN and permits client authentication, any user who can enroll can request a certificate that says they are the domain administrator, then authenticate with it. The certificate stays valid until it expires, which is why this beats a password reset as a persistence route.\n",
+    "eventid": [
+      4886,
+      4887
+    ],
+    "falsepositives": [
+      "Templates that legitimately require a SAN, such as web server or SCCM certificates",
+      "Automated enrollment that supplies a UPN for service accounts"
+    ],
+    "filename": "rules/credential-access/adcs-esc1-san-certificate-request.yml",
+    "id": "c5a61539-a2d2-59a8-8bda-e0a95e5794db",
+    "level": "critical",
+    "license": "MIT",
+    "logsource": {
+      "product": "windows",
+      "service": "security"
+    },
+    "required_fields": [
+      "Attributes",
+      "Channel",
+      "EventID"
+    ],
+    "result_type": "event",
+    "rule": [
+      "SELECT * FROM logs WHERE Channel='Security' AND ((EventID=4886 OR EventID=4887) AND (Attributes LIKE '%SAN:%' ESCAPE '\\' OR Attributes LIKE '%subjectaltname%' ESCAPE '\\' OR Attributes LIKE '%upn=%' ESCAPE '\\'))"
+    ],
+    "schema_version": 2,
+    "source": "tyrian",
+    "source_table": "logs",
+    "status": "experimental",
+    "tags": [
+      "attack.credential_access",
+      "attack.privilege_escalation",
+      "attack.persistence",
+      "attack.t1649"
+    ],
+    "title": "ADCS Certificate Requested With an Arbitrary Subject Alternative Name"
+  },
+  {
+    "author": "Tyrian",
+    "channel": [
+      "Microsoft-Windows-Sysmon/Operational"
+    ],
+    "description": "Detects deletion of backup catalogs and disabling of Windows recovery, which ransomware does immediately before encrypting so victims cannot roll back. This usually fires minutes ahead of the encryption itself.\n",
+    "eventid": [],
+    "falsepositives": [
+      "Backup retention maintenance, which should run from a known scheduled task"
+    ],
+    "filename": "rules/impact/backup-deletion-wbadmin-bcdedit.yml",
+    "id": "d8534cc1-4d7b-5498-a8a6-3d4435f764b4",
+    "level": "critical",
+    "license": "MIT",
+    "logsource": {
+      "product": "windows",
+      "service": "sysmon"
+    },
+    "required_fields": [
+      "Channel",
+      "CommandLine"
+    ],
+    "result_type": "event",
+    "rule": [
+      "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (CommandLine LIKE '%wbadmin delete%' ESCAPE '\\' OR (CommandLine LIKE '%recoveryenabled no%' ESCAPE '\\' OR CommandLine LIKE '%bootstatuspolicy ignoreallfailures%' ESCAPE '\\'))"
+    ],
+    "schema_version": 2,
+    "source": "tyrian",
+    "source_table": "logs",
+    "status": "stable",
+    "tags": [
+      "attack.impact",
+      "attack.t1490"
+    ],
+    "title": "Backup and Recovery Destruction Before Encryption"
+  },
+  {
+    "author": "Tyrian",
+    "channel": [
+      "Microsoft-Windows-Sysmon/Operational"
+    ],
+    "description": "Detects the living-off-the-land LSASS dump that calls MiniDump inside comsvcs.dll through rundll32, avoiding procdump and mimikatz binaries entirely. The ordinal form is the usual giveaway.\n",
+    "eventid": [],
+    "falsepositives": [
+      "Essentially none in normal operation"
+    ],
+    "filename": "rules/credential-access/lsass-dump-comsvcs.yml",
+    "id": "e2c200e6-4868-5cb6-b979-2c608c634217",
+    "level": "critical",
+    "license": "MIT",
+    "logsource": {
+      "product": "windows",
+      "service": "sysmon"
+    },
+    "required_fields": [
+      "Channel",
+      "CommandLine",
+      "Image"
+    ],
+    "result_type": "event",
+    "rule": [
+      "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND ((Image LIKE '%\\\\rundll32.exe' ESCAPE '\\' AND CommandLine LIKE '%comsvcs%' ESCAPE '\\') AND (CommandLine LIKE '%MiniDump%' ESCAPE '\\' OR CommandLine LIKE '%#24%' ESCAPE '\\'))"
+    ],
+    "schema_version": 2,
+    "source": "tyrian",
+    "source_table": "logs",
+    "status": "stable",
+    "tags": [
+      "attack.credential_access",
+      "attack.t1003.001"
+    ],
+    "title": "LSASS Dump via comsvcs.dll MiniDump"
+  },
+  {
+    "author": "Tyrian",
+    "channel": [
+      "Security"
+    ],
+    "description": "Detects registration of a new nTDSDSA object or an SPN change that makes a host look like a domain controller. DCShadow registers a rogue DC just long enough to push a directory replication, which writes attacker-chosen attributes into AD without generating the directory-change events a normal write would. Catching the registration is the reliable way to see it, because the changes themselves are designed not to be logged.\n",
+    "eventid": [
+      5136,
+      5137
+    ],
+    "falsepositives": [
+      "Promotion of a genuine new domain controller, which is a planned event"
+    ],
+    "filename": "rules/defense-evasion/dcshadow-rogue-domain-controller.yml",
+    "id": "e913c694-8cec-5c05-b609-bd2edeb0c2a9",
+    "level": "critical",
+    "license": "MIT",
+    "logsource": {
+      "product": "windows",
+      "service": "security"
+    },
+    "required_fields": [
+      "AttributeLDAPDisplayName",
+      "AttributeValue",
+      "Channel",
+      "EventID",
+      "ObjectClass"
+    ],
+    "result_type": "event",
+    "rule": [
+      "SELECT * FROM logs WHERE Channel='Security' AND ((EventID=5137 AND ObjectClass='nTDSDSA') OR (EventID=5136 AND AttributeLDAPDisplayName='servicePrincipalName' AND (AttributeValue LIKE '%GC/%' ESCAPE '\\' OR AttributeValue LIKE '%E3514235-4B06-11D1-AB04-00C04FC2DCD2%' ESCAPE '\\')))"
+    ],
+    "schema_version": 2,
+    "source": "tyrian",
+    "source_table": "logs",
+    "status": "experimental",
+    "tags": [
+      "attack.defense_evasion",
+      "attack.persistence",
+      "attack.t1207"
+    ],
+    "title": "DCShadow Rogue Domain Controller Registration"
+  },
+  {
+    "author": "Tyrian",
+    "channel": [
+      "Security"
+    ],
+    "description": "Detects clearing of the Windows event log. There is almost no benign reason to wipe the Security log on a production host, and it is the classic final step before an operator disengages.\n",
+    "eventid": [
+      104,
+      1102
+    ],
+    "falsepositives": [
+      "Deliberate log rotation during decommissioning"
+    ],
+    "filename": "rules/defense-evasion/event-log-cleared.yml",
+    "id": "ef34fa3f-9170-585f-a9a1-a8f22942e075",
+    "level": "critical",
+    "license": "MIT",
+    "logsource": {
+      "product": "windows",
+      "service": "security"
+    },
+    "required_fields": [
+      "Channel",
+      "EventID"
+    ],
+    "result_type": "event",
+    "rule": [
+      "SELECT * FROM logs WHERE Channel='Security' AND (EventID=1102 OR EventID=104)"
+    ],
+    "schema_version": 2,
+    "source": "tyrian",
+    "source_table": "logs",
+    "status": "stable",
+    "tags": [
+      "attack.defense_evasion",
+      "attack.t1070.001"
+    ],
+    "title": "Security or System Event Log Cleared"
+  }
+]

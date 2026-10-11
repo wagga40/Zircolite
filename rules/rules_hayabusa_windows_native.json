@@ -14,6 +14,7 @@
     "filename": "hayabusa/sysmon/Sysmon_5_Info_ProcTerm.yml",
     "id": "02353fdd-522c-48f8-9243-28d4830ebc1e",
     "level": "informational",
+    "license": "DRL-1.1",
     "logsource": {
       "product": "windows",
       "service": "sysmon"
@@ -27,6 +28,7 @@
       "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND EventID=5"
     ],
     "schema_version": 2,
+    "source": "hayabusa",
     "source_table": "logs",
     "status": "stable",
     "tags": [],
@@ -47,6 +49,7 @@
     "filename": "hayabusa/builtin/Security/LogonLogoff/Logon/Sec_4624_Info_Logon-Type-3-Network_Noisy.yml",
     "id": "0266af4f-8825-495e-959c-bff801094349",
     "level": "informational",
+    "license": "DRL-1.1",
     "logsource": {
       "product": "windows",
       "service": "security"
@@ -63,6 +66,7 @@
       "SELECT * FROM logs WHERE (Channel='Security' AND EventID=4624 AND LogonType=3) AND ((IpAddress='-' OR IpAddress='127.0.0.1' OR IpAddress='::1') OR TargetUserName LIKE '%$' ESCAPE '\\')"
     ],
     "schema_version": 2,
+    "source": "hayabusa",
     "source_table": "logs",
     "status": "stable",
     "tags": [],
@@ -81,6 +85,7 @@
     "filename": "hayabusa/sysmon/Sysmon_15_Info_ADS-Created.yml",
     "id": "046cac6f-d622-4044-ae0c-1bdbad6210f9",
     "level": "informational",
+    "license": "DRL-1.1",
     "logsource": {
       "product": "windows",
       "service": "sysmon"
@@ -95,6 +100,7 @@
       "SELECT * FROM logs WHERE (Channel='Microsoft-Windows-Sysmon/Operational' AND EventID=15) AND (RuleName='' OR RuleName='-')"
     ],
     "schema_version": 2,
+    "source": "hayabusa",
     "source_table": "logs",
     "status": "stable",
     "tags": [],
@@ -116,6 +122,7 @@
     "filename": "hayabusa/builtin/PowerShell_Op/PwSh_4104_Info_ScriptblockLog.yml",
     "id": "0f3b1343-65a5-4879-b512-9d61b0e4e3ba",
     "level": "informational",
+    "license": "DRL-1.1",
     "logsource": {
       "category": "ps_script",
       "product": "windows",
@@ -131,6 +138,7 @@
       "SELECT * FROM logs WHERE (Channel='Microsoft-Windows-PowerShell/Operational' OR Channel='PowerShellCore/Operational') AND EventID=4104 AND (NOT COALESCE((Level=3), 0))"
     ],
     "schema_version": 2,
+    "source": "hayabusa",
     "source_table": "logs",
     "status": "stable",
     "tags": [],
@@ -149,6 +157,7 @@
     "filename": "hayabusa/builtin/System/Sys_6005_Info_EventLogSvcStarted.yml",
     "id": "11dc7d25-01c9-4b07-9d91-8e07b60d8fd3",
     "level": "informational",
+    "license": "DRL-1.1",
     "logsource": {
       "product": "windows",
       "service": "system"
@@ -162,6 +171,7 @@
       "SELECT * FROM logs WHERE Channel='System' AND EventID=6005"
     ],
     "schema_version": 2,
+    "source": "hayabusa",
     "source_table": "logs",
     "status": "stable",
     "tags": [],
@@ -182,6 +192,7 @@
     "filename": "hayabusa/builtin/Security/ObjectAccess/FileShare/Sec_5140_Info_NetShareAccess.yml",
     "id": "15d042c1-07c6-4e16-ae7d-e0e556ccd9a8",
     "level": "informational",
+    "license": "DRL-1.1",
     "logsource": {
       "product": "windows",
       "service": "security"
@@ -195,6 +206,7 @@
       "SELECT * FROM logs WHERE Channel='Security' AND EventID=5140"
     ],
     "schema_version": 2,
+    "source": "hayabusa",
     "source_table": "logs",
     "status": "stable",
     "tags": [
@@ -216,6 +228,7 @@
     "filename": "hayabusa/sysmon/Sysmon_12_Info_RegKeyCreateDelete_Noisy.yml",
     "id": "1703ba97-b2c2-4071-a241-a16d017d25d3",
     "level": "informational",
+    "license": "DRL-1.1",
     "logsource": {
       "product": "windows",
       "service": "sysmon"
@@ -230,6 +243,7 @@
       "SELECT * FROM logs WHERE (Channel='Microsoft-Windows-Sysmon/Operational' AND EventID=12) AND (RuleName='' OR RuleName='-')"
     ],
     "schema_version": 2,
+    "source": "hayabusa",
     "source_table": "logs",
     "status": "stable",
     "tags": [],
@@ -250,6 +264,7 @@
     "filename": "hayabusa/builtin/BitsClient_Op/BitsCli_59_Info_BitsJobCreated.yml",
     "id": "18e6fa4a-353d-42b6-975c-bb05dbf4a004",
     "level": "informational",
+    "license": "DRL-1.1",
     "logsource": {
       "product": "windows",
       "service": "bits-client"
@@ -263,6 +278,7 @@
       "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Bits-Client/Operational' AND EventID=59"
     ],
     "schema_version": 2,
+    "source": "hayabusa",
     "source_table": "logs",
     "status": "stable",
     "tags": [
@@ -287,6 +303,7 @@
     "filename": "hayabusa/builtin/TerminalServices-RDPClient_Op/RDP-Client_1102_Info_ConnAttempt.yml",
     "id": "1a850b71-6aef-4f31-a509-f31b2c778476",
     "level": "informational",
+    "license": "DRL-1.1",
     "logsource": {
       "product": "windows"
     },
@@ -299,6 +316,7 @@
       "SELECT * FROM logs WHERE Channel='Microsoft-Windows-TerminalServices-RDPClient/Operational' AND EventID=1102"
     ],
     "schema_version": 2,
+    "source": "hayabusa",
     "source_table": "logs",
     "status": "stable",
     "tags": [
@@ -321,6 +339,7 @@
     "filename": "hayabusa/builtin/Security/DS-Access/DirectoryServiceChanges/Sec_5136_Info_DirSvcObjModified.yml",
     "id": "22ee9fb7-64ca-4eed-92de-d1dbef1170b8",
     "level": "informational",
+    "license": "DRL-1.1",
     "logsource": {
       "product": "windows",
       "service": "security"
@@ -334,6 +353,7 @@
       "SELECT * FROM logs WHERE Channel='Security' AND EventID=5136"
     ],
     "schema_version": 2,
+    "source": "hayabusa",
     "source_table": "logs",
     "status": "test",
     "tags": [],
@@ -354,6 +374,7 @@
     "filename": "hayabusa/builtin/TerminalServices-Gateway_Op/RDS_Gateway_302_Info_LogonSuccess.yml",
     "id": "27648a93-cfc0-4903-beb2-9395e784a484",
     "level": "informational",
+    "license": "DRL-1.1",
     "logsource": {
       "product": "windows"
     },
@@ -367,6 +388,7 @@
       "SELECT * FROM logs WHERE Channel='Microsoft-Windows-TerminalServices-Gateway/Operational' AND EventID=302 AND RdsGtwErrorCode=0"
     ],
     "schema_version": 2,
+    "source": "hayabusa",
     "source_table": "logs",
     "status": "stable",
     "tags": [
@@ -390,6 +412,7 @@
     "filename": "hayabusa/builtin/TerminalServices-LocalSessionManager_Op/LocalSessManager_22_Info_RDP-SessStart_Noisy.yml",
     "id": "320e2cb0-a56a-476f-a299-79dc45644fee",
     "level": "informational",
+    "license": "DRL-1.1",
     "logsource": {
       "product": "windows",
       "service": "terminalservices-localsessionmanager"
@@ -403,6 +426,7 @@
       "SELECT * FROM logs WHERE Channel='Microsoft-Windows-TerminalServices-LocalSessionManager/Operational' AND EventID=22"
     ],
     "schema_version": 2,
+    "source": "hayabusa",
     "source_table": "logs",
     "status": "stable",
     "tags": [
@@ -425,6 +449,7 @@
     "filename": "hayabusa/builtin/TaskScheduler_Op/TaskSch_106_Info_TaskCreated.yml",
     "id": "33599dfb-f3e4-4298-8d3f-59407f65f4e7",
     "level": "informational",
+    "license": "DRL-1.1",
     "logsource": {
       "product": "windows",
       "service": "taskscheduler"
@@ -438,6 +463,7 @@
       "SELECT * FROM logs WHERE Channel='Microsoft-Windows-TaskScheduler/Operational' AND EventID=106"
     ],
     "schema_version": 2,
+    "source": "hayabusa",
     "source_table": "logs",
     "status": "stable",
     "tags": [],
@@ -456,6 +482,7 @@
     "filename": "hayabusa/sysmon/Sysmon_14_Info_RegKeyValueRename_Noisy.yml",
     "id": "3546ce10-19b4-4c4c-9658-f4f3b5d27ae9",
     "level": "informational",
+    "license": "DRL-1.1",
     "logsource": {
       "product": "windows",
       "service": "sysmon"
@@ -469,6 +496,7 @@
       "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND EventID=14"
     ],
     "schema_version": 2,
+    "source": "hayabusa",
     "source_table": "logs",
     "status": "stable",
     "tags": [],
@@ -487,6 +515,7 @@
     "filename": "hayabusa/sysmon/Sysmon_20_Info_WmiEventConsumerActivity.yml",
     "id": "372be7ff-d34c-4b23-b147-42b2046b3ea8",
     "level": "informational",
+    "license": "DRL-1.1",
     "logsource": {
       "product": "windows",
       "service": "sysmon"
@@ -501,6 +530,7 @@
       "SELECT * FROM logs WHERE (Channel='Microsoft-Windows-Sysmon/Operational' AND EventID=20) AND (RuleName='' OR RuleName='-')"
     ],
     "schema_version": 2,
+    "source": "hayabusa",
     "source_table": "logs",
     "status": "stable",
     "tags": [],
@@ -519,6 +549,7 @@
     "filename": "hayabusa/sysmon/Sysmon_29_Info_FileExecutableDetected.yml",
     "id": "3cbef506-93eb-4fdc-ae32-eac668c36f00",
     "level": "informational",
+    "license": "DRL-1.1",
     "logsource": {
       "product": "windows",
       "service": "sysmon"
@@ -532,6 +563,7 @@
       "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND EventID=29"
     ],
     "schema_version": 2,
+    "source": "hayabusa",
     "source_table": "logs",
     "status": "stable",
     "tags": [],
@@ -550,6 +582,7 @@
     "filename": "hayabusa/sysmon/Sysmon_24_Info_ClipboardChange.yml",
     "id": "3d022dad-a8f0-4b8e-8610-b798f062a59f",
     "level": "informational",
+    "license": "DRL-1.1",
     "logsource": {
       "product": "windows",
       "service": "sysmon"
@@ -564,6 +597,7 @@
       "SELECT * FROM logs WHERE (Channel='Microsoft-Windows-Sysmon/Operational' AND EventID=24) AND (RuleName='' OR RuleName='-')"
     ],
     "schema_version": 2,
+    "source": "hayabusa",
     "source_table": "logs",
     "status": "stable",
     "tags": [],
@@ -584,6 +618,7 @@
     "filename": "hayabusa/builtin/TerminalServices-LocalSessionManager_Op/LocalSessManager_24_Info_RDP-Disconnect.yml",
     "id": "3fc6234f-93a5-4d48-b618-30e2c69c0a86",
     "level": "informational",
+    "license": "DRL-1.1",
     "logsource": {
       "product": "windows",
       "service": "terminalservices-localsessionmanager"
@@ -597,6 +632,7 @@
       "SELECT * FROM logs WHERE Channel='Microsoft-Windows-TerminalServices-LocalSessionManager/Operational' AND EventID=24"
     ],
     "schema_version": 2,
+    "source": "hayabusa",
     "source_table": "logs",
     "status": "stable",
     "tags": [
@@ -619,6 +655,7 @@
     "filename": "hayabusa/builtin/Security/LogonLogoff/Logon/Sec_4624_Info_Logon-Type-5-Service.yml",
     "id": "408e1304-51d7-4d3e-ab31-afd07192400b",
     "level": "informational",
+    "license": "DRL-1.1",
     "logsource": {
       "product": "windows",
       "service": "security"
@@ -634,6 +671,7 @@
       "SELECT * FROM logs WHERE (Channel='Security' AND EventID=4624 AND LogonType=5) AND (NOT COALESCE((TargetUserName='SYSTEM' OR TargetUserName='NETWORK SERVICE' OR TargetUserName='LOCAL SERVICE'), 0))"
     ],
     "schema_version": 2,
+    "source": "hayabusa",
     "source_table": "logs",
     "status": "stable",
     "tags": [],
@@ -652,6 +690,7 @@
     "filename": "hayabusa/builtin/Security/System/SecuritySystemExtension/Sec_4611_High_AbnormalLogonProcessRegisteredWithLSA.yml",
     "id": "41ca6049-dd12-462c-a772-7bba78d8e2f0",
     "level": "informational",
+    "license": "DRL-1.1",
     "logsource": {
       "product": "windows",
       "service": "security"
@@ -667,6 +706,7 @@
       "SELECT * FROM logs WHERE (Channel='Security' AND EventID=4611) AND (NOT COALESCE((SubjectUserSid='S-1-5-18' OR SubjectUserName LIKE '%$' ESCAPE '\\'), 0))"
     ],
     "schema_version": 2,
+    "source": "hayabusa",
     "source_table": "logs",
     "status": "experimental",
     "tags": [],
@@ -687,6 +727,7 @@
     "filename": "hayabusa/builtin/Crypto-DPAPI_Debug/CryptoDPAPI_16385_Info_DPAPI-Access.yml",
     "id": "420d5d28-78ed-4e43-844a-94ce69db378c",
     "level": "informational",
+    "license": "DRL-1.1",
     "logsource": {
       "product": "windows"
     },
@@ -700,6 +741,7 @@
       "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Crypto-DPAPI/Debug' AND EventID=16385 AND OperationType='SPCryptUnprotect'"
     ],
     "schema_version": 2,
+    "source": "hayabusa",
     "source_table": "logs",
     "status": "experimental",
     "tags": [],
@@ -718,6 +760,7 @@
     "filename": "hayabusa/builtin/Security/AccountManagement/ComputerAccountManagement/Sec_4741_Info_CmpAcctCreated.yml",
     "id": "42a0a842-2b82-4b2d-8e44-5580fb6c38db",
     "level": "informational",
+    "license": "DRL-1.1",
     "logsource": {
       "product": "windows",
       "service": "security"
@@ -731,6 +774,7 @@
       "SELECT * FROM logs WHERE Channel='Security' AND EventID=4741"
     ],
     "schema_version": 2,
+    "source": "hayabusa",
     "source_table": "logs",
     "status": "stable",
     "tags": [],
@@ -751,6 +795,7 @@
     "filename": "hayabusa/builtin/WinRM_Op/WinRM_6_Info_SessCreated.yml",
     "id": "4f321a68-176a-4f1d-873a-8793bc49e3b0",
     "level": "informational",
+    "license": "DRL-1.1",
     "logsource": {
       "product": "windows"
     },
@@ -763,6 +808,7 @@
       "SELECT * FROM logs WHERE Channel='Microsoft-Windows-WinRM/Operational' AND EventID=6"
     ],
     "schema_version": 2,
+    "source": "hayabusa",
     "source_table": "logs",
     "status": "stable",
     "tags": [],
@@ -783,6 +829,7 @@
     "filename": "hayabusa/builtin/Security/AccountLogon/CredentialValidation/Sec_4776_Info_NTLM-Auth.yml",
     "id": "4fbe94b0-577a-4f77-9b13-250e27d440fa",
     "level": "informational",
+    "license": "DRL-1.1",
     "logsource": {
       "product": "windows",
       "service": "security"
@@ -796,6 +843,7 @@
       "SELECT * FROM logs WHERE Channel='Security' AND EventID=4776"
     ],
     "schema_version": 2,
+    "source": "hayabusa",
     "source_table": "logs",
     "status": "stable",
     "tags": [],
@@ -816,6 +864,7 @@
     "filename": "hayabusa/builtin/TerminalServices-RDPClient_Op/RDP-Client_1024_Info_ConnAttempt.yml",
     "id": "512e70f5-bf70-4de1-9375-2174999a7f8d",
     "level": "informational",
+    "license": "DRL-1.1",
     "logsource": {
       "product": "windows"
     },
@@ -828,6 +877,7 @@
       "SELECT * FROM logs WHERE Channel='Microsoft-Windows-TerminalServices-RDPClient/Operational' AND EventID=1024"
     ],
     "schema_version": 2,
+    "source": "hayabusa",
     "source_table": "logs",
     "status": "stable",
     "tags": [
@@ -850,6 +900,7 @@
     "filename": "hayabusa/builtin/WMI-Activity_Op/WMI_5857_Info_ProviderStarted.yml",
     "id": "547aec97-2635-474a-a36c-7a3a46b07fde",
     "level": "informational",
+    "license": "DRL-1.1",
     "logsource": {
       "product": "windows",
       "service": "wmi"
@@ -863,6 +914,7 @@
       "SELECT * FROM logs WHERE Channel='Microsoft-Windows-WMI-Activity/Operational' AND EventID=5857"
     ],
     "schema_version": 2,
+    "source": "hayabusa",
     "source_table": "logs",
     "status": "stable",
     "tags": [],
@@ -881,6 +933,7 @@
     "filename": "hayabusa/sysmon/Sysmon_18_Info_PipeConnected.yml",
     "id": "558798b0-2cf6-42c0-8323-6001b4508e04",
     "level": "informational",
+    "license": "DRL-1.1",
     "logsource": {
       "product": "windows",
       "service": "sysmon"
@@ -895,6 +948,7 @@
       "SELECT * FROM logs WHERE (Channel='Microsoft-Windows-Sysmon/Operational' AND EventID=18) AND (RuleName='' OR RuleName='-')"
     ],
     "schema_version": 2,
+    "source": "hayabusa",
     "source_table": "logs",
     "status": "stable",
     "tags": [],
@@ -913,6 +967,7 @@
     "filename": "hayabusa/sysmon/Sysmon_26_Info_FileDeleted.yml",
     "id": "60338f41-0384-4469-a4f9-e6acaae1e091",
     "level": "informational",
+    "license": "DRL-1.1",
     "logsource": {
       "product": "windows",
       "service": "sysmon"
@@ -927,6 +982,7 @@
       "SELECT * FROM logs WHERE (Channel='Microsoft-Windows-Sysmon/Operational' AND EventID=26) AND (RuleName='' OR RuleName='-')"
     ],
     "schema_version": 2,
+    "source": "hayabusa",
     "source_table": "logs",
     "status": "stable",
     "tags": [],
@@ -947,6 +1003,7 @@
     "filename": "hayabusa/builtin/Security/ObjectAccess/OtherObjectAccessEvents/Sec_4698_Info_TaskCreated.yml",
     "id": "60d768ca-33e8-4f34-b967-14fd7aa18a22",
     "level": "informational",
+    "license": "DRL-1.1",
     "logsource": {
       "product": "windows",
       "service": "security"
@@ -960,6 +1017,7 @@
       "SELECT * FROM logs WHERE Channel='Security' AND EventID=4698"
     ],
     "schema_version": 2,
+    "source": "hayabusa",
     "source_table": "logs",
     "status": "stable",
     "tags": [],
@@ -978,6 +1036,7 @@
     "filename": "hayabusa/builtin/Security/System/SecuritySystemExtension/Sec_4611_Info_LogonProcessRegisteredWithLSA.yml",
     "id": "614c150b-905d-4071-9b8e-0425e370c493",
     "level": "informational",
+    "license": "DRL-1.1",
     "logsource": {
       "product": "windows",
       "service": "security"
@@ -993,6 +1052,7 @@
       "SELECT * FROM logs WHERE Channel='Security' AND EventID=4611 AND SubjectUserSid='S-1-5-18' AND SubjectUserName LIKE '%$' ESCAPE '\\'"
     ],
     "schema_version": 2,
+    "source": "hayabusa",
     "source_table": "logs",
     "status": "test",
     "tags": [],
@@ -1013,6 +1073,7 @@
     "filename": "hayabusa/builtin/System/Sys_7045_Info_SvcInstalled.yml",
     "id": "64c5d39d-10a7-44f4-b5d6-fd0d93d0a69f",
     "level": "informational",
+    "license": "DRL-1.1",
     "logsource": {
       "product": "windows",
       "service": "system"
@@ -1026,6 +1087,7 @@
       "SELECT * FROM logs WHERE Channel='System' AND EventID=7045"
     ],
     "schema_version": 2,
+    "source": "hayabusa",
     "source_table": "logs",
     "status": "stable",
     "tags": [
@@ -1046,6 +1108,7 @@
     "filename": "hayabusa/sysmon/Sysmon_6_Info_DrvLoaded_Signed.yml",
     "id": "6a67e65e-e414-44ed-94b2-72f8e3107c92",
     "level": "informational",
+    "license": "DRL-1.1",
     "logsource": {
       "product": "windows",
       "service": "sysmon"
@@ -1060,6 +1123,7 @@
       "SELECT * FROM logs WHERE (Channel='Microsoft-Windows-Sysmon/Operational' AND EventID=6) AND Signed='true'"
     ],
     "schema_version": 2,
+    "source": "hayabusa",
     "source_table": "logs",
     "status": "stable",
     "tags": [],
@@ -1080,6 +1144,7 @@
     "filename": "hayabusa/builtin/Security/LogonLogoff/Logoff/Sec_4647_Info_LogoffUserInitiated.yml",
     "id": "6bad16f1-02c4-4075-b414-3cd16944bc65",
     "level": "informational",
+    "license": "DRL-1.1",
     "logsource": {
       "product": "windows",
       "service": "security"
@@ -1093,6 +1158,7 @@
       "SELECT * FROM logs WHERE Channel='Security' AND EventID=4647"
     ],
     "schema_version": 2,
+    "source": "hayabusa",
     "source_table": "logs",
     "status": "stable",
     "tags": [],
@@ -1111,6 +1177,7 @@
     "filename": "hayabusa/builtin/DNS-Server/DNS-ServerAnalytical_261_Info_DNS-Response.yml",
     "id": "6db38b96-3772-4cbf-a8ad-c65d8ac5134e",
     "level": "informational",
+    "license": "DRL-1.1",
     "logsource": {
       "product": "windows",
       "service": "dns-server-analytic"
@@ -1124,6 +1191,7 @@
       "SELECT * FROM logs WHERE Channel='Microsoft-Windows-DNS-Server/Analytical' AND EventID=261"
     ],
     "schema_version": 2,
+    "source": "hayabusa",
     "source_table": "logs",
     "status": "experimental",
     "tags": [],
@@ -1144,6 +1212,7 @@
     "filename": "hayabusa/builtin/TerminalServices-RemoteConnectionManager_Op/RemoteConnManger_261_Info_RDP-Conn_Noisy.yml",
     "id": "6dbed1df-f08a-47ab-9a58-999c0787d034",
     "level": "informational",
+    "license": "DRL-1.1",
     "logsource": {
       "product": "windows"
     },
@@ -1156,6 +1225,7 @@
       "SELECT * FROM logs WHERE Channel='Microsoft-Windows-TerminalServices-RemoteConnectionManager/Operational' AND EventID=261"
     ],
     "schema_version": 2,
+    "source": "hayabusa",
     "source_table": "logs",
     "status": "stable",
     "tags": [
@@ -1178,6 +1248,7 @@
     "filename": "hayabusa/builtin/Security/LogonLogoff/Logoff/Sec_4634_Info_Logoff.yml",
     "id": "7309e070-56b9-408b-a2f4-f1840f8f1ebf",
     "level": "informational",
+    "license": "DRL-1.1",
     "logsource": {
       "product": "windows",
       "service": "security"
@@ -1192,6 +1263,7 @@
       "SELECT * FROM logs WHERE (Channel='Security' AND EventID=4634) AND (NOT COALESCE((TargetUserName LIKE '%$' ESCAPE '\\' OR TargetUserName REGEXP '(DWM|UMFD)-([0-9]|1[0-2])$'), 0))"
     ],
     "schema_version": 2,
+    "source": "hayabusa",
     "source_table": "logs",
     "status": "stable",
     "tags": [],
@@ -1210,6 +1282,7 @@
     "filename": "hayabusa/sysmon/Sysmon_19_Info_WmiEventFilterActivity.yml",
     "id": "7636985e-6ceb-42bd-946b-282b6e4ff65b",
     "level": "informational",
+    "license": "DRL-1.1",
     "logsource": {
       "product": "windows",
       "service": "sysmon"
@@ -1224,6 +1297,7 @@
       "SELECT * FROM logs WHERE (Channel='Microsoft-Windows-Sysmon/Operational' AND EventID=19) AND (RuleName='' OR RuleName='-')"
     ],
     "schema_version": 2,
+    "source": "hayabusa",
     "source_table": "logs",
     "status": "stable",
     "tags": [],
@@ -1242,6 +1316,7 @@
     "filename": "hayabusa/sysmon/Sysmon_17_Info_PipeCreated.yml",
     "id": "79dbbdb1-3272-4518-a633-d38db0527dfc",
     "level": "informational",
+    "license": "DRL-1.1",
     "logsource": {
       "product": "windows",
       "service": "sysmon"
@@ -1256,6 +1331,7 @@
       "SELECT * FROM logs WHERE (Channel='Microsoft-Windows-Sysmon/Operational' AND EventID=17) AND (RuleName='' OR RuleName='-')"
     ],
     "schema_version": 2,
+    "source": "hayabusa",
     "source_table": "logs",
     "status": "stable",
     "tags": [],
@@ -1276,6 +1352,7 @@
     "filename": "hayabusa/builtin/Security/LogonLogoff/Logon/Sec_4624_Info_Logon-Type-2-Interactive.yml",
     "id": "7beb4832-f357-47a4-afd8-803d69a5c85c",
     "level": "informational",
+    "license": "DRL-1.1",
     "logsource": {
       "product": "windows",
       "service": "security"
@@ -1291,6 +1368,7 @@
       "SELECT * FROM logs WHERE (Channel='Security' AND EventID=4624 AND LogonType=2) AND (NOT COALESCE((IpAddress='-'), 0))"
     ],
     "schema_version": 2,
+    "source": "hayabusa",
     "source_table": "logs",
     "status": "stable",
     "tags": [],
@@ -1311,6 +1389,7 @@
     "filename": "hayabusa/builtin/Security/LogonLogoff/Logon/Sec_4624_Info_Logon-Type-8-NetworkCleartext.yml",
     "id": "7ff51227-6a10-49e6-a58b-b9f4ac32b138",
     "level": "informational",
+    "license": "DRL-1.1",
     "logsource": {
       "product": "windows",
       "service": "security"
@@ -1325,6 +1404,7 @@
       "SELECT * FROM logs WHERE Channel='Security' AND EventID=4624 AND LogonType=8"
     ],
     "schema_version": 2,
+    "source": "hayabusa",
     "source_table": "logs",
     "status": "stable",
     "tags": [],
@@ -1345,6 +1425,7 @@
     "filename": "hayabusa/builtin/Security/LogonLogoff/Logoff/Sec_4634_Info_Logoff_Noisy.yml",
     "id": "84288799-8b61-4d98-bad0-4043c40cf992",
     "level": "informational",
+    "license": "DRL-1.1",
     "logsource": {
       "product": "windows",
       "service": "security"
@@ -1359,6 +1440,7 @@
       "SELECT * FROM logs WHERE (Channel='Security' AND EventID=4634) AND (TargetUserName LIKE '%$' ESCAPE '\\' OR TargetUserName REGEXP '(DWM|UMFD)-([0-9]|1[0-2])$')"
     ],
     "schema_version": 2,
+    "source": "hayabusa",
     "source_table": "logs",
     "status": "stable",
     "tags": [],
@@ -1379,6 +1461,7 @@
     "filename": "hayabusa/builtin/Security/LogonLogoff/Logon/Sec_4624_Info_Logon-Type-5-Service_Noisy.yml",
     "id": "84e5ff02-5f8f-48c4-a7e9-88aa1fb888f7",
     "level": "informational",
+    "license": "DRL-1.1",
     "logsource": {
       "product": "windows",
       "service": "security"
@@ -1394,6 +1477,7 @@
       "SELECT * FROM logs WHERE (Channel='Security' AND EventID=4624 AND LogonType=5) AND (TargetUserName='SYSTEM' OR TargetUserName='NETWORK SERVICE' OR TargetUserName='LOCAL SERVICE')"
     ],
     "schema_version": 2,
+    "source": "hayabusa",
     "source_table": "logs",
     "status": "stable",
     "tags": [],
@@ -1414,6 +1498,7 @@
     "filename": "hayabusa/sysmon/Sysmon_1_Info_ProcExec.yml",
     "id": "85790e3e-e270-499f-a6ad-f8afe85c35f1",
     "level": "informational",
+    "license": "DRL-1.1",
     "logsource": {
       "product": "windows",
       "service": "sysmon"
@@ -1428,6 +1513,7 @@
       "SELECT * FROM logs WHERE (Channel='Microsoft-Windows-Sysmon/Operational' AND EventID=1) AND (RuleName='' OR RuleName='-')"
     ],
     "schema_version": 2,
+    "source": "hayabusa",
     "source_table": "logs",
     "status": "stable",
     "tags": [],
@@ -1446,6 +1532,7 @@
     "filename": "hayabusa/sysmon/Sysmon_11_Info_FileCreated.yml",
     "id": "8a76bcd8-dec2-4c8a-995d-a4600aad8fe2",
     "level": "informational",
+    "license": "DRL-1.1",
     "logsource": {
       "product": "windows",
       "service": "sysmon"
@@ -1460,6 +1547,7 @@
       "SELECT * FROM logs WHERE (Channel='Microsoft-Windows-Sysmon/Operational' AND EventID=11) AND (RuleName='' OR RuleName='-')"
     ],
     "schema_version": 2,
+    "source": "hayabusa",
     "source_table": "logs",
     "status": "stable",
     "tags": [],
@@ -1478,6 +1566,7 @@
     "filename": "hayabusa/sysmon/Sysmon_7_Info_ImgLoaded_Noisy.yml",
     "id": "8b8db936-172e-4bb7-9f84-ccc954d51d93",
     "level": "informational",
+    "license": "DRL-1.1",
     "logsource": {
       "product": "windows",
       "service": "sysmon"
@@ -1492,6 +1581,7 @@
       "SELECT * FROM logs WHERE (Channel='Microsoft-Windows-Sysmon/Operational' AND EventID=7) AND (RuleName='' OR RuleName='-')"
     ],
     "schema_version": 2,
+    "source": "hayabusa",
     "source_table": "logs",
     "status": "stable",
     "tags": [],
@@ -1512,6 +1602,7 @@
     "filename": "hayabusa/builtin/Security/LogonLogoff/Logon/Sec_4648_Info_ExplicitLogon.yml",
     "id": "8c1899fe-493d-4faf-aae1-0853a33a3278",
     "level": "informational",
+    "license": "DRL-1.1",
     "logsource": {
       "product": "windows",
       "service": "security"
@@ -1529,6 +1620,7 @@
       "SELECT * FROM logs WHERE (Channel='Security' AND EventID=4648) AND (NOT COALESCE(((TargetUserName LIKE '%$' ESCAPE '\\' OR SubjectUserName LIKE '%$' ESCAPE '\\') OR (TargetUserName REGEXP '(DWM|UMFD)-([0-9]|1[0-3])$' AND IpAddress='-') OR (ProcessName LIKE '%powershell.exe' ESCAPE '\\' OR ProcessName LIKE '%WMIC.exe' ESCAPE '\\')), 0))"
     ],
     "schema_version": 2,
+    "source": "hayabusa",
     "source_table": "logs",
     "status": "stable",
     "tags": [
@@ -1552,6 +1644,7 @@
     "filename": "hayabusa/builtin/Security/ObjectAccess/DetailedFileShare/Sec_5145_Info_NetShareFileAccess.yml",
     "id": "8c6ec2b2-8dad-4996-9aba-d659afc1b919",
     "level": "informational",
+    "license": "DRL-1.1",
     "logsource": {
       "product": "windows",
       "service": "security"
@@ -1568,6 +1661,7 @@
       "SELECT * FROM logs WHERE (Channel='Security' AND EventID=5145) AND (NOT COALESCE((ShareLocalPath='' OR ShareLocalPath='null' OR ShareName LIKE '\\\\%\\\\IPC$' ESCAPE '\\' OR RelativeTargetName LIKE '\\\\' ESCAPE '\\'), 0))"
     ],
     "schema_version": 2,
+    "source": "hayabusa",
     "source_table": "logs",
     "status": "stable",
     "tags": [
@@ -1589,6 +1683,7 @@
     "filename": "hayabusa/builtin/OAlerts/OAlerts_300_Info_OfficeAppPopUp.yml",
     "id": "8cab5688-ca77-483d-a295-56dd6c1db944",
     "level": "informational",
+    "license": "DRL-1.1",
     "logsource": {
       "product": "windows",
       "service": "security"
@@ -1602,6 +1697,7 @@
       "SELECT * FROM logs WHERE Channel='OAlerts' AND EventID=300"
     ],
     "schema_version": 2,
+    "source": "hayabusa",
     "source_table": "logs",
     "status": "stable",
     "tags": [],
@@ -1622,6 +1718,7 @@
     "filename": "hayabusa/builtin/Partition_Diagnostic/PartitionDiagnostic_1006_Info_DeviceConn.yml",
     "id": "8ef5a88a-a33a-5eff-9812-8a0f8ca7cc37",
     "level": "informational",
+    "license": "DRL-1.1",
     "logsource": {
       "product": "windows"
     },
@@ -1634,6 +1731,7 @@
       "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Partition/Diagnostic' AND EventID=1006"
     ],
     "schema_version": 2,
+    "source": "hayabusa",
     "source_table": "logs",
     "status": "test",
     "tags": [],
@@ -1654,6 +1752,7 @@
     "filename": "hayabusa/builtin/TerminalServices-LocalSessionManager_Op/LocalSessManager_25_Info_RDP-Reconnect.yml",
     "id": "8fe4a60b-2af3-43d6-95e2-8f13caccc179",
     "level": "informational",
+    "license": "DRL-1.1",
     "logsource": {
       "product": "windows",
       "service": "terminalservices-localsessionmanager"
@@ -1667,6 +1766,7 @@
       "SELECT * FROM logs WHERE Channel='Microsoft-Windows-TerminalServices-LocalSessionManager/Operational' AND EventID=25"
     ],
     "schema_version": 2,
+    "source": "hayabusa",
     "source_table": "logs",
     "status": "test",
     "tags": [
@@ -1689,6 +1789,7 @@
     "filename": "hayabusa/builtin/WLAN-AutoConfig/Sec_8001_Info_Wifi-AP-Conn.yml",
     "id": "90dd0797-f481-453d-a97e-dd78436893f9",
     "level": "informational",
+    "license": "DRL-1.1",
     "logsource": {
       "product": "windows"
     },
@@ -1701,6 +1802,7 @@
       "SELECT * FROM logs WHERE Channel='Microsoft-Windows-WLAN-AutoConfig' AND EventID=8001"
     ],
     "schema_version": 2,
+    "source": "hayabusa",
     "source_table": "logs",
     "status": "stable",
     "tags": [],
@@ -1721,6 +1823,7 @@
     "filename": "hayabusa/builtin/Security/System/SecuritySystemExtension/Sec_4697_Info_SvcInstalled.yml",
     "id": "95fe88c9-5b9d-4454-97b4-957918b84208",
     "level": "informational",
+    "license": "DRL-1.1",
     "logsource": {
       "product": "windows",
       "service": "security"
@@ -1734,6 +1837,7 @@
       "SELECT * FROM logs WHERE Channel='Security' AND EventID=4697"
     ],
     "schema_version": 2,
+    "source": "hayabusa",
     "source_table": "logs",
     "status": "stable",
     "tags": [
@@ -1754,6 +1858,7 @@
     "filename": "hayabusa/builtin/System/Sys_6013_Info_ComputerUpTime.yml",
     "id": "982fdd1f-38fe-4243-bea3-6032fc01b723",
     "level": "informational",
+    "license": "DRL-1.1",
     "logsource": {
       "product": "windows",
       "service": "system"
@@ -1767,6 +1872,7 @@
       "SELECT * FROM logs WHERE Channel='System' AND EventID=6013"
     ],
     "schema_version": 2,
+    "source": "hayabusa",
     "source_table": "logs",
     "status": "test",
     "tags": [],
@@ -1785,6 +1891,7 @@
     "filename": "hayabusa/sysmon/Sysmon_23_Info_DeletedFileArchived.yml",
     "id": "9de4a8f5-ab25-426e-8dbf-88e36ff907b4",
     "level": "informational",
+    "license": "DRL-1.1",
     "logsource": {
       "product": "windows",
       "service": "sysmon"
@@ -1799,6 +1906,7 @@
       "SELECT * FROM logs WHERE (Channel='Microsoft-Windows-Sysmon/Operational' AND EventID=23) AND (RuleName='' OR RuleName='-')"
     ],
     "schema_version": 2,
+    "source": "hayabusa",
     "source_table": "logs",
     "status": "stable",
     "tags": [],
@@ -1819,6 +1927,7 @@
     "filename": "hayabusa/builtin/System/Sys_20001_Info_NewNonUSB-PnP-Device_Noisy.yml",
     "id": "9eaea7e6-6567-4ad0-bcc9-fe568dd27909",
     "level": "informational",
+    "license": "DRL-1.1",
     "logsource": {
       "product": "windows",
       "service": "system"
@@ -1833,6 +1942,7 @@
       "SELECT * FROM logs WHERE (Channel='System' AND EventID=20001) AND (NOT COALESCE((DeviceInstanceID LIKE 'USB%' ESCAPE '\\'), 0))"
     ],
     "schema_version": 2,
+    "source": "hayabusa",
     "source_table": "logs",
     "status": "stable",
     "tags": [],
@@ -1851,6 +1961,7 @@
     "filename": "hayabusa/sysmon/Sysmon_13_Info_RegKeyValueSet_Noisy.yml",
     "id": "9f5663ce-6205-4753-b486-fb8498d1fae5",
     "level": "informational",
+    "license": "DRL-1.1",
     "logsource": {
       "product": "windows",
       "service": "sysmon"
@@ -1865,6 +1976,7 @@
       "SELECT * FROM logs WHERE (Channel='Microsoft-Windows-Sysmon/Operational' AND EventID=13) AND (RuleName='' OR RuleName='-')"
     ],
     "schema_version": 2,
+    "source": "hayabusa",
     "source_table": "logs",
     "status": "stable",
     "tags": [],
@@ -1885,6 +1997,7 @@
     "filename": "hayabusa/builtin/Security/LogonLogoff/Logon/Sec_4624_Info_Logon-Type-0-System.yml",
     "id": "9fa273cc-bcb2-4789-85e3-14ca253ac7f4",
     "level": "informational",
+    "license": "DRL-1.1",
     "logsource": {
       "product": "windows",
       "service": "security"
@@ -1899,6 +2012,7 @@
       "SELECT * FROM logs WHERE Channel='Security' AND EventID=4624 AND LogonType=0"
     ],
     "schema_version": 2,
+    "source": "hayabusa",
     "source_table": "logs",
     "status": "stable",
     "tags": [],
@@ -1917,6 +2031,7 @@
     "filename": "hayabusa/builtin/System/Sys_12_Info_ComputerStartup.yml",
     "id": "a225cc36-bfdc-4e7a-ad01-f544b90e2d2a",
     "level": "informational",
+    "license": "DRL-1.1",
     "logsource": {
       "product": "windows",
       "service": "system"
@@ -1932,6 +2047,7 @@
       "SELECT * FROM logs WHERE Channel='System' AND Provider_Name='Microsoft-Windows-Kernel-General' AND EventID=12 AND BootMode=0"
     ],
     "schema_version": 2,
+    "source": "hayabusa",
     "source_table": "logs",
     "status": "test",
     "tags": [],
@@ -1952,6 +2068,7 @@
     "filename": "hayabusa/builtin/Security/LogonLogoff/Logon/Sec_4624_Info_Logon-Type-10-RemoteInteractive.yml",
     "id": "a4e05f05-ff88-48b9-8524-a88c1c32fe19",
     "level": "informational",
+    "license": "DRL-1.1",
     "logsource": {
       "product": "windows",
       "service": "security"
@@ -1966,6 +2083,7 @@
       "SELECT * FROM logs WHERE Channel='Security' AND EventID=4624 AND LogonType=10"
     ],
     "schema_version": 2,
+    "source": "hayabusa",
     "source_table": "logs",
     "status": "stable",
     "tags": [],
@@ -1986,6 +2104,7 @@
     "filename": "hayabusa/builtin/Security/LogonLogoff/Logon/Sec_4648_Info_ExplicitLogon_Noisy.yml",
     "id": "a5b3ebf0-141a-4264-b2ff-400c0d515fca",
     "level": "informational",
+    "license": "DRL-1.1",
     "logsource": {
       "product": "windows",
       "service": "security"
@@ -2003,6 +2122,7 @@
       "SELECT * FROM logs WHERE (Channel='Security' AND EventID=4648) AND (NOT COALESCE((ProcessName LIKE '%powershell.exe' ESCAPE '\\' OR ProcessName LIKE '%WMIC.exe' ESCAPE '\\'), 0)) AND ((TargetUserName LIKE '%$' ESCAPE '\\' OR SubjectUserName LIKE '%$' ESCAPE '\\') OR (TargetUserName REGEXP '(DWM|UMFD)-([0-9]|1[0-3])$' AND IpAddress='-'))"
     ],
     "schema_version": 2,
+    "source": "hayabusa",
     "source_table": "logs",
     "status": "stable",
     "tags": [
@@ -2026,6 +2146,7 @@
     "filename": "hayabusa/sysmon/Sysmon_3_Info_NetConn.yml",
     "id": "a87defd7-1f87-4a34-8864-415ccb2ef21c",
     "level": "informational",
+    "license": "DRL-1.1",
     "logsource": {
       "product": "windows",
       "service": "sysmon"
@@ -2040,6 +2161,7 @@
       "SELECT * FROM logs WHERE (Channel='Microsoft-Windows-Sysmon/Operational' AND EventID=3) AND (RuleName='' OR RuleName='-')"
     ],
     "schema_version": 2,
+    "source": "hayabusa",
     "source_table": "logs",
     "status": "stable",
     "tags": [],
@@ -2060,6 +2182,7 @@
     "filename": "hayabusa/builtin/TaskScheduler_Op/TaskSch_140_Info_TaskUpdated.yml",
     "id": "aba04101-e439-4e2f-b051-4be561993c31",
     "level": "informational",
+    "license": "DRL-1.1",
     "logsource": {
       "product": "windows",
       "service": "taskscheduler"
@@ -2073,6 +2196,7 @@
       "SELECT * FROM logs WHERE Channel='Microsoft-Windows-TaskScheduler/Operational' AND EventID=140"
     ],
     "schema_version": 2,
+    "source": "hayabusa",
     "source_table": "logs",
     "status": "stable",
     "tags": [],
@@ -2093,6 +2217,7 @@
     "filename": "hayabusa/builtin/PowerShellClassic/PwShClassic_400_Info_PwShEngineStarted.yml",
     "id": "ac2ae63b-83e6-4d06-aeaf-07409bda92c9",
     "level": "informational",
+    "license": "DRL-1.1",
     "logsource": {
       "category": "ps_classic_start",
       "product": "windows",
@@ -2108,6 +2233,7 @@
       "SELECT * FROM logs WHERE (Channel='Windows PowerShell' AND EventID=400) AND (NOT COALESCE((Data REGEXP 'powershell.exe\\r\\n\\tEngineVersion'), 0))"
     ],
     "schema_version": 2,
+    "source": "hayabusa",
     "source_table": "logs",
     "status": "test",
     "tags": [],
@@ -2128,6 +2254,7 @@
     "filename": "hayabusa/builtin/Security/DetailedTracking/ProcessCreation/Sec_4688_Info_ProcExec.yml",
     "id": "ac933178-c222-430d-8dcf-17b4f3a2fed8",
     "level": "informational",
+    "license": "DRL-1.1",
     "logsource": {
       "product": "windows",
       "service": "security"
@@ -2141,6 +2268,7 @@
       "SELECT * FROM logs WHERE Channel='Security' AND EventID=4688"
     ],
     "schema_version": 2,
+    "source": "hayabusa",
     "source_table": "logs",
     "status": "stable",
     "tags": [],
@@ -2161,6 +2289,7 @@
     "filename": "hayabusa/builtin/WMI-Activity_Op/WMI_5861_Info_PermEventConsumerRegistered.yml",
     "id": "ac9f0a2a-e9c5-4d19-b69e-e3d518ca6797",
     "level": "informational",
+    "license": "DRL-1.1",
     "logsource": {
       "product": "windows",
       "service": "wmi"
@@ -2174,6 +2303,7 @@
       "SELECT * FROM logs WHERE Channel='Microsoft-Windows-WMI-Activity/Operational' AND EventID=5861"
     ],
     "schema_version": 2,
+    "source": "hayabusa",
     "source_table": "logs",
     "status": "stable",
     "tags": [],
@@ -2194,6 +2324,7 @@
     "filename": "hayabusa/builtin/NTFS_Op/NTFS_4_info_volume_mount.yml",
     "id": "af127790-5563-473e-8d3a-43b3509572b1",
     "level": "informational",
+    "license": "DRL-1.1",
     "logsource": {
       "product": "windows",
       "service": "ntfs"
@@ -2211,6 +2342,7 @@
       "SELECT * FROM logs WHERE (Channel='Microsoft-Windows-Ntfs/Operational' AND EventID=4) AND (NOT COALESCE((VolumeGuid='{00000000-0000-0000-0000-000000000000}' OR VolumeLabel='boot' OR VolumeLabel='System Reserved' OR VolumeLabel='R\u00e9serv\u00e9 au syst\u00e8me' OR VolumeId='C:' OR VolumeId='Windows-SSD' OR (IsBootVolume='true' OR IsBootVolume=1)), 0))"
     ],
     "schema_version": 2,
+    "source": "hayabusa",
     "source_table": "logs",
     "status": "test",
     "tags": [],
@@ -2231,6 +2363,7 @@
     "filename": "hayabusa/builtin/TerminalServices-LocalSessionManager_Op/LocalSessManager_21_Info_RDP-Logon.yml",
     "id": "b107551c-409d-44b8-bb0d-3b007c269881",
     "level": "informational",
+    "license": "DRL-1.1",
     "logsource": {
       "product": "windows",
       "service": "terminalservices-localsessionmanager"
@@ -2244,6 +2377,7 @@
       "SELECT * FROM logs WHERE Channel='Microsoft-Windows-TerminalServices-LocalSessionManager/Operational' AND EventID=21"
     ],
     "schema_version": 2,
+    "source": "hayabusa",
     "source_table": "logs",
     "status": "stable",
     "tags": [
@@ -2266,6 +2400,7 @@
     "filename": "hayabusa/builtin/Security/LogonLogoff/Logon/Sec_4624_Info_Logon-Type-2-Interactive_Noisy.yml",
     "id": "b1782e40-d247-4de1-86d1-37392cb62e3b",
     "level": "informational",
+    "license": "DRL-1.1",
     "logsource": {
       "product": "windows",
       "service": "security"
@@ -2281,6 +2416,7 @@
       "SELECT * FROM logs WHERE Channel='Security' AND EventID=4624 AND LogonType=2 AND IpAddress='-'"
     ],
     "schema_version": 2,
+    "source": "hayabusa",
     "source_table": "logs",
     "status": "stable",
     "tags": [],
@@ -2301,6 +2437,7 @@
     "filename": "hayabusa/builtin/DriverFrameworks_UserMode_Op/DvrFmwk_2003_Info_USB-PluggedIn.yml",
     "id": "b39b18a5-cece-4e7d-a438-827d0b0e8a82",
     "level": "informational",
+    "license": "DRL-1.1",
     "logsource": {
       "product": "windows",
       "service": "driver-framework"
@@ -2314,6 +2451,7 @@
       "SELECT * FROM logs WHERE Channel='Microsoft-Windows-DriverFrameworks-UserMode/Operational' AND EventID=2003"
     ],
     "schema_version": 2,
+    "source": "hayabusa",
     "source_table": "logs",
     "status": "experimental",
     "tags": [],
@@ -2334,6 +2472,7 @@
     "filename": "hayabusa/builtin/Security/LogonLogoff/Logon/Sec_4624_Info_Logon-Type-7-Unlock.yml",
     "id": "b61bfa39-48ec-4bdf-9d4e-e7205f49acd2",
     "level": "informational",
+    "license": "DRL-1.1",
     "logsource": {
       "product": "windows",
       "service": "security"
@@ -2348,6 +2487,7 @@
       "SELECT * FROM logs WHERE Channel='Security' AND EventID=4624 AND LogonType=7"
     ],
     "schema_version": 2,
+    "source": "hayabusa",
     "source_table": "logs",
     "status": "stable",
     "tags": [],
@@ -2366,6 +2506,7 @@
     "filename": "hayabusa/builtin/System/Sys_6006_Info_EventLogSvcStopped.yml",
     "id": "b6d53116-36b2-4413-a99b-e6708f9c3027",
     "level": "informational",
+    "license": "DRL-1.1",
     "logsource": {
       "product": "windows",
       "service": "system"
@@ -2379,6 +2520,7 @@
       "SELECT * FROM logs WHERE Channel='System' AND EventID=6006"
     ],
     "schema_version": 2,
+    "source": "hayabusa",
     "source_table": "logs",
     "status": "stable",
     "tags": [],
@@ -2399,6 +2541,7 @@
     "filename": "hayabusa/builtin/Security/ObjectAccess/FilteringPlatformConnection/Sec_5157_Info_NetConnBlocked.yml",
     "id": "b793a8e6-28a4-4fb8-816e-17a99e4e7b40",
     "level": "informational",
+    "license": "DRL-1.1",
     "logsource": {
       "product": "windows",
       "service": "security"
@@ -2412,6 +2555,7 @@
       "SELECT * FROM logs WHERE Channel='Security' AND EventID=5157"
     ],
     "schema_version": 2,
+    "source": "hayabusa",
     "source_table": "logs",
     "status": "stable",
     "tags": [],
@@ -2430,6 +2574,7 @@
     "filename": "hayabusa/builtin/System/Sys_6009_Info_ComputerStartup.yml",
     "id": "b9893f18-ca70-5d55-b91e-5e34d8c37937",
     "level": "informational",
+    "license": "DRL-1.1",
     "logsource": {
       "product": "windows",
       "service": "system"
@@ -2443,6 +2588,7 @@
       "SELECT * FROM logs WHERE Channel='System' AND EventID=6009"
     ],
     "schema_version": 2,
+    "source": "hayabusa",
     "source_table": "logs",
     "status": "test",
     "tags": [],
@@ -2463,6 +2609,7 @@
     "filename": "hayabusa/builtin/Security/LogonLogoff/Logon/Sec_4624_Info_Logon-Type-3-Network.yml",
     "id": "c7b22878-e5d8-4c30-b245-e51fd354359e",
     "level": "informational",
+    "license": "DRL-1.1",
     "logsource": {
       "product": "windows",
       "service": "security"
@@ -2479,6 +2626,7 @@
       "SELECT * FROM logs WHERE (Channel='Security' AND EventID=4624 AND LogonType=3) AND (NOT COALESCE(((IpAddress='-' OR IpAddress='127.0.0.1' OR IpAddress='::1') OR TargetUserName LIKE '%$' ESCAPE '\\'), 0))"
     ],
     "schema_version": 2,
+    "source": "hayabusa",
     "source_table": "logs",
     "status": "stable",
     "tags": [],
@@ -2497,6 +2645,7 @@
     "filename": "hayabusa/sysmon/Sysmon_21_Info_WmiEventConsumerToFilterActivity.yml",
     "id": "cb56ab71-4371-476f-b6c2-1cf3a7b98e69",
     "level": "informational",
+    "license": "DRL-1.1",
     "logsource": {
       "product": "windows",
       "service": "sysmon"
@@ -2511,6 +2660,7 @@
       "SELECT * FROM logs WHERE (Channel='Microsoft-Windows-Sysmon/Operational' AND EventID=21) AND (RuleName='' OR RuleName='-')"
     ],
     "schema_version": 2,
+    "source": "hayabusa",
     "source_table": "logs",
     "status": "stable",
     "tags": [],
@@ -2529,6 +2679,7 @@
     "filename": "hayabusa/sysmon/Sysmon_16_Info_SysmonConfigChange.yml",
     "id": "ccd0d7ed-de7d-4948-ab9d-b849cc4a5944",
     "level": "informational",
+    "license": "DRL-1.1",
     "logsource": {
       "product": "windows",
       "service": "sysmon"
@@ -2542,6 +2693,7 @@
       "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND EventID=16"
     ],
     "schema_version": 2,
+    "source": "hayabusa",
     "source_table": "logs",
     "status": "stable",
     "tags": [],
@@ -2560,6 +2712,7 @@
     "filename": "hayabusa/builtin/DNS-Server/DNS-ServerAnalytical_260_Info_DNS-Request.yml",
     "id": "cd6eb342-9dcd-450d-b448-bebd97cb6e89",
     "level": "informational",
+    "license": "DRL-1.1",
     "logsource": {
       "product": "windows",
       "service": "dns-server-analytic"
@@ -2573,6 +2726,7 @@
       "SELECT * FROM logs WHERE Channel='Microsoft-Windows-DNS-Server/Analytical' AND EventID=260"
     ],
     "schema_version": 2,
+    "source": "hayabusa",
     "source_table": "logs",
     "status": "stable",
     "tags": [],
@@ -2593,6 +2747,7 @@
     "filename": "hayabusa/builtin/Security/ObjectAccess/FilteringPlatformConnection/Sec_5156_Info_NetConn.yml",
     "id": "d0a61a11-57c9-4afc-b940-3f19b60db08e",
     "level": "informational",
+    "license": "DRL-1.1",
     "logsource": {
       "product": "windows",
       "service": "security"
@@ -2606,6 +2761,7 @@
       "SELECT * FROM logs WHERE Channel='Security' AND EventID=5156"
     ],
     "schema_version": 2,
+    "source": "hayabusa",
     "source_table": "logs",
     "status": "stable",
     "tags": [],
@@ -2626,6 +2782,7 @@
     "filename": "hayabusa/builtin/TaskScheduler_Op/TaskSch_200_Info_TaskExecuted.yml",
     "id": "d1923809-955b-47c4-b3e5-37c0e461919c",
     "level": "informational",
+    "license": "DRL-1.1",
     "logsource": {
       "product": "windows",
       "service": "taskscheduler"
@@ -2639,6 +2796,7 @@
       "SELECT * FROM logs WHERE Channel='Microsoft-Windows-TaskScheduler/Operational' AND EventID=200"
     ],
     "schema_version": 2,
+    "source": "hayabusa",
     "source_table": "logs",
     "status": "stable",
     "tags": [],
@@ -2660,6 +2818,7 @@
     "filename": "hayabusa/builtin/PowerShell_Op/PwSh_4103_Info_PipelineExecution.yml",
     "id": "d3fb8f7b-88b0-4ff4-bf9b-ca286ce19031",
     "level": "informational",
+    "license": "DRL-1.1",
     "logsource": {
       "category": "ps_module",
       "product": "windows",
@@ -2674,6 +2833,7 @@
       "SELECT * FROM logs WHERE (Channel='Microsoft-Windows-PowerShell/Operational' OR Channel='PowerShellCore/Operational') AND EventID=4103"
     ],
     "schema_version": 2,
+    "source": "hayabusa",
     "source_table": "logs",
     "status": "stable",
     "tags": [],
@@ -2694,6 +2854,7 @@
     "filename": "hayabusa/builtin/Security/LogonLogoff/Logon/Sec_4624_Info_Logon-Type-9-NewInteractive.yml",
     "id": "d80facaa-ca97-47bb-aed2-66362416eb49",
     "level": "informational",
+    "license": "DRL-1.1",
     "logsource": {
       "product": "windows",
       "service": "security"
@@ -2708,6 +2869,7 @@
       "SELECT * FROM logs WHERE Channel='Security' AND EventID=4624 AND LogonType=9"
     ],
     "schema_version": 2,
+    "source": "hayabusa",
     "source_table": "logs",
     "status": "stable",
     "tags": [],
@@ -2728,6 +2890,7 @@
     "filename": "hayabusa/builtin/WMI-Activity_Op/WMI_5860_Info_TempEventConsumerRegistered.yml",
     "id": "d96164c4-9e15-4d48-964f-153ac0dab6e9",
     "level": "informational",
+    "license": "DRL-1.1",
     "logsource": {
       "product": "windows",
       "service": "wmi"
@@ -2741,6 +2904,7 @@
       "SELECT * FROM logs WHERE Channel='Microsoft-Windows-WMI-Activity/Operational' AND EventID=5860"
     ],
     "schema_version": 2,
+    "source": "hayabusa",
     "source_table": "logs",
     "status": "stable",
     "tags": [],
@@ -2759,6 +2923,7 @@
     "filename": "hayabusa/sysmon/Sysmon_22_Info_DNS-Query.yml",
     "id": "d98f628c-2579-4388-bacc-381433b28e5b",
     "level": "informational",
+    "license": "DRL-1.1",
     "logsource": {
       "product": "windows",
       "service": "sysmon"
@@ -2773,6 +2938,7 @@
       "SELECT * FROM logs WHERE (Channel='Microsoft-Windows-Sysmon/Operational' AND EventID=22) AND (RuleName='' OR RuleName='-')"
     ],
     "schema_version": 2,
+    "source": "hayabusa",
     "source_table": "logs",
     "status": "stable",
     "tags": [],
@@ -2793,6 +2959,7 @@
     "filename": "hayabusa/builtin/Security/AccountLogon/KerberosAuthenticationService/Sec_4768_Info_KrbTGT-Req.yml",
     "id": "d9f336ea-bb16-4a35-8a9c-183216b8d59c",
     "level": "informational",
+    "license": "DRL-1.1",
     "logsource": {
       "product": "windows",
       "service": "security"
@@ -2806,6 +2973,7 @@
       "SELECT * FROM logs WHERE Channel='Security' AND EventID=4768"
     ],
     "schema_version": 2,
+    "source": "hayabusa",
     "source_table": "logs",
     "status": "stable",
     "tags": [],
@@ -2826,6 +2994,7 @@
     "filename": "hayabusa/builtin/Security/AccountLogon/KerberosServiceTicketOperations/Sec_4769_Info_KrbSvcTktReq.yml",
     "id": "da6257f3-cf49-464a-96fc-c84a7ce20636",
     "level": "informational",
+    "license": "DRL-1.1",
     "logsource": {
       "product": "windows",
       "service": "security"
@@ -2839,6 +3008,7 @@
       "SELECT * FROM logs WHERE Channel='Security' AND EventID=4769"
     ],
     "schema_version": 2,
+    "source": "hayabusa",
     "source_table": "logs",
     "status": "stable",
     "tags": [],
@@ -2859,6 +3029,7 @@
     "filename": "hayabusa/builtin/Security/LogonLogoff/OtherLogonLogoffEvents/Sec_4778_Info_RDP-SessReconn.yml",
     "id": "db23f704-61c8-4c95-a5b7-4db61c89f41d",
     "level": "informational",
+    "license": "DRL-1.1",
     "logsource": {
       "product": "windows",
       "service": "security"
@@ -2872,6 +3043,7 @@
       "SELECT * FROM logs WHERE Channel='Security' AND EventID=4778"
     ],
     "schema_version": 2,
+    "source": "hayabusa",
     "source_table": "logs",
     "status": "stable",
     "tags": [
@@ -2894,6 +3066,7 @@
     "filename": "hayabusa/builtin/Security/ObjectAccess/OtherObjectAccessEvents/Sec_4699_Info_TaskDeleted.yml",
     "id": "de5ed02e-e7b5-47a0-a35c-06a907c988e4",
     "level": "informational",
+    "license": "DRL-1.1",
     "logsource": {
       "product": "windows",
       "service": "security"
@@ -2907,6 +3080,7 @@
       "SELECT * FROM logs WHERE Channel='Security' AND EventID=4699"
     ],
     "schema_version": 2,
+    "source": "hayabusa",
     "source_table": "logs",
     "status": "stable",
     "tags": [],
@@ -2927,6 +3101,7 @@
     "filename": "hayabusa/builtin/TerminalServices-LocalSessionManager_Op/LocalSessManager_23_Info_RDP-Logoff.yml",
     "id": "e14a729f-f4f8-427b-a238-dfbde9c1614b",
     "level": "informational",
+    "license": "DRL-1.1",
     "logsource": {
       "product": "windows",
       "service": "terminalservices-localsessionmanager"
@@ -2940,6 +3115,7 @@
       "SELECT * FROM logs WHERE Channel='Microsoft-Windows-TerminalServices-LocalSessionManager/Operational' AND EventID=23"
     ],
     "schema_version": 2,
+    "source": "hayabusa",
     "source_table": "logs",
     "status": "stable",
     "tags": [
@@ -2962,6 +3138,7 @@
     "filename": "hayabusa/builtin/Security/LogonLogoff/Logon/Sec_4624_Info_Logon-Type-13-CachedUnlock.yml",
     "id": "e50e3952-06d9-44a8-ab07-7a41c9801d78",
     "level": "informational",
+    "license": "DRL-1.1",
     "logsource": {
       "product": "windows",
       "service": "security"
@@ -2976,6 +3153,7 @@
       "SELECT * FROM logs WHERE Channel='Security' AND EventID=4624 AND LogonType=13"
     ],
     "schema_version": 2,
+    "source": "hayabusa",
     "source_table": "logs",
     "status": "stable",
     "tags": [],
@@ -2996,6 +3174,7 @@
     "filename": "hayabusa/builtin/TerminalServices-Gateway_Op/RDS_Gateway_303_Info_Logoff.yml",
     "id": "e5f74909-58a9-45ec-b70d-21c654dca4f3",
     "level": "informational",
+    "license": "DRL-1.1",
     "logsource": {
       "product": "windows"
     },
@@ -3008,6 +3187,7 @@
       "SELECT * FROM logs WHERE Channel='Microsoft-Windows-TerminalServices-Gateway/Operational' AND EventID=303"
     ],
     "schema_version": 2,
+    "source": "hayabusa",
     "source_table": "logs",
     "status": "stable",
     "tags": [
@@ -3031,6 +3211,7 @@
     "filename": "hayabusa/builtin/TerminalServices-RemoteConnectionManager_Op/RemoteConnManger_1149_Info_RDP-LogonAttempt.yml",
     "id": "e91c514e-08c5-4c42-96d7-ab1f5668a2f7",
     "level": "informational",
+    "license": "DRL-1.1",
     "logsource": {
       "product": "windows"
     },
@@ -3043,6 +3224,7 @@
       "SELECT * FROM logs WHERE Channel='Microsoft-Windows-TerminalServices-RemoteConnectionManager/Operational' AND EventID=1149"
     ],
     "schema_version": 2,
+    "source": "hayabusa",
     "source_table": "logs",
     "status": "stable",
     "tags": [
@@ -3065,6 +3247,7 @@
     "filename": "hayabusa/builtin/Application/App_1022-1033_Info_MSI-Installed.yml",
     "id": "ef118d4d-ef83-40a7-bb27-2bb3945473ee",
     "level": "informational",
+    "license": "DRL-1.1",
     "logsource": {
       "product": "windows",
       "service": "application"
@@ -3079,6 +3262,7 @@
       "SELECT * FROM logs WHERE Channel='Application' AND Provider_Name='MsiInstaller' AND (EventID=1022 OR EventID=1033)"
     ],
     "schema_version": 2,
+    "source": "hayabusa",
     "source_table": "logs",
     "status": "test",
     "tags": [],
@@ -3099,6 +3283,7 @@
     "filename": "hayabusa/builtin/Security/LogonLogoff/OtherLogonLogoffEvents/Sec_4779_Info_RDP-SessDisconn.yml",
     "id": "f3532729-5536-42b4-ad74-d061b61a3891",
     "level": "informational",
+    "license": "DRL-1.1",
     "logsource": {
       "product": "windows",
       "service": "security"
@@ -3112,6 +3297,7 @@
       "SELECT * FROM logs WHERE Channel='Security' AND EventID=4779"
     ],
     "schema_version": 2,
+    "source": "hayabusa",
     "source_table": "logs",
     "status": "stable",
     "tags": [
@@ -3134,6 +3320,7 @@
     "filename": "hayabusa/sysmon/Sysmon_4_Info_SvcStateChanged.yml",
     "id": "f48ff752-0475-4e05-8203-56f6b2e2ab06",
     "level": "informational",
+    "license": "DRL-1.1",
     "logsource": {
       "product": "windows",
       "service": "sysmon"
@@ -3147,6 +3334,7 @@
       "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND EventID=4"
     ],
     "schema_version": 2,
+    "source": "hayabusa",
     "source_table": "logs",
     "status": "stable",
     "tags": [],
@@ -3167,6 +3355,7 @@
     "filename": "hayabusa/builtin/Security/LogonLogoff/Logon/Sec_4624_Info_Logon-Type-12-CachedRemoteInteractive.yml",
     "id": "f4b46dd3-63d6-4c75-a54c-9f6bd095cd6f",
     "level": "informational",
+    "license": "DRL-1.1",
     "logsource": {
       "product": "windows",
       "service": "security"
@@ -3181,6 +3370,7 @@
       "SELECT * FROM logs WHERE Channel='Security' AND EventID=4624 AND LogonType=12"
     ],
     "schema_version": 2,
+    "source": "hayabusa",
     "source_table": "logs",
     "status": "stable",
     "tags": [],
@@ -3201,6 +3391,7 @@
     "filename": "hayabusa/builtin/System/Sys_20001_Info_NewUSB-PnP-Device.yml",
     "id": "f5c0b936-bec8-418a-a79a-89833468fea2",
     "level": "informational",
+    "license": "DRL-1.1",
     "logsource": {
       "product": "windows",
       "service": "system"
@@ -3215,6 +3406,7 @@
       "SELECT * FROM logs WHERE Channel='System' AND EventID=20001 AND DeviceInstanceID LIKE 'USB%' ESCAPE '\\'"
     ],
     "schema_version": 2,
+    "source": "hayabusa",
     "source_table": "logs",
     "status": "stable",
     "tags": [],
@@ -3235,6 +3427,7 @@
     "filename": "hayabusa/builtin/Security/System/OtherSystemEvents/Sec_4825_Low_RDP-Denied.yml",
     "id": "f97a152e-753c-4975-9375-19087fb66f8c",
     "level": "informational",
+    "license": "DRL-1.1",
     "logsource": {
       "product": "windows",
       "service": "security"
@@ -3248,6 +3441,7 @@
       "SELECT * FROM logs WHERE Channel='Security' AND EventID=4825"
     ],
     "schema_version": 2,
+    "source": "hayabusa",
     "source_table": "logs",
     "status": "stable",
     "tags": [],
@@ -3268,6 +3462,7 @@
     "filename": "hayabusa/builtin/Security/LogonLogoff/Logon/Sec_4624_Info_Logon-Type-11-CachedInteractive.yml",
     "id": "fbbe9d3f-ed1f-49a9-9446-726e349f5fba",
     "level": "informational",
+    "license": "DRL-1.1",
     "logsource": {
       "product": "windows",
       "service": "security"
@@ -3282,6 +3477,7 @@
       "SELECT * FROM logs WHERE Channel='Security' AND EventID=4624 AND LogonType=11"
     ],
     "schema_version": 2,
+    "source": "hayabusa",
     "source_table": "logs",
     "status": "stable",
     "tags": [],
@@ -3302,6 +3498,7 @@
     "filename": "hayabusa/builtin/Security/LogonLogoff/SpecialLogon/Sec_4672_Info_AdminLogon.yml",
     "id": "fdd0b325-8b89-469c-8b0c-e5ddfe39b62e",
     "level": "informational",
+    "license": "DRL-1.1",
     "logsource": {
       "product": "windows",
       "service": "security"
@@ -3316,6 +3513,7 @@
       "SELECT * FROM logs WHERE (Channel='Security' AND EventID=4672) AND (NOT COALESCE((SubjectUserName='SYSTEM' OR SubjectUserName='LOCAL SERVICE' OR SubjectUserName='NETWORK SERVICE' OR SubjectUserName LIKE '%$' ESCAPE '\\' OR SubjectUserName REGEXP '(DWM)-([0-9]|1[0-3])$' OR SubjectUserName='DefaultAppPool' OR SubjectUserName='IUSR'), 0))"
     ],
     "schema_version": 2,
+    "source": "hayabusa",
     "source_table": "logs",
     "status": "stable",
     "tags": [],
@@ -3336,6 +3534,7 @@
     "filename": "hayabusa/builtin/TaskScheduler_Op/TaskSch_141_Info_TaskDeleted.yml",
     "id": "ff6ada24-c7f0-4ae5-a7a6-f20ddb7b591f",
     "level": "informational",
+    "license": "DRL-1.1",
     "logsource": {
       "product": "windows",
       "service": "taskscheduler"
@@ -3349,6 +3548,7 @@
       "SELECT * FROM logs WHERE Channel='Microsoft-Windows-TaskScheduler/Operational' AND EventID=141"
     ],
     "schema_version": 2,
+    "source": "hayabusa",
     "source_table": "logs",
     "status": "stable",
     "tags": [],
@@ -3367,6 +3567,7 @@
     "filename": "hayabusa/sysmon/Sysmon_6_Low_DrvLoaded_UnkwnSig_Noisy.yml",
     "id": "0090ea60-f4a2-43a8-8657-3a9a4ddcf547",
     "level": "low",
+    "license": "DRL-1.1",
     "logsource": {
       "product": "windows",
       "service": "sysmon"
@@ -3382,6 +3583,7 @@
       "SELECT * FROM logs WHERE (Channel='Microsoft-Windows-Sysmon/Operational' AND EventID=6 AND Signed='true') AND (NOT COALESCE((Signature='Microsoft Windows' OR Signature='VMware' OR Signature='VMware, Inc.' OR Signature='OpenVPN Technologies, Inc.' OR Signature='Insecure.Com LLC' OR Signature='Wireshark Foundation, Inc.' OR Signature='Trend Micro' OR Signature='McAfee, Inc.' OR Signature='Riverbed Technology, Inc.' OR Signature='Oracle Corporation' OR Signature='innotek GmbH'), 0))"
     ],
     "schema_version": 2,
+    "source": "hayabusa",
     "source_table": "logs",
     "status": "experimental",
     "tags": [
@@ -3405,6 +3607,7 @@
     "filename": "hayabusa/builtin/DFS/DFSN_515_Namespace_Removal.yml",
     "id": "0346e3b9-3783-468f-9e07-ef8d490846eb",
     "level": "low",
+    "license": "DRL-1.1",
     "logsource": {
       "product": "windows",
       "service": "dfsn-server"
@@ -3418,6 +3621,7 @@
       "SELECT * FROM logs WHERE Channel='Microsoft-Windows-DFSN-Server/Admin' AND EventID=515"
     ],
     "schema_version": 2,
+    "source": "hayabusa",
     "source_table": "logs",
     "status": "stable",
     "tags": [
@@ -3441,6 +3645,7 @@
     "filename": "hayabusa/builtin/Security/System/SystemIntegrity/Sec_5038_Low_CodeIntegrityErr_InvalidImgHash.yml",
     "id": "0c871345-668e-4b71-bdad-61e42ecc31e3",
     "level": "low",
+    "license": "DRL-1.1",
     "logsource": {
       "product": "windows",
       "service": "security"
@@ -3454,6 +3659,7 @@
       "SELECT * FROM logs WHERE Channel='Security' AND EventID=5038"
     ],
     "schema_version": 2,
+    "source": "hayabusa",
     "source_table": "logs",
     "status": "test",
     "tags": [
@@ -3476,6 +3682,7 @@
     "filename": "hayabusa/builtin/Security/AccountManagement/UserAccountManagement/Sec_4720_Info_AcctCreated_UsrAcctCreated.yml",
     "id": "13edce80-2b02-4469-8de4-a3e37271dcdb",
     "level": "low",
+    "license": "DRL-1.1",
     "logsource": {
       "product": "windows",
       "service": "security"
@@ -3490,6 +3697,7 @@
       "SELECT * FROM logs WHERE (Channel='Security' AND EventID=4720) AND (NOT COALESCE((TargetUserName LIKE '%$' ESCAPE '\\'), 0))"
     ],
     "schema_version": 2,
+    "source": "hayabusa",
     "source_table": "logs",
     "status": "stable",
     "tags": [
@@ -3513,6 +3721,7 @@
     "filename": "hayabusa/builtin/TerminalServices-Gateway_Op/RDS_Gateway_302_Low_LogonError.yml",
     "id": "24a04758-729d-4c43-9bd5-cccd31db80d0",
     "level": "low",
+    "license": "DRL-1.1",
     "logsource": {
       "product": "windows"
     },
@@ -3526,6 +3735,7 @@
       "SELECT * FROM logs WHERE (Channel='Microsoft-Windows-TerminalServices-Gateway/Operational' AND EventID=302) AND (NOT COALESCE((RdsGtwErrorCode=0), 0))"
     ],
     "schema_version": 2,
+    "source": "hayabusa",
     "source_table": "logs",
     "status": "test",
     "tags": [
@@ -3547,6 +3757,7 @@
     "filename": "hayabusa/builtin/VHDMP_Op/VHDMP_12_Info_VHDX-Mount.yml",
     "id": "2c544083-e209-4a8d-ad28-4f1427353d2e",
     "level": "low",
+    "license": "DRL-1.1",
     "logsource": {
       "product": "windows",
       "service": "vhdmp"
@@ -3561,6 +3772,7 @@
       "SELECT * FROM logs WHERE Channel='Microsoft-Windows-VHDMP-Operational' AND EventID=12 AND VhdType=2"
     ],
     "schema_version": 2,
+    "source": "hayabusa",
     "source_table": "logs",
     "status": "experimental",
     "tags": [],
@@ -3581,6 +3793,7 @@
     "filename": "hayabusa/builtin/Security/AccountManagement/SecurityGroupManagement/Sec_4728_Low_MemberAddedToGlobalGrp_NonAdmin.yml",
     "id": "2f04e44e-1c79-4343-b4ab-ba670ee10aa0",
     "level": "low",
+    "license": "DRL-1.1",
     "logsource": {
       "product": "windows",
       "service": "security"
@@ -3595,6 +3808,7 @@
       "SELECT * FROM logs WHERE (Channel='Security' AND EventID=4728) AND (NOT COALESCE((TargetUserName='Administrators' OR TargetUserName='None' OR TargetUserName='Domain Admins'), 0))"
     ],
     "schema_version": 2,
+    "source": "hayabusa",
     "source_table": "logs",
     "status": "stable",
     "tags": [
@@ -3616,6 +3830,7 @@
     "filename": "hayabusa/sysmon/Sysmon_10_Low_ProcAccess.yml",
     "id": "39503291-25e2-4d79-86d4-fb18804c5f21",
     "level": "low",
+    "license": "DRL-1.1",
     "logsource": {
       "product": "windows",
       "service": "sysmon"
@@ -3632,6 +3847,7 @@
       "SELECT * FROM logs WHERE (Channel='Microsoft-Windows-Sysmon/Operational' AND EventID=10) AND (RuleName='' OR RuleName='-') AND (NOT COALESCE((SourceImage LIKE 'C:\\\\Program Files (x86)\\\\McAfee\\\\VirusScan Enterprise\\\\VsTskMgr.exe' ESCAPE '\\' OR SourceImage LIKE 'C:\\\\Program Files\\\\Common Files\\\\McAfee\\\\SystemCore\\\\mcshield.exe' ESCAPE '\\' OR SourceImage LIKE 'C:\\\\Program Files\\\\VMware\\\\VMware Tools\\\\vmtoolsd.exe' ESCAPE '\\' OR SourceImage LIKE 'C:\\\\windows\\\\system32\\\\MRT.exe' ESCAPE '\\'), 0)) AND (NOT COALESCE((SourceImage LIKE 'C:\\\\Windows\\\\system32\\\\lsass.exe' ESCAPE '\\' AND TargetImage LIKE 'C:\\\\windows\\\\system32\\\\winlogon.exe' ESCAPE '\\'), 0))"
     ],
     "schema_version": 2,
+    "source": "hayabusa",
     "source_table": "logs",
     "status": "test",
     "tags": [],
@@ -3650,6 +3866,7 @@
     "filename": "hayabusa/builtin/System/Sys_6008_Low_UnexpectedShutdown.yml",
     "id": "517c0b15-d2bf-48a3-926c-f7b4a96dcec3",
     "level": "low",
+    "license": "DRL-1.1",
     "logsource": {
       "product": "windows",
       "service": "system"
@@ -3663,6 +3880,7 @@
       "SELECT * FROM logs WHERE Channel='System' AND EventID=6008"
     ],
     "schema_version": 2,
+    "source": "hayabusa",
     "source_table": "logs",
     "status": "stable",
     "tags": [
@@ -3684,6 +3902,7 @@
     "filename": "hayabusa/sysmon/Sysmon_7_Low_ImgLoaded_RuleAlert.yml",
     "id": "5e0a0e46-0e0e-4f44-9bb6-156b09812a47",
     "level": "low",
+    "license": "DRL-1.1",
     "logsource": {
       "product": "windows",
       "service": "sysmon"
@@ -3698,6 +3917,7 @@
       "SELECT * FROM logs WHERE (Channel='Microsoft-Windows-Sysmon/Operational' AND EventID=7) AND (NOT COALESCE((RuleName='' OR RuleName='-'), 0))"
     ],
     "schema_version": 2,
+    "source": "hayabusa",
     "source_table": "logs",
     "status": "stable",
     "tags": [],
@@ -3718,6 +3938,7 @@
     "filename": "hayabusa/builtin/WindowsDefender/Defender_1116_Low_Alert.yml",
     "id": "61056ed8-7be5-46e4-9015-c5f6bc8b93a1",
     "level": "low",
+    "license": "DRL-1.1",
     "logsource": {
       "product": "windows",
       "service": "windefend"
@@ -3732,6 +3953,7 @@
       "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Windows Defender/Operational' AND EventID=1116 AND SeverityID=2"
     ],
     "schema_version": 2,
+    "source": "hayabusa",
     "source_table": "logs",
     "status": "test",
     "tags": [],
@@ -3753,6 +3975,7 @@
     "filename": "hayabusa/builtin/Security/DetailedTracking/ProcessCreation/Sec_4688_Low_ProcExec_PossibleLOLBIN-Abuse.yml",
     "id": "6c34b782-a5b5-4298-80f3-1918caf1f558",
     "level": "low",
+    "license": "DRL-1.1",
     "logsource": {
       "product": "windows",
       "service": "security"
@@ -3768,6 +3991,7 @@
       "SELECT * FROM logs WHERE (Channel='Security' AND EventID=4688 AND CommandLine LIKE '% %' ESCAPE '\\') AND ((NewProcessName LIKE '%AppInstaller.exe' ESCAPE '\\' OR NewProcessName LIKE '%Aspnet\\_Compiler.exe' ESCAPE '\\' OR NewProcessName LIKE '%At.exe' ESCAPE '\\' OR NewProcessName LIKE '%AtBroker.exe' ESCAPE '\\' OR NewProcessName LIKE '%Bash.exe' ESCAPE '\\' OR NewProcessName LIKE '%BitsAdmin.exe' ESCAPE '\\' OR NewProcessName LIKE '%CertOC.exe' ESCAPE '\\' OR NewProcessName LIKE '%CertReq.exe' ESCAPE '\\' OR NewProcessName LIKE '%CertUtil.exe' ESCAPE '\\' OR NewProcessName LIKE '%Cmd.exe' ESCAPE '\\' OR NewProcessName LIKE '%Cmdkey.exe' ESCAPE '\\' OR NewProcessName LIKE '%cmdl32.exe' ESCAPE '\\' OR NewProcessName LIKE '%Cmstp.exe' ESCAPE '\\' OR NewProcessName LIKE '%ConfigSecurityPolicy.exe' ESCAPE '\\' OR NewProcessName LIKE '%Control.exe' ESCAPE '\\' OR NewProcessName LIKE '%Csc.exe' ESCAPE '\\' OR NewProcessName LIKE '%Cscript.exe' ESCAPE '\\' OR NewProcessName LIKE '%DataSvcUtil.exe' ESCAPE '\\' OR NewProcessName LIKE '%DesktopImgDownldr.exe' ESCAPE '\\' OR NewProcessName LIKE '%DfSvc.exe' ESCAPE '\\' OR NewProcessName LIKE '%Diantz.exe' ESCAPE '\\' OR NewProcessName LIKE '%DiskShadow.exe' ESCAPE '\\' OR NewProcessName LIKE '%dllhost.exe' ESCAPE '\\' OR NewProcessName LIKE '%DnsCmd.exe' ESCAPE '\\' OR NewProcessName LIKE '%EsentUtl.exe' ESCAPE '\\' OR NewProcessName LIKE '%EventVwr.exe' ESCAPE '\\' OR NewProcessName LIKE '%Expand.exe' ESCAPE '\\' OR NewProcessName LIKE '%ExtExport.exe' ESCAPE '\\' OR NewProcessName LIKE '%Extrac32.exe' ESCAPE '\\' OR NewProcessName LIKE '%FindStr.exe' ESCAPE '\\' OR NewProcessName LIKE '%Finger.exe' ESCAPE '\\' OR NewProcessName LIKE '%FltMC.exe' ESCAPE '\\' OR NewProcessName LIKE '%ForFiles.exe' ESCAPE '\\' OR NewProcessName LIKE '%FTP.exe' ESCAPE '\\' OR NewProcessName LIKE '%GfxDownloadWrapper.exe' ESCAPE '\\' OR NewProcessName LIKE '%GpScript.exe' ESCAPE '\\' OR NewProcessName LIKE '%HH.exe' ESCAPE '\\' OR NewProcessName LIKE '%IMEWDBLD.exe' ESCAPE '\\' OR NewProcessName LIKE '%Ie4uInit.exe' ESCAPE '\\' OR NewProcessName LIKE '%IeExec.exe' ESCAPE '\\' OR NewProcessName LIKE '%ILASM.exe' ESCAPE '\\' OR NewProcessName LIKE '%InfDefaultInstall.exe' ESCAPE '\\' OR NewProcessName LIKE '%InstallUtil.exe' ESCAPE '\\' OR NewProcessName LIKE '%Jsc.exe' ESCAPE '\\' OR NewProcessName LIKE '%MakeCab.exe' ESCAPE '\\' OR NewProcessName LIKE '%MavInject.exe' ESCAPE '\\' OR NewProcessName LIKE '%Microsoft.Workflow.Compiler.exe' ESCAPE '\\' OR NewProcessName LIKE '%Mmc.exe' ESCAPE '\\' OR NewProcessName LIKE '%MpCmdRun.exe' ESCAPE '\\' OR NewProcessName LIKE '%Msbuild.exe' ESCAPE '\\') OR (NewProcessName LIKE '%MsConfig.exe' ESCAPE '\\' OR NewProcessName LIKE '%Msdt.exe' ESCAPE '\\' OR NewProcessName LIKE '%Mshta.exe' ESCAPE '\\' OR NewProcessName LIKE '%MsiExec.exe' ESCAPE '\\' OR NewProcessName LIKE '%NetSh.exe' ESCAPE '\\' OR NewProcessName LIKE '%OdbcConf.exe' ESCAPE '\\' OR NewProcessName LIKE '%OfflineScannerShell.exe' ESCAPE '\\' OR NewProcessName LIKE '%OneDriveStandaloneUpdater.exe' ESCAPE '\\' OR NewProcessName LIKE '%Pcalua.exe' ESCAPE '\\' OR NewProcessName LIKE '%PcwRun.exe' ESCAPE '\\' OR NewProcessName LIKE '%PktMon.exe' ESCAPE '\\' OR NewProcessName LIKE '%PnpUtil.exe' ESCAPE '\\' OR NewProcessName LIKE '%PresentationHost.exe' ESCAPE '\\' OR NewProcessName LIKE '%Print.exe' ESCAPE '\\' OR NewProcessName LIKE '%PrintBrm.exe' ESCAPE '\\' OR NewProcessName LIKE '%Psr.exe' ESCAPE '\\' OR NewProcessName LIKE '%Rasautou.exe' ESCAPE '\\' OR NewProcessName LIKE '%Reg.exe' ESCAPE '\\' OR NewProcessName LIKE '%Regasm.exe' ESCAPE '\\' OR NewProcessName LIKE '%RegEdit.exe' ESCAPE '\\' OR NewProcessName LIKE '%RegIni.exe' ESCAPE '\\' OR NewProcessName LIKE '%Register-CimProvider.exe' ESCAPE '\\' OR NewProcessName LIKE '%RegSvcs.exe' ESCAPE '\\' OR NewProcessName LIKE '%RegSvr32.exe' ESCAPE '\\' OR NewProcessName LIKE '%Replace.exe' ESCAPE '\\' OR NewProcessName LIKE '%RpcPing.exe' ESCAPE '\\' OR NewProcessName LIKE '%RunDll32.exe' ESCAPE '\\' OR NewProcessName LIKE '%RunOnce.exe' ESCAPE '\\' OR NewProcessName LIKE '%RunScriptHelper.exe' ESCAPE '\\' OR NewProcessName LIKE '%Sc.exe' ESCAPE '\\' OR NewProcessName LIKE '%SchTasks.exe' ESCAPE '\\' OR NewProcessName LIKE '%ScriptRunner.exe' ESCAPE '\\' OR NewProcessName LIKE '%SettingSyncHost.exe' ESCAPE '\\' OR NewProcessName LIKE '%StorDiag.exe' ESCAPE '\\' OR NewProcessName LIKE '%SyncAppvPublishingServer.exe' ESCAPE '\\' OR NewProcessName LIKE '%TtdInject.exe' ESCAPE '\\' OR NewProcessName LIKE '%TtTracer.exe' ESCAPE '\\' OR NewProcessName LIKE '%VBC.exe' ESCAPE '\\' OR NewProcessName LIKE '%Verclsid.exe' ESCAPE '\\' OR NewProcessName LIKE '%ping.exe' ESCAPE '\\' OR NewProcessName LIKE '%ipconfig.exe' ESCAPE '\\' OR NewProcessName LIKE '%Wab.exe' ESCAPE '\\' OR NewProcessName LIKE '%Wmic.exe' ESCAPE '\\' OR NewProcessName LIKE '%WorkFolders.exe' ESCAPE '\\' OR NewProcessName LIKE '%Wscript.exe' ESCAPE '\\' OR NewProcessName LIKE '%WsReset.exe' ESCAPE '\\' OR NewProcessName LIKE '%Wuauclt.exe' ESCAPE '\\' OR NewProcessName LIKE '%Xwizard.exe' ESCAPE '\\' OR NewProcessName LIKE '%ADPlus.exe' ESCAPE '\\' OR NewProcessName LIKE '%AgentExecutor.exe' ESCAPE '\\') OR (NewProcessName LIKE '%Appvlp.exe' ESCAPE '\\' OR NewProcessName LIKE '%Bginfo.exe' ESCAPE '\\' OR NewProcessName LIKE '%Cdb.exe' ESCAPE '\\' OR NewProcessName LIKE '%CoreGen.exe' ESCAPE '\\' OR NewProcessName LIKE '%CSI.exe' ESCAPE '\\' OR NewProcessName LIKE '%DefaultPack.exe' ESCAPE '\\' OR NewProcessName LIKE '%DevtoolsLauncher.exe' ESCAPE '\\' OR NewProcessName LIKE '%DNX.exe' ESCAPE '\\' OR NewProcessName LIKE '%Dotnet.exe' ESCAPE '\\' OR NewProcessName LIKE '%Dxcap.exe' ESCAPE '\\' OR NewProcessName LIKE '%NTDSUtil.exe' ESCAPE '\\' OR NewProcessName LIKE '%procdump.exe' ESCAPE '\\' OR NewProcessName LIKE '%psexec.exe' ESCAPE '\\' OR NewProcessName LIKE '%SqlDumper.exe' ESCAPE '\\' OR NewProcessName LIKE '%winrm.vbs.exe' ESCAPE '\\' OR NewProcessName LIKE '%powershell.exe' ESCAPE '\\' OR NewProcessName LIKE '%xcopy.exe' ESCAPE '\\' OR NewProcessName LIKE '%RoboCopy.exe' ESCAPE '\\'))"
     ],
     "schema_version": 2,
+    "source": "hayabusa",
     "source_table": "logs",
     "status": "stable",
     "tags": [],
@@ -3788,6 +4012,7 @@
     "filename": "hayabusa/builtin/Security/LogonLogoff/Logon/Sec_4625_Low_LogonFail_NonExistantUser.yml",
     "id": "8afa97ce-a217-4f7c-aced-3e320a57756d",
     "level": "low",
+    "license": "DRL-1.1",
     "logsource": {
       "product": "windows",
       "service": "security"
@@ -3802,6 +4027,7 @@
       "SELECT * FROM logs WHERE (Channel='Security' AND EventID=4625) AND SubStatus='0xc0000064'"
     ],
     "schema_version": 2,
+    "source": "hayabusa",
     "source_table": "logs",
     "status": "stable",
     "tags": [],
@@ -3822,6 +4048,7 @@
     "filename": "hayabusa/builtin/Security/LogonLogoff/Logon/Sec_4625_Low_LogonFail_UnknownErr.yml",
     "id": "a85096da-be85-48d7-8ad5-2f957cd74daa",
     "level": "low",
+    "license": "DRL-1.1",
     "logsource": {
       "product": "windows",
       "service": "security"
@@ -3836,6 +4063,7 @@
       "SELECT * FROM logs WHERE (Channel='Security' AND EventID=4625) AND (NOT COALESCE((SubStatus='0xc0000064' OR SubStatus='0xc000006a'), 0))"
     ],
     "schema_version": 2,
+    "source": "hayabusa",
     "source_table": "logs",
     "status": "stable",
     "tags": [],
@@ -3857,6 +4085,7 @@
     "filename": "hayabusa/builtin/Security/System/SystemIntegrity/Sec_6410_Low_CodeIntegrityErr_RequirementsNotMet.yml",
     "id": "c2eb9d20-ef9d-4b2d-bffe-d0a5d9616f30",
     "level": "low",
+    "license": "DRL-1.1",
     "logsource": {
       "product": "windows",
       "service": "security"
@@ -3870,6 +4099,7 @@
       "SELECT * FROM logs WHERE Channel='Security' AND EventID=6410"
     ],
     "schema_version": 2,
+    "source": "hayabusa",
     "source_table": "logs",
     "status": "test",
     "tags": [
@@ -3892,6 +4122,7 @@
     "filename": "hayabusa/sysmon/Sysmon_1_Low_ExeFileRenamed.yml",
     "id": "cc1b2ee2-e737-47ac-8ef1-d6065b65292b",
     "level": "low",
+    "license": "DRL-1.1",
     "logsource": {
       "product": "windows",
       "service": "sysmon"
@@ -3907,6 +4138,7 @@
       "SELECT * FROM logs WHERE (Channel='Microsoft-Windows-Sysmon/Operational' AND EventID=1 AND OriginalFileName LIKE '%.exe' ESCAPE '\\') AND (NOT COALESCE((Image LIKE '%' || REPLACE(REPLACE(REPLACE(OriginalFileName, '\\', '\\\\'), '%', '\\%'), '_', '\\_') ESCAPE '\\'), 0)) AND (NOT COALESCE((OriginalFileName='?' OR OriginalFileName='-' OR OriginalFileName IS NULL), 0)) AND (NOT COALESCE((Image LIKE '%code.exe' ESCAPE '\\' AND OriginalFileName='electron.exe'), 0)) AND (NOT COALESCE((Image LIKE '%GoogleCrashHandler%.exe' ESCAPE '\\' AND OriginalFileName='GoogleUpdate.exe'), 0))"
     ],
     "schema_version": 2,
+    "source": "hayabusa",
     "source_table": "logs",
     "status": "experimental",
     "tags": [],
@@ -3925,6 +4157,7 @@
     "filename": "hayabusa/builtin/VHDMP_Op/VHDMP_12_Info_VHD-Mount.yml",
     "id": "d00c370c-c6c2-474f-9d41-a250644852b5",
     "level": "low",
+    "license": "DRL-1.1",
     "logsource": {
       "product": "windows",
       "service": "vhdmp"
@@ -3939,6 +4172,7 @@
       "SELECT * FROM logs WHERE Channel='Microsoft-Windows-VHDMP-Operational' AND EventID=12 AND VhdType=1"
     ],
     "schema_version": 2,
+    "source": "hayabusa",
     "source_table": "logs",
     "status": "experimental",
     "tags": [],
@@ -3960,6 +4194,7 @@
     "filename": "hayabusa/builtin/Security/System/SystemIntegrity/Sec_6281_Low_CodeIntegrityErr_InvalidImgPageHash.yml",
     "id": "d4757f63-cc0e-448e-8b5b-6cb02aeb918a",
     "level": "low",
+    "license": "DRL-1.1",
     "logsource": {
       "product": "windows",
       "service": "security"
@@ -3973,6 +4208,7 @@
       "SELECT * FROM logs WHERE Channel='Security' AND EventID=6281"
     ],
     "schema_version": 2,
+    "source": "hayabusa",
     "source_table": "logs",
     "status": "test",
     "tags": [
@@ -3995,6 +4231,7 @@
     "filename": "hayabusa/builtin/Security/Default/Sec_5397_Low_CredentialManagerAccessed.yml",
     "id": "d478c070-8f84-4e65-9f45-cc432a000e93",
     "level": "low",
+    "license": "DRL-1.1",
     "logsource": {
       "product": "windows",
       "service": "security"
@@ -4011,6 +4248,7 @@
       "SELECT * FROM logs WHERE (Channel='Security' AND EventID=5379 AND ReadOperation LIKE '\\%\\%8099' ESCAPE '\\') AND (NOT COALESCE((CountOfCredentialsReturned=0 OR SubjectUserName='LOCAL SERVICE' OR SubjectUserName LIKE '%$' ESCAPE '\\'), 0))"
     ],
     "schema_version": 2,
+    "source": "hayabusa",
     "source_table": "logs",
     "status": "experimental",
     "tags": [
@@ -4032,6 +4270,7 @@
     "filename": "hayabusa/builtin/System/Sys_7031_Low_ServiceCrashed.yml",
     "id": "d869bf31-92b3-4e21-a447-708f10156e7c",
     "level": "low",
+    "license": "DRL-1.1",
     "logsource": {
       "product": "windows",
       "service": "system"
@@ -4045,6 +4284,7 @@
       "SELECT * FROM logs WHERE Channel='System' AND EventID=7031"
     ],
     "schema_version": 2,
+    "source": "hayabusa",
     "source_table": "logs",
     "status": "test",
     "tags": [
@@ -4068,6 +4308,7 @@
     "filename": "hayabusa/builtin/Security/Default/Sec_5397_Low_CredentialManagerEnumerated.yml",
     "id": "d8e3afc5-fa0a-4063-a4af-55e014eb1936",
     "level": "low",
+    "license": "DRL-1.1",
     "logsource": {
       "product": "windows",
       "service": "security"
@@ -4084,6 +4325,7 @@
       "SELECT * FROM logs WHERE (Channel='Security' AND EventID=5379 AND ReadOperation LIKE '\\%\\%8100' ESCAPE '\\') AND (NOT COALESCE((CountOfCredentialsReturned=0 OR SubjectUserName='LOCAL SERVICE' OR SubjectUserName LIKE '%$' ESCAPE '\\'), 0))"
     ],
     "schema_version": 2,
+    "source": "hayabusa",
     "source_table": "logs",
     "status": "experimental",
     "tags": [
@@ -4107,6 +4349,7 @@
     "filename": "hayabusa/builtin/Security/LogonLogoff/Logon/Sec_4625_Low_LogonFail_WrongPW.yml",
     "id": "e87bd730-df45-4ae9-85de-6c75369c5d29",
     "level": "low",
+    "license": "DRL-1.1",
     "logsource": {
       "product": "windows",
       "service": "security"
@@ -4121,6 +4364,7 @@
       "SELECT * FROM logs WHERE (Channel='Security' AND EventID=4625) AND SubStatus='0xc000006a'"
     ],
     "schema_version": 2,
+    "source": "hayabusa",
     "source_table": "logs",
     "status": "stable",
     "tags": [],
@@ -4141,6 +4385,7 @@
     "filename": "hayabusa/sysmon/Sysmon_2_Low_PossibleTimestomping.yml",
     "id": "f03e34c4-6432-4a30-9ae2-76ae6329399a",
     "level": "low",
+    "license": "DRL-1.1",
     "logsource": {
       "product": "windows",
       "service": "sysmon"
@@ -4154,6 +4399,7 @@
       "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND EventID=2"
     ],
     "schema_version": 2,
+    "source": "hayabusa",
     "source_table": "logs",
     "status": "stable",
     "tags": [
@@ -4175,6 +4421,7 @@
     "filename": "hayabusa/builtin/System/Sys_7034_Low_ServiceCrashed.yml",
     "id": "f5dc6a6d-fdf1-441a-a10c-aa10e2908aa4",
     "level": "low",
+    "license": "DRL-1.1",
     "logsource": {
       "product": "windows",
       "service": "system"
@@ -4188,6 +4435,7 @@
       "SELECT * FROM logs WHERE Channel='System' AND EventID=7034"
     ],
     "schema_version": 2,
+    "source": "hayabusa",
     "source_table": "logs",
     "status": "test",
     "tags": [
@@ -4209,6 +4457,7 @@
     "filename": "hayabusa/builtin/VHDMP_Op/VHDMP_12_Info_ISO-Mount.yml",
     "id": "f9915ff9-17ce-4524-9851-cc4bdd9bb35e",
     "level": "low",
+    "license": "DRL-1.1",
     "logsource": {
       "product": "windows",
       "service": "vhdmp"
@@ -4223,6 +4472,7 @@
       "SELECT * FROM logs WHERE Channel='Microsoft-Windows-VHDMP-Operational' AND EventID=12 AND VhdType=3"
     ],
     "schema_version": 2,
+    "source": "hayabusa",
     "source_table": "logs",
     "status": "stable",
     "tags": [],
@@ -4241,6 +4491,7 @@
     "filename": "hayabusa/sysmon/Sysmon_255_Low_Error.yml",
     "id": "f9a0bb41-a47a-4acb-875b-d64da687ee91",
     "level": "low",
+    "license": "DRL-1.1",
     "logsource": {
       "product": "windows",
       "service": "sysmon"
@@ -4254,6 +4505,7 @@
       "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND EventID=255"
     ],
     "schema_version": 2,
+    "source": "hayabusa",
     "source_table": "logs",
     "status": "stable",
     "tags": [],
@@ -4272,6 +4524,7 @@
     "filename": "hayabusa/builtin/System/Sys_1001_Med_BSOD.yml",
     "id": "082fbbf5-bb05-468c-ad9c-ef2a383bb293",
     "level": "medium",
+    "license": "DRL-1.1",
     "logsource": {
       "product": "windows",
       "service": "system"
@@ -4286,6 +4539,7 @@
       "SELECT * FROM logs WHERE Channel='System' AND ProviderName='Microsoft-Windows-WER-SystemErrorReporting' AND EventID=1001"
     ],
     "schema_version": 2,
+    "source": "hayabusa",
     "source_table": "logs",
     "status": "test",
     "tags": [],
@@ -4306,6 +4560,7 @@
     "filename": "hayabusa/builtin/Security/AccountManagement/UserAccountManagement/Sec_4724_Med_AcctPassword_OtherChanged.yml",
     "id": "0b78aca4-35f0-4bec-acce-c5743ff26614",
     "level": "medium",
+    "license": "DRL-1.1",
     "logsource": {
       "product": "windows",
       "service": "security"
@@ -4320,6 +4575,7 @@
       "SELECT * FROM logs WHERE (Channel='Security' AND EventID=4724) AND (NOT COALESCE((TargetUserName LIKE '%$' ESCAPE '\\'), 0))"
     ],
     "schema_version": 2,
+    "source": "hayabusa",
     "source_table": "logs",
     "status": "stable",
     "tags": [
@@ -4342,6 +4598,7 @@
     "filename": "hayabusa/builtin/Security/AccountManagement/SecurityGroupManagement/Sec_4728_Med_MemberAddedToGlobalGroup.yml",
     "id": "0db443ba-561c-4a04-b349-d74ce1c5fc8b",
     "level": "medium",
+    "license": "DRL-1.1",
     "logsource": {
       "product": "windows",
       "service": "security"
@@ -4357,6 +4614,7 @@
       "SELECT * FROM logs WHERE (Channel='Security' AND EventID=4728) AND (NOT COALESCE((SubjectUserName LIKE '%$' ESCAPE '\\' OR TargetUserName='None'), 0))"
     ],
     "schema_version": 2,
+    "source": "hayabusa",
     "source_table": "logs",
     "status": "stable",
     "tags": [
@@ -4380,6 +4638,7 @@
     "filename": "hayabusa/builtin/Security/PrivilegeUse/Sec_4674_Med_OpAttemptOnPrivObj_PossibleHiddenSvcCreationAttempt.yml",
     "id": "15db3cc7-30bd-47a0-bd75-66208ce8e3fe",
     "level": "medium",
+    "license": "DRL-1.1",
     "logsource": {
       "product": "windows",
       "service": "security"
@@ -4396,6 +4655,7 @@
       "SELECT * FROM logs WHERE (Channel='Security' AND EventID=4674 AND ObjectType='SERVICE OBJECT' AND AccessMask LIKE '%\\%\\%1539%' ESCAPE '\\') AND (ProcessName LIKE 'C:\\\\Windows\\\\System32\\\\services.exe' ESCAPE '\\' OR ProcessName LIKE 'C:\\\\Windows\\\\SysWOW64\\\\services.exe' ESCAPE '\\')"
     ],
     "schema_version": 2,
+    "source": "hayabusa",
     "source_table": "logs",
     "status": "stable",
     "tags": [
@@ -4417,6 +4677,7 @@
     "filename": "hayabusa/sysmon/Sysmon_17_PipeCreated_RuleAlert.yml",
     "id": "204e9d06-d055-43fe-8a67-7584e77e8361",
     "level": "medium",
+    "license": "DRL-1.1",
     "logsource": {
       "product": "windows",
       "service": "sysmon"
@@ -4431,6 +4692,7 @@
       "SELECT * FROM logs WHERE (Channel='Microsoft-Windows-Sysmon/Operational' AND EventID=17) AND (NOT COALESCE((RuleName='' OR RuleName='-'), 0))"
     ],
     "schema_version": 2,
+    "source": "hayabusa",
     "source_table": "logs",
     "status": "stable",
     "tags": [],
@@ -4449,6 +4711,7 @@
     "filename": "hayabusa/sysmon/Sysmon_8_Med_ProcInj.yml",
     "id": "3ac6bf98-e71d-4397-8b44-b8a80d8fb058",
     "level": "medium",
+    "license": "DRL-1.1",
     "logsource": {
       "product": "windows",
       "service": "sysmon"
@@ -4463,6 +4726,7 @@
       "SELECT * FROM logs WHERE (Channel='Microsoft-Windows-Sysmon/Operational' AND EventID=8) AND (RuleName='' OR RuleName='-')"
     ],
     "schema_version": 2,
+    "source": "hayabusa",
     "source_table": "logs",
     "status": "stable",
     "tags": [],
@@ -4483,6 +4747,7 @@
     "filename": "hayabusa/builtin/Security/AccountManagement/UserAccountManagement/Sec_4723_Med_AcctPassword_OwnChanged.yml",
     "id": "3b3046f3-a51c-4378-b059-c716aaa865b4",
     "level": "medium",
+    "license": "DRL-1.1",
     "logsource": {
       "product": "windows",
       "service": "security"
@@ -4497,6 +4762,7 @@
       "SELECT * FROM logs WHERE (Channel='Security' AND EventID=4723) AND (NOT COALESCE((TargetUserName LIKE '%$' ESCAPE '\\'), 0))"
     ],
     "schema_version": 2,
+    "source": "hayabusa",
     "source_table": "logs",
     "status": "stable",
     "tags": [
@@ -4517,6 +4783,7 @@
     "filename": "hayabusa/sysmon/Sysmon_19_WmiEventFilterActivity_RuleAlert.yml",
     "id": "3e5ab8cf-6872-477e-83f1-82fd0d30aea5",
     "level": "medium",
+    "license": "DRL-1.1",
     "logsource": {
       "product": "windows",
       "service": "sysmon"
@@ -4531,6 +4798,7 @@
       "SELECT * FROM logs WHERE (Channel='Microsoft-Windows-Sysmon/Operational' AND EventID=19) AND (NOT COALESCE((RuleName='' OR RuleName='-'), 0))"
     ],
     "schema_version": 2,
+    "source": "hayabusa",
     "source_table": "logs",
     "status": "stable",
     "tags": [],
@@ -4551,6 +4819,7 @@
     "filename": "hayabusa/builtin/WindowsDefender/Defender_1116_Med_Alert.yml",
     "id": "3f5005fc-e354-4b0b-b1a1-3eec1d336023",
     "level": "medium",
+    "license": "DRL-1.1",
     "logsource": {
       "product": "windows",
       "service": "windefend"
@@ -4565,6 +4834,7 @@
       "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Windows Defender/Operational' AND EventID=1116 AND SeverityID=3"
     ],
     "schema_version": 2,
+    "source": "hayabusa",
     "source_table": "logs",
     "status": "test",
     "tags": [],
@@ -4585,6 +4855,7 @@
     "filename": "hayabusa/sysmon/Sysmon_6_Med_DrvLoaded_Unsigned.yml",
     "id": "42316be5-5732-40cc-8685-03e7c7f2c6ea",
     "level": "medium",
+    "license": "DRL-1.1",
     "logsource": {
       "product": "windows",
       "service": "sysmon"
@@ -4600,6 +4871,7 @@
       "SELECT * FROM logs WHERE (Channel='Microsoft-Windows-Sysmon/Operational' AND EventID=6) AND (NOT COALESCE((Signed='true' AND SignatureStatus='Expired'), 0))"
     ],
     "schema_version": 2,
+    "source": "hayabusa",
     "source_table": "logs",
     "status": "test",
     "tags": [
@@ -4621,6 +4893,7 @@
     "filename": "hayabusa/sysmon/Sysmon_15_ADS-Created_RuleAlert.yml",
     "id": "43c90e94-2806-424b-a75b-36d8590c00a6",
     "level": "medium",
+    "license": "DRL-1.1",
     "logsource": {
       "product": "windows",
       "service": "sysmon"
@@ -4635,6 +4908,7 @@
       "SELECT * FROM logs WHERE (Channel='Microsoft-Windows-Sysmon/Operational' AND EventID=15) AND (NOT COALESCE((RuleName='' OR RuleName='-'), 0))"
     ],
     "schema_version": 2,
+    "source": "hayabusa",
     "source_table": "logs",
     "status": "stable",
     "tags": [],
@@ -4651,6 +4925,7 @@
     "filename": "hayabusa/builtin/UnkwnChannEID_Med_PossibleHiddenShellcode.yml",
     "id": "442c7996-1154-45bd-b203-c20596e7af81",
     "level": "medium",
+    "license": "DRL-1.1",
     "logsource": {
       "product": "windows"
     },
@@ -4662,6 +4937,7 @@
       "SELECT * FROM logs WHERE Data REGEXP '^[A-Fa-f0-9]{50,}$'"
     ],
     "schema_version": 2,
+    "source": "hayabusa",
     "source_table": "logs",
     "status": "stable",
     "tags": [
@@ -4682,6 +4958,7 @@
     "filename": "hayabusa/sysmon/Sysmon_24_Med_ClipboardChange_RuleAlert.yml",
     "id": "48ee073d-8109-4622-aa29-73f2b378683e",
     "level": "medium",
+    "license": "DRL-1.1",
     "logsource": {
       "product": "windows",
       "service": "sysmon"
@@ -4696,6 +4973,7 @@
       "SELECT * FROM logs WHERE (Channel='Microsoft-Windows-Sysmon/Operational' AND EventID=24) AND (NOT COALESCE((RuleName='' OR RuleName='-'), 0))"
     ],
     "schema_version": 2,
+    "source": "hayabusa",
     "source_table": "logs",
     "status": "stable",
     "tags": [],
@@ -4716,6 +4994,7 @@
     "filename": "hayabusa/builtin/Security/PrivilegeUse/Sec_4673_Med_PrivSvcCalled_UnknownProcUsedHighPriv.yml",
     "id": "5b6e58ee-c231-4a54-9eee-af2577802e08",
     "level": "medium",
+    "license": "DRL-1.1",
     "logsource": {
       "product": "windows",
       "service": "security"
@@ -4731,6 +5010,7 @@
       "SELECT * FROM logs WHERE (Channel='Security' AND EventID=4673) AND (NOT COALESCE((ProcessName LIKE 'C:\\\\Windows\\\\System32\\\\net.exe' ESCAPE '\\' OR ProcessName LIKE 'C:\\\\Windows\\\\System32\\\\lsass.exe' ESCAPE '\\' OR ProcessName LIKE 'C:\\\\Windows\\\\System32\\\\audiodg.exe' ESCAPE '\\' OR ProcessName LIKE 'C:\\\\Windows\\\\System32\\\\svchost.exe' ESCAPE '\\' OR ProcessName LIKE 'C:\\\\Windows\\\\System32\\\\mmc.exe' ESCAPE '\\' OR ProcessName LIKE 'C:\\\\Windows\\\\System32\\\\net.exe' ESCAPE '\\' OR ProcessName LIKE 'C:\\\\Windows\\\\explorer.exe' ESCAPE '\\' OR ProcessName LIKE 'C:\\\\Windows\\\\System32\\\\SettingSyncHost.exe' ESCAPE '\\' OR ProcessName LIKE 'C:\\\\Windows\\\\System32\\\\sdiagnhost.exe' ESCAPE '\\' OR ProcessName LIKE 'C:\\\\Windows\\\\System32\\\\dwm.exe' ESCAPE '\\' OR ProcessName LIKE 'C:\\\\Windows\\\\System32\\\\WinSAT.exe' ESCAPE '\\' OR ProcessName LIKE '%ngentask.exe' ESCAPE '\\' OR ProcessName LIKE 'C:\\\\Windows\\\\System32\\\\taskhostw.exe' ESCAPE '\\' OR ProcessName LIKE 'C:\\\\Program Files%' ESCAPE '\\' OR SubjectUserName='LOCAL SERVICE'), 0))"
     ],
     "schema_version": 2,
+    "source": "hayabusa",
     "source_table": "logs",
     "status": "stable",
     "tags": [
@@ -4754,6 +5034,7 @@
     "filename": "hayabusa/sysmon/Sysmon_21_Med_WmiEventConsumerToFilterActivity_RuleAlert.yml",
     "id": "6464ba9e-a285-42f8-a1ea-419ef4c867e1",
     "level": "medium",
+    "license": "DRL-1.1",
     "logsource": {
       "product": "windows",
       "service": "sysmon"
@@ -4768,6 +5049,7 @@
       "SELECT * FROM logs WHERE (Channel='Microsoft-Windows-Sysmon/Operational' AND EventID=21) AND (NOT COALESCE((RuleName='' OR RuleName='-'), 0))"
     ],
     "schema_version": 2,
+    "source": "hayabusa",
     "source_table": "logs",
     "status": "test",
     "tags": [],
@@ -4786,6 +5068,7 @@
     "filename": "hayabusa/sysmon/Sysmon_22_Med_DNS-Query_RuleAlert.yml",
     "id": "6a633cec-1e7b-4c34-903e-d5afceba585b",
     "level": "medium",
+    "license": "DRL-1.1",
     "logsource": {
       "product": "windows",
       "service": "sysmon"
@@ -4800,6 +5083,7 @@
       "SELECT * FROM logs WHERE (Channel='Microsoft-Windows-Sysmon/Operational' AND EventID=22) AND (NOT COALESCE((RuleName='' OR RuleName='-'), 0))"
     ],
     "schema_version": 2,
+    "source": "hayabusa",
     "source_table": "logs",
     "status": "stable",
     "tags": [],
@@ -4820,6 +5104,7 @@
     "filename": "hayabusa/builtin/Security/DetailedTracking/ProcessCreation/Sec_4688_Med_ProcExec_RDP-Hijacking.yml",
     "id": "6be7f3fc-8917-11ec-a8a3-0242ac120002",
     "level": "medium",
+    "license": "DRL-1.1",
     "logsource": {
       "product": "windows",
       "service": "security"
@@ -4834,6 +5119,7 @@
       "SELECT * FROM logs WHERE Channel='Security' AND EventID=4688 AND CommandLine LIKE '%/dest%rdp-tcp%' ESCAPE '\\'"
     ],
     "schema_version": 2,
+    "source": "hayabusa",
     "source_table": "logs",
     "status": "test",
     "tags": [
@@ -4859,6 +5145,7 @@
     "filename": "hayabusa/builtin/PowerShell_Op/PwSh_4104_Med_ScriptblockLog_PotentiallyMalicious.yml",
     "id": "73be1519-4648-4ed7-b305-605504afc242",
     "level": "medium",
+    "license": "DRL-1.1",
     "logsource": {
       "category": "ps_script",
       "product": "windows",
@@ -4874,6 +5161,7 @@
       "SELECT * FROM logs WHERE (Channel='Microsoft-Windows-PowerShell/Operational' OR Channel='PowerShellCore/Operational') AND EventID=4104 AND Level=3"
     ],
     "schema_version": 2,
+    "source": "hayabusa",
     "source_table": "logs",
     "status": "stable",
     "tags": [],
@@ -4894,6 +5182,7 @@
     "filename": "hayabusa/builtin/Security/DetailedTracking/ProcessCreation/Sec_4688_Med_ProcExec_MeterpreterGetSystem.yml",
     "id": "75744b7f-7e4a-47fe-afbe-1ee74ec2448e",
     "level": "medium",
+    "license": "DRL-1.1",
     "logsource": {
       "product": "windows",
       "service": "security"
@@ -4909,6 +5198,7 @@
       "SELECT * FROM logs WHERE Channel='Security' AND EventID=4688 AND NewProcessName LIKE '%cmd.exe' ESCAPE '\\' AND CommandLine LIKE '%.\\\\pipe%' ESCAPE '\\'"
     ],
     "schema_version": 2,
+    "source": "hayabusa",
     "source_table": "logs",
     "status": "stable",
     "tags": [],
@@ -4929,6 +5219,7 @@
     "filename": "hayabusa/builtin/System/Sys_7045_Med_ServiceInstalled_MetasploitService.yml",
     "id": "76355548-fa5a-4310-9610-0de4b11f4688",
     "level": "medium",
+    "license": "DRL-1.1",
     "logsource": {
       "product": "windows",
       "service": "system"
@@ -4943,6 +5234,7 @@
       "SELECT * FROM logs WHERE Channel='System' AND EventID=7045 AND ImagePath REGEXP '^%SYSTEMROOT%\\\\[a-zA-Z]{8}\\.exe$'"
     ],
     "schema_version": 2,
+    "source": "hayabusa",
     "source_table": "logs",
     "status": "test",
     "tags": [
@@ -4964,6 +5256,7 @@
     "filename": "hayabusa/sysmon/Sysmon_13_RegKeyValueSet_RuleAlert.yml",
     "id": "78431930-a5c6-46ae-b02c-fcdc2a7325c2",
     "level": "medium",
+    "license": "DRL-1.1",
     "logsource": {
       "product": "windows",
       "service": "sysmon"
@@ -4978,6 +5271,7 @@
       "SELECT * FROM logs WHERE (Channel='Microsoft-Windows-Sysmon/Operational' AND EventID=13) AND (NOT COALESCE((RuleName='' OR RuleName='-'), 0))"
     ],
     "schema_version": 2,
+    "source": "hayabusa",
     "source_table": "logs",
     "status": "stable",
     "tags": [],
@@ -4996,6 +5290,7 @@
     "filename": "hayabusa/sysmon/Sysmon_26_Med_FileDeleted_RuleAlert.yml",
     "id": "84d47bf7-008b-465d-9257-52a2b9c8d566",
     "level": "medium",
+    "license": "DRL-1.1",
     "logsource": {
       "product": "windows",
       "service": "sysmon"
@@ -5010,6 +5305,7 @@
       "SELECT * FROM logs WHERE (Channel='Microsoft-Windows-Sysmon/Operational' AND EventID=26) AND (NOT COALESCE((RuleName='' OR RuleName='-'), 0))"
     ],
     "schema_version": 2,
+    "source": "hayabusa",
     "source_table": "logs",
     "status": "stable",
     "tags": [],
@@ -5028,6 +5324,7 @@
     "filename": "hayabusa/builtin/System/Sys_12_Med_ComputerStartupInSafeMode.yml",
     "id": "8da41a05-364b-4e3c-95d9-397abb82eac4",
     "level": "medium",
+    "license": "DRL-1.1",
     "logsource": {
       "product": "windows",
       "service": "system"
@@ -5043,6 +5340,7 @@
       "SELECT * FROM logs WHERE (Channel='System' AND Provider_Name='Microsoft-Windows-Kernel-General' AND EventID=12) AND (NOT COALESCE((BootMode=0), 0))"
     ],
     "schema_version": 2,
+    "source": "hayabusa",
     "source_table": "logs",
     "status": "test",
     "tags": [],
@@ -5061,6 +5359,7 @@
     "filename": "hayabusa/sysmon/Sysmon_6_DrvLoaded_SuspPath.yml",
     "id": "92fe5e3e-6a23-4aa8-a41d-30feea4dd16b",
     "level": "medium",
+    "license": "DRL-1.1",
     "logsource": {
       "product": "windows",
       "service": "sysmon"
@@ -5076,6 +5375,7 @@
       "SELECT * FROM logs WHERE (Channel='Microsoft-Windows-Sysmon/Operational' AND EventID=6 AND Signed='true') AND (NOT COALESCE((ImageLoaded LIKE 'C:\\\\Windows\\\\System32%' ESCAPE '\\' OR ImageLoaded LIKE 'C:\\\\Program Files%' ESCAPE '\\' OR ImageLoaded LIKE 'C:\\\\ProgramData\\\\Microsoft\\\\Windows Defender%' ESCAPE '\\'), 0))"
     ],
     "schema_version": 2,
+    "source": "hayabusa",
     "source_table": "logs",
     "status": "stable",
     "tags": [
@@ -5099,6 +5399,7 @@
     "filename": "hayabusa/builtin/Security/LogonLogoff/Logon/Sec_4624_Med_Logon-Type9-NewInteractive_SuspProc.yml",
     "id": "9e8b6cdb-9991-488b-a7b3-2eec7aa64679",
     "level": "medium",
+    "license": "DRL-1.1",
     "logsource": {
       "product": "windows",
       "service": "security"
@@ -5114,6 +5415,7 @@
       "SELECT * FROM logs WHERE (Channel='Security' AND EventID=4624 AND LogonType=9) AND (NOT COALESCE((ProcessName LIKE 'C:\\\\Windows\\\\System32\\\\svchost.exe' ESCAPE '\\'), 0))"
     ],
     "schema_version": 2,
+    "source": "hayabusa",
     "source_table": "logs",
     "status": "stable",
     "tags": [],
@@ -5132,6 +5434,7 @@
     "filename": "hayabusa/sysmon/Sysmon_23_Med_DeletedFileArchived_RuleAlert.yml",
     "id": "a1cebd95-3566-4413-95a4-264ca6da74f4",
     "level": "medium",
+    "license": "DRL-1.1",
     "logsource": {
       "product": "windows",
       "service": "sysmon"
@@ -5146,6 +5449,7 @@
       "SELECT * FROM logs WHERE (Channel='Microsoft-Windows-Sysmon/Operational' AND EventID=23) AND (NOT COALESCE((RuleName='' OR RuleName='-'), 0))"
     ],
     "schema_version": 2,
+    "source": "hayabusa",
     "source_table": "logs",
     "status": "test",
     "tags": [],
@@ -5166,6 +5470,7 @@
     "filename": "hayabusa/builtin/System/Sys_7040_Med_EventLogServiceStartupDisabled.yml",
     "id": "ab3507cf-5231-4af6-ab1d-5d3b3ad467b5",
     "level": "medium",
+    "license": "DRL-1.1",
     "logsource": {
       "product": "windows",
       "service": "system"
@@ -5181,6 +5486,7 @@
       "SELECT * FROM logs WHERE Channel='System' AND EventID=7040 AND param1='Windows Event Log' AND param3='disabled'"
     ],
     "schema_version": 2,
+    "source": "hayabusa",
     "source_table": "logs",
     "status": "test",
     "tags": [
@@ -5204,6 +5510,7 @@
     "filename": "hayabusa/builtin/WMI-Activity_Op/WMI_5861_Med_FilterToConsumerBinding_CmdExec.yml",
     "id": "ab4852ca-3e27-4dbb-af6b-5f8458d5717a",
     "level": "medium",
+    "license": "DRL-1.1",
     "logsource": {
       "product": "windows",
       "service": "wmi"
@@ -5218,6 +5525,7 @@
       "SELECT * FROM logs WHERE (Channel='Microsoft-Windows-WMI-Activity/Operational' AND EventID=5861) AND UserDataPossibleCause LIKE '%CommandLineEventConsumer%' ESCAPE '\\' AND (UserDataPossibleCause LIKE '%powershell%' ESCAPE '\\' OR UserDataPossibleCause LIKE '%cmd%' ESCAPE '\\')"
     ],
     "schema_version": 2,
+    "source": "hayabusa",
     "source_table": "logs",
     "status": "stable",
     "tags": [
@@ -5241,6 +5549,7 @@
     "filename": "hayabusa/sysmon/Sysmon_9_Med_RawAccessRead.yml",
     "id": "b021180b-ea62-4709-94ce-05a75637eec5",
     "level": "medium",
+    "license": "DRL-1.1",
     "logsource": {
       "product": "windows",
       "service": "sysmon"
@@ -5254,6 +5563,7 @@
       "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND EventID=9"
     ],
     "schema_version": 2,
+    "source": "hayabusa",
     "source_table": "logs",
     "status": "test",
     "tags": [],
@@ -5272,6 +5582,7 @@
     "filename": "hayabusa/sysmon/Sysmon_18_PipeConn_RuleAlert.yml",
     "id": "b607538d-cc16-4d51-8e3f-bbee6610aa1e",
     "level": "medium",
+    "license": "DRL-1.1",
     "logsource": {
       "product": "windows",
       "service": "sysmon"
@@ -5286,6 +5597,7 @@
       "SELECT * FROM logs WHERE (Channel='Microsoft-Windows-Sysmon/Operational' AND EventID=18) AND (NOT COALESCE((RuleName='' OR RuleName='-'), 0))"
     ],
     "schema_version": 2,
+    "source": "hayabusa",
     "source_table": "logs",
     "status": "stable",
     "tags": [],
@@ -5306,6 +5618,7 @@
     "filename": "hayabusa/builtin/PowerShellClassic/PwShClassic_400_Med_PwShStarted_V2DowngradeAttack.yml",
     "id": "bc082394-73e6-4d00-a9af-e7b524ef5085",
     "level": "medium",
+    "license": "DRL-1.1",
     "logsource": {
       "category": "ps_classic_start",
       "product": "windows",
@@ -5321,6 +5634,7 @@
       "SELECT * FROM logs WHERE Channel='Windows PowerShell' AND EventID=400 AND Data LIKE '%EngineVersion=2%' ESCAPE '\\'"
     ],
     "schema_version": 2,
+    "source": "hayabusa",
     "source_table": "logs",
     "status": "test",
     "tags": [
@@ -5342,6 +5656,7 @@
     "filename": "hayabusa/sysmon/Sysmon_25_Med_ProcessTampering.yml",
     "id": "c1d21dc3-fcd0-43c7-80d3-b895f0e4c08e",
     "level": "medium",
+    "license": "DRL-1.1",
     "logsource": {
       "product": "windows",
       "service": "sysmon"
@@ -5355,6 +5670,7 @@
       "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND EventID=25"
     ],
     "schema_version": 2,
+    "source": "hayabusa",
     "source_table": "logs",
     "status": "test",
     "tags": [],
@@ -5373,6 +5689,7 @@
     "filename": "hayabusa/sysmon/Sysmon_11_Med_FileCreated_RuleAlert.yml",
     "id": "c5e6b545-73a4-4650-ae97-67c239005382",
     "level": "medium",
+    "license": "DRL-1.1",
     "logsource": {
       "product": "windows",
       "service": "sysmon"
@@ -5387,6 +5704,7 @@
       "SELECT * FROM logs WHERE (Channel='Microsoft-Windows-Sysmon/Operational' AND EventID=11) AND (NOT COALESCE((RuleName='' OR RuleName='-'), 0))"
     ],
     "schema_version": 2,
+    "source": "hayabusa",
     "source_table": "logs",
     "status": "stable",
     "tags": [],
@@ -5407,6 +5725,7 @@
     "filename": "hayabusa/sysmon/Sysmon_6_Med_DrvLoaded_ExpiredOrRevoked.yml",
     "id": "c837dd6d-0c91-4593-aeab-f6a1f3ca1961",
     "level": "medium",
+    "license": "DRL-1.1",
     "logsource": {
       "product": "windows",
       "service": "sysmon"
@@ -5422,6 +5741,7 @@
       "SELECT * FROM logs WHERE (Channel='Microsoft-Windows-Sysmon/Operational' AND EventID=6 AND SignatureStatus='Expired') AND (NOT COALESCE((Signed='true'), 0))"
     ],
     "schema_version": 2,
+    "source": "hayabusa",
     "source_table": "logs",
     "status": "stable",
     "tags": [
@@ -5445,6 +5765,7 @@
     "filename": "hayabusa/builtin/Security/AccountLogon/KerberosAuthenticationService/Sec_4768_Med_KrbTGT-Req_PossibleAS-REP-Roasting.yml",
     "id": "dee2a01e-5d7c-45b4-aec3-ad9722f2165a",
     "level": "medium",
+    "license": "DRL-1.1",
     "logsource": {
       "product": "windows",
       "service": "security"
@@ -5460,6 +5781,7 @@
       "SELECT * FROM logs WHERE Channel='Security' AND EventID=4768 AND TicketEncryptionType='0x17' AND PreAuthType='0'"
     ],
     "schema_version": 2,
+    "source": "hayabusa",
     "source_table": "logs",
     "status": "test",
     "tags": [
@@ -5483,6 +5805,7 @@
     "filename": "hayabusa/sysmon/Sysmon_3_Med_NetConn_RuleAlert.yml",
     "id": "e13c5fe0-73f1-4c0f-aef5-1bab99b4237b",
     "level": "medium",
+    "license": "DRL-1.1",
     "logsource": {
       "product": "windows",
       "service": "sysmon"
@@ -5497,6 +5820,7 @@
       "SELECT * FROM logs WHERE (Channel='Microsoft-Windows-Sysmon/Operational' AND EventID=3) AND (NOT COALESCE((RuleName='' OR RuleName='-'), 0))"
     ],
     "schema_version": 2,
+    "source": "hayabusa",
     "source_table": "logs",
     "status": "stable",
     "tags": [],
@@ -5518,6 +5842,7 @@
     "filename": "hayabusa/builtin/System/Sys_104_Med_LogCleared.yml",
     "id": "ed90ed4f-0d93-4f1a-99a2-4b9003b750a7",
     "level": "medium",
+    "license": "DRL-1.1",
     "logsource": {
       "product": "windows",
       "service": "system"
@@ -5533,6 +5858,7 @@
       "SELECT * FROM logs WHERE (Channel='System' AND Provider_Name='Microsoft-Windows-Eventlog' AND EventID=104) AND (NOT COALESCE((LogFileClearedChannel='Application' OR LogFileClearedChannel='Microsoft-Windows-Windows Defender/Operational' OR LogFileClearedChannel='Microsoft-Windows-AppLocker/EXE and DLL' OR LogFileClearedChannel='Microsoft-Windows-PowerShell/Operational' OR LogFileClearedChannel='Microsoft-Windows-Sysmon/Operational' OR LogFileClearedChannel='Microsoft-Windows-TaskScheduler/Operational' OR LogFileClearedChannel='OpenSSH/Operational' OR LogFileClearedChannel='Security' OR LogFileClearedChannel='System' OR LogFileClearedChannel='Windows PowerShell'), 0))"
     ],
     "schema_version": 2,
+    "source": "hayabusa",
     "source_table": "logs",
     "status": "stable",
     "tags": [
@@ -5554,6 +5880,7 @@
     "filename": "hayabusa/sysmon/Sysmon_12_Med_RegKeyCreateDelete_RuleAlert.yml",
     "id": "f1529b76-82e8-4017-8348-7d1d75defb41",
     "level": "medium",
+    "license": "DRL-1.1",
     "logsource": {
       "product": "windows",
       "service": "sysmon"
@@ -5568,6 +5895,7 @@
       "SELECT * FROM logs WHERE (Channel='Microsoft-Windows-Sysmon/Operational' AND EventID=12) AND (NOT COALESCE((RuleName='' OR RuleName='-'), 0))"
     ],
     "schema_version": 2,
+    "source": "hayabusa",
     "source_table": "logs",
     "status": "stable",
     "tags": [],
@@ -5588,6 +5916,7 @@
     "filename": "hayabusa/builtin/Security/AccountLogon/KerberosAuthenticationService/Sec_4769_Med_KerberosTGT-Request_PossibleKerberoasting.yml",
     "id": "f19849e7-b5ba-404b-a731-9b624d7f6d19",
     "level": "medium",
+    "license": "DRL-1.1",
     "logsource": {
       "product": "windows",
       "service": "security"
@@ -5602,6 +5931,7 @@
       "SELECT * FROM logs WHERE Channel='Security' AND EventID=4769 AND TicketEncryptionType='0x17'"
     ],
     "schema_version": 2,
+    "source": "hayabusa",
     "source_table": "logs",
     "status": "test",
     "tags": [
@@ -5623,6 +5953,7 @@
     "filename": "hayabusa/sysmon/Sysmon_20_Med_WmiEventConsumerActivity_RuleAlert.yml",
     "id": "f7606dcf-1408-4573-b243-dc9d232cebfe",
     "level": "medium",
+    "license": "DRL-1.1",
     "logsource": {
       "product": "windows",
       "service": "sysmon"
@@ -5637,6 +5968,7 @@
       "SELECT * FROM logs WHERE (Channel='Microsoft-Windows-Sysmon/Operational' AND EventID=20) AND (NOT COALESCE((RuleName='' OR RuleName='-'), 0))"
     ],
     "schema_version": 2,
+    "source": "hayabusa",
     "source_table": "logs",
     "status": "stable",
     "tags": [],
@@ -5657,6 +5989,7 @@
     "filename": "hayabusa/builtin/System/Sys_7045_Med_LateralMovement-PSEXEC.yml",
     "id": "0694c340-3a46-40ac-acfc-c3444ae6572c",
     "level": "high",
+    "license": "DRL-1.1",
     "logsource": {
       "product": "windows",
       "service": "system"
@@ -5672,6 +6005,7 @@
       "SELECT * FROM logs WHERE (Channel='System' AND EventID=7045) AND (Service='PSEXESVC' OR ImagePath LIKE '%PSEXESVC%' ESCAPE '\\')"
     ],
     "schema_version": 2,
+    "source": "hayabusa",
     "source_table": "logs",
     "status": "stable",
     "tags": [
@@ -5700,6 +6034,7 @@
     "filename": "hayabusa/builtin/WindowsDefender/Defender_1116_High_Alert.yml",
     "id": "1e11c0f0-aecd-45d8-9229-da679c0265ea",
     "level": "high",
+    "license": "DRL-1.1",
     "logsource": {
       "product": "windows",
       "service": "windefend"
@@ -5714,6 +6049,7 @@
       "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Windows Defender/Operational' AND EventID=1116 AND SeverityID=4"
     ],
     "schema_version": 2,
+    "source": "hayabusa",
     "source_table": "logs",
     "status": "test",
     "tags": [],
@@ -5732,6 +6068,7 @@
     "filename": "hayabusa/sysmon/Sysmon_6_High_DrvLoaded_InvalidSig.yml",
     "id": "1f666722-3948-40a2-9d78-d9d374477a90",
     "level": "high",
+    "license": "DRL-1.1",
     "logsource": {
       "product": "windows",
       "service": "sysmon"
@@ -5747,6 +6084,7 @@
       "SELECT * FROM logs WHERE (Channel='Microsoft-Windows-Sysmon/Operational' AND EventID=6 AND Signed='true') AND (NOT COALESCE((SignatureStatus='Valid'), 0))"
     ],
     "schema_version": 2,
+    "source": "hayabusa",
     "source_table": "logs",
     "status": "stable",
     "tags": [
@@ -5768,6 +6106,7 @@
     "filename": "hayabusa/sysmon/Sysmon_8_High_ProcInj_RuleAlert.yml",
     "id": "3fe8927b-be96-450e-8040-514229aa6baf",
     "level": "high",
+    "license": "DRL-1.1",
     "logsource": {
       "product": "windows",
       "service": "sysmon"
@@ -5782,6 +6121,7 @@
       "SELECT * FROM logs WHERE (Channel='Microsoft-Windows-Sysmon/Operational' AND EventID=8) AND (NOT COALESCE((RuleName='' OR RuleName='-'), 0))"
     ],
     "schema_version": 2,
+    "source": "hayabusa",
     "source_table": "logs",
     "status": "test",
     "tags": [],
@@ -5802,6 +6142,7 @@
     "filename": "hayabusa/builtin/Security/AccountManagement/SecurityGroupManagement/Sec_4728_High_MemberAddedToGlobalGrp_DomainAdmins.yml",
     "id": "4bb89c86-a138-42a0-baaf-fc2f777a4506",
     "level": "high",
+    "license": "DRL-1.1",
     "logsource": {
       "product": "windows",
       "service": "security"
@@ -5817,6 +6158,7 @@
       "SELECT * FROM logs WHERE (Channel='Security' AND EventID=4728 AND TargetUserName='Domain Admins') AND (NOT COALESCE((SubjectUserName LIKE '%$' ESCAPE '\\'), 0))"
     ],
     "schema_version": 2,
+    "source": "hayabusa",
     "source_table": "logs",
     "status": "stable",
     "tags": [
@@ -5838,6 +6180,7 @@
     "filename": "hayabusa/sysmon/Sysmon_10_High_ProcessAccess_RuleAlert.yml",
     "id": "58cb366b-9246-4d60-b6e4-d0723d2d9d97",
     "level": "high",
+    "license": "DRL-1.1",
     "logsource": {
       "product": "windows",
       "service": "sysmon"
@@ -5852,6 +6195,7 @@
       "SELECT * FROM logs WHERE (Channel='Microsoft-Windows-Sysmon/Operational' AND EventID=10) AND (NOT COALESCE((RuleName='' OR RuleName='-'), 0))"
     ],
     "schema_version": 2,
+    "source": "hayabusa",
     "source_table": "logs",
     "status": "stable",
     "tags": [],
@@ -5872,6 +6216,7 @@
     "filename": "hayabusa/builtin/Security/AccountManagement/SecurityGroupManagement/Sec_4732_High_MemberAddedToLocalGrp_Administrators.yml",
     "id": "611e2e76-a28f-4255-812c-eb8836b2f5bb",
     "level": "high",
+    "license": "DRL-1.1",
     "logsource": {
       "product": "windows",
       "service": "security"
@@ -5886,6 +6231,7 @@
       "SELECT * FROM logs WHERE Channel='Security' AND EventID=4732 AND TargetUserName='Administrators'"
     ],
     "schema_version": 2,
+    "source": "hayabusa",
     "source_table": "logs",
     "status": "stable",
     "tags": [
@@ -5909,6 +6255,7 @@
     "filename": "hayabusa/builtin/Security/AccountManagement/UserAccountManagement/Sec_4720_High_AcctCreated_PossibleHiddenUserAcct.yml",
     "id": "70b8b1bd-c107-4b1a-8b1e-5b0f9f57930a",
     "level": "high",
+    "license": "DRL-1.1",
     "logsource": {
       "product": "windows",
       "service": "security"
@@ -5923,6 +6270,7 @@
       "SELECT * FROM logs WHERE Channel='Security' AND EventID=4720 AND TargetUserName LIKE '%$' ESCAPE '\\'"
     ],
     "schema_version": 2,
+    "source": "hayabusa",
     "source_table": "logs",
     "status": "stable",
     "tags": [
@@ -5946,6 +6294,7 @@
     "filename": "hayabusa/builtin/Security/LogonLogoff/Logon/Sec_4648_Med_ExplicitLogon_SuspProc.yml",
     "id": "7616e857-8e41-4976-bc21-811d122b9fc9",
     "level": "high",
+    "license": "DRL-1.1",
     "logsource": {
       "product": "windows",
       "service": "security"
@@ -5964,6 +6313,7 @@
       "SELECT * FROM logs WHERE (Channel='Security' AND EventID=4648) AND (ProcessName LIKE '%powershell.exe' ESCAPE '\\' OR ProcessName LIKE '%WMIC.exe' ESCAPE '\\') AND (NOT COALESCE(((TargetUserName LIKE '%$' ESCAPE '\\' AND IpAddress='-') AND (NOT COALESCE((SubjectUserName LIKE '%$' ESCAPE '\\'), 0))), 0)) AND (NOT COALESCE((TargetUserName REGEXP '(DWM|UMFD)-([0-9]|1[0-3])$' AND IpAddress='-'), 0)) AND (NOT COALESCE((SubjectUserName LIKE '%$' ESCAPE '\\' AND TargetUserName LIKE '%$' ESCAPE '\\' AND TargetInfo LIKE '%$' ESCAPE '\\'), 0))"
     ],
     "schema_version": 2,
+    "source": "hayabusa",
     "source_table": "logs",
     "status": "stable",
     "tags": [
@@ -5985,6 +6335,7 @@
     "filename": "hayabusa/sysmon/Sysmon_28_High_FileBlockShredding.yml",
     "id": "84cab4b7-2bff-416c-8133-9771bc532f2f",
     "level": "high",
+    "license": "DRL-1.1",
     "logsource": {
       "product": "windows",
       "service": "sysmon"
@@ -5998,6 +6349,7 @@
       "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND EventID=28"
     ],
     "schema_version": 2,
+    "source": "hayabusa",
     "source_table": "logs",
     "status": "stable",
     "tags": [],
@@ -6018,6 +6370,7 @@
     "filename": "hayabusa/sysmon/Sysmon_1_High_ProcExec_NonExeProcExec.yml",
     "id": "8d1487f1-7664-4bda-83b5-cb2f79491b6a",
     "level": "high",
+    "license": "DRL-1.1",
     "logsource": {
       "product": "windows",
       "service": "sysmon"
@@ -6032,6 +6385,7 @@
       "SELECT * FROM logs WHERE (Channel='Microsoft-Windows-Sysmon/Operational' AND EventID=1) AND (NOT COALESCE((Image LIKE '%.exe' ESCAPE '\\' OR (Image LIKE 'C:\\\\Windows\\\\System32\\\\scrnsave.scr' ESCAPE '\\' OR Image LIKE 'C:\\\\Windows\\\\SysWOW64\\\\scrnsave.scr' ESCAPE '\\')), 0))"
     ],
     "schema_version": 2,
+    "source": "hayabusa",
     "source_table": "logs",
     "status": "stable",
     "tags": [
@@ -6052,6 +6406,7 @@
     "filename": "hayabusa/sysmon/Sysmon_27_High_BlockedExeFileCreation.yml",
     "id": "bb35ca48-8e4a-445b-bc6d-0a994a0e9310",
     "level": "high",
+    "license": "DRL-1.1",
     "logsource": {
       "product": "windows",
       "service": "sysmon"
@@ -6065,6 +6420,7 @@
       "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND EventID=27"
     ],
     "schema_version": 2,
+    "source": "hayabusa",
     "source_table": "logs",
     "status": "stable",
     "tags": [
@@ -6087,6 +6443,7 @@
     "filename": "hayabusa/builtin/Security/AccountManagement/SecurityGroupManagement/Sec_4732_High_MemberAddedToLocalGrp_DomainAdmins.yml",
     "id": "bc58e432-959f-464d-812e-d60ce5d46fa1",
     "level": "high",
+    "license": "DRL-1.1",
     "logsource": {
       "product": "windows",
       "service": "security"
@@ -6101,6 +6458,7 @@
       "SELECT * FROM logs WHERE Channel='Security' AND EventID=4732 AND TargetUserName='Domain Admins'"
     ],
     "schema_version": 2,
+    "source": "hayabusa",
     "source_table": "logs",
     "status": "stable",
     "tags": [
@@ -6124,6 +6482,7 @@
     "filename": "hayabusa/builtin/Security/Default/Sec_1102_High_SecLogCleared.yml",
     "id": "c2f690ac-53f8-4745-8cfe-7127dda28c74",
     "level": "high",
+    "license": "DRL-1.1",
     "logsource": {
       "product": "windows",
       "service": "security"
@@ -6137,6 +6496,7 @@
       "SELECT * FROM logs WHERE Channel='Security' AND EventID=1102"
     ],
     "schema_version": 2,
+    "source": "hayabusa",
     "source_table": "logs",
     "status": "stable",
     "tags": [
@@ -6160,6 +6520,7 @@
     "filename": "hayabusa/builtin/System/Sys_7045_High_ServiceInstalled_SuspiciousServiceName.yml",
     "id": "cc429813-21db-4019-b520-2f19648e1ef1",
     "level": "high",
+    "license": "DRL-1.1",
     "logsource": {
       "product": "windows",
       "service": "system"
@@ -6174,6 +6535,7 @@
       "SELECT * FROM logs WHERE (Channel='System' AND EventID=7045) AND ServiceName REGEXP '^[a-zA-Z]{16}'"
     ],
     "schema_version": 2,
+    "source": "hayabusa",
     "source_table": "logs",
     "status": "stable",
     "tags": [
@@ -6197,6 +6559,7 @@
     "filename": "hayabusa/sysmon/Sysmon_1_High_ProcExec_RuleAlert.yml",
     "id": "d5e4fb89-b027-43bf-bd3a-2e7f74f105ac",
     "level": "high",
+    "license": "DRL-1.1",
     "logsource": {
       "product": "windows",
       "service": "sysmon"
@@ -6211,10 +6574,91 @@
       "SELECT * FROM logs WHERE (Channel='Microsoft-Windows-Sysmon/Operational' AND EventID=1) AND (NOT COALESCE((RuleName='' OR RuleName='-'), 0))"
     ],
     "schema_version": 2,
+    "source": "hayabusa",
     "source_table": "logs",
     "status": "stable",
     "tags": [],
     "title": "Proc Exec (Sysmon Alert)"
+  },
+  {
+    "author": "Defa Mulya Pratama",
+    "channel": [
+      "Security"
+    ],
+    "description": "Detects commands commonly used by ransomware and destructive malware to inhibit system recovery, such as deleting or resizing Volume Shadow Copies, deleting backup catalogs, or disabling Windows automatic recovery.\nThis rule uses the built-in Windows Security \"Process Creation\" event (4688) so that it works without Sysmon. Command line auditing must be enabled.\n",
+    "eventid": [
+      4688
+    ],
+    "falsepositives": [
+      "Legitimate administrative maintenance of shadow copies or backups, which is uncommon and should be verified."
+    ],
+    "filename": "hayabusa/builtin/Security/DetailedTracking/ProcessCreation/Sec_4688_High_ProcExec_InhibitSystemRecovery.yml",
+    "id": "db13c364-2254-4247-8c53-da1a7c4bdb78",
+    "level": "high",
+    "license": "DRL-1.1",
+    "logsource": {
+      "product": "windows",
+      "service": "security"
+    },
+    "required_fields": [
+      "Channel",
+      "CommandLine",
+      "EventID",
+      "NewProcessName"
+    ],
+    "result_type": "event",
+    "rule": [
+      "SELECT * FROM logs WHERE (Channel='Security' AND EventID=4688) AND ((NewProcessName LIKE '%\\\\vssadmin.exe' ESCAPE '\\' AND (CommandLine LIKE '%delete%' ESCAPE '\\' AND CommandLine LIKE '%shadows%' ESCAPE '\\')) OR (NewProcessName LIKE '%\\\\vssadmin.exe' ESCAPE '\\' AND (CommandLine LIKE '%resize%' ESCAPE '\\' AND CommandLine LIKE '%shadowstorage%' ESCAPE '\\')) OR (NewProcessName LIKE '%\\\\wmic.exe' ESCAPE '\\' AND (CommandLine LIKE '%shadowcopy%' ESCAPE '\\' AND CommandLine LIKE '%delete%' ESCAPE '\\')) OR (NewProcessName LIKE '%\\\\wbadmin.exe' ESCAPE '\\' AND (CommandLine LIKE '%delete%' ESCAPE '\\' AND CommandLine LIKE '%catalog%' ESCAPE '\\')) OR (NewProcessName LIKE '%\\\\bcdedit.exe' ESCAPE '\\' AND (CommandLine LIKE '%recoveryenabled no%' ESCAPE '\\' OR CommandLine LIKE '%recoveryenabled off%' ESCAPE '\\' OR CommandLine LIKE '%ignoreallfailures%' ESCAPE '\\')))"
+    ],
+    "schema_version": 2,
+    "source": "hayabusa",
+    "source_table": "logs",
+    "status": "test",
+    "tags": [
+      "attack.impact",
+      "attack.t1490"
+    ],
+    "title": "Susp CmdLine (Possible Inhibit System Recovery)"
+  },
+  {
+    "author": "Defa Mulya Pratama",
+    "channel": [
+      "Microsoft-Windows-Sysmon/Operational"
+    ],
+    "description": "Detects commands commonly used by ransomware and destructive malware to inhibit system recovery, such as deleting or resizing Volume Shadow Copies, deleting backup catalogs, or disabling Windows automatic recovery.\nThis is the Sysmon process creation (EventID 1) version of the Security 4688 rule.\n",
+    "eventid": [
+      1
+    ],
+    "falsepositives": [
+      "Legitimate administrative maintenance of shadow copies or backups, which is uncommon and should be verified."
+    ],
+    "filename": "hayabusa/sysmon/Sysmon_1_High_ProcExec_InhibitSystemRecovery.yml",
+    "id": "db1fa879-6d12-4bd1-b947-ee5dc565c55e",
+    "level": "high",
+    "license": "DRL-1.1",
+    "logsource": {
+      "product": "windows",
+      "service": "sysmon"
+    },
+    "required_fields": [
+      "Channel",
+      "CommandLine",
+      "EventID",
+      "Image"
+    ],
+    "result_type": "event",
+    "rule": [
+      "SELECT * FROM logs WHERE (Channel='Microsoft-Windows-Sysmon/Operational' AND EventID=1) AND ((Image LIKE '%\\\\vssadmin.exe' ESCAPE '\\' AND (CommandLine LIKE '%delete%' ESCAPE '\\' AND CommandLine LIKE '%shadows%' ESCAPE '\\')) OR (Image LIKE '%\\\\vssadmin.exe' ESCAPE '\\' AND (CommandLine LIKE '%resize%' ESCAPE '\\' AND CommandLine LIKE '%shadowstorage%' ESCAPE '\\')) OR (Image LIKE '%\\\\wmic.exe' ESCAPE '\\' AND (CommandLine LIKE '%shadowcopy%' ESCAPE '\\' AND CommandLine LIKE '%delete%' ESCAPE '\\')) OR (Image LIKE '%\\\\wbadmin.exe' ESCAPE '\\' AND (CommandLine LIKE '%delete%' ESCAPE '\\' AND CommandLine LIKE '%catalog%' ESCAPE '\\')) OR (Image LIKE '%\\\\bcdedit.exe' ESCAPE '\\' AND (CommandLine LIKE '%recoveryenabled no%' ESCAPE '\\' OR CommandLine LIKE '%recoveryenabled off%' ESCAPE '\\' OR CommandLine LIKE '%ignoreallfailures%' ESCAPE '\\')))"
+    ],
+    "schema_version": 2,
+    "source": "hayabusa",
+    "source_table": "logs",
+    "status": "test",
+    "tags": [
+      "attack.impact",
+      "attack.t1490"
+    ],
+    "title": "Susp CmdLine (Possible Inhibit System Recovery)"
   },
   {
     "author": "Zach Mathis",
@@ -6233,6 +6677,7 @@
     "filename": "hayabusa/builtin/System/Sys_7045_High_ServiceInstalled_SuspiciousServicePath.yml",
     "id": "dbbfd9f3-9508-478b-887e-03ddb9236909",
     "level": "high",
+    "license": "DRL-1.1",
     "logsource": {
       "product": "windows",
       "service": "system"
@@ -6247,6 +6692,7 @@
       "SELECT * FROM logs WHERE (Channel='System' AND EventID=7045) AND (ImagePath REGEXP '[a-zA-Z0-9\\/+=]{50}' OR ImagePath LIKE '%powershell%' ESCAPE '\\' OR ImagePath LIKE '%cmd.exe%' ESCAPE '\\' OR ImagePath LIKE '%csc.exe%' ESCAPE '\\' OR ImagePath LIKE '%mshta.exe%' ESCAPE '\\' OR ImagePath LIKE '%regsvr32.exe%' ESCAPE '\\' OR ImagePath LIKE '%rundll32.exe%' ESCAPE '\\' OR ImagePath LIKE '%wscript.exe%' ESCAPE '\\' OR ImagePath LIKE '%cscript.exe%' ESCAPE '\\' OR ImagePath LIKE '%msiexec.exe%' ESCAPE '\\' OR ImagePath LIKE '%certutil.exe%' ESCAPE '\\' OR ImagePath LIKE '%bitsadmin.exe%' ESCAPE '\\' OR ImagePath LIKE '%appdata%' ESCAPE '\\' OR ImagePath LIKE '%\\%SYSTEMROOT\\%%' ESCAPE '\\')"
     ],
     "schema_version": 2,
+    "source": "hayabusa",
     "source_table": "logs",
     "status": "test",
     "tags": [
@@ -6268,6 +6714,7 @@
     "filename": "hayabusa/sysmon/Sysmon_1_ProcExec_High_LOLBAS-Rename.yml",
     "id": "dc5700ef-3688-44c9-b719-8e1a632ff3dd",
     "level": "high",
+    "license": "DRL-1.1",
     "logsource": {
       "product": "windows",
       "service": "sysmon"
@@ -6283,6 +6730,7 @@
       "SELECT * FROM logs WHERE (Channel='Microsoft-Windows-Sysmon/Operational' AND EventID=1) AND ((OriginalFileName LIKE '%AppInstaller.exe' ESCAPE '\\' OR OriginalFileName LIKE '%Aspnet\\_Compiler.exe' ESCAPE '\\' OR OriginalFileName LIKE '%At.exe' ESCAPE '\\' OR OriginalFileName LIKE '%AtBroker.exe' ESCAPE '\\' OR OriginalFileName LIKE '%Bash.exe' ESCAPE '\\' OR OriginalFileName LIKE '%BitsAdmin.exe' ESCAPE '\\' OR OriginalFileName LIKE '%CertOC.exe' ESCAPE '\\' OR OriginalFileName LIKE '%CertReq.exe' ESCAPE '\\' OR OriginalFileName LIKE '%CertUtil.exe' ESCAPE '\\' OR OriginalFileName LIKE '%Cmd.exe' ESCAPE '\\' OR OriginalFileName LIKE '%Cmdkey.exe' ESCAPE '\\' OR OriginalFileName LIKE '%cmdl32.exe' ESCAPE '\\' OR OriginalFileName LIKE '%Cmstp.exe' ESCAPE '\\' OR OriginalFileName LIKE '%ConfigSecurityPolicy.exe' ESCAPE '\\' OR OriginalFileName LIKE '%Control.exe' ESCAPE '\\' OR OriginalFileName LIKE '%Csc.exe' ESCAPE '\\' OR OriginalFileName LIKE '%Cscript.exe' ESCAPE '\\' OR OriginalFileName LIKE '%DataSvcUtil.exe' ESCAPE '\\' OR OriginalFileName LIKE '%DesktopImgDownldr.exe' ESCAPE '\\' OR OriginalFileName LIKE '%DfSvc.exe' ESCAPE '\\' OR OriginalFileName LIKE '%Diantz.exe' ESCAPE '\\' OR OriginalFileName LIKE '%DiskShadow.exe' ESCAPE '\\' OR OriginalFileName LIKE '%dllhost.exe' ESCAPE '\\' OR OriginalFileName LIKE '%DnsCmd.exe' ESCAPE '\\' OR OriginalFileName LIKE '%EsentUtl.exe' ESCAPE '\\' OR OriginalFileName LIKE '%EventVwr.exe' ESCAPE '\\' OR OriginalFileName LIKE '%Expand.exe' ESCAPE '\\' OR OriginalFileName LIKE '%ExtExport.exe' ESCAPE '\\' OR OriginalFileName LIKE '%Extrac32.exe' ESCAPE '\\' OR OriginalFileName LIKE '%FindStr.exe' ESCAPE '\\' OR OriginalFileName LIKE '%Finger.exe' ESCAPE '\\' OR OriginalFileName LIKE '%FltMC.exe' ESCAPE '\\' OR OriginalFileName LIKE '%ForFiles.exe' ESCAPE '\\' OR OriginalFileName LIKE '%FTP.exe' ESCAPE '\\' OR OriginalFileName LIKE '%GfxDownloadWrapper.exe' ESCAPE '\\' OR OriginalFileName LIKE '%GpScript.exe' ESCAPE '\\' OR OriginalFileName LIKE '%HH.exe' ESCAPE '\\' OR OriginalFileName LIKE '%IMEWDBLD.exe' ESCAPE '\\' OR OriginalFileName LIKE '%Ie4uInit.exe' ESCAPE '\\' OR OriginalFileName LIKE '%IeExec.exe' ESCAPE '\\' OR OriginalFileName LIKE '%ILASM.exe' ESCAPE '\\' OR OriginalFileName LIKE '%InfDefaultInstall.exe' ESCAPE '\\' OR OriginalFileName LIKE '%InstallUtil.exe' ESCAPE '\\' OR OriginalFileName LIKE '%Jsc.exe' ESCAPE '\\' OR OriginalFileName LIKE '%MakeCab.exe' ESCAPE '\\' OR OriginalFileName LIKE '%MavInject.exe' ESCAPE '\\' OR OriginalFileName LIKE '%Microsoft.Workflow.Compiler.exe' ESCAPE '\\' OR OriginalFileName LIKE '%Mmc.exe' ESCAPE '\\' OR OriginalFileName LIKE '%MpCmdRun.exe' ESCAPE '\\' OR OriginalFileName LIKE '%Msbuild.exe' ESCAPE '\\') OR (OriginalFileName LIKE '%MsConfig.exe' ESCAPE '\\' OR OriginalFileName LIKE '%Msdt.exe' ESCAPE '\\' OR OriginalFileName LIKE '%Mshta.exe' ESCAPE '\\' OR OriginalFileName LIKE '%MsiExec.exe' ESCAPE '\\' OR OriginalFileName LIKE '%NetSh.exe' ESCAPE '\\' OR OriginalFileName LIKE '%OdbcConf.exe' ESCAPE '\\' OR OriginalFileName LIKE '%OfflineScannerShell.exe' ESCAPE '\\' OR OriginalFileName LIKE '%OneDriveStandaloneUpdater.exe' ESCAPE '\\' OR OriginalFileName LIKE '%Pcalua.exe' ESCAPE '\\' OR OriginalFileName LIKE '%PcwRun.exe' ESCAPE '\\' OR OriginalFileName LIKE '%PktMon.exe' ESCAPE '\\' OR OriginalFileName LIKE '%PnpUtil.exe' ESCAPE '\\' OR OriginalFileName LIKE '%PresentationHost.exe' ESCAPE '\\' OR OriginalFileName LIKE '%Print.exe' ESCAPE '\\' OR OriginalFileName LIKE '%PrintBrm.exe' ESCAPE '\\' OR OriginalFileName LIKE '%Psr.exe' ESCAPE '\\' OR OriginalFileName LIKE '%Rasautou.exe' ESCAPE '\\' OR OriginalFileName LIKE '%Reg.exe' ESCAPE '\\' OR OriginalFileName LIKE '%Regasm.exe' ESCAPE '\\' OR OriginalFileName LIKE '%RegEdit.exe' ESCAPE '\\' OR OriginalFileName LIKE '%RegIni.exe' ESCAPE '\\' OR OriginalFileName LIKE '%Register-CimProvider.exe' ESCAPE '\\' OR OriginalFileName LIKE '%RegSvcs.exe' ESCAPE '\\' OR OriginalFileName LIKE '%RegSvr32.exe' ESCAPE '\\' OR OriginalFileName LIKE '%Replace.exe' ESCAPE '\\' OR OriginalFileName LIKE '%RpcPing.exe' ESCAPE '\\' OR OriginalFileName LIKE '%RunDll32.exe' ESCAPE '\\' OR OriginalFileName LIKE '%RunOnce.exe' ESCAPE '\\' OR OriginalFileName LIKE '%RunScriptHelper.exe' ESCAPE '\\' OR OriginalFileName LIKE '%Sc.exe' ESCAPE '\\' OR OriginalFileName LIKE '%SchTasks.exe' ESCAPE '\\' OR OriginalFileName LIKE '%ScriptRunner.exe' ESCAPE '\\' OR OriginalFileName LIKE '%SettingSyncHost.exe' ESCAPE '\\' OR OriginalFileName LIKE '%StorDiag.exe' ESCAPE '\\' OR OriginalFileName LIKE '%SyncAppvPublishingServer.exe' ESCAPE '\\' OR OriginalFileName LIKE '%TtdInject.exe' ESCAPE '\\' OR OriginalFileName LIKE '%TtTracer.exe' ESCAPE '\\' OR OriginalFileName LIKE '%VBC.exe' ESCAPE '\\' OR OriginalFileName LIKE '%Verclsid.exe' ESCAPE '\\' OR OriginalFileName LIKE '%ping.exe' ESCAPE '\\' OR OriginalFileName LIKE '%ipconfig.exe' ESCAPE '\\' OR OriginalFileName LIKE '%Wab.exe' ESCAPE '\\' OR OriginalFileName LIKE '%Wmic.exe' ESCAPE '\\' OR OriginalFileName LIKE '%WorkFolders.exe' ESCAPE '\\' OR OriginalFileName LIKE '%Wscript.exe' ESCAPE '\\' OR OriginalFileName LIKE '%WsReset.exe' ESCAPE '\\' OR OriginalFileName LIKE '%Wuauclt.exe' ESCAPE '\\' OR OriginalFileName LIKE '%Xwizard.exe' ESCAPE '\\' OR OriginalFileName LIKE '%ADPlus.exe' ESCAPE '\\' OR OriginalFileName LIKE '%AgentExecutor.exe' ESCAPE '\\') OR (OriginalFileName LIKE '%Appvlp.exe' ESCAPE '\\' OR OriginalFileName LIKE '%Bginfo.exe' ESCAPE '\\' OR OriginalFileName LIKE '%Cdb.exe' ESCAPE '\\' OR OriginalFileName LIKE '%CoreGen.exe' ESCAPE '\\' OR OriginalFileName LIKE '%CSI.exe' ESCAPE '\\' OR OriginalFileName LIKE '%DefaultPack.exe' ESCAPE '\\' OR OriginalFileName LIKE '%DevtoolsLauncher.exe' ESCAPE '\\' OR OriginalFileName LIKE '%DNX.exe' ESCAPE '\\' OR OriginalFileName LIKE '%Dotnet.exe' ESCAPE '\\' OR OriginalFileName LIKE '%Dxcap.exe' ESCAPE '\\' OR OriginalFileName LIKE '%NTDSUtil.exe' ESCAPE '\\' OR OriginalFileName LIKE '%procdump.exe' ESCAPE '\\' OR OriginalFileName LIKE '%psexec.exe' ESCAPE '\\' OR OriginalFileName LIKE '%SqlDumper.exe' ESCAPE '\\' OR OriginalFileName LIKE '%winrm.vbs.exe' ESCAPE '\\' OR OriginalFileName LIKE '%powershell.exe' ESCAPE '\\' OR OriginalFileName LIKE '%xcopy.exe' ESCAPE '\\' OR OriginalFileName LIKE '%RoboCopy.exe' ESCAPE '\\')) AND (NOT COALESCE((Image LIKE '%' || REPLACE(REPLACE(REPLACE(OriginalFileName, '\\', '\\\\'), '%', '\\%'), '_', '\\_') ESCAPE '\\'), 0))"
     ],
     "schema_version": 2,
+    "source": "hayabusa",
     "source_table": "logs",
     "status": "stable",
     "tags": [],
@@ -6304,6 +6752,7 @@
     "filename": "hayabusa/builtin/System/Sys_104_High_ImportantLogCleared.yml",
     "id": "f481a1f3-969e-4187-b3a5-b47c272bfebd",
     "level": "high",
+    "license": "DRL-1.1",
     "logsource": {
       "product": "windows",
       "service": "system"
@@ -6319,6 +6768,7 @@
       "SELECT * FROM logs WHERE Channel='System' AND Provider_Name='Microsoft-Windows-Eventlog' AND EventID=104 AND (LogFileClearedChannel='Application' OR LogFileClearedChannel='Microsoft-Windows-Windows Defender/Operational' OR LogFileClearedChannel='Microsoft-Windows-AppLocker/EXE and DLL' OR LogFileClearedChannel='Microsoft-Windows-PowerShell/Operational' OR LogFileClearedChannel='Microsoft-Windows-Sysmon/Operational' OR LogFileClearedChannel='Microsoft-Windows-TaskScheduler/Operational' OR LogFileClearedChannel='OpenSSH/Operational' OR LogFileClearedChannel='Security' OR LogFileClearedChannel='System' OR LogFileClearedChannel='Windows PowerShell')"
     ],
     "schema_version": 2,
+    "source": "hayabusa",
     "source_table": "logs",
     "status": "stable",
     "tags": [
@@ -6342,6 +6792,7 @@
     "filename": "hayabusa/builtin/WindowsDefender/Defender_1116_Crit_Alert.yml",
     "id": "810bfd3a-9fb3-44e0-9016-8cdf785fddbf",
     "level": "critical",
+    "license": "DRL-1.1",
     "logsource": {
       "product": "windows",
       "service": "windefend"
@@ -6356,6 +6807,7 @@
       "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Windows Defender/Operational' AND EventID=1116 AND SeverityID=5"
     ],
     "schema_version": 2,
+    "source": "hayabusa",
     "source_table": "logs",
     "status": "test",
     "tags": [],
