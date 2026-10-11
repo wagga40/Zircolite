@@ -459,7 +459,66 @@ def test_a_regexp_keeps_the_bounds_of_its_and_siblings():
                 assert Counter(conn.execute(prefilter.rewrite(query))) == Counter(conn.execute(query))
             # A pattern read from a row could fail on a row the candidates skip.
             assert prefilter.rewrite(row_pattern) == row_pattern
-            assert prefilter.rewrite(alone) == alone and prefilter.rewrite(unbounded) == unbounded
+            # A literal pattern bounds itself: every match contains "-enc".
+            assert prefilter.rewrite(alone) != alone and prefilter.rewrite(unbounded) != unbounded
+
+
+def test_regex_literals_are_necessary_for_every_match():
+    import re as stdlib_re
+
+    import regex
+
+    from zircolite.prefilter import _ASCII_FOLD, _regex_expression
+
+    rng = random.Random(152)  # noqa: S311 -- reproducible test inputs
+    chars = ["a", "b", "c", "k", "s", "i", "K", "S", "I", "\u212a", "\u017f", "\u0130", "\u00e9", "\u00c9",
+             "$", ".", "/", " ", "-", "1", "(", "["]
+    pieces = ["\\d", "\\s", "\\w", "\\b", ".", "[ab]", "[^k]", "(?:ab|ks)", "(?:s)", "^", "$"]
+
+    def atom():
+        if rng.random() < 0.6:
+            return regex.escape(rng.choice(chars))
+        return rng.choice(pieces)
+
+    def branch():
+        out = ""
+        for _ in range(rng.randint(1, 8)):
+            out += atom()
+            if rng.random() < 0.3:
+                out += rng.choice(["*", "+", "?", "{2}", "{0,2}", "{1,}", "+?", "*+"])
+        return out
+
+    bounded = checked = 0
+    for _ in range(3000):
+        pattern = ("(?i)" if rng.random() < 0.4 else "") + "|".join(branch() for _ in range(rng.randint(1, 3)))
+        try:
+            stdlib_re.compile(pattern)
+            compiled = regex.compile(pattern)
+        except (stdlib_re.error, regex.error):
+            continue
+        expression = _regex_expression("c", pattern)
+        if expression is None:
+            continue
+        bounded += 1
+        leaves = [expression[1][1]] if expression[0] == "literal" else [leaf[1][1] for leaf in expression[1]]
+        for _ in range(120):
+            value = "".join(rng.choice([*chars, "ab", "ks", "SK"]) for _ in range(rng.randint(0, 14)))
+            if compiled.search(value):
+                checked += 1
+                folded = value.translate(_ASCII_FOLD)
+                assert any(literal in folded for literal in leaves), (pattern, value, leaves)
+    assert bounded > 300 and checked > 800
+
+
+def test_shipped_regex_patterns_bound_without_errors():
+    from zircolite.prefilter import _regex_expression
+
+    patterns = {p for path in (ROOT / "rules").glob("rules_*.json")
+                for rule in json.loads(path.read_text(encoding="utf-8"))
+                for query in rule.get("rule", []) if isinstance(query, str)
+                for p in re.findall(r"REGEXP '((?:[^']|'')*)'", query)}
+    bounded = [p for p in patterns if _regex_expression("c", p.replace("''", "'")) is not None]
+    assert len(patterns) > 100 and len(bounded) > len(patterns) // 3
 
 
 def test_a_plan_without_a_bound_on_this_table_is_never_compiled(monkeypatch):

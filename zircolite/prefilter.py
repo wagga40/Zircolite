@@ -5,6 +5,7 @@ passes the original WHERE clause. None denotes the universe of rows, so an
 unknown predicate cannot accidentally narrow a rule.
 """
 
+import re
 import sqlite3
 import sys
 from collections import OrderedDict, defaultdict
@@ -74,6 +75,172 @@ def _selective(run):
     # Short ASCII runs cost more to index than they eliminate. Any non-ASCII
     # character is rare in logs, and LIKE compares it exactly.
     return len(run) >= 3 or not run.isascii()
+
+
+# Two-character escapes that match something other than themselves. Any other
+# letter or digit after a backslash starts syntax not modelled here.
+_REGEX_CLASS_ESCAPES = frozenset("dDwWsSbBAZtnrfv")
+# Under IGNORECASE the regex module also matches these letters to U+0130,
+# U+212A and U+017F, which ASCII folding of the value would not find.
+_UNICODE_CASED = frozenset("iksIKS")
+_QUANTIFIER_BRACE = re.compile(r"\{(\d*)(?:,(\d*))?\}")
+
+
+class _Unbounded(Exception):
+    """The pattern uses syntax this reader does not model."""
+
+
+def _regex_runs(pattern, start, stop):
+    """Literal runs every match of ``pattern[start:stop]`` must contain, or raise."""
+    runs, run = [], []
+    i = start
+    last_literal = False
+    while i < stop:
+        char = pattern[i]
+        if char == "\\":
+            if i + 1 >= stop:
+                raise _Unbounded("trailing escape")
+            nxt = pattern[i + 1]
+            i += 2
+            if nxt.isascii() and not nxt.isalnum():
+                run.append(nxt)
+                last_literal = True
+                continue
+            if nxt not in _REGEX_CLASS_ESCAPES:
+                raise _Unbounded("escape")
+            runs.append("".join(run))
+            run, last_literal = [], False
+            continue
+        if char == "[":
+            j = i + 1
+            if j < stop and pattern[j] == "^":
+                j += 1
+            if j < stop and pattern[j] == "]":
+                j += 1
+            while j < stop and pattern[j] != "]":
+                if pattern[j] == "[":
+                    raise _Unbounded("nested or POSIX class")
+                j += 2 if pattern[j] == "\\" else 1
+            if j >= stop:
+                raise _Unbounded("unterminated class")
+            i = j + 1
+            runs.append("".join(run))
+            run, last_literal = [], False
+            continue
+        if char == "(":
+            depth, j = 1, i + 1
+            while j < stop and depth:
+                if pattern[j] == "\\":
+                    j += 2
+                    continue
+                if pattern[j] == "[":
+                    # A class may hold parentheses; skip it whole.
+                    k = j + 1
+                    if k < stop and pattern[k] == "^":
+                        k += 1
+                    if k < stop and pattern[k] == "]":
+                        k += 1
+                    while k < stop and pattern[k] != "]":
+                        k += 2 if pattern[k] == "\\" else 1
+                    j = k + 1
+                    continue
+                depth += {"(": 1, ")": -1}.get(pattern[j], 0)
+                j += 1
+            if depth:
+                raise _Unbounded("unbalanced group")
+            i = j
+            runs.append("".join(run))
+            run, last_literal = [], False
+            continue
+        if char in "*+?{":
+            minimum = 1
+            if char == "{":
+                match = _QUANTIFIER_BRACE.match(pattern, i, stop)
+                if match is None:
+                    raise _Unbounded("brace")
+                minimum = int(match.group(1) or 0)
+                i = match.end()
+            else:
+                minimum = 0 if char in "*?" else 1
+                i += 1
+            if i < stop and pattern[i] in "?+":
+                i += 1
+            if last_literal and run:
+                kept = run[:-1] if minimum == 0 else run
+                runs.append("".join(kept))
+                run = []
+            last_literal = False
+            continue
+        if char in ".^$":
+            runs.append("".join(run))
+            run, last_literal = [], False
+            i += 1
+            continue
+        if char in ")|":
+            raise _Unbounded("stray")
+        run.append(char)
+        last_literal = True
+        i += 1
+    runs.append("".join(run))
+    return runs
+
+
+def _regex_branches(pattern):
+    """Split ``pattern`` at its top-level alternations, as (start, stop) pairs."""
+    branches, depth, start, i = [], 0, 0, 0
+    in_class = False
+    while i < len(pattern):
+        char = pattern[i]
+        if char == "\\":
+            i += 2
+            continue
+        if in_class:
+            in_class = char != "]"
+        elif char == "[":
+            in_class = True
+            if pattern[i + 1:i + 2] == "^":
+                i += 1
+            if pattern[i + 1:i + 2] == "]":
+                i += 1
+        elif char == "(":
+            depth += 1
+        elif char == ")":
+            depth -= 1
+        elif char == "|" and depth == 0:
+            branches.append((start, i))
+            start = i + 1
+        i += 1
+    branches.append((start, len(pattern)))
+    return branches
+
+
+def _regex_expression(column, pattern):
+    """A necessary-literal bound for ``column REGEXP pattern``, or None.
+
+    Conservative by construction: only syntax read here can contribute, and a
+    branch without a literal of its own leaves the whole pattern unbounded.
+    """
+    if "\x00" in pattern or len(pattern) > 4096:
+        return None
+    caseless = False
+    for flags in re.findall(r"\(\?([a-zA-Z]+)[:)]", pattern):
+        if set(flags) - set("ims"):
+            return None
+        caseless = caseless or "i" in flags
+    try:
+        leaves = []
+        for start, stop in _regex_branches(pattern):
+            runs = _regex_runs(pattern, start, stop)
+            if caseless:
+                runs = [part for run in runs
+                        for part in re.split(r"[iksIKS]|[^\x00-\x7f]", run)]
+            best = max(runs, key=lambda candidate: (_selective(candidate), len(candidate)))
+            if not _selective(best):
+                return None
+            leaves.append(("literal", (column, best.translate(_ASCII_FOLD))))
+    except _Unbounded:
+        return None
+    return _combine("or", leaves)
 
 
 def _posting_budget(rows):
@@ -163,6 +330,8 @@ class _Reader:
             # Keep affinity-dependent predicates distinct in the shared syntax
             # cache. Only a per-database binding can turn them into literals.
             return ("equality", (atom[0][1].translate(_ASCII_FOLD), value.translate(_ASCII_FOLD)))
+        if atom[1] == ("word", "REGEXP") and atom[2][0] == "literal" and len(atom) == 3:
+            return _regex_expression(atom[0][1].translate(_ASCII_FOLD), atom[2][1])
         if atom[1] != ("word", "LIKE") or atom[2][0] != "literal":
             return None
         if len(atom[2][1].encode("utf-8")) > 4096:
