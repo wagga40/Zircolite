@@ -510,6 +510,27 @@ Auto-indexes are applied once the ruleset is loaded, followed by `ANALYZE logs`.
 optional: widening (below) can more than double the column count, and without statistics
 SQLite prices rows by column count and starts abandoning selective indexes.
 
+### Keyword search text
+
+Keyword rules from pySigma's SQLite backend search a `_sigma_fulltext` column holding the
+backend's `source-values-v1` text: every decoded scalar of the source event, dictionaries in
+key order, one value per line. `fulltext.source_values` builds it in
+`StreamingEventProcessor._flatten_event` before the event is flattened, and only when a
+loaded rule or correlation plan carries `fulltext` requirements. Every value is then held
+twice: on the 142 MiB T001 Sysmon log, one keyword rule beside `rules_windows_merged.json`
+took a sequential run from 8.2 to 10.1 seconds and its peak memory from 256 to 353 MiB.
+
+The text cannot be rebuilt from the flattened columns, so it is never invented:
+
+- the `_zircolite_fulltext` table records how the text was made, and travels with a saved
+  database;
+- before a keyword rule or version 3 plan runs, `runtime.validate_fulltext` checks that every
+  row holds TEXT and the provenance matches. A success is cached until the next insertion,
+  reset or database load;
+- neither the lazy repair below nor the schema preflight adds the column, and the preflight
+  validates a keyword rule before adding its other fields;
+- rows, correlation evidence, CSV headers, `--keepflat` and the `--package` spool drop it.
+
 ## Automatic SQL repairs
 
 When SQLite cannot prepare a rule, Zircolite tries each applicable repair once. A rule that

@@ -36,6 +36,7 @@ class ProcessingConfig:
     working_db_dir: str | None = None
     sqlite_cache_mib: int = 64
     flatten_backend: str = "auto"
+    fulltext_capture: bool = False
     rule_prefilter: str = "auto"
 
     # Output options

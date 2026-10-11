@@ -21,6 +21,7 @@ from typing import Any, BinaryIO
 
 import orjson
 
+from .fulltext import FIELD as FULLTEXT_FIELD
 from .utils import parse_timestamp
 
 RESERVED_PREFIX = "_zl_"
@@ -422,6 +423,11 @@ class PartWriter:
         columns = [row[1] for row in connection.execute("PRAGMA table_info(logs)")]
         if not columns or columns[0] != "row_id":
             raise PackageError("the working database has no logs table keyed by row_id")
+        # Keyword search text is private to the rules that need it.
+        private = [name for name in columns if ascii_lower(name) == FULLTEXT_FIELD]
+        if private:
+            columns = [name for name in columns if name not in private]
+        projection = ", ".join('"' + name.replace('"', '""') + '"' for name in columns) if private else "*"
         names = columns[1:]
         keys = [ascii_lower(name) for name in names]
         for name, key in zip(names, keys, strict=True):
@@ -449,7 +455,7 @@ class PartWriter:
         row_id: Any = None
         try:
             pending = next(spelled, None)
-            cursor.execute("SELECT * FROM logs ORDER BY row_id")
+            cursor.execute(f"SELECT {projection} FROM logs ORDER BY row_id")  # noqa: S608 -- quoted column names
             while True:
                 try:
                     rows = cursor.fetchmany(FETCH_ROWS)

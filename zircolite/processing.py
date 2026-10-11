@@ -149,6 +149,12 @@ class ProcessingContext:
 # FACTORY HELPERS
 # ============================================================================
 
+def _needs_fulltext(rulesets: list) -> bool:
+    return any(rule.get("fulltext") or
+               (isinstance(rule.get("correlation_plan"), dict) and rule["correlation_plan"].get("fulltext"))
+               for rule in rulesets)
+
+
 def create_zircolite_core(
     ctx: ProcessingContext,
     db_location: str | None = None,
@@ -182,6 +188,7 @@ def create_zircolite_core(
         working_db_dir=ctx.working_db_dir,
         sqlite_cache_mib=ctx.sqlite_cache_mib,
         flatten_backend=ctx.flatten_backend,
+        fulltext_capture=_needs_fulltext(ctx.rulesets),
         rule_prefilter=ctx.rule_prefilter,
     )
     return ZircoliteCore(ctx.config, proc_config, logger=ctx.logger)
@@ -210,6 +217,7 @@ def create_worker_core(ctx: ProcessingContext, worker_id: int) -> ZircoliteCore:
         working_db_dir=ctx.working_db_dir,
         sqlite_cache_mib=ctx.sqlite_cache_mib,
         flatten_backend=ctx.flatten_backend,
+        fulltext_capture=_needs_fulltext(ctx.rulesets),
         rule_prefilter=ctx.rule_prefilter,
     )
     return ZircoliteCore(ctx.config, proc_config, logger=silent_logger)

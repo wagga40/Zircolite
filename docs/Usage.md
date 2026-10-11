@@ -237,8 +237,9 @@ keeps its last published rulesets, reported as stale with their age and error.
 
 A JSON ruleset is an array of rules, each with its `title`, `level`, `tags` and the SQL it
 runs (`rule`). Rulesets from pySigma's SQLite backend 2 add `schema_version: 2`, the fields
-each rule reads (`required_fields`) and, for a correlation, its `correlation_plan`. A
-ruleset of a newer schema is refused rather than run.
+each rule reads (`required_fields`) and, for a correlation, its `correlation_plan`. Rules
+that need [keyword search](#keyword-search) carry `schema_version: 3` and a `fulltext`
+requirement. A ruleset of a newer schema is refused rather than run.
 
 ### Native Sigma rules
 
@@ -340,6 +341,33 @@ window, metric and the evidence events behind it:
   rule's alerts, not the work. `--working-db disk` keeps large inputs out of memory.
 - **Output.** CSV and the Elasticsearch, Zinc and Timesketch templates write `group_keys`,
   `event_ids` and `evidence` as JSON text; Splunk, NDJSON and SARIF keep them nested.
+
+### Keyword search
+
+A Sigma detection can look for a word without naming a field:
+
+```yaml
+detection:
+  keywords:
+    - 'event::clear'
+  condition: keywords
+```
+
+When a loaded rule needs this, Zircolite keeps each event's original values in a private
+`_sigma_fulltext` column, one value per line, read before field mappings, exclusions,
+transforms and flattening. A word in an excluded or transformed value still matches. The
+column never reaches the output: matches, correlation evidence, CSV, `--keepflat` and
+`--package` leave it out, and `--auto-index` skips it.
+
+- **When.** Only while a loaded ruleset has keyword rules. The shipped rulesets have none;
+  they come from Sigma YAML passed to `-r`, or from a ruleset converted with keyword support.
+- **Cost.** The column repeats every value of every event, so ingestion takes longer and the
+  database grows (see [Internals](Internals.md#keyword-search-text)).
+- **Saved databases.** A database saved with `--dbfile` keeps the text and can be reused with
+  `--db-input`. One saved without it cannot serve keyword rules: they are reported as rule
+  errors while every other rule runs. Re-ingest the events to use them.
+- **Reserved name.** A source field, mapping or alias named `_sigma_fulltext` stops the run
+  while capture is on.
 
 ### Why you should build your own rulesets
 

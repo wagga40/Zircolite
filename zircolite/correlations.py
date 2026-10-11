@@ -1,7 +1,7 @@
 """Sigma correlation plans: what can run here, and how their alerts are reported.
 
-A correlation rule converted by pySigma's SQLite backend (schema version 2)
-carries a ``correlation_plan``: ordered SELECT stages that the backend's
+A correlation rule converted by pySigma's SQLite backend carries a
+``correlation_plan`` (version 2 or 3): ordered SELECT stages that the backend's
 runtime materialises as indexed TEMP tables, a result query, and diagnostic
 queries. Each result row is an alert summary -- a group, a window, a metric
 and the events behind it -- not an event from ``logs``.
@@ -12,7 +12,7 @@ import sqlite3
 from datetime import UTC, datetime
 from typing import Any
 
-PLAN_VERSION = 2
+PLAN_VERSION = 3
 
 # How a time field can be written, as the backend's timestamp_format names it:
 # ISO 8601 text, or Unix seconds, milliseconds or microseconds.
@@ -64,11 +64,13 @@ def plan_problem(plan: Any) -> str | None:
     """Why this plan cannot run here, or None if it can."""
     if not isinstance(plan, dict):
         return "correlation_plan is not an object"
-    if plan.get("version") != PLAN_VERSION:
+    if plan.get("version") not in (2, PLAN_VERSION):
         return (
             f"correlation plan version {plan.get('version')!r} is not supported "
             f"(this Zircolite runs version {PLAN_VERSION})"
         )
+    if plan["version"] == 3 and not plan.get("fulltext"):
+        return "version 3 correlation plan lacks fulltext requirements"
     missing = [key for key in _PLAN_KEYS if key not in plan]
     if missing:
         return f"correlation plan lacks {', '.join(missing)}"
