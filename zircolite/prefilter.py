@@ -727,28 +727,38 @@ class LiteralPrefilter:
                         cache = caches.get(column)
                         if cache is None:
                             continue
+                        # Nearly every value repeats one seen before: read the
+                        # cache inline and call into it only on a miss.
+                        lookup, touch = cache.values.get, cache.values.move_to_end
+                        uncertain = self.uncertain[column].add
+                        postings = self.postings
+                        added = 0
                         for row_id, value in zip(row_ids, values, strict=True):
                             if value is None:
                                 continue
                             if not isinstance(value, str):
-                                self.uncertain[column].add(row_id)
-                                added = 1
-                            else:
+                                uncertain(row_id)
+                                added += 1
+                                continue
+                            hit = lookup(value)
+                            if hit is None:
                                 matched = cache.matches(value)
-                                for literal in matched:
-                                    self.postings[column, literal].add(row_id)
-                                added = len(matched)
-                            count += added
-                            column_counts[column] += added
-                            if count > max_postings:
-                                self.skipped_columns[column] = "literal posting budget exceeded"
-                                del automata[column]
-                                del caches[column]
-                                del self.uncertain[column]
-                                for literal in patterns[column]:
-                                    del self.postings[column, literal]
-                                count -= column_counts.pop(column)
-                                break
+                            else:
+                                touch(value)
+                                matched = hit[0]
+                            for literal in matched:
+                                postings[column, literal].add(row_id)
+                            added += len(matched)
+                        count += added
+                        column_counts[column] += added
+                        if count > max_postings:
+                            self.skipped_columns[column] = "literal posting budget exceeded"
+                            del automata[column]
+                            del caches[column]
+                            del self.uncertain[column]
+                            for literal in patterns[column]:
+                                del self.postings[column, literal]
+                            count -= column_counts.pop(column)
                     if not automata:
                         break
         # Plans with no remaining necessary bound take the ordinary SQLite path.
