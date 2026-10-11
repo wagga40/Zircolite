@@ -240,6 +240,23 @@ def test_row_building_binds_missing_fields_as_null_and_merges_case_variants():
     assert _build_rows(collided, ("EventID",), frozenset(("EventID", "eventid")), False) == [(4688,), (1,)]
 
 
+def test_case_variant_batches_match_a_key_by_key_merge():
+    from zircolite.streaming import _build_rows
+
+    def reference(event, canonical):
+        merged = {}
+        for key, value in event.items():
+            if key.lower() not in merged or merged[key.lower()] is None:
+                merged[key.lower()] = value
+        return tuple(merged.get(name.lower()) for name in canonical)
+
+    rng = random.Random(4624)  # noqa: S311 -- reproducible test inputs
+    spellings = ["ProcessId", "ProcessID", "processid", "Image", "IMAGE", "User"]
+    batch = [{name: rng.choice([None, "x", 7]) for name in spellings if rng.random() < 0.4} for _ in range(500)]
+    canonical = ("ProcessId", "Image", "User")
+    assert _build_rows(batch, canonical, frozenset(spellings), False) == [reference(event, canonical) for event in batch]
+
+
 def test_cython_ingestion_matches_python_with_transforms(tmp_path):
     native("zircolite._flatten_native")
     events = [

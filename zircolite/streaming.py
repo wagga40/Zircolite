@@ -619,13 +619,18 @@ def _build_rows(batch, all_columns, all_columns_frozen, uniform):
         # (first non-None wins) and bind against the canonical column.
         canonical_lower = tuple(col.lower() for col in all_columns)
         rows = []
+        lower = str.lower
         for event in batch:
-            merged: dict[str, Any] = {}
-            for k, v in event.items():
-                kl = k.lower()
-                if kl not in merged or merged[kl] is None:
-                    merged[kl] = v
-            rows.append(tuple(merged.get(cl) for cl in canonical_lower))
+            # The variants usually sit in different events: fold the keys in C
+            # and merge key by key only for an event holding two spellings.
+            merged: dict[str, Any] = dict(zip(map(lower, event), event.values(), strict=True))
+            if len(merged) != len(event):
+                merged = {}
+                for k, v in event.items():
+                    kl = k.lower()
+                    if kl not in merged or merged[kl] is None:
+                        merged[kl] = v
+            rows.append(tuple(map(merged.get, canonical_lower)))
         return rows
     if uniform and len(all_columns) > 1:
         # Every event shares the first event's columns (a stable source).
