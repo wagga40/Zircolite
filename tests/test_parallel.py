@@ -312,6 +312,140 @@ class TestConsolidatedWorkerCalc:
 
 
 # ============================================================================
+# EVTX MEMORY ESTIMATE
+# ============================================================================
+
+
+EVTX_HEAD = b"ElfFile\x00" + b"\x00" * 120
+MIB = 1024 * 1024
+
+# Single-file peak RSS (MiB) with the merged Windows ruleset, keyed by EVTX size
+# (MiB). Measured 2026-10-12 on arm64 macOS over T001, LOGS, BHG, HANCITOR and zirko.
+MEASURED_EVTX_PEAKS = [
+    (142, 275), (150, 313), (166, 264), (177, 282), (203, 329),
+    (1000, 1154), (1200, 760), (1468, 750), (2048, 1271), (2048, 1422),
+]
+
+
+def _inputs(directory: Path, evtx: int, other: int = 0) -> list[Path]:
+    """Files carrying only a signature; tests patch the size estimate."""
+    files = []
+    for i in range(evtx):
+        files.append(directory / f"e{i}.evtx")
+        files[-1].write_bytes(EVTX_HEAD)
+    for i in range(other):
+        files.append(directory / f"j{i}.json")
+        files[-1].write_bytes(b'{"a": 1}\n')
+    return files
+
+
+class TestEvtxMemoryEstimate:
+    """EVTX records are bulky next to the rows they become; the estimate says so."""
+
+    def test_the_signature_decides_not_the_name(self, tmp_path):
+        import gzip
+
+        from zircolite.parallel import is_plain_evtx
+
+        evtx = tmp_path / "a.evtx"
+        evtx.write_bytes(EVTX_HEAD)
+        renamed = tmp_path / "a.json"
+        renamed.write_bytes(EVTX_HEAD)
+        impostor = tmp_path / "b.evtx"
+        impostor.write_bytes(b'{"Event": {}}\n')
+        compressed = tmp_path / "c.evtx.gz"
+        compressed.write_bytes(gzip.compress(EVTX_HEAD))
+        empty = tmp_path / "d.evtx"
+        empty.write_bytes(b"")
+
+        assert is_plain_evtx(evtx)
+        assert is_plain_evtx(str(renamed))
+        assert not is_plain_evtx(impostor)
+        assert not is_plain_evtx(compressed)
+        assert not is_plain_evtx(empty)
+        assert not is_plain_evtx(tmp_path / "missing.evtx")
+        assert not is_plain_evtx(tmp_path)
+
+    def test_every_file_must_be_plain_evtx(self, tmp_path):
+        from zircolite.parallel import all_plain_evtx
+
+        evtx = _inputs(tmp_path, 2)
+        assert all_plain_evtx(evtx)
+        assert not all_plain_evtx([*evtx, *_inputs(tmp_path, 0, 1)])
+        assert not all_plain_evtx([])
+
+    @pytest.mark.parametrize("size_mib,evtx,expected", [
+        (5, True, 5.0), (30, True, 4.0), (64, True, 3.5), (99, True, 3.5),
+        (100, True, 2.5), (511, True, 2.5), (512, True, 2.0), (2048, True, 2.0),
+        (5, False, 5.0), (30, False, 4.0), (100, False, 3.5), (2048, False, 3.5),
+    ])
+    def test_multiplier_drops_only_for_large_evtx(self, size_mib, evtx, expected):
+        from zircolite.parallel import memory_multiplier_for
+
+        assert memory_multiplier_for(size_mib, evtx=evtx) == expected
+        assert memory_multiplier_for(size_mib) == memory_multiplier_for(size_mib, evtx=False)
+
+    @pytest.mark.parametrize("size_mib,peak_mib", MEASURED_EVTX_PEAKS)
+    def test_evtx_estimate_keeps_headroom_over_measured_peaks(self, size_mib, peak_mib):
+        from zircolite.parallel import process_worker_mb
+
+        assert process_worker_mb(size_mib, evtx=True) >= 1.5 * peak_mib
+
+    def test_large_evtx_affords_more_process_workers(self):
+        # T001: eight EVTX files averaging 1.7 GiB, 40 GiB free, 10 cores.
+        sizes = [1704 * MIB] * 8
+        assert calculate_optimal_workers(sizes, 40 * 1024, 10, executor="process") == 5
+        assert calculate_optimal_workers(sizes, 40 * 1024, 10, executor="process", evtx=True) == 8
+
+    def test_large_evtx_can_choose_processes_where_other_input_cannot(self):
+        from zircolite.parallel import select_executor
+
+        sizes = [512 * MIB] * 4
+        assert select_executor("auto", sizes, 3072, 8)[0] == "thread"
+        assert select_executor("auto", sizes, 3072, 8, evtx=True)[0] == "process"
+
+    def test_processor_estimate_uses_the_evtx_multiplier(self, test_logger, tmp_path):
+        evtx = _inputs(tmp_path, 2)
+        other = _inputs(tmp_path, 0, 2)
+        processor = MemoryAwareParallelProcessor(logger=test_logger)
+
+        with patch("zircolite.parallel.estimate_input_size", return_value=200 * MIB):
+            assert processor.estimate_memory_per_file(evtx) == pytest.approx(200 * 2.5)
+            assert processor.estimate_memory_per_file(other) == pytest.approx(200 * 3.5)
+            # One file that is not plain EVTX keeps the whole list on the general estimate.
+            assert processor.estimate_memory_per_file([*evtx, other[0]]) == pytest.approx(200 * 3.5)
+
+    def test_processor_worker_count_uses_the_evtx_multiplier(self, test_logger, tmp_path):
+        evtx = _inputs(tmp_path, 8)
+        other = _inputs(tmp_path, 0, 8)
+        processor = MemoryAwareParallelProcessor(ParallelConfig(executor="process"), logger=test_logger)
+
+        with patch.object(processor, "get_available_memory_mb", return_value=16 * 1024), \
+             patch("zircolite.parallel.os.cpu_count", return_value=10), \
+             patch("zircolite.parallel.estimate_input_size", return_value=1024 * MIB):
+            assert processor.calculate_optimal_workers(other) == 3
+            assert processor.calculate_optimal_workers(evtx) == 6
+
+    def test_mode_recommendation_reads_the_files(self, tmp_path):
+        from zircolite.utils import analyze_files_and_recommend_mode
+
+        evtx = _inputs(tmp_path, 8)
+        other = _inputs(tmp_path, 0, 8)
+        memory = MagicMock(available=16 * 1024**3, total=32 * 1024**3)
+
+        with patch("zircolite.utils.psutil.virtual_memory", return_value=memory), \
+             patch("zircolite.utils.os.cpu_count", return_value=10), \
+             patch("zircolite.utils.estimate_input_size", return_value=1024 * MIB):
+            _, _, evtx_stats = analyze_files_and_recommend_mode(evtx, "auto")
+            _, _, other_stats = analyze_files_and_recommend_mode(other, "auto")
+
+        assert evtx_stats["memory_per_file"] == pytest.approx(1024 * MIB * 2.0)
+        assert other_stats["memory_per_file"] == pytest.approx(1024 * MIB * 3.5)
+        assert (evtx_stats["executor"], evtx_stats["parallel_workers"]) == ("process", 6)
+        assert (other_stats["executor"], other_stats["parallel_workers"]) == ("process", 3)
+
+
+# ============================================================================
 # LPT SCHEDULING
 # ============================================================================
 

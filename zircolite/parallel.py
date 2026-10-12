@@ -18,7 +18,7 @@ import signal
 import sys
 import time
 from collections import deque
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from concurrent.futures import FIRST_COMPLETED, ProcessPoolExecutor, ThreadPoolExecutor, wait
 from contextlib import contextmanager, nullcontext
 from dataclasses import dataclass, field
@@ -38,6 +38,7 @@ from rich.progress import (
 )
 
 from .console import console, literal
+from .detector import EVTX_MAGIC
 from .shutdown import is_shutdown_requested
 from .utils import estimate_input_size
 
@@ -97,14 +98,29 @@ def _sigint_held_for_new_workers():
         signal.pthread_sigmask(signal.SIG_SETMASK, previous)
 
 
+def is_plain_evtx(path: Path | str) -> bool:
+    """True for an uncompressed EVTX file, recognised by its signature rather than its name."""
+    try:
+        with open(path, "rb") as source:
+            return source.read(len(EVTX_MAGIC)) == EVTX_MAGIC
+    except OSError:
+        return False
+
+
+def all_plain_evtx(paths: Sequence[Path | str]) -> bool:
+    """True when every input is an uncompressed EVTX file."""
+    return bool(paths) and all(is_plain_evtx(path) for path in paths)
+
+
 def select_executor(requested, file_sizes, available_memory_mb, cpu_count, *,
-                    auto_mode=True, max_workers=None):
+                    auto_mode=True, max_workers=None, evtx=False):
     """Resolve CLI auto selection without changing explicit/library choices.
 
     Every SQLite row step releases the GIL and has to take it back, so thread
     workers queue behind each other: past about 32 MiB of input in total they
     ran slower than one file at a time, whatever the file size. Below that,
     the second or two each process spends loading the ruleset is not repaid.
+    ``evtx`` says every input is plain EVTX (see ``memory_multiplier_for``).
     """
     if requested != "auto":
         return requested, "explicit selection"
@@ -116,33 +132,42 @@ def select_executor(requested, file_sizes, available_memory_mb, cpu_count, *,
         return "thread", f"less than {PROCESS_MIN_TOTAL_MIB} MiB of input in total"
     average_mib = sum(file_sizes) / len(file_sizes) / 1024**2
     workers = min(len(file_sizes), cpu_count,
-                  int(available_memory_mb * 0.85 / process_worker_mb(average_mib)), max_workers or 32)
+                  int(available_memory_mb * 0.85 / process_worker_mb(average_mib, evtx=evtx)),
+                  max_workers or 32)
     if available_memory_mb < 1024 or workers < 2:
         return "thread", "insufficient resources for two process workers"
     return "process", "CPU and memory available for process workers"
 
 
-def memory_multiplier_for(avg_file_size_mb: float) -> float:
+def memory_multiplier_for(avg_file_size_mb: float, *, evtx: bool = False) -> float:
     """Peak RSS expected per MB of input, by average file size.
 
     Smaller files carry proportionally more per-event overhead; larger ones
     amortise it. Single source of truth for the estimate used by the worker
     count, the per-file estimate and the mode recommendation.
+
+    ``evtx`` means every input is plain EVTX. Its records are bulky next to
+    the rows they become: from 100 MB up, measured peaks stayed within
+    0.4-1.3 MB per MB of file above the 128 MB idle worker. These figures
+    keep at least 1.5 times that peak; the general one would leave large
+    EVTX runs with half the workers memory allows.
     """
     if avg_file_size_mb < 10:
         return 5.0
     if avg_file_size_mb < 50:
         return 4.0
+    if evtx and avg_file_size_mb >= 100:
+        return 2.5 if avg_file_size_mb < 512 else 2.0
     return 3.5
 
 
-def process_worker_mb(avg_file_size_mb: float) -> float:
+def process_worker_mb(avg_file_size_mb: float, *, evtx: bool = False) -> float:
     """Peak RSS expected of one process worker.
 
     An idle worker already holds an interpreter, the ruleset and SQLite:
     100-135 MB with the merged Windows ruleset, measured on arm64 macOS.
     """
-    return 128 + avg_file_size_mb * memory_multiplier_for(avg_file_size_mb)
+    return 128 + avg_file_size_mb * memory_multiplier_for(avg_file_size_mb, evtx=evtx)
 
 
 def calculate_optimal_workers(
@@ -154,6 +179,7 @@ def calculate_optimal_workers(
     max_workers: int | None = None,
     max_cap: int = 32,
     executor: str = "thread",
+    evtx: bool = False,
 ) -> int:
     """
     Calculate optimal number of parallel workers.
@@ -171,6 +197,7 @@ def calculate_optimal_workers(
         max_cap: Hard ceiling to avoid context-switching overhead.
         executor: ``"process"`` also caps the count at the CPU count and at
             one interpreter's memory per worker.
+        evtx: Every input is plain EVTX (see ``memory_multiplier_for``).
 
     Returns:
         Optimal worker count (always >= 1).
@@ -184,7 +211,7 @@ def calculate_optimal_workers(
         return max(1, min(max_workers, file_count))
 
     avg_file_size_mb = (sum(file_sizes) / file_count) / (1024 * 1024)
-    memory_per_file_mb = avg_file_size_mb * memory_multiplier_for(avg_file_size_mb)
+    memory_per_file_mb = avg_file_size_mb * memory_multiplier_for(avg_file_size_mb, evtx=evtx)
     usable_memory_mb = available_memory_mb * 0.85
 
     memory_based = (
@@ -207,7 +234,7 @@ def calculate_optimal_workers(
     optimal = min(optimal, file_count, max_cap)
     if executor == "process":
         # Python-heavy workers gain nothing from exceeding the CPU count.
-        memory_workers = max(1, int(usable_memory_mb / process_worker_mb(avg_file_size_mb)))
+        memory_workers = max(1, int(usable_memory_mb / process_worker_mb(avg_file_size_mb, evtx=evtx)))
         optimal = min(optimal, cpu_count, memory_workers)
 
     return optimal
@@ -365,7 +392,7 @@ class MemoryAwareParallelProcessor:
                 total_size += 10 * 1024 * 1024
 
         avg_file_size_mb = (total_size / min(len(file_list), 10)) / (1024 * 1024)
-        return avg_file_size_mb * memory_multiplier_for(avg_file_size_mb)
+        return avg_file_size_mb * memory_multiplier_for(avg_file_size_mb, evtx=all_plain_evtx(file_list))
 
     def calibrate_memory(
         self,
@@ -439,6 +466,7 @@ class MemoryAwareParallelProcessor:
             min_workers=self.config.min_workers,
             max_workers=self.config.max_workers,
             executor=self.config.executor,
+            evtx=all_plain_evtx(file_list),
         )
 
     # ------------------------------------------------------------------

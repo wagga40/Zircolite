@@ -294,7 +294,10 @@ files, the layout is unified unless `--no-auto-mode` is set, and `--executor pro
 | 8 | Anything else | Per-file | Default |
 
 The footprint is an estimate: an in-memory database is 3.5 to 5 times larger than the logs
-it holds, so rule 3 triggers at roughly a quarter to a sixth of free RAM.
+it holds, so rule 3 triggers at roughly a quarter to a sixth of free RAM. Uncompressed EVTX
+is the exception once its files average 100 MB: their records are bulkier than the rows they
+become, so they count at 2.5 times their size, and at 2 times from 512 MB. The same estimate
+sizes the worker pool below.
 
 **Parallelism** applies to per-file runs only, again first match:
 

@@ -872,26 +872,29 @@ def analyze_files_and_recommend_mode(
     # Delegate to the consolidated helpers so the heuristics stay in sync
     # with MemoryAwareParallelProcessor.
     from .parallel import (
-        calculate_optimal_workers as _calc_workers,
-    )
-    from .parallel import (
+        all_plain_evtx,
         memory_multiplier_for,
         select_executor,
     )
+    from .parallel import (
+        calculate_optimal_workers as _calc_workers,
+    )
 
     # Estimate memory usage per file (dynamic multiplier based on file size)
-    memory_multiplier = memory_multiplier_for(avg_size / (1024 * 1024))
+    evtx = all_plain_evtx(file_list)
+    memory_multiplier = memory_multiplier_for(avg_size / (1024 * 1024), evtx=evtx)
     memory_per_file = avg_size * memory_multiplier
 
     resolved_executor, executor_reason = select_executor(
         executor, file_sizes, available_ram / (1024 * 1024), cpu_count,
-        auto_mode=auto_mode, max_workers=max_workers,
+        auto_mode=auto_mode, max_workers=max_workers, evtx=evtx,
     )
     optimal_workers = _calc_workers(
         file_sizes=file_sizes,
         available_memory_mb=available_ram / (1024 * 1024),
         cpu_count=cpu_count,
         executor=resolved_executor,
+        evtx=evtx,
     )
 
     # Parallel processing recommendation
