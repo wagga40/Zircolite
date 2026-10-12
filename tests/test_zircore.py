@@ -2210,6 +2210,25 @@ class TestRulesThatSilentlyMatchedNothing:
         finally:
             core.close()
 
+    def test_rowid_alias_in_a_rule_is_not_widened_into_logs(
+        self, field_mappings_file, test_logger
+    ):
+        """Bare, oid means the row ID: the other absent field is still widened.
+
+        SQLite 3.54 refuses to add a column of that name, which used to abort
+        the widening and leave the rule unevaluated.
+        """
+        core = self._core(field_mappings_file, test_logger)
+        try:
+            results = core.execute_select_query(
+                "SELECT * FROM logs WHERE Foo IS NULL AND oid > 0", rule_title="oid rule"
+            )
+
+            assert len(results) == 1
+            assert "oid" not in {column.lower() for column in core._get_table_columns()}
+        finally:
+            core.close()
+
     def test_correlation_alias_is_not_widened_into_logs(
         self, field_mappings_file, test_logger
     ):
