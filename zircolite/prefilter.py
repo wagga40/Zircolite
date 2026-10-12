@@ -31,6 +31,21 @@ from .sqlscan import (
 
 _ASCII_FOLD = str.maketrans("ABCDEFGHIJKLMNOPQRSTUVWXYZ", "abcdefghijklmnopqrstuvwxyz")
 _ASCII_UPPER = str.maketrans("abcdefghijklmnopqrstuvwxyz", "ABCDEFGHIJKLMNOPQRSTUVWXYZ")
+
+
+def _fold_ascii(value: str) -> str:
+    """``value.translate(_ASCII_FOLD)``, fast enough to run on every scanned value.
+
+    translate() looks each character up one by one once a string holds any
+    non-ASCII character, so long PowerShell script blocks would dominate the
+    scan. bytes.lower() folds ASCII letters only, and UTF-8 encodes every other
+    character as bytes outside that range.
+    """
+    if value.isascii():
+        return value.lower()
+    return value.encode("utf-8", "surrogatepass").lower().decode("utf-8", "surrogatepass")
+
+
 AUTO_MIN_ROWS = 1000
 AUTO_MIN_QUERIES = 32
 # Share of the rows a rule's Channel/EventID bounds select past which the
@@ -524,7 +539,7 @@ class _ValueMatches:
         if cacheable and value in self.values:
             self.values.move_to_end(value)
             return self.values[value][0]
-        matched = tuple({literal for _, literal in self.automaton.iter(value.translate(_ASCII_FOLD))})
+        matched = tuple({literal for _, literal in self.automaton.iter(_fold_ascii(value))})
         if cacheable:
             # Literal strings already belong to the automaton. Count the value,
             # references and a conservative allowance for dict/LRU bookkeeping.
