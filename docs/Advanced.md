@@ -287,7 +287,7 @@ files, the layout is unified unless `--no-auto-mode` is set, and `--executor pro
 | 1 | One file | Per-file | Nothing to unify |
 | 2 | Under 2 GB of RAM free | Per-file | Memory is tight |
 | 3 | Estimated footprint over 85% of free RAM | Per-file | Avoid running out |
-| 4 | 10+ files averaging 5 MB or less | Unified | Less overhead |
+| 4 | 10+ files averaging 5 MB or less, and for EVTX no more than 1,000 records each on average | Unified | Less overhead |
 | 5 | Fewer than 5 files averaging 50 MB or more | Per-file | Memory-efficient |
 | 6 | 8 GB+ RAM and 3+ files | Per-file | Leaves the files free to run in parallel |
 | 7 | Any other run of 10+ files | Unified | Enables cross-file correlation |
@@ -298,6 +298,13 @@ it holds, so rule 3 triggers at roughly a quarter to a sixth of free RAM. Uncomp
 is the exception once its files average 100 MB: their records are bulkier than the rows they
 become, so they count at 2.5 times their size, and at 2 times from 512 MB. The same estimate
 sizes the worker pool below.
+
+Rule 4 counts EVTX records from the chunk headers, without parsing them: Windows allocates
+logs ahead of their records, so a small file may hold a few events or tens of thousands. A
+unified database keeps every record on one core, while per-file runs pay a fixed cost per
+file but spread the files over workers. Small files averaging more than 1,000 records go
+per-file instead: on a 1,692-file collection holding 4.6 million records, that took 53 s
+against 214 s unified.
 
 **Parallelism** applies to per-file runs only, again first match:
 
