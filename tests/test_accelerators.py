@@ -23,7 +23,14 @@ import yaml
 
 from zircolite import ProcessingConfig, ZircoliteCore
 from zircolite.config_loader import ConfigLoader
-from zircolite.prefilter import LiteralPrefilter, _plan_for, _posting_budget, _ValueMatches
+from zircolite.prefilter import (
+    _ASCII_FOLD,
+    LiteralPrefilter,
+    _fold_ascii,
+    _plan_for,
+    _posting_budget,
+    _ValueMatches,
+)
 from zircolite.sqlscan import normalize_rule_sql, quote_sql_identifiers
 from zircolite.streaming import StreamingEventProcessor, select_flatten_kernel
 from zircolite.utils import open_maybe_compressed, safe_load, safe_load_all
@@ -592,6 +599,35 @@ def test_value_cache_bounds_entries_bytes_and_input_length():
     roomy.matches("new")
     assert len(roomy.values) == 512 and "0" in roomy.values and "1" not in roomy.values
 
+
+
+@pytest.mark.parametrize("value", [
+    "", "CMD.EXE /C WHOAMI", "MiXeD 123 !@#~", "école", "ÉCOLE", "İSTANBUL", "ıi", "Straße", "ǅ",
+    "ΣΑΣ", "\u212aelvin", "ＡＢＣ", "nul\x00ALPHA", "🦆NEEDLE", "\ud800LONE", "A" * 5000 + "é",
+])
+def test_fold_lowers_ascii_letters_only(value):
+    assert _fold_ascii(value) == value.translate(_ASCII_FOLD)
+
+
+def test_fold_agrees_with_the_translation_table_on_random_text():
+    rng = random.Random(20261012)  # noqa: S311 -- reproducible test inputs
+    alphabet = [chr(c) for c in range(0x7F)] + ["é", "É", "\u0130", "\u212a", "ß", "\ud800", "\U0001f986"]
+    for _ in range(5000):
+        value = "".join(rng.choice(alphabet) for _ in range(rng.randrange(48)))
+        assert _fold_ascii(value) == value.translate(_ASCII_FOLD)
+
+
+def test_value_matches_fold_ascii_letters_as_like_does():
+    import ahocorasick
+
+    automaton = ahocorasick.Automaton()
+    for literal in ("needle", "école"):
+        automaton.add_word(literal, literal)
+    automaton.make_automaton()
+    cache = _ValueMatches(automaton, 16_384)
+    assert cache.matches("xNEEDLEé") == ("needle",)
+    assert cache.matches("ÉCOLE") == ()
+    assert sorted(cache.matches("École école NeEdLe" + "é" * 2000)) == ["needle", "école"]
 
 def test_only_the_negation_wrapper_is_exempt_from_the_function_call_rule():
     assert _plan_for("SELECT * FROM logs WHERE text LIKE '%alpha%' AND COALESCE(other, 0)") is None
