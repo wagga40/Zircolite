@@ -6,6 +6,7 @@ import csv
 import gzip
 import io
 import json
+import re
 import sqlite3
 import subprocess
 import sys
@@ -2302,6 +2303,33 @@ class TestStreamingBugFixes:
         conn.close()
 
 
+class _AliasRefusingCursor(sqlite3.Cursor):
+    """Refuses to add a column named after the row ID, as SQLite 3.54 does."""
+
+    def execute(self, sql, *args):
+        match = re.match(r'\s*ALTER TABLE logs ADD COLUMN "(rowid|oid|_rowid_)"', sql, re.IGNORECASE)
+        if match:
+            raise sqlite3.OperationalError(f"cannot add rowid alias: {match.group(1)}")
+        return super().execute(sql, *args)
+
+
+class _AliasRefusingConnection(sqlite3.Connection):
+    def cursor(self, factory=_AliasRefusingCursor):
+        return super().cursor(factory)
+
+
+class _RebuildFailingCursor(_AliasRefusingCursor):
+    def execute(self, sql, *args):
+        if sql.lstrip().upper().startswith("ALTER TABLE LOGS RENAME"):
+            raise sqlite3.OperationalError("simulated rebuild failure")
+        return super().execute(sql, *args)
+
+
+class _RebuildFailingConnection(sqlite3.Connection):
+    def cursor(self, factory=_RebuildFailingCursor):
+        return super().cursor(factory)
+
+
 class TestStreamingHostileKeysAndCaseVariants:
     """Regression tests for SQL identifier escaping and case-variant columns."""
 
@@ -2340,14 +2368,22 @@ class TestStreamingHostileKeysAndCaseVariants:
         assert row == ("abc", "x")
         conn.close()
 
-    @pytest.mark.parametrize("pair", ["row_id=1", "row_id=9223372036854775807"])
+    @pytest.mark.parametrize("factory", [sqlite3.Connection, _AliasRefusingConnection],
+                             ids=["sqlite", "refuses-alias-columns"])
+    @pytest.mark.parametrize("pair,column,value", [
+        ("row_id=1", "rowid", "1"),
+        ("row_id=9223372036854775807", "rowid", "9223372036854775807"),
+        ("OID=5", "OID", "5"),
+    ])
     def test_split_pair_cannot_write_row_id(
-        self, field_mappings_file, test_logger, default_args_config, tmp_path, pair
+        self, field_mappings_file, test_logger, default_args_config, tmp_path, factory, pair, column, value
     ):
         """A 'row_id' pair must never reach the INTEGER PRIMARY KEY.
 
         A duplicate id (UNIQUE) or 2**63-1 (AUTOINCREMENT exhausted) would fail
-        the batch and leave every other event of the file unanalysed.
+        the batch and leave every other event of the file unanalysed; any other
+        id would renumber the event silently. The field keeps its value in a
+        column of its own, whether or not SQLite lets ALTER TABLE add one.
         """
         processor = self._make_processor(field_mappings_file, test_logger, default_args_config)
         json_file = tmp_path / "events.json"
@@ -2358,7 +2394,7 @@ class TestStreamingHostileKeysAndCaseVariants:
         ]
         json_file.write_text("".join(json.dumps(event) + "\n" for event in events))
 
-        conn = sqlite3.connect(":memory:")
+        conn = sqlite3.connect(":memory:", factory=factory)
         processor.create_initial_table(conn)
         count = processor.process_file_streaming(conn, str(json_file), input_type="json")
 
@@ -2366,6 +2402,58 @@ class TestStreamingHostileKeysAndCaseVariants:
         assert conn.execute("SELECT row_id FROM logs ORDER BY row_id").fetchall() == [
             (1,), (2,), (3,)
         ]
+        assert conn.execute(f'SELECT row_id FROM logs WHERE "{column}" = ?', (value,)).fetchall() == [(2,)]
+        assert conn.execute('SELECT "MD5" FROM logs ORDER BY row_id').fetchall() == [("aa",), (None,), ("bb",)]
+        conn.close()
+
+    def test_row_id_field_is_dropped_when_no_column_can_hold_it(
+        self, field_mappings_file, test_logger, default_args_config, tmp_path
+    ):
+        """Losing one field beats renumbering events or failing the file."""
+        processor = self._make_processor(field_mappings_file, test_logger, default_args_config)
+        json_file = tmp_path / "events.json"
+        events = [
+            {"EventID": 1, "Hashes": "MD5=aa"},
+            {"EventID": 1, "Hashes": "OID=1,MD5=cc"},
+            {"EventID": 1, "Hashes": "MD5=bb"},
+        ]
+        json_file.write_text("".join(json.dumps(event) + "\n" for event in events))
+
+        conn = sqlite3.connect(":memory:", factory=_RebuildFailingConnection)
+        processor.create_initial_table(conn)
+        count = processor.process_file_streaming(conn, str(json_file), input_type="json")
+
+        assert count == 3
+        assert conn.execute('SELECT row_id, "MD5" FROM logs ORDER BY row_id').fetchall() == [
+            (1, "aa"), (2, "cc"), (3, "bb")
+        ]
+        assert "oid" not in {row[1].lower() for row in conn.execute("PRAGMA table_info(logs)")}
+        conn.close()
+
+    def test_rebuild_adds_the_column_and_keeps_rows_counter_indexes_and_collation(self):
+        from zircolite.streaming import _add_rowid_alias_column
+
+        conn = sqlite3.connect(":memory:")
+        conn.execute("CREATE TABLE IF NOT EXISTS logs (\n    row_id INTEGER PRIMARY KEY AUTOINCREMENT\n)")
+        conn.execute('ALTER TABLE logs ADD COLUMN "EventID" INTEGER')
+        conn.execute('ALTER TABLE logs ADD COLUMN "Image" TEXT COLLATE NOCASE')
+        conn.executemany('INSERT INTO logs ("EventID", "Image") VALUES (?, ?)',
+                         [(1, "a.exe"), (2, "b.exe"), (3, "c.exe")])
+        conn.execute("DELETE FROM logs WHERE row_id = 3")
+        conn.execute('CREATE INDEX idx_image ON logs ("Image")')
+        conn.commit()
+
+        with closing(conn.cursor()) as cursor:
+            _add_rowid_alias_column(cursor, "rowid", "TEXT COLLATE NOCASE")
+        conn.execute('INSERT INTO logs ("EventID", "rowid") VALUES (4, ?)', ("7",))
+
+        assert [row[1] for row in conn.execute("PRAGMA table_info(logs)")] == ["row_id", "EventID", "Image", "rowid"]
+        assert conn.execute('SELECT row_id, "EventID", "Image", "rowid" FROM logs ORDER BY row_id').fetchall() == [
+            (1, 1, "a.exe", None), (2, 2, "b.exe", None), (4, 4, None, "7")
+        ]
+        assert conn.execute("SELECT count(*) FROM logs WHERE Image = 'A.EXE'").fetchone() == (1,)
+        assert conn.execute("SELECT name FROM sqlite_master WHERE type = 'index'").fetchall() == [("idx_image",)]
+        assert conn.execute("SELECT name FROM sqlite_master WHERE name LIKE 'zircolite%'").fetchall() == []
         conn.close()
 
     def test_case_variant_columns_merge_values(

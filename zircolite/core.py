@@ -78,7 +78,7 @@ from .sqlscan import (
     rebalance_sql,
     scan_query,
 )
-from .streaming import StreamingEventProcessor, StrictParseError
+from .streaming import _ROWID_ALIASES, StreamingEventProcessor, StrictParseError
 from .utils import rounded_integer_warning, sanitize_row_for_csv, write_csv_header
 
 # Translation table for stripping newline characters from CSV descriptions.
@@ -844,6 +844,10 @@ class ZircoliteCore:
             # Keyword text cannot be made up after ingestion: as a NULL column
             # it would let a keyword rule run and match nothing.
             if key == FIELD:
+                continue
+            # Bare, these already name the row ID, and SQLite 3.54 refuses to
+            # add a column of that name, which would leave the rule unevaluated.
+            if key in _ROWID_ALIASES:
                 continue
             # SQL and backend metadata can spell the same absent field with
             # different case. SQLite accepts only one of those columns.
