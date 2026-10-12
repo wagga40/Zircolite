@@ -700,6 +700,50 @@ class TestModeRecommendationRemainingRules:
         assert mode == "per-file"
 
 
+class TestModeRecommendationEvtxRecords:
+    """Small EVTX files full of records run faster per-file than unified.
+
+    Unified keeps every record on one core; per-file pays a fixed cost per file
+    but spreads them over workers. Measured on eight EVTX corpora, unified won
+    up to 830 records per file and lost from 1,982.
+    """
+
+    def _analyze(self, files):
+        from unittest.mock import MagicMock, patch
+
+        from zircolite.utils import analyze_files_and_recommend_mode
+        vm = MagicMock(available=16 * 1024**3, total=32 * 1024**3)
+        with patch("zircolite.utils.psutil.virtual_memory", return_value=vm), \
+             patch("zircolite.utils.os.cpu_count", return_value=10):
+            return analyze_files_and_recommend_mode(files, "auto")
+
+    def _corpus(self, directory, records_per_file, count=12):
+        from tests.test_parallel import _evtx_with_records
+
+        half = records_per_file // 2
+        return [_evtx_with_records(directory / f"f{i}.evtx", [(1, half), (half + 1, records_per_file)])
+                for i in range(count)]
+
+    def test_files_full_of_records_go_per_file(self, tmp_path):
+        mode, reason, stats = self._analyze(self._corpus(tmp_path, 2000))
+        assert mode == "per-file"
+        assert "records" in reason
+        assert stats["parallel_recommended"]
+
+    @pytest.mark.parametrize("records", [100, 1000])
+    def test_sparse_files_stay_unified(self, tmp_path, records):
+        mode, reason, _ = self._analyze(self._corpus(tmp_path, records))
+        assert mode == "unified"
+        assert "small files" in reason
+
+    def test_a_list_that_is_not_all_evtx_keeps_the_size_rule(self, tmp_path):
+        files = self._corpus(tmp_path, 2000)
+        other = tmp_path / "events.json"
+        other.write_bytes(b'{"a": 1}\n')
+        mode, _, _ = self._analyze([*files, other])
+        assert mode == "unified"
+
+
 class TestSniffCsvDelimiter:
     """Delimiter detection shared by the log detector and the CSV stream."""
 

@@ -15,6 +15,7 @@ import multiprocessing
 import os
 import queue
 import signal
+import struct
 import sys
 import time
 from collections import deque
@@ -110,6 +111,49 @@ def is_plain_evtx(path: Path | str) -> bool:
 def all_plain_evtx(paths: Sequence[Path | str]) -> bool:
     """True when every input is an uncompressed EVTX file."""
     return bool(paths) and all(is_plain_evtx(path) for path in paths)
+
+
+_EVTX_HEADER_SIZE = 4096
+_EVTX_CHUNK_SIZE = 65536
+_EVTX_CHUNK_MAGIC = b"ElfChnk\x00"
+# A record takes 24 bytes at the very least, so a chunk header claiming more
+# than this describes no records: unused chunks carry such numbers.
+_MAX_CHUNK_RECORDS = _EVTX_CHUNK_SIZE // 24
+
+
+def evtx_record_count(path: Path | str, limit: int | None = None) -> int:
+    """Records in an EVTX file, read from its chunk headers without parsing one.
+
+    File sizes say little here: Windows allocates logs ahead of their records.
+    The scan reads 24 bytes per 64 KiB chunk and stops once ``limit`` is reached.
+    """
+    count = chunk = 0
+    try:
+        with open(path, "rb") as source:
+            if source.read(len(EVTX_MAGIC)) != EVTX_MAGIC:
+                return 0
+            while limit is None or count < limit:
+                source.seek(_EVTX_HEADER_SIZE + chunk * _EVTX_CHUNK_SIZE)
+                head = source.read(24)
+                if len(head) < 24 or not head.startswith(_EVTX_CHUNK_MAGIC):
+                    break
+                first, last = struct.unpack_from("<QQ", head, 8)
+                if first <= last < first + _MAX_CHUNK_RECORDS:
+                    count += last - first + 1
+                chunk += 1
+    except OSError:
+        pass
+    return count
+
+
+def evtx_records_exceed(paths: Sequence[Path | str], budget: int) -> bool:
+    """True when the files hold more than ``budget`` EVTX records between them."""
+    total = 0
+    for path in paths:
+        total += evtx_record_count(path, limit=budget - total + 1)
+        if total > budget:
+            return True
+    return False
 
 
 def select_executor(requested, file_sizes, available_memory_mb, cpu_count, *,

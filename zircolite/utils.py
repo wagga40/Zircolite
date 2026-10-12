@@ -873,6 +873,7 @@ def analyze_files_and_recommend_mode(
     # with MemoryAwareParallelProcessor.
     from .parallel import (
         all_plain_evtx,
+        evtx_records_exceed,
         memory_multiplier_for,
         select_executor,
     )
@@ -952,6 +953,10 @@ def analyze_files_and_recommend_mode(
     LARGE_FILE_THRESHOLD = 50 * 1024 * 1024  # 50 MB
     LOW_RAM_THRESHOLD = 2 * 1024 * 1024 * 1024  # 2 GB
     HIGH_RAM_THRESHOLD = 8 * 1024 * 1024 * 1024  # 8 GB
+    # One database keeps every record on one core; per-file pays a fixed cost
+    # per file but spreads the files over workers. On eight EVTX corpora,
+    # unified won up to 830 records per file and lost from 1,982 on.
+    UNIFIED_MAX_EVTX_RECORDS = 1000
 
     # Decision logic for database mode
 
@@ -973,8 +978,16 @@ def analyze_files_and_recommend_mode(
             stats,
         )
 
-    # Rule 4: Many small files - unified mode is more efficient
+    # Rule 4: Many small files - unified mode is more efficient, unless they
+    # are EVTX logs whose size hides how many records they hold.
     if file_count >= MANY_FILES_THRESHOLD and avg_size <= SMALL_FILE_THRESHOLD:
+        if evtx and evtx_records_exceed(file_list, file_count * UNIFIED_MAX_EVTX_RECORDS):
+            return (
+                "per-file",
+                f"Many small files, but over {UNIFIED_MAX_EVTX_RECORDS:,} EVTX records each "
+                f"on average ({file_count} files)",
+                stats,
+            )
         return (
             "unified",
             f"Many small files detected ({file_count} files, avg {format_size(avg_size)})",

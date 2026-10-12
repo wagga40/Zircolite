@@ -445,6 +445,65 @@ class TestEvtxMemoryEstimate:
         assert (other_stats["executor"], other_stats["parallel_workers"]) == ("process", 3)
 
 
+def _evtx_with_records(path: Path, chunks: list[tuple[int, int]]) -> Path:
+    """An EVTX header followed by one chunk per (first, last) record-number pair."""
+    import struct
+
+    data = bytearray(EVTX_HEAD.ljust(4096, b"\x00"))
+    for first, last in chunks:
+        chunk = bytearray(65536)
+        chunk[:8] = b"ElfChnk\x00"
+        struct.pack_into("<QQ", chunk, 8, first, last)
+        data += chunk
+    path.write_bytes(bytes(data))
+    return path
+
+
+class TestEvtxRecordCount:
+    """Records are counted from chunk headers, without parsing a record."""
+
+    def test_sums_the_chunks(self, tmp_path):
+        from zircolite.parallel import evtx_record_count
+
+        path = _evtx_with_records(tmp_path / "a.evtx", [(1, 100), (101, 250)])
+        assert evtx_record_count(path) == 250
+
+    def test_skips_chunks_that_cannot_hold_their_claimed_records(self, tmp_path):
+        from zircolite.parallel import evtx_record_count
+
+        path = _evtx_with_records(tmp_path / "a.evtx", [(1, 100), (1, 2**64 - 1), (500, 10), (101, 150)])
+        assert evtx_record_count(path) == 150
+
+    def test_stops_at_the_first_missing_or_truncated_chunk(self, tmp_path):
+        from zircolite.parallel import evtx_record_count
+
+        path = _evtx_with_records(tmp_path / "a.evtx", [(1, 10), (11, 20)])
+        with open(path, "ab") as handle:
+            handle.write(b"ElfChnk\x00" + b"\x01" * 8)
+        assert evtx_record_count(path) == 20
+        gap = _evtx_with_records(tmp_path / "b.evtx", [(1, 10), (0, 0), (11, 20)])
+        with open(gap, "r+b") as handle:
+            handle.seek(4096 + 65536)
+            handle.write(b"\x00" * 8)
+        assert evtx_record_count(gap) == 10
+
+    def test_other_inputs_hold_no_records(self, tmp_path):
+        from zircolite.parallel import evtx_record_count
+
+        other = tmp_path / "a.json"
+        other.write_bytes(b'{"a": 1}\n')
+        assert evtx_record_count(other) == 0
+        assert evtx_record_count(tmp_path / "missing.evtx") == 0
+
+    def test_limit_stops_the_scan(self, tmp_path):
+        from zircolite.parallel import evtx_record_count, evtx_records_exceed
+
+        path = _evtx_with_records(tmp_path / "a.evtx", [(1, 1000), (1001, 2000), (2001, 3000)])
+        assert evtx_record_count(path, limit=1500) == 2000
+        assert evtx_records_exceed([path, path], 5999)
+        assert not evtx_records_exceed([path, path], 6000)
+
+
 # ============================================================================
 # LPT SCHEDULING
 # ============================================================================
