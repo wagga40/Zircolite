@@ -55,6 +55,14 @@ column takes its type from the first value it receives: `INTEGER`, `NUMERIC` for
 ranges compare numerically), or `TEXT`. Integers beyond SQLite's signed 64-bit range are
 stored as floats and may be rounded; the run warns once and names the fields.
 
+Every table also declares `rowid` and `oid` as `TEXT`. SQLite reads those bare names as the
+row ID unless a column declares them, and since 3.54 ALTER TABLE cannot add such a column. A
+field of either name (`row_id` becomes `rowid` once cleaned) is therefore stored as text, and
+a rule naming one reads that field, NULL for an event without it. Detections and CSV headers
+leave the columns out unless an event filled them; a database saved with `--dbfile` keeps
+them. A correlation plan that identifies events by `rowid`, the backend's default, is
+refused; Zircolite converts rules with `row_id`.
+
 **Spellings.** SQLite column names are case-insensitive, so `ProcessId` and `ProcessID`
 share one column, named after the first spelling stored. Ingestion records every event that
 spelled a field otherwise (tables `field_spellings` and `logs_spelling`), and output prints
@@ -153,9 +161,9 @@ detections are identical with the filter on or off.
   built. It only happens where candidates will be built (past the `auto` thresholds), and
   all at once or not at all: a failure rolls the schema back. CSV output and rulesets
   containing correlations or legacy rules without field metadata keep the ordinary per-rule
-  repair, preserving headers and column-limit behaviour. Fields named `rowid`, `oid`,
-  `_rowid_`, `true` or `false` also keep it: a column of that name would change what the
-  bare name means in SQL.
+  repair, preserving headers and column-limit behaviour. Fields named `_rowid_`, `true` or
+  `false` also keep it: a column of that name would change what the bare name means in SQL.
+  `rowid` and `oid` are declared in every table from the start.
 - Candidates reach SQLite as `logs.row_id IN (SELECT value FROM json_each('[...]'))` ahead
   of the original predicate. A rule with no candidates runs `SELECT 1 WHERE 0`. A candidate
   set holding at least half the rows the rule's bounds select is bypassed.

@@ -8,6 +8,7 @@ the rows that carried another spelling, and output gives each one back.
 """
 
 import sqlite3
+from collections.abc import Iterable
 from typing import Any
 
 import orjson
@@ -99,6 +100,15 @@ class FieldSpellings:
         if lower in self._time:
             return [self._time[lower]]
         return [column, *sorted(self._others.get(lower, set()) - {column})]
+
+    def prints_column_name(self, column: str, row_ids: Iterable[int]) -> bool:
+        """Whether one of ``row_ids`` prints its ``column`` value under the column's own name."""
+        lower = column.lower()
+        respelled = BitMap64()
+        for rows, names in self._spellings:
+            if names.get(lower, column) != column:
+                respelled |= rows
+        return any((row_id & _UNSIGNED) not in respelled for row_id in row_ids)
 
     def restore(self, event: dict[str, Any]) -> dict[str, Any]:
         """``event`` under the names it is printed with."""
