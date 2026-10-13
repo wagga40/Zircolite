@@ -21,7 +21,6 @@ import operator
 import os
 import re
 import shutil
-import sqlite3
 import tempfile
 import types
 from collections.abc import Callable, Generator, Iterable
@@ -408,41 +407,15 @@ def _quote_identifier(name: str) -> str:
 # SQLite reads these names as the row ID unless a column declares them.
 _ROWID_ALIASES = frozenset({"rowid", "oid", "_rowid_"})
 
-
-def _add_rowid_alias_column(cursor, column: str, sql_type: str) -> None:
-    """Add a column named after the row ID to ``logs`` by rebuilding the table.
-
-    SQLite 3.54 refuses these names in ALTER TABLE ADD COLUMN, yet a table may
-    still declare them, and a declared column takes the name over from the row
-    ID. The copy keeps every row_id, the AUTOINCREMENT counter and the indexes.
-    """
-    found = cursor.execute("SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'logs'").fetchone()
-    definition = found[0].rstrip() if found and found[0] else ""
-    if not definition.endswith(")"):
-        raise sqlite3.OperationalError("the logs table definition cannot be extended")
-    indexes = [sql for (sql,) in cursor.execute(
-        "SELECT sql FROM sqlite_master WHERE type = 'index' AND tbl_name = 'logs' AND sql IS NOT NULL"
-    ).fetchall()]
-    counted = cursor.execute("SELECT 1 FROM sqlite_master WHERE name = 'sqlite_sequence'").fetchone()
-    columns = ", ".join(_quote_identifier(row[1]) for row in cursor.execute("PRAGMA table_info(logs)").fetchall())
-    cursor.execute("SAVEPOINT zircolite_rowid_alias")
-    try:
-        cursor.execute("ALTER TABLE logs RENAME TO zircolite_logs_rebuild")
-        # Identifiers cannot be bound: column names go through _quote_identifier,
-        # and the definition is the one SQLite stored for this table.
-        cursor.execute(f"{definition[:-1]}, {_quote_identifier(column)} {sql_type})")
-        if counted:
-            cursor.execute("UPDATE sqlite_sequence SET name = ? WHERE name = ?",
-                           ("logs", "zircolite_logs_rebuild"))
-        cursor.execute(f"INSERT INTO logs ({columns}) SELECT {columns} FROM zircolite_logs_rebuild")  # noqa: S608
-        cursor.execute("DROP TABLE zircolite_logs_rebuild")
-        for index in indexes:
-            cursor.execute(index)
-    except BaseException:
-        cursor.execute("ROLLBACK TO zircolite_rowid_alias")
-        raise
-    finally:
-        cursor.execute("RELEASE zircolite_rowid_alias")
+# Every logs table declares the aliases an event field can be called (field names
+# lose their underscores, so none is called _rowid_). SQLite 3.54 refuses them in
+# ALTER TABLE ADD COLUMN, and rebuilding the table to add one later slows every
+# insert that follows it.
+ROWID_ALIAS_COLUMNS = ("rowid", "oid")
+_CREATE_LOGS_TABLE = (
+    "CREATE TABLE IF NOT EXISTS logs (row_id INTEGER PRIMARY KEY AUTOINCREMENT, "
+    '"rowid" TEXT COLLATE NOCASE, "oid" TEXT COLLATE NOCASE)'
+)
 
 
 def _dedupe_case_variant_columns(
@@ -2192,29 +2165,19 @@ class StreamingEventProcessor:
                 sql_type = field_types.get(canonical, "TEXT COLLATE NOCASE")
                 try:
                     cursor.execute(f"ALTER TABLE logs ADD COLUMN {_quote_identifier(col)} {sql_type}")
-                except Exception as exc:
-                    error: Exception = exc
-                else:
                     db_columns.add(col_lower)
                     self._column_spellings[col_lower] = col
                     schema_changed = True
-                    continue
-                # Usually the column already exists; refresh from the real
-                # schema and check. If it truly is not there, the INSERT is
-                # about to fail on it, so say which column and why.
-                db_columns = self._read_columns(cursor)
-                if col_lower in _ROWID_ALIASES and col_lower not in db_columns:
-                    try:
-                        _add_rowid_alias_column(cursor, col, sql_type)
-                        schema_changed = True
-                    except sqlite3.Error as exc:
-                        error = exc
+                except Exception as exc:
+                    # Usually the column already exists; refresh from the real
+                    # schema and check. If it truly is not there, the INSERT is
+                    # about to fail on it, so say which column and why.
                     db_columns = self._read_columns(cursor)
-                if col_lower not in db_columns:
-                    self.logger.warning(
-                        f"[yellow]   [!] Could not add column '{literal(col)}' to the "
-                        f"events table: {literal(error)}[/]"
-                    )
+                    if col_lower not in db_columns:
+                        self.logger.warning(
+                            f"[yellow]   [!] Could not add column '{literal(col)}' to the "
+                            f"events table: {literal(exc)}[/]"
+                        )
 
         return schema_changed
 
@@ -2227,11 +2190,7 @@ class StreamingEventProcessor:
         """
         cursor = db_connection.cursor()
         try:
-            cursor.execute("""
-                CREATE TABLE IF NOT EXISTS logs (
-                    row_id INTEGER PRIMARY KEY AUTOINCREMENT
-                )
-            """)
+            cursor.execute(_CREATE_LOGS_TABLE)
             if self.fulltext_capture:
                 ensure_provenance(db_connection)
             db_connection.commit()

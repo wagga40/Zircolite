@@ -18,6 +18,9 @@ PLAN_VERSION = 3
 # ISO 8601 text, or Unix seconds, milliseconds or microseconds.
 TIMESTAMP_FORMATS = ("iso", "unix", "unix_ms", "unix_us")
 
+# Event fields in every logs table (streaming.ROWID_ALIAS_COLUMNS), so not the row ID.
+_FIELD_NOT_ROW_ID = frozenset({"rowid", "oid"})
+
 # Alert summary columns, in the order the backend reports them, then the
 # fields Zircolite adds.
 CORRELATION_COLUMNS = [
@@ -74,6 +77,11 @@ def plan_problem(plan: Any) -> str | None:
     missing = [key for key in _PLAN_KEYS if key not in plan]
     if missing:
         return f"correlation plan lacks {', '.join(missing)}"
+    if str(plan["event_id_field"]).lower() in _FIELD_NOT_ROW_ID:
+        return (
+            f"correlation plan identifies events by {plan['event_id_field']!r}, an event field here; "
+            "convert the rule with Zircolite, which uses row_id"
+        )
     if "sqlite_min_version" in plan and _version_tuple(plan["sqlite_min_version"]) is None:
         return f"correlation plan names an unreadable SQLite version {plan['sqlite_min_version']!r}"
     needed = required_sqlite(plan)

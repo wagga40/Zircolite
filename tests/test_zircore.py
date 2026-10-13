@@ -2213,10 +2213,10 @@ class TestRulesThatSilentlyMatchedNothing:
     def test_rowid_alias_in_a_rule_is_not_widened_into_logs(
         self, field_mappings_file, test_logger
     ):
-        """Bare, oid means the row ID: the other absent field is still widened.
+        """In a table that does not declare oid, the other absent field is still widened.
 
-        SQLite 3.54 refuses to add a column of that name, which used to abort
-        the widening and leave the rule unevaluated.
+        SQLite 3.54 refuses to add a column of that name, and the refusal must
+        not abort the widening and leave the rule unevaluated.
         """
         core = self._core(field_mappings_file, test_logger)
         try:
@@ -2228,6 +2228,7 @@ class TestRulesThatSilentlyMatchedNothing:
             assert "oid" not in {column.lower() for column in core._get_table_columns()}
         finally:
             core.close()
+
 
     def test_correlation_alias_is_not_widened_into_logs(
         self, field_mappings_file, test_logger
@@ -2319,6 +2320,71 @@ class TestRulesThatSilentlyMatchedNothing:
         assert '"IsExecutable" INTEGER' not in statement
         assert normalised["IsExecutable"] == "true"
         assert normalised["EventID"] == 1
+
+
+class TestRowidAliasFields:
+    """Every logs table declares rowid and oid, so those names always mean event fields."""
+
+    def _ingest(self, events, field_mappings_file, test_logger, default_args_config, tmp_path, **config):
+        json_file = tmp_path / "events.json"
+        json_file.write_text("".join(json.dumps(event) + "\n" for event in events))
+        core = ZircoliteCore(
+            config=field_mappings_file,
+            processing_config=ProcessingConfig(disable_progress=True, **config),
+            logger=test_logger,
+        )
+        core.run_streaming([str(json_file)], input_type="json", args_config=default_args_config,
+                           disable_progress=True)
+        return core
+
+    def test_a_rule_naming_oid_reads_the_field_not_the_row_id(
+        self, field_mappings_file, test_logger, default_args_config, tmp_path
+    ):
+        events = [{"Image": "a.exe"}, {"Image": "b.exe", "OID": "1.3.6.1.X"}, {"Image": "c.exe"}]
+        core = self._ingest(events, field_mappings_file, test_logger, default_args_config, tmp_path)
+        try:
+            # Every row ID is above 0: only the event with an OID matches.
+            matches = core.execute_select_query("SELECT * FROM logs WHERE oid > 0", rule_title="t")
+            assert [match["Image"] for match in matches] == ["b.exe"]
+            matches = core.execute_select_query("SELECT * FROM logs WHERE oid = '1.3.6.1.x'", rule_title="t")
+            assert [(match["Image"], match["OID"]) for match in matches] == [("b.exe", "1.3.6.1.X")]
+            assert all({"oid", "rowid"}.isdisjoint(match) for match in matches)
+        finally:
+            core.close()
+
+    @pytest.mark.parametrize("spellings", [(), ("OID",), ("OID", "oid")], ids=["none", "OID", "both"])
+    def test_csv_header_names_only_the_aliases_an_event_filled(
+        self, field_mappings_file, test_logger, default_args_config, tmp_path, spellings
+    ):
+        events = [{"Image": "a.exe", spelling: f"1.3.6.{n}"} for n, spelling in enumerate(spellings)]
+        events.append({"Image": "a.exe"})
+        core = self._ingest(events, field_mappings_file, test_logger, default_args_config, tmp_path,
+                            csv_mode=True)
+        try:
+            core.load_ruleset_from_var([{
+                "title": "t", "id": "t-1", "description": "", "level": "high", "tags": [],
+                "rule": ["SELECT * FROM logs WHERE Image = 'a.exe'"],
+            }], rule_filters=None)
+            output_file = tmp_path / "out.csv"
+            core.execute_ruleset(str(output_file), write_mode="w", last_ruleset=True)
+        finally:
+            core.close()
+
+        with output_file.open(encoding="utf-8", newline="") as handle:
+            header, *rows = list(csv.reader(handle, delimiter=core.delimiter))
+        # The table names the column oid whatever the events called it.
+        assert "rowid" not in header
+        assert sorted(name for name in header if name.lower() == "oid") == sorted(spellings)
+        for n, spelling in enumerate(spellings):
+            assert [row[header.index(spelling)] for row in rows].count(f"1.3.6.{n}") == 1
+
+    def test_rule_test_schema_declares_the_aliases_once(self):
+        statement = ZircoliteCore._infer_field_statement([{"Image": "a.exe", "OID": 5}])
+
+        assert '"Image" TEXT COLLATE NOCASE' in statement
+        assert '"OID" INTEGER' in statement
+        assert '"rowid" TEXT COLLATE NOCASE' in statement
+        assert '"oid"' not in statement
 
 
 class TestSchemaPreflight:

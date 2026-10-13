@@ -365,6 +365,15 @@ class TestPlanHelpers:
 
         assert "unreadable SQLite version" in plan_problem(plan)
 
+    @pytest.mark.parametrize("field", ["rowid", "OID"])
+    def test_a_plan_keyed_on_a_rowid_alias_is_a_problem(self, field):
+        """Every logs table declares these as event fields, so the evidence would carry no event IDs."""
+        plan = {"version": 2, "prepare": [], "query": "", "diagnostics": "", "required_fields": {},
+                "source_tables": {}, "event_id_field": field}
+
+        assert f"identifies events by {field!r}" in plan_problem(plan)
+        assert plan_problem({**plan, "event_id_field": "row_id"}) is None
+
     def test_occurrence_time_is_iso_utc_with_milliseconds(self):
         assert occurrence_iso(1704067205.5) == "2024-01-01T00:00:05.500Z"
         assert occurrence_iso(1e20) is None

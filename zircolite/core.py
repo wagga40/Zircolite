@@ -78,7 +78,12 @@ from .sqlscan import (
     rebalance_sql,
     scan_query,
 )
-from .streaming import _ROWID_ALIASES, StreamingEventProcessor, StrictParseError
+from .streaming import (
+    _ROWID_ALIASES,
+    ROWID_ALIAS_COLUMNS,
+    StreamingEventProcessor,
+    StrictParseError,
+)
 from .utils import rounded_integer_warning, sanitize_row_for_csv, write_csv_header
 
 # Translation table for stripping newline characters from CSV descriptions.
@@ -1487,12 +1492,35 @@ class ZircoliteCore:
             columns = []
         columns = [c for c in columns if c != "row_id" and c.translate(_ASCII_LOWER) != FIELD]
         spellings = self._field_spellings()
+        unprinted = self._unprinted_rowid_aliases(columns, spellings)
         if columns and spellings is not None:
             # Rows keep their own spelling, so each spelling needs its own column.
             columns = [name for column in columns for name in spellings.names_for(column)]
+        columns = [name for name in columns if name not in unprinted]
         if columns:
             return columns
         return list(rule_results["matches"][0].keys())
+
+    def _unprinted_rowid_aliases(self, columns: list[str], spellings: FieldSpellings | None) -> set[str]:
+        """The row ID alias columns no row prints a value under.
+
+        Every logs table declares them, so unlike other columns they may hold
+        nothing, or carry a spelling no event used (``oid`` for ``OID``).
+        """
+        unprinted = set()
+        cursor = self._get_cursor()
+        for name in columns:
+            if name.translate(_ASCII_LOWER) not in ROWID_ALIAS_COLUMNS:
+                continue
+            cursor.execute(f'SELECT row_id FROM logs WHERE "{self.escape_identifier(name)}" IS NOT NULL')  # noqa: S608 -- quoted column name
+            row_ids = (row_id for (row_id,) in cursor)
+            if spellings is None:
+                printed = next(row_ids, None) is not None
+            else:
+                printed = spellings.prints_column_name(name, row_ids)
+            if not printed:
+                unprinted.add(name)
+        return unprinted
 
     @timed_stage("detection")
     def execute_ruleset(
@@ -1800,6 +1828,9 @@ class ZircoliteCore:
                 elif isinstance(value, float):
                     types[key] = "REAL"
         keys = sorted({k for ev in events for k in ev})
+        # Declared as in every logs table, so a rule reads these as fields, not the row ID.
+        named = {k.translate(_ASCII_LOWER) for k in keys}
+        keys += [name for name in ROWID_ALIAS_COLUMNS if name not in named]
         return ", ".join(
             '"{}" {}'.format(k.replace('"', '""'), types.get(k, "TEXT COLLATE NOCASE"))
             for k in keys
