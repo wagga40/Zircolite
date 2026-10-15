@@ -135,7 +135,6 @@ class TestLoopsObserveShutdown:
             db_location=":memory:",
             delimiter=";",
             rulesets=sample_ruleset,
-            rule_filters=None,
             outfile=str(tmp_path / "detected_events.json"),
             ready_for_templating=False,
             package=False,

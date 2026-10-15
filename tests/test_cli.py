@@ -623,6 +623,94 @@ class TestCLIRuleFiltering:
         assert len(detections) == 0
 
 
+class TestRuleFilterAtLoad:
+    """-R selects the rules once, so everything derived from the ruleset agrees with it."""
+
+    CONFIG: ClassVar[dict] = {
+        "exclusions": [], "useless": [], "alias": {}, "split": {},
+        "mappings": {"Event.System.EventID": "EventID", "Event.EventData.CommandLine": "CommandLine"},
+        "transforms_enabled": False, "transforms": {},
+    }
+
+    def _argv(self, tmp_path, rules, *extra):
+        events = tmp_path / "events.json"
+        events.write_text('{"Event": {"System": {"EventID": 1}, "EventData": {"CommandLine": "cmd.exe /c whoami"}}}')
+        ruleset = tmp_path / "ruleset.json"
+        ruleset.write_text(json.dumps(rules))
+        config = tmp_path / "config.json"
+        config.write_text(json.dumps(self.CONFIG))
+        output = tmp_path / "detected_events.json"
+        argv = ["zircolite.py", "-e", str(events), "-r", str(ruleset), "-c", str(config), "-j",
+                "-o", str(output), *get_log_arg(tmp_path), *extra]
+        return argv, output
+
+    def test_a_rule_sharing_sql_with_a_removed_one_still_detects(self, tmp_path):
+        sql = ["SELECT * FROM logs WHERE CommandLine LIKE '%whoami%'"]
+        argv, output = self._argv(tmp_path, [
+            {"title": "Whoami - Sysmon", "id": "a", "level": "high", "tags": [], "rule": sql},
+            {"title": "Whoami Discovery", "id": "b", "level": "medium", "tags": [], "rule": sql},
+        ], "-R", "Sysmon")
+
+        with patch("sys.argv", argv):
+            zircolite_script.main()
+
+        assert [result["title"] for result in json.loads(output.read_text())] == ["Whoami Discovery"]
+
+    def test_removing_every_rule_is_an_error(self, tmp_path):
+        argv, _ = self._argv(tmp_path, [
+            {"title": "Noisy", "id": "a", "level": "high", "tags": [],
+             "rule": ["SELECT * FROM logs WHERE CommandLine LIKE '%whoami%'"]},
+        ], "-R", "Noisy")
+
+        with patch("sys.argv", argv), pytest.raises(SystemExit) as exc:
+            zircolite_script.main()
+
+        assert exc.value.code == 1
+
+    def test_an_empty_filter_is_refused(self, tmp_path):
+        # "" is a substring of every title: it would remove the whole ruleset.
+        argv, _ = self._argv(tmp_path, [
+            {"title": "Kept", "id": "a", "level": "high", "tags": [],
+             "rule": ["SELECT * FROM logs WHERE CommandLine LIKE '%whoami%'"]},
+        ], "-R", "")
+
+        with patch("sys.argv", argv), pytest.raises(SystemExit) as exc:
+            zircolite_script.main()
+
+        assert exc.value.code == 2
+
+    def test_coverage_counts_only_the_rules_that_ran(self, tmp_path):
+        argv, _ = self._argv(tmp_path, [
+            {"title": "Noisy", "id": "a", "level": "high", "tags": [],
+             "rule": ["SELECT * FROM logs WHERE CommandLine LIKE '%cmd%'"]},
+            {"title": "Kept", "id": "b", "level": "high", "tags": [],
+             "rule": ["SELECT * FROM logs WHERE CommandLine LIKE '%whoami%'"]},
+        ], "-R", "Noisy")
+
+        with patch("sys.argv", argv), patch.object(zircolite_script, "print_stats") as stats:
+            zircolite_script.main()
+
+        assert stats.call_args.kwargs["total_rules"] == 1
+
+    def test_a_removed_keyword_rule_does_not_turn_full_text_capture_on(self, tmp_path):
+        from zircolite import processing
+        argv, _ = self._argv(tmp_path, [
+            {"title": "Keyword", "id": "a", "level": "high", "tags": [], "schema_version": 3,
+             "fulltext": [{"table": "logs", "field": "_sigma_fulltext", "representation": "source-values-v1"}],
+             "rule": ["SELECT * FROM logs WHERE _sigma_fulltext LIKE '%whoami%'"]},
+            {"title": "Plain", "id": "b", "level": "high", "tags": [],
+             "rule": ["SELECT * FROM logs WHERE CommandLine LIKE '%whoami%'"]},
+        ], "-R", "Keyword")
+
+        real = processing._needs_fulltext
+        with patch("sys.argv", argv), patch.object(processing, "_needs_fulltext", wraps=real) as needs:
+            zircolite_script.main()
+
+        calls = list(needs.call_args_list)
+        assert calls
+        assert not any(real(*call.args) for call in calls)
+
+
 class TestCLITimeFiltering:
     """Tests for time-based filtering."""
 
@@ -3029,6 +3117,7 @@ class TestTestRulesCLI:
         """--test-rules combined with -R must not raise TypeError (flatten ordering)."""
         ruleset = self._write_ruleset(tmp_path, [
             {"title": "Noisy Rule", "id": "1", "rule": ["SELECT 1"]},
+            {"title": "Kept Rule", "id": "2", "rule": ["SELECT 2"]},
         ])
         test_file = tmp_path / "tests.json"
         test_file.write_text(json.dumps([]))
@@ -3039,8 +3128,23 @@ class TestTestRulesCLI:
             '-R', 'Noisy', '-n',
         ]):
             zircolite_script.main()
-        # The only rule is filtered out -> no results -> success
+        # No test cases for the rule left -> nothing failed
         assert exc_info.value.code == 0
+
+    def test_test_rules_with_every_rule_filtered_out_fails(self, tmp_path):
+        ruleset = self._write_ruleset(tmp_path, [
+            {"title": "Noisy Rule", "id": "1", "rule": ["SELECT 1"]},
+        ])
+        test_file = tmp_path / "tests.json"
+        test_file.write_text(json.dumps([]))
+
+        with pytest.raises(SystemExit) as exc_info, patch('sys.argv', [
+            'zircolite.py', '-r', ruleset,
+            '--test-rules', str(test_file),
+            '-R', 'Noisy', '-n',
+        ]):
+            zircolite_script.main()
+        assert exc_info.value.code == 1
 
     def test_test_rules_exit_zero_on_pass(self, tmp_path):
         ruleset = self._write_ruleset(tmp_path, [
@@ -4148,11 +4252,11 @@ class TestMinLevelOption:
 
 
 class TestCorrelationRuleCount:
-    def test_rules_removed_by_rulefilter_do_not_count(self):
+    def test_counts_the_correlation_rules(self):
+        # -R has already removed its rules when the ruleset gets here.
         rules = [{"title": "burst", "correlation": True}, {"title": "noise", "correlation": True}, {"title": "plain"}]
 
-        assert zircolite_script._correlation_rule_count(rules, None) == 2
-        assert zircolite_script._correlation_rule_count(rules, ["noi"]) == 1
+        assert zircolite_script._correlation_rule_count(rules) == 2
 
     def test_several_databases_are_said_to_stay_apart(self, caplog):
         logger = logging.getLogger("correlation-databases")

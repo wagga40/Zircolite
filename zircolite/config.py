@@ -123,6 +123,8 @@ class RulesetConfig:
     timestamp_format: str = "iso"
     # Lowest rule level kept, one of RULE_LEVELS; None keeps every rule
     min_level: str | None = None
+    # -R: rules whose title contains any of these are removed at load time
+    rule_filters: list[str] | None = None
 
 
 @dataclass

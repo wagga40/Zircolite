@@ -46,6 +46,7 @@ from .config import RULE_LEVELS, RulesetConfig
 
 # Rich console for styled output
 from .console import console, is_quiet, literal, make_file_link
+from .core import runnable_rules
 from .correlations import is_correlation_plan_rule, plan_problem
 from .event_filter import EventFilter
 from .fulltext import FIELD as FULLTEXT_FIELD
@@ -455,6 +456,9 @@ class RulesetHandler:
         self.time_field = cfg.time_field
         self.timestamp_format = cfg.timestamp_format
         self.min_level = cfg.min_level
+        self.rule_filters = cfg.rule_filters
+        # Rules read before -R and --min-level, so an empty selection can say why
+        self.loaded_rule_count = 0
         # The native Sigma paths converted in this run, if any
         self.yaml_paths: list[Path] = []
         self.pipelines = []
@@ -489,6 +493,11 @@ class RulesetHandler:
         self.rulesets = [
             item for sub_ruleset in raw_rulesets if sub_ruleset for item in sub_ruleset
         ]
+        self.loaded_rule_count = len(self.rulesets)
+        # Before duplicate removal: filtering its survivor afterwards also lost
+        # every rule that shared its SQL under another title.
+        if self.rule_filters:
+            self.rulesets = self._without_filtered(self.rulesets, self.rule_filters)
         if self.min_level is not None:
             self.rulesets = self._at_or_above(self.rulesets, self.min_level)
 
@@ -547,6 +556,13 @@ class RulesetHandler:
                     self.logger.info(
                         f"[+] Event filter enabled: [cyan]{stats['eventids_count']}[/] eventIDs"
                     )
+
+    def _without_filtered(self, rules: list[dict[str, Any]], rule_filters: list[str]) -> list[dict[str, Any]]:
+        """The rules whose title contains none of *rule_filters* (case-sensitive)."""
+        kept = runnable_rules(rules, rule_filters)
+        if len(kept) < len(rules):
+            self.logger.info(f"[+] {len(rules) - len(kept)} rule(s) removed by --rulefilter")
+        return kept
 
     def _at_or_above(self, rules: list[dict[str, Any]], level: str) -> list[dict[str, Any]]:
         """The rules at *level* or above; a rule without a known level counts as informational."""
