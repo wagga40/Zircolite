@@ -319,6 +319,64 @@ class TestLayouts:
         assert written["ExtraFields"] == "Hashes: MD5=00 ¦ UtcTime: 2024-01-01 00:00:00.000"
 
 
+class TestTimezones:
+    @pytest.mark.parametrize("zone,written", [
+        ("UTC", "2024-07-01T10:40:00.123456+00:00"),
+        ("+05:30", "2024-07-01T16:10:00.123456+05:30"),
+        ("-0300", "2024-07-01T07:40:00.123456-03:00"),
+        ("Europe/Paris", "2024-07-01T12:40:00.123456+02:00"),
+        ("America/New_York", "2024-07-01T06:40:00.123456-04:00"),
+    ])
+    def test_the_timestamp_is_written_in_the_zone(self, tmp_path, zone, written):
+        spool = make_spool(tmp_path, "minimal", timezone=zone)
+
+        _, path = write(tmp_path, spool, result(WHOAMI, event(time="2024-07-01T10:40:00.123456Z")))
+
+        assert jsonl(path)[0]["Timestamp"] == written
+
+    def test_daylight_saving_follows_the_instant(self, tmp_path):
+        spool = make_spool(tmp_path, "minimal", timezone="Europe/Paris")
+
+        _, path = write(tmp_path, spool, result(WHOAMI, event(1, time="2024-01-15T12:00:00Z"),
+                                                event(2, time="2024-07-15T12:00:00Z")))
+
+        assert [row["Timestamp"][-6:] for row in jsonl(path)] == ["+01:00", "+02:00"]
+
+    @pytest.mark.skipif(not hasattr(__import__("time"), "tzset"), reason="needs time.tzset")
+    def test_local_is_the_zone_of_this_machine(self, tmp_path, monkeypatch):
+        import time
+
+        monkeypatch.setenv("TZ", "Asia/Tokyo")
+        time.tzset()
+        try:
+            spool = make_spool(tmp_path, "minimal", timezone="local")
+            _, path = write(tmp_path, spool, result(WHOAMI, event(time="2024-07-01T10:40:00Z")))
+        finally:
+            monkeypatch.undo()
+            time.tzset()
+
+        assert jsonl(path)[0]["Timestamp"] == "2024-07-01T19:40:00.000000+09:00"
+
+    def test_the_order_is_the_instants_whatever_the_zone(self, tmp_path):
+        rows = [event(n, time=f"2024-07-01T{n:02d}:00:00Z") for n in range(1, 6)]
+        orders = []
+        for zone in ("UTC", "-11:00", "+14:00"):
+            run = tmp_path / zone.replace(":", "")
+            spool = make_spool(run, "standard", timezone=zone)
+            _, path = write(run, spool, result(WHOAMI, *reversed(rows)))
+            orders.append([row["RecordID"] for row in jsonl(path)])
+
+        assert orders == [[1, 2, 3, 4, 5]] * 3
+
+    @pytest.mark.parametrize("zone,named", [("Mars/Olympus", "no such time zone"), ("+24:00", "-23:59 to +23:59"),
+                                            ("+05:75", "-23:59 to +23:59")])
+    def test_an_unknown_zone_is_refused(self, zone, named):
+        from zircolite.timeline import TimezoneError, resolve_timezone
+
+        with pytest.raises(TimezoneError, match=named.replace("+", r"\+")):
+            resolve_timezone(zone)
+
+
 class TestOrder:
     def test_rows_follow_the_time_then_the_ruleset(self, tmp_path):
         spool = make_spool(tmp_path, "minimal")

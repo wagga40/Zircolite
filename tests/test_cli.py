@@ -766,7 +766,7 @@ class TestTimelineOptions:
         assert (tmp_path / "timeline.csv").read_text().startswith("Timestamp,")
 
     @pytest.mark.parametrize("flags", [["--timeline-profile", "full"], ["--keep-duplicates"],
-                                       ["--timeline-config", "config/timeline.yaml"]])
+                                       ["--timeline-config", "config/timeline.yaml"], ["--timezone", "local"]])
     def test_a_timeline_flag_without_a_timeline_is_refused(self, tmp_path, flags):
         assert self._exit_code(self._argv(tmp_path, *flags)) == 2
 
@@ -787,6 +787,19 @@ class TestTimelineOptions:
         argv = self._argv(tmp_path, "--timeline", str(tmp_path / "t.csv"), "--timeline-profile", "verbose")
 
         assert self._exit_code(argv) == 2
+
+    def test_an_unknown_timezone_is_refused(self, tmp_path):
+        argv = self._argv(tmp_path, "--timeline", str(tmp_path / "t.csv"), "--timezone", "Mars/Olympus")
+
+        assert self._exit_code(argv) == 2
+
+    def test_the_timezone_reaches_the_timeline(self, tmp_path):
+        timeline = tmp_path / "timeline.jsonl"
+
+        with patch("sys.argv", self._argv(tmp_path, "--timeline", str(timeline), "--timezone", "+05:30")):
+            zircolite_script.main()
+
+        assert json.loads(timeline.read_text().splitlines()[0])["Timestamp"] == "2024-01-01T05:30:00.000000+05:30"
 
     def test_a_broken_timeline_configuration_fails_the_run(self, tmp_path):
         broken = tmp_path / "timeline.yaml"

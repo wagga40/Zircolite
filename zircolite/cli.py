@@ -120,8 +120,10 @@ from zircolite.timeline import (
     TimelineError,
     TimelineSpool,
     TimelineStats,
+    TimezoneError,
     build_timeline,
     load_presentation,
+    resolve_timezone,
     timeline_format,
 )
 from zircolite.utils import COMPRESSED_SUFFIXES
@@ -216,6 +218,7 @@ def parse_arguments() -> argparse.Namespace:
     timeline_args.add_argument("--timeline-profile", default=None, metavar="NAME", help=f"Timeline columns: minimal, standard, full, or a profile of --timeline-config (default: {DEFAULTS['timeline_profile']})")
     timeline_args.add_argument("--timeline-config", default=None, metavar="FILE", help=f"Timeline profiles, column fields and Details settings (default: {DEFAULTS['timeline_config']})")
     timeline_args.add_argument("--keep-duplicates", action="store_true", help="Keep the timeline rows that repeat a detection from another copy of the same log")
+    timeline_args.add_argument("--timezone", default=None, metavar="TZ", help=f"Time zone of the timeline's timestamps: UTC, local, an offset such as +02:00, or a name such as Europe/Paris (default: {DEFAULTS['timezone']})")
 
     # Advanced configuration options
     config_formats_args = parser.add_argument_group('⚙️  ADVANCED CONFIGURATION')
@@ -752,6 +755,7 @@ def _timeline_flags_given(args: argparse.Namespace) -> list[str]:
         ("--timeline-profile", "timeline_profile"),
         ("--timeline-config", "timeline_config"),
         ("--keep-duplicates", "keep_duplicates"),
+        ("--timezone", "timezone"),
     ) if getattr(args, dest, None) not in (None, False)]
 
 
@@ -802,6 +806,11 @@ def _check_timeline_options(args: argparse.Namespace, flags_given: list[str],
         presentation = load_presentation(args.timeline_config)
     except TimelineConfigError as exc:
         quit_on_error(f"[red]    [-] Invalid timeline configuration: {literal(exc)}[/]", logger)
+    try:
+        resolve_timezone(args.timezone)
+    except TimezoneError as exc:
+        print_error_panel("Invalid Timeline", f"Unknown --timezone: {literal(exc)}", "Run with --timezone UTC to keep UTC.")
+        sys.exit(2)
     columns = presentation.profiles.get(args.timeline_profile)
     if columns is None:
         print_error_panel(
@@ -831,6 +840,7 @@ def _prepare_timeline(args: argparse.Namespace, rulesets: list[Any], presentatio
         columns=columns,
         presentation=presentation,
         fmt=timeline_format(args.timeline) or "csv",
+        timezone=args.timezone,
         time_field=args.timefield or "",
         timestamp_format=getattr(args, "timestamp_format", None) or "iso",
         rule_keys=rule_index(rulesets),

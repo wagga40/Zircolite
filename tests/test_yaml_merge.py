@@ -439,12 +439,22 @@ class TestTimelineResolution:
         assert (args.timeline, args.timeline_profile) == ("cli.csv", "minimal")
 
     def test_defaults_without_yaml(self):
-        args = _args(timeline=None, timeline_profile=None, timeline_config=None, keep_duplicates=False)
+        args = _args(timeline=None, timeline_profile=None, timeline_config=None, keep_duplicates=False,
+                     timezone=None)
 
         resolve(args, {})
 
-        assert (args.timeline, args.timeline_profile, args.timeline_config, args.keep_duplicates) == (
-            None, "standard", "config/timeline.yaml", False)
+        assert (args.timeline, args.timeline_profile, args.timeline_config, args.keep_duplicates, args.timezone) == (
+            None, "standard", "config/timeline.yaml", False, "UTC")
+
+    def test_the_timezone_comes_from_yaml_unless_the_cli_names_one(self):
+        from_yaml = _args(timezone=None)
+        from_cli = _args(timezone="local")
+
+        resolve(from_yaml, {"output": {"timezone": "Europe/Paris"}})
+        resolve(from_cli, {"output": {"timezone": "Europe/Paris"}})
+
+        assert (from_yaml.timezone, from_cli.timezone) == ("Europe/Paris", "local")
 
 
 class TestSettingsTable:

@@ -26,7 +26,7 @@ import tempfile
 from collections.abc import Iterable, Iterator
 from contextlib import ExitStack, suppress
 from dataclasses import dataclass, field
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime, timedelta, timezone, tzinfo
 from pathlib import Path
 from typing import Any, BinaryIO
 
@@ -73,6 +73,40 @@ class TimelineError(Exception):
 
 class TimelineConfigError(ValueError):
     """The timeline configuration cannot be used; the message names the key."""
+
+
+class TimezoneError(ValueError):
+    """A ``--timezone`` value that names no time zone."""
+
+
+# The zone each instant falls in on this machine, daylight saving included
+LOCAL = "local"
+_OFFSET = re.compile(r"([+-])(\d{2}):?(\d{2})")
+
+
+def resolve_timezone(name: str) -> tzinfo | str | None:
+    """None for UTC, ``LOCAL``, or the zone: ``±HH:MM`` or an IANA name such as ``Europe/Paris``."""
+    if name.upper() in ("UTC", "Z", "+00:00"):
+        return None
+    if name.lower() == LOCAL:
+        return LOCAL
+    offset = _OFFSET.fullmatch(name)
+    if offset is not None:
+        sign, hours, minutes = offset.groups()
+        delta = timedelta(hours=int(hours), minutes=int(minutes))
+        if delta >= timedelta(hours=24) or int(minutes) >= 60:
+            raise TimezoneError(f"{name}: an offset runs from -23:59 to +23:59")
+        return timezone(-delta if sign == "-" else delta)
+    import zoneinfo
+
+    try:
+        return zoneinfo.ZoneInfo(name)
+    except (zoneinfo.ZoneInfoNotFoundError, ValueError) as exc:
+        if not zoneinfo.available_timezones():
+            raise TimezoneError(f"{name}: this system has no time zone database; use UTC, local or an offset "
+                                "such as +02:00, or install the tzdata package") from exc
+        raise TimezoneError(f"{name}: no such time zone; use UTC, local, an offset such as +02:00 "
+                            "or a name such as Europe/Paris") from exc
 
 
 @dataclass(frozen=True)
@@ -200,12 +234,22 @@ def timeline_format(destination: str) -> str | None:
     return TIMELINE_FORMATS.get(Path(destination).suffix.lower())
 
 
-def format_instant(microseconds: int) -> str:
-    """ISO 8601 with microseconds and an explicit offset."""
-    return (_EPOCH + timedelta(microseconds=microseconds)).isoformat(timespec="microseconds")
+def format_instant(microseconds: int, zone: tzinfo | str | None = None) -> str:
+    """ISO 8601 with microseconds and the offset ``zone`` has at that instant (UTC for None).
+
+    An instant the platform cannot place in the local zone, such as one in
+    year 1, is written in UTC: the offset printed with it keeps it exact.
+    """
+    moment = _EPOCH + timedelta(microseconds=microseconds)
+    with suppress(OverflowError, OSError, ValueError):
+        if isinstance(zone, tzinfo):
+            moment = moment.astimezone(zone)
+        elif zone == LOCAL:
+            moment = moment.astimezone()
+    return moment.isoformat(timespec="microseconds")
 
 
-def _timestamp_text(raw: Any, instant: int | None) -> str | None:
+def _timestamp_text(raw: Any, instant: int | None, zone: tzinfo | str | None = None) -> str | None:
     """The Timestamp column: the instant in ISO 8601, or the value as it is when it is not a time.
 
     Windows writes UTC as ``2017-06-09T19:21:26.968669Z`` (or with a seventh
@@ -214,9 +258,10 @@ def _timestamp_text(raw: Any, instant: int | None) -> str | None:
     """
     if instant is None:
         return None if raw is None else str(raw)
-    if raw.__class__ is str and len(raw) in (27, 28) and raw[-1] == "Z" and raw[10] == "T" and raw[19] == ".":
+    if (zone is None and raw.__class__ is str and len(raw) in (27, 28) and raw[-1] == "Z"
+            and raw[10] == "T" and raw[19] == "."):
         return raw[:26] + "+00:00"
-    return format_instant(instant)
+    return format_instant(instant, zone)
 
 
 def _text(value: Any) -> str:
@@ -314,6 +359,7 @@ class TimelineSpool:
     columns: tuple[str, ...]
     presentation: Presentation
     fmt: str = "csv"
+    timezone: str = "UTC"
     time_field: str = "SystemTime"
     timestamp_format: str = "iso"
     rule_keys: RuleIndex = field(default_factory=dict)
@@ -379,6 +425,7 @@ class _Renderer:
         self.layout_groups = tuple(groups.items())
         self.csv = spool.fmt == "csv"
         self.end = b"\r\n" if self.csv else b"\n"
+        self.zone = resolve_timezone(spool.timezone)
         self._plans: dict[tuple[str, ...], _Plan] = {}
 
     def lines(self, result: dict[str, Any]) -> Iterator[bytes]:
@@ -521,7 +568,7 @@ class _Renderer:
     def _line(self, values: dict[str, Any], rule: dict[str, Any], instant: int | None, raw_time: Any,
               position: int, identity: str, source: Any) -> bytes:
         """``<key>\\t<source>\\t<row as it is written><line end>``: the main process only sorts and copies it."""
-        values["Timestamp"] = _timestamp_text(raw_time, instant)
+        values["Timestamp"] = _timestamp_text(raw_time, instant, self.zone)
         if self.csv:
             payload = ",".join([rule[column] if column in rule else _csv_cell(values.get(column))
                                 for column in self.columns]).encode("utf-8")

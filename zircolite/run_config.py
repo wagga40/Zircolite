@@ -41,6 +41,7 @@ from .config_loader import (
     DEFAULT_TIME_FIELD,
     DEFAULT_TIMELINE_CONFIG,
     DEFAULT_TIMELINE_PROFILE,
+    DEFAULT_TIMEZONE,
 )
 from .formats import format_by_yaml, has_explicit_format
 
@@ -136,6 +137,7 @@ SETTINGS: tuple[Setting, ...] = (
     Setting("timeline_profile", "output", "timeline_profile", DEFAULT_TIMELINE_PROFILE),
     Setting("timeline_config", "output", "timeline_config", DEFAULT_TIMELINE_CONFIG),
     Setting("keep_duplicates", "output", "keep_duplicates", False, Merge.OR),
+    Setting("timezone", "output", "timezone", DEFAULT_TIMEZONE),
     # -- processing -------------------------------------------------------
     Setting("unified_db", "processing", "unified_db", False, Merge.OR),
     Setting("no_auto_mode", "processing", "auto_mode", False, Merge.OR, invert=True),

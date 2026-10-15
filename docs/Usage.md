@@ -659,6 +659,11 @@ python3 zircolite.py -e logs/ --timeline - | jq 'select(.Level == "high")'
   without a record ID is a copy only when it comes from a file of another name, since one
   log can hold identical lines; the file holding it most often keeps its rows. The summary
   counts the rows dropped, and `--keep-duplicates` keeps them.
+- **Time zone.** Timestamps are in UTC unless `--timezone` names another zone: `local`, the
+  machine's own; an offset such as `+05:30`; or a name such as `Europe/Paris`, whose offset
+  follows daylight saving at each instant. Only the text changes, never the order. Names
+  need a time zone database: macOS, Linux and Docker have one, and on Windows installing
+  the `tzdata` package provides it.
 - **With other options.** `-n` does not stop the timeline. `--limit` drops a rule's results
   before the timeline sees them, per database as always. After `Ctrl+C` the timeline holds
   the rows found so far.
@@ -924,8 +929,9 @@ compatibility:
 | `--timeline-profile` | Columns: `minimal`, `standard` (default), `full`, or a profile of the timeline configuration |
 | `--timeline-config` | Timeline configuration (default `config/timeline.yaml`) |
 | `--keep-duplicates` | Keep the rows that repeat a detection from another copy of the same log |
+| `--timezone` | Time zone of the timestamps: `UTC` (default), `local`, an offset such as `+02:00`, or a name such as `Europe/Paris` |
 
-Typed without `--timeline`, the last three stop the run. In a run configuration they are
+Typed without `--timeline`, the last four stop the run. In a run configuration they are
 settings for the runs that write one.
 
 ### Templates and the Viewer
@@ -992,5 +998,5 @@ parallel runs its stage times are summed across workers and can exceed the wall-
 |------|---------|
 | `0` | The run completed, with or without detections. Files read only in part are named on the console |
 | `1` | The run did not happen or did not finish: no matching file, no rule loaded, a `--strict` parse error, an unreadable `--timefield` value or time bound, an inverted time range, a `--limit` of `0` or below `-1`, a missing template, a per-file database name (`save_a.json.db`) that already exists, a failing `--test-rules` case, a failed package, report or timeline, an invalid timeline configuration, or a configuration that cannot be honoured |
-| `2` | The command line cannot run as given: an unknown or conflicting flag, no events path, `--csv` with several rulesets, a `--csv-delimiter` longer than one character, `--all-transforms` with `--transform-category`, an output that is also an input or another output, `--dbfile` on an existing path or with parallel files, an unknown pipeline, a timeline option without `--timeline`, a timeline neither CSV nor JSON lines or with an unknown profile, `--timeline` with `--test-rules`, or a `--generate-config` that could not be written |
+| `2` | The command line cannot run as given: an unknown or conflicting flag, no events path, `--csv` with several rulesets, a `--csv-delimiter` longer than one character, `--all-transforms` with `--transform-category`, an output that is also an input or another output, `--dbfile` on an existing path or with parallel files, an unknown pipeline, a timeline option without `--timeline`, a timeline neither CSV nor JSON lines or with an unknown profile or time zone, `--timeline` with `--test-rules`, or a `--generate-config` that could not be written |
 | `130` | Interrupted with `Ctrl+C` |
