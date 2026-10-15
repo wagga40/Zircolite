@@ -336,7 +336,7 @@ class TestHits:
         assert record.hits_file is None
         assert record.rules[1]["unlinked"] == 1
 
-    def test_csv_sanitised_rows_still_link(self, hit_spool):
+    def test_rows_given_as_text_still_link(self, hit_spool):
         writer = hit_spool.open_part(0, ["x"])
         writer.sink({"title": "Two", "count": "1", "matches": [{"row_id": "7"}]})
         writer.sink({"id": "r-1", "title": "One", "result_type": "correlation", "count": 1, "alert_count": 1,

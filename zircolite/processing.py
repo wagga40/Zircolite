@@ -401,7 +401,7 @@ class _CsvResultSpool:
         }
         for row in result.get("matches", ()):
             self.columns.update(row)
-            self.rows.append({**metadata, **row})
+            self.rows.append({**metadata, **sanitize_row_for_csv(row)})
 
     def finish(self):
         with self.ctx.parent_metrics.stage("output"):
@@ -1079,7 +1079,7 @@ def process_single_file_worker(
                 }
                 for row in result["matches"]:
                     csv_columns.update(row)
-                    output.write(orjson.dumps({**metadata, **row}) + b"\n")
+                    output.write(orjson.dumps({**metadata, **sanitize_row_for_csv(row)}) + b"\n")
                     csv_rows += 1
             else:
                 if not first:
