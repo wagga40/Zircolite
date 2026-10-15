@@ -135,8 +135,8 @@ details:
        show: [TargetUserName, TargetDomainName, SubjectUserName, UserAccountControl, ServicePrincipalNames,
               AllowedToDelegateTo]}
     - {when: {Channel: Security, EventID: [4661, 4662, 4663]},
-       show: [ObjectName, ObjectType, OperationType, ProcessName, AccessList, AccessMask, Properties,
-              SubjectUserName, SubjectDomainName]}
+       show: [ObjectName, ObjectType, OperationType, ProcessName, AccessMask, SubjectUserName,
+              SubjectDomainName, SubjectLogonId]}
     - {when: {Channel: Security, EventID: [4765, 4766]},
        show: [TargetUserName, SourceUserName, SourceSid, SubjectUserName]}
     - {when: {Channel: Security, EventID: 4768},
@@ -151,9 +151,10 @@ details:
     - {when: {Channel: Security, EventID: 5136},
        show: [ObjectDN, AttributeLDAPDisplayName, AttributeValue, OperationType, SubjectUserName]}
     - {when: {Channel: Security, EventID: 5140},
-       show: [ShareName, ShareLocalPath, IpAddress, SubjectUserName, SubjectDomainName, AccessMask]}
+       show: [ShareName, ShareLocalPath, IpAddress, SubjectUserName, SubjectDomainName, SubjectLogonId]}
     - {when: {Channel: Security, EventID: 5145},
-       show: [ShareName, RelativeTargetName, IpAddress, SubjectUserName, SubjectDomainName, AccessList]}
+       show: [ShareName, ShareLocalPath, RelativeTargetName, IpAddress, SubjectUserName, SubjectDomainName,
+              SubjectLogonId]}
     - {when: {Channel: Security, EventID: [5156, 5157, 5158]},
        show: [Application, Direction, SourceAddress, SourcePort, DestAddress, DestPort, Protocol, ProcessId]}
 
