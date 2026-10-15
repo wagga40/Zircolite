@@ -631,6 +631,55 @@ with nested values as JSON text. `--csv` accepts a single ruleset.
 - With several files, rows wait until every column is known, because the header must cover
   them all.
 
+### Timeline
+
+`--timeline` writes every detection as one row, in time order across rules and files:
+
+```shell
+python3 zircolite.py -e logs/ --timeline                    # timeline.csv
+python3 zircolite.py -e logs/ --timeline case.jsonl --timeline-profile full
+python3 zircolite.py -e logs/ --timeline - | jq 'select(.Level == "high")'
+```
+
+- **Format.** The name decides: CSV for `.csv`, JSON lines for `.jsonl` and `.ndjson`. With
+  `-`, JSON lines go to stdout and everything else Zircolite prints goes to stderr. The CSV
+  uses commas and defuses formulas as the [CSV detection output](#csv-detection-output)
+  does; JSON lines keep each value's type. A missing value is `-` in the CSV, `null` in
+  JSON.
+- **Order.** Rows follow the `--timefield` value, written as ISO 8601 with microseconds and
+  an offset (`2024-05-01T10:00:08.123456+00:00`). At one instant they follow the loaded
+  ruleset, which puts the most severe rule first. A value that is not a time is written as
+  it is, and its rows come last. A correlation alert is one row, at the time it occurred.
+  The CSV comes out byte for byte the same in every database layout. In JSON lines a value
+  keeps the type its database column gave it, so a number can be written as text in one
+  layout and not in another ([Typing and collation](Internals.md#typing-and-collation)).
+- **Duplicates.** A log collected twice, such as a backup next to the live log or a volume
+  shadow copy, would list each detection twice. A row repeating a Windows record (same
+  computer, channel, record ID and time) is dropped, whichever file it came from. An event
+  without a record ID is a copy only when it comes from a file of another name, since one
+  log can hold identical lines; the file holding it most often keeps its rows. The summary
+  counts the rows dropped, and `--keep-duplicates` keeps them.
+- **With other options.** `-n` does not stop the timeline. `--limit` drops a rule's results
+  before the timeline sees them, per database as always. After `Ctrl+C` the timeline holds
+  the rows found so far.
+
+| Profile | Columns |
+|---------|---------|
+| `minimal` | `Timestamp`, `Computer`, `Channel`, `EventID`, `Level`, `RuleTitle`, `Details` |
+| `standard` (default) | `minimal`, plus `RecordID`, `ExtraFields`, `RuleID`, `Tactics`, `Techniques`, `SourceFile` |
+| `full` | `standard` with `AllFields`, every field of the event, instead of `ExtraFields` |
+
+`Details` lists the event's fields as `Name: value ¦ Name: value`, in name order. It leaves
+out the fields another column shows and those that describe the log rather than the activity
+(`Keywords`, `Opcode`, `Provider_Name`, …). `Tactics` and `Techniques` come from the rule's
+ATT&CK tags; `SourceFile` is the name of the log file. A correlation alert's `Details` gives
+its event count, its group and its metric.
+
+`config/timeline.yaml` holds the profiles, the fields `Computer`, `Channel`, `EventID` and
+`RecordID` read from (auditd's `type` stands in for `EventID`), and the fields `Details`
+leaves out. To change them or add a profile, point `--timeline-config` at a copy. A profile
+can also show any event field as a column of its own, named `%Field%`.
+
 ### Rule performance profiling
 
 `--profile-rules` times every rule and prints the 20 slowest, highlighting those over 100 ms
@@ -860,8 +909,20 @@ compatibility:
 | `--keepflat` | Save the flattened events to `flattened_events_<RAND>.json` (JSON lines) |
 | `-d`, `--dbfile` | Save the logs to an SQLite database |
 | `-l`, `--logfile` | Log file name |
-| `-n`, `--nolog` | Write neither the log file nor the detections file. Outputs asked for by name (`--template`, `--dbfile`, `--keepflat`, `--package`) are still written |
+| `-n`, `--nolog` | Write neither the log file nor the detections file. Outputs asked for by name (`--template`, `--dbfile`, `--keepflat`, `--package`, `--timeline`) are still written |
 | `--profile-rules` | Time each rule and print a report; processes files one at a time |
+
+### Timeline options
+
+| Option | Description |
+|--------|-------------|
+| `--timeline` | Write the detections as a [timeline](#timeline): CSV, JSON lines for `.jsonl` and `.ndjson`, JSON lines on stdout for `-` (default name `timeline.csv`) |
+| `--timeline-profile` | Columns: `minimal`, `standard` (default), `full`, or a profile of the timeline configuration |
+| `--timeline-config` | Timeline configuration (default `config/timeline.yaml`) |
+| `--keep-duplicates` | Keep the rows that repeat a detection from another copy of the same log |
+
+Typed without `--timeline`, the last three stop the run. In a run configuration they are
+settings for the runs that write one.
 
 ### Templates and the Viewer
 
@@ -926,6 +987,6 @@ parallel runs its stage times are summed across workers and can exceed the wall-
 | Code | Meaning |
 |------|---------|
 | `0` | The run completed, with or without detections. Files read only in part are named on the console |
-| `1` | The run did not happen or did not finish: no matching file, no rule loaded, a `--strict` parse error, an unreadable `--timefield` value or time bound, an inverted time range, a `--limit` of `0` or below `-1`, a missing template, a per-file database name (`save_a.json.db`) that already exists, a failing `--test-rules` case, a failed package or report, or a configuration that cannot be honoured |
-| `2` | The command line cannot run as given: an unknown or conflicting flag, no events path, `--csv` with several rulesets, a `--csv-delimiter` longer than one character, `--all-transforms` with `--transform-category`, an output that is also an input, `--dbfile` on an existing path or with parallel files, an unknown pipeline, or a `--generate-config` that could not be written |
+| `1` | The run did not happen or did not finish: no matching file, no rule loaded, a `--strict` parse error, an unreadable `--timefield` value or time bound, an inverted time range, a `--limit` of `0` or below `-1`, a missing template, a per-file database name (`save_a.json.db`) that already exists, a failing `--test-rules` case, a failed package, report or timeline, an invalid timeline configuration, or a configuration that cannot be honoured |
+| `2` | The command line cannot run as given: an unknown or conflicting flag, no events path, `--csv` with several rulesets, a `--csv-delimiter` longer than one character, `--all-transforms` with `--transform-category`, an output that is also an input or another output, `--dbfile` on an existing path or with parallel files, an unknown pipeline, a timeline option without `--timeline`, a timeline neither CSV nor JSON lines or with an unknown profile, `--timeline` with `--test-rules`, or a `--generate-config` that could not be written |
 | `130` | Interrupted with `Ctrl+C` |

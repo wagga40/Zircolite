@@ -1,0 +1,59 @@
+# =============================================================================
+# Zircolite timeline (--timeline): columns, profiles and Details
+# =============================================================================
+# The file --timeline reads unless --timeline-config names another. Copy it to
+# change a profile or add one; every section below has to be present.
+#
+# Field names compare ignoring case, as rules do.
+
+# Where the Computer, Channel, EventID and RecordID columns read from: the
+# first of these fields an event carries. auditd records have no channel and
+# no record ID, and name their kind in `type`.
+columns:
+  Computer: [Computer, node, host]
+  Channel: [Channel]
+  EventID: [EventID, type]
+  RecordID: [EventRecordID]
+
+# Column lists, chosen with --timeline-profile. The columns are:
+#   Timestamp    the --timefield value, as ISO 8601 with microseconds
+#   Computer, Channel, EventID, RecordID   read through `columns` above
+#   Level, RuleTitle, RuleID   the rule
+#   Tactics, Techniques        ATT&CK, from the rule's tags
+#   Details      the event's fields, as "Name: value ¦ Name: value"
+#   ExtraFields  the fields Details leaves out
+#   AllFields    every field of the event
+#   SourceFile   the log file the event came from
+# %Field% adds any event field as a column of its own.
+profiles:
+  minimal: [Timestamp, Computer, Channel, EventID, Level, RuleTitle, Details]
+  standard: [Timestamp, Computer, Channel, EventID, RecordID, Level, RuleTitle, Details,
+             ExtraFields, RuleID, Tactics, Techniques, SourceFile]
+  full: [Timestamp, Computer, Channel, EventID, RecordID, Level, RuleTitle, Details,
+         RuleID, Tactics, Techniques, SourceFile, AllFields]
+
+details:
+  # Never shown in Details or ExtraFields: they describe the log rather than
+  # the activity. A field another column of the profile shows is left out too.
+  skip:
+    - OriginalLogfile
+    - Computer
+    - Channel
+    - EventID
+    - EventRecordID
+    - SystemTime
+    - Provider_Name
+    - Guid
+    - EventSourceName
+    - Keywords
+    - Level
+    - Opcode
+    - Task
+    - Version
+    - Qualifiers
+    - Correlation
+    - ActivityID
+    - Security
+    - UserID
+    - Execution_ProcessID
+    - Execution_ThreadID

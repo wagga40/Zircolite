@@ -406,7 +406,45 @@ class TestYamlLoggingOverrides:
         zircolite_script.resolve_logging_args(args)
 
         assert args.limit is None
-        assert set(EARLY_DESTS) == {"debug", "nolog", "logfile"}
+        assert set(EARLY_DESTS) == {"debug", "nolog", "logfile", "timeline"}
+
+    def test_a_timeline_on_stdout_is_known_before_the_banner(self, tmp_path):
+        """Printing the banner to stdout would corrupt the JSONL that follows it."""
+        cfg = tmp_path / "cfg.yaml"
+        cfg.write_text("output:\n  timeline: '-'\n")
+        args = _args(yaml_config=str(cfg), debug=False, nolog=False, logfile=None, timeline=None)
+
+        zircolite_script.resolve_logging_args(args)
+
+        assert args.timeline == "-"
+
+
+class TestTimelineResolution:
+    """output.timeline* -> args."""
+
+    def test_yaml_timeline_settings_apply(self):
+        args = _args(timeline=None, timeline_profile=None, timeline_config=None, keep_duplicates=False)
+
+        resolve(args, {"output": {"timeline": "case.jsonl", "timeline_profile": "full",
+                                  "timeline_config": "mine.yaml", "keep_duplicates": True}})
+
+        assert (args.timeline, args.timeline_profile, args.timeline_config, args.keep_duplicates) == (
+            "case.jsonl", "full", "mine.yaml", True)
+
+    def test_the_cli_wins_over_the_yaml(self):
+        args = _args(timeline="cli.csv", timeline_profile="minimal", timeline_config=None, keep_duplicates=False)
+
+        resolve(args, {"output": {"timeline": "yaml.csv", "timeline_profile": "full"}})
+
+        assert (args.timeline, args.timeline_profile) == ("cli.csv", "minimal")
+
+    def test_defaults_without_yaml(self):
+        args = _args(timeline=None, timeline_profile=None, timeline_config=None, keep_duplicates=False)
+
+        resolve(args, {})
+
+        assert (args.timeline, args.timeline_profile, args.timeline_config, args.keep_duplicates) == (
+            None, "standard", "config/timeline.yaml", False)
 
 
 class TestSettingsTable:

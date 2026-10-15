@@ -321,6 +321,117 @@ class TestProcessingModeEquivalence:
         )
 
 
+class TestTimelineParity:
+    """The timeline is written through each layout's own path, and must come out byte for byte the same."""
+
+    MODES: ClassVar[dict] = {
+        "per-file": ["--no-parallel", "--no-auto-mode"],
+        "unified": ["--unified-db", "--no-auto-mode"],
+        "thread": ["--no-auto-mode", "--executor", "thread"],
+        "process": ["--no-auto-mode", "--executor", "process"],
+    }
+
+    RULESET = json.dumps([
+        {"title": "Any event", "id": "tl-1", "level": "low", "tags": ["attack.execution"],
+         "rule": ["SELECT * FROM logs"]},
+        {"title": "Whoami", "id": "tl-2", "level": "high", "tags": ["attack.discovery", "attack.t1033"],
+         "rule": ["SELECT * FROM logs WHERE CommandLine LIKE '%whoami%'"]},
+    ])
+
+    @staticmethod
+    def _event(record, second, command, *, with_record=True):
+        system = {"Channel": "Security", "EventID": 4688, "Computer": "WS01",
+                  "TimeCreated": {"#attributes": {"SystemTime": f"2024-05-01T10:00:{second:02d}.1234567Z"}}}
+        if with_record:
+            system["EventRecordID"] = record
+        return {"Event": {"System": system, "EventData": {"CommandLine": command, "Protocol": 6}}}
+
+    def _corpus(self, tmp_path):
+        corpus = tmp_path / "corpus"
+        corpus.mkdir()
+        security = [self._event(n, 10 - n, "whoami /all" if n == 2 else f"cmd {n}") for n in (1, 2, 3)]
+        lines = "\n".join(json.dumps(event) for event in security)
+        (corpus / "security.json").write_text(lines)
+        # A second copy of the same log: its records are dropped as duplicates
+        (corpus / "security-copy.json").write_text(lines)
+        # No record ID: two identical lines of one log are two events
+        repeated = json.dumps(self._event(0, 30, "net use", with_record=False))
+        (corpus / "app.json").write_text(f"{repeated}\n{repeated}")
+        return corpus
+
+    def _timeline(self, run_dir, source, flags, name, extra=()):
+        run_dir.mkdir()
+        path = run_dir / name
+        run_zircolite(run_dir, source, [*flags] if "-D" in flags else ["-j", *flags], ruleset=self.RULESET,
+                      extra=["--timeline", str(path), *extra], read=lambda _: None)
+        return path
+
+    def _every_layout(self, tmp_path, name, extra=()):
+        corpus = self._corpus(tmp_path)
+        timelines = {mode: self._timeline(tmp_path / mode, corpus, flags, name, extra)
+                     for mode, flags in self.MODES.items()}
+        database = tmp_path / "saved.db"
+        self._timeline(tmp_path / "save", corpus, ["--unified-db", "--no-auto-mode", "-d", str(database)], name, extra)
+        timelines["-D"] = self._timeline(tmp_path / "db-input", database, ["-D"], name, extra)
+        return timelines
+
+    def test_the_csv_timeline_is_identical_in_every_layout(self, tmp_path):
+        timelines = self._every_layout(tmp_path, "timeline.csv")
+
+        contents = {mode: path.read_bytes() for mode, path in timelines.items()}
+        assert all(content == contents["per-file"] for content in contents.values()), contents
+        with timelines["per-file"].open(encoding="utf-8", newline="") as handle:
+            rows = list(csv.DictReader(handle))
+        # 8 matches of "Any event" and 2 of "Whoami", less the copy's 4 rows. At one
+        # instant the rules come in loaded order, which puts the most severe first.
+        assert [(row["Timestamp"], row["RuleTitle"], row["RecordID"]) for row in rows] == [
+            ("2024-05-01T10:00:07.123456+00:00", "Any event", "3"),
+            ("2024-05-01T10:00:08.123456+00:00", "Whoami", "2"),
+            ("2024-05-01T10:00:08.123456+00:00", "Any event", "2"),
+            ("2024-05-01T10:00:09.123456+00:00", "Any event", "1"),
+            ("2024-05-01T10:00:30.123456+00:00", "Any event", "-"),
+            ("2024-05-01T10:00:30.123456+00:00", "Any event", "-"),
+        ]
+        assert rows[1]["Details"] == "CommandLine: whoami /all ¦ Protocol: 6"
+        assert rows[1]["Tactics"] == "discovery"
+
+    def test_the_full_timeline_agrees_in_every_layout(self, tmp_path):
+        """Raw values, so compared as text: a value's type follows its column in a database (docs/Internals.md)."""
+        timelines = self._every_layout(tmp_path, "timeline.jsonl", extra=["--timeline-profile", "full"])
+
+        def as_text(path):
+            return [json.loads(line, parse_int=str, parse_float=str) for line in path.read_text().splitlines()]
+
+        rows = {mode: as_text(path) for mode, path in timelines.items()}
+        assert all(content == rows["per-file"] for content in rows.values())
+        assert len(rows["per-file"]) == 6
+        assert "row_id" not in rows["per-file"][0]["AllFields"]
+
+    def test_keep_duplicates_keeps_the_copy(self, tmp_path):
+        corpus = self._corpus(tmp_path)
+
+        path = self._timeline(tmp_path / "run", corpus, self.MODES["per-file"], "t.jsonl", ["--keep-duplicates"])
+
+        assert len(path.read_text().splitlines()) == 10
+
+    def test_stdout_carries_the_timeline_and_nothing_else(self, tmp_path):
+        corpus = self._corpus(tmp_path)
+        ruleset = tmp_path / "ruleset.json"
+        ruleset.write_text(self.RULESET)
+        argv = ["-e", str(corpus), "-j", "-r", str(ruleset), "-o", str(tmp_path / "detected.json"),
+                "-l", str(tmp_path / "z.log"), "--timeline", "-"]
+        binary = os.environ.get("ZIRCOLITE_BINARY")
+        command = [str(Path(binary).resolve())] if binary else [sys.executable, str(WORKSPACE_ROOT / "zircolite.py")]
+
+        result = subprocess.run([*command, *argv], cwd=tmp_path, capture_output=True,
+                                encoding="utf-8", timeout=240)
+
+        assert result.returncode == 0, result.stderr
+        rows = [json.loads(line) for line in result.stdout.splitlines()]
+        assert len(rows) == 6
+        assert "Summary" in result.stderr
+
+
 class TestGoldenDetections:
     """The detections for a real sample are pinned to a committed expectation.
 

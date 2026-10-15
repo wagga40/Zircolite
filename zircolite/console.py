@@ -72,6 +72,16 @@ if sys.platform == "win32":
 console = Console(theme=ZIRCOLITE_THEME, highlight=False)
 
 
+def send_console_to_stderr() -> None:
+    """Show everything on stderr, leaving stdout to the data a run streams there.
+
+    ``--timeline -`` writes JSONL to stdout, where a banner, a progress bar or
+    a log line would corrupt it. The log handler prints through this console,
+    so it follows.
+    """
+    console.stderr = True
+
+
 # ============================================================================
 # QUIET MODE SUPPORT
 # ============================================================================
