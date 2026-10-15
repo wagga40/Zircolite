@@ -20,8 +20,8 @@ columns:
 #   Computer, Channel, EventID, RecordID   read through `columns` above
 #   Level, RuleTitle, RuleID   the rule
 #   Tactics, Techniques        ATT&CK, from the rule's tags
-#   Details      the event's fields, as "Name: value ¦ Name: value"
-#   ExtraFields  the fields Details leaves out
+#   Details      the fields that say what happened, as "Name: value ¦ Name: value"
+#   ExtraFields  the event's other fields
 #   AllFields    every field of the event
 #   SourceFile   the log file the event came from
 # %Field% adds any event field as a column of its own.
@@ -57,3 +57,214 @@ details:
     - UserID
     - Execution_ProcessID
     - Execution_ThreadID
+
+  # What Details shows, per kind of event: the first layout whose `when`
+  # fields all hold one of the values listed, compared as text and ignoring
+  # case. Details lists its `show` fields the event has, in that order, and
+  # ExtraFields the rest. An event no layout matches has every field in
+  # Details.
+  layouts:
+    # Sysmon, on Windows and on Linux
+    - {when: {Channel: &sysmon [Microsoft-Windows-Sysmon/Operational, Linux-Sysmon/Operational], EventID: 1},
+       show: [CommandLine, Image, User, IntegrityLevel, ParentImage, ParentCommandLine, ProcessId,
+              ParentProcessId, LogonId]}
+    - {when: {Channel: *sysmon, EventID: 2},
+       show: [TargetFilename, Image, CreationUtcTime, PreviousCreationUtcTime, User, ProcessId]}
+    - {when: {Channel: *sysmon, EventID: 3},
+       show: [Image, User, Protocol, Initiated, SourceIp, SourcePort, SourceHostname, DestinationIp,
+              DestinationPort, DestinationHostname, ProcessId]}
+    - {when: {Channel: *sysmon, EventID: 4}, show: [State, Version, SchemaVersion]}
+    - {when: {Channel: *sysmon, EventID: 5}, show: [Image, User, ProcessId]}
+    - {when: {Channel: *sysmon, EventID: 6}, show: [ImageLoaded, Signed, Signature, SignatureStatus, Hashes]}
+    - {when: {Channel: *sysmon, EventID: 7},
+       show: [ImageLoaded, Image, OriginalFileName, Signed, Signature, SignatureStatus, User, ProcessId]}
+    - {when: {Channel: *sysmon, EventID: 8},
+       show: [SourceImage, TargetImage, StartAddress, StartModule, StartFunction, SourceUser, TargetUser,
+              SourceProcessId, TargetProcessId]}
+    - {when: {Channel: *sysmon, EventID: 9}, show: [Device, Image, User, ProcessId]}
+    - {when: {Channel: *sysmon, EventID: 10},
+       show: [SourceImage, TargetImage, GrantedAccess, SourceUser, TargetUser, SourceProcessId, TargetProcessId]}
+    - {when: {Channel: *sysmon, EventID: 11}, show: [TargetFilename, Image, User, ProcessId]}
+    - {when: {Channel: *sysmon, EventID: [12, 13, 14]},
+       show: [EventType, TargetObject, Details, NewName, Image, User, ProcessId]}
+    - {when: {Channel: *sysmon, EventID: 15}, show: [TargetFilename, Image, Hash, Contents, User, ProcessId]}
+    - {when: {Channel: *sysmon, EventID: 16}, show: [Configuration, ConfigurationFileHash]}
+    - {when: {Channel: *sysmon, EventID: [17, 18]}, show: [EventType, PipeName, Image, User, ProcessId]}
+    - {when: {Channel: *sysmon, EventID: 19}, show: [Operation, User, EventNamespace, Name, Query]}
+    - {when: {Channel: *sysmon, EventID: 20}, show: [Operation, User, Name, Type, Destination]}
+    - {when: {Channel: *sysmon, EventID: 21}, show: [Operation, User, Consumer, Filter]}
+    - {when: {Channel: *sysmon, EventID: 22}, show: [QueryName, QueryResults, QueryStatus, Image, User, ProcessId]}
+    - {when: {Channel: *sysmon, EventID: [23, 26]},
+       show: [TargetFilename, Image, User, IsExecutable, Archived, Hashes, ProcessId]}
+    - {when: {Channel: *sysmon, EventID: 24}, show: [Image, User, Session, ClientInfo, Archived, Hashes, ProcessId]}
+    - {when: {Channel: *sysmon, EventID: 25}, show: [Type, Image, User, ProcessId]}
+    - {when: {Channel: *sysmon, EventID: [27, 28, 29]}, show: [TargetFilename, Image, User, Hashes, ProcessId]}
+    - {when: {Channel: *sysmon, EventID: 255}, show: [ID, Description]}
+
+    # Security
+    - {when: {Channel: Security, EventID: 1102}, show: [SubjectUserName, SubjectDomainName, SubjectLogonId]}
+    - {when: {Channel: Security, EventID: 4624},
+       show: [TargetUserName, TargetDomainName, LogonType, IpAddress, IpPort, WorkstationName,
+              LogonProcessName, AuthenticationPackageName, ElevatedToken, ImpersonationLevel, TargetLogonId]}
+    - {when: {Channel: Security, EventID: 4625},
+       show: [TargetUserName, TargetDomainName, LogonType, Status, SubStatus, IpAddress, IpPort,
+              WorkstationName, LogonProcessName, AuthenticationPackageName]}
+    - {when: {Channel: Security, EventID: 4634}, show: [TargetUserName, TargetDomainName, LogonType, TargetLogonId]}
+    - {when: {Channel: Security, EventID: 4647}, show: [TargetUserName, TargetDomainName, TargetLogonId]}
+    - {when: {Channel: Security, EventID: 4648},
+       show: [SubjectUserName, TargetUserName, TargetDomainName, TargetServerName, TargetInfo, ProcessName,
+              IpAddress, IpPort]}
+    - {when: {Channel: Security, EventID: 4672}, show: [SubjectUserName, SubjectDomainName, PrivilegeList, SubjectLogonId]}
+    - {when: {Channel: Security, EventID: 4688},
+       show: [CommandLine, NewProcessName, SubjectUserName, SubjectDomainName, TokenElevationType,
+              MandatoryLabel, ParentProcessName, NewProcessId, ProcessId, SubjectLogonId]}
+    - {when: {Channel: Security, EventID: 4697},
+       show: [ServiceName, ServiceFileName, ServiceType, ServiceStartType, ServiceAccount, SubjectUserName]}
+    - {when: {Channel: Security, EventID: [4698, 4699, 4700, 4701, 4702]},
+       show: [TaskName, SubjectUserName, SubjectDomainName, TaskContent, TaskContentNew]}
+    - {when: {Channel: Security, EventID: 4719},
+       show: [SubjectUserName, CategoryId, SubcategoryGuid, AuditPolicyChanges]}
+    - {when: {Channel: Security, EventID: [4720, 4722, 4723, 4724, 4725, 4726, 4738, 4740, 4767, 4781]},
+       show: [TargetUserName, TargetDomainName, SubjectUserName, SubjectDomainName, OldTargetUserName,
+              NewTargetUserName, SamAccountName, UserAccountControl]}
+    - {when: {Channel: Security, EventID: [4727, 4730, 4731, 4734, 4754, 4758]},
+       show: [TargetUserName, TargetDomainName, SubjectUserName, SubjectDomainName]}
+    - {when: {Channel: Security, EventID: [4728, 4729, 4732, 4733, 4756, 4757]},
+       show: [MemberName, MemberSid, TargetUserName, TargetDomainName, SubjectUserName]}
+    - {when: {Channel: Security, EventID: 4742},
+       show: [TargetUserName, TargetDomainName, SubjectUserName, UserAccountControl, ServicePrincipalNames,
+              AllowedToDelegateTo]}
+    - {when: {Channel: Security, EventID: [4661, 4662, 4663]},
+       show: [ObjectName, ObjectType, OperationType, ProcessName, AccessList, AccessMask, Properties,
+              SubjectUserName, SubjectDomainName]}
+    - {when: {Channel: Security, EventID: [4765, 4766]},
+       show: [TargetUserName, SourceUserName, SourceSid, SubjectUserName]}
+    - {when: {Channel: Security, EventID: 4768},
+       show: [TargetUserName, TargetDomainName, IpAddress, Status, TicketEncryptionType, PreAuthType, ServiceName]}
+    - {when: {Channel: Security, EventID: 4769},
+       show: [TargetUserName, ServiceName, IpAddress, Status, TicketEncryptionType, TicketOptions]}
+    - {when: {Channel: Security, EventID: 4771}, show: [TargetUserName, IpAddress, Status, PreAuthType]}
+    - {when: {Channel: Security, EventID: 4776}, show: [TargetUserName, Workstation, Status, PackageName]}
+    - {when: {Channel: Security, EventID: [4778, 4779]},
+       show: [AccountName, AccountDomain, ClientName, ClientAddress, SessionName, LogonID]}
+    - {when: {Channel: Security, EventID: 4794}, show: [SubjectUserName, Workstation, Status]}
+    - {when: {Channel: Security, EventID: 5136},
+       show: [ObjectDN, AttributeLDAPDisplayName, AttributeValue, OperationType, SubjectUserName]}
+    - {when: {Channel: Security, EventID: 5140},
+       show: [ShareName, ShareLocalPath, IpAddress, SubjectUserName, SubjectDomainName, AccessMask]}
+    - {when: {Channel: Security, EventID: 5145},
+       show: [ShareName, RelativeTargetName, IpAddress, SubjectUserName, SubjectDomainName, AccessList]}
+    - {when: {Channel: Security, EventID: [5156, 5157, 5158]},
+       show: [Application, Direction, SourceAddress, SourcePort, DestAddress, DestPort, Protocol, ProcessId]}
+
+    # System
+    - {when: {Channel: System, EventID: 7045}, show: [ServiceName, ImagePath, ServiceType, StartType, AccountName]}
+    - {when: {Channel: System, EventID: [104, 6005, 6006]}, show: [SubjectUserName, SubjectDomainName, BackupPath]}
+    - {when: {Channel: System, EventID: [7036, 7040]}, show: [param1, param2, param3, param4]}
+
+    # PowerShell
+    - {when: {Channel: Microsoft-Windows-PowerShell/Operational, EventID: 4104},
+       show: [ScriptBlockText, Path, ScriptBlockId, MessageNumber, MessageTotal]}
+    - {when: {Channel: Microsoft-Windows-PowerShell/Operational, EventID: 4103}, show: [Payload, ContextInfo]}
+
+    # Defender, BITS, remote desktop
+    - {when: {Channel: Microsoft-Windows-Windows Defender/Operational, EventID: [1116, 1117]},
+       show: [ThreatName, SeverityName, CategoryName, Path, ProcessName, DetectionUser, ActionName]}
+    - {when: {Channel: Microsoft-Windows-Bits-Client/Operational, EventID: 3},
+       show: [jobTitle, jobOwner, processPath, ProcessId]}
+    - {when: {Channel: Microsoft-Windows-Bits-Client/Operational, EventID: [59, 60]}, show: [name, url, transferId]}
+    - {when: {Channel: Microsoft-Windows-TerminalServices-RemoteConnectionManager/Operational, EventID: 1149},
+       show: [Param1, Param2, Param3]}
+    - {when: {Channel: Microsoft-Windows-TerminalServices-LocalSessionManager/Operational, EventID: [21, 22, 24, 25]},
+       show: [User, Address, SessionID]}
+
+    # auditd
+    - {when: {type: SYSCALL}, show: [syscall, success, exe, comm, key, auid, uid, euid, pid, ppid, tty]}
+    - {when: {type: EXECVE}, show: [argc, a0, a1, a2, a3, a4, a5, a6, a7]}
+    - {when: {type: [USER_LOGIN, USER_AUTH, USER_ACCT, USER_START, USER_END, CRED_ACQ, CRED_DISP]},
+       show: [acct, res, exe, addr, hostname, terminal, auid, pid]}
+    - {when: {type: [ADD_USER, DEL_USER, ADD_GROUP, DEL_GROUP]}, show: [acct, id, res, exe, auid]}
+
+# Shown after a value in Details and ExtraFields, in brackets: "3 (Network)".
+# The value itself is never changed; rules always see it as logged. Quote a
+# value YAML would read as a number in another base or as a boolean: 0x18
+# unquoted is the number 24.
+value_maps:
+  LogonType:
+    0: System
+    2: Interactive
+    3: Network
+    4: Batch
+    5: Service
+    7: Unlock
+    8: NetworkCleartext
+    9: NewCredentials
+    10: RemoteInteractive
+    11: CachedInteractive
+    12: CachedRemoteInteractive
+    13: CachedUnlock
+  # NTSTATUS in logon failures (4625, 4776), Kerberos error codes (4768, 4769, 4771)
+  Status: &status
+    "0x0": success
+    "0x6": unknown user
+    "0x7": unknown service
+    "0xe": encryption type not supported
+    "0x12": account disabled, expired or locked out
+    "0x17": password expired
+    "0x18": wrong password
+    "0x25": clock skew
+    "0xc000005e": no logon server
+    "0xc0000064": unknown user
+    "0xc000006a": wrong password
+    "0xc000006d": wrong user name or password
+    "0xc000006e": account restriction
+    "0xc000006f": outside the allowed hours
+    "0xc0000070": workstation restriction
+    "0xc0000071": password expired
+    "0xc0000072": account disabled
+    "0xc0000133": clock skew
+    "0xc000015b": logon type not granted
+    "0xc0000193": account expired
+    "0xc0000224": password must change
+    "0xc0000234": account locked out
+  SubStatus: *status
+  TicketEncryptionType:
+    "0x1": DES-CBC-CRC
+    "0x3": DES-CBC-MD5
+    "0x11": AES128
+    "0x12": AES256
+    "0x17": RC4-HMAC
+    "0x18": RC4-HMAC-EXP
+  PreAuthType:
+    0: none
+    2: password
+    15: smart card
+    16: smart card
+    17: smart card
+    138: FAST
+  TokenElevationType:
+    "%%1936": full token
+    "%%1937": elevated
+    "%%1938": limited
+  ElevatedToken: &yesno
+    "%%1842": "yes"
+    "%%1843": "no"
+  VirtualAccount: *yesno
+  ImpersonationLevel:
+    "%%1832": Identification
+    "%%1833": Impersonation
+    "%%1840": Delegation
+  ServiceStartType:
+    0: boot
+    1: system
+    2: automatic
+    3: on demand
+    4: disabled
+  Direction:
+    "%%14592": inbound
+    "%%14593": outbound
+  Protocol:
+    1: ICMP
+    6: TCP
+    17: UDP
+    58: ICMPv6

@@ -18,6 +18,7 @@ of one event.
 
 import hashlib
 import heapq
+import itertools
 import os
 import re
 import sys
@@ -75,12 +76,24 @@ class TimelineConfigError(ValueError):
 
 
 @dataclass(frozen=True)
+class Layout:
+    """The fields Details shows for the events whose ``when`` fields all hold one of the values."""
+
+    # (field, accepted values), both folded to lower case
+    when: tuple[tuple[str, frozenset[str]], ...]
+    show: tuple[str, ...]
+
+
+@dataclass(frozen=True)
 class Presentation:
     """What ``config/timeline.yaml`` says about columns, profiles and Details."""
 
     aliases: dict[str, tuple[str, ...]]
     profiles: dict[str, tuple[str, ...]]
     skip: frozenset[str]
+    layouts: tuple[Layout, ...] = ()
+    # field -> value -> what it means, field and value folded to lower case
+    value_maps: dict[str, dict[str, str]] = field(default_factory=dict)
 
 
 def load_presentation(path: str | Path) -> Presentation:
@@ -117,7 +130,10 @@ def parse_presentation(raw: Any, source: str) -> Presentation:
                 raise fail(f"{key}[{index}]", "must be a field name")
         return tuple(value)
 
-    document = mapping(raw, "", ("columns", "profiles", "details"))
+    def scalar(value: Any) -> bool:
+        return isinstance(value, (str, int, float)) and not isinstance(value, bool)
+
+    document = mapping(raw, "", ("columns", "profiles", "details", "value_maps"))
     for section in ("columns", "profiles", "details"):
         if section not in document:
             raise fail(section, "is missing")
@@ -146,9 +162,35 @@ def parse_presentation(raw: Any, source: str) -> Presentation:
     if not profiles:
         raise fail("profiles", "must name at least one profile")
 
-    details = mapping(document["details"], "details", ("skip",))
+    details = mapping(document["details"], "details", ("skip", "layouts"))
     skip = names(details.get("skip"), "details.skip") if "skip" in details else ()
-    return Presentation(aliases=aliases, profiles=profiles, skip=frozenset(name.lower() for name in skip))
+    layouts = []
+    listed_layouts = details.get("layouts", [])
+    if not isinstance(listed_layouts, list):
+        raise fail("details.layouts", "must be a list")
+    for index, listed_layout in enumerate(listed_layouts):
+        key = f"details.layouts[{index}]"
+        layout = mapping(listed_layout, key, ("when", "show"))
+        when = mapping(layout.get("when"), f"{key}.when")
+        if not when:
+            raise fail(f"{key}.when", "must name at least one field")
+        conditions = []
+        for name, accepted in when.items():
+            values = accepted if isinstance(accepted, list) else [accepted]
+            if not values or not all(scalar(value) for value in values):
+                raise fail(f"{key}.when.{name}", "must be a value or a list of values")
+            conditions.append((str(name).lower(), frozenset(str(value).lower() for value in values)))
+        layouts.append(Layout(when=tuple(sorted(conditions)), show=names(layout.get("show"), f"{key}.show")))
+
+    value_maps: dict[str, dict[str, str]] = {}
+    for name, meanings in mapping(document.get("value_maps", {}), "value_maps").items():
+        meanings = mapping(meanings, f"value_maps.{name}")
+        for value, meaning in meanings.items():
+            if not scalar(value) or not isinstance(meaning, str) or not meaning.strip():
+                raise fail(f"value_maps.{name}.{value}", "must map a value to a text")
+        value_maps[str(name).lower()] = {str(value).lower(): meaning for value, meaning in meanings.items()}
+    return Presentation(aliases=aliases, profiles=profiles, skip=frozenset(name.lower() for name in skip),
+                        layouts=tuple(layouts), value_maps=value_maps)
 
 
 def timeline_format(destination: str) -> str | None:
@@ -190,6 +232,29 @@ _SCALARS = (str, int, float)
 def _joined(pairs: Iterable[tuple[str, Any]]) -> str | None:
     text = SEPARATOR.join(f"{name}: {_text(value)}" for name, value in pairs if value is not None)
     return text or None
+
+
+# The fields one Details or ExtraFields cell lists, and the value map of each
+# (None for a cell whose fields have none, which takes the quicker path).
+_Fields = tuple[tuple[str, ...], tuple[dict[str, str] | None, ...] | None]
+
+
+def _pairs(row: dict[str, Any], fields: _Fields) -> str | None:
+    """``Name: value ¦ Name: value``, a mapped value followed by what it means."""
+    names, maps = fields
+    if maps is None:
+        text = SEPARATOR.join([f"{name}: {value}" if value.__class__ in _SCALARS else f"{name}: {_text(value)}"
+                               for name in names if (value := row[name]) is not None])
+        return text or None
+    pairs = []
+    for name, meanings in zip(names, maps, strict=True):
+        value = row[name]
+        if value is None:
+            continue
+        shown = value if value.__class__ is str else _text(value)
+        meaning = meanings.get(shown.lower()) if meanings is not None else None
+        pairs.append(f"{name}: {shown} ({meaning})" if meaning is not None else f"{name}: {shown}")
+    return SEPARATOR.join(pairs) or None
 
 
 def _lookup(row: dict[str, Any], names: Iterable[str]) -> Any:
@@ -265,15 +330,21 @@ class TimelineSpool:
 class _Plan:
     """Where a row with one set of field names finds each column: worked out once per set."""
 
-    __slots__ = ("aliases", "all", "content", "details", "fields", "record", "time")
+    __slots__ = ("aliases", "all", "cells", "content", "details", "fields", "folded", "groups", "record", "time")
 
     time: str | None
     aliases: dict[str, str | None]
     fields: dict[str, str | None]
+    folded: dict[str, str]
+    # Fields Details may list: none a column shows, none the skip list names
     details: tuple[str, ...]
     all: tuple[str, ...]
     content: tuple[tuple[str, str], ...]
     record: bool
+    # The layout groups this row can match: its own spelling of their fields
+    groups: tuple[tuple[tuple[str, ...], dict[tuple[str, ...], int]], ...]
+    # Details and ExtraFields per matching layout (None: no layout matched)
+    cells: dict[int | None, tuple[_Fields, _Fields]]
 
 
 class _Renderer:
@@ -293,8 +364,19 @@ class _Renderer:
         self.skip = spool.presentation.skip
         self.fields = {column: match.group(1) for column in spool.columns
                        if (match := _FIELD_COLUMN.fullmatch(column))}
-        self.wants_details = "Details" in spool.columns or "ExtraFields" in spool.columns
+        self.wants_details = "Details" in spool.columns
+        self.wants_extra = "ExtraFields" in spool.columns
         self.wants_all = "AllFields" in spool.columns
+        self.layouts = spool.presentation.layouts
+        self.value_maps = spool.presentation.value_maps
+        # Layouts testing the same fields share one index of their values; the
+        # earliest layout an event matches in any of them is the one it gets.
+        groups: dict[tuple[str, ...], dict[tuple[str, ...], int]] = {}
+        for position, layout in enumerate(self.layouts):
+            index = groups.setdefault(tuple(name for name, _ in layout.when), {})
+            for values in itertools.product(*(sorted(accepted) for _, accepted in layout.when)):
+                index.setdefault(values, position)
+        self.layout_groups = tuple(groups.items())
         self.csv = spool.fmt == "csv"
         self.end = b"\r\n" if self.csv else b"\n"
         self._plans: dict[tuple[str, ...], _Plan] = {}
@@ -345,6 +427,14 @@ class _Renderer:
         plan.content = tuple((name.lower(), name) for name in ordered
                              if name != _INTERNAL and name.lower() != "originallogfile")
         plan.record = all(plan.aliases[column] for column in ("Computer", "Channel", "RecordID"))
+        plan.folded = folded
+        groups = []
+        for when, index in self.layout_groups:
+            spelled = tuple(folded.get(name) for name in when)
+            if all(spelled):
+                groups.append((tuple(name for name in spelled if name), index))
+        plan.groups = tuple(groups)
+        plan.cells = {}
         if len(self._plans) < self.PLANS:
             self._plans[names] = plan
         return plan
@@ -357,11 +447,15 @@ class _Renderer:
         values = {column: get(name) if name else None for column, name in plan.aliases.items()}
         for column, name in plan.fields.items():
             values[column] = get(name) if name else None
-        if self.wants_details:
-            details = [f"{name}: {value}" if value.__class__ in _SCALARS else f"{name}: {_text(value)}"
-                       for name in plan.details if (value := row[name]) is not None]
-            values["Details"] = SEPARATOR.join(details) or None
-            values["ExtraFields"] = None
+        if self.wants_details or self.wants_extra:
+            layout = None
+            for names, index in plan.groups:
+                found = index.get(tuple(str(row[name]).lower() for name in names))
+                if found is not None and (layout is None or found < layout):
+                    layout = found
+            details, extra = plan.cells.get(layout) or self._cells(plan, layout)
+            values["Details"] = _pairs(row, details)
+            values["ExtraFields"] = _pairs(row, extra) if self.wants_extra else None
         if self.wants_all:
             values["AllFields"] = {name: row[name] for name in plan.all}
         source = values["SourceFile"] = get("OriginalLogfile")
@@ -375,6 +469,27 @@ class _Renderer:
                 for folded, name in plan.content]))
         return self._line(values, rule, instant, raw_time, position, identity, source)
 
+    def _fields(self, names: Iterable[str]) -> _Fields:
+        listed = tuple(names)
+        maps = tuple(self.value_maps.get(name.lower()) for name in listed)
+        return listed, maps if any(meanings is not None for meanings in maps) else None
+
+    def _cells(self, plan: _Plan, layout: int | None) -> tuple[_Fields, _Fields]:
+        """Details and ExtraFields for a row of ``plan`` under ``layout``.
+
+        Without a layout Details lists every field and ExtraFields nothing; with
+        one, Details lists the layout's fields the event has, in its order, and
+        ExtraFields the rest.
+        """
+        if layout is None:
+            cells = (self._fields(plan.details), self._fields(()))
+        else:
+            shown = [plan.folded[name.lower()] for name in self.layouts[layout].show if name.lower() in plan.folded]
+            listed = set(shown)
+            cells = (self._fields(shown), self._fields(name for name in plan.details if name not in listed))
+        plan.cells[layout] = cells
+        return cells
+
     def _alert(self, row: dict[str, Any], rule: dict[str, Any], position: int) -> bytes:
         occurrence = row.get("occurrence_time")
         instant = None
@@ -387,7 +502,7 @@ class _Renderer:
         for column, name in self.fields.items():
             found = _lookup(group, (name,))
             values[column] = found if found is not None else _lookup(row, (name,))
-        if self.wants_details:
+        if self.wants_details or self.wants_extra:
             details = [("Events", row.get("event_count")), *sorted(group.items(), key=lambda item: item[0].lower())]
             if row.get("metric_name"):
                 details.append((str(row["metric_name"]), row.get("metric_value")))

@@ -361,9 +361,12 @@ process. `timeline.py` holds both halves.
   is written beside the destination and moved over it once complete. The spool,
   `tmp-zircolite-timeline-*`, sits in the timeline's directory (`--working-db-dir` or the
   system temporary directory for stdout) and goes when the run ends.
-- **Rendering.** Fields are listed in name order: a unified database and a per-file one list
-  an event's columns in different orders. `row_id` never appears, since it differs between
-  layouts.
+- **Rendering.** What depends on the field names alone, such as where each column reads and
+  which fields `Details` and `ExtraFields` list under each layout, is worked out once per set
+  of names, which every row of one event type shares. Layouts testing the same fields share
+  one index of their values, so finding an event's layout is a lookup per group of fields.
+  Fields are listed in name order, as a unified database and a per-file one list an event's
+  columns in different orders. `row_id` never appears, since it differs between layouts.
 
 ## Module map
 

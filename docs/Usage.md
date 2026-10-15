@@ -669,16 +669,20 @@ python3 zircolite.py -e logs/ --timeline - | jq 'select(.Level == "high")'
 | `standard` (default) | `minimal`, plus `RecordID`, `ExtraFields`, `RuleID`, `Tactics`, `Techniques`, `SourceFile` |
 | `full` | `standard` with `AllFields`, every field of the event, instead of `ExtraFields` |
 
-`Details` lists the event's fields as `Name: value ¦ Name: value`, in name order. It leaves
-out the fields another column shows and those that describe the log rather than the activity
-(`Keywords`, `Opcode`, `Provider_Name`, …). `Tactics` and `Techniques` come from the rule's
-ATT&CK tags; `SourceFile` is the name of the log file. A correlation alert's `Details` gives
-its event count, its group and its metric.
+`Details` sums the event up as `Name: value ¦ Name: value`. For the events Zircolite knows
+(Sysmon, the common Security, System and PowerShell events, Defender, auditd, …) it lists the
+fields that say what happened, adding what some values mean (`LogonType: 3 (Network)`); for
+other events, every field, in name order. `ExtraFields` holds the fields `Details` leaves
+out. Neither repeats a field another column shows, nor those that describe the log rather
+than the activity (`Keywords`, `Opcode`, `Provider_Name`, …). `Tactics` and `Techniques`
+come from the rule's ATT&CK tags; `SourceFile` is the name of the log file. A correlation
+alert's `Details` gives its event count, its group and its metric.
 
 `config/timeline.yaml` holds the profiles, the fields `Computer`, `Channel`, `EventID` and
-`RecordID` read from (auditd's `type` stands in for `EventID`), and the fields `Details`
-leaves out. To change them or add a profile, point `--timeline-config` at a copy. A profile
-can also show any event field as a column of its own, named `%Field%`.
+`RecordID` read from (auditd's `type` stands in for `EventID`), and what `Details` shows:
+see [Advanced → Timeline Details and value maps](Advanced.md#timeline-details-and-value-maps).
+To change them or add a profile, point `--timeline-config` at a copy. A profile can also show
+any event field as a column of its own, named `%Field%`.
 
 ### Rule performance profiling
 

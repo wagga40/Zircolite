@@ -392,7 +392,8 @@ class TestTimelineParity:
             ("2024-05-01T10:00:30.123456+00:00", "Any event", "-"),
             ("2024-05-01T10:00:30.123456+00:00", "Any event", "-"),
         ]
-        assert rows[1]["Details"] == "CommandLine: whoami /all ¦ Protocol: 6"
+        # The shipped 4688 layout picks the command line; the value map explains the protocol
+        assert (rows[1]["Details"], rows[1]["ExtraFields"]) == ("CommandLine: whoami /all", "Protocol: 6 (TCP)")
         assert rows[1]["Tactics"] == "discovery"
 
     def test_the_full_timeline_agrees_in_every_layout(self, tmp_path):

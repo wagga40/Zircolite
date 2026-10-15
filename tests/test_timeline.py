@@ -33,7 +33,7 @@ NET = {"title": "Net use", "id": "r-2", "level": "medium", "filename": "net.yml"
 def make_spool(tmp_path, profile="standard", presentation=None, rules=(WHOAMI, NET), fmt="jsonl", **overrides):
     presentation = presentation or load_presentation(SHIPPED)
     directory = tmp_path / "spool"
-    directory.mkdir(exist_ok=True)
+    directory.mkdir(parents=True, exist_ok=True)
     return TimelineSpool(directory=str(directory), columns=presentation.profiles[profile],
                          presentation=presentation, fmt=fmt, time_field="SystemTime",
                          rule_keys=rule_index(list(rules)), **overrides)
@@ -97,11 +97,28 @@ class TestConfiguration:
         (presentation_with(columns={"Computer": ["Computer"], "Channel": ["Channel"],
                                     "EventID": ["EventID"]}), "columns.RecordID is missing"),
         (presentation_with(details={"skip": "Keywords"}), "details.skip must be a non-empty list"),
-        (presentation_with(details={"layouts": []}), "details.layouts is not a timeline setting"),
+        (presentation_with(details={"layouts": {"when": {}}}), "details.layouts must be a list"),
+        (presentation_with(details={"layouts": [{"when": {}, "show": ["A"]}]}),
+         "details.layouts[0].when must name at least one field"),
+        (presentation_with(details={"layouts": [{"when": {"EventID": [1, {"x": 1}]}, "show": ["A"]}]}),
+         "details.layouts[0].when.EventID must be a value or a list of values"),
+        (presentation_with(details={"layouts": [{"when": {"EventID": 1}, "show": []}]}),
+         "details.layouts[0].show must be a non-empty list"),
+        (presentation_with(details={"layouts": [{"when": {"EventID": 1}, "show": ["A"], "label": "x"}]}),
+         "details.layouts[0].label is not a timeline setting"),
+        (presentation_with(value_maps={"LogonType": [1]}), "value_maps.LogonType must be a mapping"),
+        (presentation_with(value_maps={"LogonType": {3: ""}}), "value_maps.LogonType.3 must map a value to a text"),
     ])
     def test_a_wrong_key_is_named(self, document, named):
         with pytest.raises(TimelineConfigError, match=named.replace("[", r"\[").replace("]", r"\]")):
             parse_presentation(document, "t.yaml")
+
+    def test_the_shipped_value_maps_quote_their_hexadecimal_values(self):
+        """Unquoted, YAML reads 0x18 as the number 24, and the map never matches."""
+        import re
+
+        assert not re.search(r"^\s+0x[0-9a-fA-F]+\s*:", SHIPPED.read_text(), re.MULTILINE)
+        assert load_presentation(SHIPPED).value_maps["status"]["0x18"] == "wrong password"
 
     def test_an_unreadable_file_is_a_configuration_error(self, tmp_path):
         broken = tmp_path / "t.yaml"
@@ -132,11 +149,11 @@ class TestRows:
             "Tactics": ["discovery"], "Techniques": ["T1033"], "SourceFile": "a.evtx",
         }
 
-    def test_details_lists_the_activity_in_field_name_order(self, tmp_path):
+    def test_without_a_layout_details_lists_the_fields_in_name_order(self, tmp_path):
         """Name order: a unified database and a per-file one list an event's columns differently."""
         spool = make_spool(tmp_path, "minimal")
 
-        _, path = write(tmp_path, spool, result(WHOAMI, event(Image="C:\\w.exe", CommandLine="whoami",
+        _, path = write(tmp_path, spool, result(WHOAMI, event(EventID=9999, Image="C:\\w.exe", CommandLine="whoami",
                                                              Keywords="0x80", User="bob")))
 
         assert jsonl(path)[0]["Details"] == "CommandLine: whoami ¦ Image: C:\\w.exe ¦ User: bob"
@@ -225,6 +242,81 @@ class TestRows:
         assert row["Details"] == "Events: 2 ¦ Computer: host ¦ event_count: 2"
         assert row["ExtraFields"] == "alert_id: a1 ¦ window_end: 1704067260.0 ¦ window_start: 1704067200.0"
         assert row["SourceFile"] is None
+
+
+class TestLayouts:
+    LAYOUTS = presentation_with(
+        profiles={"p": ["Timestamp", "Details", "ExtraFields"], "all": ["Details", "AllFields"]},
+        details={"skip": ["OriginalLogfile", "SystemTime", "Channel", "EventID", "Computer", "EventRecordID"],
+                 "layouts": [
+                     {"when": {"Channel": "Security", "EventID": [4624, 4625]},
+                      "show": ["TargetUserName", "LogonType", "IpAddress", "WorkstationName"]},
+                     {"when": {"EventID": 4624}, "show": ["IpAddress"]},
+                     {"when": {"Channel": "Security"}, "show": ["SubjectUserName"]},
+                 ]},
+        value_maps={"LogonType": {3: "Network"}, "Status": {"0xC000006A": "wrong password"}},
+    )
+
+    def _row(self, tmp_path, row, profile="p"):
+        spool = make_spool(tmp_path, profile, parse_presentation(self.LAYOUTS, "t"))
+        _, path = write(tmp_path, spool, result(WHOAMI, row))
+        return jsonl(path)[0]
+
+    def test_a_layout_chooses_details_and_extra_fields_take_the_rest(self, tmp_path):
+        row = self._row(tmp_path, event(EventID=4624, TargetUserName="bob", LogonType=3, IpAddress="10.0.0.5",
+                                        LogonProcessName="NtLmSsp", AuthenticationPackageName="NTLM"))
+
+        assert row["Details"] == "TargetUserName: bob ¦ LogonType: 3 (Network) ¦ IpAddress: 10.0.0.5"
+        assert row["ExtraFields"] == "AuthenticationPackageName: NTLM ¦ LogonProcessName: NtLmSsp"
+
+    def test_the_first_layout_matching_wins_whatever_fields_it_tests(self, tmp_path):
+        broad = self._row(tmp_path / "a", event(EventID=4624, IpAddress="10.0.0.5", SubjectUserName="sys"))
+        other = self._row(tmp_path / "b", event(EventID=4672, SubjectUserName="sys", PrivilegeList="SeDebug"))
+
+        assert broad["Details"] == "IpAddress: 10.0.0.5"
+        assert other["Details"] == "SubjectUserName: sys"
+
+    def test_values_compare_as_text_ignoring_case(self, tmp_path):
+        row = event(EventID="4625", TargetUserName="bob", Status="0xc000006a")
+        row["Channel"] = "SECURITY"
+
+        written = self._row(tmp_path, row)
+
+        assert written["Details"] == "TargetUserName: bob"
+        assert written["ExtraFields"] == "Status: 0xc000006a (wrong password)"
+
+    def test_an_event_matching_no_layout_lists_every_field(self, tmp_path):
+        row = event(EventID=1, Image="w.exe", LogonType=3)
+        row["Channel"] = "Microsoft-Windows-Sysmon/Operational"
+
+        written = self._row(tmp_path, row)
+
+        assert written["Details"] == "Image: w.exe ¦ LogonType: 3 (Network)"
+        assert written["ExtraFields"] is None
+
+    def test_a_layout_needs_every_field_it_tests(self, tmp_path):
+        row = event(EventID=4624, IpAddress="10.0.0.5", SubjectUserName="sys")
+        del row["Channel"]
+
+        assert self._row(tmp_path, row)["Details"] == "IpAddress: 10.0.0.5"
+
+    def test_value_maps_never_change_the_value_itself(self, tmp_path):
+        written = self._row(tmp_path, event(EventID=4624, LogonType=3), profile="all")
+
+        assert written["Details"] == "LogonType: 3 (Network)"
+        assert written["AllFields"]["LogonType"] == 3
+
+    def test_the_shipped_layouts_cover_a_sysmon_process_creation(self, tmp_path):
+        row = event(EventID=1, CommandLine="whoami /all", Image="C:\\w.exe", User="CORP\\bob",
+                    ParentImage="C:\\cmd.exe", Hashes="MD5=00", UtcTime="2024-01-01 00:00:00.000")
+        row["Channel"] = "Microsoft-Windows-Sysmon/Operational"
+        spool = make_spool(tmp_path)
+
+        _, path = write(tmp_path, spool, result(WHOAMI, row))
+
+        [written] = jsonl(path)
+        assert written["Details"] == "CommandLine: whoami /all ¦ Image: C:\\w.exe ¦ User: CORP\\bob ¦ ParentImage: C:\\cmd.exe"
+        assert written["ExtraFields"] == "Hashes: MD5=00 ¦ UtcTime: 2024-01-01 00:00:00.000"
 
 
 class TestOrder:
