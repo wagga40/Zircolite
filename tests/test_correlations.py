@@ -192,14 +192,15 @@ class TestCorrelationPlansRun:
 
         assert (result or {}).get("count") == expected
 
-    def test_csv_mode_writes_nested_values_as_json(self, tmp_path, make_core):
+    def test_csv_mode_leaves_nested_values_to_the_csv_writer(self, tmp_path, make_core):
+        """The alert stays as the plan made it; the CSV file writes it as JSON (test below)."""
         rules = convert(tmp_path, [base(), correlation()])
         core = make_core([event(0), event(1)], csv_mode=True)
 
         alert = core.execute_rule(rules[0])["matches"][0]
 
-        assert alert["group_keys"] == '{"Computer":"host"}'
-        assert alert["event_ids"].startswith("[")
+        assert alert["group_keys"] == {"Computer": "host"}
+        assert isinstance(alert["event_ids"], list)
 
     def test_alerts_stream_through_a_row_spool(self, tmp_path, make_core):
         rules = convert(tmp_path, [base(), correlation()])

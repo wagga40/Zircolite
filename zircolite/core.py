@@ -1254,7 +1254,7 @@ class ZircoliteCore:
                                     continue
                                 seen_ids.add(identity)
                                 query_ids.add(identity)
-                            filtered_rows.append(sanitize_row_for_csv(row) if self.csv_mode else row)
+                            filtered_rows.append(row)
                             if self.limit != -1 and len(filtered_rows) > self.limit:
                                 if isinstance(filtered_rows, RowSpool):
                                     filtered_rows.close()
@@ -1351,8 +1351,7 @@ class ZircoliteCore:
         matches: RowSpool | list[dict[str, Any]] = RowSpool() if stream_rows else []
         try:
             for alert in alerts:
-                safe_alert = clean(alert)
-                matches.append(sanitize_row_for_csv(safe_alert) if self.csv_mode else safe_alert)
+                matches.append(clean(alert))
         except BaseException:
             if isinstance(matches, RowSpool):
                 matches.close()
@@ -1438,13 +1437,15 @@ class ZircoliteCore:
             description = rule_results["description"]
             level = rule_results["rule_level"]
             count = rule_results["count"]
+            # Rewritten here and not in the results: result sinks, such as the
+            # package, must see the values the events hold.
             for data in rule_results["matches"]:
                 dict_csv = {
                     "rule_title": title,
                     "rule_description": description,
                     "rule_level": level,
                     "rule_count": count,
-                    **data
+                    **sanitize_row_for_csv(data)
                 }
                 csv_writer.writerow(dict_csv)
         elif isinstance(rule_results.get("matches"), RowSpool):

@@ -151,7 +151,7 @@ def _float(value: Any) -> float | None:
 
 
 def _row_id(value: Any) -> int | None:
-    """A match's row_id; ``--csv`` hands rows to sinks with every value as text."""
+    """A match's row_id, given as an int or as its decimal text."""
     if isinstance(value, str) and value.isdigit():
         value = int(value)
     if type(value) is int and 0 <= value < ROW_ID_LIMIT:
@@ -160,7 +160,7 @@ def _row_id(value: Any) -> int | None:
 
 
 def _json_value(value: Any) -> Any:
-    """A list or object that ``--csv`` may already have turned into its JSON text."""
+    """A list or object, given as itself or as its JSON text."""
     return orjson.loads(value) if isinstance(value, str) else value
 
 

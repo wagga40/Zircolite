@@ -17,6 +17,7 @@ With ``ZIRCOLITE_BINARY`` set, every run goes through that executable instead
 of the in-process CLI, so a built binary has to pass the same checks.
 """
 
+import csv
 import json
 import os
 import subprocess
@@ -61,11 +62,12 @@ FORMAT_FIXTURES = [
 ]
 
 
-def run_zircolite(tmp_path, source, flags, ruleset=MATCH_ALL_RULESET, extra=()):
+def run_zircolite(tmp_path, source, flags, ruleset=MATCH_ALL_RULESET, extra=(), outname="detected.json",
+                  read=lambda path: json.loads(path.read_text())):
     """Run the CLI over *source* and return the parsed detections."""
     ruleset_file = tmp_path / "ruleset.json"
     ruleset_file.write_text(ruleset)
-    outfile = tmp_path / "detected.json"
+    outfile = tmp_path / outname
 
     argv = [
         "zircolite.py",
@@ -95,7 +97,7 @@ def run_zircolite(tmp_path, source, flags, ruleset=MATCH_ALL_RULESET, extra=()):
             zircolite_script.main()
 
     assert outfile.exists(), f"no output written for {source}"
-    return json.loads(outfile.read_text())
+    return read(outfile)
 
 
 def detection_summary(detections):
@@ -271,6 +273,35 @@ class TestProcessingModeEquivalence:
             "Foo matched case-insensitively",
             "Widget seen",
         ]
+
+    def test_csv_rewrites_values_alike_in_every_mode(self, tmp_path):
+        """Each mode writes CSV through its own path; every one must defuse the same values."""
+        corpus = tmp_path / "corpus"
+        corpus.mkdir()
+        for index in range(3):
+            event = {"Event": {"System": {"Channel": "Security", "EventID": 1},
+                               "EventData": {"CommandLine": f"=cmd{index}\nwhoami", "Delta": -3 - index}}}
+            (corpus / f"events{index}.json").write_text(json.dumps(event))
+        ruleset = json.dumps([{"title": "Delta below zero", "id": "csv-1", "level": "high",
+                               "tags": [], "rule": ["SELECT * FROM logs WHERE Delta < 0"]}])
+        modes = {**self.MODES, "process": ["--no-auto-mode", "--executor", "process"]}
+
+        def read(path):
+            with path.open(encoding="utf-8", newline="") as handle:
+                # rule_count is per database: 1 per file in per-file runs, 3 in a unified one.
+                return sorted(tuple(sorted((k, v) for k, v in row.items() if k != "rule_count"))
+                              for row in csv.DictReader(handle, delimiter=";"))
+
+        outputs = {}
+        for name, flags in modes.items():
+            run_dir = tmp_path / name
+            run_dir.mkdir()
+            outputs[name] = run_zircolite(run_dir, corpus, ["-j", "--csv", *flags], ruleset=ruleset,
+                                          outname="detected.csv", read=read)
+
+        assert all(rows == outputs["per-file"] for rows in outputs.values()), outputs
+        values = sorted((dict(row)["CommandLine"], dict(row)["Delta"]) for row in outputs["per-file"])
+        assert values == [("'=cmd0 whoami", "'-3"), ("'=cmd1 whoami", "'-4"), ("'=cmd2 whoami", "'-5")]
 
     def test_glob_order_does_not_change_the_answer(self, tmp_path):
         """Whichever file is read first must not decide what the rest can match."""

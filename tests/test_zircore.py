@@ -998,6 +998,97 @@ class TestZircoliteCoreRulesetExecution:
         assert "rule_title" in content
         zircore.close()
 
+    def test_csv_mode_hands_result_sinks_the_rows_unchanged(self, field_mappings_file, tmp_path, test_logger):
+        """Only the CSV file is rewritten for spreadsheets; sinks such as the package see the event."""
+        zircore = ZircoliteCore(
+            config=field_mappings_file,
+            processing_config=ProcessingConfig(csv_mode=True, disable_progress=True),
+            logger=test_logger,
+        )
+        zircore.create_db("'CommandLine' TEXT COLLATE NOCASE,\n'Delta' INTEGER,\n")
+        zircore.db_connection.execute("INSERT INTO logs (CommandLine, Delta) VALUES ('=cmd\nwhoami', -3)")
+        zircore.db_connection.commit()
+        zircore.load_ruleset_from_var([{
+            "title": "t", "id": "t-1", "description": "", "level": "high", "tags": [],
+            "rule": ["SELECT * FROM logs WHERE Delta < 0"],
+        }])
+        received = []
+        output_file = tmp_path / "output.csv"
+        try:
+            zircore.execute_ruleset(
+                str(output_file), write_mode="w", last_ruleset=True,
+                result_sink=lambda result: received.extend(dict(row) for row in result["matches"]),
+            )
+        finally:
+            zircore.close()
+
+        assert len(received) == 1
+        assert received[0]["CommandLine"] == "=cmd\nwhoami"
+        assert received[0]["Delta"] == -3
+        assert isinstance(received[0]["row_id"], int)
+        with output_file.open(encoding="utf-8", newline="") as handle:
+            rows = list(csv.DictReader(handle, delimiter=";"))
+        assert [(row["CommandLine"], row["Delta"]) for row in rows] == [("'=cmd whoami", "'-3")]
+
+    def test_csv_mode_hands_result_sinks_the_alerts_unchanged(self, field_mappings_file, tmp_path, test_logger):
+        """A negative metric written as '-2 for spreadsheets is no number to the package."""
+        from zircolite.config import RulesetConfig
+        from zircolite.rules import RulesetHandler
+        rules_yml = tmp_path / "rules.yml"
+        rules_yml.write_text("""
+---
+title: Process Create
+name: proc_create
+id: aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa
+logsource:
+  product: windows
+  service: sysmon
+detection:
+  selection:
+    EventID: 1
+  condition: selection
+level: high
+---
+title: Falling balance
+id: bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb
+correlation:
+  type: value_sum
+  rules:
+    - proc_create
+  group-by:
+    - Image
+  timespan: 5m
+  condition:
+    field: Delta
+    lte: -1
+level: high
+""")
+        handler = RulesetHandler(
+            RulesetConfig(ruleset=[str(rules_yml)], pipeline=[["sysmon"]]), logger=test_logger,
+        )
+        zircore = ZircoliteCore(
+            field_mappings_file, ProcessingConfig(csv_mode=True, no_output=True), logger=test_logger,
+        )
+        try:
+            zircore.create_db(
+                "SystemTime TEXT COLLATE NOCASE, Channel TEXT COLLATE NOCASE, EventID INTEGER, "
+                "Image TEXT COLLATE NOCASE, Delta INTEGER"
+            )
+            zircore.insert_data_to_db([
+                {"SystemTime": f"2026-01-01T00:00:0{i}Z", "Channel": "Microsoft-Windows-Sysmon/Operational",
+                 "EventID": 1, "Image": "=calc.exe", "Delta": -2}
+                for i in range(3)
+            ])
+            correlation = next(rule for rule in handler.rulesets if rule.get("correlation_plan"))
+            result = zircore.execute_rule(correlation)
+        finally:
+            zircore.close()
+
+        alert = result["matches"][0]
+        assert isinstance(alert["metric_value"], int | float)
+        assert alert["metric_value"] < 0
+        assert alert["group_keys"] == {"Image": "=calc.exe"}
+
     def test_execute_ruleset_csv_header_covers_every_event_column(
         self, field_mappings_file, tmp_path, test_logger
     ):
