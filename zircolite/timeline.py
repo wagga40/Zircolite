@@ -34,7 +34,7 @@ import orjson
 
 from .attack import extract_attack_tactics, extract_attack_techniques
 from .package_spool import RuleIndex, rule_position, time_microseconds
-from .utils import sanitize_value_for_csv
+from .utils import safe_load, sanitize_value_for_csv
 
 TIMELINE_FORMATS = {".csv": "csv", ".jsonl": "jsonl", ".ndjson": "jsonl"}
 DEFAULT_TIMELINE = "timeline.csv"
@@ -135,7 +135,7 @@ def load_presentation(path: str | Path) -> Presentation:
 
     try:
         with open(path, encoding="utf-8") as handle:
-            raw = yaml.safe_load(handle)
+            raw = safe_load(handle)
     except (OSError, UnicodeDecodeError, yaml.YAMLError) as exc:
         raise TimelineConfigError(f"{path}: {exc}") from exc
     return parse_presentation(raw, str(path))
@@ -618,7 +618,7 @@ def _write_run(directory: str, lines: Iterable[bytes]) -> str:
 def _merge(runs: list[str]) -> Iterator[bytes]:
     with ExitStack() as stack:
         handles = [stack.enter_context(open(run, "rb")) for run in runs]
-        yield from heapq.merge(*handles)
+        yield from heapq.merge(*handles) if len(handles) > 1 else (handles[0] if handles else ())
 
 
 def merge_runs(runs: list[str], directory: str, fan_in: int = MERGE_FAN_IN) -> Iterator[bytes]:

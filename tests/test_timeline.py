@@ -472,6 +472,14 @@ class TestSorting:
 
 
 class TestFiles:
+    def test_a_run_without_detections_writes_the_header_alone(self, tmp_path):
+        spool = make_spool(tmp_path, "minimal", fmt="csv")
+
+        stats, path = write(tmp_path, spool)
+
+        assert path.read_bytes() == b"Timestamp,Computer,Channel,EventID,Level,RuleTitle,Details\r\n"
+        assert stats.rows == 0
+
     def test_csv_cells_cannot_become_formulas(self, tmp_path):
         presentation = parse_presentation(presentation_with(profiles={"p": ["%CommandLine%", "Details"]}), "t")
         spool = make_spool(tmp_path, "p", presentation, fmt="csv")
