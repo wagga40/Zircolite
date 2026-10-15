@@ -43,7 +43,6 @@ def _make_ctx(
         db_location=":memory:",
         delimiter=";",
         rulesets=sample_ruleset,
-        rule_filters=None,
         outfile=outfile,
         ready_for_templating=False,
         package=False,

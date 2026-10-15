@@ -448,6 +448,11 @@ and a space instead of `T`.
 - `-R`/`--rulefilter` skips rules whose title contains the text (case-sensitive); repeat it
   for more. [`--profile-rules`](Usage.md#rule-performance-profiling) shows which rules are
   slow on your data.
+  - Rules with identical SQL run once, under the title of the highest-level one. `-R`
+    applies before that merge, so skipping one title leaves the others with the same SQL
+    running under their own titles.
+  - A run whose filters leave no rule stops with exit code 1, and an empty filter is
+    refused.
 - `--min-level` loads only rules at a level or above.
 - `--limit N` drops the output of any rule matching more than N events (alerts, for a
   correlation), counted per database: per file in per-file runs, corpus-wide in unified

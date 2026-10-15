@@ -1380,6 +1380,82 @@ class TestMinimumLevel:
         assert "3 rule(s) below level high left out" in " ".join(str(c) for c in mock_info.call_args_list)
 
 
+class TestRuleFilter:
+    """-R is applied once, at load time, before anything is derived from the rules."""
+
+    def _handler(self, rules, test_logger, rule_filters, **config):
+        with patch.object(RulesetHandler, "ruleset_parsing", return_value=[rules]):
+            return RulesetHandler(
+                RulesetConfig(ruleset=[], rule_filters=rule_filters, **config), logger=test_logger
+            )
+
+    def test_a_rule_sharing_sql_with_a_removed_one_still_runs(self, test_logger):
+        # Duplicate removal keeps the higher level; filtering after it lost both.
+        rules = [
+            {"title": "Kept by dedup", "level": "high", "rule": ["SELECT * FROM logs WHERE EventID=1"]},
+            {"title": "Same SQL", "level": "medium", "rule": ["SELECT * FROM logs WHERE EventID=1"]},
+        ]
+        handler = self._handler(rules, test_logger, ["Kept by dedup"])
+        assert [rule["title"] for rule in handler.rulesets] == ["Same SQL"]
+
+    def test_matching_is_a_case_sensitive_title_substring(self, test_logger):
+        rules = [
+            {"title": "Noisy PowerShell", "level": "high", "rule": ["SELECT * FROM logs WHERE a=1"]},
+            {"title": "noisy cmd", "level": "high", "rule": ["SELECT * FROM logs WHERE a=2"]},
+            {"title": "Quiet", "level": "high", "rule": ["SELECT * FROM logs WHERE a=3"]},
+        ]
+        handler = self._handler(rules, test_logger, ["Noisy"])
+        assert sorted(rule["title"] for rule in handler.rulesets) == ["Quiet", "noisy cmd"]
+
+    def test_the_count_removed_is_reported(self, test_logger):
+        rules = [
+            {"title": "Noisy", "level": "high", "rule": ["SELECT * FROM logs WHERE a=1"]},
+            {"title": "Quiet", "level": "high", "rule": ["SELECT * FROM logs WHERE a=2"]},
+        ]
+        with patch.object(test_logger, "info") as mock_info:
+            self._handler(rules, test_logger, ["Noisy"])
+        assert "1 rule(s) removed by --rulefilter" in " ".join(str(c) for c in mock_info.call_args_list)
+
+    def test_combines_with_min_level(self, test_logger):
+        rules = [
+            {"title": "Noisy", "level": "high", "rule": ["SELECT * FROM logs WHERE a=1"]},
+            {"title": "Low", "level": "low", "rule": ["SELECT * FROM logs WHERE a=2"]},
+            {"title": "Kept", "level": "high", "rule": ["SELECT * FROM logs WHERE a=3"]},
+        ]
+        handler = self._handler(rules, test_logger, ["Noisy"], min_level="medium")
+        assert [rule["title"] for rule in handler.rulesets] == ["Kept"]
+
+    def test_a_removed_rule_does_not_widen_the_event_filter(self, test_logger):
+        rules = [
+            {"title": "Logons", "level": "high",
+             "rule": ["SELECT * FROM logs WHERE Channel='Security' AND EventID=4624"]},
+            {"title": "Services", "level": "high",
+             "rule": ["SELECT * FROM logs WHERE Channel='System' AND EventID=7045"]},
+        ]
+        handler = self._handler(rules, test_logger, ["Services"])
+        assert handler.event_filter is not None
+        assert handler.event_filter.should_process_event("Security", 4624) is True
+        assert handler.event_filter.should_process_event("System", 7045) is False
+
+    def test_a_removed_correlation_rule_leaves_the_event_filter_on(self, test_logger):
+        rules = [
+            {"title": "Logons", "level": "high",
+             "rule": ["SELECT * FROM logs WHERE Channel='Security' AND EventID=4624"]},
+            {"title": "Burst", "level": "high", "rule": ["SELECT 1"], "correlation": True,
+             "correlation_plan": {"type": "event_count"}},
+        ]
+        handler = self._handler(rules, test_logger, ["Burst"])
+        assert [rule["title"] for rule in handler.rulesets] == ["Logons"]
+        assert handler.event_filter is not None
+        assert handler.event_filter.is_enabled is True
+
+    def test_removing_every_rule_leaves_none(self, test_logger):
+        rules = [{"title": "Noisy", "level": "high", "rule": ["SELECT * FROM logs WHERE a=1"]}]
+        handler = self._handler(rules, test_logger, ["Noisy"])
+        assert handler.rulesets == []
+        assert handler.loaded_rule_count == 1
+
+
 class TestRulesetHandlerInitBranches:
     """Tests for RulesetHandler __init__ branches that are often uncovered."""
 

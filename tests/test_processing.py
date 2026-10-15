@@ -90,7 +90,6 @@ def dummy_ctx(tmp_path, memory_tracker):
         db_location=":memory:",
         delimiter=";",
         rulesets=[],
-        rule_filters=None,
         outfile=str(tmp_path / "detected_events.json"),
         ready_for_templating=False,
         package=False,
@@ -749,7 +748,6 @@ class TestProcessDbInputSkippedFiles:
                 "level": "high", "tags": [],
                 "rule": ["SELECT * FROM logs WHERE CommandLine LIKE '%powershell%' ESCAPE '\\'"],
             }],
-            rule_filters=None,
             outfile=str(tmp_path / "detected_events.json"),
             ready_for_templating=False,
             package=False,
@@ -899,7 +897,7 @@ class TestParallelKeepflatEndToEnd:
             events_after=time.strptime("2020-01-01T00:00:00", "%Y-%m-%dT%H:%M:%S"),
             events_before=time.strptime("2030-01-01T00:00:00", "%Y-%m-%dT%H:%M:%S"),
             limit=-1, csv_mode=False, time_field="SystemTime",
-            db_location=":memory:", delimiter=";", rulesets=[], rule_filters=None,
+            db_location=":memory:", delimiter=";", rulesets=[],
             outfile=str(tmp_path / "out.json"), ready_for_templating=False,
             package=False, dbfile=None, keepflat=True, memory_tracker=memory_tracker,
         )
@@ -974,7 +972,6 @@ class TestPerfileShutdownFinalization:
                 "title": "PS", "id": "1", "description": "", "level": "high", "tags": [],
                 "rule": ["SELECT * FROM logs WHERE CommandLine LIKE '%powershell%' ESCAPE '\\'"],
             }],
-            rule_filters=None,
             outfile=str(outfile), ready_for_templating=False,
             package=False, dbfile=None, keepflat=False, memory_tracker=memory_tracker,
         )

@@ -102,7 +102,6 @@ class ProcessingContext:
     db_location: str
     delimiter: str
     rulesets: list
-    rule_filters: list | None
     outfile: str
     ready_for_templating: bool
     package: bool
@@ -476,9 +475,7 @@ def process_unified_streaming(
         zircolite_core.failed_files, metrics=zircolite_core.metrics)
     _collect_package_part(ctx, None, error)
 
-    zircolite_core.load_ruleset_from_var(
-        ruleset=ctx.rulesets, rule_filters=ctx.rule_filters
-    )
+    zircolite_core.load_ruleset_from_var(ctx.rulesets)
 
     if ctx.limit > 0:
         ctx.logger.info(
@@ -649,9 +646,7 @@ def process_perfile_streaming(
                     zircolite_core.failed_files, metrics=zircolite_core.metrics)
                 _collect_package_part(ctx, None, error)
 
-                zircolite_core.load_ruleset_from_var(
-                    ruleset=ctx.rulesets, rule_filters=ctx.rule_filters
-                )
+                zircolite_core.load_ruleset_from_var(ctx.rulesets)
                 zircolite_core.full_results = []
 
                 if ctx.limit > 0 and first_file:
@@ -876,9 +871,7 @@ def process_db_input(
                 zircolite_core.failed_files, metrics=zircolite_core.metrics)
             _collect_package_part(ctx, None, error)
 
-            zircolite_core.load_ruleset_from_var(
-                ruleset=ctx.rulesets, rule_filters=ctx.rule_filters
-            )
+            zircolite_core.load_ruleset_from_var(ctx.rulesets)
             zircolite_core.full_results = []
 
             if ctx.limit > 0 and first_file:
@@ -1052,9 +1045,7 @@ def process_single_file_worker(
                 "package_error": package_error or finish_error,
             })
 
-        core.load_ruleset_from_var(
-            ruleset=ctx.rulesets, rule_filters=ctx.rule_filters
-        )
+        core.load_ruleset_from_var(ctx.rulesets)
         core.full_results = []
 
         worker_id = getattr(thread_local, "worker_id", 0)

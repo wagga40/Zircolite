@@ -168,13 +168,13 @@ class TestProcessingModeEquivalence:
         "parallel": ["--no-auto-mode"],
     }
 
-    def _run_every_mode(self, tmp_path, corpus, ruleset=MATCH_ALL_RULESET):
+    def _run_every_mode(self, tmp_path, corpus, ruleset=MATCH_ALL_RULESET, extra=(), modes=None):
         results = {}
-        for name, flags in self.MODES.items():
+        for name, flags in (modes or self.MODES).items():
             run_dir = tmp_path / name
             run_dir.mkdir()
             results[name] = detection_summary(
-                run_zircolite(run_dir, corpus, ["-j", *flags], ruleset=ruleset)
+                run_zircolite(run_dir, corpus, ["-j", *flags], ruleset=ruleset, extra=extra)
             )
         return results
 
@@ -246,6 +246,30 @@ class TestProcessingModeEquivalence:
             "Field only one file carries",
             "Foo matched case-insensitively",
             "Widget whatever its spelling",
+        ]
+
+    # Two titles share one query, so duplicate removal keeps only the first;
+    # -R names that one. Workers in processes rebuild their rules from the
+    # payload, so they are checked alongside the threads.
+    RULEFILTER_RULESET = json.dumps([
+        {"title": "Widget - Sysmon", "id": "rf-1", "level": "high",
+         "tags": [], "rule": ["SELECT * FROM logs WHERE Widget LIKE '%mimikatz%'"]},
+        {"title": "Widget seen", "id": "rf-2", "level": "medium",
+         "tags": [], "rule": ["SELECT * FROM logs WHERE Widget LIKE '%mimikatz%'"]},
+        {"title": "Foo matched case-insensitively", "id": "rf-3", "level": "high",
+         "tags": [], "rule": ["SELECT * FROM logs WHERE Foo = 'abc'"]},
+    ])
+
+    def test_rulefilter_selects_the_same_rules_in_every_mode(self, tmp_path):
+        corpus = self._heterogeneous_corpus(tmp_path)
+        modes = {**self.MODES, "process": ["--no-auto-mode", "--executor", "process"]}
+        results = self._run_every_mode(
+            tmp_path, corpus, ruleset=self.RULEFILTER_RULESET, extra=["-R", "Sysmon"], modes=modes,
+        )
+        self._assert_agree(results)
+        assert [title for title, _ in results["per-file"]] == [
+            "Foo matched case-insensitively",
+            "Widget seen",
         ]
 
     def test_glob_order_does_not_change_the_answer(self, tmp_path):

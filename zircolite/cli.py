@@ -702,7 +702,7 @@ def _write_package(ctx: ProcessingContext, args: argparse.Namespace) -> bool:
         executor=args.executor if ctx.workers_used > 1 else "sequential",
         timestamp_format=spool.timestamp_format,
         after=ctx.time_after_str if applied else None, before=ctx.time_before_str if applied else None,
-        limit=ctx.limit, rules_loaded=len(runnable_rules(ctx.rulesets or [], ctx.rule_filters)),
+        limit=ctx.limit, rules_loaded=len(runnable_rules(ctx.rulesets or [])),
     )
     failed = sorted({source for record in ctx.performance_files if record.get("status") == "failed"
                      for source in record.get("sources") or ()})
@@ -1028,12 +1028,8 @@ def _warn_ignored_db_flags(
         )
 
 
-def _correlation_rule_count(rulesets: list[dict[str, Any]], rule_filters: list[str] | None) -> int:
-    """Correlation rules left once -R has removed the rules it names."""
-    return sum(
-        1 for rule in rulesets
-        if rule.get("correlation") and not any(f in rule.get("title", "") for f in rule_filters or ())
-    )
+def _correlation_rule_count(rulesets: list[dict[str, Any]]) -> int:
+    return sum(1 for rule in rulesets if rule.get("correlation"))
 
 
 def _warn_correlations_across_databases(count: int, databases: int, logger: logging.Logger) -> None:
@@ -1074,7 +1070,7 @@ def _run_processing(
 
     phase_setup_end = time.perf_counter()
 
-    correlations = _correlation_rule_count(ctx.rulesets, getattr(args, "rulefilter", None))
+    correlations = _correlation_rule_count(ctx.rulesets)
 
     # ----- DB input mode (explicit -D) -----
     if args.db_input:
@@ -1446,6 +1442,17 @@ def _main(memory_tracker, start_time) -> None:
                     raw=_detection.timestamp_field_is_raw, path=_detection.timestamp_field_path,
                 )
 
+    if args.rulefilter:
+        args.rulefilter = [item for sublist in args.rulefilter for item in sublist]
+    if args.rulefilter and "" in args.rulefilter:
+        print_error_panel(
+            "Invalid Rule Filter",
+            "An empty --rulefilter (or rules.filters entry) is part of every title, "
+            "so it would remove every rule.",
+            "Give the text of the titles to skip, e.g. -R 'Noisy Rule'"
+        )
+        sys.exit(2)
+
     # Load rulesets (with spinner for visual feedback during pySigma conversion)
     logger.info("[+] Loading ruleset(s)")
     ruleset_config = RulesetConfig(
@@ -1455,6 +1462,7 @@ def _main(memory_tracker, start_time) -> None:
         time_field=args.timefield,
         timestamp_format=args.timestamp_format,
         min_level=args.min_level,
+        rule_filters=args.rulefilter,
     )
     from zircolite import analysis_cache
     analysis_cache.enable()
@@ -1483,15 +1491,17 @@ def _main(memory_tracker, start_time) -> None:
     # would otherwise write is indistinguishable from a clean run that found
     # nothing, so anything reading the exit code calls a failed run a success.
     if not rulesets_manager.rulesets:
+        if rulesets_manager.loaded_rule_count:
+            quit_on_error(
+                f"[red]    [-] No rules to execute: [cyan]--rulefilter[/] and [cyan]--min-level[/] "
+                f"left out all {rulesets_manager.loaded_rule_count} rule(s) loaded[/]",
+                logger,
+            )
         quit_on_error(
             "[red]    [-] No rules to execute: check the ruleset(s) given to "
             "[cyan]--ruleset[/][/]",
             logger,
         )
-
-    # Flatten rule filters (must happen before any ruleset filtering below)
-    if args.rulefilter:
-        args.rulefilter = [item for sublist in args.rulefilter for item in sublist]
 
     # Handle --test-rules: validate rules against test cases and exit
     if getattr(args, 'test_rules', None):
@@ -1500,7 +1510,7 @@ def _main(memory_tracker, start_time) -> None:
         check_if_exists(args.test_rules, f"[red]    [-] Cannot find test file: {args.test_rules}[/]", logger)
         logger.info(f"[+] Running rule tests from: {make_file_link(args.test_rules)}")
         _test_core = ZircoliteCore(args.config, logger=logger)
-        _test_core.load_ruleset_from_var(rulesets_manager.rulesets, args.rulefilter)
+        _test_core.load_ruleset_from_var(rulesets_manager.rulesets)
         try:
             test_results = _test_core.run_rule_tests(args.test_rules)
         except ValueError as e:
@@ -1704,7 +1714,6 @@ def _main(memory_tracker, start_time) -> None:
         db_location=":memory:",
         delimiter=args.csv_delimiter,
         rulesets=rulesets_manager.rulesets,
-        rule_filters=args.rulefilter,
         outfile=args.outfile,
         ready_for_templating=ready_for_templating,
         package=args.package,

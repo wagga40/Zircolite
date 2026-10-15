@@ -215,7 +215,7 @@ class _QueryFailed(Exception):
     """The current query failed; discard any rows it already yielded."""
 
 
-def runnable_rules(ruleset: list[Any], rule_filters: list[str] | None) -> list[dict[str, Any]]:
+def runnable_rules(ruleset: list[Any], rule_filters: list[str] | None = None) -> list[dict[str, Any]]:
     """The rules a run executes: empty entries and those -R names by title are left out."""
     rules = [rule for rule in ruleset if rule]
     if rule_filters is not None:
@@ -1380,7 +1380,7 @@ class ZircoliteCore:
 
     @timed_stage("setup")
     def load_ruleset_from_var(
-        self, ruleset: list[dict[str, Any]], rule_filters: list[str] | None
+        self, ruleset: list[dict[str, Any]], rule_filters: list[str] | None = None
     ) -> None:
         """Load a ruleset from a variable."""
         self.ruleset = ruleset
