@@ -1,9 +1,5 @@
 <p align="center">
-  <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="pics/zircolite_400_dark.png">
-    <source media="(prefers-color-scheme: light)" srcset="pics/zircolite_400.png">
-    <img alt="Zircolite" src="pics/zircolite_400.png">
-  </picture>
+  <img alt="Zircolite" src="pics/zircolite_400_opaque.png">
 </p>
 
 ## Standalone Sigma-based detection for EVTX, Auditd, Sysmon for Linux, XML, CSV and JSON logs
