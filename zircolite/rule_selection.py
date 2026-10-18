@@ -55,12 +55,15 @@ def has_tag(rule: dict[str, Any], patterns: Iterable[str]) -> bool:
 
 
 def tag_problem(tag: Any) -> str | None:
-    """Why *tag* cannot select anything, or None."""
-    if not isinstance(tag, str) or not tag.strip():
+    """Why *tag* cannot select anything, or None. Judged as RuleSelection stores it, stripped."""
+    if not isinstance(tag, str):
+        return f"{tag!r} is not text"
+    stripped = tag.strip()
+    if not stripped:
         return "a tag cannot be empty"
-    if "," in tag:
+    if "," in stripped:
         return f"{tag!r} holds a comma: give each tag as its own value"
-    if tag.startswith(".") or tag.endswith("."):
+    if stripped.startswith(".") or stripped.endswith("."):
         return f"{tag!r} starts or ends with a dot"
     return None
 

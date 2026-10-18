@@ -48,7 +48,7 @@ class TestTags:
     def test_a_rule_without_tags_matches_nothing(self):
         assert not has_tag({"title": "untagged"}, ["attack"])
 
-    @pytest.mark.parametrize("tag", ["", "  ", "a,b", ".attack", "attack.", None, 3])
+    @pytest.mark.parametrize("tag", ["", "  ", "a,b", ".attack", "attack.", "attack. ", " .attack", None, 3])
     def test_a_tag_that_cannot_select_anything_is_a_problem(self, tag):
         assert tag_problem(tag)
 
