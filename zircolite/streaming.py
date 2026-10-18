@@ -66,8 +66,8 @@ from .utils import (
 )
 
 if TYPE_CHECKING:
+    from .event_filter import EventFilter
     from .extractor import EvtxExtractor
-    from .rules import EventFilter
 
 
 # ---------------------------------------------------------------------------

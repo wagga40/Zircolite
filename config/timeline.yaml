@@ -2,7 +2,8 @@
 # Zircolite timeline (--timeline): columns, profiles and Details
 # =============================================================================
 # The file --timeline reads unless --timeline-config names another. Copy it to
-# change a profile or add one; every section below has to be present.
+# change a profile or add one. columns, profiles and details are required;
+# value_maps and the keys inside details are not.
 #
 # Field names compare ignoring case, as rules do.
 
@@ -16,7 +17,7 @@ columns:
   RecordID: [EventRecordID]
 
 # Column lists, chosen with --timeline-profile. The columns are:
-#   Timestamp    the --timefield value, as ISO 8601 with microseconds
+#   Timestamp    the --timefield value, as ISO 8601 with microseconds, in --timezone
 #   Computer, Channel, EventID, RecordID   read through `columns` above
 #   Level, RuleTitle, RuleID   the rule
 #   Tactics, Techniques        ATT&CK, from the rule's tags

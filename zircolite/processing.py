@@ -76,7 +76,7 @@ from .utils import (
 )
 
 if TYPE_CHECKING:
-    from .rules import EventFilter
+    from .event_filter import EventFilter
 
 
 # ============================================================================
