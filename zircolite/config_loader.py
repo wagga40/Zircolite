@@ -18,6 +18,7 @@ from .assets import resolve_shipped_ruleset, resolve_shipped_template
 from .config import RULE_LEVELS
 from .correlations import TIMESTAMP_FORMATS
 from .formats import YAML_INPUT_FORMATS, is_valid_yaml_format
+from .rule_selection import STATUSES, tag_problem
 from .utils import safe_load
 
 # Defaults shared by the dataclasses below and by the CLI. argparse declares
@@ -33,6 +34,9 @@ DEFAULT_AFTER = "1970-01-01T00:00:00"
 DEFAULT_BEFORE = "9999-12-12T23:59:59"
 DEFAULT_MEMORY_LIMIT_PERCENT = 85.0
 DEFAULT_PACKAGE_DIR = ""
+DEFAULT_TIMELINE_PROFILE = "standard"
+DEFAULT_TIMELINE_CONFIG = "config/timeline.yaml"
+DEFAULT_TIMEZONE = "UTC"
 
 
 @dataclass
@@ -60,6 +64,16 @@ class RulesConfig:
     save_ruleset: bool = False
     timestamp_format: str | None = None
     min_level: str | None = None
+    status: list[str] | None = None
+    include_tags: list[str] | None = None
+    exclude_tags: list[str] | None = None
+
+
+def _listed(value: Any) -> list:
+    """A YAML key that takes a list, read as one: a scalar is one item."""
+    if value is None:
+        return []
+    return value if isinstance(value, list) else [value]
 
 
 @dataclass
@@ -77,6 +91,11 @@ class OutputConfig:
     log_file: str = DEFAULT_LOG_FILE
     no_output: bool = False
     performance_json: str | None = None
+    timeline: str | None = None
+    timeline_profile: str = DEFAULT_TIMELINE_PROFILE
+    timeline_config: str = DEFAULT_TIMELINE_CONFIG
+    keep_duplicates: bool = False
+    timezone: str = DEFAULT_TIMEZONE
 
 
 @dataclass
@@ -258,6 +277,9 @@ class ConfigLoader:
                 save_ruleset=rules.get('save_ruleset', False),
                 timestamp_format=rules.get('timestamp_format'),
                 min_level=rules.get('min_level'),
+                status=rules.get('status'),
+                include_tags=rules.get('include_tags'),
+                exclude_tags=rules.get('exclude_tags'),
             )
 
         # Parse output section
@@ -277,6 +299,11 @@ class ConfigLoader:
                 log_file=out.get('log_file', DEFAULT_LOG_FILE),
                 no_output=out.get('no_output', False),
                 performance_json=out.get('performance_json'),
+                timeline=out.get('timeline'),
+                timeline_profile=out.get('timeline_profile', DEFAULT_TIMELINE_PROFILE),
+                timeline_config=out.get('timeline_config', DEFAULT_TIMELINE_CONFIG),
+                keep_duplicates=out.get('keep_duplicates', False),
+                timezone=out.get('timezone', DEFAULT_TIMEZONE),
             )
 
         # Parse processing section
@@ -363,6 +390,13 @@ class ConfigLoader:
             issues.append(f"timestamp_format must be one of: {', '.join(TIMESTAMP_FORMATS)}")
         if config.rules.min_level not in (None, *RULE_LEVELS):
             issues.append(f"min_level must be one of: {', '.join(RULE_LEVELS)}")
+        for status in _listed(config.rules.status):
+            if not isinstance(status, str) or status.lower() not in STATUSES:
+                issues.append(f"rules.status must name one of: {', '.join(STATUSES)} (got {status!r})")
+        for key in ("include_tags", "exclude_tags"):
+            for tag in _listed(getattr(config.rules, key)):
+                if problem := tag_problem(tag):
+                    issues.append(f"rules.{key}: {problem}")
 
         # Validate output
         if config.output.format not in ['json', 'csv']:
@@ -370,6 +404,13 @@ class ConfigLoader:
 
         if config.output.format == 'csv' and len(config.rules.rulesets) > 1:
             issues.append("CSV output is not supported with multiple rulesets")
+        for key in ("timeline", "timeline_profile", "timeline_config", "timezone"):
+            value = getattr(config.output, key)
+            if key == "timezone" and isinstance(value, int) and not isinstance(value, bool):
+                # YAML 1.1 reads an unquoted +10:00 as a base-60 number
+                issues.append(f'output.timezone reads as the number {value}: quote the offset, as in "+10:00"')
+            elif value is not None and (not isinstance(value, str) or not value):
+                issues.append(f"output.{key} must be a non-empty string")
 
         # Validate templates
         if config.output.templates:
@@ -519,6 +560,17 @@ rules:
   # high or critical. A rule without a level counts as informational.
   min_level: null  # Example: medium
 
+  # Load only the rules with one of these statuses: stable, test, experimental,
+  # deprecated or unsupported. A rule without a status counts as experimental.
+  status: null  # Example: [stable, test]
+
+  # Load only the rules carrying one of these tags or a tag below one, ignoring
+  # case: attack.t1059 also selects attack.t1059.001.
+  include_tags: null  # Example: [attack.execution, attack.persistence]
+
+  # Leave out the rules carrying one of these tags; wins over include_tags.
+  exclude_tags: null  # Example: [detection.threat-hunting]
+
   # How the time field is written, for correlation rules converted from native
   # Sigma rules: iso, unix, unix_ms or unix_us. Compiled JSON rulesets keep the
   # format they were converted with.
@@ -559,6 +611,17 @@ output:
   # Create a package for the offline viewer (every event plus the detections)
   package: false
   package_dir: ""  # Where to write it; empty means the working directory
+
+  # Every detection as one row, in time order: a .csv, .jsonl or .ndjson
+  # file, or "-" for JSONL on stdout. Off when null.
+  timeline: null  # Example: timeline.csv
+  timeline_profile: {DEFAULT_TIMELINE_PROFILE}  # minimal, standard, full, or a profile of timeline_config
+  timeline_config: {DEFAULT_TIMELINE_CONFIG}  # Profiles, column fields and Details settings
+  # Keep the rows that repeat a detection from another copy of the same log
+  keep_duplicates: false
+  # Time zone of the timestamps: UTC, local, a quoted offset such as "+02:00",
+  # or a name such as Europe/Paris. Rows are ordered by instant whatever it is.
+  timezone: {DEFAULT_TIMEZONE}
 
   # Also write the flattened events as JSONL. Only events Zircolite actually
   # processed are included, so events dropped by early event filtering or by

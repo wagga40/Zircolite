@@ -109,7 +109,7 @@ flattener decides which value lands in the column.
 ## Rule execution
 
 **Analysis cache.** Normalising, planning and scanning the statements of a 4,500-rule
-ruleset takes about two seconds, and every process worker used to pay it again. The
+ruleset takes about two seconds, which every process worker would pay again. The
 command line keeps the results in the user's cache directory (`~/Library/Caches/Zircolite`,
 `%LOCALAPPDATA%\Zircolite\Cache` or `$XDG_CACHE_HOME/zircolite`), one file per ruleset,
 keyed by the statements, the Python version and a hash of the analysing code (in a binary,
@@ -140,6 +140,8 @@ those patterns name once, finds which events contain each pattern's necessary li
 candidate events. SQLite still evaluates the whole condition on every candidate, so
 detections are identical with the filter on or off.
 
+![A rule's LIKE literals feed one Aho–Corasick pass over the column; the rows holding a literal form a bitmap of candidates, SQLite runs the full WHERE on those rows only, and the detections equal a full scan's](pics/prefilter.svg)
+
 - `auto` builds it for databases of 1,000 events or more and rulesets with 32 or more
   eligible queries; `literal` forces it, `off` disables it.
 - Only plain `SELECT * FROM logs WHERE …` statements qualify. A pattern contributes its
@@ -167,8 +169,9 @@ detections are identical with the filter on or off.
 - Candidates reach SQLite as `logs.row_id IN (SELECT value FROM json_each('[...]'))` ahead
   of the original predicate. A rule with no candidates runs `SELECT 1 WHERE 0`. A candidate
   set holding at least half the rows the rule's bounds select is bypassed.
-- Construction is capped (one million pattern characters, sixteen row IDs per event); a
-  column over budget becomes unbounded. It needs SQLite's JSON1, and stays off without it.
+- Construction is capped (one million pattern characters; sixteen row IDs per event, and
+  never fewer than two million); a column over budget becomes unbounded. It needs SQLite's
+  JSON1, and stays off without it.
 - Each field automaton caches up to 512 recently searched values of at most 1,024 characters,
   including values with no matches. An 8 MiB accounted byte budget is divided among the
   indexed fields. Caches are discarded after index construction and never cross databases
@@ -176,22 +179,9 @@ detections are identical with the filter on or off.
 
 ## Processing modes
 
-```mermaid
-flowchart LR
-    subgraph PerFile[Per-file]
-        P1[File 1 -> DB] --> P3[Combine results]
-        P2[File 2 -> DB] --> P3
-    end
-
-    subgraph Unified[Unified]
-        U1[All files] --> U2[Single DB]
-    end
-```
-
-| Layout | Selected by | Database | Enables |
-|--------|-------------|----------|---------|
-| Per-file | Auto mode, or the default with `--no-auto-mode` | One per file, reused | Parallel processing |
-| Unified | Auto mode, or `--unified-db` | One for all files | Cross-file correlation rules |
+The two database layouts, per-file and unified, and how auto mode picks one are described in
+[Advanced → Automatic processing optimization](Advanced.md#automatic-processing-optimization).
+`--unified-db` forces the unified layout, and `--no-auto-mode` keeps one database per file.
 
 `analyze_files_and_recommend_mode` returns only `per-file` or `unified`. For a per-file run
 of several inputs it separately recommends running them across workers, one database per
@@ -333,6 +323,42 @@ build, and the only part of `gui/` that ships.
   `eval` and similar sinks anywhere in `gui/source/src`, and on a page without its content
   security policy.
 
+## Timeline pipeline
+
+`--timeline` renders each row where its event is, then sorts every row of the run in the main
+process. `timeline.py` holds both halves ([diagram](Usage.md#timeline)).
+
+- **Parts.** A `TimelinePart` joins the result sinks of one working database, beside the
+  package's (`_execute_with_timeline` in `processing.py`, and the worker for parallel runs).
+  It turns each match into a line: a fixed-width key, a tab, the source file as JSON, a tab,
+  the finished row as JSON. Like `PartWriter.sink`, it keeps its first error and raises it
+  at `finish`, so a failing part never stops the rules. A failed part fails the timeline
+  (exit `1`) after the detections are written.
+- **The key.** `<unparsed flag><instant><ruleset position><identity>`: the flag puts times
+  that do not parse last, the instant is hexadecimal microseconds counted from year 1, the
+  position is the rule's place in the loaded ruleset, and the identity is a kind letter (a
+  record or content) and a BLAKE2b digest of the computer, channel and record ID, or,
+  failing one of them, of the event's fields
+  without `OriginalLogfile` and `row_id`, as text. Text, because a value's type follows its
+  column in each database ([Typing and collation](#typing-and-collation)).
+- **Sorting.** Each part keeps up to 16 MiB of lines, sorts them as bytes and writes them
+  to the spool as one run, so the sorting happens in the workers. The main process merges
+  the runs, at most 64 at a time, merging batches into longer runs first when a run per
+  file would exceed that. Bytes alone decide the order, so neither the layout nor the
+  worker that wrote a part can change it, and no row is parsed to be sorted.
+- **Duplicates.** Lines sharing a key are adjacent. A record key keeps one line; a content
+  key keeps the lines of the source file holding the most of them.
+- **Writing.** JSON lines are copied as they are; CSV rows are parsed and defused. The file
+  is written beside the destination and moved over it once complete. The spool,
+  `tmp-zircolite-timeline-*`, sits in the timeline's directory (`--working-db-dir` or the
+  system temporary directory for stdout) and goes when the run ends.
+- **Rendering.** What depends on the field names alone, such as where each column reads and
+  which fields `Details` and `ExtraFields` list under each layout, is worked out once per set
+  of names, which every row of one event type shares. Layouts testing the same fields share
+  one index of their values, so finding an event's layout is a lookup per group of fields.
+  Fields are listed in name order, as a unified database and a per-file one list an event's
+  columns in different orders. `row_id` never appears, since it differs between layouts.
+
 ## Module map
 
 All the logic lives in the `zircolite/` package. `zircolite.py` is a shim that calls
@@ -350,13 +376,14 @@ All the logic lives in the `zircolite/` package. `zircolite.py` is a shim that c
 | `spellings.py` | Field spellings a column does not carry, recorded and restored on output |
 | `core.py` | `ZircoliteCore`: database management, indexes, rule execution, output |
 | `correlations.py` | Correlation plan checks, alert rows and diagnostics wording |
-| `prefilter.py` | Literal prefilter: candidate rows for a rule's `LIKE` literals |
+| `prefilter.py` | Literal prefilter: candidate rows for a rule's `LIKE`, text equality and literal `REGEXP` conditions |
 | `analysis_cache.py` | Rule SQL analysis kept on disk between runs (see [Rule execution](#rule-execution)) |
 | `event_filter.py` | `EventFilter`, the early per-channel event filter, apart from pySigma |
 | `performance.py` | Stage timers, per-file metrics and the `--performance-json` report |
 | `detector.py` | `LogTypeDetector`: format, log source and timestamp-field detection |
 | `processing.py` | Coordinates per-file, unified and parallel runs; aggregates results |
 | `utils.py` | Logging, `MemoryTracker`, compressed-input handling, mode heuristics |
+| `rule_selection.py` | `RuleSelection`, `select_rules`: which loaded rules run (`-R`, `--min-level`, `--rule-status`, tags), apart from pySigma |
 | `rules.py` | `RulesetHandler` (Sigma → Zircolite), `RulesUpdater` |
 | `console.py` | Rich output: theme, detection tables, ATT&CK panels, hyperlinks, reports |
 | `config_loader.py` | Loads and validates YAML run configurations; generates the template |
@@ -366,6 +393,7 @@ All the logic lives in the `zircolite/` package. `zircolite.py` is a shim that c
 | `templates.py` | `TemplateEngine` (Jinja2 output) |
 | `package_spool.py` | Stage one of `--package`: spools each working database's events, hits and alerts |
 | `package.py` | Stage two of `--package`: Parquet tables, the manifest and the viewer zip |
+| `timeline.py` | `--timeline`: rows rendered per working database, then sorted, deduplicated and written |
 | `formats.py` | Input format registry: flag, YAML value, extension, encoding, reader |
 | `extractor.py` | `EvtxExtractor`: log line or XML element → event dict |
 | `config.py` | Dataclasses passed to the engine (`ProcessingConfig`, `ExtractorConfig`, …) |
@@ -566,7 +594,9 @@ The text cannot be rebuilt from the flattened columns, so it is never invented:
 
 When SQLite cannot prepare a rule, Zircolite tries each applicable repair once. A rule that
 still fails is reported at the end of the run (`--debug` shows the SQL error). Both repairs
-run only when SQLite raises the error, so a statement that compiles is never rewritten.
+run only when SQLite raises the error, so they never touch a statement that compiles. The
+[negation rewrite](#negated-conditions-on-absent-fields) below is not a repair: it applies
+to every statement.
 
 **Missing columns.** SQLite resolves column names at preparation, so a rule naming one field
 the data never produced fails as a whole. The absent columns are added as `NULL`, which

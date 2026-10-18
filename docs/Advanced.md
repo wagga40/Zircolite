@@ -412,7 +412,8 @@ event_filter:
   filter_all_sources: false     # true: filter Sysmon for Linux and Auditd too
 ```
 
-How the bounds are read from rule SQL is in [Internals → Event filter bounds](Internals.md#event-filter-bounds).
+How the bounds are read from rule SQL is in
+[Internals → Event filter bounds](Internals.md#event-filter-bounds).
 
 ### File filters
 
@@ -443,12 +444,39 @@ The value is `YYYY-MM-DDTHH:MM:SS`. The filter reads the `--timefield` column (o
 detected one), and understands epoch seconds or milliseconds, a trailing `Z`, UTC offsets
 and a space instead of `T`.
 
-### Rule filters
+### Rule selection
 
-- `-R`/`--rulefilter` skips rules whose title contains the text (case-sensitive); repeat it
-  for more. [`--profile-rules`](Usage.md#rule-performance-profiling) shows which rules are
-  slow on your data.
-- `--min-level` loads only rules at a level or above.
+These options choose which loaded rules run. Each one tests a rule on its own, and a rule
+runs only if it passes them all.
+
+| Option | A rule runs when |
+|--------|------------------|
+| `-R`, `--rulefilter` | its title contains none of the texts (case-sensitive) |
+| `--min-level` | its level is this one or above; no level counts as `informational` |
+| `--rule-status` | its status is one of those listed; no status counts as `experimental` |
+| `--include-tag` | one of its tags is a listed tag or sits below one at a dot: `attack.t1059` selects `attack.t1059.001`, not `attack.t10590` |
+| `--exclude-tag` | none of its tags is, or sits below, a listed tag. Exclusion wins over inclusion |
+
+Tags and statuses ignore case. A rule without tags never passes `--include-tag`. The YAML
+keys are `rules.filters`, `min_level`, `status`, `include_tags` and `exclude_tags`.
+
+```shell
+python3 zircolite.py --events logs/ --rule-status stable test \
+    --exclude-tag detection.threat-hunting --min-level high
+```
+
+- Selection runs as the rules load. Rules with identical SQL run once, under the title of
+  the highest-level one, and selection applies before that merge: leaving one rule out
+  leaves the others with the same SQL running under their own titles. A rule left out does
+  not widen the [event filter](#early-event-filtering).
+- A correlation is selected on its own status, tags and level. Its plan carries the
+  conditions of the rules it refers to, so leaving those out does not change its alerts.
+- A selection that leaves no rule stops with exit code 1 and names the options used. A
+  tag that no loaded rule carries is reported, and an empty tag or `-R` filter is refused.
+- `--save-ruleset` writes every converted rule; status and tags stay in the file, so the
+  selection applies again when it is loaded. `--test-rules` runs only the selected rules.
+- [`--profile-rules`](Usage.md#rule-performance-profiling) shows which rules are slow on
+  your data.
 - `--limit N` drops the output of any rule matching more than N events (alerts, for a
   correlation), counted per database: per file in per-file runs, corpus-wide in unified
   ones. It does not save the work of running the rule.
@@ -498,6 +526,39 @@ python3 zircolite.py --events logs/ \
 > Append only to **line-oriented** output (NDJSON, bulk JSON). `exportForSARIF.tmpl`
 > and `exportForAttackNavigator.tmpl` each write one JSON document, which a second run would
 > make invalid.
+
+## Timeline Details and value maps
+
+`config/timeline.yaml` decides what the [timeline](Usage.md#timeline)'s `Details` and
+`ExtraFields` columns show. To change it, pass a copy with `--timeline-config`.
+
+```yaml
+details:
+  skip: [OriginalLogfile, Keywords, Opcode]          # never shown
+  layouts:
+    - when: {Channel: Security, EventID: [4624, 4625]}
+      show: [TargetUserName, LogonType, IpAddress, WorkstationName]
+value_maps:
+  LogonType:
+    3: Network
+    10: RemoteInteractive
+```
+
+- **Layouts.** An event takes the first layout whose `when` fields all hold one of the values
+  listed, compared as text and ignoring case. `Details` then lists the layout's `show` fields
+  the event carries, in that order, and `ExtraFields` every other field, in name order. An
+  event no layout matches lists all its fields in `Details`. The shipped layouts cover Sysmon
+  on Windows and Linux, the common Security, System and PowerShell events, Defender
+  detections, BITS jobs, remote desktop sessions, and auditd's SYSCALL, EXECVE and account
+  records.
+- **Skip list.** Fields that describe the log rather than the activity, shown in neither
+  column. A field another column of the profile shows is left out too.
+- **Value maps.** After a mapped value, `Details` and `ExtraFields` add its meaning in
+  brackets: `LogonType: 3 (Network)`, `Status: 0xc000006a (wrong password)`. The value itself
+  never changes, and rules always see it as logged. Quote a value YAML would read otherwise:
+  `0x18` unquoted is the number 24, and `no` is `false`.
+- **Errors.** A wrong key stops the run before any log is read, and the message names it, as
+  in `details.layouts[3].show must be a non-empty list`.
 
 ## Zircolite Viewer
 

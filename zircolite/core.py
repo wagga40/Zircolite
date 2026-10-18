@@ -68,6 +68,7 @@ from .fulltext import (
 from .performance import FileMetrics, timed_stage
 from .prefilter import AUTO_MIN_QUERIES, AUTO_MIN_ROWS, prepare_rules, rule_queries
 from .results import RowSpool, write_result_json
+from .rule_selection import title_filtered
 from .shutdown import is_shutdown_requested
 from .spellings import FieldSpellings, drop_spellings
 from .sqlscan import (
@@ -206,20 +207,20 @@ def _rule_may_match(rule: dict[str, Any], census: dict[tuple, int]) -> bool:
 
 
 if TYPE_CHECKING:
+    from .event_filter import EventFilter
     from .extractor import EvtxExtractor
     from .prefilter import LiteralPrefilter
-    from .rules import EventFilter
 
 
 class _QueryFailed(Exception):
     """The current query failed; discard any rows it already yielded."""
 
 
-def runnable_rules(ruleset: list[Any], rule_filters: list[str] | None) -> list[dict[str, Any]]:
+def runnable_rules(ruleset: list[Any], rule_filters: list[str] | None = None) -> list[dict[str, Any]]:
     """The rules a run executes: empty entries and those -R names by title are left out."""
     rules = [rule for rule in ruleset if rule]
     if rule_filters is not None:
-        rules = [rule for rule in rules if not any(rule_filter in rule.get("title", "") for rule_filter in rule_filters)]
+        rules = [rule for rule in rules if not title_filtered(rule, rule_filters)]
     return rules
 
 
@@ -1254,7 +1255,7 @@ class ZircoliteCore:
                                     continue
                                 seen_ids.add(identity)
                                 query_ids.add(identity)
-                            filtered_rows.append(sanitize_row_for_csv(row) if self.csv_mode else row)
+                            filtered_rows.append(row)
                             if self.limit != -1 and len(filtered_rows) > self.limit:
                                 if isinstance(filtered_rows, RowSpool):
                                     filtered_rows.close()
@@ -1351,8 +1352,7 @@ class ZircoliteCore:
         matches: RowSpool | list[dict[str, Any]] = RowSpool() if stream_rows else []
         try:
             for alert in alerts:
-                safe_alert = clean(alert)
-                matches.append(sanitize_row_for_csv(safe_alert) if self.csv_mode else safe_alert)
+                matches.append(clean(alert))
         except BaseException:
             if isinstance(matches, RowSpool):
                 matches.close()
@@ -1380,7 +1380,7 @@ class ZircoliteCore:
 
     @timed_stage("setup")
     def load_ruleset_from_var(
-        self, ruleset: list[dict[str, Any]], rule_filters: list[str] | None
+        self, ruleset: list[dict[str, Any]], rule_filters: list[str] | None = None
     ) -> None:
         """Load a ruleset from a variable."""
         self.ruleset = ruleset
@@ -1438,13 +1438,15 @@ class ZircoliteCore:
             description = rule_results["description"]
             level = rule_results["rule_level"]
             count = rule_results["count"]
+            # Rewritten here and not in the results: result sinks, such as the
+            # package, must see the values the events hold.
             for data in rule_results["matches"]:
                 dict_csv = {
                     "rule_title": title,
                     "rule_description": description,
                     "rule_level": level,
                     "rule_count": count,
-                    **data
+                    **sanitize_row_for_csv(data)
                 }
                 csv_writer.writerow(dict_csv)
         elif isinstance(rule_results.get("matches"), RowSpool):

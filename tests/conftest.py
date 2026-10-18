@@ -712,7 +712,6 @@ def make_processing_context(field_mappings_file, test_logger, tmp_path):
             db_location=":memory:",
             delimiter=";",
             rulesets=[],
-            rule_filters=None,
             outfile=str(tmp_path / "detected_events.json"),
             ready_for_templating=False,
             package=False,

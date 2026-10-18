@@ -18,9 +18,9 @@ one warm-up pass, with the range in brackets; peak memory is the median of the t
 
 | Tool | Rules loaded | Wall time | Peak memory | Detections | Rules matched |
 |------|-------------:|----------:|------------:|-----------:|--------------:|
-| Zircolite 4.5.0 | 4,523 | **7.8 s** (7.7–7.8) | 1,199 MiB | 162,362 | 108 |
-| Hayabusa 4.1.0 | 4,674 (2,301 after its channel filter) | 23.4 s (23.4–24.0) | 913 MiB | 589,405 | 132 |
-| Chainsaw 2.16.5 | 3,535 (388 could not be loaded) | 53.7 s (53.4–55.2) | 365 MiB | 41,186 | 89 |
+| Zircolite 4.6.0 | 4,527 | **7.7 s** (7.6–7.7) | 1,200 MiB | 162,362 | 108 |
+| Hayabusa 4.2.0 | 4,674 (2,301 after its channel filter) | 23.3 s (23.3–25.0) | 749 MiB | 589,555 | 134 |
+| Chainsaw 2.17.1 | 3,630 (296 could not be loaded) | 48.3 s (48.3–48.4) | 378 MiB | 41,499 | 99 |
 
 ### Multi-channel corpus
 
@@ -31,53 +31,45 @@ WMI-Activity (13,228), TaskScheduler (7,017) and five more.
 
 | Tool | Rules loaded | Wall time | Peak memory | Detections | Rules matched |
 |------|-------------:|----------:|------------:|-----------:|--------------:|
-| Zircolite 4.5.0 | 4,523 | **49.3 s** (48.9–51.5) | 6,942 MiB | 264,200 | 124 |
-| Hayabusa 4.1.0 | 4,674 (4,425 after its channel filter) | 519.5 s (512.4–527.6) | 1,568 MiB | 703,915 | 181 |
-| Chainsaw 2.16.5 | 3,535 | 197.8 s (193.4–211.3) | 354 MiB | 12,295 | 80 |
-
-The September 2026 recording gave Zircolite 4.0.0 11.6 s and 104.8 s, with 4,319 rules; the
-[October sections](#text-equality-bounds-and-schema-preflight-october-2026) below measure
-the changes in between. Chainsaw ran 2.16.0 then, at 113.5 s and 206.3 s.
+| Zircolite 4.6.0 | 4,527 | **30.2 s** (30.0–30.3) | 9,158 MiB | 264,200 | 124 |
+| Hayabusa 4.2.0 | 4,674 (4,425 after its channel filter) | 500.3 s (498.2–503.2) | 1,390 MiB | 703,920 | 182 |
+| Chainsaw 2.17.1 | 3,630 | 183.0 s (181.2–185.0) | 1,176 MiB | 122,997 | 83 |
 
 ## Reading the numbers
 
-- **Channel mix affects rule pruning and runtime.**
-  Hayabusa reports it directly: its channel filter keeps 2,301 of its 4,674 rules on the
-  single-channel corpus and 4,425 on the multi-channel one. Per event it goes from 52 µs to
-  302 µs between the two, while Zircolite goes from 17 µs to 29 µs and Chainsaw stays near
-  115–119 µs. These rates use the reported corpus counts; the multi-channel count
-  is after Zircolite's event filter, not a measurement of each tool's parsed event count.
+- **Channel mix affects rule pruning and runtime.** Hayabusa's channel filter keeps 2,301
+  of its 4,674 rules on the single-channel corpus and 4,425 on the multi-channel one, and
+  its time per event goes from 51 µs to 291 µs between the two. Zircolite stays near 17 µs
+  and Chainsaw near 106 µs on both. The multi-channel rates use the event count after
+  Zircolite's event filter.
 - **The rule sets differ.** Each tool loads its own conversion of SigmaHQ, and Hayabusa
-  adds 181 rules of its own. Hayabusa's own informational and "Sysmon Alert" rules
-  (`Net Conn (Sysmon Alert)`, `DLL Loaded (Sysmon Alert)`, …) match most Sysmon events,
-  and account for most of its lead in detections. Of its 589,405 hits on the single-channel
-  corpus, 46,783 are informational, 92,205 low and 439,190 medium. Chainsaw loads only the
-  rules its mapping file can express, and it reports far fewer hits on the multi-channel
-  corpus than on the Sysmon-only one — 12,295 against 41,186 — despite the larger input.
-  Detection totals therefore do not measure relative detection quality.
+  adds rules of its own. Its informational and "Sysmon Alert" rules
+  (`Net Conn (Sysmon Alert)`, `DLL Loaded (Sysmon Alert)`, …) match most Sysmon events and
+  account for most of its lead in detections: of its 589,555 hits on the single-channel
+  corpus, 46,783 are informational, 92,205 low and 439,291 medium. Chainsaw loads only the
+  rules its mapping file can express. Detection totals therefore do not measure detection
+  quality.
 - **Rules matched are counted by Sigma rule id.** Zircolite's merged ruleset carries some
   rules once per log source, under one id.
 - **Memory covers the whole process tree.** Zircolite picks its worker count from the
-  files and the free RAM — four on both corpora here — and the figure is their sum. Its
-  peak on the multi-channel corpus varied between passes, from 5,544 to 6,967 MiB.
-  Hayabusa and Chainsaw run as one process with several threads. Zircolite used the most
-  memory in these runs. `--no-parallel` disables its file workers, reducing concurrent
-  databases at the cost of parallelism.
-- **Zircolite's time includes Python start-up and loading 9.4 MB of rule SQL.** On very
-  small inputs that fixed cost dominates: a 68 KiB EVTX file takes 0.74 s, about a tenth of
-  the small-corpus figure and under 2% of the large one.
+  files and the free RAM — four on the single-channel corpus, eight on the multi-channel
+  one — and the figure is their sum, the most of the three tools. Hayabusa and Chainsaw run
+  as one process with several threads. `--no-parallel` runs one file at a time.
+- **Zircolite's time includes Python start-up and loading its 9.4 MB ruleset.** On a 68 KiB
+  EVTX file a run takes 0.58 s, under a tenth of the single-channel figure and 2% of the
+  multi-channel one.
 
 ## Setup
 
-Apple M1 Max (10 cores, 64 GB), macOS, Python 3.14.8 and SQLite 3.53.4 for Zircolite
-(commit `bb173f6`), with the compiled flattening kernel. Logs and outputs on the same
+Apple M1 Max (10 cores, 64 GB), macOS, Python 3.14.8 and SQLite 3.54.1 for Zircolite
+(commit `e21ed93`), with the compiled flattening kernel. Logs and outputs on the same
 internal SSD. Nothing else running.
 
 | Tool | Rules |
 |------|-------|
-| Zircolite 4.5.0 | `rules/rules_windows_merged.json`, the default ruleset, as shipped in `rules/` (SigmaHQ `8a48134`, 2026-10-06) |
-| Hayabusa 4.1.0 | hayabusa-rules `04af3d2` (2026-10-08), pulled into the `rules/` directory of its release package |
-| Chainsaw 2.16.5 | SigmaHQ `8a48134` (2026-10-06): `rules`, `rules-emerging-threats` and `rules-threat-hunting`, plus Chainsaw's own `rules/`, through `mappings/sigma-event-logs-all.yml` |
+| Zircolite 4.6.0 | `rules/rules_windows_merged.json`, the default ruleset, as shipped in `rules/` (SigmaHQ `b7920ed`, 2026-10-18) |
+| Hayabusa 4.2.0 | hayabusa-rules `3264c6f` (2026-10-16), pulled into the `rules/` directory of its release package |
+| Chainsaw 2.17.1 | SigmaHQ `b7920ed` (2026-10-18): `rules`, `rules-emerging-threats` and `rules-threat-hunting`, plus Chainsaw's own `rules/`, through `mappings/sigma-event-logs-all.yml` |
 
 The commands, as `tools/tool-benchmark.py` runs them:
 
@@ -127,90 +119,5 @@ pdm run python tools/tool-benchmark.py --events /path/to/evtx \
 See [`tools/README.md`](https://github.com/wagga40/Zircolite/tree/master/tools) for every
 option.
 
-## Zircolite configurations
-
-How Zircolite's own settings compare, with `rules/rules_windows_merged.json` (4,319 rules)
-on the same machine, Python 3.14 and SQLite 3.53, with the compiled kernel. These date from
-September 2026, before the October changes below, so they are slower than the comparison
-above. Every configuration reported the same detections as `--rule-prefilter off`.
-
-| Workload | Baseline (`c972b28`) | Measured |
-|---|---:|---:|
-| Single-channel corpus, auto (processes) | 42.0 s | 11.0 s |
-| Single-channel corpus, `--unified-db` | — | 22.8 s |
-| Single-channel corpus as database input (`-D`) | — | 11.7 s (51.8 s with the prefilter off) |
-| EVTX-ATTACK-SAMPLES, 278 files, auto (unified) | 7.0 s | 5.8 s |
-| EVTX-ATTACK-SAMPLES, 278 files, per-file | 473 s | 55.7 s |
-
-The single-channel corpus gains from the literal prefilter and process workers; the 278
-small multi-channel files show the per-rule costs of per-file runs, which census pruning
-and lazy result spools remove. Compare configurations or checkouts with
-`tools/throughput-benchmark.py`, and time the rule phase alone with `-D` and
-`--performance-json`.
-
-## Text equality bounds and schema preflight (October 2026)
-
-This compares the [candidate filter](Internals.md#rule-execution) before and after it learned
-to bound text equality and to add missing rule fields before planning: commit `037144a`
-against the next one, with the 4,515-rule `rules_windows_merged.json` (SHA-256
-`8ea9b07f5fd35f37f6bf5e2430010ff8bb9160c2d072039a66a95ff29aabc9eb`). Both ran in the same
-environment: Python 3.14.8, SQLite 3.53.4, compiled flattening kernel, macOS on Apple
-Silicon (10 cores, 64 GiB). Times are medians of three interleaved passes, ranges in
-brackets; memory is the peak of the whole process tree. Multi-file runs use four process
-workers with automatic mode selection off. Every pass reported the same detections, down to
-each event's fields.
-
-| Corpus | Before | After | Peak RSS before / after | Matches |
-|---|---:|---:|---:|---:|
-| T001, 8 files (13.3 GiB) | 118.59 s (117.47–127.37) | 67.96 s (66.00–68.52) | 7,071 / 7,065 MiB | 264,200 |
-| T001 Sysmon file (142 MiB), sequential | 27.58 s (27.57–27.65) | 8.83 s (8.77–8.95) | 251 / 254 MiB | 13,905 |
-| HANCITOR, 4 files (478 MiB) | 11.90 s (11.78–11.94) | 11.17 s (11.04–11.27) | 1,252 / 1,275 MiB | 162,362 |
-| EVTX-ATTACK-SAMPLES, 278 files, per file | 12.10 s (11.95–12.46) | 12.10 s (12.04–12.14) | 730 / 735 MiB | 1,562 |
-
-Most of the gain is in rules such as `Image LIKE '%\cmd.exe' OR OriginalFileName='Cmd.Exe'`:
-the equality used to leave the whole condition unbounded. On the Sysmon file, 1,943 queries
-get candidates instead of 1,284, and the detection stage falls from 22.40 to 3.79 seconds.
-Over T001 the four workers spend 48.0 seconds in detection instead of 208.6, and 50.0 in
-building candidates instead of 41.5, since more columns are indexed. Ingestion, at 108
-seconds, is now the larger cost. The attack samples are below the filter's 1,000-event
-threshold, so nothing changes for them; HANCITOR has a single channel and few such rules.
-
-Reproduce a row against a checkout of the earlier commit (copy the compiled kernel into it):
-
-```shell
-pdm run python tools/throughput-benchmark.py \
-  --events samples/T001-04062021 --ruleset rules/rules_windows_merged.json \
-  --variants baseline current --baseline-root /path/to/037144a \
-  --modes process --workers 4 --passes 3
-```
-
-The Sysmon row uses `--events 'samples/T001-04062021/Microsoft-Windows-Sysmon%4Operational.evtx'`
-and `--modes sequential`.
-
-## Startup, regex bounds, page size and batch size (October 2026)
-
-The same method as above, for the changes that followed: commit `1ec809a` against
-`d1dd080`, each with its own compiled kernel, a warm rule-analysis cache, and the 4,515-rule
-`rules_windows_merged.json`. Times are medians of three interleaved passes, ranges in
-brackets; every pass reported the same detections.
-
-| Corpus | Before | After | Peak RSS before / after | Matches |
-|---|---:|---:|---:|---:|
-| T001, 8 files (13.3 GiB) | 66.02 s (65.80–70.05) | 53.71 s (51.67–54.69) | 7,075 / 5,574 MiB | 264,200 |
-| T001 Sysmon file (142 MiB), sequential | 9.09 s (9.07–9.13) | 4.55 s (4.53–4.58) | 255 / 273 MiB | 13,905 |
-| HANCITOR, 4 files (478 MiB) | 11.35 s (11.16–11.40) | 8.10 s (8.00–8.11) | 1,276 / 1,196 MiB | 162,362 |
-| SOC subset, 7 files (108 MiB) | 6.19 s (6.15–6.27) | 3.29 s (3.20–3.31) | 876 / 862 MiB | 1,201 |
-| EVTX-ATTACK-SAMPLES, 278 files, per file | 13.48 s (12.83–14.18) | 11.38 s (11.26–11.53) | 729 / 758 MiB | 1,562 |
-
-Where the time went, per stage (CPU seconds summed over workers):
-
-- **Setup.** About 2.4 s became 0.1 s in every worker, now that the rule analysis comes from
-  disk and workers no longer import pySigma.
-- **Detection.** T001 went from 47.7 to 18.9 s, mostly because regular expressions now bound
-  their own candidates.
-- **Ingestion.** T001 went from 105.1 to 91.2 s, from smaller insert batches and C-side
-  folding of field-name case.
-- **Memory.** On T001, 64 KiB pages and the smaller batches take 1.5 GiB off the peak. The
-  small rises on the Sysmon log and the attack samples are the loaded rule analysis.
-
-The per-change measurements are in the commit messages of that range.
+To compare Zircolite's own settings or two checkouts, use `tools/throughput-benchmark.py`;
+time the rule phase alone with `-D` and `--performance-json`.

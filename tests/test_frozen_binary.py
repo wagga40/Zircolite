@@ -657,6 +657,19 @@ class TestAssets:
         assert match_count(binary) > 0
         assert fold_by_rule(binary) == fold_by_rule(runner.source(*args).detections())
 
+    def test_a_named_time_zone_resolves(self, runner, inputs):
+        # Windows has no system zone database, so the binary must carry tzdata's.
+        run = runner.binary(
+            "-e", str(FIXTURES / "sample_events.json"), "-j",
+            "-r", str(inputs / "match_all.json"), "-o", "detected.json",
+            "--timeline", "timeline.jsonl", "--timezone", "Europe/Paris",
+        )
+
+        lines = (run.cwd / "timeline.jsonl").read_text(encoding="utf-8").splitlines()
+        stamps = [json.loads(line)["Timestamp"] for line in lines]
+        assert stamps
+        assert all(stamp.endswith(("+01:00", "+02:00")) for stamp in stamps), stamps
+
     def test_a_shipped_template_renders(self, runner):
         args = ("-e", str(FIXTURES / "sample_bitsadmin.evtx"),
                 "-r", "rules/rules_windows_sysmon.json", "-o", "detected.json",

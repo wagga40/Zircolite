@@ -86,7 +86,7 @@ from zircolite.assets import (
     shipped_copy_shadowed_by,
 )
 from zircolite.config import RULE_LEVELS
-from zircolite.console import literal
+from zircolite.console import literal, send_console_to_stderr
 from zircolite.correlations import TIMESTAMP_FORMATS
 
 # Input format registry
@@ -106,11 +106,26 @@ from zircolite.processing import (
     process_perfile_streaming,
     process_unified_streaming,
 )
+from zircolite.rule_selection import STATUSES, tag_problem
 from zircolite.run_config import DEFAULTS, EARLY_DESTS, flatten_groups
 from zircolite.shutdown import (
     install_signal_handler,
     is_shutdown_requested,
     request_shutdown,
+)
+from zircolite.timeline import (
+    DEFAULT_TIMELINE,
+    TIMELINE_FORMATS,
+    Presentation,
+    TimelineConfigError,
+    TimelineError,
+    TimelineSpool,
+    TimelineStats,
+    TimezoneError,
+    build_timeline,
+    load_presentation,
+    resolve_timezone,
+    timeline_format,
 )
 from zircolite.utils import COMPRESSED_SUFFIXES
 
@@ -178,6 +193,9 @@ def parse_arguments() -> argparse.Namespace:
     rulesets_formats_args.add_argument("-pl", "--pipeline-list", help="List all installed pysigma pipelines", action='store_true')
     rulesets_formats_args.add_argument("--min-level", choices=RULE_LEVELS, default=None, help="Load only the rules at this level or above; a rule without a level counts as informational")
     rulesets_formats_args.add_argument("-R", "--rulefilter", help="Remove rules from ruleset by matching rule title (case sensitive)", action='append', nargs='*')
+    rulesets_formats_args.add_argument("--rule-status", type=str.lower, choices=STATUSES, action='append', nargs='+', metavar="STATUS", help=f"Load only the rules with one of these statuses: {', '.join(STATUSES)}; a rule without a status counts as experimental")
+    rulesets_formats_args.add_argument("--include-tag", action='append', nargs='+', metavar="TAG", help="Load only the rules carrying one of these tags or a tag below one, ignoring case: attack.t1059 selects attack.t1059.001")
+    rulesets_formats_args.add_argument("--exclude-tag", action='append', nargs='+', metavar="TAG", help="Leave out the rules carrying one of these tags or a tag below one; wins over --include-tag")
     rulesets_formats_args.add_argument("--test-rules", help="JSON file with rule test cases (true-positive / true-negative events per rule)", type=str, metavar="TEST_FILE")
 
     # Output formats and output files options
@@ -199,13 +217,20 @@ def parse_arguments() -> argparse.Namespace:
     output_formats_args.add_argument("-l", "--logfile", "--log-file", help=f"Log file name (default: {DEFAULTS['logfile']})", default=None, type=str)
     output_formats_args.add_argument("-L", "--limit", "--limit-results", help=f"Discard rules matching more events than this (alerts, for a correlation rule), per input database: per file in per-file mode, across the whole corpus when the run uses one database (--unified-db, or auto mode choosing it) (default: {DEFAULTS['limit']}, i.e. no limit)", type=int, default=None)
 
+    timeline_args = parser.add_argument_group('🕒 TIMELINE')
+    timeline_args.add_argument("--timeline", nargs="?", const=DEFAULT_TIMELINE, default=None, metavar="FILE", help=f"Write every detection as one row, in time order: CSV, JSONL for a .jsonl or .ndjson name, or JSONL on stdout for '-' (default name: {DEFAULT_TIMELINE})")
+    timeline_args.add_argument("--timeline-profile", default=None, metavar="NAME", help=f"Timeline columns: minimal, standard, full, or a profile of --timeline-config (default: {DEFAULTS['timeline_profile']})")
+    timeline_args.add_argument("--timeline-config", default=None, metavar="FILE", help=f"Timeline profiles, column fields and Details settings (default: {DEFAULTS['timeline_config']})")
+    timeline_args.add_argument("--keep-duplicates", action="store_true", help="Keep the timeline rows that repeat a detection from another copy of the same log")
+    timeline_args.add_argument("--timezone", default=None, metavar="TZ", help=f"Time zone of the timeline's timestamps: UTC, local, an offset such as +02:00, or a name such as Europe/Paris (default: {DEFAULTS['timezone']})")
+
     # Advanced configuration options
     config_formats_args = parser.add_argument_group('⚙️  ADVANCED CONFIGURATION')
     config_formats_args.add_argument("-c", "--config", help="JSON or YAML file containing field mappings and exclusions", type=str, default="config/config.yaml", action=_StoreGiven)
     config_formats_args.add_argument("-LE", "--logs-encoding", help="Encoding of the source files, for the formats read as text: Sysmon for Linux, Auditd, EVTXtract and CSV (XML uses the encoding declared in the document, JSON is read as UTF-8)", type=str)
     config_formats_args.add_argument("-q", "--quiet", help="Quiet mode: suppress banner, progress, and info messages. Only the summary panel and errors are shown.", action='store_true')
     config_formats_args.add_argument("--debug", help="Enable debug logging", action='store_true')
-    config_formats_args.add_argument("-n", "--nolog", "--no-log", help="Don't create the log file or the detections output file (files requested explicitly with --template, --dbfile, --keepflat or --package are still written)", action='store_true')
+    config_formats_args.add_argument("-n", "--nolog", "--no-log", help="Don't create the log file or the detections output file (files requested explicitly with --template, --dbfile, --keepflat, --package or --timeline are still written)", action='store_true')
     config_formats_args.add_argument("-U", "--update-rules", help="Update rulesets in the 'rules' directory", action='store_true')
     config_formats_args.add_argument("-v", "--version", help="Display Zircolite version", action='store_true')
     config_formats_args.add_argument("--timefield", "--time-field", help="Field holding the event timestamp, after field mappings. Left unset it is auto-detected, falling back to 'SystemTime'; naming one pins it", type=str, default=None)
@@ -216,7 +241,7 @@ def parse_arguments() -> argparse.Namespace:
     config_formats_args.add_argument("--remove-index", help="Drop the given index name(s) after creation. Can be repeated or list multiple (e.g. --remove-index idx_channel idx_eventid).", action='append', nargs='+', metavar="IDX", default=None)
     config_formats_args.add_argument("--auto-index", help="Inspect the loaded ruleset and auto-create indices on the top-N columns that the most rules filter on (default N=5 when used without an explicit number). Combine with --add-index for additional manually chosen columns.", type=int, nargs='?', const=5, default=None, metavar="N")
 
-    performance_args = parser.add_argument_group('PERFORMANCE')
+    performance_args = parser.add_argument_group('🚀 PERFORMANCE')
     performance_args.add_argument("--performance-json", default=None, metavar="PATH", help="Write timings, accelerator status and sampled memory to a JSON report")
     performance_args.add_argument("--working-db", choices=("memory", "disk"), default=None, help="Working database storage (default: memory); independent of --dbfile export")
     performance_args.add_argument("--working-db-dir", default=None, metavar="DIR", help="Existing directory for temporary working databases (default: system temporary directory)")
@@ -333,6 +358,21 @@ def _announce_local_default(value: str, parts: tuple[str, ...], remedy: str, log
             f"instead of the shipped {literal(shipped)} ({remedy} to choose explicitly and "
             f"silence this)[/]"
         )
+
+
+def _resolve_config_path(value: str, given: bool, remedy: str, logger: logging.Logger) -> str:
+    """Where a relative path under config/ is read from: the working directory, else the install.
+
+    The default is the most common such value, not the only one. Only a value
+    already rooted at config/ may fall back, or `-c mine/config.yaml` would
+    quietly load the bundled file instead of reporting that it is missing.
+    """
+    path = Path(value)
+    if path.is_absolute() or path.parent != Path("config"):
+        return value
+    if not given:
+        _announce_local_default(value, ("config", path.name), remedy, logger)
+    return resolve_default_path(value, "config", path.name)
 
 
 def _is_explicit(args: argparse.Namespace, dest: str, unset: Any = None) -> bool:
@@ -596,7 +636,8 @@ def resolve_logging_args(args: argparse.Namespace) -> None:
     """Resolve the settings the logger is built from, before it exists.
 
     ``debug``, ``no_output`` and ``log_file`` decide how the logger is
-    constructed, so they cannot wait for the validated merge. Everything else
+    constructed, and a ``timeline`` of ``-`` sends the console to stderr before
+    the banner, so they cannot wait for the validated merge. Everything else
     is resolved by :func:`resolve_run_config`.
     """
     run_config.resolve(args, _read_yaml_quietly(args.yaml_config), only=EARLY_DESTS)
@@ -702,7 +743,7 @@ def _write_package(ctx: ProcessingContext, args: argparse.Namespace) -> bool:
         executor=args.executor if ctx.workers_used > 1 else "sequential",
         timestamp_format=spool.timestamp_format,
         after=ctx.time_after_str if applied else None, before=ctx.time_before_str if applied else None,
-        limit=ctx.limit, rules_loaded=len(runnable_rules(ctx.rulesets or [], ctx.rule_filters)),
+        limit=ctx.limit, rules_loaded=len(runnable_rules(ctx.rulesets or [])),
     )
     failed = sorted({source for record in ctx.performance_files if record.get("status") == "failed"
                      for source in record.get("sources") or ()})
@@ -717,6 +758,131 @@ def _write_package(ctx: ProcessingContext, args: argparse.Namespace) -> bool:
         return False
     ctx.logger.info(f"[+] Package written to: {make_file_link(str(target))}")
     return True
+
+
+def _timeline_outputs(args: argparse.Namespace) -> list[str]:
+    return [args.timeline] if args.timeline and args.timeline != "-" else []
+
+
+def _timeline_flags_given(args: argparse.Namespace) -> list[str]:
+    """The flags depending on ``--timeline`` typed on the command line.
+
+    Read before the configuration file is merged: in a configuration file they
+    are settings for the runs that write a timeline, not a request.
+    """
+    return [flag for flag, dest in (
+        ("--timeline-profile", "timeline_profile"),
+        ("--timeline-config", "timeline_config"),
+        ("--keep-duplicates", "keep_duplicates"),
+        ("--timezone", "timezone"),
+    ) if getattr(args, dest, None) not in (None, False)]
+
+
+def _check_timeline_options(args: argparse.Namespace, flags_given: list[str],
+                            logger: logging.Logger) -> tuple[Presentation, tuple[str, ...]] | None:
+    """Validate ``--timeline`` and the flags that depend on it before any work starts.
+
+    Returns the presentation and the profile's columns, or None without a
+    timeline. A dependent flag typed without one would do nothing at all.
+    """
+    if not args.timeline:
+        if flags_given:
+            print_error_panel(
+                "Invalid Configuration",
+                f"{' and '.join(flags_given)} only apply to a timeline.",
+                "Add --timeline, or drop them.",
+            )
+            sys.exit(2)
+        return None
+    if getattr(args, "test_rules", None):
+        print_error_panel("Invalid Configuration", "--test-rules runs no logs, so it has no timeline to write.",
+                          "Drop --timeline, or run the logs without --test-rules.")
+        sys.exit(2)
+    if timeline_format(args.timeline) is None:
+        if Path(args.timeline).suffix.lower() == ".json":
+            hint = "Name it .jsonl: one JSON object per line streams, where a JSON array cannot."
+        else:
+            hint = f"Name a {', '.join(TIMELINE_FORMATS)} file, or '-' for JSONL on stdout."
+        print_error_panel("Invalid Timeline", f"{literal(args.timeline)} is neither CSV nor JSONL.", hint)
+        sys.exit(2)
+    if args.timeline != "-":
+        target = Path(args.timeline).resolve()
+        others = [args.outfile if not args.nolog else None, args.dbfile, args.logfile,
+                  args.performance_json, args.config, args.yaml_config, args.timeline_config,
+                  *_template_outputs(args)]
+        if any(other and Path(other).resolve() == target for other in others):
+            print_error_panel("Invalid Output Path", f"The timeline {literal(args.timeline)} is also another "
+                              "input or output of this run.", "Write the timeline to a separate file.")
+            sys.exit(2)
+        if target.is_dir() or not target.parent.is_dir():
+            print_error_panel("Invalid Output Path", f"The timeline {literal(args.timeline)} must name a file "
+                              "in an existing directory.", "Create the directory, or name a file in one.")
+            sys.exit(2)
+
+    args.timeline_config = _resolve_config_path(args.timeline_config, _is_explicit(args, "timeline_config"),
+                                                "pass --timeline-config", logger)
+    try:
+        presentation = load_presentation(args.timeline_config)
+    except TimelineConfigError as exc:
+        quit_on_error(f"[red]    [-] Invalid timeline configuration: {literal(exc)}[/]", logger)
+    try:
+        resolve_timezone(args.timezone)
+    except TimezoneError as exc:
+        print_error_panel("Invalid Timeline", f"Unknown time zone: {literal(exc)}", "Leave it unset to keep UTC.")
+        sys.exit(2)
+    columns = presentation.profiles.get(args.timeline_profile)
+    if columns is None:
+        print_error_panel(
+            "Invalid Timeline",
+            f"There is no timeline profile {literal(args.timeline_profile)}.",
+            f"Profiles in {literal(args.timeline_config)}: {literal(', '.join(presentation.profiles))}",
+        )
+        sys.exit(2)
+    return presentation, columns
+
+
+def _prepare_timeline(args: argparse.Namespace, rulesets: list[Any], presentation: Presentation,
+                      columns: tuple[str, ...], logger: logging.Logger) -> TimelineSpool:
+    """Open the spool beside the timeline, as the package does, so the parts share its disk."""
+    if args.timeline == "-":
+        target = Path(args.working_db_dir) if args.working_db_dir else None
+    else:
+        target = Path(args.timeline).resolve().parent
+        if not target.is_dir():
+            quit_on_error(f"[red]    [-] Cannot write the timeline: {literal(target)} is not a directory[/]", logger)
+    try:
+        directory = Path(tempfile.mkdtemp(prefix="tmp-zircolite-timeline-", dir=target)).resolve()
+    except OSError as exc:
+        quit_on_error(f"[red]    [-] Cannot write the timeline: {literal(exc)}[/]", logger)
+    return TimelineSpool(
+        directory=str(directory),
+        columns=columns,
+        presentation=presentation,
+        fmt=timeline_format(args.timeline) or "csv",
+        timezone=args.timezone,
+        time_field=args.timefield or "",
+        timestamp_format=getattr(args, "timestamp_format", None) or "iso",
+        rule_keys=rule_index(rulesets),
+    )
+
+
+def _write_timeline(ctx: ProcessingContext, args: argparse.Namespace) -> TimelineStats | None:
+    """Sort the spooled parts into the timeline. None if it was not written."""
+    spool = ctx.timeline_spool
+    if spool is None:
+        return None
+    if ctx.timeline_errors:
+        for error in ctx.timeline_errors[:5]:
+            ctx.logger.error(f"[red]    [-] Cannot write the timeline: {literal(error)}[/]")
+        return None
+    try:
+        stats = build_timeline(spool, ctx.timeline_parts, args.timeline, keep_duplicates=args.keep_duplicates)
+    except (TimelineError, OSError, ValueError) as exc:
+        ctx.logger.error(f"[red]    [-] Cannot write the timeline: {literal(exc)}[/]")
+        return None
+    where = "stdout" if args.timeline == "-" else make_file_link(args.timeline)
+    ctx.logger.info(f"[+] Timeline written to {where} ([magenta]{stats.rows:,}[/] rows)")
+    return stats
 
 
 def handle_templating(
@@ -779,8 +945,13 @@ def print_stats(
     total_rules: int = 0,
     outfile: str | None = None,
     performance: dict | None = None,
+    timeline: tuple[str, TimelineStats, bool] | None = None,
 ) -> None:
-    """Print final execution statistics with a Rich summary dashboard."""
+    """Print final execution statistics with a Rich summary dashboard.
+
+    ``timeline`` is the destination, what was written and whether duplicates
+    were kept.
+    """
     memory_tracker.sample()
     peak_memory, _ = memory_tracker.get_stats()
     processing_time = performance["wall_seconds"] if performance else time.time() - start_time
@@ -953,6 +1124,15 @@ def print_stats(
     else:
         summary_table.add_row("\U0001f3af Detections", "[dim]None[/]")
 
+    if timeline is not None:
+        destination, written, kept = timeline
+        notes = ["duplicates kept" if kept else f"{written.duplicates:,} duplicate(s) dropped"]
+        if written.unparsed:
+            notes.append(f"{written.unparsed:,} without a parseable time, listed last")
+        where = "stdout" if destination == "-" else make_file_link(destination)
+        summary_table.add_row("\U0001f552 Timeline",
+                              f"[magenta]{written.rows:,}[/] rows \u2192 {where} [dim]({'; '.join(notes)})[/]")
+
     # Section separator before summary
     print_section("Results")
 
@@ -1028,12 +1208,8 @@ def _warn_ignored_db_flags(
         )
 
 
-def _correlation_rule_count(rulesets: list[dict[str, Any]], rule_filters: list[str] | None) -> int:
-    """Correlation rules left once -R has removed the rules it names."""
-    return sum(
-        1 for rule in rulesets
-        if rule.get("correlation") and not any(f in rule.get("title", "") for f in rule_filters or ())
-    )
+def _correlation_rule_count(rulesets: list[dict[str, Any]]) -> int:
+    return sum(1 for rule in rulesets if rule.get("correlation"))
 
 
 def _warn_correlations_across_databases(count: int, databases: int, logger: logging.Logger) -> None:
@@ -1074,13 +1250,14 @@ def _run_processing(
 
     phase_setup_end = time.perf_counter()
 
-    correlations = _correlation_rule_count(ctx.rulesets, getattr(args, "rulefilter", None))
+    correlations = _correlation_rule_count(ctx.rulesets)
 
     # ----- DB input mode (explicit -D) -----
     if args.db_input:
         _warn_ignored_db_flags(args, logger)
         db_files = expand_db_path(Path(args.evtx), args, logger)
         check_output_paths(_template_outputs(args), db_files, "Template output")
+        check_output_paths(_timeline_outputs(args), db_files, "Timeline")
         _warn_correlations_across_databases(correlations, len(db_files), logger)
         ctx.parent_metrics.data["seconds"]["setup"] += time.perf_counter() - phase_setup_end
         zircolite_core, all_results = process_db_input(ctx, args, file_list=db_files)
@@ -1126,10 +1303,12 @@ def _run_processing(
                 )
 
     check_output_paths(_template_outputs(args), file_list, "Template output")
+    check_output_paths(_timeline_outputs(args), file_list, "Timeline")
     ctx.time_field = args.timefield
-    if ctx.package_spool is not None:
-        # Auto-detection may have chosen the time field after the spool was opened.
-        ctx.package_spool.time_field = ctx.time_field
+    # Auto-detection may have chosen the time field after the spools were opened.
+    for spool in (ctx.package_spool, ctx.timeline_spool):
+        if spool is not None:
+            spool.time_field = ctx.time_field
 
     # DB input mode (auto-detected SQLite file)
     if args.db_input:
@@ -1294,6 +1473,7 @@ def main() -> None:
 def _main(memory_tracker, start_time) -> None:
     version = __version__
     args = parse_arguments()
+    timeline_flags = _timeline_flags_given(args)
 
     install_signal_handler()
 
@@ -1317,6 +1497,8 @@ def _main(memory_tracker, start_time) -> None:
     # Init logging. A YAML config can set debug/log_file/no_output, and those
     # have to be known before the logger exists
     resolve_logging_args(args)
+    if args.timeline == "-":
+        send_console_to_stderr()
     if args.nolog:
         args.logfile = None
     logger = init_logger(args.debug, args.logfile)
@@ -1343,16 +1525,7 @@ def _main(memory_tracker, start_time) -> None:
         # would otherwise ship the rulesets it already had.
         sys.exit(0 if updater.run() else 1)
 
-    # A relative --config names a file shipped in config/, so it has to resolve
-    # from the install as well as from the working directory -- the default is
-    # the most common such value, not the only one. Only a value already rooted
-    # at config/ may fall back, or `-c mine/config.yaml` would quietly load the
-    # bundled one instead of reporting that it is missing.
-    config_path = Path(args.config)
-    if not config_path.is_absolute() and config_path.parent == Path("config"):
-        if not getattr(args, "_config_given", False):
-            _announce_local_default(args.config, ("config", config_path.name), "pass -c", logger)
-        args.config = resolve_default_path(args.config, "config", config_path.name)
+    args.config = _resolve_config_path(args.config, getattr(args, "_config_given", False), "pass -c", logger)
 
     if args.transform_list:
         sys.exit(0 if _print_transform_categories(args.config, logger) else 1)
@@ -1391,6 +1564,9 @@ def _main(memory_tracker, start_time) -> None:
             "templates/exportForAttackNavigator.tmpl", "templates", "exportForAttackNavigator.tmpl"
         )])
         args.templateOutput.append([nav_out])
+
+    # --pipeline-list exits once the pipelines are listed, before any timeline exists.
+    timeline_choice = None if args.pipeline_list else _check_timeline_options(args, timeline_flags, logger)
 
     # Handle rulesets
     if args.ruleset:
@@ -1446,6 +1622,25 @@ def _main(memory_tracker, start_time) -> None:
                     raw=_detection.timestamp_field_is_raw, path=_detection.timestamp_field_path,
                 )
 
+    if args.rulefilter:
+        args.rulefilter = [item for sublist in args.rulefilter for item in sublist]
+    if args.rulefilter and "" in args.rulefilter:
+        print_error_panel(
+            "Invalid Rule Filter",
+            "An empty --rulefilter (or rules.filters entry) is part of every title, "
+            "so it would remove every rule.",
+            "Give the text of the titles to skip, e.g. -R 'Noisy Rule'"
+        )
+        sys.exit(2)
+    for dest in ("rule_status", "include_tag", "exclude_tag"):
+        setattr(args, dest, flatten_groups(getattr(args, dest)) or None)
+    tag_problems = [problem for tag in (args.include_tag or []) + (args.exclude_tag or [])
+                    if (problem := tag_problem(tag))]
+    if tag_problems:
+        print_error_panel("Invalid Rule Selection", escape("; ".join(tag_problems)),
+                          "Give whole tags, each as its own value, e.g. --include-tag attack.execution attack.t1059")
+        sys.exit(2)
+
     # Load rulesets (with spinner for visual feedback during pySigma conversion)
     logger.info("[+] Loading ruleset(s)")
     ruleset_config = RulesetConfig(
@@ -1455,6 +1650,10 @@ def _main(memory_tracker, start_time) -> None:
         time_field=args.timefield,
         timestamp_format=args.timestamp_format,
         min_level=args.min_level,
+        rule_filters=args.rulefilter,
+        statuses=args.rule_status,
+        include_tags=args.include_tag,
+        exclude_tags=args.exclude_tag,
     )
     from zircolite import analysis_cache
     analysis_cache.enable()
@@ -1482,16 +1681,19 @@ def _main(memory_tracker, start_time) -> None:
     # Nothing was going to be applied to the events. The empty result file this
     # would otherwise write is indistinguishable from a clean run that found
     # nothing, so anything reading the exit code calls a failed run a success.
+    selection_flags = rulesets_manager.selection.flags()
     if not rulesets_manager.rulesets:
+        if rulesets_manager.loaded_rule_count and selection_flags:
+            quit_on_error(
+                f"[red]    [-] No rules to execute: [cyan]{', '.join(selection_flags)}[/] "
+                f"left out all {rulesets_manager.loaded_rule_count} rule(s) loaded[/]",
+                logger,
+            )
         quit_on_error(
             "[red]    [-] No rules to execute: check the ruleset(s) given to "
             "[cyan]--ruleset[/][/]",
             logger,
         )
-
-    # Flatten rule filters (must happen before any ruleset filtering below)
-    if args.rulefilter:
-        args.rulefilter = [item for sublist in args.rulefilter for item in sublist]
 
     # Handle --test-rules: validate rules against test cases and exit
     if getattr(args, 'test_rules', None):
@@ -1500,7 +1702,7 @@ def _main(memory_tracker, start_time) -> None:
         check_if_exists(args.test_rules, f"[red]    [-] Cannot find test file: {args.test_rules}[/]", logger)
         logger.info(f"[+] Running rule tests from: {make_file_link(args.test_rules)}")
         _test_core = ZircoliteCore(args.config, logger=logger)
-        _test_core.load_ruleset_from_var(rulesets_manager.rulesets, args.rulefilter)
+        _test_core.load_ruleset_from_var(rulesets_manager.rulesets)
         try:
             test_results = _test_core.run_rule_tests(args.test_rules)
         except ValueError as e:
@@ -1516,10 +1718,11 @@ def _main(memory_tracker, start_time) -> None:
             if r.get('error') == 'no matching rule in ruleset'
         ]
         if orphan_cases:
+            left_out = f" ({', '.join(selection_flags)} may have left them out)" if selection_flags else ""
             logger.error(
                 f"[red]    [-] {len(orphan_cases)} test case(s) match no rule in "
                 f"the ruleset: {', '.join(r.get('title') or r.get('id') or '?' for r in orphan_cases[:5])}"
-                f"{' ...' if len(orphan_cases) > 5 else ''}[/]"
+                f"{' ...' if len(orphan_cases) > 5 else ''}{left_out}[/]"
             )
         tests_failed = bool(orphan_cases) or any(
             r.get('tp_pass') is False or r.get('tn_pass') is False
@@ -1680,6 +1883,8 @@ def _main(memory_tracker, start_time) -> None:
             quit_on_error(f"Invalid --performance-json: {exc}", logger)
 
     package_spool = _prepare_package(args, rulesets_manager.rulesets, logger) if args.package else None
+    timeline_spool = (_prepare_timeline(args, rulesets_manager.rulesets, *timeline_choice, logger)
+                      if timeline_choice else None)
 
     # Handle event filter configuration
     active_event_filter = None
@@ -1704,7 +1909,6 @@ def _main(memory_tracker, start_time) -> None:
         db_location=":memory:",
         delimiter=args.csv_delimiter,
         rulesets=rulesets_manager.rulesets,
-        rule_filters=args.rulefilter,
         outfile=args.outfile,
         ready_for_templating=ready_for_templating,
         package=args.package,
@@ -1725,6 +1929,7 @@ def _main(memory_tracker, start_time) -> None:
         flatten_backend=args.flatten_backend,
         rule_prefilter=args.rule_prefilter,
         package_spool=package_spool,
+        timeline_spool=timeline_spool,
     )
 
     zircolite_core = None
@@ -1732,6 +1937,7 @@ def _main(memory_tracker, start_time) -> None:
     all_results: list[Any] = []
     strict_error = None
     templating_ok = True
+    timeline_stats: TimelineStats | None = None
     processing_failed = False
     report_failed = False
     requested_executor = args.executor
@@ -1742,6 +1948,14 @@ def _main(memory_tracker, start_time) -> None:
         zircolite_core, all_results, log_list, _phase_setup_end = _run_processing(
             ctx, args, logger
         )
+
+        # Written after a first Ctrl+C too, from the rows found, like the detections output
+        if timeline_spool is not None:
+            finalization_start = time.perf_counter()
+            try:
+                timeline_stats = _write_timeline(ctx, args)
+            finally:
+                finalization_seconds += time.perf_counter() - finalization_start
 
         if not is_shutdown_requested():
             # Print rule profiling report if requested
@@ -1776,9 +1990,12 @@ def _main(memory_tracker, start_time) -> None:
                 logger.debug(f"Core close: {e}")
         if package_spool is not None:
             shutil.rmtree(package_spool.directory, ignore_errors=True)
+        if timeline_spool is not None:
+            shutil.rmtree(timeline_spool.directory, ignore_errors=True)
         finalization_seconds += time.perf_counter() - finalization_start
         memory_tracker.stop()
-        status = "interrupted" if is_shutdown_requested() else "failed" if strict_error is not None or processing_failed or not templating_ok else "partial" if any(record["status"] in ("partial", "failed", "running") for record in ctx.performance_files) else "complete"
+        timeline_failed = timeline_spool is not None and timeline_stats is None
+        status = "interrupted" if is_shutdown_requested() else "failed" if strict_error is not None or processing_failed or not templating_ok or timeline_failed else "partial" if any(record["status"] in ("partial", "failed", "running") for record in ctx.performance_files) else "complete"
         stages = aggregate_stages([*ctx.performance_files, ctx.parent_metrics.data])
         stages["setup"] += setup_seconds
         stages["finalization"] += finalization_seconds
@@ -1832,9 +2049,10 @@ def _main(memory_tracker, start_time) -> None:
         total_rules=len(ctx.rulesets) if ctx.rulesets else 0,
         outfile=ctx.outfile if not ctx.no_output else None,
         performance=performance,
+        timeline=(args.timeline, timeline_stats, args.keep_duplicates) if timeline_stats is not None else None,
     )
 
     # A template that did not write is a failed run: whatever consumes that file
     # would otherwise read a stale one, or nothing, and call it success
-    if not templating_ok or report_failed:
+    if not templating_ok or report_failed or timeline_failed:
         sys.exit(1)

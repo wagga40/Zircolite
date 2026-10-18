@@ -1,0 +1,228 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 420" width="960" height="420" role="img" aria-labelledby="t d">
+  <title id="t">Building the timeline</title>
+  <desc id="d">A live Security.evtx and a shadow copy of it each fill their own database, whose timeline part sorts its detections by time into runs. The main process merges the runs into one stream, drops each row repeating the time, rule, computer, channel and record ID of the row before (--keep-duplicates keeps them) and writes timeline.csv, where --timezone Europe/Paris changes only the timestamp text, never the order.</desc>
+  <style>
+    :root {
+      --paper: #eef1ef;
+      --panel: #f8faf8;
+      --ink: #16211e;
+      --ink-2: #4a5955;
+      --rule: #cfd8d4;
+      --signal: #00697a;
+      --strip: #7c8b87;
+      --danger: #a3134e;
+      --sev-1: #24835a;
+      --sev-2: #9c7409;
+      --sev-unknown: #5a2f96;
+      --signal-tint: rgb(0 105 122 / 0.1);
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --paper: #0e191c;
+        --panel: #13232a;
+        --ink: #e2ebe8;
+        --ink-2: #9daea9;
+        --rule: #26393f;
+        --signal: #53c2cf;
+        --strip: #5f7570;
+        --danger: #f2568e;
+        --sev-1: #5ac38e;
+        --sev-2: #e0b43f;
+        --sev-unknown: #8a5fc6;
+        --signal-tint: rgb(83 194 207 / 0.14);
+      }
+    }
+    text { fill: var(--ink); font: 13px ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+    .mono, .mono text { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+    .card { fill: var(--paper); stroke: var(--rule); }
+    .panel { fill: var(--panel); stroke: var(--rule); }
+    .ink2 { fill: var(--ink-2); }
+    .bold { font-weight: 600; }
+    .step { font-weight: 600; }
+    .step .n { fill: var(--signal); }
+    .arrow { fill: none; stroke: var(--strip); stroke-width: 1.5; }
+    .head { fill: var(--strip); }
+    .line { stroke: var(--rule); }
+    .live { fill: var(--signal); }
+    .vss { fill: var(--sev-unknown); }
+    .gone { opacity: 0.45; }
+    .strike { fill: none; stroke: var(--danger); stroke-width: 1.5; stroke-dasharray: 200; }
+    .drop { fill: var(--danger); font-weight: 600; }
+    .low { fill: var(--sev-1); }
+    .med { fill: var(--sev-2); }
+    .tint { fill: var(--signal-tint); }
+    .sig { fill: var(--signal); }
+
+    .scene, .an { animation: 12s ease-in-out infinite; }
+    .scene { animation-name: scene; }
+    .files { animation-name: files; }
+    .parts { animation-name: parts; }
+    .pa { animation-name: pa; }
+    .pb { animation-name: pb; }
+    .l1 { animation-name: l1; }
+    .l2 { animation-name: l2; }
+    .l3 { animation-name: l3; }
+    .v1 { animation-name: v1; }
+    .v2 { animation-name: v2; }
+    .v3 { animation-name: v3; }
+    .merge { animation-name: merge; }
+    .m1 { animation-name: m1; }
+    .m2 { animation-name: m2; }
+    .m3 { animation-name: m3; }
+    .m4 { animation-name: m4; }
+    .m5 { animation-name: m5; }
+    .m6 { animation-name: m6; }
+    .why { animation-name: why; }
+    .s3 { animation-name: s3; }
+    .s5 { animation-name: s5; }
+    .c3 { animation-name: c3; }
+    .c5 { animation-name: c5; }
+    .keep { animation-name: keep; }
+    .table { animation-name: table; }
+    .t1 { animation-name: t1; }
+    .t2 { animation-name: t2; }
+    .t3 { animation-name: t3; }
+    .t4 { animation-name: t4; }
+    .tz { animation-name: tz; }
+    .utc { animation-name: utc; }
+    .cest { animation-name: cest; }
+
+    @keyframes files { 0%, 1.67% { opacity: 0; transform: translateX(-10px); } 5%, 100% { opacity: 1; transform: none; } }
+    @keyframes parts { 0%, 4.17% { opacity: 0; transform: translateX(-8px); } 7.5%, 100% { opacity: 1; transform: none; } }
+    @keyframes pa { 0%, 7.5% { opacity: 0; } 9.17%, 22.5% { opacity: 1; } 25%, 100% { opacity: 0; } }
+    @keyframes pb { 0%, 25% { opacity: 0; } 28.33%, 100% { opacity: 1; } }
+    @keyframes l1 { 0%, 8.33% { opacity: 0; transform: translateX(-8px); } 11.25%, 100% { opacity: 1; transform: none; } }
+    @keyframes l2 { 0%, 15.83% { opacity: 0; transform: translate(-8px, 20px); } 18.75%, 23.33% { opacity: 1; transform: translate(0, 20px); } 26.67%, 100% { opacity: 1; transform: none; } }
+    @keyframes l3 { 0%, 12.08% { opacity: 0; transform: translate(-8px, -20px); } 15%, 22.5% { opacity: 1; transform: translate(0, -20px); } 24.17% { opacity: 0; transform: translate(0, -20px); } 26.67% { opacity: 0; transform: translateX(-8px); } 29.17%, 100% { opacity: 1; transform: none; } }
+    @keyframes v1 { 0%, 12.08% { opacity: 0; transform: translate(-8px, 20px); } 15%, 23.33% { opacity: 1; transform: translate(0, 20px); } 26.67%, 100% { opacity: 1; transform: none; } }
+    @keyframes v2 { 0%, 8.33% { opacity: 0; transform: translate(-8px, -20px); } 11.25%, 22.5% { opacity: 1; transform: translate(0, -20px); } 24.17% { opacity: 0; transform: translate(0, -20px); } 26.67% { opacity: 0; transform: translateX(-8px); } 29.17%, 100% { opacity: 1; transform: none; } }
+    @keyframes v3 { 0%, 15.83% { opacity: 0; transform: translateX(-8px); } 18.75%, 100% { opacity: 1; transform: none; } }
+    @keyframes merge { 0%, 28.33% { opacity: 0; transform: translateX(-8px); } 32.5%, 100% { opacity: 1; transform: none; } }
+    @keyframes m1 { 0%, 33.33% { opacity: 0; transform: translateX(-10px); } 35.83%, 100% { opacity: 1; transform: none; } }
+    @keyframes m2 { 0%, 35.83% { opacity: 0; transform: translateX(-10px); } 38.33%, 100% { opacity: 1; transform: none; } }
+    @keyframes m3 { 0%, 38.33% { opacity: 0; transform: translateX(-10px); } 40.83%, 57.5% { opacity: 1; transform: none; } 60%, 100% { opacity: 0.45; transform: none; } }
+    @keyframes m4 { 0%, 40.83% { opacity: 0; transform: translateX(-10px); } 43.33%, 100% { opacity: 1; transform: none; } }
+    @keyframes m5 { 0%, 43.33% { opacity: 0; transform: translateX(-10px); } 45.83%, 59.17% { opacity: 1; transform: none; } 61.67%, 100% { opacity: 0.45; transform: none; } }
+    @keyframes m6 { 0%, 45.83% { opacity: 0; transform: translateX(-10px); } 48.33%, 100% { opacity: 1; transform: none; } }
+    @keyframes why { 0%, 50% { opacity: 0; } 53.33%, 100% { opacity: 1; } }
+    @keyframes s3 { 0%, 53.33% { stroke-dashoffset: 200; opacity: 0; } 53.75% { opacity: 1; } 57.5%, 100% { stroke-dashoffset: 0; opacity: 1; } }
+    @keyframes s5 { 0%, 55% { stroke-dashoffset: 200; opacity: 0; } 55.42% { opacity: 1; } 59.17%, 100% { stroke-dashoffset: 0; opacity: 1; } }
+    @keyframes c3 { 0%, 57.5% { opacity: 0; transform: translateX(-6px); } 60%, 100% { opacity: 1; transform: none; } }
+    @keyframes c5 { 0%, 59.17% { opacity: 0; transform: translateX(-6px); } 61.67%, 100% { opacity: 1; transform: none; } }
+    @keyframes keep { 0%, 61.67% { opacity: 0; } 65%, 100% { opacity: 1; } }
+    @keyframes table { 0%, 65.83% { opacity: 0; transform: translateY(6px); } 69.17%, 100% { opacity: 1; transform: none; } }
+    @keyframes t1 { 0%, 68.33% { opacity: 0; transform: translateX(-8px); } 70.83%, 100% { opacity: 1; transform: none; } }
+    @keyframes t2 { 0%, 70% { opacity: 0; transform: translateX(-8px); } 72.5%, 100% { opacity: 1; transform: none; } }
+    @keyframes t3 { 0%, 71.67% { opacity: 0; transform: translateX(-8px); } 74.17%, 100% { opacity: 1; transform: none; } }
+    @keyframes t4 { 0%, 73.33% { opacity: 0; transform: translateX(-8px); } 75.83%, 100% { opacity: 1; transform: none; } }
+    @keyframes tz { 0%, 79.17% { opacity: 0; } 82.5%, 100% { opacity: 1; } }
+    @keyframes utc { 0%, 80% { opacity: 1; } 83.33%, 100% { opacity: 0; } }
+    @keyframes cest { 0%, 80.83% { opacity: 0; } 84.17%, 100% { opacity: 1; } }
+    @keyframes scene { 0%, 96.67% { opacity: 1; } 100% { opacity: 0; } }
+
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after { animation: none !important; }
+    }
+  </style>
+  <defs><rect id="sq" width="8" height="8" rx="1.5"/></defs>
+  <rect class="card" x="0.5" y="0.5" width="959" height="419" rx="14"/>
+
+  <text class="step" x="24" y="30"><tspan class="n">1</tspan>  Inputs</text>
+  <text class="step" x="194" y="30"><tspan class="n">2</tspan>  Parts sort by time</text>
+  <text class="step" x="434" y="30"><tspan class="n">3</tspan>  Main process merges</text>
+  <text class="step" x="694" y="30"><tspan class="n">4</tspan>  Copies dropped</text>
+  <text class="step" x="24" y="274"><tspan class="n">5</tspan>  timeline.csv</text>
+
+  <g class="scene">
+    <!-- 1. two copies of one log, each in its own database -->
+    <g class="an files">
+      <rect class="panel" x="24.5" y="68.5" width="140" height="48" rx="5"/>
+      <use class="live" href="#sq" x="36" y="80"/>
+      <text class="mono" x="52" y="88.5">Security.evtx</text>
+      <text class="ink2" x="52" y="107">live log</text>
+      <rect class="panel" x="24.5" y="172.5" width="140" height="48" rx="5"/>
+      <use class="vss" href="#sq" x="36" y="184"/>
+      <text class="mono" x="52" y="192.5">Security.evtx</text>
+      <text class="ink2" x="52" y="211">VSS shadow copy</text>
+    </g>
+
+    <!-- 2. each part sorts what the rules report into runs -->
+    <g class="an parts">
+      <text class="ink2" x="94.5" y="141" text-anchor="middle">own database,<tspan x="94.5" dy="17">own part</tspan></text>
+      <path class="arrow" d="M165 92.5h23M165 196.5h23"/><path class="head" d="M194 92.5l-6-4v8zM194 196.5l-6-4v8z"/>
+      <rect class="panel" x="194.5" y="44.5" width="210" height="96" rx="6"/>
+      <rect class="panel" x="194.5" y="148.5" width="210" height="96" rx="6"/>
+      <path class="line" d="M195 72.5h209M195 176.5h209"/>
+    </g>
+    <text class="an pa ink2" x="206" y="63" style="opacity: 0">as the rules report them</text>
+    <text class="an pa ink2" x="206" y="167" style="opacity: 0">as the rules report them</text>
+    <text class="an pb sig bold" x="206" y="63">sorted run, up to 16 MiB</text>
+    <text class="an pb sig bold" x="206" y="167">sorted run, up to 16 MiB</text>
+    <g class="mono">
+      <g class="an l1"><use class="live" href="#sq" x="206" y="83.5"/><text x="222" y="92">10:40:00<tspan x="300">4688</tspan><tspan x="346">48211</tspan></text></g>
+      <g class="an l2"><use class="live" href="#sq" x="206" y="103.5"/><text x="222" y="112">10:41:05<tspan x="300">4688</tspan><tspan x="346">48236</tspan></text></g>
+      <g class="an l3"><use class="live" href="#sq" x="206" y="123.5"/><text x="222" y="132">10:52:31<tspan x="300">4624</tspan><tspan x="346">48302</tspan></text></g>
+      <g class="an v1"><use class="vss" href="#sq" x="206" y="187.5"/><text x="222" y="196">10:38:12<tspan x="300">4624</tspan><tspan x="346">48190</tspan></text></g>
+      <g class="an v2"><use class="vss" href="#sq" x="206" y="207.5"/><text x="222" y="216">10:40:00<tspan x="300">4688</tspan><tspan x="346">48211</tspan></text></g>
+      <g class="an v3"><use class="vss" href="#sq" x="206" y="227.5"/><text x="222" y="236">10:41:05<tspan x="300">4688</tspan><tspan x="346">48236</tspan></text></g>
+    </g>
+
+    <!-- 3. one stream, in time order -->
+    <g class="an merge">
+      <path class="arrow" d="M405 92.5h14M405 196.5h14M419 92.5v104M419 144.5h9"/><path class="head" d="M434 144.5l-6-4v8z"/>
+      <rect class="panel" x="434.5" y="44.5" width="240" height="200" rx="6"/>
+      <path class="line" d="M435 72.5h239"/>
+      <text class="ink2" x="446" y="63">at most 64 runs at a time</text>
+    </g>
+    <g class="mono">
+      <g class="an m1"><use class="vss" href="#sq" x="450" y="86.5"/><text x="466" y="95">10:38:12<tspan x="546">4624</tspan><tspan x="592">48190</tspan></text></g>
+      <g class="an m2"><use class="vss" href="#sq" x="450" y="111.5"/><text x="466" y="120">10:40:00<tspan x="546">4688</tspan><tspan x="592">48211</tspan></text></g>
+      <g class="an m3 gone"><use class="live" href="#sq" x="450" y="136.5"/><text x="466" y="145">10:40:00<tspan x="546">4688</tspan><tspan x="592">48211</tspan></text></g>
+      <g class="an m4"><use class="live" href="#sq" x="450" y="161.5"/><text x="466" y="170">10:41:05<tspan x="546">4688</tspan><tspan x="592">48236</tspan></text></g>
+      <g class="an m5 gone"><use class="vss" href="#sq" x="450" y="186.5"/><text x="466" y="195">10:41:05<tspan x="546">4688</tspan><tspan x="592">48236</tspan></text></g>
+      <g class="an m6"><use class="live" href="#sq" x="450" y="211.5"/><text x="466" y="220">10:52:31<tspan x="546">4624</tspan><tspan x="592">48302</tspan></text></g>
+    </g>
+
+    <!-- 4. a row repeating the record of the row before is a copy -->
+    <g class="an why">
+      <text class="bold" x="694" y="63">Same record, same rule</text>
+      <text class="ink2" x="694" y="83">Time, Computer, Channel and<tspan x="694" dy="18">RecordID match the row before,</tspan><tspan x="694" dy="18">whichever file it came from</tspan></text>
+    </g>
+    <path class="strike an s3" d="M444 140.5h196"/>
+    <path class="strike an s5" d="M444 190.5h196"/>
+    <text class="an c3 drop" x="694" y="145">copy, dropped</text>
+    <text class="an c5 drop" x="694" y="195">copy, dropped</text>
+    <text class="an keep ink2" x="694" y="236"><tspan class="mono">--keep-duplicates</tspan> keeps them</text>
+
+    <!-- 5. the file: same rows, same order, whatever the time zone -->
+    <text class="an tz ink2" x="936" y="274" text-anchor="end">UTC by default; <tspan class="mono sig">--timezone Europe/Paris</tspan> changes only the text, never the order</text>
+    <g class="an table">
+      <rect class="panel" x="24.5" y="286.5" width="912" height="118" rx="6"/>
+      <path class="line" d="M25 314.5h911"/>
+      <rect class="an tz tint" x="32" y="319" width="268" height="82" rx="3"/>
+      <text class="ink2" x="40" y="305">Timestamp<tspan x="314">Computer</tspan><tspan x="390">Channel</tspan><tspan x="472">EventID</tspan><tspan x="544">RecordID</tspan><tspan x="620">Level</tspan><tspan x="690">RuleTitle</tspan></text>
+    </g>
+    <g class="mono">
+      <g class="an t1">
+        <text class="an utc" x="40" y="334" style="opacity: 0">2024-05-01T10:38:12.204417+00:00</text>
+        <text class="an cest" x="40" y="334">2024-05-01T<tspan class="sig">12</tspan>:38:12.204417<tspan class="sig">+02:00</tspan></text>
+        <text x="314" y="334">WKS-042<tspan x="390">Security</tspan><tspan x="472">4624</tspan><tspan x="544">48190</tspan><tspan class="low" x="620">low</tspan><tspan x="690">Admin User Remote Logon</tspan></text>
+      </g>
+      <g class="an t2">
+        <text class="an utc" x="40" y="354" style="opacity: 0">2024-05-01T10:40:00.118306+00:00</text>
+        <text class="an cest" x="40" y="354">2024-05-01T<tspan class="sig">12</tspan>:40:00.118306<tspan class="sig">+02:00</tspan></text>
+        <text x="314" y="354">WKS-042<tspan x="390">Security</tspan><tspan x="472">4688</tspan><tspan x="544">48211</tspan><tspan class="med" x="620">medium</tspan><tspan x="690">Whoami.EXE Execution Anomaly</tspan></text>
+      </g>
+      <g class="an t3">
+        <text class="an utc" x="40" y="374" style="opacity: 0">2024-05-01T10:41:05.730951+00:00</text>
+        <text class="an cest" x="40" y="374">2024-05-01T<tspan class="sig">12</tspan>:41:05.730951<tspan class="sig">+02:00</tspan></text>
+        <text x="314" y="374">WKS-042<tspan x="390">Security</tspan><tspan x="472">4688</tspan><tspan x="544">48236</tspan><tspan class="low" x="620">low</tspan><tspan x="690">Local Accounts Discovery</tspan></text>
+      </g>
+      <g class="an t4">
+        <text class="an utc" x="40" y="394" style="opacity: 0">2024-05-01T10:52:31.402268+00:00</text>
+        <text class="an cest" x="40" y="394">2024-05-01T<tspan class="sig">12</tspan>:52:31.402268<tspan class="sig">+02:00</tspan></text>
+        <text x="314" y="394">WKS-042<tspan x="390">Security</tspan><tspan x="472">4624</tspan><tspan x="544">48302</tspan><tspan class="low" x="620">low</tspan><tspan x="690">Admin User Remote Logon</tspan></text>
+      </g>
+    </g>
+  </g>
+</svg>

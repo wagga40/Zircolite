@@ -1,0 +1,23 @@
+# --keep-duplicates keeps the rows of both copies of one EVTX file
+tags: [evtx, output]
+skip_if:
+  missing_input: true
+command:
+  - "-e"
+  - "/data/input"
+  - "-r"
+  - "/data/input/ruleset.json"
+  - "-f"
+  - "evtx"
+  - "-o"
+  - "/data/output/detected_events.json"
+  - "-l"
+  - "/data/output/zircolite.log"
+  - "--timeline"
+  - "/data/output/timeline.csv"
+  - "--keep-duplicates"
+expected_exit_code: 0
+compare_files:
+  - actual: /data/output/timeline.csv
+    compare: content
+    expected: timeline.csv

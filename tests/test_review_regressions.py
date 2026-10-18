@@ -244,7 +244,7 @@ def test_executor_output_parity(field_mappings_file, tmp_path, executor, csv_mod
         events_before=time.strptime("9999-12-12T23:59:59", "%Y-%m-%dT%H:%M:%S"),
         limit=-1, csv_mode=csv_mode, time_field="SystemTime",
         db_location=":memory:", delimiter=";", rulesets=[{"title": "match", "id": "test", "rule": ["SELECT * FROM logs WHERE EventID=1"]}],
-        rule_filters=None, outfile=str(tmp_path / "out"), ready_for_templating=False,
+        outfile=str(tmp_path / "out"), ready_for_templating=False,
         package=False, dbfile=None, keepflat=False, memory_tracker=MemoryTracker(), retain_results=retain,
     )
     auto = executor == "process-auto"

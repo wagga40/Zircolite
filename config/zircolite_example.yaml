@@ -76,6 +76,17 @@ rules:
   # high or critical. A rule without a level counts as informational.
   min_level: null  # Example: medium
 
+  # Load only the rules with one of these statuses: stable, test, experimental,
+  # deprecated or unsupported. A rule without a status counts as experimental.
+  status: null  # Example: [stable, test]
+
+  # Load only the rules carrying one of these tags or a tag below one, ignoring
+  # case: attack.t1059 also selects attack.t1059.001.
+  include_tags: null  # Example: [attack.execution, attack.persistence]
+
+  # Leave out the rules carrying one of these tags; wins over include_tags.
+  exclude_tags: null  # Example: [detection.threat-hunting]
+
   # How the time field is written, for correlation rules converted from native
   # Sigma rules: iso, unix, unix_ms or unix_us. Compiled JSON rulesets keep the
   # format they were converted with.
@@ -116,6 +127,17 @@ output:
   # Create a package for the offline viewer (every event plus the detections)
   package: false
   package_dir: ""  # Where to write it; empty means the working directory
+
+  # Every detection as one row, in time order: a .csv, .jsonl or .ndjson
+  # file, or "-" for JSONL on stdout. Off when null.
+  timeline: null  # Example: timeline.csv
+  timeline_profile: standard  # minimal, standard, full, or a profile of timeline_config
+  timeline_config: config/timeline.yaml  # Profiles, column fields and Details settings
+  # Keep the rows that repeat a detection from another copy of the same log
+  keep_duplicates: false
+  # Time zone of the timestamps: UTC, local, a quoted offset such as "+02:00",
+  # or a name such as Europe/Paris. Rows are ordered by instant whatever it is.
+  timezone: UTC
 
   # Also write the flattened events as JSONL. Only events Zircolite actually
   # processed are included, so events dropped by early event filtering or by

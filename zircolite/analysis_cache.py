@@ -1,14 +1,14 @@
 """What Zircolite reads out of rule SQL, kept on disk between runs.
 
 Normalising, planning and scanning a 4,500-rule ruleset costs about two
-seconds, and every process worker used to pay it again. All three are pure
+seconds, which every process worker would pay again. All three are pure
 functions of the statement text and of this package's own analysis code, so a
 run reloads them from the user's cache directory instead. The file is JSON and
 is validated field by field: a damaged or foreign file is ignored and the
 analysis recomputed, never trusted in part.
 
 Only the command line enables the cache; a library caller computes everything
-in memory as before. Process workers inherit the directory through
+in memory. Process workers inherit the directory through
 ``ZIRCOLITE_ANALYSIS_CACHE``.
 """
 
@@ -157,8 +157,8 @@ def _lines(queries: tuple[str, ...]) -> Iterator[bytes]:
 
 def _save(path: Path, queries: tuple[str, ...]) -> None:
     try:
-        # A line per statement: decoding them one at a time never holds the
-        # whole file as Python objects.
+        # Line by line: decoding them one at a time never holds the whole
+        # file as Python objects.
         data = b"\n".join([orjson.dumps({"format": FORMAT, "count": len(queries)}), *_lines(queries)])
         path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
         fd, temporary = tempfile.mkstemp(dir=path.parent, prefix=".analysis-", suffix=".tmp")

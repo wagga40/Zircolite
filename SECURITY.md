@@ -2,10 +2,11 @@
 
 ## Supported versions
 
-Security updates are provided for the release line listed below. Use its latest stable version.
+Security updates are provided for the release lines listed below. Use the latest stable version of a line.
 
 | Version | Supported          |
 | ------- | ------------------ |
+| 4.6.x   | :white_check_mark: |
 | 4.5.x   | :white_check_mark: |
 | 4.2.x   | :white_check_mark: |
 | 4.1.x   | :white_check_mark: |

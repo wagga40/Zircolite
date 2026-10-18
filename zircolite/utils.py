@@ -92,6 +92,7 @@ def rounded_integer_warning(fields) -> str:
 
 # Above this, an epoch number is milliseconds rather than seconds (1973-03-03).
 _EPOCH_MS_THRESHOLD = 100_000_000_000
+_DIGITS = re.compile(r"\d*")
 
 
 def parse_timestamp(value: Any) -> datetime | None:
@@ -134,9 +135,8 @@ def parse_timestamp(value: Any) -> datetime | None:
     # dot with no digits after it
     dot = text.find(".")
     if dot != -1:
-        end = dot + 1
-        while end < len(text) and text[end].isdigit():
-            end += 1
+        match = _DIGITS.match(text, dot + 1)
+        end = match.end() if match else dot + 1
         text = f"{text[:dot]}.{text[dot + 1:end][:6].ljust(6, '0')}{text[end:]}"
 
     try:
@@ -562,7 +562,13 @@ def sanitize_value_for_csv(value: Any) -> str:
         # A correlation alert's group keys and evidence: JSON keeps them readable
         # by a program, where str() would write Python's repr.
         value = orjson.dumps(value).decode()
-    text = str(value).replace("\r\n", " ").replace("\n", " ").replace("\r", " ")
+    text = str(value)
+    # Once "\r\n" is one space, a "\r" or "\n" left stands alone, so each kind
+    # is replaced only when present: long script blocks mostly carry one.
+    if "\r" in text:
+        text = text.replace("\r\n", " ").replace("\r", " ")
+    if "\n" in text:
+        text = text.replace("\n", " ")
     if text[:1] in _CSV_FORMULA_PREFIXES:
         text = "'" + text
     return text

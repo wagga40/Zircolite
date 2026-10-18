@@ -14,6 +14,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 import requests
+import yaml
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
@@ -1378,6 +1379,155 @@ class TestMinimumLevel:
         with patch.object(test_logger, "info") as mock_info:
             self._titles(tmp_path, test_logger, "high")
         assert "3 rule(s) below level high left out" in " ".join(str(c) for c in mock_info.call_args_list)
+
+
+class TestRuleFilter:
+    """-R is applied once, at load time, before anything is derived from the rules."""
+
+    def _handler(self, rules, test_logger, rule_filters, **config):
+        with patch.object(RulesetHandler, "ruleset_parsing", return_value=[rules]):
+            return RulesetHandler(
+                RulesetConfig(ruleset=[], rule_filters=rule_filters, **config), logger=test_logger
+            )
+
+    def test_a_rule_sharing_sql_with_a_removed_one_still_runs(self, test_logger):
+        # Duplicate removal keeps the higher level; filtering after it lost both.
+        rules = [
+            {"title": "Kept by dedup", "level": "high", "rule": ["SELECT * FROM logs WHERE EventID=1"]},
+            {"title": "Same SQL", "level": "medium", "rule": ["SELECT * FROM logs WHERE EventID=1"]},
+        ]
+        handler = self._handler(rules, test_logger, ["Kept by dedup"])
+        assert [rule["title"] for rule in handler.rulesets] == ["Same SQL"]
+
+    def test_matching_is_a_case_sensitive_title_substring(self, test_logger):
+        rules = [
+            {"title": "Noisy PowerShell", "level": "high", "rule": ["SELECT * FROM logs WHERE a=1"]},
+            {"title": "noisy cmd", "level": "high", "rule": ["SELECT * FROM logs WHERE a=2"]},
+            {"title": "Quiet", "level": "high", "rule": ["SELECT * FROM logs WHERE a=3"]},
+        ]
+        handler = self._handler(rules, test_logger, ["Noisy"])
+        assert sorted(rule["title"] for rule in handler.rulesets) == ["Quiet", "noisy cmd"]
+
+    def test_the_count_removed_is_reported(self, test_logger):
+        rules = [
+            {"title": "Noisy", "level": "high", "rule": ["SELECT * FROM logs WHERE a=1"]},
+            {"title": "Quiet", "level": "high", "rule": ["SELECT * FROM logs WHERE a=2"]},
+        ]
+        with patch.object(test_logger, "info") as mock_info:
+            self._handler(rules, test_logger, ["Noisy"])
+        assert "1 rule(s) removed by --rulefilter" in " ".join(str(c) for c in mock_info.call_args_list)
+
+    def test_combines_with_min_level(self, test_logger):
+        rules = [
+            {"title": "Noisy", "level": "high", "rule": ["SELECT * FROM logs WHERE a=1"]},
+            {"title": "Low", "level": "low", "rule": ["SELECT * FROM logs WHERE a=2"]},
+            {"title": "Kept", "level": "high", "rule": ["SELECT * FROM logs WHERE a=3"]},
+        ]
+        handler = self._handler(rules, test_logger, ["Noisy"], min_level="medium")
+        assert [rule["title"] for rule in handler.rulesets] == ["Kept"]
+
+    def test_a_removed_rule_does_not_widen_the_event_filter(self, test_logger):
+        rules = [
+            {"title": "Logons", "level": "high",
+             "rule": ["SELECT * FROM logs WHERE Channel='Security' AND EventID=4624"]},
+            {"title": "Services", "level": "high",
+             "rule": ["SELECT * FROM logs WHERE Channel='System' AND EventID=7045"]},
+        ]
+        handler = self._handler(rules, test_logger, ["Services"])
+        assert handler.event_filter is not None
+        assert handler.event_filter.should_process_event("Security", 4624) is True
+        assert handler.event_filter.should_process_event("System", 7045) is False
+
+    def test_a_removed_correlation_rule_leaves_the_event_filter_on(self, test_logger):
+        rules = [
+            {"title": "Logons", "level": "high",
+             "rule": ["SELECT * FROM logs WHERE Channel='Security' AND EventID=4624"]},
+            {"title": "Burst", "level": "high", "rule": ["SELECT 1"], "correlation": True,
+             "correlation_plan": {"type": "event_count"}},
+        ]
+        handler = self._handler(rules, test_logger, ["Burst"])
+        assert [rule["title"] for rule in handler.rulesets] == ["Logons"]
+        assert handler.event_filter is not None
+        assert handler.event_filter.is_enabled is True
+
+    def test_removing_every_rule_leaves_none(self, test_logger):
+        rules = [{"title": "Noisy", "level": "high", "rule": ["SELECT * FROM logs WHERE a=1"]}]
+        handler = self._handler(rules, test_logger, ["Noisy"])
+        assert handler.rulesets == []
+        assert handler.loaded_rule_count == 1
+
+
+class TestRuleSelectionAtLoad:
+    """--rule-status and the tag options apply where -R does: at load time, before dedup."""
+
+    def _handler(self, rules, test_logger, **config):
+        with patch.object(RulesetHandler, "ruleset_parsing", return_value=[rules]):
+            return RulesetHandler(RulesetConfig(ruleset=[], **config), logger=test_logger)
+
+    def test_a_rule_sharing_sql_with_a_deselected_one_still_runs(self, test_logger):
+        rules = [
+            {"title": "Kept by dedup", "level": "high", "status": "experimental",
+             "rule": ["SELECT * FROM logs WHERE EventID=1"]},
+            {"title": "Same SQL", "level": "medium", "status": "stable",
+             "rule": ["SELECT * FROM logs WHERE EventID=1"]},
+        ]
+        handler = self._handler(rules, test_logger, statuses=["stable"])
+        assert [rule["title"] for rule in handler.rulesets] == ["Same SQL"]
+
+    def test_a_deselected_rule_does_not_widen_the_event_filter(self, test_logger):
+        rules = [
+            {"title": "Logons", "level": "high", "tags": ["attack.initial-access"],
+             "rule": ["SELECT * FROM logs WHERE Channel='Security' AND EventID=4624"]},
+            {"title": "Services", "level": "high", "tags": ["attack.persistence"],
+             "rule": ["SELECT * FROM logs WHERE Channel='System' AND EventID=7045"]},
+        ]
+        handler = self._handler(rules, test_logger, exclude_tags=["attack.persistence"])
+        assert handler.event_filter is not None
+        assert handler.event_filter.should_process_event("Security", 4624) is True
+        assert handler.event_filter.should_process_event("System", 7045) is False
+
+    def test_deselecting_the_only_correlation_turns_the_event_filter_back_on(self, test_logger):
+        rules = [
+            {"title": "Logons", "level": "high", "tags": ["attack.initial-access"],
+             "rule": ["SELECT * FROM logs WHERE Channel='Security' AND EventID=4624"]},
+            {"title": "Burst", "level": "high", "rule": ["SELECT 1"], "correlation": True,
+             "correlation_plan": {"type": "event_count"}},
+        ]
+        handler = self._handler(rules, test_logger, include_tags=["attack"])
+        assert [rule["title"] for rule in handler.rulesets] == ["Logons"]
+        assert handler.event_filter is not None
+        assert handler.event_filter.is_enabled is True
+
+    def test_the_selection_is_kept_for_the_messages(self, test_logger):
+        rules = [{"title": "Draft", "level": "high", "status": "experimental", "rule": ["SELECT 1"]}]
+        handler = self._handler(rules, test_logger, statuses=["stable"], min_level="low")
+        assert handler.rulesets == []
+        assert handler.loaded_rule_count == 1
+        assert handler.selection.flags() == ["--min-level", "--rule-status"]
+
+    @pytest.mark.requires_sigma
+    def test_converted_sigma_rules_carry_status_and_tags(self, tmp_path, test_logger, monkeypatch):
+        monkeypatch.chdir(tmp_path)
+        documents = [
+            {"title": "Stable whoami", "status": "stable", "tags": ["attack.discovery", "attack.t1033"],
+             "logsource": {"product": "windows", "category": "process_creation"},
+             "detection": {"s": {"CommandLine|contains": "whoami"}, "condition": "s"}, "level": "medium"},
+            {"title": "Draft net", "status": "experimental", "tags": ["attack.discovery"],
+             "logsource": {"product": "windows", "category": "process_creation"},
+             "detection": {"s": {"CommandLine|contains": "net user"}, "condition": "s"}, "level": "medium"},
+        ]
+        path = tmp_path / "rules.yml"
+        path.write_text(yaml.safe_dump_all(documents))
+
+        by_status = RulesetHandler(RulesetConfig(ruleset=[str(path)], statuses=["stable"], save_ruleset=True),
+                                   logger=test_logger)
+        by_tag = RulesetHandler(RulesetConfig(ruleset=[str(path)], include_tags=["attack.t1033"]),
+                                logger=test_logger)
+
+        assert [rule["title"] for rule in by_status.rulesets] == ["Stable whoami"]
+        assert [rule["title"] for rule in by_tag.rulesets] == ["Stable whoami"]
+        [saved] = tmp_path.glob("ruleset-*.json")
+        assert sorted(rule["title"] for rule in json.loads(saved.read_text())) == ["Draft net", "Stable whoami"]
 
 
 class TestRulesetHandlerInitBranches:

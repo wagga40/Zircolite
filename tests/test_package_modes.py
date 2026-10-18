@@ -72,7 +72,7 @@ def context(tmp_path, config, test_logger, *, dbfile=None, limit=-1):
         events_after=time.strptime("1970-01-01T00:00:00", "%Y-%m-%dT%H:%M:%S"),
         events_before=time.strptime("9999-12-12T23:59:59", "%Y-%m-%dT%H:%M:%S"),
         limit=limit, csv_mode=False, time_field="SystemTime", db_location=":memory:", delimiter=";",
-        rulesets=RULES, rule_filters=None, outfile=str(tmp_path / "out.json"), ready_for_templating=False,
+        rulesets=RULES, outfile=str(tmp_path / "out.json"), ready_for_templating=False,
         package=True, dbfile=dbfile, keepflat=False, memory_tracker=MemoryTracker(logger=test_logger),
         retain_results=False,
         package_spool=PackageSpool(directory=str(spool_dir), time_field="SystemTime", rule_keys=rule_index(RULES)),

@@ -623,6 +623,326 @@ class TestCLIRuleFiltering:
         assert len(detections) == 0
 
 
+class TestRuleFilterAtLoad:
+    """-R selects the rules once, so everything derived from the ruleset agrees with it."""
+
+    CONFIG: ClassVar[dict] = {
+        "exclusions": [], "useless": [], "alias": {}, "split": {},
+        "mappings": {"Event.System.EventID": "EventID", "Event.EventData.CommandLine": "CommandLine"},
+        "transforms_enabled": False, "transforms": {},
+    }
+
+    def _argv(self, tmp_path, rules, *extra):
+        events = tmp_path / "events.json"
+        events.write_text('{"Event": {"System": {"EventID": 1}, "EventData": {"CommandLine": "cmd.exe /c whoami"}}}')
+        ruleset = tmp_path / "ruleset.json"
+        ruleset.write_text(json.dumps(rules))
+        config = tmp_path / "config.json"
+        config.write_text(json.dumps(self.CONFIG))
+        output = tmp_path / "detected_events.json"
+        argv = ["zircolite.py", "-e", str(events), "-r", str(ruleset), "-c", str(config), "-j",
+                "-o", str(output), *get_log_arg(tmp_path), *extra]
+        return argv, output
+
+    def test_a_rule_sharing_sql_with_a_removed_one_still_detects(self, tmp_path):
+        sql = ["SELECT * FROM logs WHERE CommandLine LIKE '%whoami%'"]
+        argv, output = self._argv(tmp_path, [
+            {"title": "Whoami - Sysmon", "id": "a", "level": "high", "tags": [], "rule": sql},
+            {"title": "Whoami Discovery", "id": "b", "level": "medium", "tags": [], "rule": sql},
+        ], "-R", "Sysmon")
+
+        with patch("sys.argv", argv):
+            zircolite_script.main()
+
+        assert [result["title"] for result in json.loads(output.read_text())] == ["Whoami Discovery"]
+
+    def test_removing_every_rule_is_an_error(self, tmp_path):
+        argv, _ = self._argv(tmp_path, [
+            {"title": "Noisy", "id": "a", "level": "high", "tags": [],
+             "rule": ["SELECT * FROM logs WHERE CommandLine LIKE '%whoami%'"]},
+        ], "-R", "Noisy")
+
+        with patch("sys.argv", argv), pytest.raises(SystemExit) as exc:
+            zircolite_script.main()
+
+        assert exc.value.code == 1
+
+    def test_an_empty_filter_is_refused(self, tmp_path):
+        # "" is a substring of every title: it would remove the whole ruleset.
+        argv, _ = self._argv(tmp_path, [
+            {"title": "Kept", "id": "a", "level": "high", "tags": [],
+             "rule": ["SELECT * FROM logs WHERE CommandLine LIKE '%whoami%'"]},
+        ], "-R", "")
+
+        with patch("sys.argv", argv), pytest.raises(SystemExit) as exc:
+            zircolite_script.main()
+
+        assert exc.value.code == 2
+
+    def test_coverage_counts_only_the_rules_that_ran(self, tmp_path):
+        argv, _ = self._argv(tmp_path, [
+            {"title": "Noisy", "id": "a", "level": "high", "tags": [],
+             "rule": ["SELECT * FROM logs WHERE CommandLine LIKE '%cmd%'"]},
+            {"title": "Kept", "id": "b", "level": "high", "tags": [],
+             "rule": ["SELECT * FROM logs WHERE CommandLine LIKE '%whoami%'"]},
+        ], "-R", "Noisy")
+
+        with patch("sys.argv", argv), patch.object(zircolite_script, "print_stats") as stats:
+            zircolite_script.main()
+
+        assert stats.call_args.kwargs["total_rules"] == 1
+
+    def test_a_removed_keyword_rule_does_not_turn_full_text_capture_on(self, tmp_path):
+        from zircolite import processing
+        argv, _ = self._argv(tmp_path, [
+            {"title": "Keyword", "id": "a", "level": "high", "tags": [], "schema_version": 3,
+             "fulltext": [{"table": "logs", "field": "_sigma_fulltext", "representation": "source-values-v1"}],
+             "rule": ["SELECT * FROM logs WHERE _sigma_fulltext LIKE '%whoami%'"]},
+            {"title": "Plain", "id": "b", "level": "high", "tags": [],
+             "rule": ["SELECT * FROM logs WHERE CommandLine LIKE '%whoami%'"]},
+        ], "-R", "Keyword")
+
+        real = processing._needs_fulltext
+        with patch("sys.argv", argv), patch.object(processing, "_needs_fulltext", wraps=real) as needs:
+            zircolite_script.main()
+
+        calls = list(needs.call_args_list)
+        assert calls
+        assert not any(real(*call.args) for call in calls)
+
+
+class TestRuleSelectionFlags:
+    """--rule-status, --include-tag and --exclude-tag choose the rules that run."""
+
+    CONFIG = TestRuleFilterAtLoad.CONFIG
+    _argv = TestRuleFilterAtLoad._argv
+    RULES: ClassVar[list] = [
+        {"title": "Stable whoami", "id": "a", "level": "high", "status": "stable",
+         "tags": ["attack.discovery", "attack.t1033"],
+         "rule": ["SELECT * FROM logs WHERE CommandLine LIKE '%whoami%'"]},
+        {"title": "Draft cmd", "id": "b", "level": "high", "status": "experimental",
+         "tags": ["attack.execution", "detection.threat-hunting"],
+         "rule": ["SELECT * FROM logs WHERE CommandLine LIKE '%cmd%'"]},
+    ]
+
+    def _titles(self, tmp_path, *flags):
+        argv, output = self._argv(tmp_path, self.RULES, *flags)
+        with patch("sys.argv", argv):
+            zircolite_script.main()
+        return sorted(result["title"] for result in json.loads(output.read_text()))
+
+    def _exit(self, tmp_path, *flags):
+        argv, _ = self._argv(tmp_path, self.RULES, *flags)
+        with patch("sys.argv", argv), pytest.raises(SystemExit) as exc:
+            zircolite_script.main()
+        return exc.value.code
+
+    @pytest.mark.parametrize("flags,expected", [
+        ((), ["Draft cmd", "Stable whoami"]),
+        (("--rule-status", "Stable", "test"), ["Stable whoami"]),
+        (("--include-tag", "attack.t1033"), ["Stable whoami"]),
+        (("--include-tag", "attack", "--exclude-tag", "detection.threat-hunting"), ["Stable whoami"]),
+        (("--exclude-tag", "attack.discovery"), ["Draft cmd"]),
+    ])
+    def test_each_flag_chooses_the_rules(self, tmp_path, flags, expected):
+        assert self._titles(tmp_path, *flags) == expected
+
+    def test_leaving_out_every_rule_names_the_flags(self, tmp_path):
+        assert self._exit(tmp_path, "--rule-status", "deprecated") == 1
+        assert "--rule-status[/] left out all 2 rule(s) loaded" in (tmp_path / "test.log").read_text(encoding="utf-8")
+
+    @pytest.mark.parametrize("flags", [("--rule-status", "draft"), ("--include-tag", "a,b"),
+                                       ("--exclude-tag", "attack.")])
+    def test_a_value_that_selects_nothing_is_refused(self, tmp_path, flags):
+        assert self._exit(tmp_path, *flags) == 2
+
+    def test_coverage_counts_only_the_selected_rules(self, tmp_path):
+        argv, _ = self._argv(tmp_path, self.RULES, "--rule-status", "stable")
+
+        with patch("sys.argv", argv), patch.object(zircolite_script, "print_stats") as stats:
+            zircolite_script.main()
+
+        assert stats.call_args.kwargs["total_rules"] == 1
+
+    def test_a_test_case_for_a_deselected_rule_names_the_selection(self, tmp_path):
+        cases = tmp_path / "cases.json"
+        cases.write_text(json.dumps([{"title": "Draft cmd", "true_positive": [{"CommandLine": "cmd"}]}]))
+
+        assert self._exit(tmp_path, "--rule-status", "stable", "--test-rules", str(cases)) == 1
+        assert "--rule-status may have left them out" in (tmp_path / "test.log").read_text(encoding="utf-8")
+
+    def test_the_yaml_keys_select_like_the_flags(self, tmp_path):
+        settings = tmp_path / "run.yaml"
+        settings.write_text("rules:\n  status: stable\n  exclude_tags: [detection.threat-hunting]\n")
+
+        assert self._titles(tmp_path, "-Y", str(settings)) == ["Stable whoami"]
+
+
+class TestTimelineOptions:
+    """--timeline and the flags that only mean something with it."""
+
+    CONFIG: ClassVar[dict] = {
+        "exclusions": [], "useless": [], "alias": {}, "split": {},
+        "mappings": {"Event.System.EventID": "EventID", "Event.System.Computer": "Computer",
+                     "Event.System.TimeCreated.#attributes.SystemTime": "SystemTime",
+                     "Event.EventData.CommandLine": "CommandLine"},
+        "transforms_enabled": False, "transforms": {},
+    }
+    RULES: ClassVar[list] = [{"title": "Whoami", "id": "a", "level": "high", "tags": [],
+                              "rule": ["SELECT * FROM logs WHERE CommandLine LIKE '%whoami%'"]}]
+
+    def _argv(self, tmp_path, *extra, files=1):
+        events = tmp_path / "events"
+        events.mkdir()
+        for index in range(files):
+            (events / f"events{index}.json").write_text(json.dumps({"Event": {
+                "System": {"EventID": 1, "Computer": "WS01",
+                           "TimeCreated": {"#attributes": {"SystemTime": f"2024-01-01T00:00:0{index}Z"}}},
+                "EventData": {"CommandLine": f"whoami {index}"}}}))
+        ruleset = tmp_path / "ruleset.json"
+        ruleset.write_text(json.dumps(self.RULES))
+        config = tmp_path / "config.json"
+        config.write_text(json.dumps(self.CONFIG))
+        return ["zircolite.py", "-e", str(events), "-r", str(ruleset), "-c", str(config), "-j",
+                "-o", str(tmp_path / "detected_events.json"), *get_log_arg(tmp_path), *extra]
+
+    def _exit_code(self, argv):
+        with patch("sys.argv", argv), pytest.raises(SystemExit) as exc:
+            zircolite_script.main()
+        return exc.value.code
+
+    def test_the_timeline_is_written_and_summarised(self, tmp_path):
+        timeline = tmp_path / "timeline.jsonl"
+
+        with patch("sys.argv", self._argv(tmp_path, "--timeline", str(timeline), files=2)), \
+                patch.object(zircolite_script, "print_stats") as stats:
+            zircolite_script.main()
+
+        rows = [json.loads(line) for line in timeline.read_text().splitlines()]
+        assert [row["Details"] for row in rows] == ["CommandLine: whoami 0", "CommandLine: whoami 1"]
+        destination, written, kept = stats.call_args.kwargs["timeline"]
+        assert (destination, written.rows, written.duplicates, kept) == (str(timeline), 2, 0, False)
+        assert not list(tmp_path.glob("tmp-zircolite-timeline-*"))
+
+    def test_a_bare_timeline_writes_timeline_csv(self, tmp_path, monkeypatch):
+        monkeypatch.chdir(tmp_path)
+
+        with patch("sys.argv", self._argv(tmp_path, "--timeline")):
+            zircolite_script.main()
+
+        assert (tmp_path / "timeline.csv").read_text().startswith("Timestamp,")
+
+    @pytest.mark.parametrize("flags", [["--timeline-profile", "full"], ["--keep-duplicates"],
+                                       ["--timeline-config", "config/timeline.yaml"], ["--timezone", "local"]])
+    def test_a_timeline_flag_without_a_timeline_is_refused(self, tmp_path, flags):
+        assert self._exit_code(self._argv(tmp_path, *flags)) == 2
+
+    def test_a_timeline_setting_in_a_configuration_file_is_a_preference(self, tmp_path):
+        settings = tmp_path / "run.yaml"
+        settings.write_text("output:\n  timeline_profile: full\n  keep_duplicates: true\n")
+
+        with patch("sys.argv", self._argv(tmp_path, "-Y", str(settings))):
+            zircolite_script.main()
+
+        assert not list(tmp_path.glob("*.csv"))
+
+    @pytest.mark.parametrize("name", ["timeline.json", "timeline.txt"])
+    def test_a_timeline_neither_csv_nor_jsonl_is_refused(self, tmp_path, name):
+        assert self._exit_code(self._argv(tmp_path, "--timeline", str(tmp_path / name))) == 2
+
+    @pytest.mark.parametrize("name", ["out.csv", "missing/timeline.csv"])
+    def test_a_timeline_that_cannot_be_written_is_refused_before_the_run(self, tmp_path, name):
+        (tmp_path / "out.csv").mkdir()
+
+        with patch.object(zircolite_script, "RulesetHandler") as rulesets:
+            assert self._exit_code(self._argv(tmp_path, "--timeline", str(tmp_path / name))) == 2
+        rulesets.assert_not_called()
+
+    def test_the_pipeline_list_ignores_timeline_settings(self, tmp_path):
+        settings = tmp_path / "run.yaml"
+        settings.write_text("output:\n  timeline: timeline.json\n")
+
+        assert self._exit_code(["zircolite.py", "--pipeline-list", "-Y", str(settings)]) == 0
+
+    def test_an_unknown_profile_is_refused(self, tmp_path):
+        argv = self._argv(tmp_path, "--timeline", str(tmp_path / "t.csv"), "--timeline-profile", "verbose")
+
+        assert self._exit_code(argv) == 2
+
+    def test_an_unknown_timezone_is_refused(self, tmp_path):
+        argv = self._argv(tmp_path, "--timeline", str(tmp_path / "t.csv"), "--timezone", "Mars/Olympus")
+
+        assert self._exit_code(argv) == 2
+
+    def test_the_timezone_reaches_the_timeline(self, tmp_path):
+        timeline = tmp_path / "timeline.jsonl"
+
+        with patch("sys.argv", self._argv(tmp_path, "--timeline", str(timeline), "--timezone", "+05:30")):
+            zircolite_script.main()
+
+        assert json.loads(timeline.read_text().splitlines()[0])["Timestamp"] == "2024-01-01T05:30:00.000000+05:30"
+
+    def test_a_broken_timeline_configuration_fails_the_run(self, tmp_path):
+        broken = tmp_path / "timeline.yaml"
+        broken.write_text("columns: {}\nprofiles: {}\n")
+        argv = self._argv(tmp_path, "--timeline", str(tmp_path / "t.csv"), "--timeline-config", str(broken))
+
+        assert self._exit_code(argv) == 1
+
+    def test_the_timeline_cannot_replace_another_output(self, tmp_path):
+        target = tmp_path / "detected.csv"
+        argv = self._argv(tmp_path, "--csv", "-o", str(target), "--timeline", str(target))
+
+        assert self._exit_code(argv) == 2
+
+    def test_the_timeline_cannot_replace_an_input(self, tmp_path):
+        argv = self._argv(tmp_path)
+        source = tmp_path / "events" / "events0.json"
+        renamed = source.with_suffix(".jsonl")
+        source.rename(renamed)
+        argv[argv.index("-e") + 1] = str(renamed)
+
+        assert self._exit_code([*argv, "--timeline", str(renamed)]) == 2
+
+    def test_rule_tests_have_no_timeline(self, tmp_path):
+        cases = tmp_path / "cases.json"
+        cases.write_text("[]")
+        argv = self._argv(tmp_path, "--test-rules", str(cases), "--timeline", str(tmp_path / "t.csv"))
+
+        assert self._exit_code(argv) == 2
+
+    def test_an_interrupted_run_writes_the_rows_found(self, tmp_path):
+        from zircolite.core import ZircoliteCore
+        from zircolite.shutdown import request_shutdown, reset_shutdown_state
+
+        timeline = tmp_path / "timeline.jsonl"
+        execute = ZircoliteCore.execute_ruleset
+
+        def first_file_then_interrupt(self, *args, **kwargs):
+            execute(self, *args, **kwargs)
+            request_shutdown()
+
+        argv = self._argv(tmp_path, "--timeline", str(timeline), "--no-parallel", "--no-auto-mode", files=2)
+        try:
+            with patch.object(ZircoliteCore, "execute_ruleset", first_file_then_interrupt):
+                assert self._exit_code(argv) == 130
+        finally:
+            reset_shutdown_state()
+
+        # One file was done when Ctrl+C came: its row is there, the other file's is not
+        [row] = [json.loads(line) for line in timeline.read_text().splitlines()]
+        assert row["Details"].startswith("CommandLine: whoami ")
+
+    def test_a_failed_part_fails_the_run(self, tmp_path):
+        from zircolite.timeline import TimelinePart
+
+        timeline = tmp_path / "timeline.csv"
+        with patch.object(TimelinePart, "sink", lambda self, result: setattr(self, "_error", "disk full")):
+            assert self._exit_code(self._argv(tmp_path, "--timeline", str(timeline))) == 1
+
+        assert not timeline.exists()
+
+
 class TestCLITimeFiltering:
     """Tests for time-based filtering."""
 
@@ -3029,6 +3349,7 @@ class TestTestRulesCLI:
         """--test-rules combined with -R must not raise TypeError (flatten ordering)."""
         ruleset = self._write_ruleset(tmp_path, [
             {"title": "Noisy Rule", "id": "1", "rule": ["SELECT 1"]},
+            {"title": "Kept Rule", "id": "2", "rule": ["SELECT 2"]},
         ])
         test_file = tmp_path / "tests.json"
         test_file.write_text(json.dumps([]))
@@ -3039,8 +3360,23 @@ class TestTestRulesCLI:
             '-R', 'Noisy', '-n',
         ]):
             zircolite_script.main()
-        # The only rule is filtered out -> no results -> success
+        # No test cases for the rule left -> nothing failed
         assert exc_info.value.code == 0
+
+    def test_test_rules_with_every_rule_filtered_out_fails(self, tmp_path):
+        ruleset = self._write_ruleset(tmp_path, [
+            {"title": "Noisy Rule", "id": "1", "rule": ["SELECT 1"]},
+        ])
+        test_file = tmp_path / "tests.json"
+        test_file.write_text(json.dumps([]))
+
+        with pytest.raises(SystemExit) as exc_info, patch('sys.argv', [
+            'zircolite.py', '-r', ruleset,
+            '--test-rules', str(test_file),
+            '-R', 'Noisy', '-n',
+        ]):
+            zircolite_script.main()
+        assert exc_info.value.code == 1
 
     def test_test_rules_exit_zero_on_pass(self, tmp_path):
         ruleset = self._write_ruleset(tmp_path, [
@@ -3803,6 +4139,11 @@ class TestCLIConfigValidationIsFatal:
         """A typo'd format silently fell back to EVTX and found nothing."""
         assert self._run(tmp_path, "input:\n  format: jsonn\n") != 0
 
+    @pytest.mark.parametrize("body", ["rules:\n  status: [draft]\n", "rules:\n  include_tags: ['a,b']\n",
+                                      "rules:\n  exclude_tags: ['']\n"])
+    def test_a_rule_selection_that_selects_nothing_is_fatal(self, tmp_path, body):
+        assert self._run(tmp_path, body) == 1
+
     def test_invalid_time_filter_is_fatal(self, tmp_path):
         assert self._run(tmp_path, "time_filter:\n  after: not-a-date\n") != 0
 
@@ -4148,11 +4489,11 @@ class TestMinLevelOption:
 
 
 class TestCorrelationRuleCount:
-    def test_rules_removed_by_rulefilter_do_not_count(self):
+    def test_counts_the_correlation_rules(self):
+        # -R has already removed its rules when the ruleset gets here.
         rules = [{"title": "burst", "correlation": True}, {"title": "noise", "correlation": True}, {"title": "plain"}]
 
-        assert zircolite_script._correlation_rule_count(rules, None) == 2
-        assert zircolite_script._correlation_rule_count(rules, ["noi"]) == 1
+        assert zircolite_script._correlation_rule_count(rules) == 2
 
     def test_several_databases_are_said_to_stay_apart(self, caplog):
         logger = logging.getLogger("correlation-databases")

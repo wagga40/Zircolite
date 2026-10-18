@@ -14,7 +14,7 @@
 flattens events into SQLite, turns each rule into an SQL query and reports what matches,
 offline, in one command.
 
-![Zircolite in a terminal](pics/Zircolite-v3-cli.webp)
+![A Zircolite run: command, detection table and summary panel](docs/pics/zircolite-run.svg)
 
 - **Many log formats**, detected automatically: Windows EVTX (binary, XML, JSON), Auditd,
   Sysmon for Linux, EVTXtract, CSV, XML and JSON, plain or in gzip, bzip2, ZIP and 7-Zip
@@ -27,6 +27,8 @@ offline, in one command.
   decoding, IOC extraction, LOLBin detection, …).
 - **Exports**: JSON, CSV, and templates for Splunk, Elastic, OpenSearch, Timesketch, SARIF
   and ATT&CK Navigator.
+- **Timeline**: every detection as one row in time order, with a one-line summary of the
+  event, as CSV or JSON lines ([`--timeline`](docs/Usage.md#timeline)).
 - **Zircolite Viewer**: every event and detection in one zip that opens offline in a browser.
 
 📖 Read the **[documentation](https://wagga40.github.io/Zircolite/)**, also in [`docs/`](docs).
@@ -53,8 +55,8 @@ pdm install
 ```
 
 `pdm use` keeps PDM away from Python 3.15 and free-threaded builds, which are
-[not supported yet](docs/Usage.md#from-source). Any of 3.11 to 3.13 works as well;
-`pdm python install 3.14` adds a 3.14 if there is none. With [uv](https://docs.astral.sh/uv/):
+[not supported yet](docs/Usage.md#from-source); any of 3.11 to 3.13 works as well. With
+[uv](https://docs.astral.sh/uv/):
 
 ```shell
 git clone https://github.com/wagga40/Zircolite.git
@@ -82,10 +84,13 @@ python3 zircolite.py --events logs/ --ruleset ./sigma/rules/windows/process_crea
 
 # Every event and detection, for the Zircolite Viewer
 python3 zircolite.py --events logs/ --package
+
+# The detections as a timeline, for Timeline Explorer or a spreadsheet
+python3 zircolite.py --events logs/ --timeline
 ```
 
 With a binary, run `./Zircolite` instead of `python3 zircolite.py`. From source, prefix the
-command with `pdm run` (or `uv run`, `poetry run`) unless the environment is active. With
+command with `pdm run` (or `uv run`) unless the environment is active. With
 Docker, mount the logs and give absolute paths:
 
 ```shell
@@ -127,9 +132,9 @@ Median wall time on a 10-core Apple M1 Max, each tool at its defaults with its o
 
 | Tool | 4 Sysmon EVTX, 478 MB | 8 EVTX over 11 channels, 13.3 GB |
 |------|----------------------:|---------------------------------:|
-| **Zircolite** | **7.8 s** | **49.3 s** |
-| Hayabusa 4.1.0 | 23.4 s | 519.5 s |
-| Chainsaw 2.16.5 | 53.7 s | 197.8 s |
+| **Zircolite** | **7.7 s** | **30.2 s** |
+| Hayabusa 4.2.0 | 23.3 s | 500.3 s |
+| Chainsaw 2.17.1 | 48.3 s | 183.0 s |
 
 Zircolite uses more memory than the others, through its parallel workers (`--no-parallel`
 turns them off), and the rule sets differ, so detection counts do not compare. See
@@ -158,4 +163,4 @@ and [Velociraptor](https://docs.velociraptor.app/exchange/artifacts/pages/window
 
 - The **code** is under the [GNU Lesser General Public License](https://www.gnu.org/licenses/lgpl-3.0.en.html).
 - EVTX parsing uses [`evtx`](https://github.com/omerbenamram/pyevtx-rs) (pyevtx-rs), under the MIT or Apache-2.0 licence. Release packages list every bundled library and its licence in `THIRD_PARTY_LICENSES`.
-- The **rules** keep the licence of their source, with the texts in [`rules/licenses/`](rules/licenses/): the SigmaHQ and Hayabusa rules are under the [Detection Rule License (DRL) 1.1](https://github.com/SigmaHQ/Detection-Rule-License/blob/main/LICENSE.Detection.Rules.md), the Joe Security, Micah Babinski and tsale rules under the GPL 3.0, the Hatchepsoute, LOLDrivers and LOLRMM rules under the Apache License 2.0, the Dragon, ReversingLabs, Tyrian and WRG-11 rules under the MIT License, and the mdecrevoisier rules under CC0 1.0. `rules_windows_all.json` combines them, each rule keeping its own. Release packages credit every ruleset in `THIRD_PARTY_LICENSES`.
+- The **rules** keep the licence of their source: the SigmaHQ rules are under the [Detection Rule License (DRL) 1.1](https://github.com/SigmaHQ/Detection-Rule-License/blob/main/LICENSE.Detection.Rules.md), and the community sources under the DRL 1.1, GPL 3.0, Apache License 2.0, MIT License or CC0 1.0, [each named here](https://github.com/wagga40/Zircolite-Rules-v2/blob/main/docs/sources.md). The texts are in [`rules/licenses/`](rules/licenses/). `rules_windows_all.json` combines them, each rule keeping its own. Release packages credit every ruleset in `THIRD_PARTY_LICENSES`.

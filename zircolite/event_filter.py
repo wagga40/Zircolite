@@ -82,17 +82,14 @@ class EventFilter:
         # eventIDs, or True when any eventID is allowed on that channel.
         self._channel_map: dict[str, frozenset[int] | bool] = {}
 
-        # Stats
         self._rules_with_filter = 0
         self._rules_without_filter = 0
 
-        # Flags
         self._has_filter_data = False
         self._channel_filter = False
         self._eventid_filter = False
         self._eventid_bounded = False
 
-        # Extract filter data from rulesets
         self._extract_filter_data(rulesets)
 
     @staticmethod
@@ -162,7 +159,6 @@ class EventFilter:
         rules_without_channel = 0
         rules_without_eventid = 0
 
-        # Build as mutable sets first
         channels_set: set[str] = set()
         eventids_set: set[int] = set()
         # Lowercase channel -> mutable eventID set, or True for "any eventID"
@@ -174,11 +170,9 @@ class EventFilter:
             rule_ids = self._rule_eventids(rule, queries)
             eventids = rule_ids if rule_ids is not None else []
 
-            # Check if this rule has filter metadata
             if channels or eventids:
                 rules_with_filter += 1
 
-                # Add all channels from this rule
                 for channel in channels:
                     if channel:
                         channels_set.add(channel)
@@ -206,11 +200,9 @@ class EventFilter:
                     bound = channel_bounds.setdefault(key, set())
                     bound.update(rule_ids)  # type: ignore[union-attr]
 
-        # Convert to immutable frozensets for faster lookups
         self.channels = frozenset(channels_set)
         self.eventids = frozenset(eventids_set)
 
-        # Store stats
         self._rules_with_filter = rules_with_filter
         self._rules_without_filter = rules_without_filter
 
@@ -282,7 +274,6 @@ class EventFilter:
         Returns:
             True if the event should be processed, False if it can be skipped
         """
-        # Fast path: nothing to filter on
         if not self._has_filter_data:
             return True
 
@@ -308,7 +299,6 @@ class EventFilter:
             return eventid in allowed
 
         if self._eventid_filter and eventid is not None:
-            # Internal callers pass int, but the API accepts str
             if not isinstance(eventid, int):
                 try:
                     eventid = int(eventid)

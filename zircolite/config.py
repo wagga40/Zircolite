@@ -32,7 +32,7 @@ class ProcessingConfig:
     # Database options
     db_location: str = ":memory:"
     # Small batches keep wide Windows events hot in cache: on T001, 250 rows per
-    # insert ingest 9% faster and peak 12% lower than 5000; narrow events do not care.
+    # insert ingest 9% faster and peak 12% lower than 5000-row batches.
     batch_size: int = 250
     working_db: str = "memory"
     working_db_dir: str | None = None
@@ -123,6 +123,12 @@ class RulesetConfig:
     timestamp_format: str = "iso"
     # Lowest rule level kept, one of RULE_LEVELS; None keeps every rule
     min_level: str | None = None
+    # -R: rules whose title contains any of these are removed at load time
+    rule_filters: list[str] | None = None
+    # --rule-status, --include-tag, --exclude-tag (zircolite/rule_selection.py)
+    statuses: list[str] | None = None
+    include_tags: list[str] | None = None
+    exclude_tags: list[str] | None = None
 
 
 @dataclass
