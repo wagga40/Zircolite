@@ -206,9 +206,9 @@ def _rule_may_match(rule: dict[str, Any], census: dict[tuple, int]) -> bool:
 
 
 if TYPE_CHECKING:
+    from .event_filter import EventFilter
     from .extractor import EvtxExtractor
     from .prefilter import LiteralPrefilter
-    from .rules import EventFilter
 
 
 class _QueryFailed(Exception):

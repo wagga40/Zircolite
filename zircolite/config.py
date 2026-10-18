@@ -32,7 +32,7 @@ class ProcessingConfig:
     # Database options
     db_location: str = ":memory:"
     # Small batches keep wide Windows events hot in cache: on T001, 250 rows per
-    # insert ingest 9% faster and peak 12% lower than 5000; narrow events do not care.
+    # insert ingest 9% faster and peak 12% lower than 5000-row batches.
     batch_size: int = 250
     working_db: str = "memory"
     working_db_dir: str | None = None

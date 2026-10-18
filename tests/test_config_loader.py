@@ -20,6 +20,7 @@ from zircolite.config_loader import (
     ZircoliteConfig,
     create_default_config_file,
 )
+from zircolite.utils import safe_load
 
 
 class TestInputConfig:
@@ -338,6 +339,14 @@ class TestConfigLoaderValidate:
         issues = ConfigLoader(logger=test_logger).validate_config(config)
 
         assert f"output.{key} must be a non-empty string" in issues
+
+    def test_an_unquoted_offset_asks_for_quotes(self, test_logger):
+        loader = ConfigLoader(logger=test_logger)
+        config = loader.parse_config(safe_load("output:\n  timezone: +10:00\n"))
+
+        issues = loader.validate_config(config)
+
+        assert 'output.timezone reads as the number 600: quote the offset, as in "+10:00"' in issues
 
     def test_validate_missing_ruleset(self, test_logger):
         """Test validation with missing ruleset file."""

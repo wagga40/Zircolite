@@ -783,6 +783,20 @@ class TestTimelineOptions:
     def test_a_timeline_neither_csv_nor_jsonl_is_refused(self, tmp_path, name):
         assert self._exit_code(self._argv(tmp_path, "--timeline", str(tmp_path / name))) == 2
 
+    @pytest.mark.parametrize("name", ["out.csv", "missing/timeline.csv"])
+    def test_a_timeline_that_cannot_be_written_is_refused_before_the_run(self, tmp_path, name):
+        (tmp_path / "out.csv").mkdir()
+
+        with patch.object(zircolite_script, "RulesetHandler") as rulesets:
+            assert self._exit_code(self._argv(tmp_path, "--timeline", str(tmp_path / name))) == 2
+        rulesets.assert_not_called()
+
+    def test_the_pipeline_list_ignores_timeline_settings(self, tmp_path):
+        settings = tmp_path / "run.yaml"
+        settings.write_text("output:\n  timeline: timeline.json\n")
+
+        assert self._exit_code(["zircolite.py", "--pipeline-list", "-Y", str(settings)]) == 0
+
     def test_an_unknown_profile_is_refused(self, tmp_path):
         argv = self._argv(tmp_path, "--timeline", str(tmp_path / "t.csv"), "--timeline-profile", "verbose")
 

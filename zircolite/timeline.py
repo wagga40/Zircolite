@@ -26,14 +26,14 @@ import tempfile
 from collections.abc import Iterable, Iterator
 from contextlib import ExitStack, suppress
 from dataclasses import dataclass, field
-from datetime import UTC, datetime, timedelta, timezone, tzinfo
+from datetime import timedelta, timezone, tzinfo
 from pathlib import Path
 from typing import Any, BinaryIO
 
 import orjson
 
 from .attack import extract_attack_tactics, extract_attack_techniques
-from .package_spool import RuleIndex, rule_position, time_microseconds
+from .package_spool import _EPOCH, _FIRST_US, RuleIndex, rule_position, time_microseconds
 from .utils import safe_load, sanitize_value_for_csv
 
 TIMELINE_FORMATS = {".csv": "csv", ".jsonl": "jsonl", ".ndjson": "jsonl"}
@@ -51,8 +51,6 @@ SEPARATOR = " ¦ "
 PART_BUDGET = 16 * 1024 * 1024
 MERGE_FAN_IN = 64
 
-_EPOCH = datetime(1970, 1, 1, tzinfo=UTC)
-_FIRST_US = (datetime(1, 1, 1, tzinfo=UTC) - _EPOCH) // timedelta(microseconds=1)
 _NO_POSITION = 0xFFFFFFFF
 _KEY_LENGTH = 1 + 16 + 8 + 1 + 32
 _KIND_AT = 1 + 16 + 8
@@ -270,7 +268,7 @@ def _text(value: Any) -> str:
     return str(value)
 
 
-# What SQLite hands back for an event field; anything else is written as JSON
+# Written as they are; lists and dicts are written as JSON, anything else with str()
 _SCALARS = (str, int, float)
 
 

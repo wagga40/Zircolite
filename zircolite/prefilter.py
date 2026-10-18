@@ -95,9 +95,10 @@ def _selective(run):
 # Two-character escapes that match something other than themselves. Any other
 # letter or digit after a backslash starts syntax not modelled here.
 _REGEX_CLASS_ESCAPES = frozenset("dDwWsSbBAZtnrfv")
-# Under IGNORECASE the regex module also matches these letters to U+0130,
-# U+212A and U+017F, which ASCII folding of the value would not find.
-_UNICODE_CASED = frozenset("iksIKS")
+# Under IGNORECASE the regex module also matches i, k and s to U+0130, U+212A
+# and U+017F, which ASCII folding of the value would not find, so a caseless
+# literal is cut at those letters and at anything outside ASCII.
+_CASELESS_BREAKS = re.compile(r"[iksIKS]|[^\x00-\x7f]")
 _QUANTIFIER_BRACE = re.compile(r"\{(\d*)(?:,(\d*))?\}")
 
 
@@ -247,8 +248,7 @@ def _regex_expression(column, pattern):
         for start, stop in _regex_branches(pattern):
             runs = _regex_runs(pattern, start, stop)
             if caseless:
-                runs = [part for run in runs
-                        for part in re.split(r"[iksIKS]|[^\x00-\x7f]", run)]
+                runs = [part for run in runs for part in _CASELESS_BREAKS.split(run)]
             best = max(runs, key=lambda candidate: (_selective(candidate), len(candidate)))
             if not _selective(best):
                 return None
