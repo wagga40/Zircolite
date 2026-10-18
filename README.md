@@ -14,7 +14,7 @@
 flattens events into SQLite, turns each rule into an SQL query and reports what matches,
 offline, in one command.
 
-![A Zircolite run: command, detection table and summary panel](docs/pics/zircolite-run.svg)
+![Zircolite in a terminal](pics/Zircolite-v3-cli.webp)
 
 - **Many log formats**, detected automatically: Windows EVTX (binary, XML, JSON), Auditd,
   Sysmon for Linux, EVTXtract, CSV, XML and JSON, plain or in gzip, bzip2, ZIP and 7-Zip
