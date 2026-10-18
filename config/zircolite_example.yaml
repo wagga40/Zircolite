@@ -117,6 +117,17 @@ output:
   package: false
   package_dir: ""  # Where to write it; empty means the working directory
 
+  # Every detection as one row, in time order: a .csv, .jsonl or .ndjson
+  # file, or "-" for JSONL on stdout. Off when null.
+  timeline: null  # Example: timeline.csv
+  timeline_profile: standard  # minimal, standard, full, or a profile of timeline_config
+  timeline_config: config/timeline.yaml  # Profiles, column fields and Details settings
+  # Keep the rows that repeat a detection from another copy of the same log
+  keep_duplicates: false
+  # Time zone of the timestamps: UTC, local, an offset such as +02:00, or a
+  # name such as Europe/Paris. Rows are ordered by instant whatever it is.
+  timezone: UTC
+
   # Also write the flattened events as JSONL. Only events Zircolite actually
   # processed are included, so events dropped by early event filtering or by
   # the time filter are absent; combine with event_filter_enabled: false to

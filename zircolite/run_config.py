@@ -19,8 +19,9 @@ so the CLI replaces the configuration file — concatenating there would widen
 the run rather than redirect it.
 
 Resolution happens in two phases because the logger is built from ``debug``,
-``nolog`` and ``logfile`` before the configuration file has been validated.
-:data:`EARLY_DESTS` names those three; everything else is resolved afterwards.
+``nolog`` and ``logfile`` before the configuration file has been validated, and
+a ``timeline`` of ``-`` moves the console to stderr before the banner prints.
+:data:`EARLY_DESTS` names those four; everything else is resolved afterwards.
 """
 
 from collections.abc import Callable, Iterable, Mapping
@@ -38,6 +39,9 @@ from .config_loader import (
     DEFAULT_OUTFILE,
     DEFAULT_PACKAGE_DIR,
     DEFAULT_TIME_FIELD,
+    DEFAULT_TIMELINE_CONFIG,
+    DEFAULT_TIMELINE_PROFILE,
+    DEFAULT_TIMEZONE,
 )
 from .formats import format_by_yaml, has_explicit_format
 
@@ -129,6 +133,11 @@ SETTINGS: tuple[Setting, ...] = (
     Setting("performance_json", "output", "performance_json"),
     Setting("logfile", "output", "log_file", DEFAULT_LOG_FILE),
     Setting("nolog", "output", "no_output", False, Merge.OR),
+    Setting("timeline", "output", "timeline"),
+    Setting("timeline_profile", "output", "timeline_profile", DEFAULT_TIMELINE_PROFILE),
+    Setting("timeline_config", "output", "timeline_config", DEFAULT_TIMELINE_CONFIG),
+    Setting("keep_duplicates", "output", "keep_duplicates", False, Merge.OR),
+    Setting("timezone", "output", "timezone", DEFAULT_TIMEZONE),
     # -- processing -------------------------------------------------------
     Setting("unified_db", "processing", "unified_db", False, Merge.OR),
     Setting("no_auto_mode", "processing", "auto_mode", False, Merge.OR, invert=True),
@@ -187,7 +196,7 @@ SETTINGS: tuple[Setting, ...] = (
 DEFAULTS: dict[str, Any] = {s.dest: s.default for s in SETTINGS}
 
 # Resolved before the logger exists; see the module docstring.
-EARLY_DESTS: frozenset[str] = frozenset({"debug", "nolog", "logfile"})
+EARLY_DESTS: frozenset[str] = frozenset({"debug", "nolog", "logfile", "timeline"})
 
 
 def _dedup(values: list[Any]) -> list[Any]:

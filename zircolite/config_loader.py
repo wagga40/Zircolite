@@ -33,6 +33,9 @@ DEFAULT_AFTER = "1970-01-01T00:00:00"
 DEFAULT_BEFORE = "9999-12-12T23:59:59"
 DEFAULT_MEMORY_LIMIT_PERCENT = 85.0
 DEFAULT_PACKAGE_DIR = ""
+DEFAULT_TIMELINE_PROFILE = "standard"
+DEFAULT_TIMELINE_CONFIG = "config/timeline.yaml"
+DEFAULT_TIMEZONE = "UTC"
 
 
 @dataclass
@@ -77,6 +80,11 @@ class OutputConfig:
     log_file: str = DEFAULT_LOG_FILE
     no_output: bool = False
     performance_json: str | None = None
+    timeline: str | None = None
+    timeline_profile: str = DEFAULT_TIMELINE_PROFILE
+    timeline_config: str = DEFAULT_TIMELINE_CONFIG
+    keep_duplicates: bool = False
+    timezone: str = DEFAULT_TIMEZONE
 
 
 @dataclass
@@ -277,6 +285,11 @@ class ConfigLoader:
                 log_file=out.get('log_file', DEFAULT_LOG_FILE),
                 no_output=out.get('no_output', False),
                 performance_json=out.get('performance_json'),
+                timeline=out.get('timeline'),
+                timeline_profile=out.get('timeline_profile', DEFAULT_TIMELINE_PROFILE),
+                timeline_config=out.get('timeline_config', DEFAULT_TIMELINE_CONFIG),
+                keep_duplicates=out.get('keep_duplicates', False),
+                timezone=out.get('timezone', DEFAULT_TIMEZONE),
             )
 
         # Parse processing section
@@ -370,6 +383,10 @@ class ConfigLoader:
 
         if config.output.format == 'csv' and len(config.rules.rulesets) > 1:
             issues.append("CSV output is not supported with multiple rulesets")
+        for key in ("timeline", "timeline_profile", "timeline_config", "timezone"):
+            value = getattr(config.output, key)
+            if value is not None and (not isinstance(value, str) or not value):
+                issues.append(f"output.{key} must be a non-empty string")
 
         # Validate templates
         if config.output.templates:
@@ -559,6 +576,17 @@ output:
   # Create a package for the offline viewer (every event plus the detections)
   package: false
   package_dir: ""  # Where to write it; empty means the working directory
+
+  # Every detection as one row, in time order: a .csv, .jsonl or .ndjson
+  # file, or "-" for JSONL on stdout. Off when null.
+  timeline: null  # Example: timeline.csv
+  timeline_profile: {DEFAULT_TIMELINE_PROFILE}  # minimal, standard, full, or a profile of timeline_config
+  timeline_config: {DEFAULT_TIMELINE_CONFIG}  # Profiles, column fields and Details settings
+  # Keep the rows that repeat a detection from another copy of the same log
+  keep_duplicates: false
+  # Time zone of the timestamps: UTC, local, an offset such as +02:00, or a
+  # name such as Europe/Paris. Rows are ordered by instant whatever it is.
+  timezone: {DEFAULT_TIMEZONE}
 
   # Also write the flattened events as JSONL. Only events Zircolite actually
   # processed are included, so events dropped by early event filtering or by

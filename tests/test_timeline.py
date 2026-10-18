@@ -1,0 +1,567 @@
+"""Tests for the timeline: rows, their order, duplicates and the files written."""
+
+import csv
+import json
+import os
+import stat
+from pathlib import Path
+
+import pytest
+
+from zircolite import timeline
+from zircolite.package_spool import rule_index
+from zircolite.timeline import (
+    TimelineConfigError,
+    TimelineError,
+    TimelineSpool,
+    _SortedRuns,
+    build_timeline,
+    load_presentation,
+    merge_runs,
+    parse_presentation,
+    timeline_format,
+)
+
+SHIPPED = Path(__file__).parent.parent / "config" / "timeline.yaml"
+
+WHOAMI = {"title": "Whoami", "id": "r-1", "level": "high", "filename": "whoami.yml",
+          "tags": ["attack.discovery", "attack.t1033"], "rule": ["SELECT 1"]}
+NET = {"title": "Net use", "id": "r-2", "level": "medium", "filename": "net.yml",
+       "tags": [], "rule": ["SELECT 2"]}
+
+
+def make_spool(tmp_path, profile="standard", presentation=None, rules=(WHOAMI, NET), fmt="jsonl", **overrides):
+    presentation = presentation or load_presentation(SHIPPED)
+    directory = tmp_path / "spool"
+    directory.mkdir(parents=True, exist_ok=True)
+    return TimelineSpool(directory=str(directory), columns=presentation.profiles[profile],
+                         presentation=presentation, fmt=fmt, time_field="SystemTime",
+                         rule_keys=rule_index(list(rules)), **overrides)
+
+
+def result(rule, *matches, **extra):
+    return {"title": rule["title"], "id": rule["id"], "rule_level": rule["level"], "tags": rule["tags"],
+            "sigmafile": rule["filename"], "count": len(matches), "matches": list(matches), **extra}
+
+
+def event(record=1, time="2024-01-01T00:00:00.0000000Z", source="a.evtx", **fields):
+    return {"row_id": record, "SystemTime": time, "Computer": "host", "Channel": "Security",
+            "EventID": 4688, "EventRecordID": record, "OriginalLogfile": source, **fields}
+
+
+def write(tmp_path, spool, *results, name=None, parts=1, **options):
+    """Sink the results into ``parts`` parts, the way several databases would."""
+    name = name or f"timeline.{spool.fmt}"
+    records = []
+    for index in range(parts):
+        part = spool.open_part()
+        for item in results[index::parts]:
+            part.sink(item)
+        records.append(part.finish())
+    destination = tmp_path / name
+    return build_timeline(spool, records, str(destination), **options), destination
+
+
+def jsonl(path):
+    return [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines()]
+
+
+def csv_rows(path):
+    with path.open(encoding="utf-8", newline="") as handle:
+        return list(csv.DictReader(handle))
+
+
+def presentation_with(**changes):
+    document = {
+        "columns": {"Computer": ["Computer"], "Channel": ["Channel"], "EventID": ["EventID"],
+                    "RecordID": ["EventRecordID"]},
+        "profiles": {"p": ["Timestamp", "Details"]},
+        "details": {"skip": ["OriginalLogfile"]},
+    }
+    document.update(changes)
+    return document
+
+
+class TestConfiguration:
+    def test_the_shipped_configuration_validates(self):
+        presentation = load_presentation(SHIPPED)
+
+        assert {"minimal", "standard", "full"} <= set(presentation.profiles)
+
+    @pytest.mark.parametrize("document,named", [
+        ({"columns": {}, "profiles": {}}, "details is missing"),
+        (presentation_with(extra=1), "extra is not a timeline setting"),
+        (presentation_with(profiles={"p": ["Timestamp", "Nope"]}), "profiles.p[1] is neither a column"),
+        (presentation_with(profiles={"p": ["Details", "%details%"]}), "profiles.p[1] repeats the column"),
+        (presentation_with(profiles={}), "profiles must name at least one profile"),
+        (presentation_with(columns={"Computer": ["Computer"], "Channel": ["Channel"],
+                                    "EventID": ["EventID"]}), "columns.RecordID is missing"),
+        (presentation_with(details={"skip": "Keywords"}), "details.skip must be a non-empty list"),
+        (presentation_with(details={"layouts": {"when": {}}}), "details.layouts must be a list"),
+        (presentation_with(details={"layouts": [{"when": {}, "show": ["A"]}]}),
+         "details.layouts[0].when must name at least one field"),
+        (presentation_with(details={"layouts": [{"when": {"EventID": [1, {"x": 1}]}, "show": ["A"]}]}),
+         "details.layouts[0].when.EventID must be a value or a list of values"),
+        (presentation_with(details={"layouts": [{"when": {"EventID": 1}, "show": []}]}),
+         "details.layouts[0].show must be a non-empty list"),
+        (presentation_with(details={"layouts": [{"when": {"EventID": 1}, "show": ["A"], "label": "x"}]}),
+         "details.layouts[0].label is not a timeline setting"),
+        (presentation_with(value_maps={"LogonType": [1]}), "value_maps.LogonType must be a mapping"),
+        (presentation_with(value_maps={"LogonType": {3: ""}}), "value_maps.LogonType.3 must map a value to a text"),
+    ])
+    def test_a_wrong_key_is_named(self, document, named):
+        with pytest.raises(TimelineConfigError, match=named.replace("[", r"\[").replace("]", r"\]")):
+            parse_presentation(document, "t.yaml")
+
+    def test_the_shipped_value_maps_quote_their_hexadecimal_values(self):
+        """Unquoted, YAML reads 0x18 as the number 24, and the map never matches."""
+        import re
+
+        assert not re.search(r"^\s+0x[0-9a-fA-F]+\s*:", SHIPPED.read_text(), re.MULTILINE)
+        assert load_presentation(SHIPPED).value_maps["status"]["0x18"] == "wrong password"
+
+    def test_an_unreadable_file_is_a_configuration_error(self, tmp_path):
+        broken = tmp_path / "t.yaml"
+        broken.write_text("columns: [unclosed\n")
+
+        with pytest.raises(TimelineConfigError, match=r"t\.yaml"):
+            load_presentation(broken)
+
+    @pytest.mark.parametrize("destination,expected", [
+        ("t.csv", "csv"), ("t.JSONL", "jsonl"), ("t.ndjson", "jsonl"), ("-", "jsonl"),
+        ("t.json", None), ("t", None),
+    ])
+    def test_the_format_follows_the_extension(self, destination, expected):
+        assert timeline_format(destination) == expected
+
+
+class TestRows:
+    def test_an_event_row_carries_the_rule_and_the_event(self, tmp_path):
+        spool = make_spool(tmp_path)
+
+        _, path = write(tmp_path, spool, result(WHOAMI, event(7, CommandLine="whoami")))
+
+        [row] = jsonl(path)
+        assert row == {
+            "Timestamp": "2024-01-01T00:00:00.000000+00:00", "Computer": "host", "Channel": "Security",
+            "EventID": 4688, "RecordID": 7, "Level": "high", "RuleTitle": "Whoami",
+            "Details": "CommandLine: whoami", "ExtraFields": None, "RuleID": "r-1",
+            "Tactics": ["discovery"], "Techniques": ["T1033"], "SourceFile": "a.evtx",
+        }
+
+    def test_without_a_layout_details_lists_the_fields_in_name_order(self, tmp_path):
+        """Name order: a unified database and a per-file one list an event's columns differently."""
+        spool = make_spool(tmp_path, "minimal")
+
+        _, path = write(tmp_path, spool, result(WHOAMI, event(EventID=9999, Image="C:\\w.exe", CommandLine="whoami",
+                                                             Keywords="0x80", User="bob")))
+
+        assert jsonl(path)[0]["Details"] == "CommandLine: whoami ¦ Image: C:\\w.exe ¦ User: bob"
+
+    def test_field_names_compare_ignoring_case(self, tmp_path):
+        spool = make_spool(tmp_path, "minimal")
+        row = event()
+        row["computer"] = row.pop("Computer")
+
+        _, path = write(tmp_path, spool, result(WHOAMI, row))
+
+        [written] = jsonl(path)
+        assert written["Computer"] == "host"
+        assert written["Details"] is None
+
+    def test_a_missing_value_is_null_in_jsonl_and_a_dash_in_csv(self, tmp_path):
+        row = event()
+        del row["Computer"]
+
+        _, path_jsonl = write(tmp_path, make_spool(tmp_path, "minimal"), result(WHOAMI, row))
+        _, path_csv = write(tmp_path, make_spool(tmp_path, "minimal", fmt="csv"), result(WHOAMI, row))
+
+        assert jsonl(path_jsonl)[0]["Computer"] is None
+        assert csv_rows(path_csv)[0]["Computer"] == "-"
+
+    def test_the_full_profile_keeps_every_field_but_the_row_id(self, tmp_path):
+        row = event(3, Image="w.exe")
+
+        _, path_jsonl = write(tmp_path, make_spool(tmp_path, "full"), result(WHOAMI, row))
+        _, path_csv = write(tmp_path, make_spool(tmp_path, "full", fmt="csv"), result(WHOAMI, row))
+
+        fields = jsonl(path_jsonl)[0]["AllFields"]
+        assert list(fields) == sorted(fields, key=str.lower)
+        assert "row_id" not in fields
+        assert fields["EventRecordID"] == 3
+        assert csv_rows(path_csv)[0]["AllFields"].startswith("Channel: Security ¦ Computer: host ¦ ")
+
+    def test_a_field_column_leaves_details(self, tmp_path):
+        presentation = parse_presentation(presentation_with(profiles={"p": ["Timestamp", "%commandline%", "Details"]}), "t")
+        spool = make_spool(tmp_path, "p", presentation, fmt="csv")
+
+        _, path = write(tmp_path, spool, result(WHOAMI, event(CommandLine="whoami", Image="w.exe")))
+
+        [row] = csv_rows(path)
+        assert row["commandline"] == "whoami"
+        assert "CommandLine" not in row["Details"]
+
+    @pytest.mark.parametrize("raw", ["2017-06-09T19:21:26.968669Z", "2017-06-09T19:21:26.9686691Z",
+                                     "1969-12-31T23:59:59.000001Z", "0001-01-01T00:00:00.000000Z",
+                                     "2017-06-09 19:21:26.968669Z", "2017-06-09T19:21:26+02:00"])
+    def test_a_windows_time_is_cut_to_the_formatted_instant(self, raw):
+        from zircolite.package_spool import time_microseconds
+        from zircolite.timeline import _timestamp_text, format_instant
+
+        instant = time_microseconds(raw, "iso")
+
+        assert _timestamp_text(raw, instant) == format_instant(instant)
+
+    def test_unix_times_follow_the_timestamp_format(self, tmp_path):
+        spool = make_spool(tmp_path, "minimal", timestamp_format="unix_ms")
+
+        _, path = write(tmp_path, spool, result(WHOAMI, event(time=1704067200500)))
+
+        assert jsonl(path)[0]["Timestamp"] == "2024-01-01T00:00:00.500000+00:00"
+
+    def test_an_unparseable_time_is_written_raw_and_listed_last(self, tmp_path):
+        spool = make_spool(tmp_path, "minimal")
+
+        stats, path = write(tmp_path, spool, result(WHOAMI, event(1, time="not a time"), event(2)))
+
+        assert [row["Timestamp"] for row in jsonl(path)] == ["2024-01-01T00:00:00.000000+00:00", "not a time"]
+        assert stats.unparsed == 1
+
+    def test_a_correlation_alert_is_one_row_at_its_occurrence(self, tmp_path):
+        spool = make_spool(tmp_path)
+        alert = {"result_type": "correlation", "alert_id": "a1", "group_keys": {"Computer": "host"},
+                 "occurrence_time": 1704067260.0, "window_start": 1704067200.0, "window_end": 1704067260.0,
+                 "metric_name": "event_count", "metric_value": 2, "event_count": 2, "event_ids": [1, 2],
+                 "evidence": [{"event": event()}], "SystemTime": "2024-01-01T00:01:00.000Z"}
+
+        _, path = write(tmp_path, spool, result(WHOAMI, alert, result_type="correlation"))
+
+        [row] = jsonl(path)
+        assert row["Timestamp"] == "2024-01-01T00:01:00.000000+00:00"
+        assert row["Computer"] == "host"
+        assert row["Details"] == "Events: 2 ¦ Computer: host ¦ event_count: 2"
+        assert row["ExtraFields"] == "alert_id: a1 ¦ window_end: 1704067260.0 ¦ window_start: 1704067200.0"
+        assert row["SourceFile"] is None
+
+
+class TestLayouts:
+    LAYOUTS = presentation_with(
+        profiles={"p": ["Timestamp", "Details", "ExtraFields"], "all": ["Details", "AllFields"]},
+        details={"skip": ["OriginalLogfile", "SystemTime", "Channel", "EventID", "Computer", "EventRecordID"],
+                 "layouts": [
+                     {"when": {"Channel": "Security", "EventID": [4624, 4625]},
+                      "show": ["TargetUserName", "LogonType", "IpAddress", "WorkstationName"]},
+                     {"when": {"EventID": 4624}, "show": ["IpAddress"]},
+                     {"when": {"Channel": "Security"}, "show": ["SubjectUserName"]},
+                 ]},
+        value_maps={"LogonType": {3: "Network"}, "Status": {"0xC000006A": "wrong password"}},
+    )
+
+    def _row(self, tmp_path, row, profile="p"):
+        spool = make_spool(tmp_path, profile, parse_presentation(self.LAYOUTS, "t"))
+        _, path = write(tmp_path, spool, result(WHOAMI, row))
+        return jsonl(path)[0]
+
+    def test_a_layout_chooses_details_and_extra_fields_take_the_rest(self, tmp_path):
+        row = self._row(tmp_path, event(EventID=4624, TargetUserName="bob", LogonType=3, IpAddress="10.0.0.5",
+                                        LogonProcessName="NtLmSsp", AuthenticationPackageName="NTLM"))
+
+        assert row["Details"] == "TargetUserName: bob ¦ LogonType: 3 (Network) ¦ IpAddress: 10.0.0.5"
+        assert row["ExtraFields"] == "AuthenticationPackageName: NTLM ¦ LogonProcessName: NtLmSsp"
+
+    def test_the_first_layout_matching_wins_whatever_fields_it_tests(self, tmp_path):
+        broad = self._row(tmp_path / "a", event(EventID=4624, IpAddress="10.0.0.5", SubjectUserName="sys"))
+        other = self._row(tmp_path / "b", event(EventID=4672, SubjectUserName="sys", PrivilegeList="SeDebug"))
+
+        assert broad["Details"] == "IpAddress: 10.0.0.5"
+        assert other["Details"] == "SubjectUserName: sys"
+
+    def test_values_compare_as_text_ignoring_case(self, tmp_path):
+        row = event(EventID="4625", TargetUserName="bob", Status="0xc000006a")
+        row["Channel"] = "SECURITY"
+
+        written = self._row(tmp_path, row)
+
+        assert written["Details"] == "TargetUserName: bob"
+        assert written["ExtraFields"] == "Status: 0xc000006a (wrong password)"
+
+    def test_an_event_matching_no_layout_lists_every_field(self, tmp_path):
+        row = event(EventID=1, Image="w.exe", LogonType=3)
+        row["Channel"] = "Microsoft-Windows-Sysmon/Operational"
+
+        written = self._row(tmp_path, row)
+
+        assert written["Details"] == "Image: w.exe ¦ LogonType: 3 (Network)"
+        assert written["ExtraFields"] is None
+
+    def test_a_layout_needs_every_field_it_tests(self, tmp_path):
+        row = event(EventID=4624, IpAddress="10.0.0.5", SubjectUserName="sys")
+        del row["Channel"]
+
+        assert self._row(tmp_path, row)["Details"] == "IpAddress: 10.0.0.5"
+
+    def test_value_maps_never_change_the_value_itself(self, tmp_path):
+        written = self._row(tmp_path, event(EventID=4624, LogonType=3), profile="all")
+
+        assert written["Details"] == "LogonType: 3 (Network)"
+        assert written["AllFields"]["LogonType"] == 3
+
+    def test_the_shipped_layouts_cover_a_sysmon_process_creation(self, tmp_path):
+        row = event(EventID=1, CommandLine="whoami /all", Image="C:\\w.exe", User="CORP\\bob",
+                    ParentImage="C:\\cmd.exe", Hashes="MD5=00", UtcTime="2024-01-01 00:00:00.000")
+        row["Channel"] = "Microsoft-Windows-Sysmon/Operational"
+        spool = make_spool(tmp_path)
+
+        _, path = write(tmp_path, spool, result(WHOAMI, row))
+
+        [written] = jsonl(path)
+        assert written["Details"] == "CommandLine: whoami /all ¦ Image: C:\\w.exe ¦ User: CORP\\bob ¦ ParentImage: C:\\cmd.exe"
+        assert written["ExtraFields"] == "Hashes: MD5=00 ¦ UtcTime: 2024-01-01 00:00:00.000"
+
+
+class TestTimezones:
+    @pytest.mark.parametrize("zone,written", [
+        ("UTC", "2024-07-01T10:40:00.123456+00:00"),
+        ("+05:30", "2024-07-01T16:10:00.123456+05:30"),
+        ("-0300", "2024-07-01T07:40:00.123456-03:00"),
+        ("Europe/Paris", "2024-07-01T12:40:00.123456+02:00"),
+        ("America/New_York", "2024-07-01T06:40:00.123456-04:00"),
+    ])
+    def test_the_timestamp_is_written_in_the_zone(self, tmp_path, zone, written):
+        spool = make_spool(tmp_path, "minimal", timezone=zone)
+
+        _, path = write(tmp_path, spool, result(WHOAMI, event(time="2024-07-01T10:40:00.123456Z")))
+
+        assert jsonl(path)[0]["Timestamp"] == written
+
+    def test_daylight_saving_follows_the_instant(self, tmp_path):
+        spool = make_spool(tmp_path, "minimal", timezone="Europe/Paris")
+
+        _, path = write(tmp_path, spool, result(WHOAMI, event(1, time="2024-01-15T12:00:00Z"),
+                                                event(2, time="2024-07-15T12:00:00Z")))
+
+        assert [row["Timestamp"][-6:] for row in jsonl(path)] == ["+01:00", "+02:00"]
+
+    @pytest.mark.skipif(not hasattr(__import__("time"), "tzset"), reason="needs time.tzset")
+    def test_local_is_the_zone_of_this_machine(self, tmp_path, monkeypatch):
+        import time
+
+        monkeypatch.setenv("TZ", "Asia/Tokyo")
+        time.tzset()
+        try:
+            spool = make_spool(tmp_path, "minimal", timezone="local")
+            _, path = write(tmp_path, spool, result(WHOAMI, event(time="2024-07-01T10:40:00Z")))
+        finally:
+            monkeypatch.undo()
+            time.tzset()
+
+        assert jsonl(path)[0]["Timestamp"] == "2024-07-01T19:40:00.000000+09:00"
+
+    def test_the_order_is_the_instants_whatever_the_zone(self, tmp_path):
+        rows = [event(n, time=f"2024-07-01T{n:02d}:00:00Z") for n in range(1, 6)]
+        orders = []
+        for zone in ("UTC", "-11:00", "+14:00"):
+            run = tmp_path / zone.replace(":", "")
+            spool = make_spool(run, "standard", timezone=zone)
+            _, path = write(run, spool, result(WHOAMI, *reversed(rows)))
+            orders.append([row["RecordID"] for row in jsonl(path)])
+
+        assert orders == [[1, 2, 3, 4, 5]] * 3
+
+    @pytest.mark.parametrize("zone,named", [("Mars/Olympus", "no such time zone"), ("+24:00", "-23:59 to +23:59"),
+                                            ("+05:75", "-23:59 to +23:59")])
+    def test_an_unknown_zone_is_refused(self, zone, named):
+        from zircolite.timeline import TimezoneError, resolve_timezone
+
+        with pytest.raises(TimezoneError, match=named.replace("+", r"\+")):
+            resolve_timezone(zone)
+
+
+class TestOrder:
+    def test_rows_follow_the_time_then_the_ruleset(self, tmp_path):
+        spool = make_spool(tmp_path, "minimal")
+        late = "2024-01-02T00:00:00Z"
+
+        _, path = write(tmp_path, spool, result(NET, event(1)), result(WHOAMI, event(2, time=late), event(1)))
+
+        assert [(row["Timestamp"][:10], row["RuleTitle"]) for row in jsonl(path)] == [
+            ("2024-01-01", "Whoami"), ("2024-01-01", "Net use"), ("2024-01-02", "Whoami")]
+
+    def test_times_before_1970_come_first(self, tmp_path):
+        spool = make_spool(tmp_path, "minimal")
+
+        _, path = write(tmp_path, spool, result(WHOAMI, event(1), event(2, time="1969-12-31T23:59:59Z")))
+
+        assert [row["Timestamp"][:4] for row in jsonl(path)] == ["1969", "2024"]
+
+    def test_the_bytes_do_not_depend_on_how_the_rows_were_split(self, tmp_path):
+        rows = [event(n, time=f"2024-01-01T00:00:{n % 7:02d}Z", source=f"{n % 3}.evtx") for n in range(30)]
+        outputs = []
+        for parts in (1, 3):
+            run = tmp_path / str(parts)
+            run.mkdir()
+            spool = make_spool(run, fmt="csv")
+            _, path = write(run, spool, *(result(WHOAMI, row) for row in rows), parts=parts)
+            outputs.append(path.read_bytes())
+
+        assert outputs[0] == outputs[1]
+
+
+class TestDuplicates:
+    def test_a_record_from_a_second_copy_of_a_log_is_dropped(self, tmp_path):
+        spool = make_spool(tmp_path, "minimal")
+
+        stats, path = write(tmp_path, spool, result(WHOAMI, event(7, source="Security.evtx")),
+                            result(WHOAMI, event(7, source="Security-copy.evtx")), parts=2)
+
+        assert len(jsonl(path)) == 1
+        assert stats.duplicates == 1
+
+    def test_two_rules_matching_one_event_give_two_rows(self, tmp_path):
+        spool = make_spool(tmp_path, "minimal")
+
+        stats, path = write(tmp_path, spool, result(WHOAMI, event(7)), result(NET, event(7)))
+
+        assert [row["RuleTitle"] for row in jsonl(path)] == ["Whoami", "Net use"]
+        assert stats.duplicates == 0
+
+    def test_identical_events_in_one_log_stay_distinct(self, tmp_path):
+        """Without a record ID an identical line is the only identity, and one log can repeat it."""
+        spool = make_spool(tmp_path, "minimal")
+        line = {"row_id": 1, "SystemTime": "2024-01-01T00:00:00Z", "msg": "failed login", "OriginalLogfile": "app.json"}
+
+        stats, path = write(tmp_path, spool, result(WHOAMI, line, {**line, "row_id": 2}))
+
+        assert len(jsonl(path)) == 2
+        assert stats.duplicates == 0
+
+    def test_a_copy_of_a_log_without_record_ids_is_dropped(self, tmp_path):
+        spool = make_spool(tmp_path, "full")
+        line = {"SystemTime": "2024-01-01T00:00:00Z", "msg": "failed login"}
+        once = {**line, "row_id": 1, "OriginalLogfile": "app.json"}
+        twice = [{**line, "row_id": n, "OriginalLogfile": "app-full.json"} for n in (2, 3)]
+
+        stats, path = write(tmp_path, spool, result(WHOAMI, once, *twice))
+
+        # The copy holding the event most often is the one kept
+        assert [row["SourceFile"] for row in jsonl(path)] == ["app-full.json", "app-full.json"]
+        assert stats.duplicates == 1
+
+    def test_keep_duplicates_keeps_them(self, tmp_path):
+        spool = make_spool(tmp_path, "minimal")
+
+        stats, path = write(tmp_path, spool, result(WHOAMI, event(7, source="a.evtx"), event(7, source="b.evtx")),
+                            keep_duplicates=True)
+
+        assert len(jsonl(path)) == 2
+        assert stats.duplicates == 0
+
+
+class TestSorting:
+    def test_runs_merge_back_to_one_order(self, tmp_path):
+        lines = [f"{n * 7919 % 1009:016x}\t{n}\n".encode() for n in range(500)]
+        runs = _SortedRuns(str(tmp_path), budget=200)
+        for line in lines:
+            runs.add(line)
+        runs.flush()
+        assert len(runs.paths) > 3
+
+        # Three at a time: the merge has to go through longer runs first
+        assert list(merge_runs(runs.paths, str(tmp_path), fan_in=3)) == sorted(lines)
+        assert not list(tmp_path.iterdir())
+
+
+class TestFiles:
+    def test_a_run_without_detections_writes_the_header_alone(self, tmp_path):
+        spool = make_spool(tmp_path, "minimal", fmt="csv")
+
+        stats, path = write(tmp_path, spool)
+
+        assert path.read_bytes() == b"Timestamp,Computer,Channel,EventID,Level,RuleTitle,Details\r\n"
+        assert stats.rows == 0
+
+    def test_csv_cells_cannot_become_formulas(self, tmp_path):
+        presentation = parse_presentation(presentation_with(profiles={"p": ["%CommandLine%", "Details"]}), "t")
+        spool = make_spool(tmp_path, "p", presentation, fmt="csv")
+
+        _, path = write(tmp_path, spool, result(WHOAMI, event(CommandLine="=cmd|' /C calc'!A0")))
+
+        assert csv_rows(path)[0]["CommandLine"] == "'=cmd|' /C calc'!A0"
+
+    def test_quotes_and_commas_survive_a_csv_reader(self, tmp_path):
+        presentation = parse_presentation(presentation_with(profiles={"p": ["%CommandLine%", "%Path%", "Details"]}), "t")
+        spool = make_spool(tmp_path, "p", presentation, fmt="csv")
+        command = 'cmd /c "echo a, b" , "c"'
+
+        _, path = write(tmp_path, spool, result(WHOAMI, event(CommandLine=command, Path='C:\\x"y', User="a,b")))
+
+        [row] = csv_rows(path)
+        assert (row["CommandLine"], row["Path"]) == (command, 'C:\\x"y')
+        assert row["Details"].endswith(" ¦ User: a,b")
+
+    def test_lists_are_joined_in_csv(self, tmp_path):
+        spool = make_spool(tmp_path, rules=(WHOAMI,), fmt="csv")
+        tagged = {**WHOAMI, "tags": ["attack.discovery", "attack.execution"]}
+
+        _, path = write(tmp_path, spool, result(tagged, event()))
+
+        assert csv_rows(path)[0]["Tactics"] == "discovery ¦ execution"
+
+    def test_a_failed_write_keeps_the_earlier_timeline(self, tmp_path, monkeypatch):
+        spool = make_spool(tmp_path)
+        earlier = tmp_path / "timeline.jsonl"
+        earlier.write_text("earlier\n")
+        monkeypatch.setattr(timeline, "_write", lambda *args: (_ for _ in ()).throw(OSError("disk full")))
+
+        with pytest.raises(OSError, match="disk full"):
+            write(tmp_path, spool, result(WHOAMI, event()))
+
+        assert earlier.read_text() == "earlier\n"
+        assert not list(tmp_path.glob(".timeline.jsonl.*"))
+
+    def test_the_file_gets_the_usual_permissions(self, tmp_path):
+        previous = os.umask(0o022)
+        try:
+            _, path = write(tmp_path, make_spool(tmp_path), result(WHOAMI, event()))
+        finally:
+            os.umask(previous)
+
+        if os.name == "posix":
+            assert stat.S_IMODE(path.stat().st_mode) == 0o644
+
+    @pytest.mark.parametrize("name", ["t.json", "t.csv"])
+    def test_a_destination_unlike_the_parts_is_refused(self, tmp_path, name):
+        """The parts hold rows already written as JSON lines; they cannot become CSV."""
+        with pytest.raises(TimelineError, match="extension"):
+            write(tmp_path, make_spool(tmp_path), result(WHOAMI, event()), name=name)
+
+    def test_the_runs_are_removed_once_merged(self, tmp_path):
+        spool = make_spool(tmp_path)
+
+        write(tmp_path, spool, result(WHOAMI, event()), parts=2)
+
+        assert not list(Path(spool.directory).iterdir())
+
+
+class TestParts:
+    def test_a_failing_part_reports_and_removes_its_file(self, tmp_path):
+        spool = make_spool(tmp_path, "full")
+        part = spool.open_part()
+
+        part.sink(result(WHOAMI, event(Unwritable=object())))
+        part.sink(result(WHOAMI, event()))
+
+        with pytest.raises(TimelineError):
+            part.finish()
+        assert not list(Path(spool.directory).iterdir())
+
+    def test_a_discarded_part_leaves_nothing(self, tmp_path, monkeypatch):
+        monkeypatch.setattr("zircolite.timeline.PART_BUDGET", 1)
+        spool = make_spool(tmp_path)
+        part = spool.open_part()
+        part.sink(result(WHOAMI, event(1), event(2)))
+        assert list(Path(spool.directory).iterdir())
+
+        part.discard()
+
+        assert not list(Path(spool.directory).iterdir())

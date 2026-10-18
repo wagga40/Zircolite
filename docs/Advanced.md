@@ -504,6 +504,39 @@ python3 zircolite.py --events logs/ \
 > and `exportForAttackNavigator.tmpl` each write one JSON document, which a second run would
 > make invalid.
 
+## Timeline Details and value maps
+
+`config/timeline.yaml` decides what the [timeline](Usage.md#timeline)'s `Details` and
+`ExtraFields` columns show. To change it, pass a copy with `--timeline-config`.
+
+```yaml
+details:
+  skip: [OriginalLogfile, Keywords, Opcode]          # never shown
+  layouts:
+    - when: {Channel: Security, EventID: [4624, 4625]}
+      show: [TargetUserName, LogonType, IpAddress, WorkstationName]
+value_maps:
+  LogonType:
+    3: Network
+    10: RemoteInteractive
+```
+
+- **Layouts.** An event takes the first layout whose `when` fields all hold one of the values
+  listed, compared as text and ignoring case. `Details` then lists the layout's `show` fields
+  the event carries, in that order, and `ExtraFields` every other field, in name order. An
+  event no layout matches lists all its fields in `Details`. The shipped layouts cover Sysmon
+  on Windows and Linux, the common Security, System and PowerShell events, Defender
+  detections, BITS jobs, remote desktop sessions, and auditd's SYSCALL, EXECVE and account
+  records.
+- **Skip list.** Fields that describe the log rather than the activity, shown in neither
+  column. A field another column of the profile shows is left out too.
+- **Value maps.** After a mapped value, `Details` and `ExtraFields` add its meaning in
+  brackets: `LogonType: 3 (Network)`, `Status: 0xc000006a (wrong password)`. The value itself
+  never changes, and rules always see it as logged. Quote a value YAML would read otherwise:
+  `0x18` unquoted is the number 24, and `no` is `false`.
+- **Errors.** A wrong key stops the run before any log is read, and the message names it, as
+  in `details.layouts[3].show must be a non-empty list`.
+
 ## Zircolite Viewer
 
 Packages and the offline viewer are described on the [Zircolite Viewer](Viewer.md) page.

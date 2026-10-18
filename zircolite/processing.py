@@ -60,6 +60,7 @@ from .parallel import MemoryAwareParallelProcessor, ParallelConfig
 from .performance import FileMetrics
 from .results import RowSpool, result_summary, write_result_json
 from .shutdown import is_shutdown_requested, set_worker_shutdown_event
+from .timeline import TimelineError, TimelinePart, TimelinePartRecord, TimelineSpool
 from .utils import (
     MemoryTracker,
     avoid_files,
@@ -133,6 +134,11 @@ class ProcessingContext:
     package_spool: PackageSpool | None = None
     package_parts: list = field(default_factory=list, init=False)
     package_errors: list = field(default_factory=list, init=False)
+    # --timeline: where each working database's rows are spooled, plain data
+    # for the same reason as package_spool.
+    timeline_spool: TimelineSpool | None = None
+    timeline_parts: list = field(default_factory=list, init=False)
+    timeline_errors: list = field(default_factory=list, init=False)
     performance_files: list = field(default_factory=list)
     parent_metrics: FileMetrics = field(default_factory=FileMetrics, repr=False)
     # Cached formatted time strings (computed in __post_init__)
@@ -341,6 +347,41 @@ def _package_spool_for(ctx: "ProcessingContext") -> PackageSpool | None:
     return None if ctx.package_errors else ctx.package_spool
 
 
+def _finish_timeline_part(part: TimelinePart | None, sources: list[str]) -> tuple[TimelinePartRecord | None, str | None]:
+    if part is None:
+        return None, None
+    try:
+        return part.finish(), None
+    except TimelineError as exc:
+        return None, f"{', '.join(sources)}: {exc}"
+
+
+def _collect_timeline_part(ctx: "ProcessingContext", record: TimelinePartRecord | None, error: str | None) -> None:
+    if error is not None:
+        ctx.timeline_errors.append(error)
+    elif record is not None:
+        ctx.timeline_parts.append(record)
+
+
+def _timeline_spool_for(ctx: "ProcessingContext") -> TimelineSpool | None:
+    """The spool, unless an earlier part already failed and the timeline is lost."""
+    return None if ctx.timeline_errors else ctx.timeline_spool
+
+
+def _execute_with_timeline(ctx: "ProcessingContext", core: ZircoliteCore, sources: list[str],
+                           sinks: tuple[Callable[[dict[str, Any]], None] | None, ...], **options: Any) -> None:
+    """``core.execute_ruleset`` with the run's timeline part, if any, as one more sink."""
+    spool = _timeline_spool_for(ctx)
+    part = spool.open_part() if spool is not None else None
+    try:
+        core.execute_ruleset(result_sink=_fan_out(*sinks, part.sink if part else None), **options)
+    except BaseException:
+        if part is not None:
+            part.discard()
+        raise
+    _collect_timeline_part(ctx, *_finish_timeline_part(part, sources))
+
+
 class _ThreadSafeWriter:
     """Wraps a binary file handle with a lock for concurrent writes.
 
@@ -488,13 +529,14 @@ def process_unified_streaming(
         f"[yellow]{len(zircolite_core.ruleset)}[/] rules"
     )
     summaries: list[dict[str, Any]] = []
-    zircolite_core.execute_ruleset(
-        ctx.outfile,
+    _execute_with_timeline(
+        ctx, zircolite_core, [str(f) for f in file_list],
+        (_summary_sink(summaries) if not ctx.retain_results else None,
+         package_part.sink if package_part else None),
+        out_file=ctx.outfile,
         write_mode="w",
         keep_results=ctx.retain_results,
         stream_results=not ctx.retain_results,
-        result_sink=_fan_out(_summary_sink(summaries) if not ctx.retain_results else None,
-                             package_part.sink if package_part else None),
         last_ruleset=True,
         disable_progress=is_quiet(),
     )
@@ -661,14 +703,14 @@ def process_perfile_streaming(
                     f"[yellow]{len(zircolite_core.ruleset)}[/] rules"
                 )
                 file_results: list[dict[str, Any]] = []
-                zircolite_core.execute_ruleset(
-                    ctx.outfile,
+                _execute_with_timeline(
+                    ctx, zircolite_core, [str(log_file)],
+                    (_summary_sink(file_results, csv_spool) if not ctx.retain_results else None,
+                     package_part.sink if package_part else None),
+                    out_file=ctx.outfile,
                     write_mode=write_mode,
                     keep_results=ctx.retain_results,
                     stream_results=not ctx.retain_results,
-                    result_sink=_fan_out(
-                        _summary_sink(file_results, csv_spool) if not ctx.retain_results else None,
-                        package_part.sink if package_part else None),
                     last_ruleset=False,
                     source_label=file_name,
                     disable_progress=is_quiet(),
@@ -886,14 +928,14 @@ def process_db_input(
                 f"[+] Executing ruleset - [yellow]{len(zircolite_core.ruleset)}[/] rules"
             )
             file_results: list[dict[str, Any]] = []
-            zircolite_core.execute_ruleset(
-                ctx.outfile,
+            _execute_with_timeline(
+                ctx, zircolite_core, [str(db_path)],
+                (_summary_sink(file_results, csv_spool) if not ctx.retain_results else None,
+                 package_part.sink if package_part else None),
+                out_file=ctx.outfile,
                 write_mode=write_mode,
                 keep_results=ctx.retain_results,
                 stream_results=not ctx.retain_results,
-                result_sink=_fan_out(
-                    _summary_sink(file_results, csv_spool) if not ctx.retain_results else None,
-                    package_part.sink if package_part else None),
                 last_ruleset=False,
                 source_label=file_name if len(db_files) > 1 else None,
                 disable_progress=is_quiet(),
@@ -977,6 +1019,7 @@ def process_single_file_worker(
     metrics = FileMetrics()
     metrics.data["sources"] = [str(log_file)]
     package_part: PartWriter | None = None
+    timeline_part: TimelinePart | None = None
     try:
         # Get or create thread-local ZircoliteCore
         if not hasattr(thread_local, "core"):
@@ -1087,6 +1130,8 @@ def process_single_file_worker(
                 write_result_json(output.write, result)
                 first = False
 
+        timeline_spool = _timeline_spool_for(ctx)
+        timeline_part = timeline_spool.open_part() if timeline_spool is not None else None
         try:
             if output is not None and not csv_spooled:
                 output.write(b"[")
@@ -1094,7 +1139,8 @@ def process_single_file_worker(
                 ctx.outfile, write_mode="w", keep_results=not spool_output,
                 stream_results=spool_output,
                 result_sink=_fan_out(receive if spool_output else None,
-                                     package_part.sink if package_part else None),
+                                     package_part.sink if package_part else None,
+                                     timeline_part.sink if timeline_part else None),
                 last_ruleset=True, show_table=False, progress_callback=progress_callback,
             )
         finally:
@@ -1105,6 +1151,8 @@ def process_single_file_worker(
         if not spool_output:
             file_results = list(core.full_results)
         package_record, finish_error = _finish_package_part(package_part)
+        timeline_record, timeline_finish_error = _finish_timeline_part(timeline_part, [str(log_file)])
+        timeline_part = None
         summary = {
             "name": file_name,
             "path": str(log_file),
@@ -1123,6 +1171,8 @@ def process_single_file_worker(
             "performance": core.metrics.data,
             "package_part": package_record,
             "package_error": package_error or finish_error,
+            "timeline_part": timeline_record,
+            "timeline_error": timeline_finish_error,
         }
         if degraded:
             metrics.data["status"] = "partial"
@@ -1135,6 +1185,8 @@ def process_single_file_worker(
         metrics.data["status"] = "failed"
         if package_part is not None:
             package_part.discard()
+        if timeline_part is not None:
+            timeline_part.discard()
         return (
             0,
             {
@@ -1403,6 +1455,7 @@ def process_parallel_streaming(
         if file_data.get("performance"):
             ctx.performance_files.append(file_data["performance"])
         _collect_package_part(ctx, file_data.get("package_part"), file_data.get("package_error"))
+        _collect_timeline_part(ctx, file_data.get("timeline_part"), file_data.get("timeline_error"))
         if process_mode:
             total_filtered_count[0] += file_data.get("filtered", 0)
             total_filtered_count[1] += file_data.get("time_filtered", 0)

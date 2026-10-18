@@ -711,6 +711,157 @@ class TestRuleFilterAtLoad:
         assert not any(real(*call.args) for call in calls)
 
 
+class TestTimelineOptions:
+    """--timeline and the flags that only mean something with it."""
+
+    CONFIG: ClassVar[dict] = {
+        "exclusions": [], "useless": [], "alias": {}, "split": {},
+        "mappings": {"Event.System.EventID": "EventID", "Event.System.Computer": "Computer",
+                     "Event.System.TimeCreated.#attributes.SystemTime": "SystemTime",
+                     "Event.EventData.CommandLine": "CommandLine"},
+        "transforms_enabled": False, "transforms": {},
+    }
+    RULES: ClassVar[list] = [{"title": "Whoami", "id": "a", "level": "high", "tags": [],
+                              "rule": ["SELECT * FROM logs WHERE CommandLine LIKE '%whoami%'"]}]
+
+    def _argv(self, tmp_path, *extra, files=1):
+        events = tmp_path / "events"
+        events.mkdir()
+        for index in range(files):
+            (events / f"events{index}.json").write_text(json.dumps({"Event": {
+                "System": {"EventID": 1, "Computer": "WS01",
+                           "TimeCreated": {"#attributes": {"SystemTime": f"2024-01-01T00:00:0{index}Z"}}},
+                "EventData": {"CommandLine": f"whoami {index}"}}}))
+        ruleset = tmp_path / "ruleset.json"
+        ruleset.write_text(json.dumps(self.RULES))
+        config = tmp_path / "config.json"
+        config.write_text(json.dumps(self.CONFIG))
+        return ["zircolite.py", "-e", str(events), "-r", str(ruleset), "-c", str(config), "-j",
+                "-o", str(tmp_path / "detected_events.json"), *get_log_arg(tmp_path), *extra]
+
+    def _exit_code(self, argv):
+        with patch("sys.argv", argv), pytest.raises(SystemExit) as exc:
+            zircolite_script.main()
+        return exc.value.code
+
+    def test_the_timeline_is_written_and_summarised(self, tmp_path):
+        timeline = tmp_path / "timeline.jsonl"
+
+        with patch("sys.argv", self._argv(tmp_path, "--timeline", str(timeline), files=2)), \
+                patch.object(zircolite_script, "print_stats") as stats:
+            zircolite_script.main()
+
+        rows = [json.loads(line) for line in timeline.read_text().splitlines()]
+        assert [row["Details"] for row in rows] == ["CommandLine: whoami 0", "CommandLine: whoami 1"]
+        destination, written, kept = stats.call_args.kwargs["timeline"]
+        assert (destination, written.rows, written.duplicates, kept) == (str(timeline), 2, 0, False)
+        assert not list(tmp_path.glob("tmp-zircolite-timeline-*"))
+
+    def test_a_bare_timeline_writes_timeline_csv(self, tmp_path, monkeypatch):
+        monkeypatch.chdir(tmp_path)
+
+        with patch("sys.argv", self._argv(tmp_path, "--timeline")):
+            zircolite_script.main()
+
+        assert (tmp_path / "timeline.csv").read_text().startswith("Timestamp,")
+
+    @pytest.mark.parametrize("flags", [["--timeline-profile", "full"], ["--keep-duplicates"],
+                                       ["--timeline-config", "config/timeline.yaml"], ["--timezone", "local"]])
+    def test_a_timeline_flag_without_a_timeline_is_refused(self, tmp_path, flags):
+        assert self._exit_code(self._argv(tmp_path, *flags)) == 2
+
+    def test_a_timeline_setting_in_a_configuration_file_is_a_preference(self, tmp_path):
+        settings = tmp_path / "run.yaml"
+        settings.write_text("output:\n  timeline_profile: full\n  keep_duplicates: true\n")
+
+        with patch("sys.argv", self._argv(tmp_path, "-Y", str(settings))):
+            zircolite_script.main()
+
+        assert not list(tmp_path.glob("*.csv"))
+
+    @pytest.mark.parametrize("name", ["timeline.json", "timeline.txt"])
+    def test_a_timeline_neither_csv_nor_jsonl_is_refused(self, tmp_path, name):
+        assert self._exit_code(self._argv(tmp_path, "--timeline", str(tmp_path / name))) == 2
+
+    def test_an_unknown_profile_is_refused(self, tmp_path):
+        argv = self._argv(tmp_path, "--timeline", str(tmp_path / "t.csv"), "--timeline-profile", "verbose")
+
+        assert self._exit_code(argv) == 2
+
+    def test_an_unknown_timezone_is_refused(self, tmp_path):
+        argv = self._argv(tmp_path, "--timeline", str(tmp_path / "t.csv"), "--timezone", "Mars/Olympus")
+
+        assert self._exit_code(argv) == 2
+
+    def test_the_timezone_reaches_the_timeline(self, tmp_path):
+        timeline = tmp_path / "timeline.jsonl"
+
+        with patch("sys.argv", self._argv(tmp_path, "--timeline", str(timeline), "--timezone", "+05:30")):
+            zircolite_script.main()
+
+        assert json.loads(timeline.read_text().splitlines()[0])["Timestamp"] == "2024-01-01T05:30:00.000000+05:30"
+
+    def test_a_broken_timeline_configuration_fails_the_run(self, tmp_path):
+        broken = tmp_path / "timeline.yaml"
+        broken.write_text("columns: {}\nprofiles: {}\n")
+        argv = self._argv(tmp_path, "--timeline", str(tmp_path / "t.csv"), "--timeline-config", str(broken))
+
+        assert self._exit_code(argv) == 1
+
+    def test_the_timeline_cannot_replace_another_output(self, tmp_path):
+        target = tmp_path / "detected.csv"
+        argv = self._argv(tmp_path, "--csv", "-o", str(target), "--timeline", str(target))
+
+        assert self._exit_code(argv) == 2
+
+    def test_the_timeline_cannot_replace_an_input(self, tmp_path):
+        argv = self._argv(tmp_path)
+        source = tmp_path / "events" / "events0.json"
+        renamed = source.with_suffix(".jsonl")
+        source.rename(renamed)
+        argv[argv.index("-e") + 1] = str(renamed)
+
+        assert self._exit_code([*argv, "--timeline", str(renamed)]) == 2
+
+    def test_rule_tests_have_no_timeline(self, tmp_path):
+        cases = tmp_path / "cases.json"
+        cases.write_text("[]")
+        argv = self._argv(tmp_path, "--test-rules", str(cases), "--timeline", str(tmp_path / "t.csv"))
+
+        assert self._exit_code(argv) == 2
+
+    def test_an_interrupted_run_writes_the_rows_found(self, tmp_path):
+        from zircolite.core import ZircoliteCore
+        from zircolite.shutdown import request_shutdown, reset_shutdown_state
+
+        timeline = tmp_path / "timeline.jsonl"
+        execute = ZircoliteCore.execute_ruleset
+
+        def first_file_then_interrupt(self, *args, **kwargs):
+            execute(self, *args, **kwargs)
+            request_shutdown()
+
+        argv = self._argv(tmp_path, "--timeline", str(timeline), "--no-parallel", "--no-auto-mode", files=2)
+        try:
+            with patch.object(ZircoliteCore, "execute_ruleset", first_file_then_interrupt):
+                assert self._exit_code(argv) == 130
+        finally:
+            reset_shutdown_state()
+
+        # One file was done when Ctrl+C came: its row is there, the other file's is not
+        [row] = [json.loads(line) for line in timeline.read_text().splitlines()]
+        assert row["Details"].startswith("CommandLine: whoami ")
+
+    def test_a_failed_part_fails_the_run(self, tmp_path):
+        from zircolite.timeline import TimelinePart
+
+        timeline = tmp_path / "timeline.csv"
+        with patch.object(TimelinePart, "sink", lambda self, result: setattr(self, "_error", "disk full")):
+            assert self._exit_code(self._argv(tmp_path, "--timeline", str(timeline))) == 1
+
+        assert not timeline.exists()
+
+
 class TestCLITimeFiltering:
     """Tests for time-based filtering."""
 

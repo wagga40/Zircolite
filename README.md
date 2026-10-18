@@ -27,6 +27,8 @@ offline, in one command.
   decoding, IOC extraction, LOLBin detection, …).
 - **Exports**: JSON, CSV, and templates for Splunk, Elastic, OpenSearch, Timesketch, SARIF
   and ATT&CK Navigator.
+- **Timeline**: every detection as one row in time order, with a one-line summary of the
+  event, as CSV or JSON lines ([`--timeline`](docs/Usage.md#timeline)).
 - **Zircolite Viewer**: every event and detection in one zip that opens offline in a browser.
 
 📖 Read the **[documentation](https://wagga40.github.io/Zircolite/)**, also in [`docs/`](docs).
@@ -82,6 +84,9 @@ python3 zircolite.py --events logs/ --ruleset ./sigma/rules/windows/process_crea
 
 # Every event and detection, for the Zircolite Viewer
 python3 zircolite.py --events logs/ --package
+
+# The detections as a timeline, for Timeline Explorer or a spreadsheet
+python3 zircolite.py --events logs/ --timeline
 ```
 
 With a binary, run `./Zircolite` instead of `python3 zircolite.py`. From source, prefix the

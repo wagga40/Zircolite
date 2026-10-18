@@ -333,6 +333,41 @@ build, and the only part of `gui/` that ships.
   `eval` and similar sinks anywhere in `gui/source/src`, and on a page without its content
   security policy.
 
+## Timeline pipeline
+
+`--timeline` renders each row where its event is, then sorts every row of the run in the main
+process. `timeline.py` holds both halves.
+
+- **Parts.** A `TimelinePart` joins the result sinks of one working database, beside the
+  package's (`_execute_with_timeline` in `processing.py`, and the worker for parallel runs).
+  It turns each match into a line: a fixed-width key, a tab, the source file as JSON, a tab,
+  the finished row as JSON. Like `PartWriter.sink`, it keeps its first error and raises it
+  at `finish`, so a failing part never stops the rules. A failed part fails the timeline
+  (exit `1`) after the detections are written.
+- **The key.** `<unparsed flag><instant><ruleset position><identity>`: the flag puts times
+  that do not parse last, the instant is hexadecimal microseconds counted from year 1, the
+  position is the rule's place in the loaded ruleset, and the identity is a BLAKE2b digest
+  of the computer, channel and record ID, or, failing one of them, of the event's fields
+  without `OriginalLogfile` and `row_id`, as text. Text, because a value's type follows its
+  column in each database ([Typing and collation](#typing-and-collation)).
+- **Sorting.** Each part keeps up to 16 MiB of lines, sorts them as bytes and writes them
+  to the spool as one run, so the sorting happens in the workers. The main process merges
+  the runs, at most 64 at a time, merging batches into longer runs first when a run per
+  file would exceed that. Bytes alone decide the order, so neither the layout nor the
+  worker that wrote a part can change it, and no row is parsed to be sorted.
+- **Duplicates.** Lines sharing a key are adjacent. A record key keeps one line; a content
+  key keeps the lines of the source file holding the most of them.
+- **Writing.** JSON lines are copied as they are; CSV rows are parsed and defused. The file
+  is written beside the destination and moved over it once complete. The spool,
+  `tmp-zircolite-timeline-*`, sits in the timeline's directory (`--working-db-dir` or the
+  system temporary directory for stdout) and goes when the run ends.
+- **Rendering.** What depends on the field names alone, such as where each column reads and
+  which fields `Details` and `ExtraFields` list under each layout, is worked out once per set
+  of names, which every row of one event type shares. Layouts testing the same fields share
+  one index of their values, so finding an event's layout is a lookup per group of fields.
+  Fields are listed in name order, as a unified database and a per-file one list an event's
+  columns in different orders. `row_id` never appears, since it differs between layouts.
+
 ## Module map
 
 All the logic lives in the `zircolite/` package. `zircolite.py` is a shim that calls
@@ -366,6 +401,7 @@ All the logic lives in the `zircolite/` package. `zircolite.py` is a shim that c
 | `templates.py` | `TemplateEngine` (Jinja2 output) |
 | `package_spool.py` | Stage one of `--package`: spools each working database's events, hits and alerts |
 | `package.py` | Stage two of `--package`: Parquet tables, the manifest and the viewer zip |
+| `timeline.py` | `--timeline`: rows rendered per working database, then sorted, deduplicated and written |
 | `formats.py` | Input format registry: flag, YAML value, extension, encoding, reader |
 | `extractor.py` | `EvtxExtractor`: log line or XML element → event dict |
 | `config.py` | Dataclasses passed to the engine (`ProcessingConfig`, `ExtractorConfig`, …) |
