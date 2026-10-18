@@ -76,6 +76,17 @@ rules:
   # high or critical. A rule without a level counts as informational.
   min_level: null  # Example: medium
 
+  # Load only the rules with one of these statuses: stable, test, experimental,
+  # deprecated or unsupported. A rule without a status counts as experimental.
+  status: null  # Example: [stable, test]
+
+  # Load only the rules carrying one of these tags or a tag below one, ignoring
+  # case: attack.t1059 also selects attack.t1059.001.
+  include_tags: null  # Example: [attack.execution, attack.persistence]
+
+  # Leave out the rules carrying one of these tags; wins over include_tags.
+  exclude_tags: null  # Example: [detection.threat-hunting]
+
   # How the time field is written, for correlation rules converted from native
   # Sigma rules: iso, unix, unix_ms or unix_us. Compiled JSON rulesets keep the
   # format they were converted with.

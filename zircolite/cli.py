@@ -106,6 +106,7 @@ from zircolite.processing import (
     process_perfile_streaming,
     process_unified_streaming,
 )
+from zircolite.rule_selection import STATUSES, tag_problem
 from zircolite.run_config import DEFAULTS, EARLY_DESTS, flatten_groups
 from zircolite.shutdown import (
     install_signal_handler,
@@ -192,6 +193,9 @@ def parse_arguments() -> argparse.Namespace:
     rulesets_formats_args.add_argument("-pl", "--pipeline-list", help="List all installed pysigma pipelines", action='store_true')
     rulesets_formats_args.add_argument("--min-level", choices=RULE_LEVELS, default=None, help="Load only the rules at this level or above; a rule without a level counts as informational")
     rulesets_formats_args.add_argument("-R", "--rulefilter", help="Remove rules from ruleset by matching rule title (case sensitive)", action='append', nargs='*')
+    rulesets_formats_args.add_argument("--rule-status", type=str.lower, choices=STATUSES, action='append', nargs='+', metavar="STATUS", help=f"Load only the rules with one of these statuses: {', '.join(STATUSES)}; a rule without a status counts as experimental")
+    rulesets_formats_args.add_argument("--include-tag", action='append', nargs='+', metavar="TAG", help="Load only the rules carrying one of these tags or a tag below one, ignoring case: attack.t1059 selects attack.t1059.001")
+    rulesets_formats_args.add_argument("--exclude-tag", action='append', nargs='+', metavar="TAG", help="Leave out the rules carrying one of these tags or a tag below one; wins over --include-tag")
     rulesets_formats_args.add_argument("--test-rules", help="JSON file with rule test cases (true-positive / true-negative events per rule)", type=str, metavar="TEST_FILE")
 
     # Output formats and output files options
@@ -1628,6 +1632,14 @@ def _main(memory_tracker, start_time) -> None:
             "Give the text of the titles to skip, e.g. -R 'Noisy Rule'"
         )
         sys.exit(2)
+    for dest in ("rule_status", "include_tag", "exclude_tag"):
+        setattr(args, dest, flatten_groups(getattr(args, dest)) or None)
+    tag_problems = [problem for tag in (args.include_tag or []) + (args.exclude_tag or [])
+                    if (problem := tag_problem(tag))]
+    if tag_problems:
+        print_error_panel("Invalid Rule Selection", escape("; ".join(tag_problems)),
+                          "Give whole tags, each as its own value, e.g. --include-tag attack.execution attack.t1059")
+        sys.exit(2)
 
     # Load rulesets (with spinner for visual feedback during pySigma conversion)
     logger.info("[+] Loading ruleset(s)")
@@ -1639,6 +1651,9 @@ def _main(memory_tracker, start_time) -> None:
         timestamp_format=args.timestamp_format,
         min_level=args.min_level,
         rule_filters=args.rulefilter,
+        statuses=args.rule_status,
+        include_tags=args.include_tag,
+        exclude_tags=args.exclude_tag,
     )
     from zircolite import analysis_cache
     analysis_cache.enable()
@@ -1666,10 +1681,11 @@ def _main(memory_tracker, start_time) -> None:
     # Nothing was going to be applied to the events. The empty result file this
     # would otherwise write is indistinguishable from a clean run that found
     # nothing, so anything reading the exit code calls a failed run a success.
+    selection_flags = rulesets_manager.selection.flags()
     if not rulesets_manager.rulesets:
-        if rulesets_manager.loaded_rule_count:
+        if rulesets_manager.loaded_rule_count and selection_flags:
             quit_on_error(
-                f"[red]    [-] No rules to execute: [cyan]--rulefilter[/] and [cyan]--min-level[/] "
+                f"[red]    [-] No rules to execute: [cyan]{', '.join(selection_flags)}[/] "
                 f"left out all {rulesets_manager.loaded_rule_count} rule(s) loaded[/]",
                 logger,
             )
@@ -1702,10 +1718,11 @@ def _main(memory_tracker, start_time) -> None:
             if r.get('error') == 'no matching rule in ruleset'
         ]
         if orphan_cases:
+            left_out = f" ({', '.join(selection_flags)} may have left them out)" if selection_flags else ""
             logger.error(
                 f"[red]    [-] {len(orphan_cases)} test case(s) match no rule in "
                 f"the ruleset: {', '.join(r.get('title') or r.get('id') or '?' for r in orphan_cases[:5])}"
-                f"{' ...' if len(orphan_cases) > 5 else ''}[/]"
+                f"{' ...' if len(orphan_cases) > 5 else ''}{left_out}[/]"
             )
         tests_failed = bool(orphan_cases) or any(
             r.get('tp_pass') is False or r.get('tn_pass') is False

@@ -18,6 +18,7 @@ from .assets import resolve_shipped_ruleset, resolve_shipped_template
 from .config import RULE_LEVELS
 from .correlations import TIMESTAMP_FORMATS
 from .formats import YAML_INPUT_FORMATS, is_valid_yaml_format
+from .rule_selection import STATUSES, tag_problem
 from .utils import safe_load
 
 # Defaults shared by the dataclasses below and by the CLI. argparse declares
@@ -63,6 +64,16 @@ class RulesConfig:
     save_ruleset: bool = False
     timestamp_format: str | None = None
     min_level: str | None = None
+    status: list[str] | None = None
+    include_tags: list[str] | None = None
+    exclude_tags: list[str] | None = None
+
+
+def _listed(value: Any) -> list:
+    """A YAML key that takes a list, read as one: a scalar is one item."""
+    if value is None:
+        return []
+    return value if isinstance(value, list) else [value]
 
 
 @dataclass
@@ -266,6 +277,9 @@ class ConfigLoader:
                 save_ruleset=rules.get('save_ruleset', False),
                 timestamp_format=rules.get('timestamp_format'),
                 min_level=rules.get('min_level'),
+                status=rules.get('status'),
+                include_tags=rules.get('include_tags'),
+                exclude_tags=rules.get('exclude_tags'),
             )
 
         # Parse output section
@@ -376,6 +390,13 @@ class ConfigLoader:
             issues.append(f"timestamp_format must be one of: {', '.join(TIMESTAMP_FORMATS)}")
         if config.rules.min_level not in (None, *RULE_LEVELS):
             issues.append(f"min_level must be one of: {', '.join(RULE_LEVELS)}")
+        for status in _listed(config.rules.status):
+            if not isinstance(status, str) or status.lower() not in STATUSES:
+                issues.append(f"rules.status must name one of: {', '.join(STATUSES)} (got {status!r})")
+        for key in ("include_tags", "exclude_tags"):
+            for tag in _listed(getattr(config.rules, key)):
+                if problem := tag_problem(tag):
+                    issues.append(f"rules.{key}: {problem}")
 
         # Validate output
         if config.output.format not in ['json', 'csv']:
@@ -538,6 +559,17 @@ rules:
   # Load only the rules at this level or above: informational, low, medium,
   # high or critical. A rule without a level counts as informational.
   min_level: null  # Example: medium
+
+  # Load only the rules with one of these statuses: stable, test, experimental,
+  # deprecated or unsupported. A rule without a status counts as experimental.
+  status: null  # Example: [stable, test]
+
+  # Load only the rules carrying one of these tags or a tag below one, ignoring
+  # case: attack.t1059 also selects attack.t1059.001.
+  include_tags: null  # Example: [attack.execution, attack.persistence]
+
+  # Leave out the rules carrying one of these tags; wins over include_tags.
+  exclude_tags: null  # Example: [detection.threat-hunting]
 
   # How the time field is written, for correlation rules converted from native
   # Sigma rules: iso, unix, unix_ms or unix_us. Compiled JSON rulesets keep the

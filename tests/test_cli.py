@@ -711,6 +711,73 @@ class TestRuleFilterAtLoad:
         assert not any(real(*call.args) for call in calls)
 
 
+class TestRuleSelectionFlags:
+    """--rule-status, --include-tag and --exclude-tag choose the rules that run."""
+
+    CONFIG = TestRuleFilterAtLoad.CONFIG
+    _argv = TestRuleFilterAtLoad._argv
+    RULES: ClassVar[list] = [
+        {"title": "Stable whoami", "id": "a", "level": "high", "status": "stable",
+         "tags": ["attack.discovery", "attack.t1033"],
+         "rule": ["SELECT * FROM logs WHERE CommandLine LIKE '%whoami%'"]},
+        {"title": "Draft cmd", "id": "b", "level": "high", "status": "experimental",
+         "tags": ["attack.execution", "detection.threat-hunting"],
+         "rule": ["SELECT * FROM logs WHERE CommandLine LIKE '%cmd%'"]},
+    ]
+
+    def _titles(self, tmp_path, *flags):
+        argv, output = self._argv(tmp_path, self.RULES, *flags)
+        with patch("sys.argv", argv):
+            zircolite_script.main()
+        return sorted(result["title"] for result in json.loads(output.read_text()))
+
+    def _exit(self, tmp_path, *flags):
+        argv, _ = self._argv(tmp_path, self.RULES, *flags)
+        with patch("sys.argv", argv), pytest.raises(SystemExit) as exc:
+            zircolite_script.main()
+        return exc.value.code
+
+    @pytest.mark.parametrize("flags,expected", [
+        ((), ["Draft cmd", "Stable whoami"]),
+        (("--rule-status", "Stable", "test"), ["Stable whoami"]),
+        (("--include-tag", "attack.t1033"), ["Stable whoami"]),
+        (("--include-tag", "attack", "--exclude-tag", "detection.threat-hunting"), ["Stable whoami"]),
+        (("--exclude-tag", "attack.discovery"), ["Draft cmd"]),
+    ])
+    def test_each_flag_chooses_the_rules(self, tmp_path, flags, expected):
+        assert self._titles(tmp_path, *flags) == expected
+
+    def test_leaving_out_every_rule_names_the_flags(self, tmp_path):
+        assert self._exit(tmp_path, "--rule-status", "deprecated") == 1
+        assert "--rule-status[/] left out all 2 rule(s) loaded" in (tmp_path / "test.log").read_text(encoding="utf-8")
+
+    @pytest.mark.parametrize("flags", [("--rule-status", "draft"), ("--include-tag", "a,b"),
+                                       ("--exclude-tag", "attack.")])
+    def test_a_value_that_selects_nothing_is_refused(self, tmp_path, flags):
+        assert self._exit(tmp_path, *flags) == 2
+
+    def test_coverage_counts_only_the_selected_rules(self, tmp_path):
+        argv, _ = self._argv(tmp_path, self.RULES, "--rule-status", "stable")
+
+        with patch("sys.argv", argv), patch.object(zircolite_script, "print_stats") as stats:
+            zircolite_script.main()
+
+        assert stats.call_args.kwargs["total_rules"] == 1
+
+    def test_a_test_case_for_a_deselected_rule_names_the_selection(self, tmp_path):
+        cases = tmp_path / "cases.json"
+        cases.write_text(json.dumps([{"title": "Draft cmd", "true_positive": [{"CommandLine": "cmd"}]}]))
+
+        assert self._exit(tmp_path, "--rule-status", "stable", "--test-rules", str(cases)) == 1
+        assert "--rule-status may have left them out" in (tmp_path / "test.log").read_text(encoding="utf-8")
+
+    def test_the_yaml_keys_select_like_the_flags(self, tmp_path):
+        settings = tmp_path / "run.yaml"
+        settings.write_text("rules:\n  status: stable\n  exclude_tags: [detection.threat-hunting]\n")
+
+        assert self._titles(tmp_path, "-Y", str(settings)) == ["Stable whoami"]
+
+
 class TestTimelineOptions:
     """--timeline and the flags that only mean something with it."""
 
@@ -4071,6 +4138,11 @@ class TestCLIConfigValidationIsFatal:
     def test_invalid_input_format_is_fatal(self, tmp_path):
         """A typo'd format silently fell back to EVTX and found nothing."""
         assert self._run(tmp_path, "input:\n  format: jsonn\n") != 0
+
+    @pytest.mark.parametrize("body", ["rules:\n  status: [draft]\n", "rules:\n  include_tags: ['a,b']\n",
+                                      "rules:\n  exclude_tags: ['']\n"])
+    def test_a_rule_selection_that_selects_nothing_is_fatal(self, tmp_path, body):
+        assert self._run(tmp_path, body) == 1
 
     def test_invalid_time_filter_is_fatal(self, tmp_path):
         assert self._run(tmp_path, "time_filter:\n  after: not-a-date\n") != 0

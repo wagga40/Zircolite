@@ -392,6 +392,7 @@ All the logic lives in the `zircolite/` package. `zircolite.py` is a shim that c
 | `detector.py` | `LogTypeDetector`: format, log source and timestamp-field detection |
 | `processing.py` | Coordinates per-file, unified and parallel runs; aggregates results |
 | `utils.py` | Logging, `MemoryTracker`, compressed-input handling, mode heuristics |
+| `rule_selection.py` | `RuleSelection`, `select_rules`: which loaded rules run (`-R`, `--min-level`, `--rule-status`, tags), apart from pySigma |
 | `rules.py` | `RulesetHandler` (Sigma → Zircolite), `RulesUpdater` |
 | `console.py` | Rich output: theme, detection tables, ATT&CK panels, hyperlinks, reports |
 | `config_loader.py` | Loads and validates YAML run configurations; generates the template |
