@@ -20784,7 +20784,7 @@
     "channel": [
       "Microsoft-Windows-Sysmon/Operational"
     ],
-    "description": "Detects suspicious powershell download cradle using nslookup. This cradle uses nslookup to extract payloads from DNS records",
+    "description": "Detects suspicious powershell download cradle using nslookup.\nThis cradle uses nslookup to extract payloads from DNS records\n",
     "eventid": [
       1
     ],
@@ -20810,14 +20810,15 @@
     ],
     "result_type": "event",
     "rule": [
-      "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=1 AND ((Image LIKE '%\\\\nslookup.exe%' ESCAPE '\\' OR OriginalFileName LIKE '\\\\nslookup.exe' ESCAPE '\\') AND ((ParentImage LIKE '%\\\\powershell.exe' ESCAPE '\\' OR ParentImage LIKE '%\\\\pwsh.exe' ESCAPE '\\') AND (CommandLine LIKE '% -q=txt %' ESCAPE '\\' OR CommandLine LIKE '% -querytype=txt %' ESCAPE '\\'))))"
+      "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=1 AND ((Image LIKE '%\\\\nslookup.exe' ESCAPE '\\' OR OriginalFileName='nslookup.exe') AND ((ParentImage LIKE '%\\\\powershell.exe' ESCAPE '\\' OR ParentImage LIKE '%\\\\pwsh.exe' ESCAPE '\\') AND (CommandLine LIKE '% -q=txt %' ESCAPE '\\' OR CommandLine LIKE '% -querytype=txt %' ESCAPE '\\' OR CommandLine LIKE '% -type=txt%' ESCAPE '\\'))))"
     ],
     "schema_version": 2,
     "source": "sigmahq",
     "source_table": "logs",
     "status": "test",
     "tags": [
-      "attack.stealth"
+      "attack.command-and-control",
+      "attack.t1071.004"
     ],
     "title": "Nslookup PowerShell Download Cradle - ProcessCreation - Sysmon"
   },
@@ -20826,7 +20827,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects suspicious powershell download cradle using nslookup. This cradle uses nslookup to extract payloads from DNS records",
+    "description": "Detects suspicious powershell download cradle using nslookup.\nThis cradle uses nslookup to extract payloads from DNS records\n",
     "eventid": [
       4688
     ],
@@ -20851,14 +20852,15 @@
     ],
     "result_type": "event",
     "rule": [
-      "SELECT * FROM logs WHERE Channel='Security' AND (EventID=4688 AND ((NewProcessName LIKE '%\\\\nslookup.exe%' ESCAPE '\\' OR OriginalFileName LIKE '\\\\nslookup.exe' ESCAPE '\\') AND ((ParentProcessName LIKE '%\\\\powershell.exe' ESCAPE '\\' OR ParentProcessName LIKE '%\\\\pwsh.exe' ESCAPE '\\') AND (CommandLine LIKE '% -q=txt %' ESCAPE '\\' OR CommandLine LIKE '% -querytype=txt %' ESCAPE '\\'))))"
+      "SELECT * FROM logs WHERE Channel='Security' AND (EventID=4688 AND ((NewProcessName LIKE '%\\\\nslookup.exe' ESCAPE '\\' OR OriginalFileName='nslookup.exe') AND ((ParentProcessName LIKE '%\\\\powershell.exe' ESCAPE '\\' OR ParentProcessName LIKE '%\\\\pwsh.exe' ESCAPE '\\') AND (CommandLine LIKE '% -q=txt %' ESCAPE '\\' OR CommandLine LIKE '% -querytype=txt %' ESCAPE '\\' OR CommandLine LIKE '% -type=txt%' ESCAPE '\\'))))"
     ],
     "schema_version": 2,
     "source": "sigmahq",
     "source_table": "logs",
     "status": "test",
     "tags": [
-      "attack.stealth"
+      "attack.command-and-control",
+      "attack.t1071.004"
     ],
     "title": "Nslookup PowerShell Download Cradle - ProcessCreation - Generic"
   },
@@ -20955,90 +20957,6 @@
       "detection.threat-hunting"
     ],
     "title": "Registry Set With Crypto-Classes From The \"Cryptography\" PowerShell Namespace - Generic"
-  },
-  {
-    "author": "frack113",
-    "channel": [
-      "Microsoft-Windows-Sysmon/Operational"
-    ],
-    "description": "Detects registry modifications that disable internal tools or functions in explorer (malware like Agent Tesla uses this technique)",
-    "eventid": [
-      13
-    ],
-    "falsepositives": [
-      "Legitimate admin script"
-    ],
-    "filename": "rules/windows/registry/registry_set/registry_set_set_nopolicies_user.yml",
-    "id": "1c3121ed-041b-4d97-a075-07f54f20fb4a",
-    "level": "medium",
-    "license": "DRL-1.1",
-    "logsource": {
-      "category": "registry_set",
-      "product": "windows",
-      "service": "sysmon"
-    },
-    "required_fields": [
-      "Channel",
-      "Details",
-      "EventID",
-      "TargetObject"
-    ],
-    "result_type": "event",
-    "rule": [
-      "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=13 AND ((TargetObject LIKE '%SOFTWARE\\\\Microsoft\\\\Windows\\\\CurrentVersion\\\\Policies\\\\Explorer\\\\NoLogOff' ESCAPE '\\' OR TargetObject LIKE '%SOFTWARE\\\\Microsoft\\\\Windows\\\\CurrentVersion\\\\Policies\\\\Explorer\\\\NoDesktop' ESCAPE '\\' OR TargetObject LIKE '%SOFTWARE\\\\Microsoft\\\\Windows\\\\CurrentVersion\\\\Policies\\\\Explorer\\\\NoRun' ESCAPE '\\' OR TargetObject LIKE '%SOFTWARE\\\\Microsoft\\\\Windows\\\\CurrentVersion\\\\Policies\\\\Explorer\\\\NoFind' ESCAPE '\\' OR TargetObject LIKE '%SOFTWARE\\\\Microsoft\\\\Windows\\\\CurrentVersion\\\\Policies\\\\Explorer\\\\NoControlPanel' ESCAPE '\\' OR TargetObject LIKE '%SOFTWARE\\\\Microsoft\\\\Windows\\\\CurrentVersion\\\\Policies\\\\Explorer\\\\NoFileMenu' ESCAPE '\\' OR TargetObject LIKE '%SOFTWARE\\\\Microsoft\\\\Windows\\\\CurrentVersion\\\\Policies\\\\Explorer\\\\NoClose' ESCAPE '\\' OR TargetObject LIKE '%SOFTWARE\\\\Microsoft\\\\Windows\\\\CurrentVersion\\\\Policies\\\\Explorer\\\\NoSetTaskbar' ESCAPE '\\' OR TargetObject LIKE '%SOFTWARE\\\\Microsoft\\\\Windows\\\\CurrentVersion\\\\Policies\\\\Explorer\\\\NoPropertiesMyDocuments' ESCAPE '\\' OR TargetObject LIKE '%SOFTWARE\\\\Microsoft\\\\Windows\\\\CurrentVersion\\\\Policies\\\\Explorer\\\\NoTrayContextMenu' ESCAPE '\\') AND Details='DWORD (0x00000001)'))"
-    ],
-    "schema_version": 2,
-    "source": "sigmahq",
-    "source_table": "logs",
-    "status": "test",
-    "tags": [
-      "attack.persistence",
-      "attack.defense-impairment",
-      "attack.t1112"
-    ],
-    "title": "Registry Explorer Policy Modification - Sysmon"
-  },
-  {
-    "author": "frack113",
-    "channel": [
-      "Security"
-    ],
-    "description": "Detects registry modifications that disable internal tools or functions in explorer (malware like Agent Tesla uses this technique)",
-    "eventid": [
-      4657
-    ],
-    "falsepositives": [
-      "Legitimate admin script"
-    ],
-    "filename": "rules/windows/registry/registry_set/registry_set_set_nopolicies_user.yml",
-    "id": "1c3121ed-041b-4d97-a075-07f54f20fb4a",
-    "level": "medium",
-    "license": "DRL-1.1",
-    "logsource": {
-      "product": "windows",
-      "service": "security"
-    },
-    "required_fields": [
-      "Channel",
-      "EventID",
-      "NewValue",
-      "OperationType",
-      "TargetObject"
-    ],
-    "result_type": "event",
-    "rule": [
-      "SELECT * FROM logs WHERE Channel='Security' AND ((EventID=4657 AND OperationType='Existing registry value modified') AND ((TargetObject LIKE '%SOFTWARE\\\\Microsoft\\\\Windows\\\\CurrentVersion\\\\Policies\\\\Explorer\\\\NoLogOff' ESCAPE '\\' OR TargetObject LIKE '%SOFTWARE\\\\Microsoft\\\\Windows\\\\CurrentVersion\\\\Policies\\\\Explorer\\\\NoDesktop' ESCAPE '\\' OR TargetObject LIKE '%SOFTWARE\\\\Microsoft\\\\Windows\\\\CurrentVersion\\\\Policies\\\\Explorer\\\\NoRun' ESCAPE '\\' OR TargetObject LIKE '%SOFTWARE\\\\Microsoft\\\\Windows\\\\CurrentVersion\\\\Policies\\\\Explorer\\\\NoFind' ESCAPE '\\' OR TargetObject LIKE '%SOFTWARE\\\\Microsoft\\\\Windows\\\\CurrentVersion\\\\Policies\\\\Explorer\\\\NoControlPanel' ESCAPE '\\' OR TargetObject LIKE '%SOFTWARE\\\\Microsoft\\\\Windows\\\\CurrentVersion\\\\Policies\\\\Explorer\\\\NoFileMenu' ESCAPE '\\' OR TargetObject LIKE '%SOFTWARE\\\\Microsoft\\\\Windows\\\\CurrentVersion\\\\Policies\\\\Explorer\\\\NoClose' ESCAPE '\\' OR TargetObject LIKE '%SOFTWARE\\\\Microsoft\\\\Windows\\\\CurrentVersion\\\\Policies\\\\Explorer\\\\NoSetTaskbar' ESCAPE '\\' OR TargetObject LIKE '%SOFTWARE\\\\Microsoft\\\\Windows\\\\CurrentVersion\\\\Policies\\\\Explorer\\\\NoPropertiesMyDocuments' ESCAPE '\\' OR TargetObject LIKE '%SOFTWARE\\\\Microsoft\\\\Windows\\\\CurrentVersion\\\\Policies\\\\Explorer\\\\NoTrayContextMenu' ESCAPE '\\') AND NewValue='DWORD (0x00000001)'))"
-    ],
-    "schema_version": 2,
-    "source": "sigmahq",
-    "source_table": "logs",
-    "status": "test",
-    "tags": [
-      "attack.persistence",
-      "attack.defense-impairment",
-      "attack.t1112"
-    ],
-    "title": "Registry Explorer Policy Modification - Generic"
   },
   {
     "author": "Elastic, Josh Nickels, Marius Rothenb\u00fccher",
@@ -41825,7 +41743,7 @@
     ],
     "result_type": "event",
     "rule": [
-      "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=11 AND (TargetFilename LIKE '%.evtx' ESCAPE '\\' AND (NOT COALESCE((TargetFilename LIKE 'C:\\\\Windows\\\\System32\\\\winevt\\\\Logs\\\\%' ESCAPE '\\' OR (TargetFilename LIKE 'C:\\\\ProgramData\\\\Microsoft\\\\Windows\\\\Containers\\\\BaseImages\\\\%' ESCAPE '\\' AND TargetFilename LIKE '%\\\\Windows\\\\System32\\\\winevt\\\\Logs\\\\' ESCAPE '\\')), 0))))"
+      "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=11 AND (TargetFilename LIKE '%.evtx' ESCAPE '\\' AND (NOT COALESCE((TargetFilename LIKE 'C:\\\\Windows\\\\System32\\\\winevt\\\\Logs\\\\%' ESCAPE '\\' OR (TargetFilename LIKE 'C:\\\\ProgramData\\\\Microsoft\\\\Windows\\\\Containers\\\\BaseImages\\\\%' ESCAPE '\\' AND TargetFilename LIKE '%\\\\Windows\\\\System32\\\\winevt\\\\Logs\\\\%' ESCAPE '\\')), 0))))"
     ],
     "schema_version": 2,
     "source": "sigmahq",
@@ -41958,6 +41876,88 @@
       "attack.t1567.002"
     ],
     "title": "DNS Query To MEGA Hosting Website - DNS Client"
+  },
+  {
+    "author": "frack113",
+    "channel": [
+      "Microsoft-Windows-Sysmon/Operational"
+    ],
+    "description": "Detects the degradation of the system firewall security by the creation or re-enabling of per-application\nexceptions via registry writes to the AuthorizedApplications\\List keys under FirewallPolicy, which grants\nthe targeted executable network access and can be abused by malware to bypass network restrictions.\n",
+    "eventid": [
+      13
+    ],
+    "falsepositives": [
+      "Unknown"
+    ],
+    "filename": "rules/windows/registry/registry_set/registry_set_defender_firewall_add_exception.yml",
+    "id": "6648f900-4a7d-47e3-bad6-952b313a1c0e",
+    "level": "medium",
+    "license": "DRL-1.1",
+    "logsource": {
+      "category": "registry_set",
+      "product": "windows",
+      "service": "sysmon"
+    },
+    "required_fields": [
+      "Channel",
+      "Details",
+      "EventID",
+      "TargetObject"
+    ],
+    "result_type": "event",
+    "rule": [
+      "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=13 AND ((TargetObject LIKE '%\\\\Services\\\\SharedAccess\\\\Parameters\\\\FirewallPolicy\\\\%' ESCAPE '\\' AND TargetObject LIKE '%\\\\AuthorizedApplications\\\\List%' ESCAPE '\\') AND Details LIKE '%:Enabled:%' ESCAPE '\\'))"
+    ],
+    "schema_version": 2,
+    "source": "sigmahq",
+    "source_table": "logs",
+    "status": "experimental",
+    "tags": [
+      "attack.defense-impairment",
+      "attack.t1686.003"
+    ],
+    "title": "Add Authorized Applications to Microsoft Defender Firewall via Registry - Sysmon"
+  },
+  {
+    "author": "frack113",
+    "channel": [
+      "Security"
+    ],
+    "description": "Detects the degradation of the system firewall security by the creation or re-enabling of per-application\nexceptions via registry writes to the AuthorizedApplications\\List keys under FirewallPolicy, which grants\nthe targeted executable network access and can be abused by malware to bypass network restrictions.\n",
+    "eventid": [
+      4657
+    ],
+    "falsepositives": [
+      "Unknown"
+    ],
+    "filename": "rules/windows/registry/registry_set/registry_set_defender_firewall_add_exception.yml",
+    "id": "6648f900-4a7d-47e3-bad6-952b313a1c0e",
+    "level": "medium",
+    "license": "DRL-1.1",
+    "logsource": {
+      "product": "windows",
+      "service": "security"
+    },
+    "required_fields": [
+      "Channel",
+      "EventID",
+      "NewValue",
+      "OperationType",
+      "TargetObject"
+    ],
+    "result_type": "event",
+    "rule": [
+      "SELECT * FROM logs WHERE Channel='Security' AND ((EventID=4657 AND OperationType='Existing registry value modified') AND ((TargetObject LIKE '%\\\\Services\\\\SharedAccess\\\\Parameters\\\\FirewallPolicy\\\\%' ESCAPE '\\' AND TargetObject LIKE '%\\\\AuthorizedApplications\\\\List%' ESCAPE '\\') AND NewValue LIKE '%:Enabled:%' ESCAPE '\\'))"
+    ],
+    "schema_version": 2,
+    "source": "sigmahq",
+    "source_table": "logs",
+    "status": "experimental",
+    "tags": [
+      "attack.defense-impairment",
+      "attack.t1686.003"
+    ],
+    "title": "Add Authorized Applications to Microsoft Defender Firewall via Registry - Generic"
   },
   {
     "author": "Alex Walston (@4ayymm)",
@@ -70099,7 +70099,7 @@
     ],
     "result_type": "event",
     "rule": [
-      "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=1 AND ((Image LIKE '%\\\\rundll32.exe' ESCAPE '\\' OR OriginalFileName='RUNDLL32.EXE') AND (NOT COALESCE((CommandLine IS NULL OR CommandLine='' OR ((CommandLine LIKE '%.cpl %' ESCAPE '\\' OR CommandLine LIKE '%.cpl,%' ESCAPE '\\' OR CommandLine LIKE '%.cpl\"%' ESCAPE '\\' OR CommandLine LIKE '%.cpl''%' ESCAPE '\\' OR CommandLine LIKE '%.dll %' ESCAPE '\\' OR CommandLine LIKE '%.dll,%' ESCAPE '\\' OR CommandLine LIKE '%.dll\"%' ESCAPE '\\' OR CommandLine LIKE '%.dll''%' ESCAPE '\\' OR CommandLine LIKE '%.inf %' ESCAPE '\\' OR CommandLine LIKE '%.inf,%' ESCAPE '\\' OR CommandLine LIKE '%.inf\"%' ESCAPE '\\' OR CommandLine LIKE '%.inf''%' ESCAPE '\\') OR (CommandLine LIKE '%.cpl' ESCAPE '\\' OR CommandLine LIKE '%.dll' ESCAPE '\\' OR CommandLine LIKE '%.inf' ESCAPE '\\')) OR CommandLine LIKE '% -localserver %' ESCAPE '\\' OR (ParentImage LIKE '%\\\\msiexec.exe' ESCAPE '\\' AND (CommandLine LIKE '%:\\\\Windows\\\\Installer\\\\%' ESCAPE '\\' AND CommandLine LIKE '%.tmp%' ESCAPE '\\' AND CommandLine LIKE '%zzzzInvokeManagedCustomActionOutOfProc%' ESCAPE '\\'))), 0)) AND (NOT COALESCE((ParentCommandLine LIKE '%:\\\\Users\\\\%' ESCAPE '\\' AND ParentCommandLine LIKE '%\\\\AppData\\\\Local\\\\Microsoft\\\\EdgeUpdate\\\\Install\\\\{%' ESCAPE '\\' AND ParentCommandLine LIKE '%\\\\EDGEMITMP\\_%' ESCAPE '\\' AND ParentCommandLine LIKE '%.tmp\\\\setup.exe%' ESCAPE '\\' AND ParentCommandLine LIKE '%--install-archive=%' ESCAPE '\\' AND ParentCommandLine LIKE '%--previous-version=%' ESCAPE '\\' AND ParentCommandLine LIKE '%--msedgewebview --verbose-logging --do-not-launch-msedge --user-level%' ESCAPE '\\'), 0))))"
+      "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=1 AND ((Image LIKE '%\\\\rundll32.exe' ESCAPE '\\' OR OriginalFileName='RUNDLL32.EXE') AND (NOT COALESCE((CommandLine IS NULL OR CommandLine='' OR ((CommandLine LIKE '%.cpl %' ESCAPE '\\' OR CommandLine LIKE '%.cpl,%' ESCAPE '\\' OR CommandLine LIKE '%.cpl\"%' ESCAPE '\\' OR CommandLine LIKE '%.cpl''%' ESCAPE '\\' OR CommandLine LIKE '%.dll %' ESCAPE '\\' OR CommandLine LIKE '%.dll,%' ESCAPE '\\' OR CommandLine LIKE '%.dll\"%' ESCAPE '\\' OR CommandLine LIKE '%.dll''%' ESCAPE '\\' OR CommandLine LIKE '%.inf %' ESCAPE '\\' OR CommandLine LIKE '%.inf,%' ESCAPE '\\' OR CommandLine LIKE '%.inf\"%' ESCAPE '\\' OR CommandLine LIKE '%.inf''%' ESCAPE '\\') OR (CommandLine LIKE '%.cpl' ESCAPE '\\' OR CommandLine LIKE '%.dll' ESCAPE '\\' OR CommandLine LIKE '%.inf' ESCAPE '\\')) OR CommandLine LIKE '% -localserver %' ESCAPE '\\' OR (ParentImage LIKE '%\\\\msiexec.exe' ESCAPE '\\' AND (CommandLine LIKE '%:\\\\Windows\\\\Installer\\\\%' ESCAPE '\\' AND CommandLine LIKE '%.tmp%' ESCAPE '\\' AND CommandLine LIKE '%zzzzInvokeManagedCustomActionOutOfProc%' ESCAPE '\\')) OR (Image LIKE 'C:\\\\Windows\\\\System32\\\\rundll32.exe' ESCAPE '\\' AND ParentImage LIKE 'C:\\\\Windows\\\\System32\\\\svchost.exe' ESCAPE '\\' AND CommandLine LIKE '% streamci,StreamingDeviceSetup {%' ESCAPE '\\')), 0)) AND (NOT COALESCE((ParentCommandLine LIKE '%:\\\\Users\\\\%' ESCAPE '\\' AND ParentCommandLine LIKE '%\\\\AppData\\\\Local\\\\Microsoft\\\\EdgeUpdate\\\\Install\\\\{%' ESCAPE '\\' AND ParentCommandLine LIKE '%\\\\EDGEMITMP\\_%' ESCAPE '\\' AND ParentCommandLine LIKE '%.tmp\\\\setup.exe%' ESCAPE '\\' AND ParentCommandLine LIKE '%--install-archive=%' ESCAPE '\\' AND ParentCommandLine LIKE '%--previous-version=%' ESCAPE '\\' AND ParentCommandLine LIKE '%--msedgewebview --verbose-logging --do-not-launch-msedge --user-level%' ESCAPE '\\'), 0))))"
     ],
     "schema_version": 2,
     "source": "sigmahq",
@@ -70142,7 +70142,7 @@
     ],
     "result_type": "event",
     "rule": [
-      "SELECT * FROM logs WHERE Channel='Security' AND (EventID=4688 AND ((NewProcessName LIKE '%\\\\rundll32.exe' ESCAPE '\\' OR OriginalFileName='RUNDLL32.EXE') AND (NOT COALESCE((CommandLine IS NULL OR CommandLine='' OR ((CommandLine LIKE '%.cpl %' ESCAPE '\\' OR CommandLine LIKE '%.cpl,%' ESCAPE '\\' OR CommandLine LIKE '%.cpl\"%' ESCAPE '\\' OR CommandLine LIKE '%.cpl''%' ESCAPE '\\' OR CommandLine LIKE '%.dll %' ESCAPE '\\' OR CommandLine LIKE '%.dll,%' ESCAPE '\\' OR CommandLine LIKE '%.dll\"%' ESCAPE '\\' OR CommandLine LIKE '%.dll''%' ESCAPE '\\' OR CommandLine LIKE '%.inf %' ESCAPE '\\' OR CommandLine LIKE '%.inf,%' ESCAPE '\\' OR CommandLine LIKE '%.inf\"%' ESCAPE '\\' OR CommandLine LIKE '%.inf''%' ESCAPE '\\') OR (CommandLine LIKE '%.cpl' ESCAPE '\\' OR CommandLine LIKE '%.dll' ESCAPE '\\' OR CommandLine LIKE '%.inf' ESCAPE '\\')) OR CommandLine LIKE '% -localserver %' ESCAPE '\\' OR (ParentProcessName LIKE '%\\\\msiexec.exe' ESCAPE '\\' AND (CommandLine LIKE '%:\\\\Windows\\\\Installer\\\\%' ESCAPE '\\' AND CommandLine LIKE '%.tmp%' ESCAPE '\\' AND CommandLine LIKE '%zzzzInvokeManagedCustomActionOutOfProc%' ESCAPE '\\'))), 0)) AND (NOT COALESCE((ParentCommandLine LIKE '%:\\\\Users\\\\%' ESCAPE '\\' AND ParentCommandLine LIKE '%\\\\AppData\\\\Local\\\\Microsoft\\\\EdgeUpdate\\\\Install\\\\{%' ESCAPE '\\' AND ParentCommandLine LIKE '%\\\\EDGEMITMP\\_%' ESCAPE '\\' AND ParentCommandLine LIKE '%.tmp\\\\setup.exe%' ESCAPE '\\' AND ParentCommandLine LIKE '%--install-archive=%' ESCAPE '\\' AND ParentCommandLine LIKE '%--previous-version=%' ESCAPE '\\' AND ParentCommandLine LIKE '%--msedgewebview --verbose-logging --do-not-launch-msedge --user-level%' ESCAPE '\\'), 0))))"
+      "SELECT * FROM logs WHERE Channel='Security' AND (EventID=4688 AND ((NewProcessName LIKE '%\\\\rundll32.exe' ESCAPE '\\' OR OriginalFileName='RUNDLL32.EXE') AND (NOT COALESCE((CommandLine IS NULL OR CommandLine='' OR ((CommandLine LIKE '%.cpl %' ESCAPE '\\' OR CommandLine LIKE '%.cpl,%' ESCAPE '\\' OR CommandLine LIKE '%.cpl\"%' ESCAPE '\\' OR CommandLine LIKE '%.cpl''%' ESCAPE '\\' OR CommandLine LIKE '%.dll %' ESCAPE '\\' OR CommandLine LIKE '%.dll,%' ESCAPE '\\' OR CommandLine LIKE '%.dll\"%' ESCAPE '\\' OR CommandLine LIKE '%.dll''%' ESCAPE '\\' OR CommandLine LIKE '%.inf %' ESCAPE '\\' OR CommandLine LIKE '%.inf,%' ESCAPE '\\' OR CommandLine LIKE '%.inf\"%' ESCAPE '\\' OR CommandLine LIKE '%.inf''%' ESCAPE '\\') OR (CommandLine LIKE '%.cpl' ESCAPE '\\' OR CommandLine LIKE '%.dll' ESCAPE '\\' OR CommandLine LIKE '%.inf' ESCAPE '\\')) OR CommandLine LIKE '% -localserver %' ESCAPE '\\' OR (ParentProcessName LIKE '%\\\\msiexec.exe' ESCAPE '\\' AND (CommandLine LIKE '%:\\\\Windows\\\\Installer\\\\%' ESCAPE '\\' AND CommandLine LIKE '%.tmp%' ESCAPE '\\' AND CommandLine LIKE '%zzzzInvokeManagedCustomActionOutOfProc%' ESCAPE '\\')) OR (NewProcessName LIKE 'C:\\\\Windows\\\\System32\\\\rundll32.exe' ESCAPE '\\' AND ParentProcessName LIKE 'C:\\\\Windows\\\\System32\\\\svchost.exe' ESCAPE '\\' AND CommandLine LIKE '% streamci,StreamingDeviceSetup {%' ESCAPE '\\')), 0)) AND (NOT COALESCE((ParentCommandLine LIKE '%:\\\\Users\\\\%' ESCAPE '\\' AND ParentCommandLine LIKE '%\\\\AppData\\\\Local\\\\Microsoft\\\\EdgeUpdate\\\\Install\\\\{%' ESCAPE '\\' AND ParentCommandLine LIKE '%\\\\EDGEMITMP\\_%' ESCAPE '\\' AND ParentCommandLine LIKE '%.tmp\\\\setup.exe%' ESCAPE '\\' AND ParentCommandLine LIKE '%--install-archive=%' ESCAPE '\\' AND ParentCommandLine LIKE '%--previous-version=%' ESCAPE '\\' AND ParentCommandLine LIKE '%--msedgewebview --verbose-logging --do-not-launch-msedge --user-level%' ESCAPE '\\'), 0))))"
     ],
     "schema_version": 2,
     "source": "sigmahq",
@@ -71075,6 +71075,90 @@
       "attack.t1218"
     ],
     "title": "Potentially Suspicious Wuauclt Network Connection"
+  },
+  {
+    "author": "frack113",
+    "channel": [
+      "Microsoft-Windows-Sysmon/Operational"
+    ],
+    "description": "Detects the degradation of the system firewall security by the DoNotAllowExceptions policy value being\nset to 0 (DWORD 0x00000000), which re-enables application and port exceptions in the Microsoft\nDefender Firewall and can restore network paths that a hardened profile would block.\n",
+    "eventid": [
+      13
+    ],
+    "falsepositives": [
+      "Unknown"
+    ],
+    "filename": "rules/windows/registry/registry_set/registry_set_allow_defender_firewall_exceptions.yml",
+    "id": "c69fc6a2-607d-4530-b7d1-75823af1bde4",
+    "level": "medium",
+    "license": "DRL-1.1",
+    "logsource": {
+      "category": "registry_set",
+      "product": "windows",
+      "service": "sysmon"
+    },
+    "required_fields": [
+      "Channel",
+      "Details",
+      "EventID",
+      "Image",
+      "TargetObject"
+    ],
+    "result_type": "event",
+    "rule": [
+      "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=13 AND ((TargetObject LIKE '%\\\\Services\\\\SharedAccess\\\\Parameters\\\\FirewallPolicy\\\\%' ESCAPE '\\' AND TargetObject LIKE '%\\\\DoNotAllowExceptions' ESCAPE '\\' AND Details='DWORD (0x00000000)') AND (NOT COALESCE((Image LIKE 'C:\\\\Windows\\\\System32\\\\svchost.exe' ESCAPE '\\' OR Image LIKE 'C:\\\\Windows\\\\SysWOW64\\\\svchost.exe' ESCAPE '\\'), 0))))"
+    ],
+    "schema_version": 2,
+    "source": "sigmahq",
+    "source_table": "logs",
+    "status": "experimental",
+    "tags": [
+      "attack.defense-impairment",
+      "attack.t1686.003"
+    ],
+    "title": "Allow Exceptions in Microsoft Defender Firewall via Registry - Sysmon"
+  },
+  {
+    "author": "frack113",
+    "channel": [
+      "Security"
+    ],
+    "description": "Detects the degradation of the system firewall security by the DoNotAllowExceptions policy value being\nset to 0 (DWORD 0x00000000), which re-enables application and port exceptions in the Microsoft\nDefender Firewall and can restore network paths that a hardened profile would block.\n",
+    "eventid": [
+      4657
+    ],
+    "falsepositives": [
+      "Unknown"
+    ],
+    "filename": "rules/windows/registry/registry_set/registry_set_allow_defender_firewall_exceptions.yml",
+    "id": "c69fc6a2-607d-4530-b7d1-75823af1bde4",
+    "level": "medium",
+    "license": "DRL-1.1",
+    "logsource": {
+      "product": "windows",
+      "service": "security"
+    },
+    "required_fields": [
+      "Channel",
+      "EventID",
+      "NewProcessName",
+      "NewValue",
+      "OperationType",
+      "TargetObject"
+    ],
+    "result_type": "event",
+    "rule": [
+      "SELECT * FROM logs WHERE Channel='Security' AND ((EventID=4657 AND OperationType='Existing registry value modified') AND ((TargetObject LIKE '%\\\\Services\\\\SharedAccess\\\\Parameters\\\\FirewallPolicy\\\\%' ESCAPE '\\' AND TargetObject LIKE '%\\\\DoNotAllowExceptions' ESCAPE '\\' AND NewValue='DWORD (0x00000000)') AND (NOT COALESCE((NewProcessName LIKE 'C:\\\\Windows\\\\System32\\\\svchost.exe' ESCAPE '\\' OR NewProcessName LIKE 'C:\\\\Windows\\\\SysWOW64\\\\svchost.exe' ESCAPE '\\'), 0))))"
+    ],
+    "schema_version": 2,
+    "source": "sigmahq",
+    "source_table": "logs",
+    "status": "experimental",
+    "tags": [
+      "attack.defense-impairment",
+      "attack.t1686.003"
+    ],
+    "title": "Allow Exceptions in Microsoft Defender Firewall via Registry - Generic"
   },
   {
     "author": "Nasreddine Bencherchali (Nextron Systems)",
@@ -73230,6 +73314,91 @@
       "attack.t1057"
     ],
     "title": "Recon Command Output Piped To Findstr.EXE - Generic"
+  },
+  {
+    "author": "Swachchhanda Shrawan Poudel (Nextron Systems)",
+    "channel": [
+      "Microsoft-Windows-Sysmon/Operational"
+    ],
+    "description": "Detects registry modifications that tamper with internal Windows tools settings, commonly used by malware to disable security features or system tools",
+    "eventid": [
+      1
+    ],
+    "falsepositives": [
+      "Legitimate use of reg.exe to change system settings"
+    ],
+    "filename": "rules/windows/process_creation/proc_creation_win_reg_internal_tools_setting_tampering.yml",
+    "id": "ccc946a3-f65a-432a-bb6f-efc6acc1fd27",
+    "level": "medium",
+    "license": "DRL-1.1",
+    "logsource": {
+      "category": "process_creation",
+      "product": "windows",
+      "service": "sysmon"
+    },
+    "required_fields": [
+      "Channel",
+      "CommandLine",
+      "EventID",
+      "Image",
+      "OriginalFileName"
+    ],
+    "result_type": "event",
+    "rule": [
+      "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=1 AND ((Image LIKE '%\\\\reg.exe' ESCAPE '\\' OR OriginalFileName='reg.exe') AND CommandLine LIKE '% add %' ESCAPE '\\' AND (CommandLine LIKE '%SOFTWARE\\\\Microsoft\\\\Windows\\\\CurrentVersion\\\\Policies\\\\Explorer%' ESCAPE '\\' OR CommandLine LIKE '%SOFTWARE\\\\Microsoft\\\\Windows\\\\CurrentVersion\\\\Policies\\\\System%' ESCAPE '\\' OR CommandLine LIKE '%SOFTWARE\\\\Policies\\\\Microsoft\\\\Windows\\\\Explorer%' ESCAPE '\\' OR CommandLine LIKE '%SOFTWARE\\\\Policies\\\\Microsoft\\\\Windows\\\\System%' ESCAPE '\\') AND (CommandLine LIKE '%ConsentPromptBehaviorAdmin%' ESCAPE '\\' OR CommandLine LIKE '%DisableChangePassword%' ESCAPE '\\' OR CommandLine LIKE '%DisableCMD%' ESCAPE '\\' OR CommandLine LIKE '%DisableLockWorkstation%' ESCAPE '\\' OR CommandLine LIKE '%DisableNotificationCenter%' ESCAPE '\\' OR CommandLine LIKE '%DisableRegistryTools%' ESCAPE '\\' OR CommandLine LIKE '%DisableTaskmgr%' ESCAPE '\\' OR CommandLine LIKE '%HideSCAHealth%' ESCAPE '\\' OR CommandLine LIKE '%HideSCANetwork%' ESCAPE '\\' OR CommandLine LIKE '%HideSCAVolume%' ESCAPE '\\' OR CommandLine LIKE '%InactivityTimeoutSecs%' ESCAPE '\\' OR CommandLine LIKE '%NoClose%' ESCAPE '\\' OR CommandLine LIKE '%NoControlPanel%' ESCAPE '\\' OR CommandLine LIKE '%NoDesktop%' ESCAPE '\\' OR CommandLine LIKE '%NoDispBackgroundPage%' ESCAPE '\\' OR CommandLine LIKE '%NoDispCPL%' ESCAPE '\\' OR CommandLine LIKE '%NoDrives%' ESCAPE '\\' OR CommandLine LIKE '%NoFileMenu%' ESCAPE '\\' OR CommandLine LIKE '%NoFind%' ESCAPE '\\' OR CommandLine LIKE '%NoLogOff%' ESCAPE '\\' OR CommandLine LIKE '%NoPropertiesMyDocuments%' ESCAPE '\\' OR CommandLine LIKE '%NoRun%' ESCAPE '\\' OR CommandLine LIKE '%NoSetTaskbar%' ESCAPE '\\' OR CommandLine LIKE '%NoTrayContextMenu%' ESCAPE '\\' OR CommandLine LIKE '%StartMenuLogOff%' ESCAPE '\\' OR CommandLine LIKE '%shutdownwithoutlogon%' ESCAPE '\\')))"
+    ],
+    "schema_version": 2,
+    "source": "sigmahq",
+    "source_table": "logs",
+    "status": "experimental",
+    "tags": [
+      "attack.persistence",
+      "attack.defense-impairment",
+      "attack.t1112"
+    ],
+    "title": "Registry Tampering Of Internal Tools Settings - Sysmon"
+  },
+  {
+    "author": "Swachchhanda Shrawan Poudel (Nextron Systems)",
+    "channel": [
+      "Security"
+    ],
+    "description": "Detects registry modifications that tamper with internal Windows tools settings, commonly used by malware to disable security features or system tools",
+    "eventid": [
+      4688
+    ],
+    "falsepositives": [
+      "Legitimate use of reg.exe to change system settings"
+    ],
+    "filename": "rules/windows/process_creation/proc_creation_win_reg_internal_tools_setting_tampering.yml",
+    "id": "ccc946a3-f65a-432a-bb6f-efc6acc1fd27",
+    "level": "medium",
+    "license": "DRL-1.1",
+    "logsource": {
+      "product": "windows",
+      "service": "security"
+    },
+    "required_fields": [
+      "Channel",
+      "CommandLine",
+      "EventID",
+      "NewProcessName",
+      "OriginalFileName"
+    ],
+    "result_type": "event",
+    "rule": [
+      "SELECT * FROM logs WHERE Channel='Security' AND (EventID=4688 AND ((NewProcessName LIKE '%\\\\reg.exe' ESCAPE '\\' OR OriginalFileName='reg.exe') AND CommandLine LIKE '% add %' ESCAPE '\\' AND (CommandLine LIKE '%SOFTWARE\\\\Microsoft\\\\Windows\\\\CurrentVersion\\\\Policies\\\\Explorer%' ESCAPE '\\' OR CommandLine LIKE '%SOFTWARE\\\\Microsoft\\\\Windows\\\\CurrentVersion\\\\Policies\\\\System%' ESCAPE '\\' OR CommandLine LIKE '%SOFTWARE\\\\Policies\\\\Microsoft\\\\Windows\\\\Explorer%' ESCAPE '\\' OR CommandLine LIKE '%SOFTWARE\\\\Policies\\\\Microsoft\\\\Windows\\\\System%' ESCAPE '\\') AND (CommandLine LIKE '%ConsentPromptBehaviorAdmin%' ESCAPE '\\' OR CommandLine LIKE '%DisableChangePassword%' ESCAPE '\\' OR CommandLine LIKE '%DisableCMD%' ESCAPE '\\' OR CommandLine LIKE '%DisableLockWorkstation%' ESCAPE '\\' OR CommandLine LIKE '%DisableNotificationCenter%' ESCAPE '\\' OR CommandLine LIKE '%DisableRegistryTools%' ESCAPE '\\' OR CommandLine LIKE '%DisableTaskmgr%' ESCAPE '\\' OR CommandLine LIKE '%HideSCAHealth%' ESCAPE '\\' OR CommandLine LIKE '%HideSCANetwork%' ESCAPE '\\' OR CommandLine LIKE '%HideSCAVolume%' ESCAPE '\\' OR CommandLine LIKE '%InactivityTimeoutSecs%' ESCAPE '\\' OR CommandLine LIKE '%NoClose%' ESCAPE '\\' OR CommandLine LIKE '%NoControlPanel%' ESCAPE '\\' OR CommandLine LIKE '%NoDesktop%' ESCAPE '\\' OR CommandLine LIKE '%NoDispBackgroundPage%' ESCAPE '\\' OR CommandLine LIKE '%NoDispCPL%' ESCAPE '\\' OR CommandLine LIKE '%NoDrives%' ESCAPE '\\' OR CommandLine LIKE '%NoFileMenu%' ESCAPE '\\' OR CommandLine LIKE '%NoFind%' ESCAPE '\\' OR CommandLine LIKE '%NoLogOff%' ESCAPE '\\' OR CommandLine LIKE '%NoPropertiesMyDocuments%' ESCAPE '\\' OR CommandLine LIKE '%NoRun%' ESCAPE '\\' OR CommandLine LIKE '%NoSetTaskbar%' ESCAPE '\\' OR CommandLine LIKE '%NoTrayContextMenu%' ESCAPE '\\' OR CommandLine LIKE '%StartMenuLogOff%' ESCAPE '\\' OR CommandLine LIKE '%shutdownwithoutlogon%' ESCAPE '\\')))"
+    ],
+    "schema_version": 2,
+    "source": "sigmahq",
+    "source_table": "logs",
+    "status": "experimental",
+    "tags": [
+      "attack.persistence",
+      "attack.defense-impairment",
+      "attack.t1112"
+    ],
+    "title": "Registry Tampering Of Internal Tools Settings - Generic"
   },
   {
     "author": "Endgame, JHasenbusch (adapted to Sigma for oscd.community)",
@@ -80374,7 +80543,7 @@
       13
     ],
     "falsepositives": [
-      "Legitimate admin script"
+      "Legitimate script or Group Policy (GPO) configuration by administrators"
     ],
     "filename": "rules/windows/registry/registry_set/registry_set_disable_function_user.yml",
     "id": "e2482f8d-3443-4237-b906-cc145d87a076",
@@ -80393,7 +80562,7 @@
     ],
     "result_type": "event",
     "rule": [
-      "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=13 AND (((TargetObject LIKE '%SOFTWARE\\\\Microsoft\\\\Windows\\\\CurrentVersion\\\\Policies\\\\Explorer\\\\DisableCMD' ESCAPE '\\' OR TargetObject LIKE '%SOFTWARE\\\\Microsoft\\\\Windows\\\\CurrentVersion\\\\Policies\\\\Explorer\\\\NoControlPanel' ESCAPE '\\' OR TargetObject LIKE '%SOFTWARE\\\\Microsoft\\\\Windows\\\\CurrentVersion\\\\Policies\\\\Explorer\\\\NoRun' ESCAPE '\\' OR TargetObject LIKE '%SOFTWARE\\\\Microsoft\\\\Windows\\\\CurrentVersion\\\\Policies\\\\Explorer\\\\StartMenuLogOff' ESCAPE '\\' OR TargetObject LIKE '%SOFTWARE\\\\Microsoft\\\\Windows\\\\CurrentVersion\\\\Policies\\\\System\\\\DisableChangePassword' ESCAPE '\\' OR TargetObject LIKE '%SOFTWARE\\\\Microsoft\\\\Windows\\\\CurrentVersion\\\\Policies\\\\System\\\\DisableLockWorkstation' ESCAPE '\\' OR TargetObject LIKE '%SOFTWARE\\\\Microsoft\\\\Windows\\\\CurrentVersion\\\\Policies\\\\System\\\\DisableRegistryTools' ESCAPE '\\' OR TargetObject LIKE '%SOFTWARE\\\\Microsoft\\\\Windows\\\\CurrentVersion\\\\Policies\\\\System\\\\DisableTaskmgr' ESCAPE '\\' OR TargetObject LIKE '%SOFTWARE\\\\Microsoft\\\\Windows\\\\CurrentVersion\\\\Policies\\\\System\\\\NoDispBackgroundPage' ESCAPE '\\' OR TargetObject LIKE '%SOFTWARE\\\\Microsoft\\\\Windows\\\\CurrentVersion\\\\Policies\\\\System\\\\NoDispCPL' ESCAPE '\\' OR TargetObject LIKE '%SOFTWARE\\\\Policies\\\\Microsoft\\\\Windows\\\\Explorer\\\\DisableNotificationCenter' ESCAPE '\\' OR TargetObject LIKE '%SOFTWARE\\\\Policies\\\\Microsoft\\\\Windows\\\\System\\\\DisableCMD' ESCAPE '\\') AND Details='DWORD (0x00000001)') OR ((TargetObject LIKE '%SOFTWARE\\\\Microsoft\\\\Windows\\\\CurrentVersion\\\\Policies\\\\System\\\\ConsentPromptBehaviorAdmin' ESCAPE '\\' OR TargetObject LIKE '%Software\\\\Microsoft\\\\Windows\\\\CurrentVersion\\\\Policies\\\\System\\\\InactivityTimeoutSecs' ESCAPE '\\' OR TargetObject LIKE '%SOFTWARE\\\\Microsoft\\\\Windows\\\\CurrentVersion\\\\Policies\\\\System\\\\shutdownwithoutlogon' ESCAPE '\\' OR TargetObject LIKE '%SOFTWARE\\\\Microsoft\\\\Windows\\\\CurrentVersion\\\\PushNotifications\\\\ToastEnabled' ESCAPE '\\' OR TargetObject LIKE '%SYSTEM\\\\CurrentControlSet\\\\Control\\\\Storage\\\\Write Protection' ESCAPE '\\' OR TargetObject LIKE '%SYSTEM\\\\CurrentControlSet\\\\Control\\\\StorageDevicePolicies\\\\WriteProtect' ESCAPE '\\') AND Details='DWORD (0x00000000)')))"
+      "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=13 AND (((TargetObject LIKE '%SOFTWARE\\\\Microsoft\\\\Windows\\\\CurrentVersion\\\\Policies\\\\Explorer\\\\DisableCMD' ESCAPE '\\' OR TargetObject LIKE '%SOFTWARE\\\\Microsoft\\\\Windows\\\\CurrentVersion\\\\Policies\\\\Explorer\\\\HideSCAHealth' ESCAPE '\\' OR TargetObject LIKE '%SOFTWARE\\\\Microsoft\\\\Windows\\\\CurrentVersion\\\\Policies\\\\Explorer\\\\HideSCANetwork' ESCAPE '\\' OR TargetObject LIKE '%SOFTWARE\\\\Microsoft\\\\Windows\\\\CurrentVersion\\\\Policies\\\\Explorer\\\\HideSCAVolume' ESCAPE '\\' OR TargetObject LIKE '%SOFTWARE\\\\Microsoft\\\\Windows\\\\CurrentVersion\\\\Policies\\\\Explorer\\\\NoClose' ESCAPE '\\' OR TargetObject LIKE '%SOFTWARE\\\\Microsoft\\\\Windows\\\\CurrentVersion\\\\Policies\\\\Explorer\\\\NoControlPanel' ESCAPE '\\' OR TargetObject LIKE '%SOFTWARE\\\\Microsoft\\\\Windows\\\\CurrentVersion\\\\Policies\\\\Explorer\\\\NoDesktop' ESCAPE '\\' OR TargetObject LIKE '%SOFTWARE\\\\Microsoft\\\\Windows\\\\CurrentVersion\\\\Policies\\\\Explorer\\\\NoDrives' ESCAPE '\\' OR TargetObject LIKE '%SOFTWARE\\\\Microsoft\\\\Windows\\\\CurrentVersion\\\\Policies\\\\Explorer\\\\NoFileMenu' ESCAPE '\\' OR TargetObject LIKE '%SOFTWARE\\\\Microsoft\\\\Windows\\\\CurrentVersion\\\\Policies\\\\Explorer\\\\NoFind' ESCAPE '\\' OR TargetObject LIKE '%SOFTWARE\\\\Microsoft\\\\Windows\\\\CurrentVersion\\\\Policies\\\\Explorer\\\\NoLogOff' ESCAPE '\\' OR TargetObject LIKE '%SOFTWARE\\\\Microsoft\\\\Windows\\\\CurrentVersion\\\\Policies\\\\Explorer\\\\NoPropertiesMyDocuments' ESCAPE '\\' OR TargetObject LIKE '%SOFTWARE\\\\Microsoft\\\\Windows\\\\CurrentVersion\\\\Policies\\\\Explorer\\\\NoRun' ESCAPE '\\' OR TargetObject LIKE '%SOFTWARE\\\\Microsoft\\\\Windows\\\\CurrentVersion\\\\Policies\\\\Explorer\\\\NoSetTaskbar' ESCAPE '\\' OR TargetObject LIKE '%SOFTWARE\\\\Microsoft\\\\Windows\\\\CurrentVersion\\\\Policies\\\\Explorer\\\\NoTrayContextMenu' ESCAPE '\\' OR TargetObject LIKE '%SOFTWARE\\\\Microsoft\\\\Windows\\\\CurrentVersion\\\\Policies\\\\Explorer\\\\StartMenuLogOff' ESCAPE '\\' OR TargetObject LIKE '%SOFTWARE\\\\Microsoft\\\\Windows\\\\CurrentVersion\\\\Policies\\\\System\\\\DisableChangePassword' ESCAPE '\\' OR TargetObject LIKE '%SOFTWARE\\\\Microsoft\\\\Windows\\\\CurrentVersion\\\\Policies\\\\System\\\\DisableLockWorkstation' ESCAPE '\\' OR TargetObject LIKE '%SOFTWARE\\\\Microsoft\\\\Windows\\\\CurrentVersion\\\\Policies\\\\System\\\\DisableRegistryTools' ESCAPE '\\' OR TargetObject LIKE '%SOFTWARE\\\\Microsoft\\\\Windows\\\\CurrentVersion\\\\Policies\\\\System\\\\DisableTaskmgr' ESCAPE '\\' OR TargetObject LIKE '%SOFTWARE\\\\Microsoft\\\\Windows\\\\CurrentVersion\\\\Policies\\\\System\\\\NoDispBackgroundPage' ESCAPE '\\' OR TargetObject LIKE '%SOFTWARE\\\\Microsoft\\\\Windows\\\\CurrentVersion\\\\Policies\\\\System\\\\NoDispCPL' ESCAPE '\\' OR TargetObject LIKE '%SOFTWARE\\\\Policies\\\\Microsoft\\\\Windows\\\\Explorer\\\\DisableNotificationCenter' ESCAPE '\\' OR TargetObject LIKE '%SOFTWARE\\\\Policies\\\\Microsoft\\\\Windows\\\\System\\\\DisableCMD' ESCAPE '\\') AND Details='DWORD (0x00000001)') OR (TargetObject LIKE '%SOFTWARE\\\\Policies\\\\Microsoft\\\\Windows\\\\System\\\\DisableCMD' ESCAPE '\\' AND Details='DWORD (0x00000002)') OR ((TargetObject LIKE '%SOFTWARE\\\\Microsoft\\\\Windows\\\\CurrentVersion\\\\Policies\\\\System\\\\ConsentPromptBehaviorAdmin' ESCAPE '\\' OR TargetObject LIKE '%SOFTWARE\\\\Microsoft\\\\Windows\\\\CurrentVersion\\\\Policies\\\\System\\\\InactivityTimeoutSecs' ESCAPE '\\' OR TargetObject LIKE '%SOFTWARE\\\\Microsoft\\\\Windows\\\\CurrentVersion\\\\Policies\\\\System\\\\shutdownwithoutlogon' ESCAPE '\\' OR TargetObject LIKE '%SOFTWARE\\\\Microsoft\\\\Windows\\\\CurrentVersion\\\\PushNotifications\\\\ToastEnabled' ESCAPE '\\' OR TargetObject LIKE '%SYSTEM\\\\CurrentControlSet\\\\Control\\\\Storage\\\\Write Protection' ESCAPE '\\' OR TargetObject LIKE '%SYSTEM\\\\CurrentControlSet\\\\Control\\\\StorageDevicePolicies\\\\WriteProtect' ESCAPE '\\') AND Details='DWORD (0x00000000)')))"
     ],
     "schema_version": 2,
     "source": "sigmahq",
@@ -80416,7 +80585,7 @@
       4657
     ],
     "falsepositives": [
-      "Legitimate admin script"
+      "Legitimate script or Group Policy (GPO) configuration by administrators"
     ],
     "filename": "rules/windows/registry/registry_set/registry_set_disable_function_user.yml",
     "id": "e2482f8d-3443-4237-b906-cc145d87a076",
@@ -80435,7 +80604,7 @@
     ],
     "result_type": "event",
     "rule": [
-      "SELECT * FROM logs WHERE Channel='Security' AND ((EventID=4657 AND OperationType='Existing registry value modified') AND (((TargetObject LIKE '%SOFTWARE\\\\Microsoft\\\\Windows\\\\CurrentVersion\\\\Policies\\\\Explorer\\\\DisableCMD' ESCAPE '\\' OR TargetObject LIKE '%SOFTWARE\\\\Microsoft\\\\Windows\\\\CurrentVersion\\\\Policies\\\\Explorer\\\\NoControlPanel' ESCAPE '\\' OR TargetObject LIKE '%SOFTWARE\\\\Microsoft\\\\Windows\\\\CurrentVersion\\\\Policies\\\\Explorer\\\\NoRun' ESCAPE '\\' OR TargetObject LIKE '%SOFTWARE\\\\Microsoft\\\\Windows\\\\CurrentVersion\\\\Policies\\\\Explorer\\\\StartMenuLogOff' ESCAPE '\\' OR TargetObject LIKE '%SOFTWARE\\\\Microsoft\\\\Windows\\\\CurrentVersion\\\\Policies\\\\System\\\\DisableChangePassword' ESCAPE '\\' OR TargetObject LIKE '%SOFTWARE\\\\Microsoft\\\\Windows\\\\CurrentVersion\\\\Policies\\\\System\\\\DisableLockWorkstation' ESCAPE '\\' OR TargetObject LIKE '%SOFTWARE\\\\Microsoft\\\\Windows\\\\CurrentVersion\\\\Policies\\\\System\\\\DisableRegistryTools' ESCAPE '\\' OR TargetObject LIKE '%SOFTWARE\\\\Microsoft\\\\Windows\\\\CurrentVersion\\\\Policies\\\\System\\\\DisableTaskmgr' ESCAPE '\\' OR TargetObject LIKE '%SOFTWARE\\\\Microsoft\\\\Windows\\\\CurrentVersion\\\\Policies\\\\System\\\\NoDispBackgroundPage' ESCAPE '\\' OR TargetObject LIKE '%SOFTWARE\\\\Microsoft\\\\Windows\\\\CurrentVersion\\\\Policies\\\\System\\\\NoDispCPL' ESCAPE '\\' OR TargetObject LIKE '%SOFTWARE\\\\Policies\\\\Microsoft\\\\Windows\\\\Explorer\\\\DisableNotificationCenter' ESCAPE '\\' OR TargetObject LIKE '%SOFTWARE\\\\Policies\\\\Microsoft\\\\Windows\\\\System\\\\DisableCMD' ESCAPE '\\') AND NewValue='DWORD (0x00000001)') OR ((TargetObject LIKE '%SOFTWARE\\\\Microsoft\\\\Windows\\\\CurrentVersion\\\\Policies\\\\System\\\\ConsentPromptBehaviorAdmin' ESCAPE '\\' OR TargetObject LIKE '%Software\\\\Microsoft\\\\Windows\\\\CurrentVersion\\\\Policies\\\\System\\\\InactivityTimeoutSecs' ESCAPE '\\' OR TargetObject LIKE '%SOFTWARE\\\\Microsoft\\\\Windows\\\\CurrentVersion\\\\Policies\\\\System\\\\shutdownwithoutlogon' ESCAPE '\\' OR TargetObject LIKE '%SOFTWARE\\\\Microsoft\\\\Windows\\\\CurrentVersion\\\\PushNotifications\\\\ToastEnabled' ESCAPE '\\' OR TargetObject LIKE '%SYSTEM\\\\CurrentControlSet\\\\Control\\\\Storage\\\\Write Protection' ESCAPE '\\' OR TargetObject LIKE '%SYSTEM\\\\CurrentControlSet\\\\Control\\\\StorageDevicePolicies\\\\WriteProtect' ESCAPE '\\') AND NewValue='DWORD (0x00000000)')))"
+      "SELECT * FROM logs WHERE Channel='Security' AND ((EventID=4657 AND OperationType='Existing registry value modified') AND (((TargetObject LIKE '%SOFTWARE\\\\Microsoft\\\\Windows\\\\CurrentVersion\\\\Policies\\\\Explorer\\\\DisableCMD' ESCAPE '\\' OR TargetObject LIKE '%SOFTWARE\\\\Microsoft\\\\Windows\\\\CurrentVersion\\\\Policies\\\\Explorer\\\\HideSCAHealth' ESCAPE '\\' OR TargetObject LIKE '%SOFTWARE\\\\Microsoft\\\\Windows\\\\CurrentVersion\\\\Policies\\\\Explorer\\\\HideSCANetwork' ESCAPE '\\' OR TargetObject LIKE '%SOFTWARE\\\\Microsoft\\\\Windows\\\\CurrentVersion\\\\Policies\\\\Explorer\\\\HideSCAVolume' ESCAPE '\\' OR TargetObject LIKE '%SOFTWARE\\\\Microsoft\\\\Windows\\\\CurrentVersion\\\\Policies\\\\Explorer\\\\NoClose' ESCAPE '\\' OR TargetObject LIKE '%SOFTWARE\\\\Microsoft\\\\Windows\\\\CurrentVersion\\\\Policies\\\\Explorer\\\\NoControlPanel' ESCAPE '\\' OR TargetObject LIKE '%SOFTWARE\\\\Microsoft\\\\Windows\\\\CurrentVersion\\\\Policies\\\\Explorer\\\\NoDesktop' ESCAPE '\\' OR TargetObject LIKE '%SOFTWARE\\\\Microsoft\\\\Windows\\\\CurrentVersion\\\\Policies\\\\Explorer\\\\NoDrives' ESCAPE '\\' OR TargetObject LIKE '%SOFTWARE\\\\Microsoft\\\\Windows\\\\CurrentVersion\\\\Policies\\\\Explorer\\\\NoFileMenu' ESCAPE '\\' OR TargetObject LIKE '%SOFTWARE\\\\Microsoft\\\\Windows\\\\CurrentVersion\\\\Policies\\\\Explorer\\\\NoFind' ESCAPE '\\' OR TargetObject LIKE '%SOFTWARE\\\\Microsoft\\\\Windows\\\\CurrentVersion\\\\Policies\\\\Explorer\\\\NoLogOff' ESCAPE '\\' OR TargetObject LIKE '%SOFTWARE\\\\Microsoft\\\\Windows\\\\CurrentVersion\\\\Policies\\\\Explorer\\\\NoPropertiesMyDocuments' ESCAPE '\\' OR TargetObject LIKE '%SOFTWARE\\\\Microsoft\\\\Windows\\\\CurrentVersion\\\\Policies\\\\Explorer\\\\NoRun' ESCAPE '\\' OR TargetObject LIKE '%SOFTWARE\\\\Microsoft\\\\Windows\\\\CurrentVersion\\\\Policies\\\\Explorer\\\\NoSetTaskbar' ESCAPE '\\' OR TargetObject LIKE '%SOFTWARE\\\\Microsoft\\\\Windows\\\\CurrentVersion\\\\Policies\\\\Explorer\\\\NoTrayContextMenu' ESCAPE '\\' OR TargetObject LIKE '%SOFTWARE\\\\Microsoft\\\\Windows\\\\CurrentVersion\\\\Policies\\\\Explorer\\\\StartMenuLogOff' ESCAPE '\\' OR TargetObject LIKE '%SOFTWARE\\\\Microsoft\\\\Windows\\\\CurrentVersion\\\\Policies\\\\System\\\\DisableChangePassword' ESCAPE '\\' OR TargetObject LIKE '%SOFTWARE\\\\Microsoft\\\\Windows\\\\CurrentVersion\\\\Policies\\\\System\\\\DisableLockWorkstation' ESCAPE '\\' OR TargetObject LIKE '%SOFTWARE\\\\Microsoft\\\\Windows\\\\CurrentVersion\\\\Policies\\\\System\\\\DisableRegistryTools' ESCAPE '\\' OR TargetObject LIKE '%SOFTWARE\\\\Microsoft\\\\Windows\\\\CurrentVersion\\\\Policies\\\\System\\\\DisableTaskmgr' ESCAPE '\\' OR TargetObject LIKE '%SOFTWARE\\\\Microsoft\\\\Windows\\\\CurrentVersion\\\\Policies\\\\System\\\\NoDispBackgroundPage' ESCAPE '\\' OR TargetObject LIKE '%SOFTWARE\\\\Microsoft\\\\Windows\\\\CurrentVersion\\\\Policies\\\\System\\\\NoDispCPL' ESCAPE '\\' OR TargetObject LIKE '%SOFTWARE\\\\Policies\\\\Microsoft\\\\Windows\\\\Explorer\\\\DisableNotificationCenter' ESCAPE '\\' OR TargetObject LIKE '%SOFTWARE\\\\Policies\\\\Microsoft\\\\Windows\\\\System\\\\DisableCMD' ESCAPE '\\') AND NewValue='DWORD (0x00000001)') OR (TargetObject LIKE '%SOFTWARE\\\\Policies\\\\Microsoft\\\\Windows\\\\System\\\\DisableCMD' ESCAPE '\\' AND NewValue='DWORD (0x00000002)') OR ((TargetObject LIKE '%SOFTWARE\\\\Microsoft\\\\Windows\\\\CurrentVersion\\\\Policies\\\\System\\\\ConsentPromptBehaviorAdmin' ESCAPE '\\' OR TargetObject LIKE '%SOFTWARE\\\\Microsoft\\\\Windows\\\\CurrentVersion\\\\Policies\\\\System\\\\InactivityTimeoutSecs' ESCAPE '\\' OR TargetObject LIKE '%SOFTWARE\\\\Microsoft\\\\Windows\\\\CurrentVersion\\\\Policies\\\\System\\\\shutdownwithoutlogon' ESCAPE '\\' OR TargetObject LIKE '%SOFTWARE\\\\Microsoft\\\\Windows\\\\CurrentVersion\\\\PushNotifications\\\\ToastEnabled' ESCAPE '\\' OR TargetObject LIKE '%SYSTEM\\\\CurrentControlSet\\\\Control\\\\Storage\\\\Write Protection' ESCAPE '\\' OR TargetObject LIKE '%SYSTEM\\\\CurrentControlSet\\\\Control\\\\StorageDevicePolicies\\\\WriteProtect' ESCAPE '\\') AND NewValue='DWORD (0x00000000)')))"
     ],
     "schema_version": 2,
     "source": "sigmahq",
@@ -94515,7 +94684,7 @@
     ],
     "result_type": "event",
     "rule": [
-      "SELECT * FROM logs WHERE (Channel='Microsoft-Windows-PowerShell/Operational' OR Channel='PowerShellCore/Operational') AND (EventID=4104 AND (ScriptBlockText LIKE '%Remove-EtwTraceProvider %' ESCAPE '\\' OR (ScriptBlockText LIKE '%Set-EtwTraceProvider %' ESCAPE '\\' AND ScriptBlockText LIKE '%0x11%' ESCAPE '\\')))"
+      "SELECT * FROM logs WHERE (Channel='Microsoft-Windows-PowerShell/Operational' OR Channel='PowerShellCore/Operational') AND (EventID=4104 AND (ScriptBlockText LIKE '%Remove-EtwTraceProvider %' ESCAPE '\\' OR (ScriptBlockText LIKE '%Set-EtwTraceProvider %' ESCAPE '\\' AND ScriptBlockText LIKE '%0x11%' ESCAPE '\\') OR ((ScriptBlockText LIKE '%Set-EtwTraceProvider %' ESCAPE '\\' AND ScriptBlockText LIKE '% 17%' ESCAPE '\\') OR (ScriptBlockText LIKE '%Set-EtwTraceProvider %' ESCAPE '\\' AND ScriptBlockText LIKE '%\u201c''17''\u201d%' ESCAPE '\\') OR (ScriptBlockText LIKE '%Set-EtwTraceProvider %' ESCAPE '\\' AND ScriptBlockText LIKE '%\u201d17\u201d%' ESCAPE '\\'))))"
     ],
     "schema_version": 2,
     "source": "sigmahq",
@@ -146181,7 +146350,7 @@
     "channel": [
       "Microsoft-Windows-Sysmon/Operational"
     ],
-    "description": "Detects command line activity that tries to clear or disable any ETW trace log which could be a sign of logging evasion.\n",
+    "description": "Detects command line activity that attempts to tamper with Event Tracing for Windows (ETW) by clearing or disabling\ntrace logs or providers. Adversaries may target ETW to blind security tooling and evade detection by removing\nvisibility into process activity, network connections, and other telemetry sources.\nTechniques include clearing logs via wevtutil, disabling trace sessions via logman, and removing or modifying\nETW providers using PowerShell cmdlets such as Remove-EtwTraceProvider and Set-EtwTraceProvider.\n",
     "eventid": [
       1
     ],
@@ -146200,11 +146369,13 @@
     "required_fields": [
       "Channel",
       "CommandLine",
-      "EventID"
+      "EventID",
+      "Image",
+      "OriginalFileName"
     ],
     "result_type": "event",
     "rule": [
-      "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=1 AND ((CommandLine LIKE '%cl%' ESCAPE '\\' AND CommandLine LIKE '%/Trace%' ESCAPE '\\') OR (CommandLine LIKE '%clear-log%' ESCAPE '\\' AND CommandLine LIKE '%/Trace%' ESCAPE '\\') OR (CommandLine LIKE '%sl%' ESCAPE '\\' AND CommandLine LIKE '%/e:false%' ESCAPE '\\') OR (CommandLine LIKE '%set-log%' ESCAPE '\\' AND CommandLine LIKE '%/e:false%' ESCAPE '\\') OR (CommandLine LIKE '%logman%' ESCAPE '\\' AND CommandLine LIKE '%update%' ESCAPE '\\' AND CommandLine LIKE '%trace%' ESCAPE '\\' AND CommandLine LIKE '%--p%' ESCAPE '\\' AND CommandLine LIKE '%-ets%' ESCAPE '\\') OR CommandLine LIKE '%Remove-EtwTraceProvider%' ESCAPE '\\' OR (CommandLine LIKE '%Set-EtwTraceProvider%' ESCAPE '\\' AND CommandLine LIKE '%0x11%' ESCAPE '\\')))"
+      "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=1 AND (((Image LIKE '%\\\\wevtutil.exe' ESCAPE '\\' OR OriginalFileName='wevtutil.exe') AND (((CommandLine LIKE '% cl %' ESCAPE '\\' OR CommandLine LIKE '%clear-log%' ESCAPE '\\') AND (CommandLine LIKE '%-Trace%' ESCAPE '\\' OR CommandLine LIKE '%/Trace%' ESCAPE '\\' OR CommandLine LIKE '%\u2013Trace%' ESCAPE '\\' OR CommandLine LIKE '%\u2014Trace%' ESCAPE '\\' OR CommandLine LIKE '%\u2015Trace%' ESCAPE '\\')) OR ((CommandLine LIKE '% sl %' ESCAPE '\\' OR CommandLine LIKE '%set-log%' ESCAPE '\\') AND (CommandLine LIKE '%-e:false%' ESCAPE '\\' OR CommandLine LIKE '%/e:false%' ESCAPE '\\' OR CommandLine LIKE '%\u2013e:false%' ESCAPE '\\' OR CommandLine LIKE '%\u2014e:false%' ESCAPE '\\' OR CommandLine LIKE '%\u2015e:false%' ESCAPE '\\')))) OR ((Image LIKE '%\\\\logman.exe' ESCAPE '\\' OR OriginalFileName='Logman.exe') AND (CommandLine LIKE '%update%' ESCAPE '\\' AND CommandLine LIKE '%trace%' ESCAPE '\\' AND CommandLine LIKE '%--p%' ESCAPE '\\' AND CommandLine LIKE '%-ets%' ESCAPE '\\')) OR (((Image LIKE '%\\\\powershell.exe' ESCAPE '\\' OR Image LIKE '%\\\\pwsh.exe' ESCAPE '\\') OR (OriginalFileName='powershell.exe' OR OriginalFileName='pwsh.dll')) AND (CommandLine LIKE '%Remove-EtwTraceProvider%' ESCAPE '\\' OR (CommandLine LIKE '%Set-EtwTraceProvider%' ESCAPE '\\' AND CommandLine LIKE '%0x11%' ESCAPE '\\') OR (CommandLine LIKE '%Set-EtwTraceProvider%' ESCAPE '\\' AND CommandLine LIKE '% 17%' ESCAPE '\\') OR (CommandLine LIKE '%Set-EtwTraceProvider%' ESCAPE '\\' AND CommandLine LIKE '%''17''%' ESCAPE '\\') OR (CommandLine LIKE '%Set-EtwTraceProvider%' ESCAPE '\\' AND CommandLine LIKE '%\"17\"%' ESCAPE '\\')))))"
     ],
     "schema_version": 2,
     "source": "sigmahq",
@@ -146224,7 +146395,7 @@
     "channel": [
       "Security"
     ],
-    "description": "Detects command line activity that tries to clear or disable any ETW trace log which could be a sign of logging evasion.\n",
+    "description": "Detects command line activity that attempts to tamper with Event Tracing for Windows (ETW) by clearing or disabling\ntrace logs or providers. Adversaries may target ETW to blind security tooling and evade detection by removing\nvisibility into process activity, network connections, and other telemetry sources.\nTechniques include clearing logs via wevtutil, disabling trace sessions via logman, and removing or modifying\nETW providers using PowerShell cmdlets such as Remove-EtwTraceProvider and Set-EtwTraceProvider.\n",
     "eventid": [
       4688
     ],
@@ -146242,11 +146413,13 @@
     "required_fields": [
       "Channel",
       "CommandLine",
-      "EventID"
+      "EventID",
+      "NewProcessName",
+      "OriginalFileName"
     ],
     "result_type": "event",
     "rule": [
-      "SELECT * FROM logs WHERE Channel='Security' AND (EventID=4688 AND ((CommandLine LIKE '%cl%' ESCAPE '\\' AND CommandLine LIKE '%/Trace%' ESCAPE '\\') OR (CommandLine LIKE '%clear-log%' ESCAPE '\\' AND CommandLine LIKE '%/Trace%' ESCAPE '\\') OR (CommandLine LIKE '%sl%' ESCAPE '\\' AND CommandLine LIKE '%/e:false%' ESCAPE '\\') OR (CommandLine LIKE '%set-log%' ESCAPE '\\' AND CommandLine LIKE '%/e:false%' ESCAPE '\\') OR (CommandLine LIKE '%logman%' ESCAPE '\\' AND CommandLine LIKE '%update%' ESCAPE '\\' AND CommandLine LIKE '%trace%' ESCAPE '\\' AND CommandLine LIKE '%--p%' ESCAPE '\\' AND CommandLine LIKE '%-ets%' ESCAPE '\\') OR CommandLine LIKE '%Remove-EtwTraceProvider%' ESCAPE '\\' OR (CommandLine LIKE '%Set-EtwTraceProvider%' ESCAPE '\\' AND CommandLine LIKE '%0x11%' ESCAPE '\\')))"
+      "SELECT * FROM logs WHERE Channel='Security' AND (EventID=4688 AND (((NewProcessName LIKE '%\\\\wevtutil.exe' ESCAPE '\\' OR OriginalFileName='wevtutil.exe') AND (((CommandLine LIKE '% cl %' ESCAPE '\\' OR CommandLine LIKE '%clear-log%' ESCAPE '\\') AND (CommandLine LIKE '%-Trace%' ESCAPE '\\' OR CommandLine LIKE '%/Trace%' ESCAPE '\\' OR CommandLine LIKE '%\u2013Trace%' ESCAPE '\\' OR CommandLine LIKE '%\u2014Trace%' ESCAPE '\\' OR CommandLine LIKE '%\u2015Trace%' ESCAPE '\\')) OR ((CommandLine LIKE '% sl %' ESCAPE '\\' OR CommandLine LIKE '%set-log%' ESCAPE '\\') AND (CommandLine LIKE '%-e:false%' ESCAPE '\\' OR CommandLine LIKE '%/e:false%' ESCAPE '\\' OR CommandLine LIKE '%\u2013e:false%' ESCAPE '\\' OR CommandLine LIKE '%\u2014e:false%' ESCAPE '\\' OR CommandLine LIKE '%\u2015e:false%' ESCAPE '\\')))) OR ((NewProcessName LIKE '%\\\\logman.exe' ESCAPE '\\' OR OriginalFileName='Logman.exe') AND (CommandLine LIKE '%update%' ESCAPE '\\' AND CommandLine LIKE '%trace%' ESCAPE '\\' AND CommandLine LIKE '%--p%' ESCAPE '\\' AND CommandLine LIKE '%-ets%' ESCAPE '\\')) OR (((NewProcessName LIKE '%\\\\powershell.exe' ESCAPE '\\' OR NewProcessName LIKE '%\\\\pwsh.exe' ESCAPE '\\') OR (OriginalFileName='powershell.exe' OR OriginalFileName='pwsh.dll')) AND (CommandLine LIKE '%Remove-EtwTraceProvider%' ESCAPE '\\' OR (CommandLine LIKE '%Set-EtwTraceProvider%' ESCAPE '\\' AND CommandLine LIKE '%0x11%' ESCAPE '\\') OR (CommandLine LIKE '%Set-EtwTraceProvider%' ESCAPE '\\' AND CommandLine LIKE '% 17%' ESCAPE '\\') OR (CommandLine LIKE '%Set-EtwTraceProvider%' ESCAPE '\\' AND CommandLine LIKE '%''17''%' ESCAPE '\\') OR (CommandLine LIKE '%Set-EtwTraceProvider%' ESCAPE '\\' AND CommandLine LIKE '%\"17\"%' ESCAPE '\\')))))"
     ],
     "schema_version": 2,
     "source": "sigmahq",
@@ -147402,7 +147575,7 @@
     ],
     "result_type": "event",
     "rule": [
-      "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=23 AND (TargetFilename LIKE '\\\\Logging\\\\CmdletInfra\\\\LocalPowerShell\\\\Cmdlet\\\\%' ESCAPE '\\' AND TargetFilename LIKE '%\\_Cmdlet\\_%' ESCAPE '\\'))"
+      "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=23 AND (TargetFilename LIKE '%\\\\Logging\\\\CmdletInfra\\\\LocalPowerShell\\\\Cmdlet\\\\%' ESCAPE '\\' AND TargetFilename LIKE '%\\_Cmdlet\\_%' ESCAPE '\\'))"
     ],
     "schema_version": 2,
     "source": "sigmahq",
@@ -152691,7 +152864,7 @@
     ],
     "result_type": "event",
     "rule": [
-      "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=11 AND ((((TargetFilename LIKE '%.exe' ESCAPE '\\' OR TargetFilename LIKE '%.iso' ESCAPE '\\' OR TargetFilename LIKE '%.rar' ESCAPE '\\' OR TargetFilename LIKE '%.svg' ESCAPE '\\' OR TargetFilename LIKE '%.zip' ESCAPE '\\') AND (TargetFilename LIKE '%.doc.%' ESCAPE '\\' OR TargetFilename LIKE '%.docx.%' ESCAPE '\\' OR TargetFilename LIKE '%.gif.%' ESCAPE '\\' OR TargetFilename LIKE '%.jpeg.%' ESCAPE '\\' OR TargetFilename LIKE '%.jpg.%' ESCAPE '\\' OR TargetFilename LIKE '%.mp3.%' ESCAPE '\\' OR TargetFilename LIKE '%.mp4.%' ESCAPE '\\' OR TargetFilename LIKE '%.pdf.%' ESCAPE '\\' OR TargetFilename LIKE '%.png.%' ESCAPE '\\' OR TargetFilename LIKE '%.ppt.%' ESCAPE '\\' OR TargetFilename LIKE '%.pptx.%' ESCAPE '\\' OR TargetFilename LIKE '%.rtf.%' ESCAPE '\\' OR TargetFilename LIKE '%.svg.%' ESCAPE '\\' OR TargetFilename LIKE '%.txt.%' ESCAPE '\\' OR TargetFilename LIKE '%.xls.%' ESCAPE '\\' OR TargetFilename LIKE '%.xlsx.%' ESCAPE '\\')) OR (TargetFilename LIKE '%.rar.exe' ESCAPE '\\' OR TargetFilename LIKE '%.zip.exe' ESCAPE '\\')) AND (NOT COALESCE((TargetFilename LIKE '/usr/share/icons/%' ESCAPE '\\'), 0))))"
+      "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=11 AND ((TargetFilename REGEXP '(?i)\\.(docx?|gif|jpe?g|mp3|mp4|pdf|png|pptx?|rtf|svg|txt|xlsx?)\\.(bat|exe|iso|rar|svg|vbe|vbs|zip)$' OR (TargetFilename LIKE '%.rar.exe' ESCAPE '\\' OR TargetFilename LIKE '%.zip.exe' ESCAPE '\\')) AND (NOT COALESCE((TargetFilename LIKE '%.svg.svg' ESCAPE '\\' OR TargetFilename LIKE '%.png.svg' ESCAPE '\\' OR TargetFilename LIKE '%.jpg.svg' ESCAPE '\\' OR TargetFilename LIKE '%.jpeg.svg' ESCAPE '\\'), 0)) AND (NOT COALESCE((TargetFilename LIKE '/usr/share/icons/%' ESCAPE '\\'), 0))))"
     ],
     "schema_version": 2,
     "source": "sigmahq",
@@ -162838,7 +163011,7 @@
     ],
     "result_type": "event",
     "rule": [
-      "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=1 AND (((OriginalFileName='net.exe' OR OriginalFileName='net1.exe' OR OriginalFileName LIKE 'PowerShell\\_ISE.EXE' ESCAPE '\\' OR OriginalFileName='PowerShell.EXE' OR OriginalFileName='psservice.exe' OR OriginalFileName='pwsh.dll' OR OriginalFileName='sc.exe' OR OriginalFileName='wmic.exe') OR (Image LIKE '%\\\\net.exe' ESCAPE '\\' OR Image LIKE '%\\\\net1.exe' ESCAPE '\\' OR Image LIKE '%\\\\PowerShell\\_ISE.EXE' ESCAPE '\\' OR Image LIKE '%\\\\powershell.exe' ESCAPE '\\' OR Image LIKE '%\\\\PsService.exe' ESCAPE '\\' OR Image LIKE '%\\\\PsService64.exe' ESCAPE '\\' OR Image LIKE '%\\\\pwsh.exe' ESCAPE '\\' OR Image LIKE '%\\\\sc.exe' ESCAPE '\\' OR Image LIKE '%\\\\wmic.exe' ESCAPE '\\')) AND ((CommandLine LIKE '% delete %' ESCAPE '\\' OR CommandLine LIKE '%.delete()%' ESCAPE '\\' OR CommandLine LIKE '% pause %' ESCAPE '\\' OR CommandLine LIKE '% stop %' ESCAPE '\\' OR CommandLine LIKE '%Stop-Service %' ESCAPE '\\' OR CommandLine LIKE '%Remove-Service %' ESCAPE '\\') OR (CommandLine LIKE '%config%' ESCAPE '\\' AND CommandLine LIKE '%start=disabled%' ESCAPE '\\')) AND ((CommandLine LIKE '%143Svc%' ESCAPE '\\' OR CommandLine LIKE '%Acronis VSS Provider%' ESCAPE '\\' OR CommandLine LIKE '%AcronisAgent%' ESCAPE '\\' OR CommandLine LIKE '%AcrSch2Svc%' ESCAPE '\\' OR CommandLine LIKE '%AdobeARMservice%' ESCAPE '\\' OR CommandLine LIKE '%AHS Service%' ESCAPE '\\' OR CommandLine LIKE '%Antivirus%' ESCAPE '\\' OR CommandLine LIKE '%Apache4%' ESCAPE '\\' OR CommandLine LIKE '%ARSM%' ESCAPE '\\' OR CommandLine LIKE '%aswBcc%' ESCAPE '\\' OR CommandLine LIKE '%AteraAgent%' ESCAPE '\\' OR CommandLine LIKE '%Avast Business Console Client Antivirus Service%' ESCAPE '\\' OR CommandLine LIKE '%avast! Antivirus%' ESCAPE '\\' OR CommandLine LIKE '%AVG Antivirus%' ESCAPE '\\' OR CommandLine LIKE '%avgAdminClient%' ESCAPE '\\' OR CommandLine LIKE '%AvgAdminServer%' ESCAPE '\\' OR CommandLine LIKE '%AVP1%' ESCAPE '\\' OR CommandLine LIKE '%BackupExec%' ESCAPE '\\' OR CommandLine LIKE '%bedbg%' ESCAPE '\\' OR CommandLine LIKE '%BITS%' ESCAPE '\\' OR CommandLine LIKE '%BrokerInfrastructure%' ESCAPE '\\' OR CommandLine LIKE '%CASLicenceServer%' ESCAPE '\\' OR CommandLine LIKE '%CASWebServer%' ESCAPE '\\' OR CommandLine LIKE '%Client Agent 7.60%' ESCAPE '\\' OR CommandLine LIKE '%Core Browsing Protection%' ESCAPE '\\' OR CommandLine LIKE '%Core Mail Protection%' ESCAPE '\\' OR CommandLine LIKE '%Core Scanning Server%' ESCAPE '\\' OR CommandLine LIKE '%DCAgent%' ESCAPE '\\' OR CommandLine LIKE '%dwmrcs%' ESCAPE '\\' OR CommandLine LIKE '%EhttpSr%' ESCAPE '\\' OR CommandLine LIKE '%ekrn%' ESCAPE '\\' OR CommandLine LIKE '%Enterprise Client Service%' ESCAPE '\\' OR CommandLine LIKE '%epag%' ESCAPE '\\' OR CommandLine LIKE '%EPIntegrationService%' ESCAPE '\\' OR CommandLine LIKE '%EPProtectedService%' ESCAPE '\\' OR CommandLine LIKE '%EPRedline%' ESCAPE '\\' OR CommandLine LIKE '%EPSecurityService%' ESCAPE '\\' OR CommandLine LIKE '%EPUpdateService%' ESCAPE '\\' OR CommandLine LIKE '%EraserSvc11710%' ESCAPE '\\' OR CommandLine LIKE '%EsgShKernel%' ESCAPE '\\' OR CommandLine LIKE '%ESHASRV%' ESCAPE '\\' OR CommandLine LIKE '%FA\\_Scheduler%' ESCAPE '\\' OR CommandLine LIKE '%FirebirdGuardianDefaultInstance%' ESCAPE '\\' OR CommandLine LIKE '%FirebirdServerDefaultInstance%' ESCAPE '\\' OR CommandLine LIKE '%FontCache3.0.0.0%' ESCAPE '\\' OR CommandLine LIKE '%HealthTLService%' ESCAPE '\\' OR CommandLine LIKE '%hmpalertsvc%' ESCAPE '\\' OR CommandLine LIKE '%HMS%' ESCAPE '\\' OR CommandLine LIKE '%HostControllerService%' ESCAPE '\\' OR CommandLine LIKE '%hvdsvc%' ESCAPE '\\') OR (CommandLine LIKE '%IAStorDataMgrSvc%' ESCAPE '\\' OR CommandLine LIKE '%IBMHPS%' ESCAPE '\\' OR CommandLine LIKE '%ibmspsvc%' ESCAPE '\\' OR CommandLine LIKE '%IISAdmin%' ESCAPE '\\' OR CommandLine LIKE '%IMANSVC%' ESCAPE '\\' OR CommandLine LIKE '%IMAP4Svc%' ESCAPE '\\' OR CommandLine LIKE '%instance2%' ESCAPE '\\' OR CommandLine LIKE '%KAVFS%' ESCAPE '\\' OR CommandLine LIKE '%KAVFSGT%' ESCAPE '\\' OR CommandLine LIKE '%kavfsslp%' ESCAPE '\\' OR CommandLine LIKE '%KeyIso%' ESCAPE '\\' OR CommandLine LIKE '%klbackupdisk%' ESCAPE '\\' OR CommandLine LIKE '%klbackupflt%' ESCAPE '\\' OR CommandLine LIKE '%klflt%' ESCAPE '\\' OR CommandLine LIKE '%klhk%' ESCAPE '\\' OR CommandLine LIKE '%KLIF%' ESCAPE '\\' OR CommandLine LIKE '%klim6%' ESCAPE '\\' OR CommandLine LIKE '%klkbdflt%' ESCAPE '\\' OR CommandLine LIKE '%klmouflt%' ESCAPE '\\' OR CommandLine LIKE '%klnagent%' ESCAPE '\\' OR CommandLine LIKE '%klpd%' ESCAPE '\\' OR CommandLine LIKE '%kltap%' ESCAPE '\\' OR CommandLine LIKE '%KSDE1.0.0%' ESCAPE '\\' OR CommandLine LIKE '%LogProcessorService%' ESCAPE '\\' OR CommandLine LIKE '%M8EndpointAgent%' ESCAPE '\\' OR CommandLine LIKE '%macmnsvc%' ESCAPE '\\' OR CommandLine LIKE '%masvc%' ESCAPE '\\' OR CommandLine LIKE '%MBAMService%' ESCAPE '\\' OR CommandLine LIKE '%MBCloudEA%' ESCAPE '\\' OR CommandLine LIKE '%MBEndpointAgent%' ESCAPE '\\' OR CommandLine LIKE '%McAfeeDLPAgentService%' ESCAPE '\\' OR CommandLine LIKE '%McAfeeEngineService%' ESCAPE '\\' OR CommandLine LIKE '%MCAFEEEVENTPARSERSRV%' ESCAPE '\\' OR CommandLine LIKE '%McAfeeFramework%' ESCAPE '\\' OR CommandLine LIKE '%MCAFEETOMCATSRV530%' ESCAPE '\\' OR CommandLine LIKE '%McShield%' ESCAPE '\\' OR CommandLine LIKE '%McTaskManager%' ESCAPE '\\' OR CommandLine LIKE '%mfefire%' ESCAPE '\\' OR CommandLine LIKE '%mfemms%' ESCAPE '\\' OR CommandLine LIKE '%mfevto%' ESCAPE '\\' OR CommandLine LIKE '%mfevtp%' ESCAPE '\\' OR CommandLine LIKE '%mfewc%' ESCAPE '\\' OR CommandLine LIKE '%MMS%' ESCAPE '\\' OR CommandLine LIKE '%mozyprobackup%' ESCAPE '\\' OR CommandLine LIKE '%mpssvc%' ESCAPE '\\' OR CommandLine LIKE '%MSComplianceAudit%' ESCAPE '\\' OR CommandLine LIKE '%MSDTC%' ESCAPE '\\' OR CommandLine LIKE '%MsDtsServer%' ESCAPE '\\' OR CommandLine LIKE '%MSExchange%' ESCAPE '\\' OR CommandLine LIKE '%msftesq1SPROO%' ESCAPE '\\') OR (CommandLine LIKE '%msftesql$PROD%' ESCAPE '\\' OR CommandLine LIKE '%msftesql$SQLEXPRESS%' ESCAPE '\\' OR CommandLine LIKE '%MSOLAP$SQL\\_2008%' ESCAPE '\\' OR CommandLine LIKE '%MSOLAP$SYSTEM\\_BGC%' ESCAPE '\\' OR CommandLine LIKE '%MSOLAP$TPS%' ESCAPE '\\' OR CommandLine LIKE '%MSOLAP$TPSAMA%' ESCAPE '\\' OR CommandLine LIKE '%MSOLAPSTPS%' ESCAPE '\\' OR CommandLine LIKE '%MSOLAPSTPSAMA%' ESCAPE '\\' OR CommandLine LIKE '%mssecflt%' ESCAPE '\\' OR CommandLine LIKE '%MSSQ!I.SPROFXENGAGEMEHT%' ESCAPE '\\' OR CommandLine LIKE '%MSSQ0SHAREPOINT%' ESCAPE '\\' OR CommandLine LIKE '%MSSQ0SOPHOS%' ESCAPE '\\' OR CommandLine LIKE '%MSSQL%' ESCAPE '\\' OR CommandLine LIKE '%MSSQLFDLauncher$%' ESCAPE '\\' OR CommandLine LIKE '%MySQL%' ESCAPE '\\' OR CommandLine LIKE '%NanoServiceMain%' ESCAPE '\\' OR CommandLine LIKE '%NetMsmqActivator%' ESCAPE '\\' OR CommandLine LIKE '%NetPipeActivator%' ESCAPE '\\' OR CommandLine LIKE '%netprofm%' ESCAPE '\\' OR CommandLine LIKE '%NetTcpActivator%' ESCAPE '\\' OR CommandLine LIKE '%NetTcpPortSharing%' ESCAPE '\\' OR CommandLine LIKE '%ntrtscan%' ESCAPE '\\' OR CommandLine LIKE '%nvspwmi%' ESCAPE '\\' OR CommandLine LIKE '%ofcservice%' ESCAPE '\\' OR CommandLine LIKE '%Online Protection System%' ESCAPE '\\' OR CommandLine LIKE '%OracleClientCache80%' ESCAPE '\\' OR CommandLine LIKE '%OracleDBConsole%' ESCAPE '\\' OR CommandLine LIKE '%OracleMTSRecoveryService%' ESCAPE '\\' OR CommandLine LIKE '%OracleOraDb11g\\_home1%' ESCAPE '\\' OR CommandLine LIKE '%OracleService%' ESCAPE '\\' OR CommandLine LIKE '%OracleVssWriter%' ESCAPE '\\' OR CommandLine LIKE '%osppsvc%' ESCAPE '\\' OR CommandLine LIKE '%PandaAetherAgent%' ESCAPE '\\' OR CommandLine LIKE '%PccNTUpd%' ESCAPE '\\' OR CommandLine LIKE '%PDVFSService%' ESCAPE '\\' OR CommandLine LIKE '%POP3Svc%' ESCAPE '\\' OR CommandLine LIKE '%postgresql-x64-9.4%' ESCAPE '\\' OR CommandLine LIKE '%POVFSService%' ESCAPE '\\' OR CommandLine LIKE '%PSUAService%' ESCAPE '\\' OR CommandLine LIKE '%Quick Update Service%' ESCAPE '\\' OR CommandLine LIKE '%RepairService%' ESCAPE '\\' OR CommandLine LIKE '%ReportServer%' ESCAPE '\\' OR CommandLine LIKE '%ReportServer$%' ESCAPE '\\' OR CommandLine LIKE '%RESvc%' ESCAPE '\\' OR CommandLine LIKE '%RpcEptMapper%' ESCAPE '\\' OR CommandLine LIKE '%sacsvr%' ESCAPE '\\' OR CommandLine LIKE '%SamSs%' ESCAPE '\\' OR CommandLine LIKE '%SAVAdminService%' ESCAPE '\\' OR CommandLine LIKE '%SAVService%' ESCAPE '\\' OR CommandLine LIKE '%ScSecSvc%' ESCAPE '\\') OR (CommandLine LIKE '%SDRSVC%' ESCAPE '\\' OR CommandLine LIKE '%SearchExchangeTracing%' ESCAPE '\\' OR CommandLine LIKE '%sense%' ESCAPE '\\' OR CommandLine LIKE '%SentinelAgent%' ESCAPE '\\' OR CommandLine LIKE '%SentinelHelperService%' ESCAPE '\\' OR CommandLine LIKE '%SepMasterService%' ESCAPE '\\' OR CommandLine LIKE '%ShMonitor%' ESCAPE '\\' OR CommandLine LIKE '%Smcinst%' ESCAPE '\\' OR CommandLine LIKE '%SmcService%' ESCAPE '\\' OR CommandLine LIKE '%SMTPSvc%' ESCAPE '\\' OR CommandLine LIKE '%SNAC%' ESCAPE '\\' OR CommandLine LIKE '%SntpService%' ESCAPE '\\' OR CommandLine LIKE '%Sophos%' ESCAPE '\\' OR CommandLine LIKE '%SQ1SafeOLRService%' ESCAPE '\\' OR CommandLine LIKE '%SQL Backups%' ESCAPE '\\' OR CommandLine LIKE '%SQL Server%' ESCAPE '\\' OR CommandLine LIKE '%SQLAgent%' ESCAPE '\\' OR CommandLine LIKE '%SQLANYs\\_Sage\\_FAS\\_Fixed\\_Assets%' ESCAPE '\\' OR CommandLine LIKE '%SQLBrowser%' ESCAPE '\\' OR CommandLine LIKE '%SQLsafe%' ESCAPE '\\' OR CommandLine LIKE '%SQLSERVERAGENT%' ESCAPE '\\' OR CommandLine LIKE '%SQLTELEMETRY%' ESCAPE '\\' OR CommandLine LIKE '%SQLWriter%' ESCAPE '\\' OR CommandLine LIKE '%SSISTELEMETRY130%' ESCAPE '\\' OR CommandLine LIKE '%SstpSvc%' ESCAPE '\\' OR CommandLine LIKE '%storflt%' ESCAPE '\\' OR CommandLine LIKE '%svcGenericHost%' ESCAPE '\\' OR CommandLine LIKE '%swc\\_service%' ESCAPE '\\' OR CommandLine LIKE '%swi\\_filter%' ESCAPE '\\' OR CommandLine LIKE '%swi\\_service%' ESCAPE '\\' OR CommandLine LIKE '%swi\\_update%' ESCAPE '\\' OR CommandLine LIKE '%Symantec%' ESCAPE '\\' OR CommandLine LIKE '%sysmon%' ESCAPE '\\' OR CommandLine LIKE '%TeamViewer%' ESCAPE '\\' OR CommandLine LIKE '%Telemetryserver%' ESCAPE '\\' OR CommandLine LIKE '%ThreatLockerService%' ESCAPE '\\' OR CommandLine LIKE '%TMBMServer%' ESCAPE '\\' OR CommandLine LIKE '%TmCCSF%' ESCAPE '\\' OR CommandLine LIKE '%TmFilter%' ESCAPE '\\' OR CommandLine LIKE '%TMiCRCScanService%' ESCAPE '\\' OR CommandLine LIKE '%tmlisten%' ESCAPE '\\' OR CommandLine LIKE '%TMLWCSService%' ESCAPE '\\' OR CommandLine LIKE '%TmPfw%' ESCAPE '\\' OR CommandLine LIKE '%TmPreFilter%' ESCAPE '\\' OR CommandLine LIKE '%TmProxy%' ESCAPE '\\' OR CommandLine LIKE '%TMSmartRelayService%' ESCAPE '\\' OR CommandLine LIKE '%tmusa%' ESCAPE '\\' OR CommandLine LIKE '%Tomcat%' ESCAPE '\\' OR CommandLine LIKE '%Trend Micro Deep Security Manager%' ESCAPE '\\' OR CommandLine LIKE '%TrueKey%' ESCAPE '\\') OR (CommandLine LIKE '%UFNet%' ESCAPE '\\' OR CommandLine LIKE '%UI0Detect%' ESCAPE '\\' OR CommandLine LIKE '%UniFi%' ESCAPE '\\' OR CommandLine LIKE '%UTODetect%' ESCAPE '\\' OR CommandLine LIKE '%vds%' ESCAPE '\\' OR CommandLine LIKE '%Veeam%' ESCAPE '\\' OR CommandLine LIKE '%VeeamDeploySvc%' ESCAPE '\\' OR CommandLine LIKE '%Veritas System Recovery%' ESCAPE '\\' OR CommandLine LIKE '%vmic%' ESCAPE '\\' OR CommandLine LIKE '%VMTools%' ESCAPE '\\' OR CommandLine LIKE '%vmvss%' ESCAPE '\\' OR CommandLine LIKE '%VSApiNt%' ESCAPE '\\' OR CommandLine LIKE '%VSS%' ESCAPE '\\' OR CommandLine LIKE '%W3Svc%' ESCAPE '\\' OR CommandLine LIKE '%wbengine%' ESCAPE '\\' OR CommandLine LIKE '%WdNisSvc%' ESCAPE '\\' OR CommandLine LIKE '%WeanClOudSve%' ESCAPE '\\' OR CommandLine LIKE '%Weems JY%' ESCAPE '\\' OR CommandLine LIKE '%WinDefend%' ESCAPE '\\' OR CommandLine LIKE '%wmms%' ESCAPE '\\' OR CommandLine LIKE '%wozyprobackup%' ESCAPE '\\' OR CommandLine LIKE '%WPFFontCache\\_v0400%' ESCAPE '\\' OR CommandLine LIKE '%WRSVC%' ESCAPE '\\' OR CommandLine LIKE '%wsbexchange%' ESCAPE '\\' OR CommandLine LIKE '%WSearch%' ESCAPE '\\' OR CommandLine LIKE '%wscsvc%' ESCAPE '\\' OR CommandLine LIKE '%Zoolz 2 Service%' ESCAPE '\\'))))"
+      "SELECT * FROM logs WHERE Channel='Microsoft-Windows-Sysmon/Operational' AND (EventID=1 AND (((OriginalFileName='net.exe' OR OriginalFileName='net1.exe' OR OriginalFileName LIKE 'PowerShell\\_ISE.EXE' ESCAPE '\\' OR OriginalFileName='PowerShell.EXE' OR OriginalFileName='psservice.exe' OR OriginalFileName='pwsh.dll' OR OriginalFileName='sc.exe' OR OriginalFileName='wmic.exe') OR (Image LIKE '%\\\\net.exe' ESCAPE '\\' OR Image LIKE '%\\\\net1.exe' ESCAPE '\\' OR Image LIKE '%\\\\PowerShell\\_ISE.EXE' ESCAPE '\\' OR Image LIKE '%\\\\powershell.exe' ESCAPE '\\' OR Image LIKE '%\\\\PsService.exe' ESCAPE '\\' OR Image LIKE '%\\\\PsService64.exe' ESCAPE '\\' OR Image LIKE '%\\\\pwsh.exe' ESCAPE '\\' OR Image LIKE '%\\\\sc.exe' ESCAPE '\\' OR Image LIKE '%\\\\wmic.exe' ESCAPE '\\')) AND ((CommandLine LIKE '% delete %' ESCAPE '\\' OR CommandLine LIKE '%.delete()%' ESCAPE '\\' OR CommandLine LIKE '% pause %' ESCAPE '\\' OR CommandLine LIKE '% stop %' ESCAPE '\\' OR CommandLine LIKE '%Stop-Service %' ESCAPE '\\' OR CommandLine LIKE '%Remove-Service %' ESCAPE '\\') OR (CommandLine LIKE '%config%' ESCAPE '\\' AND CommandLine LIKE '%start=disabled%' ESCAPE '\\')) AND ((CommandLine LIKE '%143Svc%' ESCAPE '\\' OR CommandLine LIKE '%aakore%' ESCAPE '\\' OR CommandLine LIKE '%Acronis VSS Provider%' ESCAPE '\\' OR CommandLine LIKE '%AcronisActiveProtectionService%' ESCAPE '\\' OR CommandLine LIKE '%AcronisAgent%' ESCAPE '\\' OR CommandLine LIKE '%AcronisCyberProtectionService%' ESCAPE '\\' OR CommandLine LIKE '%AcrSch2Svc%' ESCAPE '\\' OR CommandLine LIKE '%AdobeARMservice%' ESCAPE '\\' OR CommandLine LIKE '%AHS Service%' ESCAPE '\\' OR CommandLine LIKE '%Antivirus%' ESCAPE '\\' OR CommandLine LIKE '%Apache4%' ESCAPE '\\' OR CommandLine LIKE '%ARSM%' ESCAPE '\\' OR CommandLine LIKE '%aswBcc%' ESCAPE '\\' OR CommandLine LIKE '%AteraAgent%' ESCAPE '\\' OR CommandLine LIKE '%Avast Business Console Client Antivirus Service%' ESCAPE '\\' OR CommandLine LIKE '%avast! Antivirus%' ESCAPE '\\' OR CommandLine LIKE '%AVG Antivirus%' ESCAPE '\\' OR CommandLine LIKE '%avgAdminClient%' ESCAPE '\\' OR CommandLine LIKE '%AvgAdminServer%' ESCAPE '\\' OR CommandLine LIKE '%AVP1%' ESCAPE '\\' OR CommandLine LIKE '%BackupExec%' ESCAPE '\\' OR CommandLine LIKE '%bedbg%' ESCAPE '\\' OR CommandLine LIKE '%BITS%' ESCAPE '\\' OR CommandLine LIKE '%BrokerInfrastructure%' ESCAPE '\\' OR CommandLine LIKE '%CASLicenceServer%' ESCAPE '\\' OR CommandLine LIKE '%CASWebServer%' ESCAPE '\\' OR CommandLine LIKE '%Client Agent 7.60%' ESCAPE '\\' OR CommandLine LIKE '%Core Browsing Protection%' ESCAPE '\\' OR CommandLine LIKE '%Core Mail Protection%' ESCAPE '\\' OR CommandLine LIKE '%Core Scanning Server%' ESCAPE '\\' OR CommandLine LIKE '%DCAgent%' ESCAPE '\\' OR CommandLine LIKE '%dwmrcs%' ESCAPE '\\' OR CommandLine LIKE '%EhttpSr%' ESCAPE '\\' OR CommandLine LIKE '%ekrn%' ESCAPE '\\' OR CommandLine LIKE '%Enterprise Client Service%' ESCAPE '\\' OR CommandLine LIKE '%epag%' ESCAPE '\\' OR CommandLine LIKE '%EPIntegrationService%' ESCAPE '\\' OR CommandLine LIKE '%EPProtectedService%' ESCAPE '\\' OR CommandLine LIKE '%EPRedline%' ESCAPE '\\' OR CommandLine LIKE '%EPSecurityService%' ESCAPE '\\' OR CommandLine LIKE '%EPUpdateService%' ESCAPE '\\' OR CommandLine LIKE '%EraserSvc11710%' ESCAPE '\\' OR CommandLine LIKE '%EsgShKernel%' ESCAPE '\\' OR CommandLine LIKE '%ESHASRV%' ESCAPE '\\' OR CommandLine LIKE '%FA\\_Scheduler%' ESCAPE '\\' OR CommandLine LIKE '%FirebirdGuardianDefaultInstance%' ESCAPE '\\' OR CommandLine LIKE '%FirebirdServerDefaultInstance%' ESCAPE '\\' OR CommandLine LIKE '%FontCache3.0.0.0%' ESCAPE '\\' OR CommandLine LIKE '%HealthTLService%' ESCAPE '\\' OR CommandLine LIKE '%hmpalertsvc%' ESCAPE '\\') OR (CommandLine LIKE '%HMS%' ESCAPE '\\' OR CommandLine LIKE '%HostControllerService%' ESCAPE '\\' OR CommandLine LIKE '%hvdsvc%' ESCAPE '\\' OR CommandLine LIKE '%IAStorDataMgrSvc%' ESCAPE '\\' OR CommandLine LIKE '%IBMHPS%' ESCAPE '\\' OR CommandLine LIKE '%ibmspsvc%' ESCAPE '\\' OR CommandLine LIKE '%IISAdmin%' ESCAPE '\\' OR CommandLine LIKE '%IMANSVC%' ESCAPE '\\' OR CommandLine LIKE '%IMAP4Svc%' ESCAPE '\\' OR CommandLine LIKE '%instance2%' ESCAPE '\\' OR CommandLine LIKE '%KAVFS%' ESCAPE '\\' OR CommandLine LIKE '%KAVFSGT%' ESCAPE '\\' OR CommandLine LIKE '%kavfsslp%' ESCAPE '\\' OR CommandLine LIKE '%KeyIso%' ESCAPE '\\' OR CommandLine LIKE '%klbackupdisk%' ESCAPE '\\' OR CommandLine LIKE '%klbackupflt%' ESCAPE '\\' OR CommandLine LIKE '%klflt%' ESCAPE '\\' OR CommandLine LIKE '%klhk%' ESCAPE '\\' OR CommandLine LIKE '%KLIF%' ESCAPE '\\' OR CommandLine LIKE '%klim6%' ESCAPE '\\' OR CommandLine LIKE '%klkbdflt%' ESCAPE '\\' OR CommandLine LIKE '%klmouflt%' ESCAPE '\\' OR CommandLine LIKE '%klnagent%' ESCAPE '\\' OR CommandLine LIKE '%klpd%' ESCAPE '\\' OR CommandLine LIKE '%kltap%' ESCAPE '\\' OR CommandLine LIKE '%KSDE1.0.0%' ESCAPE '\\' OR CommandLine LIKE '%LogProcessorService%' ESCAPE '\\' OR CommandLine LIKE '%M8EndpointAgent%' ESCAPE '\\' OR CommandLine LIKE '%macmnsvc%' ESCAPE '\\' OR CommandLine LIKE '%masvc%' ESCAPE '\\' OR CommandLine LIKE '%MBAMService%' ESCAPE '\\' OR CommandLine LIKE '%MBCloudEA%' ESCAPE '\\' OR CommandLine LIKE '%MBEndpointAgent%' ESCAPE '\\' OR CommandLine LIKE '%McAfeeDLPAgentService%' ESCAPE '\\' OR CommandLine LIKE '%McAfeeEngineService%' ESCAPE '\\' OR CommandLine LIKE '%MCAFEEEVENTPARSERSRV%' ESCAPE '\\' OR CommandLine LIKE '%McAfeeFramework%' ESCAPE '\\' OR CommandLine LIKE '%MCAFEETOMCATSRV530%' ESCAPE '\\' OR CommandLine LIKE '%McShield%' ESCAPE '\\' OR CommandLine LIKE '%McTaskManager%' ESCAPE '\\' OR CommandLine LIKE '%mfefire%' ESCAPE '\\' OR CommandLine LIKE '%mfemms%' ESCAPE '\\' OR CommandLine LIKE '%mfevto%' ESCAPE '\\' OR CommandLine LIKE '%mfevtp%' ESCAPE '\\' OR CommandLine LIKE '%mfewc%' ESCAPE '\\' OR CommandLine LIKE '%MMS%' ESCAPE '\\' OR CommandLine LIKE '%mozyprobackup%' ESCAPE '\\' OR CommandLine LIKE '%mpssvc%' ESCAPE '\\' OR CommandLine LIKE '%MSComplianceAudit%' ESCAPE '\\' OR CommandLine LIKE '%MSDTC%' ESCAPE '\\') OR (CommandLine LIKE '%MsDtsServer%' ESCAPE '\\' OR CommandLine LIKE '%MSExchange%' ESCAPE '\\' OR CommandLine LIKE '%msftesq1SPROO%' ESCAPE '\\' OR CommandLine LIKE '%msftesql$PROD%' ESCAPE '\\' OR CommandLine LIKE '%msftesql$SQLEXPRESS%' ESCAPE '\\' OR CommandLine LIKE '%MSOLAP$SQL\\_2008%' ESCAPE '\\' OR CommandLine LIKE '%MSOLAP$SYSTEM\\_BGC%' ESCAPE '\\' OR CommandLine LIKE '%MSOLAP$TPS%' ESCAPE '\\' OR CommandLine LIKE '%MSOLAP$TPSAMA%' ESCAPE '\\' OR CommandLine LIKE '%MSOLAPSTPS%' ESCAPE '\\' OR CommandLine LIKE '%MSOLAPSTPSAMA%' ESCAPE '\\' OR CommandLine LIKE '%mssecflt%' ESCAPE '\\' OR CommandLine LIKE '%MSSQ!I.SPROFXENGAGEMEHT%' ESCAPE '\\' OR CommandLine LIKE '%MSSQ0SHAREPOINT%' ESCAPE '\\' OR CommandLine LIKE '%MSSQ0SOPHOS%' ESCAPE '\\' OR CommandLine LIKE '%MSSQL%' ESCAPE '\\' OR CommandLine LIKE '%MSSQLFDLauncher$%' ESCAPE '\\' OR CommandLine LIKE '%MySQL%' ESCAPE '\\' OR CommandLine LIKE '%NanoServiceMain%' ESCAPE '\\' OR CommandLine LIKE '%NetMsmqActivator%' ESCAPE '\\' OR CommandLine LIKE '%NetPipeActivator%' ESCAPE '\\' OR CommandLine LIKE '%netprofm%' ESCAPE '\\' OR CommandLine LIKE '%NetTcpActivator%' ESCAPE '\\' OR CommandLine LIKE '%NetTcpPortSharing%' ESCAPE '\\' OR CommandLine LIKE '%ntrtscan%' ESCAPE '\\' OR CommandLine LIKE '%nvspwmi%' ESCAPE '\\' OR CommandLine LIKE '%ofcservice%' ESCAPE '\\' OR CommandLine LIKE '%Online Protection System%' ESCAPE '\\' OR CommandLine LIKE '%OracleClientCache80%' ESCAPE '\\' OR CommandLine LIKE '%OracleDBConsole%' ESCAPE '\\' OR CommandLine LIKE '%OracleMTSRecoveryService%' ESCAPE '\\' OR CommandLine LIKE '%OracleOraDb11g\\_home1%' ESCAPE '\\' OR CommandLine LIKE '%OracleService%' ESCAPE '\\' OR CommandLine LIKE '%OracleVssWriter%' ESCAPE '\\' OR CommandLine LIKE '%osppsvc%' ESCAPE '\\' OR CommandLine LIKE '%PandaAetherAgent%' ESCAPE '\\' OR CommandLine LIKE '%PccNTUpd%' ESCAPE '\\' OR CommandLine LIKE '%PDVFSService%' ESCAPE '\\' OR CommandLine LIKE '%POP3Svc%' ESCAPE '\\' OR CommandLine LIKE '%postgresql-x64-9.4%' ESCAPE '\\' OR CommandLine LIKE '%POVFSService%' ESCAPE '\\' OR CommandLine LIKE '%PSUAService%' ESCAPE '\\' OR CommandLine LIKE '%Quick Update Service%' ESCAPE '\\' OR CommandLine LIKE '%RepairService%' ESCAPE '\\' OR CommandLine LIKE '%ReportServer%' ESCAPE '\\' OR CommandLine LIKE '%ReportServer$%' ESCAPE '\\' OR CommandLine LIKE '%RESvc%' ESCAPE '\\' OR CommandLine LIKE '%RpcEptMapper%' ESCAPE '\\' OR CommandLine LIKE '%sacsvr%' ESCAPE '\\' OR CommandLine LIKE '%SamSs%' ESCAPE '\\') OR (CommandLine LIKE '%SAVAdminService%' ESCAPE '\\' OR CommandLine LIKE '%SAVService%' ESCAPE '\\' OR CommandLine LIKE '%ScSecSvc%' ESCAPE '\\' OR CommandLine LIKE '%SDRSVC%' ESCAPE '\\' OR CommandLine LIKE '%SearchExchangeTracing%' ESCAPE '\\' OR CommandLine LIKE '%sense%' ESCAPE '\\' OR CommandLine LIKE '%SentinelAgent%' ESCAPE '\\' OR CommandLine LIKE '%SentinelHelperService%' ESCAPE '\\' OR CommandLine LIKE '%SepMasterService%' ESCAPE '\\' OR CommandLine LIKE '%ShMonitor%' ESCAPE '\\' OR CommandLine LIKE '%Smcinst%' ESCAPE '\\' OR CommandLine LIKE '%SmcService%' ESCAPE '\\' OR CommandLine LIKE '%SMTPSvc%' ESCAPE '\\' OR CommandLine LIKE '%SNAC%' ESCAPE '\\' OR CommandLine LIKE '%SntpService%' ESCAPE '\\' OR CommandLine LIKE '%Sophos%' ESCAPE '\\' OR CommandLine LIKE '%SQ1SafeOLRService%' ESCAPE '\\' OR CommandLine LIKE '%SQL Backups%' ESCAPE '\\' OR CommandLine LIKE '%SQL Server%' ESCAPE '\\' OR CommandLine LIKE '%SQLAgent%' ESCAPE '\\' OR CommandLine LIKE '%SQLANYs\\_Sage\\_FAS\\_Fixed\\_Assets%' ESCAPE '\\' OR CommandLine LIKE '%SQLBrowser%' ESCAPE '\\' OR CommandLine LIKE '%SQLsafe%' ESCAPE '\\' OR CommandLine LIKE '%SQLSERVERAGENT%' ESCAPE '\\' OR CommandLine LIKE '%SQLTELEMETRY%' ESCAPE '\\' OR CommandLine LIKE '%SQLWriter%' ESCAPE '\\' OR CommandLine LIKE '%SSISTELEMETRY130%' ESCAPE '\\' OR CommandLine LIKE '%SstpSvc%' ESCAPE '\\' OR CommandLine LIKE '%storflt%' ESCAPE '\\' OR CommandLine LIKE '%svcGenericHost%' ESCAPE '\\' OR CommandLine LIKE '%swc\\_service%' ESCAPE '\\' OR CommandLine LIKE '%swi\\_filter%' ESCAPE '\\' OR CommandLine LIKE '%swi\\_service%' ESCAPE '\\' OR CommandLine LIKE '%swi\\_update%' ESCAPE '\\' OR CommandLine LIKE '%Symantec%' ESCAPE '\\' OR CommandLine LIKE '%sysmon%' ESCAPE '\\' OR CommandLine LIKE '%TeamViewer%' ESCAPE '\\' OR CommandLine LIKE '%Telemetryserver%' ESCAPE '\\' OR CommandLine LIKE '%ThreatLockerService%' ESCAPE '\\' OR CommandLine LIKE '%TMBMServer%' ESCAPE '\\' OR CommandLine LIKE '%TmCCSF%' ESCAPE '\\' OR CommandLine LIKE '%TmFilter%' ESCAPE '\\' OR CommandLine LIKE '%TMiCRCScanService%' ESCAPE '\\' OR CommandLine LIKE '%tmlisten%' ESCAPE '\\' OR CommandLine LIKE '%TMLWCSService%' ESCAPE '\\' OR CommandLine LIKE '%TmPfw%' ESCAPE '\\' OR CommandLine LIKE '%TmPreFilter%' ESCAPE '\\' OR CommandLine LIKE '%TmProxy%' ESCAPE '\\' OR CommandLine LIKE '%TMSmartRelayService%' ESCAPE '\\' OR CommandLine LIKE '%tmusa%' ESCAPE '\\') OR (CommandLine LIKE '%Tomcat%' ESCAPE '\\' OR CommandLine LIKE '%Trend Micro Deep Security Manager%' ESCAPE '\\' OR CommandLine LIKE '%TrueKey%' ESCAPE '\\' OR CommandLine LIKE '%UFNet%' ESCAPE '\\' OR CommandLine LIKE '%UI0Detect%' ESCAPE '\\' OR CommandLine LIKE '%UniFi%' ESCAPE '\\' OR CommandLine LIKE '%UTODetect%' ESCAPE '\\' OR CommandLine LIKE '%vds%' ESCAPE '\\' OR CommandLine LIKE '%Veeam%' ESCAPE '\\' OR CommandLine LIKE '%VeeamDeploySvc%' ESCAPE '\\' OR CommandLine LIKE '%Veritas System Recovery%' ESCAPE '\\' OR CommandLine LIKE '%vmic%' ESCAPE '\\' OR CommandLine LIKE '%VMTools%' ESCAPE '\\' OR CommandLine LIKE '%vmvss%' ESCAPE '\\' OR CommandLine LIKE '%VSApiNt%' ESCAPE '\\' OR CommandLine LIKE '%VSS%' ESCAPE '\\' OR CommandLine LIKE '%W3Svc%' ESCAPE '\\' OR CommandLine LIKE '%wbengine%' ESCAPE '\\' OR CommandLine LIKE '%WdNisSvc%' ESCAPE '\\' OR CommandLine LIKE '%WeanClOudSve%' ESCAPE '\\' OR CommandLine LIKE '%Weems JY%' ESCAPE '\\' OR CommandLine LIKE '%WinDefend%' ESCAPE '\\' OR CommandLine LIKE '%wmms%' ESCAPE '\\' OR CommandLine LIKE '%wozyprobackup%' ESCAPE '\\' OR CommandLine LIKE '%WPFFontCache\\_v0400%' ESCAPE '\\' OR CommandLine LIKE '%WRSVC%' ESCAPE '\\' OR CommandLine LIKE '%wsbexchange%' ESCAPE '\\' OR CommandLine LIKE '%WSearch%' ESCAPE '\\' OR CommandLine LIKE '%wscsvc%' ESCAPE '\\' OR CommandLine LIKE '%Zoolz 2 Service%' ESCAPE '\\'))))"
     ],
     "schema_version": 2,
     "source": "sigmahq",
@@ -162881,7 +163054,7 @@
     ],
     "result_type": "event",
     "rule": [
-      "SELECT * FROM logs WHERE Channel='Security' AND (EventID=4688 AND (((OriginalFileName='net.exe' OR OriginalFileName='net1.exe' OR OriginalFileName LIKE 'PowerShell\\_ISE.EXE' ESCAPE '\\' OR OriginalFileName='PowerShell.EXE' OR OriginalFileName='psservice.exe' OR OriginalFileName='pwsh.dll' OR OriginalFileName='sc.exe' OR OriginalFileName='wmic.exe') OR (NewProcessName LIKE '%\\\\net.exe' ESCAPE '\\' OR NewProcessName LIKE '%\\\\net1.exe' ESCAPE '\\' OR NewProcessName LIKE '%\\\\PowerShell\\_ISE.EXE' ESCAPE '\\' OR NewProcessName LIKE '%\\\\powershell.exe' ESCAPE '\\' OR NewProcessName LIKE '%\\\\PsService.exe' ESCAPE '\\' OR NewProcessName LIKE '%\\\\PsService64.exe' ESCAPE '\\' OR NewProcessName LIKE '%\\\\pwsh.exe' ESCAPE '\\' OR NewProcessName LIKE '%\\\\sc.exe' ESCAPE '\\' OR NewProcessName LIKE '%\\\\wmic.exe' ESCAPE '\\')) AND ((CommandLine LIKE '% delete %' ESCAPE '\\' OR CommandLine LIKE '%.delete()%' ESCAPE '\\' OR CommandLine LIKE '% pause %' ESCAPE '\\' OR CommandLine LIKE '% stop %' ESCAPE '\\' OR CommandLine LIKE '%Stop-Service %' ESCAPE '\\' OR CommandLine LIKE '%Remove-Service %' ESCAPE '\\') OR (CommandLine LIKE '%config%' ESCAPE '\\' AND CommandLine LIKE '%start=disabled%' ESCAPE '\\')) AND ((CommandLine LIKE '%143Svc%' ESCAPE '\\' OR CommandLine LIKE '%Acronis VSS Provider%' ESCAPE '\\' OR CommandLine LIKE '%AcronisAgent%' ESCAPE '\\' OR CommandLine LIKE '%AcrSch2Svc%' ESCAPE '\\' OR CommandLine LIKE '%AdobeARMservice%' ESCAPE '\\' OR CommandLine LIKE '%AHS Service%' ESCAPE '\\' OR CommandLine LIKE '%Antivirus%' ESCAPE '\\' OR CommandLine LIKE '%Apache4%' ESCAPE '\\' OR CommandLine LIKE '%ARSM%' ESCAPE '\\' OR CommandLine LIKE '%aswBcc%' ESCAPE '\\' OR CommandLine LIKE '%AteraAgent%' ESCAPE '\\' OR CommandLine LIKE '%Avast Business Console Client Antivirus Service%' ESCAPE '\\' OR CommandLine LIKE '%avast! Antivirus%' ESCAPE '\\' OR CommandLine LIKE '%AVG Antivirus%' ESCAPE '\\' OR CommandLine LIKE '%avgAdminClient%' ESCAPE '\\' OR CommandLine LIKE '%AvgAdminServer%' ESCAPE '\\' OR CommandLine LIKE '%AVP1%' ESCAPE '\\' OR CommandLine LIKE '%BackupExec%' ESCAPE '\\' OR CommandLine LIKE '%bedbg%' ESCAPE '\\' OR CommandLine LIKE '%BITS%' ESCAPE '\\' OR CommandLine LIKE '%BrokerInfrastructure%' ESCAPE '\\' OR CommandLine LIKE '%CASLicenceServer%' ESCAPE '\\' OR CommandLine LIKE '%CASWebServer%' ESCAPE '\\' OR CommandLine LIKE '%Client Agent 7.60%' ESCAPE '\\' OR CommandLine LIKE '%Core Browsing Protection%' ESCAPE '\\' OR CommandLine LIKE '%Core Mail Protection%' ESCAPE '\\' OR CommandLine LIKE '%Core Scanning Server%' ESCAPE '\\' OR CommandLine LIKE '%DCAgent%' ESCAPE '\\' OR CommandLine LIKE '%dwmrcs%' ESCAPE '\\' OR CommandLine LIKE '%EhttpSr%' ESCAPE '\\' OR CommandLine LIKE '%ekrn%' ESCAPE '\\' OR CommandLine LIKE '%Enterprise Client Service%' ESCAPE '\\' OR CommandLine LIKE '%epag%' ESCAPE '\\' OR CommandLine LIKE '%EPIntegrationService%' ESCAPE '\\' OR CommandLine LIKE '%EPProtectedService%' ESCAPE '\\' OR CommandLine LIKE '%EPRedline%' ESCAPE '\\' OR CommandLine LIKE '%EPSecurityService%' ESCAPE '\\' OR CommandLine LIKE '%EPUpdateService%' ESCAPE '\\' OR CommandLine LIKE '%EraserSvc11710%' ESCAPE '\\' OR CommandLine LIKE '%EsgShKernel%' ESCAPE '\\' OR CommandLine LIKE '%ESHASRV%' ESCAPE '\\' OR CommandLine LIKE '%FA\\_Scheduler%' ESCAPE '\\' OR CommandLine LIKE '%FirebirdGuardianDefaultInstance%' ESCAPE '\\' OR CommandLine LIKE '%FirebirdServerDefaultInstance%' ESCAPE '\\' OR CommandLine LIKE '%FontCache3.0.0.0%' ESCAPE '\\' OR CommandLine LIKE '%HealthTLService%' ESCAPE '\\' OR CommandLine LIKE '%hmpalertsvc%' ESCAPE '\\' OR CommandLine LIKE '%HMS%' ESCAPE '\\' OR CommandLine LIKE '%HostControllerService%' ESCAPE '\\' OR CommandLine LIKE '%hvdsvc%' ESCAPE '\\') OR (CommandLine LIKE '%IAStorDataMgrSvc%' ESCAPE '\\' OR CommandLine LIKE '%IBMHPS%' ESCAPE '\\' OR CommandLine LIKE '%ibmspsvc%' ESCAPE '\\' OR CommandLine LIKE '%IISAdmin%' ESCAPE '\\' OR CommandLine LIKE '%IMANSVC%' ESCAPE '\\' OR CommandLine LIKE '%IMAP4Svc%' ESCAPE '\\' OR CommandLine LIKE '%instance2%' ESCAPE '\\' OR CommandLine LIKE '%KAVFS%' ESCAPE '\\' OR CommandLine LIKE '%KAVFSGT%' ESCAPE '\\' OR CommandLine LIKE '%kavfsslp%' ESCAPE '\\' OR CommandLine LIKE '%KeyIso%' ESCAPE '\\' OR CommandLine LIKE '%klbackupdisk%' ESCAPE '\\' OR CommandLine LIKE '%klbackupflt%' ESCAPE '\\' OR CommandLine LIKE '%klflt%' ESCAPE '\\' OR CommandLine LIKE '%klhk%' ESCAPE '\\' OR CommandLine LIKE '%KLIF%' ESCAPE '\\' OR CommandLine LIKE '%klim6%' ESCAPE '\\' OR CommandLine LIKE '%klkbdflt%' ESCAPE '\\' OR CommandLine LIKE '%klmouflt%' ESCAPE '\\' OR CommandLine LIKE '%klnagent%' ESCAPE '\\' OR CommandLine LIKE '%klpd%' ESCAPE '\\' OR CommandLine LIKE '%kltap%' ESCAPE '\\' OR CommandLine LIKE '%KSDE1.0.0%' ESCAPE '\\' OR CommandLine LIKE '%LogProcessorService%' ESCAPE '\\' OR CommandLine LIKE '%M8EndpointAgent%' ESCAPE '\\' OR CommandLine LIKE '%macmnsvc%' ESCAPE '\\' OR CommandLine LIKE '%masvc%' ESCAPE '\\' OR CommandLine LIKE '%MBAMService%' ESCAPE '\\' OR CommandLine LIKE '%MBCloudEA%' ESCAPE '\\' OR CommandLine LIKE '%MBEndpointAgent%' ESCAPE '\\' OR CommandLine LIKE '%McAfeeDLPAgentService%' ESCAPE '\\' OR CommandLine LIKE '%McAfeeEngineService%' ESCAPE '\\' OR CommandLine LIKE '%MCAFEEEVENTPARSERSRV%' ESCAPE '\\' OR CommandLine LIKE '%McAfeeFramework%' ESCAPE '\\' OR CommandLine LIKE '%MCAFEETOMCATSRV530%' ESCAPE '\\' OR CommandLine LIKE '%McShield%' ESCAPE '\\' OR CommandLine LIKE '%McTaskManager%' ESCAPE '\\' OR CommandLine LIKE '%mfefire%' ESCAPE '\\' OR CommandLine LIKE '%mfemms%' ESCAPE '\\' OR CommandLine LIKE '%mfevto%' ESCAPE '\\' OR CommandLine LIKE '%mfevtp%' ESCAPE '\\' OR CommandLine LIKE '%mfewc%' ESCAPE '\\' OR CommandLine LIKE '%MMS%' ESCAPE '\\' OR CommandLine LIKE '%mozyprobackup%' ESCAPE '\\' OR CommandLine LIKE '%mpssvc%' ESCAPE '\\' OR CommandLine LIKE '%MSComplianceAudit%' ESCAPE '\\' OR CommandLine LIKE '%MSDTC%' ESCAPE '\\' OR CommandLine LIKE '%MsDtsServer%' ESCAPE '\\' OR CommandLine LIKE '%MSExchange%' ESCAPE '\\' OR CommandLine LIKE '%msftesq1SPROO%' ESCAPE '\\') OR (CommandLine LIKE '%msftesql$PROD%' ESCAPE '\\' OR CommandLine LIKE '%msftesql$SQLEXPRESS%' ESCAPE '\\' OR CommandLine LIKE '%MSOLAP$SQL\\_2008%' ESCAPE '\\' OR CommandLine LIKE '%MSOLAP$SYSTEM\\_BGC%' ESCAPE '\\' OR CommandLine LIKE '%MSOLAP$TPS%' ESCAPE '\\' OR CommandLine LIKE '%MSOLAP$TPSAMA%' ESCAPE '\\' OR CommandLine LIKE '%MSOLAPSTPS%' ESCAPE '\\' OR CommandLine LIKE '%MSOLAPSTPSAMA%' ESCAPE '\\' OR CommandLine LIKE '%mssecflt%' ESCAPE '\\' OR CommandLine LIKE '%MSSQ!I.SPROFXENGAGEMEHT%' ESCAPE '\\' OR CommandLine LIKE '%MSSQ0SHAREPOINT%' ESCAPE '\\' OR CommandLine LIKE '%MSSQ0SOPHOS%' ESCAPE '\\' OR CommandLine LIKE '%MSSQL%' ESCAPE '\\' OR CommandLine LIKE '%MSSQLFDLauncher$%' ESCAPE '\\' OR CommandLine LIKE '%MySQL%' ESCAPE '\\' OR CommandLine LIKE '%NanoServiceMain%' ESCAPE '\\' OR CommandLine LIKE '%NetMsmqActivator%' ESCAPE '\\' OR CommandLine LIKE '%NetPipeActivator%' ESCAPE '\\' OR CommandLine LIKE '%netprofm%' ESCAPE '\\' OR CommandLine LIKE '%NetTcpActivator%' ESCAPE '\\' OR CommandLine LIKE '%NetTcpPortSharing%' ESCAPE '\\' OR CommandLine LIKE '%ntrtscan%' ESCAPE '\\' OR CommandLine LIKE '%nvspwmi%' ESCAPE '\\' OR CommandLine LIKE '%ofcservice%' ESCAPE '\\' OR CommandLine LIKE '%Online Protection System%' ESCAPE '\\' OR CommandLine LIKE '%OracleClientCache80%' ESCAPE '\\' OR CommandLine LIKE '%OracleDBConsole%' ESCAPE '\\' OR CommandLine LIKE '%OracleMTSRecoveryService%' ESCAPE '\\' OR CommandLine LIKE '%OracleOraDb11g\\_home1%' ESCAPE '\\' OR CommandLine LIKE '%OracleService%' ESCAPE '\\' OR CommandLine LIKE '%OracleVssWriter%' ESCAPE '\\' OR CommandLine LIKE '%osppsvc%' ESCAPE '\\' OR CommandLine LIKE '%PandaAetherAgent%' ESCAPE '\\' OR CommandLine LIKE '%PccNTUpd%' ESCAPE '\\' OR CommandLine LIKE '%PDVFSService%' ESCAPE '\\' OR CommandLine LIKE '%POP3Svc%' ESCAPE '\\' OR CommandLine LIKE '%postgresql-x64-9.4%' ESCAPE '\\' OR CommandLine LIKE '%POVFSService%' ESCAPE '\\' OR CommandLine LIKE '%PSUAService%' ESCAPE '\\' OR CommandLine LIKE '%Quick Update Service%' ESCAPE '\\' OR CommandLine LIKE '%RepairService%' ESCAPE '\\' OR CommandLine LIKE '%ReportServer%' ESCAPE '\\' OR CommandLine LIKE '%ReportServer$%' ESCAPE '\\' OR CommandLine LIKE '%RESvc%' ESCAPE '\\' OR CommandLine LIKE '%RpcEptMapper%' ESCAPE '\\' OR CommandLine LIKE '%sacsvr%' ESCAPE '\\' OR CommandLine LIKE '%SamSs%' ESCAPE '\\' OR CommandLine LIKE '%SAVAdminService%' ESCAPE '\\' OR CommandLine LIKE '%SAVService%' ESCAPE '\\' OR CommandLine LIKE '%ScSecSvc%' ESCAPE '\\') OR (CommandLine LIKE '%SDRSVC%' ESCAPE '\\' OR CommandLine LIKE '%SearchExchangeTracing%' ESCAPE '\\' OR CommandLine LIKE '%sense%' ESCAPE '\\' OR CommandLine LIKE '%SentinelAgent%' ESCAPE '\\' OR CommandLine LIKE '%SentinelHelperService%' ESCAPE '\\' OR CommandLine LIKE '%SepMasterService%' ESCAPE '\\' OR CommandLine LIKE '%ShMonitor%' ESCAPE '\\' OR CommandLine LIKE '%Smcinst%' ESCAPE '\\' OR CommandLine LIKE '%SmcService%' ESCAPE '\\' OR CommandLine LIKE '%SMTPSvc%' ESCAPE '\\' OR CommandLine LIKE '%SNAC%' ESCAPE '\\' OR CommandLine LIKE '%SntpService%' ESCAPE '\\' OR CommandLine LIKE '%Sophos%' ESCAPE '\\' OR CommandLine LIKE '%SQ1SafeOLRService%' ESCAPE '\\' OR CommandLine LIKE '%SQL Backups%' ESCAPE '\\' OR CommandLine LIKE '%SQL Server%' ESCAPE '\\' OR CommandLine LIKE '%SQLAgent%' ESCAPE '\\' OR CommandLine LIKE '%SQLANYs\\_Sage\\_FAS\\_Fixed\\_Assets%' ESCAPE '\\' OR CommandLine LIKE '%SQLBrowser%' ESCAPE '\\' OR CommandLine LIKE '%SQLsafe%' ESCAPE '\\' OR CommandLine LIKE '%SQLSERVERAGENT%' ESCAPE '\\' OR CommandLine LIKE '%SQLTELEMETRY%' ESCAPE '\\' OR CommandLine LIKE '%SQLWriter%' ESCAPE '\\' OR CommandLine LIKE '%SSISTELEMETRY130%' ESCAPE '\\' OR CommandLine LIKE '%SstpSvc%' ESCAPE '\\' OR CommandLine LIKE '%storflt%' ESCAPE '\\' OR CommandLine LIKE '%svcGenericHost%' ESCAPE '\\' OR CommandLine LIKE '%swc\\_service%' ESCAPE '\\' OR CommandLine LIKE '%swi\\_filter%' ESCAPE '\\' OR CommandLine LIKE '%swi\\_service%' ESCAPE '\\' OR CommandLine LIKE '%swi\\_update%' ESCAPE '\\' OR CommandLine LIKE '%Symantec%' ESCAPE '\\' OR CommandLine LIKE '%sysmon%' ESCAPE '\\' OR CommandLine LIKE '%TeamViewer%' ESCAPE '\\' OR CommandLine LIKE '%Telemetryserver%' ESCAPE '\\' OR CommandLine LIKE '%ThreatLockerService%' ESCAPE '\\' OR CommandLine LIKE '%TMBMServer%' ESCAPE '\\' OR CommandLine LIKE '%TmCCSF%' ESCAPE '\\' OR CommandLine LIKE '%TmFilter%' ESCAPE '\\' OR CommandLine LIKE '%TMiCRCScanService%' ESCAPE '\\' OR CommandLine LIKE '%tmlisten%' ESCAPE '\\' OR CommandLine LIKE '%TMLWCSService%' ESCAPE '\\' OR CommandLine LIKE '%TmPfw%' ESCAPE '\\' OR CommandLine LIKE '%TmPreFilter%' ESCAPE '\\' OR CommandLine LIKE '%TmProxy%' ESCAPE '\\' OR CommandLine LIKE '%TMSmartRelayService%' ESCAPE '\\' OR CommandLine LIKE '%tmusa%' ESCAPE '\\' OR CommandLine LIKE '%Tomcat%' ESCAPE '\\' OR CommandLine LIKE '%Trend Micro Deep Security Manager%' ESCAPE '\\' OR CommandLine LIKE '%TrueKey%' ESCAPE '\\') OR (CommandLine LIKE '%UFNet%' ESCAPE '\\' OR CommandLine LIKE '%UI0Detect%' ESCAPE '\\' OR CommandLine LIKE '%UniFi%' ESCAPE '\\' OR CommandLine LIKE '%UTODetect%' ESCAPE '\\' OR CommandLine LIKE '%vds%' ESCAPE '\\' OR CommandLine LIKE '%Veeam%' ESCAPE '\\' OR CommandLine LIKE '%VeeamDeploySvc%' ESCAPE '\\' OR CommandLine LIKE '%Veritas System Recovery%' ESCAPE '\\' OR CommandLine LIKE '%vmic%' ESCAPE '\\' OR CommandLine LIKE '%VMTools%' ESCAPE '\\' OR CommandLine LIKE '%vmvss%' ESCAPE '\\' OR CommandLine LIKE '%VSApiNt%' ESCAPE '\\' OR CommandLine LIKE '%VSS%' ESCAPE '\\' OR CommandLine LIKE '%W3Svc%' ESCAPE '\\' OR CommandLine LIKE '%wbengine%' ESCAPE '\\' OR CommandLine LIKE '%WdNisSvc%' ESCAPE '\\' OR CommandLine LIKE '%WeanClOudSve%' ESCAPE '\\' OR CommandLine LIKE '%Weems JY%' ESCAPE '\\' OR CommandLine LIKE '%WinDefend%' ESCAPE '\\' OR CommandLine LIKE '%wmms%' ESCAPE '\\' OR CommandLine LIKE '%wozyprobackup%' ESCAPE '\\' OR CommandLine LIKE '%WPFFontCache\\_v0400%' ESCAPE '\\' OR CommandLine LIKE '%WRSVC%' ESCAPE '\\' OR CommandLine LIKE '%wsbexchange%' ESCAPE '\\' OR CommandLine LIKE '%WSearch%' ESCAPE '\\' OR CommandLine LIKE '%wscsvc%' ESCAPE '\\' OR CommandLine LIKE '%Zoolz 2 Service%' ESCAPE '\\'))))"
+      "SELECT * FROM logs WHERE Channel='Security' AND (EventID=4688 AND (((OriginalFileName='net.exe' OR OriginalFileName='net1.exe' OR OriginalFileName LIKE 'PowerShell\\_ISE.EXE' ESCAPE '\\' OR OriginalFileName='PowerShell.EXE' OR OriginalFileName='psservice.exe' OR OriginalFileName='pwsh.dll' OR OriginalFileName='sc.exe' OR OriginalFileName='wmic.exe') OR (NewProcessName LIKE '%\\\\net.exe' ESCAPE '\\' OR NewProcessName LIKE '%\\\\net1.exe' ESCAPE '\\' OR NewProcessName LIKE '%\\\\PowerShell\\_ISE.EXE' ESCAPE '\\' OR NewProcessName LIKE '%\\\\powershell.exe' ESCAPE '\\' OR NewProcessName LIKE '%\\\\PsService.exe' ESCAPE '\\' OR NewProcessName LIKE '%\\\\PsService64.exe' ESCAPE '\\' OR NewProcessName LIKE '%\\\\pwsh.exe' ESCAPE '\\' OR NewProcessName LIKE '%\\\\sc.exe' ESCAPE '\\' OR NewProcessName LIKE '%\\\\wmic.exe' ESCAPE '\\')) AND ((CommandLine LIKE '% delete %' ESCAPE '\\' OR CommandLine LIKE '%.delete()%' ESCAPE '\\' OR CommandLine LIKE '% pause %' ESCAPE '\\' OR CommandLine LIKE '% stop %' ESCAPE '\\' OR CommandLine LIKE '%Stop-Service %' ESCAPE '\\' OR CommandLine LIKE '%Remove-Service %' ESCAPE '\\') OR (CommandLine LIKE '%config%' ESCAPE '\\' AND CommandLine LIKE '%start=disabled%' ESCAPE '\\')) AND ((CommandLine LIKE '%143Svc%' ESCAPE '\\' OR CommandLine LIKE '%aakore%' ESCAPE '\\' OR CommandLine LIKE '%Acronis VSS Provider%' ESCAPE '\\' OR CommandLine LIKE '%AcronisActiveProtectionService%' ESCAPE '\\' OR CommandLine LIKE '%AcronisAgent%' ESCAPE '\\' OR CommandLine LIKE '%AcronisCyberProtectionService%' ESCAPE '\\' OR CommandLine LIKE '%AcrSch2Svc%' ESCAPE '\\' OR CommandLine LIKE '%AdobeARMservice%' ESCAPE '\\' OR CommandLine LIKE '%AHS Service%' ESCAPE '\\' OR CommandLine LIKE '%Antivirus%' ESCAPE '\\' OR CommandLine LIKE '%Apache4%' ESCAPE '\\' OR CommandLine LIKE '%ARSM%' ESCAPE '\\' OR CommandLine LIKE '%aswBcc%' ESCAPE '\\' OR CommandLine LIKE '%AteraAgent%' ESCAPE '\\' OR CommandLine LIKE '%Avast Business Console Client Antivirus Service%' ESCAPE '\\' OR CommandLine LIKE '%avast! Antivirus%' ESCAPE '\\' OR CommandLine LIKE '%AVG Antivirus%' ESCAPE '\\' OR CommandLine LIKE '%avgAdminClient%' ESCAPE '\\' OR CommandLine LIKE '%AvgAdminServer%' ESCAPE '\\' OR CommandLine LIKE '%AVP1%' ESCAPE '\\' OR CommandLine LIKE '%BackupExec%' ESCAPE '\\' OR CommandLine LIKE '%bedbg%' ESCAPE '\\' OR CommandLine LIKE '%BITS%' ESCAPE '\\' OR CommandLine LIKE '%BrokerInfrastructure%' ESCAPE '\\' OR CommandLine LIKE '%CASLicenceServer%' ESCAPE '\\' OR CommandLine LIKE '%CASWebServer%' ESCAPE '\\' OR CommandLine LIKE '%Client Agent 7.60%' ESCAPE '\\' OR CommandLine LIKE '%Core Browsing Protection%' ESCAPE '\\' OR CommandLine LIKE '%Core Mail Protection%' ESCAPE '\\' OR CommandLine LIKE '%Core Scanning Server%' ESCAPE '\\' OR CommandLine LIKE '%DCAgent%' ESCAPE '\\' OR CommandLine LIKE '%dwmrcs%' ESCAPE '\\' OR CommandLine LIKE '%EhttpSr%' ESCAPE '\\' OR CommandLine LIKE '%ekrn%' ESCAPE '\\' OR CommandLine LIKE '%Enterprise Client Service%' ESCAPE '\\' OR CommandLine LIKE '%epag%' ESCAPE '\\' OR CommandLine LIKE '%EPIntegrationService%' ESCAPE '\\' OR CommandLine LIKE '%EPProtectedService%' ESCAPE '\\' OR CommandLine LIKE '%EPRedline%' ESCAPE '\\' OR CommandLine LIKE '%EPSecurityService%' ESCAPE '\\' OR CommandLine LIKE '%EPUpdateService%' ESCAPE '\\' OR CommandLine LIKE '%EraserSvc11710%' ESCAPE '\\' OR CommandLine LIKE '%EsgShKernel%' ESCAPE '\\' OR CommandLine LIKE '%ESHASRV%' ESCAPE '\\' OR CommandLine LIKE '%FA\\_Scheduler%' ESCAPE '\\' OR CommandLine LIKE '%FirebirdGuardianDefaultInstance%' ESCAPE '\\' OR CommandLine LIKE '%FirebirdServerDefaultInstance%' ESCAPE '\\' OR CommandLine LIKE '%FontCache3.0.0.0%' ESCAPE '\\' OR CommandLine LIKE '%HealthTLService%' ESCAPE '\\' OR CommandLine LIKE '%hmpalertsvc%' ESCAPE '\\') OR (CommandLine LIKE '%HMS%' ESCAPE '\\' OR CommandLine LIKE '%HostControllerService%' ESCAPE '\\' OR CommandLine LIKE '%hvdsvc%' ESCAPE '\\' OR CommandLine LIKE '%IAStorDataMgrSvc%' ESCAPE '\\' OR CommandLine LIKE '%IBMHPS%' ESCAPE '\\' OR CommandLine LIKE '%ibmspsvc%' ESCAPE '\\' OR CommandLine LIKE '%IISAdmin%' ESCAPE '\\' OR CommandLine LIKE '%IMANSVC%' ESCAPE '\\' OR CommandLine LIKE '%IMAP4Svc%' ESCAPE '\\' OR CommandLine LIKE '%instance2%' ESCAPE '\\' OR CommandLine LIKE '%KAVFS%' ESCAPE '\\' OR CommandLine LIKE '%KAVFSGT%' ESCAPE '\\' OR CommandLine LIKE '%kavfsslp%' ESCAPE '\\' OR CommandLine LIKE '%KeyIso%' ESCAPE '\\' OR CommandLine LIKE '%klbackupdisk%' ESCAPE '\\' OR CommandLine LIKE '%klbackupflt%' ESCAPE '\\' OR CommandLine LIKE '%klflt%' ESCAPE '\\' OR CommandLine LIKE '%klhk%' ESCAPE '\\' OR CommandLine LIKE '%KLIF%' ESCAPE '\\' OR CommandLine LIKE '%klim6%' ESCAPE '\\' OR CommandLine LIKE '%klkbdflt%' ESCAPE '\\' OR CommandLine LIKE '%klmouflt%' ESCAPE '\\' OR CommandLine LIKE '%klnagent%' ESCAPE '\\' OR CommandLine LIKE '%klpd%' ESCAPE '\\' OR CommandLine LIKE '%kltap%' ESCAPE '\\' OR CommandLine LIKE '%KSDE1.0.0%' ESCAPE '\\' OR CommandLine LIKE '%LogProcessorService%' ESCAPE '\\' OR CommandLine LIKE '%M8EndpointAgent%' ESCAPE '\\' OR CommandLine LIKE '%macmnsvc%' ESCAPE '\\' OR CommandLine LIKE '%masvc%' ESCAPE '\\' OR CommandLine LIKE '%MBAMService%' ESCAPE '\\' OR CommandLine LIKE '%MBCloudEA%' ESCAPE '\\' OR CommandLine LIKE '%MBEndpointAgent%' ESCAPE '\\' OR CommandLine LIKE '%McAfeeDLPAgentService%' ESCAPE '\\' OR CommandLine LIKE '%McAfeeEngineService%' ESCAPE '\\' OR CommandLine LIKE '%MCAFEEEVENTPARSERSRV%' ESCAPE '\\' OR CommandLine LIKE '%McAfeeFramework%' ESCAPE '\\' OR CommandLine LIKE '%MCAFEETOMCATSRV530%' ESCAPE '\\' OR CommandLine LIKE '%McShield%' ESCAPE '\\' OR CommandLine LIKE '%McTaskManager%' ESCAPE '\\' OR CommandLine LIKE '%mfefire%' ESCAPE '\\' OR CommandLine LIKE '%mfemms%' ESCAPE '\\' OR CommandLine LIKE '%mfevto%' ESCAPE '\\' OR CommandLine LIKE '%mfevtp%' ESCAPE '\\' OR CommandLine LIKE '%mfewc%' ESCAPE '\\' OR CommandLine LIKE '%MMS%' ESCAPE '\\' OR CommandLine LIKE '%mozyprobackup%' ESCAPE '\\' OR CommandLine LIKE '%mpssvc%' ESCAPE '\\' OR CommandLine LIKE '%MSComplianceAudit%' ESCAPE '\\' OR CommandLine LIKE '%MSDTC%' ESCAPE '\\') OR (CommandLine LIKE '%MsDtsServer%' ESCAPE '\\' OR CommandLine LIKE '%MSExchange%' ESCAPE '\\' OR CommandLine LIKE '%msftesq1SPROO%' ESCAPE '\\' OR CommandLine LIKE '%msftesql$PROD%' ESCAPE '\\' OR CommandLine LIKE '%msftesql$SQLEXPRESS%' ESCAPE '\\' OR CommandLine LIKE '%MSOLAP$SQL\\_2008%' ESCAPE '\\' OR CommandLine LIKE '%MSOLAP$SYSTEM\\_BGC%' ESCAPE '\\' OR CommandLine LIKE '%MSOLAP$TPS%' ESCAPE '\\' OR CommandLine LIKE '%MSOLAP$TPSAMA%' ESCAPE '\\' OR CommandLine LIKE '%MSOLAPSTPS%' ESCAPE '\\' OR CommandLine LIKE '%MSOLAPSTPSAMA%' ESCAPE '\\' OR CommandLine LIKE '%mssecflt%' ESCAPE '\\' OR CommandLine LIKE '%MSSQ!I.SPROFXENGAGEMEHT%' ESCAPE '\\' OR CommandLine LIKE '%MSSQ0SHAREPOINT%' ESCAPE '\\' OR CommandLine LIKE '%MSSQ0SOPHOS%' ESCAPE '\\' OR CommandLine LIKE '%MSSQL%' ESCAPE '\\' OR CommandLine LIKE '%MSSQLFDLauncher$%' ESCAPE '\\' OR CommandLine LIKE '%MySQL%' ESCAPE '\\' OR CommandLine LIKE '%NanoServiceMain%' ESCAPE '\\' OR CommandLine LIKE '%NetMsmqActivator%' ESCAPE '\\' OR CommandLine LIKE '%NetPipeActivator%' ESCAPE '\\' OR CommandLine LIKE '%netprofm%' ESCAPE '\\' OR CommandLine LIKE '%NetTcpActivator%' ESCAPE '\\' OR CommandLine LIKE '%NetTcpPortSharing%' ESCAPE '\\' OR CommandLine LIKE '%ntrtscan%' ESCAPE '\\' OR CommandLine LIKE '%nvspwmi%' ESCAPE '\\' OR CommandLine LIKE '%ofcservice%' ESCAPE '\\' OR CommandLine LIKE '%Online Protection System%' ESCAPE '\\' OR CommandLine LIKE '%OracleClientCache80%' ESCAPE '\\' OR CommandLine LIKE '%OracleDBConsole%' ESCAPE '\\' OR CommandLine LIKE '%OracleMTSRecoveryService%' ESCAPE '\\' OR CommandLine LIKE '%OracleOraDb11g\\_home1%' ESCAPE '\\' OR CommandLine LIKE '%OracleService%' ESCAPE '\\' OR CommandLine LIKE '%OracleVssWriter%' ESCAPE '\\' OR CommandLine LIKE '%osppsvc%' ESCAPE '\\' OR CommandLine LIKE '%PandaAetherAgent%' ESCAPE '\\' OR CommandLine LIKE '%PccNTUpd%' ESCAPE '\\' OR CommandLine LIKE '%PDVFSService%' ESCAPE '\\' OR CommandLine LIKE '%POP3Svc%' ESCAPE '\\' OR CommandLine LIKE '%postgresql-x64-9.4%' ESCAPE '\\' OR CommandLine LIKE '%POVFSService%' ESCAPE '\\' OR CommandLine LIKE '%PSUAService%' ESCAPE '\\' OR CommandLine LIKE '%Quick Update Service%' ESCAPE '\\' OR CommandLine LIKE '%RepairService%' ESCAPE '\\' OR CommandLine LIKE '%ReportServer%' ESCAPE '\\' OR CommandLine LIKE '%ReportServer$%' ESCAPE '\\' OR CommandLine LIKE '%RESvc%' ESCAPE '\\' OR CommandLine LIKE '%RpcEptMapper%' ESCAPE '\\' OR CommandLine LIKE '%sacsvr%' ESCAPE '\\' OR CommandLine LIKE '%SamSs%' ESCAPE '\\') OR (CommandLine LIKE '%SAVAdminService%' ESCAPE '\\' OR CommandLine LIKE '%SAVService%' ESCAPE '\\' OR CommandLine LIKE '%ScSecSvc%' ESCAPE '\\' OR CommandLine LIKE '%SDRSVC%' ESCAPE '\\' OR CommandLine LIKE '%SearchExchangeTracing%' ESCAPE '\\' OR CommandLine LIKE '%sense%' ESCAPE '\\' OR CommandLine LIKE '%SentinelAgent%' ESCAPE '\\' OR CommandLine LIKE '%SentinelHelperService%' ESCAPE '\\' OR CommandLine LIKE '%SepMasterService%' ESCAPE '\\' OR CommandLine LIKE '%ShMonitor%' ESCAPE '\\' OR CommandLine LIKE '%Smcinst%' ESCAPE '\\' OR CommandLine LIKE '%SmcService%' ESCAPE '\\' OR CommandLine LIKE '%SMTPSvc%' ESCAPE '\\' OR CommandLine LIKE '%SNAC%' ESCAPE '\\' OR CommandLine LIKE '%SntpService%' ESCAPE '\\' OR CommandLine LIKE '%Sophos%' ESCAPE '\\' OR CommandLine LIKE '%SQ1SafeOLRService%' ESCAPE '\\' OR CommandLine LIKE '%SQL Backups%' ESCAPE '\\' OR CommandLine LIKE '%SQL Server%' ESCAPE '\\' OR CommandLine LIKE '%SQLAgent%' ESCAPE '\\' OR CommandLine LIKE '%SQLANYs\\_Sage\\_FAS\\_Fixed\\_Assets%' ESCAPE '\\' OR CommandLine LIKE '%SQLBrowser%' ESCAPE '\\' OR CommandLine LIKE '%SQLsafe%' ESCAPE '\\' OR CommandLine LIKE '%SQLSERVERAGENT%' ESCAPE '\\' OR CommandLine LIKE '%SQLTELEMETRY%' ESCAPE '\\' OR CommandLine LIKE '%SQLWriter%' ESCAPE '\\' OR CommandLine LIKE '%SSISTELEMETRY130%' ESCAPE '\\' OR CommandLine LIKE '%SstpSvc%' ESCAPE '\\' OR CommandLine LIKE '%storflt%' ESCAPE '\\' OR CommandLine LIKE '%svcGenericHost%' ESCAPE '\\' OR CommandLine LIKE '%swc\\_service%' ESCAPE '\\' OR CommandLine LIKE '%swi\\_filter%' ESCAPE '\\' OR CommandLine LIKE '%swi\\_service%' ESCAPE '\\' OR CommandLine LIKE '%swi\\_update%' ESCAPE '\\' OR CommandLine LIKE '%Symantec%' ESCAPE '\\' OR CommandLine LIKE '%sysmon%' ESCAPE '\\' OR CommandLine LIKE '%TeamViewer%' ESCAPE '\\' OR CommandLine LIKE '%Telemetryserver%' ESCAPE '\\' OR CommandLine LIKE '%ThreatLockerService%' ESCAPE '\\' OR CommandLine LIKE '%TMBMServer%' ESCAPE '\\' OR CommandLine LIKE '%TmCCSF%' ESCAPE '\\' OR CommandLine LIKE '%TmFilter%' ESCAPE '\\' OR CommandLine LIKE '%TMiCRCScanService%' ESCAPE '\\' OR CommandLine LIKE '%tmlisten%' ESCAPE '\\' OR CommandLine LIKE '%TMLWCSService%' ESCAPE '\\' OR CommandLine LIKE '%TmPfw%' ESCAPE '\\' OR CommandLine LIKE '%TmPreFilter%' ESCAPE '\\' OR CommandLine LIKE '%TmProxy%' ESCAPE '\\' OR CommandLine LIKE '%TMSmartRelayService%' ESCAPE '\\' OR CommandLine LIKE '%tmusa%' ESCAPE '\\') OR (CommandLine LIKE '%Tomcat%' ESCAPE '\\' OR CommandLine LIKE '%Trend Micro Deep Security Manager%' ESCAPE '\\' OR CommandLine LIKE '%TrueKey%' ESCAPE '\\' OR CommandLine LIKE '%UFNet%' ESCAPE '\\' OR CommandLine LIKE '%UI0Detect%' ESCAPE '\\' OR CommandLine LIKE '%UniFi%' ESCAPE '\\' OR CommandLine LIKE '%UTODetect%' ESCAPE '\\' OR CommandLine LIKE '%vds%' ESCAPE '\\' OR CommandLine LIKE '%Veeam%' ESCAPE '\\' OR CommandLine LIKE '%VeeamDeploySvc%' ESCAPE '\\' OR CommandLine LIKE '%Veritas System Recovery%' ESCAPE '\\' OR CommandLine LIKE '%vmic%' ESCAPE '\\' OR CommandLine LIKE '%VMTools%' ESCAPE '\\' OR CommandLine LIKE '%vmvss%' ESCAPE '\\' OR CommandLine LIKE '%VSApiNt%' ESCAPE '\\' OR CommandLine LIKE '%VSS%' ESCAPE '\\' OR CommandLine LIKE '%W3Svc%' ESCAPE '\\' OR CommandLine LIKE '%wbengine%' ESCAPE '\\' OR CommandLine LIKE '%WdNisSvc%' ESCAPE '\\' OR CommandLine LIKE '%WeanClOudSve%' ESCAPE '\\' OR CommandLine LIKE '%Weems JY%' ESCAPE '\\' OR CommandLine LIKE '%WinDefend%' ESCAPE '\\' OR CommandLine LIKE '%wmms%' ESCAPE '\\' OR CommandLine LIKE '%wozyprobackup%' ESCAPE '\\' OR CommandLine LIKE '%WPFFontCache\\_v0400%' ESCAPE '\\' OR CommandLine LIKE '%WRSVC%' ESCAPE '\\' OR CommandLine LIKE '%wsbexchange%' ESCAPE '\\' OR CommandLine LIKE '%WSearch%' ESCAPE '\\' OR CommandLine LIKE '%wscsvc%' ESCAPE '\\' OR CommandLine LIKE '%Zoolz 2 Service%' ESCAPE '\\'))))"
     ],
     "schema_version": 2,
     "source": "sigmahq",

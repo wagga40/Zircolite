@@ -1088,11 +1088,11 @@
       "product": "linux"
     },
     "required_fields": [
-      "Image"
+      "CommandLine"
     ],
     "result_type": "event",
     "rule": [
-      "SELECT * FROM logs WHERE Image LIKE '%/update-ca-certificates' ESCAPE '\\' OR Image LIKE '%/update-ca-trust' ESCAPE '\\'"
+      "SELECT * FROM logs WHERE CommandLine LIKE '%/update-ca-certificates%' ESCAPE '\\' OR CommandLine LIKE '%/update-ca-trust%' ESCAPE '\\'"
     ],
     "schema_version": 2,
     "source": "sigmahq",
@@ -3425,6 +3425,42 @@
       "attack.t1531"
     ],
     "title": "Group Has Been Deleted Via Groupdel"
+  },
+  {
+    "author": "Jennifer Batina",
+    "channel": [],
+    "description": "Detects a system shell interpreter being spawned directly by a Celery worker process.\nThis behavior indicates a Python background task execution framework is evaluating raw string input through a shell execution context,\nwhich is highly indicative of successful command or prompt injection exploitation against an LLM agent task.\n",
+    "eventid": [],
+    "falsepositives": [
+      "Legacy or custom administrative tasks deliberately hardcoded with shell=True or os.system execution inside Celery task functions.",
+      "Media processing, deployment, or reporting pipelines that intentionally shell out to external tools (e.g. ffmpeg, git) from within a task."
+    ],
+    "filename": "rules/linux/process_creation/proc_creation_lnx_celery_worker_shell_spawn.yml",
+    "id": "904f6442-3b57-4b3f-987c-1559f58ce8d8",
+    "level": "medium",
+    "license": "DRL-1.1",
+    "logsource": {
+      "category": "process_creation",
+      "product": "linux"
+    },
+    "required_fields": [
+      "Image",
+      "ParentCommandLine",
+      "ParentImage"
+    ],
+    "result_type": "event",
+    "rule": [
+      "SELECT * FROM logs WHERE ((Image LIKE '%/ash' ESCAPE '\\' OR Image LIKE '%/bash' ESCAPE '\\' OR Image LIKE '%/busybox' ESCAPE '\\' OR Image LIKE '%/csh' ESCAPE '\\' OR Image LIKE '%/dash' ESCAPE '\\' OR Image LIKE '%/fish' ESCAPE '\\' OR Image LIKE '%/ksh' ESCAPE '\\' OR Image LIKE '%/sh' ESCAPE '\\' OR Image LIKE '%/tcsh' ESCAPE '\\' OR Image LIKE '%/zsh' ESCAPE '\\') AND ParentCommandLine LIKE '%celery%' ESCAPE '\\') AND ((ParentImage LIKE '%/python' ESCAPE '\\' OR ParentImage LIKE '%/python3' ESCAPE '\\') OR ParentImage LIKE '%/python3.%' ESCAPE '\\')"
+    ],
+    "schema_version": 2,
+    "source": "sigmahq",
+    "source_table": "logs",
+    "status": "experimental",
+    "tags": [
+      "attack.execution",
+      "attack.t1059.004"
+    ],
+    "title": "Shell Spawned by Celery Worker Process"
   },
   {
     "author": "David Burkett (@signalblur)",

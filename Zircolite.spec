@@ -32,7 +32,12 @@ def _not_a_test_module(name):
 # nothing to apply and the rules convert without their EventID conditions.
 hiddenimports += collect_submodules('sigma.pipelines', filter=_not_a_test_module)
 hiddenimports += collect_submodules('sigma.backends', filter=_not_a_test_module)
-for library in ('evtx', 'ijson'):
+libraries = ['evtx', 'ijson']
+# zoneinfo reads zone files through importlib.resources, which the scan cannot
+# follow, and Windows has no system zone database for --timezone to fall back on.
+if sys.platform == 'win32':
+    libraries.append('tzdata')
+for library in libraries:
     library_data, library_binaries, library_imports = collect_all(library)
     datas += library_data
     binaries += library_binaries

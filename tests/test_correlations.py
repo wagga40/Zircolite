@@ -169,6 +169,22 @@ class TestCorrelationPlansRun:
         assert still_open.execute_rule(rules[0]) == {}
         assert still_open.metrics.data["correlation_diagnostics"] == {"burst": {"incomplete_window": 1}}
 
+    def test_a_chain_with_overlapping_branches_merges_its_evidence(self, tmp_path, make_core):
+        # Two OR branches can describe the same window: one alert, with both branches' evidence
+        docs = [base("proc", 1), base("success", 2), correlation(name="burst"),
+                correlation("temporal", ("burst", "success"), "burst or (burst and success) or success",
+                            name="chain")]
+        rules = convert(tmp_path, docs)
+        core = make_core([event(0), event(1), event(2), event(2, EventID=2)])
+
+        result = core.execute_rule(rules[0])
+
+        assert not core.rules_in_error
+        assert [(alert["metric_value"], alert["event_count"]) for alert in result["matches"]] == [(1, 2), (2, 4)]
+        merged = result["matches"][1]
+        assert merged["event_ids"] == sorted(set(merged["event_ids"]))
+        assert len(merged["child_alert_ids"]) == 2
+
     def test_invalid_timestamps_are_reported_even_without_alerts(self, tmp_path, make_core, caplog):
         rules = convert(tmp_path, [base(), correlation()])
         core = make_core([event(0, SystemTime="not a time"), event(1)])
