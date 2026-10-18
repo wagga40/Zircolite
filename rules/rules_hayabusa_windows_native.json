@@ -1777,7 +1777,7 @@
   {
     "author": "Zach Mathis",
     "channel": [
-      "Microsoft-Windows-WLAN-AutoConfig"
+      "Microsoft-Windows-WLAN-AutoConfig/Operational"
     ],
     "description": "Prints connection info to wireless access points.",
     "eventid": [
@@ -1799,7 +1799,7 @@
     ],
     "result_type": "event",
     "rule": [
-      "SELECT * FROM logs WHERE Channel='Microsoft-Windows-WLAN-AutoConfig' AND EventID=8001"
+      "SELECT * FROM logs WHERE Channel='Microsoft-Windows-WLAN-AutoConfig/Operational' AND EventID=8001"
     ],
     "schema_version": 2,
     "source": "hayabusa",
