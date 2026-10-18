@@ -31,6 +31,8 @@ zircolite-package-*.zip
 # Zircolite Viewer packages; never commit event data.
 zircolite-package-*
 tmp-zircolite-package-*
+timeline.csv
+tmp-zircolite-timeline-*
 results
 tmp
 *.log
