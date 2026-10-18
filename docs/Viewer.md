@@ -57,7 +57,8 @@ loads, it checks that every file arrived whole and that the engine holds exactly
 and matches the package lists. A truncated package is reported, never shown incomplete.
 These checks compare counts and sizes, not checksums.
 
-All times are UTC.
+All times are UTC; `--timezone` applies to the [`--timeline` file](Usage.md#timeline), not
+to the Viewer.
 
 **Filters.** The search box, the time range and **Detections only** (events at least one
 rule matched) apply to every view, unless a view says otherwise. Each active filter shows as

@@ -10,8 +10,8 @@ cd Zircolite
 pdm install --dev
 ```
 
-Dependencies live in `pyproject.toml` and `pdm.lock` only; `uv sync` and
-`poetry install` read the same file.
+Dependencies live in `pyproject.toml` and `pdm.lock` only; `uv sync` reads the
+same file, and Poetry [cannot resolve it yet](docs/Usage.md#from-source).
 
 Installing also compiles `zircolite/flatten_kernel.py` into
 `zircolite._flatten_native` (see `setup.py`) when a C compiler is available.
@@ -189,7 +189,7 @@ with no matches:
   it (`ZircoliteCore._note_broken_rule`) so it reaches the run summary.
 - If a reader cannot finish a file, mark the run degraded, so the file is
   reported as partial rather than as a clean run with fewer events.
-- The early event filter (`EventFilter` in `zircolite/rules.py`) must retain
+- The early event filter (`EventFilter` in `zircolite/event_filter.py`) must retain
   events when a bound is uncertain, so it cannot discard potential detections.
 - Parse rule SQL with `zircolite/sqlscan.py`, never with a regex. Field names
   are backtick-quoted whenever they are not `^[a-zA-Z0-9_]*$` (every ECS name),
@@ -273,8 +273,8 @@ the workflow by hand: `dry_run` is on by default and stops after `SHA256SUMS`.
 ## Rules and licensing
 
 Code is LGPL-3.0-or-later; the Sigma rules under `rules/` keep the licence of
-their source (DRL 1.1, GPL 3.0 or CC0 1.0), named with its text in
-`rules/licenses/` and for every file in `rules/release-manifest.json`. Refresh
+[their source](https://github.com/wagga40/Zircolite-Rules-v2/blob/main/docs/sources.md), named with its text in `rules/licenses/` and for
+every file in `rules/release-manifest.json`. Refresh
 them with `-U` rather than by hand: a release refuses files that manifest does
 not list. Rulesets are generated from
 [Zircolite-Rules-v2](https://github.com/wagga40/Zircolite-Rules-v2) — send rule

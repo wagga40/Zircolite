@@ -1,0 +1,236 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 420" width="960" height="420" role="img" aria-labelledby="t d">
+  <title id="t">The literal prefilter</title>
+  <desc id="d">A rule matching CommandLine LIKE '%mimikatz%' OR '%sekurlsa::%' yields two literals every match must contain. One Aho–Corasick pass over the CommandLine column marks rows 2, 4 and 6 in per-literal bitmaps, whose union is the candidate set; SQLite then runs the rule's full WHERE only on those rows, rejects row 4 (EventID 4688) and skips the other five, so the detections, rows 2 and 6, are exactly those of a full scan. A rule with no usable literal runs as written over the whole table.</desc>
+  <style>
+    :root {
+      --paper: #eef1ef;
+      --panel: #f8faf8;
+      --ink: #16211e;
+      --ink-2: #4a5955;
+      --rule: #cfd8d4;
+      --signal: #00697a;
+      --strip: #7c8b87;
+      --danger: #a3134e;
+      --signal-tint: rgb(0 105 122 / 0.1);
+      --danger-tint: rgb(163 19 78 / 0.12);
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --paper: #0e191c;
+        --panel: #13232a;
+        --ink: #e2ebe8;
+        --ink-2: #9daea9;
+        --rule: #26393f;
+        --signal: #53c2cf;
+        --strip: #5f7570;
+        --danger: #f2568e;
+        --signal-tint: rgb(83 194 207 / 0.14);
+        --danger-tint: rgb(242 86 142 / 0.18);
+      }
+    }
+    text { fill: var(--ink); font: 13px ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+    .mono, .mono text { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+    .card { fill: var(--paper); stroke: var(--rule); }
+    .panel { fill: var(--panel); stroke: var(--rule); }
+    .ink2, .ink2 text, .kw { fill: var(--ink-2); }
+    .bold { font-weight: 600; }
+    .step { font-weight: 600; }
+    .step .n { fill: var(--signal); }
+    .step .ink2 { font-weight: 400; }
+    .arrow { fill: none; stroke: var(--strip); stroke-width: 1.5; }
+    .head { fill: var(--strip); }
+    .line { stroke: var(--rule); }
+    .col { fill: var(--signal); font-weight: 600; }
+    .lit { fill: var(--signal); }
+    .sql .lit, .cand { font-weight: 600; }
+    .chip { fill: var(--panel); stroke: var(--signal); }
+    .small text { font-size: 12px; }
+    .bit { fill: none; stroke: var(--strip); }
+    .on { fill: var(--signal); }
+    .scanbar { fill: var(--signal-tint); }
+    .scanedge { fill: var(--signal); }
+    .hit { fill: var(--danger-tint); }
+    .hit-strip, .det { fill: var(--danger); }
+    .det { font-weight: 600; }
+    .dim { opacity: 0.45; }
+    .scan { opacity: 0; }
+
+    .scene, .an { animation: 12s ease-in-out infinite; }
+    .scene { animation-name: scene; }
+    .sql { animation-name: sql; }
+    .sqllit { animation-name: sqllit; }
+    .chip1 { animation-name: chip1; }
+    .chip2 { animation-name: chip2; }
+    .note { animation-name: note; }
+    .lead { animation-name: lead; }
+    .toTable { animation-name: toTable; }
+    .scan { animation-name: scan; animation-timing-function: linear; }
+    .l2 { animation-name: l2; }
+    .l4 { animation-name: l4; }
+    .l6 { animation-name: l6; }
+    .p2 { animation-name: p2; }
+    .p4 { animation-name: p4; }
+    .p6 { animation-name: p6; }
+    .c2 { animation-name: c2; }
+    .c4 { animation-name: c4; }
+    .c6 { animation-name: c6; }
+    .toSql { animation-name: toSql; }
+    .sqlite { animation-name: sqlite; }
+    .dim { animation-name: dim; }
+    .skip { animation-name: skip; }
+    .hits { animation-name: hits; }
+    .rej { animation-name: rej; }
+    .toRes { animation-name: toRes; }
+    .res1 { animation-name: res1; }
+    .res2 { animation-name: res2; }
+    .why { animation-name: why; }
+    .fallback { animation-name: fallback; }
+
+    @keyframes sql { 0%, 2.5% { opacity: 0; transform: translateY(6px); } 6.67%, 100% { opacity: 1; transform: none; } }
+    @keyframes sqllit { 0%, 7.5% { fill: var(--ink); } 10%, 100% { fill: var(--signal); } }
+    @keyframes lead { 0%, 8.33% { opacity: 0; } 10%, 100% { opacity: 1; } }
+    @keyframes chip1 { 0%, 10% { opacity: 0; transform: translateY(-8px); } 12.5%, 100% { opacity: 1; transform: none; } }
+    @keyframes chip2 { 0%, 11.25% { opacity: 0; transform: translateY(-8px); } 13.75%, 100% { opacity: 1; transform: none; } }
+    @keyframes note { 0%, 13.33% { opacity: 0; } 15.83%, 100% { opacity: 1; } }
+    @keyframes toTable { 0%, 15% { opacity: 0; transform: translateX(-6px); } 16.67%, 100% { opacity: 1; transform: none; } }
+    @keyframes scan {
+      0%, 15.83% { opacity: 0; transform: none; }
+      16.67% { opacity: 1; transform: none; }
+      34.17% { opacity: 1; transform: translateY(133px); }
+      36.67%, 100% { opacity: 0; transform: translateY(133px); }
+    }
+    @keyframes l2 { 0%, 19.17% { fill: var(--ink); } 20.42%, 96.67% { fill: var(--signal); } 100% { fill: var(--ink); } }
+    @keyframes l4 { 0%, 24.17% { fill: var(--ink); } 25.42%, 96.67% { fill: var(--signal); } 100% { fill: var(--ink); } }
+    @keyframes l6 { 0%, 29.17% { fill: var(--ink); } 30.42%, 96.67% { fill: var(--signal); } 100% { fill: var(--ink); } }
+    @keyframes p2 { 0%, 19.17% { opacity: 0; } 20.42%, 100% { opacity: 1; } }
+    @keyframes p4 { 0%, 24.17% { opacity: 0; } 25.42%, 100% { opacity: 1; } }
+    @keyframes p6 { 0%, 29.17% { opacity: 0; } 30.42%, 100% { opacity: 1; } }
+    @keyframes c2 { 0%, 37.5% { opacity: 0; } 39.17%, 100% { opacity: 1; } }
+    @keyframes c4 { 0%, 38.75% { opacity: 0; } 40.42%, 100% { opacity: 1; } }
+    @keyframes c6 { 0%, 40% { opacity: 0; } 41.67%, 100% { opacity: 1; } }
+    @keyframes toSql { 0%, 43.33% { opacity: 0; transform: translateX(-6px); } 45%, 100% { opacity: 1; transform: none; } }
+    @keyframes sqlite { 0%, 44.17% { opacity: 0; transform: translateY(6px); } 47.5%, 100% { opacity: 1; transform: none; } }
+    @keyframes dim { 0%, 49.17% { opacity: 1; } 52.5%, 96.67% { opacity: 0.45; } 100% { opacity: 1; } }
+    @keyframes skip { 0%, 49.17% { opacity: 0; } 52.5%, 100% { opacity: 1; } }
+    @keyframes hits { 0%, 53.33% { opacity: 0; } 56.67%, 100% { opacity: 1; } }
+    @keyframes rej { 0%, 55% { opacity: 0; transform: translateX(-6px); } 58.33%, 100% { opacity: 1; transform: none; } }
+    @keyframes toRes { 0%, 59.17% { opacity: 0; transform: translateX(-6px); } 60.83%, 100% { opacity: 1; transform: none; } }
+    @keyframes res1 { 0%, 60% { opacity: 0; transform: translateX(-8px); } 62.5%, 100% { opacity: 1; transform: none; } }
+    @keyframes res2 { 0%, 61.67% { opacity: 0; transform: translateX(-8px); } 64.17%, 100% { opacity: 1; transform: none; } }
+    @keyframes why { 0%, 65.83% { opacity: 0; transform: translateY(6px); } 69.17%, 100% { opacity: 1; transform: none; } }
+    @keyframes fallback { 0%, 70% { opacity: 0; } 73.33%, 100% { opacity: 1; } }
+    @keyframes scene { 0%, 96.67% { opacity: 1; } 100% { opacity: 0; } }
+
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after { animation: none !important; }
+    }
+  </style>
+  <rect class="card" x="0.5" y="0.5" width="959" height="419" rx="14"/>
+
+  <text class="step" x="24" y="34"><tspan class="n">1</tspan>  Rule → literals</text>
+  <text class="step" x="360" y="34"><tspan class="n">2</tspan>  One Aho–Corasick pass <tspan class="ink2">over CommandLine, for every rule at once</tspan></text>
+  <text class="step" x="24" y="254"><tspan class="n">3</tspan>  Bitmaps <tspan class="ink2">one per literal, then OR</tspan></text>
+  <text class="step" x="376" y="254"><tspan class="n">4</tspan>  SQLite checks candidates only</text>
+  <text class="step" x="664" y="254"><tspan class="n">5</tspan>  Same detections as a full scan</text>
+
+  <rect class="panel" x="24.5" y="48.5" width="320" height="178" rx="6"/>
+  <rect class="panel" x="360.5" y="48.5" width="576" height="178" rx="6"/>
+  <rect class="panel" x="24.5" y="268.5" width="336" height="116" rx="6"/>
+  <rect class="panel" x="376.5" y="268.5" width="272" height="116" rx="6"/>
+  <rect class="panel" x="664.5" y="268.5" width="272" height="116" rx="6"/>
+
+  <!-- behind the table text: the automaton's cursor and the detections -->
+  <g class="scene">
+    <g class="an scan">
+      <rect class="scanbar" x="498" y="72.5" width="262" height="19"/>
+      <rect class="scanedge" x="498" y="72.5" width="2" height="19"/>
+    </g>
+    <g class="an hits">
+      <rect class="hit" x="361" y="91.5" width="575" height="19"/><rect class="hit-strip" x="361" y="91.5" width="3" height="19"/>
+      <rect class="hit" x="361" y="167.5" width="575" height="19"/><rect class="hit-strip" x="361" y="167.5" width="3" height="19"/>
+    </g>
+  </g>
+
+  <!-- the logs table: candidates stay, the other rows are skipped -->
+  <g class="mono">
+    <text class="ink2" x="374" y="65">row_id</text>
+    <text class="ink2" x="432" y="65">EventID</text>
+    <text class="col" x="506" y="65">CommandLine</text>
+  </g>
+  <path class="line" d="M361 72.5h575M361 91.5h575M361 110.5h575M361 129.5h575M361 148.5h575M361 167.5h575M361 186.5h575M361 205.5h575"/>
+  <g class="mono">
+    <g class="an dim"><text x="394" y="86">1</text><text x="432" y="86">1</text><text x="506" y="86">explorer.exe</text></g>
+    <g><text x="394" y="105">2</text><text x="432" y="105">1</text><text x="506" y="105"><tspan class="lit an l2">mimikatz</tspan>.exe privilege::debug</text></g>
+    <g class="an dim"><text x="394" y="124">3</text><text x="432" y="124">1</text><text x="506" y="124">svchost.exe -k netsvcs</text></g>
+    <g><text x="394" y="143">4</text><text x="432" y="143">4688</text><text x="506" y="143">C:\Tools\<tspan class="lit an l4">mimikatz</tspan>.exe</text></g>
+    <g class="an dim"><text x="394" y="162">5</text><text x="432" y="162">1</text><text x="506" y="162">powershell -nop -w hidden</text></g>
+    <g><text x="394" y="181">6</text><text x="432" y="181">1</text><text x="506" y="181">pd.exe <tspan class="lit an l6">sekurlsa::</tspan>logonpasswords</text></g>
+    <g class="an dim"><text x="394" y="200">7</text><text x="432" y="200">1</text><text x="506" y="200">cmd.exe /c whoami</text></g>
+    <g class="an dim"><text x="394" y="219">8</text><text x="432" y="219">1</text><text x="506" y="219">notepad.exe report.txt</text></g>
+  </g>
+
+  <!-- bitmap cells, one row per literal and their union -->
+  <g class="mono">
+    <g class="ink2 small" text-anchor="middle"><text x="158" y="289">1</text><text x="182" y="289">2</text><text x="206" y="289">3</text><text x="230" y="289">4</text><text x="254" y="289">5</text><text x="278" y="289">6</text><text x="302" y="289">7</text><text x="326" y="289">8</text></g>
+    <text x="40" y="310">mimikatz</text>
+    <text x="40" y="334">sekurlsa::</text>
+  </g>
+  <text class="bold" x="40" y="366">candidates</text>
+  <path class="line" d="M40 345.5h296"/>
+  <path class="bit" d="M148.5 296.5h19v18h-19zm24 0h19v18h-19zm24 0h19v18h-19zm24 0h19v18h-19zm24 0h19v18h-19zm24 0h19v18h-19zm24 0h19v18h-19zm24 0h19v18h-19zM148.5 320.5h19v18h-19zm24 0h19v18h-19zm24 0h19v18h-19zm24 0h19v18h-19zm24 0h19v18h-19zm24 0h19v18h-19zm24 0h19v18h-19zm24 0h19v18h-19zM148.5 352.5h19v18h-19zm24 0h19v18h-19zm24 0h19v18h-19zm24 0h19v18h-19zm24 0h19v18h-19zm24 0h19v18h-19zm24 0h19v18h-19zm24 0h19v18h-19z"/>
+
+  <g class="scene">
+    <!-- 1. the condition and the literals every match must contain -->
+    <g class="an sql mono">
+      <text x="40" y="72"><tspan class="kw">SELECT</tspan> * <tspan class="kw">FROM</tspan> logs</text>
+      <text x="40" y="91"><tspan class="kw">WHERE</tspan> EventID = 1</text>
+      <text x="40" y="110"><tspan class="kw">AND</tspan> (CommandLine <tspan class="kw">LIKE</tspan> <tspan class="kw">'%</tspan><tspan class="lit an sqllit">mimikatz</tspan><tspan class="kw">%'</tspan></text>
+      <text x="55.7" y="129"><tspan class="kw">OR</tspan> CommandLine <tspan class="kw">LIKE</tspan> <tspan class="kw">'%</tspan><tspan class="lit an sqllit">sekurlsa::</tspan><tspan class="kw">%'</tspan>)</text>
+    </g>
+    <text class="an note ink2" x="196" y="91">no literal, no bound</text>
+    <path class="line" d="M25 146.5h319"/>
+    <text class="an lead ink2" x="40" y="168">every match contains one of these</text>
+    <g class="an chip1"><rect class="chip" x="40.5" y="180.5" width="88" height="24" rx="5"/><text class="mono lit" x="84.5" y="197" text-anchor="middle">mimikatz</text></g>
+    <g class="an chip2">
+      <text class="ink2" x="146.5" y="197" text-anchor="middle">or</text>
+      <rect class="chip" x="164.5" y="180.5" width="104" height="24" rx="5"/><text class="mono lit" x="216.5" y="197" text-anchor="middle">sekurlsa::</text>
+    </g>
+    <g class="an toTable"><path class="arrow" d="M345 192.5h8"/><path class="head" d="M359 192.5l-6-4v8z"/></g>
+
+    <!-- 2-3. the pass marks posting bits, OR takes their union -->
+    <rect class="on an p2" x="172.5" y="296.5" width="19" height="18"/>
+    <rect class="on an p4" x="220.5" y="296.5" width="19" height="18"/>
+    <rect class="on an p6" x="268.5" y="320.5" width="19" height="18"/>
+    <rect class="on an c2" x="172.5" y="352.5" width="19" height="18"/>
+    <rect class="on an c4" x="220.5" y="352.5" width="19" height="18"/>
+    <rect class="on an c6" x="268.5" y="352.5" width="19" height="18"/>
+    <g class="an toSql"><path class="arrow" d="M361 361.5h8"/><path class="head" d="M375 361.5l-6-4v8z"/></g>
+
+    <!-- 4. the rewritten statement and its verdict on each candidate -->
+    <g class="an sqlite mono">
+      <text x="392" y="291"><tspan class="kw">SELECT</tspan> * <tspan class="kw">FROM</tspan> logs <tspan class="kw">WHERE</tspan></text>
+      <text x="392" y="309">logs.row_id <tspan class="kw">IN</tspan> (<tspan class="kw">SELECT</tspan> value</text>
+      <text x="407.7" y="327"><tspan class="kw">FROM</tspan> json_each('<tspan class="lit cand">[2,4,6]</tspan>'))</text>
+      <text x="392" y="345"><tspan class="kw">AND</tspan> (EventID = 1 <tspan class="kw">AND</tspan> (…))</text>
+    </g>
+    <text class="an skip ink2" x="392" y="369">3 rows checked, 5 skipped</text>
+    <g class="an skip ink2">
+      <text x="776" y="86">skipped</text><text x="776" y="124">skipped</text>
+      <text x="776" y="162">skipped</text><text x="776" y="200">skipped</text>
+      <text x="776" y="219">skipped</text>
+    </g>
+    <g class="an hits"><text class="det" x="776" y="105">match</text><text class="det" x="776" y="181">match</text></g>
+    <text class="an rej ink2" x="776" y="143">checked, EventID ≠ 1</text>
+    <g class="an toRes"><path class="arrow" d="M649 326.5h8"/><path class="head" d="M663 326.5l-6-4v8z"/></g>
+
+    <!-- 5. identical results, and why -->
+    <g class="an res1"><text class="ink2" x="680" y="293">full scan</text><text class="mono det" x="920" y="293" text-anchor="end">rows 2, 6</text></g>
+    <g class="an res2"><text class="ink2" x="680" y="313">with prefilter</text><text class="mono det" x="920" y="313" text-anchor="end">rows 2, 6</text></g>
+    <g class="an why">
+      <path class="line" d="M680 328.5h240"/>
+      <text x="680" y="351">Every match contains a literal, and</text>
+      <text x="680" y="370">SQLite rechecks every candidate.</text>
+    </g>
+    <text class="an fallback ink2" x="480" y="406" text-anchor="middle">A rule with no usable literal runs as written, over the whole table; <tspan class="mono">--rule-prefilter off</tspan> does that for every rule.</text>
+  </g>
+</svg>

@@ -412,7 +412,8 @@ event_filter:
   filter_all_sources: false     # true: filter Sysmon for Linux and Auditd too
 ```
 
-How the bounds are read from rule SQL is in [Internals → Event filter bounds](Internals.md#event-filter-bounds).
+How the bounds are read from rule SQL is in
+[Internals → Event filter bounds](Internals.md#event-filter-bounds).
 
 ### File filters
 
