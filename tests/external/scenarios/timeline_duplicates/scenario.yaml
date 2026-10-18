@@ -1,0 +1,22 @@
+# Two copies of one EVTX file give one timeline row per detection
+tags: [evtx, output]
+skip_if:
+  missing_input: true
+command:
+  - "-e"
+  - "/data/input"
+  - "-r"
+  - "/data/input/ruleset.json"
+  - "-f"
+  - "evtx"
+  - "-o"
+  - "/data/output/detected_events.json"
+  - "-l"
+  - "/data/output/zircolite.log"
+  - "--timeline"
+  - "/data/output/timeline.csv"
+expected_exit_code: 0
+compare_files:
+  - actual: /data/output/timeline.csv
+    compare: content
+    expected: timeline.csv

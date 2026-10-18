@@ -1,0 +1,17 @@
+# A ZIP archive is read as the file it holds: the same 3 rules as json_basic
+tags: [json, format]
+command:
+  - "-e"
+  - "/data/input/events.zip"
+  - "-r"
+  - "/data/input/ruleset.json"
+  - "-j"
+  - "-o"
+  - "/data/output/detected_events.json"
+  - "-l"
+  - "/data/output/zircolite.log"
+expected_exit_code: 0
+compare_files:
+  - actual: /data/output/detected_events.json
+    compare: json_exact_count
+    count: 3

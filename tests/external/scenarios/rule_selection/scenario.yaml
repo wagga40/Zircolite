@@ -1,0 +1,25 @@
+# --rule-status keeps stable and test rules; --exclude-tag attack.t1059 drops attack.t1059.001
+tags: [json, cli]
+command:
+  - "-e"
+  - "/data/input/events.jsonl"
+  - "-r"
+  - "/data/input/ruleset.json"
+  - "-j"
+  - "-o"
+  - "/data/output/detected_events.json"
+  - "-l"
+  - "/data/output/zircolite.log"
+  - "--rule-status"
+  - "stable"
+  - "test"
+  - "--exclude-tag"
+  - "attack.t1059"
+expected_exit_code: 0
+compare_files:
+  - actual: /data/output/detected_events.json
+    compare: json_exact_count
+    count: 1
+  - actual: /data/output/detected_events.json
+    compare: json_contains_titles
+    titles: ["CMD Whoami Execution"]

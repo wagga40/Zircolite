@@ -17,6 +17,7 @@ import subprocess
 import sys
 import tempfile
 import time
+import zipfile
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from xml.etree.ElementTree import Element, ElementTree, SubElement, indent
@@ -156,6 +157,8 @@ def run_scenario(
     stdout_contains: list[str] = manifest.get("stdout_contains", [])
     stdout_not_contains: list[str] = manifest.get("stdout_not_contains", [])
     stderr_contains: list[str] = manifest.get("stderr_contains", [])
+    # Lines of JSON stdout alone must hold, for runs that stream data there
+    stdout_jsonl: int | None = manifest.get("stdout_jsonl")
     compare_files_spec: list[dict] = manifest.get("compare_files", [])
     allow_stderr_errors: bool = manifest.get("allow_stderr_errors", False)
     timeout: int = manifest.get("timeout", default_timeout)
@@ -242,6 +245,10 @@ def run_scenario(
                     f"expected stderr to contain {needle!r}",
                     docker_cmd, stdout, stderr, exit_code, duration,
                 )
+        if stdout_jsonl is not None:
+            problem = _jsonl_problem(stdout, stdout_jsonl)
+            if problem:
+                return _fail(f"stdout: {problem}", docker_cmd, stdout, stderr, exit_code, duration)
 
         if not allow_stderr_errors:
             for pattern in _TRACEBACK_PATTERNS:
@@ -254,7 +261,7 @@ def run_scenario(
         _MODES_WITHOUT_EXPECTED = (
             "json_count_min", "json_exact_count", "json_all_have_field",
             "json_matches_all_have_field", "json_schema", "json_contains_titles",
-            "exists", "lines_min",
+            "exists", "lines_min", "zip_contains",
         )
         for pair in compare_files_spec:
             actual_path = pair.get("actual")
@@ -262,6 +269,15 @@ def run_scenario(
             if not actual_path:
                 continue
             host_actual = host_output / Path(actual_path).name
+            # A glob names an output whose name Zircolite chooses, such as a package
+            if any(char in host_actual.name for char in "*?["):
+                found = sorted(host_output.glob(host_actual.name))
+                if len(found) != 1:
+                    return _fail(
+                        f"{len(found)} output files match {actual_path}, expected one",
+                        docker_cmd, stdout, stderr, exit_code, duration,
+                    )
+                host_actual = found[0]
             if not host_actual.exists():
                 return _fail(
                     f"output file missing: {actual_path}",
@@ -289,6 +305,19 @@ def run_scenario(
         docker_command=docker_cmd, zircolite_args=zircolite_args,
         duration=duration,
     )
+
+
+def _jsonl_problem(text: str, count: int) -> str | None:
+    """Why *text* is not exactly *count* lines of JSON, or None."""
+    lines = text.splitlines()
+    for number, line in enumerate(lines, 1):
+        try:
+            json.loads(line)
+        except ValueError:
+            return f"line {number} is not JSON: {line[:80]!r}"
+    if len(lines) != count:
+        return f"{len(lines)} JSON lines, expected {count}"
+    return None
 
 
 def _compare_files(actual_path: Path, expected_path: Path | None, pair: dict) -> tuple[bool, str]:
@@ -395,6 +424,14 @@ def _compare_files(actual_path: Path, expected_path: Path | None, pair: dict) ->
                 if not isinstance(matches, list) or len(matches) < matches_min:
                     count = len(matches) if isinstance(matches, list) else 0
                     return False, f"item[{idx}] has {count} matches, expected >= {matches_min}"
+        return True, ""
+
+    if compare_mode == "zip_contains":
+        with zipfile.ZipFile(actual_path) as archive:
+            names = set(archive.namelist())
+        missing = [name for name in pair.get("names", []) if name not in names]
+        if missing:
+            return False, f"missing from the archive: {missing}"
         return True, ""
 
     if compare_mode == "json_contains_titles":

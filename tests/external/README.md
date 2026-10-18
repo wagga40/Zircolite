@@ -80,6 +80,14 @@ pdm run python tests/external/run_external_tests.py \
 | `evtx_no_parallel`  | `--no-parallel` with two EVTX files in a directory | evtx |
 | `evtx_unified_db`   | `--unified-db` with two EVTX files in a directory | evtx |
 | `evtx_perfile`      | `--no-auto-mode` (per-file mode) with two EVTX files | evtx |
+| `timeline_csv`      | `--timeline` CSV, compared byte for byte | json, output |
+| `timeline_jsonl_stdout` | `--timeline -`: only JSON lines on stdout | json, output |
+| `timeline_timezone` | `--timezone Europe/Paris` (the image's zone database) | json, output |
+| `timeline_duplicates` | Two copies of one EVTX give one row per detection | evtx, output |
+| `timeline_keep_duplicates` | `--keep-duplicates` keeps both copies' rows | evtx, output |
+| `package`           | `--package`: the zip holds the Viewer and the manifest | json, output |
+| `archive_zip`       | ZIP archive input gives the plain file's detections | json, format |
+| `rule_selection`    | `--rule-status` and `--exclude-tag` (prefix match) | json, cli |
 | `error_invalid_flag` | Unknown CLI flag (expects exit 2) | error, smoke |
 | `error_missing_events` | Non-existent events file (expects exit 1) | error |
 | `error_bad_ruleset` | Broken JSON ruleset (expects exit 1) | error |
@@ -140,8 +148,10 @@ Each scenario lives under `tests/external/scenarios/<name>/`:
   - `stdout_contains`: list of strings that must appear in stdout+stderr.
   - `stdout_not_contains`: list of strings that must NOT appear in stdout+stderr.
   - `stderr_contains`: list of strings that must appear in stderr.
+  - `stdout_jsonl`: stdout alone must be exactly this many lines, each one JSON.
   - `compare_files`: list of `{ actual, expected?, compare?, ... }`:
-    - `actual`: path inside the container (e.g. `/data/output/detected_events.json`).
+    - `actual`: path inside the container (e.g. `/data/output/detected_events.json`); a glob
+      such as `/data/output/zircolite-package-*.zip` must match exactly one file.
     - `expected`: filename under the scenario's `expected/` dir (optional for non-content modes).
     - `compare`: one of:
       - `content` (default) — byte-for-byte comparison with `expected` file.
@@ -154,6 +164,7 @@ Each scenario lives under `tests/external/scenarios/<name>/`:
       - `json_contains_titles` — the output must contain detections with each title in `titles`.
       - `exists` — file must exist (no content check).
       - `lines_min` — file must have at least `min_count` non-empty lines.
+      - `zip_contains` — the zip archive must hold every entry listed in `names`.
 - **`input/`** – (optional) Directory mounted at `/data/input` in the container.
 - **`expected/`** – (optional) Directory with expected output files.
 
