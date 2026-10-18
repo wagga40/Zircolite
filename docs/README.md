@@ -32,15 +32,10 @@ terminal. Add `--package` to explore every event in the [Zircolite Viewer](Viewe
 
 ## Which ruleset?
 
-| Your logs | Ruleset |
-|-----------|---------|
-| Windows, with or without Sysmon | `rules/rules_windows_merged.json`, the default |
-| Windows, Sysmon only | `rules/rules_windows_sysmon.json` |
-| Linux: Auditd, Sysmon for Linux | `rules/rules_linux.json` |
-| Your own Sigma rules | The YAML file or directory |
-
-Pass it with `--ruleset`. See [Rulesets](Usage.md#rulesets--rules) for the others and for
-updates.
+Windows logs, with or without Sysmon, need nothing more: `rules/rules_windows_merged.json`
+is the default. For Linux logs pass `--ruleset rules/rules_linux.json`, and for your own
+Sigma rules the YAML file or directory. [Rulesets and rules](Usage.md#rulesets--rules)
+covers the others and updates.
 
 ## Contents
 

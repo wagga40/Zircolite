@@ -88,8 +88,9 @@ docker run --rm --tty \
 ```
 
 - Put your own rules in a mounted directory: `--ruleset /case/input/my_rules.yml`.
-- Outputs that go to the working directory by default, such as `--package` or `--keepflat`,
-  disappear with the container: send the package to `--package-dir /case/output`.
+- Outputs that go to the working directory by default, such as `--package`, `--timeline`
+  or `--keepflat`, disappear with the container: name a place under `/case/output`, as in
+  `--package-dir /case/output` or `--timeline /case/output/timeline.csv`.
 - The image runs as an unprivileged user. Docker Desktop and OrbStack on macOS remap the
   mounts, so that works as is. On a Linux host, run as yourself and put the log file beside
   the results: add `--user "$(id -u):$(id -g)"` and `-l /case/output/zircolite.log`.
@@ -103,12 +104,12 @@ declares the dependencies and `pdm.lock` is the tracked lock file.
 | Tool | Install | Run |
 |------|---------|-----|
 | [PDM](https://pdm-project.org/latest/) | `pdm install` | `pdm run python3 zircolite.py …` |
-| [Poetry](https://python-poetry.org) 2.2+ | `poetry install` | `poetry run python3 zircolite.py …` |
 | [uv](https://docs.astral.sh/uv/) | `uv sync` | `uv run python3 zircolite.py …` |
 
-Poetry cannot resolve the dependencies for now: the Windows and Sysmon pySigma pipelines
-still declare `pysigma<2`, which the SQLite backend outgrew, and Poetry has no way to
-override a dependency's requirement. PDM and uv apply the override in `pyproject.toml`.
+Poetry 2.2+ reads the same file but cannot resolve it for now: the Windows and Sysmon
+pySigma pipelines still declare `pysigma<2`, which the SQLite backend outgrew, and Poetry
+has no way to override a dependency's requirement. PDM and uv apply the override in
+`pyproject.toml`.
 
 ```shell
 git clone https://github.com/wagga40/Zircolite.git
@@ -118,9 +119,9 @@ pdm run python3 zircolite.py --events sample.evtx
 ```
 
 Each tool manages its own virtual environment: activate it, or prefix commands as in the
-table. All three install the `dev` group (tests, linters, PyInstaller); `pdm install --prod`,
-`uv sync --no-dev` or `poetry install --without dev` leave it out. Once the environment is
-active, `python3 -m zircolite` works from any directory.
+table. Both install the `dev` group (tests, linters, PyInstaller); `pdm install --prod` or
+`uv sync --no-dev` leave it out. Once the environment is active, `python3 -m zircolite`
+works from any directory.
 
 Python 3.15 and free-threaded builds such as `python3.14t` are not supported yet: duckdb
 and google-re2 publish no wheels for them, so the install compiles them from source.
@@ -165,10 +166,6 @@ with Python, which runs the same code. Install the toolchain first:
   Docker image and the release builds set it.
 - Reinstall after editing `zircolite/flatten_kernel.py`: a kernel built from an older copy
   is detected and ignored.
-
-Each ruleset's SQL analysis is cached in the user's cache directory, which saves about two
-seconds per run and per worker. `ZIRCOLITE_CACHE_DIR` moves it and `ZIRCOLITE_NO_CACHE=1`
-turns it off ([Internals](Internals.md#rule-execution)).
 
 ## Basic usage
 
@@ -244,14 +241,15 @@ ships ready-made ones, as do the release archives and the Docker image;
 | `rules_windows_generic.json` | Windows logs without Sysmon (Security, System, …) |
 | `rules_linux.json` | Auditd and Sysmon for Linux |
 | `rules_windows_all.json` | SigmaHQ and every community source combined, without duplicates |
-| `rules_<source>_*.json` | One community source: Dragon, Hatchepsoute, Hayabusa, Joe Security, LOLDrivers, LOLRMM, Micah Babinski, mdecrevoisier, ReversingLabs, tsale, Tyrian or WRG-11 |
+| `rules_<source>_*.json` | One [community source](https://github.com/wagga40/Zircolite-Rules-v2/blob/main/docs/sources.md) |
 | `experimental/*.json` | [Correlation rules](#sigma-correlation-rules) |
 
 Rulesets carry every level; `--min-level medium` (or `high`, …) loads only the rules at
 that level and above, and [`--rule-status` and the tag options](Advanced.md#rule-selection)
-narrow them further. The `_high` and `_medium` variants older installs carry are no longer
-published, and `-U` leaves them as they are. Each community ruleset keeps its source's licence (DRL 1.1, GPL 3.0
-or CC0 1.0); the texts are in `rules/licenses/`.
+narrow them further. Every file keeps its source's licence, with the texts in
+`rules/licenses/` and `THIRD_PARTY_LICENSES`. The rules repository lists the
+[sources and their licences](https://github.com/wagga40/Zircolite-Rules-v2/blob/main/docs/sources.md) and documents
+[how each ruleset is built](https://github.com/wagga40/Zircolite-Rules-v2/blob/main/docs/rulesets.md).
 
 **Updating.** `python3 zircolite.py -U` (or `task update-rules`) refreshes `rules/`.
 Every download is checked against the rules repository's release manifest first: a
@@ -292,7 +290,7 @@ python3 zircolite.py --events sample.evtx -r schtasks.yml -p sysmon -p windows-l
 
 Every pipeline applies to the whole conversion, not to one ruleset. An unknown name exits
 `2` before any rule is converted. Add others with `pdm add pysigma-pipeline-<name>` (or
-`uv add`, `poetry add`).
+`uv add`).
 
 ### Sigma correlation rules
 
@@ -386,8 +384,7 @@ detection:
 When a loaded rule needs this, Zircolite keeps each event's original values in a private
 `_sigma_fulltext` column, one value per line, read before field mappings, exclusions,
 transforms and flattening. A word in an excluded or transformed value still matches. The
-column never reaches the output: matches, correlation evidence, CSV, `--keepflat` and
-`--package` leave it out, and `--auto-index` skips it.
+column never reaches any output, and `--auto-index` skips it.
 
 - **When.** Only while a loaded ruleset has keyword rules. The shipped rulesets have none;
   they come from Sigma YAML passed to `-r`, or from a ruleset converted with keyword support.
@@ -586,9 +583,9 @@ python3 zircolite.py --events output.db --db-input
   database at exactly that path.
 - Otherwise each input gets its own, named after it even when there is only one:
   `--dbfile save.db` over `a.json` and `b.json` writes `save_a.json.db` and
-  `save_b.json.db`, and inputs sharing a name get numbered. Several files then need `--no-parallel`, since parallel workers cannot share a
-  file. Every name is checked before processing starts. Point `--db-input` at the directory
-  to run the rules over all of them.
+  `save_b.json.db`, and inputs sharing a name get numbered. Several files then need
+  `--no-parallel`, since parallel workers cannot share a file. Every name is checked before
+  processing starts. Point `--db-input` at the directory to run the rules over all of them.
 - A database that cannot be read, or has no `logs` table, is skipped and the run is marked
   partial. If none can be analysed, the run exits `1`.
 
@@ -664,8 +661,9 @@ python3 zircolite.py -e logs/ --timeline - | jq 'select(.Level == "high")'
   keeps the type its database column gave it, so a number can be written as text in one
   layout and not in another ([Typing and collation](Internals.md#typing-and-collation)).
 - **Duplicates.** A log collected twice, such as a backup next to the live log or a volume
-  shadow copy, would list each detection twice. A row repeating a Windows record (same
-  computer, channel, record ID and time) is dropped, whichever file it came from. An event
+  shadow copy, would list each detection twice. A row repeating a Windows record for the
+  same rule (same computer, channel, record ID and time) is dropped, whichever file it came
+  from; two rules matching one record stay two rows. An event
   without a record ID is a copy only when it comes from a file of another name, since one
   log can hold identical lines; the file holding it most often keeps its rows. The summary
   counts the rows dropped, and `--keep-duplicates` keeps them.
@@ -684,18 +682,14 @@ python3 zircolite.py -e logs/ --timeline - | jq 'select(.Level == "high")'
 | `standard` (default) | `minimal`, plus `RecordID`, `ExtraFields`, `RuleID`, `Tactics`, `Techniques`, `SourceFile` |
 | `full` | `standard` with `AllFields`, every field of the event, instead of `ExtraFields` |
 
-`Details` sums the event up as `Name: value ¦ Name: value`. For the events Zircolite knows
-(Sysmon, the common Security, System and PowerShell events, Defender, auditd, …) it lists the
-fields that say what happened, adding what some values mean (`LogonType: 3 (Network)`); for
-other events, every field, in name order. `ExtraFields` holds the fields `Details` leaves
-out. Neither repeats a field another column shows, nor those that describe the log rather
-than the activity (`Keywords`, `Opcode`, `Provider_Name`, …). `Tactics` and `Techniques`
-come from the rule's ATT&CK tags; `SourceFile` is the name of the log file. A correlation
-alert's `Details` gives its event count, its group and its metric.
+`Details` sums the event up as `Name: value ¦ Name: value`: the fields that say what
+happened, with what some values mean (`LogonType: 3 (Network)`), and `ExtraFields` holds
+the rest ([how they are chosen](Advanced.md#timeline-details-and-value-maps)). `Tactics` and
+`Techniques` come from the rule's ATT&CK tags; `SourceFile` is the name of the log file. A
+correlation alert's `Details` gives its event count, its group and its metric.
 
 `config/timeline.yaml` holds the profiles, the fields `Computer`, `Channel`, `EventID` and
-`RecordID` read from (auditd's `type` stands in for `EventID`), and what `Details` shows:
-see [Advanced → Timeline Details and value maps](Advanced.md#timeline-details-and-value-maps).
+`RecordID` read from (auditd's `type` stands in for `EventID`), and the `Details` settings.
 To change them or add a profile, point `--timeline-config` at a copy. A profile can also show
 any event field as a column of its own, named `%Field%`.
 
@@ -729,8 +723,7 @@ Two separate files shape a run:
 ### Field mappings, exclusions and aliases
 
 Logs often need reshaping before rules can match them. Edit `config/config.yaml`, or point
-`-c` at your own copy (YAML, or JSON for older files). `config/fieldMappings.yaml` was
-removed in 4.0; a kept copy still loads, with a warning.
+`-c` at your own copy (YAML, or JSON for older files).
 
 ```yaml
 exclusions:               # drop these fields
@@ -824,7 +817,10 @@ changes nothing: keys whose default depends on something else (`output.file`,
 Command-line arguments override the file, except `--transform-category`, `--add-index` and
 `--remove-index`, which add to what the file lists.
 
-Some options have no equivalent key and must be passed on the command line: `-c`/`--config`, `-q`/`--quiet`, `--profile-rules`, `--archive-password`, `--ask-archive-password`, `--test-rules`, `--timesketch`, `--navigator-output`, `--transform-list`, `--pipeline-list`, `-U`/`--update-rules`, `-v`/`--version`, `--generate-config` and `-Y`/`--yaml-config` itself.
+Some options have no equivalent key and must be passed on the command line: `-c`/`--config`,
+`-q`/`--quiet`, `--profile-rules`, `--archive-password`, `--ask-archive-password`,
+`--test-rules`, `--timesketch`, `--navigator-output`, `--transform-list`, `--pipeline-list`,
+`-U`/`--update-rules`, `-v`/`--version`, `--generate-config` and `-Y`/`--yaml-config` itself.
 
 ## Troubleshooting
 

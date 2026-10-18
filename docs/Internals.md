@@ -109,7 +109,7 @@ flattener decides which value lands in the column.
 ## Rule execution
 
 **Analysis cache.** Normalising, planning and scanning the statements of a 4,500-rule
-ruleset takes about two seconds, and every process worker used to pay it again. The
+ruleset takes about two seconds, which every process worker would pay again. The
 command line keeps the results in the user's cache directory (`~/Library/Caches/Zircolite`,
 `%LOCALAPPDATA%\Zircolite\Cache` or `$XDG_CACHE_HOME/zircolite`), one file per ruleset,
 keyed by the statements, the Python version and a hash of the analysing code (in a binary,
@@ -169,8 +169,9 @@ detections are identical with the filter on or off.
 - Candidates reach SQLite as `logs.row_id IN (SELECT value FROM json_each('[...]'))` ahead
   of the original predicate. A rule with no candidates runs `SELECT 1 WHERE 0`. A candidate
   set holding at least half the rows the rule's bounds select is bypassed.
-- Construction is capped (one million pattern characters, sixteen row IDs per event); a
-  column over budget becomes unbounded. It needs SQLite's JSON1, and stays off without it.
+- Construction is capped (one million pattern characters; sixteen row IDs per event, and
+  never fewer than two million); a column over budget becomes unbounded. It needs SQLite's
+  JSON1, and stays off without it.
 - Each field automaton caches up to 512 recently searched values of at most 1,024 characters,
   including values with no matches. An 8 MiB accounted byte budget is divided among the
   indexed fields. Caches are discarded after index construction and never cross databases
@@ -178,22 +179,9 @@ detections are identical with the filter on or off.
 
 ## Processing modes
 
-```mermaid
-flowchart LR
-    subgraph PerFile[Per-file]
-        P1[File 1 -> DB] --> P3[Combine results]
-        P2[File 2 -> DB] --> P3
-    end
-
-    subgraph Unified[Unified]
-        U1[All files] --> U2[Single DB]
-    end
-```
-
-| Layout | Selected by | Database | Enables |
-|--------|-------------|----------|---------|
-| Per-file | Auto mode, or the default with `--no-auto-mode` | One per file, reused | Parallel processing |
-| Unified | Auto mode, or `--unified-db` | One for all files | Cross-file correlation rules |
+The two database layouts, per-file and unified, and how auto mode picks one are described in
+[Advanced → Automatic processing optimization](Advanced.md#automatic-processing-optimization).
+`--unified-db` forces the unified layout, and `--no-auto-mode` keeps one database per file.
 
 `analyze_files_and_recommend_mode` returns only `per-file` or `unified`. For a per-file run
 of several inputs it separately recommends running them across workers, one database per
@@ -348,8 +336,9 @@ process. `timeline.py` holds both halves ([diagram](Usage.md#timeline)).
   (exit `1`) after the detections are written.
 - **The key.** `<unparsed flag><instant><ruleset position><identity>`: the flag puts times
   that do not parse last, the instant is hexadecimal microseconds counted from year 1, the
-  position is the rule's place in the loaded ruleset, and the identity is a BLAKE2b digest
-  of the computer, channel and record ID, or, failing one of them, of the event's fields
+  position is the rule's place in the loaded ruleset, and the identity is a kind letter (a
+  record or content) and a BLAKE2b digest of the computer, channel and record ID, or,
+  failing one of them, of the event's fields
   without `OriginalLogfile` and `row_id`, as text. Text, because a value's type follows its
   column in each database ([Typing and collation](#typing-and-collation)).
 - **Sorting.** Each part keeps up to 16 MiB of lines, sorts them as bytes and writes them
@@ -387,7 +376,7 @@ All the logic lives in the `zircolite/` package. `zircolite.py` is a shim that c
 | `spellings.py` | Field spellings a column does not carry, recorded and restored on output |
 | `core.py` | `ZircoliteCore`: database management, indexes, rule execution, output |
 | `correlations.py` | Correlation plan checks, alert rows and diagnostics wording |
-| `prefilter.py` | Literal prefilter: candidate rows for a rule's `LIKE` literals |
+| `prefilter.py` | Literal prefilter: candidate rows for a rule's `LIKE`, text equality and literal `REGEXP` conditions |
 | `analysis_cache.py` | Rule SQL analysis kept on disk between runs (see [Rule execution](#rule-execution)) |
 | `event_filter.py` | `EventFilter`, the early per-channel event filter, apart from pySigma |
 | `performance.py` | Stage timers, per-file metrics and the `--performance-json` report |
@@ -605,7 +594,9 @@ The text cannot be rebuilt from the flattened columns, so it is never invented:
 
 When SQLite cannot prepare a rule, Zircolite tries each applicable repair once. A rule that
 still fails is reported at the end of the run (`--debug` shows the SQL error). Both repairs
-run only when SQLite raises the error, so a statement that compiles is never rewritten.
+run only when SQLite raises the error, so they never touch a statement that compiles. The
+[negation rewrite](#negated-conditions-on-absent-fields) below is not a repair: it applies
+to every statement.
 
 **Missing columns.** SQLite resolves column names at preparation, so a rule naming one field
 the data never produced fails as a whole. The absent columns are added as `NULL`, which
