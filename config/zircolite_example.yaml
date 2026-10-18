@@ -124,8 +124,8 @@ output:
   timeline_config: config/timeline.yaml  # Profiles, column fields and Details settings
   # Keep the rows that repeat a detection from another copy of the same log
   keep_duplicates: false
-  # Time zone of the timestamps: UTC, local, an offset such as +02:00, or a
-  # name such as Europe/Paris. Rows are ordered by instant whatever it is.
+  # Time zone of the timestamps: UTC, local, a quoted offset such as "+02:00",
+  # or a name such as Europe/Paris. Rows are ordered by instant whatever it is.
   timezone: UTC
 
   # Also write the flattened events as JSONL. Only events Zircolite actually

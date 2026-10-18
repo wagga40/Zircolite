@@ -237,7 +237,7 @@ def parse_arguments() -> argparse.Namespace:
     config_formats_args.add_argument("--remove-index", help="Drop the given index name(s) after creation. Can be repeated or list multiple (e.g. --remove-index idx_channel idx_eventid).", action='append', nargs='+', metavar="IDX", default=None)
     config_formats_args.add_argument("--auto-index", help="Inspect the loaded ruleset and auto-create indices on the top-N columns that the most rules filter on (default N=5 when used without an explicit number). Combine with --add-index for additional manually chosen columns.", type=int, nargs='?', const=5, default=None, metavar="N")
 
-    performance_args = parser.add_argument_group('PERFORMANCE')
+    performance_args = parser.add_argument_group('🚀 PERFORMANCE')
     performance_args.add_argument("--performance-json", default=None, metavar="PATH", help="Write timings, accelerator status and sampled memory to a JSON report")
     performance_args.add_argument("--working-db", choices=("memory", "disk"), default=None, help="Working database storage (default: memory); independent of --dbfile export")
     performance_args.add_argument("--working-db-dir", default=None, metavar="DIR", help="Existing directory for temporary working databases (default: system temporary directory)")
@@ -354,6 +354,21 @@ def _announce_local_default(value: str, parts: tuple[str, ...], remedy: str, log
             f"instead of the shipped {literal(shipped)} ({remedy} to choose explicitly and "
             f"silence this)[/]"
         )
+
+
+def _resolve_config_path(value: str, given: bool, remedy: str, logger: logging.Logger) -> str:
+    """Where a relative path under config/ is read from: the working directory, else the install.
+
+    The default is the most common such value, not the only one. Only a value
+    already rooted at config/ may fall back, or `-c mine/config.yaml` would
+    quietly load the bundled file instead of reporting that it is missing.
+    """
+    path = Path(value)
+    if path.is_absolute() or path.parent != Path("config"):
+        return value
+    if not given:
+        _announce_local_default(value, ("config", path.name), remedy, logger)
+    return resolve_default_path(value, "config", path.name)
 
 
 def _is_explicit(args: argparse.Namespace, dest: str, unset: Any = None) -> bool:
@@ -795,13 +810,13 @@ def _check_timeline_options(args: argparse.Namespace, flags_given: list[str],
             print_error_panel("Invalid Output Path", f"The timeline {literal(args.timeline)} is also another "
                               "input or output of this run.", "Write the timeline to a separate file.")
             sys.exit(2)
+        if target.is_dir() or not target.parent.is_dir():
+            print_error_panel("Invalid Output Path", f"The timeline {literal(args.timeline)} must name a file "
+                              "in an existing directory.", "Create the directory, or name a file in one.")
+            sys.exit(2)
 
-    config_path = Path(args.timeline_config)
-    if not config_path.is_absolute() and config_path.parent == Path("config"):
-        if not _is_explicit(args, "timeline_config"):
-            _announce_local_default(args.timeline_config, ("config", config_path.name),
-                                    "pass --timeline-config", logger)
-        args.timeline_config = resolve_default_path(args.timeline_config, "config", config_path.name)
+    args.timeline_config = _resolve_config_path(args.timeline_config, _is_explicit(args, "timeline_config"),
+                                                "pass --timeline-config", logger)
     try:
         presentation = load_presentation(args.timeline_config)
     except TimelineConfigError as exc:
@@ -809,7 +824,7 @@ def _check_timeline_options(args: argparse.Namespace, flags_given: list[str],
     try:
         resolve_timezone(args.timezone)
     except TimezoneError as exc:
-        print_error_panel("Invalid Timeline", f"Unknown --timezone: {literal(exc)}", "Run with --timezone UTC to keep UTC.")
+        print_error_panel("Invalid Timeline", f"Unknown time zone: {literal(exc)}", "Leave it unset to keep UTC.")
         sys.exit(2)
     columns = presentation.profiles.get(args.timeline_profile)
     if columns is None:
@@ -1506,16 +1521,7 @@ def _main(memory_tracker, start_time) -> None:
         # would otherwise ship the rulesets it already had.
         sys.exit(0 if updater.run() else 1)
 
-    # A relative --config names a file shipped in config/, so it has to resolve
-    # from the install as well as from the working directory -- the default is
-    # the most common such value, not the only one. Only a value already rooted
-    # at config/ may fall back, or `-c mine/config.yaml` would quietly load the
-    # bundled one instead of reporting that it is missing.
-    config_path = Path(args.config)
-    if not config_path.is_absolute() and config_path.parent == Path("config"):
-        if not getattr(args, "_config_given", False):
-            _announce_local_default(args.config, ("config", config_path.name), "pass -c", logger)
-        args.config = resolve_default_path(args.config, "config", config_path.name)
+    args.config = _resolve_config_path(args.config, getattr(args, "_config_given", False), "pass -c", logger)
 
     if args.transform_list:
         sys.exit(0 if _print_transform_categories(args.config, logger) else 1)
@@ -1555,7 +1561,8 @@ def _main(memory_tracker, start_time) -> None:
         )])
         args.templateOutput.append([nav_out])
 
-    timeline_choice = _check_timeline_options(args, timeline_flags, logger)
+    # --pipeline-list exits once the pipelines are listed, before any timeline exists.
+    timeline_choice = None if args.pipeline_list else _check_timeline_options(args, timeline_flags, logger)
 
     # Handle rulesets
     if args.ruleset:
@@ -1925,7 +1932,7 @@ def _main(memory_tracker, start_time) -> None:
             ctx, args, logger
         )
 
-        # Written after Ctrl+C too, from the rows found, like the detections output
+        # Written after a first Ctrl+C too, from the rows found, like the detections output
         if timeline_spool is not None:
             finalization_start = time.perf_counter()
             try:

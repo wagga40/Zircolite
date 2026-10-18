@@ -385,7 +385,10 @@ class ConfigLoader:
             issues.append("CSV output is not supported with multiple rulesets")
         for key in ("timeline", "timeline_profile", "timeline_config", "timezone"):
             value = getattr(config.output, key)
-            if value is not None and (not isinstance(value, str) or not value):
+            if key == "timezone" and isinstance(value, int) and not isinstance(value, bool):
+                # YAML 1.1 reads an unquoted +10:00 as a base-60 number
+                issues.append(f'output.timezone reads as the number {value}: quote the offset, as in "+10:00"')
+            elif value is not None and (not isinstance(value, str) or not value):
                 issues.append(f"output.{key} must be a non-empty string")
 
         # Validate templates
@@ -584,8 +587,8 @@ output:
   timeline_config: {DEFAULT_TIMELINE_CONFIG}  # Profiles, column fields and Details settings
   # Keep the rows that repeat a detection from another copy of the same log
   keep_duplicates: false
-  # Time zone of the timestamps: UTC, local, an offset such as +02:00, or a
-  # name such as Europe/Paris. Rows are ordered by instant whatever it is.
+  # Time zone of the timestamps: UTC, local, a quoted offset such as "+02:00",
+  # or a name such as Europe/Paris. Rows are ordered by instant whatever it is.
   timezone: {DEFAULT_TIMEZONE}
 
   # Also write the flattened events as JSONL. Only events Zircolite actually
