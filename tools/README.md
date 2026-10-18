@@ -1,6 +1,6 @@
 # Zircolite tools
 
-Scripts for packaging, benchmarking and Sigma regression tests.
+Scripts for packaging, benchmarking, Sigma regression tests and the docs pictures.
 
 `tests/test_tools.py` runs the benchmark and regression tools over tracked fixtures.
 Release-script unit tests use temporary checkouts; end-to-end validation requires a
@@ -308,3 +308,20 @@ quote-aware SQL reader the engine uses to widen the events table.
 A test is skipped when its data file is missing or no rule in the ruleset matches the
 case. Skips are shown in the summary with their share of the total; pass
 `--fail-on-skip` to make them fail the run.
+
+## svg-theme-variants.py
+
+The explainer SVGs in `docs/pics/` pick their palette with `prefers-color-scheme` inside
+the file. Safari evaluates that against the system appearance rather than the page, so on
+GitHub, whose theme can differ from the system's, an explainer in the README drew the wrong
+palette. The README therefore shows fixed copies, `<name>-light.svg` and `<name>-dark.svg`,
+through a `<picture>` with one source per theme, and GitHub picks the copy for its theme.
+The docs site follows the system appearance and keeps the original.
+
+Edit the original only, then regenerate its copies:
+
+```sh
+pdm run python tools/svg-theme-variants.py docs/pics/how-it-works.svg
+```
+
+`tests/test_tools.py` fails while a copy differs from what the script writes.

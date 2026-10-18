@@ -1,6 +1,7 @@
 <p align="center">
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="pics/zircolite_400_dark.png">
+    <source media="(prefers-color-scheme: light)" srcset="pics/zircolite_400.png">
     <img alt="Zircolite" src="pics/zircolite_400.png">
   </picture>
 </p>
@@ -114,7 +115,11 @@ Detections go to `detected_events.json`. For logs to try it on, see
 Zircolite flattens each event into a row of an SQLite table, converts every Sigma rule into
 an SQL query over that table, and reports the rows that match.
 
-![How Zircolite works: logs are flattened into rows of an SQLite table, Sigma rules become SQL queries, and matching rows become detections](docs/pics/how-it-works.svg)
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/pics/how-it-works-dark.svg">
+  <source media="(prefers-color-scheme: light)" srcset="docs/pics/how-it-works-light.svg">
+  <img alt="How Zircolite works: logs are flattened into rows of an SQLite table, Sigma rules become SQL queries, and matching rows become detections" src="docs/pics/how-it-works-light.svg">
+</picture>
 
 ## Zircolite Viewer
 

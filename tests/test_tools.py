@@ -1294,3 +1294,39 @@ class TestWinArm64Requirements:
             (tmp_path / name).write_bytes(b"")
         with pytest.raises(win_arm64.InstallError, match="exactly one evtx"):
             win_arm64.evtx_wheel(tmp_path)
+
+
+class TestSvgThemeVariants:
+    """The README's fixed-palette copies of an explainer stay generated from it."""
+
+    PICS = WORKSPACE_ROOT / "docs" / "pics"
+
+    def test_every_copy_matches_its_source(self):
+        tool = load_tool("svg-theme-variants")
+        lights = sorted(self.PICS.glob("*-light.svg"))
+        assert lights, "no fixed-palette copies in docs/pics"
+        for light_path in lights:
+            source = light_path.with_name(light_path.name.removesuffix("-light.svg") + ".svg")
+            light, dark = tool.variants(source.read_text(encoding="utf-8"))
+            for path, expected in zip(tool.copies(source), (light, dark), strict=True):
+                assert path.read_text(encoding="utf-8") == expected, (
+                    f"{path.name} is stale: run tools/svg-theme-variants.py docs/pics/{source.name}"
+                )
+
+    def test_each_copy_keeps_one_palette(self):
+        tool = load_tool("svg-theme-variants")
+        text = (self.PICS / "how-it-works.svg").read_text(encoding="utf-8")
+
+        light, dark = tool.variants(text)
+
+        for copy in (light, dark):
+            assert "prefers-color-scheme" not in copy
+            assert "prefers-reduced-motion" in copy
+        assert "--paper: #eef1ef" in light
+        assert "--paper: #0e191c" in dark
+
+    def test_an_svg_without_a_dark_palette_is_refused(self):
+        tool = load_tool("svg-theme-variants")
+
+        with pytest.raises(ValueError, match="no `@media"):
+            tool.variants("<svg><style>:root { --paper: #fff; }</style></svg>")
