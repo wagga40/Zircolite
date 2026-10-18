@@ -344,15 +344,22 @@ window, metric and the evidence events behind it:
 - **Time.** The time field holds the moment the alert occurred, so timelines place it like
   an event. Times inside the alert are Unix seconds. String group keys are lower-cased; the
   evidence keeps the original.
-- **Windows.** Counts look back over `[t - timespan, t]` from each event, and every
-  qualifying moment is its own alert. Ordered stages need strictly increasing timestamps.
-  An absence condition (`a and not b`) waits for its window to end; a window still open at
-  the last timestamp of the input is reported as `incomplete_window`.
+- **Windows.** A condition without a negation looks back over `[t - timespan, t]` from
+  each event time, both ends included, and every qualifying moment is its own alert; events
+  sharing a time share one window. Ordered stages need strictly increasing timestamps. An
+  absence condition (`a and not b`) looks ahead over `[t, t + timespan]` and decides once
+  that deadline has passed. The input ends at its latest readable timestamp: a deadline
+  beyond it is counted as `incomplete_window`, even when `b` already arrived, and is never
+  an alert.
+
+  ![Failed logons per user: a 5-minute window looks back from each event and each moment with 3 or more is its own alert. A logon with no logoff alerts at its deadline, and a window still open at the end of input is reported as incomplete_window.](pics/correlation-windows.svg)
+
 - **Timestamps.** The time field must hold ISO 8601 text, as EVTX, XML, Sysmon for Linux
   and Auditd events do. For Unix time, convert the YAML with `--timestamp-format unix`,
-  `unix_ms` or `unix_us`; a compiled ruleset keeps what it was converted with, and those `-U`
-  installs expect `SystemTime` in ISO 8601. Events whose time cannot be read, or that lack a group-by field, are counted in
-  `diagnostics`, and a warning at the end of the run names the rule.
+  `unix_ms` or `unix_us`; a compiled ruleset keeps what it was converted with, and those
+  `-U` installs expect `SystemTime` in ISO 8601. Events whose time cannot be read, or that
+  lack a group-by field, are counted in `diagnostics`, and a warning at the end of the run
+  names the rule.
 - **One database.** A correlation sees the events of its own database. With several input
   files and a correlation rule loaded, Zircolite uses the
   [unified database](Advanced.md#automatic-processing-optimization) whatever auto mode,
@@ -641,6 +648,8 @@ python3 zircolite.py -e logs/ --timeline                    # timeline.csv
 python3 zircolite.py -e logs/ --timeline case.jsonl --timeline-profile full
 python3 zircolite.py -e logs/ --timeline - | jq 'select(.Level == "high")'
 ```
+
+![A live Security.evtx and its shadow copy each give detection rows; each part sorts its rows, the main process merges them in time order and drops the rows that repeat a record for the same rule; --timezone changes only how the timestamps are written](pics/timeline-merge.svg)
 
 - **Format.** The name decides: CSV for `.csv`, JSON lines for `.jsonl` and `.ndjson`. With
   `-`, JSON lines go to stdout and everything else Zircolite prints goes to stderr. The CSV
@@ -977,13 +986,15 @@ settings for the runs that write one.
 |--------|-------------|
 | `--performance-json` | Write a JSON report of stage timings, the kernel, prefilter use per file and sampled memory |
 | `--flatten-backend` | `auto` (default): compiled kernel if current, else Python; `python`; `cython`: stop when the compiled kernel cannot be used |
-| `--rule-prefilter` | Literal prefilter: `auto` (default), `literal` (always build it) or `off` |
+| `--rule-prefilter` | [Literal prefilter](Internals.md#rule-execution): `auto` (default), `literal` (always build it) or `off` |
 | `--working-db` | `memory` (default) or `disk`: keep working databases in temporary files. Unrelated to `--dbfile` |
 | `--working-db-dir` | Existing directory for those files (default: the system temporary directory) |
 | `--sqlite-cache-mib` | Page cache per on-disk working database, in MiB (default 64) |
 
 The performance report's `status` is `complete`, `partial`, `failed` or `interrupted`. In
 parallel runs its stage times are summed across workers and can exceed the wall-clock time.
+Each ruleset's SQL analysis is [cached between runs](Internals.md#rule-execution):
+`ZIRCOLITE_CACHE_DIR` moves the cache and `ZIRCOLITE_NO_CACHE=1` turns it off.
 
 ### General
 

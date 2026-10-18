@@ -140,6 +140,8 @@ those patterns name once, finds which events contain each pattern's necessary li
 candidate events. SQLite still evaluates the whole condition on every candidate, so
 detections are identical with the filter on or off.
 
+![A rule's LIKE literals feed one Aho–Corasick pass over the column; the rows holding a literal form a bitmap of candidates, SQLite runs the full WHERE on those rows only, and the detections equal a full scan's](pics/prefilter.svg)
+
 - `auto` builds it for databases of 1,000 events or more and rulesets with 32 or more
   eligible queries; `literal` forces it, `off` disables it.
 - Only plain `SELECT * FROM logs WHERE …` statements qualify. A pattern contributes its
@@ -336,7 +338,7 @@ build, and the only part of `gui/` that ships.
 ## Timeline pipeline
 
 `--timeline` renders each row where its event is, then sorts every row of the run in the main
-process. `timeline.py` holds both halves.
+process. `timeline.py` holds both halves ([diagram](Usage.md#timeline)).
 
 - **Parts.** A `TimelinePart` joins the result sinks of one working database, beside the
   package's (`_execute_with_timeline` in `processing.py`, and the worker for parallel runs).

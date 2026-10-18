@@ -1,0 +1,218 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 414" width="960" height="414" role="img" aria-labelledby="t d">
+  <title id="t">Correlation time windows</title>
+  <desc id="d">Failed logons grouped by User: a 5-minute window looks back from each event and every moment with 3 or more in it is its own alert, so alice gets two, at 10:05 and 10:08, and bob, with 2, gets none. Successful logon and not Logoff: each logon opens a 5-minute window decided at its deadline, so bob alerts at 10:12, alice logs off in time, and carol's window, still open at the last event of the input (10:16), is reported as incomplete_window instead of an alert.</desc>
+  <style>
+    :root {
+      --paper: #eef1ef;
+      --panel: #f8faf8;
+      --ink: #16211e;
+      --ink-2: #4a5955;
+      --rule: #cfd8d4;
+      --signal: #00697a;
+      --strip: #7c8b87;
+      --danger: #a3134e;
+      --sev-2: #9c7409;
+      --signal-tint: rgb(0 105 122 / 0.1);
+      --danger-tint: rgb(163 19 78 / 0.12);
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --paper: #0e191c;
+        --panel: #13232a;
+        --ink: #e2ebe8;
+        --ink-2: #9daea9;
+        --rule: #26393f;
+        --signal: #53c2cf;
+        --strip: #5f7570;
+        --danger: #f2568e;
+        --sev-2: #e0b43f;
+        --signal-tint: rgb(83 194 207 / 0.14);
+        --danger-tint: rgb(242 86 142 / 0.18);
+      }
+    }
+    text { fill: var(--ink); font: 13px ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+    .mono, .mono text { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+    .card { fill: var(--paper); stroke: var(--rule); }
+    .ink2, .ink2 text { fill: var(--ink-2); }
+    .step { font-weight: 600; }
+    .step .n { fill: var(--signal); }
+    .step .ink2 { font-weight: 400; }
+    .small, .small text { font-size: 12px; }
+    .tiny, .tiny text { font-size: 11px; }
+    .halo { paint-order: stroke; stroke: var(--paper); stroke-width: 4px; stroke-linejoin: round; }
+    .grid, .track, .divider { stroke: var(--rule); fill: none; }
+    .axis { stroke: var(--strip); fill: none; }
+    .ev { fill: var(--signal); }
+    .off { fill: var(--ink-2); }
+    .win { fill: var(--signal-tint); stroke: var(--signal); }
+    .alarm { fill: var(--danger-tint); stroke: var(--danger); }
+    .void { fill: var(--paper); stroke: var(--strip); stroke-dasharray: 4 3; }
+    .open { fill: none; stroke: var(--sev-2); stroke-dasharray: 4 3; }
+    .unseen { fill: var(--rule); fill-opacity: 0.4; }
+    .cap, .proof { fill: var(--danger); }
+    .ring { fill: none; stroke: var(--danger); stroke-width: 2; }
+    .now { stroke: var(--ink-2); stroke-width: 1.5; stroke-dasharray: 5 3; }
+    .alert { fill: var(--danger); font-weight: 600; }
+    .diag { fill: var(--sev-2); font-weight: 600; }
+    .grow { transform-box: fill-box; transform-origin: 0 50%; }
+
+    .scene, .an { animation: 18s ease-in-out infinite; }
+    .lin { animation-timing-function: linear; }
+    .scene { animation-name: scene; }
+    .a1 { animation-name: a1; } .a2 { animation-name: a2; } .a3 { animation-name: a3; }
+    .a4 { animation-name: a4; } .a5 { animation-name: a5; } .a6 { animation-name: a6; }
+    .slide { animation-name: slide; }
+    .c1 { animation-name: c1; } .c2 { animation-name: c2; } .c3 { animation-name: c3; } .c4 { animation-name: c4; }
+    .ring1 { animation-name: ring1; } .ring2 { animation-name: ring2; }
+    .hit1 { animation-name: hit1; } .hit2 { animation-name: hit2; }
+    .oa1 { animation-name: oa1; } .oa2 { animation-name: oa2; }
+    .b1 { animation-name: b1; } .b2 { animation-name: b2; } .b3 { animation-name: b3; } .b4 { animation-name: b4; }
+    .now { animation-name: now; }
+    .gbob { animation-name: gbob; } .galice { animation-name: galice; } .gcarol { animation-name: gcarol; }
+    .fire { animation-name: fire; } .veto { animation-name: veto; } .ring3 { animation-name: ring3; }
+    .ob1 { animation-name: ob1; } .ob2 { animation-name: ob2; }
+    .tail { animation-name: tail; } .ob3 { animation-name: ob3; }
+
+    @keyframes a1 { 0%, 1.67% { opacity: 0; transform: translateY(-6px); } 3.89%, 100% { opacity: 1; transform: none; } }
+    @keyframes a2 { 0%, 3.33% { opacity: 0; transform: translateY(-6px); } 5.56%, 100% { opacity: 1; transform: none; } }
+    @keyframes a3 { 0%, 5% { opacity: 0; transform: translateY(-6px); } 7.22%, 100% { opacity: 1; transform: none; } }
+    @keyframes a4 { 0%, 6.67% { opacity: 0; transform: translateY(-6px); } 8.89%, 100% { opacity: 1; transform: none; } }
+    @keyframes a5 { 0%, 8.33% { opacity: 0; transform: translateY(-6px); } 10.56%, 100% { opacity: 1; transform: none; } }
+    @keyframes a6 { 0%, 10% { opacity: 0; transform: translateY(-6px); } 12.22%, 100% { opacity: 1; transform: none; } }
+    @keyframes slide {
+      0%, 13.89% { opacity: 0; transform: translateX(-180px); }
+      15.56%, 18.89% { opacity: 1; transform: translateX(-180px); }
+      21.11%, 25.56% { opacity: 1; transform: translateX(-120px); }
+      27.78%, 33.33% { opacity: 1; transform: translateX(-90px); }
+      35.56%, 41.11% { opacity: 1; transform: none; }
+      42.78%, 100% { opacity: 0; transform: none; }
+    }
+    @keyframes c1 { 0%, 15% { opacity: 0; } 16.11%, 18.89% { opacity: 1; } 20%, 100% { opacity: 0; } }
+    @keyframes c2 { 0%, 21.11% { opacity: 0; } 22.22%, 25.56% { opacity: 1; } 26.67%, 100% { opacity: 0; } }
+    @keyframes c3 { 0%, 27.78% { opacity: 0; } 28.89%, 33.33% { opacity: 1; } 34.44%, 100% { opacity: 0; } }
+    @keyframes c4 { 0%, 35.56% { opacity: 0; } 36.67%, 41.11% { opacity: 1; } 42.22%, 100% { opacity: 0; } }
+    @keyframes ring1 { 0%, 27.78% { opacity: 0; } 28.89%, 32.78% { opacity: 1; } 33.89%, 100% { opacity: 0; } }
+    @keyframes ring2 { 0%, 35.56% { opacity: 0; } 36.67%, 40.56% { opacity: 1; } 41.67%, 100% { opacity: 0; } }
+    @keyframes hit1 { 0%, 28.33% { opacity: 0; transform: translateY(-6px); } 30.56%, 100% { opacity: 1; transform: none; } }
+    @keyframes hit2 { 0%, 36.11% { opacity: 0; transform: translateY(-6px); } 38.33%, 100% { opacity: 1; transform: none; } }
+    @keyframes oa1 { 0%, 42.22% { opacity: 0; transform: translateX(-8px); } 44.44%, 100% { opacity: 1; transform: none; } }
+    @keyframes oa2 { 0%, 43.33% { opacity: 0; transform: translateX(-8px); } 45.56%, 100% { opacity: 1; transform: none; } }
+    @keyframes b1 { 0%, 46.67% { opacity: 0; transform: translateY(-6px); } 48.89%, 100% { opacity: 1; transform: none; } }
+    @keyframes b2 { 0%, 47.78% { opacity: 0; transform: translateY(-6px); } 50%, 100% { opacity: 1; transform: none; } }
+    @keyframes b3 { 0%, 48.89% { opacity: 0; transform: translateY(-6px); } 51.11%, 100% { opacity: 1; transform: none; } }
+    @keyframes b4 { 0%, 50% { opacity: 0; transform: translateY(-6px); } 52.22%, 100% { opacity: 1; transform: none; } }
+    @keyframes now {
+      0%, 52.22% { opacity: 0; transform: translateX(-270px); }
+      53.33%, 54.44% { opacity: 1; transform: translateX(-270px); }
+      76.67%, 100% { opacity: 1; transform: none; }
+    }
+    @keyframes gbob { 0%, 54.44% { opacity: 0; transform: scaleX(0); } 54.5% { opacity: 1; transform: scaleX(0); } 66.79%, 100% { opacity: 1; transform: none; } }
+    @keyframes galice { 0%, 59.38% { opacity: 0; transform: scaleX(0); } 59.44% { opacity: 1; transform: scaleX(0); } 71.73%, 100% { opacity: 1; transform: none; } }
+    @keyframes gcarol { 0%, 71.73% { opacity: 0; transform: scaleX(0); } 71.79% { opacity: 1; transform: scaleX(0); } 76.67%, 100% { opacity: 1; transform: none; } }
+    @keyframes fire { 0%, 66.94% { opacity: 0; } 68.89%, 100% { opacity: 1; } }
+    @keyframes ring3 { 0%, 64.33% { opacity: 0; } 65%, 68.89% { opacity: 1; } 70%, 100% { opacity: 0; } }
+    @keyframes veto { 0%, 71.94% { opacity: 0; } 73.89%, 100% { opacity: 1; } }
+    @keyframes ob1 { 0%, 67.78% { opacity: 0; transform: translateX(-8px); } 70%, 100% { opacity: 1; transform: none; } }
+    @keyframes ob2 { 0%, 72.22% { opacity: 0; transform: translateX(-8px); } 74.44%, 100% { opacity: 1; transform: none; } }
+    @keyframes tail { 0%, 76.67% { opacity: 0; } 78.89%, 100% { opacity: 1; } }
+    @keyframes ob3 { 0%, 78.33% { opacity: 0; transform: translateX(-8px); } 80.56%, 100% { opacity: 1; transform: none; } }
+    @keyframes scene { 0%, 96.67% { opacity: 1; } 100% { opacity: 0; } }
+
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after { animation: none !important; }
+    }
+  </style>
+  <clipPath id="plot"><rect x="160" y="40" width="600" height="60"/></clipPath>
+  <rect class="card" x="0.5" y="0.5" width="959" height="413" rx="14"/>
+
+  <text class="step" x="24" y="34"><tspan class="n">1</tspan>  Failed logon <tspan class="ink2">events, grouped by User</tspan></text>
+  <text class="step" x="330" y="34"><tspan class="n">2</tspan>  <tspan class="mono">event_count</tspan> ≥ 3 in 5m <tspan class="ink2">looks back from each event</tspan></text>
+  <path class="divider" d="M24 176.5h912"/>
+  <text class="step" x="24" y="202"><tspan class="n">3</tspan>  Successful logon and not Logoff <tspan class="ink2">in 5m, decided at the deadline</tspan></text>
+  <text class="step" x="640" y="202" text-anchor="middle"><tspan class="n">4</tspan>  End of input</text>
+  <text class="small ink2" x="640" y="218" text-anchor="middle">last event, 10:16</text>
+
+  <!-- five-minute grid, group lanes and the shared time axis -->
+  <path class="grid" d="M310.5 44v124M460.5 44v124M610.5 44v124M310.5 234v118M460.5 234v118M610.5 234v118"/>
+  <path class="track" d="M160 74.5h600M160 150.5h600M160 244.5h600M160 284.5h600M160 324.5h600"/>
+  <g class="mono">
+    <text x="24" y="79"><tspan class="ink2">User:</tspan> alice</text>
+    <text x="24" y="155"><tspan class="ink2">User:</tspan> bob</text>
+    <text x="24" y="249"><tspan class="ink2">User:</tspan> bob</text>
+    <text x="24" y="289"><tspan class="ink2">User:</tspan> alice</text>
+    <text x="24" y="329"><tspan class="ink2">User:</tspan> carol</text>
+  </g>
+  <path class="axis" d="M160 352.5h601M160.5 352.5v8M190.5 352.5v4M220.5 352.5v4M250.5 352.5v4M280.5 352.5v4M310.5 352.5v8M340.5 352.5v4M370.5 352.5v4M400.5 352.5v4M430.5 352.5v4M460.5 352.5v8M490.5 352.5v4M520.5 352.5v4M550.5 352.5v4M580.5 352.5v4M610.5 352.5v8M640.5 352.5v4M670.5 352.5v4M700.5 352.5v4M730.5 352.5v4M760.5 352.5v8"/>
+  <g class="small ink2" text-anchor="middle">
+    <text x="160.5" y="374">10:00</text><text x="310.5" y="374">10:05</text><text x="460.5" y="374">10:10</text>
+    <text x="610.5" y="374">10:15</text><text x="760.5" y="374">10:20</text>
+  </g>
+  <text class="ink2" x="480" y="400" text-anchor="middle">A count looks back over [t − 5m, t] from each event; an absence looks ahead over [t, t + 5m] and waits for that deadline.</text>
+
+  <g class="scene">
+    <!-- 2. the window slides from event to event; each moment with 3 or more is its own alert -->
+    <g clip-path="url(#plot)">
+      <rect class="win an slide" x="250.5" y="62.5" width="150" height="24" rx="4" style="opacity: 0"/>
+    </g>
+    <g class="an hit1">
+      <rect class="alarm" x="160.5" y="93.5" width="150" height="13" rx="3"/>
+      <rect class="cap" x="309" y="91" width="3" height="18"/>
+      <circle class="proof" cx="220.5" cy="100" r="3.5"/><circle class="proof" cx="280.5" cy="100" r="3.5"/><circle class="proof" cx="310.5" cy="100" r="3.5"/>
+      <text class="alert small halo" x="320" y="104.5">alert 1 · 10:05</text>
+    </g>
+    <g class="an hit2">
+      <rect class="alarm" x="250.5" y="113.5" width="150" height="13" rx="3"/>
+      <rect class="cap" x="399" y="111" width="3" height="18"/>
+      <circle class="proof" cx="280.5" cy="120" r="3.5"/><circle class="proof" cx="310.5" cy="120" r="3.5"/><circle class="proof" cx="400.5" cy="120" r="3.5"/>
+      <text class="alert small halo" x="410" y="124.5">alert 2 · 10:08</text>
+    </g>
+    <g class="an ring1" style="opacity: 0">
+      <circle class="ring" cx="220.5" cy="74.5" r="10"/><circle class="ring" cx="280.5" cy="74.5" r="10"/><circle class="ring" cx="310.5" cy="74.5" r="10"/>
+    </g>
+    <g class="an ring2" style="opacity: 0">
+      <circle class="ring" cx="280.5" cy="74.5" r="10"/><circle class="ring" cx="310.5" cy="74.5" r="10"/><circle class="ring" cx="400.5" cy="74.5" r="10"/>
+    </g>
+    <circle class="ev an a1" cx="220.5" cy="74.5" r="6"/>
+    <circle class="ev an a2" cx="250.5" cy="150.5" r="6"/>
+    <circle class="ev an a3" cx="280.5" cy="74.5" r="6"/>
+    <circle class="ev an a4" cx="310.5" cy="74.5" r="6"/>
+    <circle class="ev an a5" cx="340.5" cy="150.5" r="6"/>
+    <circle class="ev an a6" cx="400.5" cy="74.5" r="6"/>
+    <g class="small halo" text-anchor="middle">
+      <text class="an c1" x="220.5" y="54" style="opacity: 0">count 1</text>
+      <text class="an c2" x="280.5" y="54" style="opacity: 0">count 2</text>
+      <text class="an c3 alert" x="310.5" y="54" style="opacity: 0">count 3: alert 1</text>
+      <text class="an c4 alert" x="400.5" y="54" style="opacity: 0">count 3: alert 2</text>
+    </g>
+    <text class="an oa1 alert" x="784" y="79">2 alerts</text>
+    <text class="an oa2 ink2" x="784" y="155">no alert: 2 in 5m</text>
+
+    <!-- 3. each logon opens a window forward; it is decided when its deadline passes -->
+    <rect class="unseen an tail" x="641" y="234" width="119" height="118.5"/>
+    <rect class="open an tail" x="580.5" y="314.5" width="150" height="20" rx="4"/>
+    <rect class="win grow an lin gbob" x="370.5" y="234.5" width="150" height="20" rx="4"/>
+    <rect class="win grow an lin galice" x="430.5" y="274.5" width="150" height="20" rx="4"/>
+    <rect class="win grow an lin gcarol" x="580.5" y="314.5" width="60" height="20"/>
+    <g class="an fire">
+      <rect class="alarm" x="370.5" y="234.5" width="150" height="20" rx="4"/>
+      <rect class="cap" x="519" y="232" width="3" height="25"/>
+    </g>
+    <rect class="void an veto" x="430.5" y="274.5" width="150" height="20" rx="4"/>
+    <circle class="ring an ring3" cx="490.5" cy="284.5" r="11" style="opacity: 0"/>
+    <path class="now an lin" d="M640.5 234v118.5"/>
+    <g class="tiny ink2 halo" text-anchor="middle">
+      <g class="an b1"><circle class="ev" cx="370.5" cy="244.5" r="6"/><text x="370.5" y="230.5">logon</text></g>
+      <g class="an b2"><circle class="ev" cx="430.5" cy="284.5" r="6"/><text x="430.5" y="270.5">logon</text></g>
+      <g class="an b3"><rect class="off" x="485" y="279" width="11" height="11" rx="1.5"/><text x="490.5" y="270.5">logoff</text></g>
+      <g class="an b4"><circle class="ev" cx="580.5" cy="324.5" r="6"/><text x="580.5" y="310.5">logon</text></g>
+    </g>
+    <text class="an ob1 alert" x="784" y="249">alert at 10:12</text>
+    <text class="an ob2 ink2" x="784" y="289">no alert: logged off</text>
+
+    <!-- 4. a deadline after the last event is not guessed -->
+    <g class="an ob3">
+      <text class="mono diag" x="784" y="329">incomplete_window</text>
+      <text class="small ink2" x="784" y="345">a diagnostic, not an alert</text>
+    </g>
+  </g>
+</svg>
