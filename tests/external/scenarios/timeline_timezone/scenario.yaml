@@ -1,0 +1,21 @@
+# --timezone Europe/Paris rewrites the timeline's timestamps with the zone's offset
+tags: [json, output]
+command:
+  - "-e"
+  - "/data/input/events.jsonl"
+  - "-r"
+  - "/data/input/ruleset.json"
+  - "-j"
+  - "-o"
+  - "/data/output/detected_events.json"
+  - "-l"
+  - "/data/output/zircolite.log"
+  - "--timeline"
+  - "/data/output/timeline.csv"
+  - "--timezone"
+  - "Europe/Paris"
+expected_exit_code: 0
+compare_files:
+  - actual: /data/output/timeline.csv
+    compare: content
+    expected: timeline.csv

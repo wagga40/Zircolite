@@ -1,0 +1,13 @@
+# --timeline - streams JSON lines on stdout; everything else goes to stderr
+tags: [json, output]
+command:
+  - "-e"
+  - "/data/input/events.jsonl"
+  - "-r"
+  - "/data/input/ruleset.json"
+  - "-j"
+  - "-n"
+  - "--timeline"
+  - "-"
+expected_exit_code: 0
+stdout_jsonl: 3

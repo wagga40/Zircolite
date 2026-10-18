@@ -1,0 +1,19 @@
+# --timeline writes every detection as one CSV row, in time order
+tags: [json, output]
+command:
+  - "-e"
+  - "/data/input/events.jsonl"
+  - "-r"
+  - "/data/input/ruleset.json"
+  - "-j"
+  - "-o"
+  - "/data/output/detected_events.json"
+  - "-l"
+  - "/data/output/zircolite.log"
+  - "--timeline"
+  - "/data/output/timeline.csv"
+expected_exit_code: 0
+compare_files:
+  - actual: /data/output/timeline.csv
+    compare: content
+    expected: timeline.csv

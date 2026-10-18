@@ -1,0 +1,20 @@
+# --package writes one zip holding the Zircolite Viewer and the run's data
+tags: [json, output]
+command:
+  - "-e"
+  - "/data/input/events.jsonl"
+  - "-r"
+  - "/data/input/ruleset.json"
+  - "-j"
+  - "-o"
+  - "/data/output/detected_events.json"
+  - "-l"
+  - "/data/output/zircolite.log"
+  - "--package"
+  - "--package-dir"
+  - "/data/output"
+expected_exit_code: 0
+compare_files:
+  - actual: /data/output/zircolite-package-*.zip
+    compare: zip_contains
+    names: [index.html, app.js, data/manifest.js]
