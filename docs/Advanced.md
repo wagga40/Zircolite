@@ -443,17 +443,39 @@ The value is `YYYY-MM-DDTHH:MM:SS`. The filter reads the `--timefield` column (o
 detected one), and understands epoch seconds or milliseconds, a trailing `Z`, UTC offsets
 and a space instead of `T`.
 
-### Rule filters
+### Rule selection
 
-- `-R`/`--rulefilter` skips rules whose title contains the text (case-sensitive); repeat it
-  for more. [`--profile-rules`](Usage.md#rule-performance-profiling) shows which rules are
-  slow on your data.
-  - Rules with identical SQL run once, under the title of the highest-level one. `-R`
-    applies before that merge, so skipping one title leaves the others with the same SQL
-    running under their own titles.
-  - A run whose filters leave no rule stops with exit code 1, and an empty filter is
-    refused.
-- `--min-level` loads only rules at a level or above.
+These options choose which loaded rules run. Each one tests a rule on its own, and a rule
+runs only if it passes them all.
+
+| Option | A rule runs when |
+|--------|------------------|
+| `-R`, `--rulefilter` | its title contains none of the texts (case-sensitive) |
+| `--min-level` | its level is this one or above; no level counts as `informational` |
+| `--rule-status` | its status is one of those listed; no status counts as `experimental` |
+| `--include-tag` | one of its tags is a listed tag or sits below one at a dot: `attack.t1059` selects `attack.t1059.001`, not `attack.t10590` |
+| `--exclude-tag` | none of its tags is, or sits below, a listed tag. Exclusion wins over inclusion |
+
+Tags and statuses ignore case. A rule without tags never passes `--include-tag`. The YAML
+keys are `rules.filters`, `min_level`, `status`, `include_tags` and `exclude_tags`.
+
+```shell
+python3 zircolite.py --events logs/ --rule-status stable test \
+    --exclude-tag detection.threat-hunting --min-level high
+```
+
+- Selection runs as the rules load. Rules with identical SQL run once, under the title of
+  the highest-level one, and selection applies before that merge: leaving one rule out
+  leaves the others with the same SQL running under their own titles. A rule left out does
+  not widen the [event filter](#early-event-filtering).
+- A correlation is selected on its own status, tags and level. Its plan carries the
+  conditions of the rules it refers to, so leaving those out does not change its alerts.
+- A selection that leaves no rule stops with exit code 1 and names the options used. A
+  tag that no loaded rule carries is reported, and an empty tag or `-R` filter is refused.
+- `--save-ruleset` writes every converted rule; status and tags stay in the file, so the
+  selection applies again when it is loaded. `--test-rules` runs only the selected rules.
+- [`--profile-rules`](Usage.md#rule-performance-profiling) shows which rules are slow on
+  your data.
 - `--limit N` drops the output of any rule matching more than N events (alerts, for a
   correlation), counted per database: per file in per-file runs, corpus-wide in unified
   ones. It does not save the work of running the rule.

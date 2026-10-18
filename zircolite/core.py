@@ -68,6 +68,7 @@ from .fulltext import (
 from .performance import FileMetrics, timed_stage
 from .prefilter import AUTO_MIN_QUERIES, AUTO_MIN_ROWS, prepare_rules, rule_queries
 from .results import RowSpool, write_result_json
+from .rule_selection import title_filtered
 from .shutdown import is_shutdown_requested
 from .spellings import FieldSpellings, drop_spellings
 from .sqlscan import (
@@ -219,7 +220,7 @@ def runnable_rules(ruleset: list[Any], rule_filters: list[str] | None = None) ->
     """The rules a run executes: empty entries and those -R names by title are left out."""
     rules = [rule for rule in ruleset if rule]
     if rule_filters is not None:
-        rules = [rule for rule in rules if not any(rule_filter in rule.get("title", "") for rule_filter in rule_filters)]
+        rules = [rule for rule in rules if not title_filtered(rule, rule_filters)]
     return rules
 
 

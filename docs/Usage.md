@@ -248,7 +248,8 @@ ships ready-made ones, as do the release archives and the Docker image;
 | `experimental/*.json` | [Correlation rules](#sigma-correlation-rules) |
 
 Rulesets carry every level; `--min-level medium` (or `high`, …) loads only the rules at
-that level and above. The `_high` and `_medium` variants older installs carry are no longer
+that level and above, and [`--rule-status` and the tag options](Advanced.md#rule-selection)
+narrow them further. The `_high` and `_medium` variants older installs carry are no longer
 published, and `-U` leaves them as they are. Each community ruleset keeps its source's licence (DRL 1.1, GPL 3.0
 or CC0 1.0); the texts are in `rules/licenses/`.
 
@@ -905,6 +906,9 @@ compatibility:
 | `--timestamp-format` | Time field format for converted correlation rules: `iso` (default), `unix`, `unix_ms`, `unix_us` |
 | `--min-level` | Load only rules at this level or above: `informational`, `low`, `medium`, `high`, `critical`. A rule without a level counts as `informational` |
 | `-R`, `--rulefilter` | Skip rules whose title contains this text (case-sensitive); repeatable |
+| `--rule-status` | Load only rules with one of these statuses: `stable`, `test`, `experimental`, `deprecated`, `unsupported` ([Rule selection](Advanced.md#rule-selection)) |
+| `--include-tag` | Load only rules carrying one of these tags, or a tag below one |
+| `--exclude-tag` | Leave out rules carrying one of these tags; wins over `--include-tag` |
 | `--test-rules` | Run [rule tests](#rule-testing) from a JSON file and exit |
 
 ### Output
@@ -997,6 +1001,6 @@ parallel runs its stage times are summed across workers and can exceed the wall-
 | Code | Meaning |
 |------|---------|
 | `0` | The run completed, with or without detections. Files read only in part are named on the console |
-| `1` | The run did not happen or did not finish: no matching file, no rule loaded, a `--strict` parse error, an unreadable `--timefield` value or time bound, an inverted time range, a `--limit` of `0` or below `-1`, a missing template, a per-file database name (`save_a.json.db`) that already exists, a failing `--test-rules` case, a failed package, report or timeline, an invalid timeline configuration, or a configuration that cannot be honoured |
-| `2` | The command line cannot run as given: an unknown or conflicting flag, no events path, `--csv` with several rulesets, a `--csv-delimiter` longer than one character, `--all-transforms` with `--transform-category`, an output that is also an input or another output, `--dbfile` on an existing path or with parallel files, an unknown pipeline, a timeline option without `--timeline`, a timeline neither CSV nor JSON lines or with an unknown profile or time zone, `--timeline` with `--test-rules`, or a `--generate-config` that could not be written |
+| `1` | The run did not happen or did not finish: no matching file, no rule loaded or left by the rule selection, a `--strict` parse error, an unreadable `--timefield` value or time bound, an inverted time range, a `--limit` of `0` or below `-1`, a missing template, a per-file database name (`save_a.json.db`) that already exists, a failing `--test-rules` case, a failed package, report or timeline, an invalid timeline configuration, or a configuration that cannot be honoured |
+| `2` | The command line cannot run as given: an unknown or conflicting flag, no events path, `--csv` with several rulesets, a `--csv-delimiter` longer than one character, `--all-transforms` with `--transform-category`, an output that is also an input or another output, `--dbfile` on an existing path or with parallel files, an unknown pipeline, an empty tag or one holding a comma, a timeline option without `--timeline`, a timeline neither CSV nor JSON lines or with an unknown profile or time zone, `--timeline` with `--test-rules`, or a `--generate-config` that could not be written |
 | `130` | Interrupted with `Ctrl+C` |

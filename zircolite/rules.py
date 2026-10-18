@@ -42,24 +42,19 @@ from sigma.processing.resolver import ProcessingPipelineResolver
 
 from . import analysis_cache
 from .assets import bundled_dir
-from .config import RULE_LEVELS, RulesetConfig
+from .config import RulesetConfig
 
 # Rich console for styled output
 from .console import console, is_quiet, literal, make_file_link
-from .core import runnable_rules
 from .correlations import is_correlation_plan_rule, plan_problem
 from .event_filter import EventFilter
 from .fulltext import FIELD as FULLTEXT_FIELD
+from .rule_selection import RuleSelection, select_rules
 from .utils import random_suffix, safe_load_all
 
 # Version 2 adds required_fields, result_type and correlation plans; version 3
 # marks rules that need captured source-value text. Unversioned rules are v1.
 RULESET_SCHEMA_VERSION = 3
-
-
-def _level_rank(rule: dict[str, Any]) -> int:
-    level = str(rule.get("level") or "").lower()
-    return RULE_LEVELS.index(level) if level in RULE_LEVELS else 0
 
 
 def _referenced_names(rule: SigmaCorrelationRule) -> list[str]:
@@ -455,9 +450,9 @@ class RulesetHandler:
         self.rulesetPathList = cfg.ruleset
         self.time_field = cfg.time_field
         self.timestamp_format = cfg.timestamp_format
-        self.min_level = cfg.min_level
-        self.rule_filters = cfg.rule_filters
-        # Rules read before -R and --min-level, so an empty selection can say why
+        self.selection = RuleSelection.build(cfg.rule_filters, cfg.statuses, cfg.include_tags,
+                                             cfg.exclude_tags, cfg.min_level)
+        # Rules read before the selection, so an empty one can say why
         self.loaded_rule_count = 0
         # The native Sigma paths converted in this run, if any
         self.yaml_paths: list[Path] = []
@@ -494,12 +489,9 @@ class RulesetHandler:
             item for sub_ruleset in raw_rulesets if sub_ruleset for item in sub_ruleset
         ]
         self.loaded_rule_count = len(self.rulesets)
-        # Before duplicate removal: filtering its survivor afterwards also lost
-        # every rule that shared its SQL under another title.
-        if self.rule_filters:
-            self.rulesets = self._without_filtered(self.rulesets, self.rule_filters)
-        if self.min_level is not None:
-            self.rulesets = self._at_or_above(self.rulesets, self.min_level)
+        # Before duplicate removal, so a rule left out cannot take with it
+        # another rule that shares its SQL.
+        self.rulesets = select_rules(self.rulesets, self.selection, self.logger)
 
         # Sort by level FIRST so that, among duplicates sharing the same SQL,
         # the surviving rule is the highest-severity one (stable sort keeps
@@ -556,21 +548,6 @@ class RulesetHandler:
                     self.logger.info(
                         f"[+] Event filter enabled: [cyan]{stats['eventids_count']}[/] eventIDs"
                     )
-
-    def _without_filtered(self, rules: list[dict[str, Any]], rule_filters: list[str]) -> list[dict[str, Any]]:
-        """The rules whose title contains none of *rule_filters* (case-sensitive)."""
-        kept = runnable_rules(rules, rule_filters)
-        if len(kept) < len(rules):
-            self.logger.info(f"[+] {len(rules) - len(kept)} rule(s) removed by --rulefilter")
-        return kept
-
-    def _at_or_above(self, rules: list[dict[str, Any]], level: str) -> list[dict[str, Any]]:
-        """The rules at *level* or above; a rule without a known level counts as informational."""
-        floor = RULE_LEVELS.index(level)
-        kept = [rule for rule in rules if _level_rank(rule) >= floor]
-        if len(kept) < len(rules):
-            self.logger.info(f"[+] {len(rules) - len(kept)} rule(s) below level {level} left out")
-        return kept
 
     def _report_unrunnable_plans(self) -> None:
         """Say once, at load time, which correlation plans cannot run here.

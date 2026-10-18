@@ -185,6 +185,19 @@ class TestCorrelationPlansRun:
         assert merged["event_ids"] == sorted(set(merged["event_ids"]))
         assert len(merged["child_alert_ids"]) == 2
 
+    def test_deselecting_the_base_rule_leaves_the_alerts(self, tmp_path, make_core):
+        # The plan carries the base rule's condition, so it does not need the rule itself
+        docs = [{**base(), "status": "experimental"},
+                {**correlation(generate=True), "status": "stable"}]
+        everything = convert(tmp_path, docs)
+        selected = convert(tmp_path, docs, statuses=["stable"])
+        events = [event(0), event(60), event(1000)]
+
+        assert sorted(rule["title"] for rule in everything) == ["burst", "proc"]
+        assert [rule["title"] for rule in selected] == ["burst"]
+        burst = next(rule for rule in everything if rule["title"] == "burst")
+        assert make_core(events).execute_rule(selected[0])["matches"] == make_core(events).execute_rule(burst)["matches"]
+
     def test_invalid_timestamps_are_reported_even_without_alerts(self, tmp_path, make_core, caplog):
         rules = convert(tmp_path, [base(), correlation()])
         core = make_core([event(0, SystemTime="not a time"), event(1)])

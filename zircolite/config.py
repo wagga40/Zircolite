@@ -125,6 +125,10 @@ class RulesetConfig:
     min_level: str | None = None
     # -R: rules whose title contains any of these are removed at load time
     rule_filters: list[str] | None = None
+    # --rule-status, --include-tag, --exclude-tag (zircolite/rule_selection.py)
+    statuses: list[str] | None = None
+    include_tags: list[str] | None = None
+    exclude_tags: list[str] | None = None
 
 
 @dataclass

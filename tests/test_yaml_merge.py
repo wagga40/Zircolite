@@ -95,6 +95,21 @@ class TestRulesResolution:
         assert from_cli.timestamp_format == "unix"
         assert neither.timestamp_format == "iso"
 
+    def test_rule_selection_comes_from_yaml_and_the_cli_replaces_it(self):
+        from_yaml = _args()
+        from_cli = _args(rule_status=[["stable"]], include_tag=[["attack.t1059"]])
+
+        settings = {"rules": {"status": "test", "include_tags": ["attack.execution", "attack.discovery"],
+                              "exclude_tags": ["detection.threat-hunting"]}}
+        resolve(from_yaml, settings)
+        resolve(from_cli, settings)
+
+        assert from_yaml.rule_status == [["test"]]
+        assert from_yaml.include_tag == [["attack.execution"], ["attack.discovery"]]
+        assert from_cli.rule_status == [["stable"]]
+        assert from_cli.include_tag == [["attack.t1059"]]
+        assert from_cli.exclude_tag == [["detection.threat-hunting"]]
+
     def test_min_level_comes_from_yaml_unless_the_cli_names_one(self):
         from_yaml = _args()
         from_cli = _args(min_level="critical")
