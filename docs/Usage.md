@@ -662,8 +662,8 @@ python3 zircolite.py -e logs/ --timeline - | jq 'select(.Level == "high")'
 - **Time zone.** Timestamps are in UTC unless `--timezone` names another zone: `local`, the
   machine's own; an offset such as `+05:30`; or a name such as `Europe/Paris`, whose offset
   follows daylight saving at each instant. Only the text changes, never the order. Names
-  need a time zone database: macOS, Linux and Docker have one, and on Windows installing
-  the `tzdata` package provides it.
+  come from the system's time zone database, or on Windows, which has none, from the
+  `tzdata` package that installs and binaries carry.
 - **With other options.** `-n` does not stop the timeline. `--limit` drops a rule's results
   before the timeline sees them, per database as always. After `Ctrl+C` the timeline holds
   the rows found so far.
