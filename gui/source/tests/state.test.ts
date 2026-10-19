@@ -11,7 +11,8 @@ afterAll(() => db.close());
 
 describe('hash', () => {
   const full = { route: 'detections' as const, q: 'host:"DC 01" & x', t: [1622700000000, 1622703600000] as [number, number], d: true,
-    cols: ['Computer', 'a,b', 'it\'s "odd"'], uid: 4294967297, desc: true };
+    cols: ['Computer', 'a,b', 'it\'s "odd"', 'x~1'], uid: 4294967297, desc: true, sort: 'Computer',
+    widths: { Computer: 320, 'x~1': 90 } };
 
   it('round-trips every field', () => {
     expect(decode(encode(full))).toEqual(full);
@@ -24,6 +25,19 @@ describe('hash', () => {
 
   it('keeps an empty column list distinct from the default', () => {
     expect(decode(encode({ ...EXPLORE, cols: [] })).cols).toEqual([]);
+  });
+
+  it('writes a width beside its column and escapes ~ in names', () => {
+    expect(encode({ ...EXPLORE, cols: ['Image', 'a~b'], widths: { Image: 320, gone: 99 } })).toBe('#/explore?cols=Image~320,a%7Eb');
+    expect(encode({ ...EXPLORE, sort: '_zl_level' })).toBe('#/explore?sort=_zl_level');
+  });
+
+  it('reads old column lists, clamps widths and ignores an empty sort', () => {
+    expect(decode('#/explore?cols=a,b')).toEqual({ ...EXPLORE, cols: ['a', 'b'] });
+    expect(decode('#/explore?cols=a~5,b~99999,c~x').widths).toEqual({ a: 60, b: 1200 });
+    expect(decode('#/explore?cols=a~5,b~99999,c~x').cols).toEqual(['a', 'b', 'c~x']);
+    expect(decode('#/explore?sort=').sort).toBeNull();
+    expect(decode('#/explore?sort=%E0%A4%A').sort).toBeNull();
   });
 
   it('ignores malformed parts and keeps the rest', () => {
@@ -96,6 +110,8 @@ describe('routes and history', () => {
     expect(historyMode(base, { ...base, uid: 2 })).toBe('replace');
     expect(historyMode(base, { ...base, cols: ['A'] })).toBe('replace');
     expect(historyMode(base, { ...base, desc: true })).toBe('replace');
+    expect(historyMode(base, { ...base, sort: 'Image' })).toBe('replace');
+    expect(historyMode(base, { ...base, cols: ['A'], widths: { A: 200 } })).toBe('replace');
     expect(historyMode(base, { ...base, uid: null })).toBe('push');
     expect(historyMode(base, { ...base, q: 'x' })).toBe('push');
     expect(historyMode(base, { ...base, t: [1, 2] })).toBe('push');

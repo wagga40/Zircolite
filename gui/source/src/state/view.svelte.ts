@@ -8,6 +8,9 @@ export class View {
   cols = $state<string[] | null>(EMPTY.cols);
   uid = $state<number | null>(EMPTY.uid);
   desc = $state(EMPTY.desc);
+  sort = $state<string | null>(EMPTY.sort);
+  // Raw: a width is replaced whole, and a deep proxy would re-run every reader on each write.
+  widths = $state.raw<Record<string, number>>(EMPTY.widths);
   #replaceNext = false;
 
   /**
@@ -25,7 +28,7 @@ export class View {
   }
 
   snapshot(): ViewHash {
-    return { route: this.route, q: this.q, t: this.t, d: this.d, cols: this.cols, uid: this.uid, desc: this.desc };
+    return { route: this.route, q: this.q, t: this.t, d: this.d, cols: this.cols, uid: this.uid, desc: this.desc, sort: this.sort, widths: this.widths };
   }
 
   apply(next: ViewHash): void {
@@ -37,6 +40,8 @@ export class View {
     if (encode({ ...EMPTY, cols: next.cols }) !== encode({ ...EMPTY, cols: this.cols })) this.cols = next.cols;
     if (next.uid !== this.uid) this.uid = next.uid;
     if (next.desc !== this.desc) this.desc = next.desc;
+    if (next.sort !== this.sort) this.sort = next.sort;
+    if (JSON.stringify(next.widths) !== JSON.stringify(this.widths)) this.widths = next.widths;
   }
 }
 

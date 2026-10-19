@@ -15,6 +15,16 @@ describe('View.apply', () => {
     expect(view.cols).toEqual(['B']);
   });
 
+  it('keeps the same widths when equal ones are applied', () => {
+    const view = new View();
+    view.apply({ ...EMPTY, cols: ['A'], widths: { A: 200 } });
+    const kept = view.widths;
+    view.apply({ ...EMPTY, cols: ['A'], widths: { A: 200 } });
+    expect(view.widths).toBe(kept);
+    view.apply({ ...EMPTY, cols: ['A'], widths: { A: 210 } });
+    expect(view.widths).toEqual({ A: 210 });
+  });
+
   it('keeps the same range when an equal one is applied', () => {
     const view = new View();
     view.apply({ ...EMPTY, t: [1, 2] });
@@ -25,7 +35,7 @@ describe('View.apply', () => {
 
   it('round-trips through snapshot', () => {
     const view = new View();
-    const next = { route: 'timeline' as const, q: 'x', t: [1, 2] as [number, number], d: true, cols: ['A'], uid: 7, desc: true };
+    const next = { route: 'timeline' as const, q: 'x', t: [1, 2] as [number, number], d: true, cols: ['A'], uid: 7, desc: true, sort: 'A', widths: { A: 300 } };
     view.apply(next);
     expect(view.snapshot()).toEqual(next);
   });
