@@ -305,7 +305,9 @@ async function phase4(page, state, steps, expectedStarts) {
   };
 
   // Logons: the first row of each table lists exactly its events, successes and failures together.
-  for (const [id, what] of [['logons-table', 'logons'], ['explicit-table', 'explicit credentials'], ['rdp-table', 'Remote Desktop events']]) {
+  for (const [id, what] of [
+    ['lateral-table', 'lateral movement'], ['logons-table', 'logons'], ['explicit-table', 'explicit credentials'], ['rdp-table', 'Remote Desktop events'],
+  ]) {
     await logons('logons');
     const table = page.locator(`#${id}`);
     if ((await table.count()) === 0) {
@@ -319,6 +321,18 @@ async function phase4(page, state, steps, expectedStarts) {
     }
     await clickAndCount(page.locator(`#${id} button.value`).first(), `the first row of ${what}`);
     steps.push(`logons: the first row of ${what} lists exactly its events`);
+  }
+
+  // Lateral movement: a link of the graph lists exactly its events, as its row in the table does.
+  await logons('logons');
+  const lateralTable = page.locator('#lateral-table');
+  if ((await lateralTable.count()) > 0 && await poll(page, () => number(lateralTable, 'data-rows'), 'the lateral movement links')) {
+    const links = page.locator('#lateral-graph g.link');
+    check((await links.count()) > 0, 'the lateral movement table has links but the graph draws none');
+    await clickAndCount(links.last(), 'the last link of the graph');
+    steps.push('logons: a link of the lateral movement graph lists exactly its events');
+  } else {
+    steps.push('logons: no lateral movement');
   }
 
   // Sessions: a session's activity opens with its logon id and its time range, holds at least the logon itself,

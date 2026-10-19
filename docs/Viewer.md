@@ -239,6 +239,15 @@ events in Explore. Up to 1,000 rows show.
 
 Windows logons under the current filters, for following an account across hosts:
 
+- **Lateral movement**: who reached which host. A link runs from a source address to the host that
+  recorded a network (3) or Remote Desktop (10) logon (Security 4624), or from the host that used
+  explicit credentials (4648) to the target server. Each link counts its events and accounts, with
+  the three accounts that used it most, and first and last times. Logons from the host itself
+  (`-`, `::1`, `127.0.0.1`) and credentials used for the host itself (`localhost`, or the host's
+  own name or short name) are left out. A graph above the table draws the table's first 60 links,
+  sources on the left, hosts on the right, the line's width growing with its events; a host that
+  reached others as well is drawn on both sides, since nothing in a logon tells which address is
+  which host. A link, in the graph or the table, opens exactly its events.
 - **Logons and failures**: Security 4624 and 4625, grouped by host, account, logon type and
   source address and workstation, failures first. Each row counts successes, failures,
   distinct sessions (`TargetLogonId`) and first and last times. Logon types are named
@@ -268,8 +277,9 @@ Windows logons under the current filters, for following an account across hosts:
   because each records the account and source in fields of its own.
 
 **Remote logon types only** keeps types 3 and 10; **Hide computer accounts** leaves out names
-ending in `$`. Both apply to the logons and the sessions, are off by default so nothing is hidden
-unless asked, and are disabled when the package lacks `LogonType` or `TargetUserName`. A table
+ending in `$`. Both apply to the logons and the sessions, and hiding computer accounts to the
+lateral movement links too. They are off by default so nothing is hidden unless asked, and are
+disabled when the package lacks `LogonType` or `TargetUserName`. A table
 whose fields the package lacks says so in its place. Each column sorts and
 filters like [Entities](#entities), and a row opens exactly its events in Explore. Fields the
 package lacks are left out. Without a `Channel` field, events are told apart by their event ID

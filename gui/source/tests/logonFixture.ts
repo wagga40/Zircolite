@@ -26,7 +26,8 @@ type Event = Partial<Record<string, string | number>> & { uid: number; time: str
  * Logons on DC01 and WS2: alice logs on twice and fails once, bob fails as an
  * unknown user, the machine account logs on, carol comes in over RDP, a logon
  * id is reused after a reboot, another is reused after a logon that never
- * logged off, and an Application event shares id 4624. Special privileges
+ * logged off, WS1's computer account reaches WS2, alice uses her own
+ * credentials on WS1, and an Application event shares id 4624. Special privileges
  * (4672) are written just before the logon they go with, as Windows writes
  * them.
  */
@@ -53,6 +54,10 @@ export const LOGON_EVENTS: Event[] = [
   { uid: 18, time: '2021-06-03 09:09:57', channel: SECURITY, id: 4672, Computer: 'DC01', SubjectDomainName: 'CORP', SubjectUserName: 'frank', SubjectLogonId: '0x5', PrivilegeList: 'SeTcbPrivilege' },
   // Too long before alice's second logon to be its own.
   { uid: 19, time: '2021-06-03 08:59:50', channel: SECURITY, id: 4672, Computer: 'DC01', SubjectDomainName: 'CORP', SubjectUserName: 'alice', SubjectLogonId: '0x2', PrivilegeList: 'SeTcbPrivilege' },
+  { uid: 20, time: '2021-06-03 13:00:00', channel: SECURITY, id: 4624, Computer: 'WS2', TargetDomainName: 'CORP', TargetUserName: 'WS1$', LogonType: 3, IpAddress: '10.0.0.5', TargetLogonId: '0x9' },
+  // Explicit credentials used for the host itself: no movement.
+  { uid: 21, time: '2021-06-03 13:10:00', channel: SECURITY, id: 4648, Computer: 'WS1', SubjectDomainName: 'CORP', SubjectUserName: 'alice', TargetDomainName: 'CORP', TargetUserName: 'alice', TargetServerName: 'localhost', ProcessName: 'C:\\Windows\\System32\\svchost.exe' },
+  { uid: 22, time: '2021-06-03 13:20:00', channel: SECURITY, id: 4648, Computer: 'WS1', SubjectDomainName: 'CORP', SubjectUserName: 'alice', TargetDomainName: 'CORP', TargetUserName: 'alice', TargetServerName: 'ws1', ProcessName: 'C:\\Windows\\System32\\svchost.exe' },
 ];
 
 const literal = (value: string | number | null | undefined) =>

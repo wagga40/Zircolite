@@ -9,10 +9,11 @@
   import { formatCount, isoTime } from '../ui/format';
   import { localWhere, sortClause, type TableColumn } from '../ui/localFilters';
   import { ownScope } from '../ui/scope';
+  import LateralGraph from './LateralGraph.svelte';
   import {
-    EXPLICIT_COLUMNS, EXPLICIT_ORDER, type ExplicitRow, explicitSql, explicitTerms, LOGON_COLUMNS, LOGON_ORDER, type LogonRow,
-    logonFields, logonsSql, logonTerms, RDP_COLUMNS, RDP_ORDER, type RdpRow, rdpSql, rdpTerms, SESSION_COLUMNS, SESSION_ORDER, sessionActivity,
-    type SessionRow, sessionsSql,
+    EXPLICIT_COLUMNS, EXPLICIT_ORDER, type ExplicitRow, explicitSql, explicitTerms, LATERAL_COLUMNS, LATERAL_ORDER, type LateralRow, lateralSql,
+    lateralTerms, LOGON_COLUMNS, LOGON_ORDER, type LogonRow, logonFields, logonsSql, logonTerms, RDP_COLUMNS, RDP_ORDER, type RdpRow, rdpSql,
+    rdpTerms, SESSION_COLUMNS, SESSION_ORDER, sessionActivity, type SessionRow, sessionsSql,
   } from './logons';
   import Section from './Section.svelte';
   import { LogonTable } from './table.svelte';
@@ -25,11 +26,18 @@
   let remoteOnly = $state(false);
   let hideMachines = $state(false);
 
+  const lateral = new LogonTable<LateralRow>(LATERAL_COLUMNS);
   const logons = new LogonTable<LogonRow>(LOGON_COLUMNS);
   const explicit = new LogonTable<ExplicitRow>(EXPLICIT_COLUMNS);
   const rdp = new LogonTable<RdpRow>(RDP_COLUMNS);
   const sessions = new LogonTable<SessionRow>(SESSION_COLUMNS);
 
+  $effect(() => {
+    void run.generation;
+    lateral.load(db, 'lateral', lateralSql(fields, query.where, {
+      hideMachines, filter: localWhere(lateral.filters, lateral.schema), order: sortClause(lateral.sort, LATERAL_ORDER),
+    }));
+  });
   $effect(() => {
     void run.generation;
     logons.load(db, 'logons', logonsSql(fields, query.where, {
@@ -63,6 +71,11 @@
   const RDP_LABELS: Record<string, string> = {
     kind: 'Event', host: 'Host', account: 'Account', source: 'Source address', client: 'Client name', events: 'Events', first: 'First (UTC)', last: 'Last (UTC)',
   };
+  const LATERAL_LABELS: Record<string, string> = {
+    source: 'From', target: 'To', kind: 'How', accounts: 'Accounts', account_list: 'Most used accounts', events: 'Events', first: 'First (UTC)',
+    last: 'Last (UTC)',
+  };
+  const lateralColumns: TableColumn<LateralRow>[] = LATERAL_COLUMNS.map(label(LATERAL_LABELS));
   const logonColumns: TableColumn<LogonRow>[] = LOGON_COLUMNS.map(label(LOGON_LABELS));
   const explicitColumns: TableColumn<ExplicitRow>[] = EXPLICIT_COLUMNS.map(label(EXPLICIT_LABELS));
   const rdpColumns: TableColumn<RdpRow>[] = RDP_COLUMNS.map(label(RDP_LABELS));
@@ -109,13 +122,21 @@
       Windows logons under the current filters: who reached which host, from where and how, and how often it failed.
       {#if !fields.field.Channel}This package has no Channel field, so events are told apart by their event ID alone.{/if}
     </p>
-    <div class="toggles" role="group" aria-label="Logons and sessions">
-      <span class="scope">Logons and sessions:</span>
+    <div class="toggles" role="group" aria-label="Lateral movement, logons and sessions">
+      <span class="scope">Lateral movement, logons and sessions:</span>
       <button type="button" aria-pressed={remoteOnly && !!fields.field.LogonType} disabled={!fields.field.LogonType} onclick={() => (remoteOnly = !remoteOnly)}
         title={fields.field.LogonType ? 'Network (3) and remote interactive (10) logons only' : 'This package has no LogonType field'}>Remote logon types only</button>
       <button type="button" aria-pressed={hideMachines && !!fields.field.TargetUserName} disabled={!fields.field.TargetUserName} onclick={() => (hideMachines = !hideMachines)}
         title={fields.field.TargetUserName ? 'Leave out computer accounts, whose names end in $' : 'This package has no TargetUserName field'}>Hide computer accounts</button>
     </div>
+    <Section title="Lateral movement" table={lateral} id="lateral-table" columns={lateralColumns} order={{ column: 'events', desc: true }} noun="links between hosts"
+      note="Who reached which host: network (3) and Remote Desktop (10) logons from their source address to the host that recorded them, and explicit credentials (4648) from the host that used them to the target server. Logons from the host itself and credentials used for it are left out."
+      events={(row) => row.events} open={(row) => explore(lateralTerms(fields, row, { hideMachines }))}
+      unavailable="This package has no LogonType and IpAddress fields, nor TargetServerName, so no link between hosts can be drawn.">
+      {#snippet figure()}
+        <LateralGraph rows={lateral.answer?.rows ?? []} pending={lateral.list.slot.pending} open={(row) => explore(lateralTerms(fields, row, { hideMachines }))} />
+      {/snippet}
+    </Section>
     <Section title="Logons and failures" table={logons} id="logons-table" columns={logonColumns} order={{ column: 'failures', desc: true }} noun="logons"
       note="Security 4624 and 4625, grouped by host, account, logon type and source; failures first. Failure reasons come from SubStatus, or Status when SubStatus says nothing."
       events={(row) => row.successes + row.failures} open={(row) => explore(logonTerms(fields, row))} unavailable="" />

@@ -317,6 +317,90 @@ export function rdpTerms(fields: LogonFields, row: RdpRow): string {
   );
 }
 
+// Lateral movement -----------------------------------------------------------------------------------------------
+
+const NETWORK_LINK = '3 Network logon';
+const RDP_LINK = '10 Remote Desktop logon';
+const EXPLICIT_LINK = '4648 Explicit credentials';
+
+export interface LateralRow {
+  source: string;
+  target: string;
+  kind: string;
+  accounts: number;
+  /** The accounts with the most events on the link, up to three. */
+  account_list: string | null;
+  events: number;
+  first: number | null;
+  last: number | null;
+  total: number;
+}
+
+export const LATERAL_COLUMNS: LocalColumn[] = [
+  { name: 'source', type: 'text' }, { name: 'target', type: 'text' }, { name: 'kind', type: 'text' }, { name: 'accounts', type: 'number' },
+  { name: 'account_list', type: 'text' }, { name: 'events', type: 'number' }, { name: 'first', type: 'time' }, { name: 'last', type: 'time' },
+];
+
+export const LATERAL_ORDER = ['"events" DESC', 'lower("source")', 'lower("target")', '"kind"'];
+
+// A source or target naming the host itself, or nobody, is no movement.
+const NOWHERE = ['', '-', '::1', '127.0.0.1', 'localhost'];
+
+function somewhere(value: string): string {
+  return `${value} IS NOT NULL AND lower(trim(${value})) NOT IN (${NOWHERE.map((v) => str(v)).join(', ')})`;
+}
+
+/**
+ * Who reached which host: network (3) and Remote Desktop (10) logons from
+ * their source address to the host that logged them, and explicit
+ * credentials (4648) from the host that used them to the target server.
+ * A 4648 for the host itself, by name or short name, is left out.
+ */
+export function lateralSql(fields: LogonFields, where: string, options: LogonOptions): string | null {
+  const f = fields.field;
+  if (!f.EventID || !f.Computer) return null;
+  const host = text(f.Computer);
+  const acct = account(text(f.TargetDomainName), text(f.TargetUserName));
+  const machines = options.hideMachines && f.TargetUserName ? ` AND coalesce(${text(f.TargetUserName)}, '') NOT LIKE '%$'` : '';
+  const from = `FROM events WHERE (${where}) AND ${channelIs(f.Channel, SECURITY)} AND ${host} IS NOT NULL${machines}`;
+  const parts: string[] = [];
+  if (f.LogonType && f.IpAddress) {
+    const type = `trim(${text(f.LogonType)})`;
+    parts.push(
+      `SELECT _zl_time, CASE ${type} WHEN '10' THEN ${str(RDP_LINK)} ELSE ${str(NETWORK_LINK)} END AS kind, ${text(f.IpAddress)} AS source, ` +
+      `${host} AS target, ${acct} AS acct ${from} AND ${eventIs(f.EventID, [4624])} AND ${type} IN ('3', '10') AND ${somewhere(text(f.IpAddress))}`);
+  }
+  if (f.TargetServerName) {
+    const server = text(f.TargetServerName);
+    parts.push(
+      `SELECT _zl_time, ${str(EXPLICIT_LINK)} AS kind, ${host} AS source, ${server} AS target, ${acct} AS acct ${from} ` +
+      `AND ${eventIs(f.EventID, [4648])} AND ${somewhere(server)} AND split_part(lower(${server}), '.', 1) <> split_part(lower(${host}), '.', 1)`);
+  }
+  if (parts.length === 0) return null;
+  return (
+    `WITH x AS (${parts.join(' UNION ALL ')}), ` +
+    'y AS (SELECT kind, lower(source) AS sk, lower(target) AS tk, min(source) AS source, min(target) AS target, min(acct) AS acct, count(*) AS n, ' +
+    'min(_zl_time) AS first, max(_zl_time) AS last FROM x GROUP BY kind, lower(source), lower(target), lower(acct)), ' +
+    'g AS (SELECT min(source) AS source, min(target) AS target, kind, count(acct)::DOUBLE AS accounts, ' +
+    "array_to_string(list_slice(list(acct ORDER BY n DESC, lower(acct)) FILTER (WHERE acct IS NOT NULL), 1, 3), ', ') AS account_list, " +
+    'sum(n)::DOUBLE AS events, epoch_ms(min(first))::DOUBLE AS first, epoch_ms(max(last))::DOUBLE AS last FROM y GROUP BY kind, sk, tk) ' +
+    tail(options, LATERAL_ORDER)
+  );
+}
+
+/** The search that lists exactly a link's events. */
+export function lateralTerms(fields: LogonFields, row: LateralRow, options: LogonOptions): string {
+  const f = fields.field;
+  const machines = options.hideMachines && f.TargetUserName ? `-${fieldToken(f.TargetUserName.name)}:*$` : null;
+  if (row.kind === EXPLICIT_LINK) {
+    return terms(idTerm(fields, [4648]), channelTerm(fields, SECURITY), term(f.Computer, row.source), term(f.TargetServerName, row.target), machines);
+  }
+  return terms(
+    idTerm(fields, [4624]), channelTerm(fields, SECURITY), term(f.LogonType, row.kind === RDP_LINK ? '10' : '3'), term(f.IpAddress, row.source),
+    term(f.Computer, row.target), machines,
+  );
+}
+
 // Sessions -------------------------------------------------------------------------------------------------------
 
 export interface SessionRow {
