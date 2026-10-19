@@ -290,6 +290,10 @@ ORDER BY e._zl_time
   `PRAGMA` — is refused, and the package's tables cannot change.
 - Values come back as text, so 64-bit integers stay exact. At most 10,000 rows show;
   **Export CSV** saves them.
+- Each result column sorts on a click and has a filter cell with the [column filter](#explore)
+  syntax: numbers compare as numbers, everything else as the text shown. Filters and sorts
+  run in the engine over every row of the query, not only the 10,000 shown, and a new query
+  starts without them.
 - The page's filters do not apply here: write them in SQL. `Ctrl`/`⌘` + `Enter` runs the
   query, and **Tables** lists every column.
 

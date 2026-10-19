@@ -311,6 +311,21 @@ async function phase4(page, state, steps, expectedStarts) {
   check((await firstCell()) === manifest.totals.events, 'the events changed after the console refused a DROP');
   steps.push('the SQL console counts the events and refuses to change them');
 
+  // The result columns filter and sort in the engine, over every row of the query, not the 10,000 shown.
+  await runSql('SELECT range AS n FROM range(20000)');
+  await firstCell();
+  const nCell = page.getByLabel('Filter n', { exact: true });
+  await nCell.fill('>=15000');
+  await nCell.press('Enter');
+  await poll(page, async () => (await number(page.locator('#sql-result'), 'data-rows')) === 5000, '5,000 filtered rows');
+  const firstN = () => page.locator('#sql-result [role="cell"]').first().textContent();
+  await page.getByRole('button', { name: 'Sort by n' }).click();
+  await poll(page, async () => (await firstN()) === '15000', 'the smallest n first');
+  await page.getByRole('button', { name: 'Sort by n' }).click();
+  await poll(page, async () => (await firstN()) === '19999', 'the largest n first');
+  check((await number(page.locator('#sql-result'), 'data-rows')) === 5000, 'sorting changed how many rows the filter keeps');
+  steps.push('the SQL results filter and sort in the engine');
+
   // Timeline: a lane holds exactly the events of its tactic in the window drawn.
   await route('timeline');
   const marks = page.locator('#timeline-marks');
