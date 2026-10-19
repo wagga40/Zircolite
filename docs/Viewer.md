@@ -226,6 +226,12 @@ Windows logons under the current filters, for following an account across hosts:
   `Status` when `SubStatus` is `0x0` (`bad password`, `no such user`, `locked out`...).
 - **Explicit credentials**: Security 4648, recorded on the host where a process used another
   account's credentials, with the target server and the process.
+- **Sessions**: each successful logon with its logoff (4634 or 4647) on the same host and logon
+  ID, and its length in minutes. A logon ID is used again after a reboot, so a logoff after the
+  next logon with that ID belongs to the next session. The page's filters choose the logons,
+  never the logoffs. Clicking a session's host opens its activity in Explore: the events on that
+  host that carry its logon ID (`TargetLogonId`, `SubjectLogonId`, or Sysmon's `LogonId`), from
+  logon to logoff, or to the end of the logs while it is open.
 - **Remote Desktop**: authentications (TerminalServices-RemoteConnectionManager 1149),
   LocalSessionManager logons, shell starts, disconnections and reconnections (21, 22, 24, 25), and
   Security session reconnections and disconnections (4778, 4779). Each kind is its own row,

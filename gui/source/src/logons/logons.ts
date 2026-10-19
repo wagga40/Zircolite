@@ -310,3 +310,71 @@ export function rdpTerms(fields: LogonFields, row: RdpRow): string {
     term(f[kind.user], row.user), term(kind.source && f[kind.source], row.source), term(kind.client && f[kind.client], row.client),
   );
 }
+
+// Sessions -------------------------------------------------------------------------------------------------------
+
+export interface SessionRow {
+  host: string | null;
+  domain: string | null;
+  user: string | null;
+  account: string | null;
+  type: string | null;
+  type_name: string | null;
+  ip: string | null;
+  session: string;
+  start: number;
+  /** The logoff, or null while the session was still open when the logs end. */
+  end: number | null;
+  minutes: number | null;
+  /** The package's last event time: where an open session's activity is looked for up to. */
+  horizon: number;
+  total: number;
+}
+
+export const SESSION_COLUMNS: LocalColumn[] = [
+  { name: 'host', type: 'text' }, { name: 'account', type: 'text' }, { name: 'type_name', type: 'text' }, { name: 'ip', type: 'text' },
+  { name: 'session', type: 'text' }, { name: 'start', type: 'time' }, { name: 'end', type: 'time' }, { name: 'minutes', type: 'number' },
+];
+
+export const SESSION_ORDER = ['"start" ASC', 'lower("host")', 'lower("session")'];
+
+/**
+ * Each successful logon (4624) as a session, closed by the first logoff
+ * (4634 or 4647) on its host with its logon id. A logon id is used again
+ * after a reboot, so a logoff that comes after the next logon with the same
+ * id belongs to that one. The page's filters choose the logons; logoffs are
+ * read from every event, since a 4647 has no logon type or source to match.
+ */
+export function sessionsSql(fields: LogonFields, where: string, options: TableOptions): string | null {
+  const f = fields.field;
+  if (!f.EventID || !f.Computer || !f.TargetLogonId) return null;
+  const security = channelIs(f.Channel, SECURITY);
+  const id = text(f.TargetLogonId);
+  const host = text(f.Computer);
+  return (
+    `WITH logon AS (SELECT _zl_uid, _zl_time AS t, ${host} AS host, lower(${host}) AS hk, ${text(f.TargetDomainName)} AS domain, ` +
+    `${text(f.TargetUserName)} AS "user", trim(${text(f.LogonType)}) AS type, ${text(f.IpAddress)} AS ip, ${id} AS session, lower(${id}) AS sk, ` +
+    `lead(_zl_time) OVER (PARTITION BY lower(${host}), lower(${id}) ORDER BY _zl_time) AS next ` +
+    `FROM events WHERE ${security} AND ${eventIs(f.EventID, [4624])} AND ${id} IS NOT NULL AND _zl_time IS NOT NULL), ` +
+    `off AS (SELECT _zl_time AS t, lower(${host}) AS hk, lower(${id}) AS sk FROM events ` +
+    `WHERE ${security} AND ${eventIs(f.EventID, [4634, 4647])} AND ${id} IS NOT NULL AND _zl_time IS NOT NULL), ` +
+    'paired AS (SELECT logon.*, CASE WHEN next IS NULL OR off.t < next THEN off.t END AS stop FROM logon ' +
+    'ASOF LEFT JOIN off ON logon.hk = off.hk AND logon.sk = off.sk AND logon.t <= off.t), ' +
+    `g AS (SELECT host, domain, "user", ${account('domain', '"user"')} AS account, type, ${named('type', LOGON_TYPES)} AS type_name, ip, session, ` +
+    'epoch_ms(t)::DOUBLE AS start, epoch_ms(stop)::DOUBLE AS "end", round(epoch_ms(stop - t) / 60000, 1)::DOUBLE AS minutes, ' +
+    '(SELECT epoch_ms(max(_zl_time)) FROM events)::DOUBLE AS horizon ' +
+    `FROM paired WHERE _zl_uid IN (SELECT _zl_uid FROM events WHERE ${where})) ` +
+    tail(options, SESSION_ORDER)
+  );
+}
+
+/** A session's activity: events on its host that carry its logon id, from its logon to its logoff or the end of the logs. */
+export function sessionActivity(fields: LogonFields, row: SessionRow): { q: string; t: [number, number] } {
+  const f = fields.field;
+  const ids = [f.TargetLogonId, f.SubjectLogonId, f.LogonId]
+    .filter((field, i, all): field is Field => field !== undefined && all.findIndex((other) => other?.key === field.key) === i)
+    .map((field) => fieldTerm(field.name, row.session));
+  const anyId = ids.length === 1 ? ids[0] : `(${ids.join(' OR ')})`;
+  // The range is half-open, and the logoff itself belongs to the session.
+  return { q: terms(term(f.Computer, row.host), anyId), t: [row.start, (row.end ?? row.horizon) + 1] };
+}

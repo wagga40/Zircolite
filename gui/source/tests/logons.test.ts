@@ -1,8 +1,10 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { Schema } from '../src/engine/schema';
 import {
-  explicitSql, explicitTerms, type LogonRow, logonFields, logonsSql, logonTerms, rdpSql, rdpTerms, type RdpRow,
+  explicitSql, explicitTerms, type LogonRow, logonFields, logonsSql, logonTerms, rdpSql, rdpTerms, type RdpRow, sessionActivity,
+  type SessionRow, sessionsSql,
 } from '../src/logons/logons';
+import { timePredicate } from '../src/state/where';
 import { compile } from '../src/search/compile';
 import { parse } from '../src/search/parse';
 import type { Fixture } from './fixture';
@@ -83,6 +85,37 @@ describe.each(kinds)('logons, with a %s', (_name, textIds) => {
   });
 });
 
+describe.each(kinds)('sessions, with a %s', (_name, textIds) => {
+  const schema = logonSchema(textIds);
+  const fields = logonFields(schema);
+  const at = (hhmm: string) => Date.UTC(2021, 5, 3, Number(hhmm.slice(0, 2)), Number(hhmm.slice(3)));
+  const sessions = async (where = 'TRUE') => (await fixture(textIds).rows(sessionsSql(fields, where, {}) as string)) as unknown as SessionRow[];
+
+  it('pairs each logon with its logoff, never the logoff of a later logon that reused its id', async () => {
+    expect((await sessions()).map((r) => [r.host, r.account, r.session, r.start, r.end, r.minutes])).toEqual([
+      ['DC01', 'CORP\\alice', '0x1', at('08:00'), at('08:20'), 20],
+      ['DC01', 'CORP\\DC01$', '0x3', at('08:30'), null, null],
+      ['dc01', 'corp\\Alice', '0x2', at('09:00'), at('10:00'), 60],
+      ['WS2', 'CORP\\carol', '0x1', at('11:00'), null, null],
+      ['DC01', 'CORP\\alice', '0x1', at('12:00'), null, null],
+    ]);
+  });
+
+  it('filters the logons, never the logoffs that close them', async () => {
+    const rows = await sessions(compile(parse('LogonType:3'), schema));
+    expect(rows.map((r) => [r.session, r.end])).toEqual([['0x1', at('08:20')], ['0x3', null], ['0x2', at('10:00')]]);
+  });
+
+  it('opens a session\'s activity: its logon id on its host, from logon to logoff', async () => {
+    const [first, open] = await sessions();
+    const activity = sessionActivity(fields, first);
+    expect(activity.t).toEqual([at('08:00'), at('08:20') + 1]);
+    const where = `(${compile(parse(activity.q), schema)}) AND (${timePredicate(activity.t)})`;
+    expect(await fixture(textIds).uids(where)).toEqual([1, 6]);
+    expect(sessionActivity(fields, open).t[1]).toBe(at('12:00') + 1);
+  });
+});
+
 describe('logons without the fields', () => {
   it('say which fields are missing, and query nothing', () => {
     const fields = logonFields(new Schema([], []));
@@ -90,5 +123,6 @@ describe('logons without the fields', () => {
     expect(logonsSql(fields, 'TRUE', {})).toBeNull();
     expect(explicitSql(fields, 'TRUE', {})).toBeNull();
     expect(rdpSql(fields, 'TRUE', {})).toBeNull();
+    expect(sessionsSql(fields, 'TRUE', {})).toBeNull();
   });
 });

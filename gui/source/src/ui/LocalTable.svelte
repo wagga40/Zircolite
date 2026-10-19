@@ -17,8 +17,8 @@
     sort?: LocalSort | null;
     /** The order with no column picked, for the header to show. */
     order: LocalSort;
-    /** The first column opens a row's events: how many there are, and how to open them. */
-    pivot: { events: (row: T) => number; open: (row: T) => void; title: (row: T) => string };
+    /** The first column opens a row's events: how many there are, when the table knows, and how to open them. */
+    pivot: { events?: (row: T) => number; open: (row: T) => void; title: (row: T) => string };
     /** What the table says when it has no row. */
     empty: string;
     /** How a missing text value reads; empty leaves the cell blank. */
@@ -80,7 +80,7 @@
             {@const raw = value(row, column.column.name)}
             <td class:num={column.column.type === 'number'} class:time={column.column.type === 'time'} class:missing={column.column.type === 'text' && (raw === null || raw === '')}>
               {#if j === 0}
-                <button type="button" class="value" data-events={pivot.events(row)} disabled={pending} title={pivot.title(row)} onclick={() => pivot.open(row)}>{cell(row, column) || '(missing)'}</button>
+                <button type="button" class="value" data-events={pivot.events?.(row)} disabled={pending} title={pivot.title(row)} onclick={() => pivot.open(row)}>{cell(row, column) || '(missing)'}</button>
               {:else}
                 {cell(row, column)}
               {/if}

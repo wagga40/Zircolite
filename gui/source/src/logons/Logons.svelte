@@ -6,11 +6,13 @@
   import type { QueryState } from '../state/query.svelte';
   import { run } from '../state/run.svelte';
   import { view } from '../state/view.svelte';
+  import { formatCount, isoTime } from '../ui/format';
   import { localWhere, sortClause, type TableColumn } from '../ui/localFilters';
   import { ownScope } from '../ui/scope';
   import {
     EXPLICIT_COLUMNS, EXPLICIT_ORDER, type ExplicitRow, explicitSql, explicitTerms, LOGON_COLUMNS, LOGON_ORDER, type LogonRow,
-    logonFields, logonsSql, logonTerms, RDP_COLUMNS, RDP_ORDER, type RdpRow, rdpSql, rdpTerms,
+    logonFields, logonsSql, logonTerms, RDP_COLUMNS, RDP_ORDER, type RdpRow, rdpSql, rdpTerms, SESSION_COLUMNS, SESSION_ORDER, sessionActivity,
+    type SessionRow, sessionsSql,
   } from './logons';
   import Section from './Section.svelte';
   import { LogonTable } from './table.svelte';
@@ -26,6 +28,7 @@
   const logons = new LogonTable<LogonRow>(LOGON_COLUMNS);
   const explicit = new LogonTable<ExplicitRow>(EXPLICIT_COLUMNS);
   const rdp = new LogonTable<RdpRow>(RDP_COLUMNS);
+  const sessions = new LogonTable<SessionRow>(SESSION_COLUMNS);
 
   $effect(() => {
     void run.generation;
@@ -42,6 +45,11 @@
     rdp.load(db, 'rdp', rdpSql(fields, query.where, { filter: localWhere(rdp.filters, rdp.schema), order: sortClause(rdp.sort, RDP_ORDER) }));
   });
 
+  $effect(() => {
+    void run.generation;
+    sessions.load(db, 'sessions', sessionsSql(fields, query.where, { filter: localWhere(sessions.filters, sessions.schema), order: sortClause(sessions.sort, SESSION_ORDER) }));
+  });
+
   const label = (names: Record<string, string>) => (column: TableColumn<never>['column']) => ({ column, label: names[column.name] });
   const LOGON_LABELS: Record<string, string> = {
     host: 'Host', account: 'Account', type_name: 'Logon type', ip: 'Source address', workstation: 'Source workstation', successes: 'Successes',
@@ -56,6 +64,20 @@
   const logonColumns: TableColumn<LogonRow>[] = LOGON_COLUMNS.map(label(LOGON_LABELS));
   const explicitColumns: TableColumn<ExplicitRow>[] = EXPLICIT_COLUMNS.map(label(EXPLICIT_LABELS));
   const rdpColumns: TableColumn<RdpRow>[] = RDP_COLUMNS.map(label(RDP_LABELS));
+  const SESSION_LABELS: Record<string, string> = {
+    host: 'Host', account: 'Account', type_name: 'Logon type', ip: 'Source address', session: 'Logon ID', start: 'Logon (UTC)', end: 'Logoff (UTC)',
+    minutes: 'Minutes',
+  };
+  const sessionColumns: TableColumn<SessionRow>[] = SESSION_COLUMNS.map(label(SESSION_LABELS)).map((column) =>
+    column.column.name === 'end' ? { ...column, show: (row: SessionRow) => (row.end === null ? 'still open' : isoTime(row.end, false)) }
+    : column.column.name === 'minutes' ? { ...column, show: (row: SessionRow) => (row.minutes === null ? '' : formatCount(row.minutes)) } : column);
+
+  function activity(row: SessionRow): void {
+    const { q, t } = sessionActivity(fields, row);
+    view.q = appendRaw(view.q, q);
+    view.t = t;
+    view.route = 'explore';
+  }
 
   function explore(terms: string): void {
     view.q = appendRaw(view.q, terms);
@@ -86,6 +108,9 @@
     <Section title="Explicit credentials" table={explicit} id="explicit-table" columns={explicitColumns} order={{ column: 'events', desc: true }} noun="uses of explicit credentials"
       note="Security 4648: a process on one host used the credentials of another account, often to reach a target server."
       events={(row) => row.events} open={(row) => explore(explicitTerms(fields, row))} />
+    <Section title="Sessions" table={sessions} id="sessions-table" columns={sessionColumns} order={{ column: 'start', desc: false }} noun="sessions"
+      note="Each successful logon with its logoff (4634 or 4647) on the same host and logon ID; a logon ID used again after a reboot starts a new session. The host opens the session's activity: the events on its host that carry its logon ID, from logon to logoff."
+      open={activity} opens={(row) => `Show what logon ID ${row.session} did on ${row.host ?? 'its host'}`} />
     <Section title="Remote Desktop" table={rdp} id="rdp-table" columns={rdpColumns} order={{ column: 'host', desc: false }} noun="Remote Desktop events"
       note="Remote Desktop authentications (1149), session logons, disconnections and reconnections, by the fields each kind of event records."
       events={(row) => row.events} open={(row) => explore(rdpTerms(fields, row))} />

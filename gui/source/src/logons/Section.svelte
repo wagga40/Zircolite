@@ -6,16 +6,18 @@
   import { LOGON_LIMIT } from './logons';
   import type { LogonTable } from './table.svelte';
 
-  let { title, note, table, id, columns, order, events, open, noun }: {
+  let { title, note, table, id, columns, order, events, open, opens, noun }: {
     title: string;
     note: string;
     table: LogonTable<Row>;
     id: string;
     columns: TableColumn<Row>[];
     order: LocalSort;
-    /** How many events a row lists in Explore. */
-    events: (row: Row) => number;
+    /** How many events a row lists in Explore, when the table counts them. */
+    events?: (row: Row) => number;
     open: (row: Row) => void;
+    /** What opening a row shows, for its button's title. */
+    opens?: (row: Row) => string;
     noun: string;
   } = $props();
 
@@ -34,7 +36,7 @@
     {#if total > rows.length}<p class="note">Showing {formatCount(rows.length)} of {formatCount(total)} rows. Filter a column to find the others.</p>{/if}
     <LocalTable {id} {columns} {rows} pending={table.list.slot.pending} answered={table.answer !== null} bind:filters={table.filters} bind:sort={table.sort}
       {order} empty={`No ${noun} ${table.filters ? 'pass the column filters' : 'among these events'}.`}
-      pivot={{ events, open, title: (row) => `Show the ${formatCount(events(row))} events of this row` }} />
+      pivot={{ events, open, title: (row) => opens?.(row) ?? `Show the ${formatCount(events?.(row) ?? 0)} events of this row` }} />
     {#if rows.length === LOGON_LIMIT}<p class="note">The table stops at {formatCount(LOGON_LIMIT)} rows.</p>{/if}
   {/if}
 </section>
