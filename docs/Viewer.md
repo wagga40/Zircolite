@@ -89,6 +89,16 @@ Process, Network, File and registry, and Other. Each value has + (filter for it)
 (filter it out) and **Copy**. **Show JSON** and **Copy JSON** give the whole event, and
 **Events on _host_ within 5 minutes** shows what happened around it.
 
+A value holding encoded text gets a **Decode** button, which lists what it decodes to:
+- a PowerShell encoded command (`-enc` and the other prefixes of `-EncodedCommand`);
+- Base64, including gzip- or deflate-packed payloads as droppers write them;
+- URL escapes;
+- hex.
+
+A decoding is offered only when it reads as text, and it shows as plain text, never as a page;
+the first 64 KiB are kept. Decoded text can be decoded again, two levels deep, for Base64 inside
+Base64.
+
 ## The views
 
 ### Overview

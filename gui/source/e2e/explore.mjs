@@ -328,6 +328,19 @@ async function scenario(page, steps) {
   await drawer.waitFor({ state: 'detached' });
   steps.push('one Escape closes the column menu over an open event');
 
+  // An encoded PowerShell command line decodes in the event view, as text.
+  r = await search(page, state, 'CommandLine:*"-enc JAB"*');
+  if (r.count > 0) {
+    await openDrawer();
+    await drawer.getByRole('button', { name: 'Show what CommandLine decodes to' }).click();
+    const decoded = await drawer.locator('.decoded pre').first().textContent();
+    check(decoded.startsWith('$'), `an encoded command decoded to ${JSON.stringify(decoded.slice(0, 40))}`);
+    await page.keyboard.press('Escape');
+    await drawer.waitFor({ state: 'detached' });
+    steps.push('an encoded PowerShell command decodes in the event view');
+  }
+  await search(page, state, '');
+
   await page.locator('#result-grid').focus();
   await page.keyboard.press('End');
   const last = page.locator(`#result-grid [role=row][aria-rowindex="${expected + 1}"]`);

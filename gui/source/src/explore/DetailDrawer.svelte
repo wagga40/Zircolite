@@ -16,6 +16,7 @@
   import {
     type Entry, familyFields, groupEntries, type Head, headSql, hostEntry, isCurrent, nearbyRange, type RuleRow, rulesSql, valuesSql,
   } from './detail';
+  import Decoded from './Decoded.svelte';
   import { eventJson } from './export';
 
   let { db, schema, manifest }: { db: Db; schema: Schema; manifest: Manifest } = $props();
@@ -224,7 +225,10 @@
                   <div class="entry">
                     <dt>{entry.name}</dt>
                     <dd>
-                      <span class="value">{entry.value}</span>
+                      <div class="value-col">
+                        <span class="value">{entry.value}</span>
+                        <Decoded value={entry.value} name={entry.name} oncopy={(text, what) => copy(text, what)} />
+                      </div>
                       <span class="tools">
                         <button type="button" disabled={stale} aria-label={`Filter for ${entry.name}`} onclick={() => (view.q = appendTerm(view.q, entry.field.name, entry.value, false))}>+</button>
                         <button type="button" disabled={stale} aria-label={`Filter out ${entry.name}`} onclick={() => (view.q = appendTerm(view.q, entry.field.name, entry.value, true))}>−</button>
@@ -267,7 +271,8 @@
   .entry { display: grid; grid-template-columns: minmax(110px, 34%) minmax(0, 1fr); gap: 10px; padding: 4px 0; border-bottom: 1px solid color-mix(in srgb, var(--rule) 45%, transparent); }
   dt { font-size: var(--t-13); color: var(--ink-2); overflow-wrap: anywhere; }
   dd { margin: 0; display: flex; gap: 6px; align-items: flex-start; }
-  .value { flex: 1; min-width: 0; font: 400 var(--t-13) / 1.45 var(--mono); white-space: pre-wrap; overflow-wrap: anywhere; }
+  .value-col { flex: 1; min-width: 0; }
+  .value { display: block; font: 400 var(--t-13) / 1.45 var(--mono); white-space: pre-wrap; overflow-wrap: anywhere; }
   .tools { display: inline-flex; gap: 2px; opacity: 0; }
   .entry:hover .tools, .entry:focus-within .tools { opacity: 1; }
   .tools button { min-width: 24px; min-height: 24px; padding: 0 6px; font-size: var(--t-12); border-color: transparent; }
