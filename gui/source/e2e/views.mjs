@@ -388,6 +388,20 @@ async function phase4(page, state, steps, expectedStarts) {
   check((await number(page.locator('#sql-result'), 'data-rows')) === 5000, 'sorting changed how many rows the filter keeps');
   steps.push('the SQL results filter and sort in the engine');
 
+  // A result with _zl_uid opens its events: one in the event view, all of them in Explore.
+  await runSql('SELECT _zl_uid, "EventID" FROM events ORDER BY _zl_uid LIMIT 7');
+  await firstCell();
+  const firstUid = await page.locator('#sql-result [role="cell"] button').first().textContent();
+  await page.locator('#sql-result [role="cell"] button').first().click();
+  await page.getByRole('complementary', { name: 'Event details' }).waitFor();
+  check(page.url().includes(`uid=${firstUid}`), `opening a result's event left ${page.url()}`);
+  await page.keyboard.press('Escape');
+  await page.getByRole('complementary', { name: 'Event details' }).waitFor({ state: 'detached' });
+  await page.getByRole('button', { name: 'Open in Explore' }).click();
+  const opened = await reopened(page, state);
+  check(opened.count === 7 && decodeURIComponent(page.url()).includes('q=uids:'), `Open in Explore lists ${opened.count} events at ${page.url()}`);
+  steps.push('the SQL console opens the events of its results');
+
   // Timeline: a lane holds exactly the events of its tactic in the window drawn.
   await route('timeline');
   const marks = page.locator('#timeline-marks');

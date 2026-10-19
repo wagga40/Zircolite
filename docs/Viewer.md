@@ -312,6 +312,7 @@ A console for one query at a time over the package's tables; see
 | `hour:` | `hour:>=22` | Events in an hour of the day (UTC), 0 to 23 |
 | `host:` | `host:DC01` | Events from a host, whichever host field holds it |
 | `user:` | `user:administrator` | Events naming an account, whichever user field holds it |
+| `uids:` | `uids:4294967297,4294967301` | Events by their ids in the package (`_zl_uid`), up to 1,000, as the SQL console opens them |
 
 - Field names ignore case; an unknown one is refused with the nearest names. Values may
   hold colons, so paths, times and IPv6 addresses need no quotes.
@@ -354,6 +355,9 @@ ORDER BY e._zl_time
   `PRAGMA` — is refused, and the package's tables cannot change.
 - Values come back as text, so 64-bit integers stay exact. At most 10,000 rows show;
   **Export CSV** saves them.
+- A result with a `_zl_uid` column opens its events. Each id is a link to its event, and
+  **Open in Explore** lists the result's events with a `uids:` search. It opens up to 1,000 events,
+  and only when every row of the result is shown.
 - Each result column sorts on a click and has a filter cell with the [column filter](#explore)
   syntax: numbers compare as numbers, everything else as the text shown. Filters and sorts
   run in the engine over every row of the query, not only the 10,000 shown, and a new query

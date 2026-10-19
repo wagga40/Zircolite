@@ -1,5 +1,6 @@
 import { isSuperseded } from '../engine/queries';
 import { str } from '../engine/sql';
+import { UIDS_LIMIT } from '../search/compile';
 import type { LocalColumn } from '../ui/localFilters';
 
 /*
@@ -146,4 +147,20 @@ export function columnWidths(columns: Column[], rows: (string | null)[][]): numb
     for (const row of rows) longest = Math.max(longest, (row[i] ?? 'NULL').length);
     return Math.min(60, Math.max(MIN_WIDTH, longest + 2));
   });
+}
+
+/**
+ * The events a result names, by its _zl_uid column, for opening in Explore:
+ * null without such a column, or why they cannot be opened. A result cut at
+ * the row limit is refused, as its events would not be the query's.
+ */
+export function eventIds(result: Result): ({ column: number } & ({ uids: number[] } | { problem: string })) | null {
+  const column = result.columns.findIndex((c) => c.name.toLowerCase() === '_zl_uid');
+  if (column < 0) return null;
+  if (result.more) return { column, problem: 'The query has more rows than shown; add a WHERE or LIMIT to open its events' };
+  const values = [...new Set(result.rows.map((row) => row[column]).filter((value): value is string => value !== null))];
+  if (!values.every((value) => /^\d+$/.test(value) && Number.isSafeInteger(Number(value)))) return { column, problem: 'The _zl_uid column holds values that are not event ids' };
+  if (values.length === 0) return { column, problem: 'The result names no event id' };
+  if (values.length > UIDS_LIMIT) return { column, problem: `Explore opens at most 1,000 events by id; this result names ${values.length}` };
+  return { column, uids: values.map(Number) };
 }
