@@ -439,7 +439,7 @@ export const SESSION_COLUMNS: LocalColumn[] = [
 export const SESSION_ORDER = ['"start" ASC', 'lower("host")', 'lower("session")'];
 
 /**
- * The special privileges (4672) each paired logon was given, joined as
+ * The special privileges (4672) each logon was given, joined as
  * granted(pt, list). Windows writes them with the logon, up to a few seconds
  * before it on a busy domain controller; the closest one in that window is
  * the logon's, so a reused logon id never inherits an older session's.
@@ -447,15 +447,15 @@ export const SESSION_ORDER = ['"start" ASC', 'lower("host")', 'lower("session")'
 function granted(fields: LogonFields, security: string): string {
   const f = fields.field;
   if (!f.EventID || !f.Computer || !f.SubjectLogonId || !f.PrivilegeList) {
-    return 'granted AS (SELECT paired.*, NULL::TIMESTAMP AS pt, NULL::VARCHAR AS list FROM paired)';
+    return 'granted AS (SELECT logon.*, NULL::TIMESTAMP AS pt, NULL::VARCHAR AS list FROM logon)';
   }
   const id = text(f.SubjectLogonId);
-  const near = 'priv.t >= paired.t - INTERVAL 5 SECOND';
+  const near = 'priv.t >= logon.t - INTERVAL 5 SECOND';
   return (
     `priv AS (SELECT _zl_time AS t, lower(${text(f.Computer)}) AS hk, lower(${id}) AS sk, ${text(f.PrivilegeList)} AS list FROM events ` +
     `WHERE ${security} AND ${eventIs(f.EventID, [4672])} AND ${id} IS NOT NULL AND _zl_time IS NOT NULL), ` +
-    `granted AS (SELECT paired.*, CASE WHEN ${near} THEN priv.t END AS pt, CASE WHEN ${near} THEN priv.list END AS list FROM paired ` +
-    'ASOF LEFT JOIN priv ON paired.hk = priv.hk AND paired.sk = priv.sk AND paired.late >= priv.t)'
+    `granted AS (SELECT logon.*, CASE WHEN ${near} THEN priv.t END AS pt, CASE WHEN ${near} THEN priv.list END AS list FROM logon ` +
+    'ASOF LEFT JOIN priv ON logon.hk = priv.hk AND logon.sk = priv.sk AND logon.late >= priv.t)'
   );
 }
 
@@ -475,14 +475,16 @@ export function sessionsSql(fields: LogonFields, where: string, options: LogonOp
   return (
     `WITH logon AS (SELECT _zl_uid, _zl_time AS t, ${host} AS host, lower(${host}) AS hk, ${text(f.TargetDomainName)} AS domain, ` +
     `${text(f.TargetUserName)} AS "user", trim(${text(f.LogonType)}) AS type, ${text(f.IpAddress)} AS ip, ${id} AS session, lower(${id}) AS sk, ` +
-    `lead(_zl_time) OVER (PARTITION BY lower(${host}), lower(${id}) ORDER BY _zl_time) AS next, _zl_time + INTERVAL 2 SECOND AS late ` +
+    '_zl_time + INTERVAL 2 SECOND AS late ' +
     `FROM events WHERE ${security} AND ${eventIs(f.EventID, [4624])} AND ${id} IS NOT NULL AND _zl_time IS NOT NULL), ` +
+    `${granted(fields, security)}, ` +
+    // Both in one window: DuckDB sorts the logons once for the two.
+    'windowed AS (SELECT granted.*, lead(t) OVER w AS next, lead(CASE WHEN pt < t THEN pt ELSE t END) OVER w AS next_begin FROM granted ' +
+    'WINDOW w AS (PARTITION BY hk, sk ORDER BY t)), ' +
     `off AS (SELECT _zl_time AS t, lower(${host}) AS hk, lower(${id}) AS sk FROM events ` +
     `WHERE ${security} AND ${eventIs(f.EventID, [4634, 4647])} AND ${id} IS NOT NULL AND _zl_time IS NOT NULL), ` +
-    'paired AS (SELECT logon.*, CASE WHEN next IS NULL OR off.t < next THEN off.t END AS stop FROM logon ' +
-    'ASOF LEFT JOIN off ON logon.hk = off.hk AND logon.sk = off.sk AND logon.t <= off.t), ' +
-    `${granted(fields, security)}, ` +
-    'began AS (SELECT granted.*, lead(CASE WHEN pt < t THEN pt ELSE t END) OVER (PARTITION BY hk, sk ORDER BY t) AS next_begin FROM granted), ' +
+    'paired AS (SELECT windowed.*, CASE WHEN next IS NULL OR off.t < next THEN off.t END AS stop FROM windowed ' +
+    'ASOF LEFT JOIN off ON windowed.hk = off.hk AND windowed.sk = off.sk AND windowed.t <= off.t), ' +
     `g AS (SELECT host, domain, "user", ${account('domain', '"user"')} AS account, type, ${named('type', LOGON_TYPES)} AS type_name, ip, session, ` +
     'epoch_ms(t)::DOUBLE AS start, epoch_ms(stop)::DOUBLE AS "end", round(epoch_ms(stop - t) / 60000, 1)::DOUBLE AS minutes, ' +
     // PrivilegeList puts each privilege on a line of its own, indented with tabs.
@@ -490,7 +492,7 @@ export function sessionsSql(fields: LogonFields, where: string, options: LogonOp
     'epoch_ms(next_begin)::DOUBLE AS next_logon, ' +
     '(SELECT epoch_ms(max(_zl_time)) FROM events)::DOUBLE AS horizon ' +
     // Narrowed after the pairing: a hidden logon still ends the session before it.
-    `FROM began WHERE _zl_uid IN (SELECT _zl_uid FROM events WHERE ${where})${narrowing(f, options, 'type', '"user"')}) ` +
+    `FROM paired WHERE ${where === 'TRUE' ? 'TRUE' : `_zl_uid IN (SELECT _zl_uid FROM events WHERE ${where})`}${narrowing(f, options, 'type', '"user"')}) ` +
     tail(options, SESSION_ORDER)
   );
 }
