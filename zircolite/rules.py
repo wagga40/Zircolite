@@ -57,6 +57,14 @@ from .utils import random_suffix, safe_load_all
 RULESET_SCHEMA_VERSION = 3
 
 
+def _is_sigma_document(doc: Any) -> bool:
+    if not isinstance(doc, dict):
+        return False
+    return (all(f in doc for f in ("title", "logsource", "detection"))
+            or ("title" in doc and "correlation" in doc)
+            or all(f in doc for f in ("title", "logsource", "filter")))
+
+
 def _referenced_names(rule: SigmaCorrelationRule) -> list[str]:
     """The rule names or ids a correlation refers to, as written."""
     if rule.rules is not None:
@@ -594,14 +602,7 @@ class RulesetHandler:
         try:
             with open(filepath, encoding="utf-8") as file:
                 for doc in safe_load_all(file):
-                    if not isinstance(doc, dict):
-                        continue
-                    has_standard = all(
-                        f in doc for f in ("title", "logsource", "detection")
-                    )
-                    has_correlation = "title" in doc and "correlation" in doc
-                    has_filter = all(f in doc for f in ("title", "logsource", "filter"))
-                    if has_standard or has_correlation or has_filter:
+                    if _is_sigma_document(doc):
                         return True
         except Exception:
             pass
@@ -728,7 +729,8 @@ class RulesetHandler:
         return collection
 
     def sigma_rules_to_ruleset(
-        self, sigma_rules_list: Sequence[Path | str], pipelines: list[Any]
+        self, sigma_rules_list: Sequence[Path | str], pipelines: list[Any],
+        *, parsed_yaml: dict[Path, list[Any]] | None = None,
     ) -> list[dict[str, Any]]:
         """Convert Sigma rules to Zircolite ruleset format.
 
@@ -743,29 +745,48 @@ class RulesetHandler:
         origin: dict[Path, int] = {}
         invalid = [0] * len(paths)
         unloadable = [0] * len(paths)
+        parsed_yaml = parsed_yaml or {}
         for index, path in enumerate(paths):
             files = sorted(path.rglob("*.yml")) + sorted(path.rglob("*.yaml")) if path.is_dir() else [path]
-            valid = [f for f in files if self.is_valid_sigma_rule(f)]
-            invalid[index] = len(files) - len(valid)
-            if invalid[index]:
-                self.logger.debug(f"[yellow]    [!] Skipped {invalid[index]} invalid Sigma rule(s)[/]")
-            for file in valid:
+            for file in files:
                 resolved = file.resolve()
                 if resolved in origin:
+                    continue
+                docs: list[Any] = []
+                try:
+                    if resolved in parsed_yaml:
+                        docs = parsed_yaml.pop(resolved)
+                    else:
+                        with open(file, encoding="utf-8") as handle:
+                            docs.extend(safe_load_all(handle))
+                except Exception as e:
+                    # A later malformed document used to fail conversion after
+                    # validation had accepted the first rule in the stream.
+                    if any(_is_sigma_document(doc) for doc in docs):
+                        self.logger.error(f"[red]    [-] Cannot load {literal(file)}: {literal(e)}[/]")
+                        unloadable[index] += 1
+                    else:
+                        invalid[index] += 1
+                    continue
+                if not any(_is_sigma_document(doc) for doc in docs):
+                    invalid[index] += 1
                     continue
                 try:
                     # As SigmaCollection.load_ruleset does: filters are collected per
                     # file and applied once, over every rule, when the files merge.
-                    with open(file, encoding="utf-8") as handle:
-                        documents.append(SigmaCollection.from_yaml(
-                            handle, source=SigmaRuleLocation(file),
-                            collect_filters=True, resolve_references=False,
-                        ))
+                    # from_yaml uses PyYAML's Python loader; reuse the documents
+                    # already checked above, parsed with our safe C-loader fallback.
+                    documents.append(SigmaCollection.from_dicts(
+                        docs, source=SigmaRuleLocation(file),
+                        collect_filters=True, resolve_references=False,
+                    ))
                 except Exception as e:
                     self.logger.error(f"[red]    [-] Cannot load {literal(file)}: {literal(e)}[/]")
                     unloadable[index] += 1
                     continue
                 origin[resolved] = index
+            if invalid[index]:
+                self.logger.debug(f"[yellow]    [!] Skipped {invalid[index]} invalid Sigma rule(s)[/]")
 
         if not documents:
             return []
@@ -854,13 +875,14 @@ class RulesetHandler:
         """Parse and convert rulesets from files or directories."""
         ruleset_list = []
         yaml_paths: list[Path] = []
+        parsed_yaml: dict[Path, list[Any]] = {}
         for ruleset in self.rulesetPathList:
             ruleset_path = Path(ruleset)
             if not ruleset_path.exists():
                 self.logger.warning(f"[yellow]    [!] Ruleset path does not exist: {literal(ruleset_path)}[/]")
                 continue
             if ruleset_path.is_file():
-                if self.is_json(ruleset_path):  # JSON Ruleset
+                if ruleset_path.suffix == ".json":
                     try:
                         with open(ruleset_path, encoding='utf-8') as f:
                             parsed = json.loads(f.read())
@@ -881,16 +903,21 @@ class RulesetHandler:
                             continue
                         ruleset_list.append(parsed)
                         self.logger.info(f"    [>] Loaded JSON/Zircolite ruleset : {make_file_link(str(ruleset_path))}")
+                    except json.JSONDecodeError:
+                        self._unrecognized_ruleset(ruleset_path)
                     except Exception as e:
                         self.logger.error(f"[red]    [-] Cannot load {literal(ruleset_path)} {literal(e)}[/]")
-                elif self.is_yaml(ruleset_path):  # YAML Ruleset
+                elif ruleset_path.suffix in (".yml", ".yaml"):
+                    try:
+                        with open(ruleset_path, encoding="utf-8") as handle:
+                            parsed_yaml[ruleset_path.resolve()] = list(safe_load_all(handle))
+                    except yaml.YAMLError:
+                        self._unrecognized_ruleset(ruleset_path)
+                        continue
                     self.logger.info(f"    [>] Converting Native Sigma to Zircolite ruleset : {make_file_link(str(ruleset_path))}")
                     yaml_paths.append(ruleset_path)
                 else:
-                    self.logger.warning(
-                        f"[yellow]    [!] Skipping unrecognized ruleset file "
-                        f"(not a valid JSON ruleset or Sigma YAML file): {literal(ruleset_path)}[/]"
-                    )
+                    self._unrecognized_ruleset(ruleset_path)
             elif ruleset_path.is_dir():  # Directory
                 self.logger.info(f"    [>] Converting Native Sigma to Zircolite ruleset : {make_file_link(str(ruleset_path))}")
                 yaml_paths.append(ruleset_path)
@@ -898,8 +925,14 @@ class RulesetHandler:
         if yaml_paths:
             # One collection for every path, so correlations resolve across them
             try:
-                ruleset_list.append(self.sigma_rules_to_ruleset(yaml_paths, self.pipelines))
+                ruleset_list.append(self.sigma_rules_to_ruleset(yaml_paths, self.pipelines, parsed_yaml=parsed_yaml))
             except Exception as e:
                 names = ", ".join(str(path) for path in yaml_paths)
                 self.logger.error(f"[red]    [-] Cannot convert {literal(names)} {literal(e)}[/]")
         return ruleset_list
+
+    def _unrecognized_ruleset(self, path: Path) -> None:
+        self.logger.warning(
+            f"[yellow]    [!] Skipping unrecognized ruleset file "
+            f"(not a valid JSON ruleset or Sigma YAML file): {literal(path)}[/]"
+        )

@@ -899,7 +899,8 @@ def handle_templating(
             time_field=ctx.time_field,
             append=getattr(args, 'template_append', False),
         )
-        template_generator = TemplateEngine(tmpl_config, logger=ctx.logger)
+        template_generator = TemplateEngine(tmpl_config, logger=ctx.logger,
+                                            sources=getattr(ctx, "template_sources", None))
         succeeded = template_generator.run(results)
 
 
@@ -1850,6 +1851,13 @@ def _main(memory_tracker, start_time) -> None:
     if args.csv:
         ready_for_templating = False
 
+    template_sources = {}
+    retain_results = False
+    if ready_for_templating:
+        templates = TemplateEngine(TemplateConfig(template=args.template or []), logger=logger)
+        retain_results = templates.needs_matches()
+        template_sources = templates.sources
+
     if args.dbfile and Path(args.dbfile).exists():
         print_error_panel(
             "Database File Exists",
@@ -1922,7 +1930,8 @@ def _main(memory_tracker, start_time) -> None:
         remove_index=flatten_groups(getattr(args, 'remove_index', None)),
         auto_index_top_n=getattr(args, 'auto_index', 0),
         strict_evtx=getattr(args, 'strict', False),
-        retain_results=ready_for_templating,
+        retain_results=retain_results,
+        template_sources=template_sources,
         working_db=args.working_db,
         working_db_dir=args.working_db_dir,
         sqlite_cache_mib=args.sqlite_cache_mib,
@@ -1951,11 +1960,8 @@ def _main(memory_tracker, start_time) -> None:
 
         # Written after a first Ctrl+C too, from the rows found, like the detections output
         if timeline_spool is not None:
-            finalization_start = time.perf_counter()
-            try:
+            with ctx.parent_metrics.stage("output"):
                 timeline_stats = _write_timeline(ctx, args)
-            finally:
-                finalization_seconds += time.perf_counter() - finalization_start
 
         if not is_shutdown_requested():
             # Print rule profiling report if requested
@@ -1965,11 +1971,8 @@ def _main(memory_tracker, start_time) -> None:
                 print_profiling_report(zircolite_core.get_profiling_report())
 
             # Handle templating and package generation
-            finalization_start = time.perf_counter()
-            try:
+            with ctx.parent_metrics.stage("output"):
                 templating_ok = handle_templating(ctx, all_results, args)
-            finally:
-                finalization_seconds += time.perf_counter() - finalization_start
     except OutputPathConflict as exc:
         processing_failed = True
         print_error_panel("Invalid Output Path", literal(exc), "Write the output to a separate file.")

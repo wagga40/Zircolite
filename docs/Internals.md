@@ -108,6 +108,11 @@ flattener decides which value lands in the column.
 
 ## Rule execution
 
+**Ruleset input.** JSON rulesets are decoded once. Sigma YAML is parsed once with
+the safe C loader (or the Python safe loader when LibYAML is unavailable), then
+passed to `SigmaCollection.from_dicts`. All files still merge before filters and
+cross-file references are resolved; pipeline application order is unchanged.
+
 **Analysis cache.** Normalising, planning and scanning the statements of a 4,500-rule
 ruleset takes about two seconds, which every process worker would pay again. The
 command line keeps the results in the user's cache directory (`~/Library/Caches/Zircolite`,
@@ -207,7 +212,27 @@ backup API either way.
 
 **Timers.** Nested stage timers pause their parent, so index and output time does not also
 count as ingestion or detection. Worker stage times are summed apart from wall time, and RSS
-is sampled in a background thread.
+is sampled in a background thread. Detection JSON/CSV writes, template rendering,
+timeline final output and package generation belong to `output`; `finalization`
+covers cleanup. These boundaries differ from older reports, which included direct
+detection writes in `detection` and final exports in `finalization`.
+
+**Exports.** Unmodified shipped NDJSON, Splunk, ELK, Zinc and Timesketch templates
+use buffered row exporters. They serialize each event once and cache metadata per
+rule, preserving Jinja's JSON/HTML escaping and nested-value handling. Object key
+order and insignificant whitespace can differ. Output is staged before writing,
+so a rendering error leaves an existing destination intact. New destinations use
+a sibling temporary file and rename; existing destinations and append operations
+copy from a temporary file, preserving hard links, permissions and named pipes.
+This needs temporary disk space for one export.
+
+Templates are recognized by a content fingerprint, not their filename. Custom or
+modified templates retain Jinja rendering and full matches. Shipped Summary CSV
+and ATT&CK Navigator templates need only rule summaries, so the CLI discards their
+match lists when no other template needs them. Those summary templates are captured
+before processing to keep retention and rendering consistent. Row exports still
+retain the match lists but no longer build the entire rendered string in memory.
+CSV spools sanitize event cells and rule metadata once, before their final write.
 
 ## Package pipeline
 

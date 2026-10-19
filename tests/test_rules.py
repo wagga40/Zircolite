@@ -28,6 +28,44 @@ from zircolite.sqlscan import column_refs, rebalance_sql
 WORKSPACE_ROOT = Path(__file__).parent.parent
 
 
+@pytest.mark.parametrize("kind", ["json", "yaml-file", "yaml-directory"])
+def test_ruleset_input_is_read_once(tmp_path, monkeypatch, kind):
+    """Validation and conversion must share the bytes/documents they read."""
+    import builtins
+
+    path = tmp_path / ("rules.json" if kind == "json" else "rule.yml")
+    if kind == "json":
+        path.write_text(json.dumps([{"title": "Once", "rule": ["SELECT * FROM logs WHERE EventID=1"]}]))
+    else:
+        path.write_text("title: Once\nlogsource: {product: windows}\n"
+                        "detection: {selection: {EventID: 1}, condition: selection}\n")
+    original_open = builtins.open
+    reads = []
+
+    def counted_open(file, *args, **kwargs):
+        if isinstance(file, (str, Path)) and Path(file) == path:
+            reads.append(file)
+        return original_open(file, *args, **kwargs)
+
+    monkeypatch.setattr(builtins, "open", counted_open)
+    source = tmp_path if kind == "yaml-directory" else path
+    handler = RulesetHandler(RulesetConfig(ruleset=[str(source)]))
+    assert [r["title"] for r in handler.rulesets] == ["Once"]
+    assert len(reads) == 1
+
+
+def test_sigma_loading_uses_safe_loader_with_python_fallback(tmp_path, monkeypatch):
+    from zircolite import utils
+
+    path = tmp_path / "rule.yml"
+    path.write_text("title: Safe\nlogsource: {product: windows}\n"
+                    "detection: {selection: {CommandLine: 'café <&>'}, condition: selection}\n")
+    converted = RulesetHandler(RulesetConfig(ruleset=[str(path)])).rulesets
+    monkeypatch.setattr(utils, "SafeLoader", yaml.SafeLoader)
+    fallback = RulesetHandler(RulesetConfig(ruleset=[str(path)])).rulesets
+    assert fallback == converted
+
+
 class TestIsValidSigmaRule:
     """Tests for the is_valid_sigma_rule method."""
 
@@ -1765,20 +1803,17 @@ class TestRulesetHandlerEdgeCases:
         # Should not crash, just log error and continue
         assert isinstance(result, list)
 
-    def test_ruleset_parsing_json_load_exception_logs_error(self, tmp_path, test_logger):
-        """ruleset_parsing logs error when json.loads fails (covers except branch)."""
+    def test_ruleset_parsing_invalid_json_logs_warning(self, tmp_path, test_logger, caplog):
+        """Malformed JSON keeps the same warning as the former format probe."""
         json_file = tmp_path / "bad.json"
         json_file.write_text("not valid json {{{")
         handler_obj = _make_bare_handler(
             test_logger,
             rulesetPathList=[str(json_file)],
-            is_json=lambda p: p.suffix == ".json",
         )
-        with patch.object(test_logger, "error") as mock_error:
-            result = handler_obj.ruleset_parsing()
+        result = handler_obj.ruleset_parsing()
         assert result == []
-        mock_error.assert_called_once()
-        assert "Cannot load" in str(mock_error.call_args)
+        assert "Skipping unrecognized ruleset file" in caplog.text
 
     def test_ruleset_parsing_yaml_conversion_exception_logs_error(self, tmp_path, test_logger):
         """ruleset_parsing logs error when Sigma conversion raises (YAML path)."""

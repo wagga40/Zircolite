@@ -1419,3 +1419,32 @@ class TestCsvHeaderIsSanitised:
         assert formula not in header
         assert row[header.index("'" + formula)] == "value"
         assert row[header.index("User")] == "alice"
+
+
+def test_csv_spool_sanitizes_cells_once(tmp_path, monkeypatch):
+    from types import SimpleNamespace
+
+    from zircolite import utils
+    from zircolite.performance import FileMetrics
+    from zircolite.processing import _CsvResultSpool
+
+    original = utils.sanitize_value_for_csv
+    visited = []
+
+    def sanitize(value):
+        visited.append(value)
+        return original(value)
+
+    monkeypatch.setattr(utils, "sanitize_value_for_csv", sanitize)
+    output = tmp_path / "once.csv"
+    ctx = SimpleNamespace(outfile=str(output), delimiter=";", parent_metrics=FileMetrics())
+    spool = _CsvResultSpool(ctx)
+    spool.add({"title": "=title", "description": "a\nb", "rule_level": "high", "count": 1,
+               "matches": [{"CommandLine": "once", "Other": "+formula", "Nested": {"x": 1}}]})
+    spool.finish()
+    with output.open(newline="") as handle:
+        assert list(csv.DictReader(handle, delimiter=";")) == [{
+            "rule_title": "'=title", "rule_description": "a b", "rule_level": "high", "rule_count": "1",
+            "CommandLine": "once", "Other": "'+formula", "Nested": '{"x":1}',
+        }]
+    assert visited.count("once") == 1

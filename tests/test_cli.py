@@ -59,6 +59,44 @@ def get_log_arg(tmp_path):
     return ['-l', str(tmp_path / "test.log")]
 
 
+@pytest.mark.parametrize("template_name,custom", [
+    ("exportSummaryCSV.tmpl", False), ("exportForAttackNavigator.tmpl", False),
+    ("exportSummaryCSV.tmpl", True),
+])
+def test_summary_templates_do_not_retain_matches(tmp_path, monkeypatch, template_name, custom):
+    events = tmp_path / "events.json"
+    events.write_text('{"EventID":1,"CommandLine":"present"}\n')
+    rules = tmp_path / "rules.json"
+    rules.write_text(json.dumps([{"title": "Matched", "id": "r", "level": "high",
+                                 "tags": ["attack.execution", "attack.t1059"], "rule": ["SELECT * FROM logs"]}]))
+    output = tmp_path / "template.txt"
+    args = ["zircolite.py", "-e", str(events), "-j", "-r", str(rules), "-q", "--no-auto-mode", "--no-parallel",
+            "-o", str(tmp_path / "detections.json"), "-l", str(tmp_path / "run.log"),
+            "-t", str(WORKSPACE_ROOT / "templates" / template_name), "-T", str(output)]
+    if custom:
+        path = tmp_path / "custom.tmpl"
+        path.write_text("{{ data[0]['matches'][0]['CommandLine'] }}")
+        args += ["-t", str(path), "-T", str(tmp_path / "custom.txt")]
+    seen = {}
+    original = zircolite_script.ProcessingContext
+
+    def capture(**kwargs):
+        seen.update(kwargs)
+        return original(**kwargs)
+
+    monkeypatch.setattr(zircolite_script, "ProcessingContext", capture)
+    monkeypatch.setattr(sys, "argv", args)
+    zircolite_script.main()
+    assert seen["retain_results"] is custom
+    assert json.loads((tmp_path / "detections.json").read_text())[0]["count"] == 1
+    if template_name == "exportForAttackNavigator.tmpl":
+        assert json.loads(output.read_text())["techniques"][0]["score"] == 1
+    else:
+        assert '"Matched","r","high",1' in output.read_text()
+    if custom:
+        assert (tmp_path / "custom.txt").read_text() == "present"
+
+
 def _matched_events(output_file):
     """Every matched event across every rule in a detections file."""
     if not Path(output_file).exists():

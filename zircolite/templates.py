@@ -5,11 +5,18 @@ This module contains:
 - TemplateEngine: Jinja2 template rendering for output generation
 """
 
+import hashlib
 import logging
+import os
+import secrets
+import shutil
+import tempfile
+from pathlib import Path
 from typing import Any
 
 import orjson
 from jinja2 import Environment
+from jinja2.utils import htmlsafe_json_dumps
 
 from .attack import extract_attack_tactics, extract_attack_techniques
 from .config import TemplateConfig
@@ -23,6 +30,81 @@ _LEVEL_COLOR = {
     'low': '#66ff66',
     'informational': '#aaffaa',
 }
+
+# Content, not filenames: a customized or shadowed template must still run
+# through Jinja with full matches. A changed shipped template safely falls back
+# until its exporter and this fingerprint are updated together.
+_BUILTIN_TEMPLATES = {
+    "e5573b8994c4e0a5194b6a88dd8d2841737ce2fd09fa409a570d25ebb2e40212": "ndjson",
+    "42695f66f3ae4b6c9bf5f50d142858640e8249972fe6794bea7ff6f808829879": "splunk",
+    "cc54c06961c0ab4843a07c8ea954374c9fd1f0d8984e9e5f9fc1878ef8a5ae3a": "splunk-id",
+    "7c599de902ae202905f0b5a47d73ca02ed5cc4d0219f88984736ea236d65ede2": "elk",
+    "1b8116b58b49905be68271bc3cc4bd7e24a14ce720c044ed3713b8376c1e6837": "zinc",
+    "ca58fbde92581cf6175f6fced597b7e53d5c10b49ed23ca05f1ecf93720dc7c4": "timesketch",
+    "d5711e794b09c9d7ffd7fcedb486fbb53a834ba5c2457f70e14c449521233679": "navigator",
+    "e0d63184d3f4f14502382aa1a219534366e0f18bbe69dee9e9c39e8c27556811": "summary",
+}
+_SUMMARY_TEMPLATES = {"navigator", "summary"}
+
+
+def _builtin_template(source: str) -> str | None:
+    return _BUILTIN_TEMPLATES.get(hashlib.sha256(source.encode("utf-8")).hexdigest())
+
+
+def _export_json(value: Any) -> str:
+    # The same JSON/HTML escaping and nested-key sorting as Jinja's tojson.
+    # Only insignificant JSON whitespace changes in the optimized exports.
+    return str(htmlsafe_json_dumps(value, sort_keys=True, separators=(",", ":")))
+
+
+def _export_rows(kind: str, data: list[dict[str, Any]], time_field: str):
+    flatten = kind in ("elk", "zinc", "timesketch")
+    for result in data:
+        prefix = None
+        for match in result.get("matches", ()):
+            if prefix is None:
+                metadata = {"title": result["title"], "description": result["description"]}
+                if kind != "splunk":
+                    metadata["id"] = result["id"]
+                if kind in ("ndjson", "timesketch"):
+                    metadata["rule_level"] = result["rule_level"]
+                if kind == "timesketch":
+                    metadata.update(message=result["title"], timestamp_desc="Event time")
+                prefix = _export_json(metadata)[:-1] + ","
+            row = {key: flat_json(value) for key, value in match.items()} if flatten else match
+            if kind == "zinc":
+                yield '{ "index" : { "_index" : "zircolite" } } \n'
+            # Keep metadata and event fields separate: the original templates
+            # emit both when a log field collides with a metadata key.
+            if kind == "timesketch":
+                yield prefix + '"datetime":' + _export_json(match.get(time_field, "")) + (
+                    "," + _export_json(row)[1:] if row else "}"
+                ) + "\n"
+            else:
+                yield prefix + _export_json(row)[1:] + "\n"
+
+
+def _write_export(output_filename: str, chunks, append: bool) -> None:
+    """Stage bounded chunks before touching the destination, even in append mode."""
+    target = Path(output_filename)
+    if append or target.exists():
+        # Preserve normal open semantics for hard links, pipes, permissions,
+        # and writable files in non-writable directories. Keep the original
+        # path: resolving /dev/stdout can turn it into an unopenable pipe name.
+        with tempfile.TemporaryFile(mode="w+t", encoding="utf-8", buffering=1024 * 1024) as staged:
+            staged.writelines(chunks)
+            staged.seek(0)
+            with target.open("a" if append else "w", encoding="utf-8", buffering=1024 * 1024) as output:
+                shutil.copyfileobj(staged, output)
+        return
+    target = target.resolve()
+    temporary = target.parent / f".zircolite-{secrets.token_hex(8)}.tmp"
+    try:
+        with temporary.open("x", encoding="utf-8", buffering=1024 * 1024) as handle:
+            handle.writelines(chunks)
+        os.replace(temporary, target)
+    finally:
+        temporary.unlink(missing_ok=True)
 
 
 def _count_label(count: int, singular: str) -> str:
@@ -156,7 +238,8 @@ class TemplateEngine:
         self,
         template_config: TemplateConfig | None = None,
         *,
-        logger: logging.Logger | None = None
+        logger: logging.Logger | None = None,
+        sources: dict[str, str] | None = None,
     ):
         """
         Initialize TemplateEngine.
@@ -172,6 +255,33 @@ class TemplateEngine:
         self.template_output = cfg.template_output
         self.time_field = cfg.time_field
         self.append = cfg.append
+        self.sources = dict(sources or {})
+
+    def _source(self, filename: str) -> str:
+        if filename in self.sources:
+            return self.sources[filename]
+        with open(filename, encoding="utf-8") as handle:
+            return handle.read()
+
+    def needs_matches(self) -> bool:
+        """Capture templates before deciding whether the CLI can retain summaries.
+
+        Rendering uses these same contents, so a file edited during ingestion
+        cannot unexpectedly ask a summary-only run for its discarded matches.
+        """
+        needs_matches = False
+        sources = {}
+        for spec in self.template:
+            try:
+                sources[spec[0]] = self._source(spec[0])
+                if _builtin_template(sources[spec[0]]) not in _SUMMARY_TEMPLATES:
+                    needs_matches = True
+            except (OSError, UnicodeError):
+                # Preserve the normal rendering error/reporting path.
+                needs_matches = True
+        if not needs_matches:
+            self.sources.update(sources)
+        return needs_matches
 
     def generate_from_template(
         self,
@@ -186,13 +296,18 @@ class TemplateEngine:
         used. Pass ``True``/``False`` explicitly to override per-call.
         """
         try:
-            with open(template_file, encoding='utf-8') as tmpl:
-                template = _make_jinja2_env().from_string(tmpl.read())
+            source = self._source(template_file)
+            kind = _builtin_template(source)
+            should_append = self.append if append is None else append
+            if kind is not None and kind not in _SUMMARY_TEMPLATES:
+                _write_export(output_filename, _export_rows(kind, data, self.time_field), should_append)
+                return True
+            template = _make_jinja2_env().from_string(source)
 
             # Render before opening the output file so a render failure does
             # not leave a truncated/empty file behind
             rendered = template.render(data=data, timeField=self.time_field)
-            mode = 'a' if (self.append if append is None else append) else 'w'
+            mode = 'a' if should_append else 'w'
             with open(output_filename, mode, encoding='utf-8') as tpl:
                 tpl.write(rendered)
             return True

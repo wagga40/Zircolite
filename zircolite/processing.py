@@ -121,8 +121,11 @@ class ProcessingContext:
     auto_index_top_n: int = 0
     strict_evtx: bool = False
     # Library callers retain the historical full-match return value. The CLI
-    # needs only summaries unless templates or packaging request the matches.
+    # needs only summaries unless a template requests the matches.
     retain_results: bool = True
+    # Snapshot summary-only templates so edits during ingestion cannot make
+    # them ask for matches that this run has already discarded.
+    template_sources: dict[str, str] = field(default_factory=dict)
     evtx_threads: int | None = None
     working_db: str = "memory"
     working_db_dir: str | None = None
@@ -429,6 +432,13 @@ def _keepflat_context(ctx: 'ProcessingContext', *, thread_safe: bool = False):
 # UNIFIED STREAMING
 # ============================================================================
 
+def _csv_metadata(result):
+    return sanitize_row_for_csv({
+        "rule_title": result["title"], "rule_description": result["description"],
+        "rule_level": result["rule_level"], "rule_count": result["count"],
+    })
+
+
 class _CsvResultSpool:
     def __init__(self, ctx):
         self.ctx = ctx
@@ -436,10 +446,7 @@ class _CsvResultSpool:
         self.columns = set()
 
     def add(self, result):
-        metadata = {
-            "rule_title": result["title"], "rule_description": result["description"],
-            "rule_level": result["rule_level"], "rule_count": result["count"],
-        }
+        metadata = _csv_metadata(result)
         for row in result.get("matches", ()):
             self.columns.update(row)
             self.rows.append({**metadata, **sanitize_row_for_csv(row)})
@@ -456,7 +463,7 @@ class _CsvResultSpool:
                     fieldnames=["rule_title", "rule_description", "rule_level", "rule_count", *columns])
                 write_csv_header(writer)
                 for row in self.rows:
-                    writer.writerow(sanitize_row_for_csv(row))
+                    writer.writerow(row)
         finally:
             self.close()
 
@@ -1116,10 +1123,7 @@ def process_single_file_worker(
             if output is None:
                 return
             if csv_spooled:
-                metadata = {
-                    "rule_title": result["title"], "rule_description": result["description"],
-                    "rule_level": result["rule_level"], "rule_count": result["count"],
-                }
+                metadata = _csv_metadata(result)
                 for row in result["matches"]:
                     csv_columns.update(row)
                     output.write(orjson.dumps({**metadata, **sanitize_row_for_csv(row)}) + b"\n")

@@ -1727,9 +1727,10 @@ class ZircoliteCore:
                                 if det_level in detection_counts:
                                     detection_counts[det_level] += rule_results.get("count", 0)
                             if not no_output:
-                                csv_writer, needs_comma_prefix = self._write_result_to_output(
-                                    rule_results, file_handle, csv_writer, needs_comma_prefix
-                                )
+                                with self.metrics.stage("output"):
+                                    csv_writer, needs_comma_prefix = self._write_result_to_output(
+                                        rule_results, file_handle, csv_writer, needs_comma_prefix
+                                    )
                             if result_sink is not None:
                                 with self.metrics.stage("output"):
                                     result_sink(rule_results)

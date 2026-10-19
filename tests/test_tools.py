@@ -60,6 +60,62 @@ def test_benchmark_default_report_stays_outside_worktree(tmp_path, monkeypatch):
     assert list(tmp_path.iterdir()) == reports
 
 
+def test_benchmark_export_matrix_and_warmup(tmp_path, monkeypatch):
+    benchmark = load_tool("throughput-benchmark")
+    report = tmp_path / "report.json"
+    exports = ["json", "csv", "ndjson", "timesketch", "navigator", "summary",
+               "timeline-jsonl", "timeline-csv", "package"]
+    monkeypatch.setattr(sys, "argv", ["throughput-benchmark.py", "--event-count", "12", "--files", "1",
+        "--passes", "1", "--warmup", "1", "--modes", "sequential", "--variants", "current",
+        "--cache", "warm", "--report", str(report), "--exports", *exports])
+    assert benchmark.main() == 0
+    data = json.loads(report.read_text())
+    assert data["warmup"] == 1
+    assert data["cache"] == "warm"
+    assert set(data["results"]) == {f"sequential/{kind}" for kind in exports}
+    for runs in data["results"].values():
+        assert len(runs) == 1
+        assert runs[0]["matches"] == 1
+        assert runs[0]["output_bytes"] > 0
+        assert runs[0]["export_fingerprint"]
+        assert runs[0]["performance"]["status"] == "complete"
+
+
+def test_benchmark_export_fingerprint_detects_changed_content(tmp_path):
+    benchmark = load_tool("throughput-benchmark")
+    output = tmp_path / "export.jsonl"
+    output.write_text('{"text":"hello","row_id":1}\n')
+    original = benchmark.export_fingerprint("ndjson", output)
+    output.write_text('{"row_id":2, "text":"hello"}\n')
+    assert benchmark.export_fingerprint("ndjson", output) == original
+    output.write_text('{"text":"different","row_id":1}\n')
+    assert benchmark.export_fingerprint("ndjson", output) != original
+
+
+def test_benchmark_navigator_fingerprint_ignores_technique_order(tmp_path):
+    benchmark = load_tool("throughput-benchmark")
+    output = tmp_path / "navigator.json"
+    techniques = [{"techniqueID": "T1001", "score": 1}, {"techniqueID": "T1002", "score": 2}]
+    output.write_text(json.dumps({"techniques": techniques}))
+    original = benchmark.export_fingerprint("navigator", output)
+    output.write_text(json.dumps({"techniques": list(reversed(techniques))}))
+    assert benchmark.export_fingerprint("navigator", output) == original
+    techniques[0]["score"] = 3
+    output.write_text(json.dumps({"techniques": techniques}))
+    assert benchmark.export_fingerprint("navigator", output) != original
+
+
+def test_benchmark_csv_detection_identity_ignores_partition_counts(tmp_path):
+    benchmark = load_tool("throughput-benchmark")
+    output = tmp_path / "detections.csv"
+    output.write_text("rule_title;rule_count;event\nt;2;a\nt;2;b\n")
+    detections = benchmark.export_fingerprint("csv", output, detections_only=True)
+    exported = benchmark.export_fingerprint("csv", output)
+    output.write_text("rule_title;rule_count;event\nt;1;a\nt;1;b\n")
+    assert benchmark.export_fingerprint("csv", output, detections_only=True) == detections
+    assert benchmark.export_fingerprint("csv", output) != exported
+
+
 @pytest.fixture(scope="module")
 def tool_benchmark():
     return load_tool("tool-benchmark")
