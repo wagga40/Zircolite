@@ -173,6 +173,39 @@ try {
     await page.locator('#sql-editor').fill('SELECT count(*) AS n FROM events');
     await page.getByRole('button', { name: 'Run', exact: true }).click();
   }, filled('#sql-result', 'data-rows'));
+  // A table that answered: busy no more, with a row count. Tables clear the count as soon as they are asked again.
+  const answered = (selector) => () => poll(page, async () => {
+    const table = page.locator(selector);
+    return (await table.getAttribute('aria-busy')) === 'false' && (await table.getAttribute('data-rows')) !== '';
+  });
+  const typeInCell = (label, text, selector) => timed(async () => {
+    await page.getByLabel(`Filter ${label}`, { exact: true }).fill(text);
+    await page.getByLabel(`Filter ${label}`, { exact: true }).press('Enter');
+  }, answered(selector));
+  await nav('Entities');
+  await answered('#entities-table')();
+  report.entities_filter_ms = await typeInCell('Events', '>=100', '#entities-table');
+  report.sql_filter_ms = await (async () => {
+    await nav('SQL');
+    await page.locator('#sql-editor').fill('SELECT "Computer", "EventID", count(*) AS n FROM events GROUP BY ALL');
+    await page.getByRole('button', { name: 'Run', exact: true }).click();
+    await filled('#sql-result', 'data-rows')();
+    return timed(async () => {
+      await page.getByLabel('Filter n', { exact: true }).fill('>=100');
+      await page.getByLabel('Filter n', { exact: true }).press('Enter');
+    }, () => poll(page, async () => (await page.locator('#sql-result').getAttribute('aria-busy')) === 'false'
+      && (await page.locator('#sql-result').getAttribute('data-rows')) !== ''));
+  })();
+  report.stack_one_ms = await timed(() => nav('Stacking'), answered('#stacking-table'));
+  const pair = page.locator('[aria-label="Stack"] button', { hasText: '+' }).first();
+  if (await pair.count()) {
+    report.stack_two_fields = await pair.textContent();
+    report.stack_two_ms = await timed(() => pair.click(), answered('#stacking-table'));
+  }
+  const logonTables = ['#logons-table', '#explicit-table', '#sessions-table', '#rdp-table'];
+  report.logons_ms = await timed(() => nav('Logons'), async () => {
+    for (const table of logonTables) if (await page.locator(table).count()) await answered(table)();
+  });
   await nav('Explore');
   build = 0;
   await settled();
