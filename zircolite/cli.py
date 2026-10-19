@@ -434,6 +434,10 @@ def discover_files(
             # at; the caller re-discovers with the detected format's suffixes.
             if not log_list:
                 log_list = candidates
+        # Directory order is the filesystem's: sorted on APFS and NTFS, hashed
+        # on ext4. A unified database numbers events in the order files are
+        # read, so the same directory must give the same run everywhere.
+        log_list.sort()
     elif log_path.is_file():
         log_list = [log_path]
     else:

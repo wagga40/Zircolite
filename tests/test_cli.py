@@ -4767,6 +4767,23 @@ def test_expanded_discovery_respects_recursion_selection_and_exclusion(tmp_path,
     assert {path.relative_to(tmp_path).as_posix() for path in found} == expected
 
 
+@pytest.mark.parametrize('overrides', [{}, {'file_pattern': '*.json'}, {'no_recursion': True}])
+def test_discovery_order_does_not_follow_the_filesystem(tmp_path, monkeypatch, overrides):
+    (tmp_path / 'nested').mkdir()
+    for name in ('b.json', 'a.json', 'nested/c.json'):
+        (tmp_path / name).touch()
+    # ext4 lists a directory in hash order; reversing the sorted listing stands in for it.
+    for method in ('glob', 'rglob'):
+        listing = getattr(Path, method)
+        monkeypatch.setattr(Path, method, lambda self, *args, listing=listing, **kwargs: iter(
+            sorted(listing(self, *args, **kwargs), reverse=True)))
+
+    found = discover_files(discovery_args(tmp_path, json_input=True, **overrides), logging.getLogger(__name__))
+
+    names = [path.relative_to(tmp_path).as_posix() for path in found]
+    assert names == sorted(names) and names[:2] == ['a.json', 'b.json']
+
+
 def test_discovery_keeps_content_detection_fallback_for_unrecognized_suffixes(tmp_path):
     (tmp_path / 'events.data').touch()
     (tmp_path / 'nested').mkdir()
