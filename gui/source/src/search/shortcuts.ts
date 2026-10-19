@@ -25,6 +25,7 @@ export const SYNTAX: readonly { pattern: string; meaning: string }[] = [
   { pattern: '"net user"', meaning: 'Any field contains the phrase.' },
   { pattern: 'EventID:4624', meaning: 'A field equals a value, in any case.' },
   { pattern: 'Image:*\\cmd.exe', meaning: '* matches any characters, outside quotes.' },
+  { pattern: 'CommandLine:*"net user"*', meaning: 'A * right beside the quotes matches any characters there, so a field can contain a phrase.' },
   { pattern: 'EventID:>4600', meaning: 'Numeric fields compare with >, >=, < and <=.' },
   { pattern: '-Channel:Security', meaning: 'Leave matches out. Events without the field stay in.' },
   { pattern: 'a OR b', meaning: 'Either term. Terms side by side must both match.' },

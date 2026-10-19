@@ -14,6 +14,9 @@ export type Node =
       op: Op;
       value: string;
       quoted: boolean;
+      /** A * outside the quotes of a quoted value, matching anything there. */
+      starBefore?: boolean;
+      starAfter?: boolean;
       start: number;
       end: number;
     };
@@ -94,6 +97,8 @@ export function parse(input: string): Node | null {
         return {
           kind: 'term', field: token.text, fieldQuoted: token.kind === 'quoted', op,
           value: value.text, quoted: value.kind === 'quoted', start: token.start, end: value.end,
+          ...(value.starBefore ? { starBefore: true } : {}),
+          ...(value.starAfter ? { starAfter: true } : {}),
         };
       }
       return { kind: 'term', field: null, fieldQuoted: false, op: '=', value: token.text, quoted: token.kind === 'quoted', start: token.start, end: token.end };

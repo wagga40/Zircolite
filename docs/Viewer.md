@@ -181,6 +181,7 @@ A console for one query at a time over the package's tables; see
 | `"net user"` | Any field contains the phrase |
 | `EventID:4624` | A field equals a value, in any case |
 | `Image:*\cmd.exe` | `*` matches any characters, outside quotes |
+| `CommandLine:*"net user"*` | A `*` right beside the quotes matches any characters there, so a field can contain a phrase |
 | `EventID:>4600` | Numeric fields compare with `>`, `>=`, `<` and `<=` |
 | `-Channel:Security` | Leave matches out; events without the field stay in |
 | `a OR b` | Either term. Terms side by side must both match |
@@ -202,7 +203,8 @@ A console for one query at a time over the package's tables; see
 - Field names ignore case; an unknown one is refused with the nearest names. Values may
   hold colons, so paths, times and IPv6 addresses need no quotes.
 - Inside quotes, `\"` is a quote and `\\` a backslash; other backslashes stay as typed, so
-  Windows paths work. `*` is a wildcard only outside quotes.
+  Windows paths work. `*` is a wildcard only outside quotes, so `Field:*"x"*` contains `x`;
+  to find quote marks, escape them inside the quotes: `Field:*"\"x\""*`.
 - Bare words read the full-text index once it has loaded in the background. Without it they
   scan every column, which is slow on large packages; a field search such as
   `CommandLine:*mimikatz*` is faster.

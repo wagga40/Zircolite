@@ -34,7 +34,11 @@ type Term = Extract<Node, { kind: 'term' }>;
 function termLabel(term: Term): string | null {
   if (term.field === null) return null;
   const op = term.op === '=' ? '' : term.op;
-  return `${term.field}: ${op}${term.value}`;
+  // A * beside quotes means nothing without the quotes, so that value is shown as written.
+  const value = term.starBefore || term.starAfter
+    ? `${term.starBefore ? '*' : ''}${quoteValue(term.value)}${term.starAfter ? '*' : ''}`
+    : term.value;
+  return `${term.field}: ${op}${value}`;
 }
 
 const GROUP_SHOWN = 3;

@@ -65,6 +65,12 @@ describe('chips and removeSpan', () => {
     ]);
   });
 
+  it('labels a wildcard beside quotes as written', () => {
+    expect(chips('CommandLine:*"net user"* Image:"C:\\\\x\\\\"* a:"b c"').map((c) => c.label)).toEqual([
+      'CommandLine: *"net user"*', 'Image: "C:\\\\x\\\\"*', 'a: b c',
+    ]);
+  });
+
   it('shortens a long OR group', () => {
     expect(chips('(F:a OR F:b OR F:c OR F:d OR F:e)')[0].label).toBe('F: a, b and 3 more');
     expect(chips('(F:a OR F:b OR F:c)')[0].label).toBe('F: a or b or c');
