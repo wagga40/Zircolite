@@ -15,6 +15,7 @@
   import { view } from '../state/view.svelte';
   import Sql from '../sql/Sql.svelte';
   import Stacking from '../stacking/Stacking.svelte';
+  import Logons from '../logons/Logons.svelte';
   import Timeline from '../timeline/Timeline.svelte';
   import { typing } from './keys';
   import { pageTopLayer } from './layers';
@@ -71,6 +72,8 @@
         <Entities {db} {schema} {manifest} {query} />
       {:else if view.route === 'stacking'}
         <Stacking {db} {schema} {manifest} {query} />
+      {:else if view.route === 'logons'}
+        <Logons {db} {schema} {manifest} {query} />
       {:else if view.route === 'processes'}
         <Processes {db} {schema} {manifest} {query} />
       {:else if view.route === 'sql'}

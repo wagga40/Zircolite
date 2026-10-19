@@ -298,6 +298,23 @@ async function phase4(page, state, steps, expectedStarts) {
   }
   steps.push(presetCount > 0 ? 'stacking: the rarest rows list exactly their events' : 'stacking: no preset fits this package');
 
+  // Logons: the first row of each table lists exactly its events, successes and failures together.
+  for (const [id, what] of [['logons-table', 'logons'], ['explicit-table', 'explicit credentials'], ['rdp-table', 'Remote Desktop events']]) {
+    await route('logons');
+    const table = page.locator(`#${id}`);
+    if ((await table.count()) === 0) {
+      steps.push(`logons: this package has no ${what}`);
+      continue;
+    }
+    const rows = await poll(page, () => number(table, 'data-rows'), what);
+    if (!rows) {
+      steps.push(`logons: no ${what}`);
+      continue;
+    }
+    await clickAndCount(page.locator(`#${id} button.value`).first(), `the first row of ${what}`);
+    steps.push(`logons: the first row of ${what} lists exactly its events`);
+  }
+
   // Processes: the tree counts every process start, and a start opens as its event.
   await route('processes');
   const tree = page.locator('#process-tree');

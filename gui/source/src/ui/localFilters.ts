@@ -29,6 +29,13 @@ export interface LocalColumn {
   type: LocalType;
 }
 
+/** A column as a table shows it: its name in the SQL, its header, and how a cell reads when not as its value. */
+export interface TableColumn<Row> {
+  column: LocalColumn;
+  label: string;
+  show?: (row: Row) => string;
+}
+
 export interface LocalSort {
   column: string;
   desc: boolean;

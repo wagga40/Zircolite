@@ -1,7 +1,7 @@
-export type Route = 'overview' | 'detections' | 'explore' | 'timeline' | 'attack' | 'entities' | 'stacking' | 'processes' | 'sql';
+export type Route = 'overview' | 'detections' | 'explore' | 'timeline' | 'attack' | 'entities' | 'stacking' | 'logons' | 'processes' | 'sql';
 
 /** The views, in the order the nav rail lists them. */
-export const ROUTES: readonly Route[] = ['overview', 'detections', 'explore', 'timeline', 'attack', 'entities', 'stacking', 'processes', 'sql'];
+export const ROUTES: readonly Route[] = ['overview', 'detections', 'explore', 'timeline', 'attack', 'entities', 'stacking', 'logons', 'processes', 'sql'];
 
 export interface ViewHash {
   route: Route;

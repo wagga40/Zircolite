@@ -215,6 +215,28 @@ without a stacked field are left out unless **Include missing values** is on, wh
 as `(missing)`. Each column sorts and filters like [Entities](#entities). A row opens exactly its
 events in Explore. Up to 1,000 rows show.
 
+### Logons
+
+Windows logons under the current filters, for following an account across hosts:
+
+- **Logons and failures**: Security 4624 and 4625, grouped by host, account, logon type and
+  source address and workstation, failures first. Each row counts successes, failures,
+  distinct sessions (`TargetLogonId`) and first and last times. Logon types are named
+  (`3 Network`, `10 RemoteInteractive`). Failure reasons are named from `SubStatus`, or from
+  `Status` when `SubStatus` is `0x0` (`bad password`, `no such user`, `locked out`...).
+- **Explicit credentials**: Security 4648, recorded on the host where a process used another
+  account's credentials, with the target server and the process.
+- **Remote Desktop**: authentications (TerminalServices-RemoteConnectionManager 1149),
+  LocalSessionManager logons, shell starts, disconnections and reconnections (21, 22, 24, 25), and
+  Security session reconnections and disconnections (4778, 4779). Each kind is its own row,
+  because each records the account and source in fields of its own.
+
+**Remote logon types only** keeps types 3 and 10; **Hide computer accounts** leaves out names
+ending in `$`. Both are off by default, so nothing is hidden unless asked. Each column sorts and
+filters like [Entities](#entities), and a row opens exactly its events in Explore. Fields the
+package lacks are left out. Without a `Channel` field, events are told apart by their event ID
+alone, and Remote Desktop kinds outside Security are not listed.
+
 ### Processes
 
 ![The Processes view, filtered to high and critical detections](pics/viewer-processes.webp)

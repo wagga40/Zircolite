@@ -22,7 +22,7 @@ const stack = async (fields: Field[], options: { missing?: boolean; filter?: str
 
 describe('the stacking route', () => {
   it('round-trips', () => {
-    for (const route of ['stacking'] as const) expect(decode(encode({ ...EMPTY, route, q: 'x' }))).toEqual({ ...EMPTY, route, q: 'x' });
+    for (const route of ['stacking', 'logons'] as const) expect(decode(encode({ ...EMPTY, route, q: 'x' }))).toEqual({ ...EMPTY, route, q: 'x' });
   });
 });
 

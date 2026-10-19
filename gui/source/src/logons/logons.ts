@@ -1,0 +1,312 @@
+/**
+ * Windows logons, explicit credentials and remote desktop sessions, as a
+ * responder reads them for lateral movement: who reached which host, from
+ * where, how, and how often it failed. Every field is looked up in the
+ * package: one it lacks is left out of the query and of every pivot, so a
+ * pivot always compiles and lists exactly the row's events.
+ */
+import type { Field, Schema } from '../engine/schema';
+import { ident, str } from '../engine/sql';
+import { fieldTerm, fieldToken } from '../search/edit';
+import type { LocalColumn } from '../ui/localFilters';
+
+const SECURITY = 'Security';
+const RCM = 'Microsoft-Windows-TerminalServices-RemoteConnectionManager/Operational';
+const LSM = 'Microsoft-Windows-TerminalServices-LocalSessionManager/Operational';
+
+/** Rows each table shows; the rest are reached through the column filters. */
+export const LOGON_LIMIT = 1000;
+
+const NAMES = [
+  'Channel', 'EventID', 'Computer', 'TargetUserName', 'TargetDomainName', 'LogonType', 'IpAddress', 'WorkstationName', 'TargetLogonId',
+  'Status', 'SubStatus', 'SubjectUserName', 'SubjectDomainName', 'TargetServerName', 'ProcessName', 'Param1', 'Param2', 'Param3',
+  'AccountName', 'AccountDomain', 'ClientName', 'ClientAddress', 'User', 'Address', 'SubjectLogonId', 'LogonId',
+] as const;
+
+export type LogonFieldName = (typeof NAMES)[number];
+
+export interface LogonFields {
+  field: Partial<Record<LogonFieldName, Field>>;
+  /** Fields without which nothing here can be found. */
+  missing: LogonFieldName[];
+}
+
+export function logonFields(schema: Schema): LogonFields {
+  const field: Partial<Record<LogonFieldName, Field>> = {};
+  for (const name of NAMES) {
+    const found = schema.find(name);
+    if (found) field[name] = found;
+  }
+  return { field, missing: (['EventID', 'Computer'] as const).filter((name) => !field[name]) };
+}
+
+/** Windows logon types by number. */
+export const LOGON_TYPES: Record<string, string> = {
+  '0': 'System', '2': 'Interactive', '3': 'Network', '4': 'Batch', '5': 'Service', '7': 'Unlock', '8': 'NetworkCleartext',
+  '9': 'NewCredentials', '10': 'RemoteInteractive', '11': 'CachedInteractive', '12': 'CachedRemoteInteractive', '13': 'CachedUnlock',
+};
+
+/** Why a logon failed, by the NTSTATUS code in 4625's SubStatus, or Status when that says nothing. */
+export const FAILURE_REASONS: Record<string, string> = {
+  '0xc000006a': 'bad password', '0xc0000064': 'no such user', '0xc000006d': 'bad user name or password', '0xc0000234': 'locked out',
+  '0xc0000072': 'disabled', '0xc000006f': 'outside logon hours', '0xc0000070': 'workstation not allowed', '0xc0000071': 'password expired',
+  '0xc0000193': 'account expired', '0xc0000224': 'password must change', '0xc000015b': 'logon type not granted',
+  '0xc0000133': 'clock skew', '0xc000018c': 'trust failure', '0xc0000413': 'authentication firewall', '0xc0000022': 'access denied',
+  '0xc000005e': 'no logon servers', '0xc0000192': 'Netlogon not started', '0xc000015c': 'no such logon session',
+};
+
+function text(field: Field | undefined): string {
+  return field ? `CAST(${ident(field.name)} AS VARCHAR)` : 'NULL::VARCHAR';
+}
+
+/** One of the event ids, compared as the package stores EventID: as numbers, or as the text a mixed package keeps. */
+function eventIs(field: Field, ids: number[]): string {
+  return field.type === 'VARCHAR' ? `trim(${ident(field.name)}) IN (${ids.map((id) => str(String(id))).join(', ')})` : `${ident(field.name)} IN (${ids.join(', ')})`;
+}
+
+/** Events of one channel; a package without Channel is matched on the event id alone. */
+function channelIs(field: Field | undefined, channel: string): string {
+  return field ? `${text(field)} ILIKE ${str(channel)}` : 'TRUE';
+}
+
+function named(value: string, names: Record<string, string>): string {
+  return `CASE lower(${value}) ${Object.entries(names).map(([code, name]) => `WHEN ${str(code)} THEN ${str(`${code} ${name}`)}`).join(' ')} ELSE ${value} END`;
+}
+
+function reasonNamed(value: string): string {
+  return `CASE ${value} ${Object.entries(FAILURE_REASONS).map(([code, name]) => `WHEN ${str(code)} THEN ${str(name)}`).join(' ')} ELSE ${value} END`;
+}
+
+/** domain\user, or whichever of the two the event has. */
+function account(domain: string, user: string): string {
+  return `nullif(concat_ws('\\', ${domain}, ${user}), '')`;
+}
+
+export interface TableOptions {
+  filter?: string;
+  order?: string;
+  limit?: number;
+}
+
+function tail(options: TableOptions, order: string[]): string {
+  const { filter = 'TRUE', limit = LOGON_LIMIT } = options;
+  return `SELECT *, (count(*) OVER ())::DOUBLE AS total FROM g WHERE ${filter} ORDER BY ${options.order || order.join(', ')} LIMIT ${Math.max(1, Math.floor(limit))}`;
+}
+
+function term(field: Field | undefined, value: string | null): string | null {
+  if (!field) return null;
+  return value === null ? `-${fieldToken(field.name)}:*` : fieldTerm(field.name, value);
+}
+
+function terms(...parts: (string | null)[]): string {
+  return parts.filter((part): part is string => part !== null).join(' ');
+}
+
+function channelTerm(fields: LogonFields, channel: string): string | null {
+  return fields.field.Channel ? fieldTerm(fields.field.Channel.name, channel) : null;
+}
+
+function idTerm(fields: LogonFields, ids: number[]): string {
+  const name = fieldToken((fields.field.EventID as Field).name);
+  const each = ids.map((id) => `${name}:${id}`);
+  return each.length === 1 ? each[0] : `(${each.join(' OR ')})`;
+}
+
+// Logons ---------------------------------------------------------------------------------------------------------
+
+export interface LogonOptions extends TableOptions {
+  /** Network and remote interactive logons only: types 3 and 10. */
+  remoteOnly?: boolean;
+  /** Leave out computer accounts, whose names end in $. */
+  hideMachines?: boolean;
+}
+
+export interface LogonRow {
+  host: string | null;
+  domain: string | null;
+  user: string | null;
+  account: string | null;
+  type: string | null;
+  type_name: string | null;
+  ip: string | null;
+  workstation: string | null;
+  successes: number;
+  failures: number;
+  reasons: string | null;
+  sessions: number;
+  first: number | null;
+  last: number | null;
+  total: number;
+}
+
+export const LOGON_COLUMNS: LocalColumn[] = [
+  { name: 'host', type: 'text' }, { name: 'account', type: 'text' }, { name: 'type_name', type: 'text' }, { name: 'ip', type: 'text' },
+  { name: 'workstation', type: 'text' }, { name: 'successes', type: 'number' }, { name: 'failures', type: 'number' },
+  { name: 'reasons', type: 'text' }, { name: 'sessions', type: 'number' }, { name: 'first', type: 'time' }, { name: 'last', type: 'time' },
+];
+
+/** Failures first: a run of them is what a responder looks for before anything else. */
+export const LOGON_ORDER = ['"failures" DESC', '"successes" DESC', 'lower("host")', 'lower("account")', 'lower("type_name")', 'lower("ip")'];
+
+/** Successful (4624) and failed (4625) logons, grouped by target host, account, logon type and source. */
+export function logonsSql(fields: LogonFields, where: string, options: LogonOptions): string | null {
+  const f = fields.field;
+  if (!f.EventID || !f.Computer) return null;
+  const remote = options.remoteOnly && f.LogonType ? ` AND trim(${text(f.LogonType)}) IN ('3', '10')` : '';
+  const machines = options.hideMachines && f.TargetUserName ? ` AND coalesce(${text(f.TargetUserName)}, '') NOT LIKE '%$'` : '';
+  const reason = `coalesce(nullif(lower(${text(f.SubStatus)}), '0x0'), lower(${text(f.Status)}))`;
+  return (
+    `WITH x AS (SELECT _zl_time, trim(CAST(${ident(f.EventID.name)} AS VARCHAR)) AS id, ${text(f.Computer)} AS host, ${text(f.TargetDomainName)} AS domain, ` +
+    `${text(f.TargetUserName)} AS "user", trim(${text(f.LogonType)}) AS type, ${text(f.IpAddress)} AS ip, ${text(f.WorkstationName)} AS workstation, ` +
+    `${text(f.TargetLogonId)} AS session, ${reason} AS reason FROM events ` +
+    `WHERE (${where}) AND ${channelIs(f.Channel, SECURITY)} AND ${eventIs(f.EventID, [4624, 4625])}${remote}${machines}), ` +
+    'g AS (SELECT min(host) AS host, min(domain) AS domain, min("user") AS "user", ' +
+    `${account('min(domain)', 'min("user")')} AS account, min(type) AS type, ${named('min(type)', LOGON_TYPES)} AS type_name, ` +
+    'min(ip) AS ip, min(workstation) AS workstation, ' +
+    `count(*) FILTER (WHERE id = '4624')::DOUBLE AS successes, count(*) FILTER (WHERE id = '4625')::DOUBLE AS failures, ` +
+    `string_agg(DISTINCT ${reasonNamed('reason')}, ', ' ORDER BY ${reasonNamed('reason')}) FILTER (WHERE id = '4625') AS reasons, ` +
+    `count(DISTINCT lower(session)) FILTER (WHERE id = '4624')::DOUBLE AS sessions, ` +
+    'epoch_ms(min(_zl_time))::DOUBLE AS first, epoch_ms(max(_zl_time))::DOUBLE AS last ' +
+    'FROM x GROUP BY lower(host), lower(domain), lower("user"), lower(type), lower(ip), lower(workstation)) ' +
+    tail(options, LOGON_ORDER)
+  );
+}
+
+/** The search that lists exactly a row's logons and failures. */
+export function logonTerms(fields: LogonFields, row: LogonRow): string {
+  const f = fields.field;
+  return terms(
+    idTerm(fields, [4624, 4625]), channelTerm(fields, SECURITY), term(f.Computer, row.host), term(f.TargetDomainName, row.domain),
+    term(f.TargetUserName, row.user), term(f.LogonType, row.type), term(f.IpAddress, row.ip), term(f.WorkstationName, row.workstation),
+  );
+}
+
+// Explicit credentials ---------------------------------------------------------------------------------------------
+
+export interface ExplicitRow {
+  host: string | null;
+  subject_domain: string | null;
+  subject_user: string | null;
+  subject: string | null;
+  domain: string | null;
+  user: string | null;
+  account: string | null;
+  server: string | null;
+  process: string | null;
+  events: number;
+  first: number | null;
+  last: number | null;
+  total: number;
+}
+
+export const EXPLICIT_COLUMNS: LocalColumn[] = [
+  { name: 'host', type: 'text' }, { name: 'subject', type: 'text' }, { name: 'account', type: 'text' }, { name: 'server', type: 'text' },
+  { name: 'process', type: 'text' }, { name: 'events', type: 'number' }, { name: 'first', type: 'time' }, { name: 'last', type: 'time' },
+];
+
+export const EXPLICIT_ORDER = ['"events" DESC', 'lower("host")', 'lower("subject")', 'lower("account")', 'lower("server")'];
+
+/** 4648: credentials a process used for another account, logged on the host they were used from. */
+export function explicitSql(fields: LogonFields, where: string, options: TableOptions): string | null {
+  const f = fields.field;
+  if (!f.EventID || !f.Computer) return null;
+  return (
+    `WITH x AS (SELECT _zl_time, ${text(f.Computer)} AS host, ${text(f.SubjectDomainName)} AS subject_domain, ${text(f.SubjectUserName)} AS subject_user, ` +
+    `${text(f.TargetDomainName)} AS domain, ${text(f.TargetUserName)} AS "user", ${text(f.TargetServerName)} AS server, ${text(f.ProcessName)} AS process ` +
+    `FROM events WHERE (${where}) AND ${channelIs(f.Channel, SECURITY)} AND ${eventIs(f.EventID, [4648])}), ` +
+    'g AS (SELECT min(host) AS host, min(subject_domain) AS subject_domain, min(subject_user) AS subject_user, ' +
+    `${account('min(subject_domain)', 'min(subject_user)')} AS subject, min(domain) AS domain, min("user") AS "user", ` +
+    `${account('min(domain)', 'min("user")')} AS account, min(server) AS server, min(process) AS process, count(*)::DOUBLE AS events, ` +
+    'epoch_ms(min(_zl_time))::DOUBLE AS first, epoch_ms(max(_zl_time))::DOUBLE AS last FROM x ' +
+    'GROUP BY lower(host), lower(subject_domain), lower(subject_user), lower(domain), lower("user"), lower(server), lower(process)) ' +
+    tail(options, EXPLICIT_ORDER)
+  );
+}
+
+export function explicitTerms(fields: LogonFields, row: ExplicitRow): string {
+  const f = fields.field;
+  return terms(
+    idTerm(fields, [4648]), channelTerm(fields, SECURITY), term(f.Computer, row.host), term(f.SubjectDomainName, row.subject_domain),
+    term(f.SubjectUserName, row.subject_user), term(f.TargetDomainName, row.domain), term(f.TargetUserName, row.user),
+    term(f.TargetServerName, row.server), term(f.ProcessName, row.process),
+  );
+}
+
+// Remote desktop -------------------------------------------------------------------------------------------------
+
+interface RdpKind {
+  id: number;
+  channel: string;
+  label: string;
+  /** The fields that hold the account, its domain, the source address and the client name in this kind of event. */
+  user: LogonFieldName;
+  domain?: LogonFieldName;
+  source?: LogonFieldName;
+  client?: LogonFieldName;
+}
+
+// Each kind keeps the account and the source in fields of its own, so kinds are never merged into one row.
+const RDP_KINDS: RdpKind[] = [
+  { id: 1149, channel: RCM, label: '1149 RDP authentication', user: 'Param1', domain: 'Param2', source: 'Param3' },
+  { id: 21, channel: LSM, label: '21 RDP logon', user: 'User', source: 'Address' },
+  { id: 22, channel: LSM, label: '22 RDP shell start', user: 'User', source: 'Address' },
+  { id: 24, channel: LSM, label: '24 RDP session disconnected', user: 'User', source: 'Address' },
+  { id: 25, channel: LSM, label: '25 RDP session reconnected', user: 'User', source: 'Address' },
+  { id: 4778, channel: SECURITY, label: '4778 RDP session reconnected', user: 'AccountName', domain: 'AccountDomain', source: 'ClientAddress', client: 'ClientName' },
+  { id: 4779, channel: SECURITY, label: '4779 RDP session disconnected', user: 'AccountName', domain: 'AccountDomain', source: 'ClientAddress', client: 'ClientName' },
+];
+
+export interface RdpRow {
+  kind: string;
+  host: string | null;
+  domain: string | null;
+  user: string | null;
+  account: string | null;
+  source: string | null;
+  client: string | null;
+  events: number;
+  first: number | null;
+  last: number | null;
+  total: number;
+}
+
+export const RDP_COLUMNS: LocalColumn[] = [
+  { name: 'kind', type: 'text' }, { name: 'host', type: 'text' }, { name: 'account', type: 'text' }, { name: 'source', type: 'text' },
+  { name: 'client', type: 'text' }, { name: 'events', type: 'number' }, { name: 'first', type: 'time' }, { name: 'last', type: 'time' },
+];
+
+export const RDP_ORDER = ['lower("host")', '"kind"', 'lower("account")', 'lower("source")'];
+
+/** The remote desktop kinds this package can read: those whose account field it has. */
+function rdpKinds(fields: LogonFields): RdpKind[] {
+  return RDP_KINDS.filter((kind) => fields.field[kind.user] && (fields.field.Channel || kind.channel === SECURITY));
+}
+
+/** Remote desktop authentications, logons, disconnections and reconnections, by kind, host, account and source. */
+export function rdpSql(fields: LogonFields, where: string, options: TableOptions): string | null {
+  const f = fields.field;
+  if (!f.EventID || !f.Computer) return null;
+  const kinds = rdpKinds(fields);
+  if (kinds.length === 0) return null;
+  const parts = kinds.map((kind) =>
+    `SELECT _zl_time, ${str(kind.label)} AS kind, ${text(f.Computer)} AS host, ${text(kind.domain && f[kind.domain])} AS domain, ` +
+    `${text(f[kind.user])} AS "user", ${text(kind.source && f[kind.source])} AS source, ${text(kind.client && f[kind.client])} AS client ` +
+    `FROM events WHERE (${where}) AND ${channelIs(f.Channel, kind.channel)} AND ${eventIs(f.EventID as Field, [kind.id])}`);
+  return (
+    `WITH x AS (${parts.join(' UNION ALL ')}), ` +
+    'g AS (SELECT kind, min(host) AS host, min(domain) AS domain, min("user") AS "user", ' +
+    `${account('min(domain)', 'min("user")')} AS account, min(source) AS source, min(client) AS client, count(*)::DOUBLE AS events, ` +
+    'epoch_ms(min(_zl_time))::DOUBLE AS first, epoch_ms(max(_zl_time))::DOUBLE AS last FROM x ' +
+    'GROUP BY kind, lower(host), lower(domain), lower("user"), lower(source), lower(client)) ' +
+    tail(options, RDP_ORDER)
+  );
+}
+
+export function rdpTerms(fields: LogonFields, row: RdpRow): string {
+  const f = fields.field;
+  const kind = RDP_KINDS.find((k) => k.label === row.kind) as RdpKind;
+  return terms(
+    channelTerm(fields, kind.channel), idTerm(fields, [kind.id]), term(f.Computer, row.host), term(kind.domain && f[kind.domain], row.domain),
+    term(f[kind.user], row.user), term(kind.source && f[kind.source], row.source), term(kind.client && f[kind.client], row.client),
+  );
+}
