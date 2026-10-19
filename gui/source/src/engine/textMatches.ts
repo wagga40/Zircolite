@@ -49,12 +49,12 @@ export function textPredicate(like: string): string {
   return `_zl_uid IN (SELECT _zl_uid FROM fulltext WHERE _zl_text LIKE ${like}${escapeClause(like)})`;
 }
 
-// A bare word's pattern always opens and closes with %. Inside a string literal every quote is
-// doubled, so lower('% cannot occur there, and a literal that spells the predicate is left as it is.
+// A bare word's pattern always opens and closes with %. Only a match that starts outside every
+// literal and quoted name is a predicate: a value, or a field name taken from the logs, may spell one.
 const PREDICATE = /_zl_uid IN \(SELECT _zl_uid FROM fulltext WHERE _zl_text LIKE (lower\('%(?:[^']|'')*%'\))(?: ESCAPE '\\')?\)/g;
 
-// A field match compile() writes for a pattern that opens with %. Quotes inside a column name are
-// doubled as inside a literal, so neither a name nor a value can spell the predicate.
+// A field match compile() writes for a pattern that opens with %. A name's own quotes are doubled, so a
+// match that starts outside every literal and quoted name reads the name and the pattern as compile wrote them.
 const COLUMN = String.raw`(?:"(?:[^"]|"")+"|CAST\("(?:[^"]|"")+" AS VARCHAR\))`;
 const OPEN_LITERAL = String.raw`'%(?:[^']|'')*'`;
 const FIELD_PREDICATE = new RegExp(String.raw`_zl_uid IN \(SELECT _zl_uid FROM events WHERE (${COLUMN} ILIKE ${OPEN_LITERAL}(?: ESCAPE '\\')?)\)`, 'g');
@@ -85,6 +85,26 @@ interface Entry {
   /** Slices already inserted, so a scan that was stopped resumes instead of starting over. */
   done: number;
   ready: boolean;
+}
+
+/**
+ * Whether a position of a statement lies outside its string literals and
+ * quoted names, each closed by its own quote with a doubled quote inside.
+ */
+export function outsideQuotes(sql: string): (index: number) => boolean {
+  const quoted: [number, number][] = [];
+  for (let i = 0; i < sql.length; i++) {
+    const quote = sql[i];
+    if (quote !== "'" && quote !== '"') continue;
+    const start = i;
+    for (i++; i < sql.length; i++) {
+      if (sql[i] !== quote) continue;
+      if (sql[i + 1] !== quote) break;
+      i++;
+    }
+    quoted.push([start, i]);
+  }
+  return (index) => !quoted.some(([start, end]) => index >= start && index <= end);
 }
 
 /** Lower bounds of the slices: every k-th row group's first uid, so each slice reads only its own row groups. */
@@ -122,14 +142,17 @@ class Matches {
   /** The query with each predicate answered from its table of matches, built first when it is missing. */
   async prepare(sql: string, stop: Stop): Promise<string> {
     const pattern = this.kind.pattern;
-    const keys = [...new Set([...sql.matchAll(pattern)].map((m) => m[1]))];
+    const free = outsideQuotes(sql);
+    const keys = [...new Set([...sql.matchAll(pattern)].filter((m) => free(m.index)).map((m) => m[1]))];
     if (keys.length === 0) return sql;
     const tabled = new Set<string>();
     for (const key of keys) if (await this.worth(key, stop)) tabled.add(key);
     if (tabled.size > 0) await this.ready(stop);
     for (const key of tabled) await this.build(key, tabled, stop);
-    return sql.replace(pattern, (_whole, key: string) =>
-      tabled.has(key) ? `_zl_uid IN (SELECT _zl_uid FROM ${(this.entries.get(key) as Entry).table})` : `(${key})`);
+    return sql.replace(pattern, (whole: string, key: string, at: number) => {
+      if (!free(at)) return whole;
+      return tabled.has(key) ? `_zl_uid IN (SELECT _zl_uid FROM ${(this.entries.get(key) as Entry).table})` : `(${key})`;
+    });
   }
 
   /** Whether a predicate is worth a table; one that is not is answered in place, as the same predicate. */

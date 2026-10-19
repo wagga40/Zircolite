@@ -4,6 +4,7 @@ import { FieldMatches, sliceBounds, type Stop, TEXT_VIEW_SQL, textPredicate, Tex
 import { compile } from '../src/search/compile';
 import { parse } from '../src/search/parse';
 import { schema } from './fixture';
+import { ident } from '../src/engine/sql';
 
 const WORD = "lower('%word%')";
 const predicate = textPredicate(WORD);
@@ -436,5 +437,35 @@ describe('FieldMatches', () => {
       expect(await matches.prepare(sql, never)).toBe(sql);
     }
     expect(sent).toEqual([]);
+  });
+});
+
+describe('a field name from the logs', () => {
+  // Field names come from the events themselves, so a crafted log can name a field after a predicate.
+  const field = `_zl_uid IN (SELECT _zl_uid FROM events WHERE "" ILIKE '%z')`;
+  const word = `_zl_uid IN (SELECT _zl_uid FROM fulltext WHERE _zl_text LIKE lower('%z%'))`;
+
+  it('is never read as a field match', async () => {
+    const sent: string[] = [];
+    const matches = new FieldMatches(async (sql) => {
+      sent.push(sql);
+      return sql.includes('total_uncompressed_size') ? [{ c: '', b: 1e12 }] : [];
+    }, 0);
+    const sql = `SELECT CAST(e.${ident(field)} AS VARCHAR) AS v FROM events e`;
+    expect(await matches.prepare(sql, never)).toBe(sql);
+    expect(scans(sent)).toEqual([]);
+  });
+
+  it('is never read as a full-text match', async () => {
+    const { matches, sent } = matcher([1]);
+    const sql = `SELECT CAST(e.${ident(word)} AS VARCHAR) AS v FROM events e`;
+    expect(await matches.prepare(sql, never)).toBe(sql);
+    expect(scans(sent)).toEqual([]);
+  });
+
+  it('leaves a real match beside it rewritten', async () => {
+    const { matches } = matcher([1]);
+    const sql = `SELECT CAST(e.${ident(word)} AS VARCHAR) AS v FROM events e WHERE ${predicate}`;
+    expect(await matches.prepare(sql, never)).toBe(`SELECT CAST(e.${ident(word)} AS VARCHAR) AS v FROM events e WHERE _zl_uid IN (SELECT _zl_uid FROM _zl_tm_1)`);
   });
 });
