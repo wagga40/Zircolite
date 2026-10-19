@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { type Decoded, decodings } from './decode';
+  import { decodeAll, type Decodings } from './decode';
   import Self from './Decoded.svelte';
 
   let { value, name, oncopy, depth = 0 }: {
@@ -13,25 +13,27 @@
   /** Decodings nest this deep: Base64 inside Base64 inside a command line is common, a fourth layer is not. */
   const DEPTH = 3;
 
-  let found = $state.raw<Decoded[]>([]);
+  let result = $state.raw<Decodings>({ decoded: [], incomplete: [] });
+  const found = $derived(result.decoded);
   let open = $state(false);
   let ticket = 0;
 
   $effect(() => {
     const text = value;
     const mine = ++ticket;
-    found = [];
+    result = { decoded: [], incomplete: [] };
     open = false;
-    void decodings(text).then((result) => {
-      if (mine === ticket) found = result;
+    void decodeAll(text).then((answer) => {
+      if (mine === ticket) result = answer;
     });
   });
 </script>
 
-{#if found.length > 0}
+{#if found.length > 0 || result.incomplete.length > 0}
   <button type="button" class="toggle" aria-expanded={open} onclick={() => (open = !open)}
-    aria-label={`${open ? 'Hide' : 'Show'} what ${name} decodes to`}>{open ? 'Hide decoded' : `Decode (${found.map((d) => d.label).join(', ')})`}</button>
+    aria-label={`${open ? 'Hide' : 'Show'} what ${name} decodes to`}>{open ? 'Hide decoded' : found.length ? `Decode (${found.map((d) => d.label).join(', ')})` : 'Decode (limits reached)'}</button>
   {#if open}
+    {#each result.incomplete as note (note)}<p class="limit" role="note">{note}</p>{/each}
     <ul class="decoded">
       {#each found as decoded, i (i)}
         <li>
@@ -49,6 +51,7 @@
   .toggle { margin-top: 4px; padding: 1px 8px; min-height: 24px; font-size: var(--t-12); background: none; border: 1px solid var(--signal); border-radius: var(--radius); color: var(--signal); cursor: pointer; }
   .decoded { list-style: none; margin: 6px 0 0; padding: 0 0 0 10px; border-left: 2px solid var(--signal); }
   .decoded li + li { margin-top: 8px; }
+  .limit { margin: 6px 0 0; font-size: var(--t-12); color: var(--danger); }
   .label { display: flex; align-items: center; gap: 8px; margin: 0 0 4px; font-size: var(--t-12); color: var(--ink-2); }
   .label button { padding: 0 6px; min-height: 22px; font-size: var(--t-12); background: none; border: 1px solid var(--rule); border-radius: var(--radius); cursor: pointer; }
   pre { margin: 0; max-height: 320px; overflow: auto; padding: 8px; font: 400 var(--t-13) / 1.45 var(--mono); white-space: pre-wrap; overflow-wrap: anywhere; background: var(--paper); border: 1px solid var(--rule); border-radius: var(--radius); }

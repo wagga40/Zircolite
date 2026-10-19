@@ -91,14 +91,18 @@ function readable(text: string): boolean {
   return odd <= text.length * 0.05;
 }
 
-/** What one decodings() call may still unpack. */
+/** What one value's decoding may still unpack, and whether that ran out. */
 interface Budget {
   unpacked: number;
+  spent: boolean;
 }
 
 async function unpack(bytes: Uint8Array, format: 'gzip' | 'deflate-raw', budget: Budget): Promise<Uint8Array | null> {
   const limit = Math.min(UNPACKED_LIMIT, budget.unpacked);
-  if (limit <= 0) return null;
+  if (limit <= 0) {
+    budget.spent = true;
+    return null;
+  }
   try {
     const reader = new Blob([bytes as BlobPart]).stream().pipeThrough(new DecompressionStream(format)).getReader();
     const chunks: Uint8Array[] = [];
@@ -113,6 +117,7 @@ async function unpack(bytes: Uint8Array, format: 'gzip' | 'deflate-raw', budget:
         break;
       }
     }
+    if (size > limit && limit < UNPACKED_LIMIT) budget.spent = true;
     budget.unpacked -= Math.min(size, limit);
     const out = new Uint8Array(Math.min(size, limit));
     let at = 0;
@@ -178,18 +183,41 @@ async function decode(part: EncodedPart, budget: Budget): Promise<Decoded | null
   }
 }
 
-/** What a value decodes to, part by part, leaving out parts that do not decode to text. */
-export async function decodings(value: string): Promise<Decoded[]> {
-  const found: Decoded[] = [];
+export interface Decodings {
+  decoded: Decoded[];
+  /** What the limits kept from being decoded, said so that nothing goes missing unseen. */
+  incomplete: string[];
+}
+
+/**
+ * What a value decodes to, part by part, leaving out parts that do not decode
+ * to text. An encoded command is tried first: junk in front of it must not use
+ * up the tries.
+ */
+export async function decodeAll(value: string): Promise<Decodings> {
+  const parts = encodedParts(value);
+  const ordered = [...parts.filter((part) => part.kind === 'powershell'), ...parts.filter((part) => part.kind !== 'powershell')];
+  const decoded: Decoded[] = [];
   const texts = new Set<string>();
-  const budget: Budget = { unpacked: UNPACKED_TOTAL };
+  const budget: Budget = { unpacked: UNPACKED_TOTAL, spent: false };
+  let tried = 0;
   // Parts that decode to nothing still cost a try each, so the tries are bounded as well as the decodings.
-  for (const part of encodedParts(value).slice(0, DECODED_PARTS * 2)) {
-    if (found.length >= DECODED_PARTS) break;
-    const decoded = await decode(part, budget);
-    if (!decoded || texts.has(decoded.text)) continue;
-    texts.add(decoded.text);
-    found.push(decoded);
+  for (const part of ordered) {
+    if (decoded.length >= DECODED_PARTS || tried >= DECODED_PARTS * 2) break;
+    tried++;
+    const found = await decode(part, budget);
+    if (!found || texts.has(found.text)) continue;
+    texts.add(found.text);
+    decoded.push(found);
   }
-  return found;
+  const incomplete: string[] = [];
+  if (value.length > SCANNED_LIMIT) incomplete.push(`Only the first ${SCANNED_LIMIT / 1024} KiB of the value was searched for encoded text.`);
+  const left = ordered.length - tried;
+  if (left > 0) incomplete.push(`${left} more encoded-looking ${left === 1 ? 'part was' : 'parts were'} not tried.`);
+  if (budget.spent) incomplete.push(`Unpacking stopped after ${UNPACKED_TOTAL / 1024 / 1024} MiB of packed payloads.`);
+  return { decoded, incomplete };
+}
+
+export async function decodings(value: string): Promise<Decoded[]> {
+  return (await decodeAll(value)).decoded;
 }
