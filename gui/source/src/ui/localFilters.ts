@@ -12,7 +12,7 @@ import { type Bound, CellError, type ColumnFilter, cellText, columnState, parseC
 import { parse } from '../search/parse';
 import { isoTime } from './format';
 
-export const TEXT_HINT = 'Contains this text. =x is exact, * a wildcard, "…" literal, >5 compares, ! leaves out; Enter applies';
+export const TEXT_HINT = 'Contains this text; a whole number is exact. =x is exact, * a wildcard, "…" literal, >5 compares, ! leaves out; Enter applies';
 const NUMBER_HINT = '>=10 or >=1 <10 compares, 5 is exact, * has a value, ! leaves out; Enter applies';
 const TIME_HINT = '>=2021-06-03 or <2021-06-03 08:00 compares, in UTC; * has a value, ! leaves out; Enter applies';
 

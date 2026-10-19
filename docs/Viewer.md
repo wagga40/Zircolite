@@ -125,6 +125,7 @@ or show it as a column. **Export CSV** writes the shown columns, in the order sh
 | In a cell | Keeps events whose value |
 |-----------|--------------------------|
 | `powershell`, `net user` | contains the text, in any case |
+| `4624` | is exactly the number, in every column |
 | `=cmd.exe` | is exactly the text, in any case |
 | `C:\Windows\*`, `*\cmd.exe`, `a*b` | matches the wildcards |
 | `"a*b"` | contains the text as written, `*` included |
@@ -132,8 +133,9 @@ or show it as a column. **Export CSV** writes the shown columns, in the order sh
 | `*` / `!*` | has a value / has none |
 | `!x`, `!=x`, `!>5` | does not match; events without the field stay in |
 
-A plain number in a numeric column is an exact match. `!` leaves matches out because `-` starts
-values analysts look for, such as `-enc`. `Esc` puts back what the cell held; an empty cell
+A whole number is an exact match even in a column the package stores as text, as it stores
+`EventID` when its sources mixed numbers and text; `*4624*` finds the digits anywhere. `!` leaves
+matches out because `-` starts values analysts look for, such as `-enc`. `Esc` puts back what the cell held; an empty cell
 removes the column's filter.
 
 The funnel beside a column name opens its menu, which has:
@@ -228,17 +230,21 @@ Windows logons under the current filters, for following an account across hosts:
   account's credentials, with the target server and the process.
 - **Sessions**: each successful logon with its logoff (4634 or 4647) on the same host and logon
   ID, and its length in minutes. A logon ID is used again after a reboot, so a logoff after the
-  next logon with that ID belongs to the next session. The page's filters choose the logons,
-  never the logoffs. Clicking a session's host opens its activity in Explore: the events on that
-  host that carry its logon ID (`TargetLogonId`, `SubjectLogonId`, or Sysmon's `LogonId`), from
-  logon to logoff, or to the end of the logs while it is open.
+  next logon with that ID belongs to the next session. A session with no logoff before that next
+  logon reads "no logoff". The page's filters choose the logons, never the logoffs. Clicking a
+  session's host opens its activity in Explore, in place of the search and with **Detections
+  only** off: the events on that host that carry its logon ID (`TargetLogonId`, `SubjectLogonId`,
+  or Sysmon's `LogonId`). The activity runs from logon to logoff, to the next logon with the ID, or
+  to the end of the logs while the session is open.
 - **Remote Desktop**: authentications (TerminalServices-RemoteConnectionManager 1149),
   LocalSessionManager logons, shell starts, disconnections and reconnections (21, 22, 24, 25), and
   Security session reconnections and disconnections (4778, 4779). Each kind is its own row,
   because each records the account and source in fields of its own.
 
 **Remote logon types only** keeps types 3 and 10; **Hide computer accounts** leaves out names
-ending in `$`. Both are off by default, so nothing is hidden unless asked. Each column sorts and
+ending in `$`. Both apply to the logons and the sessions, are off by default so nothing is hidden
+unless asked, and are disabled when the package lacks `LogonType` or `TargetUserName`. A table
+whose fields the package lacks says so in its place. Each column sorts and
 filters like [Entities](#entities), and a row opens exactly its events in Explore. Fields the
 package lacks are left out. Without a `Channel` field, events are told apart by their event ID
 alone, and Remote Desktop kinds outside Security are not listed.
