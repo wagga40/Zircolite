@@ -341,6 +341,23 @@ async function scenario(page, steps) {
   }
   await search(page, state, '');
 
+  // From a filtered list, an event is shown among all events, the list centred on it.
+  await search(page, state, 'EventID:4688');
+  await openDrawer();
+  const located = new URL(page.url()).hash.match(/uid=(\d+)/)[1];
+  await drawer.getByRole('button', { name: 'Show in all events' }).click();
+  r = await results(page, state);
+  check(r.count === expected && !page.url().includes('q=') && page.url().includes(`uid=${located}`), `Show in all events left ${page.url()}, ${r.count} events`);
+  await poll(page, async () => {
+    const row = page.locator('#result-grid [role=row][aria-selected="true"]');
+    if ((await row.count()) === 0) return false;
+    const [box, grid] = await Promise.all([row.boundingBox(), page.locator('#result-grid').boundingBox()]);
+    return box && grid && box.y >= grid.y && box.y + box.height <= grid.y + grid.height;
+  }, 'the shown event in view');
+  await page.keyboard.press('Escape');
+  await drawer.waitFor({ state: 'detached' });
+  steps.push('an event shows among all events, the list centred on it');
+
   await page.locator('#result-grid').focus();
   await page.keyboard.press('End');
   const last = page.locator(`#result-grid [role=row][aria-rowindex="${expected + 1}"]`);

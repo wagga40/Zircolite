@@ -13,6 +13,7 @@
   import { isoTime } from '../ui/format';
   import { focusFallback } from '../ui/focus';
   import { pageTopLayer } from '../ui/layers';
+  import { ui } from '../ui/ui.svelte';
   import {
     type Entry, familyFields, groupEntries, type Head, headSql, hostEntry, isCurrent, nearbyRange, type RuleRow, rulesSql, valuesSql,
   } from './detail';
@@ -158,6 +159,18 @@
     view.d = false;
   }
 
+  // The event among every event, in time order: what happened just before and after it, whatever filter found it.
+  function showAmongAll(): void {
+    if (stale || !loaded) return;
+    view.q = '';
+    view.t = null;
+    view.d = false;
+    view.sort = null;
+    view.desc = false;
+    ui.locate = loaded.uid;
+    view.route = 'explore';
+  }
+
   function filterRule(rule: RuleRow): void {
     if (stale) return;
     view.q = appendRaw(view.q, `rulekey:${quoteValue(rule.key)}`);
@@ -195,6 +208,7 @@
           {#if host && loaded.head._zl_t !== null}
             <button type="button" disabled={stale} onclick={nearby}>Events on {host.value} within 5 minutes</button>
           {/if}
+          <button type="button" disabled={stale} onclick={showAmongAll} title="Clear the search and the time range, and scroll the events table to this event">Show in all events</button>
         </div>
         <p class="status" role="status">{status}</p>
 

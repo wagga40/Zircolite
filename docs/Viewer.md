@@ -99,6 +99,14 @@ A decoding is offered only when it reads as text, and it shows as plain text, ne
 the first 64 KiB are kept. Decoded text can be decoded again, two levels deep, for Base64 inside
 Base64.
 
+Logs come from the attacker's host, so each value is bounded: at most 16 decodings, 4 MiB of
+unpacked payloads, and the first 512 KiB searched. Encoded commands are tried first. When a
+limit is reached, the decodings say which one.
+
+**Show in all events** clears the search, the time range and **Detections only**, returns to
+time order, and scrolls the events table to the event, centred. It shows what happened just
+before and after the event, whatever filter found it; Back restores the filters.
+
 ## The views
 
 ### Overview
