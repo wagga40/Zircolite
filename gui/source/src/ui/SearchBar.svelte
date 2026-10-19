@@ -6,7 +6,7 @@
   import { formatRange } from '../explore/histogram';
   import { suggestValuesSql } from '../explore/sidebar';
   import { compile } from '../search/compile';
-  import { chips, type Completion, completionAt, editable, fieldSuggestions, lookupField, quoteValue, removeSpan, shownQuery } from '../search/edit';
+  import { chips, type Completion, completionAt, editable, fieldSuggestions, lookupField, quoteValue, removeSpans, shownQuery } from '../search/edit';
   import { parse } from '../search/parse';
   import { SHORTCUTS, SYNTAX } from '../search/shortcuts';
   import { SearchError } from '../search/tokens';
@@ -236,7 +236,7 @@
       {#each items as chip, i (chip.start)}
         <li>
           <span>{chip.negated ? 'not ' : ''}{shownQuery(chip.label)}</span>
-          <button type="button" aria-label={`Remove ${chip.negated ? 'not ' : ''}${shownQuery(chip.label)}`} onclick={() => removeChip(i, () => (view.q = removeSpan(view.q, chip.start, chip.end)))}>×</button>
+          <button type="button" aria-label={`Remove ${chip.negated ? 'not ' : ''}${shownQuery(chip.label)}`} onclick={() => removeChip(i, () => (view.q = removeSpans(view.q, [[chip.start, chip.end]])))}>×</button>
         </li>
       {/each}
       {#if view.t}
