@@ -10,6 +10,7 @@ standard library and orjson: duckdb is loaded by stage two
 
 import contextlib
 import math
+import shutil
 import sqlite3
 import string
 import zlib
@@ -27,6 +28,9 @@ from .utils import parse_timestamp
 RESERVED_PREFIX = "_zl_"
 # Stage two reads several spool files at once, so a part is cut into pieces.
 ROWS_PER_SPOOL_FILE = 100_000
+SPOOL_FILE_BYTES = 64 << 20
+# Leave room for events/index Parquet, their wrapped ZIP, and scratch files.
+SPOOL_DISK_RESERVE = 6 << 30
 FETCH_ROWS = 2_000
 # The viewer names an event part * 2**32 + row_id, which has to stay below
 # 2**53 to be an exact JavaScript number.
@@ -207,49 +211,61 @@ class PackageSpool:
     rule_keys: RuleIndex = field(default_factory=dict)
     # Parallel workers are handed a path, not a position; this restores it.
     part_of: dict[str, int] = field(default_factory=dict)
+    concurrent_writers: int = 1
 
     def open_part(self, part: int, sources: list[str], *, unreadable: Iterable[str] = ()) -> "PartWriter":
         return PartWriter(self, part, sources, unreadable)
 
 
 class _SpoolFiles:
-    """Gzip-compressed NDJSON, cut every ROWS_PER_SPOOL_FILE rows."""
+    """Bounded NDJSON chunks, compressed when the destination is short of space."""
 
-    def __init__(self, prefix: Path) -> None:
+    def __init__(self, prefix: Path, concurrent_writers: int = 1) -> None:
         self.prefix = prefix
+        self.concurrent_writers = max(1, concurrent_writers)
         self.paths: list[str] = []
         self.longest = 0
         self._handle: BinaryIO | None = None
         self._compressor: Any = None
         self._rows = 0
+        self._bytes = 0
 
     def add(self, line: bytes) -> None:
         handle = self._handle
-        if handle is None or self._rows == ROWS_PER_SPOOL_FILE:
-            handle = self._rotate()
-        handle.write(self._compressor.compress(line + b"\n"))
+        size = len(line) + 1
+        if handle is None or self._rows == ROWS_PER_SPOOL_FILE or self._bytes + size > SPOOL_FILE_BYTES:
+            handle = self._rotate(size)
+        block = line + b"\n"
+        handle.write(self._compressor.compress(block) if self._compressor is not None else block)
         self._rows += 1
+        self._bytes += size
         self.longest = max(self.longest, len(line))
 
-    def _rotate(self) -> BinaryIO:
+    def _rotate(self, next_size: int) -> BinaryIO:
         self.close()
-        path = Path(f"{self.prefix}-{len(self.paths):04d}.ndjson.gz")
+        allowance = max(SPOOL_FILE_BYTES, next_size) * self.concurrent_writers
+        try:
+            compressed = shutil.disk_usage(self.prefix.parent).free < SPOOL_DISK_RESERVE + allowance
+        except OSError:
+            compressed = True
+        suffix = ".ndjson.gz" if compressed else ".ndjson"
+        path = Path(f"{self.prefix}-{len(self.paths):04d}{suffix}")
         self.paths.append(str(path))
         handle = open(path, "wb")  # noqa: SIM115 -- closed by close()
         self._handle = handle
-        # Level 1: the spool is read once, minutes later, and level 1 already
-        # brings EVTX-derived JSON down to about 7% of its size.
-        self._compressor = zlib.compressobj(1, zlib.DEFLATED, 31)
+        self._compressor = zlib.compressobj(1, zlib.DEFLATED, 31) if compressed else None
         self._rows = 0
+        self._bytes = 0
         return handle
 
     def close(self) -> None:
         if self._handle is not None:
             try:
-                self._handle.write(self._compressor.flush())
+                if self._compressor is not None:
+                    self._handle.write(self._compressor.flush())
             finally:
-                self._handle.close()
-                self._handle = None
+                handle, self._handle = self._handle, None
+                handle.close()
 
     def abandon(self) -> None:
         """Close after a failure without raising, so the original error is the one reported."""
@@ -299,7 +315,7 @@ class PartWriter:
         Whatever fails, ``record.event_files`` lists the files written so far,
         so a discard can remove them.
         """
-        spool = _SpoolFiles(self._prefix)
+        spool = _SpoolFiles(self._prefix, self.spool.concurrent_writers)
         try:
             self._copy_events(connection, spool)
             spool.close()

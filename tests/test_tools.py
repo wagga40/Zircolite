@@ -92,6 +92,35 @@ def test_benchmark_export_fingerprint_detects_changed_content(tmp_path):
     assert benchmark.export_fingerprint("ndjson", output) != original
 
 
+@pytest.mark.parametrize("change", ["event", "uid", "schema", "manifest", "text"])
+def test_package_benchmark_checks_data_beyond_totals(tmp_path, change):
+    import duckdb
+
+    from tests.test_package_build import build, fake_viewer, part
+    from zircolite.package import Viewer, sql_string, write_package
+    from zircolite.package_spool import PackageSpool
+
+    benchmark = load_tool("throughput-benchmark")
+    spool = PackageSpool(directory=str(tmp_path), time_field="SystemTime", rule_keys={})
+    data = build(spool, [part(spool, 0, [{"Computer": "one"}])])
+    viewer = Viewer(fake_viewer(tmp_path), "test", ("index.html",), ("engine.wasm.gz",))
+    original = benchmark.export_fingerprint("package", write_package(viewer, data, tmp_path, tmp_path))
+    data.manifest["created"] = "a different creation time"
+    assert benchmark.export_fingerprint("package", write_package(viewer, data, tmp_path, tmp_path)) == original
+    if change == "manifest":
+        data.manifest["warnings"].append("changed metadata")
+    else:
+        table = "text" if change == "text" else "events"
+        target = tmp_path / "changed.parquet"
+        projection = {"event": "* REPLACE ('two' AS Computer)", "uid": "* REPLACE (2::BIGINT AS _zl_uid)",
+                      "schema": "*, 1 AS extra", "text": "* REPLACE ('changed' AS _zl_text)"}[change]
+        with duckdb.connect() as connection:
+            connection.execute(f"COPY (SELECT {projection} FROM read_parquet(?)) "
+                               f"TO {sql_string(str(target))} (FORMAT parquet)", [str(data.tables[table])])
+        data.tables[table] = target
+    assert benchmark.export_fingerprint("package", write_package(viewer, data, tmp_path, tmp_path)) != original
+
+
 def test_benchmark_navigator_fingerprint_ignores_technique_order(tmp_path):
     benchmark = load_tool("throughput-benchmark")
     output = tmp_path / "navigator.json"

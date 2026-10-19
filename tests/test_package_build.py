@@ -1,9 +1,12 @@
 """Stage two of a package: spooled parts become Parquet tables and a manifest."""
 
 import dataclasses
+import gzip
 import hashlib
 import json
 import zipfile
+from pathlib import Path
+from types import SimpleNamespace
 
 import duckdb
 import pytest
@@ -63,6 +66,67 @@ def build(spool, parts, failed=(), rulesets=RULES, expected_events=None, run=RUN
 
 def table(data, name, tmp_path, sql="SELECT * FROM t"):
     return parquet_rows(data.tables[name].read_bytes(), tmp_path, sql)
+
+
+def test_build_reads_mixed_spool_compression(spool, tmp_path):
+    records = [part(spool, 0, [{"A": "one"}]), part(spool, 1, [{"A": "two"}])]
+    for record, compressed in zip(records, (False, True), strict=True):
+        source = Path(record.event_files[0])
+        raw = gzip.decompress(source.read_bytes()) if source.suffix == ".gz" else source.read_bytes()
+        target = source.with_name(f"mixed-{record.part}.ndjson" + (".gz" if compressed else ""))
+        target.write_bytes(gzip.compress(raw) if compressed else raw)
+        record.event_files = [str(target)]
+
+    data = build(spool, records)
+
+    assert table(data, "events", tmp_path, 'SELECT _zl_uid, A FROM t ORDER BY _zl_uid')[1] == [
+        (1, "one"), ((1 << 32) + 1, "two")]
+
+
+@pytest.mark.parametrize("cpus,available,want", [(4, 4 << 30, (2, "3GB")),
+                                               (1, 8 << 30, (1, "2GB")),
+                                               (4, (4 << 30) - 1, (1, "2GB"))])
+def test_build_selects_bounded_resources(spool, monkeypatch, cpus, available, want):
+    monkeypatch.setattr("os.cpu_count", lambda: cpus)
+    monkeypatch.setattr("psutil.virtual_memory", lambda: SimpleNamespace(available=available))
+    connect = duckdb.connect
+    settings = []
+    def capture(*args, **kwargs):
+        settings.append(kwargs["config"])
+        return connect(*args, **kwargs)
+    monkeypatch.setattr(duckdb, "connect", capture)
+
+    data = build(spool, [])
+
+    assert data.manifest["totals"]["events"] == 0
+    assert (settings[0]["threads"], settings[0]["memory_limit"]) == want
+
+
+@pytest.mark.parametrize("columns,expected", [(4, 20000), (169, 20000), (390, 10000), (2004, 2048)])
+def test_row_groups_bound_wide_schema_buffers(columns, expected):
+    assert package.row_group_size(columns) == expected
+
+
+def test_wide_build_applies_its_row_group_size_to_every_table(spool, monkeypatch):
+    copies = []
+    copy = package._copy
+    def capture(connection, query, target, group_size=20000):
+        copies.append((target.stem, group_size))
+        return copy(connection, query, target, group_size)
+    monkeypatch.setattr(package, "_copy", capture)
+
+    build(spool, [part(spool, 0, [{f"field_{n}": "value" for n in range(386)}])])
+    build(spool, [part(spool, 1, [{"one": "value"}])])
+
+    names = ["events", "rules", "hits", "alerts", "alert_events", "text"]
+    assert copies == [(name, 10000) for name in names] + [(name, 20000) for name in names]
+
+
+def test_unknown_available_memory_uses_one_thread(monkeypatch):
+    def unavailable():
+        raise OSError("memory statistics unavailable")
+    monkeypatch.setattr(package.psutil, "virtual_memory", unavailable)
+    assert package._duckdb_settings()["threads"] == 1
 
 
 class TestDuckdb:

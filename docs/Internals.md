@@ -257,8 +257,12 @@ only the standard library and orjson. Each working database is one **part**.
 
 - **Events.** `PartWriter.export_events` copies `logs` right after ingestion (where
   `--dbfile` saves) and before the first rule, which adds columns, indexes and statistics
-  the package must not carry. Rows go out in `row_id` order as gzip NDJSON, a new file every
-  100,000 rows, each with `_zl_part`, `_zl_rid`, `_zl_time` (microseconds, parsed as
+  the package must not carry. Rows go out in `row_id` order as NDJSON, a new file every
+  100,000 rows or 64 MiB, without splitting a record. Before each chunk, a free-space check
+  leaves a 6 GiB reserve plus one chunk per concurrent writer (larger for an oversized
+  record). Below that threshold, or if free space cannot be measured, the chunk uses
+  gzip level 1. A part can contain both plain and compressed files. Each record has
+  `_zl_part`, `_zl_rid`, `_zl_time` (microseconds, parsed as
   `--after`/`--before` parse it) and `_zl_spelling` where needed. The same pass records each
   column's types and non-null count, the columns of each `(Channel, EventID)` family and the
   time range, so stage two never scans for them.
@@ -278,13 +282,18 @@ its detections, then reports the error, writes no package and exits `1`.
 ### Stage 2: Parquet
 
 `PackageBuilder.build_data`, in the main process, first checks that the parts hold exactly
-the events ingested. It then runs an in-memory duckdb (2 GB limit, one thread, insertion
-order kept, spill directory in the package's temporary directory, extension autoloading
-off); `check_duckdb` refused a duckdb without JSON and Parquet built in before ingestion.
+the events ingested. It then runs an in-memory duckdb with two threads and a 3 GB memory
+limit when at least two CPUs and 4 GiB of available RAM are detected; otherwise it uses
+one thread and a 2 GB limit. Insertion order is kept, spilling stays in the package's
+temporary directory, and extension autoloading is off. The memory setting limits DuckDB's
+buffer manager, not total process RSS. `check_duckdb` refused a duckdb without JSON and
+Parquet built in before ingestion.
 
-- **Events.** `read_json` over the spool, in part order, through
-  `COPY … (FORMAT parquet, COMPRESSION zstd, ROW_GROUP_SIZE 20000)`. One thread and 20,000-row
-  groups keep the writer near 1.6 GB at 386 columns, where 100,000-row groups need 6 to 7 GB.
+- **Events.** `read_json` detects each spool file's compression and reads in part order,
+  through `COPY … (FORMAT parquet, COMPRESSION zstd)`. The requested row-group size is
+  `max(2048, min(20000, 1000 * (4000000 // (1000 * C))))`, where `C` includes the four
+  internal event columns. This reduces writer buffers for wide schemas; every table
+  writer receives the same per-build value. DuckDB rounds to its vector boundaries.
 - **Types.** Integers only → `BIGINT`, reals only → `DOUBLE`, anything else `VARCHAR`, so no
   integer above 2⁵³ goes through a double.
 - **Names.** A column takes the spelling of the lowest-numbered part that has it, except the
@@ -325,6 +334,15 @@ data/manifest.js  data/{events,rules,hits,alerts,alert_events,text}.parquet.NNNN
 `data_format` the viewer reads, which must equal `PACKAGE_FORMAT` in `package.py`. The zip
 is written in a temporary directory inside the destination and moved into place with
 `os.replace`.
+
+The command line caches a ZIP of the static viewer files, wrapped engine and README in
+`package-assets/` under the normal cache directory. Its content key covers the descriptor,
+assets, wrapping format, chunk size and ZIP compression level (6). Before reuse, the copied
+archive's exact member list, sizes and decoded bytes are checked against the current
+assets. Only then are fresh data and a fresh manifest appended. Cache failures fall back
+to ordinary assembly; publication is atomic and retains two versions. No event data or
+manifest enters this cache. `ZIRCOLITE_CACHE_DIR` and `ZIRCOLITE_NO_CACHE` control both
+caches. Library callers opt in with `PackageBuilder(..., cache_directory=path)`.
 
 ### The viewer
 
@@ -418,6 +436,7 @@ All the logic lives in the `zircolite/` package. `zircolite.py` is a shim that c
 | `templates.py` | `TemplateEngine` (Jinja2 output) |
 | `package_spool.py` | Stage one of `--package`: spools each working database's events, hits and alerts |
 | `package.py` | Stage two of `--package`: Parquet tables, the manifest and the viewer zip |
+| `package_cache.py` | Verified compressed viewer assets reused between package exports |
 | `timeline.py` | `--timeline`: rows rendered per working database, then sorted, deduplicated and written |
 | `formats.py` | Input format registry: flag, YAML value, extension, encoding, reader |
 | `extractor.py` | `EvtxExtractor`: log line or XML element → event dict |

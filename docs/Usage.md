@@ -991,6 +991,8 @@ The performance report's `status` is `complete`, `partial`, `failed` or `interru
 parallel runs its stage times are summed across workers and can exceed the wall-clock time.
 Each ruleset's SQL analysis is [cached between runs](Internals.md#rule-execution):
 `ZIRCOLITE_CACHE_DIR` moves the cache and `ZIRCOLITE_NO_CACHE=1` turns it off.
+These variables also control the compressed viewer-asset cache used by `--package`;
+that cache never contains events or run metadata.
 
 ### General
 

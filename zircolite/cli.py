@@ -750,7 +750,9 @@ def _write_package(ctx: ProcessingContext, args: argparse.Namespace) -> bool:
     destination = Path(args.package_dir) if args.package_dir else Path(".")
     ctx.logger.info("[+] Building the package")
     try:
-        target = package.PackageBuilder(spool, logger=ctx.logger).build(
+        from .analysis_cache import default_directory
+
+        target = package.PackageBuilder(spool, logger=ctx.logger, cache_directory=default_directory()).build(
             viewer=package.find_viewer(), parts=ctx.package_parts, rulesets=ctx.rulesets, run=run,
             failed_sources=failed, expected_events=ctx.total_events, destination=destination)
     except (PackageError, OSError) as exc:

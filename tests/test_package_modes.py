@@ -144,6 +144,7 @@ def test_parallel_matches_per_file(corpus, tmp_path, test_logger, expected, args
     files, config = corpus
     ctx = context(tmp_path, config, test_logger)
     process_parallel_streaming(ctx, files, "json", None, args(executor=executor), recommended_workers=2)
+    assert ctx.package_spool.concurrent_writers == 2
     assert sources(ctx) == {index: [str(path)] for index, path in enumerate(files)}
     assert content(ctx) == expected
 

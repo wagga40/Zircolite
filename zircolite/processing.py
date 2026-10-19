@@ -1435,6 +1435,8 @@ def process_parallel_streaming(
 
     # Give each file worker a share of the native parser CPU budget.
     worker_count = processor.calculate_optimal_workers(file_list)
+    if ctx.package_spool is not None:
+        ctx.package_spool.concurrent_writers = worker_count
     ctx.evtx_threads = max(1, (os.cpu_count() or 1) // worker_count)
     process_mode = parallel_config.executor == "process"
     spool_results = process_mode or not ctx.retain_results

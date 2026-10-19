@@ -29,6 +29,7 @@ from copy import deepcopy
 from itertools import dropwhile
 from pathlib import Path
 
+import duckdb
 import orjson
 import psutil
 
@@ -145,29 +146,63 @@ def source_fingerprint(root):
     return digest.hexdigest()
 
 
-def export_fingerprint(kind, path, *, detections_only=False):
-    """Validate exports outside timing; ignore row order and internal row IDs.
+def package_fingerprint(path):
+    """Compare decoded schemas, rows (including links), and stable metadata."""
+    with (zipfile.ZipFile(path) as archive, tempfile.TemporaryDirectory() as directory,
+          duckdb.connect(config={"threads": 1, "memory_limit": "2GB",
+                                 "autoinstall_known_extensions": False,
+                                 "autoload_known_extensions": False}) as connection):
+        if archive.testzip() is not None:
+            raise RuntimeError("Package ZIP checksum failure")
+        raw = archive.read("data/manifest.js")
+        manifest = orjson.loads(raw[len(b"__zircolite.manifest("):-3])
+        tables = {}
+        for item in manifest["files"]:
+            decoded = Path(directory) / "payload"
+            payload_hash = hashlib.sha256()
+            size = 0
+            with decoded.open("wb") as handle:
+                for index, name in enumerate(item["chunks"]):
+                    content = archive.read(name)
+                    args = orjson.loads(b"[" + content[len(b"__zircolite.chunk("):-3] + b"]")
+                    if args[:2] != [item["name"], index]:
+                        raise RuntimeError(f"Package chunk identity failure: {name}")
+                    block = base64.b64decode(args[2], validate=True)
+                    payload_hash.update(block)
+                    size += len(block)
+                    handle.write(block)
+            if payload_hash.hexdigest() != item["sha256"] or size != item["bytes"]:
+                raise RuntimeError(f"Package payload checksum failure: {item['name']}")
+            if item["kind"] not in ("data", "index"):
+                continue
+            cursor = connection.execute("SELECT * FROM read_parquet(?)", [str(decoded)])
+            schema = [(column[0], str(column[1])) for column in cursor.description]
+            count, digest_sum = 0, 0
+            while rows := cursor.fetchmany(512):
+                for row in rows:
+                    digest = hashlib.sha256(orjson.dumps(row)).digest()
+                    digest_sum = (digest_sum + int.from_bytes(digest, "big")) % (1 << 256)
+                    count += 1
+            tables[item["name"]] = {"schema": schema, "rows": count, "digest": f"{digest_sum:064x}"}
+        manifest.pop("created", None)
+        # Parquet encoding and chunk boundaries can change without changing data.
+        manifest["files"] = [{"name": item["name"], "kind": item["kind"]}
+                             if item["kind"] in ("data", "index") else item for item in manifest["files"]]
+        canonical = {"manifest": manifest, "tables": tables}
+        return manifest["totals"]["events"], hashlib.sha256(
+            orjson.dumps(canonical, option=orjson.OPT_SORT_KEYS)).hexdigest()
 
-    Packages validate ZIP CRCs and embedded file hashes, then compare manifest
-    totals. Their detection content is checked separately via the JSON output.
+
+def export_fingerprint(kind, path, *, detections_only=False):
+    """Validate exports outside timing; ignore row order and detection row IDs.
+
+    Package UIDs and links are retained; physical Parquet encoding and creation
+    timestamps are excluded from comparison.
     """
     if kind == "json":
         return fingerprint(path)
     if kind == "package":
-        with zipfile.ZipFile(path) as archive:
-            if archive.testzip() is not None:
-                raise RuntimeError("Package ZIP checksum failure")
-            raw = archive.read("data/manifest.js")
-            manifest = orjson.loads(raw[len(b"__zircolite.manifest("):-3])
-            for item in manifest["files"]:
-                payload_hash = hashlib.sha256()
-                for name in item["chunks"]:
-                    content = archive.read(name)
-                    args = orjson.loads(b"[" + content[len(b"__zircolite.chunk("):-3] + b"]")
-                    payload_hash.update(base64.b64decode(args[2], validate=True))
-                if payload_hash.hexdigest() != item["sha256"]:
-                    raise RuntimeError(f"Package payload checksum failure: {item}")
-            rows = [manifest["totals"]]
+        return package_fingerprint(path)
     elif kind in ("csv", "summary", "timeline-csv"):
         with path.open(encoding="utf-8", newline="") as handle:
             # A worker may expose additional empty columns in a CSV union.
@@ -278,7 +313,7 @@ def main():
     parser.add_argument("--warmup", type=int, default=0, help="Untimed passes per combination before measurement")
     parser.add_argument("--exports", nargs="+", choices=EXPORTS, default=["json"])
     parser.add_argument("--cache", choices=("warm", "cold", "off"), default="warm",
-                        help="Isolated analysis cache: reuse, clear each run, or disable")
+                        help="Isolated rule/viewer caches: reuse, clear each run, or disable")
     parser.add_argument("--modes", nargs="+", choices=("auto", "sequential", "thread", "process"), default=["sequential", "thread", "process"])
     parser.add_argument("--variants", nargs="+", choices=tuple(VARIANTS), default=["reference", "current"])
     parser.add_argument("--baseline-root", type=Path, help="Preserved checkout for the baseline variant")

@@ -30,11 +30,17 @@ the keys are `output.package` and `output.package_dir`.
   allowed to download anything.
 - **A package is whole or absent.** It is assembled in a `tmp-zircolite-package-*`
   directory inside the destination and moved into place when complete. That directory needs
-  several times the package's size: 867 MB at peak for a 175 MB package of 1.87 million
-  events. If the package fails, the run exits `1` after writing its detections.
+  space for the temporary event spool, Parquet and final zip. With sufficient free space,
+  plain temporary chunks save compression time; when space is low, new chunks use gzip.
+  If the package fails, the run exits `1` after writing its detections.
 - **The command line is not recorded**, so an archive password cannot leak into it. The
   package keeps the settings that shape what it shows: processing mode, time field, time
   bounds, `--limit`, number of rules.
+
+Repeated exports reuse a verified cache of the compressed viewer assets. Event data is
+always exported afresh. `ZIRCOLITE_CACHE_DIR` changes the cache location;
+`ZIRCOLITE_NO_CACHE=1` disables it. The [package pipeline](Internals.md#package-pipeline)
+describes the disk-space and memory choices.
 
 The browser holds the events in WebAssembly memory, which stops at 4 GB, so Zircolite
 refuses a package whose events exceed 1 GiB as Parquet and suggests narrowing the run with

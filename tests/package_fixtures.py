@@ -42,7 +42,7 @@ def make_logs(rows: list[dict[str, Any]], *, types: dict[str, str] | None = None
 def read_spool(paths: list[str]) -> list[dict[str, Any]]:
     rows: list[dict[str, Any]] = []
     for path in paths:
-        with gzip.open(path, "rb") as handle:
+        with (gzip.open(path, "rb") if path.endswith(".gz") else open(path, "rb")) as handle:
             rows.extend(orjson.loads(line) for line in handle)
     return rows
 

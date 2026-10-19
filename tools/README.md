@@ -170,10 +170,12 @@ pdm run python tools/throughput-benchmark.py --events /path/to/logs --ruleset ru
   record counts and normalized content fingerprints, checked across variants and
   repeats for each executor. CSV detections are compared separately from JSON;
   template and timeline runs also check their underlying JSON detections. Packages
-  verify ZIP and embedded payload checksums and compare manifest totals, alongside
-  JSON detection parity; the harness does not compare decoded Parquet rows.
+  verify ZIP and embedded payload checksums, then compare every decoded Parquet schema
+  and row, including event IDs, links and full-text values, plus manifest metadata.
+  Creation time, physical Parquet encoding and row order are excluded. Validation runs
+  outside the timed region, alongside JSON detection parity.
 - `--warmup` excludes initial passes from reported measurements (default: `0`).
-  `--cache warm` reuses an isolated analysis cache per variant; use a warmup to
+  `--cache warm` reuses isolated rule-analysis and viewer-asset caches per variant; use a warmup to
   populate it before measurement. `--cache cold` clears it before every run;
   `--cache off` disables it. These settings do not clear operating-system file caches.
 
