@@ -22,7 +22,7 @@ ROW_EXPORTS = ["exportNDJSON.tmpl", "exportForSplunk.tmpl", "exportForSplunkWith
 
 
 @pytest.mark.parametrize("name", ROW_EXPORTS)
-def test_shipped_export_batches_json_without_changing_records(tmp_path, monkeypatch, name):
+def test_shipped_export_batches_json_without_changing_records(tmp_path, name):
     from zircolite.templates import _make_jinja2_env
 
     source = Path(__file__).resolve().parents[1] / "templates" / name
@@ -30,27 +30,68 @@ def test_shipped_export_batches_json_without_changing_records(tmp_path, monkeypa
              "matches": [{**{f"f{i}": i for i in range(100)}, "title": "event title",
                           "SystemTime": "2026-01-01", "nested": {"z": [1, None], "a": "<&'é"}}]}]
     reference = _make_jinja2_env().from_string(source.read_text()).render(data=data, timeField="SystemTime")
-    calls = []
-    original = json.dumps
-
-    def counted_dumps(*args, **kwargs):
-        calls.append(1)
-        return original(*args, **kwargs)
-
-    monkeypatch.setattr(json, "dumps", counted_dumps)
     output = tmp_path / "out.jsonl"
     engine = TemplateEngine(TemplateConfig(time_field="SystemTime"))
     assert engine.generate_from_template(str(source), str(output), data)
     # Keep duplicate metadata/event keys, not only their last decoded value.
     def records(text):
         return [json.loads(line, object_pairs_hook=list) for line in text.splitlines() if line.strip()]
-    actual, expected = records(output.read_text()), records(reference)
+    text = output.read_text(encoding="utf-8")
+    actual, expected = records(text), records(reference)
     # Object key ordering is not part of JSON; duplicate keys retain their order.
     assert len(actual) == len(expected)
     for a, b in zip(actual, expected, strict=True):
         assert sorted(a, key=lambda item: item[0]) == sorted(b, key=lambda item: item[0])
-    assert "\\u003c" in output.read_text() and "\\u00e9" in output.read_text()
-    assert len(calls) < 10, "one JSON encoding per row, not per field"
+    # HTML-sensitive characters stay escaped as tojson escapes them; other
+    # text is written as UTF-8 rather than as \u escapes.
+    assert "\\u003c" in text and "\\u0026" in text and "\\u0027" in text
+    assert not any(character in text for character in "<>&'")
+    assert "café" in text
+
+
+@pytest.mark.parametrize("name", ROW_EXPORTS)
+def test_shipped_export_spooled_by_parts_matches_one_pass(tmp_path, name):
+    from zircolite.exports import ExportSpool, write_spooled
+    from zircolite.templates import _builtin_template
+
+    source = Path(__file__).resolve().parents[1] / "templates" / name
+    kind = _builtin_template(source.read_text())
+    results = [
+        {"title": "One", "id": "1", "description": "d", "rule_level": "low",
+         "matches": [{"SystemTime": "2026-01-01", "x": 1}, {"SystemTime": "2026-01-02", "x": 2}]},
+        {"title": "Two", "id": "2", "description": "d", "rule_level": "high", "result_type": "correlation",
+         "matches": [{"SystemTime": "2026-01-03", "event_ids": ["logs:1"], "group_keys": {"a": "<b>"}}]},
+        {"title": "Three", "id": "3", "description": "d", "rule_level": "high", "matches": []},
+    ]
+    one_pass = tmp_path / "one.jsonl"
+    assert TemplateEngine(TemplateConfig(time_field="SystemTime")).generate_from_template(
+        str(source), str(one_pass), results)
+    spool = ExportSpool(directory=str(tmp_path), kinds=(kind,), time_field="SystemTime")
+    first, second = spool.open_part(), spool.open_part()
+    for result in results[:2]:
+        first.sink(result)
+    second.sink(results[2])
+    records = [first.finish(), second.finish()]
+    assert [record.rows for record in records] == [3, 0]
+    spooled = tmp_path / "spooled.jsonl"
+    progress = []
+    write_spooled(str(spooled), [r.files[kind] for r in records if kind in r.files], False,
+                  lambda done, total: progress.append((done, total)))
+    assert spooled.read_bytes() == one_pass.read_bytes()
+    assert progress[-1] == (spooled.stat().st_size, spooled.stat().st_size)
+
+
+def test_export_part_keeps_its_first_error_and_removes_its_files(tmp_path):
+    from zircolite.exports import ExportError, ExportSpool
+
+    spool = ExportSpool(directory=str(tmp_path), kinds=("ndjson",), time_field="SystemTime")
+    part = spool.open_part()
+    part.sink({"title": "t", "id": "i", "description": "d", "rule_level": "low", "matches": [{"x": 1}]})
+    part.sink({"title": "t", "id": "i", "description": "d", "rule_level": "low", "matches": [{"x": object()}]})
+    part.sink({"title": "t", "id": "i", "description": "d", "rule_level": "low", "matches": [{"x": 2}]})
+    with pytest.raises(ExportError):
+        part.finish()
+    assert list(tmp_path.iterdir()) == []
 
 
 @pytest.mark.parametrize("append", [False, True])
@@ -119,6 +160,14 @@ def test_summary_retention_uses_captured_template_content(tmp_path):
         {"title": "t", "id": "i", "rule_level": "low", "count": 1, "description": "d"}])
     assert '"t","i","low",1,"d"' in output.read_text()
     assert TemplateEngine(TemplateConfig(template=[[str(copied)]])).needs_matches() is True
+
+
+def test_row_exports_need_no_retained_matches(tmp_path):
+    shipped = Path(__file__).resolve().parents[1] / "templates"
+    engine = TemplateEngine(TemplateConfig(template=[[str(shipped / "exportForTimesketch.tmpl")],
+                                                     [str(shipped / "exportSummaryCSV.tmpl")]]))
+    assert engine.needs_matches() is False
+    assert engine.row_exports() == {str(shipped / "exportForTimesketch.tmpl"): "timesketch"}
 
 
 def test_modified_shipped_template_keeps_custom_jinja_behavior(tmp_path):

@@ -163,11 +163,31 @@ def test_database_input_matches_per_file(corpus, tmp_path, test_logger, expected
 
 def run_mode(mode, ctx, files, args):
     if mode == "unified":
-        process_unified_streaming(ctx, files, "json", None, args())
-    elif mode == "per-file":
-        process_perfile_streaming(ctx, files, "json", None, args())
-    else:
-        process_parallel_streaming(ctx, files, "json", None, args(executor=mode), recommended_workers=2)
+        return process_unified_streaming(ctx, files, "json", None, args())
+    if mode == "per-file":
+        return process_perfile_streaming(ctx, files, "json", None, args())
+    return process_parallel_streaming(ctx, files, "json", None, args(executor=mode), recommended_workers=2)
+
+
+@pytest.mark.parametrize("mode", ["per-file", "unified", "thread", "process"])
+def test_row_exports_written_by_the_rules_equal_rendering_the_kept_results(corpus, tmp_path, test_logger, args, mode):
+    from zircolite.exports import ExportSpool, export_rows, write_spooled
+
+    files, config = corpus
+    ctx = context(tmp_path, config, test_logger)
+    ctx.retain_results = True
+    exports = tmp_path / "exports"
+    exports.mkdir()
+    ctx.export_spool = ExportSpool(directory=str(exports), kinds=("ndjson", "timesketch"), time_field="SystemTime")
+
+    _, results = run_mode(mode, ctx, files, args)
+
+    assert ctx.export_errors == []
+    assert sum(record.rows for record in ctx.export_parts) == sum(len(result["matches"]) for result in results) == 3
+    for kind in ctx.export_spool.kinds:
+        target = tmp_path / f"{kind}.jsonl"
+        write_spooled(str(target), [record.files[kind] for record in ctx.export_parts if kind in record.files], False)
+        assert target.read_bytes() == b"".join(export_rows(kind, results, "SystemTime"))
 
 
 @pytest.mark.parametrize("mode", ["per-file", "unified", "thread", "process"])
@@ -190,7 +210,7 @@ def test_inputs_read_in_part_or_not_at_all_are_recorded_on_their_part(damaged, t
 def test_an_export_failure_is_recorded_and_the_rules_still_run(corpus, tmp_path, test_logger, monkeypatch, args):
     from zircolite.package_spool import PackageError, PartWriter
 
-    def broken(self, connection):
+    def broken(self, connection, progress=None):
         raise PackageError("disk full")
 
     monkeypatch.setattr(PartWriter, "export_events", broken)

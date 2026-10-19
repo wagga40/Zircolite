@@ -29,8 +29,6 @@ dependencies = [
     # Rule regexes run with a CPU-time limit (zircolite/core.py, REGEX_TIMEOUT_SECONDS)
     "regex>=2024.11.6",
     "duckdb<2,>=1.5.6",
-    # Spool compression for --package (stage 1): zstandard is more efficient than gzip
-    "zstandard>=0.21.0",
     # zoneinfo reads its zone data from here on Windows, which has no system database
     "tzdata; sys_platform == 'win32'",
 ]

@@ -11,8 +11,8 @@ from types import SimpleNamespace
 import duckdb
 import pytest
 
-from tests.package_fixtures import make_logs, parquet_rows, read_package
-from zircolite import package
+from tests.package_fixtures import make_logs, open_spool, parquet_rows, read_package
+from zircolite import package, package_spool
 from zircolite.package import (
     CHUNK_BYTES,
     PACKAGE_FORMAT,
@@ -69,21 +69,29 @@ def table(data, name, tmp_path, sql="SELECT * FROM t"):
 
 
 def test_build_reads_mixed_spool_compression(spool, tmp_path):
-    records = [part(spool, 0, [{"A": "one"}]), part(spool, 1, [{"A": "two"}])]
-    for record, compressed in zip(records, (False, True), strict=True):
+    suffixes = ["", ".gz"] + ([".zst"] if package_spool._zstd is not None else [])
+    records = [part(spool, index, [{"A": f"value {index}"}]) for index in range(len(suffixes))]
+    for record, suffix in zip(records, suffixes, strict=True):
         source = Path(record.event_files[0])
-        raw = gzip.decompress(source.read_bytes()) if source.suffix == ".gz" else source.read_bytes()
-        target = source.with_name(f"mixed-{record.part}.ndjson" + (".gz" if compressed else ""))
-        target.write_bytes(gzip.compress(raw) if compressed else raw)
+        with open_spool(str(source)) as handle:
+            raw = handle.read()
+        target = source.with_name(f"mixed-{record.part}.ndjson{suffix}")
+        if suffix == ".gz":
+            raw = gzip.compress(raw)
+        elif suffix == ".zst":
+            raw = package_spool._zstd.compress(raw)
+        target.write_bytes(raw)
         record.event_files = [str(target)]
 
     data = build(spool, records)
 
     assert table(data, "events", tmp_path, 'SELECT _zl_uid, A FROM t ORDER BY _zl_uid')[1] == [
-        (1, "one"), ((1 << 32) + 1, "two")]
+        ((index << 32) + 1, f"value {index}") for index in range(len(suffixes))]
 
 
 @pytest.mark.parametrize("cpus,available,want", [(4, 4 << 30, (4, "2GB")),
+                                               (2, 25 << 30, (2, "12GB")),
+                                               (16, 128 << 30, (4, "32GB")),
                                                (1, 8 << 30, (1, "2GB")),
                                                (4, (4 << 30) - 1, (1, "2GB"))])
 def test_build_selects_bounded_resources(spool, monkeypatch, cpus, available, want):
@@ -483,6 +491,36 @@ class TestZip:
         assert {"duckdb-eh.wasm.gz", "parquet.duckdb_extension.wasm", "events.parquet"} <= set(files)
         assert manifest["totals"]["events"] == 1
         assert manifest["viewer"] == find_viewer().version != ""
+
+
+    def test_build_reports_each_step_and_the_bytes_zipped(self, spool, tmp_path, monkeypatch):
+        class Recorder:
+            def __init__(self):
+                self.calls = []
+
+            def __call__(self, phase, done=0, total=0, **_):
+                self.calls.append((phase, done, total))
+
+            def clear(self):
+                pass
+
+        statements = []
+        execute = duckdb.DuckDBPyConnection.execute
+        monkeypatch.setattr(duckdb.DuckDBPyConnection, "execute",
+                            lambda self, query, *args: statements.append(query) or execute(self, query, *args))
+        destination = tmp_path / "out"
+        destination.mkdir()
+        recorder = Recorder()
+
+        PackageBuilder(spool).build(viewer=find_viewer(), parts=[part(spool, 0, [{"A": str(n)} for n in range(50)])],
+                                    rulesets=RULES, run=RUN, failed_sources=[], expected_events=50,
+                                    destination=destination, progress=recorder)
+
+        phases = list(dict.fromkeys(phase for phase, _, _ in recorder.calls))
+        assert phases == ["Writing the events", "Writing the detections", "Writing the full-text index",
+                          "Writing the package"]
+        assert recorder.calls[-1][1] == recorder.calls[-1][2] > 0
+        assert "SET enable_progress_bar_print = false" in statements, "duckdb must not draw its own bar"
 
 
 class TestTextIndex:

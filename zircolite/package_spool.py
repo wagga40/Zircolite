@@ -14,7 +14,7 @@ import shutil
 import sqlite3
 import string
 import zlib
-from collections.abc import Generator, Iterable
+from collections.abc import Callable, Generator, Iterable
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
@@ -23,10 +23,9 @@ from typing import Any, BinaryIO
 import orjson
 
 try:
-    import zstandard
-    HAS_ZSTANDARD = True
-except ImportError:
-    HAS_ZSTANDARD = False
+    from compression import zstd as _zstd
+except ImportError:  # Python before 3.14
+    _zstd = None
 
 from .fulltext import FIELD as FULLTEXT_FIELD
 from .utils import parse_timestamp
@@ -35,6 +34,9 @@ RESERVED_PREFIX = "_zl_"
 # Stage two reads several spool files at once, so a part is cut into pieces.
 ROWS_PER_SPOOL_FILE = 100_000
 SPOOL_FILE_BYTES = 64 << 20
+# Lines are compressed and written in blocks: a compressor call per line costs
+# more than the compression itself.
+SPOOL_WRITE_BYTES = 1 << 20
 # Leave room for events/index Parquet, their wrapped ZIP, and scratch files.
 SPOOL_DISK_RESERVE = 6 << 30
 FETCH_ROWS = 2_000
@@ -223,30 +225,14 @@ class PackageSpool:
         return PartWriter(self, part, sources, unreadable)
 
 
-class _CompressorWrapper:
-    """Adapter for both zlib and zstandard compressors to provide consistent API."""
-
-    def __init__(self, is_zstd: bool) -> None:
-        if is_zstd:
-            self.compressor = zstandard.ZstdCompressor(level=1, write_checksum=False)
-        else:
-            self.compressor = zlib.compressobj(1, zlib.DEFLATED, 31)
-        self.is_zstd = is_zstd
-
-    def compress(self, data: bytes) -> bytes:
-        """Return compressed data."""
-        return self.compressor.compress(data)
-
-    def flush(self) -> bytes:
-        """Finalize compression and return any remaining data."""
-        if self.is_zstd:
-            return self.compressor.flush()
-        else:
-            return self.compressor.flush()
-
-
 class _SpoolFiles:
-    """Bounded NDJSON chunks, compressed when the destination is short of space."""
+    """Bounded NDJSON chunks.
+
+    With zstd (Python 3.14 and later) every chunk is compressed: a 64 MiB
+    chunk shrinks about thirty times in a few hundredths of a second, and
+    duckdb reads it back as fast as plain text. Without it a chunk stays plain
+    unless the destination is short of space, and is then gzipped.
+    """
 
     def __init__(self, prefix: Path, concurrent_writers: int = 1) -> None:
         self.prefix = prefix
@@ -255,47 +241,51 @@ class _SpoolFiles:
         self.longest = 0
         self._handle: BinaryIO | None = None
         self._compressor: Any = None
+        self._buffer = bytearray()
         self._rows = 0
         self._bytes = 0
 
     def add(self, line: bytes) -> None:
-        handle = self._handle
         size = len(line) + 1
-        if handle is None or self._rows == ROWS_PER_SPOOL_FILE or self._bytes + size > SPOOL_FILE_BYTES:
-            handle = self._rotate(size)
-        block = line + b"\n"
-        handle.write(self._compressor.compress(block) if self._compressor is not None else block)
+        if self._handle is None or self._rows == ROWS_PER_SPOOL_FILE or self._bytes + size > SPOOL_FILE_BYTES:
+            self._rotate(size)
+        buffer = self._buffer
+        buffer += line
+        buffer += b"\n"
+        if len(buffer) >= SPOOL_WRITE_BYTES:
+            self._write_buffer()
         self._rows += 1
         self._bytes += size
         self.longest = max(self.longest, len(line))
 
-    def _rotate(self, next_size: int) -> BinaryIO:
+    def _write_buffer(self) -> None:
+        if self._handle is not None and self._buffer:
+            block = self._buffer
+            self._handle.write(self._compressor.compress(block) if self._compressor is not None else block)
+            block.clear()
+
+    def _rotate(self, next_size: int) -> None:
         self.close()
-        allowance = max(SPOOL_FILE_BYTES, next_size) * self.concurrent_writers
-        try:
-            compressed = shutil.disk_usage(self.prefix.parent).free < SPOOL_DISK_RESERVE + allowance
-        except OSError:
-            compressed = True
-        if compressed:
-            if HAS_ZSTANDARD:
-                suffix = ".ndjson.zst"
-            else:
-                suffix = ".ndjson.gz"
-            self._compressor = _CompressorWrapper(HAS_ZSTANDARD)
+        if _zstd is not None:
+            suffix, compressor = ".ndjson.zst", _zstd.ZstdCompressor(level=1)
         else:
-            suffix = ".ndjson"
-            self._compressor = None
+            allowance = max(SPOOL_FILE_BYTES, next_size) * self.concurrent_writers
+            try:
+                compressed = shutil.disk_usage(self.prefix.parent).free < SPOOL_DISK_RESERVE + allowance
+            except OSError:
+                compressed = True
+            suffix, compressor = (".ndjson.gz", zlib.compressobj(1, zlib.DEFLATED, 31)) if compressed else (".ndjson", None)
         path = Path(f"{self.prefix}-{len(self.paths):04d}{suffix}")
         self.paths.append(str(path))
-        handle = open(path, "wb")  # noqa: SIM115 -- closed by close()
-        self._handle = handle
+        self._handle = open(path, "wb")  # noqa: SIM115 -- closed by close()
+        self._compressor = compressor
         self._rows = 0
         self._bytes = 0
-        return handle
 
     def close(self) -> None:
         if self._handle is not None:
             try:
+                self._write_buffer()
                 if self._compressor is not None:
                     self._handle.write(self._compressor.flush())
             finally:
@@ -304,6 +294,7 @@ class _SpoolFiles:
 
     def abandon(self) -> None:
         """Close after a failure without raising, so the original error is the one reported."""
+        self._buffer.clear()
         handle, self._handle = self._handle, None
         if handle is not None:
             with contextlib.suppress(OSError):
@@ -344,15 +335,17 @@ class PartWriter:
         self._alert_seq = 0
         self._error: str | None = None
 
-    def export_events(self, connection: sqlite3.Connection) -> None:
+    def export_events(self, connection: sqlite3.Connection,
+                      progress: Callable[[int, int], None] | None = None) -> None:
         """Copy every row of ``logs`` to the spool, with what stage two needs to type it.
 
         Whatever fails, ``record.event_files`` lists the files written so far,
-        so a discard can remove them.
+        so a discard can remove them. ``progress`` gets the last row_id copied
+        and the highest one, batch by batch.
         """
         spool = _SpoolFiles(self._prefix, self.spool.concurrent_writers)
         try:
-            self._copy_events(connection, spool)
+            self._copy_events(connection, spool, progress)
             spool.close()
         except (sqlite3.Error, OSError) as exc:
             spool.abandon()
@@ -470,7 +463,8 @@ class PartWriter:
             self.record.alerts_file = path
         self._alerts.write(orjson.dumps(line) + b"\n")
 
-    def _copy_events(self, connection: sqlite3.Connection, spool: "_SpoolFiles") -> None:
+    def _copy_events(self, connection: sqlite3.Connection, spool: "_SpoolFiles",
+                     progress: Callable[[int, int], None] | None = None) -> None:
         columns = [row[1] for row in connection.execute("PRAGMA table_info(logs)")]
         if not columns or columns[0] != "row_id":
             raise PackageError("the working database has no logs table keyed by row_id")
@@ -506,6 +500,7 @@ class PartWriter:
         row_id: Any = None
         try:
             pending = next(spelled, None)
+            last = connection.execute("SELECT max(row_id) FROM logs").fetchone()[0] if progress else None
             cursor.execute(f"SELECT {projection} FROM logs ORDER BY row_id")  # noqa: S608 -- quoted column names
             while True:
                 try:
@@ -514,6 +509,8 @@ class PartWriter:
                     raise _unreadable_row(connection, row_id, exc) from exc
                 if not rows:
                     break
+                if progress is not None and type(last) is int and type(rows[-1][0]) is int:
+                    progress(rows[-1][0], last)
                 for row in rows:
                     row_id = row[0]
                     if type(row_id) is not int or not 0 <= row_id < ROW_ID_LIMIT:

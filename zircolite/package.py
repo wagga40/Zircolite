@@ -11,8 +11,10 @@ import base64
 import hashlib
 import logging
 import os
+import threading
 import zipfile
-from collections.abc import Callable
+from collections.abc import Callable, Iterator
+from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from itertools import pairwise
@@ -28,7 +30,7 @@ from .attack import TACTIC_ORDER, extract_attack_tactics, extract_attack_techniq
 from .config import RULE_LEVELS
 from .config_loader import DEFAULT_AFTER, DEFAULT_BEFORE, DEFAULT_LIMIT
 from .correlations import is_correlation_plan_rule
-from .package_cache import ZIP_LEVEL, prepare_archive
+from .package_cache import prepare_archive
 from .package_spool import (
     UID_PART_SHIFT,
     PackageError,
@@ -37,6 +39,7 @@ from .package_spool import (
     ascii_lower,
     rule_key,
 )
+from .progress import Reporter
 from .utils import random_suffix
 
 PACKAGE_FORMAT = 1
@@ -57,6 +60,9 @@ EVENTS_PARQUET_LIMIT = 1 << 30
 TEXT_PARQUET_LIMIT = 1 << 30
 UID_FACTOR = 1 << UID_PART_SHIFT
 CHUNK_BYTES = 3 * 1024 * 1024  # a multiple of 3: base64 pads only the last chunk
+# Parquet is compressed already, so deflate only wins back base64's overhead;
+# level 1 does that about as well as 6, in three quarters of the time.
+DATA_ZIP_LEVEL = 1
 README_TEXT = """Zircolite package
 =================
 
@@ -201,23 +207,52 @@ def row_group_size(column_count: int) -> int:
 
 
 def _duckdb_settings() -> dict[str, Any]:
+    """Threads and memory for stage two, sized by what is free once the workers are gone.
+
+    Keeping insertion order, duckdb spills to disk what does not fit under
+    memory_limit, and a spill costs more than threads gain: 1.9 million events
+    of 386 columns took 31 s under 3 GB, spilling 5.5 GiB, and 13 s under 12 GB.
+    """
     settings = dict(DUCKDB_SETTINGS)
     try:
         available = psutil.virtual_memory().available
-        cpu_count = os.cpu_count() or 1
-        # Allocate ~50% of available RAM for DuckDB, bounded between 2GB and 32GB.
-        # The 3GB hardcoded limit caused spills on T001 (5.5 GiB); measurements showed
-        # 12GB with 4 threads achieves 12.8s + 3.8s text (vs 31s + 7.5s with 3GB/2 threads).
-        memory_gb = max(2, min(32, (available // 2) >> 30))
-        roomy = cpu_count >= 2 and available >= (4 << 30)
     except (OSError, psutil.Error):
-        roomy = False
-        memory_gb = 2
-    if roomy:
-        # Use 4 threads when available memory allows; measurements showed 4 threads
-        # achieves best performance on wide schemas with sufficient RAM.
-        settings.update(threads=4, memory_limit=f"{memory_gb}GB")
+        return settings
+    cpus = os.cpu_count() or 1
+    if cpus >= 2 and available >= (4 << 30):
+        settings.update(threads=min(4, cpus), memory_limit=f"{min(32, (available // 2) >> 30)}GB")
     return settings
+
+
+@contextmanager
+def _watched(connection: duckdb.DuckDBPyConnection, report: Reporter | None, label: str) -> Iterator[None]:
+    """Report how far duckdb is through the statements run inside, from a second thread.
+
+    ``query_progress`` answers -1 until duckdb has an estimate, so the step
+    shows without a bar until then.
+    """
+    if report is None:
+        yield
+        return
+    report(label)
+    stop = threading.Event()
+
+    def poll() -> None:
+        while not stop.wait(0.2):
+            try:
+                value = connection.query_progress()
+            except duckdb.Error:
+                return
+            if value >= 0:
+                report(label, int(value * 10), 1000)
+
+    watcher = threading.Thread(target=poll, name="zircolite-package-progress", daemon=True)
+    watcher.start()
+    try:
+        yield
+    finally:
+        stop.set()
+        watcher.join()
 
 
 def _copy(connection: duckdb.DuckDBPyConnection, query: str, target: Path,
@@ -476,13 +511,15 @@ def find_viewer() -> Viewer:
     return Viewer(descriptor.parent, str(meta.get("version", "")), copy, wrap)
 
 
-def _wrap(archive: zipfile.ZipFile, source: Path, name: str, folder: str, kind: str) -> dict[str, Any]:
+def _wrap(archive: zipfile.ZipFile, source: Path, name: str, folder: str, kind: str,
+          wrote: Callable[[int], None] | None = None) -> dict[str, Any]:
     """Write ``source`` into the archive as ``__zircolite.chunk`` scripts."""
-    return _write_wrapped(source, name, folder, kind, archive.writestr)
+    return _write_wrapped(source, name, folder, kind, archive.writestr, wrote)
 
 
 def _write_wrapped(source: Path, name: str, folder: str, kind: str,
-                   write: Callable[[str, bytes], None]) -> dict[str, Any]:
+                   write: Callable[[str, bytes], None], wrote: Callable[[int], None] | None = None) -> dict[str, Any]:
+    """``wrote`` is told the size of each chunk once it is written."""
     digest = hashlib.sha256()
     chunks: list[str] = []
     size = 0
@@ -495,6 +532,8 @@ def _write_wrapped(source: Path, name: str, folder: str, kind: str,
             chunks.append(entry)
             digest.update(block)
             size += len(block)
+            if wrote is not None:
+                wrote(len(block))
     return {"name": name, "kind": kind, "bytes": size, "sha256": digest.hexdigest(), "chunks": chunks}
 
 
@@ -506,7 +545,7 @@ def _fresh_name(directory: Path) -> Path:
 
 
 def write_package(viewer: Viewer, data: PackageData, destination: Path, work: Path, *,
-                  cache_directory: Path | None = None) -> Path:
+                  cache_directory: Path | None = None, progress: Reporter | None = None) -> Path:
     """Write the zip beside the spool, then move it into place under a fresh name.
 
     The spool lives in the destination directory, so the move is a rename: a
@@ -523,11 +562,19 @@ def write_package(viewer: Viewer, data: PackageData, destination: Path, work: Pa
         context += descriptor.read_bytes()
     prepare_archive(temporary, entries, context=context, cache_directory=cache_directory)
     del entries
-    with zipfile.ZipFile(temporary, "a", compression=zipfile.ZIP_DEFLATED, compresslevel=ZIP_LEVEL) as archive:
-        for table in DATA_TABLES:
-            files.append(_wrap(archive, data.tables[table], f"{table}.parquet", "data", "data"))
-        if "text" in data.tables:
-            files.append(_wrap(archive, data.tables["text"], "text.parquet", "data", "index"))
+    wrapped = [(table, "data") for table in DATA_TABLES] + ([("text", "index")] if "text" in data.tables else [])
+    total = sum(data.tables[table].stat().st_size for table, _ in wrapped)
+    done = 0
+
+    def wrote(size: int) -> None:
+        nonlocal done
+        done += size
+        if progress is not None:
+            progress("Writing the package", done, total)
+
+    with zipfile.ZipFile(temporary, "a", compression=zipfile.ZIP_DEFLATED, compresslevel=DATA_ZIP_LEVEL) as archive:
+        for table, kind in wrapped:
+            files.append(_wrap(archive, data.tables[table], f"{table}.parquet", "data", kind, wrote))
         manifest = orjson.dumps({**data.manifest, "viewer": viewer.version, "files": files})
         archive.writestr("data/manifest.js", b"__zircolite.manifest(" + manifest + b");\n")
     target = _fresh_name(destination)
@@ -546,7 +593,7 @@ class PackageBuilder:
         self.work = Path(spool.directory) / "build"
 
     def build_data(self, *, parts: list[PartRecord], rulesets: list[dict[str, Any]], run: RunInfo,
-                   failed_sources: list[str], expected_events: int) -> PackageData:
+                   failed_sources: list[str], expected_events: int, progress: Reporter | None = None) -> PackageData:
         """``expected_events`` is what the run ingested: a package holds every event or is not written."""
         parts = sorted(parts, key=lambda record: record.part)
         for previous, record in pairwise(parts):
@@ -560,18 +607,25 @@ class PackageBuilder:
         group_size = row_group_size(len(columns) + len(EVENT_COLUMNS))
         connection = duckdb.connect(":memory:", config={**_duckdb_settings(), "temp_directory": str(self.work / "duckdb")})
         try:
-            tables = {
-                "events": write_events(connection, self.work, parts, columns, group_size=group_size),
-                "rules": write_rules(connection, self.work, rule_rows(parts, rulesets), group_size=group_size),
-                "hits": write_hits(connection, self.work, parts, group_size=group_size),
-                **write_alerts(connection, self.work, parts, group_size=group_size),
-            }
+            if progress is not None:
+                connection.execute("SET enable_progress_bar = true")
+                connection.execute("SET enable_progress_bar_print = false")
+            with _watched(connection, progress, "Writing the events"):
+                events = write_events(connection, self.work, parts, columns, group_size=group_size)
+            with _watched(connection, progress, "Writing the detections"):
+                tables = {
+                    "events": events,
+                    "rules": write_rules(connection, self.work, rule_rows(parts, rulesets), group_size=group_size),
+                    "hits": write_hits(connection, self.work, parts, group_size=group_size),
+                    **write_alerts(connection, self.work, parts, group_size=group_size),
+                }
             size = tables["events"].stat().st_size
             if size > EVENTS_PARQUET_LIMIT:
                 raise PackageError(
                     f"the events take {size / 2**20:,.0f} MiB, more than the {EVENTS_PARQUET_LIMIT // 2**20:,} MiB "
                     "a browser can hold; narrow the run with --after/--before or -s")
-            text = write_text(connection, self.work, tables["events"], columns, group_size=group_size)
+            with _watched(connection, progress, "Writing the full-text index"):
+                text = write_text(connection, self.work, tables["events"], columns, group_size=group_size)
             totals = {name: _count(connection, "SELECT count(*) FROM read_parquet(?)", tables[name])
                       for name in ("events", "hits", "alerts")}
             # Counted like the run summary, which collapses a rule's variants into one.
@@ -597,7 +651,10 @@ class PackageBuilder:
         return PackageData(tables=tables, manifest=manifest)
 
     def build(self, *, viewer: Viewer, parts: list[PartRecord], rulesets: list[dict[str, Any]], run: RunInfo,
-              failed_sources: list[str], expected_events: int, destination: Path) -> Path:
+              failed_sources: list[str], expected_events: int, destination: Path,
+              progress: Reporter | None = None) -> Path:
+        """``progress`` is told each step: duckdb's estimate while it writes Parquet, then the zip's bytes."""
         data = self.build_data(parts=parts, rulesets=rulesets, run=run, failed_sources=failed_sources,
-                               expected_events=expected_events)
-        return write_package(viewer, data, destination, self.work, cache_directory=self.cache_directory)
+                               expected_events=expected_events, progress=progress)
+        return write_package(viewer, data, destination, self.work, cache_directory=self.cache_directory,
+                             progress=progress)

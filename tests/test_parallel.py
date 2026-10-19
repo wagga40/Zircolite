@@ -2,7 +2,6 @@
 Tests for the parallel processing module.
 """
 
-import queue
 import sys
 from pathlib import Path
 from unittest.mock import MagicMock, patch
@@ -976,27 +975,40 @@ class TestMemoryAwareParallelProcessorProcessFiles:
         assert stats.processed_files == 2
         assert len(results) == 2
 
-    def test_rule_progress_queue_drained(self, test_logger, tmp_path):
-        """When rule_progress_queue is passed, main thread drains it during processing."""
-        progress_queue = queue.Queue()
-        f = tmp_path / "one.json"
-        f.write_text('{"x": 1}')
-        total_rules = 4
-        file_name = "one.json"
+    def test_long_names_keep_both_ends(self):
+        from zircolite.parallel import _truncate_filename
 
-        def put_rule_progress(path):
-            for done in range(total_rules + 1):
-                progress_queue.put((0, file_name, done, total_rules))
-            return (1, None)
+        name = "Archive-ForwardedEvents-2021-06-04-09-12-10-163.evtx"
+        short = _truncate_filename(name)
+        assert len(short) == 40
+        assert short.startswith("Archive-Forwarded") and short.endswith("09-12-10-163.evtx")
+        assert _truncate_filename("short.evtx") == "short.evtx"
 
-        processor = MemoryAwareParallelProcessor(logger=test_logger)
-        processor.process_files_parallel(
-            [f],
-            put_rule_progress,
-            disable_progress=True,
-            rule_progress_queue=progress_queue,
-        )
-        assert progress_queue.empty()
+    def test_board_rows_follow_the_workers(self, test_logger, tmp_path):
+        """A worker's slot shows while its file runs and is free again once it returns."""
+        from zircolite.progress import WorkerBoard
+
+        board = WorkerBoard(2)
+        files = [tmp_path / "one.json", tmp_path / "two.json"]
+        for f in files:
+            f.write_text('{"x": 1}')
+        seen = []
+
+        def work(path):
+            slot = board.slot(0, files.index(path))
+            try:
+                slot("rules", 1, 4, events=3)
+                seen.append(board.rows())
+            finally:
+                slot.release()
+            return (3, None)
+
+        processor = MemoryAwareParallelProcessor(ParallelConfig(max_workers=1, sort_by_size=False), logger=test_logger)
+        _, stats = processor.process_files_parallel(files, work, disable_progress=True, board=board)
+
+        assert seen == [[(0, "rules", 1, 4, 3)], [(1, "rules", 1, 4, 3)]]
+        assert board.rows() == []
+        assert stats.total_events == 6
 
 
 # ============================================================================

@@ -608,8 +608,10 @@ class LiteralPrefilter:
 
     def __init__(self, connection, rules, *, automatic=False, automaton_factory=None, bitmap_factory=None,
                  max_postings=None, max_pattern_chars=1_000_000, prepared=None, census=None,
-                 max_cache_bytes=8 * 1024 * 1024):
+                 max_cache_bytes=8 * 1024 * 1024, progress=None):
         self.connection = connection
+        # Called with (rows scanned, rows) as the index is built.
+        self.progress = progress
         self.plans: dict[str, LiteralPlan] = {}
         self.postings: dict[tuple[str, str], Any] = {}
         self.uncertain: dict[str, Any] = {}
@@ -729,10 +731,15 @@ class LiteralPrefilter:
                   for column, automaton in automata.items()}
         quoted = ', '.join('"' + known[column].replace('"', '""') + '"' for column in selected)
         if selected:
+            progress = self.progress
+            scanned = 0
             with closing(conn.execute(f"SELECT row_id, {quoted} FROM logs")) as cursor:  # noqa: S608
                 while rows := cursor.fetchmany(256):
                     if is_shutdown_requested():
                         raise ValueError("prefilter interrupted")
+                    if progress is not None:
+                        scanned += len(rows)
+                        progress(scanned, self.total_rows)
                     # Transpose one bounded batch in C, then scan each column.
                     # This avoids a zip and automaton lookup for every cell,
                     # particularly useful for sparse and single-column rules.

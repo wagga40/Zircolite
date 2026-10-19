@@ -496,6 +496,40 @@ class TestProcessSingleFileWorker:
         assert len(file_data["results"]) >= 1
         assert file_data["events"] == 1
 
+    def test_worker_reports_each_step_on_its_board_slot(
+        self, default_args_config, sample_ruleset, tmp_path, make_processing_context, monkeypatch,
+    ):
+        from zircolite.progress import BoardSlot, WorkerBoard
+
+        reported = []
+        report = BoardSlot.__call__
+
+        def record(self, phase, done=0, total=0, **values):
+            reported.append((phase, done, total))
+            report(self, phase, done, total, **values)
+
+        monkeypatch.setattr(BoardSlot, "__call__", record)
+        ctx = make_processing_context(rulesets=sample_ruleset, outfile=str(tmp_path / "out.json"))
+        jf = tmp_path / "ev.json"
+        jf.write_text(
+            '{"Event": {"System": {"EventID": 1}, "EventData": {"CommandLine": "powershell.exe"}}}\n'
+        )
+        board = WorkerBoard(2)
+
+        process_single_file_worker(
+            jf, ctx, "json", None, default_args_config,
+            counter_lock=threading.Lock(), worker_counter=[0], total_filtered_count=[0, 0],
+            thread_local=threading.local(), progress_board=board, progress_files={str(jf): 0},
+            progress_slot=1,
+        )
+
+        phases = [phase for phase, _, _ in reported]
+        assert phases[0] == "reading"
+        assert phases.index("indexing") < phases.index("rules")
+        assert ("reading", jf.stat().st_size, jf.stat().st_size) in reported
+        assert reported[-1] == ("rules", len(sample_ruleset), len(sample_ruleset))
+        assert board.rows() == [], "the slot is free once the file is done"
+
     def test_broken_rule_is_reported_out_of_the_worker(
         self, default_args_config, tmp_path, make_processing_context,
     ):

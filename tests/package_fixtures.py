@@ -39,10 +39,19 @@ def make_logs(rows: list[dict[str, Any]], *, types: dict[str, str] | None = None
     return connection
 
 
+def open_spool(path: str) -> Any:
+    if path.endswith(".gz"):
+        return gzip.open(path, "rb")
+    if path.endswith(".zst"):
+        from compression import zstd
+        return zstd.open(path, "rb")
+    return open(path, "rb")
+
+
 def read_spool(paths: list[str]) -> list[dict[str, Any]]:
     rows: list[dict[str, Any]] = []
     for path in paths:
-        with (gzip.open(path, "rb") if path.endswith(".gz") else open(path, "rb")) as handle:
+        with open_spool(path) as handle:
             rows.extend(orjson.loads(line) for line in handle)
     return rows
 

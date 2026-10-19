@@ -614,6 +614,12 @@ table, a summary panel and an ATT&CK tactics heatmap, then the output path as a 
 keeps only the summary panel and errors; `--debug` adds debug messages and full tracebacks.
 The log file keeps full detail either way, unless `-n` turns it off.
 
+Each step shows its progress while it runs: reading each file, building indexes, saving
+or loading a database, spooling events for a package, building the literal index, the
+rules, then writing the timeline, the template exports and the package. In a parallel run,
+each busy worker gets a row under the main bar with its file and its step, and the main
+bar counts events as the workers read them ([how](Internals.md#processing-modes)).
+
 - **Detection table.** Severity, rule, matches (events, or `N alerts` for a correlation)
   and ATT&CK techniques, sorted by severity, then by count. With several files processed one
   by one, each file gets its own table.
