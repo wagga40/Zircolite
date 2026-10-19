@@ -63,11 +63,18 @@ export function formFrom(state: ColumnState, numeric: boolean): MenuForm {
   }
 }
 
+const NUMBER = /^-?\d+(\.\d+)?$/;
+
 export function filterFrom(form: MenuForm): ColumnFilter | { problem: string } {
   if (form.op === 'present' || form.op === 'missing') return { op: 'present', negate: form.op === 'missing' };
   if (form.value === '') return { problem: 'Type a value to filter by' };
+  if (form.op === 'between' && form.value2 === '') return { problem: 'A range needs both ends' };
+  // A bound is written into the search as typed, so anything but a number could carry search syntax of its own.
+  const compares = form.op === 'between' || SYMBOL[form.op] !== undefined;
+  if (compares && ![form.value, form.op === 'between' ? form.value2 : '0'].every((value) => NUMBER.test(value.trim()))) {
+    return { problem: 'A comparison takes a number, as in 4600 or -1.5' };
+  }
   if (form.op === 'between') {
-    if (form.value2 === '') return { problem: 'A range needs both ends' };
     return { op: 'compare', bounds: [{ op: '>=', value: form.value.trim() }, { op: '<=', value: form.value2.trim() }], negate: form.not };
   }
   const symbol = SYMBOL[form.op];

@@ -62,7 +62,8 @@ export function toTerms(field: string, filter: ColumnFilter, options: ColumnOpti
     case 'present':
       return `${not}${name}:*`;
     case 'compare': {
-      const terms = filter.bounds.map((bound) => `${name}:${bound.op}${bound.value}`).join(' ');
+      // A bound that is not one plain word is quoted, so the search refuses it rather than reading it as more terms.
+      const terms = filter.bounds.map((bound) => `${name}:${bound.op}${plain(bound.value) ? bound.value : quoteValue(bound.value)}`).join(' ');
       return filter.negate && filter.bounds.length > 1 ? `-(${terms})` : `${not}${terms}`;
     }
     case 'oneOf':
@@ -187,6 +188,7 @@ export class CellError extends Error {
 }
 
 const NUMBER = /^-?\d+(\.\d+)?$/;
+const WHOLE = /^-?\d+$/;
 const BOUND = /^(>=|<=|>|<)\s*([^\s<>=]+)\s*/;
 
 function unquote(text: string): { value: string; rest: string } {
@@ -222,8 +224,9 @@ function bounds(text: string): Bound[] {
 
 /**
  * The filter a cell's text asks for, or null for an empty cell. Plain text
- * is contained in the value; = matches it exactly, * is a wildcard, quotes
- * keep text literal, > >= < <= compare and ! leaves matches out.
+ * is contained in the value and a whole number matches exactly; = matches
+ * exactly, * is a wildcard, quotes keep text literal, > >= < <= compare and
+ * ! leaves matches out.
  */
 export function parseCell(input: string, numeric: boolean): ColumnFilter | null {
   let text = input.trim();
@@ -258,7 +261,9 @@ export function parseCell(input: string, numeric: boolean): ColumnFilter | null 
     if (/["()]/.test(text)) throw new CellError('A pattern with * cannot hold quotes or parentheses');
     return { ...wildcardShape(text), negate } as ColumnFilter;
   }
-  if (numeric && NUMBER.test(text)) return { op: 'equals', value: text, negate };
+  // A whole number alone is an id, a port, a logon type: exact, even where the package stores the column as text,
+  // as it does EventID when its sources mixed numbers and text. Contained digits are written *4624*.
+  if (WHOLE.test(text) || (numeric && NUMBER.test(text))) return { op: 'equals', value: text, negate };
   return { op: 'contains', value: text, negate };
 }
 

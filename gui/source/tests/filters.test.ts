@@ -53,6 +53,13 @@ describe('toTerms', () => {
   });
 });
 
+describe('a column filter never reaches past its own terms', () => {
+  it.each(['4600 OR EventID:1', '4600 4700', '10) OR (Computer:x', '"x"', '5*'])('writes the bound %j so the search refuses it', (value) => {
+    const query = toTerms('EventID', { op: 'compare', bounds: [{ op: '>', value }], negate: false });
+    expect(() => compile(parse(`Channel:Security ${query}`), schema)).toThrow();
+  });
+});
+
 describe('a column filter matches what it says', () => {
   it.each<[string, ColumnFilter, number[]]>([
     ['CommandLine', contains('enc SQBF'), [PS]],
@@ -163,7 +170,11 @@ describe('parseCell and cellText', () => {
     ['net user', false, contains('net user')],
     ['-enc', false, contains('-enc')],
     ['4624', true, { op: 'equals', value: '4624', negate: false }],
-    ['4624', false, contains('4624')],
+    ['4624', false, { op: 'equals', value: '4624', negate: false }],
+    ['-12', false, { op: 'equals', value: '-12', negate: false }],
+    ['4.5', false, contains('4.5')],
+    ['4.5', true, { op: 'equals', value: '4.5', negate: false }],
+    ['*4624*', false, contains('4624')],
     ['=cmd.exe', false, { op: 'equals', value: 'cmd.exe', negate: false }],
     ['= a b', false, { op: 'equals', value: 'a b', negate: false }],
     ['cmd*', false, { op: 'prefix', value: 'cmd', negate: false }],
@@ -205,6 +216,7 @@ describe('parseCell and cellText', () => {
       [contains('powershell'), false],
       [contains('net user', true), false],
       [contains('4624'), true],
+      [contains('4624'), false],
       [contains('=x'), false],
       [contains('!x'), false],
       [contains('>3'), false],

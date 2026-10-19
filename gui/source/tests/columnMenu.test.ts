@@ -39,6 +39,9 @@ describe('the column menu form', () => {
     [{ op: 'between', value: '1', value2: '', not: false }, /both ends/],
     [{ op: 'pattern', value: 'abc', value2: '', not: false }, /needs a \*/],
     [{ op: 'pattern', value: 'a* b', value2: '', not: false }, /cannot hold spaces/],
+    [{ op: 'gt', value: '4600 OR EventID:1', value2: '', not: false }, /a number/],
+    [{ op: 'gte', value: '4600 4700', value2: '', not: false }, /a number/],
+    [{ op: 'between', value: '1', value2: '10 OR Computer:x', not: true }, /a number/],
   ] as const)('refuses %j', (form, message) => {
     expect(filterFrom({ ...form })).toEqual({ problem: expect.stringMatching(message) });
   });
