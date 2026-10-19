@@ -22,6 +22,12 @@ from typing import Any, BinaryIO
 
 import orjson
 
+try:
+    import zstandard
+    HAS_ZSTANDARD = True
+except ImportError:
+    HAS_ZSTANDARD = False
+
 from .fulltext import FIELD as FULLTEXT_FIELD
 from .utils import parse_timestamp
 
@@ -217,6 +223,28 @@ class PackageSpool:
         return PartWriter(self, part, sources, unreadable)
 
 
+class _CompressorWrapper:
+    """Adapter for both zlib and zstandard compressors to provide consistent API."""
+
+    def __init__(self, is_zstd: bool) -> None:
+        if is_zstd:
+            self.compressor = zstandard.ZstdCompressor(level=1, write_checksum=False)
+        else:
+            self.compressor = zlib.compressobj(1, zlib.DEFLATED, 31)
+        self.is_zstd = is_zstd
+
+    def compress(self, data: bytes) -> bytes:
+        """Return compressed data."""
+        return self.compressor.compress(data)
+
+    def flush(self) -> bytes:
+        """Finalize compression and return any remaining data."""
+        if self.is_zstd:
+            return self.compressor.flush()
+        else:
+            return self.compressor.flush()
+
+
 class _SpoolFiles:
     """Bounded NDJSON chunks, compressed when the destination is short of space."""
 
@@ -248,12 +276,19 @@ class _SpoolFiles:
             compressed = shutil.disk_usage(self.prefix.parent).free < SPOOL_DISK_RESERVE + allowance
         except OSError:
             compressed = True
-        suffix = ".ndjson.gz" if compressed else ".ndjson"
+        if compressed:
+            if HAS_ZSTANDARD:
+                suffix = ".ndjson.zst"
+            else:
+                suffix = ".ndjson.gz"
+            self._compressor = _CompressorWrapper(HAS_ZSTANDARD)
+        else:
+            suffix = ".ndjson"
+            self._compressor = None
         path = Path(f"{self.prefix}-{len(self.paths):04d}{suffix}")
         self.paths.append(str(path))
         handle = open(path, "wb")  # noqa: SIM115 -- closed by close()
         self._handle = handle
-        self._compressor = zlib.compressobj(1, zlib.DEFLATED, 31) if compressed else None
         self._rows = 0
         self._bytes = 0
         return handle

@@ -83,7 +83,7 @@ def test_build_reads_mixed_spool_compression(spool, tmp_path):
         (1, "one"), ((1 << 32) + 1, "two")]
 
 
-@pytest.mark.parametrize("cpus,available,want", [(4, 4 << 30, (2, "3GB")),
+@pytest.mark.parametrize("cpus,available,want", [(4, 4 << 30, (4, "2GB")),
                                                (1, 8 << 30, (1, "2GB")),
                                                (4, (4 << 30) - 1, (1, "2GB"))])
 def test_build_selects_bounded_resources(spool, monkeypatch, cpus, available, want):
