@@ -203,6 +203,18 @@ only, never the search, and the count above the table counts what they keep.
 | Hashes | `SHA256`, `SHA1`, `MD5`, `IMPHASH` |
 | Domains | `QueryName`, `DestinationHostname` |
 
+### Stacking
+
+Least-frequency analysis: each value of one to three fields among the filtered events, rarest
+first, with its events, hosts, events with detections, and first and last times. What few
+events on few hosts carry is where unusual activity tends to be. Presets are offered when the
+package has their fields: `Image`, `CommandLine`, `ParentImage + Image`, `Image + User`,
+`ServiceName + ImagePath`, `TaskName`, `QueryName`, `DestinationIp + DestinationPort` and
+`TargetFilename`. **Add a field** stacks any other. Values are grouped ignoring case. Events
+without a stacked field are left out unless **Include missing values** is on, which lists them
+as `(missing)`. Each column sorts and filters like [Entities](#entities). A row opens exactly its
+events in Explore. Up to 1,000 rows show.
+
 ### Processes
 
 ![The Processes view, filtered to high and critical detections](pics/viewer-processes.webp)

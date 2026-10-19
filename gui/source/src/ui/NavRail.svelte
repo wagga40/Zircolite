@@ -4,7 +4,7 @@
 
   const LABELS: Record<Route, string> = {
     overview: 'Overview', detections: 'Detections', explore: 'Explore', timeline: 'Timeline',
-    attack: 'ATT&CK', entities: 'Entities', processes: 'Processes', sql: 'SQL',
+    attack: 'ATT&CK', entities: 'Entities', stacking: 'Stacking', processes: 'Processes', sql: 'SQL',
   };
   let rail = $state<HTMLElement>();
 

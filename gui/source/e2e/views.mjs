@@ -269,6 +269,35 @@ async function phase4(page, state, steps, expectedStarts) {
     steps.push('entities filter and sort by their own columns');
   }
 
+  // Stacking: the rarest combination of each preset, and of a stack with its missing values, lists exactly its events.
+  await route('stacking');
+  const stackTable = page.locator('#stacking-table');
+  const presets = page.locator('[aria-label="Stack"] button');
+  const presetCount = await presets.count();
+  for (let i = 0; i < Math.min(presetCount, 3); i++) {
+    if (i > 0) {
+      await route('stacking');
+      await presets.nth(i).click();
+    }
+    const name = await presets.nth(i).textContent();
+    const rows = await poll(page, async () => (await presets.nth(i).getAttribute('aria-pressed')) === 'true' && number(stackTable, 'data-rows'), `the ${name} stack`);
+    if (!rows) {
+      steps.push(`stacking: no event has ${name}`);
+      continue;
+    }
+    await clickAndCount(page.locator('#stacking-table button.value').first(), `the rarest ${name}`);
+  }
+  if (presetCount > 0) {
+    await route('stacking');
+    await page.getByRole('button', { name: 'Include missing values' }).click();
+    await poll(page, () => number(stackTable, 'data-rows'), 'the stack with missing values');
+    const missing = page.locator('#stacking-table td.missing button.value').first();
+    if ((await missing.count()) > 0) await clickAndCount(missing, 'the events without the stacked field');
+    await route('stacking');
+    await page.getByRole('button', { name: 'Include missing values' }).click();
+  }
+  steps.push(presetCount > 0 ? 'stacking: the rarest rows list exactly their events' : 'stacking: no preset fits this package');
+
   // Processes: the tree counts every process start, and a start opens as its event.
   await route('processes');
   const tree = page.locator('#process-tree');
