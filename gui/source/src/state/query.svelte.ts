@@ -22,7 +22,7 @@ export class QueryState {
     if (!view.q) return { tree: null, sql: null, error: null };
     try {
       const tree = parse(view.q);
-      return { tree, sql: compile(tree, this.schema, { textIndex: this.onIndex }), error: null };
+      return { tree, sql: compile(tree, this.schema, { textIndex: this.onIndex, matches: true }), error: null };
     } catch (problem) {
       if (problem instanceof SearchError) return { tree: null, sql: 'FALSE', error: problem };
       throw problem;
@@ -47,7 +47,7 @@ export class QueryState {
   whereFor(q: string): string {
     let sql: string | null = null;
     try {
-      sql = q ? compile(parse(q), this.schema, { textIndex: this.onIndex }) : null;
+      sql = q ? compile(parse(q), this.schema, { textIndex: this.onIndex, matches: true }) : null;
     } catch (problem) {
       if (!(problem instanceof SearchError)) throw problem;
       sql = 'FALSE';

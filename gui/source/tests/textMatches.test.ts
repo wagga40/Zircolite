@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { isSuperseded, QueryScheduler, type Sender, Superseded } from '../src/engine/queries';
-import { sliceBounds, type Stop, TEXT_VIEW_SQL, textPredicate, TextMatches } from '../src/engine/textMatches';
+import { FieldMatches, sliceBounds, type Stop, TEXT_VIEW_SQL, textPredicate, TextMatches } from '../src/engine/textMatches';
 import { compile } from '../src/search/compile';
 import { parse } from '../src/search/parse';
 import { schema } from './fixture';
@@ -355,5 +355,86 @@ describe('guards after a cancel', () => {
     cancelled = false;
     await matches.prepare(like('f'), never);
     expect(sent.filter((sql) => sql.startsWith('DROP TABLE'))).toEqual(['DROP TABLE IF EXISTS _zl_tm_1', 'DROP TABLE IF EXISTS _zl_tm_2']);
+  });
+});
+
+describe('FieldMatches', () => {
+  /** Every column is as large as given; the matches built are the large ones. */
+  function fieldMatcher(bytes = 1e9, large?: number) {
+    const sent: string[] = [];
+    const matches = new FieldMatches(async (sql) => {
+      sent.push(sql);
+      if (sql.includes('total_uncompressed_size')) return schema.fields.map((field) => ({ c: field.name, b: bytes }));
+      return sql.includes('parquet_metadata') ? [{ first: 1 }] : [];
+    }, large);
+    return { matches, sent };
+  }
+
+  it.each([
+    'CommandLine:*whoami*', 'Image:*\\cmd.exe', 'Image:*50_off*', 'CommandLine:*"it\'s"*', 'CommandLine:*100%*',
+    '"it\'s \\"odd\\"":*x*', 'EventID:*62*', 'Image:*a*b*', 'CommandLine:*"\\"q\\""*',
+  ])('rewrites the match compile() writes for %s', async (query) => {
+    const { matches, sent } = fieldMatcher();
+    expect(await matches.prepare(compile(parse(query), schema, { matches: true }), never)).toBe('_zl_uid IN (SELECT _zl_uid FROM _zl_fm_1)');
+    expect(sent.some((sql) => sql.includes("parquet_metadata('events.parquet')"))).toBe(true);
+    expect(scans(sent)[0]).toMatch(/^CREATE OR REPLACE TEMP TABLE _zl_fm_1 AS SELECT _zl_uid FROM events WHERE \(/);
+  });
+
+  it('scans a large column for a plain contains through lower() LIKE, the engine\'s fast contains', async () => {
+    for (const [query, scan] of [
+      ['CommandLine:*whoami*', `(lower("CommandLine") LIKE lower('%whoami%'))`],
+      ['EventID:*62*', `(lower(CAST("EventID" AS VARCHAR)) LIKE lower('%62%'))`],
+      ['CommandLine:*"it\'s"*', `(lower("CommandLine") LIKE lower('%it''s%'))`],
+      ['Image:*a*b*', `("Image" ILIKE '%a%b%')`],
+      ['Image:*50_off*', String.raw`("Image" ILIKE '%50\_off%' ESCAPE '\')`],
+    ]) {
+      const { matches, sent } = fieldMatcher();
+      await matches.prepare(compile(parse(query), schema, { matches: true }), never);
+      expect(scans(sent)[0], query).toBe(`CREATE OR REPLACE TEMP TABLE _zl_fm_1 AS SELECT _zl_uid FROM events WHERE ${scan}`);
+    }
+  });
+
+  it('answers a match on a small column in place, where a table would cost more than the scans it saves', async () => {
+    const { matches, sent } = fieldMatcher(1024);
+    const sql = compile(parse('CommandLine:*whoami* OR Image:*\\cmd.exe'), schema, { matches: true });
+    expect(await matches.prepare(sql, never)).toBe(String.raw`(("CommandLine" ILIKE '%whoami%') OR ("Image" ILIKE '%\\cmd.exe' ESCAPE '\'))`);
+    expect(scans(sent)).toEqual([]);
+    expect(sent.filter((q) => q.includes('total_uncompressed_size'))).toHaveLength(1);
+    await matches.prepare(sql, never);
+    expect(sent.filter((q) => q.includes('total_uncompressed_size'))).toHaveLength(1);
+  });
+
+  it('slices a scan by the size of its column, about a second of reading each', async () => {
+    for (const [mib, slices] of [[120, 1], [600, 2], [3125, 12]] as const) {
+      const sent: string[] = [];
+      const matches = new FieldMatches(async (sql) => {
+        sent.push(sql);
+        if (sql.includes('total_uncompressed_size')) return [{ c: 'CommandLine', b: mib * 1024 * 1024 }];
+        return sql.includes('parquet_metadata') ? Array.from({ length: 24 }, (_, i) => ({ first: 1 + i * 1000 })) : [];
+      });
+      await matches.prepare(compile(parse('CommandLine:*whoami*'), schema, { matches: true }), never);
+      expect(scans(sent), `${mib} MiB`).toHaveLength(slices);
+    }
+  });
+
+  it('answers in place when the file cannot say how large its columns are', async () => {
+    const sent: string[] = [];
+    const matches = new FieldMatches(async (sql) => {
+      sent.push(sql);
+      if (sql.includes('parquet_metadata')) throw new Error('no such file');
+      return [];
+    });
+    const sql = compile(parse('CommandLine:*whoami*'), schema, { matches: true });
+    expect(await matches.prepare(sql, never)).toBe(`("CommandLine" ILIKE '%whoami%')`);
+    expect(scans(sent)).toEqual([]);
+  });
+
+  it('leaves a match that does not start with a wildcard, and a literal that spells one, alone', async () => {
+    const { matches, sent } = fieldMatcher();
+    for (const query of ['Image:C:*', 'EventID:4624', 'rulekey:"_zl_uid IN (SELECT _zl_uid FROM events WHERE lower(\\"x\\") LIKE lower(\'%a%\'))"']) {
+      const sql = compile(parse(query), schema, { matches: true });
+      expect(await matches.prepare(sql, never)).toBe(sql);
+    }
+    expect(sent).toEqual([]);
   });
 });

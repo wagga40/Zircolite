@@ -191,6 +191,8 @@
     busy = true;
     failure = null;
     pageFailure = false;
+    // The previous list's family probe is moot now, and would hold the one connection ahead of this list.
+    db.cancel('family');
     void (async () => {
       try {
         await db.exec(sql, { lane: 'results' });

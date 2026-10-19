@@ -15,6 +15,12 @@ const TACTIC_ALIASES: Record<string, string> = { 'defense-evasion': 'stealth' };
 
 export interface CompileOptions {
   textIndex?: boolean;
+  /**
+   * Write a field match that starts with a wildcard as a set of events, which
+   * the scheduler answers once into a table: such a match scans the whole
+   * column, and the list, the strip and the counts would each scan it again.
+   */
+  matches?: boolean;
 }
 
 export function compile(tree: Node | null, schema: Schema, options: CompileOptions = {}): string {
@@ -39,13 +45,13 @@ function node(n: Node, schema: Schema, options: CompileOptions): string {
 function term(t: Term, schema: Schema, options: CompileOptions): string {
   if (t.field === null) return fullText(t, schema, options);
   const shortcut = t.fieldQuoted ? undefined : findShortcut(t.field);
-  if (shortcut) return SHORTCUT_COMPILERS[shortcut.name](t, schema);
+  if (shortcut) return SHORTCUT_COMPILERS[shortcut.name](t, schema, options);
   const field = schema.find(t.field);
   if (!field) {
     const near = schema.suggest(t.field);
     throw new SearchError(`No field named ${t.field}${near.length ? `; did you mean ${near.join(', ')}?` : ''}`, t.start, t.end);
   }
-  return fieldMatch(field, t);
+  return fieldMatch(field, t, options);
 }
 
 function exactOnly(t: Term): void {
@@ -67,7 +73,7 @@ function oneOnly(t: Term, name: string, thing: string): void {
   if (starred(t)) throw new SearchError(`${name}: matches one ${thing} exactly; a * does not apply to it`, t.start, t.end);
 }
 
-function fieldMatch(field: Field, t: Term): string {
+function fieldMatch(field: Field, t: Term, options: CompileOptions = {}): string {
   const column = ident(field.name);
   const numeric = field.type !== 'VARCHAR';
   if (t.op !== '=') {
@@ -79,7 +85,8 @@ function fieldMatch(field: Field, t: Term): string {
   if (numeric && NUMBER.test(t.value) && !starred(t)) return `${column} = ${t.value}`;
   const text = numeric ? `CAST(${column} AS VARCHAR)` : column;
   const literal = pattern(t, false);
-  return `${text} ILIKE ${literal}${escapeClause(literal)}`;
+  const predicate = `${text} ILIKE ${literal}${escapeClause(literal)}`;
+  return options.matches && literal.startsWith("'%") ? `_zl_uid IN (SELECT _zl_uid FROM events WHERE ${predicate})` : predicate;
 }
 
 function fullText(t: Term, schema: Schema, options: CompileOptions): string {
@@ -116,14 +123,14 @@ function tacticNames(t: Term, tactics: readonly string[]): string[] {
 }
 
 function anyField(names: readonly string[], label: string) {
-  return (t: Term, schema: Schema): string => {
+  return (t: Term, schema: Schema, options: CompileOptions): string => {
     const found = new Map<string, Field>();
     for (const name of names) {
       const field = schema.find(name);
       if (field) found.set(field.key, field);
     }
     if (found.size === 0) throw new SearchError(`This package has no ${label} field (looked for ${names.join(', ')})`, t.start, t.end);
-    return `(${[...found.values()].map((field) => fieldMatch(field, t)).join(' OR ')})`;
+    return `(${[...found.values()].map((field) => fieldMatch(field, t, options)).join(' OR ')})`;
   };
 }
 
@@ -136,7 +143,7 @@ function weekdayNumber(value: string): number | null {
   return i < 0 ? null : i + 1;
 }
 
-const SHORTCUT_COMPILERS: Record<string, (t: Term, schema: Schema) => string> = {
+const SHORTCUT_COMPILERS: Record<string, (t: Term, schema: Schema, options: CompileOptions) => string> = {
   rule: (t) => {
     exactOnly(t);
     const p = pattern(t, false);

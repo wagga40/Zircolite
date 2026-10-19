@@ -1,4 +1,4 @@
-import { type Stop, TextMatches, type TextSource } from './textMatches';
+import { FieldMatches, type Stop, TextMatches, type TextSource } from './textMatches';
 
 /** A query the page no longer wants: a newer one replaced it in its lane, or the page was stopped. */
 export class Superseded extends Error {
@@ -68,10 +68,13 @@ export class QueryScheduler {
   private running: Job | null = null;
   private readonly cache = new Map<string, Record<string, unknown>[]>();
   private readonly matches: TextMatches;
+  private readonly fields: FieldMatches;
 
-  constructor(conn: Sender) {
+  /** largeColumn: the column size from which a field match gets a table; sliceBytes: how much each slice of its scan reads. Tests lower both. */
+  constructor(conn: Sender, options: { largeColumn?: number; sliceBytes?: number } = {}) {
     this.conn = conn;
     this.matches = new TextMatches((sql) => this.collect(sql));
+    this.fields = new FieldMatches((sql) => this.collect(sql), options.largeColumn, options.sliceBytes);
   }
 
   rows<T = Record<string, unknown>>(sql: string, options: QueryOptions = {}): Promise<T[]> {
@@ -142,7 +145,8 @@ export class QueryScheduler {
     const job = this.queue.shift() as Job;
     this.running = job;
     try {
-      const sql = await this.matches.prepare(job.sql, this.stopOf(job));
+      const stop = this.stopOf(job);
+      const sql = await this.fields.prepare(await this.matches.prepare(job.sql, stop), stop);
       // A cancel that came before the statement was sent had nothing in the engine to stop.
       if (job.cancelled) throw new Superseded();
       const out = await this.collect(sql, job.rows);

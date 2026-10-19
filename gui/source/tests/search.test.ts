@@ -231,6 +231,25 @@ describe('rulekey', () => {
   });
 });
 
+describe('field contains', () => {
+  it('reads a scan that starts with a wildcard from one shared table when asked', () => {
+    const matches = { matches: true };
+    expect(compile(parse('CommandLine:*whoami*'), schema)).toBe(`"CommandLine" ILIKE '%whoami%'`);
+    expect(compile(parse('CommandLine:*whoami*'), schema, matches)).toBe(`_zl_uid IN (SELECT _zl_uid FROM events WHERE "CommandLine" ILIKE '%whoami%')`);
+    expect(compile(parse('EventID:*62*'), schema, matches)).toBe(`_zl_uid IN (SELECT _zl_uid FROM events WHERE CAST("EventID" AS VARCHAR) ILIKE '%62%')`);
+    expect(compile(parse('Image:*\\cmd.exe'), schema, matches)).toBe(`_zl_uid IN (SELECT _zl_uid FROM events WHERE "Image" ILIKE '%\\\\cmd.exe' ESCAPE '\\')`);
+    expect(compile(parse('Image:C:*'), schema, matches)).toBe(`"Image" ILIKE 'C:%'`);
+    expect(compile(parse('EventID:4624'), schema, matches)).toBe('"EventID" = 4624');
+  });
+
+  it.each([
+    'CommandLine:*whoami*', '-CommandLine:*whoami*', 'Image:*\\cmd.exe', 'Image:*50_off*', 'Image:*5_off*', 'CommandLine:*100%*',
+    'CommandLine:*"it\'s"*', 'Computer:*s0*', '-Computer:*s0* Image:*system32*', 'host:*S0*', 'EventID:*6*',
+  ])('finds the same events either way: %s', async (query) => {
+    expect(await db.uids(compile(parse(query), schema, { matches: true }))).toEqual(await run(query));
+  });
+});
+
 describe('a wildcard beside a quoted value', () => {
   const quotedValue = (query: string) => tokenize(query).filter((t) => t.kind === 'quoted').map((t) => [t.text, t.starBefore ?? false, t.starAfter ?? false]);
 
