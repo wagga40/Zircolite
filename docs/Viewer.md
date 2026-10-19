@@ -114,11 +114,57 @@ its group keys, metric and evidence events.
 
 ### Explore
 
-Every event that matches the filters, in a table sorted by time (click **Time (UTC)** to
-reverse it). The **Fields** panel lists every field with its coverage; open one for its ten
-most frequent values, each with + and −, or show it as a column. **Export CSV** writes the
-shown columns for up to 500,000 events, defusing spreadsheet formulas; **Export JSON** writes
-every field for up to 100,000 events, one object per line.
+Every event that matches the filters, in a table sorted by time. The **Fields** panel lists
+every field with its coverage; open one for its ten most frequent values, each with + and −,
+or show it as a column. **Export CSV** writes the shown columns, in the order shown, for up to
+500,000 events, defusing spreadsheet formulas; **Export JSON** writes every field for up to
+100,000 events, one object per line.
+
+**Column filters.** Under each column name is a filter cell; type, then press `Enter`:
+
+| In a cell | Keeps events whose value |
+|-----------|--------------------------|
+| `powershell`, `net user` | contains the text, in any case |
+| `=cmd.exe` | is exactly the text, in any case |
+| `C:\Windows\*`, `*\cmd.exe`, `a*b` | matches the wildcards |
+| `"a*b"` | contains the text as written, `*` included |
+| `>4600`, `>=1 <10` | compares as a number (numeric columns) |
+| `*` / `!*` | has a value / has none |
+| `!x`, `!=x`, `!>5` | does not match; events without the field stay in |
+
+A plain number in a numeric column is an exact match. `!` leaves matches out because `-` starts
+values analysts look for, such as `-enc`. `Esc` puts back what the cell held; an empty cell
+removes the column's filter.
+
+The funnel beside a column name opens its menu, which has:
+
+- the sort, both ways;
+- a form with the operators for the column's type: contains, equals, starts with, ends with,
+  matches a pattern, has a value or none for text; =, >, ≥, <, ≤ or between for numbers;
+- **Not**, **Apply** and **Clear**;
+- the column's values. They are counted under every filter except the column's own, so several
+  can be ticked, then kept with **Show only these** or dropped with **Leave these out**. **Rarest
+  first** lists the least frequent values first, where unusual activity tends to be.
+
+The Level column's cell picks a level and up.
+
+Every column filter is ordinary search text (`CommandLine:*"net user"*`,
+`(Channel:Security OR Channel:System)`), so it shows in the search box and as a chip. It is
+kept in the link, Back undoes it, and every view applies it. A column whose terms no single
+filter describes, such as two contains, shows them read-only; edit them in the search bar, or
+clear them from the cell.
+
+**Sorting and columns.** Click a column's name to sort by it, and again to reverse; click
+**Time (UTC)** to go back to time order. Ties stay in time order. Text sorts by its first 128
+characters, ignoring case. Drag a column's name to move it, or use **Move left** and **Move right**
+in its menu. Drag the edge of its header to resize it; with the keyboard, focus the edge and
+use the arrow keys. `Delete` or a double click gives the column back its share of the width.
+The order, widths and sort are kept in the link.
+
+When the results hold one kind of event, such as Security 4624 or Sysmon 1, **Columns for…**
+shows the fields that tell those events apart, the host first. The search's own EventID and
+Channel name the kind; otherwise the viewer looks when the results hold up to 200,000 events.
+**Default columns** goes back.
 
 ### Timeline
 

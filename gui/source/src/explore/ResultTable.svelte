@@ -54,8 +54,9 @@
   let exporting = $state<{ done: number; total: number } | null>(null);
   let exportNote = $state<string | null>(null);
   let menuOpen = $state(false);
-  // The column whose filter and sort menu is open, and the funnel it opened from.
-  let columnMenu = $state<{ field: Field; anchor: HTMLElement } | null>(null);
+  // The column whose filter and sort menu is open, and the funnel it opened from. Raw: the field is compared
+  // by identity with the shown columns and the sort, and a deep proxy of it would equal neither.
+  let columnMenu = $state.raw<{ field: Field; anchor: HTMLElement } | null>(null);
   let cellProblem = $state<string | null>(null);
   let menu = $state<HTMLDetailsElement>();
   let cancelButton = $state<HTMLButtonElement>();
@@ -191,7 +192,8 @@
     busy = true;
     failure = null;
     pageFailure = false;
-    // The previous list's family probe is moot now, and would hold the one connection ahead of this list.
+    // The previous list's page and family probe are moot now, and would hold the one connection ahead of this list.
+    db.cancel('page');
     db.cancel('family');
     void (async () => {
       try {

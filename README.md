@@ -121,9 +121,9 @@ an SQL query over that table, and reports the rows that match.
 
 `--package` writes one zip holding every event of the run, with the detections and
 correlation alerts linked to them. Extract it and open `index.html`: the viewer runs offline
-and offers an overview, the detections, a searchable event table, a timeline, the ATT&CK
-matrix, entities, process trees and an SQL console. Share a package as you would the logs it
-came from. See [Zircolite Viewer](docs/Viewer.md).
+and offers an overview, the detections, an event table you can search, filter and sort by
+any column, a timeline, the ATT&CK matrix, entities, process trees and an SQL console. Share a
+package as you would the logs it came from. See [Zircolite Viewer](docs/Viewer.md).
 
 ![A tour of the Zircolite Viewer: from the Overview to a Mimikatz detection, its event, a host search, the timeline, the ATT&CK matrix and the process tree](docs/pics/viewer-tour.webp)
 

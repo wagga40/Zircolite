@@ -117,6 +117,46 @@ try {
   report.end_of_list_ms = await timed(() => page.keyboard.press('End'), () =>
     poll(page, async () => (await last.count()) > 0 && (await last.locator('[role=gridcell]').first().textContent()) !== 'Loading'));
 
+  // Column filters, menus and sorts, on the columns a responder filters first. A cell applies on Enter.
+  await page.goto(`${base}#/explore?cols=Computer,Channel,EventID,CommandLine,Message`);
+  const cell = (name) => page.getByLabel(`Filter ${name}`, { exact: true });
+  await cell('EventID').waitFor();
+  const applyCell = (name, text) => timed(async () => {
+    await cell(name).fill(text);
+    await cell(name).press('Enter');
+  }, settled);
+  report.filter_cell_equals_ms = await applyCell('EventID', '=4624');
+  await applyCell('EventID', '');
+  report.filter_cell_contains_ms = await applyCell('CommandLine', 'powershell');
+  // A person brushes once the strip has drawn the filtered events.
+  await poll(page, async () => (await page.locator('#seismic-strip').getAttribute('aria-busy')) !== 'true'
+    && (await page.locator('.plot[aria-busy="true"]').count()) === 0);
+  report.brush_with_contains_ms = await timed(async () => {
+    await page.mouse.move(box.x + box.width * 0.9, box.y + 40);
+    await page.mouse.down();
+    await page.mouse.move(box.x + box.width * 0.98, box.y + 40);
+    await page.mouse.up();
+  }, settled);
+  await page.goBack();
+  await settled();
+  await applyCell('CommandLine', '');
+  report.filter_cell_contains_long_ms = await applyCell('Message', 'error');
+  await applyCell('Message', '');
+  const menuValues = async (key) => timed(() => page.locator(`[data-column-funnel="${key}"]`).click(), () =>
+    poll(page, async () => (await page.locator('[data-column-menu] li[data-value]').count()) > 0
+      && (await page.locator('[data-column-menu] section[aria-busy="false"]').count()) > 0));
+  report.column_values_ms = await menuValues('channel');
+  await page.keyboard.press('Escape');
+  report.column_values_wide_ms = await menuValues('commandline');
+  await page.keyboard.press('Escape');
+  const sortBy = (key) => timed(() => page.locator(`[data-field-key="${key}"] button.sort`).click(), settled);
+  report.sort_text_ms = await sortBy('computer');
+  report.sort_long_text_ms = await sortBy('commandline');
+  report.sort_message_ms = await sortBy('message');
+  report.sort_level_ms = await timed(() => page.locator('#result-grid button.sort', { hasText: 'Level' }).click(), settled);
+  await timed(() => page.locator('#result-grid button.sort', { hasText: 'Time (UTC)' }).click(), settled);
+  await page.goto(`${base}#/explore`);
+
   const nav = (name) => page.locator('nav[aria-label="Views"] button', { hasText: name }).click();
   const filled = (selector, attribute) => () => poll(page, async () => {
     const value = await page.locator(selector).getAttribute(attribute);
@@ -154,11 +194,11 @@ try {
   const stopped = page.locator('p.stopped');
   const cheap = 'EventID:4624';
   const stopReport = {};
-  // The wildcard's strip and count results are cached after the reference run, leaving the one scan the
-  // table needs, about a third of full_ms, and that scan restarts on Run again; the index builds its
-  // matches once, in slices, so stopping at half of full_ms leaves half the scan for Run again to resume.
+  // Both build their matches once, in slices, so stopping partway leaves the rest of the scan for Run again
+  // to resume.
+  // A field scan on a large column also keeps its matches, so its three runs spell one pattern three ways.
   const cases = [
-    { name: 'wildcard', query: 'Message:*a*b*c*', midway: 0.15 },
+    { name: 'wildcard', query: 'Message:*a*b*c*', reference: 'Message:**a*b*c*', again: 'Message:*a*b*c**', midway: 0.5 },
     { name: 'index', query: 'ntlm', reference: '*ntlm*', again: 'ntlm*', midway: 0.5 },
   ];
   for (const { name, query, reference = query, again = query, midway } of cases) {
